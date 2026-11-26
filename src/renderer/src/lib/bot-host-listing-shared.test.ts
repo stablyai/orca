@@ -6,11 +6,9 @@ import {
   toRuntimeExecutionHostId
 } from '../../../shared/execution-host/execution-host'
 import { installSharedBotHostCatalog } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
-import { publishBots, readHostBots, setBotHostListing } from './bot-catalog-snapshot'
+import { setBotHostListing } from './bot-catalog-snapshot'
 import { isBotHostDown, readBotHostDown } from './bot-host-views'
 import { computeBotHostListing, installBotHostListing } from './bot-host-listing'
-import { getBotHomes, isHome } from '../../../shared/bots/bot-homes'
-import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 
 const SHARED: SharedBotHostView = {
   environmentId: 'shared-env',
@@ -18,7 +16,6 @@ const SHARED: SharedBotHostView = {
   botId: 'bot-1',
   botName: 'Ivy',
   ownerName: 'Jinwoo Hong',
-  homeWorkspaceId: null,
   link: 'live',
   holds: true,
   held: []
@@ -56,7 +53,6 @@ const store = {
 }
 
 let answerList: (state: SharedBotHostsState) => void = () => {}
-let changed: (state: SharedBotHostsState) => void = () => {}
 const stops: (() => void)[] = []
 
 beforeEach(() => {
@@ -90,10 +86,7 @@ beforeEach(() => {
           new Promise<SharedBotHostsState>((resolve) => {
             answerList = resolve
           }),
-        onChanged: (listener: (state: SharedBotHostsState) => void) => {
-          changed = listener
-          return () => {}
-        }
+        onChanged: () => () => {}
       }
     }
   })
@@ -114,28 +107,6 @@ describe('a shared agent’s listing in the window', () => {
     await Promise.resolve()
     expect(localStorage.getItem(KEY)).not.toBeNull()
     answerList = () => {}
-  })
-
-  it('pairs its agent with the home this computer keeps for it, once main has made it', async () => {
-    localStorage.removeItem(KEY)
-    stops.push(installSharedBotHostCatalog())
-    answerList({ hosts: [SHARED], sharing: true })
-    await Promise.resolve()
-    stops.push(installBotHostListing(store, false))
-    publishBots([ivy], { threadReplies: false, webhooks: undefined }, HOST)
-    // The owner's home id names nothing here.
-    const home = { id: 'local-ivy-home', connectionId: null, executionHostId: null }
-    expect(getBotHomes(readHostBots(HOST), [home])).toEqual([])
-    changed({ hosts: [{ ...SHARED, homeWorkspaceId: home.id }], sharing: true })
-    const [bot] = readHostBots(HOST)
-    expect(bot).toMatchObject({ hostId: HOST, folderWorkspaceId: home.id })
-    expect(getBotHomes(readHostBots(HOST), [home]).map((entry) => entry.home.id)).toEqual([home.id])
-    // A workspace of the same id on the agent's own host is not its home here.
-    const ownersHome: Pick<FolderWorkspace, 'id' | 'connectionId' | 'executionHostId'> = {
-      ...home,
-      executionHostId: HOST
-    }
-    expect(isHome(ownersHome, readHostBots(HOST))).toBe(false)
   })
 })
 

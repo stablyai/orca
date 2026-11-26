@@ -13,7 +13,6 @@ import { sharedBotsCloud, type SharedBotOfferWait, type SharedBotsCloud } from '
 import { reportingSharedBotsCloud, SharedBotHostFailures } from './shared-bot-host-failures'
 import { requestConnector } from '../../connector-cloud/connector-cloud-request'
 import type { ConnectorCloud } from '../../connector-cloud/connector-cloud'
-import { memorySharedBotHomes } from './shared-bot-home.test-fixture'
 
 const dirs: string[] = []
 afterEach(() => {
@@ -67,7 +66,6 @@ function hosts(
     account: () => 'ada',
     cloud: () => cloud,
     publish: () => {},
-    homes: memorySharedBotHomes(dir).homes,
     now: options.now ?? (() => 1_000)
   })
   return { service, accepts, declines, dir, reads }
@@ -221,7 +219,6 @@ describe('a share offered to this account', () => {
         account: () => 'ada',
         cloud: () => cloud,
         publish: () => {},
-        homes: memorySharedBotHomes(dir).homes,
         now: () => Date.now()
       })
       await service.refresh()

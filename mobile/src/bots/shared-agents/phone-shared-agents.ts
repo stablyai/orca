@@ -280,7 +280,6 @@ export class PhoneSharedAgents {
   /** The agent as its pages show it: whether it holds (the off switch applied there) and what. */
   private view(entry: PhoneSharedAgent): SharedBotHostView {
     return sharedBotHostView(entry, {
-      homeWorkspaceId: null,
       link: this.linkFor(entry).current(),
       holds: sharedBotHoldsSends(entry.hostKey),
       held: this.held.views(entry)

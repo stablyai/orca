@@ -26,7 +26,6 @@ import { nextPairingStep, type MineShare } from './shared-bot-pairing'
 import { SerialRerun } from '../../../shared/concurrency/serial-rerun'
 import { CloudSharesSupport, type SharedBotsCloud } from './shared-bots-cloud'
 import { SharedBotOfferWaits } from './shared-bot-offer-waits'
-import type { SharedBotHomes } from './shared-bot-home'
 import { SharedBotPhoneGrants } from './shared-bot-phone-grants'
 import { SharedBotReadPace, type SharedBotReadPaceDeps } from './shared-bot-read-pace'
 import type { SharedHost } from '../../../shared/remote-runtime/pairing/shared-host-keys'
@@ -43,7 +42,6 @@ export type SharedBotHostsDeps = Partial<Pick<SharedBotReadPaceDeps, 'invites' |
   /** Orca Cloud's connector origin, for this computer's phones; null without a cloud. */
   connectorOrigin?: () => string | null
   publish: (state: SharedBotHostsState) => void
-  homes: SharedBotHomes
   failures?: SharedBotHostFailures
   now?: () => number
 }
@@ -139,7 +137,6 @@ export class SharedBotHosts {
   views(): SharedBotHostsState['hosts'] {
     return this.listed().map((entry) =>
       sharedBotHostView(entry, {
-        homeWorkspaceId: entry.homeWorkspaceId ?? null,
         link: this.linkFor(entry).current(),
         accepting: this.offerWaits.connecting(entry.shareId, this.linkFor(entry).current()),
         holds: entry.hostKey !== undefined,
@@ -186,9 +183,10 @@ export class SharedBotHosts {
     }
     // Signed out: the account's shares, keys and links go with it. Any other failure keeps them.
     const shares = this.sharing.sharesIn(answer)
-    const gone = shares ? this.applyMine(shares, read) : []
+    if (shares) {
+      this.applyMine(shares, read)
+    }
     applied()
-    await this.deps.homes.settle(gone, this.store)
     if (shares) {
       await Promise.all(this.store.list().map((entry) => this.advance(entry)))
     }
@@ -247,8 +245,8 @@ export class SharedBotHosts {
     return entry ? this.held.sendAgain(entry, clientMessageId) : false
   }
 
-  /** Applies the cloud's list; returns the kept shares it no longer lists, now removed. */
-  private applyMine(shares: readonly MineShare[], read: number): SharedBotHostEntry[] {
+  /** Applies the cloud's list: the kept shares it no longer lists are removed. */
+  private applyMine(shares: readonly MineShare[], read: number): void {
     this.shares = new Map(shares.map((share) => [share.shareId, share]))
     // Its host's connections go even where no link was made here (the window's calls open them too).
     const closeLink = (shareId: string) => {
@@ -259,7 +257,7 @@ export class SharedBotHosts {
         endSharedBotHostConnections(environmentId)
       }
     }
-    return applySharedBotMine({ store: this.store, held: this.held, closeLink }, shares, read)
+    applySharedBotMine({ store: this.store, held: this.held, closeLink }, shares, read)
   }
 
   /** Accept: keeps the share and runs its accept and pairing; false when it isn't offered now. */

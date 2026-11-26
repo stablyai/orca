@@ -6,7 +6,6 @@ import type { SharedBotHostsState } from '../../../shared/bots/shared-bot-hosts'
 import { ConnectorAccountTransport } from '../../connector-cloud/connector-transport'
 import { SharedBotHosts } from './shared-bot-hosts'
 import { sharedBotsCloud } from './shared-bots-cloud'
-import { memorySharedBotHomes } from './shared-bot-home.test-fixture'
 
 const dirs: string[] = []
 afterEach(() => {
@@ -50,7 +49,6 @@ function sharingHosts(replies: Reply[], account: () => string | null = () => 'ad
           transport.call(path, undefined, schema, { ...options, method: 'GET' })
       }),
     publish: (state) => published.push(state),
-    homes: memorySharedBotHomes(dir).homes,
     now: () => 0
   })
   return { hosts, published, fetches: () => fetches }
@@ -138,7 +136,6 @@ describe('whether this account’s Orca Cloud takes shares', () => {
       account: () => 'ada',
       cloud: () => null,
       publish: (state) => published.push(state),
-      homes: memorySharedBotHomes(dir).homes,
       now: () => 0
     })
     await hosts.refresh()
@@ -174,7 +171,6 @@ describe('an account switch while a shares read is out', () => {
       async () => null
     ]
     const accepted: string[] = []
-    const { homes, folders } = memorySharedBotHomes(dir)
     const hosts = new SharedBotHosts({
       userDataPath: dir,
       account: () => account,
@@ -193,14 +189,12 @@ describe('an account switch while a shares read is out', () => {
         hold: async () => ({ ok: true, value: { status: 'held' } })
       }),
       publish: () => {},
-      homes,
       now: () => 0
     })
     try {
       await hosts.refresh()
       const kept = hosts.views()
       expect(kept.map((view) => view.shareId)).toEqual(['share-1'])
-      const keptFolders = folders.map((folder) => folder.id)
       const keptAccepts = accepted.length
 
       const outstanding = hosts.refresh()
@@ -213,7 +207,6 @@ describe('an account switch while a shares read is out', () => {
       // That read was share-1's one wait for its offer, so only its connecting state ends.
       const settled = ({ accepting: _accepting, ...view }: (typeof kept)[number]) => view
       expect(hosts.views().map(settled)).toEqual(kept.map(settled))
-      expect(folders.map((folder) => folder.id)).toEqual(keptFolders)
       expect(accepted).toHaveLength(keptAccepts)
     } finally {
       hosts.stop()

@@ -20,7 +20,6 @@ import { beginCloudConnectAttempt } from '../orca-profiles/cloud-auth/profile-cl
 import { commitExchangedCloudSession } from '../orca-profiles/cloud-session/profile-cloud-session-commit'
 import { SharedBotHosts } from '../bots/shared-with-me/shared-bot-hosts'
 import { sharedBotsCloud } from '../bots/shared-with-me/shared-bots-cloud'
-import { memorySharedBotHomes } from '../bots/shared-with-me/shared-bot-home.test-fixture'
 import { ConnectorCloud } from './connector-cloud'
 import { desktopConnectorCredentials } from './connector-token-mint'
 import { FakeConnectorCloud } from './fake-connector-cloud.test-fixture'
@@ -146,7 +145,6 @@ function setUp(options: { connector: boolean; connectNow?: boolean }) {
     cloud: () => sharedBotsCloud(connector),
     account: () => connector.signedInAccount(),
     publish: () => {},
-    homes: memorySharedBotHomes(userDataPath).homes,
     invites: connector.invites,
     random: () => 0
   })

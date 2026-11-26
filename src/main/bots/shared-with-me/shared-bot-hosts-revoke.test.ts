@@ -12,7 +12,6 @@ import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runt
 import { SharedBotHosts } from './shared-bot-hosts'
 import type { MineShare } from './shared-bot-pairing'
 import type { SharedBotsCloud } from './shared-bots-cloud'
-import { memorySharedBotHomes } from './shared-bot-home.test-fixture'
 
 const dirs: string[] = []
 afterEach(() => {
@@ -52,7 +51,6 @@ function hosts(cloud: {
     account: () => 'ada',
     cloud: () => sharesCloud,
     publish: () => {},
-    homes: memorySharedBotHomes(dir).homes,
     now: () => 1_000
   })
 }

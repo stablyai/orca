@@ -62,8 +62,7 @@ import { NativeChatVisualOwnerContext } from '@/components/native-chat/media/vis
 import { isHome, type BotHomeOwner } from '../../../shared/bots/bot-homes'
 import { requestNativeChatComposerFocus } from '../components/native-chat/composer/focus/native-chat-composer-focus-intent'
 import { structuredAgentSessionDraftScopeKey } from '../components/native-chat/drafts/native-chat-draft-scope'
-import { botHomeHostId } from '../../../shared/bots/bot-home-host'
-import { closeSharedBotChat, openSharedBotChat } from './agent-session/open/shared-bot-chat-open'
+import { revealSharedBotChat } from './agent-session/open/shared-bot-chat-open'
 
 export { isHome, readBots, readHostBots, refreshBotHost, refreshBots, subscribeToBotChanges }
 
@@ -273,18 +272,10 @@ export async function openBotChat(bot: BotRef): Promise<string> {
 
 /** A new Home Chat; the old one stops, leaves the tab bar and stays in history. */
 export async function newBotHomeChat(bot: BotRef): Promise<string> {
-  const saved = readHostBots(bot.hostId).find((entry) => entry.id === bot.id)
   const { sessionId } = await callBotRpc<{ sessionId: string }>(bot, 'bots.chat.reset', {
     botId: bot.id
   })
   await refreshBotHost(bot.hostId)
-  // A shared agent's host keeps no tabs for this account: the Home it replaced leaves them here.
-  if (saved?.chatSessionId) {
-    closeSharedBotChat({
-      workspaceId: folderWorkspaceKey(saved.folderWorkspaceId),
-      sessionId: saved.chatSessionId
-    })
-  }
   return sessionId
 }
 
@@ -325,7 +316,7 @@ export async function deleteBot(
 /** False when the home is not in the catalog (or not reachable) yet. */
 export function openBotHome(bot: Bot): boolean {
   const opened = activateAndRevealFolderWorkspace(bot.folderWorkspaceId, {
-    executionHostId: botHomeHostId(bot),
+    executionHostId: bot.hostId,
     // Bots are not rows of the workspace list, so there is nothing there to reveal.
     revealInSidebar: false,
     // Its surface is this account's Home chat, which BotHomeChat opens on the page: never a seeded terminal.
@@ -347,17 +338,17 @@ export async function openBotHomeTab(bot: Bot, options?: { draft?: string }): Pr
   })
   // The home must be in the catalog before it can open.
   await useAppStore.getState().fetchFolderWorkspaces({
-    runtimeEnvironmentId: runtimeTargetEnvironmentId(botHostTarget(botHomeHostId(bot)))
+    runtimeEnvironmentId: runtimeTargetEnvironmentId(botHostTarget(bot.hostId))
   })
   if (!openBotHome(bot)) {
     return false
   }
   if (chatSessionId) {
     const worktreeId = folderWorkspaceKey(bot.folderWorkspaceId)
-    // A shared agent's host keeps no tabs for this account: its Home opens in a tab kept here. Else an
-    // open Home switches here; one not in this window yet opens when the host's activation arrives.
+    // An open Home switches here; one not in this window yet opens when the host's activation
+    // arrives, which a shared agent's host sends to this window alone.
     if (
-      openSharedBotChat({ workspaceId: worktreeId, sessionId: chatSessionId }) === null &&
+      !revealSharedBotChat(bot, worktreeId, chatSessionId) &&
       !activateStructuredAgentSessionById({ worktreeId, sessionId: chatSessionId })
     ) {
       activateStructuredAgentSessionTabOnOwner(worktreeId, chatSessionId)

@@ -19,7 +19,6 @@ const SHARED: SharedBotHostView = {
   botId: 'ivy',
   botName: 'Ivy',
   ownerName: 'Jinwoo Hong',
-  homeWorkspaceId: null,
   link: 'live',
   holds: true,
   held: []

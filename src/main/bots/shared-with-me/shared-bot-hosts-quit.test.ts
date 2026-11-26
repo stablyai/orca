@@ -13,7 +13,6 @@ import {
 } from './shared-bot-host-store'
 import type { MineShare } from './shared-bot-pairing'
 import type { SharedBotsCloud } from './shared-bots-cloud'
-import { memorySharedBotHomes } from './shared-bot-home.test-fixture'
 
 const dirs: string[] = []
 afterEach(() => {
@@ -65,7 +64,6 @@ async function kept(mine: () => Promise<MineAnswer>, account: () => string | nul
     account,
     cloud: () => cloud,
     publish: () => {},
-    homes: memorySharedBotHomes(dir).homes,
     now: () => 1_000
   })
   return { service, file, before }

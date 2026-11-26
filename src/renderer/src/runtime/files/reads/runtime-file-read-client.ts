@@ -82,7 +82,7 @@ async function readRuntimeFileContentAsStored({
       pageOversizedBinary: pageOversizedBinary === true
     })
   }
-  const address = workspaceOrScratchFileAddress(target, worktreeId, relativePath, filePath)
+  const address = workspaceOrScratchFileAddress(worktreeId, relativePath, filePath)
   if (!address) {
     throw new Error('Remote file is outside the owning runtime worktree')
   }

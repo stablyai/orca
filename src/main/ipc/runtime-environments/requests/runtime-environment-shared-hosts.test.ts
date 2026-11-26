@@ -13,7 +13,6 @@ import {
 } from '../../../../shared/remote-runtime/pairing/shared-host-keys'
 import { parseRuntimeRelayEndpoint } from '../../../../shared/remote-runtime/pairing/runtime-relay-endpoint'
 import { SharedBotHosts } from '../../../bots/shared-with-me/shared-bot-hosts'
-import { memorySharedBotHomes } from '../../../bots/shared-with-me/shared-bot-home.test-fixture'
 import {
   RELAY_TEST_INVITE,
   startHostOverRelay
@@ -129,8 +128,7 @@ it(
         decline: async () => ({ ok: true, value: { status: 'declined' } }),
         hold: async () => ({ ok: true, value: { status: 'held' } })
       }),
-      publish: () => {},
-      homes: memorySharedBotHomes(userDataPath).homes
+      publish: () => {}
     })
     await hosts.ready()
     const reach = parseRuntimeRelayEndpoint(host.connection.endpoint)!

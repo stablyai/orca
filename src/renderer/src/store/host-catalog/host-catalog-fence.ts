@@ -3,6 +3,7 @@ import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host
 import { isRemovedRuntimeHostId } from './removed-runtime-host-rows'
 import { getEnvironmentSshStateGeneration } from '../slices/ssh/runtime-environment-ssh'
 import { getRuntimeTargetHostId } from '../../runtime/rpc/targets/runtime-client-target'
+import { readSharedBotHosts } from '../../runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 import type { HostIdentityFence } from '../../runtime/rpc/environment-revisions/host-identity-fence'
 import {
   captureHostIdentityFence,
@@ -83,6 +84,10 @@ async function listRuntimeEnvironmentsForAllHostLoad(): Promise<{ id: string }[]
   }
 }
 
+function sharedBotHostEnvironmentIds(): string[] {
+  return readSharedBotHosts().map((host) => host.environmentId)
+}
+
 /** Claim each runtime fence before listing; stale loads claim none and callers own settlement. */
 export async function loadRuntimeHostCatalogs(
   get: CatalogFenceStore,
@@ -99,13 +104,17 @@ export async function loadRuntimeHostCatalogs(
   if (!isCurrentLoad()) {
     return
   }
-  const environments = listed ?? []
+  // A shared agent's host lists its agent's home and groups here; its repos stay out of Projects.
+  const shared = kind === 'repos' ? [] : sharedBotHostEnvironmentIds()
+  const environmentIds = [
+    ...new Set([...(listed ?? []).map((environment) => environment.id), ...shared])
+  ]
   if (listed) {
-    onListed?.(listed.map((environment) => environment.id))
+    onListed?.(environmentIds)
   }
   await Promise.all(
-    environments.map((environment) => {
-      const target = { kind: 'environment' as const, environmentId: environment.id }
+    environmentIds.map((environmentId) => {
+      const target = { kind: 'environment' as const, environmentId }
       return load(target, claimHostCatalogFence(get, kind, target))
     })
   )

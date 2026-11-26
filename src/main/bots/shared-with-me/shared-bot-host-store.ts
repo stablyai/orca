@@ -77,7 +77,7 @@ const SharedBotHostEntry = z.object({
   pendingResume: z.object({ token: Text, hash: Text, reqId: Text }).optional(),
   resume: ResumeCredential.optional(),
   acceptedAt: z.number().int().nonnegative().optional(),
-  // This computer's folder workspace its chats open in; absent until made (and in a store from before).
+  // The home an older build kept on this computer; removed at startup (shared-bot-home-cleanup.ts).
   homeWorkspaceId: Text.optional(),
   status: KeptStatus.optional(),
   held: z.array(SharedBotHeldMessage),

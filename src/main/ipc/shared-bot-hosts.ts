@@ -14,7 +14,10 @@ import {
 } from '../bots/shared-with-me/shared-bot-host-failures'
 import { setSharedHostsOwner } from './runtime-environments/requests/runtime-environment-shared-hosts'
 import { setSharedHosts } from '../../shared/remote-runtime/pairing/shared-host-keys'
-import { SharedBotHomes, type SharedBotHomeDeps } from '../bots/shared-with-me/shared-bot-home'
+import {
+  removeOldSharedBotHomes,
+  type SharedBotHomeCleanupDeps
+} from '../bots/shared-with-me/shared-bot-home-cleanup'
 
 const ShareArgs = z.object({ shareId: BotShareIdSchema })
 const SendAgainArgs = z.object({
@@ -25,14 +28,13 @@ const SendAgainArgs = z.object({
 export function registerSharedBotHostsHandlers(args: {
   userDataPath: string
   cloud: () => ConnectorCloud | null
-  homes: Omit<SharedBotHomeDeps, 'userDataPath'>
+  homes: Pick<SharedBotHomeCleanupDeps, 'folderWorkspaceIds' | 'deleteFolderWorkspace'>
   /** The list this computer's phones read (sharedBots.phone.list) changed. */
   phoneSharesChanged: () => void
 }): SharedBotHosts {
   const failures = new SharedBotHostFailures()
   const hosts = new SharedBotHosts({
     userDataPath: args.userDataPath,
-    homes: new SharedBotHomes({ ...args.homes, userDataPath: args.userDataPath }),
     cloud: () => {
       const cloud = args.cloud()
       return cloud ? reportingSharedBotsCloud(sharedBotsCloud(cloud), failures) : null
@@ -76,6 +78,16 @@ export function registerSharedBotHostsHandlers(args: {
   )
   setSharedHosts((environmentId) => hosts.sharedHost(environmentId))
   setSharedHostsOwner(hosts)
+  void hosts
+    .ready()
+    .then(() =>
+      removeOldSharedBotHomes({
+        ...args.homes,
+        userDataPath: args.userDataPath,
+        store: hosts.store
+      })
+    )
+    .catch((error: unknown) => console.warn('[shared-agents] old home cleanup failed', error))
   hosts.start()
   return hosts
 }
