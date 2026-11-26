@@ -1,3 +1,4 @@
+import { captureWorkerHandoffTurn } from './start/worker-handoff-brief'
 import { stopHelperAfterStart } from './worker-stop'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { z } from 'zod'
@@ -71,6 +72,7 @@ export async function startWorker(
   startFollowUp?: WorkerFollowUp
 ): Promise<unknown> {
   const { runtime, orchestrationMutation, orchestrationCaller } = ctx
+  const handoffTurn = captureWorkerHandoffTurn(orchestrationCaller)
   if (startParams.origin !== undefined && startParams.on) {
     throw new OrchestrationError(
       'invalid_argument',
@@ -111,7 +113,8 @@ export async function startWorker(
       task: existingTask,
       taskDeps,
       orchestrationMutation,
-      callerSession: orchestrationCaller
+      callerSession: orchestrationCaller,
+      chatLineage
     })
     await stopHelperAfterStart(runtime, receipt, orchestrationMutation)
     const placed = receipt && typeof receipt === 'object' ? { ...receipt, mode } : receipt
@@ -132,6 +135,7 @@ export async function startWorker(
     orchestrationMutation,
     mode,
     chatLineage,
+    handoffTurn,
     helperCreator,
     followUp
   })
@@ -255,11 +259,7 @@ export async function prepareWorkerStart(
     )
   }
   if (helperCreator && !followUp) {
-    assertHelperStartScope(db, helperCreator, {
-      task: existingTask,
-      params,
-      ...(followUp ? { followUp } : {})
-    })
+    assertHelperStartScope(db, helperCreator, { task: existingTask, params })
   }
   if (existingTask) {
     await assertWorkerStartTaskSpecWithinPromptBudget(existingTask.spec)

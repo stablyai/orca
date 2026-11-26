@@ -11,6 +11,8 @@ import { taskNotFoundError } from '../../coordinator/dispatch/task-dispatch-refu
 import { claimTaskForStart } from '../tasks/task-start-claim'
 import { getFollowUpDispatch, takeFollowUpMail } from '../dispatch-context/worker-follow-up-lineage'
 
+import { assertBotRunWorkerCapacity } from '../bot-run-worker-capacity'
+
 export function createStartingWorkerDispatch(
   this: OrchestrationDb,
   params: {
@@ -131,6 +133,14 @@ export function createStartingWorkerDispatch(
         { effectsApplied: false }
       )
     }
+    const chatLineage =
+      params.chatLineage === true ||
+      [params.retryOf, params.followUpOf].some(
+        (earlier) => earlier && this.getDispatchContextById(earlier)?.chat_lineage === 1
+      )
+    if (chatLineage) {
+      assertBotRunWorkerCapacity(this, task.run_id)
+    }
     const { priorFailures } = claimTaskForStart(this, task, { retryOf: params.retryOf })
 
     const id = generateId('ctx')
@@ -189,11 +199,7 @@ export function createStartingWorkerDispatch(
           .map((earlier) => (earlier ? this.getDispatchContextById(earlier)?.for_message_id : null))
           .find((ref) => ref) ??
         null,
-      chatLineage:
-        params.chatLineage === true ||
-        [params.retryOf, params.followUpOf].some(
-          (earlier) => earlier && this.getDispatchContextById(earlier)?.chat_lineage === 1
-        ),
+      chatLineage,
       ...recordedCreatorIdentity(params.creator)
     })
     if (params.takesMailOf) {

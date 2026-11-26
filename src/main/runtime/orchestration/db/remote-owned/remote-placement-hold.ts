@@ -13,6 +13,7 @@ export type RemotePlacementRow = {
   dispatch_id: string | null
   created_at: string
   never_sent_at: string | null
+  chat_lineage: 0 | 1 | null
 }
 
 /**

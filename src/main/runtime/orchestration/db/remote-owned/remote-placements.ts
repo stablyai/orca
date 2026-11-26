@@ -24,6 +24,7 @@ import {
 } from './remote-dispatch-records'
 import { getOpenRemoteRunLink, type RemoteRunLinkRow } from './remote-run-links'
 import { getLiveRemotePlacement, type RemotePlacementRow } from './remote-placement-hold'
+import { assertBotRunWorkerCapacity } from '../bot-run-worker-capacity'
 import { writtenRow } from './written-row'
 
 export function getRemotePlacement(
@@ -53,6 +54,7 @@ export function reserveRemotePlacement(
     requestKey: string
     create?: TaskCreation
     retryOf?: string
+    enforceBotRunCapacity?: boolean
   }
 ): { placement: RemotePlacementRow; task: TaskRow; nothingSent: boolean } {
   const transaction = beginLifecycleWriteTransaction(db.db, 'reserve_remote_placement')
@@ -81,6 +83,9 @@ export function reserveRemotePlacement(
         nothingSent: existing.never_sent_at !== null
       }
     }
+    if (params.enforceBotRunCapacity) {
+      assertBotRunWorkerCapacity(db, link.run_id)
+    }
     const task =
       db.getTask(params.taskId) ??
       (params.create
@@ -97,13 +102,14 @@ export function reserveRemotePlacement(
       .prepare(
         `INSERT INTO remote_placements (
            task_id, run_id, environment_id, conversation_id, state, request_key, prior_task_status,
-           dispatch_id
-         ) VALUES (?, ?, ?, ?, 'reserved', ?, ?, ?)
+           dispatch_id, chat_lineage
+         ) VALUES (?, ?, ?, ?, 'reserved', ?, ?, ?, ?)
          ON CONFLICT(task_id) DO UPDATE SET
            run_id = excluded.run_id, environment_id = excluded.environment_id,
            conversation_id = excluded.conversation_id, state = 'reserved',
            request_key = excluded.request_key, prior_task_status = excluded.prior_task_status,
-           dispatch_id = excluded.dispatch_id, never_sent_at = NULL`
+           dispatch_id = excluded.dispatch_id, never_sent_at = NULL,
+           chat_lineage = excluded.chat_lineage`
       )
       .run(
         task.id,
@@ -112,7 +118,8 @@ export function reserveRemotePlacement(
         link.conversation_id,
         params.requestKey,
         task.status,
-        params.retryOf ?? null
+        params.retryOf ?? null,
+        params.enforceBotRunCapacity ? 1 : 0
       )
     transitionLifecycleWithDb(db.db, {
       entity: 'task',
@@ -277,13 +284,10 @@ export function currentRemoteAttempt(
   taskId: string
 ): RemoteDispatchRow | undefined {
   const placement = getLiveRemotePlacement(db, taskId)
-  if (placement?.state !== 'accepted' || !placement.dispatch_id) {
-    return undefined
-  }
-  if (getActiveDispatchForTask(db, taskId)) {
-    return undefined
-  }
-  return getRemoteDispatch(db, placement.dispatch_id)
+  const dispatchId = placement?.state === 'accepted' ? placement.dispatch_id : null
+  return dispatchId && !getActiveDispatchForTask(db, taskId)
+    ? getRemoteDispatch(db, dispatchId)
+    : undefined
 }
 
 /**

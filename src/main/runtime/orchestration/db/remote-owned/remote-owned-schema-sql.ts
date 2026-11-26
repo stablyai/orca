@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS remote_run_links (
   cancel_key               TEXT,
   cancel_attempt           INTEGER NOT NULL DEFAULT 0,
   cancel_retries           INTEGER NOT NULL DEFAULT 0,
+  -- A tasks reset removes the live rows while the still-running workers hold these slots.
+  cancel_owed_workers      INTEGER,
   cancel_retry_at          INTEGER,
   last_imported_sequence   INTEGER NOT NULL DEFAULT 0,
   last_error               TEXT,
@@ -25,6 +27,8 @@ CREATE TABLE IF NOT EXISTS remote_run_links (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_remote_run_links_open
   ON remote_run_links(run_id, environment_id) WHERE state = 'open';
+CREATE INDEX IF NOT EXISTS idx_remote_run_links_worker_capacity
+  ON remote_run_links(run_id) WHERE state IN ('open', 'cancel_owed');
 CREATE INDEX IF NOT EXISTS idx_remote_run_links_environment
   ON remote_run_links(environment_id, state);
 
@@ -42,7 +46,9 @@ CREATE TABLE IF NOT EXISTS remote_placements (
   created_at         TEXT NOT NULL DEFAULT (datetime('now')),
   -- Set when every send under request_key failed before leaving this Orca, so a cancel may retire
   -- the reservation; a resend clears it first.
-  never_sent_at      TEXT
+  never_sent_at      TEXT,
+  -- Whether the home admitted this as a bot's worker; NULL for placements recorded before this.
+  chat_lineage       INTEGER
 );
 -- Closing a link visits only its own rows here and in remote_dispatches.
 CREATE INDEX IF NOT EXISTS idx_remote_placements_conversation ON remote_placements(conversation_id);

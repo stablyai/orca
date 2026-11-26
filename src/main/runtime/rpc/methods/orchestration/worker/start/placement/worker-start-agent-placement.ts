@@ -8,10 +8,15 @@ import type { TuiAgent } from '../../../../../../../../shared/agent-launch/catal
 import { executeAgentLaunch } from '../../../../../../../agent-launch/agent-launch-executor'
 import type { AgentLaunchSurfaceFactory } from '../../../../../../../agent-launch/agent-launch-surface-factories'
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
+import {
+  sessionCallerOf,
+  type OrchestrationEntryCaller
+} from '../../../../../../orchestration/addressing/orchestration-caller-identity'
 import type { OrchestrationDb } from '../../../../../../orchestration/db/orchestration-db'
 import { WORKER_START_VOCABULARY } from '../../../structured-workers/orchestration-worker-start-mode'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { tearDownFailedWorkerStart } from '../readiness/failed-worker-start-teardown'
+import { readWorkerHandoffBrief, type WorkerHandoffTurn } from '../worker-handoff-brief'
 import type { WorkerStartInput } from '../worker-start-input'
 import {
   createExistingWorktreeWorkerTerminal,
@@ -44,7 +49,7 @@ export type WorkerAgentPlacement = {
   warning?: string
   /** Set when a follow-up brought a closed worker back instead of launching one. */
   reopened?: ReopenedWorker
-  /** Context the fresh agent's Task carries in place of the conversation it could not reopen. */
+  /** Reference context from the bot handoff or the worker conversation it could not reopen. */
   extraSpec?: string
 }
 
@@ -53,6 +58,7 @@ type WorkerAgentPlacementArgs = {
   db: OrchestrationDb
   dispatchId: string
   taskId: string
+  taskSpec: string
   params: WorkerStartInput
   requestedWorktree: string
   /** Present only when this start creates a worktree. */
@@ -62,6 +68,8 @@ type WorkerAgentPlacementArgs = {
   resolvedWorktree: PlacedWorktree | undefined
   /** Decided before the dispatch record; for an existing worktree, already settled on its host. */
   mode: WorkerStartModeReceipt
+  callerSession?: OrchestrationEntryCaller
+  handoffTurn?: WorkerHandoffTurn
   agent: TuiAgent | undefined
   launch: {
     preferences: AgentLaunchPreferences | undefined
@@ -125,9 +133,21 @@ export async function placeWorkerAgent(
   }
   const launched = await launchWorkerAgent(args, existing)
   // A reopen refused before spawning anything: the fresh agent gets the earlier work instead.
-  return reopened === null && args.followUp?.earlierWork
-    ? { ...launched, extraSpec: args.followUp.earlierWork }
-    : launched
+  if (reopened === null && args.followUp?.earlierWork) {
+    return { ...launched, extraSpec: args.followUp.earlierWork }
+  }
+  if (launched.structuredSession && !args.followUp && args.agent && args.handoffTurn) {
+    const extraSpec = await readWorkerHandoffBrief({
+      runtime: args.runtime,
+      db: args.db,
+      callerSession: args.callerSession,
+      turn: args.handoffTurn,
+      workerAgent: args.agent,
+      taskSpec: args.taskSpec
+    })
+    return { ...launched, extraSpec }
+  }
+  return launched
 }
 
 async function launchWorkerAgent(
@@ -262,6 +282,7 @@ function workerSurfaceFactory(
         worktreeId,
         agent,
         dispatchId: args.dispatchId,
+        caller: sessionCallerOf(args.callerSession),
         ...(args.launch.preferences ? { launchPreferences: args.launch.preferences } : {}),
         effects: args.effects
       })

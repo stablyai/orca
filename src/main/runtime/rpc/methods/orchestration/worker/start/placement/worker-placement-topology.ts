@@ -5,6 +5,13 @@ import type { TuiAgent } from '../../../../../../../../shared/agent-launch/catal
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../../../orchestration/db/orchestration-db'
 import { createStructuredWorkerSession } from '../../../structured-workers/orchestration-structured-worker-session'
+import type { OrchestrationSessionCaller } from '../../../../../../orchestration/addressing/orchestration-caller-identity'
+import { readAgentSessionRecordStore } from '../../../../../../orchestration/addressing/session-lineage/structured-session-lineage'
+import { botOfHome } from '../../../../../../../bots/bot-home-membership'
+import {
+  AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
+  newChatPermissionMode
+} from '../../../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { dispatchReportMailbox } from '../../../../../../orchestration/workers/reports/dispatch-report-mailbox'
 
 export type WorkerEffect = {
@@ -27,6 +34,15 @@ export type WorkerEffect = {
   sessionId?: string
   surface?: 'visible' | 'background'
   warning?: string
+}
+
+export function existingWorkerPlacementEffects(worktreeId: string | undefined): WorkerEffect[] {
+  return worktreeId
+    ? [
+        { kind: 'worktree', action: 'reused', id: worktreeId },
+        { kind: 'setup', action: 'not_applicable', state: 'not_applicable' }
+      ]
+    : []
 }
 
 export type WorkerSetupReceipt = {
@@ -96,11 +112,29 @@ export async function createStructuredWorkerSessionForWorktree(args: {
   worktreeId: string
   agent: TuiAgent
   dispatchId: string
+  caller?: OrchestrationSessionCaller
   /** `--model`/`--effort`, laid over the saved selection; a leveled Antigravity `--model` replaces it. */
   launchPreferences?: AgentLaunchPreferences
   effects: WorkerEffect[]
 }): Promise<Awaited<ReturnType<typeof createStructuredWorkerSession>>> {
-  const options = narrowStructuredLaunchSeedOptions(args.launchPreferences)
+  const bot = botOfHome(args.runtime.bots, { workspaceId: args.worktreeId })
+  const homeCaller = args.caller?.workspaceId === args.worktreeId ? args.caller : undefined
+  const caller = homeCaller && readAgentSessionRecordStore()?.getRecord(homeCaller.sessionId)
+  const ownChoice =
+    bot &&
+    caller &&
+    caller.location.workspaceId === args.worktreeId &&
+    caller.provider === args.agent
+      ? caller.permissionMode
+      : undefined
+  const botChoice = bot?.agent === args.agent ? bot.permissionMode : undefined
+  // A different workspace may use the destination bot home without borrowing its approval grants.
+  const savedMode = homeCaller ? (ownChoice ?? botChoice) : botChoice && 'ask'
+  const permissionMode = savedMode ? newChatPermissionMode(args.agent, savedMode) : null
+  const launchOptions = narrowStructuredLaunchSeedOptions(args.launchPreferences)
+  const options = permissionMode
+    ? { ...launchOptions, [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: permissionMode }
+    : launchOptions
   const created = await createStructuredWorkerSession({
     runtime: args.runtime,
     worktreeId: args.worktreeId,

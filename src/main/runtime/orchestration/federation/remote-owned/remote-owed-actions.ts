@@ -145,12 +145,18 @@ export async function sendOwedRemoteRunCancel(
   if (!link.cancel_key) {
     return
   }
-  const settle = (update: { closed: boolean; answered: boolean; error: string | null }): void => {
+  const settle = (update: {
+    closed: boolean
+    answered: boolean
+    error: string | null
+    remaining?: number
+  }): void => {
     runtime
       .getOrchestrationDb()
       .db.prepare(
         `UPDATE remote_run_links SET
            state = CASE WHEN ? THEN 'closed' ELSE state END,
+           cancel_owed_workers = COALESCE(?, cancel_owed_workers),
            cancel_attempt = CASE WHEN ? THEN cancel_attempt + 1 ELSE cancel_attempt END,
            cancel_retries = cancel_retries + 1,
            cancel_retry_at = CASE WHEN ? THEN NULL ELSE ? END,
@@ -159,6 +165,7 @@ export async function sendOwedRemoteRunCancel(
       )
       .run(
         update.closed ? 1 : 0,
+        update.remaining ?? null,
         update.answered && !update.closed ? 1 : 0,
         update.closed ? 1 : 0,
         remoteResendRetryAt(link.cancel_retries, now()),
@@ -180,6 +187,7 @@ export async function sendOwedRemoteRunCancel(
     )
     settle({
       closed: answer.remaining === 0,
+      remaining: answer.remaining,
       answered: true,
       error:
         answer.remaining === 0 ? null : `${answer.remaining} workers there are not proven stopped.`
