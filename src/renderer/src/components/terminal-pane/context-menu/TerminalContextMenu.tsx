@@ -15,6 +15,7 @@ import {
   RotateCcw,
   SquareTerminal,
   TextSelect,
+  Waypoints,
   X
 } from 'lucide-react'
 import {
@@ -73,6 +74,10 @@ type TerminalContextMenuProps = {
   canToggleNativeChat: boolean
   isNativeChatView: boolean
   onToggleNativeChat: () => void
+  /** True when this pane's agent session can be shown as the live map view. */
+  canShowAgentMap: boolean
+  isAgentMapView: boolean
+  onToggleAgentMap: () => void
   onCopyAgentSessionContext: () => void
   quickCommandHosts: TerminalQuickCommandMenuHost[]
   quickCommandHostLoadFailed: boolean
@@ -175,6 +180,9 @@ function TerminalContextMenuItems({
   canToggleNativeChat,
   isNativeChatView,
   onToggleNativeChat,
+  canShowAgentMap,
+  isAgentMapView,
+  onToggleAgentMap,
   onCopyAgentSessionContext,
   quickCommandHosts,
   quickCommandHostLoadFailed,
@@ -207,7 +215,8 @@ function TerminalContextMenuItems({
       clearPaneTitle: formatPrimaryShortcutLabel('terminal.clearPaneTitle', keybindings),
       copySessionId: formatOptionalPrimaryShortcutLabel('terminal.copySessionId', keybindings),
       close: formatPrimaryShortcutLabel('terminal.closePane', keybindings),
-      nativeChat: formatOptionalPrimaryShortcutLabel('terminal.toggleNativeChat', keybindings)
+      nativeChat: formatOptionalPrimaryShortcutLabel('terminal.toggleNativeChat', keybindings),
+      agentMap: formatOptionalPrimaryShortcutLabel('terminal.toggleAgentMap', keybindings)
     }),
     [keybindings]
   )
@@ -267,6 +276,17 @@ function TerminalContextMenuItems({
             : t('components.tab.bar.SortableTabContextMenu.switchToChatView', 'Continue in chat')}
           {shortcuts.nativeChat ? (
             <DropdownMenuShortcut>{shortcuts.nativeChat}</DropdownMenuShortcut>
+          ) : null}
+        </DropdownMenuItem>
+      ) : null}
+      {canShowAgentMap ? (
+        <DropdownMenuItem onSelect={onToggleAgentMap}>
+          <Waypoints />
+          {isAgentMapView
+            ? t('components.terminal.pane.contextMenu.switchToTerminalView', 'Back to Terminal')
+            : t('components.terminal.pane.contextMenu.showAgentMapView', 'Show Agent Map')}
+          {shortcuts.agentMap ? (
+            <DropdownMenuShortcut>{shortcuts.agentMap}</DropdownMenuShortcut>
           ) : null}
         </DropdownMenuItem>
       ) : null}

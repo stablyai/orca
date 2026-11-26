@@ -16,10 +16,13 @@ export function useMobileNativeChatActiveResolution(args: {
 }): {
   sessionViewReady: boolean
   isTabChatView: (tabId: string) => boolean
+  isTabMapView: (tabId: string) => boolean
   setTabView: MobileSessionViewModeController['setTabView']
   toggleTabChatView: (tabId: string) => void
   showNativeChat: boolean
   showNativeChatRef: MutableRefObject<boolean>
+  showAgentMap: boolean
+  activeMapSessionId: string | null
   activeChatAgent: string | null
   /** False when only memory names the agent; chat writes stay locked. */
   activeChatAgentConfirmed: boolean
@@ -42,17 +45,27 @@ export function useMobileNativeChatActiveResolution(args: {
   const {
     ready: sessionViewReady,
     isTabChatView,
+    isTabMapView,
     setTabView,
     toggleTabChatView
   } = useMobileSessionViewMode({ hostId, worktreeId })
+  // Map wins over chat: both overlay the terminal, and a map pick hides the transcript.
+  const tabWantsMap = activeSessionTabId ? isTabMapView(activeSessionTabId) : false
   const tabWantsChat =
-    activeSessionTab?.type === 'agent-session' ||
-    (activeSessionTabId ? isTabChatView(activeSessionTabId) : false)
+    (activeSessionTab?.type === 'agent-session' ||
+      (activeSessionTabId ? isTabChatView(activeSessionTabId) : false)) &&
+    !tabWantsMap
   const activeChatResolution =
     activeSessionTab && activeSessionTabId && tabWantsChat
       ? resolveMobileNativeChat(activeSessionTab, nativeChatTranscriptIsLocalReadable)
       : null
+  const activeMapResolution =
+    activeSessionTab && activeSessionTabId && tabWantsMap
+      ? resolveMobileNativeChat(activeSessionTab, nativeChatTranscriptIsLocalReadable)
+      : null
   const showNativeChat = activeChatResolution != null
+  const showAgentMap = activeMapResolution != null
+  const activeMapSessionId = activeMapResolution?.sessionId ?? null
   const showNativeChatRef = useRef(showNativeChat)
   const activeChatAgent = activeChatResolution?.agent ?? null
   const activeChatAgentRef = useRef<string | null>(activeChatAgent)
@@ -73,10 +86,13 @@ export function useMobileNativeChatActiveResolution(args: {
   return {
     sessionViewReady,
     isTabChatView,
+    isTabMapView,
     setTabView,
     toggleTabChatView,
     showNativeChat,
     showNativeChatRef,
+    showAgentMap,
+    activeMapSessionId,
     activeChatAgent,
     activeChatAgentConfirmed: activeChatResolution?.agentConfirmed !== false,
     activeChatAgentRef,

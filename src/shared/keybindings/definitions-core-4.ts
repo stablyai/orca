@@ -58,6 +58,17 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     }
   },
   {
+    id: 'terminal.toggleAgentMap',
+    title: 'Show the agent session as a live map',
+    group: 'Chat',
+    scope: 'terminal',
+    conflictGroups: ['global', 'tabs', 'terminal', 'chat', 'fileExplorer'],
+    implicitDefaultYields: true,
+    searchKeywords: ['shortcut', 'agent map', 'map', 'zoetrope', 'live map', 'toggle', 'switch'],
+    // Why: ship unbound like the sleeping toggle, so no existing chord is claimed on any platform.
+    defaultBindings: platformBindings([])
+  },
+  {
     id: 'sidebar.childWorkspaces.toggle',
     title: 'Toggle Child Workspaces',
     group: 'Global',

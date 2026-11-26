@@ -132,6 +132,7 @@ export type KeybindingActionId =
   | 'botItem.back'
   | 'botItem.previous'
   | 'botItem.next'
+  | 'terminal.toggleAgentMap'
   | PluginKeybindingActionId
 
 export type KeybindingOverrides = Partial<Record<KeybindingActionId, string[]>>

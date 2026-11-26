@@ -42,6 +42,7 @@ import type {
   AgentListPublication,
   AgentPaneActivityChange
 } from '../../../../shared/agent-status/presentation/agent-list-status'
+import type { TerminalViewMode } from '../../../../shared/terminal-view-mode'
 
 export type RuntimeNotifier = {
   automationsChanged?(payload: {
@@ -92,7 +93,7 @@ export type RuntimeNotifier = {
       launchConfig?: SleepingAgentLaunchConfig
       launchToken?: string
       launchAgent?: TuiAgent
-      viewMode?: 'terminal' | 'chat'
+      viewMode?: TerminalViewMode
       targetGroupId?: string
       afterTabId?: string
       shellOverride?: string

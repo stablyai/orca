@@ -16,6 +16,7 @@ import { TerminalOverlaySlot } from './TerminalOverlaySlot'
 import { captureWorkspaceEmptiedReaction } from '../../../lib/workspace/tabs/close/workspace-emptied-reaction'
 import { TerminalRestoringPlaceholder } from './TerminalRestoringPlaceholder'
 import { useTerminalTabColdParking } from '../parking/lifecycle/use-terminal-tab-cold-parking'
+import { useAgentMapToggleShortcut } from '../../agent-session-map/use-agent-map-toggle-shortcut'
 
 type TerminalOverlayAssignment = {
   unifiedTabId: string
@@ -70,6 +71,7 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   const consumeSuppressedPtyExit = useAppStore((state) => state.consumeSuppressedPtyExit)
 
   useNativeChatToggleShortcut(worktreeId, isWorktreeActive && ownsNativeChatToggleShortcut)
+  useAgentMapToggleShortcut(worktreeId, isWorktreeActive)
 
   const captureEmptiedReaction = useCallback(
     () => captureWorkspaceEmptiedReaction(worktreeId),

@@ -72,7 +72,7 @@ export type WindowLayoutCommand =
       tabId: string
       color?: string | null
       isPinned?: boolean
-      viewMode?: 'terminal' | 'chat'
+      viewMode?: 'terminal' | 'chat' | 'map'
       clearLaunchAgent?: true
     }
   | {

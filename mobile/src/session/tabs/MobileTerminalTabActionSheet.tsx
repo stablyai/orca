@@ -32,9 +32,15 @@ export function MobileTerminalTabActionSheet({
         target: actionTarget,
         tabs: terminalTabs,
         isTabChatView: controller.nativeChatController.isTabChatView,
+        isTabMapView: controller.nativeChatController.isTabMapView,
         nativeChatTranscriptIsLocalReadable: controller.nativeChatTranscriptIsLocalReadable,
         onDismiss: () => setActionTarget(null),
         onToggleChat: controller.toggleTabChatView,
+        onToggleMap: (tabId) =>
+          controller.nativeChatController.setTabView(
+            tabId,
+            controller.nativeChatController.isTabMapView(tabId) ? 'terminal' : 'map'
+          ),
         isPhoneMode: (handle) => isTerminalPhoneDisplayMode(handle, controller.terminalModes),
         onToggleDisplayMode: (handle) => void controller.toggleDisplayMode(handle),
         onRename: controller.setRenameTarget,

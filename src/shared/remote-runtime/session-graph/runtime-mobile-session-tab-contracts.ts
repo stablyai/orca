@@ -8,6 +8,7 @@ import type { TerminalColorOverrides } from '../../terminal-themes/terminal-colo
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../workspace-layout/terminal-tab-types'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 import type { StructuredAgentId } from '../../agent-session/lifecycle/provider-handles/agent-session-provider-handle'
+import type { TerminalViewMode } from '../../terminal-view-mode.ts'
 
 export type RuntimeMobileSessionTerminalTab = {
   type: 'terminal'
@@ -41,7 +42,7 @@ export type RuntimeMobileSessionTerminalTab = {
   parentLayout?: TerminalLayoutSnapshot
   color?: string | null
   isPinned?: boolean
-  viewMode?: 'terminal' | 'chat'
+  viewMode?: TerminalViewMode
   launchDraft?: string
   launchDraftCreatedAt?: number
   isActive: boolean

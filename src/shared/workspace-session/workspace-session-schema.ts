@@ -63,7 +63,7 @@ export const terminalTabSchema = z.object({
   color: z.string().nullable(),
   isPinned: z.boolean().optional(),
   // Preserve chat ownership through restore; missing/unknown modes safely default to terminal, matching unified tabs.
-  viewMode: z.enum(['terminal', 'chat']).catch('terminal').optional(),
+  viewMode: z.enum(['terminal', 'chat', 'map']).catch('terminal').optional(),
   sortOrder: z.number(),
   createdAt: z.number(),
   generation: z.number().optional(),
@@ -114,7 +114,7 @@ const tabSchema = z.object({
   isPreview: z.boolean().optional(),
   isPinned: z.boolean().optional(),
   // Preserve chat mode on restore; unknown future values degrade to terminal and missing legacy values remain absent.
-  viewMode: z.enum(['terminal', 'chat']).catch('terminal').optional()
+  viewMode: z.enum(['terminal', 'chat', 'map']).catch('terminal').optional()
 })
 
 const tabGroupSchema = z.object({
