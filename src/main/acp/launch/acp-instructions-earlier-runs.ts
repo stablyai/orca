@@ -151,5 +151,6 @@ export function clearEarlierRunsOnce(
       })
     clearing.set(root, attempt)
   }
-  return Promise.all(removing.get(`${root}\0${chat}`) ?? []).then(() => undefined)
+  const inFlight: Promise<void>[] = Array.from(removing.get(`${root}\0${chat}`) ?? [])
+  return Promise.all(inFlight).then(() => undefined)
 }
