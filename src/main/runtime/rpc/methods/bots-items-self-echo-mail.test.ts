@@ -94,6 +94,8 @@ async function createRig() {
       })
     )
 
+  let rotateContextOnNextEpochRead = false
+
   const mountHost = async () => {
     const records = buildRecords()
     const journalDb = await openTestAgentSessionDatabase(dir)
@@ -116,7 +118,27 @@ async function createRig() {
 
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only record reads and journalDatabase are used by structuredAgentStartJournal and botChatTakingMailNow.
     const hostDeps = {
-      journalDatabase: journalDb,
+      journalDatabase: {
+        sessionEpoch: async (sessionId: string) => {
+          const epoch = await journalDb.sessionEpoch(sessionId)
+          if (rotateContextOnNextEpochRead && sessionId === HOME) {
+            rotateContextOnNextEpochRead = false
+            const entry = records.get(HOME)!
+            const updated = agentSessionRecordFixture({
+              sessionId: HOME,
+              conversationName: 'Home Chat',
+              providerContextBoundary: {
+                operationId: 'context-rotated',
+                afterFence: 0,
+                clearedAt: 1_800_000_000_000
+              },
+              location: { workspaceId: entry.record.location.workspaceId }
+            })
+            records.set(HOME, { record: updated, view: agentSessionConversationView(updated) })
+          }
+          return epoch
+        }
+      },
       store: {
         getRecord: (id: string) => records.get(id)?.record ?? null,
         listRecords: () => [...records.values()].map((entry) => entry.record),
@@ -241,7 +263,10 @@ async function createRig() {
     },
     wakes,
     readNotes,
-    restart
+    restart,
+    rotateContextOnce: () => {
+      rotateContextOnNextEpochRead = true
+    }
   }
 }
 
@@ -444,7 +469,12 @@ describe('sendBotItemMail same-bot sibling-chat self-echoes', () => {
     const [owed] = rig.items.owedMail(0).mails
     expect(owed).toBeDefined()
 
-    // First delivery + immediate in-process retry before markMailSent commits.
+    // If the recipient chat clears/rotates context mid-capture, leave it owed so the retry writes the note.
+    rig.rotateContextOnce()
+    expect(await sendBotItemMail(rig.runtime, owed!)).toBe(false)
+    expect(await rig.readNotes(HOME)).toHaveLength(0)
+
+    // Retry succeeds + immediate in-process retry before markMailSent commits does not duplicate.
     expect(await sendBotItemMail(rig.runtime, owed!)).toBe(true)
     expect(await sendBotItemMail(rig.runtime, owed!)).toBe(true)
     expect(await rig.readNotes(HOME)).toHaveLength(1)

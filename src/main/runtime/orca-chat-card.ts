@@ -19,10 +19,10 @@ export async function appendOrcaChatCard(
       return true
     }
     const captured = await destination
-    if (captured) {
-      await host.appendAgentStart(captured, body, Date.now())
+    if (!captured) {
+      return false
     }
-    return true
+    return (await host.appendAgentStart(captured, body, Date.now())) !== false
   } catch (error) {
     return fail(error)
   }
