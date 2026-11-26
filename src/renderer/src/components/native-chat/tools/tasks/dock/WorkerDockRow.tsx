@@ -63,13 +63,7 @@ export const WorkerDockRow = memo(function WorkerDockRow({
   const loading = t('components.native-chat.workerDock.loadingWorker', 'Loading worker…')
   const title = row ? workerDockRowTitle(row) : loading
   // An unreadable state has no label anywhere: the row reads as its title and time only.
-  const state = !row
-    ? ''
-    : row.retired
-      ? t('components.native-chat.workerDock.doneResult', 'Done · open result')
-      : row.state === 'unavailable'
-        ? ''
-        : workerDockStateLabel(t, row.state)
+  const state = !row || row.state === 'unavailable' ? '' : workerDockStateLabel(t, row.state)
   // A remote chat's worker is shown, not driven, here: its label says where to act instead.
   const remote =
     row?.kind === 'worker' && row.ownerActionsAvailable === false
@@ -78,17 +72,11 @@ export const WorkerDockRow = memo(function WorkerDockRow({
           'Stop or clear this from the computer it runs on'
         )
       : ''
-  const reason =
-    row &&
-    (row.state === 'failed' || row.state === 'unexpected' || row.state === 'stopping') &&
-    row.reason
-      ? row.reason
-      : ''
-  const label = [mixed && row ? workerDockKindLabel(t, row.kind) : '', title, state, reason, remote]
+  const label = [mixed && row ? workerDockKindLabel(t, row.kind) : '', title, state, remote]
     .filter(Boolean)
     .join(' · ')
   const tooltip = row
-    ? [row.name, title === row.title ? '' : row.title, title, state, reason, remote]
+    ? [row.name, title === row.title ? '' : row.title, title, state, remote]
         .filter(Boolean)
         .join(' · ')
     : undefined

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { PLUGIN_HOST_API } from '../../../../shared/plugins/workers/plugin-host-api'
 import {
   PLUGIN_WORKSPACE_LIST_LIMIT,
@@ -27,25 +28,33 @@ import { pluginAutomationRefusal } from './plugin-automation-confirmation'
 
 const api = PLUGIN_HOST_API
 
-const automationListAnswer = z.object({ automations: z.array(automationAnswer) })
-const automationCreateAnswer = z.object({ automation: z.object({ id: z.string() }) })
-const projectHostSetupAnswer = z.object({
-  setups: z.array(
-    z.object({
-      id: z.string(),
-      projectId: z.string(),
-      hostId: z.string(),
-      repoId: z.string(),
-      path: z.string(),
-      setupState: z.string()
-    })
-  )
-})
-const worktreeListAnswer = z.object({
-  worktrees: z.array(
-    z.object({ id: z.string(), identity: z.object({ key: z.string() }).optional() })
-  )
-})
+const automationListAnswer = lazyZodSchema(() =>
+  z.object({ automations: z.array(automationAnswer) })
+)
+const automationCreateAnswer = lazyZodSchema(() =>
+  z.object({ automation: z.object({ id: z.string() }) })
+)
+const projectHostSetupAnswer = lazyZodSchema(() =>
+  z.object({
+    setups: z.array(
+      z.object({
+        id: z.string(),
+        projectId: z.string(),
+        hostId: z.string(),
+        repoId: z.string(),
+        path: z.string(),
+        setupState: z.string()
+      })
+    )
+  })
+)
+const worktreeListAnswer = lazyZodSchema(() =>
+  z.object({
+    worktrees: z.array(
+      z.object({ id: z.string(), identity: z.object({ key: z.string() }).optional() })
+    )
+  })
+)
 
 /** The ids `workspace.list` gives the workspaces automations run in. */
 async function listedWorkspaceIds(
