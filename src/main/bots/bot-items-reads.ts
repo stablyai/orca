@@ -68,19 +68,27 @@ export class BotItemsReads extends BotItemsTables {
   }
 
   /** An item and where its work started (its `made` event's `startedIn`), in one call: what a
-   *  finished worker's report names. */
-  reportFact(uid: string): { item: BotItemRecord; startedIn: string | null } | null {
+   *  finished worker's report names. `startedInOwed` when the place was set only for a handoff or
+   *  the item's own thread; an older item's may be a question's, owed to the asking bot instead. */
+  reportFact(
+    uid: string
+  ): { item: BotItemRecord; startedIn: string | null; startedInOwed: boolean } | null {
     const item = this.get(uid)
     if (!item) {
       return null
     }
     const made = this.db
       .prepare(
-        "SELECT json_extract(data, '$.startedIn') AS started_in FROM item_events WHERE item_uid = ? AND kind = 'made' ORDER BY id LIMIT 1"
+        "SELECT json_extract(data, '$.startedIn') AS started_in, json_extract(data, '$.startedInOwed') AS owed FROM item_events WHERE item_uid = ? AND kind = 'made' ORDER BY id LIMIT 1"
       )
       .get(uid)
     const startedIn = made?.started_in
-    return { item, startedIn: typeof startedIn === 'string' && startedIn ? startedIn : null }
+    return {
+      item,
+      startedIn: typeof startedIn === 'string' && startedIn ? startedIn : null,
+      // SQLite's json_extract reads a JSON true as 1.
+      startedInOwed: made?.owed === 1
+    }
   }
 
   /** Every Dispatch any item links. */

@@ -154,8 +154,9 @@ describe('where a bot turn’s work started', () => {
     expect(placeOf('msg_handoff')).toEqual(THREAD)
     expect(placeOf('msg_question')).toBe(undefined)
     expect(placeOf('msg_status')).toBe(undefined)
-    // Status mail is no job, so it never hides a handoff's place; a question beside one is a second job.
-    expect(placeOf('msg_status', 'msg_handoff')).toEqual(THREAD)
+    // Anything beside a handoff leaves the turn no single place, so no other work it does inherits the
+    // handoff's thread; the handoff's own item names its request (`bot item add --request`).
+    expect(placeOf('msg_status', 'msg_handoff')).toBe(undefined)
     expect(placeOf('msg_handoff', 'msg_question')).toBe(undefined)
     expect(placeOf('msg_handoff', 'msg_private-handoff')).toBe(undefined)
     expect(placeOf('msg_handoff', 'msg_other-handoff')).toBe(undefined)

@@ -5,16 +5,13 @@
 import { randomUUID } from 'node:crypto'
 import type { BotItemsAddParams } from '../../../../shared/rpc-contract/bots-items-params'
 import { BotItemError } from '../../../bots/bot-item-error'
-import { BOT_ITEM_LIMITS } from '../../../../shared/bots/bot-items'
 import { botItemRequestMail } from '../../../bots/bot-items-mail-text'
-import {
-  assertBotItemAddable,
-  uniqueBotItemLinks,
-  type BotItemLinkInput
-} from '../../../bots/bot-items-input'
+import { assertBotItemAddable } from '../../../bots/bot-items-input'
 import { sessionCallerOf } from '../../orchestration/addressing/orchestration-caller-identity'
 import type { RpcContext } from '../core'
 import { readBotTurnOrigin } from './orchestration/messaging/bot-turn-origin'
+import { itemLinksWithOrigin, itemStartedIn } from './bots-items-started-in'
+import type { BotWakingPlace } from '../../../bots/bot-request-asker'
 import { botChatAddress } from './orchestration/messaging/bot-chat-address'
 import { sendToBot } from './orchestration/messaging/bot-request-send'
 import {
@@ -33,11 +30,16 @@ export async function addItem(
   const writer = writerOf(params, context)
   const store = runtime.botItems.store()
   const typed = (params.links ?? []).map(parseItemLink)
-  const startedIn = await originUrl(context, writer.sessionId)
-  const links = uniqueBotItemLinks(startedIn ? withOrigin(typed, startedIn) : typed)
   const target = params.forBot
     ? botNamed(params.forBot, writer.bot, runtime.bots.list())
     : writer.bot
+  const startedIn = itemStartedIn(
+    runtime.getOrchestrationDb(),
+    target.id,
+    params.request,
+    params.request === undefined ? await originPlace(context, writer.sessionId) : null
+  )
+  const links = itemLinksWithOrigin(typed, startedIn)
   const fields = {
     title: params.title,
     ...(params.description !== undefined ? { description: params.description } : {}),
@@ -88,16 +90,11 @@ export async function addItem(
   }
 }
 
-/** The thread, issue or pull request the calling turn's work started in, so its result goes back
- *  there; none when the turn can't be read, which never stops the add. */
-async function originUrl(context: RpcContext, sessionId: string): Promise<string | null> {
+/** The thread, issue or pull request all the calling turn's work started in, for an add that names
+ *  no request; none when the turn can't be read, which never stops the add. */
+async function originPlace(context: RpcContext, sessionId: string): Promise<BotWakingPlace | null> {
   try {
-    const origin = await readBotTurnOrigin(
-      context.runtime,
-      context.runtime.getOrchestrationDb(),
-      sessionId
-    )
-    return origin?.url ?? null
+    return await readBotTurnOrigin(context.runtime, context.runtime.getOrchestrationDb(), sessionId)
   } catch (error) {
     // A newest turn only the whole conversation's sends could place: no origin, as designed.
     if (!(error instanceof Error && error.name === 'JournalWindowNotIndexed')) {
@@ -105,17 +102,6 @@ async function originUrl(context: RpcContext, sessionId: string): Promise<string
     }
     return null
   }
-}
-
-/** The typed links plus the origin's, unless one names the same page (a Slack link may add
- *  `?thread_ts=`). */
-function withOrigin(typed: BotItemLinkInput[], url: string): BotItemLinkInput[] {
-  const origin = parseItemLink(url)
-  const key = (link: BotItemLinkInput) =>
-    `${link.kind}:${link.kind === 'url' ? link.ref.split(/[?#]/)[0] : link.ref}`
-  // An add already at the link limit keeps its own links: the origin is guidance, never a refusal.
-  const full = typed.length >= BOT_ITEM_LIMITS.links
-  return full || typed.some((link) => key(link) === key(origin)) ? typed : [...typed, origin]
 }
 
 /** Sends as the verified calling chat, through the path `orchestration send --to bot:` takes, so the
