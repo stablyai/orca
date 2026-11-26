@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import {
   outcomeFormat1Stored,
   outcomeFormat1StoredScalars,
@@ -22,8 +23,8 @@ const storedCard = outcomeFormat1Stored['queue.cards']._def.items[1].extend({
   unattended: z.boolean().optional()
 })
 const strictCard = strictStorage(storedCard)
-export const outcomeFormat3Card = z.custom<QueuedMessageRow>(
-  (value) => strictCard.safeParse(value).success
+export const outcomeFormat3Card = lazyZodSchema(() =>
+  z.custom<QueuedMessageRow>((value) => strictCard.safeParse(value).success)
 )
 const card = strictStorage(z.tuple([z.string(), storedCard]))
 
@@ -35,8 +36,8 @@ const storedPauseMarks = outcomeFormat1StoredScalars.shape.queuePauseMarks.exten
     .optional()
 })
 const pauseMarks = strictStorage(storedPauseMarks)
-export const outcomeFormat3PauseMarks = z.custom<JournalReducerState['queuePauseMarks']>(
-  (value) => pauseMarks.safeParse(value).success
+export const outcomeFormat3PauseMarks = lazyZodSchema(() =>
+  z.custom<JournalReducerState['queuePauseMarks']>((value) => pauseMarks.safeParse(value).success)
 )
 const completeScalars = strictStorage(
   outcomeFormat1StoredScalars.extend({ queuePauseMarks: storedPauseMarks })
