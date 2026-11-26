@@ -72,6 +72,18 @@ it('rejects a superseded check and runs the current check’s track without inhe
   )
 })
 
+it('rejects a previously shown update after a newer catalog read fails', async () => {
+  const { state, call, list } = setup()
+  const shownCheck = await state().refreshRemoteServerUpdates()
+  const unavailable = new Error('Fixture catalog unavailable')
+  list.mockRejectedValueOnce(unavailable)
+  await expect(state().refreshRemoteServerUpdates()).rejects.toBe(unavailable)
+  expect(state().remoteServerUpdates.get(HOST)?.targetVersion).toBe('1.4.276')
+
+  await state().startRemoteServerUpdates([HOST], shownCheck)
+  expect(call).not.toHaveBeenCalled()
+})
+
 it('keeps the failure from a completed batch on a passive re-check of the same target', async () => {
   const { state } = setup()
   const check = await state().refreshRemoteServerUpdates()

@@ -1,5 +1,5 @@
 import type React from 'react'
-import { useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useTranslate } from '@/i18n/use-translate'
@@ -28,6 +28,7 @@ export function ServerRestartConfirm({
 }): React.JSX.Element {
   const t = useTranslate()
   const confirmed = useRef(false)
+  const warningId = useId()
   const ids = servers.map((entry) => entry.environmentId)
   const key = ids.join('\n')
   // Bound to the servers it named: if the set changes while open, the question closes unanswered.
@@ -81,6 +82,7 @@ export function ServerRestartConfirm({
         side="top"
         align="end"
         aria-label={question}
+        aria-describedby={live ? warningId : undefined}
         className="@container/server-confirm w-[min(30rem,var(--radix-popover-trigger-width))]"
         onCloseAutoFocus={(event) => {
           if (confirmed.current) {
@@ -92,11 +94,18 @@ export function ServerRestartConfirm({
       >
         <div className="flex items-center gap-1 p-1.5 @min-[27rem]/server-confirm:gap-2 @min-[27rem]/server-confirm:ps-3">
           <p className="min-w-0 flex-1 truncate text-sm">
-            {question}
+            <span className={live ? 'hidden @min-[27rem]/server-confirm:inline' : undefined}>
+              {question}
+            </span>
             {live ? (
-              <span className="hidden @min-[27rem]/server-confirm:inline">
-                {' '}
-                {t('settings.about.servers.liveMayDrop', 'Live sessions may drop.')}
+              <span id={warningId}>
+                <span className="hidden @min-[27rem]/server-confirm:inline">
+                  {' '}
+                  {t('settings.about.servers.liveMayDrop', 'Live sessions may drop.')}
+                </span>
+                <span className="@min-[27rem]/server-confirm:hidden">
+                  {t('settings.about.servers.sessionsMayDrop', 'Sessions may drop')}
+                </span>
               </span>
             ) : null}
           </p>

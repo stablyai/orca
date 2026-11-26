@@ -155,9 +155,7 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
     },
     [refresh]
   )
-  const needsSnapshot =
-    snapshot.phase === 'owed' ||
-    (snapshot.phase === 'ready' && snapshot.check.revision !== revision)
+  const needsSnapshot = snapshot.phase === 'owed'
   useEffect(() => {
     if (!open || !needsSnapshot || checking || running) {
       return

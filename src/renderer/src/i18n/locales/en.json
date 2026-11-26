@@ -2279,6 +2279,7 @@
         "confirmOne": "Restart {{name}}?",
         "confirmMany": "Restart {{count}} servers?",
         "liveMayDrop": "Live sessions may drop.",
+        "sessionsMayDrop": "Sessions may drop",
         "cancel": "Cancel"
       },
       "action": {
