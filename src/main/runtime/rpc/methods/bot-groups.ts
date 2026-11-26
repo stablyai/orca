@@ -9,6 +9,8 @@ import {
   BotGroupReorder
 } from '../../../../shared/bots/bot-group'
 import { runtimeBotGroups } from '../../../bots/bot-group-runtime'
+import { typedByOwner } from '../../../bots/bot-typed-in-orca'
+import { typedByOf } from '../callers/rpc-caller-typed-by'
 import { defineMethod, type RpcContext } from '../core'
 
 /** Rooms are run by their human owner, on the desktop or a paired device. */
@@ -96,7 +98,8 @@ export const BOT_GROUP_METHODS = [
       assertBotGroupOwner(context)
       return {
         message: await runtimeBotGroups(context.runtime).send(params, {
-          local: context.caller?.kind === 'desktop'
+          local: context.caller?.kind === 'desktop',
+          typedByOwner: typedByOwner(typedByOf(context))
         })
       }
     }

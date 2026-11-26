@@ -64,7 +64,12 @@ export type BotRequestJoins = {
   /** `item add --from-item`: the request the named item was made for. Only the key is joined; who
    *  started the request, when and their words stay this chain's own. */
   fromItemKey?: string
+  /** The request the turn continues, by Orca's records (bot-continued-request.ts): its key and start. */
+  continues?: BotTurnContinues | null
 }
+
+/** A request a turn continues: its key, when it has one, and how it started. */
+export type BotTurnContinues = { rootKey?: string; start: BotRequestStart }
 
 /** Read from Orca's records of the waking requests, never from the sender's text. */
 export function botRequestChain(
@@ -73,7 +78,7 @@ export function botRequestChain(
   turn: ChainTurn,
   joins: BotRequestJoins = {}
 ): BotRequestChain {
-  const { fromItemKey } = joins
+  const { fromItemKey, continues } = joins
   const turnKey = sessionId && turn.rootItemId ? `${sessionId}:${turn.rootItemId}` : null
   const parents = turn.requestIds.flatMap((id) => {
     const row = db.getBotRequest(id)
@@ -84,13 +89,18 @@ export function botRequestChain(
   const openingRequest = turn.openedBy === undefined ? parents[0] : undefined
   if (!openingRequest) {
     const ownKey = sessionId && turn.openedItemId ? `${sessionId}:${turn.openedItemId}` : turnKey
-    return { depth, rootKey: fromItemKey ?? ownKey, turnKey, start: turnStart(sessionId, turn) }
+    return {
+      depth,
+      rootKey: fromItemKey ?? continues?.rootKey ?? ownKey,
+      turnKey,
+      start: continues?.start ?? turnStart(sessionId, turn)
+    }
   }
   return {
     depth,
-    rootKey: fromItemKey ?? openingRequest.root_key,
+    rootKey: fromItemKey ?? continues?.rootKey ?? openingRequest.root_key,
     turnKey,
-    start: recordedStart(openingRequest.record)
+    start: continues?.start ?? recordedStart(openingRequest.record)
   }
 }
 

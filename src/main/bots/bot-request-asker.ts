@@ -73,6 +73,13 @@ export type BotActingTurn = {
   /** The message that opened the turn when rootItemId is a bot request steered in after it: the
    *  turn's chain is keyed by the opener's id, so the request never moves it. */
   openedItemId?: string
+  /** The room operation that delivered the message opening the turn (bot-turn-continuation.ts). */
+  openerOperationId?: string
+  /** Orca's item mail that woke the turns read back past to reach this one (bot-turn-continuation.ts). */
+  itemMailIds?: string[]
+  /** Set when Orca's own continue after a restart or a usage limit opened the turn: the turn it
+   *  resumes, read from the rows before it, or null when none is readable. */
+  resumes?: BotActingTurn | null
   /** The event this turn acts on, as the host recorded it: its automation prompt's, or the one the
    *  waking request carries. A request the turn sends carries it on, its text marked as content. */
   origin?: AutomationTriggeredBy
@@ -212,7 +219,7 @@ export function firstMessageActsFor(
 /** Each turn's messages, newest turn first: the one that opened it and those steered into it. A
  *  message still queued belongs to no turn yet. A host that keeps no turn rows gives each its own.
  *  The opener is the chat's own anchor: a turn names a sent message by the provider's id for it. */
-function turnWindows(
+export function turnWindows(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[],
   newestTurns: number | null

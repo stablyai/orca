@@ -17,8 +17,11 @@ import type { RpcContext } from '../core'
 import { readBotTurnOrigin } from './orchestration/messaging/bot-turn-origin'
 import { readBotTurn } from './orchestration/messaging/bot-recipient'
 import {
+  continuedRequestStores,
+  readTurnRequest
+} from './orchestration/messaging/bot-continued-request'
+import {
   botRequestOrigin,
-  botTurnRequestOrigin,
   UNKNOWN_REQUEST_START
 } from './orchestration/messaging/bot-request-chain'
 import { botChatAddress } from './orchestration/messaging/bot-chat-address'
@@ -140,7 +143,8 @@ async function turnRequestOrigin(
   try {
     const db = context.runtime.getOrchestrationDb()
     const { turn } = await readBotTurn(context.runtime, db, sessionId)
-    return botTurnRequestOrigin(db, sessionId, turn, { fromItemKey })
+    const stores = continuedRequestStores(context.runtime, sessionId)
+    return (await readTurnRequest(db, stores, sessionId, turn, { fromItemKey })).origin
   } catch (error) {
     console.warn('[bots] could not read the request an item came from', error)
     return fromItemKey ? { rootKey: fromItemKey, ...UNKNOWN_REQUEST_START } : null

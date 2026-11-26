@@ -1,5 +1,6 @@
 import type { JournalSqlReads } from '../native-chat/agent-session-journal/journal-sql-reads'
 import { endedChatTurnRow } from '../external-conversations/external-conversation-turn-opener'
+import { withContinuation } from './bot-turn-continuation'
 import {
   readBotActingTurnWithin,
   type BotActingTurn,
@@ -46,7 +47,7 @@ export async function readNewestBotActingTurn(
       complete || !widen ? null : newestTurns
     )
     if (turn) {
-      return turn
+      return withContinuation(turn, items, snapshot.submissions, lookups)
     }
   }
 }
