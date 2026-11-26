@@ -1,7 +1,8 @@
-import { useId, useState } from 'react'
-import { Info } from 'lucide-react'
+import { useId, useRef, useState } from 'react'
+import { ChevronRight, Info } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { useToastHeightChange } from '@/components/ui/toast-height-change'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { getKeepLocalMainUpToDateTitle } from '@/components/settings/source-control/keep-local-main-up-to-date-setting'
 import { translate } from '@/i18n/i18n'
@@ -133,39 +134,48 @@ function RefreshFailureDetails({
   detail,
   showLabel,
   hideLabel,
-  actions
+  actions,
+  onResize
 }: {
   reason: string
   detail: string
   showLabel: string
   hideLabel: string
   actions: React.ReactNode
+  onResize: () => void
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const detailId = useId()
+  const bodyRef = useRef<HTMLDivElement>(null)
+  useToastHeightChange(bodyRef, onResize)
   return (
-    <div className="flex w-full min-w-0 flex-col gap-2">
+    <div ref={bodyRef} className="flex w-full min-w-0 flex-col gap-2">
       <p className="truncate text-sm leading-5 text-popover-foreground/80" title={reason}>
         {reason}
       </p>
       {open ? (
         <p
           id={detailId}
-          className="rounded-md bg-accent px-2 py-1.5 font-mono text-xs leading-4 text-muted-foreground [overflow-wrap:anywhere]"
+          className="select-text whitespace-pre-wrap rounded-md bg-muted px-2 py-1.5 font-mono text-xs leading-relaxed text-muted-foreground [overflow-wrap:anywhere]"
         >
           {detail}
         </p>
       ) : null}
       <div className="flex items-center gap-2">
-        <button
+        <Button
           type="button"
-          aria-expanded={open}
-          aria-controls={open ? detailId : undefined}
+          variant="disclosure"
+          size="xs"
+          className="-ml-1.5 mr-auto"
           onClick={() => setOpen((value) => !value)}
-          className="mr-auto rounded-sm text-xs text-muted-foreground underline underline-offset-2 outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          aria-expanded={open}
+          aria-controls={detailId}
         >
+          <ChevronRight
+            className={`size-3.5 transition-transform motion-reduce:transition-none ${open ? 'rotate-90' : ''}`}
+          />
           {open ? hideLabel : showLabel}
-        </button>
+        </Button>
         {actions}
       </div>
     </div>
@@ -319,26 +329,40 @@ export function showLocalBaseRefRefreshToast(
     </>
   )
 
-  // Why a custom body: sonner's native action slot pinches beside a multi-line description.
-  // Infinity so create-time failures aren't buried; the opt-out lives here since the setting is opt-in.
-  // Why info, not warning: the workspace was created fine; only the optional local-branch refresh was skipped.
-  toast.info(refreshFailureTitle(result), {
-    id,
-    description: result.shallowHistory ? (
-      <div className="flex w-full flex-col gap-3">
-        {shallowHistoryDescription(result, worktreeName)}
-        <div className="flex items-center justify-end gap-2">{actions}</div>
-      </div>
-    ) : (
-      <RefreshFailureDetails
-        reason={refreshFailureReason(result)}
-        detail={localBaseRefRefreshFailureDetail(result)}
-        showLabel={translate('auto.store.slices.worktrees.localBaseRefShowDetails', 'Details')}
-        hideLabel={translate('auto.store.slices.worktrees.localBaseRefHideDetails', 'Hide details')}
-        actions={actions}
-      />
-    ),
-    duration: Infinity,
-    dismissible: true
-  })
+  // Why re-shown on resize: opening Details grows the card, and sonner only measures on show.
+  const onResize = (): void => {
+    if (toast.getToasts().some((entry) => entry.id === id)) {
+      show()
+    }
+  }
+  // Why an arrow: a hoisted function declaration would lose the `result` narrowing.
+  const show = (): void => {
+    // Why a custom body: sonner's native action slot pinches beside a multi-line description.
+    // Infinity so create-time failures aren't buried; the opt-out lives here since the setting is opt-in.
+    // Why info, not warning: the workspace was created fine; only the optional local-branch refresh was skipped.
+    toast.info(refreshFailureTitle(result), {
+      id,
+      description: result.shallowHistory ? (
+        <div className="flex w-full flex-col gap-3">
+          {shallowHistoryDescription(result, worktreeName)}
+          <div className="flex items-center justify-end gap-2">{actions}</div>
+        </div>
+      ) : (
+        <RefreshFailureDetails
+          reason={refreshFailureReason(result)}
+          detail={localBaseRefRefreshFailureDetail(result)}
+          showLabel={translate('auto.store.slices.worktrees.localBaseRefShowDetails', 'Details')}
+          hideLabel={translate(
+            'auto.store.slices.worktrees.localBaseRefHideDetails',
+            'Hide details'
+          )}
+          actions={actions}
+          onResize={onResize}
+        />
+      ),
+      duration: Infinity,
+      dismissible: true
+    })
+  }
+  show()
 }

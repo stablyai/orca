@@ -38,10 +38,15 @@ function ToastFrame({ result }: { result: LocalBaseRefRefreshResult }): React.JS
   )
 }
 
+// Hover first: sonner pins an expanded (hovered) toast to its measured height.
 const openDetails = async (frame: HTMLElement): Promise<void> => {
   await new Promise((resolve) => setTimeout(resolve, 300))
-  frame.ownerDocument.querySelector<HTMLButtonElement>('[aria-expanded]')?.click()
-  await new Promise((resolve) => setTimeout(resolve, 300))
+  const doc = frame.ownerDocument
+  doc
+    .querySelector('[data-sonner-toast]')
+    ?.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
+  doc.querySelector<HTMLButtonElement>('[aria-expanded]')?.click()
+  await new Promise((resolve) => setTimeout(resolve, 600))
 }
 
 const dirty: LocalBaseRefRefreshResult = {
