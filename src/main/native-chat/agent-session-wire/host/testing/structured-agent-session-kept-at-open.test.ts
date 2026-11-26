@@ -173,14 +173,14 @@ it.skipIf(process.platform === 'win32')(
     const startedAtMs = await readProcessStartTimeMs(pid)
     const daemonAlive = {
       ...relayed(pid, exitedPid()),
-      daemon: { instance: INSTANCE, pid, startedAtMs: startedAtMs ?? 1 }
+      // Its own start: a start names one daemon process, so its proof is shared only within it.
+      daemon: { instance: 'daemon-start-alive', pid, startedAtMs: startedAtMs ?? 1 }
     }
     expect(startedAtMs).not.toBeNull()
     expect(await relays.providerRelayRunLiveness(chat(daemonAlive))).toBe('unknown')
     agent.kill('SIGKILL')
-    expect(await relays.providerRelayRunLiveness(chat(relayed(exitedPid(), exitedPid())))).toBe(
-      'gone'
-    )
+    const goneRun = relayed(exitedPid(), exitedPid(), 'daemon-start-gone')
+    expect(await relays.providerRelayRunLiveness(chat(goneRun))).toBe('gone')
   }
 )
 
