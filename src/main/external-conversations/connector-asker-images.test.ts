@@ -6,6 +6,55 @@ const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3
 const conversation = { source: 'slack', externalId: 'T1:C1:1.1:U0BOT' }
 
 describe('connectorAskerImages', () => {
+  it('keeps an image on the mention ahead of earlier request images', async () => {
+    const read = vi.fn(async ({ fileId }: { fileId: string }) => ({
+      ok: true as const,
+      value: {
+        ok: true as const,
+        result: {
+          download: {
+            id: fileId,
+            name: `${fileId}.png`,
+            size: PNG.length,
+            url: `https://cloud.example/files/${fileId}`,
+            ticket: 'ticket'
+          }
+        }
+      }
+    }))
+    const get = connectorAskerImages({
+      read,
+      store: async (name) => `/attachments/${name}`,
+      fetch: async () => new Response(new Uint8Array(PNG))
+    })
+    const earlier = Array.from({ length: 4 }, (_, index) => ({
+      text: 'Earlier screenshot.',
+      at: index,
+      messageRef: `slack:T1:C1:1.${index}:1.${index}`,
+      files: [{ id: `F${index}`, name: 'image.png', type: 'image/png' }]
+    }))
+    await get({
+      botId: 'bot-1',
+      conversation,
+      signal: new AbortController().signal,
+      asker: {
+        userId: 'U1',
+        role: 'owner',
+        place: { kind: 'public_channel', id: 'C1' },
+        context: [],
+        text: '@bot\n[image: current.png, file FCURRENT]',
+        messageRef: 'slack:T1:C1:2.0:2.0',
+        earlierOwn: { messages: earlier }
+      }
+    })
+    expect(read.mock.calls.map(([request]) => (request as { fileId: string }).fileId)).toEqual([
+      'FCURRENT',
+      'F3',
+      'F2',
+      'F1'
+    ])
+  })
+
   it('stages an image from the request before a bare mention', async () => {
     const read = vi.fn(async () => ({
       ok: true as const,

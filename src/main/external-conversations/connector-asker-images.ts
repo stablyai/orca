@@ -47,7 +47,12 @@ function askerImageTargets(asker: ConnectorAsker): ImageTarget[] {
       targets.push(target)
     }
   }
-  for (const message of asker.earlierOwn?.messages ?? []) {
+  if (asker.messageRef) {
+    for (const fileId of askerImageIds(asker.text)) {
+      add({ ref: asker.messageRef, fileId })
+    }
+  }
+  for (const message of (asker.earlierOwn?.messages ?? []).toReversed()) {
     if (!message.messageRef) {
       continue
     }
@@ -55,11 +60,6 @@ function askerImageTargets(asker: ConnectorAsker): ImageTarget[] {
       if (file.type?.startsWith('image/') === true) {
         add({ ref: message.messageRef, fileId: file.id })
       }
-    }
-  }
-  if (asker.messageRef) {
-    for (const fileId of askerImageIds(asker.text)) {
-      add({ ref: asker.messageRef, fileId })
     }
   }
   return targets
