@@ -15,13 +15,13 @@ const HOUR = 60 * 60_000
 
 function relay(
   id: string,
-  state: { tracking: boolean; unread: boolean; finished?: boolean }
+  state: { tracking: boolean; unread: boolean; finished?: boolean; onlyWaiting?: boolean }
 ): CappableRelay {
   return {
     relayId: id,
     live: true,
     attachedClientId: null,
-    idleStopPolicy: { finished: false, unaccounted: false, ...state },
+    idleStopPolicy: { finished: false, unaccounted: false, onlyWaiting: false, ...state },
     stoppedBy: null,
     close: vi.fn(async () => {})
   }
@@ -55,6 +55,44 @@ describe('a detached agent with output no app took', () => {
     unread.value = false
     idle.check()
     expect(stop).toHaveBeenCalledTimes(1)
+  })
+
+  it('caps an agent whose only open item is a waiting approval, never one with a running turn', async () => {
+    const pending = { count: 1 }
+    const counted = vi.fn()
+    const idle = new ProviderRelayIdleStop({
+      attached: () => false,
+      live: () => true,
+      pendingCount: () => pending.count,
+      unacked: () => [],
+      stop: vi.fn(),
+      idleUnread: counted
+    })
+    const policy = readProviderRelayDetachPolicy({
+      idleStopMs: IDLE_MS,
+      markers: CODEX_RELAY_WORK_MARKERS.markers,
+      open: {}
+    })
+    idle.arm(policy)
+    await vi.advanceTimersByTimeAsync(IDLE_MS)
+    expect(idle.onlyWaiting).toBe(true)
+    expect(counted).toHaveBeenCalledTimes(1)
+    let now = 0
+    const cap = new ProviderRelayDetachedCap(
+      () => {},
+      () => now
+    )
+    const asking = relay('asking', { tracking: true, unread: false, onlyWaiting: true })
+    const turning = relay('turning', { tracking: true, unread: false })
+    for (const each of [asking, turning]) {
+      cap.detached(each)
+      cap.idleUnread(each)
+    }
+    now = RELAY_DETACHED_CAP_MS
+    await vi.advanceTimersByTimeAsync(RELAY_DETACHED_CAP_MS)
+    expect(asking.stoppedBy).toBe('cap')
+    expect(turning.close).not.toHaveBeenCalled()
+    cap.stop()
   })
 
   it('is stopped 24 h after its detach once idle with unread output or with work unknown, on one timer; busy work never', async () => {

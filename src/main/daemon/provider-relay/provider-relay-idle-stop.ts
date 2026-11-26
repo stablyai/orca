@@ -111,6 +111,11 @@ export class ProviderRelayIdleStop {
     )
   }
 
+  /** Tracked, with nothing open but an approval waiting: the detached cap bounds it. */
+  get onlyWaiting(): boolean {
+    return this.armed && this.work !== null && !this.work.busy && this.host.pendingCount() > 0
+  }
+
   get unread(): boolean {
     return this.host.unread?.() === true
   }
@@ -256,8 +261,8 @@ export class ProviderRelayIdleStop {
     }
     if (this.work.busy || this.host.pendingCount() > 0) {
       this.waitingForLine = true
-      if (this.unaccounted) {
-        // Counted from now by the detached cap, as unknown work is.
+      if (this.unaccounted || this.onlyWaiting) {
+        // Counted by the detached cap, as unknown work is; only a running turn or command isn't.
         this.host.idleUnread?.()
       }
       return
