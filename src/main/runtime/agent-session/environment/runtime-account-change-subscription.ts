@@ -1,5 +1,6 @@
 import { hasAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import { getManagedDataAccountService } from '../../../managed-data-accounts/service'
+import { STALE_THRESHOLD_MS } from '../../../rate-limits/service/service-types'
 import type { AccountsSnapshot, RuntimeAccountServices } from './runtime-account-controller'
 import { runtimePluginUsageSnapshot } from './runtime-account-snapshot'
 
@@ -32,6 +33,7 @@ export function subscribeRuntimeAccountChanges(
   let running = false
   let pending: (AccountSnapshotVersion & { usage?: AccountsSnapshot['rateLimits'] }) | undefined
   let pendingPluginUsage: AccountsSnapshot['pluginUsageProviders']
+  let pendingPluginExpiry: ReturnType<typeof setTimeout> | undefined
   let lastPublished: AccountsSnapshot | undefined
   let lastValid: { version: AccountSnapshotVersion; snapshot: AccountsSnapshot } | undefined
   const currentVersion = (): AccountSnapshotVersion => ({
@@ -52,16 +54,47 @@ export function subscribeRuntimeAccountChanges(
       lastPublished = snapshot
     }
   }
-  const clearRemovedPluginUsage = (
-    current: NonNullable<AccountsSnapshot['pluginUsageProviders']>
+  const prunePluginUsage = (
+    current: NonNullable<AccountsSnapshot['pluginUsageProviders']>,
+    allowPendingReplacement = false
   ) => {
+    clearTimeout(pendingPluginExpiry)
+    pendingPluginExpiry = undefined
     const previous = lastPublished
     if (!previous?.pluginUsageProviders?.length) {
       return
     }
     // The producer keeps a reading's object identity until it is replaced or removed.
     const currentReadings = new Set(current)
-    const retained = previous.pluginUsageProviders.filter((reading) => currentReadings.has(reading))
+    const now = Date.now()
+    let nextExpiry = Infinity
+    const retained = previous.pluginUsageProviders.filter((reading) => {
+      const expiresAt = reading.observedAt + STALE_THRESHOLD_MS
+      if (expiresAt <= now) {
+        return false
+      }
+      if (currentReadings.has(reading)) {
+        return true
+      }
+      if (
+        !allowPendingReplacement ||
+        !current.some(
+          (candidate) =>
+            candidate.pluginKey === reading.pluginKey &&
+            candidate.providerId === reading.providerId &&
+            candidate.iconRevision === reading.iconRevision
+        )
+      ) {
+        return false
+      }
+      // Keep the previous meter while the replacement waits for the in-flight roster read.
+      nextExpiry = Math.min(nextExpiry, expiresAt)
+      return true
+    })
+    if (nextExpiry < Infinity) {
+      pendingPluginExpiry = setTimeout(() => prunePluginUsage(current, true), nextExpiry - now)
+      pendingPluginExpiry.unref()
+    }
     if (retained.length < previous.pluginUsageProviders.length) {
       try {
         publish({ ...previous, pluginUsageProviders: retained })
@@ -75,7 +108,7 @@ export function subscribeRuntimeAccountChanges(
       return
     }
     if (!lastValid || !isCurrent(lastValid.version)) {
-      clearRemovedPluginUsage(pluginUsageProviders)
+      prunePluginUsage(pluginUsageProviders)
       // A quota change may be the only notification after a failed roster refresh.
       queueSnapshot()
       return
@@ -112,6 +145,7 @@ export function subscribeRuntimeAccountChanges(
             if (isCurrent(change)) {
               lastValid = { version: change, snapshot }
               pendingPluginUsage = undefined
+              clearTimeout(pendingPluginExpiry)
               publish({ ...snapshot, ...runtimePluginUsageSnapshot(services) })
             }
           } catch (error) {
@@ -121,6 +155,7 @@ export function subscribeRuntimeAccountChanges(
         }
       } finally {
         running = false
+        clearTimeout(pendingPluginExpiry)
         // Each coalesced quota change can request at most one replacement read.
         const readings = pendingPluginUsage
         pendingPluginUsage = undefined
@@ -139,7 +174,7 @@ export function subscribeRuntimeAccountChanges(
   const unsubscribePluginUsage = services.pluginUsageProviders?.onChanged(
     (pluginUsageProviders) => {
       if (running) {
-        clearRemovedPluginUsage(pluginUsageProviders)
+        prunePluginUsage(pluginUsageProviders, true)
         pendingPluginUsage = pluginUsageProviders
       } else {
         publishPluginUsage(pluginUsageProviders)
@@ -172,6 +207,7 @@ export function subscribeRuntimeAccountChanges(
       pendingPluginUsage = undefined
       lastValid = undefined
       lastPublished = undefined
+      clearTimeout(pendingPluginExpiry)
       unsubscribeData()
       unsubscribeUsage()
       unsubscribePluginUsage?.()

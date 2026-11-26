@@ -15,7 +15,7 @@ it('layers plugin readings over the newest valid account snapshot during and aft
     label: 'Sample quota',
     status: 'ok',
     accounts: [{ label: 'Sample account', windows: [{ label: '5h', usedPercent: 25 }] }],
-    observedAt: 1
+    observedAt: Date.now()
   }
   const delayedRoster = Promise.withResolvers<AccountsSnapshot['codex']>()
   const snapshots: AccountsSnapshot[] = []
@@ -85,13 +85,12 @@ it('layers plugin readings over the newest valid account snapshot during and aft
     onUsageChanged(initialUsage)
     generations = [0, 1]
     onUsageChanged(nextUsage)
-    pluginUsageProviders = [{ ...reading, observedAt: 2 }]
+    pluginUsageProviders = [{ ...reading, observedAt: reading.observedAt + 1 }]
     onPluginUsageChanged(pluginUsageProviders)
     delayedRoster.resolve(accounts)
     await setImmediate()
 
     expect(snapshots.splice(0)).toEqual([
-      { claude: accounts, codex: accounts, rateLimits: initialUsage, pluginUsageProviders: [] },
       { claude: accounts, codex: accounts, rateLimits: nextUsage, pluginUsageProviders }
     ])
 
