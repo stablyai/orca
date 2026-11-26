@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PluginFrameGuest } from '../../../../../shared/plugins/frames/plugin-frame-bridge'
+import type { PluginRemotePanelBinding } from '../../../../../shared/plugins/frames/plugin-remote-panel'
 import { currentPluginFrameTheme } from './plugin-panel-design-token-css'
 import { notePluginFrameIsolation } from '@/store/plugins/frames/plugin-frame-isolation'
+
+/** Where a panel's plugin runs when its workspace is on a paired host: there, or here and why. */
+export type PluginFrameHost = { kind: 'paired'; name: string } | { kind: 'local'; reason: string }
 
 export type PluginFrameEntryState =
   | { status: 'loading' }
@@ -14,6 +18,7 @@ export type PluginFrameEntryState =
       revision: number
       guest?: PluginFrameGuest
       ui?: 'components'
+      host?: PluginFrameHost
     }
 
 /**
@@ -28,7 +33,9 @@ export function usePluginFrameEntry(
   /** Null while there is no plugin to read from. */
   pluginKey: string | null,
   /** The panel or custom editor id in the plugin's manifest. */
-  contributionId: string | null
+  contributionId: string | null,
+  /** A panel's focused workspace is on this paired host: its calls and pushes go there. */
+  pairedEnvironmentId: string | null = null
 ): { entry: PluginFrameEntryState; markUnresponsive: () => void; remountGone: () => void } {
   const [entry, setEntry] = useState<PluginFrameEntryState>({ status: 'loading' })
   const remountRef = useRef<() => void>(() => {})
@@ -42,6 +49,11 @@ export function usePluginFrameEntry(
     let revision = 0
     // Why: refresh events start overlapping reads; only the newest may set the entry.
     let latestRead = 0
+    // One bind per session token, shared by overlapping reads; the newest read keeps only its own.
+    const binds = new Map<string, Promise<PluginRemotePanelBinding>>()
+    // The session token whose calls go to the paired host, and what the panel shows about it.
+    let boundToken: string | null = null
+    let host: PluginFrameHost | undefined
     setEntry({ status: 'loading' })
     const pluginsApi = window.api?.plugins
     if (!pluginsApi) {
@@ -51,6 +63,52 @@ export function usePluginFrameEntry(
     const fail = (): void => {
       currentHtml = null
       setEntry({ status: 'error' })
+    }
+    // Unbinds once that token's bind lands, even if it is still in flight.
+    const release = (sessionToken: string): void => {
+      const pending = binds.get(sessionToken)
+      binds.delete(sessionToken)
+      if (boundToken === sessionToken) {
+        boundToken = null
+      }
+      void pending?.then((binding) => {
+        if (binding.bound) {
+          void pluginsApi
+            .unbindRemotePanel?.({ sessionToken, bindingId: binding.bindingId })
+            .catch(() => undefined)
+        }
+      })
+    }
+    // Binds before the frame mounts, so its first call already reaches the host.
+    const bindHost = async (sessionToken: string | null, isLatest: () => boolean) => {
+      const bindRemotePanel = pluginsApi.bindRemotePanel
+      if (surface !== 'panel' || !pairedEnvironmentId || !bindRemotePanel || !sessionToken) {
+        return
+      }
+      let pending = binds.get(sessionToken)
+      if (!pending) {
+        pending = bindRemotePanel({ sessionToken, environmentId: pairedEnvironmentId }).catch(
+          (error: unknown) => ({ bound: false as const, reason: String(error) })
+        )
+        binds.set(sessionToken, pending)
+      }
+      const binding = await pending
+      // Main holds nothing for a refused bind, so the next read asks again.
+      if (!binding.bound && binds.get(sessionToken) === pending) {
+        binds.delete(sessionToken)
+      }
+      if (!isLatest()) {
+        return
+      }
+      for (const token of binds.keys()) {
+        if (token !== sessionToken) {
+          release(token)
+        }
+      }
+      boundToken = binding.bound ? sessionToken : null
+      host = binding.bound
+        ? { kind: 'paired', name: binding.hostName }
+        : { kind: 'local', reason: binding.reason }
     }
     const load = (): void => {
       const readId = ++latestRead
@@ -65,12 +123,16 @@ export function usePluginFrameEntry(
         return
       }
       pending
-        .then((result) => {
+        .then(async (result) => {
           if (cancelled || readId !== latestRead) {
             return
           }
           if (!result) {
             fail()
+            return
+          }
+          await bindHost(result.sessionToken, () => !cancelled && readId === latestRead)
+          if (cancelled || readId !== latestRead) {
             return
           }
           notePluginFrameIsolation(result.guest !== undefined)
@@ -87,7 +149,8 @@ export function usePluginFrameEntry(
             sessionToken: result.sessionToken,
             revision,
             ...(result.guest ? { guest: result.guest } : {}),
-            ...(result.ui === 'components' ? { ui: 'components' as const } : {})
+            ...(result.ui === 'components' ? { ui: 'components' as const } : {}),
+            ...(host ? { host } : {})
           }
           // Why: a session rotation must not revive a frame the watchdog suspended.
           setEntry((previous) =>
@@ -118,11 +181,30 @@ export function usePluginFrameEntry(
       load()
     }
     const unsubscribe = pluginsApi.onChanged ? pluginsApi.onChanged(load) : null
+    // The host went away: draw the panel again, on the host if it is back, else here. Its bind may
+    // still be in flight (main's notice can beat the bind answer); the new read makes it stale.
+    const unsubscribeClosed = pluginsApi.onRemotePanelClosed?.((sessionToken) => {
+      if (cancelled || !binds.has(sessionToken)) {
+        return
+      }
+      // Main already ended that binding.
+      binds.delete(sessionToken)
+      if (boundToken === sessionToken) {
+        boundToken = null
+      }
+      currentHtml = null
+      setEntry({ status: 'loading' })
+      load()
+    })
     return () => {
       cancelled = true
       unsubscribe?.()
+      unsubscribeClosed?.()
+      for (const token of binds.keys()) {
+        release(token)
+      }
     }
-  }, [surface, pluginKey, contributionId])
+  }, [surface, pluginKey, contributionId, pairedEnvironmentId])
 
   const markUnresponsive = useCallback(() => setEntry({ status: 'unresponsive' }), [])
   const remountGone = useCallback(() => remountRef.current(), [])

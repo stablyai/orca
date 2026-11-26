@@ -35,6 +35,13 @@ export const PluginReadPanelEntryParams = z.object({
   panelId: z.string().min(1)
 })
 
+/** A paired desktop drawing its own copy of this plugin; the fingerprint proves it is the same one. */
+export const PluginPanelSessionParams = z.object({
+  pluginKey: z.string().min(1),
+  panelId: z.string().min(1),
+  consentFingerprint: z.string().min(1).max(256)
+})
+
 export const PluginInvokeCommandParams = z.object({
   pluginKey: z.string().min(1),
   commandId: z.string().min(1),

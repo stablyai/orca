@@ -63,6 +63,7 @@ import { WORKSPACE_PORT_METHODS } from './workspace-ports/workspace-ports'
 import { NETWORK_PORT_FORWARD_METHODS } from './workspace-ports/network-port-forward'
 import { LINK_PREVIEW_METHODS } from './link-preview/link-preview'
 import { PLUGIN_METHODS } from './plugins/plugins'
+import { PLUGIN_PANEL_SESSION_METHODS } from './plugins/plugin-panel-session'
 import { PLUGIN_VIEW_METHODS } from './plugins/plugin-view'
 import { PLUGIN_DEV_EMIT_METHODS } from './plugins/plugin-dev-emit'
 import { PLUGIN_DEV_REQUEST_METHODS } from './plugins/plugin-dev-request'
@@ -252,6 +253,7 @@ const SERVICE_RPC_METHODS = [
   ...WORKSPACE_PORT_METHODS,
   ...LINK_PREVIEW_METHODS,
   ...PLUGIN_METHODS,
+  ...PLUGIN_PANEL_SESSION_METHODS,
   ...PLUGIN_VIEW_METHODS,
   ...PLUGIN_DEV_EMIT_METHODS,
   ...PLUGIN_DEV_REQUEST_METHODS,
