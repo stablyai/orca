@@ -318,6 +318,7 @@ function variants(scenario: Scenario) {
 }
 
 const behind = variants({ behind: 45 })
+export const behindMinimum = behind.minimum
 export const behindNarrow = behind.narrow
 export const behindStandard = behind.standard
 export const behindWide = behind.wide
@@ -333,6 +334,7 @@ export const prOpenStandard = prOpen.standard
 export const prOpenWide = prOpen.wide
 
 const longBranch = variants({ branch: LONG_BRANCH, behind: 128, ahead: 3, review: 'open' })
+export const longBranchMinimum = longBranch.minimum
 export const longBranchNarrow = longBranch.narrow
 export const longBranchStandard = longBranch.standard
 export const longBranchWide = longBranch.wide
