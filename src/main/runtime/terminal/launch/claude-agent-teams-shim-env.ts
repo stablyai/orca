@@ -33,12 +33,17 @@ export async function ensureClaudeAgentTeamsShimDir(root = defaultShimRoot()): P
 
 export async function buildClaudeAgentTeamsLaunchPlan(args: {
   command: string | undefined
+  pickerTeams?: boolean
   mode: ClaudeAgentTeamsMode | undefined
   baseEnv: Record<string, string | undefined>
   createTeamEnv: (shimDir: string, shimBin: string) => Record<string, string>
 }): Promise<ClaudeAgentTeamsLaunchPlan | null> {
   const mode = args.mode ?? 'off'
-  if (!args.command || mode === 'off' || !isDirectClaudeCommand(args.command)) {
+  if (
+    !args.command ||
+    mode === 'off' ||
+    (!args.pickerTeams && !isDirectClaudeCommand(args.command))
+  ) {
     return null
   }
   if (mode === 'in-process' || process.platform === 'win32') {

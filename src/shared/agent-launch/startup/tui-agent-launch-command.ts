@@ -64,7 +64,9 @@ export function resolveAgentLaunchCommand(args: {
   agentHostPlatform?: NodeJS.Platform | null
   managedAgentCommands?: ManagedAgentCommands | null
 }): ResolvedAgentLaunchCommand {
-  const override = args.cmdOverrides[args.agent]
+  const override =
+    args.cmdOverrides[args.agent] ??
+    (args.agent === 'claude-agent-teams' ? args.cmdOverrides.claude : undefined)
   const commandProvenance = launchCommandProvenance(
     override,
     stockLaunchProgram(args.agent, args.platform, args.isRemote),
@@ -76,7 +78,8 @@ export function resolveAgentLaunchCommand(args: {
       isRemote: args.isRemote
     })
   // Saved sessions resolve the stock program on their current host.
-  const program = withManagedAgentProgram(command, args)
+  const program =
+    commandProvenance === 'generated' ? withManagedAgentProgram(command, args) : command
   const suppressionArgs = args.suppressStartupUpdatePrompt
     ? (STARTUP_UPDATE_PROMPT_SUPPRESSION_ARGS[args.agent] ?? [])
     : []

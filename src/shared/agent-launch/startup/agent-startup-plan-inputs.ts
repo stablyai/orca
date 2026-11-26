@@ -73,7 +73,9 @@ export function resolveAgentStartupPlanInputs(args: {
     agentArgs: args.agentArgs,
     sessionOptions,
     yieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
-    command: settings.agentCmdOverrides?.[agent],
+    command:
+      settings.agentCmdOverrides?.[agent] ??
+      (agent === 'claude-agent-teams' ? settings.agentCmdOverrides?.claude : undefined),
     extraAgentArgs: args.extraAgentArgs,
     shell: resolveStartupShell(platform, shell)
   })

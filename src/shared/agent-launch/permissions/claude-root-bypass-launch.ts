@@ -29,11 +29,11 @@ function claudeArgsStart(
   tokens: readonly string[],
   shell: AgentStartupShell
 ): number {
-  if (agent === 'claude') {
-    const index = findAgentExecutableIndex(tokens, shell, (token) =>
-      isAgentExecutableToken(token, ['claude'])
-    )
-    return index < 0 ? -1 : index + 1
+  const direct = findAgentExecutableIndex(tokens, shell, (token) =>
+    isAgentExecutableToken(token, ['claude'])
+  )
+  if (direct >= 0 || agent === 'claude') {
+    return direct < 0 ? -1 : direct + 1
   }
   const config = TUI_AGENT_CONFIG['claude-agent-teams']
   const names = [config.detectCmd, ...(config.detectCmdAliases ?? [])]

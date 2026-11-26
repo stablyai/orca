@@ -100,6 +100,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           .prepare(
             {
               launchConfig: launchOpts.launchConfig,
+              launchAgent: launchOpts.launchAgent,
               command: launchOpts.command,
               claudeAgentTeamsSourceCommand: launchOpts.claudeAgentTeamsSourceCommand,
               claudeAgentTeamsMode: this.store?.getSettings?.().claudeAgentTeamsMode,
@@ -126,7 +127,6 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           },
           agentTeamsPlan?.env
         )
-        const terminalColorQueryReplies = getTerminalViewerColors()
         if (launchOpts.signal?.aborted) {
           throw new Error('client_disconnected')
         }
@@ -166,7 +166,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
               preAllocatedHandle,
               tabId,
               leafId,
-              terminalColorQueryReplies,
+              terminalColorQueryReplies: getTerminalViewerColors(),
               launcherSpawnArgs,
               commit,
               operation

@@ -1,4 +1,13 @@
-import { withManagedAgentProgram } from '../../../shared/agent-launch/startup/managed-agent-launch-program'
+import {
+  readLocalTerminalAgentProgram,
+  type TerminalAgentProgram
+} from '../../preflight/agent-command-detection'
+import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
+import {
+  launchCommandProvenance,
+  launchProgramHead,
+  stockLaunchProgram
+} from '../../../shared/agent-launch/startup/managed-agent-launch-program'
 import { resolveStartupShell } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import type { AgentStartupPlanInputs } from '../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import {
@@ -16,10 +25,6 @@ import {
   isVerifiedOpenCodeConfigModelVersion,
   isVerifiedOpenCodeLegacyModelVersion
 } from './opencode-model-version-policy'
-import {
-  getTuiAgentLaunchCommand,
-  TUI_AGENT_CONFIG
-} from '../../../shared/agent-launch/catalog/tui-agent-config'
 import { applyManagedDataAccountEnvironment } from '../../managed-data-accounts/launch-environment'
 import { OrchestrationError } from '../../runtime/orchestration/orchestration-error'
 import { probeOpenCodeLaunchCapabilities } from './opencode-launch-capabilities'
@@ -46,14 +51,24 @@ export async function resolveOpenCodeModelLaunchRoute(
   options: Pick<StartupScope, 'inputs' | 'cwd' | 'hostIdentity'>
 ) {
   const { inputs } = options
-  const stock = getTuiAgentLaunchCommand(TUI_AGENT_CONFIG.opencode, inputs.platform)
-  const command = inputs.cmdOverrides.opencode || stock
-  // Probes run the program the launch will; records keep the stock name.
-  const program = withManagedAgentProgram(command, {
-    ...inputs,
-    agent: 'opencode',
-    shell: inputs.shell ?? resolveStartupShell(inputs.platform)
-  })
+  const stock = stockLaunchProgram('opencode', inputs.platform)
+  const override = inputs.cmdOverrides.opencode
+  const commandProvenance = launchCommandProvenance(override, stock, inputs.platform)
+  const command = commandProvenance === 'generated' ? stock : (override ?? stock)
+  const shell = resolveStartupShell(inputs.platform, inputs.shell)
+  // Probe the same user installation as the PTY, even when it sits outside PATH.
+  const selected =
+    commandProvenance === 'generated'
+      ? await withTimeout<TerminalAgentProgram>(
+          readLocalTerminalAgentProgram(stock, shell),
+          10_000,
+          { kind: 'unknown' }
+        )
+      : undefined
+  if (selected && !('path' in selected)) {
+    refuseModel(OPENCODE_MODEL_VERSION_REFUSAL)
+  }
+  const program = selected ? launchProgramHead(selected.path, shell) : command
   const env: Record<string, string> = {}
   for (const [key, value] of Object.entries({ ...process.env, ...inputs.agentEnv })) {
     if (value !== undefined) {
@@ -73,7 +88,7 @@ export async function resolveOpenCodeModelLaunchRoute(
   if (!legacy && !isVerifiedOpenCodeConfigModelVersion(capabilities?.version)) {
     refuseModel(OPENCODE_MODEL_VERSION_REFUSAL)
   }
-  return { command, program, env, legacy }
+  return { command, program, env, legacy, commandProvenance }
 }
 
 export async function prepareOpenCodeModelStartupInputs(
@@ -101,7 +116,8 @@ export async function prepareOpenCodeModelStartupInputs(
   ) {
     refuseModel()
   }
-  const { command, program, env, legacy } = await resolveOpenCodeModelLaunchRoute(options)
+  const { command, program, env, legacy, commandProvenance } =
+    await resolveOpenCodeModelLaunchRoute(options)
   if (legacy) {
     return { inputs }
   }
@@ -139,6 +155,7 @@ export async function prepareOpenCodeModelStartupInputs(
     },
     launchConfig: buildSleepingAgentLaunchConfig({
       agentCommand: command,
+      commandProvenance,
       agentArgs: inputs.agentArgs,
       agentEnv: inputs.agentEnv
     })

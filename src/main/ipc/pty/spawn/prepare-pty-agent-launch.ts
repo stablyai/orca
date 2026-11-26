@@ -1,3 +1,7 @@
+import {
+  addClaudeTeammateModeAuto,
+  addClaudeTeammateModeInProcess
+} from '../../../../shared/agent-launch/startup/claude-agent-teams-tmux-compat'
 import { planClaudeRootLaunch } from '../../../../shared/agent-launch/permissions/claude-root-bypass-launch'
 import { withClaudeAgentViewPlugin } from '../../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view-launch'
 import {
@@ -80,9 +84,20 @@ export async function preparePtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
     settings?.terminalInlineImages,
     input.headlessHost
   )
+  const pickerTeams =
+    launchAgent === 'claude-agent-teams' && Boolean(launchConfig?.commandProvenance)
+  const teamsCommand =
+    pickerTeams && openCodeLaunch.command
+      ? env.ORCA_AGENT_TEAMS_TEAM_ID
+        ? addClaudeTeammateModeAuto(openCodeLaunch.command)
+        : addClaudeTeammateModeInProcess(openCodeLaunch.command)
+      : openCodeLaunch.command
+  if (pickerTeams && teamsCommand) {
+    env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = '1'
+  }
   const mcp = await withSpawnTerminalMcpServers(input, {
-    launchAgent,
-    command: openCodeLaunch.command,
+    launchAgent: pickerTeams ? 'claude' : launchAgent,
+    command: teamsCommand,
     env,
     shell,
     connectionId

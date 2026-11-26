@@ -10,6 +10,7 @@ import { inferCapturedClaudeAgentTeamsMode } from './runtime-agent-launch-resolu
 
 export async function buildRuntimeAgentTeamsLaunchPlan(args: {
   launchConfig: TerminalCreateOptions['launchConfig']
+  launchAgent?: TerminalCreateOptions['launchAgent']
   command?: string
   claudeAgentTeamsSourceCommand?: string
   claudeAgentTeamsMode?: ClaudeAgentTeamsMode
@@ -24,17 +25,19 @@ export async function buildRuntimeAgentTeamsLaunchPlan(args: {
   sequencedStartupCommand?: string
   effectiveLaunchConfig: TerminalCreateOptions['launchConfig']
 }> {
-  const sourceCommand =
-    args.claudeAgentTeamsSourceCommand?.trim() || args.command?.trim() || undefined
+  const sourceCommand = args.claudeAgentTeamsSourceCommand || args.command
+  const pickerTeams =
+    args.launchAgent === 'claude-agent-teams' && Boolean(args.launchConfig?.commandProvenance)
   const mode = inferCapturedClaudeAgentTeamsMode(
     args.launchConfig,
     sourceCommand,
-    args.claudeAgentTeamsMode
+    pickerTeams ? 'native-panes-shim' : args.claudeAgentTeamsMode
   )
   const plan = args.adoptedBeforeLaunch
     ? undefined
     : await buildClaudeAgentTeamsLaunchPlan({
         command: sourceCommand,
+        pickerTeams,
         mode,
         baseEnv: args.baseEnv,
         createTeamEnv: args.createTeamEnv

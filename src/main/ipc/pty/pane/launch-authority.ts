@@ -62,9 +62,13 @@ export function admitProviderReattachLaunchIdentity(args: {
 }
 
 export function shouldRefreshNativeClaudeAgentTeamsEnv(args: {
+  launchAgent?: unknown
   command?: string
   launchConfig?: SleepingAgentLaunchConfig
 }): boolean {
+  if (args.launchAgent === 'claude-agent-teams' && args.launchConfig?.commandProvenance) {
+    return true
+  }
   const capturedCommand = args.launchConfig?.agentCommand?.trim() || args.command?.trim() || ''
   const capturedArgs = args.launchConfig?.agentArgs?.trim() ?? ''
   const capturedLaunch = `${capturedCommand} ${capturedArgs}`.trim()
