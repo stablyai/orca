@@ -223,7 +223,7 @@ export type BrowserTabAnnotationsResult = {
 }
 export type BrowserTabCurrentResult = { tab: BrowserTabInfo }
 /** A loopback CDP websocket for a local agent-browser; it bypasses Orca's per-action guards. */
-export type BrowserTabCdpResult = { browserPageId: string; url: string }
+export type BrowserTabCdpResult = { browserPageId: string; url: string; agentBrowser: string }
 
 export type BrowserTabProfileShowResult = {
   browserPageId: string

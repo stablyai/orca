@@ -57,7 +57,7 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
   async directCdpEndpoint(
     worktreeId?: string,
     browserPageId?: string
-  ): Promise<{ browserPageId: string; url: string }> {
+  ): Promise<{ browserPageId: string; url: string; agentBrowser: string }> {
     // A loopback endpoint on this desktop is useless to, and must never reach, an SSH host.
     if (captureRemoteCliBrowserScope().bridged) {
       throw new BrowserError('invalid_argument', 'orca tab cdp is available only on this desktop')
@@ -67,7 +67,9 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
       browserPageId,
       async (_sessionName, target) => ({
         browserPageId: target.browserPageId,
-        url: await this.startDirectCdpProxy(target.browserPageId, target.webContentsId)
+        url: await this.startDirectCdpProxy(target.browserPageId, target.webContentsId),
+        // Agents' shells rarely have agent-browser on PATH; Orca ships its own copy.
+        agentBrowser: this.agentBrowserBin
       }),
       { ensureSession: false }
     )
