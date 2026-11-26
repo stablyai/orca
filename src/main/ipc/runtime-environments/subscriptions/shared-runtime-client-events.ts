@@ -10,6 +10,7 @@ type PassiveObserver = {
   onResponse: (response: RuntimeRpcResponse<unknown>) => void
   onClose: () => void
   closed: boolean
+  sawReady: boolean
 }
 
 type DocumentHostStream = {
@@ -26,6 +27,8 @@ type RelayOwnedUpstream = {
 type SharedChannel = {
   key: string
   hostStreams: Set<DocumentHostStream>
+  // The one document stream that feeds observers, so two windows never deliver each event twice.
+  feeder: DocumentHostStream | null
   observers: Set<PassiveObserver>
   relayUpstream: RelayOwnedUpstream | null
   openRelayUpstream:
@@ -48,6 +51,7 @@ function getOrCreateChannel(key: string): SharedChannel {
     channel = {
       key,
       hostStreams: new Set(),
+      feeder: null,
       observers: new Set(),
       relayUpstream: null,
       openRelayUpstream: null
@@ -79,13 +83,25 @@ function closeRelayUpstream(channel: SharedChannel): void {
   pruneChannel(channel)
 }
 
+function deliverResponse(observer: PassiveObserver, response: RuntimeRpcResponse<unknown>): void {
+  if (isReadyResponse(response)) {
+    observer.sawReady = true
+  }
+  try {
+    observer.onResponse(response)
+  } catch (error) {
+    // One observer's failure must not starve the others sharing this stream.
+    console.warn('[runtime-environments] shared client-event observer failed', error)
+  }
+}
+
 function notifyObserversResponse(
   channel: SharedChannel,
   response: RuntimeRpcResponse<unknown>
 ): void {
   for (const observer of Array.from(channel.observers)) {
     if (!observer.closed) {
-      observer.onResponse(response)
+      deliverResponse(observer, response)
     }
   }
 }
@@ -96,7 +112,11 @@ function notifyObserversClosed(channel: SharedChannel): void {
   for (const observer of observers) {
     if (!observer.closed) {
       observer.closed = true
-      observer.onClose()
+      try {
+        observer.onClose()
+      } catch (error) {
+        console.warn('[runtime-environments] shared client-event observer close failed', error)
+      }
     }
   }
   pruneChannel(channel)
@@ -113,19 +133,11 @@ function isReadyResponse(response: RuntimeRpcResponse<unknown>): boolean {
 }
 
 function readyResponseFor(channel: SharedChannel): RuntimeRpcResponse<unknown> | null {
-  if (channel.relayUpstream?.readyResponse) {
-    return channel.relayUpstream.readyResponse
-  }
-  for (const host of channel.hostStreams) {
-    if (host.readyResponse) {
-      return host.readyResponse
-    }
-  }
-  return null
+  return channel.relayUpstream?.readyResponse ?? channel.feeder?.readyResponse ?? null
 }
 
 function startRelayUpstream(channel: SharedChannel): void {
-  if (channel.relayUpstream || channel.hostStreams.size > 0 || channel.observers.size === 0) {
+  if (channel.relayUpstream || channel.feeder || channel.observers.size === 0) {
     return
   }
   const open = channel.openRelayUpstream
@@ -149,8 +161,8 @@ function startRelayUpstream(channel: SharedChannel): void {
     if (channel.relayUpstream === upstream) {
       channel.relayUpstream = null
     }
-    // Only close passive observers if no desktop document host stream took over.
-    if (channel.hostStreams.size === 0) {
+    // Only close passive observers if no desktop document stream took over.
+    if (!channel.feeder) {
       notifyObserversClosed(channel)
     } else {
       pruneChannel(channel)
@@ -196,49 +208,54 @@ export function registerDocumentClientEventsStream(
   const host: DocumentHostStream = { readyResponse: null }
   channel.hostStreams.add(host)
   let active = true
+  const detach = (): void => {
+    if (!active) {
+      return
+    }
+    active = false
+    channel.hostStreams.delete(host)
+    if (channel.feeder === host) {
+      channel.feeder = null
+      for (const candidate of channel.hostStreams) {
+        if (candidate.readyResponse) {
+          channel.feeder = candidate
+          break
+        }
+      }
+    }
+    if (!channel.feeder && channel.observers.size > 0) {
+      // Why: a document socket close does not say whether the host is gone. Reopening our own
+      // stream keeps observers fed when it isn't, and fails (closing them) when the transport is.
+      startRelayUpstream(channel)
+    } else {
+      pruneChannel(channel)
+    }
+  }
 
   return {
     onResponse: (response) => {
       if (!active) {
         return
       }
-      if (isReadyResponse(response)) {
+      const ready = isReadyResponse(response)
+      if (ready) {
         host.readyResponse = response
-        // Close any relay-owned stream only once the document stream is ready, avoiding an event gap.
-        if (channel.relayUpstream) {
+      }
+      if (!channel.feeder) {
+        if (!channel.relayUpstream) {
+          channel.feeder = host
+        } else if (ready) {
+          // Close the relay-owned stream only once the document stream is ready, avoiding an event gap.
+          channel.feeder = host
           closeRelayUpstream(channel)
         }
       }
-      // Forward only while no relay-owned stream is still feeding observers, to avoid double delivery.
-      if (!channel.relayUpstream && channel.observers.size > 0) {
+      if (channel.feeder === host && channel.observers.size > 0) {
         notifyObserversResponse(channel, response)
       }
     },
-    onTransportClose: () => {
-      if (!active) {
-        return
-      }
-      active = false
-      channel.hostStreams.delete(host)
-      if (channel.hostStreams.size === 0 && !channel.relayUpstream) {
-        notifyObserversClosed(channel)
-      } else {
-        pruneChannel(channel)
-      }
-    },
-    unregister: () => {
-      if (!active) {
-        return
-      }
-      active = false
-      channel.hostStreams.delete(host)
-      // Document closed while the transport is still alive: promote to a relay-owned stream if needed.
-      if (channel.hostStreams.size === 0 && channel.observers.size > 0 && !channel.relayUpstream) {
-        startRelayUpstream(channel)
-      } else {
-        pruneChannel(channel)
-      }
-    }
+    onTransportClose: detach,
+    unregister: detach
   }
 }
 
@@ -263,7 +280,8 @@ export function subscribeSharedRuntimeClientEvents(args: {
   const observer: PassiveObserver = {
     onResponse: args.onResponse,
     onClose: args.onClose,
-    closed: false
+    closed: false,
+    sawReady: false
   }
   channel.observers.add(observer)
 
@@ -271,8 +289,9 @@ export function subscribeSharedRuntimeClientEvents(args: {
     startRelayUpstream(channel)
   } else if (cachedReady) {
     queueMicrotask(() => {
-      if (!observer.closed) {
-        observer.onResponse(cachedReady)
+      // A live ready that arrived first already initialized this observer.
+      if (!observer.closed && !observer.sawReady) {
+        deliverResponse(observer, cachedReady)
       }
     })
   }

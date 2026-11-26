@@ -114,7 +114,7 @@ export function useHomeServerAgents(
       watchedDesktopsRef.current.clear()
       for (const client of watched) {
         if (client.getState() === 'connected') {
-          void relayHostsUnwatchRows(client, undefined).catch(() => {})
+          void relayHostsUnwatchRows.request(client).catch(() => {})
         }
       }
     }, HOME_RELAYED_REFRESH_FLOOR_MS)

@@ -39,6 +39,8 @@ export async function watchRuntimeEnvironmentChanges(args: {
   const environment = await findEnvironment()
   if (
     !environment ||
+    // The transport moved on while we looked the pairing up; don't join or open the old channel.
+    !current() ||
     isRuntimeEnvironmentManuallyDisconnected(environmentId) ||
     environment.pairingRevision !== expected.pairingRevision ||
     environment.runtimeId !== expected.runtimeId
