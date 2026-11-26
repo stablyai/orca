@@ -31,6 +31,7 @@ import { usePluginFontRegistration } from '../../store/plugins/appearance/plugin
 import { scheduleRuntimeGraphSync } from '../../runtime/sync-runtime-graph/graph-sync-scheduler'
 import { useAppStore } from '../../store/index'
 import { useReduceVisualEffects } from '@/hooks/theme/use-reduce-visual-effects'
+import { useSmoothSpinners } from '@/hooks/theme/use-smooth-spinners'
 
 export function useDocumentAppearance(): void {
   const {
@@ -57,6 +58,7 @@ export function useDocumentAppearance(): void {
   usePluginIconThemeActivation(useAppStore((s) => s.settings?.pluginIconTheme))
   usePluginFontRegistration()
   const reduceEffects = useReduceVisualEffects(useAppStore((s) => s.settings?.reduceVisualEffects))
+  useSmoothSpinners(useAppStore((s) => s.settings?.smoothSpinners))
   const surfaceOpacity = useAppStore((s) => s.settings?.terminalBackgroundOpacity ?? 1)
   useEffect(() => {
     document.documentElement.style.setProperty(

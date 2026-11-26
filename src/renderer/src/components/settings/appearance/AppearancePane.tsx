@@ -30,6 +30,7 @@ import {
   getWorkspaceCardLayoutEntry
 } from './appearance-sidebar-search'
 import { getReduceVisualEffectsEntries } from './appearance-reduce-visual-effects-search'
+import { getSmoothSpinnersEntries } from './appearance-smooth-spinners-search'
 import { getTerminalAppearanceSearchEntries } from '../terminal/terminal-search'
 import { TerminalAppearanceSection } from '../terminal/appearance/TerminalAppearanceSection'
 import type { UseTerminalConfigImportReturn } from '../terminal/configuration/useTerminalConfigImport'
@@ -114,6 +115,7 @@ export function AppearancePane({
     ...(SHOW_UI_LANGUAGE_SETTING ? getLanguageEntries() : []),
     ...getTitlebarEntries(),
     ...getReduceVisualEffectsEntries(),
+    ...getSmoothSpinnersEntries(),
     ...getSystemTrayEntries({ showSystemTray: isDesktopWindows }),
     ...getMenuBarIconEntries({ showMenuBarIcon: isDesktopMac })
   ]
