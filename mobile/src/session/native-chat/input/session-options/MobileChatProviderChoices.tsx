@@ -135,7 +135,7 @@ export function MobileChatProviderChoices({
                   key={model.id}
                   title={model.label}
                   subtitle={model.description}
-                  selected={model.id === catalog.modelId}
+                  selected={model.id === selection.options?.model}
                   disabled={pending}
                   onPress={() => void pick(selection.agent, { model: model.id })}
                 />
@@ -158,12 +158,11 @@ export function MobileChatProviderChoices({
                   <ListRow
                     key={value}
                     title={label}
-                    selected={value === catalog.effort?.value}
+                    selected={value === selection.options?.effort}
                     disabled={pending}
                     onPress={() =>
                       void pick(selection.agent, {
                         ...selection.options,
-                        ...(catalog.modelId ? { model: catalog.modelId } : {}),
                         effort: value
                       })
                     }

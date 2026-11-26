@@ -31,53 +31,6 @@ import {
   type HostSessionMirrorSettle
 } from '../hydration/mirror-settle'
 import { recordAgentFinishDropped } from '@/attention/agent-finish-drop-breadcrumb'
-import { replaceTabBuckets } from '../../../store/record-transitions/keyed-record-transitions'
-import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
-import { isStructuredAgentId } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
-
-export type StructuredChatProviderFact = {
-  tab: Pick<Tab, 'worktreeId' | 'id' | 'entityId'>
-  agent: string
-}
-
-/** Mirror the host's provider without changing tab membership or invalidating other buckets. */
-export function mirrorStructuredChatProviders(facts: readonly StructuredChatProviderFact[]): void {
-  const byWorkspace = new Map<string, Map<string, StructuredChatProviderFact>>()
-  for (const fact of facts) {
-    if (!isStructuredAgentId(fact.agent)) {
-      continue
-    }
-    const { worktreeId, id } = fact.tab
-    const byTab = byWorkspace.get(worktreeId) ?? new Map()
-    byTab.set(id, fact)
-    byWorkspace.set(worktreeId, byTab)
-  }
-  useAppStore.getState().updateAgentStatusState((state) => {
-    const replacements: [string, Tab[]][] = []
-    for (const [worktreeId, byTab] of byWorkspace) {
-      let changed = false
-      const tabs = state.unifiedTabsByWorktree[worktreeId]?.map((tab) => {
-        const fact = byTab.get(tab.id)
-        if (
-          !fact ||
-          tab.contentType !== 'agent-session' ||
-          tab.entityId !== fact.tab.entityId ||
-          tab.agentSessionAgent === fact.agent
-        ) {
-          return tab
-        }
-        changed = true
-        return { ...tab, agentSessionAgent: fact.agent }
-      })
-      if (changed && tabs) {
-        replacements.push([worktreeId, tabs])
-      }
-    }
-    return replacements.length
-      ? { unifiedTabsByWorktree: replaceTabBuckets(state.unifiedTabsByWorktree, replacements) }
-      : state
-  })
-}
 
 /** Commit a reconciliation patch and return a receipt for its host evidence. */
 export function applyWebSessionTabsStorePatch(

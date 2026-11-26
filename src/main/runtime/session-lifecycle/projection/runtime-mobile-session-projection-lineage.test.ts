@@ -1,8 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
+import type {
+  RuntimeMobileSessionAgentTab,
+  RuntimeMobileSessionTerminalTab
+} from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import {
+  structuredAgentSessionPaneKey,
+  structuredAgentSessionTabId
+} from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
 import { buildRuntimeMobileAgentStatus } from './runtime-mobile-agent-status-builder'
 import {
@@ -190,6 +197,54 @@ describe('paired-client frame lineage identity', () => {
       terminalHandle: 'term_worker',
       orchestration: ORCHESTRATION
     })
+  })
+
+  it('projects a switched chat agent into the existing tab for connected clients', () => {
+    const sessionId = 'session-1'
+    const tab: RuntimeMobileSessionAgentTab = {
+      type: 'agent-session',
+      id: structuredAgentSessionTabId(sessionId),
+      title: 'Existing chat',
+      sessionId,
+      agent: 'claude',
+      isActive: true
+    }
+    const paneKey = structuredAgentSessionPaneKey(tab.id, sessionId)
+    const row: AgentStatusIpcPayload = {
+      paneKey,
+      connectionId: null,
+      worktreeId: 'wt-1',
+      agentType: 'codex',
+      state: 'working',
+      prompt: 'next turn',
+      receivedAt: NOW,
+      stateStartedAt: NOW,
+      structuredHost: 'owned'
+    }
+    const host = hostWithFinishedHookRow(NOW)
+    host.getProviderSessionRows = (key) =>
+      key === paneKey
+        ? [row, { ...row, worktreeId: 'wt-2', agentType: 'claude', receivedAt: NOW + 1 }]
+        : []
+    const result = projectRuntimeMobileSessionTabs(
+      {
+        worktree: 'wt-1',
+        publicationEpoch: 'desktop:1',
+        snapshotVersion: 2,
+        activeGroupId: null,
+        activeTabId: tab.id,
+        activeTabType: 'agent-session',
+        tabs: [tab]
+      },
+      host
+    )
+    expect(result.tabs).toEqual([
+      {
+        ...tab,
+        agent: 'codex',
+        chatStatus: { state: 'working', updatedAt: NOW, structuredHostOwned: true }
+      }
+    ])
   })
 
   it('keeps lineage when a stale working row is rebuilt from its title', () => {

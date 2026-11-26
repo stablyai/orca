@@ -178,9 +178,9 @@ export function MobileNativeChatSessionOptionPickers({
   const providerDetails = (
     selection
       ? [
-          catalog?.model?.label ?? selection.options?.model ?? catalog?.modelId,
+          selection.options?.model ? (catalog?.model?.label ?? selection.options.model) : undefined,
           catalog?.effort?.option.kind.choices.find(
-            (choice) => choice.value === catalog.effort?.value
+            (choice) => choice.value === selection.options?.effort
           )?.label ?? selection.options?.effort
         ]
       : [primary, secondary]

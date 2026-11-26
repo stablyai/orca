@@ -41,5 +41,7 @@ export function withStructuredChatStatus(
     ...(row.evidenceObservedAt !== undefined ? { evidenceObservedAt: row.evidenceObservedAt } : {}),
     ...(row.structuredHost === 'owned' ? { structuredHostOwned: true as const } : {})
   }
-  return { ...tab, chatStatus }
+  const agent =
+    row.structuredHost && row.agentType && row.agentType !== 'unknown' ? row.agentType : tab.agent
+  return { ...tab, agent, chatStatus }
 }

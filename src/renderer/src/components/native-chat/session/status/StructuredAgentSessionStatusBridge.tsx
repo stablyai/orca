@@ -108,16 +108,8 @@ function installStatusProjection(): () => void {
     if (!current(input)) {
       return
     }
-    const feed = member.group?.feed
-    const latest = feed?.getSnapshot().get(tab.entityId)
-    if (
-      latest?.agent &&
-      latest.agent !== tab.agentSessionAgent &&
-      feed?.getSessionObservation(tab.entityId) === 'live'
-    ) {
-      writes.push({ kind: 'provider', tab, agent: latest.agent })
-    }
-    if (latest?.launchDirectory !== directory) {
+    const latestDirectory = member.group?.feed.getSnapshot().get(tab.entityId)?.launchDirectory
+    if (latestDirectory !== directory) {
       return
     }
     writes.push(
