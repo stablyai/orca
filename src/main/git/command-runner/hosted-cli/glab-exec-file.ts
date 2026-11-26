@@ -47,10 +47,18 @@ export function redirectPortedHostnameToEnv(
   }
 }
 
+export function glabExecFileAsync(
+  args: string[],
+  options: GlabExecOptions & { encoding: 'buffer' }
+): Promise<{ stdout: Buffer; stderr: Buffer }>
+export function glabExecFileAsync(
+  args: string[],
+  options?: Omit<GlabExecOptions, 'encoding'> & { encoding?: BufferEncoding }
+): Promise<{ stdout: string; stderr: string }>
 export async function glabExecFileAsync(
   args: string[],
   options: GlabExecOptions = {}
-): Promise<{ stdout: string; stderr: string }> {
+): Promise<{ stdout: string | Buffer; stderr: string | Buffer }> {
   ;({ args, options } = redirectPortedHostnameToEnv(args, options))
   // WSLENV is not extended, so wsl.exe-routed glab keeps the distro's proxy like WSL terminals.
   const env = withConfiguredProxyEnv(options.env)
@@ -66,7 +74,7 @@ export async function glabExecFileAsync(
         resolved.args,
         {
           cwd: resolved.cwd,
-          encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
+          encoding: options.encoding ?? 'utf-8',
           maxBuffer: options.maxBuffer,
           timeout: timeoutMs,
           env,
@@ -75,7 +83,7 @@ export async function glabExecFileAsync(
         },
         resolved.termination
       )
-      return { stdout: stdout as string, stderr: stderr as string }
+      return { stdout, stderr }
     } catch (err) {
       lastError = err
       const { stderr } = extractExecError(err)
