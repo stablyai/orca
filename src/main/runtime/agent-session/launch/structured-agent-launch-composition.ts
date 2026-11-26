@@ -7,7 +7,10 @@ import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { isNativeLocalLocation } from '../../../../shared/execution-host/execution-host'
 import type { StructuredAgentDefinition } from '../../../native-chat/agent-session-wire/providers/structured-agent-definition'
-import { agentDrivesSession } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-provider-support'
+import {
+  agentDrivesSession,
+  migrationAdjustedHandleChain
+} from '../../../native-chat/agent-session-wire/providers/structured-agent-session-provider-support'
 import type { StructuredAgentCommandSettings } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import {
   createNativeChatVisualsDelivery,
@@ -169,11 +172,7 @@ function admittedRecord(
     // dropping those relics opens the session fresh instead of hard-erroring every migrated chat.
     const migrated = {
       ...record,
-      providerHandleChain: record.providerHandleChain.filter(
-        (link) =>
-          link.handle.transport === definition.handleTransport ||
-          link.handle.agent !== definition.agent
-      )
+      providerHandleChain: migrationAdjustedHandleChain(definition, record.providerHandleChain)
     }
     if (
       migrated.providerHandleChain.length !== record.providerHandleChain.length &&

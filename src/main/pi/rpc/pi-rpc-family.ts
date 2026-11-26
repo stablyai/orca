@@ -18,6 +18,8 @@ export type PiRpcFamily = {
   readTools: readonly string[]
   /** OMP before 19.2.0 does not strip MCP/extension tools under `--no-tools`, so limited launches are unsafe. */
   limitedToolsMinimumVersion: string
+  /** Fail closed when the version probe cannot prove the limited-launch minimum; pi's old minimum stays permissive. */
+  limitedLaunchRequiresVerifiedVersion: boolean
 }
 
 export const PI_RPC_FAMILY_PI: PiRpcFamily = {
@@ -29,7 +31,8 @@ export const PI_RPC_FAMILY_PI: PiRpcFamily = {
   supportsBackgroundWorkBridge: true,
   supportsNoMcpFlag: true,
   readTools: ['read', 'grep', 'find', 'ls'],
-  limitedToolsMinimumVersion: '1.0.4'
+  limitedToolsMinimumVersion: '1.0.4',
+  limitedLaunchRequiresVerifiedVersion: false
 }
 
 export const PI_RPC_FAMILY_OMP: PiRpcFamily = {
@@ -41,7 +44,8 @@ export const PI_RPC_FAMILY_OMP: PiRpcFamily = {
   supportsBackgroundWorkBridge: false,
   supportsNoMcpFlag: false,
   readTools: ['read', 'grep', 'glob'],
-  limitedToolsMinimumVersion: '19.2.0'
+  limitedToolsMinimumVersion: '19.2.0',
+  limitedLaunchRequiresVerifiedVersion: true
 }
 
 export function piRpcFamilyFor(agent: string): PiRpcFamily {

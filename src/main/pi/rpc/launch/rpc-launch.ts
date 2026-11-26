@@ -109,15 +109,21 @@ export function piToolLimit(
   agent: PiRpcFamilyAgent = 'pi'
 ): PiToolLimit | null {
   const tools = readOnly === 'reply-only' ? 'none' : readOnly ? 'read' : null
+  const family = piRpcFamilyFor(agent)
   if (
     tools &&
     launchVersion.status === 'ready' &&
-    compareAppVersions(launchVersion.version, piRpcFamilyFor(agent).limitedToolsMinimumVersion) < 0
+    compareAppVersions(launchVersion.version, family.limitedToolsMinimumVersion) < 0
   ) {
     throw AgentCliInstallationError.tooOld(agent, {
       version: launchVersion.version,
-      minimumVersion: piRpcFamilyFor(agent).limitedToolsMinimumVersion
+      minimumVersion: family.limitedToolsMinimumVersion
     })
+  }
+  if (tools && family.limitedLaunchRequiresVerifiedVersion && launchVersion.status !== 'ready') {
+    throw new Error(
+      `${agent} limited sessions require a verified version >= ${family.limitedToolsMinimumVersion}, but the version probe returned ${launchVersion.status}`
+    )
   }
   return tools
 }
