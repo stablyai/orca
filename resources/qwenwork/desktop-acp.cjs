@@ -308,10 +308,14 @@ function serve(profile, windowsSecurityModule) {
         }
         const target = { scope: 'session', session_id: ownedSession }
         pendingModel = model
-        const actual = selectedModel(
+        let actual = selectedModel(
           await desktop.call('model.set', { ...target, model: params.value }),
           target
         )
+        if (actual !== params.value) {
+          // Some desktop versions acknowledge the write with the previous model.
+          actual = selectedModel(await desktop.call('model.get', target), target)
+        }
         if (actual !== params.value) {
           throw new DesktopControlError('QwenWork desktop did not confirm the selected model.')
         }
