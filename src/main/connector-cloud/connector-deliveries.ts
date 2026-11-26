@@ -62,7 +62,7 @@ export async function recordedDeliveryResult(
 export type DispatchMachine = Pick<
   ConnectorMachine,
   'runTrigger' | 'webhookNotice' | 'turnAutomations' | 'prEvent' | 'threadMute'
->
+> & { deliverySignal?: AbortSignal }
 export type RequestDelivery = Extract<ConnectorDelivery, { kind: 'start' | 'send' }>
 export type SendDelivery = Extract<ConnectorDelivery, { kind: 'send' }>
 export type ThreadDelivery = Exclude<
@@ -151,7 +151,7 @@ export function dispatchDelivery(
     preparing ??
     ((delivery.kind === 'start' || delivery.kind === 'send') &&
     hasEarlierImages(delivery.conversation.source, delivery.asker)
-      ? new DeliveryPreparation()
+      ? new DeliveryPreparation(machine.deliverySignal, () => msLeft(delivery.expiresAt))
       : undefined)
   // A send this machine already took replays its receipt, never decided again: one the thread's
   // mute held replays as it was, with no turn and so no automations run in one.

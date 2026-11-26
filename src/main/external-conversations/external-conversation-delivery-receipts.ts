@@ -26,6 +26,24 @@ export class DeliveryPreparation {
   private pending: Set<string> | null = new Set()
   private ledger: { db: DeliveryReceiptDb; fingerprint: string } | undefined
 
+  constructor(
+    private readonly pollSignal?: AbortSignal,
+    private readonly msLeft?: () => number
+  ) {}
+
+  expired(): boolean {
+    return (this.msLeft?.() ?? Infinity) <= 0
+  }
+
+  signal(lane: AbortSignal): AbortSignal {
+    const signals = this.pollSignal ? [lane, this.pollSignal] : [lane]
+    if (this.msLeft) {
+      const remaining = Math.min(2_147_483_647, Math.floor(this.msLeft()))
+      signals.push(remaining > 0 ? AbortSignal.timeout(remaining) : AbortSignal.abort())
+    }
+    return AbortSignal.any(signals)
+  }
+
   track(db: DeliveryReceiptDb, fingerprint: string, requestId: string): () => void {
     const pending = this.pending
     if (!pending) {

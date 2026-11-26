@@ -9,7 +9,8 @@ import type { ExternalConversationSeam } from '../external-conversations/externa
 import {
   dispatchDelivery,
   recordedDeliveryResult,
-  type DispatchedDelivery
+  type DispatchedDelivery,
+  type DispatchMachine
 } from './connector-deliveries'
 import { connectorDeliveryUnits, dispatchBatch } from './connector-delivery-batches'
 import type { ConnectorMachine } from './connector-machine'
@@ -24,6 +25,7 @@ const MAX_ACKS_PER_REQUEST = 100
 export class ConnectorDeliveryAcks {
   private readonly acks: ConnectorOutbox<ConnectorAck>
   private readonly sender: ConnectorOutboxSender<ConnectorAck>
+  private readonly machine: DispatchMachine
   // Received in this process and not yet confirmed done.
   private readonly active = new Set<string>()
   // Of those, the ones confirmed only by done (a trigger, a pull request event): never `received`, so
@@ -49,6 +51,7 @@ export class ConnectorDeliveryAcks {
       onUnblocked?: () => void
     }
   ) {
+    this.machine = { ...deps.machine, deliverySignal: deps.signal }
     this.acks = new ConnectorOutbox<ConnectorAck>({
       headSize: () => MAX_ACKS_PER_REQUEST,
       onAccepted: (sent) => {
@@ -86,7 +89,7 @@ export class ConnectorDeliveryAcks {
     msLeft: (expiresAt: number) => number,
     outbox: string | null = this.outbox()
   ): void {
-    const { seam, host, machine } = this.deps
+    const { seam, host } = this.deps
     const held = (delivery: { deliveryId: string; conversation: ConnectorConversation }) =>
       this.active.has(delivery.deliveryId) ||
       seam.receipts.known(delivery.conversation, delivery.deliveryId)
@@ -99,7 +102,14 @@ export class ConnectorDeliveryAcks {
         this.deliver(unit.batch[0], msLeft, outbox)
         continue
       }
-      for (const dispatched of dispatchBatch(seam, host, machine, unit.batch, msLeft, outbox)) {
+      for (const dispatched of dispatchBatch(
+        seam,
+        host,
+        this.machine,
+        unit.batch,
+        msLeft,
+        outbox
+      )) {
         this.track(dispatched)
       }
     }
@@ -118,8 +128,8 @@ export class ConnectorDeliveryAcks {
       }
       return
     }
-    const { seam, host, machine } = this.deps
-    const dispatched = dispatchDelivery(seam, host, machine, raw, msLeft, [], outbox)
+    const { seam, host } = this.deps
+    const dispatched = dispatchDelivery(seam, host, this.machine, raw, msLeft, [], outbox)
     if (dispatched) {
       this.track(dispatched)
     }

@@ -59,7 +59,8 @@ async function storedConnectorImageId(
 type StoredImage = { bytes: number; fileId: string | undefined }
 
 export function connectorMissingImages(): CapabilityProbeCache<string> {
-  return new CapabilityProbeCache(5 * 60_000, 4096)
+  // A stored upload path is never reused. Keep its absence long enough for sparse requests to advance.
+  return new CapabilityProbeCache(Number.POSITIVE_INFINITY, 4096)
 }
 
 export function connectorImageInspection(

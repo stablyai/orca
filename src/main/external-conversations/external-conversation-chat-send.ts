@@ -51,6 +51,10 @@ export async function deliverToChat(
   if (!chat) {
     return refused('agent_not_reachable')
   }
+  const signal = delivery.preparation?.signal(delivery.signal) ?? delivery.signal
+  if (signal.aborted) {
+    return refused(refusalOf(signal))
+  }
   // Its chat was deleted: the conversation may start a new one.
   if (!chat.deps.store.getConversation(link.sessionId)) {
     return refused(CHAT_GONE_REFUSAL)
@@ -68,7 +72,7 @@ export async function deliverToChat(
     let inspection: ConnectorImageInspection | undefined
     let firstCarry: Promise<CarriedMessages> | undefined
     const readCarry = (direct: readonly ConnectorImage[]) =>
-      readCarriedMessages(chat, link, delivery.reply?.account, direct, delivery.signal, inspection)
+      readCarriedMessages(chat, link, delivery.reply?.account, direct, signal, inspection)
     const earlierBudget = (carried: CarriedMessages, direct: readonly ConnectorImage[]) =>
       budgetForEarlierImages(link.agent, carried.earlierBudget, direct)
     let carried: CarriedMessages | undefined
@@ -80,7 +84,7 @@ export async function deliverToChat(
               botId: link.bot.botId,
               conversation: { source: link.source, externalId: link.externalId },
               asker: delivery.asker,
-              signal: delivery.signal,
+              signal,
               earlierBudget: async (direct, signal) => {
                 directCount = direct.length
                 inspection = connectorImageInspection(
@@ -109,7 +113,7 @@ export async function deliverToChat(
       const outcome = await sendConnectorTurn(
         chat,
         link,
-        delivery,
+        { ...delivery, signal },
         carried,
         [...direct, ...fitting],
         admit
@@ -145,7 +149,7 @@ export async function deliverToChat(
     if (admitted) {
       return { outcome: 'unknown', reason: 'writer_failed' }
     }
-    return refused(delivery.signal.aborted ? refusalOf(delivery.signal) : 'agent_not_reachable')
+    return refused(signal.aborted ? refusalOf(signal) : 'agent_not_reachable')
   }
 }
 
@@ -261,6 +265,9 @@ function sendConnectorTurn(
       beforeRun: () => {
         if (signal.aborted) {
           throw new Error(refusalOf(signal))
+        }
+        if (delivery.preparation?.expired()) {
+          throw new Error('conversation_cancelled')
         }
         delivery.preparation?.ready()
         admit()

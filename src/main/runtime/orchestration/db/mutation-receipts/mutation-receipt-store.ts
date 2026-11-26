@@ -204,22 +204,31 @@ export function settlePendingMutationReceipts(
   receipt: string,
   retryableReceipt?: string
 ): void {
-  if (retryableReceipt !== undefined) {
-    this.db
-      .prepare(
-        `DELETE FROM mutation_receipts
-         WHERE caller_fingerprint IN (SELECT value FROM json_each(?))
-           AND state = 'pending' AND receipt = ?`
+  const fingerprints = JSON.stringify(callerFingerprints)
+  const settle = `UPDATE mutation_receipts
+    SET state = 'completed', receipt = CASE WHEN receipt = ? THEN receipt ELSE ? END,
+        updated_at = datetime('now')
+    WHERE caller_fingerprint IN (SELECT value FROM json_each(?)) AND state = 'pending'`
+  this.db.exec('BEGIN IMMEDIATE')
+  try {
+    const settled = this.db
+      .prepare(`${settle} RETURNING caller_fingerprint, request_id, receipt`)
+      .all(retryableReceipt ?? null, receipt, fingerprints)
+    if (settled.some((row) => row.receipt === retryableReceipt)) {
+      const discard = this.db.prepare(
+        'DELETE FROM mutation_receipts WHERE caller_fingerprint = ? AND request_id = ?'
       )
-      .run(JSON.stringify(callerFingerprints), retryableReceipt)
+      for (const row of settled) {
+        if (row.receipt === retryableReceipt) {
+          discard.run(String(row.caller_fingerprint), String(row.request_id))
+        }
+      }
+    }
+    this.db.exec('COMMIT')
+  } catch (error) {
+    this.db.exec('ROLLBACK')
+    throw error
   }
-  this.db
-    .prepare(
-      `UPDATE mutation_receipts
-       SET state = 'completed', receipt = ?, updated_at = datetime('now')
-       WHERE caller_fingerprint IN (SELECT value FROM json_each(?)) AND state = 'pending'`
-    )
-    .run(receipt, JSON.stringify(callerFingerprints))
 }
 
 export function getMutationReceipt(
