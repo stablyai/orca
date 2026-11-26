@@ -6,6 +6,7 @@ import { openDiscriminatedUnion } from './agent-session-journal-open-union'
 const ThreadGoal = z.object({
   objective: z.string(),
   status: z.string().min(1),
+  statusDetail: z.string().min(1).max(1250).optional(),
   tokenBudget: z.number().finite().nullable(),
   tokensUsed: z.number().finite(),
   timeUsedSeconds: z.number().finite(),

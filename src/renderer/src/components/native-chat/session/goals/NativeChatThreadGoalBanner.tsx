@@ -137,6 +137,11 @@ export function NativeChatThreadGoalBanner(props: {
           </GoalAction>
         </div>
       </div>
+      {expanded && goal.statusDetail ? (
+        <p className="max-h-40 overflow-y-auto px-3 pt-1 pb-2 whitespace-pre-wrap break-words text-sm text-foreground scrollbar-sleek">
+          {goal.statusDetail}
+        </p>
+      ) : null}
       {expanded && goal.lastCheck ? (
         <div className="max-h-40 overflow-y-auto px-3 pt-1 pb-2 whitespace-pre-wrap break-words text-sm text-foreground scrollbar-sleek">
           <p className="mb-1 text-xs font-semibold text-muted-foreground">

@@ -11,6 +11,7 @@ const report = z.discriminatedUnion('state', [
       .object({
         objective: z.string().trim().min(1).max(4000),
         status: z.enum(['active', 'paused', 'blocked', 'complete']),
+        statusDetail: z.string().trim().min(1).max(1250).optional(),
         tokenBudget: z.null(),
         tokensUsed: z.number().int().nonnegative(),
         timeUsedSeconds: z.number().int().nonnegative(),

@@ -47,7 +47,7 @@ export const expanded = goalFeedback(720, true)
 export const narrowCollapsed = goalFeedback(360, false)
 export const narrowExpanded = goalFeedback(360, true)
 
-function piGoal(status: 'active' | 'paused' | null) {
+function piGoal(status: 'active' | 'paused' | 'blocked' | null) {
   const observedAt = Date.now()
   return defineFixture({
     width: 720,
@@ -58,6 +58,9 @@ function piGoal(status: 'active' | 'paused' | null) {
             goal={{
               objective: 'Verify the release checklist',
               status,
+              ...(status === 'blocked'
+                ? { statusDetail: 'Waiting for the test owner to confirm the result.' }
+                : {}),
               tokenBudget: null,
               tokensUsed: 120,
               timeUsedSeconds: 2,
@@ -78,13 +81,21 @@ function piGoal(status: 'active' | 'paused' | null) {
           Ask anything, @ to mention files, / for commands
         </div>
       </div>
-    )
+    ),
+    ...(status === 'blocked'
+      ? {
+          interact: (frame: HTMLElement) => {
+            frame.querySelector<HTMLButtonElement>('button[aria-label="Show full goal"]')?.click()
+          }
+        }
+      : {})
   })
 }
 
 export const piBeforeGoalReport = piGoal(null)
 export const piGoalActive = piGoal('active')
 export const piGoalPaused = piGoal('paused')
+export const piGoalBlocked = piGoal('blocked')
 
 export const endedGoalChecks = defineFixture({
   width: 720,

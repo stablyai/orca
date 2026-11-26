@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { AgentJournalThreadGoalStateSchema } from '../../../shared/agent-session/journal/agent-session-journal-thread-goal-schema'
 import { PiRpcDialogCallbacks } from './rpc-dialog-callbacks'
 
 describe('Pi goal reports', () => {
@@ -14,7 +15,8 @@ describe('Pi goal reports', () => {
     )
     const goal = {
       objective: 'Verify the change',
-      status: 'active',
+      status: 'blocked',
+      statusDetail: 'Waiting for test evidence.',
       tokenBudget: null,
       tokensUsed: 120,
       timeUsedSeconds: 2,
@@ -30,6 +32,7 @@ describe('Pi goal reports', () => {
       })
     report({ state: 'set', goal }, 'unrelated')
     report({ state: 'set', goal: { ...goal, tokensUsed: -1 } })
+    report({ state: 'set', goal: { ...goal, statusDetail: 'x'.repeat(1251) } })
     expect(apply).not.toHaveBeenCalled()
 
     report({ state: 'set', goal })
@@ -66,6 +69,8 @@ describe('Pi goal reports', () => {
         ]
       ]
     ])
+    const journaled = apply.mock.calls[0]?.[0][0].body.threadGoal
+    expect(AgentJournalThreadGoalStateSchema.parse(journaled)).toEqual({ state: 'set', goal })
     expect(send).not.toHaveBeenCalled()
   })
 })
