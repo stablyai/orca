@@ -255,7 +255,7 @@ export class AcpTimelineTranslator {
     if (standard) {
       const messageKey =
         this.dialect.injectedPromptIdentity || this.options.numbersMessages
-          ? this.ownership.messages.key(turn, standard.update)
+          ? this.ownership.messages.key(turn, standard.update, this.prompts.current?.turn)
           : undefined
       // A relayed chat's finished message leaves the text streams, as an unnumbered one would.
       const ended = this.ownership.messages.takeEnded()

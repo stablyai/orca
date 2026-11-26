@@ -9,7 +9,7 @@ export function acpNamedTextKey(messageId: string, channel: ProviderTimelineText
   return `message:${JSON.stringify([messageId, channel])}`
 }
 
-type MessagePosition = { ordinal: number; channel?: string; tagged?: boolean }
+type MessagePosition = { ordinal: number; channel?: string }
 
 export type AcpMessageOwner = { turn?: string; settled?: boolean }
 
@@ -89,8 +89,10 @@ export class AcpTurnMessages {
     }
   }
 
-  /** `turn` undefined: an update its agent left untagged, numbered in the relayed prompt running. */
-  key(turn: string | undefined, update: SessionUpdate): string | undefined {
+  /** `turn` undefined: an update its agent left untagged, numbered in `running`, the prompt still
+   *  running, when it is the relayed one `opened` recorded (an adopted one resolves every update to
+   *  it, so live and replayed numbering agree). */
+  key(turn: string | undefined, update: SessionUpdate, running?: string): string | undefined {
     if (
       (update.sessionUpdate === 'agent_message_chunk' ||
         update.sessionUpdate === 'agent_thought_chunk') &&
@@ -101,7 +103,7 @@ export class AcpTurnMessages {
         update.sessionUpdate === 'agent_thought_chunk' ? 'reasoning' : 'assistant'
       )
     }
-    const scope = turn ?? this.prompt
+    const scope = turn ?? (running !== undefined && running === this.prompt ? running : undefined)
     if (scope === undefined || (turn !== undefined && !this.owners.isLive(turn))) {
       return undefined
     }
@@ -110,12 +112,6 @@ export class AcpTurnMessages {
     const chunk =
       update.sessionUpdate === 'agent_message_chunk' ||
       update.sessionUpdate === 'agent_thought_chunk'
-    // Tagged and untagged text never share a row: one ends where the other begins.
-    if (chunk && state.tagged !== (turn !== undefined) && state.channel !== undefined) {
-      this.ended = this.position(scope, state.ordinal)
-      state.channel = undefined
-    }
-    state.tagged = chunk ? turn !== undefined : state.tagged
     const resets =
       chunk ||
       ['user_message_chunk', 'tool_call', 'tool_call_update', 'plan'].includes(update.sessionUpdate)
