@@ -68,13 +68,16 @@ export function useHostScreenController({
   const forceReconnectHost = useForceReconnect()
   const { hostCapabilities, statusReadable, floatingWorkspaceEnabled, hostInstallationId } =
     useHostProtocolGates()
-  const state = useHostScreenState(hostId, peekStoredHost(hostId))
+  const storedHost = peekStoredHost(hostId)
+  const state = useHostScreenState(hostId, storedHost)
   const settings = useHostViewSettings({ client, connState, state })
   const connectionVerdict = classifyConnection({
     state: connState,
     reconnectAttempts,
     lastConnectedAt,
     hostName: state.hostName,
+    // Link-local hosts are never dialed directly, so a refusal there must advise re-pairing.
+    endpoint: storedHost?.endpoint,
     ...relayRecovery
   })
   const hostDisplay = useHostDisplay(

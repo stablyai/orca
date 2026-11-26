@@ -151,4 +151,84 @@ describe('Relay credential recovery', () => {
       }
     }
   )
+
+  // The old cell knows neither token, and the director refuses the old one: only pending's own lookup finds the host.
+  it('recovers a lost rotation on a later attempt after the host moved cells', async () => {
+    let stored: MobileRelayCredentialBundle = bundle
+    const writeBundle = vi.fn(async (next: MobileRelayCredentialBundle) => {
+      stored = next
+    })
+    const direct = new FakeSession('connected')
+    direct.sendRequest.mockImplementation(async (method) => {
+      if (method === 'pairing.provisionRelay') {
+        throw new Error('socket closed')
+      }
+      return {
+        id: 'rpc-1',
+        ok: true,
+        result: { v: 1, relay, installStatus: { v: 1, reqId: 'r', state: 'not-found' } },
+        _meta: { runtimeId: 'runtime-1' }
+      }
+    })
+    await expect(
+      rotateMobileRelayCredential({
+        client: direct,
+        bundle,
+        writeBundle,
+        randomBytes: (length) => new Uint8Array(length).fill(1)
+      })
+    ).rejects.toThrow('socket closed')
+    const pending = stored.pending
+    expect(pending).toBeDefined()
+
+    vi.useFakeTimers()
+    const moved = { ...relay, cellUrl: 'https://relay-c2.onorca.dev', assignmentEpoch: 8 }
+    const openRelay = vi.fn((cell: typeof relay, credential: { token: string }) => {
+      if (cell.cellUrl !== moved.cellUrl || credential.token !== pending?.token) {
+        return new FakeRelaySession('disconnected', new RelayOuterError(4409))
+      }
+      const accepted = new FakeRelaySession('connected')
+      accepted.getResumeConfirmation = () => ({
+        v: 1,
+        reqId: 'confirm-1',
+        currentVersion: 3,
+        acceptedAs: 'current',
+        renewed: true,
+        resumeExpiresAt: 2_000_000_000_000
+      })
+      return accepted
+    })
+    const resolveRelay = vi.fn(async ({ resumeToken }: { resumeToken: string }) => {
+      if (resumeToken !== pending?.token) {
+        throw new RelayDirectorHttpError(401, null)
+      }
+      return moved
+    })
+    const logical = new FakeLogicalClient('disconnected', 'relay')
+    const supervisor = new MobileEndpointSupervisor(
+      logical,
+      host.id,
+      relay,
+      dependencies({
+        openRelay,
+        readBundle: vi.fn(async () => stored),
+        resolveRelay,
+        writeBundle,
+        directUnavailable: true
+      })
+    )
+    try {
+      await supervisor.start()
+      expect(logical.getState()).toBe('disconnected')
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(logical.getState()).toBe('connected')
+      expect(resolveRelay).toHaveBeenLastCalledWith(
+        expect.objectContaining({ resumeToken: pending?.token })
+      )
+      expect(stored.pending).toBeUndefined()
+      expect(stored.current.version).toBe(3)
+    } finally {
+      supervisor.stop()
+    }
+  })
 })

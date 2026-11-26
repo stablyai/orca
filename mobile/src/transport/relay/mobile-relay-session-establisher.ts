@@ -105,10 +105,14 @@ export class MobileRelaySessionEstablisher {
         refusal ??= result.error
         continue
       }
-      // A director 401 can be stale (it reads a store an edge-hosted host may have outgrown), so try
-      // pending without condemning this one.
+      // A director 401 can be stale (it reads a store an edge-hosted host may have outgrown), so try pending at
+      // this cell now. With a pending to fall back on, the refused token also sits out later attempts, so a
+      // moved host's pending gets the director lookup itself; without one, base retries are kept.
       if (!isDirectorRefusal(result.error)) {
         break
+      }
+      if (pendingToken !== undefined && credential.token !== pendingToken) {
+        this.args.controller.recordRejectedCredential(credential.version)
       }
       directorRefused = true
     }
