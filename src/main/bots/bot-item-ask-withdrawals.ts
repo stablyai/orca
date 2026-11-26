@@ -65,10 +65,12 @@ type ProfileState = {
   armed: boolean
   /** Items moved whose lists weren't told yet (a later write in the pass failed). */
   untold: Set<string>
+  /** Item changes seen, so one that lands during a pass's read keeps the check armed. */
+  changes: number
 }
 
 function freshState(store: BotItemAskWithdrawalStore | null): ProfileState {
-  return { store, unsent: new Map(), seeded: false, armed: true, untold: new Set() }
+  return { store, unsent: new Map(), seeded: false, armed: true, untold: new Set(), changes: 0 }
 }
 
 /** One pass at a time; a minute during one runs it again with that minute's time. A failed pass is
@@ -108,6 +110,7 @@ export class BotItemAskWithdrawals {
   /** An item changed: it may now ask `--while`, which the next minute checks. */
   itemsChanged(): void {
     this.state.armed = true
+    this.state.changes++
   }
 
   async settled(): Promise<void> {
@@ -125,8 +128,9 @@ export class BotItemAskWithdrawals {
       }
       state.seeded = true
     }
+    const changes = state.changes
     const questions = await store.askWhileQuestions()
-    state.armed = questions.length > 0
+    state.armed = questions.length > 0 || state.changes !== changes
     const candidates = questions.filter(
       (question) => settledBy(question.askWhile, now, this.deps.worker) !== null
     )

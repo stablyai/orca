@@ -367,4 +367,34 @@ describe('Needs you asks kept open --while', () => {
     await withdrawals.settled()
     expect(told).toContain(first)
   })
+
+  it('stays armed for an ask made while a minute was reading the open questions', async () => {
+    const store = open()
+    let uid = ''
+    let reads = 0
+    const withdrawals = new BotItemAskWithdrawals({
+      store: () => wrapped,
+      worker: () => 'unknown',
+      workerTitle: async () => new Map(),
+      changed: () => {},
+      sendOwedMail: async () => {}
+    })
+    const wrapped: BotItemAskWithdrawalStore = {
+      ...remote(store),
+      askWhileQuestions: async () => {
+        const questions = store.askWhileQuestions()
+        if (++reads === 1) {
+          // An ask lands, and its change is told, after this read's snapshot.
+          uid = asked(store, { kind: 'until', at: LATER })
+          withdrawals.itemsChanged()
+        }
+        return questions
+      }
+    }
+    withdrawals.tick(LATER - 1)
+    await withdrawals.settled()
+    withdrawals.tick(LATER)
+    await withdrawals.settled()
+    expect(store.get(uid)!.status).toBe('working')
+  })
 })
