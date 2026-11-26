@@ -81,7 +81,7 @@ type Fresh = Awaited<ReturnType<typeof freshRelays>>
 
 /** One host's kept opens over the given open sessions; settle is the spy that a settle happened. */
 function keptOpens(fresh: Fresh, sessions: Map<string, unknown>, ownerPid: () => number) {
-  const settle = vi.fn(async () => {})
+  const settle = vi.fn(async (_id: string, _open: unknown, _fence: number, _since: number) => {})
   const opens = new fresh.StructuredAgentSessionKeptOpens({
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reconciler reads only child and journal.cursor
     sessions: sessions as never,
@@ -92,7 +92,10 @@ function keptOpens(fresh: Fresh, sessions: Map<string, unknown>, ownerPid: () =>
     settle,
     logger: { warn: () => {} }
   })
-  return { opens, settle }
+  const adopt = (id: string, session: ReturnType<typeof openSession>): void =>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reconciler reads only child and journal.cursor
+    adopt(id, session)
+  return { opens, settle, adopt }
 }
 
 const openSession = () => ({
@@ -103,13 +106,6 @@ const openSession = () => ({
 async function settleTurns(): Promise<void> {
   for (let i = 0; i < 20; i += 1) {
     await new Promise((resolve) => setImmediate(resolve))
-  }
-}
-
-/** Waits (real time, bounded) until `done` holds; the listing reads processes, so turns aren't enough. */
-async function until(done: () => boolean): Promise<void> {
-  for (let waited = 0; !done() && waited < 5_000; waited += 10) {
-    await new Promise((resolve) => setTimeout(resolve, 10))
   }
 }
 
@@ -134,12 +130,12 @@ it.skipIf(process.platform === 'win32')(
     const fresh = await freshRelays(late.client)
     expect(await openKept(fresh, SESSION, process.pid, 10)).toBe(true)
     const session = openSession()
-    const { opens, settle } = keptOpens(fresh, new Map([[SESSION, session]]), () => process.pid)
-    opens.adopted(SESSION, session as never)
+    const { adopt, settle } = keptOpens(fresh, new Map([[SESSION, session]]), () => process.pid)
+    adopt(SESSION, session)
     late.answer([keptRelay('another-chat')])
     await fresh.relays.providerRelayListingSettled()
-    await until(() => settle.mock.calls.length > 0)
-    expect(settle).toHaveBeenCalledTimes(1)
+    // The listing reads the listed relay's process, so the settle lands after real I/O.
+    await vi.waitFor(() => expect(settle).toHaveBeenCalledTimes(1), { timeout: 5_000 })
     expect(settle).toHaveBeenCalledWith(SESSION, session, 3, 6)
   }
 )
@@ -151,8 +147,8 @@ it.skipIf(process.platform === 'win32')(
     const fresh = await freshRelays(late.client)
     expect(await openKept(fresh, SESSION, process.pid, 10)).toBe(true)
     const session = openSession()
-    const { opens, settle } = keptOpens(fresh, new Map([[SESSION, session]]), () => process.pid)
-    opens.adopted(SESSION, session as never)
+    const { adopt, settle } = keptOpens(fresh, new Map([[SESSION, session]]), () => process.pid)
+    adopt(SESSION, session)
     late.answer([keptRelay(SESSION)])
     await settleTurns()
     expect(settle).not.toHaveBeenCalled()
@@ -205,14 +201,14 @@ it.skipIf(process.platform === 'win32')(
     const fresh = await freshRelays(daemon.client)
     const inventory = await import('../../../../provider-relay/provider-relay-launch-inventory')
     const sessions = new Map<string, unknown>()
-    const { opens, settle } = keptOpens(fresh, sessions, () => process.pid)
+    const { adopt, settle } = keptOpens(fresh, sessions, () => process.pid)
     const chats = Array.from({ length: 1_000 }, (_, i) => `chat-${i}`)
     for (const id of chats) {
       expect(await openKept(fresh, id, process.pid)).toBe(true)
       const session = openSession()
       sessions.set(id, session)
-      opens.adopted(id, session as never)
-      opens.adopted(id, session as never)
+      adopt(id, session)
+      adopt(id, session)
     }
     await settleTurns()
     expect(settle).not.toHaveBeenCalled()
@@ -222,10 +218,10 @@ it.skipIf(process.platform === 'win32')(
     }
     daemon.recover()
     await inventory.listKeptProviderRelays(async () => [daemon.client], true)
-    await until(() => settle.mock.calls.length > 0)
+    await vi.waitFor(() => expect(settle).toHaveBeenCalledTimes(1), { timeout: 5_000 })
     await settleTurns()
     expect(settle).toHaveBeenCalledTimes(1)
-    expect(settle.mock.calls[0]?.[0]).toBe('chat-0')
+    expect(settle).toHaveBeenCalledWith('chat-0', expect.anything(), 3, 6)
   }
 )
 
@@ -237,15 +233,18 @@ it.skipIf(process.platform === 'win32')(
     expect(await openKept(fresh, SESSION, process.pid)).toBe(true)
     const session = openSession()
     let ownerPid = process.pid
-    const { opens, settle } = keptOpens(fresh, new Map([[SESSION, session]]), () => ownerPid)
-    opens.adopted(SESSION, session as never)
+    const { adopt, settle } = keptOpens(fresh, new Map([[SESSION, session]]), () => ownerPid)
+    adopt(SESSION, session)
     await settleTurns()
     expect(settle).not.toHaveBeenCalled()
     ownerPid = exitedPid()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a refused or proven-gone launch reads only chatKey
-    await expect(
-      fresh.relays.launchRelayedProviderProcess({} as never, { chatKey: SESSION } as never)
-    ).resolves.toBeNull()
+    const launched = fresh.relays.launchRelayedProviderProcess(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a refused or proven-gone launch reads no launch field
+      {} as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a refused or proven-gone launch reads only chatKey
+      { chatKey: SESSION } as never
+    )
+    await expect(launched).resolves.toBeNull()
     expect(settle).toHaveBeenCalledTimes(1)
   }
 )
