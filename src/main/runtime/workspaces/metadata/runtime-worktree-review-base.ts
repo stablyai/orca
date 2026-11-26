@@ -1,4 +1,4 @@
-import type { GitHubPrStartPoint, GitPushTarget } from '../../../../shared/worktree/types'
+import type { GitHubPrStartPoint, GitLabMrStartPoint } from '../../../../shared/worktree/types'
 import {
   resolveRuntimeGitHubWorktreeBase,
   type RuntimeGitHubWorktreeBaseArgs
@@ -21,9 +21,7 @@ export abstract class RuntimeWorktreeReviewBase extends RuntimeRemoteFetchOperat
 
   async resolveManagedMrBase(
     args: RuntimeGitLabWorktreeBaseArgs
-  ): Promise<
-    { baseBranch: string; compareBaseRef?: string; pushTarget?: GitPushTarget } | { error: string }
-  > {
+  ): Promise<GitLabMrStartPoint | { error: string }> {
     return resolveRuntimeGitLabWorktreeBase(args, {
       store: this.store ? this.requireStore() : null,
       resolveRepo: (selector) => this.resolveRepoSelector(selector)

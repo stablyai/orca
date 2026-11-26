@@ -2,6 +2,7 @@ import type { ComposerModel } from '../composer-model'
 
 type GitHubSubmitResolutionInput = Pick<
   ComposerModel,
+  | 'baseBranch'
   | 'branchAutoNameRef'
   | 'folderSourceRepos'
   | 'isProjectGroupTarget'
@@ -54,6 +55,7 @@ import {
   getGitHubLinkedWorkItemIdentity
 } from './source-selection-decisions'
 
+import { resolveAndApplyGitLabMrSubmit } from './gitlab-submit-resolution'
 import { getUnresolvedSmartGitHubSubmitMessage } from './github-submit-unresolved-message'
 
 export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {
@@ -89,6 +91,10 @@ export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {
     useCallback(async (): Promise<PendingSmartGitHubSubmitResolution> => {
       if (linkedWorkItem) {
         const reviewSelection = smartSourceSelectionRef.current
+        const gitlabResolution = await resolveAndApplyGitLabMrSubmit(input, reviewSelection)
+        if (gitlabResolution) {
+          return gitlabResolution
+        }
         const startPointSelection = reviewSelection?.kind === 'github-pr' ? reviewSelection : null
         const linkedWorkItemIdentity = getGitHubLinkedWorkItemIdentity(linkedWorkItem)
         const startPointIdentity = startPointSelection
@@ -267,6 +273,7 @@ export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {
       setStartFromResetHint(null)
       return resolution
     }, [
+      input,
       folderSourceRepos,
       isProjectGroupTarget,
       linkedWorkItem,

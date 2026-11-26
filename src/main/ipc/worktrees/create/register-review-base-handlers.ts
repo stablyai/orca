@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import type { GitHubPrStartPoint, GitPushTarget } from '../../../../shared/worktree/types'
+import type { GitHubPrStartPoint, GitLabMrStartPoint } from '../../../../shared/worktree/types'
 import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
 import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
@@ -113,10 +113,7 @@ export function registerReviewBaseHandlers(context: WorktreeIpcContext): void {
         /** The user creating from the MR: it may start a stopped WSL distro. */
         wakeWslDistro?: boolean
       }
-    ): Promise<
-      | { baseBranch: string; compareBaseRef?: string; pushTarget?: GitPushTarget }
-      | { error: string }
-    > => {
+    ): Promise<GitLabMrStartPoint | { error: string }> => {
       return runtime.resolveManagedMrBase({
         repoSelector: `id:${args.repoId}`,
         mrIid: args.mrIid,

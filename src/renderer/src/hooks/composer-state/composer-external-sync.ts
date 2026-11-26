@@ -71,6 +71,7 @@ export function useComposerExternalSync(target: ComposerTargetState): ComposerEx
     setName: target.sourceContextState.setName
   })
   const githubSubmitResolution = useGitHubSubmitResolution({
+    baseBranch: target.workspaceIdentityState.baseBranch,
     branchAutoNameRef: target.asyncComposerState.branchAutoNameRef,
     folderSourceRepos: target.runtimeTargetSelection.folderSourceRepos,
     isProjectGroupTarget: target.runtimeTargetSelection.isProjectGroupTarget,

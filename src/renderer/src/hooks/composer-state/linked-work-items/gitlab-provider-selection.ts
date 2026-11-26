@@ -37,9 +37,9 @@ import {
 } from '../../../../../shared/new-workspace/workspace-source'
 import { getLinkedItemDisplayName } from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-selection'
 import { runtimeTargetForRepoOwner } from '@/lib/workspace/ownership/repo-runtime-owner'
-import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import type { GitPushTarget } from '../../../../../shared/worktree/types'
+import { requestGitLabMrStartPoint } from '@/lib/source-control/review/gitlab-mr-start-point'
 import { toast } from 'sonner'
+import type { SmartSourceSelection } from './source-selection-decisions'
 import { translate } from '@/i18n/i18n'
 import { reviewStartPointErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 
@@ -115,39 +115,22 @@ export function useGitLabProviderSelection(input: GitLabProviderSelectionInput) 
         setCompareBaseRef(undefined)
         return
       }
-      const startPointSelection = { kind: 'gitlab-mr', repoId: runRepo.id, item } as const
+      const startPointSelection: Extract<SmartSourceSelection, { kind: 'gitlab-mr' }> = {
+        kind: 'gitlab-mr',
+        repoId: runRepo.id,
+        item
+      }
       smartSourceSelectionRef.current = startPointSelection
       // Picking an MR to create from is a user act: it may start the repo's stopped WSL distro.
-      const resolveMrBase =
-        target.kind === 'local'
-          ? window.api.worktrees.resolveMrBase({
-              repoId: runRepo.id,
-              mrIid: item.number,
-              wakeWslDistro: true,
-              ...(item.branchName ? { sourceBranch: item.branchName } : {}),
-              ...(item.baseRefName ? { targetBranch: item.baseRefName } : {}),
-              ...(item.isCrossRepository !== undefined
-                ? { isCrossRepository: item.isCrossRepository }
-                : {})
-            })
-          : callRuntimeRpc<
-              | { baseBranch: string; compareBaseRef?: string; pushTarget?: GitPushTarget }
-              | { error: string }
-            >(
-              target,
-              'worktree.resolveMrBase',
-              {
-                repo: runRepo.id,
-                mrIid: item.number,
-                wakeWslDistro: true,
-                ...(item.branchName ? { sourceBranch: item.branchName } : {}),
-                ...(item.baseRefName ? { targetBranch: item.baseRefName } : {}),
-                ...(item.isCrossRepository !== undefined
-                  ? { isCrossRepository: item.isCrossRepository }
-                  : {})
-              },
-              { timeoutMs: 30_000 }
-            )
+      const resolveMrBase = requestGitLabMrStartPoint({
+        repoId: runRepo.id,
+        mrIid: item.number,
+        target,
+        wakeWslDistro: true,
+        sourceBranch: item.branchName,
+        targetBranch: item.baseRefName,
+        isCrossRepository: item.isCrossRepository
+      })
       void resolveMrBase
         .then((result) => {
           if (smartSourceSelectionRef.current !== startPointSelection) {
@@ -161,11 +144,13 @@ export function useGitLabProviderSelection(input: GitLabProviderSelectionInput) 
             toast.error(reviewStartPointErrorText(result))
             return
           }
+          startPointSelection.resolved = result
           handleBaseBranchMrSelect(
             result.baseBranch,
             item,
             result.pushTarget,
             result.compareBaseRef,
+            result.branchNameOverride,
             { sourceAlreadyLinked: true }
           )
         })
