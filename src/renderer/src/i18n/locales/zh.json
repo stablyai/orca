@@ -13508,6 +13508,8 @@
             "unverifiable": "未完成：Orca 无法确认此服务器上正在运行什么，请在主机可访问时重试",
             "migration": "未完成：迁移到此服务器的操作尚未完成，请先继续该操作",
             "deferred": "尚未完成：服务器尚未准备好执行此操作，请稍后重试",
+            "stopIncomplete": "未完成：Orca 无法确认当前服务器已退出，因此未开始更新，请先查看主机上 ~/.orca-remote 中服务器安装文件夹内的 orcad.log 再重试",
+            "rollbackStopIncomplete": "未完成：Orca 无法确认当前服务器已退出，因此未回滚，请先查看主机上 ~/.orca-remote 中服务器安装文件夹内的 orcad.log 再重试",
             "failed": "Orca 无法在服务器上完成此操作，请重试",
             "defaultServer": "未执行：此服务器是新项目的默认主机，停止前请在“新项目打开位置”中选择其他主机",
             "wslMoveRunning": "未完成：有项目正在移到此服务器上。移动完成后，Orca 会更新它"

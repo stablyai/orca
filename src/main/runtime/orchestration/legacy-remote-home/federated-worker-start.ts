@@ -257,7 +257,9 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
           : {
               name: server.name,
               dispatchId: started.dispatch.id,
-              cli: params.from ? runtime.getTerminalOrchestrationCliCommand(params.from) : 'orca'
+              cli: params.from
+                ? runtime.getTerminalOrchestrationCliTarget(params.from).cliCommand
+                : 'orca'
             }
       )
     } else if (remote.state === 'outcome_unknown') {

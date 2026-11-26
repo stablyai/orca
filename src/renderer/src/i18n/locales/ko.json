@@ -1797,7 +1797,13 @@
             "forwarded": "{{host}}에서 포트 {{port}}을(를) 전달했습니다",
             "opened": "기본 브라우저에서 {{address}}을(를) 열었습니다.",
             "otherMachine": "포트 {{port}}을(를) 전달하지 못했습니다. 이 워크스페이스는 {{host}}에서 직접 실행되지 않습니다.",
-            "useSshPorts": "{{host}}에서 포트 {{port}}을(를) 전달하지 못했습니다. 포트 패널에서 전달한 뒤 다시 시도하세요."
+            "useSshPorts": "{{host}}에서 포트 {{port}}을(를) 전달하지 못했습니다. 포트 패널에서 전달한 뒤 다시 시도하세요.",
+            "restoredMoved": "{{host}}에서 포트 {{port}}을(를) localhost:{{localPort}}(으)로 전달했습니다",
+            "restoredMovedReason": "이 컴퓨터에서 localhost:{{previousPort}}은(는) 이미 사용 중입니다."
+          },
+          "forwardedUrl": {
+            "openedIpv4": "localhost 대신 127.0.0.1:{{port}}을(를) 열었습니다",
+            "openedIpv4Reason": "이 컴퓨터의 다른 앱이 localhost:{{port}}을(를) 사용하고 있습니다."
           }
         }
       },
@@ -7213,7 +7219,7 @@
             "ref": {
               "suggestion": {
                 "toast": {
-                  "670864ab52": "로컬 {{value0}}을 최신 상태로 유지",
+                  "670864ab52": "로컬 {{value0}}을(를) 최신 상태로 유지",
                   "84c62e4d7f": "{{value0}}을(를) 켤 수 없습니다.",
                   "442552c656": "설정을 열고 다시 시도하세요.",
                   "34a03a6565": "{{value0}} 최신 상태로 유지",
@@ -7437,7 +7443,7 @@
           "sshConfigPickerAddAll": "모두 추가 ({{value0}})",
           "sshConfigPickerNoNewHosts": "추가할 새 호스트가 없습니다.",
           "sshConfigPickerAddAllEmpty": "Orca에 모두 추가",
-          "identityFileFromConfigHint": "의도적으로 비워 두기: Orca는 ~/.ssh/config가 {{value0}}을 확인하는 모든 키를 사용합니다. 해당 키만 사용하려면 경로를 입력하세요.",
+          "identityFileFromConfigHint": "의도적으로 비워 두기: Orca는 ~/.ssh/config가 {{value0}}을(를) 확인하는 모든 키를 사용합니다. 해당 키만 사용하려면 경로를 입력하세요.",
           "sshConfigPickerRetry": "다시 시도하세요",
           "sshConfigPickerResolving": "읽는 중…",
           "pairingHelpShareComputer": "다른 컴퓨터의 설정 → 원격 Orca 서버 → 이 컴퓨터 공유에서 만드세요.",
@@ -13141,7 +13147,7 @@
             "pendingUnlink": "SSH 액세스 중지가 완료되지 않았습니다.",
             "retry": "다시 시도",
             "cancelLink": "취소",
-            "linkedRoute": "{{host}}를 통해 연결됨, 서버 포트 {{port}}.",
+            "linkedRoute": "{{host}}을(를) 통해 연결됨, 서버 포트 {{port}}.",
             "connect": "연결",
             "chooseHost": "호스트 선택"
           },
@@ -13195,6 +13201,8 @@
             "unverifiable": "완료되지 않음: Orca가 이 서버에서 무엇이 실행 중인지 확인하지 못했습니다. 호스트에 연결할 수 있을 때 다시 시도하세요.",
             "migration": "완료되지 않음: 이 서버로의 이동이 끝나지 않았습니다. 먼저 재개하세요.",
             "deferred": "아직 완료되지 않음: 서버가 아직 준비되지 않았습니다. 나중에 다시 시도하세요.",
+            "stopIncomplete": "완료되지 않음: Orca가 현재 서버가 종료되었는지 확인하지 못해 업데이트를 시작하지 않았습니다. 다시 시도하기 전에 호스트의 ~/.orca-remote 아래 서버 설치 폴더에 있는 orcad.log를 확인하세요.",
+            "rollbackStopIncomplete": "완료되지 않음: Orca가 현재 서버가 종료되었는지 확인하지 못해 롤백하지 않았습니다. 다시 시도하기 전에 호스트의 ~/.orca-remote 아래 서버 설치 폴더에 있는 orcad.log를 확인하세요.",
             "failed": "Orca가 서버에서 이 작업을 완료하지 못했습니다. 다시 시도하세요.",
             "defaultServer": "완료되지 않음: 이 서버는 새 프로젝트의 기본 호스트입니다. 중지하기 전에 '새 프로젝트를 여는 위치'에서 다른 서버를 선택하세요.",
             "wslMoveRunning": "완료되지 않음: 프로젝트를 이 서버로 옮기는 중입니다. 이동이 끝나면 Orca가 업데이트합니다."
@@ -14485,7 +14493,7 @@
             "branchFilesChangedVsBase_other": "{{ref}} 대비 파일 {{count}}개 변경됨",
             "noteCount_one": "메모 {{count}}개",
             "noteCount_other": "메모 {{count}}개",
-            "comparingAgainstRef": "{{ref}}와 비교 중",
+            "comparingAgainstRef": "{{ref}}과(와) 비교 중",
             "commitsAheadShort_one": "{{count}}개 앞섬",
             "commitsAheadShort_other": "{{count}}개 앞섬",
             "unresolvedConflictOfKind": "해결되지 않은 충돌 ({{kind}})",
@@ -14545,12 +14553,12 @@
             "scopeLoadingBranchChanges": "브랜치 변경 사항 로드 중…",
             "scopeBranchCommits": "이 브랜치의 커밋",
             "scopeRecentCommits": "최근 커밋",
-            "scopeCompareTo": "{{ref}}와 비교",
+            "scopeCompareTo": "{{ref}}과(와) 비교",
             "scopeFilterCommits": "커밋 필터링",
             "scopeCommitsFailed": "커밋을 로드하지 못했습니다.",
             "scopeFilesFailed": "파일을 로드하지 못했습니다.",
             "scopeLoadingFiles": "파일 로드 중…",
-            "scopeNoSharedHistory": "{{ref}}와 공통 기록이 없습니다",
+            "scopeNoSharedHistory": "{{ref}}과(와) 공통 기록이 없습니다",
             "scopeRetryCommits": "다시 시도",
             "scopeLoadingCommits": "커밋 로드 중…",
             "scopeNoMatchingCommits": "일치하는 커밋 없음",
@@ -17035,9 +17043,9 @@
         "MarkdownTableOfContentsPanel": {
           "de3928b6e4": "제목 없음",
           "bbe8369097": "목차 닫기",
-          "4680a4b808": "H{{value0}}로 축소",
+          "4680a4b808": "H{{value0}}(으)로 축소",
           "a5daadd68b": "모두 펼치기",
-          "111e66b85d": "제목 수준 {{value0}}로 축소",
+          "111e66b85d": "제목 수준 {{value0}}(으)로 축소",
           "f3de856175": "모든 제목 수준 확장",
           "0dc7b2f05a": "레벨별로 접기",
           "06357eea60": "목차",
@@ -19567,7 +19575,7 @@
       "UnexpectedSignoutCard": {
         "9f2c1a4b7d": "로그아웃되었습니다",
         "3e8f5c2a91": "닫기",
-        "7b4d9e1f2a": "아티팩트 공유, Orca 릴레이 및 스킬 공유를 복원하려면 {{value0}}로 다시 로그인하세요.",
+        "7b4d9e1f2a": "아티팩트 공유, Orca 릴레이 및 스킬 공유를 복원하려면 {{value0}}(으)로 다시 로그인하세요.",
         "5a1c8d3e6f": "아티팩트 공유, Orca 릴레이, 스킬 공유를 복원하려면 다시 로그인하세요.",
         "1f6b2c9d4e": "다시 사용할 수 있는 기능",
         "8d2e4f7a1b": "아티팩트 공유",
@@ -20133,8 +20141,8 @@
         "codexManagedNotSignedIn": "이 Codex 계정에 로그인하지 않았습니다. Codex 계정 설정에서 다시 로그인하세요.",
         "antigravityNotSignedIn": "Antigravity에 로그인되어 있지 않습니다. 설정 → 계정 → Antigravity에서 로그인한 후 메시지를 다시 보내세요.",
         "antigravitySystemNotSignedIn": "Antigravity에 로그인되어 있지 않습니다. 이 채팅을 실행 중인 컴퓨터에서 `agy`를 실행해 로그인한 뒤 메시지를 다시 보내세요.",
-        "cliMissing": "이 채팅을 실행하는 컴퓨터에서 {{agent}}를 찾을 수 없습니다. 설치하거나 설정 → 에이전트에서 명령을 확인하세요.",
-        "cliMissingInWslDistro": "WSL 배포판 {{distro}}에 {{agent}}가 설치되어 있지 않습니다. {{distro}} 안에 설치하거나 설정 → 에이전트에서 명령을 확인하세요.",
+        "cliMissing": "이 채팅을 실행하는 컴퓨터에서 {{agent}}을(를) 찾을 수 없습니다. 설치하거나 설정 → 에이전트에서 명령을 확인하세요.",
+        "cliMissingInWslDistro": "WSL 배포판 {{distro}}에 {{agent}}이(가) 설치되어 있지 않습니다. {{distro}} 안에 설치하거나 설정 → 에이전트에서 명령을 확인하세요.",
         "signInFirst": "먼저 로그인하세요.",
         "signInThenRunCommand": "로그인한 다음 /{{command}}을(를) 다시 실행하세요.",
         "signInThenSend": "로그인한 다음 메시지를 다시 보내세요.",
@@ -20147,7 +20155,7 @@
         "claudeAccountFolderMissing": "선택한 Claude 계정의 폴더가 없습니다. 다시 로그인하거나 다른 계정을 선택하세요.",
         "claudeAccountSetupFailed": "선택한 Claude 계정을 설정할 수 없습니다. 다시 시도하거나 다른 계정을 선택하세요.",
         "agentCommandNotRunnable": "설정 → 에이전트에서 {{agent}}의 명령은 Orca가 찾을 수 있는 프로그램으로 시작해야 합니다. 변수, 파이프 및 기타 셸 구문은 지원되지 않습니다. 변수는 환경 설정을 사용하세요. 명령을 변경하거나 초기화하세요.",
-        "agentCommandFailed": "설정 → 에이전트에서 {{agent}}의 명령이 {{agent}}를 시작하지 못했습니다: {{detail}}. 명령을 변경하거나 초기화하세요.",
+        "agentCommandFailed": "설정 → 에이전트에서 {{agent}}의 명령이 {{agent}}을(를) 시작하지 못했습니다: {{detail}}. 명령을 변경하거나 초기화하세요.",
         "runtimeNotInstalled": "{{agent}}이(가) 이 채팅을 실행하는 컴퓨터에 설치되어 있지 않습니다. 최신 버전의 Orca에서 채팅을 통해 설치하세요.",
         "fullAccessAsRoot": "{{agent}}은(는) root로 실행되는 동안 전체 액세스를 사용하지 않습니다. 이 채팅을 실행하는 컴퓨터의 설정 → 에이전트에서 {{agent}}에 다른 권한을 선택한 다음 새 채팅을 시작하세요.",
         "botToolsNeedStatusHooks": "{{agent}} 봇에는 에이전트 상태 훅이 필요합니다. 봇의 도구는 이 훅을 통해 봇으로 동작합니다. 설정 → 에이전트에서 {{agent}}에 대해 켠 다음 새 채팅을 시작하세요.",
@@ -22374,7 +22382,7 @@
       "detectingAgents": "이 워크스페이스 호스트에서 에이전트를 찾는 중…",
       "detectionFailed": "이 워크스페이스 호스트에서 에이전트를 찾을 수 없습니다.",
       "noAgents": "이 워크스페이스 호스트에서 사용할 수 있는 에이전트를 찾지 못했습니다.",
-      "onlySourceFamilyDetected": "이 워크스페이스 호스트에서 사용할 수 있는 에이전트는 {{agent}}와 사용 한도를 공유하는 에이전트뿐입니다. 다른 에이전트를 활성화하거나 설치하세요.",
+      "onlySourceFamilyDetected": "이 워크스페이스 호스트에서 사용할 수 있는 에이전트는 {{agent}}과(와) 사용 한도를 공유하는 에이전트뿐입니다. 다른 에이전트를 활성화하거나 설치하세요.",
       "context": "컨텍스트",
       "starting": "시작 중…",
       "noContext": "새 세션에서 계속할 세션 컨텍스트가 없습니다.",
@@ -22383,7 +22391,7 @@
       "sent": "세션 컨텍스트를 새 {{agent}} 세션으로 보냈습니다.",
       "deliveryFailed": "새 {{agent}} 세션은 시작되었지만 컨텍스트를 보내지 못했습니다.",
       "launchFailed": "새 {{agent}} 세션을 시작할 수 없습니다.",
-      "deliveryUnconfirmed": "Orca가 {{agent}}가 세션 컨텍스트를 받았는지 확인하지 못했습니다. 새 세션을 확인하고 입력이 비어 있으면 직접 붙여넣으세요.",
+      "deliveryUnconfirmed": "Orca가 {{agent}}이(가) 세션 컨텍스트를 받았는지 확인하지 못했습니다. 새 세션을 확인하고 입력이 비어 있으면 직접 붙여넣으세요.",
       "copyPrompt": "프롬프트 복사",
       "dialogTitleSentence": "다른 에이전트에게 넘기기",
       "metaWithAgent": "{{agent}}에서 · {{session}} · 원본은 그대로 유지됩니다",
@@ -23589,7 +23597,7 @@
     },
     "sshEgress": {
       "routedTooltip": "{{value0}}을(를) 탐색하는 중",
-      "localTooltip": "{{value0}}이 아닌 이 기기에서 탐색 중입니다.",
+      "localTooltip": "{{value0}}이(가) 아닌 이 기기에서 탐색 중입니다.",
       "routedDetail": "네트워크 트래픽과 DNS는 워크스페이스의 SSH 호스트를 통과합니다.",
       "localDetail": "이 시스템과 해당 네트워크에서 페이지가 로드됩니다.",
       "settingsLink": "라우팅 설정"
@@ -23723,7 +23731,7 @@
       },
       "sshPage": {
         "stored": "{{host}}용 브라우저에 저장했습니다.",
-        "googleCookiesSkipped": "Google 쿠키는 가져오지 않았습니다. {{host}}를 통해 탐색하는 페이지를 열고 Google에 로그인하세요."
+        "googleCookiesSkipped": "Google 쿠키는 가져오지 않았습니다. {{host}}을(를) 통해 탐색하는 페이지를 열고 Google에 로그인하세요."
       },
       "picker": {
         "menuItem": "쿠키 가져오기…",
