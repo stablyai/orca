@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import {
   pluginTerminalIdSchema,
   pluginWorkspaceIdSchema
@@ -12,28 +13,36 @@ import { spec, WORKER_ONLY } from './plugin-host-method-spec'
 /** Terminals of any workspace, by the ids `terminal.read` and `terminal.sendText` take. Each runs
  *  the runtime method `orca terminal list|focus|close` runs, on the host that owns the terminal. */
 
-const terminalListParams = z.strictObject({ workspaceId: pluginWorkspaceIdSchema })
-const terminalListResult = z.object({
-  terminals: z
-    .array(
-      z.object({
-        id: pluginTerminalIdSchema,
-        /** The pane's name, or its terminal title; absent when it has neither. */
-        title: z.string().max(PLUGIN_WORKSPACE_LABEL_MAX_LENGTH).optional()
-      })
-    )
-    .max(PLUGIN_WORKSPACE_TERMINAL_LIMIT),
-  /** The workspace has more terminals than the list holds. */
-  truncated: z.boolean()
-})
+const terminalListParams = lazyZodSchema(() =>
+  z.strictObject({ workspaceId: pluginWorkspaceIdSchema })
+)
+const terminalListResult = lazyZodSchema(() =>
+  z.object({
+    terminals: z
+      .array(
+        z.object({
+          id: pluginTerminalIdSchema,
+          /** The pane's name, or its terminal title; absent when it has neither. */
+          title: z.string().max(PLUGIN_WORKSPACE_LABEL_MAX_LENGTH).optional()
+        })
+      )
+      .max(PLUGIN_WORKSPACE_TERMINAL_LIMIT),
+    /** The workspace has more terminals than the list holds. */
+    truncated: z.boolean()
+  })
+)
 
-const terminalTargetParams = z.strictObject({ terminalId: pluginTerminalIdSchema })
-const terminalFocusResult = z.object({
-  /** False when Orca's window did not move to the terminal: a newer focus request won, or the
-   *  window could not show it. */
-  focused: z.boolean()
-})
-const terminalCloseResult = z.object({ closed: z.literal(true) })
+const terminalTargetParams = lazyZodSchema(() =>
+  z.strictObject({ terminalId: pluginTerminalIdSchema })
+)
+const terminalFocusResult = lazyZodSchema(() =>
+  z.object({
+    /** False when Orca's window did not move to the terminal: a newer focus request won, or the
+     *  window could not show it. */
+    focused: z.boolean()
+  })
+)
+const terminalCloseResult = lazyZodSchema(() => z.object({ closed: z.literal(true) }))
 
 export const PLUGIN_TERMINAL_ACTIONS_API = {
   'terminal.list': spec({

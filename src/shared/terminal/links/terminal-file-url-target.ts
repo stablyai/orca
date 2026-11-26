@@ -34,13 +34,15 @@ export function splitPathLineHash(
   return location ? { pathText: pathText.slice(0, hashIndex), ...location } : null
 }
 
-function parseFilePathTrailingLineTarget(filePath: string): TerminalFileUrlTarget | null {
-  const match = /^(.*?)(?::(\d+))(?::(\d+))?$/.exec(filePath)
-  if (!match || !match[1] || match[1].endsWith('/') || match[1].endsWith('\\')) {
+function parseUrlPathLineSuffix(
+  pathname: string
+): ({ suffixLength: number } & LineHashLocation) | null {
+  const match = /^.+?(:(\d+)(?::(\d+))?)$/.exec(pathname)
+  if (!match) {
     return null
   }
   return {
-    filePath: match[1],
+    suffixLength: match[1].length,
     line: Number(match[2]),
     column: match[3] ? Number(match[3]) : null
   }
@@ -64,5 +66,13 @@ export function resolveTerminalFileUrlTarget(
     return { filePath, line: hashTarget.line, column: hashTarget.column }
   }
 
-  return parseFilePathTrailingLineTarget(filePath) ?? { filePath, line: null, column: null }
+  // Encoded colons belong to the filename; only a literal URL suffix denotes a location.
+  const suffix = parseUrlPathLineSuffix(parsed.pathname)
+  if (suffix) {
+    const targetPath = filePath.slice(0, -suffix.suffixLength)
+    if (!targetPath.endsWith('/') && !targetPath.endsWith('\\')) {
+      return { filePath: targetPath, line: suffix.line, column: suffix.column }
+    }
+  }
+  return { filePath, line: null, column: null }
 }

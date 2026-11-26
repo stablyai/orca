@@ -179,6 +179,17 @@ describe('terminal path helpers', () => {
     }
   )
 
+  it.each([
+    ['file:///tmp/report%3A12', '/tmp/report:12', null, null],
+    ['file:///tmp/report%3A12:8:3', '/tmp/report:12', 8, 3]
+  ])('keeps an encoded colon in file URL %s as filename text', (target, filePath, line, column) => {
+    const osc = classifyTerminalOscLinkTarget(target, {
+      windowsPathsFirst: false,
+      allowUncHost: false
+    })
+    expect(osc).toEqual({ kind: 'file-url', target: { filePath, line, column } })
+  })
+
   it('does not read a malformed URL OSC hyperlink target as a path', () => {
     const osc = classifyTerminalOscLinkTarget('https://exa mple.com', {
       windowsPathsFirst: false,

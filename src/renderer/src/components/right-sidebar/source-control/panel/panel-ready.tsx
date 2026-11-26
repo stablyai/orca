@@ -66,7 +66,10 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
   // One probe per panel: the header Graph button and the scope menu's Graph item share it.
   const graphSupport = useGitGraphSupport(currentWorktreeId, isGitHistoryVisible)
   // A folder card's header owns filter, Graph and overflow; the selected panel's file-list header does.
-  const embedded = useSourceControlScope() !== null
+  const scope = useSourceControlScope()
+  const embedded = scope !== null
+  // A folder card's Graph opens in the folder workspace that shows the card.
+  const placementWorkspaceId = scope?.placementWorkspaceId
   const panelActions = {
     sourceControlViewMode,
     viewModeToggleDisabled: settings === null,
@@ -84,7 +87,11 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
     onFilterExpandedChange: setFilterExpanded
   }
   const openGraph = (event: SourceControlRowOpenEvent): void => {
-    void openGitGraph(currentWorktreeId, () => resolveSplitTargetGroupId(event))
+    void openGitGraph(
+      currentWorktreeId,
+      () => resolveSplitTargetGroupId(event),
+      placementWorkspaceId
+    )
   }
 
   // Sits under the commit composer, so it renders inside the scrolling content.

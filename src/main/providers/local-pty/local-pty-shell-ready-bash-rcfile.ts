@@ -67,8 +67,9 @@ __orca_osc133_precmd() {
   return "$exit_code"
 }
 __orca_osc133_prompt_done() {
-  unset __orca_in_prompt_command
+  # functrace runs DEBUG inside the adoption helpers; keep the prompt flag set so they cannot emit C.
   __orca_adopt_outer_debug_trap
+  unset __orca_in_prompt_command
   trap '__orca_osc133_preexec' DEBUG
 }
 __orca_osc133_preexec() {
@@ -102,6 +103,8 @@ __orca_osc133_preexec() {
   __orca_run_user_debug_trap
   [[ -z "\${__orca_in_prompt_command:-}" ]] || return 0
   [[ -z "\${__orca_in_command:-}" ]] || return 0
+  # functrace subshells (e.g. PS0 $(...)) inherit this trap but cannot set __orca_in_command here.
+  (( BASH_SUBSHELL == 0 )) || return 0
   # DEBUG runs per simple command; chained traps may reenter for the same foreground command.
   printf "\\033]133;C\\007"
   __orca_in_command=1

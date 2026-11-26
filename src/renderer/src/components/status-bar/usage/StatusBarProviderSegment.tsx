@@ -64,7 +64,7 @@ function WindowLabel({
   display: UsagePercentageDisplay
   showLabel?: boolean
   labelFirst?: boolean
-  /** Compact bar: a bold bright number with a smaller, regular-weight muted unit. */
+  /** Compact bar: a regular-weight bright number with a smaller unit at 70% of its color. */
   compact?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
@@ -73,11 +73,7 @@ function WindowLabel({
     const value = String(getDisplayedUsagePercentage(w.usedPercent, display))
     const at = text.indexOf(value)
     const unit = (part: string) =>
-      part.trim() ? (
-        <span className="text-[0.82em] font-normal text-muted-foreground">{part}</span>
-      ) : (
-        part
-      )
+      part.trim() ? <span className="text-[0.82em] opacity-70">{part}</span> : part
     return (
       <span className="tabular-nums">
         {showLabel && labelFirst ? (
@@ -86,9 +82,9 @@ function WindowLabel({
           ''
         )}
         {at === -1 ? (
-          <span className="font-semibold text-foreground">{text}</span>
+          <span className="text-foreground">{text}</span>
         ) : (
-          <span className="font-semibold text-foreground">
+          <span className="text-foreground">
             {unit(text.slice(0, at))}
             {value}
             {unit(text.slice(at + value.length))}

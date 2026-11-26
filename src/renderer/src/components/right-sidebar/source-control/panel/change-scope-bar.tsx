@@ -20,6 +20,7 @@ import {
   SourceControlFilterToggle,
   type SourceControlFileFilterProps
 } from './file-filter-controls'
+import { useSourceControlScope } from './worktree-scope'
 
 function fileCountLabel(t: Translate, count: number): string {
   return t('auto.components.right.sidebar.SourceControl.scopeFileCount', '{{count}} files', {
@@ -83,6 +84,7 @@ export function SourceControlChangeScopeBar({
   overflowMenu?: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
+  const placementWorkspaceId = useSourceControlScope()?.placementWorkspaceId
   const intlLocale = useIntlLocale()
   const scopeTriggerRef = useRef<HTMLButtonElement>(null)
   // The toggle remounts when the filter row closes; focus returns to it on Escape or clear.
@@ -271,7 +273,11 @@ export function SourceControlChangeScopeBar({
           historyState={gitHistoryState}
           graphSupported={graphSupported}
           onOpenGitGraph={() => {
-            void openGitGraph(currentWorktreeId, () => resolveSplitTargetGroupId())
+            void openGitGraph(
+              currentWorktreeId,
+              () => resolveSplitTargetGroupId(),
+              placementWorkspaceId
+            )
           }}
           onRetry={() => void refreshGitHistory({ wakeWslDistro: true })}
         />
