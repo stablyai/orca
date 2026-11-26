@@ -16,6 +16,8 @@ import { NgitNewIssueDialog } from './ngit-new-issue-dialog'
 import { filterNgitItems, type NgitStateFilter, type NgitView } from './ngit-item-filter'
 import { useNgitWorkItems } from './use-ngit-work-items'
 import { useNgitWorkspaceStart } from './use-ngit-workspace-start'
+import { findNgitItemWorkspace } from './ngit-item-workspace'
+import type { Worktree } from '../../../../../shared/worktree/types'
 
 export function TaskPageNgitContent({
   model
@@ -32,7 +34,8 @@ export function TaskPageNgitContent({
     setRepoSelection,
     taskPickerGroups,
     taskPickerRepos,
-    getTaskPickerRepoHostLabel
+    getTaskPickerRepoHostLabel,
+    allWorktrees
   } = model
   const [view, setView] = useState<NgitView>('issues')
   const [stateFilter, setStateFilter] = useState<NgitStateFilter>('open')
@@ -42,7 +45,9 @@ export function TaskPageNgitContent({
     selectedRepos,
     selectedReposKey
   )
-  const startWorkspace = useNgitWorkspaceStart(selectedRepos)
+  const workspaces = useNgitWorkspaceStart(selectedRepos)
+  const workspaceOf = (item: NgitWorkItem): Worktree | null =>
+    findNgitItemWorkspace(allWorktrees, getWorkItemRepo(selectedRepos, item), item)
   const openItemRepo = openItem ? getWorkItemRepo(selectedRepos, openItem) : undefined
   const saveSelection = (selection: string[] | null): void => {
     void updateSettings({ defaultRepoSelection: selection }).catch(() => {
@@ -167,7 +172,9 @@ export function TaskPageNgitContent({
               : t('components.taskPage.ngit.emptyDescription', 'Try another state or refresh.')
           }
           onOpen={setOpenItem}
-          onUse={startWorkspace}
+          workspaceOf={workspaceOf}
+          onUse={workspaces.openOrStart}
+          onStartNew={workspaces.start}
         />
       </div>
       {openItem && openItemRepo ? (
@@ -175,11 +182,12 @@ export function TaskPageNgitContent({
           key={openItem.id}
           item={openItem}
           repo={openItemRepo}
+          hasWorkspace={workspaceOf(openItem) !== null}
           onClose={() => setOpenItem(null)}
           onChanged={refresh}
           onUse={(item) => {
             setOpenItem(null)
-            startWorkspace(item)
+            workspaces.openOrStart(item)
           }}
         />
       ) : null}

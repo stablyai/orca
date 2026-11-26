@@ -1,6 +1,8 @@
 import { useCallback, useRef } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
+import { findNgitItemWorkspace } from './ngit-item-workspace'
 import { ngitApiFor } from '@/runtime/repository-ngit/ngit-owner-api'
 import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'
 import { getTaskPageRepoSourceContext } from '@/lib/work-items/task-repo-source-context'
@@ -12,11 +14,16 @@ import type { NgitWorkItem } from '../../../../../shared/ngit/ngit-work-item-typ
 import { getLinkedWorkItemSuggestedName } from '../../../../../shared/workspace/naming/workspace-name'
 
 /** Opens the workspace composer for an issue, or for a pull request at its fetched tip. */
-export function useNgitWorkspaceStart(repos: readonly Repo[]): (item: NgitWorkItem) => void {
+export function useNgitWorkspaceStart(repos: readonly Repo[]): {
+  /** Resumes the item's workspace, or starts one. */
+  openOrStart: (item: NgitWorkItem) => void
+  /** Always a new workspace. */
+  start: (item: NgitWorkItem) => void
+} {
   const openModal = useAppStore((state) => state.openModal)
   const pendingRef = useRef<string | null>(null)
-  return useCallback(
-    (item) => {
+  const start = useCallback(
+    (item: NgitWorkItem) => {
       const repo = getWorkItemRepo(repos, item)
       if (!repo || pendingRef.current === item.id) {
         return
@@ -63,4 +70,24 @@ export function useNgitWorkspaceStart(repos: readonly Repo[]): (item: NgitWorkIt
     },
     [openModal, repos]
   )
+  const openOrStart = useCallback(
+    (item: NgitWorkItem) => {
+      const attached = findNgitItemWorkspace(
+        useAppStore.getState().allWorktrees(),
+        getWorkItemRepo(repos, item),
+        item
+      )
+      if (!attached) {
+        start(item)
+        return
+      }
+      if (activateAndRevealWorktree(attached.id, { navigationIntent: 'user-open' }) === false) {
+        toast.error(
+          translate('components.taskPage.ngit.openWorkspaceFailed', 'Unable to open the workspace.')
+        )
+      }
+    },
+    [repos, start]
+  )
+  return { openOrStart, start }
 }

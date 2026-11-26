@@ -24580,7 +24580,9 @@
         "mergeWarning": "Creates a merge commit on {{branch}} and pushes it, publishing “{{title}}” as merged. This cannot be undone.",
         "defaultBranch": "the default branch",
         "confirmMerge": "Merge and push",
-        "actionAppliedElsewhere": "Mark merged elsewhere"
+        "actionAppliedElsewhere": "Mark merged elsewhere",
+        "openWorkspace": "Open workspace",
+        "openWorkspaceFailed": "Unable to open the workspace."
       }
     }
   },

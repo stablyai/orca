@@ -1,4 +1,6 @@
-import { ArrowRight, ExternalLink } from 'lucide-react'
+import { ArrowRight, ExternalLink, FolderKanban, Plus } from 'lucide-react'
+import { getWorktreeAttachmentLabel } from '@/lib/workspace/display/worktree-attachment-label'
+import type { Worktree } from '../../../../../shared/worktree/types'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
@@ -6,7 +8,7 @@ import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { ngitShortId, type NgitWorkItem } from '../../../../../shared/ngit/ngit-work-item-types'
 import { NgitStateIcon, ngitStateLabel, ngitTypeLabel } from './ngit-work-item-state'
 
-const ROW_COLUMNS = 'grid-cols-[88px_minmax(0,3fr)_minmax(0,1fr)_120px_100px_64px]'
+const ROW_COLUMNS = 'grid-cols-[88px_minmax(0,3fr)_minmax(0,1fr)_120px_100px_150px]'
 
 export function NgitItemList({
   items,
@@ -14,18 +16,23 @@ export function NgitItemList({
   emptyTitle,
   emptyDescription,
   onOpen,
-  onUse
+  workspaceOf,
+  onUse,
+  onStartNew
 }: {
   items: NgitWorkItem[]
   loading: boolean
   emptyTitle: string
   emptyDescription: string
   onOpen: (item: NgitWorkItem) => void
+  workspaceOf: (item: NgitWorkItem) => Worktree | null
   onUse: (item: NgitWorkItem) => void
+  onStartNew: (item: NgitWorkItem) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
   const startWorkspace = t('components.taskPage.ngit.startWorkspace', 'Start workspace')
+  const startNew = t('auto.components.TaskPage.b6329379ca', 'Start new workspace')
   const openInBrowser = t('components.taskPage.ngit.openInBrowser', 'Open on gitworkshop.dev')
   return (
     <div className="flex min-h-0 max-h-full flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border/50 bg-muted/50 shadow-sm">
@@ -55,79 +62,107 @@ export function NgitItemList({
           </div>
         ) : null}
         <div className="divide-y divide-border/50">
-          {items.map((item) => (
-            // A div button, because the row nests its own buttons.
-            <div
-              role="button"
-              tabIndex={0}
-              key={`${item.repoHostId ?? ''}:${item.id}`}
-              onClick={() => onOpen(item)}
-              onKeyDown={(event) => {
-                if (
-                  event.target === event.currentTarget &&
-                  (event.key === 'Enter' || event.key === ' ')
-                ) {
-                  event.preventDefault()
-                  onOpen(item)
-                }
-              }}
-              className={`grid w-full cursor-pointer items-center gap-3 px-3 py-2 text-left hover:bg-muted/50 ${ROW_COLUMNS}`}
-            >
-              <span className="font-mono text-xs text-muted-foreground">
-                {ngitShortId(item.eventId)}
-              </span>
-              <span className="flex min-w-0 items-center gap-2 text-sm">
-                <NgitStateIcon item={item} className="size-3.5 shrink-0 text-muted-foreground" />
-                <span className="truncate">{item.title}</span>
-                {item.labels.map((label) => (
-                  <span
-                    key={label}
-                    className="shrink-0 rounded-full border border-border/50 bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
-                  >
-                    {label}
-                  </span>
-                ))}
-              </span>
-              <span className="truncate text-xs text-muted-foreground">{item.author}</span>
-              <span className="text-xs text-muted-foreground">
-                {ngitTypeLabel(item)} · {ngitStateLabel(item)}
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {new Date(item.updatedAt).toLocaleDateString(intlLocale)}
-              </span>
-              <div className="flex items-center justify-end gap-1">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      aria-label={startWorkspace}
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        onUse(item)
-                      }}
+          {items.map((item) => {
+            const attached = workspaceOf(item)
+            const useLabel = !attached
+              ? t('auto.components.TaskPage.7d08e8be0f', 'Start')
+              : item.type === 'pr'
+                ? t('auto.components.TaskPage.7753652524', 'Resume')
+                : t('auto.components.TaskPage.606a85c774', 'Open')
+            return (
+              // A div button, because the row nests its own buttons.
+              <div
+                role="button"
+                tabIndex={0}
+                key={`${item.repoHostId ?? ''}:${item.id}`}
+                onClick={() => onOpen(item)}
+                onKeyDown={(event) => {
+                  if (
+                    event.target === event.currentTarget &&
+                    (event.key === 'Enter' || event.key === ' ')
+                  ) {
+                    event.preventDefault()
+                    onOpen(item)
+                  }
+                }}
+                className={`grid w-full cursor-pointer items-center gap-3 px-3 py-2 text-left hover:bg-muted/50 ${ROW_COLUMNS}`}
+              >
+                <span className="font-mono text-xs text-muted-foreground">
+                  {ngitShortId(item.eventId)}
+                </span>
+                <span className="flex min-w-0 items-center gap-2 text-sm">
+                  <NgitStateIcon item={item} className="size-3.5 shrink-0 text-muted-foreground" />
+                  <span className="truncate">{item.title}</span>
+                  {attached ? (
+                    <span className="inline-flex min-w-0 shrink items-center gap-1 text-xs text-muted-foreground">
+                      <FolderKanban className="size-3 shrink-0" />
+                      <span className="truncate">{getWorktreeAttachmentLabel(attached)}</span>
+                    </span>
+                  ) : null}
+                  {item.labels.map((label) => (
+                    <span
+                      key={label}
+                      className="shrink-0 rounded-full border border-border/50 bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
                     >
-                      <ArrowRight className="size-3.5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" sideOffset={6}>
-                    {startWorkspace}
-                  </TooltipContent>
-                </Tooltip>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={openInBrowser}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    openAppHttpLink(item.url, { event })
-                  }}
-                >
-                  <ExternalLink className="size-3.5" />
-                </Button>
+                      {label}
+                    </span>
+                  ))}
+                </span>
+                <span className="truncate text-xs text-muted-foreground">{item.author}</span>
+                <span className="text-xs text-muted-foreground">
+                  {ngitTypeLabel(item)} · {ngitStateLabel(item)}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {new Date(item.updatedAt).toLocaleDateString(intlLocale)}
+                </span>
+                <div className="flex items-center justify-end gap-1">
+                  <Button
+                    variant={attached ? 'default' : 'outline'}
+                    size="xs"
+                    aria-label={attached ? undefined : startWorkspace}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      onUse(item)
+                    }}
+                  >
+                    {useLabel}
+                    <ArrowRight className="size-3" />
+                  </Button>
+                  {attached ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          aria-label={startNew}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            onStartNew(item)
+                          }}
+                        >
+                          <Plus className="size-3.5" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" sideOffset={6}>
+                        {startNew}
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : null}
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={openInBrowser}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      openAppHttpLink(item.url, { event })
+                    }}
+                  >
+                    <ExternalLink className="size-3.5" />
+                  </Button>
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </div>
     </div>

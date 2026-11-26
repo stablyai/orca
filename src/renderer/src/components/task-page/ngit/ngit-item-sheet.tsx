@@ -21,7 +21,8 @@ export function NgitItemSheet({
   repo,
   onClose,
   onChanged,
-  onUse
+  onUse,
+  hasWorkspace
 }: {
   item: NgitWorkItem
   repo: Repo
@@ -29,6 +30,7 @@ export function NgitItemSheet({
   onChanged: () => void
   /** Absent where the item already has its workspace. */
   onUse?: (item: NgitWorkItem) => void
+  hasWorkspace?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
@@ -114,7 +116,7 @@ export function NgitItemSheet({
           <NgitConversation details={details} error={error} loading={loading} />
         </div>
         <footer className="flex-none border-t border-border/40 px-5 py-3">
-          <NgitItemActions item={item} state={state} onUse={onUse} />
+          <NgitItemActions item={item} state={state} onUse={onUse} hasWorkspace={hasWorkspace} />
         </footer>
       </SheetContent>
     </Sheet>

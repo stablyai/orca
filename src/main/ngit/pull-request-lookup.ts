@@ -1,11 +1,15 @@
 import type { HostedReviewInfo } from '../../shared/source-control/hosted-review/hosted-review-contracts'
+import {
+  isNgitDefaultBranch,
+  ngitBranchIdPrefix,
+  ngitProposalName,
+  ngitShortBranch
+} from '../../shared/ngit/ngit-branch-names'
 import { getPrimaryNostrRepoRef, type NostrRepoRef } from './repository-ref'
 import { getNostrRepositorySnapshot } from './repository-snapshot'
 import type { ProjectedWorkItem } from './work-item-projection'
 
 type LocalGitExecOptions = { wslDistro?: string }
-
-const DEFAULT_BRANCH_NAMES = new Set(['main', 'master'])
 
 export async function getNgitRepoSlug(
   repoPath: string,
@@ -15,12 +19,6 @@ export async function getNgitRepoSlug(
 ): Promise<NostrRepoRef | null> {
   return getPrimaryNostrRepoRef(repoPath, connectionId, localGitOptions, branch)
 }
-
-/**
- * The id suffix of `pr/name(1a2b3c4d)` (ngit's checkout) or `name-1a2b3c4d` (a workspace Orca
- * started from the pull request, whatever branch prefix it got).
- */
-const BRANCH_ID_SUFFIX = /(?:\(([0-9a-f]{8})\)|-([0-9a-f]{8}))$/
 
 /** The pull request a local branch stands for, by link, ngit's branch naming, or tip commit. */
 export function findPullRequestForBranch(
@@ -32,20 +30,20 @@ export function findPullRequestForBranch(
   if (linkedNumber != null) {
     return pulls.find(({ item }) => item.number === linkedNumber) ?? null
   }
-  const shortBranch = branch.replace(/^refs\/heads\//, '')
-  if (!shortBranch || DEFAULT_BRANCH_NAMES.has(shortBranch)) {
+  if (!ngitShortBranch(branch) || isNgitDefaultBranch(branch)) {
     return null
   }
-  const suffix = shortBranch.match(BRANCH_ID_SUFFIX)
-  const idPrefix = suffix?.[1] ?? suffix?.[2]
+  const idPrefix = ngitBranchIdPrefix(branch)
   const byId = idPrefix ? pulls.find(({ item }) => item.eventId.startsWith(idPrefix)) : undefined
   if (byId) {
     return byId
   }
-  const name = shortBranch.replace(/^pr\//, '')
+  const name = ngitProposalName(branch)
   const atHead = (candidate: ProjectedWorkItem): boolean =>
     Boolean(headOid) && candidate.item.headSha === headOid
-  const named = pulls.filter(({ item }) => item.branchName?.replace(/^pr\//, '') === name)
+  const named = pulls.filter(
+    ({ item }) => item.branchName !== undefined && ngitProposalName(item.branchName) === name
+  )
   // A finished PR only claims a reused branch name while the checkout is still at its tip.
   return (
     named.find(({ item }) => item.state === 'open' || item.state === 'draft') ??

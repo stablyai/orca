@@ -14,12 +14,14 @@ import { NgitStatusActions } from './ngit-status-actions'
 export function NgitItemActions({
   item,
   state,
-  onUse
+  onUse,
+  hasWorkspace
 }: {
   item: NgitWorkItem
   state: ReturnType<typeof useNgitItemDetails>
   /** Absent where the item already has its workspace. */
   onUse?: (item: NgitWorkItem) => void
+  hasWorkspace?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const { details, viewer, writing, publish } = state
@@ -122,7 +124,9 @@ export function NgitItemActions({
           />
           {onUse ? (
             <Button size="sm" onClick={() => onUse(shown)}>
-              {t('components.taskPage.ngit.createWorkspace', 'Create workspace')}
+              {hasWorkspace
+                ? t('components.taskPage.ngit.openWorkspace', 'Open workspace')
+                : t('components.taskPage.ngit.createWorkspace', 'Create workspace')}
             </Button>
           ) : null}
         </div>
