@@ -1,9 +1,9 @@
-import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
 import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
 import type { AcpAccountBinding } from '../acp/launch/acp-account-binding'
 import { GENERIC_ACP_DIALECT } from '../acp/acp-dialects/acp-dialect'
+import { resolveStructuredEnvAccountHomePath } from '../runtime/agent-session/environment/structured-agent-account-home'
 import { isLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { AgentSessionModelOption } from '../../shared/agent-session/options/model-catalog/agent-session-model-option'
 import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
@@ -13,11 +13,17 @@ import type { StructuredAgentSessionHistory } from '../native-chat/conversation-
 const OuroStatusSchema = z.object({
   agents: z.array(z.unknown())
 })
+// With no daemon to ask, `ouro status --json` still exits 0, and says why in its own output.
+const OuroStatusFailureSchema = z.object({
+  ok: z.literal(false),
+  error: z.string().min(1)
+})
 const OuroStatusAgentSchema = z.object({
   name: z.string().min(1),
   enabled: z.literal(true),
-  // An agent whose home is another machine runs there, and this daemon won't serve it.
-  homeState: z.literal('here')
+  // An agent whose home is another machine runs there, and this daemon won't serve it. A
+  // fallback agent has no reachable home and runs here until it has one.
+  homeState: z.enum(['here', 'fallback'])
 })
 
 /** The agents this machine's daemon serves, as the chat's models: the model is the agent. */
@@ -27,6 +33,10 @@ export function parseOuroAgentListing(stdout: string): AgentSessionModelOption[]
     json = JSON.parse(stdout)
   } catch {
     return []
+  }
+  const failure = OuroStatusFailureSchema.safeParse(json)
+  if (failure.success) {
+    throw new Error(`ouro status: ${failure.data.error}. Run \`ouro up\` to start the daemon.`)
   }
   const status = OuroStatusSchema.safeParse(json)
   if (!status.success) {
@@ -55,9 +65,13 @@ export function parseOuroAgentListing(stdout: string): AgentSessionModelOption[]
 const OURO_ACCOUNT_VARIABLE = 'OURO_AGENT_BUNDLES'
 const OURO_ACCOUNT: AcpAccountBinding = {
   pin: { accountHomeVariable: OURO_ACCOUNT_VARIABLE },
-  resolve: async () => ({
+  resolve: async ({ launchEnv }) => ({
     variable: OURO_ACCOUNT_VARIABLE,
-    path: join(homedir(), 'AgentBundles')
+    path: resolveStructuredEnvAccountHomePath({
+      launchEnv,
+      variable: OURO_ACCOUNT_VARIABLE,
+      defaultPath: (homePath) => join(homePath, 'AgentBundles')
+    })
   }),
   environment: (home, env) => {
     if (!isLegacyAgentSessionAccountHome(home) || home.variable !== OURO_ACCOUNT_VARIABLE) {
