@@ -2059,6 +2059,8 @@
     "mcp": {
       "workspace": "Espaço de Trabalho",
       "inspectFailed": "Não foi possível inspecionar {{directory}}.",
+      "inspectConfigsFailed": "Não foi possível inspecionar as configurações de MCP.",
+      "createConfigFailed": "Falha ao criar a configuração de MCP.",
       "unreadable": "Não foi possível ler",
       "notFound": "Não encontrado",
       "invalidJson": "JSON inválido",
@@ -2257,8 +2259,158 @@
       "teamDisabled": "O compartilhamento de Artefatos foi desativado pela sua equipe."
     },
     "mcpServers": {
+      "custom": {
+        "noneChecked": "Marque um servidor para adicionar.",
+        "addMany": "Adicionar ({{count}})",
+        "found": "{{count}} servidores encontrados",
+        "foundUrl": "URL · {{line}}",
+        "foundCommand": "Comando · {{line}}",
+        "title": "Servidor personalizado",
+        "sourceLabel": "URL do servidor, comando de inicialização ou configuração",
+        "sourceHint": "Cole a URL do servidor, o comando de inicialização ou a configuração, ou insira os detalhes você mesmo.",
+        "nameTaken": "Já existe um servidor chamado {{name}}. Escolha outro nome.",
+        "line": "Uma URL, um comando de inicialização ou uma configuração",
+        "foundTaken": "Já adicionado"
+      },
+      "empty": {
+        "copied": "Servidores copiados de {{host}}: {{count}}",
+        "title": "Nenhum servidor MCP em {{host}}",
+        "copyFrom": "Copiar de {{host}}"
+      },
+      "addServer": "Adicionar um servidor",
+      "toast": {
+        "allOn": "{{name}} ativado para todos os agentes",
+        "allOff": "{{name}} desativado para todos os agentes",
+        "agentOn": "{{name}} ativado para {{agent}}",
+        "agentOff": "{{name}} desativado para {{agent}}",
+        "saved": "{{name}} salvo",
+        "sharedOn": "{{name}} compartilha um único processo",
+        "sharedOff": "{{name}} é executado uma vez por sessão",
+        "signedOut": "Você saiu de {{name}}",
+        "removed": "{{name}} removido",
+        "workspaces": "{{name}}: {{workspaces}}",
+        "added": "{{name}} adicionado",
+        "newSessions": "Vale para novas sessões",
+        "restart_one": "Reiniciar {{count}} sessão",
+        "restart_other": "Reiniciar {{count}} sessões",
+        "restart_many": "Reiniciar {{count}} sessões",
+        "staleTerminals_one": "{{count}} terminal de agente usa uma configuração de MCP mais antiga",
+        "staleTerminals_other": "{{count}} terminais de agente usam uma configuração de MCP mais antiga",
+        "staleTerminals_many": "{{count}} terminais de agente usam uma configuração de MCP mais antiga",
+        "staleTerminalsOnHost_one": "{{count}} terminal de agente em {{host}} usa uma configuração de MCP mais antiga",
+        "staleTerminalsOnHost_other": "{{count}} terminais de agente em {{host}} usam uma configuração de MCP mais antiga",
+        "staleTerminalsOnHost_many": "{{count}} terminais de agente em {{host}} usam uma configuração de MCP mais antiga",
+        "staleTerminalsRestart_one": "Reinicie-o para reconectar os servidores MCP do Orca.",
+        "staleTerminalsRestart_other": "Reinicie-os para reconectar os servidores MCP do Orca.",
+        "staleTerminalsRestart_many": "Reinicie-os para reconectar os servidores MCP do Orca.",
+        "staleTerminalsRestartManual_one": "Reinicie-o você mesmo para reconectar os servidores MCP do Orca.",
+        "staleTerminalsRestartManual_other": "Reinicie-os você mesmo para reconectar os servidores MCP do Orca.",
+        "staleTerminalsRestartManual_many": "Reinicie-os você mesmo para reconectar os servidores MCP do Orca.",
+        "staleTerminalsRestartSome_one": "É possível retomar {{restartable}} aqui. Reinicie manualmente o terminal restante.",
+        "staleTerminalsRestartSome_other": "É possível retomar {{restartable}} aqui. Reinicie manualmente os {{count}} terminais restantes.",
+        "staleTerminalsRestartSome_many": "É possível retomar {{restartable}} aqui. Reinicie manualmente os {{count}} terminais restantes.",
+        "addedMany": "{{count}} servidores adicionados",
+        "repoOn": "{{name}} ativado em {{repo}}",
+        "repoOff": "{{name}} desativado em {{repo}}"
+      },
+      "fileAgent": {
+        "title": "Permitir que o Orca edite o arquivo de MCP de {{agent}}?",
+        "line": "O Orca vai manter seus servidores MCP no arquivo de configurações de {{agent}} ({{file}}). Suas próprias entradas ficam como estão.",
+        "allow": "Permitir"
+      },
       "agents": {
+        "title": "Agentes",
+        "allOff": "Desativar todos",
+        "allOn": "Ativar todos",
+        "all": "Todos os agentes",
+        "someOff": "Agentes desativados: {{count}}",
+        "none": "Nenhum agente",
+        "some": "{{on}} de {{total}} agentes",
         "blocked": "Bloqueado pelas configurações do Claude da sua organização"
+      },
+      "stale": "Este servidor foi alterado em outro lugar. Mostrando-o como está agora.",
+      "launch": {
+        "title": "Inicialização",
+        "command": "Comando",
+        "args": "Argumentos",
+        "env": "Ambiente"
+      },
+      "connection": {
+        "title": "Conexão",
+        "url": "URL",
+        "headers": "Cabeçalhos"
+      },
+      "shared": {
+        "title": "Compartilhar um único processo entre agentes",
+        "line": "Usa menos memória. O servidor é executado fora da pasta do espaço de trabalho."
+      },
+      "status": {
+        "needsSignIn": "Login necessário",
+        "signedIn": "Conectado",
+        "commandFailed": "Comando não encontrado em {{host}}",
+        "unreachable": "Não é possível alcançar {{host}}"
+      },
+      "signIn": "Entrar",
+      "signInActions": "Ações de login",
+      "signInAgain": "Entrar novamente",
+      "signOut": "Sair",
+      "loading": "Lendo servidores MCP…",
+      "remove": {
+        "title": "Remover {{name}}?",
+        "line": "As novas sessões em {{host}} não vão tê-lo. Os valores salvos e o login dele são excluídos.",
+        "confirm": "Remover",
+        "button": "Remover servidor"
+      },
+      "found": {
+        "onlyIn": "{{agents}} · somente {{projects}}",
+        "move": "Mover para o Orca",
+        "actions": "Ações de {{name}}",
+        "copy": "Copiar para o Orca",
+        "open": "Abrir",
+        "copied": "{{name}} copiado para o Orca",
+        "title": "Nos seus agentes",
+        "summary": "Servidores encontrados em {{agents}}: {{count}}",
+        "moveAll": "Mover todos para o Orca"
+      },
+      "signedInToast": "Conectado a {{name}}",
+      "pasteRefused": "Esse endereço não é deste login.",
+      "workspaces": {
+        "title": "Espaços de Trabalho",
+        "later": "Espaços de trabalho adicionados depois",
+        "all": "Todos os espaços de trabalho",
+        "none": "Nenhum espaço de trabalho",
+        "allBut": "Todos, exceto {{names}}",
+        "only": "Somente {{names}}"
+      },
+      "catalog": {
+        "noMatch": "Nenhum servidor corresponde a “{{query}}”.",
+        "search": "Pesquisar servidores",
+        "caption": "Servidores"
+      },
+      "add": {
+        "title": "Adicionar um servidor MCP"
+      },
+      "catalogLine": {
+        "github": "Issues, pull requests e pesquisa de código",
+        "linear": "Ler e atualizar issues e projetos"
+      },
+      "move": {
+        "title": "Mover {{name}} para o Orca?",
+        "allTitle": "Mover {{count}} servidores para o Orca?",
+        "line": "O Orca o remove das configurações de {{agents}} e mantém um backup.",
+        "allLine": "O Orca os remove das configurações de {{agents}} e mantém um backup.",
+        "confirm": "Mover"
+      },
+      "yours": "Seus",
+      "fromPlugins": "De plugins",
+      "unsupported": "Os servidores MCP não estão disponíveis em {{host}}.",
+      "title": "Servidores MCP",
+      "description": "Servidores que seus agentes podem usar. As alterações valem para novas sessões.",
+      "repo": {
+        "on": "Ativado neste repositório",
+        "add": "Adicionar um servidor para este repositório",
+        "files": "Dos arquivos deste repositório",
+        "open": "Abrir {{file}}"
       }
     }
   },
@@ -7077,6 +7229,7 @@
         "PluginConsentDialog": {
           "reconsent": "Mudou desde que você aprovou",
           "instructionalWarning": "Os comandos podem agir por você ou seus agentes",
+          "mcpServersWarning": "Dá aos seus agentes os servidores MCP dele, que podem iniciar programas e agir em nome deles",
           "declarativeWarning": "Somente conteúdo. Nenhum código é executado.",
           "enable": "Ativar plugin",
           "capability": {
@@ -8741,7 +8894,8 @@
           "installedManifestUnloadable": "Esta versão não pode ser carregada neste Orca. Atualize-a ou reinstale-a.",
           "invalidArtifact": "Um arquivo de worker ou painel declarado está ausente ou é inseguro. Corrija os arquivos do plugin e depois atualize.",
           "consentChanged": "O plugin mudou enquanto você o revisava. Feche esta caixa de diálogo e revise as permissões atualizadas.",
-          "installGitMoved": "O repositório mudou depois que o Orca o verificou. Tente novamente."
+          "installGitMoved": "O repositório mudou depois que o Orca o verificou. Tente novamente.",
+          "installReservedIdentity": "Este plugin usa um nome reservado para plugins oficiais do Orca, que só são instalados pelo catálogo do Orca. Para sua própria cópia ou fork, altere \"id\" em orca-plugin.json para que não comece com \"orca-\" e defina \"publisher\" com o seu próprio nome."
         },
         "TaskSourceProviderCard": {
           "statusChecking": "Verificando…",
@@ -9947,6 +10101,7 @@
           "customEditor": "Editor",
           "panel": "Painel da barra lateral",
           "recipe": "Receita de máquina",
+          "mcpServer": "Servidor MCP",
           "logs": "Logs",
           "copyLogs": "Copiar"
         },
@@ -10008,6 +10163,7 @@
           "newEvents": "Reage a mais eventos do Orca",
           "newPanels": "Adiciona painéis",
           "newRecipes": "Receitas de máquina",
+          "newMcpServers": "Servidores MCP",
           "newShortcuts": "Atalhos de teclado",
           "previewError": "Não foi possível ler esta atualização",
           "update": "Atualizar",
@@ -10214,6 +10370,7 @@
           "contentOnly": "Somente conteúdo",
           "fullAccess": "Acesso total",
           "addsVmRecipes": "Adiciona receitas de VM",
+          "addsMcpServers": "Adiciona servidores MCP",
           "opensAndEditsFiles": "Abre e edita arquivos",
           "runsPluginCode": "Executa código do plugin"
         },
@@ -10270,7 +10427,8 @@
           "newFileMenu": "Adiciona ao menu +",
           "editorReplacesViewer": "Abre {{value0}} em vez do visualizador do Orca",
           "editorMayReplaceViewer": "Pode abrir {{value0}} em vez do visualizador do Orca",
-          "statusBar": "Barra de status"
+          "statusBar": "Barra de status",
+          "font": "Fonte para o terminal, o editor ou a interface"
         },
         "PluginPageHero": {
           "screenshots": "Capturas de tela",
@@ -10284,7 +10442,8 @@
           "worktreeRemoved": "Quando um espaço de trabalho é removido",
           "agentStatusChanged": "Quando o status de um agente muda",
           "detail": "Código em segundo plano é executado",
-          "workspaceChanged": "Quando você muda de espaço de trabalho ou seus terminais mudam"
+          "workspaceChanged": "Quando você muda de espaço de trabalho ou seus terminais mudam",
+          "editorTypographyChanged": "Quando a fonte ou o zoom do editor muda"
         },
         "PluginChips": {
           "updateNeedsReview": "Atualização precisa de revisão",
@@ -11955,7 +12114,9 @@
             "8adb953095": "Falha na operação"
           },
           "activityBar": {
-            "error": "Erro"
+            "error": "Erro",
+            "disablePlugin": "Desativar Plugin",
+            "disableFailed": "Não foi possível desativar o plugin."
           },
           "AiVaultScanProgressStrip": {
             "fileCount_one": "{{value0}} arquivo",
@@ -12536,6 +12697,11 @@
                 "43d9395605": "{{value0}} excluída(s), {{value1}} não excluída(s)",
                 "d42f1f14e0_one": "Tentar Novamente {{count}} Branch",
                 "d42f1f14e0_other": "Tentar Novamente {{count}} Branches",
+                "0e0379f24a": "{{count}} branches mantidas",
+                "6310412304": "Revisar {{count}} Branches",
+                "a3cdd9d9e6": "O Git manteve {{count}} branches locais porque elas podem conter commits sem merge. As branches mantidas não preservam as pastas dos espaços de trabalho; os commits delas continuam no repositório. O Orca pode continuar liberando espaço em disco dos espaços de trabalho em segundo plano.",
+                "cea24c2b7d": "{{count}} espaços de trabalho removidos",
+                "d42f1f14e0": "Tentar {{count}} Branches Novamente",
                 "d42f1f14e0_many": "Tentar Novamente {{count}} Branches"
               }
             }
@@ -13323,7 +13489,8 @@
           "changesLost_one": "{{count}} alteração não commitada será perdida",
           "changesLost_other": "{{count}} alterações não commitadas serão perdidas",
           "changesLost_many": "{{count}} alterações não commitadas serão perdidas",
-          "uncountedChangesLost": "As alterações não commitadas serão perdidas"
+          "uncountedChangesLost": "As alterações não commitadas serão perdidas",
+          "moreLoadedPaths": "e mais {{value0}} caminhos carregados"
         },
         "WorkspaceKanbanCard": {
           "cefae8983e": "Fixado"
@@ -20646,6 +20813,14 @@
         "pluginNameDisambiguation": {
           "nameWithPublisher": "{{value0}} ({{value1}})"
         },
+        "PluginCatalogHighlights": {
+          "justNow": "agora mesmo",
+          "added": "Adicionado {{value0}}",
+          "featured": "Destaques",
+          "featuredDetail": "os mais instalados, um por categoria",
+          "newlyAdded": "Adicionados recentemente",
+          "newlyAddedDetail": "em todos os seus catálogos"
+        },
         "declarative": {
           "PluginDeclarativeView": {
             "unsupported": "{{value0}} não está disponível nesta versão do Orca"
@@ -23130,7 +23305,8 @@
           "checking": "Verificando alterações…",
           "checkingDetails": "Verificando…",
           "unavailableDetails": "Detalhes indisponíveis",
-          "none": "Nenhuma alteração não commitada"
+          "none": "Nenhuma alteração não commitada",
+          "noUnsaved": "Nenhum arquivo não salvo"
         },
         "unsavedEdits": {
           "discarded_one": "As alterações não salvas em {{count}} arquivo serão descartadas:",
@@ -23149,9 +23325,25 @@
           "line_other": "As edições não salvas em {{count}} arquivos serão descartadas: {{files}}",
           "line_many": "As edições não salvas em {{count}} arquivos serão descartadas: {{files}}"
         },
-        "ignoredFilesUnchecked": "Não foi possível verificar completamente os arquivos ignorados"
+        "ignoredFilesUnchecked": "Não foi possível verificar completamente os arquivos ignorados",
+        "ignoredFiles": {
+          "none": "Nenhum arquivo local ignorado",
+          "unavailable": "Arquivos ignorados não verificados",
+          "checking": "Verificando arquivos ignorados…",
+          "lost_one": "{{count}} arquivo ignorado será perdido",
+          "lost_other": "{{count}} arquivos ignorados serão perdidos",
+          "lost_many": "{{count}} arquivos ignorados serão perdidos",
+          "lostIncomplete": "{{count}}+ arquivos ignorados serão perdidos",
+          "showPaths": "Mostrar caminhos ignorados",
+          "morePaths_one": "e mais {{count}} caminho ignorado",
+          "morePaths_other": "e mais {{count}} caminhos ignorados",
+          "morePaths_many": "e mais {{count}} caminhos ignorados",
+          "listLabel": "Arquivos locais ignorados que serão perdidos",
+          "incompleteNotice": "A verificação parou antes do fim; mais arquivos ignorados nesta worktree também podem ser excluídos."
+        }
       },
       "atRiskLocalFiles": {
+        "namesWithCount": "{{names}} +{{value0}}",
         "namesAndMore": "{{names}} e outros"
       }
     },
@@ -23473,6 +23665,246 @@
       "repositoryHooks": {
         "availableEnvVars": "Variáveis de ambiente disponíveis"
       },
+      "RepositoryHooksSection": {
+        "folderRunPolicyDescription": "Comportamento padrão quando um novo espaço de trabalho é criado.",
+        "folderTitle": "Hooks do espaço de trabalho",
+        "folderDescription": "Scripts executados nesta pasta quando um espaço de trabalho é criado ou removido. Todos os espaços de trabalho compartilham a pasta. Os scripts locais ficam armazenados nesta máquina; os scripts do `orca.yaml` são compartilhados com sua equipe.",
+        "folderSetupDescription": "Scripts locais e compartilhados executados depois que um novo espaço de trabalho é criado.",
+        "folderArchiveDescription": "Scripts locais e compartilhados executados antes de um espaço de trabalho ser removido.",
+        "folderSetupFieldDescription": "Executado depois que um novo espaço de trabalho é criado; crie worktrees filhas, instale dependências, copie arquivos env.",
+        "folderArchiveFieldDescription": "Executado antes de um espaço de trabalho ser removido."
+      },
+      "workspaceCleanup": {
+        "title": "Limpeza de Espaços de Trabalho",
+        "description": "Remova os espaços de trabalho com os quais você já terminou. Antes de remover qualquer coisa, o Orca verifica novamente se há trabalho não salvo.",
+        "unsupportedHost": "Este host executa uma versão do Orca sem limpeza automática. Atualize o Orca nele para usar estas configurações.",
+        "previewFailed": "Não foi possível verificar a quais espaços de trabalho esta alteração se aplica.",
+        "pinFailed": "Não foi possível manter {{name}}.",
+        "rules": {
+          "branchNote": "As branches com merge são excluídas com o espaço de trabalho. As branches sem merge são mantidas.",
+          "recommended": "Recomendado",
+          "inactiveDescription": "Sem atividade há {{count}} dias.",
+          "advancedDescription": "Espaços de trabalho de automações e de workers de orquestração",
+          "inactiveFor": "Inativo há",
+          "days": "dias",
+          "then": "Depois",
+          "archiveDescription": "Arquivar libera espaço em disco e mantém o espaço de trabalho na barra lateral.",
+          "deleteDescription": "Excluir remove o espaço de trabalho e a pasta dele.",
+          "archive": "Arquivar",
+          "delete": "Excluir",
+          "matchesCount": "Corresponde a {{count}} espaços de trabalho agora",
+          "hideMatches": "Ocultar",
+          "showMatches": "Mostrar",
+          "merged": "Excluir espaços de trabalho com merge",
+          "mergedDescription": "O pull request teve merge e tudo o que está no espaço de trabalho faz parte dele.",
+          "unchanged": "Excluir espaços de trabalho sem alterações",
+          "unchangedDescription": "Nenhum commit além da branch padrão e nenhuma edição.",
+          "inactiveCleanUp": "Limpar espaços de trabalho inativos",
+          "inactive": "Excluir espaços de trabalho inativos",
+          "automationRuns": "Excluir espaços de trabalho de automações concluídas",
+          "automationRunsDescription": "Espaços de trabalho criados por uma execução de automação, depois que a execução termina.",
+          "orchestrationWorkers": "Excluir espaços de trabalho de workers de orquestração liberados",
+          "orchestrationWorkersDescription": "Espaços de trabalho usados por um worker de orquestração, depois que o coordenador o libera.",
+          "inactiveDescription_one": "Sem atividade há {{count}} dia.",
+          "inactiveDescription_other": "Sem atividade há {{count}} dias.",
+          "inactiveDescription_many": "Sem atividade há {{count}} dias.",
+          "matchesCount_one": "Corresponde a {{count}} espaço de trabalho agora",
+          "matchesCount_other": "Corresponde a {{count}} espaços de trabalho agora",
+          "matchesCount_many": "Corresponde a {{count}} espaços de trabalho agora",
+          "checking": "Verificando quais espaços de trabalho correspondem…",
+          "checkFailed": "Não foi possível verificar quais espaços de trabalho correspondem."
+        },
+        "protection": {
+          "title": "Proteção",
+          "keepIgnoredFiles": "Manter espaços de trabalho com arquivos ignorados",
+          "keepIgnoredFilesDescription": "Arquivos como .env e configurações locais não podem ser recuperados. node_modules e saídas de build não contam.",
+          "alwaysKeptLabel": "Sempre mantidos",
+          "alwaysKeptList": "Espaços de trabalho fixados, agentes ou terminais em execução, alterações não salvas no editor, alterações não commitadas, commits não enviados."
+        },
+        "activity": {
+          "loadFailed": "Não foi possível carregar a atividade: {{error}}",
+          "empty": "A limpeza ainda não foi executada.",
+          "unfinished": "Não foi possível concluir",
+          "nothingRemoved": "Nada para limpar",
+          "removedCount": "Removidos: {{count}}",
+          "keptCount": "Mantidos: {{count}}",
+          "failedCount": "{{count}} com falha",
+          "removed": "Removidos · {{count}}",
+          "failed": "Com falha · {{count}}",
+          "archived": "Arquivado",
+          "deleted": "Excluído",
+          "kept": "Mantidos · {{count}}",
+          "showMore": "Mostrar mais {{count}}",
+          "waiting": "Inativo há {{elapsed}} de {{after}} dias",
+          "title": "Atividade",
+          "notListed_one": "Mais {{count}} espaço de trabalho mantido não está listado.",
+          "notListed_other": "Mais {{count}} espaços de trabalho mantidos não estão listados.",
+          "notListed_many": "Mais {{count}} espaços de trabalho mantidos não estão listados.",
+          "chatsDeletedCount_one": "{{count}} chat excluído",
+          "chatsDeletedCount_other": "{{count}} chats excluídos",
+          "chatsDeletedCount_many": "{{count}} chats excluídos",
+          "chatsDeleted_one": "{{count}} chat de um espaço de trabalho excluído foi excluído",
+          "chatsDeleted_other": "{{count}} chats de espaços de trabalho excluídos foram excluídos",
+          "chatsDeleted_many": "{{count}} chats de espaços de trabalho excluídos foram excluídos",
+          "chatsFailed_one": "Não foi possível excluir {{count}} chat",
+          "chatsFailed_other": "Não foi possível excluir {{count}} chats",
+          "chatsFailed_many": "Não foi possível excluir {{count}} chats"
+        },
+        "runFailed": "Não foi possível executar a limpeza.",
+        "updateFailed": "Não foi possível salvar as regras de limpeza.",
+        "enable": {
+          "title": "Ativar a regra “{{rule}}”?",
+          "description_one": "{{count}} espaço de trabalho corresponde agora. Ele será excluído alguns segundos depois que você ativar isto.",
+          "description_other": "{{count}} espaços de trabalho correspondem agora. Eles serão excluídos alguns segundos depois que você ativar isto.",
+          "description_many": "{{count}} espaços de trabalho correspondem agora. Eles serão excluídos alguns segundos depois que você ativar isto.",
+          "summary": "Total a excluir: {{count}}",
+          "cancel": "Cancelar",
+          "turnOn": "Ativar"
+        },
+        "reason": {
+          "merged": "Com merge",
+          "unchanged": "Sem alterações",
+          "inactive": "Inativo",
+          "automationRun": "Execução de automação",
+          "orchestrationWorker": "Worker de orquestração",
+          "mergedNumber": "{{label}} · #{{number}}"
+        },
+        "keep": {
+          "pinned": "Fixado",
+          "noRuleMatched": "Nenhuma regra correspondeu",
+          "recentlyActive": "Usado na última hora",
+          "activeWorkspace": "Aberto agora",
+          "agentRunning": "Agente em execução",
+          "terminalRunning": "Terminal executando um processo",
+          "terminalUnknown": "Estado do terminal desconhecido",
+          "unsavedEditorChanges": "Alterações não salvas no editor",
+          "uncommittedChanges": "Alterações não commitadas",
+          "unpushedCommits": "Commits não enviados",
+          "ignoredFiles": "Arquivos ignorados",
+          "gitUnknown": "Não foi possível ler o status do Git",
+          "archiveUnavailable": "Arquivamento indisponível",
+          "archiveScript": "Tem um script de arquivamento",
+          "removing": "Já está sendo removido",
+          "folderWorkspaceSibling": "Outro repositório neste espaço de trabalho ainda está em uso",
+          "waiting": "Aguardando",
+          "notRemovable": "Espaço de trabalho principal ou projeto de pasta",
+          "projectOff": "Limpeza desativada para este projeto",
+          "rulesOff": "Nenhuma regra ativada",
+          "withDetail": "{{cause}} · {{detail}}"
+        },
+        "trigger": {
+          "startup": "Na inicialização",
+          "hourly": "A cada hora",
+          "settings": "Após uma alteração de regra",
+          "runNow": "Executar regras agora",
+          "cli": "Pela CLI"
+        },
+        "search": {
+          "cleanup": "limpeza",
+          "cleanUp": "limpar",
+          "delete": "excluir",
+          "automatic": "automático",
+          "pullRequest": "PR",
+          "inactiveDescription": "Sem atividade há alguns dias.",
+          "stale": "parado",
+          "days": "dias",
+          "automations": "automações",
+          "orchestration": "orquestração",
+          "protection": "proteção",
+          "activityDescription": "O que cada execução de limpeza removeu e manteve.",
+          "history": "histórico",
+          "runs": "execuções",
+          "envFile": ".env",
+          "manual": "manual",
+          "automaticDescription": "Se a limpeza automática está ativada, quando será a próxima execução e como executar as regras agora.",
+          "runRulesNow": "executar regras agora",
+          "cleanUpNow": "limpar agora",
+          "schedule": "agendamento"
+        },
+        "status": {
+          "lastRunFailed": "A última execução {{when}} não pôde ser concluída: {{error}}",
+          "lastRunNothing": "A última execução {{when}} não removeu nada.",
+          "lastRunFreed_one": "A última execução {{when}} removeu {{count}} espaço de trabalho e liberou {{size}}.",
+          "lastRunFreed_other": "A última execução {{when}} removeu {{count}} espaços de trabalho e liberou {{size}}.",
+          "lastRunFreed_many": "A última execução {{when}} removeu {{count}} espaços de trabalho e liberou {{size}}.",
+          "lastRunRemoved_one": "A última execução {{when}} removeu {{count}} espaço de trabalho.",
+          "lastRunRemoved_other": "A última execução {{when}} removeu {{count}} espaços de trabalho.",
+          "lastRunRemoved_many": "A última execução {{when}} removeu {{count}} espaços de trabalho.",
+          "nextRun": "Próxima execução {{when}}.",
+          "justNow": "agora mesmo",
+          "inUnderAMinute": "em menos de um minuto",
+          "lastRunChats_one": "A última execução {{when}} excluiu {{count}} chat de um espaço de trabalho excluído.",
+          "lastRunChats_other": "A última execução {{when}} excluiu {{count}} chats de espaços de trabalho excluídos.",
+          "lastRunChats_many": "A última execução {{when}} excluiu {{count}} chats de espaços de trabalho excluídos."
+        },
+        "change": {
+          "title": "Alterar a regra “{{rule}}”?",
+          "description_one": "Esta alteração faz {{count}} espaço de trabalho a mais corresponder agora. Ele será excluído alguns segundos depois que você aplicá-la.",
+          "description_other": "Esta alteração faz {{count}} espaços de trabalho a mais corresponderem agora. Eles serão excluídos alguns segundos depois que você aplicá-la.",
+          "description_many": "Esta alteração faz {{count}} espaços de trabalho a mais corresponderem agora. Eles serão excluídos alguns segundos depois que você aplicá-la.",
+          "apply": "Aplicar"
+        },
+        "rulesLoadFailed": "Não foi possível carregar as regras de limpeza deste host: {{error}}",
+        "retry": "Tentar novamente",
+        "listSeparator": ", ",
+        "summary": {
+          "merged": "Excluir com merge",
+          "unchanged": "Excluir sem alterações",
+          "inactiveCleanUp": "Limpar inativos",
+          "inactive": "Excluir inativos",
+          "automationRuns": "Espaços de trabalho de automações",
+          "orchestrationWorkers": "Workers de orquestração",
+          "off": "Desativada"
+        },
+        "disableIgnoredFiles": {
+          "title": "Desativar a proteção de arquivos ignorados?",
+          "description": "Nos projetos que usam estas regras de limpeza, os arquivos ignorados deixarão de impedir a limpeza automática. Arquivos como .env e configurações locais podem ser excluídos e não poderão ser recuperados.",
+          "matches_one": "Sem fixar, {{count}} espaço de trabalho adicional será excluído alguns segundos depois que você desativar a proteção.",
+          "matches_other": "Sem fixar, {{count}} espaços de trabalho adicionais serão excluídos alguns segundos depois que você desativar a proteção.",
+          "matches_many": "Sem fixar, {{count}} espaços de trabalho adicionais serão excluídos alguns segundos depois que você desativar a proteção.",
+          "noMatches": "Nenhum espaço de trabalho adicional corresponde agora. Esta configuração afeta limpezas futuras nos projetos que usam estas regras.",
+          "turnOff": "Desativar proteção"
+        },
+        "pinAndKeep": {
+          "description": "Os espaços de trabalho selecionados serão fixados quando você confirmar. Espaços de trabalho fixados ficam fora da limpeza automática até você desafixá-los.",
+          "named": "Fixar e manter {{name}}",
+          "label": "Fixar e manter"
+        },
+        "chatHistory": {
+          "title": "Histórico de chats"
+        },
+        "manual": {
+          "title": "Limpeza manual",
+          "label": "Excluir os espaços de trabalho que você escolher",
+          "review": "Revisar espaços de trabalho",
+          "description": "Veja todos os espaços de trabalho e escolha quais excluir."
+        },
+        "automatic": {
+          "offDetail": "Ative uma regra para remover espaços de trabalho de forma programada.",
+          "running": "Removendo o que suas regras encontraram…",
+          "title": "Limpeza automática",
+          "on": "Ativada",
+          "off": "Desativada",
+          "runningButton": "Executando…",
+          "runNow": "Executar regras agora"
+        }
+      },
+      "repository": {
+        "workspaceCleanup": {
+          "title": "Limpeza de espaços de trabalho",
+          "description": "Regras apenas para {{name}}. Usar global segue Configurações / Limpeza de Espaços de Trabalho.",
+          "usingGlobal": "Usando global: {{rules}}",
+          "globalDefault": "Padrão global: {{rules}}",
+          "useGlobal": "Usar global",
+          "off": "Desativada",
+          "custom": "Personalizada",
+          "rules": "Regras de limpeza",
+          "rulesDescription": "Quais regras de limpeza de espaços de trabalho se aplicam a este projeto.",
+          "keywordCleanup": "limpeza",
+          "keywordDelete": "excluir",
+          "keywordMerged": "com merge"
+        }
+      },
       "bitbucket": {
         "credentials": {
           "dialog": {
@@ -23495,6 +23927,51 @@
         "confirmCheckHomeFolder": "Nenhuma outra máquina que compartilha esta pasta pessoal está executando o Orca",
         "details": "Detalhes",
         "clearing": "Removendo…"
+      },
+      "agents": {
+        "deleteHistoryWithWorkspace": {
+          "updateFailed": "Não foi possível atualizar a configuração em {{host}}.",
+          "recommended": "Recomendado",
+          "unsupported": "Atualize o Orca em {{host}} para usar esta configuração lá.",
+          "confirmTitle": "Excluir o histórico de agentes dos espaços de trabalho excluídos?",
+          "confirmDescription": "O Orca vai excluir os chats do Orca, do Claude Code e do Codex de espaços de trabalho que não existem mais, incluindo os excluídos antes de hoje. Os chats dos espaços de trabalho que você ainda tem são mantidos. Chats excluídos não podem ser recuperados.",
+          "cancel": "Cancelar",
+          "turnOn": "Ativar",
+          "title": "Excluir o histórico de agentes quando um espaço de trabalho for excluído",
+          "description": "Os chats do Orca, do Claude Code e do Codex de espaços de trabalho excluídos são removidos automaticamente para liberar espaço em disco. Eles não podem ser recuperados.",
+          "codexHistoryBadge": "Histórico do Codex: {{size}}",
+          "codexHistoryBadgeAtLeast": "Histórico do Codex: {{size}}+",
+          "codexHistoryTooltip": "Espaço que o Codex usa para o próprio histórico de chats em {{host}}, incluindo chats de espaços de trabalho que você ainda tem.",
+          "codexHistoryTooltipAtLeast": "O Codex usa pelo menos este espaço para o próprio histórico de chats em {{host}}, incluindo chats de espaços de trabalho que você ainda tem.",
+          "chat": "chat",
+          "transcripts": "transcrições",
+          "diskSpace": "espaço em disco",
+          "cleanup": "limpeza",
+          "chatHistory": "excluir histórico de chats"
+        }
+      },
+      "notifications": {
+        "server": {
+          "fallbackHost": "este servidor",
+          "updateFailed": "Não foi possível atualizar as notificações em {{host}}.",
+          "unsupported": "Atualize o Orca em {{host}} para alterar as notificações dele aqui.",
+          "enabledDescription": "Alertas que {{host}} envia para os agentes e terminais dele, incluindo envios por push para seus celulares.",
+          "sectionDescription": "Alertas que {{host}} envia para os agentes e terminais dele."
+        }
+      },
+      "orcaAccount": {
+        "server": {
+          "sectionDescription": "A conta do Orca com a qual {{host}} é executado, para Slack, GitHub, Linear e webhooks dos bots dele.",
+          "unread": "Não é possível ler a conta do Orca de {{host}}. Atualize ou reconecte {{host}}.",
+          "signInThere": "Execute `orca auth login` em {{host}} para conectá-lo."
+        }
+      },
+      "hostScope": {
+        "updateHostToChange": "Atualize o Orca em {{host}} para alterar esta configuração lá.",
+        "updateFailed": "Não foi possível atualizar a configuração em {{host}}."
+      },
+      "git": {
+        "branchPrefixHostGitUsername": "Nome de usuário do Git em {{host}}"
       }
     },
     "jiraIssueAssigneeField": {
@@ -24228,6 +24705,13 @@
       "createdBranchSkipped": "A configuração não foi executada: a branch deste espaço de trabalho tem comandos de configuração no orca.yaml diferentes daqueles que você aprovou."
     },
     "delete": {
+      "detachingChildren": "Desvinculando os filhos...",
+      "childrenPreservedDescription": "Os filhos diretos vão se tornar espaços de trabalho de nível superior. Os arquivos, terminais e filhos aninhados deles serão mantidos.",
+      "detachChildren": "Desvincular e manter os espaços de trabalho filhos",
+      "nestedChildrenCannotBeKept": "As pastas de espaços de trabalho filhos dentro deste espaço de trabalho precisam ser movidas para fora dele antes de poderem ser mantidas.",
+      "childrenChanged": "Os espaços de trabalho filhos mudaram. Revise a lista de espaços de trabalho e tente novamente.",
+      "childrenChangedClearPreserve": "Os espaços de trabalho filhos mudaram. Desmarque esta opção para revisar a exclusão.",
+      "detachFailed": "Não foi possível desvincular todos os espaços de trabalho filhos. O pai não foi excluído. {{error}}",
       "loss": {
         "changes_one": "{{count}} alteração não commitada",
         "changes_other": "{{count}} alterações não commitadas",
@@ -24256,7 +24740,11 @@
       "singleTitle": "Excluir {{name}}?",
       "forceExplanation": "O Git não conseguiu excluí-lo porque há alterações. A exclusão forçada remove essas alterações mesmo assim.",
       "errorDetails": "Detalhes",
-      "changesIncomplete": "Não foi possível verificar completamente algumas alterações."
+      "changesIncomplete": "Não foi possível verificar completamente algumas alterações.",
+      "parentWorkspace": "Espaço de trabalho pai",
+      "workspacesToReview": "Espaços de trabalho para revisar",
+      "workspaceDetails": "Detalhes do espaço de trabalho selecionado",
+      "workspaceKept": "Será mantido"
     }
   },
   "projectBoard": {
@@ -26761,5 +27249,14 @@
     "moveLeft": "Mover para a esquerda",
     "moveRight": "Mover para a direita",
     "reset": "Restaurar ordem das abas"
+  },
+  "mcpServers": {
+    "paste": {
+      "badCommand": "Coloque os próprios valores no comando mcp add: o Orca não consegue preencher $VARIABLES nem outras expressões do shell.",
+      "unsupported": "O Orca não consegue adicionar este servidor como está escrito: ele usa SSE, um cliente OAuth próprio ou um valor lido do ambiente.",
+      "badAddCommand": "Verifique o comando mcp add: um nome e uma URL ou um comando.",
+      "badJson": "Verifique o JSON colado: ele não pode ser analisado.",
+      "none": "O Orca não encontrou nenhum servidor que possa adicionar. Servidores SSE, servidores com cliente OAuth próprio ou filtros de ferramentas e valores lidos do ambiente (${VAR}) não são suportados."
+    }
   }
 }

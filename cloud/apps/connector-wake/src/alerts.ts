@@ -7,7 +7,8 @@
 // that binding every breaching run posts. ALERTS_OFF names rules a deployment never runs.
 // Secrets (stdin only): AE_READ_TOKEN (Account Analytics: Read), ALERT_WEBHOOK_URL (its own Slack
 // webhook). Probes (EDGE_PROBE_URL): an unauthenticated wake upgrade must get 401, and the canary
-// object must answer. Rules, thresholds and their env vars: alerts-rules.ts.
+// object must answer (one miss is retried before it pages). Rules, thresholds and their env vars:
+// alerts-rules.ts.
 import { cloudflareErrors } from '../../relay-edge/src/alerts-cloudflare'
 import { probeObject, probeUnauthenticatedUpgrade } from '../../relay-edge/src/alerts-probe'
 import { CONNECTOR_WAKE_PATH } from '../../../packages/connector-contract/src/wake-messages'
@@ -79,10 +80,26 @@ async function post(env: WakeAlertsEnv, text: string): Promise<boolean> {
   return false
 }
 
-async function probes(env: WakeAlertsEnv): Promise<string[]> {
+// The canary object misses one call now and then: a single health check runs past the wake Worker's
+// 3 s limit and answers 503 while the probes right after pass. That happened at 13:25 and 13:55 UTC
+// on 2026-11-26 with no wake failing. So a miss is retried once, after OBJECT_PROBE_RETRY_MS, and
+// pages only if the retry misses too. A broken object runtime fails both and still pages in the
+// same run.
+export const OBJECT_PROBE_RETRY_MS = 10_000
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+
+async function probeObjectTwice(base: string, wait: (ms: number) => Promise<void>): Promise<string | null> {
+  const first = await probeObject(base)
+  if (!first) { return null }
+  await wait(OBJECT_PROBE_RETRY_MS)
+  const second = await probeObject(base)
+  return second ? `${second} (retried after ${OBJECT_PROBE_RETRY_MS / 1000} s; first try: ${first})` : null
+}
+
+async function probes(env: WakeAlertsEnv, wait: (ms: number) => Promise<void>): Promise<string[]> {
   if (!env.EDGE_PROBE_URL) { return [] }
   const base = env.EDGE_PROBE_URL.replace(/\/+$/, '')
-  const [edge, object] = await Promise.all([probeUnauthenticatedUpgrade(`${base}${CONNECTOR_WAKE_PATH}`, 'wake', Date.now), probeObject(base)])
+  const [edge, object] = await Promise.all([probeUnauthenticatedUpgrade(`${base}${CONNECTOR_WAKE_PATH}`, 'wake', Date.now), probeObjectTwice(base, wait)])
   return [...(edge ? [`FIRING edge-probe: ${edge}`] : []), ...(object ? [`FIRING object-probe: ${object}`] : [])]
 }
 
@@ -102,13 +119,14 @@ async function withCloudflare(env: WakeAlertsEnv, now: Counts, before: Counts, a
   }
 }
 
-export async function evaluate(env: WakeAlertsEnv, scheduledTime: number): Promise<string[]> {
+// wait: tests pass one that returns at once.
+export async function evaluate(env: WakeAlertsEnv, scheduledTime: number, wait: (ms: number) => Promise<void> = sleep): Promise<string[]> {
   if (!env.AE_READ_TOKEN || !env.ALERT_WEBHOOK_URL) {
     console.warn('connector-wake alerts: secrets not set; skipping')
     return []
   }
   const limits = thresholds(env)
-  const probeAlerts = await probes(env)
+  const probeAlerts = await probes(env, wait)
   for (const text of probeAlerts) { await post(env, text) }
   let rows: Minute[]
   try {
