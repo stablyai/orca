@@ -75,8 +75,12 @@ function attachTopRowHover(layer: HTMLElement, host: HTMLElement): () => void {
     const { clientX, clientY } = event
     // Avoid revealing chromeless headers during terminal text selection or pane drags.
     if (event.buttons !== 0) {
-      if (hoveredEntry && !cacheDirty && !pointInRect(hoveredEntry, clientX, clientY)) {
-        setHoveredEntry(null)
+      if (hoveredEntry) {
+        // Refresh at most once per invalidation so a stale rect cannot keep the reveal pinned.
+        ensureCache()
+        if (hoveredEntry && !pointInRect(hoveredEntry, clientX, clientY)) {
+          setHoveredEntry(null)
+        }
       }
       return
     }
