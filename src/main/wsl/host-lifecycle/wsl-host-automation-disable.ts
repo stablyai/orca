@@ -51,12 +51,13 @@ export async function readWslHostAutomationStates(
 export async function disableWslHostAutomations(
   userDataPath: string,
   environmentId: string,
-  automationIds: readonly string[]
+  automationIds: readonly string[],
+  signal?: AbortSignal
 ): Promise<string[]> {
   if (automationIds.length === 0) {
     return []
   }
-  const request = await openWslHostAutomationApi(userDataPath, environmentId)
+  const request = await openWslHostAutomationApi(userDataPath, environmentId, signal)
   const turnedOff: string[] = []
   try {
     for (const id of automationIds) {
@@ -79,12 +80,13 @@ export async function disableWslHostAutomations(
 export async function restoreWslHostAutomations(
   userDataPath: string,
   environmentId: string,
-  automationIds: readonly string[]
+  automationIds: readonly string[],
+  signal?: AbortSignal
 ): Promise<void> {
   if (automationIds.length === 0) {
     return
   }
-  const request = await openWslHostAutomationApi(userDataPath, environmentId)
+  const request = await openWslHostAutomationApi(userDataPath, environmentId, signal)
   const leftOff = await turnOnEach(request, automationIds)
   if (leftOff.length > 0) {
     throw new WslHostAutomationsLeftOffError('wsl_move_automation_enable_failed', leftOff)

@@ -207,6 +207,7 @@
         "widthDescription": "넓은 패널에서 메시지와 입력란이 확장될 수 있는 최대 너비입니다.",
         "resetAppearance": "채팅 모양 초기화",
         "resetDescription": "위의 기본값으로 복원합니다.",
+        "resetKeyword": "초기화",
         "comfortable": "편안하게",
         "wide": "넓게",
         "full": "전체",
@@ -638,6 +639,8 @@
     "mcp": {
       "workspace": "워크스페이스",
       "inspectFailed": "{{directory}}을(를) 검사할 수 없습니다.",
+      "inspectConfigsFailed": "MCP 구성을 검사할 수 없습니다.",
+      "createConfigFailed": "MCP 구성을 만들지 못했습니다.",
       "unreadable": "읽을 수 없음",
       "notFound": "찾을 수 없음",
       "invalidJson": "잘못된 JSON",
@@ -954,6 +957,11 @@
     "artifacts": {
       "teamDisabled": "팀에서 아티팩트 공유를 꺼 두었습니다."
     },
+    "navigation": {
+      "accounts": {
+        "description": "Claude, Codex, Antigravity, OpenCode Go, MiniMax, Grok의 선택적 계정 전환과 사용량 설정입니다."
+      }
+    },
     "general": {
       "openInMenu": {
         "keyword": {
@@ -1098,8 +1106,152 @@
       "keywordSecurity": "보안"
     },
     "mcpServers": {
+      "custom": {
+        "noneChecked": "추가할 서버를 선택하세요.",
+        "addMany": "서버 {{count}}개 추가",
+        "found": "서버 {{count}}개를 찾았습니다",
+        "foundUrl": "URL · {{line}}",
+        "foundCommand": "명령 · {{line}}",
+        "title": "사용자 지정 서버",
+        "sourceLabel": "서버 URL, 시작 명령 또는 구성",
+        "sourceHint": "서버 URL, 시작 명령 또는 구성을 붙여넣거나 세부 정보를 직접 입력하세요.",
+        "nameTaken": "이름이 {{name}}인 서버가 이미 있습니다. 다른 이름을 선택하세요.",
+        "line": "URL, 시작 명령 또는 구성",
+        "foundTaken": "이미 추가됨"
+      },
+      "empty": {
+        "copied": "{{host}}에서 서버 {{count}}개를 복사했습니다",
+        "title": "{{host}}에 MCP 서버가 없습니다",
+        "copyFrom": "{{host}}에서 복사"
+      },
+      "addServer": "서버 추가",
+      "toast": {
+        "allOn": "모든 에이전트에서 {{name}}을(를) 켰습니다",
+        "allOff": "모든 에이전트에서 {{name}}을(를) 껐습니다",
+        "agentOn": "{{agent}}에서 {{name}}을(를) 켰습니다",
+        "agentOff": "{{agent}}에서 {{name}}을(를) 껐습니다",
+        "saved": "{{name}}을(를) 저장했습니다",
+        "sharedOn": "{{name}}이(가) 프로세스 하나를 공유합니다",
+        "sharedOff": "{{name}}이(가) 세션마다 따로 실행됩니다",
+        "signedOut": "{{name}}에서 로그아웃했습니다",
+        "removed": "{{name}}을(를) 제거했습니다",
+        "workspaces": "{{name}}: {{workspaces}}",
+        "added": "{{name}}을(를) 추가했습니다",
+        "newSessions": "새 세션부터 적용됩니다",
+        "restart_one": "세션 {{count}}개 다시 시작",
+        "restart_other": "세션 {{count}}개 다시 시작",
+        "staleTerminals_one": "에이전트 터미널 {{count}}개가 이전 MCP 설정을 사용 중입니다",
+        "staleTerminals_other": "에이전트 터미널 {{count}}개가 이전 MCP 설정을 사용 중입니다",
+        "staleTerminalsOnHost_one": "{{host}}의 에이전트 터미널 {{count}}개가 이전 MCP 설정을 사용 중입니다",
+        "staleTerminalsOnHost_other": "{{host}}의 에이전트 터미널 {{count}}개가 이전 MCP 설정을 사용 중입니다",
+        "staleTerminalsRestart_one": "Orca의 MCP 서버에 다시 연결하려면 터미널을 다시 시작하세요.",
+        "staleTerminalsRestart_other": "Orca의 MCP 서버에 다시 연결하려면 터미널을 다시 시작하세요.",
+        "staleTerminalsRestartManual_one": "Orca의 MCP 서버에 다시 연결하려면 터미널을 직접 다시 시작하세요.",
+        "staleTerminalsRestartManual_other": "Orca의 MCP 서버에 다시 연결하려면 터미널을 직접 다시 시작하세요.",
+        "staleTerminalsRestartSome_one": "{{restartable}}개는 여기에서 재개할 수 있습니다. 나머지 {{count}}개는 직접 다시 시작하세요.",
+        "staleTerminalsRestartSome_other": "{{restartable}}개는 여기에서 재개할 수 있습니다. 나머지 {{count}}개는 직접 다시 시작하세요.",
+        "addedMany": "서버 {{count}}개를 추가했습니다",
+        "repoOn": "{{repo}}에서 {{name}}을(를) 켰습니다",
+        "repoOff": "{{repo}}에서 {{name}}을(를) 껐습니다"
+      },
+      "fileAgent": {
+        "title": "Orca가 {{agent}}의 MCP 파일을 편집하도록 허용하시겠습니까?",
+        "line": "Orca가 {{agent}}의 설정 파일({{file}})에서 MCP 서버를 관리합니다. 직접 추가한 항목은 그대로 유지됩니다.",
+        "allow": "허용"
+      },
       "agents": {
+        "title": "에이전트",
+        "allOff": "모두 끄기",
+        "allOn": "모두 켜기",
+        "all": "모든 에이전트",
+        "someOff": "에이전트 {{count}}개 꺼짐",
+        "none": "에이전트 없음",
+        "some": "에이전트 {{total}}개 중 {{on}}개",
         "blocked": "조직의 Claude 설정에 의해 차단됨"
+      },
+      "stale": "이 서버가 다른 곳에서 변경되었습니다. 현재 상태를 표시합니다.",
+      "launch": {
+        "title": "실행",
+        "command": "명령",
+        "args": "인수",
+        "env": "환경"
+      },
+      "connection": {
+        "title": "연결",
+        "url": "URL",
+        "headers": "헤더"
+      },
+      "shared": {
+        "title": "에이전트 간에 프로세스 하나를 공유",
+        "line": "메모리를 덜 사용합니다. 서버는 워크스페이스 폴더 밖에서 실행됩니다."
+      },
+      "status": {
+        "needsSignIn": "로그인 필요",
+        "signedIn": "로그인됨",
+        "commandFailed": "{{host}}에서 명령을 찾을 수 없음",
+        "unreachable": "{{host}}에 연결할 수 없음"
+      },
+      "signIn": "로그인",
+      "signInActions": "로그인 작업",
+      "signInAgain": "다시 로그인",
+      "signOut": "로그아웃",
+      "loading": "MCP 서버를 읽는 중…",
+      "remove": {
+        "title": "{{name}}을(를) 제거하시겠습니까?",
+        "line": "{{host}}의 새 세션에서는 이 서버를 사용할 수 없습니다. 저장된 값과 로그인 정보가 삭제됩니다.",
+        "confirm": "제거",
+        "button": "서버 제거"
+      },
+      "found": {
+        "onlyIn": "{{agents}} · {{projects}}에서만",
+        "move": "Orca로 이동",
+        "actions": "{{name}} 작업",
+        "copy": "Orca로 복사",
+        "open": "열기",
+        "copied": "{{name}}을(를) Orca로 복사했습니다",
+        "title": "내 에이전트에 있는 서버",
+        "summary": "{{agents}}에서 서버 {{count}}개를 찾았습니다",
+        "moveAll": "모두 Orca로 이동"
+      },
+      "signedInToast": "{{name}}에 로그인했습니다",
+      "pasteRefused": "이 로그인에서 나온 주소가 아닙니다.",
+      "workspaces": {
+        "title": "워크스페이스",
+        "later": "나중에 추가하는 워크스페이스",
+        "all": "모든 워크스페이스",
+        "none": "워크스페이스 없음",
+        "allBut": "{{names}} 제외 전체",
+        "only": "{{names}}만"
+      },
+      "catalog": {
+        "noMatch": "“{{query}}”와(과) 일치하는 서버가 없습니다.",
+        "search": "서버 검색",
+        "caption": "서버"
+      },
+      "add": {
+        "title": "MCP 서버 추가"
+      },
+      "catalogLine": {
+        "github": "이슈, PR, 코드 검색",
+        "linear": "이슈와 프로젝트 읽기 및 업데이트"
+      },
+      "move": {
+        "title": "{{name}}을(를) Orca로 이동하시겠습니까?",
+        "allTitle": "서버 {{count}}개를 Orca로 이동하시겠습니까?",
+        "line": "Orca가 {{agents}} 설정에서 이 서버를 제거하고 백업을 보관합니다.",
+        "allLine": "Orca가 {{agents}} 설정에서 서버를 제거하고 백업을 보관합니다.",
+        "confirm": "이동"
+      },
+      "yours": "내 서버",
+      "fromPlugins": "플러그인 제공",
+      "unsupported": "{{host}}에서는 MCP 서버를 사용할 수 없습니다.",
+      "title": "MCP 서버",
+      "description": "에이전트가 사용할 수 있는 서버입니다. 변경 사항은 새 세션부터 적용됩니다.",
+      "repo": {
+        "on": "이 저장소에서 사용",
+        "add": "이 저장소에 서버 추가",
+        "files": "이 저장소 파일에 있는 서버",
+        "open": "{{file}} 열기"
       }
     }
   },
@@ -6188,6 +6340,7 @@
           "strandedDescription": "수정 내용은 아직 {{value0}}에 있습니다. 다시 업데이트하기 전에 안전한 곳에 복사하세요.",
           "preservedTitle": "{{value0}}의 수정 내용을 별도로 저장했습니다",
           "preservedDescription": "Orca가 스킬을 업데이트하고 수정 내용을 {{value0}}에 저장했습니다.",
+          "preservedBackupOnly": "Orca가 수정 내용을 {{value0}}에 저장했습니다.",
           "uncertainTitle": "Orca가 {{value0}}의 스킬 업데이트를 확인하지 못했습니다",
           "uncertainDescriptionKept": "Orca가 {{value0}}의 스킬을 업데이트했을 수 있지만 결과를 확인하지 못했습니다. 업데이트 중에 스킬을 수정했다면 사본이 {{value1}}에 있거나 스킬 폴더에 그대로 남아 있습니다."
         },
@@ -6195,6 +6348,16 @@
           "movedTo": "이전 사본을 옮긴 위치:",
           "movedToOnHost": "이전 사본을 옮긴 위치({{host}}):",
           "showFolder": "폴더 보기"
+        },
+        "skillBackupRefusal": {
+          "inPlaceReason": "백업할 수 없습니다. 다른 드라이브에 있습니다.",
+          "tryAgain": "스킬 폴더 밖으로 옮긴 뒤 다시 시도하세요.",
+          "leftoverReason": "남은 사본을 백업할 수 없습니다. 다른 드라이브에 있습니다.",
+          "movedAsideReason": "이전 사본을 백업하지 못했습니다. 다른 드라이브에 있습니다.",
+          "keepIt": "보관하려면 스킬 폴더 밖으로 옮기세요.",
+          "noReminder": "스킬 폴더 밖으로 옮기세요. Orca가 다시 알려 주지 않습니다.",
+          "copyPathFor": "{{value0}} 경로 복사",
+          "copyFailed": "경로를 복사할 수 없습니다."
         }
       },
       "sidebar": {
@@ -6307,10 +6470,7 @@
           "eab8b45238": "오류 복사",
           "a23b22d16f": "복사됨",
           "74fc00776f": "오류 세부정보",
-          "ca3b225195": "브랜치 자동 이름 지정에 실패했습니다.",
-          "couldNotGenerateBranchName": "Orca에서 첫 번째 에이전트 메시지를 바탕으로 <name>{{name}}</name>의 브랜치 이름을 생성하지 못했습니다.",
           "tryAgain": "다시 시도",
-          "namingBranch": "브랜치 이름 짓는 중…",
           "errorDetailsAt": "오류 상세 · {{time}}",
           "reasonNothingYet": "브랜치 이름을 지을 변경 사항이 아직 없습니다.",
           "reasonBranchChanged": "Orca가 이름을 짓는 동안 브랜치가 변경되었습니다.",
@@ -6324,8 +6484,7 @@
           "reasonNoDistinctName": "생성된 이름이 현재 이름과 같습니다.",
           "reasonFirstMessageUnavailable": "Orca가 이 워크스페이스의 첫 메시지를 찾을 수 없습니다.",
           "reasonAlreadyNamed": "이 워크스페이스는 이미 이름이 변경되었습니다.",
-          "reasonUnavailable": "Orca가 더 이상 이 브랜치의 이름을 지을 수 없습니다.",
-          "branchNameKept": "브랜치 이름 유지됨"
+          "reasonUnavailable": "Orca가 더 이상 이 브랜치의 이름을 지을 수 없습니다."
         },
         "CreateProjectLocationField": {
           "95548e33bf": "상위 폴더 선택...",
@@ -6752,9 +6911,6 @@
           "0f33af979b": "부분 체크아웃. 이 경로 외부의 파일은 디스크에 없습니다.",
           "4f964d5e8c": "스파스",
           "7d517f82e2": "기본",
-          "4eba2ea99e": "자동 이름을 지정하지 못했습니다. 자세한 내용을 보려면 클릭하세요.",
-          "74522ee457": "이름 바꾸기 실패",
-          "02e19349f4": "자동 이름 바꾸기 실패: 오류 보기",
           "691ccfd622": "삭제 중…",
           "deleteFailed": "삭제 실패",
           "35ccfe2475": "프로젝트 {{value0}}",
@@ -6864,7 +7020,8 @@
           "lineageSubmenu": "상위 및 하위",
           "projectGroupSubmenu": "프로젝트 그룹",
           "muteNotifications": "알림 음소거",
-          "unmuteNotifications": "알림 음소거 해제"
+          "unmuteNotifications": "알림 음소거 해제",
+          "copyAutoNameError": "자동 이름 오류"
         },
         "WorktreeList": {
           "d880ea0744": "그룹을 만들고 이 프로젝트를 그룹으로 이동하세요.",
@@ -7710,6 +7867,26 @@
           "browseFolder": "폴더 찾아보기…",
           "cloneFromUrl": "URL에서 클론…",
           "createNewProject": "새 프로젝트 만들기…"
+        },
+        "AutoNameFailed": {
+          "naming": "이 워크스페이스의 이름을 짓는 중…",
+          "title": "이름을 자동으로 짓지 못했습니다",
+          "dismiss": "닫기",
+          "modelUnavailableOnAccount": "이 {{agent}} 계정에서는 {{model}}을(를) 사용할 수 없습니다",
+          "modelUnavailableForAgent": "{{agent}}에서는 {{model}}을(를) 사용할 수 없습니다",
+          "modelUnavailable": "{{model}}을(를) 사용할 수 없습니다",
+          "timedOut": "제한 시간({{seconds}}초)을 초과했습니다",
+          "agentMissing": "{{agent}}이(가) 설치되어 있지 않습니다",
+          "usageLimitAgent": "{{agent}}이(가) 사용 한도에 도달했습니다",
+          "usageLimit": "이름 생성 에이전트가 사용 한도에 도달했습니다",
+          "signedOutAgent": "{{agent}}에 로그인되어 있지 않습니다",
+          "signedOut": "이름 생성 에이전트에 로그인되어 있지 않습니다",
+          "agentFailed": "{{agent}}이(가) 오류로 종료되었습니다",
+          "noAgent": "설정된 이름 생성 에이전트가 없습니다",
+          "publishCheck": "브랜치가 푸시되었는지 확인하지 못했습니다",
+          "environment": "이름 생성 에이전트를 시작하지 못했습니다",
+          "emptyName": "에이전트가 사용할 수 있는 이름을 반환하지 않았습니다",
+          "unknown": "이름 생성 에이전트에서 오류가 발생했습니다"
         }
       },
       "shared": {
@@ -12381,6 +12558,7 @@
         "PluginConsentDialog": {
           "reconsent": "승인 이후 변경됨",
           "instructionalWarning": "명령이 사용자나 에이전트를 대신해 동작할 수 있습니다",
+          "mcpServersWarning": "에이전트에 이 플러그인의 MCP 서버를 제공하며, 이 서버는 프로그램을 시작하고 에이전트를 대신해 동작할 수 있습니다",
           "declarativeWarning": "콘텐츠만. 코드가 실행되지 않습니다.",
           "enable": "플러그인 활성화",
           "capability": {
@@ -13661,6 +13839,7 @@
           "command": "명령",
           "panel": "사이드바 패널",
           "recipe": "머신 레시피",
+          "mcpServer": "MCP 서버",
           "access": "접근 가능 범위",
           "accessLoading": "플러그인을 읽는 중…",
           "logs": "로그",
@@ -13737,6 +13916,7 @@
           "newEvents": "더 많은 Orca 이벤트에 반응합니다",
           "newPanels": "패널을 추가합니다",
           "newRecipes": "머신 레시피",
+          "newMcpServers": "MCP 서버",
           "newShortcuts": "키보드 단축키",
           "update": "업데이트",
           "replacesAction": "Orca의 {{value1}} 대신 {{value0}}이(가) 실행됩니다",
@@ -13879,6 +14059,7 @@
           "contentOnly": "콘텐츠만",
           "fullAccess": "전체 접근 권한",
           "addsVmRecipes": "VM 레시피를 추가합니다",
+          "addsMcpServers": "MCP 서버를 추가합니다",
           "opensAndEditsFiles": "파일을 열고 편집합니다",
           "runsPluginCode": "플러그인 코드를 실행합니다"
         },
@@ -13997,7 +14178,8 @@
             "windows": "구간 비율",
             "reset": "초기화까지 남은 시간, 예: 3h 15m",
             "resetAt": "초기화 시각, 예: 20:50",
-            "optional": "안의 자리표시자가 비어 있으면 생략됨"
+            "optional": "안의 자리표시자가 비어 있으면 생략됨",
+            "usagePools": "이름이 있는 사용량 풀, 예: Antigravity 모델"
           }
         },
         "RepositoryRemoveProjectSection": {
@@ -14520,6 +14702,7 @@
             "baseUpToDate": "최신 상태",
             "rebaseOperationInProgress": "현재 Git 작업이 끝날 때까지 기다리세요",
             "rebaseButton": "리베이스",
+            "rebaseConflictCount_one": "충돌 {{count}}개",
             "rebaseConflictCount_other": "충돌 {{count}}개",
             "rebasePaused": "리베이스 일시 중지됨",
             "rebaseResolveConflictsFirst": "먼저 충돌을 해결하세요",
@@ -15714,7 +15897,8 @@
           "lettersInput": "최대 2글자",
           "lettersPlaceholder": "1–2글자",
           "useLetters": "“{{value0}}” 사용",
-          "usingGitHubAvatar": "GitHub 아바타 사용 중"
+          "usingGitHubAvatar": "GitHub 아바타 사용 중",
+          "openSettings": "설정 열기"
         }
       },
       "pet": {
@@ -19826,6 +20010,11 @@
         "stateResuming": "재개 중",
         "stateStopped": "중지됨"
       },
+      "RunTargetCombobox": {
+        "noWslDistros": "WSL 배포판을 찾을 수 없음",
+        "wslDistro": "WSL 배포판",
+        "wslDistroHint": "이 PC의 Linux 배포판"
+      },
       "NativeChatResumeFailureGuidance": {
         "fallbackShort": "재개하지 못했습니다.",
         "unconfirmedShort": "계속 진행을 확인하지 못했습니다.",
@@ -20953,6 +21142,10 @@
       "copyCode": "코드 복사",
       "wrapLines": "줄 바꿈",
       "disableLineWrap": "줄 바꿈 끄기",
+      "htmlPreview": "HTML 미리보기",
+      "htmlView": "HTML 보기",
+      "htmlViewCode": "코드",
+      "htmlViewPreview": "미리보기",
       "context": {
         "unavailable": "컨텍스트 사용량을 아직 알 수 없습니다. 에이전트가 다음에 응답하면 확인할 수 있습니다.",
         "summary": "컨텍스트: {{used}}/{{window}} 토큰 ({{percent}}%), 마지막 응답 기준 추정치입니다.",
@@ -22414,6 +22607,9 @@
       },
       "hostFile": {
         "updateHostForOutsideFiles": "워크스페이스 밖의 파일을 열려면 {{value0}}의 Orca를 업데이트하세요"
+      },
+      "paste": {
+        "clipboardUnpastable": "복사한 파일을 붙여넣을 수 없습니다. 터미널로 끌어다 놓아 보세요."
       }
     },
     "jiraUserPicker": {
@@ -22724,6 +22920,7 @@
           "correctionWordDescription": "방금 한 말을 취소할 때 말합니다: “4시에, {{word}}, 5시에”.",
           "correctionWordOff": "없음"
         },
+        "localOnlyNotice": "어느 창에서든 입력 대신 말하세요. 이 설정은 이 컴퓨터에만 적용되며, {{host}}은(는) 자체 설정을 유지합니다.",
         "keepLoaded": {
           "label": "모델 로드 유지",
           "description": "로드되어 있는 동안 받아쓰기가 바로 시작됩니다.",
@@ -23527,6 +23724,9 @@
     "guestRecovery": {
       "title": "브라우저 페이지가 중지되었습니다.",
       "failed": "브라우저 페이지가 예기치 않게 중지되었습니다. 복원을 다시 시도하세요."
+    },
+    "claimedDownload": {
+      "saved": "{{place}}에 저장됨"
     },
     "serverPage": {
       "download": {
@@ -24945,7 +25145,20 @@
       "chatTitle": "Antigravity 채팅",
       "terminalTitle": "터미널의 agy",
       "terminalDescription": "agy가 저장한 자체 계정을 사용합니다. 전환하면 새 agy 세션에 적용됩니다.",
-      "addAccountHelp": "계정을 추가하려면 agy에서 /logout을 실행하고 다시 로그인한 뒤 여기에서 저장하세요."
+      "addAccountHelp": "계정을 추가하려면 agy에서 /logout을 실행하고 다시 로그인한 뒤 여기에서 저장하세요.",
+      "description": "채팅과 터미널의 agy는 agy의 Google 계정을 함께 사용합니다. 채팅은 대신 Gemini API 키나 gcloud로 로그인할 수 있습니다.",
+      "descriptionWindows": "채팅과 터미널의 agy는 agy의 Google 계정을 함께 사용합니다. 전환은 호스트의 기본 agy 자격 증명에 적용됩니다. 채팅은 대신 Gemini API 키나 gcloud로 로그인할 수 있습니다.",
+      "signInGoogle": "Google로 로그인",
+      "addAccount": "계정 추가",
+      "addAccountInApp": "다른 Google 계정으로 로그인합니다. 두 계정 모두 여기에 저장되어 서로 전환할 수 있습니다.",
+      "chatCancelSignIn": "로그인 취소",
+      "chatCopied": "복사됨",
+      "chatCopySignInLink": "로그인 링크 복사",
+      "chatFinishInBrowser": "브라우저에서 마친 뒤 코드를 붙여넣으세요.",
+      "chatOtherWindow": "다른 창에서 로그인이 진행 중입니다.",
+      "chatPageDidntOpen": "페이지가 열리지 않았나요?",
+      "chatPasteCode": "코드를 붙여넣으세요",
+      "chatPasteCodeLabel": "로그인 후 Google이 보여 주는 코드 또는 그 페이지의 주소"
     },
     "claude": {
       "added": "계정이 추가되었습니다. 다음에 시작하는 Claude에 사용하려면 이 계정을 선택하세요.",
@@ -25049,6 +25262,12 @@
       }
     },
     "remoteScopeAccountsAddHere": "{{value0}}에서 관리하는 계정을 표시합니다. 거기에 새 계정이 로그인됩니다. 이 기기의 브라우저에서 완료합니다.",
+    "selection": {
+      "claudeRemoteWslDefaultUnavailable": "이 호스트의 WSL 계정을 시스템 기본값으로 다시 전환하는 작업은 아직 여기에서 할 수 없습니다.",
+      "claudeWslLanesNotReset": "WSL Claude 계정은 아직 여기에서 시스템 기본값으로 되돌릴 수 없습니다.",
+      "codexSystemDefaultIncludingWsl": "WSL을 포함해 현재 {{value0}} Codex 로그인을 사용하세요.",
+      "systemDefaultIncludingWsl": "{{value0}} · WSL 포함"
+    },
     "rename": {
       "action": "이름 바꾸기",
       "title": "계정 이름 변경",
@@ -26051,7 +26270,8 @@
       "bots": "봇"
     },
     "searchKeyword": {
-      "worktreePaletteFormerTitle": "워크트리 전환"
+      "worktreePaletteFormerTitle": "워크트리 전환",
+      "quickCommandsMenuFormerTitle": "빠른 명령어 메뉴 전환"
     }
   },
   "gpuFallback": {
@@ -28670,7 +28890,23 @@
     "failedChipTooltip": "업데이트하지 못했습니다. 눌러서 자세히 확인하세요.",
     "failedTitle": "{{product}}을(를) 업데이트하지 못했습니다",
     "failedDescription": "Orca가 <strong>{{host}}</strong>에서 <code>{{command}}</code>을(를) 실행해 {{product}}을(를) <strong>{{installedVersion}}</strong>에서 <strong>{{latestVersion}}</strong>(으)로 업데이트하려 했지만 실패했습니다.",
-    "failedDescriptionNoCommand": "Orca가 <strong>{{host}}</strong>에서 {{product}}을(를) 업데이트할 수 없습니다."
+    "failedDescriptionNoCommand": "Orca가 <strong>{{host}}</strong>에서 {{product}}을(를) 업데이트할 수 없습니다.",
+    "cardLabel": "에이전트 CLI 업데이트",
+    "cardLater": "나중에",
+    "toastUpdating_one": "CLI {{count}}개 중 {{current}}번째 업데이트 중",
+    "toastUpdating_other": "CLI {{count}}개 중 {{current}}번째 업데이트 중",
+    "toastDone_one": "CLI {{count}}개 업데이트됨",
+    "toastDone_other": "CLI {{count}}개 업데이트됨",
+    "hideList": "목록 숨기기",
+    "showList": "목록 보기",
+    "toastUpdate": "{{total}}개 업데이트",
+    "toastRetry": "{{failed}}개 다시 시도",
+    "copied": "복사됨",
+    "manualSection": "수동 업데이트",
+    "toastFailedCount_one": "업데이트 {{count}}개 실패",
+    "toastFailedCount_other": "업데이트 {{count}}개 실패",
+    "toastClose": "닫기",
+    "queued": "대기 중"
   },
   "backgroundWorkerPaused": {
     "title": "반복해서 중단된 일부 백그라운드 작업을 일시 중지했습니다",
@@ -28705,7 +28941,9 @@
     "workspaces": "워크스페이스",
     "more": "더 보기",
     "customize": "사용자 지정",
-    "pageRegion": "페이지"
+    "pageRegion": "페이지",
+    "account": "계정",
+    "signIn": "로그인"
   },
   "chats": {
     "delete": {
@@ -28732,5 +28970,14 @@
     "moveLeft": "왼쪽으로 이동",
     "moveRight": "오른쪽으로 이동",
     "reset": "탭 순서 초기화"
+  },
+  "mcpServers": {
+    "paste": {
+      "badCommand": "mcp add 명령에 값을 직접 넣으세요. Orca는 $VARIABLES나 다른 셸 표현식을 채울 수 없습니다.",
+      "unsupported": "Orca는 이 서버를 적힌 그대로 추가할 수 없습니다. 이 서버는 SSE, 자체 OAuth 클라이언트 또는 환경에서 읽는 값을 사용합니다.",
+      "badAddCommand": "mcp add 명령을 확인하세요. 이름과 함께 URL이나 명령이 있어야 합니다.",
+      "badJson": "붙여넣은 JSON을 확인하세요. 해석할 수 없습니다.",
+      "none": "Orca가 추가할 수 있는 서버를 찾지 못했습니다. SSE 서버, 자체 OAuth 클라이언트나 도구 필터가 있는 서버, 환경에서 읽는 값(${VAR})은 지원하지 않습니다."
+    }
   }
 }

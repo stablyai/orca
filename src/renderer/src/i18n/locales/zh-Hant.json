@@ -1634,7 +1634,12 @@
         "workspaces": "{{name}}：{{workspaces}}",
         "added": "已新增 {{name}}",
         "newSessions": "將套用至新的工作階段",
-        "restart": "重新啟動 {{count}} 個工作階段",
+        "restart_other": "重新啟動 {{count}} 個工作階段",
+        "staleTerminals_other": "{{count}} 個代理程式終端機使用的是舊的 MCP 設定",
+        "staleTerminalsOnHost_other": "{{host}} 上有 {{count}} 個代理程式終端機使用的是舊的 MCP 設定",
+        "staleTerminalsRestart_other": "重新啟動它們以重新連線 Orca 的 MCP 伺服器。",
+        "staleTerminalsRestartManual_other": "請手動重新啟動它們以重新連線 Orca 的 MCP 伺服器。",
+        "staleTerminalsRestartSome_other": "其中 {{restartable}} 個可在此繼續，其餘 {{count}} 個請手動重新啟動。",
         "addedMany": "已新增 {{count}} 個伺服器",
         "repoOn": "已在 {{repo}} 中開啟 {{name}}",
         "repoOff": "已在 {{repo}} 中關閉 {{name}}"
@@ -7067,10 +7072,7 @@
           "eab8b45238": "複製錯誤",
           "a23b22d16f": "已複製",
           "74fc00776f": "錯誤詳情",
-          "ca3b225195": "分支自動命名失敗",
-          "couldNotGenerateBranchName": "Orca 無法根據代理程式的第一則訊息為 <name>{{name}}</name> 產生分支名稱。",
           "tryAgain": "再試一次",
-          "namingBranch": "正在為分支命名…",
           "errorDetailsAt": "錯誤詳情 · {{time}}",
           "reasonNothingYet": "目前還沒有可用來為此分支命名的變更。",
           "reasonBranchChanged": "Orca 為分支命名時，分支已變更。",
@@ -7084,8 +7086,7 @@
           "reasonNoDistinctName": "產生的名稱與目前名稱相同。",
           "reasonFirstMessageUnavailable": "Orca 找不到此工作區的第一則訊息。",
           "reasonAlreadyNamed": "此工作區已重新命名過。",
-          "reasonUnavailable": "Orca 已無法為此分支命名。",
-          "branchNameKept": "已保留分支名稱"
+          "reasonUnavailable": "Orca 已無法為此分支命名。"
         },
         "CreateProjectLocationField": {
           "95548e33bf": "選擇父資料夾...",
@@ -7500,9 +7501,6 @@
           "0f33af979b": "部分檢出。這些路徑之外的檔案不在磁碟上。",
           "4f964d5e8c": "稀疏",
           "7d517f82e2": "主要",
-          "4eba2ea99e": "自動命名失敗。點選檢視詳情。",
-          "74522ee457": "重新命名失敗",
-          "02e19349f4": "自動重新命名失敗：檢視錯誤",
           "691ccfd622": "正在刪除…",
           "deleteFailed": "刪除失敗",
           "35ccfe2475": "專案 {{value0}}",
@@ -27030,6 +27028,7 @@
         "body": "安裝在 Windows 上的代理程式無法在 WSL 內執行。請在發行版中安裝一個並登入，它就會出現在這裡。",
         "copied": "已複製",
         "copy": "複製",
+        "checkAgain": "重新檢查",
         "checking": "正在重新檢查…"
       },
       "hostSleeping": "休眠中 · 使用時喚醒",

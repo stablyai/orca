@@ -4166,11 +4166,16 @@
     }
   },
   "webShell": {
+    "downloadProgress": {
+      "megabytes": "{{received}} de {{total}} MB"
+    },
     "shellStateScreen": {
       "checkingHost": "Comprobando el host",
       "connectToDownload": "Conéctate a este host para descargar la última versión de la aplicación",
       "documentLoadFailed": "No se pudo abrir la aplicación descargada.",
       "downloadFailed": "No se pudo descargar la última versión de la aplicación desde este host.",
+      "downloadProgressFromHost": "desde {{host}} · {{progress}}",
+      "downloadingLatestApp": "Descargando la última versión",
       "hostProfileUnreadable": "No se pudo leer la información de este host en tu dispositivo. Inténtalo de nuevo.",
       "isolationUnavailable": "La versión de WebView de este dispositivo es demasiado antigua para abrir el espacio de trabajo de forma segura.",
       "openingWorkspace": "Abriendo espacio de trabajo",

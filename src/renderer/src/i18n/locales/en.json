@@ -2081,7 +2081,18 @@
         "workspaces": "{{name}}: {{workspaces}}",
         "added": "{{name}} added",
         "newSessions": "Applies to new sessions",
-        "restart": "Restart {{count}} sessions",
+        "restart_one": "Restart {{count}} session",
+        "restart_other": "Restart {{count}} sessions",
+        "staleTerminals_one": "{{count}} agent terminal uses an older MCP setup",
+        "staleTerminals_other": "{{count}} agent terminals use an older MCP setup",
+        "staleTerminalsOnHost_one": "{{count}} agent terminal on {{host}} uses an older MCP setup",
+        "staleTerminalsOnHost_other": "{{count}} agent terminals on {{host}} use an older MCP setup",
+        "staleTerminalsRestart_one": "Restart it to reconnect Orca’s MCP servers.",
+        "staleTerminalsRestart_other": "Restart them to reconnect Orca’s MCP servers.",
+        "staleTerminalsRestartManual_one": "Restart it yourself to reconnect Orca’s MCP servers.",
+        "staleTerminalsRestartManual_other": "Restart them yourself to reconnect Orca’s MCP servers.",
+        "staleTerminalsRestartSome_one": "{{restartable}} can be resumed here. Restart the other one yourself.",
+        "staleTerminalsRestartSome_other": "{{restartable}} can be resumed here. Restart the other {{count}} yourself.",
         "addedMany": "{{count}} servers added",
         "repoOn": "{{name}} turned on in {{repo}}",
         "repoOff": "{{name}} turned off in {{repo}}"
@@ -7453,10 +7464,7 @@
           "eab8b45238": "Copy error",
           "a23b22d16f": "Copied",
           "74fc00776f": "Error details",
-          "ca3b225195": "Branch auto-name failed",
-          "couldNotGenerateBranchName": "Orca couldn't generate a branch name for <name>{{name}}</name> from the first agent message.",
           "tryAgain": "Try again",
-          "namingBranch": "Naming branch…",
           "errorDetailsAt": "Error details · {{time}}",
           "reasonNothingYet": "No changes to name this branch from yet.",
           "reasonBranchChanged": "The branch changed while Orca was naming it.",
@@ -7470,8 +7478,7 @@
           "reasonNoDistinctName": "The generated name matched the current one.",
           "reasonFirstMessageUnavailable": "Orca couldn't find this workspace's first message.",
           "reasonAlreadyNamed": "This workspace was already renamed.",
-          "reasonUnavailable": "Orca can't name this branch anymore.",
-          "branchNameKept": "Branch name kept"
+          "reasonUnavailable": "Orca can't name this branch anymore."
         },
         "CreateProjectLocationField": {
           "95548e33bf": "Choose parent folder...",
@@ -7904,9 +7911,6 @@
           "0f33af979b": "Partial checkout. Files outside these paths are not on disk.",
           "4f964d5e8c": "sparse",
           "7d517f82e2": "primary",
-          "4eba2ea99e": "Auto-name failed. Click to see details.",
-          "74522ee457": "rename failed",
-          "02e19349f4": "Auto-rename failed: view error",
           "691ccfd622": "Deleting…",
           "deleteFailed": "Delete failed",
           "35ccfe2475": "Project {{value0}}",
@@ -8016,7 +8020,8 @@
           "lineageSubmenu": "Parent & Children",
           "projectGroupSubmenu": "Project Group",
           "muteNotifications": "Mute Notifications",
-          "unmuteNotifications": "Unmute Notifications"
+          "unmuteNotifications": "Unmute Notifications",
+          "copyAutoNameError": "Auto-Name Error"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",
@@ -8824,6 +8829,26 @@
           "browseFolder": "Browse folder…",
           "cloneFromUrl": "Clone from URL…",
           "createNewProject": "Create new project…"
+        },
+        "AutoNameFailed": {
+          "naming": "Naming this workspace…",
+          "title": "Couldn’t auto-name",
+          "dismiss": "Dismiss",
+          "modelUnavailableOnAccount": "{{model}} isn’t available on this {{agent}} account",
+          "modelUnavailableForAgent": "{{model}} isn’t available for {{agent}}",
+          "modelUnavailable": "{{model}} isn’t available",
+          "timedOut": "Timed out after {{seconds}}s",
+          "agentMissing": "{{agent}} isn’t installed",
+          "usageLimitAgent": "{{agent}} hit its usage limit",
+          "usageLimit": "The naming agent hit its usage limit",
+          "signedOutAgent": "{{agent}} isn’t signed in",
+          "signedOut": "The naming agent isn’t signed in",
+          "agentFailed": "{{agent}} exited with an error",
+          "noAgent": "No naming agent is set up",
+          "publishCheck": "Couldn’t check whether the branch was pushed",
+          "environment": "Couldn’t start the naming agent",
+          "emptyName": "The agent returned no usable name",
+          "unknown": "The naming agent hit an error"
         }
       },
       "shared": {
@@ -25990,7 +26015,18 @@
       "addEmoji": "Add emoji",
       "addEmojiTooltip": "Add emoji (or type :)",
       "noEmojiFound": "No emoji found",
-      "labels": "Labels: {{labels}}"
+      "labels": "Labels: {{labels}}",
+      "peek": {
+        "closed": "closed",
+        "open": "open",
+        "merged": "merged",
+        "draft": "draft",
+        "failing": "failing",
+        "running": "running",
+        "cancelled": "cancelled",
+        "passing": "passing",
+        "more": "+{{count}} more"
+      }
     },
     "attachments": {
       "updateRuntime": "Update the remote runtime to change workspace links",
@@ -27745,6 +27781,7 @@
       "computerHint": "Where the bot runs.",
       "computerAccountHint": "Where the bot runs, signed in to Orca as {{account}}.",
       "useChatDefaults": "Use chat defaults",
+      "useChatDefaultsHint": "Reset the agent's model, options and permissions to your chat defaults",
       "usingChatDefault": "Using your chat default. Background runs use your Agents setting.",
       "agent": "Agent",
       "folder": "Folder: {{path}}",
@@ -27816,6 +27853,7 @@
         "body": "Agents installed on Windows can’t run inside WSL. Install one in the distro and sign in, and it shows up here.",
         "copied": "Copied",
         "copy": "Copy",
+        "checkAgain": "Check again",
         "checking": "Checking again…"
       },
       "hostSleeping": "Sleeping · wakes when used",
@@ -29261,7 +29299,8 @@
         "purpose": "Your Composio project key lets your bots use the apps you connect there. It stays on this computer; bots never see it.",
         "getKey": "Get a key",
         "change": "Change",
-        "purposeOnHost": "Your Composio project key lets the bots on {{host}} use the apps you connect there. It stays on {{host}}; bots never see it."
+        "purposeOnHost": "Your Composio project key lets the bots on {{host}} use the apps you connect there. It stays on {{host}}; bots never see it.",
+        "changeKey": "Change key"
       },
       "card": {
         "heading": "Composio",
@@ -29983,7 +30022,12 @@
         "keyStored": "Stored on this computer; bots never see it. Composio holds your app sign-ins.",
         "addKey": "Add key and continue",
         "keyStoredOnHost": "Stored on {{host}}; bots never see it. Composio holds your app sign-ins.",
-        "signsIn": "Signs in through your Composio account."
+        "signsIn": "Signs in through your Composio account.",
+        "changeKeyTitle": "Change your Composio key",
+        "replacesKeyEnding": "Replaces the key ending in {{hint}}, for all your bots.",
+        "replacesKey": "Replaces your saved key, for all your bots.",
+        "newKeyNeeds": "The new key needs <permission/>.",
+        "replaceKey": "Replace key and continue"
       },
       "closeKeepsSigningIn": "Sign-in continues in your browser",
       "openPageAgain": "Open page again",
@@ -30124,7 +30168,8 @@
         "more": "More"
       },
       "setUpNamed": "Set up {{name}}",
-      "setUp": "Set up"
+      "setUp": "Set up",
+      "couldNotConnect": "Couldn’t connect {{app}}"
     },
     "panel": {
       "idle": "Idle",
@@ -30534,7 +30579,7 @@
         "showLess": "Show less",
         "submit": "Comment",
         "thisServer": "This server",
-        "replyOrPick": "Reply in your own words, or pick an option",
+        "replyOrPick": "Reply or pick an option",
         "replyingTo": "Replying to:",
         "hideReplyingTo": "Hide",
         "replyingToShow": "Replying to: {{question}}. Show question",
@@ -30823,7 +30868,10 @@
       "groupReplierNotMember": "Choose a current room member in Room replies.",
       "groupMailNeverStarted": "This mail never started a turn.",
       "groupRemoteUnreachable": "Couldn't reach {{host}}. {{detail}}",
-      "groupRemoteUnreachableRetry": "Couldn't reach {{host}}. {{detail}} Post again to retry."
+      "groupRemoteUnreachableRetry": "Couldn't reach {{host}}. {{detail}} Post again to retry.",
+      "composioKeyCantCreateSessions": "This Composio key can’t create sessions. It needs {{permission}}.",
+      "composioKeyNeedsPermission": "This Composio key is missing a permission. It needs {{permission}}.",
+      "composioKeyMissingPermission": "This Composio key is missing a permission Orca needs."
     },
     "lookAroundEvery": {
       "every4h": "Every 4 hours, 8 AM to 8 PM",

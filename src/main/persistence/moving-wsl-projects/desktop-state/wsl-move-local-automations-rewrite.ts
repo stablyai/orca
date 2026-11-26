@@ -9,7 +9,7 @@ import {
 } from '../../../../shared/wsl-move/wsl-move-cutover'
 import type { Store } from '../../loading-store/store'
 import {
-  listWslMoveCutovers,
+  scanWslMoveCutovers,
   writeWslMoveCutover
 } from '../cutover-recovery/wsl-move-cutover-journal'
 import { runWslMoveHostAutomationsExclusive } from '../cutover-recovery/wsl-move-host-automations-lock'
@@ -30,10 +30,10 @@ function disableWhileMoved(
   userDataPath: string,
   profile: WslMoveLocalAutomationsProfile,
   migrationId: string,
-  afterDisable: (move: WslMoveCutover) => Promise<void> = async () => {}
+  afterDisable: (move: Readonly<WslMoveCutover>) => Promise<void> = async () => {}
 ): Promise<void> {
   return runWslMoveHostAutomationsExclusive(async () => {
-    const move = listWslMoveCutovers(userDataPath).find((c) => c.migrationId === migrationId)
+    const move = scanWslMoveCutovers(userDataPath).find((c) => c.migrationId === migrationId)
     if (!move) {
       return
     }
@@ -60,32 +60,38 @@ export function registerWslMoveLocalAutomationsStore(
 
 const COMMITTED = WSL_MOVE_CUTOVER_PHASES.indexOf('destination-committed')
 
-/** A move that left its rewrite phase before this store existed, not yet caught up. */
-function finishedBeforeLocalAutomations(cutover: WslMoveCutover): boolean {
+/** A move that left its rewrite phase before this store existed, with automations still to turn off. */
+function finishedBeforeLocalAutomations(cutover: Readonly<WslMoveCutover>): boolean {
   return (
     WSL_MOVE_CUTOVER_PHASES.indexOf(cutover.phase) > COMMITTED &&
     !cutover.rewrittenStores.includes(WSL_MOVE_LOCAL_AUTOMATIONS_STORE_ID) &&
-    !cutover.localAutomationsCaughtUp
+    !cutover.localAutomationsCaughtUp &&
+    (cutover.automationsToReenable?.length ?? 0) > 0
   )
 }
 
-/**
- * Startup's catch-up for those moves, once each. Their ledger is closed, so a mark beside it
- * records the catch-up: a copy here the user turns back on afterwards stays on.
- */
+/** Startup's once-per-move catch-up, marked beside the closed ledger so a copy re-enabled by hand stays on. */
 export async function disableLocalAutomationsOfEarlierWslMoves(
   userDataPath: string,
   profile: WslMoveLocalAutomationsProfile
 ): Promise<void> {
-  for (const cutover of listWslMoveCutovers(userDataPath).filter(finishedBeforeLocalAutomations)) {
-    await disableWhileMoved(userDataPath, profile, cutover.migrationId, async (move) => {
-      // The disable is on disk before the mark: a crash between them only repeats it.
-      await profile.flushPendingOrThrowAsync()
-      writeWslMoveCutover(userDataPath, {
-        ...move,
-        localAutomationsCaughtUp: true,
-        updatedAt: new Date().toISOString()
+  const migrationIds = scanWslMoveCutovers(userDataPath)
+    .filter(finishedBeforeLocalAutomations)
+    .map((cutover) => cutover.migrationId)
+  for (const migrationId of migrationIds) {
+    try {
+      await disableWhileMoved(userDataPath, profile, migrationId, async (move) => {
+        // The disable is on disk before the mark: a crash between them only repeats it.
+        await profile.flushPendingOrThrowAsync()
+        writeWslMoveCutover(userDataPath, {
+          ...move,
+          localAutomationsCaughtUp: true,
+          updatedAt: new Date().toISOString()
+        })
       })
-    })
+    } catch (error) {
+      // One move's failure must not skip the rest; it is tried again next launch.
+      console.warn(`[wsl-move] Could not turn off move ${migrationId}'s automations here:`, error)
+    }
   }
 }

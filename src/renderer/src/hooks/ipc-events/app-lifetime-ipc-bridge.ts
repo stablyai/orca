@@ -122,7 +122,7 @@ export function installAppLifetimeIpcEvents(): () => void {
       if (snapshot.transport === 'ready' && snapshot.verification === 'verified') {
         if (!availableHosts.has(snapshot.environmentId)) {
           availableHosts.add(snapshot.environmentId)
-          window.api.ui.notifySleepingMailAvailability?.()
+          window.api.ui.notifySleepingMailAvailability?.(undefined, snapshot.environmentId)
         }
       } else {
         availableHosts.delete(snapshot.environmentId)

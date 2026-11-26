@@ -6,6 +6,7 @@ import { syncCodexGlobalInstructionsIntoManagedHome } from '../homes/codex-home-
 import { syncSystemConfigIntoManagedCodexHome } from './codex-config-mirror'
 import { getCodexConfigSyncStatus } from './config-sync-stall'
 import { getCodexSettingsBaselinePath } from './config-settings-baseline'
+import { MAX_AGENT_STATE_FILE_BYTES } from '../agent-state-file-reader'
 import { withHookPassEditGuard } from '../../hooks/installation/codex-hook-pass-edit-guard'
 import {
   CODEX_CONFIG_SYNC_WSL_PROTOCOL,
@@ -87,8 +88,11 @@ function syncGuarded(homes: { runtimeHomePath: string; systemHomePath: string })
     getCodexSettingsBaselinePath(homes.runtimeHomePath)
   ]
   for (let attempt = 0; attempt < PASS_ATTEMPTS; attempt++) {
-    const guarded = withHookPassEditGuard(paths, () =>
-      syncSystemConfigIntoManagedCodexHome({ ...homes, guestHome: true })
+    const guarded = withHookPassEditGuard(
+      paths,
+      () => syncSystemConfigIntoManagedCodexHome({ ...homes, guestHome: true }),
+      // The mirror rejects these files past the state-file limit, so hashing more is wasted.
+      { maxBytes: MAX_AGENT_STATE_FILE_BYTES }
     )
     if (guarded.conflict === null) {
       return guarded.value

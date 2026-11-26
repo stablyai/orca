@@ -91,6 +91,45 @@ describe('the local copies of moved automations', () => {
     expect(local.disableAutomations).toHaveBeenCalledTimes(1)
   })
 
+  it('turn off at startup for every earlier move, past one that fails', async () => {
+    seed('client-rewritten')
+    seedWslMoveCutover(
+      userDataPath,
+      wslMoveCutoverFixture(
+        'move-2',
+        'client-rewritten',
+        { automationsToReenable: ['auto-3'] },
+        { repoIds: ['repo-2'] },
+        undefined,
+        'Debian'
+      )
+    )
+    const local = profile()
+    local.disableAutomations.mockImplementationOnce(() => {
+      throw new Error('profile write failed')
+    })
+    await expect(disableLocalAutomationsOfEarlierWslMoves(userDataPath, local)).resolves.toBe(
+      undefined
+    )
+    expect(local.disableAutomations).toHaveBeenCalledTimes(2)
+  })
+
+  it('skips earlier moves with no moved automations without touching profile or journal', async () => {
+    seedWslMoveCutover(
+      userDataPath,
+      wslMoveCutoverFixture('move-empty', 'client-rewritten', {
+        automationsToReenable: []
+      })
+    )
+    const local = {
+      disableAutomations: vi.fn(() => 0),
+      flushPendingOrThrowAsync: vi.fn(async () => {})
+    }
+    await disableLocalAutomationsOfEarlierWslMoves(userDataPath, local)
+    expect(local.disableAutomations).not.toHaveBeenCalled()
+    expect(local.flushPendingOrThrowAsync).not.toHaveBeenCalled()
+  })
+
   it('come back on at undo when the host no longer has them, with a fresh next run', async () => {
     seed('client-rewritten')
     // The host read leaves out one deleted there; the user paused auto-2 on the host.

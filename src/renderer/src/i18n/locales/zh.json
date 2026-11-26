@@ -220,7 +220,8 @@
         "softer": "更柔和",
         "sharper": "更清晰",
         "terminalControlledHint": "由终端界面设置",
-        "terminalControlledTooltip": "正在匹配终端外观，要更改此项，请关闭“匹配终端外观”"
+        "terminalControlledTooltip": "正在匹配终端外观，要更改此项，请关闭“匹配终端外观”",
+        "resetKeyword": "重置"
       },
       "editorTheme": {
         "light": "浅色编辑器主题",
@@ -646,7 +647,9 @@
       "invalidServer": "无效的服务器",
       "serverCount_one": "{{count}} 个服务器",
       "serverCount_other": "{{count}} 个服务器",
-      "claudeWorkspace": "Claude 工作区"
+      "claudeWorkspace": "Claude 工作区",
+      "inspectConfigsFailed": "无法检查 MCP 配置。",
+      "createConfigFailed": "无法创建 MCP 配置。"
     },
     "shortcuts": {
       "parseFailed": "无法解析快捷键",
@@ -1392,7 +1395,12 @@
         "workspaces": "{{name}}：{{workspaces}}",
         "added": "已添加 {{name}}",
         "newSessions": "对新会话生效",
-        "restart": "重启 {{count}} 个会话",
+        "restart_other": "重启 {{count}} 个会话",
+        "staleTerminals_other": "{{count}} 个智能体终端使用的是旧的 MCP 设置",
+        "staleTerminalsOnHost_other": "{{host}} 上有 {{count}} 个智能体终端使用的是旧的 MCP 设置",
+        "staleTerminalsRestart_other": "重启它们以重新连接 Orca 的 MCP 服务器。",
+        "staleTerminalsRestartManual_other": "请手动重启它们以重新连接 Orca 的 MCP 服务器。",
+        "staleTerminalsRestartSome_other": "其中 {{restartable}} 个可在此恢复，其余 {{count}} 个请手动重启。",
         "addedMany": "已添加 {{count}} 个服务器",
         "repoOn": "已在 {{repo}} 中开启 {{name}}",
         "repoOff": "已在 {{repo}} 中关闭 {{name}}"
@@ -6634,10 +6642,7 @@
           "eab8b45238": "复制错误",
           "a23b22d16f": "已复制",
           "74fc00776f": "错误详情",
-          "ca3b225195": "分支自动命名失败",
-          "couldNotGenerateBranchName": "Orca 无法根据智能体的第一条消息为 <name>{{name}}</name> 生成分支名称",
           "tryAgain": "重试",
-          "namingBranch": "正在命名分支…",
           "errorDetailsAt": "错误详情 · {{time}}",
           "reasonNothingYet": "暂无可用于命名此分支的更改",
           "reasonBranchChanged": "在 Orca 命名期间，该分支发生了变化",
@@ -6651,8 +6656,7 @@
           "reasonNoDistinctName": "生成的名称与当前名称相同",
           "reasonFirstMessageUnavailable": "Orca 找不到此工作区的第一条消息",
           "reasonAlreadyNamed": "此工作区已被重命名",
-          "reasonUnavailable": "Orca 无法再为此分支命名",
-          "branchNameKept": "已保留分支名称"
+          "reasonUnavailable": "Orca 无法再为此分支命名"
         },
         "CreateProjectLocationField": {
           "95548e33bf": "选择父文件夹...",
@@ -7058,9 +7062,6 @@
           "0f33af979b": "部分检出，这些路径之外的文件不在磁盘上",
           "4f964d5e8c": "稀疏",
           "7d517f82e2": "主要",
-          "4eba2ea99e": "自动命名失败，点击查看详情",
-          "74522ee457": "重命名失败",
-          "02e19349f4": "自动重命名失败：查看错误",
           "691ccfd622": "正在删除...",
           "deleteFailed": "删除失败",
           "35ccfe2475": "项目{{value0}}",
@@ -22010,7 +22011,11 @@
         "removed": "已移除",
         "remove": "移除",
         "added": "已添加"
-      }
+      },
+      "htmlPreview": "HTML 预览",
+      "htmlView": "HTML 视图",
+      "htmlViewCode": "代码",
+      "htmlViewPreview": "预览"
     },
     "tab": {
       "bar": {
@@ -22425,6 +22430,9 @@
       },
       "hostFile": {
         "updateHostForOutsideFiles": "更新 {{value0}} 上的 Orca 以打开其工作区之外的文件"
+      },
+      "paste": {
+        "clipboardUnpastable": "无法粘贴复制的文件。请把它拖进终端试试。"
       }
     },
     "onboarding": {
@@ -26220,7 +26228,8 @@
       "bots": "Bots"
     },
     "searchKeyword": {
-      "worktreePaletteFormerTitle": "切换工作树"
+      "worktreePaletteFormerTitle": "切换工作树",
+      "quickCommandsMenuFormerTitle": "切换快捷命令菜单"
     }
   },
   "gpuFallback": {
@@ -27994,11 +28003,13 @@
         "body": "安装在 Windows 上的智能体无法在 WSL 中运行。请在发行版中安装一个智能体并登录，它就会显示在这里。",
         "copied": "已复制",
         "copy": "复制",
+        "checkAgain": "重新检查",
         "checking": "正在重新检查…"
       },
       "hostSleeping": "休眠中 · 使用时唤醒",
       "wslWaking": "正在唤醒 {{distro}}…",
-      "hostWaking": "正在唤醒…"
+      "hostWaking": "正在唤醒…",
+      "useChatDefaultsHint": "把智能体的模型、选项和权限恢复为你的聊天默认设置"
     },
     "googleSetup": {
       "otherAccount": "切换账号",
@@ -28125,7 +28136,12 @@
         "keyStored": "存储在此电脑上，bots 永远看不到它。你的应用登录信息由 Composio 保管",
         "addKey": "添加密钥并继续",
         "keyStoredOnHost": "存储在 {{host}} 上，bots 永远看不到它。你的应用登录信息由 Composio 保管",
-        "signsIn": "通过你的 Composio 账户登录。"
+        "signsIn": "通过你的 Composio 账户登录。",
+        "changeKeyTitle": "更换你的 Composio 密钥",
+        "replacesKeyEnding": "会替换以 {{hint}} 结尾的密钥，对你的所有 bots 生效。",
+        "replacesKey": "会替换你已保存的密钥，对你的所有 bots 生效。",
+        "newKeyNeeds": "新密钥需要 <permission/>。",
+        "replaceKey": "替换密钥并继续"
       },
       "closeKeepsSigningIn": "登录会在浏览器中继续进行",
       "openPageAgain": "再次打开页面",
@@ -28260,7 +28276,8 @@
       "filters": "按应用筛选",
       "searchAdded": "搜索已添加的应用",
       "setUp": "设置",
-      "setUpNamed": "设置 {{name}}"
+      "setUpNamed": "设置 {{name}}",
+      "couldNotConnect": "无法连接 {{app}}"
     },
     "row": {
       "paused": "已暂停",
@@ -28481,7 +28498,7 @@
         "showLess": "收起",
         "submit": "评论",
         "thisServer": "此服务器",
-        "replyOrPick": "用你自己的话回复，或选择一个选项",
+        "replyOrPick": "回复或选择一个选项",
         "replyingTo": "回复：",
         "hideReplyingTo": "隐藏",
         "replyingToShow": "回复：{{question}}。显示问题",
@@ -30001,7 +30018,8 @@
         "purpose": "你的 Composio 项目密钥可让你的 bots 使用你在 Composio 中连接的应用。密钥保存在此电脑上；bots 永远看不到它",
         "getKey": "获取密钥",
         "change": "更改",
-        "purposeOnHost": "你的 Composio 项目密钥可让 {{host}} 上的 bots 使用你在 Composio 中连接的应用。密钥保存在 {{host}} 上；bots 永远看不到它"
+        "purposeOnHost": "你的 Composio 项目密钥可让 {{host}} 上的 bots 使用你在 Composio 中连接的应用。密钥保存在 {{host}} 上；bots 永远看不到它",
+        "changeKey": "更换密钥"
       },
       "card": {
         "heading": "Composio",
@@ -30516,7 +30534,10 @@
       "groupMailNeverStarted": "这封邮件从未开始一轮对话。",
       "groupRemoteUnreachable": "无法连接 {{host}}。{{detail}}",
       "groupRemoteUnreachableRetry": "无法连接 {{host}}。{{detail}} 重新发布即可重试。",
-      "googleAccountsChanged": "这个 bot 的 Google 账户在你打开后有变化，请重新检查并保存。"
+      "googleAccountsChanged": "这个 bot 的 Google 账户在你打开后有变化，请重新检查并保存。",
+      "composioKeyCantCreateSessions": "这个 Composio 密钥无法创建会话。它需要 {{permission}}。",
+      "composioKeyNeedsPermission": "这个 Composio 密钥缺少一项权限。它需要 {{permission}}。",
+      "composioKeyMissingPermission": "这个 Composio 密钥缺少 Orca 需要的一项权限。"
     },
     "notices": {
       "couldNotFinish": "{{bot}} 未能完成",

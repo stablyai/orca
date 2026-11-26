@@ -4,6 +4,7 @@
 // before the event is written, so the chat's claims and sweep keep it exactly as long as that chat's own pastes.
 import { botFailure, botFailureEnglish, type BotFailure } from '../../shared/bots/bot-failure-copy'
 import { isAbsolute } from 'node:path'
+import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { isAgentInlineImagePath } from '../../shared/native-chat/input/composer/agent-inline-image-types'
 import { formatNativeChatFileReference } from '../../shared/native-chat/input/composer/agent-image-paste'
 import {
@@ -22,6 +23,7 @@ import {
 } from './bot-attachment-images'
 import { BotItemError } from './bot-item-error'
 import { botItemCommentAttachmentBody } from './bot-item-comment-attachment-body'
+import type { AdmittedCommentClaim } from './bot-item-comment-admitted-claims'
 
 const COMMENT_IMAGE_LABELS = {
   tooMany: 'commentImagesTooMany',
@@ -39,7 +41,12 @@ export type BotItemCommentAttachmentDeps = {
   chat: () => Promise<{ sessionId: string; title: string | null } | null>
 }
 
-export type BotItemCommentAttached = { text: string; images: BotItemCommentImage[] }
+export type BotItemCommentAttached = {
+  text: string
+  images: BotItemCommentImage[]
+  /** The uploads claimed for the item's chat, when the comment names any. */
+  claimed?: AdmittedCommentClaim
+}
 
 /** The comment's text and images, named and sized on this host, once each upload it names is claimed
  *  for the item's chat; a text-only comment naming no upload touches nothing. `files`: files on this
@@ -83,8 +90,13 @@ export async function admitBotItemCommentAttachments(
     : commentText.trim()
       ? `${commentText.trimEnd()}\n\n${references}`
       : references
-  await claimBotItemCommentAttachments(deps, text, images)
-  return { text, images }
+  const body = botItemCommentAttachmentBody(text, images)
+  const uploadIds = agentSessionAttachmentReferences(store.rootDir, body)
+  if (uploadIds.size === 0) {
+    return { text, images }
+  }
+  const sessionId = await claimBodyForChat(deps, body)
+  return { text, images, claimed: { sessionId, uploadIds } }
 }
 
 /** Claims each upload an admitted comment names for `deps.chat`'s session; naming none, touches
@@ -98,6 +110,14 @@ export async function claimBotItemCommentAttachments(
   if (!deps.store || agentSessionAttachmentReferences(deps.store.rootDir, body).size === 0) {
     return
   }
+  await claimBodyForChat(deps, body)
+}
+
+/** Claims `body`'s uploads for `deps.chat`'s live session, and returns that session. */
+async function claimBodyForChat(
+  deps: Pick<BotItemCommentAttachmentDeps, 'claim' | 'chat'>,
+  body: AgentJournalMessageItem
+): Promise<string> {
   const chat = await deps.chat()
   if (!chat) {
     throw refused(botFailure('commentChatDeleted'))
@@ -110,6 +130,7 @@ export async function claimBotItemCommentAttachments(
     retry: botFailure('commentAttachFailed'),
     refused
   })
+  return chat.sessionId
 }
 
 function refused(failure: BotFailure): BotItemError {
