@@ -187,6 +187,26 @@ it.skipIf(process.platform === 'win32')(
   }
 )
 
+it.skipIf(process.platform !== 'linux')(
+  'concurrent asks for one kept agent never lose the spawn token it carries',
+  async () => {
+    const { pid, agent } = liveAgent()
+    const relays = await fresh([daemon(INSTANCE, () => [{ ...relay('r-1'), pid }])])
+    const record = chat(relayed(process.pid, pid))
+    // One ask is still reading the token back when the other answers kept.
+    expect(
+      await Promise.all([
+        relays.providerRelayRunLiveness(record),
+        relays.providerRelayRunLiveness(record, { fresh: true })
+      ])
+    ).toEqual(['kept', 'kept'])
+    expect(relays.keptProviderRelaySpawnToken(SESSION)).toBe('kept-agent-token')
+    expect(await relays.providerRelayRunLiveness(record, { fresh: true })).toBe('kept')
+    expect(relays.keptProviderRelaySpawnToken(SESSION)).toBe('kept-agent-token')
+    agent.kill('SIGKILL')
+  }
+)
+
 it.skipIf(process.platform === 'win32')(
   'with its daemon start unreachable, a run is gone only once its daemon and agent are both proven gone',
   async () => {

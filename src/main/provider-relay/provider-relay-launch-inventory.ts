@@ -105,18 +105,17 @@ export async function placeKeptProviderRelay(
   relay: KeptProviderRelay,
   ask: number
 ) {
-  if (!providerRelayRunAskCurrent(chatKey, ask)) {
+  const placed = () => listed.get(chatKey)?.info.relayId === relay.info.relayId
+  if (!providerRelayRunAskUnfenced(chatKey, ask) || placed()) {
     return
   }
-  if (listed.get(chatKey)?.info.relayId === relay.info.relayId) {
+  // The row and its token are published together, so no ask ever sees a row whose token is pending.
+  const { pid, exit } = relay.info
+  const token = pid !== null && exit === null ? await readSpawnToken(pid) : null
+  if (!providerRelayRunAskUnfenced(chatKey, ask) || placed()) {
     return
   }
   listed.set(chatKey, relay)
-  const { pid, exit } = relay.info
-  const token = pid !== null && exit === null ? await readSpawnToken(pid) : null
-  if (!providerRelayRunAskCurrent(chatKey, ask) || listed.get(chatKey) !== relay) {
-    return
-  }
   if (token) {
     spawnTokens.set(chatKey, token)
   } else {
@@ -280,11 +279,14 @@ let askSeq = 0
  * Per chat with an ask in flight: how many, and the newest ask a later answer, close, deletion or
  * new run fenced off. An ask's verdict applies only when it started after that floor.
  */
-const asks = new Map<string, { inFlight: number; floor: number; unknownFloor: number }>()
+const asks = new Map<
+  string,
+  { inFlight: number; floor: number; unknownFloor: number; fence: number }
+>()
 
 /** Starts one ask; its number is passed back with its verdict. */
 export function beginProviderRelayRunAsk(chatKey: string): number {
-  const ask = asks.get(chatKey) ?? { inFlight: 0, floor: 0, unknownFloor: 0 }
+  const ask = asks.get(chatKey) ?? { inFlight: 0, floor: 0, unknownFloor: 0, fence: 0 }
   ask.inFlight += 1
   asks.set(chatKey, ask)
   askSeq += 1
@@ -323,6 +325,12 @@ export function providerRelayRunAskAwaitsProof(chatKey: string, seq: number): bo
   return ask !== undefined && seq > ask.floor && seq > ask.unknownFloor
 }
 
+/** No close, deletion or new run since the ask began (a newer answer about the same run is fine). */
+function providerRelayRunAskUnfenced(chatKey: string, seq: number): boolean {
+  const ask = asks.get(chatKey)
+  return ask !== undefined && seq > ask.fence
+}
+
 export function providerRelayRunAskCurrent(chatKey: string, seq: number): boolean {
   const ask = asks.get(chatKey)
   return ask !== undefined && seq > ask.floor
@@ -335,6 +343,7 @@ export function forgetProviderRelayRunVerdict(chatKey: string): void {
   const ask = asks.get(chatKey)
   if (ask) {
     ask.floor = askSeq
+    ask.fence = askSeq
   }
 }
 
