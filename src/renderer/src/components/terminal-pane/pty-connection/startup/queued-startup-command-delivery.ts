@@ -74,8 +74,13 @@ export function bindQueuedStartupCommandDelivery(session: ConnectPanePtySession)
         if (!isCurrent()) {
           return
         }
-        const command = await prepareQueuedStartupCommand(session, ptyId, startup, isCurrent)
-        if (!isCurrent()) {
+        const { preparedCommand: command, launchConfig } = await prepareQueuedStartupCommand(
+          session,
+          ptyId,
+          startup,
+          isCurrent
+        )
+        if (command === null || !isCurrent()) {
           return
         }
         const submitted = session.shouldDeliverStartupViaTerminalPaste
@@ -85,6 +90,12 @@ export function bindQueuedStartupCommandDelivery(session: ConnectPanePtySession)
           return
         }
         if (submitted) {
+          if (launchConfig && launchConfig !== startup.launchConfig) {
+            session.registerEffectiveLaunchConfig(launchConfig, {
+              launchToken: session.launchToken,
+              launchAgent: startup.launchAgent
+            })
+          }
           session.armStartupDraftReadinessObservation()
         } else {
           session.releaseUnattemptedStartupDraftPasteDelivery()

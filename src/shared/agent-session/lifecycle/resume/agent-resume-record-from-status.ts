@@ -39,6 +39,8 @@ export type ResumeRecordTab = { id: string; title?: string }
 
 export function copyLaunchConfig(config: SleepingAgentLaunchConfig): SleepingAgentLaunchConfig {
   return {
+    ...(config.commandProvenance ? { commandProvenance: config.commandProvenance } : {}),
+    ...(config.selectedExecutable ? { selectedExecutable: config.selectedExecutable } : {}),
     ...(config.agentCommand ? { agentCommand: config.agentCommand } : {}),
     agentArgs: config.agentArgs,
     agentEnv: { ...config.agentEnv },

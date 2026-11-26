@@ -154,7 +154,6 @@ export function agentSessionSignInCommand(
     shell?: AgentStartupShell | null
     /** Full path to Orca's copy, when the host has no CLI of the user's own. */
     managedCommand?: string | null
-    prepared?: boolean
   }
 ): string | null {
   const entry = agentSessionSetupFor(agent)
@@ -165,11 +164,7 @@ export function agentSessionSignInCommand(
   if (entry.agent === 'claude' && options.account === 'system') {
     return options.shell === null
       ? null
-      : claudeSystemSignInCommand(
-          options.shell ?? 'posix',
-          options.managedCommand,
-          options.prepared
-        )
+      : claudeSystemSignInCommand(options.shell ?? 'posix', options.managedCommand)
   }
   const argv =
     options.account === 'system' && 'systemLoginCommand' in entry
@@ -199,8 +194,7 @@ export function agentSessionSignInEnv(
 /** Bypass the selected-profile function and restore the config Orca replaced for this login. */
 function claudeSystemSignInCommand(
   shell: AgentStartupShell,
-  managedCommand?: string | null,
-  prepared?: boolean
+  managedCommand?: string | null
 ): string {
   const program = managedCommand ? launchProgramHead(managedCommand, shell) : null
   if (shell === 'powershell') {
@@ -226,8 +220,7 @@ function claudeSystemSignInCommand(
     'if [ -n "${ORCA_CLAUDE_INJECTED_CONFIG_DIR:-}" ] && [ "${CLAUDE_CONFIG_DIR:-}" = "$ORCA_CLAUDE_INJECTED_CONFIG_DIR" ]; then ' +
     'if [ -n "${ORCA_CLAUDE_USER_CONFIG_DIR:-}" ]; then export CLAUDE_CONFIG_DIR="$ORCA_CLAUDE_USER_CONFIG_DIR"; else unset CLAUDE_CONFIG_DIR; fi; fi; ' +
     `unset ORCA_CLAUDE_INJECTED_CONFIG_DIR ORCA_CLAUDE_PROFILE_POINTER; exec ${program ?? 'claude'} auth login`
-  // Set the script's $0 so spawn can distinguish a prepared lookup from the stock wrapper.
-  return `sh -c ${quoteStartupArg(script, shell)}${prepared ? ' orca-sign-in' : ''}`
+  return `sh -c ${quoteStartupArg(script, shell)}`
 }
 
 /** The shell line that installs `agent` on a host of `hostPlatform`; null when unknown or without one. */

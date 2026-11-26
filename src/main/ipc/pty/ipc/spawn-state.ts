@@ -86,6 +86,7 @@ export type PtyIpcSpawnState = {
   codexResumeLaunch: CodexResumeLaunch
   /** The host's verdict on the spawn's resume; a refused one starts the pane's plain shell. */
   resumeAdmission: ResumeSpawnAdmission | null
+  agentProgramBlocked?: 'unknown' | 'unavailable'
   launchCommand: string | undefined
   /** What the host's MCP server list gave the pane, recorded at commit. */
   terminalMcp?: TerminalMcpPaneLaunch | null

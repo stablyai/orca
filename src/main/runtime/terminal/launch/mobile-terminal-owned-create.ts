@@ -123,6 +123,7 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
         ...(opts.launchRuntime ? { launchRuntime: opts.launchRuntime } : {}),
         ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
         ...(opts.targetGroupId ? { targetGroupId: opts.targetGroupId } : {}),
+        nativeChatSignIn: opts.nativeChatSignIn,
         startupCommandDelivery: opts.startupCommandDelivery,
         ...(opts.identity
           ? {

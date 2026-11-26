@@ -1,3 +1,4 @@
+import type { NativeChatSignInRequest } from '../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import type { PtySpawnOutcome } from '../spawn/spawn-outcome'
 import type { PaneSpawnReservation } from '../pane/spawn-reservation'
 import type { PaneSpawnOperation } from '../pane/pane-spawn-operation'
@@ -39,6 +40,7 @@ export type PtySpawnIpcArgs = {
   launchToken?: unknown
   launchAgent?: TuiAgent
   trustWorktreeId?: string
+  nativeChatSignIn?: NativeChatSignInRequest
   startupCommandDelivery?: StartupCommandDelivery
   connectionId?: string | null
   worktreeId?: string

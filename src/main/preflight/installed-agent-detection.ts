@@ -125,7 +125,6 @@ export async function detectInstalledAgentInventory(
   const foundOutsidePath = new Map<string, string>()
   const found = await detectAgentCommandsOnHost(probeCommands, {
     context,
-    overrideCommands: new Set([...overrides.values()].map((probe) => probe.command)),
     outsidePath: foundOutsidePath
   })
   const detected = resolveDetectedTuiAgentIds(commands, found, runtime)

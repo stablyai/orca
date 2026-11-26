@@ -63,6 +63,7 @@ export type PtySpawnExecutionFacts = {
   preAllocatedHandle?: string | null
   replacedPaneOwner?: ReplacedPaneOwner | null
   attachOnlyView?: true
+  agentProgramBlocked?: 'unknown' | 'unavailable'
   savedResumePaneKey?: string | null
   launchConfig?: SleepingAgentLaunchConfig
   suppressRefusedLaunch?: () => void

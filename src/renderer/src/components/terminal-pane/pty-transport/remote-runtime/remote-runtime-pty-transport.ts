@@ -250,6 +250,7 @@ export function createRemoteRuntimePtyTransport(
   const trustOptions = createAgentSessionTrustWorktreeOptions(opts.trustWorktreeId)
   const {
     command,
+    nativeChatSignIn,
     startupCommandDelivery,
     env,
     envToDelete,
@@ -3683,6 +3684,9 @@ export function createRemoteRuntimePtyTransport(
         worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
         clientMutationId: terminalCreateMutationId,
         ...(commandToSend !== undefined ? { command: commandToSend } : {}),
+        ...((options.nativeChatSignIn ?? nativeChatSignIn)
+          ? { nativeChatSignIn: options.nativeChatSignIn ?? nativeChatSignIn }
+          : {}),
         ...(startupCommandDeliveryToSend !== undefined
           ? { startupCommandDelivery: startupCommandDeliveryToSend }
           : {}),

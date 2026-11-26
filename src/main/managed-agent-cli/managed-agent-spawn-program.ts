@@ -1,5 +1,7 @@
-import { basename, delimiter, isAbsolute, join, resolve } from 'node:path'
+import { basename, isAbsolute, join, resolve, win32 } from 'node:path'
+import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 import {
+  matchesStockLaunchProgram,
   renderCmdLaunchForPowerShell,
   replaceLaunchExecutable,
   stockLaunchProgram,
@@ -9,12 +11,10 @@ import {
   isFreshOmpLaunchCommand,
   prepareFreshOmpLaunch
 } from '../../shared/agent-launch/startup/omp-fresh-launch'
-import { agentSessionSignInCommand } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import {
   readLaunchPosition,
   type LaunchPosition
 } from '../../shared/agent-launch/startup/launch-position'
-import { COMMAND_TOKEN_SCAN_MAX_CHARS } from '../../shared/shell/command-resolution/command-token-scanner'
 import type { AgentStartupShell } from '../../shared/agent-launch/startup/tui-agent-startup-shell'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent, TUI_AGENT_CONFIG } from '../../shared/agent-launch/catalog/tui-agent-config'
@@ -23,45 +23,50 @@ import {
   normalizeRuntimePathForComparison,
   relativePathInsideRoot
 } from '../../shared/file-access/cross-platform-path'
-import {
-  isQuotedWindowsPathEntry,
-  normalizePathEntry
-} from '../../shared/shell/command-resolution/node-cli-command-resolution'
 import { toWindowsWslDrivePath } from '../../shared/file-access/wsl-paths'
-import { resolveWindowsGitBashShellPathAsync } from '../pty/shell-startup/git-bash'
-import {
-  captureLoginShellEnvironment,
-  resolveLoginShellEnvironment
-} from '../startup/shell-environment/login-shell-environment'
-import { resolveProfileLoadingShell } from '../startup/shell-environment/hydrate-shell-path'
+import type { SleepingAgentLaunchConfig } from '../../shared/agent-session/lifecycle/agent-session-resume'
+import type { NativeChatSignInRequest } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
-import {
-  readHostManagedAgentCommands,
-  resolveNativeChatSignInProgram
-} from '../runtime/rpc/methods/host-management/managed-copy-detection'
 import { MANAGED_AGENT_CLI_IDS, managedAgentCli } from './managed-agent-cli-registry'
+import { isOrcaAgentRuntimePath } from './managed-agent-cli-path'
+import { resolveCommandOnLocalPath } from '../ipc/command-path/command-path-resolver'
+import { isExecutableFile } from '../ipc/command-path/command-path-directory'
+import {
+  detectAgentCommandsOnHost,
+  readLocalTerminalAgentProgram,
+  type TerminalAgentProgram
+} from '../preflight/agent-command-detection'
+import { prepareNativeChatSignIn } from './prepare-native-chat-sign-in'
 
-type SpawnSettings = Parameters<typeof resolveNativeChatSignInProgram>[2]
-
+type SpawnSettings = Parameters<typeof prepareNativeChatSignIn>[1]
+const INVENTORY_WAIT_MS = 10_000
+const stockAgents = Object.keys(TUI_AGENT_CONFIG).filter(isTuiAgent)
 const stockPrograms = new Set(
-  Object.keys(TUI_AGENT_CONFIG)
-    .filter(isTuiAgent)
-    .map((agent) => stockProgramKey(stockLaunchProgram(agent, process.platform), process.platform))
+  stockAgents.map((agent) =>
+    stockProgramKey(stockLaunchProgram(agent, process.platform), process.platform)
+  )
 )
 
 type SpawnLaunch = {
   launchCommand: string | undefined
+  launchConfig?: SleepingAgentLaunchConfig
+  launchAgent?: TuiAgent
+  nativeChatSignIn?: NativeChatSignInRequest
   codexRuntime?: 'host' | 'wsl'
+  expectedWslDistro?: string | null
   sshTarget?: boolean
   getSettings?: () => SpawnSettings | undefined
   cwd?: string
   readCwd?: () => Promise<string | undefined>
-  env?: Record<string, string | undefined>
-  envToDelete?: readonly string[]
-  /** A queued launch has already seeded the PTY; never pass request values into a profile subprocess. */
-  queuedPath?: string | null
-  shellOverride?: string
   sourceShell?: AgentStartupShell
+  restoring?: boolean
+  env?: Record<string, string | undefined>
+}
+
+type AlignedLaunch = {
+  command: string | undefined
+  launchConfig?: SleepingAgentLaunchConfig
+  blocked?: 'unknown' | 'unavailable'
 }
 
 function managedPathAgent(program: string): TuiAgent | undefined {
@@ -86,161 +91,111 @@ function managedPathAgent(program: string): TuiAgent | undefined {
   })
 }
 
-function launchPath(env: NodeJS.ProcessEnv): string | undefined {
-  if (process.platform !== 'win32') {
-    return env.PATH
+const cmdFolderLookups = new Map<string, Promise<string | null>>()
+
+function cmdFolderProgram(
+  program: string,
+  cwd: string,
+  pathExt: string | undefined
+): Promise<string | null> {
+  const key = JSON.stringify([win32.resolve(cwd).toLowerCase(), program.toLowerCase(), pathExt])
+  const pending = cmdFolderLookups.get(key)
+  if (pending) {
+    return pending
   }
-  const key = Object.keys(env).find((name) => name.toLowerCase() === 'path')
-  return key ? env[key] : undefined
+  const lookup = resolveCommandOnLocalPath(program, {
+    cwd,
+    env: { PATH: '', PATHEXT: pathExt }
+  }).finally(() => cmdFolderLookups.delete(key))
+  cmdFolderLookups.set(key, lookup)
+  return lookup
 }
 
-// Matches hostShellEnvironment's TTL on the same capture, so launch bursts share one refresh.
-const STARTUP_PATH_REFRESH_MS = 10_000
-// Past this size, shells not warmed within the TTL are forgotten; a recent one never is, so none warms early.
-const MAX_WARMED_SHELLS = 64
-const warmedShells = new Map<string, number>()
-
-/** Refreshes a stale or failed capture in the background, at most once per shell per TTL. */
-function warmStartupPath(shellOverride: string | null | undefined): void {
-  const key = shellOverride ?? ''
-  const now = Date.now()
-  const last = warmedShells.get(key)
-  if (last !== undefined && now - last < STARTUP_PATH_REFRESH_MS) {
-    return
-  }
-  warmedShells.delete(key)
-  warmedShells.set(key, now)
-  if (warmedShells.size > MAX_WARMED_SHELLS) {
-    for (const [shell, at] of warmedShells) {
-      if (now - at < STARTUP_PATH_REFRESH_MS) {
-        break
-      }
-      warmedShells.delete(shell)
-    }
-  }
-  void captureLoginShellEnvironment({
-    shellOverride,
-    refreshAfterMs: STARTUP_PATH_REFRESH_MS
-  }).catch(() => {})
-}
-
-/** A queued shell ran its startup files over the seed: also search the cached login PATH they build.
- * Reads the cache only; never waits for a capture. */
-async function withStartupFilePath(
-  seed: string | null,
-  shellOverride: string | null | undefined
-): Promise<string | undefined> {
-  if (seed === null || process.platform === 'win32') {
-    return seed ?? undefined
-  }
-  const shell = shellOverride === resolveProfileLoadingShell() ? undefined : shellOverride
-  const capture = await captureLoginShellEnvironment({ shellOverride: shell, cachedOnly: true })
-  warmStartupPath(shell)
-  if (capture.status !== 'captured') {
-    return seed
-  }
-  const searched = new Set(seed.split(delimiter))
-  const added = (capture.env.PATH ?? '')
-    .split(delimiter)
-    .filter((entry) => entry && !searched.has(entry))
-  return [seed, ...added].join(delimiter)
-}
-
-function nativeShellPath(path: string, shell: AgentStartupShell): string {
-  return process.platform === 'win32' && shell === 'posix' ? msysDrivePathToWindows(path) : path
-}
-
-async function effectiveSearchPath(
+async function selectProgram(
   spawn: SpawnLaunch,
   shell: AgentStartupShell,
-  launch?: LaunchPosition
-): Promise<string> {
-  const isWindows = process.platform === 'win32'
-  const pathKey = (name: string): boolean =>
-    isWindows ? name.toLowerCase() === 'path' : name === 'PATH'
-  const scopedPath = launch && [...launch.env].findLast(([name]) => pathKey(name))
-  const launchEnvPath = launchPath(spawn.env ?? {})
-  const sourceShell = spawn.sourceShell ?? shell
-  const shellOverride =
-    !scopedPath && spawn.queuedPath === undefined && isWindows
-      ? sourceShell === 'cmd'
-        ? null
-        : sourceShell === 'posix'
-          ? await resolveWindowsGitBashShellPathAsync(spawn.shellOverride ?? 'git-bash')
-          : spawn.shellOverride
-      : spawn.shellOverride
-  const initialEnv =
-    launchEnvPath !== undefined || spawn.envToDelete?.some(pathKey)
-      ? Object.fromEntries([
-          ...Object.entries(process.env).filter(([key]) => !pathKey(key)),
-          ...(launchEnvPath === undefined || spawn.envToDelete?.some(pathKey)
-            ? []
-            : [['PATH', launchEnvPath]])
-        ])
-      : undefined
-  const path = scopedPath
-    ? scopedPath[1]
-    : spawn.queuedPath !== undefined
-      ? await withStartupFilePath(spawn.queuedPath, shellOverride)
-      : launchPath(await resolveLoginShellEnvironment({ shellOverride, env: initialEnv }))
-  // MSYS uses colons for an inline PATH, but the PTY's environment seed uses native delimiters.
-  const pathDelimiter = isWindows && sourceShell === 'posix' && scopedPath ? ':' : delimiter
-  const entries = path !== undefined && (path !== '' || !isWindows) ? path.split(pathDelimiter) : []
-  const directories = entries.map((entry) =>
-    nativeShellPath(normalizePathEntry(process.platform, entry), shell)
-  )
-  const preserveQuotes = (paths: string[]) =>
-    isWindows
-      ? paths.map((dir, index) => (isQuotedWindowsPathEntry(entries[index]) ? `"${dir}"` : dir))
-      : paths
-  const searchesCwd = isWindows && shell === 'cmd'
-  if (!searchesCwd && directories.every(isAbsolute)) {
-    return preserveQuotes(directories).join(delimiter)
+  program: string,
+  launch: LaunchPosition,
+  pinned: string | undefined
+): Promise<TerminalAgentProgram> {
+  if (spawn.codexRuntime === 'wsl') {
+    const found = await detectAgentCommandsOnHost([program], {
+      context: spawn.expectedWslDistro
+        ? { wslDistro: spawn.expectedWslDistro }
+        : { wslDefault: true }
+    })
+    return found.has(program) ? { kind: 'by-name', path: program } : { kind: 'unavailable' }
   }
-  const launchCwd = nativeShellPath(launch?.cwd ?? '.', shell)
+  if (spawn.sshTarget) {
+    // SSH panes execute the name in the guest shell, with no desktop runtime paths.
+    return { kind: 'by-name', path: program }
+  }
+  if (
+    pinned &&
+    isAbsolute(pinned) &&
+    !isOrcaAgentRuntimePath(pinned) &&
+    (await isExecutableFile(pinned, process.platform === 'win32'))
+  ) {
+    return { kind: 'full-path', path: pinned }
+  }
+  const selected = await readLocalTerminalAgentProgram(program, shell, Boolean(pinned))
+  if (
+    selected.kind === 'by-name' &&
+    Object.keys(spawn.launchConfig?.agentEnv ?? {}).some((key) =>
+      process.platform === 'win32' ? /^(path|pathext)$/i.test(key) : key === 'PATH'
+    )
+  ) {
+    return { kind: 'full-path', path: selected.path }
+  }
+  if (process.platform !== 'win32' || shell !== 'cmd' || selected.kind !== 'by-name') {
+    return selected
+  }
+  const launchCwd = launch.cwd ?? '.'
   const cwd = isAbsolute(launchCwd)
     ? launchCwd
-    : resolve(
-        nativeShellPath((await spawn.readCwd?.()) || spawn.cwd || process.cwd(), shell),
-        launchCwd
-      )
-  const absoluteDirectories = preserveQuotes(directories.map((entry) => resolve(cwd, entry)))
-  return (searchesCwd ? [cwd, ...absoluteDirectories] : absoluteDirectories).join(delimiter)
+    : resolve((await spawn.readCwd?.()) || spawn.cwd || process.cwd(), launchCwd)
+  const pathExt =
+    Object.entries(spawn.env ?? {}).find(([key]) => key.toLowerCase() === 'pathext')?.[1] ??
+    process.env.PATHEXT
+  const first = await cmdFolderProgram(program, cwd, pathExt)
+  return first &&
+    normalizeRuntimePathForComparison(first) !== normalizeRuntimePathForComparison(selected.path)
+    ? { kind: 'full-path', path: selected.path }
+    : selected
 }
 
 export async function alignManagedAgentLaunchAtSpawn(
   spawn: SpawnLaunch,
   shell: AgentStartupShell
-): Promise<string | undefined> {
+): Promise<AlignedLaunch> {
   const command = spawn.launchCommand
+  const config = spawn.launchConfig
   if (!command) {
-    return command
+    return { command, launchConfig: config }
+  }
+  if (spawn.nativeChatSignIn) {
+    const prepared = await prepareNativeChatSignIn(
+      spawn.sshTarget
+        ? { kind: 'ssh', connectionId: '' }
+        : {
+            kind: 'local',
+            context: spawn.codexRuntime === 'wsl' ? { wslDefault: true } : undefined
+          },
+      spawn.getSettings?.() ?? {},
+      spawn.nativeChatSignIn,
+      shell
+    )
+    return { command: prepared ?? command, launchConfig: config }
   }
   if (isFreshOmpLaunchCommand(command)) {
-    return prepareFreshOmpLaunch(command, shell, (inner) =>
-      rewriteLaunchExecutable(spawn, shell, inner)
-    )
-  }
-  // The system sign-in deliberately bypasses Claude's shell function after restoring its config.
-  if (
-    command.slice(0, COMMAND_TOKEN_SCAN_MAX_CHARS).includes('ORCA_CLAUDE_INJECTED_CONFIG_DIR') &&
-    command === agentSessionSignInCommand('claude', { account: 'system', remote: false, shell })
-  ) {
-    const program =
-      spawn.sshTarget || spawn.codexRuntime === 'wsl'
-        ? null
-        : await resolveNativeChatSignInProgram('claude', 'claude', spawn.getSettings?.() ?? {}, {
-            pathEnv: await effectiveSearchPath(spawn, shell),
-            shell
-          })
-    return program
-      ? (agentSessionSignInCommand('claude', {
-          account: 'system',
-          remote: false,
-          shell,
-          managedCommand: program
-        }) ?? command)
-      : command
+    let aligned: AlignedLaunch | undefined
+    const guarded = await prepareFreshOmpLaunch(command, shell, async (inner) => {
+      aligned = await rewriteLaunchExecutable(spawn, shell, inner)
+      return aligned.command ?? inner
+    })
+    return aligned
+      ? { ...aligned, command: aligned.blocked ? undefined : guarded }
+      : { command, launchConfig: config }
   }
   return rewriteLaunchExecutable(spawn, shell, command)
 }
@@ -249,52 +204,95 @@ async function rewriteLaunchExecutable(
   spawn: SpawnLaunch,
   shell: AgentStartupShell,
   command: string
-): Promise<string> {
-  const sourceShell = spawn.sourceShell ?? shell
-  const convertCmd = sourceShell === 'cmd' && shell === 'powershell'
-  if (
-    !convertCmd &&
-    !/[\\/]agent-runtimes[\\/]/i.test(command.slice(0, COMMAND_TOKEN_SCAN_MAX_CHARS))
-  ) {
-    return command
+): Promise<AlignedLaunch> {
+  const config = spawn.launchConfig
+  const source = spawn.sourceShell ?? shell
+  const convertCmd = source === 'cmd' && shell === 'powershell'
+  const generated = config?.commandProvenance === 'generated'
+  const legacy = !config?.commandProvenance && spawn.restoring
+
+  if (!convertCmd && !generated && !legacy) {
+    return { command, launchConfig: config }
   }
-  const launch = readLaunchPosition(command, sourceShell)
+  const launch = readLaunchPosition(command, source)
   if (!launch) {
-    return command
+    return {
+      command: generated ? undefined : command,
+      launchConfig: config,
+      ...(generated ? { blocked: 'unknown' as const } : {})
+    }
   }
-  const wslPath =
-    process.platform === 'win32' && sourceShell === 'posix' && spawn.codexRuntime === 'wsl'
-      ? toWindowsWslDrivePath(launch.executable)
-      : null
-  const program = wslPath ?? nativeShellPath(launch.executable, sourceShell)
-  const managedAgent = managedPathAgent(program)
-  const remote = spawn.sshTarget || spawn.codexRuntime === 'wsl'
+  const guest = spawn.sshTarget || spawn.codexRuntime === 'wsl'
+  const platform = guest ? 'linux' : process.platform
+  const stock = (agent: TuiAgent) => stockLaunchProgram(agent, platform, guest)
+  const sourceProgram =
+    spawn.codexRuntime === 'wsl'
+      ? (toWindowsWslDrivePath(launch.executable) ?? launch.executable)
+      : process.platform === 'win32' && source === 'posix'
+        ? msysDrivePathToWindows(launch.executable)
+        : launch.executable
+  const recorded =
+    legacy && config?.agentCommand ? readLaunchPosition(config.agentCommand, source) : launch
+  const bare =
+    recorded &&
+    !recorded.env.size &&
+    !recorded.bypassesShellFunction &&
+    !recorded.hasCallOperator &&
+    (!recorded.cwd || !config?.agentCommand)
+  const oldAgent = legacy
+    ? (managedPathAgent(sourceProgram) ??
+      (bare
+        ? [spawn.launchAgent, ...stockAgents].find(
+            (agent) =>
+              agent && matchesStockLaunchProgram(recorded.executable, stock(agent), platform)
+          )
+        : undefined))
+    : undefined
+  const agent = generated
+    ? (spawn.launchAgent ??
+      stockAgents.find((candidate) =>
+        matchesStockLaunchProgram(launch.executable, stock(candidate), platform)
+      ))
+    : oldAgent
+  if (generated && !agent) {
+    return { command: undefined, launchConfig: config, blocked: 'unknown' }
+  }
   let executable = launch.executable
-  if (managedAgent) {
-    const settings = spawn.getSettings?.() ?? {}
-    const override = settings.agentCmdOverrides?.[managedAgent]
-    const explicitProgram = override && readLaunchPosition(override, sourceShell)?.executable
-    if (
-      !explicitProgram ||
-      normalizeRuntimePathForComparison(explicitProgram) !==
-        normalizeRuntimePathForComparison(launch.executable)
-    ) {
-      executable = stockLaunchProgram(managedAgent, remote ? 'linux' : process.platform, remote)
-      if (!remote) {
-        const paths = await readHostManagedAgentCommands(settings, [managedAgent], {
-          pathEnv: await effectiveSearchPath(spawn, shell, launch),
-          shell,
-          restoring: true
-        })
-        executable = paths[managedAgent] ?? executable
+  let launchConfig = config
+  if (agent) {
+    const program = stock(agent)
+    const pinned = spawn.restoring ? config?.selectedExecutable : undefined
+    const selected = await withTimeout<TerminalAgentProgram>(
+      selectProgram(spawn, shell, program, launch, pinned).catch(() => ({ kind: 'unknown' })),
+      INVENTORY_WAIT_MS,
+      { kind: 'unknown' }
+    )
+    if (!('path' in selected)) {
+      return { command: undefined, launchConfig: config, blocked: selected.kind }
+    }
+    executable = selected.kind === 'by-name' ? program : selected.path
+    if (config) {
+      const { selectedExecutable: _previous, ...recipe } = config
+      launchConfig = {
+        ...recipe,
+        ...(oldAgent && recorded && config.agentCommand
+          ? {
+              agentCommand: replaceLaunchExecutable(config.agentCommand, source, recorded, program)
+            }
+          : {}),
+        commandProvenance: 'generated',
+        ...(!guest ? { selectedExecutable: selected.path } : {})
       }
     }
   }
-  if (
-    convertCmd &&
-    (managedAgent || stockPrograms.has(stockProgramKey(basename(program), process.platform)))
-  ) {
-    return renderCmdLaunchForPowerShell(command, launch, executable) ?? command
+  return {
+    command:
+      convertCmd &&
+      (agent ||
+        config ||
+        stockPrograms.has(stockProgramKey(basename(sourceProgram), process.platform)))
+        ? (renderCmdLaunchForPowerShell(command, launch, executable) ?? command)
+        : replaceLaunchExecutable(command, shell, launch, executable),
+    launchConfig
   }
-  return replaceLaunchExecutable(command, shell, launch, executable)
 }

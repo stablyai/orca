@@ -37,6 +37,7 @@ export async function buildPlainCreateTerminalParams(
     cwd: args.cwd,
     ...(args.env ? { env: args.env } : {}),
     ...(args.envToDelete ? { envToDelete: args.envToDelete } : {}),
+    nativeChatSignIn: args.nativeChatSignIn,
     startupCommandDelivery: args.startupCommandDelivery,
     ...(args.launchConfig ? { launchConfig: args.launchConfig } : {}),
     ...(args.launchToken ? { launchToken: args.launchToken } : {}),

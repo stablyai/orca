@@ -85,10 +85,14 @@ export function publishCommittedPtySpawn(input: PtySpawnCommitInput): PtySpawnOu
   seedTerminalRestoreRecordsFromSpawnResult(runtime, result)
   // Arm output detection from the launch command, matching renderer startup behavior.
   if (!state.stablePaneOwner) {
-    runtime?.noteTerminalSpawnCommand?.(result.id, state.launchCommand ?? null)
+    runtime?.noteTerminalSpawnCommand?.(
+      result.id,
+      state.launchCommand ?? null,
+      result.agentProgramBlocked
+    )
   }
   // Emit agent_started only after confirmed spawn, with field validation at the telemetry boundary.
-  if (args.telemetry && !state.stablePaneOwner) {
+  if (args.telemetry && !state.stablePaneOwner && !result.agentProgramBlocked) {
     recordAgentStartTelemetry(args.telemetry)
   }
   // Publish reverse pane lookup for hook titles and provider cleanup.
@@ -96,6 +100,7 @@ export function publishCommittedPtySpawn(input: PtySpawnCommitInput): PtySpawnOu
   if (
     rememberedPaneKey &&
     !result.isReattach &&
+    !result.agentProgramBlocked &&
     result.agentSessionEnsure?.disposition !== 'adopted'
   ) {
     const providerSession =
@@ -128,7 +133,7 @@ export function publishCommittedPtySpawn(input: PtySpawnCommitInput): PtySpawnOu
     connectionId: args.connectionId,
     worktreeId: args.worktreeId,
     launchedAt: state.codexHomeLaunchStartedAt,
-    resumeArgvDropped: input.resumeArgvDropped,
+    resumeArgvDropped: input.resumeArgvDropped || Boolean(result.agentProgramBlocked),
     result
   })
   // Inventory cannot infer background/reattached PTYs from mounted views.

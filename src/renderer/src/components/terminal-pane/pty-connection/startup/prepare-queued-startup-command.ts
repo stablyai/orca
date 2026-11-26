@@ -13,7 +13,7 @@ import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/re
 import { QUEUED_AGENT_LAUNCH_CAPABILITY } from '../../../../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import {
   mayResolveQueuedAgentLaunch,
-  queuedLaunchPath,
+  type PreparedAgentLaunch,
   type QueuedAgentLaunch
 } from '../../../../../../shared/agent-launch/startup/queued-agent-launch'
 import { prepareShellNativeAgentLaunch } from '../../../../../../shared/agent-launch/startup/codex-startup-image-command'
@@ -30,7 +30,7 @@ export async function prepareQueuedStartupCommand(
   ptyId: string,
   startup: PendingStartupCommand,
   isCurrent: () => boolean
-): Promise<string> {
+): Promise<PreparedAgentLaunch> {
   const state = useAppStore.getState()
   const paired = getRemoteRuntimePtyOwner(ptyId)
   const localSession = session.transport.getLocalSessionMetadata?.()
@@ -69,36 +69,36 @@ export async function prepareQueuedStartupCommand(
   })
   const shell = resolveStartupShell(target.platform, target.shell)
   const images = state.settings?.terminalInlineImages !== false
-  if (mayResolveQueuedAgentLaunch(startup.command, shell)) {
-    const launch: QueuedAgentLaunch = {
-      terminal: paired?.terminal ?? ptyId,
-      command: startup.command,
-      shell,
-      shellOverride,
-      cwd: localSession?.cwd ?? session.deps.cwd,
-      images,
-      path: queuedLaunchPath(
-        startup.env ?? session.paneEnv,
-        session.paneStartup?.envToDelete,
-        target.platform
-      )
-    }
+  const launch: QueuedAgentLaunch = {
+    terminal: paired?.terminal ?? ptyId,
+    command: startup.command,
+    shell,
+    shellOverride,
+    cwd: localSession?.cwd ?? session.deps.cwd,
+    images,
+    launchConfig: startup.launchConfig,
+    launchAgent: startup.launchAgent,
+    restoring: startup.restoring,
+    nativeChatSignIn: startup.nativeChatSignIn
+  }
+  if (mayResolveQueuedAgentLaunch(launch)) {
     try {
       const reply = await requestQueuedLaunch(ptyId, paired, launch, isCurrent)
-      if (
-        reply &&
-        typeof reply === 'object' &&
-        'preparedCommand' in reply &&
-        typeof reply.preparedCommand === 'string'
-      ) {
-        return reply.preparedCommand
+      if (reply && typeof reply === 'object' && 'preparedCommand' in reply) {
+        const prepared = reply as PreparedAgentLaunch
+        return typeof prepared.preparedCommand === 'string' ? prepared : { preparedCommand: null }
       }
     } catch {
-      // A lost host or an older preload leaves preparation to the shell.
+      // Delivery can be retried once the pane has a current host again.
     }
+    return { preparedCommand: null }
   }
-  // Older hosts cannot verify retired paths, so the original executable can still be stale.
-  return prepareShellNativeAgentLaunch(startup.command, shell, images)
+  return {
+    preparedCommand:
+      startup.launchConfig?.commandProvenance === 'authored'
+        ? startup.command
+        : prepareShellNativeAgentLaunch(startup.command, shell, images)
+  }
 }
 
 async function requestQueuedLaunch(

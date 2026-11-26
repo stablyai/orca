@@ -3,10 +3,17 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../workspace/identity/floating
 import { parseRoutableExecutionHostId } from '../../execution-host/execution-host'
 import { OptionalExecutionHostId } from '../workspaces/worktree-params'
 import { RepoSelector } from '../github/github-repo-target-params'
+import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 import type { WorkspaceLaunchKind } from '../../agent-launch/contracts/workspace-launch-kind'
 import type { ProjectExecutionRuntimeResolution } from '../../execution-host/project-execution-runtime'
 import { TERMINAL_INPUT_MAX_BYTES } from '../../terminal/input/terminal-input'
+
+export const NativeChatSignIn = z.object({
+  agent: z.string().min(1).max(128),
+  account: z.enum(['system', 'managed']).optional(),
+  remote: z.boolean()
+})
 
 export const PreflightQueuedAgentLaunch = z.object({
   terminal: z.string().min(1).max(4096),
@@ -14,7 +21,19 @@ export const PreflightQueuedAgentLaunch = z.object({
   shell: z.enum(['posix', 'powershell', 'cmd']),
   shellOverride: z.string().max(4096).optional(),
   cwd: z.string().max(4096).optional(),
-  path: z.string().max(32_767).nullable().optional(),
+  launchConfig: z
+    .object({
+      agentCommand: z.string().optional(),
+      agentArgs: z.string(),
+      agentEnv: z.record(z.string(), z.string()),
+      commandProvenance: z.enum(['authored', 'generated']).optional(),
+      selectedExecutable: z.string().optional(),
+      ompResumeFilePath: z.string().optional()
+    })
+    .optional(),
+  launchAgent: z.custom<TuiAgent>(isTuiAgent).optional(),
+  restoring: z.boolean().optional(),
+  nativeChatSignIn: NativeChatSignIn.optional(),
   images: z.boolean().optional()
 })
 
@@ -56,13 +75,7 @@ export const PreflightProjectAgentDetection = PreflightAgentDetection.safeExtend
   /** Answer `{ agents, managedAgentCommands }`; older hosts drop it and answer the list alone. */
   withManagedAgentCommands: z.boolean().optional(),
   launch: PreflightQueuedAgentLaunch.optional(),
-  nativeChatSignIn: z
-    .object({
-      agent: z.string().min(1).max(128),
-      account: z.enum(['system', 'managed']).optional(),
-      remote: z.boolean()
-    })
-    .optional(),
+  nativeChatSignIn: NativeChatSignIn.optional(),
   project: RepoSelector.extend({ repo: RepoSelector.shape.repo.pipe(z.string().max(4096)) })
     .strict()
     .optional()

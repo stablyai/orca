@@ -1,7 +1,10 @@
+import { launchExecutableIs, readLaunchArguments, readLaunchPosition } from './launch-position'
+import { quoteStartupArg, type AgentStartupShell } from './tui-agent-startup-shell'
+import type { TuiAgent } from '../catalog/tui-agent'
 import { recognizeAgentProcessFromCommandLine } from '../../agent-status/process/agent-process-recognition'
 import { shellReadyMarkerComesFromLineEditor } from '../../terminal/output/shell-ready-marker-timing'
 import { unwrapPowerShellNativeLaunch } from './powershell-native-launch'
-import { unwrapDirectAgentLaunchCommand } from './codex-startup-image-command'
+import { CODEX_EXECUTABLE, unwrapDirectAgentLaunchCommand } from './codex-startup-image-command'
 
 export type StartupCommandDelivery = 'fast' | 'shell-ready'
 
@@ -96,4 +99,37 @@ export function shouldUseShellReadyStartupDelivery(args: {
       shellReadyMarkerComesFromLineEditor(args.shellPath) &&
       isCodexStartupCommand(args.command))
   )
+}
+
+// Why not win32: Codex there reads console input records and needs its burst for pastes (windowsInputRecordPasteNewline).
+// Elsewhere Orca's terminals bracket every paste, so the burst can only misread relayed typing (#34496).
+function agentTerminalInputArgs(
+  agent: TuiAgent,
+  platform: NodeJS.Platform | null
+): readonly string[] {
+  return agent === 'codex' && platform !== null && platform !== 'win32'
+    ? ['-c', 'disable_paste_burst=true']
+    : []
+}
+
+/** Appends the per-launch terminal input flags to a recorded agent command. */
+export function withAgentTerminalInputArgs(
+  command: string,
+  agent: TuiAgent,
+  /** OS that runs the agent; null when the host has not reported it. */
+  platform: NodeJS.Platform | null,
+  shell: AgentStartupShell
+): string {
+  const inputArgs = agentTerminalInputArgs(agent, platform)
+  if (!inputArgs.length) {
+    return command
+  }
+  const launch = readLaunchPosition(command, shell)
+  if (!launch || !launchExecutableIs(launch.executable, CODEX_EXECUTABLE)) {
+    return command
+  }
+  const argv = readLaunchArguments(command, shell, launch)
+  return argv && !command.includes('disable_paste_burst') && !argv.includes('--')
+    ? `${command} ${inputArgs.map((arg) => quoteStartupArg(arg, shell)).join(' ')}`
+    : command
 }

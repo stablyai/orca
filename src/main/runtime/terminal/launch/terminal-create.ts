@@ -77,7 +77,6 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           ? this.singleGroupWorkspaceGridSize
           : undefined
       const group = groupId ? this.terminalGroupGridSizes?.[groupId] : undefined
-      const initialSize = resolvePtyFirstSize({ pane: paneSize(session, opts), group, singleGroup })
       let preAllocatedHandle =
         launchOpts.preAllocatedHandle ?? this.createPreAllocatedTerminalHandle()
       let { tabId, leafId, paneKey } = allocateTerminalPaneIdentity(launchOpts)
@@ -135,7 +134,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           const { launchAgent } = launchOpts
           launchOpts.onPtySpawnDispatched?.({ launchConfig: effectiveLaunchConfig, launchAgent })
           result = await spawnInAdmittedPane(this.store, ptyController, {
-            ...initialSize,
+            ...resolvePtyFirstSize({ pane: paneSize(session, opts), group, singleGroup }),
             cwd,
             command: sequencedStartupCommand
               ? launchOpts.command
@@ -145,6 +144,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
             launchConfig: effectiveLaunchConfig,
             ...(launchToken ? { launchToken } : {}),
             commandDelivery: 'provider',
+            nativeChatSignIn: launchOpts.nativeChatSignIn,
             startupCommandDelivery: launchOpts.startupCommandDelivery,
             env,
             envToDelete: mergeTerminalEnvDeletionKeys(

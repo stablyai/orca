@@ -11,7 +11,6 @@ import {
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { TerminalCreateOptions } from './terminal-create-options'
-import { resolveBareAgentLaunchCommand } from './runtime-agent-launch-resolution'
 import {
   buildExecutionHostAgentStartupPlan,
   planExecutionHostStartupWithPromptCandidate
@@ -39,7 +38,6 @@ import { resolveStartupShell } from '../../../../shared/agent-launch/startup/tui
 import { resolveWslSessionContext } from '../../../daemon/pty-subprocess/wsl-session-context'
 import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { resolveWslHostAgentLaunchInputs } from './wsl-host-agent-terminal-launch'
-import { readHostManagedAgentCommands } from '../../rpc/methods/host-management/managed-copy-detection'
 
 /** No launch command could be built for a requested `startupAgent`. */
 export class AgentLaunchUnbuildableError extends Error {}
@@ -60,23 +58,14 @@ export async function resolveAgentTerminalCreateOptions(
   sessionOptions?: Readonly<Record<string, SessionOptionValue>>
 ): Promise<TerminalCreateOptions> {
   const store = host.store ?? undefined
-  // Preserve raw commands such as codex exec; Settings defaults apply only to unmanaged repo-backed bare agents.
   const callerSuppliedLaunch =
     opts.env ||
     opts.launchConfig ||
     opts.launchAgent ||
     opts.startupCommandDelivery ||
-    opts.claudeAgentTeamsSourceCommand
-  const plannedAgent =
-    opts.startupAgent ??
-    (!callerSuppliedLaunch && store && opts.command && workspace.repo
-      ? resolveBareAgentLaunchCommand({
-          command: opts.command,
-          settings: store.getSettings(),
-          platform: agentLaunchPlatformForScope(store, workspace),
-          isRemote: Boolean(workspace.connectionId)
-        })
-      : null)
+    opts.claudeAgentTeamsSourceCommand ||
+    opts.nativeChatSignIn
+  const plannedAgent = opts.startupAgent ?? null
   const launchAgent = plannedAgent ?? opts.launchAgent
   // Refuse unsupported requested shells before any return, using the runtime that will spawn this PTY.
   const shellRefusal = terminalShellOverrideRefusal({
@@ -189,11 +178,7 @@ async function buildRuntimeAgentTerminalStartupOptions(
         ...(opts.extraAgentArgs !== undefined ? { extraAgentArgs: opts.extraAgentArgs } : {}),
         shell: agentLaunchQuotingShell(runtime),
         sessionOptions: sessionOptions ?? host.toSessionOptions(opts.launchPreferences),
-        ...(opts.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
-        // Only use installer paths from the host actually running the terminal.
-        ...(!isRemote && runtime.platform === process.platform
-          ? { managedAgentCommands: await readHostManagedAgentCommands(settings, [agent]) }
-          : {})
+        ...(opts.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {})
       }),
       opts.env?.PATH
     ),

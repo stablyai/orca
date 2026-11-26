@@ -68,6 +68,8 @@ const sleepingAgentLaunchEnvSchema = z.preprocess(
 
 export const sleepingAgentLaunchConfigBaseSchema = z.object({
   agentCommand: z.string().optional(),
+  commandProvenance: z.enum(['authored', 'generated']).optional(),
+  selectedExecutable: z.string().optional(),
   agentArgs: z.string(),
   agentEnv: sleepingAgentLaunchEnvSchema,
   // AI Vault scans arbitrary OMP roots; retain the exact resume locator for cold restore.

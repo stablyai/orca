@@ -1,3 +1,5 @@
+import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { NativeChatSignInRequest } from '../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import { preparePtyAgentLaunch } from './prepare-pty-agent-launch'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { applyAgentWorkspaceTrustToSpawn } from '../../../agent-launch/trust/agent-workspace-trust-spawn'
@@ -17,6 +19,9 @@ export type PtySpawnLaunchOptionsInput = {
     cols: number
     rows: number
     launchAgent?: unknown
+    nativeChatSignIn?: NativeChatSignInRequest
+    resumeProviderSession?: unknown
+    resumeOrigin?: unknown
     command?: string
     commandDelivery?: PtySpawnOptions['commandDelivery']
     startupCommandDelivery?: PtySpawnOptions['startupCommandDelivery']
@@ -31,6 +36,7 @@ export type PtySpawnLaunchOptionsInput = {
   /** Mutated: OpenCode prep may add the keys its launch must drop. */
   envToDelete: string[]
   launchCommand: string | undefined
+  launchConfig?: SleepingAgentLaunchConfig
   cwd: string | undefined
   /** Window only: the renderer validated cwd; a daemon re-validates it in its own process. */
   prevalidatedCwd?: string
@@ -58,12 +64,14 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
   spawnOptions: PtySpawnOptions
   env: Record<string, string> | undefined
   launchCommand: string | undefined
+  launchConfig?: SleepingAgentLaunchConfig
+  blocked?: 'unknown' | 'unavailable'
   /** What the host's MCP server list gave the pane; null when it was left as main leaves it. */
   terminalMcp: TerminalMcpPaneLaunch | null
 }> {
   const { args } = input
   const connectionId = args.connectionId ?? undefined
-  const { env, launchAgent, launchCommand, startup, settings, terminalMcp } =
+  const { env, launchAgent, launchCommand, startup, settings, terminalMcp, launchConfig, blocked } =
     await preparePtyAgentLaunch(input)
   promoteAgentTeamsShimPath(env, input.requestedAgentTeamsPath)
   const spawnOptions: PtySpawnOptions = {
@@ -150,7 +158,7 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
         : undefined
     }
   }
-  return { spawnOptions, env, launchCommand, terminalMcp }
+  return { spawnOptions, env, launchCommand, terminalMcp, launchConfig, blocked }
 }
 
 export type PtySpawnSizeSeed = {

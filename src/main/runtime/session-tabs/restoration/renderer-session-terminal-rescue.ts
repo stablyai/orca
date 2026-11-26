@@ -1,3 +1,5 @@
+import { prepareQueuedAgentLaunch } from '../../../preflight/prepare-queued-agent-launch'
+import { mayResolveQueuedAgentLaunch } from '../../../../shared/agent-launch/startup/queued-agent-launch'
 import type { OrcaRuntimeWithWaitForLeafPtyId as WaitForLeafPtyIdMethods } from '../../terminal/view/renderer-terminal-snapshot'
 import { OrcaRuntimeWithWaitForMobileTerminalSurface } from '../../terminal/view/mobile-terminal-surface'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
@@ -116,14 +118,30 @@ export abstract class OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobile
   }
 
   // A stalled create may leave an agent tab bound to a plain shell (#7587, STA-3214), bypassing pending recovery; absent recorded startup proves it never ran, so deliver it now.
-  protected deliverPendingStartupCommandToBareRendererPty(worktreeId: string, tabId: string): void {
-    const pending = this.pendingMobileTerminalCreatesByKey.get(`${worktreeId}::${tabId}`)
-    const command = pending?.startupCommand
-    if (!command) {
+  protected async deliverPendingStartupCommandToBareRendererPty(
+    worktreeId: string,
+    tabId: string
+  ): Promise<void> {
+    const key = `${worktreeId}::${tabId}`
+    const pending = this.pendingMobileTerminalCreatesByKey.get(key)
+    const pty = this.findLiveRegisteredPtyForRendererTab(worktreeId, tabId)
+    if (!pending?.startup || !pty || this.terminalSpawnCommandsByPtyId.has(pty.ptyId)) {
       return
     }
-    const pty = this.findLiveRegisteredPtyForRendererTab(worktreeId, tabId)
-    if (!pty || this.terminalSpawnCommandsByPtyId.has(pty.ptyId)) {
+    const launch = { ...pending.startup, terminal: pty.ptyId, shell: 'posix' as const }
+    const owner = this.readQueuedLaunchPty(pty.ptyId)
+    const command = mayResolveQueuedAgentLaunch(launch)
+      ? await prepareQueuedAgentLaunch(this, pty.ptyId, launch, this.store?.getSettings()).then(
+          (result) => result.preparedCommand,
+          () => null
+        )
+      : launch.command
+    if (
+      !command ||
+      !owner?.isCurrent() ||
+      this.pendingMobileTerminalCreatesByKey.get(key) !== pending ||
+      this.terminalSpawnCommandsByPtyId.has(pty.ptyId)
+    ) {
       return
     }
     if (this.ptyController?.write(pty.ptyId, command, 'launch')) {

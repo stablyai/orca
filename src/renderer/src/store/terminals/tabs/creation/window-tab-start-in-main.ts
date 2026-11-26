@@ -107,6 +107,7 @@ export function startWindowTabInMain(
     leafId,
     ...(cwd ? { cwd } : {}),
     ...(tab.shellOverride ? { shell: tab.shellOverride } : {}),
+    ...(startup?.nativeChatSignIn ? { nativeChatSignIn: startup.nativeChatSignIn } : {}),
     ...(startup?.command ? { command: startup.command } : {}),
     ...(startup?.startupCommandDelivery
       ? { startupCommandDelivery: startup.startupCommandDelivery }

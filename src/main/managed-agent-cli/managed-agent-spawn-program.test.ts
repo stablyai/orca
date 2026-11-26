@@ -20,7 +20,9 @@ const ompFailure =
   "printf '%s\\n' 'Orca: fresh OMP settings are unavailable on this host. Restart the terminal after updating Orca.' >&2"
 
 const spawn = (launchCommand: string) =>
-  alignManagedAgentLaunchAtSpawn({ launchCommand, sshTarget: true }, 'posix')
+  alignManagedAgentLaunchAtSpawn({ launchCommand, sshTarget: true, restoring: true }, 'posix').then(
+    (result) => result.command
+  )
 
 it.runIf(process.platform === 'win32')(
   'uses the absolute Claude path in PowerShell when its directory is quoted on PATH',

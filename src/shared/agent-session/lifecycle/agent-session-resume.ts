@@ -56,6 +56,8 @@ export type AgentProviderSessionMetadata = {
 
 export type SleepingAgentLaunchConfig = {
   agentCommand?: string
+  commandProvenance?: 'authored' | 'generated'
+  selectedExecutable?: string
   agentArgs: string
   agentEnv: Record<string, string>
   ompResumeFilePath?: string
@@ -299,6 +301,7 @@ export type SavedResumeDecision = {
 
 /** Effective facts of a terminal launch; a refused shell carries no rejected agent metadata. */
 export type TerminalLaunchResult = {
+  agentProgramBlocked?: 'unknown' | 'unavailable'
   savedResumeDecision?: SavedResumeDecision
   agentResumeUnavailable?: true
   agentResumeRefused?: 'chat-home' | 'chat-writing' | 'unverifiable'
@@ -319,6 +322,7 @@ export type SavedResumeStartupSource = {
 /** Forward only effective launch facts through each existing terminal envelope. */
 export function terminalLaunchFacts(result: TerminalLaunchResult): TerminalLaunchResult {
   return {
+    ...(result.agentProgramBlocked ? { agentProgramBlocked: result.agentProgramBlocked } : {}),
     ...(result.savedResumeDecision ? { savedResumeDecision: result.savedResumeDecision } : {}),
     ...(result.agentResumeUnavailable
       ? { agentResumeUnavailable: result.agentResumeUnavailable }

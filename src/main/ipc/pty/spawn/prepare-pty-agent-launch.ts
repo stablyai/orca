@@ -41,10 +41,17 @@ export async function preparePtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
       : 'powershell'
     : paneShell
   const command = sequenced || input.launchCommand
-  const startupCommand = await alignManagedAgentLaunchAtSpawn(
+  const {
+    command: startupCommand,
+    launchConfig,
+    blocked
+  } = await alignManagedAgentLaunchAtSpawn(
     {
       ...input,
       launchCommand: command,
+      launchAgent,
+      restoring: Boolean(args.resumeProviderSession) || args.resumeOrigin === 'saved',
+      nativeChatSignIn: args.nativeChatSignIn,
       sshTarget: Boolean(connectionId),
       ...(sequenced ? { sourceShell: paneShell } : {})
     },
@@ -87,17 +94,26 @@ export async function preparePtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
   const local = !connectionId && input.codexRuntime !== 'wsl'
   const images = inlineImagesEnabled && !input.envToDelete.includes('KITTY_WINDOW_ID')
   const prepared =
-    connectionId || agentCommand === undefined
+    connectionId ||
+    args.nativeChatSignIn ||
+    agentCommand === undefined ||
+    launchConfig?.commandProvenance !== 'generated'
       ? agentCommand
       : await prepareDirectLaunch(agentCommand, shell, input, env, local, images)
-  if (sequenced && prepared !== undefined) {
-    env[SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV] = prepared
+  if (sequenced) {
+    if (prepared === undefined) {
+      delete env[SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]
+    } else {
+      env[SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV] = prepared
+    }
   }
   return {
     env,
-    launchAgent,
-    launchCommand: sequenced ? input.launchCommand : agentCommand,
-    startup: sequenced ? input.launchCommand : prepared,
+    launchAgent: blocked ? undefined : launchAgent,
+    launchConfig,
+    blocked,
+    launchCommand: sequenced && !blocked ? input.launchCommand : agentCommand,
+    startup: sequenced && !blocked ? input.launchCommand : prepared,
     settings,
     terminalMcp: mcp.pane
   }

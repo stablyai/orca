@@ -8,7 +8,6 @@ import { notifyWebRuntimeTerminalCreateFailure } from '@/runtime/hosted-terminal
 import { startStoppedWslHostForUserAct } from '@/runtime/hosts/wsl/wsl-host-user-start'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { NativeChatSignInRequest } from '../../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
-import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 
 export type NativeChatHostCommandTerminal = {
   opening: boolean
@@ -44,14 +43,6 @@ export function useNativeChatHostCommandTerminal(input: {
         if (!command) {
           return false
         }
-        if (nativeChatSignIn) {
-          const prepared = await callRuntimeRpc<{ preparedCommand?: string | null }>(
-            environmentId ? { kind: 'environment', environmentId } : { kind: 'local' },
-            'preflight.detectAgents',
-            { worktreeId, nativeChatSignIn }
-          ).catch(() => null)
-          command = prepared?.preparedCommand ?? command
-        }
         if (environmentId) {
           const outcome = await createWebRuntimeSessionTerminalOnHost(
             {
@@ -59,6 +50,7 @@ export function useNativeChatHostCommandTerminal(input: {
               environmentId,
               targetGroupId: groupId,
               command,
+              ...(nativeChatSignIn ? { nativeChatSignIn } : {}),
               ...(env && { env }),
               viewMode: 'terminal',
               activate: true
@@ -72,7 +64,11 @@ export function useNativeChatHostCommandTerminal(input: {
         } else {
           const store = useAppStore.getState()
           const tab = store.createTab(worktreeId, groupId, undefined, {
-            pendingStartup: { command, ...(env && { env }) },
+            pendingStartup: {
+              command,
+              ...(env && { env }),
+              ...(nativeChatSignIn ? { nativeChatSignIn } : {})
+            },
             viewMode: 'terminal'
           })
           store.setActiveTabType('terminal', worktreeId)

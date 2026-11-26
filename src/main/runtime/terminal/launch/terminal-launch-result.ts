@@ -33,17 +33,20 @@ export function resolveTerminalLaunchResult(
   return {
     adoptedStablePane,
     surface,
-    launchAgent: refused
-      ? undefined
-      : (result.launchAgent ?? (adoptedStablePane ? undefined : requested.launchAgent)),
+    launchAgent:
+      refused || result.agentProgramBlocked
+        ? undefined
+        : (result.launchAgent ?? (adoptedStablePane ? undefined : requested.launchAgent)),
     launchConfig: refused
       ? undefined
       : (result.launchConfig ?? (adoptedStablePane ? undefined : requested.launchConfig)),
     launchToken: refused
       ? undefined
       : (result.launchToken ?? (adoptedStablePane ? undefined : requested.launchToken)),
-    effectiveTitle: refused || adoptedStablePane ? null : requested.title,
-    effectiveViewMode: refused || adoptedStablePane ? undefined : requested.viewMode
+    effectiveTitle:
+      refused || adoptedStablePane || result.agentProgramBlocked ? null : requested.title,
+    effectiveViewMode:
+      refused || adoptedStablePane || result.agentProgramBlocked ? undefined : requested.viewMode
   }
 }
 
@@ -77,7 +80,7 @@ export function recordTerminalLaunchMetadata(
     token: pty.launchToken ?? undefined,
     config: pty.launchConfig ?? undefined
   })
-  if (result.agentResumeRefused) {
+  if (result.agentResumeRefused || result.agentProgramBlocked) {
     pty.launchCommandAgent = null
     return null
   }

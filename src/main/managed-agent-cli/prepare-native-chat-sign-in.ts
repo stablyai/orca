@@ -4,7 +4,7 @@ import {
   type NativeChatSignInRequest
 } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import { readLaunchPosition } from '../../shared/agent-launch/startup/launch-position'
-import { quoteStartupArg } from '../../shared/agent-launch/startup/tui-agent-startup-shell'
+import type { AgentStartupShell } from '../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { resolveWindowsShellStartupFamily } from '../../shared/shell/launch/windows-terminal-shell'
 import { getPreflightWslTarget } from '../ipc/preflight/preflight-runtime-target'
 import type { AgentDetectionHost } from '../preflight/workspace-agent-detection'
@@ -16,7 +16,8 @@ export async function prepareNativeChatSignIn(
   settings: Parameters<typeof resolveNativeChatSignInProgram>[2] & {
     terminalWindowsShell?: string | null
   },
-  request: NativeChatSignInRequest
+  request: NativeChatSignInRequest,
+  receivingShell?: AgentStartupShell
 ): Promise<string | null> {
   const agent = agentSessionSetupFor(request.agent)?.agent
   if (
@@ -30,9 +31,10 @@ export async function prepareNativeChatSignIn(
     return null
   }
   const shell =
-    process.platform === 'win32'
+    receivingShell ??
+    (process.platform === 'win32'
       ? resolveWindowsShellStartupFamily(settings.terminalWindowsShell)
-      : 'posix'
+      : 'posix')
   const options = { ...request, shell }
   const stock = agentSessionSignInCommand(agent, options)
   if (!stock) {
@@ -42,25 +44,6 @@ export async function prepareNativeChatSignIn(
   const claudeSystemSignIn = agent === 'claude' && request.account === 'system'
   const executable = claudeSystemSignIn ? 'claude' : readLaunchPosition(stock, shell)?.executable
   const program =
-    executable && (await resolveNativeChatSignInProgram(agent, executable, settings, { shell }))
-  if (!program && !claudeSystemSignIn) {
-    return stock
-  }
-  const login = program
-    ? agentSessionSignInCommand(agent, { ...options, managedCommand: program })
-    : stock
-  if (!login || (claudeSystemSignIn && program)) {
-    return login
-  }
-  // Distinguish a prepared login from stock wrappers or old runtime paths that spawn would resolve.
-  switch (shell) {
-    case 'powershell':
-      return `& { ${login} }`
-    case 'cmd':
-      return `if 1==1 ${login}`
-    case 'posix':
-      return claudeSystemSignIn
-        ? agentSessionSignInCommand(agent, { ...options, prepared: true })
-        : `sh -c ${quoteStartupArg(`exec ${login}`, shell)}`
-  }
+    executable && (await resolveNativeChatSignInProgram(agent, executable, settings, shell))
+  return program ? agentSessionSignInCommand(agent, { ...options, managedCommand: program }) : stock
 }

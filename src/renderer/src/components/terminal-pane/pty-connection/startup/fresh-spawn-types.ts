@@ -6,7 +6,12 @@ import type {
 } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { buildAgentResumeStartupPlan } from '../../../../../../shared/agent-launch/startup/tui-agent-resume-startup'
 
-export type PendingStartupCommand = {
+import type { QueuedAgentLaunch } from '../../../../../../shared/agent-launch/startup/queued-agent-launch'
+
+export type PendingStartupCommand = Pick<
+  QueuedAgentLaunch,
+  'launchConfig' | 'launchAgent' | 'restoring' | 'nativeChatSignIn'
+> & {
   command: string
   resumeSource?: SavedResumeStartupSource
   isCurrent?: () => boolean

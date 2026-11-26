@@ -80,9 +80,14 @@ export abstract class OrcaRuntimeWithPreparePtyExecutionContext extends OrcaRunt
   }
 
   /** Arm Command Code from the spawn command; chunks arriving earlier fall back to banner detection. */
-  noteTerminalSpawnCommand(ptyId: string, command: string | null | undefined): void {
+  noteTerminalSpawnCommand(
+    ptyId: string,
+    command: string | null | undefined,
+    blocked?: 'unknown' | 'unavailable'
+  ): void {
     const trimmed = typeof command === 'string' ? command.trim() : ''
-    if (trimmed.length > 0) {
+    // A deliberately withheld launch also settles renderer rescue for this PTY.
+    if (trimmed || blocked) {
       this.terminalSpawnCommandsByPtyId.set(ptyId, trimmed)
     }
   }

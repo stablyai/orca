@@ -18,7 +18,6 @@ import { agentLaunchQuotingShell } from '../../../../shared/agent-launch/startup
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { withAgentSessionAccountEnv } from '../../agent-session/environment/agent-session-account-env'
 import { resolveWslHostAgentResumeInputs } from '../../terminal/launch/wsl-host-agent-terminal-launch'
-import { readHostManagedAgentCommands } from '../../rpc/methods/host-management/managed-copy-detection'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { resolveSavedRestoreLaunchRecipe } from './saved-restore-launch-recipe'
@@ -188,11 +187,7 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
         sessionOptionsOverrideAgentArgs: Boolean(request.launchPreferences),
         platform,
         shell,
-        isRemote,
-        // Only use installer paths from the host actually running the terminal.
-        ...(!isRemote && platform === process.platform
-          ? { managedAgentCommands: await readHostManagedAgentCommands(settings, [request.agent]) }
-          : {})
+        isRemote
       })
     )
     if (!startup) {

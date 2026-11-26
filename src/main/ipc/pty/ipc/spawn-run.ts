@@ -63,6 +63,7 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, request: PtySpawnIpc
         }
       },
       sessionId: ctx.effectiveSessionId,
+      agentProgramBlocked: ctx.agentProgramBlocked,
       savedResumePaneKey: ctx.stablePaneKey,
       launchConfig: ctx.effectiveLaunchConfig,
       suppressRefusedLaunch: () => {

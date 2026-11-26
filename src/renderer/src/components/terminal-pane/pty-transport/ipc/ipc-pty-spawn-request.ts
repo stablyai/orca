@@ -81,6 +81,7 @@ export async function spawnIpcPty(
     resumeOrigin,
     launchToken,
     launchAgent,
+    nativeChatSignIn,
     startupCommandDelivery,
     connectionId,
     worktreeId,
@@ -125,6 +126,9 @@ export async function spawnIpcPty(
       : {}),
     ...((connectOptions.launchAgent ?? launchAgent)
       ? { launchAgent: connectOptions.launchAgent ?? launchAgent }
+      : {}),
+    ...((connectOptions.nativeChatSignIn ?? nativeChatSignIn)
+      ? { nativeChatSignIn: connectOptions.nativeChatSignIn ?? nativeChatSignIn }
       : {}),
     ...((connectOptions.startupCommandDelivery ?? startupCommandDelivery)
       ? {

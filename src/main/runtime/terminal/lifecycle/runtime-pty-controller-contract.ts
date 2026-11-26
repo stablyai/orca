@@ -1,3 +1,4 @@
+import type { NativeChatSignInRequest } from '../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import type { DaemonLaunchNoteChange } from '../../../daemon/protocol/daemon-launch-note-protocol'
 import type {
   TerminalLimitStatus,
@@ -85,6 +86,7 @@ export type RuntimePtyController = {
     launchConfig?: WorktreeStartupLaunch['launchConfig']
     launchToken?: string
     commandDelivery?: 'renderer' | 'provider'
+    nativeChatSignIn?: NativeChatSignInRequest
     startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
     env?: Record<string, string>
     envToDelete?: string[]

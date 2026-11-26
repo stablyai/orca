@@ -5,8 +5,9 @@ import type {
 } from '../../agent-session/lifecycle/agent-session-resume'
 import type { SessionOptionValue } from '../../native-chat/input/native-chat-session-options'
 import { buildSleepingAgentLaunchConfig } from '../../agent-session/lifecycle/resume/sleeping-agent-launch-config'
-import { resolveAgentLaunchCommand, withAgentTerminalInputArgs } from './tui-agent-launch-command'
-import { withManagedAgentProgram, type ManagedAgentCommands } from './managed-agent-launch-program'
+import { resolveAgentLaunchCommand } from './tui-agent-launch-command'
+import { withAgentTerminalInputArgs } from './codex-startup-delivery'
+import type { ManagedAgentCommands } from './managed-agent-launch-program'
 import type { AgentStartupPlan } from './tui-agent-startup'
 import { resolveStartupShell, type AgentStartupShell } from './tui-agent-startup-shell'
 import { TUI_AGENT_CONFIG } from '../catalog/tui-agent-config'
@@ -26,6 +27,8 @@ export function buildAgentResumeStartupPlan(args: {
   agentArgs?: string | null
   agentEnv?: Record<string, string> | null
   agentCommand?: string | null
+  commandProvenance?: 'authored' | 'generated'
+  selectedExecutable?: string
   ompResumeFilePath?: string | null
   sessionOptions?: Record<string, SessionOptionValue>
   sessionOptionsOverrideAgentArgs?: boolean
@@ -58,14 +61,18 @@ export function buildAgentResumeStartupPlan(args: {
     args.agent === 'codex' && !args.fork
       ? dropRecordedAgentPermissionArgs(args.agent, args, shell)
       : args
-  const resolvedAgentCommand = recorded.agentCommand?.trim()
+  const resolvedAgentCommand = recorded.agentCommand
   const baseCommand = resolvedAgentCommand
     ? ({
         ok: true,
         command: withAgentTerminalInputArgs(
-          withManagedAgentProgram(resolvedAgentCommand, { ...args, shell }),
+          resolvedAgentCommand,
           args.agent,
-          args.agentHostPlatform === undefined ? args.platform : args.agentHostPlatform,
+          args.commandProvenance === 'authored'
+            ? null
+            : args.agentHostPlatform === undefined
+              ? args.platform
+              : args.agentHostPlatform,
           shell
         ),
         resumeLaunch: { agentCommand: resolvedAgentCommand },
@@ -81,7 +88,7 @@ export function buildAgentResumeStartupPlan(args: {
         sessionOptionsOverrideAgentArgs: args.sessionOptionsOverrideAgentArgs,
         isRemote: args.isRemote,
         agentHostPlatform: args.agentHostPlatform,
-        managedAgentCommands: args.managedAgentCommands
+        managedAgentCommands: undefined
       })
   if (!baseCommand.ok) {
     return null

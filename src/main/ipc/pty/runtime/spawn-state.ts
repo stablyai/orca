@@ -1,3 +1,4 @@
+import type { NativeChatSignInRequest } from '../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import type { TerminalViewAttributes } from '../../../../shared/terminal/protocol/queries/terminal-view-attributes'
 import type { TerminalMcpPaneLaunch } from '../../../mcp-servers/terminal/terminal-mcp-launch'
 import type { PtySpawnSizeSeed } from '../spawn/spawn-options-assembly'
@@ -61,6 +62,7 @@ export type RuntimePtySpawnState = {
   /** The host's verdict on the spawn's resume; a refused one starts the pane's plain shell. */
   resumeAdmission: ResumeSpawnAdmission | null
   codexSelectionTarget: CodexAccountSelectionTarget
+  agentProgramBlocked?: 'unknown' | 'unavailable'
   launchCommand: string | undefined
   /** What the host's MCP server list gave the pane, recorded at commit. */
   terminalMcp?: TerminalMcpPaneLaunch | null
@@ -122,6 +124,7 @@ export type RuntimePtySpawnArgs = {
   launchConfig?: SleepingAgentLaunchConfig
   launchToken?: string
   commandDelivery?: 'renderer' | 'provider'
+  nativeChatSignIn?: NativeChatSignInRequest
   startupCommandDelivery?: StartupCommandDelivery
   telemetry?: {
     agent_kind?: unknown

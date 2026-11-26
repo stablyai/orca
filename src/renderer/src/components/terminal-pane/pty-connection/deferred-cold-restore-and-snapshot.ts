@@ -34,6 +34,9 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     if (!session.pendingStartupCommand && session.shouldDeliverStartupViaTerminalPaste) {
       session.pendingStartupCommand = {
         command: startup.command,
+        launchConfig: startup.launchConfig,
+        launchAgent: startup.agent,
+        restoring: true,
         resumeSource: startup.resumeSource,
         env: startup.env
       }

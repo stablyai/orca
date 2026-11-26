@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { buildAgentStartupPlan } from './tui-agent-startup'
-import { buildAgentResumeStartupPlan } from './tui-agent-resume-startup'
 import { agentSessionSignInCommand } from '../../agent-session/lifecycle/launch/agent-session-setup-commands'
 
 const MAC_OPENCODE = '/Users/a b/Library/Application Support/orca/opencode/bin/opencode'
@@ -11,6 +10,7 @@ function launch(args: {
   shell?: 'posix' | 'powershell' | 'cmd'
   managed?: string
   override?: string
+  agentArgs?: string
 }) {
   return buildAgentStartupPlan({
     agent: 'opencode',
@@ -18,6 +18,7 @@ function launch(args: {
     allowEmptyPromptLaunch: true,
     cmdOverrides: args.override ? { opencode: args.override } : {},
     platform: args.platform,
+    agentArgs: args.agentArgs,
     shell: args.shell,
     managedAgentCommands: args.managed ? { opencode: args.managed } : undefined
   })
@@ -72,19 +73,36 @@ describe('launching a user CLI found outside PATH', () => {
     ).toBe("/bin/sh -c 'opencode --verbose'")
   })
 
-  it('records the stock name, so a resume finds the user CLI on its host', () => {
-    expect(launch({ platform: 'darwin', managed: MAC_OPENCODE })?.launchConfig.agentCommand).toBe(
-      'opencode'
-    )
-    const resumed = buildAgentResumeStartupPlan({
-      agent: 'opencode',
-      providerSession: { key: 'session_id', id: 'abc' },
-      cmdOverrides: {},
-      agentCommand: 'opencode --model opus',
-      platform: 'darwin',
-      managedAgentCommands: { opencode: '/opt/orca/opencode' }
+  it('records a generated head for a stock Command and separate Arguments', () => {
+    expect(
+      launch({
+        platform: 'win32',
+        managed: WIN_OPENCODE,
+        override: ' OPENCODE ',
+        agentArgs: '--verbose'
+      })
+    ).toMatchObject({
+      launchCommand:
+        "& 'C:\\Users\\a b\\AppData\\Roaming\\orca\\opencode\\opencode.exe' '--verbose'",
+      launchConfig: { commandProvenance: 'generated', selectedExecutable: WIN_OPENCODE }
     })
-    expect(resumed?.launchCommand).toBe("'/opt/orca/opencode' --model opus '--session' 'abc'")
+    expect(
+      launch({ platform: 'darwin', managed: MAC_OPENCODE, agentArgs: '--verbose' })
+    ).toMatchObject({
+      launchCommand:
+        "'/Users/a b/Library/Application Support/orca/opencode/bin/opencode' '--verbose'",
+      launchConfig: { commandProvenance: 'generated', selectedExecutable: MAC_OPENCODE }
+    })
+    expect(
+      launch({
+        platform: 'darwin',
+        managed: MAC_OPENCODE,
+        override: 'PATH=/scoped/bin opencode   --verbose'
+      })
+    ).toMatchObject({
+      launchCommand: 'PATH=/scoped/bin opencode   --verbose',
+      launchConfig: { commandProvenance: 'authored' }
+    })
   })
 
   it('renders native-chat sign-in with a resolved executable', () => {

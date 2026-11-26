@@ -43,7 +43,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
   protected abstract deliverPendingStartupCommandToBareRendererPty(
     worktreeId: string,
     tabId: string
-  ): void
+  ): Promise<void>
 
   protected abstract findMobileTerminalSurface(
     worktreeId: string,
@@ -147,6 +147,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           cwd,
           env: startupCommand.env,
           envToDelete: startupCommand.envToDelete,
+          nativeChatSignIn: startupCommand.nativeChatSignIn,
           startupCommandDelivery: startupCommand.startupCommandDelivery,
           launchAgent: startupCommand.launchAgent,
           ...(opts.trustWorktreeId ? { trustWorktreeId: opts.trustWorktreeId } : {}),
@@ -197,6 +198,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           ...(startupCommand.launchAgent ? { launchAgent: startupCommand.launchAgent } : {}),
           ...(opts.trustWorktreeId ? { trustWorktreeId: opts.trustWorktreeId } : {}),
           ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
+          nativeChatSignIn: startupCommand.nativeChatSignIn,
           startupCommandDelivery: startupCommand.startupCommandDelivery,
           source: 'runtime-session',
           activate: opts.activate
@@ -217,7 +219,16 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
         activate: opts.activate !== false,
         paired: pairedCreate,
         selectIfNoActiveTab: true,
-        ...(startupCommand.command ? { startupCommand: startupCommand.command } : {}),
+        ...(startupCommand.command
+          ? {
+              startup: {
+                command: startupCommand.command,
+                launchConfig: startupCommand.launchConfig,
+                launchAgent: startupCommand.launchAgent,
+                nativeChatSignIn: startupCommand.nativeChatSignIn
+              }
+            }
+          : {}),
         ...(opts.viewMode ? { viewMode: opts.viewMode } : {})
       })
       try {
@@ -228,7 +239,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           signal: opts.signal
         })
         if (this.isReadyMobileTerminalSurface(surface)) {
-          this.deliverPendingStartupCommandToBareRendererPty(worktreeId, reply.tabId)
+          await this.deliverPendingStartupCommandToBareRendererPty(worktreeId, reply.tabId)
           // The window spawned it outside this RPC, so the runtime's spawn point never saw the caller.
           noteCallerOpenedTerminal(surface.tab.terminal)
           return surface
@@ -239,7 +250,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           signal: opts.signal
         }).catch(() => null)
         if (readySurface) {
-          this.deliverPendingStartupCommandToBareRendererPty(worktreeId, reply.tabId)
+          await this.deliverPendingStartupCommandToBareRendererPty(worktreeId, reply.tabId)
           noteCallerOpenedTerminal(readySurface.tab.terminal)
           return readySurface
         }
@@ -263,6 +274,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
             cwd,
             env: startupCommand.env,
             envToDelete: startupCommand.envToDelete,
+            nativeChatSignIn: startupCommand.nativeChatSignIn,
             startupCommandDelivery: startupCommand.startupCommandDelivery,
             identity: { tabId: pendingSurface.tab.parentTabId, leafId: pendingSurface.tab.leafId },
             launchAgent: startupCommand.launchAgent,
@@ -280,7 +292,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
         if (this.findLiveRegisteredPtyForRendererTab(worktreeId, reply.tabId)) {
           const rescued = this.ensurePtyBackedMobileSurfaceForRendererTab(worktreeId, reply.tabId)
           if (rescued) {
-            this.deliverPendingStartupCommandToBareRendererPty(worktreeId, reply.tabId)
+            await this.deliverPendingStartupCommandToBareRendererPty(worktreeId, reply.tabId)
             return rescued
           }
         }

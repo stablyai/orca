@@ -21,9 +21,13 @@ import {
   type AgentStartupShell
 } from './tui-agent-startup-shell'
 import type { TuiAgent } from '../catalog/tui-agent'
-import { withManagedAgentProgram, type ManagedAgentCommands } from './managed-agent-launch-program'
-import { CODEX_EXECUTABLE } from './codex-startup-image-command'
-import { launchExecutableIs, readLaunchArguments, readLaunchPosition } from './launch-position'
+import {
+  launchCommandProvenance,
+  stockLaunchProgram,
+  withManagedAgentProgram,
+  type ManagedAgentCommands
+} from './managed-agent-launch-program'
+import { withAgentTerminalInputArgs } from './codex-startup-delivery'
 import { antigravityModelArgs } from './antigravity-resume-model-args'
 
 // Why: Enter on Codex's "Update available" screen picks "Update now", which installs and exits.
@@ -46,44 +50,16 @@ const STARTUP_UPDATE_PROMPT_SUPPRESSION_ENV: Partial<
   kimi: { KIMI_CODE_NO_AUTO_UPDATE: '1', KIMI_CLI_NO_AUTO_UPDATE: '1' }
 }
 
-// Why not win32: Codex there reads console input records and needs its burst for pastes (windowsInputRecordPasteNewline).
-// Elsewhere Orca's terminals bracket every paste, so the burst can only misread relayed typing (#34496).
-function agentTerminalInputArgs(
-  agent: TuiAgent,
-  platform: NodeJS.Platform | null
-): readonly string[] {
-  return agent === 'codex' && platform !== null && platform !== 'win32'
-    ? ['-c', 'disable_paste_burst=true']
-    : []
-}
-
-/** Appends the per-launch terminal input flags to a recorded agent command. */
-export function withAgentTerminalInputArgs(
-  command: string,
-  agent: TuiAgent,
-  /** OS that runs the agent; null when the host has not reported it. */
-  platform: NodeJS.Platform | null,
-  shell: AgentStartupShell
-): string {
-  const inputArgs = agentTerminalInputArgs(agent, platform)
-  if (!inputArgs.length) {
-    return command
-  }
-  const launch = readLaunchPosition(command, shell)
-  if (!launch || !launchExecutableIs(launch.executable, CODEX_EXECUTABLE)) {
-    return command
-  }
-  const argv = readLaunchArguments(command, shell, launch)
-  return argv && !command.includes('disable_paste_burst') && !argv.includes('--')
-    ? `${command} ${inputArgs.map((arg) => quoteStartupArg(arg, shell)).join(' ')}`
-    : command
-}
-
 export type ResolvedAgentLaunchCommand =
   | {
       ok: true
       command: string
-      resumeLaunch: { agentCommand: string; agentArgs?: string }
+      resumeLaunch: {
+        agentCommand: string
+        agentArgs?: string
+        commandProvenance: 'authored' | 'generated'
+        selectedExecutable?: string
+      }
       appliedSessionOptions: Record<string, SessionOptionValue>
       startupEnv?: Readonly<Record<string, string>>
     }
@@ -105,8 +81,13 @@ export function resolveAgentLaunchCommand(args: {
   managedAgentCommands?: ManagedAgentCommands | null
 }): ResolvedAgentLaunchCommand {
   const override = args.cmdOverrides[args.agent]
+  const commandProvenance = launchCommandProvenance(
+    override,
+    stockLaunchProgram(args.agent, args.platform, args.isRemote),
+    args.platform
+  )
   const command =
-    override ||
+    (commandProvenance === 'authored' ? override : undefined) ||
     getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[args.agent], args.platform, {
       isRemote: args.isRemote
     })
@@ -121,7 +102,11 @@ export function resolveAgentLaunchCommand(args: {
       ? `${program} ${prefixSuppressionArgs.map((arg) => quoteStartupArg(arg, args.shell)).join(' ')}`
       : program,
     args.agent,
-    args.agentHostPlatform === undefined ? args.platform : args.agentHostPlatform,
+    commandProvenance === 'authored'
+      ? null
+      : args.agentHostPlatform === undefined
+        ? args.platform
+        : args.agentHostPlatform,
     args.shell
   )
   const trailingTokens: ReturnType<typeof tokenizeStartupCommand> = args.agentArgs?.trim()
@@ -199,6 +184,10 @@ export function resolveAgentLaunchCommand(args: {
     command: withArgs(launchArgs, launchHead),
     resumeLaunch: {
       agentCommand: withArgs(resumeArgs),
+      commandProvenance,
+      ...(program !== command
+        ? { selectedExecutable: args.managedAgentCommands?.[args.agent] }
+        : {}),
       ...(keptTokens.length !== rawTokens.length ||
       keptTokens.some((token, index) => token !== rawTokens[index]) ||
       resolvedOptions.permissionArgs ||

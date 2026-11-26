@@ -1,3 +1,4 @@
+import type { NativeChatSignInRequest } from '../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import { OrcaRuntimeWithRunCreateMobileSessionTerminal } from './mobile-terminal-renderer-create'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
@@ -13,7 +14,6 @@ import { buildAgentResumeStartupPlan } from '../../../../shared/agent-launch/sta
 import { buildAgentStartupPlan } from '../../../../shared/agent-launch/startup/tui-agent-startup'
 import { resolveResumeLaunchRecipe } from '../../../../shared/agent-launch/choices/resume-launch-recipe'
 import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
-import { readHostManagedAgentCommands } from '../../rpc/methods/host-management/managed-copy-detection'
 import {
   resolveWslHostAgentLaunchInputs,
   resolveWslHostAgentResumeInputs
@@ -27,6 +27,7 @@ export type MobileTerminalCommandOptions = {
   command?: string
   env?: Record<string, string>
   envToDelete?: string[]
+  nativeChatSignIn?: NativeChatSignInRequest
   startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
   agent?: TuiAgent
   agentPrompt?: string
@@ -47,6 +48,7 @@ export type MobileTerminalCommand = {
   command?: string
   env?: Record<string, string>
   envToDelete?: string[]
+  nativeChatSignIn?: NativeChatSignInRequest
   startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
   launchConfig?: SleepingAgentLaunchConfig
   launchAgent?: TuiAgent
@@ -57,14 +59,6 @@ export type MobileTerminalCommand = {
 export type MobileTerminalResumeCommand = MobileTerminalCommand & {
   command: string
   resumeProviderSession: AgentProviderSessionMetadata
-}
-
-/** Only use installer paths from the host actually running the terminal. */
-function runsOnThisHost(
-  workspace: TerminalWorkspaceLaunchScope,
-  launchRuntime: { platform: NodeJS.Platform }
-): boolean {
-  return !workspace.connectionId && launchRuntime.platform === process.platform
 }
 
 function normalizeOriginConnectionId(connectionId: string | null | undefined): string | null {
@@ -104,10 +98,7 @@ export abstract class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends
       platform: launchRuntime.platform,
       shell: agentLaunchQuotingShell(launchRuntime),
       isRemote: Boolean(workspace.connectionId),
-      launchCwd: workspace.path,
-      ...(runsOnThisHost(workspace, launchRuntime)
-        ? { managedAgentCommands: await readHostManagedAgentCommands(settings, [record.agent]) }
-        : {})
+      launchCwd: workspace.path
     })
     const startupPlan = buildAgentResumeStartupPlan(resumeInputs)
     if (!startupPlan) {
@@ -135,6 +126,7 @@ export abstract class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends
         envToDelete: opts.envToDelete,
         launchConfig: opts.launchConfig,
         launchAgent: opts.launchAgent,
+        nativeChatSignIn: opts.nativeChatSignIn,
         startupCommandDelivery: opts.startupCommandDelivery
       }
     }
@@ -155,10 +147,7 @@ export abstract class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends
           platform: launchRuntime.platform,
           shell: agentLaunchQuotingShell(launchRuntime),
           // SSH uses relay-shim orca, never the local Linux orca-ide rename.
-          isRemote: Boolean(workspace.connectionId),
-          ...(runsOnThisHost(workspace, launchRuntime)
-            ? { managedAgentCommands: await readHostManagedAgentCommands(settings, [opts.agent]) }
-            : {})
+          isRemote: Boolean(workspace.connectionId)
         })
       ),
       prompt: opts.agentPrompt ?? '',

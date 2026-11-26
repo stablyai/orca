@@ -92,6 +92,15 @@ export function matchesStockLaunchProgram(
   return platform === 'win32' ? program?.toLowerCase() === stock.toLowerCase() : program === stock
 }
 
+export function launchCommandProvenance(
+  override: string | undefined,
+  stock: string,
+  platform: NodeJS.Platform
+): 'authored' | 'generated' {
+  const command = override?.trim()
+  return !command || matchesStockLaunchProgram(command, stock, platform) ? 'generated' : 'authored'
+}
+
 export function withManagedAgentProgram(
   command: string,
   args: {
@@ -108,14 +117,8 @@ export function withManagedAgentProgram(
   if (!path) {
     return command
   }
-  const override = args.cmdOverrides?.[args.agent]?.trim()
   if (
-    override &&
-    !matchesStockLaunchProgram(
-      readLaunchPosition(override, args.shell)?.executable,
-      stock,
-      args.platform
-    )
+    launchCommandProvenance(args.cmdOverrides?.[args.agent], stock, args.platform) === 'authored'
   ) {
     return command
   }

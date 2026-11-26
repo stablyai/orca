@@ -10,15 +10,16 @@ vi.mock('./command-path-directory-worker-client', async () => ({
     (await import('./command-path-directory')).readDetectionDirectory
   )
 }))
+const filesystem = vi.hoisted(() => ({ realStat: undefined as typeof FileSystem.stat | undefined }))
 vi.mock('node:fs/promises', async (importOriginal) => {
   const fs = await importOriginal<typeof FileSystem>()
+  filesystem.realStat = fs.stat
   return { ...fs, stat: vi.fn(fs.stat) }
 })
-import {
-  findCommandsOnLocalPath,
-  isCommandOnLocalPath,
-  resolveCommandOnLocalPath
-} from './command-path-resolver'
+import { readDetectionDirectoryViaWorker } from './command-path-directory-worker-client'
+import { readDetectionDirectory } from './command-path-directory'
+import { findCommandsOnLocalPath, type AgentPathMatch } from './command-path-batch'
+import { isCommandOnLocalPath, resolveCommandOnLocalPath } from './command-path-resolver'
 
 describe('isCommandOnLocalPath', () => {
   // POSIX semantics: executable bit + absolute-only + symlink follow.
@@ -112,12 +113,11 @@ describe('win32 PATH lookup', () => {
     const earlier = path.join(quotedBin, 'tool.cmd')
     const later = path.join(dotBin, 'tool.cmd')
     const laterChecked = Promise.withResolvers<void>()
-    const { stat: realStat } = await vi.importActual<typeof FileSystem>('node:fs/promises')
     vi.mocked(stat).mockImplementation(async (candidate) => {
       if (candidate === earlier) {
         await laterChecked.promise
       }
-      const result = await realStat(candidate)
+      const result = await filesystem.realStat!(candidate)
       if (candidate === later) {
         setImmediate(laterChecked.resolve)
       }
@@ -134,6 +134,48 @@ describe('win32 PATH lookup', () => {
       expect(matches.get('tool')).toBe(earlier)
     } finally {
       vi.mocked(stat).mockReset()
+    }
+  })
+
+  it('scans Windows PATH spellings once, retaining shell precedence and stopping before a pending tail', async () => {
+    const runtime = path.join(root, 'orca-runtime')
+    const late = path.join(root, 'late')
+    const programs = ['claude', 'codex', 'grok', 'omp', 'opencode']
+    await mkdir(runtime)
+    await Promise.all([
+      writeFile(path.join(runtime, 'claude.cmd'), ''),
+      ...programs.map((program) => writeFile(path.join(dotBin, `${program}.cmd`), ''))
+    ])
+    const held = Promise.withResolvers<Map<string, string> | null>()
+    const listings = vi.mocked(readDetectionDirectoryViaWorker)
+    listings.mockClear()
+    listings.mockImplementation((dir) =>
+      dir === late ? held.promise : readDetectionDirectory(dir)
+    )
+    vi.mocked(stat).mockClear()
+    const matches = new Map<string, AgentPathMatch>()
+    try {
+      await expect(
+        findCommandsOnLocalPath(programs, {
+          platform: 'win32',
+          env: { PATH: `"${runtime}/";${runtime};${dotBin};${late}`, PATHEXT: '.cmd' },
+          inventory: { isRuntimePath: (dir) => dir === runtime || dir === `${runtime}/`, matches }
+        })
+      ).resolves.toEqual(new Set(programs))
+      expect(matches.get('claude')).toEqual({
+        first: path.join(runtime, 'claude.cmd'),
+        unquoted: path.join(runtime, 'claude.cmd'),
+        user: path.join(dotBin, 'claude.cmd')
+      })
+      expect(
+        listings.mock.calls.filter(([dir]) => dir === runtime || dir === `${runtime}/`)
+      ).toHaveLength(1)
+      expect(
+        vi.mocked(stat).mock.calls.filter(([file]) => file === path.join(runtime, 'claude.cmd'))
+      ).toHaveLength(1)
+    } finally {
+      held.resolve(new Map())
+      listings.mockReset()
     }
   })
 

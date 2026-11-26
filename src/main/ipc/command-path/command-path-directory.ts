@@ -1,7 +1,6 @@
 import type { Dir } from 'node:fs'
 import { access, constants as fsConstants, opendir, stat } from 'node:fs/promises'
 import path from 'node:path'
-import { forEachWithConcurrency } from '../../../shared/concurrency/map-with-concurrency'
 
 const MAX_DETECTION_DIRECTORY_ENTRIES = 128
 
@@ -28,58 +27,35 @@ export async function isExecutableFile(candidate: string, isWin: boolean): Promi
   }
 }
 
-export function uniqueDetectionDirectories(
-  directories: string[],
-  isWin: boolean,
-  seen = new Set<string>()
-): string[] {
-  const isAbsolute = isWin ? path.win32.isAbsolute : path.posix.isAbsolute
-  return directories.filter((dir) => {
-    const key = isWin ? path.normalize(dir).toLowerCase() : dir
-    if (!isAbsolute(dir) || seen.has(key)) {
-      return false
-    }
-    seen.add(key)
-    return true
-  })
+export function detectionDirectoryKey(dir: string, isWin: boolean): string {
+  return isWin
+    ? path.win32
+        .normalize(dir)
+        .replace(/[\\/]+$/, '')
+        .toLowerCase()
+    : dir
 }
 
-type RecordDirectoryHit = (command: string, candidate: string) => void
-
-export async function scanDetectionDirectories(
-  directories: string[],
-  options: {
-    concurrency: number
-    ordered: boolean
-    scan: (dir: string, record: RecordDirectoryHit) => Promise<void>
-    record: RecordDirectoryHit
-    allFound: Promise<void>
-    isDone: () => boolean
-  }
+export async function scanDetectionDirectories<T, Hit>(
+  directories: T[],
+  concurrency: number,
+  scan: (dir: T) => Promise<Hit>,
+  commit: (dir: T, hits: Hit) => void,
+  isDone: () => boolean
 ): Promise<void> {
+  // Start the first entry on its own. Later reads overlap, but commit strictly in PATH order.
   if (directories.length === 0) {
     return
   }
-  const { concurrency, ordered, scan, record, allFound, isDone } = options
-  await scan(directories[0], record)
-  if (!ordered) {
-    await Promise.race([
-      allFound,
-      forEachWithConcurrency(directories.slice(1), concurrency, (dir) => scan(dir, record))
-    ])
-    return
-  }
-  // Listings overlap, but an earlier PATH entry wins even when a later stat finishes first.
+  commit(directories[0], await scan(directories[0]))
   for (let index = 1; index < directories.length && !isDone(); index += concurrency) {
-    const hits = await Promise.all(
-      directories.slice(index, index + concurrency).map(async (dir) => {
-        const matches = new Map<string, string>()
-        await scan(dir, (command, candidate) => matches.set(command, candidate))
-        return matches
-      })
-    )
-    for (const matches of hits) {
-      matches.forEach((candidate, command) => record(command, candidate))
+    const wave = directories.slice(index, index + concurrency)
+    const pending = wave.map((dir) => scan(dir))
+    for (const [offset, dir] of wave.entries()) {
+      commit(dir, await pending[offset])
+      if (isDone()) {
+        return
+      }
     }
   }
 }

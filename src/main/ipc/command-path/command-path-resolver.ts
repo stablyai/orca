@@ -2,17 +2,8 @@ import { statSync, type Stats } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
-import {
-  getExecutableNames,
-  stripWindowsPathQuotes
-} from '../../../shared/shell/command-resolution/node-cli-command-resolution'
-import {
-  directoryNameKey,
-  isExecutableFile,
-  scanDetectionDirectories,
-  uniqueDetectionDirectories
-} from './command-path-directory'
-import { readDetectionDirectoryViaWorker } from './command-path-directory-worker-client'
+import { stripWindowsPathQuotes } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
+import { isExecutableFile } from './command-path-directory'
 
 export type ResolveCommandOptions = {
   /** Defaults to `process.platform`. Lets tests exercise the win32 lookup on posix. */
@@ -26,7 +17,7 @@ export type ResolveCommandOptions = {
 }
 
 // Windows environment keys are case-insensitive even though this Record is not.
-function readEnvCaseInsensitive(env: NodeJS.ProcessEnv, key: string): string | undefined {
+export function readEnvCaseInsensitive(env: NodeJS.ProcessEnv, key: string): string | undefined {
   const direct = env[key]
   if (direct !== undefined) {
     return direct
@@ -40,7 +31,7 @@ function readEnvCaseInsensitive(env: NodeJS.ProcessEnv, key: string): string | u
   return undefined
 }
 
-function getWindowsPathSearchExtensions(env: NodeJS.ProcessEnv, command: string): string[] {
+export function getWindowsPathSearchExtensions(env: NodeJS.ProcessEnv, command: string): string[] {
   const pathext = readEnvCaseInsensitive(env, 'PATHEXT') ?? '.EXE;.CMD;.BAT;.COM'
   const extensions = pathext.split(';').filter((ext) => ext.length > 0)
   // Like libuv, only a dot in the basename permits an exact-name match, so a dotted parent
@@ -49,16 +40,6 @@ function getWindowsPathSearchExtensions(env: NodeJS.ProcessEnv, command: string)
     extensions.unshift('')
   }
   return extensions
-}
-
-/** Agent CLI fallback also checks a literal executable name without an extension. */
-function getWindowsBatchDetectionExtensions(env: NodeJS.ProcessEnv, command: string): string[] {
-  return [
-    ...new Set([
-      ...getWindowsPathSearchExtensions(env, command),
-      ...getExecutableNames('win32', command).map((name) => name.slice(command.length))
-    ])
-  ]
 }
 
 type LocalCommandSelection = {
@@ -179,112 +160,10 @@ export async function isCommandOnLocalPath(
   return (await findLocalCommandPaths(command, options, true)).length > 0
 }
 
-const DIRECT_DETECTION_COMMAND_LIMIT = 4
-
 // Real Windows hosts get native separators (and keep UNC roots);
 // synthetic win32 lookups on POSIX hosts keep POSIX joins.
-const joinCandidatePath = (isWin: boolean, dir: string, name: string): string =>
+export const joinCandidatePath = (isWin: boolean, dir: string, name: string): string =>
   (isWin ? path.join : path.posix.join)(dir, name)
-
-/** Bounded, lazy PATH detection; listings eliminate repeated probes for absence-heavy inventories. */
-export async function findCommandsOnLocalPath(
-  commands: readonly string[],
-  options: ResolveCommandOptions & {
-    matches?: Map<string, string>
-    searchedDirectories?: Set<string>
-  } = {}
-): Promise<Set<string>> {
-  const found = new Set<string>()
-  const bareCommands = new Set<string>()
-  const isWin = (options.platform ?? process.platform) === 'win32'
-  for (const command of commands.filter(Boolean)) {
-    if (command.includes('/') || (isWin && command.includes('\\'))) {
-      if (await isCommandOnLocalPath(command, options)) {
-        found.add(command)
-      }
-    } else {
-      bareCommands.add(command)
-    }
-  }
-  if (bareCommands.size === 0) {
-    return found
-  }
-
-  const env = options.env ?? process.env
-  const pathDirs = (readEnvCaseInsensitive(env, 'PATH') ?? '')
-    .split(isWin ? ';' : ':')
-    // The install-dir fallback also searches trimmed PATH entries.
-    .flatMap((dir) => [dir, dir.trim()])
-    .map((dir) => (isWin ? stripWindowsPathQuotes(dir) : dir))
-  const cwd = options.cwd ?? process.cwd()
-  const searchDirs = uniqueDetectionDirectories(
-    isWin ? [cwd, ...pathDirs] : pathDirs,
-    isWin,
-    options.searchedDirectories
-  )
-  const extensions = new Map(
-    [...bareCommands].map((command) => [
-      command,
-      isWin ? getWindowsBatchDetectionExtensions(env, command) : ['']
-    ])
-  )
-
-  const allFound = Promise.withResolvers<void>()
-  const scanDirectory = async (
-    dir: string,
-    record: (command: string, candidate: string) => void
-  ): Promise<void> => {
-    if (bareCommands.size === 0) {
-      return
-    }
-    const names =
-      !isWin && bareCommands.size <= DIRECT_DETECTION_COMMAND_LIMIT
-        ? null
-        : await readDetectionDirectoryViaWorker(dir)
-    await Promise.all(
-      [...bareCommands].map(async (command) => {
-        const seenCandidates = new Set<string>()
-        for (const ext of extensions.get(command) ?? []) {
-          const wanted = command + ext
-          const listed = names?.get(directoryNameKey(wanted))
-          if (names !== null && listed === undefined) {
-            continue
-          }
-          // POSIX stat must decide volume case sensitivity, even for a folded-name match.
-          const candidate = joinCandidatePath(isWin, dir, isWin ? (listed ?? wanted) : wanted)
-          const candidateKey = isWin ? candidate.toLowerCase() : candidate
-          if (seenCandidates.has(candidateKey)) {
-            continue
-          }
-          seenCandidates.add(candidateKey)
-          if (await isExecutableFile(candidate, isWin)) {
-            record(command, candidate)
-            break
-          }
-        }
-      })
-    )
-  }
-  const recordHit = (command: string, candidate: string): void => {
-    if (!bareCommands.delete(command)) {
-      return
-    }
-    found.add(command)
-    options.matches?.set(command, candidate)
-    if (bareCommands.size === 0) {
-      allFound.resolve()
-    }
-  }
-  await scanDetectionDirectories(searchDirs, {
-    concurrency: commands.length <= DIRECT_DETECTION_COMMAND_LIMIT ? 1 : 4,
-    ordered: options.matches !== undefined,
-    scan: scanDirectory,
-    record: recordHit,
-    allFound: allFound.promise,
-    isDone: () => bareCommands.size === 0
-  })
-  return found
-}
 
 /** The absolute path `isCommandOnLocalPath` found, or null. */
 export async function resolveCommandOnLocalPath(

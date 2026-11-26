@@ -1,3 +1,5 @@
+import type { QueuedAgentLaunch } from '../../../../shared/agent-launch/startup/queued-agent-launch'
+import type { NativeChatSignInRequest } from '../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as SessionTabsPublication } from '../../session-tabs/publication/session-tabs-change-publication'
 import { OrcaRuntimeWithFailedStartPanes } from './failed-start-pane'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
@@ -31,6 +33,7 @@ export type MobileTerminalCreateOptions = {
   cwd?: string
   env?: Record<string, string>
   envToDelete?: string[]
+  nativeChatSignIn?: NativeChatSignInRequest
   startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
   agent?: TuiAgent
   agentPrompt?: string
@@ -45,6 +48,15 @@ export type MobileTerminalCreateOptions = {
   signal?: AbortSignal
 }
 
+export type PendingMobileTerminalCreate = {
+  activate: boolean
+  paired: boolean
+  selectIfNoActiveTab: boolean
+  viewMode?: 'terminal' | 'chat'
+  /** A renderer may mount a bare shell while its create is pending (STA-3214). */
+  startup?: Pick<QueuedAgentLaunch, 'command' | 'launchConfig' | 'launchAgent' | 'nativeChatSignIn'>
+}
+
 export type OwnedMobileTerminalCreateOptions = {
   /** A paired client's own create or tab open; without it a stopped WSL distro holds the start. */
   wslUserAct?: true
@@ -53,6 +65,7 @@ export type OwnedMobileTerminalCreateOptions = {
   cwd?: string
   env?: Record<string, string>
   envToDelete?: string[]
+  nativeChatSignIn?: NativeChatSignInRequest
   startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
   identity?: { tabId: string; leafId: string; sessionId?: string }
   createMutation?: { clientIdentity: string; id: string }
@@ -105,6 +118,7 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
       cwd?: string
       env?: Record<string, string>
       envToDelete?: string[]
+      nativeChatSignIn?: NativeChatSignInRequest
       startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
       agent?: TuiAgent
       agentPrompt?: string

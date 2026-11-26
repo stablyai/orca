@@ -28,6 +28,7 @@ export async function spawnPtyFromRuntimeController(
     },
     facts: () => ({
       sessionId: ctx.sessionId,
+      agentProgramBlocked: ctx.agentProgramBlocked,
       savedResumePaneKey: ctx.spawnIdentityPaneKey,
       launchConfig: ctx.args.launchConfig,
       suppressRefusedLaunch: () => {
@@ -44,11 +45,12 @@ export async function spawnPtyFromRuntimeController(
         Object.assign(ctx.result, {
           ...(ctx.agentResumeUnavailable ? { agentResumeUnavailable: true as const } : {}),
           launchConfig: ctx.args.launchConfig,
-          launchAgent: ctx.args.launchAgent,
+          launchAgent: ctx.agentProgramBlocked ? undefined : ctx.args.launchAgent,
           launchToken: ctx.args.launchToken,
-          resumeProviderSession: ctx.codexResumeArgvDropped
-            ? undefined
-            : ctx.args.resumeProviderSession
+          resumeProviderSession:
+            ctx.agentProgramBlocked || ctx.codexResumeArgvDropped
+              ? undefined
+              : ctx.args.resumeProviderSession
         })
       }
       return commitRuntimePtySpawn(ctx)

@@ -48,9 +48,9 @@ export async function prepareQueuedAgentLaunch(
       ptyShellPath.get(ptyId) === recordedShell
     try {
       const ssh = owner.kind === 'ssh' || Boolean(pty.connectionId)
-      const preparedCommand = await prepareForPty(pty, ssh, recordedShell, launch, settings)
+      const prepared = await prepareForPty(pty, ssh, recordedShell, launch, settings)
       if (isCurrent()) {
-        return { preparedCommand }
+        return prepared
       }
     } catch (error) {
       if (isCurrent()) {
@@ -67,7 +67,7 @@ async function prepareForPty(
   recordedShell: string | undefined,
   launch: QueuedAgentLaunch,
   settings: LaunchSettings | undefined
-): Promise<string> {
+): Promise<PreparedAgentLaunch> {
   const foreground =
     !ssh && !recordedShell && !pty.wslDistro && process.platform === 'win32'
       ? await pty.readForegroundProcess()
@@ -96,22 +96,33 @@ async function prepareForPty(
     : process.platform === 'win32' && !wsl
       ? resolveWindowsShellStartupFamily(shellPreference)
       : 'posix'
-  const command = await alignManagedAgentLaunchAtSpawn(
+  const { command, launchConfig } = await alignManagedAgentLaunchAtSpawn(
     {
       launchCommand: launch.command,
       codexRuntime: wsl ? 'wsl' : 'host',
       sshTarget: ssh,
       cwd: launch.cwd,
       readCwd: pty.readCwd,
-      queuedPath: launch.path,
-      shellOverride: process.platform === 'win32' ? ptyShell : shellPreference,
+      launchConfig: launch.launchConfig,
+      launchAgent: launch.launchAgent,
+      nativeChatSignIn: launch.nativeChatSignIn,
+      restoring: launch.restoring ?? !launch.launchConfig,
+      expectedWslDistro: pty.wslDistro,
       getSettings: () => settings
     },
     shell
   )
-  return prepareShellNativeAgentLaunch(
-    command ?? launch.command,
-    shell,
-    launch.images !== false && settings?.terminalInlineImages !== false
-  )
+  return {
+    preparedCommand:
+      command === undefined
+        ? null
+        : launch.nativeChatSignIn || launchConfig?.commandProvenance === 'authored'
+          ? command
+          : prepareShellNativeAgentLaunch(
+              command,
+              shell,
+              launch.images !== false && settings?.terminalInlineImages !== false
+            ),
+    launchConfig
+  }
 }

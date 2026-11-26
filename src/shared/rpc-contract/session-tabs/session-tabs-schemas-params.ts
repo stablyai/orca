@@ -1,3 +1,4 @@
+import { NativeChatSignIn } from '../preflight/preflight-params'
 import { BotLinkOpenTargetSchema } from '../../bots/bot-link-open-target'
 import { z } from 'zod'
 import { RUNTIME_NAVIGATION_TARGETS } from '../../remote-runtime/session-graph/runtime-navigation'
@@ -169,6 +170,7 @@ export const CreateTerminalTab = WorktreeTabSelector.extend({
   cwd: z.string().min(1).optional(),
   env: z.record(z.string(), z.string()).optional(),
   envToDelete: z.array(z.string().min(1).max(256)).max(32).optional(),
+  nativeChatSignIn: NativeChatSignIn.optional(),
   startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
   launchConfig: sleepingAgentLaunchConfigSchema,
   launchToken: z.string().min(1).max(128).optional(),
@@ -220,6 +222,7 @@ export const CreateTerminalTab = WorktreeTabSelector.extend({
       'resumeProviderSession',
       'launchAgent',
       'startupCommandDelivery',
+      'nativeChatSignIn',
       'viewMode'
     ] as const) {
       if (value[field] !== undefined) {

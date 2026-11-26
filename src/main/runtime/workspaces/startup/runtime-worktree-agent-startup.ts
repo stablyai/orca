@@ -14,9 +14,6 @@ import {
   pickTuiAgent
 } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
-import { readHostManagedAgentCommands } from '../../rpc/methods/host-management/managed-copy-detection'
-import type { ManagedCopySettings } from '../../../acp/launch/acp-launch-contract'
-import type { ManagedAgentCommands } from '../../../../shared/agent-launch/startup/managed-agent-launch-program'
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 import type { resolveStartupAgentLaunchRuntime } from '../../terminal/launch/agent-launch-scope-runtime'
 import {
@@ -89,18 +86,6 @@ export async function resolveWorktreeStartupDraftAgent(
   return pickTuiAgent(null, detected.filter(isTuiAgent), settings.disabledTuiAgents)
 }
 
-/** Only use installer paths from the host actually running the terminal. */
-function launchManagedAgentCommands(
-  repo: Parameters<typeof repoIsRemote>[0],
-  platform: NodeJS.Platform,
-  settings: ManagedCopySettings,
-  agent: TuiAgent
-): Promise<ManagedAgentCommands> | undefined {
-  return !repoIsRemote(repo) && platform === process.platform
-    ? readHostManagedAgentCommands(settings, [agent])
-    : undefined
-}
-
 export async function buildWorktreeStartupForDraft(
   environment: StartupEnvironment & {
     draft: string
@@ -130,7 +115,6 @@ export async function buildWorktreeStartupForDraft(
     platform,
     shell,
     isRemote: repoIsRemote(repo),
-    managedAgentCommands: await launchManagedAgentCommands(repo, platform, settings, agent),
     ...(agent === (environment.originalAgent ?? environment.requestedAgent)
       ? {
           ...(environment.agentArgs !== undefined ? { agentArgs: environment.agentArgs } : {}),
@@ -215,7 +199,6 @@ export async function buildWorktreeStartupForAgent(
     platform,
     shell,
     isRemote: repoIsRemote(repo),
-    managedAgentCommands: await launchManagedAgentCommands(repo, platform, settings, agent),
     ...(environment.agentArgs !== undefined ? { agentArgs: environment.agentArgs } : {}),
     ...(environment.extraAgentArgs ? { extraAgentArgs: environment.extraAgentArgs } : {}),
     ...(environment.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),

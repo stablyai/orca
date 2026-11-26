@@ -1,3 +1,4 @@
+import type { NativeChatSignInRequest } from '../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
 import type {
   AgentProviderSessionMetadata,
@@ -64,6 +65,7 @@ export type TerminalCreateOptions = {
   targetGroupId?: string
   /** Main-internal placement anchor; removed before PTY dispatch. */
   afterTabId?: string
+  nativeChatSignIn?: NativeChatSignInRequest
   startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
   telemetry?: WorktreeStartupLaunch['telemetry']
   /** Attribute host-built startupAgent launches by surface; missing/unknown surface becomes unknown. Ignore without startupAgent. */

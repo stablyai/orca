@@ -70,6 +70,7 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
           data.launchConfig ||
           data.resumeProviderSession
             ? {
+                ...(data.nativeChatSignIn ? { nativeChatSignIn: data.nativeChatSignIn } : {}),
                 ...(data.command ? { command: data.command } : {}),
                 ...(data.env ? { env: data.env } : {}),
                 ...(data.envToDelete ? { envToDelete: data.envToDelete } : {}),

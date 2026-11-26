@@ -11,6 +11,8 @@ export function launchConfigsEqual(
   }
   if (
     a.agentCommand !== b.agentCommand ||
+    a.commandProvenance !== b.commandProvenance ||
+    a.selectedExecutable !== b.selectedExecutable ||
     a.agentArgs !== b.agentArgs ||
     a.ompResumeFilePath !== b.ompResumeFilePath
   ) {

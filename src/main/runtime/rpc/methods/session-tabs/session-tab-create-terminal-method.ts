@@ -29,6 +29,7 @@ export const SESSION_TAB_CREATE_TERMINAL_METHOD = defineMethod({
       cwd: params.cwd,
       ...(params.env ? { env: params.env } : {}),
       ...(params.envToDelete ? { envToDelete: params.envToDelete } : {}),
+      nativeChatSignIn: params.nativeChatSignIn,
       startupCommandDelivery: params.startupCommandDelivery,
       agent: params.agent,
       ...(params.agentPrompt !== undefined ? { agentPrompt: params.agentPrompt } : {}),

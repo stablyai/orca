@@ -21,6 +21,12 @@ export function resolveResumeLaunchRecipe(
   return {
     agentArgs: launchConfig.agentArgs,
     agentEnv: launchConfig.agentEnv,
+    ...(launchConfig.commandProvenance
+      ? { commandProvenance: launchConfig.commandProvenance }
+      : {}),
+    ...(launchConfig.selectedExecutable
+      ? { selectedExecutable: launchConfig.selectedExecutable }
+      : {}),
     ...(launchConfig.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
     ...(launchConfig.ompResumeFilePath ? { ompResumeFilePath: launchConfig.ompResumeFilePath } : {})
   }
