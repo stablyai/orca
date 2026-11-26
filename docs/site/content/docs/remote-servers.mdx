@@ -14,6 +14,12 @@ The easiest setup is the Orca desktop app on both computers, connected through [
   such as the same Tailscale tailnet or LAN.
 </Callout>
 
+## Keep agents running after you disconnect
+
+For a laptop connected to a headless Linux VM, [install the server on Linux](#install-only-the-server-on-linux), start it on the VM, and add its access link to Orca on your laptop. Create or open the project on the VM and start the agent there. The agent keeps running when your laptop disconnects as long as the VM and Orca runtime stay running. If you start the server from an SSH shell, use a service to keep the runtime running after you close that shell.
+
+Connecting a server makes it available as a project host. The **New projects open on** setting only chooses the default host for new projects. You can leave the default set to this computer and explicitly select the VM when creating a project or workspace. Changing the default does not move an existing local session to the VM.
+
 ## What runs where
 
 ```text
@@ -37,7 +43,7 @@ orca account add --agent codex
 orca account list
 ```
 
-Install or refresh agent skills without a Settings UI:
+Install skills in the environment where the agent runs. For an agent running on the VM, run these commands in the VM shell as the user running Orca. Installing skills or authenticating an agent CLI on the laptop only configures that laptop.
 
 ```bash
 orca skills install --skill orca-cli --skill orchestration
@@ -101,7 +107,7 @@ On the computer you want to use as the client:
   caption="Share an Orca desktop runtime with another client over a private network."
 />
 
-Adding a server saves it without forcing every new project onto it. Open **Advanced → Default host for new projects** only when you want server-routed projects, terminals, provider checks, and browser or mobile handoff to use that server by default.
+This flow pairs with an Orca runtime that is already running. To use an SSH host you want Orca to manage, start with [SSH targets](/docs/ssh#add-an-ssh-target). For a manually managed Linux server, install and update Orca on the host using the [server-only instructions](#install-only-the-server-on-linux).
 
 ## Use the remote server
 
