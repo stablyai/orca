@@ -279,13 +279,17 @@ const CombinedSearchRowView = React.memo(function CombinedSearchRowView({
             title={`${row.fileResult.relativePath}:${row.match.line}`}
           >
             <span className="flex min-w-0 flex-1 items-baseline overflow-hidden whitespace-pre">
-              <span className="min-w-0 truncate text-muted-foreground">{parts.before}</span>
+              <span className="min-w-0 overflow-hidden text-ellipsis whitespace-pre text-muted-foreground">
+                {parts.before}
+              </span>
               {parts.match ? (
                 <span className="max-w-full shrink-0 truncate rounded-sm bg-annotation-highlight/30 text-foreground">
                   {parts.match}
                 </span>
               ) : null}
-              <span className="min-w-0 truncate text-muted-foreground">{parts.after}</span>
+              <span className="min-w-0 overflow-hidden text-ellipsis whitespace-pre text-muted-foreground">
+                {parts.after}
+              </span>
             </span>
           </div>
         </CopyPathMenu>

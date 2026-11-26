@@ -23,8 +23,11 @@ export function CombinedSearchStrip({
 }): React.JSX.Element {
   const t = useTranslate()
   const [focused, setFocused] = useState(false)
-  const [filtersOpen, setFiltersOpen] = useState(() => countActiveSearchFilters(filters) > 0)
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const showOptions = shouldShowSearchOptions(focused, field.query)
+  const activeFilterCount = countActiveSearchFilters(filters)
+  // A set filter stays visible at rest so it never silently narrows text results.
+  const showFiltersRow = showOptions || filtersOpen || activeFilterCount > 0
   const hasQuery = field.query.trim().length > 0
   const findFilesLabel = t(
     'auto.components.right.sidebar.FileExplorerNameFilter.26fb73c6e3',
@@ -34,7 +37,7 @@ export function CombinedSearchStrip({
   return (
     <div className="border-b border-border px-2 py-2" data-ignore-file-explorer-keys="true">
       <div
-        className="flex h-8 items-center gap-1 rounded-md border border-border bg-input/50 px-2 focus-within:border-ring focus-within:ring-1 focus-within:ring-ring"
+        className="flex h-8 items-center gap-1 rounded-md border border-border bg-input/50 px-[7px] focus-within:border-ring focus-within:ring-1 focus-within:ring-ring"
         data-combined-search-field=""
         onFocus={() => setFocused(true)}
         onBlur={(event) => {
@@ -110,17 +113,31 @@ export function CombinedSearchStrip({
             >
               <Regex className="size-3.5" />
             </ToggleButton>
-            <ToggleButton
-              active={filtersOpen || countActiveSearchFilters(filters) > 0}
-              ariaExpanded={filtersOpen}
-              onClick={() => setFiltersOpen((open) => !open)}
-              title={t('fileSearch.filters.toggle', 'Toggle search details')}
-            >
-              <ListFilter className="size-3.5" />
-            </ToggleButton>
           </span>
         ) : null}
       </div>
+      {showFiltersRow ? (
+        // Why: at 220px a fourth icon in the field leaves too little room for the query.
+        <div
+          className="flex h-6 items-center justify-end gap-1 pt-1"
+          data-search-filters-row=""
+          onMouseDown={(event) => event.preventDefault()}
+        >
+          {activeFilterCount > 0 ? (
+            <span className="text-2xs tabular-nums text-muted-foreground">
+              {t('fileSearch.filters.active', '{{count}} active', { count: activeFilterCount })}
+            </span>
+          ) : null}
+          <ToggleButton
+            active={filtersOpen || activeFilterCount > 0}
+            ariaExpanded={filtersOpen}
+            onClick={() => setFiltersOpen((open) => !open)}
+            title={t('fileSearch.filters.toggle', 'Toggle search details')}
+          >
+            <ListFilter className="size-3.5" />
+          </ToggleButton>
+        </div>
+      ) : null}
       <SearchFilters open={filtersOpen} {...filters} />
     </div>
   )
