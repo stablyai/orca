@@ -189,8 +189,8 @@ describe('win32 PATH lookup', () => {
   })
 
   it('finds a cmd shim created after an expired caller missed it', async () => {
-    const cmd = path.join(quotedBin, 'claude.CMD')
-    const bat = path.join(quotedBin, 'claude.BAT')
+    const cmd = path.join(quotedBin, 'late-shim.CMD')
+    const bat = path.join(quotedBin, 'late-shim.BAT')
     const entered = Promise.withResolvers<void>()
     const held = Promise.withResolvers<void>()
     const statFile = vi.mocked(stat)
@@ -203,7 +203,7 @@ describe('win32 PATH lookup', () => {
       return filesystem.realStat!(file)
     })
     const lookup = (signal: AbortSignal) =>
-      resolveCmdLaunchFolderProgram('claude', quotedBin, '.EXE;.CMD;.BAT;.COM', signal)
+      resolveCmdLaunchFolderProgram('late-shim', quotedBin, '.EXE;.CMD;.BAT;.COM', signal)
     const caller = new AbortController()
     const first = lookup(caller.signal).catch((error: unknown) => error)
     try {

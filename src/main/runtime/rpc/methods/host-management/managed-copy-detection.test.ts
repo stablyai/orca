@@ -71,8 +71,16 @@ vi.mock('node:os', async (original) => ({
   homedir: () => fixture.root
 }))
 vi.mock('../../../../ipc/preflight/preflight-local-env', () => ({
-  buildLocalPreflightEnv: () => ({ PATH: fixture.path, PATHEXT: '.EXE;.CMD' })
+  buildLocalPreflightEnv: () => ({ PATH: fixture.path, PATHEXT: '.EXE;.CMD' }),
+  buildLocalPreflightEnvAsync: async () => ({ PATH: fixture.path, PATHEXT: '.EXE;.CMD' })
 }))
+vi.mock('../../../../ipc/command-path/command-path-directory-worker-client', async () => {
+  const directory = await import('../../../../ipc/command-path/command-path-directory')
+  return {
+    readDetectionDirectoryViaWorker: directory.readDetectionDirectory,
+    readInstallDirectoriesViaWorker: directory.readInstallSubdirectories
+  }
+})
 vi.mock('../../../../ipc/command-path/agent-detection-shell-path', () => ({
   hydrateShellPathForAgentDetection: async () => {}
 }))

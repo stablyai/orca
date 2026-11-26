@@ -6,6 +6,7 @@ import type {
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
+import type { PreselectedAgentProgram } from '../../../managed-agent-cli/managed-agent-spawn-program'
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type {
   AgentLaunchPreferences,
@@ -50,6 +51,7 @@ export type TerminalCreateOptions = {
   suppressStartupUpdatePrompt?: boolean
   /** Host-only runtime fact used to quote this launch; spawn must take its shell from that same fact, never client input. */
   launchRuntime?: AgentLaunchRuntime
+  preselectedAgentProgram?: PreselectedAgentProgram
   /** Account routing env merged over `startupAgent`'s plan env; an input to that plan, like
    *  `agentArgs`, so not part of `callerSuppliedLaunch`. */
   accountEnv?: Record<string, string>

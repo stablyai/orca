@@ -6,6 +6,7 @@ import type { PtySpawnOutcome } from '../spawn/spawn-outcome'
 import type { PtyRegistrationClaim } from '../../../runtime/terminal/records/runtime-terminal-state-records'
 import type { PaneSpawnOperation } from '../pane/pane-spawn-operation'
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
+import type { PreselectedAgentProgram } from '../../../managed-agent-cli/managed-agent-spawn-program'
 import type { SpawnIntent } from '../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import type { IPtyProvider, PtySpawnOptions } from '../../../providers/pty/provider-contract'
 import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
@@ -148,6 +149,7 @@ export type RuntimePtySpawnArgs = {
   shellOverride?: string
   /** Planned command quoting determines the PTY runtime shell. */
   launchRuntime?: AgentLaunchRuntime
+  preselectedAgentProgram?: PreselectedAgentProgram
   isNewSession?: boolean
   /** No renderer view exists at spawn; main owns delivery and query replies until one mounts. */
   initiallyHidden?: boolean

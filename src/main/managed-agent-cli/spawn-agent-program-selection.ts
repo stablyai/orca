@@ -17,6 +17,7 @@ import { resolveCommandOnLocalPath } from '../ipc/command-path/command-path-reso
 import {
   AgentInventoryDeadlineError,
   selectTerminalAgentProgram,
+  withAgentInventoryDeadline,
   type TerminalAgentProgramSelection
 } from '../preflight/agent-command-detection'
 import { isOrcaAgentRuntimePath } from './managed-agent-cli-path'
@@ -31,9 +32,53 @@ export type SpawnProgramContext = {
   cwd?: string
   readCwd?: () => Promise<string | undefined>
   env?: NodeJS.ProcessEnv
+  preselectedAgentProgram?: PreselectedAgentProgram
 }
 
-export async function selectSpawnAgentProgram(
+export type PreselectedAgentProgram = {
+  shell: AgentStartupShell
+  wslDistro?: string | null
+  cmdCwd?: string
+  selection: TerminalAgentProgramSelection
+}
+
+export async function resolveSpawnAgentProgram(
+  spawn: SpawnProgramContext,
+  shell: AgentStartupShell,
+  programs: readonly [string, ...string[]],
+  launchCwd: string | undefined,
+  pinned: string | undefined,
+  onProgramSelected?: (program: PreselectedAgentProgram) => void
+): Promise<TerminalAgentProgramSelection> {
+  const unknownSelection: TerminalAgentProgramSelection = {
+    program: programs[0],
+    result: { kind: 'unknown' }
+  }
+  const preselected = spawn.preselectedAgentProgram
+  const wslDistro =
+    spawn.codexRuntime === 'wsl' ? (spawn.expectedWslDistro?.toLowerCase() ?? null) : undefined
+  const cmdCwd =
+    shell === 'cmd' && (onProgramSelected || preselected)
+      ? resolve(spawn.cwd ?? process.cwd(), launchCwd ?? '.')
+      : undefined
+  if (preselected) {
+    return preselected.shell === shell &&
+      preselected.wslDistro === wslDistro &&
+      (preselected.selection.result.kind !== 'by-name' || preselected.cmdCwd === cmdCwd) &&
+      programs.includes(preselected.selection.program)
+      ? preselected.selection
+      : unknownSelection
+  }
+  const selection = await withAgentInventoryDeadline((signal) =>
+    selectSpawnAgentProgram(spawn, shell, programs, launchCwd, pinned, signal)
+  ).catch(() => unknownSelection)
+  if ('path' in selection.result) {
+    onProgramSelected?.({ shell, wslDistro, cmdCwd, selection })
+  }
+  return selection
+}
+
+async function selectSpawnAgentProgram(
   spawn: SpawnProgramContext,
   shell: AgentStartupShell,
   programs: readonly [string, ...string[]],

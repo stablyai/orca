@@ -6,6 +6,13 @@ import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent
 import type { WorktreeSleepResumeRecorder } from '../../terminal/stop/worktree-sleep-resume-records'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentSessionResumeClaim } from './agent-session-resume-claims'
+import { agentLaunchQuotingShell } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
+import { resolveWslSessionContext } from '../../../daemon/pty-subprocess/wsl-session-context'
+import { getCodexSelectionTargetForPty } from '../../../ipc/pty/host-env/codex-home'
+import {
+  alignManagedAgentLaunchAtSpawn,
+  type PreselectedAgentProgram
+} from '../../../managed-agent-cli/managed-agent-spawn-program'
 
 export type AgentPaneRestartRefusal =
   /** Not a live terminal of this host's own (an SSH relay or another server's pane). */
@@ -13,6 +20,7 @@ export type AgentPaneRestartRefusal =
   /** A client viewing the pane would be left on a dead pane by an older Orca. */
   | 'viewer_cannot_follow'
   | 'no_resume_command'
+  | 'agent_program_blocked'
   | 'busy'
   /** The stop was sent but its exit unconfirmed: the terminal may still end, with no replacement. */
   | 'stop_failed'
@@ -61,17 +69,48 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
     let held: AgentSessionResumeClaim | null = null
     let dispatched = false
     try {
-      // Resolve the resume recipe before stopping the current terminal.
-      const resume = await this.resolveTerminalWorkspaceLaunchScope(`id:${pty.worktreeId}`)
-        .then((workspace) =>
-          this.resolveMobileSessionResumeCommand(workspace, {
-            ...session,
-            launchConfig: pty.launchConfig ?? undefined
-          })
-        )
-        .catch(() => null)
-      if (!resume) {
+      const workspace = await this.resolveTerminalWorkspaceLaunchScope(
+        `id:${pty.worktreeId}`
+      ).catch(() => null)
+      if (!workspace || workspace.connectionId) {
+        return { ok: false, reason: 'not_local' }
+      }
+      const resume = await this.resolveMobileSessionResumeCommand(workspace, {
+        ...session,
+        launchConfig: pty.launchConfig ?? undefined
+      }).catch(() => null)
+      if (!resume?.launchRuntime) {
         return { ok: false, reason: 'no_resume_command' }
+      }
+      const { launchRuntime } = resume
+      const cwd = workspace.path
+      const { shellOverride } = launchRuntime.pty
+      const expectedWslDistro = resolveWslSessionContext({ cwd, ...launchRuntime.pty })?.distro
+      const codexRuntime = getCodexSelectionTargetForPty(
+        shellOverride,
+        cwd,
+        expectedWslDistro
+      ).runtime
+      let preselectedAgentProgram: PreselectedAgentProgram | undefined
+      // Verify the replacement before stopping, then reuse its selection at spawn.
+      const aligned = await alignManagedAgentLaunchAtSpawn(
+        {
+          launchCommand: resume.command,
+          launchConfig: resume.launchConfig,
+          launchAgent: resume.launchAgent,
+          env: resume.env,
+          cwd,
+          codexRuntime,
+          expectedWslDistro,
+          restoring: true
+        },
+        agentLaunchQuotingShell(launchRuntime),
+        (program) => {
+          preselectedAgentProgram = program
+        }
+      )
+      if (aligned.blocked) {
+        return { ok: false, reason: 'agent_program_blocked' }
       }
       const ownPaneKey = makePaneKey(tabId, pane.leafId)
       // Held from before the live-pane check, so no other resume can start this conversation
@@ -190,6 +229,7 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
             launchConfig: resume.launchConfig,
             launchAgent: resume.launchAgent,
             launchRuntime: resume.launchRuntime,
+            preselectedAgentProgram,
             resumeProviderSession: resume.resumeProviderSession,
             spawnIntent: 'user-resume',
             // A desktop window that didn't hold the pane isn't shown or focused to the new terminal.

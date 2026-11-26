@@ -13,6 +13,7 @@ import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../share
 import type { RuntimeTerminalPresentation } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { SpawnIntent } from '../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
+import type { PreselectedAgentProgram } from '../../../managed-agent-cli/managed-agent-spawn-program'
 import {
   type RuntimeNavigationTarget,
   navigationTargetsHost
@@ -82,6 +83,7 @@ export type OwnedMobileTerminalCreateOptions = {
   resumeOrigin?: 'saved'
   spawnIntent?: SpawnIntent
   launchRuntime?: AgentLaunchRuntime
+  preselectedAgentProgram?: PreselectedAgentProgram
   signal?: AbortSignal
   refuseSleptWorktree?: boolean
   resumesSleepingRecord?: true

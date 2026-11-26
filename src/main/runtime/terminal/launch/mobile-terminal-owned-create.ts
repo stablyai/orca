@@ -121,6 +121,9 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
         ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
         ...(opts.trustWorktreeId ? { trustWorktreeId: opts.trustWorktreeId } : {}),
         ...(opts.launchRuntime ? { launchRuntime: opts.launchRuntime } : {}),
+        ...(opts.preselectedAgentProgram
+          ? { preselectedAgentProgram: opts.preselectedAgentProgram }
+          : {}),
         ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
         ...(opts.targetGroupId ? { targetGroupId: opts.targetGroupId } : {}),
         nativeChatSignIn: opts.nativeChatSignIn,

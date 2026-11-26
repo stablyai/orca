@@ -85,7 +85,7 @@ export class InventoryFsProbes {
       if (this.signal.aborted) {
         return UNVERIFIED_FS_PROBE
       }
-      return pending.get(path) ?? (await issueProbe(pending, path, kind, read))
+      return await (pending.get(path) ?? issueProbe(pending, path, kind, read))
     } finally {
       release()
     }

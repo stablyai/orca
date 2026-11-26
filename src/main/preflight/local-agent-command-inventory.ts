@@ -11,7 +11,7 @@ import {
   UNVERIFIED_FS_PROBE
 } from '../../shared/shell/command-resolution/inventory-fs-probes'
 import { readInstallDirectoriesViaWorker } from '../ipc/command-path/command-path-directory-worker-client'
-import { buildLocalPreflightEnv } from '../ipc/preflight/preflight-local-env'
+import { buildLocalPreflightEnvAsync } from '../ipc/preflight/preflight-local-env'
 import { waitForPromiseWithSignal } from '../../shared/concurrency/abort-signal-reason'
 import type { CommandInventory, InventoryPublication } from './agent-command-inventory-publication'
 
@@ -86,7 +86,7 @@ export async function scanLocalAgentCommandInventory(
   signal: AbortSignal
 ): Promise<CommandInventory> {
   const env =
-    buildLocalPreflightEnv() ??
+    (await waitForPromiseWithSignal(buildLocalPreflightEnvAsync(), signal)) ??
     (readLoginPath
       ? await waitForPromiseWithSignal(resolveLoginShellEnvironment(), signal)
       : process.env)

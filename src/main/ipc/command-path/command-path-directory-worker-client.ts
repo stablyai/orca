@@ -1,7 +1,6 @@
-import { existsSync } from 'node:fs'
 import type { Worker } from 'node:worker_threads'
 import type { InstallDirectoryListing } from '../../../shared/shell/command-resolution/inventory-fs-probes'
-import { readInlineInstallSubdirectories } from './command-path-directory'
+import { readInstallSubdirectories } from './command-path-directory'
 import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
 import { LazyWorkerThreadHost } from '../../worker-threads/lazy-worker-thread-host'
 import type { WorkerThreadFactory } from '../../worker-threads/worker-thread-transport'
@@ -25,9 +24,6 @@ function createWorker(): Worker {
     currentWorkerEntryLayout(__dirname),
     'command-path-directory-worker-entry.js'
   )
-  if (!existsSync(workerPath)) {
-    throw new Error(`Detection directory worker entry not found: ${workerPath}`)
-  }
   return spawnWorkerThread(workerPath, { name: 'orca-command-path-directory' })
 }
 
@@ -119,7 +115,7 @@ export async function readInstallDirectoriesViaWorker(
   dir: string
 ): Promise<InstallDirectoryListing | null> {
   if (cliInventory) {
-    return readInlineInstallSubdirectories(dir)
+    return readInstallSubdirectories(dir)
   }
   installClient ??= new DetectionDirectoryWorkerClient(createWorker, 'install')
   const listing = await installClient.read(dir)

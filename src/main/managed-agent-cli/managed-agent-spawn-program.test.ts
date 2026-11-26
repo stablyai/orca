@@ -11,16 +11,28 @@ import { detectInstalledAgentInventory } from '../preflight/installed-agent-dete
 import { selectTerminalAgentProgram } from '../preflight/agent-command-detection'
 import { alignManagedAgentLaunchAtSpawn } from './managed-agent-spawn-program'
 
-const detection = vi.hoisted(() => ({ path: '' }))
+const detection = vi.hoisted(() => ({ path: '', home: '' }))
 vi.mock(import('../preflight/agent-command-detection'), async (importOriginal) => ({
   ...(await importOriginal()),
   selectTerminalAgentProgram: vi.fn()
 }))
 vi.mock('../ipc/preflight/preflight-local-env', () => ({
-  buildLocalPreflightEnv: () => ({ Path: detection.path })
+  buildLocalPreflightEnv: () => ({ Path: detection.path }),
+  buildLocalPreflightEnvAsync: async () => ({ Path: detection.path })
 }))
-vi.mock('../ipc/command-path/command-path-directory-worker-client', () => ({
-  readDetectionDirectoryViaWorker: async () => null
+vi.mock('../ipc/command-path/command-path-directory-worker-client', async () => {
+  const directory = await import('../ipc/command-path/command-path-directory')
+  return {
+    readDetectionDirectoryViaWorker: directory.readDetectionDirectory,
+    readInstallDirectoriesViaWorker: directory.readInstallSubdirectories
+  }
+})
+vi.mock(import('node:os'), async (original) => ({
+  ...(await original()),
+  homedir: () => detection.home
+}))
+vi.mock('../../shared/shell/command-resolution/fnm-default-alias-dirs', () => ({
+  getFnmDefaultAliasDirectories: () => []
 }))
 vi.mock('../orca-profiles/profile-storage-paths', () => ({
   getProfileUserDataPath: () => (process.platform === 'win32' ? 'C:\\data\\orca' : '/data/orca')
@@ -232,6 +244,7 @@ it.runIf(process.platform === 'win32')(
     try {
       await writeFile(bin, '')
       detection.path = `"${pathEntry}"`
+      detection.home = dir
       const inventory = await detectInstalledAgentInventory()
       const plan = buildAgentStartupPlan({
         agent: 'claude',
@@ -245,10 +258,11 @@ it.runIf(process.platform === 'win32')(
       })
       expect(plan?.launchCommand).toBe(`& '${join(pathEntry, 'claude.eXe')}' '--verbose'`)
 
-      detection.path += `;${dir}`
+      detection.path += `;${pathEntry}`
       expect((await detectInstalledAgentInventory()).outsidePath?.claude).toBeUndefined()
     } finally {
       detection.path = ''
+      detection.home = ''
       await rm(dir, { recursive: true, force: true })
     }
   }

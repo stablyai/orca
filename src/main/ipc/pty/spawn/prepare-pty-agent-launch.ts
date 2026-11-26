@@ -67,6 +67,7 @@ export async function selectPtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
       ...input,
       launchCommand: command,
       launchAgent,
+      preselectedAgentProgram: args.preselectedAgentProgram,
       restoring: Boolean(args.resumeProviderSession) || args.resumeOrigin === 'saved',
       nativeChatSignIn: args.nativeChatSignIn,
       sshTarget: Boolean(connectionId),

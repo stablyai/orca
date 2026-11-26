@@ -1,10 +1,4 @@
-import {
-  opendirSync,
-  readdir as readdirCallback,
-  readdirSync,
-  type Dir,
-  type Dirent
-} from 'node:fs'
+import { readdir as readdirCallback, type Dir, type Dirent } from 'node:fs'
 import { lstat, opendir, readdir } from 'node:fs/promises'
 import path from 'node:path'
 import { promisify } from 'node:util'
@@ -77,9 +71,7 @@ function isDirentLookupError(error: unknown): error is { syscall: 'lstat'; code?
 // The callback API resolves DT_UNKNOWN entries with async lstat.
 const readdirEntries = promisify<string, { withFileTypes: true }, Dirent[]>(readdirCallback)
 
-export async function readInlineInstallSubdirectories(
-  dir: string
-): Promise<InstallDirectoryListing> {
+export async function readInstallSubdirectories(dir: string): Promise<InstallDirectoryListing> {
   const names: string[] = []
   let uncertain = false
   try {
@@ -108,47 +100,4 @@ export async function readInlineInstallSubdirectories(
     uncertain ||= !isMissingPathError(error) && !isPathPermissionError(error)
   }
   return { names, uncertain }
-}
-
-export function readInstallSubdirectories(dir: string): InstallDirectoryListing {
-  const names: string[] = []
-  let uncertain = false
-  try {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      if (entry.isDirectory()) {
-        names.push(entry.name)
-      }
-    }
-    return { names, uncertain }
-  } catch (error) {
-    if (!isDirentLookupError(error)) {
-      return { names, uncertain: !isMissingPathError(error) && !isPathPermissionError(error) }
-    }
-    uncertain = error.code !== 'ENOENT'
-  }
-  try {
-    // Read one entry at a time so a DT_UNKNOWN lookup error only drops that entry.
-    using directory = opendirSync(dir, { bufferSize: 1 })
-    for (;;) {
-      try {
-        const entry = directory.readSync()
-        if (!entry) {
-          return { names, uncertain }
-        }
-        if (entry.isDirectory()) {
-          names.push(entry.name)
-        }
-      } catch (error) {
-        if (!isDirentLookupError(error)) {
-          throw error
-        }
-        uncertain ||= error.code !== 'ENOENT'
-      }
-    }
-  } catch (error) {
-    return {
-      names,
-      uncertain: uncertain || (!isMissingPathError(error) && !isPathPermissionError(error))
-    }
-  }
 }

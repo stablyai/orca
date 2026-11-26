@@ -1,4 +1,5 @@
 import { OrcaRuntimeWithRegisterPty } from '../lifecycle/pty-registration'
+import type { AgentProgramBlockReason } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 
 export abstract class OrcaRuntimeWithPreparePtyExecutionContext extends OrcaRuntimeWithRegisterPty {
   protected abstract disposeHeadlessTerminal(ptyId: string): void
@@ -83,12 +84,12 @@ export abstract class OrcaRuntimeWithPreparePtyExecutionContext extends OrcaRunt
   noteTerminalSpawnCommand(
     ptyId: string,
     command: string | null | undefined,
-    blocked?: 'unknown' | 'unavailable'
+    blocked?: AgentProgramBlockReason
   ): void {
     const trimmed = typeof command === 'string' ? command.trim() : ''
     // A deliberately withheld launch also settles renderer rescue for this PTY.
     if (trimmed || blocked) {
-      this.terminalSpawnCommandsByPtyId.set(ptyId, trimmed)
+      this.terminalSpawnCommandsByPtyId.set(ptyId, blocked ? '' : trimmed)
     }
   }
 }

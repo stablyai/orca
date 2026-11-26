@@ -1,14 +1,17 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { AgentProgramBlockReason } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { notifyAgentLaunchFailure } from '../failure/agent-launch-failure'
 
 export function notifyBlockedAgentStartup(
   reason: AgentProgramBlockReason,
   request: string | undefined
 ): void {
   if (reason === 'unbuildable') {
-    notifyAgentLaunchFailure('hermes')
+    void import('../failure/agent-launch-failure')
+      .then(({ notifyAgentLaunchFailure }) => notifyAgentLaunchFailure('hermes'))
+      .catch((error: unknown) =>
+        console.warn('[terminal] could not show the startup notice', error)
+      )
     return
   }
   toast.message(

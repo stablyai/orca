@@ -1,6 +1,10 @@
-import { mergePersistedWindowsPath } from '../../pty/environment/windows-environment-path'
+import {
+  mergePersistedWindowsPath,
+  mergePersistedWindowsPathAsync
+} from '../../pty/environment/windows-environment-path'
 import {
   readGuestWindowsDriveMounts,
+  readGuestWindowsDriveMountsAsync,
   withoutWindowsDriveMountDirs
 } from '../../wsl/filesystem/wsl-guest-windows-drive-path'
 
@@ -18,16 +22,31 @@ export function buildLocalPreflightEnv(
   guestWindowsDriveMounts: readonly string[] = readGuestWindowsDriveMounts()
 ): Record<string, string> | undefined {
   if (process.platform !== 'win32') {
-    if (guestWindowsDriveMounts.length === 0) {
-      return undefined
-    }
-    // In a WSL guest, detection must find the Linux CLI, not a Windows shim on /mnt/<drive>.
-    const env = stringOnlyProcessEnv(process.env)
-    env.PATH = withoutWindowsDriveMountDirs(env.PATH ?? '', guestWindowsDriveMounts)
-    return env
+    return preflightEnvForMounts(guestWindowsDriveMounts)
   }
   const env = stringOnlyProcessEnv(process.env)
   // The running app must merge persisted Windows PATH to see newly installed CLIs.
   mergePersistedWindowsPath(env)
+  return env
+}
+
+export async function buildLocalPreflightEnvAsync(): Promise<Record<string, string> | undefined> {
+  if (process.platform !== 'win32') {
+    return preflightEnvForMounts(await readGuestWindowsDriveMountsAsync())
+  }
+  const env = stringOnlyProcessEnv(process.env)
+  await mergePersistedWindowsPathAsync(env)
+  return env
+}
+
+function preflightEnvForMounts(
+  guestWindowsDriveMounts: readonly string[]
+): Record<string, string> | undefined {
+  if (guestWindowsDriveMounts.length === 0) {
+    return undefined
+  }
+  // In a WSL guest, detection must find the Linux CLI, not a Windows shim on /mnt/<drive>.
+  const env = stringOnlyProcessEnv(process.env)
+  env.PATH = withoutWindowsDriveMountDirs(env.PATH ?? '', guestWindowsDriveMounts)
   return env
 }

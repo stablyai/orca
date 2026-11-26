@@ -38,9 +38,14 @@ import type { SleepingAgentLaunchConfig } from '../../shared/agent-session/lifec
 import type { NativeChatSignInRequest } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { MANAGED_AGENT_CLI_IDS, managedAgentCli } from './managed-agent-cli-registry'
-import { withAgentInventoryDeadline } from '../preflight/agent-command-detection'
 import { prepareNativeChatSignIn } from './prepare-native-chat-sign-in'
-import { selectSpawnAgentProgram, type SpawnProgramContext } from './spawn-agent-program-selection'
+import {
+  resolveSpawnAgentProgram,
+  type PreselectedAgentProgram,
+  type SpawnProgramContext
+} from './spawn-agent-program-selection'
+
+export type { PreselectedAgentProgram } from './spawn-agent-program-selection'
 
 type SpawnSettings = Parameters<typeof prepareNativeChatSignIn>[1]
 const stockAgents = Object.keys(TUI_AGENT_CONFIG).filter(isTuiAgent)
@@ -90,7 +95,8 @@ function managedPathAgent(program: string): TuiAgent | undefined {
 
 export async function alignManagedAgentLaunchAtSpawn(
   spawn: SpawnLaunch,
-  shell: AgentStartupShell
+  shell: AgentStartupShell,
+  onProgramSelected?: (program: PreselectedAgentProgram) => void
 ): Promise<AlignedLaunch> {
   const command = spawn.launchCommand
   const config = spawn.launchConfig
@@ -117,20 +123,21 @@ export async function alignManagedAgentLaunchAtSpawn(
   if (isFreshOmpLaunchCommand(command)) {
     let aligned: AlignedLaunch | undefined
     const guarded = await prepareFreshOmpLaunch(command, shell, async (inner) => {
-      aligned = await rewriteLaunchExecutable(spawn, shell, inner)
+      aligned = await rewriteLaunchExecutable(spawn, shell, inner, onProgramSelected)
       return aligned.command ?? inner
     })
     return aligned
       ? { ...aligned, command: aligned.blocked ? undefined : guarded }
       : { command, launchConfig: config }
   }
-  return rewriteLaunchExecutable(spawn, shell, command)
+  return rewriteLaunchExecutable(spawn, shell, command, onProgramSelected)
 }
 
 async function rewriteLaunchExecutable(
   spawn: SpawnLaunch,
   shell: AgentStartupShell,
-  command: string
+  command: string,
+  onProgramSelected?: (program: PreselectedAgentProgram) => void
 ): Promise<AlignedLaunch> {
   const config = spawn.launchConfig
   const source = spawn.sourceShell ?? shell
@@ -214,16 +221,14 @@ async function rewriteLaunchExecutable(
       agent === 'qoder' ? namesFor(agent).filter((name) => name !== preferred) : []
     const pinned = spawn.restoring ? config?.selectedExecutable : undefined
     const receivingShell = hermesArgv && shell === 'cmd' ? 'powershell' : shell
-    const { program, result: selected } = await withAgentInventoryDeadline((signal) =>
-      selectSpawnAgentProgram(
-        spawn,
-        receivingShell,
-        [preferred, ...alternatives],
-        cmd?.cwd || launch?.cwd,
-        pinned,
-        signal
-      )
-    ).catch(() => ({ program: preferred, result: { kind: 'unknown' as const } }))
+    const { program, result: selected } = await resolveSpawnAgentProgram(
+      spawn,
+      receivingShell,
+      [preferred, ...alternatives],
+      cmd?.cwd || launch?.cwd,
+      pinned,
+      onProgramSelected
+    )
     if (!('path' in selected)) {
       return { command: undefined, launchConfig: config, blocked: selected.kind }
     }

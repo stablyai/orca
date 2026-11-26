@@ -161,11 +161,8 @@ export async function findCommandsOnLocalPath(
         ])
       : []
   )
-  type Listing = Map<string, string> | typeof UNVERIFIED_FS_PROBE
-  const readListing = (
-    dir: PathDirectory,
-    pendingCount: number
-  ): Promise<Listing | null> | null => {
+  type Listing = Map<string, string> | typeof UNVERIFIED_FS_PROBE | null
+  const readListing = (dir: PathDirectory, pendingCount: number): Promise<Listing> | null => {
     if (!isWin && pendingCount <= DIRECT_DETECTION_COMMAND_LIMIT) {
       return null
     }
@@ -175,7 +172,7 @@ export async function findCommandsOnLocalPath(
   const probeCommand = async (
     command: string,
     dir: PathDirectory,
-    listing: Listing | null,
+    listing: Listing,
     canProbe: boolean
   ): Promise<DirectoryCandidate> => {
     const names = listing === UNVERIFIED_FS_PROBE ? null : listing
