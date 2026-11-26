@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import * as pty from 'node-pty'
@@ -26,7 +26,8 @@ afterEach(() => {
   rmSync(scratch, { recursive: true, force: true })
 })
 
-describe('daemon zsh startup command delivery', () => {
+// The zsh wrapper is POSIX-only; on Windows the launch config falls back without it.
+describe.skipIf(process.platform === 'win32')('daemon zsh startup command delivery', () => {
   it('hands a startup command to the wrapper instead of typing it', () => {
     const config = getShellLaunchConfig('/bin/zsh', ['ready', 'markers'], {
       hasStartupCommand: true,
@@ -84,14 +85,17 @@ describe('daemon zsh startup command delivery', () => {
       })
       const exited = new Promise<void>((resolve) => proc.onExit(() => resolve()))
       try {
-        await vi.waitFor(() => expect(existsSync(outPath)).toBe(true), { timeout: 15_000 })
+        // zsh creates the file before print writes to it.
+        await vi.waitFor(
+          () => expect(readFileSync(outPath, 'utf8').trim()).toBe('launched-in-full'),
+          { timeout: 15_000 }
+        )
       } finally {
         proc.kill()
         // afterEach removes the scratch dir; a still-dying zsh writing into it fails that with ENOTEMPTY.
         await exited
       }
 
-      expect(readFileSync(outPath, 'utf8').trim()).toBe('launched-in-full')
       // Nothing was typed, so the rc file's question saw no key.
       expect(readFileSync(answerPath, 'utf8').trim()).toBe('<>')
       expect(readFileSync(inheritedPath, 'utf8').trim()).toBe('0')
