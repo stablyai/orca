@@ -33,7 +33,7 @@ import {
 import { resolveUnixShellPath } from '../../providers/local-pty/local-pty-executable-spawn'
 import { selectShellStartupFeatures } from '../../pty/shell-startup/shell-startup-features'
 import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
-import { addWslEnvKeys } from '../../../shared/shell/wsl/wsl-env'
+import { addTerminalHandleToWslEnv, addWslEnvKeys } from '../../../shared/shell/wsl/wsl-env'
 import {
   recognizeAgentProcessFromCommandLine,
   type RecognizedAgentProcess
@@ -194,6 +194,7 @@ export function createPtyShellLaunchPlan(
     if (pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe') {
       addOrcaWslInteropEnv(env)
     }
+    addTerminalHandleToWslEnv(env)
   } else {
     rescrubDaemonPtyEnvironment(env, opts)
     const preferredShellPath = shellPath
