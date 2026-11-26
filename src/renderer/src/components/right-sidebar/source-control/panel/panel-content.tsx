@@ -68,6 +68,7 @@ export function SourceControlPanelContent({
     openBranchAllDiffs,
     openCommitFile,
     openCommittedDiff,
+    openHistoryCommitDiff,
     openConflictReview,
     refreshActiveGitStatus,
     refreshBranchCompare,
@@ -309,6 +310,12 @@ export function SourceControlPanelContent({
           label={t('auto.components.right.sidebar.SourceControl.scopeCommitFiles', 'Files')}
           sectionKey="commit"
           headerButtonRef={commitFilesHeaderRef}
+          // The whole-commit diff, as View all opens it for the other sections.
+          onViewAll={
+            currentCommitFiles?.status === 'ready' && currentCommitFiles.entries.length > 0
+              ? () => void openHistoryCommitDiff(changeScope.commit)
+              : undefined
+          }
           activeOpenRowKeys={activeOpenRowKeys}
           filteredBranchEntries={filteredBranchEntries}
           collapsedSections={collapsedSections}
