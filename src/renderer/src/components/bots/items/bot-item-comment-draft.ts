@@ -1,6 +1,9 @@
 // An item's comment box draft, kept in chat's draft store so it outlives the box.
 import { botRefKey, type BotRef } from '@/lib/bot-hosts'
-import { readNativeChatComposerDraft } from '../../native-chat/drafts/native-chat-composer-draft-store'
+import {
+  readNativeChatComposerDraft,
+  subscribeToNativeChatComposerDraft
+} from '../../native-chat/drafts/native-chat-composer-draft-store'
 import {
   readNativeChatDraftCache,
   writeNativeChatDraftCache
@@ -23,5 +26,6 @@ export function returnBotItemCommentDraft(bot: BotRef, uid: string, text: string
 /** What each box's draft replies to, in the same draft store beside it, so a restart keeps both. */
 export const botItemReplyTargetDrafts: BotItemReplyTargetStore = {
   read: readNativeChatDraftCache,
-  write: (key, value) => writeNativeChatDraftCache(key, value)
+  write: (key, value) => writeNativeChatDraftCache(key, value),
+  subscribe: subscribeToNativeChatComposerDraft
 }

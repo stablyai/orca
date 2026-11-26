@@ -10,6 +10,11 @@ import type { BotItem, BotItemEvent } from '../../../../../shared/bots/bot-items
 import type { BotItemWaitingLine } from '../../../../../shared/bots/bot-item-question-answers'
 import { createBotItemQuestionStepsHooks } from '../../../../../shared/bots/use-bot-item-question-steps'
 import { updateNativeChatComposerDraft } from '../../native-chat/drafts/native-chat-composer-draft-store'
+import { readNativeChatDraftCache } from '../../native-chat/drafts/native-chat-draft-views'
+import {
+  botItemReplyTargetKey,
+  sessionBotItemReplyTargets
+} from '../../../../../shared/bots/bot-item-reply-target'
 import { botItemCommentDraftScope } from './bot-item-comment-draft'
 import { useBotItemQuestionSteps } from './use-bot-item-question-steps'
 
@@ -110,6 +115,8 @@ type Hook = {
   send: () => void
   /** The chip's ×. */
   hide: () => void
+  /** Type your answer on the open question (the phone has none for one question). */
+  bind?: () => void
   hidden: () => boolean
   posted: Posted[]
 }
@@ -123,7 +130,8 @@ function desktop(uid: string, start: View): Hook {
         { ...item, uid },
         events,
         (_t, _p, questionId, plain) => void posted.push({ questionId, plain }),
-        []
+        [],
+        true
       ),
     { initialProps: start }
   )
@@ -142,6 +150,7 @@ function desktop(uid: string, start: View): Hook {
         fromBox('words', [], replyMark.hidden ? null : (waitingLine?.id ?? null))
       }),
     hide: () => act(() => hook.result.current.replyMark.hide()),
+    bind: () => act(() => hook.result.current.answerWaiting()),
     hidden: () => hook.result.current.replyMark.hidden
   }
 }
@@ -273,7 +282,7 @@ describe.each([
 })
 
 // A restart: every module fresh, with only what the draft storage saved.
-async function launchDesktop(saved: ReadonlyMap<string, unknown>) {
+async function launchDesktop(saved: ReadonlyMap<string, unknown>, mountBeforeLoad = false) {
   vi.resetModules()
   const drafts = '../../native-chat/drafts/'
   const storage = await import(`${drafts}native-chat-composer-draft-storage`)
@@ -282,7 +291,12 @@ async function launchDesktop(saved: ReadonlyMap<string, unknown>) {
     disk.drafts.set(key, value)
   }
   storage.setNativeChatComposerDraftStorageForTests(disk)
-  await (await import(`${drafts}native-chat-composer-draft-load`)).hydrateNativeChatComposerDrafts()
+  const { hydrateNativeChatComposerDrafts } = await import(
+    `${drafts}native-chat-composer-draft-load`
+  )
+  if (!mountBeforeLoad) {
+    await hydrateNativeChatComposerDrafts()
+  }
   const testing = await import('@testing-library/react')
   const { useBotItemQuestionSteps: useSteps } = await import('./use-bot-item-question-steps')
   const { flushNativeChatComposerDrafts } = await import(
@@ -302,6 +316,10 @@ async function launchDesktop(saved: ReadonlyMap<string, unknown>) {
       []
     )
   )
+  if (mountBeforeLoad) {
+    // The item opened before the saved drafts finished loading.
+    await testing.act(() => hydrateNativeChatComposerDrafts())
+  }
   return {
     disk: disk.drafts,
     posted,
@@ -360,5 +378,131 @@ describe.each([
     cleanup()
     away('other words')
     expect(open(uid, start, false).line()).toBeNull()
+  })
+})
+
+it('a desktop box open before the saved drafts load takes their target and ×', async () => {
+  const before = await launchDesktop(new Map())
+  await before.type('words')
+  before.act(() => before.hook.result.current.replyMark.hide())
+  await before.quit()
+  const after = await launchDesktop(before.disk, true)
+  expect(after.hook.result.current.waitingLine?.eventId).toBe(A.id)
+  expect(after.hook.result.current.replyMark.hidden).toBe(true)
+  await after.quit()
+})
+
+describe('changes made together in one event all land', () => {
+  it("a later line's Type your answer names that line", () => {
+    const uid = 'paired-line'
+    const hook = renderHook(() =>
+      useBotItemQuestionSteps(bot, { ...needsYou(PAIR), uid }, [PAIR], () => {}, [], true)
+    )
+    // The card's Type your answer on line 2: the step binds it, then the box shows "Replying to".
+    act(() => {
+      hook.result.current.steps!.bind(1)
+      hook.result.current.replyMark.show()
+    })
+    act(() =>
+      updateNativeChatComposerDraft(
+        botItemCommentDraftScope(bot, uid),
+        { text: 'words' },
+        'immediate'
+      )
+    )
+    expect(hook.result.current.waitingLine?.id).toBe(`${PAIR.id}:1`)
+  })
+
+  it('Type your answer over a draft begun before the question answers it', () => {
+    const uid = 'paired-plain'
+    const plainStart: View = { item: working, events: [] }
+    const posted: Posted[] = []
+    const hook = renderHook(
+      ({ item, events }: View) =>
+        useBotItemQuestionSteps(
+          bot,
+          { ...item, uid },
+          events,
+          (_t, _p, questionId, plain) => void posted.push({ questionId, plain }),
+          [],
+          true
+        ),
+      { initialProps: plainStart }
+    )
+    act(() =>
+      updateNativeChatComposerDraft(
+        botItemCommentDraftScope(bot, uid),
+        { text: 'words' },
+        'immediate'
+      )
+    )
+    hook.rerender({ item: needsYou(A), events: [A] })
+    expect(hook.result.current.waitingLine).toBeNull()
+    act(() => {
+      hook.result.current.answerWaiting()
+      hook.result.current.replyMark.show()
+    })
+    expect(hook.result.current.waitingLine?.eventId).toBe(A.id)
+    expect(hook.result.current.replyMark.hidden).toBe(false)
+  })
+
+  it('answers recovered as a comment of their own name no line', () => {
+    const uid = 'paired-recover'
+    const hook = renderHook(() =>
+      useBotItemQuestionSteps(bot, { ...needsYou(A), uid }, [A], () => {}, [], true)
+    )
+    // Recovering an earlier ask's answers: none, the words go in, and "Replying to" hides.
+    act(() => {
+      hook.result.current.answerNone()
+      updateNativeChatComposerDraft(
+        botItemCommentDraftScope(bot, uid),
+        { text: 'earlier' },
+        'immediate'
+      )
+      hook.result.current.replyMark.hide()
+    })
+    expect(hook.result.current.waitingLine).toBeNull()
+  })
+})
+
+it('two desktop boxes on one item agree on the ×', () => {
+  const uid = 'two-boxes'
+  const open = () =>
+    renderHook(() => useBotItemQuestionSteps(bot, { ...needsYou(A), uid }, [A], () => {}, [], true))
+  const one = open()
+  const two = open()
+  act(() =>
+    updateNativeChatComposerDraft(botItemCommentDraftScope(bot, uid), { text: 'w' }, 'immediate')
+  )
+  act(() => one.result.current.replyMark.hide())
+  expect(two.result.current.replyMark.hidden).toBe(true)
+  act(() =>
+    updateNativeChatComposerDraft(botItemCommentDraftScope(bot, uid), { text: 'wo' }, 'immediate')
+  )
+  expect(one.result.current.replyMark.hidden).toBe(true)
+  expect(two.result.current.replyMark.hidden).toBe(true)
+})
+
+describe.each([
+  [
+    'desktop',
+    (uid: string) =>
+      readNativeChatDraftCache(botItemReplyTargetKey(botItemCommentDraftScope(bot, uid)))
+  ],
+  ['phone', (uid: string) => sessionBotItemReplyTargets.read(botItemReplyTargetKey(uid))]
+] as const)('%s keeps nothing for a question that is gone', (app, kept) => {
+  const opener = app === 'desktop' ? desktop : phone
+  const cases: [string, (box: Hook) => void][] = [['closed with ×', (box) => box.hide()]]
+  if (app === 'desktop') {
+    cases.push(['chosen by Type your answer', (box) => box.bind?.()])
+  }
+  it.each(cases)('%s', (_name, choose) => {
+    const uid = `${app}-gone-${_name}`
+    const box = opener(uid, { item: needsYou(A), events: [A] })
+    choose(box)
+    expect(kept(uid)).not.toBe('')
+    // The item is done: it reads with no question waiting.
+    box.show({ item: { ...working, status: 'done' }, events: [A] })
+    expect(kept(uid)).toBe('')
   })
 })

@@ -1,8 +1,10 @@
 // What an item's comment box replies to, on the desktop and the phone: the question line its draft
-// started on and whether its "Replying to" was closed, kept beside the box's draft so it outlives
-// the box as the draft does.
+// started on and whether its "Replying to" was closed. Kept in one store beside the box's draft, which
+// every box on the item reads and writes, so it outlives the box (and on desktop a restart) as the
+// draft does.
 import type * as React from 'react'
 import type { BotItemWaitingLine } from './bot-item-question-answers'
+import type { BotItem } from './bot-items'
 
 /** The box's "Replying to" on its line: closed (×), and how to close or reopen it. */
 export type BotItemReplyMarkState = Pick<BotItemReplyTarget, 'hidden' | 'hide' | 'show'>
@@ -35,14 +37,43 @@ type Kept = { bound: Bound; wasEmpty: boolean; hidden: string | null }
 export type BotItemReplyTargetStore = {
   read: (key: string) => string
   write: (key: string, value: string) => void
+  subscribe: (key: string, listener: () => void) => () => void
 }
 
 const sessionTargets = new Map<string, string>()
+const sessionListeners = new Map<string, Set<() => void>>()
 
 /** For drafts kept only for the app session (the phone's). */
 export const sessionBotItemReplyTargets: BotItemReplyTargetStore = {
   read: (key) => sessionTargets.get(key) ?? '',
-  write: (key, value) => void (value ? sessionTargets.set(key, value) : sessionTargets.delete(key))
+  write: (key, value) => {
+    if (value) {
+      sessionTargets.set(key, value)
+    } else {
+      sessionTargets.delete(key)
+    }
+    sessionListeners.get(key)?.forEach((listener) => listener())
+  },
+  subscribe: (key, listener) => {
+    const listeners = sessionListeners.get(key) ?? new Set()
+    sessionListeners.set(key, listeners)
+    listeners.add(listener)
+    return () => {
+      listeners.delete(listener)
+      if (listeners.size === 0) {
+        sessionListeners.delete(key)
+      }
+    }
+  }
+}
+
+/** The item is read (with its Activity) and waits on no question, so the box's kept lines are gone. */
+export function botItemWaitsOnNoQuestion(
+  item: BotItem | null,
+  waitingAsk: unknown,
+  eventsRead: boolean
+): boolean {
+  return eventsRead && item !== null && item.question === null && !item.waitingAsk && !waitingAsk
 }
 
 export function botItemReplyTargetKey(scope: string): string {
@@ -89,13 +120,54 @@ function parseKept(text: string): Kept | null {
   return null
 }
 
+type Asked = {
+  open: readonly BotItemWaitingLine[]
+  /** The item is read and waits on no question: every kept line is gone. */
+  noQuestion: boolean
+}
+
+/** The kept target as the box is now: a draft's start or end moves it, and lines no longer asked go.
+ *  `seenEmpty`: what this box last saw, for a box with nothing kept. */
+function settleKept(
+  stored: Kept | null,
+  seenEmpty: boolean,
+  boxEmpty: boolean,
+  { open, noQuestion }: Asked
+): Kept {
+  const asked = (id: string): boolean => open.some((line) => line.id === id)
+  // An open line other than it, or none at all on a read item: never a line still loading or on its way.
+  const gone = (id: string): boolean => !asked(id) && (open.length > 0 || noQuestion)
+  let { bound, wasEmpty, hidden } = stored ?? { bound: null, wasEmpty: seenEmpty, hidden: null }
+  if (wasEmpty !== boxEmpty) {
+    if (!boxEmpty && bound !== 'none' && !(bound && asked(bound.id))) {
+      bound = open[0] ? { id: open[0].id, explicit: false } : 'none'
+    } else if (boxEmpty && (bound === 'none' || (bound && !bound.explicit))) {
+      bound = null
+    }
+    wasEmpty = boxEmpty
+  }
+  if (hidden !== null && gone(hidden)) {
+    hidden = null
+  }
+  if (bound !== null && bound !== 'none' && gone(bound.id)) {
+    bound = boxEmpty ? null : 'none'
+  }
+  return { bound, wasEmpty, hidden }
+}
+
 /** What the comment box replies to, desktop and phone alike: the line named when its draft's first
  *  words (or a photo) arrived, until it is empty again. A later ask never moves a draft to its line:
  *  the box then names nothing, so the words go as a comment of their own. An empty box names the first
- *  of `open`. The target is kept beside the draft (`store`), so a draft there when the item opens,
- *  or after a restart, names the line it named before; one that changed meanwhile names none. */
+ *  of `open`. The store owns it: every box on the item reads it, and each change reads it fresh, so two
+ *  changes in one event both land. A draft there when the item opens, or after a restart, names the
+ *  line it named before; one restored with nothing kept (or that changed meanwhile) names none. */
 export function createBotItemReplyTargetHook(
-  { useState, useLayoutEffect }: Pick<typeof React, 'useState' | 'useLayoutEffect'>,
+  {
+    useCallback,
+    useLayoutEffect,
+    useRef,
+    useSyncExternalStore
+  }: Pick<typeof React, 'useCallback' | 'useLayoutEffect' | 'useRef' | 'useSyncExternalStore'>,
   store: BotItemReplyTargetStore = sessionBotItemReplyTargets
 ) {
   return function useBotItemReplyTarget(
@@ -103,49 +175,45 @@ export function createBotItemReplyTargetHook(
     scope: string,
     /** The lines the box could name now, the one an empty box names first. */
     open: readonly BotItemWaitingLine[],
-    boxEmpty: boolean
+    boxEmpty: boolean,
+    /** The item is read and waits on no question. */
+    noQuestion = false
   ): BotItemReplyTarget {
     const key = botItemReplyTargetKey(scope)
-    const find = (id: string): BotItemWaitingLine | null =>
-      open.find((line) => line.id === id) ?? null
-    const first = open[0] ?? null
-    // `live`: this box's state from its last render, when it is still this scope's.
-    const settle = (live: Kept | null): Kept & { key: string } => {
-      const kept = parseKept(store.read(key))
-      const hidden = live ? live.hidden : (kept?.hidden ?? null)
-      // A draft that is as it was kept (the box shown again, or loaded after a restart) keeps it.
-      if (kept && kept.wasEmpty === boxEmpty) {
-        return { key, bound: kept.bound, wasEmpty: boxEmpty, hidden }
+    const subscribe = useCallback((listener: () => void) => store.subscribe(key, listener), [key])
+    const text = useSyncExternalStore(subscribe, () => store.read(key))
+    const seen = useRef<{ key: string; empty: boolean } | null>(null)
+    const seenEmpty = seen.current?.key === key ? seen.current.empty : boxEmpty
+    const asked = { open, noQuestion }
+    const current = settleKept(parseKept(text), seenEmpty, boxEmpty, asked)
+    const settled = serializeKept(current)
+    useLayoutEffect(() => {
+      seen.current = { key, empty: boxEmpty }
+      // Only over what this render read: another box's newer write re-renders this one instead.
+      if (settled !== text && store.read(key) === text) {
+        store.write(key, settled)
       }
-      let bound = live ? live.bound : null
-      if (live) {
-        if (!boxEmpty && bound !== 'none' && !(bound && find(bound.id))) {
-          bound = first ? { id: first.id, explicit: false } : 'none'
-        } else if (boxEmpty && (bound === 'none' || (bound && !bound.explicit))) {
-          bound = null
-        }
-      }
-      return { key, bound, wasEmpty: boxEmpty, hidden }
+    })
+    const lineOf = ({ bound }: Kept): BotItemWaitingLine | null =>
+      bound === 'none'
+        ? null
+        : ((bound && open.find((line) => line.id === bound.id)) ??
+          (boxEmpty ? open[0] : null) ??
+          null)
+    // Read fresh, so a second change in the same event keeps the first.
+    const update = (change: (kept: Kept) => Partial<Kept>): void => {
+      const fresh = settleKept(parseKept(store.read(key)), boxEmpty, boxEmpty, asked)
+      store.write(key, serializeKept({ ...fresh, ...change(fresh) }))
     }
-    const [state, setState] = useState(() => settle(null))
-    let current = state
-    if (state.key !== key || state.wasEmpty !== boxEmpty) {
-      current = settle(state.key === key ? state : null)
-      setState(current)
-    }
-    const kept = serializeKept(current)
-    useLayoutEffect(() => store.write(key, kept), [key, kept])
-    const save = (change: Partial<Kept>): void => setState({ ...current, ...change })
-    const held = current.bound
-    const line = held === 'none' ? null : ((held && find(held.id)) ?? (boxEmpty ? first : null))
+    const line = lineOf(current)
     return {
       line,
       hidden: line !== null && current.hidden === line.id,
-      bind: (id) => save({ bound: { id, explicit: true } }),
-      none: () => save({ bound: 'none' }),
-      release: () => save({ bound: null }),
-      hide: () => save({ hidden: line?.id ?? null }),
-      show: () => save({ hidden: null })
+      bind: (id) => update(() => ({ bound: { id, explicit: true } })),
+      none: () => update(() => ({ bound: 'none' })),
+      release: () => update(() => ({ bound: null })),
+      hide: () => update((kept) => ({ hidden: lineOf(kept)?.id ?? null })),
+      show: () => update(() => ({ hidden: null }))
     }
   }
 }

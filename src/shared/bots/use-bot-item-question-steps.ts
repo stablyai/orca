@@ -29,7 +29,11 @@ import {
   type BotItemWaitingLine
 } from './bot-item-question-answers'
 import type { BotItemPendingComment, BotItemPendingIntent } from './bot-item-pending-comments'
-import { createBotItemReplyTargetHook, type BotItemReplyMarkState } from './bot-item-reply-target'
+import {
+  botItemWaitsOnNoQuestion,
+  createBotItemReplyTargetHook,
+  type BotItemReplyMarkState
+} from './bot-item-reply-target'
 
 const NO_ASK: BotItemQuestionShape = { body: '', decisions: [] }
 
@@ -131,11 +135,20 @@ export function createBotItemQuestionStepsHooks(
     useLayoutEffect,
     useMemo,
     useRef,
-    useState
-  }: Pick<typeof React, 'useCallback' | 'useLayoutEffect' | 'useMemo' | 'useRef' | 'useState'>,
+    useState,
+    useSyncExternalStore
+  }: Pick<
+    typeof React,
+    'useCallback' | 'useLayoutEffect' | 'useMemo' | 'useRef' | 'useState' | 'useSyncExternalStore'
+  >,
   useHeldDraft: HeldDraft
 ) {
-  const useBotItemReplyTarget = createBotItemReplyTargetHook({ useState, useLayoutEffect })
+  const useBotItemReplyTarget = createBotItemReplyTargetHook({
+    useCallback,
+    useLayoutEffect,
+    useRef,
+    useSyncExternalStore
+  })
 
   /** A stable function calling the latest committed handler. */
   function useLatest<A extends unknown[], R>(handler: (...args: A) => R): (...args: A) => R {
@@ -199,7 +212,9 @@ export function createBotItemQuestionStepsHooks(
         : oneLine
           ? [oneLine]
           : [],
-      boxEmpty
+      boxEmpty,
+      // The phone reads an item and its Activity together.
+      botItemWaitsOnNoQuestion(item, asked, true)
     )
     // A line another client answered meanwhile keeps that answer; its held one is dropped.
     const kept = shape.decisions.map((_, at) => (lines.includes(at) ? (held[at] ?? null) : null))

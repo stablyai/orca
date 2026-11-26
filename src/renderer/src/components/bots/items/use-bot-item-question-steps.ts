@@ -6,7 +6,7 @@
 // sent with (src/shared/bots/bot-item-held-answers). Box words with no line named post at once and
 // take the picks along. What each send answers is kept on its pending entry
 // (`intent`), so its lines show as sent and can't be sent twice, whatever its words.
-import { useCallback, useLayoutEffect, useState, useSyncExternalStore } from 'react'
+import { useCallback, useLayoutEffect, useRef, useSyncExternalStore } from 'react'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import type { Bot } from '../../../../../shared/bot-types'
 import type {
@@ -32,6 +32,7 @@ import {
   type BotItemWaitingLine
 } from '../../../../../shared/bots/bot-item-question-answers'
 import {
+  botItemWaitsOnNoQuestion,
   createBotItemReplyTargetHook,
   type BotItemReplyMarkState
 } from '../../../../../shared/bots/bot-item-reply-target'
@@ -50,7 +51,7 @@ import {
 const NO_ASK: BotItemQuestionShape = { body: '', decisions: [] }
 
 const useBotItemReplyTarget = createBotItemReplyTargetHook(
-  { useState, useLayoutEffect },
+  { useCallback, useLayoutEffect, useRef, useSyncExternalStore },
   botItemReplyTargetDrafts
 )
 
@@ -101,7 +102,9 @@ export function useBotItemQuestionSteps(
     skipped?: readonly number[],
     intent?: BotItemPendingIntent
   ) => void,
-  pending: readonly BotItemPendingComment[]
+  pending: readonly BotItemPendingComment[],
+  /** The item's Activity is read: until then a question may be there unseen. */
+  eventsRead = false
 ): {
   steps: BotItemQuestionSteps | null
   sent: ReadonlyMap<string, readonly (string | null)[]>
@@ -169,7 +172,12 @@ export function useBotItemQuestionSteps(
     : oneLine && !pending.some((entry) => !entry.failed && entry.intent?.askId === oneLine.eventId)
       ? [oneLine]
       : []
-  const target = useBotItemReplyTarget(boxScope, open, boxEmpty)
+  const target = useBotItemReplyTarget(
+    boxScope,
+    open,
+    boxEmpty,
+    botItemWaitsOnNoQuestion(item, asked, eventsRead)
+  )
   // Stored picks: a line a comment answered by name loses its pick; one on its way keeps it, to
   // recover if the host refuses it.
   const stored = (index: number, answer: BotItemHeldAnswer | null): (BotItemHeldAnswer | null)[] =>
