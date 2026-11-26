@@ -24,17 +24,8 @@ describe('WSL distro holder account', () => {
     await removeTempDirs(dirs.splice(0))
   })
 
-  it('passes the pinned account as -u', () => {
-    expect(buildWslDistroHolderArgs('Ubuntu', 'root').slice(0, 4)).toEqual([
-      '-d',
-      'Ubuntu',
-      '-u',
-      'root'
-    ])
-    expect(buildWslDistroHolderArgs('Ubuntu')).not.toContain('-u')
-  })
-
-  it('replaces a holder an earlier run spawned for the default user once the host is pinned', async () => {
+  // First in the file: no records read has happened yet in this module.
+  it('keeps a holder until pins load, then replaces one running as another account', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-wsl-holder-user-'))
     dirs.push(userDataPath)
     await writeWslDistroHolderRecord(userDataPath, {
@@ -44,7 +35,6 @@ describe('WSL distro holder account', () => {
       creationTimeMs: 1,
       startedAtMs: 1
     })
-    pinWslHostLinuxUsers([{ distro: 'Ubuntu', linuxUser: 'root' }])
     const alive = new Set([OLD_PID])
     const killed: number[] = []
     const holder = createWslDistroHolder({
@@ -53,7 +43,7 @@ describe('WSL distro holder account', () => {
         alive.has(pid)
           ? {
               status: 'present',
-              commandLine: commandLine(pid === OLD_PID ? undefined : 'root'),
+              commandLine: commandLine(pid === OLD_PID ? 'root' : 'alice'),
               startedAtMs: 1
             }
           : { status: 'missing' },
@@ -74,8 +64,22 @@ describe('WSL distro holder account', () => {
       listRunningDistros: async () => ['Ubuntu'],
       sleep: async () => {}
     })
+    // Pins not loaded yet (an unreadable host store): the root holder is kept, not judged.
+    expect(await holder.holderState('Ubuntu')).toBe('live')
+    expect(killed).toEqual([])
+    pinWslHostLinuxUsers([{ distro: 'Ubuntu', linuxUser: 'alice' }])
     const result = await holder.ensureHeld('Ubuntu')
     expect(killed).toEqual([OLD_PID])
     expect(result).toMatchObject({ outcome: 'spawned', record: { pid: NEW_PID } })
+  })
+
+  it('passes the pinned account as -u', () => {
+    expect(buildWslDistroHolderArgs('Ubuntu', 'root').slice(0, 4)).toEqual([
+      '-d',
+      'Ubuntu',
+      '-u',
+      'root'
+    ])
+    expect(buildWslDistroHolderArgs('Ubuntu')).not.toContain('-u')
   })
 })

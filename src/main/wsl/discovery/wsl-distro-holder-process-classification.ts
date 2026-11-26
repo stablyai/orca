@@ -38,11 +38,15 @@ export function classifyWslDistroHolderProcess(
 export function classifyWslDistroHolderForAccount(
   record: WslDistroHolderRecord,
   evidence: WindowsProcessEvidence,
-  user: string | undefined
+  /** null: pins not loaded yet, so no holder is judged another account's. */
+  user: string | undefined | null
 ): WslDistroHolderState | 'other-account' {
   const state = classifyWslDistroHolderProcess(record, evidence)
   const commandLine = evidence.status === 'present' ? evidence.commandLine : null
-  return state === 'live' && commandLine && !isWslDistroHolderForUser(commandLine, user)
+  return state === 'live' &&
+    commandLine &&
+    user !== null &&
+    !isWslDistroHolderForUser(commandLine, user)
     ? 'other-account'
     : state
 }

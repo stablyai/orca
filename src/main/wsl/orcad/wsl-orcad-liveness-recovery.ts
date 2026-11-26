@@ -93,11 +93,12 @@ export async function recoverWslOrcad(
       if (!context.current()) {
         return null
       }
-      // Final (an unsupported distro, a changed account, another server's key): show it, wait on the user.
+      // Provably final (unsupported distro, changed account, sealed refusals); an unclassified `foreign` answer may be a restart, so it backs off.
       if (
         error instanceof OrcadHostUnsupportedError ||
-        error instanceof OrcadManagedIdentityError ||
-        error instanceof OrcadManagedPairingRejectedError
+        error instanceof OrcadManagedPairingRejectedError ||
+        (error instanceof OrcadManagedIdentityError &&
+          (error.sealed || error.kind === 'replaced-server'))
       ) {
         context.publish({ state: 'failed', reason: error.message, terminals })
         return null

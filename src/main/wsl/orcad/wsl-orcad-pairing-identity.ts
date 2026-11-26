@@ -3,7 +3,6 @@ import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing
 import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type { ServeReadiness } from '../../server/serve-readiness'
 import {
-  ORCAD_IDENTITY_MISMATCH_CODE,
   OrcadManagedIdentityError,
   orcadIdentityRefusal,
   verifyOrcadPairingIdentity,
@@ -54,18 +53,15 @@ export async function resolveWslOrcadPairing(
   return pairingOffer
 }
 
-/** An enrolled WSL host's refusal names WSL causes and fixes, not an SSH user's (#49180). */
+/** An enrolled WSL host's proven refusal names WSL causes and fixes (#49180); a guess stays as it was. */
 async function withWslIdentityWording(distro: string, run: () => Promise<unknown>): Promise<void> {
   try {
     await run()
   } catch (error) {
-    if (!(error instanceof OrcadManagedIdentityError)) {
-      throw error
-    }
-    throw OrcadManagedIdentityError.wslHostServer(
-      distro,
-      error.message.replace(`${ORCAD_IDENTITY_MISMATCH_CODE}: `, '')
-    )
+    const proven =
+      error instanceof OrcadManagedIdentityError &&
+      (error.sealed || error.kind === 'replaced-server')
+    throw proven ? OrcadManagedIdentityError.wslHostServer(distro, error) : error
   }
 }
 

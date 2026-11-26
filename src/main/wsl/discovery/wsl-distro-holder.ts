@@ -6,7 +6,7 @@ import {
 } from './wsl-background-distro-gate'
 import { WslDistroNotRunningError } from '../orcad/wsl-orcad-connection-errors'
 import { spawnDetachedHolder } from './wsl-distro-holder-command'
-import { pinnedWslHostLinuxUser } from '../orcad/wsl-orcad-host-user'
+import { knownWslHostLinuxUser } from '../orcad/wsl-orcad-host-user'
 import {
   listWslDistroHolderRecordDistros,
   readWslDistroHolderRecord,
@@ -79,7 +79,7 @@ export function createWslDistroHolder(dependencies: WslDistroHolderDependencies)
     const found = classifyWslDistroHolderForAccount(
       read.record,
       evidence,
-      pinnedWslHostLinuxUser(distro)
+      knownWslHostLinuxUser(distro)
     )
     // One spawned for another account watches that account's release file: replace it (#49180).
     const state = found === 'other-account' ? await stopRecordedHolder(read.record) : found

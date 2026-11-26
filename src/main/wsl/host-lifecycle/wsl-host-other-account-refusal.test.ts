@@ -1,13 +1,14 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type { WslHostDeploymentRecord } from '../../../shared/remote-runtime/host-store/wsl-host-deployment-store'
 import { WslHostAccountChangedError } from '../orcad/wsl-orcad-account-facts'
-import { pinnedWslHostLinuxUser } from '../orcad/wsl-orcad-host-user'
+import { pinnedWslHostLinuxUser, pinWslHostLinuxUsers } from '../orcad/wsl-orcad-host-user'
 import { recoverWslOrcad } from '../orcad/wsl-orcad-liveness-recovery'
 import { WslOrcadReconnectBackoff } from '../orcad/wsl-orcad-reconnect-backoff'
 import type { WslOrcadConnectionStatus } from '../orcad/wsl-orcad-connection-status'
 import { UNVERIFIABLE_ORCAD_TERMINAL_CENSUS } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
 import { retryableConnectFailure } from './wsl-host-connect-failure'
+import { OrcadManagedIdentityError } from '../../managed-server/lifecycle/orcad-managed-tunnel-identity'
 import { accountHoldingKey, connectAsPairedWslAccount } from './wsl-host-account-migration'
 
 const changed = new WslHostAccountChangedError('Ubuntu-24.04', { uid: '1001', name: 'qauser' })
@@ -54,9 +55,41 @@ describe('a WSL host whose default account no longer serves its pairing', () => 
     expect(attempts).toBe(1)
     expect(published.at(-1)).toMatchObject({ state: 'failed', reason: changed.message })
   })
+
+  it('keeps backing off on a guessed foreign answer but stops on a sealed one', async () => {
+    const run = async (error: Error): Promise<number> => {
+      let attempts = 0
+      await recoverWslOrcad(
+        {
+          distro: 'Ubuntu-24.04',
+          backoff: new WslOrcadReconnectBackoff(() => 0),
+          now: () => 0,
+          current: () => true,
+          wait: async () => {},
+          publish: () => {},
+          ensure: async () => {
+            attempts += 1
+            throw error
+          },
+          collectCensus: async () => UNVERIFIABLE_ORCAD_TERMINAL_CENSUS,
+          arm: async () => {},
+          readRunning: async () => ({ status: 'confirmed', distros: ['Ubuntu-24.04'] })
+        },
+        'orcad-exited'
+      )
+      return attempts
+    }
+    // A bridge port briefly answered by something else during a restart: not proof.
+    expect(
+      await run(OrcadManagedIdentityError.foreignPort(6800, 'status.get failed'))
+    ).toBeGreaterThan(1)
+    expect(await run(OrcadManagedIdentityError.foreignPort(6800, 'closed 4003', true))).toBe(1)
+  })
 })
 
 describe('pinning the account behind an unpinned host', () => {
+  afterEach(() => pinWslHostLinuxUsers([]))
+
   it('pins only the one account whose orcad holds the paired key', () => {
     const keys = 'root AAAA\nqauser BBBB\n'
     expect(accountHoldingKey(keys, 'AAAA')).toBe('root')
@@ -90,5 +123,36 @@ describe('pinning the account behind an unpinned host', () => {
       persist
     )
     expect(saved).toMatchObject([['/user-data', record.environmentId, { linuxUser: 'root' }]])
+    // Kept in memory past the trial, so the holder and liveness stay on root until the next read.
+    expect(pinnedWslHostLinuxUser(record.distro)).toBe('root')
+  })
+
+  it('runs one trial per host and ends a hung one, dropping its account', async () => {
+    let connects = 0
+    const hung = (): Promise<never> => {
+      connects += 1
+      return new Promise<never>(() => {})
+    }
+    const persist = async (): Promise<void> => {}
+    const first = connectAsPairedWslAccount(
+      '/u',
+      record,
+      { linuxUser: 'root', offer },
+      hung,
+      persist,
+      20
+    )
+    const second = connectAsPairedWslAccount(
+      '/u',
+      record,
+      { linuxUser: 'root', offer },
+      hung,
+      persist,
+      20
+    )
+    await expect(first).rejects.toThrow(/too long/)
+    await expect(second).rejects.toThrow(/too long/)
+    expect(connects).toBe(1)
+    expect(pinnedWslHostLinuxUser(record.distro)).toBeUndefined()
   })
 })

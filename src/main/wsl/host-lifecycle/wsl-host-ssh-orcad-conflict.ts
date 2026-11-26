@@ -11,9 +11,12 @@ import type { OrcadHostTransport } from '../../managed-server/install/orcad-host
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import { wslHostAddRefusal } from './wsl-host-add-admission'
 
-/** Prints only the public half of `home`'s orcad key; the private key never leaves the distro. */
+/** Prints only the public half of an orcad key file on stdin; the private key never leaves the distro. */
+export const ORCAD_PUBLIC_KEY_SED = `sed -n 's/.*"publicKeyB64"[[:space:]]*:[[:space:]]*"\\([A-Za-z0-9+/=]*\\)".*/\\1/p' | head -n 1`
+
+/** `home`'s orcad public key; the private key never leaves the distro. */
 export function orcadPublicKeyCommand(home: string): string {
-  return `sed -n 's/.*"publicKeyB64"[[:space:]]*:[[:space:]]*"\\([A-Za-z0-9+/=]*\\)".*/\\1/p' "${home}/.orca/${E2EE_KEYPAIR_FILENAME}" 2>/dev/null | head -n 1`
+  return `${ORCAD_PUBLIC_KEY_SED} < "${home}/.orca/${E2EE_KEYPAIR_FILENAME}" 2>/dev/null`
 }
 
 const READ_PUBLIC_KEY = orcadPublicKeyCommand('$HOME')
