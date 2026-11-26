@@ -145,7 +145,7 @@ export function FileExplorerRow({
           className={cn(
             'flex w-full items-center gap-1 rounded-sm px-2 py-1 text-left text-xs transition-colors',
             !isSelected && 'hover:bg-accent hover:text-foreground',
-            isSelected && 'text-accent-foreground',
+            isSelected && 'bg-accent text-accent-foreground',
             isFlashing && 'bg-amber-400/20 ring-1 ring-inset ring-amber-400/70'
           )}
           style={{ paddingLeft: `${(node.depth - displayDepthOffset) * 16 + 8}px` }}

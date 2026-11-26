@@ -81,6 +81,9 @@ export function updateSettings(
   if ('linuxTilingWindowMode' in updates) {
     sanitizedUpdates.linuxTilingWindowMode = updates.linuxTilingWindowMode === true
   }
+  if ('explorerRevealActiveFile' in updates) {
+    sanitizedUpdates.explorerRevealActiveFile = updates.explorerRevealActiveFile === true
+  }
   if ('artifactSharingEnabled' in updates) {
     sanitizedUpdates.artifactSharingEnabled = updates.artifactSharingEnabled === true
   }

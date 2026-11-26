@@ -2,20 +2,23 @@ import { useCallback, useEffect, useRef } from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import { getRelativePathInsideRoot } from '@/lib/path'
 import { useAppStore } from '@/store/index'
+import type { PendingExplorerReveal } from '@/store/slices/editor/explorer/explorer-dir-state'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { FileExplorerRowProjection } from '../tree/file-explorer-row-projection'
+import { getRevealableActiveFilePath } from './active-file-explorer-reveal'
 
 type UseFileExplorerAutoRevealParams = {
   activeFileId: string | null
   activeWorktreeId: string | null
   worktreePath: string | null
   displayRootPath?: string | null
-  pendingExplorerReveal: { worktreeId: string; filePath: string; requestId: number } | null
+  pendingExplorerReveal: PendingExplorerReveal | null
   openFiles: OpenFile[]
   hasNameFilterQuery: boolean
   rowProjection: FileExplorerRowProjection
   selectedPath: string | null
   setSelectedPath: (path: string | null) => void
+  cancelRevealScroll?: () => void
   virtualizer: Virtualizer<HTMLDivElement, Element>
 }
 
@@ -31,10 +34,16 @@ export function useFileExplorerAutoReveal({
   rowProjection,
   selectedPath,
   setSelectedPath,
+  cancelRevealScroll,
   virtualizer
 }: UseFileExplorerAutoRevealParams): void {
-  const prevActiveFileIdRef = useRef<string | null>(null)
-  const realTreeRevealedFileIdRef = useRef<string | null>(null)
+  const revealActiveFileEnabled = useAppStore(
+    (state) => state.settings?.explorerRevealActiveFile !== false
+  )
+  const hasObservedActiveFileRef = useRef(false)
+  const prevActiveFileKeyRef = useRef<string | null>(null)
+  const realTreeRevealedFileKeyRef = useRef<string | null>(null)
+  const deferredByManualRevealIdRef = useRef<number | null>(null)
   const handledSelectionRef = useRef<string | null>(null)
   const scrollFrameRef = useRef<number | null>(null)
 
@@ -49,56 +58,107 @@ export function useFileExplorerAutoReveal({
   useEffect(() => cancelScrollFrame, [cancelScrollFrame])
 
   useEffect(() => {
+    const activeFileKey =
+      activeWorktreeId && activeFileId ? `${activeWorktreeId}\0${activeFileId}` : null
+    const wasInitialized = hasObservedActiveFileRef.current
+    hasObservedActiveFileRef.current = true
+
+    if (!revealActiveFileEnabled) {
+      prevActiveFileKeyRef.current = activeFileKey
+      realTreeRevealedFileKeyRef.current = null
+      deferredByManualRevealIdRef.current = null
+      handledSelectionRef.current = selectedPath
+      return
+    }
+
     const realTreeVisible = Boolean(worktreePath) && !hasNameFilterQuery
-    // Why: a file handled among name-filter rows is revealed in the real tree once the filter clears.
-    // A hidden tree leaves it unhandled, unless a kept name filter would be cleared by that reveal.
-    const sameActiveFile = activeFileId === prevActiveFileIdRef.current
+    const sameActiveFile = wasInitialized && activeFileKey === prevActiveFileKeyRef.current
+    if (!realTreeVisible) {
+      // Skip auto-reveal while hidden or filtered, remembering the active file for when the tree returns.
+      if (!sameActiveFile) {
+        handledSelectionRef.current = selectedPath
+        prevActiveFileKeyRef.current = activeFileKey
+        realTreeRevealedFileKeyRef.current = null
+        deferredByManualRevealIdRef.current = null
+      }
+      return
+    }
+
     if (sameActiveFile) {
-      if (!realTreeVisible || realTreeRevealedFileIdRef.current === activeFileId) {
+      if (realTreeRevealedFileKeyRef.current === activeFileKey) {
         return
       }
-    } else if (!worktreePath && !hasNameFilterQuery) {
-      prevActiveFileIdRef.current = null
-      return
     } else {
       handledSelectionRef.current = selectedPath
+      prevActiveFileKeyRef.current = activeFileKey
+      realTreeRevealedFileKeyRef.current = null
+      deferredByManualRevealIdRef.current = null
     }
-    prevActiveFileIdRef.current = activeFileId
-    realTreeRevealedFileIdRef.current = realTreeVisible ? activeFileId : null
 
     if (!activeFileId || !activeWorktreeId || !worktreePath) {
+      if (pendingExplorerReveal?.source === 'auto') {
+        useAppStore.setState((state) =>
+          state.pendingExplorerReveal?.source === 'auto' ? { pendingExplorerReveal: null } : state
+        )
+      }
+      realTreeRevealedFileKeyRef.current = activeFileKey
       return
     }
 
-    // Don't override a pending manual reveal (e.g. from Source Control "Reveal in Explorer")
-    if (pendingExplorerReveal) {
+    // Don't override a pending manual reveal (e.g. from Source Control or the reveal command).
+    if (pendingExplorerReveal && pendingExplorerReveal.source !== 'auto') {
+      if (wasInitialized && !sameActiveFile) {
+        // Tab switched while a manual reveal was already pending; re-evaluate once it clears.
+        deferredByManualRevealIdRef.current = pendingExplorerReveal.requestId
+        return
+      }
+      if (deferredByManualRevealIdRef.current === pendingExplorerReveal.requestId) {
+        return
+      }
+      // Manual reveal started after this file was already active (or before mount); let it win.
+      deferredByManualRevealIdRef.current = null
+      realTreeRevealedFileKeyRef.current = activeFileKey
       return
     }
 
-    // Markdown previews own concrete files and sync selection; diff/conflict surfaces do not.
-    const activeFile = openFiles.find((f) => f.id === activeFileId)
-    if (
-      !activeFile ||
-      activeFile.worktreeId !== activeWorktreeId ||
-      (activeFile.mode !== 'edit' && activeFile.mode !== 'markdown-preview')
-    ) {
+    const resumedAfterManualReveal = deferredByManualRevealIdRef.current !== null
+    deferredByManualRevealIdRef.current = null
+    if (resumedAfterManualReveal) {
+      handledSelectionRef.current = selectedPath
+    }
+
+    const activeFile = openFiles.find((file) => file.id === activeFileId)
+    const filePath = getRevealableActiveFilePath(activeFile, activeWorktreeId, worktreePath)
+    if (!filePath) {
+      if (pendingExplorerReveal?.source === 'auto') {
+        useAppStore.setState((state) =>
+          state.pendingExplorerReveal?.source === 'auto' ? { pendingExplorerReveal: null } : state
+        )
+      }
+      realTreeRevealedFileKeyRef.current = activeFileKey
       return
     }
 
-    const filePath = activeFile.filePath
-    if (getRelativePathInsideRoot(filePath, displayRootPath) === null) {
-      return
-    }
-    // Why: after the name filter clears, keep a row the user selected since the file was handled.
+    // Preserve a manual tree selection made while the same file stayed active.
     if (
       sameActiveFile &&
       selectedPath !== filePath &&
       selectedPath !== handledSelectionRef.current
     ) {
+      realTreeRevealedFileKeyRef.current = activeFileKey
       return
     }
 
-    if (rowProjection.hasPath(filePath)) {
+    const insideDisplayRoot =
+      getRelativePathInsideRoot(filePath, displayRootPath ?? worktreePath) !== null
+    if (insideDisplayRoot && rowProjection.hasPath(filePath)) {
+      if (pendingExplorerReveal?.source === 'auto') {
+        useAppStore.setState((state) =>
+          state.pendingExplorerReveal?.source === 'auto' ? { pendingExplorerReveal: null } : state
+        )
+      }
+      realTreeRevealedFileKeyRef.current = activeFileKey
+      cancelRevealScroll?.()
       setSelectedPath(filePath)
       handledSelectionRef.current = filePath
       const targetIndex = rowProjection.getIndexByPath(filePath)
@@ -110,29 +170,43 @@ export function useFileExplorerAutoReveal({
         })
       }
     } else {
-      // Queuing the reveal expands the real tree and clears a name filter, so it is handled.
-      realTreeRevealedFileIdRef.current = activeFileId
-      useAppStore.setState({
-        pendingExplorerReveal: {
-          worktreeId: activeWorktreeId,
-          filePath,
-          requestId: Date.now(),
-          flash: false
+      realTreeRevealedFileKeyRef.current = activeFileKey
+      if (
+        pendingExplorerReveal?.source === 'auto' &&
+        pendingExplorerReveal.worktreeId === activeWorktreeId &&
+        pendingExplorerReveal.filePath === filePath
+      ) {
+        return
+      }
+      useAppStore.setState((state) => {
+        if (state.pendingExplorerReveal && state.pendingExplorerReveal.source !== 'auto') {
+          return state
+        }
+        return {
+          pendingExplorerReveal: {
+            worktreeId: activeWorktreeId,
+            filePath,
+            requestId: Math.max(Date.now(), (state.pendingExplorerReveal?.requestId ?? 0) + 1),
+            flash: false,
+            source: 'auto'
+          }
         }
       })
     }
   }, [
     activeFileId,
     activeWorktreeId,
+    cancelRevealScroll,
     cancelScrollFrame,
-    worktreePath,
     displayRootPath,
-    pendingExplorerReveal,
-    openFiles,
     hasNameFilterQuery,
+    openFiles,
+    pendingExplorerReveal,
+    revealActiveFileEnabled,
     rowProjection,
     selectedPath,
     setSelectedPath,
-    virtualizer
+    virtualizer,
+    worktreePath
   ])
 }

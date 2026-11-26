@@ -5,6 +5,14 @@ const WINDOWS_LINUX_TOGGLE_BINDINGS = ['Mod+Shift+F11', 'Mod+Shift+J']
 
 export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
   {
+    id: 'terminal.equalizePaneSizes',
+    title: 'Equalize pane sizes',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'pane', 'split', 'equalize', 'resize', 'balance', 'size'],
+    defaultBindings: platformBindings([])
+  },
+  {
     id: 'terminal.expandPane',
     title: 'Expand / collapse pane',
     group: 'Terminal Panes',

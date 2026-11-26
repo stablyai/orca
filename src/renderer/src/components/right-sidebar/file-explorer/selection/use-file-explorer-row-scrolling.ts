@@ -86,7 +86,7 @@ export function useFileExplorerRowScrolling({
     }
   })
 
-  const cancelRevealTimers = useFileExplorerReveal({
+  const { cancelRevealTimers, cancelRevealScroll } = useFileExplorerReveal({
     onRevealOutsideRoot,
     activeWorktreeId,
     worktreePath,
@@ -128,6 +128,7 @@ export function useFileExplorerRowScrolling({
     rowProjection,
     selectedPath,
     setSelectedPath,
+    cancelRevealScroll,
     virtualizer
   })
 

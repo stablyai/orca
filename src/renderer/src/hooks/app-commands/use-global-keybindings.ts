@@ -244,7 +244,14 @@ export function useGlobalKeybindings(args: {
         }
       }
 
-      // Run this unbound alias after built-ins; claim it only when unsent review notes exist.
+      // Run unbound aliases after built-ins; claim only when an active target exists.
+      if (
+        canRevealRightSidebar &&
+        matchAppShortcut('fileExplorer.revealActiveFile') &&
+        handlers.get('fileExplorer.revealActiveFile')?.()
+      ) {
+        return
+      }
       if (canRevealRightSidebar && matchAppShortcut('sourceControl.sendReviewNotes')) {
         if (actions.openDiffNotesSendMenuForActiveWorktree()) {
           input.preventDefault()

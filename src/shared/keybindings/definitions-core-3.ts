@@ -212,6 +212,24 @@ export const KEYBINDING_DEFINITION_CORE_3: readonly KeybindingDefinition[] = [
     allowBareKeybindings: true
   },
   {
+    id: 'fileExplorer.revealActiveFile',
+    title: 'Reveal Active File in Explorer',
+    group: 'File Explorer',
+    scope: 'global',
+    conflictGroups: ['global', 'editor', 'fileExplorer'],
+    allowInTextField: 'non-default-chords',
+    searchKeywords: [
+      'shortcut',
+      'file explorer',
+      'reveal',
+      'active file',
+      'locate',
+      'show in explorer'
+    ],
+    // Why: unbound by default so it does not collide with existing chords; users opt in via Settings.
+    defaultBindings: platformBindings([])
+  },
+  {
     id: 'settings.search',
     title: 'Search Settings',
     group: 'Settings',
@@ -286,13 +304,5 @@ export const KEYBINDING_DEFINITION_CORE_3: readonly KeybindingDefinition[] = [
     scope: 'terminal',
     searchKeywords: ['shortcut', 'pane', 'focus', 'previous'],
     defaultBindings: platformBindings(['Mod+BracketLeft'])
-  },
-  {
-    id: 'terminal.equalizePaneSizes',
-    title: 'Equalize pane sizes',
-    group: 'Terminal Panes',
-    scope: 'terminal',
-    searchKeywords: ['shortcut', 'pane', 'split', 'equalize', 'resize', 'balance', 'size'],
-    defaultBindings: platformBindings([])
   }
 ]

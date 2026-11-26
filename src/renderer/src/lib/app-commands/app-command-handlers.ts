@@ -24,6 +24,7 @@ import { isGitRepoKind } from '../../../../shared/repository/repo-kind'
 import { openPluginsSettings } from '@/components/settings/navigation/open-plugins-settings'
 import { resolveActiveTabRenameTarget } from './active-tab-rename-target'
 import { createPluginsSettingsShortcutHandler } from './plugin-settings-shortcut-handler'
+import { revealActiveFileShortcut } from './reveal-active-file-shortcut-handler'
 import type {
   KeybindingActionId,
   KeybindingContext,
@@ -306,6 +307,7 @@ export function createAppCommandHandlers(
           : revealRightSidebarTab('sidebar.sourceControl.toggle', 'source-control')
     ],
     ['sidebar.checks.toggle', () => revealRightSidebarTab('sidebar.checks.toggle', 'checks')],
-    ['sidebar.ports.toggle', () => revealRightSidebarTab('sidebar.ports.toggle', 'ports')]
+    ['sidebar.ports.toggle', () => revealRightSidebarTab('sidebar.ports.toggle', 'ports')],
+    ['fileExplorer.revealActiveFile', revealActiveFileShortcut(canRevealRightSidebar, claim)]
   ])
 }

@@ -13,7 +13,8 @@ import {
   SettingsSwitchRow
 } from '../form-controls/SettingsFormControls'
 import { useAvailableStatusBarToggles } from '../../status-bar/composition/use-available-status-bar-toggles'
-import { getLayoutEntries, getFollowSymlinkedDirectoriesEntry } from './appearance-search'
+import { getLayoutEntries } from './appearance-search'
+import { AppearanceFileExplorerSubsection } from './AppearanceFileExplorerSubsection'
 import {
   getSidebarEntries,
   getLeftSidebarAppearanceEntry,
@@ -95,7 +96,6 @@ export function AppearanceWindowSidebarSection({
   const leftSidebarAppearanceEntry = getLeftSidebarAppearanceEntry()
   const sidebarEntries = getSidebarEntries()
   const layoutEntries = getLayoutEntries()
-  const followSymlinkEntry = getFollowSymlinkedDirectoriesEntry(t)
   const statusBarTitle = t('auto.components.settings.AppearancePane.3a5d06686d', 'Status bar')
   const statusBarDescription = t(
     'auto.components.settings.AppearancePane.statusBarDescription',
@@ -367,47 +367,11 @@ export function AppearanceWindowSidebarSection({
           ) : null}
 
           {showFileExplorerAdvanced ? (
-            <SettingsGroupSubsection
-              title={t('auto.components.settings.AppearancePane.8e374ce9a3', 'File explorer')}
-            >
-              <SearchableSetting
-                title={
-                  layoutEntries[0]?.title ??
-                  t('auto.components.settings.AppearancePane.7e958ee950', 'Show Git-ignored files')
-                }
-                description={layoutEntries[0]?.description}
-                keywords={layoutEntries[0]?.keywords ?? ['git', 'gitignore', 'ignored']}
-              >
-                <SettingsSwitchRow
-                  label={t(
-                    'auto.components.settings.AppearancePane.7e958ee950',
-                    'Show Git-ignored files'
-                  )}
-                  description={t(
-                    'auto.components.settings.AppearancePane.gitIgnoredGlossary',
-                    'Files matched by .gitignore.'
-                  )}
-                  checked={settings.showGitIgnoredFiles ?? true}
-                  onChange={() =>
-                    updateSettings({
-                      showGitIgnoredFiles: !(settings.showGitIgnoredFiles ?? true)
-                    })
-                  }
-                />
-              </SearchableSetting>
-              <SearchableSetting {...followSymlinkEntry}>
-                <SettingsSwitchRow
-                  label={followSymlinkEntry.title}
-                  description={followSymlinkEntry.description}
-                  checked={settings.followSymlinkedDirectories ?? false}
-                  onChange={() =>
-                    updateSettings({
-                      followSymlinkedDirectories: !settings.followSymlinkedDirectories
-                    })
-                  }
-                />
-              </SearchableSetting>
-            </SettingsGroupSubsection>
+            <AppearanceFileExplorerSubsection
+              settings={settings}
+              updateSettings={updateSettings}
+              showGitIgnoredEntry={layoutEntries[0]}
+            />
           ) : null}
         </SettingsGroupDisclosure>
       ) : null}

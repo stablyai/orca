@@ -1,18 +1,21 @@
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import { isPathInsideOrEqual } from '../../../../../../shared/file-access/cross-platform-path'
 
+export type PendingExplorerReveal = {
+  worktreeId: string
+  filePath: string
+  requestId: number
+  flash?: boolean
+  source?: 'auto' | 'manual'
+}
+
 export type ExplorerDirState = {
   expandedDirs: Record<string, Set<string>>
   collapseAllDirs: (worktreeId: string) => void
   collapseDirSubtree: (worktreeId: string, dirPath: string) => void
   toggleDir: (worktreeId: string, dirPath: string) => void
-  pendingExplorerReveal: {
-    worktreeId: string
-    filePath: string
-    requestId: number
-    flash?: boolean
-  } | null
-  revealInExplorer: (worktreeId: string, filePath: string) => void
+  pendingExplorerReveal: PendingExplorerReveal | null
+  revealInExplorer: (worktreeId: string, filePath: string, options?: { flash?: boolean }) => void
   clearPendingExplorerReveal: () => void
 }
 
@@ -58,7 +61,7 @@ export function createExplorerDirState(set: EditorSet, _get: EditorGet): Explore
         return { expandedDirs: { ...s.expandedDirs, [worktreeId]: next } }
       }),
     pendingExplorerReveal: null,
-    revealInExplorer: (worktreeId, filePath) =>
+    revealInExplorer: (worktreeId, filePath, options) =>
       set((s) => ({
         rightSidebarOpen: true,
         rightSidebarTab: 'explorer',
@@ -68,7 +71,13 @@ export function createExplorerDirState(set: EditorSet, _get: EditorGet): Explore
           ...s.rightSidebarExplorerViewByWorktree,
           [worktreeId]: 'files'
         },
-        pendingExplorerReveal: { worktreeId, filePath, requestId: Date.now() }
+        pendingExplorerReveal: {
+          worktreeId,
+          filePath,
+          requestId: Math.max(Date.now(), (s.pendingExplorerReveal?.requestId ?? 0) + 1),
+          source: 'manual',
+          ...(options?.flash !== undefined ? { flash: options.flash } : {})
+        }
       })),
     clearPendingExplorerReveal: () => set({ pendingExplorerReveal: null })
   }

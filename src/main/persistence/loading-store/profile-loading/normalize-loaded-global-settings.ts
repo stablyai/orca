@@ -174,6 +174,7 @@ export function normalizeLoadedGlobalSettings(
     // Default-on values round-trip off-platform; macOS consumers gate the actual effect.
     showMenuBarIcon: parsed.settings?.showMenuBarIcon !== false,
     linuxTilingWindowMode: parsed.settings?.linuxTilingWindowMode === true,
+    explorerRevealActiveFile: parsed.settings?.explorerRevealActiveFile !== false,
     ...migratedPortugueseUiLanguage,
     nativeChatInheritShellEnvironment: parsed.settings?.nativeChatInheritShellEnvironment !== false,
     nativeChatShellEnvironmentVariables: normalizeNativeChatShellEnvironmentVariables(

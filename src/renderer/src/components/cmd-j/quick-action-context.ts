@@ -7,6 +7,11 @@ import {
   runActiveNativeChatSplit
 } from '@/components/native-chat/pane/routing/native-chat-layout-actions'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import { canShowRightSidebarForView } from '@/components/right-sidebar/visibility/right-sidebar-visibility'
+import {
+  resolveActiveFileToRevealInExplorer,
+  revealActiveFileInExplorer
+} from '@/components/right-sidebar/file-explorer/navigation/active-file-explorer-reveal'
 import type { AppState } from '@/store/types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { SshConnectionStatus } from '../../../../shared/remote-runtime/ssh/ssh-types'
@@ -19,6 +24,7 @@ export type CmdJUnavailableReason =
   | 'ssh-disconnected'
   | 'no-active-group'
   | 'no-active-chat'
+  | 'no-active-file'
   | 'client-action-unsupported'
 
 export type CmdJQuickActionAvailability =
@@ -48,6 +54,8 @@ export type CmdJQuickActionContext = {
   openAddQuickCommand: () => void
   canSplitActiveChat?: boolean
   splitActiveChat?: (direction: NativeChatSplitDirection) => boolean
+  canRevealActiveFileInExplorer?: boolean
+  revealActiveFileInExplorer?: () => boolean
 }
 
 export function resolveCmdJActiveGroupId(
@@ -184,6 +192,9 @@ export function buildCmdJQuickActionContext(args: {
     args.state.activeView === 'terminal'
       ? resolveActiveNativeChatSplitTarget(args.state, activeWorktreeId, activeGroupId)
       : null
+  const canRevealActiveFileInExplorer =
+    canShowRightSidebarForView(args.state.activeView) &&
+    resolveActiveFileToRevealInExplorer(args.state) !== null
 
   return {
     activeView: args.state.activeView,
@@ -203,7 +214,9 @@ export function buildCmdJQuickActionContext(args: {
     openAddQuickCommand: args.openAddQuickCommand,
     canSplitActiveChat: canRunNativeChatSplitTarget(args.state, activeChatTarget),
     splitActiveChat: (direction) =>
-      runActiveNativeChatSplit(activeWorktreeId, activeGroupId, direction)
+      runActiveNativeChatSplit(activeWorktreeId, activeGroupId, direction),
+    canRevealActiveFileInExplorer,
+    revealActiveFileInExplorer: () => revealActiveFileInExplorer(args.state)
   }
 }
 
@@ -242,6 +255,12 @@ export function getUnavailableQuickActionMessage(
       return translate(
         'auto.components.cmdJ.quickActionUnavailable.noMovableChat',
         'Can’t run “{{action}}” — no movable chat is active.',
+        options
+      )
+    case 'no-active-file':
+      return translate(
+        'auto.components.cmdJ.quickActionUnavailable.noActiveFile',
+        'Can’t run “{{action}}” — no active editor file is open in this workspace.',
         options
       )
     case 'client-action-unsupported':
