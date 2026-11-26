@@ -1,9 +1,18 @@
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  applyMacosTerminalOpenShimEnv,
   buildMacosTerminalOpenShimScript,
   ensureMacosTerminalOpenShimDir
 } from './macos-terminal-open-shim'
@@ -42,7 +51,9 @@ describe('macos-terminal-open-shim', () => {
       const dir = mkdtempSync(join(tmpdir(), 'orca-open-shim-'))
       tempDirs.push(dir)
       const argsLog = join(dir, 'cli-args.txt')
-      const fakeCli = join(dir, 'fake-orca')
+      const cliBinDir = join(dir, 'cli', 'bin')
+      mkdirSync(cliBinDir, { recursive: true })
+      const fakeCli = join(cliBinDir, 'orca-dev')
       writeFileSync(fakeCli, `#!/bin/sh\nprintf '%s\\n' "$@" > "${argsLog}"\nexit 0\n`, {
         mode: 0o755
       })
@@ -84,6 +95,21 @@ describe('macos-terminal-open-shim', () => {
         encoding: 'utf8'
       })
       expect(scrubbed.status).toBe(0)
+
+      const env: Record<string, string> = {
+        PATH: '/usr/bin:/bin',
+        ORCA_CLI_BIN_DIR: cliBinDir
+      }
+      const applied = applyMacosTerminalOpenShimEnv(env, {
+        userDataPath: dir,
+        cliLauncher: fakeCli,
+        platform: 'darwin'
+      })
+      expect(applied).toBe(shimDir)
+      expect(env.ORCA_CLI_BIN_DIR).toBe(shimDir)
+      expect(existsSync(join(shimDir!, 'orca'))).toBe(true)
+      expect(existsSync(join(shimDir!, 'orca-dev'))).toBe(true)
+      expect(existsSync(join(cliBinDir, 'open'))).toBe(true)
 
       expect(buildMacosTerminalOpenShimScript(null)).toContain('exec /usr/bin/open "$@"')
     }

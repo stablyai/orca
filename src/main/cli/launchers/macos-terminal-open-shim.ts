@@ -1,9 +1,33 @@
 import { randomUUID } from 'node:crypto'
 import { chmod, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
+import { isPathInsideOrEqual } from '../command-paths/cli-install-path-format'
 
 const SHIM_DIR_NAME = 'macos-open-shim'
+
+async function writeExecutableIfChanged(filePath: string, content: string): Promise<void> {
+  let existing: string | null = null
+  try {
+    existing = await readFile(filePath, 'utf8')
+  } catch {
+    existing = null
+  }
+  if (existing === content) {
+    return
+  }
+  await mkdir(dirname(filePath), { recursive: true })
+  const tempPath = `${filePath}.${randomUUID()}.tmp`
+  try {
+    await writeFile(tempPath, content, { mode: 0o755 })
+    // Apply explicit mode before rename so restrictive umasks never expose a non-executable shim.
+    await chmod(tempPath, 0o755)
+    await rename(tempPath, filePath)
+  } catch (error) {
+    await unlink(tempPath).catch(() => {})
+    throw error
+  }
+}
 
 /** Routes single http(s) URL opens to Orca when a mobile client is viewing the terminal, else /usr/bin/open. */
 export function buildMacosTerminalOpenShimScript(cliLauncher: string | null): string {
@@ -38,26 +62,23 @@ export async function ensureMacosTerminalOpenShimDir(options: {
     return null
   }
   const shimDir = join(options.userDataPath, SHIM_DIR_NAME)
-  const shimPath = join(shimDir, 'open')
   const script = buildMacosTerminalOpenShimScript(options.cliLauncher)
   try {
-    let existing: string | null = null
-    try {
-      existing = await readFile(shimPath, 'utf8')
-    } catch {
-      existing = null
-    }
-    if (existing !== script) {
-      await mkdir(shimDir, { recursive: true })
-      const tempPath = `${shimPath}.${randomUUID()}.tmp`
-      try {
-        await writeFile(tempPath, script, { mode: 0o755 })
-        // Apply explicit mode before rename so restrictive umasks never expose a non-executable shim.
-        await chmod(tempPath, 0o755)
-        await rename(tempPath, shimPath)
-      } catch (error) {
-        await unlink(tempPath).catch(() => {})
-        throw error
+    await writeExecutableIfChanged(join(shimDir, 'open'), script)
+    if (options.cliLauncher && resolve(dirname(options.cliLauncher)) !== resolve(shimDir)) {
+      // Expose `orca` (and `orca-dev`) inside shimDir so ORCA_CLI_BIN_DIR=shimDir works on pre-update orcad daemons.
+      const forwarder = `#!/bin/sh\nexec ${quotePosixShell(options.cliLauncher)} "$@"\n`
+      await writeExecutableIfChanged(join(shimDir, 'orca'), forwarder)
+      const launcherName = basename(options.cliLauncher)
+      if (launcherName !== 'orca' && launcherName !== 'open') {
+        await writeExecutableIfChanged(join(shimDir, launcherName), forwarder)
+      }
+      const launcherDir = dirname(options.cliLauncher)
+      if (
+        resolve(launcherDir) !== resolve(options.userDataPath) &&
+        isPathInsideOrEqual(resolve(options.userDataPath), resolve(launcherDir))
+      ) {
+        await writeExecutableIfChanged(join(launcherDir, 'open'), script)
       }
     }
   } catch {
@@ -89,6 +110,10 @@ export function applyMacosTerminalOpenShimEnv(
   const shimDir = join(options.userDataPath, SHIM_DIR_NAME)
   void ensureMacosTerminalOpenShimDir(options)
   env.ORCA_OPEN_SHIM_DIR = shimDir
+  if (options.cliLauncher) {
+    // Persistent orcad daemons across app updates restore ORCA_CLI_BIN_DIR ahead of /usr/bin.
+    env.ORCA_CLI_BIN_DIR = shimDir
+  }
   const currentPath = env.PATH ?? process.env.PATH ?? ''
   const entries = currentPath
     .split(':')

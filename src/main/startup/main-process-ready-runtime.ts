@@ -23,6 +23,8 @@ import {
   composeDesktopCore,
   type DesktopCoreNative
 } from '../core-desktop/desktop-core-composition'
+import { ensureMacosTerminalOpenShimDir } from '../cli/launchers/macos-terminal-open-shim'
+import { thisAppOrcaCliLauncher } from '../cli/launchers/this-app-orca-cli-launcher'
 import type { Store } from '../persistence/loading-store/store'
 import type { RuntimeDesktopWindowStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
@@ -149,10 +151,17 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   }
   // Renderers fork from zygotes that exist already, so this must land before the first window.
   await refuseRealtimeSchedulingUnderZeroRtTime()
+  const userData = app.getPath('userData')
+  if (process.platform === 'darwin') {
+    void ensureMacosTerminalOpenShimDir({
+      userDataPath: userData,
+      cliLauncher: thisAppOrcaCliLauncher(userData)
+    })
+  }
   await composeDesktopCore(state.core, {
     store,
     paths: {
-      userData: app.getPath('userData'),
+      userData,
       home: app.getPath('home'),
       isPackaged: app.isPackaged
     },
