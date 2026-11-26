@@ -75,6 +75,7 @@ it('isolates recalled replies across pages and restart, and does not mark failed
     cardkit: async (...args) => inbox.cardkit(...args),
     cardSequence: async (...args) => inbox.cardSequence(...args),
     updateResponse: async (...args) => inbox.updateResponse(...args),
+    workerResponse: async (...args) => inbox.workerResponse(...args),
     pendingCards: async (...args) => inbox.pendingCards(...args),
     pendingChoice: async (...args) => inbox.pendingChoice(...args),
     claimCard: async (...args) => inbox.claimCard(...args),

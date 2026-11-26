@@ -7,6 +7,7 @@ import { describeToolInput } from '../../shared/native-chat/tools/native-chat-to
 import { connectorTurnActivityStepTitle } from '../../shared/connectors/connector-turn-activity-line'
 import type { FeishuNativeResponse } from './feishu-native-data'
 import { CODEX_ASYNC_QUESTION_TOOL } from '../../shared/native-chat/input/questions/codex-async-question-input'
+import { isConversationReport } from '../external-conversations/external-conversation-turn-opener'
 
 const TOOL_LABELS: [RegExp, string, string][] = [
   [/search/i, '搜索', 'search_outlined'],
@@ -52,17 +53,39 @@ export class FeishuNativeProjection {
       this.items.delete(this.items.keys().next().value!)
     }
   }
+  reportWorkers(): string[] | null {
+    const id = this.latest?.turn.userItemId
+    const body = id ? this.items.get(id)?.body : undefined
+    if (!body || !isConversationReport(body) || body.kind !== 'message') {
+      return null
+    }
+    const senders = body.from?.senders ?? []
+    return senders.length > 0 && senders.every((sender) => sender.relation === 'worker')
+      ? senders.map((sender) => sender.party.address)
+      : null
+  }
   project(
     account: string,
-    external: string
+    external: string,
+    reportOriginal?: string | null
   ): { original: string; continuations: string[]; native: FeishuNativeResponse } | null {
     const latest = this.latest
     const user = latest?.turn.userItemId && this.items.get(latest.turn.userItemId)
-    const delivery =
+    const stamped =
       user &&
       user.body.kind === 'message' &&
       user.body.role === 'user' &&
       user.body.connectorDelivery
+    const report = !stamped && reportOriginal && this.reportWorkers()
+    const delivery =
+      stamped ||
+      (report
+        ? {
+            account,
+            conversation: { source: 'feishu-local', externalId: external },
+            deliveryId: reportOriginal
+          }
+        : null)
     if (
       !latest ||
       !delivery ||
@@ -79,11 +102,22 @@ export class FeishuNativeProjection {
       messages: [],
       tools: []
     }
+    if (report) {
+      native.report = true
+    }
     const continuations: string[] = []
     const ordered = [...this.items.values()].sort(
       (a, b) => a.sequence - b.sequence || (a.sequenceIndex ?? 0) - (b.sequenceIndex ?? 0)
     )
     for (const item of ordered) {
+      if (
+        item.body.kind === 'agent-start' &&
+        item.observedAt >= native.startedAt &&
+        (native.completedAt === undefined || item.observedAt <= native.completedAt)
+      ) {
+        native.workers ??= []
+        native.workers.push(item.body.worker.party.address)
+      }
       if (item.turnScope?.kind !== 'turn' || item.turnScope.turnItemId !== latest.itemId) {
         continue
       }

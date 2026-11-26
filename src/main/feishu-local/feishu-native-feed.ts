@@ -68,7 +68,11 @@ export class FeishuNativeFeed {
             projection.items.set(item.itemId, item)
           }
         }
-        const value = projection.project(this.b.account, external)
+        const workers = projection.reportWorkers()
+        const original = workers
+          ? await this.store.workerResponse(this.b.account, external, workers)
+          : null
+        const value = projection.project(this.b.account, external, original)
         if (!value) {
           return
         }

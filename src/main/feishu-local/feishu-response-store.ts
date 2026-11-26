@@ -2,12 +2,18 @@ import type Database from '../sqlite/sync-database'
 import { cardData, type FeishuResponseChange } from './feishu-card-data'
 import type { FeishuCardStore } from './feishu-card-store'
 import { responseCardId, responseDestination } from './feishu-card-links'
+import { FeishuWorkerResponses } from './feishu-worker-responses'
 
 export class FeishuResponseStore {
+  private readonly workers: FeishuWorkerResponses
   constructor(
     private readonly db: Database.Database,
     private readonly cards: FeishuCardStore
-  ) {}
+  ) {
+    this.workers = new FeishuWorkerResponses(db)
+  }
+  workerResponse = (...args: Parameters<FeishuWorkerResponses['destination']>) =>
+    this.workers.destination(...args)
 
   private handoff(
     account: string,
@@ -149,7 +155,9 @@ export class FeishuResponseStore {
     }
     if (
       response.continuation &&
-      ((change.kind === 'native' && !change.value.deliveries?.includes(response.continuation)) ||
+      ((change.kind === 'native' &&
+        !change.value.report &&
+        !change.value.deliveries?.includes(response.continuation)) ||
         (change.kind === 'final' &&
           original !== response.continuation &&
           !response.native?.deliveries?.includes(response.continuation)))
@@ -174,6 +182,7 @@ export class FeishuResponseStore {
           response.native &&
           (change.value.startedAt < response.native.startedAt ||
             (response.final !== undefined &&
+              !change.value.report &&
               change.value.turnItemId !== response.native.turnItemId))
         ) {
           return id
@@ -183,8 +192,29 @@ export class FeishuResponseStore {
         if (previous?.completedAt !== undefined && change.value.completedAt === undefined) {
           return id
         }
+        if (change.value.report && !previous) {
+          if (response.native) {
+            response.history = [...(response.history ?? []), response.native].slice(-10)
+          }
+          response.final = undefined
+          response.progress = []
+          response.phase = 'working'
+        }
+        this.workers.remember(
+          account,
+          external,
+          original ?? card!.original,
+          change.value.workers ?? []
+        )
         response.native = {
           ...change.value,
+          ...(previous?.workers || change.value.workers
+            ? {
+                workers: [
+                  ...new Set([...(previous?.workers ?? []), ...(change.value.workers ?? [])])
+                ]
+              }
+            : {}),
           tools: [
             ...new Map(
               [...(previous?.tools ?? []), ...change.value.tools].map((t) => [t.id, t])
@@ -195,6 +225,10 @@ export class FeishuResponseStore {
               [...(previous?.messages ?? []), ...change.value.messages].map((m) => [m.id, m])
             ).values()
           ].slice(-20)
+        }
+        if (change.value.report && change.value.completedAt !== undefined) {
+          response.final = response.native.messages.at(-1)?.text ?? ''
+          response.phase = 'done'
         }
         break
       case 'begin':

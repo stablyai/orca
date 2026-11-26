@@ -16,6 +16,7 @@ const OPS = [
   'cardkit',
   'cardSequence',
   'updateResponse',
+  'workerResponse',
   'pendingCards',
   'pendingChoice',
   'claimCard',

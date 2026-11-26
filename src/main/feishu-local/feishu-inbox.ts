@@ -63,6 +63,8 @@ export class FeishuInbox {
     this.cards.questionContinuation(...args)
   updateResponse = (...args: Parameters<FeishuResponseStore['update']>) =>
     this.responses.update(...args)
+  workerResponse = (...args: Parameters<FeishuResponseStore['workerResponse']>) =>
+    this.responses.workerResponse(...args)
   putCard = (...args: Parameters<FeishuCardStore['put']>) => this.cards.put(...args)
   pendingChoice = (...args: Parameters<FeishuCardStore['pendingChoice']>) =>
     this.cards.pendingChoice(...args)
