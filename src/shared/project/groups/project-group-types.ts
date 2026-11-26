@@ -26,7 +26,8 @@ export type ProjectGroupUpdate = Partial<
 
 export type ProjectGroupMutation = { groupId: string; updates: ProjectGroupUpdate }
 
-export type ProjectGroupParentMove = { groupId: string; parentGroupId: string }
+/** A null parent moves the group to the sidebar's top level. */
+export type ProjectGroupParentMove = { groupId: string; parentGroupId: string | null }
 
 export type NestedRepoScanOptions = {
   maxDepth?: number

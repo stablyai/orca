@@ -7,6 +7,7 @@ import {
   ProjectGroupMoveProject,
   ProjectGroupScanNested,
   ProjectGroupSelector,
+  ProjectGroupSetParent,
   ProjectGroupUpdate,
   ProjectGroupUpdateMany
 } from '../../../../../shared/rpc-contract/projects/repo-params'
@@ -39,6 +40,15 @@ export const PROJECT_GROUP_METHODS = [
     params: ProjectGroupUpdate,
     handler: async (params, { runtime }) => ({
       group: await runtime.updateProjectGroup(params.groupId, params.updates)
+    })
+  }),
+  // Older hosts answer method_not_found; the CLI then says the host must be updated to re-parent.
+  defineMethod({
+    name: 'projectGroup.setParent',
+    permission: 'workspace',
+    params: ProjectGroupSetParent,
+    handler: async (params, { runtime }) => ({
+      group: await runtime.setProjectGroupParent(params.groupId, params.parentGroupId)
     })
   }),
   defineMethod({

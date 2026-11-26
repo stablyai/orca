@@ -1,5 +1,6 @@
 import type { CommandSpec } from '../discovery/command-spec'
 import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-boundary'
+import { REPO_LUCIDE_ICON_NAMES } from '../../shared/repository/appearance/repo-lucide-icon-names'
 
 export const REPO_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -27,16 +28,32 @@ export const REPO_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['repo', 'set'],
-    summary: "Set a repo's non-Orca worktree visibility or browser profile",
+    summary:
+      "Set a repo's sidebar group, name, color, icon, worktree visibility or browser profile",
     usage:
-      'orca repo set --repo <selector> [--external-worktree-visibility show|hide|inherit] [--browser-profile <id>|inherit] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'external-worktree-visibility', 'browser-profile'],
+      'orca repo set --repo <selector> [--group <group>|none] [--group-order <n>] [--display-name <name>] [--badge-color <hex>] [--icon <lucide-name>|none] [--external-worktree-visibility show|hide|inherit] [--browser-profile <id>|inherit] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'repo',
+      'group',
+      'group-order',
+      'display-name',
+      'badge-color',
+      'icon',
+      'external-worktree-visibility',
+      'browser-profile'
+    ],
     notes: [
+      '--group moves the repo into a project group from `orca group list` (id:<id>, name:<name>, or a bare id or name); none moves it out of every group. It goes last in the group unless --group-order is passed.',
+      '--group-order is the sort position among the projects of the same group, lowest first; without --group it repositions the repo where it already is.',
+      `--icon takes one of ${REPO_LUCIDE_ICON_NAMES.join(', ')} in any case or in kebab-case; none restores the default mark. --badge-color takes a hex color such as #22c55e.`,
       'show and hide override the global non-Orca worktree visibility default for this repo; inherit clears the override.',
       'Per-worktree visibility rules still apply.',
       "--browser-profile picks the profile new browser tabs in this repo use, overriding the Browser setting's profile for new tabs; inherit clears it. Ids come from `orca tab profile list`; `default` is the Default profile."
     ],
     examples: [
+      'orca repo set --repo name:acme-web --group name:Clients --json',
+      'orca repo set --repo name:acme-web --display-name "Acme Web" --badge-color "#22c55e" --icon rocket --json',
       'orca repo set --repo path:/path/to/repo --external-worktree-visibility show --json',
       'orca repo set --repo name:acme-web --browser-profile <profileId> --json'
     ]

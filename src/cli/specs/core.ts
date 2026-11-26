@@ -5,6 +5,7 @@ import { WORKTREE_CREATE_COMMAND_SPEC } from './worktree-create'
 import { WORKTREE_SET_COMMAND_SPEC } from './worktree-set'
 import { SERVE_COMMAND_SPECS } from './serve'
 import { REPO_COMMAND_SPECS } from './repo'
+import { GROUP_COMMAND_SPECS } from './group'
 import { TERMINAL_SEND_COMMAND_SPEC } from './terminal-send'
 import { TERMINAL_CLOSE_COMMAND_SPEC } from './terminal-close'
 import { TERMINAL_SET_PANE_TITLE_COMMAND_SPEC } from './terminal-set-pane-title'
@@ -44,6 +45,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     examples: ['orca claude-teams', 'orca claude-teams --resume <session-id>']
   },
   ...REPO_COMMAND_SPECS,
+  ...GROUP_COMMAND_SPECS,
   {
     path: ['worktree', 'list'],
     summary: 'List Orca-managed worktrees',

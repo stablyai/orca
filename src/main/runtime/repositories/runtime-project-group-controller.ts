@@ -119,6 +119,32 @@ export class RuntimeProjectGroupController {
     return updated
   }
 
+  /** A null parent moves the group to the top level. */
+  async setGroupParent(groupId: string, parentGroupId: string | null): Promise<ProjectGroup> {
+    const store = this.deps.getStore()
+    if (!store?.setProjectGroupParents || !store.getProjectGroups) {
+      throw new Error('runtime_unavailable')
+    }
+    const groups = store.getProjectGroups()
+    const group = groups.find((entry) => entry.id === groupId)
+    if (!group) {
+      throw new Error('project_group_not_found')
+    }
+    if (group.parentGroupId === parentGroupId) {
+      return group
+    }
+    if (parentGroupId !== null && !groups.some((entry) => entry.id === parentGroupId)) {
+      throw new Error('project_group_parent_not_found')
+    }
+    const [moved] = store.setProjectGroupParents([{ groupId, parentGroupId }])
+    if (!moved) {
+      // The store skips only cycles once both groups are known to exist.
+      throw new Error('project_group_parent_cycle')
+    }
+    this.deps.notifyReposChanged()
+    return moved
+  }
+
   async deleteGroup(groupId: string): Promise<{ deleted: boolean }> {
     const store = this.deps.getStore()
     if (!store?.deleteProjectGroup) {

@@ -121,24 +121,48 @@ export class ProjectGroupPersistenceOperations {
     return updated
   }
 
-  /** Moves nested groups under other groups in order, skipping unknown groups and moves that would form a cycle. */
+  /** Moves groups under other groups, or to the top level, in order; skips unknown groups and moves that would form a cycle. */
   setProjectGroupParents(moves: readonly ProjectGroupParentMove[]): ProjectGroup[] {
     const byId = new Map((this.state.projectGroups ?? []).map((group) => [group.id, group]))
     const moved: ProjectGroup[] = []
     for (const { groupId, parentGroupId } of moves) {
       const group = byId.get(groupId)
-      if (!group || !byId.has(parentGroupId) || group.parentGroupId === parentGroupId) {
+      if (
+        !group ||
+        group.parentGroupId === parentGroupId ||
+        (parentGroupId !== null && !byId.has(parentGroupId))
+      ) {
         continue
       }
       // A cycle exists if the group is the new parent or one of its ancestors.
       const visited = new Set<string>()
-      let ancestor = byId.get(parentGroupId)
+      let ancestor = parentGroupId === null ? undefined : byId.get(parentGroupId)
       while (ancestor && ancestor.id !== groupId && !visited.has(ancestor.id)) {
         visited.add(ancestor.id)
         ancestor = ancestor.parentGroupId ? byId.get(ancestor.parentGroupId) : undefined
       }
       if (ancestor?.id === groupId) {
         continue
+      }
+      if (parentGroupId === null) {
+        // Ranked before the parent changes, so the group lands after the existing top-level rows.
+        const rootProjectOrder = getNextRootProjectOrder(
+          this.state.repos,
+          this.state.projectGroups ?? []
+        )
+        if (rootProjectOrder === undefined) {
+          // Unranked top-level groups sort by tabOrder alone, so last means past every other group.
+          delete group.rootProjectOrder
+          let maxOrder = -1
+          for (const other of this.state.projectGroups ?? []) {
+            if (other !== group) {
+              maxOrder = Math.max(maxOrder, other.tabOrder)
+            }
+          }
+          group.tabOrder = maxOrder + 1
+        } else {
+          group.rootProjectOrder = rootProjectOrder
+        }
       }
       group.parentGroupId = parentGroupId
       group.updatedAt = Date.now()

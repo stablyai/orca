@@ -97,6 +97,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     ],
     load: async () => (await import('../projects/repo.js')).REPO_HANDLERS
   },
+  {
+    name: 'group',
+    keys: ['group list', 'group create', 'group set', 'group rm'],
+    load: async () => (await import('../projects/group.js')).GROUP_HANDLERS
+  },
   ...WORKTREE_HANDLER_GROUPS,
   {
     name: 'file',

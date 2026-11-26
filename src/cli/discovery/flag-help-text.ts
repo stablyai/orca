@@ -3,6 +3,11 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   switch: '--switch               Replace the Orca account this host is already signed in to',
   'external-worktree-visibility':
     '--external-worktree-visibility show|hide|inherit  Override or inherit non-Orca worktree visibility',
+  group:
+    '--group <group>        Project group: id:<id>, name:<name>, or a bare id or name; none where a command can clear it',
+  'group-order': "--group-order <n>      Sort position among the group's projects, lowest first",
+  'badge-color': '--badge-color <hex>    Project color, as a hex value such as #22c55e',
+  icon: '--icon <lucide-name>|none Project icon from the built-in set; none restores the default mark',
   'browser-profile':
     '--browser-profile <id>|inherit  Browser profile for new tabs in this repo, or inherit the Browser setting',
   agent: '--agent <id>          Launch a known TUI agent in the first terminal',
