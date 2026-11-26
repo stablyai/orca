@@ -9,8 +9,11 @@ export type CapturedTerminalDropTarget = {
   blockWhileVeiled?: true
 }
 
-export function isTerminalPaneVeiled(container: HTMLElement): boolean {
-  return container.querySelector('[data-remote-server-pane-veil]') !== null
+export function getTerminalPaneVeilEnvironmentId(container: HTMLElement): string | null {
+  return (
+    container.querySelector<HTMLElement>('[data-remote-server-pane-veil]')?.dataset
+      .remoteServerPaneVeil ?? null
+  )
 }
 
 export function captureTerminalDropTarget(
@@ -46,7 +49,7 @@ export function getCurrentTerminalDropTransport(
       (pane) =>
         pane.id === target.paneId &&
         pane.leafId === target.leafId &&
-        (!target.blockWhileVeiled || !isTerminalPaneVeiled(pane.container))
+        (!target.blockWhileVeiled || getTerminalPaneVeilEnvironmentId(pane.container) === null)
     )
   return paneStillMounted ? liveTransport : null
 }

@@ -2,7 +2,11 @@
 import { expect, it } from 'vitest'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'
-import { captureTerminalDropTarget, getCurrentTerminalDropTransport } from './terminal-drop-target'
+import {
+  captureTerminalDropTarget,
+  getCurrentTerminalDropTransport,
+  getTerminalPaneVeilEnvironmentId
+} from './terminal-drop-target'
 
 it('blocks delivery of a native drop if the pane gains an outage veil after capture', () => {
   const pane = { id: 1, leafId: 'leaf-one', container: document.createElement('div') }
@@ -19,6 +23,7 @@ it('blocks delivery of a native drop if the pane gains an outage veil after capt
   expect(getCurrentTerminalDropTransport(manager, transports, target)).toBe(transport)
 
   pane.container.append(veil)
+  expect(getTerminalPaneVeilEnvironmentId(pane.container)).toBe('fixture-server')
   expect(getCurrentTerminalDropTransport(manager, transports, target)).toBeNull()
 
   veil.remove()
