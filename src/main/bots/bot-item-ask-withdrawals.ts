@@ -3,6 +3,7 @@
 import type { BotItemAskWhile, BotItemAskWithdrawn } from '../../shared/bots/bot-item-ask-while'
 import type { BotItemAskWhileWorker } from './bot-item-ask-while-worker'
 import type { BotItemsRemote } from './bot-items-ops'
+import type { BotItemLinkJoin } from './bot-items-link-join'
 import type { BotItemRecord } from './bot-items-schema'
 
 export type BotItemAskWithdrawalStore = Pick<
@@ -20,6 +21,18 @@ export type BotItemAskWithdrawalDeps = {
   /** Items Orca moved. */
   changed: (items: readonly BotItemRecord[]) => void
   sendOwedMail: () => Promise<void>
+}
+
+/** Workers' titles as their items show them, from the item link join. */
+export function linkedWorkerTitles(
+  join: Pick<BotItemLinkJoin, 'readLinkedWorkers'>
+): BotItemAskWithdrawalDeps['workerTitle'] {
+  return async (refs) => {
+    const workers = await join.readLinkedWorkers(refs, { pullRequests: false })
+    return new Map(
+      [...workers].flatMap(([ref, read]) => (read.worker?.title ? [[ref, read.worker.title]] : []))
+    )
+  }
 }
 
 /** A withdrawal's mail is tried again each minute for up to an hour, then left to the next write. */

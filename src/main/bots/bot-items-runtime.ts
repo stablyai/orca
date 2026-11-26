@@ -26,7 +26,7 @@ import type { BotItemMail, BotItemRecord, BotItemSource } from './bot-items-sche
 import type { BotWorkRuntime } from './bot-work-runtime'
 import type { BotsDbWorkerClient } from './db-worker/bots-db-worker-client'
 import { BotItemUsageLimitWaits } from './bot-item-usage-limit-wait'
-import { BotItemAskWithdrawals } from './bot-item-ask-withdrawals'
+import { BotItemAskWithdrawals, linkedWorkerTitles } from './bot-item-ask-withdrawals'
 import { botItemAskWhileWorker } from './bot-item-ask-while-worker'
 
 export type BotItemsHostDeps = {
@@ -86,14 +86,7 @@ export class BotItemsHost {
     this.askWithdrawals = new BotItemAskWithdrawals({
       store: () => this.openedStore(),
       worker: (ref) => botItemAskWhileWorker(db(), ref),
-      workerTitle: async (refs) => {
-        const workers = await this.join.readLinkedWorkers(refs, { pullRequests: false })
-        return new Map(
-          [...workers].flatMap(([ref, read]) =>
-            read.worker?.title ? [[ref, read.worker.title]] : []
-          )
-        )
-      },
+      workerTitle: linkedWorkerTitles(this.join),
       changed: (items) => this.notifyChanged(items),
       sendOwedMail: () => this.sendOwedMail()
     })
