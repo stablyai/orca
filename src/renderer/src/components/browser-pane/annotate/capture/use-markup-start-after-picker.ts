@@ -10,17 +10,15 @@ const TWO_GUEST_FRAMES_SCRIPT =
   'new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(true))))'
 
 /**
- * Starts Draw even while Grab or Annotate is on: the picker is removed from the page and a frame painted
- * without its highlight before the screenshot, so Draw never freezes the picker's overlay into the image.
+ * Starts Draw even while Grab or Annotate is on, or still turning off: the picker is removed from the page and a
+ * frame painted without its highlight before the screenshot, so Draw never freezes the picker's overlay into it.
  */
 export function useMarkupStartAfterPicker({
-  browserPageId,
   markup,
   grab,
   stopPicker,
   webviewRef
 }: {
-  browserPageId: string
   markup: MarkupModeController
   grab: GrabModeHook
   /** Stops the picker and drops its unsaved card and toast. */
@@ -29,20 +27,18 @@ export function useMarkupStartAfterPicker({
 }): () => Promise<void> {
   const pickerOn = grab.state !== 'idle'
   const { start } = markup
-  const { setGrabMode } = grab.transport
+  const { pendingTeardown } = grab
   return useCallback(() => {
-    if (!pickerOn) {
+    if (!pickerOn && pendingTeardown() === null) {
       return start()
     }
     return start(async () => {
-      stopPicker()
-      // Main serializes a page's grab mode changes, so this settles after the stop above has torn down.
-      const stopped = await withTimeout(
-        setGrabMode({ browserPageId, enabled: false }),
-        PICKER_TEARDOWN_DEADLINE_MS,
-        { ok: false, reason: 'injection-failed' }
-      )
-      if (!stopped.ok) {
+      if (pickerOn) {
+        stopPicker()
+      }
+      const teardown = pendingTeardown()
+      // False when the disable failed or a newer request (another viewer re-arming) superseded it.
+      if (teardown && !(await withTimeout(teardown, PICKER_TEARDOWN_DEADLINE_MS, false))) {
         return false
       }
       const webview = webviewRef.current
@@ -55,5 +51,5 @@ export function useMarkupStartAfterPicker({
       }
       return true
     })
-  }, [browserPageId, pickerOn, setGrabMode, start, stopPicker, webviewRef])
+  }, [pendingTeardown, pickerOn, start, stopPicker, webviewRef])
 }

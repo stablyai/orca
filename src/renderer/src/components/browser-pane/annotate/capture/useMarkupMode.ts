@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import {
@@ -52,6 +52,14 @@ export function useMarkupMode({
   const contextRef = useRef<MarkupCaptureContext | null>(null)
   // Cancellation invalidates pending captures so stale completions cannot reopen drawing.
   const captureTokenRef = useRef(0)
+
+  // Unmount retires any capture in flight, so a closed tab never captures, updates state, or shows an error toast.
+  useEffect(
+    () => () => {
+      captureTokenRef.current += 1
+    },
+    []
+  )
 
   const reset = useCallback(() => {
     captureTokenRef.current += 1

@@ -31,6 +31,8 @@ export type GrabModeHook = {
   /** Called after Attach to AI — exits grab mode entirely. */
   exit: () => void
   getOperationToken: () => number
+  /** The latest teardown still in flight for this page: true once the picker is genuinely gone, null when none is. */
+  pendingTeardown: () => Promise<boolean> | null
   isCurrentOperationToken: (token: number) => boolean
   transport: BrowserGuestToolsTransport
 }
@@ -78,6 +80,29 @@ export function useGrabMode(
   const armGenerationRef = useRef(0)
   const browserTabIdRef = useRef(browserPageId)
   const mountedRef = useMountedRef()
+  const teardownRef = useRef<{ browserPageId: string; settled: Promise<boolean> } | null>(null)
+
+  // Main serializes a page's mode changes, so the latest disable settles after every earlier one.
+  const disable = useCallback(
+    (tabId: string): void => {
+      const settled = transport.setGrabMode({ browserPageId: tabId, enabled: false }).then(
+        (result) => result.ok && !result.superseded,
+        () => false
+      )
+      const teardown = { browserPageId: tabId, settled }
+      teardownRef.current = teardown
+      void settled.finally(() => {
+        if (teardownRef.current === teardown) {
+          teardownRef.current = null
+        }
+      })
+    },
+    [transport]
+  )
+  const pendingTeardown = useCallback((): Promise<boolean> | null => {
+    const teardown = teardownRef.current
+    return teardown && teardown.browserPageId === browserTabIdRef.current ? teardown.settled : null
+  }, [])
 
   const getOperationToken = useCallback((): number => armGenerationRef.current, [])
   const isCurrentOperationToken = useCallback(
@@ -99,13 +124,13 @@ export function useGrabMode(
       const grabTabId = grabTabIdRef.current
       if (grabTabId) {
         armGenerationRef.current += 1
-        void transport.setGrabMode({ browserPageId: grabTabId, enabled: false })
+        disable(grabTabId)
         void transport.cancelGrab({ browserPageId: grabTabId })
         grabTabIdRef.current = null
         activeOpIdRef.current = null
       }
     }
-  }, [browserPageId, transport])
+  }, [browserPageId, disable, transport])
 
   const armAndAwait = useCallback(async () => {
     const tabId = browserPageId
@@ -126,7 +151,7 @@ export function useGrabMode(
       const supersededBySameTab =
         armGenerationRef.current !== armGeneration && grabTabIdRef.current === tabId
       if (!supersededBySameTab) {
-        void transport.setGrabMode({ browserPageId: tabId, enabled: false })
+        disable(tabId)
         void transport.cancelGrab({ browserPageId: tabId })
         if (grabTabIdRef.current === tabId) {
           grabTabIdRef.current = null
@@ -188,17 +213,14 @@ export function useGrabMode(
       setState('error')
       setError(result.reason)
     }
-  }, [browserPageId, mountedRef, transport])
+  }, [browserPageId, disable, mountedRef, transport])
 
   const cancel = useCallback(() => {
     const targetTabId = grabTabIdRef.current
     armGenerationRef.current += 1
     // Navigation cancels every page's capture; an idle page has nothing in main to tear down.
     if (targetTabId !== null) {
-      void transport.setGrabMode({
-        browserPageId: targetTabId,
-        enabled: false
-      })
+      disable(targetTabId)
       if (activeOpIdRef.current) {
         void transport.cancelGrab({
           browserPageId: targetTabId
@@ -211,7 +233,7 @@ export function useGrabMode(
     setPayload(null)
     setError(null)
     setContextMenu(false)
-  }, [transport])
+  }, [disable, transport])
 
   const toggle = useCallback(() => {
     if ((state === 'idle' || state === 'error') && grabTabIdRef.current === null) {
@@ -237,10 +259,7 @@ export function useGrabMode(
   const exit = useCallback(() => {
     const targetTabId = grabTabIdRef.current ?? browserTabIdRef.current
     armGenerationRef.current += 1
-    void transport.setGrabMode({
-      browserPageId: targetTabId,
-      enabled: false
-    })
+    disable(targetTabId)
     // Invalidate prior in-flight selections before exiting.
     activeOpIdRef.current = null
     grabTabIdRef.current = null
@@ -248,7 +267,7 @@ export function useGrabMode(
     setPayload(null)
     setError(null)
     setContextMenu(false)
-  }, [transport])
+  }, [disable])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent): void => {
@@ -287,6 +306,7 @@ export function useGrabMode(
     rearm,
     exit,
     getOperationToken,
+    pendingTeardown,
     isCurrentOperationToken,
     transport
   }

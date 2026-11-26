@@ -115,7 +115,10 @@ export type BrowserGrabRejectReason =
   | 'already-active'
   | 'injection-failed'
 
-export type BrowserSetGrabModeResult = { ok: true } | { ok: false; reason: BrowserGrabRejectReason }
+/** `superseded`: a newer request for the page won before this one took effect, so it proves nothing about the page. */
+export type BrowserSetGrabModeResult =
+  | { ok: true; superseded?: true }
+  | { ok: false; reason: BrowserGrabRejectReason }
 
 export type BrowserAwaitGrabSelectionArgs = {
   browserPageId: string

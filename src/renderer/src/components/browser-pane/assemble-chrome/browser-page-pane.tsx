@@ -181,7 +181,6 @@ export function BrowserPagePane({
     shortcuts: { workspaceId, chromeShortcutScope }
   })
   const startMarkup = useMarkupStartAfterPicker({
-    browserPageId: browserTab.id,
     markup,
     grab,
     stopPicker: grabAnnotations.cancelPendingBrowserCapture,

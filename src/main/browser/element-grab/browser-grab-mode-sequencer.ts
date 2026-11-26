@@ -3,6 +3,36 @@ import type { BrowserSetGrabModeResult } from '../../../shared/browser/element-g
 
 const grabModeIntentByPageId = new Map<string, { generation: number; enabled: boolean }>()
 const grabModeOperationByPageId = new Map<string, Promise<void>>()
+const intentChangeListenersByPageId = new Map<string, Set<() => void>>()
+const SUPERSEDED: BrowserSetGrabModeResult = { ok: true, superseded: true }
+
+function notifyIntentChange(browserPageId: string): void {
+  const listeners = intentChangeListenersByPageId.get(browserPageId)
+  intentChangeListenersByPageId.delete(browserPageId)
+  for (const listener of listeners ?? []) {
+    listener()
+  }
+}
+
+// Electron holds scripts until the main frame loads; waiting here instead lets a newer request skip this arm.
+function waitUntilArmable(browserPageId: string, guest: Electron.WebContents): Promise<void> {
+  if (guest.isDestroyed() || !guest.isLoadingMainFrame()) {
+    return Promise.resolve()
+  }
+  return new Promise((resolve) => {
+    const listeners = intentChangeListenersByPageId.get(browserPageId) ?? new Set()
+    intentChangeListenersByPageId.set(browserPageId, listeners)
+    const done = (): void => {
+      listeners.delete(done)
+      guest.off('did-stop-loading', done)
+      guest.off('destroyed', done)
+      resolve()
+    }
+    listeners.add(done)
+    guest.on('did-stop-loading', done)
+    guest.on('destroyed', done)
+  })
+}
 
 function queueGrabModeOperation(
   browserPageId: string,
@@ -23,12 +53,16 @@ function queueGrabModeOperation(
 }
 
 export function resetGrabModeState(): void {
+  for (const browserPageId of intentChangeListenersByPageId.keys()) {
+    notifyIntentChange(browserPageId)
+  }
   grabModeIntentByPageId.clear()
   // Retired registrations must not leave chains blocking new operations.
   grabModeOperationByPageId.clear()
 }
 
 export function disposeGrabModeStateForPage(browserPageId: string): void {
+  notifyIntentChange(browserPageId)
   grabModeIntentByPageId.delete(browserPageId)
   // Reused page IDs must not queue behind destroyed guests.
   grabModeOperationByPageId.delete(browserPageId)
@@ -46,12 +80,13 @@ export async function setBrowserGrabMode(
     enabled
   }
   grabModeIntentByPageId.set(browserPageId, intent)
+  notifyIntentChange(browserPageId)
   const isCurrentIntent = (): boolean => grabModeIntentByPageId.get(browserPageId) === intent
   let guest = resolveGuest()
   if (!guest && enabled && waitForGuest) {
     await waitForGuest()
     if (!isCurrentIntent()) {
-      return { ok: true }
+      return SUPERSEDED
     }
     guest = resolveGuest()
   }
@@ -60,15 +95,22 @@ export async function setBrowserGrabMode(
   }
   return queueGrabModeOperation(browserPageId, async () => {
     if (!isCurrentIntent()) {
-      return { ok: true }
+      return SUPERSEDED
     }
-    const current = resolveGuest()
+    let current = resolveGuest()
+    if (current && enabled) {
+      await waitUntilArmable(browserPageId, current)
+      if (!isCurrentIntent()) {
+        return SUPERSEDED
+      }
+      current = resolveGuest()
+    }
     if (!current) {
       return enabled ? { ok: false, reason: 'not-ready' } : { ok: true }
     }
     const success = await browserManager.setGrabMode(browserPageId, enabled, current)
     if (!isCurrentIntent()) {
-      return { ok: true }
+      return SUPERSEDED
     }
     return success ? { ok: true } : { ok: false, reason: 'injection-failed' }
   })
