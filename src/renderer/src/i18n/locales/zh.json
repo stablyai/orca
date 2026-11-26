@@ -408,7 +408,7 @@
         "importInvalid": "{{count}} 行无法读取",
         "importUndecryptable": "{{count}} 个受浏览器保护，请改为从该浏览器导出 CSV",
         "imported": "已导入 {{count}} 个密码",
-        "deleteAllConfirmDescription": "{{profile}} 配置文件中所有已保存的密码、备注和永不保存密码的网站都将被永久删除。此操作无法撤销。",
+        "deleteAllConfirmDescription": "{{profile}} 配置文件中所有已保存的密码、备注和永不保存密码的网站都将被永久删除。此操作无法撤销",
         "deletedAll": "密码数据已删除",
         "form": {
           "invalidSite": "请输入网站地址，例如 example.com",
@@ -1340,7 +1340,7 @@
       "soulEmpty": "还没有指令。双击或选择\"编辑\"开始撰写",
       "muteNotifications": "静音通知",
       "muteNotificationsDescription": "不再发送系统通知。未读圆点仍会显示",
-      "teamDisabled": "你的团队已关闭 bots"
+      "teamDisabled": "你的团队已关闭 Bots"
     },
     "automaticUpdates": {
       "title": "自动更新",
@@ -7869,8 +7869,8 @@
           "stopped": "已停止",
           "unverifiable": "未知",
           "title": "添加 WSL 发行版",
-          "descriptionMoveFromSidebar": "git、文件和终端在 Linux 中原生运行。现有的 WSL 项目会留在 Windows 上，直到你在其项目菜单中选择“移到 … 主机”。",
-          "descriptionAutoMove": "git、文件和终端在 Linux 中原生运行。WSL 项目会在其终端空闲后移到这里。",
+          "descriptionMoveFromSidebar": "git、文件和终端在 Linux 中原生运行。现有的 WSL 项目会留在 Windows 上，直到你在其项目菜单中选择\"移到 … 主机\"",
+          "descriptionAutoMove": "git、文件和终端在 Linux 中原生运行。WSL 项目会在其终端空闲后移到这里",
           "distro": "发行版",
           "loading": "正在查找 WSL 发行版…",
           "placeholder": "选择发行版",
@@ -13639,7 +13639,7 @@
         "wslHostsExperimental": {
           "toggleLabel": "切换\"WSL 发行版作为主机\"",
           "title": "WSL 发行版作为主机",
-          "description": "在 WSL 2 发行版内运行 Orca 的服务器，让 git、文件和终端在 Linux 中原生运行。",
+          "description": "在 WSL 2 发行版内运行 Orca 的服务器，让 git、文件和终端在 Linux 中原生运行",
           "keywordWsl": "wsl",
           "keywordLinux": "linux",
           "keywordDistro": "发行版"
@@ -13647,17 +13647,17 @@
         "wslHosts": {
           "title": "WSL 主机",
           "experimental": "实验性",
-          "description": "Orca 在每个发行版内运行一个服务器。要启动已停止的发行版，请点击“启动”、打开终端或在此处连接。",
+          "description": "Orca 在每个发行版内运行一个服务器。要启动已停止的发行版，请点击\"启动\"、打开终端或在此处连接",
           "add": "添加 WSL 发行版",
           "connect": "连接",
           "turnOn": "打开实验功能",
           "forceUpdate": "强制更新",
           "chip": "WSL",
-          "notStartedAsWslHost": "此服务器由 SSH 主机启动，因此无法将项目移到这里。请将其作为 WSL 主机重启以解决此问题。",
+          "notStartedAsWslHost": "此服务器由 SSH 主机启动，因此无法将项目移到这里。请将其作为 WSL 主机重启以解决此问题",
           "restartAsWslHost": {
             "button": "作为 WSL 主机重启",
             "title": "要作为 WSL 主机重启吗？",
-            "description": "结束 {{host}} 上的所有终端和代理（包括 SSH 主机打开的），然后将 Orca 的服务器作为 WSL 主机重启。",
+            "description": "结束 {{host}} 上的所有终端和智能体（包括 SSH 主机打开的），然后将 Orca 的服务器作为 WSL 主机重启",
             "cancel": "取消",
             "action": "结束终端并重启"
           }
@@ -21994,7 +21994,8 @@
       "htmlPreview": "HTML 预览",
       "htmlView": "HTML 视图",
       "htmlViewCode": "代码",
-      "htmlViewPreview": "预览"
+      "htmlViewPreview": "预览",
+      "htmlViewPreviewWaiting": "此代码块完成后即可预览"
     },
     "tab": {
       "bar": {
@@ -24894,12 +24895,24 @@
       "scopeDetails": "关于稀疏检出范围",
       "scopeExplanation": "文件夹选择器只改变显示范围，不会改变检出的文件，仓库根目录视图也会显示根目录和上级文件夹中已检出的文件",
       "folderLoadError": "无法加载此文件夹：",
-      "emptyFolder": "此文件夹中没有文件"
+      "emptyFolder": "此文件夹中没有文件",
+      "combinedSearchExplanation": "搜索会查找当前文件夹中的文件名，以及整个工作区中的文本。稀疏检出排除的文件不会被搜索"
     },
     "trashFailed": {
       "titleRecycleBin": "无法将\"{{name}}\"移到回收站。是否永久删除？",
       "titleTrash": "无法将\"{{name}}\"移到废纸篓。是否永久删除？",
       "description": "此操作无法撤销"
+    },
+    "combinedSearch": {
+      "text": "文本",
+      "filesIn": "{{path}} 中的文件",
+      "files": "文件",
+      "showAll": "显示全部 {{count}} 个",
+      "noResults": "没有结果",
+      "placeholder": "搜索",
+      "placeholderScoped": "搜索 {{path}}",
+      "textInWorkspace": "工作区中的文本",
+      "refine": "匹配项过多"
     }
   },
   "sparsePreset": {
@@ -25037,11 +25050,11 @@
       "chatCancelSignIn": "取消登录",
       "chatCopied": "已复制",
       "chatCopySignInLink": "复制登录链接",
-      "chatFinishInBrowser": "请在浏览器中完成，然后粘贴代码",
+      "chatFinishInBrowser": "在浏览器中完成登录，然后粘贴授权码",
       "chatOtherWindow": "正在另一个窗口中登录",
       "chatPageDidntOpen": "页面没有打开？",
-      "chatPasteCode": "粘贴代码",
-      "chatPasteCodeLabel": "登录后 Google 显示的代码，或那个页面的地址",
+      "chatPasteCode": "粘贴授权码",
+      "chatPasteCodeLabel": "登录后 Google 显示的授权码，或该页面的地址",
       "description": "聊天和终端中的 agy 共用 agy 的 Google 账户。聊天也可以改用 Gemini API 密钥或 gcloud 登录",
       "descriptionWindows": "聊天和终端中的 agy 共用 agy 的 Google 账户。切换只影响这台主机的默认 agy 凭据。聊天也可以改用 Gemini API 密钥或 gcloud 登录",
       "agentPlatform": "Google Agent Platform",
@@ -25303,7 +25316,8 @@
     "filters": {
       "toggle": "切换搜索详情",
       "active": "{{count}} 个已启用"
-    }
+    },
+    "unavailable": "此处不可用"
   },
   "csv": {
     "detectingDelimiter": "正在检测分隔符…",
@@ -27963,9 +27977,9 @@
       "outfitNightShift": "夜班",
       "outfitNone": "无装扮",
       "outfitParty": "派对",
-      "outfitReviewer": "审阅者",
+      "outfitReviewer": "评审人",
       "outfitScientist": "科学家",
-      "outfitSecurity": "安保",
+      "outfitSecurity": "保安",
       "outfitTie": "领带",
       "pictureOutfit": "装扮",
       "wslSetupFailedShort": "设置未完成",
@@ -28799,7 +28813,7 @@
       "appAdded": "已添加你团队的 Google 应用",
       "disconnect": {
         "title": "要断开 {{email}} 的连接吗？",
-        "revokeNote": "Bots 将停止在此处使用此账户，Google 也会在所有已授权的地方撤销 Orca 的访问权限。",
+        "revokeNote": "Bots 将停止在此处使用此账户，Google 也会在所有已授权的地方撤销 Orca 的访问权限",
         "removeNote": "Bots 将停止在此处使用此账户。Bot 设置会保留，之后点击\"连接 Google\"即可重新开启",
         "confirm": "断开连接",
         "remove": "从此电脑移除",
@@ -28937,7 +28951,7 @@
         "apiOff": "{{service}} 已在 Google Cloud 中停用",
         "error": "无法检查 {{service}}",
         "notAllowed": "不允许使用 {{service}}",
-        "signedOut": "登录已失效"
+        "signedOut": "已被 Google 退出登录"
       },
       "setDefault": "设为默认",
       "addServiceMenu": "添加服务…",
@@ -28946,7 +28960,7 @@
       "setUpNewApp": "设置新的 Google 应用",
       "useAnother": "使用其他账户",
       "useAnotherSignIn": "使用 Google 登录",
-      "useAnotherSignInDetail": "使用你当前的 Google 应用",
+      "useAnotherSignInDetail": "使用你当前 Google 应用",
       "setUpNewAppDetail": "如果当前应用不适用于此账户或组织",
       "updateToSetUpNewApp": "请更新 {{host}} 上的 Orca 以设置新的 Google 应用",
       "updateToChooseAccounts": "请更新 {{host}} 上的 Orca 以选择账户",
@@ -30252,7 +30266,7 @@
       "generic": "出了点问题，请重试",
       "avatarInvalid": "无法使用该图片。请选择 PNG 或 JPG 图片",
       "unsavedDrafts": "它的文件夹中有未保存的编辑器更改。请先保存或关闭这些更改，然后再删除",
-      "avatarHomeUnreadable": "无法读取已保存的图片。请重新选择",
+      "avatarHomeUnreadable": "无法读取已保存的头像。请重新选择",
       "folderNotOwned": "无法验证此 bot 的文件夹"
     },
     "slack": {

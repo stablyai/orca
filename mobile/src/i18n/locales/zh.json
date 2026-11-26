@@ -1913,7 +1913,7 @@
         "retry": "重试"
       },
       "workerDock": {
-        "coordinator": "正在等待协调者",
+        "coordinator": "等待协调者",
         "starting": "正在启动",
         "idle": "空闲",
         "saving": "正在保存结果…",
@@ -1925,7 +1925,7 @@
         "taskCount_one": "{{count}} 个任务",
         "taskCount_other": "{{count}} 个任务",
         "failedCount": "{{count}} 个失败",
-        "needsYouCount": "{{count}} 个需要你",
+        "needsYouCount": "{{count}} 个等待你处理",
         "runningCount": "{{count}} 个运行中",
         "workersRegion": "工作者",
         "stopOnComputer": "请在工作者运行的电脑上停止或清除它们"
@@ -2483,7 +2483,8 @@
       "tasks": "任务",
       "moreActions": "更多操作",
       "automations": "自动化",
-      "sharedLinks": "分享链接"
+      "sharedLinks": "分享链接",
+      "mcpServers": "MCP 服务器"
     },
     "deleteConfirm": {
       "changes_one": "{{count}} 项未提交的更改",
@@ -2630,7 +2631,8 @@
       "tasks": "任务",
       "terminal": "终端",
       "workspace": "工作区",
-      "automations": "自动化"
+      "automations": "自动化",
+      "mcpServers": "MCP 服务器"
     }
   },
   "newWorkspace": {
@@ -6878,7 +6880,7 @@
         "copyPath": "复制路径",
         "fileOutside": "{{path}} 不在此 bot 的文件夹中",
         "automation": "自动化",
-        "automationOn": "将为此事项唤醒智能体",
+        "automationOn": "会为这个事项唤醒智能体",
         "automationEnded": "已结束"
       },
       "open": {
@@ -6933,8 +6935,8 @@
       },
       "wait": {
         "titleOne": "{{title}} 在等待什么？",
-        "titleMany": "这 {{count}} 个事项在等待什么？",
-        "placeholder": "等待内容",
+        "titleMany": "{{count}} 个事项在等待什么？",
+        "placeholder": "在等待…",
         "keep": "取消",
         "confirm": "设为等待中",
         "offline": "{{host}} 已离线。你输入的内容会保留；它恢复在线后即可再次使用\"设为等待中\""
@@ -7005,7 +7007,7 @@
       "chat": "你与 {{name}} 的聊天",
       "access": "{{person}} 请求访问权限",
       "fixConnector": "打开 {{name}}",
-      "pairedAsk": "{{from}} 想给 {{name}} 发消息",
+      "pairedAsk": "{{from}} 想要给 {{name}} 发消息",
       "connectorFix": "登录或修复",
       "questions": "{{count}} 个问题",
       "signInApps": "登录 {{count}} 个应用",
@@ -7498,7 +7500,8 @@
       "removeVariableRow": "移除变量",
       "emptyArgument": "空",
       "valueNew": "新值",
-      "valueSaved": "已保存"
+      "valueSaved": "已保存",
+      "hostMcpServers": "你的 MCP 服务器"
     },
     "handToBot": {
       "menu": "交给 bot…",
@@ -7834,7 +7837,7 @@
       "toolCredentialsRaced": "机器人的工具凭据已在另一个 Orca 中更改。请重试",
       "toolSourceManaged": "这个工具由 Orca 管理。请到你设置它的地方更改",
       "toolValuesUnmoved": "有个工具仍保存着它的值。请重新打开机器人的工具以迁移这些值",
-      "googleAccountsChanged": "打开后其 Google 账户已发生变化。请检查后重新保存",
+      "googleAccountsChanged": "这个 bot 的 Google 账户在你打开后有变化，请重新检查并保存",
       "toolCodexCheckFailed": "Codex 无法检查或连接这些工具。请检查它的设置后重试",
       "toolCodexNoThread": "Codex 没有启动用于检查工具的线程",
       "toolSignInFolderFailed": "无法准备登录文件夹：{{detail}}",
@@ -7890,7 +7893,10 @@
       "groupReplierNotMember": "请在\"房间回复\"中选择一位当前的房间成员",
       "groupMailNeverStarted": "这封邮件从未开始一轮对话",
       "groupRemoteUnreachable": "无法连接 {{host}}。{{detail}}",
-      "groupRemoteUnreachableRetry": "无法连接 {{host}}。{{detail}} 重新发布即可重试"
+      "groupRemoteUnreachableRetry": "无法连接 {{host}}。{{detail}} 重新发布即可重试",
+      "composioKeyCantCreateSessions": "这个 Composio 密钥无法创建会话。它需要 {{permission}}",
+      "composioKeyNeedsPermission": "这个 Composio 密钥缺少一项权限。它需要 {{permission}}",
+      "composioKeyMissingPermission": "这个 Composio 密钥缺少 Orca 需要的一项权限"
     },
     "pairedServers": {
       "heading": "已配对的服务器",
@@ -8439,7 +8445,7 @@
       "moreMatches_other": "还有 {{count}} 个匹配项。输入更完整的名称以缩小范围",
       "readFailedTitle": "无法加载聊天",
       "runningCount": "{{count}} 个运行中",
-      "needsYouCount": "{{count}} 个需要你",
+      "needsYouCount": "{{count}} 项需要你处理",
       "open": "打开",
       "delete": "删除聊天"
     },
@@ -8565,7 +8571,97 @@
     }
   },
   "mcpServers": {
-    "agentBlocked": "已被你所在组织的 Claude 设置阻止"
+    "category": {
+      "coding": "编程",
+      "chat": "聊天",
+      "monitoring": "监控",
+      "docs": "文档与项目",
+      "more": "更多"
+    },
+    "searchApps": "搜索应用",
+    "filterActive": "筛选，{{filter}}",
+    "filter": "筛选",
+    "allApps": "所有应用",
+    "added": "已添加",
+    "addTitle": "添加 MCP 服务器",
+    "customServer": "自定义服务器",
+    "customServerLine": "URL、命令或粘贴的配置",
+    "noMatch": "没有与\"{{query}}\"匹配的应用",
+    "apps": "应用",
+    "header": "请求头",
+    "headerName": "名称",
+    "headerValue": "值",
+    "removeHeader": "移除请求头",
+    "headers": "请求头",
+    "headerEmpty": "空",
+    "addHeader": "添加请求头",
+    "addButton": "添加",
+    "sourceLabel": "服务器 URL 或启动命令",
+    "sourcePlaceholder": "https://… 或 npx …",
+    "sourceNote": "粘贴服务器 URL、启动命令或 mcpServers 配置",
+    "details": "详情",
+    "trust": "只添加你信任的软件",
+    "serverType": "服务器类型",
+    "urlMode": "连接到 URL",
+    "commandMode": "运行命令",
+    "serverName": "服务器名称",
+    "headersNone": "无",
+    "yours": "你的服务器",
+    "addServer": "添加服务器",
+    "fromPlugins": "来自插件",
+    "inYourAgents": "来自你的智能体",
+    "needsSignIn": "需要登录",
+    "wontStart": "无法启动",
+    "signIn": "登录",
+    "projectsOnly": "仅限 {{projects}}",
+    "moreFor": "{{name}} 的更多操作",
+    "moveToOrca": "移至 Orca",
+    "copyToOrca": "复制到 Orca",
+    "signInAgain": "重新登录",
+    "signOut": "退出登录",
+    "workspaces": "工作区",
+    "account": "账户",
+    "signedIn": "已登录",
+    "agents": "智能体",
+    "turnAllOn": "全部开启",
+    "agentsUnread": "无法读取这台电脑上的智能体",
+    "agentBlocked": "已被你所在组织的 Claude 设置阻止",
+    "advanced": "高级",
+    "sharedProcess": "所有智能体共用一个进程",
+    "sharedProcessNote": "占用更少内存。在工作区文件夹之外运行",
+    "removeServer": "移除服务器",
+    "url": "URL",
+    "command": "命令",
+    "arguments": "参数",
+    "title": "MCP 服务器",
+    "reading": "正在读取 MCP 服务器…",
+    "unavailable": "{{host}} 上没有 MCP 服务器功能",
+    "signedInTo": "已登录 {{app}}",
+    "allWorkspaces": "所有工作区",
+    "includingLater": "包括之后添加的工作区",
+    "appliesToNewNote": "更改将应用于新会话",
+    "allAgents": "所有智能体",
+    "agentsOf": "{{total}} 个中的 {{on}} 个",
+    "workspacesAll": "全部",
+    "workspacesAllBut": "除 {{names}} 外的所有工作区",
+    "workspacesNone": "无",
+    "appliesToNew": "对新会话生效",
+    "restartSessions": "重启 {{count}} 个会话",
+    "restarted": "已重启 {{count}} 个会话",
+    "agentFileTitle": "为 {{agent}} 开启 {{server}}？",
+    "agentFileMessage": "Orca 会将你的 MCP 服务器保存在 {{agent}} 的设置文件（{{file}}）中。你自己的条目保持不变",
+    "agentFilesMessage": "Orca 会将你的 MCP 服务器保存在它们的设置文件中。你自己的条目保持不变",
+    "allow": "允许",
+    "removeTitle": "移除 {{name}}？",
+    "removeMessage": "新会话将不再使用它。你随时可以重新添加",
+    "remove": "移除",
+    "moveTitle": "将 {{name}} 移至 Orca？",
+    "moveMessage": "Orca 会将它从 {{agents}} 的设置中移除，并保留备份",
+    "move": "移动",
+    "workspacesCount": "{{count}} 个工作区",
+    "workspacesAllButCount": "除 {{count}} 个外的全部",
+    "headerMissing": "填写 {{header}} 后才能添加此服务器",
+    "servers": "服务器"
   },
   "chats": {
     "delete": {
