@@ -58,18 +58,20 @@ const [
 const text = lazyZodSchema(() => z.string().optional())
 const count = lazyZodSchema(() => z.number().optional())
 
-export const storedFailureFact = AgentSessionFailureFactSchema.extend({
-  account: text,
-  refusal: storedRefusalReference.optional(),
-  attachment: z.object({ reason: z.string(), limit: count }).optional(),
-  retry: z
-    .object({ error: text, status: count, cause: text, attempt: count, maxRetries: count })
-    .optional(),
-  usageLimit: z.object({ window: text, resetsAt: count }).optional(),
-  neverReachedAgent: z.literal(true).optional(),
-  backgroundStop: text,
-  requestTimeout: z.object({ method: z.string(), timeoutMs: z.number() }).optional()
-})
+export const storedFailureFact = lazyZodSchema(() =>
+  AgentSessionFailureFactSchema.extend({
+    account: text,
+    refusal: storedRefusalReference.optional(),
+    attachment: z.object({ reason: z.string(), limit: count }).optional(),
+    retry: z
+      .object({ error: text, status: count, cause: text, attempt: count, maxRetries: count })
+      .optional(),
+    usageLimit: z.object({ window: text, resetsAt: count }).optional(),
+    neverReachedAgent: z.literal(true).optional(),
+    backgroundStop: text,
+    requestTimeout: z.object({ method: z.string(), timeoutMs: z.number() }).optional()
+  })
+)
 
 // A sender's reader salvages any value of a known key, so only the keys are storage's to close.
 const salvaged = lazyZodSchema(() => z.unknown().optional())
