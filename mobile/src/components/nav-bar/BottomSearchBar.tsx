@@ -245,12 +245,7 @@ const styles = themedStyleSheet(() => ({
     borderRadius: radii.pill,
     backgroundColor: colors.bgRaised,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.composerBorder,
-    shadowColor: '#000',
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 6
+    borderColor: colors.composerBorder
   },
   button: {
     width: BUTTON_SIZE,
@@ -260,12 +255,7 @@ const styles = themedStyleSheet(() => ({
     justifyContent: 'center',
     backgroundColor: colors.bgRaised,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.composerBorder,
-    shadowColor: '#000',
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 6
+    borderColor: colors.composerBorder
   },
   buttonEmphasis: {
     backgroundColor: colors.createActionFill,

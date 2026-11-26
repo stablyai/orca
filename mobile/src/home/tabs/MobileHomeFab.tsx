@@ -70,7 +70,6 @@ export function MobileHomeFab(props: {
           <Animated.View
             style={[
               styles.button,
-              props.disabled && styles.buttonFlat,
               {
                 transform: [{ scale: pressed ? 0.92 : 1 }],
                 transitionProperty: 'transform',
@@ -101,14 +100,8 @@ const styles = themedStyleSheet(() => ({
     borderRadius: radii.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.accentBlue,
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 5 },
-    elevation: 6
+    backgroundColor: colors.accentBlue
   },
-  buttonFlat: { shadowOpacity: 0, elevation: 0 },
   hint: {
     maxWidth: 220,
     fontSize: 13,
