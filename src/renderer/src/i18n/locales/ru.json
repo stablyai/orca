@@ -12333,22 +12333,6 @@
           "0bb18642b7": "Использование",
           "a8f4139350": "Grok не сообщил процент использования для этой учётной записи."
         },
-        "ServerCliUsageStatus": {
-          "signedInOn": "Выполнен вход на {{host}}",
-          "readsGrok": "Orca считывает вход в Grok CLI на {{host}}.",
-          "readsCursor": "Orca считывает вход в Cursor на {{host}}.",
-          "notReportedGrok": "{{host}} не сообщил о расходе Grok",
-          "notReportedCursor": "{{host}} не сообщил о расходе Cursor",
-          "checkingOn": "Проверка расхода на {{host}}…",
-          "noSignInGrok": "Нет входа в Grok на {{host}}",
-          "noSignInCursor": "Нет входа в Cursor на {{host}}",
-          "reportedNoGrok": "{{host}} не передал значения расхода Grok",
-          "reportedNoCursor": "{{host}} не передал значения расхода Cursor",
-          "grokHint": "Запустите grok на {{host}} и дождитесь его старта, при запросе выполните вход. Затем нажмите «Обновить расход».",
-          "cursorHint": "Войдите в Cursor на {{host}} (Cursor IDE или cursor-agent login), затем нажмите «Обновить расход».",
-          "cursorSubtitle": "Показывает использование тарифа Cursor из входа на {{host}}. Orca только читает данные и никогда не меняет этот вход в Cursor.",
-          "refreshUsage": "Обновить расход"
-        },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "Использовано",
           "usagePercentageDisplayRemaining": "Осталось"

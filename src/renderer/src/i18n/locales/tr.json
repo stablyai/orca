@@ -13187,22 +13187,6 @@
           "0bb18642b7": "Kullanım",
           "a8f4139350": "Grok bu hesap için kullanım yüzdesi bildirmedi."
         },
-        "ServerCliUsageStatus": {
-          "signedInOn": "{{host}} üzerinde oturum açıldı",
-          "readsGrok": "Orca, {{host}} üzerindeki Grok CLI oturumunu okur.",
-          "readsCursor": "Orca, {{host}} üzerindeki Cursor oturumunu okur.",
-          "notReportedGrok": "{{host}} Grok kullanımını bildirmedi",
-          "notReportedCursor": "{{host}} Cursor kullanımını bildirmedi",
-          "checkingOn": "{{host}} üzerindeki kullanım denetleniyor…",
-          "noSignInGrok": "{{host}} üzerinde Grok oturumu yok",
-          "noSignInCursor": "{{host}} üzerinde Cursor oturumu yok",
-          "reportedNoGrok": "{{host}} herhangi bir Grok kullanım değeri bildirmedi",
-          "reportedNoCursor": "{{host}} herhangi bir Cursor kullanım değeri bildirmedi",
-          "grokHint": "{{host}} üzerinde grok komutunu çalıştırın ve başlamasını bekleyin; istenirse oturum açın. Ardından Kullanımı yenile'ye tıklayın.",
-          "cursorHint": "{{host}} üzerinde Cursor'da oturum açın (Cursor IDE veya cursor-agent login), ardından Kullanımı yenile'ye tıklayın.",
-          "cursorSubtitle": "{{host}} üzerindeki oturumdan Cursor plan kullanımını gösterir. Orca bu bilgiyi yalnızca okur — o Cursor oturumunu asla değiştirmez.",
-          "refreshUsage": "Kullanımı yenile"
-        },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "Kullanılan",
           "usagePercentageDisplayRemaining": "Kalan"

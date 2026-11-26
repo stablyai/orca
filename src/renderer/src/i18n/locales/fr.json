@@ -11860,22 +11860,6 @@
           "0bb18642b7": "Utilisation",
           "a8f4139350": "Grok n'a signalé aucun pourcentage d'utilisation pour ce compte."
         },
-        "ServerCliUsageStatus": {
-          "signedInOn": "Connecté sur {{host}}",
-          "readsGrok": "Orca lit la connexion à Grok CLI sur {{host}}.",
-          "readsCursor": "Orca lit la connexion à Cursor sur {{host}}.",
-          "notReportedGrok": "{{host}} n'a pas signalé l'utilisation de Grok",
-          "notReportedCursor": "{{host}} n'a pas signalé l'utilisation de Cursor",
-          "checkingOn": "Vérification de l'utilisation sur {{host}}…",
-          "noSignInGrok": "Aucune connexion Grok sur {{host}}",
-          "noSignInCursor": "Aucune connexion Cursor sur {{host}}",
-          "reportedNoGrok": "{{host}} n'indique aucun chiffre d'utilisation de Grok",
-          "reportedNoCursor": "{{host}} n'indique aucun chiffre d'utilisation de Cursor",
-          "grokHint": "Exécutez grok sur {{host}} et attendez qu'il démarre, en vous connectant si on vous le demande. Cliquez ensuite sur Actualiser l'utilisation.",
-          "cursorHint": "Connectez-vous à Cursor sur {{host}} (Cursor IDE ou cursor-agent login), puis cliquez sur Actualiser l'utilisation.",
-          "cursorSubtitle": "Affiche l'utilisation du forfait Cursor à partir de la connexion sur {{host}}. Orca se contente de la lire — il ne modifie jamais cette connexion Cursor.",
-          "refreshUsage": "Actualiser l'utilisation"
-        },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "Utilisé",
           "usagePercentageDisplayRemaining": "Restant"
