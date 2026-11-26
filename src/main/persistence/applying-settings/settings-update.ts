@@ -126,7 +126,10 @@ export function updateSettings(
     )
   }
   sanitizeAgentLaunchProfileUpdates(sanitizedUpdates, updates)
-  Object.assign(sanitizedUpdates, normalizeOrchestrationWorkerSettingsUpdates(updates, operations.state.settings))
+  Object.assign(
+    sanitizedUpdates,
+    normalizeOrchestrationWorkerSettingsUpdates(updates, operations.state.settings)
+  )
   if ('nativeChatPermissionMode' in updates || 'agentPermissionDefault' in updates) {
     Object.assign(
       sanitizedUpdates,

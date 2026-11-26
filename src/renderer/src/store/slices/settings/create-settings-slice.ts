@@ -110,7 +110,10 @@ function normalizeSettingsUpdates(
     sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
   }
   sanitizeAgentLaunchProfileUpdates(sanitizedUpdates, updates)
-  Object.assign(sanitizedUpdates, normalizeOrchestrationWorkerSettingsUpdates(updates, currentSettings))
+  Object.assign(
+    sanitizedUpdates,
+    normalizeOrchestrationWorkerSettingsUpdates(updates, currentSettings)
+  )
   if ('uiLanguage' in updates) {
     sanitizedUpdates.uiLanguage = normalizeUiLanguage(updates.uiLanguage)
   }
