@@ -24,6 +24,7 @@ import { openAnnotationLocation } from '@/components/editor/check-details/action
 import { useTranslate } from '@/i18n/use-translate'
 import type { ChecksPanelActiveContentModel } from './active-content-props'
 import { ChecksPanelReviewHeader } from './review-header'
+import { GitHubLabelChips } from '@/components/github-project/cells/ProjectCellValueEditors'
 
 export function ChecksPanelActiveContent({
   model,
@@ -193,6 +194,10 @@ export function ChecksPanelActiveContent({
             </span>
             <Pencil className="size-3 text-muted-foreground/40 can-hover:opacity-0 group-hover/title:opacity-100 transition-opacity shrink-0 mt-0.5" />
           </div>
+        )}
+
+        {settings?.showGitHubLabelsInChecks && activeReview.provider === 'github' && (
+          <GitHubLabelChips labels={pr?.labels} />
         )}
 
         {activeReview.updatedAt && (

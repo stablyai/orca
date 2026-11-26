@@ -1,4 +1,5 @@
 import type { GitHubRepositoryIdentity } from '../repositories/repository-identity'
+import type { GitHubProjectLabel } from '../projects/project-types'
 
 export type PRState = 'open' | 'closed' | 'merged' | 'draft'
 
@@ -52,6 +53,7 @@ export type GitHubPRStack = {
 export type PRInfo = {
   number: number
   title: string
+  labels?: GitHubProjectLabel[]
   state: PRState
   url: string
   checksStatus: CheckStatus

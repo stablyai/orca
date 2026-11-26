@@ -235,6 +235,7 @@ export type GlobalSettings = GlobalSettingsBase & {
   sourceControlViewMode: SourceControlViewMode
   /** Preferred Source Control group order. Per-user, not per-workspace. */
   sourceControlGroupOrder: SourceControlGroupOrder
+  showGitHubLabelsInChecks: boolean
   /** Compare base defaults to the branch upstream instead of the repo default; affects only the compare/diff view, not the PR/rebase target. Per-user. */
   sourceControlCompareAgainstUpstream: boolean
   /** Whether to show the Orca app name in the titlebar. */

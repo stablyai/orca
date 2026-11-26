@@ -2,8 +2,25 @@ import { getAutoRenameBranchSearchEntries } from './auto-rename-branch-search'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import type { Translate } from '@/i18n/use-translate'
+
+export function getGitHubLabelsInChecksEntry(t: Translate = translate) {
+  return {
+    title: t(
+      'auto.components.settings.GitPane.showGitHubLabelsInChecks',
+      'Show GitHub pull request labels in Checks'
+    ),
+    keywords: translateSearchKeyword(
+      'auto.components.settings.GitPane.prLabelsKeyword',
+      'PR labels',
+      undefined,
+      t
+    )
+  }
+}
 
 export const getGitPaneSearchEntries = createLocalizedCatalog(() => [
+  getGitHubLabelsInChecksEntry(),
   {
     title: translate('auto.components.settings.git.search.25eac7e904', 'Branch prefix'),
     description: translate(

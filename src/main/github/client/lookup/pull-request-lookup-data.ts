@@ -7,6 +7,7 @@ import type {
 import type {
   GitHubPRMergeMethodSettings,
   GitHubPRStack,
+  PRInfo,
   PRMergeableState,
   PRReviewDecision
 } from '../../../../shared/github/pull-requests/pull-request-types'
@@ -26,6 +27,7 @@ import { githubRepositoryWebHost } from '../../repositories/github-repository-ho
 export type PullRequestLookupData = {
   number: number
   title: string
+  labels?: PRInfo['labels']
   state: string
   url: string
   statusCheckRollup: unknown[]
@@ -61,6 +63,7 @@ export type PullRequestLookupPolicy = {
 export type RestPullRequest = {
   number: number
   title: string
+  labels?: PRInfo['labels']
   state: string
   html_url?: string
   url?: string
@@ -86,10 +89,10 @@ export type RestPullRequest = {
 }
 
 export const PR_LOOKUP_JSON_FIELDS =
-  'number,title,state,url,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
+  'number,title,labels,state,url,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
 
 export const PR_BRANCH_LIST_JSON_FIELDS =
-  'number,title,state,url,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
+  'number,title,labels,state,url,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
 
 export type GitHubPRBranchLookupOptions = HostedReviewExecutionOptions & {
   resetQuietBackoff?: boolean
@@ -143,6 +146,7 @@ export function mapRestPullRequest(pr: RestPullRequest): PullRequestLookupData {
   return {
     number: pr.number,
     title: pr.title,
+    labels: pr.labels,
     state: pr.merged_at ? 'MERGED' : pr.state,
     url: pr.html_url ?? pr.url ?? '',
     statusCheckRollup: [],

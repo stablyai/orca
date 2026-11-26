@@ -16,6 +16,7 @@ import {
 const CHECKS_FIELDS = prCheckRollupFields()
 const SIDEBAR_FIELDS = `{
       number title state url updatedAt isDraft mergeable reviewDecision mergeStateStatus
+      labels(first: 100) { nodes { name color } pageInfo { hasNextPage } }
       autoMergeRequest { enabledAt }
       baseRefName headRefName baseRefOid headRefOid isCrossRepository
       headRepositoryOwner { login }
@@ -43,6 +44,12 @@ const errorsSchema = z
 const pullRequestSchema = z.object({
   number: z.number().int().positive(),
   title: z.string(),
+  labels: z
+    .object({
+      nodes: z.array(z.object({ name: z.string(), color: z.string() })),
+      pageInfo: z.object({ hasNextPage: z.literal(false) })
+    })
+    .optional(),
   state: z.enum(['OPEN', 'CLOSED', 'MERGED']),
   url: z.string(),
   updatedAt: z.string(),
@@ -250,6 +257,7 @@ export async function parsePullRequestSidebarResponse(
   const { commits: _commits, stackEntry: _stackEntry, ...metadata } = pr
   return {
     ...metadata,
+    labels: pr.labels?.nodes,
     baseRefOid: pr.baseRefOid ?? undefined,
     headRefOid: pr.headRefOid ?? undefined,
     statusCheckRollup: statusCheckRollup ?? [],
