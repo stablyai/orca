@@ -32,7 +32,11 @@ const relay = (relayId: string, exit: ProviderRelayInfo['exit'] = null): Provide
  * A daemon start whose listing answers what `relays()` returns; null never answers, and 'busy'
  * refuses (an unanswered listing as its timeout ends it).
  */
-function daemon(instance: string, relays: () => ProviderRelayInfo[] | null | 'busy') {
+function daemon(
+  instance: string,
+  relays: () => ProviderRelayInfo[] | null | 'busy',
+  requests: string[] = []
+) {
   const client = {
     getDaemonIdentity: () => ({
       providerRelay: true,
@@ -45,6 +49,7 @@ function daemon(instance: string, relays: () => ProviderRelayInfo[] | null | 'bu
     onDisconnected: () => () => {},
     connectedListeners: new DaemonClientListeners<() => void>(),
     request: (type: string) => {
+      requests.push(type)
       if (type !== 'relayList') {
         return Promise.resolve({})
       }
@@ -136,6 +141,25 @@ it.skipIf(process.platform === 'win32')(
 )
 
 it.skipIf(process.platform === 'win32')(
+  'an observe-only ask reads the listing without ending any relay or recording anything',
+  async () => {
+    // Another build's agent, which this build can't reattach, sits beside the chat's kept relay.
+    const requests: string[] = []
+    const newer = { ...relay('r-newer'), chatKey: 'other-chat', agent: 'agent-of-a-newer-build' }
+    const relays = await fresh([daemon(INSTANCE, () => [relay('r-1'), newer], requests)])
+    const record = chat(relayed(1, 1))
+    expect(await relays.providerRelayRunLiveness(record, { observe: true })).toBe('kept')
+    expect(requests.filter((type) => type !== 'relayList')).toEqual([])
+    expect(relays.keptRunningProviderRelayPid(SESSION)).toBeNull()
+    expect(relays.providerRelayRunUnknown(SESSION)).toBe(false)
+    // The chat's own ask acts on the same listing once: it ends the relay it can't reattach.
+    expect(await relays.providerRelayRunLiveness(record)).toBe('kept')
+    expect(requests.filter((type) => type !== 'relayList')).toEqual(['relayClose'])
+    expect(relays.keptRunningProviderRelayPid(SESSION)).toBe(process.pid)
+  }
+)
+
+it.skipIf(process.platform === 'win32')(
   'a run that started in the app, or has no placement, is gone without asking any daemon',
   async () => {
     // This daemon never answers: a direct run must not wait on it (the test's timeout would).
@@ -159,6 +183,26 @@ it.skipIf(process.platform === 'win32')(
     expect(relays.providerRelayKeptFromLastRun(SESSION)).toBe(true)
     answers = true
     expect(await relays.providerRelayRunLiveness(record, { fresh: true })).toBe('kept')
+    agent.kill('SIGKILL')
+  }
+)
+
+it.skipIf(process.platform !== 'linux')(
+  'concurrent asks for one kept agent never lose the spawn token it carries',
+  async () => {
+    const { pid, agent } = liveAgent()
+    const relays = await fresh([daemon(INSTANCE, () => [{ ...relay('r-1'), pid }])])
+    const record = chat(relayed(process.pid, pid))
+    // One ask is still reading the token back when the other answers kept.
+    expect(
+      await Promise.all([
+        relays.providerRelayRunLiveness(record),
+        relays.providerRelayRunLiveness(record, { fresh: true })
+      ])
+    ).toEqual(['kept', 'kept'])
+    expect(relays.keptProviderRelaySpawnToken(SESSION)).toBe('kept-agent-token')
+    expect(await relays.providerRelayRunLiveness(record, { fresh: true })).toBe('kept')
+    expect(relays.keptProviderRelaySpawnToken(SESSION)).toBe('kept-agent-token')
     agent.kill('SIGKILL')
   }
 )

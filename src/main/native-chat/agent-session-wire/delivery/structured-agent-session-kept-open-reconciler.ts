@@ -99,7 +99,7 @@ export class StructuredAgentSessionKeptOpens {
     // A new waiter joins its start's retry; it never restarts the backoff.
     retry.chats.add(sessionId)
     this.waitingOn.set(sessionId, instance)
-    this.arm()
+    this.arm(retry.dueAt)
   }
 
   /** The chat closed or was decided: it waits on nothing, and a start nobody waits on stops asking. */
@@ -143,26 +143,20 @@ export class StructuredAgentSessionKeptOpens {
       return
     }
     retry.dueAt = Math.min(retry.dueAt, retry.lastStartedAt + RETRY_FIRST_MS)
-    this.arm()
+    this.arm(retry.dueAt)
   }
 
-  /** The one timer, set for the earliest due start; none while nothing is due. */
-  private arm(): void {
-    let next = Number.POSITIVE_INFINITY
-    for (const retry of this.retries.values()) {
-      if (retry.dueAt !== null && retry.dueAt < next) {
-        next = retry.dueAt
-      }
-    }
-    if (next === this.timerDueAt && this.timer) {
+  /**
+   * The one timer, moved earlier when a start falls due sooner; one that comes due with nothing to
+   * do finds the next due time in the same pass. None while no start waits.
+   */
+  private arm(dueAt: number | null): void {
+    if (dueAt === null || dueAt >= this.timerDueAt || this.disposed) {
       return
     }
     this.disarm()
-    if (next === Number.POSITIVE_INFINITY || this.disposed) {
-      return
-    }
-    this.timerDueAt = next
-    this.timer = setTimeout(() => this.tick(), Math.max(0, next - Date.now()))
+    this.timerDueAt = dueAt
+    this.timer = setTimeout(() => this.tick(), Math.max(0, dueAt - Date.now()))
     this.timer.unref?.()
   }
 
@@ -178,8 +172,13 @@ export class StructuredAgentSessionKeptOpens {
     this.timer = null
     this.timerDueAt = Number.POSITIVE_INFINITY
     const now = Date.now()
+    let next: number | null = null
     for (const [instance, retry] of this.retries) {
-      if (retry.dueAt === null || retry.dueAt > now) {
+      if (retry.dueAt === null) {
+        continue
+      }
+      if (retry.dueAt > now) {
+        next = next === null ? retry.dueAt : Math.min(next, retry.dueAt)
         continue
       }
       retry.dueAt = null
@@ -188,7 +187,7 @@ export class StructuredAgentSessionKeptOpens {
         .catch((error: unknown) => this.warn(instance, error))
         .finally(() => this.reschedule(instance, retry))
     }
-    this.arm()
+    this.arm(next)
   }
 
   private reschedule(instance: string, retry: InstanceRetry): void {
@@ -207,7 +206,7 @@ export class StructuredAgentSessionKeptOpens {
       const backoffMs = RETRY_FIRST_MS * 2 ** (retry.attempt - 1)
       retry.dueAt = backoffMs < RETRY_MAX_MS ? Date.now() + backoffMs : this.nextCeilingTick()
     }
-    this.arm()
+    this.arm(retry.dueAt)
   }
 
   /**
@@ -225,7 +224,9 @@ export class StructuredAgentSessionKeptOpens {
       this.waitingOn.delete(id)
     }
     this.retries.delete(instance)
-    this.arm()
+    if (this.retries.size === 0) {
+      this.disarm()
+    }
   }
 
   /** Asks again for this daemon start's open waiting chats; closed or decided ones leave the set. */
