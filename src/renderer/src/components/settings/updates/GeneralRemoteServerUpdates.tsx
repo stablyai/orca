@@ -147,9 +147,13 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
     eligible.length === 1
       ? t('settings.about.action.update', 'Update')
       : t('settings.about.servers.updateAll', 'Update all')
-  const setOpenAndClear = (next: boolean): void => {
+  // Opening re-checks on the default track, as the dialog did, so targets and live-session
+  // counts are never a stale snapshot from an earlier (possibly modifier) check.
+  const setOpenAndRefresh = (next: boolean): void => {
     setOpen(next)
-    if (!next) {
+    if (next) {
+      void refresh()
+    } else {
       clearCheckOptions()
     }
   }
@@ -162,7 +166,7 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
       {t('settings.about.servers.updating', 'Updating')}
     </Button>
   ) : eligible.length > 0 && !open && !checking ? (
-    <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)}>
+    <Button type="button" variant="outline" size="sm" onClick={() => setOpenAndRefresh(true)}>
       {updateLabel}
     </Button>
   ) : (
@@ -198,7 +202,7 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
         label={t('settings.about.servers.title', 'Servers')}
         summary={<ServerSummary parts={serverSummaryParts(entries, t)} />}
         open={open}
-        onOpenChange={setOpenAndClear}
+        onOpenChange={setOpenAndRefresh}
         control={action}
       >
         {open ? (
@@ -345,9 +349,10 @@ function RemoteServerAboutRow({
         <div
           title={sub}
           // Static strings: cn() would merge the size token away as a text colour.
+          // A failure is the user's recovery instructions, so it wraps in full instead of truncating.
           className={
             entry.phase === 'failed'
-              ? 'truncate text-settings-detail text-destructive'
+              ? 'break-words text-settings-detail text-destructive'
               : 'truncate text-settings-detail text-muted-foreground'
           }
         >

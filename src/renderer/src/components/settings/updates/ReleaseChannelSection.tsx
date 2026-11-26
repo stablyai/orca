@@ -267,10 +267,10 @@ export function ReleaseChannelSection(): React.JSX.Element {
             )}
           </p>
         ) : selectedBuild && !isRunningBuild ? (
+          // A safety warning wraps rather than being cut off.
           <p
             data-settings-row=""
-            className="truncate text-settings-detail text-muted-foreground"
-            title={selectedBuild.version}
+            className="break-words text-settings-detail text-muted-foreground"
           >
             {t(
               'auto.components.settings.ReleaseChannelSection.willSwitch',

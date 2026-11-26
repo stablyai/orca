@@ -180,70 +180,72 @@ export function UpdateStatusRow({
             </span>
             {version.suffix ? <span className="min-w-0 truncate">{version.suffix}</span> : null}
           </div>
-          {copy || details ? (
-            <div className="flex min-w-0 items-center whitespace-nowrap text-settings-detail text-muted-foreground">
+          {/* The live region stays mounted, empty when idle, so state changes are announced. */}
+          <div className="flex min-w-0 items-center whitespace-nowrap text-settings-detail text-muted-foreground">
+            <span
+              role="status"
+              className={cn('min-w-0 truncate', copy?.tone === 'destructive' && 'text-destructive')}
+            >
               {copy ? (
-                <span
-                  role="status"
-                  className={cn(
-                    'min-w-0 truncate',
-                    copy.tone === 'destructive' && 'text-destructive'
-                  )}
-                >
+                <>
                   <span className={cn(copy.narrow && '@max-xs/about-status:hidden')}>
                     {copy.full}
                   </span>
                   {copy.narrow ? (
                     <span className="hidden @max-xs/about-status:inline">{copy.narrow}</span>
                   ) : null}
-                </span>
+                </>
               ) : null}
-              {model.notesVersion ? (
-                // Narrow rows drop Notes so the version in the line is never cut off.
-                <span className="shrink-0 @max-xs/about-status:hidden">
-                  <span aria-hidden className="px-1.5">
-                    ·
-                  </span>
-                  <a
-                    href={releaseNotesUrl(status, model.notesVersion)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={openAppHttpLinkFromAnchor}
-                    className="hover:text-foreground hover:underline"
-                  >
-                    {t('settings.about.status.notes', 'Notes')}
-                  </a>
-                </span>
-              ) : null}
-              {details ? (
-                <>
-                  {copy ? (
+            </span>
+            {copy || details ? (
+              <>
+                {model.notesVersion ? (
+                  // Narrow rows drop Notes so the version in the line is never cut off.
+                  <span className="shrink-0 @max-xs/about-status:hidden">
                     <span aria-hidden className="px-1.5">
                       ·
                     </span>
-                  ) : null}
-                  <Button
-                    type="button"
-                    variant="link-muted"
-                    size="inlineInherit"
-                    aria-expanded={showDetails}
-                    onClick={() => setDetailsOpen((open) => !open)}
-                  >
-                    <span className="@max-xs/about-status:hidden">
-                      {showDetails
-                        ? t('settings.about.status.hideDetails', 'Hide details')
-                        : t('settings.about.status.showDetails', 'Show details')}
-                    </span>
-                    <span className="hidden @max-xs/about-status:inline">
-                      {showDetails
-                        ? t('settings.about.status.hide', 'Hide')
-                        : t('settings.about.status.details', 'Details')}
-                    </span>
-                  </Button>
-                </>
-              ) : null}
-            </div>
-          ) : null}
+                    <a
+                      href={releaseNotesUrl(status, model.notesVersion)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={openAppHttpLinkFromAnchor}
+                      className="hover:text-foreground hover:underline"
+                    >
+                      {t('settings.about.status.notes', 'Notes')}
+                    </a>
+                  </span>
+                ) : null}
+                {details ? (
+                  <>
+                    {copy ? (
+                      <span aria-hidden className="px-1.5">
+                        ·
+                      </span>
+                    ) : null}
+                    <Button
+                      type="button"
+                      variant="link-muted"
+                      size="inlineInherit"
+                      aria-expanded={showDetails}
+                      onClick={() => setDetailsOpen((open) => !open)}
+                    >
+                      <span className="@max-xs/about-status:hidden">
+                        {showDetails
+                          ? t('settings.about.status.hideDetails', 'Hide details')
+                          : t('settings.about.status.showDetails', 'Show details')}
+                      </span>
+                      <span className="hidden @max-xs/about-status:inline">
+                        {showDetails
+                          ? t('settings.about.status.hide', 'Hide')
+                          : t('settings.about.status.details', 'Details')}
+                      </span>
+                    </Button>
+                  </>
+                ) : null}
+              </>
+            ) : null}
+          </div>
           {percent !== null ? (
             // Inside the row's bottom padding, so a download never changes the row's height.
             <div className="absolute inset-x-0 -bottom-1.5">
@@ -273,8 +275,9 @@ export function UpdateStatusRow({
                   <RefreshCw />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={4}>
+              <TooltipContent side="top" sideOffset={4} className="max-w-xs">
                 {t('settings.about.action.checkForUpdates', 'Check for updates')}
+                <span className="block text-muted-foreground">{getUpdateCheckHint()}</span>
               </TooltipContent>
             </Tooltip>
           </span>
