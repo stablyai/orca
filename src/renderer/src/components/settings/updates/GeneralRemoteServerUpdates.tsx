@@ -127,6 +127,15 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
   const start = useAppStore((state) => state.startRemoteServerUpdates)
   const setDialogOpen = useAppStore((state) => state.setRemoteServerUpdateDialogOpen)
   const [open, setOpen] = useState(false)
+  // Opening owes a default-track re-check; it waits for any in-flight (possibly modifier) check,
+  // and updates stay off until it has run, so a confirm never acts on a stale or one-off snapshot.
+  const [refreshOwed, setRefreshOwed] = useState(false)
+  useEffect(() => {
+    if (open && refreshOwed && !checking && !running) {
+      setRefreshOwed(false)
+      void refresh()
+    }
+  }, [open, refreshOwed, checking, running, refresh])
 
   // A modifier-click Check picks a one-off release track; closing the dialog clears it, and so
   // does folding this list or leaving the page, so a later Update all can't inherit it.
@@ -142,7 +151,7 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
   }
 
   const eligible = entries.filter(isEligible)
-  const busy = checking || running
+  const busy = checking || running || refreshOwed
   const updateLabel =
     eligible.length === 1
       ? t('settings.about.action.update', 'Update')
@@ -151,9 +160,8 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
   // counts are never a stale snapshot from an earlier (possibly modifier) check.
   const setOpenAndRefresh = (next: boolean): void => {
     setOpen(next)
-    if (next) {
-      void refresh()
-    } else {
+    setRefreshOwed(next)
+    if (!next) {
       clearCheckOptions()
     }
   }
@@ -212,7 +220,7 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
                 key={entry.environmentId}
                 entry={entry}
                 disabled={busy}
-                onUpdate={() => void start([entry.environmentId])}
+                onUpdate={(ids) => void start(ids)}
               />
             ))}
             {eligible.length > 0 ? (
@@ -222,7 +230,7 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
                   label={updateLabel}
                   variant="default"
                   disabled={busy}
-                  onConfirm={() => void start()}
+                  onConfirm={(ids) => void start(ids)}
                 />
               </div>
             ) : null}
@@ -245,10 +253,15 @@ function ServerRestartConfirm({
   label: string
   variant: 'default' | 'outline'
   disabled: boolean
-  onConfirm: () => void
+  /** Receives exactly the servers the question named. */
+  onConfirm: (environmentIds: string[]) => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const [open, setOpen] = useState(false)
+  const ids = servers.map((entry) => entry.environmentId)
+  const key = ids.join('\n')
+  // Bound to the servers it named: if the set changes while open, the question closes unanswered.
+  const [openKey, setOpenKey] = useState<string | null>(null)
+  const open = openKey === key && !disabled
   const live = servers.some((entry) => entry.liveTabCount > 0 || entry.liveLeafCount > 0)
   const question =
     servers.length === 1
@@ -257,28 +270,39 @@ function ServerRestartConfirm({
           count: servers.length
         })
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={(next) => setOpenKey(next ? key : null)}>
       <PopoverTrigger asChild>
         <Button type="button" variant={variant} size="sm" disabled={disabled}>
           {label}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-auto max-w-[calc(100vw-1rem)]">
+      <PopoverContent
+        align="end"
+        aria-label={question}
+        className="w-auto max-w-[min(30rem,calc(100vw-1rem))]"
+      >
         <div className="flex items-center gap-3 p-1.5 ps-3">
-          <p className="whitespace-nowrap text-sm">
+          <p className="min-w-0 text-sm">
             {question}
             {live ? ` ${t('settings.about.servers.liveMayDrop', 'Live sessions may drop.')}` : null}
           </p>
-          <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>
+          {/* Focus starts on Cancel so a repeated or held Enter can't restart servers. */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            autoFocus
+            onClick={() => setOpenKey(null)}
+          >
             {t('settings.about.servers.cancel', 'Cancel')}
           </Button>
           <Button
             type="button"
             size="sm"
-            autoFocus
+            disabled={disabled}
             onClick={() => {
-              setOpen(false)
-              onConfirm()
+              setOpenKey(null)
+              onConfirm(ids)
             }}
           >
             {t('settings.about.action.update', 'Update')}
@@ -322,7 +346,7 @@ function RemoteServerAboutRow({
 }: {
   entry: RemoteServerUpdateEntry
   disabled: boolean
-  onUpdate: () => void
+  onUpdate: (environmentIds: string[]) => void
 }): React.JSX.Element {
   const t = useTranslate()
   // "Manual update" already says what to do; its long help would only be cut off here.

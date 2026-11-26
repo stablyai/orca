@@ -135,7 +135,8 @@ export const createRemoteServerUpdatesSlice: StateCreator<
   },
 
   startRemoteServerUpdates: async (environmentIds) => {
-    if (get().remoteServerUpdatesRunning) {
+    // A check in flight is about to replace the targets; starting now would act on a stale cohort.
+    if (get().remoteServerUpdatesRunning || get().remoteServerUpdatesChecking) {
       return
     }
     const selected = new Set(environmentIds ?? [])

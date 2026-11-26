@@ -1,5 +1,5 @@
 import type React from 'react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '../../../store/index'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
@@ -21,17 +21,20 @@ export function GeneralUpdateSettingsSection({
 }: { headerAction?: React.ReactNode } = {}): React.JSX.Element {
   const t = useTranslate()
   const updateStatus = useAppStore((s) => s.updateStatus)
-  // Older hosts omit error versions; retain the target for accurate failure copy.
-  const updateVersionRef = useRef<string | null>(null)
-  if ('version' in updateStatus && updateStatus.version) {
-    updateVersionRef.current = updateStatus.version
-  } else if (
-    updateStatus.state === 'checking' ||
-    updateStatus.state === 'idle' ||
-    updateStatus.state === 'not-available'
-  ) {
-    // Clear old targets on clean/new cycles so later check failures cannot look like stale download failures.
-    updateVersionRef.current = null
+  // Older hosts omit error versions; retain the target for accurate failure copy. Derived state,
+  // not a ref, so the render stays pure.
+  const [retainedVersion, setRetainedVersion] = useState<string | null>(null)
+  const nextRetainedVersion =
+    'version' in updateStatus && updateStatus.version
+      ? updateStatus.version
+      : updateStatus.state === 'checking' ||
+          updateStatus.state === 'idle' ||
+          updateStatus.state === 'not-available'
+        ? // Clear old targets on clean/new cycles so later check failures cannot look like stale download failures.
+          null
+        : retainedVersion
+  if (nextRetainedVersion !== retainedVersion) {
+    setRetainedVersion(nextRetainedVersion)
   }
 
   const [appVersion, setAppVersion] = useState<string | null>(null)
@@ -96,7 +99,7 @@ export function GeneralUpdateSettingsSection({
 
   const model = getUpdateStatusRowModel(updateStatus, {
     showManualRestart,
-    retainedVersion: updateVersionRef.current,
+    retainedVersion: nextRetainedVersion,
     canSkipDelay: teamDelayDays === undefined,
     now
   })
