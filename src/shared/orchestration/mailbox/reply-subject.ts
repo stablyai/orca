@@ -1,5 +1,5 @@
-// Only match prefixes on the subject's first line, including in historical mail envelopes.
-const REPLY_PREFIXES = /^(re:[ \t]*)(?:re:[ \t]*)*/i
+// A colon inside a word belongs to the title. Consume one separator to retain the title's spacing.
+const REPLY_PREFIXES = /^[ \t]*re:(?=[ \t\r\n]|$)([ \t]+re:(?=[ \t\r\n]|$))*[ \t]?/i
 const REPLY_PREFIX = 'Re: '
 
 export function replySubject(subject: string): string {
@@ -8,7 +8,5 @@ export function replySubject(subject: string): string {
 
 export function collapseRepeatedReplyPrefixes(subject: string): string {
   const match = REPLY_PREFIXES.exec(subject)
-  return match && match[0] !== match[1]
-    ? `${REPLY_PREFIX}${subject.slice(match[0].length)}`
-    : subject
+  return match?.[1] ? `${REPLY_PREFIX}${subject.slice(match[0].length)}` : subject
 }

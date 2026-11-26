@@ -338,7 +338,7 @@ describe('agent mail between paired Orca servers', () => {
       '--to',
       'term_b',
       '--subject',
-      'Check the build'
+      '  re:build notes'
     )
     expect(opened).toMatchObject({ result: { message: { to: 'term_b' } } })
     const [original] = mailFor(a, 'term_b')
@@ -347,7 +347,7 @@ describe('agent mail between paired Orca servers', () => {
     await cli(a, 'reply', '--id', reply!.id, '--body', 'Re: Thanks.', '--from', 'term_a')
     const [followup] = mailFor(a, 'term_b')
     expect(followup).toMatchObject({
-      subject: 'Re: Check the build',
+      subject: 'Re:   re:build notes',
       body: 'Re: Thanks.',
       thread_id: original!.id
     })

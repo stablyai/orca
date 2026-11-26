@@ -253,7 +253,7 @@ describe("worker mail, which the host delivers past a Stop and ahead of the pers
   }
 
   it('derives a readable subject from an existing queued envelope', () => {
-    const subject = `${'Re: '.repeat(42)}Check the build`
+    const subject = `${'Re: '.repeat(42)}re:build notes`
     const body = 'Re: Re: Body text'
     const text = `${subject}\n${body}`
     const queued = card('mail', 1, { paused: true })
@@ -277,7 +277,7 @@ describe("worker mail, which the host delivers past a Stop and ahead of the pers
     const [projected] = projectQueuedMessageCards([queued], [], { queuePaused: true })
     expect(projected).toMatchObject({
       text,
-      displayText: `Re: Check the build\n\n${body}`
+      displayText: `Re: re:build notes\n\n${body}`
     })
   })
 
