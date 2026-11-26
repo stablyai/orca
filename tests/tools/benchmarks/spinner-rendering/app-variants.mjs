@@ -7,7 +7,7 @@ export const spinnerVariants = {
   // Keeps scrolled-out rings animating, as before offscreen pausing.
   unpaused: `
     .agent-working-spinner[data-animation-offscreen] {
-      animation: agent-spinner-rotate 86400s steps(1036800, end) infinite;
+      animation: agent-spinner-rotate 103680s linear infinite;
     }
   `,
   // Retain the rejected containment experiment for reproducible ablation.

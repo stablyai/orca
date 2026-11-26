@@ -72,12 +72,13 @@ try {
   if (!values['verify-only']) {
     const cdp = await page.context().newCDPSession(page)
     await cdp.send('Performance.enable')
-    // Redraw gate: running rings may draw at their own step rate, never on the main thread or while scrolled away.
+    // Smooth rings may redraw at display cadence, never on the main thread or while scrolled away.
     const FRAME_SCENARIOS = {
       idle: { count: 0 },
       visible: { count },
       'scrolled away': { count, offset: 5000 },
-      'baseline visible': { count, baseline: true }
+      'baseline visible': { count, baseline: true },
+      'reference visible': { count, reference: true }
     }
     for (const [name, options] of Object.entries(FRAME_SCENARIOS)) {
       await page.evaluate((value) => window.spinnerBenchmark.render(value), options)
@@ -96,10 +97,11 @@ try {
       frames['baseline visible'].windowRedrawsPerSecond >= 8,
       'a visible 12-step ring drew under 8 window redraws/s; the measurement is broken (a hidden window draws no frames on some hosts, e.g. Windows)'
     )
-    // 12 steps/s plus slack for a stray frame.
+    // The independent smooth reference supplies this display's cadence without a fixed refresh-rate limit.
     expect(
-      frames.visible.windowRedrawsPerSecond <= frames.idle.windowRedrawsPerSecond + 14,
-      'visible rings redraw the window faster than their 12 steps/s'
+      frames.visible.windowRedrawsPerSecond <=
+        frames['reference visible'].windowRedrawsPerSecond + 2,
+      'visible rings redraw the window faster than the independent smooth reference'
     )
     expect(
       frames.visible.mainFramesPerSecond <= frames.idle.mainFramesPerSecond + 2,

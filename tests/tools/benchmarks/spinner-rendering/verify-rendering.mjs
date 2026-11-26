@@ -63,6 +63,7 @@ async function waitForScrollState(page, expectVisible) {
   }, expectVisible)
 }
 
+/** Exercises live motion and visibility because frozen pixel comparisons cannot verify those transitions. */
 export async function verifyRendering(app, page, outputDir) {
   await page.emulateMedia({ reducedMotion: 'no-preference' })
   await page.evaluate(() => window.spinnerBenchmark.render({ count: 4, paired: true }))
@@ -130,7 +131,7 @@ export async function verifyRendering(app, page, outputDir) {
   await waitForPhase(page)
   const { candidateSteps, ...iterationEvents } = await page.evaluate(async () => {
     const events = { baseline: 0, candidate: 0, candidateSteps: 0 }
-    // Read the live transform without seeking: the candidate must keep stepping.
+    // Read the live transform without seeking so a frozen animation cannot pass pixel comparisons alone.
     const candidate = document.querySelector('[data-agent-spinner]')
     let lastTransform = getComputedStyle(candidate).transform
     const sampler = setInterval(() => {
@@ -159,8 +160,11 @@ export async function verifyRendering(app, page, outputDir) {
   })
   assert.ok(iterationEvents.baseline >= 2)
   assert.equal(iterationEvents.candidate, 0)
-  // 12 steps/s over 1.25 s is 15 steps; allow for a frame or two lost to scheduling.
-  assert.ok(candidateSteps >= 12, `candidate ring stepped ${candidateSteps} times in 1.25 s`)
+  // Preserve the liveness floor; the independent pixel reference checks the intended cadence.
+  assert.ok(
+    candidateSteps >= 12,
+    `candidate ring changed transform ${candidateSteps} times in 1.25 s`
+  )
   assert.ok(
     await app.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows().every((window) => !window.isVisible() && !window.isFocused())

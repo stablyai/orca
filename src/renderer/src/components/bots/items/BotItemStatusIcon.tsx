@@ -6,7 +6,7 @@ import { AgentWorkingSpinner } from '@/components/agent/status/AgentWorkingSpinn
 import { cn } from '@/lib/class-names'
 import type { BotItemStatus } from '../../../../../shared/bots/bot-items'
 
-// Every glyph shares the spinner's 10 px box and 2 px stroke, so a group's rows read at one weight.
+// Every glyph shares the spinner's 10 px box so status changes keep the rows aligned.
 const BOX = 'size-2.5 shrink-0'
 const RING = `${BOX} rounded-full border-2`
 const LUCIDE = { size: 10, strokeWidth: 2, absoluteStrokeWidth: true } as const
