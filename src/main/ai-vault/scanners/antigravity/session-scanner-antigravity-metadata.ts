@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url'
 import { parseJsonObject } from '../../parsing/session-json-object'
 
 export const ANTIGRAVITY_INDEX_MAX_BYTES = 4 * 1024 * 1024
-const MAX_INDEX_ENTRIES = 10_000
+export const MAX_INDEX_ENTRIES = 10_000
 
 type JsonRecord = Record<string, unknown>
 function isRecord(value: unknown): value is JsonRecord {
@@ -34,6 +34,11 @@ function unique(map: Map<string, string | null>, id: string, path: string | null
 export function antigravityCachePath(historyPath: string, fileName: string): string {
   const separator = historyPath.includes('\\') ? '\\' : '/'
   return `${historyPath.replace(/[\\/]history\.jsonl$/, '') + separator}cache${separator}${fileName}`
+}
+
+export function antigravitySummariesDbPath(historyPath: string): string {
+  const separator = historyPath.includes('\\') ? '\\' : '/'
+  return `${historyPath.replace(/[\\/]history\.jsonl$/, '')}${separator}conversation_summaries.db`
 }
 
 export function antigravityMetadataWorkspaces(contents: {
@@ -76,7 +81,7 @@ export function antigravityMetadataWorkspaces(contents: {
   return { paths, workspaceUriPathById }
 }
 
-function soleWorkspacePath(uris: unknown): string | undefined {
+export function soleWorkspacePath(uris: unknown): string | undefined {
   if (!Array.isArray(uris) || uris.length !== 1 || typeof uris[0] !== 'string') {
     return undefined
   }
