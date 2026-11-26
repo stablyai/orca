@@ -79,7 +79,8 @@ export class MobileEndpointNudgeRouter {
       }, GATED_NETWORK_NUDGE_WINDOW_MS - sinceLift)
       return
     }
-    if (reason !== 'focus') {
+    // Refill speculative retries on a resume or a real network move, never on a repeated callback.
+    if (reason === 'app-resume') {
       args.onExternalSignal()
     }
     args.controller.handleActiveNudge(args.logical, reason)
@@ -88,7 +89,7 @@ export class MobileEndpointNudgeRouter {
     }
     // The phone usually joins home Wi-Fi in a pocket, so a resume can be the first sight of the new network.
     if (reason !== 'focus') {
-      void this.routeNetworkChange()
+      void this.routeNetworkChange(args.onExternalSignal)
     }
   }
 

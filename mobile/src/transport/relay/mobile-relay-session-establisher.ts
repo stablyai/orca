@@ -12,6 +12,8 @@ import {
   persistResumeConfirmation
 } from './mobile-relay-credential-rotation'
 import { isExplicitCredentialRejection } from './relay-credential-eligibility'
+import { RelayOuterError } from '../encryption/mobile-relay-e2ee-link'
+import { MOBILE_RELAY_CLOSE_CODE } from '../../../../src/shared/remote-runtime/relay/mobile-relay-close-codes'
 import type { MobileRelayCredentialBundle } from '../../host-credentials/mobile-relay-credential-bundle'
 import type { RelayReconnectController } from './mobile-relay-reconnect-controller'
 import type { StableLogicalRpcClient } from '../connection/stable-logical-rpc-client'
@@ -19,6 +21,10 @@ import type { MobileRelayEndpoint } from '../../../../src/shared/remote-runtime/
 import { RELAY_HOST_CLOSE_REASON } from '../../../../src/shared/remote-runtime/relay/relay-host-close-reason'
 
 const PENDING_DIAL_BUDGET = 3
+
+function isHostOffline(error: Error): boolean {
+  return error instanceof RelayOuterError && error.code === MOBILE_RELAY_CLOSE_CODE.HOST_OFFLINE
+}
 
 function isDirectorRefusal(error: Error | null): boolean {
   return error instanceof RelayDirectorHttpError && error.status === 401
@@ -135,7 +141,8 @@ export class MobileRelaySessionEstablisher {
       if (isDirectorRefusal(result.error)) {
         this.directorTried.set(credential.token, ++this.directorTrySeq)
       }
-      if (usedPending) {
+      // A 4404 comes after the cell accepted the credential, so it proves pending rather than spends it.
+      if (usedPending && !isHostOffline(result.error)) {
         this.pendingFailures++
       }
       if (isExplicitCredentialRejection(result.error)) {
