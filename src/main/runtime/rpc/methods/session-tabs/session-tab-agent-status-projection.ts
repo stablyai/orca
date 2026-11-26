@@ -45,12 +45,21 @@ function resolveMobileStructuredChatFallbackTitle(
     : STRUCTURED_CHAT_UPDATE_REQUIRED_TAB_TITLE
 }
 
+/** A paired client that can't draw chats and isn't a phone gets no chat rows at all. */
+export function sessionTabsHideAllAgentSessions(
+  clientKind: 'mobile' | 'runtime' | undefined,
+  clientCapabilities: readonly RuntimeCapability[] | undefined
+): boolean {
+  return (
+    clientKind !== 'mobile' && !supportsStructuredAgentSessions({ clientKind, clientCapabilities })
+  )
+}
+
 export function projectSessionTabAgentStatus<TPayload extends SessionTabsPayload>(
   payload: TPayload,
   clientKind: 'mobile' | 'runtime' | undefined,
   clientCapabilities: readonly RuntimeCapability[] | undefined
 ): TPayload {
-  const structuredVisible = supportsStructuredAgentSessions({ clientKind, clientCapabilities })
   let projected: TPayload
   if (clientKind === 'mobile') {
     // Keep an actionable fallback row so the chat is discoverable; retaining it needs no layout repair.
@@ -59,9 +68,10 @@ export function projectSessionTabAgentStatus<TPayload extends SessionTabsPayload
       clientCapabilities
     })
   } else {
-    projected = structuredVisible ? payload : projectAgentSessionTabsOut(payload, () => true)
+    const hideAll = sessionTabsHideAllAgentSessions(clientKind, clientCapabilities)
+    projected = hideAll ? projectAgentSessionTabsOut(payload, () => true) : payload
     // Gate chat rows by client rendering support or selection opens neither chat nor terminal.
-    if (structuredVisible && clientKind !== undefined) {
+    if (!hideAll && clientKind !== undefined) {
       projected = projectAgentSessionTabsOut(
         projected,
         (tab) => !clientCanRenderStructuredAgentSessionTab(tab, clientCapabilities)

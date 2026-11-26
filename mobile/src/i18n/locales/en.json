@@ -1211,6 +1211,11 @@
       "repair": "Re-pair",
       "webNote": "Reconnect or remove this host from the Orca app."
     },
+    "desktopLinkPairing": {
+      "message": "This phone was paired with a link for another Orca app, so its chats are hidden. Pair again with the code in Settings → Mobile on your computer, or run orca pair --mobile on your server.",
+      "repair": "Pair again",
+      "title": "Chats are hidden on this phone"
+    },
     "codexResetCreditAction": {
       "earnedReset": "Earned Codex rate-limit reset",
       "resettingLabel": "Resetting Codex rate limits",

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, type ReactElement } from 'react'
 import { Animated, Platform, RefreshControl, View } from 'react-native'
 import { isBotsListRow, useMobileBotsListParts } from '../../bots/use-mobile-bots-list-parts'
 import { AuthFailedBanner } from '../../components/host-connection/AuthFailedBanner'
+import { DesktopLinkPairingBanner } from '../../components/host-connection/DesktopLinkPairingBanner'
+import { useOptionalHostProtocolGates } from '../../components/host-connection/host-protocol-gates-context'
 import { Presence } from '../../components/motion/AutoHeight'
 import { HostDiagnosticsLink } from '../../components/host-connection/HostDiagnosticsLink'
 import {
@@ -77,6 +79,7 @@ export function HostWorkspaceList({
     state
   } = controller
   const { rawSections, sections, repoById } = sectionsResult
+  const chatsHidden = useOptionalHostProtocolGates()?.agentSessionsHidden === true
   const bots = useMobileBotsListParts(controller)
   const { pending } = settings.pendingViewChanges
   // A collapse the desktop has not answered within SLOW_PENDING_MS spins on its header.
@@ -231,6 +234,11 @@ export function HostWorkspaceList({
             onRepair={() => router.push('/pair-scan')}
             onRemove={() => state.setConfirmRemoveHost(true)}
           />
+        )}
+      </Presence>
+      <Presence>
+        {chatsHidden && connState === 'connected' && (
+          <DesktopLinkPairingBanner onRepair={() => router.push('/pair-scan')} />
         )}
       </Presence>
 

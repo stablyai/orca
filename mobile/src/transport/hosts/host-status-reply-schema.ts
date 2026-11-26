@@ -21,6 +21,8 @@ export const hostStatusSchema = z.looseObject({
   hostPlatform: salvagedOptional('hostPlatform', z.enum(NODE_PLATFORM_NAMES)),
   machineName: salvagedOptional('machineName', z.string()),
   hostMachine: salvagedOptional('hostMachine', HostMachineSchema),
+  // This phone's own pairing is a desktop link, so the host leaves every chat out of its tabs.
+  agentSessionsHidden: salvagedOptional('agentSessionsHidden', z.boolean()),
   // Strings, not enums: a future install mode or reason still shows the generic update steps.
   remoteUpdateSupport: salvagedOptional(
     'remoteUpdateSupport',

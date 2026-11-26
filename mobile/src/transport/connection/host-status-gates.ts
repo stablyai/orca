@@ -24,6 +24,8 @@ export type HostStatusGates = {
   hostPlatform?: NodeJS.Platform
   /** Whether and how the host updates itself; absent from hosts that predate it. */
   hostUpdateSupport?: HostUpdateSupport
+  /** This phone paired with a desktop link, so the host shows it no chats; absent from hosts that predate it. */
+  agentSessionsHidden?: true
 }
 
 export type HostUpdateSupport = NonNullable<HostStatusReply['remoteUpdateSupport']>
@@ -76,7 +78,8 @@ export function hostStatusGatesFromStatus(
       ? { hostInstallationId: status.hostDescriptor.installationId }
       : {}),
     ...(status.hostPlatform ? { hostPlatform: status.hostPlatform } : {}),
-    ...(status.remoteUpdateSupport ? { hostUpdateSupport: status.remoteUpdateSupport } : {})
+    ...(status.remoteUpdateSupport ? { hostUpdateSupport: status.remoteUpdateSupport } : {}),
+    ...(status.agentSessionsHidden === true ? { agentSessionsHidden: true as const } : {})
   }
 }
 
@@ -162,7 +165,8 @@ export function useHostStatusGates(args: {
     statusPending: connState === 'connected' && unverified,
     ...(proven.hostInstallationId ? { hostInstallationId: proven.hostInstallationId } : {}),
     ...(proven.hostPlatform ? { hostPlatform: proven.hostPlatform } : {}),
-    ...(proven.hostUpdateSupport ? { hostUpdateSupport: proven.hostUpdateSupport } : {})
+    ...(proven.hostUpdateSupport ? { hostUpdateSupport: proven.hostUpdateSupport } : {}),
+    ...(proven.agentSessionsHidden ? { agentSessionsHidden: true as const } : {})
   }
 }
 
