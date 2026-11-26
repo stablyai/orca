@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { PLUGIN_MANIFEST_V2_SINCE, pluginFieldDoc } from '../manifest/plugin-schema-field-docs'
 import {
   tolerantPluginThemeBackgroundRegistration,
@@ -191,7 +192,7 @@ const themeFields = {
 // Why VS Code's shape: authors can paste a VS Code theme's `tokenColors` unchanged.
 const TOKEN_FONT_STYLE =
   /^(?:(?:italic|bold|underline|strikethrough)(?: (?:italic|bold|underline|strikethrough))*)?$/
-const tokenColorScope = z.string().min(1).max(512)
+const tokenColorScope = lazyZodSchema(() => z.string().min(1).max(512))
 const tokenColorRuleFields = {
   name: z.string().max(256).optional(),
   scope: z.union([tokenColorScope, z.array(tokenColorScope).min(1).max(64)]),
@@ -206,17 +207,19 @@ const tokenColorRuleFields = {
       .optional()
   })
 }
-const tokenColorRuleSchema = z.strictObject(tokenColorRuleFields)
+const tokenColorRuleSchema = lazyZodSchema(() => z.strictObject(tokenColorRuleFields))
 const MAX_TOKEN_COLOR_RULES = 512
-const tokenColorsSchema = z
-  .array(tokenColorRuleSchema)
-  .max(MAX_TOKEN_COLOR_RULES)
-  .meta(
-    pluginFieldDoc(
-      "Code colors by TextMate scope, in VS Code's `tokenColors` shape.",
-      PLUGIN_MANIFEST_V2_SINCE
+const tokenColorsSchema = lazyZodSchema(() =>
+  z
+    .array(tokenColorRuleSchema)
+    .max(MAX_TOKEN_COLOR_RULES)
+    .meta(
+      pluginFieldDoc(
+        "Code colors by TextMate scope, in VS Code's `tokenColors` shape.",
+        PLUGIN_MANIFEST_V2_SINCE
+      )
     )
-  )
+)
 export type PluginThemeTokenColorRule = z.infer<typeof tokenColorRuleSchema>
 
 /** Runtime keeps the rules it understands, so one malformed or newer rule never drops the theme. */
@@ -275,32 +278,36 @@ function pluginAppThemeArtifactSchema(strictness: PluginArtifactStrictness) {
 }
 
 /** Host-owned id; plugin keys keep ids from colliding across publishers. */
-export const pluginContentIdSchema = z.templateLiteral(['plugin:', z.string()])
+export const pluginContentIdSchema = lazyZodSchema(() => z.templateLiteral(['plugin:', z.string()]))
 
 // Why looser values here: the host adds derived color-mix() values; the renderer still accepts
 // only what CSS parses as a color and checks contrast before painting.
-const registrationTokenValueSchema = z
-  .string()
-  .max(256)
-  .refine((value) => !/url\(|var\(|[;{}\\]/i.test(value), 'must be a color value')
+const registrationTokenValueSchema = lazyZodSchema(() =>
+  z
+    .string()
+    .max(256)
+    .refine((value) => !/url\(|var\(|[;{}\\]/i.test(value), 'must be a color value')
+)
 
-const pluginThemeRegistrationSchema = z
-  .object({
-    base: themeFields.base,
-    tokens: z.record(
-      z.string().refine((token) => THEME_TOKEN_SET.has(token)),
-      registrationTokenValueSchema
-    ),
-    tokenColors: tokenColorsSchema.optional(),
-    background: tolerantPluginThemeBackgroundRegistration,
-    id: pluginContentIdSchema,
-    /** Changes whenever the theme's content does, so a cached paint can be checked. */
-    revision: z.string().max(128),
-    pluginKey: z.string(),
-    pluginName: z.string(),
-    label: z.string()
-  })
-  .refine(hasRequiredTokens)
+const pluginThemeRegistrationSchema = lazyZodSchema(() =>
+  z
+    .object({
+      base: themeFields.base,
+      tokens: z.record(
+        z.string().refine((token) => THEME_TOKEN_SET.has(token)),
+        registrationTokenValueSchema
+      ),
+      tokenColors: tokenColorsSchema.optional(),
+      background: tolerantPluginThemeBackgroundRegistration,
+      id: pluginContentIdSchema,
+      /** Changes whenever the theme's content does, so a cached paint can be checked. */
+      revision: z.string().max(128),
+      pluginKey: z.string(),
+      pluginName: z.string(),
+      label: z.string()
+    })
+    .refine(hasRequiredTokens)
+)
 
 export type PluginAppThemeArtifact = Pick<
   PluginThemeRegistration,
