@@ -105,6 +105,7 @@ export class ConnectorReplyOutbox {
   private waiting = 0
   private running: Promise<void> | null = null
   private again = false
+  private awaitingPage = false
   private retired = false
   private retry: ReturnType<typeof setTimeout> | null = null
 
@@ -142,7 +143,8 @@ export class ConnectorReplyOutbox {
     try {
       await journal.sent(ids.map((deliveryId) => ({ account: this.account, deliveryId })))
       this.forget(ids)
-      if (this.inFlight.size === 0) {
+      if (this.awaitingPage && this.inFlight.size === 0) {
+        this.awaitingPage = false
         void this.drain()
       }
     } catch (error) {
@@ -183,9 +185,11 @@ export class ConnectorReplyOutbox {
       return
     }
     const route = this.hooks.route()
-    if (route.outbox && this.inFlight.size > 0) {
+    if (route.presentations && this.inFlight.size > 0) {
+      this.awaitingPage = true
       return
     }
+    this.awaitingPage = false
     // Page by page in delivery id order, so no backlog outgrows one read. A row a page leaves (in
     // flight, or refused) stays behind the cursor for a later drain; kept counts the refused.
     let after: string | null = null
@@ -218,15 +222,23 @@ export class ConnectorReplyOutbox {
         this.setWaiting(kept + owed.length)
         // The hello and client as they are now, after the read; and the account still this one,
         // after a count that may have reconciled it away. With no client the count is enough.
-        const { client, outbox } = this.hooks.route()
+        const { client, outbox, presentations } = this.hooks.route()
         if (this.retired || !client || outbox === undefined) {
           return
         }
         if (outbox) {
           owed.forEach((row) => this.inFlight.add(row.deliveryId))
           client.push(replyEventsOf(owed))
-          this.setWaiting(page.length === PAGE_ROWS ? 1 : 0)
-          return
+          if (presentations) {
+            this.awaitingPage = page.length === PAGE_ROWS
+            this.setWaiting(this.awaitingPage ? 1 : 0)
+            return
+          }
+          this.setWaiting(kept)
+          if (page.length < PAGE_ROWS) {
+            return
+          }
+          continue
         }
         const left = await this.post(journal, owed, kept)
         if (left === null) {

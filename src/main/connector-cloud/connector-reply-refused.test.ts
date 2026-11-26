@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { CONNECTOR_REPLIES_OUTBOX_FEATURE } from '../../shared/connectors/connector-cloud-contract'
+import { CONNECTOR_SLACK_PRESENTATION_FEATURE } from '../../shared/connectors/slack-answer-presentation'
 import type { JournalConnectorReplyRow } from '../../shared/agent-session/journal/journal-connector-reply'
 import type { ConnectorFailure } from './connector-cloud-request'
 import { ConnectorTurnEvents } from './connector-turn-events'
@@ -107,7 +108,9 @@ it('loads the next journal page only once the outbox accepts the current page', 
     hostName: () => 'laptop'
   })
   try {
-    events.useCloudFeatures(new Set([CONNECTOR_REPLIES_OUTBOX_FEATURE]))
+    events.useCloudFeatures(
+      new Set([CONNECTOR_REPLIES_OUTBOX_FEATURE, CONNECTOR_SLACK_PRESENTATION_FEATURE])
+    )
     events.useReplyFlush(() => {})
     await events.drainReplies()
     await events.drainReplies()

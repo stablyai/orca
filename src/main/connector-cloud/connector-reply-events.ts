@@ -29,7 +29,12 @@ export function replyEventsOf(rows: readonly FilledConnectorReply[]): ConnectorR
       row.fill.turnStartedAt,
       row.fill.toolsRan
     ])
-    groups.set(key, [...(groups.get(key) ?? []), row])
+    const previous = groups.get(key)
+    if (previous) {
+      previous.push(row)
+    } else {
+      groups.set(key, [row])
+    }
   }
   const events: ConnectorReplyEvent[] = []
   for (const group of groups.values()) {
@@ -52,6 +57,7 @@ export function replyEventsOf(rows: readonly FilledConnectorReply[]): ConnectorR
     // Each event names the answer's own delivery among its ids.
     const others = group.map((row) => row.deliveryId).filter((id) => id !== answerDeliveryId)
     const room = CONNECTOR_CLIENT_LIMITS.maxReplyDeliveryIds - 1
+    const answer = presentation ? slackAnswerText(presentation) : prose
     for (let start = 0; start === 0 || start < others.length; start += room) {
       events.push({
         kind: 'reply',
@@ -59,9 +65,7 @@ export function replyEventsOf(rows: readonly FilledConnectorReply[]): ConnectorR
         deliveryIds: [answerDeliveryId, ...others.slice(start, start + room)],
         answerDeliveryId,
         outcome,
-        ...(outcome === 'answered' && prose
-          ? { prose: presentation ? slackAnswerText(presentation) : prose }
-          : {}),
+        ...(outcome === 'answered' && answer ? { prose: answer } : {}),
         ...(outcome === 'answered' && conversation.source === 'slack' && presentation
           ? { presentation }
           : {}),
