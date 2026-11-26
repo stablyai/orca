@@ -14,7 +14,8 @@ const ACTIVATING_OTHER_INPUT_TYPES: ReadonlySet<string> = new Set([
   'pointerUp'
 ])
 
-export const BROWSER_GUEST_INPUT_GESTURE_WINDOW_MS = 1_000
+// Cover async OAuth/SSO iframe handshakes before window.open while still expiring within 5s.
+export const BROWSER_GUEST_INPUT_GESTURE_WINDOW_MS = 4_500
 
 /** Whether activation observed at `observedAt` still lets the page act on it. */
 export function isRecentBrowserGuestInput(observedAt: number, now: number): boolean {

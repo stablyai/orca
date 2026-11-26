@@ -51,7 +51,10 @@ export type BrowserRouteGuestPopupDependencies = {
   isAgentCommandShownHere?: (webContentsId: number) => boolean
   /** Injected input reaching this popup now is a paired viewer's, not an agent's. */
   isPersonCommandRunning?: (webContentsId: number) => boolean
-  isPopupShownToViewers?: (openerWebContentsId: number) => boolean
+  isPopupShownToViewers?: (
+    openerWebContentsId: number,
+    observed?: ObservedBrowserGuestGesture | null
+  ) => boolean
   popupOpened?: (opener: WebContents, popupContents: WebContents) => void
   openPopupWindow?: (
     options: PopupChildWindowOptions,
@@ -242,7 +245,9 @@ export function createBrowserRouteGuestPopupController(input: {
         }
         return { action: 'deny' }
       }
-      const shownToViewers = input.dependencies.isPopupShownToViewers?.(source.id) === true
+      const shownToViewers =
+        input.dependencies.isPopupShownToViewers?.(source.id, observed) === true
+      const showWhenAppActive = !shownToViewers && observed.byAgent
       const options = {
         ...ROUTE_POPUP_WINDOW_OPTIONS,
         ...(shownToViewers ? { show: false } : {}),
@@ -258,7 +263,7 @@ export function createBrowserRouteGuestPopupController(input: {
           opener: source,
           options,
           background: details?.disposition === 'background-tab',
-          showWhenAppActive: observed.byAgent,
+          showWhenAppActive,
           canPresent: () => !disposed && navigationAllowed(ORCA_BROWSER_BLANK_URL),
           onCreated: (nativeOptions) => openPopup(nativeOptions, details?.url ?? normalized)
         })
@@ -288,7 +293,7 @@ export function createBrowserRouteGuestPopupController(input: {
             {
               ...options,
               ...(shownToViewers ? { show: false } : {}),
-              showWhenAppActive: observed.byAgent,
+              showWhenAppActive,
               // Reopening a POST by URL would discard its body.
               loadInitialUrl:
                 !options.webContents && !details?.postBody && !isBlankBrowserPopupUrl(normalized)

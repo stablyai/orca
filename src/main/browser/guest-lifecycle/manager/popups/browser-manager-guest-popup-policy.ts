@@ -25,6 +25,7 @@ import type {
 } from '../../popups/browser-popup-ownership'
 import {
   allowManagedGuestPopupWindow,
+  isPopupShownToPairedViewers,
   openManagedPopupChildWindow,
   publishBrowserPopupToViewers
 } from '../../popups/browser-viewer-popup-publication'
@@ -87,14 +88,14 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
       if (this.openNewTabPopup(guest, request, observed)) {
         return { action: 'deny' }
       }
-      // Only the desktop user's own click may bring a popup forward; agents and late opens wait.
-      const showWhenAppActive = observed?.byAgent !== false
       const browserTabId = this.resolvePopupOwnerContext(guest.id)?.browserTabId ?? null
       const externalUrl = normalizeExternalBrowserUrl(url)
 
       // A server page's popup (or one opened by a paired mobile viewer) reaches its viewer as a tab, never flashing on the host screen.
       // Hidden, not offscreen: Electron never sizes or paints an offscreen window.open child (electron/electron#55565).
-      const shownToViewers = this.isPopupShownToViewers(guest.id, browserTabId)
+      const shownToViewers = this.isPopupShownToViewers(guest.id, browserTabId, observed)
+      // Only the desktop user's own click may bring a popup forward; agents and late opens wait.
+      const showWhenAppActive = !shownToViewers && observed?.byAgent !== false
       // Native popups must not target local files.
       const canOpenAsChild = normalizeBrowserPopupUrl(url) !== null
       if (browserTabId && canOpenAsChild) {
@@ -227,9 +228,12 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
     }
   }
 
-  isRoutePopupShownToViewers(openerWebContentsId: number): boolean {
+  isRoutePopupShownToViewers(
+    openerWebContentsId: number,
+    observed?: ObservedBrowserGuestGesture | null
+  ): boolean {
     const browserTabId = this.resolvePopupOwnerContext(openerWebContentsId)?.browserTabId ?? null
-    return this.isPopupShownToViewers(openerWebContentsId, browserTabId)
+    return this.isPopupShownToViewers(openerWebContentsId, browserTabId, observed)
   }
 
   publishRouteGuestPopup(
@@ -242,11 +246,18 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
     }
   }
 
-  private isPopupShownToViewers(guestWebContentsId: number, browserTabId: string | null): boolean {
-    return (
-      this.isListedAsServerPage(guestWebContentsId) ||
-      (browserTabId !== null && this.pageInputCredit.peek(browserTabId) !== null)
-    )
+  private isPopupShownToViewers(
+    guestWebContentsId: number,
+    browserTabId: string | null,
+    observed?: ObservedBrowserGuestGesture | null
+  ): boolean {
+    return isPopupShownToPairedViewers({
+      isListedAsServerPage: this.isListedAsServerPage(guestWebContentsId),
+      browserTabId,
+      immediatePageId: this.pageIdForGuest(guestWebContentsId),
+      peekCreditDeviceId: (tabId) => this.pageInputCredit.peek(tabId),
+      observed
+    })
   }
 
   /** An agent's command drives the guest's page on this desktop; a Server page is shown to its viewers instead. */

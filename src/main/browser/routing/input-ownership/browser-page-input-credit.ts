@@ -4,6 +4,8 @@ import {
   type RpcCallerIdentity
 } from '../../../runtime/rpc/callers/rpc-caller-identity'
 
+const RECENT_PAIRED_ECHO_MS = 300
+
 type Runner = {
   pairedDeviceId: string | null
   /** A person sent it: a viewer's relayed click or key press, not an agent's CLI. */
@@ -14,6 +16,10 @@ type Runner = {
 export class BrowserPageInputCredit {
   // The command each page is running; queued commands run one at a time per page.
   private readonly runnerByPageId = new Map<string, Runner>()
+  private readonly recentPairedByPageId = new Map<
+    string,
+    { pairedDeviceId: string; endedAt: number }
+  >()
   private readonly creditByTabId = new Map<string, { pairedDeviceId: string; at: number }>()
   // The same input, for what the page prints; opening a tab doesn't spend it.
   private readonly printCreditByTabId = new Map<string, { pairedDeviceId: string; at: number }>()
@@ -22,8 +28,17 @@ export class BrowserPageInputCredit {
 
   /** Nothing to credit or clear: no command is running and no credit is held. */
   get idle(): boolean {
+    if (this.recentPairedByPageId.size > 0) {
+      const now = this.now()
+      for (const [pageId, recent] of this.recentPairedByPageId) {
+        if (now - recent.endedAt > RECENT_PAIRED_ECHO_MS) {
+          this.recentPairedByPageId.delete(pageId)
+        }
+      }
+    }
     return (
       this.runnerByPageId.size === 0 &&
+      this.recentPairedByPageId.size === 0 &&
       this.creditByTabId.size === 0 &&
       this.printCreditByTabId.size === 0
     )
@@ -42,28 +57,46 @@ export class BrowserPageInputCredit {
       person: caller !== undefined && !isAgentRpcCaller(caller)
     }
     this.runnerByPageId.set(browserPageId, runner)
+    if (!runner.pairedDeviceId) {
+      this.recentPairedByPageId.delete(browserPageId)
+    }
     try {
       return await execute()
     } finally {
       if (this.runnerByPageId.get(browserPageId) === runner) {
         this.runnerByPageId.delete(browserPageId)
+        if (runner.pairedDeviceId) {
+          this.recentPairedByPageId.set(browserPageId, {
+            pairedDeviceId: runner.pairedDeviceId,
+            endedAt: this.now()
+          })
+        }
       }
     }
   }
 
   /** The command running on the page now is a person's, so input reaching it is theirs. */
   isRunningPersonCommand(browserPageId: string): boolean {
-    return this.runnerByPageId.get(browserPageId)?.person === true
+    const active = this.runnerByPageId.get(browserPageId)
+    if (active) {
+      return active.person
+    }
+    const recent = this.recentPairedByPageId.get(browserPageId)
+    return Boolean(recent && this.now() - recent.endedAt <= RECENT_PAIRED_ECHO_MS)
   }
 
   /** Activating input reached the page; the running command's paired client, if any, owns what it opens. */
   creditInput(browserTabId: string, browserPageId: string, { printable = true } = {}): void {
-    const pairedDeviceId = this.runnerByPageId.get(browserPageId)?.pairedDeviceId ?? null
+    const now = this.now()
+    const active = this.runnerByPageId.get(browserPageId)
+    const recent = !active ? this.recentPairedByPageId.get(browserPageId) : undefined
+    const pairedDeviceId =
+      active?.pairedDeviceId ??
+      (recent && now - recent.endedAt <= RECENT_PAIRED_ECHO_MS ? recent.pairedDeviceId : null)
     if (!pairedDeviceId) {
       this.withdraw(browserTabId)
       return
     }
-    const now = this.now()
     // Unconsumed credits for tabs that opened nothing would otherwise pile up.
     for (const credits of [this.creditByTabId, this.printCreditByTabId]) {
       for (const [tabId, credit] of credits) {
@@ -84,6 +117,7 @@ export class BrowserPageInputCredit {
   withdraw(browserTabId: string): void {
     this.creditByTabId.delete(browserTabId)
     this.printCreditByTabId.delete(browserTabId)
+    this.recentPairedByPageId.delete(browserTabId)
   }
 
   /** Whose input just reached the tab, for a print it makes; a tab that input opened doesn't spend it. */

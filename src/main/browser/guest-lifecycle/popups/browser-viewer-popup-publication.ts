@@ -1,4 +1,5 @@
 import { safeOrigin } from '../browser-event-origin'
+import type { ObservedBrowserGuestGesture } from '../input/browser-guest-input-gesture'
 import type { BrowserPageEvent } from '../page-activity/browser-page-events'
 import type {
   PopupOwnerContext,
@@ -19,6 +20,59 @@ import {
 } from './presentation/popup-origin-bar-window'
 import { installBrowserJavaScriptDialogs } from '../prompts/browser-javascript-dialogs'
 
+const activePopupViewersByPageId = new Map<string, Set<string>>()
+
+export function addBrowserPopupViewer(browserPageId: string, pairedDeviceId: string): () => void {
+  let viewers = activePopupViewersByPageId.get(browserPageId)
+  if (!viewers) {
+    viewers = new Set()
+    activePopupViewersByPageId.set(browserPageId, viewers)
+  }
+  viewers.delete(pairedDeviceId)
+  viewers.add(pairedDeviceId)
+  return () => {
+    const current = activePopupViewersByPageId.get(browserPageId)
+    if (!current) {
+      return
+    }
+    current.delete(pairedDeviceId)
+    if (current.size === 0) {
+      activePopupViewersByPageId.delete(browserPageId)
+    }
+  }
+}
+
+export function getActiveBrowserPopupViewer(
+  browserPageId: string | null | undefined
+): string | null {
+  if (!browserPageId) {
+    return null
+  }
+  const viewers = activePopupViewersByPageId.get(browserPageId)
+  return viewers && viewers.size > 0 ? ([...viewers].at(-1) ?? null) : null
+}
+
+export function isPopupShownToPairedViewers(input: {
+  isListedAsServerPage: boolean
+  browserTabId: string | null
+  immediatePageId?: string
+  peekCreditDeviceId: (browserTabId: string) => string | null
+  observed?: ObservedBrowserGuestGesture | null
+}): boolean {
+  if (input.isListedAsServerPage) {
+    return true
+  }
+  if (input.observed?.byAgent === false && input.observed.fromThisDesktop) {
+    return false
+  }
+  return Boolean(
+    (input.browserTabId !== null &&
+      (input.peekCreditDeviceId(input.browserTabId) !== null ||
+        getActiveBrowserPopupViewer(input.browserTabId) !== null)) ||
+    getActiveBrowserPopupViewer(input.immediatePageId) !== null
+  )
+}
+
 // Lists a popup as a viewer tab and returns the opening paired client to its opener on close.
 export function publishBrowserPopupToViewers(input: {
   contents: Electron.WebContents
@@ -37,7 +91,10 @@ export function publishBrowserPopupToViewers(input: {
   // Hidden on the host, so its viewers and agents answer its dialogs, as for a server page.
   installBrowserJavaScriptDialogs(contents, () => null)
   const browserPageId = browserPopupPageId(contents.id)
-  const pairedDeviceId = input.consumePairedDeviceId(owner.browserTabId)
+  const pairedDeviceId =
+    input.consumePairedDeviceId(owner.browserTabId) ??
+    getActiveBrowserPopupViewer(immediateOpenerPageId) ??
+    getActiveBrowserPopupViewer(owner.browserTabId)
   const openerBrowserPageId = immediateOpenerPageId ?? owner.browserTabId
   contents.once('destroyed', () => {
     if (pairedDeviceId && input.closePopup) {
@@ -81,6 +138,10 @@ export function allowManagedGuestPopupWindow(input: {
     input.tryOpenAsTabWithoutOpener(popupChildOpener(options))
       ? discardPopupChildWindow(options, input.url)
       : null
+  const windowOptions = input.shownToViewers
+    ? { ...SAFE_POPUP_WINDOW_OPTIONS, show: false }
+    : SAFE_POPUP_WINDOW_OPTIONS
+  const showWhenAppActive = !input.shownToViewers && input.showWhenAppActive
   if (
     isNativeBrowserPopupRequest({
       disposition: input.disposition,
@@ -90,11 +151,9 @@ export function allowManagedGuestPopupWindow(input: {
   ) {
     return allowNativeBrowserPopup({
       opener: input.opener,
-      options: input.shownToViewers
-        ? { ...SAFE_POPUP_WINDOW_OPTIONS, show: false }
-        : SAFE_POPUP_WINDOW_OPTIONS,
+      options: windowOptions,
       background: input.disposition === 'background-tab',
-      showWhenAppActive: input.showWhenAppActive,
+      showWhenAppActive,
       canPresent: input.canPresent,
       onCreated: (options) => openAsTabWithoutOpener(options) ?? input.createChildWindow(options)
     })
@@ -102,14 +161,14 @@ export function allowManagedGuestPopupWindow(input: {
   // Restrict page-requested chrome so native popups remain verifiable and escapable.
   return {
     action: 'allow',
-    overrideBrowserWindowOptions: SAFE_POPUP_WINDOW_OPTIONS,
+    overrideBrowserWindowOptions: windowOptions,
     // Host child windows with an origin bar so users can verify the destination.
     createWindow: (options: PopupChildWindowOptions) =>
       openAsTabWithoutOpener(options) ??
       input.createChildWindow({
         ...options,
         ...(input.shownToViewers ? { show: false } : {}),
-        showWhenAppActive: input.showWhenAppActive,
+        showWhenAppActive,
         // Bind link-created contents to the opener's session.
         webPreferences: { ...options.webPreferences, session: input.opener.session }
       })

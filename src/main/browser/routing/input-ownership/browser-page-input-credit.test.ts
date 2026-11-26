@@ -33,5 +33,11 @@ describe('BrowserPageInputCredit print attribution', () => {
     await credit.during('tab', viewer, async () => credit.creditInput('tab', 'tab'))
     now += 5_000
     expect(credit.printer('tab')).toBeNull()
+
+    // Delayed cross-origin iframe input echoes arriving right after during() keep the viewer's credit.
+    await credit.during('tab', viewer, async () => {})
+    now += 50
+    credit.creditInput('tab', 'tab')
+    expect(credit.peek('tab')).toBe('desk-a')
   })
 })
