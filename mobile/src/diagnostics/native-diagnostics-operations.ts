@@ -16,8 +16,26 @@ import { NATIVE_APP_LOG_ID } from './native-render-log'
 import { submitConnectionDiagnostics } from './connection-diagnostics-submission'
 import type { DiagnosticsDeviceOperations } from './diagnostics-device-operations'
 import { BRIDGE_PROTOCOL_VERSION } from '../mobile-web-shell/bridge/protocol/bridge-frame-fields'
-import { readMobileRelayCredentialBundle } from '../host-credentials/mobile-relay-credential-bundle'
+import {
+  readMobileRelayCredentialBundle,
+  type MobileRelayCredentialBundle
+} from '../host-credentials/mobile-relay-credential-bundle'
 import { withTimeout } from '../../../src/shared/concurrency/promise-timeout-fallback'
+
+// The read queues behind every keychain mutation: a report never waits on an unrelated write, and
+// repeated taps share one read instead of stacking reads that run after their reports finished.
+const relayCredentialReads = new Map<string, Promise<MobileRelayCredentialBundle | null>>()
+
+function readRelayCredentialForReport(hostId: string): Promise<MobileRelayCredentialBundle | null> {
+  let read = relayCredentialReads.get(hostId)
+  if (!read) {
+    read = readMobileRelayCredentialBundle(hostId)
+      .catch(() => null)
+      .finally(() => relayCredentialReads.delete(hostId))
+    relayCredentialReads.set(hostId, read)
+  }
+  return withTimeout(read, 2_000, null)
+}
 
 export function createNativeDiagnosticsOperations(
   host: HostProfile | null,
@@ -43,10 +61,7 @@ export function createNativeDiagnosticsOperations(
         }
       }
       const snapshot = await readConnectionDiagnosticsSnapshot(context, connectionLogStore, host.id)
-      // The read queues behind every keychain mutation; a report must never wait on an unrelated write.
-      const relayCredential = host.relay
-        ? await withTimeout(readMobileRelayCredentialBundle(host.id), 2_000, null)
-        : undefined
+      const relayCredential = host.relay ? await readRelayCredentialForReport(host.id) : undefined
       return {
         report: buildConnectionDiagnosticsReport({
           hostName: host.name,
