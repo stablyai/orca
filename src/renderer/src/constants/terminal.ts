@@ -12,7 +12,6 @@ export const REQUEST_ACTIVE_TERMINAL_PANE_CLOSE_EVENT = 'orca-request-active-ter
 export const BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT = 'orca-background-mount-terminal-worktree'
 
 // Mobile wake must fan out by worktree to mounted hidden panes, whose instance-owned bindings can resume without a desktop reveal.
-export const WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT = 'orca-wake-hibernated-agents-worktree'
 
 // Fit synchronous sidebar toggles before paint to avoid a wrong-width frame; continuous drags use per-pane ResizeObserver instead.
 export const SYNC_FIT_PANES_EVENT = 'orca-sync-fit-panes'
@@ -73,12 +72,14 @@ export type SetTerminalPaneTitleDetail = {
 
 export type BackgroundMountTerminalWorktreeDetail = {
   worktreeId: string
+  wakePaneKey?: string
   /** Target background mounts to exact tabs to avoid connecting every saved pane; omitted IDs preserve legacy whole-worktree mount, lifted by real activation. */
   tabIds?: readonly string[]
 }
 
 export type WakeHibernatedAgentsWorktreeDetail = {
   worktreeId: string
+  paneKey?: string
   /** Collect provider-session claims from panes consuming/latching wake so generic resume cannot launch those sessions twice. */
   wokenClaimKeys?: Set<string>
 }

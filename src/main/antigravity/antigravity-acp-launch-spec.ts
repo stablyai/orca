@@ -89,11 +89,14 @@ function scrubAgyHostEnvironment(
   return removed
 }
 
-// A session lists what a chat is offered; `agy models` can return a shorter fallback list.
+// A session lists what a chat is offered; `agy models` can return a shorter fallback list. Its
+// session request reads agy's login (a locked Linux keyring raises an unlock prompt), so only an
+// Antigravity picker starts it, never startup or settings warm-up.
 const AGY_SESSION_MODEL_DISCOVERY: AcpSessionModelDiscovery = {
   kind: 'session',
   listingNamesConfiguredModel: false,
   inPrivateFolder: true,
+  listsOnDemand: true,
   discardSession: discardAgyListingSession
 }
 

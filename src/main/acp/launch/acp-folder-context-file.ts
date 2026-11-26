@@ -1,6 +1,20 @@
 import { randomUUID } from 'node:crypto'
-import { lstat, mkdir, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises'
+import { constants } from 'node:fs'
+import {
+  copyFile,
+  link,
+  lstat,
+  mkdir,
+  readFile,
+  realpath,
+  rename,
+  rm,
+  writeFile
+} from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import { isHardLinkUnsupported } from '../../filesystem/hard-link-unsupported-error'
+import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
+import { errnoCodeOrUnknown } from '../../../shared/errors/errno-code'
 import { realFolderUnderRoot } from '../../filesystem/real-folder-under-root'
 
 const header = (agentName: string) =>
@@ -11,19 +25,6 @@ const BLOCK_END = '<!-- orca:end -->'
 // Only markers alone on their lines count, so text that quotes them is left alone.
 const ORCA_MARK = /^<!-- orca:(begin|end) -->\r?$/gm
 
-/** Where the block Orca replaces sits, so writing one and taking it out name the same span. */
-function orcaBlockSpan(existing: string): { at: number; until: number } | null {
-  const marks = [...existing.matchAll(ORCA_MARK)]
-  // The last begin followed by an end with no other begin between them, so a stray one the user
-  // wrote earlier cannot swallow their text.
-  const start = marks.findLast((mark, i) => mark[1] === 'begin' && marks[i + 1]?.[1] === 'end')
-  if (!start) {
-    return null
-  }
-  const end = marks[marks.indexOf(start) + 1]
-  return { at: start.index, until: end.index + end[0].length }
-}
-
 /** Orca's own file is replaced whole; a file the user wrote keeps their text and gets Orca's block. */
 function withOrcaText(existing: string | null, rawText: string, agentName: string): string {
   const text = rawText.replace(/<!--\s*orca:(begin|end)\s*-->/g, '')
@@ -31,117 +32,204 @@ function withOrcaText(existing: string | null, rawText: string, agentName: strin
     return `${header(agentName)}\n\n${text}\n`
   }
   const block = `${BLOCK_START}\n${text}\n${BLOCK_END}`
-  const span = orcaBlockSpan(existing)
-  if (span) {
-    return existing.slice(0, span.at) + block + existing.slice(span.until)
+  const range = orcaBlockRange(existing)
+  if (range) {
+    return existing.slice(0, range.start) + block + existing.slice(range.end)
   }
   return `${existing.trimEnd()}\n\n${block}\n`
 }
 
-/** The real file `path` names in `cwd`; null when a linked folder on the way leads elsewhere. */
-async function realFolderContextTarget(cwd: string, path: string): Promise<string | null> {
-  const realCwd = await realpath(cwd).catch(() => cwd)
-  const folders = dirname(path)
-    .split(/[\\/]/)
-    .filter((segment) => segment && segment !== '.')
-  // A linked folder on the way would carry the bot's instructions somewhere else.
-  if ((await realFolderUnderRoot(cwd, realCwd, folders)) === 'other') {
-    return null
-  }
-  return join(realCwd, path)
-}
-
-/** What the folder already holds there; a file the user owns stays theirs. */
-async function readExistingFolderContextFile(
-  target: string
-): Promise<{ kind: 'missing' } | { kind: 'untouched' } | { kind: 'file'; text: string }> {
-  const info = await lstat(target).catch(() => null)
-  if (!info) {
-    return { kind: 'missing' }
-  }
-  // A link may point outside the folder or into a tracked file, so it is left as the user's.
-  if (info.isSymbolicLink()) {
-    return { kind: 'untouched' }
-  }
-  try {
-    return { kind: 'file', text: await readFile(target, 'utf8') }
-  } catch {
-    return { kind: 'untouched' }
-  }
-}
-
-/** Replaced whole, so the agent never reads a half-written file; only this host's user may read
- *  the result, a file the user wrote included, since it now carries the bot's instructions. An
- *  inheritable ACL the user set on the folder still applies on top of that. */
-async function writeFolderContextText(target: string, content: string): Promise<void> {
-  const staged = `${target}.${randomUUID()}`
-  try {
-    await writeFile(staged, content, { mode: 0o600 })
-    await rename(staged, target)
-  } catch (error) {
-    await rm(staged, { force: true }).catch(() => undefined)
-    throw error
-  }
+function orcaBlockRange(existing: string): { start: number; end: number } | null {
+  // Only markers alone on their lines count, so text that quotes them is left alone; the last
+  // pair wins, so a stray one the user wrote earlier cannot swallow their text.
+  const marks = [...existing.matchAll(ORCA_MARK)]
+  // Take the last begin that is followed by an end with no other begin between them.
+  const start = marks.findLast((mark, i) => mark[1] === 'begin' && marks[i + 1]?.[1] === 'end')
+  const end = start && marks[marks.indexOf(start) + 1]
+  return start && end ? { start: start.index, end: end.index + end[0].length } : null
 }
 
 /** Writes Orca's text into `cwd`'s `path` whole, so the agent never reads a half-written file.
- *  A symlink on the way, or a file that cannot be read, stays untouched and is reported as not
- *  written, so a launch that needs the text can refuse instead of starting without it. */
+ *  A symlink on the way, or a file that cannot be read as UTF-8, stays untouched and is reported as
+ *  not written, so a launch that needs the text can refuse instead of starting without it. The
+ *  result is readable only by this host's user, a file the user wrote included, since it now carries
+ *  the bot's instructions. An inheritable ACL the user set on the folder still applies on top of
+ *  that. */
 export async function writeFolderContextFile(
   cwd: string,
   path: string,
   agentName: string,
   text: string
 ): Promise<boolean> {
-  const target = await realFolderContextTarget(cwd, path)
-  if (!target) {
+  const realCwd = await realpath(cwd).catch(() => cwd)
+  const folders = dirname(path)
+    .split(/[\\/]/)
+    .filter((segment) => segment && segment !== '.')
+  // A linked folder on the way would carry the bot's instructions somewhere else.
+  if ((await realFolderUnderRoot(cwd, realCwd, folders)) === 'other') {
     return false
   }
-  const existing = await readExistingFolderContextFile(target)
-  if (existing.kind === 'untouched') {
-    return false
-  }
-  if (existing.kind === 'missing') {
-    await mkdir(dirname(target), { recursive: true })
-  }
-  await writeFolderContextText(
+  const target = join(realCwd, path)
+  return await replaceWhileUnchanged(
     target,
-    withOrcaText(existing.kind === 'file' ? existing.text : null, text, agentName)
+    async () => {
+      const info = await lstat(target).catch(() => null)
+      if (!info) {
+        await mkdir(dirname(target), { recursive: true })
+        return null
+      }
+      // A link may point outside the folder or into a tracked file, so it is left as the user's.
+      return info.isSymbolicLink() ? undefined : readUtf8(target).catch(() => undefined)
+    },
+    (existing) => withOrcaText(existing, text, agentName)
   )
-  return true
 }
 
-/** Takes Orca's text back out, for a launch that brings none: Orca's own file goes whole, the
- *  user's keeps their text, and never only the markers. */
-export async function removeFolderContextBlock(
+/** Takes Orca's text back out of `cwd`'s `path`: deletes a file Orca wrote for `agentName`, or
+ *  removes only Orca's block from a file the user wrote. A symlink, or a file that cannot be
+ *  read as UTF-8, stays. */
+export async function removeFolderContextFile(
   cwd: string,
   path: string,
   agentName: string
 ): Promise<void> {
-  const target = await realFolderContextTarget(cwd, path)
-  if (!target) {
-    return
-  }
-  const existing = await readExistingFolderContextFile(target)
-  if (existing.kind !== 'file') {
-    return
-  }
-  if (existing.text.startsWith(header(agentName))) {
-    await rm(target, { force: true })
-    return
-  }
-  const span = orcaBlockSpan(existing.text)
-  if (!span) {
-    return
-  }
-  // Only the end is tidied: the user's own first line may open an indented code block, and its
-  // indentation is theirs to keep.
-  const remaining = existing.text.slice(0, span.at) + existing.text.slice(span.until)
-  if (!remaining.trim()) {
-    await rm(target, { force: true })
-    return
-  }
-  await writeFolderContextText(target, `${remaining.replace(/\s+$/, '')}\n`)
+  const target = join(await realpath(cwd).catch(() => cwd), path)
+  await replaceWhileUnchanged(
+    target,
+    async () => {
+      const info = await lstat(target).catch(() => null)
+      return info?.isFile() ? readUtf8(target).catch(() => undefined) : undefined
+    },
+    (existing) => (existing === null ? undefined : withoutOrcaText(existing, agentName))
+  )
 }
 
-export const removeFolderContextFile = removeFolderContextBlock
+export const removeFolderContextBlock = removeFolderContextFile
+
+/** Orca's own file goes whole (null). From a file the user wrote only Orca's block goes, with the
+ *  line break after it and the one blank line Orca put before it, so the user's bytes stay; with no
+ *  block there is nothing to do (undefined). */
+function withoutOrcaText(existing: string, agentName: string): string | null | undefined {
+  if (existing.startsWith(header(agentName))) {
+    return null
+  }
+  const range = orcaBlockRange(existing)
+  if (!range) {
+    return undefined
+  }
+  let start = range.start
+  let end = range.end + (/^\r?\n/.exec(existing.slice(range.end))?.[0].length ?? 0)
+  const blankBefore = /(?:^|\n)(\r?\n)$/.exec(existing.slice(0, start))
+  const blankAfter = /^\r?\n/.exec(existing.slice(end))
+  if (blankBefore && (end === existing.length || blankAfter)) {
+    start -= blankBefore[1].length
+  }
+  const next = existing.slice(0, start) + existing.slice(end)
+  return next.trim() ? next : null
+}
+
+const UPDATE_PASSES = 3
+
+/** Puts `next(current)` in place of `target` (null deletes it) only while the file still holds the
+ *  text it was made from, so a save landing meanwhile is never replaced; the next pass starts from
+ *  that save. `read` returns null for no file and undefined for a file to leave alone; `next`
+ *  returns undefined when there is nothing to change. The result is
+ *  readable only by this host's user, since it carries the bot's instructions. */
+async function replaceWhileUnchanged(
+  target: string,
+  read: () => Promise<string | null | undefined>,
+  next: (current: string | null) => string | null | undefined
+): Promise<boolean> {
+  for (let pass = 0; pass < UPDATE_PASSES; pass++) {
+    const current = await read()
+    if (current === undefined) {
+      return false
+    }
+    // Rewritten even when equal, so a file made readable by others again goes back to 0600.
+    const content = next(current)
+    if (content === undefined) {
+      return false
+    }
+    if (await publishIfUnchanged(target, current, content)) {
+      return true
+    }
+  }
+  return false
+}
+
+/** False, changing nothing, when `target` no longer holds `expected`. The file never goes missing
+ *  meanwhile, so no other writer mistakes it for absent; only a save landing between the last
+ *  compare and the rename or removal is still replaced, as Node has no compare-and-swap. */
+async function publishIfUnchanged(
+  target: string,
+  expected: string | null,
+  content: string | null
+): Promise<boolean> {
+  const unchanged = async (): Promise<boolean> => (await readIfPresent(target)) === expected
+  if (content === null) {
+    if (!(await unchanged())) {
+      return false
+    }
+    await rm(target, { force: true })
+    return true
+  }
+  const staged = `${target}.${randomUUID()}`
+  try {
+    await writeFile(staged, content, { mode: 0o600 })
+    if (expected === null) {
+      return await createFrom(staged, target)
+    }
+    if (!(await unchanged())) {
+      return false
+    }
+    await rename(staged, target)
+    return true
+  } finally {
+    await rm(staged, { force: true }).catch(() => undefined)
+  }
+}
+
+/** Links `staged` in as `target` only when no file took that name first. */
+async function createFrom(staged: string, target: string): Promise<boolean> {
+  try {
+    await link(staged, target)
+    return true
+  } catch (error) {
+    if (errnoCodeOrUnknown(error) === 'EEXIST') {
+      return false
+    }
+    if (!isHardLinkUnsupported(error)) {
+      throw error
+    }
+  }
+  try {
+    await copyFile(staged, target, constants.COPYFILE_EXCL)
+    return true
+  } catch (error) {
+    if (errnoCodeOrUnknown(error) === 'EEXIST') {
+      return false
+    }
+    throw error
+  }
+}
+
+async function readIfPresent(path: string): Promise<string | null | undefined> {
+  try {
+    return await readUtf8(path)
+  } catch (error) {
+    if (isDefinitiveAbsence(error)) {
+      return null
+    }
+    throw error
+  }
+}
+
+/** Undefined for bytes that aren't UTF-8: written back as text they would come out changed. */
+async function readUtf8(path: string): Promise<string | undefined> {
+  const bytes = await readFile(path)
+  try {
+    return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes)
+  } catch {
+    return undefined
+  }
+}

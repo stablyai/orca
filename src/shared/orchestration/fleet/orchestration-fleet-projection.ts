@@ -50,6 +50,11 @@ export type FleetDurableWorker = {
     autoReleaseAt?: string | null
     updatedAt: string
   } | null
+  /** Its terminal went to this follow-up, with the shared row it last held when one names it. */
+  handedOn?: {
+    toDispatchId: string
+    resource: { id: string; ownerDispatchId: string; releaseState: string } | null
+  } | null
 }
 
 export type FleetLiveness =
@@ -72,6 +77,8 @@ export type FleetLiveness =
         | 'peer_changed'
         /** The Dispatch settled with no worker row, so no process was ever supervised. */
         | 'unsupervised_settled'
+        /** Settled, and its terminal now runs a follow-up that has not released it. */
+        | 'handed_on'
       observedAt?: number
       /** What the host could not verify, when it said. */
       detail?: string

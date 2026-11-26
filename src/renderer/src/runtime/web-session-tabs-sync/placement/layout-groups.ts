@@ -210,3 +210,32 @@ export function buildMirroredHostGroups({
 
   return orderedGroups.length > 0 ? orderedGroups : null
 }
+
+export function placeUngroupedLinkedChats(
+  groups: RuntimeMobileSessionTabGroup[],
+  activeGroupId: string | null | undefined,
+  linkedChats: ReadonlyMap<string, MirroredAgentTab>,
+  alreadyGrouped: ReadonlySet<string>,
+  hostGroupIdByTabId: ReadonlyMap<string, string>
+) {
+  const groupIds = new Set(groups.map((group) => group.id))
+  const fallback = activeGroupId && groupIds.has(activeGroupId) ? activeGroupId : groups[0].id
+  const additionsByGroup = new Map<string, string[]>()
+  for (const { hostTabId } of linkedChats.values()) {
+    if (alreadyGrouped.has(hostTabId)) {
+      continue
+    }
+    const wanted = hostGroupIdByTabId.get(hostTabId)
+    const groupId = wanted && groupIds.has(wanted) ? wanted : fallback
+    const additions = additionsByGroup.get(groupId) ?? []
+    additions.push(hostTabId)
+    additionsByGroup.set(groupId, additions)
+  }
+  if (additionsByGroup.size === 0) {
+    return groups
+  }
+  return groups.map((group) => {
+    const additions = additionsByGroup.get(group.id)
+    return additions ? { ...group, tabOrder: [...group.tabOrder, ...additions] } : group
+  })
+}

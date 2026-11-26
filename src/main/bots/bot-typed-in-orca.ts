@@ -44,16 +44,24 @@ export function typedInOrcaByPerson(
   )
 }
 
-/** The owner typed it in Orca: at the host's own window, or on a paired device the host found signed
- *  in to its own account. Anything Orca can't place as the owner (no stamp, an account it couldn't
- *  compare, another account) is not. */
+/** The owner typed it in Orca, as the host itself saw: at its own window. A paired device's account is
+ *  only what it declares, so even one matching the host's is not proof; it never makes a turn the
+ *  owner's over whom its conversation acts for. No stamp, or any device, is not. */
 export function typedInOrcaByOwner(
   item: AgentJournalRenderItem,
   submissions: readonly AgentJournalSubmission[]
 ): boolean {
   const typedBy = item.body.kind === 'message' ? item.body.typedBy : undefined
+  return typedBy?.by === 'host' && typedInOrcaByPerson(item, submissions)
+}
+
+/** Typed on a paired device the host did not find on its own account (another account, or one it
+ *  couldn't compare), by a person or by an agent's CLI over its pairing. Such a message never acts
+ *  for the owner, whomever its conversation acts for. */
+export function typedOnAnotherDevice(item: Pick<AgentJournalRenderItem, 'body'>): boolean {
+  const typedBy = item.body.kind === 'message' ? item.body.typedBy : undefined
   return (
-    (typedBy?.by === 'host' || (typedBy?.by === 'device' && typedBy.own === true)) &&
-    typedInOrcaByPerson(item, submissions)
+    (typedBy?.by === 'device' || (typedBy?.by === 'agent' && typedBy.deviceId !== undefined)) &&
+    typedBy.own !== true
   )
 }
