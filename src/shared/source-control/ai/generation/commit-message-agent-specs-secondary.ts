@@ -64,8 +64,9 @@ export function buildSecondaryCommitMessageAgentSpecs({
       effortFlag: [],
       label: 'Cursor',
       binary: 'cursor-agent',
-      promptDelivery: 'argv',
-      buildArgs: ({ prompt, model }) => [
+      // --print reads piped stdin when argv has no prompt; Windows agent.cmd cannot carry multi-line argv (#8793).
+      promptDelivery: 'stdin',
+      buildArgs: ({ model }) => [
         '--print',
         '--mode',
         'ask',
@@ -73,8 +74,7 @@ export function buildSecondaryCommitMessageAgentSpecs({
         '--output-format',
         'text',
         '--model',
-        model,
-        prompt
+        model
       ],
       modelSource: 'dynamic',
       modelDiscovery: { binary: 'cursor-agent', args: ['--list-models'], parse: parseCursorModels },
