@@ -58,18 +58,18 @@ export function NativeChatQuestionCardHeader({
     <div
       data-native-chat-dock-pinned
       // Its icon buttons take the options' focus outline, not the shared ring.
-      className="flex min-h-9 shrink-0 items-start gap-1.5 bg-primary/9 py-2 pr-1.5 pl-3.5 text-xs font-semibold text-foreground [&_button:focus-visible]:ring-0 [&_button:focus-visible]:outline-2 [&_button:focus-visible]:outline-offset-2 [&_button:focus-visible]:outline-foreground/45 [&_button:focus-visible]:outline-solid"
+      className="flex min-h-9 items-start gap-1.5 bg-primary/9 py-2 pr-1.5 pl-3.5 text-xs font-semibold text-foreground [&_button:focus-visible]:ring-0 [&_button:focus-visible]:outline-2 [&_button:focus-visible]:outline-offset-2 [&_button:focus-visible]:outline-foreground/45 [&_button:focus-visible]:outline-solid"
     >
       <MessageCircleQuestionMark aria-hidden className="mt-0.5 size-3.5 shrink-0 text-primary" />
       <div
         data-native-chat-dock-floor-lines={2}
-        className="native-chat-question-card-question min-h-[1lh] min-w-0 flex-1 overflow-y-auto text-[length:calc(var(--text-sm)*15/13)] leading-snug font-semibold text-foreground scrollbar-sleek max-h-[4lh] [[data-native-chat-dock-fit~=card]_&]:max-h-[2lh]"
+        className="native-chat-question-card-question min-h-[1lh] min-w-[6ch] flex-1 overflow-y-auto text-[length:calc(var(--text-sm)*15/13)] leading-snug font-semibold text-foreground scrollbar-sleek max-h-[4lh] [[data-native-chat-dock-fit~=card]_&]:max-h-[2lh]"
       >
         <div data-native-chat-dock-content data-testid="native-chat-question-card-title">
           {question}
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-1">
+      <div className="flex min-w-0 shrink flex-wrap items-center justify-end gap-1">
         {total > 1 && current.answered ? (
           <Check
             aria-label={t('components.native-chat.question.answered', 'Answered')}

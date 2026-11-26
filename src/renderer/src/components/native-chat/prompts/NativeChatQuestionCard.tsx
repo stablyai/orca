@@ -319,9 +319,9 @@ export function NativeChatQuestionCard({
           {look?.header}
           <div
             data-native-chat-dock-unsqueezed
-            // Short of room (fit level card), the question, options and typed answer scroll as one body,
-            // still tall enough for the question's first line and option 1, and faded while more lies below.
-            className="native-chat-question-card-body scrollbar-sleek flex min-h-0 shrink flex-col [[data-native-chat-dock-fit~=card]_&]:min-h-[calc(var(--spacing)*26)] [[data-native-chat-dock-fit~=card]_&]:overflow-y-auto"
+            // Short of room (fit level card), options and typed answers scroll as one body, still tall
+            // enough for option 1 while the question keeps its own two-line floor in the pinned band.
+            className="native-chat-question-card-body scrollbar-sleek flex min-h-0 shrink flex-col [[data-native-chat-dock-fit~=card]_&]:min-h-[calc(var(--spacing)*14)] [[data-native-chat-dock-fit~=card]_&]:overflow-y-auto"
           >
             {q.options.length > 0 ? (
               // Padded so each tile's outside focus outline clears the scroll clip.

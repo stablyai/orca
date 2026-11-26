@@ -84,6 +84,25 @@ describe('NativeChatQuestionCard', () => {
     expect(container.querySelectorAll('[data-native-chat-question-step]')).toHaveLength(2)
   })
 
+  it('shows a multi-step question once even when its header repeats it', () => {
+    const repeatedQuestion = 'Which slice should I open first?'
+    renderCard({
+      prompt: {
+        questions: [
+          {
+            question: repeatedQuestion,
+            header: repeatedQuestion,
+            multiSelect: false,
+            options: [{ label: 'One' }]
+          },
+          question('Two')
+        ]
+      }
+    })
+
+    expect(container.textContent?.match(/Which slice should I open first\?/g)).toHaveLength(1)
+  })
+
   it('arrows past a title checkbox into the multiline answer and leaves only at its text edges', () => {
     container.setAttribute('data-native-chat-root', 'true')
     act(() => {
