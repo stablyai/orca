@@ -71,9 +71,6 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     copyMarkdownPath,
     confirmDiscardMarkdown,
     handleDeleteCustomKey,
-    handleManageShortcuts,
-    smartRailEnabled,
-    handleSmartRailChange,
     handleCreateTerminal,
     launchQuickCommand,
     handleCreateMarkdownNote,
@@ -337,8 +334,6 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         visible={showCustomKeyModal}
         onClose={() => setShowCustomKeyModal(false)}
         onKeysChanged={setCustomKeys}
-        onManageShortcuts={handleManageShortcuts}
-        smartRail={{ enabled: smartRailEnabled, onChange: handleSmartRailChange }}
       />
       <MobileDictationSetupSheet
         visible={showDictationSetup}

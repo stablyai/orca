@@ -1222,23 +1222,16 @@
       "editing": "Editing",
       "navigation": "Navigation",
       "function": "Function",
-      "addShortcut": "Add Shortcut",
-      "shortcutCombo": "Shortcut Combo",
-      "pickKey": "Pick a key",
-      "textMacro": "Text Macro",
-      "shortcutComboHint": "Build Ctrl, Alt, and Shift key chords",
-      "textMacroHint": "Send custom text command",
-      "manageShortcuts": "Manage Shortcuts",
-      "manageShortcutsHint": "Show, hide, or reorder shortcut keys",
-      "modifiers": "Modifiers",
       "key": "Key",
-      "moreKeys": "More keys",
       "add": "Add",
-      "label": "Label",
       "labelPlaceholder": "e.g. Build",
-      "command": "Command",
       "commandPlaceholder": "e.g. pnpm build",
-      "pressEnter": "Press Enter"
+      "pressEnter": "Press Enter",
+      "title": "Add a key",
+      "letterOrSymbol": "Letter, number or symbol",
+      "keyCombo": "Key combo",
+      "text": "Text",
+      "name": "Name on the key"
     },
     "dragReorderRow": {
       "dragToReorder": "Drag to reorder",
@@ -2377,10 +2370,9 @@
       "listening": "Listening",
       "processing": "Processing",
       "startingMic": "Starting mic",
-      "uploadingImageTitle": "Uploading image",
       "releaseMicHint": "Release mic to stop",
       "preparingMic": "Preparing microphone",
-      "uploadingImage": "Uploading image to host"
+      "uploading": "Uploading…"
     },
     "markdownReader": {
       "readOnly": "Read only",
@@ -2439,12 +2431,7 @@
       "messageModeLabel": "Message mode: write, then send. Switch to Keys mode",
       "moreKeys": "More keys and actions",
       "showKeyboard": "Show keyboard",
-      "dismissKeyboardHint": "Hides the software keyboard and keeps the current terminal session open.",
-      "switchToDesktopMode": "Switch to desktop mode",
-      "switchToPhoneMode": "Switch to phone mode",
-      "pasteFromClipboard": "Paste from clipboard",
-      "paste": "Paste",
-      "addCustomShortcut": "Add custom shortcut"
+      "pasteFromClipboard": "Paste from clipboard"
     },
     "activeContent": {
       "noTabs": "No tabs in this session",
@@ -2458,7 +2445,7 @@
     "commandDock": {
       "liveInputLabel": "Live terminal input",
       "liveInputHint": "Typed text is sent directly to the active terminal",
-      "tapToShowKeyboard": "Tap to show keyboard"
+      "typeIntoTerminal": "Type into terminal"
     },
     "contentRow": {
       "dismissCreationWarning": "Dismiss workspace creation warning"
@@ -2557,9 +2544,7 @@
       "checkingCapabilities": "Checking desktop capabilities — try again in a moment"
     },
     "terminalInputActions": {
-      "sendingImage": "Sending image",
-      "attachPhoto": "Attach a photo",
-      "attachFileHint": "Long press to attach a file instead"
+      "attach": "Attach a photo or file"
     },
     "quickCommandEditorForm": {
       "terminalCommand": "Terminal Command",
@@ -3198,17 +3183,26 @@
     "terminalMoreKeys": {
       "sendKey": "Send {{label}}",
       "paste": "Paste",
-      "sending": "Sending…",
       "photo": "Photo",
       "file": "File",
       "desktopWidth": "Desktop width",
       "phoneWidth": "Phone width",
       "keys": "Keys",
-      "combos": "Combos",
       "yourKeys": "Your keys",
       "deleteKeyHint": "Long press to delete this key",
       "addCustomKey": "Add custom key",
-      "addKey": "Add key"
+      "title": "More keys",
+      "interrupt": "Interrupt",
+      "endOfInput": "End of input",
+      "clearScreen": "Clear screen",
+      "suspend": "Suspend",
+      "searchHistory": "Search history",
+      "lineStart": "Start of line",
+      "lineEnd": "End of line",
+      "deleteWord": "Delete word",
+      "deleteLine": "Delete to line start",
+      "shortcuts": "Shortcuts",
+      "add": "Add"
     },
     "terminalLayoutSheet": {
       "title": "Terminal layout",
