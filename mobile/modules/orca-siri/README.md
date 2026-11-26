@@ -90,10 +90,10 @@ Siri / CarPlay ─> App Intent (Swift, app target) ─HTTPS + Siri token─> wat
   - the 429 rate limit kicks in
 - Swift decodes the real overview JSON. Sample speech: "1 prompt is waiting for you. 3 agents: 1 working, 1 waiting, 1 done." / "Fix login bug in api wants to use Bash: npm test."
 - `ORCA_SIRI=1 expo prebuild` adds `OrcaAppIntents.swift` to the Orca app target. `pod install` succeeds.
+- Full simulator `xcodebuild` (Xcode 27.1): **BUILD SUCCEEDED**. `Orca.app/Metadata.appintents` contains all 4 intents, `OrcaAgentEntity` and the 11 phrases.
 
 ## Still to do
 
-- [ ] Check the result of the simulator `xcodebuild`: App Intents metadata extraction, and `import OrcaSiri` from the app target.
 - [ ] Run "Hey Siri, check Orca" on a device with a locked phone, then in CarPlay Simulator.
 - [ ] Check whether `requestChoice` options can be spoken in CarPlay, or whether a `requestConfirmation` fallback is needed.
 - [ ] Native chat (agent-session) tabs are not covered: only terminal agents are. Prompts still come from reading Claude's dialog off the terminal screen.

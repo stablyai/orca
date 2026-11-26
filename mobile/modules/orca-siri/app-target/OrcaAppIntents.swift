@@ -2,7 +2,8 @@
 // metadata only from the app target, not from static CocoaPods libraries. All logic lives in the
 // OrcaSiri pod; this file only declares what Siri can do.
 import AppIntents
-import OrcaSiri
+// `internal` to match ExpoModulesProvider.swift, which Expo autolinking generates with internal imports.
+internal import OrcaSiri
 
 // MARK: - Agent entity
 
