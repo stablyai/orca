@@ -1,14 +1,16 @@
 import { ipcRenderer } from 'electron'
 import {
   MAX_PROVIDER_RECEIPT_REPLY_BYTES,
+  MAX_PROVIDER_RECEIPT_REQUEST_BYTES,
+  PROVIDER_RECEIPT_PORT_ACQUIRE,
+  PROVIDER_RECEIPT_PORT_DELIVERY,
   PROVIDER_RECEIPT_READ_METHOD,
+  ReceiptRead,
   type ProviderReceiptCursor,
+  type ProviderReceiptReader,
   type ProviderReceiptReply
 } from '../../../shared/rpc-contract/structured-agent-session/structured-agent-session-provider-receipts'
-import type {
-  RuntimeRpcFailure,
-  RuntimeRpcResponse
-} from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
 type RuntimeCall = {
   method: string
@@ -18,6 +20,10 @@ type RuntimeCall = {
 
 let pending = false
 let unread: ProviderReceiptCursor | undefined
+let last: ProviderReceiptCursor | undefined
+let active: { reader: ProviderReceiptReader; port: MessagePort } | undefined
+const encoder = new TextEncoder()
+const decoder = new TextDecoder('utf-8', { fatal: true })
 
 function hasCursor(value: unknown, cursor: ProviderReceiptCursor): boolean {
   return (
@@ -31,33 +37,111 @@ function hasCursor(value: unknown, cursor: ProviderReceiptCursor): boolean {
 }
 
 export function discardProviderReceiptReply(revision: ProviderReceiptCursor): void {
-  if (unread && hasCursor(revision, unread)) {
-    ipcRenderer.send('runtime:unsubscribe', { receiptDisposition: unread })
+  if (active && unread && hasCursor(revision, unread)) {
+    active.port.postMessage(encoder.encode(JSON.stringify(unread)))
     unread = undefined
   }
 }
 
-async function read(args: RuntimeCall): Promise<RuntimeRpcResponse<unknown>> {
-  const { params } = args
-  const since = params && typeof params === 'object' && 'since' in params ? params.since : null
-  if (pending || (unread && !hasCursor(since, unread))) {
+async function acquire(reader: ProviderReceiptReader): Promise<MessagePort> {
+  if (active?.reader.id === reader.id && active.reader.generation === reader.generation) {
+    return active.port
+  }
+  if (active && (active.reader.id !== reader.id || active.reader.generation >= reader.generation)) {
     throw new Error('provider_receipt_read_pending')
+  }
+  const nonce = crypto.randomUUID()
+  const { resolve, promise } = Promise.withResolvers<MessagePort>()
+  let arrived: MessagePort | undefined
+  const onPort = (event: Electron.IpcRendererEvent, received: unknown): void => {
+    if (received === nonce && event.ports.length === 1) {
+      arrived = event.ports[0]!
+      resolve(arrived)
+    }
+  }
+  ipcRenderer.on(PROVIDER_RECEIPT_PORT_DELIVERY, onPort)
+  try {
+    const granted = await ipcRenderer.invoke(
+      PROVIDER_RECEIPT_PORT_ACQUIRE,
+      encoder.encode(JSON.stringify({ reader, nonce }))
+    )
+    if (granted !== true) {
+      throw new Error('provider_receipt_unavailable')
+    }
+    const port = await promise
+    active?.port.close()
+    active = { reader, port }
+    port.addEventListener(
+      'close',
+      () => {
+        if (active?.port === port) {
+          active = undefined
+        }
+      },
+      { once: true }
+    )
+    return port
+  } catch (error) {
+    arrived?.close()
+    throw error
+  } finally {
+    ipcRenderer.off(PROVIDER_RECEIPT_PORT_DELIVERY, onPort)
+  }
+}
+
+async function exchange(
+  port: MessagePort,
+  encoded: Uint8Array
+): Promise<RuntimeRpcResponse<ProviderReceiptReply>> {
+  const { resolve, reject, promise } =
+    Promise.withResolvers<RuntimeRpcResponse<ProviderReceiptReply>>()
+  const closed = (): void => reject(new Error('provider_receipt_sender_retired'))
+  const receive = ({ data }: MessageEvent<unknown>): void => {
+    if (!(data instanceof Uint8Array) || data.byteLength > MAX_PROVIDER_RECEIPT_REPLY_BYTES) {
+      return closed()
+    }
+    try {
+      resolve(JSON.parse(decoder.decode(data)))
+    } catch {
+      closed()
+    }
+  }
+  port.addEventListener('message', receive, { once: true })
+  port.addEventListener('messageerror', closed, { once: true })
+  port.addEventListener('close', closed, { once: true })
+  try {
+    port.start()
+    port.postMessage(encoded)
+    unread = undefined
+    return await promise
+  } finally {
+    port.removeEventListener('message', receive)
+    port.removeEventListener('messageerror', closed)
+    port.removeEventListener('close', closed)
+  }
+}
+
+async function read(args: RuntimeCall): Promise<RuntimeRpcResponse<unknown>> {
+  if (pending) {
+    throw new Error('provider_receipt_read_pending')
+  }
+  const input = ReceiptRead.safeParse(args.params)
+  if (!input.success) {
+    throw new Error('provider_receipt_invalid_read')
+  }
+  const { reader, since } = input.data
+  if ((unread && !hasCursor(since, unread)) || (since && (!last || !hasCursor(since, last)))) {
+    throw new Error('provider_receipt_read_pending')
+  }
+  const encoded = encoder.encode(JSON.stringify(input.data))
+  if (encoded.byteLength > MAX_PROVIDER_RECEIPT_REQUEST_BYTES) {
+    throw new Error('provider_receipt_capacity')
   }
   pending = true
   try {
-    const result: Uint8Array | RuntimeRpcFailure = await ipcRenderer.invoke('runtime:call', args)
-    if (!ArrayBuffer.isView(result)) {
-      return result
-    }
-    if (result.byteLength > MAX_PROVIDER_RECEIPT_REPLY_BYTES) {
-      throw new Error('provider_receipt_capacity')
-    }
-    // Trusted same-build IPC returns this envelope after charging its exact UTF-8 bytes.
-    const reply: RuntimeRpcResponse<ProviderReceiptReply> = JSON.parse(
-      new TextDecoder().decode(result)
-    )
+    const reply = await exchange(await acquire(reader), encoded)
     if (reply.ok) {
-      unread = reply.result.revision
+      unread = last = reply.result.revision
     }
     return reply
   } finally {

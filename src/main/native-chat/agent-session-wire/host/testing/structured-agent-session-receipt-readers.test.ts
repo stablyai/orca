@@ -140,13 +140,9 @@ it('distinguishes duplicate waits, host restart, shutdown and transport loss', a
     rig.readers.handoff(renderer.endpoint)
     const parked = renderer.read(reply)
     expect(() => renderer.read(reply)).toThrow()
-    reply = await parked
-    expect(reply.status).toBe('superseded')
-    rig.readers.handoff(renderer.endpoint)
-
-    const closed = renderer.read(reply)
+    expect(() => renderer.read(reply, { since: null })).toThrow()
     rig.source.close()
-    const terminal = await closed
+    const terminal = await parked
     expect(terminal.status).toBe('closed')
     rig.readers.handoff(renderer.endpoint)
     renderer.transport.abort()

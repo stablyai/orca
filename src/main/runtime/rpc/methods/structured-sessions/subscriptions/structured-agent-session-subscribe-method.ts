@@ -1,6 +1,6 @@
 import type * as z from 'zod'
 import { defineStreamingMethod, type RpcContext } from '../../../core'
-import { ReceiptReader } from './structured-agent-session-read-provider-receipts'
+import { ReceiptReader } from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-provider-receipts'
 import { sendingTextAppends } from '../../../../../../shared/agent-session/view/live-read/agent-session-text-append'
 import { recordMobileViewOpened } from '../../../../../telemetry/mobile-client-telemetry'
 import { clientRequestsCommands } from '../structured-agent-session-policy'

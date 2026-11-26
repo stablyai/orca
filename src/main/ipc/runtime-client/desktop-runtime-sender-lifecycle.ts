@@ -4,8 +4,6 @@ import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 type SenderState = {
   connectionId: string
   sender: WebContents
-  receiptDocument?: AbortController
-  receiptTransport?: AbortController
   subscriptions: Map<string, AbortController>
 }
 
@@ -30,21 +28,6 @@ export class DesktopRuntimeSenderLifecycle {
     return state?.sender === sender ? state.subscriptions : null
   }
 
-  receiptEndpointFor(sender: WebContents) {
-    const state = this.stateFor(sender)
-    state.receiptTransport ??= new AbortController()
-    state.receiptDocument ??= new AbortController()
-    return { transport: state.receiptTransport.signal, document: state.receiptDocument.signal }
-  }
-
-  existingReceiptEndpointFor(sender: WebContents) {
-    const state = this.senders.get(sender.id)
-    if (state?.sender === sender && state.receiptTransport && state.receiptDocument) {
-      return { transport: state.receiptTransport.signal, document: state.receiptDocument.signal }
-    }
-    return undefined
-  }
-
   private stateFor(sender: WebContents): SenderState {
     const existing = this.senders.get(sender.id)
     if (existing?.sender === sender) {
@@ -61,12 +44,12 @@ export class DesktopRuntimeSenderLifecycle {
     this.senders.set(sender.id, state)
     const retireDocument = (): void => this.retire(state, false)
     sender.on('did-navigate', retireDocument)
-    sender.on('render-process-gone', () => this.retire(state, false, true))
+    sender.on('render-process-gone', retireDocument)
     sender.once('destroyed', () => this.retire(state, true))
     return state
   }
 
-  private retire(state: SenderState, destroyed: boolean, processGone = destroyed): void {
+  private retire(state: SenderState, destroyed: boolean): void {
     if (this.senders.get(state.sender.id) !== state) {
       return
     }
@@ -76,12 +59,6 @@ export class DesktopRuntimeSenderLifecycle {
     } else {
       state.connectionId = this.mintConnectionId(state.sender.id)
     }
-    if (processGone) {
-      state.receiptTransport?.abort()
-      state.receiptTransport = undefined
-    }
-    state.receiptDocument?.abort()
-    state.receiptDocument = undefined
     for (const controller of state.subscriptions.values()) {
       controller.abort()
     }

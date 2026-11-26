@@ -80,6 +80,12 @@ export class ProviderReceiptCredits {
     return this.destinations.get(transport)
   }
 
+  hasRoom(transport: AbortSignal): boolean {
+    return (
+      this.destinations.has(transport) || this.destinations.size < MAX_PROVIDER_RECEIPT_DESTINATIONS
+    )
+  }
+
   isBlocked(target: Destination): boolean {
     return this.blocked.has(target)
   }
@@ -94,23 +100,32 @@ export class ProviderReceiptCredits {
 
   discard(endpoint: ProviderReceiptDestination, revision: ProviderReceiptCursor): void {
     const target = this.destinations.get(endpoint.transport)
-    if (target && this.release(target, endpoint.document, revision, true)) {
+    if (target?.unread?.handedOff && this.release(target, endpoint.document, revision, true)) {
       this.prune(target)
     }
   }
 
   // Navigation cancels the waiter. Only a suppressed send or destruction frees unread bytes.
-  handoff(endpoint: ProviderReceiptDestination): void {
+  handoff(endpoint: ProviderReceiptDestination, bytes?: number, post?: () => void): boolean {
     const unread = this.get(endpoint.transport)?.unread
-    if (unread?.document === endpoint.document) {
+    if (
+      unread?.document === endpoint.document &&
+      !unread.handedOff &&
+      (bytes === undefined || bytes === unread.bytes)
+    ) {
+      post?.()
       unread.handedOff = true
+      return true
     }
+    return false
   }
 
   suppress(endpoint: ProviderReceiptDestination): void {
-    const unread = this.get(endpoint.transport)?.unread
-    if (unread?.document === endpoint.document && !unread.handedOff) {
-      this.discard(endpoint, unread.revision)
+    const target = this.get(endpoint.transport)
+    const unread = target?.unread
+    if (target && unread?.document === endpoint.document && !unread.handedOff) {
+      this.release(target, endpoint.document, unread.revision, true)
+      this.prune(target)
     }
   }
 

@@ -1,4 +1,5 @@
-import { stat } from 'node:fs/promises'
+import { stat, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import {
   waitForReplay,
@@ -7,6 +8,7 @@ import {
 import { JournalSqlOwner } from '../../../agent-session-journal/journal-sql-owner'
 import { SqlAgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
 import { journalDomainDatabasePath } from '../../../agent-session-journal/database/journal-host-database'
+import { journalSqlWorkerPath } from '../../../agent-session-journal/journal-sql-worker-bundle.test-fixture'
 import { createQueuedMessageTestRig } from './structured-agent-session-queued-message-rig.test-fixture'
 import {
   claudeReceiptIngress,
@@ -21,10 +23,52 @@ import {
 
 const eventLoop = () => new Promise<void>((resolve) => setImmediate(resolve))
 
+async function gatedBulkWriter(root: string): Promise<string> {
+  const entry = join(root, 'receipt-bulk-writer.cjs')
+  await writeFile(
+    entry,
+    `
+    const { DatabaseSync } = require('node:sqlite')
+    const { existsSync, writeFileSync } = require('node:fs')
+    const prepare = DatabaseSync.prototype.prepare
+    const exec = DatabaseSync.prototype.exec
+    const armed = new WeakSet()
+    const started = ${JSON.stringify(join(root, 'bulk-started'))}
+    const resume = ${JSON.stringify(join(root, 'bulk-resume'))}
+    const clock = new Int32Array(new SharedArrayBuffer(4))
+    DatabaseSync.prototype.prepare = function(sql) {
+      const statement = prepare.call(this, sql)
+      if (sql.startsWith('INSERT INTO journal_items(')) {
+        const run = statement.run
+        statement.run = (...bindings) => {
+          const result = run.apply(statement, bindings)
+          if (bindings[2] === 'orca:other-0') armed.add(this)
+          return result
+        }
+      }
+      return statement
+    }
+    DatabaseSync.prototype.exec = function(sql) {
+      if (sql === 'COMMIT' && armed.delete(this)) {
+        writeFileSync(started, '')
+        const deadline = Date.now() + 8000
+        while (!existsSync(resume)) {
+          if (Date.now() >= deadline) throw new Error('bulk commit barrier timed out')
+          Atomics.wait(clock, 0, 0, 5)
+        }
+      }
+      return exec.call(this, sql)
+    }
+    require(${JSON.stringify(journalSqlWorkerPath())})
+  `
+  )
+  return entry
+}
+
 it.each([100, 1_000])(
   'uses only keyed memory delivery at %s provider frames per second, with and without receipt readers',
   async (count) => {
-    const rig = await createQueuedMessageTestRig({ agent: 'claude' })
+    const rig = await createQueuedMessageTestRig({ agent: 'claude', writerBundle: gatedBulkWriter })
     try {
       const id = await rig.workingSend()
       await eventually(() => expect(rig.dispatch).toHaveBeenCalledTimes(1))
@@ -45,7 +89,7 @@ it.each([100, 1_000])(
         )
       try {
         let sequence = ingress.handover.handoverCursor.sequence
-        const burst = async (phase: string) => {
+        const burst = async (phase: string, afterIngress?: () => Promise<void>) => {
           const refresh = vi.spyOn(runtimeState, 'refreshActivity')
           const point = vi.spyOn(deps.journalDatabase.readers, 'point')
           const write = vi.spyOn(JournalSqlOwner.prototype, 'write')
@@ -95,6 +139,7 @@ it.each([100, 1_000])(
               await eventLoop()
             }
             expect(performance.now() - begin).toBeLessThan(1_000)
+            await afterIngress?.()
             expect(await ingress.flush()).toEqual({ ok: true })
             expect(journal.cursor()).toEqual(cursor)
             expect(refresh).not.toHaveBeenCalled()
@@ -135,11 +180,31 @@ it.each([100, 1_000])(
 
         const fast = await openReceiptStream(rig)
         const held = await openReceiptStream(rig, { paused: true })
+        let firstBulkCommitted = false
         const bulkWrites = Promise.all(
-          Array.from({ length: 50 }, (_, index) => append(bulk, `other-${index}`))
+          Array.from({ length: 50 }, (_, index) => append(bulk, `other-${index}`)).map(
+            (write, index) =>
+              write.then((item) => {
+                if (index === 0) {
+                  firstBulkCommitted = true
+                }
+                return item
+              })
+          )
         )
-        await burst('fast and stalled with bulk work')
-        await bulkWrites
+        const release = () => writeFile(join(rig.root, 'bulk-resume'), '')
+        try {
+          await eventually(async () => {
+            expect((await stat(join(rig.root, 'bulk-started'))).isFile()).toBe(true)
+          })
+          await burst('fast and stalled with bulk work', async () => {
+            expect(firstBulkCommitted).toBe(false)
+            await release()
+          })
+        } finally {
+          await release()
+          await bulkWrites
+        }
         const stamps = fast.frames
           .flatMap((frame) => frame.updates)
           .filter((update) => typeof update.observedAt === 'number')

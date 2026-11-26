@@ -1,14 +1,13 @@
 import { randomUUID } from 'node:crypto'
 import type { AgentJournalCursor } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
-import {
-  MAX_PROVIDER_RECEIPT_REPLY_BYTES,
-  MAX_PROVIDER_RECEIPT_REPLY_KEYS,
-  type ProviderReceiptRead,
-  type ProviderReceiptReader,
-  type ProviderReceiptReply
+import type {
+  ProviderReceiptRead,
+  ProviderReceiptReader,
+  ProviderReceiptReply
 } from '../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-provider-receipts'
 import type { StructuredAgentSessionProviderReceipts } from '../../host/structured-agent-session-provider-receipts'
 import { ProviderReceiptStream } from './provider-receipt-stream'
+import { fitProviderReceiptUpdates, providerReceiptFrameBytes } from './provider-receipt-frame'
 
 import {
   ProviderReceiptCredits,
@@ -35,6 +34,50 @@ export class ProviderReceiptReaders {
 
   constructor(private readonly runtimeId: () => string) {}
 
+  hasUnread(transport: AbortSignal): boolean {
+    return this.credits.get(transport)?.unread !== undefined
+  }
+
+  canBind(endpoint: ProviderReceiptDestination, identity?: ProviderReceiptReader): boolean {
+    const unread = this.credits.get(endpoint.transport)?.unread
+    const generation = this.generations.get(endpoint.document)
+    return (
+      !endpoint.document.aborted &&
+      !endpoint.transport.aborted &&
+      this.credits.hasRoom(endpoint.transport) &&
+      (!unread || unread.document === endpoint.document) &&
+      (!identity ||
+        !generation ||
+        (identity.id === generation.id && identity.generation >= generation.generation))
+    )
+  }
+
+  canRead(endpoint: ProviderReceiptDestination, input: ProviderReceiptRead): boolean {
+    const target = this.credits.get(endpoint.transport)
+    const generation = this.generations.get(endpoint.document)
+    if (
+      !this.canBind(endpoint, input.reader) ||
+      target?.waiting ||
+      (generation && generation.generation !== input.reader.generation)
+    ) {
+      return false
+    }
+    const unread = target?.unread
+    return unread
+      ? unread.handedOff && sameCursor(unread.revision, input.since)
+      : input.since === null || sameCursor(input.since, target?.consumed ?? null)
+  }
+
+  retireDocument(endpoint: ProviderReceiptDestination): void {
+    const target = this.credits.get(endpoint.transport)
+    if (target?.reader?.document === endpoint.document) {
+      for (const member of target.reader.streams.values()) {
+        member.close()
+      }
+    }
+    this.suppress(endpoint)
+  }
+
   attach(
     endpoint: ProviderReceiptDestination,
     identity: ProviderReceiptReader,
@@ -42,21 +85,11 @@ export class ProviderReceiptReaders {
     registration: { sessionId: string; subscription: string },
     cursor: () => AgentJournalCursor
   ): ProviderReceiptInterest | undefined {
-    if (endpoint.document.aborted || endpoint.transport.aborted || source.closed) {
+    if (!this.canBind(endpoint, identity) || source.closed) {
       return undefined
     }
     const destination = this.credits.get(endpoint.transport)
-    if (destination?.unread && destination.unread.document !== endpoint.document) {
-      return undefined
-    }
     const previous = destination?.reader
-    const generation = this.generations.get(endpoint.document)
-    if (
-      generation &&
-      (identity.id !== generation.id || identity.generation < generation.generation)
-    ) {
-      return undefined
-    }
     const replace = previous?.streams.get(registration.subscription)
     if (this.streamCount >= MAX_PROVIDER_RECEIPT_STREAMS && !replace) {
       return undefined
@@ -146,40 +179,32 @@ export class ProviderReceiptReaders {
   read(
     endpoint: ProviderReceiptDestination,
     input: ProviderReceiptRead,
-    source: StructuredAgentSessionProviderReceipts | undefined
+    source: StructuredAgentSessionProviderReceipts | undefined,
+    fixedFailure?: 'closed' | 'capacity'
   ): Promise<ProviderReceiptReply> {
     if (endpoint.document.aborted || endpoint.transport.aborted) {
       throw new Error('provider_receipt_sender_retired')
     }
-    const target = this.credits.get(endpoint.transport) ?? this.credits.allocate(endpoint.transport)
-    if (!target) {
+    if (!this.credits.hasRoom(endpoint.transport)) {
       throw new Error('provider_receipt_capacity')
     }
-    if (target.waiting) {
-      target.waiting.failure = 'superseded'
-      this.wake(target)
+    if (!this.canRead(endpoint, input)) {
       throw new Error('provider_receipt_read_pending')
     }
-    if (
-      target.unread &&
-      !this.credits.release(target, endpoint.document, input.since, input.discarded === true)
-    ) {
-      throw new Error('provider_receipt_read_pending')
+    const target = (this.credits.get(endpoint.transport) ??
+      this.credits.allocate(endpoint.transport))!
+    if (target.unread) {
+      this.credits.release(target, endpoint.document, input.since, input.discarded === true)
     }
     const reader = target.reader
-    const generation = this.generations.get(endpoint.document)
     let failure: Wait['failure']
-    if (source?.closed) {
+    if (fixedFailure) {
+      failure = fixedFailure
+    } else if (source?.closed) {
       failure = 'closed'
     } else if (input.hostIncarnation !== null && input.hostIncarnation !== source?.incarnation) {
       failure = 'host_restarted'
     } else if (
-      generation?.id === input.reader.id &&
-      input.reader.generation < generation.generation
-    ) {
-      failure = 'superseded'
-    } else if (
-      (input.since && !sameCursor(input.since, target.consumed ?? null)) ||
       !reader ||
       reader.source !== source ||
       reader.document !== endpoint.document ||
@@ -187,8 +212,6 @@ export class ProviderReceiptReaders {
     ) {
       failure =
         this.streamCount === MAX_PROVIDER_RECEIPT_STREAMS && !reader ? 'capacity' : 'reader_unknown'
-    } else if (reader.identity.generation !== input.reader.generation) {
-      failure = 'superseded'
     }
     if (!failure && !input.since && target.consumed && reader) {
       for (const member of reader.streams.values()) {
@@ -247,9 +270,10 @@ export class ProviderReceiptReaders {
       revision: { sequence: (target.consumed?.sequence ?? 0) + 1, nonce: randomUUID() },
       streams: []
     })
+    const runtimeId = this.runtimeId()
     if (wait.failure) {
       const reply = makeReply()
-      this.credits.deliver(target, wait, reply, this.bytes(reply))
+      this.credits.deliver(target, wait, reply, providerReceiptFrameBytes(runtimeId, reply))
       return
     }
     const reader = wait.reader!
@@ -268,44 +292,22 @@ export class ProviderReceiptReaders {
       const { frame, updates } = prepared
       const reply = makeReply()
       reply.streams.push(frame)
-      let bytes = this.bytes(reply)
-      for (const update of updates) {
-        const appended = Buffer.byteLength(JSON.stringify(update)) + (frame.updates.length ? 1 : 0)
-        if (
-          bytes + appended > MAX_PROVIDER_RECEIPT_REPLY_BYTES ||
-          frame.updates.length === MAX_PROVIDER_RECEIPT_REPLY_KEYS
-        ) {
-          break
-        }
-        frame.updates.push(update)
-        bytes += appended
-      }
+      const complete = fitProviderReceiptUpdates(
+        providerReceiptFrameBytes(runtimeId, reply),
+        frame,
+        updates
+      )
       if (frame.updates.length === 0 && updates.length !== 0) {
         wait.failure = 'capacity'
         return this.wake(target)
       }
-      const complete = frame.updates.length === updates.length
-      if (frame.reset) {
-        frame.reset.complete = complete
-      }
       member.stream.handedOff(frame, complete)
       member.staged = frame
-      this.credits.deliver(target, wait, reply, this.bytes(reply), {
+      this.credits.deliver(target, wait, reply, providerReceiptFrameBytes(runtimeId, reply), {
         subscription: frame.subscription,
         token: member.token
       })
       return
     }
-  }
-
-  private bytes(reply: ProviderReceiptReply): number {
-    return Buffer.byteLength(
-      JSON.stringify({
-        id: 'desktop-ipc',
-        ok: true,
-        result: reply,
-        _meta: { runtimeId: this.runtimeId() }
-      })
-    )
   }
 }
