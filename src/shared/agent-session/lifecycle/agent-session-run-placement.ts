@@ -64,10 +64,10 @@ export function agentSessionRunPlacement(record: {
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each field is checked below.
   const placement = value as Record<string, unknown>
-  if (!Number.isSafeInteger(placement.fence)) {
+  const fence = placement.fence
+  if (typeof fence !== 'number' || !Number.isSafeInteger(fence)) {
     return null
   }
-  const fence = placement.fence as number
   if (placement.kind === 'direct') {
     return { fence, kind: 'direct' }
   }
