@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { createDnrRequestState } from '../declarative-net-request/request-state'
 import { DnrEngine } from '../declarative-net-request/engine'
 import type { DnrHostAccess } from '../declarative-net-request/matching/extension-matcher'
@@ -14,17 +15,19 @@ import { BrowserExtensionApiError } from '../api-runtime/browser-extension-names
 import type { DnrExtensionRules } from '../declarative-net-request/session/browser-extension-dnr-extension-rules'
 import { DNR_ERRORS } from '../declarative-net-request/session/browser-extension-dnr-limits'
 
-export const testMatchRequestSchema = z
-  .object({
-    url: z.string(),
-    initiator: z.string().optional(),
-    method: z.enum(DNR_REQUEST_METHODS).optional(),
-    type: z.enum(DNR_RESOURCE_TYPES),
-    tabId: z.number().int().optional(),
-    responseHeaders: z.record(z.string(), z.array(z.string())).optional(),
-    topUrl: z.string().optional()
-  })
-  .loose()
+export const testMatchRequestSchema = lazyZodSchema(() =>
+  z
+    .object({
+      url: z.string(),
+      initiator: z.string().optional(),
+      method: z.enum(DNR_REQUEST_METHODS).optional(),
+      type: z.enum(DNR_RESOURCE_TYPES),
+      tabId: z.number().int().optional(),
+      responseHeaders: z.record(z.string(), z.array(z.string())).optional(),
+      topUrl: z.string().optional()
+    })
+    .loose()
+)
 
 function parseUrl(raw: string, error: string): URL {
   try {

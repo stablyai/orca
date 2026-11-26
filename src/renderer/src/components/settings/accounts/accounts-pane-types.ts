@@ -61,7 +61,8 @@ export type ProviderAccountVisibilityOptions = {
 export type CodexAccountActionRunner = (
   action: ProviderAccountAction,
   operation: () => Promise<CodexRateLimitAccountsState>,
-  actionRuntime?: ProviderAccountRuntimeView
+  /** Several lanes when one System default clears host and WSL slots together. */
+  actionRuntime?: ProviderAccountRuntimeView | readonly ProviderAccountRuntimeView[]
 ) => Promise<void>
 
 export type ClaudeAccountActionRunner = (

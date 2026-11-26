@@ -13,6 +13,7 @@ import type {
 import { parseOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
 import { botOfSession } from '../../../../bots/bot-session-tabs'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../../shared/schema/lazy-zod-schema'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { PeerMailConversationRow } from '../../db/federation/peer-mail-store'
@@ -33,15 +34,21 @@ export type PeerMailRuntime = Pick<
 >
 
 const NOTHING_SENT = { effectsApplied: false } as const
-const RuntimeStatusCapabilities = z.object({ capabilities: z.array(z.string()).optional() })
+const RuntimeStatusCapabilities = lazyZodSchema(() =>
+  z.object({ capabilities: z.array(z.string()).optional() })
+)
 const DELIVER_TIMEOUT_MS = 15_000
 // An older server returns none; one this Orca cannot read is dropped, since the mail is already stored.
-const PeerMailDeliverResult = z.object({ warnings: z.array(z.unknown()).max(8).optional() })
-const PeerMailDeliveryHeld = z.object({
-  code: z.literal('recipient_delivery_held'),
-  recipient: z.string(),
-  message: z.string().max(2000)
-})
+const PeerMailDeliverResult = lazyZodSchema(() =>
+  z.object({ warnings: z.array(z.unknown()).max(8).optional() })
+)
+const PeerMailDeliveryHeld = lazyZodSchema(() =>
+  z.object({
+    code: z.literal('recipient_delivery_held'),
+    recipient: z.string(),
+    message: z.string().max(2000)
+  })
+)
 
 /** "term_9f3c on Jinwoo's Mac": who sent it, and the Orca server it came from. */
 export function peerMailSenderLabel(runtime: PeerMailRuntime, sender: string): string {
@@ -153,6 +160,7 @@ export async function deliverPeerMail(
     type?: z.infer<typeof PeerMailMessageType>
     priority?: 'normal' | 'high' | 'urgent'
     threadId?: string
+    replyTo?: string
     chat?: string
     item?: string
     attachments?: readonly string[]
@@ -172,6 +180,7 @@ export async function deliverPeerMail(
       ...(message.type ? { type: message.type } : {}),
       ...(message.priority ? { priority: message.priority } : {}),
       ...(message.threadId ? { threadId: message.threadId } : {}),
+      ...(message.replyTo ? { replyTo: message.replyTo } : {}),
       ...(message.chat ? { chat: message.chat } : {}),
       ...(message.item ? { item: message.item } : {}),
       ...(message.attachments?.length ? { attachments: message.attachments } : {}),
@@ -185,12 +194,13 @@ export async function deliverPeerMail(
   return warnings.flatMap((warning) => PeerMailDeliveryHeld.safeParse(warning).data ?? [])
 }
 
-/** Queues one reply on a conversation a paired Orca opened here, for it to pull. */
+/** Queues one reply on a conversation a paired Orca opened here, for it to pull. It names the
+ *  message it answers, which is how the opener settles that one ask and no other. */
 export function queuePeerMailReply(
   db: OrchestrationDb,
   conversationId: string,
   messageId: string,
-  reply: z.infer<typeof PeerMailRelayPayload>
+  reply: z.infer<typeof PeerMailRelayPayload> & { replyTo: string }
 ): void {
   db.enqueueFederationRelay({
     dispatchId: conversationId,

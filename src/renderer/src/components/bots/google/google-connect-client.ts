@@ -42,6 +42,7 @@ type GoogleHostEntry = { view: GoogleHostView; read: number; pending: boolean }
 
 let readsStarted = 0
 const latestReadOf = new Map<string, number>()
+const inFlightReadOf = new Map<string, number>()
 const views = new Map<string, GoogleHostEntry>()
 const listeners = new Set<() => void>()
 function publish(target: RuntimeClientTarget, view: GoogleHostView, read: number): void {
@@ -50,6 +51,7 @@ function publish(target: RuntimeClientTarget, view: GoogleHostView, read: number
   if (latestReadOf.get(key) !== read) {
     return
   }
+  inFlightReadOf.delete(key)
   views.set(key, { view, read, pending: false })
   notify()
 }
@@ -63,6 +65,7 @@ function startRead(target: RuntimeClientTarget): number {
   const key = keyOf(target)
   const read = ++readsStarted
   latestReadOf.set(key, read)
+  inFlightReadOf.set(key, read)
   const entry = views.get(key)
   if (entry && !entry.pending) {
     views.set(key, { ...entry, pending: true })
@@ -114,16 +117,17 @@ export function useGoogleHost(target: RuntimeClientTarget, shown = true): Google
 
 function useGoogleHostEntry(
   target: RuntimeClientTarget,
-  shown = true
+  shown = true,
+  afterRead = 0
 ): GoogleHostEntry | undefined {
   const key = keyOf(target)
   const entry = useSyncExternalStore(subscribe, () => views.get(key))
   const environmentId = target.kind === 'environment' ? target.environmentId : null
   useEffect(() => {
-    if (shown) {
+    if (shown && (inFlightReadOf.get(key) ?? 0) <= afterRead) {
       void refreshGoogle(runtimeTargetForOwnerEnvironment(environmentId))
     }
-  }, [environmentId, shown])
+  }, [key, environmentId, shown, afterRead])
   return entry
 }
 
@@ -138,7 +142,7 @@ export function useBotGoogleReach(bot: Pick<Bot, 'google'> & BotOnHost): {
 } {
   // Reads already started may predate a sign-in or an update, so only a later one can say "nothing".
   const [readsBeforeMount] = useState(() => readsStarted)
-  const entry = useGoogleHostEntry(botTarget(bot))
+  const entry = useGoogleHostEntry(botTarget(bot), bot.google === true, readsBeforeMount)
   if (bot.google !== true) {
     return { areas: [], unknown: false }
   }

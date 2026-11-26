@@ -2,6 +2,7 @@ import { spawnProcess } from '@orca/process-host'
 import type { ChildProcess } from 'node:child_process'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
 import { admitProcessTreeKill } from '@orca/process-host/process-tree-kill-gate'
+import { childProcessHasExited } from '@orca/process-host/process-tree-termination'
 import { runWindowsTaskkillTree } from '../../pty/process-retirement/windows-process-tree-kill'
 
 /** Spawn seam for tests; production always goes through the hardened spawnProcess wrapper. */
@@ -26,13 +27,13 @@ export function killCodexAppServerProcessTree(
   }
   if (platform === 'win32' && child.pid) {
     if (
+      childProcessHasExited(child) ||
       !admitProcessTreeKill({
         pid: child.pid,
         site: 'codex-app-server-session-deadline',
         scope: 'win-taskkill-tree'
       })
     ) {
-      // A handle-addressed root kill cannot target the recycled PID refused by the tree gate.
       child.kill('SIGKILL')
       return
     }

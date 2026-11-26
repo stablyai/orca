@@ -14,10 +14,6 @@ import type {
 import { stopSingleWorker, type StopMutation } from './stop/single-worker-stop'
 import { settleRestartCutStart } from '../../../../orchestration/workers/turn-stops/awaiting-worker-start-report'
 import { closeStoppedWorkerTerminals } from './release/worker-bound-terminal-close'
-import {
-  holdWorkerDockStopping,
-  recordWorkerStop
-} from '../../../../orchestration/dock/worker-dock-owner-stop'
 
 export const ORCHESTRATION_WORKER_STOP_METHODS = [
   defineOrchestrationMethod({
@@ -25,14 +21,8 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
     access: { kind: 'writes', targets: { dispatch: 'dispatch' } },
     permission: 'workspace',
     params: WorkerDispatchParams,
-    handler: (params, { runtime, orchestrationMutation }) => {
-      const db = runtime.getOrchestrationDb()
-      return holdWorkerDockStopping(db, params.dispatch, async () => {
-        const receipt = await stopWorkerAndHelpers(runtime, params.dispatch, orchestrationMutation)
-        recordWorkerStop(db, params.dispatch, receipt)
-        return receipt
-      })
-    }
+    handler: (params, { runtime, orchestrationMutation }) =>
+      stopWorkerAndHelpers(runtime, params.dispatch, orchestrationMutation)
   })
 ]
 

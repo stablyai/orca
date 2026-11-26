@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { usageLimitResetsAt } from '../../../shared/agent-session/failures/agent-session-usage-limit'
 import {
   readProviderRetry,
@@ -14,44 +15,50 @@ import type { AcpDialect } from './acp-dialect'
 import { OPENCODE_CHILD_SESSION_CAPABILITY, openCodeChildUpdate } from './opencode-child-sessions'
 
 // Normalize rawOutput.metadata to the shared stdout/exitCode fields.
-const commandRawOutputSchema = z.looseObject({
-  output: z.unknown().optional(),
-  metadata: z
-    .looseObject({
-      exit: z.number().int().nullable().optional(),
-      output: z.string().optional()
-    })
-    .optional()
-})
+const commandRawOutputSchema = lazyZodSchema(() =>
+  z.looseObject({
+    output: z.unknown().optional(),
+    metadata: z
+      .looseObject({
+        exit: z.number().int().nullable().optional(),
+        output: z.string().optional()
+      })
+      .optional()
+  })
+)
 
-const promptFailureDataSchema = z.object({
-  errorName: z.enum(['provider.quota', 'provider.rate-limit']),
-  status: z.number().optional().catch(undefined),
-  resetsAt: z.number().optional().catch(undefined),
-  retryAfterMs: z.number().nonnegative().optional().catch(undefined)
-})
+const promptFailureDataSchema = lazyZodSchema(() =>
+  z.object({
+    errorName: z.enum(['provider.quota', 'provider.rate-limit']),
+    status: z.number().optional().catch(undefined),
+    resetsAt: z.number().optional().catch(undefined),
+    retryAfterMs: z.number().nonnegative().optional().catch(undefined)
+  })
+)
 
 // OpenCode names a failed model-provider call with these; its local refusals use other names.
-const providerErrorDataSchema = z.looseObject({
-  service: z.literal('session'),
-  errorName: z.enum([
-    'APIError',
-    'provider.error',
-    'provider.rate-limit',
-    'provider.quota',
-    'provider.chatgpt-limit',
-    'provider.free-limit',
-    'provider.budget-limit',
-    'provider.model-budget-limit',
-    'provider.go-limit',
-    'provider.transport',
-    'provider.internal',
-    'provider.invalid-output',
-    'provider.invalid-request',
-    'provider.unknown',
-    'provider.timeout'
-  ])
-})
+const providerErrorDataSchema = lazyZodSchema(() =>
+  z.looseObject({
+    service: z.literal('session'),
+    errorName: z.enum([
+      'APIError',
+      'provider.error',
+      'provider.rate-limit',
+      'provider.quota',
+      'provider.chatgpt-limit',
+      'provider.free-limit',
+      'provider.budget-limit',
+      'provider.model-budget-limit',
+      'provider.go-limit',
+      'provider.transport',
+      'provider.internal',
+      'provider.invalid-output',
+      'provider.invalid-request',
+      'provider.unknown',
+      'provider.timeout'
+    ])
+  })
+)
 
 // ACP omits HTTP status; documented billing and entitlement instructions survive in the message.
 const NON_RESET_QUOTA_FAILURES = [
@@ -85,7 +92,9 @@ function promptFailure(error: AcpAgentError, at: number) {
 }
 
 // OpenCode 2.x refuses a session/load outside the session's folder with exactly this data.
-const otherFolderRefusalSchema = z.strictObject({ sessionId: z.string(), cwd: z.string() })
+const otherFolderRefusalSchema = lazyZodSchema(() =>
+  z.strictObject({ sessionId: z.string(), cwd: z.string() })
+)
 
 function sessionInOtherFolder(error: AcpAgentError, sessionId: string, cwd: string): boolean {
   const data = otherFolderRefusalSchema.safeParse(error.data)
@@ -124,13 +133,15 @@ function normalizeToolUpdate(update: ToolCallUpdate): ToolCallUpdate {
 }
 
 // Without the client's `session.compaction` capability, OpenCode reports compaction in this marker.
-const compactionMarkerSchema = z.object({
-  status: z.enum(['started', 'completed', 'failed']),
-  messageId: z.string(),
-  // Only the /compact Orca sent; an auto-compaction from a queued prompt reports in the same drain.
-  reason: z.literal('manual'),
-  error: z.looseObject({ type: z.string(), message: z.string() }).optional().catch(undefined)
-})
+const compactionMarkerSchema = lazyZodSchema(() =>
+  z.object({
+    status: z.enum(['started', 'completed', 'failed']),
+    messageId: z.string(),
+    // Only the /compact Orca sent; an auto-compaction from a queued prompt reports in the same drain.
+    reason: z.literal('manual'),
+    error: z.looseObject({ type: z.string(), message: z.string() }).optional().catch(undefined)
+  })
+)
 const CANCELLED_COMPACTION_ERRORS = ['aborted', 'compaction.interrupted']
 
 // Mirrors OpenCode's own `compaction_update`, which hides a defect's multi-line cause.
@@ -158,17 +169,19 @@ function compactionUpdate(update: SessionUpdate): CompactionUpdate | undefined {
 }
 
 const RETRY_META = 'opencode/retry'
-const retrySchema = z.looseObject({
-  attempt: z.number().optional().catch(undefined),
-  error: z
-    .looseObject({
-      type: z.string().optional().catch(undefined),
-      message: z.string().optional().catch(undefined),
-      status: z.number().optional().catch(undefined)
-    })
-    .optional()
-    .catch(undefined)
-})
+const retrySchema = lazyZodSchema(() =>
+  z.looseObject({
+    attempt: z.number().optional().catch(undefined),
+    error: z
+      .looseObject({
+        type: z.string().optional().catch(undefined),
+        message: z.string().optional().catch(undefined),
+        status: z.number().optional().catch(undefined)
+      })
+      .optional()
+      .catch(undefined)
+  })
+)
 
 // OpenCode reports each scheduled retry of a failed model call here, and null once its next step starts.
 function providerRetry(update: SessionUpdate): AgentSessionProviderRetry | null | undefined {

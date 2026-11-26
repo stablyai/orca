@@ -5,41 +5,10 @@ import {
   STATUS_BAR_RESERVE_HEIGHT,
   WORKSPACE_TOP_CHROME_HEIGHT
 } from '../../../../app-shell/chrome/workspace-chrome-metrics'
-import { trackSidebarLiveWidth } from '../../chrome/sidebar-live-width'
 import { resolveSidebarDrawerLeftEdge } from '../../chrome/sidebar-drawer-left-edge'
 import { useAppStore } from '@/store/index'
 import { selectAppRailWidth } from '@/components/app-rail/app-rail-layout'
-
-const MIN_DOCKED_BOARD_WIDTH = 320
-const BOARD_RIGHT_EDGE = '--workspace-board-right-edge'
-
-function trackWorkspaceBoardBounds(element: HTMLElement | null): (() => void) | undefined {
-  if (!element) {
-    return
-  }
-
-  const stopTrackingSidebar = trackSidebarLiveWidth(element)
-  const workspace = element.ownerDocument.querySelector('[data-workspace-shell-content]')
-  if (!workspace) {
-    return stopTrackingSidebar
-  }
-
-  let lastRightEdge: string | null = null
-  // Why: ResizeObserver's initial delivery runs before first paint, so no synchronous sync is needed.
-  const observer = new ResizeObserver(() => {
-    const next = `${workspace.getBoundingClientRect().right}px`
-    if (next === lastRightEdge) {
-      return
-    }
-    lastRightEdge = next
-    element.style.setProperty(BOARD_RIGHT_EDGE, next)
-  })
-  observer.observe(workspace)
-  return () => {
-    observer.disconnect()
-    stopTrackingSidebar?.()
-  }
-}
+import { trackWorkspaceBoardBounds, workspaceBoardSheetWidth } from './workspace-board-sheet-bounds'
 
 type WorkspaceKanbanSheetProps = {
   boardRef: React.RefObject<HTMLDivElement | null>
@@ -122,7 +91,7 @@ export default function WorkspaceKanbanSheet({
           top: WORKSPACE_TOP_CHROME_HEIGHT,
           bottom: drawerBottom,
           height: 'auto',
-          width: `min(max(var(${BOARD_RIGHT_EDGE}, 100vw) - ${drawerLeftCss}, ${MIN_DOCKED_BOARD_WIDTH}px), 100vw - ${drawerLeftCss}, 1294px)`
+          width: workspaceBoardSheetWidth(drawerLeftCss)
         }}
         data-contextual-tour-target="workspace-board-surface"
         data-workspace-board-sheet=""

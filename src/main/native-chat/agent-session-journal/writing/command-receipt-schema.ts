@@ -1,12 +1,15 @@
 import { isDeepStrictEqual } from 'node:util'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import type Database from '../../../sqlite/sync-database'
 import { readAgentSessionRefusalReference } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 
-export const commandReceiptScopeSchema = z.discriminatedUnion('kind', [
-  z.strictObject({ kind: z.literal('global') }),
-  z.strictObject({ kind: z.literal('caller'), callerKey: z.string().min(1) })
-])
+export const commandReceiptScopeSchema = lazyZodSchema(() =>
+  z.discriminatedUnion('kind', [
+    z.strictObject({ kind: z.literal('global') }),
+    z.strictObject({ kind: z.literal('caller'), callerKey: z.string().min(1) })
+  ])
+)
 
 export type CommandReceiptScope = z.infer<typeof commandReceiptScopeSchema>
 
@@ -19,73 +22,77 @@ export function commandReceiptScope(
 }
 
 // Missing referenced rows never authorize rerunning spent commands; replay remaining facts or answer unknown.
-export const commandReceiptResultSchema = z.discriminatedUnion('kind', [
-  z.strictObject({
-    kind: z.literal('journal-row'),
-    epoch: z.string().min(1),
-    sequence: z.int().positive()
-  }),
-  z.strictObject({
-    kind: z.literal('queued-draft'),
-    messageId: z.string().min(1)
-  }),
-  // Persist accepted prompt answers so rewinds/revisions cannot change their replay.
-  z.strictObject({
-    kind: z.literal('prompt-answer'),
-    itemId: z.string().min(1),
-    revision: z.int().positive(),
-    resolution: z.strictObject({
-      state: z.literal('resolved'),
-      selectedOptionId: z.string().nullable(),
-      answers: z
-        .array(
-          z.strictObject({
-            questionId: z.string(),
-            optionIds: z.array(z.string()),
-            other: z.string().optional()
-          })
-        )
-        .optional(),
-      resolvedBy: z.string().nullable(),
-      resolvedAt: z.number().nullable()
-    })
-  }),
-  z.strictObject({ kind: z.literal('stop') }),
-  z.strictObject({
-    kind: z.literal('no-op'),
-    outcome: z.discriminatedUnion('kind', [
-      z.strictObject({
-        kind: z.literal('cancel'),
-        cancelled: z.literal(false),
-        turnId: z.string().optional()
-      }),
-      z.strictObject({ kind: z.literal('queue-resume'), resumed: z.literal(false) }),
-      z.strictObject({
-        kind: z.literal('queue-move'),
-        messageId: z.string().min(1).max(512),
-        status: z.enum(['moved', 'unchanged', 'gone', 'stale'])
-      }),
-      z.strictObject({
-        kind: z.literal('queue-delete'),
-        messageId: z.string().min(1),
-        disposition: z.enum(['dispatched', 'withdrawn', 'missing'])
+export const commandReceiptResultSchema = lazyZodSchema(() =>
+  z.discriminatedUnion('kind', [
+    z.strictObject({
+      kind: z.literal('journal-row'),
+      epoch: z.string().min(1),
+      sequence: z.int().positive()
+    }),
+    z.strictObject({
+      kind: z.literal('queued-draft'),
+      messageId: z.string().min(1)
+    }),
+    // Persist accepted prompt answers so rewinds/revisions cannot change their replay.
+    z.strictObject({
+      kind: z.literal('prompt-answer'),
+      itemId: z.string().min(1),
+      revision: z.int().positive(),
+      resolution: z.strictObject({
+        state: z.literal('resolved'),
+        selectedOptionId: z.string().nullable(),
+        answers: z
+          .array(
+            z.strictObject({
+              questionId: z.string(),
+              optionIds: z.array(z.string()),
+              other: z.string().optional()
+            })
+          )
+          .optional(),
+        resolvedBy: z.string().nullable(),
+        resolvedAt: z.number().nullable()
       })
-    ])
-  })
-])
+    }),
+    z.strictObject({ kind: z.literal('stop') }),
+    z.strictObject({
+      kind: z.literal('no-op'),
+      outcome: z.discriminatedUnion('kind', [
+        z.strictObject({
+          kind: z.literal('cancel'),
+          cancelled: z.literal(false),
+          turnId: z.string().optional()
+        }),
+        z.strictObject({ kind: z.literal('queue-resume'), resumed: z.literal(false) }),
+        z.strictObject({
+          kind: z.literal('queue-move'),
+          messageId: z.string().min(1).max(512),
+          status: z.enum(['moved', 'unchanged', 'gone', 'stale'])
+        }),
+        z.strictObject({
+          kind: z.literal('queue-delete'),
+          messageId: z.string().min(1),
+          disposition: z.enum(['dispatched', 'withdrawn', 'missing'])
+        })
+      ])
+    })
+  ])
+)
 
 export type CommandReceiptResult = z.infer<typeof commandReceiptResultSchema>
 
-const rejectionSchema = z
-  .strictObject({ reference: z.unknown(), message: z.string().optional() })
-  .transform((value, ctx) => {
-    const reference = readAgentSessionRefusalReference(value.reference)
-    if (!reference || !isDeepStrictEqual(reference, value.reference)) {
-      ctx.addIssue({ code: 'custom', message: 'unreadable command refusal' })
-      return z.NEVER
-    }
-    return { reference, ...(value.message !== undefined ? { message: value.message } : {}) }
-  })
+const rejectionSchema = lazyZodSchema(() =>
+  z
+    .strictObject({ reference: z.unknown(), message: z.string().optional() })
+    .transform((value, ctx) => {
+      const reference = readAgentSessionRefusalReference(value.reference)
+      if (!reference || !isDeepStrictEqual(reference, value.reference)) {
+        ctx.addIssue({ code: 'custom', message: 'unreadable command refusal' })
+        return z.NEVER
+      }
+      return { reference, ...(value.message !== undefined ? { message: value.message } : {}) }
+    })
+)
 
 const receiptIdentity = {
   operationId: z.string().min(1),
@@ -96,18 +103,20 @@ const receiptIdentity = {
   acceptedAt: z.int().nonnegative()
 }
 
-export const commandReceiptSchema = z.discriminatedUnion('status', [
-  z.strictObject({
-    ...receiptIdentity,
-    status: z.literal('accepted'),
-    result: commandReceiptResultSchema
-  }),
-  z.strictObject({
-    ...receiptIdentity,
-    status: z.literal('rejected'),
-    rejection: rejectionSchema
-  })
-])
+export const commandReceiptSchema = lazyZodSchema(() =>
+  z.discriminatedUnion('status', [
+    z.strictObject({
+      ...receiptIdentity,
+      status: z.literal('accepted'),
+      result: commandReceiptResultSchema
+    }),
+    z.strictObject({
+      ...receiptIdentity,
+      status: z.literal('rejected'),
+      rejection: rejectionSchema
+    })
+  ])
+)
 
 export type CommandReceipt = z.infer<typeof commandReceiptSchema>
 

@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process'
+import { childProcessHasExited } from '@orca/process-host/process-tree-termination'
 import type { ClientChannel } from 'ssh2'
 import type { AutomationPrecheck } from '../../../shared/automations/automation-definition'
 import type { AutomationPrecheckResult } from '../../../shared/automations/history/automation-run'
@@ -87,17 +88,15 @@ export function killLocalPrecheckProcessTree(
   }
 
   if (process.platform === 'win32') {
-    // Windows may reuse an exited root's pid while inherited pipes still delay close.
+    // An exited root's pid may be reused before close; only the handle kill is safe then.
     if (
-      (child.exitCode ?? null) !== null ||
-      (child.signalCode ?? null) !== null ||
+      childProcessHasExited(child) ||
       !admitSelfInitiatedTreeKill({
         pid,
         site: 'automation-precheck-timeout',
         scope: 'win-taskkill-tree'
       })
     ) {
-      // A refused tree walk still permits killing the root through its child handle.
       child.kill()
       return null
     }
