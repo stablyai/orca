@@ -14,22 +14,26 @@ export async function completeTestJournalRewind(
   fence = 1,
   providerHandleChain?: AgentSessionProviderHandleChain
 ) {
-  const { sessionId, agent: provider, providerHandle } = journal.identity
+  const { sessionId } = journal.identity
+  const providerHandle = providerHandleChain?.at(-1)?.handle ?? journal.identity.providerHandle
+  const provider = providerHandle?.agent
   if (!providerHandle || (provider !== 'claude' && provider !== 'codex')) {
     throw new Error('rewind fixture requires a native provider handle')
   }
   const record = agentSessionRecordFixture({
     sessionId,
     provider,
-    providerHandleChain: providerHandleChain ?? [
-      {
-        linkId: 'head',
-        handle: providerHandle,
-        origin: 'adopted',
-        mintedAtFence: fence,
-        observedAt: 1
-      }
-    ]
+    providerHandleChain: providerHandleChain
+      ? [...providerHandleChain]
+      : [
+          {
+            linkId: 'head',
+            handle: providerHandle,
+            origin: 'adopted',
+            mintedAtFence: fence,
+            observedAt: 1
+          }
+        ]
   })
   await seedTestAgentSessionRecordStore(root, {
     records: [{ ...record, lease: { ...record.lease, runtimeFence: fence } }]

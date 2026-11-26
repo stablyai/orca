@@ -23,7 +23,7 @@ export type AgentSessionProviderCommand =
       kind: 'settle-provider-switch'
       clientMessageId: string
       outcome: 'delivered' | 'failed'
-      deferContext?: true
+      deferContextThrough?: AgentJournalCursor
       now: number
     }
   | { kind: 'deliver-deferred-provider-context'; marker: string; clientMessageId?: string }
@@ -148,12 +148,12 @@ function settleProviderSwitch(
       ...(providerSwitch.queueBoundary
         ? { providerSwitchQueueBoundary: providerSwitch.queueBoundary }
         : {}),
-      ...(command.deferContext
+      ...(command.deferContextThrough
         ? {
             deferredProviderContext: {
               marker: command.clientMessageId,
               from: providerSwitch.from.provider,
-              through: providerSwitch.through,
+              through: command.deferContextThrough,
               clearKey: record.providerContextBoundary?.operationId ?? null
             }
           }

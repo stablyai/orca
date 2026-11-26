@@ -32,7 +32,8 @@ export function wireStructuredChatProviderSwitch(
   > = async (session, clientMessageId, outcome) => {
     const id = session.params.envelope.sessionId
     const current = host.deps.store.getRecord(id)
-    if (current?.providerSwitch?.clientMessageId !== clientMessageId) {
+    const switching = current?.providerSwitch
+    if (!current || switching?.clientMessageId !== clientMessageId) {
       return
     }
     if (outcome === 'failed' && session.child) {
@@ -42,15 +43,24 @@ export function wireStructuredChatProviderSwitch(
       outcome === 'delivered'
         ? await session.journal.reads.itemBody(agentJournalSubmissionKey(clientMessageId))
         : undefined
+    let deferContextThrough: typeof switching.through | undefined
+    if (
+      body?.kind === 'message' &&
+      isNativeProviderCommand(body, current.provider, host.deps.adapter.readCommands?.(id))
+    ) {
+      const accepted = await session.journal.reads.submission(clientMessageId)
+      // The command is saved history by the time its deferred prose can run.
+      deferContextThrough = {
+        ...switching.through,
+        sequence: Math.max(switching.through.sequence, accepted?.acceptedSequence ?? 0)
+      }
+    }
     const record = await host.deps.store.updateRecord(id, {
       kind: 'settle-provider-switch',
       clientMessageId,
       outcome,
       now: host.now(),
-      ...(body?.kind === 'message' &&
-      isNativeProviderCommand(body, current.provider, host.deps.adapter.readCommands?.(id))
-        ? { deferContext: true }
-        : {})
+      ...(deferContextThrough ? { deferContextThrough } : {})
     })
     setProviderSwitchSessionParams(session, record)
     if (outcome === 'failed') {
