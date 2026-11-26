@@ -223,6 +223,8 @@ export const BotSchema = z.object({
   /** The accounts it may use while `google` is on; absent is every account, now and later. A malformed
    *  list reads as none, never as every account. */
   googleAccounts: z.array(z.string().min(1).max(320)).max(100).optional().catch([]),
+  /** The bot may use the Microsoft Teams sign-in on its host, as its owner. Absent is off. */
+  teams: z.boolean().optional().catch(undefined),
   /** Its sessions also take the host's MCP server list (and so its sign-ins); absent is off. Only
    *  bots.tools.setHostMcpServers sets it, never the bot itself. Older hosts drop it. */
   hostMcpServers: z.boolean().optional().catch(undefined),
