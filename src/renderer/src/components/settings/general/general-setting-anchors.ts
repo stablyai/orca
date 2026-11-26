@@ -58,6 +58,7 @@ export const GENERAL_SETTING_OWNERS: Readonly<Record<string, GeneralSubPage | nu
   [GENERAL_SETTING_ANCHORS.fontSmoothing]: 'editor',
   [GENERAL_SETTING_ANCHORS.editorWrap]: 'editor',
   [GENERAL_SETTING_ANCHORS.minimap]: 'editor',
+  [GENERAL_SETTING_ANCHORS.linkedEditing]: 'editor',
   [GENERAL_SETTING_ANCHORS.diffView]: 'editor',
   [GENERAL_SETTING_ANCHORS.diffWhitespace]: 'editor',
   [GENERAL_SETTING_ANCHORS.collapseUnchanged]: 'editor',
