@@ -25705,7 +25705,18 @@
       "addEmoji": "이모지 추가",
       "addEmojiTooltip": "이모지 추가 (또는 : 입력)",
       "noEmojiFound": "이모지를 찾을 수 없습니다",
-      "labels": "레이블: {{labels}}"
+      "labels": "레이블: {{labels}}",
+      "peek": {
+        "closed": "닫힘",
+        "open": "열림",
+        "merged": "병합됨",
+        "draft": "초안",
+        "failing": "실패",
+        "running": "실행 중",
+        "cancelled": "취소됨",
+        "passing": "통과",
+        "more": "+{{count}}개 더"
+      }
     },
     "attachments": {
       "updateRuntime": "워크스페이스 링크를 변경하려면 원격 런타임을 업데이트하세요",
@@ -27963,6 +27974,7 @@
         "body": "Windows에 설치한 에이전트는 WSL 안에서 실행할 수 없습니다. 배포판에 에이전트를 설치하고 로그인하면 여기에 나타납니다.",
         "copied": "복사됨",
         "copy": "복사",
+        "checkAgain": "다시 확인",
         "checking": "다시 확인하는 중…"
       },
       "hostSleeping": "절전 중 · 사용하면 깨어남",
