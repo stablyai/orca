@@ -18,6 +18,15 @@ import {
   type JournalWriterSettled
 } from '../../agent-session-journal/journal-sql-failure'
 
+/** The owner whose death may settle a kept open: none when the ended agent still opens to replay. */
+export function keptOpenProvableOwner(
+  record: Pick<AgentSessionConversationView, 'provider' | 'ownerObservation'> | null | undefined
+): AgentSessionProcessIdentity | null {
+  return record && !providerRelayProviderOpensEnded(record.provider)
+    ? record.ownerObservation.ownerProcess
+    : null
+}
+
 /** Gone, or its pid now names another process: pid reuse never keeps a dead chat's last run. */
 export async function ownerProvenGone(owner: AgentSessionProcessIdentity): Promise<boolean> {
   const probe = await probeAgentSessionProcessIdentity({
@@ -59,7 +68,7 @@ export async function structuredAgentSessionKeptAtOpen(
   // An ended agent that still opens leaves output to replay, and an owner released without proof
   // (launch recovery) leaves only the listing to prove it gone.
   const gone = owner
-    ? !providerRelayProviderOpensEnded(provider) && (await ownerProvenGone(owner))
+    ? keptOpenProvableOwner(record) !== null && (await ownerProvenGone(owner))
     : record.neverStarted || record.ownerObservation.deathEvidence !== null
   if (gone) {
     return false
