@@ -7020,7 +7020,8 @@
           "lineageSubmenu": "상위 및 하위",
           "projectGroupSubmenu": "프로젝트 그룹",
           "muteNotifications": "알림 음소거",
-          "unmuteNotifications": "알림 음소거 해제"
+          "unmuteNotifications": "알림 음소거 해제",
+          "copyAutoNameError": "자동 이름 오류"
         },
         "WorktreeList": {
           "d880ea0744": "그룹을 만들고 이 프로젝트를 그룹으로 이동하세요.",
@@ -7866,6 +7867,26 @@
           "browseFolder": "폴더 찾아보기…",
           "cloneFromUrl": "URL에서 클론…",
           "createNewProject": "새 프로젝트 만들기…"
+        },
+        "AutoNameFailed": {
+          "naming": "이 워크스페이스의 이름을 짓는 중…",
+          "title": "이름을 자동으로 짓지 못했습니다",
+          "dismiss": "닫기",
+          "modelUnavailableOnAccount": "이 {{agent}} 계정에서는 {{model}}을(를) 사용할 수 없습니다",
+          "modelUnavailableForAgent": "{{agent}}에서는 {{model}}을(를) 사용할 수 없습니다",
+          "modelUnavailable": "{{model}}을(를) 사용할 수 없습니다",
+          "timedOut": "제한 시간({{seconds}}초)을 초과했습니다",
+          "agentMissing": "{{agent}}이(가) 설치되어 있지 않습니다",
+          "usageLimitAgent": "{{agent}}이(가) 사용 한도에 도달했습니다",
+          "usageLimit": "이름 생성 에이전트가 사용 한도에 도달했습니다",
+          "signedOutAgent": "{{agent}}에 로그인되어 있지 않습니다",
+          "signedOut": "이름 생성 에이전트에 로그인되어 있지 않습니다",
+          "agentFailed": "{{agent}}이(가) 오류로 종료되었습니다",
+          "noAgent": "설정된 이름 생성 에이전트가 없습니다",
+          "publishCheck": "브랜치가 푸시되었는지 확인하지 못했습니다",
+          "environment": "이름 생성 에이전트를 시작하지 못했습니다",
+          "emptyName": "에이전트가 사용할 수 있는 이름을 반환하지 않았습니다",
+          "unknown": "이름 생성 에이전트에서 오류가 발생했습니다"
         }
       },
       "shared": {
