@@ -1116,6 +1116,19 @@
         "disconnected": "Getrennt",
         "reconnecting": "Verbindung wird wiederhergestellt…",
         "reconnection-failed": "Wiederherstellen der Verbindung fehlgeschlagen"
+      },
+      "errors": {
+        "authMethodsFailed": "Alle konfigurierten Authentifizierungsmethoden sind fehlgeschlagen",
+        "badPassphrase": "privateKey kann nicht gelesen werden: Integritätsprüfung des OpenSSH-Schlüssels fehlgeschlagen – falsche Passphrase?",
+        "connectionRefused": "Verbindung abgelehnt",
+        "connectionTimedOut": "Zeitüberschreitung der Verbindung",
+        "handshakeLost": "Verbindung vor dem Handshake verloren",
+        "handshakeTimeout": "Zeitüberschreitung beim Warten auf den Handshake",
+        "hostKeyVerificationFailed": "Überprüfung des Host-Schlüssels fehlgeschlagen",
+        "hostNotFound": "Host nicht gefunden",
+        "passphraseRequired": "privateKey kann nicht gelesen werden: Verschlüsselter privater OpenSSH-Schlüssel erkannt, aber keine Passphrase angegeben",
+        "permissionDenied": "Zugriff verweigert",
+        "permissionDeniedPublickey": "Zugriff verweigert (publickey)"
       }
     },
     "network": {
@@ -2130,7 +2143,9 @@
         "settingUpWorkspace": "Arbeitsbereich wird eingerichtet…",
         "preparingWorkspace": "Arbeitsbereich wird vorbereitet…",
         "creatingWorktree": "Worktree wird erstellt…",
-        "fetchingBaseBranch": "Basis-Branch wird gefetcht…"
+        "fetchingBaseBranch": "Basis-Branch wird gefetcht…",
+        "checkingVmEnvironment": "VM-Umgebung wird geprüft…",
+        "vmChecksFailed": "Umgebungsprüfungen fehlgeschlagen"
       },
       "duplicatePairedServers": {
         "ambiguousSameServer": "{{value0}} und {{value1}} sind derselbe, zweimal gekoppelte Server. Einen davon unter Einstellungen > Entfernte Orca-Server entfernen."
@@ -2160,6 +2175,15 @@
         "descriptionWithPath": "{{value0}} befindet sich auf einem Windows-Laufwerk. Git in WSL meldet dort fälschlicherweise Änderungen an Zeilenenden, erkennt unter Windows vorgenommene Änderungen nicht und durchsucht das Laufwerk nur langsam.",
         "description": "Dieser Ordner befindet sich auf einem Windows-Laufwerk. Git in WSL meldet dort fälschlicherweise Änderungen an Zeilenenden, erkennt unter Windows vorgenommene Änderungen nicht und durchsucht das Laufwerk nur langsam."
       },
+      "environmentSetupAgentLaunch": {
+        "noAgent": "Für diesen Arbeitsbereich wurde kein aktivierter KI-Agent erkannt.",
+        "noWorkspace": "Öffne zuerst einen Arbeitsbereich für dieses Projekt und versuche es dann erneut."
+      },
+      "ephemeralVmEnvironmentCheck": {
+        "backgroundFailed": "Die Umgebungsprüfungen für einen neuen VM-Arbeitsbereich sind fehlgeschlagen. Öffne ihn in der Seitenleiste, um fortzufahren.",
+        "openedDegraded": "Der Arbeitsbereich wird auf einer VM erstellt, deren Umgebungsprüfungen fehlgeschlagen sind.",
+        "unreachable": "Die Umgebungsprüfungen konnten nicht abgeschlossen werden: {{error}}"
+      },
       "cli": {
         "detail": {
           "registerForWsl": "{{path}} registrieren, um Orca aus WSL zu verwenden.",
@@ -2188,6 +2212,24 @@
           "wslRegistrationUnavailable": "Die WSL-CLI-Registrierung ist nicht verfügbar.",
           "wslWindowsOnly": "Die WSL-CLI-Registrierung ist nur unter Windows verfügbar."
         }
+      },
+      "ephemeralVm": {
+        "provisionedRootNeedsUpdate": "Der Orca-Server auf dieser VM kann kein bereitgestelltes Stammverzeichnis übernehmen. Aktualisiere Orca auf der VM."
+      },
+      "executionHostFacts": {
+        "sshPlatformWithheld": "Der SSH-Host hat sein Betriebssystem noch nicht gemeldet. Verbinde dich mit ihm und versuche es erneut.",
+        "runtimePlatformWithheld": "Der Orca-Server hat sein Betriebssystem noch nicht gemeldet. Verbinde dich erneut mit ihm und versuche es noch einmal.",
+        "runtimePlatformUpdate": "Dieser Orca-Server meldet sein Betriebssystem nicht. Aktualisiere den Server, um darauf Agenten zu starten.",
+        "hostUnresolvedWithheld": "Orca kann noch nicht feststellen, welchem Host dieser Arbeitsbereich gehört."
+      },
+      "fileOwnerRuntimeTarget": {
+        "unresolved": "Es konnte nicht geprüft werden, welchem Host diese Datei gehört. Öffne die Datei erneut und versuche es noch einmal."
+      },
+      "nativeChatCliFork": {
+        "sourceChanged": "Der Quell-Chat hat sich vor der Vorbereitung geändert.",
+        "hostUnavailable": "Der Host der Unterhaltung ist nicht verfügbar.",
+        "preparationTimedOut": "Zeitüberschreitung bei der Vorbereitung der Unterhaltung.",
+        "noSavedConversation": "Dieser Chat hat keine gespeicherte Unterhaltung zum Kopieren."
       },
       "projectHostSetupOptions": {
         "locationNotSet": "Projektverzeichnis nicht festgelegt",
@@ -3994,6 +4036,30 @@
             "767951265d": "Beim Erstellen des Worktrees ist ein Fehler aufgetreten.",
             "cancelProvisioning": "Abbrechen",
             "vmProvisioningLogEmpty": "Warten auf Rezeptausgabe…"
+          },
+          "PendingNativeChatCreation": {
+            "sendBlockedFailed": "Erstelle den Worktree erneut, um zu senden",
+            "sendBlockedHeld": "Wird gesendet, sobald der Worktree bereit ist",
+            "openingChat": "Chat wird geöffnet…"
+          },
+          "WorktreeSetupSteps": {
+            "prepare": "Arbeitsbereich vorbereiten",
+            "fetch": "Basis-Branch abrufen",
+            "create": "Worktree erstellen",
+            "setup": "Arbeitsbereich einrichten",
+            "startAgent": "{{agent}} starten"
+          },
+          "VmBuildSheet": {
+            "checks": "Umgebung prüfen",
+            "checksFailed": "Die VM läuft, aber die Prüfungen ihrer Umgebung sind fehlgeschlagen",
+            "create": "Arbeitsbereich erstellen",
+            "editRecipe": "Rezept bearbeiten",
+            "fixWithAgent": "Mit Agent beheben",
+            "openAnyway": "Trotzdem öffnen",
+            "openAnywayHint": "„Trotzdem öffnen“ behält diese VM und erstellt den Arbeitsbereich unverändert darauf. „Schließen“ löscht die VM.",
+            "provision": "VM bereitstellen",
+            "retryChecks": "Prüfungen wiederholen",
+            "title": "Deine VM wird erstellt"
           }
         }
       },
@@ -5618,7 +5684,13 @@
         },
         "usageFormatters": {
           "notScannedYet": "Noch nicht gescannt",
-          "updatedAt": "Aktualisiert: {{time}}"
+          "updatedAt": "Aktualisiert: {{time}}",
+          "unknownLocation": "Unbekannter Standort"
+        },
+        "StatsHostScope": {
+          "remoteCaption": "Statistiken und Nutzung erfasst auf {{value0}}. Aktivieren und Aktualisieren wirken auf {{value0}}.",
+          "tooOldTitle": "{{value0}} kann noch keine Nutzung melden",
+          "tooOldBody": "Dort läuft eine ältere Orca-Version. Aktualisiere Orca auf {{value0}}, um die Token-Nutzung hier zu sehen."
         }
       },
       "sparse": {
@@ -7435,6 +7507,8 @@
           "stopped": "Gestoppt",
           "unverifiable": "Unbekannt",
           "title": "WSL-Distribution hinzufügen",
+          "descriptionMoveFromSidebar": "Git, Dateien und Terminals laufen nativ unter Linux. Vorhandene WSL-Projekte bleiben unter Windows, bis du im Projektmenü „Auf … Host verschieben“ wählst.",
+          "descriptionAutoMove": "Git, Dateien und Terminals laufen nativ unter Linux. Deine WSL-Projekte werden hierher verschoben, sobald ihre Terminals inaktiv sind.",
           "distro": "Distribution",
           "loading": "WSL-Distributionen werden gesucht…",
           "placeholder": "Distribution auswählen",
@@ -7461,7 +7535,9 @@
           "turnedOffShort": "Unter Einstellungen → Experimentell deaktiviert",
           "serverFilesMissing": "Dieser Orca-Build kann keine WSL-Hosts ausführen (Serverdateien fehlen).",
           "serverFilesMissingShort": "Dieser Build kann keine WSL-Hosts ausführen",
-          "removalPending": "Entfernen nicht abgeschlossen"
+          "removalPending": "Entfernen nicht abgeschlossen",
+          "paused": "WSL-Hosts sind in diesem Build pausiert. Deine gespeicherten Hosts und ihre Projekte funktionieren weiter; das Hinzufügen von Hosts und das Verschieben von Projekten dorthin ist pausiert.",
+          "pausedShort": "Das Hinzufügen von WSL-Distributionen ist in diesem Build pausiert."
         },
         "wslHostRemoval": {
           "keptForOthers": "Aus diesem Orca entfernt. Der Host läuft für {{value0}} weiter.",
@@ -9349,6 +9425,8 @@
           "bulkProgress": "Entfernen: {{done}} von {{count}}…",
           "bulkConnectedSingular": "{{count}} Host ist verbunden. Seine entfernten Terminals werden geschlossen.",
           "bulkConnectedPlural": "{{count}} Hosts sind verbunden. Ihre entfernten Terminals werden geschlossen.",
+          "remove": "Entfernen",
+          "removing": "Wird entfernt",
           "916f480036": "SSH-Ziel entfernen"
         },
         "SshTargetForm": {
@@ -11872,7 +11950,11 @@
           "deleteAnywayClicked": "„Trotzdem löschen“ angeklickt"
         },
         "EphemeralVmRecipeRow": {
-          "useInWorkspace": "Im Arbeitsbereich verwenden"
+          "useInWorkspace": "Im Arbeitsbereich verwenden",
+          "envLimited": "Skripte erhalten nur die in passEnv aufgeführten Variablen sowie PATH, HOME und ähnliche Grundvariablen.",
+          "envNamesMore": "{{names}} +{{count}} weitere",
+          "envExposedAllowlist": "Skripte laufen auf diesem Computer und erhalten diese Zugangsdaten aus passEnv: {{names}}.",
+          "envExposedAll": "Skripte laufen auf diesem Computer mit deiner gesamten Umgebung, einschließlich {{names}}. Lege passEnv im Rezept fest, um nur das Nötige weiterzugeben."
         },
         "EphemeralVmRuntimesSection": {
           "cleanupFailed": "Bereinigung fehlgeschlagen",
@@ -11895,6 +11977,10 @@
           "stopCleanup": "Bereinigung stoppen",
           "cleanupStopped": "Bereinigung gestoppt",
           "stopCleanupFailed": "Cloud-VM-Bereinigung konnte nicht gestoppt werden.",
+          "provisioning": "Wird bereitgestellt",
+          "untrackedRuntimeHint": "Orca hat die Details dieser VM nie erhalten. Die Bereinigung führt destroy nur mit der Instanz-ID {{instanceId}} aus; schlägt das fehl, lösche die VM bei deinem Anbieter und entferne sie dann aus dieser Liste.",
+          "removeFromList": "Aus Liste entfernen",
+          "removeFromListFailed": "Die Cloud-VM-Laufzeit konnte nicht aus der Liste entfernt werden.",
           "cca21fb369": "Cloud-VMs aktualisieren"
         },
         "ephemeralVms": {
@@ -11924,7 +12010,10 @@
           "checking": "Rezepte werden geprüft…",
           "none": "Noch keine Rezepte gefunden.",
           "cloudVmSkillTitle": "Skill zur Cloud-VM-Einrichtung",
-          "cloudVmRefresh": "Cloud-VM-Rezepte aktualisieren"
+          "cloudVmRefresh": "Cloud-VM-Rezepte aktualisieren",
+          "setUpWithAgent": "Mit Agent einrichten",
+          "setUpWithAgentHint": "Startet deinen Standardagenten in {{repo}}. Er bearbeitet orca.yaml, führt die Doctor-Prüfungen aus, bis sie bestehen, und öffnet einen PR.",
+          "setUpWithAgentNoRepo": "Füge zuerst ein Projekt hinzu."
         },
         "ephemeralVmsExperimentalSetting": {
           "description": "Zeigt Einrichtungsoptionen und Ausführungsziele für Arbeitsbereiche in im Repository verwalteten, bei Bedarf bereitgestellten Umgebungen an.",
@@ -12781,7 +12870,8 @@
             "updateOrcaOnHost": "Orca auf diesem Host aktualisieren",
             "updateAnyway": "Trotzdem aktualisieren",
             "notNow": "Jetzt nicht",
-            "forceUpdate": "Auf diesem Host laufen Terminals. Sie laufen während des Updates weiter, und ihre Bereiche verbinden sich erneut, wenn der Orca-Server neu startet."
+            "forceUpdate": "Auf diesem Host laufen Terminals. Sie laufen während des Updates weiter, und ihre Bereiche verbinden sich erneut, wenn der Orca-Server neu startet.",
+            "forceUpdateUncounted": "Orca konnte die Terminals auf diesem Host nicht zählen. Das Update wird nur ausgeführt, wenn dort kein Terminal-Daemon läuft, und alle Terminals, die Orcas Server selbst ausführt, werden beendet."
           },
           "description": "Orca installiert sich auf einem leeren SSH-Host und hält sich selbst aktuell.",
           "deploy": {
@@ -12886,6 +12976,9 @@
           "unsupportedUnknown": "Dieser Host wird von dieser Orca-Version nicht unterstützt. Eine ältere Orca-Version installieren, um ihn weiter zu verwenden.",
           "tunnelUnsupported": "Dieser Host wird von dieser Orca-Version nicht unterstützt: Sein SSH-Server erlaubt keine Portweiterleitung, und Orca konnte seinen Server auch nicht über die SSH-Sitzung erreichen. Eine ältere Orca-Version installieren, um ihn weiter zu verwenden.",
           "setupRetry": "Orca konnte seinen Server auf diesem Host nicht starten. Erneut verbinden.",
+          "setupFreeHostSpace": "Auf diesem Host ist nicht genug freier Speicherplatz, damit Orca beim Start eine Sicherung seiner Serverdaten anlegen kann. Gib auf dem Host Speicherplatz frei und verbinde dich dann erneut.",
+          "setupStopUnmanagedRuntime": "Ein Orca-Server, den diese App nicht gestartet hat, scheint noch die Orca-Daten dieses Hosts zu verwenden. Beende ihn auf dem Host und verbinde dich dann erneut. Die Details dieses Hosts unter Einstellungen > SSH-Hosts nennen seinen Prozess.",
+          "setupSeeDetails": "Orca konnte seinen Server auf diesem Host nicht starten. Die Ursache steht in den Details dieses Hosts unter Einstellungen > SSH-Hosts.",
           "moveHeld": "Orca hat die Verschiebung der Projekte dieses Hosts auf dessen Orca-Server angehalten, weil die Kopie des Servers nicht bestätigt werden konnte. Nichts ist verloren: Der Host behält seine Projekte und bleibt gesperrt, bis die Verschiebung abgeschlossen ist. Zum Fortsetzen erneut verbinden. Falls der Server nicht wieder verfügbar wird, ihn unter „Einstellungen > Orca auf SSH-Hosts“ stoppen oder vergessen.",
           "olderTerminalsBridged": "Orca ist auf diesem Host noch nicht eingerichtet: In seinen Projekten laufen noch Terminals, die von einer älteren Orca-Version gestartet wurden. Sie funktionieren hier weiterhin. Diese schließen oder auf dem Host beenden und anschließend erneut verbinden.",
           "olderTerminalsUncounted": "Auf diesem Host laufen noch Terminals, die von einer älteren Orca-Version gestartet wurden und nicht von selbst enden. Diese in jener Orca-Version schließen oder auf dem Host beenden und anschließend erneut verbinden.",
@@ -12912,7 +13005,9 @@
           "refusedLeaveBehind": "Einige gespeicherte Elemente für diesen Host können nicht auf seinen Orca-Server verschoben werden: {{items}}. „Trotzdem verschieben“ verbindet den Host und behält diese Elemente auf diesem Computer.",
           "refusedLeaveBehindUnnamed": "Einige gespeicherte Elemente für diesen Host können nicht auf seinen Orca-Server verschoben werden. „Trotzdem verschieben“ verbindet den Host und behält diese Elemente auf diesem Computer.",
           "windowsBuildUnsupported": "Auf diesem Host läuft eine ältere Windows-Version als Windows 10 bzw. Windows Server 2016. Daher kann er den Orca-Server nicht ausführen. Einen Host mit einer neueren Windows-Version oder einen Linux- oder macOS-Host verwenden.",
-          "windowsNoExtractor": "Dieser Windows-Host verfügt weder über tar.exe noch über Expand-Archive von PowerShell. Daher kann Orca seinen Server dort nicht entpacken. Windows PowerShell 5.1 auf dem Host installieren und anschließend erneut verbinden."
+          "windowsNoExtractor": "Dieser Windows-Host verfügt weder über tar.exe noch über Expand-Archive von PowerShell. Daher kann Orca seinen Server dort nicht entpacken. Windows PowerShell 5.1 auf dem Host installieren und anschließend erneut verbinden.",
+          "linkedProjects": "Der Orca-Server dieses Hosts hatte bereits {{paths}}, daher verwendet dieser Desktop jetzt die Kopie des Servers. Die Tabs dieses Desktops und {{count}} Automatisierungen dort wurden nicht verschoben, und von ihm dort erstellte Worktrees werden als externe Worktrees angezeigt.",
+          "olderTerminals": "{{count}} Terminals, die von einer älteren Orca-Version gestartet wurden, laufen noch auf diesem Host und beenden sich nicht von selbst. Schließe sie in dieser Orca-Version oder beende sie auf dem Host und verbinde dich dann erneut."
         },
         "ZcodeCliSetupSection": {
           "title": "GLM mit ZCode verwenden",
@@ -13010,6 +13105,7 @@
         "SettingsHostScopePicker": {
           "label": "Host",
           "unavailable": "{{value0}} (nicht verfügbar)",
+          "loading": "Hosts werden geladen…",
           "unavailableNotice": "Dieser Server ist nicht mehr gespeichert, daher kann nichts für ihn angezeigt werden. Oben in den Einstellungen einen anderen Host auswählen."
         },
         "wslHostsExperimental": {
@@ -13028,7 +13124,15 @@
           "connect": "Verbinden",
           "forceUpdate": "Update erzwingen",
           "turnOn": "Experimentell öffnen",
-          "chip": "WSL"
+          "chip": "WSL",
+          "notStartedAsWslHost": "Ein SSH-Host hat diesen Server gestartet, daher können keine Projekte hierher verschoben werden. Starte ihn als WSL-Host neu, um das zu beheben.",
+          "restartAsWslHost": {
+            "button": "Als WSL-Host neu starten",
+            "title": "Als WSL-Host neu starten?",
+            "description": "Beendet alle Terminals und Agenten auf {{host}}, auch die von einem SSH-Host geöffneten, und startet Orcas Server dann als WSL-Host neu.",
+            "cancel": "Abbrechen",
+            "action": "Terminals beenden und neu starten"
+          }
         },
         "restartServer": {
           "action": "Orca-Server neu starten…",
@@ -13192,6 +13296,7 @@
           "setUpOnSshHost": "Orca auf einem SSH-Host einrichten",
           "setUp": "Einrichten",
           "overYourSsh": "Über die SSH-Verbindung",
+          "newerThanApp": "Neuer als diese App (v{{version}})",
           "installViaSsh": "Per SSH installieren"
         },
         "sshBulkRemove": {
@@ -18626,6 +18731,9 @@
         "statusProviderUnsupported": "Anbieter auf diesem Host nicht unterstützt",
         "statusServerUpdateNeeded": "benötigt Serverupdate",
         "unavailableCount_one": "{{count}} nicht verfügbar",
+        "statusProvisioning": "wird bereitgestellt",
+        "statusSuspended": "angehalten",
+        "statusWaking": "wird aufgeweckt",
         "unavailableCount_other": "{{count}} nicht verfügbar",
         "statusConnected": "verbunden",
         "statusAuthNeeded": "Anmeldung erforderlich",
@@ -19203,6 +19311,11 @@
         "stateResuming": "Wird fortgesetzt",
         "stateStopped": "Angehalten"
       },
+      "RunTargetCombobox": {
+        "noWslDistros": "Keine WSL-Distributionen gefunden",
+        "wslDistro": "WSL-Distribution",
+        "wslDistroHint": "Eine Linux-Distribution auf diesem PC"
+      },
       "NativeChatResumeFailureGuidance": {
         "fallbackShort": "Nicht fortgesetzt.",
         "unconfirmedShort": "Fortsetzen nicht bestätigt.",
@@ -19259,6 +19372,16 @@
       "forgeCredentialTarget": {
         "unknownHost": "Der Computer, auf dem sich dieses Repository befindet, ist noch nicht bekannt. Erneut verbinden und noch einmal versuchen.",
         "thisComputer": "dieser Computer"
+      },
+      "remoteTerminal": {
+        "connectionClosed": "Verbindung zur Remote-Laufzeit geschlossen.",
+        "streamClosed": "Remote-Terminal-Stream geschlossen.",
+        "streamEnded": "Remote-Terminal-Stream beendet.",
+        "streamStopped": "Der Remote-Terminal-Stream reagiert nicht mehr."
+      },
+      "jira": {
+        "currentSprintNeedsUpdate": "Aktualisiere den entfernten Orca-Server, um voreingestellte Issues nach dem aktuellen Sprint zu filtern.",
+        "transitionFieldsNeedsUpdate": "Aktualisiere den entfernten Orca-Server, um erforderliche Übergangsfelder zu übermitteln, oder schließe den Übergang in Jira ab."
       },
       "runtimeGitSyncClient": {
         "completeMergeNeedsNewerHost": "Zum Abschließen eines Merge wird eine neuere Orca-Version auf diesem Host benötigt. Aktualisiere Orca auf diesem Host.",
@@ -23547,6 +23670,30 @@
       "draft": "{{review}}: Entwurf",
       "merged": "{{review}}: gemergt",
       "open": "{{review}}: offen"
+    },
+    "vm": {
+      "menu": {
+        "waking": "VM wird aufgeweckt…",
+        "retryResume": "Fortsetzen erneut versuchen",
+        "resume": "VM fortsetzen",
+        "suspend": "VM anhalten",
+        "suspendDescription": "Schließt die Panels dieses Arbeitsbereichs und hält seine VM an. Beim Öffnen des Arbeitsbereichs wird sie aufgeweckt."
+      },
+      "state": {
+        "provisioning": "VM wird bereitgestellt",
+        "suspended": "VM angehalten",
+        "waking": "VM wird aufgeweckt",
+        "resumeFailed": "Fortsetzen der VM fehlgeschlagen",
+        "provisionFailed": "Einrichtung der VM fehlgeschlagen"
+      },
+      "hint": {
+        "provisioning": "Die VM wird erstellt.",
+        "suspended": "Ruht, um Kosten zu sparen. Beim Öffnen des Arbeitsbereichs wird sie aufgeweckt.",
+        "waking": "Die VM wird fortgesetzt und neu verbunden.",
+        "resumeFailed": "Die VM konnte nicht fortgesetzt werden. Klicke mit der rechten Maustaste und wähle „VM fortsetzen“, um es erneut zu versuchen.",
+        "provisionFailed": "Die VM wurde nicht erstellt, oder die Erstellung wurde unterbrochen. Öffne die Einstellungen, um sie zu löschen oder zu entfernen."
+      },
+      "suspendFailed": "VM-Arbeitsbereich konnte nicht angehalten werden"
     }
   },
   "tabHoverCard": {
@@ -23660,7 +23807,8 @@
       "manual": "Die automatische Installation ist fehlgeschlagen. Dieses Update manuell installieren.",
       "deadline": "Neustart bis {{deadline}}. Orca speichert die Sitzungen vor dem Neustart.",
       "download": "Downloads öffnen"
-    }
+    },
+    "remoteUpdateBusy": "Dieser Server wird bereits aktualisiert. Prüfe erneut, sobald der Vorgang abgeschlossen ist."
   },
   "jira": {
     "connect": {
@@ -23879,7 +24027,8 @@
       "review": "Zurück zu den Projekten",
       "browserLoginsHostUnknown": "Browser-Anmeldungen wurden nicht kopiert, da Orca das Browser-Profil des Hosts nicht ermitteln konnte. In den Browser-Tabs des Hosts erneut anmelden.",
       "browserLoginsConflict": "Browser-Anmeldungen wurden nicht kopiert, da das Browser-Profil des Hosts bereits verwendet wird. In den Browser-Tabs des Hosts erneut anmelden.",
-      "browserLoginsNotCopied": "Browser-Anmeldungen wurden nicht auf den Host kopiert. In den Browser-Tabs des Hosts erneut anmelden."
+      "browserLoginsNotCopied": "Browser-Anmeldungen wurden nicht auf den Host kopiert. In den Browser-Tabs des Hosts erneut anmelden.",
+      "droppedForMappedDrives": "Nicht verschoben, weil ihr Laufwerksbuchstabe nicht mehr auf {{distro}} verweist: {{names}}. Prüfe das Laufwerk und verschiebe sie dann erneut."
     },
     "runtime": {
       "label": "Projektlaufzeitumgebung",
@@ -23902,6 +24051,8 @@
       "destinationChanged": "Frühere Projekte aus {{distro}} wurden auf einen anderen WSL-Host verschoben. Diesen Host verbinden, um weitere Projekte zu verschieben.",
       "hostUnavailable": "Der {{distro}}-Host ist nicht verbunden. In den Einstellungen verbinden und dann erneut versuchen.",
       "hostUpdateRequired": "Auf dem {{distro}}-Host läuft eine ältere Version von Orca. In den Einstellungen aktualisieren und dann erneut versuchen.",
+      "hostLaunchUnproven": "Der Orca-Server in {{distro}} läuft mit dieser Orca-Version, kann diese Projekte aber nicht übernehmen, daher hilft ein Update nicht. Er wurde möglicherweise außerhalb der WSL-Hosts gestartet, etwa von einem SSH-Host. Entferne den Host {{distro}} in den Einstellungen und füge ihn dann erneut hinzu.",
+      "hostNotWslLaunched": "Der Orca-Server in {{distro}} wurde nicht als WSL-Host gestartet (meist hat ihn ein SSH-Host für diese Distribution gestartet), daher kann er diese Projekte nicht übernehmen. Ein Update hilft nicht. Wähle in den Einstellungen beim Host {{distro}} „Als WSL-Host neu starten“ und versuche es dann erneut.",
       "terminalsBlocked": "Einige Terminals, Agenten oder Automatisierungen in diesen Projekten sind beschäftigt. Es wurde nichts verschoben.",
       "exportIncomplete": "Einige gespeicherte Zustandsdaten dieser Projekte können noch nicht übertragen werden, daher wurde nichts verschoben:",
       "exportIncompletePreview": "Einige gespeicherte Zustandsdaten dieser Projekte können noch nicht übertragen werden:",
@@ -23909,7 +24060,9 @@
       "pauseFailed": "Orca konnte die Terminals in diesen Projekten nicht pausieren, daher wurde nichts verschoben. Pausierte Terminals starten beim Öffnen wieder. Erneut versuchen.",
       "scopeChanged": "Ein Projekt wurde während der Vorbereitung des Verschiebevorgangs geändert, daher wurde nichts verschoben. Die Projekte prüfen und erneut versuchen.",
       "cancelled": "Verschieben abgebrochen. Es wurde nichts verschoben.",
-      "finishedEarlierMove": "Orca hat zunächst einen früheren Verschiebevorgang nach {{distro}} abgeschlossen. Das Fenster neu laden und dann diesen Verschiebevorgang erneut starten."
+      "finishedEarlierMove": "Orca hat zunächst einen früheren Verschiebevorgang nach {{distro}} abgeschlossen. Das Fenster neu laden und dann diesen Verschiebevorgang erneut starten.",
+      "mappedDriveUnverifiable": "Orca konnte einen Laufwerksbuchstaben, auf dem einige Projekte gespeichert sind, nicht prüfen. Stelle sicher, dass das Laufwerk verbunden ist, und versuche es dann erneut.",
+      "nothingMovable": "Keines dieser Projekte kann bisher auf den Host {{distro}} verschoben werden. Bei jedem steht, warum."
     },
     "step": {
       "preparing": "Vorbereiten",
@@ -23947,7 +24100,11 @@
       "windowsDrive": "Sein Ordner liegt auf einem Windows-Laufwerk, daher bleibt es auf diesem Computer.",
       "mixedLocations": "Einige seiner Ordner liegen außerhalb dieser Distribution, daher bleibt es auf diesem Computer.",
       "notLocal": "Es läuft bereits auf einem anderen Host.",
-      "other": "Es kann nicht verschoben werden."
+      "other": "Es kann nicht verschoben werden.",
+      "windowsGitWorktrees": "Git for Windows hat einige seiner Worktrees erfasst, auch inzwischen gelöschte, und Git auf dem WSL-Host kann diese Einträge nicht verwenden. Entferne diese Worktrees oder führe git worktree repair in WSL aus und verschiebe es dann.",
+      "windowsGitDir": "Sein Git-Ordner ist über einen Windows-Pfad verknüpft (ein Worktree oder ein separater Git-Ordner, den Git for Windows eingerichtet hat), dem Git auf dem WSL-Host nicht folgen kann.",
+      "gitUnreadable": "Orca konnte seine Git-Details nicht rechtzeitig lesen, um sie zu prüfen, daher bleibt es auf diesem Computer. Prüfe es gleich noch einmal.",
+      "mappedDriveUnverifiable": "Orca konnte gerade nicht prüfen, wohin sein Laufwerksbuchstabe verweist. Stelle sicher, dass das Laufwerk verbunden ist, und prüfe es dann erneut."
     },
     "reloadToast": {
       "title": "Neu laden, um das Verschieben abzuschließen"
@@ -24361,6 +24518,49 @@
     "title": "Orca konnte nicht gestartet werden",
     "finishFailed": "Orca konnte den Start nicht abschließen: {{detail}}"
   },
+  "wslDriveProject": {
+    "label": "Git",
+    "converted": "Orca führt Git für dieses Projekt unter Windows aus. Terminals und Agenten laufen weiterhin in {{distro}}.",
+    "checkFailed": "Orca konnte dieses Projekt nicht prüfen.",
+    "convertFailed": "Orca konnte Git nicht umstellen.",
+    "description": "Dieses Projekt liegt auf einem Windows-Laufwerk, auf dem Git in WSL langsam ist und unter Windows vorgenommene Änderungen übersieht. Verwende stattdessen Git for Windows; Terminals und Agenten bleiben in {{distro}}.",
+    "useWindowsGit": "Git for Windows verwenden",
+    "review": "In Orca ändert sich für dieses Projekt nichts: Tabs, Terminals, Chats und Arbeitsbereiche bleiben, wie sie sind. Laufende Terminals laufen weiter.",
+    "lineEndings": "Setzt in diesem Repo außerdem core.autocrlf, damit git in WSL-Terminals nicht mehr jede Datei als geändert anzeigt.",
+    "cancel": "Abbrechen",
+    "confirm": "Git for Windows verwenden",
+    "blocker": {
+      "notWsl": "Dieses Projekt führt Git bereits unter Windows aus.",
+      "repair": "Behebe zuerst die WSL-Laufzeit dieses Projekts: Seine Distribution fehlt oder WSL ist nicht verfügbar.",
+      "notWindowsDrive": "Ein Ordner dieses Projekts liegt nicht auf einem Windows-Laufwerk.",
+      "gitMissing": "Git for Windows ist nicht installiert. Installiere es von git-scm.com und versuche es dann erneut.",
+      "wslWorktrees": "WSL-Git hat diese Arbeitsbereiche erstellt, und Git for Windows kann sie nicht lesen: {{paths}}. Entferne sie oder belasse dieses Projekt bei WSL-Git.",
+      "worktreeFolder": "Neue Arbeitsbereiche für dieses Projekt werden innerhalb von WSL angelegt. Wähle zuerst in den Einstellungen dieses Projekts einen Ordner auf einem Windows-Laufwerk."
+    }
+  },
+  "wslDriveUnc": {
+    "label": "Speicherort",
+    "description": "Orca öffnet dieses Projekt über WSL. Öffne es stattdessen unter {{drivePath}}: Git läuft dann unter Windows, was hier deutlich schneller ist, und Terminals und Agenten bleiben in {{distro}}.",
+    "convert": "Unter {{drivePath}} öffnen",
+    "review": "Orca pausiert die Terminals dieses Projekts, startet neu und öffnet es unter {{drivePath}} erneut. Tabs, Terminals mit ihrem Verlauf, Chats und Einstellungen werden übernommen, und pausierte Terminals machen dort weiter, wo sie waren.",
+    "cancel": "Abbrechen",
+    "confirm": "Neu starten und umstellen",
+    "failed": "Orca konnte dieses Projekt nicht umstellen.",
+    "restarting": "Orca wird neu gestartet, um dieses Projekt umzustellen…",
+    "terminalsBusy": "Einige Terminals in diesem Projekt sind beschäftigt. Lass sie fertig werden oder schließe sie und versuche es dann erneut.",
+    "pauseFailed": "Orca konnte die Terminals dieses Projekts nicht pausieren, daher wurde nichts geändert.",
+    "blocker": {
+      "pending": "Orca stellt bereits ein Projekt um. Der Vorgang wird beim Neustart von Orca abgeschlossen.",
+      "state": "Orca hat für dieses Projekt gespeicherte Daten gefunden, die es nicht sicher umstellen kann, daher wurde nichts geändert.",
+      "duplicate": "{{drivePath}} ist bereits ein Projekt in Orca.",
+      "mixed": "Einige Ordner dieses Projekts liegen in WSL, nicht auf einem Windows-Laufwerk.",
+      "overlap": "Dieses Projekt teilt Ordner mit einem Projekt, das Orca nicht umstellen kann, daher würden sie getrennt.",
+      "notDriveMount": "In dieser Distribution ist dieser Ordner nicht {{drivePath}}: Er ist nicht von diesem Windows-Laufwerk eingebunden.",
+      "notConvertible": "Dieses Projekt liegt auf diesem Computer nicht auf einem Windows-Laufwerk.",
+      "differingState": "Orca hat für diesen Ordner unter seinem WSL-Pfad und unter {{drivePath}} unterschiedliche Details gespeichert, daher wurde nichts geändert.",
+      "projectSplit": "Dieses Projekt enthält auch ein Repository, das nicht umgestellt wird, daher wurde nichts geändert."
+    }
+  },
   "native": {
     "about": {
       "gpu": {
@@ -24406,7 +24606,12 @@
       "mixed": "Gemischt",
       "repair": "Erneute Kopplung erforderlich",
       "update": "Update erforderlich",
-      "serverReplaced": "Anderer Server"
+      "serverReplaced": "Anderer Server",
+      "resumeFailed": "Fortsetzen fehlgeschlagen",
+      "setupFailed": "Einrichtung fehlgeschlagen",
+      "provisioning": "Wird bereitgestellt",
+      "suspended": "Angehalten",
+      "waking": "Wird aufgeweckt"
     },
     "remoteServerPairingErrors": {
       "invalidPairingCode": "Ungültiger Kopplungscode. Eine URL im Format orca://pair?... oder reine Kopplungsdaten erwartet.",
@@ -24893,7 +25098,13 @@
       "cleanupInterrupted": "Bereinigung wurde unterbrochen. Zum Fortsetzen die Bereinigung erneut versuchen.",
       "sshTargetRemoveFailed": "Das verborgene SSH-Ziel konnte nicht entfernt werden.",
       "recipeExitedWithoutCode": "Rezept wurde mit unbekanntem Code beendet.",
-      "destroyExitedWithoutCode": "Löschen wurde mit unbekanntem Code beendet."
+      "destroyExitedWithoutCode": "Löschen wurde mit unbekanntem Code beendet.",
+      "suspendExited": "Anhalten wurde mit Code {{exitCode}} beendet.",
+      "suspendExitedWithoutCode": "Anhalten wurde mit unbekanntem Code beendet.",
+      "resumeExited": "Fortsetzen wurde mit Code {{exitCode}} beendet.",
+      "resumeExitedWithoutCode": "Fortsetzen wurde mit unbekanntem Code beendet.",
+      "recipeTimedOut": "Der Rezeptschritt {{mode}} wurde nicht innerhalb von {{timeout}} abgeschlossen, daher hat Orca ihn gestoppt. Prüfe die Ausgabe des Rezepts oder erhöhe timeoutSeconds in orca.yaml, wenn er länger braucht.",
+      "provisionInterrupted": "Orca wurde beendet, während diese VM erstellt wurde. Lösche sie, um Ressourcen beim Anbieter freizugeben."
     }
   },
   "installDirAcl": {
