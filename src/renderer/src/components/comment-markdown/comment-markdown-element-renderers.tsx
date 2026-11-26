@@ -7,6 +7,7 @@ import {
   CommentMarkdownDocumentCode,
   CommentMarkdownDocumentPre
 } from './comment-markdown-code-renderers'
+import { CommentMarkdownMermaidContext } from './comment-markdown-mermaid-policy'
 import {
   GitHubUserAttachmentImage,
   GitHubUserAttachmentVideo,
@@ -365,7 +366,31 @@ export function selectCommentMarkdownComponents({
       ? createDocumentCommentMarkdownComponents(onLinkClick, renderCodeBlock)
       : documentCommentMarkdownComponents
   }
-  return onLinkClick || expandImages
-    ? createCompactCommentMarkdownComponents(onLinkClick, expandImages)
-    : compactCommentMarkdownComponents
+  const compact =
+    onLinkClick || expandImages
+      ? createCompactCommentMarkdownComponents(onLinkClick, expandImages)
+      : compactCommentMarkdownComponents
+  return renderCodeBlock ? { ...compact, pre: compactCodeBlockPre(renderCodeBlock) } : compact
+}
+
+/** Fences through the given renderer in compact Markdown, keeping its inline code and source-only diagrams. */
+function compactCodeBlockPre(renderCodeBlock: DocumentCodeBlockRenderer): Components['pre'] {
+  return function CompactCodeBlockPre({ node, children }) {
+    const child = React.Children.toArray(children)[0]
+    return (
+      <CommentMarkdownMermaidContext.Provider value={false}>
+        <CommentMarkdownDocumentPre
+          renderCodeBlock={renderCodeBlock}
+          blockLine={node?.position?.start.line}
+        >
+          {/* Compact `code` is an inline chip; a fence's code stays plain inside the block. */}
+          {React.isValidElement<{ className?: string; children?: React.ReactNode }>(child) ? (
+            <code className={child.props.className}>{child.props.children}</code>
+          ) : (
+            children
+          )}
+        </CommentMarkdownDocumentPre>
+      </CommentMarkdownMermaidContext.Provider>
+    )
+  }
 }
