@@ -9,7 +9,7 @@ export function acpNamedTextKey(messageId: string, channel: ProviderTimelineText
   return `message:${JSON.stringify([messageId, channel])}`
 }
 
-type MessagePosition = { ordinal: number; channel?: string }
+type MessagePosition = { ordinal: number; channel?: string; tagged?: boolean }
 
 export type AcpMessageOwner = { turn?: string; settled?: boolean }
 
@@ -28,6 +28,8 @@ export class AcpTurnMessages {
   private readonly carried = new Map<string, string>()
   /** The numbered message the last keyed update ended, until taken. */
   private ended: string | undefined
+  /** The relayed prompt running, whose untagged updates are numbered in it. */
+  private prompt: string | undefined
 
   constructor(private readonly owners: AcpItemOwnership) {}
 
@@ -87,7 +89,8 @@ export class AcpTurnMessages {
     }
   }
 
-  key(turn: string, update: SessionUpdate): string | undefined {
+  /** `turn` undefined: an update its agent left untagged, numbered in the relayed prompt running. */
+  key(turn: string | undefined, update: SessionUpdate): string | undefined {
     if (
       (update.sessionUpdate === 'agent_message_chunk' ||
         update.sessionUpdate === 'agent_thought_chunk') &&
@@ -98,19 +101,26 @@ export class AcpTurnMessages {
         update.sessionUpdate === 'agent_thought_chunk' ? 'reasoning' : 'assistant'
       )
     }
-    if (!this.owners.isLive(turn)) {
+    const scope = turn ?? this.prompt
+    if (scope === undefined || (turn !== undefined && !this.owners.isLive(turn))) {
       return undefined
     }
-    const state = this.turns.get(turn) ?? { ordinal: 0 }
-    this.turns.set(turn, state)
+    const state = this.turns.get(scope) ?? { ordinal: 0 }
+    this.turns.set(scope, state)
     const chunk =
       update.sessionUpdate === 'agent_message_chunk' ||
       update.sessionUpdate === 'agent_thought_chunk'
+    // Tagged and untagged text never share a row: one ends where the other begins.
+    if (chunk && state.tagged !== (turn !== undefined) && state.channel !== undefined) {
+      this.ended = this.position(scope, state.ordinal)
+      state.channel = undefined
+    }
+    state.tagged = chunk ? turn !== undefined : state.tagged
     const resets =
       chunk ||
       ['user_message_chunk', 'tool_call', 'tool_call_update', 'plan'].includes(update.sessionUpdate)
     if (resets && state.channel !== undefined && state.channel !== update.sessionUpdate) {
-      this.ended = this.position(turn, state.ordinal)
+      this.ended = this.position(scope, state.ordinal)
       state.channel = undefined
     }
     if (!chunk) {
@@ -120,7 +130,7 @@ export class AcpTurnMessages {
       state.ordinal += 1
       state.channel = update.sessionUpdate
     }
-    return this.position(turn, state.ordinal)
+    return this.position(scope, state.ordinal)
   }
 
   /** The numbered message the last keyed update ended: its stream can close now. */
@@ -135,6 +145,15 @@ export class AcpTurnMessages {
     return `turn-message:${JSON.stringify(carried ? [turn, ordinal, carried] : [turn, ordinal])}`
   }
 
+  /** A prompt opened. `numbered`: a relayed chat's, whose replay starts at its first line, so its
+   *  untagged updates are numbered in it too. `salt`: a replay renumbering it (see `carry`). */
+  opened(turn: string, numbered: boolean, salt?: string): void {
+    this.prompt = numbered ? turn : undefined
+    if (salt) {
+      this.carry(turn, salt)
+    }
+  }
+
   /** `salt`: the same for every replay from one start, so a restart that replays it again rewrites
    *  the rows the last one wrote; a replay from elsewhere numbers rows of its own. */
   carry(turn: string, salt: string = randomUUID()): void {
@@ -144,10 +163,14 @@ export class AcpTurnMessages {
   dispose(): void {
     this.turns.clear()
     this.carried.clear()
+    this.prompt = undefined
   }
 
   end(turn: string): void {
     this.turns.delete(turn)
     this.carried.delete(turn)
+    if (this.prompt === turn) {
+      this.prompt = undefined
+    }
   }
 }
