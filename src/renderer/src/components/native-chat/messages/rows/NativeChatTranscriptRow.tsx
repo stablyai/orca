@@ -161,18 +161,19 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   ) : null
   // A settling quiet turn's bar fades alone, or with its whole row when nothing else draws in it.
   const leavesWhole = nativeChatSlotLeavesWhole(slot)
-  const bar = status ? (
-    <NativeChatWorkingStatus
-      bot={context.turnBot}
-      startedAt={status.startedAt}
-      workedSeconds={status.workedSeconds}
-      verdict={status.verdict}
-      expanded={expanded === true}
-      onToggleExpanded={
-        slot.turnFolds && turnKey ? () => context.onToggleExpandedTurn(turnKey) : undefined
-      }
-    />
-  ) : null
+  const bar =
+    status && !(messaging && status.workedSeconds == null) ? (
+      <NativeChatWorkingStatus
+        bot={context.turnBot}
+        startedAt={status.startedAt}
+        workedSeconds={status.workedSeconds}
+        verdict={status.verdict}
+        expanded={expanded === true}
+        onToggleExpanded={
+          slot.turnFolds && turnKey ? () => context.onToggleExpandedTurn(turnKey) : undefined
+        }
+      />
+    ) : null
   const statusRow =
     bar && slot.leaving === 'bar' && !leavesWhole ? (
       <NativeChatQuietTurnLeave gap={slot.statusAbove ? 'below' : 'above'}>

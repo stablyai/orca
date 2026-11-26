@@ -21266,6 +21266,9 @@
           "plugin": "Plugin",
           "session": "Sitzung"
         }
+      },
+      "messaging": {
+        "usingTool": "Verwendet {{tool}}"
       }
     },
     "tab": {

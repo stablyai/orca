@@ -20945,6 +20945,9 @@
           "plugin": "Plugin",
           "session": "Sesión"
         }
+      },
+      "messaging": {
+        "usingTool": "Usando {{tool}}"
       }
     },
     "tab": {

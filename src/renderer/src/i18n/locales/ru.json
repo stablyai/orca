@@ -21969,6 +21969,9 @@
           "plugin": "Плагин",
           "session": "Сессия"
         }
+      },
+      "messaging": {
+        "usingTool": "Используется {{tool}}"
       }
     },
     "tab": {

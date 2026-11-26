@@ -23137,6 +23137,9 @@
         "sampleCall": "Sample call",
         "sampleNote": "Starts a real run",
         "send": "Send"
+      },
+      "messaging": {
+        "usingTool": "Using {{tool}}"
       }
     },
     "tab": {

@@ -21272,6 +21272,9 @@
           "plugin": "Plugin",
           "session": "Session"
         }
+      },
+      "messaging": {
+        "usingTool": "Utilisation de {{tool}}"
       }
     },
     "tab": {

@@ -21336,6 +21336,9 @@
           "plugin": "プラグイン",
           "session": "セッション"
         }
+      },
+      "messaging": {
+        "usingTool": "{{tool}} を使用中"
       }
     },
     "tab": {

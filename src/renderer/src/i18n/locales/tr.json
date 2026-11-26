@@ -22929,6 +22929,9 @@
       "explicitChatWslRunAsHost": "{{distro}} dağıtımını ana bilgisayar olarak çalıştır",
       "signIn": {
         "title": "Sohbete başlamak için {{agent}} oturumunuzu açın"
+      },
+      "messaging": {
+        "usingTool": "{{tool}} kullanılıyor"
       }
     },
     "tab": {

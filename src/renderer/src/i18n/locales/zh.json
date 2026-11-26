@@ -22019,7 +22019,10 @@
       "htmlPreview": "HTML 预览",
       "htmlView": "HTML 视图",
       "htmlViewCode": "代码",
-      "htmlViewPreview": "预览"
+      "htmlViewPreview": "预览",
+      "messaging": {
+        "usingTool": "正在使用 {{tool}}"
+      }
     },
     "tab": {
       "bar": {

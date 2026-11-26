@@ -22477,6 +22477,9 @@
           "plugin": "外掛",
           "session": "工作階段"
         }
+      },
+      "messaging": {
+        "usingTool": "正在使用 {{tool}}"
       }
     },
     "tab": {

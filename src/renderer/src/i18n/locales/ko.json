@@ -22190,6 +22190,9 @@
           "plugin": "플러그인",
           "session": "세션"
         }
+      },
+      "messaging": {
+        "usingTool": "{{tool}} 사용 중"
       }
     },
     "tab": {

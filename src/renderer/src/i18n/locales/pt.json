@@ -22799,6 +22799,9 @@
           "plugin": "Plugin",
           "session": "Sessão"
         }
+      },
+      "messaging": {
+        "usingTool": "Usando {{tool}}"
       }
     },
     "tab": {
