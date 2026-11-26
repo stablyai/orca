@@ -71,6 +71,18 @@ export class OrcadManagedIdentityError extends Error {
       detail
     )
   }
+
+  /** A WSL host's distro serves another key: usually its default Linux user changed (#49180). */
+  static wslHostServer(distro: string, detail: string): OrcadManagedIdentityError {
+    return new OrcadManagedIdentityError(
+      'replaced-server',
+      `the Orca server in ${distro} is not the one this desktop paired with (the distro’s ` +
+        'default Linux user may have changed, or the server was reinstalled), so reconnecting ' +
+        'won’t restore access. Click Connect to look for the paired server under the distro’s ' +
+        'other Linux users; if none has it, remove the WSL host and add it again',
+      detail
+    )
+  }
 }
 
 /** Status code of a refusal automatic retries can't clear (the pairing must change); null otherwise. */

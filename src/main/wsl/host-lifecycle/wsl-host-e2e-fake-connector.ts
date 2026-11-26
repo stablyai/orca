@@ -116,6 +116,7 @@ export function createFakeWslHostConnector(
       fullVersion: 'e2e',
       pid: null,
       linuxUser: null,
+      defaultLinuxUser: null,
       pairingOffer: config.pairingCode,
       deferredUpdate: null,
       close: async () => {

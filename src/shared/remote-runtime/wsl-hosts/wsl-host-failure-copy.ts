@@ -12,7 +12,9 @@ export const WSL_HOST_ADD_REFUSAL_COPY = {
   notRegistered:
     '{{distro}} is not an installed WSL distro. Run {{command}} in a Windows terminal to see the installed ones, or reinstall it and try again.',
   sshManaged:
-    '{{distro}} already runs the Orca server for “{{server}}”, which this computer reaches over SSH. Remove that server first; moving it to a WSL host isn’t supported yet.'
+    '{{distro}} already runs the Orca server for “{{server}}”, which this computer reaches over SSH. Remove that server first; moving it to a WSL host isn’t supported yet.',
+  otherAccountServer:
+    '{{distro}} already runs Orca’s server for the Linux user {{user}} on port {{port}}, so Orca can’t add it as this user. To add it as {{user}}, make {{user}} the distro’s default user and add it again; otherwise end that server first.'
 } as const
 
 export type WslHostAddRefusalCode = keyof typeof WSL_HOST_ADD_REFUSAL_COPY
@@ -29,6 +31,7 @@ export const WSL_HOST_STATUS_DETAIL_COPY = {
   peerCheckFailed:
     'Orca couldn’t ask the WSL host whether another Orca on this computer still uses it: {{detail}}',
   removalUnrecorded: 'Orca couldn’t record what this Remove left running: {{detail}}',
+  runsAsOtherUser: 'Runs as {{user}}. To use {{defaultUser}}, remove the host and add it again.',
   installLockWait: {
     one: 'Waiting for another Orca install in this distro to finish. If it doesn’t, Orca takes over in about {{count}} minute.',
     other:

@@ -11,8 +11,12 @@ import type { OrcadHostTransport } from '../../managed-server/install/orcad-host
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import { wslHostAddRefusal } from './wsl-host-add-admission'
 
-// Prints only the public half; the private key never leaves the distro.
-const READ_PUBLIC_KEY = `sed -n 's/.*"publicKeyB64"[[:space:]]*:[[:space:]]*"\\([A-Za-z0-9+/=]*\\)".*/\\1/p' "$HOME/.orca/${E2EE_KEYPAIR_FILENAME}" 2>/dev/null | head -n 1`
+/** Prints only the public half of `home`'s orcad key; the private key never leaves the distro. */
+export function orcadPublicKeyCommand(home: string): string {
+  return `sed -n 's/.*"publicKeyB64"[[:space:]]*:[[:space:]]*"\\([A-Za-z0-9+/=]*\\)".*/\\1/p' "${home}/.orca/${E2EE_KEYPAIR_FILENAME}" 2>/dev/null | head -n 1`
+}
+
+const READ_PUBLIC_KEY = orcadPublicKeyCommand('$HOME')
 
 export async function readWslDistroOrcadPublicKey(
   transport: OrcadHostTransport,

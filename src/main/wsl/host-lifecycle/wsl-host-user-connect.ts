@@ -9,6 +9,9 @@ import type { WslHostConnectRequest } from './wsl-host-connect-request'
 import type { WslHostConnector, WslHostServiceDependencies } from './wsl-host-connector-contract'
 import { assertWslHostRunAllowed } from './wsl-host-gate'
 import { admitConnectToPendingHost } from './wsl-host-removal'
+import { pinUnpinnedWslHostAccount } from './wsl-host-account-migration'
+import { WslHostAccountChangedError } from '../orcad/wsl-orcad-account-facts'
+import { OrcadManagedIdentityError } from '../../managed-server/lifecycle/orcad-managed-tunnel-identity'
 
 export type WslHostUserConnectPort = {
   deps: WslHostServiceDependencies
@@ -33,9 +36,23 @@ export async function connectWslHostForUser(
   port.parked.delete(environmentId)
   const { intent, pastUncountedTerminals } = options
   if (intent !== 'restart-as-wsl-host') {
-    await port.connector.connect(distro, {
-      ...(intent ? { intent } : {}),
-      ...(pastUncountedTerminals ? { pastUncountedTerminals } : {})
+    const connect = () =>
+      port.connector.connect(distro, {
+        ...(intent ? { intent } : {}),
+        ...(pastUncountedTerminals ? { pastUncountedTerminals } : {})
+      })
+    await connect().catch(async (error: unknown) => {
+      // #49180: an unpinned host's paired server may run under the distro's previous default user.
+      if (
+        !(error instanceof WslHostAccountChangedError || error instanceof OrcadManagedIdentityError)
+      ) {
+        throw error
+      }
+      if (!(await pinUnpinnedWslHostAccount(port.deps.userDataPath(), record))) {
+        throw error
+      }
+      port.connector.forgetPairingFailures?.(environmentId)
+      await connect()
     })
     return
   }

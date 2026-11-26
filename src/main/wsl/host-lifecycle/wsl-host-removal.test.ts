@@ -78,6 +78,15 @@ describe('removing a WSL host whose server Orca cannot reach', () => {
     expect(store.removed).toEqual([record.environmentId])
   })
 
+  it('keeps a reachable host whose terminals refused to close, however often it is removed', async () => {
+    const connector = unreachableConnector()
+    connector.stopServer = async () => ({ stopped: false, verdict: 'live', reason: 'refused' })
+    const pendingStop = { since: 2, reason: 'refused', verdict: 'live' as const }
+    const again = await removeWslHostServer(userDataPath, connector, { ...record, pendingStop })
+    expect(again.removed).toBe(false)
+    expect(store.removed).toEqual([])
+  })
+
   it('forgets it without contacting the distro', async () => {
     const connector = unreachableConnector()
     const forgotten = await removeWslHostServer(userDataPath, connector, record, true)

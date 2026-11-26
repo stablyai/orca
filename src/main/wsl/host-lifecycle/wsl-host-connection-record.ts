@@ -62,7 +62,7 @@ export function toWslHostStatus(
     environmentId: record.environmentId,
     distro: record.distro,
     state: status.state,
-    ...wslHostStatusDetail(record, status),
+    ...(runsAsOtherUserDetail(status, connection) ?? wslHostStatusDetail(record, status)),
     // Ready serves the incumbent; deferred serves nothing, so retain its Update/Force explanation.
     deferredUpdate:
       status.state === 'ready'
@@ -72,6 +72,20 @@ export function toWslHostStatus(
           : null,
     ...(record.pendingStop ? { removalPending: true } : {})
   }
+}
+
+/** A ready host pinned to an account that is no longer the distro's default says so (#49180). */
+function runsAsOtherUserDetail(
+  status: WslOrcadConnectionStatus,
+  connection: WslOrcadConnection | null
+): WslHostStatusDetail | null {
+  const user = connection?.linuxUser
+  const defaultUser = connection?.defaultLinuxUser
+  if (status.state !== 'ready' || !user || !defaultUser) {
+    return null
+  }
+  const { text, code, params } = wslHostStatusDetailText('runsAsOtherUser', { user, defaultUser })
+  return codedDetail(text, code, params)
 }
 
 const UNVERIFIABLE_DETAIL_CODES: Record<WslLivenessUnverifiableReason, WslHostStatusDetailCode> = {

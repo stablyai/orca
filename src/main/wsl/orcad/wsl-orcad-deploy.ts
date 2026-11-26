@@ -102,7 +102,7 @@ async function launchOverTransport(
   // Read GUID alongside deploy; failure leaves the record without one.
   const distroId = (options.readRegistryId ?? readWslDistroRegistryIdShared)(name).catch(() => null)
   options.onStage?.('starting-distro')
-  const first = await holdWslDistroWithContext(name, target, conn, holder, signal)
+  const first = await holdWslDistroWithContext(name, target, conn, holder, options)
   const { connectState, launchIdentity } = first
   let context = first.context
   const hints = wslOrcadConnectStateHints(connectState, context.activationRecord)

@@ -8,6 +8,7 @@ import {
 import { WslDistroNotRunningError } from '../orcad/wsl-orcad-connection-errors'
 import { resolveWslInteropSpawnCwd } from '../execution/wsl-interop-spawn-directory'
 import { buildWslDistroHolderArgs } from './wsl-distro-holder-command'
+import { pinnedWslHostLinuxUser } from '../orcad/wsl-orcad-host-user'
 import {
   listWslDistroHolderRecordDistros,
   readWslDistroHolderRecord,
@@ -39,7 +40,8 @@ function spawnDetachedHolder(distro: string): WslDistroHolderChild {
   // Inheriting none of Orca's handles keeps a launcher's pipe or a DevTools socket from outliving Orca.
   return spawnDetachedWithoutInheritance({
     program: resolveWslExecutablePath(),
-    args: buildWslDistroHolderArgs(distro),
+    // As the host's pinned account: it watches that account's release file and processes.
+    args: buildWslDistroHolderArgs(distro, pinnedWslHostLinuxUser(distro)),
     // A host-wide holder must never pin a worktree as its Windows cwd.
     cwd: resolveWslInteropSpawnCwd(),
     env: { ...process.env, WSL_UTF8: '1' }

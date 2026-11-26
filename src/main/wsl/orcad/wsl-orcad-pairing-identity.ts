@@ -3,6 +3,8 @@ import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing
 import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type { ServeReadiness } from '../../server/serve-readiness'
 import {
+  ORCAD_IDENTITY_MISMATCH_CODE,
+  OrcadManagedIdentityError,
   orcadIdentityRefusal,
   verifyOrcadPairingIdentity,
   type OrcadTunnelIdentity
@@ -35,19 +37,36 @@ export async function resolveWslOrcadPairing(
     return verified(paired)
   }
   let pairingOffer = ''
-  await buildWithPairingRepair(
-    {
-      ...recovery,
-      ensure: async (environment) => {
-        pairingOffer = await verified(getPreferredPairingOffer(environment))
+  await withWslIdentityWording(launch.distro, () =>
+    buildWithPairingRepair(
+      {
+        ...recovery,
+        ensure: async (environment) => {
+          pairingOffer = await verified(getPreferredPairingOffer(environment))
+        }
+      },
+      recovery.environmentId,
+      async () => {
+        pairingOffer = await verified(paired)
       }
-    },
-    recovery.environmentId,
-    async () => {
-      pairingOffer = await verified(paired)
-    }
+    )
   )
   return pairingOffer
+}
+
+/** An enrolled WSL host's refusal names WSL causes and fixes, not an SSH user's (#49180). */
+async function withWslIdentityWording(distro: string, run: () => Promise<unknown>): Promise<void> {
+  try {
+    await run()
+  } catch (error) {
+    if (!(error instanceof OrcadManagedIdentityError)) {
+      throw error
+    }
+    throw OrcadManagedIdentityError.wslHostServer(
+      distro,
+      error.message.replace(`${ORCAD_IDENTITY_MISMATCH_CODE}: `, '')
+    )
+  }
 }
 
 async function verifyWslOrcadPairing(

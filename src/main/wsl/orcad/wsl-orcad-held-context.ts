@@ -12,10 +12,15 @@ import type { WslDistroHolder } from '../discovery/wsl-distro-holder-types'
 import { refuseMissingWslDistro, WslDistroVersion1Error } from '../discovery/wsl-distro-unsupported'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
 import { createWslOrcadConnectStateReader } from './wsl-orcad-connect-state-snapshot'
+import type { WslOrcadDeployOptions } from './wsl-orcad-launch-contract'
+import { pinnedWslHostLinuxUser } from './wsl-orcad-host-user'
 import {
   readWslAccountFacts,
   WSL_ACCOUNT_FACTS_COMMAND,
+  WslHostAccountChangedError,
   WslOrcadOtherAccountServerError,
+  noteWslPortCheckUnavailable,
+  readWslDefaultUserBesidePin,
   type WslAccountFacts
 } from './wsl-orcad-account-facts'
 
@@ -42,6 +47,7 @@ export function readWslHostFacts(output: string): WslHostFacts | null {
     kernelLine = '',
     homeLine = '',
     userLine = '',
+    keyLine = '',
     peerLine = '',
     gap,
     platformLine = '',
@@ -49,7 +55,7 @@ export function readWslHostFacts(output: string): WslHostFacts | null {
     libcMarker,
     ...libc
   ] = lines
-  const accounts = readWslAccountFacts(userLine, peerLine)
+  const accounts = readWslAccountFacts(userLine, keyLine, peerLine)
   if (
     !accounts ||
     !kernelLine.startsWith(KERNEL_MARKER) ||
@@ -90,7 +96,7 @@ export async function holdWslDistroWithContext(
   target: WslOrcadHostTarget,
   conn: OrcadHostTransport,
   holder: WslDistroHolder,
-  signal: AbortSignal | undefined
+  { signal, pairedOffer }: Pick<WslOrcadDeployOptions, 'signal' | 'pairedOffer'>
 ) {
   // One exec for the kernel, the login home and the platform the context would probe one by one.
   const facts: WslHostFacts = readWslHostFacts(
@@ -101,9 +107,21 @@ export async function holdWslDistroWithContext(
   if (isWsl1KernelRelease(facts.kernel)) {
     throw new WslDistroVersion1Error(name)
   }
-  // Before the holder or any launch: never start a second account's orcad beside another's.
+  // Before the holder or any launch: another account's orcad already holds this host's port.
   if (facts.otherServerAccount) {
     throw new WslOrcadOtherAccountServerError(name, facts.otherServerAccount, facts.account)
+  }
+  if (facts.portCheckUnavailable) {
+    noteWslPortCheckUnavailable(name)
+  }
+  // An unpinned host whose default account doesn't hold the paired key would deploy a stranger.
+  if (
+    facts.account &&
+    pairedOffer &&
+    facts.ownKey !== pairedOffer.publicKeyB64 &&
+    !pinnedWslHostLinuxUser(name)
+  ) {
+    throw new WslHostAccountChangedError(name, facts.account)
   }
   // Once the hold fails, stop the probes: after dispose they fall back to fresh wsl.exe execs,
   // which would boot a distro that just went away (E9).
@@ -115,7 +133,7 @@ export async function holdWslDistroWithContext(
   signal?.addEventListener('abort', stopProbes, { once: true })
   const connectState = createWslOrcadConnectStateReader()
   try {
-    const [held, context] = await Promise.all([
+    const [held, context, defaultLinuxUser] = await Promise.all([
       holder.ensureHeld(name).catch((error: unknown) => {
         probes.abort(error)
         throw error
@@ -125,9 +143,11 @@ export async function holdWslDistroWithContext(
         readActivationRecord: connectState.readActivationRecord,
         // Only with a proven platform: the libc answer belongs to the same host shape.
         ...(facts.platform ? { firstLibcProbeOutput: facts.firstLibcProbeOutput } : {})
-      })
+      }),
+      readWslDefaultUserBesidePin(target, probes.signal)
     ])
-    const launchIdentity = { holder: held.outcome, linuxUser: facts.account?.name ?? null }
+    const linuxUser = facts.account?.name ?? null
+    const launchIdentity = { holder: held.outcome, linuxUser, defaultLinuxUser }
     return { context, connectState: connectState.snapshot(), launchIdentity }
   } catch (error) {
     probes.abort(error)

@@ -1,4 +1,5 @@
 /** C4 recovery uses bounded relaunch backoff, then census before publishing terminal verdicts. Recovery is never a user action, so it needs a confirmed-running distro and never boots one (E9). */
+import { OrcadHostUnsupportedError } from '../../orcad/diagnostics/orcad-host-unavailable'
 import type { OrcadTerminalCensus } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
 import { wslHostStatusDetailText } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-failure-copy'
 import type { WslRunningDistrosRead } from '../discovery/wsl-background-distro-gate'
@@ -86,6 +87,11 @@ export async function recoverWslOrcad(
         error instanceof Error ? error.message : error
       )
       if (!context.current()) {
+        return null
+      }
+      // Final (another account's server holds the port, an unsupported distro): wait on the user.
+      if (error instanceof OrcadHostUnsupportedError) {
+        context.publish({ state: 'failed', reason: error.message, terminals })
         return null
       }
     }

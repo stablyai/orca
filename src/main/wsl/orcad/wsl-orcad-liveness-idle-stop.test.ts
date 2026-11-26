@@ -18,6 +18,7 @@ function connection(pid: number): WslOrcadConnection {
     fullVersion: '1.0.0',
     pid,
     linuxUser: null,
+    defaultLinuxUser: null,
     pairingOffer: '',
     deferredUpdate: null,
     close: async () => {}

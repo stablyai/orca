@@ -54,10 +54,7 @@ export const WslHostDeploymentRecordSchema = OrcadWslDeploymentLinkSchema.extend
   pairingPublicKeyB64: z.string().min(1).optional(),
   /** The key a refresh replaced, accepted until the pairing write that follows it lands. */
   previousPairingPublicKeyB64: z.string().min(1).optional(),
-  /**
-   * The Linux account orcad runs as (`wsl -u`), pinned at add so a later default-user change can't
-   * swap in another account's server. Optional: older records are pinned on their next connect.
-   */
+  /** orcad's pinned Linux account (`wsl -u`); older records are pinned on their next verified connect. */
   linuxUser: WslLinuxUserNameSchema.optional(),
   pendingStop: WslHostPendingStopSchema.optional()
 })

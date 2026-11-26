@@ -1,9 +1,4 @@
-/**
- * Removing a WSL host (E11). A first Remove drops its records only on a proven stop; anything else
- * keeps the host listed with a pending stop, so Connect or Add can still keep it. Removing it again
- * retries the stop and, if that still can't be proven, drops it anyway (#49180): a host whose
- * server can't be reached (a changed default user, a deleted account) must never be stuck listed.
- */
+/** Removing a WSL host (E11): a proven stop drops it, else it stays pending; a repeat Remove of an unreachable server drops it anyway (#49180). */
 import { errorMessage } from '../../../shared/errors/error-message'
 import { wslHostServerStopReason } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-failure-copy'
 import {
@@ -20,6 +15,7 @@ import type { WslHostDistroCandidate } from './wsl-host-distro-list'
 import type { WslHostConnector } from './wsl-host-connector-contract'
 import { noteWslHostUserAction } from './wsl-host-user-actions'
 import { forgetWslHostKeptForPeers, recordWslHostKeptForPeers } from './wsl-host-kept-for-peers'
+import { pinWslHostLinuxUser } from '../orcad/wsl-orcad-host-user'
 
 export type WslHostRemoval = { serverStop: WslHostServerStop; removed: boolean }
 
@@ -47,6 +43,10 @@ export async function removeWslHostServer(
       .resolveDistroName(record.distro, record.distroId)
       .catch(() => null)
     if (current !== false) {
+      // A renamed distro keeps its account: the pins are keyed by the record's name.
+      if (current && record.linuxUser) {
+        pinWslHostLinuxUser(current, record.linuxUser)
+      }
       // Under its current name: a renamed distro never reads as running under the old one.
       // Never boots: a stopped distro is itself a proven stop.
       serverStop = await connector
@@ -62,8 +62,7 @@ export async function removeWslHostServer(
     await connector.releaseHolder(record.distro)
   }
   serverStop = noteServerKeptForPeers(userDataPath, record.environmentId, serverStop)
-  // The user already saw this stop fail once and asked again: let go of the host regardless.
-  if (!serverStop.stopped && (forget || record.pendingStop)) {
+  if (!serverStop.stopped && (forget || (record.pendingStop && mayForgetOnRetry(serverStop)))) {
     serverStop = { ...serverStop, forgotten: true }
   }
   if (serverStop.stopped || serverStop.forgotten) {
@@ -82,6 +81,11 @@ export async function removeWslHostServer(
     verdict: serverStop.verdict ?? 'unverifiable'
   })
   return { serverStop: { ...serverStop, kept: true }, removed: false }
+}
+
+/** A repeated Remove drops the host only when Orca couldn't reach it, never past proven live work. */
+function mayForgetOnRetry(serverStop: Extract<WslHostServerStop, { stopped: false }>): boolean {
+  return serverStop.verdict !== 'live' && serverStop.reasonCode !== 'removalUnrecorded'
 }
 
 /** R39: undo of a move onto this host must not read a server kept for another Orca as stopped. */

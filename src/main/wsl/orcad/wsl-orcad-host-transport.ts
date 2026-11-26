@@ -45,6 +45,8 @@ type WslOrcadHostTransportOptions = {
   commandLoops?: boolean
   /** Test seam; production shares the deploy's own registry read (no extra reg.exe). */
   readDistroRegistryId?: (distro: string) => Promise<string | null>
+  /** Overrides the host's pinned account; null runs as the distro's default user. */
+  user?: string | null
   /** Once aborted, no wsl.exe starts and running ones end, so a late step can't boot a stopped distro. */
   signal?: AbortSignal
 }
@@ -58,7 +60,8 @@ export function createWslOrcadHostTransport(
   const spawnWsl = (shellArgs: string[]) => {
     const program = resolveWslExecutablePath()
     const args = buildWslExecArgs(target.distro, shellArgs, {
-      user: pinnedWslHostLinuxUser(target.distro)
+      user:
+        options.user === null ? undefined : (options.user ?? pinnedWslHostLinuxUser(target.distro))
     })
     if (commandLineLength([program, ...args]) > MAX_COMMAND_LINE_CHARS) {
       throw new Error('WSL command exceeds the Windows command-line limit')

@@ -20,6 +20,8 @@ export type WslOrcadLaunch =
       distroId: string | null
       /** The Linux account orcad runs as, which the host's record pins; null if unreadable. */
       linuxUser: string | null
+      /** The distro's default account when it isn't `linuxUser`, for the host's "runs as" note. */
+      defaultLinuxUser: string | null
       /** The loopback port orcad bound inside the distro (another one when the preferred was taken). */
       port: number
       fullVersion: string

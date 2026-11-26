@@ -1,8 +1,4 @@
-/**
- * The Linux account each WSL host's orcad runs as, pinned when the host was added (#49180). Every
- * host wsl.exe call passes it as `-u`, so changing the distro's default user later never starts a
- * second orcad (another home, another host key) that the saved pairing would refuse.
- */
+/** Each WSL host's pinned Linux account (#49180): host wsl.exe calls pass it as `-u`, so a default-user change never swaps servers. */
 import { wslDistroHolderKey } from '../discovery/wsl-distro-holder-record'
 
 const pinned = new Map<string, string>()
@@ -22,4 +18,9 @@ export function pinWslHostLinuxUsers(
 /** The account to run host commands as; undefined runs as the distro's default user (an Add). */
 export function pinnedWslHostLinuxUser(distro: string): string | undefined {
   return pinned.get(wslDistroHolderKey(distro))
+}
+
+/** Adds one more name for a pinned host (a renamed distro) until the next records read. */
+export function pinWslHostLinuxUser(distro: string, linuxUser: string): void {
+  pinned.set(wslDistroHolderKey(distro), linuxUser)
 }

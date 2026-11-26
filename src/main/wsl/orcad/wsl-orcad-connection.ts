@@ -296,6 +296,7 @@ export class WslOrcadConnectionManager {
           fullVersion: launch.fullVersion,
           pid: launch.pid,
           linuxUser: launch.linuxUser,
+          defaultLinuxUser: launch.defaultLinuxUser,
           pairingOffer,
           deferredUpdate: launch.deferredUpdate ?? null,
           close: () => this.closeEntry(key, entry)
