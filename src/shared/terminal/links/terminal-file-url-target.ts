@@ -34,13 +34,18 @@ export function splitPathLineHash(
   return location ? { pathText: pathText.slice(0, hashIndex), ...location } : null
 }
 
-function parseFilePathTrailingLineTarget(filePath: string): TerminalFileUrlTarget | null {
-  const match = /^(.*?)(?::(\d+))(?::(\d+))?$/.exec(filePath)
-  if (!match || !match[1] || match[1].endsWith('/') || match[1].endsWith('\\')) {
+function parseEncodedPathnameLineTarget(
+  parsed: URL
+): { baseUrl: URL; line: number; column: number | null } | null {
+  // Why: inspect raw pathname before decodeURIComponent so encoded %3A stays filename content.
+  const match = /^(.*?)(?::(\d+))(?::(\d+))?$/.exec(parsed.pathname)
+  if (!match || !match[1]) {
     return null
   }
+  const baseUrl = new URL(parsed.href)
+  baseUrl.pathname = match[1]
   return {
-    filePath: match[1],
+    baseUrl,
     line: Number(match[2]),
     column: match[3] ? Number(match[3]) : null
   }
@@ -54,15 +59,28 @@ export function resolveTerminalFileUrlTarget(
     return null
   }
 
+  const hashTarget = parseFileUrlLineHash(parsed.hash)
+  if (hashTarget) {
+    const filePath = fileUriToFilesystemPath(parsed)
+    return filePath ? { filePath, line: hashTarget.line, column: hashTarget.column } : null
+  }
+
+  const trailingTarget = parseEncodedPathnameLineTarget(parsed)
+  if (trailingTarget) {
+    const basePath = fileUriToFilesystemPath(trailingTarget.baseUrl)
+    if (basePath && !basePath.endsWith('/') && !basePath.endsWith('\\')) {
+      return {
+        filePath: basePath,
+        line: trailingTarget.line,
+        column: trailingTarget.column
+      }
+    }
+  }
+
   const filePath = fileUriToFilesystemPath(parsed)
   if (!filePath) {
     return null
   }
 
-  const hashTarget = parseFileUrlLineHash(parsed.hash)
-  if (hashTarget) {
-    return { filePath, line: hashTarget.line, column: hashTarget.column }
-  }
-
-  return parseFilePathTrailingLineTarget(filePath) ?? { filePath, line: null, column: null }
+  return { filePath, line: null, column: null }
 }
