@@ -31,15 +31,33 @@ export function marginBefore(
   return user ?? 0
 }
 
-/** The newest row before `sequence` the index's own filter and `test` both hold for. `test` is no
- *  index column, so an indexed-only read looks back only as far as an admitted window could reach. */
+/** Where the `count`th newest root turn sits, by index alone: a turn row a subagent's lifecycle
+ *  wrote is no root turn, so it looks back only as far as an admitted window could reach. 0 when
+ *  the chat has fewer. */
+export function newestRootTurn(scope: JournalSqlScope, count: number): number {
+  const turn = newestBefore(
+    scope,
+    'journal_items_status_turn',
+    'turn_id IS NOT NULL',
+    'root=1',
+    Number.MAX_SAFE_INTEGER,
+    true,
+    count - 1
+  )
+  return turn ?? 0
+}
+
+/** The newest row before `sequence` the index's own filter and `test` both hold for, past `skip`
+ *  more. `test` is no index column, so an indexed-only read looks back only as far as an admitted
+ *  window could reach. */
 function newestBefore(
   scope: JournalSqlScope,
   index: string,
   indexed: string,
   test: string,
   sequence: number,
-  indexedOnly: boolean
+  indexedOnly: boolean,
+  skip = 0
 ): number | null {
   const where = `session_id=? AND epoch=? AND hidden=0 AND ${indexed} AND sequence<?`
   if (!indexedOnly) {
@@ -52,8 +70,9 @@ function newestBefore(
   // Newest first, stopping at the first that holds; only a miss asks whether more lie behind.
   const at = scope.db
     .prepare(`SELECT sequence FROM (SELECT sequence, root, kind, message_role FROM journal_items
-      INDEXED BY ${index} WHERE ${where} ORDER BY sequence DESC LIMIT ?) WHERE ${test} LIMIT 1`)
-    .get(...scope.prefix, sequence, INDEXED_ONLY_ROW_CAP + 1)?.sequence
+      INDEXED BY ${index} WHERE ${where} ORDER BY sequence DESC LIMIT ?) WHERE ${test}
+      LIMIT 1 OFFSET ?`)
+    .get(...scope.prefix, sequence, INDEXED_ONLY_ROW_CAP + 1, skip)?.sequence
   if (at !== null && at !== undefined) {
     return Number(at)
   }

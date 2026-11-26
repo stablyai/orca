@@ -544,7 +544,7 @@ it('stops its look back for the turn ahead at the nearest match, however long th
     })
     const prepare = db.prepare.bind(db)
     db.prepare = (sql: string) => {
-      probes += sql.includes('OFFSET') ? 1 : 0
+      probes += sql.includes('DESC LIMIT 1 OFFSET') ? 1 : 0
       const prompt = "kind='message' AND message_role='user'"
       return prepare(sql.replaceAll(prompt, `tested(${prompt})`))
     }
@@ -585,6 +585,59 @@ it("reads a closing turn's askers with the same work however long the chat ran, 
   expect([await examined(500), await examined(5_000)]).toEqual([
     { rows: 18, opener: true },
     { rows: 18, opener: true }
+  ])
+})
+
+// #49889: the close's newest-turn lookup once tested every turn row behind the newest root turn. A
+// subagent's lifecycle rows (kept from older builds) are turn rows but no root turn; it now tests no
+// more than an admitted window could hold, and refuses past that.
+it('finds the newest root turn testing no more turn rows than a window holds, however many a subagent wrote', () => {
+  const look = (subagentTurns: number) => {
+    const db = chat(1)
+    const turn = db
+      .prepare(
+        `SELECT * FROM journal_items WHERE kind='turn' AND root=1 ORDER BY sequence DESC LIMIT 1`
+      )
+      .get()
+    if (!turn) {
+      throw new Error('the chat has no root turn')
+    }
+    const columns = Object.keys(turn)
+    const insert = db.prepare(
+      `INSERT INTO journal_items (${columns.join(',')}) VALUES (${columns.map(() => '?').join(',')})`
+    )
+    db.pragma('synchronous = OFF')
+    db.exec('BEGIN')
+    for (let index = 1; index <= subagentTurns; index += 1) {
+      const row = { ...turn, item_id: `subagent-${index}`, turn_id: `subagent-${index}`, root: 0 }
+      insert.run(
+        ...columns.map((column) =>
+          column === 'sequence' ? Number(turn.sequence) + index : row[column]
+        )
+      )
+    }
+    db.exec('COMMIT')
+    let tested = 0
+    db.function('tested', (root) => ((tested += 1), root))
+    const prepare = db.prepare.bind(db)
+    db.prepare = (sql: string) => prepare(sql.replaceAll('root=1', 'tested(root)=1'))
+    const scope = new JournalSqlScope(db, 'chat', 'epoch')
+    let refused = false
+    try {
+      readJournalDomainOperationWindow(scope, {
+        latestTurns: 1,
+        anchorsOnly: true,
+        indexedOnly: true
+      })
+    } catch (error) {
+      refused = error instanceof JournalWindowNotIndexed
+    }
+    db.close()
+    return { refused, bounded: tested <= 4097 }
+  }
+  expect([look(5_000), look(50_000)]).toEqual([
+    { refused: true, bounded: true },
+    { refused: true, bounded: true }
   ])
 })
 
