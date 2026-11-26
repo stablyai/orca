@@ -2,11 +2,8 @@ import { useAppStore } from '@/store'
 import { useMemo } from 'react'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { getRenderRowKey, type RenderRow } from './render-row'
-import {
-  composeWorktreeHostIdentity,
-  getWorktreeHostIdentity,
-  getWorktreeIdFromHostIdentity
-} from '../../../../../../shared/worktree/host-qualified-identity'
+import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
+import { activeFamilyRootsFor } from './active-family-roots'
 import { getFolderWorkspaceHostIdentity } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import {
@@ -237,32 +234,15 @@ export function useLineageRowProjection(args: {
     () => rows.findIndex((row) => row.type === 'header' || row.type === 'host-header'),
     [rows]
   )
-  const activeFamilyRoots = useMemo(() => {
-    const roots = new Set<number>()
-    if (activeWorktreeId) {
-      const addRoots = (occurrences: readonly number[]) => {
-        for (const index of occurrences) {
-          const root = projection.frames[index].root
-          if (projection.frames[root].end > root) {
-            roots.add(root)
-          }
-        }
-      }
-      if (activeWorkspaceExecutionHostId) {
-        addRoots(
-          projection.occurrencesByIdentity.get(
-            composeWorktreeHostIdentity(activeWorkspaceExecutionHostId, activeWorktreeId)
-          ) ?? []
-        )
-      } else {
-        for (const [identity, occurrences] of projection.occurrencesByIdentity) {
-          if (getWorktreeIdFromHostIdentity(identity) === activeWorktreeId) {
-            addRoots(occurrences)
-          }
-        }
-      }
-    }
-    return roots
-  }, [activeWorktreeId, activeWorkspaceExecutionHostId, projection])
+  const activeFamilyRoots = useMemo(
+    () =>
+      activeFamilyRootsFor({
+        rows,
+        projection,
+        activeWorktreeId,
+        activeWorkspaceExecutionHostId
+      }),
+    [rows, activeWorktreeId, activeWorkspaceExecutionHostId, projection]
+  )
   return { projection, activeFamilyRoots, firstHeaderIndex }
 }
