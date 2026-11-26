@@ -76,6 +76,31 @@ export const mobileBrowserPaneStyles = themedStyleSheet(() => ({
     textAlign: 'center',
     overflow: 'hidden'
   },
+  // One line like desktop's stream toast: the reason, then Reconnect.
+  streamStopped: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.bgPanel,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    borderRadius: radii.surface,
+    paddingLeft: spacing.md,
+    paddingRight: spacing.xs,
+    paddingVertical: spacing.xs,
+    maxWidth: '100%'
+  },
+  streamStoppedText: {
+    flexShrink: 1,
+    color: colors.textPrimary,
+    fontSize: 13
+  },
+  streamStoppedButton: {
+    minHeight: 30
+  },
+  streamStoppedButtonText: {
+    fontSize: 13
+  },
   dialogOverlay: {
     ...StyleSheet.absoluteFill,
     zIndex: 30,

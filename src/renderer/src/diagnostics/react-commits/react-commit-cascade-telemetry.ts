@@ -60,12 +60,6 @@ export function setReactCommitCascadeRendererSurface(surface: RendererSurface): 
   rendererSurface = surface
 }
 
-export function resetReactCommitCascadeTelemetryForTests(): void {
-  Object.assign(sharedState, createReactCommitCascadeState())
-  rendererSurface = 'main'
-  resetReactCommitCascadeWriteSamples()
-}
-
 function endCascade(state: ReactCommitCascadeState): void {
   state.cascadeRoot = null
   state.commits = 0

@@ -1,3 +1,4 @@
+import type { JournalConversionStorage } from './journal-conversion-storage'
 import type { LegacyProofCursor, LegacyProofPage } from './journal-legacy-source-proof'
 import type {
   JournalForkPreparationInput,
@@ -37,6 +38,7 @@ export type JournalSqlReaderOperation =
   | { kind: 'conversion-page'; conversionId: number }
   | { kind: 'conversion-release'; conversionId: number }
   | { kind: 'legacy-compare'; sessionId: string }
+  | { kind: 'conversion-storage'; sessionId?: string; sizedAt?: string }
 
 export type JournalSqlReaderRequest = { id: number; operation: JournalSqlReaderOperation }
 /** A charged reply's bytes, which main releases once the caller has taken it. */
@@ -54,6 +56,11 @@ export type JournalSqlReaderReply = (
   | { type: 'rows'; id: number; page: JournalDomainImportPage | null }
   | { type: 'released'; id: number }
   | { type: 'legacy-compare'; id: number; result: JournalLegacyChatComparison | null }
+  | {
+      type: 'conversion-storage'
+      id: number
+      storage: JournalConversionStorage | null
+    }
   | { type: 'failed'; id?: number; error: JournalSqlFailure }
 ) &
   JournalSqlReaderReplyCharge

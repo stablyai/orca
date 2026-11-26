@@ -40,6 +40,11 @@ export function isAgentCopyId(value: unknown): value is string {
   return typeof value === 'string' && agentCopyBase(value) !== null
 }
 
+/** Whether `selector` names `base` itself or one of its copies. */
+export function selectsAgent(selector: string | undefined, base: TuiAgent): boolean {
+  return selector !== undefined && (agentCopyBase(selector) ?? selector) === base
+}
+
 function normalizeEnv(value: unknown): Record<string, string> | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return undefined

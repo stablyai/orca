@@ -10,6 +10,7 @@ import type { PerfNoticeGlobalSettings } from '../perf-notices/perf-notice-setti
 import type { ClaudeAccountSwitchSettings } from '../agent-accounts/claude/claude-account-switch-settings'
 import type { NativeChatGlobalSettings } from '../native-chat/settings/native-chat-appearance-settings'
 import type { NativeChatIdleStopSettings } from '../native-chat/settings/native-chat-idle-stop'
+import type { SharedCodexServersSettings } from '../native-chat/settings/native-chat-shared-codex-servers'
 import type { NativeChatUsageLimitAutoContinueSettings } from '../native-chat/settings/native-chat-usage-limit-auto-continue'
 import type { EditorTypographySettings } from '../editor/appearance/editor-typography-settings-types'
 import type { PluginAppearanceSettings } from '../plugins/appearance/plugin-appearance-settings-types'
@@ -51,6 +52,7 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   ClaudeAgentViewSettings &
   NativeChatGlobalSettings &
   NativeChatIdleStopSettings &
+  SharedCodexServersSettings &
   NativeChatUsageLimitAutoContinueSettings &
   WorktreeDeletionPreferences &
   WorktreeCardDisplaySettings &

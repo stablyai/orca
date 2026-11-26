@@ -5,7 +5,14 @@ import { workspaceKeyOfRow } from '../../../src/shared/workspace/identity/worksp
 import type { Worktree as HostWorktree } from '../../../src/shared/worktree/types'
 import type { WorkspaceListItem, Worktree } from '../worktree/workspace-list/workspace-list-types'
 import { isWorktreeActive } from '../worktree/workspace-list/workspace-row-filtering'
-import { getWorktreeStatus } from '../worktree/workspace-list/workspace-list-ordering'
+import {
+  getWorktreeDotStatus,
+  getWorktreeStatus
+} from '../worktree/workspace-list/workspace-list-ordering'
+import {
+  countLiveBotWorkspaces,
+  type BotWorkspaceLiveCounts
+} from '../../../src/shared/bots/bot-sidebar-workspaces'
 import { botLineLanes, lanesNeedingYouFirst } from '../../../src/shared/bots/bot-line-lanes'
 import { asHostWorktree } from '../worktree/catalog/host-worktree-from-row'
 import { getWorktreeRowIdentity } from '../worktree/row-presentation/worktree-host-row-identity'
@@ -70,6 +77,24 @@ function resolveHostBotLineage(
     rowByIdentity: new Map(rows.map((row) => [identity(row), row])),
     hostOf
   }
+}
+
+/** The bot's own workers' live counts, as its Bots list row counts them, for a row drawn without
+ *  its worker lines (Home). */
+export function hostBotWorkerCounts(
+  homeRow: Worktree,
+  lineage: HostBotLineage
+): BotWorkspaceLiveCounts {
+  const { childWorktrees } = getFolderWorkspaceChildWorktrees(
+    composeWorktreeHostIdentity(lineage.hostOf(homeRow), homeRow.worktreeId),
+    lineage.childrenByParentIdentity
+  )
+  return countLiveBotWorkspaces(
+    childWorktrees.flatMap((worker) => {
+      const row = lineage.rowByIdentity.get(getWorktreeHostIdentity(worker))
+      return row ? [getWorktreeDotStatus(row)] : []
+    })
+  )
 }
 
 /** One worker's workspace by its id, and its lines: its own first, then its children's. */

@@ -84,8 +84,11 @@ function hasSentRequest(socket: MockWebSocket, method: string): boolean {
   return socket.sent.some((payload) => readRequest(payload)?.method === method)
 }
 
-function connectAuthenticated(): { client: ReturnType<typeof connect>; socket: MockWebSocket } {
-  const client = connect('ws://desktop.invalid', 'token', 'server-key')
+function connectAuthenticated(endpoint = 'ws://desktop.invalid'): {
+  client: ReturnType<typeof connect>
+  socket: MockWebSocket
+} {
+  const client = connect(endpoint, 'token', 'server-key')
   const socket = mockSockets[mockSockets.length - 1]!
   socket.open()
   socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
@@ -94,7 +97,7 @@ function connectAuthenticated(): { client: ReturnType<typeof connect>; socket: M
 }
 
 // Written frames with lost replies must remain delivery-unknown so UI cannot claim a mutation definitely failed.
-describe('mobile rpc-client delivery ambiguity marking', () => {
+describe('mobile rpc-client socket recovery', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     mockSockets.length = 0
@@ -200,4 +203,48 @@ describe('mobile rpc-client delivery ambiguity marking', () => {
     expect(isRpcDeliveryUnknown(error)).toBe(false)
     client.close()
   })
+
+  it.each([false, true])(
+    'follows up a stalled network dial while preserving an active handshake (opened: %s)',
+    async (opened) => {
+      const { client, socket } = connectAuthenticated()
+      socket.drop()
+      client.notifyForeground('network-change')
+      const retrySocket = mockSockets[1]!
+      await vi.advanceTimersByTimeAsync(200)
+      client.notifyForeground('network-change')
+      await vi.advanceTimersByTimeAsync(3_800)
+      if (opened) {
+        retrySocket.open()
+      }
+      await vi.advanceTimersByTimeAsync(199)
+      expect(mockSockets).toHaveLength(2)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(mockSockets).toHaveLength(opened ? 2 : 3)
+      client.close()
+    }
+  )
+
+  it.each([false, true])(
+    'resets resume backoff only for previously reachable Tailscale hosts (reachable: %s)',
+    async (previouslyConnected) => {
+      const endpoint = 'ws://100.64.0.2:6768'
+      const client = previouslyConnected
+        ? connectAuthenticated(endpoint).client
+        : connect(endpoint, 'token', 'server-key')
+      mockSockets[0]!.drop()
+      await vi.advanceTimersByTimeAsync(500)
+      mockSockets[1]!.drop()
+      expect(client.getReconnectAttempt()).toBe(2)
+
+      if (previouslyConnected) {
+        client.notifyForeground('network-change')
+        await vi.advanceTimersByTimeAsync(200)
+      }
+      client.notifyForeground('app-resume')
+      expect(mockSockets).toHaveLength(3)
+      expect(client.getReconnectAttempt()).toBe(previouslyConnected ? 0 : 2)
+      client.close()
+    }
+  )
 })

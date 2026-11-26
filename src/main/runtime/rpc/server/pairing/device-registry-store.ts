@@ -32,7 +32,7 @@ export class DeviceRegistryStore {
     this.load()
   }
 
-  /** Fires when a save adds, removes, relabels or flips usesLegacyE2EE on a listed phone; lastSeen-only saves stay silent. */
+  /** Fires when a save or an adopted external edit changes a listed phone or runtime grant. */
   setOnPairedDevicesChanged(listener: (() => void) | null): void {
     this.onPairedDevicesChanged = listener
   }
@@ -61,7 +61,11 @@ export class DeviceRegistryStore {
   protected adoptExternalEdits(options: { fresh?: boolean } = {}): void {
     // An unreadable load refuses everything until restart; there is nothing to merge into.
     if (!this.registryUnreadable) {
-      this.devices = this.writer.adoptExternalEdits(this.devices, options) ?? this.devices
+      const adopted = this.writer.adoptExternalEdits(this.devices, options)
+      if (adopted) {
+        this.devices = adopted
+        this.publishPairedDevicesChange(adopted)
+      }
     }
   }
 
@@ -114,23 +118,34 @@ export class DeviceRegistryStore {
     const written = this.writer.write(before, devices, options)
     // Every save includes current timestamps, making a pending refresh redundant.
     this.cancelPendingLastSeenFlush()
-    const pairedDevicesKey = pairedDevicesKeyOf(written)
-    if (pairedDevicesKey !== this.pairedDevicesKey) {
-      this.pairedDevicesKey = pairedDevicesKey
-      try {
-        this.onPairedDevicesChanged?.()
-      } catch (error) {
-        // The write already landed; a failing listener must not stop callers from taking it.
-        console.error('[runtime] Paired device change listener failed:', error)
-      }
-    }
+    this.publishPairedDevicesChange(written)
     return written
+  }
+
+  private publishPairedDevicesChange(devices: readonly DeviceEntry[]): void {
+    const pairedDevicesKey = pairedDevicesKeyOf(devices)
+    if (pairedDevicesKey === this.pairedDevicesKey) {
+      return
+    }
+    this.pairedDevicesKey = pairedDevicesKey
+    try {
+      this.onPairedDevicesChanged?.()
+    } catch (error) {
+      // The change already landed; a failing listener must not stop callers from taking it.
+      console.error('[runtime] Paired device change listener failed:', error)
+    }
   }
 }
 
 // Leaves out lastSeenAt: reconnect bookkeeping saves must not push a renderer refetch.
 function pairedDevicesKeyOf(devices: readonly DeviceEntry[]): string {
   return JSON.stringify(
-    devices.filter(isPairedMobileDevice).map((d) => [d.deviceId, d.name, usesLegacyE2EE(d)])
+    devices
+      .filter((device) => device.scope === 'runtime' || isPairedMobileDevice(device))
+      .map((device) =>
+        device.scope === 'runtime'
+          ? device.deviceId
+          : [device.deviceId, device.name, usesLegacyE2EE(device)]
+      )
   )
 }

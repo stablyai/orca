@@ -2,6 +2,9 @@ import {
   isAgentSessionRefusalError,
   type AgentSessionRefusalError
 } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
+import { hasPersistedStructuredAgentSessionDatabaseFile } from '../records/persisted-agent-session-database-file'
 
 let installRefusal: AgentSessionRefusalError | null = null
 
@@ -30,6 +33,19 @@ export async function ensureStructuredAgentSessionHostUnlessRefused(
       throw error
     }
   }
+}
+
+/** Skip booting the chat journal host for ownership lookups when no chat store exists yet. */
+export async function ensurePersistedStructuredAgentSessionHostUnlessRefused(
+  ensureHost: () => Promise<unknown>
+): Promise<void> {
+  if (
+    !getStructuredAgentSessionHost() &&
+    !(await hasPersistedStructuredAgentSessionDatabaseFile(getProfileUserDataPath()))
+  ) {
+    return
+  }
+  await ensureStructuredAgentSessionHostUnlessRefused(ensureHost)
 }
 
 /** Chat-host setup is bookkeeping for a terminal resume; an existing owner is checked afterward. */

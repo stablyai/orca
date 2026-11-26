@@ -49,8 +49,14 @@ async function main() {
       return;
     }
     // A conversation saved in a sub-folder belongs to the workspace, as Session History lists it.
+    // Name it by the segments past the workspace, so the host can spell it from the workspace path.
     if (compared && source.startsWith(/^(?:[a-z]:)?\/$/.test(compared) ? compared : compared + '/')) {
-      process.stdout.write(JSON.stringify({version:1, matched:true, inside:true}));
+      const depth = compared.split('/').filter(Boolean).length;
+      const raw = request.sourceCwd.trim();
+      // Only Windows paths separate with a backslash; POSIX names may contain one.
+      const windows = /^[A-Za-z]:[\\/]/.test(raw) || raw.startsWith('\\\\') || raw.startsWith('//');
+      const inside = raw.split(windows ? /[\\/]+/ : /\/+/).filter(Boolean).slice(depth).join('/');
+      process.stdout.write(JSON.stringify({version:1, matched:true, inside}));
       return;
     }
     const parent = dirname(prefix);
@@ -71,12 +77,13 @@ export class AdoptedDirectoryProbes {
     return this.owned.size
   }
 
-  /** Whether the source folder is the workspace, inside it, or neither, after resolving the workspace's links. */
+  /** The source folder's path inside the workspace after resolving the workspace's links: '' for the
+   *  workspace itself, `/`-separated segments for a sub-folder, null for neither. */
   async relate(
     workspaceCwd: string,
     sourceCwd: string,
     signal?: AbortSignal
-  ): Promise<'same' | 'inside' | null> {
+  ): Promise<string | null> {
     const job = {}
     this.owned.add(job)
     const env = pickAllowedEnv(RUNTIME_ENV_ALLOWLIST, process.env, process.platform)
@@ -108,7 +115,14 @@ export class AdoptedDirectoryProbes {
       ) {
         throw new Error('Invalid directory verification response')
       }
-      return value.matched ? ('inside' in value && value.inside === true ? 'inside' : 'same') : null
+      if (!value.matched) {
+        return null
+      }
+      const inside = 'inside' in value ? value.inside : ''
+      if (typeof inside !== 'string') {
+        throw new Error('Invalid directory verification response')
+      }
+      return inside
     } catch {
       throw new Error('The conversation directory could not be verified. Try Resume again.')
     }

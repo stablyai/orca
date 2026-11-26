@@ -21,6 +21,7 @@ export function retainWorkerLaunchObservation(
       this.db
         .prepare('UPDATE worker_dispatches SET start_options = ? WHERE dispatch_id = ?')
         .run(options, dispatchId)
+      this.workerDockSources?.changedDispatch(dispatchId)
     }
     this.db.exec('COMMIT')
   } catch (error) {

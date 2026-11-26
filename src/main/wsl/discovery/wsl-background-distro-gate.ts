@@ -273,18 +273,3 @@ function logDeferredTaskFailure(error: unknown): void {
     error instanceof Error ? error.message : String(error)
   )
 }
-
-export function _resetWslBackgroundDistroGateForTests(): void {
-  deferredTasksByDistro.clear()
-  for (const timer of settleProbes.values()) {
-    clearTimeout(timer)
-  }
-  settleProbes.clear()
-  unsubscribeObservations?.()
-  unsubscribeObservations = null
-  mayHaveStoppedAt.clear()
-  wokenAt.clear()
-  unsubscribeStops?.()
-  unsubscribeStops = null
-  noteListeners.clear()
-}

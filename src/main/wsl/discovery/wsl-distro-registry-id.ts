@@ -148,7 +148,3 @@ export function readWslDistroRegistryIdShared(
   sharedReads.set(key, { at: now(), id })
   return id
 }
-
-export function resetWslDistroRegistryIdSharedReadsForTests(): void {
-  sharedReads.clear()
-}

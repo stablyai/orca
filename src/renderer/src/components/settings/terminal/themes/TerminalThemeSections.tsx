@@ -44,10 +44,6 @@ function rememberTerminalThemeTarget(target: TerminalThemeSlot): void {
   lastEditedTerminalThemeTarget = target
 }
 
-export function resetTerminalThemeTargetMemoryForTests(): void {
-  lastEditedTerminalThemeTarget = null
-}
-
 // Why a queue: the store applies a write only once it is acknowledged, so each delete or undo must
 // read the list the previous one saved or a quick second delete would revive the first.
 let customThemeWrites: Promise<void> = Promise.resolve()

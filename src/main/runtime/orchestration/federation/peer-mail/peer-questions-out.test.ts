@@ -16,7 +16,8 @@ describe('questions asked of an agent on a paired computer', () => {
   const runtime = {
     getLiveTerminalPaneKey: () => null,
     getTerminalHandleForPaneKey: () => null,
-    notifyMessageArrived: (handle: string) => void notified.push(handle)
+    notifyMessageArrived: (handle: string) => void notified.push(handle),
+    notifyPeerMailReturned: () => {}
   } as unknown as OrcaRuntimeService
 
   beforeEach(() => {

@@ -33,7 +33,9 @@ const SendResponseSchema = z.object({
 export type PushSendResult = z.infer<typeof SendResponseSchema>['results'][number]
 
 export type PushSendNotification = {
-  kind?: 'alert' | 'dismiss'
+  kind?: 'alert' | 'dismiss' | 'badge'
+  /** This host's unread count; the gateway sums every host's into the phone's icon badge. */
+  badge?: number
   expiresAt?: number
   sound?: boolean
   notificationId?: string
@@ -71,6 +73,16 @@ export class PushGatewayClient {
       fetchImpl: this.fetchImpl,
       now: options.now ?? Date.now
     })
+  }
+
+  /** How far off this host's clock is, when the push service refuses sign-in for it; null otherwise. */
+  async currentClockSkewMs(): Promise<number | null> {
+    // Only a recorded refusal re-signs in, so a fixed clock clears it without a handshake per test.
+    if (this.session.clockSkewMs() === null) {
+      return null
+    }
+    const outcome = await this.session.ensure(null)
+    return outcome.ok ? null : (outcome.clockSkewMs ?? null)
   }
 
   async registerDevice(input: {

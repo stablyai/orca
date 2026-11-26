@@ -137,8 +137,3 @@ export function replayPendingRuntimeRepoRemovals(
     return 'settled'
   })
 }
-
-export function resetPendingRuntimeRepoRemovalsForTests(): void {
-  pending = []
-  environmentChains.clear()
-}

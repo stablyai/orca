@@ -61,6 +61,8 @@ export type MobileNativeChatViewProps = MobileNativeChatSendProps &
     onLoadEarlier?: () => void
     // Fence send completion by route identity after tab/view switches.
     sendSurfaceId: string
+    /** The structured session this chat shows, where its cards' answers go; null before it has one. */
+    sessionId?: string | null
     getSendCompletionGeneration: () => number
     getComposerEditGeneration: () => number
     pending: MobileNativeChatPendingItem[]
@@ -84,6 +86,8 @@ export type MobileNativeChatViewProps = MobileNativeChatSendProps &
     onDismissSendError?: () => void
     filePaths?: string[]
     onNeedFiles?: (query: string) => void
+    /** How a picked file is written when the chat runs in a workspace sub-folder. */
+    fileReference?: (path: string) => string | undefined
     skillDiscovery?: NativeChatSkillDiscoverySnapshot
     onNeedSkills?: () => void
     sessionOptions?: MobileNativeChatSessionOptionPickersProps | null

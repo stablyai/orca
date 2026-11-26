@@ -134,14 +134,3 @@ export function useHostPRAutoRefreshCadence(
     environmentId ? knownHostPRAutoRefreshCadence(environmentId) : null
   )
 }
-
-/** How many hosts this client keeps any per-host read or support state for. */
-export function _trackedHostPRAutoRefreshStateCountForTests(): number {
-  return new Set([...pendingReads.keys(), ...hostsLackingSetting]).size
-}
-
-export function _resetHostPRAutoRefreshCadenceGenerationsForTests(): void {
-  pendingReads.clear()
-  hostsLackingSetting.clear()
-  lackListeners.clear()
-}

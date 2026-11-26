@@ -4,7 +4,7 @@ import { renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
-import { chatTakesOrcaRuntimeSignIn, useAgentCopyOwnCommand } from './NativeChatInstallSlot'
+import { chatTakesAntigravitySignIn, useAgentCopyOwnCommand } from './NativeChatInstallSlot'
 
 const initialState = useAppStore.getState()
 
@@ -39,36 +39,11 @@ describe("a copy chat's install gate", () => {
   })
 })
 
-describe("Orca's Antigravity sign-in", () => {
-  const observation = {
-    kind: 'active' as const,
-    subject: { target: { kind: 'local' as const }, runtimeId: null, agent: 'antigravity' },
-    removable: true,
-    snapshot: {
-      kind: 'known' as const,
-      state: {
-        agent: 'antigravity',
-        revision: 1,
-        available: true,
-        version: '1.5.13',
-        installedVersion: '1.5.13',
-        installedCurrent: true,
-        source: 'managed' as const,
-        operation: null
-      }
-    }
-  }
+describe("a chat's Antigravity sign-in", () => {
   const signsIn = (ownCommand: boolean) =>
-    chatTakesOrcaRuntimeSignIn({
-      agent: 'antigravity',
-      visible: true,
-      hostProgram: false,
-      ownCommand,
-      slot: { kind: 'none' },
-      observation
-    })
+    chatTakesAntigravitySignIn({ agent: 'antigravity', visible: true, ownCommand })
 
-  it("is asked of a chat on Orca's runtime, never of a copy with its own Command", () => {
+  it('is asked of a chat that runs agy, never of a copy with its own Command', () => {
     expect(signsIn(false)).toBe(true)
     expect(signsIn(true)).toBe(false)
   })

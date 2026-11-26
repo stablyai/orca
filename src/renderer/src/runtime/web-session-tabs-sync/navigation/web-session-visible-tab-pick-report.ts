@@ -310,14 +310,3 @@ export function forgetVisibleTabPicksForWorktree(environmentId: string, worktree
   const frameKey = `${environmentId}\0${worktreeId}`
   forgetVisibleTabPicks((key) => key === frameKey)
 }
-
-export function resetReportedVisibleTabPicksForTests(): void {
-  reportedPaneByWorkspace.clear()
-  latestFrameByWorkspace.clear()
-  for (const timer of pendingCheckByWorkspace.values()) {
-    clearTimeout(timer)
-  }
-  pendingCheckByWorkspace.clear()
-  stopWatchingActiveWorkspace?.()
-  stopWatchingActiveWorkspace = null
-}

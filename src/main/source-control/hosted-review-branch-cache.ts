@@ -9,13 +9,8 @@ import type {
   HostedReviewInfo
 } from '../../shared/source-control/hosted-review/hosted-review-contracts'
 import { cachedHostedReviewOutcome } from '../../shared/source-control/hosted-review/hosted-review-contracts'
+import { isActiveBranch, noteActiveClaim } from './hosted-review-active-branch-claims'
 import {
-  __resetHostedReviewActiveClaimsForTests,
-  isActiveBranch,
-  noteActiveClaim
-} from './hosted-review-active-branch-claims'
-import {
-  __resetUnsettledHostedReviewLookupsForTests,
   lookupCapacityRefusal,
   noteDetachedLookup,
   noteLookupStarted,
@@ -23,7 +18,6 @@ import {
   settleLookup
 } from './hosted-review-unsettled-lookups'
 import {
-  __resetHostedReviewInflightLookupsForTests,
   expireOverdueInflight,
   getInflightLookup,
   releaseInflight,
@@ -33,13 +27,11 @@ import {
   type InflightToken
 } from './hosted-review-inflight-lookups'
 import {
-  __resetHostedReviewScopeGenerationsForTests,
   bumpScopeGeneration,
   hostedReviewRepoScope,
   scopeGeneration
 } from './hosted-review-scope-generations'
 import {
-  __resetHostedReviewLookupBackoffForTests,
   backoffUntil,
   clearFailures,
   dropFailuresWithPrefix,
@@ -131,16 +123,6 @@ export function invalidateHostedReviewBranchCache(
   }
   retireInflightWithPrefix(prefix)
   dropFailuresWithPrefix(prefix)
-}
-
-/** @internal - exposed for tests only */
-export function __resetHostedReviewBranchCacheForTests(): void {
-  entries.clear()
-  __resetHostedReviewInflightLookupsForTests()
-  __resetHostedReviewLookupBackoffForTests()
-  __resetHostedReviewActiveClaimsForTests()
-  __resetUnsettledHostedReviewLookupsForTests()
-  __resetHostedReviewScopeGenerationsForTests()
 }
 
 /** Detached answers may fill gaps or replace strictly older attempts only; never outrank the served pre-refresh answer or a replacement owner. Late null would otherwise mask a real review. */

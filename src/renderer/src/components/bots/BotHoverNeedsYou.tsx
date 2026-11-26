@@ -11,6 +11,7 @@ import type { Bot } from '../../../../shared/bot-types'
 import { botNeedsYouCount } from '../../../../shared/bots/bot-now'
 import { botActivityRowTitle } from './bot-activity-row-title'
 import { botConnectorTitleText } from './bot-connector-titles'
+import { pairedAskSenderName } from './BotPairedAskNeedRow'
 import { useBotNow, type BotNeedView } from './use-bot-now'
 
 /** Asks listed by name; the rest are counted. */
@@ -59,6 +60,16 @@ function askOf(need: BotNeedView, bot: Bot, t: Translate): Ask {
         icon: <UserPlus className={cn(GLYPH, 'text-agent-question')} />,
         title: need.request.requester.name || need.request.requester.handle,
         detail: t('bots.hover.access', 'Asked for access')
+      }
+    case 'paired-ask':
+      return {
+        key: need.key,
+        icon: <Shield className={cn(GLYPH, 'text-agent-question')} />,
+        title: t('bots.needs.pairedAsk', '{{from}} wants to message {{name}}', {
+          from: pairedAskSenderName(need.card),
+          name: bot.name
+        }),
+        detail: t('bots.hover.wantsApproval', 'Wants your approval')
       }
   }
 }

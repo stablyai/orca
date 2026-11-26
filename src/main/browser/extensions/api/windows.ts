@@ -1,5 +1,6 @@
 /// <reference types="chrome" />
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import {
   BrowserExtensionApiError,
   defineBrowserExtensionMethod,
@@ -9,13 +10,12 @@ import {
 import {
   describeBrowserExtensionTab,
   listBrowserExtensionTabs,
-  resolveCallerWindowId
+  requireCallerWindow
 } from '../tabs-and-windows/browser-extension-tab-model'
 import {
   WINDOW_ID_CURRENT,
   createBrowserExtensionPopout,
   describeBrowserExtensionWindow,
-  getBrowserExtensionWindow,
   getLastFocusedBrowserExtensionWindowId,
   listBrowserExtensionWindows,
   presentBrowserExtensionWindow,
@@ -24,40 +24,48 @@ import {
 import { requireOpenableUrl } from '../tabs-and-windows/browser-extension-requested-navigation'
 import { findBrowserExtensionCallerAgentPage } from '../tabs-and-windows/browser-extension-agent-caller'
 
-const windowIdSchema = z.number().int()
-const queryOptionsSchema = z
-  .object({ populate: z.boolean(), windowTypes: z.array(z.string()) })
-  .partial()
-  .loose()
-const windowStateSchema = z.enum(['normal', 'minimized', 'maximized', 'fullscreen'])
-const createDataSchema = z
-  .object({
-    url: z.union([z.string(), z.array(z.string())]),
-    tabId: z.number().int(),
-    left: z.number().int(),
-    top: z.number().int(),
-    width: z.number().int().positive(),
-    height: z.number().int().positive(),
-    focused: z.boolean(),
-    incognito: z.boolean(),
-    type: z.enum(['normal', 'popup', 'panel']),
-    state: windowStateSchema,
-    setSelfAsOpener: z.boolean()
-  })
-  .partial()
-  .loose()
-const updateInfoSchema = z
-  .object({
-    left: z.number().int(),
-    top: z.number().int(),
-    width: z.number().int().positive(),
-    height: z.number().int().positive(),
-    focused: z.boolean(),
-    drawAttention: z.boolean(),
-    state: windowStateSchema
-  })
-  .partial()
-  .loose()
+const windowIdSchema = lazyZodSchema(() => z.number().int())
+const queryOptionsSchema = lazyZodSchema(() =>
+  z
+    .object({ populate: z.boolean(), windowTypes: z.array(z.string()) })
+    .partial()
+    .loose()
+)
+const windowStateSchema = lazyZodSchema(() =>
+  z.enum(['normal', 'minimized', 'maximized', 'fullscreen'])
+)
+const createDataSchema = lazyZodSchema(() =>
+  z
+    .object({
+      url: z.union([z.string(), z.array(z.string())]),
+      tabId: z.number().int(),
+      left: z.number().int(),
+      top: z.number().int(),
+      width: z.number().int().positive(),
+      height: z.number().int().positive(),
+      focused: z.boolean(),
+      incognito: z.boolean(),
+      type: z.enum(['normal', 'popup', 'panel']),
+      state: windowStateSchema,
+      setSelfAsOpener: z.boolean()
+    })
+    .partial()
+    .loose()
+)
+const updateInfoSchema = lazyZodSchema(() =>
+  z
+    .object({
+      left: z.number().int(),
+      top: z.number().int(),
+      width: z.number().int().positive(),
+      height: z.number().int().positive(),
+      focused: z.boolean(),
+      drawAttention: z.boolean(),
+      state: windowStateSchema
+    })
+    .partial()
+    .loose()
+)
 
 type QueryOptions = z.infer<typeof queryOptionsSchema>
 
@@ -72,18 +80,6 @@ function describe(
         .map((tab) => describeBrowserExtensionTab(caller.extension, tab))
     : undefined
   return describeBrowserExtensionWindow(entry, tabs)
-}
-
-function requireWindow(
-  caller: BrowserExtensionCaller,
-  windowId: number
-): BrowserExtensionWindowEntry {
-  const resolvedId = windowId === WINDOW_ID_CURRENT ? resolveCallerWindowId(caller) : windowId
-  const entry = resolvedId === null ? null : getBrowserExtensionWindow(resolvedId, caller.session)
-  if (!entry) {
-    throw new BrowserExtensionApiError(`No window with id: ${windowId}.`)
-  }
-  return entry
 }
 
 function applyWindowState(
@@ -143,17 +139,23 @@ export function registerWindowsNamespace(): void {
       ),
       get: defineBrowserExtensionMethod(
         z.tuple([windowIdSchema, queryOptionsSchema.optional()]),
-        (caller, windowId, options) => describe(caller, requireWindow(caller, windowId), options)
+        (caller, windowId, options) =>
+          describe(caller, requireCallerWindow(caller, windowId), options)
       ),
       getCurrent: defineBrowserExtensionMethod(
         z.tuple([queryOptionsSchema.optional()]),
-        (caller, options) => describe(caller, requireWindow(caller, WINDOW_ID_CURRENT), options)
+        (caller, options) =>
+          describe(caller, requireCallerWindow(caller, WINDOW_ID_CURRENT), options)
       ),
       getLastFocused: defineBrowserExtensionMethod(
         z.tuple([queryOptionsSchema.optional()]),
         (caller, options) => {
           const windowId = getLastFocusedBrowserExtensionWindowId(caller.session)
-          return describe(caller, requireWindow(caller, windowId ?? WINDOW_ID_CURRENT), options)
+          return describe(
+            caller,
+            requireCallerWindow(caller, windowId ?? WINDOW_ID_CURRENT),
+            options
+          )
         }
       ),
       create: defineBrowserExtensionMethod(
@@ -180,19 +182,19 @@ export function registerWindowsNamespace(): void {
                 : 'focused',
             state: data?.state
           })
-          return describe(caller, requireWindow(caller, window.id), { populate: true })
+          return describe(caller, requireCallerWindow(caller, window.id), { populate: true })
         }
       ),
       update: defineBrowserExtensionMethod(
         z.tuple([windowIdSchema, updateInfoSchema]),
         (caller, windowId, info) => {
-          const entry = requireWindow(caller, windowId)
+          const entry = requireCallerWindow(caller, windowId)
           applyWindowUpdate(entry, info, findBrowserExtensionCallerAgentPage(caller) !== null)
           return describe(caller, entry, undefined)
         }
       ),
       remove: defineBrowserExtensionMethod(z.tuple([windowIdSchema]), (caller, windowId) => {
-        const entry = requireWindow(caller, windowId)
+        const entry = requireCallerWindow(caller, windowId)
         if (entry.isMain) {
           throw new BrowserExtensionApiError("Extensions cannot close Orca's main window")
         }

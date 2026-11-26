@@ -115,6 +115,9 @@ export async function buildWorkspaceCleanupCandidate(args: {
       upstreamAhead: gitEvidence.upstreamAhead,
       upstreamBehind: gitEvidence.upstreamBehind,
       checkedAt: gitEvidence.checkedAt,
+      ...(gitEvidence.dirtyFileCount !== undefined
+        ? { dirtyFileCount: gitEvidence.dirtyFileCount }
+        : {}),
       ...(gitEvidence.merge ? { merge: gitEvidence.merge } : {}),
       atRiskLocalFiles: gitEvidence.atRiskLocalFiles
     },

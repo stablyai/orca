@@ -71,10 +71,12 @@ export function settlePeerQuestionsOut(
 export function tellUnpairedPeerQuestions(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
-  params: { environmentId: string } & (
-    | { serverName: string; reason: string }
-    | { server: OrchestrationWorkerServer }
-  )
+  params: { environmentId: string } &
+    // `currentPairing` keeps the questions sent under it, as a re-paired server's pairing does.
+    (
+      | { serverName: string; reason: string; currentPairing?: string }
+      | { server: OrchestrationWorkerServer }
+    )
 ): void {
   const { serverName, reason, pairing } =
     'server' in params
@@ -83,13 +85,14 @@ export function tellUnpairedPeerQuestions(
           reason: `The pairing with ${params.server.name} was re-made.`,
           pairing: peerMailPairing(params.server)
         }
-      : { ...params, pairing: null }
+      : { ...params, pairing: params.currentPairing ?? null }
   const waiting = db.db
     .prepare(
       `SELECT message_id, conversation_id, asker, thread_id FROM peer_questions_out
        WHERE environment_id = ?1 AND awaiting = 1 AND (?2 IS NULL OR peer_fingerprint <> ?2)`
     )
     .all(params.environmentId, pairing)
+  let anyTold = false
   for (const row of waiting) {
     const id = String(row.message_id)
     const conversation = db.getPeerMailConversation(String(row.conversation_id))
@@ -114,7 +117,12 @@ export function tellUnpairedPeerQuestions(
       })
     })
     if (told) {
+      anyTold = true
       runtime.notifyMessageArrived(told.to_handle, told.type)
     }
+  }
+  if (anyTold) {
+    // The asking chats' cards settle too, on a host with nothing else to announce it.
+    runtime.notifyPeerMailReturned()
   }
 }

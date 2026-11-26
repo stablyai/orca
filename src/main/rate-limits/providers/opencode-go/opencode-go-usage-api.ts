@@ -41,8 +41,8 @@ function readErrorType(body: string): string | null {
 
 function classifyFailure(status: number, body: string): OpenCodeGoUsageApiOutcome {
   const errorType = readErrorType(body)
-  // Migrated requests reach a new console with different status codes; error names remain stable.
-  if (errorType === 'EntitlementError' || status === 403) {
+  // Error names stay stable across consoles; a bare 403 can be an edge block, not an entitlement verdict.
+  if (errorType === 'EntitlementError') {
     return { kind: 'no-subscription' }
   }
   if (errorType === 'AuthError' || status === 401) {

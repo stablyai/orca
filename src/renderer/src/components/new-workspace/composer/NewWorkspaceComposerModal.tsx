@@ -1,8 +1,4 @@
-import {
-  composerRecoveryPicks,
-  type ComposerAgentPick,
-  type ComposerModalData
-} from './composer-modal-data'
+import { composerRecoveryPicks, type ComposerModalData } from './composer-modal-data'
 import { toast } from 'sonner'
 import {
   formatWorkspaceCreateError,
@@ -178,11 +174,19 @@ function QuickTabBody({
   const detected = cardProps.detectedAgentIds ? [...cardProps.detectedAgentIds] : null
   const choicePending = (agent: TuiAgent): boolean =>
     agentChoicePending(useAppStore.getState(), agent, launchWorkspace, detected)
+  const observation = useAgentMenuObservation(
+    cardProps.agentRows?.target ?? null,
+    active && Boolean(cardProps.agentRows),
+    cardProps.agentRows?.detectionTarget,
+    { wakeOnOpen: true }
+  )
+  // The rows' host list governs picks; until a paired server states it, preselect by this client's list.
+  const disabledTuiAgents = observation.preferences.disabledTuiAgents
   // Pending discovery preserves the existing catalog fallback; current facts settle the default.
   const preferredQuickAgent = pickQuickWorkspaceAgent(
     settings?.defaultTuiAgent,
     cardProps.detectedAgentIds,
-    settings?.disabledTuiAgents,
+    observation.preferencesInherited ? settings?.disabledTuiAgents : disabledTuiAgents,
     offeredAgentIds,
     choicePending
   )
@@ -193,7 +197,7 @@ function QuickTabBody({
     detectedAgentIds: cardProps.detectedAgentIds,
     offeredAgentIds,
     selectedChoiceUnresolved: Boolean(quickAgentOverride && choicePending(quickAgentOverride)),
-    disabledTuiAgents: settings?.disabledTuiAgents
+    disabledTuiAgents
   })
   if (resolvedQuickAgentSelection.quickAgentOverride !== quickAgentOverride) {
     // Repair invalid picks before children render an unavailable option.
@@ -205,13 +209,7 @@ function QuickTabBody({
     new Set([...offeredAgentIds, ...(quickAgent && choicePending(quickAgent) ? [quickAgent] : [])])
   // Why keyed by agent: a pick repaired to another agent must not carry the old one's surface.
   const [recovered] = useState(() => composerRecoveryPicks(modalData.recovery))
-  const [quickAgentPick, setQuickAgentPick] = useState<ComposerAgentPick>(recovered.pick)
-  const observation = useAgentMenuObservation(
-    cardProps.agentRows?.target ?? null,
-    active && Boolean(cardProps.agentRows),
-    cardProps.agentRows?.detectionTarget,
-    { wakeOnOpen: true }
-  )
+  const [quickAgentPick, setQuickAgentPick] = useState(recovered.pick)
   const pickerDraft =
     quickAgentPick.agent === quickAgent && quickAgentPick.contextKey === observation.contextKey
       ? quickAgentPick.draft

@@ -21,13 +21,17 @@
     },
     "claude": {
       "usageSignInLabel": "重新登入",
-      "usageSignInMessage": "所選 Claude 帳戶需要您重新登入。請開啟設定 > AI 供應商帳戶，或選擇系統預設。"
+      "usageSignInMessage": "此帳戶需要您重新登入。"
     }
   },
   "agentHistory": {
     "panel": {
       "all": "全部",
       "emptyScope": "此範圍內沒有過往的代理程式工作階段。",
+      "hideDetails": "隱藏詳情",
+      "showDetails": "顯示詳情",
+      "loading": "正在載入代理程式工作階段…",
+      "showAllAgents": "顯示所有代理程式",
       "missingResumeId": "此工作階段缺少恢復識別碼。",
       "noSearchResults": "沒有符合搜尋條件的工作階段。",
       "noSessions": "沒有代理程式工作階段",
@@ -58,7 +62,10 @@
       "messages_one": "{{count}} 則訊息",
       "messages_other": "{{count}} 則訊息",
       "resumeSession": "恢復代理程式工作階段",
-      "continueInCli": "在 CLI 中繼續"
+      "continueInCli": "在 CLI 中繼續",
+      "hidePreview": "隱藏最近的訊息。",
+      "showPreview": "顯示最近的訊息。",
+      "you": "你"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "無法連上主機",
@@ -68,6 +75,42 @@
     "worktreeNavigationActions": {
       "agentSessionHistory": "代理程式工作階段歷史",
       "sourceControl": "原始碼控制"
+    },
+    "resume": {
+      "hostConnectionChanged": "主機連線已變更。請再次嘗試繼續工作階段。"
+    },
+    "interrupted": {
+      "failed": "無法恢復已中斷的聊天。",
+      "count_one": "{{count}} 個聊天已中斷",
+      "count_other": "{{count}} 個聊天已中斷",
+      "resumeAll": "全部恢復",
+      "failedCount_one": "{{count}} 個聊天無法恢復",
+      "failedCount_other": "{{count}} 個聊天無法恢復"
+    },
+    "viewControls": {
+      "allAgents": "所有代理程式",
+      "lastUpdated": "最後更新",
+      "created": "建立時間",
+      "agents": "代理程式"
+    },
+    "filterSheet": {
+      "title": "篩選與排序",
+      "activeLabel": "篩選與排序，{{count}} 個已啟用",
+      "reset": "重設",
+      "done": "完成",
+      "sortBy": "排序方式"
+    },
+    "actions": {
+      "resume": "恢復"
+    },
+    "handoff": {
+      "title": "交接給代理程式",
+      "context": "上下文",
+      "latestStatus": "最新狀態",
+      "fullTranscript": "完整記錄",
+      "noContext": "沒有可用於在新工作階段中繼續的上下文。",
+      "launchFailed": "無法啟動新的工作階段。",
+      "promptCopied": "已複製提示詞。請開啟代理程式並貼上。"
     }
   },
   "app": {
@@ -203,12 +246,19 @@
   },
   "chat": {
     "ask": {
+      "send": "傳送",
+      "notNow": "暫時不要",
       "answerPlaceholder": "輸入您的回答",
+      "optionPreview": "{{option}} 預覽",
+      "previewPosition": "{{current}} / {{total}}",
+      "chosen": "已選擇",
+      "chooseThis": "選擇此項",
+      "viewPreview": "檢視",
       "next": "下一步",
       "other": "其他…",
+      "recommended": "推薦",
       "skip": "跳過",
-      "step": "第 {{step}} 步",
-      "submit": "送出"
+      "step": "第 {{step}} 步"
     },
     "askRow": {
       "asked": "已提問：",
@@ -240,6 +290,7 @@
       "file": "檔案",
       "fileMeta": "{{type}} · {{size}}",
       "removeFile": "移除 {{name}}",
+      "uploadingImage": "正在上傳圖片",
       "removeImage": "移除圖片",
       "uploadingFile": "正在上傳 {{name}}"
     },
@@ -283,7 +334,9 @@
       "saveFailed": "無法儲存影像",
       "shareFailed": "無法分享影像",
       "photosAccessDenied": "請在「設定」中允許 Orca 加入照片",
-      "imageTooLarge": "影像過大"
+      "imageTooLarge": "影像過大",
+      "previousImage": "上一張圖片",
+      "nextImage": "下一張圖片"
     },
     "nativeChatProse": {
       "attachedImage": "附加的圖片",
@@ -342,6 +395,7 @@
       "permissionDenied": "{{agent}} 拒絕了權限。查看詳細資訊。",
       "safetyReviewApproved": "{{agent}} 已核准此操作。查看詳細資訊。",
       "safetyReview": "{{agent}} 回報了安全審查警告。查看詳細資訊。",
+      "autoReviewDenied": "{{agent}} 的自動審查拒絕了：{{action}}",
       "truncatedResponse": "供應商回應已截斷（原始大小：{{bytes}} 位元組）。",
       "modelFallback": "Claude 已切換模型：{{from}} → {{to}}。",
       "signIn": "登入",
@@ -365,6 +419,12 @@
       "failed": "無法繼續此聊天。請重試，或傳送一則訊息。",
       "explanation": "繼續後，代理程式會先檢查其上一步是否已完成。"
     },
+    "restartNote": {
+      "continued": "Orca 在重新啟動後已請此代理程式繼續。你自己的提示詞未重新傳送。",
+      "refused": "Orca 在重新啟動後無法繼續此聊天。請傳送訊息以繼續。",
+      "unconfirmed": "Orca 在重新啟動後已請此代理程式繼續，但無法確認它是否照做。傳送其他訊息前，請先查看它的最新回覆。",
+      "notConnected": "Orca 在重新啟動後無法重新連線到此聊天，因此未請代理程式繼續。"
+    },
     "sendError": {
       "dismiss": "關閉"
     },
@@ -381,17 +441,16 @@
     "promptStrip": {
       "expand": "展開"
     },
-    "question": {
-      "otherReplyPlaceholder": "或輸入回覆…",
-      "replyPlaceholder": "輸入您的回覆…",
-      "sendReply": "傳送回覆",
-      "submit": "送出",
-      "submitCount": "送出（{{count}}）",
-      "submitSelectedOptions": "送出所選選項"
-    },
     "queuedMessages": {
       "deleteAll": "全部刪除",
       "editMessage": "編輯訊息",
+      "showLess": "收合",
+      "moreCount_one": "還有 {{count}} 則",
+      "moreCount_other": "還有 {{count}} 則",
+      "deleteMessage": "刪除訊息",
+      "queuedCount_one": "{{count}} 則排隊中的訊息",
+      "queuedCount_other": "{{count}} 則排隊中的訊息",
+      "foldNeedsAttention": "{{more}}，有訊息需要處理",
       "pausedState": "已暫停",
       "queuedState": "已排隊",
       "resume": "繼續",
@@ -413,10 +472,27 @@
       "unavailable": "無法顯示所選的答案",
       "thisPhone": "這支手機",
       "computer": "電腦",
-      "otherDevice": "其他裝置"
+      "otherDevice": "其他裝置",
+      "questionCancelled": "問題已取消",
+      "youAnswered": "你已回答：<answer>{{answer}}</answer>",
+      "answeredCount_one": "你已回答 <answer>{{count}} 個問題</answer>",
+      "answeredCount_other": "你已回答 <answer>{{count}} 個問題</answer>",
+      "answeredCount": "你已回答 <answer>{{count}} 個問題</answer>"
+    },
+    "approvalRecord": {
+      "cancelled": "<tool>{{tool}}</tool> 的請求已取消",
+      "coordinatorAllowed": "協調者已允許 <tool>{{tool}}</tool>",
+      "coordinatorDenied": "協調者已拒絕 <tool>{{tool}}</tool>",
+      "allowedUnnamed": "已允許 <tool>{{tool}}</tool>",
+      "deniedUnnamed": "已拒絕 <tool>{{tool}}</tool>",
+      "youAllowed": "你已允許 <tool>{{tool}}</tool>",
+      "youAllowedForSession": "你已在此工作階段中允許 <tool>{{tool}}</tool>",
+      "youDenied": "你已拒絕 <tool>{{tool}}</tool>",
+      "youAnswered": "你已回答 <tool>{{tool}}</tool>：<answer>{{answer}}</answer>"
     },
     "sessionOptionCopy": {
       "none": "無",
+      "ultracode": "Ultracode",
       "availableAfterSessionStarts": "工作階段開始後可用。",
       "chooseInAgentPicker": "在代理程式選擇器中選擇…",
       "effort": "推理強度",
@@ -435,6 +511,11 @@
       "on": "開啟",
       "permissions": "權限",
       "sessionOptions": "工作階段選項",
+      "permissionAppliesNextMessage": "{{saved}} 將套用於你的下一則訊息；目前使用 {{active}}",
+      "permissionAppliesNextMessageCompact": "{{saved}} · 下一則訊息",
+      "permissionAppliesNextMessageTiming": "下一則訊息套用 · 目前使用 {{active}}",
+      "modelsLoading": "正在載入模型…",
+      "signInForModels": "登入後即可查看可用的模型。",
       "setWhenSessionStarts": "將於工作階段開始時設定。",
       "speed": "速度",
       "standard": "標準",
@@ -451,6 +532,10 @@
       "modelFullAccessLabel": "模型，{{value}}，完整存取權",
       "modelLabel": "模型，{{value}}",
       "permissions": "權限",
+      "applying": "正在套用…",
+      "onAttach": "聊天連線後套用",
+      "heldPickRefused": "此聊天無法使用 {{picked}}。已保留 {{kept}}。",
+      "optionsSection": "選項",
       "permissionsLabel": "權限，{{value}}",
       "settingsLocked": "本回合結束後即可變更模型設定。",
       "workingAnnouncement": "代理程式正在執行。本回合結束後即可變更模型設定。"
@@ -633,6 +718,27 @@
       "saveUpdate": "儲存功能將在手機更新中提供。",
       "fullCopySaveUpdate": "完整複製和儲存此附件的功能將在手機更新中提供。"
     },
+    "agentMessage": {
+      "open": "開啟 {{name}}",
+      "row": {
+        "started": "已啟動",
+        "forItems": "負責",
+        "reopened": "已重新開啟",
+        "followedUp": "已傳送後續訊息給",
+        "handedOff": "已交接給",
+        "task": "任務來自",
+        "update": "更新來自",
+        "message": "訊息來自",
+        "notSentYet": "尚未傳送"
+      },
+      "kind": {
+        "started": "已啟動",
+        "reopened": "已重新開啟",
+        "followedUp": "後續訊息",
+        "handedOff": "已交接",
+        "task": "任務"
+      }
+    },
     "hostOutage": {
       "offlineAsOf": "{{host}} 已離線 · 截至 {{time}}",
       "reconnecting": "{{hostName}} 正在重新連線…",
@@ -654,7 +760,10 @@
       "collapse": "隱藏完整目標",
       "attachmentsUnsupported": "在設定目標之前刪除附件。",
       "pause": "暫停",
-      "resume": "繼續"
+      "resume": "繼續",
+      "checks_one": "{{count}} 次檢查",
+      "checks_other": "{{count}} 次檢查",
+      "last-check": "最近一次目標檢查"
     },
     "rewind": {
       "title": "回溯到此處？",
@@ -675,6 +784,15 @@
       "timeout": "返回到此訊息後聊天未更新。請重新開啟以檢視最新內容。",
       "pending": "請等待對話回溯到更早的訊息。"
     },
+    "urlRequest": {
+      "title": "已要求登入",
+      "open": "開啟登入頁面",
+      "decline": "拒絕",
+      "opened": "已在你的瀏覽器中開啟登入頁面。",
+      "openAgain": "再次開啟",
+      "finished": "登入完成",
+      "finishedWith": "登入完成 · {{message}}"
+    },
     "fork": {
       "busy": "另一個聊天或終端機正在開啟。請稍候，再次從 {{agent}} 聊天建立分支。",
       "unconfirmed": "{{agent}} 無法確認是否已建立分支。它可能已經開啟；請先檢查工作階段歷史記錄，再試一次。",
@@ -687,8 +805,44 @@
       "action": "引用",
       "hint": "將所選文字作為引用加入訊息"
     },
+    "eventRow": {
+      "running": "執行中",
+      "failed": "失敗"
+    },
+    "workerApproval": {
+      "allowFor": "要允許 {{worker}} 使用 {{tool}} 嗎？",
+      "title": "{{worker}} · {{title}}",
+      "allow": "允許",
+      "deny": "拒絕",
+      "waiting": "{{count}} 個工作者等待中 · 由舊到新",
+      "countdown": "若無人回應，Claude 將在 {{time}} 後自動拒絕。",
+      "openWorker": "開啟工作者",
+      "record": {
+        "youAllowedFor": "你已允許 <tool>{{tool}}</tool> 用於 <task>{{task}}</task>",
+        "youDeniedFor": "你已拒絕 <tool>{{tool}}</tool> 用於 <task>{{task}}</task>",
+        "coordinatorAllowed": "協調者已允許 <tool>{{tool}}</tool> 用於 <task>{{task}}</task>",
+        "coordinatorDenied": "協調者已拒絕 <tool>{{tool}}</tool> 用於 <task>{{task}}</task>",
+        "allowedInTerminal": "<tool>{{tool}}</tool> 用於 <task>{{task}}</task>，已在其終端機中允許",
+        "deniedInTerminal": "<tool>{{tool}}</tool> 用於 <task>{{task}}</task>，已在其終端機中拒絕",
+        "allowedInChat": "<tool>{{tool}}</tool> 用於 <task>{{task}}</task>，已在其聊天中允許",
+        "deniedInChat": "<tool>{{tool}}</tool> 用於 <task>{{task}}</task>，已在其聊天中拒絕",
+        "timedOut": "<tool>{{tool}}</tool> 用於 <task>{{task}}</task>，已逾時",
+        "waitsInTerminal": "<tool>{{tool}}</tool> 用於 <task>{{task}}</task>，正在其終端機中等待",
+        "workerEnded": "<tool>{{tool}}</tool> 用於 <task>{{task}}</task>，已關閉：工作者已結束",
+        "closedUnnamed": "<tool>{{tool}}</tool> 用於 <task>{{task}}</task>，已關閉且無記錄的回應",
+        "reasonSentAsMessage": "原因，將以訊息傳送",
+        "coordinatorReason": "協調者的原因"
+      }
+    },
     "messageTime": {
       "yesterday": "昨天 {{time}}"
+    },
+    "pairedServerAsk": {
+      "title": "{{from}} 想傳訊息給這台電腦上的 {{to}}",
+      "once": "允許一次",
+      "always": "一律允許 {{server}}",
+      "deny": "拒絕",
+      "thisServer": "此伺服器"
     },
     "mcp": {
       "status": {
@@ -702,7 +856,8 @@
         "off": "關閉",
         "pending": "正在連線…",
         "tools_other": "{{count}} 個工具",
-        "waitingForSignIn": "正在等待登入…"
+        "waitingForSignIn": "正在等待登入…",
+        "tools_one": "{{count}} 個工具"
       },
       "source": {
         "project": "專案",
@@ -729,10 +884,12 @@
       "summary": {
         "signingIn": "正在登入 {{name}}",
         "connected": "已連線：{{count}}",
+        "needsAuth_one": "{{count}} 個需要登入",
         "needsAuth_other": "{{count}} 個需要登入",
         "failed": "失敗：{{count}}"
       },
-      "pasteHint": "當瀏覽器前往無法載入的頁面時，請複製網址並貼到這裡。"
+      "pasteHint": "當瀏覽器前往無法載入的頁面時，請複製網址並貼到這裡。",
+      "manage": "管理 MCP 伺服器"
     }
   },
   "common": {
@@ -1215,7 +1372,7 @@
       "pairingInvalid": "配對已失效，請重新與電腦配對",
       "rePairDetail": "重新與電腦配對",
       "reconnecting": "正在重新連線…",
-      "relayAccessExpired": "{{host}} 的 Relay 存取權已到期",
+      "relayAccessRefused": "Relay 拒絕了對 {{host}} 的存取",
       "relayConnectFailed": "無法透過 Relay 連線",
       "relayUnreachable": "無法連上 Relay",
       "signInDetail": "在電腦上登入 Orca 即可重新連線",
@@ -2019,7 +2176,10 @@
       "dismissKeyboard": "收起鍵盤",
       "sendKey": "傳送 {{label}}",
       "typeCharacter": "輸入 {{character}}",
+      "control": "Control",
       "interrupt": "中斷終端機",
+      "alt": "Alt",
+      "shift": "Shift",
       "keysModeLabel": "按鍵模式：輸入內容會直接傳送至終端機。切換至訊息模式",
       "messageModeLabel": "訊息模式：輸入後再傳送。切換至按鍵模式",
       "moreKeys": "更多按鍵與操作",
@@ -2124,6 +2284,7 @@
     "browserTabActionSheet": {
       "forward": "前進",
       "reload": "重新載入",
+      "hardReload": "強制重新載入",
       "title": "瀏覽器"
     },
     "bulkCloseSheetActions": {
@@ -2139,6 +2300,7 @@
     },
     "commandDock": {
       "liveInputHint": "輸入的文字會直接傳送至目前使用中的終端機",
+      "tapToShowKeyboard": "點一下以顯示鍵盤",
       "liveInputLabel": "終端機即時輸入"
     },
     "contentRow": {
@@ -2156,21 +2318,38 @@
       "committedChangesFailed": "載入已提交的變更失敗",
       "committedChangesUnavailable": "無法取得已提交的變更",
       "committedDiffUnavailable": "無法取得已提交的差異",
+      "commitLoadFailed": "無法載入此提交",
+      "commitDiffUnavailable": "無法取得提交的差異",
       "desktopUpdateRequired": "請更新此主機上的 Orca，以便在手機上審查變更。",
       "diffLoadFailed": "無法載入差異",
       "reviewNotesLoadFailed": "無法載入審查備註"
     },
     "diffReviewQueue": {
       "committedOnBranch": "已在分支上提交",
+      "inCommit": "此提交中",
       "staged": "已暫存",
       "unstaged": "未暫存"
     },
     "diffReviewScreenModel": {
       "branch": "分支",
       "staged": "已暫存",
-      "unstaged": "未暫存"
+      "unstaged": "未暫存",
+      "positionUncommitted": "{{position}} / {{count}} · 未提交",
+      "positionInCommit": "{{position}} / {{count}} · 此提交中",
+      "positionViewed": "{{position}} / {{count}} · 已檢視 {{viewedCount}} 個",
+      "commitFiles_one": "{{count}} 個檔案",
+      "commitFiles_other": "{{count}} 個檔案",
+      "uncommittedFiles_one": "{{count}} 個未提交",
+      "uncommittedFiles_other": "{{count}} 個未提交",
+      "viewedOfCount": "已檢視 {{viewedCount}} / {{count}} 個"
     },
     "failure": {
+      "forkOriginalMissing": "{{agent}} 在原始聊天中找不到此回覆。請開啟該聊天，並從那裡建立分支。",
+      "forkOriginalUnavailable": "{{agent}} 無法在原始聊天中從此回覆建立分支。請開啟該聊天，並從那裡建立分支。",
+      "forkOriginalMissingNamed": "{{agent}} 在「{{detail}}」中找不到此回覆。請開啟該聊天，並從那裡建立分支。",
+      "forkOriginalUnavailableNamed": "{{agent}} 無法在「{{detail}}」中從此回覆建立分支。請開啟該聊天，並從那裡建立分支。",
+      "forkOriginalLatestOnly": "{{agent}} 只能從原始聊天的最新回覆建立分支。請開啟該聊天，待最新回覆完成後再從中建立分支。",
+      "forkOriginalLatestOnlyNamed": "{{agent}} 只能從「{{detail}}」的最新回覆建立分支。請開啟該聊天，待最新回覆完成後再從中建立分支。",
       "accountSwitchInProgress": "{{agent}} 在此主機上的設定正在變更。請在完成後重試。",
       "agentCommandNotRunnable": "{{agent}} 在「設定 → 代理程式」中的命令必須是 Orca 能找到的程式路徑或名稱，且不能包含引數或變數。請修改或重設。",
       "agentCommandFailed": "{{agent}} 在「設定 → 代理程式」中的命令未能啟動 {{agent}}：{{detail}}。請修改或重設。",
@@ -2180,6 +2359,7 @@
       "agentStillWorking": "代理程式仍在工作。",
       "answerUnconfirmed": "您的回答已記錄，但代理程式未確認。",
       "antigravityNotSignedIn": "Antigravity 尚未登入。請前往「設定 → 帳戶 → Antigravity」登入，再重新傳送訊息。",
+      "antigravitySystemNotSignedIn": "Antigravity 尚未登入。請在執行此聊天的電腦上執行 `agy` 登入，然後再次傳送訊息。",
       "argumentsMissingValue": "已儲存的引數需要為 {{option}} 指定一個值。",
       "argumentsMultipleValues": "已儲存的引數為 {{option}} 指定了多個值。",
       "argumentsPositionalPrompt": "已儲存的引數中包含提示詞。",
@@ -2206,6 +2386,7 @@
       "chooseClaudeAccount": "請在 Claude 帳戶設定中選擇或新增一個。",
       "chooseClaudeAccountThenRunCommand": "請在 Claude 帳戶設定中選擇或新增一個，然後重新執行 /{{command}}。",
       "chooseClaudeAccountThenSend": "請在 Claude 帳戶設定中選擇或新增一個，然後重新傳送您的訊息。",
+      "unconfirmed": "無法確認此訊息是否已傳送，且尚未重新傳送。",
       "claudeAccountFolderMissing": "所選 Claude 帳戶的資料夾不存在。請重新登入該帳戶或選擇其他帳戶。",
       "claudeAccountSetupFailed": "無法設定所選 Claude 帳戶。請重試或選擇其他帳戶。",
       "claudeEffortInvalid": "Claude 的推理強度無效；請選擇 low、medium、high、xhigh 或 max，然後重新傳送。",
@@ -2232,6 +2413,8 @@
       "editSavedArguments": "請在設定 > 代理程式 > 引數中編輯。",
       "emptyMessage": "此訊息為空，因此未傳送。",
       "fullAccessAsRoot": "{{agent}} 以 root 身分執行時不會使用「完整存取權」。請在執行此聊天的電腦上，前往「設定 → 代理程式」為 {{agent}} 選擇其他權限，然後開始新的聊天。",
+      "botToolsNeedStatusHooks": "{{agent}} 機器人需要代理程式狀態鉤子：機器人的工具正是透過它們以機器人身分運作。請在「設定 → 代理程式」中為 {{agent}} 開啟，然後開始新的聊天。",
+      "botToolsGatewayOutdated": "{{agent}} 的閘道仍在執行舊版 Orca 外掛，因此此機器人的工具無法以機器人身分運作。請執行 `hermes gateway stop`，然後開始新的聊天。",
       "historyInOtherAccount": "此聊天的歷史記錄位於另一個 Claude 帳戶中。請切換回該帳戶以繼續此聊天。",
       "historyTooLarge": "此對話的歷史記錄過大，無法在此恢復。",
       "hostFault": "Orca 遇到問題，因此此操作未完成。",
@@ -2306,6 +2489,7 @@
       "imageLabel": "{{title}} 圖片",
       "noReviewNotes": "尚無審查備註",
       "previewLabel": "{{title}} 預覽",
+      "loading": "正在載入檔案…",
       "reviewNotes_one": "{{count}} 則審查備註",
       "reviewNotes_other": "{{count}} 則審查備註",
       "send": "傳送",
@@ -2316,6 +2500,7 @@
     },
     "githubPrMutations": {
       "reviewThreadUpdateFailed": "無法更新審查討論串。",
+      "fileViewedFailed": "無法更新已檢視狀態。",
       "titleUpdateFailed": "無法更新標題。"
     },
     "githubPrRpc": {
@@ -2334,7 +2519,8 @@
       "sourceControl": "原始碼控制",
       "newTab": "新分頁",
       "quickCommands": "快速命令",
-      "items": "項目"
+      "items": "項目",
+      "textSize": "文字大小"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "代理程式歷史紀錄",
@@ -2347,6 +2533,7 @@
       "copyLoaded": "複製已載入內容",
       "copyLoadedSource": "複製已載入的 Markdown 原始碼",
       "copyPath": "複製路徑",
+      "loading": "正在載入文件…",
       "copyPathLabel": "複製 Markdown 路徑",
       "copySource": "複製 Markdown 原始碼",
       "discard": "放棄",
@@ -2421,6 +2608,7 @@
       "images_one": "{{count}} 張圖片",
       "images_other": "{{count}} 張圖片",
       "moreActions": "更多操作",
+      "you": "你",
       "send": "傳送",
       "sendAgainHint": "再次傳送此訊息",
       "sendHint": "傳送此訊息",
@@ -2498,7 +2686,10 @@
     },
     "sheets": {
       "browser": "瀏覽器",
+      "browserStreamingUnavailable": "此主機無法串流瀏覽器分頁",
       "chat": "聊天",
+      "cli": "CLI",
+      "cliOnly": "僅限 CLI",
       "copyAllAndLeave": "全部複製並離開",
       "copyDraftsFailed": "無法複製草稿",
       "copyNotes": "複製備註",
@@ -2522,6 +2713,9 @@
       "shortcut": "快速鍵",
       "terminal": "終端機",
       "terminalWithShell": "終端機: {{shell}}",
+      "more": "更多",
+      "linkCopied": "已複製連結",
+      "copyLinkFailed": "無法複製連結",
       "shellPowerShell": "PowerShell",
       "shellCmd": "命令提示字元",
       "shellGitBash": "Git Bash",
@@ -2530,6 +2724,7 @@
       "unsavedMarkdown": "尚未儲存的 Markdown 變更",
       "urlPrompt": "請輸入網址，或留空以開啟新分頁。",
       "allowAutoClose": "允許自動關閉",
+      "agents": "代理程式",
       "renameTerminalFailed": "無法重新命名終端機。{{reason}}"
     },
     "sourceControlLaunchAgent": {
@@ -2600,7 +2795,8 @@
       "browserUnavailable": "瀏覽器頁面尚未就緒。",
       "invalidUrl": "請輸入有效的網址",
       "noteCreateFailed": "建立 Markdown 筆記失敗",
-      "untitledNoteCreateFailed": "無法建立未命名的 Markdown 筆記"
+      "untitledNoteCreateFailed": "無法建立未命名的 Markdown 筆記",
+      "browserStreamingUnavailable": "此主機無法串流瀏覽器分頁"
     },
     "useDiffComments": {
       "copyNotesFailed": "無法複製備註",
@@ -2616,6 +2812,7 @@
     },
     "useDiffReviewController": {
       "loadFailed": "無法載入審查",
+      "commitMissing": "請更新 Orca 應用程式，以便在此開啟提交中的檔案。",
       "missingWorktree": "找不到工作樹"
     },
     "useDiffReviewDiffLoading": {
@@ -2743,6 +2940,8 @@
       "conversationCleared": "此對話已被清除。",
       "goalsUnsupported": "此代理程式不支援目標。",
       "historyUnavailable": "Orca 目前無法開啟此聊天的歷史記錄。",
+      "diskFull": "執行此聊天的電腦磁碟已滿。",
+      "freeDiskSpace": "請釋放該磁碟空間後重試。",
       "savedInOtherFolder": "此對話儲存在另一個資料夾中。",
       "historyUnreadable": "Orca 無法讀取此聊天的已儲存歷史記錄。",
       "historyUnusable": "無法載入此聊天。",
@@ -2774,6 +2973,7 @@
       "reattachFiles": "請將它們移除後重新附加。",
       "recordFailed": "Orca 無法將此內容儲存到聊天歷史記錄中。",
       "recordUnreadable": "Orca 無法讀取此聊天的已儲存狀態。",
+      "mailOwnerUnconfirmed": "Orca 無法確認此訊息是否仍應送往此聊天。",
       "reopenChat": "請重新開啟聊天以再次檢查。",
       "restartFailed": "代理程式無法重新啟動。",
       "runClearWhenDone": "完成後再執行 /clear。",
@@ -2841,18 +3041,108 @@
       "inputPane": "{{title}} · 輸入"
     },
     "structuredOpen": {
+      "goneGeneric": "代理程式的聊天已不在此主機上，因此無法在此重新開啟。",
+      "unknownGeneric": "在此主機上找不到代理程式的聊天。請重新連線至其所在的電腦，然後再試一次。",
+      "unsupportedGeneric": "必須更新 Orca，才能重新開啟代理程式的聊天。",
+      "unreachableGeneric": "代理程式的聊天尚無法使用。請稍後重試。",
+      "gone": "{{agent}} 的聊天已不在此主機上，因此無法在此重新開啟。",
+      "unknown": "在此主機上找不到 {{agent}} 的聊天。請重新連線至其所在的電腦，然後再試一次。",
+      "unsupported": "必須更新 Orca，才能重新開啟 {{agent}} 的聊天。",
+      "unreachable": "{{agent}} 的聊天尚無法使用。請稍後重試。",
+      "paneUnavailable": "代理程式的窗格不再可用。",
       "worktreeDeleted": "工作樹已刪除。",
+      "projectRemoved": "專案已從 Orca 移除。",
       "folderWorkspaceRemoved": "資料夾工作區已移除。"
     },
     "nativeChatView": {
+      "loading": "正在載入對話…",
       "linkedMessageMissing": "找不到該訊息。"
     },
+    "contentState": {
+      "connectingTo": "正在連線至 {{host}}…",
+      "connecting": "正在連線…",
+      "tabsStalled": "載入分頁的時間比預期久",
+      "tabsAsOf": "分頁狀態截至 {{time}}"
+    },
+    "presentation": {
+      "loadingTabs": "正在載入分頁",
+      "tapToRetry": "{{status}} — 點一下以重試"
+    },
+    "documentReaders": {
+      "markdownFailed": "無法載入 Markdown",
+      "diffFailed": "無法載入差異預覽",
+      "fileFailed": "無法載入檔案預覽",
+      "outsideWorkspace": "此檔案位於工作區之外。請在電腦上開啟以檢視。"
+    },
+    "linkActionSheet": {
+      "openInOrca": "在 Orca 瀏覽器中開啟",
+      "openInBrowser": "在系統瀏覽器中開啟",
+      "copyLink": "複製連結"
+    },
+    "usePrTextAction": {
+      "updateFailed": "無法更新 PR。"
+    },
+    "smartKeys": {
+      "always": "一律",
+      "answer": "回答",
+      "background": "背景執行",
+      "cancel": "取消",
+      "confirm": "確認",
+      "edit": "編輯",
+      "history": "歷史記錄",
+      "keyLabel": "{{word}}，傳送 {{combo}}",
+      "mode": "模式",
+      "no": "否",
+      "queue": "加入佇列",
+      "reject": "拒絕",
+      "rewind": "回溯",
+      "sendNow": "立即傳送",
+      "skip": "跳過",
+      "stop": "停止",
+      "yes": "是"
+    },
+    "tabsSheet": {
+      "needsYou": "需要你處理",
+      "working": "工作中",
+      "everythingElse": "其他",
+      "closeTab": "關閉 {{title}}",
+      "panes_one": "{{count}} 個窗格",
+      "panes_other": "{{count}} 個窗格"
+    },
+    "tabMenu": {
+      "closeTab": "關閉分頁"
+    },
+    "tabRows": {
+      "browser": "瀏覽器",
+      "markdown": "Markdown 筆記",
+      "file": "檔案",
+      "chat": "聊天",
+      "terminal": "終端機"
+    },
     "browserProfile": {
-      "default": "預設"
+      "title": "設定檔",
+      "default": "預設",
+      "workspaceDefault": "工作區預設"
+    },
+    "orcaCommands": {
+      "desktopOnly": "可在桌面版應用程式中使用"
     },
     "tabBar": {
+      "oneTab": "1 個分頁",
       "tabCount": "{{count}} 個分頁",
+      "anotherNeedsYou": "另一個分頁需要你處理",
+      "actionsHint": "顯示此分頁的操作",
+      "next": "下一個分頁",
+      "previous": "上一個分頁",
       "hint": "顯示所有分頁"
+    },
+    "textSizeSheet": {
+      "chatTitle": "聊天文字",
+      "size": "大小",
+      "moreChat": "更多文字設定",
+      "terminalTitle": "終端機文字",
+      "pointsAndColumns": "{{points}} · {{count}} 欄",
+      "moreTerminal": "更多終端機設定"
     }
   },
   "settings": {
@@ -2946,6 +3236,8 @@
       "loadFailed": "無法載入已配對的電腦。",
       "pairDesktop": "請先配對電腦，再試一次。",
       "pushServiceFailed": "無法透過 Orca 的推播服務傳送，請再試一次。",
+      "hostClockSkew": "{{host}} 的時鐘偏差了 {{seconds}} 秒，因此 Orca 的推播服務拒絕了它。請將時鐘設定為正確時間後再試一次。",
+      "hostClockSkewDuration": "{{host}} 的時鐘偏差了 {{duration}}，因此 Orca 的推播服務拒絕了它。請將時鐘設定為正確時間後再試一次。",
       "rateLimited": "通知過多，請稍後再試。",
       "sendButton": "傳送測試通知",
       "sendFailed": "無法傳送測試推播。",
@@ -3052,6 +3344,7 @@
       "switchBranch": "切換分支",
       "syncCounts": "拉取 {{behind}} 筆，推送 {{ahead}} 筆。",
       "upToDate": "沒有可提交的內容。分支已是最新狀態。",
+      "openCommits": "開啟提交記錄",
       "waitForRemoteOperation": "請等待遠端操作完成後再試。"
     },
     "branchBaseRef": {
@@ -3083,6 +3376,11 @@
       "commitSync": "提交並同步",
       "commitThenPullPush": "先提交，再拉取並推送",
       "enterMessage": "輸入提交訊息以進行提交",
+      "statusConflicts": "衝突",
+      "statusNothingStaged": "沒有已暫存的變更",
+      "statusNeedsMessage": "缺少提交訊息",
+      "statusNotPublished": "未發布",
+      "statusNoBranch": "無分支",
       "linkedReviewTargetUnavailable": "已連結的審查分支無法使用",
       "prAlreadyMerged": "PR 已合併",
       "publishBranchFirstToPush": "請先發布分支再推送提交",
@@ -3163,8 +3461,10 @@
       "loadingCommitted": "正在載入已提交的變更…",
       "openChangedFile": "開啟已變更的檔案 {{path}}",
       "openCommittedChange": "開啟 {{path}} 的已提交變更",
+      "discard": "放棄",
       "renamedFrom": "原為 {{path}}",
       "stageFile": "暫存 {{path}}",
+      "discardFile": "放棄 {{path}}",
       "unresolvedConflict": "未解決的衝突",
       "unstageFile": "取消暫存 {{path}}"
     },
@@ -3187,11 +3487,14 @@
       "loadFailed": "無法載入歷史記錄",
       "loadFilesFailed": "無法載入該次提交的檔案",
       "noCommits": "沒有提交記錄。",
+      "loading": "正在載入提交…",
       "noFileChanges": "沒有檔案變更",
       "retryFiles": "重新載入提交的檔案"
     },
     "gitStatus": {
-      "conflicts": "衝突"
+      "conflicts": "衝突",
+      "uncommitted": "未提交",
+      "staged": "已暫存"
     },
     "header": {
       "backToSession": "返回工作階段",
@@ -3250,7 +3553,8 @@
       "pushBeforeCreateFailed": "推送失敗。請解決推送錯誤後再試一次。"
     },
     "hubTab": {
-      "changes": "變更"
+      "changes": "變更",
+      "pullRequest": "PR"
     },
     "loaders": {
       "loadFailed": "無法載入原始碼控制",
@@ -3267,7 +3571,24 @@
       "switchBranchTitle": "切換分支"
     },
     "panel": {
-      "unavailableTitle": "無法使用原始碼控制"
+      "unavailableTitle": "無法使用原始碼控制",
+      "loading": "正在載入變更…"
+    },
+    "folder": {
+      "emptyTitle": "還沒有附加的工作樹",
+      "emptyCopy": "從此工作區建立的工作樹將顯示在這裡。",
+      "statusUnavailable": "無法使用",
+      "backToFolder": "返回資料夾",
+      "createSection": "建立工作樹",
+      "createIn": "在 {{repo}} 中建立工作樹",
+      "created": "已在 {{repo}} 中建立工作樹 {{name}}",
+      "createdNamed": "已建立工作樹 {{name}}",
+      "createFailed": "無法在 {{repo}} 中建立工作樹。",
+      "loadReposRetry": "載入存放庫",
+      "setupChoiceTitle": "要略過設定並重試嗎？",
+      "setupChoiceMessage": "Orca 無法確認上次在 {{repo}} 中的建立作業。重試時需要選擇設定方式；工作樹將在不執行存放庫設定的情況下建立。",
+      "setupChoiceSkip": "略過設定並重試",
+      "checking": "{{repo}} 的工作樹可能已建立。正在檢查資料夾…"
     },
     "prCreate": {
       "authRequired": "請在建立 {{reviewLabel}} 之前完成身分驗證。",
@@ -3296,6 +3617,13 @@
       "forcePush": "強制推送",
       "forcePushFromDesktop": "從桌面版強制推送此 PR 的分支",
       "publishBranch": "發布分支",
+      "commitFiles_one": "提交 {{count}} 個檔案",
+      "commitFiles_other": "提交 {{count}} 個檔案",
+      "pushCommits_one": "推送 {{count}} 筆提交",
+      "pushCommits_other": "推送 {{count}} 筆提交",
+      "pullCommits_one": "拉取 {{count}} 筆提交",
+      "pullCommits_other": "拉取 {{count}} 筆提交",
+      "stageAll": "暫存全部",
       "pull": "拉取",
       "push": "推送",
       "sync": "同步"
@@ -3344,6 +3672,14 @@
       "rebaseFromBase": "以基準分支進行變基",
       "rebaseFromNamedBase": "以 {{baseRef}} 為基準進行變基",
       "rebaseWithLatestFrom": "使用 {{baseRef}} 的最新提交，對目前分支進行變基",
+      "statusUpToDate": "已是最新",
+      "statusSetsUpstream": "設定上游",
+      "statusNotPublished": "未發布",
+      "statusNoBranch": "無分支",
+      "statusMayFail": "可能失敗",
+      "statusPublished": "已發布",
+      "statusStashFirst": "請先儲藏",
+      "statusReplaces": "將覆寫 ↓{{behind}}",
       "sync": "同步",
       "tryFastForwardPull": "嘗試以快轉方式拉取；git 可能因本機提交而拒絕拉取",
       "tryRegularPush": "嘗試一般推送；git 可能要求強制推送",
@@ -3429,6 +3765,9 @@
       "planModelUnavailable": "模型「{{model}}」無法用於 {{label}}。",
       "planModelWithoutThinking": "模型「{{model}}」不支援設定思考強度。",
       "planThinkingLevelInvalid": "思考強度「{{level}}」不適用於 {{model}}。",
+      "commandTemplateEmptyDictationCleanup": "聽寫整理的命令範本為空。",
+      "dictationCleanupAgentUnsupported": "請在「設定 -> 語音 -> 整理」中為 AI 整理選擇支援的代理程式。支援的代理程式：{{agents}}，也可選擇「自訂命令」。",
+      "agentCannotGenerateDictationCleanup": "代理程式「{{agent}}」不支援聽寫整理。支援的代理程式：{{agents}}，也可選擇「自訂命令」。",
       "promptTooLargeForArgument": "{{label}} 的提示詞過大，無法作為單一命令列引數傳遞。請減少暫存的變更後再試一次。",
       "promptTooLargeForWindows": "{{label}} 的提示詞過大，無法用於 Windows 命令列。請減少暫存的變更後再試一次。",
       "pullRequestDetailsUnparseable": "無法解析產生的 PR 詳細資料。",
@@ -3444,17 +3783,101 @@
     "useMobileCommitMessageGeneration": {
       "generateFailed": "無法產生提交訊息"
     },
+    "useMobileCreatePrRunner": {
+      "branchRequired": "請先檢出分支，再建立 PR。"
+    },
     "useMobileGitRequests": {
       "actionFailed": "原始碼控制操作失敗",
       "branchUnavailable": "無法取得分支狀態",
       "commitFailed": "提交失敗"
     },
     "conflictActions": {
+      "resolveFile": "{{action}}：{{path}}",
       "needsNewerHost": "請更新執行此工作區的電腦上的 Orca，才能從手機解決合併衝突。",
       "markResolved": "標記為已解決",
       "keepFile": "保留檔案",
       "keepDeletion": "保留刪除",
       "completeMergeFailed": "無法完成合併"
+    },
+    "commitDetail": {
+      "copySha": "複製 SHA",
+      "openOnGitHub": "在 GitHub 上開啟",
+      "openOnWeb": "在網頁上開啟",
+      "back": "返回提交記錄",
+      "title": "提交",
+      "more": "更多提交操作",
+      "author": "作者",
+      "date": "日期",
+      "status": "狀態",
+      "onOrigin": "已在 origin",
+      "notPushed": "未推送",
+      "files_one": "{{count}} 個檔案",
+      "files_other": "{{count}} 個檔案",
+      "filesHeader": "檔案",
+      "authorWithCoAuthors": "{{author}}，共同作者：{{coAuthors}}"
+    },
+    "commits": {
+      "branchedFrom": "從 {{baseRef}} 分支",
+      "baseUpToDate": "已是最新",
+      "baseNewer_one": "1 筆較新的提交",
+      "baseNewer_other": "{{count}} 筆較新的提交",
+      "updateBranch": "更新分支",
+      "back": "返回原始碼控制",
+      "title": "提交記錄",
+      "loadMoreFailed": "重試載入提交記錄",
+      "notPushed": "未推送 {{count}}",
+      "onOrigin": "origin 上 {{count}}"
+    },
+    "nextStep": {
+      "willMergeWhenReady": "將在準備好後合併",
+      "cancelAutoMerge": "取消",
+      "cancelAutoMergeLabel": "取消自動合併",
+      "mergedInto": "已合併至 {{base}}",
+      "merged": "已合併",
+      "genericAgent": "AI",
+      "resolveWithAgent": "使用 {{agent}} 解決",
+      "fixWithAgent": "使用 {{agent}} 修復",
+      "cantMergeYet": "尚無法合併：",
+      "checksFailing_one": "{{count}} 項檢查失敗",
+      "checksFailing_other": "{{count}} 項檢查失敗",
+      "mergeWhenReady": "準備好後合併",
+      "pushAndCreateReview": "推送並建立 {{review}}",
+      "createReview": "建立 {{review}}",
+      "merge": "合併",
+      "checksRunning_one": "{{count}} 項檢查仍在執行",
+      "checksRunning_other": "{{count}} 項檢查仍在執行",
+      "waitingOnReviewer": "正在等待 {{login}} 審查",
+      "waitingOnReview": "正在等待審查"
+    },
+    "prCreateDraft": {
+      "generateFailed": "無法產生描述"
+    },
+    "changesHeader": {
+      "merging": "合併中",
+      "rebasing": "變基中",
+      "cherryPicking": "揀選中",
+      "notPublished": "未發布",
+      "notPushed": "{{count}} 筆未推送",
+      "behind": "落後 {{count}} 筆",
+      "upToDate": "已是最新",
+      "switchBranch": "切換分支（目前為 {{branch}}）",
+      "mergeInProgress": "合併正在進行中",
+      "rebaseInProgress": "變基正在進行中",
+      "cherryPickInProgress": "揀選正在進行中",
+      "filesNeedDecision_one": "{{count}} 個檔案需要你決定如何處理，才能完成。",
+      "filesNeedDecision_other": "{{count}} 個檔案需要你決定如何處理，才能完成。",
+      "conflictsResolved": "所有衝突皆已解決。請從下方列完成。",
+      "continueOnComputer": "所有衝突皆已解決。請在電腦上繼續以完成。",
+      "commits_one": "{{count}} 筆提交",
+      "commits_other": "{{count}} 筆提交",
+      "conflictsMayRemain": "未列出所有檔案，因此可能仍有衝突。請在電腦上檢查。"
+    },
+    "fileList": {
+      "stageAll": "暫存全部",
+      "mergedCleanly": "無衝突合併",
+      "unstageAll": "全部取消暫存",
+      "onThisBranch": "此分支上 {{count}}",
+      "versusBase": "對比 {{base}}"
     }
   },
   "tasks": {
@@ -3471,6 +3894,46 @@
       "loadPageFailed": "無法從 GitHub 載入第 {{page}} 頁。",
       "noMoreResults": "第 {{page}} 頁沒有更多結果。"
     },
+    "filterSheet": {
+      "sortBy": "排序方式",
+      "issueSource": "議題來源",
+      "issueSourceRow": "upstream 或 origin",
+      "view": "檢視",
+      "projectView": "專案檢視",
+      "projectItems_one": "{{count}} 個項目",
+      "projectItems_other": "{{count}} 個項目",
+      "chooseView": "選擇",
+      "showOnRows": "在列上顯示",
+      "projectFields": "專案欄位",
+      "workspace": "工作區",
+      "linearWorkspace": "Linear 工作區",
+      "layout": "版面配置",
+      "groupBy": "分組依據",
+      "orderBy": "排序依據",
+      "displayProperties": "顯示屬性",
+      "title": "篩選與顯示",
+      "done": "完成",
+      "jqlReplacesPreset": "你的 JQL 搜尋會取代「顯示」預設篩選。清除搜尋即可重新選擇。"
+    },
+    "jiraViewControls": {
+      "jqlSearch": "JQL 搜尋"
+    },
+    "itemComments": {
+      "noComments": "尚無留言",
+      "oneComment": "1 則留言",
+      "commentCount": "{{commentCount}} 則留言"
+    },
+    "listState": {
+      "loading": "正在載入任務…"
+    },
+    "connectionPresentation": {
+      "connectToHost": "連線至主機以載入任務",
+      "noMatchingTasks": "沒有符合的任務"
+    },
+    "runtimeHydration": {
+      "loadFailed": "無法載入「任務」設定"
+    },
+    "rerunUnsuccessful": "重試檢查",
     "composerSource": {
       "baseFailed": "無法解析基礎分支。",
       "forkPushWarning": "此 PR 未啟用「允許維護者編輯」；推送至分叉存放庫可能會遭 GitHub 拒絕。"
@@ -3498,6 +3961,7 @@
       "gitlabView": "GitLab 檢視",
       "jiraFilter": "Jira 篩選",
       "jiraSite": "Jira 網站",
+      "statesFailed": "無法載入狀態。請重新開啟以再試一次。",
       "linearFilter": "Linear 篩選",
       "linearIssue": "Linear 議題",
       "linearWorkspace": "Linear 工作區",
@@ -3519,6 +3983,8 @@
       "items": "項目",
       "moreFields_one": "+{{count}} 個欄位",
       "moreFields_other": "+{{count}} 個欄位",
+      "loading": "正在載入專案…",
+      "noMatches": "沒有符合的專案項目。",
       "noItems": "沒有專案項目",
       "pullRequestSubtitle": "PR · {{repository}}{{number}}",
       "linkedPullRequestsOverflow": "另有 {{count}} 個"
@@ -3553,6 +4019,9 @@
     },
     "itemActions": {
       "changeStatus": "更改狀態",
+      "copyLink": "複製連結",
+      "startWorkspace": "啟動工作區",
+      "moreActions": "更多操作",
       "copyGitHubLink": "複製 GitHub 連結",
       "copyLinearLink": "複製 Linear 連結",
       "creating": "建立中…",
@@ -3567,6 +4036,14 @@
       "discussion": "討論",
       "noChecks": "找不到檢查項目。",
       "noComments": "沒有留言。",
+      "details": "詳情",
+      "type": "類型",
+      "status": "狀態",
+      "assignee": "負責人",
+      "project": "專案",
+      "priority": "優先等級",
+      "assignees": "負責人",
+      "loading": "正在載入詳情…",
       "noPipelineRuns": "此 MR 沒有管線執行紀錄。",
       "noSubIssues": "沒有子議題。",
       "none": "無",
@@ -3809,10 +4286,15 @@
     },
     "providerControls": {
       "myTodos": "我的待辦事項",
+      "reposLabel": "存放庫：{{repos}}",
+      "filterCount": "篩選 · {{count}}",
+      "filter": "篩選",
+      "filterLabel": "篩選與顯示",
       "projectMergeRequests": "專案 MR"
     },
     "providerItemList": {
       "intoBranch": "合併至 {{base}}",
+      "kindAndStatus": "{{kind}}，{{status}}",
       "nextPage": "前往下一頁",
       "page": "第 {{page}} 頁",
       "pageOfTotal": "第 {{page}} 頁，共 {{total}} 頁",
@@ -3928,6 +4410,7 @@
       "agent": "代理程式",
       "connectFirst": "請先連線存放庫",
       "connectRepository": "連線存放庫",
+      "optionalLabel": "選填",
       "defaultBranch": "預設分支",
       "detectingAgents": "正在偵測代理程式…",
       "remoteRepository": "遠端存放庫",
@@ -4029,11 +4512,16 @@
     }
   },
   "webShell": {
+    "downloadProgress": {
+      "megabytes": "{{received}} / {{total}} MB"
+    },
     "shellStateScreen": {
       "checkingHost": "正在檢查主機",
       "connectToDownload": "連線至此主機以下載最新版應用程式",
       "documentLoadFailed": "無法開啟已下載的應用程式。",
       "downloadFailed": "無法從此主機下載最新版應用程式。",
+      "downloadProgressFromHost": "來自 {{host}} · {{progress}}",
+      "downloadingLatestApp": "正在下載最新版應用程式",
       "hostProfileUnreadable": "裝置無法讀取此主機的資料。請重試。",
       "isolationUnavailable": "此裝置的 WebView 版本過舊，無法安全開啟工作區。",
       "openingWorkspace": "正在開啟工作區",
@@ -4051,6 +4539,9 @@
       "newHint": "建立新的本機分支",
       "newName": "新分支名稱",
       "title": "此工作樹的分支"
+    },
+    "activity": {
+      "permission": "需要權限"
     }
   },
   "worktree": {
@@ -4079,7 +4570,6 @@
       "empty": "沒有工作區",
       "loadFailed": "無法從此主機載入工作區",
       "noFilterMatches": "沒有符合篩選條件的工作區",
-      "noMatches": "找不到相符的工作區",
       "reopen": "重新開啟以更新",
       "reopenDetail": "此頁面尚不支援這台主機列出工作區的方式。"
     },
@@ -4106,7 +4596,6 @@
       "extraAgentArguments": "額外的代理程式引數",
       "allAutomations": "全部自動化",
       "schedule": "排程",
-      "nextRun": "下次執行",
       "agent": "代理程式",
       "project": "專案",
       "unavailable": "不可用",
@@ -4157,7 +4646,6 @@
       "newWorkspacePerRun": "每次執行建立新工作區",
       "instructions": "指示",
       "runNow": "立即執行",
-      "viewAllRuns": "查看所有執行",
       "savedAgent": "{{agent}}（已儲存）",
       "chooseAProjectSetUpOnThisHost": "請選擇此主機上已設定的專案。",
       "newAutomation": "新增自動化",
@@ -4181,9 +4669,6 @@
       "letYourAgentsWorkOnASchedule": "讓代理程式依排程工作",
       "createAnAutomationToRunATaskOnThisHost": "建立自動化以在此主機上執行任務。",
       "nextDate": "下次：{{date}}",
-      "lastResult": "上次：{{status}} · {{date}}",
-      "latestResultNotReported": "未回報最新結果",
-      "sshTarget": " · SSH {{target}}",
       "reconnectToThisHostToRefreshOrMakeChangesSavedInformationRemainsAvailableBelow": "請重新連線至此主機以重新整理或變更。已儲存的資訊仍可在下方查看。",
       "recentRuns": "最近執行",
       "outcome": "結果",
@@ -4206,7 +4691,6 @@
       "fullOutputUnavailable": "無法載入完整輸出。",
       "retryFullOutput": "重試",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "已載入的歷程記錄中沒有符合的執行。請載入更多以繼續。",
-      "noMatchingRunsYet": "尚無符合的執行。",
       "runSummary": "{{title}}，{{status}}，{{date}}",
       "scheduled": "已排定",
       "loadMoreRuns": "載入更多執行",
@@ -4218,6 +4702,7 @@
       "timeZone": "時區",
       "runsOnTheSelectedHostKeepThatHostAvailableAtTheScheduledTime": "在所選主機上執行。請確保該主機在排定時間可用。",
       "pairedHost": "已配對主機",
+      "chooseHost": "{{host}} 上的自動化，選擇其他主機",
       "selectedServerUnavailable": "所選伺服器（無法使用）",
       "addANameInstructionsAndAnAgent": "請新增名稱、指示和代理程式。",
       "chooseAnExistingWorkspace": "請選擇現有工作區。",
@@ -4249,7 +4734,16 @@
       "discardChangesTitle": "捨棄變更？",
       "discardChangesMessage": "對此自動化所做的未儲存編輯將會遺失。",
       "discard": "捨棄",
-      "keepEditing": "繼續編輯"
+      "keepEditing": "繼續編輯",
+      "on": "開啟",
+      "repeats": "重複",
+      "newOnePerRun": "每次執行都新建",
+      "moreActions": "更多操作",
+      "noRunsYet": "尚無執行記錄",
+      "nextRunToday": "下次執行：今天 {{time}}",
+      "nextRunTomorrow": "下次執行：明天 {{time}}",
+      "nextRunWeekday": "下次執行：{{day}} {{time}}",
+      "nextRunDate": "下次執行：{{date}}"
     },
     "orphanIssues": {
       "hostReselection": "執行此自動化之前，請先編輯它並重新選擇主機。",
@@ -4285,6 +4779,7 @@
       "hooksReviewBlocked": "代理程式正在等待有人審查新增或變更的鉤子（「Hooks need review」）。請開啟此次執行，信任這些鉤子或將其移除。排定的執行會持續進行，等沒有需要審查的項目後便會成功。",
       "agentNeverStarted": "送出提示詞後，自動化代理程式始終未啟動。",
       "agentNoCompletion": "自動化代理程式未回報完成。",
+      "agentInterrupted": "代理程式在完成此次執行前被中斷。",
       "watchTimedOut": "6 小時內未收到完成訊號，Orca 已停止監看此次執行。",
       "projectSetupState": {
         "notSetUp": "專案尚未在所選自動化主機上完成設定。",
@@ -4292,8 +4787,14 @@
         "error": "專案在所選自動化主機上設定失敗。",
         "unsupported": "所選自動化主機不支援此專案。"
       },
-      "wslDistroStopped": "WSL 發行版 {{distro}} 已停止，因此這次排程執行沒有啟動它。請啟動該發行版或使用「立即執行」；它執行期間，之後的排程會照常進行。"
-    }
+      "wslDistroStopped": "WSL 發行版 {{distro}} 已停止，因此這次排程執行沒有啟動它。請啟動該發行版或使用「立即執行」；它執行期間，之後的排程會照常進行。",
+      "botsOff": "設定中已關閉機器人，因此 Orca 略過了這次執行。",
+      "botMissing": "執行這個自動化的機器人已不存在。",
+      "botFolderMissing": "機器人的資料夾已無法使用。",
+      "botPaused": "{{bot}} 已暫停，因此 Orca 略過了這次執行。"
+    },
+    "eventsWontFire": "只會依排程執行：需要 {{connectors}} 連接器",
+    "wontFire": "不會執行：需要 {{connectors}} 連接器"
   },
   "auto": {
     "components": {
@@ -4386,6 +4887,12 @@
                 "message": "Claude 用量將在下次執行 Claude 時更新。"
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "執行 Codex 時更新",
+                "message": "Codex 用量將在下次執行 Codex 時更新。"
+              }
+            },
             "1804cd8c3f": "正在重新整理登入",
             "bf2e739f18": "登入不可用",
             "f8f0f9d8cc": "網路問題",
@@ -4423,7 +4930,86 @@
       }
     }
   },
+  "agents": {
+    "list": {
+      "idleCount": "{{count}} 個閒置",
+      "offlineTitle": "{{desktop}} 已離線",
+      "offlineMessage": "請重新連線該電腦，以開啟此代理程式。",
+      "actions": "{{title}} 的操作",
+      "workers_one": "{{count}} 個工作者",
+      "workers_other": "{{count}} 個工作者",
+      "noMatches": "沒有符合「{{query}}」的代理程式",
+      "emptyTitle": "沒有執行中的代理程式",
+      "pairDesktop": "配對電腦後，即可在這裡查看它的代理程式。",
+      "emptyBody": "在任一工作區啟動代理程式，就會顯示在這裡。",
+      "unread": "未讀",
+      "noDesktopTitle": "未連線任何電腦",
+      "noDesktopBody": "電腦連線後，代理程式就會顯示在這裡。",
+      "hideWorkers": "隱藏 {{workers}}",
+      "showWorkers": "顯示 {{workers}}"
+    },
+    "actions": {
+      "offlineHint": "所在電腦已離線。",
+      "open": "開啟",
+      "goToWorkspace": "前往工作區",
+      "copyTitle": "複製標題",
+      "copied": "已複製",
+      "copyFailed": "無法複製標題",
+      "markRead": "標為已讀",
+      "markUnread": "標為未讀",
+      "clear": "從清單中清除"
+    },
+    "groupBy": {
+      "status": "狀態",
+      "workspace": "工作區",
+      "project": "專案",
+      "agent": "代理程式",
+      "desktop": "電腦"
+    },
+    "options": {
+      "groupBy": "分組依據",
+      "showWorkers": "顯示工作者",
+      "open": "代理程式清單選項",
+      "unreadOnly": "僅顯示未讀",
+      "markAllRead": "標記全部已讀",
+      "clearFinished": "清除已完成"
+    },
+    "search": {
+      "toggle": "搜尋代理程式",
+      "placeholder": "搜尋代理程式"
+    },
+    "desktops": {
+      "pickerTitle": "顯示哪台電腦的代理程式",
+      "agents_one": "{{count}} 個代理程式",
+      "agents_other": "{{count}} 個代理程式",
+      "all": "所有電腦",
+      "offline": "離線",
+      "needsYou_one": "{{count}} 個需要你處理",
+      "needsYou_other": "{{count}} 個需要你處理"
+    },
+    "sections": {
+      "needsYou": "需要你處理",
+      "working": "執行中",
+      "done": "已完成",
+      "offline": "離線",
+      "offlineSeenAgo": "離線 · 上次確認：{{ago}}前",
+      "offlineSeenJustNow": "離線 · 剛剛在線",
+      "seenAgo": "上次確認：{{ago}}前",
+      "seenJustNow": "剛剛在線",
+      "clear": "清除"
+    },
+    "swipe": {
+      "read": "已讀",
+      "unread": "未讀",
+      "clear": "清除"
+    },
+    "activity": {
+      "needsWindow": "無法更新。請在 {{desktop}} 上開啟 Orca。",
+      "failed": "無法更新代理程式清單。"
+    }
+  },
   "bots": {
+    "section": {},
     "link": {
       "pairTitle": "配對電腦",
       "pairRequired": "若要開啟此連結，請將這部手機與電腦配對，然後重新開啟該連結。",
@@ -4462,27 +5048,20 @@
       "access": "存取",
       "whoCanAsk": "誰可以提問",
       "deleteBot": "刪除機器人…",
-      "agentDetail": "用於機器人的對話和自動化。新模型適用於新對話；主聊天保持當前模型。",
       "accountChecking": "檢查中…",
       "signedOut": "已登出 Orca",
       "orcaAccount": "Orca 帳戶",
       "folder": "資料夾",
       "copyPath": "複製路徑",
       "pathCopied": "已複製路徑",
-      "off": "關閉",
-      "lastLooked": "上次檢視 {{when}}",
       "tidyNightLine": "每晚凌晨 3 點後",
       "tidyWeekLine": "每週一次，凌晨 3 點後",
-      "today": "今天",
-      "yesterday": "昨天",
-      "lastTidied": "上次整理 {{when}}",
       "withAccess": "{{service}}：{{people}} 有存取權限",
       "requests_one": "{{count}} 個請求",
       "requests_other": "{{count}} 個請求",
       "onlyYou": "僅你自己",
       "model": "模型",
       "effort": "推理強度",
-      "chatDefaultNote": "使用你的聊天預設設定。後臺執行使用你的「代理程式」設定。",
       "modelDefault": "預設",
       "signInChanged": "Orca 登入已變更",
       "sameAsChatsDetail": "使用你的聊天權限設定。",
@@ -4508,7 +5087,6 @@
     "lookAround": {
       "looking": "正在查詢…",
       "save": "儲存",
-      "detail": "讀取已連線的應用程式和專案以建議下一步。唯讀。每次檢視都會使用你的代理程式方案，且主機上必須正在執行 Orca。",
       "lookNow": "立即檢視",
       "notYet": "尚未",
       "backToLookAround": "返回四處看看"
@@ -4523,35 +5101,22 @@
     "groups": {
       "group": "群組",
       "peerTold": "{{from}} 告知了 {{to}}",
-      "startAConversationWithThisGroupMentionBots": "與此群組開始對話。用 @名稱 或 @everyone 提及機器人。",
       "items": {
-        "thisGroup": "此群組",
-        "thread": "討論串",
-        "all": "它們的全部工作",
-        "orNames": "{{names}} 或 {{last}}",
-        "outsideRoom_one": "此房間外還有 {{count}} 項",
-        "outsideRoom_other": "此房間外還有 {{count}} 項",
-        "outsideThread_one": "此討論串外還有 {{count}} 項",
-        "outsideThread_other": "此討論串外還有 {{count}} 項",
-        "outside_one": "此群組外還有 {{count}} 項",
-        "outside_other": "此群組外還有 {{count}} 項",
         "emptyTitle": "此群組還沒有事項",
-        "emptyBody": "當 {{names}} 在此群組中接手某項工作時，會顯示在這裡。",
         "needsYouCount_one": "{{count}} 個需要您處理",
         "needsYouCount_other": "{{count}} 個需要您處理",
         "workingCount_one": "{{count}} 個執行中",
         "workingCount_other": "{{count}} 個執行中",
         "filterBot": "機器人",
-        "outsideRoom": "此房間外還有 {{count}} 項",
-        "outsideThread": "此討論串外還有 {{count}} 項",
-        "outside": "此群組外還有 {{count}} 項",
         "needsYouCount": "{{count}} 個需要您處理",
         "workingCount": "{{count}} 個執行中"
       },
       "newThreadTab": "建立討論串",
       "newThreadHint": "重新開始",
       "newThread": "在 {{name}} 中建立討論串",
-      "handoffsPaused": "移交 {{count}} 次後已暫停。回覆即可繼續。"
+      "handoffsPaused": "移交 {{count}} 次後已暫停。回覆即可繼續。",
+      "stopCouldNotBeConfirmed": "無法確認是否已停止。",
+      "notStarted": "尚未啟動"
     },
     "templates": {
       "title": "機器人範本",
@@ -4574,14 +5139,11 @@
     "tidyUp": {
       "title": "記憶維護",
       "never": "尚未",
-      "footer": "僅更改記憶檔案。與簡短聊天一樣，會使用你的代理程式方案。你的電腦上必須正在執行 Orca。",
-      "undoNote": "復原會一次將 MEMORY.md 恢復到此次整理之前的狀態。完整歷史記錄和記憶編輯功能位於電腦上的「設定 → 記憶」。",
       "backToTidyUp": "返回記憶維護"
     },
     "items": {
       "filter": {
-        "clearAll": "清除篩選",
-        "chat": "聊天"
+        "clearAll": "清除篩選"
       },
       "tab": "項目",
       "activity": {
@@ -4597,17 +5159,21 @@
         "title": "項目",
         "placeOf": "第 {{index}} 個，共 {{total}} 個",
         "previous": "上一個項目",
-        "next": "下一個項目",
-        "subWhere": "事項 {{number}} · {{chat}}"
-      },
-      "ask": {
-        "notNow": "暫不"
+        "next": "下一個項目"
       },
       "write": {
         "offline": "{{host}} 已離線。"
       },
       "thisComputer": "電腦",
-      "readFailedClosedPage": "無法讀取更多已關閉的事項。"
+      "readFailedClosedPage": "無法讀取更多已關閉的事項。",
+      "skillLimit": "訊息未傳送。請最多選擇 {{limit}} 個技能檔案後再試一次。",
+      "ask": {
+        "replaced": "代理程式提出了新問題。請先閱讀，再回覆。",
+        "replacedByNewer": "已由較新的問題取代",
+        "skipped": "已略過",
+        "heldImagesLimit": "你的回答會作為一則留言送出，一則留言最多包含 {{max}} 張照片。請移除一些後再試一次。",
+        "heldSkillsLimit": "你的回答會作為一則留言送出，一則留言最多包含 {{max}} 個技能。請移除一些後再試一次。"
+      }
     },
     "needs": {
       "chat": "你與 {{name}} 的對話",
@@ -4642,7 +5208,6 @@
       },
       "rotate": {
         "open": "輪換金鑰…",
-        "title": "要輪換「{{automation}}」的金鑰嗎？",
         "confirm": "輪換金鑰",
         "note": "URL 將獲得新金鑰。請用它更新每個傳送方。",
         "overlap": "舊金鑰繼續有效 24 小時",
@@ -4657,19 +5222,15 @@
         "add": "新增簽名金鑰…",
         "generatedTitle": "簽名金鑰已就緒",
         "done": "完成",
-        "generatedNote": "把它複製到 {{sender}} 的 Webhook 設定中。今後呼叫必須帶有它的簽名。",
         "copy": "複製金鑰",
         "copied": "金鑰已複製",
         "changeTitle": "更改簽名金鑰",
         "addTitle": "新增簽名金鑰",
-        "note": "之後 Orca 只接受用此金鑰簽名的呼叫，因此僅洩露 URL 無法啟動「{{automation}}」。",
         "sender": "傳送方",
         "modeGenerate": "由 Orca 生成",
         "modePaste": "貼上傳送方的金鑰",
         "generateNote": "此金鑰由 Orca 生成。接下來請把它複製到 {{sender}}。",
         "paste": "{{sender}} 金鑰",
-        "pasteNote": "當傳送方提供自己的金鑰時使用此項。",
-        "generate": "生成金鑰",
         "save": "儲存",
         "saved": "簽名金鑰已儲存",
         "changeOpen": "更改簽名金鑰…",
@@ -4703,7 +5264,6 @@
       "hookCount_one": "{{count}} 個 Hook",
       "hookCount_other": "{{count}} 個 Hook",
       "name": "Webhooks",
-      "hooks": "Hook",
       "addInChat": "在聊天中新增",
       "setUpDraft": "設定一個這樣的 Webhook：",
       "resumed": "Webhook 已恢復",
@@ -4769,8 +5329,7 @@
         "unverifiable": "無法驗證",
         "unverifiableDetail": "無法連線 {{bot}} 的電腦"
       },
-      "back": "返回 Webhook",
-      "howToCallShort": "任何工具或指令碼都能向 Webhook 的 URL 傳送 POST 請求。每個 Webhook 會啟動一個自動化。"
+      "back": "返回 Webhook"
     },
     "errors": {
       "generic": "出了點問題。請重試。"
@@ -4836,7 +5395,6 @@
       "colorInk": "墨黑",
       "title": "名稱和圖片",
       "mascot": "吉祥物",
-      "background": "背景顏色",
       "choosePhoto": "從「照片」選擇",
       "slackToo": "也會更改你的機器人在 Slack 中的圖片。"
     },
@@ -4853,9 +5411,7 @@
       "addButton": "新增",
       "sourceLabel": "伺服器 URL 或啟動命令",
       "sourcePlaceholder": "https://… or npx …",
-      "scope": "除了你自己的工具外，只有 {{name}} 會獲得它。",
       "details": "詳情",
-      "commandWarning": "命令在 {{host}} 上此機器人的主資料夾中執行。新增或儲存可能會在原生檢查期間啟動它。只新增你信任的軟體。",
       "serverType": "伺服器型別",
       "urlMode": "連線到 URL",
       "commandMode": "執行命令",
@@ -4863,7 +5419,6 @@
       "removeTitle": "要移除 {{app}} 嗎？",
       "removeNote": "{{bot}} 將無法再使用 {{app}}。你隨時可以重新新增。",
       "remove": "移除",
-      "signInOrca": "適用於 Claude 和 Codex",
       "signInMissing": "{{agent}} 未登入",
       "signInHeld": "由 {{agent}} 保管",
       "wontStart": "無法啟動",
@@ -4911,7 +5466,31 @@
       "tryAgain": "重試",
       "signedInTo": "已登入 {{app}}",
       "back": "返回工具",
-      "problem": "問題"
+      "problem": "問題",
+      "input": {
+        "invalid": "請輸入有效的伺服器名稱，以及 URL 或執行檔。",
+        "namesRepeat": "每個標頭或環境變數名稱都必須唯一。",
+        "rowInvalid": "請為每一列輸入有效的名稱和值，或移除該列。"
+      },
+      "signInFailure": {
+        "unsupported": "尚不支援此應用程式。",
+        "unavailable": "無法連線到此應用程式。請檢查網址後再試一次。",
+        "noTool": "這個機器人已經沒有那個工具了。",
+        "desktopOnly": "請在 {{host}} 上的 Orca 中登入。",
+        "denied": "未獲准存取。",
+        "expired": "登入已逾期。請再試一次。",
+        "couldNotSignIn": "無法登入。請再試一次。"
+      },
+      "trust": "只新增你信任的軟體。",
+      "argument": "引數",
+      "removeArgument": "移除引數",
+      "header": "標頭",
+      "variable": "變數",
+      "removeHeaderRow": "移除標頭",
+      "removeVariableRow": "移除變數",
+      "emptyArgument": "空白",
+      "valueNew": "新值",
+      "valueSaved": "已儲存"
     },
     "handToBot": {
       "menu": "移交給機器人…",
@@ -4944,7 +5523,6 @@
       "rowDetail": "{{app}} {{kind}}",
       "bringOver": "遷移過來",
       "otherApp": "其他應用程式…",
-      "otherAppNote": "舊機器人會幫你複製它的檔案",
       "noneFoundNote": "在 OpenClaw（~/.openclaw）、Hermes（~/.hermes）或 OpenBot 中沒有找到機器人。",
       "sendStep": "把這條訊息發給舊機器人",
       "copyMessage": "複製訊息",
@@ -4955,18 +5533,13 @@
       "replyLabel": "它的回覆",
       "title": "從其他應用程式匯入",
       "newBot": "新機器人",
-      "exportDescription": "讓舊機器人複製一份自己，然後把副本交給你的新機器人。",
-      "description": "你的新機器人會讀取舊機器人並自行完成設定。",
       "nameAnother": "為新機器人命名",
-      "importedBefore": "{{bot}} 來自此機器人",
       "keysStay": "金鑰和登入資訊不會帶過來",
       "chooseFolderTitle": "選擇資料夾",
       "loadingFolders": "正在載入資料夾…",
       "lookingOn": "正在 {{host}} 上查詢…",
       "foundOn": "在 {{host}} 上找到 {{count}} 個",
-      "copiedNote": "已複製。請在你平常與舊機器人聊天的地方貼上。",
       "copyAgain": "再次複製",
-      "addStepNote": "它會在 {{host}} 的 Downloads 資料夾中儲存名稱以 -export 結尾的資料夾。",
       "folderItems_one": "{{count}} 個項目",
       "folderItems_other": "{{count}} 個項目",
       "chooseAnother": "選擇其他資料夾…",
@@ -4981,6 +5554,189 @@
     },
     "panel": {
       "backTo": "返回 {{name}}"
+    },
+    "failures": {
+      "lookUnfinished": "上次四處檢視沒有完成。",
+      "lookTimedOut": "上次四處檢視在 {{minutes}} 分鐘後被停止。",
+      "lookInterrupted": "上次四處檢視期間 Orca 停止了。",
+      "lookCouldNotStart": "上次四處檢視無法開始。",
+      "lookAsleep": "這台電腦處於睡眠狀態，錯過了上次四處檢視。",
+      "tidyUpUnfinished": "上次整理沒有完成。",
+      "tidyUpTimedOut": "上次整理在 {{minutes}} 分鐘後被停止。",
+      "tidyUpCouldNotStart": "上次整理無法開始。",
+      "tidyUpAsleep": "這台電腦處於睡眠狀態，錯過了上次整理。",
+      "tidyUpUnreadChats": "上次整理無法讀取它的聊天，因此沒有執行。",
+      "tidyUpNoDraft": "上次整理沒有回覆新的 MEMORY.md。",
+      "tidyUpNoOps": "上次整理的回覆不是 Orca 能讀取的變更清單。",
+      "tidyUpAllSkipped": "Orca 略過了上次整理要求的所有變更，因此沒有任何變化。（{{detail}}）",
+      "tidyUpNotListLines": "上次整理沒有執行：MEMORY.md 中有不少不是清單行的內容，而整理只讀取清單行。",
+      "tidyUpMovedOnly": "上次整理把狀態行移到了 memory/journal/，但 Orca 無法使用它回覆的其餘部分。（{{detail}}）",
+      "tidyUpBadTopic": "上次整理指定了 Orca 無法寫入的主題檔案，因此沒有任何變化。",
+      "tidyUpTooLong": "上次整理的 MEMORY.md 超過 {{max}} 行且沒有變短，因此沒有任何變化。",
+      "tidyUpTooManyRemoved": "上次整理一次刪去了太多行，因此沒有任何變化。",
+      "tidyUpTooManyAdded": "上次整理一次新增了太多新行，因此沒有任何變化。",
+      "tidyUpNotCopied": "上次整理歸檔了一行 MEMORY.md 中沒有的內容；新資訊應寫進 MEMORY.md，因此沒有任何變化。",
+      "tidyUpTooManyFiled": "上次整理一次歸檔了超過 {{max}} 行，因此沒有任何變化。",
+      "tidyUpChanged": "上次整理期間 MEMORY.md 發生了變化，因此沒有任何變化。",
+      "tidyUpNotApplied": "上次整理的變更無法儲存，因此沒有任何變化。",
+      "toolGone": "這個機器人已經沒有那個工具了。",
+      "toolDetailsInvalid": "工具資訊無效。請檢查名稱、URL 或執行檔以及各項值。",
+      "toolDestinationChanged": "憑證的目標位址已變更。請重新輸入已儲存的值，或刪除對應的列。",
+      "toolSavedValueGone": "那個已儲存的值不再可用。請重新輸入，或刪除它所在的列。",
+      "toolValueMissing": "請為每一列輸入值，或刪除該列。",
+      "toolCredentialsUnreadable": "無法讀取機器人已儲存的工具憑證。請重新輸入該工具的值。",
+      "toolSignInManaged": "這個工具由 Orca 登入。請改為登入或登出它。",
+      "toolCredentialsRaced": "機器人的工具憑證已在另一個 Orca 中變更。請重試。",
+      "toolSourceManaged": "這個工具由 Orca 管理。請到你設定它的地方變更。",
+      "toolValuesUnmoved": "有個工具仍保存著它的值。請重新開啟機器人的工具以移轉這些值。",
+      "toolCodexCheckFailed": "Codex 無法檢查或連線這些工具。請檢查它的設定後重試。",
+      "toolCodexNoThread": "Codex 沒有啟動用於檢查工具的執行緒。",
+      "toolSignInFolderFailed": "無法準備登入資料夾：{{detail}}",
+      "toolClaudePrepareFailed": "無法在 Claude Code 中準備 {{name}}。請檢查工具設定。",
+      "toolNameTaken": "這個機器人已經有名為 {{name}} 的工具。",
+      "toolNameTakenByAgent": "你的 {{agent}} 已經有名為 {{name}} 的工具，這個機器人也會取得它。請用 --name 換一個名稱。",
+      "toolNameTakenByCodexStdio": "你的 Codex 已經有名為 {{name}} 的本機工具，所以這個機器人的 {{name}} 無法執行。請重新命名這個機器人的工具。",
+      "toolNotUpdated": "工具沒有更新。",
+      "toolSignInAddressIncomplete": "請貼上登入頁面最後停留的完整位址。",
+      "toolSignInAddressWrong": "這不是本次登入結束時的位址。請用「連線」重新開始，登入後貼上瀏覽器顯示的位址。",
+      "toolSignInEnded": "登入已經結束或逾時。請用「連線」重新開始。",
+      "toolNotFound": "這個機器人沒有名為 {{name}} 的工具。",
+      "toolNeedsNoSignIn": "{{name}} 使用已儲存的值，無需登入。",
+      "toolSignInAgentUnsupported": "Orca 只為 Claude Code 和 Codex 登入 {{name}}。請改為用它的登入值新增。",
+      "toolCodexNoSignInPage": "Codex 沒有提供 {{name}} 的登入頁面。",
+      "toolClaudeSignInFailed": "Claude 無法開始登入 {{name}}。",
+      "toolClaudeNoSignInPage": "Claude 沒有開啟 {{name}} 的登入頁面。",
+      "groupMessageIdReused": "訊息識別碼已被使用。",
+      "groupChangedBeforeSend": "群組已變更。傳送前請查看目前成員。",
+      "groupEmptyBeforeSend": "所有機器人都已離開這個群組。傳送前請新增一個機器人。",
+      "groupRequestUnverifiable": "無法驗證排隊中的原始群組請求。",
+      "groupTurnInactive": "這個群組請求或成員已不再有效。",
+      "groupBotUnavailable": "這個機器人已暫停或無法使用。沒有改用其他機器人。",
+      "groupBotTwice": "每個機器人只能選一次。",
+      "groupBotGone": "所選的一個機器人已無法使用。",
+      "groupLocalOnly": "群組目前只支援這台本機主機上的機器人。",
+      "groupChanged": "群組已變更。請重新開啟此對話框後重試。",
+      "groupReplierGone": "請在「聊天室回覆」中選擇一位目前成員。",
+      "groupEmptyBeforeThread": "所有機器人都已離開這個群組。開始討論串前請新增一個機器人。",
+      "groupNeedsLocalBot": "這個群組至少需要一個在這台電腦上的機器人。",
+      "groupNameTaken": "{{name}} 已在這個群組中。成員需要不同的名稱，提及才不會混淆。",
+      "groupPostFromHost": "要在包含其他電腦上機器人的群組中發文，請使用 {{host}}。",
+      "groupPeerTooOld": "請更新 {{host}} 上的 Orca，才能把它的機器人加入群組。",
+      "attachmentUnreadable": "無法讀取 {{name}}。",
+      "attachmentTooLarge": "{{name}} 超過 {{maxMb}} MB。",
+      "attachmentUploading": "{{name}} 仍在上傳。",
+      "attachmentExpired": "{{names}}：此附件已過期。請重新附加。",
+      "commentImagesTooMany": "留言最多可附 {{max}} 張圖片。",
+      "commentImagesTooLarge": "這些圖片共 {{totalMb}} MB。一則留言最多 {{maxMb}} MB。",
+      "commentImageNotStored": "留言中只能放貼上或附加的圖片。",
+      "commentAttachmentsUnavailable": "這台電腦現在無法接收附件。請稍後再留言。",
+      "commentFileNotAbsolute": "{{path}}：請用完整路徑指定檔案。",
+      "commentFilesTooMany": "除圖片外，留言最多可附 {{max}} 個檔案。",
+      "commentChatDeleted": "此項目的聊天已刪除，因此無法在這裡附加檔案。",
+      "commentAttachFailed": "無法附加檔案。請稍後再留言。",
+      "groupImagesTooMany": "群組訊息最多可附 {{max}} 張圖片。",
+      "groupImagesTooLarge": "這些圖片共 {{totalMb}} MB。一則群組訊息最多 {{maxMb}} MB。",
+      "groupImageNotStored": "群組訊息中只能放貼上或附加的圖片。",
+      "groupAttachmentsUnavailable": "這台電腦現在無法接收附件。請稍後再傳送。",
+      "groupAttachFailed": "無法附加檔案。請稍後再傳送。",
+      "groupMentionAmbiguous": "請先修正有歧義的機器人提及，再傳送。",
+      "groupMentionUnavailable": "請先修正無法使用或有歧義的機器人提及，再傳送。",
+      "groupReplierNotMember": "請在「聊天室回覆」中選擇一位目前的聊天室成員。",
+      "groupMailNeverStarted": "這封郵件從未開始一輪對話。",
+      "groupRemoteUnreachable": "無法連線到 {{host}}。{{detail}}",
+      "groupRemoteUnreachableRetry": "無法連線到 {{host}}。{{detail}} 重新發布即可重試。"
+    },
+    "automations": {
+      "paused": "已暫停",
+      "newDraft": "設定一個自動化，用來 "
+    },
+    "row": {
+      "idle": "閒置"
+    },
+    "apps": {
+      "line": {
+        "vercel": "查看部署並閱讀其記錄",
+        "sentry": "調查錯誤及其背後的事件",
+        "datadog": "搜尋記錄、指標和監控",
+        "posthog": "查詢產品分析和功能旗標",
+        "cloudflare": "管理 Workers、DNS 以及帳號的其他內容",
+        "supabase": "查詢資料庫並管理專案",
+        "neon": "執行 SQL 並管理 Postgres 分支",
+        "netlify": "部署網站並檢查其建置",
+        "gitlab": "讀取和更新議題與合併請求",
+        "context7": "程式庫的最新文件和範例",
+        "atlassian": "Jira 議題和 Confluence 頁面",
+        "notion": "搜尋、閱讀和編輯頁面",
+        "stripe": "查詢付款、客戶和訂閱",
+        "github": "議題和 PR 中的提及與事件",
+        "slack": "訊息和提及",
+        "linear": "指派的議題和提及",
+        "google": "以你的身分使用 Gmail、日曆和雲端硬碟",
+        "clickup": "管理任務、清單和文件",
+        "airtable": "查詢及編輯 Base、資料表和記錄",
+        "todoist": "新增、排序和完成任務",
+        "zapier": "在你於 Zapier 設定的應用程式中執行動作",
+        "granola": "搜尋會議筆記和逐字稿",
+        "intercom": "搜尋對話、聯絡人和文章"
+      },
+      "composioLine": {
+        "outlook": "郵件、行事曆和聯絡人",
+        "microsoft_teams": "聊天、頻道和會議",
+        "notion": "頁面、資料庫和留言",
+        "jira": "議題、專案和衝刺",
+        "hubspot": "聯絡人、公司、交易和工單",
+        "salesforce": "客戶、潛在客戶和商機",
+        "asana": "任務、專案和留言",
+        "airtable": "資料庫、表格和記錄",
+        "zendesk": "工單、使用者和說明中心文章",
+        "figma": "檔案、留言和元件",
+        "stripe": "付款、客戶和發票",
+        "dropbox": "檔案和資料夾",
+        "one_drive": "檔案和資料夾",
+        "confluence": "頁面、空間和留言",
+        "clickup": "任務、清單和文件",
+        "monday": "看板、項目和更新",
+        "intercom": "對話、聯絡人和文章",
+        "zoom": "會議、錄影和逐字稿",
+        "calendly": "活動、受邀者和預約連結",
+        "trello": "看板、清單和卡片",
+        "sentry": "問題、事件和發行版本",
+        "box": "檔案和資料夾",
+        "miro": "白板、便利貼和框架",
+        "reddit": "貼文、留言和子版"
+      },
+      "webhooks": {
+        "line": "來自任何工具或指令碼的事件"
+      },
+      "composio": {
+        "keyOnHost": "儲存在 {{host}}；機器人永遠看不到。"
+      }
+    },
+    "share": {
+      "signInOtherSite": "電腦傳來的是其他網站的登入連結，因此沒有開啟。"
+    },
+    "settingsPage": {
+      "off": "關閉",
+      "lastLooked": "上次檢視 {{when}}",
+      "today": "今天",
+      "yesterday": "昨天",
+      "lastTidied": "上次整理 {{when}}"
+    },
+    "usageLimit": {
+      "continuesAt": "將於 {{time}} 繼續",
+      "continues": "將於 {{time}} 繼續",
+      "hitLimit": "已達上限 · {{time}} 重設"
+    },
+    "new": {
+      "purposeTooLongForHost": "{{host}} 上的 Orca 最多接受 200 個字元的用途說明。請縮短內容，或更新 {{host}} 上的 Orca。"
     }
+  },
+  "sidebar": {
+    "cardSlot": {
+      "working": "執行中"
+    }
+  },
+  "mcpServers": {
+    "agentBlocked": "已被你所屬組織的 Claude 設定阻止"
   }
 }

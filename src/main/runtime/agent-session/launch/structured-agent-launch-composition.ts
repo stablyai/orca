@@ -1,9 +1,9 @@
 // Compose shared admission, cwd, environment, visuals and child sealing; agent parts add only agent-specific inputs and never set cwd/sealed env.
 
-import { overlayEnvironmentVariables } from '../../../../shared/shell/launch/environment-overlay'
+import { agentCopyEnvironment, agentCopyLaunch } from './structured-agent-copy-launch'
 import type { StructuredAgentCopyLaunch } from '../installation/structured-agent-session-runtime-contract'
-import type { ReadOnlySessionMode } from '../../../bots/bot-look-around-policy'
-import { BotLaunchTools } from '../../../bots/bot-launch-tools'
+import { toolFreeSession, type ReadOnlySessionMode } from '../../../bots/bot-look-around-policy'
+import { SessionMcpTools } from '../../../mcp-servers/session-mcp-tools'
 import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
@@ -46,7 +46,9 @@ export type StructuredAgentLaunchSources = {
     record: AgentSessionRecord,
     launchDirectory: string,
     /** How to use the linked projects' skills, as `linkedSkillsSection` writes it; null for none. */
-    linkedSkills: string | null
+    linkedSkills: string | null,
+    /** See `StructuredAgentDefinition.instructionsEachStart`. */
+    eachStart: boolean
   ) => Promise<string | null>
   /** Rereads the base environment after a lookup that started at `askedAt` found no program in
    *  it; absent never retries. */
@@ -55,11 +57,11 @@ export type StructuredAgentLaunchSources = {
   readOnlySession?: (sessionId: string) => ReadOnlySessionMode | null
   /** Work every launch of this session waits for, read-only ones too; a rejection stops the launch. */
   prepareLaunch?: (record: AgentSessionRecord, launchDirectory: string) => Promise<void>
-  /** A bot's own tools for a session in its home folder; absent or empty adds none. */
+  /** The MCP servers Orca adds to the session: a bot's own, and the host's list; absent adds none. */
   resolveToolServers?: (
     record: AgentSessionRecord,
     launchDirectory: string
-  ) => Promise<BotLaunchTools>
+  ) => Promise<SessionMcpTools>
   /** A bot's linked-skills folder and the projects in it, scanned for this launch; absent: none. */
   resolveLinkedSkills?: (record: AgentSessionRecord) => Promise<LinkedSkills>
   /** The agent loaded fewer linked skills than its instructions said; this section replaces it. */
@@ -80,8 +82,8 @@ export type StructuredAgentLaunchBasis = {
   visuals(): Promise<NativeChatVisualsLaunch | null>
   /** Null when there are none. A resumed conversation keeps the ones it started with, in both agents. */
   instructions(linkedSkills?: string | null): Promise<string | null>
-  /** A bot's own tools (MCP servers), for agents that take them per thread; empty for any other chat. */
-  toolServers(): Promise<BotLaunchTools>
+  /** The MCP servers Orca adds (a bot's own and the host's list); none for a read-only session. */
+  toolServers(): Promise<SessionMcpTools>
   /** The bot's linked-skills folder the chat loads beside the agent's own; none for any other chat. */
   linkedSkills(): Promise<LinkedSkills>
   /** After launch, when the agent turned the linked skill roots down. */
@@ -95,6 +97,9 @@ export type StructuredAgentLaunchBasis = {
   permissionMode?: AgentChatPermissionChoice
   /** The session may only read: the agent's part adds its own enforcement of this mode. */
   readOnly: ReadOnlySessionMode | null
+  /** The run needs no tools (`toolFreeSession`): it gets no skills either, and a part that can't
+   *  turn tools off refuses every request and stops the run at its first tool call. */
+  toolFree: boolean
 }
 
 export type StructuredLaunchRequest = {
@@ -185,27 +190,20 @@ async function composedPart<L>(
   permissionMode?: AgentChatPermissionChoice
 ): Promise<StructuredAgentLaunchPart<L> & { cwd: string }> {
   const record = admittedRecord(definition, sources.store, identity.sessionId)
-  const copy = record.agentCopy
-    ? requireAgentCopyLaunch(sources, definition, record.agentCopy)
-    : null
+  const copy = agentCopyLaunch(sources.resolveAgentCopyLaunch, definition.agent, record.agentCopy)
   const launchEnv = once(
     () => copy?.launchEnv ?? sources.resolveAgentLaunchEnv?.(definition.agent) ?? {}
   )
   const launchDirectory = once(() => resolveAgentSessionLaunchDirectory(sources, record))
   const readEnvironments = () => {
     const base = once(sources.resolveBaseEnvironment)
-    return {
-      base,
-      agent: once(async () =>
-        copy
-          ? overlayEnvironmentVariables(await base(), copy.launchEnv, process.platform)
-          : sources.resolveAgentEnvironment(definition.agent)
-      )
-    }
+    const agent = () => sources.resolveAgentEnvironment(definition.agent)
+    return { base, agent: once(copy ? agentCopyEnvironment(base, copy) : agent) }
   }
   let environments = readEnvironments()
   const refresh = sources.refreshAfterMissingProgram
   const readOnly = sources.readOnlySession?.(record.sessionId) ?? null
+  const toolFree = toolFreeSession(readOnly)
   const basis: StructuredAgentLaunchBasis = {
     record,
     launchDirectory,
@@ -222,17 +220,24 @@ async function composedPart<L>(
       return (linkedSkills: string | null = null) =>
         (read ??= (async () =>
           sources.resolveInstructions
-            ? sources.resolveInstructions(record, await launchDirectory(), linkedSkills)
+            ? sources.resolveInstructions(
+                record,
+                await launchDirectory(),
+                linkedSkills,
+                definition.instructionsEachStart
+              )
             : linkedSkills)())
     })(),
     // A read-only session gets none: Look around keeps every tool off.
     toolServers: once(async () =>
       readOnly || !sources.resolveToolServers
-        ? BotLaunchTools.none
+        ? SessionMcpTools.none
         : sources.resolveToolServers(record, await launchDirectory())
     ),
-    linkedSkills: once(
-      async () => (await sources.resolveLinkedSkills?.(record)) ?? NO_LINKED_SKILLS
+    linkedSkills: once(async () =>
+      toolFree
+        ? NO_LINKED_SKILLS
+        : ((await sources.resolveLinkedSkills?.(record)) ?? NO_LINKED_SKILLS)
     ),
     linkedSkillsRefused: (linkedSkills) =>
       sources.reportLinkedSkills?.(record.sessionId, linkedSkills),
@@ -248,7 +253,8 @@ async function composedPart<L>(
       : {}),
     // Ask, whatever the chat chose: the agent's part answers its asks from the read-only allow-list.
     ...(readOnly ? { permissionMode: 'ask' as const } : permissionMode ? { permissionMode } : {}),
-    readOnly
+    readOnly,
+    toolFree
   }
   await sources.prepareLaunch?.(record, await launchDirectory())
   const composed = await part(basis, identity)
@@ -258,19 +264,6 @@ async function composedPart<L>(
     inheritedEnvToDelete: [...STRUCTURED_CHILD_ENV_TO_DELETE, ...composed.inheritedEnvToDelete],
     cwd: await basis.launchDirectory()
   }
-}
-
-/** A copy deleted since its chat began refuses, so the chat never quietly runs as its agent. */
-function requireAgentCopyLaunch(
-  sources: StructuredAgentLaunchSources,
-  definition: StructuredAgentDefinition,
-  copyId: string
-): StructuredAgentCopyLaunch {
-  const copy = sources.resolveAgentCopyLaunch?.(definition.agent, copyId)
-  if (!copy) {
-    throw new Error(`Unknown agent copy "${copyId}"`)
-  }
-  return copy
 }
 
 export function composeStructuredLaunch<L>(

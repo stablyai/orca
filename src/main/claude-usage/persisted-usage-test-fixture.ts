@@ -29,8 +29,7 @@ export async function createPersistedUsageTestFixture() {
   const sourceRef = {
     path: usageSourceCachePath(reportPath),
     schemaVersion: 7,
-    worktreeFingerprint: '[]',
-    reuse: true
+    worktreeFingerprint: '[]'
   }
   const transcripts = [transcript]
   vi.mocked(listClaudeTranscriptFiles).mockReset()

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { AGENT_STATUS_STATES } from '../../agent-status/contracts/agent-status-types'
 import { AGENT_TURN_OUTCOMES } from '../../agent-status/lifecycle/agent-turn-outcome'
 import type { PluginEventName } from '../manifest/plugin-manifest'
@@ -35,57 +36,65 @@ const workspaceIdentity = {
   kind: z.enum(['worktree', 'folder'])
 }
 
-export const workspaceCreatedPayloadSchema = z.object({
-  ...workspaceIdentity,
-  path: z
-    .string()
-    .min(1)
-    .max(32 * 1024),
-  branch: z.string().max(1024)
-})
+export const workspaceCreatedPayloadSchema = lazyZodSchema(() =>
+  z.object({
+    ...workspaceIdentity,
+    path: z
+      .string()
+      .min(1)
+      .max(32 * 1024),
+    branch: z.string().max(1024)
+  })
+)
 
-export const workspaceRemovedPayloadSchema = z.object({
-  ...workspaceIdentity,
-  path: z
-    .string()
-    .min(1)
-    .max(32 * 1024)
-})
+export const workspaceRemovedPayloadSchema = lazyZodSchema(() =>
+  z.object({
+    ...workspaceIdentity,
+    path: z
+      .string()
+      .min(1)
+      .max(32 * 1024)
+  })
+)
 
-export const agentStatusChangedPayloadSchema = z.object({
-  workspaceId: z.string().min(1).max(2048).nullable(),
-  /** Absent too while `workspaceId` is null. */
-  workspaceListId,
-  paneKey: z.string().min(1).max(2048),
-  /** The pane's terminal, as `workspace.readContext` and `terminal.sendText` name it; absent when
-   *  Orca cannot tie the pane to a terminal it lists. */
-  terminalId: z.string().min(1).max(PLUGIN_TERMINAL_ID_MAX_LENGTH).optional(),
-  /** The pane's name, or its terminal title. */
-  title: z.string().max(PLUGIN_WORKSPACE_LABEL_MAX_LENGTH).optional(),
-  /** The combined status the user sees: `working` while the main agent or any live child works. */
-  state: z.enum(AGENT_STATUS_STATES),
-  receivedAt: z.number().finite().positive(),
-  /** Distinguish the main agent from combined child activity; absent on older hosts or without main-agent evidence. State keeps its meaning. */
-  mainAgent: z
-    .object({
-      state: z.enum(AGENT_STATUS_STATES),
-      /** The verdict on the main agent's last finished turn, the provider's or else the host-observed end
-       *  (`interruption`, `unconfirmed`); present only while `state` is done. */
-      outcome: z.enum(AGENT_TURN_OUTCOMES).optional(),
-      // Why: the same bound the row normalizer applies; a stricter one here would reject the whole event.
-      /** Stamped by the host the agent runs on (an SSH host's own clock), unlike `receivedAt`. */
-      stateStartedAt: z.number().finite()
-    })
-    .optional(),
-  /** The agent's own session id, which `agent.resume` takes; absent when Orca has none, and
-   *  before host API 1.8. */
-  sessionId: pluginAgentSessionIdSchema.optional()
-})
+export const agentStatusChangedPayloadSchema = lazyZodSchema(() =>
+  z.object({
+    workspaceId: z.string().min(1).max(2048).nullable(),
+    /** Absent too while `workspaceId` is null. */
+    workspaceListId,
+    paneKey: z.string().min(1).max(2048),
+    /** The pane's terminal, as `workspace.readContext` and `terminal.sendText` name it; absent when
+     *  Orca cannot tie the pane to a terminal it lists. */
+    terminalId: z.string().min(1).max(PLUGIN_TERMINAL_ID_MAX_LENGTH).optional(),
+    /** The pane's name, or its terminal title. */
+    title: z.string().max(PLUGIN_WORKSPACE_LABEL_MAX_LENGTH).optional(),
+    /** The combined status the user sees: `working` while the main agent or any live child works. */
+    state: z.enum(AGENT_STATUS_STATES),
+    receivedAt: z.number().finite().positive(),
+    /** Distinguish the main agent from combined child activity; absent on older hosts or without main-agent evidence. State keeps its meaning. */
+    mainAgent: z
+      .object({
+        state: z.enum(AGENT_STATUS_STATES),
+        /** The verdict on the main agent's last finished turn, the provider's or else the host-observed end
+         *  (`interruption`, `unconfirmed`); present only while `state` is done. */
+        outcome: z.enum(AGENT_TURN_OUTCOMES).optional(),
+        // Why: the same bound the row normalizer applies; a stricter one here would reject the whole event.
+        /** Stamped by the host the agent runs on (an SSH host's own clock), unlike `receivedAt`. */
+        stateStartedAt: z.number().finite()
+      })
+      .optional(),
+    /** The agent's own session id, which `agent.resume` takes; absent when Orca has none, and
+     *  before host API 1.8. */
+    sessionId: pluginAgentSessionIdSchema.optional()
+  })
+)
 
-export const workspaceChangedPayloadSchema = z.object({
-  /** What `workspace.readContext` answers now; null when no workspace is focused. */
-  context: pluginWorkspaceContextSchema
-})
+export const workspaceChangedPayloadSchema = lazyZodSchema(() =>
+  z.object({
+    /** What `workspace.readContext` answers now; null when no workspace is focused. */
+    context: pluginWorkspaceContextSchema
+  })
+)
 
 export const PLUGIN_EVENT_PAYLOAD_SCHEMAS = {
   'workspace.created': workspaceCreatedPayloadSchema,

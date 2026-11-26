@@ -192,6 +192,8 @@ function mobileSessionTabEqual(
         a.canGoForward === b.canGoForward &&
         a.faviconUrl === b.faviconUrl &&
         a.browserProfileId === b.browserProfileId &&
+        a.clientHost?.deviceName === b.clientHost?.deviceName &&
+        a.clientHost?.offline === b.clientHost?.offline &&
         a.certificateFailure?.challengeId === b.certificateFailure?.challengeId &&
         a.certificateFailure?.canProceed === b.certificateFailure?.canProceed
       )

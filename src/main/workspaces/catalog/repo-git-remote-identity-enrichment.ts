@@ -304,22 +304,3 @@ export function enrichMissingRepoGitRemoteIdentities(
       }
     })
 }
-
-export async function flushRepoGitRemoteIdentityEnrichmentForTests(): Promise<void> {
-  // A queued rerun replaces sweepInFlight when the current pass settles.
-  while (sweepInFlight) {
-    await sweepInFlight
-  }
-  await Promise.all([...inFlightProbesByLocation.values()].map((entry) => entry.promise))
-}
-
-export function resetRepoGitRemoteIdentityEnrichmentForTests(): void {
-  for (const entry of inFlightProbesByLocation.values()) {
-    entry.controller.abort()
-  }
-  inFlightProbesByLocation.clear()
-  probeRetryAfterByLocation.clear()
-  pendingChangeListeners.clear()
-  sweepInFlight = null
-  rerunRequested = false
-}

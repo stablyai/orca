@@ -15,10 +15,7 @@ import {
   isLocalWorktreeScanGenerationCurrent,
   onWorktreeRouteInputsChanged
 } from './local-worktree-scan-generation'
-import {
-  isLiveWorktreeCatalogRoute,
-  setWorktreeCatalogRouteResolver
-} from './repo-worktree-catalog-route'
+import { isLiveWorktreeCatalogRoute } from './repo-worktree-catalog-route'
 import { verify } from './repo-worktree-catalog-verification'
 import { onWslDiscoveryChanged } from '../../wsl/discovery/wsl-discovery-change'
 
@@ -137,6 +134,7 @@ function startFlight(
       .scan()
       .catch((error: unknown): WorktreeCatalogOutcome => ({ kind: 'failed', error }))
       .then((outcome) => {
+        const completedAt = Math.max(startedAt, Date.now())
         const observation: WorktreeCatalogObservation = {
           outcome:
             outcome.kind === 'rows'
@@ -147,12 +145,14 @@ function startFlight(
                 }
               : outcome,
           startedAt,
+          completedAt,
           generation,
           revision,
           adminFingerprint,
           startedBy: requirement.kind,
           witness,
-          confirmedAt: startedAt
+          // A pre-scan fingerprint can only vouch from scan start; the first verifier read after it probes once.
+          confirmedAt: adminFingerprint ? startedAt : completedAt
         }
         entryByObservation.set(observation, entry)
         if (entry.flight === flight) {
@@ -204,8 +204,11 @@ function acceptable(
     return false
   }
   // Verifier confirmations are a runtime admission; other readers need a full observation that young.
-  const basis = requirement.verifier ? observation.confirmedAt : observation.startedAt
-  return now - basis <= requirement.maxAgeMs
+  const basis = requirement.verifier ? observation.confirmedAt : observation.completedAt
+  // A completion-timed reuse must not outlive the verifier's full-list ceiling, which runs from scan start.
+  const withinCeiling =
+    !requirement.verifier || now - observation.startedAt < requirement.verifier.ceilingMs
+  return withinCeiling && now - basis <= requirement.maxAgeMs
 }
 
 /** The sole owner of a repo's raw worktree rows: readers state what they accept and share its one flight. */
@@ -310,16 +313,4 @@ export function retireObsoleteWorktreeCatalogs(): void {
       retireEntry(key, entry)
     }
   }
-}
-
-export function _resetWorktreeCatalogOwnerForTests(): void {
-  // Shared test workers outlive the runtime whose store registered the resolver.
-  setWorktreeCatalogRouteResolver(null)
-  for (const [key, entry] of entries) {
-    retireEntry(key, entry)
-  }
-}
-
-export function _getWorktreeCatalogOwnerSizeForTests(): number {
-  return entries.size
 }

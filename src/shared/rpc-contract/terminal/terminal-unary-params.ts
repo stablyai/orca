@@ -2,13 +2,12 @@ import * as z from 'zod'
 import { TERMINAL_KITTY_FILE_MAX_BYTES } from '../../terminal/images/terminal-kitty-file'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../rpc-param-primitives'
 import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
-import { SpawnIntentParam } from './agent-session-params'
+import { SpawnIntentParam, TerminalColorQueryReplyColorsParam } from './agent-session-params'
 import {
   canonicalizeWindowsShellOverride,
   isSupportedWindowsShellOverride,
   listSupportedWindowsShellOverrides
 } from '../../shell/launch/windows-terminal-shell'
-import { TERMINAL_PANE_SPLIT_SOURCES } from '../../feature-education/feature-education-telemetry'
 import { OptionalExecutionHostId } from '../workspaces/worktree-params'
 import { AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH } from '../../agent-status/contracts/agent-status-types'
 
@@ -232,11 +231,6 @@ export const TerminalWait = TerminalHandle.extend({
   timeoutMs: OptionalFiniteNumber
 })
 
-const TerminalColorQueryReplyColorsParam = z.object({
-  foreground: z.string().max(128).optional(),
-  background: z.string().max(128).optional()
-})
-
 export const TerminalSetViewerColors = z.object({
   colors: TerminalColorQueryReplyColorsParam,
   /** Full appearance for hidden OSC 4/12 and ?996n replies; validated by the host, dropped by older hosts. */
@@ -252,6 +246,8 @@ export const ResumeProviderSessionParam = z.object({
 
 export const TerminalCreateParams = z.object({
   worktree: OptionalString,
+  // Not closed with the worker that created it; older hosts drop it and close none.
+  keepOpen: z.literal(true).optional(),
   clientMutationId: z.string().min(1).max(128).optional(),
   reconcileExisting: z.boolean().optional(),
   command: OptionalString,
@@ -294,44 +290,6 @@ export const TerminalCreateParams = z.object({
   windowTab: z.literal(true).optional(),
   cwd: OptionalString
 })
-
-export const TerminalSplit = z
-  .object({
-    // Required unless `pane` names the source; the refinement keeps the handle's message.
-    terminal: OptionalString,
-    expectedIncarnationId: TerminalHandle.shape.expectedIncarnationId,
-    direction: z
-      .unknown()
-      .transform((v) => (v === 'vertical' || v === 'horizontal' ? v : undefined))
-      .pipe(z.union([z.enum(['vertical', 'horizontal']), z.undefined()]))
-      .optional(),
-    command: OptionalString,
-    env: z.record(z.string(), z.string()).optional(),
-    telemetrySource: z.enum(TERMINAL_PANE_SPLIT_SOURCES).optional(),
-    // Timed-out split identity, gated on TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY; reject blank rather than treating it as a fresh split.
-    retrySplit: z.string().min(1, 'Missing split id').optional(),
-    // Layout-owner build: a window names its own pane; main writes the split and starts it.
-    pane: z
-      .object({
-        worktreeId: requiredString('Missing worktree'),
-        tabId: requiredString('Missing tab'),
-        leafId: requiredString('Missing pane')
-      })
-      .optional(),
-    newLeafId: OptionalString,
-    cwd: OptionalString,
-    initialSize: z
-      .object({
-        cols: z.number().int().min(1).max(1000),
-        rows: z.number().int().min(1).max(500)
-      })
-      .optional()
-  })
-  .superRefine((params, ctx) => {
-    if (!params.terminal && !params.pane) {
-      ctx.addIssue({ code: 'custom', message: 'Missing terminal handle', path: ['terminal'] })
-    }
-  })
 
 export const TerminalStop = z.object({
   worktree: requiredString('Missing worktree selector')

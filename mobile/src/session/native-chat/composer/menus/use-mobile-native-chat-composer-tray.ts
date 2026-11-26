@@ -1,7 +1,22 @@
-import { createElement, Fragment, useMemo, useState, type ReactNode, type RefObject } from 'react'
+import {
+  createElement,
+  Fragment,
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject
+} from 'react'
+import { createMembershipStore } from '../../../../../../src/shared/collections/membership-store'
 import type { TextInputInstance } from 'react-native'
 import { MobileNativeChatBackgroundTasks } from '../../input/tasks/MobileNativeChatBackgroundTasks'
 import { MobileNativeChatDockedTaskList } from '../../input/tasks/MobileNativeChatDockedTaskList'
+import { MobileNativeChatWorkerDock } from '../../input/tasks/MobileNativeChatWorkerDock'
+import type { WorkerDockEntry } from '../../../../../../src/shared/orchestration/dock/worker-dock'
+import type { MobileWorkerApproval } from '../../input/prompts/use-mobile-worker-approvals'
+import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import type { NativeChatTaskList } from '../../../../../../src/shared/native-chat/input/task-lists/native-chat-task-list'
 import {
   MobileNativeChatQueuedMessages,
@@ -11,6 +26,7 @@ import {
 import type { MobileStructuredBackgroundTasks } from '../../input/tasks/use-mobile-structured-background-tasks'
 import { useMobileNativeChatQueuedEditFocus } from '../../input/queued-messages/use-mobile-native-chat-queued-edit-focus'
 import { createMobileQueuedHeadLight } from '../../input/queued-messages/mobile-queued-head-light'
+import type { MobileWaitingAgentMail } from '../../transcript/agent-messages/MobileWaitingAgentMailActions'
 import {
   createMobileQueuedCardActionStore,
   useMobileQueuedCardActions
@@ -30,11 +46,16 @@ export type MobileNativeChatComposerTray = {
   content?: ReactNode
   composerInputRef?: RefObject<TextInputInstance | null>
   steerHead?: MobileNativeChatSteerHead
+  /** Steer and Delete on other agents' waiting mail, which the transcript draws instead of a card. */
+  waitingAgentMail?: MobileWaitingAgentMail
 }
 
 export type ComposerTrayProps = {
   composerTray?: MobileNativeChatComposerTray
 }
+
+const NO_ROWS: readonly NativeChatMessage[] = []
+const NONE_EDITABLE = (): boolean => false
 
 // Reuse the empty tray so its default cannot trigger rerenders.
 export const NO_COMPOSER_TRAY: MobileNativeChatComposerTray = {}
@@ -42,14 +63,22 @@ export const NO_COMPOSER_TRAY: MobileNativeChatComposerTray = {}
 export function useMobileNativeChatComposerTray({
   queued,
   taskList,
-  backgroundTasks
+  backgroundTasks,
+  workerDock,
+  workerApprovals
 }: {
   queued: MobileNativeChatQueuedMessagesProps & {
     /** One card list per conversation: a pending action in one never disables another's. */
     sessionKey: string
+    /** Other agents' waiting mail, which the transcript draws instead of a card. */
+    agentMail?: readonly NativeChatMessage[]
+    agentMailEditable?: (messageId: string) => boolean
   }
   taskList: NativeChatTaskList | null
   backgroundTasks: MobileStructuredBackgroundTasks | null
+  workerDock: readonly WorkerDockEntry[]
+  /** Open worker approvals, which mark their workers in the strip as waiting on you. */
+  workerApprovals: readonly MobileWorkerApproval[]
 }): MobileNativeChatComposerTray {
   const { composerInputRef, editQueuedMessage } = useMobileNativeChatQueuedEditFocus(queued.onEdit)
   // Held here, not in the list, so a chat switch mid-preview mounts the new list already lit.
@@ -57,18 +86,60 @@ export function useMobileNativeChatComposerTray({
   const [actionStore] = useState(createMobileQueuedCardActionStore)
   const {
     cards,
+    steerOrder = cards,
     onSend,
     onDelete,
     onClearAll,
+    clearIds,
     editor,
     onMove,
     pause,
     onResume,
     sessionKey,
     steerHeld,
-    agentWorking
+    agentWorking,
+    agentMail,
+    agentMailEditable
   } = queued
   const actions = useMobileQueuedCardActions(actionStore, sessionKey)
+  // Both change with every queue change; read through stable handles, a new arrival redraws no
+  // other row's buttons, and a row's Edit redraws only when its own editability flips.
+  const [editable] = useState(() => createMembershipStore(agentMailEditable ?? NONE_EDITABLE))
+  const latestEdit = useRef(editQueuedMessage)
+  useLayoutEffect(() => {
+    editable.set(agentMailEditable ?? NONE_EDITABLE)
+    latestEdit.current = editQueuedMessage
+  }, [editable, agentMailEditable, editQueuedMessage])
+  const hasEdit = editQueuedMessage !== undefined
+  const editMail = useCallback(
+    (messageId: string, onCopied?: () => void) =>
+      latestEdit.current?.(messageId, onCopied) ?? Promise.resolve(false),
+    []
+  )
+  // Its own memo, so the transcript's waiting rows redraw only when the mail or its actions change.
+  const waitingAgentActions = useMemo(
+    () =>
+      // A list without the chat's queue actions draws no waiting mail.
+      onSend && onDelete
+        ? {
+            actions,
+            send: onSend,
+            delete: onDelete,
+            edit: hasEdit ? editMail : undefined,
+            editable,
+            steerHeld: steerHeld === true,
+            agentWorking: agentWorking === true
+          }
+        : undefined,
+    [actions, onSend, onDelete, hasEdit, editMail, editable, steerHeld, agentWorking]
+  )
+  const waitingAgentMail = useMemo(
+    () =>
+      waitingAgentActions
+        ? { rows: agentMail ?? NO_ROWS, actions: waitingAgentActions }
+        : undefined,
+    [agentMail, waitingAgentActions]
+  )
   return useMemo(
     () => ({
       content: createElement(
@@ -88,6 +159,11 @@ export function useMobileNativeChatComposerTray({
               tasks: backgroundTasks
             })
           : null,
+        createElement(MobileNativeChatWorkerDock, {
+          key: `${sessionKey}:worker-dock`,
+          rows: workerDock,
+          approvals: workerApprovals
+        }),
         createElement(MobileNativeChatQueuedMessages, {
           key: sessionKey,
           actions,
@@ -95,6 +171,7 @@ export function useMobileNativeChatComposerTray({
           onSend,
           onDelete,
           onClearAll,
+          clearIds,
           onEdit: editQueuedMessage,
           editor,
           onMove,
@@ -102,14 +179,17 @@ export function useMobileNativeChatComposerTray({
           onResume,
           steerHeld,
           headLight,
-          agentWorking
+          agentWorking,
+          steerOrder
         })
       ),
       composerInputRef,
+      // Shares the cards' action guard, so a press here and on a card never overlap.
+      waitingAgentMail,
       steerHead: {
         steers: (alternateSteers: boolean) => {
           const head = mobileNativeChatChordHeadId(
-            { cards, steerHeld, agentWorking, editor },
+            { cards: steerOrder, steerHeld, agentWorking, editor },
             alternateSteers
           )
           // A card whose own action is on its way would refuse the press, as desktop hides it then.
@@ -117,7 +197,7 @@ export function useMobileNativeChatComposerTray({
         },
         run: (alternateSteers: boolean) => {
           const head = mobileNativeChatChordHeadId(
-            { cards, steerHeld, agentWorking, editor },
+            { cards: steerOrder, steerHeld, agentWorking, editor },
             alternateSteers
           )
           return head !== null && actions.run(head, onSend)
@@ -128,13 +208,17 @@ export function useMobileNativeChatComposerTray({
     [
       taskList,
       backgroundTasks,
+      workerDock,
+      workerApprovals,
       cards,
+      steerOrder,
       composerInputRef,
       editQueuedMessage,
       editor,
       onMove,
       onDelete,
       onClearAll,
+      clearIds,
       onResume,
       onSend,
       pause,
@@ -142,7 +226,8 @@ export function useMobileNativeChatComposerTray({
       steerHeld,
       headLight,
       actions,
-      agentWorking
+      agentWorking,
+      waitingAgentMail
     ]
   )
 }

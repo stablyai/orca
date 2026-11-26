@@ -18,10 +18,13 @@ export function useNativeChatMediaHref({
   tabId,
   sessionId,
   active,
-  retryKey
+  retryKey,
+  cwd
 }: {
   href: string | undefined
   runtimeContext: NativeChatImageRuntimeContext
+  /** Where relative paths resolve when not the workspace: the sub-folder an adopted chat runs in. */
+  cwd?: string
   tabId?: string
   sessionId?: string | null
   active: boolean
@@ -40,7 +43,9 @@ export function useNativeChatMediaHref({
   )
   const identity =
     resolve && runtimeContext
-      ? [getLocalImageCacheKey(pathText, undefined, runtimeContext), tabId, sessionId].join('\0')
+      ? [getLocalImageCacheKey(pathText, undefined, runtimeContext), cwd, tabId, sessionId].join(
+          '\0'
+        )
       : ''
   const [resolved, setResolved] = useState<{
     identity: string
@@ -65,7 +70,7 @@ export function useNativeChatMediaHref({
       {
         worktree: toRuntimeWorktreeSelector(runtimeContext.worktreeId),
         pathText,
-        cwd: runtimeContext.worktreePath,
+        cwd: cwd ?? runtimeContext.worktreePath,
         nativeChatContext: { tabId, sessionId }
       },
       {
@@ -93,6 +98,6 @@ export function useNativeChatMediaHref({
         }
       })
     return () => controller.abort()
-  }, [identity, active, runtimeContext, tabId, sessionId, pathText, retryKey])
+  }, [identity, active, runtimeContext, tabId, sessionId, pathText, retryKey, cwd])
   return !resolve ? { href } : resolved?.identity === identity ? resolved : {}
 }

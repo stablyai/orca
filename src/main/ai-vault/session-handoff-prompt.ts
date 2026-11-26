@@ -8,11 +8,16 @@ import {
   type AiVaultContinuationSession
 } from '../../shared/ai-vault/resume/ai-vault-session-continuation'
 import { writeAiVaultSessionHandoffSnapshot } from './session-handoff-snapshot'
+import { isCursorAcpSessionRow } from '../../shared/ai-vault/session-display/cursor-acp-session-path'
 
 /** Desktop's History hand-off prompt for a client that shows the row but should not carry the builder. */
 export async function prepareAiVaultSessionHandoffPrompts(
   session: AiVaultContinuationSession & { sessionId?: string }
 ): Promise<AiVaultSessionHandoffPrompts> {
+  // Only its chat holds the conversation; a last-turn preview is not one to hand off.
+  if (isCursorAcpSessionRow(session)) {
+    return {}
+  }
   const saved = await writeAiVaultSessionHandoffSnapshot(session)
   const { source } = prepareAiVaultSessionContinuation({
     session,

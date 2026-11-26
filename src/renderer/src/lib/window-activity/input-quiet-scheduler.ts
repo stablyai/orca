@@ -30,10 +30,6 @@ export function markInputQuietSchedulerInput(): void {
   recordInput()
 }
 
-export function resetInputQuietSchedulerForTest(): void {
-  lastInputAt = Number.NEGATIVE_INFINITY
-}
-
 export function hasInputBeenQuietFor(quietMs: number): boolean {
   if (typeof window !== 'undefined') {
     ensureInputQuietListeners(window)

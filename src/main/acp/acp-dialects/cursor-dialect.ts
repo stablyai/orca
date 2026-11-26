@@ -14,6 +14,7 @@ import {
   type AcpRequestPresentation,
   type AcpRequestSettlement
 } from './acp-dialect'
+import { CURSOR_CLI_MODEL_SUFFIX } from '../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-cursor'
 
 const ASK_QUESTION = 'cursor/ask_question'
 const CREATE_PLAN = 'cursor/create_plan'
@@ -145,10 +146,6 @@ function settleRequest(method: string, params: unknown): AcpRequestSettlement | 
   }
 }
 
-// What `cursor-agent models` ids add after the chat server's id: Claude's `-thinking` (its ids
-// without it are non-thinking), effort and Fast.
-const CLI_MODEL_SUFFIX =
-  /^(-thinking)?(?:-(none|minimal|low|medium|high|xhigh|extra-high|max))?(-fast)?$/
 // Older Claude ids lead with the version and end with `-thinking`: claude-4.6-opus-high-thinking.
 const LEGACY_CLAUDE_ID = /^claude-(\d+(?:\.\d+)?)-([a-z]+)(-[a-z-]+?)??(-thinking)?$/
 
@@ -160,7 +157,7 @@ function cliModelChoices(value: string, listed: readonly string[]): AcpListedCha
   for (const model of listed) {
     const suffix =
       model.length > matchedLength && id.startsWith(model)
-        ? CLI_MODEL_SUFFIX.exec(id.slice(model.length))
+        ? CURSOR_CLI_MODEL_SUFFIX.exec(id.slice(model.length))
         : null
     if (suffix) {
       const [, thinking, effort, fast] = suffix

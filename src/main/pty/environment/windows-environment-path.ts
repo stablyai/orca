@@ -289,13 +289,6 @@ export async function readPersistedWindowsPathSegmentsAsync(
   }
 }
 
-export function __resetPersistedWindowsPathCacheForTests(): void {
-  invalidatePersistedWindowsPathCache()
-  windowsPathRegistryFallback.reset()
-  persistedWindowsPathReadSequence = 0
-  persistedWindowsPathCommittedSequence = 0
-}
-
 export function invalidatePersistedWindowsPathCache(): void {
   persistedWindowsPathCacheGeneration += 1
   persistedWindowsPathCache = undefined

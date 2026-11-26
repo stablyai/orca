@@ -25,6 +25,8 @@ export type UpdateErrorCardModel = {
   variant?: 'default' | 'http1Compatibility' | 'security' | 'waiting'
   blockers?: UpdateInstallBlocker[]
   deferLabel?: string
+  /** Label-width actions aligned to the end, with the defer action before the primary. */
+  compactActions?: boolean
   title: string
   summary: string
   /** Optional guidance box between the summary and the raw error output. */
@@ -72,6 +74,7 @@ export function UpdateErrorCardContent({
   variant = 'default',
   blockers,
   deferLabel,
+  compactActions = false,
   title,
   summary,
   explainer,
@@ -88,6 +91,11 @@ export function UpdateErrorCardContent({
   // Lead with the summary; raw diagnostics stay collapsed.
   const [showDetails, setShowDetails] = useState(false)
   const detailId = useId()
+  const deferButton = deferLabel ? (
+    <Button variant="outline" size="sm" onClick={onClose} className="flex-1">
+      {deferLabel}
+    </Button>
+  ) : null
   const isCompatibility = variant === 'http1Compatibility'
   const isSecurity = variant === 'security'
   const Icon = isCompatibility
@@ -187,7 +195,8 @@ export function UpdateErrorCardContent({
       ) : null}
 
       <div className="flex flex-col gap-2">
-        <div className="flex gap-2">
+        <div className={compactActions ? 'flex justify-end gap-2 *:flex-none' : 'flex gap-2'}>
+          {compactActions && deferButton}
           {primaryAction && (
             <ActionButton
               action={primaryAction}
@@ -195,11 +204,7 @@ export function UpdateErrorCardContent({
               leadingIcon={isCompatibility ? <RotateCw className="size-3.5" /> : undefined}
             />
           )}
-          {deferLabel && (
-            <Button variant="outline" size="sm" onClick={onClose} className="flex-1">
-              {deferLabel}
-            </Button>
-          )}
+          {!compactActions && deferButton}
           {secondaryAction && <ActionButton action={secondaryAction} variant="outline" />}
           {releaseUrl && (
             <Button

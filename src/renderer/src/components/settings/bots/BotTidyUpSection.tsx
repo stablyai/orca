@@ -1,3 +1,4 @@
+import { botCodedText } from '../../../../../shared/bots/bot-failure-copy'
 import { useState } from 'react'
 import { BotTidyUpReview, tidyUpRunMeta } from '@/components/bots/BotTidyUpReview'
 import { botAgentLabel } from '@/components/bots/bot-presentation'
@@ -12,8 +13,7 @@ import {
 } from '@/components/ui/select'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import type { Bot } from '../../../../../shared/bot-types'
-import { lookAroundSupported } from '../../../../../shared/bots/bot-look-around'
+import { tidyUpSupported, type Bot } from '../../../../../shared/bot-types'
 import {
   botTidyUp,
   TIDY_UP_EVERY_CHOICES,
@@ -51,7 +51,7 @@ export function BotTidyUpSection({
   const change = (next: Partial<BotTidyUp>): void => {
     void update({ tidyUp: next })
   }
-  if (!lookAroundSupported(bot.agent)) {
+  if (!tidyUpSupported(bot.agent)) {
     return null
   }
   const last = view?.last ?? null
@@ -74,7 +74,7 @@ export function BotTidyUpSection({
             ? t(
                 'settings.bots.tidyUp.turnedOff',
                 'Turned off after 10 tidy-ups in a row failed. Last: {{error}}',
-                { error: view.turnedOff }
+                { error: botCodedText(view.turnedOff, view.turnedOffFailure, t) }
               )
             : t(
                 'settings.bots.tidyUp.onDescription',
@@ -146,7 +146,7 @@ export function BotTidyUpSection({
                 {view?.error && !view.turnedOff ? (
                   <>
                     <br />
-                    {view.error}
+                    {botCodedText(view.error, view.failure, t)}
                   </>
                 ) : null}
                 <br />

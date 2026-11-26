@@ -50,11 +50,6 @@ export function resolveSettingsHighlightElement(target: HTMLElement): HTMLElemen
 }
 
 export function applySettingsTargetHighlightBleed(target: HTMLElement): void {
-  if (target.closest('[data-settings-scroll-list]')) {
-    target.style.setProperty('--settings-target-bleed-left', '0px')
-    target.style.setProperty('--settings-target-bleed-right', '0px')
-    return
-  }
   const card = findEnclosingSettingsCard(target)
   if (!card) {
     // No card edges to bleed to, so CSS grows a halo; a highlighted card keeps its own edges.

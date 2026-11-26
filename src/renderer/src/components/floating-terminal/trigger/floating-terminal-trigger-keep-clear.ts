@@ -99,11 +99,14 @@ function keepClearOf(element: HTMLElement): () => void {
 }
 
 /** Keeps the floating terminal button off `element` while it is mounted. */
-export function useKeepFloatingTerminalTriggerClear(element: RefObject<HTMLElement | null>): void {
+export function useKeepFloatingTerminalTriggerClear(
+  element: RefObject<HTMLElement | null>,
+  enabled = true
+): void {
   useEffect(() => {
-    const node = element.current
+    const node = enabled ? element.current : null
     return node ? keepClearOf(node) : undefined
-  }, [element])
+  }, [element, enabled])
 }
 
 function subscribe(listener: () => void): () => void {

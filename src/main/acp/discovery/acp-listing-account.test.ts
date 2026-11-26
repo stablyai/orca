@@ -1,56 +1,29 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
-import { acpLaunchSpecFor } from '../launch/acp-launch-registry'
-import { prepareAcpListingAccount } from './acp-listing-account'
+import { expect, it, vi } from 'vitest'
+import type { AntigravityChatAuthConfig } from '../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
+import { directoryAccountBinding } from '../launch/acp-account-binding'
+import { AcpListingRefused, prepareAcpListingAccount } from './acp-listing-account'
 
-let root = ''
-afterEach(() => rmSync(root, { recursive: true, force: true }))
-
-it("writes Orca's chat home settings for the saved method before a listing, as a chat start does", async () => {
-  root = mkdtempSync(join(tmpdir(), 'acp-listing-account-'))
-  const home = join(root, 'antigravity-chat')
-  const env = { GEMINI_HOME: home, HOME: root, GEMINI_API_KEY: 'key' }
-  await prepareAcpListingAccount(
-    acpLaunchSpecFor('antigravity')!,
-    env,
-    { method: 'gemini-api-key' },
-    () => {}
-  )
-  expect(readFileSync(join(home, 'antigravity-acp', 'settings.json'), 'utf8')).toBe(
-    '{"auth":{"type":"gemini-api-key"}}'
-  )
+const binding = directoryAccountBinding('GEMINI_HOME', (home) => home)
+const failingWith = (error: Error) => ({
+  account: {
+    ...binding,
+    prepare: async () => {
+      throw error
+    }
+  }
 })
 
-it('never refuses a listing, even with no key and a saved Google login', async () => {
-  root = mkdtempSync(join(tmpdir(), 'acp-listing-account-'))
-  const home = join(root, 'antigravity-chat')
-  mkdirSync(join(home, 'antigravity-acp'), { recursive: true })
-  writeFileSync(join(home, 'antigravity-acp', 'acp_token.json'), '{}')
-  await expect(
-    prepareAcpListingAccount(
-      acpLaunchSpecFor('antigravity')!,
-      { GEMINI_HOME: home, HOME: root },
-      { method: 'gemini-api-key' },
-      () => {}
-    )
-  ).resolves.toBeUndefined()
-})
+const auth: AntigravityChatAuthConfig = { method: 'gemini-api-key' }
 
-it('never fails a listing whose account files cannot be prepared, as before', async () => {
-  root = mkdtempSync(join(tmpdir(), 'acp-listing-account-'))
-  // gcloud with no project anywhere: a chat start says so; a listing goes on.
-  await expect(
-    prepareAcpListingAccount(
-      acpLaunchSpecFor('antigravity')!,
-      {
-        GEMINI_HOME: join(root, 'antigravity-chat'),
-        HOME: root,
-        CLOUDSDK_CONFIG: join(root, 'none')
-      },
-      { method: 'agent-platform' },
-      () => {}
-    )
-  ).resolves.toBeUndefined()
+it('lists anyway when the account files fail, but not on an account that refuses the listing', async () => {
+  const assertCurrent = vi.fn()
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+  const failing = failingWith(new Error('disk full'))
+  await expect(prepareAcpListingAccount(failing, {}, auth, assertCurrent)).resolves.toBeUndefined()
+  expect(warn).toHaveBeenCalled()
+  const refused = new AcpListingRefused('no key')
+  const refusing = failingWith(refused)
+  await expect(prepareAcpListingAccount(refusing, {}, auth, assertCurrent)).rejects.toBe(refused)
+  expect(assertCurrent).toHaveBeenCalledTimes(1)
+  warn.mockRestore()
 })

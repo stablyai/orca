@@ -12,17 +12,13 @@ import type { ManagedRuntimeInstallState } from '../../../../../shared/agent-lau
 import { NativeChatInstallStrip } from './NativeChatInstallStrip'
 import {
   NativeChatSignInStrip,
-  nativeChatSignInTitle,
+  useAntigravityChatSignInStrip,
   type NativeChatSignInStripState
 } from './NativeChatSignInStrip'
-import { useAntigravityChatSignIn } from '@/components/provider-accounts/use-antigravity-chat-sign-in'
-import {
-  antigravityChatSignInPrompt,
-  antigravityOrcaRuntimeSignsIn
-} from '@/components/provider-accounts/antigravity-chat-runtime-sign-in-policy'
 import {
   useStructuredAgentSessionAgentCopy,
-  useStructuredAgentSessionHostProgram
+  useStructuredAgentSessionHostProgram,
+  useStructuredAgentSessionOwnLogin
 } from '../session/status/structured-agent-session-status-hooks'
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { findAgentCopy } from '../../../../../shared/agent-launch/catalog/agent-copies'
@@ -61,7 +57,8 @@ export function useNativeChatInstallSlot(
 } {
   const t = useTranslate()
   const hostProgram = useStructuredAgentSessionHostProgram(props.sessionId, props.target)
-  // Chats on the host program follow it too: Orca's copy of agy may be what they need installed.
+  const ownLogin = useStructuredAgentSessionOwnLogin(props.sessionId, props.target)
+  // Chats on the host program follow it too: Orca's agy may be what they need installed.
   const observation = useManagedRuntimeInstall(props.target, props.agent, props.isVisible)
   const ownCommand = useAgentCopyOwnCommand(
     props.agent,
@@ -69,75 +66,39 @@ export function useNativeChatInstallSlot(
     props.target
   )
   const slot = ownCommand ? NONE : nativeChatInstallSlotState(observation, layout, hostProgram)
-  // Once Orca's own runtime is ready, chats still need its sign-in; the host's agy signs itself in.
-  const signsIn = chatTakesOrcaRuntimeSignIn({
+  const antigravity = chatTakesAntigravitySignIn({
     agent: props.agent,
     visible: props.isVisible,
-    hostProgram,
-    ownCommand,
-    slot,
-    observation
+    ownCommand
   })
-  const signInView = useAntigravityChatSignIn(signsIn ? props.target : null)
-  const prompt = signsIn ? antigravityChatSignInPrompt(signInView) : null
-  const signIn =
-    prompt === null ? null : { prompt, view: signInView, agent: props.agent, host: props.target }
+  // Advisory, as the host's other verdicts: a login agy gets elsewhere isn't seen at once.
+  const signIn = useAntigravityChatSignInStrip(
+    antigravity && slot.kind === 'none' ? props.target : null,
+    props.agent
+  )
   const unavailableHint =
     slot.kind === 'install'
       ? managedRuntimeInstallCard(slot.state, agentLabel, slot.layout, undefined, t).title
-      : signIn
-        ? nativeChatSignInTitle(agentLabel, t)
-        : undefined
+      : undefined
   return {
     slot,
     signIn,
     sendBlockedReason: unavailableHint ?? installSlotSendBlockedReason(slot, agentLabel, t),
     unavailableHint,
-    antigravityAuth:
-      signsIn && observation.kind === 'active'
-        ? {
-            host: props.target,
-            backend: 'managed',
-            managedVersion:
-              observation.snapshot.kind === 'known'
-                ? observation.snapshot.state.installedVersion
-                : null
-          }
-        : props.agent === 'antigravity' && props.isVisible && hostProgram
-          ? {
-              host: props.target,
-              backend: 'agy',
-              ...orcasAgy(observation),
-              // Until the host says which agy is there, or while none is, the chip names none.
-              programPending:
-                slot.kind === 'install' ||
-                observation.kind === 'pending' ||
-                (observation.kind === 'active' && observation.snapshot.kind === 'unknown')
-            }
-          : null
+    antigravityAuth: antigravity
+      ? { host: props.target, ownLogin, ...antigravityAgy(observation) }
+      : null
   }
 }
 
-/** Only a chat on Orca's own Antigravity runtime, once installed, takes Orca's sign-in: never the
- *  host's agy, and never a copy with its own Command, which runs neither. */
-export function chatTakesOrcaRuntimeSignIn(args: {
+/** Only a chat that runs agy signs in to Antigravity: never a copy with its own Command, which
+ *  runs neither Orca's agy nor the host's. */
+export function chatTakesAntigravitySignIn(args: {
   agent: string
   visible: boolean
-  hostProgram: boolean
   ownCommand: boolean
-  slot: NativeChatInstallSlotState
-  observation: ManagedRuntimeInstallObservation
 }): boolean {
-  const { observation } = args
-  return (
-    args.agent === 'antigravity' &&
-    args.visible &&
-    !args.hostProgram &&
-    !args.ownCommand &&
-    args.slot.kind === 'none' &&
-    observation.kind === 'active' &&
-    antigravityOrcaRuntimeSignsIn(observation)
-  )
+  return args.agent === 'antigravity' && args.visible && !args.ownCommand
 }
 
 /** Whether this computer's chat runs as an agent copy with a Command of its own, which the host
@@ -154,15 +115,20 @@ export function useAgentCopyOwnCommand(
   })
 }
 
-/** Orca's installed agy is the one a chat on the host program runs; the person's own wins. */
-function orcasAgy(observation: ManagedRuntimeInstallObservation) {
+/** Which agy runs Antigravity chats on the host, once its install status says. */
+function antigravityAgy(
+  observation: ManagedRuntimeInstallObservation
+): Pick<NativeChatAntigravityAuthTarget, 'agy' | 'managedVersion'> {
   const state =
     observation.kind === 'active' && observation.snapshot.kind === 'known'
       ? observation.snapshot.state
       : null
-  return state?.program === 'cli' && state.source === 'managed'
-    ? { orcasAgy: true, managedVersion: state.installedVersion }
-    : {}
+  if (state?.program !== 'cli' || state.source === null) {
+    return { agy: null, managedVersion: null }
+  }
+  return state.source === 'managed'
+    ? { agy: 'orcas', managedVersion: state.installedVersion }
+    : { agy: 'yours', managedVersion: null }
 }
 
 /** A chat on the host's own program needs an install only when that program is Orca's missing

@@ -1,99 +1,100 @@
-import { expect, it } from 'vitest'
+// Whom an ended turn acts for, read from its journal as the Slack mirror and an adopted turn read it:
+// a paired device Orca can't place as the owner typing a steer the provider took into the turn makes
+// it no longer the owner's; a send only scoped to the turn, which the provider never took, does not.
+import { describe, expect, it } from 'vitest'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import { endedTurn, endedTurnAttribution } from './external-conversation-ended-turn'
+import { chatTurnFor } from './external-conversation-turn-state'
 import type { ConversationChat } from './external-conversation-chat'
-import { endedTurn } from './external-conversation-ended-turn'
 
-// Design item 125 §3 (turn membership): an ended turn's deliveries are its opener's and each send the
-// provider proved it steered in, keyed by the turn row's journal key rather than the provider's
-// turn id. A message whose turn scope only the host set at handover is not evidence. Its prose is
-// the turn's own.
+const TURN = 'turn-1'
+const CURSOR = { epoch: 'e1', sequence: 10 }
+const host = { by: 'host' }
+const unclaimed = { by: 'device', deviceId: 'd4' }
 
-const TURN_KEY = 'item:turn-1'
-const SLACK = { source: 'slack', externalId: 'slack:T1:C1:1.2' }
-
-const item = (
-  itemId: string,
-  sequence: number,
-  body: AgentJournalRenderItem['body'],
-  turnItemId?: string
-): AgentJournalRenderItem => ({
-  itemId,
-  revision: 1,
-  body,
-  sequence,
-  observedAt: sequence,
-  ...(turnItemId ? { turnScope: { kind: 'turn' as const, turnItemId } } : {})
+let seq = 0
+const row = (itemId: string, body: unknown, extra: Record<string, unknown> = {}) =>
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: journal rows with only the fields the readers read.
+  ({
+    itemId,
+    revision: 1,
+    sequence: ++seq,
+    observedAt: seq,
+    body,
+    ...extra
+  }) as AgentJournalRenderItem
+const message = (typedBy: unknown) => ({
+  kind: 'message',
+  role: 'user',
+  blocks: [{ type: 'text', text: 'go' }],
+  typedBy
 })
-const asked = (deliveryId: string, sequence: number, turnItemId?: string) =>
-  item(
-    agentJournalSubmissionKey(deliveryId),
-    sequence,
-    {
-      kind: 'message',
-      role: 'user',
-      blocks: [{ type: 'text', text: deliveryId }],
-      connectorDelivery: { account: 'account-a', conversation: SLACK, deliveryId }
-    },
-    turnItemId
-  )
-const steered: AgentJournalSubmission = {
-  clientMessageId: 'd1',
-  fence: 1,
-  payloadFingerprint: 'd1',
-  dispatchState: 'accepted',
-  providerItemId: null,
-  reason: null,
-  submittedAt: 1,
-  resolvedAt: 2,
-  answeredInTurn: { turnItemId: TURN_KEY, via: 'steer' }
+const send = (clientMessageId: string, answeredInTurn?: unknown) =>
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a submission with only the fields the readers read.
+  ({
+    clientMessageId,
+    origin: 'client',
+    source: { kind: 'user' },
+    dispatchState: 'accepted',
+    ...(answeredInTurn ? { answeredInTurn } : {})
+  }) as unknown as AgentJournalSubmission
+
+/** The owner's host-typed turn, with a paired device's send steered in: taken by the provider, or
+ *  only scoped to the turn. */
+function journal(steer: 'taken' | 'scoped') {
+  seq = 0
+  const steered = agentJournalSubmissionKey('c2')
+  const items = [
+    row('u1', message(host)),
+    row('t1', { kind: 'turn', turnId: TURN, state: 'completed', userItemId: 'u1' }),
+    row(steered, message(unclaimed), { turnScope: { kind: 'turn', turnItemId: 't1' } })
+  ]
+  const submissions = [
+    send('c2', steer === 'taken' ? { turnItemId: 't1', via: 'steer' } : undefined)
+  ]
+  return { items, submissions }
 }
 
-it('claims the opener and the proven steer by the turn row’s key, never a host-scoped handover', async () => {
-  const items = [
-    asked('d0', 1),
-    asked('d1', 2),
-    // Handed over into the turn by the host; the provider never took it.
-    asked('d2', 3, TURN_KEY),
-    item(
-      'said',
-      4,
-      { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Done.' }] },
-      TURN_KEY
-    ),
-    asked('after', 5),
-    item(TURN_KEY, 6, {
-      kind: 'turn',
-      turnId: 'provider-turn-1',
-      state: 'completed',
-      outcome: 'success',
-      userItemId: agentJournalSubmissionKey('d0')
-    })
-  ]
-  const chat = {
+function chatOf(steer: 'taken' | 'scoped') {
+  const { items, submissions } = journal(steer)
+  const opener = items[0]!
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the readers call only these journal reads.
+  return {
     journalReads: async () => ({
-      operationWindow: async () => ({
-        snapshot: {
-          sessionId: 'chat-1',
-          cursor: { epoch: 'e', sequence: 6 },
-          items,
-          submissions: [steered]
-        },
-        complete: true
-      }),
-      canonicalItemIds: async (ids: readonly string[]) =>
-        ids.map((itemId) => ({ itemId, canonicalItemId: itemId }))
+      operationWindow: async () => ({ snapshot: { items, submissions, cursor: CURSOR } }),
+      canonicalItemIds: async () => [],
+      turnAttribution: async () => ({
+        cursor: CURSOR,
+        turnItemId: 't1',
+        opener,
+        stamps: [],
+        messages: steer === 'taken' ? [opener, items[2]!] : [opener]
+      })
     })
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: endedTurn reads only these chat members.
-  const ended = await endedTurn(chat as unknown as ConversationChat, 'chat-1', 'provider-turn-1', {
-    epoch: 'e',
-    sequence: 6
+  } as unknown as ConversationChat
+}
+
+const ownerThread = chatTurnFor('local', 'owner')
+
+describe('an ended turn of the owner’s thread', () => {
+  it('is never the owner’s once a device Orca can’t place as the owner steered into it', async () => {
+    const full = await endedTurn(chatOf('taken'), 'chat', TURN, CURSOR)
+    expect(full.typedByAnother).toBe(true)
+    expect(ownerThread(full).turnFor).toBe('someone_else')
+    const indexed = await endedTurnAttribution(chatOf('taken'), 'chat', TURN, CURSOR)
+    expect(indexed.typedByAnother).toBe(true)
+    expect(ownerThread(indexed).turnFor).toBe('someone_else')
   })
-  expect(ended.turnItemId).toBe(TURN_KEY)
-  expect(ended.stamps?.map((stamp) => stamp.deliveryId).sort()).toEqual(['d0', 'd1'])
-  expect(ended.turnProse).toBe('Done.')
+
+  it('stays the owner’s when the provider never took that send into the turn', async () => {
+    const full = await endedTurn(chatOf('scoped'), 'chat', TURN, CURSOR)
+    expect(full.typedByAnother).toBeUndefined()
+    expect(ownerThread(full).turnFor).toBe('owner')
+    const indexed = await endedTurnAttribution(chatOf('scoped'), 'chat', TURN, CURSOR)
+    expect(ownerThread(indexed).turnFor).toBe('owner')
+  })
 })

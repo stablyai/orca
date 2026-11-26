@@ -65,6 +65,7 @@ export type SessionTabsPublicationEpochHistory = RetiredValueHistory
 
 export type WebSessionTabsSnapshotApplyOptions = {
   contentScope?: 'all' | 'agent-session'
+  requestReceivedFrame?: number
   preserveLocalLayout?: boolean
   terminalPtyMode?: 'local' | 'remote'
   reconcileBrowserPage?: {
@@ -220,6 +221,9 @@ export type MirroredBrowserTab = {
   previousPage?: BrowserPage
   preservesLoading: boolean
   certificateFailure: BrowserCertificateFailure | null
+  audible: boolean
+  audioMuted: boolean
+  agentDriving: boolean
   remotePageId: string
   browserProfileId?: string
   placement?: RuntimeBrowserPlacement
@@ -246,6 +250,8 @@ export type WebSessionTabsSyncState = Pick<
   | 'agentStatusEpoch'
   | 'browserPagesByWorkspace'
   | 'browserCertificateFailuresByPageId'
+  | 'browserAudiblePageIds'
+  | 'browserAudioMutedTabIds'
   | 'browserTabsByWorktree'
   | 'editorBuffers'
   | 'groupsByWorktree'
@@ -287,6 +293,8 @@ export type WebSessionTabsBatchRecordKey =
   | 'agentStatusByPaneKey'
   | 'automaticAgentResumeClaimsByTabId'
   | 'browserCertificateFailuresByPageId'
+  | 'browserAudiblePageIds'
+  | 'browserAudioMutedTabIds'
   | 'browserPagesByWorkspace'
   | 'browserTabsByWorktree'
   | 'groupsByWorktree'

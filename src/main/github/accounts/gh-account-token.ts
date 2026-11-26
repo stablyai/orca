@@ -283,8 +283,3 @@ export function invalidateGhAccountTokenCache(binding?: GhAccountBinding | null)
     }
   }
 }
-
-/** @internal — test-only */
-export function clearGhAccountTokenCacheForTests(): void {
-  invalidateGhAccountTokenCache()
-}

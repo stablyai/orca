@@ -2,7 +2,7 @@ import { expect, it } from 'vitest'
 import { agentCopyMenuRows } from './agent-copy-menu-rows'
 
 it('offers a copy as a chat and a CLI where its agent is, and nowhere else', () => {
-  const copy = (id: string, agent: 'claude' | 'codex' | 'gemini' | 'grok') => ({
+  const copy = (id: string, agent: 'claude' | 'codex' | 'aider' | 'grok') => ({
     id,
     name: id,
     agent
@@ -16,7 +16,7 @@ it('offers a copy as a chat and a CLI where its agent is, and nowhere else', () 
     [
       copy('claude.a', 'claude'),
       copy('codex.b', 'codex'),
-      copy('gemini.c', 'gemini'),
+      copy('aider.c', 'aider'),
       copy('grok.d', 'grok')
     ],
     ['claude', 'codex', 'grok']

@@ -1,5 +1,7 @@
 import { useEffect } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store/index'
+import { workspaceCatalogConfirmsAbsence } from '@/store/workspaces/catalog/workspace-catalog-absence'
 import {
   getAutomationAuthorityTarget,
   getAutomationHostTargetKey,
@@ -7,7 +9,7 @@ import {
 } from '../hosts/automation-host-client'
 import { ALL_AUTOMATION_HOSTS_FILTER } from '../../../../../shared/automations/ownership/automation-host-filter'
 import { canRerunAutomationRun } from './automation-run-view-state'
-import { getAutomationRunWorkspaceDisplay } from './automation-run-workspace-display'
+import { getAutomationRunDetailsWorkspaceName } from './automation-run-workspace-display'
 import type { AutomationsPageListState } from '../listing/use-automations-page-list-state'
 import type { AutomationsPageLocalState } from '../use-automations-page-local-state'
 import type { AutomationsPageSetupState } from '../authoring/use-automations-page-setup-state'
@@ -253,16 +255,32 @@ export function useAutomationRunPageState({
   const selectedRunTarget = selectedAutomationRunPage
     ? list.runTargetFor(selectedAutomationRunPage)
     : null
-  const selectedAutomationRunPageWorkspaceDisplay = selectedAutomationRunPage
-    ? getAutomationRunWorkspaceDisplay(
+  const viewState = selectedRunTarget?.viewState
+  const workspaceId = selectedAutomationRunPage?.workspaceId
+  const catalogHostId = selectedRunTarget?.workspaceCatalogHostId
+  const workspaceRemoved = useAppStore((state) =>
+    Boolean(
+      workspaceId &&
+      catalogHostId &&
+      !selectedRunTarget?.worktree &&
+      !viewState?.canOpen &&
+      workspaceCatalogConfirmsAbsence(state, workspaceId, catalogHostId)
+    )
+  )
+  const selectedAutomationRunPageWorkspaceActionLabel = viewState?.canOpen
+    ? viewState.actionLabel
+    : null
+  const selectedAutomationRunPageWorkspaceName = selectedAutomationRunPage
+    ? getAutomationRunDetailsWorkspaceName(
         {
           run: selectedAutomationRunPage,
-          worktree: selectedRunTarget?.worktree ?? null
+          worktree: selectedRunTarget?.worktree ?? null,
+          actionLabel: selectedAutomationRunPageWorkspaceActionLabel,
+          workspaceRemoved
         },
         t
       )
     : null
-  const selectedAutomationRunPageViewState = selectedRunTarget?.viewState ?? null
   const canRerunSelectedAutomationRunPage =
     selectedAutomationRunPage !== null &&
     canRerunAutomationRun({ automation: selected, run: selectedAutomationRunPage })
@@ -270,8 +288,8 @@ export function useAutomationRunPageState({
     selectedAutomationRunPage !== null && rerunRunIdsInFlight.has(selectedAutomationRunPage.id)
 
   return {
-    selectedAutomationRunPageWorkspaceDisplay,
-    selectedAutomationRunPageViewState,
+    selectedAutomationRunPageWorkspaceName,
+    selectedAutomationRunPageWorkspaceActionLabel,
     canRerunSelectedAutomationRunPage,
     isSelectedAutomationRunPageRerunPending
   }

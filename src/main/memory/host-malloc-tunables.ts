@@ -38,7 +38,3 @@ export function claimHostMallocTunables(env: NodeJS.ProcessEnv = process.env): v
 export function hostMallocTunablesDaemonEnv(): Record<string, string> {
   return claimed === null ? {} : { [GLIBC_TUNABLES]: claimed, [HOST_MALLOC_TUNABLES_ENV]: claimed }
 }
-
-export function resetHostMallocTunablesForTests(): void {
-  claimed = null
-}

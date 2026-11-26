@@ -20,7 +20,7 @@ export function useBotChatPersona(workspaceId: string | null): NativeChatPersona
     return null
   }
   return {
-    icon: <BotAvatar bot={bot} className="size-14 rounded-xl text-xl" />,
+    icon: <BotAvatar bot={bot} size="large" className="size-14 rounded-xl text-xl" />,
     name: bot.name,
     subtitle:
       description ??

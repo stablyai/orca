@@ -1,15 +1,16 @@
 import { z } from 'zod'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
-import { PeerMailRelayPayload } from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
-import { resolveBareOrchestrationRecipient } from '../../../rpc/methods/orchestration/messaging/recipient-routing'
+import {
+  PeerMailItem,
+  PeerMailRelayPayload
+} from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { MessageRow } from '../../db/orchestration-records'
 import { federationRelayRetryDelayMs } from '../relay/federation-relay-scheduler'
 import { HeldPeerConversations } from './held-peer-conversations'
+import { storePeerReply } from './peer-reply-store'
 import type { OrchestrationEnvironmentTransport } from '../environment-transport'
-import { peerMailLocalRecipient } from './peer-mail-delivery'
 import { peerMailRelayEnvironments, peerMailRelayWants } from './peer-mail-relay-environments'
-import { presentImportedPeerItem } from '../../mailbox/formatting/imported-peer-item-presentation'
 import { importRemoteOwnedItem } from '../../db/remote-owned/remote-owned-import'
 import {
   dueRemoteResendsNow,
@@ -20,25 +21,16 @@ import {
 import { resendOwedRemoteActions } from '../remote-owned/remote-owed-actions'
 import { remoteServerName } from '../remote-owned/remote-owned-reads'
 import { isRemoteServerUnreachable } from '../remote-owned/remote-server-unreachable'
-import { settlePeerQuestionsOut } from './peer-questions-out'
 import { retryRemoteAskNotices } from '../../../rpc/methods/orchestration/messaging/remote-ask-notices'
+import { deletedCoordinatorChat } from '../../../rpc/methods/orchestration/messaging/deleted-coordinator-chat'
 import { settleRemovedPairedServer, settleRepairedServer } from './paired-server-changes'
+import * as asksLoop from '../paired-server-asks/paired-server-asks-loop'
 
 // Under the relay edge's idle cutoff, so an idle pull ends by itself instead of being dropped.
 const PULL_WAIT_MS = 20_000
 const PULL_TIMEOUT_MS = PULL_WAIT_MS + 15_000
 
-const PulledPeerMail = z.object({
-  items: z.array(
-    z.object({
-      conversationId: z.string(),
-      sequence: z.number().int().positive(),
-      messageId: z.string(),
-      kind: z.string().optional(),
-      payload: z.string()
-    })
-  )
-})
+const PulledPeerMail = z.object({ items: z.array(PeerMailItem) })
 
 /** What this Orca's pull loop last heard from a paired server; nothing until its first pull settles. */
 export type PeerServerAnswerStatus = {
@@ -48,8 +40,8 @@ export type PeerServerAnswerStatus = {
   unreachableSince?: number
 }
 
-type Loop = {
-  db: OrchestrationDb
+// Named on a server that sends this computer asks; `forceOnce` pulls once with no reason, to announce.
+type Loop = asksLoop.PairedServerAsksHolder & {
   stopped: boolean
   resending: boolean
   held: HeldPeerConversations
@@ -61,25 +53,39 @@ type Loop = {
 export class PeerMailRelay {
   private readonly loops = new Map<string, Loop>()
   private readonly answers = new Map<string, PeerServerAnswerStatus>()
+  private unwatch: (() => void) | null = null
 
   constructor(
     private readonly runtime: OrcaRuntimeService,
     private readonly transport: () => OrchestrationEnvironmentTransport | null
   ) {}
 
-  ensure(targetEnvironmentId?: string): void {
-    if (!this.transport()) {
+  ensure(targetEnvironmentId?: string, options: { forceOnce?: boolean } = {}): void {
+    const transport = this.transport()
+    if (!transport) {
       return
     }
+    this.unwatch ??= asksLoop.watchPairedServers(this.runtime, transport, (id) =>
+      this.ensure(id, { forceOnce: true })
+    )
     const db = this.runtime.getOrchestrationDb()
     for (const environmentId of targetEnvironmentId === undefined
       ? peerMailRelayEnvironments(db)
       : [targetEnvironmentId]) {
       const current = this.loops.get(environmentId)
       if (current && !current.stopped && current.db === db) {
+        // A running loop announces on its next pull, under what the server says now.
+        current.forceOnce ||= options.forceOnce
+        current.asksStale ||= options.forceOnce
         continue
       }
-      const loop: Loop = { db, stopped: false, resending: false, held: new HeldPeerConversations() }
+      const loop: Loop = {
+        db,
+        stopped: false,
+        resending: false,
+        held: new HeldPeerConversations(),
+        forceOnce: options.forceOnce
+      }
       this.loops.set(environmentId, loop)
       void this.run(environmentId, loop)
     }
@@ -90,8 +96,12 @@ export class PeerMailRelay {
   }
 
   stop(): void {
+    this.unwatch?.()
+    this.unwatch = null
     for (const loop of this.loops.values()) {
       loop.stopped = true
+      // Told now: a stopped loop's pull may wait out its full timeout first.
+      asksLoop.endPairedServerAsks(this.runtime, loop.asks)
     }
     this.loops.clear()
   }
@@ -109,14 +119,20 @@ export class PeerMailRelay {
     // Named while it is still paired, so a removal can say which server went.
     const serverName = await remoteServerName(this.runtime, environmentId)
     // Ends with its last reason to pull; a later conversation or link starts a new loop through ensure().
-    while (this.isCurrent(environmentId, loop) && peerMailRelayWants(loop.db, environmentId)) {
+    while (
+      this.isCurrent(environmentId, loop) &&
+      (loop.forceOnce || peerMailRelayWants(loop.db, environmentId))
+    ) {
       try {
         await this.pullOnce(environmentId, loop)
+        loop.forceOnce = false
+        asksLoop.afterPairedServerPull(this.runtime, loop.asks)
         retryRemoteAskNotices(environmentId)
         if (failures > 0) {
           // The server answers again: what this Orca owes it goes out now, not after its backoff.
           dueRemoteResendsNow(loop.db, environmentId)
           this.resendOwed(environmentId, loop)
+          loop.asksStale = true
         }
         failures = 0
       } catch {
@@ -138,6 +154,7 @@ export class PeerMailRelay {
         })
       }
     }
+    asksLoop.endPairedServerAsks(this.runtime, loop.asks)
     if (this.loops.get(environmentId) === loop) {
       this.loops.delete(environmentId)
     }
@@ -156,13 +173,18 @@ export class PeerMailRelay {
     // A re-pair is noticed here, not only by the next call through a link: its held Tasks fail now.
     const server = await this.runtime.resolveOrchestrationWorkerServer(environmentId)
     settleRepairedServer(this.runtime, loop.db, server)
+    await asksLoop.refreshPairedServerAsks(this.runtime, loop, server, this.transport())
     this.resendOwed(environmentId, loop)
     const { holdBack, waitMs } = loop.held.forPull(Date.now(), PULL_WAIT_MS)
     const response = await this.runtime
       .callOrchestrationWorkerServer(
         environmentId,
         'orchestration.peerMailPull',
-        { waitMs, ...(holdBack.length > 0 ? { holdBack } : {}) },
+        {
+          waitMs,
+          ...(holdBack.length > 0 ? { holdBack } : {}),
+          ...asksLoop.pairedServerPullParams(loop.asks)
+        },
         PULL_TIMEOUT_MS
       )
       .catch((error: unknown) => {
@@ -179,6 +201,7 @@ export class PeerMailRelay {
     if (!this.isCurrent(environmentId, loop)) {
       return
     }
+    asksLoop.notePairedServerAnswer(loop.db, loop.asks, response)
     const { items } = PulledPeerMail.parse(response)
     if (items.length === 0) {
       return
@@ -201,7 +224,9 @@ export class PeerMailRelay {
       }
       onlyHeldBack = false
       try {
-        const stored = await this.importItem(loop.db, environmentId, item)
+        const stored = (await asksLoop.importAsk(this.runtime, loop.db, loop.asks, item))
+          ? undefined
+          : await this.importItem(loop.db, environmentId, item)
         // Wake before the ack: a replay after a failed ack finds the row stored and stays quiet.
         if (stored) {
           this.runtime.notifyMessageArrived(stored.to, stored.type)
@@ -269,7 +294,8 @@ export class PeerMailRelay {
       const server = await this.runtime.resolveOrchestrationWorkerServer(environmentId)
       return importRemoteOwnedItem(db, remoteServerPin(server), item, {
         name: server.name,
-        notify: (handle, type) => this.runtime.notifyMessageArrived(handle, type)
+        notify: (handle, type) => this.runtime.notifyMessageArrived(handle, type),
+        deletedChat: deletedCoordinatorChat
       })
     }
     const stored = this.importReply(db, environmentId, item)
@@ -295,29 +321,7 @@ export class PeerMailRelay {
       )
       return undefined
     }
-    const handle = peerMailLocalRecipient(this.runtime, conversation)
-    // Peer-mail replies come home to this Orca's own sender handle, never a terminal agent's id.
-    const recipient = resolveBareOrchestrationRecipient({ runtime: this.runtime, db, handle })
-    const { from, body, ...carried } = presentImportedPeerItem({
-      kind: 'peer_mail',
-      ...payload.data
-    })
-    settlePeerQuestionsOut(db, conversation.conversation_id, payload.data)
-    const stored = db.insertPeerMailMessage({
-      conversationId: conversation.conversation_id,
-      remoteParty: payload.data.fromAddress,
-      message: {
-        id: item.messageId,
-        from,
-        to: recipient.ok ? recipient.to : handle,
-        subject: payload.data.subject,
-        body,
-        threadId: payload.data.threadId ?? undefined,
-        runId: recipient.ok ? recipient.runId : undefined,
-        ...carried
-      }
-    })
-    return stored.duplicate ? undefined : stored.message
+    return storePeerReply(this.runtime, db, conversation, item.messageId, payload.data)
   }
 }
 

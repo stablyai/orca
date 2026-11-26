@@ -18,7 +18,9 @@ export function backgroundTaskStatesEqual(
     left.state !== right.state ||
     left.supportsTaskStop !== right.supportsTaskStop ||
     left.supportsStopAll !== right.supportsStopAll ||
-    left.incomplete !== right.incomplete
+    left.incomplete !== right.incomplete ||
+    left.workerDock?.revision !== right.workerDock?.revision ||
+    left.workerDock?.open !== right.workerDock?.open
   ) {
     return false
   }

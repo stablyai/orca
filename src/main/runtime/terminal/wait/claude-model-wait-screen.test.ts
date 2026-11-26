@@ -1,82 +1,36 @@
-import { describe, expect, it } from 'vitest'
-import {
-  claudeModelWaitLastSeen,
-  claudeReplyScreen,
-  claudeToolRunsOnScreen
-} from './claude-model-wait-screen'
+import { expect, it } from 'vitest'
+import { claudeCompactingOnScreen, claudeTurnDoneOnScreen } from './claude-model-wait-screen'
 
-// Lines as Claude 2.1.330 drew them in a worker pane (rig, 2026-11-21).
-const chrome = (status: string) => [
-  '────────────────────────────────────────',
-  '❯',
-  '────────────────────────────────────────',
-  status,
-  '  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt'
-]
+const FOOTER = '  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt'
 
-describe("terminal Claude's screen while it waits on the model", () => {
-  it('reads a stalled request as unchanged though its spinner moves', () => {
-    const before = [
-      '⏺ Reply PONG',
-      ...chrome('✻ Waiting for API response · will retry in 3m 38s · check your network')
-    ]
-    const after = ['⏺ Reply PONG', ...chrome('✶ Calculating… (5m 25s)')]
-    expect(claudeReplyScreen(before)).toBe(claudeReplyScreen(after))
-    expect(claudeModelWaitLastSeen(before)).toBe(
-      'Waiting for API response · will retry in 3m 38s · check your network'
-    )
-  })
+// Drawn by Claude 2.1.330 on a worker whose turn had ended while a background shell ran on; a
+// subagent hook then reopened model time, and the screen check sent a false waiting notice.
+it('reads a turn Claude shows as done, with a shell still running, as waiting on nothing', () => {
+  const screen = [
+    '⏺ Both PR branches are updated locally. Waiting for the fixed-build 50-pane run.',
+    '✻ Cooked for 8m 52s · done 1:31 AM · 1 shell still running',
+    '❯',
+    FOOTER
+  ]
+  expect(claudeTurnDoneOnScreen(screen)).toBe(true)
+})
 
-  it('reads a streaming reply as changed', () => {
-    const before = ['⏺ 1. Lake Baikal is the deepest lake.', ...chrome('✳ Kneading… (40s)')]
-    const after = [
-      '⏺ 1. Lake Baikal is the deepest lake.',
-      '  2. Lake Superior holds a tenth of the fresh surface water.',
-      ...chrome('✳ Kneading… (44s)')
-    ]
-    expect(claudeReplyScreen(before)).not.toBe(claudeReplyScreen(after))
-  })
+it('reads a stalled request, and a reply that says done, as still waiting', () => {
+  expect(
+    claudeTurnDoneOnScreen([
+      '⏺ The build is done · tests next.',
+      '✻ Waiting for API response · will retry in 3m 32s · check your network',
+      '❯',
+      FOOTER
+    ])
+  ).toBe(false)
+  expect(claudeTurnDoneOnScreen(['· Whirlpooling… (11m 27s)', '❯', FOOTER])).toBe(false)
+})
 
-  it('keeps reply text that uses the words of a retry', () => {
-    const before = ['⏺ attempt 1/3: A', ...chrome('✳ Kneading… (40s)')]
-    const after = ['⏺ attempt 1/3: AB', ...chrome('✳ Kneading… (44s)')]
-    expect(claudeReplyScreen(before)).not.toBe(claudeReplyScreen(after))
-  })
-
-  it("reads a tool call's input streaming, which Claude does not draw, by its received tokens", () => {
-    const tip = '  ⎿  Tip: Use /btw to ask a side question without interrupting Claude'
-    const before = ['  60.', ...chrome('· Zigzagging… (10m 8s · ↓ 1.2k tokens)'), tip]
-    const same = ['  60.', ...chrome('✽ Zigzagging… (10m 23s · ↓ 1.2k tokens)'), tip]
-    const after = ['  60.', ...chrome('✢ Zigzagging… (10m 38s · ↓ 1.4k tokens)'), tip]
-    expect(claudeReplyScreen(before)).toBe(claudeReplyScreen(same))
-    expect(claudeReplyScreen(before)).not.toBe(claudeReplyScreen(after))
-  })
-
-  it("reads a running tool's ticking timer as unchanged, and as a running tool", () => {
-    const before = [
-      '⏺ Bash(python3 longjob.py)',
-      '  ⎿  Running… (3s · timeout 20m)',
-      ...chrome('✳ Smooshing… (7s · ↓ 135 tokens)')
-    ]
-    const after = [
-      '⏺ Bash(python3 longjob.py)',
-      '  ⎿  Running… (7s · timeout 20m)',
-      ...chrome('✳ Smooshing… (11s · ↓ 135 tokens)')
-    ]
-    expect(claudeReplyScreen(before)).toBe(claudeReplyScreen(after))
-    expect(claudeToolRunsOnScreen(after)).toBe(true)
-    expect(claudeToolRunsOnScreen(chrome('✶ Calculating… (5m 25s)'))).toBe(false)
-  })
-
-  it("names Claude's retry, else its spinner, else the last line it drew", () => {
-    expect(claudeModelWaitLastSeen(chrome('✻ API error · retrying… · attempt 1/8'))).toBe(
-      'API error · retrying… · attempt 1/8'
-    )
-    expect(
-      claudeModelWaitLastSeen(['⏺ Thinking about the plan', ...chrome('✶ Calculating… (10m 2s)')])
-    ).toBe('Calculating… (10m 2s)')
-    expect(claudeModelWaitLastSeen(['⏺ Thinking about the plan', ...chrome('')])).toBe(
-      '⏺ Thinking about the plan'
-    )
-  })
+// A compaction's request writes no api-request row, so only its spinner says one is out.
+it('reads a compaction in progress from its spinner', () => {
+  expect(claudeCompactingOnScreen(['✻ Compacting conversation… (1m 34s)', '❯', FOOTER])).toBe(true)
+  expect(claudeCompactingOnScreen(['· Whirlpooling… (11m 27s)', '❯', FOOTER])).toBe(false)
+  // A 20-column pane wraps the spinner's words onto rows of their own.
+  expect(claudeCompactingOnScreen(['✻ Compacting', 'conversation… (1m', '34s)', '❯'])).toBe(true)
 })

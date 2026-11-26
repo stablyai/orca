@@ -170,19 +170,3 @@ export function disableWslGitReadEnvironment(distro: string): void {
   touchDistroState(distro)
   transientRetryAfterByDistro.delete(distro)
 }
-
-export function resetWslGitReadEnvironmentForTests(): void {
-  environmentByDistro.clear()
-  settledEnvironmentByDistro.clear()
-  transientRetryAfterByDistro.clear()
-}
-
-export function seedWslGitReadEnvironmentForTests(
-  distro: string,
-  environment: WslGitReadEnvironment
-): void {
-  environmentByDistro.set(distro, Promise.resolve(environment))
-  settledEnvironmentByDistro.set(distro, environment)
-  touchDistroState(distro)
-  transientRetryAfterByDistro.delete(distro)
-}

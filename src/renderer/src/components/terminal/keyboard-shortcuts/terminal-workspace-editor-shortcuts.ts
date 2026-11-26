@@ -7,7 +7,6 @@ import {
 import { getEditorCmdSaveFileId } from '../../editor/save/commands/editor-cmd-save-target'
 import { runAfterEditorFramesFlush } from '../../editor/save/flush/editor-pending-flush'
 import { canToggleChangesModeForFile } from '../../editor/view-mode/editor-panel-file-mode'
-import { isEventTargetInsideFloatingWorkspacePanel } from '@/components/floating-terminal/workspace/floating-workspace-terminal-actions'
 
 type EditorShortcutContext = {
   event: KeyboardEvent
@@ -23,8 +22,6 @@ export function handleTerminalWorkspaceEditorShortcut({
   matchShortcut,
   notifyTerminalCapture
 }: EditorShortcutContext): boolean {
-  const floatingPanelOwnsEvent = (): boolean =>
-    isEventTargetInsideFloatingWorkspacePanel(event.target) || floatingWorkspaceFocused
   // Save fallback for focus outside the editor; editor-local handlers own focused saves.
   if (!event.repeat && matchShortcut('editor.save')) {
     const target = event.target as HTMLElement | null
@@ -33,7 +30,7 @@ export function handleTerminalWorkspaceEditorShortcut({
       target?.closest('textarea:not(.xterm-helper-textarea), input') !== null
     if (!inEditor) {
       const state = useAppStore.getState()
-      const requestedFileId = getEditorCmdSaveFileId(state, floatingPanelOwnsEvent())
+      const requestedFileId = getEditorCmdSaveFileId(state, floatingWorkspaceFocused)
       if (requestedFileId) {
         event.preventDefault()
         notifyTerminalCapture('editor.save')
@@ -67,7 +64,7 @@ export function handleTerminalWorkspaceEditorShortcut({
   // Why: keyboard path for the toolbar's Edit/Changes toggle (#11095).
   if (matchShortcut('editor.toggleChangesView')) {
     const state = useAppStore.getState()
-    const fileId = getEditorCmdSaveFileId(state, floatingPanelOwnsEvent())
+    const fileId = getEditorCmdSaveFileId(state, floatingWorkspaceFocused)
     const file = fileId ? state.openFiles.find((candidate) => candidate.id === fileId) : undefined
     if (file && canToggleChangesModeForFile(file)) {
       // Why: Monaco ignores defaultPrevented, so a chord like Mod+Z would also run its own command.

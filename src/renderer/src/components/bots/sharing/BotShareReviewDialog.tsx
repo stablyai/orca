@@ -16,6 +16,8 @@ import { isBotMascotId } from '../../../../../shared/bot-avatar'
 import type { BotShareReview } from '../../../../../shared/bots/bot-share-received'
 import { BOT_MASCOT_URLS } from '../bot-mascots'
 import { BotAvatarTile } from '../BotAvatar'
+import { useBotMascotLayers } from '../bot-mascot-look'
+import { wornBotOutfit } from '../../../../../shared/bots/bot-avatar-outfit'
 import { botShareCheckSummary, botShareFlagLabel, botShareFlagPage } from './bot-share-flags'
 import type { BotShareFlagSpot } from '../../../../../shared/bots/bot-share-flag-spots'
 import { reviewFlagSpots, reviewPartFiles } from '../../../../../shared/bots/bot-share-review-files'
@@ -38,6 +40,25 @@ export function reviewPictureSrc(review: BotShareReview): string | null {
   return avatar && 'mascot' in avatar && isBotMascotId(avatar.mascot)
     ? BOT_MASCOT_URLS[avatar.mascot]
     : null
+}
+
+// The shared mascot on its tile color, wearing its outfit, or the shared image.
+function ReviewPicture({ review }: { review: BotShareReview }): React.JSX.Element {
+  const avatar = review.bot.avatar
+  const shared = !review.avatarDataUrl && avatar && 'mascot' in avatar ? avatar : null
+  const look = useBotMascotLayers(
+    shared && isBotMascotId(shared.mascot) ? shared.mascot : null,
+    shared?.color,
+    wornBotOutfit(shared?.outfit)
+  )
+  return (
+    <BotAvatarTile
+      src={look?.src ?? reviewPictureSrc(review)}
+      outfit={look?.outfit}
+      fallback={review.bot.name.slice(0, 1)}
+      className="size-11 shrink-0 rounded-lg"
+    />
+  )
 }
 
 function SafetyLine({
@@ -127,11 +148,7 @@ export function BotShareReviewDialog(
       >
         <div className="space-y-3">
           <div className="flex items-start gap-3">
-            <BotAvatarTile
-              src={reviewPictureSrc(review)}
-              fallback={review.bot.name.slice(0, 1)}
-              className="size-11 shrink-0 rounded-lg"
-            />
+            <ReviewPicture review={review} />
             <div className="min-w-0 flex-1">
               <DialogTitle>{review.bot.name}</DialogTitle>
               <DialogDescription>{review.bot.purpose}</DialogDescription>

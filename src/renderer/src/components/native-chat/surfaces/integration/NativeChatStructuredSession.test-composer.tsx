@@ -1,4 +1,5 @@
-import { forwardRef, useImperativeHandle, useRef } from 'react'
+import { forwardRef, useImperativeHandle, useRef, type ReactNode } from 'react'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import type { NativeChatComposerNotice } from '../../composer/controls/native-chat-composer-notice'
 import { NativeChatComposerNotices } from '../../composer/controls/NativeChatComposerNotices'
 
@@ -10,7 +11,7 @@ export function createStructuredSessionComposerMock(mocks: {
 }) {
   return {
     NativeChatComposer: forwardRef(
-      (props: { notices?: readonly NativeChatComposerNotice[] }, ref) => {
+      (props: { notices?: readonly NativeChatComposerNotice[]; dock?: ReactNode }, ref) => {
         mocks.composerProps = props
         const fieldRef = useRef<HTMLTextAreaElement>(null)
         useImperativeHandle(ref, () => ({
@@ -28,6 +29,7 @@ export function createStructuredSessionComposerMock(mocks: {
         return (
           <>
             <NativeChatComposerNotices notices={props.notices ?? []} />
+            {props.dock ? <TooltipProvider>{props.dock}</TooltipProvider> : null}
             <textarea ref={fieldRef} aria-label="Message" data-testid="structured-composer" />
           </>
         )

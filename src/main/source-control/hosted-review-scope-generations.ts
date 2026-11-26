@@ -29,9 +29,3 @@ export function bumpScopeGeneration(scope: string): void {
     scopeGenerations.delete(oldest)
   }
 }
-
-/** @internal - exposed for tests only */
-export function __resetHostedReviewScopeGenerationsForTests(): void {
-  scopeGenerations.clear()
-  evictedGeneration = 0
-}

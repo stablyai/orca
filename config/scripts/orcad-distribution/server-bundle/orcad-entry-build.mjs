@@ -1,6 +1,7 @@
 import { build } from 'esbuild'
 import { createHash } from 'node:crypto'
 import { readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { basename, dirname, join } from 'node:path'
 
@@ -89,8 +90,33 @@ const jsoncParserEsm = {
   }
 }
 
+// esbuild preserves regex literals, including the SDK's superscript Windows device-name digits.
+const claudeSdkAsciiDeviceNames = {
+  name: 'claude-sdk-ascii-device-names',
+  setup(pluginBuild) {
+    pluginBuild.onLoad(
+      { filter: /[\\/]@anthropic-ai[\\/]claude-agent-sdk[\\/]sdk\.mjs$/ },
+      async ({ path }) => {
+        const source = await readFile(path, 'utf8')
+        const regex = '/^(con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³])$/i'
+        if (!source.includes(regex)) {
+          throw new Error(`${path} no longer contains ${regex}; update claudeSdkAsciiDeviceNames`)
+        }
+        return {
+          contents: source.replace(regex, regex.replaceAll('¹²³', '\\u00b9\\u00b2\\u00b3')),
+          resolveDir: dirname(path)
+        }
+      }
+    )
+  }
+}
+
 // Every orcad bundle (server, children, CLI) must share these, or one ships a UMD build that cannot load (#33592).
-export const ORCAD_BUNDLE_PLUGINS = [jsoncParserEsm, externalNativeAddons]
+export const ORCAD_BUNDLE_PLUGINS = [
+  jsoncParserEsm,
+  externalNativeAddons,
+  claudeSdkAsciiDeviceNames
+]
 
 // One non-ASCII character makes V8 store the ~11MB bundle as ~21MB two-byte text; esbuild escapes strings but leaves regex/tagged-template literals.
 export function findNonAsciiSource(source) {

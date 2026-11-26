@@ -1,9 +1,9 @@
 /**
  * #43632: before WSL hosts, users reached a distro through an SSH host, which starts orcad without
  * the WSL host marker. A same-version connect reuses that server, which then refuses project
- * moves. Restart it as a WSL host only when a fenced recount proves no terminal runs on it; an
- * SSH client still attached reconnects to the new server. Otherwise nothing stops, and the host
- * row offers "Restart as WSL host".
+ * moves. Restart it as a WSL host only when a fenced recount proves no terminal and no native chat
+ * runs on it; an SSH client still attached reconnects to the new server. Otherwise nothing stops,
+ * and the host row offers "Restart as WSL host".
  */
 import {
   ORCAD_NOT_WSL_HOST_LAUNCH_DEFERRAL_CODE,
@@ -18,6 +18,7 @@ import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
 import { readWslOrcadIncumbent } from './wsl-orcad-incumbent'
 import type { WslOrcadLaunchMode } from './wsl-orcad-active-probe'
 import type { ServeReadiness } from '../../server/serve-readiness'
+import type { OrcadTerminalCensus } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
 
 /** What the connect serves after checking a server started without the WSL host marker. */
 export type WslOrcadHostRelaunch =
@@ -34,10 +35,6 @@ export type WslOrcadHostRelaunch =
 // Environments this run already restarted once: if the server comes back without the marker (an
 // SSH client woke it first), later connects only offer the restart instead of bouncing it again.
 const restartedThisSession = new Set<string>()
-
-export function forgetWslHostRelaunchesForTests(): void {
-  restartedThisSession.clear()
-}
 
 function wslHostNotWslLaunchedDeferral(fullVersion: string, reason: string): WslHostDeferredUpdate {
   return {
@@ -88,9 +85,14 @@ export async function relaunchAsWslHost(args: {
   if (census.liveSessions !== 0 || (census.inProcessSessions ?? 0) !== 0) {
     return deferred(terminalsRunning(census.liveSessions))
   }
+  const chats = chatsRunning(census)
+  if (chats !== null) {
+    return deferred(chats)
+  }
   const stopped = await stopIdleOrcadForRestart(args.slot, {
     recountCensus: incumbent.recount,
-    releaseIncumbentAdmission: incumbent.releaseAdmission
+    releaseIncumbentAdmission: incumbent.releaseAdmission,
+    refuseOtherWork: chatsRunning
   })
   if (stopped.state === 'terminals-running') {
     return deferred(terminalsRunning(stopped.liveSessions))
@@ -135,5 +137,21 @@ function terminalsRunning(liveSessions: number | null): string {
   return (
     `This host’s Orca server was not started as a WSL host (an SSH host usually started it), and ${what}. ` +
     'It restarts as a WSL host when Orca next connects with no terminals running, or restart it now.'
+  )
+}
+
+/** A chat's provider runs inside orcad, so the stop would end its turn; an unreported count is unknown. */
+function chatsRunning(census: OrcadTerminalCensus): string | null {
+  const chats = census.chatSessions
+  if (chats === 0) {
+    return null
+  }
+  const what =
+    typeof chats !== 'number'
+      ? 'Orca could not tell whether a chat runs on it'
+      : `${chats} chat${chats === 1 ? ' runs' : 's run'} on it`
+  return (
+    `This host’s Orca server was not started as a WSL host (an SSH host usually started it), and ${what}. ` +
+    'It restarts as a WSL host when Orca next connects with no terminals or chats running, or restart it now.'
   )
 }

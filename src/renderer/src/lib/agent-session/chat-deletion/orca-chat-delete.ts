@@ -22,7 +22,7 @@ import {
 } from '../../../../../shared/execution-host/execution-host'
 import {
   AGENT_SESSION_DELETE_RUNTIME_CAPABILITY,
-  type OrcaChatDeleteRefusal,
+  orcaChatDeleteRefusalText,
   type OrcaChatDeleteResult
 } from '../../../../../shared/agent-session/chat-deletion/orca-chat-delete'
 
@@ -47,19 +47,7 @@ function hostUpdateReason(hostLabel: string, t: Translate = translate): string {
 
 /** A group room's chats carry the room's messages, so Session History doesn't delete them. */
 export function orcaChatGroupDeleteReason(t: Translate = translate): string {
-  return t('chats.delete.groupRoom', "A group room's chat can't be deleted")
-}
-
-function refusalText(reason: OrcaChatDeleteRefusal): string {
-  if (reason === 'group') {
-    return orcaChatGroupDeleteReason()
-  }
-  if (reason === 'home') {
-    return translate('chats.delete.home', "A managed agent's Home Chat can't be deleted")
-  }
-  return reason === 'workers'
-    ? translate('chats.delete.workerOwed', 'An orchestration still waits on this chat')
-    : translate('chats.delete.failed', "Couldn't delete the chat")
+  return orcaChatDeleteRefusalText(t, 'group')
 }
 
 /** Why the host can't delete chats: an older paired server. Null while unknown, so a click asks. */
@@ -148,7 +136,7 @@ export function useDeleteOrcaChat(): (target: OrcaChatDeleteTarget) => Promise<b
         if (result.outcome === 'deleted' || result.reason === 'not-found') {
           return true
         }
-        toast.error(refusalText(result.reason))
+        toast.error(orcaChatDeleteRefusalText(translate, result.reason))
       } catch {
         toast.error(translate('chats.delete.failed', "Couldn't delete the chat"))
       }

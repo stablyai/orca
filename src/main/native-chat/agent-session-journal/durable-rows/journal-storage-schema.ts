@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import {
   AgentJournalKnownSchemas,
   AgentJournalRenderItemSchema
@@ -11,6 +12,7 @@ import type {
   AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StorageDeclaresAll, UndeclaredStorageKeys } from './journal-storage-strict'
+import { storedRefusalReference } from './journal-storage-refusal-schema'
 import {
   storedAutomationSaved,
   storedBotStatusNotes,
@@ -53,34 +55,12 @@ const [
   botItemNoteBody
 ] = AgentJournalKnownSchemas.bodies
 
-const text = z.string().optional()
-const count = z.number().optional()
-const argumentProblem = z.object({ agent: z.string(), option: z.string(), problem: z.string() })
-
-const refusalDetails = z.object({
-  reason: text,
-  ownerVerdict: text,
-  rewindReason: text,
-  account: text,
-  argumentProblem: argumentProblem.optional(),
-  agent: text,
-  agentInstallation: z
-    .object({ agent: z.string(), installedVersion: z.string(), minimumVersion: z.string() })
-    .optional(),
-  codexInstallation: z
-    .object({ installedVersion: z.string().nullable(), minimumVersion: z.string() })
-    .optional(),
-  expiredAttachments: z.array(z.object({ uploadId: z.string(), name: z.string() })).optional(),
-  otherFolder: z.literal(true).optional(),
-  currentFence: count,
-  currentRevision: count,
-  resolution: AgentJournalKnownSchemas.resolution.optional(),
-  owner: z.object({ sessionId: z.string(), workspaceId: z.string() }).optional()
-})
+const text = lazyZodSchema(() => z.string().optional())
+const count = lazyZodSchema(() => z.number().optional())
 
 export const storedFailureFact = AgentSessionFailureFactSchema.extend({
   account: text,
-  refusal: z.object({ code: z.string().min(1), details: refusalDetails.optional() }).optional(),
+  refusal: storedRefusalReference.optional(),
   attachment: z.object({ reason: z.string(), limit: count }).optional(),
   retry: z
     .object({ error: text, status: count, cause: text, attempt: count, maxRetries: count })
@@ -92,97 +72,112 @@ export const storedFailureFact = AgentSessionFailureFactSchema.extend({
 })
 
 // A sender's reader salvages any value of a known key, so only the keys are storage's to close.
-const salvaged = z.unknown().optional()
-const sender = z.object({
-  party: z
-    .object({ address: salvaged, terminalHandle: salvaged, orcaSessionId: salvaged })
-    .nullable()
-    .optional(),
-  name: salvaged,
-  agent: salvaged,
-  relation: salvaged,
-  toConversation: salvaged,
-  bot: salvaged,
-  host: salvaged,
-  botAvatar: salvaged
-})
-const orchestration = z.discriminatedUnion('message', [
+const salvaged = lazyZodSchema(() => z.unknown().optional())
+const sender = lazyZodSchema(() =>
   z.object({
-    message: z.literal('mail-notice'),
-    mailbox: salvaged,
-    dispatchId: salvaged,
-    messages: z
-      .array(
-        z.object({
-          messageId: salvaged,
-          runId: salvaged,
-          from: salvaged,
-          content: z
-            .object({ subject: salvaged, body: salvaged, payload: salvaged })
-            .nullable()
-            .optional()
-        })
-      )
+    party: z
+      .object({ address: salvaged, terminalHandle: salvaged, orcaSessionId: salvaged })
       .nullable()
-      .optional()
-  }),
-  z.object({ message: z.literal('task'), runId: salvaged, taskId: salvaged, dispatchId: salvaged })
-])
-const messageSource = z.object({
-  kind: salvaged,
-  senders: z.array(sender.nullable()).nullable().optional(),
-  orchestration: orchestration.nullable().optional()
-})
-
-const storedConnectorDelivery = z.object({
-  account: z.string(),
-  conversation: z.object({ source: z.string(), externalId: z.string() }),
-  deliveryId: z.string(),
-  carried: z.array(z.string()).optional()
-})
-
-const block = z.discriminatedUnion('type', [
-  textBlock.extend({
-    contextClear: z
-      .object({ operationId: z.string(), afterFence: z.number(), clearedAt: z.number() })
       .optional(),
-    failure: storedFailureFact.optional(),
-    orcaStop: z.object({ cause: z.string(), turnItemId: text }).optional(),
-    usageLimitTurnItemId: text,
-    ...storedBotStatusNotes,
-    automationResultCleared: z.literal(true).optional(),
-    forkedFrom: z
-      .object({
-        sessionId: z.string(),
-        sourceForked: z.literal(true).optional(),
-        sourceMissing: z.literal(true).optional()
-      })
-      .optional()
-  }),
-  toolCallBlock.extend({ state: text, endedAs: text }),
-  toolResultBlock.extend({
-    callId: text,
-    editPatch: z
-      .object({
-        filePath: text,
-        hunks: z.array(
+    name: salvaged,
+    agent: salvaged,
+    relation: salvaged,
+    toConversation: salvaged,
+    bot: salvaged,
+    host: salvaged,
+    botAvatar: salvaged
+  })
+)
+const orchestration = lazyZodSchema(() =>
+  z.discriminatedUnion('message', [
+    z.object({
+      message: z.literal('mail-notice'),
+      mailbox: salvaged,
+      dispatchId: salvaged,
+      messages: z
+        .array(
           z.object({
-            oldStart: z.number(),
-            oldLines: z.number(),
-            newStart: z.number(),
-            newLines: z.number(),
-            lines: z.array(z.string())
+            messageId: salvaged,
+            runId: salvaged,
+            from: salvaged,
+            content: z
+              .object({ subject: salvaged, body: salvaged, payload: salvaged })
+              .nullable()
+              .optional()
           })
         )
-      })
-      .optional(),
-    fullOutputItemId: text
-  }),
-  imageRefBlock,
-  subagentGroupBlock,
-  subagentBlock,
-  backgroundTaskBlock
-])
+        .nullable()
+        .optional()
+    }),
+    z.object({
+      message: z.literal('task'),
+      runId: salvaged,
+      taskId: salvaged,
+      dispatchId: salvaged
+    })
+  ])
+)
+const messageSource = lazyZodSchema(() =>
+  z.object({
+    kind: salvaged,
+    senders: z.array(sender.nullable()).nullable().optional(),
+    orchestration: orchestration.nullable().optional()
+  })
+)
+
+const storedConnectorDelivery = lazyZodSchema(() =>
+  z.object({
+    account: z.string(),
+    conversation: z.object({ source: z.string(), externalId: z.string() }),
+    deliveryId: z.string(),
+    carried: z.array(z.string()).optional()
+  })
+)
+
+const block = lazyZodSchema(() =>
+  z.discriminatedUnion('type', [
+    textBlock.extend({
+      contextClear: z
+        .object({ operationId: z.string(), afterFence: z.number(), clearedAt: z.number() })
+        .optional(),
+      failure: storedFailureFact.optional(),
+      orcaStop: z.object({ cause: z.string(), turnItemId: text }).optional(),
+      usageLimitTurnItemId: text,
+      ...storedBotStatusNotes,
+      automationResultCleared: z.literal(true).optional(),
+      forkedFrom: z
+        .object({
+          sessionId: z.string(),
+          sourceForked: z.literal(true).optional(),
+          sourceMissing: z.literal(true).optional()
+        })
+        .optional()
+    }),
+    toolCallBlock.extend({ state: text, endedAs: text }),
+    toolResultBlock.extend({
+      callId: text,
+      editPatch: z
+        .object({
+          filePath: text,
+          hunks: z.array(
+            z.object({
+              oldStart: z.number(),
+              oldLines: z.number(),
+              newStart: z.number(),
+              newLines: z.number(),
+              lines: z.array(z.string())
+            })
+          )
+        })
+        .optional(),
+      fullOutputItemId: text
+    }),
+    imageRefBlock,
+    subagentGroupBlock,
+    subagentBlock,
+    backgroundTaskBlock
+  ])
+)
 
 export const storedMessageBody = messageBody.extend({
   blocks: z.array(block),
@@ -199,13 +194,20 @@ export const storedMessageBody = messageBody.extend({
         computer: z.string().optional(),
         phone: z.string().optional()
       }),
-      z.object({ by: z.literal('agent') })
+      z.object({
+        by: z.literal('agent'),
+        deviceId: z.string().optional(),
+        own: z.boolean().optional()
+      })
     ])
     .optional(),
   origin: text,
   asker: storedConnectorAsker.optional(),
   connectorConversation: z.object({ source: z.string(), externalId: z.string() }).optional(),
+  leaveEligible: z.literal(true).optional(),
   connectorDelivery: storedConnectorDelivery.optional(),
+  carriedCards: z.array(z.object({ messageId: z.string(), fingerprint: z.string() })).optional(),
+  carriedAskers: z.array(storedConnectorAsker.nullable()).optional(),
   connectorClaim: z
     .object({
       cutTurnId: z.string(),
@@ -223,36 +225,40 @@ export const storedMessageBody = messageBody.extend({
   automationRun: storedAutomationRun.optional()
 })
 
-export const storedItemBody = z.discriminatedUnion('kind', [
-  storedMessageBody,
-  agentStartBody.extend({
-    worker: sender.nullable().optional(),
-    agent: text,
-    followUp: z.object({ of: z.string(), reopened: z.boolean() }).optional()
-  }),
-  agentHandoffBody.extend({ agent: sender.nullable().optional() }),
-  toolCallBody,
-  diffBody,
-  approvalBody,
-  questionBody,
-  statusBody.extend({
-    ...storedBotStatusNotes,
-    failure: storedFailureFact.optional(),
-    turnLifecycle: turnBody.omit({ kind: true }).optional()
-  }),
-  turnBody,
-  automationSavedBody.extend(storedAutomationSaved),
-  toolAddedBody,
-  waitEndedBody.extend(storedWaitEnded),
-  automationRunNotStartedBody.extend(storedAutomationRunNotStarted),
-  botItemNoteBody.extend(storedBotItemNote)
-])
+export const storedItemBody = lazyZodSchema(() =>
+  z.discriminatedUnion('kind', [
+    storedMessageBody,
+    agentStartBody.extend({
+      worker: sender.nullable().optional(),
+      agent: text,
+      followUp: z.object({ of: z.string(), reopened: z.boolean() }).optional()
+    }),
+    agentHandoffBody.extend({ agent: sender.nullable().optional() }),
+    toolCallBody,
+    diffBody,
+    approvalBody,
+    questionBody,
+    statusBody.extend({
+      ...storedBotStatusNotes,
+      failure: storedFailureFact.optional(),
+      turnLifecycle: turnBody.omit({ kind: true }).optional()
+    }),
+    turnBody,
+    automationSavedBody.extend(storedAutomationSaved),
+    toolAddedBody,
+    waitEndedBody.extend(storedWaitEnded),
+    automationRunNotStartedBody.extend(storedAutomationRunNotStarted),
+    botItemNoteBody.extend(storedBotItemNote)
+  ])
+)
 
-export const storedProviderHandle = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('codex'), threadId: z.string() }),
-  z.object({ kind: z.literal('claude'), sessionId: z.string(), leafUuid: z.string().nullable() }),
-  z.object({ kind: z.literal('opaque'), agent: z.string(), value: z.string() })
-])
+export const storedProviderHandle = lazyZodSchema(() =>
+  z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('codex'), threadId: z.string() }),
+    z.object({ kind: z.literal('claude'), sessionId: z.string(), leafUuid: z.string().nullable() }),
+    z.object({ kind: z.literal('opaque'), agent: z.string(), value: z.string() })
+  ])
+)
 
 export const storedItem = AgentJournalRenderItemSchema.extend({ body: storedItemBody })
 

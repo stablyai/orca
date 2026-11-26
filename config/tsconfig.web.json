@@ -11,11 +11,6 @@
     "../src/shared/**/*",
     "../cloud/packages/connector-contract/src/connect-messages.ts"
   ],
-  "exclude": [
-    "../src/renderer/src/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-host-platform.test.ts",
-    "../src/renderer/src/components/browser-pane/assemble-chrome/client-hosted/ClientHostedBrowserPagePane.test.tsx",
-    "../src/renderer/src/runtime/provider-accounts/observations/provider-account-observation.test-fixture.ts"
-  ],
   "compilerOptions": {
     "composite": true,
     "jsx": "react-jsx",

@@ -5,6 +5,7 @@ import {
   downgradeAgentLaunchModeForHost,
   resolveAgentLaunchModeOnHost,
   type AgentLaunchModeSettings,
+  type AgentLaunchSupportPlace,
   type AgentLaunchModeVocabulary
 } from '../../../../../agent-launch/agent-launch-mode'
 import { readAgentLaunchModeSettings } from '../../../../../agent-launch/agent-launch-mode-settings'
@@ -42,12 +43,15 @@ type WorkerStartModePlacement = {
 export function decideWorkerStartMode(args: {
   params: WorkerStartModePlacement
   settings: AgentLaunchModeSettings | null | undefined
+  /** The caller's lineage starts its workers as chats, whatever the settings say. */
+  chatLineage?: boolean
 }): WorkerStartModeReceipt {
   // `--agent <copy id>` is decided as its base agent, under the copy's own settings.
   const base = args.params.agent ? agentCopyBase(args.params.agent) : null
   return decideAgentLaunchMode({
     placement: base ? { ...args.params, agent: base } : args.params,
     settings: args.settings,
+    chatLineage: args.chatLineage,
     vocabulary: WORKER_START_VOCABULARY
   })
 }
@@ -55,10 +59,10 @@ export function decideWorkerStartMode(args: {
 export async function resolveWorkerStartModeOnHost(
   runtime: Pick<OrcaRuntimeService, 'getStructuredAgentSessionCreateSupport'>,
   mode: WorkerStartModeReceipt,
-  worktreeId: string | undefined,
+  place: AgentLaunchSupportPlace | undefined,
   agent: TuiAgent | undefined
 ): Promise<WorkerStartModeReceipt> {
-  return resolveAgentLaunchModeOnHost(runtime, mode, worktreeId, agent, WORKER_START_VOCABULARY)
+  return resolveAgentLaunchModeOnHost(runtime, mode, place, agent, WORKER_START_VOCABULARY)
 }
 
 export function downgradeWorkerStartModeForHost(
