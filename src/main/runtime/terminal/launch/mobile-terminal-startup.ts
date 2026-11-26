@@ -2,6 +2,7 @@ import { OrcaRuntimeWithRunCreateMobileSessionTerminal } from './mobile-terminal
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
 import {
   isResumableTuiAgent,
   normalizeAgentProviderSession,
@@ -49,6 +50,8 @@ export type MobileTerminalCommand = {
   startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
   launchConfig?: SleepingAgentLaunchConfig
   launchAgent?: TuiAgent
+  /** Options Orca applied launching launchAgent; only a fresh launch carries them. */
+  sessionOptions?: Record<string, SessionOptionValue>
   /** What the command was quoted for; the create spawns with it. */
   launchRuntime?: AgentLaunchRuntime
 }
@@ -162,6 +165,7 @@ export abstract class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends
       envToDelete: opts.envToDelete,
       launchConfig: startupPlan.launchConfig,
       launchAgent: opts.agent,
+      ...(startupPlan.sessionOptions ? { sessionOptions: startupPlan.sessionOptions } : {}),
       startupCommandDelivery: startupPlan.startupCommandDelivery,
       launchRuntime
     }

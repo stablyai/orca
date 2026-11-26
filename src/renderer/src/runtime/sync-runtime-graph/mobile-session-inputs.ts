@@ -186,6 +186,10 @@ export function buildMobileSessionWorktreeInputs(
       mountedSurfaceCaptureByTabId,
       launchDraftByTabId: narrowRecordByKeys(state.nativeChatLaunchDraftByTabId, terminalTabIds)
     }),
+    appliedSessionOptionsByTabId: narrowRecordByKeys(
+      state.nativeChatAppliedSessionOptionsByTabId,
+      terminalTabIds
+    ),
     editorDraftVersionByFileId: narrowMapByKeys(
       publication.editorDraftVersionByFileId,
       openFileIds

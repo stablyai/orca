@@ -168,6 +168,14 @@ export class TerminalRunFactsRegister {
     return this.lastDrivingInputAtByPtyId.get(ptyId) ?? null
   }
 
+  /** A fresh spawn of this incarnation that no client or orchestration has typed into yet. */
+  isUntypedFreshSpawn(ptyId: string, incarnationId: string | null): boolean {
+    const run = this.read(ptyId, incarnationId)
+    return (
+      run.freshSpawn && run.firstUserInputAt === null && !this.lastDrivingInputAtByPtyId.has(ptyId)
+    )
+  }
+
   /** Like readLastDrivingInputAt, but only input that can change what the program reads as text:
    *  pointer reports (hover, clicks, wheel) don't count. */
   readLastTypedInputAt(ptyId: string): number | null {

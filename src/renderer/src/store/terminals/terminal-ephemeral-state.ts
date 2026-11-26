@@ -1,6 +1,8 @@
 import { isClaudeAgent as isClaudeAgentDefault } from '../../../../shared/agent-status/title/agent-title-identity'
 import { recordTerminalInputActivity } from '@/lib/terminal/input/terminal-input-activity-coalescing'
 import { detectAgentStatusFromTitle } from '../../../../shared/agent-status/title/agent-title-status'
+import { replaceRecordEntries } from '@/store/record-transitions/keyed-record-transitions'
+import { isTerminalTabPresent } from './retirement/terminal-tab-retirement'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 
 export function createTerminalEphemeralActions(
@@ -20,6 +22,7 @@ export function createTerminalEphemeralActions(
   | 'markNativeChatLaunchDraftAdopted'
   | 'resolveNativeChatLaunchDraft'
   | 'clearNativeChatLaunchDraft'
+  | 'setNativeChatAppliedSessionOptions'
   | 'recordTerminalInput'
   | 'setCacheTimerStartedAt'
   | 'seedCacheTimersForIdleTabs'
@@ -140,6 +143,20 @@ export function createTerminalEphemeralActions(
         const next = { ...s.nativeChatLaunchDraftByTabId }
         delete next[tabId]
         return { nativeChatLaunchDraftByTabId: next }
+      })
+    },
+    setNativeChatAppliedSessionOptions: (tabId, value) => {
+      if (!isTerminalTabPresent(get(), tabId)) {
+        return
+      }
+      set((s) => {
+        const ptyId = value.ptyId ?? s.ptyIdsByTabId[tabId]?.[0]
+        return {
+          nativeChatAppliedSessionOptionsByTabId: replaceRecordEntries(
+            s.nativeChatAppliedSessionOptionsByTabId,
+            [[tabId, ptyId ? { ...value, ptyId } : value]]
+          )
+        }
       })
     },
     recordTerminalInput: (paneKey, timestamp = Date.now()) => {

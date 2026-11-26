@@ -195,6 +195,9 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           ...(startupCommand.envToDelete ? { envToDelete: startupCommand.envToDelete } : {}),
           ...(startupCommand.launchConfig ? { launchConfig: startupCommand.launchConfig } : {}),
           ...(startupCommand.launchAgent ? { launchAgent: startupCommand.launchAgent } : {}),
+          ...(startupCommand.sessionOptions
+            ? { sessionOptions: startupCommand.sessionOptions }
+            : {}),
           ...(opts.trustWorktreeId ? { trustWorktreeId: opts.trustWorktreeId } : {}),
           ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
           startupCommandDelivery: startupCommand.startupCommandDelivery,

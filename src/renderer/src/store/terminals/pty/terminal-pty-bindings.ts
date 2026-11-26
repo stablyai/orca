@@ -182,7 +182,17 @@ export function createTerminalPtyBindingActions(
             delete nextMigrationUnsupportedByPtyId[replacementPtyId]
           }
         }
+        // The first process bound after an agent launch is the one its applied options describe.
+        const applied = s.nativeChatAppliedSessionOptionsByTabId[tabId]
         return {
+          ...(applied && !applied.ptyId && !replacementPtyId
+            ? {
+                nativeChatAppliedSessionOptionsByTabId: replaceRecordEntries<typeof applied>(
+                  s.nativeChatAppliedSessionOptionsByTabId,
+                  [[tabId, { ...applied, ptyId }]]
+                )
+              }
+            : {}),
           ...(nextTabsByWorktree !== s.tabsByWorktree
             ? {
                 tabsByWorktree: nextTabsByWorktree

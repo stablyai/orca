@@ -175,6 +175,10 @@ export function canReuseMobileSessionSnapshot(
     narrowedEntriesEqual(previous.terminalLayoutByTabId, next.terminalLayoutByTabId) &&
     narrowedEntriesEqual(previous.paneTitlesByTabId, next.paneTitlesByTabId) &&
     narrowedEntriesEqual(previous.launchDraftByPaneKey, next.launchDraftByPaneKey) &&
+    narrowedEntriesEqual(
+      previous.appliedSessionOptionsByTabId,
+      next.appliedSessionOptionsByTabId
+    ) &&
     narrowedEntriesEqual(previous.editorDraftVersionByFileId, next.editorDraftVersionByFileId) &&
     narrowedEntriesEqual(previous.pagesByBrowserWorkspaceId, next.pagesByBrowserWorkspaceId) &&
     narrowedEntriesEqual(

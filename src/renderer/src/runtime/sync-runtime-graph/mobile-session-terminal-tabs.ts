@@ -25,6 +25,7 @@ export function buildMobileTerminalSurfaceTabs(
   unifiedTabId?: string
 ): RuntimeMobileSessionSnapshotTab[] {
   const capture = inputs.mountedSurfaceCaptureByTabId.get(terminal.id)
+  const appliedSessionOptions = inputs.appliedSessionOptionsByTabId.get(terminal.id)
   const isDesktopTabActive = unifiedTabId
     ? isUnifiedTabActiveInActiveGroup(inputs, unifiedTabId)
     : inputs.activeTerminalTabId === terminal.id
@@ -124,6 +125,9 @@ export function buildMobileTerminalSurfaceTabs(
       ...(inputs.terminalTheme ? { terminalTheme: inputs.terminalTheme } : {}),
       statusSuppressionTitle: agentStatusTitle,
       ...(launchAgent ? { launchAgent } : {}),
+      ...(appliedSessionOptions?.agent === launchAgent && appliedSessionOptions.ptyId === ptyId
+        ? { appliedSessionOptions: appliedSessionOptions.values }
+        : {}),
       ...(publishedLaunchDraft
         ? {
             launchDraft: publishedLaunchDraft.text,

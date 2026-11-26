@@ -223,6 +223,7 @@ export function useMobileNativeChatController(args: {
     useMobileNativeChatSessionOptionController({
       client,
       activeChatStructured,
+      activeSessionTab,
       activeSessionTabId,
       agent: activeChatResolution?.agent ?? null,
       dispatchCommand: handleNativeChatDispatchCommand,

@@ -61,6 +61,12 @@ export type TerminalState = {
   automaticAgentResumeClaimsByTabId: Record<string, AutomaticAgentResumeClaim>
   nativeChatLaunchPromptByTabId: Record<string, NativeChatLaunchPrompt>
   nativeChatLaunchDraftByTabId: Record<string, NativeChatLaunchDraft>
+  /** Applied agent options are session-only and never persisted. */
+  nativeChatAppliedSessionOptionsByTabId: Record<
+    string,
+    /** `ptyId` is the launch process; a later process in the tab (a resume) did not get these. */
+    { agent: TuiAgent; values: Record<string, SessionOptionValue>; ptyId?: string }
+  >
   pendingStartupByTabId: Record<
     string,
     {

@@ -12,10 +12,13 @@ import {
   applyNativeChatReportedSessionOptions,
   clearNativeChatSessionModel,
   createNativeChatSessionOptionRecord,
+  isFlipOnlyMidSession,
   setTrackedSessionOption,
   type NativeChatSessionOptionRecord
 } from './native-chat-session-option-state'
 import {
+  fillNativeChatSessionOptionGaps,
+  nativeChatAppliedSessionOptionRecord,
   readNativeChatSessionOptionCache,
   writeNativeChatSessionOptionCache
 } from './native-chat-session-option-cache'
@@ -38,6 +41,7 @@ type PersistSelection = (args: {
 
 export type NativeChatPtySessionOptionsSurface = SessionOptionsSurface & {
   recordOutgoingCommand(command: string): void
+  fillAppliedSessionOptions(values: Record<string, SessionOptionValue>): void
   /** Applies what the running agent reports. `forNewModel` holds values that are not news on their
    *  own (an unchanged effort) but describe a model the session switches to. */
   reportSessionOptions(
@@ -182,6 +186,35 @@ export function createNativeChatPtySessionOptions(
       }
       if (result.opensAgentPicker) {
         args.onAgentPicker?.()
+      }
+    },
+    fillAppliedSessionOptions: (values) => {
+      // A toggle flips from what the chat believes is on, so an unconfirmed launch value must not become its baseline.
+      const flipOnly = [
+        ...catalog.models.flatMap((model) => model.options),
+        ...(catalog.unknownModelOptions ?? [])
+      ]
+        .filter((option) => isFlipOnlyMidSession(option.apply.midSession))
+        .map((option) => option.id)
+      const fillable = Object.fromEntries(
+        Object.entries(values).filter(([id]) => !flipOnly.includes(id))
+      )
+      const applied = nativeChatAppliedSessionOptionRecord(args.agent, fillable)
+      if (!applied) {
+        return
+      }
+      const before = JSON.stringify(record)
+      if (!record.model && applied.model) {
+        record.model = { ...applied.model }
+      }
+      const adopt = () =>
+        adoptOfferedValuesWithoutModel(record, activeModels(), record.model?.value)
+      // A value picked before the model was known moves onto it first, so the launch value cannot shadow it.
+      adopt()
+      fillNativeChatSessionOptionGaps(record, applied)
+      adopt()
+      if (JSON.stringify(record) !== before) {
+        publish()
       }
     },
     reportSessionOptions: (values, forNewModel) => {

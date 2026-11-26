@@ -38,6 +38,7 @@ export type MobileTerminalSessionTab = Partial<
   /** Host-provided launch context still parked as an unsent TUI-input draft. */
   launchDraft?: string
   launchDraftCreatedAt?: number
+  appliedSessionOptions?: RuntimeMobileSessionTerminalTab['appliedSessionOptions']
   terminalTheme?: RuntimeMobileTerminalTheme
   unread?: true
   isActive: boolean
@@ -153,6 +154,8 @@ function mobileSessionTabEqual(
         a.terminal === b.terminal &&
         a.launchDraft === b.launchDraft &&
         a.launchDraftCreatedAt === b.launchDraftCreatedAt &&
+        JSON.stringify(a.appliedSessionOptions ?? null) ===
+          JSON.stringify(b.appliedSessionOptions ?? null) &&
         // Names decide whether the title is agent evidence, so a name-only change must re-render.
         a.customTitle === b.customTitle &&
         a.quickCommandLabel === b.quickCommandLabel &&

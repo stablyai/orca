@@ -43,7 +43,8 @@ void OWNER_FIELDS_COMPLETE
 const SEAM_TAB_KEYED_FIELDS = [
   'terminalLayoutsByTabId',
   'runtimePaneTitlesByTabId',
-  'nativeChatLaunchDraftByTabId'
+  'nativeChatLaunchDraftByTabId',
+  'nativeChatAppliedSessionOptionsByTabId'
 ] as const satisfies readonly (keyof AppState)[]
 
 const scratchSources: unknown[] = []

@@ -13,6 +13,7 @@ import type {
   SessionOptionsSurface
 } from '../../../../../../src/shared/native-chat/input/native-chat-session-options'
 import { mobileNativeChatScopeKey } from '../../conversation/mobile-native-chat-scope-key'
+import type { MobileNativeChatTab } from '../../conversation/mobile-native-chat-eligibility'
 import type { MobileNativeChatSendOutcome } from '../../composer/delivery/mobile-native-chat-send'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
 import {
@@ -27,6 +28,7 @@ function isAuthoritativeListing(catalog: AgentSessionOptionCatalog | null): bool
 export function useMobileNativeChatSessionOptionController(args: {
   client?: RpcClient | null
   activeChatStructured: boolean
+  activeSessionTab: Pick<MobileNativeChatTab, 'launchAgent' | 'appliedSessionOptions'> | null
   activeSessionTabId: string | null
   agent: string | null
   dispatchCommand: (text: string) => Promise<MobileNativeChatSendOutcome>
@@ -55,6 +57,7 @@ export function useMobileNativeChatSessionOptionController(args: {
 } {
   const {
     activeChatStructured,
+    activeSessionTab,
     activeSessionTabId,
     agent,
     dispatchCommand,
@@ -104,6 +107,8 @@ export function useMobileNativeChatSessionOptionController(args: {
     discoveredModels,
     modelSwitchCommand: reportedStatus?.modelSwitchCommand,
     agent: activeChatStructured ? null : agent,
+    appliedSessionOptions:
+      activeSessionTab?.launchAgent === agent ? activeSessionTab?.appliedSessionOptions : undefined,
     scopeKey: mobileNativeChatScopeKey(hostId, worktreeId, activeSessionTabId),
     reportedModel: reportedStatus?.model ?? null,
     reportedEffort: reportedStatus?.providerSession?.effort,

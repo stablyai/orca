@@ -57,6 +57,10 @@ export type TerminalActions = {
     resolution: Pick<NativeChatLaunchDraft, 'createdAt' | 'text'>
   ) => void
   clearNativeChatLaunchDraft: (tabId: string) => void
+  setNativeChatAppliedSessionOptions: (
+    tabId: string,
+    value: TerminalState['nativeChatAppliedSessionOptionsByTabId'][string]
+  ) => void
   markDefaultTerminalTabsApplied: (worktreeId: string) => void
   setHydrationSucceeded: (value: boolean) => void
   consumePendingSnapshot: (ptyId: string) => {

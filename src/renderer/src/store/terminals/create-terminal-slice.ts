@@ -53,6 +53,7 @@ export const createTerminalSlice: (
   automaticAgentResumeClaimsByTabId: {},
   nativeChatLaunchPromptByTabId: {},
   nativeChatLaunchDraftByTabId: {},
+  nativeChatAppliedSessionOptionsByTabId: {},
   tabBarOrderByWorktree: {},
   workspaceSessionReady: false,
   terminalStartupRestorationReady: false,
