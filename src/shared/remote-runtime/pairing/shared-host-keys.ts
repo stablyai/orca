@@ -20,10 +20,25 @@ export type SharedHost = {
 }
 
 let hosts: ((environmentId: string) => SharedHost | null) | null = null
+// The runtime each host last answered from, kept as a paired server's store keeps it: tab streams are
+// fenced on it, and a host that restarted answers from a new one.
+const answeredRuntimeIds = new Map<string, string>()
 
 /** Set once by the desktop's shared-agents owner; null elsewhere, and in tests that end. */
 export function setSharedHosts(lookup: ((environmentId: string) => SharedHost | null) | null) {
   hosts = lookup
+  answeredRuntimeIds.clear()
+}
+
+/** Records the runtime a shared host answered from; false for any other host. */
+export function noteSharedHostRuntime(environmentId: string, runtimeId: string | null | undefined) {
+  if (!sharedHostKey(environmentId)) {
+    return false
+  }
+  if (runtimeId) {
+    answeredRuntimeIds.set(environmentId, runtimeId)
+  }
+  return true
 }
 
 export function sharedHostKey(environmentId: string): SharedHost | null {
@@ -44,7 +59,7 @@ export function sharedHostEnvironment(environmentId: string): KnownRuntimeEnviro
     updatedAt: 0,
     pairedDeviceId: host.offer.deviceId,
     lastUsedAt: null,
-    runtimeId: null,
+    runtimeId: answeredRuntimeIds.get(environmentId) ?? null,
     endpoints: [
       {
         id: endpointId,

@@ -2,6 +2,8 @@ import type { RemoteRuntimeSharedControlConnectionOptions } from '../../../../sh
 import type { RuntimeCapability } from '../../../../shared/remote-runtime/protocol/protocol-version'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/remote-runtime/protocol/electron-remote-runtime-client-capabilities'
 import { IDLE_PASSIVE_CONTROL_CLIENT_CAPABILITY } from '../../../../shared/remote-runtime/protocol/orcad-runtime-capabilities'
+import { sharedHostKey } from '../../../../shared/remote-runtime/pairing/shared-host-keys'
+import { BOTS_SHARE_WORKSPACES_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
 import { isRuntimeEnvironmentCapabilityPaused } from './runtime-environment-capability-evidence'
 import { isRuntimeEnvironmentManuallyDisconnected } from '../connectivity/runtime-environment-manual-disconnect'
 import { handleSharedControlRefusal } from '../pairing/runtime-environment-pairing-refusal-registry'
@@ -48,10 +50,15 @@ export function sharedControlEnvironmentPolicy(
  * Only a WSL host's sockets are passive, since only WSL wakes a host that idled out under an open
  * desktop; their ordinary requests still count as use. An SSH host stays held up by an open
  * desktop, as before (#46567). An older orcad ignores the unknown capability and stays held.
+ * A shared agent's host is told this Orca works in the agent's workspaces: its home is the host's
+ * own, which a chats-only teammate could not list.
  */
 export function desktopRuntimeClientCapabilities(
   environmentId: string
 ): readonly RuntimeCapability[] {
+  if (sharedHostKey(environmentId)) {
+    return [...ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES, BOTS_SHARE_WORKSPACES_CAPABILITY]
+  }
   return isWslOrcadEnvironmentId(environmentId)
     ? [...ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES, IDLE_PASSIVE_CONTROL_CLIENT_CAPABILITY]
     : ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
