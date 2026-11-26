@@ -33,6 +33,7 @@ const WORKER_NOTES = hostUnionArms<NonNullable<BotChatTreeWorker['note']>>({
 
 const ORIGINS = hostUnionArms<BotChatOrigin>({
   home: true,
+  'feishu-local': true,
   slack: true,
   linear: true,
   github: true,
