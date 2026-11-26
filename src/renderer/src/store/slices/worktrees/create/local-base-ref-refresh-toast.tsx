@@ -1,3 +1,4 @@
+import { useId, useState } from 'react'
 import { Info } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -68,7 +69,7 @@ function runnableUnshallowCommand(result: LocalBaseRefRefreshResult): string | u
     : undefined
 }
 
-function refreshFailureTitle(result: LocalBaseRefRefreshResult, worktreeName: string): string {
+function refreshFailureTitle(result: LocalBaseRefRefreshResult): string {
   if (result.shallowHistory) {
     return translate(
       'auto.store.slices.worktrees.localBaseRefShallowHistoryTitle',
@@ -76,59 +77,99 @@ function refreshFailureTitle(result: LocalBaseRefRefreshResult, worktreeName: st
       { value0: result.localBranch }
     )
   }
-  return worktreeName
-    ? translate(
-        'auto.store.slices.worktrees.localBaseRefRefreshFailedForWorktree',
-        'Local {{value0}} was not refreshed for "{{value1}}"',
-        { value0: result.localBranch, value1: worktreeName }
-      )
-    : translate('auto.store.slices.worktrees.14bc053a47', 'Local {{value0}} was not refreshed', {
-        value0: result.localBranch
-      })
+  return translate('auto.store.slices.worktrees.localBaseRefNotUpdated', '{{value0}} not updated', {
+    value0: result.localBranch
+  })
 }
 
-function refreshFailureDescription(
-  result: LocalBaseRefRefreshResult,
-  worktreeName: string
-): React.ReactNode {
-  if (result.shallowHistory) {
-    const explanation = worktreeName
-      ? translate(
-          'auto.store.slices.worktrees.localBaseRefShallowHistoryNamed',
-          '"{{value0}}" was created from {{value1}} and is unaffected. Orca could not also update your local {{value2}} branch because this clone only has recent history, so Git cannot confirm local {{value2}} is just behind. To fix this for every new workspace, run once:',
-          { value0: worktreeName, value1: result.baseRef, value2: result.localBranch }
-        )
-      : translate(
-          'auto.store.slices.worktrees.localBaseRefShallowHistory',
-          'Your workspace was created from {{value0}} and is unaffected. Orca could not also update your local {{value1}} branch because this clone only has recent history, so Git cannot confirm local {{value1}} is just behind. To fix this for every new workspace, run once:',
-          { value0: result.baseRef, value1: result.localBranch }
-        )
-    return (
-      <>
-        {explanation}{' '}
-        <code className="rounded bg-accent px-1 py-px font-mono [overflow-wrap:anywhere]">
-          {unshallowCommand(result)}
-        </code>
-      </>
-    )
+function refreshFailureReason(result: LocalBaseRefRefreshResult): string {
+  switch (result.status) {
+    case 'skipped_dirty_worktree':
+      return translate(
+        'auto.store.slices.worktrees.localBaseRefNotUpdatedDirty',
+        'Uncommitted changes in {{value0}}.',
+        { value0: result.localBranch }
+      )
+    case 'skipped_not_fast_forward':
+      return translate(
+        'auto.store.slices.worktrees.localBaseRefNotUpdatedNotFastForward',
+        'Local-only commits on {{value0}}.',
+        { value0: result.localBranch }
+      )
+    case 'skipped_error':
+    case 'updated':
+      return translate('auto.store.slices.worktrees.localBaseRefNotUpdatedError', 'Git error.')
   }
-  const detail = localBaseRefRefreshFailureDetail(result)
-  return worktreeName
+}
+
+function ShallowHistoryDescription({
+  result,
+  worktreeName
+}: {
+  result: LocalBaseRefRefreshResult
+  worktreeName: string
+}): React.JSX.Element {
+  const explanation = worktreeName
     ? translate(
-        'auto.store.slices.worktrees.localBaseRefRefreshFailedDescriptionNamed',
-        'Workspace "{{value0}}" was created from {{value1}}, but Orca could not fast-forward local {{value2}}. {{value3}}',
-        {
-          value0: worktreeName,
-          value1: result.baseRef,
-          value2: result.localBranch,
-          value3: detail
-        }
+        'auto.store.slices.worktrees.localBaseRefShallowHistoryNamed',
+        '"{{value0}}" was created from {{value1}} and is unaffected. Orca could not also update your local {{value2}} branch because this clone only has recent history, so Git cannot confirm local {{value2}} is just behind. To fix this for every new workspace, run once:',
+        { value0: worktreeName, value1: result.baseRef, value2: result.localBranch }
       )
     : translate(
-        'auto.store.slices.worktrees.903b51c2ed',
-        'Workspace created from {{value0}}, but Orca could not fast-forward local {{value1}}. {{value2}}',
-        { value0: result.baseRef, value1: result.localBranch, value2: detail }
+        'auto.store.slices.worktrees.localBaseRefShallowHistory',
+        'Your workspace was created from {{value0}} and is unaffected. Orca could not also update your local {{value1}} branch because this clone only has recent history, so Git cannot confirm local {{value1}} is just behind. To fix this for every new workspace, run once:',
+        { value0: result.baseRef, value1: result.localBranch }
       )
+  return (
+    <p className="text-sm leading-5 text-popover-foreground/80">
+      {explanation}{' '}
+      <code className="rounded bg-accent px-1 py-px font-mono [overflow-wrap:anywhere]">
+        {unshallowCommand(result)}
+      </code>
+    </p>
+  )
+}
+
+// Why: the raw Git guidance (incl. the owner worktree path) stays behind a click so the toast reads in one line.
+function RefreshFailureDetails({
+  result,
+  actions
+}: {
+  result: LocalBaseRefRefreshResult
+  actions: React.ReactNode
+}): React.JSX.Element {
+  const [open, setOpen] = useState(false)
+  const detailId = useId()
+  const reason = refreshFailureReason(result)
+  return (
+    <div className="flex w-full min-w-0 flex-col gap-2">
+      <p className="truncate text-sm leading-5 text-popover-foreground/80" title={reason}>
+        {reason}
+      </p>
+      {open ? (
+        <p
+          id={detailId}
+          className="rounded-md bg-accent px-2 py-1.5 font-mono text-xs leading-4 text-muted-foreground [overflow-wrap:anywhere]"
+        >
+          {localBaseRefRefreshFailureDetail(result)}
+        </p>
+      ) : null}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={open ? detailId : undefined}
+          onClick={() => setOpen((value) => !value)}
+          className="mr-auto rounded-sm text-xs text-muted-foreground underline underline-offset-2 outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        >
+          {open
+            ? translate('auto.store.slices.worktrees.localBaseRefHideDetails', 'Hide details')
+            : translate('auto.store.slices.worktrees.localBaseRefShowDetails', 'Details')}
+        </button>
+        {actions}
+      </div>
+    </div>
+  )
 }
 
 function stopRefreshingLocalBaseRef(
@@ -235,61 +276,61 @@ export function showLocalBaseRefRefreshToast(
   const id = `local-base-ref-refresh-failed:${createdWorktree?.repoId ?? 'unknown'}:${result.localBranch}`
   const runnableCommand = result.shallowHistory ? runnableUnshallowCommand(result) : undefined
 
+  const actions = (
+    <>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label={translate(
+              'auto.store.slices.worktrees.localBaseRefRefreshTurnOffHelp',
+              'What Disable Check does'
+            )}
+            className="rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            <Info className="size-3.5" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={6} className="max-w-72">
+          {translate(
+            'auto.store.slices.worktrees.localBaseRefRefreshTurnOffTooltip',
+            'Turns off the Orca setting {{value0}}. Orca will stop updating local {{value1}} when you create a workspace, and this warning will stop appearing. New workspaces are unaffected. Turn it back on anytime in Settings › Git.',
+            { value0: getKeepLocalMainUpToDateTitle(), value1: result.localBranch }
+          )}
+        </TooltipContent>
+      </Tooltip>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() => stopRefreshingLocalBaseRef(id, result.localBranch, updateSettings)}
+      >
+        {translate('auto.store.slices.worktrees.localBaseRefRefreshTurnOff', 'Disable Check')}
+      </Button>
+      {result.shallowHistory && createdWorktree && runnableCommand ? (
+        <Button
+          size="sm"
+          onClick={() =>
+            runUnshallowInNewTerminalTab(id, createdWorktree.id, executionHostId, runnableCommand)
+          }
+        >
+          {translate('auto.store.slices.worktrees.localBaseRefUnshallow', 'Unshallow')}
+        </Button>
+      ) : null}
+    </>
+  )
+
   // Why a custom body: sonner's native action slot pinches beside a multi-line description.
   // Infinity so create-time failures aren't buried; the opt-out lives here since the setting is opt-in.
-  toast.warning(refreshFailureTitle(result, worktreeName), {
+  // Why info, not warning: the workspace was created fine; only the optional local-branch refresh was skipped.
+  toast.info(refreshFailureTitle(result), {
     id,
-    description: (
+    description: result.shallowHistory ? (
       <div className="flex w-full flex-col gap-3">
-        <p className="text-sm leading-5 text-popover-foreground/80">
-          {refreshFailureDescription(result, worktreeName)}
-        </p>
-        <div className="flex items-center justify-end gap-2">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                aria-label={translate(
-                  'auto.store.slices.worktrees.localBaseRefRefreshTurnOffHelp',
-                  'What Disable Check does'
-                )}
-                className="rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-              >
-                <Info className="size-3.5" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={6} className="max-w-72">
-              {translate(
-                'auto.store.slices.worktrees.localBaseRefRefreshTurnOffTooltip',
-                'Turns off the Orca setting {{value0}}. Orca will stop updating local {{value1}} when you create a workspace, and this warning will stop appearing. New workspaces are unaffected. Turn it back on anytime in Settings › Git.',
-                { value0: getKeepLocalMainUpToDateTitle(), value1: result.localBranch }
-              )}
-            </TooltipContent>
-          </Tooltip>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => stopRefreshingLocalBaseRef(id, result.localBranch, updateSettings)}
-          >
-            {translate('auto.store.slices.worktrees.localBaseRefRefreshTurnOff', 'Disable Check')}
-          </Button>
-          {result.shallowHistory && createdWorktree && runnableCommand ? (
-            <Button
-              size="sm"
-              onClick={() =>
-                runUnshallowInNewTerminalTab(
-                  id,
-                  createdWorktree.id,
-                  executionHostId,
-                  runnableCommand
-                )
-              }
-            >
-              {translate('auto.store.slices.worktrees.localBaseRefUnshallow', 'Unshallow')}
-            </Button>
-          ) : null}
-        </div>
+        <ShallowHistoryDescription result={result} worktreeName={worktreeName} />
+        <div className="flex items-center justify-end gap-2">{actions}</div>
       </div>
+    ) : (
+      <RefreshFailureDetails result={result} actions={actions} />
     ),
     duration: Infinity,
     dismissible: true
