@@ -31370,6 +31370,12 @@
       "failed": "Failed",
       "cancelFile": "Cancel {{name}}",
       "cancelAll": "Cancel all"
+    },
+    "download": {
+      "progress": {
+        "title": "Downloading {{name}}…",
+        "cancel": "Cancel"
+      }
     }
   }
 }
