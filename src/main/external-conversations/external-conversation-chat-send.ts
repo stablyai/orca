@@ -38,7 +38,6 @@ import {
 } from './connector-asker-stored-image'
 import { getAgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import type { DeliveryPreparation } from './external-conversation-delivery-receipts'
-import type { CapabilityProbeCache } from '../../shared/concurrency/capability-probe-cache'
 import { budgetForEarlierImages, earlierImagesThatFit } from './connector-asker-image-budget'
 
 /** Sent as a person's message would be: a busy chat takes it into the running turn. A bot's is
@@ -57,7 +56,6 @@ export async function deliverToChat(
     askerImages?: AskerImages
     stagedImages?: StagedConnectorImages
     preparation?: DeliveryPreparation
-    missingImages?: CapabilityProbeCache<string>
     returnedImageProgress?: ReturnedImageProgress
   }
 ): Promise<Delivery> {
@@ -97,8 +95,7 @@ export async function deliverToChat(
             delivery.preparation
               ? signal
               : AbortSignal.any([signal, AbortSignal.timeout(ASKER_IMAGES_BUDGET_MS)]),
-            delivery.missingImages,
-            Boolean(delivery.askerImages && earlierImageContext)
+            { allPaths: Boolean(delivery.askerImages && earlierImageContext) }
           )
         : undefined
     let firstCarry: Promise<CarriedMessages> | undefined

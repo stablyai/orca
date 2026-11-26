@@ -114,7 +114,7 @@ export async function carriedMessages(
   let fileIds = new Set(direct.map((image) => image.fileId))
   let imageCount = 0
   const imagePositions = new Map<string, number>()
-  const start = progress?.owner.read(progress.key, eligible) ?? 0
+  const start = progress?.owner.read(progress.key, eligible, now) ?? 0
   let missingPrefix = start
   const carried: JournalReturnedCard[] = []
   const blocks: NativeChatBlock[] = []
@@ -142,8 +142,8 @@ export async function carriedMessages(
         break cards
       }
       // An older, unreadable card can still be edited. It needn't hold up the later ones.
-      if (stored === null) {
-        if (index === missingPrefix && !inspection?.signal.aborted) {
+      if (stored === 'missing' || stored === 'unreadable') {
+        if (stored === 'missing' && index === missingPrefix && !inspection?.signal.aborted) {
           missingPrefix += 1
         }
         continue cards
@@ -176,7 +176,7 @@ export async function carriedMessages(
     blocks.push(...withSentLine(ownBlocks, each.submittedAt, now))
   }
   if (progress && missingPrefix > start) {
-    progress.owner.remember(progress.key, eligible, missingPrefix)
+    progress.owner.remember(progress.key, eligible, missingPrefix, now)
   }
   return {
     blocks,

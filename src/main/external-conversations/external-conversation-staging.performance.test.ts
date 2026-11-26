@@ -5,7 +5,11 @@ import { expect, it } from 'vitest'
 import { AgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store'
 import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { connectorAskerImages } from './connector-asker-images'
-import { storeConnectorImage } from './connector-asker-stored-image'
+import {
+  connectorImageInspection,
+  ConnectorImageProbes,
+  storeConnectorImage
+} from './connector-asker-stored-image'
 import { ChatDeliveries } from './external-conversation-chat-delivery'
 import { DeliveryPreparation, DeliveryReceipts } from './external-conversation-delivery-receipts'
 import type { ExternalConversationSeamDeps } from './external-conversation-host'
@@ -97,5 +101,36 @@ it.each([10, 100])('retains no unadmitted uploads after %i retired starts', asyn
   } finally {
     db.close()
     await rm(root, { recursive: true, force: true })
+  }
+})
+
+it.each([100, 1000])('bounds unsettled image probes across %i retired deliveries', async (count) => {
+  const storage = Promise.withResolvers<{ bytes: number; fileId: string }>()
+  let reads = 0
+  const probes = new ConnectorImageProbes(() => {
+    reads++
+    return storage.promise
+  })
+  const result = { bytes: 8, fileId: 'FSHOT' }
+  try {
+    for (let index = 0; index < count; index++) {
+      const poll = new AbortController()
+      const inspection = connectorImageInspection(undefined, poll.signal, { probes })
+      const first = inspection.image('same-file')
+      const second = inspection.image(`file-${index}`)
+      poll.abort()
+      expect(await first).toBe('limit')
+      expect(await second).toBe('limit')
+    }
+    expect(reads).toBe(8)
+    const successor = connectorImageInspection(undefined, new AbortController().signal, { probes })
+    const same = successor.image('same-file')
+    expect(reads).toBe(8)
+    storage.resolve(result)
+    expect(await same).toEqual(result)
+    expect(await successor.image('new-file')).toEqual(result)
+    expect(reads).toBe(9)
+  } finally {
+    storage.resolve(result)
   }
 })

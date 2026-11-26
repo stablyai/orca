@@ -4,7 +4,6 @@ import { CONNECTOR_SOURCES } from '../../shared/connectors/external-conversation
 import { ConnectorAsker } from '../../shared/connector-asker-contract'
 import type { LinkableChat } from './external-conversation-chat-delivery'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { rejectedSendRefusal } from './external-conversation-failure'
 import { refusalOf } from './external-conversation-chain'
 import type { DeliveryReceiptDb } from './external-conversation-delivery-receipts'
@@ -105,10 +104,10 @@ export class DeliveryPreparation {
 
 export async function recoverConnectorAdmission(
   { sessionId, operationId, thread }: DeliveryAdmissionAttempt,
-  runtime: Pick<OrcaRuntimeService, 'ensureStructuredAgentSessionHost'>,
+  runtime: { ensureStructuredAgentSessionHost?: () => Promise<unknown> },
   restore?: (thread: RestorableThread, chat: LinkableChat) => void
 ): Promise<Delivery | null> {
-  await runtime.ensureStructuredAgentSessionHost()
+  await runtime.ensureStructuredAgentSessionHost?.()
   const host = getStructuredAgentSessionHost()
   const conversation = host?.deps.store.getConversation(sessionId)
   if (host && conversation) {

@@ -42,7 +42,12 @@ async function storedConnectorImageId(
   if (!root || !parseAgentSessionAttachmentStorePath(root, path)) {
     return undefined
   }
-  const file = await open(join(dirname(path), CONNECTOR_FILE_ID), 'r').catch(() => null)
+  const file = await open(join(dirname(path), CONNECTOR_FILE_ID), 'r').catch((error) => {
+    if (isMissingPath(error)) {
+      return null
+    }
+    throw error
+  })
   if (!file) {
     return undefined
   }
@@ -52,67 +57,108 @@ async function storedConnectorImageId(
     const { bytesRead } = await file.read(bytes, 0, bytes.length, 0)
     const fileId = bytes.toString('utf8', 0, bytesRead)
     return isConnectorFileId(fileId) ? fileId : undefined
-  } catch {
-    return undefined
   } finally {
     await file.close().catch(() => {})
   }
 }
 
 type StoredImage = { bytes: number; fileId: string | undefined }
+type ImageProbe = StoredImage | 'missing' | 'unreadable' | 'limit'
+export const RETURNED_IMAGE_RETRY_MS = 5 * 60_000
+const MAX_ACTIVE_IMAGE_PROBES = 8
 
-export function connectorMissingImages(): CapabilityProbeCache<string> {
-  return new CapabilityProbeCache(5 * 60_000, 4096)
+export class ConnectorImageProbes {
+  private readonly missing = new CapabilityProbeCache<string>(RETURNED_IMAGE_RETRY_MS, 4096)
+  private readonly active = new Map<string, Promise<ImageProbe>>()
+
+  constructor(private readonly lookup = inspectConnectorImage) {}
+
+  read(root: string | undefined, path: string): Promise<ImageProbe> {
+    const existing = this.active.get(path)
+    if (existing) {
+      return existing
+    }
+    if (!this.missing.shouldTry(path)) {
+      return Promise.resolve('missing')
+    }
+    if (this.active.size >= MAX_ACTIVE_IMAGE_PROBES) {
+      return Promise.resolve('limit')
+    }
+    const pending = this.lookup(root, path)
+      .then((result) => {
+        if (result === 'missing') {
+          this.missing.rememberUnsupported(path)
+        }
+        return result
+      })
+      .finally(() => this.active.delete(path))
+    this.active.set(path, pending)
+    return pending
+  }
+
+  clearMissing(): void {
+    this.missing.clear()
+  }
 }
+
+// Retired deliveries may still own filesystem work after the connector seam is replaced.
+export const connectorImageProbes = new ConnectorImageProbes()
 
 export function connectorImageInspection(
   root: string | undefined,
   signal: AbortSignal,
-  missing = connectorMissingImages(),
-  allPaths = true
+  { probes = connectorImageProbes, allPaths = true } = {}
 ) {
   // A card edit may require another read of the queue, but the same immutable upload needs one probe.
-  const images = new Map<string, Promise<StoredImage | null>>()
+  const images = new Map<string, Promise<ImageProbe>>()
   return {
     signal,
     allPaths,
-    image(path: string): Promise<StoredImage | null | 'limit'> {
-      if (!missing.shouldTry(path)) {
-        return Promise.resolve(null)
-      }
+    image(path: string): Promise<ImageProbe> {
       let lookup = images.get(path)
       if (!lookup) {
         if (signal.aborted || images.size >= AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT) {
           return Promise.resolve('limit')
         }
-        lookup = inspectConnectorImage(root, path, signal, missing)
+        lookup = probes.read(root, path)
         images.set(path, lookup)
       }
-      return waitForPromiseWithSignal(lookup, signal).catch((error) => {
-        if (signal.aborted) {
-          return 'limit' as const
-        }
-        throw error
-      })
+      return waitForPromiseWithSignal(lookup, signal)
+        .then((result) => {
+          if (result === 'limit') {
+            images.delete(path)
+          }
+          return result
+        })
+        .catch((error) => {
+          if (signal.aborted) {
+            return 'limit' as const
+          }
+          throw error
+        })
     }
   }
 }
 
-async function inspectConnectorImage(
-  root: string | undefined,
-  path: string,
-  signal: AbortSignal,
-  missing: CapabilityProbeCache<string>
-): Promise<StoredImage | null> {
-  const info = await stat(path).catch(() => null)
-  if (signal.aborted) {
-    return null
+async function inspectConnectorImage(root: string | undefined, path: string): Promise<ImageProbe> {
+  try {
+    const info = await stat(path)
+    if (!info.isFile() || info.size === 0) {
+      return 'missing'
+    }
+    return { bytes: info.size, fileId: await storedConnectorImageId(root, path) }
+  } catch (error) {
+    return isMissingPath(error) ? 'missing' : 'unreadable'
   }
-  if (!info?.isFile() || info.size === 0) {
-    missing.rememberUnsupported(path)
-    return null
-  }
-  return { bytes: info.size, fileId: await storedConnectorImageId(root, path) }
+}
+
+function isMissingPath(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error.code === 'ENOENT' || error.code === 'ENOTDIR')
+  )
 }
 
 export type ConnectorImageInspection = ReturnType<typeof connectorImageInspection>

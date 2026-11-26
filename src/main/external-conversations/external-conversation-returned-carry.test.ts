@@ -35,7 +35,8 @@ import {
 import { connectorAskerImages } from './connector-asker-images'
 import {
   connectorImageInspection,
-  connectorMissingImages,
+  ConnectorImageProbes,
+  RETURNED_IMAGE_RETRY_MS,
   storeConnectorImage
 } from './connector-asker-stored-image'
 import { AgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store'
@@ -479,21 +480,23 @@ it('keeps a failed request and stages only new earlier images that fit the byte 
     )
   }
   failedStart('failed', failed, 'notSignedIn', NOW + 20)
-  const missing = connectorMissingImages()
+  const images = new ConnectorImageProbes()
   const progress = new ReturnedImageProgress()
-  const carry = () =>
+  const carry = (now = NOW + 30) =>
     carriedMessages(
       THREAD,
       readJournalDomainReturnedCards(db, target, NOW + 30),
       ACCOUNT,
-      NOW + 30,
+      now,
       [],
-      connectorImageInspection(attachmentStore.rootDir, new AbortController().signal, missing),
+      connectorImageInspection(attachmentStore.rootDir, new AbortController().signal, {
+        probes: images
+      }),
       { owner: progress, key: 'thread' }
     )
   expect((await carry()).cards).toEqual([])
   // Interleaved conversations may evict all path misses. The returned queue can still advance.
-  missing.clear()
+  images.clearMissing()
   const carried = await carry()
 
   const reads: string[] = []
@@ -550,6 +553,13 @@ it('keeps a failed request and stages only new earlier images that fit the byte 
   expect(carried.cards.map(({ messageId }) => messageId)).toEqual(['failed'])
   expect(staged.map(({ fileId }) => fileId)).toEqual(['F4', 'F5', 'F6'])
   expect(reads).toEqual(['F4', 'F5', 'F6', 'F7'])
+  const restored = openSync(join(dir, 'missing-0.png'), 'w')
+  ftruncateSync(restored, 1)
+  closeSync(restored)
+  expect((await carry()).cards.map(({ messageId }) => messageId)).toEqual(['failed'])
+  images.clearMissing()
+  const retried = await carry(NOW + 30 + RETURNED_IMAGE_RETRY_MS)
+  expect(retried.cards.map(({ messageId }) => messageId)).toContain('missing-0')
 })
 
 it('updates screenshot positions even when a nested image precedes its label', async () => {
@@ -602,7 +612,7 @@ it('updates screenshot positions even when a nested image precedes its label', a
     ACCOUNT,
     NOW + 3,
     [],
-    connectorImageInspection(store.rootDir, signal, undefined, false)
+    connectorImageInspection(store.rootDir, signal, { allPaths: false })
   )
   const blocks = reconcileCarriedImageLabels(carried.blocks, carried.imagePositions)
   expect(carried.cards.map((card) => card.messageId)).toEqual(['FBEFORE', 'FAFTER'])
