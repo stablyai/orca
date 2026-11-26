@@ -118,7 +118,8 @@
       "scanCodeStep": "Escanea el código QR",
       "title": "Emparejar con un escritorio",
       "tryAgain": "Reintentar",
-      "codeNoLongerValid": "Este código de emparejamiento caducó, ya se usó o se reemplazó. Muestra un código nuevo en tu ordenador y vuelve a escanear."
+      "codeNoLongerValid": "Este código de emparejamiento caducó, ya se usó o se reemplazó. Muestra un código nuevo en tu ordenador y vuelve a escanear.",
+      "runtimeAccessLink": "Este enlace es para otra app de Orca. Escanea el código en Ajustes → Móvil en tu equipo o ejecuta orca pair --mobile en tu servidor."
     },
     "terminalSettings": {
       "keepPhoneSize": "Mantener en tamaño de teléfono (predeterminado)",
@@ -132,6 +133,32 @@
       "restoreAfterSeconds_one": "Después de {{count}}s",
       "restoreAfterSeconds_other": "Después de {{count}}s",
       "restoreHost": "Restaurar {{name}}",
+      "previewColumns_many": "{{count}} columnas",
+      "previewColumns_one": "{{count}} columna",
+      "previewColumns_other": "{{count}} columnas",
+      "previewLabel": "Vista previa de la terminal",
+      "previewHeading": "VISTA PREVIA",
+      "fontHeading": "FUENTE",
+      "fontDescription": "Pellizca en una terminal para cambiar el tamaño; se guarda aquí. Solo cambia este dispositivo, no la terminal del escritorio.",
+      "font": "Fuente",
+      "size": "Tamaño",
+      "sizePoints": "{{size}} pt",
+      "smaller": "Más pequeño",
+      "larger": "Más grande",
+      "lineSpacing": "Interlineado",
+      "lineSpacingTight": "Estrecho",
+      "lineSpacingNormal": "Normal",
+      "lineSpacingRoomy": "Amplio",
+      "weight": "Grosor",
+      "weightLight": "Fino",
+      "weightRegular": "Normal",
+      "weightMedium": "Medio",
+      "fontPickerTitle": "Fuente de la terminal",
+      "fontsOnDevice": "En este dispositivo",
+      "fontsIncluded": "Incluidas con Orca",
+      "systemMono": "Monoespaciada del sistema",
+      "defaultFont": "Predeterminada",
+      "resetFont": "Restablecer ajustes de fuente",
       "title": "Terminal"
     }
   },
@@ -163,6 +190,12 @@
     }
   },
   "browser": {
+    "clientHost": {
+      "openOnNamed": "Abrir en {{device}}",
+      "openOn": "Abrir en otro equipo",
+      "offlineNamed": "{{device}} está sin conexión",
+      "offline": "El equipo que muestra esta página está sin conexión"
+    },
     "addressField": {
       "urlPlaceholder": "URL"
     },
@@ -176,7 +209,9 @@
       "sendText": "Enviar texto al navegador",
       "dialogTitleWithOrigin": "{{origin}} dice",
       "dialogTitleNoOrigin": "Esta página dice",
-      "dialogAnswer": "Respuesta"
+      "dialogAnswer": "Respuesta",
+      "stop": "Detener",
+      "reconnect": "Reconectar"
     },
     "pointerModifiers": {
       "clickModifier": "Modificador {{key}} para clics"
@@ -185,6 +220,14 @@
       "deliveryUnconfirmed": "Envío sin confirmar — revisa la página antes de reintentarlo",
       "dialogAnswerFailed": "Esa respuesta no llegó a la página.",
       "sent": "Enviado"
+    },
+    "stream": {
+      "updateApp": "Actualiza la app de Orca para transmitir aquí las pestañas del navegador.",
+      "hostCannotStream": "Este host no puede transmitir aquí las pestañas del navegador.",
+      "checking": "Comprobando si el navegador del escritorio admite la transmisión.",
+      "pageUnavailable": "La página del navegador aún no está disponible.",
+      "timedOut": "Se agotó el tiempo de espera de la transmisión del navegador.",
+      "stopped": "Transmisión detenida"
     },
     "viewModeSwitch": {
       "mobileView": "Mostrar vista móvil del sitio web",
@@ -202,7 +245,43 @@
       "certificateChallengeExpired": "Esta aprobación de certificado caducó. Vuelve a intentarlo con la página para solicitar una nueva.",
       "certificateChallengeChanged": "La solicitud de certificado cambió. Vuelve a intentarlo con la página y revisa la nueva advertencia.",
       "certificateProceedFailed": "Orca no pudo aprobar esta solicitud de certificado. Vuelve a intentarlo con la página e inténtalo de nuevo.",
-      "certificateChallengeUnavailable": "Esta solicitud de certificado ya no está disponible. Vuelve a intentarlo con la página para solicitar una nueva."
+      "certificateChallengeUnavailable": "Esta solicitud de certificado ya no está disponible. Vuelve a intentarlo con la página para solicitar una nueva.",
+      "certificateProceedNeedsHostUpdate": "Actualiza Orca en este host para aceptar advertencias de certificado desde tu teléfono."
+    },
+    "pagePrompt": {
+      "downloadStarted": "Descargando en {{path}} en el host",
+      "downloadSaved": "Guardado en {{path}} en el host",
+      "downloadCanceled": "Descarga cancelada.",
+      "downloadFailed": "No se pudo completar la descarga.",
+      "answerFailed": "Esa respuesta no llegó a la página.",
+      "openFailed": "No se pudo abrir ninguna aplicación para este enlace {{scheme}}.",
+      "localFiles": "Archivos locales",
+      "ask": {
+        "camera": "Usar la cámara",
+        "microphone": "Usar el micrófono",
+        "location": "Acceder a tu ubicación",
+        "notifications": "Mostrar notificaciones",
+        "clipboard": "Leer el texto y las imágenes del portapapeles",
+        "midi": "Usar tus dispositivos MIDI",
+        "windowManagement": "Gestionar ventanas en todas tus pantallas",
+        "idleDetection": "Detectar cuándo estás usando este dispositivo",
+        "localNetwork": "Acceder a las apps de este dispositivo y a los dispositivos de tu red local"
+      },
+      "fileTitle": "Este archivo solicita permiso para",
+      "permissionTitle": "{{site}} solicita permiso para",
+      "block": "Bloquear",
+      "allow": "Permitir",
+      "signInTitle": "Iniciar sesión",
+      "signInDescription": "{{origin}} solicita un nombre de usuario y una contraseña.",
+      "signInInsecure": "Tu conexión con este sitio no es privada.",
+      "signInRetry": "Ese nombre de usuario o contraseña no funcionó.",
+      "signIn": "Iniciar sesión",
+      "openLinkTitle": "¿Abrir este enlace {{scheme}}?",
+      "openLinkDescription": "{{origin}} quiere abrir otra aplicación.",
+      "openLinkAnonymous": "Una página del navegador quiere abrir otra aplicación.",
+      "openLink": "Abrir enlace",
+      "username": "Nombre de usuario",
+      "password": "Contraseña"
     }
   },
   "chat": {
@@ -1608,6 +1687,7 @@
   "home": {
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Descartar la actualización de Orca {{version}}",
+      "update": "Actualizar",
       "title": "Orca {{version}} está disponible",
       "updateAccessibilityLabel": "Orca {{version}} está disponible, toca para actualizar"
     },
@@ -1629,6 +1709,8 @@
       "connectedDescription": "Tu escritorio aparecerá aquí. Todo está cifrado de extremo a extremo.",
       "connectedTitle": "Ya tienes conexión",
       "description": "Empareja tu teléfono con Orca en tu ordenador para supervisar a tus agentes, acceder a cualquier terminal y gestionar el trabajo desde el móvil.",
+      "pairDesktopButton": "Emparejar escritorio",
+      "scanCodeBelowDescription": "Toca Emparejar escritorio abajo y apunta con la cámara al código QR de tu pantalla.",
       "openDesktopDescription": "Ve a Ajustes → Móvil y genera un código QR de emparejamiento.",
       "openDesktopTitle": "Abre Orca en el escritorio",
       "scanCodeTitle": "Escanea el código",
@@ -1647,6 +1729,17 @@
       "removeHostTitle": "Eliminar host",
       "tryAgain": "Por favor, vuelve a intentarlo."
     },
+    "bottomBar": {
+      "connectFirst": "Conecta un escritorio para empezar un trabajo nuevo.",
+      "newWorkspace": "Nuevo espacio de trabajo"
+    },
+    "desktops": {
+      "pairDesktop": "Emparejar un escritorio"
+    },
+    "sections": {
+      "tasks": "Tareas",
+      "tasksSubtitle": "Consulta tus issues y revisiones"
+    },
     "stats": {
       "agentTime": "Tiempo de agentes",
       "agentsSpawned": "Agentes iniciados",
@@ -1660,7 +1753,9 @@
       "automations": "Automatizaciones",
       "chooseDesktop": "{{desktop}}, elegir otro escritorio",
       "feed": "Actividad",
-      "usage": "Uso"
+      "usage": "Uso",
+      "agents": "Agentes",
+      "bots": "Bots"
     },
     "usage": {
       "active": "Activa",
@@ -1673,6 +1768,10 @@
       "showUsageFor": "Mostrar uso de",
       "updatedAgo": "Actualizado hace {{time}}",
       "updatedJustNow": "Actualizado ahora mismo"
+    },
+    "activeAgents": {
+      "heading": "Activos",
+      "seeAll": "Ver todos los agentes"
     }
   },
   "hooks": {
@@ -1723,7 +1822,25 @@
       "hideSidebar": "Ocultar barra lateral",
       "reconnect": "Reconectar",
       "tasks": "Tareas",
-      "automations": "Automatizaciones"
+      "moreActions": "Más acciones",
+      "automations": "Automatizaciones",
+      "mcpServers": "Servidores MCP"
+    },
+    "deleteConfirm": {
+      "changes_many": "{{count}} cambios sin confirmar",
+      "changes_one": "{{count}} cambio sin confirmar",
+      "changes_other": "{{count}} cambios sin confirmar",
+      "changesAndIgnoredLost": "Se perderán {{what}} y los archivos ignorados",
+      "lost": "Se perderá lo siguiente: {{what}}",
+      "ignoredLost": "Se perderán los archivos ignorados",
+      "checking": "Comprobando si hay cambios…",
+      "unchecked": "No se pudieron comprobar los cambios",
+      "ignoredNamesMore": "{{names}} y más",
+      "ignoredNamesCount": "{{names}} +{{value0}}",
+      "ignoredUnchecked": "No se pudieron comprobar todos los archivos ignorados",
+      "needsUpdate": "Actualiza Orca en tu equipo para eliminar este espacio de trabajo desde el teléfono.",
+      "removeTitle": "Quitar espacio de trabajo",
+      "removeFolderMessage": "¿Quitar \"{{name}}\" de Orca? La carpeta se conserva en el disco."
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "¿Eliminar \"{{name}}\" ({{branch}})?",
@@ -1733,6 +1850,7 @@
       "primaryWorktreeDeleteHint": "El worktree principal no se puede eliminar. Quita el proyecto en su lugar.",
       "removeHost": "Eliminar host",
       "removeHostMessage": "¿Eliminar \"{{name}}\"? Puedes volver a emparejarlo más tarde.",
+      "deleteFailed": "No se pudo eliminar \"{{name}}\"",
       "sleep": "Suspender",
       "unpin": "Desanclar",
       "rename": "Cambiar nombre",
@@ -1819,9 +1937,22 @@
       "showProperties": "Mostrar propiedades",
       "sortBy": "Ordenar por",
       "syncedAcrossDevices": "Sincronizadas entre tus dispositivos",
+      "done": "Listo",
+      "reset": "Restablecer",
       "thisComputer": "Este equipo",
       "waitingForDesktop": "Aún esperando respuesta del host",
       "workspaceOptions": "Opciones de espacio de trabajo"
+    },
+    "hostBottomBar": {
+      "workspaceOptions": "Opciones de espacio de trabajo",
+      "activeFilters_many": "Opciones de espacio de trabajo ({{count}} filtros activos)",
+      "activeFilters_one": "Opciones de espacio de trabajo ({{count}} filtro activo)",
+      "activeFilters_other": "Opciones de espacio de trabajo ({{count}} filtros activos)",
+      "search": "Buscar",
+      "newWorkspace": "Nuevo espacio de trabajo"
+    },
+    "identity": {
+      "hostNotFound": "Host no encontrado"
     },
     "workspaceRenameSheet": {
       "title": "Cambiar nombre del espacio de trabajo",
@@ -2996,6 +3127,12 @@
         "heading": "IDIOMA",
         "systemWithCurrent": "Sistema ({{language}})"
       },
+      "usage": {
+        "used": "Usado",
+        "remaining": "Restante",
+        "heading": "PORCENTAJES DE USO",
+        "description": "Las barras de uso de Inicio y Cuentas muestran cuánto se ha usado o queda de cada límite. Se guarda en este teléfono."
+      },
       "theme": {
         "dark": "Oscuro",
         "description": "La opción Sistema usa el modo claro u oscuro de este dispositivo.",
@@ -3040,6 +3177,28 @@
       "on": "Activado",
       "openInChatUi": "Abrir sesiones en la interfaz de chat",
       "title": "Interfaz de chat"
+    },
+    "nativeChatText": {
+      "heading": "TEXTO",
+      "footer": "Pellizca en un chat para cambiarlo; se guarda aquí.",
+      "size": "Tamaño del texto",
+      "sizeDefault": "Predeterminado",
+      "sizePoints": "{{size}} pt",
+      "sizeSpoken": "{{size}} puntos",
+      "font": "Fuente",
+      "fontPickerTitle": "Fuente del chat",
+      "fontSystem": "Sistema",
+      "fontSerif": "Con serifa",
+      "fontMono": "Monoespaciada",
+      "fontMonoSubtitle": "Igual que el código",
+      "lineSpacing": "Interlineado",
+      "spacingCompact": "Compacto",
+      "spacingDefault": "Predeterminado",
+      "spacingRelaxed": "Amplio",
+      "reset": "Restablecer ajustes de texto",
+      "previewQuestion": "¿Por qué es inestable la prueba de reanudación?",
+      "previewTools": "Se leyeron 3 archivos · Se ejecutó pnpm test",
+      "previewAnswer": "La prueba espera a `setTimeout(0)` mientras el flujo aún se está vaciando, así que solo pasa cuando el vaciado gana."
     },
     "nativeNotificationDeliverySettings": {
       "loadFailed": "No se pudo cargar la configuración de entrega. Vuelve a abrir esta pantalla para reintentarlo.",
@@ -3111,6 +3270,7 @@
       "noneSelected": "Ninguno seleccionado",
       "selectModelFailed": "No se pudo seleccionar el modelo",
       "speechModel": "Modelo de voz",
+      "loading": "Cargando ajustes de voz…",
       "speechModelHeading": "MODELO DE VOZ",
       "title": "Voz",
       "toggleMode": "Alternar",
@@ -3132,6 +3292,9 @@
       "download": "Descargar para este teléfono",
       "downloadSize": "Unos {{size}} MB",
       "phoneChecking": "Comprobando…"
+    },
+    "sharedLinks": {
+      "bots": "Bots"
     }
   },
   "sourceControl": {
@@ -5311,6 +5474,95 @@
     }
   },
   "mcpServers": {
-    "agentBlocked": "Bloqueado por la configuración de Claude de tu organización"
+    "category": {
+      "coding": "Programación",
+      "chat": "Chat",
+      "monitoring": "Monitorización",
+      "docs": "Documentos y proyectos",
+      "more": "Más"
+    },
+    "searchApps": "Buscar apps",
+    "filterActive": "Filtrar, {{filter}}",
+    "filter": "Filtrar",
+    "allApps": "Todas las apps",
+    "added": "Añadida",
+    "addTitle": "Añadir un servidor MCP",
+    "customServer": "Servidor personalizado",
+    "customServerLine": "URL, comando o configuración pegada",
+    "noMatch": "Ninguna app coincide con “{{query}}”.",
+    "apps": "Apps",
+    "header": "Encabezado",
+    "headerName": "Nombre",
+    "headerValue": "Valor",
+    "removeHeader": "Quitar encabezado",
+    "headers": "Encabezados",
+    "headerEmpty": "Vacío",
+    "addHeader": "Añadir encabezado",
+    "addButton": "Añadir",
+    "sourceLabel": "URL del servidor o comando de inicio",
+    "sourcePlaceholder": "https://… o npx …",
+    "sourceNote": "Pega una URL de servidor, un comando de inicio o una configuración de mcpServers.",
+    "details": "Detalles",
+    "trust": "Añade solo software de confianza.",
+    "serverType": "Tipo de servidor",
+    "urlMode": "Conectar a una URL",
+    "commandMode": "Ejecutar un comando",
+    "serverName": "Nombre del servidor",
+    "headersNone": "Ninguno",
+    "yours": "Tuyos",
+    "addServer": "Añadir un servidor",
+    "fromPlugins": "De plugins",
+    "inYourAgents": "En tus agentes",
+    "needsSignIn": "Necesita iniciar sesión",
+    "wontStart": "No se inicia",
+    "signIn": "Iniciar sesión",
+    "projectsOnly": "Solo {{projects}}",
+    "moreFor": "Más opciones de {{name}}",
+    "moveToOrca": "Mover a Orca",
+    "copyToOrca": "Copiar a Orca",
+    "signInAgain": "Iniciar sesión de nuevo",
+    "signOut": "Cerrar sesión",
+    "workspaces": "Espacios de trabajo",
+    "account": "Cuenta",
+    "signedIn": "Sesión iniciada",
+    "agents": "Agentes",
+    "turnAllOn": "Activar todos",
+    "agentsUnread": "No se pudieron leer los agentes de este equipo.",
+    "agentBlocked": "Bloqueado por la configuración de Claude de tu organización",
+    "advanced": "Avanzado",
+    "sharedProcess": "Compartir un proceso entre agentes",
+    "sharedProcessNote": "Usa menos memoria. Se ejecuta fuera de la carpeta del espacio de trabajo.",
+    "removeServer": "Quitar servidor",
+    "url": "URL",
+    "command": "Comando",
+    "arguments": "Argumentos",
+    "title": "Servidores MCP",
+    "reading": "Leyendo servidores MCP…",
+    "unavailable": "Los servidores MCP no están disponibles en {{host}}",
+    "signedInTo": "Sesión iniciada en {{app}}",
+    "allWorkspaces": "Todos los espacios de trabajo",
+    "includingLater": "Incluidos los que se añadan más adelante",
+    "appliesToNewNote": "Los cambios se aplican a las sesiones nuevas.",
+    "allAgents": "Todos los agentes",
+    "agentsOf": "{{on}} de {{total}}",
+    "workspacesAll": "Todos",
+    "workspacesAllBut": "Todos menos {{names}}",
+    "workspacesNone": "Ninguno",
+    "appliesToNew": "Se aplica a las sesiones nuevas",
+    "restartSessions": "Reiniciar sesiones ({{count}})",
+    "restarted": "Sesiones reiniciadas: {{count}}",
+    "agentFileTitle": "¿Activar {{server}} para {{agent}}?",
+    "agentFileMessage": "Orca guardará tus servidores MCP en el archivo de configuración de {{agent}} ({{file}}). Tus propias entradas se quedan como están.",
+    "agentFilesMessage": "Orca guardará tus servidores MCP en sus archivos de configuración. Tus propias entradas se quedan como están.",
+    "allow": "Permitir",
+    "removeTitle": "¿Quitar {{name}}?",
+    "remove": "Quitar",
+    "moveTitle": "¿Mover {{name}} a Orca?",
+    "moveMessage": "Orca lo quita de la configuración de {{agents}} y guarda una copia de seguridad.",
+    "move": "Mover",
+    "workspacesCount": "{{count}} espacios de trabajo",
+    "workspacesAllButCount": "Todos menos {{count}}",
+    "headerMissing": "Rellena {{header}} para añadir este servidor.",
+    "servers": "Servidores"
   }
 }
