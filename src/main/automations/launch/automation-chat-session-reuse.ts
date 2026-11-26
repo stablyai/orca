@@ -1,4 +1,5 @@
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
+import { prepareAutomationFullAccess } from './automation-chat-permission'
 import type {
   AutomationChatLaunchRequest,
   AutomationChatAgentLaunch
@@ -75,6 +76,9 @@ export async function reuseAutomationChat(
         throw preparationError?.error ?? new Error('Chat host is unavailable')
       }
       const operationId = automationRunOperationId(run, 'reuse-send')
+      if (runtime.requireStore().getSettings().automationFullAccess === true) {
+        await prepareAutomationFullAccess(host, id)
+      }
       const callerKey = rpcCallerOperationKey(AUTOMATION_AGENT_CALLER)
       const sent = await host.send(
         { callerKey },

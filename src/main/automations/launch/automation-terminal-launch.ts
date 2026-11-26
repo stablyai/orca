@@ -1,4 +1,5 @@
 import { automationTerminalLaunchInputs } from '../../../shared/automations/launch/automation-launch-setup'
+import { automationWithFullAccess } from '../../../shared/automations/launch/automation-permission-policy'
 import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import {
   getRepoExecutionHostId,
@@ -43,6 +44,8 @@ export async function launchAutomationTerminalAgent(
     runs: readonly AutomationRun[]
   }
 ): Promise<AutomationTerminalAgentLaunch> {
+  const fullAccess = runtime.requireStore().getSettings().automationFullAccess === true
+  request = { ...request, automation: automationWithFullAccess(request.automation, fullAccess) }
   const { automation, run, target } = request
   const agent = automation.agentId
   const selectedTarget =
@@ -52,7 +55,7 @@ export async function launchAutomationTerminalAgent(
   const selectedWorkspace = selectedTarget?.managedWorktree
   // The startup plan trims the prompt for every agent; a blank one launches the agent bare.
   const text = automation.prompt?.trim()
-  if (automation.reuseSession && automation.workspaceMode === 'existing' && text) {
+  if (!fullAccess && automation.reuseSession && automation.workspaceMode === 'existing' && text) {
     const reused = await sendToReusableSession(
       runtime,
       { ...request, text },

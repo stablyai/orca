@@ -1,4 +1,5 @@
 import { automationCanonicalLaunchSetup } from '../../../shared/automations/launch/automation-canonical-launch-setup'
+import { automationWithFullAccess } from '../../../shared/automations/launch/automation-permission-policy'
 import { automationLaunchInputs } from '../../../shared/automations/launch/automation-launch-choices'
 import type { Automation } from '../../../shared/automations/automation-definition'
 import type { AutomationRun } from '../../../shared/automations/history/automation-run'
@@ -32,6 +33,13 @@ export async function launchAutomationChatAgent(
   runtime: OrcaRuntimeService,
   request: AutomationChatLaunchRequest
 ): Promise<AutomationChatAgentLaunch> {
+  request = {
+    ...request,
+    automation: automationWithFullAccess(
+      request.automation,
+      runtime.requireStore().getSettings().automationFullAccess === true
+    )
+  }
   try {
     return await enrichAutomationRunTarget(runtime, await launchChat(runtime, request))
   } catch (error) {

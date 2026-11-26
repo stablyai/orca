@@ -41,6 +41,8 @@ export type RuntimeClientSettings = Pick<
   | 'agentSkillSharingEnabled'
   | 'machineName'
   | 'nativeChatPermissionMode'
+  | 'automationFullAccess'
+  | 'fullAccessBotIds'
   | 'nativeChatQueueFollowUps'
   | 'nativeChatCiResultLines'
   | 'sourceControlGroupOrder'

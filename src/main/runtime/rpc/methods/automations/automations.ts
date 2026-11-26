@@ -6,6 +6,7 @@ import { defineMethod, type RpcContext, InvalidArgumentError } from '../../core'
 import { previewAutomationRunsPage } from './automation-runs-preview-page'
 import {
   AutomationCreate,
+  AutomationPermissionPolicy,
   AutomationId,
   AutomationList,
   AutomationRuns,
@@ -70,6 +71,48 @@ function refuseFromLookAround(callerSessionId: string | undefined, context: RpcC
 }
 
 export const AUTOMATION_METHODS = [
+  defineMethod({
+    name: 'automation.setPermissionPolicy',
+    permission: 'settings-write',
+    params: AutomationPermissionPolicy,
+    handler: async ({ expected, enabled, expectedBotIds, botIds }, { runtime }) => {
+      const store = runtime.requireStore()
+      if (!store.runDurableMutation || !store.updateSettings) {
+        throw new Error('runtime_unavailable')
+      }
+      const applySettings = store.updateSettings.bind(store)
+      return store.runDurableMutation(() => {
+        const previous = store.getSettings().automationFullAccess === true
+        const previousBots = store.getSettings().fullAccessBotIds ?? []
+        const sameBots = (a: string[], b: string[]) =>
+          JSON.stringify([...a].sort()) === JSON.stringify([...b].sort())
+        if (previous !== expected || !sameBots(previousBots, expectedBotIds)) {
+          throw new InvalidArgumentError('Automation permission policy changed; read it again.')
+        }
+        if (botIds.some((id) => !runtime.bots.list().some((bot) => bot.id === id))) {
+          throw new InvalidArgumentError('Full Access policy names an unknown bot.')
+        }
+        applySettings(
+          { automationFullAccess: enabled, fullAccessBotIds: botIds },
+          { notifyListeners: true }
+        )
+        return {
+          value: { automationFullAccess: enabled, fullAccessBotIds: botIds },
+          rollback: () => {
+            if (
+              store.getSettings().automationFullAccess === enabled &&
+              sameBots(store.getSettings().fullAccessBotIds ?? [], botIds)
+            ) {
+              applySettings(
+                { automationFullAccess: previous, fullAccessBotIds: previousBots },
+                { notifyListeners: true }
+              )
+            }
+          }
+        }
+      })
+    }
+  }),
   defineMethod({
     name: 'automation.list',
     permission: 'workspace',

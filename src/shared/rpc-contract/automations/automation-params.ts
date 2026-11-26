@@ -1,4 +1,10 @@
 import * as z from 'zod'
+export const AutomationPermissionPolicy = z.strictObject({
+  expected: z.boolean(),
+  enabled: z.boolean(),
+  expectedBotIds: z.array(z.uuid()).default([]),
+  botIds: z.array(z.uuid()).default([])
+})
 import { ChoicePatch, OptionKey } from '../agent-launch/agent-launch-settings-params'
 import { AGENT_PERMISSION_CHOICES } from '../../agent-launch/permissions/tui-agent-permission-choice'
 import {

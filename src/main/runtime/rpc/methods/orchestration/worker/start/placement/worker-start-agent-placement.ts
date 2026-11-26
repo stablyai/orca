@@ -1,4 +1,7 @@
 import type { RuntimeTerminalCreate } from '../../../../../../../../shared/terminal/runtime/runtime-terminal-create-contract'
+import { botWorkerRequiresFullAccess } from '../../../../../../../bots/bot-full-access-policy'
+import { prepareFullAccessWorkerReuse } from './worker-permission-policy'
+import { automationChatPermissionMode } from '../../../../../../../../shared/automations/launch/automation-permission-policy'
 /** Use the shared executor for new workers; structured worktrees omit startup agent, then resolve host support before chat creation.
  * Keep worker lineage/effects and background presentation in factories; caller passes the pre-decided mode.
  * Structured create refusals fail start through the worker error contract instead of silently downgrading. */
@@ -72,6 +75,7 @@ type WorkerAgentPlacementArgs = {
   onStage: (stage: string) => void
   /** A follow-up continuing a worker; a closed one is brought back in place of a launch. */
   followUp?: WorkerFollowUp | undefined
+  fullAccess?: boolean
 }
 
 /** Setup evidence for existing placements and failures before placement creation. */
@@ -87,8 +91,15 @@ export const EXISTING_WORKTREE_SETUP: WorkerSetupReceipt = {
 export async function placeWorkerAgent(
   args: WorkerAgentPlacementArgs
 ): Promise<WorkerAgentPlacement> {
+  args = { ...args, fullAccess: botWorkerRequiresFullAccess(args.runtime, args.dispatchId) }
+  if (args.fullAccess && args.agent) {
+    automationChatPermissionMode(args.agent, { automationFullAccess: true }, true, undefined)
+  }
   const existing = args.creationTarget ? undefined : requirePlacement(args.resolvedWorktree)
   if (existing && args.params.terminal) {
+    if (args.fullAccess) {
+      await prepareFullAccessWorkerReuse(args.runtime, args.params.terminal)
+    }
     args.effects.push({
       kind: 'terminal',
       role: 'agent',
@@ -104,7 +115,9 @@ export async function placeWorkerAgent(
       setupReceipt: EXISTING_WORKTREE_SETUP
     }
   }
-  const reopened = existing && (await args.followUp?.reopen?.(args.dispatchId))
+  const reopened = args.fullAccess
+    ? null
+    : existing && (await args.followUp?.reopen?.(args.dispatchId))
   if (existing && reopened) {
     args.effects.push({
       kind: 'terminal',
@@ -182,6 +195,7 @@ async function launchWorkerAgent(
             agent,
             // The executor withholds the startup agent exactly when the worker is to be a session.
             withAgentTerminal: startupAgent !== undefined,
+            fullAccess: args.fullAccess,
             promisedAgentChat,
             onWorkspaceCreated,
             ...(args.launch.preferences ? { launchPreferences: args.launch.preferences } : {}),
@@ -262,6 +276,7 @@ function workerSurfaceFactory(
         worktreeId,
         agent,
         dispatchId: args.dispatchId,
+        fullAccess: args.fullAccess,
         ...(args.launch.preferences ? { launchPreferences: args.launch.preferences } : {}),
         effects: args.effects
       })
@@ -280,6 +295,7 @@ function workerSurfaceFactory(
         agent,
         ...(args.launch.preferences ? { launchPreferences: args.launch.preferences } : {}),
         taskId: args.taskId,
+        fullAccess: args.fullAccess,
         effects: args.effects
       })
       onTerminalCreation(terminal)

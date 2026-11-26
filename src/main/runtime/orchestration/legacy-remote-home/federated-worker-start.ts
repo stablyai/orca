@@ -1,4 +1,5 @@
 import type { FederatedWorkerStartRequest } from './federated-worker-start-request'
+import { refuseUnpropagatedBotAccess } from '../../../bots/bot-full-access-policy'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
@@ -44,6 +45,7 @@ import {
 
 export async function startFederatedWorker(args: FederatedWorkerStartRequest): Promise<unknown> {
   const { params, runtime, db, task, orchestrationMutation } = args
+  refuseUnpropagatedBotAccess(runtime, args.callerSession, params.from)
   const recordStart = prepareWorkerStartCard(runtime, args.callerSession)
   if (!isWorkerStartTimeoutWithinTimerLimit(params.timeoutMs)) {
     throw new OrchestrationError(
