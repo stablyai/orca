@@ -65,7 +65,7 @@ export function useNativeChatOffer(botId: string, cardId: string): NativeChatOff
   const typed = (text: string) => async (): Promise<boolean> => (await view?.send(text)) === true
   // Typed follows the follow-up setting and can steer a running turn; a card answer always waits for it.
   const sessionId = view?.sessionId
-  const asCardAnswer = sessionId != null && botHostTakes(ref, BOTS_OFFER_ANSWER_RUNTIME_CAPABILITY)
+  const asCardAnswer = !!sessionId && botHostTakes(ref, BOTS_OFFER_ANSWER_RUNTIME_CAPABILITY)
   const told = (text: string) =>
     asCardAnswer
       ? async (): Promise<boolean> =>

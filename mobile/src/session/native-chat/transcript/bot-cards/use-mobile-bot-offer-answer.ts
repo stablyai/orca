@@ -11,6 +11,7 @@ import { errorMessage } from '../../../../../../src/shared/errors/error-message'
 import { botUpdate } from '../../../../bots/bot-sheet-operations'
 import { publishHostBot, useHostBotById } from '../../../../bots/host-bot-store'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
+import { isRpcDeliveryUnknown } from '../../../../transport/rpc/rpc-delivery-ambiguity'
 import { useRouteCapability } from '../../../../worktree/execution-hosts/use-route-capability'
 import {
   MobileBotCardSendContext,
@@ -62,7 +63,8 @@ export function useMobileBotOfferAnswer(botId: string, cardId: string): MobileBo
           botUpdate.interpret(await botUpdate.request(client, { botId, updates: { offerAnswer } }))
             .bot
         ),
-      send: async () => (await mobileBotOfferTell(card, cardAnswer, text)) === true
+      send: async () => (await mobileBotOfferTell(card, cardAnswer, text)) === true,
+      deliveryUnknown: isRpcDeliveryUnknown
     })
       .then((outcome) => {
         if (outcome === 'refused') {

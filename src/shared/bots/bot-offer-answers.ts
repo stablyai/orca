@@ -70,6 +70,9 @@ export async function answerBotOffer(
     update: (offerAnswer: BotOfferAnswerUpdate) => Promise<unknown>
     /** Tells the bot; false when the chat refused it. */
     send: () => Promise<boolean>
+    /** The send threw after it may have reached the host (a lost reply): the claim stays, so a second
+     *  press can't tell the bot twice. */
+    deliveryUnknown?: (error: unknown) => boolean
   }
 ): Promise<BotOfferAnswerOutcome> {
   const field: BotOfferAnswerField = answer.sent ? 'sent' : 'dismissed'
@@ -82,10 +85,14 @@ export async function answerBotOffer(
     throw error
   }
   let sent = false
+  let maybeSent = false
   try {
     sent = await ops.send()
+  } catch (error) {
+    maybeSent = ops.deliveryUnknown?.(error) === true
+    throw error
   } finally {
-    if (!sent) {
+    if (!sent && !maybeSent) {
       await ops.update({ cardId: answer.cardId, release: field })
     }
   }
