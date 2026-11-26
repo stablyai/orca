@@ -2,7 +2,7 @@
  * WSL refuses Windows file access to its drive mounts over UNC: `\\wsl.localhost\<d>\mnt\c\x`
  * answers EPERM (WSL 2.7). The same folder opens through its drive path, `C:\x`.
  */
-import { realpath as fsRealpath } from 'node:fs/promises'
+import { realpathWithoutArchiveLock } from '../../filesystem/asar-transparent-fs'
 import { parseWslUncPath, toWindowsWslDrivePath } from '../../../shared/file-access/wsl-paths'
 
 const WSL_UNC_PREFIX = /^[\\/]{2}(?:wsl\.localhost|wsl\$)[\\/][^\\/]+/i
@@ -32,7 +32,7 @@ export function windowsFsPath(path: string, platform: NodeJS.Platform = process.
 export async function realpathAcrossWslDriveMount(
   path: string,
   deps: { realpath: (path: string) => Promise<string>; platform: NodeJS.Platform } = {
-    realpath: fsRealpath,
+    realpath: realpathWithoutArchiveLock,
     platform: process.platform
   }
 ): Promise<string> {
