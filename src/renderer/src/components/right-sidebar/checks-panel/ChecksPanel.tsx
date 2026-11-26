@@ -4,6 +4,7 @@ import { useChecksPanelContextState } from './review-state/use-checks-panel-cont
 import { useChecksPanelReviewState } from './review-state/use-checks-panel-review-state'
 import { useChecksPanelGeneration } from './review-actions/use-checks-panel-generation'
 import { useChecksPanelComposerState } from './review-actions/use-checks-panel-composer-state'
+import { useChecksPanelNgitReview } from './refresh/use-checks-panel-ngit-review'
 import { useChecksPanelForegroundEffects } from './refresh/use-checks-panel-foreground-effects'
 import { useChecksPanelGitStatusEffects } from './refresh/use-checks-panel-git-status-effects'
 import { useChecksPanelConflictRefresh } from './refresh/use-checks-panel-conflict-refresh'
@@ -33,6 +34,7 @@ export default function ChecksPanel(): React.JSX.Element {
   const generationModel = Object.assign(reviewModel, useChecksPanelGeneration(reviewModel))
   const composerModel = Object.assign(generationModel, useChecksPanelComposerState(generationModel))
   useChecksPanelForegroundEffects(composerModel)
+  useChecksPanelNgitReview(composerModel)
   useChecksPanelGitStatusEffects(composerModel)
   useChecksPanelConflictRefresh(composerModel)
   const pollingModel = Object.assign(composerModel, useChecksPanelPolling(composerModel))
