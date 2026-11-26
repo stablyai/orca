@@ -13,7 +13,6 @@ import {
   BASIC_THINKING_LEVELS,
   CLAUDE_THINKING_LEVELS,
   OPENAI_THINKING_LEVELS,
-  parseAntigravityModels,
   parseClaudeModels,
   parseCursorModels,
   parseLineModels,
@@ -153,7 +152,6 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
     BASIC_THINKING_LEVELS,
     OPENAI_THINKING_LEVELS,
     parseCursorModels,
-    parseAntigravityModels,
     parseLineModels
   })
 }
@@ -186,7 +184,11 @@ export function resolveCommitMessageAgentChoice(
   defaultTuiAgent: DefaultTuiAgentPreference,
   disabledTuiAgents?: Iterable<unknown> | null
 ): CommitMessageAgentChoice | null {
-  if (configuredAgentId) {
+  // A saved agent with no text mode, such as Antigravity, picks as if none were saved.
+  if (
+    configuredAgentId &&
+    (isCustomAgentId(configuredAgentId) || getCommitMessageAgentSpec(configuredAgentId))
+  ) {
     return configuredAgentId
   }
   if (

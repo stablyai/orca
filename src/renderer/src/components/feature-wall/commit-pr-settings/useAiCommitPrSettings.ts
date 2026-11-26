@@ -96,12 +96,6 @@ export function useAiCommitPrSettings(): AiCommitPrSettingsViewModel {
     resolvedAgentId && !isCustomAgentId(resolvedAgentId)
       ? capabilities.find((capability) => capability.id === resolvedAgentId)
       : undefined
-  const unsupportedConfiguredAgent =
-    resolvedAgentId && !isCustom && !activeCapability ? resolvedAgentId : null
-  const unsupportedConfiguredAgentLabel = unsupportedConfiguredAgent
-    ? (getAgentCatalog().find((a) => a.id === unsupportedConfiguredAgent)?.label ??
-      unsupportedConfiguredAgent)
-    : null
   const agentSelectValue = activeCapability
     ? activeCapability.id
     : isCustom
@@ -114,17 +108,13 @@ export function useAiCommitPrSettings(): AiCommitPrSettingsViewModel {
     ? resolveCommitMessageSelectedThinking(config, activeModel)
     : undefined
   const unsupportedDefaultAgent =
-    resolvedAgentId === null &&
-    !config.agentId &&
-    settings?.defaultTuiAgent &&
-    settings.defaultTuiAgent !== 'blank'
+    resolvedAgentId === null && settings?.defaultTuiAgent && settings.defaultTuiAgent !== 'blank'
       ? settings.defaultTuiAgent
       : null
-  const unsupportedDefaultAgentLabel = unsupportedDefaultAgent
+  const unsupportedAgentLabel = unsupportedDefaultAgent
     ? (getAgentCatalog().find((a) => a.id === unsupportedDefaultAgent)?.label ??
       unsupportedDefaultAgent)
     : null
-  const unsupportedAgentLabel = unsupportedConfiguredAgentLabel ?? unsupportedDefaultAgentLabel
 
   const writeConfig = (patch: Partial<CommitMessageAiSettings>): void => {
     const latest = useAppStore.getState().settings
