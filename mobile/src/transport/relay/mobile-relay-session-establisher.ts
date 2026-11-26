@@ -5,9 +5,12 @@ import {
   toError
 } from './mobile-relay-director-fallback'
 import { RelayHostOfflineStreak } from './relay-host-offline-streak'
-import { RelayResolveTimeoutBudget } from './mobile-relay-resume-director'
+import { RelayDirectorHttpError, RelayResolveTimeoutBudget } from './mobile-relay-resume-director'
 import { encodeBase64Url } from '../encryption/mobile-session-id-encoding'
-import { persistResumeConfirmation } from './mobile-relay-credential-rotation'
+import {
+  pendingRelayCredentialLease,
+  persistResumeConfirmation
+} from './mobile-relay-credential-rotation'
 import { isExplicitCredentialRejection } from './relay-credential-eligibility'
 import type { MobileRelayCredentialBundle } from '../../host-credentials/mobile-relay-credential-bundle'
 import type { RelayReconnectController } from './mobile-relay-reconnect-controller'
@@ -64,14 +67,20 @@ export class MobileRelaySessionEstablisher {
     this.relay = relay
   }
 
-  // Try the grace credential only after an explicit rejection.
+  // Try the next credential only after the relay refuses one; pendingOnly marks a failed pending dial.
   async dialEligible(
     credentials: { token: string; version: number }[]
   ): Promise<
-    { outcome: 'established' } | { outcome: 'aborted' } | { outcome: 'failed'; error: Error | null }
+    | { outcome: 'established' }
+    | { outcome: 'aborted' }
+    | { outcome: 'failed'; error: Error | null; pendingOnly: boolean }
   > {
     let lastError: Error | null = null
+    let pendingOnly = false
+    const bundle = this.args.bundle()
+    const pending = bundle ? pendingRelayCredentialLease(bundle) : null
     for (const credential of credentials) {
+      pendingOnly = credential.token === pending?.token
       const result = await this.dial(credential)
       if (result.ok) {
         return { outcome: 'established' }
@@ -81,13 +90,18 @@ export class MobileRelaySessionEstablisher {
       }
       lastError = result.error
       this.args.onDialFailure(result.error)
-      if (!isExplicitCredentialRejection(result.error)) {
+      if (isExplicitCredentialRejection(result.error)) {
+        // Why: a rejected version stays invalid; retry only the later credentials.
+        this.args.controller.recordRejectedCredential(credential.version)
+        continue
+      }
+      // A director 401 can be stale (it reads a store an edge-hosted host may have outgrown), so try
+      // the next credential without condemning this one.
+      if (!(result.error instanceof RelayDirectorHttpError && result.error.status === 401)) {
         break
       }
-      // Why: a rejected version stays invalid; retry only the grace credential.
-      this.args.controller.recordRejectedCredential(credential.version)
     }
-    return { outcome: 'failed', error: lastError }
+    return { outcome: 'failed', error: lastError, pendingOnly }
   }
 
   dial(credential: { token: string; version: number }): Promise<EstablishResult> {

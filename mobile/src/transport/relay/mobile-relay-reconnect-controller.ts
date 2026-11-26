@@ -199,8 +199,6 @@ export class RelayReconnectController {
 
   recordRejectedCredential = (version: number): void => this.credentials.recordRejected(version)
 
-  isRejectedCredential = (version: number): boolean => this.credentials.isRejected(version)
-
   registerActiveFailure(logical: StableLogicalRpcClient): Error | null {
     if (logical.getActivePath() !== 'relay') {
       return null
@@ -235,7 +233,8 @@ export class RelayReconnectController {
     return null
   }
 
-  registerFailure(error: Error | null, scheduleRetry = true): void {
+  // pendingOnly: the failed dial used an unconfirmed pending install, whose validity only the relay knows.
+  registerFailure(error: Error | null, scheduleRetry = true, pendingOnly = false): void {
     // Bank rejection evidence before gated early return, except when a live authenticated relay disproves revocation.
     if (!this.activeSession) {
       this.evidence.record(error)
@@ -268,6 +267,11 @@ export class RelayReconnectController {
     if (credentialRejected) {
       // Never retry rejected credentials fast; each slow attempt re-reads durable state.
       this.holdGate(scheduleRetry, 'fresh-credential')
+      return
+    }
+    if (pendingOnly) {
+      // A speculative credential gets slow reprobes, plus one fast retry per network change or resume.
+      this.holdGate(scheduleRetry, 'external-signal')
       return
     }
     if (hostOffline) {

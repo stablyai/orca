@@ -14,7 +14,7 @@ export function onActiveFailure(
     controller.needsRecovery(state) &&
     logical.getActivePath() === 'relay' &&
     bundle &&
-    controller.hasDialableCredential(...relayDialCandidates(bundle, controller))
+    controller.hasDialableCredential(...relayDialCandidates(bundle))
   ) {
     logical.setRecoveryPath('relay')
   }

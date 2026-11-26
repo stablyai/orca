@@ -2,16 +2,11 @@ import type { MobileRelayCredentialBundle } from '../../host-credentials/mobile-
 import type { RelayReconnectController } from './mobile-relay-reconnect-controller'
 import { pendingRelayCredentialLease } from './mobile-relay-credential-rotation'
 
-// Dial order: pending is reached only after the relay refuses current and grace. A current that
-// merely expired here is no evidence pending committed, so it keeps the slow credential reprobe.
+// Dial order: pending is reached only after the relay refuses current and grace (or they expired here).
 export function relayDialCandidates(
-  bundle: MobileRelayCredentialBundle,
-  controller: Pick<RelayReconnectController, 'hasDialableCredential' | 'isRejectedCredential'>
+  bundle: MobileRelayCredentialBundle
 ): (MobileRelayCredentialBundle['current'] | null | undefined)[] {
-  const pendingAllowed =
-    controller.hasDialableCredential(bundle.current) ||
-    controller.isRejectedCredential(bundle.current.version)
-  return [bundle.current, bundle.grace, pendingAllowed ? pendingRelayCredentialLease(bundle) : null]
+  return [bundle.current, bundle.grace, pendingRelayCredentialLease(bundle)]
 }
 
 // Adopt durable state only when it restores a dialable credential; fresh renewals/re-pairing do not reliably increase version.
@@ -27,7 +22,7 @@ export async function selectDialableRelayCredentials(args: {
 }> {
   const memory = args.bundle
   const memoryCredentials = memory
-    ? args.controller.eligibleCredentials(...relayDialCandidates(memory, args.controller))
+    ? args.controller.eligibleCredentials(...relayDialCandidates(memory))
     : []
   if (memoryCredentials.length > 0) {
     // Keep newer in-memory resume state when its durable write failed.

@@ -1,13 +1,9 @@
 import { MOBILE_RELAY_CLOSE_CODE } from '../../../../src/shared/remote-runtime/relay/mobile-relay-close-codes'
 import { RelayOuterError } from '../encryption/mobile-relay-e2ee-link'
-import { RelayDirectorHttpError } from './mobile-relay-resume-director'
 
-// Only a relay-hello refusal or a director 401 (the same credential lookup) is the relay's verdict;
-// a bare 4401 close also covers a first-frame timeout, which proves nothing about it.
+// Only a relay-hello refusal is the relay's verdict on a credential; a bare 4401
+// close also covers a first-frame timeout, which proves nothing about it.
 export function isExplicitCredentialRejection(error: unknown): boolean {
-  if (error instanceof RelayDirectorHttpError) {
-    return error.status === 401
-  }
   return (
     error instanceof RelayOuterError &&
     error.rejectedByRelayHello &&
