@@ -67,15 +67,21 @@ export function createHistoryCatchUpBatch() {
   const expectedItems: ExpectedHistoryItem[] = []
   let bytes = 0
   let admissions = 0
+  // What this commit stages, hashed as it is admitted, so a split import names it without reserializing.
+  const content = createHash('sha256')
   const admit = (serialized: string, expected?: ExpectedHistoryItem) => {
-    bytes += Buffer.byteLength(serialized, 'utf8') + 1
-    if (expected) {
-      bytes += Buffer.byteLength(JSON.stringify(expected), 'utf8') + 1
-    }
-    if (admissions >= HISTORY_CATCH_UP_MAX_OPERATIONS || bytes > HISTORY_CATCH_UP_MAX_BYTES) {
+    const expectedText = expected ? JSON.stringify(expected) : ''
+    const next =
+      bytes +
+      Buffer.byteLength(serialized, 'utf8') +
+      1 +
+      (expected ? Buffer.byteLength(expectedText, 'utf8') + 1 : 0)
+    if (admissions >= HISTORY_CATCH_UP_MAX_OPERATIONS || next > HISTORY_CATCH_UP_MAX_BYTES) {
       throw new Error('too-large')
     }
+    bytes = next
     admissions++
+    content.update(serialized).update('\n').update(expectedText).update('\n')
     if (expected) {
       expectedItems.push(expected)
     }
@@ -93,6 +99,11 @@ export function createHistoryCatchUpBatch() {
     get size(): number {
       return mutations.length
     },
+    get bytes(): number {
+      return bytes
+    },
+    /** What this commit staged, in order; read once, at the end. */
+    contentDigest: (): string => content.digest('hex'),
     push(mutation: JournalLifecycleIdentityMutationInput, serialized = JSON.stringify(mutation)) {
       stage(mutation, serialized)
     },

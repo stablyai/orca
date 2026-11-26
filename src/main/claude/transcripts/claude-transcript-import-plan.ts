@@ -287,12 +287,13 @@ export function createClaudeTranscriptImportPlan(input: {
         } else {
           batch.push(row)
         }
+        await batch.pause()
       }
-      return batch.finish('claude-history-import', [
+      input.check()
+      return await batch.finish('claude-history-import', [
         input.epoch,
         input.providerSessionId,
-        uuids,
-        rows
+        uuids
       ])
     },
     dispose: () => translator.dispose()

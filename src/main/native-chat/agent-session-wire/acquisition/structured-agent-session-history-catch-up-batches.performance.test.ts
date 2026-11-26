@@ -11,10 +11,7 @@ import { readTestJournalItems } from '../../agent-session-journal/journal-observ
 import { createTrackedJournalOpener } from '../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createDeferredStructuredAgentSessionEventSink } from '../journal-ingress/structured-agent-session-event-sink'
 import { testEventSinkLogging } from '../host/testing/structured-agent-session-logger.test-fixture'
-import {
-  continuedOutsideNotice,
-  runHistoryCatchUp
-} from './structured-agent-session-history-catch-up'
+import { runHistoryCatchUp } from './structured-agent-session-history-catch-up'
 import { createHistoryCatchUpBatches } from './structured-agent-session-history-catch-up-batches'
 
 const SESSION = 'session-catch-up-batches'
@@ -59,16 +56,23 @@ async function importRows(count: number) {
     readView: async (history) => ({ physicalCursor: await history.reads.physicalCursor() }),
     prepare: async () => {
       const batches = createHistoryCatchUpBatches(() => {})
-      const rows = Array.from({ length: count }, (_, index) =>
-        journalLifecycleItemMutation(
-          { turnScope: AGENT_JOURNAL_THREAD_SCOPE },
-          { provider: 'legacy', agent: 'claude', sessionId: SESSION, recordId: `row-${index}` },
-          continuedOutsideNotice(false)
+      // Rows the size of real transcript replies, so serialization cost is what an import pays.
+      const text = 'x'.repeat(2048)
+      for (let index = 0; index < count; index++) {
+        batches.push(
+          journalLifecycleItemMutation(
+            { turnScope: AGENT_JOURNAL_THREAD_SCOPE },
+            { provider: 'legacy', agent: 'claude', sessionId: SESSION, recordId: `row-${index}` },
+            {
+              kind: 'message',
+              role: 'assistant',
+              blocks: [{ type: 'text', text: `${index}${text}` }]
+            }
+          )
         )
-      )
-      rows.forEach((row) => batches.push(row))
-      // The whole import names the settlements, as the transcript import does.
-      return batches.finish('batches-performance', [SESSION, rows])
+        await batches.pause()
+      }
+      return await batches.finish('batches-performance', [SESSION, count])
     }
   })
   delay.disable()
