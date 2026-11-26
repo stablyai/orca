@@ -21,7 +21,7 @@ import {
   folderWorkspaceKey,
   parseWorkspaceKey
 } from '../../../../shared/workspace/identity/workspace-scope'
-import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
+import { getRepoIdFromWorktreeId, splitWorktreeId } from '../../../../shared/worktree/id'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { wslHostMovableDistroOfPath } from '../../../../shared/file-access/wsl-paths'
 import type {
@@ -96,9 +96,22 @@ function localWorkspaceKeys(catalog: WslMoveCatalog, ref: WslMoveRowRef): string
   if (ref.kind === 'folder') {
     return [folderWorkspaceKey(ref.id)]
   }
-  return (catalog.repoWorktrees[ref.id] ?? [])
-    .filter((worktree) => (worktree.hostId ?? LOCAL_EXECUTION_HOST_ID) === LOCAL_EXECUTION_HOST_ID)
-    .map((worktree) => worktree.id)
+  const keys = new Set(
+    (catalog.repoWorktrees[ref.id] ?? [])
+      .filter(
+        (worktree) => (worktree.hostId ?? LOCAL_EXECUTION_HOST_ID) === LOCAL_EXECUTION_HOST_ID
+      )
+      .map((worktree) => worktree.id)
+  )
+  // Main moves every saved tab bucket of the repo, listed or not; a bridge listing can lag or
+  // fail under load. Only UNC buckets: a host copy shares the repo id but has Linux paths.
+  for (const key of Object.keys(catalog.unifiedTabsByWorktree)) {
+    const parsed = splitWorktreeId(key)
+    if (parsed?.repoId === ref.id && wslMoveDistroOfPath(parsed.worktreePath)) {
+      keys.add(key)
+    }
+  }
+  return [...keys]
 }
 
 /** Counts of what the selected projects hold here, for the preview's summary line. */

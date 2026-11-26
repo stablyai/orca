@@ -110,24 +110,42 @@ export async function stopWslMoveHostAutomations(
       }
       settleRefusedUndo(userDataPath, migrationId, recorded, leftOff)
     },
-    applyHere: () => {
-      const applied: { id: string; enabled: boolean }[] = []
-      for (const update of wslMoveLocalAutomationStateUpdates(ports.listHere(), intent)) {
-        try {
-          ports.setHere(update.id, update.enabled)
-          applied.push(update)
-        } catch (error) {
-          console.warn('[wsl-move] Could not give an automation here its host state:', error)
-        }
-      }
-      return () => {
-        for (const { id, enabled } of applied) {
-          try {
-            ports.setHere(id, !enabled)
-          } catch (error) {
-            console.warn('[wsl-move] Could not put an automation here back:', error)
-          }
-        }
+    // One the host no longer answers for goes back to how it was here before the move.
+    applyHere: () =>
+      applyWslMoveAutomationStatesHere(ports, {
+        ...wslMoveAutomationsOnBeforeMove(readMove(userDataPath, migrationId)),
+        ...intent
+      })
+  }
+}
+
+/** The move turned these off here (local-automations); they were on before it. */
+export function wslMoveAutomationsOnBeforeMove(
+  move: Pick<WslMoveCutover, 'automationsToReenable'> | undefined
+): Record<string, boolean> {
+  return Object.fromEntries((move?.automationsToReenable ?? []).map((id) => [id, true]))
+}
+
+/** Gives the copies here `intent`; returns how to undo that write. */
+export function applyWslMoveAutomationStatesHere(
+  ports: Pick<WslMoveHostAutomationPorts, 'listHere' | 'setHere'>,
+  intent: Readonly<Record<string, boolean>>
+): () => void {
+  const applied: { id: string; enabled: boolean }[] = []
+  for (const update of wslMoveLocalAutomationStateUpdates(ports.listHere(), intent)) {
+    try {
+      ports.setHere(update.id, update.enabled)
+      applied.push(update)
+    } catch (error) {
+      console.warn('[wsl-move] Could not give an automation here its host state:', error)
+    }
+  }
+  return () => {
+    for (const { id, enabled } of applied) {
+      try {
+        ports.setHere(id, !enabled)
+      } catch (error) {
+        console.warn('[wsl-move] Could not put an automation here back:', error)
       }
     }
   }

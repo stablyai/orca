@@ -10,13 +10,17 @@ import {
   type WslMoveHostAutomations
 } from './wsl-move-host-automations-rewrite'
 import {
+  registerWslMoveLocalAutomationsStore,
+  type WslMoveLocalAutomationsProfile
+} from './wsl-move-local-automations-rewrite'
+import {
   registerWslMoveMainRewriteStores,
   type WslMoveMainRewriteProfile
 } from './wsl-move-main-rewrite-stores'
 import { registerWslMoveOrchestrationHistoryStore } from './wsl-move-orchestration-history-rewrite'
 
 export type WslMoveDesktopRewriteRegistryDependencies = {
-  profile: WslMoveMainRewriteProfile
+  profile: WslMoveMainRewriteProfile & WslMoveLocalAutomationsProfile
   orchestrationDatabasePath: string
   hostAutomations: WslMoveHostAutomations
   browserCookies: WslMoveBrowserCookieCopyDependencies
@@ -28,6 +32,8 @@ export function registerWslMoveDesktopRewriteRegistry(
   registerWslMoveMainRewriteStores(dependencies.profile)
   registerWslMoveOrchestrationHistoryStore(dependencies.orchestrationDatabasePath)
   registerWslMoveRendererRewriteStores()
+  // Off here before on there: never two live copies, even for a moment.
+  registerWslMoveLocalAutomationsStore(dependencies.profile)
   registerWslMoveHostAutomationsStore(dependencies.hostAutomations)
   // Last among main-side stores: it throws until browser sessions exist, pausing any store after it.
   registerWslMoveBrowserCookieStore(dependencies.browserCookies)
