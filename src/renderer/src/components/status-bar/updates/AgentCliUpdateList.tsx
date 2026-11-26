@@ -45,9 +45,13 @@ export function agentCliUpdateRows(hostKey: string, host: AgentCliUpdateHost): A
   }))
 }
 
-/** Rows Update all may start: offered, runnable and not already running. */
+/** Rows Update all may start: offered, runnable and not already queued or running. */
 export function agentCliUpdateStartable(row: AgentCliUpdateRow): boolean {
-  return row.update?.runnable === true && row.run?.phase !== 'running'
+  return row.update?.runnable === true && !agentCliUpdateBusy(row)
+}
+
+export function agentCliUpdateBusy(row: AgentCliUpdateRow): boolean {
+  return row.run?.phase === 'running' || row.run?.phase === 'queued'
 }
 
 export function runAgentCliUpdateRow(row: AgentCliUpdateRow): void {
@@ -55,10 +59,17 @@ export function runAgentCliUpdateRow(row: AgentCliUpdateRow): void {
 }
 
 /** For a CLI Orca can't update itself: the user runs its command in a terminal. Resolves whether it copied. */
-export function copyAgentCliUpdateCommand(command: string, t: Translate): Promise<boolean> {
+export function copyAgentCliUpdateCommand(
+  command: string,
+  t: Translate,
+  // Off when the button itself shows that it copied.
+  { announce = true }: { announce?: boolean } = {}
+): Promise<boolean> {
   return window.api.ui.writeClipboardText(command).then(
     () => {
-      toast.success(t('agentCliUpdate.commandCopied', 'Command copied'))
+      if (announce) {
+        toast.success(t('agentCliUpdate.commandCopied', 'Command copied'))
+      }
       return true
     },
     () => {
@@ -84,7 +95,11 @@ function AgentCliUpdateListRow({
         <AgentIcon agent={row.agent} size={14} />
         <span className="truncate text-[13px]">{agentCliProductName(row.agent, t, 'short')}</span>
         <span className="ml-auto flex shrink-0 items-center gap-1.5">
-          {run?.phase === 'running' ? (
+          {run?.phase === 'queued' ? (
+            <span className="text-2xs text-muted-foreground">
+              {t('agentCliUpdate.queued', 'Queued')}
+            </span>
+          ) : run?.phase === 'running' ? (
             <>
               <span className="text-2xs text-muted-foreground">
                 {t('agentCliUpdate.updating', 'Updating…')}

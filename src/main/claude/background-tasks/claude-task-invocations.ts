@@ -1,4 +1,5 @@
 import { record, taskAliasId, taskId } from './claude-background-task-frames'
+import { isClaudeForkedCommandTask } from '../subagents/claude-subagent-task-frames'
 import type { ClaudeBackgroundTaskDescriptor } from './claude-background-task-identity'
 
 export type ClaudeTaskInvocation = {
@@ -7,6 +8,8 @@ export type ClaudeTaskInvocation = {
   /** Only current provider evidence may correct durable producer attribution. */
   reportedParentTaskId?: string
   excluded: boolean
+  /** Its later frames repeat the ambient flags without saying what started it. */
+  forkedCommand?: boolean
   monitor: boolean
   ended?: { status: string; toolUseId?: string }
   /** Only accepted current evidence proves an alias is historical after replacement. */
@@ -52,7 +55,9 @@ export class ClaudeTaskInvocations {
         invocation.reportedParentTaskId =
           taskAliasId(frame.parent_task_id) ?? invocation.reportedParentTaskId
         invocation.parentTaskId = invocation.reportedParentTaskId ?? invocation.parentTaskId
-        invocation.excluded ||= frame.ambient === true || frame.skip_transcript === true
+        invocation.forkedCommand ||= isClaudeForkedCommandTask(frame)
+        invocation.excluded ||=
+          !invocation.forkedCommand && (frame.ambient === true || frame.skip_transcript === true)
         if (start && acceptsStart) {
           invocation.ended = undefined
         }

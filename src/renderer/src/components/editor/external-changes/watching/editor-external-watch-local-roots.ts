@@ -44,6 +44,28 @@ export function acquireWatchRoot(
   return root.installed
 }
 
+/** Settles once the root's latest watch request has, including a retry. */
+export function watchRootInstalled(roots: HeldWatchRoots, target: WatchRootArgs): Promise<void> {
+  return roots.get(getWatchRootKey(target))?.installed ?? Promise.resolve()
+}
+
+/** Whether the root's latest watch request failed; a pending one counts as working. */
+export function isWatchRootFailed(roots: HeldWatchRoots, target: WatchRootArgs): boolean {
+  return roots.get(getWatchRootKey(target))?.failed === true
+}
+
+/** Re-requests a held root whose last request failed; one that is installed or pending is left alone. */
+export function retryFailedWatchRoot(
+  roots: HeldWatchRoots,
+  target: WatchRootArgs,
+  onError: (error: unknown) => void
+): void {
+  const held = roots.get(getWatchRootKey(target))
+  if (held?.failed) {
+    requestWatch(held, onError)
+  }
+}
+
 function requestWatch(root: HeldWatchRoot, onError: (error: unknown) => void): void {
   root.failed = false
   root.installed = window.api.fs.watchWorktree(root.args).catch((error: unknown) => {

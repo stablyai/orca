@@ -143,7 +143,8 @@ export const CommitMessageModelCapability = z.object({
   id: z.string(),
   label: z.string(),
   thinkingLevels: z.array(z.object({ id: z.string(), label: z.string() })).optional(),
-  defaultThinkingLevel: z.string().optional()
+  defaultThinkingLevel: z.string().optional(),
+  isDefault: z.boolean().optional()
 })
 
 export const CommitMessageAiSettings = z.object({
@@ -161,6 +162,7 @@ export const CommitMessageAiSettings = z.object({
 })
 
 export const SourceControlAiSettings = CommitMessageAiSettings.omit({ customPrompt: true }).extend({
+  discoveredAtByAgentByHost: z.record(z.string(), z.record(z.string(), z.number())).optional(),
   actions: z.unknown().optional().transform(normalizeSourceControlAiActionDefaults),
   instructionsByOperation: z.record(z.string(), z.string()).optional(),
   modelOverridesByOperation: z
