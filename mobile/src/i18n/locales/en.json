@@ -953,7 +953,8 @@
       "searchProjectsPlaceholder": "Search projects…",
       "searchProjects": "Search projects",
       "hover": "Hover",
-      "agentActivityLayout": "Agent activity layout"
+      "agentActivityLayout": "Agent activity layout",
+      "projectName": "Project name"
     },
     "workspaceOptionsSheet": {
       "projects": "Projects",
