@@ -39,7 +39,7 @@ export class MobileRelaySessionEstablisher {
   // tried first; otherwise current takes every admission and the next token always gets a 503.
   private directorTried = new Map<string, number>()
   private directorTrySeq = 0
-  // A refused pending gets a few slow reprobes for a late commit, then counts as refused for good.
+  // A refused pending (cell or director) gets a few slow reprobes for a late commit, then counts as refused.
   private pendingRefusals = 0
   private resolvedThisAttempt = false
 
@@ -132,9 +132,12 @@ export class MobileRelaySessionEstablisher {
         continue
       }
       // A director 401 can be stale (it reads a store an edge-hosted host may have outgrown), so try
-      // the next credential without condemning this one.
+      // the next credential without condemning this one; only speculative pending has a refusal budget.
       if (!isDirectorRefusal(result.error)) {
         break
+      }
+      if (usedPending && ++this.pendingRefusals >= PENDING_REFUSAL_RETRIES) {
+        this.args.controller.recordRejectedCredential(credential.version)
       }
     }
     return {
