@@ -69,7 +69,7 @@ describe('v47-v48 bot dispatch migrations', () => {
   function expectCurrentSchema(path: string, seededTaskId?: string): void {
     const db = new OrchestrationDb(path)
     try {
-      expect(db.db.pragma('user_version', { simple: true })).toBe(51)
+      expect(db.db.pragma('user_version', { simple: true })).toBe(52)
       expect(db.hasColumn('dispatch_contexts', 'chat_lineage')).toBe(true)
       expect(TAKE_COLUMNS.filter(([table, column]) => !db.hasColumn(table, column))).toEqual([])
       expect(db.hasColumn('dispatch_contexts', 'creator_turn_source')).toBe(true)
@@ -120,7 +120,7 @@ describe('v47-v48 bot dispatch migrations', () => {
     expectCurrentSchema(path, taskId)
   })
 
-  it('opens a fresh database at v48, and again unchanged', () => {
+  it('opens a fresh database with bot dispatch support, and again unchanged', () => {
     const path = dbPath()
     expectCurrentSchema(path)
     expectCurrentSchema(path)

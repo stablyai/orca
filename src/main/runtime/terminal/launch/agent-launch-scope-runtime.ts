@@ -51,12 +51,21 @@ export function agentLaunchProjectRuntime(
   agent: TuiAgent | undefined
 ): ProjectExecutionRuntimeResolution | undefined {
   const runtime = resolveLocalLaunchScopeRuntime(store, scope)
-  const onWindowsHost = runtime?.status === 'resolved' && runtime.runtime.kind === 'windows-host'
   // Folders can lack project runtime; local repositories have one.
   const mainHadNone = !resolveLocalProjectRuntimeForWorktreeId(store, scope.id)
+  return effectiveAgentLaunchProjectRuntime(runtime, scope.path, mainHadNone, agent)
+}
+
+export function effectiveAgentLaunchProjectRuntime(
+  runtime: ProjectExecutionRuntimeResolution | undefined,
+  workspacePath: string,
+  mainHadNone: boolean,
+  agent: TuiAgent | undefined
+): ProjectExecutionRuntimeResolution | undefined {
+  const onWindowsHost = runtime?.status === 'resolved' && runtime.runtime.kind === 'windows-host'
   const pathDecides =
     // UNC cwd proves WSL execution regardless of Windows-host settings; retain beyond the temporary exceptions.
-    (onWindowsHost && isWslUncPath(scope.path)) ||
+    (onWindowsHost && isWslUncPath(workspacePath)) ||
     // TEMPORARY (STA-10231): an explicit Windows host can't be told from the shipped default.
     (onWindowsHost && mainHadNone) ||
     // TEMPORARY (STA-10251): OpenCode models can't yet be verified inside WSL.

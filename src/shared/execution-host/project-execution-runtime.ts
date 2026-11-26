@@ -61,6 +61,7 @@ export type ResolveProjectExecutionRuntimeArgs = {
   globalWindowsRuntimeDefault?: unknown
   wslAvailable?: boolean
   availableWslDistros?: readonly string[] | null
+  availableWslDistroSet?: ReadonlySet<string>
 }
 
 type RuntimeSource = 'project-override' | 'global-default'
@@ -124,7 +125,8 @@ function resolveWslRuntime(
 
   const repairReason = getWslRepairReason(distro, {
     wslAvailable: args.wslAvailable,
-    availableWslDistros: args.availableWslDistros
+    availableWslDistros: args.availableWslDistros,
+    availableWslDistroSet: args.availableWslDistroSet
   })
   if (repairReason) {
     return {
@@ -172,12 +174,16 @@ function resolvedWindowsHost(
 
 function getWslRepairReason(
   distro: string,
-  context: LegacyWindowsRuntimeMigrationContext
+  context: LegacyWindowsRuntimeMigrationContext & { availableWslDistroSet?: ReadonlySet<string> }
 ): ProjectExecutionRuntimeRepairReason | null {
   if (context.wslAvailable === false) {
     return 'wsl-unavailable'
   }
-  if (isKnownMissingDistro(distro, context.availableWslDistros)) {
+  if (
+    context.availableWslDistroSet
+      ? !context.availableWslDistroSet.has(distro)
+      : isKnownMissingDistro(distro, context.availableWslDistros)
+  ) {
     return 'wsl-distro-missing'
   }
   return null
