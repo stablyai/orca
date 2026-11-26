@@ -119,7 +119,11 @@ export function accountHoldVerdict({
     rateLimitShowsRoom(reading)
       ? reading.updatedAt
       : (roomAt(account?.key, reading) ??
-        (!movedCut && account && reading && recent
+        (!movedCut &&
+        account &&
+        reading &&
+        recent &&
+        reading.updatedAt > (hold.spentSeenAt ?? Number.NEGATIVE_INFINITY)
           ? usageLimitWindowRenewedAt(cut, reading)
           : undefined))
   // Room read since a relaunch outranks any earlier spending, as it does for a resetless cut.
