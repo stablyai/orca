@@ -1,10 +1,10 @@
 // A room's newest post, for its sidebar row, when a member finishes a reply; the owner's send stamps its own.
 import {
-  botGroupCompletedReply,
   botGroupTurnItems,
   botGroupTurnOperation,
   isBotGroupMemberSession
 } from '../../shared/bots/bot-group'
+import { botGroupCompletedReply } from '../../shared/bots/bot-group-completed-reply'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { requireStructuredHost } from './bot-chat-session'
 import { runtimeBotGroups } from './bot-group-runtime'
