@@ -32,8 +32,11 @@ export function mobileWebAppBundleMaxAssets(routeCount, imageCount, catalogChunk
 
 // UI-language catalogs have their own allowance, like the font: one chunk per non-English locale,
 // fetched only for the active language, never before the first route. Code keeps its own fence.
+// Caps the summed JS locale chunks: current shells skip them and read one catalog over RPC, shells
+// without hostCatalogs still download them. 4 MiB fits every current locale filled to the English
+// catalog (3,928,912 bytes of chunks simulated, 2026-11-26).
 export const MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_CHUNKS = 10
-export const MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_BYTES = 3 * 1024 * 1024
+export const MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_BYTES = 4 * 1024 * 1024
 // A budget, not a frame limit: the host sends a catalog as plain JSON in one reply (gzipped when the phone
 // reads compressed frames) under the 4 MiB REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES. This keeps the first-paint
 // read short and the page's gzipped stored copy under DEVICE_STORE_MAX_VALUE_LENGTH.
