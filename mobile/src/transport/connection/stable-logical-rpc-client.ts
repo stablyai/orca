@@ -207,9 +207,10 @@ export function createStableLogicalRpcClient(
       const forwarder = forwardMigrationDialState({
         session: nextSession,
         snapshot: () => ({ state, suspended }),
-        // Ignore late dial phases after close so they cannot revive the disconnected state.
+        // Ignore late dial phases after close so they cannot revive the disconnected state, and while
+        // a refusal verdict stands: it outranks dial phases, and each would re-project every Home host.
         publish: (next) => {
-          if (!closed) {
+          if (!closed && connectionPath.getRelayHostReachability() !== 'credential-refused') {
             publishState(next)
           }
         }
