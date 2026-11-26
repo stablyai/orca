@@ -93,6 +93,20 @@ describe('text search runner publication', () => {
     expect(stored()?.loading).toBe(false)
   })
 
+  it('drops a settled error when a debounced rerun is cancelled', () => {
+    useAppStore.getState().updateFileSearchState(WORKTREE_ID, {
+      query: 'cart',
+      error: 'rg failed',
+      resultOwner: { worktreeId: WORKTREE_ID, runtimeEnvironmentId: null }
+    })
+    const { result } = render()
+    act(() => result.current.executeSearch('carts'))
+    act(() => result.current.cancelPendingSearch())
+    // An error left without its owner would render as the muted skipped-scan notice.
+    expect(stored()?.resultOwner).toBeNull()
+    expect(stored()?.error).toBeNull()
+  })
+
   it('lets an explicit seed search one character', async () => {
     const { result } = render()
     act(() => result.current.executeSearch('x', { allowShortQuery: true }))

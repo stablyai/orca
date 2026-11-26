@@ -80,7 +80,8 @@ export function useFileSearchRunner({
     }
     updateActiveSearchState({
       loading: false,
-      ...(interrupted ? { results: null, resultOwner: null } : {})
+      // Why: an ownerless leftover error would read as a skipped-scan notice on the next mount.
+      ...(interrupted ? { results: null, resultOwner: null, error: null } : {})
     })
   }, [updateActiveSearchState])
 

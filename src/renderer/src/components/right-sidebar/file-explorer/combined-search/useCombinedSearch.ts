@@ -48,6 +48,8 @@ export function useCombinedSearch({
 }): {
   clearQuery: () => void
   inputRef: React.RefObject<HTMLInputElement | null>
+  /** Text for the pane's persistent polite live region (a muted notice, else empty). */
+  announcement: string
   field: CombinedSearchFieldState
   filters: SearchFiltersProps
   results: CombinedSearchResultsState
@@ -234,6 +236,7 @@ export function useCombinedSearch({
   return {
     clearQuery,
     inputRef,
+    announcement: hasQuery ? (textNotice ?? '') : '',
     field: {
       query,
       loading: hasQuery && (namesLoading || textPending),

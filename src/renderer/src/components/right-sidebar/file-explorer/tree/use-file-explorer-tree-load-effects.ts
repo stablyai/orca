@@ -57,6 +57,7 @@ export function useFileExplorerTreeLoadEffects({
       staleRefreshRef.current = null
     }
   }, [visibleFilesWorktreePath])
+  const lastResetWorktreePathRef = useRef<string | null>(null)
   const followSymlinks = useAppStore((s) => s.settings?.followSymlinkedDirectories ?? false)
   const lastFollowSymlinks = useRef(followSymlinks)
   useEffect(() => {
@@ -65,11 +66,19 @@ export function useFileExplorerTreeLoadEffects({
       return
     }
     lastFollowSymlinks.current = followSymlinks
+    // A newly visible path gets its own full reset below, which already lists with the new setting.
+    if (
+      shouldResetFileExplorerForVisibleWorktree(
+        lastResetWorktreePathRef.current,
+        visibleFilesWorktreePath
+      )
+    ) {
+      return
+    }
     resetAndLoad()
   }, [followSymlinks, visibleFilesWorktreePath, resetAndLoad])
   const sshConnectedGeneration = useAppStore((s) => s.sshConnectedGeneration)
 
-  const lastResetWorktreePathRef = useRef<string | null>(null)
   useEffect(
     () => () => {
       lastResetWorktreePathRef.current = null

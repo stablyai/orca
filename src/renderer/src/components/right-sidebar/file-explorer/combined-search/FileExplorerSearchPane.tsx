@@ -153,6 +153,10 @@ export const FileExplorerSearchPane = React.memo(function FileExplorerSearchPane
         filters={search.filters}
         scopeLabel={scopeLabel}
       />
+      {/* Mounted for the pane's lifetime so a notice that appears later is announced. */}
+      <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {search.announcement}
+      </span>
       <div className="relative min-h-0 flex-1 overflow-hidden">
         {tree}
         {hasQuery ? (

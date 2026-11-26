@@ -217,5 +217,7 @@ describe('combined search text state', () => {
     expect(keys).not.toContain('no-results')
     expect(field().field.loading).toBe(false)
     expect(pending).toEqual([])
+    // The muted row is not a live region itself; the pane's persistent region carries this text.
+    expect(field().announcement).toBe('Not available here')
   })
 })

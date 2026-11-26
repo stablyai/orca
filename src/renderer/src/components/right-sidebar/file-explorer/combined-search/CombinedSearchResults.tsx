@@ -234,8 +234,9 @@ const CombinedSearchRowView = React.memo(function CombinedSearchRowView({
       )
     case 'error':
       // A known limit reads like No results; only real failures are red.
+      // The pane's persistent live region announces a muted notice; a fresh region here would not be.
       return row.muted ? (
-        <div role="status" className="flex h-6 items-center px-2 text-xs text-muted-foreground">
+        <div className="flex h-6 items-center px-2 text-xs text-muted-foreground">
           {row.message}
         </div>
       ) : (
