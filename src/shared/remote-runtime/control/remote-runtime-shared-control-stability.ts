@@ -1,3 +1,4 @@
+import { unrefTimer } from '../../timers/unref-timer'
 import type { RuntimeRpcResponse } from '../rpc/runtime-rpc-envelope'
 import { remoteRuntimeUnavailableError } from '../requests/remote-runtime-request-frames'
 import { SharedControlAppHeartbeat } from './remote-runtime-shared-control-app-heartbeat'
@@ -106,7 +107,7 @@ export class SharedControlReadinessTimer {
         'ready_timeout'
       )
     }, this.options.readyDeadlineMs ?? SHARED_CONTROL_READY_DEADLINE_MS)
-    timer.unref?.()
+    unrefTimer(timer)
     this.timer = timer
   }
 

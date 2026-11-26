@@ -1,3 +1,4 @@
+import { unrefTimer } from '../../timers/unref-timer'
 import type { SharedHostLinkEntry } from '../relay/client/shared-host-relay-link'
 import {
   isHostAttachTimeout,
@@ -118,7 +119,7 @@ export class RelayRuntimeDialMemory {
       dial()
     }
     const timer = setTimeout(release, waitMs)
-    timer.unref?.()
+    unrefTimer(timer)
     this.holdWaiters.add(release)
     return () => {
       clearTimeout(timer)
