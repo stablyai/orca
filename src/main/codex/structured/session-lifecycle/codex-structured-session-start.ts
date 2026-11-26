@@ -23,7 +23,10 @@ import { openCodexThread } from '../threads/codex-structured-thread-open'
 import { catchUpCodexThread } from '../threads/codex-structured-thread-catch-up'
 import { withCodexSkillRootsThreadConfig } from '../launch/codex-structured-skill-roots'
 import { codexReadOnlyMcpOff } from '../prompts/codex-structured-read-only'
-import { NATIVE_CHAT_SCRATCH_DIR_ENV } from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
+import {
+  withNativeChatVisualsEnv,
+  nativeChatVisualsWritableFolders
+} from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
 import {
   restoredCodexSessionOptions,
   reportedCodexSessionOptions
@@ -111,10 +114,7 @@ export async function openCodexStructuredSession(
     openInput.signal
   )
   current()
-  const commandEnv = {
-    ...launch.commandEnv,
-    ...(launch.visuals ? { [NATIVE_CHAT_SCRATCH_DIR_ENV]: launch.visuals.folder } : {})
-  }
+  const commandEnv = withNativeChatVisualsEnv({ ...launch.commandEnv }, launch.visuals ?? null)
   const opened = await waitForPromiseWithSignal(
     openCodexThread(
       connection,
@@ -186,7 +186,9 @@ export async function openCodexStructuredSession(
       ...(opened.sandbox ? { acquiredSandbox: opened.sandbox } : {}),
       launchSandboxIntact: true,
       cwd: launch.cwd,
-      ...(launch.visuals ? { visualsFolder: launch.visuals.folder } : {})
+      ...(launch.visuals
+        ? { storageFolders: nativeChatVisualsWritableFolders(launch.visuals) }
+        : {})
     },
     activeTurnIds: new Set(),
     abortedTurnIds: new Set(),

@@ -41,8 +41,7 @@ import { codexReadOnlyThreadConfig } from '../prompts/codex-structured-read-only
 import { codexOrcaHooksOffArgs } from './codex-structured-orca-hooks-off'
 import { getSystemCodexHomePath } from '../../configuration/homes/codex-home-paths'
 import {
-  LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
-  NATIVE_CHAT_SCRATCH_DIR_ENV,
+  nativeChatVisualsInheritedEnvToDelete,
   withNativeChatVisualsEnv
 } from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
 import { linkedSkillsSection } from '../../../native-chat/native-chat-skill-roots'
@@ -243,11 +242,7 @@ export function codexStructuredLaunchPart(
         visuals
       ),
       commandEnv: tools.commandEnv,
-      // Clear inherited scratch paths that may belong to another chat.
-      inheritedEnvToDelete: [
-        ...(visuals ? [] : [NATIVE_CHAT_SCRATCH_DIR_ENV]),
-        LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV
-      ],
+      inheritedEnvToDelete: nativeChatVisualsInheritedEnvToDelete(visuals),
       cliRuntimeCommand: command
     }
   }

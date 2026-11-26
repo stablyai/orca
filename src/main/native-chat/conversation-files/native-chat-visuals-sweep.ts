@@ -2,6 +2,7 @@
 // Restore legacy .expired folders still belonging to chats; cleanup failures never block startup.
 
 import type { Dirent } from 'node:fs'
+import { sweepChatTemporaryStorage } from './native-chat-temporary-storage'
 import { lstat, readdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
@@ -88,6 +89,25 @@ export async function sweepNativeChatVisualsFolders(
   return result
 }
 
+/** Temporary data follows the same roster of retained chats as the reports beside it. */
+export function sweepNativeChatTemporaryFolders(
+  deps: NativeChatVisualsSweepDeps,
+  recentUntil?: Map<string, number>,
+  isStopped: () => boolean = () => false
+): Promise<NativeChatVisualsSweepResult> {
+  return sweepChatTemporaryStorage(
+    deps.stateDirectory,
+    {
+      listHeld: () => {
+        const held = deps.listHeldSessionIds()
+        return held && new Set(held.map(nativeChatScratchFolderName))
+      },
+      recentUntil
+    },
+    isStopped
+  )
+}
+
 // Delay the first sweep to avoid competing with session restore.
 const FIRST_SWEEP_DELAY_MS = 2 * 60_000
 const SWEEP_INTERVAL_MS = 6 * 60 * 60_000
@@ -95,9 +115,19 @@ const SWEEP_INTERVAL_MS = 6 * 60 * 60_000
 export function scheduleNativeChatVisualsSweep(deps: NativeChatVisualsSweepDeps): () => void {
   let stopped = false
   let timer: ReturnType<typeof setTimeout> | null = null
+  const recentUntil = new Map<string, number>()
   const run = async (): Promise<void> => {
     try {
       await sweepNativeChatVisualsFolders(deps, () => stopped)
+      if (!stopped) {
+        const temporary = await sweepNativeChatTemporaryFolders(deps, recentUntil, () => stopped)
+        if (temporary.failed) {
+          deps.logger.warn('native-chat temporary cleanup was incomplete', {
+            scope: 'nativeChatVisuals.temporarySweep',
+            ...temporary
+          })
+        }
+      }
     } catch (error) {
       deps.logger.warn('native-chat visuals sweep failed', {
         scope: 'nativeChatVisuals.sweep',

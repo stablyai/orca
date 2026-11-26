@@ -2,7 +2,9 @@
 name: orca-chat-visuals
 description: Show a chart, diagram, table, report or mockup inline in this Orca chat as an HTML
   page. Use when a visual would help the user understand your answer. Only available when the
-  ORCA_CHAT_SCRATCH_DIR environment variable is set.
+  ORCA_CHAT_SCRATCH_DIR environment variable is set. For every task, keep reports in
+  ORCA_CHAT_SCRATCH_DIR and put disposable builds, tests, checkouts and private caches in
+  ORCA_CHAT_TEMP_DIR.
 user-invocable: false
 ---
 
@@ -16,7 +18,20 @@ clearer.
 - Save it in the folder named by `ORCA_CHAT_SCRATCH_DIR` (`printenv ORCA_CHAT_SCRATCH_DIR`; in
   PowerShell `$env:ORCA_CHAT_SCRATCH_DIR`). If it's unset or you can't write there, skip the visual.
   This folder belongs to this chat and is kept as long as the chat. Save files meant for the
-  project in the workspace.
+  project in the workspace. This is persistent artifact storage: do not put dependency installs,
+  package caches, source checkouts, build output or test environments here.
+- Use `ORCA_CHAT_TEMP_DIR` for disposable build/test data, if set: dependency installs, private
+  caches, source checkouts, build output and test environments. It is the same folder for the
+  whole chat. Give each task its own subfolder: Orca removes a subfolder once nothing in it has
+  changed for 7 days, unless it holds Git data, and removes the whole folder with the chat. Move
+  reports and files the user needs into `ORCA_CHAT_SCRATCH_DIR` before replying. If temporary
+  storage is unavailable, use the operating system temporary directory; do not fall back to
+  persistent artifact storage for builds. Keep source changes in the workspace or an Orca
+  worktree, and delete a temporary checkout when its task is done: it stays until the chat is
+  removed, and is removed with it.
+- Prefer the package manager's normal shared cache. When a task needs an isolated cache or
+  dependency tree, keep it in `ORCA_CHAT_TEMP_DIR`. Follow the project's existing dependency
+  installation rules.
 - One complete HTML file per visual, directly in that folder, under 512 KB, with a new file name
   each time (e.g. `latency-by-region-7c1e.html`): letters, digits, `.`, `_`, `-`, ending in `.html`.
 - Inline your styles, scripts and data. Libraries and fonts may load only from cdn.jsdelivr.net,

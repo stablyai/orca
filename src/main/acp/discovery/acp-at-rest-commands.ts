@@ -14,7 +14,8 @@ import { ORCA_AGENT_SESSION_CALLER_ENV_KEYS } from '../../ipc/pty/host-env/spawn
 import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../../runtime/agent-session/environment/structured-session-child-env'
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
-  NATIVE_CHAT_SCRATCH_DIR_ENV
+  NATIVE_CHAT_SCRATCH_DIR_ENV,
+  NATIVE_CHAT_TEMP_DIR_ENV
 } from '../../native-chat/conversation-files/native-chat-visuals-delivery'
 import { acpListingDependsOnRelease, acpModelListingForRelease } from './acp-model-discovery-policy'
 import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
@@ -130,6 +131,7 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
                 ...ORCA_AGENT_SESSION_CALLER_ENV_KEYS,
                 ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV,
                 NATIVE_CHAT_SCRATCH_DIR_ENV,
+                NATIVE_CHAT_TEMP_DIR_ENV,
                 LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV
               ]
             }
