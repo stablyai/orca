@@ -3,6 +3,7 @@ import { useId, useLayoutEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useTranslate } from '@/i18n/use-translate'
+import { middleEllipsis } from '@/lib/middle-ellipsis'
 import type { RemoteServerUpdateEntry } from '@/runtime/hosts/updates/remote-server-update-coordinator'
 
 const WAIT_FOR_EXPANSION = Symbol()
@@ -36,25 +37,10 @@ function ServerNameWithSuffix({
       // Measure in the dialog's own typography so the suffix fits beside the last visible glyph.
       element.append(probe)
       const fits = (candidate: string): boolean => {
-        probe.textContent = `${candidate}…${suffix}`
+        probe.textContent = `${candidate}${suffix}`
         return probe.getBoundingClientRect().width <= width
       }
-      if (!fits('')) {
-        setVisibleName('')
-        return
-      }
-      const graphemes = Array.from(new Intl.Segmenter().segment(name), ({ segment }) => segment)
-      let lower = 0
-      let upper = graphemes.length
-      while (lower < upper) {
-        const middle = Math.ceil((lower + upper) / 2)
-        if (fits(graphemes.slice(0, middle).join(''))) {
-          lower = middle
-        } else {
-          upper = middle - 1
-        }
-      }
-      setVisibleName(`${graphemes.slice(0, lower).join('')}…`)
+      setVisibleName(fits('…') ? middleEllipsis(name, fits) : '')
     }
     fitName()
     const observer = new ResizeObserver(fitName)
@@ -67,7 +53,7 @@ function ServerNameWithSuffix({
   }, [name, suffix])
 
   return (
-    <span ref={ref} className="relative min-w-0 overflow-hidden whitespace-nowrap">
+    <span ref={ref} title={name} className="relative min-w-0 overflow-hidden whitespace-nowrap">
       {/* Keep the available width independent of the display name after truncation. */}
       <span ref={fullNameRef} aria-hidden className="invisible inline-block">
         {`${name}${suffix}`}
@@ -128,7 +114,10 @@ export function ServerRestartConfirm({
           count: servers.length
         })
   // Keep the translated punctuation and word order when the visible name has to truncate.
-  const [beforeName, afterName] = question.split(NAME_TOKEN)
+  const nameParts = question.split(NAME_TOKEN)
+  const [beforeName, afterName] = nameParts.length === 2 ? nameParts : ['Restart ', '?']
+  const accessibleQuestion =
+    serverName === undefined ? question : `${beforeName}${serverName}${afterName}`
   return (
     <Popover
       open={open}
@@ -188,7 +177,7 @@ export function ServerRestartConfirm({
       <PopoverContent
         side="top"
         align="end"
-        aria-label={question.replace(NAME_TOKEN, () => serverName ?? '')}
+        aria-label={accessibleQuestion}
         aria-describedby={live ? warningId : undefined}
         className="@container/server-confirm w-[min(30rem,var(--radix-popover-trigger-width))]"
         onCloseAutoFocus={(event) => {
@@ -208,12 +197,12 @@ export function ServerRestartConfirm({
                   : 'flex min-w-0 overflow-hidden'
               }
             >
-              {afterName === undefined ? (
+              {serverName === undefined ? (
                 <span className="truncate">{question}</span>
               ) : (
                 <>
                   <span className="shrink-0 whitespace-pre">{beforeName}</span>
-                  <ServerNameWithSuffix name={serverName ?? ''} suffix={afterName} />
+                  <ServerNameWithSuffix name={serverName} suffix={afterName} />
                 </>
               )}
             </span>
@@ -233,7 +222,7 @@ export function ServerRestartConfirm({
             <Button
               type="button"
               variant="ghost"
-              size="sm"
+              size="responsive-sm"
               autoFocus
               onClick={() => setOpenKey(null)}
             >
@@ -241,7 +230,7 @@ export function ServerRestartConfirm({
             </Button>
             <Button
               type="button"
-              size="sm"
+              size="responsive-sm"
               disabled={disabled}
               onClick={() => {
                 confirmed.current = true
