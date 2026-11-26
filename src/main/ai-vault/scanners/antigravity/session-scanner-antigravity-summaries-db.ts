@@ -65,22 +65,22 @@ function readAntigravitySummaryWorkspacesFromDb(dbPath: string): Map<string, str
         if (!record || !id || id.length > MAX_ID_LENGTH) {
           continue
         }
-        const uriPath = parseWorkspaceUrisColumn(record.workspace_uris)
-        if (uriPath && uriPath.length <= MAX_PATH_LENGTH) {
-          workspaceById.set(id, uriPath)
-        }
-        if (hasParent) {
+        const parsed = parseWorkspaceUrisColumn(record.workspace_uris)
+        if (parsed.kind === 'resolved' && parsed.path.length <= MAX_PATH_LENGTH) {
+          workspaceById.set(id, parsed.path)
+        } else if (parsed.kind === 'empty' && hasParent) {
           const parentId = extractString(record.parent_conversation_id)
           if (parentId && parentId.length <= MAX_ID_LENGTH && parentId !== id) {
             parentById.set(id, parentId)
           }
         }
       }
+      const memo = new Map<string, string | null>()
       for (const id of parentById.keys()) {
         if (workspaceById.has(id)) {
           continue
         }
-        const inherited = resolveParentWorkspace(id, workspaceById, parentById)
+        const inherited = resolveParentWorkspace(id, workspaceById, parentById, memo)
         if (inherited) {
           workspaceById.set(id, inherited)
         }
@@ -90,31 +90,54 @@ function readAntigravitySummaryWorkspacesFromDb(dbPath: string): Map<string, str
   })
 }
 
-function parseWorkspaceUrisColumn(raw: unknown): string | undefined {
+type ParsedWorkspaceUris =
+  | { kind: 'empty' }
+  | { kind: 'resolved'; path: string }
+  | { kind: 'explicit-unresolved' }
+
+function parseWorkspaceUrisColumn(raw: unknown): ParsedWorkspaceUris {
   if (typeof raw !== 'string' || !raw.trim()) {
-    return undefined
+    return { kind: 'empty' }
   }
+  let parsed: unknown
   try {
-    return soleWorkspacePath(JSON.parse(raw))
+    parsed = JSON.parse(raw)
   } catch {
-    return undefined
+    return { kind: 'explicit-unresolved' }
   }
+  if (Array.isArray(parsed) && parsed.length === 0) {
+    return { kind: 'empty' }
+  }
+  const uriPath = soleWorkspacePath(parsed)
+  return uriPath ? { kind: 'resolved', path: uriPath } : { kind: 'explicit-unresolved' }
 }
 
 function resolveParentWorkspace(
   startId: string,
   workspaceById: Map<string, string>,
-  parentById: Map<string, string>
+  parentById: Map<string, string>,
+  memo: Map<string, string | null>
 ): string | null {
-  const visited = new Set<string>([startId])
-  let current = parentById.get(startId)
+  const path: string[] = []
+  const visited = new Set<string>()
+  let current: string | undefined = startId
+  let result: string | null = null
   while (current && !visited.has(current)) {
+    if (memo.has(current)) {
+      result = memo.get(current) ?? null
+      break
+    }
     const workspace = workspaceById.get(current)
     if (workspace) {
-      return workspace
+      result = workspace
+      break
     }
     visited.add(current)
+    path.push(current)
     current = parentById.get(current)
   }
-  return null
+  for (const id of path) {
+    memo.set(id, result)
+  }
+  return result
 }

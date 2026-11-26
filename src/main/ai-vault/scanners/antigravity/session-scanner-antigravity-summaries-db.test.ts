@@ -167,4 +167,31 @@ describe('Antigravity conversation_summaries.db workspace resolution', () => {
     ])
     expect(await readLocalAntigravitySummaryWorkspaces(cyclePath)).toEqual(new Map())
   })
+
+  it('does not inherit parent workspace when a child explicitly lists multiple workspaces', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-antigravity-summaries-multi-'))
+    tempRoots.push(root)
+    const dbPath = join(root, 'conversation_summaries.db')
+    writeSummariesDb(dbPath, [
+      {
+        conversation_id: 'parent',
+        workspace_uris: JSON.stringify(['file:///parent'])
+      },
+      {
+        conversation_id: 'child-empty-array',
+        workspace_uris: '[]',
+        parent_conversation_id: 'parent'
+      },
+      {
+        conversation_id: 'child-multi',
+        workspace_uris: JSON.stringify(['file:///child-a', 'file:///child-b']),
+        parent_conversation_id: 'parent'
+      }
+    ])
+
+    const resolved = await readLocalAntigravitySummaryWorkspaces(dbPath)
+    expect(resolved.get('parent')).toBe('/parent')
+    expect(resolved.get('child-empty-array')).toBe('/parent')
+    expect(resolved.has('child-multi')).toBe(false)
+  })
 })
