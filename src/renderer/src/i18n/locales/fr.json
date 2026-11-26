@@ -19975,7 +19975,6 @@
         "expand": "Développer"
       },
       "question": {
-        "step": "Étape {{value0}}",
         "otherPlaceholder": "Saisissez votre réponse",
         "cancel": "Annuler",
         "send": "Valider",
@@ -19990,7 +19989,9 @@
         "previous": "Question précédente",
         "nextQuestion": "Question suivante",
         "back": "Retour",
-        "skipAndSubmit": "Passer et envoyer"
+        "skipAndSubmit": "Passer et envoyer",
+        "stepLabel": "{{value0}}, {{value1}} sur {{value2}} : {{value3}}",
+        "questionStepLabel": "{{value0}}, {{value1}} sur {{value2}}"
       },
       "approval": {
         "needsNewerOrca": "Cette demande nécessite une version plus récente d'Orca.",

@@ -21359,7 +21359,6 @@
         "expand": "展開"
       },
       "question": {
-        "step": "步驟 {{value0}}",
         "otherPlaceholder": "輸入你的回答",
         "cancel": "取消",
         "send": "送出",
@@ -21374,7 +21373,9 @@
         "previous": "上一個問題",
         "nextQuestion": "下一個問題",
         "back": "返回",
-        "skipAndSubmit": "略過並提交"
+        "skipAndSubmit": "略過並提交",
+        "stepLabel": "{{value0}}，第 {{value1}} 個，共 {{value2}} 個：{{value3}}",
+        "questionStepLabel": "{{value0}}，第 {{value1}} 個，共 {{value2}} 個"
       },
       "ask": {
         "awaiting": "等待使用者輸入：",

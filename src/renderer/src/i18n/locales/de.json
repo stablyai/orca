@@ -20135,7 +20135,6 @@
         "expand": "Ausklappen"
       },
       "question": {
-        "step": "Schritt {{value0}}",
         "otherPlaceholder": "Antwort eingeben",
         "cancel": "Abbrechen",
         "send": "Absenden",
@@ -20150,7 +20149,9 @@
         "previous": "Vorherige Frage",
         "nextQuestion": "Nächste Frage",
         "back": "Zurück",
-        "skipAndSubmit": "Überspringen und senden"
+        "skipAndSubmit": "Überspringen und senden",
+        "stepLabel": "{{value0}}, {{value1}} von {{value2}}: {{value3}}",
+        "questionStepLabel": "{{value0}}, {{value1}} von {{value2}}"
       },
       "ask": {
         "awaiting": "Warten auf Benutzereingabe:",
