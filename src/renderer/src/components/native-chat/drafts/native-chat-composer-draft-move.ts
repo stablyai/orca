@@ -3,6 +3,7 @@ import {
   readNativeChatComposerDraft
 } from './native-chat-composer-draft-store'
 import { deleteNativeChatComposerDraft } from './native-chat-composer-draft-removal'
+import { sweepLeftoverMovedNativeChatDrafts } from './native-chat-moved-draft-adoption'
 import {
   deferredRemovals,
   records,
@@ -21,6 +22,7 @@ import {
 import {
   captureNativeChatAttachmentNotes,
   moveNativeChatAttachmentNotes,
+  retryNativeChatAttachmentNotesAdoption,
   saveNativeChatAttachmentNotes
 } from '../media/notes/native-chat-attachment-notes'
 import {
@@ -47,7 +49,11 @@ setMovedNativeChatDraftSourceRelease({
     }
   },
   // Both run: each retries its own refused writes.
-  save: () => [saveNativeChatAttachmentNotes(), saveNativeChatHeldNotes()].every(Boolean)
+  save: () => [saveNativeChatAttachmentNotes(), saveNativeChatHeldNotes()].every(Boolean),
+  adopt: () => {
+    retryNativeChatAttachmentNotesAdoption()
+    sweepLeftoverMovedNativeChatDrafts()
+  }
 })
 
 /** Transfer the live draft synchronously; storage acknowledgement only governs source cleanup. */

@@ -59,11 +59,83 @@ const storage = createNativeChatNotesStorage<NativeChatAttachmentNotes>(STORAGE_
   isNotes(value) ? value : null
 )
 
+// Attachment ids are unique, so notes found under another scope for an image this draft holds are
+// its own, left behind by a move whose copy storage refused (and that a restart cut short). They
+// are read from there and adopted: copied under this draft's own key once storage takes it, after
+// which the scope they were left in lets go of them (see the draft move).
+const adoptions = new Map<string, string>()
+let adoptionQueued = false
+let onAdopted: (from: string, to: string, attachmentId: string) => void = () => {}
+
+/** Sets what happens once notes left under another scope are saved under their draft's own. */
+export function setNativeChatAttachmentNotesAdoption(
+  next: (from: string, to: string, attachmentId: string) => void
+): void {
+  onAdopted = next
+}
+
+/** Adopts notes left under another scope wherever storage now takes them; retried on later saves. */
+export function retryNativeChatAttachmentNotesAdoption(): void {
+  if (!nativeChatComposerDraftsHydrated()) {
+    return
+  }
+  for (const [own, left] of adoptions) {
+    const entry = storage.get(left)
+    if (!entry) {
+      adoptions.delete(own)
+      continue
+    }
+    // Copied already but refused: only a save that lands counts.
+    const saved = storage.get(own)
+      ? storage.save()
+      : storage.update((entries) => entries.set(own, entry).has(own))
+    if (!saved) {
+      continue
+    }
+    adoptions.delete(own)
+    const scopeOf = (key: string): string => key.slice(0, key.indexOf('\u0000'))
+    onAdopted(scopeOf(left), scopeOf(own), own.slice(own.indexOf('\u0000') + 1))
+  }
+}
+
+function leftElsewhere(own: string, attachmentId: string): NativeChatAttachmentNotes | null {
+  const suffix = `\u0000${attachmentId}`
+  const left = storage.keys().find((key) => key !== own && key.endsWith(suffix))
+  if (!left) {
+    return null
+  }
+  if (!adoptions.has(own)) {
+    adoptions.set(own, left)
+    if (!adoptionQueued) {
+      adoptionQueued = true
+      queueMicrotask(() => {
+        adoptionQueued = false
+        retryNativeChatAttachmentNotesAdoption()
+      })
+    }
+  }
+  return storage.get(left) ?? null
+}
+
+/** For an image whose notes were left under another scope: whether they are saved under this
+ *  draft's own key yet. Undefined when the image has no notes anywhere. */
+export function hasOwnNativeChatAttachmentNotes(
+  scopeKey: string,
+  attachmentId: string
+): boolean | undefined {
+  const own = keyOf(scopeKey, attachmentId)
+  if (storage.get(own)) {
+    return true
+  }
+  return storage.keys().some((key) => key.endsWith(`\u0000${attachmentId}`)) ? false : undefined
+}
+
 export function readNativeChatAttachmentNotes(
   scopeKey: string,
   attachmentId: string
 ): NativeChatAttachmentNotes | null {
-  return storage.get(keyOf(scopeKey, attachmentId)) ?? null
+  const own = keyOf(scopeKey, attachmentId)
+  return storage.get(own) ?? leftElsewhere(own, attachmentId)
 }
 
 export function setNativeChatAttachmentNotes(

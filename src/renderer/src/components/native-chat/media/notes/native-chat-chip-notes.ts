@@ -6,6 +6,8 @@ import {
 import { chatImageAccess } from '@/lib/files/access/local-file-access'
 import { removeImageWithReferences } from '../../composer/editor/native-chat-composer-image-references'
 import { whenNativeChatComposerDraftSaved } from '../../drafts/native-chat-composer-draft-saved'
+// Chips show notes a move left under its source; this adopts them where their draft is now.
+import '../../drafts/native-chat-moved-draft-adoption'
 import {
   claimNativeChatNotesEdit,
   nativeChatNotesEditClaimed,

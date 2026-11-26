@@ -1,11 +1,38 @@
 import { useLayoutEffect, useRef, type RefObject } from 'react'
 
 /** One open viewer, across the images it steps through (each mounts its own body): where focus was
- *  when it opened, and how many bodies are mounted. */
-export type NativeChatMediaViewerFocusSession = { opener: Element | null; bodies: number }
+ *  when it opened, the opener's ancestors (to find its replacement), and how many bodies are
+ *  mounted. */
+export type NativeChatMediaViewerFocusSession = {
+  opener: Element | null
+  around: Element[]
+  bodies: number
+}
 
 export function useNativeChatMediaViewerFocusSession(): RefObject<NativeChatMediaViewerFocusSession> {
-  return useRef<NativeChatMediaViewerFocusSession>({ opener: null, bodies: 0 })
+  return useRef<NativeChatMediaViewerFocusSession>({ opener: null, around: [], bodies: 0 })
+}
+
+/** How far up from the opener its replacement is looked for. */
+const AROUND_LEVELS = 4
+
+/** What took the opener's place once it is gone (a chip the viewer's marked copy replaced): the last
+ *  control like it, by tag and label up to its first colon, in its nearest ancestor still on the
+ *  page. Failing that, that ancestor's first focusable control. */
+function replacementFor(opener: Element, around: readonly Element[]): HTMLElement | null {
+  const label = (element: Element): string =>
+    (element.getAttribute('aria-label') ?? '').split(':')[0]
+  const container = around.find((element) => element.isConnected)
+  if (!container) {
+    return null
+  }
+  const controls = [
+    ...container.querySelectorAll<HTMLElement>('button, a[href], [tabindex]:not([tabindex="-1"])')
+  ]
+  const alike = controls.filter(
+    (control) => control.tagName === opener.tagName && label(control) === label(opener)
+  )
+  return alike.at(-1) ?? controls[0] ?? null
 }
 
 function enterBody(session: NativeChatMediaViewerFocusSession): () => void {
@@ -51,6 +78,14 @@ function openBody(session: NativeChatMediaViewerFocusSession, event: Event): voi
     const active = document.activeElement
     session.opener = nominated ?? (active && active !== document.body ? active : pressed)
     nominated = null
+    session.around = []
+    for (
+      let element = session.opener?.parentElement ?? null;
+      element && session.around.length < AROUND_LEVELS;
+      element = element.parentElement
+    ) {
+      session.around.push(element)
+    }
   }
   event.preventDefault()
 }
@@ -62,10 +97,18 @@ function closeBody(session: NativeChatMediaViewerFocusSession, event: Event): vo
     return
   }
   const previous = session.opener
+  const around = session.around
   session.opener = null
-  if (previous instanceof HTMLElement && previous.isConnected) {
+  session.around = []
+  const target =
+    previous instanceof HTMLElement && previous.isConnected
+      ? previous
+      : previous
+        ? replacementFor(previous, around)
+        : null
+  if (target) {
     event.preventDefault()
-    previous.focus({ preventScroll: true })
+    target.focus({ preventScroll: true })
   }
 }
 

@@ -13,9 +13,11 @@ type KeptNotes = {
   capture: (sourceScope: string) => () => void
   /** Retries notes writes storage refused; true once the copies at the destination are saved. */
   save: () => boolean
+  /** Retries adopting notes a move left under its source (see the draft move). */
+  adopt: () => void
 }
 
-let kept: KeptNotes = { capture: () => () => {}, save: () => true }
+let kept: KeptNotes = { capture: () => () => {}, save: () => true, adopt: () => {} }
 // What each moved draft's source lets go of once it is gone for good.
 const copies = new Map<string, () => void>()
 // Sources whose removal is being written; their notes go once it is confirmed.
@@ -91,6 +93,7 @@ export function movedNativeChatDraftSourceReused(sourceScope: string): void {
 
 /** Lets go of reused sources' copies once the notes copied away from them are saved. */
 export function retryMovedNativeChatDraftReleases(): void {
+  kept.adopt()
   if (releaseWhenSaved.length === 0 || !kept.save()) {
     return
   }

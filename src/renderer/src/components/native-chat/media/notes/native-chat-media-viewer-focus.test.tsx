@@ -101,3 +101,59 @@ it('Esc after stepping returns focus to the tile of an image the chat’s image 
   await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull())
   await vi.waitFor(() => expect(document.activeElement).toBe(tile))
 })
+
+/** A message box chip whose viewer, on close, replaces it with its marked copy (a new chip). */
+function ChipRow(): React.JSX.Element {
+  const [open, setOpen] = useState(false)
+  const [generation, setGeneration] = useState(0)
+  const row = useRef<HTMLDivElement>(null)
+  const name = generation === 0 ? 'a.png' : 'a-notes.png'
+  return (
+    <div ref={row}>
+      <div key={generation}>
+        <button
+          type="button"
+          data-chip={generation}
+          aria-label={`View image: ${name}`}
+          onClick={() => setOpen(true)}
+        >
+          {name}
+        </button>
+        <button type="button" aria-label="Remove image">
+          ×
+        </button>
+      </div>
+      <NativeChatMediaViewer
+        open={open}
+        onOpenChange={(next) => {
+          if (!next) {
+            setGeneration((value) => value + 1)
+          }
+          setOpen(next)
+        }}
+        src={SRC}
+        title={name}
+        source={{ path: '/a.png' }}
+        opener={row}
+        annotatable={false}
+      />
+    </div>
+  )
+}
+
+it('closing a chip its marked copy replaced returns focus to the new chip, not the page', async () => {
+  const view = render(<ChipRow />)
+  const chip = view.container.querySelector<HTMLButtonElement>('[data-chip="0"]')!
+  chip.focus()
+  act(() => {
+    chip.click()
+  })
+  await openWithFocus()
+  act(() => {
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
+  })
+  await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull())
+  await vi.waitFor(() =>
+    expect(document.activeElement).toBe(view.container.querySelector('[data-chip="1"]'))
+  )
+})

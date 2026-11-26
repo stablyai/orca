@@ -134,7 +134,7 @@ it('stepping to another image keeps the opener, and closing returns focus to it'
   const opener = document.createElement('button')
   document.body.append(opener)
   opener.focus()
-  const state: NativeChatMediaViewerFocusSession = { opener: null, bodies: 0 }
+  const state: NativeChatMediaViewerFocusSession = { opener: null, around: [], bodies: 0 }
   const session = { current: state }
   const event = (): Event => new Event('focus', { cancelable: true })
   // First image: records the opener.
