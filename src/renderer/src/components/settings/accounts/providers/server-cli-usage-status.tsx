@@ -2,12 +2,21 @@ import { useCallback, useSyncExternalStore } from 'react'
 import { Loader2, RefreshCw, ShieldCheck } from 'lucide-react'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
+import {
+  readOwnerAccounts,
+  subscribeOwnerAccounts,
+  type OwnerAccountsFailure
+} from '@/runtime/provider-accounts/observations/owner-accounts-stream'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { ProviderRateLimits } from '../../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { createEmptyRateLimitState } from '../../../../../../shared/agent-usage/rate-limits/rate-limit-state-factory'
 import { getProviderUsageStatusLabel } from '../../../../../../shared/agent-usage/status-copy/usage-error-copy'
-import { useAppStore } from '../../../../store/index'
 import { Button } from '../../../ui/button'
-import { useAccountOwnerUsage } from '../../../status-bar/usage/use-owner-usage-rate-limits'
+import { describeUnverifiableOwner } from '../../../status-bar/usage/owner-usage-rate-limits'
+import {
+  refreshOwnerAccountsUsage,
+  useAccountOwnerUsage
+} from '../../../status-bar/usage/use-owner-usage-rate-limits'
 
 export type ServerCliUsage = {
   owner: RuntimeClientTarget
@@ -22,7 +31,11 @@ const FIX_BY_SIGN_IN_FAILURES: ReadonlySet<string> = new Set([
   'missing-credentials'
 ])
 
+// Why: nothing from this device may stand in for the server's usage.
+const NO_LOCAL_USAGE = createEmptyRateLimitState()
+
 const refreshesInFlight = new Map<string, Promise<void>>()
+const refreshErrors = new Map<string, string>()
 const refreshListeners = new Set<() => void>()
 
 function notifyRefreshListeners(): void {
@@ -37,25 +50,32 @@ function subscribeRefreshes(listener: () => void): () => void {
 }
 
 // Why: a forced read refreshes every provider on the host, so both buttons share one.
-function joinHostRefresh(hostKey: string, run: () => Promise<void>): Promise<void> {
+function joinHostRefresh(hostKey: string): Promise<void> {
   const running = refreshesInFlight.get(hostKey)
   if (running) {
     return running
   }
-  const started = run().finally(() => {
-    refreshesInFlight.delete(hostKey)
-    notifyRefreshListeners()
-  })
+  refreshErrors.delete(hostKey)
+  const started = refreshOwnerAccountsUsage(hostKey)
+    .catch((cause: unknown) => {
+      refreshErrors.set(hostKey, cause instanceof Error ? cause.message : String(cause))
+    })
+    .finally(() => {
+      refreshesInFlight.delete(hostKey)
+      notifyRefreshListeners()
+    })
   refreshesInFlight.set(hostKey, started)
   notifyRefreshListeners()
   return started
 }
 
-function hasUsageReading(provider: ServerCliProvider, usage: ProviderRateLimits): boolean {
+function hasUsageWindow(provider: ServerCliProvider, usage: ProviderRateLimits): boolean {
   return provider === 'grok'
     ? Boolean(usage.weekly || usage.monthly)
     : (usage.buckets?.length ?? 0) > 0 || Boolean(usage.monthly)
 }
+
+const NO_HOST_STREAM = (): (() => void) => () => {}
 
 export function useServerCliUsage(
   server: ServerCliUsage,
@@ -63,32 +83,54 @@ export function useServerCliUsage(
 ): {
   usage: ProviderRateLimits | null
   usageKnown: boolean
+  hostFailure: OwnerAccountsFailure | null
+  hostAnswered: boolean
+  authConfigured: boolean
   refreshing: boolean
+  refreshError: string | null
   refresh: (() => void) | null
 } {
-  const local = useAppStore((s) => s.rateLimits)
   // Why: a non-host owner would resolve to this device's usage, which must never sit under a server header.
   const owner =
     server.owner.kind === 'environment' ? { target: server.owner, wslHostDistro: null } : null
-  const { rateLimits, refreshRemote } = useAccountOwnerUsage(owner, local, server.label)
-  const hostKey = server.owner.kind === 'environment' ? server.owner.environmentId : ''
+  const { rateLimits } = useAccountOwnerUsage(owner, NO_LOCAL_USAGE, server.label)
+  const hostKey = server.owner.kind === 'environment' ? server.owner.environmentId : null
+  const subscribeHost = useCallback(
+    (listener: () => void) =>
+      hostKey ? subscribeOwnerAccounts(hostKey, listener) : NO_HOST_STREAM(),
+    [hostKey]
+  )
+  const hostState = useSyncExternalStore(subscribeHost, () =>
+    hostKey ? readOwnerAccounts(hostKey) : null
+  )
   const refreshing = useSyncExternalStore(
     subscribeRefreshes,
-    () => refreshesInFlight.has(hostKey),
+    () => hostKey !== null && refreshesInFlight.has(hostKey),
     () => false
   )
+  const refreshError = useSyncExternalStore(
+    subscribeRefreshes,
+    () => (hostKey ? (refreshErrors.get(hostKey) ?? null) : null),
+    () => null
+  )
   const refresh = useCallback(() => {
-    if (refreshRemote) {
-      void joinHostRefresh(hostKey, refreshRemote)
+    if (hostKey) {
+      void joinHostRefresh(hostKey)
     }
-  }, [hostKey, refreshRemote])
+  }, [hostKey])
   const usage = rateLimits[provider]
   return {
     usage,
-    // Why: the unreachable-host message already shows in the status line; repeating it as a usage row misleads.
-    usageKnown: usage !== null && !usage.usageMetadata?.unverifiableOwner,
+    // Why: a row without a window would repeat the status line.
+    usageKnown:
+      usage !== null && hasUsageWindow(provider, usage) && !usage.usageMetadata?.unverifiableOwner,
+    authConfigured:
+      provider === 'grok' ? rateLimits.grokAuthConfigured : rateLimits.cursorAuthConfigured,
+    hostFailure: hostState?.failure ?? null,
+    hostAnswered: hostState !== null,
     refreshing,
-    refresh: refreshRemote ? refresh : null
+    refreshError,
+    refresh: hostKey ? refresh : null
   }
 }
 
@@ -96,12 +138,31 @@ function describeServerCliStatus(
   provider: ServerCliProvider,
   label: string,
   usage: ProviderRateLimits | null,
+  host: {
+    failure: OwnerAccountsFailure | null
+    answered: boolean
+    authConfigured: boolean
+  },
   t: Translate
 ): { title: string; body: string | null; signedIn: boolean } {
+  const grok = provider === 'grok'
+  const checking = {
+    title: t(
+      'auto.components.settings.ServerCliUsageStatus.checkingOn',
+      'Checking usage on {{host}}…',
+      { host: label }
+    ),
+    body: null,
+    signedIn: false
+  }
   if (!usage) {
+    if (!host.answered) {
+      return checking
+    }
     return {
-      title:
-        provider === 'grok'
+      title: host.failure
+        ? describeUnverifiableOwner(label, host.failure, t)
+        : grok
           ? t(
               'auto.components.settings.ServerCliUsageStatus.notReportedGrok',
               '{{host}} has not reported Grok usage',
@@ -117,57 +178,84 @@ function describeServerCliStatus(
     }
   }
   if (usage.status === 'fetching' || usage.status === 'idle') {
-    return {
-      title: t(
-        'auto.components.settings.ServerCliUsageStatus.checkingOn',
-        'Checking usage on {{host}}…',
-        { host: label }
-      ),
-      body: null,
-      signedIn: false
-    }
+    return checking
   }
-  if (usage.status === 'ok' && hasUsageReading(provider, usage)) {
+  if (usage.status === 'ok') {
     return {
       title: t(
         'auto.components.settings.ServerCliUsageStatus.signedInOn',
         'Signed in on {{host}}',
         { host: label }
       ),
-      body:
-        provider === 'grok'
-          ? t(
-              'auto.components.settings.ServerCliUsageStatus.readsGrok',
-              'Orca reads the Grok CLI sign-in on {{host}}.',
-              { host: label }
-            )
-          : t(
-              'auto.components.settings.ServerCliUsageStatus.readsCursor',
-              'Orca reads the Cursor sign-in on {{host}}.',
-              { host: label }
-            ),
+      body: grok
+        ? t(
+            'auto.components.settings.ServerCliUsageStatus.readsGrok',
+            'Orca reads the Grok CLI sign-in on {{host}}.',
+            { host: label }
+          )
+        : t(
+            'auto.components.settings.ServerCliUsageStatus.readsCursor',
+            'Orca reads the Cursor sign-in on {{host}}.',
+            { host: label }
+          ),
       signedIn: true
     }
   }
+  const hint = grok
+    ? t(
+        'auto.components.settings.ServerCliUsageStatus.grokHint',
+        'Run grok on {{host}} and wait for it to start, signing in if asked. Then click Refresh usage.',
+        { host: label }
+      )
+    : t(
+        'auto.components.settings.ServerCliUsageStatus.cursorHint',
+        'Sign in to Cursor on {{host}} (Cursor IDE or cursor-agent login), then click Refresh usage.',
+        { host: label }
+      )
+  // Why: the host's own wording says "this computer", which reads as this desktop under a server header.
+  if (usage.status === 'unavailable') {
+    if (host.authConfigured) {
+      return {
+        title: grok
+          ? t(
+              'auto.components.settings.ServerCliUsageStatus.reportedNoGrok',
+              '{{host}} reported no Grok usage',
+              { host: label }
+            )
+          : t(
+              'auto.components.settings.ServerCliUsageStatus.reportedNoCursor',
+              '{{host}} reported no Cursor usage',
+              { host: label }
+            ),
+        body: null,
+        signedIn: false
+      }
+    }
+    return {
+      title: grok
+        ? t(
+            'auto.components.settings.ServerCliUsageStatus.noSignInGrok',
+            'No Grok sign-in on {{host}}',
+            { host: label }
+          )
+        : t(
+            'auto.components.settings.ServerCliUsageStatus.noSignInCursor',
+            'No Cursor sign-in on {{host}}',
+            { host: label }
+          ),
+      body: hint,
+      signedIn: false
+    }
+  }
   const failureKind = usage.usageMetadata?.failureKind
-  const needsSignIn =
-    (failureKind !== undefined && FIX_BY_SIGN_IN_FAILURES.has(failureKind)) ||
-    usage.usageMetadata?.ownerNotSetUp !== undefined
-  const hint =
-    provider === 'grok'
-      ? t(
-          'auto.components.settings.ServerCliUsageStatus.grokHint',
-          'Run grok on {{host}} and wait for it to start, signing in if asked. Then click Refresh usage.',
-          { host: label }
-        )
-      : t(
-          'auto.components.settings.ServerCliUsageStatus.cursorHint',
-          'Sign in to Cursor on {{host}} (Cursor IDE or cursor-agent login), then click Refresh usage.',
-          { host: label }
-        )
   return {
     title: getProviderUsageStatusLabel(usage, t),
-    body: needsSignIn ? hint : (usage.error ?? null),
+    // Why: unverifiableOwner text is our own copy naming the host; any other error text is the host's.
+    body: usage.usageMetadata?.unverifiableOwner
+      ? usage.error
+      : failureKind !== undefined && FIX_BY_SIGN_IN_FAILURES.has(failureKind)
+        ? hint
+        : null,
     signedIn: false
   }
 }
@@ -176,17 +264,21 @@ export function ServerCliUsageRow({
   provider,
   label,
   usage,
+  host,
   refreshing,
+  refreshError,
   onRefresh
 }: {
   provider: ServerCliProvider
   label: string
   usage: ProviderRateLimits | null
+  host: { failure: OwnerAccountsFailure | null; answered: boolean; authConfigured: boolean }
   refreshing: boolean
+  refreshError: string | null
   onRefresh: (() => void) | null
 }): React.JSX.Element {
   const t = useTranslate()
-  const { title, body, signedIn } = describeServerCliStatus(provider, label, usage, t)
+  const { title, body, signedIn } = describeServerCliStatus(provider, label, usage, host, t)
 
   return (
     <div className="flex items-start gap-3 py-3">
@@ -199,6 +291,7 @@ export function ServerCliUsageRow({
       <div className="min-w-0 flex-1 space-y-1">
         <p className="text-xs font-medium">{title}</p>
         {body ? <p className="text-xs text-muted-foreground">{body}</p> : null}
+        {refreshError ? <p className="text-xs text-destructive">{refreshError}</p> : null}
       </div>
       <Button
         variant="outline"
