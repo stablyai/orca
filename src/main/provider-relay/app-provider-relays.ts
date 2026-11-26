@@ -205,8 +205,15 @@ async function reattachListed(launch: ProviderRelayLaunch): Promise<RelayedProvi
         rememberKeptProviderRelay(launch.chatKey, relay)
         handedBack.add(launch.chatKey)
       }
-      // A reattached agent is relayed before its placement commits: quit hands it back even then.
-      const handOff = () => (quitting ? detachProviderRelayForQuit(launch.chatKey, null) : null)
+      // A reattached agent is relayed before its placement commits: quit hands it back even then,
+      // listed again first so an abandoned start's rebind finds it kept, not gone.
+      const handOff = () => {
+        if (!quitting) {
+          return null
+        }
+        rememberKeptProviderRelay(launch.chatKey, relay)
+        return detachProviderRelayForQuit(launch.chatKey, null)
+      }
       const managed = relayedManagedProcess(child, handOff)
       return { managed, child, reattached: true, keep }
     }
