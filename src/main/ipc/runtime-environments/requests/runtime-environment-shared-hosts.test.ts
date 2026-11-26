@@ -199,6 +199,13 @@ it(
       { timeout: 10_000, interval: 5 }
     )
     expect(new Set(seen)).toEqual(new Set(['offline']))
+    // The host is back: an asked-for dial (a phone's key, the cloud saying it is online) is awaited,
+    // not answered from the away state, and a second ask joins it rather than reopening it.
+    host.cellState.hostOffline = false
+    const link = hosts['linkFor'](hosts.store.get('share-1')!)
+    const [first, second] = await Promise.all([link.connect(), link.connect()])
+    expect([first, second]).toEqual(['live', 'live'])
+    expect(link.current()).toBe('live')
 
     // The owner stops sharing it: nothing of it stays open or redials, and a call answers as ended.
     const paired = getPreferredPairedRuntimeConnection(sharedHostEnvironment(ENVIRONMENT_ID)!)

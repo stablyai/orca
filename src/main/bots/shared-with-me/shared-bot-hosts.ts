@@ -120,6 +120,10 @@ export class SharedBotHosts {
       link.close()
     }
     this.links.clear()
+    // As an ended share's: its host's connections go even where no link was made here.
+    for (const entry of this.store.list()) {
+      endSharedBotHostConnections(entry.environmentId)
+    }
   }
 
   /** Every change to the kept shares so far is on disk. */

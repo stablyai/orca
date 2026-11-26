@@ -14,6 +14,7 @@ import {
   sendRemoteRuntimeSharedControlRequest
 } from '../../ipc/runtime-environments/connections/runtime-environment-request-connections'
 import { onRuntimeEnvironmentDiagnostics } from '../../ipc/runtime-environments/status/runtime-environment-diagnostics-broadcast'
+import { clearRelayDialHolds } from '../../ipc/runtime-environments/connections/runtime-environment-relay-link'
 
 type Settled = Exclude<SharedHostLink, 'connecting'>
 
@@ -38,11 +39,11 @@ export function sharedBotHostLink(deps: {
   onLinkChanged: (link: SharedHostLink, previous: SharedHostLink) => void
 }): SharedBotHostLink {
   const { environmentId } = deps
-  let waiters: ((settled: Settled) => void)[] = []
-  let settleTimer: ReturnType<typeof setTimeout> | null = null
-  // Ready is live, and a closed connection away (unpaired once its credential is gone). A dial reads
-  // as connecting only until the host first answers or is found away: a redial behind a drop, or
-  // inside Relay's host-offline hold (one open channel the whole outage), stays away until it answers.
+  let closed = false
+  // Ready is live, and a closed connection away (unpaired once its credential is gone). The link
+  // reads as connecting only until the host first answers or is found away: a redial behind a drop,
+  // or inside Relay's host-offline hold (one open channel the whole outage), stays away until it
+  // answers. Whether a dial is in flight is tracked apart (`dial`), so connect() still awaits it.
   const linkOf = (
     diagnostics: RemoteRuntimeSharedConnectionDiagnostics,
     current: SharedHostLink
@@ -55,78 +56,124 @@ export function sharedBotHostLink(deps: {
     }
     return current === 'live' || current === 'offline' ? 'offline' : 'connecting'
   }
-  const settleAs = (settled: Settled): void => {
-    const settling = waiters
-    waiters = []
-    for (const resolve of settling) {
-      resolve(settled)
-    }
-  }
-  // A dial that never answers reads as away; the connection keeps retrying behind it.
-  const armSettleTimer = (): void => {
-    settleTimer ??= setTimeout(() => {
-      settleTimer = null
-      if (link === 'connecting') {
-        setLink('offline')
-      }
-    }, CONNECT_SETTLE_MS)
-    settleTimer.unref?.()
-  }
+  const opened = getRemoteRuntimeSharedControlDiagnostics(environmentId)
+  // The host's connection may already be open (the window's calls open it too).
+  let link: SharedHostLink = opened ? linkOf(opened, 'unpaired') : 'unpaired'
   const setLink = (next: SharedHostLink): void => {
-    if (next !== link) {
-      const previous = link
-      link = next
-      deps.onLinkChanged(next, previous)
-    }
-    if (next === 'connecting') {
-      armSettleTimer()
+    if (closed || next === link) {
       return
     }
-    if (settleTimer) {
-      clearTimeout(settleTimer)
-      settleTimer = null
-    }
-    settleAs(next)
+    const previous = link
+    link = next
+    deps.onLinkChanged(next, previous)
   }
-  // The host's connection may already be open (the window's calls open it too).
-  const opened = getRemoteRuntimeSharedControlDiagnostics(environmentId)
-  let link: SharedHostLink = opened ? linkOf(opened, 'unpaired') : 'unpaired'
-  if (link === 'connecting') {
-    armSettleTimer()
+  // The dial this link awaits: settled by the host answering (live), by the connection closing after
+  // it tried (away or unpaired), or by its bound (away; the connection keeps retrying behind it).
+  let dial: {
+    settled: Promise<Settled>
+    sawAttempt: boolean
+    settle: (settled: Settled) => void
+  } | null = null
+  const settleDial = (settled: Settled): void => {
+    const current = dial
+    dial = null
+    current?.settle(settled)
+  }
+  const awaitDial = (): Promise<Settled> => {
+    if (dial) {
+      return dial.settled
+    }
+    let settle: (settled: Settled) => void = () => {}
+    const settled = new Promise<Settled>((resolve) => (settle = resolve))
+    const timer = setTimeout(() => {
+      if (dial?.settled === settled) {
+        settleDial('offline')
+        if (link === 'connecting') {
+          setLink('offline')
+        }
+      }
+    }, CONNECT_SETTLE_MS)
+    timer.unref?.()
+    dial = {
+      settled,
+      sawAttempt: false,
+      settle: (outcome) => {
+        clearTimeout(timer)
+        settle(outcome)
+      }
+    }
+    return settled
   }
   const stopListening = onRuntimeEnvironmentDiagnostics((event) => {
-    if (event.environmentId === environmentId) {
-      setLink(linkOf(event.diagnostics, link))
+    if (event.environmentId !== environmentId) {
+      return
+    }
+    const { state } = event.diagnostics
+    setLink(linkOf(event.diagnostics, link))
+    if (!dial) {
+      return
+    }
+    if (state === 'ready') {
+      settleDial('live')
+    } else if (state === 'awaiting_ready' || state === 'awaiting_authenticated') {
+      dial.sawAttempt = true
+    } else if (dial.sawAttempt) {
+      // Closed only after this dial tried: the close that reopened it is not its outcome.
+      settleDial(deps.hasCredential() ? 'offline' : 'unpaired')
     }
   })
   const connection = () => {
     const environment = sharedHostEnvironment(environmentId)
     return environment ? getPreferredPairedRuntimeConnection(environment) : null
   }
+  const dialInFlight = (): boolean => {
+    const state = getRemoteRuntimeSharedControlDiagnostics(environmentId)?.state
+    return state === 'awaiting_ready' || state === 'awaiting_authenticated'
+  }
+  /** Joins a dial already under way: the connection's own, or one asked for here. */
+  const joinDial = (): Promise<Settled> | null => {
+    if (dial) {
+      return dial.settled
+    }
+    if (!dialInFlight()) {
+      return null
+    }
+    const settled = awaitDial()
+    dial!.sawAttempt = true
+    return settled
+  }
   const settled = (): Promise<Settled> =>
-    link === 'connecting'
-      ? new Promise((resolve) => void waiters.push(resolve))
-      : Promise.resolve(link)
+    link === 'live'
+      ? Promise.resolve('live')
+      : (joinDial() ?? Promise.resolve(link === 'connecting' ? 'offline' : link))
   return {
     current: () => link,
     connect: () => {
       const paired = connection()
-      if (!paired) {
+      if (!paired || closed) {
         return Promise.resolve('unpaired')
       }
-      // Live, or a dial already under way: reopening it would only cut that dial short.
-      if (link === 'live' || link === 'connecting') {
-        return settled()
+      if (link === 'live') {
+        return Promise.resolve('live')
       }
+      // A dial already under way is awaited, never reopened: that would cut its handshake short.
+      const joined = joinDial()
+      if (joined) {
+        return joined
+      }
+      const settledDial = awaitDial()
+      // Asked for now (the host is back, or a phone needs it): no stale host-offline hold delays it.
+      clearRelayDialHolds(environmentId)
       ensureRemoteRuntimeSharedControlConnection(environmentId, paired)
       reconnectRemoteRuntimeSharedControlConnection(environmentId)
       if (getRemoteRuntimeSharedControlDiagnostics(environmentId)?.state === 'ready') {
         setLink('live')
+        settleDial('live')
       } else if (link === 'unpaired') {
+        // Found away before, it reads as away until it answers.
         setLink('connecting')
       }
-      // Found away before: it redials now, and reads as away until it answers.
-      return settled()
+      return settledDial
     },
     settled,
     request: (method, params) => {
@@ -143,8 +190,10 @@ export function sharedBotHostLink(deps: {
     },
     close: () => {
       stopListening()
-      endSharedBotHostConnections(environmentId)
       setLink('unpaired')
+      closed = true
+      settleDial('unpaired')
+      endSharedBotHostConnections(environmentId)
     }
   }
 }
