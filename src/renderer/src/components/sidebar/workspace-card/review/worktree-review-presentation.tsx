@@ -91,9 +91,13 @@ export function ReviewIcon({
     variant === 'provider' && review.provider === 'gitlab' ? GitMerge : PullRequestIcon
   const Icon = getReviewStateIcon(review.state) ?? providerIcon
   return createElement(Icon, {
-    className: cn(
-      className,
-      (showChecks ? getCheckTone(review) : null) ?? getStateTone(review.state)
-    )
+    className: cn(className, getReviewIconTone(review, showChecks))
   })
+}
+
+export function getReviewIconTone(
+  review: Pick<WorktreeCardPrDisplay, 'state' | 'status' | 'checksSummary'>,
+  showChecks = true
+): string {
+  return (showChecks ? getCheckTone(review) : null) ?? getStateTone(review.state)
 }

@@ -5,7 +5,7 @@ import { JiraIcon } from '@/components/icons/JiraIcon'
 import { getWorkspaceAttachmentKey } from '../../../../../../shared/workspace-attachments/workspace-attachment-normalization'
 import { getProviderChecksOutcome } from '../../../../../../shared/source-control/checks/provider-check-summary'
 import type { WorkspaceAttachment } from '../../../../../../shared/worktree/types'
-import { ReviewIcon } from './worktree-review-presentation'
+import { getReviewIconTone, ReviewIcon } from './worktree-review-presentation'
 import { workspaceAttachmentLabel } from '../metadata/worktree-attachment-editing'
 import {
   workspaceReferenceReview,
@@ -62,8 +62,7 @@ function ReferenceGlyph({
 function glyphSignature(item: WorkspaceAttachment, details: WorkspaceReferenceDetailsMap): string {
   const review = workspaceReferenceReview(item, details[getWorkspaceAttachmentKey(item)])
   if (review) {
-    const outcome = review.status && getProviderChecksOutcome(review.checksSummary, review.status)
-    return `review:${review.provider === 'gitlab' ? 'gitlab' : 'pr'}:${review.state}:${outcome}`
+    return `review:${review.provider === 'gitlab' ? 'gitlab' : 'pr'}:${review.state}:${getReviewIconTone(review)}`
   }
   return item.provider === 'linear' || item.provider === 'jira' ? item.provider : 'issue'
 }
