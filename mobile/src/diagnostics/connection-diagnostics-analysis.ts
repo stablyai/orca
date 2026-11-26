@@ -180,7 +180,7 @@ const RELAY_DIAL_ADVICE: Record<
     likelyCause: (code) =>
       `Relay refused this device’s relay credential (close code ${code}), so it could not check whether the desktop is online.`,
     nextStep:
-      'Connect this phone once on the same network as the desktop to refresh Relay access. If Relay still refuses it, re-pair it.'
+      "Connect once on the desktop's network to refresh Relay access. If Relay still refuses, re-pair."
   },
   unreachable: {
     likelyCause: (code) => `The phone could not reach the Relay cell (transport close ${code}).`,
@@ -215,7 +215,7 @@ function relayDialFailure(
   const advice = RELAY_DIAL_ADVICE[reachability]
   const nextStep =
     reachability === 'credential-refused' && isUndialableLinkLocal(endpoint)
-      ? 'Re-pair this phone with the desktop.'
+      ? 'Re-pair this phone.'
       : advice.nextStep
   return { likelyCause: advice.likelyCause(code), nextStep, reportability: 'none' }
 }

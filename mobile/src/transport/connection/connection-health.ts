@@ -22,7 +22,7 @@ export function isEarlyConnectRetry(
 // A link-local endpoint (169.254/16, fe80::/10) is never dialed, so only re-pairing refreshes its
 // Relay access. A literal-prefix check: the full shared parser costs the web bundle's size budget.
 export function isUndialableLinkLocal(endpoint: string | null | undefined): boolean {
-  return /^\w+:\/\/(169\.254\.|\[fe[89ab])/i.test(endpoint ?? '')
+  return /\/\/(169\.254\.|\[fe[89ab])/i.test(endpoint ?? '')
 }
 
 function relayHostCopy(directRefreshUnavailable: boolean): Record<
