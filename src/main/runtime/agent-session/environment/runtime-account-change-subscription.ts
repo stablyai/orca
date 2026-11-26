@@ -32,6 +32,7 @@ export function subscribeRuntimeAccountChanges(
   let running = false
   let pending: (AccountSnapshotVersion & { usage?: AccountsSnapshot['rateLimits'] }) | undefined
   let pendingPluginUsage: AccountsSnapshot['pluginUsageProviders']
+  let lastPublished: AccountsSnapshot | undefined
   let lastValid: { version: AccountSnapshotVersion; snapshot: AccountsSnapshot } | undefined
   const currentVersion = (): AccountSnapshotVersion => ({
     revision,
@@ -45,17 +46,49 @@ export function subscribeRuntimeAccountChanges(
       version.generations.every((generation, index) => generation === current.generations[index])
     )
   }
+  const publish = (snapshot: AccountsSnapshot, send = listener) => {
+    send(snapshot)
+    if (services.pluginUsageProviders) {
+      lastPublished = snapshot
+    }
+  }
+  const clearRemovedPluginUsage = (
+    current: NonNullable<AccountsSnapshot['pluginUsageProviders']>
+  ) => {
+    const previous = lastPublished
+    if (!previous?.pluginUsageProviders?.length) {
+      return
+    }
+    // Revocations must reach the client even if account reads keep failing. Retain only data
+    // already delivered on this connection, and never add a new reading without a valid roster.
+    const retained = previous.pluginUsageProviders.filter((reading) =>
+      current.some(
+        (candidate) =>
+          candidate.pluginKey === reading.pluginKey &&
+          candidate.providerId === reading.providerId &&
+          candidate.iconRevision === reading.iconRevision
+      )
+    )
+    if (retained.length < previous.pluginUsageProviders.length) {
+      try {
+        publish({ ...previous, pluginUsageProviders: retained })
+      } catch (error) {
+        console.warn('[accounts] Failed to publish account snapshot', error)
+      }
+    }
+  }
   const publishPluginUsage = (pluginUsageProviders: AccountsSnapshot['pluginUsageProviders']) => {
     if (!pluginUsageProviders || !active) {
       return
     }
     if (!lastValid || !isCurrent(lastValid.version)) {
+      clearRemovedPluginUsage(pluginUsageProviders)
       // A quota change may be the only notification after a failed roster refresh.
       queueSnapshot()
       return
     }
     try {
-      listener({ ...lastValid.snapshot, pluginUsageProviders })
+      publish({ ...lastValid.snapshot, pluginUsageProviders })
     } catch (error) {
       console.warn('[accounts] Failed to publish account snapshot', error)
     }
@@ -86,7 +119,7 @@ export function subscribeRuntimeAccountChanges(
             if (isCurrent(change)) {
               lastValid = { version: change, snapshot }
               pendingPluginUsage = undefined
-              listener({ ...snapshot, ...runtimePluginUsageSnapshot(services) })
+              publish({ ...snapshot, ...runtimePluginUsageSnapshot(services) })
             }
           } catch (error) {
             lastValid = undefined
@@ -113,6 +146,7 @@ export function subscribeRuntimeAccountChanges(
   const unsubscribePluginUsage = services.pluginUsageProviders?.onChanged(
     (pluginUsageProviders) => {
       if (running) {
+        clearRemovedPluginUsage(pluginUsageProviders)
         pendingPluginUsage = pluginUsageProviders
       } else {
         publishPluginUsage(pluginUsageProviders)
@@ -131,19 +165,20 @@ export function subscribeRuntimeAccountChanges(
         return
       }
       if (lastValid && isCurrent(lastValid.version)) {
-        ready({ ...lastValid.snapshot, ...runtimePluginUsageSnapshot(services) })
+        publish({ ...lastValid.snapshot, ...runtimePluginUsageSnapshot(services) }, ready)
         return
       }
       if (isCurrent(version)) {
         lastValid = { version, snapshot: initial }
       }
-      ready({ ...initial, ...runtimePluginUsageSnapshot(services) })
+      publish({ ...initial, ...runtimePluginUsageSnapshot(services) }, ready)
     },
     unsubscribe() {
       active = false
       pending = undefined
       pendingPluginUsage = undefined
       lastValid = undefined
+      lastPublished = undefined
       unsubscribeData()
       unsubscribeUsage()
       unsubscribePluginUsage?.()

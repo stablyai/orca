@@ -22,7 +22,7 @@ function plugin(id: string, contentHash: string, provider: string): ValidDiscove
       publisher: 'samples',
       name: 'Sample plugin',
       version: '1.0.0',
-      engines: { orca: '>=1.4.277' },
+      engines: { orca: '>=1.4.278' },
       pluginApi: 1,
       execution: 'trusted-worker',
       main: 'worker.js',

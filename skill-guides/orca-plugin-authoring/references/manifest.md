@@ -49,7 +49,7 @@
 - `newFiles` (NewFileContribution[], since 1.4.245): Untitled files the user can create from the + menu and the command palette. At most 16.
 - `settings` (SettingContribution[], since 1.4.246): Settings Orca shows under the plugin in Settings; code reads them with `settings.get` (`settings:own`). At most 64.
 - `statusBarItems` (StatusBarItemContribution[], since 1.4.248): Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. With `main`, the worker runs for as long as the plugin is enabled. At most 8.
-- `usageProviders` (UsageProviderContribution[], since 1.4.277): Quota sources in the usage area, updated by the plugin worker with `usageProvider.update`. At most 8.
+- `usageProviders` (UsageProviderContribution[], since 1.4.278): Quota sources in the usage area, updated by the plugin worker with `usageProvider.update`. At most 8.
 - `mcpServers` (McpServerContribution[], since 1.4.276): MCP servers Orca offers to the agents it launches on this host, listed under From plugins in Settings → MCP servers. At most 16.
 
 Reserved (must stay empty arrays): `agentHarnesses`, `skills`, `taskSources`, `connections`, `sidebarCards`.
@@ -200,8 +200,8 @@ An item in the status bar. Requires the `declarative` profile; a `trusted-worker
 
 A quota source updated by its plugin worker.
 
-- `id` (string, required, since 1.4.277): Provider id, unique within the plugin.
-- `label` (string, required, since 1.4.277): Label shown in the usage area.
+- `id` (string, required, since 1.4.278): Provider id, unique within the plugin.
+- `label` (string, required, since 1.4.278): Label shown in the usage area.
 
 ## McpServerContribution
 

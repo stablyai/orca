@@ -3,7 +3,7 @@ import { safePluginDisplayText } from '../manifest/plugin-display-text'
 import { pluginIdSchema } from '../manifest/plugin-manifest-fields'
 import { pluginFieldDoc } from '../manifest/plugin-schema-field-docs'
 
-export const PLUGIN_USAGE_PROVIDERS_SINCE = '1.4.277'
+export const PLUGIN_USAGE_PROVIDERS_SINCE = '1.4.278'
 export const PLUGIN_USAGE_PROVIDER_LIMIT = 8
 export const PLUGIN_USAGE_PROVIDERS_CHANGED_CHANNEL = 'plugins:usageProvidersChanged'
 

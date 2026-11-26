@@ -348,7 +348,7 @@
         "usageProviders": {
           "default": [],
           "description": "Quota sources in the usage area, updated by the plugin worker with `usageProvider.update`. At most 8.",
-          "x-orca-since": "1.4.277",
+          "x-orca-since": "1.4.278",
           "maxItems": 8,
           "type": "array",
           "items": {
@@ -1620,7 +1620,7 @@
           "maxLength": 64,
           "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
           "description": "Provider id, unique within the plugin.",
-          "x-orca-since": "1.4.277",
+          "x-orca-since": "1.4.278",
           "examples": [
             "sample-quota"
           ]
@@ -1630,7 +1630,7 @@
           "minLength": 1,
           "maxLength": 64,
           "description": "Label shown in the usage area.",
-          "x-orca-since": "1.4.277",
+          "x-orca-since": "1.4.278",
           "examples": [
             "Sample quota"
           ]

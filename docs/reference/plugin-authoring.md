@@ -221,7 +221,7 @@ running in WSL still reports `local` with a `C:\` path, so a hook cannot tell it
 
 ### Publishing quota readings
 
-Set `engines.orca` to `>=1.4.277` and use the `trusted-worker` execution profile with `main`.
+Set `engines.orca` to `>=1.4.278` and use the `trusted-worker` execution profile with `main`.
 Declare each quota source in `contributes.usageProviders`, for example
 `[{ "id": "sample-quota", "label": "Sample quota" }]`. Orca keeps the worker running while the plugin is enabled.
 Usage shows the plugin's manifest `icon` when present.

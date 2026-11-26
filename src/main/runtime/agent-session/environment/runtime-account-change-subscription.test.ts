@@ -28,6 +28,7 @@ it('layers plugin readings over the newest valid account snapshot during and aft
   let rosterReads = 0
   let failUsageRead = false
   let streamUsage = initialUsage
+  let failStreamReads = false
   const removeListener = () => () => {}
   const services: Parameters<typeof subscribeRuntimeAccountChanges>[0] = {
     claudeAccounts: { listAccounts: () => accounts, onAccountRenamed: removeListener },
@@ -62,7 +63,7 @@ it('layers plugin readings over the newest valid account snapshot during and aft
     services,
     {
       stream: async () => {
-        if (++streamReads === 2) {
+        if (++streamReads === 2 || failStreamReads) {
           throw new Error('Temporary account read failure')
         }
         return { claude: accounts, codex: accounts, rateLimits: streamUsage }
@@ -126,6 +127,13 @@ it('layers plugin readings over the newest valid account snapshot during and aft
     onPluginUsageChanged(pluginUsageProviders)
     await setImmediate()
     expect(snapshots.at(-1)).toMatchObject({ rateLimits: nextUsage, pluginUsageProviders })
+
+    failStreamReads = true
+    onRename()
+    pluginUsageProviders = []
+    onPluginUsageChanged(pluginUsageProviders)
+    await setImmediate()
+    expect(snapshots.at(-1)).toMatchObject({ rateLimits: nextUsage, pluginUsageProviders: [] })
   } finally {
     unsubscribe()
   }

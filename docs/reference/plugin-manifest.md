@@ -46,7 +46,7 @@ Add `"$schema": "https://raw.githubusercontent.com/stablyai/orca/main/docs/schem
 | `contributes.newFiles` | [NewFileContribution](#newfilecontribution)[] | no | 1.4.245 | Untitled files the user can create from the + menu and the command palette. At most 16. |
 | `contributes.settings` | [SettingContribution](#settingcontribution)[] | no | 1.4.246 | Settings Orca shows under the plugin in Settings; code reads them with `settings.get` (`settings:own`). At most 64. |
 | `contributes.statusBarItems` | [StatusBarItemContribution](#statusbaritemcontribution)[] | no | 1.4.248 | Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. With `main`, the worker runs for as long as the plugin is enabled. At most 8. |
-| `contributes.usageProviders` | [UsageProviderContribution](#usageprovidercontribution)[] | no | 1.4.277 | Quota sources in the usage area, updated by the plugin worker with `usageProvider.update`. At most 8. |
+| `contributes.usageProviders` | [UsageProviderContribution](#usageprovidercontribution)[] | no | 1.4.278 | Quota sources in the usage area, updated by the plugin worker with `usageProvider.update`. At most 8. |
 | `contributes.mcpServers` | [McpServerContribution](#mcpservercontribution)[] | no | 1.4.276 | MCP servers Orca offers to the agents it launches on this host, listed under From plugins in Settings → MCP servers. At most 16. |
 | `contributes.agentHarnesses` | any[] | no | 1.4.245 | Reserved for coding-agent harness definitions; must be empty until their format is defined. |
 | `contributes.skills` | any[] | no | 1.4.245 | Reserved for agent skills; must be empty until their format is defined. |
@@ -238,8 +238,8 @@ A quota source updated by its plugin worker.
 
 | Field | Type | Required | Since | Description |
 | --- | --- | --- | --- | --- |
-| `id` | string | yes | 1.4.277 | Provider id, unique within the plugin. Example: `"sample-quota"` |
-| `label` | string | yes | 1.4.277 | Label shown in the usage area. Example: `"Sample quota"` |
+| `id` | string | yes | 1.4.278 | Provider id, unique within the plugin. Example: `"sample-quota"` |
+| `label` | string | yes | 1.4.278 | Label shown in the usage area. Example: `"Sample quota"` |
 
 ## McpServerContribution
 
