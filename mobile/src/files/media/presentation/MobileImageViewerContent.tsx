@@ -1,16 +1,11 @@
-import { Image } from 'react-native'
 import { isSvgDataUri, MobileSvgImage } from './MobileSvgImage'
 import type { MobilePanZoomImage } from './MobilePanZoomImage'
+import { MobileNativePanZoomImage } from './MobileNativePanZoomImage'
 
-export function MobileImageViewerContent({ uri, label }: Parameters<typeof MobilePanZoomImage>[0]) {
-  return isSvgDataUri(uri) ? (
-    <MobileSvgImage uri={uri} label={label} />
+export function MobileImageViewerContent(props: Parameters<typeof MobilePanZoomImage>[0]) {
+  return isSvgDataUri(props.uri) ? (
+    <MobileSvgImage uri={props.uri} label={props.label} onError={props.onError} />
   ) : (
-    <Image
-      source={{ uri }}
-      accessibilityLabel={label}
-      resizeMode="contain"
-      style={{ width: '100%', height: '100%' }}
-    />
+    <MobileNativePanZoomImage {...props} />
   )
 }
