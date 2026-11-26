@@ -233,7 +233,8 @@ describe('the opening read deadline', () => {
   it('an in-time reply shows, and a fresh opening after an expired one reads again', async () => {
     const expired = open(
       vi.fn(async (...args: unknown[]) => {
-        await new Promise((resolve) => setTimeout(resolve, 20_000))
+        // Held until after the deadline (never released here), like a slow compatibility wait.
+        await new Promise<void>(() => {})
         sendCheck(args)()
         return reply('runtime-a')
       })
