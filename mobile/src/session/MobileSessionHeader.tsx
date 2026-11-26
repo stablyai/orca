@@ -52,7 +52,8 @@ export function MobileSessionHeader({
     openBotPanel,
     terminalResume,
     connState,
-    statusDot
+    statusDot,
+    nativeChatController
   } = controller
   // A switched-back terminal shows its last screen at once; only a slow catch-up shows the refresh line.
   const catchingUp = useSyncExternalStore(terminalResume.subscribe, terminalResume.anyCatchingUp)
@@ -167,6 +168,8 @@ export function MobileSessionHeader({
       <SafeAreaView
         style={[
           styles.sessionChrome,
+          // A chat is one ground from the top: its header and tabs sit on the canvas, with no line under them.
+          nativeChatController.showNativeChat && styles.sessionChromeOnChat,
           topChrome.space && {
             paddingLeft: topChrome.space.left,
             paddingRight: topChrome.space.right,

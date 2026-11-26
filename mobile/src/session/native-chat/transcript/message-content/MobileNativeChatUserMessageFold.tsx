@@ -34,7 +34,7 @@ export function MobileNativeChatUserMessageFold({
   const t = useMobileTranslation()
   const longText = useMemo(() => nativeChatUserMessageFolds(text), [text])
   const [height, setHeight] = useState<number | null>(null)
-  const { textScale, lineSpacing } = useNativeChatProseText(fontScale)
+  const { textScale, lineSpacing } = useNativeChatProseText(fontScale, true)
   const clip =
     NATIVE_CHAT_USER_MESSAGE_MAX_UNFOLDED_LINES *
     markdownStyles.paragraph.lineHeight *
