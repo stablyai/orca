@@ -160,6 +160,7 @@ export function MobileSessionActiveContent({
         createError={createError}
         onReconnect={forceReconnectHost ? () => void forceReconnectHost(hostId) : null}
         onRetryTabs={() => void retryPendingTerminalRecovery()}
+        onNewTab={controller.handleOpenNewTab}
       />
     ) : activeMarkdownTab ? (
       <View style={styles.markdownFrame}>

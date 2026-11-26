@@ -2449,8 +2449,8 @@
       "terminalTakingLonger": "Terminal is taking longer than expected",
       "loadingTerminal": "Loading terminal",
       "retryLoadingTerminal": "Retry loading terminal",
-      "noTabsHint": "Start an agent or a terminal with +.",
-      "noTabs": "No tabs open"
+      "noTabs": "No tabs open",
+      "noTabsStart": "Start an agent or a terminal."
     },
     "commandDock": {
       "liveInputLabel": "Live terminal input",
@@ -2480,17 +2480,13 @@
       "loading": "Loading file…"
     },
     "header": {
-      "workspaceDetailsHint": "Shows the full workspace name and where it is",
       "showSidebar": "Show sidebar",
       "backToWorktrees": "Back to worktrees",
       "terminalTitle": "Terminal",
       "reconnectToDesktop": "Reconnect to desktop",
-      "openSourceControl": "Open source control",
       "moreActions": "More session actions",
       "terminalLayout": "Terminal layout",
-      "newTab": "New tab",
       "quickCommands": "Quick commands",
-      "fileExplorer": "File explorer",
       "sourceControl": "Source control",
       "itemsNeedYou": "Items, {{count}} need you",
       "items": "Items",
@@ -2499,8 +2495,7 @@
     "headerMoreActionsSheet": {
       "agentHistory": "Agent History",
       "agentHistoryHint": "Browse and resume agent sessions",
-      "checks": "Checks",
-      "checksHint": "Open pull request checks"
+      "checks": "Checks"
     },
     "routeScreen": {
       "openingWorkspace": "Opening workspace"
@@ -2546,7 +2541,6 @@
       "copyLinkFailed": "Couldn't copy link"
     },
     "tabStrip": {
-      "newTab": "New tab",
       "quickCommandsUpdateRequired": "Desktop update required for quick commands",
       "checkingCapabilities": "Checking desktop capabilities — try again in a moment"
     },
@@ -3321,10 +3315,7 @@
       "oneTab": "1 tab",
       "tabCount": "{{count}} tabs",
       "actionsHint": "Shows actions for this tab",
-      "next": "Next tab",
-      "previous": "Previous tab",
       "hint": "Shows all tabs",
-      "noTabs": "No tabs",
       "needYou_one": "{{count}} needs you",
       "needYou_other": "{{count}} need you"
     },
@@ -3343,6 +3334,12 @@
     },
     "orcaCommands": {
       "desktopOnly": "Available in the desktop app"
+    },
+    "sidebar": {
+      "backTo": "Back to {{title}}",
+      "needsYou": "Needs you",
+      "files": "Files",
+      "otherWorkspaces": "Other workspaces"
     }
   },
   "chat": {

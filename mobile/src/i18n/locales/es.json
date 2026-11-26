@@ -2391,25 +2391,20 @@
       "requestFailed": "La solicitud falló: {{method}}"
     },
     "header": {
-      "workspaceDetailsHint": "Muestra el nombre completo del espacio de trabajo y dónde se encuentra",
       "backToWorktrees": "Volver a los worktrees",
       "moreActions": "Más acciones de la sesión",
-      "openSourceControl": "Abrir control de código fuente",
       "reconnectToDesktop": "Volver a conectar con el escritorio",
       "showSidebar": "Mostrar barra lateral",
       "terminalTitle": "Terminal",
       "terminalLayout": "Diseño del terminal",
-      "fileExplorer": "Explorador de archivos",
       "sourceControl": "Control de código fuente",
-      "newTab": "Nueva pestaña",
       "quickCommands": "Comandos rápidos",
       "items": "Elementos"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "Historial de agentes",
       "agentHistoryHint": "Explora y reanuda sesiones de agentes",
-      "checks": "Checks",
-      "checksHint": "Abrir los checks de la pull request"
+      "checks": "Checks"
     },
     "markdownReader": {
       "changedOnDesktop": "Modificado en el escritorio",
@@ -2615,7 +2610,6 @@
     },
     "tabStrip": {
       "checkingCapabilities": "Comprobando las funciones del escritorio. Inténtalo de nuevo en un momento.",
-      "newTab": "Nueva pestaña",
       "quickCommandsUpdateRequired": "Actualiza el escritorio para usar los comandos rápidos."
     },
     "terminalActionSheetActions": {
@@ -2938,8 +2932,6 @@
       "oneTab": "1 pestaña",
       "tabCount": "Pestañas: {{count}}",
       "actionsHint": "Muestra las acciones de esta pestaña",
-      "next": "Pestaña siguiente",
-      "previous": "Pestaña anterior",
       "hint": "Muestra todas las pestañas"
     }
   },

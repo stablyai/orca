@@ -3234,18 +3234,14 @@
       "requestFailed": "请求失败：{{method}}"
     },
     "header": {
-      "workspaceDetailsHint": "显示工作区的完整名称及其所在位置",
       "backToWorktrees": "返回工作树",
       "moreActions": "更多会话操作",
-      "openSourceControl": "打开源代码控制",
       "reconnectToDesktop": "重新连接到桌面",
       "showSidebar": "显示侧边栏",
       "terminalTitle": "终端",
       "terminalLayout": "终端布局",
-      "fileExplorer": "文件资源管理器",
       "sourceControl": "源代码管理",
       "itemsNeedYou": "事项，{{count}} 个需要你处理",
-      "newTab": "新标签页",
       "quickCommands": "快捷命令",
       "items": "事项",
       "textSize": "文字大小"
@@ -3253,8 +3249,7 @@
     "headerMoreActionsSheet": {
       "agentHistory": "智能体历史记录",
       "agentHistoryHint": "浏览并恢复智能体会话",
-      "checks": "检查项",
-      "checksHint": "打开 PR 检查项"
+      "checks": "检查项"
     },
     "markdownReader": {
       "changedOnDesktop": "已在桌面上更改",
@@ -3463,7 +3458,6 @@
     },
     "tabStrip": {
       "checkingCapabilities": "正在检查桌面支持的功能，请稍后重试",
-      "newTab": "新标签页",
       "quickCommandsUpdateRequired": "使用快捷命令需更新桌面应用"
     },
     "terminalActionSheetActions": {
@@ -3839,8 +3833,6 @@
       "oneTab": "1 个标签页",
       "tabCount": "{{count}} 个标签页",
       "actionsHint": "显示此标签页的操作",
-      "next": "下一个标签页",
-      "previous": "上一个标签页",
       "hint": "显示所有标签页"
     },
     "textSizeSheet": {

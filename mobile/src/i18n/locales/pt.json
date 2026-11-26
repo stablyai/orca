@@ -2752,25 +2752,20 @@
       "requestFailed": "Falha na solicitação: {{method}}"
     },
     "header": {
-      "workspaceDetailsHint": "Mostra o nome completo do espaço de trabalho e onde ele está",
       "backToWorktrees": "Voltar às worktrees",
       "moreActions": "Mais ações da sessão",
-      "openSourceControl": "Abrir controle de versão",
       "reconnectToDesktop": "Reconectar ao desktop",
       "showSidebar": "Mostrar barra lateral",
       "terminalTitle": "Terminal",
       "terminalLayout": "Layout do terminal",
-      "fileExplorer": "Explorador de arquivos",
       "sourceControl": "Controle de código-fonte",
-      "newTab": "Nova aba",
       "quickCommands": "Comandos rápidos",
       "items": "Itens"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "Histórico de Agentes",
       "agentHistoryHint": "Ver e retomar sessões de agentes",
-      "checks": "Verificações",
-      "checksHint": "Abrir verificações do pull request"
+      "checks": "Verificações"
     },
     "markdownReader": {
       "changedOnDesktop": "Alterado no desktop",
@@ -2977,7 +2972,6 @@
     },
     "tabStrip": {
       "checkingCapabilities": "Verificando os recursos do desktop — tente novamente em instantes",
-      "newTab": "Nova aba",
       "quickCommandsUpdateRequired": "Atualize o desktop para usar comandos rápidos"
     },
     "terminalActionSheetActions": {
@@ -3335,8 +3329,6 @@
       "oneTab": "1 aba",
       "tabCount": "Abas: {{count}}",
       "actionsHint": "Mostra ações para esta aba",
-      "next": "Próxima aba",
-      "previous": "Aba anterior",
       "hint": "Mostra todas as abas"
     }
   },

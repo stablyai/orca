@@ -159,6 +159,9 @@ export function buildMobileSessionTabSummary(
   }
 }
 
+// A path keeps its end in view, as the sidebar's rows do.
+export const isPathTitle = (title: string) => /[\\/]/.test(title)
+
 const oneLine = (text: string) => text.replace(/\s+/g, ' ').trim()
 
 // Question tools wait for an answer, not a permission; Copilot reports its ask_user as blocked.
@@ -169,16 +172,15 @@ const isQuestionTool = (toolName: string | undefined) =>
 
 /**
  * What a waiting agent wants, as its ask card puts it: the question, or the tool it needs allowed.
- * Null when the host sent neither (older hosts), so the row keeps its usual preview.
+ * Null when the host sent neither (older hosts), so the row keeps its usual preview. A tab's status
+ * and a workspace's agent row both carry these fields.
  */
-function needsYouLine(
-  tab: MobileSessionTab,
+export function mobileAgentAskLine(
+  status: { interactivePrompt?: string; toolName?: string | null; toolInput?: string | null },
   dotState: AgentDotState | undefined
 ): { stateWord: string; content: string } | null {
-  if (tab.type !== 'terminal' || !tab.agentStatus) {
-    return null
-  }
-  const { interactivePrompt, toolName } = tab.agentStatus
+  const { interactivePrompt } = status
+  const toolName = status.toolName ?? undefined
   const question = parseAskFromStatus(interactivePrompt, toolName)?.questions[0]?.question
   if (question) {
     return { stateWord: translate('session.tabRows.asks', 'Asks'), content: oneLine(question) }
@@ -190,7 +192,7 @@ function needsYouLine(
       stateWord: translate('session.tabRows.allowTool', 'Allow {{tool}}?', {
         tool: agentToolDisplayName(approval.tool)
       }),
-      content: oneLine(approval.summary ?? agentToolPreviewInput(tab.agentStatus, false))
+      content: oneLine(approval.summary ?? agentToolPreviewInput(status, false))
     }
   }
   // Only a permission wait asks to allow its tool; a question tool without its prompt keeps the preview.
@@ -200,17 +202,22 @@ function needsYouLine(
   }
   return {
     stateWord: translate('session.tabRows.allowTool', 'Allow {{tool}}?', { tool }),
-    content: oneLine(agentToolPreviewInput(tab.agentStatus, false))
+    content: oneLine(agentToolPreviewInput(status, false))
   }
 }
 
-// Why: the preview scans each agent's last message, so only the open sheet pays for it (STA-15103).
+// Why: the preview scans each agent's last message, so only a waiting agent's row (the one line the
+// sidebar draws) pays for it, and only while the sidebar shows (STA-15103).
 export function buildMobileSessionTabRow(summary: MobileSessionTabSummary): MobileSessionTabRow {
   const { tab, title, dotState } = summary
-  const ask = summary.group === 'needs-you' ? needsYouLine(tab, dotState) : null
+  const ask =
+    summary.group === 'needs-you' && tab.type === 'terminal' && tab.agentStatus
+      ? mobileAgentAskLine(tab.agentStatus, dotState)
+      : null
   const stateWord =
     ask?.stateWord ?? (dotState && dotState !== 'idle' ? agentStateLabel(dotState) : '')
-  const content = ask?.content ?? tabContent(tab, title, dotState)
+  const content =
+    ask?.content ?? (summary.group === 'needs-you' ? tabContent(tab, title, dotState) : '')
   const timeAt =
     tab.type === 'terminal' && tab.agentStatus && !tab.agentStatus.restoredUnconfirmed
       ? agentRowTimeAt(tab.agentStatus)
@@ -266,40 +273,4 @@ export function groupMobileSessionSplitTabs<T extends MobileSessionTabSummary>(
     })
   }
   return entries
-}
-
-/** The split a pane belongs to, keyed as its entry is; null for a lone tab. */
-export function mobileSessionSplitKey(tab: MobileSessionTab): string | null {
-  return tab.type === 'terminal' && tab.parentTabId ? tab.parentTabId : null
-}
-
-/**
- * The tabs a swipe steps to: one stop per desktop tab, so a split is one stop that lands on the pane
- * last open in it (`lastPane`, by split key), else the desktop's active pane, else its first.
- */
-export function mobileSessionSwipeStops<T extends MobileSessionTabSummary>(
-  rows: readonly T[],
-  activeTabId: string | null,
-  lastPane: ReadonlyMap<string, string>
-): { previous: T | undefined; next: T | undefined } {
-  const entries = groupMobileSessionSplitTabs(rows)
-  const stop = (entry: MobileSessionTabEntry<T> | undefined): T | undefined => {
-    if (!entry || entry.kind === 'tab') {
-      return entry?.tab
-    }
-    return (
-      entry.panes.find((pane) => pane.tab.id === lastPane.get(entry.key)) ??
-      entry.panes.find((pane) => pane.tab.isActive) ??
-      entry.panes[0]
-    )
-  }
-  const index = entries.findIndex((entry) =>
-    entry.kind === 'tab'
-      ? entry.tab.tab.id === activeTabId
-      : entry.panes.some((pane) => pane.tab.id === activeTabId)
-  )
-  if (index === -1) {
-    return { previous: undefined, next: undefined }
-  }
-  return { previous: stop(entries[index - 1]), next: stop(entries[index + 1]) }
 }
