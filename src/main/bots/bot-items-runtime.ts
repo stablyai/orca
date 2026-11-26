@@ -83,12 +83,14 @@ export class BotItemsHost {
   }
 
   /** Per profile: a profile switch reads that profile's items. */
-  store(): BotItemsRemote {
+  store(startUsageLimitWaits = true): BotItemsRemote {
     const path = botItemsStoreFile(getProfileUserDataPath())
     let store = this.stores.get(path)
     if (!store) {
       store = trackDispatchLinks((around) => this.deps.db.items(path, around))
       this.stores.set(path, store)
+    }
+    if (startUsageLimitWaits) {
       // With items to move: workers stopping on a usage limit move theirs to Waiting.
       this.usageLimitWaits.start()
     }
@@ -114,7 +116,7 @@ export class BotItemsHost {
       root,
       tracked: () => this.stores.get(path),
       current: () => stateDirectory === getProfileUserDataPath(),
-      open: () => this.store(),
+      open: () => this.store(false),
       warn
     })
   }
