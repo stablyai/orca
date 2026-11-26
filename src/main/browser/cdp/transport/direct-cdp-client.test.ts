@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import type WebSocket from 'ws'
 import { CdpWsProxy } from './cdp-ws-proxy'
 import type { AgentPointer } from '../input/cdp-page-input-commands'
-import { DIRECT_CDP_CLIENT_POINTER } from './direct-cdp-client'
+import { directCdpClientPointer } from './direct-cdp-client'
 import {
   connect,
   createMockWebContents,
@@ -53,7 +53,10 @@ async function embeddedGuestNeverAckingMoves(pointer: AgentPointer) {
 }
 
 it('answers a direct client hover move at once and delivers the press after it', async () => {
-  const { mock, ws } = await embeddedGuestNeverAckingMoves(DIRECT_CDP_CLIENT_POINTER)
+  const echoed: unknown[] = []
+  const { mock, ws } = await embeddedGuestNeverAckingMoves(
+    directCdpClientPointer((input) => echoed.push(input.type))
+  )
 
   expect(await sendAndReceive(ws, MOVE)).toMatchObject({ id: 1, result: {} })
   expect(await sendAndReceive(ws, PRESS)).toMatchObject({ id: 2, result: {} })
@@ -61,6 +64,8 @@ it('answers a direct client hover move at once and delivers the press after it',
     ([method]) => method === 'Input.dispatchMouseEvent'
   )
   expect(mouse.map(([, params]) => params?.type)).toEqual(['mouseMoved', 'mousePressed'])
+  // The cursor is echoed after the input went out, and drawing it never held the input.
+  await vi.waitFor(() => expect(echoed).toEqual(['mouseMoved', 'mousePressed']))
 })
 
 it("keeps Orca's own helper drawing the cursor and waiting for the move ack", async () => {
@@ -113,7 +118,7 @@ async function embeddedGuestNeverSettlingKeys(pointer: AgentPointer) {
 }
 
 it('answers a direct client typed key once it is sent to the page', async () => {
-  const { mock, ws } = await embeddedGuestNeverSettlingKeys(DIRECT_CDP_CLIENT_POINTER)
+  const { mock, ws } = await embeddedGuestNeverSettlingKeys(directCdpClientPointer(() => {}))
 
   expect(await sendAndReceive(ws, KEY_A)).toMatchObject({ id: 4, result: {} })
   expect(mock.webContents.sendInputEvent).toHaveBeenCalled()

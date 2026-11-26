@@ -1,5 +1,5 @@
 import { CdpWsProxy } from '../../cdp/transport/cdp-ws-proxy'
-import { DIRECT_CDP_CLIENT_POINTER } from '../../cdp/transport/direct-cdp-client'
+import { directCdpClientPointer } from '../../cdp/transport/direct-cdp-client'
 import { BrowserError } from '../../browser-error'
 import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-session-name'
 import { AgentBrowserBridgeRawProcess } from '../helper-process/agent-browser-bridge-raw-process'
@@ -119,12 +119,12 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
         `Browser page ${browserPageId} is no longer available`
       )
     }
-    // Focus guarding still applies; the cursor and the hover move's frame wait don't.
+    // Focus guarding still applies; the cursor is echoed after input instead of shown before it.
     const proxy = new CdpWsProxy(
       wc,
       () => this.browserManager.holdPaintForCapture(webContentsId),
       () => this.browserManager.guardUserFocusForAgentInput(webContentsId),
-      DIRECT_CDP_CLIENT_POINTER
+      directCdpClientPointer((input) => this.browserManager.echoDirectAgentPointer(wc, input))
     )
     // The socket outlives this request, so it must not inherit a revocable remote scope.
     const endpoint = await runOutsideRemoteCliBrowserScope(() => proxy.start())

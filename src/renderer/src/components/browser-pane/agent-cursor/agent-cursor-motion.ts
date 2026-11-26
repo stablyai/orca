@@ -242,6 +242,12 @@ export function createAgentCursor(
         finishInstantly(sequence)
         return
       }
+      if (motion && Math.hypot(motion.end.x - target.x, motion.end.y - target.y) < 0.5) {
+        // Already gliding there; a repeat (a press echoed right after its move) must not bend the path.
+        pendingArrival = sequence
+        start()
+        return
+      }
       if (hidden) {
         // Appear where the agent acts instead of flying in from a stale spot.
         jumpTo(target)
@@ -259,7 +265,8 @@ export function createAgentCursor(
     },
     press() {
       markActive()
-      playPressRing(layer, point, options.reducedMotion())
+      // Mid-glide, the press already landed where the glide ends.
+      playPressRing(layer, motion?.end ?? point, options.reducedMotion())
     },
     setVisible(visible) {
       visibility.target = visible ? 1 : 0
