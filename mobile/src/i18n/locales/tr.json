@@ -8218,9 +8218,9 @@
         "uses": "Kullanır"
       },
       "original": {
-        "sharedBy": "Paylaşan: {{who}}",
         "viewOriginal": "Orijinali görüntüle",
-        "originalGone": "Artık kullanılamıyor"
+        "originalGone": "Artık kullanılamıyor",
+        "copiedFrom": "Kopyalandığı kişi: {{who}}"
       },
       "sameLinkShort": "Daha önce oluşturulan kopyalar olduğu gibi kalır.",
       "receive": {
@@ -8262,7 +8262,6 @@
       "updatedAt": "Güncelleme: {{date}}",
       "upToDate": "Güncel",
       "changedSince": "Bot o zamandan beri değişti",
-      "copy": "Kopyala",
       "copyLink": "Bağlantıyı kopyala",
       "secretFoundTitle": "Gizli bilgi bulundu",
       "secretWhere": "{{where}}, satır {{line}}: {{flag}}",

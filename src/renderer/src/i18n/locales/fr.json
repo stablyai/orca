@@ -26004,6 +26004,9 @@
         "messagesWait": "Les messages attendent son retour.",
         "leave": "Vous pouvez partir à tout moment.",
         "uses": "Utilise"
+      },
+      "copy": {
+        "copiedFrom": "Copié depuis {{who}}"
       }
     },
     "host": {
@@ -26182,6 +26185,22 @@
         "expired": "La connexion a expiré. Réessayez.",
         "couldNotSignIn": "Connexion impossible. Réessayez."
       }
+    },
+    "teamShare": {
+      "shareWithTeammates": "Partager avec des coéquipiers…"
+    },
+    "sharingPage": {
+      "teammates": "Coéquipiers",
+      "teammatesFoot": "S’exécute sur {{host}} avec vos comptes. Vous voyez leurs discussions avec lui, et chaque coéquipier ne voit que les siennes.",
+      "add": "Ajouter",
+      "copyLink": "Lien de copie",
+      "createCopyLink": "Créer un lien de copie",
+      "anyoneCanCopy": "Toute personne disposant du lien peut en faire une copie",
+      "linkActions": "Actions du lien",
+      "changeIncluded": "Modifier le contenu inclus…",
+      "stopSharing": "Arrêter le partage…",
+      "allYourLinks": "Tous vos liens",
+      "alreadyUpToDate": "Le lien est déjà à jour"
     }
   },
   "plugins": {

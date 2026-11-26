@@ -7725,7 +7725,6 @@
       "updatedAt": "更新于 {{date}}",
       "upToDate": "已是最新",
       "changedSince": "Bot 此后已更改",
-      "copy": "复制",
       "copyLink": "复制链接",
       "secretFoundTitle": "发现密钥",
       "secretWhere": "{{flag}}，位于 {{where}} 第 {{line}} 行",
@@ -7830,9 +7829,9 @@
       "linkNoLongerAvailable": "此分享链接已不可用",
       "signInOtherSite": "电脑发来的是其他网站的登录链接，因此没有打开。",
       "original": {
-        "sharedBy": "由 {{who}} 分享",
         "viewOriginal": "查看原始版本",
-        "originalGone": "已不可用"
+        "originalGone": "已不可用",
+        "copiedFrom": "复制自 {{who}}"
       },
       "invite": {
         "invitedYou": "{{owner}} 邀请了你",

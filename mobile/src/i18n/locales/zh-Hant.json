@@ -5178,6 +5178,9 @@
         "messagesWait": "訊息會等它恢復後再處理。",
         "leave": "你可以隨時離開。",
         "uses": "使用"
+      },
+      "original": {
+        "copiedFrom": "複製自 {{who}}"
       }
     },
     "settingsPage": {

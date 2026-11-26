@@ -5870,6 +5870,9 @@
         "messagesWait": "As mensagens esperam até ele voltar.",
         "leave": "Você pode sair quando quiser.",
         "uses": "Usa"
+      },
+      "original": {
+        "copiedFrom": "Copiado de {{who}}"
       }
     },
     "settingsPage": {

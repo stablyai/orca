@@ -27524,6 +27524,9 @@
         "messagesWait": "訊息會等它恢復後再處理。",
         "leave": "你可以隨時離開。",
         "uses": "使用"
+      },
+      "copy": {
+        "copiedFrom": "複製自 {{who}}"
       }
     },
     "host": {
@@ -27751,6 +27754,22 @@
         "expired": "登入已逾期。請再試一次。",
         "couldNotSignIn": "無法登入。請再試一次。"
       }
+    },
+    "teamShare": {
+      "shareWithTeammates": "與隊友分享…"
+    },
+    "sharingPage": {
+      "teammates": "隊友",
+      "teammatesFoot": "在 {{host}} 上使用你的帳號執行。你能看到隊友與它的聊天，每位隊友只能看到自己的聊天。",
+      "add": "新增",
+      "copyLink": "副本連結",
+      "createCopyLink": "建立副本連結",
+      "anyoneCanCopy": "任何擁有連結的人都可以建立副本",
+      "linkActions": "連結操作",
+      "changeIncluded": "變更包含的內容…",
+      "stopSharing": "停止分享…",
+      "allYourLinks": "你的所有連結",
+      "alreadyUpToDate": "連結已是最新"
     }
   },
   "plugins": {

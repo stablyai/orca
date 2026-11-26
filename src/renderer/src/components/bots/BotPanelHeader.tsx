@@ -294,7 +294,7 @@ function BotPanelHeaderActions({
             {sharingOffered ? (
               <DropdownMenuItem onSelect={() => setSharing('people')}>
                 <UserPlus />
-                {t('bots.teamShare.share', 'Share…')}
+                {t('bots.teamShare.shareWithTeammates', 'Share with teammates…')}
               </DropdownMenuItem>
             ) : null}
             <DropdownMenuItem

@@ -5296,6 +5296,9 @@
         "messagesWait": "Les messages attendent son retour.",
         "leave": "Vous pouvez partir à tout moment.",
         "uses": "Utilise"
+      },
+      "original": {
+        "copiedFrom": "Copié depuis {{who}}"
       }
     },
     "settingsPage": {
