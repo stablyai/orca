@@ -100,7 +100,7 @@ export function orchestrationMutationRecoveryError(
         : [
             queryCommand
               ? `Run ${renderCommand(queryCommand)} before retrying.`
-              : `Run ${renderCommand(query)}${whereRestored || ' with the same --pairing-code this command used (it is not repeated here)'} before retrying.`,
+              : `Run ${renderCommand(query)}${whereRestored} before retrying.`,
             retryStep
           ]),
     ...(readsStdin ? ['Pipe the same input into the retry again; it reads stdin.'] : [])

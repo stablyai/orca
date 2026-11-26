@@ -69,15 +69,16 @@ export function recoveryGuidance(
   route: OrchestrationRecoveryRoute | undefined
 ): RecoveryGuidance {
   const guidance = routeGuidance(flags, route)
-  // No flag chooses a profile, so an ORCA_USER_DATA_PATH override is reproduced only by the shell.
-  if (route?.profileEnv === 'empty') {
+  // No flag chooses a profile, so only the shell reproduces it, even the default: a parent shell
+  // can export another profile that a one-shot `env -u` hid from this command.
+  if (route?.profileEnv === 'empty' || route?.profileEnv === 'unset') {
     guidance.caveats.push(
-      'This command ran with ORCA_USER_DATA_PATH empty, so run these where it is unset or empty; another profile keeps a different record of it.'
+      `This command ran with ORCA_USER_DATA_PATH ${route.profileEnv}, so run both the inspect and the retry where it is unset or empty; another profile keeps a different record of it.`
     )
     guidance.requiredEnv.push('ORCA_USER_DATA_PATH')
   } else if (route?.profileEnv === 'set') {
     guidance.caveats.push(
-      'Run these where ORCA_USER_DATA_PATH names the same Orca profile as for this command; another profile keeps a different record of it.'
+      'Run both the inspect and the retry where ORCA_USER_DATA_PATH names the same Orca profile as for this command; another profile keeps a different record of it.'
     )
     guidance.requiredEnv.push('ORCA_USER_DATA_PATH')
   }
@@ -107,8 +108,13 @@ function routeGuidance(
       caveats: named ? [PAIRING_UNSET] : []
     }
   }
+  // The flag's pairing is never repeated, and an ORCA_ENVIRONMENT export would conflict with it.
   if (flags?.has('pairing-code')) {
-    return none()
+    return {
+      ...none(),
+      restore: 'ORCA_ENVIRONMENT is unset or empty, with the same --pairing-code this command used',
+      requiredEnv: ['ORCA_ENVIRONMENT']
+    }
   }
   if (route?.pairingEnv) {
     // The client prefers ORCA_PAIRING_CODE, so the fallback wins again only while it is unset.

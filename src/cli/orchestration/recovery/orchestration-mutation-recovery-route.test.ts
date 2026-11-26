@@ -354,6 +354,53 @@ describe('recovery commands that select the original Orca by themselves', () => 
 })
 
 describe('recovery commands withheld when only the original shell selects its Orca', () => {
+  it('tells an explicit --pairing-code to keep ORCA_ENVIRONMENT unset or empty, never repeating it', async () => {
+    vi.stubEnv('ORCA_ENVIRONMENT', 'devbox')
+    const cleared = { ORCA_ENVIRONMENT: '' }
+    const { text, recovery } = await original([...SEND, '--pairing-code', PAIRING], cleared)
+    const id = recovery.orchestrationRequestId
+    const query = [...bareQuery(id).slice(0, -1), '--pairing-code', PAIRING, '--json']
+    const retry = keyedRetry([...SEND, '--pairing-code', PAIRING], id)
+
+    expect(sends).toEqual([{ ledger: `pairing:${PAIRING}`, requestId: id }])
+    expect(recovery).not.toHaveProperty('queryCommand')
+    expect(recovery).not.toHaveProperty('retryCommand')
+    expect(recovery.requiredEnv).toEqual(['ORCA_ENVIRONMENT', 'ORCA_USER_DATA_PATH'])
+    expect(text).toContain(
+      'from a shell where ORCA_ENVIRONMENT is unset or empty, with the same --pairing-code this command used'
+    )
+    expect(text).toContain(
+      `--retry-request ${id} from a shell where ORCA_ENVIRONMENT is unset or empty`
+    )
+    expect(text).not.toContain('secret-pairing-payload')
+    // Once the named export resumes, the same pairing refuses; the stated condition reaches it.
+    expect(await inspect(query)).toContain('Use either --pairing-code or --environment')
+    expect(await inspect(query, cleared)).toBe('completed')
+    expect(await retryLands(retry, cleared)).toBe(`pairing:${PAIRING}`)
+  })
+
+  it('gives an explicit --pairing-code fresh unsent send the same condition', async () => {
+    vi.stubEnv('ORCA_ENVIRONMENT', 'devbox')
+    const cleared = { ORCA_ENVIRONMENT: '' }
+    fixture.nextSendUnsent = true
+    const argv = [...STATUS, '--pairing-code', PAIRING]
+    const { text, recovery } = await original(argv, cleared)
+
+    expect(recovery).toMatchObject({
+      disposition: 'not_sent',
+      requiredEnv: ['ORCA_ENVIRONMENT', 'ORCA_USER_DATA_PATH']
+    })
+    expect(text).toContain(
+      `--retry-request ${recovery.orchestrationRequestId} from a shell where ORCA_ENVIRONMENT is unset or empty`
+    )
+    expect(await retryLands(keyedRetry(argv, recovery.orchestrationRequestId))).toContain(
+      'Use either'
+    )
+    expect(await retryLands(keyedRetry(argv, recovery.orchestrationRequestId), cleared)).toBe(
+      `pairing:${PAIRING}`
+    )
+  })
+
   it('names ORCA_PAIRING_CODE and the conditions that select it again, never the code', async () => {
     const { text, recovery } = await original(SEND, { ORCA_PAIRING_CODE: PAIRING })
     const id = recovery.orchestrationRequestId
@@ -362,7 +409,7 @@ describe('recovery commands withheld when only the original shell selects its Or
     expect(recovery).not.toHaveProperty('retryCommand')
     expect(recovery).toMatchObject({
       disposition: 'outcome_unknown',
-      requiredEnv: ['ORCA_PAIRING_CODE']
+      requiredEnv: ['ORCA_PAIRING_CODE', 'ORCA_USER_DATA_PATH']
     })
     expect(text).toContain(
       'ORCA_PAIRING_CODE is set to the same pairing as for this command, and ORCA_ENVIRONMENT is unset or empty'
@@ -380,7 +427,11 @@ describe('recovery commands withheld when only the original shell selects its Or
     const id = recovery.orchestrationRequestId
 
     expect(recovery).not.toHaveProperty('queryCommand')
-    expect(recovery.requiredEnv).toEqual(['ORCA_REMOTE_PAIRING', 'ORCA_PAIRING_CODE'])
+    expect(recovery.requiredEnv).toEqual([
+      'ORCA_REMOTE_PAIRING',
+      'ORCA_PAIRING_CODE',
+      'ORCA_USER_DATA_PATH'
+    ])
     expect(text).toContain(
       'ORCA_REMOTE_PAIRING is set to the same pairing as for this command and ORCA_PAIRING_CODE is unset'
     )
@@ -424,6 +475,52 @@ describe('recovery commands withheld when only the original shell selects its Or
 })
 
 describe('the profile, which only ORCA_USER_DATA_PATH selects', () => {
+  it('states the default profile when the variable was removed for the original only', async () => {
+    vi.stubEnv('ORCA_USER_DATA_PATH', PROFILE)
+    const removed = { ORCA_USER_DATA_PATH: undefined }
+    const { text, recovery } = await original(SEND, removed)
+    const id = recovery.orchestrationRequestId
+
+    expect(sends).toEqual([{ ledger: LOCAL, requestId: id }])
+    expect(recovery).toMatchObject({
+      disposition: 'outcome_unknown',
+      requiredEnv: ['ORCA_USER_DATA_PATH']
+    })
+    expect(text).toContain(
+      'ran with ORCA_USER_DATA_PATH unset, so run both the inspect and the retry where it is unset or empty'
+    )
+    expect(text).not.toContain(PROFILE)
+    // The parent's export reaches another profile; the stated condition reaches the original.
+    expect(await inspect(recovery.queryCommand)).toBe('absent')
+    expect(await inspect(recovery.queryCommand, removed)).toBe('completed')
+    const before = sends.length
+    expect(await retryLands(recovery.retryCommand, removed)).toBe(LOCAL)
+    expect(sends[before]?.requestId).toBe(id)
+  })
+
+  it('states it for a fresh unsent send and keeps an explicit earlier key uncertain', async () => {
+    vi.stubEnv('ORCA_USER_DATA_PATH', PROFILE)
+    const removed = { ORCA_USER_DATA_PATH: undefined }
+    fixture.nextSendUnsent = true
+    const fresh = await original(STATUS, removed)
+
+    expect(fresh.recovery).toMatchObject({
+      disposition: 'not_sent',
+      requiredEnv: ['ORCA_USER_DATA_PATH']
+    })
+    expect(fresh.text).toContain('ran with ORCA_USER_DATA_PATH unset')
+    expect(await retryLands(fresh.recovery.retryCommand, removed)).toBe(LOCAL)
+
+    const key = randomUUID()
+    fixture.nextSendUnsent = true
+    const explicit = await original([...STATUS, '--retry-request', key], removed)
+    expect(explicit.recovery).toMatchObject({
+      orchestrationRequestId: key,
+      disposition: 'outcome_unknown'
+    })
+    expect(await inspect(explicit.recovery.queryCommand, removed)).toBe('absent')
+  })
+
   it('states an alternate profile as a prerequisite, without printing its path', async () => {
     const { text, recovery } = await original(SEND, { ORCA_USER_DATA_PATH: PROFILE })
 
