@@ -20,16 +20,16 @@ type Lookup = {
   signal?: AbortSignal
   resolve: (own: boolean) => void
   reject: (error: Error) => void
-  /** A dropped lookup stays in the queue array and is skipped once when it reaches the head. */
-  state: 'queued' | 'sent' | 'dropped'
+  /** Links in the helper's queue; a cancel unlinks its own lookup without searching or leaving it behind. */
+  queued: boolean
+  previous: Lookup | null
+  next: Lookup | null
 }
 type RunningHelper = {
   child: ChildProcessWithoutNullStreams
-  /** Written one at a time, so a lookup whose connection closed while queued is never scanned.
-   *  Entries before `head` are done; dropping marks a lookup instead of searching for it. */
-  queue: Lookup[]
-  head: number
-  /** Queued lookups not yet sent or dropped. */
+  /** Written one at a time, so a lookup whose connection closed while queued is never scanned. */
+  first: Lookup | null
+  last: Lookup | null
   waiting: number
   inFlight: Lookup | null
   buffered: string
@@ -97,52 +97,62 @@ export function isOwnDarwinConnection(
       signal,
       resolve,
       reject,
-      state: 'queued'
+      queued: false,
+      previous: null,
+      next: null
     }
-    helper.queue.push(lookup)
-    helper.waiting++
+    enqueue(helper, lookup)
     signal?.addEventListener('abort', () => dropQueued(helper, lookup), { once: true })
     sendNext(helper)
   })
 }
 
-function dropQueued(helper: RunningHelper, lookup: Lookup): void {
-  if (lookup.state !== 'queued' || running !== helper) {
-    return
+function enqueue(helper: RunningHelper, lookup: Lookup): void {
+  lookup.queued = true
+  lookup.previous = helper.last
+  if (helper.last) {
+    helper.last.next = lookup
+  } else {
+    helper.first = lookup
   }
-  lookup.state = 'dropped'
-  helper.waiting--
-  lookup.reject(new Error('the connection closed before its owner check'))
+  helper.last = lookup
+  helper.waiting++
 }
 
-/** The next queued lookup, stepping over dropped ones; each entry is passed once. */
-function takeNext(helper: RunningHelper): Lookup | undefined {
-  while (helper.head < helper.queue.length) {
-    const lookup = helper.queue[helper.head++]!
-    if (lookup.state === 'queued') {
-      helper.waiting--
-      return lookup
-    }
+function unlink(helper: RunningHelper, lookup: Lookup): void {
+  if (lookup.previous) {
+    lookup.previous.next = lookup.next
+  } else {
+    helper.first = lookup.next
   }
-  helper.queue = []
-  helper.head = 0
-  return undefined
+  if (lookup.next) {
+    lookup.next.previous = lookup.previous
+  } else {
+    helper.last = lookup.previous
+  }
+  lookup.queued = false
+  lookup.previous = null
+  lookup.next = null
+  helper.waiting--
+}
+
+function dropQueued(helper: RunningHelper, lookup: Lookup): void {
+  if (!lookup.queued || running !== helper) {
+    return
+  }
+  unlink(helper, lookup)
+  lookup.reject(new Error('the connection closed before its owner check'))
 }
 
 function sendNext(helper: RunningHelper): void {
   if (helper.inFlight || running !== helper) {
     return
   }
-  const next = takeNext(helper)
+  const next = helper.first
   if (!next) {
     return
   }
-  next.state = 'sent'
-  // Done entries are released once they make up half the array, so it stays within twice the queue.
-  if (helper.head * 2 >= helper.queue.length) {
-    helper.queue = helper.queue.slice(helper.head)
-    helper.head = 0
-  }
+  unlink(helper, next)
   helper.inFlight = next
   helper.stall = setTimeout(
     () => fail(helper, 'the macOS socket owner helper stopped answering'),
@@ -155,8 +165,8 @@ function start(): RunningHelper {
   const child = spawnProcess({ program: helperPath(), args: [] })
   const helper: RunningHelper = {
     child,
-    queue: [],
-    head: 0,
+    first: null,
+    last: null,
     waiting: 0,
     inFlight: null,
     buffered: '',
@@ -214,10 +224,12 @@ function stop(helper: RunningHelper | null, reason: string): void {
   if (helper.stall) {
     clearTimeout(helper.stall)
   }
-  const lookups = helper.queue.slice(helper.head).filter((lookup) => lookup.state === 'queued')
-  helper.queue = []
-  helper.head = 0
-  helper.waiting = 0
+  const lookups: Lookup[] = []
+  while (helper.first) {
+    const lookup = helper.first
+    unlink(helper, lookup)
+    lookups.push(lookup)
+  }
   if (helper.inFlight) {
     lookups.push(helper.inFlight)
     helper.inFlight = null
