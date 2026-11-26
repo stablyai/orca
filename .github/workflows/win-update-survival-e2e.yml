@@ -196,7 +196,7 @@ jobs:
       - uses: ./.github/actions/prepare-windows-agent-hook
 
       # N, N+1 and N+2 are this branch at 1.4.900/901/902 (N+1/N+2 repackage N with a build marker);
-      # main-n is N with main's process check; pr-trace is N with the CI-only check trace.
+      # main-n/main-n1 are N/N+1 with main's process check; pr-trace is N with the CI-only check trace.
       - name: Build installers (unsigned)
         shell: pwsh
         run: |
@@ -218,6 +218,7 @@ jobs:
           git fetch --depth=1 origin main
           cmd /c "git show FETCH_HEAD:config/nsis/orca-process-check.nsh > config/nsis/orca-process-check.nsh"
           Repack 1.4.900 main installers/main-n.exe
+          Repack 1.4.901 main1 installers/main-n1.exe
           git checkout -- config/nsis
           node tests/tools/win-update-e2e/trace-installer-branches.mjs
           Repack 1.4.900 trace installers/pr-trace.exe
@@ -239,7 +240,7 @@ jobs:
           ORCA_BACKGROUND_LAUNCH: '1'
         run: |
           New-Item -ItemType Directory -Force artifacts/scenarios | Out-Null
-          node tests/tools/win-update-e2e/scenarios.mjs --release installers/release/orca-windows-setup.exe --pr-n installers/pr-n.exe --pr-n1 installers/pr-n1.exe --pr-n2 installers/pr-n2.exe --main-n installers/main-n.exe --pr-trace installers/pr-trace.exe --out artifacts/scenarios 2>&1 | Tee-Object -FilePath artifacts/scenarios/matrix.log
+          node tests/tools/win-update-e2e/scenarios.mjs --release installers/release/orca-windows-setup.exe --pr-n installers/pr-n.exe --pr-n1 installers/pr-n1.exe --pr-n2 installers/pr-n2.exe --main-n installers/main-n.exe --main-n1 installers/main-n1.exe --pr-trace installers/pr-trace.exe --out artifacts/scenarios 2>&1 | Tee-Object -FilePath artifacts/scenarios/matrix.log
           exit $LASTEXITCODE
 
       - name: Scenario 4, relocated daemon survives (released to branch)

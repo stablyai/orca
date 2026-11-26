@@ -1,10 +1,6 @@
 # Snapshot of an Orca install folder for the update scenarios. Prints one JSON object.
 param([Parameter(Mandatory = $true)][string]$InstallDir)
 
-function Hash($path) {
-  if (Test-Path -LiteralPath $path) { (Get-FileHash -Algorithm SHA256 -LiteralPath $path).Hash.Substring(0, 16) } else { $null }
-}
-
 $exe = Join-Path $InstallDir 'Orca.exe'
 $present = Test-Path -LiteralPath $exe
 $uninstall = Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' -ErrorAction SilentlyContinue |
@@ -19,8 +15,6 @@ $marker = Join-Path $InstallDir 'resources\e2e-build.txt'
 [pscustomobject]@{
   present        = $present
   exeVersion     = if ($present) { (Get-Item -LiteralPath $exe).VersionInfo.ProductVersion } else { $null }
-  exeSha         = Hash $exe
-  asarSha        = Hash (Join-Path $InstallDir 'resources\app.asar')
   fileCount      = if (Test-Path -LiteralPath $InstallDir) { @(Get-ChildItem -LiteralPath $InstallDir -Recurse -File -ErrorAction SilentlyContinue).Count } else { 0 }
   displayVersion = if ($uninstall) { $uninstall.DisplayVersion } else { $null }
   marker         = if (Test-Path -LiteralPath $marker) { (Get-Content -LiteralPath $marker -Raw).Trim() } else { $null }

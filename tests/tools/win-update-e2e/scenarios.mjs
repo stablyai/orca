@@ -5,7 +5,8 @@
 // installed app then opens a window. Results: <out>/scenarios.json and <out>/scenarios.md.
 
 import { spawn, spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { assertWin32 } from './platform-guard.mjs'
@@ -30,6 +31,7 @@ const installers = {
   prN1: arg('--pr-n1'),
   prN2: arg('--pr-n2'),
   mainN: arg('--main-n'),
+  mainN1: arg('--main-n1'),
   prTrace: arg('--pr-trace')
 }
 const outDir = arg('--out') ?? 'artifacts/scenarios'
@@ -42,8 +44,17 @@ function log(msg) {
   console.log(`[scenarios] ${msg}`)
 }
 
+function shortHash(file) {
+  return existsSync(file)
+    ? createHash('sha256').update(readFileSync(file)).digest('hex').slice(0, 12)
+    : null
+}
+
 function probe() {
-  return runScriptFileJson(PROBE, [INSTALL_DIR])
+  const snapshot = runScriptFileJson(PROBE, [INSTALL_DIR])
+  snapshot.exeSha = shortHash(path.join(INSTALL_DIR, 'Orca.exe'))
+  snapshot.asarSha = shortHash(path.join(INSTALL_DIR, 'resources', 'app.asar'))
+  return snapshot
 }
 
 function brief(snapshot) {
@@ -101,21 +112,48 @@ function startLeftover() {
 // A process outside the install folder holding app.asar open without delete sharing (as an
 // antivirus scanner or indexer can): no running-app check sees it.
 function startOutsideHolder() {
-  const asar = path.join(INSTALL_DIR, 'resources', 'app.asar').replaceAll("'", "''")
+  const ready = path.join(work, `holding-${Date.now()}.txt`)
   const child = spawn(
     'powershell.exe',
     [
       '-NoProfile',
-      '-Command',
-      `$f = [IO.File]::Open('${asar}', 'Open', 'Read', 'Read'); Start-Sleep -Seconds 3600`
+      '-ExecutionPolicy',
+      'Bypass',
+      '-File',
+      path.join(HERE, 'hold-file.ps1'),
+      '-Path',
+      path.join(INSTALL_DIR, 'resources', 'app.asar'),
+      '-ReadyFile',
+      ready
     ],
     { detached: true, stdio: 'ignore', windowsHide: true }
   )
   child.unref()
   owned.add(child.pid)
-  sleep(4000)
-  log(`outside holder pid ${child.pid} alive=${isPidAlive(child.pid)}`)
+  for (let i = 0; i < 60 && !existsSync(ready); i++) {
+    sleep(250)
+  }
+  log(`outside holder pid ${child.pid} holding=${existsSync(ready)}`)
+  if (!existsSync(ready)) {
+    throw new Error('outside holder never opened app.asar')
+  }
   return child.pid
+}
+
+// The installer as a normal per-user install runs it: a Basic User token without Administrators
+// or SeDebugPrivilege (the CI runner itself is an elevated admin).
+function runDeelevated(exe, args) {
+  const started = Date.now()
+  const result = runScriptFileJson(
+    path.join(HERE, 'run-deelevated.ps1'),
+    ['-Exe', path.resolve(exe), '-Arguments', args.join(' ')],
+    { timeout: INSTALLER_TIMEOUT_MS + 60_000 }
+  )
+  const seconds = Math.round((Date.now() - started) / 100) / 10
+  log(
+    `${path.basename(exe)} ${args.join(' ')} (Basic User token) -> exit ${result.exit} in ${seconds}s`
+  )
+  return { exit: result.exit, seconds }
 }
 
 // One leftover the installer can find but not end: its DACL denies PROCESS_TERMINATE, which stands
@@ -197,7 +235,7 @@ async function step(scenario, label, exe, args, { leftover, expect, extraEnv, du
   const row = {
     scenario,
     step: label,
-    command: `${path.basename(exe)} ${args.join(' ')}`,
+    command: `${path.basename(exe)} ${args.join(' ')}${run === runDeelevated ? ' (Basic User token)' : ''}`,
     exit: result.exit,
     seconds: result.seconds,
     before: brief(before),
@@ -261,8 +299,8 @@ const scenarios = {
   async '2-one-leftover'() {
     freshInstall(installers.mainN)
     let leftover = startLeftover()
-    // Observational: main's check is the old PowerShell one; the row records what it does.
-    await step('2 one leftover', "main's check", installers.mainN, UPDATE, { leftover })
+    // Observational: main's PowerShell check; the row records what it does with one leftover.
+    await step('2 one leftover', "main's check", installers.mainN1, UPDATE, { leftover })
     freshInstall(installers.prN)
     leftover = startLeftover()
     await step('2 one leftover', "this PR's check", installers.prN1, UPDATE, {
@@ -280,6 +318,7 @@ const scenarios = {
       UPDATE,
       {
         leftover: protectedLeftover,
+        run: runDeelevated,
         expect: all(checks.failed, checks.unchanged, checks.leftoverAlive, checks.launches)
       }
     )
@@ -429,6 +468,7 @@ function table() {
 async function main() {
   assertWin32('update scenarios')
   mkdirSync(outDir, { recursive: true })
+  log(`runner token:\n${spawnSync('whoami.exe', ['/priv'], { encoding: 'utf8' }).stdout}`)
   for (const [name, run] of Object.entries(scenarios)) {
     if (only && !only.includes(name)) {
       continue
