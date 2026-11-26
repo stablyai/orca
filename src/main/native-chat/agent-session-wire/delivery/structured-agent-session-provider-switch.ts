@@ -277,12 +277,13 @@ async function appendProviderHandoff(
 ): Promise<void> {
   const from = tuiAgentDisplayName(source) ?? source
   const to = tuiAgentDisplayName(target) ?? target
+  const retry = failure === true ? 'Retry sends to the agent shown in the composer.' : failure
   await session.journal.appendItem(
     { provider: 'orca', clientMessageId: `context-handoff:${clientMessageId}` },
     {
       kind: 'status',
       presentation: 'context-handoff',
-      text: `Context handoff · ${from} → ${to}${typeof failure === 'string' ? ` · ${failure}` : ''}`,
+      text: `Context handoff · ${from} → ${to}${typeof retry === 'string' ? ` · ${retry}` : ''}`,
       ...(failure ? { tone: 'error' } : {})
     },
     { fence, turnScope: { kind: 'thread' } }

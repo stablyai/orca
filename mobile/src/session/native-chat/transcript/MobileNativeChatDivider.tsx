@@ -51,7 +51,8 @@ export const mobileNativeChatDividerStyles = themedStyleSheet(() => ({
   },
   dividerLabel: {
     color: colors.textMuted,
-    fontSize: typography.metaSize
+    fontSize: typography.metaSize,
+    flexShrink: 1
   }
 }))
 
