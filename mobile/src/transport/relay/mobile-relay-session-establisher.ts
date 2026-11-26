@@ -18,6 +18,8 @@ import type { StableLogicalRpcClient } from '../connection/stable-logical-rpc-cl
 import type { MobileRelayEndpoint } from '../../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import { RELAY_HOST_CLOSE_REASON } from '../../../../src/shared/remote-runtime/relay/relay-host-close-reason'
 
+const PENDING_REFUSAL_RETRIES = 3
+
 function isDirectorRefusal(error: Error | null): boolean {
   return error instanceof RelayDirectorHttpError && error.status === 401
 }
@@ -37,6 +39,8 @@ export class MobileRelaySessionEstablisher {
   // tried first; otherwise current takes every admission and the next token always gets a 503.
   private directorTried = new Map<string, number>()
   private directorTrySeq = 0
+  // A refused pending gets a few slow reprobes for a late commit, then counts as refused for good.
+  private pendingRefusals = 0
 
   constructor(
     private readonly args: {
@@ -99,11 +103,14 @@ export class MobileRelaySessionEstablisher {
     this.directorTried = kept
     const lastTried = (token: string) => this.directorTried.get(token) ?? -1
     const ordered = [...credentials].sort((a, b) => lastTried(a.token) - lastTried(b.token))
+    let directorAnswered = false
     for (const credential of ordered) {
       usedPending = credential.token === pending?.token
-      const result = await this.dial(credential)
+      // The director admits one resolve per host per window, so after a 401 the rest only dial the cell.
+      const result = await this.dial(credential, !directorAnswered)
       if (result.ok) {
         this.directorTried.clear()
+        this.pendingRefusals = 0
         return { outcome: 'established' }
       }
       if (result.error instanceof RelayDialAbortedError) {
@@ -113,12 +120,13 @@ export class MobileRelaySessionEstablisher {
       this.args.onDialFailure(result.error)
       // Only a 401 used the admission; a rate-limited 503/429 never reached the token, so it goes first next.
       if (isDirectorRefusal(result.error)) {
+        directorAnswered = true
         this.directorTried.set(credential.token, ++this.directorTrySeq)
       }
       if (isExplicitCredentialRejection(result.error)) {
         // Why: a rejected version stays invalid; retry only the later credentials. Pending is spared:
         // its install can still commit after this refusal, and the gated reprobe retries it slowly.
-        if (!usedPending) {
+        if (!usedPending || ++this.pendingRefusals >= PENDING_REFUSAL_RETRIES) {
           this.args.controller.recordRejectedCredential(credential.version)
         }
         continue
@@ -136,8 +144,12 @@ export class MobileRelaySessionEstablisher {
     }
   }
 
-  dial(credential: { token: string; version: number }): Promise<EstablishResult> {
+  dial(
+    credential: { token: string; version: number },
+    canResolve = true
+  ): Promise<EstablishResult> {
     return dialRelayThroughDirectorFallback({
+      canResolve,
       resumeToken: credential.token,
       hostOfflineStreak: this.hostOfflineStreak,
       relay: () => this.relay,

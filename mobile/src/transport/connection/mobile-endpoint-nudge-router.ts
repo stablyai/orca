@@ -1,6 +1,7 @@
 import type { RelayReconnectController } from '../relay/mobile-relay-reconnect-controller'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { ForegroundNudgeReason } from './connection-state'
+import type { ScheduleTimer } from '../../platform/timer-scheduler'
 
 const GATED_NETWORK_NUDGE_WINDOW_MS = 30_000
 
@@ -11,6 +12,7 @@ export class MobileEndpointNudgeRouter {
   private readsStarted = 0
   private lastAppliedRead = 0
   private lastGateLiftAt = Number.NEGATIVE_INFINITY
+  private trailingLift: ReturnType<typeof setTimeout> | null = null
 
   constructor(
     private readonly args: {
@@ -22,6 +24,7 @@ export class MobileEndpointNudgeRouter {
       scheduleDirectProbe: () => void
       readLocalNetwork: () => Promise<string | null>
       now: () => number
+      setTimer: ScheduleTimer
       onLocalNetworkArrival: () => void
     }
   ) {
@@ -55,12 +58,20 @@ export class MobileEndpointNudgeRouter {
         this.lastGateLiftAt = args.now()
         args.controller.handleActiveNudge(args.logical, reason)
       }
-      if (args.now() - this.lastGateLiftAt >= GATED_NETWORK_NUDGE_WINDOW_MS) {
+      const sinceLift = args.now() - this.lastGateLiftAt
+      if (sinceLift >= GATED_NETWORK_NUDGE_WINDOW_MS) {
         liftGate()
         void this.routeNetworkChange()
-      } else {
-        void this.routeNetworkChange(liftGate)
+        return
       }
+      void this.routeNetworkChange(liftGate)
+      // A suppressed callback may be connectivity returning, so it still earns one retry when the window ends.
+      this.trailingLift ??= args.setTimer(() => {
+        this.trailingLift = null
+        if (!args.isStopped() && args.isForeground() && args.controller.holdsExternalSignalGate()) {
+          liftGate()
+        }
+      }, GATED_NETWORK_NUDGE_WINDOW_MS - sinceLift)
       return
     }
     args.controller.handleActiveNudge(args.logical, reason)

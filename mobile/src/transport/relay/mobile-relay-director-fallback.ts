@@ -24,6 +24,8 @@ export async function dialRelayThroughDirectorFallback(args: {
     resumeToken: string
   }) => Promise<MobileRelayEndpoint>
   persistResolvedRelay: (resolved: MobileRelayEndpoint) => Promise<void>
+  // False when the director already answered this host within its admission window.
+  canResolve?: boolean
 }): Promise<RelayDialResult> {
   const first = await args.dial()
   const relay = args.relay()
@@ -31,6 +33,7 @@ export async function dialRelayThroughDirectorFallback(args: {
     args.hostOfflineStreak?.shouldResolve(first.ok ? null : first.error) ?? false
   if (
     first.ok ||
+    args.canResolve === false ||
     first.error instanceof RelayDialAbortedError ||
     !(persistentHostOffline || isDirectorResolutionFailure(first.error))
   ) {
