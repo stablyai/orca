@@ -23,10 +23,13 @@ function missingFolderByPane(errors: TerminalErrorsByPaneId): Map<number, string
 /** A pane refused for a missing folder (an unmounted volume) starts again once the folder is back, even if its error toast was dismissed. */
 export function useMissingFolderPaneRetry({
   terminalErrorsByPaneId,
+  paneOnClient,
   paneTransportsRef,
   handleRestartPane
 }: {
   terminalErrorsByPaneId: TerminalErrorsByPaneId
+  /** False for SSH, runtime or not-yet-known hosts: this client cannot see their folders. */
+  paneOnClient: boolean
   paneTransportsRef: TerminalPaneFoundation['paneTransportsRef']
   handleRestartPane: ReturnType<typeof usePaneProcessRestart>['handleRestartPane']
 }): void {
@@ -39,6 +42,9 @@ export function useMissingFolderPaneRetry({
 
   useEffect(() => {
     const waiting = waitingRef.current
+    if (!paneOnClient) {
+      return
+    }
     for (const [paneId, folder] of missingFolderByPane(terminalErrorsByPaneId)) {
       waiting.set(paneId, folder)
     }
@@ -61,8 +67,14 @@ export function useMissingFolderPaneRetry({
               return
             }
             // Why: a pane the user already restarted owns a live shell this must not replace.
-            if (!paneTransportsRef.current.get(paneId)?.getPtyId()) {
+            if (paneTransportsRef.current.get(paneId)?.getPtyId()) {
+              return
+            }
+            try {
               restartRef.current(paneId, null, { focus: false })
+            } catch {
+              // Why: a failed restart already cleared the pane's error, so keep waiting rather than leave it dead.
+              waiting.set(paneId, folder)
             }
           })
         ).finally(() => {
@@ -74,7 +86,7 @@ export function useMissingFolderPaneRetry({
         })
       }
     })
-  }, [terminalErrorsByPaneId, paneTransportsRef])
+  }, [terminalErrorsByPaneId, paneOnClient, paneTransportsRef])
 
   useEffect(() => {
     const waiting = waitingRef.current
