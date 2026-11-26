@@ -171,6 +171,24 @@ export function withBotShareAnswer(
   return shares.map((entry) => (entry === share ? { ...share, [field]: at } : entry))
 }
 
+/** The list with that account's share named `name`: a share resolved before the cloud sent names
+ *  gets one from a later accept. The same list when there is nothing to change. */
+export function withBotShareNamed(
+  shares: readonly BotShare[],
+  named: { shareId: string; accountId: string; name?: string }
+): readonly BotShare[] {
+  const share = shares.find((entry) => entry.shareId === named.shareId)
+  if (
+    !named.name ||
+    share?.kind !== 'account' ||
+    share.accountId !== named.accountId ||
+    share.name === named.name
+  ) {
+    return shares
+  }
+  return shares.map((entry) => (entry === share ? { ...share, name: named.name } : entry))
+}
+
 /** The list with each account share whose teammate already reaches the bot marked accepted: shares
  *  accepted before the owner's list kept it. */
 export function withBotSharesReached(

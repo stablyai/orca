@@ -93,7 +93,9 @@ const DeviceAsk = {
 export const ShareAcceptFields = {
   ...ShareDeliveryFields,
   accountId: OpaqueIdSchema,
-  ...DeviceAsk
+  ...DeviceAsk,
+  // The teammate's account name, so a share resolved before names were sent gets one.
+  name: Name.optional()
 }
 
 // A message the teammate sent while the host was away, sealed to the host's key. The host opens it,

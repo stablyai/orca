@@ -28767,6 +28767,8 @@
     "tabs": {
       "homeDetail": "主聊天：bot 的主要对话。它的记忆、自动化以及他人的请求都会汇集到这里",
       "sideDetail": "支线聊天：与此 bot 讨论另一个话题",
+      "teammateHomeDetail": "主聊天：你与此智能体的主要对话。你的请求和它给你的回复都会汇集到这里",
+      "personHomeDetail": "{{name}} 的 Home：他们与此智能体的主要对话",
       "homeBanner": "打开 {{name}} 的主页",
       "homeTitle": "主聊天"
     },

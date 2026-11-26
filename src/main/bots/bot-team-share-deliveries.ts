@@ -4,6 +4,7 @@
 import {
   botAccountShare,
   withBotShareAnswer,
+  withBotShareNamed,
   withBotShareResolved,
   withBotSharesReached,
   type BotShareAnswer
@@ -77,7 +78,7 @@ export type BotShareOfferMint = (input: {
  *  isn't theirs. A decline notifies no one. */
 export async function answerBotShare(
   bots: SharedBotsEditor,
-  answer: BotShareAnswer & { botId: string },
+  answer: BotShareAnswer & { botId: string; name?: string },
   at: number
 ): Promise<boolean> {
   if (
@@ -90,7 +91,7 @@ export async function answerBotShare(
     return false
   }
   await bots.update(answer.botId, (saved) => {
-    const next = withBotShareAnswer(saved.shares ?? [], answer, at)
+    const next = withBotShareNamed(withBotShareAnswer(saved.shares ?? [], answer, at), answer)
     return next !== saved.shares ? { shares: [...next] } : {}
   })
   return true
@@ -161,7 +162,7 @@ export async function acceptBotShare(
   const offer = await deps.mintOffer({
     botId: delivery.botId,
     accountId: share.accountId,
-    name: share.name ?? share.email,
+    name: delivery.name ?? share.name ?? share.email,
     devicePublicKey: delivery.devicePublicKey
   })
   // A remove that landed during the mint found no row to end; end the one just minted.

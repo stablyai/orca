@@ -5,11 +5,18 @@ import {
   BOT_SHARES_FULL,
   BotSharesSchema,
   withBotShareInvites,
+  withBotShareNamed,
   withBotShareResolved,
   withBotSharesEmailed,
   type BotShare
 } from './bot-team-shares'
-import { automationActsFor, botHome, withBotHome } from './bot-home-of'
+import {
+  automationActsFor,
+  botHome,
+  botHomeName,
+  botSharePersonName,
+  withBotHome
+} from './bot-home-of'
 
 let next = 0
 const mint = () => ({ shareId: `share-${++next}`, addedAt: 1 })
@@ -141,5 +148,42 @@ describe('a Home Chat for each person, as the bot file keeps them', () => {
     expect(automationActsFor({ shares: [] }, { home: 'acct-alice' })).toEqual([
       { kind: 'person', source: 'orca', userId: 'acct-alice', workspaceId: null, role: 'member' }
     ])
+  })
+})
+
+describe('a teammate share stored before names', () => {
+  it('reads by its email until an accept names it, and only that account is named', () => {
+    // A row an older build wrote: an account share with no name.
+    const [stored] = BotSharesSchema.parse([
+      {
+        kind: 'account',
+        shareId: 'a',
+        accountId: 'acct-alice',
+        email: 'alice@example.com',
+        addedAt: 1
+      }
+    ])
+    const bot = { shares: [stored] }
+    expect(botSharePersonName(bot, 'acct-alice')).toBe('alice@example.com')
+    expect(botHomeName(bot, { accountId: 'acct-alice' })).toBe('alice@example.com’s Home')
+
+    expect(withBotShareNamed(bot.shares, { shareId: 'a', accountId: 'acct-alice' })).toBe(
+      bot.shares
+    )
+    expect(
+      withBotShareNamed(bot.shares, { shareId: 'a', accountId: 'acct-bob', name: 'Bob' })
+    ).toBe(bot.shares)
+
+    const named = {
+      shares: [
+        ...withBotShareNamed(bot.shares, {
+          shareId: 'a',
+          accountId: 'acct-alice',
+          name: 'Alice Kim'
+        })
+      ]
+    }
+    expect(botHomeName(named, { accountId: 'acct-alice' })).toBe('Alice Kim’s Home')
+    expect(BotSharesSchema.parse(JSON.parse(JSON.stringify(named.shares)))).toEqual(named.shares)
   })
 })
