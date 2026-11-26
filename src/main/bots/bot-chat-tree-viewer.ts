@@ -1,5 +1,5 @@
-// One chats tree on the agent's host, projected for whoever reads it: the owner sees every chat, with
-// teammates' Homes named as theirs; a teammate sees their own chats, with their Home as the Home row.
+// One chats tree on the agent's host, projected for whoever reads it: everyone sees every chat, with
+// others' Homes named as theirs; a teammate's own Home is their Home row.
 import type { BotChatTreeChat, BotChatTreeRead } from '../../shared/bots/bot-chat-tree'
 import {
   HOME_CHAT_TITLE,
@@ -11,7 +11,13 @@ import { botHomePlaceholderAccount, type BotHomeOf } from '../../shared/bots/bot
 
 export type BotChatTreeViewer =
   | { kind: 'owner'; personName: (accountId: string) => string }
-  | { kind: 'teammate'; accountId: string; owns: (chatId: string) => boolean }
+  | {
+      kind: 'teammate'
+      accountId: string
+      personName: (accountId: string) => string
+      /** The owner as the share names them, for their Home row. */
+      ownerName: string
+    }
 
 function wireChat({ whoseHome: _internal, ...chat }: BotChatHostChat): BotChatTreeChat {
   return chat
@@ -77,26 +83,38 @@ function teammateView(
   viewer: Extract<BotChatTreeViewer, { kind: 'teammate' }>,
   page: boolean
 ): BotChatTreeRead {
-  const byId = new Map(tree.chats.map((chat) => [chat.chatId, chat]))
-  // By identity, so their Home not made yet (no record says whom it acts for) is never dropped.
-  const theirs = (chatId: string): boolean =>
-    teammateHome(byId.get(chatId)?.whoseHome, viewer.accountId) ||
-    botHomePlaceholderAccount(chatId) === viewer.accountId ||
-    viewer.owns(chatId)
+  const own = (chatId: string, of: BotHomeOf | undefined): boolean =>
+    teammateHome(of, viewer.accountId) || botHomePlaceholderAccount(chatId) === viewer.accountId
   const asHome = (chatId: string): string =>
     botHomePlaceholderAccount(chatId) === viewer.accountId ? NO_HOME_CHAT_ID : chatId
+  const self = { accountId: viewer.accountId, name: viewer.personName(viewer.accountId) }
+  // Everyone's chats, as the owner sees them: their own Home is the Home row, anyone else's (the
+  // owner's included) a row named for that person.
   const chats = tree.chats.flatMap((chat): BotChatTreeChat[] => {
-    if (!theirs(chat.chatId)) {
-      return []
+    const of = chat.whoseHome
+    if (own(chat.chatId, of)) {
+      return [
+        {
+          ...teammateWireChat(chat),
+          chatId: asHome(chat.chatId),
+          origin: 'home',
+          title: HOME_CHAT_TITLE,
+          person: self
+        }
+      ]
     }
-    if (!teammateHome(chat.whoseHome, viewer.accountId)) {
+    if (!of) {
       return [teammateWireChat(chat)]
     }
+    if (isPlaceholder(chat) && chat.runningTotal === 0) {
+      return []
+    }
+    const name = of === 'owner' ? viewer.ownerName : viewer.personName(of.accountId)
     return [
       {
         ...teammateWireChat(chat),
-        chatId: asHome(chat.chatId),
-        origin: 'home',
+        origin: 'side',
+        homeOf: name,
         title: HOME_CHAT_TITLE
       }
     ]
@@ -114,6 +132,7 @@ function teammateView(
             lastActiveAt: 0,
             unread: false,
             closed: false,
+            person: self,
             running: [],
             runningTotal: 0,
             finished: [],
@@ -122,11 +141,14 @@ function teammateView(
           },
           ...chats
         ]
+  const shown = new Set(withHome.map((chat) => chat.chatId))
   return {
     chats: withHome,
     workspaceChats: Object.fromEntries(
       Object.entries(tree.workspaceChats).flatMap(([workspace, chatId]) =>
-        theirs(chatId) ? [[workspace, asHome(chatId)] as const] : []
+        !botHomePlaceholderAccount(chatId) || shown.has(asHome(chatId))
+          ? [[workspace, asHome(chatId)] as const]
+          : []
       )
     )
   }

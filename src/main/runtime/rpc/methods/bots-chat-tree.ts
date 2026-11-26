@@ -8,12 +8,12 @@ import { readSharedBotChatTree, runtimeBotChatTreeHost } from '../../../bots/bot
 import { readBotOwnChatPanes } from '../../../bots/bot-own-chat-panes'
 import { runtimeBotChatSearchHost, searchBotChats } from '../../../bots/bot-chat-search-host'
 import { defineMethod } from '../core'
+import { botShareScopeOf, withBotChatPeople } from '../../../bots/team-share/bot-share-chats'
 import {
-  botShareChatFilter,
-  botShareScopeOf,
-  withBotChatPeople
-} from '../../../bots/team-share/bot-share-chats'
-import { botShareScopedView } from '../../../bots/team-share/bot-share-scoped-view'
+  botShareHostOwnerName,
+  botShareScopedView,
+  HOST_OWNER_FALLBACK_NAME
+} from '../../../bots/team-share/bot-share-scoped-view'
 import { botChatTreeForViewer, type BotChatTreeViewer } from '../../../bots/bot-chat-tree-viewer'
 import { NO_HOME_CHAT_ID } from '../../../../shared/bots/bot-chat-tree-model'
 import { botHomePlaceholderId, botSharePersonName } from '../../../../shared/bots/bot-home-of'
@@ -34,18 +34,17 @@ export const BOT_CHAT_TREE_METHODS = [
           : params
       const tree = await readSharedBotChatTree(runtime, read)
       const bot = runtime.bots.list().find((entry) => entry.id === params.botId)
+      const personName = (accountId: string): string => botSharePersonName(bot ?? {}, accountId)
       const viewer: BotChatTreeViewer = share
         ? {
             kind: 'teammate',
             accountId: share.accountId,
-            owns: botShareChatFilter(runtime, share)
+            personName,
+            ownerName: botShareHostOwnerName() ?? HOST_OWNER_FALLBACK_NAME
           }
-        : {
-            kind: 'owner',
-            personName: (accountId) => botSharePersonName(bot ?? {}, accountId)
-          }
+        : { kind: 'owner', personName }
       const view = botChatTreeForViewer(tree, viewer, { page: params.chatId !== undefined })
-      return share ? view : withBotChatPeople(runtime, bot, view)
+      return withBotChatPeople(runtime, bot, view)
     }
   }),
   // Each bot's own side chats, pane and title, so its row's line says what any of them is doing.

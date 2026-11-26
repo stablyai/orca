@@ -58,8 +58,11 @@ export type BotShareScopedView = EveryScopedMethod<{
   'bots.tools.list': (tools: BotTools) => BotTools
 }>
 
+/** What a teammate's lists call the owner when this host's sign-in names no one. */
+export const HOST_OWNER_FALLBACK_NAME = 'Owner'
+
 /** The owner as this host's Orca sign-in names them; null signed out. */
-function hostOwnerName(): string | null {
+export function botShareHostOwnerName(): string | null {
   const account = getOrcaServerSignIn()?.status()
   return account?.state === 'signed-in' ? (account.displayName ?? account.email ?? null) : null
 }
@@ -74,7 +77,7 @@ export function botShareScopedView(
   }
   const { runtime } = context
   return {
-    'bots.list': (bots) => botShareListedBots(bots, scope, hostOwnerName()),
+    'bots.list': (bots) => botShareListedBots(bots, scope, botShareHostOwnerName()),
     // Built from the listed bot, so it links nowhere and reads no SOUL.md, chats or other computers.
     'bots.roster': () =>
       botShareListedBots(runtime.bots.list(), scope).map((bot) => ({

@@ -36,11 +36,15 @@ import { updateBotReporting } from './bot-update-reporting'
 import { useBotPictureSetting } from '../settings/bots/use-bot-picture-setting'
 import { BotChatsSkeleton } from './BotChatsSkeleton'
 import { BotChatsPersonFilter } from './BotChatsPersonFilter'
-import { botChatPeople, type BotChatPersonPick } from '../../../../shared/bots/bot-chat-people'
+import {
+  botItemsPersonPick,
+  botPickedOther,
+  type BotChatPersonPick
+} from '../../../../shared/bots/bot-chat-people'
+import { useBotItemsPeople } from './BotPersonPickItems'
 
 const useBotChatSearch = createBotChatSearchHook({ useCallback, useEffect, useMemo, useState })
 
-const EVERYONE: BotChatPersonPick = { kind: 'everyone' }
 const NOTE = 'px-2 pt-1 text-2xs text-muted-foreground'
 const HEADING = 'px-2 pt-2.5 pb-1 text-xs font-medium text-muted-foreground'
 
@@ -78,14 +82,12 @@ function BotChatsTab({ bot }: { bot: Bot }): React.JSX.Element {
   const tree = useBotOwnChatTree(bot)
   // Its server is down: the last read shows with its actions off until it's back.
   const offline = useBotHostOffline(bot.hostId)
-  const people = useMemo(() => botChatPeople(bot), [bot])
-  const [pickState, setPick] = useState<BotChatPersonPick>(EVERYONE)
-  // A teammate no longer shared with drops the pick back to everyone.
-  const pick =
-    pickState.kind === 'person' &&
-    !people.some((person) => person.accountId === pickState.person.accountId)
-      ? EVERYONE
-      : pickState
+  // Whose chats: the viewer's own until another pick, as Items opens; a pick whose person is gone
+  // falls back to the viewer's own.
+  const people = useBotItemsPeople(bot)
+  const [picked, setPick] = useState<BotChatPersonPick | null>(null)
+  const pick = botItemsPersonPick(people, picked)
+  const other = botPickedOther(pick, people)
   const chats = useMemo(() => orderChatsTab(tree.chats), [tree.chats])
   // Its home's chats and runs, and each listed worker's own workspace.
   const stopWorkspaces = useMemo(
@@ -132,12 +134,11 @@ function BotChatsTab({ bot }: { bot: Bot }): React.JSX.Element {
   const search = useBotChatSearch(ask, chats, query)
   const { found, older, onlyHome, noMatch, searchFailed, moreMatches, noneFromPick } =
     botChatListView(chats, { steps, query, search, pick })
-  const searchLabel =
-    pick.kind === 'person'
-      ? t('bots.chats.searchPerson', "Search {{name}}'s chats", { name: pick.person.name })
-      : pick.kind === 'owner'
-        ? t('bots.chats.searchOwn', 'Search your chats')
-        : t('bots.chats.search', 'Search chats and workers')
+  const searchLabel = other
+    ? t('bots.chats.searchPerson', "Search {{name}}'s chats", { name: other.label })
+    : pick.kind === 'everyone'
+      ? t('bots.chats.search', 'Search chats and workers')
+      : t('bots.chats.searchOwn', 'Search your chats')
 
   const searching = query.trim() !== ''
   // A search lists the chats it found by their own words, then the workers it found by title.
@@ -167,12 +168,11 @@ function BotChatsTab({ bot }: { bot: Bot }): React.JSX.Element {
               aria-label={searchLabel}
               density="compact"
               inset="leadingIcon"
-              adornment={people.length > 0 ? 'trailing' : 'none'}
+              adornment={people ? 'trailing' : 'none'}
               disabled={offline}
             />
-            {people.length > 0 ? (
+            {people ? (
               <BotChatsPersonFilter
-                bot={bot}
                 people={people}
                 pick={pick}
                 onPick={(next) => {
@@ -196,9 +196,9 @@ function BotChatsTab({ bot }: { bot: Bot }): React.JSX.Element {
           ) : null}
           {noneFromPick && tree.state === 'ready' ? (
             <p className={NOTE}>
-              {pick.kind === 'person'
+              {other
                 ? t('bots.chats.noneFromPerson', 'No chats from {{name}}.', {
-                    name: pick.person.name
+                    name: other.label
                   })
                 : t('bots.chats.noneFromYou', 'No chats from you.')}
             </p>

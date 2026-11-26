@@ -1,4 +1,4 @@
-// The Chats tab's person filter, at the search field's end: everyone, the owner's own chats, or one teammate's.
+// The Chats tab's person filter, at the search field's end: everyone, the viewer's own chats, or another person's.
 import { ListFilter } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -9,31 +9,27 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
-import type { Bot } from '../../../../shared/bot-types'
-import type { BotChatPerson } from '../../../../shared/bots/bot-chat-tree'
 import type { BotChatPersonPick } from '../../../../shared/bots/bot-chat-people'
-import { BotPersonPickItems, botPersonPickName, useBotOwnPersonLabel } from './BotPersonPickItems'
+import {
+  BotPersonPickItems,
+  botPersonPickName,
+  type BotPersonPickLabelled
+} from './BotPersonPickItems'
 
+/** `people`: the viewer first (`useBotItemsPeople`). */
 export function BotChatsPersonFilter({
-  bot,
   people,
   pick,
   onPick
 }: {
-  bot: Bot
-  people: readonly BotChatPerson[]
+  people: readonly BotPersonPickLabelled[]
   pick: BotChatPersonPick
   onPick: (pick: BotChatPersonPick) => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const you = useBotOwnPersonLabel(bot)
   const on = pick.kind !== 'everyone'
   const label = t('bots.chats.filter.label', 'Filter by person')
-  const entries = [
-    { pick: { kind: 'owner' } as const, label: you },
-    ...people.map((person) => ({ pick: { kind: 'person' as const, person }, label: person.name }))
-  ]
-  const named = botPersonPickName(pick, entries)
+  const named = botPersonPickName(pick, people)
   const fullLabel = named ? `${label} · ${named}` : label
   return (
     <DropdownMenu>
@@ -61,7 +57,7 @@ export function BotChatsPersonFilter({
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" className="min-w-52">
-        <BotPersonPickItems entries={entries} pick={pick} onPick={onPick} />
+        <BotPersonPickItems entries={people} pick={pick} onPick={onPick} />
       </DropdownMenuContent>
     </DropdownMenu>
   )
