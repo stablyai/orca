@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { isUtf8ByteLengthWithinLimit } from '../../text/utf8-byte-limits'
 import { pluginGrammarScopeSchema } from '../contributions/plugin-content-pack-contributions'
 import type { PluginArtifactStrictness } from './plugin-theme-artifact'
@@ -26,58 +27,66 @@ type GrammarRule = {
   whileCaptures?: Record<string, GrammarRule>
 }
 
-const repositoryKey = z.string().regex(/^[A-Za-z0-9_.-]{1,128}$/)
-const captureKey = z.string().regex(/^(?:0|[1-9][0-9]{0,2})$/)
-const text = z.string().max(64 * 1024)
+const repositoryKey = lazyZodSchema(() => z.string().regex(/^[A-Za-z0-9_.-]{1,128}$/))
+const captureKey = lazyZodSchema(() => z.string().regex(/^(?:0|[1-9][0-9]{0,2})$/))
+const text = lazyZodSchema(() => z.string().max(64 * 1024))
 // Why an allowlist of keys: a grammar is data the TextMate engine interprets, so anything it does
 // not understand is dropped rather than carried into the renderer.
-const ruleSchema: z.ZodType<GrammarRule> = z.lazy(() =>
+const ruleSchema: z.ZodType<GrammarRule> = lazyZodSchema(() =>
+  z.lazy(() =>
+    z.object({
+      name: z.string().max(1024).optional(),
+      contentName: z.string().max(1024).optional(),
+      comment: text.optional(),
+      include: z
+        .string()
+        .max(256)
+        .regex(
+          /^(?:\$self|\$base|#[A-Za-z0-9_.-]+|[A-Za-z][A-Za-z0-9_-]*(?:\.[A-Za-z0-9_-]+)+(?:#[A-Za-z0-9_.-]+)?)$/
+        )
+        .optional(),
+      match: text.optional(),
+      begin: text.optional(),
+      end: text.optional(),
+      while: text.optional(),
+      applyEndPatternLast: z.union([z.boolean(), z.literal(0), z.literal(1)]).optional(),
+      patterns: z.array(ruleSchema).max(10_000).optional(),
+      repository: z.record(repositoryKey, ruleSchema).optional(),
+      captures: z.record(captureKey, ruleSchema).optional(),
+      beginCaptures: z.record(captureKey, ruleSchema).optional(),
+      endCaptures: z.record(captureKey, ruleSchema).optional(),
+      whileCaptures: z.record(captureKey, ruleSchema).optional()
+    })
+  )
+)
+
+const grammarSchema = lazyZodSchema(() =>
   z.object({
-    name: z.string().max(1024).optional(),
-    contentName: z.string().max(1024).optional(),
-    comment: text.optional(),
-    include: z
-      .string()
-      .max(256)
-      .regex(
-        /^(?:\$self|\$base|#[A-Za-z0-9_.-]+|[A-Za-z][A-Za-z0-9_-]*(?:\.[A-Za-z0-9_-]+)+(?:#[A-Za-z0-9_.-]+)?)$/
-      )
-      .optional(),
-    match: text.optional(),
-    begin: text.optional(),
-    end: text.optional(),
-    while: text.optional(),
-    applyEndPatternLast: z.union([z.boolean(), z.literal(0), z.literal(1)]).optional(),
-    patterns: z.array(ruleSchema).max(10_000).optional(),
-    repository: z.record(repositoryKey, ruleSchema).optional(),
-    captures: z.record(captureKey, ruleSchema).optional(),
-    beginCaptures: z.record(captureKey, ruleSchema).optional(),
-    endCaptures: z.record(captureKey, ruleSchema).optional(),
-    whileCaptures: z.record(captureKey, ruleSchema).optional()
+    scopeName: pluginGrammarScopeSchema,
+    patterns: z.array(ruleSchema).max(10_000),
+    repository: z.record(repositoryKey, ruleSchema).default({})
   })
 )
 
-const grammarSchema = z.object({
-  scopeName: pluginGrammarScopeSchema,
-  patterns: z.array(ruleSchema).max(10_000),
-  repository: z.record(repositoryKey, ruleSchema).default({})
-})
-
 // Why short, one line and printable: the editor types these as you type, and real languages need a
 // few characters at most (`<!--`, `"""`, `{{!--`).
-const literal = z
-  .string()
-  .regex(
-    /^[^\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]{1,8}$/u,
-    'must be 1 to 8 printable characters on one line'
-  )
+const literal = lazyZodSchema(() =>
+  z
+    .string()
+    .regex(
+      /^[^\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]{1,8}$/u,
+      'must be 1 to 8 printable characters on one line'
+    )
+)
 // Why longer: brackets match and color keywords such as `function`/`end`, and comment markers are
 // only inserted by Toggle Comment, where some languages need more (Liquid's `{% endcomment %}`).
-const lineLiteral = z
-  .string()
-  .regex(/^[^\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]{1,128}$/u, 'must be printable text on one line')
-const linePair = z.tuple([lineLiteral, lineLiteral])
-const closingPair = z.object({ open: literal, close: literal })
+const lineLiteral = lazyZodSchema(() =>
+  z
+    .string()
+    .regex(/^[^\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]{1,128}$/u, 'must be printable text on one line')
+)
+const linePair = lazyZodSchema(() => z.tuple([lineLiteral, lineLiteral]))
+const closingPair = lazyZodSchema(() => z.object({ open: literal, close: literal }))
 
 /** `validate:plugin` refuses a bad literal; hosts drop just that entry so the language still loads. */
 function configurationSchema(strictness: PluginArtifactStrictness) {
@@ -217,22 +226,26 @@ export function validatePluginGrammarIncludes(grammars: readonly PluginGrammarAr
   }
 }
 
-const metadataSchema = z.object({
-  id: z.templateLiteral(['plugin:', z.string()]),
-  pluginKey: z.string(),
-  label: z.string(),
-  extensions: z.array(z.string()),
-  filenames: z.array(z.string()),
-  revision: z.string()
-})
+const metadataSchema = lazyZodSchema(() =>
+  z.object({
+    id: z.templateLiteral(['plugin:', z.string()]),
+    pluginKey: z.string(),
+    label: z.string(),
+    extensions: z.array(z.string()),
+    filenames: z.array(z.string()),
+    revision: z.string()
+  })
+)
 
-const payloadSchema = z.object({
-  id: z.templateLiteral(['plugin:', z.string()]),
-  revision: z.string(),
-  scopeName: pluginGrammarScopeSchema,
-  grammars: z.array(grammarSchema).min(1).max(16),
-  configuration: tolerantConfigurationSchema
-})
+const payloadSchema = lazyZodSchema(() =>
+  z.object({
+    id: z.templateLiteral(['plugin:', z.string()]),
+    revision: z.string(),
+    scopeName: pluginGrammarScopeSchema,
+    grammars: z.array(grammarSchema).min(1).max(16),
+    configuration: tolerantConfigurationSchema
+  })
+)
 
 /** What the editor needs to route files; grammars load only when a matching file opens. */
 export type PluginSyntaxMetadata = z.infer<typeof metadataSchema>

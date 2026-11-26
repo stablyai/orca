@@ -19,7 +19,11 @@ import { admitBotItemFiles } from './bots-items-bot-files'
 import { BotItemError } from '../../../bots/bot-item-error'
 import { assertBotItemSetInput } from '../../../bots/bot-items-edits'
 import { assertBotItemAttach, assertBotItemOwnerWrite } from '../../../bots/bot-items-tables'
-import type { BotItemLinkInput } from '../../../bots/bot-items-input'
+import {
+  assertBotItemLinkRoom,
+  linkWords,
+  type BotItemLinkInput
+} from '../../../bots/bot-items-input'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 import type { Bot } from '../../../../shared/bot-types'
 import { commentAsMaker } from './bots-items-maker-comment'
@@ -163,11 +167,15 @@ const LINK = defineMethod({
         : startersOf(db, requested, context.runtime.bots.list())
     // Every worker named is checked, one already linked too, so a mixed call fails whole.
     assertBotItemAttach(item, writer.actor, requested, (id) => startedBy[id] ?? null)
+    // A step of a follow-up chain the item already links is that worker again: no second link.
+    const held = await store.links(item.uid)
+    const links = linksOutsideLinkedChains(db, held, requested)
     if (params.check) {
+      // The write's own bound, so nothing is created that can't link.
+      const fresh = links.filter((l) => !held.some((h) => h.kind === l.kind && h.ref === l.ref))
+      assertBotItemLinkRoom(held.length, new Set(fresh.map(linkWords)).size)
       return null
     }
-    // A step of a follow-up chain the item already links is that worker again: no second link.
-    const links = linksOutsideLinkedChains(db, await store.links(item.uid), requested)
     const outcome = await store.link(item.uid, links, writer.actor, startedBy)
     return writeResult(context, outcome, writer)
   }

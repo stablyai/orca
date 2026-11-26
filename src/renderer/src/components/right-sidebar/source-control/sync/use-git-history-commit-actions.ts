@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { requireGitOwnerTarget } from './worktree-git-owner-target'
 import {
+  commitCompareKey,
   commitDiffErrorMessage,
   runLatestCommitDiffOpen,
   trackCommitCompare,
@@ -49,7 +50,8 @@ export function useGitHistoryCommitActions({
   activeRepoTarget,
   ownerConnectionId,
   resolveSplitTargetGroupId,
-  isSurfaceOpen
+  isSurfaceOpen,
+  placementWorkspaceId: placementOverride
 }: {
   activeWorktreeId: string | null | undefined
   worktreePath: string | null
@@ -58,10 +60,12 @@ export function useGitHistoryCommitActions({
   resolveSplitTargetGroupId: (event?: SourceControlRowOpenEvent) => string | undefined
   /** False once the view that asked for an Open diff has closed; a hidden tab still counts as open. */
   isSurfaceOpen?: () => boolean
+  /** The workspace showing the view when no source control scope provides it, e.g. a Git Graph tab. */
+  placementWorkspaceId?: string
 }): GitHistoryCommitActions {
   const scope = useSourceControlScope()
   const executionHostId = scope?.executionHostId
-  const placementWorkspaceId = scope?.placementWorkspaceId
+  const placementWorkspaceId = placementOverride ?? scope?.placementWorkspaceId
   const runtimeEnvironmentId = scope?.runtimeOwnerEnvironmentId
 
   // One generation per worktree + repo-owner authority; its cache shares compare results across loads and opens.
@@ -90,22 +94,24 @@ export function useGitHistoryCommitActions({
         return null
       }
       const generation = generationRef.current
-      const cached = generation.cache.get(item.id)
+      const compareKey = commitCompareKey(item)
+      const cached = generation.cache.get(compareKey)
       if (cached) {
         return cached
       }
       const connectionId = sourceControlConnectionId(scope, activeWorktreeId, ownerConnectionId)
-      const request = getRuntimeGitCommitCompare(
-        {
-          // Compare on the repo owner, which may differ from the focused host.
-          target: requireGitOwnerTarget(activeRepoTarget),
-          worktreeId: activeWorktreeId,
-          worktreePath,
-          connectionId
-        },
-        item.id
+      return trackCommitCompare(generation, compareKey, () =>
+        getRuntimeGitCommitCompare(
+          {
+            // Compare on the repo owner, which may differ from the focused host.
+            target: requireGitOwnerTarget(activeRepoTarget),
+            worktreeId: activeWorktreeId,
+            worktreePath,
+            connectionId
+          },
+          item.id
+        )
       )
-      return trackCommitCompare(generation, item.id, request)
     },
     [activeRepoTarget, activeWorktreeId, scope, worktreePath, ownerConnectionId]
   )
@@ -126,7 +132,7 @@ export function useGitHistoryCommitActions({
       // Switching away from a still-open tab does not, and neither does a scope change in the list.
       await runLatestCommitDiffOpen(
         JSON.stringify([generation.key, item.id]),
-        () => generation.pending.get(item.id)?.completion.promise ?? loadCommitCompare(item),
+        () => loadCommitCompare(item),
         () => generationRef.current === generation && (isSurfaceOpen?.() ?? true),
         (compare) => {
           useAppStore
@@ -164,7 +170,7 @@ export function useGitHistoryCommitActions({
       if (!activeWorktreeId || !worktreePath) {
         return
       }
-      const cached = generationRef.current.cache.get(item.id)
+      const cached = generationRef.current.cache.get(commitCompareKey(item))
       if (!cached) {
         return
       }
