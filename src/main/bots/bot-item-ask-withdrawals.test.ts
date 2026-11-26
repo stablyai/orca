@@ -297,4 +297,74 @@ describe('Needs you asks kept open --while', () => {
     await withdrawals.settled()
     expect(told).toEqual([uid])
   })
+
+  it('keeps a new profile’s owed mail when a pass for the old profile finishes after the switch', async () => {
+    const before = open()
+    const after = open()
+    const uid = asked(after, { kind: 'until', at: LATER })
+    const owedEvent = after.withdrawAsk(uid, after.get(uid)!.questionEvent!, {
+      kind: 'until',
+      at: LATER,
+      state: 'passed'
+    })!
+    let release: () => void = () => {}
+    const slow: BotItemAskWithdrawalStore = {
+      ...remote(before),
+      owedWithdrawals: () =>
+        new Promise((resolve) => {
+          release = () => resolve(before.owedWithdrawals())
+        })
+    }
+    const stores = [slow, remote(after)]
+    let current = 0
+    const withdrawals = new BotItemAskWithdrawals({
+      store: () => stores[current]!,
+      worker: () => 'unknown',
+      workerTitle: async () => new Map(),
+      changed: () => {},
+      sendOwedMail: async () => {
+        const owed = after.owedMail(0).mails.flatMap((mail) => mail.changes.map((c) => c.event.id))
+        if (current === 1) {
+          after.markMailSent(owed)
+        }
+      }
+    })
+    withdrawals.tick(LATER)
+    current = 1
+    withdrawals.tick(LATER + 1)
+    release()
+    await withdrawals.settled()
+    expect(after.stillOwed([owedEvent])).toEqual([])
+  })
+
+  it('tells the lists of a withdrawal on the next minute when a later write in its pass failed', async () => {
+    const store = open()
+    const first = asked(store, { kind: 'until', at: LATER })
+    asked(store, { kind: 'until', at: LATER })
+    const told: string[] = []
+    let writes = 0
+    const wrapped: BotItemAskWithdrawalStore = {
+      ...remote(store),
+      withdrawAsk: async (...args) => {
+        writes++
+        if (writes === 2) {
+          throw new Error('busy')
+        }
+        return store.withdrawAsk(...args)
+      }
+    }
+    const withdrawals = new BotItemAskWithdrawals({
+      store: () => wrapped,
+      worker: () => 'unknown',
+      workerTitle: async () => new Map(),
+      changed: (items) => told.push(...items.map((item) => item.uid)),
+      sendOwedMail: async () => {}
+    })
+    withdrawals.tick(LATER)
+    await withdrawals.settled()
+    expect(told).toEqual([])
+    withdrawals.tick(LATER + 60_000)
+    await withdrawals.settled()
+    expect(told).toContain(first)
+  })
 })

@@ -53,34 +53,40 @@ function settledBy(
     : null
 }
 
+/** What the check keeps for one profile's store; another profile gets a fresh one, so a pass still
+ *  running for the old store writes only into the old one. */
+type ProfileState = {
+  store: BotItemAskWithdrawalStore | null
+  /** Withdrawals whose mail is still owed, with the minutes of retries left. */
+  unsent: Map<number, number>
+  /** Owed withdrawals a crash left are picked up by the first pass. */
+  seeded: boolean
+  /** Whether any `--while` ask was open at the last pass; none, and a minute costs nothing. */
+  armed: boolean
+  /** Items moved whose lists weren't told yet (a later write in the pass failed). */
+  untold: Set<string>
+}
+
+function freshState(store: BotItemAskWithdrawalStore | null): ProfileState {
+  return { store, unsent: new Map(), seeded: false, armed: true, untold: new Set() }
+}
+
 /** One pass at a time; a minute during one runs it again with that minute's time. A failed pass is
  *  tried at the next minute. */
 export class BotItemAskWithdrawals {
   private running: Promise<void> | null = null
   private latest: number | null = null
-  /** Withdrawals whose mail is still owed, with the minutes of retries left. */
-  private readonly unsent = new Map<number, number>()
-  /** Owed withdrawals a crash left are picked up by the first pass. */
-  private seeded = false
-  /** Whether any `--while` ask was open at the last pass; none, and a minute costs nothing. */
-  private armed = true
-  /** Items moved whose lists weren't told yet (a later write in the pass failed). */
-  private readonly untold = new Set<string>()
-  /** The profile's store all of the above belongs to; another profile starts over. */
-  private store: BotItemAskWithdrawalStore | null = null
+  private state = freshState(null)
 
   constructor(private readonly deps: BotItemAskWithdrawalDeps) {}
 
   tick(now = Date.now()): void {
     const store = this.deps.store()
-    if (store !== this.store) {
-      this.store = store
-      this.unsent.clear()
-      this.untold.clear()
-      this.seeded = false
-      this.armed = true
+    if (store !== this.state.store) {
+      this.state = freshState(store)
     }
-    if (!this.armed && this.unsent.size === 0 && this.untold.size === 0 && this.seeded) {
+    const { armed, unsent, untold, seeded } = this.state
+    if (!armed && unsent.size === 0 && untold.size === 0 && seeded) {
       return
     }
     this.latest = now
@@ -88,8 +94,9 @@ export class BotItemAskWithdrawals {
       while (this.latest !== null) {
         const at = this.latest
         this.latest = null
-        await this.pass(at).catch((error: unknown) => {
-          this.armed = true
+        const state = this.state
+        await this.pass(state, at).catch((error: unknown) => {
+          state.armed = true
           console.warn('[bots] items: withdrawing settled asks failed', error)
         })
       }
@@ -100,27 +107,26 @@ export class BotItemAskWithdrawals {
 
   /** An item changed: it may now ask `--while`, which the next minute checks. */
   itemsChanged(): void {
-    this.armed = true
+    this.state.armed = true
   }
 
   async settled(): Promise<void> {
     await this.running
   }
 
-  private async pass(now: number): Promise<void> {
-    // One store for the whole pass: a profile switch meanwhile leaves the new profile to its own pass.
-    const store = this.store
+  private async pass(state: ProfileState, now: number): Promise<void> {
+    const { store } = state
     if (!store) {
       return
     }
-    if (!this.seeded) {
+    if (!state.seeded) {
       for (const eventId of await store.owedWithdrawals()) {
-        this.unsent.set(eventId, MAIL_RETRIES)
+        state.unsent.set(eventId, MAIL_RETRIES)
       }
-      this.seeded = true
+      state.seeded = true
     }
     const questions = await store.askWhileQuestions()
-    this.armed = questions.length > 0
+    state.armed = questions.length > 0
     const candidates = questions.filter(
       (question) => settledBy(question.askWhile, now, this.deps.worker) !== null
     )
@@ -138,30 +144,30 @@ export class BotItemAskWithdrawals {
       const named = withdrawn.kind === 'dispatch' && title ? { ...withdrawn, title } : withdrawn
       const eventId = await store.withdrawAsk(uid, questionEvent, named, now)
       if (eventId !== null) {
-        this.untold.add(uid)
-        this.unsent.set(eventId, MAIL_RETRIES)
+        state.untold.add(uid)
+        state.unsent.set(eventId, MAIL_RETRIES)
       }
     }
-    if (this.untold.size > 0) {
-      const moved = [...this.untold]
+    if (state.untold.size > 0) {
+      const moved = [...state.untold]
       this.deps.changed((await store.viewRows(moved)).items)
-      moved.forEach((uid) => this.untold.delete(uid))
+      moved.forEach((uid) => state.untold.delete(uid))
     }
-    await this.sendMail(store)
+    await this.sendMail(state, store)
   }
 
   /** Once per pass, so once a minute: each owed withdrawal spends one retry. */
-  private async sendMail(store: BotItemAskWithdrawalStore): Promise<void> {
-    if (this.unsent.size === 0) {
+  private async sendMail(state: ProfileState, store: BotItemAskWithdrawalStore): Promise<void> {
+    if (state.unsent.size === 0) {
       return
     }
     await this.deps.sendOwedMail()
-    const owed = new Set(await store.stillOwed([...this.unsent.keys()]))
-    for (const [eventId, left] of this.unsent) {
+    const owed = new Set(await store.stillOwed([...state.unsent.keys()]))
+    for (const [eventId, left] of state.unsent) {
       if (!owed.has(eventId) || left <= 1) {
-        this.unsent.delete(eventId)
+        state.unsent.delete(eventId)
       } else {
-        this.unsent.set(eventId, left - 1)
+        state.unsent.set(eventId, left - 1)
       }
     }
   }
