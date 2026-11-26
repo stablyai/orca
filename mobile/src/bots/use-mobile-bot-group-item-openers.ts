@@ -55,8 +55,13 @@ export function useMobileBotGroupItemOpeners({
             paneKey: structuredAgentSessionPaneKey(opened.tabId, chatId),
             name: bot.name
           }),
-        home: (bot) =>
-          openBotHome({ pairedHostId: hostId, executionHost: LOCAL_EXECUTION_HOST_ID }, bot)
+        home: (bot, current) =>
+          openBotHome(
+            { pairedHostId: hostId, executionHost: LOCAL_EXECUTION_HOST_ID },
+            bot,
+            undefined,
+            current
+          )
       }),
     [client, hostId, openMobileSession, openBotHome]
   )
@@ -70,7 +75,7 @@ export function useMobileBotGroupItemOpeners({
       if (room) {
         onOpenRoom(room.threadId)
       } else if (bot && home) {
-        openBotHome({ pairedHostId: hostId, executionHost: LOCAL_EXECUTION_HOST_ID }, bot)
+        chatOpener.home(bot)
       } else if (bot) {
         chatOpener.open(bot, chatId)
       }
