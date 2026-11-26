@@ -185,7 +185,7 @@ export function BotRowLineView({
     <div className="flex min-w-0 items-center gap-1.5 text-xs leading-4 text-muted-foreground">
       {leading}
       {limit && !disconnected ? (
-        // Amber like the badge; the badge's tooltip says where it stopped and if it continues.
+        // Amber like the badge; the badge's tooltip says whose limit and if it continues.
         <span className="min-w-0 flex-1 truncate text-status-warning-text tabular-nums">
           {t('bots.usageLimit.rowLine', 'Usage limit · {{time}}', {
             time: formatUsageLimitResetShort(limit.stop.at, now, intlLocale)
