@@ -27,6 +27,7 @@ import {
   type StartupFollowupPromptOptions,
   type WorktreeStartupReadinessHost
 } from './runtime-worktree-startup-readiness'
+import { waitForWorktreeSetupGate } from './worktree-setup-gate'
 import {
   provisionWorktreeTerminals,
   type WorktreeTerminalProvisioningHost
@@ -218,7 +219,11 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     return recordCreatedWorktreeLineageState(this.store, worktree, lineageResolution)
   }
 
-  protected pasteStartupDraftWhenReady(handle: string, draft: WorktreeStartupDraftPaste): void {
+  protected pasteStartupDraftWhenReady(
+    handle: string,
+    draft: WorktreeStartupDraftPaste,
+    awaitSetupGate?: boolean
+  ): void {
     pasteStartupDraftInCustody(
       {
         readiness: this.getWorktreeStartupReadinessHost(),
@@ -228,7 +233,8 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
         isStopRequested: (ptyId) => this.isPtyStopRequested(ptyId)
       },
       handle,
-      draft
+      draft,
+      awaitSetupGate
     )
   }
 
@@ -274,12 +280,24 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     }
   }
 
-  deliverStartupFollowup(
+  async deliverStartupFollowup(
     handle: string,
     followup: WorktreeStartupFollowup,
     options?: StartupFollowupPromptOptions
   ): Promise<boolean> {
     const host = this.getWorktreeStartupReadinessHost()
+    if (options?.awaitSetupGate) {
+      const ptyId = host.getPtyId(handle)
+      if (!ptyId) {
+        return false
+      }
+      const lifecycle = this.getPtyLifecycleSignal(ptyId)
+      const signal = options.signal ? AbortSignal.any([lifecycle, options.signal]) : lifecycle
+      if (!(await waitForWorktreeSetupGate(host, ptyId, signal))) {
+        return false
+      }
+      return deliverStartupFollowupPrompt(this, host, handle, followup, { ...options, signal })
+    }
     return deliverStartupFollowupPrompt(this, host, handle, followup, options)
   }
 

@@ -36,6 +36,7 @@ export type PtySpawnOperationState = Pick<
   | 'provisionalPtySize'
   | 'ownsNewIncarnation'
   | 'resumeAdmission'
+  | 'sequencedAgentLaunch'
 > & {
   deps: Pick<
     PtyRuntimeControllerDeps,

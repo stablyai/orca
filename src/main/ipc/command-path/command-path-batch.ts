@@ -39,7 +39,7 @@ export type { AgentPathMatch } from './command-path-inventory-scan'
 
 type AgentPathInventory = {
   isRuntimePath: (entry: string) => boolean
-  isRuntimeTarget?: (entry: string) => Promise<boolean>
+  isRuntimeTarget?: (entry: string) => Promise<boolean | typeof UNVERIFIED_FS_PROBE>
   matches: Map<string, AgentPathMatch>
 }
 
@@ -200,16 +200,17 @@ export async function findCommandsOnLocalPath(
       const outcome = await checkExecutableFile(candidate, isWin, probes)
       if (outcome === 'executable') {
         const eligible = !isWin || shellExtensions.get(command)?.has(ext.toLowerCase())
-        if (inventory && probes && dir.user) {
+        if (inventory && probes && (dir.user || inventory.isRuntimePath(dir.dir))) {
           const target = await probes.realPath(candidate)
-          if (target === UNVERIFIED_FS_PROBE) {
+          const runtime =
+            typeof target === 'string'
+              ? await (inventory.isRuntimeTarget?.(target) ?? inventory.isRuntimePath(target))
+              : target
+          if (runtime === UNVERIFIED_FS_PROBE) {
             uncertain = true
             continue
           }
-          if (
-            target === null ||
-            (await (inventory.isRuntimeTarget?.(target) ?? inventory.isRuntimePath(target)))
-          ) {
+          if (runtime === true || runtime === null) {
             shadow ||= Boolean(eligible)
             continue
           }

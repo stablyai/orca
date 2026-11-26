@@ -37,6 +37,7 @@ export type InstalledAgentDetectionOptions = {
   agentCmdOverrides?: Partial<Record<TuiAgent, string>> | null
   /** Probe only this agent, for a caller that checks one agent rather than listing them all. */
   onlyTuiAgent?: TuiAgent
+  reuseSettled?: boolean
   /** Publication sequence from this caller's incomplete detect reply. */
   afterPublication?: number
   /** Wait for the complete publication within the request budget. */
@@ -150,6 +151,7 @@ export async function detectInstalledAgentInventory(
         ? {}
         : { afterPublication: options.afterPublication }),
       waitForCompletion: options?.waitForCompletion,
+      reuseSettled: options?.reuseSettled,
       ...(runtime === 'wsl' ? {} : { outsidePath: foundOutsidePath }),
       ...(options?.onlyTuiAgent || options?.disabledTuiAgents?.length
         ? { onlyRequested: true }

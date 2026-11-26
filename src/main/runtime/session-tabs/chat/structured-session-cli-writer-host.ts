@@ -35,7 +35,7 @@ export abstract class OrcaRuntimeWithStructuredSessionCliWriterHost extends Orca
 
   rememberSavedTerminalLaunchResult(ptyId: string, result: TerminalLaunchResult): void {
     const pty = this.ptysById.get(ptyId)
-    if (pty && result.savedResumeDecision) {
+    if (pty && (result.savedResumeDecision || result.agentProgramBlocked)) {
       pty.savedTerminalLaunchResult = {
         incarnationId: pty.incarnationId,
         launchConfig: pty.launchConfig,

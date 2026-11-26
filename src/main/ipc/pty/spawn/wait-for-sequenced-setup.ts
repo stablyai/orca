@@ -27,6 +27,8 @@ export function waitForSequencedSetup(
       resolve(status)
     }
     const abort = (): void => finish(null)
+    let reading = false
+    let changed = false
     const read = async (): Promise<void> => {
       const stats = await stat(path)
       if (stats.isFile() && stats.size <= 96) {
@@ -37,7 +39,23 @@ export function waitForSequencedSetup(
       }
     }
     const check = (): void => {
-      void read().catch(() => {})
+      if (done) {
+        return
+      }
+      if (reading) {
+        changed = true
+        return
+      }
+      reading = true
+      void read()
+        .catch(() => {})
+        .finally(() => {
+          reading = false
+          if (changed) {
+            changed = false
+            check()
+          }
+        })
     }
     let watcher: ReturnType<typeof watch>
     try {

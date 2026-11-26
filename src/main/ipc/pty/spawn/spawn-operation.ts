@@ -19,6 +19,9 @@ import {
 import { restoreProvisionalPtySize } from './spawn-options-assembly'
 import { spawnWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { recordTerminalMcpPaneForSpawn } from '../../../mcp-servers/terminal/terminal-mcp-panes'
+import { bindOpenCodeStartupPromptOwner } from '../../../opencode/startup-prompts/opencode-startup-prompt-owner'
+import { ptyIncarnationById } from '../provider/ownership-state'
 import { releaseStoppedPaneBinding } from '../pane/pane-owner-replacement'
 import {
   admitColdRestoreReattach,
@@ -171,6 +174,27 @@ export async function runPtySpawn<State extends PtySpawnOperationState>(
       }
     }
     finish(outcome)
+    if (
+      outcome.kind === 'committed' &&
+      !ctx.result.isReattach &&
+      !resumeSpawnRefusal(ctx.resumeAdmission)
+    ) {
+      const { result, provider } = ctx
+      ctx.sequencedAgentLaunch?.(
+        provider,
+        result,
+        ({ launchConfig, terminalMcp, blocked, env }) => {
+          if (ptyIncarnationById.get(result.id) !== result.incarnationId) {
+            return
+          }
+          runtime?.noteSequencedAgentLaunch?.(result, launchConfig, blocked)
+          recordTerminalMcpPaneForSpawn({ ptyId: result.id, isReattach: false, pane: terminalMcp })
+          if (!blocked) {
+            bindOpenCodeStartupPromptOwner({ env, result, runtime, provider })
+          }
+        }
+      )
+    }
     // Runtime hidden P2 follows the awaited prompt-intent wrapper and never an exited result.
     if (outcome.kind !== 'registration-exited') {
       adapter.onCommitted?.()

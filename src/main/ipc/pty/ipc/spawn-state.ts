@@ -21,6 +21,7 @@ import type { ReplacedPaneOwner } from '../pane/replaced-pane-owner'
 import { localProvider } from '../provider/registry'
 import type { AdoptStablePaneResult, PtySpawnIpcArgs, PtySpawnIpcDeps } from './spawn-types'
 import type { PaneAgentLaunch } from './spawn-agent-launch-end'
+import type { SequencedAgentLaunch } from '../spawn/sequenced-agent-launch'
 
 export type PtyIpcSpawnState = {
   deps: PtySpawnIpcDeps
@@ -90,6 +91,7 @@ export type PtyIpcSpawnState = {
   /** The host's verdict on the spawn's resume; a refused one starts the pane's plain shell. */
   resumeAdmission: ResumeSpawnAdmission | null
   agentProgramBlocked?: AgentProgramBlockReason
+  sequencedAgentLaunch?: SequencedAgentLaunch
   launchCommand: string | undefined
   /** What the host's MCP server list gave the pane, recorded at commit. */
   terminalMcp?: TerminalMcpPaneLaunch | null

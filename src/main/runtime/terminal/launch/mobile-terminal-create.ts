@@ -72,6 +72,7 @@ export type OwnedMobileTerminalCreateOptions = {
   startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
   identity?: { tabId: string; leafId: string; sessionId?: string }
   createMutation?: { clientIdentity: string; id: string }
+  historyResume?: true
   launchAgent?: TuiAgent
   trustWorktreeId?: string
   viewMode?: 'terminal' | 'chat'

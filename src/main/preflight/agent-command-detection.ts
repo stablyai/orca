@@ -183,6 +183,7 @@ type CommandDetectionOptions = {
   context?: PreflightRuntimeContext
   outsidePath?: Map<string, string>
   onlyRequested?: boolean
+  reuseSettled?: boolean
   refresh?: boolean
   afterPublication?: number
   waitForCompletion?: boolean
@@ -220,8 +221,7 @@ export async function detectAgentCommandInventoryOnHost(
   }
   const wslTarget = getPreflightWslTarget(options.context)
   const targeted = options.onlyRequested ?? false
-  const ordinaryMode = targeted ? 'read' : 'detect'
-  const refreshMode = targeted ? 'revalidate' : 'refresh'
+  const ordinaryMode = targeted && options.reuseSettled ? 'read' : 'detect'
   const detect = async (waitSignal: AbortSignal) => {
     let slot: InventorySlot | undefined
     let read: ReturnType<typeof readInventory> | undefined
@@ -248,7 +248,7 @@ export async function detectAgentCommandInventoryOnHost(
       if (completed) {
         return { slot, publication: completed }
       }
-      read = readInventory(slot, commands, options.refresh ? refreshMode : ordinaryMode, {
+      read = readInventory(slot, commands, options.refresh ? 'refresh' : ordinaryMode, {
         targeted,
         afterPublication: options.afterPublication,
         waitForCompletion:

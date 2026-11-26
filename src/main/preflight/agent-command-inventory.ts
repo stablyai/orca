@@ -94,7 +94,7 @@ async function scanInventory(
     commands,
     readLoginPath,
     slot.shellPath,
-    afterSetup,
+    mode === 'refresh' && (afterSetup || slot.shellPath !== undefined),
     progress,
     () => notifyScanChange(scan),
     controller.signal
@@ -215,12 +215,12 @@ export function readInventory(
   }: InventoryReadOptions = {}
 ): InventoryRead {
   const generation = inventoryGeneration(slot)
-  const published = currentInventoryPublication(slot, mode === 'detect' ? 'complete' : 'latest')
+  const published = currentInventoryPublication(slot)
   const current = published?.inventory
   const hasMatch =
     current && requested.some((cmd) => current.probed.has(cmd) && current.found.has(cmd))
   const settled =
-    (mode === 'read' || (mode === 'detect' && !slot.pending)) &&
+    mode === 'read' &&
     published &&
     current &&
     (afterPublication === undefined || published.sequence > afterPublication) &&
@@ -238,7 +238,7 @@ export function readInventory(
   if (
     settled &&
     !revalidateMiss &&
-    (!qualifiesEarly || !slot.pending) &&
+    (!slot.pending || (!qualifiesEarly && slot.pending.active.mode !== 'refresh')) &&
     (!published?.partial || !waitForCompletion || acceptAnyMatch)
   ) {
     return readPublished()
@@ -275,7 +275,7 @@ export function readInventory(
       return readScan(active)
     }
     if (
-      mode === 'refresh' ||
+      (mode === 'refresh' && active.targeted && !targeted) ||
       scanPriority[mode] > scanPriority[active.mode] ||
       !commands.every((cmd) => active.commands.has(cmd))
     ) {

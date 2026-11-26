@@ -42,7 +42,7 @@ export function generatedCmdResumeEnv(
   options: Parameters<typeof generatedCmdLaunchEnv>[2]
 ): Record<string, string> | undefined {
   const executable = recorded
-    ? (readLaunchPosition(recipe.agentCommand, 'cmd')?.executable ?? recipe.selectedExecutable)
+    ? (recipe.selectedExecutable ?? readLaunchPosition(recipe.agentCommand, 'cmd')?.executable)
     : (recipe.selectedExecutable ?? recipe.agentCommand.split(' ')[0])
   return generatedCmdLaunchEnv(executable, invocation, options)
 }

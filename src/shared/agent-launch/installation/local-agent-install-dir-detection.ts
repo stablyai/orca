@@ -22,7 +22,7 @@ export async function detectCommandsInInstallDirs(
   }: {
     probes: InventoryFsProbes
     readDirectories: NonNullable<CliFsProbeOptions['readDirectories']>
-    acceptsExecutableTarget: (target: string) => Promise<boolean>
+    acceptsExecutableTarget: NonNullable<CliFsProbeOptions['acceptsExecutableTarget']>
     complete: (command: string, user: string | null, uncertain: boolean) => void
   }
 ): Promise<void> {

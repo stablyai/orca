@@ -72,26 +72,24 @@ export async function resolveWorktreeStartupDraftAgent(
   if (isTuiAgent(preferredAgent) && isTuiAgentEnabled(preferredAgent, settings.disabledTuiAgents)) {
     return preferredAgent
   }
-  let detected: string[] = []
   // Detect on the execution host; raw connectionId misses executionHostId-only SSH repos.
   const sshConnectionId = getRepoSshConnectionId(repo)
-  try {
-    // Sparse launch environments may lack host detection dependencies.
-    // Disabled agents cannot be picked here, so background detection never probes them (#34635).
-    detected = await detectAgentsOnHost(
-      sshConnectionId ? { kind: 'ssh', connectionId: sshConnectionId } : { kind: 'local' },
-      {
-        disabledTuiAgents: settings.disabledTuiAgents,
-        afterPublication: environment.afterPublication,
-        waitForCompletion: false,
-        ...agentCommandOverrideDetectionOptions(settings.agentCmdOverrides)
-      }
-    )
-  } catch (error) {
+  // Disabled agents cannot be picked here, so background detection never probes them (#34635).
+  const detected = await detectAgentsOnHost(
+    sshConnectionId ? { kind: 'ssh', connectionId: sshConnectionId } : { kind: 'local' },
+    {
+      disabledTuiAgents: settings.disabledTuiAgents,
+      afterPublication: environment.afterPublication,
+      waitForCompletion: false,
+      reuseSettled: true,
+      ...agentCommandOverrideDetectionOptions(settings.agentCmdOverrides)
+    }
+  ).catch((error: unknown) => {
     if (error instanceof AgentInventoryDeadlineError) {
       throw error
     }
-  }
+    return []
+  })
   return pickTuiAgent(null, detected.filter(isTuiAgent), settings.disabledTuiAgents)
 }
 

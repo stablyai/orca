@@ -1,5 +1,7 @@
 import {
   SETUP_AGENT_WAIT_TIMEOUT_SECONDS,
+  SETUP_AGENT_BLOCKED_MESSAGE,
+  SETUP_AGENT_SELECTION_TIMEOUT_SECONDS,
   SETUP_COMPLETE_MESSAGE,
   SETUP_FAILED_MESSAGE_PREFIX,
   SETUP_WAIT_MESSAGE,
@@ -8,11 +10,13 @@ import {
 import { copyUtf16SuffixToOwnedString } from '../../text/owned-utf16-suffix'
 
 /** The wrapper itself gives up then, so no agent can start after it. */
-export const SETUP_WAIT_GATE_MAX_MS = SETUP_AGENT_WAIT_TIMEOUT_SECONDS * 1000
+export const SETUP_WAIT_GATE_MAX_MS =
+  (SETUP_AGENT_WAIT_TIMEOUT_SECONDS + SETUP_AGENT_SELECTION_TIMEOUT_SECONDS) * 1000
 
 const SETUP_WAIT_END_LINES: readonly { line: string; phase: 'started' | 'failed' }[] = [
   { line: SETUP_COMPLETE_MESSAGE, phase: 'started' },
   { line: SETUP_FAILED_MESSAGE_PREFIX, phase: 'failed' },
+  { line: SETUP_AGENT_BLOCKED_MESSAGE, phase: 'failed' },
   { line: SETUP_WAIT_TIMEOUT_MESSAGE, phase: 'failed' }
 ]
 const END_CARRY = Math.max(...SETUP_WAIT_END_LINES.map(({ line }) => line.length)) - 1
@@ -26,8 +30,8 @@ export type SetupWaitGate = {
 }
 
 /** A wait-for-setup pane runs no agent between the sequenced wrapper's wait line and the line that ends it. */
-export function createSetupWaitGate(): SetupWaitGate {
-  let state: 'before' | 'waiting' | 'ended' = 'before'
+export function createSetupWaitGate(initiallyWaiting = false): SetupWaitGate {
+  let state: 'before' | 'waiting' | 'ended' = initiallyWaiting ? 'waiting' : 'before'
   let carry = ''
   return {
     observe: (chunk) => {

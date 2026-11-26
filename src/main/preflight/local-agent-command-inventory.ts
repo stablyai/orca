@@ -94,29 +94,26 @@ export async function scanLocalAgentCommandInventory(
   commands: ReadonlySet<string>,
   readLoginPath: boolean,
   shellPath: string | undefined,
-  afterSetup: boolean,
+  freshCapture: boolean,
   { matches, found, probed }: LocalInventoryProgress,
   onChange: () => void,
   signal: AbortSignal
 ): Promise<CommandInventory> {
   const captured =
-    shellPath || (afterSetup && process.platform !== 'win32')
+    shellPath || (freshCapture && process.platform !== 'win32')
       ? await waitForPromiseWithSignal(
           captureLoginShellEnvironment({
             shellOverride: shellPath,
             exactPath: true,
-            ...(afterSetup
+            ...(freshCapture
               ? { startedAfter: Date.now() }
               : { refreshAfterMs: 5_000, keepCaptured: true })
           }),
           signal
         )
       : undefined
-  if (captured?.status === 'fallback') {
-    return { matches, found, probed, incomplete: true }
-  }
   const env =
-    captured?.env ??
+    (captured?.status === 'captured' ? captured.env : undefined) ??
     (await waitForPromiseWithSignal(buildLocalPreflightEnvAsync(), signal)) ??
     (readLoginPath
       ? await waitForPromiseWithSignal(resolveLoginShellEnvironment(), signal)
@@ -181,7 +178,10 @@ export async function scanLocalAgentCommandInventory(
     const isRuntime = createAgentRuntimeTargetCheck(probes)
     await detectCommandsInInstallDirs(pathMisses, {
       probes,
-      acceptsExecutableTarget: async (target) => !(await isRuntime(target)),
+      acceptsExecutableTarget: async (target) => {
+        const runtime = await isRuntime(target)
+        return runtime === UNVERIFIED_FS_PROBE ? runtime : !runtime
+      },
       readDirectories: (dir) =>
         probes.read(
           dir,

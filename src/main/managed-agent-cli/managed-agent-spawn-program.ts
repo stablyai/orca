@@ -2,7 +2,9 @@ import { basename, isAbsolute, win32 } from 'node:path'
 import {
   matchesStockLaunchProgram,
   renderCmdLaunchForPowerShell,
+  renderPinnedLaunchHead,
   replaceLaunchExecutable,
+  savedLaunchProgramHead,
   stockLaunchProgram,
   stockProgramKey
 } from '../../shared/agent-launch/startup/managed-agent-launch-program'
@@ -116,10 +118,14 @@ async function rewriteLaunchExecutable(
   const source = spawn.sourceShell ?? shell
   const convertCmd = source === 'cmd' && shell === 'powershell'
   const generated = config?.commandProvenance === 'generated'
+  const pin = config?.selectedExecutable
   const legacy = !config?.commandProvenance && spawn.restoring
 
   if (!convertCmd && !generated && !legacy) {
     return { command, launchConfig: config }
+  }
+  if (generated && pin && spawn.restoring) {
+    command = renderPinnedLaunchHead(command, pin, source)
   }
   const inputs = generated
     ? readGeneratedAgentLaunchInputs(spawn.env?.[GENERATED_AGENT_LAUNCH_ENV])
@@ -157,14 +163,17 @@ async function rewriteLaunchExecutable(
         ? msysDrivePathToWindows(originalExecutable)
         : originalExecutable)
   const isAbsoluteProgram = cmd ? win32.isAbsolute : isAbsolute
-  const recorded = config?.agentCommand ? readLaunchPosition(config.agentCommand, source) : launch
+  const recordedCommand =
+    generated && pin && config.agentCommand
+      ? renderPinnedLaunchHead(config.agentCommand, pin, source)
+      : config?.agentCommand
+  const recorded = recordedCommand ? readLaunchPosition(recordedCommand, source) : launch
   const bare =
     recorded &&
     !recorded.env.size &&
     !recorded.bypassesShellFunction &&
     !recorded.hasCallOperator &&
     (!recorded.cwd || !config?.agentCommand)
-  const pin = config?.selectedExecutable
   const pinName = pin ? basename(pin) : undefined
   const oldAgent = legacy
     ? ((sourceProgram ? managedPathAgent(sourceProgram) : undefined) ??
@@ -233,14 +242,20 @@ async function rewriteLaunchExecutable(
         (recordedName && recordedName !== program)
       launchConfig = {
         ...recipe,
-        ...(updateRecipe && recorded && config.agentCommand
+        ...(updateRecipe && recorded && recordedCommand
           ? {
-              agentCommand: replaceLaunchExecutable(
-                config.agentCommand,
-                source,
-                recorded,
-                selected.kind === 'full-path' ? selected.path : program
-              )
+              agentCommand: /^[ \t]*(?:&[ \t]+)?$/.test(recordedCommand.slice(0, recorded.start))
+                ? savedLaunchProgramHead(
+                    selected.kind === 'full-path' ? selected.path : program,
+                    source,
+                    recordedCommand.slice(recorded.end)
+                  ) + recordedCommand.slice(recorded.end)
+                : replaceLaunchExecutable(
+                    recordedCommand,
+                    source,
+                    recorded,
+                    selected.kind === 'full-path' ? selected.path : program
+                  )
             }
           : {}),
         commandProvenance: 'generated',

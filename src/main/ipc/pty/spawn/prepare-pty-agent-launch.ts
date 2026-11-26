@@ -19,10 +19,8 @@ import {
 } from '../../../../shared/agent-launch/startup/codex-startup-image-command'
 import { withClaudeDirectLaunchCommand } from '../../../../shared/agent-launch/startup/claude-direct-launch-command'
 import {
-  SETUP_AGENT_SEQUENCE_BLOCKED_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
-  SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV,
-  SETUP_WAIT_TIMEOUT_MESSAGE
+  SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
 } from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import { withSpawnTerminalMcpServers } from '../../../mcp-servers/terminal/terminal-mcp-spawn-step'
 import { planCodexNoDaemonLaunch } from '../../../pty/shell-startup/codex-no-daemon-launch-command'
@@ -45,8 +43,6 @@ export async function preparePtyAgentLaunch(
     sequenced,
     launchConfig,
     selectionBlocked,
-    setupExit,
-    waitForSetup,
     rebuiltHermesQuery
   } = selection
   const settings = input.getSettings?.()
@@ -164,15 +160,10 @@ export async function preparePtyAgentLaunch(
     prepared = undefined
     delete env[ORCA_HERMES_STARTUP_QUERY_ENV]
   }
-  const keepGate = sequenced && (!blocked || (waitForSetup && setupExit !== null))
+  const keepGate = sequenced && !blocked
   if (sequenced) {
     if (!keepGate) {
       delete env[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]
-    } else if (blocked) {
-      env[SETUP_AGENT_SEQUENCE_BLOCKED_ENV] =
-        blocked === 'unavailable'
-          ? 'The agent could not be found on this host.'
-          : 'Agent startup is blocked. Try again.'
     }
     if (prepared === undefined) {
       delete env[SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]
@@ -190,9 +181,7 @@ export async function preparePtyAgentLaunch(
     settings,
     startupNotice: hermesQueryTooLarge
       ? `\r\n[orca] ${agentLaunchUnbuildableMessage('hermes')}\r\n`
-      : setupExit === null
-        ? `\r\n[orca] ${SETUP_WAIT_TIMEOUT_MESSAGE}\r\n`
-        : (authoredRootLaunch?.notice ?? rootLaunch?.notice),
+      : (authoredRootLaunch?.notice ?? rootLaunch?.notice),
     terminalMcp: mcp.pane
   }
 }

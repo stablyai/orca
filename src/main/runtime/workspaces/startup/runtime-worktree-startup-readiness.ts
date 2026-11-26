@@ -39,6 +39,7 @@ export type StartupFollowupPromptOptions = {
   signal?: AbortSignal
   agentLaunch?: boolean
   terminalCreation?: TerminalReadinessCreation
+  awaitSetupGate?: boolean
 }
 
 /** A post-start agent's first prompt: its process in front can still drop typed text (#10336). */
@@ -128,6 +129,7 @@ export type StartupDraftReadinessOptions = {
   submit?: boolean
   /** A wait-for-setup pane's Setup time does not count: the deadline restarts when Setup ends. */
   afterSetup?: boolean
+  awaitSetupGate?: boolean
 }
 
 export function waitForWorktreeStartupDraft(
@@ -152,7 +154,7 @@ export function waitForWorktreeStartupDraft(
     let hardTimer: NodeJS.Timeout | null = null
     let deadlineCheckTimer: NodeJS.Timeout | null = null
     let unsubscribe: (() => void) | null = null
-    const setupGate = options.afterSetup ? createSetupWaitGate() : null
+    const setupGate = options.afterSetup ? createSetupWaitGate(options.awaitSetupGate) : null
     // A check begun before a shell handoff cannot settle after it.
     let handoffs = 0
     let handoffCarry = ''
@@ -311,7 +313,7 @@ export function waitForWorktreeStartupDraft(
       }
       armDeadline(phase === 'waiting' ? SETUP_WAIT_GATE_MAX_MS : undefined)
     }
-    armDeadline()
+    armDeadline(options.awaitSetupGate ? SETUP_WAIT_GATE_MAX_MS : undefined)
     const replay = host.readRecentOutput(ptyId)
     if (replay) {
       observe(replay)

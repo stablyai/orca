@@ -25,7 +25,8 @@ import {
 } from '../preflight/agent-command-detection'
 import { createAgentRuntimeTargetCheck, isOrcaAgentRuntimePath } from './managed-agent-cli-path'
 
-const pendingLookups = new Map<string, PromiseSettlementWaiters<string | null>>()
+type ConfiguredPathResult = string | null | typeof UNVERIFIED_FS_PROBE
+const pendingLookups = new Map<string, PromiseSettlementWaiters<ConfiguredPathResult>>()
 
 export type SpawnProgramContext = {
   launchConfig?: SleepingAgentLaunchConfig
@@ -39,6 +40,7 @@ export type SpawnProgramContext = {
   readCwd?: () => Promise<string | undefined>
   env?: NodeJS.ProcessEnv
   preselectedAgentProgram?: PreselectedAgentProgram
+  signal?: AbortSignal
 }
 
 export type PreselectedAgentProgram = {
@@ -74,10 +76,12 @@ export async function resolveSpawnAgentProgram(
       : unknownSelection
   }
   let wslDistro: string | undefined
-  let selection = await withAgentInventoryDeadline((signal) =>
-    selectSpawnAgentProgram(spawn, shell, programs, launchCwd, pinned, signal, (distro) => {
-      wslDistro = distro
-    })
+  let selection = await withAgentInventoryDeadline(
+    (signal) =>
+      selectSpawnAgentProgram(spawn, shell, programs, launchCwd, pinned, signal, (distro) => {
+        wslDistro = distro
+      }),
+    spawn.signal
   ).catch(() => unknownSelection)
   if (onProgramSelected && 'path' in selection.result) {
     if (shell === 'cmd' && selection.result.kind === 'by-name') {
@@ -113,14 +117,16 @@ async function selectSpawnAgentProgram(
       onWslDistroSelected
     })
   }
-  if (pinned && isAbsolute(pinned) && !isOrcaAgentRuntimePath(pinned)) {
+  if (pinned && isAbsolute(pinned)) {
     const probes = new InventoryFsProbes(signal)
     const checked = await checkExecutableFile(pinned, process.platform === 'win32', probes)
     const target = checked === 'executable' ? await probes.realPath(pinned) : null
-    if (typeof target === 'string' && !(await createAgentRuntimeTargetCheck(probes)(target))) {
+    const runtime =
+      typeof target === 'string' ? await createAgentRuntimeTargetCheck(probes)(target) : target
+    if (runtime === false && !isOrcaAgentRuntimePath(pinned)) {
       return { program: preferred, result: { kind: 'full-path', path: pinned } }
     }
-    if (checked === 'unknown' || target === UNVERIFIED_FS_PROBE) {
+    if (checked === 'unknown' || runtime === UNVERIFIED_FS_PROBE) {
       return { program: preferred, result: { kind: 'unknown' } }
     }
   }
@@ -141,6 +147,7 @@ async function selectSpawnAgentProgram(
   const effective = (key: string) =>
     readPathEnv(spawn.env, key) ?? readPathEnv(configuredEnv, key) ?? readPathEnv(process.env, key)
   let selection: TerminalAgentProgramSelection | undefined
+  let configuredPathUnknown = false
   if (configuredEnv) {
     for (const program of programs) {
       const path = await resolveAgentOnConfiguredPath(
@@ -150,10 +157,11 @@ async function selectSpawnAgentProgram(
         readCwd,
         signal
       )
-      if (path) {
+      if (typeof path === 'string') {
         selection = { program, result: { kind: 'by-name', path } }
         break
       }
+      configuredPathUnknown ||= path === UNVERIFIED_FS_PROBE
     }
   }
   selection ??= await selectTerminalAgentProgram(programs, shell, {
@@ -168,7 +176,9 @@ async function selectSpawnAgentProgram(
     throwIfSignalAborted(signal)
   }
   if (selected.kind !== 'by-name') {
-    return selection
+    return configuredPathUnknown && selected.kind === 'unavailable'
+      ? { program, result: { kind: 'unknown' } }
+      : selection
   }
   // Pin the selection when the agent's PATH differs from the host inventory's.
   if (configuredEnv || spawn.refreshAgentProgram) {
@@ -221,7 +231,7 @@ async function resolveAgentOnConfiguredPath(
   pathExt: string | undefined,
   readCwd: () => Promise<string>,
   signal: AbortSignal
-): Promise<string | null> {
+): Promise<ConfiguredPathResult> {
   const windows = process.platform === 'win32'
   const entries = pathEnv?.split(delimiter) ?? []
   const dirs = windows ? entries.filter(Boolean).map(stripWindowsPathQuotes) : entries
@@ -234,28 +244,32 @@ async function resolveAgentOnConfiguredPath(
   let pending = pendingLookups.get(key)
   if (!pending) {
     const controller = new AbortController()
-    const lookup = new PromiseSettlementWaiters<string | null>(
-      Promise.resolve().then((): Promise<string | null> | null => {
+    const lookup = new PromiseSettlementWaiters<ConfiguredPathResult>(
+      Promise.resolve().then(async (): Promise<ConfiguredPathResult> => {
         if (lookup.waiterCount === 0) {
           return null
         }
         const probes = new InventoryFsProbes(controller.signal)
         const isRuntime = createAgentRuntimeTargetCheck(probes)
-        return resolveCommandOnLocalPath(program, {
+        let uncertain = false
+        const path = await resolveCommandOnLocalPath(program, {
           env: { PATHEXT: pathExt },
           pathEntries,
           signal: controller.signal,
           probeCandidate: async (candidate) => {
             try {
-              if (
-                isOrcaAgentRuntimePath(candidate) ||
-                (await checkExecutableFile(candidate, windows, probes)) !== 'executable' ||
-                lookup.waiterCount === 0
-              ) {
+              if (isOrcaAgentRuntimePath(candidate) || lookup.waiterCount === 0) {
+                return false
+              }
+              const checked = await checkExecutableFile(candidate, windows, probes)
+              uncertain ||= checked === 'unknown'
+              if (checked !== 'executable' || lookup.waiterCount === 0) {
                 return false
               }
               const target = await probes.realPath(candidate)
-              return typeof target === 'string' && !(await isRuntime(target))
+              const runtime = typeof target === 'string' ? await isRuntime(target) : target
+              uncertain ||= runtime === UNVERIFIED_FS_PROBE
+              return runtime === false
             } finally {
               // Let callers share an issued probe, then stop once no launch is waiting on it.
               if (lookup.waiterCount === 0) {
@@ -264,6 +278,7 @@ async function resolveAgentOnConfiguredPath(
             }
           }
         })
+        return path ?? (uncertain ? UNVERIFIED_FS_PROBE : null)
       }),
       () => pendingLookups.delete(key)
     )

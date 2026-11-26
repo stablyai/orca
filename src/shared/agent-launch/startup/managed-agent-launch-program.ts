@@ -13,6 +13,41 @@ export function launchProgramHead(path: string, shell: AgentStartupShell): strin
   return shell === 'powershell' && quoted !== path ? `& ${quoted}` : quoted
 }
 
+export function savedLaunchProgramHead(
+  path: string,
+  shell: AgentStartupShell,
+  suffix = ''
+): string {
+  return shell !== 'posix' &&
+    /^[A-Za-z]:\\[\w.\\-]+$/.test(path) &&
+    /^[\w ./:=\\+\t-]*$/.test(suffix)
+    ? path
+    : launchProgramHead(path, shell)
+}
+
+export function renderPinnedLaunchHead(
+  command: string,
+  pin: string,
+  shell: AgentStartupShell
+): string {
+  const rendered = launchProgramHead(pin, shell)
+  for (const source of ['powershell', 'cmd', 'posix'] satisfies AgentStartupShell[]) {
+    const head = launchProgramHead(pin, source)
+    const suffix = command.slice(head.length)
+    if (command.startsWith(head) && (!suffix || /^\s/.test(suffix))) {
+      const argv =
+        source === shell ? null : readLaunchArguments(command, source, { end: head.length })
+      return argv ? renderLaunchInvocation(pin, argv, shell) : rendered + suffix
+    }
+  }
+  const portableHead = savedLaunchProgramHead(pin, 'cmd')
+  const suffix = command.slice(portableHead.length)
+  if (command.startsWith(portableHead) && (!suffix || /^\s/.test(suffix))) {
+    return rendered + suffix
+  }
+  return command
+}
+
 /** A program path as one word: a plain name reads alike in every shell. */
 function quoteLaunchProgram(path: string, shell: AgentStartupShell): string {
   if (/^[\w.-]+$/.test(path)) {

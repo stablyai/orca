@@ -70,7 +70,6 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
     worktreeSelector: string,
     opts: MobileTerminalCreateOptions = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
-    const pairedCreate = Boolean(opts.clientNavigationId)
     const graphEpoch = this.captureReadyGraphEpoch()
     // The paired client's own create: its user's act, as every start below.
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector, undefined, {
@@ -131,6 +130,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
             leafId: deterministicAgentSessionUuid(`mobile-qoder-leaf\0${seed}`)
           },
           createMutation: { clientIdentity, id: opts.clientMutationId },
+          historyResume: opts.historyResume,
           viewMode: opts.viewMode,
           targetGroupId: opts.targetGroupId,
           supportsSplitGroupPlacement: opts.supportsSplitGroupPlacement,
@@ -172,7 +172,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
     if (!desktop.hasLiveRenderer(windowId)) {
       throw new Error('runtime_unavailable')
     }
-    const releasePublicationThrottle = pairedCreate
+    const releasePublicationThrottle = opts.clientNavigationId
       ? (desktop.holdRendererPublication?.(windowId) ?? (() => {}))
       : () => {}
     try {
@@ -221,7 +221,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
       // Rescue uses the active group; renderer reconciliation later moves the tab into its requested group.
       this.pendingMobileTerminalCreatesByKey.set(pendingCreateKey, {
         activate: opts.activate !== false,
-        paired: pairedCreate,
+        paired: Boolean(opts.clientNavigationId),
         selectIfNoActiveTab: true,
         ...(startupCommand.command
           ? {

@@ -3,6 +3,7 @@ import { isAgentForegroundProcess } from '../../../../../../shared/agent-status/
 import type { AgentProgramBlockReason } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { resolveDraftPasteReadyTimeoutMs } from '../../../../../../shared/agent-launch/startup/readiness/draft-paste-ready-timeout'
 import { createDraftPasteReadyScanner } from '../../../../../../shared/agent-launch/startup/readiness/draft-paste-ready-scanner'
+import { SETUP_AGENT_SEQUENCE_MARKER_ENV } from '../../../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import {
   createSetupWaitGate,
   SETUP_WAIT_GATE_MAX_MS
@@ -40,7 +41,8 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
     ? createStartupDraftReadyScanner()
     : null
   // A wait-for-setup pane's Setup time does not count toward the draft deadline.
-  const setupWaitGate = createSetupWaitGate()
+  const awaitSetupGate = Boolean(session.paneStartup?.env?.[SETUP_AGENT_SEQUENCE_MARKER_ENV])
+  const setupWaitGate = createSetupWaitGate(awaitSetupGate)
   let startupDraftReadinessArmed = false
   let startupDraftPasteSettled = !session.ownsStartupDraftPaste
   let startupDraftPasteInFlight = false
@@ -185,6 +187,9 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
       return
     }
     startupDraftReadinessArmed = true
+    if (awaitSetupGate) {
+      return armStartupDraftHardTimer(SETUP_WAIT_GATE_MAX_MS, abandonStartupDraft)
+    }
     armStartupDraftHardTimer()
   }
   session.observeStartupDraftPasteReadiness = (data: string): void => {

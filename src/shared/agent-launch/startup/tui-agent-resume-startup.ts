@@ -22,6 +22,7 @@ import { normalizeRuntimePathForComparison } from '../../file-access/cross-platf
 import { parseWslUncPath } from '../../file-access/wsl-paths'
 import { dropRecordedAgentPermissionArgs } from '../permissions/tui-agent-permission-lift'
 import { generatedCmdResumeEnv } from './generated-cmd-launch'
+import { renderPinnedLaunchHead } from './managed-agent-launch-program'
 
 type AgentResumeStartupArgs = {
   agent: ResumableTuiAgent
@@ -87,7 +88,10 @@ function buildAgentResumePlan(
     args.agent === 'codex' && !args.fork
       ? dropRecordedAgentPermissionArgs(args.agent, args, shell)
       : args
-  const resolvedAgentCommand = recorded.agentCommand
+  const resolvedAgentCommand =
+    recorded.agentCommand && args.commandProvenance === 'generated' && args.selectedExecutable
+      ? renderPinnedLaunchHead(recorded.agentCommand, args.selectedExecutable, shell)
+      : recorded.agentCommand
   const baseCommand = resolvedAgentCommand
     ? ({
         ok: true,

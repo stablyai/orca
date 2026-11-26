@@ -96,6 +96,7 @@ export async function buildRuntimePtySpawnOptions(
   ctx.launchCommand = launch.launchCommand
   args.launchConfig = launch.launchConfig
   ctx.agentProgramBlocked = launch.blocked
+  ctx.sequencedAgentLaunch = launch.sequencedAgentLaunch
   ctx.terminalMcp = launch.terminalMcp
   ctx.provisionalPtySize = seedPtySpawnSize({
     sessionId: ctx.sessionId,

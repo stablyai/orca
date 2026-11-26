@@ -92,7 +92,7 @@ async function isNativeExecutableAsync(path: string): Promise<boolean> {
 export type CliFsProbeOptions = {
   probes: InventoryFsProbes
   onUnverified: () => void
-  acceptsExecutableTarget?: (target: string) => Promise<boolean>
+  acceptsExecutableTarget?: (target: string) => Promise<boolean | typeof UNVERIFIED_FS_PROBE>
   readDirectories?: (
     path: string
   ) => Promise<InstallDirectoryListing | null | typeof UNVERIFIED_FS_PROBE>

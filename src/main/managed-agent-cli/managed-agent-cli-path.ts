@@ -18,14 +18,14 @@ export function isOrcaAgentRuntimePath(path: string): boolean {
 export function createAgentRuntimeTargetCheck(probes: InventoryFsProbes) {
   const root = hasAppEnvironment() ? join(getProfileUserDataPath(), 'agent-runtimes') : undefined
   let canonicalRoot: ReturnType<InventoryFsProbes['realPath']> | undefined
-  return async (target: string): Promise<boolean> => {
-    if (!root || isOrcaAgentRuntimePath(target)) {
-      return Boolean(root)
+  return async (target: string): Promise<boolean | typeof UNVERIFIED_FS_PROBE> => {
+    if (!root) {
+      return false
     }
     const realRoot = await (canonicalRoot ??= probes.realPath(root))
-    return (
-      realRoot === UNVERIFIED_FS_PROBE ||
-      (realRoot !== null && isPathInsideOrEqual(realRoot, target))
-    )
+    return realRoot === UNVERIFIED_FS_PROBE
+      ? realRoot
+      : realRoot !== null &&
+          (isOrcaAgentRuntimePath(target) || isPathInsideOrEqual(realRoot, target))
   }
 }
