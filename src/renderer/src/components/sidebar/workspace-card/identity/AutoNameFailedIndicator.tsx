@@ -130,7 +130,8 @@ export function AutoNameFailedIndicator({
         side="right"
         align="center"
         sideOffset={sideOffset}
-        className="w-auto max-w-[min(26rem,calc(100vw-2rem))] p-3 text-xs"
+        variant="workspace-details"
+        className="w-auto max-w-[min(26rem,calc(100vw-2rem))]"
         onClick={(event) => event.stopPropagation()}
         onPointerDown={(event) => event.stopPropagation()}
         // Portaled events still bubble to the row, whose double-click opens Edit Details.
@@ -202,15 +203,15 @@ function AutoNameAction({
       <TooltipTrigger asChild>
         <Button
           type="button"
-          variant="ghost"
-          size="icon"
+          variant="ghost-muted"
+          size="icon-xs"
           aria-label={label}
           // aria-disabled keeps focus on a busy Try again; a natively disabled button drops it.
           aria-disabled={busy || undefined}
           aria-busy={busy || undefined}
           disabled={disabled}
           onClick={onClick}
-          className="size-6 rounded text-muted-foreground hover:text-foreground [&_svg]:size-3.5"
+          className="[&_svg]:size-3.5"
         >
           {children}
         </Button>

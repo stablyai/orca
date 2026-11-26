@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { Repo } from '../../../shared/repository/repo-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
+import { getDefaultSettings } from '../../../shared/orca-profiles/constants'
 import { dismissFirstWorkRename } from './first-work-rename-dismiss'
 import { firstWorkDismissDeps, firstWorkRenameDeps } from './first-work-rename-runtime'
 import { getFirstWorkRetryAvailability } from './first-work-rename-retry'
@@ -11,40 +12,60 @@ import {
 
 const REPO: Repo = { id: 'repo-1', path: '/repo', displayName: 'repo', badgeColor: '', addedAt: 1 }
 const WORKTREE_ID = 'repo-1::/repo/barracuda-208'
-
-// The persisted metadata a restart reads back; everything else is rebuilt from it.
-function makeStore(meta: Record<string, WorktreeMeta>) {
-  return {
-    getSettings: () => ({ autoRenameBranchFromWork: true }) as never,
-    getRepo: (id: string) => (id === REPO.id ? REPO : undefined),
-    getRepos: () => [REPO],
-    getWorktreeMeta: (id: string) => meta[id],
-    setWorktreeMeta: (target: { id: string }, updates: Partial<WorktreeMeta>) => {
-      meta[target.id] = { ...meta[target.id], ...updates } as WorktreeMeta
-      return meta[target.id]
-    },
-    getFolderWorkspace: () => undefined,
-    updateFolderWorkspace: () => undefined
-  } as unknown as Parameters<typeof firstWorkRenameDeps>[0]
+const FAILED_META: WorktreeMeta = {
+  displayName: 'barracuda-208',
+  comment: '',
+  linkedIssue: null,
+  linkedPR: null,
+  linkedLinearIssue: null,
+  isArchived: false,
+  isUnread: false,
+  isPinned: false,
+  sortOrder: 0,
+  lastActivityAt: 1,
+  orcaCreationSource: 'desktop',
+  orcaCreatedAt: 1,
+  firstAgentMessageRenameError: 'Generation timed out after 60s.'
 }
 
-const runtime = {
+type DismissStore = Parameters<typeof firstWorkRenameDeps>[0]
+type Write = { id: string; hostId: string }
+
+// The persisted metadata a restart reads back; everything else is rebuilt from it.
+function makeStore(
+  meta: Record<string, WorktreeMeta>,
+  repos: Repo[] = [REPO],
+  writes: Write[] = []
+): DismissStore {
+  return {
+    getSettings: () => getDefaultSettings('/home/me'),
+    getRepo: (id: string) => repos.find((repo) => repo.id === id),
+    getRepos: () => repos,
+    getWorktreeMeta: (id: string) => meta[id],
+    setWorktreeMeta: (target, updates) => {
+      writes.push({ id: target.id, hostId: target.hostId })
+      const next: WorktreeMeta = { ...meta[target.id], ...updates }
+      meta[target.id] = next
+      return next
+    },
+    getFolderWorkspace: () => undefined,
+    updateFolderWorkspace: () => null
+  }
+}
+
+const runtime: Parameters<typeof firstWorkRenameDeps>[1] = {
   getCommitMessageAgentEnvironmentResolvers: () => undefined,
   notifyFolderWorkspaceChanged: () => {},
   notifyBranchRenamed: () => {},
   notifyWorktreeFolderRenamed: () => {}
-} as unknown as Parameters<typeof firstWorkRenameDeps>[1]
+}
 
 describe('dismissFirstWorkRename', () => {
   beforeEach(() => resetFirstWorkBranchRenameState())
 
   it('keeps the name across a restart: the error stays cleared and nothing retries', async () => {
     const meta: Record<string, WorktreeMeta> = {
-      [WORKTREE_ID]: {
-        orcaCreationSource: 'desktop',
-        orcaCreatedAt: 1,
-        firstAgentMessageRenameError: 'Generation timed out after 60s.'
-      } as WorktreeMeta
+      [WORKTREE_ID]: { ...FAILED_META }
     }
     const store = makeStore(meta)
 
@@ -69,22 +90,11 @@ describe('dismissFirstWorkRename', () => {
   })
 
   it('writes this host’s own row when a same-id repo is also registered on another host', () => {
-    const writes: { id: string; hostId: string }[] = []
+    const writes: Write[] = []
     const meta: Record<string, WorktreeMeta> = {
-      [WORKTREE_ID]: {
-        orcaCreationSource: 'desktop',
-        firstAgentMessageRenameError: 'Generation timed out after 60s.'
-      } as WorktreeMeta
+      [WORKTREE_ID]: { ...FAILED_META }
     }
-    const store = {
-      ...makeStore(meta),
-      getRepos: () => [REPO, { ...REPO, executionHostId: 'runtime:g16' }],
-      setWorktreeMeta: (target: { id: string; hostId: string }, updates: Partial<WorktreeMeta>) => {
-        writes.push({ id: target.id, hostId: target.hostId })
-        meta[target.id] = { ...meta[target.id], ...updates } as WorktreeMeta
-        return meta[target.id]
-      }
-    } as unknown as Parameters<typeof firstWorkRenameDeps>[0]
+    const store = makeStore(meta, [REPO, { ...REPO, executionHostId: 'runtime:g16' }], writes)
 
     expect(dismissFirstWorkRename(WORKTREE_ID, firstWorkDismissDeps(store, runtime))).toEqual({
       dismissed: true
