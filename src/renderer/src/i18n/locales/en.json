@@ -9057,7 +9057,6 @@
             "plan": "Plan: {{plan}}",
             "clearFailed": "Could not clear the Command Code key",
             "clearFailedDescription": "Orca could not confirm the key was cleared. The status will refresh; check it before trying again.",
-            "clearFailedUnchangedDescription": "The saved key is unchanged. Try again.",
             "saveFailed": "Could not save the Command Code key",
             "saveFailedDescription": "Check the key and try again.",
             "session": "5-hour window: {{percent}}% used",

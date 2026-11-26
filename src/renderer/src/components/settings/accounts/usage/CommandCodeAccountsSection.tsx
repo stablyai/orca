@@ -179,15 +179,12 @@ export function mutationFailureCopy(
           'auto.components.settings.AccountsPane.commandCode.clearFailed',
           'Could not clear the Command Code key'
         ),
-        description: isClearTimeoutError(error)
-          ? t(
-              'auto.components.settings.AccountsPane.commandCode.clearFailedDescription',
-              'Orca could not confirm the key was cleared. The status will refresh; check it before trying again.'
-            )
-          : t(
-              'auto.components.settings.AccountsPane.commandCode.clearFailedUnchangedDescription',
-              'The saved key is unchanged. Try again.'
-            )
+        // The host may delete the key before a later step fails or a reply is lost, so no
+        // clear failure can promise the key is unchanged.
+        description: t(
+          'auto.components.settings.AccountsPane.commandCode.clearFailedDescription',
+          'Orca could not confirm the key was cleared. The status will refresh; check it before trying again.'
+        )
       }
     : {
         title: t(

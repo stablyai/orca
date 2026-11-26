@@ -83,11 +83,7 @@ describe('mutationFailureCopy', () => {
   const t: Translate = (_key, fallback) => fallback
 
   it('uses unknown-outcome wording on a clear timeout', () => {
-    const copy = mutationFailureCopy(
-      true,
-      t,
-      Object.assign(new Error('timed out'), { name: 'TimeoutError' })
-    )
+    const copy = mutationFailureCopy(true, t)
     expect(copy.description).toBe(
       'Orca could not confirm the key was cleared. The status will refresh; check it before trying again.'
     )
@@ -96,9 +92,9 @@ describe('mutationFailureCopy', () => {
     ).toBe(true)
   })
 
-  it('keeps unchanged wording on a clear failure known to leave the key in place', () => {
-    const copy = mutationFailureCopy(true, t, new Error('boom'))
-    expect(copy.description).toBe('The saved key is unchanged. Try again.')
+  it('never claims the key is unchanged after any clear failure', () => {
+    const copy = mutationFailureCopy(true, t)
+    expect(copy.description).not.toMatch(/unchanged/i)
   })
 })
 
