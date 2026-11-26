@@ -246,16 +246,30 @@ export class BotItemsWrites extends BotItemsEdits {
         return null
       }
       const actor: BotItemActor = { kind: 'orca', why: BOT_ITEM_ASK_WITHDRAWN }
+      // The questions a late reply may still name: the item's question and the ask it waited on.
+      const asked = [...new Set([questionEvent, this.waitingAsk(item) ?? questionEvent])]
       this.writeStatus(uid, 'working', null, actor, now)
       const data = {
         from: 'needs_you',
         to: 'working',
         cause: 'withdrawn',
         withdrawn,
+        asked,
         note: botItemAskWithdrawnNote(withdrawn)
       }
       return this.appendEvent(uid, 'status', actor, data, true, now)
     })
+  }
+
+  /** Orca's withdrawals whose mail is still owed, as a crash before the send left them. */
+  owedWithdrawals(): number[] {
+    return this.db
+      .prepare(
+        `SELECT id FROM item_events WHERE mail = 'owed' AND kind = 'status'
+           AND json_extract(actor, '$.kind') = 'orca' AND json_extract(actor, '$.why') = ?`
+      )
+      .all(BOT_ITEM_ASK_WITHDRAWN)
+      .map((row) => Number(row.id))
   }
 
   /** Of these events, the ones whose mail is still owed. */

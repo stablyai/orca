@@ -331,7 +331,6 @@ export class BotItemsHost {
       this.workerLinks.dispatchChanged(dispatchId)
       // A worker that finished can leave only stopped ones on its item.
       this.usageLimitWaits.recheck()
-      this.askWithdrawals.dispatchChanged()
     }
   }
 

@@ -12,6 +12,7 @@ import {
   getRepeatedStringFlag,
   getRequiredStringFlag
 } from '../arguments/flags'
+import { REPEATED_FLAG_SEPARATOR } from '../arguments/args'
 import { readTextOrFileFlag } from '../arguments/command-body-input'
 import { printResult } from '../output/command-result-output'
 import {
@@ -139,7 +140,11 @@ export const BOT_ITEM_HANDLERS: Record<string, CommandHandler> = {
     }
     const ask = botItemAskFromFlags(ctx, BOT_ITEM_ASK_BOOLEAN_FLAGS)
     const comment = await readTextOrFileFlag(flags, cwd, 'comment', false)
-    const askWhile = getOptionalStringFlagAllowingEmpty(flags, 'while')
+    const given = getOptionalStringFlagAllowingEmpty(flags, 'while')?.split(REPEATED_FLAG_SEPARATOR)
+    if (given && given.length > 1) {
+      throw new RuntimeClientError('invalid_argument', 'Give --while once. Nothing was posted.')
+    }
+    const askWhile = given?.[0]
     if (askWhile !== undefined) {
       if (!askWhile.trim()) {
         throw new RuntimeClientError(

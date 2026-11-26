@@ -90,7 +90,12 @@ export async function writeResult(
       item!.links
     )
     const owner = runtime.bots.list().find((bot) => bot.id === record.ownerBotId)
-    notifyBotItemQuestion(runtimeBotOwnerNotice(runtime), owner, item!, write)
+    // Only while it still asks that question: Orca may have withdrawn it during the awaits above.
+    const asks = write.some((event) => event.kind === 'status' && event.data.to === 'needs_you')
+    const now = asks ? await store.get(outcome.uid) : null
+    if (now?.status === 'needs_you' && now.questionEvent === record.questionEvent) {
+      notifyBotItemQuestion(runtimeBotOwnerNotice(runtime), owner, item!, write)
+    }
   }
   // A write from another chat of the bot owes the item's chat a mail.
   await runtime.botItems.sendOwedMail()

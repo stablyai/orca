@@ -45,6 +45,7 @@ describe('Needs you asks kept open --while', () => {
       askWhileQuestions: async () => store.askWhileQuestions(),
       withdrawAsk: async (...args) => store.withdrawAsk(...args),
       stillOwed: async (ids) => store.stillOwed(ids),
+      owedWithdrawals: async () => store.owedWithdrawals(),
       viewRows: async (uids) => store.viewRows(uids)
     }
   }
@@ -80,6 +81,8 @@ describe('Needs you asks kept open --while', () => {
       'until:2026-11-27T09:00:00',
       'until:2026-11-27',
       'until:2026-11-24T09:00:00Z',
+      'until:2027-02-29T09:00:00Z',
+      'until:2026-11-27T24:00:00Z',
       'until:2028-11-27T09:00:00Z',
       'dispatch:',
       'dispatch:ctx a',
@@ -176,10 +179,34 @@ describe('Needs you asks kept open --while', () => {
     const uid = asked(store, { kind: 'until', at: LATER })
     const question = store.get(uid)!.questionEvent!
     store.withdrawAsk(uid, question, { kind: 'until', at: LATER, state: 'passed' }, LATER)
-    expect(() => store.ownerComment(uid, 'Yes', OWNER, [], LATER + 1, undefined, question)).toThrow(
-      /Orca withdrew this question on item \d+/
-    )
+    const late = () => store.ownerComment(uid, 'Yes', OWNER, [], LATER + 1, undefined, question)
+    expect(late).toThrow(expect.objectContaining({ code: 'item_changed' }))
+    // Still refused once the bot has moved on and closed the item.
+    store.close(uid, 'done', undefined, BOT)
+    expect(late).toThrow(expect.objectContaining({ code: 'item_changed' }))
     expect(store.ownerComment(uid, 'Noted.', OWNER, [], LATER + 2).eventId).not.toBeNull()
+  })
+
+  it('sends withdrawal mail a crash left owed on the first minute after a restart', async () => {
+    const store = open()
+    const uid = asked(store, { kind: 'until', at: LATER })
+    const eventId = store.withdrawAsk(uid, store.get(uid)!.questionEvent!, {
+      kind: 'until',
+      at: LATER,
+      state: 'passed'
+    })!
+    const restarted = watcher(
+      store,
+      () => 'unknown',
+      async () => {
+        store.markMailSent(
+          store.owedMail(0).mails.flatMap((mail) => mail.changes.map((c) => c.event.id))
+        )
+      }
+    )
+    restarted.tick(LATER + 1)
+    await restarted.settled()
+    expect(store.stillOwed([eventId])).toEqual([])
   })
 
   it('sends the withdrawal’s mail with no other write, and tries a failed send again next minute', async () => {

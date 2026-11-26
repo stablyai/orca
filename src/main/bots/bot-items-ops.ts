@@ -28,6 +28,7 @@ export const BOT_ITEMS_OPS = [
   'askWhileQuestions',
   'withdrawAsk',
   'stillOwed',
+  'owedWithdrawals',
   'orcaComment',
   'ownerComment',
   'ownerCommentByRequest',

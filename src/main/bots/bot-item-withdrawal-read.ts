@@ -6,7 +6,7 @@ import {
 import type SyncDatabase from '../sqlite/sync-database'
 import { eventRecordOf } from './bot-items-rows'
 
-/** Why Orca withdrew the question, when the item's latest move did, after it. */
+/** Why Orca withdrew the question a late reply names, when it did. */
 export function botItemWithdrawalAfter(
   db: SyncDatabase,
   uid: string,
@@ -14,14 +14,11 @@ export function botItemWithdrawalAfter(
 ): BotItemAskWithdrawn | null {
   const row = db
     .prepare(
-      `SELECT * FROM item_events WHERE item_uid = ? AND kind = 'status' ORDER BY id DESC LIMIT 1`
+      `SELECT * FROM item_events WHERE item_uid = ? AND id > ? AND kind = 'status'
+         AND json_extract(actor, '$.kind') = 'orca' AND json_extract(data, '$.cause') = 'withdrawn'
+         AND EXISTS (SELECT 1 FROM json_each(data, '$.asked') WHERE value = ?)
+       ORDER BY id DESC LIMIT 1`
     )
-    .get(uid)
-  const event = row === undefined ? null : eventRecordOf(row)
-  return event &&
-    event.id > questionEventId &&
-    event.actor.kind === 'orca' &&
-    event.data.cause === 'withdrawn'
-    ? botItemAskWithdrawnOf(event.data.withdrawn)
-    : null
+    .get(uid, questionEventId, questionEventId)
+  return row === undefined ? null : botItemAskWithdrawnOf(eventRecordOf(row).data.withdrawn)
 }

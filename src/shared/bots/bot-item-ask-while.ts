@@ -15,7 +15,29 @@ export type BotItemAskWithdrawn =
 const DISPATCH_REF = /^[^\s:]+$/
 // A full date and time with seconds optional and an explicit zone, so no host guesses the offset.
 const ISO_WITH_ZONE =
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,3})?)?(?:Z|[+-](\d{2}):(\d{2}))$/
+
+/** The instant, or NaN for a day or clock time that doesn't exist (Feb 29, 2027; 24:00). */
+function untilInstant(text: string): number {
+  const match = ISO_WITH_ZONE.exec(text)
+  if (!match) {
+    return Number.NaN
+  }
+  const [year, month, day, hour, minute, second, zoneHour, zoneMinute] = match
+    .slice(1)
+    .map((part) => Number(part ?? 0))
+  const calendar = new Date(Date.UTC(year!, month! - 1, day!))
+  const real =
+    calendar.getUTCFullYear() === year &&
+    calendar.getUTCMonth() === month! - 1 &&
+    calendar.getUTCDate() === day &&
+    hour! < 24 &&
+    minute! < 60 &&
+    second! < 60 &&
+    zoneHour! <= 14 &&
+    zoneMinute! < 60
+  return real ? Date.parse(text) : Number.NaN
+}
 
 /** `--while` as typed; the message says what to type instead. */
 export function parseBotItemAskWhile(
@@ -32,7 +54,7 @@ export function parseBotItemAskWhile(
       : { ok: false, message: '--while dispatch: takes a worker id, e.g. dispatch:ctx_ab12cd34.' }
   }
   if (kind === 'until') {
-    const at = ISO_WITH_ZONE.test(rest) ? Date.parse(rest) : Number.NaN
+    const at = untilInstant(rest)
     if (!Number.isFinite(at)) {
       return {
         ok: false,
@@ -99,7 +121,8 @@ export function botItemAskWhileTime(at: number, locale?: string): string {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
-    minute: '2-digit'
+    minute: '2-digit',
+    timeZoneName: 'short'
   }).format(new Date(at))
 }
 
