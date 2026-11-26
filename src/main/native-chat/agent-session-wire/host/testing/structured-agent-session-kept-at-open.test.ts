@@ -32,7 +32,11 @@ const relay = (relayId: string, exit: ProviderRelayInfo['exit'] = null): Provide
  * A daemon start whose listing answers what `relays()` returns; null never answers, and 'busy'
  * refuses (an unanswered listing as its timeout ends it).
  */
-function daemon(instance: string, relays: () => ProviderRelayInfo[] | null | 'busy') {
+function daemon(
+  instance: string,
+  relays: () => ProviderRelayInfo[] | null | 'busy',
+  requests: string[] = []
+) {
   const client = {
     getDaemonIdentity: () => ({
       providerRelay: true,
@@ -45,6 +49,7 @@ function daemon(instance: string, relays: () => ProviderRelayInfo[] | null | 'bu
     onDisconnected: () => () => {},
     connectedListeners: new DaemonClientListeners<() => void>(),
     request: (type: string) => {
+      requests.push(type)
       if (type !== 'relayList') {
         return Promise.resolve({})
       }
@@ -132,6 +137,25 @@ it.skipIf(process.platform === 'win32')(
     listing = [relay('r-1', { code: 0, signal: null })]
     expect(await relays.providerRelayRunLiveness(record, { fresh: true })).toBe('gone')
     expect(relays.keptRunningProviderRelayPid(SESSION)).toBeNull()
+  }
+)
+
+it.skipIf(process.platform === 'win32')(
+  'an observe-only ask reads the listing without ending any relay or recording anything',
+  async () => {
+    // Another build's agent, which this build can't reattach, sits beside the chat's kept relay.
+    const requests: string[] = []
+    const newer = { ...relay('r-newer'), chatKey: 'other-chat', agent: 'agent-of-a-newer-build' }
+    const relays = await fresh([daemon(INSTANCE, () => [relay('r-1'), newer], requests)])
+    const record = chat(relayed(1, 1))
+    expect(await relays.providerRelayRunLiveness(record, { observe: true })).toBe('kept')
+    expect(requests.filter((type) => type !== 'relayList')).toEqual([])
+    expect(relays.keptRunningProviderRelayPid(SESSION)).toBeNull()
+    expect(relays.providerRelayRunUnknown(SESSION)).toBe(false)
+    // The chat's own ask acts on the same listing once: it ends the relay it can't reattach.
+    expect(await relays.providerRelayRunLiveness(record)).toBe('kept')
+    expect(requests.filter((type) => type !== 'relayList')).toEqual(['relayClose'])
+    expect(relays.keptRunningProviderRelayPid(SESSION)).toBe(process.pid)
   }
 )
 

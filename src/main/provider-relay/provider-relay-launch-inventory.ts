@@ -143,6 +143,9 @@ type InstanceListing = {
   /** Only an answer is reused; an unanswered listing is asked again by the next caller. */
   answered: boolean
   listing: Promise<ReadonlyMap<string, ProviderRelayInfo> | null>
+  /** The answer's cleanup, run once by the first ask that acts on it; an observer never runs it. */
+  kept: Promise<void> | null
+  keep: () => Promise<void>
 }
 /** By daemon start; bounded by the daemons this app has talked to. */
 const instanceListings = new Map<string, InstanceListing>()
@@ -150,26 +153,40 @@ const instanceListings = new Map<string, InstanceListing>()
 /**
  * The relays one daemon start holds, by relay id; null when it didn't answer. `fresh` asks again
  * unless a listing is in flight (a send or a failed attach must not reuse an answer); otherwise an
- * answer settled within 2 s answers. An unanswered one is never reused.
+ * answer settled within 2 s answers. An unanswered one is never reused. `observe` only reads: it
+ * neither ends relays nor records anything.
  */
-export function listProviderRelayInstance(
+export async function listProviderRelayInstance(
   client: DaemonClient,
   instance: string,
-  fresh = false
+  fresh = false,
+  observe = false
 ): Promise<ReadonlyMap<string, ProviderRelayInfo> | null> {
+  const entry = instanceListing(client, instance, fresh)
+  const listing = await entry.listing
+  if (listing && !observe) {
+    entry.kept ??= entry.keep()
+    await entry.kept
+  }
+  return listing
+}
+
+function instanceListing(client: DaemonClient, instance: string, fresh: boolean): InstanceListing {
   const cached = instanceListings.get(instance)
   if (
     cached &&
     (cached.settledAt === Number.POSITIVE_INFINITY ||
       (!fresh && cached.answered && Date.now() - cached.settledAt < INSTANCE_LISTING_FRESH_MS))
   ) {
-    return cached.listing
+    return cached
   }
   const channel = providerRelayChannel(client)
   const entry: InstanceListing = {
     settledAt: Number.POSITIVE_INFINITY,
     answered: false,
-    listing: Promise.resolve(null)
+    listing: Promise.resolve(null),
+    kept: null,
+    keep: async () => {}
   }
   entry.listing = withTimeout(
     channel.list(LIST_TIMEOUT_MS).catch(() => null),
@@ -181,7 +198,7 @@ export function listProviderRelayInstance(
       if (!result || (result.daemonInstance !== undefined && result.daemonInstance !== instance)) {
         return null
       }
-      await keep(channel, result.relays)
+      entry.keep = () => keep(channel, result.relays)
       entry.answered = true
       return new Map(result.relays.map((info) => [info.relayId, info]))
     })
@@ -195,7 +212,7 @@ export function listProviderRelayInstance(
     }
   }
   instanceListings.set(instance, entry)
-  return entry.listing
+  return entry
 }
 
 async function listOne(client: DaemonClient): Promise<boolean> {
