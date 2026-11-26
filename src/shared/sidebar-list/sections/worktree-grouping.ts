@@ -39,6 +39,7 @@ export function buildOrderedGroups(args: {
   repoOrder: Map<string, number> | undefined
   projectOrderBy: ProjectOrderBy
   folderWorkspaces?: readonly RenderableFolderWorkspace[]
+  activityOnlyWorktrees?: readonly Worktree[]
 }): OrderedGroupEntry[] {
   const {
     groupBy,
@@ -77,7 +78,8 @@ export function buildOrderedGroups(args: {
       ],
       pendingRepoIds: pendingByRepo.keys(),
       repoOrder,
-      projectOrderBy
+      projectOrderBy,
+      activityOnlyItems: args.activityOnlyWorktrees
     })
   }
 

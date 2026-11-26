@@ -119,6 +119,16 @@ export function planProjectGroupTree<S extends object>(args: {
           rows.filter((row) => row.workspaceKind === 'folder-workspace').length
         ])
       ),
+      // Same Recent ranking as the desktop: a group's own sessions count as its activity.
+      folderActivityByGroupId: new Map(
+        [...args.folderRowsByGroupId].flatMap(([groupId, rows]) => {
+          const times = rows
+            .filter((row) => row.workspaceKind === 'folder-workspace')
+            .map((row) => row.lastActivityAt ?? 0)
+          const latest: [string, number] = [groupId, Math.max(...times)]
+          return times.length > 0 ? [latest] : []
+        })
+      ),
       projectOrderBy: args.catalog.projectOrderBy,
       repoOrder: args.catalog.repoOrder
     },

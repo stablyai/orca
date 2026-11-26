@@ -274,10 +274,16 @@ export function buildProjectSections<
   pendingRepoIds?: Iterable<string>
   repoOrder: ReadonlyMap<string, number> | undefined
   projectOrderBy: ProjectOrderBy
+  /** Ranks a section's recency without becoming one of its rows. */
+  activityOnlyItems?: readonly Item[]
 }): [string, ProjectSectionEntry<Item, R>][] {
   const { repoMap, projectIndex } = args
   const sections = new Map<string, ProjectSectionEntry<Item, R>>()
-  const ownership = buildProjectOwnershipIndex(args)
+  const ownership = buildProjectOwnershipIndex(
+    args.activityOnlyItems?.length
+      ? { ...args, items: [...args.items, ...args.activityOnlyItems] }
+      : args
+  )
   for (const item of args.items) {
     const repoId = args.repoIdOf(item)
     addItemToProjectSection(

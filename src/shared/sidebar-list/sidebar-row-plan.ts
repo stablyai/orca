@@ -90,6 +90,8 @@ export type SidebarRowPlanInputs = {
   filterRepoIds: readonly string[]
   /** A hidden project's rows reach the plan only under a folder workspace; they never make its section. */
   hiddenProjects?: HiddenProjects
+  /** Filtered-out workspaces whose activity still ranks their project under Recent order. */
+  activityOnlyWorktrees?: readonly Worktree[]
 }
 
 /** Plans the sidebar's sections once; `render` emits rows for a collapse state. */
@@ -107,20 +109,18 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     lineageById,
     lineageParentIdentities,
     worktreeMap,
-    nestLineage,
     projectGroups,
     placeholderRepoIds,
     importedWorktreesByRepo,
     newExternalWorktreesInboxByRepo,
     pendingCreations,
-    projectGrouping,
     folderWorkspaces,
     hostLabelById,
     defaultHostId,
     pinnedDisplayPolicy,
     filterRepoIds
   } = inputs
-  const projectIndex = buildProjectGroupingIndex(projectGrouping)
+  const projectIndex = buildProjectGroupingIndex(inputs.projectGrouping)
   const repoOf = repoOfWorktree ?? ((worktree: Worktree) => repoMap.get(worktree.repoId))
   // Resolve folder membership before groupBy; every mode renders the same set (#15362).
   const renderableFolderWorkspaces = getRenderableFolderWorkspaces(folderWorkspaces, projectGroups)
@@ -134,7 +134,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
   const projectGroupPaths = getProjectGroupOccurrencePaths(projectGroups)
   // Folder rows are occurrences too, so a folder parent nests its children like any other row.
   const folders = getSidebarFolderOccurrences(renderableFolderWorkspaces, inputs.hiddenProjects)
-  const lineageChildren = nestLineage
+  const lineageChildren = inputs.nestLineage
     ? getSidebarLineageChildren(
         worktrees,
         lineageById,
@@ -177,7 +177,8 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
               pendingByRepo,
               repoOrder,
               projectOrderBy,
-              folderWorkspaces: renderableFolderWorkspaces
+              folderWorkspaces: renderableFolderWorkspaces,
+              activityOnlyWorktrees: inputs.activityOnlyWorktrees
             })
       if (pinned.length > 0) {
         groups.unshift([PINNED_GROUP_KEY, { label: '', items: pinned, repoIds: new Set() }])
