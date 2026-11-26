@@ -10668,9 +10668,7 @@
             "scopeUncommitted": "Não commitadas",
             "scopeAllChanges": "Todas as alterações",
             "scopeNone": "Nenhuma",
-            "scopeOpenDiff": "Abrir diff",
             "scopeShowAll": "Mostrar todas as alterações",
-            "scopeLoadingBranchChanges": "Carregando alterações da branch…",
             "scopeBranchCommits": "Commits nesta branch",
             "scopeRecentCommits": "Commits recentes",
             "scopeCompareTo": "Comparar com {{ref}}",
@@ -10689,7 +10687,8 @@
             "scopeCommitFiles": "Arquivos",
             "gitGraphButton": "Grafo",
             "scopeFileCount_many": "{{count}} arquivos",
-            "scopeCommitCount_many": "{{count}} commits"
+            "scopeCommitCount_many": "{{count}} commits",
+            "compareLoadingAgainst": "Comparando com {{base}}"
           },
           "checks": {
             "panel": {

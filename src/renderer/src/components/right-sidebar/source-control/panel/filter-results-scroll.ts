@@ -1,54 +1,65 @@
-import { useCallback, useLayoutEffect, useSyncExternalStore, type RefObject } from 'react'
+import { useLayoutEffect, useRef, type RefObject } from 'react'
 
-/**
- * When the filter query changes while the list is scrolled past the sticky file-list header,
- * start the results right under it. The stuck header (and its input) stays where it was.
- */
-export function useFilterResultsStartUnderStickyHeader(
-  header: RefObject<HTMLElement | null>,
-  scroller: HTMLElement | null,
-  normalizedFilter: string,
-  enabled: boolean
-): void {
-  useLayoutEffect(() => {
-    const node = header.current
-    const next = node?.nextElementSibling
-    if (!enabled || !node || !scroller || !(next instanceof HTMLElement)) {
-      return
-    }
-    // The header is sticky, so read its unstuck top from the first element after it.
-    const resultsTop = next.offsetTop - node.offsetHeight
-    if (scroller.scrollTop > resultsTop) {
-      scroller.scrollTop = resultsTop
-    }
-  }, [header, scroller, normalizedFilter, enabled])
+/** Scroll offset at which the sticky header just sticks, read from the first element after it. */
+function headerStickTop(header: HTMLElement): number | null {
+  const next = header.nextElementSibling
+  return next instanceof HTMLElement ? next.offsetTop - header.offsetHeight : null
 }
 
 /**
- * Height for the spacer after the list while a filter is open or active: one viewport minus the
- * sticky header, so a shrinking result list cannot clamp scrollTop and move the header's input.
- * (A percentage height does not resolve inside the scroller, so it is measured.)
+ * Sizes the spacer so the scroll range ends exactly where the header sticks: a shrinking result
+ * list cannot clamp scrollTop and move the header's input, and results cannot scroll away under it.
  */
-export function useStickyFilterSpacerHeight(
-  scroller: HTMLElement | null,
+function fitSpacer(header: HTMLElement, spacer: HTMLElement, scroller: HTMLElement): number | null {
+  const stickTop = headerStickTop(header)
+  if (stickTop === null) {
+    return null
+  }
+  const contentHeight = scroller.scrollHeight - spacer.offsetHeight
+  spacer.style.height = `${Math.max(0, stickTop + scroller.clientHeight - contentHeight)}px`
+  return stickTop
+}
+
+/**
+ * While a filter is open or active under the sticky file-list header, keeps the header (and its
+ * input) still as results change, and starts new results right under it. Returns the spacer ref.
+ */
+export function useStickyFilterScroll(
   header: RefObject<HTMLElement | null>,
+  scroller: HTMLElement | null,
+  normalizedFilter: string,
   active: boolean
-): number {
-  const subscribe = useCallback(
-    (onChange: () => void) => {
-      if (!active || !scroller) {
-        return () => {}
+): RefObject<HTMLDivElement | null> {
+  const spacer = useRef<HTMLDivElement>(null)
+  const lastFilter = useRef(normalizedFilter)
+
+  // No deps: results, feedback and collapsed sections all change the list height between renders.
+  useLayoutEffect(() => {
+    const filterChanged = lastFilter.current !== normalizedFilter
+    lastFilter.current = normalizedFilter
+    const headerNode = header.current
+    const spacerNode = spacer.current
+    if (!active || !headerNode || !spacerNode || !scroller) {
+      return
+    }
+    const stickTop = fitSpacer(headerNode, spacerNode, scroller)
+    if (filterChanged && stickTop !== null && scroller.scrollTop > stickTop) {
+      scroller.scrollTo({ top: stickTop })
+    }
+  })
+
+  useLayoutEffect(() => {
+    if (!active || !scroller) {
+      return
+    }
+    const observer = new ResizeObserver(() => {
+      if (header.current && spacer.current) {
+        fitSpacer(header.current, spacer.current, scroller)
       }
-      const observer = new ResizeObserver(onChange)
-      observer.observe(scroller)
-      return () => observer.disconnect()
-    },
-    [scroller, active]
-  )
-  // Reads layout only while a filter is open or active.
-  const getSnapshot = (): number =>
-    active && scroller
-      ? Math.max(0, scroller.clientHeight - (header.current?.offsetHeight ?? 0))
-      : 0
-  return useSyncExternalStore(subscribe, getSnapshot, () => 0)
+    })
+    observer.observe(scroller)
+    return () => observer.disconnect()
+  }, [header, scroller, active])
+
+  return spacer
 }

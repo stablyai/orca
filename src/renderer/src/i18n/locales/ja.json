@@ -14159,9 +14159,7 @@
             "scopeUncommitted": "未コミット",
             "scopeAllChanges": "すべての変更",
             "scopeNone": "なし",
-            "scopeOpenDiff": "差分を開く",
             "scopeShowAll": "すべての変更を表示",
-            "scopeLoadingBranchChanges": "ブランチの変更を読み込み中…",
             "scopeBranchCommits": "このブランチのコミット",
             "scopeRecentCommits": "最近のコミット",
             "scopeCompareTo": "{{ref}} と比較",
@@ -14178,7 +14176,8 @@
             "scopeOlderHistory": "Git Graph で以前の履歴を表示",
             "scopeNoUncommitted": "未コミットの変更はありません。",
             "scopeCommitFiles": "ファイル",
-            "gitGraphButton": "グラフ"
+            "gitGraphButton": "グラフ",
+            "compareLoadingAgainst": "{{base}} と比較中"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "選択した Agent を開始できませんでした。",

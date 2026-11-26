@@ -14826,9 +14826,7 @@
             "scopeUncommitted": "未提交",
             "scopeAllChanges": "所有更改",
             "scopeNone": "无",
-            "scopeOpenDiff": "打开差异",
             "scopeShowAll": "显示所有更改",
-            "scopeLoadingBranchChanges": "正在加载分支更改…",
             "scopeBranchCommits": "此分支上的提交",
             "scopeRecentCommits": "最近提交",
             "scopeCompareTo": "与 {{ref}} 比较",
@@ -14845,7 +14843,8 @@
             "scopeOlderHistory": "在 Git Graph 中查看更早的历史",
             "scopeNoUncommitted": "没有未提交的更改。",
             "scopeCommitFiles": "文件",
-            "gitGraphButton": "图谱"
+            "gitGraphButton": "图谱",
+            "compareLoadingAgainst": "正在与 {{base}} 比较"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的代理",

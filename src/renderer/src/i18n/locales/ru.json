@@ -14581,9 +14581,7 @@
             "scopeUncommitted": "Незакоммиченные",
             "scopeAllChanges": "Все изменения",
             "scopeNone": "Нет",
-            "scopeOpenDiff": "Открыть diff",
             "scopeShowAll": "Показать все изменения",
-            "scopeLoadingBranchChanges": "Загрузка изменений ветки…",
             "scopeBranchCommits": "Коммиты в этой ветке",
             "scopeRecentCommits": "Последние коммиты",
             "scopeCompareTo": "Сравнить с {{ref}}",
@@ -14604,7 +14602,8 @@
             "scopeFileCount_few": "{{count}} файла",
             "scopeFileCount_many": "{{count}} файлов",
             "scopeCommitCount_few": "{{count}} коммита",
-            "scopeCommitCount_many": "{{count}} коммитов"
+            "scopeCommitCount_many": "{{count}} коммитов",
+            "compareLoadingAgainst": "Сравнение с {{base}}"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Не удалось запустить выбранного агента.",

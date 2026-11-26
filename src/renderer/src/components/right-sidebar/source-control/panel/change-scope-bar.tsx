@@ -1,5 +1,5 @@
 import React, { useRef } from 'react'
-import { ChevronDown, FileDiff, X } from 'lucide-react'
+import { ChevronDown, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
 import { DropdownMenu, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -70,7 +70,6 @@ function scopeTriggerLabel(t: Translate, scope: SourceControlChangeScope): strin
 
 export function SourceControlChangeScopeBar({
   currentWorktreeId,
-  worktreePath,
   model,
   graphSupported,
   filter,
@@ -99,8 +98,6 @@ export function SourceControlChangeScopeBar({
     entries,
     gitHistoryContextKey,
     gitHistoryState,
-    openAllDiffs,
-    openHistoryCommitDiff,
     refreshGitHistory,
     resolveSplitTargetGroupId,
     setBaseRefDialogOpen,
@@ -143,60 +140,6 @@ export function SourceControlChangeScopeBar({
         ? uncommitted
         : commitFiles
 
-  // Whole-scope ruling: All changes waits for branch compare instead of opening a partial diff.
-  const branchCompareLoading =
-    changeScope.kind === 'all' &&
-    Boolean(compareBaseRef) &&
-    (!branchSummary || branchSummary.status === 'loading')
-  const openDiffDisabled =
-    changeScope.kind === 'commit' ? !commitFiles?.files : (scoped?.files ?? 0) === 0
-  const openDiff = (): void => {
-    if (branchCompareLoading || openDiffDisabled) {
-      return
-    }
-    if (changeScope.kind === 'commit') {
-      void openHistoryCommitDiff(changeScope.commit)
-      return
-    }
-    // The store re-checks compare readiness when building the tab; failed or unavailable
-    // compare opens the uncommitted changes under their own title.
-    openAllDiffs(
-      currentWorktreeId,
-      worktreePath,
-      undefined,
-      undefined,
-      undefined,
-      changeScope.kind === 'uncommitted' ? { uncommittedOnly: true } : { wholeScope: true }
-    )
-  }
-  const openDiffLabel = t('auto.components.right.sidebar.SourceControl.scopeOpenDiff', 'Open diff')
-  const openDiffButton = (
-    <Button
-      type="button"
-      variant="outline"
-      size="xs"
-      className="aria-disabled:cursor-default"
-      disabled={openDiffDisabled && !branchCompareLoading}
-      // Stays focusable while loading so the tooltip can say why.
-      aria-disabled={branchCompareLoading || undefined}
-      aria-label={openDiffLabel}
-      onClick={openDiff}
-      data-testid="source-control-change-scope-open-diff"
-    >
-      <FileDiff className="size-3.5" />
-      {/* Yields to the scope name below the 240px panel (or a narrower scope row beside a scrollbar);
-          aria-label and tooltip keep "Open diff". Longer scope names need the room sooner. */}
-      <span
-        className={
-          changeScope.kind === 'all'
-            ? '@max-[204px]/change-scope:hidden'
-            : '@max-[216px]/change-scope:hidden'
-        }
-      >
-        {t('auto.components.right.sidebar.SourceControl.scopeDiffButton', 'Diff')}
-      </span>
-    </Button>
-  )
   const showAllLabel = t(
     'auto.components.right.sidebar.SourceControl.scopeShowAll',
     'Show all changes'
@@ -246,7 +189,7 @@ export function SourceControlChangeScopeBar({
             </Tooltip>
             {/* Hidden when narrow: the scope menu's All changes item does the same, and the label needs the room. */}
             {changeScope.kind !== 'all' ? (
-              <span className="contents @max-[232px]/change-scope:hidden">
+              <span className="contents @max-[184px]/change-scope:hidden">
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
@@ -276,8 +219,8 @@ export function SourceControlChangeScopeBar({
                     'ml-0.5 shrink-0 text-2xs tabular-nums text-muted-foreground',
                     // The × beside a picked scope needs the room first.
                     changeScope.kind === 'all'
-                      ? '@max-[216px]/change-scope:hidden'
-                      : '@max-[256px]/change-scope:hidden'
+                      ? '@max-[180px]/change-scope:hidden'
+                      : '@max-[200px]/change-scope:hidden'
                   )}
                   data-testid="source-control-change-scope-count"
                 >
@@ -302,24 +245,6 @@ export function SourceControlChangeScopeBar({
                 />
               ) : null}
               {graphControl}
-              {/* Disabled buttons swallow pointer events, so a wrapper carries the tooltip. */}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  {openDiffDisabled && !branchCompareLoading ? (
-                    <span className="inline-flex">{openDiffButton}</span>
-                  ) : (
-                    openDiffButton
-                  )}
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>
-                  {branchCompareLoading
-                    ? t(
-                        'auto.components.right.sidebar.SourceControl.scopeLoadingBranchChanges',
-                        'Loading branch changes…'
-                      )
-                    : openDiffLabel}
-                </TooltipContent>
-              </Tooltip>
               {overflowMenu}
             </div>
           </div>

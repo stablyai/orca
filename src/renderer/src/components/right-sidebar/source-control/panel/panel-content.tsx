@@ -1,8 +1,5 @@
 import { useRef, type ReactNode } from 'react'
-import {
-  useFilterResultsStartUnderStickyHeader,
-  useStickyFilterSpacerHeight
-} from './filter-results-scroll'
+import { useStickyFilterScroll } from './filter-results-scroll'
 import { useGitCommitActionsSupport } from '@/runtime/source-control/git/git-commit-actions-capability'
 import { shouldShowSourceControlCompareUnavailableCard } from './header-toolbar'
 import { shouldRenderCommitArea } from '../commit/component-gates'
@@ -109,16 +106,12 @@ export function SourceControlPanelContent({
   // A commit's files still loading must not read as "No matching files" under a filter.
   const commitFilesPending = scopeKind === 'commit' && currentCommitFiles?.status !== 'ready'
   const stickyFileListHeader = fileListHeader !== null && !embedded
-  const filterSpacerHeight = useStickyFilterSpacerHeight(
-    fileListScrollElement,
-    fileListHeaderRef,
-    stickyFileListHeader && Boolean(normalizedFilter || filterExpanded)
-  )
-  useFilterResultsStartUnderStickyHeader(
+  const stickyFilterActive = stickyFileListHeader && Boolean(normalizedFilter || filterExpanded)
+  const filterSpacerRef = useStickyFilterScroll(
     fileListHeaderRef,
     fileListScrollElement,
     normalizedFilter,
-    stickyFileListHeader
+    stickyFilterActive
   )
   const commitSurfaceShown =
     scopeKind !== 'commit' &&
@@ -348,8 +341,9 @@ export function SourceControlPanelContent({
         </SourceControlBranchSection>
       ) : null}
 
-      {filterSpacerHeight > 0 ? (
-        <div aria-hidden="true" className="shrink-0" style={{ height: filterSpacerHeight }} />
+      {stickyFilterActive ? (
+        // Height is fitted by useStickyFilterScroll so the stuck header never moves while filtering.
+        <div ref={filterSpacerRef} aria-hidden="true" className="shrink-0" />
       ) : null}
     </>
   )

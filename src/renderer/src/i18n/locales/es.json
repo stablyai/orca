@@ -13793,9 +13793,7 @@
             "scopeUncommitted": "Sin confirmar",
             "scopeAllChanges": "Todos los cambios",
             "scopeNone": "Ninguno",
-            "scopeOpenDiff": "Abrir diff",
             "scopeShowAll": "Mostrar todos los cambios",
-            "scopeLoadingBranchChanges": "Cargando cambios de la rama…",
             "scopeBranchCommits": "Commits de esta rama",
             "scopeRecentCommits": "Commits recientes",
             "scopeCompareTo": "Comparar con {{ref}}",
@@ -13812,7 +13810,8 @@
             "scopeOlderHistory": "Historial anterior en Git Graph",
             "scopeNoUncommitted": "No hay cambios sin confirmar.",
             "scopeCommitFiles": "Archivos",
-            "gitGraphButton": "Grafo"
+            "gitGraphButton": "Grafo",
+            "compareLoadingAgainst": "Comparando con {{base}}"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "No se pudo iniciar el agente seleccionado.",

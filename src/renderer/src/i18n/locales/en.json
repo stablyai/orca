@@ -15687,9 +15687,7 @@
             "scopeUncommitted": "Uncommitted",
             "scopeAllChanges": "All changes",
             "scopeNone": "None",
-            "scopeOpenDiff": "Open diff",
             "scopeShowAll": "Show all changes",
-            "scopeLoadingBranchChanges": "Loading branch changes…",
             "scopeBranchCommits": "Commits on this branch",
             "scopeRecentCommits": "Recent commits",
             "scopeCompareTo": "Compare to {{ref}}",
@@ -15707,7 +15705,6 @@
             "scopeNoUncommitted": "No uncommitted changes.",
             "scopeCommitFiles": "Files",
             "gitGraphButton": "Graph",
-            "scopeDiffButton": "Diff",
             "compareLoadingAgainst": "Comparing against {{base}}"
           },
           "SourceControlAgentActionDialog": {

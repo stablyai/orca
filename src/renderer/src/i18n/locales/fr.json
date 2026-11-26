@@ -14118,9 +14118,7 @@
             "scopeUncommitted": "Non validées",
             "scopeAllChanges": "Toutes les modifications",
             "scopeNone": "Aucune",
-            "scopeOpenDiff": "Ouvrir le diff",
             "scopeShowAll": "Afficher toutes les modifications",
-            "scopeLoadingBranchChanges": "Chargement des modifications de la branche…",
             "scopeBranchCommits": "Commits sur cette branche",
             "scopeRecentCommits": "Commits récents",
             "scopeCompareTo": "Comparer à {{ref}}",
@@ -14137,7 +14135,8 @@
             "scopeOlderHistory": "Historique plus ancien dans Git Graph",
             "scopeNoUncommitted": "Aucune modification non validée.",
             "scopeCommitFiles": "Fichiers",
-            "gitGraphButton": "Graphe"
+            "gitGraphButton": "Graphe",
+            "compareLoadingAgainst": "Comparaison avec {{base}}"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Impossible de démarrer l'agent sélectionné.",

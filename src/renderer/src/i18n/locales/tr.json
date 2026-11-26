@@ -15489,9 +15489,7 @@
             "scopeUncommitted": "Commit edilmemiş",
             "scopeAllChanges": "Tüm değişiklikler",
             "scopeNone": "Yok",
-            "scopeOpenDiff": "Diff aç",
             "scopeShowAll": "Tüm değişiklikleri göster",
-            "scopeLoadingBranchChanges": "Dal değişiklikleri yükleniyor…",
             "scopeBranchCommits": "Bu daldaki commitler",
             "scopeRecentCommits": "Son commitler",
             "scopeCompareTo": "{{ref}} ile karşılaştır",
@@ -15508,7 +15506,8 @@
             "scopeOlderHistory": "Git Graph içinde daha eski geçmiş",
             "scopeNoUncommitted": "Commit edilmemiş değişiklik yok.",
             "scopeCommitFiles": "Dosyalar",
-            "gitGraphButton": "Grafik"
+            "gitGraphButton": "Grafik",
+            "compareLoadingAgainst": "{{base}} ile karşılaştırılıyor"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Seçilen ajan başlatılamadı.",
