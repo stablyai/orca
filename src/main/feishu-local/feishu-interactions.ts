@@ -1,3 +1,5 @@
+import { continueFeishuChoice } from './feishu-choice-continuation'
+import { feishuAsker } from '../../shared/bots/feishu-members'
 import {
   promptPublicationFor,
   type PromptPublication
@@ -37,6 +39,9 @@ export class FeishuInteractions {
     this.asyncQuestions = new FeishuAsyncQuestions(runtime, store, b, signal, active, wake)
   }
 
+  private members() {
+    return this.runtime.bots.list().find((bot) => bot.id === this.b.bot)?.members ?? []
+  }
   async listen(checkProfile: () => Promise<void>): Promise<void> {
     while (!this.signal.aborted) {
       try {
@@ -67,11 +72,13 @@ export class FeishuInteractions {
   }
   async click(line: string): Promise<void> {
     const click = readFeishuClick(line)
-    if (!click || click.operator_id !== this.b.owner || !this.active()) {
+    if (!click || !this.active()) {
       return
     }
-    const card = await this.store.claimCard(
-      this.b.account,
+    const card = await this.store.claimCardFor(
+      this.b,
+      this.members(),
+      click.operator_id,
       click.message_id,
       click.chat_id,
       click.option,
@@ -232,6 +239,13 @@ export class FeishuInteractions {
       }
       const data = cardData.parse(JSON.parse(card.body))
       if (card.state === 'claimed' && card.selected !== null) {
+        const sender = data.ownerOnly
+          ? b.owner
+          : await this.store.laneSender(b.account, card.external)
+        if (!feishuAsker(b, this.members(), sender)) {
+          await this.store.closeCard(b.account, card.id, '提问权限已撤销')
+          continue
+        }
         if (!(await this.cards.publish(card.id))) {
           continue
         }
@@ -248,32 +262,7 @@ export class FeishuInteractions {
             await this.store.closeCard(b.account, card.id, '此问题已结束')
             continue
           }
-          const route = await this.store.laneRoute(b.account, card.external)
-          if (!route) {
-            await this.store.closeCard(b.account, card.id, '会话已结束')
-            continue
-          }
-          const continuation = data.inline
-            ? await this.store.questionContinuation(b.account, card.id)
-            : null
-          const mid = data.inline ? continuation?.mid : card.message
-          if (!mid) {
-            await this.store.closeCard(b.account, card.id, '此问题已结束')
-            continue
-          }
-          await this.store.putRoute(b.account, mid, { ...route, original: mid })
-          await this.store.accept(b, {
-            type: 'im.message.receive_v1',
-            chat_type: route.group ? 'group' : 'p2p',
-            message_type: 'text',
-            create_time: String(Date.now()),
-            event_id: `choice:${card.id}`,
-            message_id: mid,
-            chat_id: card.chat,
-            sender_id: b.owner!,
-            content: option.answer ?? option.label
-          })
-          await this.store.closeCard(b.account, card.id, `已选择：${option.label}`)
+          await continueFeishuChoice(this.store, b, card, data, option, sender!, this.members())
         } else if (data.kind === 'prompt' && data.promptId) {
           const seam = this.runtime.getExternalConversationSeam()
           if (!seam) {

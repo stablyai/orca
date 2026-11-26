@@ -9,11 +9,13 @@ export const feishuRoute = z.object({
   group: z.boolean()
 })
 export type FeishuRoute = z.infer<typeof feishuRoute>
-export function threadKey(b: Binding, chat: string, root: string) {
+export function threadKey(b: Binding, chat: string, root: string, sender: string = b.owner!) {
   return {
     source: 'feishu-local' as const,
     externalId: createHash('sha256')
-      .update(JSON.stringify([dmKey(b).externalId, chat, root]))
+      .update(
+        JSON.stringify([dmKey(b).externalId, chat, root, ...(sender === b.owner ? [] : [sender])])
+      )
       .digest('hex')
   }
 }

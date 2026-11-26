@@ -33,7 +33,13 @@ const resource = z.object({
   file_name: z.string().optional(),
   file_size: z.coerce.number().int().nonnegative().optional()
 })
-export function originalResource(value: unknown, b: Binding, mid: string, kind: ResourceKind) {
+export function originalResource(
+  value: unknown,
+  b: Binding,
+  mid: string,
+  kind: ResourceKind,
+  sender: string | null = b.owner
+) {
   const msg = z.object({
     message_id: z.literal(mid),
     chat_id: z.literal(b.chat),
@@ -41,7 +47,7 @@ export function originalResource(value: unknown, b: Binding, mid: string, kind: 
     sender: z.object({
       id_type: z.literal('open_id'),
       sender_type: z.literal('user'),
-      id: z.literal(b.owner)
+      id: z.literal(sender)
     }),
     body: z.object({ content: z.string() })
   })
@@ -73,6 +79,7 @@ async function storeFeishuResource(
   b: Binding,
   mid: string,
   kind: ResourceKind,
+  sender: string | null,
   signal: AbortSignal
 ): Promise<string> {
   const store = getAgentSessionAttachmentStore()
@@ -93,7 +100,7 @@ async function storeFeishuResource(
     ],
     signal
   )
-  const meta = originalResource(value, b, mid, kind)
+  const meta = originalResource(value, b, mid, kind, sender)
   const limit =
     kind === 'image'
       ? Math.min(AGENT_SESSION_ATTACHMENT_MAX_BYTES, MAX_ASKER_IMAGE_BYTES)
@@ -191,22 +198,25 @@ export async function feishuInput(
   if (row.kind === 'image' && getAgentImageHandling(agent) === 'unsupported') {
     return {
       prompt:
-        'The owner sent an image, but this bot’s agent does not accept image attachments. Tell the owner to choose an image-capable agent or describe the image.'
+        'The requester sent an image, but this bot’s agent does not accept image attachments. Tell the requester to choose an image-capable agent or describe the image.'
     }
   }
   try {
-    const path = row.path ?? (await storeFeishuResource(binding, row.mid, row.kind, signal))
+    const path =
+      row.path ?? (await storeFeishuResource(binding, row.mid, row.kind, row.sender, signal))
     if (!row.path) {
       await inbox.stored(binding.account, row.mid, path)
     }
     signal.throwIfAborted()
     return row.kind === 'image'
-      ? { prompt: 'The owner sent this image in the DM.', storedImages: [path] }
-      : { prompt: `The owner sent a file in the DM: ${formatNativeChatFileReference(path)}` }
+      ? { prompt: 'The requester sent this image in this conversation.', storedImages: [path] }
+      : {
+          prompt: `The requester sent a file in this conversation: ${formatNativeChatFileReference(path)}`
+        }
   } catch {
     signal.throwIfAborted()
     return {
-      prompt: `The owner's ${row.kind} could not be attached. Tell the owner the attachment could not be read; do not infer its contents.`
+      prompt: `The requester's ${row.kind} could not be attached. Tell the requester the attachment could not be read; do not infer its contents.`
     }
   }
 }

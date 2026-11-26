@@ -1,3 +1,4 @@
+import { feishuAsker } from '../../shared/bots/feishu-members'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { Bot } from '../../shared/bot-types'
 import { runtimeConversationHost } from '../external-conversations/external-conversation-runtime-host'
@@ -24,6 +25,18 @@ export async function deliverFeishuMessages(
   const host = runtimeConversationHost(runtime)
   let row = await inbox.next(b.account)
   while (row && !signal.aborted && active()) {
+    const currentAsker = () => {
+      const current = runtime.bots
+        .list()
+        .find((candidate) => candidate.id === b.bot && !candidate.paused)
+      return current && feishuAsker(b, current.members, row!.sender)
+    }
+    let asker = currentAsker()
+    if (!asker) {
+      await inbox.admitted(b.account, row.mid)
+      row = await inbox.next(b.account)
+      continue
+    }
     const route = await inbox.messageRoute(b.account, row.mid)
     const key = route ? { source: 'feishu-local' as const, externalId: route.external } : dmKey(b)
     if (row.kind !== 'text') {
@@ -36,6 +49,12 @@ export async function deliverFeishuMessages(
       bot.agent,
       signal
     )
+    asker = currentAsker()
+    if (!asker) {
+      await inbox.admitted(b.account, row.mid)
+      row = await inbox.next(b.account)
+      continue
+    }
     await inbox.updateResponse(b.account, key.externalId, row.mid, route?.chat ?? b.chat, {
       kind: 'begin'
     })
@@ -47,11 +66,10 @@ export async function deliverFeishuMessages(
       note: FEISHU_MESSAGE_INSTRUCTIONS,
       storedImages,
       asker: {
-        userId: b.owner,
-        role: 'owner',
+        ...asker,
         place: route?.group
           ? { kind: 'channel', id: route.chat }
-          : { kind: 'direct_message', id: b.chat },
+          : { kind: 'direct_message', id: route?.chat ?? b.chat },
         text: prompt,
         context: row.context,
         ...(route?.group && row.context.length

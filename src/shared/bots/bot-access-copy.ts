@@ -68,6 +68,7 @@ export const BOT_ACCESS_COPY = {
   codexNoSandbox: 'No Codex sandbox.',
   whoeverAskedApproves: 'If it asks, whoever asked can approve.',
   reachLinear: 'Comment on, update and create Linear issues as you',
+  reachFeishu: 'Post in Feishu as {{name}}',
   reachSlack: 'Post in Slack as {{name}}',
   reachGitHub: 'Comment, review and push on GitHub as you',
   reachGoogleEmail: 'Read and send your email',

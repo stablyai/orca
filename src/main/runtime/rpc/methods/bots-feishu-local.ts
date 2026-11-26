@@ -1,8 +1,9 @@
 import { sessionCallerOf } from '../../orchestration/addressing/orchestration-caller-identity'
 import { chatPaneKey } from '../../../external-conversations/external-conversation-chat'
-import { botTurnFor } from '../../../bots/bot-turn-for'
+import { sameSession } from '../../../bots/bot-turn-for'
 import {
   FeishuLocalBot,
+  FeishuLocalMembers,
   FeishuGeneratedFile,
   FeishuLocalConnect
 } from '../../../../shared/rpc-contract/bots-feishu-local-params'
@@ -17,16 +18,19 @@ function host(context: RpcContext) {
 }
 export const BOT_FEISHU_LOCAL_METHODS = [
   defineMethod({
+    name: 'bots.feishuLocal.members',
+    permission: 'accounts-admin',
+    params: FeishuLocalMembers,
+    handler: ({ botId, query }, context) => host(context).members(botId, query)
+  }),
+  defineMethod({
     name: 'bots.feishuLocal.stageFile',
     permission: 'workspace',
     params: FeishuGeneratedFile,
     handler: async ({ sessionId, name, base64 }, context) => {
       const caller = sessionCallerOf(context.orchestrationCaller)?.sessionId
-      if (
-        caller !== sessionId ||
-        (await botTurnFor(context.runtime, sessionId, caller)) !== 'owner'
-      ) {
-        throw new Error('Only the owner’s active Feishu DM turn can stage a file')
+      if (!caller || !sameSession(caller, sessionId)) {
+        throw new Error('Only the active Feishu conversation can stage a file')
       }
       const target = context.runtime
         .getExternalConversationSeam()

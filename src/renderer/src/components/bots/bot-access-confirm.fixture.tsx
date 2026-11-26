@@ -23,6 +23,7 @@ const longName: Person = {
 }
 
 const PLACES: Record<BotAccessConnector, { connector: string; workspace: string | null }> = {
+  'feishu-local': { connector: 'Feishu', workspace: null },
   slack: { connector: 'Slack', workspace: 'Acme' },
   github: { connector: 'GitHub', workspace: null },
   linear: { connector: 'Linear', workspace: 'Acme' }

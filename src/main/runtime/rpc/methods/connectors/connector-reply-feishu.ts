@@ -1,7 +1,7 @@
 import type { z } from 'zod'
 import type { ConnectorReply } from '../../../../../shared/rpc-contract/connectors/connector-params'
 import { connectorReviewText } from '../../../../../shared/connector-review-text'
-import { botTurnFor, sameSession } from '../../../../bots/bot-turn-for'
+import { sameSession } from '../../../../bots/bot-turn-for'
 import { chatPaneKey } from '../../../../external-conversations/external-conversation-chat'
 import { connectorPostAttempts } from '../../../../external-conversations/connector-post-attempts'
 import type { ReplyTarget } from '../../../../external-conversations/external-conversation-types'
@@ -15,12 +15,7 @@ export async function replyToFeishu(
   choices?: string[]
 ) {
   const caller = sessionCallerOf(context.orchestrationCaller)?.sessionId
-  if (
-    !('sessionId' in params) ||
-    !caller ||
-    !sameSession(caller, params.sessionId) ||
-    (await botTurnFor(context.runtime, params.sessionId, caller)) !== 'owner'
-  ) {
+  if (!('sessionId' in params) || !caller || !sameSession(caller, params.sessionId)) {
     throw new Error('not_this_bots_conversation')
   }
   const paneKey = chatPaneKey(params.sessionId)

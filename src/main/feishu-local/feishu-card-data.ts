@@ -7,6 +7,7 @@ export const cardData = z.object({
   text: z.string(),
   options: z.array(option).default([]),
   inline: z.boolean().optional(),
+  ownerOnly: z.boolean().optional(),
   promptId: z.string().optional(),
   sessionId: z.string().optional(),
   note: z.string().optional(),

@@ -27503,7 +27503,6 @@
   },
   "bots": {
     "feishu": {
-      "who": "Only the owner can ask, from the direct message verified in connection settings.",
       "verificationFailed": "Could not verify the original DM. Check the app’s permission to read private messages, then send the code again.",
       "name": "Feishu",
       "chat": "Feishu DM",
@@ -27535,7 +27534,14 @@
       "selectProfile": "Choose a profile",
       "copyCommand": "Copy setup command",
       "copyCode": "Copy code",
-      "openDm": "Open Feishu DM"
+      "openDm": "Open Feishu DM",
+      "peopleError": "Couldn’t read Feishu group members. Check the connection and the bot’s group-member permission.",
+      "peopleSearch": "Search by name or Feishu ID",
+      "peopleHeading": "People in the bot’s Feishu groups",
+      "peopleNoMatch": "No matching person: {{query}}",
+      "peopleHint": "Add the person and the bot to a group, then reopen this picker. Only people the bot can read are listed.",
+      "peopleOthers": "Only you and the people listed here can ask in Feishu private chats and group threads. Others’ messages do not start work. Each person answers their own conversation’s buttons.",
+      "peoplePairFirst": "Connect and pair this Feishu app before adding people."
     },
     "row": {
       "deleteTitle": "Delete {{name}}?",
@@ -28364,7 +28370,8 @@
       "thisServer": "this server",
       "there": "there",
       "executionComputer": "the computer this agent runs on",
-      "yourComputer": "your computer"
+      "yourComputer": "your computer",
+      "reachFeishu": "Post in Feishu as {{name}}"
     },
     "accessRequest": {
       "toast": "{{person}} asked for access to {{name}}",

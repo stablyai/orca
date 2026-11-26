@@ -17,6 +17,7 @@ export type FeishuLocalState = {
     | 'paused'
     | 'review'
     | 'expired'
+  ownerId?: string
   appId?: string
   pairingText?: string
 }

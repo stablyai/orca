@@ -178,7 +178,12 @@ import {
   ConnectorConnectStart,
   ConnectorConnectWait
 } from './bots-connector-setup-params'
-import { FeishuGeneratedFile, FeishuLocalBot, FeishuLocalConnect } from './bots-feishu-local-params'
+import {
+  FeishuGeneratedFile,
+  FeishuLocalBot,
+  FeishuLocalConnect,
+  FeishuLocalMembers
+} from './bots-feishu-local-params'
 import { BotImportDoneCard, BotImportPlanCard, BotImportSources } from './bots-import-params'
 import {
   BotItemsAdd,
@@ -1308,6 +1313,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'bots.createOffer': BotCreateOfferRequest,
   'bots.delete': BotDelete,
   'bots.feishuLocal.connect': FeishuLocalConnect,
+  'bots.feishuLocal.members': FeishuLocalMembers,
   'bots.feishuLocal.profiles': null,
   'bots.feishuLocal.remove': FeishuLocalBot,
   'bots.feishuLocal.stageFile': FeishuGeneratedFile,

@@ -161,7 +161,7 @@ function permissionWords(
   }
 }
 
-const CONNECTOR_ICON: Record<BotAccessConnector, React.ElementType> = {
+const CONNECTOR_ICON = {
   linear: SquarePen,
   slack: MessageSquare,
   github: GitPullRequest
@@ -185,7 +185,7 @@ function reachWords(
     case 'connector':
       return {
         title: copy(t, CONNECTOR_REACH_COPY[line.connector], { name: bot.name }),
-        Icon: CONNECTOR_ICON[line.connector]
+        Icon: CONNECTOR_ICON[line.connector === 'feishu-local' ? 'slack' : line.connector]
       }
     case 'google':
       return { title: copy(t, GOOGLE_REACH_COPY[line.area ?? 'unknown']), Icon: Mail }

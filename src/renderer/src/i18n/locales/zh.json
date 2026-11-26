@@ -27066,7 +27066,6 @@
   },
   "bots": {
     "feishu": {
-      "who": "只有主人能从连接设置里验证过的飞书私聊向 bot 提问。",
       "verificationFailed": "无法核对原始私聊消息。请检查应用的私聊读取权限，然后重新发送验证码。",
       "name": "飞书",
       "chat": "飞书私聊",
@@ -27098,7 +27097,14 @@
       "selectProfile": "选择配置",
       "copyCommand": "复制设置命令",
       "copyCode": "复制验证码",
-      "openDm": "打开飞书私聊"
+      "openDm": "打开飞书私聊",
+      "peopleError": "无法读取飞书群成员。请检查连接和机器人的群成员读取权限。",
+      "peopleSearch": "按姓名或飞书 ID 搜索",
+      "peopleHeading": "机器人所在飞书群中的成员",
+      "peopleNoMatch": "没有找到匹配的成员：{{query}}",
+      "peopleHint": "请先将成员和机器人加入同一个群，然后重新打开选择器。这里只列出机器人可以读取的成员。",
+      "peopleOthers": "只有你和名单中的成员可以在飞书私聊、群话题中提问。其他人的消息不会启动任务。每人只能操作自己对话中的按钮。",
+      "peoplePairFirst": "连接并完成飞书配对后，即可添加成员。"
     },
     "deepLink": {
       "missing": "该对话未在此电脑上打开",
@@ -29500,7 +29506,8 @@
       "thisServer": "此服务器",
       "there": "那里",
       "executionComputer": "运行此智能体的电脑",
-      "yourComputer": "你的电脑"
+      "yourComputer": "你的电脑",
+      "reachFeishu": "以 {{name}} 的身份在飞书发送消息"
     },
     "import": {
       "nudgeOne": "在 {{app}} 中发现了一个 bot",

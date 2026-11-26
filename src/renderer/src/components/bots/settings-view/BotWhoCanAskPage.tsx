@@ -1,5 +1,5 @@
 // Who can ask the bot, every connector at once: each Slack workspace, Linear workspace and GitHub org's own whole list.
-import { useTranslate } from '@/i18n/use-translate'
+import { useFeishuWhoCanAsk } from '../feishu/use-feishu-who-can-ask'
 import type { Bot, BotLinear } from '../../../../../shared/bot-types'
 import type { ConnectorGitHubInstallation } from '../../../../../shared/connector-bot-github-contract'
 import { BotNoConnectors } from '../../settings/bots/BotConnectorsSection'
@@ -14,7 +14,10 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/ex
 import { BotPairedServersWhoCanAsk } from './BotPairedServersWhoCanAsk'
 import { pairedServerAsksOn } from '../paired-server-asks-on'
 
-type PeopleEntry = Extract<BotConnectorEntry, { kind: 'slack' | 'linear' | 'github' }>
+type PeopleEntry = Extract<
+  BotConnectorEntry,
+  { kind: 'slack' | 'linear' | 'github' | 'feishu-local' }
+>
 
 function ConnectorPeople({
   bot,
@@ -75,12 +78,21 @@ function GitHubPeople({
   )
 }
 
+function FeishuPeople({
+  bot,
+  entry
+}: {
+  bot: Bot
+  entry: PeopleEntry & { kind: 'feishu-local' }
+}): React.JSX.Element {
+  return <ConnectorPeople bot={bot} entry={entry} people={useFeishuWhoCanAsk(bot, entry.state)} />
+}
+
 export function BotWhoCanAskPage({ bot }: { bot: Bot }): React.JSX.Element {
-  const t = useTranslate()
   const all = useBotConnectorEntries(bot)
   const feishu = all.find((entry) => entry.kind === 'feishu-local')
   const entries = all.filter(
-    (entry): entry is PeopleEntry =>
+    (entry): entry is Exclude<PeopleEntry, { kind: 'feishu-local' }> =>
       entry.kind === 'slack' || entry.kind === 'linear' || entry.kind === 'github'
   )
   // Paired servers ask agents on this computer once it takes their asks: listed even with no connector.
@@ -98,19 +110,7 @@ export function BotWhoCanAskPage({ bot }: { bot: Bot }): React.JSX.Element {
   }
   return (
     <>
-      {feishu ? (
-        <section className="flex min-w-0 flex-col gap-2">
-          <h3 className="text-xs font-medium text-muted-foreground">
-            {t('bots.feishu.name', 'Feishu')}
-          </h3>
-          <p className="text-sm">
-            {t(
-              'bots.feishu.who',
-              'Only the owner can ask, from the direct message verified in connection settings.'
-            )}
-          </p>
-        </section>
-      ) : null}
+      {feishu ? <FeishuPeople bot={bot} entry={feishu} /> : null}
       {entries.map((entry) => {
         switch (entry.kind) {
           case 'slack':

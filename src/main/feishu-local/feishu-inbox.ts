@@ -6,8 +6,9 @@ import { FeishuResponseStore } from './feishu-response-store'
 import { FeishuCardStore } from './feishu-card-store'
 import { FeishuRoutes } from './feishu-routes'
 import { binding, type Binding } from './feishu-binding'
-import type { ConnectorContextItem } from '../../shared/connector-asker-contract'
-import { feishuStoredContext } from './feishu-history-context'
+import { claimFeishuControl } from './feishu-control-access'
+import type { BotMember } from '../../shared/bot-types'
+import { FeishuAdmissions } from './feishu-admissions'
 
 const inReplyWindow = (first: number, now: number): boolean =>
   now >= first && now - first < 55 * 60_000
@@ -17,6 +18,7 @@ export class FeishuInbox {
   private db: Database.Database
   private cards: FeishuCardStore
   private responses: FeishuResponseStore
+  private admissions: FeishuAdmissions
   private routes: FeishuRoutes
   constructor(path: string) {
     this.db = new Database(path)
@@ -31,19 +33,7 @@ export class FeishuInbox {
     this.cards = new FeishuCardStore(this.db)
     this.responses = new FeishuResponseStore(this.db, this.cards)
     this.routes = new FeishuRoutes(this.db)
-    const columns = this.db.prepare('PRAGMA table_info(inbox)').all()
-    if (!columns.some((c) => c.name === 'progress')) {
-      this.db.exec('ALTER TABLE inbox ADD COLUMN progress INTEGER NOT NULL DEFAULT 0')
-    }
-    if (!columns.some((c) => c.name === 'kind')) {
-      this.db.exec("ALTER TABLE inbox ADD COLUMN kind TEXT NOT NULL DEFAULT 'text'")
-    }
-    if (!columns.some((c) => c.name === 'stored_path')) {
-      this.db.exec('ALTER TABLE inbox ADD COLUMN stored_path TEXT')
-    }
-    if (!columns.some((c) => c.name === 'context')) {
-      this.db.exec('ALTER TABLE inbox ADD COLUMN context TEXT')
-    }
+    this.admissions = new FeishuAdmissions(this.db, this.routes)
   }
   putRoute = (...args: Parameters<FeishuRoutes['put']>) => this.routes.put(...args)
   messageRoute(account: string, mid: string) {
@@ -67,6 +57,27 @@ export class FeishuInbox {
   pendingChoice = (...args: Parameters<FeishuCardStore['pendingChoice']>) =>
     this.cards.pendingChoice(...args)
   pendingCards = (...args: Parameters<FeishuCardStore['pending']>) => this.cards.pending(...args)
+  claimCardFor(
+    b: Binding,
+    members: readonly BotMember[],
+    actor: string,
+    message: string,
+    chat: string,
+    option: string,
+    question?: string
+  ) {
+    return claimFeishuControl(
+      this.cards,
+      this.admissions,
+      b,
+      members,
+      actor,
+      message,
+      chat,
+      option,
+      question
+    )
+  }
   claimCard = (...args: Parameters<FeishuCardStore['claim']>) => this.cards.claim(...args)
   closeCard = (...args: Parameters<FeishuCardStore['close']>) => this.cards.close(...args)
   closePrompts = (...args: Parameters<FeishuCardStore['closePrompts']>) =>
@@ -126,40 +137,10 @@ export class FeishuInbox {
       throw error
     }
   }
-  accept(b: Binding, m: FeishuMessage, context: ConnectorContextItem[] = []): void {
-    if (
-      m.sender_id !== b.owner ||
-      (m.chat_id !== b.chat && !this.routes.message(b.account, m.message_id)) ||
-      b.pairedAt === null ||
-      Number(m.create_time) <= b.pairedAt
-    ) {
-      return
-    }
-    this.db
-      .prepare(
-        'INSERT OR IGNORE INTO inbox(account,mid,event,body,kind,context) VALUES(?,?,?,?,?,?)'
-      )
-      .run(b.account, m.message_id, m.event_id, m.content, m.message_type, JSON.stringify(context))
-  }
-  next(account: string) {
-    const row = this.db
-      .prepare(
-        'SELECT mid,body,kind,stored_path AS path,context FROM inbox WHERE account=? AND body IS NOT NULL AND review=0 ORDER BY rowid LIMIT 1'
-      )
-      .get(account)
-    return (
-      row &&
-      z
-        .object({
-          mid: z.string(),
-          body: z.string(),
-          kind: z.enum(['text', 'image', 'file']),
-          context: feishuStoredContext,
-          path: z.string().nullable()
-        })
-        .parse(row)
-    )
-  }
+  accept = (...args: Parameters<FeishuAdmissions['accept']>) => this.admissions.accept(...args)
+  next = (account: string) => this.admissions.next(account)
+  sender = (account: string, mid: string) => this.admissions.sender(account, mid)
+  laneSender = (account: string, external: string) => this.admissions.laneSender(account, external)
   stored(account: string, mid: string, path: string): void {
     this.db
       .prepare('UPDATE inbox SET stored_path=? WHERE account=? AND mid=? AND body IS NOT NULL')

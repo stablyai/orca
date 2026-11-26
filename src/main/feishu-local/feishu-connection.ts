@@ -1,3 +1,4 @@
+import { FeishuPeopleDirectory } from './feishu-people'
 import { deliverFeishuMessages } from './feishu-deliveries'
 import { FeishuMessageIngress } from './feishu-message-ingress'
 import { FeishuInteractions } from './feishu-interactions'
@@ -28,6 +29,7 @@ export class FeishuConnection {
   private again = false
   private deliveryRetry = false
   private cardConsumer?: Promise<void>
+  private readonly directory = new FeishuPeopleDirectory()
   private readonly ingress: FeishuMessageIngress
   private readonly interactions: FeishuInteractions
   constructor(
@@ -36,7 +38,7 @@ export class FeishuConnection {
     private readonly scope: string,
     readonly binding: Binding
   ) {
-    this.ingress = new FeishuMessageIngress(inbox, this.signal)
+    this.ingress = new FeishuMessageIngress(inbox, this.signal, () => this.bot()?.members ?? [])
     this.interactions = new FeishuInteractions(
       runtime,
       inbox,
@@ -103,16 +105,24 @@ export class FeishuConnection {
     return {
       profile,
       appId: this.binding.app,
+      ownerId: this.binding.owner ?? undefined,
       status,
       ...((status === 'pairing' || status === 'verification-failed') && this.code
         ? { pairingText: this.code }
         : {})
     }
   }
+  async people(query: string) {
+    await this.checkProfile()
+    if (!this.binding.owner) {
+      throw new Error('Pair this Feishu app first')
+    }
+    return this.directory.search(this.binding.app, query, this.signal)
+  }
+
   private bot() {
-    return (
-      this.runtime.bots.enabled() &&
-      this.runtime.bots.list().find((b) => b.id === this.binding.bot && !b.paused)
+    return (this.runtime.bots.enabled() ? this.runtime.bots.list() : []).find(
+      (b) => b.id === this.binding.bot && !b.paused
     )
   }
   async stop(): Promise<void> {

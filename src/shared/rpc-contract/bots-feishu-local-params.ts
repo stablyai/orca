@@ -4,6 +4,7 @@ import {
 } from '../agent-session/agent-session-attachments'
 import { z } from 'zod'
 export const FeishuLocalBot = z.strictObject({ botId: z.string().min(1) })
+export const FeishuLocalMembers = FeishuLocalBot.extend({ query: z.string().max(200) })
 export const FeishuLocalConnect = FeishuLocalBot.extend({ profile: z.string().min(1).max(128) })
 
 export const FeishuGeneratedFile = z.strictObject({

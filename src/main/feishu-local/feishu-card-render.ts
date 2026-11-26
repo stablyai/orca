@@ -50,6 +50,7 @@ export function feishuPromptData(
     prompt.kind === 'approval' ? `${prompt.tool}\n${prompt.summary ?? ''}` : prompt.question
   return {
     kind: 'prompt',
+    ownerOnly: prompt.raisedBy !== 'conversation',
     promptId: prompt.promptId,
     text: [
       text,

@@ -128,6 +128,12 @@ export class FeishuCardStore {
       .run(account, mid, parent.id)
     return { mid, message: parent.message }
   }
+  byMessage(account: string, message: string, chat: string) {
+    const found = this.db
+      .prepare('SELECT * FROM feishu_cards WHERE account=? AND message=? AND chat=?')
+      .get(account, message, chat)
+    return found ? row.parse(found) : null
+  }
   get(account: string, id: string) {
     const found = this.db
       .prepare('SELECT * FROM feishu_cards WHERE account=? AND id=?')

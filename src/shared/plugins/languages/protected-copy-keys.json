@@ -686,6 +686,7 @@
     "bots.access.confirmNoApprovals",
     "bots.access.confirmWarning",
     "bots.access.place",
+    "bots.access.reachFeishu",
     "bots.access.reachSlack",
     "bots.access.reject",
     "bots.access.titleMany",

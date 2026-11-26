@@ -1,3 +1,5 @@
+import type { BotMember } from '../../shared/bot-types'
+import { feishuAsker } from '../../shared/bots/feishu-members'
 import { z } from 'zod'
 import { feishuCommand, type FeishuMessage } from './feishu-cli'
 import type { Binding } from './feishu-binding'
@@ -9,8 +11,9 @@ export class FeishuMessageIngress {
   private botOpenId?: string
   private botName?: string
   constructor(
-    private readonly store: FeishuStore,
-    private readonly signal: AbortSignal
+    private readonly store: Pick<FeishuStore, 'messageRoute' | 'laneRoute' | 'putRoute' | 'accept'>,
+    private readonly signal: AbortSignal,
+    private readonly members: () => readonly BotMember[] = () => []
   ) {}
   async displayName(app: string): Promise<string> {
     if (!this.botName) {
@@ -31,10 +34,10 @@ export class FeishuMessageIngress {
     return this.botName
   }
   async receive(b: Binding, m: FeishuMessage): Promise<void> {
-    if (b.owner !== m.sender_id || m.sender_type === 'bot') {
+    if (!feishuAsker(b, this.members(), m.sender_id) || m.sender_type === 'bot') {
       return
     }
-    if (m.chat_type === 'p2p' && b.chat !== m.chat_id) {
+    if (m.chat_type === 'p2p' && m.sender_id === b.owner && b.chat !== m.chat_id) {
       return
     }
     const parent = m.root_id || m.reply_to
@@ -42,15 +45,19 @@ export class FeishuMessageIngress {
     if (known && known.chat !== m.chat_id) {
       return
     }
-    if (m.chat_type === 'group' && !known) {
+    const root = known?.root ?? parent ?? m.message_id
+    const external = threadKey(b, m.chat_id, root, m.sender_id).externalId
+    const own = await this.store.laneRoute(b.account, external)
+    if (m.chat_type === 'group' && !own) {
       await this.displayName(b.app)
       if (!m.mentions?.some((mention) => mention.id === this.botOpenId)) {
         return
       }
     }
-    const history = !known ? await feishuThreadContext(b, m, this.signal) : []
-    const root = known?.root ?? parent ?? m.message_id
-    const external = known?.external ?? threadKey(b, m.chat_id, root).externalId
+    const history = !own ? await feishuThreadContext(b, m, this.signal) : []
+    if (!feishuAsker(b, this.members(), m.sender_id)) {
+      return
+    }
     await this.store.putRoute(b.account, m.message_id, {
       external,
       chat: m.chat_id,
@@ -76,7 +83,8 @@ export class FeishuMessageIngress {
               .trim() || m.content
           : m.content
       },
-      history
+      history,
+      this.members()
     )
   }
 }

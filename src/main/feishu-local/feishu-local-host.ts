@@ -1,3 +1,4 @@
+import { feishuAsker } from '../../shared/bots/feishu-members'
 import { access, open } from 'node:fs/promises'
 import { join, relative, sep } from 'node:path'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
@@ -76,6 +77,14 @@ export class FeishuLocalHost {
     }
     return this.active.get(bot)?.state() ?? { status: 'off' }
   }
+  async members(botId: string, query: string) {
+    await this.opening
+    const connection = this.active.get(botId)
+    if (!connection || this.stopping || this.retiring.has(botId)) {
+      throw new Error('Feishu is not connected')
+    }
+    return connection.people(query)
+  }
   async profiles(): Promise<string[]> {
     return (await listProfiles()).map((p) => p.name)
   }
@@ -129,6 +138,15 @@ export class FeishuLocalHost {
     this.retiring.set(bot, removal)
     return removal
   }
+  private async mayReply(b: Binding, external: string, mid: string): Promise<boolean> {
+    const route = await this.inbox.messageRoute(b.account, mid)
+    if (route ? route.external !== external : dmKey(b).externalId !== external) {
+      return false
+    }
+    const sender = await this.inbox.sender(b.account, mid)
+    const bot = this.runtime.bots.list().find((entry) => entry.id === b.bot && !entry.paused)
+    return Boolean(bot && feishuAsker(b, bot.members, sender))
+  }
   async stageFile(
     botId: string,
     externalId: string,
@@ -148,6 +166,9 @@ export class FeishuLocalHost {
       !this.runtime.bots.list().some((b) => b.id === botId && !b.paused)
     ) {
       throw new Error('This Feishu conversation cannot receive files')
+    }
+    if (!(await this.mayReply(c.binding, externalId, mid))) {
+      throw new Error('not_this_bots_conversation')
     }
     await this.inbox.stageFile(c.binding.account, mid, name, bytes)
   }
@@ -169,6 +190,9 @@ export class FeishuLocalHost {
       !this.runtime.bots.enabled() ||
       !this.runtime.bots.list().some((b) => b.id === botId && !b.paused)
     ) {
+      throw new Error('not_this_bots_conversation')
+    }
+    if (!(await this.mayReply(c.binding, externalId, mid))) {
       throw new Error('not_this_bots_conversation')
     }
     if (choices?.length) {
