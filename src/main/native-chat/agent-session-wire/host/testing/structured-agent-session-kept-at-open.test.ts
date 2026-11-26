@@ -10,7 +10,7 @@ const keptRelay = (chatKey: string): ProviderRelayInfo => ({
   relayId: `r-${chatKey}`,
   chatKey,
   agent: 'codex-test',
-  pid: null,
+  pid: process.pid,
   spawnedAtMs: 1,
   attached: false,
   exit: null,
