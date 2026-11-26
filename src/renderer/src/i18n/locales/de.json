@@ -13750,8 +13750,7 @@
             "741ff8a0d2": "Pushen und {{value0}} erstellen"
           },
           "FileExplorer": {
-            "79b1537dd3": "Einen Arbeitsbereich auswählen, um Dateien zu durchsuchen",
-            "2f4483d6c4": "Keine Dateien entsprechen diesem Filter"
+            "79b1537dd3": "Einen Arbeitsbereich auswählen, um Dateien zu durchsuchen"
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "Ordner erstellen",
@@ -13794,7 +13793,6 @@
             "31b4c3195d": "Weitere Explorer-Aktionen",
             "d95e30fe28": "Explorer aktualisieren",
             "6026b16950": "Alle einklappen",
-            "c1f3f3ec70": "Dateiinhalte durchsuchen",
             "openInApp": "In {{app}} öffnen"
           },
           "FileExplorerTreeStatus": {
@@ -13907,17 +13905,6 @@
             "localPortInUse": "Port {{port}} wird bereits verwendet. Einen anderen lokalen Port wählen.",
             "localPortRequiresPrivileges": "Port {{port}} erfordert erhöhte Rechte. Einen lokalen Port ≥ 1024 verwenden."
           },
-          "Search": {
-            "1abfb25a66": "Suchbegriff eingeben, um Dateien zu durchsuchen",
-            "d56d140747": "Zum Suchen Enter drücken",
-            "98c8435e36": "Einen Arbeitsbereich zum Durchsuchen auswählen",
-            "dcc294f28d": "(Ergebnisse gekürzt)",
-            "resultsInFiles": "{{results}} in {{files}}",
-            "resultCount_one": "{{count}} Ergebnis",
-            "resultCount_other": "{{count}} Ergebnisse",
-            "fileCount_one": "{{count}} Datei",
-            "fileCount_other": "{{count}} Dateien"
-          },
           "SearchFilters": {
             "01e4671ccf": "z. B. *.min.js, dist/**",
             "0a6412a895": "Auszuschließende Dateien",
@@ -13927,11 +13914,9 @@
           "SearchHeader": {
             "6234a5ef85": "Regulären Ausdruck verwenden",
             "4567e6e0b6": "Nur ganze Wörter suchen",
-            "464ae3974f": "Groß-/Kleinschreibung beachten",
-            "693cbeadd0": "Suchen"
+            "464ae3974f": "Groß-/Kleinschreibung beachten"
           },
           "SearchQueryRow": {
-            "queryLabel": "Dateien durchsuchen",
             "clearLabel": "Suche leeren"
           },
           "SearchResultItems": {
@@ -15065,16 +15050,6 @@
             "description": "„{{value0}}“ wird gelöscht. Danach kann die Sitzung auch über die eigene Befehlszeile von {{value1}} nicht mehr fortgesetzt werden.",
             "remoteDescription": "„{{value0}}“ wird von {{value2}} gelöscht. Danach kann die Sitzung auch über die eigene Befehlszeile von {{value1}} nicht mehr fortgesetzt werden.",
             "confirm": "Löschen"
-          },
-          "FileExplorerNameFilter": {
-            "26fb73c6e3": "Dateien suchen",
-            "4d5a6b2a49": "Dateifilter leeren",
-            "7a9fb1e6aa": "Inhalte"
-          },
-          "FileExplorerViewSwitch": {
-            "c4e9a2b713": "Namen",
-            "b3c8f1a902": "Dateien nach Namen filtern",
-            "f8a2c4d1e0": "Suchmodus des Datei-Explorers"
           },
           "GitHistoryCommitFiles": {
             "b2c3d4e5f6": "Keine Dateiänderungen in diesem Commit"
@@ -23092,13 +23067,10 @@
       "label": "Stammverzeichnis des Explorers",
       "full": "Repository-Stammverzeichnis",
       "back": "Zurück zu {{path}}",
-      "searchScope": "Suchbereich: Dateien des Arbeitsbereichs",
       "retry": "Erneut versuchen",
       "sparseStatus": "Partieller Checkout",
       "scopeDetails": "Zum Umfang des partiellen Checkouts",
       "scopeExplanation": "Die Ordnerauswahl ändert die Anzeige, nicht die Auswahl der ausgecheckten Dateien. Der Repository-Stamm umfasst die ausgecheckten Dateien im Stammverzeichnis und in übergeordneten Ordnern.",
-      "searchExplanation": "„Namen“ filtert den angezeigten Ordner. „Inhalt“ durchsucht den gesamten Arbeitsbereich. Beim partiellen Checkout ausgelassene Dateien werden nicht durchsucht.",
-      "findInFolder": "In {{path}} suchen",
       "folderLoadError": "Dieser Ordner konnte nicht geladen werden:",
       "emptyFolder": "Keine Dateien in diesem Ordner"
     },
@@ -23323,8 +23295,7 @@
     "filters": {
       "toggle": "Suchdetails ein-/ausblenden",
       "active": "{{count}} aktiv"
-    },
-    "noResults": "Keine Ergebnisse. Eine andere Suche versuchen oder die Filter anpassen."
+    }
   },
   "workspaceDeletion": {
     "preferenceSaveFailed": "Die Löscheinstellung konnte nicht gespeichert werden",

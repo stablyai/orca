@@ -14385,8 +14385,7 @@
             "741ff8a0d2": "推送并创建 {{value0}}"
           },
           "FileExplorer": {
-            "79b1537dd3": "选择一个工作区来浏览文件",
-            "2f4483d6c4": "没有文件匹配此筛选条件"
+            "79b1537dd3": "选择一个工作区来浏览文件"
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "新建文件夹",
@@ -14429,7 +14428,6 @@
             "31b4c3195d": "更多文件管理器操作",
             "d95e30fe28": "刷新文件管理器",
             "6026b16950": "全部折叠",
-            "c1f3f3ec70": "搜索文件内容",
             "openInApp": "在 {{app}} 中打开"
           },
           "FileExplorerTreeStatus": {
@@ -14542,17 +14540,6 @@
             "localPortInUse": "端口 {{port}} 已被占用。请选择其他本地端口",
             "localPortRequiresPrivileges": "端口 {{port}} 需要提升权限。请使用本地端口 ≥ 1024"
           },
-          "Search": {
-            "1abfb25a66": "输入要在文件中搜索的内容",
-            "d56d140747": "按 Enter 进行搜索",
-            "98c8435e36": "选择要搜索的工作区",
-            "dcc294f28d": "(结果被截断)",
-            "resultsInFiles": "{{files}}中共 {{results}}",
-            "resultCount_one": "{{count}} 个结果",
-            "resultCount_other": "{{count}} 个结果",
-            "fileCount_one": "{{count}} 个文件",
-            "fileCount_other": "{{count}} 个文件"
-          },
           "SearchFilters": {
             "01e4671ccf": "例如 *.min.js、dist/**",
             "0a6412a895": "要排除的文件",
@@ -14562,11 +14549,9 @@
           "SearchHeader": {
             "6234a5ef85": "使用正则表达式",
             "4567e6e0b6": "匹配整个单词",
-            "464ae3974f": "区分大小写",
-            "693cbeadd0": "搜索"
+            "464ae3974f": "区分大小写"
           },
           "SearchQueryRow": {
-            "queryLabel": "搜索文件",
             "clearLabel": "清除搜索"
           },
           "SearchResultItems": {
@@ -15699,16 +15684,6 @@
             "description": "\"{{value0}}\"将被删除，删除后，也将无法通过 {{value1}} 自身的命令行恢复",
             "remoteDescription": "“{{value0}}”将从 {{value2}} 删除。删除后，也无法再从 {{value1}} 自己的命令行恢复",
             "confirm": "删除"
-          },
-          "FileExplorerNameFilter": {
-            "26fb73c6e3": "查找文件",
-            "4d5a6b2a49": "清除文件筛选器",
-            "7a9fb1e6aa": "内容"
-          },
-          "FileExplorerViewSwitch": {
-            "c4e9a2b713": "名称",
-            "b3c8f1a902": "按名称筛选文件",
-            "f8a2c4d1e0": "资源管理器搜索模式"
           },
           "GitHistoryCommitFiles": {
             "b2c3d4e5f6": "此提交没有文件更改"
@@ -24909,13 +24884,10 @@
       "label": "文件浏览器根目录",
       "full": "仓库根目录",
       "back": "返回 {{path}}",
-      "searchScope": "搜索范围：工作区文件",
       "retry": "重试",
       "sparseStatus": "稀疏检出",
       "scopeDetails": "关于稀疏检出范围",
       "scopeExplanation": "文件夹选择器只改变显示范围，不会改变检出的文件，仓库根目录视图也会显示根目录和上级文件夹中已检出的文件",
-      "searchExplanation": "“名称”筛选当前查看的文件夹，“内容”搜索整个工作区，稀疏检出排除的文件不会被搜索",
-      "findInFolder": "在 {{path}} 中查找",
       "folderLoadError": "无法加载此文件夹：",
       "emptyFolder": "此文件夹中没有文件"
     },
@@ -25326,8 +25298,7 @@
     "filters": {
       "toggle": "切换搜索详情",
       "active": "{{count}} 个已启用"
-    },
-    "noResults": "没有结果。请尝试其他搜索或调整筛选条件"
+    }
   },
   "csv": {
     "detectingDelimiter": "正在检测分隔符…",

@@ -13328,8 +13328,7 @@
             "741ff8a0d2": "Hacer push y crear {{value0}}"
           },
           "FileExplorer": {
-            "79b1537dd3": "Selecciona un espacio de trabajo para explorar archivos",
-            "2f4483d6c4": "No hay archivos que coincidan con este filtro"
+            "79b1537dd3": "Selecciona un espacio de trabajo para explorar archivos"
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "Nueva carpeta",
@@ -13372,7 +13371,6 @@
             "31b4c3195d": "Más acciones del explorador",
             "d95e30fe28": "Actualizar explorador",
             "6026b16950": "Contraer todo",
-            "c1f3f3ec70": "Buscar en el contenido de los archivos",
             "openInApp": "Abrir en {{app}}"
           },
           "FileExplorerTreeStatus": {
@@ -13485,19 +13483,6 @@
             "localPortInUse": "El puerto {{port}} ya está en uso. Elige otro puerto local.",
             "localPortRequiresPrivileges": "El puerto {{port}} requiere privilegios elevados. Usa un puerto local ≥ 1024."
           },
-          "Search": {
-            "1abfb25a66": "Escriba para buscar en archivos",
-            "d56d140747": "Presione Enter para buscar",
-            "98c8435e36": "Seleccione un espacio de trabajo para buscar",
-            "dcc294f28d": "(resultados truncados)",
-            "resultsInFiles": "{{results}} en {{files}}",
-            "resultCount_one": "{{count}} resultado",
-            "resultCount_other": "{{count}} resultados",
-            "resultCount_many": "{{count}} resultados",
-            "fileCount_one": "{{count}} archivo",
-            "fileCount_other": "{{count}} archivos",
-            "fileCount_many": "{{count}} archivos"
-          },
           "SearchFilters": {
             "01e4671ccf": "archivos a excluir (por ejemplo, *.min.js, dist/**)",
             "0a6412a895": "Archivos para excluir",
@@ -13507,11 +13492,9 @@
           "SearchHeader": {
             "6234a5ef85": "Usar expresión regular",
             "4567e6e0b6": "Coincidir palabra completa",
-            "464ae3974f": "Distinguir mayúsculas y minúsculas",
-            "693cbeadd0": "Buscar"
+            "464ae3974f": "Distinguir mayúsculas y minúsculas"
           },
           "SearchQueryRow": {
-            "queryLabel": "Buscar archivos",
             "clearLabel": "Borrar búsqueda"
           },
           "SearchResultItems": {
@@ -14684,16 +14667,6 @@
             "description": "\"{{value0}}\" se eliminará. Una vez eliminada, tampoco podrá reanudarse desde la línea de comandos propia de {{value1}}.",
             "remoteDescription": "\"{{value0}}\" se eliminará de {{value2}}. Una vez eliminada, tampoco se podrá reanudar desde la línea de comandos de {{value1}}.",
             "confirm": "Eliminar"
-          },
-          "FileExplorerNameFilter": {
-            "26fb73c6e3": "Buscar archivos",
-            "4d5a6b2a49": "Borrar filtro de archivos",
-            "7a9fb1e6aa": "Contenido"
-          },
-          "FileExplorerViewSwitch": {
-            "c4e9a2b713": "Nombres",
-            "b3c8f1a902": "Filtrar archivos por nombre",
-            "f8a2c4d1e0": "Modo de búsqueda del explorador"
           },
           "GitHistoryCommitFiles": {
             "b2c3d4e5f6": "No hay cambios de archivos en este commit"
@@ -22590,13 +22563,10 @@
       "label": "Raíz del explorador",
       "full": "Raíz del repositorio",
       "back": "Volver a {{path}}",
-      "searchScope": "Ámbito: archivos del espacio de trabajo",
       "retry": "Reintentar",
       "sparseStatus": "Checkout disperso",
       "scopeDetails": "Acerca del alcance del checkout disperso",
       "scopeExplanation": "El selector de carpetas cambia lo que ves, no los archivos del checkout. La raíz del repositorio incluye los archivos presentes en la raíz y en las carpetas superiores.",
-      "searchExplanation": "Nombres filtra la carpeta que estás viendo. Contenido busca en todo el espacio de trabajo. No se buscan los archivos omitidos por el checkout disperso.",
-      "findInFolder": "Buscar en {{path}}",
       "folderLoadError": "No se pudo cargar esta carpeta:",
       "emptyFolder": "No hay archivos en esta carpeta"
     },
@@ -23681,8 +23651,7 @@
     "filters": {
       "toggle": "Mostrar u ocultar detalles de búsqueda",
       "active": "{{count}} activos"
-    },
-    "noResults": "No hay resultados. Prueba otra búsqueda o ajusta los filtros."
+    }
   },
   "resourceManager": {
     "pty": {
