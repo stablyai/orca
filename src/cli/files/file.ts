@@ -1,5 +1,6 @@
 import { getFileOpenPosition } from './file-open-position'
 import type { GitStatusEntry, GitStatusResult } from '../../shared/git/status/git-status-types'
+import { isRuntimePathAbsolute } from '../../shared/file-access/cross-platform-path'
 import type { RuntimeFileOpenResult } from '../../shared/file-access/runtime-editor-file-open'
 import type { RuntimeNavigationTarget } from '../../shared/remote-runtime/session-graph/runtime-navigation'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
@@ -7,7 +8,11 @@ import { getOptionalStringFlag, getRequiredStringFlag } from '../arguments/flags
 import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { callFileOpen } from './file-open-call'
-import { resolveFileOpenTarget } from './file-open-absolute-worktree'
+import {
+  resolveAbsoluteFileOpenWithoutCwdWorktree,
+  resolveFileOpenTarget,
+  type FileOpenTarget
+} from './file-open-absolute-worktree'
 import {
   getOptionalWorktreeSelector,
   resolveCurrentWorktreeSelector
@@ -50,6 +55,27 @@ async function getFileWorktreeSelector({ flags, cwd, client }: HandlerContext): 
     )
   }
   return await resolveCurrentWorktreeSelector(cwd, client)
+}
+
+async function resolveFileOpenOrDiffTarget(
+  ctx: HandlerContext,
+  path: string
+): Promise<FileOpenTarget> {
+  const explicit = ctx.flags.has('worktree')
+  if (!explicit && !ctx.client.isRemote && isRuntimePathAbsolute(path)) {
+    try {
+      const worktree = await getFileWorktreeSelector(ctx)
+      return await resolveFileOpenTarget(ctx, worktree, path, false)
+    } catch (error) {
+      // The cwd miss happens before the containing-worktree lookup.
+      if (error instanceof RuntimeClientError && error.code === 'selector_not_found') {
+        return resolveAbsoluteFileOpenWithoutCwdWorktree(ctx, path)
+      }
+      throw error
+    }
+  }
+  const worktree = await getFileWorktreeSelector(ctx)
+  return resolveFileOpenTarget(ctx, worktree, path, explicit)
 }
 
 function getOpenChangedMode(flags: Map<string, string | boolean>): OpenChangedMode {
@@ -162,8 +188,7 @@ export const FILE_HANDLERS: Record<string, CommandHandler> = {
   'file open': async (ctx) => {
     const path = getRequiredStringFlag(ctx.flags, 'path')
     const position = getFileOpenPosition(ctx.flags)
-    const worktree = await getFileWorktreeSelector(ctx)
-    const target = await resolveFileOpenTarget(ctx, worktree, path, ctx.flags.has('worktree'))
+    const target = await resolveFileOpenOrDiffTarget(ctx, path)
     const result = await callFileOpen(ctx, 'files.open', {
       worktree: target.worktree,
       relativePath: target.relativePath,
@@ -176,8 +201,7 @@ export const FILE_HANDLERS: Record<string, CommandHandler> = {
   'file diff': async (ctx) => {
     const path = getRequiredStringFlag(ctx.flags, 'path')
     const staged = ctx.flags.get('staged') === true
-    const worktree = await getFileWorktreeSelector(ctx)
-    const target = await resolveFileOpenTarget(ctx, worktree, path, ctx.flags.has('worktree'))
+    const target = await resolveFileOpenOrDiffTarget(ctx, path)
     const result = await callFileOpen(ctx, 'files.openDiff', {
       worktree: target.worktree,
       relativePath: target.relativePath,

@@ -8,6 +8,7 @@ import { specPaths } from '../discovery/command-spec'
 import type { HandlerContext } from '../dispatch/dispatch'
 import type { RuntimeClient } from '../runtime/client'
 import { resolveFileOpenTarget } from './file-open-absolute-worktree'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { FILE_HANDLERS } from './file'
 
 const selectorMocks = vi.hoisted(() => ({
@@ -172,6 +173,69 @@ describe('file open absolute paths outside the selected worktree', () => {
     expect(call.mock.calls.find((entry) => entry[0] === 'worktree.list')?.[1]).toEqual({
       limit: 10000
     })
+  })
+
+  it('opens an absolute path when no workspace contains the cwd', async () => {
+    selectorMocks.resolveCurrentWorktreeSelector.mockRejectedValue(
+      new RuntimeClientError(
+        'selector_not_found',
+        'No Orca workspace contains the current directory: /tmp/outside'
+      )
+    )
+    const paths = COMMAND_SPECS.flatMap((spec) => specPaths(spec))
+    const openArgv = ['file', 'open', '/repos/feature/README.md', '--json']
+    const openParsed = normalizeCommandPositionals(
+      COMMAND_SPECS,
+      parseArgs(openArgv, paths, COMMAND_SPECS)
+    )
+    const opened = clientFor(catalog)
+    await FILE_HANDLERS['file open']({
+      flags: openParsed.flags,
+      client: opened.client,
+      cwd: '/tmp/outside',
+      json: true,
+      rawArgs: openArgv
+    })
+    expect(opened.call.mock.calls.filter((entry) => entry[0] === 'files.open')).toEqual([
+      [
+        'files.open',
+        {
+          worktree: 'id:repoA::/repos/feature',
+          relativePath: 'README.md',
+          navigation: 'caller'
+        }
+      ]
+    ])
+    expect(opened.call.mock.calls.map((entry) => entry[0])).toEqual(['worktree.list', 'files.open'])
+
+    const diffArgv = ['file', 'diff', '/repos/feature/README.md', '--json']
+    const diffParsed = normalizeCommandPositionals(
+      COMMAND_SPECS,
+      parseArgs(diffArgv, paths, COMMAND_SPECS)
+    )
+    const diffed = clientFor(catalog)
+    await FILE_HANDLERS['file diff']({
+      flags: diffParsed.flags,
+      client: diffed.client,
+      cwd: '/tmp/outside',
+      json: true,
+      rawArgs: diffArgv
+    })
+    expect(diffed.call.mock.calls.filter((entry) => entry[0] === 'files.openDiff')).toEqual([
+      [
+        'files.openDiff',
+        {
+          worktree: 'id:repoA::/repos/feature',
+          relativePath: 'README.md',
+          staged: false,
+          navigation: 'caller'
+        }
+      ]
+    ])
+    expect(diffed.call.mock.calls.map((entry) => entry[0])).toEqual([
+      'worktree.list',
+      'files.openDiff'
+    ])
   })
 
   it('opens a nested worktree instead of its parent', async () => {

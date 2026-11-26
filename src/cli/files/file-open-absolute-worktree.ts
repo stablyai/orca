@@ -49,6 +49,21 @@ export async function resolveFileOpenTarget(
   if (explicitWorktree) {
     throw outsideSelectedWorktree(ctx.client.isRemote)
   }
+  return listContainingFileOpenTarget(ctx, resolved)
+}
+
+// `resolveCurrentWorktreeSelector` throws before this when the cwd is outside every workspace.
+export async function resolveAbsoluteFileOpenWithoutCwdWorktree(
+  ctx: HandlerContext,
+  path: string
+): Promise<FileOpenTarget> {
+  return listContainingFileOpenTarget(ctx, path)
+}
+
+async function listContainingFileOpenTarget(
+  ctx: HandlerContext,
+  absolutePath: string
+): Promise<FileOpenTarget> {
   const listed = await ctx.client.call<{ worktrees: ListedWorktree[]; truncated?: boolean }>(
     'worktree.list',
     { limit: WORKTREE_LIST_LIMIT }
@@ -62,7 +77,7 @@ export async function resolveFileOpenTarget(
       }
     )
   }
-  return pickContainingWorktree(ctx.cwd, resolved, listed.result.worktrees)
+  return pickContainingWorktree(ctx.cwd, absolutePath, listed.result.worktrees)
 }
 
 function outsideSelectedWorktree(isRemote: boolean): RuntimeClientError {
