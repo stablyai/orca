@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store/index'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { cn } from '@/lib/class-names'
 import {
   getUpdateCheckClickOptions,
   getUpdateCheckHint
@@ -14,13 +13,9 @@ import { getRemoteServerNewerThanClientVersion } from '@/runtime/hosts/updates/r
 import type { RemoteServerUpdateEntry } from '@/runtime/hosts/updates/remote-server-update-coordinator'
 import type { RemoteServerUpdateCheck } from '@/store/slices/runtime-host-updates/remote-server-updates'
 import type { UpdateCheckOptions } from '../../../../../shared/updater/update-status-types'
-import { getRemoteServerUpdatePhaseLabel } from '../runtime-environments/updates/RemoteServerUpdateStatus'
-import {
-  getRemoteServerEntryHelp,
-  getRemoteServerVersionDescription
-} from '../runtime-environments/updates/remote-server-update-entry-copy'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { AboutDisclosureRow } from './AboutDisclosureRow'
+import { RemoteServerAboutRow } from './RemoteServerAboutRow'
 import { ServerRestartConfirm } from './ServerRestartConfirm'
 
 const isEligible = (entry: RemoteServerUpdateEntry): boolean =>
@@ -137,6 +132,7 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
   const setDialogOpen = useAppStore((state) => state.setRemoteServerUpdateDialogOpen)
   const [open, setOpen] = useState(false)
   const toggleRef = useRef<HTMLButtonElement>(null)
+  const bulkActionRef = useRef<HTMLDivElement>(null)
   const [snapshot, setSnapshot] = useState<Snapshot>({ phase: 'owed' })
   const refreshSnapshot = useCallback(
     (options?: UpdateCheckOptions): void => {
@@ -210,6 +206,43 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
   }
   const checkLabel = t('settings.about.action.checkForUpdates', 'Check for updates')
   const updatingLabel = t('settings.about.servers.updating', 'Updating')
+  // The compact header has one control. If its check failed or went stale, offer a fresh check.
+  const needsRetry =
+    eligible.length > 0 &&
+    open &&
+    !busy &&
+    (snapshot.phase === 'failed' || (snapshot.phase === 'ready' && !authorizedCheck))
+  const checkAction = (
+    <Button
+      ref={
+        needsRetry
+          ? (button) => {
+              if (
+                button &&
+                bulkActionRef.current?.contains(button.ownerDocument.activeElement) &&
+                button.getClientRects().length
+              ) {
+                button.focus()
+              }
+            }
+          : undefined
+      }
+      type="button"
+      variant="outline"
+      size="sm"
+      title={getUpdateCheckHint()}
+      disabled={busy}
+      onClick={(event) => {
+        if (needsRetry) {
+          focusServers()
+        }
+        check(event)
+      }}
+    >
+      {checking ? <Loader2 className="animate-spin" /> : null}
+      {t('settings.about.action.check', 'Check')}
+    </Button>
+  )
   const action =
     eligible.length > 0 ? (
       <div className="flex items-center gap-1">
@@ -219,6 +252,7 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
               type="button"
               variant="ghost-muted"
               size="icon-sm"
+              className="@max-xs/about-row:hidden"
               aria-label={running ? updatingLabel : checkLabel}
               disabled={busy}
               onClick={check}
@@ -231,26 +265,29 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
             <span className="block text-muted-foreground">{getUpdateCheckHint()}</span>
           </TooltipContent>
         </Tooltip>
-        <ServerRestartConfirm
-          servers={eligible}
-          label={t('settings.about.servers.updateAll', 'Update all')}
-          variant="outline"
-          disabled={open ? updatesBlocked : busy}
-          disabledReason={
-            running
-              ? updatingLabel
-              : checking
-                ? t('settings.about.status.checking', 'Checking…')
-                : checkLabel
-          }
-          expansion={{
-            expanded: open,
-            failed: snapshot.phase === 'failed',
-            expand: () => setOpenAndRefresh(true)
-          }}
-          onConfirm={startConfirmed}
-          focusAfterConfirm={focusServers}
-        />
+        {needsRetry ? <div className="hidden @max-xs/about-row:block">{checkAction}</div> : null}
+        <div ref={bulkActionRef} className={needsRetry ? '@max-xs/about-row:hidden' : undefined}>
+          <ServerRestartConfirm
+            servers={eligible}
+            label={t('settings.about.servers.updateAll', 'Update all')}
+            variant="outline"
+            disabled={open ? updatesBlocked : busy}
+            disabledReason={
+              running
+                ? updatingLabel
+                : checking
+                  ? t('settings.about.status.checking', 'Checking…')
+                  : checkLabel
+            }
+            expansion={{
+              expanded: open,
+              failed: snapshot.phase === 'failed',
+              expand: () => setOpenAndRefresh(true)
+            }}
+            onConfirm={startConfirmed}
+            focusAfterConfirm={focusServers}
+          />
+        </div>
       </div>
     ) : running ? (
       <Button type="button" variant="outline" size="sm" disabled>
@@ -258,17 +295,7 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
         {updatingLabel}
       </Button>
     ) : (
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        title={getUpdateCheckHint()}
-        disabled={busy}
-        onClick={check}
-      >
-        {checking ? <Loader2 className="animate-spin" /> : null}
-        {t('settings.about.action.check', 'Check')}
-      </Button>
+      checkAction
     )
 
   return (
@@ -283,7 +310,7 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
       )}
       keywords={['remote server', 'update all', 'paired', 'version']}
       // SettingsGroup's 20px content inset and 1px card border.
-      className="@container [--about-card-inset:calc(1.25rem_+_1px)]"
+      className="@container/about-servers [--about-card-inset:calc(1.25rem_+_1px)]"
     >
       <AboutDisclosureRow
         label={t('settings.about.servers.title', 'Servers')}
@@ -306,106 +333,5 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
           : null}
       </AboutDisclosureRow>
     </SearchableSetting>
-  )
-}
-
-function statusDotClass(entry: RemoteServerUpdateEntry): string {
-  switch (entry.phase) {
-    case 'available':
-      return 'bg-theme-accent'
-    case 'current':
-    case 'updated':
-      return 'bg-status-success'
-    case 'manual':
-      return 'bg-status-warning'
-    case 'failed':
-      return 'bg-destructive'
-    case 'offline':
-      return 'border border-muted-foreground'
-    // Busy phases draw a spinner instead of this dot.
-    case 'checking':
-    case 'checking-update':
-    case 'downloading':
-    case 'queued':
-    case 'restarting':
-      return 'bg-muted-foreground'
-  }
-}
-
-const BUSY_PHASES = new Set<RemoteServerUpdateEntry['phase']>([
-  'checking',
-  'queued',
-  'checking-update',
-  'downloading',
-  'restarting'
-])
-
-function RemoteServerAboutRow({
-  entry,
-  disabled,
-  onUpdate,
-  focusAfterConfirm
-}: {
-  entry: RemoteServerUpdateEntry
-  disabled: boolean
-  onUpdate: (environmentIds: string[]) => void
-  focusAfterConfirm: () => void
-}): React.JSX.Element {
-  const t = useTranslate()
-  // "Manual update" already says what to do; its long help would only be cut off here.
-  const help = entry.phase === 'manual' ? null : getRemoteServerEntryHelp(entry, t)
-  const version = getRemoteServerVersionDescription(entry, t)
-  // Keep the version beside the help so a manual or failed server still says what it runs.
-  const sub = help ? `${version} · ${help}` : version
-  const busy = BUSY_PHASES.has(entry.phase)
-  const status =
-    entry.phase === 'downloading' && entry.progress !== null
-      ? `${Math.round(entry.progress)}%`
-      : getRemoteServerUpdatePhaseLabel(entry.phase, t)
-  return (
-    <div data-settings-row="" className="flex items-center gap-3">
-      <span aria-hidden className="grid size-3.5 shrink-0 place-items-center">
-        {busy ? (
-          <Loader2 className="size-3 animate-spin text-muted-foreground" />
-        ) : (
-          <span className={cn('size-2 rounded-full', statusDotClass(entry))} />
-        )}
-      </span>
-      <div className="min-w-0 flex-1">
-        <div title={entry.name} className="truncate text-sm">
-          {entry.name}
-        </div>
-        <div
-          title={sub}
-          // Static strings: cn() would merge the size token away as a text colour.
-          // A failure is the user's recovery instructions, so it wraps in full instead of truncating.
-          className={
-            entry.phase === 'failed'
-              ? 'break-words text-settings-detail text-destructive'
-              : 'truncate text-settings-detail text-muted-foreground'
-          }
-        >
-          {sub}
-        </div>
-      </div>
-      {entry.phase === 'available' || entry.phase === 'failed' ? (
-        <ServerRestartConfirm
-          servers={[entry]}
-          label={
-            entry.phase === 'failed'
-              ? t('auto.components.settings.RemoteServerUpdateDialog.retry', 'Retry')
-              : t('settings.about.action.update', 'Update')
-          }
-          variant="outline"
-          disabled={disabled}
-          onConfirm={onUpdate}
-          focusAfterConfirm={focusAfterConfirm}
-        />
-      ) : (
-        <span className="shrink-0 text-settings-detail text-muted-foreground tabular-nums">
-          {status}
-        </span>
-      )}
-    </div>
   )
 }
