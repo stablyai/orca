@@ -276,7 +276,10 @@ export class MobileEndpointSupervisor {
         withdrewWithoutDial = true
         return
       }
-      this.logical.setRecoveryPath('relay', this.relayReconnect.getFailureCount())
+      // A refused-credential verdict outranks the pending path, so a gated reprobe publishes nothing.
+      if (!this.relayReconnect.blocksUntilFreshCredential()) {
+        this.logical.setRecoveryPath('relay', this.relayReconnect.getFailureCount())
+      }
       const dialed = await this.sessionEstablisher.dialEligible(selection.credentials)
       if (dialed.outcome === 'established') {
         // Why: a fresh socket satisfies any replacement intent queued mid-dial.
