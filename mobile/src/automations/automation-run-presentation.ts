@@ -6,7 +6,7 @@ import { translate } from '../i18n/mobile-i18n'
 import { getUiIntlLocale, uiDateTimeFormat } from '../i18n/ui-intl-locale'
 import type { MobileAutomationRun } from './automation-reply-schema'
 import {
-  createRegionalDateTimeFormat,
+  regionalDateTimeFormat,
   DATE_TIME_NUMERIC
 } from '../../../src/shared/i18n/regional-date-time-format'
 
@@ -40,11 +40,7 @@ export function automationDate(timestamp: number | null | undefined, timezone?: 
     return translate('automations.mobile.notReported', 'Not reported')
   }
   try {
-    return (
-      timezone
-        ? createRegionalDateTimeFormat({ ...RUN_DATE, timeZone: timezone }, getUiIntlLocale())
-        : uiDateTimeFormat(RUN_DATE)
-    ).format(timestamp)
+    return regionalDateTimeFormat(RUN_DATE, getUiIntlLocale(), timezone).format(timestamp)
   } catch {
     return uiDateTimeFormat(DATE_TIME_NUMERIC).format(timestamp)
   }

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   hourCycleFromTimePattern,
   osLocaleRegion,
@@ -99,6 +99,24 @@ describe('regionalDateTimeFormat', () => {
     } finally {
       process.env.TZ = zone
     }
+  })
+
+  it('works out the language and region once, and reuses a formatter per explicit zone', () => {
+    setOsDateTimeRegion({ region: 'BR', hourCycle: null })
+    regionalDateTimeFormat({ hour: 'numeric' }, 'ko')
+    const locales = vi.spyOn(Intl, 'Locale')
+    try {
+      for (let index = 0; index < 50; index++) {
+        regionalDateTimeFormat({ month: 'short', hour: 'numeric' }, 'ko')
+      }
+      expect(locales).not.toHaveBeenCalled()
+    } finally {
+      locales.mockRestore()
+    }
+    const run = { dateStyle: 'medium' } as const
+    expect(regionalDateTimeFormat(run, 'ko', 'Asia/Tokyo')).toBe(
+      regionalDateTimeFormat(run, 'ko', 'Asia/Tokyo')
+    )
   })
 
   it('keeps a bounded number of formatters per options as languages come and go', () => {

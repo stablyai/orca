@@ -149,15 +149,37 @@ function regionDropped(tag: string, region: string | null): boolean {
   }
 }
 
+type LocalePlan = { tag: string; hourCycle: OsDateTimeRegion['hourCycle'] }
+// One plan per language and OS region, so a new formatter costs only its own construction.
+const MAX_PLANS = 8
+const plans = new Map<string, LocalePlan>()
+
+function localePlan(uiLocale: string): LocalePlan {
+  const key = `${uiLocale}|${osDateTimeRegionKey()}`
+  let plan = plans.get(key)
+  if (!plan) {
+    const { region, hourCycle: forced } = osDateTimeRegion
+    const tag = withOsRegion(uiLocale, region)
+    // A pair ICU knows keeps its own clock (fr-CA is 24-hour though Canada's main language is not).
+    plan = {
+      tag,
+      hourCycle: forced ?? (regionDropped(tag, region) ? regionHourCycle(region) : null)
+    }
+    if (plans.size >= MAX_PLANS) {
+      plans.delete(plans.keys().next().value as string)
+    }
+    plans.set(key, plan)
+  }
+  return plan
+}
+
 function buildDateTimeFormat(
   options: Intl.DateTimeFormatOptions,
   uiLocale: string
 ): Intl.DateTimeFormat {
   const { region, hourCycle: forced } = osDateTimeRegion
   try {
-    const tag = withOsRegion(uiLocale, region)
-    // A pair ICU knows keeps its own clock (fr-CA is 24-hour though Canada's main language is not).
-    const hourCycle = forced ?? (regionDropped(tag, region) ? regionHourCycle(region) : null)
+    const { tag, hourCycle } = localePlan(uiLocale)
     const regional =
       hourCycle && options.hour12 === undefined && options.hourCycle === undefined
         ? { ...options, hourCycle }
@@ -183,26 +205,27 @@ export function createRegionalDateTimeFormat(
   return forgiving(buildDateTimeFormat(options, resolveLocale(locale)))
 }
 
-// Keyed by options identity, then language and OS region. Live keys are the UI language, its English
-// fallback and the runtime default; the cap drops ones left behind by language or zone changes.
-const MAX_KEYS_PER_OPTIONS = 4
+// Keyed by options identity, then language, OS region and zone. Live keys are the UI language, its
+// English fallback, the runtime default and a few explicit zones; the cap drops the oldest.
+const MAX_KEYS_PER_OPTIONS = 8
 const JANUARY = new Date(2026, 0, 1)
 const JULY = new Date(2026, 6, 1)
 
 // A formatter keeps the zone it was built in; the offsets change when the system zone does.
-function systemZoneKey(options: Intl.DateTimeFormatOptions): string {
-  return options.timeZone === undefined
-    ? `${JANUARY.getTimezoneOffset()}/${JULY.getTimezoneOffset()}`
-    : ''
+function systemZoneKey(): string {
+  return `${JANUARY.getTimezoneOffset()}/${JULY.getTimezoneOffset()}`
 }
 const formats = new WeakMap<Intl.DateTimeFormatOptions, Map<string, RegionalDateTimeFormat>>()
 
-/** Cached per options object (pass module constants) and rebuilt when the language, OS region or zone changes. */
+/** Cached per options object (pass module constants) and rebuilt when the language, OS region or
+ *  zone changes. `timeZone` formats in that zone instead of the system's. */
 export function regionalDateTimeFormat(
   options: Intl.DateTimeFormatOptions,
-  locale?: string
+  locale?: string,
+  timeZone?: string
 ): RegionalDateTimeFormat {
-  const key = `${locale}|${osDateTimeRegionKey()}|${systemZoneKey(options)}`
+  const zone = timeZone ?? (options.timeZone === undefined ? systemZoneKey() : '')
+  const key = `${locale}|${osDateTimeRegionKey()}|${zone}`
   let byKey = formats.get(options)
   if (!byKey) {
     byKey = new Map()
@@ -210,7 +233,7 @@ export function regionalDateTimeFormat(
   }
   let formatter = byKey.get(key)
   if (!formatter) {
-    formatter = createRegionalDateTimeFormat(options, locale)
+    formatter = createRegionalDateTimeFormat(timeZone ? { ...options, timeZone } : options, locale)
     if (byKey.size >= MAX_KEYS_PER_OPTIONS) {
       byKey.delete(byKey.keys().next().value as string)
     }
