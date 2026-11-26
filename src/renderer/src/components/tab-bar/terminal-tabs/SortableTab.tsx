@@ -1,7 +1,7 @@
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { structuredAgentSessionAddressTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { useCallback, useEffect } from 'react'
-import { Minimize2, Pin } from 'lucide-react'
+import { Minimize2 } from 'lucide-react'
 import { stripLeadingAgentTitleDecoration } from '../../../../../shared/agent-status/title/agent-title-decoration'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { basename } from '@/lib/path'
@@ -184,7 +184,6 @@ export default function SortableTab({
   })
   const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
   const slotProps = useTabStripSlotProps(tab.id, isActive, sizing)
-  const iconOnly = slotProps['data-tab-density'] === 'icon'
   const tabTitle = tab.customTitle ?? tab.title
   const titleNode = fork ? <ForkMarkedName name={displayTitle} narrowIcon /> : displayTitle
   const tabRoot = (
@@ -247,11 +246,7 @@ export default function SortableTab({
         isActive={isActive}
         progress={programProgress}
         identity={identityIcon}
-        compact={iconOnly && !isEditing}
       />
-      {isPinned && !isEditing && !iconOnly && (
-        <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />
-      )}
       {isEditing ? (
         <Input
           ref={setRenameInputElement}
@@ -284,7 +279,7 @@ export default function SortableTab({
           {titleNode}
         </span>
       )}
-      {tab.color && !isEditing && !iconOnly && (
+      {tab.color && !isEditing && (
         <span
           data-tab-color-dot=""
           className="mr-1.5 size-2 rounded-full shrink-0"

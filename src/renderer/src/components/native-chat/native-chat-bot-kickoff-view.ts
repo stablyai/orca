@@ -11,6 +11,7 @@ import {
   type NativeChatFirstScreen
 } from '../../../../shared/bots/bot-first-screen'
 import type { NativeChatStructuredComposerTransport } from './composer/submit/native-chat-structured-composer-transport'
+import { projectionBesideStreamedText } from '../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 
 export type NativeChatBotKickoffView = {
   /** The owner hasn't written since the latest kickoff. */
@@ -48,7 +49,9 @@ export function useNativeChatBotKickoffView(
   useLayoutEffect(() => {
     latestTransport.current = transport
   }, [transport])
-  const live = useMemo(() => bot !== null && nativeChatKickoffLive(messages), [bot, messages])
+  // Kickoffs and sends are structure, so a streamed reply's text revision keeps these lookups.
+  const structure = projectionBesideStreamedText(messages)
+  const live = useMemo(() => bot !== null && nativeChatKickoffLive(structure), [bot, structure])
   const turnEnded = nativeChatKickoffEnded(session)
   const refusal = nativeChatKickoffRefusal(session)
   // Keyed by its words, so a new object for the same refusal keeps the first screen.
@@ -87,8 +90,13 @@ export function useNativeChatBotKickoffView(
       refusedAccount
     ]
   )
-  const firstKickoffId =
-    messages.find((message) => message.orcaNotice === 'bot-created')?.id ?? null
+  const firstKickoffId = useMemo(
+    () =>
+      bot === null
+        ? null
+        : (structure.find((message) => message.orcaNotice === 'bot-created')?.id ?? null),
+    [bot, structure]
+  )
   return useMemo(
     () => ({
       live,

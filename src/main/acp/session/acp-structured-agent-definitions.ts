@@ -25,6 +25,7 @@ export function acpStructuredAgentDefinition(spec: AcpLaunchSpec): StructuredAge
     agent,
     handleTransport: ACP_HANDLE_TRANSPORT,
     ...spec.account.pin,
+    instructionsEachStart: spec.instructions?.eachStart ?? false,
     capabilities: {
       // ACP has no stable rewind or goal methods.
       rewind: false,

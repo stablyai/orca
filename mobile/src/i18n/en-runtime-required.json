@@ -273,11 +273,15 @@
         "zoom": "Meetings, recordings and transcripts"
       },
       "line": {
+        "airtable": "Query and edit bases, tables and records",
         "atlassian": "Jira issues and Confluence pages",
+        "clickup": "Manage tasks, lists and docs",
         "cloudflare": "Manage Workers, DNS and the rest of an account",
         "context7": "Current docs and examples for code libraries",
         "datadog": "Search logs, metrics and monitors",
         "gitlab": "Read and update issues and merge requests",
+        "granola": "Search meeting notes and transcripts",
+        "intercom": "Search conversations, contacts and articles",
         "neon": "Run SQL and manage Postgres branches",
         "netlify": "Deploy sites and check their builds",
         "notion": "Search, read and edit pages",
@@ -285,7 +289,9 @@
         "sentry": "Look into errors and the events behind them",
         "stripe": "Look up payments, customers and subscriptions",
         "supabase": "Query databases and manage projects",
-        "vercel": "Check deployments and read their logs"
+        "todoist": "Add, sort and complete tasks",
+        "vercel": "Check deployments and read their logs",
+        "zapier": "Run actions in the apps you set up in Zapier"
       }
     },
     "chats": {
@@ -307,6 +313,9 @@
       "commentImageNotStored": "Only pasted or attached images can go on a comment.",
       "commentImagesTooLarge": "These images add up to {{totalMb}} MB. A comment takes up to {{maxMb}} MB.",
       "commentImagesTooMany": "Comments take up to {{max}} images.",
+      "composioKeyCantCreateSessions": "This Composio key can’t create sessions. It needs {{permission}}.",
+      "composioKeyMissingPermission": "This Composio key is missing a permission Orca needs.",
+      "composioKeyNeedsPermission": "This Composio key is missing a permission. It needs {{permission}}.",
       "googleAccountsChanged": "Its Google accounts changed since you opened them. Check them and save again.",
       "groupAttachFailed": "Couldn't attach the files. Try sending again in a moment.",
       "groupAttachmentsUnavailable": "This computer can't take attachments right now. Try sending again in a moment.",

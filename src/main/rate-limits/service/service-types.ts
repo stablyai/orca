@@ -9,7 +9,9 @@ import type { KimiHomeResolution } from '../../kimi/kimi-runtime-home'
 import type { CodexAccountSelectionTarget } from '../../../shared/agent-accounts/codex/codex-selection-lane'
 import type { CodexRateLimitHomeResolution } from '../../codex-accounts/runtime-home/runtime-home-service-types'
 
-export type InactiveCodexHome = { kind: 'ready'; managedHomePath: string } | { kind: 'skip' }
+export type InactiveCodexHome =
+  | { kind: 'ready'; managedHomePath: string; backendUsageOnly?: boolean }
+  | { kind: 'skip' }
 
 export type InactiveCodexAccountInfo = {
   id: string

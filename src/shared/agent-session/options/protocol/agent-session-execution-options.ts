@@ -1,3 +1,4 @@
+import { lazyZodSchema } from '../../../schema/lazy-zod-schema'
 import * as z from 'zod'
 
 /** Freeze choices on acceptance; permission stays a launch setting. Strip unknown keys from free-form send/saved options. */
@@ -30,6 +31,8 @@ export function agentSessionExecutionOptionsRecord(
 }
 
 /** Exact picker domain; personality remains host-captured. */
-export const AgentSessionSelectionSchema = AgentSessionExecutionOptionsSchema.omit({
-  personality: true
-}).strict()
+export const AgentSessionSelectionSchema = lazyZodSchema(() =>
+  AgentSessionExecutionOptionsSchema.omit({
+    personality: true
+  }).strict()
+)

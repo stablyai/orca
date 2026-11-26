@@ -43,6 +43,12 @@ export function WorktreeCopySubMenu({ model }: { model: WorktreeContextMenuModel
           <Copy className="size-3.5" />
           {t('auto.components.sidebar.WorktreeContextMenu.copyNameOption', 'Worktree Name')}
         </DropdownMenuItem>
+        {model.worktree.firstAgentMessageRenameError ? (
+          <DropdownMenuItem onSelect={model.handleCopyRenameError} disabled={model.isDeleting}>
+            <Copy className="size-3.5" />
+            {t('auto.components.sidebar.WorktreeContextMenu.copyAutoNameError', 'Auto-Name Error')}
+          </DropdownMenuItem>
+        ) : null}
       </DropdownMenuSubContent>
     </DropdownMenuSub>
   )
