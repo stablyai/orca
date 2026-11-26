@@ -17,6 +17,7 @@ import {
   detectInstalledAgents
 } from '../../../../preflight/installed-agent-detection'
 import {
+  AgentInventoryDeadlineError,
   detectAgentCommandsOnHost,
   readLocalTerminalAgentProgram,
   readWslTerminalAgentProgram,
@@ -541,10 +542,14 @@ it('returns the published agents as incomplete when a detect wait expires', asyn
       incomplete: true,
       afterPublication: 1
     })
-    expect(await plainLists).toEqual([
-      { status: 'rejected', reason: new Error('Agent inventory is still running. Try again.') },
-      { status: 'rejected', reason: new Error('Agent inventory is still running. Try again.') }
-    ])
+    const incompleteList = {
+      status: 'rejected',
+      reason: expect.objectContaining({
+        message: 'Agent inventory is still running. Try again.',
+        data: { afterPublication: 1 }
+      })
+    }
+    expect(await plainLists).toEqual([incompleteList, incompleteList])
   } finally {
     const completion = detectInstalledAgentInventory()
     held.resolve()
@@ -565,11 +570,12 @@ it('allows workspace creation to retry its draft after an inventory timeout', as
   const reachedCreate = new Error('Reached workspace creation')
   const runtime: CreateRuntime = {
     showRepo: async () => repo,
-    resolveStartupDraftAgent: (resolvedRepo, requestedAgent) =>
+    resolveStartupDraftAgent: (resolvedRepo, requestedAgent, afterPublication) =>
       resolveWorktreeStartupDraftAgent({
         repo: resolvedRepo,
         settings: store.getSettings(),
-        requestedAgent
+        requestedAgent,
+        afterPublication
       }),
     createManagedWorktree: vi
       .fn<CreateRuntime['createManagedWorktree']>()
@@ -584,17 +590,24 @@ it('allows workspace creation to retry its draft after an inventory timeout', as
     startupDraft: 'Review these changes'
   }
   const first = createWorktreeWithStartupAgent(runtime, args).catch((error: unknown) => error)
+  const afterPublication = 0
   try {
     await entered.promise
     await vi.advanceTimersByTimeAsync(10_000)
-    expect(await first).toEqual(new Error('Agent inventory is still running. Try again.'))
+    const refusal = await first
+    expect(refusal).toBeInstanceOf(AgentInventoryDeadlineError)
+    expect(refusal).toHaveProperty('message', 'Agent inventory is still running. Try again.')
+    expect(refusal).toHaveProperty('data', { afterPublication })
     expect(runtime.createManagedWorktree).not.toHaveBeenCalled()
   } finally {
     const completion = readLocalTerminalAgentProgram('claude', shell)
     held.resolve()
     await completion
   }
-  await expect(createWorktreeWithStartupAgent(runtime, args)).rejects.toBe(reachedCreate)
+  await expect(createWorktreeWithStartupAgent(runtime, { ...args, afterPublication })).rejects.toBe(
+    reachedCreate
+  )
+  expect(fixture.enumerate).toHaveBeenCalledTimes(1)
   expect(runtime.createManagedWorktree).toHaveBeenCalledExactlyOnceWith({
     repoSelector: 'repo',
     name: 'draft-workspace',

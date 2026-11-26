@@ -205,7 +205,11 @@ export class RuntimeProjectGroupController {
       !input.startupCommand &&
       input.startupDraft?.trim()
         ? await resolveWorktreeStartupDraftAgent({
-            repo: projectGroupHookOwner(group) ?? { path: folderPath, connectionId },
+            repo: projectGroupHookOwner(group) ?? {
+              path: folderPath,
+              connectionId,
+              executionHostId: input.executionHostId ?? group.executionHostId
+            },
             settings: store.getSettings(),
             requestedAgent: input.startupAgent ?? input.createdWithAgent,
             afterPublication: input.afterPublication

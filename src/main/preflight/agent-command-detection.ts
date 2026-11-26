@@ -76,6 +76,16 @@ function qualifyProgram(
     : { kind: 'full-path', path: match.user }
 }
 
+export function readPublishedLocalTerminalAgentProgram(
+  program: string,
+  shell: AgentStartupShell
+): TerminalAgentProgram {
+  const inventory = currentInventoryPublication(getLocalInventory())?.inventory
+  return inventory?.probed.has(program)
+    ? qualifyProgram(inventory.matches.get(program), shell)
+    : { kind: 'unknown' }
+}
+
 export async function readLocalTerminalAgentProgram(
   program: string,
   shell: AgentStartupShell,

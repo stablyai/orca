@@ -10,6 +10,8 @@ import { stripWindowsPathQuotes } from '../../../../shared/shell/command-resolut
 import {
   AgentInventoryDeadlineError,
   readLocalTerminalAgentProgram,
+  readPublishedLocalTerminalAgentProgram,
+  type TerminalAgentProgram,
   withAgentInventoryDeadline
 } from '../../../preflight/agent-command-detection'
 import { isOrcaAgentRuntimePath } from '../../../managed-agent-cli/managed-agent-cli-path'
@@ -54,6 +56,10 @@ export async function resolveClaudeTeamsInvocation(
 }
 
 async function userClaude(caller: Caller): Promise<string> {
+  const published = directClaudePath(readPublishedLocalTerminalAgentProgram('claude', 'posix'))
+  if (published) {
+    return published
+  }
   return withAgentInventoryDeadline(async (signal) => {
     const callerWait = new AbortController()
     const callerSignal = AbortSignal.any([signal, callerWait.signal])
@@ -64,11 +70,9 @@ async function userClaude(caller: Caller): Promise<string> {
       : null
     try {
       const selection = await readLocalTerminalAgentProgram('claude', 'posix', false, signal)
-      if (
-        'path' in selection &&
-        (process.platform !== 'win32' || windowsDirectExecutable.test(selection.path))
-      ) {
-        return selection.path
+      const hostCommand = directClaudePath(selection)
+      if (hostCommand) {
+        return hostCommand
       }
       const command = await callerResult
       if (command) {
@@ -82,6 +86,15 @@ async function userClaude(caller: Caller): Promise<string> {
       callerWait.abort()
     }
   })
+}
+
+function directClaudePath(selection: TerminalAgentProgram): string | undefined {
+  if (
+    'path' in selection &&
+    (process.platform !== 'win32' || windowsDirectExecutable.test(selection.path))
+  ) {
+    return selection.path
+  }
 }
 
 function resolveClaudeOnCallerPath(
@@ -101,8 +114,9 @@ function resolveClaudeOnCallerPath(
     .filter((dir) => isAbsolute(dir) && !isOrcaAgentRuntimePath(dir))
     .join(delimiter)
   const pathExt = windows ? readEnvCaseInsensitive(env, 'PATHEXT') : undefined
-  // Relative entries already contain the caller's directory after resolution.
-  const key = JSON.stringify([path, pathExt])
+  // Windows also searches cwd before PATH; POSIX relative entries already include it.
+  const lookupDirectory = windows ? (callerDirectory ?? '') : ''
+  const key = JSON.stringify([path, pathExt, lookupDirectory])
   let pending = pendingCallerClaudeLookups.get(key)
   if (!pending) {
     const controller = new AbortController()
@@ -113,8 +127,7 @@ function resolveClaudeOnCallerPath(
         }
         return resolveCommandOnLocalPath('claude', {
           env: { PATH: path, PATHEXT: pathExt },
-          // The direct launcher receives an absolute path from the caller's PATH search.
-          cwd: '',
+          cwd: lookupDirectory,
           signal: controller.signal,
           probeCandidate: async (candidate) => {
             if (

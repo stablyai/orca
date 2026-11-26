@@ -16,6 +16,7 @@ import {
 import type { SetupDecision as WorkspaceCreateSetupDecision } from '../../../../src/shared/worktree/create-types'
 import {
   createWorktreeWithNameRetry,
+  type WorktreeCreateDraftRetry,
   type WorktreeCreateParent,
   type WorktreeCreateResult
 } from './worktree-create-retry'
@@ -42,6 +43,7 @@ export type CreateWorkspaceFromComposerArgs = {
   worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
   agentLaunchSupported: WorktreeCreateAgentLaunch['supported']
   branchIntentSupported?: boolean | Promise<boolean>
+  draftRetry?: WorktreeCreateDraftRetry
   parent?: WorktreeCreateParent
 }
 
@@ -120,19 +122,11 @@ function resolveComposerAgentLaunch(
   return agentId ? { agent: agentId, supported } : undefined
 }
 
-async function createWorkItemWorkspace(args: {
-  client: RpcClient
-  selection: Extract<MobileComposerCreateSelection, { kind: 'work-item' }>
-  targetRepoId: string
-  setupDecision: WorkspaceCreateSetupDecision
-  approvedSetupHash?: string
-  agent: WorkspaceCreateAgentBundle
-  workspaceName: string | undefined
-  nameIsAutoManaged?: boolean
-  note: string | undefined
-  worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
-  parent?: WorktreeCreateParent
-}): Promise<WorktreeCreateResult> {
+async function createWorkItemWorkspace(
+  args: CreateWorkspaceFromComposerArgs & {
+    selection: Extract<MobileComposerCreateSelection, { kind: 'work-item' }>
+  }
+): Promise<WorktreeCreateResult> {
   // The caller resolved the start point before showing its setup; creating from another could run unseen setup.
   const { client, selection, targetRepoId, setupDecision, agent, workspaceName, note } = args
   const item = selection.item
@@ -161,6 +155,7 @@ async function createWorkItemWorkspace(args: {
     client,
     baseName,
     worktreeCreateIdempotency: args.worktreeCreateIdempotency,
+    draftRetry: args.draftRetry,
     buildParams: (name) => ({ ...params, name })
   })
 }
