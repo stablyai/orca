@@ -259,10 +259,8 @@ export class RelayReconnectController {
       ? this.delays.hostOfflineDelayMs(this.failureCount.claimAttachTimeoutRedial(error))
       : this.delays.transportDelayMs(failureCount, relayDirectorRetryAfterMs(error))
     this.nextAttemptAt = now + delay
-    if (
-      error instanceof MobileE2EEAuthenticationError ||
-      (unconfirmed && !credentialRejected && !hostOffline)
-    ) {
+    const speculative = unconfirmed && !credentialRejected && !hostOffline
+    if (error instanceof MobileE2EEAuthenticationError || speculative) {
       // E2EE rejection can be transient during credential commit, and an unconfirmed token may be dead (a 4404 passed
       // the cell's credential check); gate slow reprobes plus one retry per network change or resume.
       this.holdGate(scheduleRetry, 'external-signal')
