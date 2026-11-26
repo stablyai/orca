@@ -2,6 +2,7 @@ import { CLAUDE_ACCOUNT_SWITCH_RUNNING_SESSIONS } from '../../../../../../shared
 import type { ClaudeAccountSwitchRunningSessions } from '../../../../../../shared/agent-accounts/claude/claude-account-switch-settings'
 import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import { useTranslate } from '@/i18n/use-translate'
+import { Button } from '../../../ui/button'
 import { Label } from '../../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
@@ -57,8 +58,19 @@ export function ClaudeRunningSessionSwitchSetting({
         <p className="text-xs text-muted-foreground">
           {policy.setting.state === 'unsupported'
             ? getHostSettingUnsupportedNote(hostLabel, t)
-            : description}
+            : policy.setting.state === 'error'
+              ? t(
+                  'accounts.claude.switchSessions.settingReadFailed',
+                  'Couldn’t read this setting from {{host}}.',
+                  { host: hostLabel }
+                )
+              : description}
         </p>
+        {policy.setting.state === 'error' ? (
+          <Button variant="ghost" size="xs" onClick={policy.retry} className="mt-1">
+            {t('accounts.claude.switchSessions.retry', 'Retry')}
+          </Button>
+        ) : null}
       </div>
       <Select
         value={value}
