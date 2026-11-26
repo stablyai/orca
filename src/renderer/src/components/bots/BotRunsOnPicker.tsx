@@ -93,7 +93,8 @@ export function BotRunsOnPicker({
   /** The bot's name, for its folder. */
   name?: string
   showSubmitFeedback?: boolean
-  /** `row` is a boxed summary that opens to the fields; `fields` shows Computer and Agent side by side. */
+  /** `row` is a boxed summary that opens to the fields; `fields` shows Computer and Agent side by side,
+   *  and leaves Use chat defaults to the dialog's footer. */
   variant?: 'row' | 'fields'
 }): React.JSX.Element {
   const t = useTranslate()
@@ -251,6 +252,7 @@ export function BotRunsOnPicker({
               onChange={onSetupChange}
               keptPermission={keptPermission}
               showChatDefaultHint={!fields}
+              showReset={!fields}
             />
           )}
         </div>

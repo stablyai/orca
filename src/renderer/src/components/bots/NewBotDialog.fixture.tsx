@@ -322,3 +322,40 @@ const fromLink = (width: 340 | 480) => ({
 // The link flow's New bot: the same dialog, prefilled from the link, beside longest340/480.
 export const link340 = defineFixture(fromLink(340))
 export const link480 = defineFixture(fromLink(480))
+
+// A model picked, so Use chat defaults shows on the footer's left.
+const pickModel = async (): Promise<void> => {
+  await FILLED()
+  const trigger = document.querySelector<HTMLElement>(
+    '[role="dialog"] [role="group"][aria-label="Agent"] button'
+  )
+  trigger?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+  await new Promise((resolve) => setTimeout(resolve, 400))
+  const label = [...document.querySelectorAll<HTMLElement>('[role="menu"] *')].find(
+    (node) => node.childElementCount === 0 && node.textContent?.trim() === 'Opus'
+  )
+  const opus = label?.closest<HTMLElement>('[role="option"]')
+  opus?.click()
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  document.activeElement?.dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+  )
+  const focused = document.activeElement
+  if (focused instanceof HTMLElement) {
+    focused.blur()
+  }
+  await new Promise((resolve) => setTimeout(resolve, 300))
+}
+export const chatDefaults340 = defineFixture({ ...newBotFixture(340), interact: pickModel })
+export const chatDefaults480 = defineFixture({ ...newBotFixture(480), interact: pickModel })
+export const chatDefaultsFocus340 = defineFixture({
+  ...newBotFixture(340),
+  interact: async () => {
+    await pickModel()
+    const link = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
+      (button) => button.textContent === 'Use chat defaults'
+    )
+    link?.focus()
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+})
