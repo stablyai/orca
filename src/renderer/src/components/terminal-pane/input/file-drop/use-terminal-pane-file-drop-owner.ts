@@ -11,6 +11,7 @@ import {
 import { getNativeFileDropRejectionMessage } from '@/lib/files/drop/native-file-drop-rejection-message'
 import { makePaneKey, type PaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'
+import { isTerminalPaneVeiled } from './terminal-drop-target'
 import { captureNativeTerminalFileDrop } from './terminal-native-file-drop-destination'
 
 export type TerminalPaneFileDropOwnerArgs = {
@@ -35,8 +36,9 @@ function sequenceForPane(pane: ManagedPane, paneKey: PaneKey): OsFileDropSequenc
   return sequence
 }
 
-function paneIsCurrent(manager: PaneManager | null, pane: ManagedPane): boolean {
+function paneCanReceiveDrop(manager: PaneManager | null, pane: ManagedPane): boolean {
   return Boolean(
+    !isTerminalPaneVeiled(pane.container) &&
     manager
       ?.getPanes()
       .some(
@@ -63,7 +65,7 @@ export function useTerminalPaneFileDropOwner(
         rootRef.current?.isConnected &&
         !rootRef.current.closest('[inert]') &&
         !isElementDisplayNone(rootRef.current) &&
-        paneIsCurrent(managerRef.current, pane) &&
+        paneCanReceiveDrop(managerRef.current, pane) &&
         paneTransportsRef.current.get(pane.id)?.isConnected()
       ),
     captureDestination: () => {
@@ -78,7 +80,7 @@ export function useTerminalPaneFileDropOwner(
           managerRef.current !== manager ||
           paneTransportsRef.current !== paneTransports ||
           makePaneKey(tabId, pane.leafId) !== paneKey ||
-          !paneIsCurrent(manager, pane)
+          !paneCanReceiveDrop(manager, pane)
         ) {
           return
         }

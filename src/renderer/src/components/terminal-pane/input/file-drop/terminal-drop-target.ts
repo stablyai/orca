@@ -6,17 +6,24 @@ export type CapturedTerminalDropTarget = {
   leafId: string
   ptyId: string | null
   transport: PtyTransport
+  blockWhileVeiled?: true
+}
+
+export function isTerminalPaneVeiled(container: HTMLElement): boolean {
+  return container.querySelector('[data-remote-server-pane-veil]') !== null
 }
 
 export function captureTerminalDropTarget(
   pane: { id: number; leafId: string },
-  transport: PtyTransport
+  transport: PtyTransport,
+  options?: Pick<CapturedTerminalDropTarget, 'blockWhileVeiled'>
 ): CapturedTerminalDropTarget {
   return {
     paneId: pane.id,
     leafId: pane.leafId,
     ptyId: transport.getPtyId(),
-    transport
+    transport,
+    ...options
   }
 }
 
@@ -35,6 +42,11 @@ export function getCurrentTerminalDropTransport(
   }
   const paneStillMounted = manager
     .getPanes()
-    .some((pane) => pane.id === target.paneId && pane.leafId === target.leafId)
+    .some(
+      (pane) =>
+        pane.id === target.paneId &&
+        pane.leafId === target.leafId &&
+        (!target.blockWhileVeiled || !isTerminalPaneVeiled(pane.container))
+    )
   return paneStillMounted ? liveTransport : null
 }
