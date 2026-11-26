@@ -73,7 +73,13 @@ export function accumulatorSessionIdentity(
 }
 
 export function cloneSessionAccumulator(accumulator: SessionAccumulator): SessionAccumulator {
-  return { ...accumulator, previewMessages: [...accumulator.previewMessages] }
+  return {
+    ...accumulator,
+    previewMessages: [...accumulator.previewMessages],
+    ...(accumulator.antigravityUsageSteps
+      ? { antigravityUsageSteps: new Map(accumulator.antigravityUsageSteps) }
+      : {})
+  }
 }
 
 // Use only when the accumulator contains all parser state; closure state needs a custom resume implementation.
