@@ -1,4 +1,5 @@
 import type { BotSessionHooks } from '../bots/bot-turn-ended'
+import { LocalConnectorHosts } from '../local-connectors/local-connector-hosts'
 import { UNSET_BOT_SESSION_HOOKS } from '../bots/bot-session-hooks-unset'
 import { sessionRepliesInSlack } from '../external-conversations/external-conversation-links'
 import { join } from 'node:path'
@@ -205,6 +206,9 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     showManagedTerminalWorkspace: (...args) => this.showManagedTerminalWorkspace(...args),
     linkStore: () => this.store
   }
+
+  /** The IM connectors this host runs itself, once the connector host installs them. */
+  readonly localConnectors = new LocalConnectorHosts()
 
   /** The runtime's one bots DB worker: every bot store's SQL runs in it, off this thread. */
   private readonly botsDb = new BotsDbWorkerClient()

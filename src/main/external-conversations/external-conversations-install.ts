@@ -78,6 +78,8 @@ export function installExternalConversations(
           reply: LeaveLinesCloud['reply']
         })
       | null
+    /** The IM connectors this host runs itself, told when outbox rows fill as the cloud is. */
+    localConnectors?: { repliesFilled(): void }
   }
 ): {
   current(): ExternalConversationSeam | null
@@ -229,14 +231,14 @@ export function installExternalConversations(
 /** The reply outbox's fill, boot recovery and watch (design item 125), for one enabled seam. */
 function connectorReplyOutbox(
   store: ExternalConversationLinkStore,
-  runtime: {
-    getConnectorCloud?: () => { repliesFilled(): void } | null
-    structuredAgentSessionLaunchContinuation?: { continued: Promise<unknown> }
-  },
+  runtime: Parameters<typeof installExternalConversations>[1],
   signal: AbortSignal
 ): { fill: ConversationReplyFill; admitted: (sessionId: string) => void } {
   const journal = () => getStructuredAgentSessionHost()?.deps.store.connectorReplies() ?? null
-  const filled = () => runtime.getConnectorCloud?.()?.repliesFilled()
+  const filled = () => {
+    runtime.getConnectorCloud?.()?.repliesFilled()
+    runtime.localConnectors?.repliesFilled()
+  }
   const usageLimitDisposition = async (sessionId: string, turnItemId: string) =>
     getStructuredAgentSessionHost()?.usageLimitContinue.disposition(sessionId, turnItemId)
   const { retry, settleWith } = liveEmptyTurnRetry(journal, getStructuredAgentSessionHost, signal)
