@@ -207,20 +207,25 @@ it('retries directly when a resolved OS system proxy fails with 407 proxy auth',
     setProxy: async () => {}
   }))
   const usageEnvs: (NodeJS.ProcessEnv | undefined)[] = []
+  const usageTimeouts: (number | null | undefined)[] = []
+  let nowMs = 0
   const runCommand: typeof runProcess = async (spec) => {
     if (spec.args?.[0] === '--version') {
       return { code: 0, signal: null, stdout: '1.5.15\n', stderr: '', timedOut: false }
     }
     usageEnvs.push(spec.env)
-    return usageEnvs.length === 1
-      ? {
-          code: 1,
-          signal: null,
-          stdout: '',
-          stderr: 'HTTP 407 Proxy Authentication Required',
-          timedOut: false
-        }
-      : { code: 0, signal: null, stdout: VALID_USAGE_JSON, stderr: '', timedOut: false }
+    usageTimeouts.push(spec.timeoutMs)
+    if (usageEnvs.length === 1) {
+      nowMs = 29_500
+      return {
+        code: 1,
+        signal: null,
+        stdout: '',
+        stderr: 'HTTP 407 Proxy Authentication Required',
+        timedOut: false
+      }
+    }
+    return { code: 0, signal: null, stdout: VALID_USAGE_JSON, stderr: '', timedOut: false }
   }
 
   const limits = await fetchAntigravityRateLimits({
@@ -228,12 +233,40 @@ it('retries directly when a resolved OS system proxy fails with 407 proxy auth',
     resolveCommand: async () => '/usr/local/bin/agy',
     resolveEnvironment: async () => ({ PATH: '/usr/bin' }),
     platform: 'darwin',
-    now: () => 0
+    now: () => nowMs
   })
 
   expect(limits.status).toBe('ok')
   expect(limits.session?.usedPercent).toBe(25)
   expect(usageEnvs.map((env) => env?.HTTPS_PROXY)).toEqual(['http://127.0.0.1:8080', undefined])
+  expect(usageTimeouts).toEqual([30_000, 1_000])
+
+  const controller = new AbortController()
+  const abortedEnvs: (NodeJS.ProcessEnv | undefined)[] = []
+  const aborted = await fetchAntigravityRateLimits({
+    runCommand: async (spec) => {
+      if (spec.args?.[0] === '--version') {
+        return { code: 0, signal: null, stdout: '1.5.15\n', stderr: '', timedOut: false }
+      }
+      abortedEnvs.push(spec.env)
+      controller.abort()
+      return {
+        code: 1,
+        signal: null,
+        stdout: '',
+        stderr: 'HTTP 407 Proxy Authentication Required',
+        timedOut: false
+      }
+    },
+    resolveCommand: async () => '/usr/local/bin/agy',
+    resolveEnvironment: async () => ({ PATH: '/usr/bin' }),
+    platform: 'darwin',
+    signal: controller.signal,
+    now: () => 0
+  })
+
+  expect(aborted.status).toBe('unavailable')
+  expect(abortedEnvs.map((env) => env?.HTTPS_PROXY)).toEqual(['http://127.0.0.1:8080'])
 })
 
 it('retries directly only when a failed PAC proxy has a DIRECT fallback', async () => {

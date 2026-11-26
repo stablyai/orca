@@ -124,6 +124,16 @@ describe('parseSystemProxyRule', () => {
       proxyUrl: null,
       hasDirectFallback: true
     })
+    expect(
+      parseSystemProxyRule('PROXY primary.example:8080; PROXY backup.example:8080; DIRECT')
+    ).toEqual({
+      proxyUrl: 'http://primary.example:8080',
+      hasDirectFallback: true
+    })
+    expect(parseSystemProxyRule('PROXY primary.example:8080; PROXY backup.example:8080')).toEqual({
+      proxyUrl: 'http://primary.example:8080',
+      hasDirectFallback: false
+    })
   })
 })
 
@@ -219,5 +229,68 @@ describe('resolveConfiguredOrSystemProxyEnv', () => {
       usedSystemProxy: false,
       hasDirectFallback: false
     })
+  })
+
+  it('falls back to unproxied env when proxy session is absent, returns DIRECT, rejects, throws, or signal is aborted', async () => {
+    const callerEnv = { PATH: '/usr/bin' }
+    const targetUrl = 'https://daily-cloudcode-pa.googleapis.com'
+
+    setDefaultProxySessionResolver(null)
+    await expect(
+      resolveConfiguredOrSystemProxyEnv(callerEnv, { targetUrl, settings: null })
+    ).resolves.toEqual({
+      env: callerEnv,
+      usedSystemProxy: false,
+      hasDirectFallback: false
+    })
+
+    mockProxySession(async () => 'DIRECT')
+    await expect(
+      resolveConfiguredOrSystemProxyEnv(callerEnv, { targetUrl, settings: null })
+    ).resolves.toEqual({
+      env: callerEnv,
+      usedSystemProxy: false,
+      hasDirectFallback: true
+    })
+
+    mockProxySession(() => Promise.reject(new Error('pac lookup failed')))
+    await expect(
+      resolveConfiguredOrSystemProxyEnv(callerEnv, { targetUrl, settings: null })
+    ).resolves.toEqual({
+      env: callerEnv,
+      usedSystemProxy: false,
+      hasDirectFallback: false
+    })
+
+    mockProxySession(() => {
+      throw new Error('resolver exploded')
+    })
+    await expect(
+      resolveConfiguredOrSystemProxyEnv(callerEnv, { targetUrl, settings: null })
+    ).resolves.toEqual({
+      env: callerEnv,
+      usedSystemProxy: false,
+      hasDirectFallback: false
+    })
+
+    let abortedResolveCalls = 0
+    mockProxySession(async () => {
+      abortedResolveCalls += 1
+      return 'PROXY 127.0.0.1:7897'
+    })
+    const controller = new AbortController()
+    controller.abort()
+    await expect(
+      resolveConfiguredOrSystemProxyEnv(callerEnv, {
+        targetUrl,
+        settings: null,
+        signal: controller.signal
+      })
+    ).resolves.toEqual({
+      env: callerEnv,
+      usedSystemProxy: false,
+      hasDirectFallback: false
+    })
+    expect(abortedResolveCalls).toBe(0)
   })
 })
