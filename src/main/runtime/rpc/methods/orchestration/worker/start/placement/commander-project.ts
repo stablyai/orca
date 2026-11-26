@@ -4,8 +4,11 @@ import { OrchestrationError } from '../../../../../../orchestration/orchestratio
 export async function assertCommanderProject(
   runtime: OrcaRuntimeService,
   projectId: string,
-  repoSelector: string
+  repoSelector: string | undefined
 ) {
+  if (!repoSelector) {
+    throw new OrchestrationError('invalid_argument', 'Commander placement requires a repository.')
+  }
   const repo = await runtime.showRepo(repoSelector)
   if (
     !runtime

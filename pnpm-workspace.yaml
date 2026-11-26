@@ -130,6 +130,8 @@ patchedDependencies:
   picomatch@4.0.7: config/patches/picomatch@4.0.7.patch
   '@radix-ui/react-menu@2.1.24': config/patches/@radix-ui__react-menu@2.1.24.patch
   mermaid@11.17.2: config/patches/mermaid@11.17.2.patch
+  serve-sim@0.1.47: config/patches/serve-sim@0.1.47.patch
+  ssh2@1.17.0: config/patches/ssh2@1.17.0.patch
 permissions:
   agent-browser:
     skills: false

@@ -40,6 +40,10 @@ class OrchestrationDbCore {
   pendingMailHandBacks: MailHandBack[] = []
   /** The runtime's wake for mail a settlement handed to a Run, called once the transaction ends. */
   mailHandBackListener: ((handBack: MailHandBack) => void) | undefined
+  /** Told which mailboxes mail was read from, after the consuming write commits. */
+  mailReadListener: ((mailboxes: string[]) => void) | undefined
+  /** Whether that listener wants reads now; false skips reading which mailboxes they came from. */
+  mailReadWanted: () => boolean = () => true
   /** The runtime's auto-release timer, re-armed whenever a deadline moves. */
   workerTerminalAutoReleaseListener: (() => void) | undefined
   /** Told, with its id, of every change to what places or shows a Dispatch (see worker-status-notice),
@@ -54,6 +58,7 @@ class OrchestrationDbCore {
   private closed = false
   private readonly closeListeners = new Set<() => void>()
   private changedDispatchIds: Set<string> | null = null
+  private workerStatusNoticeSuppressedDepth = 0
   /** The user's auto-close switch; this runtime's choice also governs the remote workers it coordinates. */
   workerAutoReleaseEnabled: (() => boolean) | undefined
   /** PTYs whose pointers were released this session; title edges skip the release write for them. */
@@ -143,6 +148,9 @@ class OrchestrationDbCore {
     createCoordinatorMailRoutingTrigger.call(this as unknown as OrchestrationDb)
     rememberCurrentRunCoordinatorHandles.call(this as unknown as OrchestrationDb)
     installWorkerStatusNotice(this.db, (dispatchId, change) => {
+      if (this.workerStatusNoticeSuppressedDepth > 0) {
+        return
+      }
       if (dispatchId) {
         revokeAgentSessionPublicationFences([JSON.stringify(['worker', dispatchId])])
       }
@@ -153,6 +161,16 @@ class OrchestrationDbCore {
       }
     })
     hardenOrchestrationDatabaseFiles(dbPath)
+  }
+
+  /** Runs a write without firing worker-status triggers (used for heartbeat-only timestamp updates). */
+  withoutWorkerStatusNotice<T>(operation: () => T): T {
+    this.workerStatusNoticeSuppressedDepth += 1
+    try {
+      return operation()
+    } finally {
+      this.workerStatusNoticeSuppressedDepth -= 1
+    }
   }
 
   /** After the writes that fired it, so the read sees committed rows and never runs inside a trigger;

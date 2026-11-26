@@ -1,3 +1,4 @@
+import { portSystemBrowserOpener } from './server-port-forward-open'
 import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { translate } from '@/i18n/i18n'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
@@ -107,9 +108,17 @@ export async function openWorkspacePortInBrowser(args: {
     runtimeTarget: args.runtimeTarget,
     localhostLabelRoute: args.localhostLabelRoute
   })
-  if (args.openInOrcaBrowser === false && args.runtimeTarget.kind === 'local') {
+  const openInSystemBrowser =
+    args.openInOrcaBrowser === false
+      ? portSystemBrowserOpener(
+          url,
+          args.runtimeTarget,
+          args.port.kind === 'workspace' ? args.port.owner.worktreeId : null
+        )
+      : null
+  if (openInSystemBrowser) {
     try {
-      await window.api.shell.openUrl(url)
+      await openInSystemBrowser()
       return { ok: true }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)

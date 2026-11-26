@@ -13,6 +13,7 @@ import type { AppState } from '@/store/types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { toHostSessionPaneKey } from '../../../../shared/workspace-layout/terminal-surface-id'
 import { ORCHESTRATION_WORKER_KEEP_OPEN_RUNTIME_CAPABILITY } from '../../../../shared/orchestration/orchestration-runtime-capabilities'
 import {
   pollWorkerAutoClose,
@@ -27,6 +28,16 @@ import {
 export type WorkerAutoCloseSubject = { paneKey: string } | { sessionId: string }
 
 const RPC_OPTIONS = { suppressFeatureInteraction: true }
+
+/** The subject as its host names it: a mirrored `web-terminal-` pane goes back to the host's own key. */
+export function hostWorkerSubject(
+  target: RuntimeClientTarget,
+  subject: WorkerAutoCloseSubject
+): WorkerAutoCloseSubject {
+  return target.kind === 'environment' && 'paneKey' in subject
+    ? { paneKey: toHostSessionPaneKey(subject.paneKey) }
+    : subject
+}
 
 // An older host lacks the methods; asking its advertised capabilities first costs it no request.
 async function hostKeepsWorkersOpen(target: RuntimeClientTarget): Promise<boolean> {
@@ -51,7 +62,12 @@ export function readWorkerAutoClose(
   return hostKeepsWorkersOpen(target)
     .then((supported) =>
       supported
-        ? callRuntimeRpc<unknown>(target, 'orchestration.workerAutoClose', subject, RPC_OPTIONS)
+        ? callRuntimeRpc<unknown>(
+            target,
+            'orchestration.workerAutoClose',
+            hostWorkerSubject(target, subject),
+            RPC_OPTIONS
+          )
         : null
     )
     .then(readWorkerAutoCloseReply)
@@ -67,7 +83,7 @@ export function setWorkerKeptOpen(
   return callRuntimeRpc<unknown>(
     target,
     'orchestration.workerKeepOpen',
-    { ...subject, keep },
+    { ...hostWorkerSubject(target, subject), keep },
     RPC_OPTIONS
   )
     .then(readWorkerAutoCloseReply)

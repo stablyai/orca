@@ -111,4 +111,29 @@ describe('Commander project overview', () => {
     })
     expect(project.counts).toMatchObject({ done: 1, interrupted: 1, 'last-seen': 1 })
   })
+  it('keeps a shared pane key separate across desktop, catalog and relayed server rows', () => {
+    const entry = agent('same-pane', 'app', 'working')
+    const projects = commanderProjects({
+      hosts: [{ id: 'desktop' }],
+      hostStates: { desktop: 'connected' },
+      now: 1,
+      worktreeInfo: {
+        desktop: {
+          hostId: 'desktop',
+          totalWorktrees: 3,
+          activeCount: 3,
+          agents: [
+            entry,
+            { ...entry, hostId: 'runtime:catalog' },
+            { ...entry, executionHost: { id: 'runtime:relayed', label: 'Server' } }
+          ]
+        }
+      }
+    })
+    expect(projects.map((p) => [p.executionHostId, p.counts.working, p.rows[0]?.unread])).toEqual([
+      ['local', 1, false],
+      ['runtime:catalog', 1, undefined],
+      ['runtime:relayed', 1, undefined]
+    ])
+  })
 })

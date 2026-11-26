@@ -1,5 +1,11 @@
 import { useContext, useMemo, useState } from 'react'
 import { ScrollView, Text, View } from 'react-native'
+import { MobileFooterRowsScrollerContext } from './transcript/agent-messages/use-mobile-footer-row-on-screen'
+import { createMobileNativeChatTailViewport } from './transcript/viewport/mobile-native-chat-tail-viewport'
+import {
+  MobileNativeChatDisclosureContext,
+  useMobileNativeChatDisclosures
+} from './transcript/viewport/mobile-native-chat-disclosure-store'
 import {
   Check,
   ChevronRight,
@@ -101,9 +107,12 @@ function LookMark({ state }: { state: FirstLookRow['state'] }): React.JSX.Elemen
 /** The desktop's first screen: who the bot is, its setup step by step, Try again once a step failed,
  *  and what it finds as it first looks around. */
 export function MobileBotFirstScreen({
-  firstScreen
+  firstScreen,
+  after
 }: {
   firstScreen: NativeChatFirstScreen
+  /** Drawn below the setup, such as other agents' waiting mail. */
+  after?: React.ReactNode
 }): React.JSX.Element | null {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -124,7 +133,7 @@ export function MobileBotFirstScreen({
   const [asking, setAsking] = useState(false)
   const [retryError, setRetryError] = useState<string | null>(null)
   if (!identity?.botId || !bot) {
-    return null
+    return <SetupMail after={after} />
   }
   const { botId } = identity
   const agent = botAgentLabel(bot.agent)
@@ -177,105 +186,139 @@ export function MobileBotFirstScreen({
   }
   const reading = rows.some((row) => row.state === 'running')
   return (
-    <ScrollView style={styles.root} contentContainerStyle={styles.content}>
-      <View style={styles.who}>
-        <MobileBotAvatar avatar={identity.avatar} size={80} />
-        <Text style={styles.name}>{bot.name}</Text>
-        <Text style={styles.subtitle}>
-          {t('bots.firstScreen.subtitle', 'Your new bot · runs your {{agent}}', { agent })}
-        </Text>
-      </View>
-      <SectionHeader title={t('bots.firstScreen.setup', 'Setup')} />
-      <ListGroup separatorInset={LIST_LEADING_INSET} style={styles.group}>
-        {steps.map(({ id, step, label }) => (
-          <ListRow
-            key={id}
-            title={label}
-            {...(step.detail ? { subtitle: step.detail, subtitleLines: 3 } : {})}
-            leading={<StepMark state={step.state} />}
-            destructive={step.state === 'failed'}
-            disabled={step.state === 'pending'}
-          />
-        ))}
-        {providerDetail ? (
-          <ListRow
-            title={t('common.details', 'Details')}
-            leading={
-              <DisclosureChevron expanded={detailsOpen} collapsedDeg={0} expandedDeg={90}>
-                <ChevronRight size={15} color={colors.textMuted} strokeWidth={2.2} />
-              </DisclosureChevron>
-            }
-            detail={
-              detailsOpen ? (
-                <Text selectable style={styles.providerDetail}>
-                  {providerDetail}
-                </Text>
-              ) : undefined
-            }
-            accessibilityRole="button"
-            onPress={() => setDetailsOpen(!detailsOpen)}
-          />
-        ) : null}
-        {stepFailed ? (
-          <ListRow
-            title={t('bots.firstScreen.failed', 'Couldn’t finish setting up')}
-            wrapTitle
-            {...(retryError ? { subtitle: retryError } : {})}
-            detail={
-              failureBlock?.type === 'text' ? (
-                <MobileNativeChatUsageLimitStatus notice={failureBlock} fontScale={1} />
-              ) : undefined
-            }
-            accessory={
-              <View style={styles.actions}>
-                {signInCommand && runInTerminal ? (
+    <>
+      <ScrollView style={styles.root} contentContainerStyle={styles.content}>
+        <View style={styles.who}>
+          <MobileBotAvatar avatar={identity.avatar} size={80} />
+          <Text style={styles.name}>{bot.name}</Text>
+          <Text style={styles.subtitle}>
+            {t('bots.firstScreen.subtitle', 'Your new bot · runs your {{agent}}', { agent })}
+          </Text>
+        </View>
+        <SectionHeader title={t('bots.firstScreen.setup', 'Setup')} />
+        <ListGroup separatorInset={LIST_LEADING_INSET} style={styles.group}>
+          {steps.map(({ id, step, label }) => (
+            <ListRow
+              key={id}
+              title={label}
+              {...(step.detail ? { subtitle: step.detail, subtitleLines: 3 } : {})}
+              leading={<StepMark state={step.state} />}
+              destructive={step.state === 'failed'}
+              disabled={step.state === 'pending'}
+            />
+          ))}
+          {providerDetail ? (
+            <ListRow
+              title={t('common.details', 'Details')}
+              leading={
+                <DisclosureChevron expanded={detailsOpen} collapsedDeg={0} expandedDeg={90}>
+                  <ChevronRight size={15} color={colors.textMuted} strokeWidth={2.2} />
+                </DisclosureChevron>
+              }
+              detail={
+                detailsOpen ? (
+                  <Text selectable style={styles.providerDetail}>
+                    {providerDetail}
+                  </Text>
+                ) : undefined
+              }
+              accessibilityRole="button"
+              onPress={() => setDetailsOpen(!detailsOpen)}
+            />
+          ) : null}
+          {stepFailed ? (
+            <ListRow
+              title={t('bots.firstScreen.failed', 'Couldn’t finish setting up')}
+              wrapTitle
+              {...(retryError ? { subtitle: retryError } : {})}
+              detail={
+                failureBlock?.type === 'text' ? (
+                  <MobileNativeChatUsageLimitStatus notice={failureBlock} fontScale={1} />
+                ) : undefined
+              }
+              accessory={
+                <View style={styles.actions}>
+                  {signInCommand && runInTerminal ? (
+                    <MobileNativeChatNoticePill
+                      label={t('chat.notice.signIn', 'Sign in')}
+                      accessibilityHint={t(
+                        'chat.notice.signInHint',
+                        'Opens a terminal on the computer running this chat'
+                      )}
+                      primary
+                      onPress={() => runInTerminal(signInCommand)}
+                    />
+                  ) : null}
                   <MobileNativeChatNoticePill
-                    label={t('chat.notice.signIn', 'Sign in')}
-                    accessibilityHint={t(
-                      'chat.notice.signInHint',
-                      'Opens a terminal on the computer running this chat'
-                    )}
-                    primary
-                    onPress={() => runInTerminal(signInCommand)}
+                    label={t('bots.firstScreen.tryAgain', 'Try again')}
+                    Icon={RotateCcw}
+                    disabled={asking || !client}
+                    onPress={tryAgain}
                   />
-                ) : null}
-                <MobileNativeChatNoticePill
-                  label={t('bots.firstScreen.tryAgain', 'Try again')}
-                  Icon={RotateCcw}
-                  disabled={asking || !client}
-                  onPress={tryAgain}
+                </View>
+              }
+            />
+          ) : null}
+        </ListGroup>
+        {rows.length > 0 ? (
+          <>
+            <SectionHeader
+              title={
+                reading || !failed
+                  ? t('bots.firstScreen.reading', 'Getting to know your setup…')
+                  : t('bots.firstScreen.read', 'Getting to know your setup')
+              }
+            />
+            <ListGroup separatorInset={LIST_LEADING_INSET} style={styles.group}>
+              {rows.map((row) => (
+                <ListRow
+                  key={row.area}
+                  title={firstLookRowText(row, t)}
+                  leading={<LookMark state={row.state} />}
                 />
-              </View>
-            }
-          />
+              ))}
+            </ListGroup>
+          </>
         ) : null}
-      </ListGroup>
-      {rows.length > 0 ? (
-        <>
-          <SectionHeader
-            title={
-              reading || !failed
-                ? t('bots.firstScreen.reading', 'Getting to know your setup…')
-                : t('bots.firstScreen.read', 'Getting to know your setup')
-            }
-          />
-          <ListGroup separatorInset={LIST_LEADING_INSET} style={styles.group}>
-            {rows.map((row) => (
-              <ListRow
-                key={row.area}
-                title={firstLookRowText(row, t)}
-                leading={<LookMark state={row.state} />}
-              />
-            ))}
-          </ListGroup>
-        </>
-      ) : null}
-    </ScrollView>
+      </ScrollView>
+      <SetupMail after={after} />
+    </>
+  )
+}
+
+/** Other agents' waiting mail under setup: outside the chat's list, so at most half the screen and
+ *  scrolling on its own; its rows read their place from this scroller, not the list. */
+function SetupMail({ after }: { after: React.ReactNode }): React.JSX.Element | null {
+  return after ? <SetupMailScroller after={after} /> : null
+}
+
+/** Mounts with its scroller, so a scroller that empties and comes back starts its place afresh. */
+function SetupMailScroller({ after }: { after: React.ReactNode }): React.JSX.Element {
+  const [viewport] = useState(() => createMobileNativeChatTailViewport(true))
+  // Its own open-state store: rows scrolled away drop their card and keep it.
+  const disclosures = useMobileNativeChatDisclosures('bot-setup-mail')
+  return (
+    <MobileFooterRowsScrollerContext.Provider value={viewport}>
+      <ScrollView
+        style={styles.mail}
+        // A tap on a row's action acts with the composer's keyboard up, as in the transcript.
+        keyboardShouldPersistTaps="handled"
+        onScroll={(event) => viewport.record(event.nativeEvent)}
+        scrollEventThrottle={32}
+        onContentSizeChange={(_width, height) => viewport.contentResized(height)}
+        onLayout={(event) => viewport.laidOut(event.nativeEvent.layout.height)}
+      >
+        <MobileNativeChatDisclosureContext.Provider value={disclosures}>
+          {after}
+        </MobileNativeChatDisclosureContext.Provider>
+      </ScrollView>
+    </MobileFooterRowsScrollerContext.Provider>
   )
 }
 
 const styles = themedStyleSheet(() => ({
   root: { flex: 1 },
+  mail: { flexGrow: 0, maxHeight: '50%' },
   actions: { flexDirection: 'row', gap: spacing.sm },
   // On the chat's own background, not a sheet's, so a step above it in both themes.
   group: { backgroundColor: colors.bgRaised },

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { BrowserTarget } from '../rpc-param-primitives'
 import {
   isValidBrowserAnnotationViewportBridgeMarkers,
@@ -6,7 +7,7 @@ import {
   type BrowserAnnotationViewportBridgeMarker
 } from '../../browser/annotations/browser-annotation-viewport-bridge'
 
-const finite = z.number().finite()
+const finite = lazyZodSchema(() => z.number().finite())
 
 export const GrabSetMode = BrowserTarget.extend({
   enabled: z.boolean()

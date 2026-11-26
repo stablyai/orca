@@ -193,6 +193,11 @@ export const ptySessionControlApi = {
       keepHistory: opts?.keepHistory ?? false,
       replaced: opts?.replaced ?? false
     }),
+  sleepAdmitted: (
+    id: string,
+    paneKey: string
+  ): Promise<{ admitted: boolean; terminalHandle: string | null }> =>
+    ipcRenderer.invoke('pty:sleepAdmitted', { id, paneKey }),
   listSessions: (
     scope?: PtySessionListScope,
     admission?: ResourceViewAdmission

@@ -4,6 +4,7 @@ import { useAppStore } from '@/store/index'
 import { useVisibleWorktreeDiffComments } from '../../../diff-comments/use-visible-worktree-diff-comments'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { FloatingSplitTabCloseButton } from '@/components/floating-terminal/workspace/floating-split-tab-close-button'
 import EditorViewToggle, {
   CSV_VIEW_MODE_METADATA,
   CUSTOM_EDITOR_SOURCE_METADATA,
@@ -29,6 +30,8 @@ const NO_CUSTOM_EDITOR_TITLES: Readonly<Record<CustomEditorToggleValue, string>>
 
 type EditorPanelHeaderProps = {
   activeFile: OpenFile
+  /** The tab showing this file; a floating split closes it from here. */
+  viewStateId: string
   copiedPathVisible: boolean
   isSingleDiff: boolean
   isDiffSurface: boolean
@@ -66,6 +69,7 @@ type EditorPanelHeaderProps = {
 
 export function EditorPanelHeader({
   activeFile,
+  viewStateId,
   copiedPathVisible,
   isSingleDiff,
   isDiffSurface,
@@ -356,6 +360,7 @@ export function EditorPanelHeader({
         onToggleMarkdownFrontmatter={onToggleMarkdownFrontmatter}
         onExportMarkdownToPdf={onExportMarkdownToPdf}
       />
+      <FloatingSplitTabCloseButton worktreeId={activeFile.worktreeId} tabId={viewStateId} />
     </div>
   )
 }

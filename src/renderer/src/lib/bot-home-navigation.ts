@@ -9,6 +9,7 @@ import {
   activateStructuredAgentSessionById,
   activateStructuredAgentSessionTabOnOwner
 } from './agent-session/structured-agent-session-tab-activation'
+import { cancelPendingBotThreadOpen } from './agent-session/open/bot-thread-open-lifecycle'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { structuredAgentSessionTabId } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { appendNativeChatDraftCache } from '@/components/native-chat/drafts/native-chat-draft-views'
@@ -47,6 +48,7 @@ export async function openBotHomeTab(
     prepareDraft?: (sessionId: string) => () => void
   }
 ): Promise<boolean> {
+  cancelPendingBotThreadOpen()
   // Home exists before the page opens, so the page lands on it rather than on a new terminal.
   const chatSessionId = await openBotChat(bot).catch((error: unknown) => {
     if (options?.destination === 'composer') {

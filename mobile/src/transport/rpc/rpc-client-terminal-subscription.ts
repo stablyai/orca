@@ -59,8 +59,11 @@ export function buildStreamUnsubscribe(
       ? { method: 'agentSession.unsubscribe', params: { sessionId, subscriptionId: requestId } }
       : null
   }
-  if (method === 'orchestration.workerApprovalsSubscribe') {
-    // The host names each approvals stream by the request that opened it.
+  if (
+    method === 'orchestration.workerApprovalsSubscribe' ||
+    method === 'orchestration.workerDockSubscribe'
+  ) {
+    // The host names each stream by the request that opened it; this release ends either kind.
     return requestId
       ? {
           method: 'orchestration.workerApprovalsUnsubscribe',

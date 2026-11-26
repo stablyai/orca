@@ -5,7 +5,7 @@ import { ActionSheetModal, type ActionSheetAction } from '../components/sheets/A
 import { TransientToast, useTransientToast } from '../components/feedback/TransientToast'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useClipboardWriter } from '../platform/clipboard/clipboard'
-import { normalizeExecutionHostId } from '../../../src/shared/execution-host/execution-host'
+import { homeAgentRelayHostId } from '../worktree/catalog/home-worktree-info'
 import { serverUpdateNeededNotice } from '../host-route-notice'
 import { readConnectionStatusProbe } from '../transport/connection/runtime-status-probe'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
@@ -37,7 +37,7 @@ export function useAgentListRowActions(
 
   const open = useCallback(
     (row: AgentListRow, withPane: boolean) => {
-      const executionHost = normalizeExecutionHostId(row.entry.hostId) ?? undefined
+      const executionHost = homeAgentRelayHostId(row.entry)
       let routeHost
       if (executionHost?.startsWith('runtime:')) {
         const client = clients.find((entry) => entry.hostId === row.hostId)?.client ?? null
@@ -86,7 +86,7 @@ export function useAgentListRowActions(
     () => ({
       onOpen: (row) => {
         // Like desktop opening a pane; a refusal here isn't worth interrupting the open.
-        if (row.unread && !row.entry.hostId?.startsWith('runtime:')) {
+        if (row.unread) {
           void applyActivity([row], { unread: false })
         }
         open(row, true)

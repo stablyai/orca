@@ -34,6 +34,7 @@ describe('designated Commander bot', () => {
       deleteFolderWorkspace: async () => {},
       deleteBotAutomations: async () => {},
       botsRoot: () => join(testState.dir, 'bots'),
+      slackIconsRoot: () => join(testState.dir, 'slack-icons'),
       filesystem: localBotHomeFilesystem
     })
   })

@@ -1,6 +1,7 @@
 import { noteEnvironmentStoreWrite } from './runtime-environment-store-write-generation'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { writeSecureJsonFileWithinLimit } from '../../secure-storage/bounded-secure-json-file'
 import {
   readEnvironmentRegistryFile,
@@ -21,14 +22,16 @@ export const MAX_WSL_HOST_DEPLOYMENTS_FILE_BYTES = 256 * 1024
 
 /** A managed orcad in a WSL distro. The environment's name is its label; runtime state lives elsewhere. */
 /** A Remove that could not prove the host's server stopped (E11); the host stays until one does. */
-export const WslHostPendingStopSchema = z.object({
-  since: z.number().finite(),
-  reason: z.string().max(4_096),
-  /** `reason`'s WSL_HOST_STATUS_DETAIL_COPY code; older builds drop it and show `reason`. */
-  reasonCode: z.string().max(128).optional(),
-  reasonParams: z.record(z.string(), z.union([z.string().max(4_096), z.number()])).optional(),
-  verdict: z.enum(['live', 'unverifiable'])
-})
+export const WslHostPendingStopSchema = lazyZodSchema(() =>
+  z.object({
+    since: z.number().finite(),
+    reason: z.string().max(4_096),
+    /** `reason`'s WSL_HOST_STATUS_DETAIL_COPY code; older builds drop it and show `reason`. */
+    reasonCode: z.string().max(128).optional(),
+    reasonParams: z.record(z.string(), z.union([z.string().max(4_096), z.number()])).optional(),
+    verdict: z.enum(['live', 'unverifiable'])
+  })
+)
 
 export type WslHostPendingStop = z.infer<typeof WslHostPendingStopSchema>
 
@@ -48,10 +51,12 @@ export const WslHostDeploymentRecordSchema = OrcadWslDeploymentLinkSchema.extend
 export type WslHostDeploymentRecord = z.infer<typeof WslHostDeploymentRecordSchema>
 
 // Records stay opaque so one bad or newer-kind record cannot hide the rest.
-const EnvelopeSchema = z.object({
-  version: z.literal(1),
-  deployments: z.array(z.unknown())
-})
+const EnvelopeSchema = lazyZodSchema(() =>
+  z.object({
+    version: z.literal(1),
+    deployments: z.array(z.unknown())
+  })
+)
 
 type StoredRecord = {
   environmentId: string | undefined

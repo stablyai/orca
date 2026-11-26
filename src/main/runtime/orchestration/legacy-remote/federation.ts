@@ -33,6 +33,7 @@ import { assertWorkerStartTaskSpecWithinPromptBudget } from '../../rpc/methods/o
 import { prepareFederatedAttachmentAuthority } from './federation-attachment-authority'
 import { resolveRpcWorkspaceCreatorProvenance } from '../../rpc/callers/workspace-creator-context'
 import { claimTerminalForRemoteAttach } from '../db/worker-dispatch/worker-terminal-claim'
+import { refuseUninstalledWorkerAgent } from '../../rpc/methods/orchestration/worker/start/launch/worker-agent-host-preflight'
 
 export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
   defineOrchestrationMethod({
@@ -60,18 +61,15 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
         )
       }
       const readinessTimeoutMs = resolveWorkerStartReadinessTimeoutMs(params.timeoutMs)
-      if (params.worktree === 'current' || params.worktree === 'new-child') {
+      const { worktree: requestedWorktree } = params
+      if (requestedWorktree === 'current' || requestedWorktree === 'new-child') {
         throw new OrchestrationError(
           'invalid_argument',
           'A remote worker requires an exact existing worktree or new-top-level.'
         )
       }
-      const createsWorktree = params.worktree === 'new-top-level'
-      const targetLabel = workerStartTargetLabel({
-        ...params,
-        createsWorktree,
-        requestedWorktree: params.worktree
-      })
+      const createsWorktree = requestedWorktree === 'new-top-level'
+      const targetLabel = workerStartTargetLabel({ ...params, createsWorktree, requestedWorktree })
       const { agent, launch } = await refuseUnmatchedWorkerSelector(targetLabel, () =>
         prepareFederationWorkerLaunchOnHost({ params, createsWorktree, runtime })
       )
@@ -84,18 +82,18 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
           })
         )
       }
-
+      // The same installed-agent check as every start, before anything is created here.
+      const workspace = createsWorktree
+        ? undefined
+        : await runtime.showManagedTerminalWorkspace(requestedWorktree).catch(() => undefined)
+      const repoSelector = createsWorktree ? params.repo : workspace && `id:${workspace.repoId}`
+      await refuseUninstalledWorkerAgent(runtime, {
+        agent,
+        terminal: params.terminal,
+        repoSelector
+      })
       if (params.commanderProjectId) {
-        const repo = createsWorktree
-          ? params.repo
-          : `id:${(await runtime.showManagedTerminalWorkspace(params.worktree)).repoId}`
-        if (!repo) {
-          throw new OrchestrationError(
-            'invalid_argument',
-            'Commander placement requires a repository.'
-          )
-        }
-        await assertCommanderProject(runtime, params.commanderProjectId, repo)
+        await assertCommanderProject(runtime, params.commanderProjectId, repoSelector)
       }
       const db = runtime.getOrchestrationDb()
       // Synchronous through the insert, so a racing start on the same terminal is refused before any wait.
@@ -157,12 +155,13 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
         if (createsWorktree) {
           ;({ worktree, terminalHandle, terminalCreation } = await launchAgent())
         } else {
-          worktree = await runtime.showManagedTerminalWorkspace(params.worktree).catch(() => {
+          if (!workspace) {
             throw new OrchestrationError(
               'worktree_not_found_on_server',
-              `Worktree ${params.worktree} was not found on the selected worker server.`
+              `Worktree ${requestedWorktree} was not found on the selected worker server.`
             )
-          })
+          }
+          worktree = workspace
           effects.push(
             { kind: 'worktree', action: 'reused', id: worktree.id },
             { kind: 'setup', action: 'not_applicable', state: 'not_applicable' }
@@ -262,7 +261,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
               // Enforce the execution host's nesting cap using its own setting.
               canDispatchSubWorkers: (params.depth ?? 1) < runtime.getNestedWorkerMaxDepth(),
               subWorkersInOwnRun: true,
-              cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
+              ...runtime.getTerminalOrchestrationCliTarget(terminalHandle)
             })
           }
         }).finally(() => briefGuard?.dispose())

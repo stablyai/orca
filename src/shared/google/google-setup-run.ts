@@ -106,6 +106,13 @@ export const GoogleSetupRunSchema = z.object({
 })
 export type GoogleSetupRun = z.infer<typeof GoogleSetupRunSchema>
 
+/** Whether the run is still under way: anything that moves it, or offers to stop it, asks this. */
+export function googleSetupRunActive(
+  run: Pick<GoogleSetupRun, 'state'> | null | undefined
+): boolean {
+  return run?.state === 'running'
+}
+
 /** The step the run is on: the first one not done or skipped; null once every step is. */
 export function currentGoogleSetupStep(run: Pick<GoogleSetupRun, 'steps'>): GoogleSetupStep | null {
   return (
@@ -120,7 +127,7 @@ export function currentGoogleSetupStep(run: Pick<GoogleSetupRun, 'steps'>): Goog
  *  policy box, say) mustn't stop Orca from saving a key made meanwhile. */
 export function googleSetupAwaitsKey(run: Pick<GoogleSetupRun, 'state' | 'steps'>): boolean {
   const client = run.steps.client?.status
-  return run.state === 'running' && client !== 'done' && client !== 'skipped'
+  return googleSetupRunActive(run) && client !== 'done' && client !== 'skipped'
 }
 
 /** The Google Cloud page that creates OAuth clients and shows a new one's secret in its dialog. */

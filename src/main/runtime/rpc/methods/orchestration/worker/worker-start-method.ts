@@ -74,13 +74,13 @@ export async function startWorker(
   if (startParams.origin !== undefined && startParams.on) {
     throw new OrchestrationError(
       'invalid_argument',
-      'worker-start --item starts workers on this computer, where the item is. No effects were applied.',
+      "--item can't be combined with --on: worker-start --item starts workers on this computer, where the item is. No effects were applied.",
       { effectsApplied: false }
     )
   }
   const checked =
     startParams.origin !== undefined
-      ? await checkedWorkerOrigin(startParams.origin, ctx)
+      ? await checkedWorkerOrigin(startParams.origin, ctx, startFollowUp?.of)
       : undefined
   const prepared = await prepareWorkerStart(
     checked ? { ...startParams, origin: checked.origin } : startParams,

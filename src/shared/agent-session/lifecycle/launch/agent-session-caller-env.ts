@@ -32,12 +32,16 @@ export const SHARED_TOOL_PROCESS_BOT_FIELD = 'orcaBot'
 export const BOT_TOOLS_TOKEN_ENV = 'ORCA_BOT_TOOLS_TOKEN'
 export const COMMANDER_HOME_CAPABILITY_ENV = 'ORCA_COMMANDER_HOME_CAPABILITY'
 
+/** A non-bot session's key to the relay for its host's MCP servers; it names no bot. */
+export const MCP_TOKEN_ENV = 'ORCA_MCP_TOKEN'
+
 /** What names the calling chat or bot: a process other chats share must never carry one chat's. */
 export const CALLER_IDENTITY_ENV: readonly string[] = [
   ORCA_AGENT_SESSION_ID_ENV,
   'ORCA_TERMINAL_HANDLE',
   BOT_TOOLS_TOKEN_ENV,
-  COMMANDER_HOME_CAPABILITY_ENV
+  COMMANDER_HOME_CAPABILITY_ENV,
+  MCP_TOKEN_ENV
 ]
 
 export function readInjectedBotToken(

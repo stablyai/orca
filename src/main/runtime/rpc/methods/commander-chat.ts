@@ -23,9 +23,7 @@ export const COMMANDER_CHAT_OPEN = defineMethod({
     requireCommanderOwner(context)
     const { runtime } = context
     const bot = await runtime.bots.ensureCommander(async () => {
-      const choices = await hostBotAgentChoices(runtime)
-      const preferred = runtime.requireStore().getSettings().defaultTuiAgent
-      const agent = choices.find((candidate) => candidate === preferred) ?? choices[0]
+      const { defaultAgent: agent } = await hostBotAgentChoices(runtime)
       if (!agent) {
         throw new InvalidArgumentError(
           'Set up a chat agent such as Codex or Claude on this host, then open Commander again.'

@@ -11,6 +11,7 @@ import {
   PanelBottom,
   PanelRight,
   PenTool,
+  Plug,
   Server,
   SquareTerminal,
   Type
@@ -95,6 +96,7 @@ const CONTRIBUTION_ICON: Record<PluginContributionKind, React.ReactNode> = {
   panels: <PanelRight />,
   customEditors: <PenTool />,
   vmRecipes: <Server />,
+  mcpServers: <Plug />,
   newFiles: <FilePlus />,
   statusBarItems: <PanelBottom />
 }
@@ -247,6 +249,7 @@ function useContributionRowActions(
       case 'fonts':
       case 'customEditors':
       case 'vmRecipes':
+      case 'mcpServers':
       case 'statusBarItems':
         // Themes have "Use now" above; fonts are picked in Settings; the rest has nothing to try here.
         return null
@@ -282,7 +285,13 @@ export function PluginAddsSection({
   const source = plugin
     ? installedSource
     : summary
-      ? summaryContributionSource(summary, themePreview)
+      ? {
+          ...summaryContributionSource(summary, themePreview),
+          // The fetched manifest's servers are what install binds, so they show what will run.
+          ...(preview
+            ? { mcpServers: manifestContributionSource(preview.manifest).mcpServers }
+            : {})
+        }
       : preview
         ? manifestContributionSource(preview.manifest)
         : EMPTY_CONTRIBUTION_SOURCE

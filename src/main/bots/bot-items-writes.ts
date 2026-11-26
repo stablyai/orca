@@ -6,6 +6,7 @@ import {
   type BotItemActor,
   type BotItemCommentImage
 } from '../../shared/bots/bot-items'
+import type { BotRequestAsker } from '../../shared/bots/bot-acts-for'
 import { BotItemError } from './bot-item-error'
 import { BotItemsEdits } from './bot-items-edits'
 import { assertBotItemAttach } from './bot-items-tables'
@@ -61,6 +62,8 @@ export class BotItemsWrites extends BotItemsEdits {
     to: 'done' | 'canceled',
     note: string | undefined,
     actor: BotItemBotActor,
+    /** Whom the closing chat acts for, kept on the close. */
+    actsFor?: readonly BotRequestAsker[],
     now = Date.now()
   ): BotItemWriteOutcome {
     assertBotItemText('note', note)
@@ -71,7 +74,12 @@ export class BotItemsWrites extends BotItemsEdits {
       const item = this.requireItem(uid)
       this.requireOwnerWrite(item, actor)
       this.writeStatus(uid, to, null, actor, now, note ?? null)
-      const data = { from: item.status, to, ...(note ? { note } : {}) }
+      const data = {
+        from: item.status,
+        to,
+        ...(note ? { note } : {}),
+        ...(actsFor ? { actsFor } : {})
+      }
       const mail = mailsItemChat(item, actor)
       return { uid, eventId: this.appendEvent(uid, 'status', actor, data, mail, now) }
     })

@@ -200,6 +200,18 @@ export function managedServerOutcomeLabel(
       'Not done: a move onto this server is unfinished. Resume it first.'
     )
   }
+  if (code === 'orcad_outgoing_stop_incomplete') {
+    return t(
+      'auto.components.settings.managedServers.outcome.stopIncomplete',
+      'Not done: Orca couldn’t confirm the current server exited, so it did not start the update. Check orcad.log in the server’s install folder under ~/.orca-remote on the host before trying again.'
+    )
+  }
+  if (code === 'orcad_rollback_stop_incomplete') {
+    return t(
+      'auto.components.settings.managedServers.outcome.rollbackStopIncomplete',
+      'Not done: Orca couldn’t confirm the current server exited, so it did not roll back. Check orcad.log in the server’s install folder under ~/.orca-remote on the host before trying again.'
+    )
+  }
   if (result.outcome === 'deferred' || result.outcome === 'pending') {
     return t(
       'auto.components.settings.managedServers.outcome.deferred',

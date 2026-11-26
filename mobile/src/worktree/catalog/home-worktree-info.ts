@@ -1,11 +1,12 @@
 import type { AgentWorkingMode } from '../../../../src/shared/agent-status/contracts/agent-status-types'
+import type { ExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
 import type { RuntimeWorktreeAgentRow } from '../../../../src/shared/worktree/catalog/runtime-worktree-contracts'
 import type { WorkspaceLineage } from '../../../../src/shared/worktree/lineage-types'
 import type { Worktree } from '../workspace-list/workspace-list-types'
 import type { WorktreeCatalogSnapshot } from './worktree-catalog-snapshot-client'
 
 export type HomeWorktreeSummary = {
-  hostId?: string
+  hostId?: ExecutionHostId
   worktreeId: string
   repo: string
   branch: string
@@ -24,7 +25,7 @@ export type HomeWorktreeSummary = {
 
 /** One agent on a desktop, with the workspace it runs in. */
 export type HomeAgentEntry = Readonly<{
-  hostId?: string
+  hostId?: ExecutionHostId
   worktreeId: string
   workspaceName: string
   repo: string
@@ -32,9 +33,17 @@ export type HomeAgentEntry = Readonly<{
   agent: RuntimeWorktreeAgentRow
   /** Set when the agent is a bot's chat in its home: the row names and pictures the bot. */
   bot?: HomeAgentBot
+  /** Set when the agent runs on a server the desktop relays to, not on the desktop itself. */
+  executionHost?: Readonly<{ id: ExecutionHostId; label: string }>
 }>
 
 export type HomeAgentBot = Readonly<{ id: string; name: string; avatar: string | null }>
+
+export function homeAgentRelayHostId(entry: HomeAgentEntry): ExecutionHostId | undefined {
+  return (
+    entry.executionHost?.id ?? (entry.hostId?.startsWith('runtime:') ? entry.hostId : undefined)
+  )
+}
 
 export type HomeProjectWorktree = Pick<HomeWorktreeSummary, 'worktreeId' | 'repo' | 'hostId'>
 
@@ -60,7 +69,10 @@ export type HostWorktreeInfo = {
 }
 
 export function homeAgentEntries(
-  worktrees: readonly HomeWorktreeSummary[],
+  worktrees: readonly Pick<
+    HomeWorktreeSummary,
+    'worktreeId' | 'displayName' | 'repo' | 'branch' | 'agents' | 'hostId'
+  >[],
   botByHomeId: ReadonlyMap<string, HomeAgentBot> = new Map()
 ): HomeAgentEntry[] {
   return worktrees.flatMap((worktree) => {

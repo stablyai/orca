@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type * as Lineage from '../runtime/orchestration/addressing/session-lineage/structured-session-lineage'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { makeTestBot } from '../bots/bot.test-fixture'
-import { BotLaunchTools } from '../bots/bot-launch-tools'
+import { SessionMcpTools } from '../mcp-servers/session-mcp-tools'
 import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { COMMANDER_HOME_CAPABILITY_ENV } from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
@@ -165,10 +165,10 @@ it('withholds an in-flight reply after its chat was replaced', async () => {
 })
 
 it('keeps the Codex token off its snapshot environment, while Claude receives it only for this launch', () => {
-  const codex = BotLaunchTools.none.withCommanderCapability('codex', 'cap')
-  const claude = BotLaunchTools.none.withCommanderCapability('claude', 'cap')
+  const codex = SessionMcpTools.none.withCommanderCapability('codex', 'cap')
+  const claude = SessionMcpTools.none.withCommanderCapability('claude', 'cap')
   expect(codex.env).not.toHaveProperty(COMMANDER_HOME_CAPABILITY_ENV)
   expect(codex.commandEnv).toHaveProperty(COMMANDER_HOME_CAPABILITY_ENV, 'cap')
   expect(claude.env).toHaveProperty(COMMANDER_HOME_CAPABILITY_ENV, 'cap')
-  expect(BotLaunchTools.none.env).not.toHaveProperty(COMMANDER_HOME_CAPABILITY_ENV)
+  expect(SessionMcpTools.none.env).not.toHaveProperty(COMMANDER_HOME_CAPABILITY_ENV)
 })

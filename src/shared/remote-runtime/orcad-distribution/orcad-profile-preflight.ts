@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
 export const ORCAD_PROFILE_PREFLIGHT_FLAG = '--orcad-profile-state-preflight'
 export const ORCAD_STARTUP_PREFLIGHT_FLAG = '--orcad-startup-preflight'
@@ -14,17 +15,19 @@ export type OrcadPreflightRuntimeIdentity = {
   runtimeVersion: string
 }
 
-export const orcadProfilePreflightResponseSchema = z.object({
-  type: z.literal('orca_profile_state_ready'),
-  nonce: z.string().uuid(),
-  runtime: z.enum(ORCAD_PREFLIGHT_RUNTIMES),
-  runtimeVersion: z.string().min(1),
-  artifactVersion: z.string().regex(/^\d+\.\d+\.\d+\+[a-f0-9]{12}$/),
-  sqliteVersion: z.string().min(1),
-  revision: z.number().int().positive(),
-  /** Daemon generations alive under the served data root, when asked; null when unverifiable. */
-  liveDaemonProtocols: z.array(z.number().int().positive()).nullable().optional()
-})
+export const orcadProfilePreflightResponseSchema = lazyZodSchema(() =>
+  z.object({
+    type: z.literal('orca_profile_state_ready'),
+    nonce: z.string().uuid(),
+    runtime: z.enum(ORCAD_PREFLIGHT_RUNTIMES),
+    runtimeVersion: z.string().min(1),
+    artifactVersion: z.string().regex(/^\d+\.\d+\.\d+\+[a-f0-9]{12}$/),
+    sqliteVersion: z.string().min(1),
+    revision: z.number().int().positive(),
+    /** Daemon generations alive under the served data root, when asked; null when unverifiable. */
+    liveDaemonProtocols: z.array(z.number().int().positive()).nullable().optional()
+  })
+)
 
 export type OrcadProfilePreflightResponse = z.infer<typeof orcadProfilePreflightResponseSchema>
 

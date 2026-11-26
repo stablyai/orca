@@ -23,6 +23,7 @@ export function createDesktopOrcaAccountService(
         redeclarePairedDesktopAccounts()
         broadcastOrcaProfileAuthStatusChanged()
       },
+      onSignedIn: () => mainProcessConnectorCloud()?.signedIn(),
       // Only sign-out fences paired phones; reasonless quit/relaunch must not look like logout.
       onBeforeSignOut: () => {
         state.core.relayHost?.signOutStarted()

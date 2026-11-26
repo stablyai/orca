@@ -17,10 +17,7 @@ import {
 } from './bot-cards/MobileBotCardFrame'
 import { useMobileBotOfferAnswer } from './bot-cards/use-mobile-bot-offer-answer'
 import { MobileNativeChatNoticePill } from './notices/MobileNativeChatNoticePill'
-import {
-  MobileGoogleMark,
-  MobileConnectorSourceIcon
-} from '../../../bots/MobileConnectorSourceIcon'
+import { MobileConnectorLogo } from '../../../bots/MobileConnectorSourceIcon'
 import type { Translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { colors, typography } from '../../../theme/mobile-theme'
@@ -140,13 +137,7 @@ export function MobileNativeChatConnectorOfferRow({
   )
   return (
     <MobileBotCardFrame
-      avatar={
-        offer.source === 'google' ? (
-          <MobileGoogleMark />
-        ) : (
-          <MobileConnectorSourceIcon source={offer.source} />
-        )
-      }
+      avatar={<MobileConnectorLogo source={offer.source} />}
       heading={t('bots.connectorOffer.heading', 'Connect a service')}
       title={offer.workspace ? `${name} · ${offer.workspace}` : name}
       meta={connected ? null : meta(connectorDescription(t, offer.source))}

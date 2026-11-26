@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { AI_VAULT_AGENTS } from './ai-vault-types'
 import {
   AI_VAULT_SESSION_DELETE_REJECTION_CODES,
@@ -7,16 +8,18 @@ import {
 } from './ai-vault-session-deletion'
 import type { RuntimeRpcResponse } from '../../remote-runtime/rpc/runtime-rpc-envelope'
 
-const AiVaultDeleteSessionResultSchema = z.union([
-  z.object({ outcome: z.literal('deleted') }),
-  z.object({
-    outcome: z.literal('rejected'),
-    agent: z.enum(AI_VAULT_AGENTS),
-    // A newer host may add codes; every rejection renders as one failure message.
-    reason: z.enum(AI_VAULT_SESSION_DELETE_REJECTION_CODES).catch('invalid-path')
-  }),
-  z.object({ outcome: z.literal('failed'), agent: z.enum(AI_VAULT_AGENTS), error: z.string() })
-])
+const AiVaultDeleteSessionResultSchema = lazyZodSchema(() =>
+  z.union([
+    z.object({ outcome: z.literal('deleted') }),
+    z.object({
+      outcome: z.literal('rejected'),
+      agent: z.enum(AI_VAULT_AGENTS),
+      // A newer host may add codes; every rejection renders as one failure message.
+      reason: z.enum(AI_VAULT_SESSION_DELETE_REJECTION_CODES).catch('invalid-path')
+    }),
+    z.object({ outcome: z.literal('failed'), agent: z.enum(AI_VAULT_AGENTS), error: z.string() })
+  ])
+)
 
 /** The owning host validates the path itself, so only the row identity travels. */
 export function runtimeAiVaultDeleteSessionParams(

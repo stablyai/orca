@@ -2,7 +2,7 @@ import type { RuntimeHostStatusSnapshot } from '../../../../shared/remote-runtim
 
 /** Reports a server only when it newly turns verified; repeat publishes of a healthy server stay silent. */
 export function trackRuntimeEnvironmentVerifiedTransitions(
-  listener: (environmentId: string) => void
+  listener: (environmentId: string, snapshot: RuntimeHostStatusSnapshot) => void
 ): (snapshot: RuntimeHostStatusSnapshot) => void {
   const verified = new Set<string>()
   return (snapshot) => {
@@ -11,7 +11,7 @@ export function trackRuntimeEnvironmentVerifiedTransitions(
       verified.delete(environmentId)
     } else if (!verified.has(environmentId)) {
       verified.add(environmentId)
-      listener(environmentId)
+      listener(environmentId, snapshot)
     }
   }
 }

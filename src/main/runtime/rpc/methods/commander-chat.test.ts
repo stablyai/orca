@@ -25,9 +25,8 @@ vi.mock(
 )
 
 function open(caller: RpcContext['caller']) {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: opening Commander only calls these two runtime ports; provider discovery is replaced above.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the bot port is the only runtime dependency after provider discovery is mocked.
   const runtime = {
-    requireStore: () => ({ getSettings: () => ({ defaultTuiAgent: 'codex' }) }),
     bots: {
       ensureCommander: async (choose: () => Promise<BotAgent>) => ({
         ...makeTestBot(),
@@ -47,11 +46,14 @@ describe('Commander Chat owner entry', () => {
     await expect(open(undefined)).rejects.toThrow('authenticated')
   })
   it('selects the configured runnable provider from a paired phone and reports a host without one', async () => {
-    vi.mocked(hostBotAgentChoices).mockResolvedValueOnce(['claude', 'codex'])
+    vi.mocked(hostBotAgentChoices).mockResolvedValueOnce({
+      agents: ['claude', 'codex'],
+      defaultAgent: 'codex'
+    })
     await expect(open({ kind: 'paired-device', deviceId: 'phone' })).resolves.toMatchObject({
       bot: { agent: 'codex' }
     })
-    vi.mocked(hostBotAgentChoices).mockResolvedValueOnce([])
+    vi.mocked(hostBotAgentChoices).mockResolvedValueOnce({ agents: [], defaultAgent: undefined })
     await expect(open({ kind: 'desktop' })).rejects.toThrow('Set up a chat agent')
   })
 })

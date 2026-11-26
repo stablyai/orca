@@ -83,7 +83,7 @@ export function commanderProjects(
       const project = projectFor(
         getRepoIdFromWorktreeId(row.entry.worktreeId),
         row.entry.repo,
-        row.entry.hostId
+        row.entry.executionHost?.id ?? row.entry.hostId
       )
       project.live = host.live
       project.rows.push(row)

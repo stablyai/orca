@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
+import { cn } from '@/lib/class-names'
 import {
   chatProviderAgents,
   managedRuntimeChatAgents,
@@ -106,15 +107,23 @@ function ChatAgentRow({
   actions = null
 }: ChatAgentRowProps & { line?: React.ReactNode; actions?: React.ReactNode }): React.JSX.Element {
   return (
-    <div data-settings-row="" className="flex items-center justify-between gap-4 py-3">
-      <div className="flex min-w-0 items-center gap-3">
+    <div
+      data-settings-row=""
+      className={cn('flex items-center justify-between gap-4 py-3', line && 'flex-wrap gap-y-2')}
+    >
+      <div className={cn('flex min-w-0 items-center gap-3', line && 'grow basis-40')}>
         <AgentIcon agent={agent} size={16} />
-        <div className="min-w-0">
+        <div className={cn('min-w-0', line && 'flex-1')}>
           <div className="text-sm font-medium">{label}</div>
           {line ? <div className="mt-0.5">{line}</div> : null}
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-2">
+      <div
+        className={cn(
+          'flex shrink-0 items-center gap-2',
+          line && 'ms-auto max-w-full flex-wrap justify-end'
+        )}
+      >
         {actions}
         <AgentOpensAsControl label={label} opensAs={opensAs} />
       </div>
