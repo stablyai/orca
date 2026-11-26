@@ -33,24 +33,19 @@ function publishLanguageDetection(detection: UiLanguageDetection): UiLanguageDet
   return detection
 }
 
-// Readiness waits at most a second; a later answer still applies and repaints dates once.
-async function loadOsDateTimeRegion(): Promise<void> {
+// Asked at load, before settings, so it lands before dates are drawn; a later answer repaints them once.
+// Readiness never waits on it.
+function loadOsDateTimeRegion(): void {
   try {
-    const region = window.api?.app?.getOsDateTimeRegion?.()
-    if (region) {
-      await withTimeout(
-        region.then(setRendererOsDateTimeRegion, () => undefined),
-        1000,
-        undefined
-      )
-    }
+    void window.api?.app?.getOsDateTimeRegion?.().then(setRendererOsDateTimeRegion, () => undefined)
   } catch {
     // Older bridges keep dates in the UI language's own conventions.
   }
 }
 
-// Asked at load, not after settings, so it usually lands before any date is drawn.
-const osDateTimeRegionLoad = isWebClientLocation() ? null : loadOsDateTimeRegion()
+if (!isWebClientLocation()) {
+  loadOsDateTimeRegion()
+}
 
 export function initializeLanguageDetection(): Promise<UiLanguageDetection> {
   const currentDetection = useLanguageReadiness.getState().detection
@@ -80,7 +75,6 @@ export function initializeLanguageDetection(): Promise<UiLanguageDetection> {
       } catch {
         // Older local bridges do not provide the optional snapshot.
       }
-      await osDateTimeRegionLoad
     }
     detection ??= useLanguageReadiness.getState().detection ?? browserDetection
     return publishLanguageDetection(detection)
