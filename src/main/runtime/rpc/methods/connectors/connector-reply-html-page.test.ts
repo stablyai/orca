@@ -1,6 +1,4 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { dispatch, type HandlerContext } from '../../../../../cli/dispatch/dispatch'
-import { RuntimeClientError } from '../../../../../cli/runtime/connection/types'
 import type { ConnectorCloudFeature } from '../../../../../shared/connector-cloud-features'
 import * as htmlFences from '../../../../../shared/markdown/html-document-fences'
 import type { StructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-host'
@@ -14,12 +12,11 @@ const SESSION_ID = '55555555-5555-4555-8555-555555555555'
 
 afterEach(() => {
   setStructuredAgentSessionHost(null)
-  vi.unstubAllEnvs()
   vi.restoreAllMocks()
 })
 
 it.each([20, 200])(
-  'skips repeat discovery for ordinary replies and unsupported clouds (%i bots)',
+  'checks for HTML attachments only for eligible bot replies (%i bots)',
   async (botCount) => {
     const bots = Array.from({ length: botCount }, (_, index) => ({
       id: `bot-${index}`,
@@ -31,7 +28,7 @@ it.each([20, 200])(
     let linkedToBot = true
     let sessionReads = 0
     let rosterReads = 0
-    const features = new Set<ConnectorCloudFeature>(['actions', 'files.direct'])
+    const features = new Set<ConnectorCloudFeature>(['actions', 'files.direct', 'reply.files'])
     const host = {
       deps: {
         store: {
@@ -44,8 +41,7 @@ it.each([20, 200])(
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this route only reads the conversation store from the host.
     setStructuredAgentSessionHost(host as unknown as StructuredAgentSessionHost)
-    const replyIds: string[] = []
-    const stagedNames: unknown[] = []
+    const inlinePosts: { replyId: string; text: string }[] = []
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       bots: {
@@ -65,8 +61,8 @@ it.each([20, 200])(
       }),
       getConnectorCloud: () => ({
         cloudFeatures: () => features,
-        reply: async ({ replyId }: { replyId: string }) => {
-          replyIds.push(replyId)
+        reply: async ({ replyId, text }: { replyId: string; text: string }) => {
+          inlinePosts.push({ replyId, text })
           return { ok: true, value: { status: 'posted' } }
         }
       })
@@ -76,71 +72,50 @@ it.each([20, 200])(
       runtime: runtime as unknown as OrcaRuntimeService,
       methods: CONNECTOR_METHODS
     })
-    const reply = (id: string, text: string, pagesAsFiles?: true) =>
+    const reply = (replyId: string, params: { text: string; pagesAsFiles?: true }) =>
       dispatcher.dispatch({
-        id,
+        id: replyId,
         authToken: 'test-token',
         method: 'connector.reply',
-        params: { sessionId: SESSION_ID, replyId: id, text, pagesAsFiles }
+        params: { sessionId: SESSION_ID, replyId, ...params }
       })
 
-    expect(await reply('old-cloud', HTML, true)).toMatchObject({
+    const split = vi.spyOn(htmlFences, 'splitHtmlDocumentFences')
+    const prose = 'The report is ready.\n```ts\nconst format = "html"\n```'
+    expect(await reply('prose', { text: prose })).toMatchObject({
       ok: true,
       result: { status: 'posted' }
     })
-    features.add('reply.files')
-    vi.stubEnv('ORCA_AGENT_SESSION_ID', SESSION_ID)
-    vi.stubEnv('ORCA_PANE_KEY', undefined)
-    vi.stubEnv('ORCA_AGENT_PANE', undefined)
-    const output = vi.spyOn(console, 'log').mockImplementation(() => {})
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the CLI uses only call for this command.
-    const client = {
-      call: async (method: string, params: unknown) => {
-        if (method === 'connector.act') {
-          stagedNames.push(params)
-          throw new Error('staging unavailable')
-        }
-        const response = await dispatcher.dispatch({
-          id: 'cli',
-          authToken: 'test-token',
-          method,
-          params
-        })
-        if (!response.ok) {
-          throw new RuntimeClientError(response.error.code, response.error.message)
-        }
-        return response
-      }
-    } as unknown as HandlerContext['client']
-    await dispatch(['bot', 'reply'], {
-      client,
-      cwd: process.cwd(),
-      json: false,
-      flags: new Map([['text', 'The report is ready.\n```ts\nconst format = "html"\n```']])
-    })
-    expect(output).toHaveBeenCalledWith('Posted to the thread.')
-    expect({ sessionReads, rosterReads }).toEqual({ sessionReads: 0, rosterReads: 2 })
+    expect({ sessionReads, rosterReads }).toEqual({ sessionReads: 0, rosterReads: 1 })
+    expect(split).not.toHaveBeenCalled()
 
-    await dispatch(['bot', 'reply'], {
-      client,
-      cwd: process.cwd(),
-      json: false,
-      flags: new Map([['text', HTML]])
+    features.delete('reply.files')
+    expect(await reply('old-cloud', { text: HTML, pagesAsFiles: true })).toMatchObject({
+      ok: true,
+      result: { status: 'posted' }
     })
-    expect(stagedNames).toMatchObject([{ verb: 'reply', args: { upload: { name: 'page.html' } } }])
+    expect({ sessionReads, rosterReads }).toEqual({ sessionReads: 0, rosterReads: 2 })
+    expect(split).not.toHaveBeenCalled()
+
+    features.add('reply.files')
+    expect(await reply('bot-page', { text: HTML, pagesAsFiles: true })).toMatchObject({
+      ok: false,
+      error: { code: 'html_document_as_file' }
+    })
+    expect(split).toHaveBeenCalledWith(HTML)
+    split.mockClear()
 
     linkedToBot = false
     sessionWorkspaceId = 'folder:other-home'
-    const split = vi.spyOn(htmlFences, 'splitHtmlDocumentFences')
-    try {
-      expect(await reply('non-bot', HTML, true)).toMatchObject({
-        ok: true,
-        result: { status: 'posted' }
-      })
-      expect(split).not.toHaveBeenCalled()
-    } finally {
-      split.mockRestore()
-    }
-    expect(replyIds).toEqual(['old-cloud', expect.any(String), expect.any(String), 'non-bot'])
+    expect(await reply('non-bot', { text: HTML, pagesAsFiles: true })).toMatchObject({
+      ok: true,
+      result: { status: 'posted' }
+    })
+    expect(split).not.toHaveBeenCalled()
+    expect(inlinePosts).toEqual([
+      { replyId: 'prose', text: prose },
+      { replyId: 'old-cloud', text: HTML },
+      { replyId: 'non-bot', text: HTML }
+    ])
   }
 )
