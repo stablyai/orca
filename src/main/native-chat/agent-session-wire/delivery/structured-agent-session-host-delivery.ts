@@ -39,10 +39,7 @@ import {
   retireStructuredAgentSessionChildOnOtherAccount
 } from './structured-agent-session-outgrown-retirement'
 import { closeWhatTheUserClosed } from '../structured-agent-session-user-closed-sends'
-import {
-  keptOpenProvableOwner,
-  recoverStructuredAgentSessionKeptOpen
-} from '../host/structured-agent-session-kept-at-open'
+import { recoverStructuredAgentSessionKeptOpen } from '../host/structured-agent-session-kept-at-open'
 import { StructuredAgentSessionKeptOpens } from './structured-agent-session-kept-open-reconciler'
 import type { StructuredAgentSessionAcquireAborts } from '../startup/structured-agent-session-acquire-aborts'
 import type { StructuredAgentSessionStopEnding } from '../termination/structured-agent-session-host-stop-event'
@@ -205,10 +202,10 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     sessions,
     serialize: input.serialize,
     trackStart: input.trackStart,
-    owner: (id) => keptOpenProvableOwner(deps.store.getConversation(id)),
+    record: (id) => deps.store.getConversation(id) ?? null,
     fence: (id) => deps.store.getConversation(id)?.currentFence,
     settle: async (id, open, fence, openedSince) => {
-      await settleGoneStructuredAgentSessionGeneration(deps, id, open, fence)
+      await settleGoneStructuredAgentSessionGeneration(deps, id, open)
       await recoverStructuredAgentSessionKeptOpen(open.journal, fence, openedSince)
     },
     logger: deps.logger

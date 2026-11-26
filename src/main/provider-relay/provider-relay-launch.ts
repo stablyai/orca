@@ -13,6 +13,4 @@ export type ProviderRelayLaunch = {
   only?: 'spawn' | 'reattach'
   /** Session state the daemon keeps for the next attach; only a daemon that can keep it relays. */
   keep?: ProviderRelayKeepSpec
-  /** A reattached agent closed during quit (its start given up) goes back to the daemon instead. */
-  handsOffOnQuit?: true
 }

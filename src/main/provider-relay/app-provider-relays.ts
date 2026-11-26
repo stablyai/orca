@@ -7,25 +7,36 @@ export {
   keptRunningProviderRelayPid,
   providerRelayKeptFromLastRun,
   providerRelayChatsIdleStoppedThisRun,
-  liveKeptProviderRelayChats as liveProviderRelayChats,
-  providerRelayInventoryCompleted,
-  providerRelayKeptUnverified,
+  providerRelayRunMayContinue,
+  providerRelayRunUnknown,
   registerReattachableProviderRelayAgent
 } from './provider-relay-launch-inventory'
 import {
-  dropListedProviderRelay,
   forgetKeptProviderRelay,
   rememberKeptProviderRelay,
   keptProviderRelayAttachable,
+  keptProviderRelayUnread,
   providerRelayAgentOpensEnded,
   noteProviderRelayReattachedFromLastRun,
   keptProviderRelay,
   listKeptProviderRelays,
-  recheckKeptProviderRelay,
-  providerRelayKeptUnverified,
-  providerRelayMayKeep,
-  providerRelayInventoryComplete as inventoryComplete
+  providerRelayMayKeep
 } from './provider-relay-launch-inventory'
+import { providerRelayRoute } from './provider-relay-route'
+import { providerRelayRunGate } from './provider-relay-run-liveness'
+import {
+  forgetProviderRelayRunPlacement,
+  noteProviderRelayRunPlacement,
+  providerRelayRunIsRelayed
+} from './provider-relay-run-placements'
+export { installProviderRelayRoute, type ProviderRelayRoute } from './provider-relay-route'
+export {
+  installProviderRelayRunGate,
+  providerRelayRunLiveness,
+  type ProviderRelayRunLiveness,
+  type ProviderRelayRunRecord
+} from './provider-relay-run-liveness'
+export { takeProviderRelayRunPlacement } from './provider-relay-run-placements'
 import {
   KeptProviderRelayEndedError,
   KeptProviderRelayUnreachableError,
@@ -41,17 +52,6 @@ import { RelayedProviderChild } from './relayed-provider-child'
 import { daemonReadsFolder, providerRelaySpawnSpec } from './provider-relay-spawn-request'
 import { ProviderRelayCarriedWork } from './provider-relay-carried-work'
 import { relayedManagedProcess } from './relayed-managed-process'
-
-/** Desktop composition installs this on macOS and Linux; anywhere else chats launch as before. */
-export type ProviderRelayRoute = {
-  /** The daemon this app launched or adopted for its own bundle; the only one new chats go to. */
-  current: () => Promise<DaemonClient | null>
-  /** Every daemon generation, so relays kept by an older one are found at launch too. */
-  all: () => Promise<DaemonClient[]>
-  appVersion: string
-  /** The user's native-chat idle stop, read at each attach and detach. */
-  idleStopMs: () => number | null
-}
 
 export type { ProviderRelayWorkMarkers } from './provider-relay-agent-markers'
 
@@ -76,7 +76,6 @@ const CONNECT_TIMEOUT_MS = 1_000
 /** How long one chat's hand-back waits for its paused reader, apart from quit's shared deadline. */
 const KEEP_READER_WAIT_MS = 2_000
 
-let route: ProviderRelayRoute | null = null
 /** Every relay this app is attached to, by chat; quit detaches these instead of closing them. */
 const attached = new Map<string, RelayedProviderChild>()
 const markersFor = new WeakMap<RelayedProviderChild, ProviderRelayWorkMarkers>()
@@ -89,11 +88,7 @@ const handedBack = new Set<string>()
 let quitting = false
 let durableFor: ((chatKey: string, force: boolean) => Promise<boolean> | undefined) | null = null
 
-export function installProviderRelayRoute(installed: ProviderRelayRoute | null): void {
-  route = installed
-}
-
-export const providerRelayRouteInstalled = (): boolean => route !== null
+export const providerRelayRouteInstalled = (): boolean => providerRelayRoute() !== null
 
 /** The session host's journal barrier; acks wait on it so replay after a crash loses nothing. */
 export function installProviderRelayDurability(barrier: typeof durableFor): void {
@@ -105,7 +100,7 @@ function policyFor(
   open?: ProviderRelayOpenWork | null
 ): RelayProtocol.ProviderRelayDetachPolicy {
   return {
-    idleStopMs: route?.idleStopMs() ?? null,
+    idleStopMs: providerRelayRoute()?.idleStopMs() ?? null,
     markers: [...markers.markers],
     ...(markers.requests ? { workRequests: [...markers.requests] } : {}),
     ...(markers.quiet ? { quiet: [...markers.quiet] } : {}),
@@ -114,42 +109,15 @@ function policyFor(
   }
 }
 
-/** No agent can be kept where no relay route is installed (servers, SSH hosts). */
-export function providerRelayInventoryComplete(): boolean {
-  return !route || inventoryComplete()
-}
-
 /** Lists the daemons' kept relays once per launch (again after a daemon that didn't answer). */
 export function listProviderRelaysAtLaunch(): Promise<void> {
-  const installed = route
+  const installed = providerRelayRoute()
   return installed ? listKeptProviderRelays(() => installed.all()) : Promise.resolve()
 }
 
-/** Proves a chat opened as kept, that no listing placed, ended since; it settles that chat too. */
-let keptUnverifiedProof: ((chatKey: string) => Promise<boolean>) | null = null
-
-export function installProviderRelayKeptUnverifiedProof(proof: typeof keptUnverifiedProof): void {
-  keptUnverifiedProof = proof
-}
-
-/** The shared launch listing, never asked again here: true once every daemon has answered. */
-export async function providerRelayListingSettled(): Promise<boolean> {
-  await listProviderRelaysAtLaunch()
-  return inventoryComplete()
-}
-
-/** Whether this chat could have an agent kept here; no other chat waits on the listing. */
+/** Whether this chat could have an agent kept here; no other chat waits on a daemon. */
 export function providerRelayMayKeepChat(provider: string, ownerOnLocalHost: boolean): boolean {
-  return route !== null && providerRelayMayKeep(provider, ownerOnLocalHost)
-}
-
-/** True once every daemon answered within `ms`; false while the listing is late or incomplete. */
-export function listProviderRelaysAtLaunchWithin(ms: number): Promise<boolean> {
-  return withTimeout(
-    listProviderRelaysAtLaunch().then(() => inventoryComplete()),
-    ms,
-    false
-  )
+  return providerRelayRoute() !== null && providerRelayMayKeep(provider, ownerOnLocalHost)
 }
 
 async function connected(client: DaemonClient | null): Promise<DaemonClient | null> {
@@ -216,6 +184,7 @@ async function reattachListed(launch: ProviderRelayLaunch): Promise<RelayedProvi
     endedSince = (attach?.exit ?? null) !== null && !providerRelayAgentOpensEnded(info.agent)
     if (attach && !endedSince) {
       forgetKeptProviderRelay(launch.chatKey, relay)
+      noteProviderRelayRunPlacement(launch.chatKey, channel.client, info.relayId)
       reattachedChildren.add(child)
       noteProviderRelayReattachedFromLastRun(launch.chatKey)
       handedBack.delete(launch.chatKey)
@@ -232,21 +201,29 @@ async function reattachListed(launch: ProviderRelayLaunch): Promise<RelayedProvi
         rememberKeptProviderRelay(launch.chatKey, relay)
         handedBack.add(launch.chatKey)
       }
-      const handOff = () => (quitting ? detachProviderRelayForQuit(launch.chatKey, null) : null)
-      const managed = relayedManagedProcess(child, launch.handsOffOnQuit ? handOff : undefined)
+      const managed = relayedManagedProcess(child, () =>
+        providerRelayRunOutlivesQuit(launch.chatKey)
+          ? detachProviderRelayForQuit(launch.chatKey, null)
+          : null
+      )
       return { managed, child, reattached: true, keep }
     }
     // Nothing takes this attach's held output: it goes, so the channel keeps none of it.
     channel.release(info.relayId)
   }
+  // A failed attach asks the run's daemon start again; only its word (or proof) ends the run.
   const verdict =
     info.exit === null && !endedSince
-      ? await recheckKeptProviderRelay(launch.chatKey, relay)
+      ? await providerRelayRunGate(launch.chatKey, 'unknown')
       : 'gone'
   if (verdict !== 'gone') {
     throw new KeptProviderRelayUnreachableError(launch.chatKey)
   }
-  dropListedProviderRelay(launch.chatKey, true) // a failed attach never drops unread output
+  forgetKeptProviderRelay(launch.chatKey, relay)
+  // A failed attach never drops unread output.
+  if (!keptProviderRelayUnread(info)) {
+    void channel.close(info.relayId).catch(() => {})
+  }
   if (providerRelayRebinding(launch.chatKey)) {
     throw new KeptProviderRelayEndedError(launch.chatKey)
   }
@@ -263,21 +240,16 @@ export async function launchRelayedProviderProcess(
   relay: ProviderRelayLaunch
 ): Promise<RelayedProviderProcess | null> {
   handedBack.delete(relay.chatKey)
-  const installed = route
+  forgetProviderRelayRunPlacement(relay.chatKey)
+  const installed = providerRelayRoute()
   if (!installed) {
     return null
   }
-  await listProviderRelaysAtLaunch()
-  // Opened as kept while the listing was late: ask once more, and never start a second agent.
-  if (!inventoryComplete() && providerRelayKeptUnverified(relay.chatKey)) {
-    await listKeptProviderRelays(() => installed.all(), true)
-    if (
-      !inventoryComplete() &&
-      !keptProviderRelay(relay.chatKey) &&
-      !(await keptUnverifiedProof?.(relay.chatKey).catch(() => false))
-    ) {
-      throw new KeptProviderRelayUnreachableError(relay.chatKey)
-    }
+  // Only the last run's own daemon start (or proof) says whether a second agent may start.
+  const verdict = await providerRelayRunGate(relay.chatKey, 'gone')
+  // Kept but not ours to attach (another app holds it) is as unreachable as an unanswered daemon.
+  if (verdict === 'unknown' || (verdict === 'kept' && !keptProviderRelay(relay.chatKey))) {
+    throw new KeptProviderRelayUnreachableError(relay.chatKey)
   }
   if (relay.only === 'spawn' && keptProviderRelay(relay.chatKey)) {
     throw new KeptProviderRelayUnreachableError(relay.chatKey)
@@ -313,6 +285,7 @@ export async function launchRelayedProviderProcess(
     return null
   }
   track(relay.chatKey, child, relay.markers)
+  noteProviderRelayRunPlacement(relay.chatKey, client, spawned.relayId, spawned.daemonInstance)
   return { managed: relayedManagedProcess(child), child, reattached: false }
 }
 
@@ -323,6 +296,14 @@ export function beginProviderRelayQuit(): void {
 
 export function providerRelayQuitting(): boolean {
   return quitting
+}
+
+/**
+ * At quit, a relayed run goes on under its daemon, so the app writes no turn end for it; only a
+ * run that started in this app ends with the quit. Every provider reads this, not a flag of its own.
+ */
+export function providerRelayRunOutlivesQuit(chatKey: string): boolean {
+  return quitting && providerRelayRunIsRelayed(chatKey)
 }
 
 /** Resolves when chat shutdown finished its detaches, at once when no chat is relayed. */

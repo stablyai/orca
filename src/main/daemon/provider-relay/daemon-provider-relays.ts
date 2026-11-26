@@ -8,6 +8,8 @@ type DaemonProviderRelayOptions = {
   appVersion?: string
   entryPath?: string
   protocolVersion: number
+  /** This start's hello `launchNonce`; null only for daemons without an identity, which never relay. */
+  daemonInstance: string | null
   acceptsWork: () => boolean
   onLiveCountChanged: () => void
   log: DaemonFileLog
@@ -22,6 +24,7 @@ export function createDaemonProviderRelays(options: DaemonProviderRelayOptions):
     runtimeDir: dirname(options.tokenPath),
     appVersion: options.appVersion ?? null,
     entryPath: options.entryPath ?? null,
+    daemonInstance: options.daemonInstance,
     acceptsWork: options.acceptsWork,
     onLiveCountChanged: options.onLiveCountChanged,
     log: (event, details) => options.log.log(event, details)

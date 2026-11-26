@@ -28,6 +28,8 @@ type RelayHostOptions = {
   runtimeDir: string
   appVersion: string | null
   entryPath: string | null
+  /** Echoed in spawn and list replies so a client knows which daemon start holds an agent. */
+  daemonInstance?: string | null
   platform?: NodeJS.Platform
   acceptsWork: () => boolean
   onLiveCountChanged: () => void
@@ -52,6 +54,10 @@ export class ProviderRelayHost {
 
   constructor(private readonly options: RelayHostOptions) {
     this.platform = options.platform ?? process.platform
+  }
+
+  get daemonInstance(): string | null {
+    return this.options.daemonInstance ?? null
   }
 
   /** Windows keeps today's launch until a Job Object ties agents to this daemon's life. */
