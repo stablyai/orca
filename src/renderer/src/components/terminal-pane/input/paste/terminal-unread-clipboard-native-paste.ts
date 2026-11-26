@@ -37,7 +37,7 @@ export function reportUnpastedClipboardEventFiles(
     toast.error(
       translate(
         'components.terminalPane.paste.clipboardUnpastable',
-        "Couldn't paste the copied item into the terminal. Copy it as an image or text, then paste again."
+        "Couldn't paste the copied file. Try dragging it into the terminal."
       )
     )
   }

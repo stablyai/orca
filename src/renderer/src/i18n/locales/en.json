@@ -23549,7 +23549,7 @@
         "updateHostForOutsideFiles": "Update Orca on {{value0}} to open files outside its workspaces"
       },
       "paste": {
-        "clipboardUnpastable": "Couldn't paste the copied item into the terminal. Copy it as an image or text, then paste again."
+        "clipboardUnpastable": "Couldn't paste the copied file. Try dragging it into the terminal."
       }
     },
     "settings": {
