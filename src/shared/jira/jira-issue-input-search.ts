@@ -1,6 +1,11 @@
-import type { JiraIssue } from './jira-types'
+import type { JiraIssue, JiraIssueSuggestions } from './jira-types'
 import { buildJiraIssueKeyJql, buildJiraTextMatchJql, mayBeJql } from './jira-search-input-jql'
 import { parseJiraStatusError } from './jira-status-error'
+
+export type JiraIssueSearch = (
+  jql: string,
+  suggestions?: JiraIssueSuggestions
+) => Promise<JiraIssue[]>
 
 export type JiraJqlRejection = {
   /** Jira's reason; '' when it gave none. */
@@ -23,9 +28,10 @@ export function getJiraBadRequestReason(error: unknown): string | null {
 
 export async function searchJiraIssuesByKeyOrText(
   input: string,
-  search: (jql: string) => Promise<JiraIssue[]>
+  search: JiraIssueSearch,
+  projectKey?: string
 ): Promise<JiraIssue[]> {
-  const keyJql = buildJiraIssueKeyJql(input)
+  const keyJql = buildJiraIssueKeyJql(input, projectKey)
   if (keyJql) {
     // Key-shaped text such as utf-8 can yield an empty result or 400; neither rules out a text match.
     const issues = await search(keyJql).catch((error: unknown) => {
@@ -39,6 +45,9 @@ export async function searchJiraIssuesByKeyOrText(
     }
   }
   const textJql = buildJiraTextMatchJql(input)
+  if (!projectKey && /^\d+$/.test(input.trim())) {
+    return search(textJql, { query: input.trim(), currentJql: 'ORDER BY updated DESC' })
+  }
   // Why: the runtime RPC rejects empty JQL.
   return textJql ? search(textJql) : []
 }
@@ -46,15 +55,19 @@ export async function searchJiraIssuesByKeyOrText(
 /** Search what a user typed: a key or text, or JQL that falls back to text when Jira rejects it. */
 export async function searchJiraIssuesByInput(
   query: string,
-  search: (jql: string) => Promise<JiraIssue[]>,
-  mode: 'input' | 'jql' = 'input'
+  search: JiraIssueSearch,
+  mode: 'input' | 'jql' = 'input',
+  projectKey?: string
 ): Promise<JiraInputSearchResult> {
   const trimmed = query.trim()
   if (mode === 'jql') {
     return { issues: await search(trimmed), jqlRejection: null }
   }
   if (!mayBeJql(trimmed)) {
-    return { issues: await searchJiraIssuesByKeyOrText(trimmed, search), jqlRejection: null }
+    return {
+      issues: await searchJiraIssuesByKeyOrText(trimmed, search, projectKey),
+      jqlRejection: null
+    }
   }
   try {
     return { issues: await search(trimmed), jqlRejection: null }

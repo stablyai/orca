@@ -26,7 +26,7 @@ export const jiraApi = {
 
   testConnection: (args?: { siteId?: string }) => ipcRenderer.invoke('jira:testConnection', args),
 
-  searchIssues: (args: { jql: string; limit?: number; siteId?: string; requestId?: string }) =>
+  searchIssues: (args: Parameters<PreloadApi['jira']['searchIssues']>[0]) =>
     ipcRenderer.invoke('jira:searchIssues', args),
   cancelSearchIssues: (args: { requestId: string }): Promise<void> =>
     ipcRenderer.invoke('jira:cancelSearchIssues', args),
