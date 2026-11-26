@@ -103,12 +103,26 @@ export function countRemoteDispatches(db: OrchestrationDb, runId: string | undef
   return row.count
 }
 
-/** This Orca's own receipt of the start proves the creator its placement gave the attempt asked
- *  for it: only then does its start outcome report where it was asked. Adoption alone proves none. */
-export function markRemoteAskerProven(db: OrchestrationDb, dispatchId: string): void {
+/** This Orca's own receipt of the start proves its placement's asker asked for the attempt, when
+ *  the attempt's record names that asker: only then does its start outcome report where it was
+ *  asked. Adoption alone proves no one. */
+export function markRemoteAskerProven(
+  db: OrchestrationDb,
+  dispatchId: string,
+  placement: RemoteCreatorColumns
+): void {
   db.db
-    .prepare('UPDATE remote_dispatches SET asker_proven = 1 WHERE dispatch_id = ?')
-    .run(dispatchId)
+    .prepare(
+      `UPDATE remote_dispatches SET asker_proven = 1
+       WHERE dispatch_id = ? AND creator_orca_session_id IS ? AND creator_handle IS ?
+         AND creator_turn_source IS ?`
+    )
+    .run(
+      dispatchId,
+      placement.creator_orca_session_id,
+      placement.creator_handle,
+      placement.creator_turn_source
+    )
 }
 
 /** The server's state for the Dispatch, applied in its queue order. A terminal state sends any stop owed at once: its receipt is now the proof. */

@@ -36,15 +36,15 @@ export function getRemotePlacement(
 }
 
 /** A same-key retry sends again. When nothing under the key left this Orca, it is the first ask the
- *  server will see, so the placement names who asks now. Once the server answered the key, a send
- *  that still starts work there (its receipt gone) is no ask this Orca can prove. */
+ *  server will see, so the placement names who asks now. Otherwise the server may already hold, or
+ *  have forgotten, the first send: its next answer proves the first asker only if they ask again. */
 export function resendRemoteReservation(
   db: OrchestrationDb,
-  existing: Pick<RemotePlacementRow, 'task_id' | 'never_sent_at' | 'state'>,
+  existing: RemotePlacementRow,
   creator: DispatchCreator
 ): void {
+  const asker = recordedCreatorIdentity(creator)
   if (existing.never_sent_at !== null) {
-    const asker = recordedCreatorIdentity(creator)
     db.db
       .prepare(
         `UPDATE remote_placements SET creator_orca_session_id = ?, creator_pane_key = ?,
@@ -57,7 +57,11 @@ export function resendRemoteReservation(
         asker.creatorTurnSource,
         existing.task_id
       )
-  } else if (existing.state === 'accepted') {
+  } else if (
+    asker.creatorOrcaSessionId !== existing.creator_orca_session_id ||
+    asker.creatorHandle !== existing.creator_handle ||
+    asker.creatorTurnSource !== existing.creator_turn_source
+  ) {
     db.db
       .prepare('UPDATE remote_placements SET asker_unproven = 1 WHERE task_id = ?')
       .run(existing.task_id)

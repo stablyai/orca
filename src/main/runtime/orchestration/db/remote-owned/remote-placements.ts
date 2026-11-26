@@ -209,7 +209,7 @@ export function recordRemoteStart(
     const record = link && ours ? adoptRemoteAttempt(db, link, params) : undefined
     // This Orca's own receipt of the start it sent: its asker is the attempt's, as a local creator.
     if (record && placement?.request_key === params.requestKey && !placement.asker_unproven) {
-      markRemoteAskerProven(db, record.dispatch_id)
+      markRemoteAskerProven(db, record.dispatch_id, placement)
     }
     if (record && params.peerRunId) {
       noteRemoteRunLinkPeerRun(db, params.conversationId, params.peerRunId)

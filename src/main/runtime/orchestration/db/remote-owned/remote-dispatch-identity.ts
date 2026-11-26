@@ -4,8 +4,9 @@ import type { RemoteRunLinkRow } from './remote-run-links'
 import { getRemoteDispatch, type RemoteDispatchRow } from './remote-dispatch-records'
 import { writtenRow } from './written-row'
 
-const UNSTAMPED = `remote_dispatches.creator_orca_session_id IS NULL
-  AND remote_dispatches.creator_pane_key IS NULL AND remote_dispatches.creator_handle IS NULL`
+// The asker's terminal and turn come only from the placement: only its start's answer can prove them.
+const NO_ASKER = `remote_dispatches.creator_handle IS NULL
+  AND remote_dispatches.creator_turn_source IS NULL`
 
 /** What names a server's Dispatch here. `earlierDispatchId`: the server's Dispatch it continues (a
  *  follow-up) or whose worker started it (a helper). */
@@ -30,35 +31,41 @@ export function ensureRemoteDispatchRecord(
   db.db
     .prepare(
       `WITH creator AS (
-         SELECT creator_orca_session_id AS session, creator_pane_key AS pane,
-           creator_handle AS handle, creator_turn_source AS turn, 1 AS rank
+         SELECT creator_orca_session_id AS session, creator_pane_key AS pane, 1 AS rank
          FROM remote_placements WHERE task_id = ?5 AND conversation_id = ?2
          UNION ALL
-         SELECT creator_orca_session_id, creator_pane_key, creator_handle, creator_turn_source, 2
+         SELECT creator_orca_session_id, creator_pane_key, 2
          FROM remote_dispatches WHERE dispatch_id = ?8 AND conversation_id = ?2
        ),
        chosen AS (
-         SELECT session, pane, handle, turn FROM creator
-         WHERE session IS NOT NULL OR pane IS NOT NULL OR handle IS NOT NULL
+         SELECT session, pane FROM creator WHERE session IS NOT NULL OR pane IS NOT NULL
          ORDER BY rank LIMIT 1
+       ),
+       asker AS (
+         SELECT creator_handle AS handle, creator_turn_source AS turn
+         FROM remote_placements WHERE task_id = ?5 AND conversation_id = ?2
        )
        INSERT INTO remote_dispatches (
          dispatch_id, conversation_id, run_id, environment_id, task_id, agent,
          creator_orca_session_id, creator_pane_key, creator_handle, creator_turn_source, worktree_id
        )
        SELECT ?1, ?2, ?3, ?4, ?5, ?6, (SELECT session FROM chosen), (SELECT pane FROM chosen),
-         (SELECT handle FROM chosen), (SELECT turn FROM chosen), ?7
+         (SELECT handle FROM asker), (SELECT turn FROM asker), ?7
        WHERE true
        ON CONFLICT(dispatch_id) DO UPDATE SET
          agent = COALESCE(remote_dispatches.agent, excluded.agent),
          worktree_id = COALESCE(remote_dispatches.worktree_id, excluded.worktree_id),
-         creator_orca_session_id = CASE WHEN ${UNSTAMPED}
+         creator_orca_session_id = CASE
+           WHEN remote_dispatches.creator_orca_session_id IS NULL
+             AND remote_dispatches.creator_pane_key IS NULL
            THEN excluded.creator_orca_session_id ELSE remote_dispatches.creator_orca_session_id END,
-         creator_pane_key = CASE WHEN ${UNSTAMPED}
+         creator_pane_key = CASE
+           WHEN remote_dispatches.creator_orca_session_id IS NULL
+             AND remote_dispatches.creator_pane_key IS NULL
            THEN excluded.creator_pane_key ELSE remote_dispatches.creator_pane_key END,
-         creator_handle = CASE WHEN ${UNSTAMPED}
+         creator_handle = CASE WHEN ${NO_ASKER}
            THEN excluded.creator_handle ELSE remote_dispatches.creator_handle END,
-         creator_turn_source = CASE WHEN ${UNSTAMPED}
+         creator_turn_source = CASE WHEN ${NO_ASKER}
            THEN excluded.creator_turn_source ELSE remote_dispatches.creator_turn_source END`
     )
     .run(

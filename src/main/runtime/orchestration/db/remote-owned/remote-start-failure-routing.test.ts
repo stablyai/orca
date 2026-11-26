@@ -5,6 +5,7 @@ import '../messages/mailbox-routing-page'
 import '../dispatch-row-writer'
 import '../attempt-outcome-projection'
 import type { DispatchCreator } from '../dispatch-depth'
+import { isOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address'
 import type { MessageRow } from '../orchestration-records'
 import type { OrchestrationWorkerServer } from '../../federation/environment-transport'
 import { importRemoteOwnedItem } from './remote-owned-import'
@@ -39,6 +40,26 @@ const THREAD_TURN: DispatchCreator = {
   turnSource: 'connector'
 }
 const ORCA_TURN: DispatchCreator = { kind: 'terminal', handle: COORDINATOR }
+const BOT_SESSION = '7d3c1e52-9a4b-4f0e-8c21-5b6a7f8e9d01'
+if (!isOrcaSessionId(BOT_SESSION)) {
+  throw new Error('fixture needs an Orca session id')
+}
+/** A bot's chat: a session coordinator, woken by its thread. */
+const BOT_THREAD_TURN: DispatchCreator = {
+  kind: 'session',
+  orcaSessionId: BOT_SESSION,
+  turnSource: 'connector'
+}
+
+/** A Run coordinated by `creator`'s terminal or, for a session creator, by that session. */
+function createRun(db: OrchestrationDb, creator?: DispatchCreator) {
+  return db.createRun({
+    objective: 'o',
+    coordinatorHandle: creator?.kind === 'session' ? null : COORDINATOR,
+    coordinatorPaneKey: null,
+    ...(creator?.kind === 'session' ? { coordinatorOrcaSessionId: creator.orcaSessionId } : {})
+  })
+}
 
 /** How a start ends before its worker runs, each reported in production order. */
 type Failure =
@@ -152,11 +173,7 @@ function fail(db: OrchestrationDb, dispatchId: string, failure: Failure, host: H
 
 function failLocally(creator: DispatchCreator, failure: Failure, host: Host = 'this-computer') {
   const db = newDb()
-  const run = db.createRun({
-    objective: 'o',
-    coordinatorHandle: COORDINATOR,
-    coordinatorPaneKey: null
-  })
+  const run = createRun(db, creator)
   const task = db.createTask({ runId: run.id, spec: 'work' })
   const { dispatch } = db.createStartingWorkerDispatch({
     creator,
@@ -169,14 +186,10 @@ function failLocally(creator: DispatchCreator, failure: Failure, host: Host = 't
 }
 
 /** This Orca's Run placed on a paired server, and that server, with the real start records and queue. */
-function pairedRun() {
+function pairedRun(coordinator?: DispatchCreator) {
   const home = newDb()
   const server = newDb()
-  const runId = home.createRun({
-    objective: 'o',
-    coordinatorHandle: COORDINATOR,
-    coordinatorPaneKey: null
-  }).id
+  const runId = createRun(home, coordinator).id
   const link = openRemoteRunLink(home, runId, SERVER)
   const peerRunId = server.admitPeerRun({
     peerFingerprint: 'fp_home',
@@ -284,7 +297,7 @@ function pairedRun() {
 
 /** worker-start --on as `creator` asks it; its start fails there and its report comes home. */
 function failOnServer(creator: DispatchCreator, failure: Failure, host: Host = 'this-computer') {
-  const run = pairedRun()
+  const run = pairedRun(creator)
   run.reserve(creator)
   const dispatchId = run.start()
   run.receive(dispatchId)
@@ -296,12 +309,12 @@ function failOnServer(creator: DispatchCreator, failure: Failure, host: Host = '
 describe("a paired server's start outcome reaches its asker as a local one does", () => {
   const cases = FAILURES.flatMap((failure) =>
     (['this-computer', 'ssh'] as const).flatMap((host) =>
-      (['thread', 'orca'] as const).map((asked) => [failure, host, asked] as const)
+      (['thread', 'orca', 'bot-thread'] as const).map((asked) => [failure, host, asked] as const)
     )
   )
 
   it.each(cases)('%s on %s, asked in %s: remote equals local', (failure, host, asked) => {
-    const creator = asked === 'thread' ? THREAD_TURN : ORCA_TURN
+    const creator = { thread: THREAD_TURN, orca: ORCA_TURN, 'bot-thread': BOT_THREAD_TURN }[asked]
     expect(failOnServer(creator, failure, host)).toEqual(failLocally(creator, failure, host))
   })
 
@@ -373,11 +386,13 @@ describe("a paired server's start outcome reaches its asker as a local one does"
 })
 
 describe('the asker a paired-server attempt reports for', () => {
+  // A retry by someone else may be what started the work the server answers for: it proves no one.
   it.each([
+    [THREAD_TURN, THREAD_TURN, true],
     [ORCA_TURN, THREAD_TURN, false],
-    [THREAD_TURN, ORCA_TURN, true]
+    [THREAD_TURN, ORCA_TURN, false]
   ] as const)(
-    'keeps the first ask when a later turn retries a sent start',
+    'proves the asker of a sent start only when the same turn source retries it',
     (first, retry, toThread) => {
       const run = pairedRun()
       run.reserve(first)
@@ -424,6 +439,20 @@ describe('the asker a paired-server attempt reports for', () => {
     run.fail(third, 'never-ready')
     run.pull()
     expect(run.judge(sentBy(`dispatch:${third}`)).toThread).toBe(true)
+  })
+
+  it("proves no asker that the attempt's record does not name", () => {
+    const run = pairedRun()
+    run.reserve(THREAD_TURN)
+    run.neverSent()
+    const dispatchId = run.start()
+    run.fail(dispatchId, 'never-ready')
+    // The queue's adoption names the first asker; a later first-send retry names another.
+    run.pull()
+    run.reserve(ORCA_TURN)
+    run.receive(dispatchId)
+    expect(run.creatorOf(dispatchId)).toEqual([COORDINATOR, 'connector'])
+    expect(run.judge().toThread).toBe(false)
   })
 
   it('names no one for an attempt the server started by itself', () => {
