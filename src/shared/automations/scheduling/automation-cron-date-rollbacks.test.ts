@@ -15,12 +15,10 @@ it('preserves matching minutes when a midnight rollback revisits the previous da
     const wall = calendar.fields(minute)
     return wall.weekday === 6 && wall.hour === 23
   })
-  const sunday = minutes
-    .filter((minute) => {
-      const wall = calendar.fields(minute)
-      return wall.weekday === 0 && wall.hour === 0
-    })
-    .at(-1)
+  const sunday = minutes.findLast((minute) => {
+    const wall = calendar.fields(minute)
+    return wall.weekday === 0 && wall.hour === 0
+  })
 
   expect(saturday).toBeDefined()
   expect(sunday).toBeDefined()
