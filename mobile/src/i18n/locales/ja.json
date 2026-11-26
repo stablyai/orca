@@ -4060,11 +4060,16 @@
     }
   },
   "webShell": {
+    "downloadProgress": {
+      "megabytes": "{{received}} / {{total}} MB"
+    },
     "shellStateScreen": {
       "checkingHost": "ホストを確認中",
       "connectToDownload": "このホストに接続して、最新のアプリをダウンロードしてください。",
       "documentLoadFailed": "ダウンロードしたアプリを開けませんでした。",
       "downloadFailed": "このホストから最新のアプリをダウンロードできませんでした。",
+      "downloadProgressFromHost": "{{host}} から · {{progress}}",
+      "downloadingLatestApp": "最新のアプリをダウンロードしています",
       "hostProfileUnreadable": "このデバイスでこのホストの情報を読み取れませんでした。再試行してください。",
       "isolationUnavailable": "このデバイスの WebView が古すぎるため、ワークスペースを安全に開けません。",
       "openingWorkspace": "ワークスペースを開いています",

@@ -27745,6 +27745,7 @@
       "computerHint": "Where the bot runs.",
       "computerAccountHint": "Where the bot runs, signed in to Orca as {{account}}.",
       "useChatDefaults": "Use chat defaults",
+      "useChatDefaultsHint": "Reset the agent's model, options and permissions to your chat defaults",
       "usingChatDefault": "Using your chat default. Background runs use your Agents setting.",
       "agent": "Agent",
       "folder": "Folder: {{path}}",
@@ -29261,7 +29262,8 @@
         "purpose": "Your Composio project key lets your bots use the apps you connect there. It stays on this computer; bots never see it.",
         "getKey": "Get a key",
         "change": "Change",
-        "purposeOnHost": "Your Composio project key lets the bots on {{host}} use the apps you connect there. It stays on {{host}}; bots never see it."
+        "purposeOnHost": "Your Composio project key lets the bots on {{host}} use the apps you connect there. It stays on {{host}}; bots never see it.",
+        "changeKey": "Change key"
       },
       "card": {
         "heading": "Composio",
@@ -29983,7 +29985,12 @@
         "keyStored": "Stored on this computer; bots never see it. Composio holds your app sign-ins.",
         "addKey": "Add key and continue",
         "keyStoredOnHost": "Stored on {{host}}; bots never see it. Composio holds your app sign-ins.",
-        "signsIn": "Signs in through your Composio account."
+        "signsIn": "Signs in through your Composio account.",
+        "changeKeyTitle": "Change your Composio key",
+        "replacesKeyEnding": "Replaces the key ending in {{hint}}, for all your bots.",
+        "replacesKey": "Replaces your saved key, for all your bots.",
+        "newKeyNeeds": "The new key needs <permission/>.",
+        "replaceKey": "Replace key and continue"
       },
       "closeKeepsSigningIn": "Sign-in continues in your browser",
       "openPageAgain": "Open page again",
@@ -30124,7 +30131,8 @@
         "more": "More"
       },
       "setUpNamed": "Set up {{name}}",
-      "setUp": "Set up"
+      "setUp": "Set up",
+      "couldNotConnect": "Couldn’t connect {{app}}"
     },
     "panel": {
       "idle": "Idle",
@@ -30823,7 +30831,10 @@
       "groupReplierNotMember": "Choose a current room member in Room replies.",
       "groupMailNeverStarted": "This mail never started a turn.",
       "groupRemoteUnreachable": "Couldn't reach {{host}}. {{detail}}",
-      "groupRemoteUnreachableRetry": "Couldn't reach {{host}}. {{detail}} Post again to retry."
+      "groupRemoteUnreachableRetry": "Couldn't reach {{host}}. {{detail}} Post again to retry.",
+      "composioKeyCantCreateSessions": "This Composio key can’t create sessions. It needs {{permission}}.",
+      "composioKeyNeedsPermission": "This Composio key is missing a permission. It needs {{permission}}.",
+      "composioKeyMissingPermission": "This Composio key is missing a permission Orca needs."
     },
     "lookAroundEvery": {
       "every4h": "Every 4 hours, 8 AM to 8 PM",

@@ -69,23 +69,28 @@ function finishedBeforeLocalAutomations(cutover: WslMoveCutover): boolean {
   )
 }
 
-/**
- * Startup's catch-up for those moves, once each. Their ledger is closed, so a mark beside it
- * records the catch-up: a copy here the user turns back on afterwards stays on.
- */
+/** Startup's once-per-move catch-up, marked beside the closed ledger so a copy re-enabled by hand stays on. */
 export async function disableLocalAutomationsOfEarlierWslMoves(
   userDataPath: string,
   profile: WslMoveLocalAutomationsProfile
 ): Promise<void> {
   for (const cutover of listWslMoveCutovers(userDataPath).filter(finishedBeforeLocalAutomations)) {
-    await disableWhileMoved(userDataPath, profile, cutover.migrationId, async (move) => {
-      // The disable is on disk before the mark: a crash between them only repeats it.
-      await profile.flushPendingOrThrowAsync()
-      writeWslMoveCutover(userDataPath, {
-        ...move,
-        localAutomationsCaughtUp: true,
-        updatedAt: new Date().toISOString()
+    try {
+      await disableWhileMoved(userDataPath, profile, cutover.migrationId, async (move) => {
+        // The disable is on disk before the mark: a crash between them only repeats it.
+        await profile.flushPendingOrThrowAsync()
+        writeWslMoveCutover(userDataPath, {
+          ...move,
+          localAutomationsCaughtUp: true,
+          updatedAt: new Date().toISOString()
+        })
       })
-    })
+    } catch (error) {
+      // One move's failure must not skip the rest; it is tried again next launch.
+      console.warn(
+        `[wsl-move] Could not turn off move ${cutover.migrationId}'s automations here:`,
+        error
+      )
+    }
   }
 }
