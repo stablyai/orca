@@ -3,6 +3,7 @@ import type { TaskRow } from '../../db/orchestration-records'
 import { buildDispatchPreamble } from '../../workers/launch/worker-dispatch-preamble'
 import { sendAgentTurn } from '../../turn-delivery/send-agent-turn'
 import type { CoordinatorRuntime, WorktreeDrift } from '../coordinator-runtime-contract'
+import { findWorkerLaunchSettingsForAssignee } from '../../db/worker-dispatch/worker-launch-settings'
 import {
   DISPATCH_STALE_THRESHOLD,
   parseAllowStaleBaseFromSpec
@@ -104,7 +105,8 @@ export async function dispatchTaskToWorker(params: {
     workerHandle: targetHandle,
     devMode: process.env.ORCA_USER_DATA_PATH?.includes('orca-dev'),
     ...runtime.getTerminalOrchestrationCliTarget?.(targetHandle),
-    ...(baseDrift ? { baseDrift } : {})
+    ...(baseDrift ? { baseDrift } : {}),
+    launch: findWorkerLaunchSettingsForAssignee(db, targetHandle) ?? undefined
   })
 
   const gates = db.listGates({ taskId: task.id, status: 'resolved' })

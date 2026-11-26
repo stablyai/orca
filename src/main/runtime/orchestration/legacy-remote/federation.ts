@@ -2,6 +2,7 @@ import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/
 import { waitForWorkerAgentReady } from '../../terminal/wait/launched-agent-composer-readiness'
 import { agentStartupBlockedMessage } from '../../terminal/wait/agent-startup-blocked-message'
 import { buildDispatchPreamble } from '../workers/launch/worker-dispatch-preamble'
+import { workerStartOptionsLaunch } from '../workers/launch/worker-launch-observation'
 import { sendAgentTurn } from '../turn-delivery/send-agent-turn'
 import { createWorkerBriefWriteGuard } from '../../terminal/wait/launched-agent-write-guard'
 import { OrchestrationError } from '../orchestration-error'
@@ -259,7 +260,10 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
               // Enforce the execution host's nesting cap using its own setting.
               canDispatchSubWorkers: (params.depth ?? 1) < runtime.getNestedWorkerMaxDepth(),
               subWorkersInOwnRun: true,
-              ...runtime.getTerminalOrchestrationCliTarget(terminalHandle)
+              ...runtime.getTerminalOrchestrationCliTarget(terminalHandle),
+              launch:
+                workerStartOptionsLaunch(db.getWorkerDispatch(params.dispatchId)?.start_options) ??
+                undefined
             })
           }
         }).finally(() => briefGuard?.dispose())
