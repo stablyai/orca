@@ -90,6 +90,9 @@ function heldTabId(
     return chat.id
   }
   const tabId = parsePaneKey(location.paneKey)?.tabId
+  if (!tabId) {
+    return null
+  }
   return (state.tabsByWorktree[location.worktreeId] ?? []).some((tab) => tab.id === tabId)
     ? tabId
     : null
