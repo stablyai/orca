@@ -468,7 +468,7 @@
         "searchKeywords": {
           "memory": "memoria",
           "tabs": "pestañas",
-          "idle": "idle",
+          "idle": "inactivo",
           "sleep": "suspender",
           "performance": "rendimiento"
         }
@@ -535,7 +535,7 @@
       "permissionModeSurfaceDifference": "Los terminales usan {{terminal}}; los chats nuevos usan {{mode}}.",
       "permissionSameAsAll": "Igual que todos los agentes",
       "choiceChipRemove": "Quitar {{flag}}",
-      "choiceChipTooltip": "Añadido por {{choice}}. Quítalo para usar el valor predeterminado.",
+      "choiceChipTooltip": "Agregado por {{choice}}. Quítalo para usar el valor predeterminado.",
       "permissionChipRemove": "Quitar {{flag}} y usar la configuración propia de {{agent}}",
       "permissionChipTooltip": "Añadido por Permisos. Quítalo para usar la configuración propia de {{agent}}.",
       "permissionOverridesKept_one": "{{count}} agente sigue usando su propia configuración de permisos:",
@@ -824,7 +824,7 @@
         "macApp": "Sal de Orca y luego arrástrala de Aplicaciones a la Papelera.",
         "homebrew": "Orca se instaló con Homebrew. Ejecuta esto para quitar la app:",
         "linuxPackage": "Ejecuta esto para quitar el paquete:",
-        "windows": "Termina en el desinstalador de Windows. Orca se cierra cuando se abre.",
+        "windows": "Termina en el desinstalador de Windows. Orca se cierra cuando se abre el desinstalador.",
         "appImage": "Sal de Orca y luego elimina <path>{{path}}</path>."
       },
       "openUninstaller": "Abrir el desinstalador",
