@@ -43,6 +43,7 @@ function run(
     homes: [home],
     storeHome: store,
     platform: 'darwin',
+    version: `test-${Math.random()}`,
     moveOutcome: () => options.outcome ?? 'moved',
     shouldStop: () => false,
     findOpen: async (paths) => (options.open ? options.open(paths) : new Set()),

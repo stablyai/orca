@@ -77,6 +77,8 @@ export async function cleanUpCodexAccountCopies(args: {
   worker: CodexAccountCopiesWorker
   findOpen?: typeof findOpenFiles
   platform?: NodeJS.Platform
+  /** This Orca's version; each home settled under it is skipped. */
+  version: string
 }): Promise<(CopiesTally & { homes: number }) | null> {
   const platform = args.platform ?? process.platform
   if (platform !== 'darwin' && platform !== 'win32') {
@@ -98,7 +100,8 @@ export async function cleanUpCodexAccountCopies(args: {
       op: 'verify',
       accountHome,
       storeHome: args.storeHome,
-      budget: { maxBytes: bytesLeft, deadline }
+      budget: { maxBytes: bytesLeft, deadline },
+      version: args.version
     })
     if (!checked.ok) {
       if (args.shouldStop()) {

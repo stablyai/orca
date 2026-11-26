@@ -4,7 +4,7 @@ import type { CopiesTally } from './codex-account-copies-tally'
 
 /** One call at a time between the cleanup and its worker: verify, hold, then finish. */
 export type CodexAccountCopiesRequest =
-  | { op: 'verify'; accountHome: string; storeHome: string; budget: VerifyBudget }
+  | { op: 'verify'; accountHome: string; storeHome: string; budget: VerifyBudget; version: string }
   | { op: 'hold'; accountHome: string; copies: VerifiedCopy[] }
   | {
       op: 'finish'

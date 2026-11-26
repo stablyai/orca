@@ -118,11 +118,17 @@ export async function verifyCodexAccountCopies(args: {
   accountHome: string
   storeHome: string
   budget: VerifyBudget
+  /** This Orca's version: a home this version already settled is not walked again. */
+  version: string
 }): Promise<{ verified: VerifiedCopy[]; tally: CopiesTally; bytesRead: number }> {
   const tally = emptyTally()
   const verified: VerifiedCopy[] = []
   releaseLeftoverHeldCopies(args.accountHome)
-  const kept = readKeptCopies(args.accountHome)
+  const record = readKeptCopies(args.accountHome)
+  if (record.settled === args.version) {
+    return { verified, tally, bytesRead: 0 }
+  }
+  const kept = record.differs
   const nextKept: KeptCopies = {}
   const visited = new Set<string>()
   let bytesRead = 0
@@ -227,7 +233,9 @@ export async function verifyCodexAccountCopies(args: {
       }
     }
   }
-  writeKeptCopies(args.accountHome, nextKept)
+  const settled =
+    verified.length === 0 && tally.deferred + tally.changed + tally.error + tally.open === 0
+  writeKeptCopies(args.accountHome, { differs: nextKept, settled: settled ? args.version : null })
   return { verified, tally, bytesRead }
 }
 

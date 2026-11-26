@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
+import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import { getSystemCodexHomePath } from '../../configuration/homes/codex-home-paths'
 import { isCodexAccountHistoryWorkStopping } from './codex-account-history-index'
 import {
@@ -13,11 +14,13 @@ import type { CodexHistoryMoveOutcome } from '../../../telemetry/codex-history-m
 // Once per run, a while after the launch's passes settle, and only while no pass runs.
 const DELAY_MS = 2 * 60_000
 const RETRY_MS = 60_000
+const MAX_RETRIES = 10
 const inRootContext = AsyncLocalStorage.snapshot()
 
 /** The run's one cleanup of old account copies; a pass stops it before touching a home. */
 export class CodexAccountCopiesCleanupRun {
   private scheduled = false
+  private retries = 0
   private worker: CodexAccountCopiesWorker | null = null
 
   constructor(
@@ -49,7 +52,11 @@ export class CodexAccountCopiesCleanupRun {
       return
     }
     if (this.deps.passRunning()) {
-      this.schedule(RETRY_MS)
+      // A pass that never settles must not keep a timer firing all run: a later launch retries.
+      this.retries += 1
+      if (this.retries <= MAX_RETRIES) {
+        this.schedule(RETRY_MS)
+      }
       return
     }
     const homes = this.deps.homes().filter((home) => this.deps.moveOutcome(home) === 'moved')
@@ -64,7 +71,8 @@ export class CodexAccountCopiesCleanupRun {
         storeHome: getSystemCodexHomePath(),
         moveOutcome: (home) => (this.worker === worker ? this.deps.moveOutcome(home) : null),
         shouldStop: () => this.worker !== worker || isCodexAccountHistoryWorkStopping(),
-        worker
+        worker,
+        version: getAppEnvironment().getVersion()
       })
       if (tally && tally.deleted > 0) {
         forgetCodexHistoryDiskUsage()
