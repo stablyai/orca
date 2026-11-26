@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import Database from '../../../sqlite/sync-database'
-import { replyEventsOf } from '../../../connector-cloud/connector-reply-outbox'
+import { replyEventsOf } from '../../../connector-cloud/connector-reply-events'
 import { ensureJournalConnectorRepliesSchema } from './journal-connector-replies-schema'
 import {
   fillJournalConnectorReplies,

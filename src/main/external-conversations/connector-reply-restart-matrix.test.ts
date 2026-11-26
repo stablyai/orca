@@ -7,7 +7,7 @@ import type { ConnectorReplyCutJournal } from '../connector-cloud/connector-repl
 import { conversationReplyFill } from './external-conversation-reply-fill'
 
 import { connectorReplyTurnStamps } from '../../shared/agent-session/journal/journal-connector-reply-turn'
-import { replyEventsOf } from '../connector-cloud/connector-reply-outbox'
+import { replyEventsOf } from '../connector-cloud/connector-reply-events'
 
 import {
   NOW,

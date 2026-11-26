@@ -11,7 +11,7 @@ const MAX_PROJECTED_BYTES = 8 * 1024
 // A presentation is literal text. An independently authorized source link can be
 // rendered by the posting adapter, but the author cannot supply a URL or Slack markup.
 const UNSAFE_TEXT =
-  /[<>`@]|\p{Cf}|\p{Cs}|\b(?:[a-z][a-z\d+.-]*:\/\/|javascript:|data:|mailto:|www\.)|\]\s*\(/iu
+  /[<>`@]|\p{Cf}|\p{Cs}|:\/\/|\b(?:javascript:|data:|mailto:|www\.)|\]\s*\(/iu
 const CONTROL = /\p{Cc}/u
 
 function containsDomain(text: string): boolean {
