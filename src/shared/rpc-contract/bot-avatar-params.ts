@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { isSettableBotAvatar, MAX_BOT_AVATAR_BYTES } from '../bot-avatar'
+import { AttachmentUploadIdParams } from './structured-agent-session/agent-session-attachment-params'
 import { requiredString } from './rpc-param-primitives'
 
 /** A mascot, an emoji or null; an upload is set with bots.avatar.upload. */
@@ -9,7 +10,7 @@ export const SettableBotAvatar = z
   .refine(isSettableBotAvatar, 'Set an uploaded picture with bots.avatar.upload')
 
 /** A square PNG, base64, that becomes the bot's picture. */
-export const BotAvatarUpload = z.object({
+const BotPictureUpload = z.object({
   botId: requiredString('Missing bot id'),
   png: z
     .string()
@@ -20,6 +21,11 @@ export const BotAvatarUpload = z.object({
   expectedAvatarRevision: z.number().int().nonnegative().optional(),
   expectedAvatarEpoch: z.uuid().optional()
 })
+
+export const BotAvatarUpload = z.union([
+  BotPictureUpload,
+  AttachmentUploadIdParams.extend({ botToken: z.string().min(1).max(200) })
+])
 
 export const BotAvatarRead = z.object({
   botId: requiredString('Missing bot id'),
@@ -35,6 +41,6 @@ export const BotSlackIconWanted = z.object({
 })
 
 /** A window's 512 px drawing of the bot's mascot in `look`, for its Slack icon. */
-export const BotSlackIconUpload = BotSlackIconWanted.extend({ png: BotAvatarUpload.shape.png })
+export const BotSlackIconUpload = BotSlackIconWanted.extend({ png: BotPictureUpload.shape.png })
 
 export type BotAvatarUploadParams = z.infer<typeof BotAvatarUpload>

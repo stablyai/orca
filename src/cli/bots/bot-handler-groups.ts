@@ -2,6 +2,11 @@ import type { HandlerGroup } from '../dispatch/handler-group-manifest'
 
 export const BOT_HANDLER_GROUPS: HandlerGroup[] = [
   {
+    name: 'bot-avatar',
+    keys: ['bot avatar set'],
+    load: async () => (await import('./bot-avatar.js')).BOT_AVATAR_HANDLERS
+  },
+  {
     name: 'bot',
     keys: ['bot list', 'bot chats', 'bot new-chat', 'bot memory forget'],
     load: async () => (await import('./bot.js')).BOT_HANDLERS

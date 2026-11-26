@@ -37,6 +37,7 @@ const SESSION_EVIDENCE_METHODS: ReadonlySet<string> = new Set([
   'agent.launchReplay',
   'automation.create',
   'automation.update',
+  'bots.avatar.upload',
   ...BOT_ITEM_WRITE_METHOD_NAMES,
   ...CONNECTOR_POST_METHOD_NAMES
 ])

@@ -63,6 +63,7 @@ const NEEDS_RUNNING_AGENT: ReadonlySet<string> = new Set([
 const SESSION_CALLER_METHODS: ReadonlySet<string> = new Set([
   'automation.create',
   'automation.update',
+  'bots.avatar.upload',
   ...BOT_ITEM_WRITE_METHOD_NAMES,
   ...CONNECTOR_POST_METHOD_NAMES
 ])
