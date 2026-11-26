@@ -6,6 +6,7 @@ import { resolveJavaNavigationTarget } from './java-target-resolution'
 
 const API = '/repo/api/src/main/java/com/acme/web'
 const CORE = '/repo/core/src/main/java/com/acme/core'
+const SHOP = '/repo/shop/src/main/java/com/acme/shop'
 
 const CONTROLLER = `package com.acme.web;
 
@@ -29,6 +30,39 @@ public class AboutController extends LocalizedController {
 }
 `
 
+const CHILD = `package com.acme.shop;
+
+import static com.acme.core.Strings.trim;
+import static com.acme.shop.Flags.*;
+
+class Helper {
+    void unrelated() {}
+}
+
+public class Child extends Base {
+    private static final String TAG = """
+        /* not a comment
+        """;
+
+    void reset() {
+        int count = 0;
+    }
+
+    void run() {
+        this.count++;
+        trim(TAG);
+        boolean ready = READY;
+        Options options = null;
+        Outer.Inner.run();
+        inherited();
+    }
+
+    String trim(String value) {
+        return value;
+    }
+}
+`
+
 const FILES: Record<string, string> = {
   [`${API}/AboutController.java`]: CONTROLLER,
   [`${API}/Model.java`]: 'package com.acme.web;\n\npublic class Model {}\n',
@@ -45,7 +79,30 @@ public abstract class LocalizedController extends BaseController {
     'package com.acme.core;\n\npublic class BaseController {\n    protected String render(String view) {\n        return view;\n    }\n}\n',
   [`${CORE}/Strings.java`]:
     'package com.acme.core;\n\npublic final class Strings {\n    public static String trim(String value) {\n        return value.trim();\n    }\n}\n',
-  [`${CORE}/util/Helper.java`]: 'package com.acme.core.util;\n\npublic class Helper {}\n'
+  [`${CORE}/util/Helper.java`]: 'package com.acme.core.util;\n\npublic class Helper {}\n',
+  [`${SHOP}/Child.java`]: CHILD,
+  [`${SHOP}/Base.java`]: `package com.acme.shop;
+
+public class Base {
+    protected int count;
+
+    public static class Options {}
+
+    protected void inherited() {}
+}
+`,
+  [`${SHOP}/Flags.java`]:
+    'package com.acme.shop;\n\npublic final class Flags {\n    public static final boolean READY = true;\n}\n',
+  [`${SHOP}/Outer.java`]: `package com.acme.shop;
+
+public class Outer {
+    public static void run() {}
+
+    public static class Inner {
+        public static void run() {}
+    }
+}
+`
 }
 
 const access: ImportNavigationFileAccess = {
@@ -54,30 +111,36 @@ const access: ImportNavigationFileAccess = {
   findFilesNamed: async (name) => Object.keys(FILES).filter((path) => path.endsWith(`/${name}`))
 }
 
-/** Resolves Go to Definition on the `nth` occurrence of `marker` in the controller. */
-async function definitionAt(marker: string, nth = 0) {
-  let offset = -1
-  for (let index = 0; index <= nth; index += 1) {
-    offset = CONTROLLER.indexOf(marker, offset + 1)
-  }
-  const outline = outlineJavaSource(CONTROLLER)
-  const request = findJavaNavigationRequest(CONTROLLER, outline, offset)
-  if (!request) {
-    return null
-  }
-  const target = await resolveJavaNavigationTarget(
-    access,
-    { filePath: `${API}/AboutController.java`, rootPath: '/repo', content: CONTROLLER, outline },
-    request
-  )
-  return (
-    target && {
-      filePath: target.filePath,
-      line: target.content.slice(0, target.offset).split('\n').length,
-      word: target.content.slice(target.offset, target.offset + marker.length)
+/** Resolves Go to Definition on the `nth` occurrence of a marker in the file at `filePath`. */
+function definitionsIn(filePath: string) {
+  const content = FILES[filePath]
+  return async (marker: string, nth = 0) => {
+    let offset = -1
+    for (let index = 0; index <= nth; index += 1) {
+      offset = content.indexOf(marker, offset + 1)
     }
-  )
+    const outline = outlineJavaSource(content)
+    const request = findJavaNavigationRequest(outline, offset)
+    if (!request) {
+      return null
+    }
+    const target = await resolveJavaNavigationTarget(
+      access,
+      { filePath, rootPath: '/repo', content, outline },
+      request
+    )
+    return (
+      target && {
+        filePath: target.filePath,
+        line: target.content.slice(0, target.offset).split('\n').length,
+        word: target.content.slice(target.offset, target.offset + marker.length)
+      }
+    )
+  }
 }
+
+const definitionAt = definitionsIn(`${API}/AboutController.java`)
+const childDefinitionAt = definitionsIn(`${SHOP}/Child.java`)
 
 describe('Java Go to Definition', () => {
   it('opens types from another module, the same package, wildcard imports and import lines', async () => {
@@ -130,5 +193,46 @@ describe('Java Go to Definition', () => {
     expect(await definitionAt('toString')).toBeNull()
     expect(await definitionAt('return')).toBeNull()
     expect(await definitionAt('resolved without')).toBeNull()
+  })
+
+  it('looks names up from the type around the cursor, as Java scopes them', async () => {
+    // Another method's local does not hide the inherited field.
+    expect(await childDefinitionAt('count', 1)).toEqual({
+      filePath: `${SHOP}/Base.java`,
+      line: 4,
+      word: 'count'
+    })
+    // The class's own method shadows the statically imported one.
+    expect(await childDefinitionAt('trim', 1)).toEqual({
+      filePath: `${SHOP}/Child.java`,
+      line: 28,
+      word: 'trim'
+    })
+    expect(await childDefinitionAt('TAG', 1)).toEqual({
+      filePath: `${SHOP}/Child.java`,
+      line: 11,
+      word: 'TAG'
+    })
+    expect(await childDefinitionAt('READY')).toEqual({
+      filePath: `${SHOP}/Flags.java`,
+      line: 4,
+      word: 'READY'
+    })
+    expect(await childDefinitionAt('Options')).toEqual({
+      filePath: `${SHOP}/Base.java`,
+      line: 6,
+      word: 'Options'
+    })
+    expect(await childDefinitionAt('run', 1)).toEqual({
+      filePath: `${SHOP}/Outer.java`,
+      line: 7,
+      word: 'run'
+    })
+    // Child's supertypes apply, not those of Helper before it.
+    expect(await childDefinitionAt('inherited')).toEqual({
+      filePath: `${SHOP}/Base.java`,
+      line: 8,
+      word: 'inherited'
+    })
   })
 })

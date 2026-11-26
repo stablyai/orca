@@ -24,7 +24,7 @@ async function javaDefinition(
   }
   const content = model.getValue()
   const outline = outlineJavaSource(content)
-  const request = findJavaNavigationRequest(content, outline, model.getOffsetAt(position))
+  const request = findJavaNavigationRequest(outline, model.getOffsetAt(position))
   const access = request ? createOpenFileImportNavigationAccess(useAppStore.getState(), file) : null
   if (!request || !access) {
     return null

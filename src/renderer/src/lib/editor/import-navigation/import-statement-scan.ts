@@ -40,9 +40,13 @@ const NAMESPACE_CLAUSE = new RegExp(`\\*\\s*as\\s+(${IDENTIFIER})`)
 
 /**
  * Blank comments and template bodies, keeping offsets, so statement patterns only see code and plain
- * string literals; `blankStrings` also blanks those literals' contents for declaration lookups.
+ * string literals; `blankStrings` also blanks those literals' contents for declaration lookups, and
+ * `textBlocks` reads `"""` as a multi-line literal, as Java does.
  */
-export function maskNonCodeText(source: string, { blankStrings = false } = {}): string {
+export function maskNonCodeText(
+  source: string,
+  { blankStrings = false, textBlocks = false } = {}
+): string {
   const chars = source.split('')
   let index = 0
   const blank = (from: number, to: number): void => {
@@ -66,17 +70,18 @@ export function maskNonCodeText(source: string, { blankStrings = false } = {}): 
       blank(index, stop)
       index = stop
     } else if (char === "'" || char === '"' || char === '`') {
-      let at = index + 1
-      while (at < source.length && source[at] !== char) {
-        if (char !== '`' && source[at] === '\n') {
+      const delimiter = textBlocks && source.startsWith('"""', index) ? '"""' : char
+      let at = index + delimiter.length
+      while (at < source.length && !source.startsWith(delimiter, at)) {
+        if ((delimiter === "'" || delimiter === '"') && source[at] === '\n') {
           break
         }
         at += source[at] === '\\' ? 2 : 1
       }
       if (char === '`' || blankStrings) {
-        blank(index + 1, Math.min(at, source.length))
+        blank(index + delimiter.length, Math.min(at, source.length))
       }
-      index = at + 1
+      index = at + delimiter.length
     } else {
       index += 1
     }

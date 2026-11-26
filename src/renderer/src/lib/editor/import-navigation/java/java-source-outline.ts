@@ -8,24 +8,34 @@ export type JavaImport = {
   pathStart: number
 }
 
+export type JavaTypeDeclaration = {
+  name: string
+  isEnum: boolean
+  nameOffset: number
+  /** Offsets of the body's `{` and its `}`; a body still being typed runs to the end. */
+  bodyStart: number
+  bodyEnd: number
+  /** Braces open around the declaration; its members sit one deeper. */
+  depth: number
+  /** Names after `extends`/`implements`, without type arguments. */
+  supertypes: string[]
+  /** The type whose body holds this declaration; null at the top level. */
+  parent: JavaTypeDeclaration | null
+}
+
 export type JavaSourceOutline = {
+  /** The source with comments and literals blanked, offsets kept. */
+  code: string
   packageName: string | null
   imports: JavaImport[]
-  /** Names after `extends`/`implements` of the first top-level type, without type arguments. */
-  supertypes: string[]
-  /** Simple names of the types this file declares, nested ones included. */
-  declaredTypes: Set<string>
+  /** Every type the file declares, nested and local ones included, in source order. */
+  types: JavaTypeDeclaration[]
 }
 
 const DOTTED_NAME = '[A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*'
 const PACKAGE = new RegExp(`\\bpackage\\s+(${DOTTED_NAME})\\s*;`)
 const IMPORT = new RegExp(`\\bimport\\s+(static\\s+)?(${DOTTED_NAME})(\\.\\*)?\\s*;`, 'g')
-const TYPE_DECLARATION = /\b(?:class|interface|enum|record)\s+([A-Za-z_$][\w$]*)/g
-
-/** Comments and string literals blanked, offsets kept; Java shares JS comment and quote syntax. */
-export function javaCode(source: string): string {
-  return maskNonCodeText(source, { blankStrings: true })
-}
+const TYPE_DECLARATION = /\b(class|interface|enum|record)\s+([A-Za-z_$][\w$]*)/g
 
 function stripTypeArguments(text: string): string {
   let stripped = text
@@ -42,30 +52,66 @@ function names(list: string | undefined): string[] {
     .filter((name) => new RegExp(`^${DOTTED_NAME}$`).test(name))
 }
 
-function topLevelSupertypes(code: string): string[] {
-  let depth = 0
-  let scanned = 0
-  for (const match of code.matchAll(TYPE_DECLARATION)) {
-    for (; scanned < match.index; scanned += 1) {
-      depth += code[scanned] === '{' ? 1 : code[scanned] === '}' ? -1 : 0
+function supertypesOf(header: string): string[] {
+  const plain = stripTypeArguments(header).replace(/\([^)]*\)/g, ' ')
+  const extendsList = /\bextends\s+([\s\S]*?)(?=\bimplements\b|\bpermits\b|$)/.exec(plain)?.[1]
+  const implementsList = /\bimplements\s+([\s\S]*?)(?=\bpermits\b|$)/.exec(plain)?.[1]
+  return [...names(extendsList), ...names(implementsList)]
+}
+
+/** The matching `}` and the enclosing brace depth of each `{` in `starts`. */
+function bodyBraces(
+  code: string,
+  starts: ReadonlySet<number>
+): Map<number, { end: number; depth: number }> {
+  const bodies = new Map<number, { end: number; depth: number }>()
+  const open: number[] = []
+  for (let at = 0; at < code.length; at += 1) {
+    if (code[at] === '{') {
+      if (starts.has(at)) {
+        bodies.set(at, { end: code.length, depth: open.length })
+      }
+      open.push(at)
+    } else if (code[at] === '}') {
+      const body = bodies.get(open.pop() ?? -1)
+      if (body) {
+        body.end = at
+      }
     }
-    if (depth !== 0) {
-      continue
-    }
-    const headerEnd = code.indexOf('{', match.index)
-    const header = stripTypeArguments(
-      code.slice(match.index + match[0].length, headerEnd === -1 ? undefined : headerEnd)
-    ).replace(/\([^)]*\)/g, ' ')
-    const extendsList = /\bextends\s+([\s\S]*?)(?=\bimplements\b|\bpermits\b|$)/.exec(header)?.[1]
-    const implementsList = /\bimplements\s+([\s\S]*?)(?=\bpermits\b|$)/.exec(header)?.[1]
-    return [...names(extendsList), ...names(implementsList)]
   }
-  return []
+  return bodies
+}
+
+function typeDeclarations(code: string): JavaTypeDeclaration[] {
+  const headers = [...code.matchAll(TYPE_DECLARATION)].map((match) => {
+    const nameOffset = match.index + match[0].length - match[2].length
+    const open = code.indexOf('{', nameOffset)
+    return { match, nameOffset, bodyStart: open === -1 ? code.length : open }
+  })
+  const bodies = bodyBraces(code, new Set(headers.map((header) => header.bodyStart)))
+  const types: JavaTypeDeclaration[] = []
+  for (const { match, nameOffset, bodyStart } of headers) {
+    const body = bodies.get(bodyStart)
+    types.push({
+      name: match[2],
+      isEnum: match[1] === 'enum',
+      nameOffset,
+      bodyStart,
+      bodyEnd: body?.end ?? code.length,
+      depth: body?.depth ?? 0,
+      supertypes: supertypesOf(code.slice(nameOffset + match[2].length, bodyStart)),
+      parent:
+        types.findLast((type) => type.bodyStart < nameOffset && nameOffset < type.bodyEnd) ?? null
+    })
+  }
+  return types
 }
 
 export function outlineJavaSource(source: string): JavaSourceOutline {
-  const code = javaCode(source)
+  // Why: Java shares JS comment and quote syntax, plus `"""` text blocks.
+  const code = maskNonCodeText(source, { blankStrings: true, textBlocks: true })
   return {
+    code,
     packageName: PACKAGE.exec(code)?.[1] ?? null,
     imports: [...code.matchAll(IMPORT)].map((match) => ({
       path: match[2],
@@ -73,9 +119,46 @@ export function outlineJavaSource(source: string): JavaSourceOutline {
       wildcard: match[3] !== undefined,
       pathStart: match.index + match[0].indexOf(match[2], 'import'.length)
     })),
-    supertypes: topLevelSupertypes(code),
-    declaredTypes: new Set([...code.matchAll(TYPE_DECLARATION)].map((match) => match[1]))
+    types: typeDeclarations(code)
   }
+}
+
+/** Types whose bodies contain `offset`, innermost first. */
+export function enclosingJavaTypes(
+  outline: JavaSourceOutline,
+  offset: number
+): JavaTypeDeclaration[] {
+  return outline.types
+    .filter((type) => type.bodyStart < offset && offset < type.bodyEnd)
+    .toReversed()
+}
+
+/**
+ * The type `path` names when written at `offset`: its head declared in a type around `offset`,
+ * innermost first, or at the top level, then each nested name inside the previous one.
+ */
+export function javaTypeAt(
+  outline: JavaSourceOutline,
+  [head, ...nested]: readonly string[],
+  offset = -1
+): JavaTypeDeclaration | null {
+  let type: JavaTypeDeclaration | null = null
+  for (const scope of [...enclosingJavaTypes(outline, offset), null]) {
+    type =
+      outline.types.find((candidate) => candidate.parent === scope && candidate.name === head) ??
+      null
+    if (type) {
+      break
+    }
+  }
+  for (const name of nested) {
+    const scope = type
+    type =
+      scope &&
+      (outline.types.find((candidate) => candidate.parent === scope && candidate.name === name) ??
+        null)
+  }
+  return type
 }
 
 /** Fully qualified candidates for a type name used in this file, most likely first. */

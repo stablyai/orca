@@ -1,16 +1,23 @@
-import { javaCode, javaTypeCandidates, type JavaSourceOutline } from './java-source-outline'
+import { javaTypeAt, type JavaSourceOutline } from './java-source-outline'
+
+/** A type as written in the file; lands on `member` in it or its supertypes, else on the type. */
+export type JavaTypeLookup = { kind: 'type'; type: string; member: string | null }
+
+/** A simple name looked up from the cursor outwards: locals, enclosing types, their supertypes. */
+export type JavaNameLookup = {
+  kind: 'name'
+  name: string
+  /** `this.name` searches the innermost type and its supertypes; `super.name` only the supertypes. */
+  receiver: 'this' | 'super' | null
+  /** Types the name may come from through `import static`, tried last. */
+  staticTypes: string[]
+}
 
 export type JavaNavigationRequest = {
-  /** Fully qualified types to open, most likely first; empty when only a member is named. */
-  types: string[]
-  /** Member or nested type to land on; null lands on the type itself. */
-  member: string | null
-  /** Types an unqualified member may come from through `import static …*`. */
-  staticTypes: string[]
-  /** Look for the member in this file, then up its `extends`/`implements` chain. */
-  searchHierarchy: boolean
-  /** `super.name`: skip this file's own declaration. */
-  skipCurrentFile: boolean
+  /** Where the name is used; it resolves in the scope around this offset. */
+  offset: number
+  /** Tried in order until one finds a declaration. */
+  lookups: (JavaTypeLookup | JavaNameLookup)[]
 }
 
 const IDENTIFIER_CHAR = /[\w$]/
@@ -53,18 +60,14 @@ function qualifierBefore(code: string, start: number): string | null {
   )
 }
 
-function isConstantName(name: string): boolean {
-  return /^[A-Z][A-Z0-9_]*$/.test(name) && /[_0-9]/.test(name)
+function typeLookup(type: string, member: string | null): JavaTypeLookup {
+  return { kind: 'type', type, member }
 }
 
-function typeRequest(types: string[], member: string | null): JavaNavigationRequest {
-  return { types, member, staticTypes: [], searchHierarchy: false, skipCurrentFile: false }
-}
-
-function importRequest(
+function importLookups(
   outline: JavaSourceOutline,
   offset: number
-): JavaNavigationRequest | null | undefined {
+): JavaTypeLookup[] | null | undefined {
   const entry = outline.imports.find(
     (candidate) =>
       offset >= candidate.pathStart && offset < candidate.pathStart + candidate.path.length
@@ -82,69 +85,69 @@ function importRequest(
   if (typeIndex === -1 || clicked < typeIndex) {
     return null
   }
-  return typeRequest(
-    [segments.slice(0, typeIndex + 1).join('.')],
-    clicked > typeIndex ? segments[clicked] : null
-  )
+  // Why: a segment past the type names a member of the one before it, e.g. `NAME` of `Outer.Inner`.
+  return clicked > typeIndex
+    ? [typeLookup(segments.slice(0, clicked).join('.'), segments[clicked])]
+    : [typeLookup(segments.slice(0, typeIndex + 1).join('.'), null)]
 }
 
-/** What a Go to Definition request at `offset` in a Java file should open, or null. */
-export function findJavaNavigationRequest(
-  source: string,
+function lookupsAt(
   outline: JavaSourceOutline,
   offset: number
-): JavaNavigationRequest | null {
-  const fromImport = importRequest(outline, offset)
+): JavaNavigationRequest['lookups'] | null {
+  const fromImport = importLookups(outline, offset)
   if (fromImport !== undefined) {
     return fromImport
   }
-  const code = javaCode(source)
-  const target = wordAt(code, offset)
-  if (!target) {
+  const target = wordAt(outline.code, offset)
+  if (!target || KEYWORDS.has(target.word)) {
     return null
   }
   const { word, start } = target
-  if (KEYWORDS.has(word)) {
-    return null
-  }
-  const qualifier = qualifierBefore(code, start)
+  const qualifier = qualifierBefore(outline.code, start)
   if (qualifier === 'this' || qualifier === 'super') {
-    return {
-      types: [],
-      member: word,
-      staticTypes: [],
-      searchHierarchy: true,
-      skipCurrentFile: qualifier === 'super'
-    }
+    return [{ kind: 'name', name: word, receiver: qualifier, staticTypes: [] }]
   }
   if (qualifier) {
     const segments = qualifier.split('.')
     // Why: a lowercase last qualifier is a variable whose type is unknown without a language server.
     if (/^[A-Z]/.test(segments.at(-1) ?? '')) {
-      return typeRequest(javaTypeCandidates(outline, qualifier), word)
+      return [typeLookup(qualifier, word)]
     }
     return segments.every((segment) => /^[a-z]/.test(segment)) && /^[A-Z]/.test(word)
-      ? typeRequest([`${qualifier}.${word}`], null)
+      ? [typeLookup(`${qualifier}.${word}`, null)]
       : null
   }
-  const staticImport = outline.imports.find(
-    (entry) => entry.isStatic && !entry.wildcard && entry.path.split('.').at(-1) === word
-  )
-  if (staticImport) {
-    return typeRequest([staticImport.path.split('.').slice(0, -1).join('.')], word)
+  const singleStatic = outline.imports
+    .filter((entry) => entry.isStatic && !entry.wildcard && entry.path.split('.').at(-1) === word)
+    .map((entry) => entry.path.split('.').slice(0, -1).join('.'))
+  const nameLookup: JavaNameLookup = {
+    kind: 'name',
+    name: word,
+    receiver: null,
+    // Why: a single static import shadows the on-demand ones for its name.
+    staticTypes:
+      singleStatic.length > 0
+        ? singleStatic
+        : outline.imports
+            .filter((entry) => entry.isStatic && entry.wildcard)
+            .map((entry) => entry.path)
   }
-  if (/^[A-Z]/.test(word) && !isConstantName(word)) {
-    return outline.declaredTypes.has(word)
-      ? { types: [], member: word, staticTypes: [], searchHierarchy: true, skipCurrentFile: false }
-      : typeRequest(javaTypeCandidates(outline, word), null)
+  if (!/^[A-Z]/.test(word) || singleStatic.length > 0 || javaTypeAt(outline, [word], offset)) {
+    return [nameLookup]
   }
-  return {
-    types: [],
-    member: word,
-    staticTypes: outline.imports
-      .filter((entry) => entry.isStatic && entry.wildcard)
-      .map((entry) => entry.path),
-    searchHierarchy: true,
-    skipCurrentFile: false
-  }
+  // Why: an all-caps name is usually a constant, so a type such as `URL` comes second; any other
+  // capitalized name is a type first, else a member type inherited from a supertype.
+  return /^[A-Z][A-Z0-9_]*$/.test(word)
+    ? [nameLookup, typeLookup(word, null)]
+    : [typeLookup(word, null), nameLookup]
+}
+
+/** What a Go to Definition request at `offset` in a Java file should look up, or null. */
+export function findJavaNavigationRequest(
+  outline: JavaSourceOutline,
+  offset: number
+): JavaNavigationRequest | null {
+  const lookups = lookupsAt(outline, offset)
+  return lookups ? { offset, lookups } : null
 }

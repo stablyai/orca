@@ -174,14 +174,16 @@ export function importNavigationTargetLink(
   )
   const start = targetModel.getPositionAt(resolved.offset)
   const word = targetModel.getWordAtPosition(start)
+  const endLineNumber = Math.min(targetModel.getLineCount(), start.lineNumber + PREVIEW_LINES)
   return {
     uri: targetModel.uri,
-    // Why: eight or more lines make Monaco preview the declaration's indented block, not one name.
+    // Why: eight or more lines make Monaco preview the declaration's indented block, not one name;
+    // ending at the last column keeps a declaration on a short file's final line in the preview.
     range: {
       startLineNumber: start.lineNumber,
       startColumn: 1,
-      endLineNumber: Math.min(targetModel.getLineCount(), start.lineNumber + PREVIEW_LINES),
-      endColumn: 1
+      endLineNumber,
+      endColumn: targetModel.getLineMaxColumn(endLineNumber)
     },
     targetSelectionRange: {
       startLineNumber: start.lineNumber,

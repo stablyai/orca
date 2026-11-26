@@ -2,15 +2,25 @@ import { dirname, getRelativePathInsideRoot } from '@/lib/path'
 import { resolveModulePath } from '../import-module-candidates'
 import type { ImportNavigationFileAccess } from '../import-navigation-file-access'
 import type { ImportNavigationTarget } from '../import-target-resolution'
-import { locateJavaMember, locateJavaType } from './java-declaration-locate'
-import type { JavaNavigationRequest } from './java-navigation-request'
+import { locateJavaLocal, locateJavaMember } from './java-declaration-locate'
+import type {
+  JavaNameLookup,
+  JavaNavigationRequest,
+  JavaTypeLookup
+} from './java-navigation-request'
 import {
+  enclosingJavaTypes,
+  javaTypeAt,
   javaTypeCandidates,
   outlineJavaSource,
-  type JavaSourceOutline
+  type JavaSourceOutline,
+  type JavaTypeDeclaration
 } from './java-source-outline'
 
 type JavaFile = { filePath: string; content: string; outline: JavaSourceOutline }
+
+/** A resolved type name; `type` is null when its file has no such declaration. */
+type JavaTypeInFile = { file: JavaFile; type: JavaTypeDeclaration | null }
 
 type JavaSearch = {
   access: ImportNavigationFileAccess
@@ -63,12 +73,12 @@ async function readJavaFile(search: JavaSearch, filePath: string): Promise<JavaF
   return content === null ? null : { filePath, content, outline: outlineJavaSource(content) }
 }
 
-/** The file declaring the top-level type of `qualifiedName`, plus the nested type names after it. */
+/** The file declaring the top-level type of `qualifiedName`, plus the type path from it. */
 async function resolveTypeFile(
   search: JavaSearch,
   fromFile: JavaFile,
   qualifiedName: string
-): Promise<{ file: JavaFile; nested: string[] } | null> {
+): Promise<{ file: JavaFile; path: string[] } | null> {
   const segments = qualifiedName.split('.')
   const typeIndex = Math.max(
     0,
@@ -76,7 +86,7 @@ async function resolveTypeFile(
   )
   const fileName = `${segments[typeIndex]}.java`
   const relativePath = [...segments.slice(0, typeIndex), fileName].join('/')
-  const nested = segments.slice(typeIndex + 1)
+  const path = segments.slice(typeIndex)
   const candidates = sourceRoots(fromFile)
     .map((root) => resolveModulePath(root, relativePath))
     .filter((candidate) => getRelativePathInsideRoot(candidate, search.rootPath) !== null)
@@ -84,20 +94,40 @@ async function resolveTypeFile(
   for (const [index, candidate] of candidates.entries()) {
     const file = exists[index] ? await readJavaFile(search, candidate) : null
     if (file) {
-      return { file, nested }
+      return { file, path }
     }
   }
   // Why: another module (e.g. Gradle's core/src/main/java) holds the type; find it by name.
   const named = (await search.access.findFilesNamed?.(fileName)) ?? []
   const matches = named
-    .filter((path) => forwardSlashes(path).endsWith(`/${relativePath}`))
+    .filter((filePath) => forwardSlashes(filePath).endsWith(`/${relativePath}`))
     .sort(
       (a, b) => sharedPrefixLength(b, fromFile.filePath) - sharedPrefixLength(a, fromFile.filePath)
     )
   for (const match of matches.slice(0, 3)) {
     const file = await readJavaFile(search, match)
     if (file) {
-      return { file, nested }
+      return { file, path }
+    }
+  }
+  return null
+}
+
+/** The type a name written at `offset` in `fromFile` refers to: declared there, else imported. */
+async function resolveType(
+  search: JavaSearch,
+  fromFile: JavaFile,
+  name: string,
+  offset: number
+): Promise<JavaTypeInFile | null> {
+  const declared = javaTypeAt(fromFile.outline, name.split('.'), offset)
+  if (declared) {
+    return { file: fromFile, type: declared }
+  }
+  for (const qualifiedName of javaTypeCandidates(fromFile.outline, name)) {
+    const resolved = await resolveTypeFile(search, fromFile, qualifiedName)
+    if (resolved) {
+      return { file: resolved.file, type: javaTypeAt(resolved.file.outline, resolved.path) }
     }
   }
   return null
@@ -110,31 +140,94 @@ function target(file: JavaFile, offset: number | null): ImportNavigationTarget {
 async function memberInHierarchy(
   search: JavaSearch,
   file: JavaFile,
+  type: JavaTypeDeclaration,
   member: string,
   skipOwn: boolean,
   depth: number
 ): Promise<ImportNavigationTarget | null> {
-  if (search.visited.has(file.filePath)) {
+  const key = `${file.filePath}\0${type.nameOffset}`
+  if (search.visited.has(key)) {
     return null
   }
-  search.visited.add(file.filePath)
-  const own = skipOwn ? null : locateJavaMember(file.content, member)
+  search.visited.add(key)
+  const own = skipOwn ? null : locateJavaMember(file.outline, type, member)
   if (own !== null) {
     return target(file, own)
   }
   if (depth >= MAX_SUPERTYPE_DEPTH) {
     return null
   }
-  for (const supertype of file.outline.supertypes) {
-    for (const qualifiedName of javaTypeCandidates(file.outline, supertype)) {
-      const resolved = await resolveTypeFile(search, file, qualifiedName)
-      if (resolved) {
-        const found = await memberInHierarchy(search, resolved.file, member, false, depth + 1)
-        if (found) {
-          return found
-        }
-        break
+  for (const supertype of type.supertypes) {
+    // Why: a supertype name resolves where it is written, around the subtype's declaration.
+    const resolved = await resolveType(search, file, supertype, type.nameOffset)
+    const found = resolved?.type
+      ? await memberInHierarchy(search, resolved.file, resolved.type, member, false, depth + 1)
+      : null
+    if (found) {
+      return found
+    }
+  }
+  return null
+}
+
+async function openType(
+  search: JavaSearch,
+  current: JavaFile,
+  offset: number,
+  lookup: JavaTypeLookup
+): Promise<ImportNavigationTarget | null> {
+  const resolved = await resolveType(search, current, lookup.type, offset)
+  if (!resolved) {
+    return null
+  }
+  const member =
+    lookup.member && resolved.type
+      ? await memberInHierarchy(search, resolved.file, resolved.type, lookup.member, false, 0)
+      : null
+  return member ?? target(resolved.file, resolved.type?.nameOffset ?? null)
+}
+
+async function lookUpName(
+  search: JavaSearch,
+  current: JavaFile,
+  offset: number,
+  { name, receiver, staticTypes }: JavaNameLookup
+): Promise<ImportNavigationTarget | null> {
+  const enclosing = enclosingJavaTypes(current.outline, offset)
+  // Why: `this.` and `super.` name the innermost type's members; a simple name may be an outer one's.
+  const scopes = receiver ? enclosing.slice(0, 1) : enclosing
+  if (!receiver) {
+    const local = locateJavaLocal(current.outline, name, offset)
+    if (local !== null) {
+      return target(current, local)
+    }
+  }
+  if (receiver !== 'super') {
+    for (const scope of scopes) {
+      const own = locateJavaMember(current.outline, scope, name)
+      if (own !== null) {
+        return target(current, own)
       }
+    }
+  }
+  const declared = receiver ? null : javaTypeAt(current.outline, [name], offset)
+  if (declared) {
+    return target(current, declared.nameOffset)
+  }
+  for (const scope of scopes) {
+    const inherited = await memberInHierarchy(search, current, scope, name, true, 0)
+    if (inherited) {
+      return inherited
+    }
+  }
+  // Why: members of the file and its supertypes shadow names brought in with `import static`.
+  for (const staticType of staticTypes) {
+    const resolved = await resolveType(search, current, staticType, offset)
+    const found = resolved?.type
+      ? await memberInHierarchy(search, resolved.file, resolved.type, name, false, 0)
+      : null
+    if (found) {
+      return found
     }
   }
   return null
@@ -157,41 +250,13 @@ export async function resolveJavaNavigationTarget(
     content: params.content,
     outline: params.outline
   }
-  for (const qualifiedName of request.types) {
-    const resolved = await resolveTypeFile(search, current, qualifiedName)
-    if (!resolved) {
-      continue
-    }
-    const { file, nested } = resolved
-    const typeName =
-      nested.at(-1) ?? qualifiedName.split('.').find((segment) => /^[A-Z]/.test(segment))
-    const typeOffset = typeName ? locateJavaType(file.content, typeName) : null
-    if (!request.member) {
-      return target(file, typeOffset)
-    }
-    return (
-      (await memberInHierarchy(search, file, request.member, false, 0)) ?? target(file, typeOffset)
-    )
-  }
-  if (!request.member || !request.searchHierarchy) {
-    return null
-  }
-  if (!request.skipCurrentFile) {
-    const own = locateJavaMember(current.content, request.member)
-    if (own !== null) {
-      return target(current, own)
-    }
-  }
-  // Why: inherited members shadow names brought in with `import static …*`.
-  const inherited = await memberInHierarchy(search, current, request.member, true, 0)
-  if (inherited) {
-    return inherited
-  }
-  for (const staticType of request.staticTypes) {
-    const resolved = await resolveTypeFile(search, current, staticType)
-    const offset = resolved ? locateJavaMember(resolved.file.content, request.member) : null
-    if (resolved && offset !== null) {
-      return target(resolved.file, offset)
+  for (const lookup of request.lookups) {
+    const found =
+      lookup.kind === 'type'
+        ? await openType(search, current, request.offset, lookup)
+        : await lookUpName(search, current, request.offset, lookup)
+    if (found) {
+      return found
     }
   }
   return null
