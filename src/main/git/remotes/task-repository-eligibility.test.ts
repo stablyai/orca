@@ -29,7 +29,7 @@ import { isTaskRepositoryIneligible } from './task-repository-eligibility'
 
 beforeEach(() => {
   state.remoteLines = ''
-  state.gitlabHosts = ['gitlab.example.com', 'gitlab.example.com:8080']
+  state.gitlabHosts = ['gitlab.com', 'gitlab.example.com', 'gitlab.example.com:8080']
   state.authenticatedHosts = []
 })
 
@@ -38,54 +38,71 @@ function remotes(...urls: string[]): void {
 }
 
 it('hides a project whose remotes are all GitLab', async () => {
-  remotes(
-    'http://gitlab.example.com:8080/acme/widgets.git',
-    'https://gitlab.example.com/acme/widgets.git'
-  )
+  remotes('http://gitlab.example.com:8080/acme/widgets.git', 'git@gitlab.com:acme/widgets.git')
 
   expect(await isTaskRepositoryIneligible('/repo', 'github')).toBe(true)
 })
 
-it('hides a GitLab project with an extra non-GitHub mirror (#49583)', async () => {
+it('keeps a GitLab project with an unknown mirror remote', async () => {
   remotes(
     'http://gitlab.example.com:8080/acme/widgets.git',
     'http://mirror.example.org:3000/acme/widgets.git'
   )
 
-  expect(await isTaskRepositoryIneligible('/repo', 'github')).toBe(true)
+  expect(await isTaskRepositoryIneligible('/repo', 'github')).toBe(false)
 })
 
-it('keeps a project that also has a GitHub remote', async () => {
+it('keeps a project with GitHub over HTTPS or SSH', async () => {
   remotes('http://gitlab.example.com:8080/acme/widgets.git', 'git@github.com:acme/widgets.git')
+  expect(await isTaskRepositoryIneligible('/repo', 'github')).toBe(false)
+
+  remotes('http://gitlab.example.com:8080/acme/widgets.git', 'https://github.com/acme/widgets.git')
+  expect(await isTaskRepositoryIneligible('/repo', 'github')).toBe(false)
+})
+
+it('keeps an unknown SSH alias', async () => {
+  remotes('http://gitlab.example.com:8080/acme/widgets.git', 'ssh://unknown-alias/acme/widgets.git')
 
   expect(await isTaskRepositoryIneligible('/repo', 'github')).toBe(false)
 })
 
-it('keeps a project with an SSH alias, which cannot rule out GitHub', async () => {
+it('keeps a GitHub Enterprise host whether or not it is authenticated', async () => {
   remotes(
     'http://gitlab.example.com:8080/acme/widgets.git',
-    'ssh://gitlab-internal/acme/widgets.git'
+    'https://ghe.example.com/acme/widgets.git'
   )
-
   expect(await isTaskRepositoryIneligible('/repo', 'github')).toBe(false)
 
-  remotes('http://gitlab.example.com:8080/acme/widgets.git', 'ssh://unknown-alias/acme/widgets.git')
+  state.authenticatedHosts = ['ghe.example.com']
   expect(await isTaskRepositoryIneligible('/repo', 'github')).toBe(false)
+})
+
+it('treats known public non-GitHub forges as exclusion evidence', async () => {
+  remotes(
+    'http://gitlab.example.com:8080/acme/widgets.git',
+    'https://bitbucket.org/acme/widgets.git'
+  )
+  expect(await isTaskRepositoryIneligible('/repo', 'github')).toBe(true)
+
+  remotes(
+    'http://gitlab.example.com:8080/acme/widgets.git',
+    'https://dev.azure.com/acme/widgets.git'
+  )
+  expect(await isTaskRepositoryIneligible('/repo', 'github')).toBe(true)
 })
 
 it('keeps a project with no remotes or an explicit connection', async () => {
   remotes()
 
   expect(await isTaskRepositoryIneligible('/repo', 'github')).toBe(false)
-  remotes('git@github.com:acme/widgets.git')
+  remotes('https://github.com/acme/widgets.git')
   expect(await isTaskRepositoryIneligible('/repo', 'github', 'connection-1')).toBe(false)
 })
 
 it('mirrors the rule for the GitLab provider', async () => {
-  remotes('https://github.com/acme/widgets.git', 'https://github.com/acme/tools.git')
-
+  remotes('git@github.com:acme/widgets.git', 'https://github.com/acme/tools.git')
   expect(await isTaskRepositoryIneligible('/repo', 'gitlab')).toBe(true)
 
-  remotes('https://github.com/acme/widgets.git', 'http://gitlab.example.com:8080/acme/widgets.git')
+  remotes('git@github.com:acme/widgets.git', 'http://gitlab.example.com:8080/acme/widgets.git')
   expect(await isTaskRepositoryIneligible('/repo', 'gitlab')).toBe(false)
 })

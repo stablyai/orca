@@ -1,4 +1,5 @@
 import { parseGitRemoteVerboseOutput } from '../../../shared/git/remotes/git-remote-identity'
+import { getPublicForgeProviderForHost } from '../../../shared/git/remotes/public-forge-host'
 import { isDefaultGitHubHost } from '../../../shared/github/repositories/repository-identity-key'
 import { isGitHubHostAuthenticated } from '../../github/repositories/github-enterprise-repository'
 import {
@@ -11,9 +12,8 @@ import {
   parseRemoteProjectRefCandidate
 } from '../../gitlab/projects/project-ref-parser'
 import {
-  gitHubSshConfigHostAlias,
   parseGitHubRemoteIdentity,
-  rawSshTransportHost
+  remoteUrlUsesSshTransport
 } from '../../github/repositories/github-remote-identity-parsing'
 import { REMOTE_URL_PROBE_TIMEOUT_MS } from './remote-git-probe-timeout'
 import { gitExecFileAsync } from '../command-runner/git-exec-file'
@@ -28,28 +28,42 @@ async function resolveRemoteForgeEvidence(
   repoPath: string,
   localGitOptions: RemoteRefLocalGitOptions
 ): Promise<RemoteForgeEvidence> {
-  // An SSH alias cannot be ruled out without expanding it in the repo runtime; unknown stays visible.
-  if (gitHubSshConfigHostAlias(remoteUrl) ?? rawSshTransportHost(remoteUrl)) {
-    return 'unknown'
-  }
-  const url = remoteUrl
+  const identity = parseGitHubRemoteIdentity(remoteUrl)
 
-  const identity = parseGitHubRemoteIdentity(url)
+  // Direct github.com (HTTPS or SSH) must win before the SSH fallback.
+  if (identity && isDefaultGitHubHost(identity.host)) {
+    return 'github'
+  }
   if (
     identity &&
-    (isDefaultGitHubHost(identity.host) ||
-      (await isGitHubHostAuthenticated(identity.host, repoPath, null, localGitOptions)))
+    (await isGitHubHostAuthenticated(identity.host, repoPath, null, localGitOptions))
   ) {
     return 'github'
   }
+
+  // A known GitLab host is affirmative evidence, including SSH to that host.
   const gitlabRef =
     provider === 'github'
-      ? parseGitLabProjectRef(url, gitLabHosts)
-      : parseGitLabProjectRefCandidate(url)
+      ? parseGitLabProjectRef(remoteUrl, gitLabHosts)
+      : parseGitLabProjectRefCandidate(remoteUrl)
   if (gitlabRef) {
     return 'gitlab'
   }
-  return parseRemoteProjectRefCandidate(url) ? 'non-github' : 'unknown'
+
+  // A non-default SSH host may be an OpenSSH alias; do not rule out GitHub.
+  if (remoteUrlUsesSshTransport(remoteUrl)) {
+    return 'unknown'
+  }
+
+  const candidate = parseRemoteProjectRefCandidate(remoteUrl)
+  const host = identity?.host ?? candidate?.host
+  const knownForge = host ? getPublicForgeProviderForHost(host) : null
+  if (knownForge && knownForge !== 'gitlab') {
+    return 'non-github'
+  }
+
+  // An unknown HTTP host may be GitHub Enterprise. Never exclusion evidence.
+  return 'unknown'
 }
 
 /** Call only after the requested provider found no usable source; unknown is never exclusion evidence. */
