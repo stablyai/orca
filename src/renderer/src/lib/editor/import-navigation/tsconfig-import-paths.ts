@@ -1,5 +1,6 @@
 import { parse } from 'jsonc-parser'
 import { dirname, getRelativePathInsideRoot } from '@/lib/path'
+import { isCaseInsensitiveRuntimeRoot } from '../../../../../shared/file-access/cross-platform-path'
 import { escapeRegex } from '../../../../../shared/text/regex-escaping'
 import type { ImportNavigationFileAccess } from './import-navigation-file-access'
 import {
@@ -170,7 +171,11 @@ function toMappings(config: ConfigMappings): ImportPathMappings | null {
 type SpecUsage = 'include' | 'exclude'
 
 /** TypeScript's wildcards: `**` spans directories, while `*` and `?` stay within one segment. */
-function wildcardSegmentsPattern(segments: string[], usage: SpecUsage): RegExp {
+function wildcardSegmentsPattern(
+  segments: string[],
+  usage: SpecUsage,
+  ignoreCase: boolean
+): RegExp {
   const source = segments.map((segment, index) => {
     if (segment === '**') {
       return '(?:[^/]+/)*'
@@ -182,7 +187,8 @@ function wildcardSegmentsPattern(segments: string[], usage: SpecUsage): RegExp {
     return index < segments.length - 1 ? `${literal}/` : literal
   })
   // Why: an `exclude` entry also drops everything beneath the path it matches.
-  return new RegExp(`^${source.join('')}${usage === 'exclude' ? '(?:$|/)' : '$'}`)
+  const pattern = `^${source.join('')}${usage === 'exclude' ? '(?:$|/)' : '$'}`
+  return new RegExp(pattern, ignoreCase ? 'i' : '')
 }
 
 /** Whether an `include` or `exclude` entry, already resolved against its config, names `filePath`. */
@@ -199,10 +205,10 @@ function specMatches(resolvedSpec: string, filePath: string, usage: SpecUsage): 
     return usage === 'exclude' ? relative !== null : relative === ''
   }
   const relative = getRelativePathInsideRoot(filePath, spec.slice(0, wildcardAt))
-  return (
-    relative !== null &&
-    wildcardSegmentsPattern(spec.slice(wildcardAt).split(/[\\/]+/), usage).test(relative)
-  )
+  const segments = spec.slice(wildcardAt).split(/[\\/]+/)
+  // Why: TypeScript applies the file system's case policy to wildcards too, not only the prefix.
+  const ignoreCase = isCaseInsensitiveRuntimeRoot(filePath)
+  return relative !== null && wildcardSegmentsPattern(segments, usage, ignoreCase).test(relative)
 }
 
 function specsMatch(specs: ConfigSpecs | null, filePath: string, usage: SpecUsage): boolean {
@@ -218,7 +224,10 @@ function sourcesCover(
   { include, exclude, files, configDir }: ConfigSources,
   filePath: string
 ): boolean {
-  if (files?.specs.some((file) => resolveModulePath(files.originDir, file) === filePath)) {
+  const listed = files?.specs.some(
+    (file) => getRelativePathInsideRoot(filePath, resolveModulePath(files.originDir, file)) === ''
+  )
+  if (listed) {
     return true
   }
   // Why: with neither `files` nor `include` set, TypeScript includes everything under the config.
