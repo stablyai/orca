@@ -1,8 +1,12 @@
 import { create } from 'zustand'
 
 /** Public install counts by plugin key, mirrored from main; display only. */
-export const usePluginInstallCountsStore = create<{ counts: Record<string, number> }>(() => ({
-  counts: {}
+export const usePluginInstallCountsStore = create<{
+  counts: Record<string, number>
+  loaded: boolean
+}>(() => ({
+  counts: {},
+  loaded: false
 }))
 
 let watching = false
@@ -14,7 +18,7 @@ function loadInstallCounts(): void {
   }
   void plugins
     .getInstallCounts()
-    .then((counts) => usePluginInstallCountsStore.setState({ counts }))
+    .then((counts) => usePluginInstallCountsStore.setState({ counts, loaded: true }))
     // Why ignored: an older host has no counts; they just stay hidden.
     .catch(() => undefined)
 }
