@@ -27,6 +27,10 @@ export class MobileEndpointNudgeRouter {
       setTimer: ScheduleTimer
       // A resume or network change is fresh evidence, so speculative credentials may be retried.
       onExternalSignal: (liftOnly?: boolean) => void
+      // A lift that can't dial anything only rearms the gate, so unchanged-network callbacks skip it.
+      canLiftDial: () => boolean
+      // A lifted gate was the only retry owner of a due lease replacement, which a connected relay's nudge skips.
+      retryDueLease: () => void
       clearTimer: typeof clearTimeout
       onLocalNetworkArrival: () => void
     }
@@ -62,10 +66,14 @@ export class MobileEndpointNudgeRouter {
         this.cancelTrailingLift()
         this.lastGateLiftAt = args.now()
         args.onExternalSignal(true)
+        const lifting = args.controller.holdsExternalSignalGate()
         args.controller.handleActiveNudge(args.logical, reason)
+        if (lifting) {
+          args.retryDueLease()
+        }
       }
       const sinceLift = args.now() - this.lastGateLiftAt
-      if (sinceLift >= GATED_NETWORK_NUDGE_WINDOW_MS) {
+      if (sinceLift >= GATED_NETWORK_NUDGE_WINDOW_MS && args.canLiftDial()) {
         liftGate()
         void this.routeNetworkChange()
         return
@@ -76,13 +84,24 @@ export class MobileEndpointNudgeRouter {
           liftGate()
         }
       })
-      // A suppressed callback may be connectivity returning, so it still earns one retry when the window ends.
-      this.trailingLift ??= args.setTimer(() => {
-        this.trailingLift = null
-        if (!args.isStopped() && args.isForeground() && args.controller.holdsExternalSignalGate()) {
-          liftGate()
-        }
-      }, GATED_NETWORK_NUDGE_WINDOW_MS - sinceLift)
+      // A suppressed callback may be connectivity returning, so it still earns one retry when the window ends,
+      // if that retry could dial anything (rechecked when it fires).
+      if (args.canLiftDial()) {
+        this.trailingLift ??= args.setTimer(
+          () => {
+            this.trailingLift = null
+            if (
+              !args.isStopped() &&
+              args.isForeground() &&
+              args.controller.holdsExternalSignalGate() &&
+              args.canLiftDial()
+            ) {
+              liftGate()
+            }
+          },
+          Math.max(0, GATED_NETWORK_NUDGE_WINDOW_MS - sinceLift)
+        )
+      }
       return
     }
     // Refill speculative retries on a resume or a real network move, never on a repeated callback.

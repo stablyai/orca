@@ -9,6 +9,7 @@ import { RelayDirectorHttpError, RelayResolveTimeoutBudget } from './mobile-rela
 import { encodeBase64Url } from '../encryption/mobile-session-id-encoding'
 import { persistResumeConfirmation } from './mobile-relay-credential-rotation'
 import { isExplicitCredentialRejection, isRelayHostOffline } from './relay-credential-eligibility'
+import { relayHostReachabilityForFailure } from './relay-host-reachability-latch'
 import type { MobileRelayCredentialBundle } from '../../host-credentials/mobile-relay-credential-bundle'
 import type { RelayReconnectController } from './mobile-relay-reconnect-controller'
 import type { StableLogicalRpcClient } from '../connection/stable-logical-rpc-client'
@@ -79,6 +80,17 @@ export class MobileRelaySessionEstablisher {
     this.hostOfflineStreak = new RelayHostOfflineStreak(() => args.logical.getLastConnectedAt())
   }
 
+  // A gated lift can dial only a dialable current or grace, or a pending that isn't paused or may take its lift try.
+  liftCanDial(): boolean {
+    const bundle = this.args.bundle()
+    return (
+      (bundle !== null &&
+        this.args.controller.hasDialableCredential(bundle.current, bundle.grace)) ||
+      this.pendingFailures < PENDING_DIAL_BUDGET ||
+      this.args.now() - this.lastLiftGrantAt >= this.pendingPauseMs
+    )
+  }
+
   // Proven by a 4404 or paused: either way, rereading the keychain for it would find nothing to dial.
   pendingSettled(): boolean {
     return this.pendingProven || this.pendingPauseRemainingMs() > 0
@@ -123,9 +135,10 @@ export class MobileRelaySessionEstablisher {
   ): Promise<
     | { outcome: 'established' }
     | { outcome: 'aborted' }
-    | { outcome: 'failed'; error: Error | null; unconfirmed: boolean }
+    | { outcome: 'failed'; error: Error | null; unconfirmed: boolean; evidence?: Error }
   > {
     let lastError: Error | null = null
+    let refusal: Error | undefined
     let usedPending = false
     const pendingToken = this.args.bundle()?.pending?.token
     // Keep only this bundle's tokens, so retention stays at three.
@@ -186,6 +199,7 @@ export class MobileRelaySessionEstablisher {
         if (!usedPending) {
           this.args.controller.recordRejectedCredential(credential.version)
         }
+        refusal ??= result.error
         continue
       }
       // A director 401 can be stale (it reads a store an edge-hosted host may have outgrown), so try
@@ -198,7 +212,9 @@ export class MobileRelaySessionEstablisher {
     return {
       outcome: 'failed',
       error: lastError,
-      unconfirmed: usedPending || isDirectorRefusal(lastError)
+      unconfirmed: usedPending || isDirectorRefusal(lastError),
+      // A verdict-less last failure (say, a director 503 for pending) must not reopen the refused verdict.
+      evidence: relayHostReachabilityForFailure(lastError) === 'connecting' ? refusal : undefined
     }
   }
 

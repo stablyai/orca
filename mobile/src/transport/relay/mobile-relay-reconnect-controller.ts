@@ -24,6 +24,9 @@ export type RelayReconnectDependencies = {
 }
 
 type RecoveryGate = 'external-signal' | 'fresh-credential'
+// unconfirmed: the dial's token may not exist (pending) or was refused by a possibly stale director.
+// evidence: an earlier refusal in the attempt, when the final error names no verdict, keeps that verdict standing.
+type DialOutcome = { unconfirmed?: boolean; evidence?: Error | null }
 type RetainableRelaySession = Pick<MobileRelayRpcSession, 'getFailure' | 'notifyForeground'>
 
 export class RelayReconnectController {
@@ -175,13 +178,9 @@ export class RelayReconnectController {
 
   // Retry missing credentials slowly so later durable writes can restore access.
   armCredentialReprobe(): void {
-    if (this.credentials.hasRejected()) {
-      this.holdGate(true, 'fresh-credential')
-      return
-    }
-    if (this.recoveryGate) {
-      // Mint a gated tick’s pass token or deferral() would double the intended cadence.
-      this.holdGate(true)
+    // Mint a gated tick’s pass token or deferral() would double the intended cadence.
+    if (this.credentials.hasRejected() || this.recoveryGate) {
+      this.holdGate(true, this.credentials.hasRejected() ? 'fresh-credential' : this.recoveryGate)
       return
     }
     // Missing/expired alone must not force rotation; retry durable reads through plain escalating cooldown.
@@ -234,11 +233,10 @@ export class RelayReconnectController {
     return null
   }
 
-  // unconfirmed: the dial's token may not exist (pending) or was refused by a possibly stale director.
-  registerFailure(error: Error | null, scheduleRetry = true, unconfirmed = false): void {
+  registerFailure(error: Error | null, scheduleRetry = true, dial: DialOutcome = {}): void {
     // Bank rejection evidence before gated early return, except when a live authenticated relay disproves revocation.
     if (!this.activeSession) {
-      this.evidence.record(error)
+      this.evidence.record(dial.evidence ?? error)
     }
     const hostOffline = isRelayHostOffline(error)
     const credentialRejected = isExplicitCredentialRejection(error)
@@ -260,7 +258,7 @@ export class RelayReconnectController {
       : this.delays.transportDelayMs(failureCount, relayDirectorRetryAfterMs(error))
     this.nextAttemptAt = now + delay
     // Without scheduleRetry (lease refresh) the caller owns the retry and needs retryDelayMs, not a gate.
-    const speculative = scheduleRetry && unconfirmed && !hostOffline
+    const speculative = scheduleRetry && dial.unconfirmed === true && !hostOffline
     if (error instanceof MobileE2EEAuthenticationError || speculative) {
       // E2EE rejection can be transient during credential commit, and an unconfirmed token (even a refused pending,
       // whose install may still commit) may be dead; gate slow reprobes plus a retry per network change or resume.

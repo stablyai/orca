@@ -69,6 +69,8 @@ export class MobileEndpointSupervisor {
       setTimer: dependencies.setTimer,
       clearTimer: dependencies.clearTimer,
       onExternalSignal: (liftOnly) => this.sessionEstablisher.refillPendingBudget(liftOnly),
+      canLiftDial: () => this.sessionEstablisher.liftCanDial(),
+      retryDueLease: () => void (this.relayRotationPending && this.recoverRelay(true)),
       onLocalNetworkArrival: () => this.directProbe.arrive()
     })
     this.leaseRotation = new RelayLeaseRotationTimer(dependencies, () => {
@@ -307,7 +309,7 @@ export class MobileEndpointSupervisor {
       }
       // Record a dial completing after cleanup without recreating foreground timers.
       const scheduleRetry = (!forceReplacement || ownsRecovery) && this.isActive()
-      this.relayReconnect.registerFailure(dialed.error, scheduleRetry, dialed.unconfirmed)
+      this.relayReconnect.registerFailure(dialed.error, scheduleRetry, dialed)
       recoveryPresentation.clearIfCredentialBlocked(this.logical, this.relayReconnect)
       if (ownsRecovery) {
         suspendRelayIfStillConnected(this.relayReconnect, this.logical)
