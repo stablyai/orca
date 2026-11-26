@@ -27,6 +27,8 @@ import {
 import { admitOrchestrationPeerCall } from '../orchestration/callers/orchestration-peer-caller'
 import { waitForRestoredWorkerCallerIdentity } from '../orchestration/callers/worker-caller-identity-restore-wait'
 import { admitBotShareCall } from './bot-share-call-admission'
+import { admitTeammateCall } from '../../../bots/team-share/teammate-call-admission'
+import { rpcCallContext } from '../rpc-call-context'
 
 type RpcRequestAdmissionDeps = {
   runtime: OrcaRuntimeService
@@ -97,10 +99,19 @@ export function admitRpcRequest<M extends RpcMethod | RpcStreamingMethod>(
     if (callerScope.kind !== 'bot-share') {
       return admitted
     }
-    return admitBotShareCall(runtime, callerScope, method.share, admitted.params).then(
+    const answered = callerScope.workspaceTier
+      ? admitTeammateCall(
+          rpcCallContext(runtime, request, options, pinnedCallerScope, caller, admitted.params),
+          callerScope,
+          admitted
+        )
+      : admitBotShareCall(runtime, callerScope, method.share, admitted.params).then((answer) =>
+          'refusal' in answer ? answer : { ...admitted, params: answer.params }
+        )
+    return answered.then(
       (answer) => {
-        if ('params' in answer) {
-          return { ...admitted, params: answer.params }
+        if (!('refusal' in answer)) {
+          return answer
         }
         reportAgentShareFailure({ stage: 'admission_refused', reason: answer.refusal })
         return reject(errorResponse(request.id, meta, 'not_found', answer.refusal))

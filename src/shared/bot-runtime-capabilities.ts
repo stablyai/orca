@@ -94,6 +94,10 @@ export const BOTS_SLACK_POST_AS_RUNTIME_CAPABILITY = 'bots.slack-post-as.v1' as 
 // an older host refuses those calls, so the phone hands that step to the computer.
 export const BOTS_GOOGLE_PHONE_SIGN_IN_RUNTIME_CAPABILITY = 'bots.google-phone-sign-in.v1' as const
 
+// Host lets a teammate's Orca that advertises it work in a shared agent's workspaces (its home and its
+// workers' worktrees), each list scoped to them; an older host, or a teammate's older Orca, keeps chats and files.
+export const BOTS_SHARE_WORKSPACES_CAPABILITY = 'bots.share-workspaces.v1' as const
+
 export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_GROUPS_RUNTIME_CAPABILITY,
   BOTS_GROUP_ATTACHMENTS_RUNTIME_CAPABILITY,
@@ -119,5 +123,6 @@ export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_ITEM_WAITING_CAPABILITY,
   BOTS_ITEM_CANCEL_NO_REASON_CAPABILITY,
   BOTS_AVATAR_REVISION_RUNTIME_CAPABILITY,
-  BOTS_GOOGLE_PHONE_SIGN_IN_RUNTIME_CAPABILITY
+  BOTS_GOOGLE_PHONE_SIGN_IN_RUNTIME_CAPABILITY,
+  BOTS_SHARE_WORKSPACES_CAPABILITY
 ] as const

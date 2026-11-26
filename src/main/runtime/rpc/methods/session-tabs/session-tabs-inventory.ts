@@ -11,6 +11,7 @@ import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remot
 import type { RpcContext } from '../../core'
 import { createSessionTabsStreamDelta } from './session-tabs-sender-delta'
 import { prepareStructuredTabsIfSupported } from './structured-session-tab-restore'
+import { openTeammateTabStream } from '../../../../bots/team-share/teammate-workspace-view'
 import { createSessionTabsTabDeltaEncoder } from '../../../../../shared/remote-runtime/session-graph/session-tabs-tab-delta'
 
 type SessionTabsChange = RuntimeMobileSessionTabsResult & { removed?: true }
@@ -57,7 +58,8 @@ export async function subscribeSessionTabsInventory(
       snapshot,
       context.clientKind,
       context.capabilitySource?.current ?? context.clientCapabilities,
-      context.runtime
+      context.runtime,
+      teammate?.person
     ) as SessionTabsChange
   const withoutNavigationIntent = (snapshot: SessionTabsChange): SessionTabsChange => {
     if (snapshot.navigationIntent === undefined) {
@@ -167,7 +169,8 @@ export async function subscribeSessionTabsInventory(
       deliveredChangeSequenceByWorktree.set(snapshot.worktree, changeSequence)
     }
   }
-  const unsubscribe = runtime.onMobileSessionTabsChanged(
+  const teammate = await openTeammateTabStream(context, publishedSnapshotsByWorktree)
+  const unsubscribe = (teammate ?? runtime).onMobileSessionTabsChanged(
     (runtimeSnapshot, changeSequence, delivery) => {
       if (closed) {
         return
@@ -217,6 +220,7 @@ export async function subscribeSessionTabsInventory(
       unsubscribe()
       runtime.forgetClientHostedPageObservation?.(pairedDeviceId, observation)
       stopCapabilities?.()
+      teammate?.dispose()
       canonicalSnapshotsByWorktree.clear()
       clearBufferedChanges()
       publishedSnapshotsByWorktree.clear()
@@ -265,7 +269,8 @@ export async function subscribeSessionTabsInventory(
   if (closed) {
     return
   }
-  const { inventory, changeSequence } = collected
+  const { changeSequence } = collected
+  const inventory = teammate?.census(collected.inventory) ?? collected.inventory
   censusChangeSequence = changeSequence
   const projectedSnapshots = inventory.snapshots.map(projectChange)
   emit({

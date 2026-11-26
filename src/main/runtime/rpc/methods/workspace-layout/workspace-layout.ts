@@ -12,10 +12,14 @@ import {
   LayoutUnsubscribeParams
 } from '../../../../../shared/rpc-contract/workspace-layout/workspace-layout-params'
 import { LayoutReopenHeldPanesParams } from '../../../../../shared/rpc-contract/workspace-layout/workspace-layout-held-panes-params'
-import type { WorkspaceLayoutStreamFrame } from '../../../../../shared/workspace-layout/published-layout/workspace-layout-stream-frames'
+import type {
+  WorkspaceLayoutStreamEvent,
+  WorkspaceLayoutStreamFrame
+} from '../../../../../shared/workspace-layout/published-layout/workspace-layout-stream-frames'
 import { defineMethod, defineStreamingMethod } from '../../core'
 import { getAppEnvironment } from '../../../../../shared/app-lifecycle/app-environment'
 import { listEnvironments } from '../../../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { openTeammateLayoutStream } from '../../../../bots/team-share/teammate-layout-stream'
 
 let layoutSubscriptionSeq = 0
 
@@ -29,29 +33,38 @@ export const WORKSPACE_LAYOUT_METHODS = [
     permission: 'workspace',
     share: 'not-shared',
     params: LayoutSubscribeParams,
-    handler: async (params, { runtime, connectionId, signal, clientCapabilities }, emitFrame) => {
+    handler: async (params, context, emitFrame) => {
+      const { runtime, connectionId, signal, clientCapabilities } = context
       // Keep emitted frames checked against the client contract.
       const project = createGitGraphFrameProjection()
       const emit = (frame: WorkspaceLayoutStreamFrame): void =>
         emitFrame(readsGitGraph(clientCapabilities) ? frame : project(frame))
       const keys = params?.workspaces
       const wanted = (key: string) => !Array.isArray(keys) || keys.includes(key)
+      // A workspace teammate's frames carry only the agent's workspaces, its home per person.
+      const teammate = await openTeammateLayoutStream(context)
       await new Promise<void>((resolve) => {
         const subscriptionId = `layout-${connectionId ?? 'inproc'}-${++layoutSubscriptionSeq}`
         const cleanupKey = layoutCleanupKey(connectionId, subscriptionId)
         const release = (): void => runtime.cleanupSubscription(cleanupKey)
-        const { snapshot, seq, epoch, unsubscribe } = runtime.subscribeWorkspaceLayouts((event) => {
+        const forward = (event: WorkspaceLayoutStreamEvent): void => {
           if (event.type === 'records') {
             // Emit even unrelated events so subscriber positions stay gapless.
             emit({ ...event, workspaces: event.workspaces.filter((change) => wanted(change.key)) })
           } else if (wanted(event.key)) {
             emit(event)
           }
-        })
+        }
+        const subscribed = runtime.subscribeWorkspaceLayouts((event) =>
+          teammate ? teammate.event(event, forward) : forward(event)
+        )
+        const { seq, epoch, unsubscribe } = subscribed
+        const snapshot = teammate ? teammate.snapshot(subscribed.snapshot) : subscribed.snapshot
         runtime.registerSubscriptionCleanup(
           cleanupKey,
           () => {
             unsubscribe()
+            teammate?.dispose()
             signal?.removeEventListener('abort', release)
             emit({ type: 'end' })
             resolve()

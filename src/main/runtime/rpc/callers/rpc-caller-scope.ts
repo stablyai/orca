@@ -1,5 +1,6 @@
 /** Transport stamps proven scope; unstamped calls are local desktop/owner CLI. Non-owner methods require an explicitly granted permission. */
 import { MOBILE_RPC_METHOD_ALLOWLIST } from '../server/runtime-rpc-mobile-method-allowlist'
+import { teammateMethodClass } from './teammate-method-classes'
 import type { RpcMethodPermission, RuntimeDeviceGrant } from './rpc-method-permission'
 import type { RpcMethodShare } from '../../../../shared/bots/bot-share-rpc-methods'
 
@@ -21,6 +22,9 @@ export type BotShareCallerScope = {
   botId: string
   accountId: string
   name: string
+  /** Their Orca works in the agent's workspaces (`bots.share-workspaces.v1`): every method as
+   *  teammate-method-classes.json classifies it, each list kept to the agent's workspaces. */
+  workspaceTier?: true
 }
 
 export const OWNER_RPC_CALLER_SCOPE: RpcCallerScope = { kind: 'owner' }
@@ -58,9 +62,11 @@ export function denyRpcMethodForCaller(
       : null
   }
   if (scope.kind === 'bot-share') {
-    return share !== undefined && share !== 'not-shared'
-      ? null
-      : `Method '${methodName}' is not available to a shared agent's teammates`
+    // The workspace tier admits by its one table; a chats-only teammate by each method's share rule.
+    const allowed = scope.workspaceTier
+      ? teammateMethodClass(methodName) !== 'refused'
+      : share !== undefined && share !== 'not-shared'
+    return allowed ? null : `Method '${methodName}' is not available to a shared agent's teammates`
   }
   if (scope.kind === 'owner' || permission === undefined) {
     return null

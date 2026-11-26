@@ -6,12 +6,19 @@ import {
 } from './session-tab-browser-placement-projection'
 import { projectSessionTabFileHosts } from './session-tab-file-host-projection'
 
+/** A workspace teammate's own tabs in the agent's home (`teammateSessionTabsOf`); absent for anyone else. */
+export type SessionTabsPersonFilter = (
+  snapshot: RuntimeMobileSessionTabsResult
+) => RuntimeMobileSessionTabsResult
+
 export function projectSessionTabsForClient(
-  snapshot: RuntimeMobileSessionTabsResult,
+  shown: RuntimeMobileSessionTabsResult,
   clientKind: 'mobile' | 'runtime' | undefined,
   clientCapabilities: Parameters<typeof projectSessionTabAgentStatus>[2],
-  hosts: ClientHostedPageHosts
+  hosts: ClientHostedPageHosts,
+  person?: SessionTabsPersonFilter | null
 ): RuntimeMobileSessionTabsResult {
+  const snapshot = person ? person(shown) : shown
   // Phones draw no agent message cards, so they never pay for sender identity.
   const { agentSenderAssociations: _desktopOnly, ...phone } = snapshot
   return projectSessionTabBrowserPlacements(
@@ -34,9 +41,16 @@ export function projectSessionTabsForInventoryStream(
   snapshot: RuntimeMobileSessionTabsResult,
   clientKind: 'mobile' | 'runtime' | undefined,
   clientCapabilities: Parameters<typeof projectSessionTabAgentStatus>[2],
-  hosts: ClientHostedPageHosts
+  hosts: ClientHostedPageHosts,
+  person?: SessionTabsPersonFilter | null
 ): RuntimeMobileSessionTabsResult {
-  const projected = projectSessionTabsForClient(snapshot, clientKind, clientCapabilities, hosts)
+  const projected = projectSessionTabsForClient(
+    snapshot,
+    clientKind,
+    clientCapabilities,
+    hosts,
+    person
+  )
   if (
     clientKind === 'mobile' ||
     !projected.tabs.some((tab) => tab.type === 'agent-session' && tab.chatStatus)

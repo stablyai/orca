@@ -295,6 +295,9 @@ export class RuntimeRpcDeviceDispatch extends RuntimeRpcMobileDevices {
     params: unknown
   ): Promise<unknown> {
     const principal = botSharePrincipalOf(device)
+    const clientCapabilities = remoteRuntimeClientCapabilities(
+      ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+    )
     const response = await this.dispatcher.dispatch(
       { id: randomUUID(), authToken: '', method, params },
       {
@@ -305,10 +308,8 @@ export class RuntimeRpcDeviceDispatch extends RuntimeRpcMobileDevices {
         // As the teammate's desktop would send it live: its handshake's capabilities, which take a
         // send's answer at acceptance.
         clientKind: 'runtime',
-        callerScope: botShareCallerScopeOf(device),
-        clientCapabilities: remoteRuntimeClientCapabilities(
-          ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
-        )
+        callerScope: botShareCallerScopeOf(device, clientCapabilities),
+        clientCapabilities
       }
     )
     if (!response.ok) {
