@@ -62,7 +62,7 @@ export async function sweepAgentSessionAttachments(
     if (ageMs <= UNCLAIMED_ATTACHMENT_MAX_AGE_MS) {
       continue
     }
-    if (!retained && facts.retention) {
+    if (retained === undefined && facts.retention) {
       if (!(await facts.retention.isUnclaimed(uploadId))) {
         continue
       }

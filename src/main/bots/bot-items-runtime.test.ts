@@ -1,8 +1,13 @@
-import { expect, it, vi } from 'vitest'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, expect, it, vi } from 'vitest'
 import type { BotItemsHostDeps } from './bot-items-runtime'
 import { BotItemsHost } from './bot-items-runtime'
+import { botItemsStoreFile } from './bot-items-input'
 
 const state = vi.hoisted(() => ({ directory: '/profile' }))
+const directories: string[] = []
 
 vi.mock('../orca-profiles/profile-storage-paths', () => ({
   getProfileUserDataPath: () => state.directory
@@ -28,17 +33,21 @@ function hostWithRetentionRead(read: ReturnType<typeof vi.fn>): BotItemsHost {
   return new BotItemsHost(deps)
 }
 
-it('keeps item-mail attachment retention unknown until its store can read again', async () => {
+afterEach(async () => {
+  await Promise.all(directories.splice(0).map((directory) => rm(directory, { recursive: true })))
+})
+
+it('keeps item-mail attachment retention unknown only while an existing store cannot read', async () => {
   const read = vi.fn<() => Promise<string[]>>()
+  state.directory = await mkdtemp(join(tmpdir(), 'orca-item-retention-'))
+  directories.push(state.directory)
   const host = hostWithRetentionRead(read)
 
-  expect(await host.owedCommentAttachmentUploads(state.directory, '/attachments')).toBeNull()
-
-  read.mockResolvedValueOnce([])
-  host.store()
   expect(await host.owedCommentAttachmentUploads(state.directory, '/attachments')).toEqual(
     new Set()
   )
+
+  await writeFile(botItemsStoreFile(state.directory), '')
 
   read.mockRejectedValueOnce(new Error('items database is temporarily unavailable'))
   expect(await host.owedCommentAttachmentUploads(state.directory, '/attachments')).toBeNull()
