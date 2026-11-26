@@ -140,6 +140,8 @@ export type UISlicePreferences = {
   setAgentDashboardDrawerOpen: (open: boolean) => void
   statusBarItems: StatusBarItem[]
   toggleStatusBarItem: (item: StatusBarItem) => void
+  /** Show or hide one item; resolves once main has persisted it, so callers can refresh after. */
+  setStatusBarItemVisible: (item: StatusBarItem, visible: boolean) => Promise<void>
   statusBarVisible: boolean
   setStatusBarVisible: (v: boolean) => void
   usagePercentageDisplay: UsagePercentageDisplay

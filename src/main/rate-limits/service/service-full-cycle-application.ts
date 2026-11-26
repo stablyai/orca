@@ -49,6 +49,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       zcodeConfigChanged,
       zcodeGeneration,
       antigravityGeneration,
+      cursorFetchAllowed,
       claudeFetchGated,
       results: [claudeResult, codexResult, opencodeGoResult, kimiResult, miniMaxResult],
       grokResultPromise,
@@ -221,6 +222,14 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     const shouldApplyAntigravity = antigravityGeneration === this.antigravityFetchGeneration
     // Discard Cursor stale usage only for a known account change; unidentified transient failures retain their last reading.
     const cursorAccountChanged = hasKnownProvenanceChange(previousState.cursor, cursor)
+    // Re-check: a read started before the user hid Cursor must not publish onto the hidden meter.
+    const cursorShown = cursorFetchAllowed && (this.cursorUsageEnabledResolver?.() ?? true)
+    // The stale policy would resurface the last reading as an error; a hidden meter settles idle.
+    const nextCursor = !cursorShown
+      ? disabledUsageSnapshot('cursor')
+      : cursorAccountChanged
+        ? cursor
+        : this.applyStalePolicy(cursor, previousState.cursor)
     const previousZcodeAccount = previousState.zcode?.usageMetadata?.authProvenance
     const zcodeAccount = zcode.usageMetadata?.authProvenance
     const sameZcodeAccount =
@@ -228,7 +237,12 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       zcodeAccount !== undefined &&
       previousZcodeAccount === zcodeAccount
     this.trackActiveFailureStreak('grok', grok)
-    this.trackActiveFailureStreak('cursor', cursor)
+    if (cursorShown) {
+      this.trackActiveFailureStreak('cursor', cursor)
+    } else {
+      // A hidden meter's past failures must not throttle the first read after it is shown again.
+      this.activeFailureStreakByProvider.cursor = 0
+    }
     if (shouldApplyZcode) {
       this.trackActiveFailureStreak('zcode', zcode)
     }
@@ -238,7 +252,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     this.updateState({
       ...this.state,
       grok: this.applyStalePolicy(grok, previousState.grok),
-      cursor: cursorAccountChanged ? cursor : this.applyStalePolicy(cursor, previousState.cursor),
+      cursor: nextCursor,
       zcode: !shouldApplyZcode
         ? this.state.zcode
         : zcodeConfigChanged

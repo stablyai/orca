@@ -24,6 +24,8 @@ export type FetchAllCyclePrepared = {
   zcodeConfigChanged: boolean
   zcodeGeneration: number
   antigravityGeneration: number
+  // False when the Cursor meter is hidden; the cycle then publishes an idle snapshot.
+  cursorFetchAllowed: boolean
   claudeFetchGated: boolean
   results: [
     PromiseSettledResult<ProviderRateLimits>,
