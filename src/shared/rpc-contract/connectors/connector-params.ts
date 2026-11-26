@@ -47,12 +47,12 @@ export const ConnectorAct = z.object({
   args: ConnectorActionArgs.default({})
 })
 
-/** `orca bot reply --react`: an emoji on the message that woke the calling bot's run. */
 /** Where the calling bot chat's running turn started, for a worker start to name. */
 export const ConnectorWakeReplyPlace = z.object({
   sessionId: z.string().min(1, 'Missing session id')
 })
 
+/** `orca bot reply --react`: an emoji on the message that woke the calling bot's run. */
 export const ConnectorReact = z.object({
   sessionId: z.string().min(1, 'Missing session id'),
   emoji: z.string().min(1).max(100)

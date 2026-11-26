@@ -15,6 +15,7 @@ const CHAT = '55555555-5555-4555-8555-555555555555'
 const OTHER_CHAT = '66666666-6666-4666-8666-666666666666'
 const THREAD = 'T1:C1:1712.000100:UBOT'
 const DM = 'T1:D0X:D0X:UBOT'
+const DM_THREAD = 'T1:D0X:1712.000200:UBOT'
 
 let target: Record<string, unknown> | null = null
 // A connector message opened or joined the running turn, as the host's delivery mark records it.
@@ -92,5 +93,7 @@ describe('a turn that started on its own can tell the thread its work came from'
       target = chatOn(DM, { kind })
       expect(await placeFor(CHAT)).toEqual({ place: null })
     }
+    target = chatOn(DM_THREAD)
+    expect(await placeFor(CHAT)).toEqual({ place: null })
   })
 })

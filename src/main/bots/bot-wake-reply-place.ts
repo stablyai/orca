@@ -25,7 +25,8 @@ export async function wakeReplyPlace(
     return null
   }
   const slack = slackPlaceOf(target.key.externalId)
-  if (!slack?.threadTs) {
+  // A thread inside a DM is DM territory, a later stage.
+  if (!slack?.threadTs || slack.channelId.startsWith('D')) {
     return null
   }
   const origin = await readOrigin()

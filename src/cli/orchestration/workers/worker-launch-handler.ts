@@ -31,6 +31,9 @@ import { readWorkerStartWakeNote } from './worker-start-wake-note'
 export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler> = {
   'orchestration worker-start': async (ctx) => {
     const { flags, client, cwd, json } = ctx
+    // Read first, while the starting turn still runs, so a later turn this start wakes is told where
+    // it came from.
+    const wakeNote = await readWorkerStartWakeNote(client)
     await refuseAgentServerRoute('worker-start', ctx)
     const terminal = getPresentStringFlag(flags, 'terminal')
     const model = getOptionalStringFlag(flags, 'model')
@@ -82,8 +85,6 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       from: await resolveCoordinatorTerminalHandle(flags, cwd, client),
       devMode: isDevCliInvocation()
     }
-    // Read in the starting turn, so a later turn this start wakes is told where it came from.
-    const wakeNote = await readWorkerStartWakeNote(client)
     const tellWake = () => {
       if (wakeNote) {
         process.stderr.write(`${wakeNote}\n`)
