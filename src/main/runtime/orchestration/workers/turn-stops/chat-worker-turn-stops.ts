@@ -3,7 +3,11 @@ import type { AgentSessionTurnCompletionEvent } from '../../../../../shared/agen
 import { AGENT_DONE_QUIET_MS } from '../../../../../shared/agent-status/lifecycle/agent-transitions'
 import { chatWorkerDispatches } from './chat-worker-error-escalation'
 import { readCoordinatorMailSnapshot } from '../../db/messages/dispatch-read-mail'
-import { readWorkingTurnStartedAt } from '../../db/worker-presence/worker-presence-store'
+import {
+  readMaxMessageSequence,
+  readWorkingTurnAfterSequence,
+  readWorkingTurnStartedAt
+} from '../../db/worker-presence/worker-presence-store'
 import type { WorkerTurnStopReportDeps } from './worker-turn-stop-report'
 import { observeWorker, type WorkerRest } from './worker-presence-report'
 import {
@@ -65,6 +69,8 @@ export function chatWorkerTurnStopReporter(
   const generations = new Map<string, number>()
   // A turn begins after its session's previous turn completed; a prompt arrives mid-turn and bounds nothing.
   const previousCompletionAt = new Map<string, number>()
+  const previousCompletionSequence = new Map<string, number>()
+  const inFlightAfterSequence = new Map<string, number>()
   const lifetime = new AbortController()
   const timers = new Set<() => void>()
   const schedule = (run: () => void, delayMs: number): void => {
@@ -113,28 +119,52 @@ export function chatWorkerTurnStopReporter(
       const generation = (generations.get(sessionId) ?? 0) + 1
       generations.set(sessionId, generation)
       const previousTurnEndedAt = previousCompletionAt.get(sessionId)
-      if (event.type === 'completion') {
-        previousCompletionAt.set(sessionId, now())
-      }
+      const prevSeq = previousCompletionSequence.get(sessionId)
+      const db = deps.getDb()
       const stop = chatStop(event)
-      const db = stop ? deps.getDb() : null
-      if (!stop || !db) {
-        return
-      }
       // The Dispatch a stop belongs to is one open when it was seen.
       // Mail taken after the turn ended belongs to the next turn, though it lands before this report.
-      const seen = new Map(
-        chatWorkerDispatches(stop.sessionId, db).map(({ dispatch }) => {
-          const turnStartedAt = previousTurnEndedAt ?? readWorkingTurnStartedAt(db, dispatch.id)
-          return [
-            dispatch.id,
-            {
-              ...readCoordinatorMailSnapshot(db, dispatch.id),
-              ...(turnStartedAt !== undefined ? { turnStartedAt } : {})
-            }
-          ]
-        })
-      )
+      const seen =
+        stop && db
+          ? new Map(
+              chatWorkerDispatches(stop.sessionId, db).map(({ dispatch }) => {
+                const key = `${stop.sessionId}:${dispatch.id}`
+                const workingSeq =
+                  inFlightAfterSequence.get(key) ?? readWorkingTurnAfterSequence(db, dispatch.id)
+                const turnStartedAfterSequence =
+                  prevSeq !== undefined && workingSeq !== undefined
+                    ? Math.max(prevSeq, workingSeq)
+                    : (prevSeq ?? workingSeq)
+                if (event.type === 'prompt' && turnStartedAfterSequence !== undefined) {
+                  inFlightAfterSequence.set(key, turnStartedAfterSequence)
+                }
+                const turnStartedAt =
+                  previousTurnEndedAt ?? readWorkingTurnStartedAt(db, dispatch.id)
+                return [
+                  dispatch.id,
+                  {
+                    ...readCoordinatorMailSnapshot(db, dispatch.id),
+                    ...(turnStartedAt !== undefined ? { turnStartedAt } : {}),
+                    ...(turnStartedAfterSequence !== undefined ? { turnStartedAfterSequence } : {})
+                  }
+                ]
+              })
+            )
+          : null
+      if (event.type === 'completion') {
+        previousCompletionAt.set(sessionId, now())
+        if (db) {
+          previousCompletionSequence.set(sessionId, readMaxMessageSequence(db))
+        }
+        for (const key of inFlightAfterSequence.keys()) {
+          if (key.startsWith(`${sessionId}:`)) {
+            inFlightAfterSequence.delete(key)
+          }
+        }
+      }
+      if (!stop || !db || !seen) {
+        return
+      }
       let approval: AgentJournalApprovalItem | null = null
       const deliver = (): void => {
         try {
@@ -252,6 +282,8 @@ export function chatWorkerTurnStopReporter(
       }
       generations.clear()
       previousCompletionAt.clear()
+      previousCompletionSequence.clear()
+      inFlightAfterSequence.clear()
     }
   }
 }

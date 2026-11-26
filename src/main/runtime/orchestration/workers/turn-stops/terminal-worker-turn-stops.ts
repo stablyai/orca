@@ -29,7 +29,10 @@ import {
   agentLeadTurnFailedUnderChildWork
 } from '../../../../../shared/agent-status/lifecycle/agent-background-wait'
 import { WorkerBackgroundWaits } from './worker-background-waits'
-import { hasRelayedWorkerReport } from '../../db/worker-presence/worker-presence-store'
+import {
+  hasRelayedWorkerReport,
+  readWorkingTurnAfterSequence
+} from '../../db/worker-presence/worker-presence-store'
 import { resolveTerminalWorkerDispatch } from './terminal-worker-dispatch'
 import { terminalRequestError } from './terminal-request-error'
 export { resolveTerminalWorkerDispatch }
@@ -51,6 +54,7 @@ type PreparedStop = TerminalAgentTurnNewsItem & {
   dispatchId: string | null
   mailTaken?: number
   latestCoordinatorSequence?: number
+  turnStartedAfterSequence?: number
 }
 
 export class TerminalWorkerTurnStops {
@@ -66,10 +70,13 @@ export class TerminalWorkerTurnStops {
       prepare: (news) => {
         const resolved = this.resolve(news.paneKey)
         const dispatchId = resolved && workerTurnStopDispatchId(resolved.target)
+        const turnStartedAfterSequence =
+          resolved && dispatchId ? readWorkingTurnAfterSequence(resolved.db, dispatchId) : undefined
         return {
           ...news,
           dispatchId,
-          ...(resolved && dispatchId ? readCoordinatorMailSnapshot(resolved.db, dispatchId) : {})
+          ...(resolved && dispatchId ? readCoordinatorMailSnapshot(resolved.db, dispatchId) : {}),
+          ...(turnStartedAfterSequence !== undefined ? { turnStartedAfterSequence } : {})
         }
       },
       deliver: (stop, row) => void this.report(stop, row),
@@ -179,6 +186,7 @@ export class TerminalWorkerTurnStops {
         rest: {
           from: resolved.handle,
           turnStartedAt: stop.row.turnStartedAt,
+          turnStartedAfterSequence: stop.turnStartedAfterSequence,
           reason,
           mailTaken: stop.mailTaken,
           latestCoordinatorSequence: stop.latestCoordinatorSequence,

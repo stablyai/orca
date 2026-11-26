@@ -158,3 +158,34 @@ export function readWorkingTurnStartedAt(
   const parsed = updatedAt ? Date.parse(updatedAt) : Number.NaN
   return Number.isNaN(parsed) ? undefined : parsed
 }
+
+export function readMaxMessageSequence(db: OrchestrationDb): number {
+  const row = db.db.prepare('SELECT COALESCE(MAX(sequence), 0) AS seq FROM messages').get()
+  return typeof row?.seq === 'number' ? row.seq : 0
+}
+
+export function readMaxRelaySequence(db: OrchestrationDb, dispatchId: string): number {
+  const row = db.db
+    .prepare(
+      `SELECT COALESCE(MAX(sequence), 0) AS seq FROM federation_relay_items
+        WHERE dispatch_id = ? AND direction = 'to_home'`
+    )
+    .get(dispatchId)
+  return typeof row?.seq === 'number' ? row.seq : 0
+}
+
+export function formatWorkingTurnFence(generation: number, afterSequence: number): string {
+  return `turn:${generation}:seq:${afterSequence}`
+}
+
+/** Sequence watermark recorded when the worker entered its current `working` turn. */
+export function readWorkingTurnAfterSequence(
+  db: OrchestrationDb,
+  dispatchId: string
+): number | undefined {
+  const row = db.db
+    .prepare("SELECT fence FROM worker_presence WHERE dispatch_id = ? AND presence = 'working'")
+    .get(dispatchId)
+  const match = typeof row?.fence === 'string' ? /^turn:\d+:seq:(\d+)$/.exec(row.fence) : null
+  return match ? Number(match[1]) : undefined
+}

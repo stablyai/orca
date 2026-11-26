@@ -30,9 +30,11 @@ describe('post-reply idle-stop dedupe for open chat workers', () => {
   let runId: string
   let taskId: string
   let dispatchId: string
+  let clock: number
   let pendingTimers: (() => void)[]
 
   beforeEach(() => {
+    clock = Date.UTC(2026, 10, 25, 18, 0, 0)
     pendingTimers = []
     db = new OrchestrationDb(':memory:')
     const run = db.createRun({
@@ -80,7 +82,9 @@ describe('post-reply idle-stop dedupe for open chat workers', () => {
           }
         }
       },
-      async () => null
+      async () => null,
+      undefined,
+      () => clock
     )
   }
 
@@ -93,7 +97,7 @@ describe('post-reply idle-stop dedupe for open chat workers', () => {
           sessionId: WORKER_SESSION,
           turnId,
           outcome: 'success',
-          completedAt: Date.now()
+          completedAt: clock
         }
       },
       () => ({ status: 'idle', lastAssistantMessage: 'Done.' })
@@ -283,7 +287,7 @@ describe('post-reply idle-stop dedupe for open chat workers', () => {
           sessionId: WORKER_SESSION,
           turnId: 'turn-out-of-order',
           outcome: 'success',
-          completedAt: Date.now()
+          completedAt: clock
         }
       },
       () => ({ status: 'idle', lastAssistantMessage: 'Done.' })
@@ -295,8 +299,8 @@ describe('post-reply idle-stop dedupe for open chat workers', () => {
     expect(stopEscalations()).toEqual(['Worker stopped without reporting'])
   })
 
-  it('does not let an earlier turn status suppress a silent stop when turnStartedAt is unknown or later', () => {
-    const earlierStatus = db.insertMessage({
+  it('does not count a prior turn status when turn start is unknown or within the same second', () => {
+    db.insertMessage({
       from: WORKER_ADDRESS,
       senderDispatchId: dispatchId,
       to: `run:${runId}`,
@@ -305,27 +309,79 @@ describe('post-reply idle-stop dedupe for open chat workers', () => {
       type: 'status',
       runId
     })
-    db.db
-      .prepare("UPDATE messages SET created_at = datetime('now', '-10 seconds') WHERE id = ?")
-      .run(earlierStatus.id)
 
-    // First observed turn on a fresh reporter has unknown turnStartedAt and no consumed mail.
+    // First observed turn on a fresh reporter has unknown turn start and no consumed mail.
     const reporter = createReporter()
     completeTurn(reporter, 'turn-unknown-start')
     expect(stopEscalations()).toEqual(['Worker stopped without reporting'])
 
-    // A later working turn with consumed mail still ignores the pre-turn status.
-    sendCoordinatorMail('follow-up after restart')
+    // On a fresh open Dispatch with no consumed mail, a cancelled turn at .900s that sent a status
+    // must not suppress the next silent turn in the exact same second (.950s).
+    const secondTaskId = db.createTask({ spec: 'same-second sequence watermark', runId }).id
+    const secondDispatchId = db.createDispatchContext({
+      taskId: secondTaskId,
+      assigneeHandle: WORKER_ADDRESS,
+      creator: { kind: 'session', orcaSessionId: COORDINATOR_SESSION },
+      maxDepth: Number.MAX_SAFE_INTEGER
+    }).id
+    clock = Date.UTC(2026, 10, 25, 18, 0, 0, 100)
     observeChatWorkerWorking(WORKER_SESSION, {
       getDb: () => db,
       isWaitingForMail: () => false,
       notify: () => {}
     })
-    completeTurn(reporter, 'turn-known-start-silent')
+    db.insertMessage({
+      from: WORKER_ADDRESS,
+      senderDispatchId: secondDispatchId,
+      to: `run:${runId}`,
+      subject: 'Cancelled turn status',
+      body: 'Sent before cancellation in same second',
+      type: 'status',
+      runId
+    })
+    clock = Date.UTC(2026, 10, 25, 18, 0, 0, 900)
+    reporter.onTurnAttention(
+      {
+        type: 'completion',
+        completion: {
+          scope: SESSION_SCOPE,
+          sessionId: WORKER_SESSION,
+          turnId: 'turn-cancelled-same-sec',
+          outcome: 'cancelled',
+          completedAt: clock
+        }
+      },
+      () => ({ status: 'idle', lastAssistantMessage: '' })
+    )
+    clock = Date.UTC(2026, 10, 25, 18, 0, 0, 950)
+    completeTurn(reporter, 'turn-silent-same-sec')
     expect(stopEscalations()).toEqual([
       'Worker stopped without reporting',
       'Worker stopped without reporting'
     ])
+
+    // A valid report sent in the new turn within the same second (.980s) still suppresses escalation.
+    const mail = db.insertMessage({
+      from: COORDINATOR_ADDRESS,
+      to: `dispatch:${secondDispatchId}`,
+      subject: 'same-second follow-up',
+      body: 'Check status',
+      type: 'status',
+      runId
+    })
+    db.markAsRead([mail.id], { kind: 'session', sessionId: WORKER_SESSION })
+    clock = Date.UTC(2026, 10, 25, 18, 0, 0, 980)
+    db.insertMessage({
+      from: WORKER_ADDRESS,
+      senderDispatchId: secondDispatchId,
+      to: `run:${runId}`,
+      subject: 'Same-second valid status',
+      body: 'Sent after turn boundary in same second',
+      type: 'status',
+      runId
+    })
+    completeTurn(reporter, 'turn-reported-same-sec')
+    expect(stopEscalations()).toHaveLength(2)
   })
 
   it('does not treat an earlier remote reply on the same thread as answering a newer coordinator message', () => {

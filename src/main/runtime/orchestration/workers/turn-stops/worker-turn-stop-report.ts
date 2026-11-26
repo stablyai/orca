@@ -44,6 +44,8 @@ export type WorkerTurnStop = {
   approval?: WorkerApprovalPayload
   /** When the stopping turn began, on this host's clock; absent when unknown, which mutes nothing. */
   turnStartedAt?: number
+  /** Highest message (or relay) sequence before the stopping turn began; rejects prior-turn reports in the same second. */
+  turnStartedAfterSequence?: number
   /** Why the worker went away, for an `exited`, `lost` or `start-failed` stop. */
   cause?: string
   /** An exited chat: mail starts it again, keeping its history. */
@@ -75,6 +77,7 @@ export type WorkerRestFact =
   | 'awaitsReply'
   | 'approval'
   | 'turnStartedAt'
+  | 'turnStartedAfterSequence'
   | 'mailTaken'
   | 'latestCoordinatorSequence'
   | 'requestError'
@@ -124,6 +127,7 @@ export function isDeliberateRest(
     WorkerTurnStop,
     | 'reason'
     | 'turnStartedAt'
+    | 'turnStartedAfterSequence'
     | 'mailTaken'
     | 'latestCoordinatorSequence'
     | 'requestError'

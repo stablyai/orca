@@ -16,7 +16,7 @@ export type ConsumedCoordinatorMessage = {
   createdAt: string
 }
 
-export type CoordinatorMailSnapshot = {
+type CoordinatorMailSnapshot = {
   mailTaken: number
   latestCoordinatorSequence?: number
 }
@@ -57,7 +57,7 @@ export function latestConsumedCoordinatorMessage(
     : allConsumed.at(-1)
 }
 
-export function readCoordinatorMessages(
+function readCoordinatorMessages(
   db: OrchestrationDb,
   dispatchId: string
 ): ConsumedCoordinatorMessage[] {

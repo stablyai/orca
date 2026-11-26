@@ -35,6 +35,7 @@ type OutboundReportStop = {
   mailTaken?: number
   latestCoordinatorSequence?: number
   turnStartedAt?: number
+  turnStartedAfterSequence?: number
 }
 type CandidateMessage = {
   id: string
@@ -59,9 +60,6 @@ export function hasOutboundCoordinatorReport(
   }
   const { dispatch } = target
   const latest = latestConsumedCoordinatorMessage(db, dispatch.id, stop)
-  if (latest && hasPeerMailReplyTo(db, latest, stop)) {
-    return true
-  }
   const recipients = coordinatorRecipients(db, dispatch, latest?.from)
   const { candidates, provenanceIds } = readWorkerOutboundCandidates(
     db,
@@ -91,11 +89,10 @@ export function hasOutboundCoordinatorReport(
     if (latest) {
       return (
         answersCoordinatorMessage(candidate, latest) ||
-        (candidate.sequence > latest.sequence &&
-          sentInOrAfterTurn(candidate.createdAt, stop.turnStartedAt))
+        (candidate.sequence > latest.sequence && sentInCurrentLocalTurn(candidate, stop))
       )
     }
-    return sentAt >= dispatchCreatedAt && sentInOrAfterTurn(candidate.createdAt, stop.turnStartedAt)
+    return sentAt >= dispatchCreatedAt && sentInCurrentLocalTurn(candidate, stop)
   })
 }
 
@@ -202,33 +199,11 @@ function answersCoordinatorMessage(
   return sameThread || parsed?.requestId === latest.id || parsed?.replyTo === latest.id
 }
 
-function hasPeerMailReplyTo(
-  db: OrchestrationDb,
-  latest: ConsumedCoordinatorMessage,
-  stop: OutboundReportStop
-): boolean {
-  const route = db.getPeerMailMessage(latest.id)
-  if (!route) {
-    return false
+function sentInCurrentLocalTurn(candidate: CandidateMessage, stop: OutboundReportStop): boolean {
+  if (stop.turnStartedAfterSequence !== undefined) {
+    return candidate.sequence > stop.turnStartedAfterSequence
   }
-  const expectedThread = latest.threadId ?? latest.id
-  const latestSec = Math.floor(parseDispatchUtcMs(latest.createdAt) / 1000)
-  return db.db
-    .prepare(
-      "SELECT payload, created_at FROM federation_relay_items WHERE dispatch_id = ? AND direction = 'to_home'"
-    )
-    .all(route.conversation_id)
-    .some((row) => {
-      const createdAt = text(row.created_at) ?? ''
-      if (
-        Math.floor(parseDispatchUtcMs(createdAt) / 1000) < latestSec ||
-        !sentInOrAfterTurn(createdAt, stop.turnStartedAt)
-      ) {
-        return false
-      }
-      const parsed = parseJsonRecord(text(row.payload))
-      return parsed?.threadId === expectedThread && !('notice' in parsed)
-    })
+  return sentInOrAfterTurn(candidate.createdAt, stop.turnStartedAt)
 }
 
 function hasRemoteOutboundReport(
@@ -240,10 +215,11 @@ function hasRemoteOutboundReport(
   const latestSec = latest ? Math.floor(parseDispatchUtcMs(latest.createdAt) / 1000) : null
   return db.db
     .prepare(
-      "SELECT message_id, kind, created_at FROM federation_relay_items WHERE dispatch_id = ? AND direction = 'to_home' ORDER BY sequence ASC"
+      "SELECT sequence, message_id, kind, created_at FROM federation_relay_items WHERE dispatch_id = ? AND direction = 'to_home' ORDER BY sequence ASC"
     )
     .all(dispatchId)
     .some((row) => {
+      const sequence = typeof row.sequence === 'number' ? row.sequence : 0
       const messageId = text(row.message_id) ?? ''
       const kind = text(row.kind) ?? ''
       const createdAt = text(row.created_at) ?? ''
@@ -252,6 +228,9 @@ function hasRemoteOutboundReport(
       }
       if (latestSec !== null && Math.floor(parseDispatchUtcMs(createdAt) / 1000) < latestSec) {
         return false
+      }
+      if (stop.turnStartedAfterSequence !== undefined) {
+        return sequence > stop.turnStartedAfterSequence
       }
       return sentInOrAfterTurn(createdAt, stop.turnStartedAt)
     })
