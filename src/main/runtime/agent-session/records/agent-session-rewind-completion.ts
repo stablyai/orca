@@ -20,14 +20,16 @@ function rewindProviderChain(
   fence: number
 ) {
   const fork = rewind.providerFork
-  const head = agentSessionProviderHandleChainHead(record.providerHandleChain)?.handle
+  // Only the active agent rewound its saved conversation.
+  const chain = record.providerHandleChain.filter(({ handle }) => handle.agent === record.provider)
+  const head = agentSessionProviderHandleChainHead(chain)?.handle
   if (!fork?.materialized || head?.nativeId === fork.sessionId) {
-    return record.providerHandleChain
+    return chain
   }
   if (!head || head.nativeId !== fork.replacesSessionId) {
     throw new Error('agent_session_rewind:stale-provider')
   }
-  return appendAgentSessionProviderHandleLink(record.providerHandleChain, {
+  return appendAgentSessionProviderHandleLink(chain, {
     linkId: `rewind-${fork.sessionId}`,
     handle: {
       transport: head.transport,
@@ -71,10 +73,11 @@ export function commitAgentSessionRewindCompletion(
     const { coverage: _coverage, ...fork } = current.providerFork
     current.providerFork = fork
   }
+  const { deferredProviderContext: _discarded, ...rewoundRecord } = record
   draft.records.set(sessionId, {
     // The rewound context may predate the instructions update its later turns carried.
     ...withoutAgentSessionInstructionsKey(
-      cancel ? cancelAgentSessionUsageLimitContinue(record, cancel) : record
+      cancel ? cancelAgentSessionUsageLimitContinue(rewoundRecord, cancel) : rewoundRecord
     ),
     ...(childBoundary && record.forkedFrom
       ? { forkedFrom: { ...record.forkedFrom, childBoundary } }

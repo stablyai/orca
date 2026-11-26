@@ -27,11 +27,11 @@ const keys = ['model', 'effort', 'fastMode', 'serviceTier'] as const
 
 function pickerOptions(snapshot: SessionOptionDescriptor[]): Record<string, string> {
   return Object.fromEntries(
-    snapshot.flatMap(({ id, kind }) => {
+    snapshot.flatMap(({ id, kind, fallbackModel }) => {
       if (!keys.some((key) => key === id)) {
         return []
       }
-      const value = kind.currentValue
+      const value = (id === 'model' ? fallbackModel : undefined) ?? kind.currentValue
       return value === undefined ? [] : [[id, String(value)]]
     })
   )

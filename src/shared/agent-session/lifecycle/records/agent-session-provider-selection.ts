@@ -18,6 +18,7 @@ export type AgentSessionProviderSelection = {
     fromPermission: AgentChatPermissionChoice
     hostRunId?: string
     through: AgentJournalCursor
+    queueThrough?: AgentJournalCursor
   }
 }
 

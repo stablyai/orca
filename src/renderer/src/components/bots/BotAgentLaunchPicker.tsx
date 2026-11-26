@@ -127,6 +127,7 @@ export function BotAgentLaunchPicker({
   worktreeId,
   defaultModelHint,
   withPermission = true,
+  closeOnAgentChange,
   showChatDefaultHint = true,
   disabled,
   inherit,
@@ -143,6 +144,7 @@ export function BotAgentLaunchPicker({
   defaultModelHint?: { model?: { id: string; label: string }; observeModel: (id: string) => void }
   /** False where the bot's permission has its own control beside the picker. */
   withPermission?: boolean
+  closeOnAgentChange?: boolean
   showChatDefaultHint?: boolean
   disabled?: boolean
   /** Offered under the card; while chosen, the field shows it instead of `value`. */
@@ -239,6 +241,7 @@ export function BotAgentLaunchPicker({
         draftForEntry={draftForEntry}
         disabled={disabled}
         selectAgentOnTab
+        closeOnAgentChange={closeOnAgentChange}
         onOpenChange={setMenuOpen}
         onCatalogOpen={setCatalogAgent}
         onPick={onPick}

@@ -101,6 +101,7 @@ export function BotAgentSettings({ bot, update }: { bot: Bot; update: Update }):
           worktreeId={worktreeId}
           defaultModelHint={defaultModelHint}
           withPermission={false}
+          closeOnAgentChange
           onChange={(setup) => void setAgentSetup(setup)}
         />
       </div>

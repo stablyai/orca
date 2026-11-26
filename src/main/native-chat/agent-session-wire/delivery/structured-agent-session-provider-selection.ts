@@ -100,6 +100,7 @@ export async function selectStructuredChatProvider(
         previousConsent?.from === record.provider &&
         previousConsent.fromPermission === fromPermission &&
         previousConsent.hostRunId === providerSwitchHostRunId(deps) &&
+        previousConsent.queueThrough?.epoch === session.journal.physicalCursor().epoch &&
         previousConsent.through.epoch === cursor.epoch
       ) {
         await deps.store.updateRecord(sessionId, {
@@ -124,7 +125,8 @@ export async function selectStructuredChatProvider(
             from: record.provider,
             fromPermission,
             hostRunId: providerSwitchHostRunId(deps),
-            through: cursor
+            through: cursor,
+            queueThrough: { ...session.journal.physicalCursor(), sequence: cursor.sequence }
           }
         },
         now: host.now()

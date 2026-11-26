@@ -11,6 +11,7 @@ import type { StructuredAgentSessionAttachContext } from '../acquisition/structu
 import type { StructuredAgentSessionResumeOutcome } from './structured-agent-session-agent-start'
 import { hostCanStartRecord } from '../providers/structured-agent-session-provider-support'
 import { isCurrentProviderSwitch } from '../delivery/structured-agent-session-provider-selection'
+import { submissionForActiveAgent } from '../options/structured-agent-session-execution-options'
 import {
   structuredAgentSessionResumeOperationId,
   structuredAgentSessionResumeParams
@@ -78,10 +79,11 @@ export async function structuredAgentSessionStartParams(
             'The session lease is not one this host may resume.'
           )
   }
-  const startupOptions = startedFor
-    ? record.providerSwitch?.clientMessageId === startedFor
-      ? record.options
-      : (await context.sessions.get(sessionId)?.journal.reads.submission(startedFor))?.options
+  const submission = startedFor
+    ? await context.sessions.get(sessionId)?.journal.reads.submission(startedFor)
+    : undefined
+  const startupOptions = submission
+    ? submissionForActiveAgent(record, submission).options
     : undefined
   return { ok: true, params, ...(startupOptions ? { startupOptions } : {}) }
 }

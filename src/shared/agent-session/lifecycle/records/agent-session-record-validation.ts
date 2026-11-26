@@ -175,6 +175,7 @@ function isAgentSessionProviderSelection(value: unknown): value is AgentSessionP
         isStructuredAgentId(consent.from) &&
         isAgentChatPermissionChoice(consent.fromPermission) &&
         (consent.hostRunId === undefined || typeof consent.hostRunId === 'string') &&
+        (consent.queueThrough === undefined || isProviderSwitchCursor(consent.queueThrough)) &&
         isProviderSwitchCursor(consent.through)))
   )
 }

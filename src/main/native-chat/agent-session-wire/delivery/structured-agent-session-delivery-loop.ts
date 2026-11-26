@@ -22,6 +22,7 @@ import type { StructuredAgentSessionStartReadiness } from '../startup/structured
 import { holdRestartedStructuredAgentSessionSends } from '../termination/structured-agent-session-host-lifetime'
 import { structuredAgentSessionEndedChildFailure } from '../termination/structured-agent-session-ended-child-failure'
 import { waitsForCodexTurnOptions } from '../options/structured-agent-session-message-options'
+import { submissionForActiveAgent } from '../options/structured-agent-session-execution-options'
 import { sameProviderChild } from '../host/structured-agent-session-provider-child'
 import { DeliveryProgress } from './structured-agent-session-delivery-progress'
 import { selectableStructuredSubmission } from './structured-agent-session-input-selection'
@@ -210,7 +211,8 @@ export class StructuredAgentSessionDeliveryLoop {
     if (switching === 'rejected') {
       return 'continue'
     }
-    await this.deps.retireOutgrownChild(sessionId, undefined, oldest)
+    const activeInput = submissionForActiveAgent(this.deps.record(sessionId), oldest)
+    await this.deps.retireOutgrownChild(sessionId, undefined, activeInput)
     const child = this.deps.sessions.get(sessionId)?.child
     if (!child || child.close) {
       return { start: await progress.claim(sessionId, this.deps, oldest.clientMessageId) }
@@ -282,18 +284,20 @@ export class StructuredAgentSessionDeliveryLoop {
     if (switching === 'changed' || switching === 'rejected') {
       return 'continue'
     }
+    const activeRecord = this.deps.record(sessionId)
+    const activeInput = submissionForActiveAgent(activeRecord, next)
     if (waited) {
       // Verify awaited-child identity before rechecking launch permissions.
-      await this.deps.retireOutgrownChild(sessionId, undefined, next)
+      await this.deps.retireOutgrownChild(sessionId, undefined, activeInput)
       if (session.child !== awaitedChild) {
         return 'continue'
       }
     }
     if (
       await waitsForCodexTurnOptions(
-        this.deps.record(sessionId),
+        activeRecord,
         session.journal,
-        next,
+        activeInput,
         awaitedChild,
         this.deps.adapter
       )
@@ -308,7 +312,7 @@ export class StructuredAgentSessionDeliveryLoop {
       sessionId,
       session,
       awaitedChild,
-      next,
+      activeInput,
       () => this.disposed
     )
     return pending ?? 'continue'

@@ -66,14 +66,24 @@ it('finishes the current reply before carrying its history into the next agent o
     { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
 
-  expect(await chat.host.selectProvider({ sessionId: SESSION, agent: 'claude' })).toEqual({
-    status: 'selected'
-  })
+  expect(
+    await chat.host.selectProvider({
+      sessionId: SESSION,
+      agent: 'claude',
+      options: { effort: 'low' }
+    })
+  ).toEqual({ status: 'selected' })
   const second = await chat.send('Add the shortcut to the note', 'queue-if-active').result
   if (!second.ok || !('queued' in second.value)) {
     throw new Error('Expected the second message to wait in the queue')
   }
   const queued = second.value.queued.messageId
+  const third = await chat.send('Now update the changelog', 'queue-if-active', {
+    carried: { effort: 'high' }
+  }).result
+  if (!third.ok || !('queued' in third.value)) {
+    throw new Error('Expected the third message to wait behind the second')
+  }
   expect(chat.store.getRecord(SESSION)).toMatchObject({
     provider: 'codex',
     selectedProvider: { agent: 'claude' }
@@ -114,6 +124,57 @@ it('finishes the current reply before carrying its history into the next agent o
   const handoffId = await chat.handoffId(queued)
   const saved = await journal.reads.itemBody(agentJournalSubmissionKey(handoffId))
   expect(saved).toMatchObject({ blocks: [{ type: 'text', text: 'Add the shortcut to the note' }] })
+  expect(chat.dispatch.mock.calls.at(-1)?.[0].executionOptions).toEqual({ effort: 'low' })
+  await chat.host.settleLateDispatch({
+    sessionId: SESSION,
+    clientMessageId: handoffId,
+    providerIdentity: { provider: 'legacy', agent: 'claude', sessionId: THREAD, recordId: 'second' }
+  })
+  await eventually(async () => {
+    expect((await chat.handoff(third.value.queued.messageId))?.handedOverAt).toBeDefined()
+    expect(chat.dispatch.mock.calls.at(-1)?.[0]).toMatchObject({
+      body: { blocks: [{ type: 'text', text: 'Now update the changelog' }] },
+      executionOptions: { effort: 'low' }
+    })
+  })
+})
+
+it('delivers the first prose after a switched command receives its late receipt', async () => {
+  const chat = await createQueuedMessageTestRig({
+    agent: 'claude',
+    restartable: true,
+    hostDeps: {
+      resolveProviderSwitchAccount: async () => ({ variable: 'CODEX_HOME', path: '/test/codex' })
+    }
+  })
+  rig = chat
+  expect(await chat.host.selectProvider({ sessionId: SESSION, agent: 'codex' })).toEqual({
+    status: 'selected'
+  })
+  const command = chat.send('/status')
+  expect(await command.result).toMatchObject({ ok: true })
+  await eventually(async () =>
+    expect((await chat.submission(command.id))?.handedOverAt).toBeDefined()
+  )
+  expect(chat.dispatch.mock.calls[0]?.[0].body.blocks).toEqual([{ type: 'text', text: '/status' }])
+  await chat.settleAccepted(command.id, 'command')
+  expect(chat.store.getRecord(SESSION)?.providerSwitch?.clientMessageId).toBe(command.id)
+
+  const prose = chat.send('Summarize the saved work', undefined, {
+    fence: chat.store.getRecord(SESSION)!.lease.runtimeFence
+  })
+  expect(await prose.result).toMatchObject({ ok: true })
+  await eventually(() => {
+    expect(chat.dispatch.mock.calls.at(-1)?.[0]).toMatchObject({
+      clientMessageId: prose.id,
+      body: {
+        blocks: [
+          { type: 'text', text: expect.stringContaining('[user] /status') },
+          { type: 'text', text: 'Summarize the saved work' }
+        ]
+      }
+    })
+  })
 })
 
 it('requires fresh consent after the host restarts before the first switched turn', async () => {

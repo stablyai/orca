@@ -107,7 +107,9 @@ function beginProviderSwitch(
       hostRunId: command.hostRunId,
       through: command.through,
       ...(retryHome ? { retryHome } : {}),
-      ...(selectedProvider.consent ? { queueBoundary: selectedProvider.consent.through } : {}),
+      ...(selectedProvider.consent?.queueThrough
+        ? { queueBoundary: selectedProvider.consent.queueThrough }
+        : {}),
       ...(head ? { fromLinkId: head.linkId } : {}),
       from: {
         provider,

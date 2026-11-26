@@ -161,14 +161,26 @@ function readJournalDomainContinuationPage(
     return { ...page, items, next: { part: next.length ? 'items' : 'sends', after: next } }
   }
   // Unaccepted sends belong only to an uncleared context, matching the saved-prompt policy.
+  if (clear > 0) {
+    const submissions: JournalContinuationPage['submissions'] = []
+    // Seek by acceptance, then sort only the suffix into the same order as a full export.
+    for (const row of db
+      .prepare(`SELECT payload_json FROM journal_submission_attempts
+        INDEXED BY journal_submission_accepted_position
+        WHERE session_id=? AND epoch=? AND current=1 AND accepted_sequence>?
+        ORDER BY submitted_at, ordinal, message_id`)
+      .iterate(...prefix, clear)) {
+      submissions.push(JSON.parse(String(row.payload_json)))
+    }
+    return { ...page, submissions }
+  }
   const rows = db
     .prepare(`SELECT payload_json, submitted_at, ordinal, message_id
     FROM journal_submission_attempts INDEXED BY journal_submission_order
     WHERE session_id=? AND epoch=? AND current=1
-      ${clear > 0 ? 'AND accepted_sequence>?' : ''}
       ${after.length ? 'AND (submitted_at, ordinal, message_id)>(?, ?, ?)' : ''}
     ORDER BY submitted_at, ordinal, message_id LIMIT ?`)
-    .all(...prefix, ...(clear > 0 ? [clear] : []), ...after, PAGE)
+    .all(...prefix, ...after, PAGE)
   const next = nextPage(rows, ['submitted_at', 'ordinal', 'message_id'])
   return {
     ...page,

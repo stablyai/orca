@@ -7,6 +7,7 @@ function sample(sessionId: string, reads: StructuredAgentSessionDeliveryLoopDeps
   return {
     journal: session?.journal.cursor(),
     child: [child?.generation, child?.fence, child?.phase, child?.close !== undefined] as const,
+    handoff: reads.record(sessionId)?.providerSwitch?.clientMessageId,
     wakes
   }
 }
@@ -55,6 +56,9 @@ export class DeliveryProgress {
     }
     if (before.child.some((value, index) => value !== now.child[index])) {
       return transition({ kind: 'child', before, now } as const)
+    }
+    if (before.handoff !== now.handoff) {
+      return transition({ kind: 'handoff', before, now } as const)
     }
     if (joined && reads.startFlights?.get(sessionId) !== joined) {
       return transition({ kind: 'startup', flight: joined } as const)

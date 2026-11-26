@@ -3,7 +3,6 @@ import { buildAgentSessionContinuationPrompt } from '../../../../shared/agent-se
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { continuationContextReader } from '../recovery/structured-agent-session-continuation-context'
 import type { StructuredAgentSessionHostDeps } from '../host/structured-agent-session-host-types'
-import { readAgentSessionExecutionOptions } from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionHandoverContext,
@@ -32,9 +31,7 @@ export async function structuredChatSwitchInput(
   }
   const contextHandoff = await deps.providerSwitchPrompt?.(session, next.clientMessageId)
   return {
-    submission: switching
-      ? { ...next, options: readAgentSessionExecutionOptions(record?.options ?? {}) ?? undefined }
-      : next,
+    submission: next,
     ...(contextHandoff ? { contextHandoff } : {}),
     ...(switching
       ? {

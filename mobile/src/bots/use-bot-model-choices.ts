@@ -41,7 +41,8 @@ type HostChoices = {
 async function readHostChoices(
   client: RpcClient,
   agent: string,
-  worktreeId: string
+  worktreeId: string,
+  signal: AbortSignal
 ): Promise<HostChoices> {
   const worktree = `id:${worktreeId}`
   const read = (waitForListing: boolean) =>
@@ -61,7 +62,11 @@ async function readHostChoices(
   ])
   // A listing still running answers when it lands, as the desktop's picker waits for it.
   let catalog = first
-  for (let wait = 0; catalog.listingInProgress && wait < CATALOG_WAITS; wait += 1) {
+  for (
+    let wait = 0;
+    !signal.aborted && catalog.listingInProgress && wait < CATALOG_WAITS;
+    wait += 1
+  ) {
     catalog = await read(true)
   }
   return { catalog, seed: parseStructuredLaunchSeedOptions(support?.seedOptions) }
@@ -95,14 +100,15 @@ export function useMobileChatModelChoices(
     if (!client || !online || !agent) {
       return
     }
-    let live = true
-    void readHostChoices(client, agent, worktreeId).then(
-      (host) => live && setAnswer({ key, host }),
+    const controller = new AbortController()
+    void readHostChoices(client, agent, worktreeId, controller.signal).then(
+      (host) => !controller.signal.aborted && setAnswer({ key, host }),
       () =>
-        live && setAnswer((held) => (held?.key === key && held.host ? held : { key, host: null }))
+        !controller.signal.aborted &&
+        setAnswer((held) => (held?.key === key && held.host ? held : { key, host: null }))
     )
     return () => {
-      live = false
+      controller.abort()
     }
   }, [client, online, agent, worktreeId, key])
   const host = answer?.key === key ? answer.host : null

@@ -110,7 +110,7 @@ export async function prepareStructuredChatProviderSwitch(
   if (
     activeBoundary &&
     next.queuedMessageId &&
-    queuedBeforeConsent(queued?.queuedAt, activeBoundary, session.journal.cursor().epoch) &&
+    queuedBeforeConsent(queued?.queuedAt, activeBoundary, session.journal.physicalCursor().epoch) &&
     !(allowsSwitch && selection && agentChatPermissionModes(selection.agent))
   ) {
     return refuseProviderSwitchSend(session, record, next, 'providerSwitchQueuedPermission')
@@ -136,10 +136,12 @@ export async function prepareStructuredChatProviderSwitch(
   if (requiresConsent) {
     const consent = selection.consent
     const cursor = session.journal.cursor()
+    const physical = session.journal.physicalCursor()
     if (
       consent?.from !== record.provider ||
       consent.fromPermission !== fromPermission ||
       consent.hostRunId !== providerSwitchHostRunId(deps) ||
+      consent.queueThrough?.epoch !== physical.epoch ||
       consent.through.epoch !== cursor.epoch
     ) {
       await deps.store.updateRecord(sessionId, {
@@ -156,12 +158,12 @@ export async function prepareStructuredChatProviderSwitch(
         selection.agent
       )
     }
-    if ((next.submittedSequence ?? 0) <= consent.through.sequence) {
+    if ((next.submittedSequence ?? 0) <= consent.queueThrough.sequence) {
       return 'none'
     }
     if (
       next.queuedMessageId &&
-      queuedBeforeConsent(queued?.queuedAt, consent.through, cursor.epoch)
+      queuedBeforeConsent(queued?.queuedAt, consent.queueThrough, physical.epoch)
     ) {
       return 'none'
     }
