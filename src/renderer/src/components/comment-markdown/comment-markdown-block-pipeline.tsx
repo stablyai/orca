@@ -114,13 +114,19 @@ export const MemoizedMarkdown = React.memo(function DeferredMarkdown({
     }
     return [...(props.remarkPlugins ?? []), reuseParsedBlock]
   }, [block, props.remarkPlugins])
+  const drawn = props.children ?? ''
+  const checkClosingFence = React.useMemo(
+    () =>
+      authoredCodeFenceSource === undefined
+        ? null
+        : createClosingFenceCheck(authoredCodeFenceSource, drawn),
+    [authoredCodeFenceSource, drawn]
+  )
   const markdown = <Markdown {...props} remarkPlugins={parsedPlugins} rehypePlugins={plugins} />
-  return authoredCodeFenceSource === undefined ? (
+  return checkClosingFence === null ? (
     markdown
   ) : (
-    <CommentMarkdownClosingFenceContext.Provider
-      value={createClosingFenceCheck(authoredCodeFenceSource, props.children ?? '')}
-    >
+    <CommentMarkdownClosingFenceContext.Provider value={checkClosingFence}>
       {markdown}
     </CommentMarkdownClosingFenceContext.Provider>
   )
