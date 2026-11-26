@@ -213,6 +213,7 @@ export const AGENT_ISSUE_WRITE_FIELDS = `
   state { id name }
   parent { id identifier }
   project { id name }
+  projectMilestone { id name }
   assignee { id displayName }
   priority
   estimate

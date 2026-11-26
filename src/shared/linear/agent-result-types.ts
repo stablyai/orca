@@ -8,6 +8,7 @@ import type {
 import type { LinearInlineMedia } from './inline-media'
 import type { LinearPriorityLabel } from './priority-label'
 import type { LinearIssueActivityEntry } from './issue-activity'
+import type { LinearIssueProjectMilestone } from './issue-project-milestone'
 
 export type LinearIssueSummary = {
   id: string
@@ -19,6 +20,8 @@ export type LinearIssueSummary = {
   team?: (LinearNamedEntity & { key?: string | null }) | null
   project?: LinearNamedEntity | null
   cycle?: LinearNamedEntity | null
+  // Older hosts omit projectMilestone: absent means unknown, null means no milestone.
+  projectMilestone?: LinearIssueProjectMilestone | null
   assignee?: LinearUserSummary | null
   labels: LinearNamedEntity[]
   priority?: number | null
@@ -301,6 +304,7 @@ export type LinearCreateResult = {
     state: { id: string; name: string } | null
     parent: { id: string; identifier: string } | null
     project?: LinearNamedEntity | null
+    projectMilestone?: LinearIssueProjectMilestone | null
     assignee?: LinearUserSummary | null
     priority?: number | null
     estimate?: number | null

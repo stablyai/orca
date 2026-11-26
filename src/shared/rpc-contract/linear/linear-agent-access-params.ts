@@ -138,6 +138,7 @@ export const LinearIssueCreate = z.object({
   dueDate: OptionalLinearDueDate,
   labels: z.array(z.string()).optional(),
   projectInput: OptionalString,
+  milestoneInput: OptionalString,
   parentInput: OptionalString,
   parentCurrent: z.boolean().optional(),
   workspaceId: OptionalString.refine((value) => value !== 'all', {
@@ -158,6 +159,7 @@ export const LinearSaveIssue = LinearWriteTarget.extend({
   dueDate: OptionalLinearDueDateOrClear,
   labels: z.array(z.string()).optional(),
   project: z.string().nullable().optional(),
+  milestone: z.string().nullable().optional(),
   parentId: z.string().nullable().optional(),
   writeId: OptionalString
 })

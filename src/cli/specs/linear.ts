@@ -271,7 +271,7 @@ export const LINEAR_COMMAND_SPECS: CommandSpec[] = [
     path: ['linear', 'create'],
     summary: 'Create a Linear issue',
     usage:
-      'orca linear create --title <title> [--body <text> | --body-file <path|->] [--team <key|id>] [--project <projectId-or-exact-name>] [--state <stateId|exact-name>] [--assignee me|<userId>] [--priority none|low|medium|high|urgent] [--estimate <number>] [--due-date <yyyy-mm-dd>] [--label <labelId-or-exact-name>]... [--parent <id> | --parent-current] [--write-id <uuid>] [--workspace <id>] [--json]',
+      'orca linear create --title <title> [--body <text> | --body-file <path|->] [--team <key|id>] [--project <projectId-or-exact-name>] [--milestone <milestoneId-or-exact-name>] [--state <stateId|exact-name>] [--assignee me|<userId>] [--priority none|low|medium|high|urgent] [--estimate <number>] [--due-date <yyyy-mm-dd>] [--label <labelId-or-exact-name>]... [--parent <id> | --parent-current] [--write-id <uuid>] [--workspace <id>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'title',
@@ -279,6 +279,7 @@ export const LINEAR_COMMAND_SPECS: CommandSpec[] = [
       'body-file',
       'team',
       'project',
+      'milestone',
       'state',
       'assignee',
       'priority',

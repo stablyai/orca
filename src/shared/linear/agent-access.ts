@@ -26,6 +26,7 @@ export const LINEAR_ERROR_CODES = [
   'linear_invalid_parent',
   'linear_comment_not_found',
   'linear_invalid_project',
+  'linear_invalid_milestone',
   'linear_team_required',
   'linear_invalid_url',
   'linear_body_too_large',
@@ -193,6 +194,7 @@ export type LinearCreateRequest = {
   dueDate?: string
   labels?: string[]
   projectInput?: string
+  milestoneInput?: string
   parentInput?: string
   parentCurrent?: boolean
   workspaceId?: string
@@ -211,6 +213,7 @@ export type LinearSaveIssueRequest = LinearWriteTargetRequest & {
   dueDate?: string | null
   labels?: string[]
   project?: string | null
+  milestone?: string | null
   parentId?: string | null
   writeId?: string
 }

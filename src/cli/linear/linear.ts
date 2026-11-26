@@ -64,6 +64,7 @@ import {
   printLinearSearchWarnings
 } from './linear-format'
 import { LINEAR_COMMENT_WRITE_HANDLERS } from './linear-comment-write'
+import { assertLinearMilestoneWriteSupport } from './linear-milestone-write-support'
 import { runLinearListIssues } from './linear-list-issues'
 import { linearRelationWriteHandler } from './linear-relation-write'
 import { runLinearSaveIssue } from './linear-save-issue'
@@ -243,6 +244,7 @@ export const LINEAR_HANDLERS: Record<string, CommandHandler> = {
       ...(body !== undefined ? { body } : {}),
       teamInput: getOptionalStringFlag(flags, 'team'),
       projectInput: getOptionalStringFlag(flags, 'project'),
+      milestoneInput: getOptionalStringFlag(flags, 'milestone'),
       state: getOptionalStringFlag(flags, 'state'),
       assignee: getOptionalStringFlag(flags, 'assignee'),
       priority: flags.has('priority') ? getPriorityFlag(flags, 'priority') : undefined,
@@ -256,6 +258,9 @@ export const LINEAR_HANDLERS: Record<string, CommandHandler> = {
       workspaceId: getOptionalStringFlag(flags, 'workspace'),
       writeId: getOptionalWriteId(flags),
       context: buildLinearCurrentContext(cwd, client.isRemote)
+    }
+    if (request.milestoneInput !== undefined) {
+      await assertLinearMilestoneWriteSupport(client)
     }
     const response = await client.call<LinearCreateResult>('linear.issueCreate', request, {
       timeoutMs: LINEAR_WRITE_TIMEOUT_MS

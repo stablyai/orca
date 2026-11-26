@@ -3,12 +3,16 @@ import type { LinearSaveIssueResult } from '../../shared/linear/agent-result-typ
 import type { CommandHandler } from '../dispatch/dispatch'
 import { printResult } from '../output/command-result-output'
 import { formatLinearSaveIssue } from './linear-format'
+import { assertLinearMilestoneWriteSupport } from './linear-milestone-write-support'
 import { buildSaveIssueRequest } from './linear-save-issue-request'
 
 const LINEAR_WRITE_TIMEOUT_MS = 75_000
 
 export const runLinearSaveIssue: CommandHandler = async ({ flags, client, cwd, json }) => {
   const request: LinearSaveIssueRequest = await buildSaveIssueRequest(flags, cwd, client.isRemote)
+  if (request.milestone !== undefined) {
+    await assertLinearMilestoneWriteSupport(client)
+  }
   const response = await client.call<LinearSaveIssueResult>('linear.saveIssue', request, {
     timeoutMs: LINEAR_WRITE_TIMEOUT_MS
   })

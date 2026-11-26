@@ -232,6 +232,12 @@ export class RuntimeLinearDedupeCommands extends RuntimeLinearCommentLookupComma
     if (intent.projectId !== undefined && (issue.project?.id ?? null) !== intent.projectId) {
       return false
     }
+    if (
+      intent.projectMilestoneId !== undefined &&
+      (issue.projectMilestone?.id ?? null) !== intent.projectMilestoneId
+    ) {
+      return false
+    }
     const issueLabelIds = issue.labelIds ?? issue.labels?.map((label) => label.id) ?? []
     if (intent.labelIds !== undefined && !sameStringSet(issueLabelIds, intent.labelIds)) {
       return false

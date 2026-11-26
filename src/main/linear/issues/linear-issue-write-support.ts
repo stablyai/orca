@@ -33,6 +33,7 @@ export type LinearIssueWriteRecord = {
   state: { id: string; name: string } | null
   parent: { id: string; identifier: string } | null
   project?: { id: string; name: string } | null
+  projectMilestone?: { id: string; name: string } | null
   assignee?: { id: string; displayName: string } | null
   priority?: number | null
   estimate?: number | null

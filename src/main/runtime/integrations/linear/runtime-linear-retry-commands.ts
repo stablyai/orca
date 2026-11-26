@@ -133,6 +133,9 @@ export class RuntimeLinearRetryCommands extends RuntimeLinearCommandBase {
       ...(fields.projectId
         ? [`--project=${this.commandToken(fields.projectId, 'PROJECT_ID')}`]
         : []),
+      ...(fields.projectMilestoneId
+        ? [`--milestone=${this.commandToken(fields.projectMilestoneId, 'MILESTONE_ID')}`]
+        : []),
       ...(fields.labelIds ?? []).map(
         (labelId) => `--label=${this.commandToken(labelId, 'LABEL_ID')}`
       )

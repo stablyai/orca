@@ -20,6 +20,9 @@ export function buildIssueFilter(request: LinearMcpIssueListRequest): Record<str
   if (request.project) {
     filter.project = nullableProjectFilter(request.project)
   }
+  if (request.milestone) {
+    filter.projectMilestone = nullableNamedFilter(request.milestone)
+  }
   if (request.release) {
     filter.releases = { some: namedFilter(request.release, false, true) }
   }

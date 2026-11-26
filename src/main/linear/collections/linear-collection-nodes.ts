@@ -131,6 +131,12 @@ export type ProjectTeamsResponse = {
   } | null
 }
 
+export type ProjectMilestonesResponse = {
+  project?: {
+    projectMilestones?: LinearConnection<{ id: string; name?: string | null }> | null
+  } | null
+}
+
 export type CustomViewConnectionResponse = {
   customViews?: LinearConnection<LinearCustomViewNode> | null
   customView?:

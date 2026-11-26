@@ -70,7 +70,7 @@ ORCA linear project list --query <project-name> --workspace <workspaceId> --json
 
 Prefer IDs for automation. Names are accepted only when they exactly and uniquely match in the relevant team or workspace.
 
-`save-issue` matches Linear MCP's create-or-update shape: omit an issue target to create, or pass an id/`--current` to update. Repeated labels replace the complete label set. Use the literal `null` to clear assignee, estimate, due date, project, or parent.
+`save-issue` matches Linear MCP's create-or-update shape: omit an issue target to create, or pass an id/`--current` to update. Repeated labels replace the complete label set. Use the literal `null` to clear assignee, estimate, due date, project, milestone, or parent. `--milestone <name|id>` on `save-issue` and `create` sets a project milestone: it is looked up in the issue's project, or in `--project` when both are passed.
 
 SSH/remoting note: when running through an SSH-backed remote Orca CLI, body files are only supported via stdin (`--body-file -`), not arbitrary remote file paths. Pipe or redirect the body content explicitly.
 
@@ -87,6 +87,7 @@ Use `ORCA linear list-issues` when MCP-compatible filters or cursor pagination a
 - When a cap held results back, `--json` sets `result.truncated` and `result.meta.hasMore`; human output prints `truncated: showing N`. Check `truncated` before reporting a count, then page with `--cursor` until it is false.
 - A `--cursor` is bound to the workspace and the Orca runtime that issued it. `--workspace all` cannot page, and a raw Linear cursor still needs a concrete `--workspace`.
 - `--priority` is `0=none`, `1=urgent`, `2=high`, `3=medium`, `4=low`. Issue JSON carries `priorityLabel` in the CLI setter vocabulary; project JSON keeps Linear's title-case label.
+- `--milestone <name|id|null>` filters by project milestone, usually together with `--project`. Issue JSON from `list-issues` and `issue` carries `projectMilestone` (`id`, `name`, `targetDate`), or `null` when the issue has none; an older Orca host omits the field, which means unknown, not no milestone.
 - `ORCA linear list` and `ORCA linear project list` follow the same `--limit` rules and set `result.truncated` the same way, but cannot page: narrow the filter instead. `ORCA linear search` returns at most 50 matches (20 by default); when it is truncated, `result.meta.total` is Linear's full match count, absent if any workspace could not report one.
 
 Prefer `label add` and `label remove` for incremental edits. `label set` replaces the full label set and should be used only when deliberate cleanup is intended.

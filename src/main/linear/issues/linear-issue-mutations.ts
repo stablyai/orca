@@ -96,6 +96,7 @@ export async function createIssueForAgent(
     id: string
     parentId?: string | null
     projectId?: string | null
+    projectMilestoneId?: string
     stateId?: string
     assigneeId?: string | null
     priority?: number
@@ -122,6 +123,7 @@ export async function createIssueForAgent(
         ...(description ? { description } : {}),
         ...(options.parentId ? { parentId: options.parentId } : {}),
         ...(options.projectId ? { projectId: options.projectId } : {}),
+        ...(options.projectMilestoneId ? { projectMilestoneId: options.projectMilestoneId } : {}),
         ...(options.stateId ? { stateId: options.stateId } : {}),
         ...(options.assigneeId !== undefined ? { assigneeId: options.assigneeId } : {}),
         ...(options.priority !== undefined ? { priority: options.priority } : {}),
@@ -208,6 +210,9 @@ export async function updateIssue(
     if (updates.projectId !== undefined) {
       payload.projectId = updates.projectId
     }
+    if (updates.projectMilestoneId !== undefined) {
+      payload.projectMilestoneId = updates.projectMilestoneId
+    }
     if (updates.parentId !== undefined) {
       payload.parentId = updates.parentId
     }
@@ -271,6 +276,9 @@ export async function updateIssueForAgent(
       }
       if (updates.projectId !== undefined) {
         payload.projectId = updates.projectId
+      }
+      if (updates.projectMilestoneId !== undefined) {
+        payload.projectMilestoneId = updates.projectMilestoneId
       }
       if (updates.parentId !== undefined) {
         payload.parentId = updates.parentId
