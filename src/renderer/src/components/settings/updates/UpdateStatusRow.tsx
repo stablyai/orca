@@ -345,10 +345,14 @@ function UpdateStatusAction({
           // Modifier clicks pick a one-off release track, not a saved setting.
           onClick={(event) => void window.api.updater.check(getUpdateCheckClickOptions(event))}
         >
-          {spinner}
-          {kind === 'check'
-            ? t('settings.about.action.check', 'Check')
-            : t('settings.about.action.retry', 'Retry')}
+          <span className="relative inline-grid place-items-center">
+            <span className={busy ? 'opacity-0' : undefined}>
+              {kind === 'check'
+                ? t('settings.about.action.check', 'Check')
+                : t('settings.about.action.retry', 'Retry')}
+            </span>
+            {busy ? <Loader2 aria-hidden className="absolute animate-spin" /> : null}
+          </span>
         </Button>
       )
     case 'skip-delay':
