@@ -109,6 +109,9 @@ export function watchPluginWorkspaceStatus(input: {
     if (!input.events.wantsEvent('workspace.status.changed')) {
       lastById.clear()
       consecutiveFailures = 0
+      if (inFlight) {
+        rerun = true
+      }
       return
     }
     if (inFlight) {
