@@ -30,6 +30,11 @@ export function withArmed(
   return { ...withoutPending(fact), ...extra, armed }
 }
 
+/** A heard turn end: its answer goes to the thread now, so the wait starts over from it. */
+export function withTurnEnd(fact: ThreadStatusFact & { armed: Armed }, at: number) {
+  return { ...fact, armed: { ...fact.armed, turnEndAt: at, lastLineAt: at, dueStep: 0 as const } }
+}
+
 /** A bot line: the backoff starts over. */
 export function withBotLine(fact: ThreadStatusFact & { armed: Armed }, at: number) {
   return { ...fact, armed: { ...fact.armed, lastLineAt: at, lastBotAt: at, dueStep: 0 as const } }
@@ -39,7 +44,8 @@ export function withBotLine(fact: ThreadStatusFact & { armed: Armed }, at: numbe
 export function withHostLine(fact: ThreadStatusFact & { armed: Armed }, at: number) {
   const counted = { ...fact, day: utcDay(at), dayCount: linesToday(fact, at) + 1 }
   const dueStep = Math.min(fact.armed.dueStep + 1, 2) as Armed['dueStep']
-  return withArmed(counted, { ...fact.armed, lastLineAt: at, dueStep })
+  const lines = (fact.armed.lines ?? 0) + 1
+  return withArmed(counted, { ...fact.armed, lastLineAt: at, dueStep, lines })
 }
 
 export function withoutPending(fact: ThreadStatusFact): ThreadStatusFact {
@@ -51,9 +57,10 @@ export function disarmedFact({ seq, day, dayCount }: ThreadStatusFact): ThreadSt
   return { seq, day, dayCount }
 }
 
-/** One post per thread and line number, however often it is retried or resumed. */
-export function statusReplyId(link: Thread, seq: number): string {
-  const id = `${link.source}:${link.externalId}:${seq}`
+/** One post per thread, run and line number, however often it is retried or resumed; the run's
+ *  start keeps ids unique when a dropped link starts the numbering over. */
+export function statusReplyId(link: Thread, runAt: number, seq: number): string {
+  const id = `${link.source}:${link.externalId}:${runAt}:${seq}`
   return `${THREAD_STATUS_REPLY_PREFIX}${createHash('sha256').update(id).digest('base64url')}`
 }
 

@@ -79,8 +79,16 @@ export class ConversationWorkers {
 
   constructor(private readonly deps: ConversationWorkersDeps) {}
 
-  private watcher(): ConversationWorkersWatcher | null {
-    return this.deps.workersWatcher ?? installedConversationWorkersWatcher()
+  // A watcher that throws never stops this read's other panes from applying.
+  private tell(call: (watcher: ConversationWorkersWatcher) => void): void {
+    const watcher = this.deps.workersWatcher ?? installedConversationWorkersWatcher()
+    try {
+      if (watcher) {
+        call(watcher)
+      }
+    } catch (error) {
+      console.warn('[connector] a workers watcher threw', error)
+    }
   }
 
   /** Undefined before its first read. */
@@ -240,7 +248,7 @@ export class ConversationWorkers {
     if (running !== told) {
       this.deps.emit({ kind: 'workers', ...pane, running })
     }
-    this.watcher()?.applied(paneKey, viewOf(tracked), reasons)
+    this.tell((watcher) => watcher.applied(paneKey, viewOf(tracked), reasons))
   }
 
   // An unlinked conversation's workers no longer hold it.
@@ -251,7 +259,7 @@ export class ConversationWorkers {
       this.deps.emit({ kind: 'workers', ...tracked.pane, running: false })
     }
     if (tracked) {
-      this.watcher()?.forgotten(paneKey)
+      this.tell((watcher) => watcher.forgotten(paneKey))
     }
   }
 
@@ -263,7 +271,7 @@ export class ConversationWorkers {
         void this.check(paneKey, 'watch')
       }
     }
-    this.watcher()?.watched()
+    this.tell((watcher) => watcher.watched())
   }
 
   clear(): void {
@@ -276,7 +284,7 @@ export class ConversationWorkers {
       settle(entry)
     }
     this.pending.clear()
-    this.watcher()?.cleared()
+    this.tell((watcher) => watcher.cleared())
   }
 
   // Only conversations with open workers are polled; one without is read again at its next turn end.

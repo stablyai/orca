@@ -10,8 +10,10 @@ const HOUR_MS = 60 * MINUTE_MS
 export const THREAD_STATUS_DUE_MS = [30 * MINUTE_MS, 60 * MINUTE_MS, 120 * MINUTE_MS] as const
 /** Lines stop this long after the pane's latest heard turn end. */
 export const THREAD_STATUS_MAX_MS = 6 * HOUR_MS
-/** Lines one thread may get in a UTC day. */
+/** Lines one thread may get in a UTC day, its stop line included. */
 export const THREAD_STATUS_DAY_CAP = 12
+// Past this, a run that could neither read its workers nor post its stop line ends quietly.
+const STUCK_GRACE_MS = 30 * MINUTE_MS
 
 export const THREAD_STATUS_WORKING_LINE = (elapsed: string): string =>
   `Still working on this (${elapsed}).`
@@ -46,6 +48,11 @@ export function utcDay(at: number): string {
 }
 
 /** Lines posted today, by the fact's day. */
+/** Whether a turn end may start a run: the day's lines leave room for an update and the stop line. */
+export function mayArm(fact: ThreadStatusFact | undefined, now: number): boolean {
+  return !fact || linesToday(fact, now) < THREAD_STATUS_DAY_CAP - 1
+}
+
 export function linesToday(fact: ThreadStatusFact, now: number): number {
   return fact.day === utcDay(now) ? fact.dayCount : 0
 }
@@ -61,7 +68,7 @@ export function decideThreadStatus({
   if (!fact || !armed) {
     return WAIT
   }
-  if (!eligible) {
+  if (!eligible || now - armed.turnEndAt >= THREAD_STATUS_MAX_MS + STUCK_GRACE_MS) {
     return DISARM
   }
   if (view === undefined) {
@@ -73,9 +80,14 @@ export function decideThreadStatus({
   if (
     !view.open ||
     now - armed.turnEndAt >= THREAD_STATUS_MAX_MS ||
-    linesToday(fact, now) >= THREAD_STATUS_DAY_CAP
+    linesToday(fact, now) >= THREAD_STATUS_DAY_CAP - 1
   ) {
-    return held ? WAIT : { kind: 'post', text: THREAD_STATUS_STOP_LINE, stop: true }
+    // A run that posted no update ends without saying it stops them.
+    return !armed.lines
+      ? DISARM
+      : held
+        ? WAIT
+        : { kind: 'post', text: THREAD_STATUS_STOP_LINE, stop: true }
   }
   if (held || now - armed.lastLineAt < THREAD_STATUS_DUE_MS[armed.dueStep]) {
     return WAIT

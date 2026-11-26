@@ -70,6 +70,8 @@ export type ThreadStatusFact = {
     lastLineAt: number
     lastBotAt: number
     dueStep: 0 | 1 | 2
+    /** Orca's lines posted in this run; absent before the first. */
+    lines?: number
   }
   /** A line decided and saved before it is sent, so a retry or restart sends the same one. */
   pending?: { replyId: string; text: string; at: number; stop: boolean }

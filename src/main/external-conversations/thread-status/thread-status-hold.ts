@@ -1,7 +1,7 @@
 // Whether something the thread should see first is still on its way: a status line waits for it.
 import { cloudConversation } from '../../../shared/connectors/connector-cloud-contract'
 import type { ExternalConversationLink } from '../../../shared/connectors/external-conversation-link'
-import type { ThreadStatusDeps } from './thread-status'
+import type { ThreadStatusDeps } from './thread-status-deps'
 
 // A running turn holds the lines this long, unless it waits on a prompt in the thread.
 const RUNNING_TURN_HOLD_MS = 30 * 60_000

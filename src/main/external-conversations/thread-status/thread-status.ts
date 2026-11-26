@@ -7,19 +7,14 @@ import type {
   ExternalConversationLink,
   ThreadStatusFact
 } from '../../../shared/connectors/external-conversation-link'
-import type { LeaveLinesCloud } from '../external-conversation-leave-lines'
 import { writeLinkFact } from '../external-conversation-link-writes'
-import {
-  findLink,
-  findLinkForPane,
-  type ExternalConversationLinkStore
-} from '../external-conversation-links'
+import { findLink, findLinkForPane } from '../external-conversation-links'
 import type {
   ConversationWorkersRead,
   ConversationWorkersWatcher,
   ConversationWorkerView
 } from '../external-conversation-worker-view'
-import { decideThreadStatus } from './thread-status-decide'
+import { decideThreadStatus, mayArm } from './thread-status-decide'
 import {
   armedFact,
   armedLinks,
@@ -28,38 +23,21 @@ import {
   withArmed,
   withBotLine,
   withHostLine,
-  withoutPending
+  withoutPending,
+  withTurnEnd
 } from './thread-status-fact'
 import { threadStatusHeld } from './thread-status-hold'
 import { threadLinesOf } from './thread-status-lines'
 import { sendThreadStatusLine } from './thread-status-send'
+import { idOf, unrefTimer, type ThreadStatusDeps } from './thread-status-deps'
+
+export type { ThreadStatusCloud, ThreadStatusDeps } from './thread-status-deps'
 
 const TICK_MS = 60_000
 // A line decided longer ago than this is dropped, never posted with a stale elapsed time.
 const PENDING_MAX_MS = 10 * 60_000
 
 type Thread = Pick<ExternalConversationLink, 'source' | 'externalId'>
-
-export type ThreadStatusCloud = Pick<LeaveLinesCloud, 'cloudFeatures' | 'turnEndPending' | 'reply'>
-
-export type ThreadStatusDeps = {
-  store: ExternalConversationLinkStore
-  /** Null while no client runs: lines wait. */
-  cloud: () => ThreadStatusCloud | null
-  /** Saves pending store writes to disk; a line is saved before it is sent. */
-  flush?: () => Promise<void>
-  /** Whether the reply outbox still holds `turnId`'s answer in the thread. Rejects when it can't tell. */
-  answerPending?: (
-    link: Pick<ExternalConversationLink, 'source' | 'externalId' | 'sessionId'>,
-    turnId: number
-  ) => Promise<boolean>
-  /** The pane's running turn (its id is its start), null when none runs. */
-  runningTurn: (paneKey: string) => number | null
-  /** The bot is paused or gone. */
-  botRefused?: (botId: string) => boolean
-  now?: () => number
-  setTick?: (run: () => void, ms: number) => { cancel: () => void }
-}
 
 export class ThreadStatus implements ConversationWorkersWatcher {
   private readonly views = new Map<string, ConversationWorkerView>()
@@ -71,6 +49,8 @@ export class ThreadStatus implements ConversationWorkersWatcher {
   private readonly busy = new Set<string>()
   // Threads whose last line the cloud refused as a conflict: a second in a row stops them.
   private readonly conflicted = new Set<string>()
+  // When the cloud said a thread's line may go again, by thread id.
+  private readonly notBefore = new Map<string, number>()
   private timer: { cancel: () => void } | null = null
   private readonly now: () => number
 
@@ -93,12 +73,20 @@ export class ThreadStatus implements ConversationWorkersWatcher {
       return
     }
     const fact = link.threadStatus
-    if (reasons.has('turn-ended') && fact?.armed) {
-      this.write(link, { ...fact, armed: { ...fact.armed, turnEndAt: this.now() } })
-    } else if (reasons.has('turn-ended') && view.open && this.eligible(link)) {
+    if (!reasons.has('turn-ended')) {
+      void this.evaluate(link)
+      return
+    }
+    // A turn end's answer is still on its way to the thread: the next tick decides, never this read.
+    if (fact?.armed) {
+      this.write(link, withTurnEnd({ ...fact, armed: fact.armed }, this.now()))
+    } else if (view.open && this.eligible(link) && mayArm(fact, this.now())) {
       this.write(link, armedFact(fact, this.now()))
     }
-    void this.evaluate(link)
+    if (findLink(this.deps.store, link)?.link.threadStatus?.armed) {
+      this.armed.set(idOf(link), link)
+      this.schedule()
+    }
   }
 
   forgotten(paneKey: string): void {
@@ -184,6 +172,8 @@ export class ThreadStatus implements ConversationWorkersWatcher {
     this.busy.add(id)
     try {
       await this.decideAndSend(thread)
+    } catch (error) {
+      console.warn('[connectors] could not post a thread’s status line', error)
     } finally {
       this.busy.delete(id)
     }
@@ -204,6 +194,9 @@ export class ThreadStatus implements ConversationWorkersWatcher {
     this.armed.set(id, thread)
     this.schedule()
     const { link, fact } = found
+    if ((this.notBefore.get(id) ?? 0) > this.now()) {
+      return
+    }
     if (fact.pending && this.now() - fact.pending.at <= PENDING_MAX_MS) {
       return this.eligible(link) ? await this.send(link) : this.disarm(link, fact)
     }
@@ -242,7 +235,7 @@ export class ThreadStatus implements ConversationWorkersWatcher {
     }
     const seq = current.fact.seq + 1
     const pending = {
-      replyId: statusReplyId(current.link, seq),
+      replyId: statusReplyId(current.link, current.armed.at, seq),
       text: decided.text,
       at: this.now(),
       stop: decided.stop
@@ -274,17 +267,21 @@ export class ThreadStatus implements ConversationWorkersWatcher {
     }
     const sent = await sendThreadStatusLine(cloud, conversation, pending, owed)
     const id = idOf(link)
-    if (sent === 'sent') {
+    this.notBefore.delete(id)
+    if (sent.kind === 'later' && sent.retryAfterMs) {
+      this.notBefore.set(id, this.now() + sent.retryAfterMs)
+    }
+    if (sent.kind === 'sent') {
       this.conflicted.delete(id)
       this.hostLine(link, pending.replyId, this.now())
       return
     }
     const current = findLink(this.deps.store, link)?.link
     const fact = current?.threadStatus
-    if (sent === 'later' || !current || fact?.pending?.replyId !== pending.replyId) {
+    if (sent.kind === 'later' || !current || fact?.pending?.replyId !== pending.replyId) {
       return
     }
-    if (sent === 'never') {
+    if (sent.kind === 'never') {
       console.warn('[connectors] stopped a thread’s status lines the cloud refused')
       return this.disarm(current, fact)
     }
@@ -299,6 +296,7 @@ export class ThreadStatus implements ConversationWorkersWatcher {
   private disarm(link: ExternalConversationLink, fact: ThreadStatusFact): void {
     this.armed.delete(idOf(link))
     this.prompts.delete(idOf(link))
+    this.notBefore.delete(idOf(link))
     this.write(link, disarmedFact(fact))
   }
 
@@ -326,13 +324,4 @@ export class ThreadStatus implements ConversationWorkersWatcher {
       ? this.deps.setTick(tick, TICK_MS)
       : unrefTimer(setTimeout(tick, TICK_MS))
   }
-}
-
-function unrefTimer(timer: ReturnType<typeof setTimeout>): { cancel: () => void } {
-  timer.unref?.()
-  return { cancel: () => clearTimeout(timer) }
-}
-
-function idOf(link: Thread): string {
-  return JSON.stringify([link.source, link.externalId])
 }

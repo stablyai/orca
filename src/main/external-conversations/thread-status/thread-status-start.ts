@@ -3,7 +3,8 @@
 import type { Bot } from '../../../shared/bot-types'
 import { installSentConnectorCalls } from '../../connector-cloud/connector-sent-calls'
 import { installConversationWorkersWatcher } from '../external-conversation-worker-view'
-import { ThreadStatus, type ThreadStatusDeps } from './thread-status'
+import { ThreadStatus } from './thread-status'
+import type { ThreadStatusDeps } from './thread-status-deps'
 
 export function startThreadStatus(
   deps: Omit<ThreadStatusDeps, 'runningTurn' | 'botRefused'> & {

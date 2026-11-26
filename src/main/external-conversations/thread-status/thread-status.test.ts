@@ -6,7 +6,7 @@ import type { ExternalConversationLink } from '../../../shared/connectors/extern
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import type { ConnectorReplyBody } from '../../connector-cloud/connector-replies'
 import { closeTestStores, createStore, testState } from '../../persistence/persistence-test-harness'
-import { findLink, writeLink } from '../external-conversation-links'
+import { findLink, removeLink, writeLink } from '../external-conversation-links'
 import { writeLinkFact } from '../external-conversation-link-writes'
 import type { ConversationWorkerView } from '../external-conversation-workers'
 import { THREAD_STATUS_STOP_LINE } from './thread-status-decide'
@@ -21,7 +21,9 @@ const THREAD = { source: 'slack' as const, externalId: 'T1:C1:1795657346.281449:
 const DM = { source: 'slack' as const, externalId: 'T1:D1:D1:U0BOT' }
 const PANE = 'pane-thread'
 
-type Answer = { ok: true } | { ok: false; status: number | null; error: string | null }
+type Answer =
+  | { ok: true }
+  | { ok: false; status: number | null; error: string | null; retryAfterMs?: number }
 
 beforeEach(() => {
   testState.dir = mkdtempSync(join(tmpdir(), 'orca-thread-status-'))
@@ -70,7 +72,11 @@ const view = (extra: Partial<ConversationWorkerView> = {}): ConversationWorkerVi
  *  the transport observes it. */
 function harness(
   store: ReturnType<typeof createStore>,
-  options: Partial<ThreadStatusDeps> & { answers?: Answer[]; features?: boolean } = {}
+  options: Partial<ThreadStatusDeps> & {
+    answers?: Answer[]
+    features?: boolean
+    turnEndPending?: () => boolean
+  } = {}
 ) {
   const clock = { now: START, running: null as number | null }
   const timers: { at: number; run: () => void }[] = []
@@ -78,7 +84,7 @@ function harness(
   const answers = options.answers ?? []
   const cloud = {
     cloudFeatures: () => (options.features === false ? null : new Set<string>()),
-    turnEndPending: () => false,
+    turnEndPending: options.turnEndPending ?? (() => false),
     reply: (body: ConnectorReplyBody) => {
       sent.push({ ...body, at: clock.now })
       const answer = answers.shift() ?? { ok: true as const }
@@ -135,7 +141,19 @@ function harness(
   const lines = () =>
     sent.map(({ at, text }) => `${new Date(at).toISOString().slice(11, 16)} ${text}`)
   const fact = () => findLink(store, THREAD)?.link.threadStatus
-  return { status, clock, sent, lines, advance, settle, turnEnded, polled, botSaid, fact }
+  return {
+    timers: () => timers.length,
+    status,
+    clock,
+    sent,
+    lines,
+    advance,
+    settle,
+    turnEnded,
+    polled,
+    botSaid,
+    fact
+  }
 }
 
 describe('ThreadStatus', () => {
@@ -156,7 +174,7 @@ describe('ThreadStatus', () => {
     // Each line went as Orca's own, on no one's behalf, under its saved id and time.
     expect(run.sent[0]).toMatchObject({
       conversation: THREAD,
-      replyId: statusReplyId(THREAD, 1),
+      replyId: statusReplyId(THREAD, START, 1),
       turnFor: 'none',
       turnId: START + 30 * MIN
     })
@@ -269,7 +287,7 @@ describe('ThreadStatus', () => {
     await before.turnEnded()
     await before.advance(30 * MIN)
     const pending = before.fact()?.pending
-    expect(pending).toMatchObject({ replyId: statusReplyId(THREAD, 1), stop: false })
+    expect(pending).toMatchObject({ replyId: statusReplyId(THREAD, START, 1), stop: false })
     await store.flushPendingOrThrowAsync()
     await closeTestStores()
 
@@ -293,13 +311,13 @@ describe('ThreadStatus', () => {
     const run = harness(store, { answers: [{ ok: false, status: 503, error: null }] })
     await run.turnEnded()
     await run.advance(30 * MIN)
-    expect(run.fact()?.pending?.replyId).toBe(statusReplyId(THREAD, 1))
+    expect(run.fact()?.pending?.replyId).toBe(statusReplyId(THREAD, START, 1))
     run.clock.now += 11 * MIN
     run.status.watched()
     await run.settle()
     expect(run.sent.map((body) => body.replyId)).toEqual([
-      statusReplyId(THREAD, 1),
-      statusReplyId(THREAD, 2)
+      statusReplyId(THREAD, START, 1),
+      statusReplyId(THREAD, START, 2)
     ])
     expect(run.sent[1]?.text).toBe('Still working on this (41 min).')
   })
@@ -317,8 +335,8 @@ describe('ThreadStatus', () => {
     await busy.turnEnded()
     await busy.advance(31 * MIN)
     expect(busy.sent.map((body) => body.replyId)).toEqual([
-      statusReplyId(THREAD, 1),
-      statusReplyId(THREAD, 1)
+      statusReplyId(THREAD, START, 1),
+      statusReplyId(THREAD, START, 1)
     ])
     await closeTestStores()
 
@@ -327,8 +345,8 @@ describe('ThreadStatus', () => {
     await twice.turnEnded()
     await twice.advance(32 * MIN)
     expect(twice.sent.map((body) => body.replyId)).toEqual([
-      statusReplyId(THREAD, 1),
-      statusReplyId(THREAD, 2)
+      statusReplyId(THREAD, START, 1),
+      statusReplyId(THREAD, START, 2)
     ])
     expect(twice.fact()?.armed).toBeUndefined()
     await closeTestStores()
@@ -366,5 +384,106 @@ describe('ThreadStatus', () => {
     await run.advance(45 * MIN)
     expect(run.sent).toHaveLength(0)
     expect(run.fact()?.armed).toBeUndefined()
+  })
+
+  it('starts no run once the day has no room left for an update and a stop line', async () => {
+    const store = botHome()
+    writeLinkFact(store, THREAD, { threadStatus: { seq: 12, day: '2026-11-26', dayCount: 11 } })
+    const run = harness(store)
+    for (let i = 0; i < 3; i++) {
+      await run.turnEnded()
+      await run.advance(5 * MIN)
+    }
+    expect(run.sent).toHaveLength(0)
+    expect(run.fact()).toEqual({ seq: 12, day: '2026-11-26', dayCount: 11 })
+  })
+
+  it('never reuses a reply id when a dropped link starts the numbering over', async () => {
+    const store = botHome()
+    const run = harness(store)
+    await run.turnEnded()
+    await run.advance(30 * MIN)
+    const { workspace } = findLink(store, THREAD)!
+    removeLink(store, THREAD)
+    writeLink(store, workspace, {
+      ...THREAD,
+      sessionId: 'chat-2',
+      agent: 'claude',
+      paneKey: PANE,
+      bot: { kind: 'bot', botId: 'bot-1' },
+      createdAt: 2
+    })
+    await run.turnEnded()
+    await run.advance(30 * MIN)
+    const [first, second] = run.sent
+    expect(first?.text).toBe(second?.text)
+    expect(first?.replyId).not.toBe(second?.replyId)
+  })
+
+  it('never posts a due line beside the answer of the turn that just ended', async () => {
+    const run = harness(botHome())
+    await run.turnEnded()
+    await run.advance(30 * MIN)
+    // A person asks at 1:20 and the turn runs past the next line's time.
+    run.clock.running = START + 80 * MIN
+    await run.advance(65 * MIN)
+    expect(run.sent).toHaveLength(1)
+    run.clock.running = null
+    await run.turnEnded()
+    await run.advance(29 * MIN)
+    expect(run.sent).toHaveLength(1)
+    await run.advance(MIN)
+    expect(run.lines()[1]).toBe('04:14 Still working on this (2 h 5 min).')
+  })
+
+  it("waits out the cloud's Retry-After before sending the same line again", async () => {
+    const run = harness(botHome(), {
+      answers: [{ ok: false, status: 429, error: null, retryAfterMs: 5 * MIN }]
+    })
+    await run.turnEnded()
+    await run.advance(34 * MIN)
+    expect(run.sent).toHaveLength(1)
+    await run.advance(MIN)
+    expect(run.sent.map((body) => body.replyId)).toEqual([
+      statusReplyId(THREAD, START, 1),
+      statusReplyId(THREAD, START, 1)
+    ])
+  })
+
+  it('holds a line until it is on disk and while the cloud still queues the turn end', async () => {
+    let saves = 0
+    const unsaved = harness(botHome(), {
+      flush: async () => {
+        saves += 1
+        if (saves === 1) {
+          throw new Error('disk busy')
+        }
+      }
+    })
+    await unsaved.turnEnded()
+    await unsaved.advance(30 * MIN)
+    expect(unsaved.sent).toHaveLength(0)
+    await unsaved.advance(MIN)
+    expect(unsaved.sent.map((body) => body.replyId)).toEqual([statusReplyId(THREAD, START, 1)])
+    await closeTestStores()
+
+    let queued = true
+    const ending = harness(botHome(), { turnEndPending: () => queued })
+    await ending.turnEnded()
+    await ending.advance(45 * MIN)
+    expect(ending.sent).toHaveLength(0)
+    queued = false
+    await ending.advance(MIN)
+    expect(ending.sent).toHaveLength(1)
+  })
+
+  it('ends a run that can no longer read its workers, and its clock with it', async () => {
+    const run = harness(botHome())
+    await run.turnEnded()
+    run.status.cleared()
+    await run.advance(9 * HOUR)
+    expect(run.sent).toHaveLength(0)
+    expect(run.fact()?.armed).toBeUndefined()
+    expect(run.timers()).toBe(0)
   })
 })

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ThreadStatusFact } from '../../../shared/connectors/external-conversation-link'
 import {
   decideThreadStatus,
+  mayArm,
   threadStatusElapsed,
   THREAD_STATUS_STOP_LINE,
   utcDay,
@@ -66,7 +67,8 @@ describe('decideThreadStatus', () => {
         armed: {
           ...armed,
           lastLineAt: now,
-          dueStep: Math.min(armed.dueStep + 1, 2) as 0 | 1 | 2
+          dueStep: Math.min(armed.dueStep + 1, 2) as 0 | 1 | 2,
+          lines: (armed.lines ?? 0) + 1
         }
       }
     }
@@ -126,24 +128,48 @@ describe('decideThreadStatus', () => {
 
   it('posts the stop line when the workers read closes, 6 hours pass or the day is full', () => {
     const stop = { kind: 'post', text: THREAD_STATUS_STOP_LINE, stop: true }
-    // Closed by the workers' own 6 h or 15 min unverifiable bound, before a line was due.
+    const posted = armedAt(START, { lines: 1 })
+    // Closed by the workers' own 6 h or 15 min unverifiable bound.
     expect(
       decide({
-        now: START + 5 * MIN,
+        now: START + 40 * MIN,
+        fact: posted,
         view: { activity: 'idle', open: false, helpersRunning: false }
       })
     ).toEqual(stop)
     expect(
-      decide({ now: START + 6 * HOUR, fact: armedAt(START, { lastLineAt: START + 6 * HOUR }) })
+      decide({
+        now: START + 6 * HOUR,
+        fact: { ...posted, armed: { ...posted.armed, lastLineAt: START + 6 * HOUR } }
+      })
     ).toEqual(stop)
-    expect(decide({ now: START + 5 * MIN, fact: { ...armedAt(START), dayCount: 12 } })).toEqual(
-      stop
-    )
+    // The 12th line of the day is the stop line.
+    expect(decide({ now: START + 5 * MIN, fact: { ...posted, dayCount: 11 } })).toEqual(stop)
     // Yesterday's lines don't count today.
     expect(
-      decide({ now: START + 5 * MIN, fact: { ...armedAt(START), day: '2026-11-25', dayCount: 12 } })
+      decide({ now: START + 5 * MIN, fact: { ...posted, day: '2026-11-25', dayCount: 11 } })
     ).toEqual({ kind: 'wait' })
-    expect(decide({ now: START + 6 * HOUR, held: true })).toEqual({ kind: 'wait' })
+    expect(decide({ now: START + 6 * HOUR, fact: posted, held: true })).toEqual({ kind: 'wait' })
+  })
+
+  it('ends a run quietly when it posted no update, or could not stop for 30 minutes past its end', () => {
+    const closed = { activity: 'idle', open: false, helpersRunning: false } as const
+    expect(decide({ now: START + 15 * MIN, view: closed })).toEqual({ kind: 'disarm' })
+    expect(decide({ now: START + 6 * HOUR })).toEqual({ kind: 'disarm' })
+    const posted = armedAt(START, { lines: 2 })
+    expect(decide({ now: START + 6 * HOUR + 30 * MIN, fact: posted, view: undefined })).toEqual({
+      kind: 'disarm'
+    })
+    expect(decide({ now: START + 6 * HOUR + 30 * MIN, fact: posted, held: true })).toEqual({
+      kind: 'disarm'
+    })
+  })
+
+  it('arms only while the day leaves room for an update and its stop line', () => {
+    expect(mayArm(undefined, START)).toBe(true)
+    expect(mayArm({ seq: 10, day: utcDay(START), dayCount: 10 }, START)).toBe(true)
+    expect(mayArm({ seq: 11, day: utcDay(START), dayCount: 11 }, START)).toBe(false)
+    expect(mayArm({ seq: 11, day: '2026-11-25', dayCount: 11 }, START)).toBe(true)
   })
 
   it('keeps every line short and built only from its fixed words', () => {
@@ -157,7 +183,7 @@ describe('decideThreadStatus', () => {
         now: START + 30 * MIN,
         view: { activity: 'idle', open: true, helpersRunning: false }
       }),
-      decide({ now: START + 6 * HOUR })
+      decide({ now: START + 6 * HOUR, fact: armedAt(START, { lines: 1 }) })
     ].map((decided) => (decided.kind === 'post' ? decided.text : ''))
     for (const text of texts) {
       expect(text.length).toBeGreaterThan(0)

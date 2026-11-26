@@ -36,7 +36,14 @@ it('reads a lead waiting on its own open workers as idle with helpers running', 
                   pendingQuestion: false,
                   helpersRunning: true
                 },
-                { state: 'working', activity: 'working', pendingQuestion: true }
+                { state: 'working', activity: 'working', pendingQuestion: true },
+                // A finished worker's open helpers don't count: it no longer waits on them.
+                {
+                  state: 'completed',
+                  activity: 'done',
+                  pendingQuestion: false,
+                  helpersRunning: true
+                }
               ] as const
             ]
           ])
@@ -45,6 +52,50 @@ it('reads a lead waiting on its own open workers as idle with helpers running', 
     [link]
   )
   expect(activities?.get('chat-1')).toEqual({ activity: 'idle', helpersRunning: true })
+  const finished = await conversationWorkerActivities(
+    {
+      workers: {
+        read: async () =>
+          new Map([
+            [
+              'chat-1',
+              [
+                {
+                  state: 'completed',
+                  activity: 'done',
+                  pendingQuestion: false,
+                  helpersRunning: true
+                }
+              ] as const
+            ]
+          ])
+      }
+    },
+    [link]
+  )
+  expect(finished?.get('chat-1')).toEqual({ activity: 'none', helpersRunning: false })
+})
+
+it("tells a watch's first read even when nothing runs, since an earlier process may have said otherwise", async () => {
+  const events: ConversationEvent[] = []
+  const workers = new ConversationWorkers({
+    now: () => 1_000,
+    setTimer: () => ({ cancel: () => {} }),
+    linkedFor: () => ({ link, workspace: { worktreeId: 'wt', sshHostId: null } }),
+    emit: (event) => events.push(event),
+    workerActivities: async () => new Map([['chat-1', { activity: 'none', helpersRunning: false }]])
+  })
+  await workers.check('pane', 'watch')
+  await workers.check('pane', 'poll')
+  expect(events).toEqual([
+    {
+      kind: 'workers',
+      conversation: { source: 'slack', externalId: link.externalId },
+      paneKey: 'pane',
+      worktreeId: 'wt',
+      running: false
+    }
+  ])
 })
 
 it('tells the watcher each read with its turn end, and emits running changes as before', async () => {
