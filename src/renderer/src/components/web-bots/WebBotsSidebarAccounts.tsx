@@ -1,14 +1,5 @@
 import { useState } from 'react'
-import {
-  ArrowDown,
-  ArrowUp,
-  Cookie,
-  Loader2,
-  Pencil,
-  Plus,
-  RefreshCw,
-  Trash2
-} from 'lucide-react'
+import { ArrowDown, ArrowUp, Cookie, Loader2, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/class-names'
 import { Button } from '@/components/ui/button'
@@ -158,9 +149,7 @@ export function WebBotsSidebarAccounts({
                         {Math.round(acc.quotaPercent)}%
                       </span>
                     ) : null}
-                    {isWarm ? (
-                      <span className="text-3xs text-muted-foreground">保活</span>
-                    ) : null}
+                    {isWarm ? <span className="text-3xs text-muted-foreground">保活</span> : null}
                   </div>
                   {acc.proxyUrl || acc.email || acc.quotaText ? (
                     <span className="truncate pl-3 text-2xs text-muted-foreground">

@@ -279,7 +279,6 @@ pub async fn eval_cdp_json(webview: &Webview<tauri::Wry>, script: &str) -> Resul
 
 #[derive(Debug, Clone)]
 pub struct AccountProbeResult {
-    pub url: Option<String>,
     pub email: Option<String>,
     pub authenticated: bool,
     pub quota_text: Option<String>,
@@ -307,12 +306,6 @@ pub async fn probe_account_webview(
     webview: &Webview<tauri::Wry>,
 ) -> Result<AccountProbeResult, String> {
     let val = eval_cdp_json(webview, build_probe_account_script()).await?;
-    let url = val
-        .get("url")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(ToOwned::to_owned);
     let email = val
         .get("email")
         .and_then(Value::as_str)
@@ -334,7 +327,6 @@ pub async fn probe_account_webview(
         .and_then(Value::as_f64)
         .filter(|v| v.is_finite() && (0.0..=100.0).contains(v));
     Ok(AccountProbeResult {
-        url,
         email,
         authenticated,
         quota_text,
