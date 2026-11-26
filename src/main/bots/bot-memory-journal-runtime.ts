@@ -102,9 +102,10 @@ export function createBotMemoryJournal(deps: {
   }
 }
 
-/** Every item of the bot closed at or after `since`, with its view and whose work its close was.
- *  Pages by latest activity: a close is its item's activity too, so once a page reaches activity
- *  before `since`, no later page holds a close after it. */
+/** Every close since `since` of the bot's closed items, with each item's view and whose work each
+ *  close was: an item closed, reopened and closed again since gets one per close. Pages by latest
+ *  activity: a close is its item's activity too, so once a page reaches activity before `since`, no
+ *  later page holds a close after it. */
 export async function readClosedSince<
   R extends Pick<BotItemRecord, 'uid' | 'number' | 'lastActivityAt' | 'closedAt'>
 >(
@@ -115,8 +116,8 @@ export async function readClosedSince<
   }) => Promise<{ items: R[] }>,
   views: (records: R[]) => Promise<(Omit<JournalItem, 'closedAt'> | undefined)[]>,
   closes: (
-    items: readonly { uid: string; closedAt: number }[]
-  ) => Promise<Record<string, BotItemClose>>,
+    items: readonly { uid: string; since: number }[]
+  ) => Promise<Record<string, BotItemClose[]>>,
   since: number,
   written: ReadonlySet<number> = new Set()
 ): Promise<JournalItem[]> {
@@ -144,16 +145,29 @@ export async function readClosedSince<
     return []
   }
   const shown = await views(records)
-  // By its close time, so a reopen and another close since this read can't lend this close its asker.
-  const closed = await closes(
-    records.flatMap(({ uid, closedAt }) => (closedAt === null ? [] : [{ uid, closedAt }]))
-  )
+  // Each close by its own event, so a reopen and another close can't lend it their asker or status.
+  const closed = await closes(records.map(({ uid }) => ({ uid, since })))
   return records.flatMap((record, index) => {
     const view = shown[index]
-    const closedFor = journalCloseLabel(closed[record.uid])
-    return view && record.closedAt !== null
-      ? [{ ...view, closedAt: record.closedAt, ...(closedFor ? { closedFor } : {}) }]
-      : []
+    const { closedAt: recordClosedAt } = record
+    if (!view || recordClosedAt === null) {
+      return []
+    }
+    const fresh = (closedAt: number) =>
+      closedAt > since || (closedAt === since && !written.has(record.number))
+    const own = (closed[record.uid] ?? []).filter(({ closedAt }) => fresh(closedAt))
+    // A close whose event Orca can't find still gets its line, which says whom it was for is unknown.
+    const each = own.length > 0 ? own : [undefined]
+    return each.map((close) => {
+      const closedFor = journalCloseLabel(close)
+      return {
+        ...view,
+        ...(close ? { status: close.status } : {}),
+        closedAt: close?.closedAt ?? recordClosedAt,
+        ...(closedFor ? { closedFor } : {}),
+        ...(close?.closeNumber && close.closeNumber > 1 ? { closeNumber: close.closeNumber } : {})
+      }
+    })
   })
 }
 

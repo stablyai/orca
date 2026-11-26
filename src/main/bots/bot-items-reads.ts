@@ -34,7 +34,15 @@ export type BotItemListQuery = {
   cursor?: { at: number; number: number }
 }
 
-export type BotItemClose = { actor: BotItemActor; actsFor: readonly BotRequestAsker[] | null }
+/** One close of an item: when, to which status, who made it, whom its chat acted for when it says,
+ *  and its number among the item's closes (null for one from before Orca numbered them). */
+export type BotItemClose = {
+  closedAt: number
+  status: 'done' | 'canceled'
+  actor: BotItemActor
+  actsFor: readonly BotRequestAsker[] | null
+  closeNumber: number | null
+}
 
 export class BotItemsReads extends BotItemsTables {
   /** Links of a kind to any of these refs, across items. */
@@ -147,26 +155,31 @@ export class BotItemsReads extends BotItemsTables {
       }))
   }
 
-  /** The close each item's `closedAt` names: who made it, and whom its chat acted for when it says.
-   *  Seeks each by item and time on the status-event index, so later events never grow the read. */
-  closes(items: readonly { uid: string; closedAt: number }[]): Record<string, BotItemClose> {
-    const closes: Record<string, BotItemClose> = {}
+  /** Each item's closes at or after its `since`, oldest first: every move of an open item to a
+   *  closed status (a move between closed ones is no new close). Seeks each item's status events from
+   *  `since` on the status-event index, so earlier events never grow the read. */
+  closes(items: readonly { uid: string; since: number }[]): Record<string, BotItemClose[]> {
+    const closes: Record<string, BotItemClose[]> = {}
     for (const row of this.db
       .prepare(
-        `SELECT * FROM item_events WHERE id IN (SELECT (SELECT id FROM item_events
-           WHERE item_uid = json_extract(named.value, '$.uid') AND kind = 'status'
-             AND created_at = json_extract(named.value, '$.closedAt')
-             AND json_extract(data, '$.to') IN ('done', 'canceled')
-           ORDER BY id DESC LIMIT 1) FROM json_each(?) AS named)`
+        `SELECT item_events.* FROM json_each(?) AS named CROSS JOIN item_events
+         WHERE item_uid = json_extract(named.value, '$.uid') AND kind = 'status'
+           AND created_at >= json_extract(named.value, '$.since')
+           AND json_extract(data, '$.to') IN ('done', 'canceled')
+           AND json_extract(data, '$.from') NOT IN ('done', 'canceled')
+         ORDER BY created_at, id`
       )
       .all(JSON.stringify(items))) {
       const event = eventRecordOf(row)
-      const { actsFor } = event.data
-      closes[event.itemUid] = {
+      const { actsFor, closeNumber, to } = event.data
+      ;(closes[event.itemUid] ??= []).push({
+        closedAt: event.createdAt,
+        status: to === 'canceled' ? 'canceled' : 'done',
         actor: event.actor,
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the host writes actsFor, from a turn's askers.
-        actsFor: Array.isArray(actsFor) ? (actsFor as BotRequestAsker[]) : null
-      }
+        actsFor: Array.isArray(actsFor) ? (actsFor as BotRequestAsker[]) : null,
+        closeNumber: typeof closeNumber === 'number' ? closeNumber : null
+      })
     }
     return closes
   }
