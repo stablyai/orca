@@ -1,4 +1,5 @@
 import { isClipboardTextByteLengthOverLimit } from '../clipboard/clipboard-text'
+import { composeQuickOpenText } from '../quick-open/quick-open-path-search'
 
 /** Explorer name-filter matching, shared so the host can filter a scan exactly like the renderer. */
 
@@ -54,7 +55,22 @@ export function pathMatchesFileNameFilterTokens(
   if (tokens.length === 0) {
     return true
   }
-  // Locale-independent folding keeps host/renderer matching aligned; paths arrive normalized.
+  // Locale-independent folding keeps host/renderer matching aligned.
   const haystack = relativePath.toLowerCase()
-  return tokens.every((token) => haystack.includes(token))
+  return tokens.every((token) => lowerTextIncludesFileNameFilterToken(haystack, token))
+}
+
+const NON_ASCII = /[\u0080-\u{10ffff}]/u
+
+/** `lowerText` is already lowercased; tokens come from `splitFileNameFilterTokens`. */
+export function lowerTextIncludesFileNameFilterToken(lowerText: string, token: string): boolean {
+  if (lowerText.includes(token)) {
+    return true
+  }
+  // Why: macOS can list names decomposed (NFD) while the keyboard types composed (NFC); compare
+  // both composed, as Quick Open does (#41828). Exact matches come first, and an ASCII token
+  // cannot gain a match from composing, so only non-ASCII tokens pay for this.
+  return (
+    NON_ASCII.test(token) && composeQuickOpenText(lowerText).includes(composeQuickOpenText(token))
+  )
 }

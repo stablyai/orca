@@ -62,6 +62,27 @@ describe('findNameMatches', () => {
   it('matches nothing for a blank query', () => {
     expect(find('   ', 5)).toEqual({ total: 0, matches: [] })
   })
+
+  it('finds and ranks a decomposed (NFD) name for composed query text', () => {
+    const stored = '회의록.md'.normalize('NFD')
+    const result = findNameMatches({
+      relativePaths: [`회의/agenda.md`.normalize('NFC'), `notes/${stored}`],
+      query: '회의'.normalize('NFC'),
+      worktreePath: ROOT,
+      displayRootPath: ROOT,
+      showDotfiles: false,
+      limit: 5
+    })
+    expect(result.total).toBe(2)
+    // The file-name hit ranks above the folder-only hit, and the highlight covers the stored jamo.
+    expect(result.matches[0]).toEqual({
+      relativePath: `notes/${stored}`,
+      name: stored,
+      dir: 'notes',
+      // 회의 is four jamo when stored decomposed.
+      ranges: [[0, 4]]
+    })
+  })
 })
 
 describe('getNameMatchRanges', () => {
@@ -74,5 +95,14 @@ describe('getNameMatchRanges', () => {
 
   it('skips highlighting when case folding changes the length', () => {
     expect(getNameMatchRanges('İndex.ts', ['index'])).toEqual([])
+  })
+
+  it('maps a composed hit back onto a decomposed name', () => {
+    const name = 'Café-회의.md'.normalize('NFD')
+    const ranges = getNameMatchRanges(name, ['café'.normalize('NFC'), '회의'.normalize('NFC')])
+    expect(ranges.map(([start, end]) => name.slice(start, end).normalize('NFC'))).toEqual([
+      'Café',
+      '회의'
+    ])
   })
 })

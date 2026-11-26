@@ -3,9 +3,11 @@ import { normalizeRelativePath } from '../../../../../../shared/file-access/cros
 import { compareFileNames } from '../../../../../../shared/file-listing/file-name-sort'
 import {
   isFileNameFilterQueryTooLarge,
+  lowerTextIncludesFileNameFilterToken,
   pathMatchesFileNameFilterTokens,
   splitFileNameFilterTokens
 } from '../../../../../../shared/file-listing/file-name-filter-tokens'
+import { composeQuickOpenText } from '../../../../../../shared/quick-open/quick-open-path-search'
 import { isDotfileRelativePath } from '../tree/file-explorer-entries'
 
 export const NAME_MATCH_PREVIEW_LIMIT = 5
@@ -49,6 +51,31 @@ function getBasenameStart(relativePath: string): number {
   return relativePath.lastIndexOf('/') + 1
 }
 
+const NON_ASCII = /[\u0080-\u{10ffff}]/u
+let graphemeSegmenter: Intl.Segmenter | undefined
+
+/** Finds `token` in the composed (NFC) form of `lower` and maps the hit back to `lower`'s offsets, so a decomposed (NFD) name highlights the characters typed composed. */
+function findComposedRange(lower: string, token: string): [number, number] | null {
+  // Composing cannot make an ASCII token match where it did not match as is.
+  if (!NON_ASCII.test(token)) {
+    return null
+  }
+  graphemeSegmenter ??= new Intl.Segmenter('und', { granularity: 'grapheme' })
+  const composedToken = composeQuickOpenText(token)
+  // Composed offset of each grapheme boundary → the same boundary in `lower`.
+  const boundaries = new Map<number, number>([[0, 0]])
+  let composed = ''
+  for (const { segment, index } of graphemeSegmenter.segment(lower)) {
+    composed += composeQuickOpenText(segment)
+    boundaries.set(composed.length, index + segment.length)
+  }
+  const start = composed.indexOf(composedToken)
+  const from = boundaries.get(start)
+  const to = boundaries.get(start + composedToken.length)
+  // A hit that starts or ends inside a grapheme has no clean range to highlight.
+  return start === -1 || from === undefined || to === undefined ? null : [from, to]
+}
+
 export function getNameMatchRanges(
   name: string,
   tokens: readonly string[]
@@ -60,9 +87,17 @@ export function getNameMatchRanges(
   }
   const ranges: [number, number][] = []
   for (const token of tokens) {
+    if (token.length === 0) {
+      continue
+    }
     const start = lower.indexOf(token)
-    if (start !== -1 && token.length > 0) {
+    if (start !== -1) {
       ranges.push([start, start + token.length])
+      continue
+    }
+    const composedRange = findComposedRange(lower, token)
+    if (composedRange) {
+      ranges.push(composedRange)
     }
   }
   ranges.sort((a, b) => a[0] - b[0])
@@ -122,7 +157,7 @@ export function findNameMatches({
     const candidate = {
       relativePath,
       nameStart,
-      nameHit: tokens.every((token) => lowerName.includes(token))
+      nameHit: tokens.every((token) => lowerTextIncludesFileNameFilterToken(lowerName, token))
     }
     if (limit === null) {
       kept.push(candidate)
