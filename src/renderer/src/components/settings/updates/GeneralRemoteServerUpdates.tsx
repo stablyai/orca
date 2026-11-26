@@ -2,6 +2,7 @@ import type React from 'react'
 import { useCallback, useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useAppStore } from '@/store/index'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
@@ -22,7 +23,9 @@ import { AboutDisclosureRow } from './AboutDisclosureRow'
 const isEligible = (entry: RemoteServerUpdateEntry): boolean =>
   entry.phase === 'available' || entry.phase === 'failed'
 
-function serverSummaryParts(entries: RemoteServerUpdateEntry[], t: Translate): string[] {
+type SummaryPart = { text: string; count: number }
+
+function serverSummaryParts(entries: RemoteServerUpdateEntry[], t: Translate): SummaryPart[] {
   const count = (phase: RemoteServerUpdateEntry['phase']): number =>
     entries.filter((entry) => entry.phase === phase).length
   const available = entries.filter(isEligible).length
@@ -30,60 +33,85 @@ function serverSummaryParts(entries: RemoteServerUpdateEntry[], t: Translate): s
   // A newer server needs nothing from its own updater; this app is the one behind.
   const newer = settled.filter((entry) => getRemoteServerNewerThanClientVersion(entry)).length
   const current = settled.length - newer
-  const parts = [
-    available > 0
-      ? t('settings.about.servers.readyCount', '{{value0}} ready', { value0: available })
-      : null,
-    current > 0
-      ? t(
-          'auto.components.settings.GeneralRemoteServerUpdates.currentCount',
-          '{{value0}} up to date',
-          { value0: current }
-        )
-      : null,
-    newer > 0
-      ? t(
-          'auto.components.settings.GeneralRemoteServerUpdates.newerCount',
-          '{{value0}} newer than this app',
-          { value0: newer }
-        )
-      : null,
-    count('manual') > 0
-      ? t('auto.components.settings.GeneralRemoteServerUpdates.manualCount', '{{value0}} manual', {
-          value0: count('manual')
-        })
-      : null,
-    count('offline') > 0
-      ? t(
-          'auto.components.settings.GeneralRemoteServerUpdates.offlineCount',
-          '{{value0}} offline',
-          { value0: count('offline') }
-        )
-      : null
-  ].filter((part): part is string => part !== null)
+  const manual = count('manual')
+  const offline = count('offline')
+  const parts: SummaryPart[] = [
+    {
+      count: available,
+      text: t('settings.about.servers.readyCount', '{{value0}} ready', { value0: available })
+    },
+    {
+      count: current,
+      text: t(
+        'auto.components.settings.GeneralRemoteServerUpdates.currentCount',
+        '{{value0}} up to date',
+        { value0: current }
+      )
+    },
+    {
+      count: newer,
+      text: t(
+        'auto.components.settings.GeneralRemoteServerUpdates.newerCount',
+        '{{value0}} newer than this app',
+        { value0: newer }
+      )
+    },
+    {
+      count: manual,
+      text: t(
+        'auto.components.settings.GeneralRemoteServerUpdates.manualCount',
+        '{{value0}} manual',
+        {
+          value0: manual
+        }
+      )
+    },
+    {
+      count: offline,
+      text: t(
+        'auto.components.settings.GeneralRemoteServerUpdates.offlineCount',
+        '{{value0}} offline',
+        { value0: offline }
+      )
+    }
+  ].filter((part) => part.count > 0)
   if (parts.length > 0) {
     return parts
   }
   return [
-    entries.length === 1
-      ? t('auto.components.settings.GeneralRemoteServerUpdates.serverCountOne', '1 paired server')
-      : t(
-          'auto.components.settings.GeneralRemoteServerUpdates.serverCount',
-          '{{value0}} paired servers',
-          { value0: entries.length }
-        )
+    {
+      count: entries.length,
+      text:
+        entries.length === 1
+          ? t(
+              'auto.components.settings.GeneralRemoteServerUpdates.serverCountOne',
+              '1 paired server'
+            )
+          : t(
+              'auto.components.settings.GeneralRemoteServerUpdates.serverCount',
+              '{{value0}} paired servers',
+              { value0: entries.length }
+            )
+    }
   ]
 }
 
-/** All counts, or only the first when the row is too narrow to show them on one line. */
-function ServerSummary({ parts }: { parts: string[] }): React.JSX.Element {
+/** All counts; when narrow, the first count plus the rest folded into "N other" so none disappear. */
+function ServerSummary({ parts }: { parts: SummaryPart[] }): React.JSX.Element {
+  const t = useTranslate()
+  const [first, ...rest] = parts
+  const other = rest.reduce((total, part) => total + part.count, 0)
   return (
     <>
-      <span className={parts.length > 1 ? '@max-xs/about-row:hidden' : undefined}>
-        {parts.join(' · ')}
+      <span className={rest.length > 0 ? '@max-xs/about-row:hidden' : undefined}>
+        {parts.map((part) => part.text).join(' · ')}
       </span>
-      {parts.length > 1 ? (
-        <span className="hidden @max-xs/about-row:inline">{parts[0]}</span>
+      {rest.length > 0 ? (
+        <span className="hidden @max-xs/about-row:inline">
+          {first.text}
+          {' · '}
+          {t('settings.about.servers.otherCount', '{{value0}} other', { value0: other })}
+        </span>
       ) : null}
     </>
   )
@@ -114,8 +142,6 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
   }
 
   const eligible = entries.filter(isEligible)
-  const liveTabCount = eligible.reduce((total, entry) => total + entry.liveTabCount, 0)
-  const liveLeafCount = eligible.reduce((total, entry) => total + entry.liveLeafCount, 0)
   const busy = checking || running
   const updateLabel =
     eligible.length === 1
@@ -186,48 +212,76 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
               />
             ))}
             {eligible.length > 0 ? (
-              <div data-settings-row="" className="flex items-center gap-3">
-                <p className="min-w-0 flex-1 text-settings-detail text-muted-foreground">
-                  {liveTabCount > 0 || liveLeafCount > 0
-                    ? t(
-                        'auto.components.settings.RemoteServerUpdateDialog.restartWarning',
-                        'Updating restarts these servers. {{value0}} and {{value1}} may briefly disconnect.',
-                        {
-                          value0:
-                            liveTabCount === 1
-                              ? t(
-                                  'auto.components.settings.RemoteServerUpdateDialog.liveTabOne',
-                                  '1 live tab'
-                                )
-                              : t(
-                                  'auto.components.settings.RemoteServerUpdateDialog.liveTabs',
-                                  '{{value0}} live tabs',
-                                  { value0: liveTabCount }
-                                ),
-                          value1:
-                            liveLeafCount === 1
-                              ? t(
-                                  'auto.components.settings.RemoteServerUpdateDialog.livePaneOne',
-                                  '1 live pane'
-                                )
-                              : t(
-                                  'auto.components.settings.RemoteServerUpdateDialog.livePanes',
-                                  '{{value0}} live panes',
-                                  { value0: liveLeafCount }
-                                )
-                        }
-                      )
-                    : t('settings.about.servers.restartNote', 'Updating restarts these servers.')}
-                </p>
-                <Button type="button" size="sm" disabled={busy} onClick={() => void start()}>
-                  {updateLabel}
-                </Button>
+              <div data-settings-row="" className="flex items-center justify-end">
+                <ServerRestartConfirm
+                  servers={eligible}
+                  label={updateLabel}
+                  variant="default"
+                  disabled={busy}
+                  onConfirm={() => void start()}
+                />
               </div>
             ) : null}
           </>
         ) : null}
       </AboutDisclosureRow>
     </SearchableSetting>
+  )
+}
+
+/** Updating restarts servers, so every update asks once, naming what restarts and whether live sessions drop. */
+function ServerRestartConfirm({
+  servers,
+  label,
+  variant,
+  disabled,
+  onConfirm
+}: {
+  servers: RemoteServerUpdateEntry[]
+  label: string
+  variant: 'default' | 'outline'
+  disabled: boolean
+  onConfirm: () => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  const [open, setOpen] = useState(false)
+  const live = servers.some((entry) => entry.liveTabCount > 0 || entry.liveLeafCount > 0)
+  const question =
+    servers.length === 1
+      ? t('settings.about.servers.confirmOne', 'Restart {{name}}?', { name: servers[0].name })
+      : t('settings.about.servers.confirmMany', 'Restart {{count}} servers?', {
+          count: servers.length
+        })
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button type="button" variant={variant} size="sm" disabled={disabled}>
+          {label}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-auto max-w-[calc(100vw-1rem)]">
+        <div className="flex items-center gap-3">
+          <p className="whitespace-nowrap text-sm">
+            {question}
+            {live ? ` ${t('settings.about.servers.liveMayDrop', 'Live sessions may drop.')}` : null}
+          </p>
+          <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>
+            {t('settings.about.servers.cancel', 'Cancel')}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            autoFocus
+            onClick={() => {
+              setOpen(false)
+              onConfirm()
+            }}
+          >
+            {t('settings.about.action.update', 'Update')}
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
   )
 }
 
@@ -267,7 +321,8 @@ function RemoteServerAboutRow({
   onUpdate: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const help = getRemoteServerEntryHelp(entry, t)
+  // "Manual update" already says what to do; its long help would only be cut off here.
+  const help = entry.phase === 'manual' ? null : getRemoteServerEntryHelp(entry, t)
   const version = getRemoteServerVersionDescription(entry, t)
   // Keep the version beside the help so a manual or failed server still says what it runs.
   const sub = help ? `${version} · ${help}` : version
@@ -300,11 +355,17 @@ function RemoteServerAboutRow({
         </div>
       </div>
       {entry.phase === 'available' || entry.phase === 'failed' ? (
-        <Button type="button" variant="outline" size="xs" onClick={onUpdate} disabled={disabled}>
-          {entry.phase === 'failed'
-            ? t('auto.components.settings.RemoteServerUpdateDialog.retry', 'Retry')
-            : t('settings.about.action.update', 'Update')}
-        </Button>
+        <ServerRestartConfirm
+          servers={[entry]}
+          label={
+            entry.phase === 'failed'
+              ? t('auto.components.settings.RemoteServerUpdateDialog.retry', 'Retry')
+              : t('settings.about.action.update', 'Update')
+          }
+          variant="outline"
+          disabled={disabled}
+          onConfirm={onUpdate}
+        />
       ) : (
         <span className="shrink-0 text-settings-detail text-muted-foreground tabular-nums">
           {status}

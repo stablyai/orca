@@ -182,60 +182,74 @@ export function ReleaseChannelSection(): React.JSX.Element {
           </Select>
         }
       >
-        <div data-settings-row="" className="flex items-center gap-2">
-          <ReleaseBuildPicker
-            key={activeChannel}
-            builds={builds ?? []}
-            selectedTag={selectedTag}
-            runningVersion={appVersion}
-            onSelect={setSelectedTag}
-            disabled={loading || !builds || builds.length === 0}
-            placeholder={
-              loading || (builds === null && loadError === null)
-                ? t(
-                    'auto.components.settings.ReleaseChannelSection.loadingBuilds',
-                    'Loading builds…'
-                  )
-                : t('auto.components.settings.ReleaseChannelSection.noBuilds', 'No builds found')
-            }
-          />
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            type="button"
-            aria-label={t(
-              'auto.components.settings.ReleaseChannelSection.refresh',
-              'Refresh build list'
-            )}
-            disabled={loading}
-            onClick={() => void loadBuilds(activeChannel, { force: true })}
-          >
-            {loading ? <Loader2 className="animate-spin" /> : <RefreshCw />}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            type="button"
-            disabled={!selectedBuild || busy || isRunningBuild}
-            onClick={() => {
-              if (!selectedBuild) {
-                return
-              }
-              if (needsManualInstall) {
-                handleDownloadInstaller(selectedBuild)
-                return
-              }
-              handleSwitchTo(selectedBuild)
-            }}
-          >
-            {busy ? <Loader2 className="animate-spin" /> : needsManualInstall ? <Download /> : null}
-            {needsManualInstall
-              ? t(
-                  'auto.components.settings.ReleaseChannelSection.downloadInstaller',
-                  'Download installer'
-                )
-              : t('settings.about.channel.switch', 'Switch')}
-          </Button>
+        {/* Narrow rows give the build picker its own line so a build label is never cut short. */}
+        <div data-settings-row="" className="@container/build-row">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex min-w-0 flex-1 @max-xs/build-row:basis-full">
+              <ReleaseBuildPicker
+                key={activeChannel}
+                builds={builds ?? []}
+                selectedTag={selectedTag}
+                runningVersion={appVersion}
+                onSelect={setSelectedTag}
+                disabled={loading || !builds || builds.length === 0}
+                placeholder={
+                  loading || (builds === null && loadError === null)
+                    ? t(
+                        'auto.components.settings.ReleaseChannelSection.loadingBuilds',
+                        'Loading builds…'
+                      )
+                    : t(
+                        'auto.components.settings.ReleaseChannelSection.noBuilds',
+                        'No builds found'
+                      )
+                }
+              />
+            </div>
+            <div className="ms-auto flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                type="button"
+                aria-label={t(
+                  'auto.components.settings.ReleaseChannelSection.refresh',
+                  'Refresh build list'
+                )}
+                disabled={loading}
+                onClick={() => void loadBuilds(activeChannel, { force: true })}
+              >
+                {loading ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                type="button"
+                disabled={!selectedBuild || busy || isRunningBuild}
+                onClick={() => {
+                  if (!selectedBuild) {
+                    return
+                  }
+                  if (needsManualInstall) {
+                    handleDownloadInstaller(selectedBuild)
+                    return
+                  }
+                  handleSwitchTo(selectedBuild)
+                }}
+              >
+                {busy ? (
+                  <Loader2 className="animate-spin" />
+                ) : needsManualInstall ? (
+                  <Download />
+                ) : null}
+                {needsManualInstall
+                  ? t(
+                      'auto.components.settings.ReleaseChannelSection.downloadInstaller',
+                      'Download installer'
+                    )
+                  : t('settings.about.channel.switch', 'Switch')}
+              </Button>
+            </div>
+          </div>
         </div>
         {loadError ? (
           <p data-settings-row="" className="text-settings-detail text-destructive">

@@ -32,10 +32,12 @@ type UpdateStatusRowProps = {
   onRestart: () => void
 }
 
-/** Full and narrow copy for one line; the narrow form shows when the card is under 20rem. */
+/** Full and narrow copy for one line; the narrow form shows when the card is under 20rem and never drops a version. */
 type LineCopy = { full: string; narrow?: string; tone?: 'destructive' }
 
 function lineCopy(line: UpdateStatusLine, t: Translate, intlLocale: string): LineCopy | null {
+  const percent = (value: number): string =>
+    uiNumberFormat(PERCENT_FORMAT, intlLocale).format(Math.round(value) / 100)
   switch (line.kind) {
     case 'none':
       return null
@@ -56,29 +58,25 @@ function lineCopy(line: UpdateStatusLine, t: Translate, intlLocale: string): Lin
       return {
         full: t('settings.about.status.available', '{{version}} available', {
           version: line.version
-        }),
-        narrow: line.version
+        })
       }
     case 'unsupported-system':
       return { full: t('settings.about.status.latestForMac', 'Latest for this Mac') }
     case 'downloading':
       return {
-        full: t('settings.about.status.downloading', 'Downloading {{version}}', {
-          version: line.version
-        }),
-        narrow: line.version
+        full: t('settings.about.status.downloadingPercent', 'Downloading {{percent}}', {
+          percent: percent(line.percent)
+        })
       }
     case 'ready':
       return {
-        full: t('settings.about.status.ready', '{{version}} ready', { version: line.version }),
-        narrow: line.version
+        full: t('settings.about.status.ready', '{{version}} ready', { version: line.version })
       }
     case 'installing':
       return {
         full: t('settings.about.status.installing', 'Installing {{version}}…', {
           version: line.version
-        }),
-        narrow: line.version
+        })
       }
     case 'install-on-quit':
       return { full: t('settings.about.status.installOnQuit', 'Quit to install') }
@@ -143,6 +141,17 @@ function releaseNotesUrl(status: UpdateStatus, version: string): string {
   return url ?? getReleaseNotesUrlForVersion(version)
 }
 
+/** Dev builds carry a long build suffix; the semver must stay whole, so only the suffix truncates. */
+function splitVersion(version: string | null): { semver: string; suffix: string } {
+  if (!version) {
+    return { semver: '…', suffix: '' }
+  }
+  const dash = version.indexOf('-')
+  return dash === -1
+    ? { semver: version, suffix: '' }
+    : { semver: version.slice(0, dash), suffix: version.slice(dash) }
+}
+
 export function UpdateStatusRow({
   model,
   status,
@@ -158,16 +167,18 @@ export function UpdateStatusRow({
   const details = detailsText(model, status, t)
   const showDetails = detailsOpen && details !== null
   const percent = model.line.kind === 'downloading' ? Math.round(model.line.percent) : null
+  const version = splitVersion(appVersion)
 
   return (
     <div className="@container/about-status">
       <div className="flex items-center gap-3">
         <img src={iconUrl} alt="" aria-hidden className="size-7 shrink-0 rounded-md" />
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-medium">
-            {t('settings.general.about.version', 'Orca {{version}}', {
-              version: appVersion ?? '…'
-            })}
+        <div className="relative min-w-0 flex-1">
+          <div className="flex min-w-0 text-sm font-medium">
+            <span className="shrink-0">
+              {t('settings.general.about.version', 'Orca {{version}}', { version: version.semver })}
+            </span>
+            {version.suffix ? <span className="min-w-0 truncate">{version.suffix}</span> : null}
           </div>
           {copy || details ? (
             <div className="flex min-w-0 items-center whitespace-nowrap text-settings-detail text-muted-foreground">
@@ -188,7 +199,8 @@ export function UpdateStatusRow({
                 </span>
               ) : null}
               {model.notesVersion ? (
-                <>
+                // Narrow rows drop Notes so the version in the line is never cut off.
+                <span className="shrink-0 @max-xs/about-status:hidden">
                   <span aria-hidden className="px-1.5">
                     ·
                   </span>
@@ -197,11 +209,11 @@ export function UpdateStatusRow({
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={openAppHttpLinkFromAnchor}
-                    className="shrink-0 hover:text-foreground hover:underline"
+                    className="hover:text-foreground hover:underline"
                   >
                     {t('settings.about.status.notes', 'Notes')}
                   </a>
-                </>
+                </span>
               ) : null}
               {details ? (
                 <>
@@ -232,49 +244,43 @@ export function UpdateStatusRow({
               ) : null}
             </div>
           ) : null}
+          {percent !== null ? (
+            // Inside the row's bottom padding, so a download never changes the row's height.
+            <div className="absolute inset-x-0 -bottom-1.5">
+              <Progress
+                value={percent}
+                aria-label={t('settings.about.status.downloadProgress', 'Download progress')}
+                className="h-0.5"
+              />
+            </div>
+          ) : null}
         </div>
         {model.secondaryCheck ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost-muted"
-                size="icon-sm"
-                aria-label={t('settings.about.action.checkForUpdates', 'Check for updates')}
-                disabled={model.secondaryCheck.disabled}
-                // Modifier clicks pick a one-off release track, not a saved setting.
-                onClick={(event) =>
-                  void window.api.updater.check(getUpdateCheckClickOptions(event))
-                }
-              >
-                <RefreshCw />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={4}>
-              {t('settings.about.action.checkForUpdates', 'Check for updates')}
-            </TooltipContent>
-          </Tooltip>
+          <span className="@max-xs/about-status:hidden">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost-muted"
+                  size="icon-sm"
+                  aria-label={t('settings.about.action.checkForUpdates', 'Check for updates')}
+                  disabled={model.secondaryCheck.disabled}
+                  // Modifier clicks pick a one-off release track, not a saved setting.
+                  onClick={(event) =>
+                    void window.api.updater.check(getUpdateCheckClickOptions(event))
+                  }
+                >
+                  <RefreshCw />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                {t('settings.about.action.checkForUpdates', 'Check for updates')}
+              </TooltipContent>
+            </Tooltip>
+          </span>
         ) : null}
-        <UpdateStatusAction
-          model={model}
-          percent={
-            percent === null
-              ? null
-              : uiNumberFormat(PERCENT_FORMAT, intlLocale).format(percent / 100)
-          }
-          onDownload={onDownload}
-          onRestart={onRestart}
-        />
+        <UpdateStatusAction model={model} onDownload={onDownload} onRestart={onRestart} />
       </div>
-      {percent !== null ? (
-        <div className="mt-2 ms-10">
-          <Progress
-            value={percent}
-            aria-label={t('settings.about.status.downloadProgress', 'Download progress')}
-            className="h-1"
-          />
-        </div>
-      ) : null}
       {showDetails ? <UpdateStatusDetails text={details} /> : null}
     </div>
   )
@@ -283,36 +289,36 @@ export function UpdateStatusRow({
 function UpdateStatusDetails({ text }: { text: string }): React.JSX.Element {
   const t = useTranslate()
   return (
-    <div className="mt-2 ms-10 flex items-start gap-1 rounded-md bg-muted/50 py-1.5 ps-2.5 pe-1">
-      <pre className="max-h-24 min-w-0 flex-1 overflow-auto whitespace-pre-wrap break-all py-0.5 font-mono text-xs text-muted-foreground scrollbar-sleek">
+    <div className="relative mt-2 ms-10 rounded-md bg-muted/50 py-1.5 ps-2.5 pe-8">
+      <pre className="max-h-24 overflow-auto whitespace-pre-wrap break-all py-0.5 font-mono text-xs text-muted-foreground scrollbar-sleek">
         {text}
       </pre>
-      <Button
-        type="button"
-        variant="ghost-muted"
-        size="icon-xs"
-        aria-label={t('settings.about.status.copyDetails', 'Copy details')}
-        onClick={() => {
-          void window.api.ui.writeClipboardText(text).then(
-            () => toast.message(t('settings.about.status.copied', 'Copied')),
-            () => toast.error(t('settings.about.status.copyFailed', 'Could not copy details.'))
-          )
-        }}
-      >
-        <Copy />
-      </Button>
+      <div className="absolute end-1 top-1">
+        <Button
+          type="button"
+          variant="ghost-muted"
+          size="icon-xs"
+          aria-label={t('settings.about.status.copyDetails', 'Copy details')}
+          onClick={() => {
+            void window.api.ui.writeClipboardText(text).then(
+              () => toast.message(t('settings.about.status.copied', 'Copied')),
+              () => toast.error(t('settings.about.status.copyFailed', 'Could not copy details.'))
+            )
+          }}
+        >
+          <Copy />
+        </Button>
+      </div>
     </div>
   )
 }
 
 function UpdateStatusAction({
   model,
-  percent,
   onDownload,
   onRestart
 }: {
   model: UpdateStatusRowModel
-  percent: string | null
   onDownload: () => void
   onRestart: () => void
 }): React.JSX.Element | null {
@@ -321,9 +327,9 @@ function UpdateStatusAction({
   const spinner = busy ? <Loader2 className="animate-spin" /> : null
   switch (kind) {
     case 'none':
-      return null
     case 'progress':
-      return <span className="shrink-0 text-sm text-muted-foreground tabular-nums">{percent}</span>
+      // Download progress lives in the state line and its bar; there's nothing to press.
+      return null
     case 'check':
     case 'retry-check':
       return (
