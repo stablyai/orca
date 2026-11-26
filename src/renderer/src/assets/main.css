@@ -109,6 +109,7 @@
   --color-chat-focus-ring: var(--chat-focus-ring);
   --color-unread: var(--unread);
   --color-unread-inverse: var(--unread-inverse);
+  --color-unread-bell: var(--unread-bell);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -333,6 +334,8 @@
   --unread: var(--color-blue-500);
   /* The unread dot on an inverted surface (tips): blue-500 keeps 3:1 on both the near-black and near-white inverse. */
   --unread-inverse: var(--color-blue-500);
+  /* The amber unread bell, shared by both themes. */
+  --unread-bell: var(--color-amber-500);
   /* Keep PR-state hues stable across theme changes. */
   --workspace-status-done: #c7a594;
   --workspace-status-review: #16a34a;
@@ -2396,6 +2399,28 @@ html.native-shell .app-layout {
   animation: none;
 }
 
+/* The worker chip's running dot grid: an opacity-only wave (compositor), each cell delayed by its diagonal. */
+@keyframes worker-dock-dot-wave {
+  0%,
+  60%,
+  100% {
+    opacity: 0.3;
+  }
+  25% {
+    opacity: 0.9;
+  }
+}
+
+.worker-dock-dot-grid > * {
+  opacity: 0.9;
+  animation: worker-dock-dot-wave 2s ease-in-out infinite both;
+}
+
+/* Offscreen, the cells drop the wave instead of pausing it, so the reveal re-anchors their phase. */
+.worker-dock-dot-grid[data-animation-offscreen] > * {
+  animation: none;
+}
+
 /* Virtual-list rows outside the viewport (overscan included) pause only endless loops; finite animations still finish. */
 [data-row-offscreen] .animate-spin,
 [data-row-offscreen] .animate-pulse,
@@ -2408,7 +2433,8 @@ html.native-shell .app-layout {
   .agent-working-spinner,
   .loading-spinner,
   .animate-spin,
-  .animate-pulse {
+  .animate-pulse,
+  .worker-dock-dot-grid > * {
     animation: none;
   }
 }

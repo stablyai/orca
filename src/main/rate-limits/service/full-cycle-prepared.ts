@@ -23,7 +23,6 @@ export type FetchAllCyclePrepared = {
   miniMaxGeneration: number
   zcodeConfigChanged: boolean
   zcodeGeneration: number
-  antigravityGeneration: number
   claudeFetchGated: boolean
   kimchiFetchGated: boolean
   results: [
@@ -37,5 +36,4 @@ export type FetchAllCyclePrepared = {
   cursorResultPromise: Promise<SettledProviderResult>
   kimchiResultPromise: Promise<SettledProviderResult>
   zcodeResultPromise: Promise<SettledProviderResult>
-  antigravityResultPromise: Promise<SettledProviderResult>
 }

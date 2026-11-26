@@ -19,7 +19,6 @@ const settledProviders = createEmptyRateLimitState({
   codex: unavailable('codex'),
   opencodeGo: unavailable('opencode-go'),
   kimi: unavailable('kimi'),
-  antigravity: unavailable('antigravity'),
   minimax: unavailable('minimax'),
   grok: unavailable('grok'),
   cursor: unavailable('cursor'),

@@ -82,6 +82,8 @@ const buttonVariants = cva(
       size: {
         default: 'h-9 px-4 py-2 has-[>svg]:px-3',
         xs: "h-6 gap-1 rounded-md px-2 text-xs has-[>svg]:px-1.5 [&_svg:not([class*='size-'])]:size-3",
+        // `xs` at 13px with a 6px radius, for the one action in a 36px browser notice bar.
+        'xs-notice': 'h-6 gap-1 rounded-sm px-2.5 text-[13px]',
         // `xs` trimmed to its text, for an action inside a 32px status line.
         'xs-compact':
           "h-5 gap-1 rounded-md px-1.5 py-0.5 text-xs [&_svg:not([class*='size-'])]:size-3",

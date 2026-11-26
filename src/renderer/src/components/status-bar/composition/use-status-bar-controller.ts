@@ -101,19 +101,12 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     return null
   }
 
-  const { claude, codex, opencodeGo, kimi, kimchi, antigravity, minimax, grok, cursor, zcode } =
-    rateLimits
+  const { claude, codex, opencodeGo, kimi, kimchi, minimax, grok, cursor, zcode } = rateLimits
   const muse = rateLimits.muse
 
-  // Antigravity has no saved credential; the checked item and detected CLI establish setup.
-  const antigravityUsageConfigured =
-    !remoteOwned &&
-    statusBarItems.includes('antigravity') &&
-    isStatusBarItemAvailable('antigravity', detectedAgentIds)
   // Use owner-specific durable setup flags; viewer credentials cannot establish remote configuration.
   const usageSettings = {
     ...(remoteOwned ? {} : settings),
-    antigravityUsageConfigured,
     minimaxCookieConfigured: rateLimits.minimaxCookieConfigured,
     minimaxApiKeyConfigured: rateLimits.minimaxApiKeyConfigured,
     opencodeGoApiKeyConfigured: rateLimits.opencodeGoApiKeyConfigured,
@@ -125,7 +118,6 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const visibleCodex = getVisibleUsageProvider('codex', codex, usageSettings)
   const visibleKimi = getVisibleUsageProvider('kimi', kimi, usageSettings)
   const visibleKimchi = getVisibleUsageProvider('kimchi', kimchi, usageSettings)
-  const visibleAntigravity = getVisibleUsageProvider('antigravity', antigravity, usageSettings)
   const visibleMiniMax = getVisibleUsageProvider('minimax', minimax, usageSettings)
   const visibleGrok = getVisibleUsageProvider('grok', grok, usageSettings)
   const visibleCursor = getVisibleUsageProvider('cursor', cursor, usageSettings)
@@ -145,10 +137,6 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     isStatusBarItemAvailable('kimi', detectedAgentIds)
   // Kimchi's saved API key can provide usage independently of CLI detection.
   const showKimchi = visibleKimchi !== null && statusBarItems.includes('kimchi')
-  const showAntigravity =
-    visibleAntigravity !== null &&
-    statusBarItems.includes('antigravity') &&
-    isStatusBarItemAvailable('antigravity', detectedAgentIds)
   // MiniMax supports cookie/API-key usage without an installed CLI.
   const showMiniMax = visibleMiniMax !== null && statusBarItems.includes('minimax')
   const showGrok =
@@ -182,7 +170,6 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showOpencodeGo ||
     showKimi ||
     showKimchi ||
-    showAntigravity ||
     showMiniMax ||
     showGrok ||
     showCursor ||
@@ -199,7 +186,6 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     opencodeGo?.status === 'fetching' ||
     kimi?.status === 'fetching' ||
     kimchi?.status === 'fetching' ||
-    antigravity?.status === 'fetching' ||
     minimax?.status === 'fetching' ||
     grok?.status === 'fetching' ||
     cursor?.status === 'fetching' ||
@@ -215,7 +201,6 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const rosterProviders = [
     showClaude ? visibleClaude : null,
     showCodex ? visibleCodex : null,
-    showAntigravity ? visibleAntigravity : null,
     showOpencodeGo ? visibleOpencodeGo : null,
     showKimi ? visibleKimi : null,
     showKimchi ? visibleKimchi : null,
@@ -267,7 +252,6 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   }
 
   return {
-    antigravityAccounts: rateLimits.antigravityAccounts,
     anyFetching,
     anyVisible,
     canSignInFromUsageRow,

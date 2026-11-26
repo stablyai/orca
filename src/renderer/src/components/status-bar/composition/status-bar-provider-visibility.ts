@@ -6,8 +6,6 @@ export type UsageProviderSettings = Pick<
   GlobalSettings,
   'codexManagedAccounts' | 'claudeManagedAccounts' | 'opencodeSessionCookie'
 > & {
-  // Antigravity setup is a checked item plus PATH detection.
-  antigravityUsageConfigured: boolean
   // Why: MiniMax/Grok sign-in live on disk, not in settings; main sets these each poll.
   minimaxCookieConfigured: boolean
   minimaxApiKeyConfigured: boolean
@@ -25,7 +23,6 @@ type UsageProviderSnapshots = {
   opencodeGo: ProviderRateLimits | null | undefined
   kimi: ProviderRateLimits | null | undefined
   kimchi?: ProviderRateLimits | null
-  antigravity: ProviderRateLimits | null | undefined
   minimax: ProviderRateLimits | null | undefined
   grok: ProviderRateLimits | null | undefined
   cursor: ProviderRateLimits | null | undefined
@@ -61,7 +58,6 @@ export function hasUsageProviderSettings(
     (settings?.claudeManagedAccounts?.length ?? 0) > 0 ||
     Boolean(settings?.opencodeSessionCookie?.trim()) ||
     settings?.opencodeGoApiKeyConfigured === true ||
-    settings?.antigravityUsageConfigured === true ||
     settings?.minimaxCookieConfigured === true ||
     settings?.minimaxApiKeyConfigured === true ||
     settings?.grokAuthConfigured === true ||
@@ -89,10 +85,6 @@ export function hasUsageProviderSettingsForProvider(
       settings.opencodeGoApiKeyConfigured === true
     )
   }
-  if (providerId === 'antigravity') {
-    // The agy probe needs only the PATH-gated checked item.
-    return settings.antigravityUsageConfigured === true
-  }
   if (providerId === 'minimax') {
     return settings.minimaxCookieConfigured === true || settings.minimaxApiKeyConfigured === true
   }
@@ -115,7 +107,7 @@ export function createPendingProviderSnapshot(providerId: UsageProviderId): Prov
     weekly: null,
     ...(providerId === 'opencode-go' ? { monthly: null } : {}),
     // Bucket-backed providers need bucket-shaped pending skeletons to avoid layout changes on their first reading.
-    ...(providerId === 'cursor' || providerId === 'antigravity' ? { buckets: [] } : {}),
+    ...(providerId === 'cursor' ? { buckets: [] } : {}),
     updatedAt: 0,
     error: null,
     status: 'fetching'
@@ -145,16 +137,12 @@ export function isUsageEmptyState(
     return false
   }
   // System-default Claude/Codex have no saved account row; wait for snapshots before proposing setup.
-  const antigravitySnapshotPending =
-    hasUsageProviderSettingsForProvider('antigravity', settings) &&
-    isProviderSnapshotPending(providers.antigravity)
   if (
     isProviderSnapshotPending(providers.claude) ||
     isProviderSnapshotPending(providers.codex) ||
     isProviderSnapshotPending(providers.opencodeGo) ||
     isProviderSnapshotPending(providers.kimi) ||
     (providers.kimchi != null && isProviderSnapshotPending(providers.kimchi)) ||
-    antigravitySnapshotPending ||
     isProviderSnapshotPending(providers.minimax) ||
     isProviderSnapshotPending(providers.grok) ||
     isProviderSnapshotPending(providers.cursor) ||
@@ -170,7 +158,6 @@ export function isUsageEmptyState(
     !isProviderConfigured(providers.opencodeGo) &&
     !isProviderConfigured(providers.kimi) &&
     !isProviderConfigured(providers.kimchi) &&
-    !isProviderConfigured(providers.antigravity) &&
     !isProviderConfigured(providers.minimax) &&
     !isProviderConfigured(providers.grok) &&
     !isProviderConfigured(providers.cursor) &&

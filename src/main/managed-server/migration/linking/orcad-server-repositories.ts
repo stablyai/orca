@@ -1,20 +1,23 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import type { CatalogRequestOptions } from '../catalog/orcad-migration-request'
 import { listServerRows } from '../catalog/orcad-server-catalog-rows'
 import type { Repo } from '../../../../shared/repository/repo-types'
 
 // repo.list returns full stored rows; omitted host fields identify server-local repos.
-const ServerRepositoriesSchema = z.object({
-  repos: z.array(
-    z.object({
-      id: z.string().min(1),
-      path: z.string().min(1),
-      connectionId: z.string().nullish(),
-      executionHostId: z.string().nullish(),
-      projectGroupId: z.string().nullish()
-    })
-  )
-})
+const ServerRepositoriesSchema = lazyZodSchema(() =>
+  z.object({
+    repos: z.array(
+      z.object({
+        id: z.string().min(1),
+        path: z.string().min(1),
+        connectionId: z.string().nullish(),
+        executionHostId: z.string().nullish(),
+        projectGroupId: z.string().nullish()
+      })
+    )
+  })
+)
 
 export async function listRemoteOrcadRepositories(
   pairingCode: string,
