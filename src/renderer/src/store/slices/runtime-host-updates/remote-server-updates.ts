@@ -153,7 +153,11 @@ export const createRemoteServerUpdatesSlice: StateCreator<
           })
         })
       )
-      set({ remoteServerUpdatesLastCheckedAt: Date.now() })
+      set({
+        remoteServerUpdatesLastCheckedAt: Date.now(),
+        // After a default check, the dialog must dispatch for the targets it now displays.
+        ...(checkOptions ? {} : { remoteServerUpdateCheckOptions: null })
+      })
       return { revision, options: checkOptions }
     } finally {
       set({ remoteServerUpdatesChecking: false })

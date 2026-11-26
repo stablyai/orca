@@ -87,3 +87,30 @@ it('keeps the failure from a completed batch on a passive re-check of the same t
   await state().refreshRemoteServerUpdates()
   expect(state().remoteServerUpdates.get(HOST)).toMatchObject({ phase: 'available', error: null })
 })
+
+it('uses the displayed stable target when recovery re-checks after a failed one-off RC update', async () => {
+  const { state, call } = setup()
+  call.mockResolvedValueOnce({
+    ok: true,
+    result: { status: { state: 'available', version: '1.4.277-rc.1' } }
+  })
+  const oneOff = await state().refreshRemoteServerUpdates({ includePrerelease: true })
+  await state().startRemoteServerUpdates([HOST], oneOff)
+  expect(state().remoteServerUpdates.get(HOST)).toMatchObject({
+    phase: 'failed',
+    targetVersion: '1.4.277-rc.1'
+  })
+
+  state().setRemoteServerUpdateDialogOpen(true)
+  await state().refreshRemoteServerUpdates()
+  expect(state().remoteServerUpdates.get(HOST)?.targetVersion).toBe('1.4.276')
+
+  call.mockClear()
+  await state().startRemoteServerUpdates([HOST])
+  expect(call).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({
+      method: 'updater.check',
+      params: { includePrerelease: false, includePerfPrerelease: false }
+    })
+  )
+})
