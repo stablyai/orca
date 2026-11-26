@@ -8,6 +8,7 @@ import { styles as chatStyles } from '../../mobile-native-chat-view-styles'
 export function MobileNativeChatNoticePill({
   label,
   Icon,
+  accessibilityLabel,
   accessibilityHint,
   onPress,
   primary = false,
@@ -16,6 +17,8 @@ export function MobileNativeChatNoticePill({
 }: {
   label: string
   Icon?: typeof Play
+  /** What a screen reader says when the visible label alone is ambiguous, as one Open among several. */
+  accessibilityLabel?: string
   accessibilityHint?: string
   onPress: () => void
   primary?: boolean
@@ -25,6 +28,7 @@ export function MobileNativeChatNoticePill({
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
       accessibilityHint={accessibilityHint}
       accessibilityState={disabled ? { disabled } : undefined}
       disabled={disabled}

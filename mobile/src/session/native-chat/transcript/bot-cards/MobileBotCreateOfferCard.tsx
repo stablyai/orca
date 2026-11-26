@@ -242,6 +242,8 @@ export function MobileBotCreateOfferCard({
         <MobileBotCardActions>
           <MobileNativeChatNoticePill
             label={say('open')}
+            // A chat can hold several created cards; each Open says which bot it opens.
+            accessibilityLabel={say('openBot', { name: view.title })}
             onPress={() => publishBotLink({ kind: 'bot', botId: created.id })}
           />
         </MobileBotCardActions>
