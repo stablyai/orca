@@ -231,7 +231,7 @@ export function useMcpServerActions(args: {
         // (a credential another entry shares, one this host can't open, a read still pending).
         message: t(
           'mcpServers.removeMessageSavedData',
-          'Sessions using it may lose access now. This can delete any saved headers, environment variables or sign-in for it; you’ll need to re-enter or sign in again to add it back.'
+          'Sessions using it may lose access now. This can delete any saved headers, environment variables or sign-in for it. If so, you may need to re-enter them or sign in again to get that access back.'
         ),
         confirmLabel: t('mcpServers.remove', 'Remove'),
         destructive: true,
