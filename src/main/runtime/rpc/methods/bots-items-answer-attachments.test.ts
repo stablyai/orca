@@ -97,7 +97,9 @@ it('claims an item answer for the chat it actually mails and replays the same an
   const retired = Promise.withResolvers<void>()
   const successorReady = Promise.withResolvers<void>()
   let reset: Promise<void> | undefined
+  const claimedFor: string[] = []
   setAgentSessionAttachmentStore(attachments, async (sessionId, body) => {
+    claimedFor.push(sessionId)
     journal.writeAutocommit((db) =>
       claimAgentSessionAttachmentsInTransaction(db, {
         stateDirectory: dir,
@@ -286,6 +288,7 @@ it('claims an item answer for the chat it actually mails and replays the same an
       callerKey: 'owner-phone',
       uploadId: staged.uploadId
     })
+    claimedFor.length = 0
     await comment.handler(
       {
         ...answer,
@@ -301,6 +304,8 @@ it('claims an item answer for the chat it actually mails and replays the same an
     expect(mail.getMessageById(botItemMailId(nextMail!.id))?.to_handle).toBe(
       `orca_session_id:${HOME}`
     )
+    // Delivery to the chat admission just claimed for doesn't claim the same uploads again.
+    expect(claimedFor).toEqual([HOME])
     expect(await readFile(next.path, 'utf8')).toBe('test')
 
     items.markMailSent(nextMail!.changes.map(({ event }) => event.id))
