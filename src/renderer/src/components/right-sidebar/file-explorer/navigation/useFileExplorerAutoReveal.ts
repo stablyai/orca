@@ -65,7 +65,7 @@ export function useFileExplorerAutoReveal({
 
     if (!revealActiveFileEnabled) {
       prevActiveFileKeyRef.current = activeFileKey
-      realTreeRevealedFileKeyRef.current = activeFileKey
+      realTreeRevealedFileKeyRef.current = null
       deferredByManualRevealIdRef.current = null
       handledSelectionRef.current = selectedPath
       return
