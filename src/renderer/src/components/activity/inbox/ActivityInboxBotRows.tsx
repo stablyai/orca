@@ -1,18 +1,13 @@
-import React, { useMemo, useSyncExternalStore } from 'react'
-import { Bot as BotIcon, UserPlus } from 'lucide-react'
-import { useTranslate } from '@/i18n/use-translate'
-import { readBots, subscribeToBotChanges } from '@/lib/bot-catalog-snapshot'
-import {
-  reviewAccessRequest,
-  useAccessRequests,
-  type HostAccessRequest
-} from '@/lib/bot-access-requests'
-import { BotAvatar } from '@/components/bots/BotAvatar'
-import { openBotHomePanelFromSidebar } from '@/components/bots/BotRow'
+// The bot side of the inbox: which bots have items for you, those items, and pending access requests.
+import { useEffect, useMemo, useSyncExternalStore } from 'react'
+import { subscribeToBotChanges } from '@/lib/bot-catalog-snapshot'
+import { useAccessRequests, type HostAccessRequest } from '@/lib/bot-access-requests'
+import { botRefKey } from '@/lib/bot-hosts'
+import { useBotItems } from '@/components/bots/items/use-bot-items'
+import type { Bot } from '../../../../../shared/bot-types'
+import type { BotItem } from '../../../../../shared/bots/bot-items'
+import { botItemGroupOf, botItemStaleDays } from '../../../../../shared/bots/bot-item-groups'
 import { isLiveAccessRequest, readActivityInboxBots, type ActivityInboxBot } from './activity-inbox'
-import { ActivityInboxRow } from './ActivityInboxRow'
-
-const noop = (): void => {}
 
 // A primitive key, so the external-store snapshot is stable between notifications.
 function readBotsNeedingYouKey(): string {
@@ -21,15 +16,16 @@ function readBotsNeedingYouKey(): string {
     .join('\u0001')
 }
 
-export type ActivityInboxBotEntries = {
+export type ActivityInboxBotSources = {
+  /** Bots whose published count says items need you; only these have their items read. */
   bots: ActivityInboxBot[]
   requests: HostAccessRequest[]
 }
 
-/** Bots with tasks needing you and pending access requests, from what the renderer already holds (no fetch). */
-export function useActivityInboxBotEntries(): ActivityInboxBotEntries {
+/** From what the renderer already holds (no fetch): the bots to read items for, and access requests. */
+export function useActivityInboxBotSources(): ActivityInboxBotSources {
   const botsKey = useSyncExternalStore(subscribeToBotChanges, readBotsNeedingYouKey)
-  // botsKey changes exactly when the rows do; the read itself is the snapshot's in-memory lists.
+  // botsKey changes exactly when the set does; the read itself is the snapshot's in-memory lists.
   // oxlint-disable-next-line react-hooks/exhaustive-deps
   const bots = useMemo(() => readActivityInboxBots(), [botsKey])
   const allRequests = useAccessRequests()
@@ -37,57 +33,31 @@ export function useActivityInboxBotEntries(): ActivityInboxBotEntries {
   return { bots, requests }
 }
 
-/** Each bot row opens the bot's Home with its Needs you; each access row opens its review. */
-export function ActivityInboxBotRows({
-  bots,
-  requests
-}: ActivityInboxBotEntries): React.JSX.Element {
-  const t = useTranslate()
-  return (
-    <>
-      {bots.map(({ bot, count }) => (
-        <ActivityInboxRow
-          key={`${bot.hostId}:${bot.id}`}
-          avatar={<BotAvatar bot={bot} className="size-4 rounded-full" />}
-          title={bot.name}
-          line={
-            count === 1
-              ? t('activityInbox.botTask', '1 task needs you')
-              : t('activityInbox.botTasks', '{{count}} tasks need you', { count })
-          }
-          ask
-          contextIcon={<BotIcon className="size-3" aria-hidden />}
-          context={t('activityInbox.opensNeedsYou', 'Opens its Needs you')}
-          onOpen={() => openBotHomePanelFromSidebar(bot, noop)}
-        />
-      ))}
-      {requests.map((request) => {
-        const bot = readBots().find(
-          (candidate) => candidate.id === request.botId && candidate.hostId === request.hostId
-        )
-        return (
-          <ActivityInboxRow
-            key={`${request.hostId}:${request.requestId}`}
-            avatar={
-              bot ? (
-                <BotAvatar bot={bot} className="size-4 rounded-full" />
-              ) : (
-                <BotIcon className="size-3.5 text-muted-foreground" aria-hidden />
-              )
-            }
-            title={bot?.name ?? request.requester.name}
-            line={t('activityInbox.accessRequest', '{{name}} asked for access', {
-              name: request.requester.name
-            })}
-            ask
-            contextIcon={<UserPlus className="size-3" aria-hidden />}
-            context={t('activityInbox.accessContext', 'Access request · {{source}}', {
-              source: request.source === 'slack' ? 'Slack' : 'Linear'
-            })}
-            onOpen={() => reviewAccessRequest(request)}
-          />
-        )
-      })}
-    </>
-  )
+/** A bot's items in Needs you, as its Items tab groups them; null until its list has been read. */
+export type BotItemsNeedingYou = { bot: Bot; items: BotItem[] | null }
+
+/**
+ * Reads one bot's items while Activity is open, through the same shared read as its Items tab (one read per
+ * bot, re-read on its notices), and reports those in Needs you. Renders nothing.
+ */
+export function ActivityInboxBotItemsReader({
+  bot,
+  onItems
+}: {
+  bot: Bot
+  onItems: (key: string, value: BotItemsNeedingYou | undefined) => void
+}): null {
+  const { read } = useBotItems(bot)
+  const key = botRefKey(bot)
+  useEffect(() => {
+    // Grouped as the list lands (staleness reads the clock), not during render.
+    const staleDays = botItemStaleDays(bot.itemsStale)
+    const now = Date.now()
+    const items = read
+      ? read.items.filter((item) => botItemGroupOf(item, staleDays, now) === 'needs_you')
+      : null
+    onItems(key, { bot, items })
+  }, [key, bot, read, onItems])
+  useEffect(() => () => onItems(key, undefined), [key, onItems])
+  return null
 }

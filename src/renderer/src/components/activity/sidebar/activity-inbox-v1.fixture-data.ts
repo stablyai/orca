@@ -1,6 +1,10 @@
 // Sample rows for activity-inbox-v1.fixture.tsx: agents waiting, blocked and finished, and two bots.
 import { fixtureCos } from '../../../component-fixtures/fixture-bot-panel'
 import type { AgentPaneThread } from '../threads/activity-thread-types'
+import type { BotItem } from '../../../../../shared/bots/bot-items'
+import type { HostAccessRequest } from '@/lib/bot-access-requests'
+import type { ActivityInboxEntry } from '../inbox/activity-inbox-entries'
+import { activityInboxKind } from '../inbox/activity-inbox'
 import type { Bot } from '../../../../../shared/bot-types'
 import { mascotAvatar } from '../../../../../shared/bot-avatar'
 import type {
@@ -173,3 +177,81 @@ export const releaseBot: Bot = {
   avatar: mascotAvatar('R3'),
   folderWorkspaceId: 'fw-release'
 }
+
+function item(
+  uid: string,
+  number: number,
+  title: string,
+  gist: string,
+  minutesAgo: number
+): BotItem {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the inbox row reads only these fields.
+  return {
+    uid,
+    number,
+    title,
+    question: { eventId: `${uid}-q`, text: gist, gist },
+    lastActivityAt: now - minutesAgo * MIN
+  } as BotItem
+}
+
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the inbox row reads only these fields.
+const accessRequest = {
+  requestId: 'req-1',
+  hostId: 'local',
+  botId: triageBot.id,
+  source: 'slack',
+  requester: { name: 'Priya', handle: 'priya' },
+  createdAt: now - 40 * MIN
+} as unknown as HostAccessRequest
+
+/** The inbox as ActivityInbox builds it: one list, newest first. The local Triage bot chat shows as the bot. */
+const UNSORTED_ENTRIES: ActivityInboxEntry[] = [
+  ...THREADS.flatMap((entry): ActivityInboxEntry[] => {
+    const kind = activityInboxKind(entry)
+    if (!kind || (kind === 'outcome' && !entry.unread)) {
+      return []
+    }
+    const bot = entry.repo === null ? triageBot : null
+    return [
+      {
+        kind: 'agent',
+        key: entry.paneKey,
+        at: entry.latestTimestamp,
+        thread: entry,
+        ask: kind === 'ask',
+        bot
+      }
+    ]
+  }),
+  {
+    kind: 'item',
+    key: 'item-1',
+    at: now - 4 * MIN,
+    bot: triageBot,
+    item: item('i1', 35, 'Windows relay drops after sleep', 'Merge these two tickets?', 4)
+  },
+  {
+    kind: 'item',
+    key: 'item-2',
+    at: now - 12 * MIN,
+    bot: triageBot,
+    item: item('i2', 36, 'Crash on launch from Dock', 'Which release should this go in?', 12)
+  },
+  {
+    kind: 'item',
+    key: 'item-3',
+    at: now - 22 * MIN,
+    bot: releaseBot,
+    item: item('i3', 12, 'Ship v1.4.2', 'Approve the release notes?', 22)
+  },
+  {
+    kind: 'access',
+    key: 'access-1',
+    at: accessRequest.createdAt,
+    request: accessRequest,
+    bot: triageBot
+  }
+]
+
+export const INBOX_ENTRIES = UNSORTED_ENTRIES.toSorted((a, b) => b.at - a.at)

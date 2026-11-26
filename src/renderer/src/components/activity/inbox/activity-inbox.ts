@@ -23,6 +23,9 @@ export type ActivityInboxKind = 'ask' | 'outcome'
  * is never listed (null); its live progress stays on the workspace cards.
  */
 export function activityInboxKind(thread: AgentPaneThread): ActivityInboxKind | null {
+  if (isChildWorkerThread(thread)) {
+    return null
+  }
   if (thread.migrationUnsupportedPtyId !== undefined) {
     return 'ask'
   }
@@ -32,6 +35,21 @@ export function activityInboxKind(thread: AgentPaneThread): ActivityInboxKind | 
     return thread.currentAgentState || thread.unread ? 'ask' : null
   }
   return OUTCOME_STATUSES.has(status) ? 'outcome' : null
+}
+
+/** A dispatched worker reports to its coordinator, not to you; its coordinator's row speaks for it. */
+export function isChildWorkerEntry(
+  entry: Pick<AgentStatusEntry, 'orchestration'> | null | undefined
+): boolean {
+  return entry?.orchestration !== undefined
+}
+
+function isChildWorkerThread(thread: AgentPaneThread): boolean {
+  return (
+    isChildWorkerEntry(thread.currentAgentEntry) ||
+    isChildWorkerEntry(thread.paneEntry) ||
+    isChildWorkerEntry(thread.latestEvent?.entry)
+  )
 }
 
 // Only the current turn counts, so the dot never lights for a row the list leaves out.
@@ -60,8 +78,8 @@ export function hasActivityInboxAgentAttention(source: AgentAttentionSource, now
   }
   const { projection } = source.agentStatusByPaneKey
   for (const [paneKey, entry] of source.agentStatusByPaneKey.entries()) {
-    // Panes with no workspace row have no Activity row to clear.
-    if (!projection.rowWorktree(paneKey)) {
+    // Panes with no workspace row have no Activity row to clear; child workers are never listed.
+    if (!projection.rowWorktree(paneKey) || isChildWorkerEntry(entry)) {
       continue
     }
     const live = freshActivityLiveAgentState(entry, now)

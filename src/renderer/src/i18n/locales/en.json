@@ -31498,14 +31498,10 @@
     }
   },
   "activityInbox": {
-    "botTask": "1 task needs you",
-    "botTasks": "{{count}} tasks need you",
-    "opensNeedsYou": "Opens its Needs you",
     "accessRequest": "{{name}} asked for access",
     "accessContext": "Access request · {{source}}",
     "caughtUp": "You’re all caught up",
     "caughtUpDetail": "Agents waiting on you, bots with tasks for you and finished work show up here. Running agents stay on their workspace cards.",
-    "needsYou": "Needs you",
-    "new": "New"
+    "itemNeedsYou": "Needs you"
   }
 }

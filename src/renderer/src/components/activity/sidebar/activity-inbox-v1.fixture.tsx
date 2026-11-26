@@ -1,16 +1,8 @@
 // Design preview for docs/activity-center-design.md (Activity inbox v1), drawn with the real app rail
-// (including its Activity button and dot), sidebar section headers and the inbox's own rows, section headers
-// and empty state. v1 is for the experimental app rail only.
+// (including its Activity button and dot), sidebar section headers and the inbox's own flat list of rows
+// and its empty state. v1 is for the experimental app rail only.
 import { DndContext } from '@dnd-kit/core'
-import {
-  Bell,
-  Bot as BotIcon,
-  CheckCheck,
-  FolderPlus,
-  Plus,
-  SlidersHorizontal,
-  UserPlus
-} from 'lucide-react'
+import { Bell, CheckCheck, FolderPlus, Plus, SlidersHorizontal } from 'lucide-react'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
@@ -18,13 +10,9 @@ import type { AppState } from '@/store/types'
 import { AppRail } from '../../app-rail/AppRail'
 import { SidebarSectionHeader } from '../../sidebar/SidebarSectionHeader'
 import { SidebarActivityBadge } from './sidebar-activity-badge'
-import { BotAvatar } from '../../bots/BotAvatar'
-import { now, releaseBot, THREADS, triageBot } from './activity-inbox-v1.fixture-data'
+import { INBOX_ENTRIES, now } from './activity-inbox-v1.fixture-data'
 import { ActivityInboxEmpty } from '../inbox/ActivityInboxEmpty'
-import { AgentInboxRow } from '../inbox/ActivityInbox'
-import { ActivityInboxRow, ActivityInboxSectionHeader } from '../inbox/ActivityInboxRow'
-import { activityInboxKind } from '../inbox/activity-inbox'
-import type { Bot } from '../../../../../shared/bot-types'
+import { ActivityInboxEntryRow } from '../inbox/activity-inbox-entries'
 
 function HeaderIcon({ children }: { children: React.ReactNode }) {
   return (
@@ -109,54 +97,14 @@ function BotsHeader() {
 
 const noop = (): void => {}
 
-function BotInboxRow({
-  bot,
-  line,
-  request = false
-}: {
-  bot: Bot
-  line: string
-  request?: boolean
-}) {
-  return (
-    <ActivityInboxRow
-      avatar={<BotAvatar bot={bot} className="size-4 rounded-full" />}
-      title={bot.name}
-      line={line}
-      ask
-      contextIcon={request ? <UserPlus className="size-3" /> : <BotIcon className="size-3" />}
-      context={request ? 'Access request · Slack' : 'Opens its Needs you'}
-      onOpen={noop}
-    />
-  )
-}
-
-/** The inbox as ActivityInbox lays it out: Needs you (agents, then bots and access requests), then New. */
+/** The inbox as ActivityInbox draws it: one flat list, newest first. */
 function InboxPreview() {
-  const asks = THREADS.filter((thread) => activityInboxKind(thread) === 'ask')
-  const outcomes = THREADS.filter(
-    (thread) => activityInboxKind(thread) === 'outcome' && thread.unread
-  )
   return (
-    <div className="px-1.5 pb-2">
-      <ActivityInboxSectionHeader label="Needs you" state="waiting" count={asks.length + 3} />
-      <ul>
-        {asks.map((thread) => (
-          <AgentInboxRow key={thread.paneKey} thread={thread} ask onOpen={noop} />
-        ))}
-        <BotInboxRow bot={triageBot} line="2 tasks need you" />
-        <BotInboxRow bot={releaseBot} line="1 task needs you" />
-        <BotInboxRow bot={triageBot} line="A teammate asked for access" request />
-      </ul>
-      <div className="pt-1">
-        <ActivityInboxSectionHeader label="New" state="done" count={outcomes.length} />
-        <ul>
-          {outcomes.map((thread) => (
-            <AgentInboxRow key={thread.paneKey} thread={thread} ask={false} onOpen={noop} />
-          ))}
-        </ul>
-      </div>
-    </div>
+    <ul className="px-1.5 pb-2">
+      {INBOX_ENTRIES.map((entry) => (
+        <ActivityInboxEntryRow key={entry.key} entry={entry} onOpenThread={noop} />
+      ))}
+    </ul>
   )
 }
 

@@ -75,6 +75,11 @@ describe('hasActivityInboxAgentAttention', () => {
     ).toBe(false)
   })
 
+  it('ignores a dispatched child worker', () => {
+    const child = entry({ orchestration: { taskId: 't', dispatchId: 'd' } })
+    expect(hasActivityInboxAgentAttention(source({ a: child }), NOW)).toBe(false)
+  })
+
   it('ignores panes with no Activity row', () => {
     expect(hasActivityInboxAgentAttention(source({ a: entry() }, { rows: [] }), NOW)).toBe(false)
   })
@@ -117,6 +122,18 @@ describe('activityInboxKind', () => {
 
   it('lists a finished turn as an outcome', () => {
     expect(activityInboxKind(thread({ paneEntry: entry({ state: 'done' }) }))).toBe('outcome')
+  })
+
+  it('never lists a dispatched child worker', () => {
+    const orchestration = { taskId: 't', dispatchId: 'd' }
+    expect(
+      activityInboxKind(
+        thread({
+          currentAgentState: 'waiting',
+          currentAgentEntry: entry({ state: 'waiting', orchestration })
+        })
+      )
+    ).toBeNull()
   })
 
   it('lists a blocked migration as an ask', () => {

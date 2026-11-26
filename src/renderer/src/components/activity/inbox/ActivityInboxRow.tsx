@@ -1,36 +1,9 @@
 import React from 'react'
 import { cn } from '@/lib/class-names'
-import { AgentStateDot } from '@/components/agent/status/AgentStateDot'
 import { useNow } from '@/lib/window-activity/use-now'
 import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
 import { useIntlLocale } from '@/i18n/use-translate'
 import { formatAbsoluteDate } from '../threads/activity-thread-presentation'
-import type { AgentDotState } from '@/components/agent/status/AgentStateDot'
-
-/** A section of the inbox: Needs you, or New. Not a control; nothing collapses. */
-export function ActivityInboxSectionHeader({
-  label,
-  state,
-  count
-}: {
-  label: string
-  state: AgentDotState
-  count: number
-}): React.JSX.Element {
-  return (
-    <div className="flex h-7 select-none items-center gap-1.5 rounded-md px-1.5 py-1 text-muted-foreground">
-      <span className="inline-flex size-4 shrink-0 items-center justify-center">
-        <AgentStateDot state={state} size="sm" />
-      </span>
-      <span className="min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-[0.05em] text-foreground/80">
-        {label}
-      </span>
-      <span className="rounded-full border border-border/80 bg-muted/80 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums leading-none text-foreground/80 shadow-xs">
-        {count}
-      </span>
-    </div>
-  )
-}
 
 /**
  * One inbox row, for an agent, a bot or an access request: who, when, what they need or did, and where. The whole
