@@ -10,6 +10,7 @@ import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { ChatDeliveries, type LinkableChat } from './external-conversation-chat-delivery'
 import type { ConversationChat, ConversationChatHost } from './external-conversation-chat'
+import type { ConnectorImage } from './connector-asker-images'
 
 // The real chat host and journal: a connector message whose start failed, then the conversation's next.
 const KEY = { source: 'slack' as const, externalId: 'T1:C1:1.2:UBOT' }
@@ -104,6 +105,37 @@ it('carries the failed message into the next one through send admission, once', 
     consumedAs: next.id
   })
   expect(await (await journal()).queuedMessages.returned()).toEqual([])
+})
+
+it('a request preparing its attachments does not own a concurrent local turn', async () => {
+  rig = await createQueuedMessageTestRig({ starting: true })
+  const deliveries = new ChatDeliveries(vi.fn())
+  const preparing = Promise.withResolvers<void>()
+  const staged = Promise.withResolvers<ConnectorImage[]>()
+  const result = deliveries.deliver(chatHost(rig.host), KEY, CHAT, {
+    deliveryId: 'd-slack',
+    text: '@bot',
+    signal: new AbortController().signal,
+    asker: {
+      userId: 'U1',
+      role: 'owner',
+      place: { kind: 'public_channel', id: 'C1' },
+      context: [],
+      text: '@bot'
+    },
+    askerImages: () => {
+      preparing.resolve()
+      return staged.promise
+    }
+  })
+  await preparing.promise
+  const pendingDuringPreparation = deliveries.pending(SESSION)
+  const turnOrigin = deliveries.origin(SESSION, null)
+  staged.resolve([])
+  await expect(result).resolves.toEqual({ outcome: 'accepted' })
+  expect(pendingDuringPreparation).toBe(false)
+  expect(turnOrigin).toBe('local')
+  expect(deliveries.pending(SESSION)).toBe(true)
 })
 
 it('a Retry racing the send leaves the delivery its own turn, not the Retry’s', async () => {

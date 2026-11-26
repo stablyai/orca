@@ -194,15 +194,27 @@ export class ChatDeliveries {
     // A send starts the chat's agent, so the host is installed for it as any send would.
     const generation = this.generations.get(chat.sessionId) ?? {}
     this.generations.set(chat.sessionId, generation)
-    const sending = this.sending.get(chat.sessionId) ?? new Set<object>()
     const attempt = {}
-    sending.add(attempt)
-    this.sending.set(chat.sessionId, sending)
+    let sending: Set<object> | undefined
     const current = () => this.generations.get(chat.sessionId) === generation
+    const stopSending = () => {
+      if (!sending) {
+        return
+      }
+      sending.delete(attempt)
+      if (this.sending.get(chat.sessionId) === sending && sending.size === 0) {
+        this.sending.delete(chat.sessionId)
+      }
+      sending = undefined
+    }
     // Listed at admission: the turn it starts may begin before the send returns, and none before.
     let sent: { deliveryId: string; sentAt: number } | undefined
     const admitted = () => {
       if (current()) {
+        // Only admission can make a concurrent turn this delivery's. Downloads are still preparation.
+        sending = this.sending.get(chat.sessionId) ?? new Set()
+        sending.add(attempt)
+        this.sending.set(chat.sessionId, sending)
         sent = this.admit(chat.sessionId, delivery.deliveryId)
       }
       return () => {
@@ -210,17 +222,13 @@ export class ChatDeliveries {
           this.unadmit(chat.sessionId, sent)
         }
         sent = undefined
+        stopSending()
       }
     }
     const outcome = await deliverToChat((await chats?.ensure()) ?? null, chatLink(key, chat), {
       ...delivery,
       admitted
-    }).finally(() => {
-      sending.delete(attempt)
-      if (this.sending.get(chat.sessionId) === sending && sending.size === 0) {
-        this.sending.delete(chat.sessionId)
-      }
-    })
+    }).finally(stopSending)
     if (!current()) {
       return outcome
     }
