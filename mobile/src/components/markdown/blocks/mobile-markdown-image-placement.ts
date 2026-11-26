@@ -1,13 +1,26 @@
-import type { Image, Root, RootContent } from 'mdast'
+import type { Image, PhrasingContent, Root, RootContent } from 'mdast'
 
 /** The same nesting boundary applies to native layout and image discovery. */
 export function mobileMarkdownBlockIsLiteral(node: RootContent, depth: number): boolean {
   return depth > 8 && 'children' in node
 }
 
-export function mobileMarkdownParagraphImages(node: RootContent, depth: number): Image[] {
+export function mobileMarkdownParagraphImage(
+  node: PhrasingContent,
+  documentImages: boolean
+): Image | undefined {
+  const image =
+    documentImages && node.type === 'link' && node.children.length === 1 ? node.children[0] : node
+  return image?.type === 'image' ? image : undefined
+}
+
+export function mobileMarkdownParagraphImages(
+  node: RootContent,
+  depth: number,
+  documentImages = false
+): Image[] {
   return node.type === 'paragraph' && !mobileMarkdownBlockIsLiteral(node, depth)
-    ? node.children.filter((child): child is Image => child.type === 'image')
+    ? node.children.flatMap((child) => mobileMarkdownParagraphImage(child, documentImages) ?? [])
     : []
 }
 

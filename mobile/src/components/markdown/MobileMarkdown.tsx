@@ -133,6 +133,7 @@ function MobileMarkdownContent({
     cards,
     renderVisual,
     renderImage: renderImage ?? renderRemoteImage,
+    documentImages,
     mermaidOccurrences: new Map()
   }
   // Native-chat range selection is set on each block; nested inline spans inherit it.

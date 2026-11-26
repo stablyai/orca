@@ -61,6 +61,7 @@ export type MarkdownBlockContext = MarkdownInlineContext & {
   directives: readonly NativeChatVisualDirective[]
   /** Bot cards the reply's lines name, by their placeholder index. */
   cards: readonly NativeChatDirectiveBotCard[]
+  documentImages: boolean
   /** Null or undefined leaves the image a link. */
   renderImage?: (href: string, alt: string, width?: number, onOpenLink?: () => void) => ReactNode
   renderVisual?: (directive: NativeChatVisualDirective, index: number) => ReactNode
@@ -220,7 +221,7 @@ function renderBlock(
       }
       const withImages = renderImageParagraph(
         node.children,
-        mobileMarkdownParagraphImages(node, depth),
+        mobileMarkdownParagraphImages(node, depth, ctx.documentImages),
         key,
         ctx,
         text
