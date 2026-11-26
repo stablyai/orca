@@ -20,6 +20,7 @@ import type { ConnectorFailure } from './connector-cloud-request'
 import { ConnectorTurnEvents } from './connector-turn-events'
 import { ConnectorEventRequests } from './connector-event-requests'
 import { ConnectorOutboxSender } from './connector-outbox'
+import { connectorPollRetryMs } from './connector-poll-control'
 import {
   isRecord,
   pollClientHarness,
@@ -387,7 +388,10 @@ it('drains a real journal page and a later turn and approval while a prepared en
   onTestFinished(() => client.stop())
   await settle()
   emit(preparedEnd)
-  await settle(1_000)
+  await settle()
+  // The refused request dropped the hello while a poll was still waiting under it.
+  h.poll([])
+  await settle(connectorPollRetryMs(0, refusal(400, 'invalid_request'), () => 0.5))
   expect(h.fake.events).toContainEqual(
     expect.objectContaining({ kind: 'turn-ended', turnId: preparedEnd.turnId, stateOnly: true })
   )
