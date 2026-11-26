@@ -63,6 +63,7 @@ describe('tool letters from a real page during a pick', () => {
           forwarded: ['g'],
           pageSawKey: false
         },
+        quickClick: { kind: 'selected', target: 'button' },
         afterCancellation: { kind: 'cancelled', forwarded: [], pageSawKey: true },
         retiredPolicy: { userKeyReachedPage: true, agentKeyReachedPage: true, forwarded: [] },
         nonCommit: { documentKept: true, pages: ['page-1'], pageSawChord: false },

@@ -61,15 +61,16 @@ ${GRAB_GUEST_LABEL_PLACEMENT_SCRIPT}
     hoverLabel.style.top = place.top + 'px';
   }
 
-  function onPointerMove(e) {
+  var lastPointer = null;
+  function hitAt(x, y) {
     // Exclude the overlay from hit testing to find the page element underneath.
     host.style.pointerEvents = 'none';
-    var el = document.elementFromPoint(e.clientX, e.clientY);
+    var el = document.elementFromPoint(x, y);
     // Document hit-testing stops at a shadow host; closed roots stay opaque.
     // Page code can shadow shadowRoot (e.g. a form control named "shadowRoot"); keep the deepest real hit.
     try {
       while (el && el.shadowRoot) {
-        var inner = el.shadowRoot.elementFromPoint(e.clientX, e.clientY);
+        var inner = el.shadowRoot.elementFromPoint(x, y);
         if (!inner || inner === el) break;
         el = inner;
       }
@@ -77,6 +78,18 @@ ${GRAB_GUEST_LABEL_PLACEMENT_SCRIPT}
     } finally {
       host.style.pointerEvents = 'all';
     }
+    return el;
+  }
+  // The outline follows a frame later; a pick or hover read hit-tests now, like the preload's trusted pointer.
+  function settleHover() {
+    if (!lastPointer) return;
+    var el = hitAt(lastPointer.x, lastPointer.y);
+    if (el) updateHighlight(el);
+  }
+
+  function onPointerMove(e) {
+    lastPointer = { x: e.clientX, y: e.clientY };
+    var el = hitAt(e.clientX, e.clientY);
     if (el) {
       requestAnimationFrame(function() { updateHighlight(el); });
     }
@@ -213,6 +226,8 @@ ${GRAB_GUEST_LABEL_PLACEMENT_SCRIPT}
         grab.onPick = null;
         grab.cancelAwait = null;
         host.removeAttribute('data-orca-grab-awaiting');
+        lastPointer = { x: e.clientX, y: e.clientY };
+        settleHover();
         var el = currentEl;
         if (!el) {
           grab.cleanup();
@@ -257,6 +272,7 @@ ${GRAB_GUEST_LABEL_PLACEMENT_SCRIPT}
       return true;
     }
     if (action === 'extractHover') {
+      settleHover();
       if (!currentEl) return null;
       try {
         return pickControl(currentEl, extractPayload(currentEl), false);

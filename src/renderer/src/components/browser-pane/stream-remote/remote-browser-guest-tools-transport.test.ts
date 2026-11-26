@@ -112,12 +112,34 @@ it('a request waits and cancels on the page it armed, even after the streamed pa
   const tools = transport(new RemoteBrowserInputQueue(), () => page)
   await tools.setGrabMode({ browserPageId: 'tab', enabled: true, requestId: 'r' })
   page = 'page-2'
-  const wait = tools.awaitGrabSelection({ browserPageId: 'tab', opId: 'op', requestId: 'r' })
   sentPages.length = 0
+  const wait = tools.awaitGrabSelection({ browserPageId: 'tab', opId: 'op', requestId: 'r' })
   await tools.cancelGrab({ browserPageId: 'tab', requestId: 'r' })
   await wait
-  expect(sentPages).toEqual(['browser.grab.cancel@page-1'])
+  expect(sentPages).toEqual(['browser.grab.await@page-1', 'browser.grab.cancel@page-1'])
   sentPages.length = 0
   await tools.cancelGrab({ browserPageId: 'tab' })
   expect(sentPages).toEqual(['browser.grab.cancel@page-2'])
+})
+
+it('a cancel that overtakes its delayed enable, and its retry, both reach the page it armed on', async () => {
+  const inputQueue = new RemoteBrowserInputQueue()
+  let page = 'page-1'
+  const tools = transport(inputQueue, () => page)
+  let releaseEarlierInput: () => void = () => {}
+  void inputQueue.enqueue(
+    () =>
+      new Promise<void>((resolve) => {
+        releaseEarlierInput = resolve
+      })
+  )
+  const enable = tools.setGrabMode({ browserPageId: 'tab', enabled: true, requestId: 'r' })
+  page = 'page-2'
+  sentPages.length = 0
+  await tools.cancelGrab({ browserPageId: 'tab', requestId: 'r' })
+  releaseEarlierInput()
+  await enable
+  // The picker's retry once the superseded enable settles.
+  await tools.cancelGrab({ browserPageId: 'tab', requestId: 'r' })
+  expect(sentPages).toEqual(['browser.grab.cancel@page-1', 'browser.grab.cancel@page-1'])
 })

@@ -3,6 +3,7 @@ import type { KeybindingOverrides } from '../../../../shared/keybindings/types'
 import { verifyGrabChordNonCommit } from './grab-chord-noncommit-electron-fixture'
 import { verifyGrabChordRefresh } from './grab-chord-refresh-electron-fixture'
 import { verifyGrabSelectionReplacement } from './grab-selection-replacement-electron-fixture'
+import { verifyGrabQuickClick } from './grab-quick-click-electron-fixture'
 import { mkdirSync, readFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
@@ -242,6 +243,8 @@ async function run(): Promise<void> {
 
   const replacement = await verifyGrabSelectionReplacement(page, manager, forwarded, press)
   await manager.setGrabMode('page-1', true, page, renderer)
+  const quickClick = await verifyGrabQuickClick(page, manager)
+  await manager.setGrabMode('page-1', true, page, renderer)
 
   await evalPage("document.getElementById('buy').focus();window.__pageKeys=[]")
   const selection = manager.awaitGrabSelection('page-1', 'cancel-from-page', page)
@@ -291,6 +294,7 @@ async function run(): Promise<void> {
     chordOffField,
     chordInField,
     replacement,
+    quickClick,
     afterCancellation,
     chordRefresh,
     nonCommit,

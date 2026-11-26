@@ -127,7 +127,9 @@ export function BrowserGuestAnnotateOverlays({
     pageId: notesPageId,
     containerRef,
     markupPortalContainer,
-    modeOn: activeTool !== null
+    paletteToolActive: activeTool !== null,
+    grabActive: grab.state !== 'idle',
+    markupActive: markup?.isActive === true
   })
   useEffect(() => {
     if (!notesOpen) {

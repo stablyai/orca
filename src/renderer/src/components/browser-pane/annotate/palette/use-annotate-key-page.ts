@@ -7,18 +7,24 @@ import {
 /**
  * Gives a page's annotate keys an owner: its viewport surface (and Draw's portal target) carries its id, so keys
  * from Draw's canvas, the comment card or the notes list resolve to it, and the page is registered while its mode is on.
+ * Chrome without the palette has no active tool, so an armed picker or Draw alone also keeps the page registered.
  */
 export function useAnnotateKeyPage({
   pageId,
   containerRef,
   markupPortalContainer,
-  modeOn
+  paletteToolActive,
+  grabActive,
+  markupActive
 }: {
   pageId: string
   containerRef: RefObject<HTMLDivElement | null>
   markupPortalContainer?: HTMLDivElement | null
-  modeOn: boolean
+  paletteToolActive: boolean
+  grabActive: boolean
+  markupActive: boolean
 }): void {
+  const modeOn = paletteToolActive || grabActive || markupActive
   useEffect(() => {
     if (!pageId) {
       return

@@ -34,6 +34,7 @@ export function createRemoteBrowserGuestToolsTransport({
   // retires them here and they never send.
   const unsentEnables = new Set<{ requestId?: string; retired: boolean }>()
   // The page each request armed on: the streamed page can change before that request's cancel.
+  // Kept past a cancel (bounded, oldest first) so a retried cancel still reaches the original page.
   const requestPages = new Map<string, string>()
   const pageForRequest = (requestId: string | undefined): string | null =>
     (requestId === undefined ? undefined : requestPages.get(requestId)) ?? remotePage()
@@ -68,14 +69,12 @@ export function createRemoteBrowserGuestToolsTransport({
   return {
     setGrabMode: ({ enabled, requestId }) => {
       const page = enabled ? remotePage() : pageForRequest(requestId)
-      if (requestId !== undefined) {
+      if (requestId !== undefined && enabled && page) {
         requestPages.delete(requestId)
-        if (enabled && page) {
-          requestPages.set(requestId, page)
-          const oldest = requestPages.keys().next()
-          if (requestPages.size > MAX_TRACKED_REQUEST_PAGES && !oldest.done) {
-            requestPages.delete(oldest.value)
-          }
+        requestPages.set(requestId, page)
+        const oldest = requestPages.keys().next()
+        if (requestPages.size > MAX_TRACKED_REQUEST_PAGES && !oldest.done) {
+          requestPages.delete(oldest.value)
         }
       }
       const unsent = enabled ? { requestId, retired: false } : null
@@ -131,9 +130,6 @@ export function createRemoteBrowserGuestToolsTransport({
     },
     cancelGrab: async ({ requestId }): Promise<boolean> => {
       const page = pageForRequest(requestId)
-      if (requestId !== undefined) {
-        requestPages.delete(requestId)
-      }
       // A rearm during the round trip starts a new wait that this cancel must not end, and a
       // retired request's cancel must not end the wait of the request that replaced it.
       const cancelledSelections = [...awaitingSelections]

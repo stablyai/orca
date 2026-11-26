@@ -8,6 +8,7 @@ import { useBrowserPageGrabAnnotations } from '../grab/use-browser-page-grab-ann
 import { useMarkupMode, type MarkupCaptureContext } from '../capture/useMarkupMode'
 import { registerAnnotateKeyPage } from './annotate-esc-ownership'
 import { useBrowserAnnotateToolSwitch } from './use-browser-annotate-tool-switch'
+import { useAnnotateKeyPage } from './use-annotate-key-page'
 
 vi.mock('@/store/index', () => ({
   useAppStore: (select: (state: Record<string, unknown>) => unknown) =>
@@ -250,5 +251,27 @@ describe('annotate keys on the real tools', () => {
 
     await waitFor(() => expect(second.result.current.tools.activeTool).toBe('copy'))
     expect(first.result.current.tools.activeTool).toBe('annotate')
+  })
+
+  it('chrome without the palette still owns Esc for its armed picker', async () => {
+    const surface = document.createElement('div')
+    document.body.append(surface)
+    const page = renderHook(() => {
+      const grab = useGrabMode('page-1')
+      useAnnotateKeyPage({
+        pageId: 'page-1',
+        containerRef: { current: surface },
+        paletteToolActive: false,
+        grabActive: grab.state !== 'idle',
+        markupActive: false
+      })
+      return grab
+    })
+    act(() => page.result.current.toggle())
+    await waitFor(() => expect(page.result.current.state).toBe('awaiting'))
+
+    press(document.body, 'Escape')
+
+    expect(page.result.current.state).toBe('idle')
   })
 })
