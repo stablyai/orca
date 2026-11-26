@@ -4,12 +4,11 @@ import type {
   BrowserGrabScreenshot,
   GrabIntent
 } from '../../../../../../shared/browser/element-grab/browser-grab-types'
-import { formatGrabPayloadAsText } from './GrabConfirmationSheet'
+import { copyGrabPayloadText } from './grab-text-copy'
 import type { GrabModeHook } from './useGrabMode'
 import type { ShowGrabToast } from '../../describe-page/browser-page-types'
 import { translate } from '@/i18n/i18n'
 import {
-  copiedGrabToastMessage,
   hoverReadFailedGrabToastMessage,
   noHoverGrabToastMessage,
   noScreenshotGrabToastMessage
@@ -58,10 +57,8 @@ export function runBrowserGrabActionShortcut({
       return
     }
     if (key === 'c') {
-      const text = formatGrabPayloadAsText(payload)
-      void window.api.ui.writeClipboardText(text)
+      copyGrabPayloadText(payload, showGrabToast)
       recordFeatureInteraction('browser-grab')
-      showGrabToast(copiedGrabToastMessage(), 'success', payload, true)
     } else {
       const dataUrl = payload.screenshot?.dataUrl
       if (dataUrl?.startsWith('data:image/png;base64,')) {

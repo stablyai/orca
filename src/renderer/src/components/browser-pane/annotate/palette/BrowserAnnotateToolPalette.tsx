@@ -6,7 +6,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import type { BrowserAnnotateTool } from './use-browser-annotate-tool-switch'
-import { PALETTE_EDGE_INSET_PX, paletteRatioPercent } from './palette-placement'
+import {
+  PALETTE_EDGE_INSET_PX,
+  PALETTE_HINT_LINE_PX,
+  paletteRatioPercent
+} from './palette-placement'
 import { usePaletteDrag } from './use-palette-drag'
 import { usePaletteFitLevel } from './use-palette-fit-level'
 import type { MarkupPaletteDensity } from './MarkupPaletteTools'
@@ -126,13 +130,15 @@ export function BrowserAnnotateToolPalette({
   // Read here, not by the always-mounted overlays, so no page subscribes while its palette is closed.
   const position = useAnnotatePalettePosition()
   const [findBarMinTop, setFindBarMinTop] = useState(PALETTE_EDGE_INSET_PX)
+  const [hintHeight, setHintHeight] = useState(PALETTE_HINT_LINE_PX)
   const { left, top, canMove, dragging, snapping, shownPosition, hintPlacement, gripProps } =
     usePaletteDrag({
       bounds,
       paletteRef,
       position,
       minTop: findBarMinTop,
-      onPositionChange: setAnnotatePalettePosition
+      onPositionChange: setAnnotatePalettePosition,
+      hintHeight
     })
   const seeThrough = useHoldAltSeeThrough(pageId)
   usePaletteTopOffset(bounds, paletteRef, labelProbeRef, left, setFindBarMinTop)
@@ -177,6 +183,13 @@ export function BrowserAnnotateToolPalette({
   const wrapActions = fitLevel >= FIT_LEVEL_WRAP
   const showHint =
     Boolean(hint) && (fitLevel === 0 || hintKeepsWhenCompact) && !dragging && left !== null
+  // A wrapped hint is taller than one line; its placement needs the real height to stay on the page.
+  useLayoutEffect(() => {
+    const height = hintRef.current?.offsetHeight
+    if (showHint && height) {
+      setHintHeight(height)
+    }
+  }, [showHint, hint, left, top, fitLevel])
   const hasActions =
     activeTool === 'draw' ? drawHasActions : activeTool === 'copy' || annotateActions !== null
   useGrabLabelAvoidArea({

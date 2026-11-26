@@ -157,3 +157,52 @@ it('a cancel for the same request ID on another page leaves the waiting enable t
   await expect(enable).resolves.toEqual({ ok: true, clean: false })
   expect(sequencer.setBrowserGrabMode).toHaveBeenCalledTimes(1)
 })
+
+it('a repeated enable for a request still waiting cannot arm after that request is cancelled', async () => {
+  // Each page operation waits for its own turn, so the first enable arms before the repeat is admitted.
+  const turns: (() => void)[] = []
+  vi.spyOn(RuntimeBrowserCommandTargets.prototype, 'withPageOperation').mockImplementation(
+    async (params, execute) => {
+      await new Promise<void>((resolve) => turns.push(resolve))
+      return execute(params)
+    }
+  )
+  const commands = new RuntimeBrowserCommands(host)
+  const first = commands.browserGrabSetMode({ page: 'page', enabled: true, requestId: 'request' })
+  const repeat = commands.browserGrabSetMode({ page: 'page', enabled: true, requestId: 'request' })
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  turns[0]()
+  await expect(first).resolves.toEqual({ ok: true, clean: false })
+  // The request is the sequencer's now; its cancel goes there, and the repeat must not arm after it.
+  await commands.browserGrabCancel({ page: 'page', requestId: 'request' })
+  turns[1]?.()
+  await expect(repeat).resolves.toEqual({ ok: false, reason: 'not-ready' })
+  expect(sequencer.setBrowserGrabMode).toHaveBeenCalledTimes(1)
+})
+
+it('a wait the viewer gave up on while its page resolved retires the armed request', async () => {
+  sequencer.cancelBrowserGrabMode.mockClear()
+  const commands = new RuntimeBrowserGrab(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the lookup is stubbed in beforeEach.
+    {} as unknown as ConstructorParameters<typeof RuntimeBrowserGrab>[0],
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the lookup is stubbed in beforeEach.
+    {} as unknown as ConstructorParameters<typeof RuntimeBrowserGrab>[1]
+  )
+  const gaveUp = new AbortController()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the private guest lookup is replaced.
+  vi.spyOn(commands as unknown as GrabGuestLookup, 'resolveGrabGuest').mockImplementation(
+    async () => {
+      gaveUp.abort()
+      return { browserPageId: 'page', resolveGuest: () => null }
+    }
+  )
+  await expect(
+    commands.browserGrabAwait({ page: 'page', opId: 'op', requestId: 'request' }, gaveUp.signal)
+  ).resolves.toEqual({ opId: 'op', kind: 'cancelled', reason: 'user' })
+  expect(sequencer.cancelBrowserGrabMode).toHaveBeenCalledWith(
+    'page',
+    expect.any(Function),
+    'request',
+    'runtime'
+  )
+})

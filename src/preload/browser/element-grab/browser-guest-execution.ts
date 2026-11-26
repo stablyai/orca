@@ -41,6 +41,11 @@ export function installBrowserGuestExecution(
   const occupied = new Set<string>()
   const completed = new Map<string, { id: string; result: GrabExecutionResult }>()
   let overlay: Overlay | null = null
+  // The authority hit-tests around the live picker only, never an arm that was rejected.
+  const setOverlay = (next: Overlay | null): void => {
+    overlay = next
+    authority?.adopt(next?.host ?? null)
+  }
   let pendingOverlay: string | null = null
   let retiredOverlay: string | null = null
   // Hosts this preload tore down; a clean verdict needs every one of them really detached.
@@ -114,7 +119,7 @@ export function installBrowserGuestExecution(
       }
       if (overlay?.id === request.overlayId) {
         const retired = overlay
-        overlay = null
+        setOverlay(null)
         retireHosts(retired, retired.host ? [retired.host] : [])
       }
       return
@@ -140,7 +145,7 @@ export function installBrowserGuestExecution(
           let removed = true
           if (overlay) {
             removed = tearDown(overlay)
-            overlay = null
+            setOverlay(null)
           }
           const painted = await waitForGuestPaint()
           // Positive only when the owned overlay is verifiably gone from this document.
@@ -179,7 +184,7 @@ export function installBrowserGuestExecution(
           } else {
             // The replacement is live first: a throwing teardown of the old picker must not lose its control.
             const previous = overlay
-            overlay = { id: request.id, control, host }
+            setOverlay({ id: request.id, control, host })
             if (previous) {
               retireHosts(previous, previous.host ? [previous.host] : [])
             }

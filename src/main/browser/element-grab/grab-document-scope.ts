@@ -32,6 +32,14 @@ export function retireGrabOverlay(scope: GrabDocumentScope): void {
   scope.pendingOverlayId = null
 }
 
+/** Retires one picker only while it is still the live one; a successor that replaced it stays. */
+export function retireGrabOverlayIfLive(scope: GrabDocumentScope, overlayId: string | null): void {
+  if (overlayId && scope.documentId && scope.overlayId === overlayId) {
+    sendPrivate(scope.frame, { kind: 'retire', documentId: scope.documentId, overlayId })
+    scope.overlayId = null
+  }
+}
+
 export function restoreGrabCapture(scope: GrabDocumentScope, captureId: string): void {
   if (scope.documentId) {
     sendPrivate(scope.frame, { kind: 'restoreCapture', documentId: scope.documentId, captureId })

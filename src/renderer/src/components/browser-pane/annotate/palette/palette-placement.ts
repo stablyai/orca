@@ -35,8 +35,8 @@ export const PALETTE_EDGE_INSET_PX = 8
 const KEY_STEP = 0.05
 const KEY_STEP_LARGE = 0.25
 const HINT_GAP_PX = 8
-/** The one-line hint plus its gaps. */
-const HINT_ROOM_PX = 40
+/** A one-line hint's height, until the rendered hint is measured. */
+export const PALETTE_HINT_LINE_PX = 24
 /** Releasing this close to the horizontal centre (as a fraction of travel) snaps back to centre. */
 const PALETTE_CENTRE_SNAP = 0.04
 
@@ -110,14 +110,30 @@ export function paletteRatioPercent(ratio: number): number {
 /**
  * The hint sits under the palette, or above it near the page's bottom where there's no room under it.
  * Measured height: at the last fit level a row can wrap and make the palette taller than one line.
- * It lines up with the palette's edge on its saved side and never runs past the page's far edge.
+ * `hintHeight` is the rendered hint's (a wrapped hint is taller). It centres under a centred palette and
+ * otherwise lines up with the palette's edge on its saved side, never running past the page's far edge.
  */
-export function paletteHintPlacement(layout: PaletteLayout): CSSProperties {
+export function paletteHintPlacement(
+  layout: PaletteLayout,
+  hintHeight: number = PALETTE_HINT_LINE_PX
+): CSSProperties {
   const { left, top, paletteHeight, paletteWidth, boundsWidth } = layout
   const vertical =
-    layout.boundsHeight - top - paletteHeight < HINT_ROOM_PX
+    layout.boundsHeight - top - paletteHeight < hintHeight + HINT_GAP_PX * 2
       ? { bottom: `calc(100% - ${top - HINT_GAP_PX}px)` }
       : { top: top + paletteHeight + HINT_GAP_PX }
+  if (layout.x === 0.5) {
+    const centre = left + paletteWidth / 2
+    const half = Math.max(0, Math.min(centre, boundsWidth - centre) - PALETTE_EDGE_INSET_PX)
+    // max-content: shrink-to-fit would size it from its centre to the page's edge and wrap early.
+    return {
+      ...vertical,
+      left: centre,
+      transform: 'translateX(-50%)',
+      width: 'max-content',
+      maxWidth: half * 2
+    }
+  }
   if (layout.x > 0.5) {
     const right = Math.max(0, boundsWidth - left - paletteWidth)
     return { ...vertical, right, maxWidth: `calc(100% - ${right + PALETTE_EDGE_INSET_PX}px)` }

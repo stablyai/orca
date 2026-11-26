@@ -1,7 +1,7 @@
 import { useCallback, type MutableRefObject } from 'react'
 import type { BrowserGrabPayload } from '../../../../../../shared/browser/element-grab/browser-grab-types'
 import type { ShowGrabToast } from '../../describe-page/browser-page-types'
-import { formatGrabPayloadAsText } from './GrabConfirmationSheet'
+import { copyGrabPayloadText } from './grab-text-copy'
 import type { GrabModeHook } from './useGrabMode'
 
 /**
@@ -37,9 +37,8 @@ export function useGrabCopyHandlers({
       if (!payload) {
         return
       }
-      void window.api.ui.writeClipboardText(formatGrabPayloadAsText(payload))
+      copyGrabPayloadText(payload, showGrabToast, copiedMessage())
       recordFeatureInteraction('browser-grab')
-      showGrabToast(copiedMessage(), 'success', payload, true)
       if (grab.state === 'confirming') {
         grab.rearm()
       }

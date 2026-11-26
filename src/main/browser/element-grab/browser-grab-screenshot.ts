@@ -120,13 +120,11 @@ export async function captureSelectionScreenshot(
     if (!Number.isFinite(scale) || scale <= 0) {
       return null
     }
-    const x = Math.max(0, Math.round(rect.x * scale))
-    const y = Math.max(0, Math.round(rect.y * scale))
-    const width = Math.min(bitmap.width - x, Math.round(rect.width * scale))
-    const height = Math.min(bitmap.height - y, Math.round(rect.height * scale))
-    if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) {
+    const crop = selectionCropRect(rect, scale, bitmap)
+    if (!crop) {
       return null
     }
+    const { x, y, width, height } = crop
     const png = image.crop({ x, y, width, height }).toPNG()
     if (png.byteLength > GRAB_BUDGET.screenshotMaxBytes) {
       return null
@@ -147,4 +145,23 @@ export async function captureSelectionScreenshot(
       releasePaint()
     }
   }
+}
+
+/**
+ * The element's box in bitmap pixels, cut to the bitmap on each side: a box partly off the top or
+ * left keeps its far edge where it is instead of growing past the element.
+ */
+export function selectionCropRect(
+  rect: { x: number; y: number; width: number; height: number },
+  scale: number,
+  bitmap: { width: number; height: number }
+): { x: number; y: number; width: number; height: number } | null {
+  const x = Math.max(0, Math.round(rect.x * scale))
+  const y = Math.max(0, Math.round(rect.y * scale))
+  const width = Math.min(bitmap.width, Math.round((rect.x + rect.width) * scale)) - x
+  const height = Math.min(bitmap.height, Math.round((rect.y + rect.height) * scale)) - y
+  if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) {
+    return null
+  }
+  return { x, y, width, height }
 }

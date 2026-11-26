@@ -59,7 +59,8 @@ export function usePaletteDrag({
   paletteRef,
   position,
   minTop,
-  onPositionChange
+  onPositionChange,
+  hintHeight
 }: {
   /** The page area; null until it is attached. */
   bounds: HTMLElement | null
@@ -68,6 +69,8 @@ export function usePaletteDrag({
   /** Highest the palette may sit (below an overlapping find bar); never above the edge inset. */
   minTop: number
   onPositionChange: (position: AnnotatePalettePosition) => void
+  /** The rendered hint's height, so a wrapped hint still finds room under or above the palette. */
+  hintHeight?: number
 }): {
   left: number | null
   top: number
@@ -189,7 +192,7 @@ export function usePaletteDrag({
     dragging,
     snapping,
     shownPosition,
-    hintPlacement: layout ? paletteHintPlacement(layout) : {},
+    hintPlacement: layout ? paletteHintPlacement(layout, hintHeight) : {},
     gripProps: {
       onPointerDown: (event) => {
         const palette = paletteRef.current

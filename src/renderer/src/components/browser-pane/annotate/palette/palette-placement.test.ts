@@ -25,7 +25,32 @@ describe('annotate palette placement', () => {
         topMin: 8
       })
     expect(layout(1, 252)).toEqual({ top: 54, right: 8, maxWidth: 'calc(100% - 16px)' })
-    expect(layout(0.5, 130)).toEqual({ top: 54, left: 130, maxWidth: 'calc(100% - 138px)' })
+    expect(layout(0.3, 130)).toEqual({ top: 54, left: 130, maxWidth: 'calc(100% - 138px)' })
+    // Centred palette: the hint centres under it, as wide as the nearer edge allows.
+    expect(layout(0.5, 130)).toEqual({
+      top: 54,
+      left: 280,
+      transform: 'translateX(-50%)',
+      width: 'max-content',
+      maxWidth: 544
+    })
+  })
+
+  it('puts a wrapped hint above the palette when its measured height has no room below', () => {
+    const near = {
+      boundsWidth: 560,
+      boundsHeight: 400,
+      paletteWidth: 300,
+      paletteHeight: 38,
+      left: 8,
+      top: 300,
+      x: 0,
+      y: 1,
+      topMin: 8
+    }
+    // 62px below the palette: room for one line, not for three.
+    expect(paletteHintPlacement(near, 24)).toMatchObject({ top: 346 })
+    expect(paletteHintPlacement(near, 60)).toMatchObject({ bottom: 'calc(100% - 292px)' })
   })
 
   it('keeps a placed palette on its saved side when compaction narrows it', () => {

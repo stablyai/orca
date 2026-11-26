@@ -8,7 +8,7 @@ import {
   type BrowserGrabPayload,
   type GrabIntent
 } from '../../../../../../shared/browser/element-grab/browser-grab-types'
-import { formatGrabPayloadAsText } from './GrabConfirmationSheet'
+import { copyGrabPayloadText } from './grab-text-copy'
 import { browserAnnotationLimitMessage } from '../delivery/browser-annotation-limit-message'
 import {
   createBrowserAnnotationId,
@@ -164,10 +164,8 @@ export function useBrowserPageGrabAnnotations({
       return
     }
     if (!grab.contextMenu) {
-      const text = formatGrabPayloadAsText(grab.payload)
-      void window.api.ui.writeClipboardText(text)
+      copyGrabPayloadText(grab.payload, showGrabToast)
       recordFeatureInteraction('browser-grab')
-      showGrabToast(copiedGrabToastMessage(), 'success', grab.payload, true)
     }
   }, [
     grab.state,

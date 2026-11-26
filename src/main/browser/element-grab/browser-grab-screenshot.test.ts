@@ -85,3 +85,15 @@ it('keeps the lane and the paint lease after its deadline until the abandoned re
   expect(isNativeCaptureBusy(guest)).toBe(false)
   expect(paint).toEqual(['hold', 'release'])
 })
+
+it('crops a box partly off the top-left to the visible part of the element only', async () => {
+  const { selectionCropRect } = await import('./browser-grab-screenshot')
+  // 2x bitmap; the element spans x -10..40, y -5..15 in CSS pixels.
+  expect(
+    selectionCropRect({ x: -10, y: -5, width: 50, height: 20 }, 2, { width: 400, height: 300 })
+  ).toEqual({ x: 0, y: 0, width: 80, height: 30 })
+  // And off the bottom-right edge of the bitmap.
+  expect(
+    selectionCropRect({ x: 180, y: 140, width: 50, height: 20 }, 2, { width: 400, height: 300 })
+  ).toEqual({ x: 360, y: 280, width: 40, height: 20 })
+})

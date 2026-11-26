@@ -9,6 +9,7 @@ import {
   grabDocumentScope,
   retireGrabOverlay
 } from './grab-guest-execution'
+import { retireGrabOverlayIfLive } from './grab-document-scope'
 import { clampGrabPayload } from './browser-grab-payload'
 import { readDocPreviewGuestDocumentUrl } from '../document-preview/doc-preview-guest-policy'
 
@@ -18,7 +19,7 @@ type ActiveGrabOp = {
   guestWebContentsId: number
   resolve: (result: BrowserGrabResult) => void
   /** Preserve the overlay while the selection copy menu is open. */
-  cleanup: (preserveOverlay?: boolean) => void
+  cleanup: (preserveOverlay?: boolean, retireAll?: boolean) => void
   /** Replacing an operation must not tear down its newly armed overlay. */
   skipTeardown?: boolean
 }
@@ -92,6 +93,8 @@ export class BrowserGrabSessionController {
 
     return new Promise<BrowserGrabResult>((resolve) => {
       const scope = grabDocumentScope(guest)
+      // The picker this wait runs on; a later arm may replace it, and this wait's end must not retire that one.
+      const awaitedOverlay = scope.overlayId
       const abort = new AbortController()
       const guestWebContentsId = guest.id
       let settled = false
@@ -103,7 +106,12 @@ export class BrowserGrabSessionController {
         settled = true
         clearTimeout(timeoutId)
         // Keep the selection highlight until the renderer dismisses or rearms the picker.
-        op.cleanup(result.kind === 'selected' || result.kind === 'context-selected')
+        op.cleanup(
+          result.kind === 'selected' || result.kind === 'context-selected',
+          // Eviction and the timeout end the picker itself; any other end only this wait's picker.
+          result.kind === 'cancelled' &&
+            (result.reason === 'evicted' || result.reason === 'timeout')
+        )
         this.activeGrabOps.delete(browserTabId)
         this.onSettled?.(browserTabId, guest)
         resolve(result)
@@ -216,7 +224,7 @@ export class BrowserGrabSessionController {
       guest.on('did-start-navigation', handleNavigation)
       guest.on('destroyed', handleDestroyed)
 
-      const cleanup = (preserveOverlay?: boolean): void => {
+      const cleanup = (preserveOverlay?: boolean, retireAll = false): void => {
         abort.abort()
         try {
           guest.off('did-start-navigation', handleNavigation)
@@ -229,7 +237,11 @@ export class BrowserGrabSessionController {
         }
         try {
           if (!guest.isDestroyed()) {
-            retireGrabOverlay(scope)
+            if (retireAll) {
+              retireGrabOverlay(scope)
+            } else {
+              retireGrabOverlayIfLive(scope, awaitedOverlay)
+            }
           }
         } catch {
           // Best-effort overlay removal

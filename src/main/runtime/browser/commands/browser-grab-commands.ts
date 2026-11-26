@@ -97,8 +97,12 @@ export class RuntimeBrowserGrab {
     run: () => Promise<BrowserSetGrabModeResult>
   ): Promise<BrowserSetGrabModeResult> {
     const key = pendingEnableKey(params)
-    if (!params.enabled || key === null || this.pendingEnables.has(key)) {
+    if (!params.enabled || key === null) {
       return run()
+    }
+    // A repeat of a request still waiting would slip past the one cancel that request gets.
+    if (this.pendingEnables.has(key)) {
+      return supersededGrabMode()
     }
     if (this.pendingEnables.size >= MAX_PENDING_GRAB_ENABLES) {
       return supersededGrabMode()
@@ -144,19 +148,21 @@ export class RuntimeBrowserGrab {
     signal?: AbortSignal
   ): Promise<BrowserGrabResult> {
     const { browserPageId, resolveGuest } = await this.resolveGrabGuest(params)
+    // A viewer that disconnects or gives up must not leave the page armed until the grab times out.
+    const abandon = (): void => {
+      cancelBrowserGrabMode(browserPageId, resolveGuest, params.requestId, 'runtime')
+    }
+    // Also when it gave up while the page was being resolved: nothing else retires the armed picker.
+    if (signal?.aborted) {
+      abandon()
+      return { opId: params.opId, kind: 'cancelled', reason: 'user' }
+    }
     const guest = resolveGuest()
     if (!guest) {
       return { opId: params.opId, kind: 'error', reason: 'Guest not ready' }
     }
     if (!isCurrentBrowserGrabRequest(browserPageId, guest, params.requestId, 'runtime')) {
       return { opId: params.opId, kind: 'cancelled', reason: 'navigation' }
-    }
-    // A viewer that disconnects or gives up must not leave the page armed until the grab times out.
-    const abandon = (): void => {
-      cancelBrowserGrabMode(browserPageId, resolveGuest, params.requestId, 'runtime')
-    }
-    if (signal?.aborted) {
-      return { opId: params.opId, kind: 'cancelled', reason: 'user' }
     }
     signal?.addEventListener('abort', abandon, { once: true })
     try {

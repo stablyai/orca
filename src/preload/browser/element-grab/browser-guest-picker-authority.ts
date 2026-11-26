@@ -29,6 +29,8 @@ export type ArmObservation<T> =
 export type BrowserGuestPickerAuthority = {
   /** Every overlay host the arm added anywhere in the document is reported, also when the arm failed. */
   observeArm: <T>(run: () => Promise<T>) => Promise<ArmObservation<T>>
+  /** The live picker's host, left out of trusted hit tests; set only once an arm is accepted. */
+  adopt: (host: Element | null) => void
   hostRemoved: (host: Element | null) => boolean
   /** Detaches hosts a failed arm left behind, through this world's own bindings. */
   discard: (hosts: readonly Element[]) => void
@@ -144,9 +146,6 @@ export function createBrowserGuestPickerAuthority(
         const value = await run()
         collect(observer.takeRecords())
         const armed = added.length === 1 ? added[0] : null
-        if (armed) {
-          host = armed
-        }
         return { ok: true, value, host: armed, added }
       } catch {
         collect(observer.takeRecords())
@@ -154,6 +153,9 @@ export function createBrowserGuestPickerAuthority(
       } finally {
         observer.disconnect()
       }
+    },
+    adopt: (live) => {
+      host = live
     },
     hostRemoved: (owned) => !owned || !owned.isConnected,
     discard: (hosts) => {

@@ -201,3 +201,32 @@ it('pairs a hover read only with the node the trusted pointer is over, and takes
       : null
   expect(target).toEqual({ tagName: 'a', rectViewport: { x: 3, y: 4, width: 30, height: 10 } })
 })
+
+it('keeps hit testing around the live picker after a replacement arm the preload rejected', async () => {
+  const target = document.createElement('button')
+  target.setAttribute(BROWSER_GRAB_SELECTED_ATTRIBUTE, 'picked-at')
+  document.body.append(target)
+  const hosts: HTMLElement[] = []
+  // Each arm adds a picker host; the replacement then returns no control, so the preload rejects it.
+  const guest = guestWith(async (code) => {
+    if (code === 'pick') {
+      return (action: string): unknown =>
+        action === 'payload'
+          ? { payload: { page: { capturedAt: 'picked-at' }, target: { tagName: 'button' } } }
+          : true
+    }
+    const host = document.createElement('div')
+    host.id = '__orca-grab-host'
+    document.documentElement.appendChild(host)
+    hosts.push(host)
+    return code === 'rejected' ? 'not a control' : () => true
+  })
+  await expect(executeGrabScript(guest, 'live', { overlayControl: true })).resolves.toBe(true)
+  await expect(executeGrabScript(guest, 'rejected', { overlayControl: true })).resolves.toBe(null)
+  // The live picker's host covers the page unless the hit test steps around it.
+  document.elementFromPoint = () => (hosts[0].style.pointerEvents === 'none' ? target : hosts[0])
+  window.dispatchEvent(new MouseEvent('click', { clientX: 5, clientY: 5 }))
+
+  const picked = await requestGrabExecution(guest, 'pick', { capturePick: 'held' })
+  expect(picked.ok && picked.value).toMatchObject({ target: { tagName: 'button' } })
+})
