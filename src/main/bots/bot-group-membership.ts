@@ -54,6 +54,7 @@ export async function createBotGroup(
       members,
       ...(remoteMembers.length > 0 ? { remoteMembers } : {}),
       replyMode: { kind: 'bot', botId: bots[0].id },
+      ...(input.fromOffer ? { fromOfferId: input.fromOffer.offerId } : {}),
       createdAt: Date.now()
     }
     groups.store.put(group)

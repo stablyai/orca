@@ -13,6 +13,7 @@ import { botContextNoteOf } from '../../bots/bot-context-note'
 import { tidyUpNoteOf } from '../../bots/bot-tidy-up'
 import { connectorOfferOf } from '../../bots/bot-connector-offer'
 import { botCreateOfferOf } from '../../bots/bot-proposal'
+import { botGroupOfferOf } from '../../bots/bot-group-offer'
 import { botImportDoneOf, botImportPlanOf } from '../../bots/bot-import-cards'
 import { botRequestCardOf } from '../../bots/bot-request-card'
 import { googleSetupCardOf } from '../../google/google-setup-card'
@@ -37,6 +38,7 @@ export function structuredAgentSessionStatusBlock(
   const tidyUp = tidyUpNoteOf(body)
   const connectorOffer = connectorOfferOf(body)
   const botCreateOffer = botCreateOfferOf(body)
+  const botGroupOffer = botGroupOfferOf(body)
   const botImportPlan = botImportPlanOf(body)
   const botImportDone = botImportDoneOf(body)
   const botRequest = botRequestCardOf(body)
@@ -66,6 +68,7 @@ export function structuredAgentSessionStatusBlock(
     ...(tidyUp ? { tidyUp } : {}),
     ...(connectorOffer ? { connectorOffer } : {}),
     ...(botCreateOffer ? { botCreateOffer } : {}),
+    ...(botGroupOffer ? { botGroupOffer } : {}),
     ...(botImportPlan ? { botImportPlan } : {}),
     ...(botImportDone ? { botImportDone } : {}),
     ...(botRequest ? { botRequest } : {}),

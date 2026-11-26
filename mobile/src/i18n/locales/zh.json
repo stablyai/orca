@@ -6471,6 +6471,16 @@
           }
         }
       },
+      "super-bot": {
+        "name": "超级 bot",
+        "line": "帮你组建 bot 团队：你提出需求时，提议新建 bot 和群聊",
+        "firstChat": "列出你现有的 bot，之后只要你在对话里提出，就会提议新建 bot 或群聊。每张卡片你点一下即可创建",
+        "watches": "你的 bot 以及各自的用途",
+        "does": "在你提出时，以卡片形式提议新建 bot 和群聊。它自己不创建任何东西",
+        "reports": "在这里，在你提出时",
+        "example1": "已根据发布说明模板提议“发布说明”。在卡片上点“创建 bot”",
+        "example2": "已提议群聊“发布小组”，成员为发布说明和 PR 评审"
+      },
       "followup": {
         "name": "待你回复",
         "line": "提醒你还欠着哪些回复",
@@ -6940,6 +6950,7 @@
       "specFormat": "规格说明格式",
       "incidentTimeline": "事故时间线",
       "workspaceHygiene": "工作区整理规范",
+      "botTeamBuilding": "组建 bot 团队",
       "lines": {
         "pr-review-checklist": "阅读差异，查找行为变化、缺失的测试和有风险的修改；每项发现都要注明出处",
         "bug-reproduction": "在寻找原因之前，先写下能重现 Bug 的确切步骤",
@@ -6953,7 +6964,8 @@
         "status-brief": "变化、受阻、待决策：十行以内的简报",
         "spec-format": "一页规格说明：问题、决策、范围、待定问题",
         "incident-timeline": "维护带时间戳的时间线，然后起草不追责的事后报告",
-        "workspace-hygiene": "工作区何时算已完成或已废弃，以及移除前要检查什么"
+        "workspace-hygiene": "工作区何时算已完成或已废弃，以及移除前要检查什么",
+        "bot-team-building": "以卡片形式提议新建 bot 或 bot 群聊，由主人创建"
       }
     },
     "waits": {

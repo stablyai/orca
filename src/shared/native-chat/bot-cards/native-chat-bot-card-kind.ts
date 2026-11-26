@@ -33,7 +33,9 @@ const STATUS_LINE_CARDS = {
   composioSetup: (block: NativeChatBotCardFields) =>
     block.composioSetup ? ({ kind: 'composioSetup', value: block.composioSetup } as const) : null,
   botCreateOffer: (block: NativeChatBotCardFields) =>
-    block.botCreateOffer ? ({ kind: 'createOffer', value: block.botCreateOffer } as const) : null
+    block.botCreateOffer ? ({ kind: 'createOffer', value: block.botCreateOffer } as const) : null,
+  botGroupOffer: (block: NativeChatBotCardFields) =>
+    block.botGroupOffer ? ({ kind: 'groupOffer', value: block.botGroupOffer } as const) : null
 } satisfies {
   [F in CardField]: (block: NativeChatBotCardFields) => {
     kind: string

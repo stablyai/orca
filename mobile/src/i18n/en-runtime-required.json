@@ -455,6 +455,7 @@
     },
     "templateSkills": {
       "lines": {
+        "bot-team-building": "Propose a new bot or a group chat of bots as a card; your owner creates it.",
         "bug-reproduction": "Write down the exact steps that show the bug before looking for its cause.",
         "ci-failure-triage": "Tell a flaky check from a real failure or broken infrastructure, and find the commit that started it.",
         "dependency-upgrade": "Upgrade one group at a time, read the changelog, run the tests, one pull request each.",
@@ -813,6 +814,16 @@
           }
         },
         "watches": "Your workspaces, pull requests and issues"
+      },
+      "super-bot": {
+        "does": "Proposes new bots and group chats as cards when you ask. Creates nothing itself.",
+        "example1": "Proposed “Release notes” from the release notes template. Press Create bot on the card.",
+        "example2": "Proposed the group “Launch crew” with Release notes and PR review.",
+        "firstChat": "Lists the bots you have, then proposes a new bot or a group chat whenever you ask for one. You create each with one press on its card.",
+        "line": "Builds your team of bots: proposes new bots and group chats when you ask.",
+        "name": "Super bot",
+        "reports": "Here, when you ask",
+        "watches": "Your bots and what each is for"
       },
       "support": {
         "does": "Lists unanswered questions with links, and notes which already have a Linear issue.",

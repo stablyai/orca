@@ -109,8 +109,15 @@ const NO_GROUPS: readonly BotGroup[] = []
 const readNoGroups = (): readonly BotGroup[] => NO_GROUPS
 const subscribeToNothing = (): (() => void) => () => {}
 
+// A chat hidden by <Activity> unsubscribes and is shown again without re-rendering, so each subscribe re-checks the list.
+function watchBotGroupsFromNow(listener: () => void): () => void {
+  const stop = watchBotGroups(listener)
+  listener()
+  return stop
+}
+
 /** Every listed host's groups; while `enabled` is false, none, and nothing is read. */
 export function useBotGroups(enabled = true): readonly BotGroup[] {
   const read = enabled ? readBotGroups : readNoGroups
-  return useSyncExternalStore(enabled ? watchBotGroups : subscribeToNothing, read, read)
+  return useSyncExternalStore(enabled ? watchBotGroupsFromNow : subscribeToNothing, read, read)
 }

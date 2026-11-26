@@ -22654,6 +22654,14 @@
         "willPropose": "Will propose",
         "details": "Details of {{name}}"
       },
+      "botGroupOffer": {
+        "heading": "New group",
+        "created": "Created",
+        "create": "Create group",
+        "open": "Open",
+        "members": "With {{names}}",
+        "memberGone": "{{name}} is gone, so this group can’t be created."
+      },
       "usage": {
         "description": "Show usage for this chat’s Codex account",
         "loading": "Loading Codex usage…",
@@ -29761,6 +29769,16 @@
           }
         }
       },
+      "super-bot": {
+        "name": "Super bot",
+        "line": "Builds your team of bots: proposes new bots and group chats when you ask.",
+        "firstChat": "Lists the bots you have, then proposes a new bot or a group chat whenever you ask for one. You create each with one press on its card.",
+        "watches": "Your bots and what each is for",
+        "does": "Proposes new bots and group chats as cards when you ask. Creates nothing itself.",
+        "reports": "Here, when you ask",
+        "example1": "Proposed “Release notes” from the release notes template. Press Create bot on the card.",
+        "example2": "Proposed the group “Launch crew” with Release notes and PR review."
+      },
       "followup": {
         "name": "Replies you owe",
         "line": "Reminds you of replies you still owe.",
@@ -30879,6 +30897,7 @@
       "specFormat": "spec-format",
       "incidentTimeline": "incident-timeline",
       "workspaceHygiene": "workspace-hygiene",
+      "botTeamBuilding": "bot-team-building",
       "lines": {
         "pr-review-checklist": "Read a diff for behaviour changes, missing tests and risky edits; cite each finding.",
         "bug-reproduction": "Write down the exact steps that show the bug before looking for its cause.",
@@ -30892,7 +30911,8 @@
         "status-brief": "Changed, blocked, needs a decision: a brief in under ten lines.",
         "spec-format": "A one-page spec: problem, decision, scope, open questions.",
         "incident-timeline": "Keep a timestamped timeline, then draft a blameless write-up.",
-        "workspace-hygiene": "When a workspace is done or abandoned, and what to check before removing it."
+        "workspace-hygiene": "When a workspace is done or abandoned, and what to check before removing it.",
+        "bot-team-building": "Propose a new bot or a group chat of bots as a card; your owner creates it."
       }
     },
     "notices": {

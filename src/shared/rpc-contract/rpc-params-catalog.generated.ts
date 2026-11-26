@@ -9,6 +9,7 @@ import {
   AiVaultSetSearchEnabledParamsSchema
 } from '../ai-vault/search/ai-vault-search-contract'
 import { UsageCallParams } from '../backend/backend-service-contract'
+import { BotGroupOfferRequest } from '../bots/bot-group-offer'
 import {
   BotGroupCreate,
   BotGroupDelete,
@@ -1329,6 +1330,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'bots.googleSetup.start': GoogleSetupStart,
   'bots.googleSetup.write': GoogleSetupWrite,
   'bots.groups.create': BotGroupCreate,
+  'bots.groups.createOffer': BotGroupOfferRequest,
   'bots.groups.delete': BotGroupDelete,
   'bots.groups.list': null,
   'bots.groups.newThread': BotGroupNewThread,

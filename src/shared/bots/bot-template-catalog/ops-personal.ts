@@ -64,6 +64,26 @@ export const BOT_TEMPLATES_OPS: readonly BotTemplate[] = [
 
 export const BOT_TEMPLATES_PERSONAL: readonly BotTemplate[] = [
   {
+    id: 'super-bot',
+    category: 'personal',
+    name: 'Super bot',
+    line: 'Builds your team of bots: proposes new bots and group chats when you ask.',
+    firstChat:
+      'Lists the bots you have, then proposes a new bot or a group chat whenever you ask for one. You create each with one press on its card.',
+    mascot: 'A1',
+    watches: 'Your bots and what each is for',
+    does: 'Proposes new bots and group chats as cards when you ask. Creates nothing itself.',
+    reports: 'Here, when you ask',
+    connectors: [],
+    schedules: [],
+    events: [],
+    skills: ['bot-team-building'],
+    example: [
+      'Proposed “Release notes” from the release notes template. Press Create bot on the card.',
+      'Proposed the group “Launch crew” with Release notes and PR review.'
+    ]
+  },
+  {
     id: 'followup',
     category: 'personal',
     name: 'Replies you owe',

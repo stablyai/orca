@@ -76,6 +76,15 @@ export const storedBotCreateOffer = z.object({
   offeredAt: z.number()
 })
 
+export const storedBotGroupOffer = z.object({
+  botId: z.string(),
+  offerId: z.string(),
+  name: z.string(),
+  members: z.array(z.object({ botId: z.string(), name: z.string() })),
+  purpose: text,
+  offeredAt: z.number()
+})
+
 const importLine = z.string()
 
 export const storedBotImportPlan = z.object({
@@ -235,6 +244,7 @@ export const storedBotStatusNotes = {
   connectorOffer: storedConnectorOffer.optional(),
   handoffOffer: legacyHandoffOffer.optional(),
   botCreateOffer: storedBotCreateOffer.optional(),
+  botGroupOffer: storedBotGroupOffer.optional(),
   botImportPlan: storedBotImportPlan.optional(),
   botImportDone: storedBotImportDone.optional(),
   botRequest: storedBotRequestCard.optional(),

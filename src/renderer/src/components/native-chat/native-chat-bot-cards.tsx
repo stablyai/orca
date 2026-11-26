@@ -10,6 +10,7 @@ import {
 import { ComposioSetupChatCard } from '../bots/composio/ComposioSetupChatCard'
 import { GoogleSetupChatCard } from '../bots/google/setup-cards/GoogleSetupChatCard'
 import { NativeChatBotCreateOfferCard } from './NativeChatBotCreateOfferCard'
+import { NativeChatBotGroupOfferCard } from './NativeChatBotGroupOfferCard'
 import { NativeChatBotRequestCard } from './NativeChatBotRequestCard'
 import { NativeChatConnectorOfferCard } from './NativeChatConnectorOfferCard'
 import { NativeChatImportDoneCard } from './NativeChatImportDoneCard'
@@ -49,6 +50,9 @@ const DESKTOP_BOT_CARDS: {
   composioSetup: (card, { fallback }) => <ComposioSetupChatCard card={card} fallback={fallback} />,
   createOffer: (offer, { messageId, fallback }) => (
     <NativeChatBotCreateOfferCard offer={offer} messageId={messageId} fallback={fallback} />
+  ),
+  groupOffer: (offer, { messageId, fallback }) => (
+    <NativeChatBotGroupOfferCard offer={offer} messageId={messageId} fallback={fallback} />
   )
 }
 

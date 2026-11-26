@@ -1,5 +1,6 @@
 // Our own SKILL.md for each template skill, written into a template bot's home.
 import type { BotTemplateSkill } from '../../shared/bots/bot-templates'
+import { SKILL as botTeamBuilding } from './bot-template-skills/bot-team-building'
 import { SKILL as bugReproduction } from './bot-template-skills/bug-reproduction'
 import { SKILL as ciFailureTriage } from './bot-template-skills/ci-failure-triage'
 import { SKILL as dependencyUpgrade } from './bot-template-skills/dependency-upgrade'
@@ -15,6 +16,7 @@ import { SKILL as statusBrief } from './bot-template-skills/status-brief'
 import { SKILL as workspaceHygiene } from './bot-template-skills/workspace-hygiene'
 
 export const BOT_TEMPLATE_SKILL_TEXT: Record<BotTemplateSkill, string> = {
+  'bot-team-building': botTeamBuilding,
   'bug-reproduction': bugReproduction,
   'ci-failure-triage': ciFailureTriage,
   'dependency-upgrade': dependencyUpgrade,
