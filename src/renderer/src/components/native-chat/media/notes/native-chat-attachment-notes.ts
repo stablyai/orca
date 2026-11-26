@@ -135,7 +135,14 @@ export function readNativeChatAttachmentNotes(
   attachmentId: string
 ): NativeChatAttachmentNotes | null {
   const own = keyOf(scopeKey, attachmentId)
-  return storage.get(own) ?? leftElsewhere(own, attachmentId)
+  const saved = storage.get(own)
+  if (saved) {
+    return saved
+  }
+  // Only for an image this chat's draft holds: another chat never reads notes that aren't its own.
+  return readNativeChatComposerDraft(scopeKey).images.some(({ id }) => id === attachmentId)
+    ? leftElsewhere(own, attachmentId)
+    : null
 }
 
 export function setNativeChatAttachmentNotes(
