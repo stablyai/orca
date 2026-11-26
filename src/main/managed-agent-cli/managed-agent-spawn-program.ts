@@ -10,7 +10,10 @@ import {
   prepareFreshOmpLaunch
 } from '../../shared/agent-launch/startup/omp-fresh-launch'
 import { agentSessionSignInCommand } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
-import { readLaunchPosition } from '../../shared/agent-launch/startup/launch-position'
+import {
+  readLaunchPosition,
+  type LaunchPosition
+} from '../../shared/agent-launch/startup/launch-position'
 import { COMMAND_TOKEN_SCAN_MAX_CHARS } from '../../shared/shell/command-resolution/command-token-scanner'
 import type { AgentStartupShell } from '../../shared/agent-launch/startup/tui-agent-startup-shell'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
@@ -20,7 +23,10 @@ import {
   normalizeRuntimePathForComparison,
   relativePathInsideRoot
 } from '../../shared/file-access/cross-platform-path'
-import { normalizePathEntry } from '../../shared/shell/command-resolution/node-cli-command-resolution'
+import {
+  isQuotedWindowsPathEntry,
+  normalizePathEntry
+} from '../../shared/shell/command-resolution/node-cli-command-resolution'
 import { toWindowsWslDrivePath } from '../../shared/file-access/wsl-paths'
 import { resolveWindowsGitBashShellPathAsync } from '../pty/shell-startup/git-bash'
 import {
@@ -30,7 +36,7 @@ import {
 import { resolveProfileLoadingShell } from '../startup/shell-environment/hydrate-shell-path'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import {
-  isQuotedWindowsPathEntry,
+  readHostManagedAgentCommands,
   resolveNativeChatSignInProgram
 } from '../runtime/rpc/methods/host-management/managed-copy-detection'
 import { MANAGED_AGENT_CLI_IDS, managedAgentCli } from './managed-agent-cli-registry'
@@ -144,16 +150,22 @@ function nativeShellPath(path: string, shell: AgentStartupShell): string {
   return process.platform === 'win32' && shell === 'posix' ? msysDrivePathToWindows(path) : path
 }
 
-async function effectiveSearchPath(spawn: SpawnLaunch, shell: AgentStartupShell): Promise<string> {
+async function effectiveSearchPath(
+  spawn: SpawnLaunch,
+  shell: AgentStartupShell,
+  launch?: LaunchPosition
+): Promise<string> {
   const isWindows = process.platform === 'win32'
   const pathKey = (name: string): boolean =>
     isWindows ? name.toLowerCase() === 'path' : name === 'PATH'
+  const scopedPath = launch && [...launch.env].findLast(([name]) => pathKey(name))
   const launchEnvPath = launchPath(spawn.env ?? {})
+  const sourceShell = spawn.sourceShell ?? shell
   const shellOverride =
-    spawn.queuedPath === undefined && isWindows
-      ? shell === 'cmd'
+    !scopedPath && spawn.queuedPath === undefined && isWindows
+      ? sourceShell === 'cmd'
         ? null
-        : shell === 'posix'
+        : sourceShell === 'posix'
           ? await resolveWindowsGitBashShellPathAsync(spawn.shellOverride ?? 'git-bash')
           : spawn.shellOverride
       : spawn.shellOverride
@@ -166,11 +178,14 @@ async function effectiveSearchPath(spawn: SpawnLaunch, shell: AgentStartupShell)
             : [['PATH', launchEnvPath]])
         ])
       : undefined
-  const path =
-    spawn.queuedPath !== undefined
+  const path = scopedPath
+    ? scopedPath[1]
+    : spawn.queuedPath !== undefined
       ? await withStartupFilePath(spawn.queuedPath, shellOverride)
       : launchPath(await resolveLoginShellEnvironment({ shellOverride, env: initialEnv }))
-  const entries = path !== undefined && (path !== '' || !isWindows) ? path.split(delimiter) : []
+  // MSYS uses colons for an inline PATH, but the PTY's environment seed uses native delimiters.
+  const pathDelimiter = isWindows && sourceShell === 'posix' && scopedPath ? ':' : delimiter
+  const entries = path !== undefined && (path !== '' || !isWindows) ? path.split(pathDelimiter) : []
   const directories = entries.map((entry) =>
     nativeShellPath(normalizePathEntry(process.platform, entry), shell)
   )
@@ -182,7 +197,13 @@ async function effectiveSearchPath(spawn: SpawnLaunch, shell: AgentStartupShell)
   if (!searchesCwd && directories.every(isAbsolute)) {
     return preserveQuotes(directories).join(delimiter)
   }
-  const cwd = nativeShellPath((await spawn.readCwd?.()) || spawn.cwd || process.cwd(), shell)
+  const launchCwd = nativeShellPath(launch?.cwd ?? '.', shell)
+  const cwd = isAbsolute(launchCwd)
+    ? launchCwd
+    : resolve(
+        nativeShellPath((await spawn.readCwd?.()) || spawn.cwd || process.cwd(), shell),
+        launchCwd
+      )
   const absoluteDirectories = preserveQuotes(directories.map((entry) => resolve(cwd, entry)))
   return (searchesCwd ? [cwd, ...absoluteDirectories] : absoluteDirectories).join(delimiter)
 }
@@ -224,11 +245,11 @@ export async function alignManagedAgentLaunchAtSpawn(
   return rewriteLaunchExecutable(spawn, shell, command)
 }
 
-function rewriteLaunchExecutable(
+async function rewriteLaunchExecutable(
   spawn: SpawnLaunch,
   shell: AgentStartupShell,
   command: string
-): string {
+): Promise<string> {
   const sourceShell = spawn.sourceShell ?? shell
   const convertCmd = sourceShell === 'cmd' && shell === 'powershell'
   if (
@@ -248,9 +269,26 @@ function rewriteLaunchExecutable(
   const program = wslPath ?? nativeShellPath(launch.executable, sourceShell)
   const managedAgent = managedPathAgent(program)
   const remote = spawn.sshTarget || spawn.codexRuntime === 'wsl'
-  const executable = managedAgent
-    ? stockLaunchProgram(managedAgent, remote ? 'linux' : process.platform, remote)
-    : launch.executable
+  let executable = launch.executable
+  if (managedAgent) {
+    const settings = spawn.getSettings?.() ?? {}
+    const override = settings.agentCmdOverrides?.[managedAgent]
+    const explicitProgram = override && readLaunchPosition(override, sourceShell)?.executable
+    if (
+      !explicitProgram ||
+      normalizeRuntimePathForComparison(explicitProgram) !==
+        normalizeRuntimePathForComparison(launch.executable)
+    ) {
+      executable = stockLaunchProgram(managedAgent, remote ? 'linux' : process.platform, remote)
+      if (!remote) {
+        const paths = await readHostManagedAgentCommands(settings, [managedAgent], {
+          pathEnv: await effectiveSearchPath(spawn, shell, launch),
+          shell
+        })
+        executable = paths[managedAgent] ?? executable
+      }
+    }
+  }
   if (
     convertCmd &&
     (managedAgent || stockPrograms.has(stockProgramKey(basename(program), process.platform)))

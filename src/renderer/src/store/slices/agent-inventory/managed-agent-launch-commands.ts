@@ -1,7 +1,6 @@
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { ManagedAgentCommands } from '../../../../../shared/agent-launch/startup/managed-agent-launch-program'
-import { normalizeRuntimePathForComparison } from '../../../../../shared/file-access/cross-platform-path'
 
 // Host facts launches read synchronously, kept out of Zustand: one entry per host, never per
 // workspace, so the map is bounded by the paired hosts and drops with them.
@@ -36,26 +35,16 @@ export function beginAgentDetection(
 ): (reply: AgentDetectionReply) => AgentDetectionReading {
   const started = ++lastStarted
   return (reply) => {
-    const legacyPaths =
-      'agents' in reply && !reply.outsidePath
-        ? Object.entries(reply.managedAgentCommands ?? {})
-        : []
-    const managedOnly = new Set(
-      legacyPaths
-        .filter(([agent, path]) => isLegacyManagedAgentPath(agent, path))
-        .map(([agent]) => agent)
-    )
+    // Legacy replies don't identify the host's data root, so their paths may be user installs.
     const paths = 'agents' in reply ? (reply.outsidePath ?? reply.managedAgentCommands) : undefined
     return {
-      agents: ('agents' in reply ? reply.agents : reply).filter(
-        (agent): agent is TuiAgent => isTuiAgent(agent) && !managedOnly.has(agent)
-      ),
+      agents: ('agents' in reply ? reply.agents : reply).filter(isTuiAgent),
       keepManagedAgentCommands: () => {
         const kept = byHost.get(host)
         if (!paths || started <= (kept?.started ?? 0)) {
           return
         }
-        const commands = typedCommands(paths, managedOnly)
+        const commands = typedCommands(paths)
         const changed = !kept || !sameCommands(kept.commands, commands)
         // An unchanged reply keeps the same object, so readers see no change.
         byHost.set(host, { started, commands: changed ? commands : kept.commands })
@@ -91,28 +80,10 @@ function sameCommands(a: ManagedAgentCommands, b: ManagedAgentCommands): boolean
   )
 }
 
-function isLegacyManagedAgentPath(agent: string, path: string): boolean {
-  if (!isTuiAgent(agent) || typeof path !== 'string') {
-    return false
-  }
-  const release = normalizeRuntimePathForComparison(path).match(
-    /\/agent-runtimes\/(claude|codex|opencode2?|cursor|copilot|grok|kimi|omp|agy)\/\d+\.\d+(?:\.\d+)?(?:-[^/]+)?\//
-  )
-  return release?.[1] === (agent === 'antigravity' ? 'agy' : agent)
-}
-
-function typedCommands(
-  paths: Record<string, string>,
-  managedOnly: ReadonlySet<string>
-): ManagedAgentCommands {
+function typedCommands(paths: Record<string, string>): ManagedAgentCommands {
   const typed: ManagedAgentCommands = {}
   for (const [agent, path] of Object.entries(paths)) {
-    if (
-      isTuiAgent(agent) &&
-      typeof path === 'string' &&
-      path.length > 0 &&
-      !managedOnly.has(agent)
-    ) {
+    if (isTuiAgent(agent) && typeof path === 'string' && path.length > 0) {
       typed[agent] = path
     }
   }

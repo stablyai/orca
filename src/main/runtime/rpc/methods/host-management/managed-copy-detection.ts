@@ -27,8 +27,8 @@ import { runCliFsReadsAsync } from '../../../../../shared/shell/command-resoluti
 import {
   cliPathLookup,
   getExecutableNames,
-  normalizePathEntry,
-  stripWindowsPathQuotes
+  isQuotedWindowsPathEntry,
+  normalizePathEntry
 } from '../../../../../shared/shell/command-resolution/node-cli-command-resolution'
 import {
   resolveCliCommandAsync,
@@ -204,14 +204,6 @@ function lookUpOwnProgram(
   ).finally(() => ownProgramLookups.delete(key))
   ownProgramLookups.set(key, lookup)
   return lookup
-}
-
-export function isQuotedWindowsPathEntry(entry: string): boolean {
-  if (process.platform !== 'win32') {
-    return false
-  }
-  const trimmed = entry.trim()
-  return stripWindowsPathQuotes(trimmed) !== trimmed
 }
 
 function acceptsQuotedPathEntries(shell?: AgentStartupShell): boolean {

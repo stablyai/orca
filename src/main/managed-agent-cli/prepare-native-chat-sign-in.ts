@@ -43,14 +43,16 @@ export async function prepareNativeChatSignIn(
   const executable = claudeSystemSignIn ? 'claude' : readLaunchPosition(stock, shell)?.executable
   const program =
     executable && (await resolveNativeChatSignInProgram(agent, executable, settings, { shell }))
-  if (!program) {
+  if (!program && !claudeSystemSignIn) {
     return stock
   }
-  const login = agentSessionSignInCommand(agent, { ...options, managedCommand: program })
-  if (!login || claudeSystemSignIn) {
+  const login = program
+    ? agentSessionSignInCommand(agent, { ...options, managedCommand: program })
+    : stock
+  if (!login || (claudeSystemSignIn && program)) {
     return login
   }
-  // Keep the resolved login distinct from a restored terminal launch that names an old release.
+  // Distinguish a prepared login from stock wrappers or old runtime paths that spawn would resolve.
   switch (shell) {
     case 'powershell':
       return `& { ${login} }`

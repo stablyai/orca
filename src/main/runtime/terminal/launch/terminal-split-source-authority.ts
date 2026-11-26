@@ -157,7 +157,12 @@ export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends
     const pathEnv = launch.env.PATH ?? args.baseEnv?.PATH
     const outsidePath =
       pty && !pty.connectionId && !pty.isWsl && pathEnv !== undefined
-        ? (await readHostManagedAgentCommands({}, ['claude'], { pathEnv, shell: 'posix' })).claude
+        ? (
+            await readHostManagedAgentCommands(this.requireStore().getSettings(), ['claude'], {
+              pathEnv,
+              shell: 'posix'
+            })
+          ).claude
         : undefined
     return { ...launch, ...(outsidePath ? { outsidePath } : {}) }
   }

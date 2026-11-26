@@ -25,6 +25,14 @@ export function getExecutableNames(platform: NodeJS.Platform, commandName: strin
 // Windows installers often quote PATH entries; cmd strips only double quotes, so match the terminal.
 export const stripWindowsPathQuotes = (entry: string): string => entry.replace(/^"(.*)"$/, '$1')
 
+export function isQuotedWindowsPathEntry(entry: string): boolean {
+  if (process.platform !== 'win32') {
+    return false
+  }
+  const trimmed = entry.trim()
+  return stripWindowsPathQuotes(trimmed) !== trimmed
+}
+
 /** Trims and unquotes a Windows PATH entry; POSIX entries are returned unchanged. */
 export function normalizePathEntry(platform: NodeJS.Platform, entry: string): string {
   return platform === 'win32' ? stripWindowsPathQuotes(entry.trim()).trim() : entry

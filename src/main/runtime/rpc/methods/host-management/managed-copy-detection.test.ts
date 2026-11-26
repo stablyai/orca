@@ -8,6 +8,7 @@ import { agentSessionSignInCommand } from '../../../../../shared/agent-session/l
 import { readHostManagedAgentCommands } from './managed-copy-detection'
 import { alignManagedAgentLaunchAtSpawn } from '../../../../managed-agent-cli/managed-agent-spawn-program'
 import { prepareNativeChatSignIn } from '../../../../managed-agent-cli/prepare-native-chat-sign-in'
+import { detectInstalledAgentInventory } from '../../../../preflight/installed-agent-detection'
 import { launchProgramHead } from '../../../../../shared/agent-launch/startup/managed-agent-launch-program'
 import { mayResolveQueuedAgentLaunch } from '../../../../../shared/agent-launch/startup/queued-agent-launch'
 import { readLaunchPosition } from '../../../../../shared/agent-launch/startup/launch-position'
@@ -23,6 +24,9 @@ vi.mock('../../../../orca-profiles/profile-storage-paths', () => ({
 vi.mock('../../../../startup/shell-environment/login-shell-environment', () => ({
   captureLoginShellEnvironment: async () => ({ status: 'fallback', env: {} }),
   resolveLoginShellEnvironment: async () => ({ PATH: profile.path })
+}))
+vi.mock('../../../../ipc/preflight/preflight-local-env', () => ({
+  buildLocalPreflightEnv: () => ({ PATH: profile.path })
 }))
 vi.mock('../../../../../shared/shell/command-resolution/system-cli-install-dirs', () => ({
   getSystemCliInstallDirectories: () => []
@@ -70,6 +74,15 @@ it.each(['claude', 'codex'] as const)(
       expect(mayResolveQueuedAgentLaunch(saved, shell)).toBe(true)
       expect(await prepare(saved)).toBe(windows ? `& ${stock}` : stock)
 
+      const overrides = { agentCmdOverrides: { [agent]: launchProgramHead(bin, shell) } }
+      expect((await detectInstalledAgentInventory(undefined, overrides)).agents).toContain(agent)
+      expect(
+        await alignManagedAgentLaunchAtSpawn(
+          { launchCommand: saved, queuedPath: pathEnv, getSettings: () => overrides },
+          shell
+        )
+      ).toBe(saved)
+
       const userPath = join(
         dir,
         'user',
@@ -87,6 +100,14 @@ it.each(['claude', 'codex'] as const)(
         const preparedSignIn = await prepare(signIn ?? undefined)
         expect(preparedSignIn).toContain(bin)
         expect(preparedSignIn).toContain(' auth login')
+
+        const ownDir = join(dir, '.local', 'bin')
+        const ownBin = join(ownDir, windows ? 'claude.exe' : 'claude')
+        await mkdir(ownDir, { recursive: true })
+        await writeFile(ownBin, '', { mode: 0o755 })
+        expect(await prepare(saved)).toBe(
+          windows ? `& '${ownBin}' --version` : `'${ownBin}' --version`
+        )
       } else {
         const signIn = await prepareNativeChatSignIn(
           { kind: 'local' },

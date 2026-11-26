@@ -4,6 +4,8 @@ import type { MobileNewTabAgentOption } from '../../../session/agent-launch/mobi
 import { sessionTabCreateTerminal } from '../../../session/tabs/mobile-session-tab-write-operations'
 
 export type MobileSessionTerminalCreateOptions = MobileQuickCommandLaunch['options'] & {
+  /** Resolve a startup command after claiming the terminal creation slot. */
+  prepareStartupCommand?: (client: RpcClient) => Promise<string>
   onPromptSent?: () => void
   errorToast?: string
   sourceChatFork?: { sessionId: string; agent: string }
@@ -13,13 +15,14 @@ export type MobileSessionTerminalCreateOptions = MobileQuickCommandLaunch['optio
   shell?: string
 }
 
-export function requestMobileSessionTerminalCreate(args: {
+export async function requestMobileSessionTerminalCreate(args: {
   client: RpcClient
   worktreeId: string
   afterTabId?: string
   clientMutationId: string
   agent?: MobileNewTabAgentOption['agent']
-  options?: MobileQuickCommandLaunch['options']
+  options?: MobileSessionTerminalCreateOptions
+  isCurrent: () => boolean
   shell?: string
   sourceChatFork?: { sessionId: string }
   viewMode?: 'chat'
@@ -35,11 +38,16 @@ export function requestMobileSessionTerminalCreate(args: {
     sourceChatFork,
     viewMode
   } = args
+  const prepare = options?.prepareStartupCommand
+  const command = prepare ? await prepare(client) : options?.startupCommand
+  if (prepare && !args.isCurrent()) {
+    return null
+  }
   const params = {
     worktree: `id:${worktreeId}`,
     afterTabId,
     clientMutationId,
-    ...(options?.startupCommand ? { command: options.startupCommand } : {}),
+    ...(command ? { command } : {}),
     ...(options?.startupCommandDelivery
       ? { startupCommandDelivery: options.startupCommandDelivery }
       : {}),

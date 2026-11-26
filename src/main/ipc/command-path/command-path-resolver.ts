@@ -204,7 +204,7 @@ const joinCandidatePath = (isWin: boolean, dir: string, name: string): string =>
 /** Bounded, lazy PATH detection; listings eliminate repeated probes for absence-heavy inventories. */
 export async function findCommandsOnLocalPath(
   commands: readonly string[],
-  options: ResolveCommandOptions = {}
+  options: ResolveCommandOptions & { matches?: Map<string, string> } = {}
 ): Promise<Set<string>> {
   const found = new Set<string>()
   const bareCommands = new Set<string>()
@@ -265,6 +265,7 @@ export async function findCommandsOnLocalPath(
           seenCandidates.add(candidateKey)
           if (await isExecutableFile(candidate, isWin)) {
             found.add(command)
+            options.matches?.set(command, options.matches.get(command) ?? candidate)
             bareCommands.delete(command)
             if (bareCommands.size === 0) {
               allFound.resolve()

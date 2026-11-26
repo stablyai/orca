@@ -21,25 +21,23 @@ const prepareSignIn = bindDeferredRpcOperation(
 export function nativeChatTerminalRunner(
   controller: Pick<
     MobileSessionController,
-    'client' | 'worktreeId' | 'worktreeHostId' | 'handleCreateTerminal'
+    'worktreeId' | 'worktreeHostId' | 'handleCreateTerminal'
   >
 ): NativeChatTerminalRunner {
-  return async (command, nativeChatSignIn) => {
-    const { client, worktreeId, worktreeHostId } = controller
-    if (client) {
-      const host = parseRoutableExecutionHostId(worktreeHostId)
-      const prepared = await prepareSignIn
-        .request(client, {
-          worktreeId,
-          ...(host ? { worktreeHostId: host.id } : {}),
-          nativeChatSignIn
-        })
-        .then(prepareSignIn.interpret)
-        .catch(() => null)
-      command = prepared?.preparedCommand ?? command
-    }
-    await controller.handleCreateTerminal(undefined, {
-      startupCommand: command,
+  return (command, nativeChatSignIn) => {
+    void controller.handleCreateTerminal(undefined, {
+      prepareStartupCommand: async (client) => {
+        const host = parseRoutableExecutionHostId(controller.worktreeHostId)
+        const prepared = await prepareSignIn
+          .request(client, {
+            worktreeId: controller.worktreeId,
+            ...(host ? { worktreeHostId: host.id } : {}),
+            nativeChatSignIn
+          })
+          .then(prepareSignIn.interpret)
+          .catch(() => null)
+        return prepared?.preparedCommand ?? command
+      },
       startupCommandDelivery: 'shell-ready',
       terminalView: true
     })
