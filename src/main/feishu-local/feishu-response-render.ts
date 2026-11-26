@@ -25,6 +25,9 @@ export function feishuResponseText(data: FeishuCardData): string {
   const texts = [...response.progress, ...(response.native?.messages ?? [])].map(
     (entry) => entry.text
   )
+  if (response.final) {
+    texts.push(response.final)
+  }
   return [...new Set(texts)].join('\n\n')
 }
 export function feishuResponseCard(data: FeishuCardData, botName: string, streaming = false) {
@@ -36,11 +39,6 @@ export function feishuResponseCard(data: FeishuCardData, botName: string, stream
   const elapsed = native
     ? Math.max(0, (native.completedAt ?? Date.now()) - native.startedAt)
     : undefined
-  const history = [
-    ...new Set([...response.progress, ...(native?.messages ?? [])].map((e) => e.text))
-  ]
-    .filter((entry) => entry !== response.final)
-    .map(prose)
   const elements: CardElement[] = []
   if (tools.length) {
     const visible = complete ? tools : tools.slice(-3)
@@ -65,10 +63,7 @@ export function feishuResponseCard(data: FeishuCardData, botName: string, stream
     elements.push({ ...folded('执行记录', trace), expanded: !complete })
   }
   if (complete) {
-    elements.unshift(prose(response.final || text || '已处理'))
-    if (history.length) {
-      elements.push(folded('过程记录', history))
-    }
+    elements.push(prose(text || '已处理'))
   } else {
     elements.push({
       ...prose(text || (tools.length ? '正在执行上述步骤…' : '等待 Agent 生成回复…')),
