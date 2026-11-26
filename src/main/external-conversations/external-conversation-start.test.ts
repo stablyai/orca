@@ -148,16 +148,13 @@ it.each(['accepted', 'unknown', 'rejected'] as const)(
           mirror: true
         })
         const history = await rig.host.history({ sessionId, direction: 'tail' })
-        expect(history).toMatchObject({
-          ok: true,
-          page: {
-            queuedMessages: expect.arrayContaining([
-              expect.objectContaining({
-                state: 'waiting',
-                body: { blocks: [{ type: 'text', text: 'next' }] }
-              })
-            ])
-          }
+        if (!history.ok) {
+          throw new Error('could not read the recovered thread')
+        }
+        expect(history.page.queuedMessages).toHaveLength(1)
+        expect(history.page.queuedMessages?.[0]).toMatchObject({
+          state: 'waiting',
+          body: { connectorConversation: KEY, blocks: [{ type: 'text', text: 'next' }] }
         })
       } else {
         const recovered = await seam.start(host, KEY, ID, INPUT, new DeliveryPreparation())
