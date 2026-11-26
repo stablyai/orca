@@ -91,17 +91,13 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
       `Connected server ${server.name} does not support orchestration federation.`
     )
   }
-  const {
-    model: effectiveModel,
-    effort: effectiveEffort,
-    requestedLaunch,
-    warning: launchDropWarning
-  } = resolveFederatedWorkerLaunchPreferences({
+  const launchPlan = resolveFederatedWorkerLaunchPreferences({
     params,
     createsWorktree,
     capabilities: status.capabilities,
     serverName: server.name
   })
+  const { requestedLaunch } = launchPlan
   const childParent = createMode
     ? await resolveFederatedChildParent({
         runtime,
@@ -124,6 +120,7 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
         : 1
 
   const setupDecision = createsWorktree ? (params.setup ?? 'inherit') : 'not_applicable'
+  const creationSetupSource = params.setup ? 'explicit_request' : 'orchestration_default'
   const runId = args.bindRunId()
   const started = db.createStartingWorkerDispatch({
     creator: resolveDispatchCreator(runtime, params.from, args.callerSession),
@@ -147,11 +144,7 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
       launch: requestedLaunch,
       timeoutMs: budgets.readinessTimeoutMs,
       setup: setupDecision,
-      setupSource: createsWorktree
-        ? params.setup
-          ? 'explicit_request'
-          : 'orchestration_default'
-        : 'existing_worktree'
+      setupSource: createsWorktree ? creationSetupSource : 'existing_worktree'
     },
     runtimeEpoch: runtime.getRuntimeId(),
     mutationReceipt: orchestrationMutation,
@@ -200,15 +193,11 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
           ...(params.displayName !== undefined ? { displayNameKind: 'user' as const } : {}),
           comment: params.comment,
           setup: createsWorktree ? params.setup : undefined,
-          setupSource: createsWorktree
-            ? params.setup
-              ? 'explicit_request'
-              : 'orchestration_default'
-            : undefined,
+          setupSource: createsWorktree ? creationSetupSource : undefined,
           terminal: params.terminal,
           agent: params.agent,
-          model: effectiveModel,
-          effort: effectiveEffort,
+          model: launchPlan.model,
+          effort: launchPlan.effort,
           timeoutMs: budgets.readinessTimeoutMs,
           devMode: params.devMode
         },
@@ -237,7 +226,7 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
         ORCHESTRATION_WORKER_TURN_STOP_REPORTS_RUNTIME_CAPABILITY
       )
       const warning = joinWorkerStartWarnings(
-        launchDropWarning,
+        launchPlan.warning,
         childParent && 'warning' in childParent ? childParent.warning : undefined
       )
       readyResult = withWorkerStartNext(

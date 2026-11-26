@@ -108,7 +108,15 @@ function createRetryStartFixture() {
     return `term_worker_${seq}`
   }
 
-  return { db, runtime, activeRunId, callStart, startFailedAttempt, releaseWorker, nextWorkerHandle }
+  return {
+    db,
+    runtime,
+    activeRunId,
+    callStart,
+    startFailedAttempt,
+    releaseWorker,
+    nextWorkerHandle
+  }
 }
 
 describe('worker-start --retry-of launch preference rehydration', () => {
@@ -120,7 +128,7 @@ describe('worker-start --retry-of launch preference rehydration', () => {
     vi.restoreAllMocks()
   })
 
-  it('rehydrates agent, model, and effort when --agent, --model, and --effort are omitted', async () => {
+  it('rehydrates agent, model, and effort when omitted on --retry-of', async () => {
     const { db, runtime, callStart, startFailedAttempt, releaseWorker } = createRetryStartFixture()
     activeDb = db
     const first = await startFailedAttempt({
@@ -184,7 +192,7 @@ describe('worker-start --retry-of launch preference rehydration', () => {
     })
   })
 
-  it('treats model and effort as one unit so an explicit --model does not inherit an incompatible prior effort', async () => {
+  it('treats model and effort as a unit when --model or --effort is passed', async () => {
     const { db, runtime, callStart, startFailedAttempt } = createRetryStartFixture()
     activeDb = db
     // Claude opus accepts effort=high, whereas haiku accepts no effort levels at all.
@@ -226,7 +234,7 @@ describe('worker-start --retry-of launch preference rehydration', () => {
     })
   })
 
-  it('does not carry over the prior model or effort on a cross-agent --agent override', async () => {
+  it('drops prior model and effort on a cross-agent --agent override', async () => {
     const { db, runtime, callStart, startFailedAttempt } = createRetryStartFixture()
     activeDb = db
     const first = await startFailedAttempt({
@@ -254,7 +262,7 @@ describe('worker-start --retry-of launch preference rehydration', () => {
     expect(secondTerminalOptions).not.toHaveProperty('launchPreferences')
   })
 
-  it('preserves --terminal reuse guards and injects no agent or launch preferences when --terminal is passed', async () => {
+  it('preserves --terminal reuse guards without injecting launch defaults', async () => {
     const { db, runtime, callStart, startFailedAttempt } = createRetryStartFixture()
     activeDb = db
     const first = await startFailedAttempt(
@@ -308,7 +316,7 @@ describe('worker-start --retry-of launch preference rehydration', () => {
     expect(runtime.createTerminal).toHaveBeenCalledTimes(1)
   })
 
-  it('drops inherited model and effort with a warning when retrying on an older peer without launch-preferences capability', async () => {
+  it('drops inherited preferences with a warning on an older paired server', async () => {
     const { db, runtime, callStart, startFailedAttempt } = createRetryStartFixture()
     activeDb = db
     const first = await startFailedAttempt({
@@ -411,7 +419,7 @@ describe('worker-start --retry-of launch preference rehydration', () => {
     })
   })
 
-  it('drops inherited opencode --model with a warning when retried on new-top-level or an unsupported host', async () => {
+  it('drops inherited opencode --model with a warning when unsupported', async () => {
     const { db, runtime, callStart, startFailedAttempt, releaseWorker, nextWorkerHandle } =
       createRetryStartFixture()
     activeDb = db
@@ -446,7 +454,11 @@ describe('worker-start --retry-of launch preference rehydration', () => {
           startupTerminal: terminal
         } as never
       })
-    vi.spyOn(runtime, 'listTerminals').mockResolvedValue({ terminals: [] })
+    vi.spyOn(runtime, 'listTerminals').mockResolvedValue({
+      terminals: [],
+      totalCount: 0,
+      truncated: false
+    })
 
     const first = await startFailedAttempt({
       agent: 'opencode',
@@ -487,9 +499,10 @@ describe('worker-start --retry-of launch preference rehydration', () => {
         'not carrying over model anthropic/claude-sonnet-4-5 from the retried worker: OpenCode model selection requires an existing worktree. Use --worktree current or an existing worktree selector, or omit --model.'
     })
     expect(createWorktree.mock.calls[0]?.[0]).not.toHaveProperty('startupLaunchPreferences')
-    await releaseWorker(
-      isStartReceipt(topLevelRetry) ? topLevelRetry.dispatchId : first.dispatchId
-    )
+    if (!isStartReceipt(topLevelRetry)) {
+      throw new Error('expected top-level retry receipt')
+    }
+    await releaseWorker(topLevelRetry.dispatchId)
 
     const second = await startFailedAttempt({
       agent: 'opencode',

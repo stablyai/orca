@@ -13,6 +13,7 @@ import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { RpcContext } from '../../../rpc/core'
 import { prepareWorkerStart } from '../../../rpc/methods/orchestration/worker/worker-start-method'
+import type { WorkerStartInput } from '../../../rpc/methods/orchestration/worker/start/worker-start-input'
 import { resolveFederatedWorkerStartBudgets } from '../../../rpc/methods/orchestration/worker/start/launch/worker-start-budgets'
 import { OrchestrationError } from '../../orchestration-error'
 import { nameRefusingComputer } from '../../../rpc/methods/orchestration/worker/start/launch/worker-agent-host-preflight'
@@ -96,9 +97,7 @@ export async function forwardedChatLineage(
 
 /** The caller's options a server's start takes; this Orca's own fields, and a lineage claim the
  *  caller made itself, stay here. */
-export function serverStartOptions(
-  params: StartParams & { inheritedLaunchPreferences?: boolean }
-) {
+export function serverStartOptions(params: WorkerStartInput) {
   const {
     from: _from,
     run: _run,

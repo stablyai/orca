@@ -1,5 +1,5 @@
 import { createLocalWorkerStartDispatch } from './local-worker-start-dispatch'
-import { resolveWorkerConfiguredAgentParams } from './launch/worker-configured-agent-preflight'
+import { resolveLocalWorkerStartLaunch } from './launch/worker-opencode-model-preflight'
 import type { OrcaRuntimeService } from '../../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import type {
@@ -39,7 +39,6 @@ import {
 } from '../release/retried-worker-terminal-release'
 import { requireWorkerAuthority } from './placement/worker-placement-topology'
 import { joinWorkerStartWarnings } from './launch/worker-launch-preferences'
-import { resolveLocalWorkerStartLaunch } from './launch/worker-start-validation'
 import { deliverAndSettleWorkerStartReadiness } from './readiness/worker-start-readiness-settlement'
 import { handOverWhenReady, wakeReusedSleptAgent } from './readiness/placed-worker-readiness'
 import type { WorkerStartMutation } from './worker-start-mutation'
@@ -93,23 +92,20 @@ export async function startLocalWorker(args: {
   const existingWorktree =
     requestedWorktree === 'current' ? `id:${coordinatorWorktreeId}` : requestedWorktree
   const targetLabel = workerStartTargetLabel({ ...args.params, createsWorktree, requestedWorktree })
-  const launchParams = await refuseUnmatchedWorkerSelector(targetLabel, () =>
-    resolveWorkerConfiguredAgentParams(runtime, params, async () =>
-      createsWorktree
-        ? { repo: (await creationTargetFor(coordinatorWorktreeId)).repoSelector }
-        : { worktree: existingWorktree }
-    )
-  )
   const {
     agent,
     launch,
     warning: retryLaunchWarning
   } = await resolveLocalWorkerStartLaunch({
-    params: launchParams,
+    params,
     createsWorktree,
     existingWorktree,
     targetLabel,
-    runtime
+    runtime,
+    resolveTarget: async () =>
+      createsWorktree
+        ? { repo: (await creationTargetFor(coordinatorWorktreeId)).repoSelector }
+        : { worktree: existingWorktree }
   })
 
   const creationTarget = createsWorktree
@@ -238,6 +234,8 @@ export async function startLocalWorker(args: {
     // Fixed now: the hand-over may run later, from the background wait.
     const placement = placed
     const handle = terminalHandle
+    const warning = joinWorkerStartWarnings(retryLaunchWarning, placement.warning)
+    const awaitingReceipt = { runId: run.id, taskId: task.id, launch: placed.launch, mode, warning }
     // A hand-over from the background wait gets a fresh delivery budget; one in time keeps the shared one.
     const bindTerminal = (): void => {
       if (retained) {
@@ -282,7 +280,7 @@ export async function startLocalWorker(args: {
         timeoutMs,
         readinessDeadline: deliveryDeadline,
         effects,
-        terminalRevealWarning: joinWorkerStartWarnings(retryLaunchWarning, placement.warning),
+        terminalRevealWarning: warning,
         onStage
       })
     }
@@ -295,13 +293,7 @@ export async function startLocalWorker(args: {
       timeoutMs,
       readinessDeadline,
       launchedAt,
-      receipt: {
-        runId: run.id,
-        taskId: task.id,
-        launch: placed.launch,
-        mode,
-        warning: joinWorkerStartWarnings(retryLaunchWarning, placed.warning)
-      },
+      receipt: awaitingReceipt,
       onSetupFailed: () => onStage('setup_wait'),
       handOver,
       bindTerminal,

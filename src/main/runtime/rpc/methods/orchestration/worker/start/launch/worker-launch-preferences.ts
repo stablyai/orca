@@ -90,11 +90,12 @@ export function formatDroppedRetryLaunchWarning(
     dropped.model ? `model ${dropped.model}` : undefined,
     dropped.effort ? `effort ${dropped.effort}` : undefined
   ].filter((part): part is string => Boolean(part))
-  return `not carrying over ${parts.join(' / ')} from the retried worker: ${reason.replace(/\s+/g, ' ').trim()}`
+  const detail = reason.replace(/\s+/g, ' ').trim()
+  return `not carrying over ${parts.join(' / ')} from the retried worker: ${detail}`
 }
 
 export function joinWorkerStartWarnings(
-  ...warnings: ReadonlyArray<string | undefined>
+  ...warnings: readonly (string | undefined)[]
 ): string | undefined {
   const present = warnings.filter((warning): warning is string => Boolean(warning))
   return present.length ? present.join(' ') : undefined
