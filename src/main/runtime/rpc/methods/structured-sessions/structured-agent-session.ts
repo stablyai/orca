@@ -6,7 +6,6 @@ import { STRUCTURED_AGENT_SESSION_USAGE_LIMIT_CONTINUE_METHODS } from './catalog
 import { STRUCTURED_AGENT_SESSION_SKIP_ASYNC_QUESTIONS_METHODS } from './conversation/structured-agent-session-skip-async-questions'
 import { STRUCTURED_AGENT_SESSION_CLOSE_METHOD } from './conversation/structured-agent-session-close-method'
 import { STRUCTURED_AGENT_SESSION_DELETE_METHOD } from './conversation/structured-agent-session-delete-method'
-import { STRUCTURED_AGENT_SESSION_ACK_PROVIDER_RECEIPTS } from './subscriptions/structured-agent-session-provider-receipt-acks'
 import { STRUCTURED_AGENT_SESSION_SUBSCRIBE_METHOD } from './subscriptions/structured-agent-session-subscribe-method'
 import {
   clientReadsCurrentRequests,
@@ -194,7 +193,6 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     }
   }),
   STRUCTURED_AGENT_SESSION_SUBSCRIBE_METHOD,
-  STRUCTURED_AGENT_SESSION_ACK_PROVIDER_RECEIPTS,
   defineMethod({
     name: 'agentSession.unsubscribe',
     permission: 'workspace',

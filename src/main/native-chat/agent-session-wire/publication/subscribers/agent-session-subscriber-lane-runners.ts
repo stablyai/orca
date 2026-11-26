@@ -201,6 +201,5 @@ function openProviderReceiptsAtHead(
     subscriberAtHead(subscriber, journal)
   ) {
     subscriber.openProviderReceipts()
-    subscriber.openProviderReceipts = undefined
   }
 }

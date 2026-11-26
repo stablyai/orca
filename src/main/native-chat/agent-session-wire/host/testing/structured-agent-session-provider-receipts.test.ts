@@ -13,12 +13,10 @@ import {
 import { structuredAgentSessionHandingOver } from '../../delivery/structured-agent-session-handing-over'
 import { retireWaiter } from '../../../../claude/structured/dispatch/claude-structured-dispatch-waiters'
 
-it.each(['throw', 'reject', 'stall'] as const)(
-  'preserves Claude lifecycle, durable echo and assistant content when receipt delivery can %s',
+it.each(['discard', 'stall'] as const)(
+  'preserves Claude lifecycle, durable echo and assistant content after receipt %s',
   async (failure) => {
     const rig = await createQueuedMessageTestRig({ agent: 'claude' })
-    let calls = 0
-    const blocked = Promise.withResolvers<void>()
     try {
       const id = await rig.workingSend()
       await eventually(() => expect(rig.dispatch).toHaveBeenCalledTimes(1))
@@ -26,19 +24,8 @@ it.each(['throw', 'reject', 'stall'] as const)(
       const child = rig.host.collaboratorsForTests().sessions.get(CHAT)?.child
       await eventually(() => expect(structuredAgentSessionHandingOver(journal).size).toBe(0))
       const ingress = claudeReceiptIngress(rig)
-      const stream = await openReceiptStream(rig, (frame) => {
-        if (frame.replace) {
-          return
-        }
-        calls++
-        if (failure === 'throw') {
-          throw new Error('receipt transport threw')
-        }
-        if (failure === 'reject') {
-          return Promise.reject(new Error('receipt transport rejected'))
-        }
-        return blocked.promise
-      })
+      const stream = await openReceiptStream(rig, { paused: true })
+      const read = stream.read()
       const cursor = journal.cursor()
       const activity = rig.host.collaboratorsForTests().sessions.lastActivityAt(CHAT)
       ingress.lifecycle('queued', NOW + 100)
@@ -46,7 +33,7 @@ it.each(['throw', 'reject', 'stall'] as const)(
       ingress.lifecycle('started', NOW + 150)
       expect(await ingress.flush()).toEqual({ ok: true })
       expect(ingress.waiter.commandLifecycle).toBe('started')
-      expect(calls).toBe(1)
+      await read
       expect(stream.frames[1]?.updates).toEqual([{ clientMessageId: id, observedAt: NOW + 100 }])
       expect(journal.cursor()).toEqual(cursor)
       expect(rig.host.collaboratorsForTests().sessions.lastActivityAt(CHAT)).toEqual(activity)
@@ -63,18 +50,13 @@ it.each(['throw', 'reject', 'stall'] as const)(
       expect(rig.host.collaboratorsForTests().sessions.get(CHAT)?.child).toBe(child)
       expect(rig.closeSession).not.toHaveBeenCalled()
 
-      if (failure === 'stall') {
-        expect(stream.frames).toHaveLength(2)
-        blocked.resolve()
-      }
-      await eventually(() => {
-        const last = stream.frames.at(-1)
-        expect(last?.revision).toBeGreaterThan(stream.frames[1]!.revision)
-        expect(last?.updates.some((update) => update.observedAt !== null)).toBe(false)
-      })
+      expect(stream.frames).toHaveLength(2)
+      await stream.read({ discarded: failure === 'discard' })
+      const last = stream.frames.at(-1)
+      expect(last?.revision.sequence).toBeGreaterThan(stream.frames[1]!.revision.sequence)
+      expect(last?.updates.some((update) => update.observedAt !== null)).toBe(false)
       stream.close()
     } finally {
-      blocked.resolve()
       await rig.dispose()
     }
   }
@@ -197,7 +179,6 @@ it.each([false, true])(
       const history = JSON.stringify(await rig.host.history({ sessionId: CHAT, direction: 'tail' }))
       const control: string[] = []
       const raced: string[] = []
-      const receipts: unknown[] = []
       const stopControl = await rig.host.subscribe({
         id: 'control',
         sessionId: CHAT,
@@ -218,16 +199,11 @@ it.each([false, true])(
           return event
         }
       })
-      const stopReceipt = await rig.host.subscribe({
-        id: 'receipt',
-        sessionId: CHAT,
-        emit: () => {},
-        emitProviderReceipts: (frame) => void receipts.push(frame)
-      })
+      const receipt = await openReceiptStream(rig)
       try {
         await captured.promise
         ingress.lifecycle('queued', NOW + 100)
-        await eventually(() => expect(JSON.stringify(receipts)).toContain(id))
+        await eventually(() => expect(JSON.stringify(receipt.frames)).toContain(id))
         expect(raced).toEqual([])
         expect(journal.cursor()).toEqual(cursor)
         resume.resolve()
@@ -239,7 +215,7 @@ it.each([false, true])(
       } finally {
         stopControl()
         stopRaced()
-        stopReceipt()
+        receipt.close()
       }
     } finally {
       resume.resolve()
@@ -251,20 +227,11 @@ it.each([false, true])(
 
 it('restates a fresh set after settlement, re-handover and replacement of a stalled stream', async () => {
   const rig = await createQueuedMessageTestRig({ agent: 'claude' })
-  const resume = Promise.withResolvers<void>()
-  const inFlight = Promise.withResolvers<AbortSignal>()
   try {
     const id = await rig.workingSend()
     await eventually(() => expect(rig.dispatch).toHaveBeenCalledTimes(1))
     const ingress = claudeReceiptIngress(rig)
-    const first = await openReceiptStream(rig, (frame, signal) => {
-      if (frame.replace) {
-        inFlight.resolve(signal)
-        return resume.promise
-      }
-      return undefined
-    })
-    const signal = await inFlight.promise
+    const first = await openReceiptStream(rig, { paused: true })
     ingress.lifecycle('queued', NOW + 100)
     const { sessions } = rig.host.collaboratorsForTests()
     const session = sessions.get(CHAT)!
@@ -287,18 +254,16 @@ it('restates a fresh set after settlement, re-handover and replacement of a stal
     stamp({ ...next.handover!, attempt: next.handover!.attempt + 1 }, NOW + 210)
     stamp(next.handover!, NOW + 220)
     const replacement = await openReceiptStream(rig)
-    expect(signal.aborted).toBe(true)
     expect(replacement.frames[0]).toMatchObject({
       hostIncarnation: first.frames[0]!.hostIncarnation,
       updates: [{ clientMessageId: id, observedAt: NOW + 220 }]
     })
     expect(replacement.frames[0]!.subscription).not.toBe(first.frames[0]!.subscription)
     first.close()
-    resume.resolve()
     await rig.settleAccepted(id, 'accepted')
     await eventually(() => {
       const last = replacement.frames.at(-1)
-      expect(last?.revision).toBeGreaterThan(replacement.frames[0]!.revision)
+      expect(last?.revision.sequence).toBeGreaterThan(replacement.frames[0]!.revision.sequence)
       expect(last?.updates).toEqual(
         last?.replace ? [] : [{ clientMessageId: id, observedAt: null }]
       )
@@ -309,7 +274,6 @@ it('restates a fresh set after settlement, re-handover and replacement of a stal
     expect(first.frames).toHaveLength(1)
     empty.close()
   } finally {
-    resume.resolve()
     await rig.dispose()
   }
 })

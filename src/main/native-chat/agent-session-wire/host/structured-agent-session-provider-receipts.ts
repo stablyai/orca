@@ -1,17 +1,11 @@
 import { randomUUID } from 'node:crypto'
+import { AGENT_SESSION_ID_MAX_LENGTH } from '../../../../shared/agent-session/agent-session-wire'
 import type { ProviderReceiptUpdate } from '../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-provider-receipts'
 import type { JournalHandoverIdentity } from '../../agent-session-journal/journal-store-contracts'
 import type { JournalWriterCommit } from '../../agent-session-journal/journal-writer-changes'
 import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import { MAX_ACTIVE_DISPATCH_WAITERS } from '../../../claude/structured/dispatch/claude-structured-dispatch-waiters'
 import { MAX_CODEX_PENDING_DISPATCH_ECHOES } from '../../../codex/structured/turns/codex-dispatch-receipt-correlation'
-import {
-  AgentSessionReceiptStream,
-  MAX_PROVIDER_RECEIPT_FRAME_BYTES,
-  MAX_PROVIDER_RECEIPT_KEY_LENGTH,
-  MAX_PROVIDER_RECEIPT_STREAMS,
-  type ProviderReceiptEmitter
-} from '../publication/subscribers/agent-session-subscriber-receipts'
 import type {
   StructuredAgentSessionHostSession,
   StructuredAgentSessionProviderChild
@@ -25,7 +19,7 @@ export type ProviderReceiptHandover = JournalHandoverIdentity & {
 
 export type ProviderReceiptObservation = ProviderReceiptHandover & { observedAt: number }
 
-type Receipt = JournalHandoverIdentity & { observedAt?: number }
+type Receipt = JournalHandoverIdentity & { stamp?: ProviderReceiptUpdate }
 type LiveHandovers = {
   journal: SqlAgentSessionJournal
   child: StructuredAgentSessionProviderChild
@@ -35,23 +29,20 @@ type LiveHandovers = {
   entries: Map<string, Receipt>
 }
 
-// 4,096 entries at a budget of 1 KiB each (including the key and map accounting), plus at most
-// 256 streams holding two 224 KiB buffers each. IDs/metadata are capped; no carrier or content is
-// retained. Journal and child references point to authority already held by the conversation.
 export const MAX_HOST_PROVIDER_RECEIPTS = 4096
-export const MAX_HOST_PROVIDER_RECEIPT_BYTES =
-  MAX_HOST_PROVIDER_RECEIPTS * 1024 +
-  2 * MAX_PROVIDER_RECEIPT_STREAMS * MAX_PROVIDER_RECEIPT_FRAME_BYTES
 const EMPTY: readonly never[] = []
+type ReceiptObserver = (clientMessageId: string | null, closed?: true) => void
 
 export class StructuredAgentSessionProviderReceipts {
-  private readonly incarnation = randomUUID()
-  private revision = 0
+  readonly incarnation = randomUUID()
   private entries = 0
-  private streams = 0
-  private closed = false
   private readonly live = new Map<string, LiveHandovers>()
-  private readonly subscribers = new Map<string, Set<AgentSessionReceiptStream>>()
+  private readonly observers = new Map<string, Set<ReceiptObserver>>()
+  private stopped = false
+
+  get closed(): boolean {
+    return this.stopped
+  }
 
   constructor(
     private readonly session: (sessionId: string) => StructuredAgentSessionHostSession | undefined,
@@ -90,9 +81,9 @@ export class StructuredAgentSessionProviderReceipts {
       !handover ||
       !cap ||
       this.entries >= MAX_HOST_PROVIDER_RECEIPTS ||
-      sessionId.length > MAX_PROVIDER_RECEIPT_KEY_LENGTH ||
-      clientMessageId.length > MAX_PROVIDER_RECEIPT_KEY_LENGTH ||
-      handover.handoverCursor.epoch.length > MAX_PROVIDER_RECEIPT_KEY_LENGTH ||
+      sessionId.length > AGENT_SESSION_ID_MAX_LENGTH ||
+      clientMessageId.length > AGENT_SESSION_ID_MAX_LENGTH ||
+      handover.handoverCursor.epoch.length > AGENT_SESSION_ID_MAX_LENGTH ||
       !this.owns(session, journal, child, handover.handoverCursor.epoch)
     ) {
       return
@@ -130,7 +121,7 @@ export class StructuredAgentSessionProviderReceipts {
     const receipt = live.entries.get(observation.clientMessageId)
     if (
       !receipt ||
-      receipt.observedAt !== undefined ||
+      receipt.stamp !== undefined ||
       receipt.attempt !== observation.attempt ||
       receipt.handoverCursor.epoch !== observation.handoverCursor.epoch ||
       receipt.handoverCursor.sequence !== observation.handoverCursor.sequence ||
@@ -140,9 +131,15 @@ export class StructuredAgentSessionProviderReceipts {
     ) {
       return
     }
-    receipt.observedAt = observation.observedAt
+    receipt.stamp = {
+      clientMessageId: observation.clientMessageId,
+      attempt: observation.attempt,
+      handoverSequence: observation.handoverCursor.sequence,
+      fence: observation.fence,
+      observedAt: observation.observedAt
+    }
     live.stamps++
-    this.changed(sessionId, observation.clientMessageId, receipt.observedAt)
+    this.changed(sessionId, observation.clientMessageId)
   }
 
   withdraw(
@@ -188,11 +185,8 @@ export class StructuredAgentSessionProviderReceipts {
     if (live) {
       this.entries -= live.entries.size
       this.live.delete(sessionId)
-      if (live.stamps > 0) {
-        this.revision++
-        for (const stream of this.subscribers.get(sessionId) ?? EMPTY) {
-          stream.reset()
-        }
+      if (live.stamps) {
+        this.changed(sessionId, null)
       }
     }
   }
@@ -208,48 +202,40 @@ export class StructuredAgentSessionProviderReceipts {
     }
   }
 
-  subscribe(sessionId: string, emit: ProviderReceiptEmitter) {
-    if (
-      this.closed ||
-      this.streams >= MAX_PROVIDER_RECEIPT_STREAMS ||
-      sessionId.length > MAX_PROVIDER_RECEIPT_KEY_LENGTH
-    ) {
-      return undefined
+  watch(sessionId: string, observe: ReceiptObserver): () => void {
+    const observers = this.observers.get(sessionId) ?? new Set()
+    observers.add(observe)
+    this.observers.set(sessionId, observers)
+    return () => {
+      observers.delete(observe)
+      if (observers.size === 0 && this.observers.get(sessionId) === observers) {
+        this.observers.delete(sessionId)
+      }
     }
-    const stream = new AgentSessionReceiptStream(sessionId, this.incarnation, emit, () => {
-      this.revalidate(sessionId)
-      return { revision: this.revision, snapshot: () => this.snapshot(sessionId) }
-    })
-    const streams = this.subscribers.get(sessionId) ?? new Set()
-    streams.add(stream)
-    this.subscribers.set(sessionId, streams)
-    this.streams++
-    return {
-      open: () => stream.open(),
-      close: () => {
-        if (streams.delete(stream)) {
-          this.streams--
-          if (streams.size === 0) {
-            this.subscribers.delete(sessionId)
-          }
-        }
-        stream.close()
+  }
+
+  stampFor(sessionId: string, clientMessageId: string): ProviderReceiptUpdate | undefined {
+    return this.live.get(sessionId)?.entries.get(clientMessageId)?.stamp
+  }
+
+  *snapshot(sessionId: string): IterableIterator<ProviderReceiptUpdate> {
+    for (const receipt of this.live.get(sessionId)?.entries.values() ?? EMPTY) {
+      if (receipt.stamp) {
+        yield receipt.stamp
       }
     }
   }
 
   close(): void {
-    this.closed = true
+    this.stopped = true
     this.live.clear()
     this.entries = 0
-    for (const streams of this.subscribers.values()) {
-      for (const stream of streams) {
-        stream.close()
+    for (const observers of this.observers.values()) {
+      for (const observe of observers) {
+        observe(null, true)
       }
-      streams.clear()
     }
-    this.subscribers.clear()
-    this.streams = 0
+    this.observers.clear()
   }
 
   private supersede(
@@ -267,9 +253,9 @@ export class StructuredAgentSessionProviderReceipts {
     if (live.entries.size === 0) {
       this.live.delete(sessionId)
     }
-    if (receipt.observedAt !== undefined) {
+    if (receipt.stamp !== undefined) {
       live.stamps--
-      this.changed(sessionId, clientMessageId, null)
+      this.changed(sessionId, clientMessageId)
     }
   }
 
@@ -290,20 +276,9 @@ export class StructuredAgentSessionProviderReceipts {
     )
   }
 
-  private changed(sessionId: string, clientMessageId: string, observedAt: number | null): void {
-    this.revision++
-    for (const stream of this.subscribers.get(sessionId) ?? EMPTY) {
-      stream.changed(clientMessageId, observedAt)
+  private changed(sessionId: string, clientMessageId: string | null): void {
+    for (const observe of this.observers.get(sessionId) ?? EMPTY) {
+      observe(clientMessageId)
     }
-  }
-
-  private snapshot(sessionId: string): ProviderReceiptUpdate[] {
-    const updates: ProviderReceiptUpdate[] = []
-    for (const [clientMessageId, receipt] of this.live.get(sessionId)?.entries ?? EMPTY) {
-      if (receipt.observedAt !== undefined) {
-        updates.push({ clientMessageId, observedAt: receipt.observedAt })
-      }
-    }
-    return updates
   }
 }

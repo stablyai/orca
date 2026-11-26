@@ -1,6 +1,6 @@
-import type { AgentSessionProviderReceiptFrame } from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-provider-receipts'
-import { defineStreamingMethod } from '../../../core'
-import { sendProviderReceiptFrame } from './structured-agent-session-provider-receipt-acks'
+import type * as z from 'zod'
+import { defineStreamingMethod, type RpcContext } from '../../../core'
+import { ReceiptReader } from './structured-agent-session-read-provider-receipts'
 import { sendingTextAppends } from '../../../../../../shared/agent-session/view/live-read/agent-session-text-append'
 import { recordMobileViewOpened } from '../../../../../telemetry/mobile-client-telemetry'
 import { clientRequestsCommands } from '../structured-agent-session-policy'
@@ -19,76 +19,95 @@ export const STRUCTURED_AGENT_SESSION_SUBSCRIBE_METHOD = defineStreamingMethod({
   name: 'agentSession.subscribe',
   permission: 'workspace',
   params: SubscribeParams,
-  handler: async (params, ctx, emitFrame) => {
-    const { capabilities } = params
-    const emit =
-      capabilities?.textAppend === 1 ? sendingTextAppends(emitFrame, capabilities) : emitFrame
-    const host = await requireInstalledHost(ctx, params.sessionId)
-    const subscriptionId = subscriptionIdFor(ctx, params.sessionId)
-    // A stream reads; it never keeps an agent alive or starts one.
-    let dispose = (): void => {}
-    const stream = bindStructuredAgentSessionStream(ctx, subscriptionId, () => dispose())
-    if (stream.isClosed()) {
-      return
-    }
-    // Resolve once registered; the opening snapshot follows on the stream. A racing close disposes it.
-    dispose = await host.subscribe({
-      ...(capabilities?.providerReceipts === 1
-        ? {
-            emitProviderReceipts: (
-              frame: AgentSessionProviderReceiptFrame,
-              signal: AbortSignal
-            ) => {
-              return stream.isClosed()
-                ? undefined
-                : sendProviderReceiptFrame(ctx, frame, signal, emitFrame)
-            }
-          }
-        : {}),
-      commandsOnRequest: clientRequestsCommands(ctx),
-      readsCurrentRequests: clientReadsCurrentRequests(ctx),
-      id: subscriptionId,
-      sessionId: params.sessionId,
-      ...queuedImages.queuedImageSubscriber(ctx),
-      projectQueuePublication: (publication) =>
-        queuedImages.projectQueuedImageCardPublication(publication, ctx),
-      emit: (event) =>
-        emit(
-          projectReceiptDeviceEvent(
-            projectTurnItemEvent(
-              projectBackgroundTaskEvent(event, ctx),
-              ctx,
-              host.sessionAgent(params.sessionId)
-            ),
-            ctx
-          )
-        ),
-      end: (cause) => {
-        if (stream.isClosed()) {
-          return
-        }
-        console.warn('[agent-session] ending stream after a failed frame', params.sessionId, cause)
-        try {
-          emitFrame({ type: 'end' })
-        } catch {
-          // The transport is gone; releasing the stream below is all that is left to do.
-        }
-        stream.close()
-      },
-      ...(params.cursor ? { cursor: params.cursor } : {}),
-      snapshotCatchUp: clientSupportsSnapshotCatchUp(ctx),
-      ...(capabilities?.promptSuggestions === 1 ? { showsPromptSuggestions: true } : {}),
-      // Every phone's app, whatever its version, ends a stream over a frame its bridge cannot carry.
-      ...(ctx.clientKind === 'mobile' ? { boundedFrames: true } : {})
-    })
-    if (stream.isClosed()) {
-      dispose()
-      return
-    }
-    recordMobileViewOpened(ctx, {
-      surface: 'chat',
-      viewKey: `agentSession:${params.sessionId}`,
-      agent: () => host.sessionAgent(params.sessionId)
-    })
-  }
+  handler: subscribe
 })
+
+const LocalSubscribeParams = SubscribeParams.extend({ receiptReader: ReceiptReader.optional() })
+
+export const LOCAL_STRUCTURED_AGENT_SESSION_SUBSCRIBE_METHOD = defineStreamingMethod({
+  name: 'agentSession.subscribe',
+  permission: 'workspace',
+  params: LocalSubscribeParams,
+  handler: subscribe
+})
+
+async function subscribe(
+  params: z.infer<typeof LocalSubscribeParams>,
+  ctx: RpcContext,
+  emitFrame: (event: unknown) => void
+): Promise<void> {
+  const { capabilities, receiptReader } = params
+  const { localProviderReceipts, requestId } = ctx
+  const emit =
+    capabilities?.textAppend === 1 ? sendingTextAppends(emitFrame, capabilities) : emitFrame
+  const host = await requireInstalledHost(ctx, params.sessionId)
+  const subscriptionId = subscriptionIdFor(ctx, params.sessionId)
+  // A stream reads; it never keeps an agent alive or starts one.
+  let dispose = (): void => {}
+  const stream = bindStructuredAgentSessionStream(ctx, subscriptionId, () => dispose())
+  if (stream.isClosed()) {
+    return
+  }
+  // Resolve once registered; the opening snapshot follows on the stream. A racing close disposes it.
+  dispose = await host.subscribe({
+    ...(receiptReader && localProviderReceipts && requestId
+      ? {
+          attachProviderReceipts: (cursor) => {
+            const attached = localProviderReceipts.readers.attach(
+              localProviderReceipts.endpoint,
+              receiptReader,
+              host.providerReceipts,
+              { sessionId: params.sessionId, subscription: requestId },
+              cursor
+            )
+            localProviderReceipts.attached?.(attached !== undefined)
+            return attached
+          }
+        }
+      : {}),
+    commandsOnRequest: clientRequestsCommands(ctx),
+    readsCurrentRequests: clientReadsCurrentRequests(ctx),
+    id: subscriptionId,
+    sessionId: params.sessionId,
+    ...queuedImages.queuedImageSubscriber(ctx),
+    projectQueuePublication: (publication) =>
+      queuedImages.projectQueuedImageCardPublication(publication, ctx),
+    emit: (event) =>
+      emit(
+        projectReceiptDeviceEvent(
+          projectTurnItemEvent(
+            projectBackgroundTaskEvent(event, ctx),
+            ctx,
+            host.sessionAgent(params.sessionId)
+          ),
+          ctx
+        )
+      ),
+    end: (cause) => {
+      if (stream.isClosed()) {
+        return
+      }
+      console.warn('[agent-session] ending stream after a failed frame', params.sessionId, cause)
+      try {
+        emitFrame({ type: 'end' })
+      } catch {
+        // The transport is gone; releasing the stream below is all that is left to do.
+      }
+      stream.close()
+    },
+    ...(params.cursor ? { cursor: params.cursor } : {}),
+    snapshotCatchUp: clientSupportsSnapshotCatchUp(ctx),
+    ...(capabilities?.promptSuggestions === 1 ? { showsPromptSuggestions: true } : {}),
+    // Every phone's app, whatever its version, ends a stream over a frame its bridge cannot carry.
+    ...(ctx.clientKind === 'mobile' ? { boundedFrames: true } : {})
+  })
+  if (stream.isClosed()) {
+    dispose()
+    return
+  }
+  recordMobileViewOpened(ctx, {
+    surface: 'chat',
+    viewKey: `agentSession:${params.sessionId}`,
+    agent: () => host.sessionAgent(params.sessionId)
+  })
+}

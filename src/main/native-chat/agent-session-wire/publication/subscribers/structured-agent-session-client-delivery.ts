@@ -73,7 +73,7 @@ export class StructuredAgentSessionClientDelivery {
     starting?: (sessionId: string) => boolean,
     private readonly publications?: Pick<
       StructuredAgentSessionConversations,
-      'publish' | 'endPublications' | 'providerReceipts'
+      'publish' | 'endPublications'
     >,
     readUsageLimitContinue?: (
       id: string,
@@ -108,8 +108,6 @@ export class StructuredAgentSessionClientDelivery {
     )
     this.waitForSendSettlement = this.sendSettlement.wait
     this.subscribers = new AgentSessionSubscribers({
-      subscribeProviderReceipts: (id, emit) =>
-        this.publications?.providerReceipts.subscribe(id, emit),
       ...(readLiveText ? { readLiveText } : {}),
       readForkJournal: (id) => this.sessions.get(id)?.journal,
       readForkMarker: (sessionId) => readForkMarker(this.deps().store, sessionId),

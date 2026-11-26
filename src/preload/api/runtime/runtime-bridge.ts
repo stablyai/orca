@@ -3,6 +3,7 @@ import type {
   RendererStatusAck
 } from '../../../shared/agent-status/renderer-status-publication'
 import { ipcRenderer } from 'electron'
+import { callRuntime, discardProviderReceiptReply } from './provider-receipt-read'
 import type { ClientHostedBrowserRowsEvent } from '../../../shared/browser/client-hosting/client-hosted-browser-rows'
 import type { SidebarInputsChangedEvent } from '../../../shared/sidebar-list/feed/sidebar-inputs-feed-contract'
 import type {
@@ -16,16 +17,14 @@ import type { RuntimeEnvironmentSubscriptionHandle } from '../../runtime/runtime
 import type { PreloadApi } from '../../api-types'
 
 export const runtimeApi = {
+  providerReceiptReadV1: true as const,
+  discardProviderReceiptReply,
   syncAgentStatus: (batch: RendererStatusPublication): Promise<RendererStatusAck> =>
     ipcRenderer.invoke('runtime:syncAgentStatus', batch),
   syncWindowGraph: (graph: RuntimeRendererSyncWindowGraph): Promise<RuntimeSyncWindowGraphResult> =>
     ipcRenderer.invoke('runtime:syncWindowGraph', graph),
   getStatus: (): Promise<RuntimeStatus> => ipcRenderer.invoke('runtime:getStatus'),
-  call: (args: {
-    method: string
-    params?: unknown
-    orchestration?: { contractVersion: number; requestId: string }
-  }): Promise<RuntimeRpcResponse<unknown>> => ipcRenderer.invoke('runtime:call', args),
+  call: callRuntime,
   subscribe: async (
     args: { method: string; params?: unknown },
     callback: (response: RuntimeRpcResponse<unknown>) => void
@@ -35,13 +34,20 @@ export const runtimeApi = {
     const listener = (_event: Electron.IpcRendererEvent, response: RuntimeRpcResponse<unknown>) =>
       callback(response)
     ipcRenderer.on(channel, listener)
+    let receiptAttached: boolean | undefined
     try {
-      await ipcRenderer.invoke('runtime:subscribe', { subscriptionId, ...args })
+      const response = await ipcRenderer.invoke('runtime:subscribe', { subscriptionId, ...args })
+      receiptAttached = response?.receiptAttached
     } catch (error) {
       ipcRenderer.removeListener(channel, listener)
       throw error
     }
     return {
+      ...(receiptAttached !== undefined
+        ? {
+            receiptSubscription: receiptAttached ? subscriptionId : null
+          }
+        : {}),
       unsubscribe: () => {
         ipcRenderer.removeListener(channel, listener)
         ipcRenderer.send('runtime:unsubscribe', { subscriptionId })

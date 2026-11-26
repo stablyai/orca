@@ -1,127 +1,108 @@
 import { expect, it, vi } from 'vitest'
+import { randomUUID } from 'node:crypto'
 import { setStructuredAgentSessionHost } from '../structured-agent-session-registry'
-import { STRUCTURED_AGENT_SESSION_ACK_PROVIDER_RECEIPTS as ack } from '../../../../runtime/rpc/methods/structured-sessions/subscriptions/structured-agent-session-provider-receipt-acks'
 import { STRUCTURED_AGENT_SESSION_SUBSCRIBE_METHOD as subscribe } from '../../../../runtime/rpc/methods/structured-sessions/subscriptions/structured-agent-session-subscribe-method'
+import { STRUCTURED_AGENT_SESSION_METHODS } from '../../../../runtime/rpc/methods/structured-sessions/structured-agent-session'
+import { MOBILE_AGENT_SESSION_RPC_METHODS } from '../../../../runtime/rpc/server/runtime-rpc-mobile-agent-session-methods'
+import { LOCAL_READ_PROVIDER_RECEIPTS } from '../../../../runtime/rpc/methods/structured-sessions/subscriptions/structured-agent-session-read-provider-receipts'
+import { classifyRuntimeLongPoll } from '../../../../runtime/rpc/server/runtime-rpc-long-poll'
+import { RpcDispatcher } from '../../../../runtime/rpc/dispatcher'
 import type { RpcContext } from '../../../../runtime/rpc/core'
-import type { AgentSessionProviderReceiptFrame } from '../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-provider-receipts'
-import {
-  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-  AGENT_SESSION_SNAPSHOT_CATCH_UP_CLIENT_CAPABILITY
-} from '../../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
-import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../../../shared/agent-session/requests/agent-session-current-requests-capability'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../../shared/remote-runtime/protocol/electron-remote-runtime-client-capabilities'
+import { MOBILE_RUNTIME_CAPABILITIES } from '../../../../../shared/remote-runtime/protocol/mobile-runtime-capabilities'
+import { ORCAD_RUNTIME_CAPABILITIES } from '../../../../../shared/remote-runtime/protocol/orcad-runtime-capabilities'
+import { HOST_RUNTIME_CAPABILITIES } from '../../../../../shared/remote-runtime/protocol/host-runtime-capabilities'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import { createQueuedMessageTestRig } from './structured-agent-session-queued-message-rig.test-fixture'
-import { claudeReceiptIngress } from './structured-agent-session-provider-receipt-rig.test-fixture'
+import {
+  claudeReceiptIngress,
+  openReceiptStream
+} from './structured-agent-session-provider-receipt-rig.test-fixture'
 import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 import {
   HOST_TEST_SESSION as CHAT,
   HOST_TEST_NOW as NOW
 } from './structured-agent-session-host-test-data.test-fixture'
 
-it.each(['runtime', 'mobile'] as const)(
-  'uses a one-frame receipt window without changing the ordinary %s transcript',
-  async (clientKind) => {
+it.each([
+  ['SSH', 'runtime', ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES, ORCAD_RUNTIME_CAPABILITIES],
+  ['WSL', 'runtime', ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES, ORCAD_RUNTIME_CAPABILITIES],
+  ['direct phone', 'mobile', MOBILE_RUNTIME_CAPABILITIES, HOST_RUNTIME_CAPABILITIES],
+  ['relayed phone', 'mobile', MOBILE_RUNTIME_CAPABILITIES, HOST_RUNTIME_CAPABILITIES]
+] as const)(
+  'preserves the paired %s reply bytes and offers no receipt read',
+  async (_route, clientKind, capabilities, hostCapabilities) => {
     const rig = await createQueuedMessageTestRig({ agent: 'claude' })
-    const signals = [new AbortController(), new AbortController(), new AbortController()]
     const clock = vi.spyOn(Date, 'now').mockReturnValue(NOW)
+    const signal = new AbortController()
     setStructuredAgentSessionHost(rig.host)
     try {
       const id = await rig.workingSend()
       await eventually(() => expect(rig.dispatch).toHaveBeenCalledTimes(1))
       const ingress = claudeReceiptIngress(rig)
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the installed host is real; the transport fixture owns only stream cleanup.
+      const session = await rig.host.conversation(CHAT)
+      const cursor = session.journal.cursor()
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the actual dispatcher and host use only these runtime methods for the requests below.
       const runtime = {
+        getRuntimeId: () => 'paired-runtime',
         registerOwnedSubscriptionCleanup: (_id: string, close: () => void) => ({
           releaseIfCurrent: close
         })
-      } as RpcContext['runtime']
-      const frames: unknown[][] = [[], [], []]
-      const context = (index: number): RpcContext => ({
-        runtime,
+      } as unknown as RpcContext['runtime']
+      const opts = {
         clientKind,
-        clientCapabilities: [
-          STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-          ...(index
-            ? [
-                AGENT_SESSION_SNAPSHOT_CATCH_UP_CLIENT_CAPABILITY,
-                AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY
-              ]
-            : [])
-        ],
-        requestId: `stream-${index}`,
-        connectionId: 'same-connection',
-        signal: signals[index]!.signal
-      })
-      for (let index = 0; index < frames.length; index++) {
-        await subscribe.handler(
-          {
-            sessionId: CHAT,
-            ...(index === 2 ? { capabilities: { providerReceipts: 1 } } : {})
-          },
-          context(index),
-          (frame) => void frames[index]!.push(frame)
-        )
+        clientCapabilities: [...capabilities, STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY],
+        pairedDeviceId: 'paired-test-device',
+        connectionId: 'paired-transport',
+        signal: signal.signal
       }
-      const receiptFrames = (): AgentSessionProviderReceiptFrame[] =>
-        frames[2]!.filter(
-          (frame): frame is AgentSessionProviderReceiptFrame =>
-            typeof frame === 'object' &&
-            frame !== null &&
-            'type' in frame &&
-            frame.type === 'provider-receipts'
-        )
-      await eventually(() => expect(receiptFrames()).toHaveLength(1))
-      const first = receiptFrames()[0]!
-      expect(first).toMatchObject({ replace: true, updates: [] })
-      const acknowledgement = { subscription: first.subscription, revision: first.revision }
-
-      ingress.lifecycle('queued', NOW + 100)
-      await ack.handler(acknowledgement, { ...context(2), connectionId: 'other-connection' })
-      await ack.handler({ ...acknowledgement, revision: acknowledgement.revision + 1 }, context(2))
-      await new Promise<void>((resolve) => setImmediate(resolve))
-      expect(receiptFrames()).toHaveLength(1)
-      await ack.handler(acknowledgement, context(2))
-      await eventually(() =>
-        expect(receiptFrames()[1]?.updates).toEqual([
-          { clientMessageId: id, observedAt: NOW + 100 }
-        ])
+      const dispatcher = new RpcDispatcher({ runtime, methods: STRUCTURED_AGENT_SESSION_METHODS })
+      const request = {
+        id: 'receipt-read',
+        authToken: 'paired',
+        method: LOCAL_READ_PROVIDER_RECEIPTS.name
+      }
+      expect(JSON.stringify(await dispatcher.dispatch(request, opts))).toBe(
+        '{"id":"receipt-read","ok":false,"error":{"code":"method_not_found","message":"Unknown method: agentSession.readProviderReceipts"},"_meta":{"runtimeId":"paired-runtime"}}'
       )
-      const atOpen = frames.slice(0, 2).map((events) => events.length)
+      expect(hostCapabilities.some((name) => /provider.receipt/i.test(name))).toBe(false)
+      expect(MOBILE_AGENT_SESSION_RPC_METHODS.some((name) => /provider.receipt/i.test(name))).toBe(
+        false
+      )
+      expect(classifyRuntimeLongPoll(request)).toBeNull()
+      expect(
+        subscribe.params.safeParse({
+          sessionId: CHAT,
+          receiptReader: { id: randomUUID(), generation: 1 }
+        }).success
+      ).toBe(false)
 
+      const captured: string[][] = [[], []]
+      const open = (index: number) =>
+        dispatcher.dispatchStreaming(
+          { ...request, id: 'stream', method: subscribe.name, params: { sessionId: CHAT, cursor } },
+          (frame) => void captured[index]!.push(frame),
+          { ...opts, connectionId: `paired-transport-${index}` }
+        )
+      await open(0)
+      await eventually(() => expect(JSON.stringify(captured[0])).toContain(id))
+      const reader = await openReceiptStream(rig)
+      ingress.lifecycle('queued', NOW + 100)
+      await eventually(() =>
+        expect(reader.frames[1]?.updates).toEqual([{ clientMessageId: id, observedAt: NOW + 100 }])
+      )
+      await open(1)
+      await eventually(() => expect(captured[1]).toEqual(captured[0]))
       ingress.echo()
       ingress.assistant()
-      expect(await ingress.flush()).toEqual({ ok: true })
+      await ingress.flush()
       await eventually(() => {
-        expect(JSON.stringify(frames[0])).toContain('Hello there')
-        expect(JSON.stringify(frames[1])).toContain('Hello there')
+        expect(JSON.stringify(captured[1])).toContain('Hello there')
+        expect(captured[1]).toEqual(captured[0])
       })
-      expect(receiptFrames()).toHaveLength(2)
-      expect(frames.slice(0, 2).every((events, index) => events.length > atOpen[index]!)).toBe(true)
-      for (const normal of frames.slice(0, 2)) {
-        expect(JSON.stringify(normal)).not.toContain('provider-receipts')
-      }
-      await eventually(() =>
-        expect(
-          JSON.stringify(
-            frames[2]!.filter((frame) => !receiptFrames().some((receipt) => frame === receipt))
-          )
-        ).toBe(JSON.stringify(frames[1]))
-      )
-      const second = receiptFrames()[1]!
-      await ack.handler(
-        { subscription: second.subscription, revision: second.revision },
-        context(2)
-      )
-      await eventually(() => {
-        const last = receiptFrames()[2]
-        expect(last?.revision).toBeGreaterThan(second.revision)
-        expect(last?.updates).toEqual(
-          last?.replace ? [] : [{ clientMessageId: id, observedAt: null }]
-        )
-      })
+      reader.close()
     } finally {
-      for (const signal of signals) {
-        signal.abort()
-      }
+      signal.abort()
       clock.mockRestore()
       setStructuredAgentSessionHost(null)
       await rig.dispose()

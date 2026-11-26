@@ -7,6 +7,7 @@ import { createQueuedMessageTestRig } from './structured-agent-session-queued-me
 import { openReceiptStream } from './structured-agent-session-provider-receipt-rig.test-fixture'
 import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 import {
+  HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as CHAT,
   HOST_TEST_THREAD as THREAD
 } from './structured-agent-session-host-test-data.test-fixture'
@@ -54,7 +55,8 @@ it.each(['start', 'steer', 'refused-steer', 'echo-first'] as const)(
               turnOpenWaits: { wait: async () => {} }
             },
             input,
-            undefined
+            undefined,
+            () => NOW + 250
           )
         } finally {
           completed.resolve()
@@ -71,7 +73,7 @@ it.each(['start', 'steer', 'refused-steer', 'echo-first'] as const)(
       if (mode === 'start' || mode === 'refused-steer') {
         await eventually(() =>
           expect(stream.frames[1]?.updates).toEqual([
-            { clientMessageId: id, observedAt: expect.any(Number) }
+            { clientMessageId: id, observedAt: NOW + 250 }
           ])
         )
       } else {

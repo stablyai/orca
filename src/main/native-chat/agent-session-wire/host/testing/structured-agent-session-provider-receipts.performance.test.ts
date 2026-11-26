@@ -1,15 +1,3 @@
-import type { AgentSessionProviderReceiptFrame } from '../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-provider-receipts'
-import {
-  MAX_HOST_PROVIDER_RECEIPTS,
-  MAX_HOST_PROVIDER_RECEIPT_BYTES,
-  StructuredAgentSessionProviderReceipts
-} from '../structured-agent-session-provider-receipts'
-import {
-  MAX_PROVIDER_RECEIPT_FRAME_BYTES,
-  MAX_PROVIDER_RECEIPT_FRAME_ENTRIES,
-  MAX_PROVIDER_RECEIPT_KEY_LENGTH,
-  MAX_PROVIDER_RECEIPT_STREAMS
-} from '../../publication/subscribers/agent-session-subscriber-receipts'
 import { stat } from 'node:fs/promises'
 import { expect, it, vi } from 'vitest'
 import {
@@ -146,19 +134,7 @@ it.each([100, 1_000])(
         expect(legacy).not.toHaveBeenCalled()
 
         const fast = await openReceiptStream(rig)
-        const unblock = Promise.withResolvers<void>()
-        const held: unknown[] = []
-        const stopStalled = await rig.host.subscribe({
-          id: 'stalled',
-          sessionId: CHAT,
-          emit: () => {},
-          emitProviderReceipts: (frame) => {
-            held.push(frame)
-            return unblock.promise
-          }
-        })
-        await eventually(() => expect(held).toHaveLength(1))
-        await eventLoop()
+        const held = await openReceiptStream(rig, { paused: true })
         const bulkWrites = Promise.all(
           Array.from({ length: 50 }, (_, index) => append(bulk, `other-${index}`))
         )
@@ -169,7 +145,7 @@ it.each([100, 1_000])(
           .filter((update) => typeof update.observedAt === 'number')
         expect(stamps).toHaveLength(count)
         expect(fast.frames.slice(1).every((frame) => !frame.replace)).toBe(true)
-        expect(held).toHaveLength(1)
+        expect(held.frames).toHaveLength(1)
         expect(legacy).not.toHaveBeenCalled()
         await append(journal, 'ordinary-content')
         await eventually(() =>
@@ -182,11 +158,10 @@ it.each([100, 1_000])(
         expect(fast.frames.at(-1)?.updates).toEqual([
           { clientMessageId: id, observedAt: NOW + 100 }
         ])
-        stopStalled()
-        unblock.resolve()
+        held.close()
         fast.close()
         stopLegacy()
-        expect(held).toHaveLength(1)
+        expect(held.frames).toHaveLength(1)
       } finally {
         await bulk.close()
       }
@@ -196,91 +171,3 @@ it.each([100, 1_000])(
   },
   30_000
 )
-
-it('bounds handovers and delivery by chat, host and stream, including worst-case escaped keys', async () => {
-  const rig = await createQueuedMessageTestRig()
-  try {
-    await rig.workingSend()
-    const { sessions } = rig.host.collaboratorsForTests()
-    const session = sessions.get(CHAT)!
-    const { journal, child } = session
-    let owner = child!
-    const index = new StructuredAgentSessionProviderReceipts(
-      () => ({ ...session, child: owner }),
-      () => owner.fence
-    )
-    const streams: (() => void)[] = []
-    try {
-      for (let stream = 0; stream < MAX_PROVIDER_RECEIPT_STREAMS; stream++) {
-        streams.push(index.subscribe('unrelated', () => {})!.close)
-      }
-      expect(index.subscribe(CHAT, () => {})).toBeUndefined()
-      streams.pop()!()
-      const frames: AgentSessionProviderReceiptFrame[] = []
-      const subscriber = index.subscribe(CHAT, (frame) => void frames.push(frame))!
-      subscriber.open()
-      await eventLoop()
-
-      const make = (number: number) => ({
-        clientMessageId: String(number).padStart(MAX_PROVIDER_RECEIPT_KEY_LENGTH, '\u0000'),
-        fence: child!.fence,
-        handoverCursor: { epoch: journal.physicalCursor().epoch, sequence: number },
-        attempt: number,
-        observedAt: NOW
-      })
-      const add = (chat: string, number: number) => {
-        const observation = make(number)
-        index.register(chat, journal, owner, observation.clientMessageId, observation)
-        index.stamp(chat, owner, observation)
-      }
-      for (const capacity of [16, 160, MAX_PROVIDER_RECEIPT_FRAME_ENTRIES]) {
-        frames.length = 0
-        for (let number = 0; number < capacity; number++) {
-          add(CHAT, number)
-          index.stamp(CHAT, owner, make(number))
-        }
-        await eventLoop()
-        expect(frames).toHaveLength(1)
-        expect(frames[0]).toMatchObject({ replace: false, revision: expect.any(Number) })
-        expect(frames[0]!.updates).toHaveLength(capacity)
-        expect(Buffer.byteLength(JSON.stringify(frames[0]), 'utf8')).toBeLessThanOrEqual(
-          MAX_PROVIDER_RECEIPT_FRAME_BYTES
-        )
-        index.retire(CHAT)
-        await eventLoop()
-        expect(frames[1]).toMatchObject({ replace: true, updates: [] })
-      }
-
-      for (let indexNo = 0; indexNo < MAX_HOST_PROVIDER_RECEIPTS; indexNo++) {
-        const chat = `other-${Math.floor(indexNo / MAX_PROVIDER_RECEIPT_FRAME_ENTRIES)}`
-        add(chat, indexNo)
-      }
-      const revision = frames.at(-1)!.revision
-      add(CHAT, 0)
-      await eventLoop()
-      expect(frames.at(-1)!.revision).toBe(revision)
-      index.retire('other-0')
-      for (let number = 0; number <= MAX_PROVIDER_RECEIPT_FRAME_ENTRIES; number++) {
-        add(CHAT, number)
-      }
-      await eventLoop()
-      expect(frames.at(-1)!.updates).toHaveLength(MAX_PROVIDER_RECEIPT_FRAME_ENTRIES)
-      const preceding = frames.at(-1)!.revision
-      owner = { ...owner }
-      index.revalidate(CHAT)
-      index.stamp(CHAT, child!, make(0))
-      await eventLoop()
-      expect(frames.at(-1)).toMatchObject({ replace: true, revision: preceding + 1, updates: [] })
-      subscriber.close()
-      expect(MAX_HOST_PROVIDER_RECEIPT_BYTES).toBe(116 * 1024 * 1024)
-    } finally {
-      for (const close of streams) {
-        close()
-      }
-      index.close()
-    }
-    expect(index.subscribe(CHAT, () => {})).toBeUndefined()
-  } finally {
-    await rig.dispose()
-  }
-})

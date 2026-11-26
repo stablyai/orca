@@ -28,6 +28,8 @@ type RuntimeEnvironmentSubscriptionCallbacks = {
 }
 
 export type RuntimeEnvironmentSubscriptionHandle = {
+  /** Local receipt reader membership. Null means use the ordinary echo path. */
+  receiptSubscription?: string | null
   unsubscribe: () => void
   sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => void
 }

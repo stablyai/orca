@@ -31,13 +31,13 @@ async function faultingWriter(root: string): Promise<string> {
       }
       if (fs.existsSync(trigger) && (sql === 'BEGIN IMMEDIATE' || sql === 'COMMIT')) {
         const fault = fs.readFileSync(trigger, 'utf8')
-        if ((sql === 'COMMIT') === (fault !== 'disk-full')) {
+        if ((sql === 'COMMIT') === (fault !== 'disk-full-at-begin')) {
           fs.unlinkSync(trigger)
           if (fault === 'after') exec.call(this, 'COMMIT')
           if (fault === 'connection') this.close()
           failRollback = fault === 'rollback'
           throw Object.assign(new Error('injected ' + fault), {
-            code: 'ERR_SQLITE_ERROR', errcode: fault === 'disk-full' ? 13 : 10
+            code: 'ERR_SQLITE_ERROR', errcode: fault.startsWith('disk-full') ? 13 : 10
           })
         }
       }
@@ -49,7 +49,7 @@ async function faultingWriter(root: string): Promise<string> {
   return path
 }
 
-it.each(['disk-full', 'before', 'after', 'rollback', 'connection'])(
+it.each(['disk-full-at-begin', 'disk-full-at-commit', 'before', 'after', 'rollback', 'connection'])(
   'keeps ordinary write disposition and durable event order under %s with or without receipts',
   async (fault) => {
     const run = async (receipts: boolean) => {

@@ -36,6 +36,7 @@ export class StructuredAgentSessionHost {
     deps: () => this.deps,
     now: () => this.now()
   })
+  readonly providerReceipts = this.sessions.providerReceipts
   private readonly queued = wireQueuedMessages(this.sessions, () => this.mutationContext())
   // Journal publication renews idle activity.
   private readonly clientDelivery = new StructuredAgentSessionClientDelivery(

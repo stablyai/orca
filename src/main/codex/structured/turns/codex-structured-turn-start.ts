@@ -229,7 +229,8 @@ export async function dispatchCodexTurn(
     sessionId: string
     handover?: () => JournalHandoverIdentity | undefined
   },
-  timeoutMs: number | undefined
+  timeoutMs: number | undefined,
+  now: () => number
 ): Promise<AgentSessionDispatchOutcome> {
   let answer: { turnId: string | null; via: AgentJournalTurnJoin } | false
   // Capture wire order at reply receipt, before async continuations run.
@@ -250,7 +251,7 @@ export async function dispatchCodexTurn(
           clientMessageId: input.clientMessageId,
           ...handover,
           fence,
-          observedAt: Date.now()
+          observedAt: now()
         })
       }
     }

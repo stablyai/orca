@@ -71,20 +71,18 @@ export class AgentSessionSubscribers {
   open(
     input: AgentSessionSubscribeInput & { journal: AgentSessionJournal; fence: number }
   ): () => void {
-    const { journal, emitProviderReceipts, ...fields } = input
+    const { journal, attachProviderReceipts, ...fields } = input
     const session = this.bySession.get(input.sessionId) ?? new Map<string, Subscriber>()
     const replaced = session.get(input.id)
+    const receipts = attachProviderReceipts?.(() => journal.cursor())
     if (replaced) {
       replaced.closeProviderReceipts?.()
       this.lanes.clear(replaced)
     }
-    const receipts = emitProviderReceipts
-      ? this.hooks.subscribeProviderReceipts?.(input.sessionId, emitProviderReceipts)
-      : undefined
     const liveCursor = journal.cursor()
     const subscriber: Subscriber = {
       ...fields,
-      openProviderReceipts: receipts?.open,
+      openProviderReceipts: receipts?.reachedHead,
       closeProviderReceipts: receipts?.close,
       readForkMarker: () => this.hooks.readForkMarker?.(fields.sessionId),
       cursor: input.cursor ?? { epoch: liveCursor.epoch, sequence: 0 },
@@ -104,7 +102,9 @@ export class AgentSessionSubscribers {
     this.promptSuggestions.opened(subscriber)
     const { sessionId, id } = subscriber
     return () => {
-      if (this.isActive(subscriber)) {
+      // An asynchronous local receipt subscription can finish after its replacement opens.
+      // Its disposer owns only that registration. Preserve the legacy stream cleanup semantics.
+      if (!attachProviderReceipts || this.isActive(subscriber)) {
         this.close(sessionId, id)
       }
     }

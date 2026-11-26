@@ -244,7 +244,8 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
           input,
           () => this.sessions.get(input.sessionId) === session
         ),
-        this.deps.requestTimeoutMs
+        this.deps.requestTimeoutMs,
+        this.deps.now ?? Date.now
       )
       this.deps.onEvent?.({
         type: 'options-reported',

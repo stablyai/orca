@@ -1,4 +1,4 @@
-import type { ProviderReceiptEmitter } from './agent-session-subscriber-receipts'
+import type { ProviderReceiptInterest } from '../receipts/provider-receipt-readers'
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
 import type { StructuredAgentSessionObservedWork } from '../../observations/structured-agent-session-observed-work'
@@ -14,7 +14,7 @@ import type { AgentJournalCursor } from '../../../../../shared/agent-session/jou
 import type { AgentSessionSubscribeEvent } from '../../../../../shared/agent-session/agent-session-wire'
 
 export type AgentSessionSubscribeInput = {
-  emitProviderReceipts?: ProviderReceiptEmitter
+  attachProviderReceipts?: (cursor: () => AgentJournalCursor) => ProviderReceiptInterest | undefined
   commandsOnRequest?: boolean
   id: string
   sessionId: string
@@ -62,10 +62,6 @@ export type Subscriber = {
   SubscriberFieldState
 
 export type AgentSessionSubscribersHooks = SubscriberFieldHooks & {
-  subscribeProviderReceipts?: (
-    sessionId: string,
-    emit: ProviderReceiptEmitter
-  ) => { open: () => void; close: () => void } | undefined
   readLiveText?: (sessionId: string) => readonly AgentJournalRenderItem[]
   readForkMarker?: (sessionId: string) => ForkMarker | undefined
   readForkJournal?: (sessionId: string) => AgentSessionJournal | undefined

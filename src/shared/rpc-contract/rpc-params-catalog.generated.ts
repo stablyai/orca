@@ -981,10 +981,7 @@ import {
 } from './structured-agent-session/structured-agent-session-queued-edit-params'
 import { RenameParams } from './structured-agent-session/structured-agent-session-rename-params'
 import { SendRecordedParams } from './structured-agent-session/structured-agent-session-send-recorded-params'
-import {
-  AckProviderReceiptsParams,
-  SubscribeParams
-} from './structured-agent-session/structured-agent-session-subscribe-params'
+import { SubscribeParams } from './structured-agent-session/structured-agent-session-subscribe-params'
 import { CancelUsageLimitContinueParams } from './structured-agent-session/usage-limit-continue-params'
 import { CreateAgentSessionParams, EnsureAgentSessionParams } from './terminal/agent-session-params'
 import { TerminalInferCodexQuestionSkip } from './terminal/terminal-codex-question-params'
@@ -1182,7 +1179,6 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentCliUpdate.subscribe': null,
   'agentHooks.prepareCodexForWslPane': PrepareCodexForWslPaneParams,
   'agentSession.accountUsage': OptionsParams,
-  'agentSession.ackProviderReceipts': AckProviderReceiptsParams,
   'agentSession.acknowledgeAttention': AcknowledgeAttentionParams,
   'agentSession.agents': AgentsParams,
   'agentSession.approveAutoReviewDenial': AutoReviewApprovalParams,
