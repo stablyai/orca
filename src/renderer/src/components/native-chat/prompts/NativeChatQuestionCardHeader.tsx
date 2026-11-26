@@ -14,18 +14,17 @@ export function nativeChatQuestionCardLabel(
   if (total <= 1) {
     return question.question
   }
-  return t(
-    'components.native-chat.question.stepLabel',
-    '{{value0}}, {{value1}} of {{value2}}: {{value3}}',
-    {
-      value0:
-        question.header ||
-        t('components.native-chat.question.step', 'Step {{value0}}', { value0: index + 1 }),
-      value1: index + 1,
-      value2: total,
-      value3: question.question
-    }
-  )
+  const name =
+    question.header && question.header !== question.question
+      ? question.header + ': ' + question.question
+      : question.question
+  return [
+    name,
+    t('components.native-chat.question.stepOf', '{{value0}} of {{value1}}', {
+      value0: index + 1,
+      value1: total
+    })
+  ].join(', ')
 }
 
 export type NativeChatQuestionStep = { answered: boolean }

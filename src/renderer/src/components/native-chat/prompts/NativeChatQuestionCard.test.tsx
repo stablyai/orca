@@ -101,6 +101,7 @@ describe('NativeChatQuestionCard', () => {
     })
 
     expect(container.textContent?.match(/Which slice should I open first\?/g)).toHaveLength(1)
+    expect(card().getAttribute('aria-label')).toBe('Which slice should I open first?, 1 of 2')
   })
 
   it('arrows past a title checkbox into the multiline answer and leaves only at its text edges', () => {
@@ -266,7 +267,7 @@ describe('NativeChatQuestionCard', () => {
     const onAnswer = vi.fn()
     renderCard({ prompt: { questions: [question('One'), question('Two')] }, onAnswer })
     expect(document.activeElement).toBe(card())
-    expect(card().getAttribute('aria-label')).toBe('One, 1 of 2: One?')
+    expect(card().getAttribute('aria-label')).toBe('One: One?, 1 of 2')
     expect(optionRows().map((row) => row.getAttribute('aria-pressed'))).toEqual(['false', 'false'])
     // Enter on the card with nothing answered neither picks option 1 nor moves on.
     pressKey({ key: 'Enter' }, card())

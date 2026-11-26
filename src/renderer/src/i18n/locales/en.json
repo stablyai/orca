@@ -21932,8 +21932,7 @@
         "previous": "Previous question",
         "nextQuestion": "Next question",
         "back": "Back",
-        "skipAndSubmit": "Skip and submit",
-        "stepLabel": "{{value0}}, {{value1}} of {{value2}}: {{value3}}"
+        "skipAndSubmit": "Skip and submit"
       },
       "ask": {
         "awaiting": "Awaiting user input:",

@@ -20817,8 +20817,7 @@
         "previous": "Предыдущий вопрос",
         "nextQuestion": "Следующий вопрос",
         "back": "Назад",
-        "skipAndSubmit": "Пропустить и отправить",
-        "stepLabel": "{{value0}}, {{value1}} из {{value2}}: {{value3}}"
+        "skipAndSubmit": "Пропустить и отправить"
       },
       "ask": {
         "awaiting": "Ждёт вашего ответа:",
