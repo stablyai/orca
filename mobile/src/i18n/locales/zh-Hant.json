@@ -1212,6 +1212,7 @@
       "labelWithHint": "{{label}} — {{hint}}",
       "pairingInvalid": "配對已失效，請重新與電腦配對",
       "relayAccessRefreshDetail": "請在與 {{host}} 相同的網路上連線一次以更新 Relay 存取權，或重新配對",
+      "rePairDetail": "重新與電腦配對",
       "reconnecting": "正在重新連線…",
       "relayAccessRefused": "Relay 拒絕了對 {{host}} 的存取",
       "relayConnectFailed": "無法透過 Relay 連線",

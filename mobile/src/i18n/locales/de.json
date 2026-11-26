@@ -1215,6 +1215,7 @@
       "labelWithHint": "{{label}} – {{hint}}",
       "pairingInvalid": "Kopplung ungültig – erneut mit dem Computer koppeln",
       "relayAccessRefreshDetail": "Verbinde dich einmal im selben Netzwerk wie {{host}}, um den Relay-Zugriff zu erneuern, oder kopple erneut",
+      "rePairDetail": "Erneut mit dem Computer koppeln",
       "reconnecting": "Verbindung wird wiederhergestellt…",
       "relayAccessRefused": "Relay hat den Zugriff für {{host}} verweigert",
       "relayConnectFailed": "Verbindung über Relay fehlgeschlagen",

@@ -22,19 +22,20 @@ import {
 } from '../host-credentials/mobile-relay-credential-bundle'
 import { withTimeout } from '../../../src/shared/concurrency/promise-timeout-fallback'
 
-// The read queues behind every keychain mutation: a report never waits on an unrelated write, and
-// repeated taps share one read instead of stacking reads that run after their reports finished.
 const relayCredentialReads = new Map<string, Promise<MobileRelayCredentialBundle | null>>()
 
+// The read queues behind every keychain mutation, so taps share one read and one 2 s deadline per
+// host; once it lapses, later taps settle at once instead of each waiting again. A fresh read starts only after the native one settles.
 function readRelayCredentialForReport(hostId: string): Promise<MobileRelayCredentialBundle | null> {
-  let read = relayCredentialReads.get(hostId)
-  if (!read) {
-    read = readMobileRelayCredentialBundle(hostId)
-      .catch(() => null)
-      .finally(() => relayCredentialReads.delete(hostId))
-    relayCredentialReads.set(hostId, read)
+  const shared = relayCredentialReads.get(hostId)
+  if (shared) {
+    return shared
   }
-  return withTimeout(read, 2_000, null)
+  const read = readMobileRelayCredentialBundle(hostId)
+  const result = withTimeout(read, 2_000, null)
+  relayCredentialReads.set(hostId, result)
+  void read.catch(() => null).finally(() => relayCredentialReads.delete(hostId))
+  return result
 }
 
 export function createNativeDiagnosticsOperations(

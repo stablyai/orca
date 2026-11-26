@@ -96,8 +96,11 @@ export class MobileRelaySessionEstablisher {
       lastError = result.error
       this.args.onDialFailure(result.error)
       if (isExplicitCredentialRejection(result.error)) {
-        // Why: a rejected version stays invalid; retry only the later credentials.
-        this.args.controller.recordRejectedCredential(credential.version)
+        // Why: a rejected version stays invalid; retry only the later credentials. Pending is spared:
+        // its install can still commit after this refusal, and the gated reprobe retries it slowly.
+        if (!usedPending) {
+          this.args.controller.recordRejectedCredential(credential.version)
+        }
         continue
       }
       // A director 401 can be stale (it reads a store an edge-hosted host may have outgrown), so try
