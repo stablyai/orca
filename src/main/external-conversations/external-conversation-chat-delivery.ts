@@ -12,7 +12,6 @@ import { chatPaneKey, watchChatNews, type ConversationChatHost } from './externa
 import { deliverToChat } from './external-conversation-chat-send'
 import { HOST_CLOCK } from './external-conversation-host'
 import type { ConnectorMessage, ConversationKey, Delivery } from './external-conversation-types'
-import { chatPaneKey } from '../../shared/agent-session/view/structured-agent-session-projection'
 
 /** A native chat a conversation links to; chats run only on this host. */
 export type LinkableChat = {
