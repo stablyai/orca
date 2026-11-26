@@ -49,7 +49,10 @@ export function feishuResponseCard(data: FeishuCardData, botName: string, stream
   const stopped = complete || superseded || waiting
   const native = response.native
   const text = feishuResponseText(data)
-  const tools = (native?.tools ?? []).filter(
+  const tools = [
+    ...(response.history ?? []).flatMap((turn) => turn.tools),
+    ...(native?.tools ?? [])
+  ].filter(
     (tool) =>
       response.baseline?.turnItemId !== native?.turnItemId ||
       !response.baseline?.tools.some(
@@ -60,6 +63,16 @@ export function feishuResponseCard(data: FeishuCardData, botName: string, stream
     ? Math.max(0, (response.stoppedAt ?? native.completedAt ?? Date.now()) - native.startedAt)
     : undefined
   const elements: CardElement[] = []
+  const history = [
+    ...new Set(
+      (response.history ?? []).flatMap((turn) =>
+        turn.messages.map((entry) => entry.text).filter((text) => text.trim())
+      )
+    )
+  ].join('\n\n')
+  if (history) {
+    elements.push(prose(history))
+  }
   if (tools.length) {
     const visible = stopped ? tools : tools.slice(-3)
     const panel = buildStreamingToolUseActivePanel({
@@ -94,6 +107,35 @@ export function feishuResponseCard(data: FeishuCardData, botName: string, stream
       ...prose(text || (tools.length ? '正在执行上述步骤…' : '等待 Agent 生成回复…')),
       element_id: 'answer'
     })
+  }
+  const question = response.question
+  if (question?.inline && !superseded) {
+    const questionElements: CardElement[] = [
+      { tag: 'div', text: { tag: 'plain_text', content: question.text ?? '' } }
+    ]
+    if (question.note) {
+      questionElements.push({ tag: 'div', text: { tag: 'plain_text', content: question.note } })
+    }
+    if (question.pending) {
+      for (const [index, option] of (question.options ?? []).entries()) {
+        questionElements.push({
+          tag: 'button',
+          text: { tag: 'plain_text', content: option.label },
+          type: index === 0 ? 'primary_filled' : 'default',
+          behaviors: [
+            {
+              type: 'callback',
+              value: { orca: 'answer', option: option.id, question: question.id }
+            }
+          ]
+        })
+      }
+    }
+    if (response.continuation && !question.pending) {
+      elements.splice(-1, 0, ...questionElements)
+    } else {
+      elements.push(...questionElements)
+    }
   }
   const status = superseded
     ? '已转至最新提问'

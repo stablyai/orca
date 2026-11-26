@@ -55,6 +55,12 @@ export class FeishuInbox {
   cardkit = (...args: Parameters<FeishuCardStore['cardkit']>) => this.cards.cardkit(...args)
   cardSequence = (...args: Parameters<FeishuCardStore['sequence']>) => this.cards.sequence(...args)
   getCard = (...args: Parameters<FeishuCardStore['get']>) => this.cards.get(...args)
+  replyMessage = (...args: Parameters<FeishuCardStore['replyMessage']>) =>
+    this.cards.replyMessage(...args)
+  questionResponse = (...args: Parameters<FeishuCardStore['questionResponse']>) =>
+    this.cards.questionResponse(...args)
+  questionContinuation = (...args: Parameters<FeishuCardStore['questionContinuation']>) =>
+    this.cards.questionContinuation(...args)
   updateResponse = (...args: Parameters<FeishuResponseStore['update']>) =>
     this.responses.update(...args)
   putCard = (...args: Parameters<FeishuCardStore['put']>) => this.cards.put(...args)
@@ -63,19 +69,12 @@ export class FeishuInbox {
   pendingCards = (...args: Parameters<FeishuCardStore['pending']>) => this.cards.pending(...args)
   claimCard = (...args: Parameters<FeishuCardStore['claim']>) => this.cards.claim(...args)
   closeCard = (...args: Parameters<FeishuCardStore['close']>) => this.cards.close(...args)
-  closePrompts(
-    account: string,
-    external: string,
-    keep: string | null,
-    note: string,
-    kind: 'prompt' | 'async-question' = 'prompt'
-  ) {
-    this.cards.closePrompts(account, external, keep, note, kind)
-  }
+  closePrompts = (...args: Parameters<FeishuCardStore['closePrompts']>) =>
+    this.cards.closePrompts(...args)
   sendingCard(account: string, id: string, now: number) {
     return this.cards.sending(account, id, now)
   }
-  postedCard(account: string, id: string, revision: number, message: string) {
+  postedCard(account: string, id: string, revision: number, message: string | null) {
     this.cards.posted(account, id, revision, message)
   }
   close(): void {

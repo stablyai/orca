@@ -1,7 +1,10 @@
 import { z } from 'zod'
+import { createHash } from 'node:crypto'
 import type Database from '../sqlite/sync-database'
 
 import { cardData, type FeishuCardData } from './feishu-card-data'
+import { responseCardId, responseDestination } from './feishu-card-links'
+import { syncInlineQuestion } from './feishu-inline-question-state'
 const row = z.object({
   id: z.string(),
   external: z.string(),
@@ -22,6 +25,9 @@ export type FeishuCardRow = z.infer<typeof row>
 
 export class FeishuCardStore {
   constructor(private readonly db: Database.Database) {
+    db.exec(
+      'CREATE TABLE IF NOT EXISTS feishu_response_links(account TEXT NOT NULL REFERENCES bindings(account) ON DELETE CASCADE, delivery TEXT NOT NULL, card TEXT NOT NULL, PRIMARY KEY(account,delivery))'
+    )
     db.exec(`CREATE TABLE IF NOT EXISTS feishu_cards(account TEXT NOT NULL REFERENCES bindings(account) ON DELETE CASCADE,
       id TEXT NOT NULL,external TEXT NOT NULL,original TEXT NOT NULL,chat TEXT NOT NULL,message TEXT,
       body TEXT NOT NULL,revision INTEGER NOT NULL DEFAULT 1,sent INTEGER NOT NULL DEFAULT 0,
@@ -70,7 +76,7 @@ export class FeishuCardStore {
         throw new Error('Card identity changed')
       }
       if (data.kind !== 'status' && data.kind !== 'response') {
-        this.syncQuestion(account, existing)
+        syncInlineQuestion(this.db, this, account, existing)
         return
       }
       this.db
@@ -85,45 +91,42 @@ export class FeishuCardStore {
         )
         .run(account, id, external, original, chat, body)
     }
-    if (data.kind === 'async-question') {
-      this.syncQuestion(account, this.get(account, id)!)
+    if (data.kind === 'async-question' || data.inline) {
+      syncInlineQuestion(this.db, this, account, this.get(account, id)!)
     }
   }
-  private syncQuestion(account: string, question: FeishuCardRow) {
-    if (cardData.parse(JSON.parse(question.body)).kind !== 'async-question') {
-      return
+  questionResponse(account: string, id: string) {
+    const q = this.get(account, id)
+    return (
+      q &&
+      responseDestination(
+        this,
+        account,
+        responseCardId(this.db, account, q.original),
+        q.external,
+        q.chat
+      )
+    )
+  }
+  replyMessage(account: string, mid: string) {
+    return this.get(account, responseCardId(this.db, account, mid))?.message ?? mid
+  }
+  questionContinuation(account: string, id: string) {
+    const q = this.get(account, id),
+      parent = this.questionResponse(account, id)
+    if (
+      !q ||
+      q.state !== 'claimed' ||
+      !parent?.message ||
+      cardData.parse(JSON.parse(parent.body)).response?.question?.id !== id
+    ) {
+      return null
     }
-    let id = `response:${question.original}`
-    const seen = new Set<string>()
-    while (!seen.has(id)) {
-      seen.add(id)
-      const card = this.get(account, id)
-      if (!card || card.external !== question.external || card.chat !== question.chat) {
-        return
-      }
-      const data = cardData.parse(JSON.parse(card.body))
-      if (!data.response) {
-        return
-      }
-      if (data.response.supersededBy) {
-        id = data.response.supersededBy
-        continue
-      }
-      const current = data.response.question
-      if (current && current.id !== question.id) {
-        const newer = this.db
-          .prepare(
-            'SELECT 1 FROM feishu_cards WHERE account=? AND id=? AND rowid>(SELECT rowid FROM feishu_cards WHERE account=? AND id=?)'
-          )
-          .get(account, question.id, account, current.id)
-        if (!newer) {
-          return
-        }
-      }
-      data.response.question = { id: question.id, pending: question.state === 'open' }
-      this.put(account, card.id, card.external, card.original, card.chat, data)
-      return
-    }
+    const mid = `om_orca_choice_${createHash('sha256').update(id).digest('hex')}`
+    this.db
+      .prepare('INSERT OR IGNORE INTO feishu_response_links(account,delivery,card) VALUES(?,?,?)')
+      .run(account, mid, parent.id)
+    return { mid, message: parent.message }
   }
   get(account: string, id: string) {
     const found = this.db
@@ -135,7 +138,7 @@ export class FeishuCardStore {
     return Boolean(
       this.db
         .prepare(
-          "SELECT 1 FROM feishu_cards WHERE account=? AND original=? AND id LIKE 'choices:%' AND message IS NULL AND review=0 LIMIT 1"
+          "SELECT 1 FROM feishu_cards WHERE account=? AND original=? AND id LIKE 'choices:%' AND message IS NULL AND revision>sent AND review=0 LIMIT 1"
         )
         .get(account, original)
     )
@@ -148,15 +151,31 @@ export class FeishuCardStore {
       .all(account)
       .map((r) => row.parse(r))
   }
-  claim(account: string, message: string, chat: string, option: string) {
+  claim(account: string, message: string, chat: string, option: string, questionId?: string) {
     const found = this.db
       .prepare('SELECT * FROM feishu_cards WHERE account=? AND message=? AND chat=?')
       .get(account, message, chat)
     if (!found) {
       return null
     }
-    const card = row.parse(found),
+    let card = row.parse(found),
       data = cardData.parse(JSON.parse(card.body))
+    if (data.kind === 'response') {
+      if (
+        !questionId ||
+        data.response?.supersededBy ||
+        data.response?.question?.id !== questionId ||
+        !data.response.question.inline
+      ) {
+        return null
+      }
+      const control = this.get(account, questionId)
+      if (!control || control.external !== card.external || control.chat !== chat) {
+        return null
+      }
+      card = control
+      data = cardData.parse(JSON.parse(card.body))
+    }
     if (
       card.state !== 'open' ||
       card.review ||
@@ -181,7 +200,7 @@ export class FeishuCardStore {
       ).changes
     const claimed = changed ? this.get(account, card.id) : null
     if (claimed) {
-      this.syncQuestion(account, claimed)
+      syncInlineQuestion(this.db, this, account, claimed)
     }
     return claimed
   }
@@ -196,7 +215,7 @@ export class FeishuCardStore {
         "UPDATE feishu_cards SET body=?,state='closed',revision=revision+1 WHERE account=? AND id=?"
       )
       .run(JSON.stringify({ ...data, note }), account, id)
-    this.syncQuestion(account, this.get(account, id)!)
+    syncInlineQuestion(this.db, this, account, this.get(account, id)!)
   }
   closePrompts(
     account: string,
@@ -234,7 +253,7 @@ export class FeishuCardStore {
     }
     return true
   }
-  posted(account: string, id: string, revision: number, message: string) {
+  posted(account: string, id: string, revision: number, message: string | null) {
     this.db
       .prepare('UPDATE feishu_cards SET message=?,sent=MAX(sent,?) WHERE account=? AND id=?')
       .run(message, revision, account, id)

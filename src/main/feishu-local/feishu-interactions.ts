@@ -74,7 +74,8 @@ export class FeishuInteractions {
       this.b.account,
       click.message_id,
       click.chat_id,
-      click.option
+      click.option,
+      click.question
     )
     try {
       if (card) {
@@ -239,7 +240,7 @@ export class FeishuInteractions {
           await this.store.closeCard(b.account, card.id, '选项已失效')
           continue
         }
-        if ((data.kind === 'choices' || data.kind === 'async-question') && card.message) {
+        if (data.kind === 'choices' || data.kind === 'async-question') {
           if (
             data.kind === 'async-question' &&
             !this.asyncQuestions.isCurrent(data, card.external)
@@ -252,14 +253,22 @@ export class FeishuInteractions {
             await this.store.closeCard(b.account, card.id, '会话已结束')
             continue
           }
-          await this.store.putRoute(b.account, card.message, { ...route, original: card.message })
+          const continuation = data.inline
+            ? await this.store.questionContinuation(b.account, card.id)
+            : null
+          const mid = data.inline ? continuation?.mid : card.message
+          if (!mid) {
+            await this.store.closeCard(b.account, card.id, '此问题已结束')
+            continue
+          }
+          await this.store.putRoute(b.account, mid, { ...route, original: mid })
           await this.store.accept(b, {
             type: 'im.message.receive_v1',
             chat_type: route.group ? 'group' : 'p2p',
             message_type: 'text',
             create_time: String(Date.now()),
             event_id: `choice:${card.id}`,
-            message_id: card.message,
+            message_id: mid,
             chat_id: card.chat,
             sender_id: b.owner!,
             content: option.answer ?? option.label

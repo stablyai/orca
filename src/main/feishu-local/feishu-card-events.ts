@@ -9,11 +9,15 @@ const click = z.object({
   action_tag: z.literal('button'),
   action_value: z.string()
 })
-const choice = z.object({ orca: z.literal('answer'), option: z.string().min(1).max(256) })
+const choice = z.object({
+  orca: z.literal('answer'),
+  option: z.string().min(1).max(256),
+  question: z.string().min(1).max(1024).optional()
+})
 export function readFeishuClick(line: string) {
   try {
     const event = click.parse(JSON.parse(line))
-    return { ...event, option: choice.parse(JSON.parse(event.action_value)).option }
+    return { ...event, ...choice.parse(JSON.parse(event.action_value)) }
   } catch {
     return null
   }

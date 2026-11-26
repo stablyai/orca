@@ -136,6 +136,7 @@ export class FeishuNativeProjection {
     }
     native.tools = native.tools.slice(-60)
     native.messages = native.messages.slice(-20)
+    native.deliveries = [delivery.deliveryId, ...continuations]
     return { original: delivery.deliveryId, continuations, native }
   }
 }

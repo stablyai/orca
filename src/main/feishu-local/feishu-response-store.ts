@@ -1,29 +1,13 @@
 import type Database from '../sqlite/sync-database'
 import { cardData, type FeishuResponseChange } from './feishu-card-data'
 import type { FeishuCardStore } from './feishu-card-store'
+import { responseCardId, responseDestination } from './feishu-card-links'
 
 export class FeishuResponseStore {
   constructor(
     private readonly db: Database.Database,
     private readonly cards: FeishuCardStore
   ) {}
-
-  private destination(account: string, id: string, external: string, chat: string) {
-    const seen = new Set<string>()
-    while (!seen.has(id)) {
-      seen.add(id)
-      const card = this.cards.get(account, id)
-      if (!card || card.external !== external || card.chat !== chat) {
-        return null
-      }
-      const next = cardData.parse(JSON.parse(card.body)).response?.supersededBy
-      if (!next) {
-        return card
-      }
-      id = next
-    }
-    return null
-  }
 
   private handoff(
     account: string,
@@ -33,7 +17,13 @@ export class FeishuResponseStore {
     change: Extract<FeishuResponseChange, { kind: 'handoff' }>
   ) {
     const target = this.cards.get(account, id)
-    const previous = this.destination(account, `response:${change.from}`, external, chat)
+    const previous = responseDestination(
+      this.cards,
+      account,
+      responseCardId(this.db, account, change.from),
+      external,
+      chat
+    )
     const newer =
       previous &&
       this.db
@@ -90,7 +80,7 @@ export class FeishuResponseStore {
     chat: string,
     change: FeishuResponseChange
   ) {
-    let id = original ? `response:${original}` : null
+    let id = original ? responseCardId(this.db, account, original) : null
     if (!id) {
       const turn = change.kind !== 'start' && 'turn' in change ? change.turn : undefined
       const found = this.db
@@ -108,8 +98,8 @@ export class FeishuResponseStore {
       return this.handoff(account, id, external, chat, change)
     }
     let card = this.cards.get(account, id)
-    if (card && change.kind !== 'begin') {
-      card = this.destination(account, id, external, chat)
+    if (card && (change.kind !== 'begin' || id !== `response:${original}`)) {
+      card = responseDestination(this.cards, account, id, external, chat)
       if (!card) {
         return null
       }
@@ -129,6 +119,50 @@ export class FeishuResponseStore {
     const response = data.response
     if (!response || (card && (card.external !== external || card.chat !== chat))) {
       return null
+    }
+    if (
+      original &&
+      change.kind === 'begin' &&
+      id !== `response:${original}` &&
+      response.continuation !== original
+    ) {
+      response.history = [
+        ...(response.history ?? []),
+        {
+          turnItemId: response.native?.turnItemId ?? card?.id ?? original,
+          startedAt: response.native?.startedAt ?? response.turn ?? 0,
+          messages: [
+            ...(response.native?.messages ?? []),
+            ...response.progress,
+            ...(response.final ? [{ id: 'previous-final', text: response.final }] : [])
+          ],
+          tools: response.native?.tools ?? []
+        }
+      ].slice(-10)
+      response.progress = []
+      response.continuation = original
+      response.native = undefined
+      response.final = undefined
+      response.phase = 'working'
+      response.turn = undefined
+      data.text = '正在处理'
+    }
+    if (
+      response.continuation &&
+      ((change.kind === 'native' && !change.value.deliveries?.includes(response.continuation)) ||
+        (change.kind === 'final' &&
+          original !== response.continuation &&
+          !response.native?.deliveries?.includes(response.continuation)))
+    ) {
+      return id
+    }
+    if (
+      change.kind === 'final' &&
+      change.turnItemId &&
+      response.native &&
+      change.turnItemId !== response.native.turnItemId
+    ) {
+      return id
     }
     // A late activity, reconnect snapshot or retried progress must never reopen a final answer.
     if (response.supersededBy || (response.final !== undefined && change.kind !== 'native')) {

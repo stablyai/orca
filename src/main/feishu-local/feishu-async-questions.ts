@@ -160,6 +160,7 @@ export class FeishuAsyncQuestions {
       route.chat,
       {
         kind: 'async-question',
+        inline: true,
         promptId: question.itemId,
         sessionId: summary.sessionId,
         text: question.text + (options.length ? '' : '\n请在本话题中回复答案，或在 Orca 中回答。'),

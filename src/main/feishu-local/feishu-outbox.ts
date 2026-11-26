@@ -102,7 +102,7 @@ export async function drainFeishuOutbox(
           await replyFeishu(
             b.app,
             b.account,
-            row.deliveryId,
+            await inbox.replyMessage(b.account, row.deliveryId),
             chat,
             { type: 'file', content: { file_key: key } },
             'file',
@@ -121,6 +121,7 @@ export async function drainFeishuOutbox(
         chat,
         {
           kind: 'final',
+          turnItemId: fill.turnItemId ?? undefined,
           text:
             fill.answerDeliveryId === row.deliveryId && fill.outcome !== 'quiet'
               ? fill.prose || outcomeSentence(fill.outcome, 'Orca')

@@ -11,6 +11,7 @@ export const nativeResponse = z.object({
   turnItemId: z.string(),
   startedAt: z.number(),
   completedAt: z.number().optional(),
+  deliveries: z.array(z.string()).optional(),
   messages: z.array(z.object({ id: z.string(), text: z.string() })),
   tools: z.array(nativeStep)
 })

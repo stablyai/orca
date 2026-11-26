@@ -179,7 +179,12 @@ export class FeishuLocalHost {
         externalId,
         mid,
         route?.chat ?? c.binding.chat!,
-        { kind: 'choices', text, options: choices.map((label, i) => ({ id: String(i), label })) }
+        {
+          kind: 'choices',
+          inline: true,
+          text,
+          options: choices.map((label, i) => ({ id: String(i), label }))
+        }
       )
       c.wake()
       return { status: 'queued' as const }

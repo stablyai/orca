@@ -14,7 +14,7 @@ import {
 } from './upstream/cardkit-transport'
 
 export class FeishuCardKit {
-  private readonly sent = new Map<string, { layout: string; text: string }>()
+  private readonly sent = new Map<string, { layout: string; text: string; complete: boolean }>()
   constructor(
     private readonly store: FeishuStore,
     private readonly b: Binding,
@@ -68,6 +68,7 @@ export class FeishuCardKit {
       trace: data.response?.native ? undefined : data.response?.trace,
       complete,
       question: data.response?.question,
+      history: data.response?.history,
       answerFormat: text.includes('![') || /<img\b/i.test(text) ? 'plain' : 'markdown',
       hasText: Boolean(text),
       phase: data.response?.phase
@@ -77,13 +78,16 @@ export class FeishuCardKit {
       await setCardStreamingMode(this.request, entity, false, await sequence())
       await updateCardKitCard(this.request, entity, content, await sequence())
     } else if (!previous || previous.layout !== layout) {
+      if (!previous || previous.complete) {
+        await setCardStreamingMode(this.request, entity, true, await sequence())
+      }
       await updateCardKitCard(this.request, entity, content, await sequence())
     } else if (text !== previous.text && text && !text.includes('![') && !/<img\b/i.test(text)) {
       await streamCardContent(this.request, entity, text, await sequence())
     } else if (text !== previous.text) {
       await updateCardKitCard(this.request, entity, content, await sequence())
     }
-    this.sent.set(card.id, { layout, text })
+    this.sent.set(card.id, { layout, text, complete })
     if (this.sent.size > 128) {
       this.sent.delete(this.sent.keys().next().value!)
     }

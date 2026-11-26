@@ -43,13 +43,21 @@ export class FeishuCardDelivery {
     if (!card) {
       return null
     }
+    const data = cardData.parse(JSON.parse(card.body))
+    if (data.inline) {
+      const parent = await this.store.questionResponse(this.b.account, id)
+      const message = parent && (await this.publish(parent.id))
+      if (message) {
+        await this.store.postedCard(this.b.account, id, card.revision, null)
+      }
+      return message
+    }
     if (card.revision <= card.sent) {
       return card.message
     }
     if (!(await this.store.sendingCard(this.b.account, id, Date.now()))) {
       return null
     }
-    const data = cardData.parse(JSON.parse(card.body))
     const content =
       data.kind === 'response'
         ? feishuResponseCard(data, this.name)

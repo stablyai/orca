@@ -1,12 +1,12 @@
 import { z } from 'zod'
 import { nativeResponse, type FeishuNativeResponse } from './feishu-native-data'
+const option = z.object({ id: z.string(), label: z.string(), answer: z.string().optional() })
 
 export const cardData = z.object({
   kind: z.enum(['status', 'prompt', 'choices', 'async-question', 'response']),
   text: z.string(),
-  options: z
-    .array(z.object({ id: z.string(), label: z.string(), answer: z.string().optional() }))
-    .default([]),
+  options: z.array(option).default([]),
+  inline: z.boolean().optional(),
   promptId: z.string().optional(),
   sessionId: z.string().optional(),
   note: z.string().optional(),
@@ -17,7 +17,18 @@ export const cardData = z.object({
       progress: z.array(z.object({ id: z.string(), text: z.string() })),
       trace: z.array(z.string()),
       final: z.string().optional(),
-      question: z.object({ id: z.string(), pending: z.boolean() }).optional(),
+      question: z
+        .object({
+          id: z.string(),
+          pending: z.boolean(),
+          inline: z.boolean().optional(),
+          text: z.string().optional(),
+          options: z.array(option).optional(),
+          note: z.string().optional()
+        })
+        .optional(),
+      continuation: z.string().optional(),
+      history: z.array(nativeResponse).optional(),
       native: nativeResponse.optional(),
       baseline: nativeResponse.optional(),
       supersededBy: z.string().optional(),
@@ -35,4 +46,4 @@ export type FeishuResponseChange =
   | { kind: 'status'; text: string; turn?: number | null }
   | { kind: 'trace'; text: string; turn: number }
   | { kind: 'progress'; id: string; text: string }
-  | { kind: 'final'; text: string; failed?: boolean }
+  | { kind: 'final'; text: string; failed?: boolean; turnItemId?: string }
