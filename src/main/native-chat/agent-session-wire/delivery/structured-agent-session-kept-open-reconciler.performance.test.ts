@@ -84,6 +84,8 @@ it.skipIf(process.platform === 'win32')(
       }
     }
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    // A fixed epoch, so the shared cadence's grid falls the same way on every run.
+    vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'))
     vi.resetModules()
     const relays = await import('../../../provider-relay/app-provider-relays')
     const inventory = await import('../../../provider-relay/provider-relay-launch-inventory')
@@ -98,7 +100,7 @@ it.skipIf(process.platform === 'win32')(
       idleStopMs: () => null
     })
     const starts = 20
-    const asks: number[] = []
+    const asks: { at: number; id: string }[] = []
     const records = new Map<string, ProviderRelayRunRecord>()
     const sessions = new Map<string, StructuredAgentSessionHostSession>()
     const keptOpens = new KeptOpens({
@@ -106,7 +108,7 @@ it.skipIf(process.platform === 'win32')(
       serialize: (_id, task) => task(),
       trackStart: (start) => start,
       record: (id) => {
-        asks.push(Date.now())
+        asks.push({ at: Date.now(), id })
         return records.get(id) ?? null
       },
       fence: () => 1,
@@ -148,7 +150,10 @@ it.skipIf(process.platform === 'win32')(
       await vi.advanceTimersByTimeAsync(5_000)
       await settle()
     }
-    const lastHour = new Set(asks.filter((at) => at >= hourFrom))
+    const inLastHour = asks.filter(({ at }) => at >= hourFrom)
+    const lastHour = new Set(inLastHour.map(({ at }) => at))
+    // Every waiting start is still asked.
+    expect(new Set(inLastHour.map(({ id }) => id)).size).toBe(starts)
     // At most one wakeup per 5 min for all twenty starts, not one per start (a start whose probe
     // finishes late under load waits for the next shared tick; it never adds one).
     expect(lastHour.size).toBeGreaterThan(0)
