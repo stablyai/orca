@@ -7,6 +7,7 @@ import { recoverClaudeTranscript } from './claude-transcript-recovery'
 import { claudeRecord } from '../structured/journal/claude-structured-item-translation'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { StructuredAgentSessionHistoryJournal } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
+import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
@@ -26,6 +27,17 @@ import {
 } from './claude-transcript-item-reader'
 
 const DEFAULT_CLAUDE_CATCH_UP_TIMEOUT_MS = 30_000
+/** What an import too big to land throws: retrying it unchanged lands nothing either. */
+const OVER_CAPS = new Set(['too-large', 'history-workspace-too-large'])
+/** Per chat, the transcript state and saved row a first-turn import was over the caps at. */
+const overCapsFirstTurns = new Map<string, string>()
+
+/** What would change a first-turn import's outcome: the transcript's size and write time, and
+ *  the newest row the chat holds. */
+async function firstTurnImportKey(filePath: string, leaf: string): Promise<string | undefined> {
+  const info = await stat(filePath).catch(() => null)
+  return info ? `${info.size}:${info.mtimeMs}:${leaf}` : undefined
+}
 type ClaudeHistoryView = {
   physicalCursor: AgentJournalCursor
   origin: JournalHistoryOrigin | null
@@ -54,6 +66,7 @@ export async function catchUpClaudeTranscript(input: {
   logger?: StructuredAgentSessionLogger
 }): Promise<boolean> {
   let complete = false
+  let noteOverCaps: (() => void) | undefined
   const outcome = await runHistoryCatchUp({
     agentName: 'Claude',
     scope: 'claude-transcript-catch-up',
@@ -97,100 +110,128 @@ export async function catchUpClaudeTranscript(input: {
             : undefined
         return { hasRows, newest, origin, covered, turns }
       }),
-    prepare: async ({ view, history, signal, check, yieldTurn, warn }) => {
-      // Decided from the journal first, so a chat with nothing to import touches no files.
-      const planned = await view()
-      check()
-      // Only a chat on its first turn: an older one without a saved leaf is left as it is.
-      const afterFirstPrompt =
-        input.leafUuid === '' && !planned.covered && !!input.fromFirstPrompt && planned.turns === 1
-      if (input.leafUuid === '' && !planned.covered && !afterFirstPrompt) {
-        return null
-      }
-      const claudeProjectsDir = join(input.claudeConfigDir, 'projects')
-      // A moved project can leave its transcript outside the cwd's bucket; the resolver probes both.
-      const filePath = await resolveSessionFilePath(
-        'claude',
-        input.providerSessionId,
-        { claudeProjectsDir, cwd: input.cwd },
-        signal
-      )
-      check()
-      if (!filePath) {
-        return null
-      }
-      // A first turn imported before reads on from its newest row, so a later open repeats nothing.
-      const leaf = afterFirstPrompt
-        ? ((await newestClaudeRow(history.reads, input.providerSessionId)) ?? '')
-        : input.leafUuid
-      check()
-      let leafAbsent = leaf === '' && (!!planned.covered || afterFirstPrompt)
-      const tail = leafAbsent
-        ? null
-        : await readClaudeTranscriptTail({
-            filePath,
-            leafUuid: leaf,
-            isLeaf: claudeTranscriptRowIs(leaf),
-            check,
-            onLeafAbsent: () => {
-              leafAbsent = true
-            }
-          })
-      check()
-      if (!tail && !(leafAbsent && (planned.covered || afterFirstPrompt))) {
-        warn('leaf-not-in-tail')
-        return null
-      }
-      const items = await createClaudeTranscriptItemReader(
-        history.reads,
-        input.sessionId,
-        (tail?.rows ?? []).flatMap((row) => {
-          const attachment = row.attachment
-          const source =
-            attachment && typeof attachment === 'object' && 'source_uuid' in attachment
-              ? attachment.source_uuid
-              : undefined
-          return [row.uuid, source].filter((uuid): uuid is string => typeof uuid === 'string')
-        }),
-        (tail?.rows ?? []).flatMap((row) => claudeTranscriptItemKeys(row, input.providerSessionId))
-      )
-      const staging = createClaudeTranscriptImportPlan({
-        sessionId: input.sessionId,
-        providerSessionId: input.providerSessionId,
-        epoch: history.cursor().epoch,
-        items,
-        rewound: planned.hasRows ? (tail?.rewound ?? !afterFirstPrompt) : null,
-        check
+    // An import over the caps leaves nothing behind; noted, so an unchanged chat doesn't retry it.
+    prepare: (context) =>
+      prepare(context).catch((error: unknown) => {
+        if (error instanceof Error && OVER_CAPS.has(error.message)) {
+          noteOverCaps?.()
+        }
+        throw error
       })
-      try {
-        // A tail starts after the first prompt; a whole-chain scan finds it first.
-        let prompted = !afterFirstPrompt || tail !== null
-        const restore = async (row: Record<string, unknown>) => {
-          check()
-          if (!prompted) {
-            // The chat already shows its first prompt; the active chain after it is what's missing.
-            prompted = isClaudeTranscriptRootPrompt(row)
-          } else if (!planned.covered?.has(String(row.uuid))) {
-            await items.loadRow(row, input.providerSessionId)
-            await staging.restore(row)
-          }
-        }
-        if (tail) {
-          for (const row of tail.rows) {
-            await restore(row)
-            await yieldTurn()
-          }
-        } else {
-          await recoverClaudeTranscript({ filePath, signal, restore, yieldTurn })
-        }
-        complete = true
-        return await staging.finish()
-      } finally {
-        staging.dispose()
-      }
-    }
   })
   return complete && (outcome === 'committed' || outcome === 'checked')
+
+  async function prepare({
+    view,
+    history,
+    signal,
+    check,
+    yieldTurn,
+    warn
+  }: Parameters<Parameters<typeof runHistoryCatchUp<ClaudeHistoryView>>[0]['prepare']>[0]) {
+    // Decided from the journal first, so a chat with nothing to import touches no files.
+    const planned = await view()
+    check()
+    // Only a chat on its first turn: an older one without a saved leaf is left as it is.
+    const afterFirstPrompt =
+      input.leafUuid === '' && !planned.covered && !!input.fromFirstPrompt && planned.turns === 1
+    if (input.leafUuid === '' && !planned.covered && !afterFirstPrompt) {
+      return null
+    }
+    const claudeProjectsDir = join(input.claudeConfigDir, 'projects')
+    // A moved project can leave its transcript outside the cwd's bucket; the resolver probes both.
+    const filePath = await resolveSessionFilePath(
+      'claude',
+      input.providerSessionId,
+      { claudeProjectsDir, cwd: input.cwd },
+      signal
+    )
+    check()
+    if (!filePath) {
+      return null
+    }
+    // A first turn imported before reads on from its newest row, so a later open repeats nothing.
+    const leaf = afterFirstPrompt
+      ? ((await newestClaudeRow(history.reads, input.providerSessionId)) ?? '')
+      : input.leafUuid
+    check()
+    const skipKey = afterFirstPrompt ? await firstTurnImportKey(filePath, leaf) : undefined
+    if (skipKey !== undefined && overCapsFirstTurns.get(input.sessionId) === skipKey) {
+      return null
+    }
+    const overCaps = () => {
+      if (skipKey !== undefined) {
+        overCapsFirstTurns.set(input.sessionId, skipKey)
+      }
+    }
+    noteOverCaps = overCaps
+    let leafAbsent = leaf === '' && (!!planned.covered || afterFirstPrompt)
+    const tail = leafAbsent
+      ? null
+      : await readClaudeTranscriptTail({
+          filePath,
+          leafUuid: leaf,
+          isLeaf: claudeTranscriptRowIs(leaf),
+          check,
+          onLeafAbsent: () => {
+            leafAbsent = true
+          }
+        })
+    check()
+    if (!tail && !(leafAbsent && (planned.covered || afterFirstPrompt))) {
+      // Past the tail's read budget: as over the caps as a too-large import.
+      overCaps()
+      warn('leaf-not-in-tail')
+      return null
+    }
+    const items = await createClaudeTranscriptItemReader(
+      history.reads,
+      input.sessionId,
+      (tail?.rows ?? []).flatMap((row) => {
+        const attachment = row.attachment
+        const source =
+          attachment && typeof attachment === 'object' && 'source_uuid' in attachment
+            ? attachment.source_uuid
+            : undefined
+        return [row.uuid, source].filter((uuid): uuid is string => typeof uuid === 'string')
+      }),
+      (tail?.rows ?? []).flatMap((row) => claudeTranscriptItemKeys(row, input.providerSessionId))
+    )
+    const staging = createClaudeTranscriptImportPlan({
+      sessionId: input.sessionId,
+      providerSessionId: input.providerSessionId,
+      epoch: history.cursor().epoch,
+      items,
+      rewound: planned.hasRows ? (tail?.rewound ?? !afterFirstPrompt) : null,
+      check
+    })
+    try {
+      // A tail starts after the first prompt; a whole-chain scan finds it first.
+      let prompted = !afterFirstPrompt || tail !== null
+      const restore = async (row: Record<string, unknown>) => {
+        check()
+        if (!prompted) {
+          // The chat already shows its first prompt; the active chain after it is what's missing.
+          prompted = isClaudeTranscriptRootPrompt(row)
+        } else if (!planned.covered?.has(String(row.uuid))) {
+          await items.loadRow(row, input.providerSessionId)
+          await staging.restore(row)
+        }
+      }
+      if (tail) {
+        for (const row of tail.rows) {
+          await restore(row)
+          await yieldTurn()
+        }
+      } else {
+        await recoverClaudeTranscript({ filePath, signal, restore, yieldTurn })
+      }
+      complete = true
+      return await staging.finish()
+    } finally {
+      staging.dispose()
+    }
+  }
 }
 
 /** The newest saved root row Claude's transcript names, as the chat holds it: its uuid. */
