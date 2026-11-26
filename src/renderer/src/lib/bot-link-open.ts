@@ -18,6 +18,7 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host/execution-host'
 import { reviewAccessRequest } from './bot-access-requests'
+import { openLinkedBotItem, type PendingBotItemLink } from './bot-item-link-open'
 import {
   readBotHostIds,
   readBotHostState,
@@ -111,12 +112,21 @@ async function serverThreadSession(
  * Opens the bot on whichever computer lists it. `conversation`: this computer had no chat for the
  * link's thread, so a server's bot opens the server's chat for it. A thread no computer has a chat
  * for (its message never arrived, or the chat is gone) only says so: its Home is a different chat.
+ * `botItemUid`: opens that item of the bot instead of just its Home.
  */
 export function openBotLinkHome(
   botId: string,
-  conversation: LinkConversation | null
+  conversation: LinkConversation | null,
+  botItemUid?: string
 ): Promise<void> {
   if (!conversation) {
+    if (botItemUid) {
+      return runBotThreadOpen(JSON.stringify([botId, botItemUid]), (signal) =>
+        withBotThreadOpenNavigation(signal, (navigate) =>
+          resolveBotLinkHome(botId, { botItemUid, signal, navigate })
+        )
+      )
+    }
     cancelPendingBotThreadOpen()
     return resolveBotLinkHome(botId)
   }
@@ -129,9 +139,15 @@ export function openBotLinkHome(
   )
 }
 
+type PendingThreadLink = {
+  conversation: LinkConversation
+  signal: AbortSignal
+  navigate: BotThreadNavigate
+}
+
 async function resolveBotLinkHome(
   botId: string,
-  link?: { conversation: LinkConversation; signal: AbortSignal; navigate: BotThreadNavigate }
+  link?: PendingThreadLink | PendingBotItemLink
 ): Promise<void> {
   await refreshBots()
   if (link?.signal.aborted) {
@@ -143,6 +159,10 @@ async function resolveBotLinkHome(
       const { hostId, bot } = resolution.match
       if (!link) {
         await openBotHomeTab(bot)
+        return
+      }
+      if ('botItemUid' in link) {
+        await openLinkedBotItem(bot, link)
         return
       }
       const { conversation, signal, navigate } = link
@@ -229,7 +249,14 @@ async function resolveBotLinkHome(
       return
     case 'missing':
       // An unknown or deleted bot opens nothing, as before bare links were read.
-      if (link) {
+      if (link && 'botItemUid' in link) {
+        toast.info(
+          translate(
+            'bots.deepLink.botNotHere',
+            "That bot isn't on this computer or a paired server."
+          )
+        )
+      } else if (link) {
         sayThreadMissing()
       }
   }

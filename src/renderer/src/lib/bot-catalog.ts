@@ -26,6 +26,7 @@ import {
 } from './agent-session/structured-agent-session-tab-activation'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { cancelPendingBotThreadOpen } from './agent-session/open/bot-thread-open-lifecycle'
+import type { BotThreadNavigate } from './agent-session/open/bot-thread-open-navigation'
 import { structuredAgentSessionTabId } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { appendNativeChatDraftCache } from '@/components/native-chat/drafts/native-chat-draft-views'
 import {
@@ -326,9 +327,18 @@ export function openBotHome(bot: Bot): boolean {
 /**
  * The bot's page on its Home tab, whatever tab was last open there. False when its home can't open yet.
  * `draft` is added to Home's unsent message, never sent, and its composer takes focus.
+ * `link`: the pending external link opening it, which newer navigation aborts.
  */
-export async function openBotHomeTab(bot: Bot, options?: { draft?: string }): Promise<boolean> {
-  cancelPendingBotThreadOpen()
+export async function openBotHomeTab(
+  bot: Bot,
+  options?: { draft?: string; link?: { signal: AbortSignal; navigate: BotThreadNavigate } }
+): Promise<boolean> {
+  const link = options?.link
+  // A link's own open must not abort itself.
+  if (!link) {
+    cancelPendingBotThreadOpen()
+  }
+  const navigate: BotThreadNavigate = link?.navigate ?? ((action) => action())
   // Home exists before the page opens, so the page lands on it rather than on a new terminal.
   const chatSessionId = await openBotChat(bot).catch((error: unknown) => {
     console.error('Failed to open the bot chat:', error)
@@ -338,15 +348,17 @@ export async function openBotHomeTab(bot: Bot, options?: { draft?: string }): Pr
   await useAppStore
     .getState()
     .fetchFolderWorkspaces({ runtimeEnvironmentId: runtimeTargetEnvironmentId(botTarget(bot)) })
-  if (!openBotHome(bot)) {
+  if (link?.signal.aborted || !navigate(() => openBotHome(bot))) {
     return false
   }
   if (chatSessionId) {
     const worktreeId = folderWorkspaceKey(bot.folderWorkspaceId)
     // An open Home switches here; one not in this window yet opens when the host's activation arrives.
-    if (!activateStructuredAgentSessionById({ worktreeId, sessionId: chatSessionId })) {
-      activateStructuredAgentSessionTabOnOwner(worktreeId, chatSessionId)
-    }
+    navigate(() => {
+      if (!activateStructuredAgentSessionById({ worktreeId, sessionId: chatSessionId })) {
+        activateStructuredAgentSessionTabOnOwner(worktreeId, chatSessionId)
+      }
+    })
     if (options?.draft) {
       appendNativeChatDraftCache(structuredAgentSessionDraftScopeKey(chatSessionId), options.draft)
       // The draft lands once, here: the cache reaches a mounted composer and seeds one that mounts
