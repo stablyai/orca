@@ -22,14 +22,14 @@ export function slackAnswerRoute(message: AgentJournalMessageItem): 'thread' | '
 }
 
 export function botSlackAnswerGuidance(route: 'thread' | 'run'): string {
-  const prepare = `Use \`${BOT_ORCA_CLI} bot reply --presentation-file <path> --prepare-final\` and use its printed text as your entire final answer.`
+  const prepare = `Use \`${BOT_ORCA_CLI} bot reply --presentation-file <path> --prepare-final\` and use the text printed by your last successful preparation as your entire final answer.`
   const explicit =
     route === 'thread'
       ? ' For a separate in-thread update you already owe, omit --prepare-final.'
       : ''
   return [
     'For this Slack answer, use one native visual when it helps. Use a line for evenly spaced times, bars to compare categories, or a compact table for exact values. Lead with the answer. Use only words and values approved for everyone in the conversation, including external participants.',
-    'Write a JSON file up to 12 KiB with v: 1, text (the short answer), and visual with kind, title and source. For a bar, add axis, unit, labels and series of {label, values}. For a line, use points of {at, label} in place of labels and add a UTC window of {from, to}. For a table, use columns of {label, unit?} and rows with unique text in the first column and numbers in columns with units. A bar or table can add UTC timing of {asOf} or {from, to}.',
+    'Write a JSON file up to 12 KiB with v: 1, text (the short answer), and visual with kind, title and source. Use a source name or a data filename such as regional-sales.csv, without paths or links. For a bar, add axis, unit, labels and series of {label, values}. For a line, use points of {at, label} in place of labels and add a UTC window of {from, to}. For a table, use columns of {label, unit?} and rows with unique text in the first column and numbers in columns with units. A bar or table can add UTC timing of {asOf} or {from, to}.',
     prepare + explicit,
     'If a visual adds little or you cannot prepare one, give a complete shareable answer in words.'
   ].join('\n')

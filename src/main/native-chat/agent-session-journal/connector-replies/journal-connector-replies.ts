@@ -6,10 +6,7 @@ import {
   SLACK_PRESENTATION_UNCONFIRMED,
   slackAnswerText
 } from '../../../../shared/connectors/slack-answer-presentation'
-import {
-  journalHasSlackAnswerPresentations,
-  journalSlackAnswerPresentation
-} from './journal-slack-answer-presentation'
+import { journalSlackAnswerPreparation } from './journal-slack-answer-presentation'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   answersThroughOutbox,
@@ -125,7 +122,7 @@ export function fillJournalConnectorReplies(
   const open = fillWhere(EXPECT_OPEN)
   const claimed = fillWhere(EXPECT_CLAIMED)
   const owed = fillWhere(EXPECT_CUT)
-  const answerText = new Map<string, string | undefined>()
+  const answerText = new Map<string, string | null | undefined>()
   let filled = 0
   for (const row of fills) {
     const expect = row.expect
@@ -142,15 +139,15 @@ export function fillJournalConnectorReplies(
       row.outcome === 'answered' &&
       prose &&
       prose.length <= SLACK_ANSWER_MAX_TEXT &&
-      prose.includes('\nSource: ') &&
-      journalHasSlackAnswerPresentations(db)
+      prose.includes('\nSource: ')
     ) {
       const key = JSON.stringify(presentationTurn)
       if (!answerText.has(key)) {
-        const answer = journalSlackAnswerPresentation(db, presentationTurn)
-        answerText.set(key, answer?.visual ? slackAnswerText(answer) : undefined)
+        const answer = journalSlackAnswerPreparation(db, presentationTurn)
+        answerText.set(key, answer ? slackAnswerText(answer) : answer)
       }
-      hasPresentation = answerText.get(key) === prose
+      const preparedText = answerText.get(key)
+      hasPresentation = preparedText === null || preparedText === prose
     }
     filled += Number(
       fill.run(

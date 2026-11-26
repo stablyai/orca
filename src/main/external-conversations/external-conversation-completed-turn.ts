@@ -6,10 +6,13 @@ import {
   type ChatTurnEnd,
   type SlackMirrorTurn
 } from './external-conversation-turn-ends'
-import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import {
+  SLACK_PRESENTATION_UNCONFIRMED,
+  slackAnswerText
+} from '../../shared/connectors/slack-answer-presentation'
 
 /** A run that took its event thread answers under that thread's existing turn-end post key. */
-async function linkedSlackRunAnswer(
+function linkedSlackRunAnswer(
   end: ChatTurnEnd,
   link: ExternalConversationLink,
   turn: EndedChatTurn,
@@ -24,19 +27,14 @@ async function linkedSlackRunAnswer(
     words !== turn.turnBotProse ||
     opener?.kind !== 'message' ||
     opener.automationRun?.trigger !== 'event' ||
-    opener.automationRun.event?.source !== 'slack' ||
-    !turn.journalEpoch ||
-    !turn.turnItemId
+    opener.automationRun.event?.source !== 'slack'
   ) {
     return undefined
   }
-  return getStructuredAgentSessionHost()
-    ?.deps.store.connectorReplies()
-    .answerPresentation(
-      { sessionId: end.news.sessionId, epoch: turn.journalEpoch, turnItemId: turn.turnItemId },
-      words
-    )
-    .catch(() => undefined)
+  const { slackAnswer } = turn
+  return slackAnswer === null || (slackAnswer?.visual && slackAnswerText(slackAnswer) === words)
+    ? slackAnswer
+    : undefined
 }
 
 export async function tellCompletedTurn(
@@ -48,20 +46,20 @@ export async function tellCompletedTurn(
   links: () => Promise<ConnectorWorkLink[]>,
   mirror: SlackMirrorTurn | null
 ): Promise<void> {
-  const [workLinks, presentation] = await Promise.all([
-    links(),
-    !mirror && origin === 'delivery' ? linkedSlackRunAnswer(end, link, turn, words) : undefined,
-    end.workersChecked()
-  ])
+  const [workLinks] = await Promise.all([links(), end.workersChecked()])
   if (!end.current()) {
     return
   }
   const emit = mirror ? mirror.release : end.emit
+  const presentation =
+    !mirror && origin === 'delivery' ? linkedSlackRunAnswer(end, link, turn, words) : undefined
   emit({
     ...end.ended,
     ...end.turnFor(turn),
     ...(origin ? { origin } : {}),
-    ...(words ? { lastAssistantMessage: words } : {}),
+    ...(words
+      ? { lastAssistantMessage: presentation === null ? SLACK_PRESENTATION_UNCONFIRMED : words }
+      : {}),
     ...(presentation ? { presentation } : {}),
     ...turnFailure(end, turn),
     ...(workLinks.length > 0 ? { links: workLinks } : {})

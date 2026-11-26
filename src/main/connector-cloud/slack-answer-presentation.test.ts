@@ -64,6 +64,33 @@ describe.each([host, cloud])('Slack answer presentation', (contract) => {
     ).toBe(false)
   })
 
+  it('projects the supplied source filename while keeping link-like sources out', () => {
+    const visual = {
+      kind: 'bar',
+      title: 'Regional sales',
+      source: 'regional-sales.csv',
+      axis: 'Region',
+      unit: 'USD',
+      labels: ['East', 'West'],
+      series: [{ label: 'Sales', values: [6200, 2600] }]
+    }
+    const answer = { v: 1, text: 'East led by $3,600.', visual }
+    const parsed = contract.SlackAnswerPresentationSchema.parse(answer)
+    expect(contract.slackAnswerText(parsed)).toContain('Source: regional-sales.csv')
+    expect(matchingSlackPresentation(parsed, contract.slackAnswerText(parsed))).toBe(true)
+    for (const source of [
+      'https://regional-sales.csv',
+      'www.regional-sales.csv',
+      'regional-sales.com',
+      'regional-sales.com.csv',
+      'regional-sales.csv/preview',
+      'sales@regional-sales.csv',
+      '<https://example.com|regional-sales.csv>'
+    ]) {
+      expect(parse({ ...answer, visual: { ...visual, source } }).success).toBe(false)
+    }
+  })
+
   it('requires a unique row header and consistent numeric units for tables', () => {
     const visual = {
       kind: 'table',

@@ -13,7 +13,10 @@ import {
   readOwedJournalConnectorReplies
 } from './journal-connector-replies-read'
 import { ensureJournalConnectorRepliesSchema } from './journal-connector-replies-schema'
-import { JOURNAL_DOMAIN_SCHEMA_001 } from '../database/journal-domain-schema-001'
+import { migrateJournalDomainSchema } from '../database/journal-domain-migrations'
+import type { JournalOperationWindow } from '../journal-domain-operation-window'
+import { readOperationWindowItems } from '../journal-operation-window-rows'
+import { JournalSqlScope } from '../journal-sql-scope'
 import {
   SlackAnswerPresentationSchema,
   SLACK_PRESENTATION_UNCONFIRMED,
@@ -62,8 +65,7 @@ it('binds preparation to a running root turn and keeps the first filled presenta
   dir = mkdtempSync(join(tmpdir(), 'orca-reply-schema-'))
   const file = join(dir, 'journal.db')
   const db = new Database(file)
-  db.exec(JOURNAL_DOMAIN_SCHEMA_001)
-  ensureJournalConnectorRepliesSchema(db)
+  migrateJournalDomainSchema(db)
   const turn = { sessionId: 'chat-1', epoch: 'e', turnItemId: 'turn-1' }
   db.exec(`INSERT INTO journal_items
     (session_id,epoch,item_id,ordinal,revision,sequence,sequence_index,owner_fence,kind,lifecycle_state,payload_json)
@@ -115,10 +117,20 @@ it('binds preparation to a running root turn and keeps the first filled presenta
       11
     )
   ).toBe(0)
+  // A prior build wrote the presentation but did not record preparation on the turn row.
+  db.exec('ALTER TABLE journal_items DROP COLUMN slack_answer_prepared')
   db.close()
 
   const reopened = new Database(file)
   try {
+    migrateJournalDomainSchema(reopened)
+    const scope = new JournalSqlScope(reopened, turn.sessionId, turn.epoch)
+    const readPrepared = () => {
+      const answers: NonNullable<JournalOperationWindow['slackAnswers']> = []
+      readOperationWindowItems(scope, 0, {}, null, answers)
+      return answers
+    }
+    expect(readPrepared()).toEqual([['turn-1', presentation]])
     expect(journalSlackAnswerPresentation(reopened, turn)).toEqual(presentation)
     expect(readJournalConnectorReplies(reopened, 'chat-1')[0]?.fill?.presentation).toBeUndefined()
     expect(readOwedJournalConnectorReplies(reopened, 'a', null, 1, true)[0]?.fill).toEqual({
@@ -144,6 +156,21 @@ it('binds preparation to a running root turn and keeps the first filled presenta
     })
     expect(pruneSlackAnswerPresentations(reopened, 150, 50)).toEqual({ deleted: 1, more: false })
     expect(journalSlackAnswerPresentation(reopened, turn)).toBeUndefined()
+    expect(readPrepared()).toEqual([['turn-1', null]])
+    expect(
+      fillJournalConnectorReplies(
+        reopened,
+        [{ ...first, deliveryId: 'unrelated', answerDeliveryId: 'unrelated' }],
+        151
+      )
+    ).toBe(1)
+    expect(readOwedJournalConnectorReplies(reopened, 'a', null, 1, true)[0]?.fill).toEqual({
+      outcome: 'answered',
+      answerDeliveryId: 'unrelated',
+      turnItemId: 'turn-1',
+      prose: SLACK_PRESENTATION_UNCONFIRMED,
+      filledAt: 151
+    })
   } finally {
     reopened.close()
   }

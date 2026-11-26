@@ -6,25 +6,13 @@ import {
   type SlackAnswerPresentation
 } from '../../../../shared/connectors/slack-answer-presentation'
 
-const hasPreparedAnswer = new WeakMap<Database.Database, boolean>()
-
-export function journalHasSlackAnswerPresentations(db: Database.Database): boolean {
-  const known = hasPreparedAnswer.get(db)
-  if (known !== undefined) {
-    return known
-  }
-  const present =
-    db.prepare('SELECT 1 FROM journal_slack_answer_presentations LIMIT 1').get() !== undefined
-  hasPreparedAnswer.set(db, present)
-  return present
-}
-
 export function readSlackAnswerPresentation(value: unknown): SlackAnswerPresentation | undefined {
   if (typeof value !== 'string' || value.length > SLACK_ANSWER_MAX_BYTES) {
     return undefined
   }
   try {
-    return SlackAnswerPresentationSchema.safeParse(JSON.parse(value)).data
+    const presentation = SlackAnswerPresentationSchema.safeParse(JSON.parse(value)).data
+    return presentation?.visual ? presentation : undefined
   } catch {
     return undefined
   }
@@ -50,7 +38,8 @@ export function prepareSlackAnswerPresentation(
         .run(JSON.stringify(presentation), now, sessionId, epoch, turnItemId).changes
     ) > 0
   if (prepared) {
-    hasPreparedAnswer.set(db, true)
+    db.prepare(`UPDATE journal_items SET slack_answer_prepared=1
+      WHERE session_id=? AND epoch=? AND item_id=?`).run(sessionId, epoch, turnItemId)
   }
   return prepared
 }
@@ -92,10 +81,18 @@ export function pruneSlackAnswerPresentations(
       postpone.run(now, ...key)
     }
   }
-  if (deleted > 0) {
-    hasPreparedAnswer.delete(db)
-  }
   return { deleted, more: due.length === 50 }
+}
+
+export function journalSlackAnswerPreparation(
+  db: Database.Database,
+  turn: JournalSlackAnswerTurn
+): SlackAnswerPresentation | null | undefined {
+  const prepared = db
+    .prepare(`SELECT 1 FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?
+      AND slack_answer_prepared=1`)
+    .get(turn.sessionId, turn.epoch, turn.turnItemId)
+  return prepared ? (journalSlackAnswerPresentation(db, turn) ?? null) : undefined
 }
 
 export function journalSlackAnswerPresentation(

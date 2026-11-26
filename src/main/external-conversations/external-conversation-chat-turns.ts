@@ -294,7 +294,12 @@ export class ChatTurns {
     if (shared && !heard) {
       return end.leave.settle()
     }
-    void news.readTurn().then(async (turn) => {
+    const slackAnswers =
+      !mirrored &&
+      origin === 'delivery' &&
+      Boolean(linked.link.bot) &&
+      linked.link.source === 'slack'
+    void news.readTurn(slackAnswers).then(async (turn) => {
       const reply = turnReply(linked.link, turn)
       const links = readOnce(() => this.toldLinks.next(paneKey, linked.link))
       const fill = this.deps.replyFill?.()

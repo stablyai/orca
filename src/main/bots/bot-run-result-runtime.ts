@@ -41,11 +41,7 @@ export function runtimeBotRunResults(runtime: OrcaRuntimeService): BotRunResults
       ) {
         return watchBotTurnEnds(host)
       }
-      const journal = host.deps.store.connectorReplies()
-      const watched = watchBotTurnEnds(
-        host,
-        linkedThread ? undefined : (turn, prose) => journal.answerPresentation(turn, prose)
-      )
+      const watched = watchBotTurnEnds(host, !linkedThread)
       const release = keepSlackRunAnswer(slackRunId)
       return {
         dispose: () => {

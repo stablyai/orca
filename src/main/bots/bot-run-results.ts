@@ -177,6 +177,9 @@ export async function deliverBotRunResult(
     return { ...completed, error: COPY.notInThread }
   }
   if (message && !isQuietBotResult(message) && resultsTo === 'thread' && target.threadPost) {
+    if (ended.presentation === null && target.threadPost.source === 'slack') {
+      return { ...completed, error: COPY.postFailed }
+    }
     const text = capAnswer(message, CONNECTOR_CLIENT_LIMITS.maxLastAssistantMessageBytes)
     const posted = await deps.replyInThread(
       target.threadPost,
@@ -236,6 +239,9 @@ export async function deliverBotRunResult(
         console.warn('[bots] could not note an unposted result in its run', noteError)
       )
     return { ...completed, error }
+  }
+  if (ended.presentation === null && 'channel' in resultsTo) {
+    return { ...completed, error: COPY.postFailed }
   }
   const turnFor = 'channel' in resultsTo ? await deps.turnForOf(result.sessionId) : undefined
   const slackPresentation =

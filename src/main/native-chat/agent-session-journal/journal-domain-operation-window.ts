@@ -8,6 +8,7 @@ import { journalDomainContextHead } from './journal-sql-continuation-context'
 import type { JournalSqlScope } from './journal-sql-scope'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import { readOperationWindowItems } from './journal-operation-window-rows'
+import type { SlackAnswerPresentation } from '../../../shared/connectors/slack-answer-presentation'
 import { marginBefore } from './journal-operation-window-turn-ahead'
 import { marginAfter } from './journal-operation-window-end'
 import {
@@ -31,6 +32,8 @@ import {
 
 /** Where a reader's interest starts; the window runs from a turn ahead of the earliest to the head. */
 export type JournalOperationWindowAnchors = {
+  /** Read preparation alongside the selected Slack turn's own words. */
+  slackAnswers?: true
   /** Sends, by client message id or by the queued card id they carried. */
   operationIds?: readonly string[]
   /** Rows by item id. */
@@ -68,6 +71,7 @@ export type JournalOperationWindowAnchors = {
 
 export type JournalOperationWindow = {
   snapshot: AgentJournalSnapshot
+  slackAnswers?: [turnItemId: string, presentation: SlackAnswerPresentation | null][]
   /** The window starts at the conversation's first row, so it holds everything. */
   complete: boolean
 }
@@ -184,12 +188,15 @@ export function readJournalDomainOperationWindow(
     }
     start = next
   }
-  const items = start === null ? [] : readOperationWindowItems(scope, start, anchors, end)
+  const slackAnswers: JournalOperationWindow['slackAnswers'] = anchors.slackAnswers ? [] : undefined
+  const items =
+    start === null ? [] : readOperationWindowItems(scope, start, anchors, end, slackAnswers)
   const first = scope.db
     .prepare(`SELECT MIN(sequence) AS sequence FROM journal_items INDEXED BY journal_items_visible_position
     WHERE session_id=? AND epoch=? AND hidden=0`)
     .get(...scope.prefix)?.sequence
   return {
+    ...(slackAnswers ? { slackAnswers } : {}),
     snapshot: {
       sessionId: scope.sessionId,
       cursor: journalDomainContextHead(scope.db, scope),

@@ -28,12 +28,7 @@ import {
   readJournalConnectorReplies,
   readOwedJournalConnectorReplies
 } from './connector-replies/journal-connector-replies-read'
-import type {
-  JournalConnectorReplyRow,
-  JournalSlackAnswerTurn
-} from '../../../shared/agent-session/journal/journal-connector-reply'
-import type { SlackAnswerPresentation } from '../../../shared/connectors/slack-answer-presentation'
-import { journalSlackAnswerPresentation } from './connector-replies/journal-slack-answer-presentation'
+import type { JournalConnectorReplyRow } from '../../../shared/agent-session/journal/journal-connector-reply'
 
 export type JournalSqlStoredRecords = Omit<AgentSessionStoreState, 'sessionTabs'> & {
   sessionTabs: [tabId: string, sessionId: string][] | null
@@ -70,8 +65,6 @@ export type JournalSqlDatabaseRead =
       limit: number
       includePresentations?: boolean
     }
-  | { kind: 'slack-answer-presentation'; turn: JournalSlackAnswerTurn }
-  | { kind: 'slack-answer-presence' }
   | {
       kind: 'connector-reply-unsent'
       sessionId: string
@@ -97,12 +90,6 @@ export type JournalSqlDatabaseReadResult =
   | { kind: 'deleted-chats'; chats: DeletedChat[] }
   | { kind: 'connector-replies'; rows: JournalConnectorReplyRow[] }
   | { kind: 'connector-reply-unsent'; unsent: boolean }
-  | {
-      kind: 'slack-answer-presentation'
-      presentation: SlackAnswerPresentation | undefined
-      any: boolean
-    }
-  | { kind: 'slack-answer-presence'; any: boolean }
 
 /** Profile metadata has no chat projection prerequisite; all reads still share one WAL snapshot. */
 export function readJournalSqlDatabase(
@@ -147,22 +134,6 @@ function read(
       return {
         kind: 'connector-replies',
         rows: readJournalConnectorReplies(db, operation.sessionId)
-      }
-    case 'slack-answer-presentation': {
-      const presentation = journalSlackAnswerPresentation(db, operation.turn)
-      return {
-        kind: 'slack-answer-presentation',
-        presentation,
-        any:
-          presentation !== undefined ||
-          db.prepare('SELECT 1 FROM journal_slack_answer_presentations LIMIT 1').get() !== undefined
-      }
-    }
-    case 'slack-answer-presence':
-      return {
-        kind: 'slack-answer-presence',
-        any:
-          db.prepare('SELECT 1 FROM journal_slack_answer_presentations LIMIT 1').get() !== undefined
       }
     case 'connector-reply-unsent':
       return {

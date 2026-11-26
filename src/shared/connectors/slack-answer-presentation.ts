@@ -25,6 +25,8 @@ const MAX_PROJECTED_BYTES = 8 * 1024
 // rendered by the posting adapter, but the author cannot supply a URL or Slack markup.
 const UNSAFE_TEXT = /[<>`@]|\p{Cf}|\p{Cs}|:\/\/|\b(?:javascript:|data:|mailto:|www\.)|\]\s*\(/iu
 const CONTROL = /\p{Cc}/u
+// Data-file suffixes here are not internet top-level domains.
+const SOURCE_FILENAME = /^[a-z0-9][a-z0-9_-]*\.(?:csv|tsv|xlsx|jsonl?)$/iu
 
 function containsDomain(text: string): boolean {
   let labelEndsAt = -1
@@ -46,7 +48,7 @@ function containsDomain(text: string): boolean {
   return false
 }
 
-function literal(max: number, multiline = false) {
+function literal(max: number, { multiline = false, source = false } = {}) {
   return z
     .string()
     .refine((text) => text.length > 0 && text.length <= max, { abort: true })
@@ -54,7 +56,7 @@ function literal(max: number, multiline = false) {
       (text) =>
         text === text.trim() &&
         !UNSAFE_TEXT.test(text) &&
-        !containsDomain(text) &&
+        ((source && SOURCE_FILENAME.test(text)) || !containsDomain(text)) &&
         !CONTROL.test(multiline ? text.replaceAll('\n', '') : text) &&
         (multiline || !text.includes('\n')),
       { message: 'Expected literal text without links, mentions, or control characters' }
@@ -91,7 +93,7 @@ const Value = z.number().finite()
 const DateTime = z.iso.datetime({ precision: 0 })
 const Window = z.strictObject({ from: DateTime, to: DateTime }).refine(({ from, to }) => from < to)
 const Timing = z.union([z.strictObject({ asOf: DateTime }), Window])
-const Frame = { title: literal(50), source: literal(80) }
+const Frame = { title: literal(50), source: literal(80, { source: true }) }
 const Chart = {
   ...Frame,
   axis: literal(25),
@@ -177,7 +179,7 @@ const Visual = z.discriminatedUnion('kind', [Line, Bar, Table]).refine(
 
 const Presentation = z.strictObject({
   v: z.literal(1),
-  text: literal(SLACK_ANSWER_MAX_TEXT, true),
+  text: literal(SLACK_ANSWER_MAX_TEXT, { multiline: true }),
   visual: Visual.optional()
 })
 
