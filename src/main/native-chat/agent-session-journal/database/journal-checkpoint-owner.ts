@@ -44,6 +44,7 @@ export class JournalCheckpointOwner {
       factory?: () => WorkerRequestTransport
       restartDelayMs?: number
       stallMs?: number
+      idleTeardownMs?: number
       /** The SQL writer thread's own checkpoints while a write waits; without it the owner only measures. */
       relief?: JournalWalWriterRelief
     } = {}
@@ -52,10 +53,12 @@ export class JournalCheckpointOwner {
       factory: options.factory,
       restartDelayMs: options.restartDelayMs,
       stallMs: options.stallMs,
+      idleTeardownMs: options.idleTeardownMs,
       onWarn: this.warn,
       onStateChange: () => this.syncWriterCheckpoints(),
       canRetireIdle: () => {
-        if (this.waiters.size > 0) {
+        // Measuring runs a NOOP checkpoint, which an open transaction on the writer must not see.
+        if (this.waiters.size > 0 || this.writer.isTransaction) {
           return false
         }
         this.measure()

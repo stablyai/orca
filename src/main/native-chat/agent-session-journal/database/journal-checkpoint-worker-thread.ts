@@ -85,6 +85,7 @@ type JournalCheckpointWorkerHooks = {
   factory?: () => WorkerRequestTransport
   restartDelayMs?: number
   stallMs?: number
+  idleTeardownMs?: number
 }
 
 /** Lazily spawns the off-thread checkpoint worker on backlog, retires it when idle, and restarts with backoff on crash. */
@@ -98,6 +99,8 @@ export class JournalCheckpointWorkerController {
   private askedAt = 0
   private askAgain: { force: boolean } | undefined
   private exited: Promise<void> = Promise.resolve()
+  /** The retiring worker's exit, kept apart: a new spawn overwrites `exited` while the old thread still closes. */
+  private retiringExited: Promise<void> = Promise.resolve()
   private restartTimer: ReturnType<typeof setTimeout> | undefined
   private restartDelayMs: number
   private closing = false
@@ -222,9 +225,8 @@ export class JournalCheckpointWorkerController {
     clearTimeout(this.restartTimer)
     if (this.worker) {
       await stopJournalCheckpointWorker(this.worker, this.exited)
-    } else if (this.retiringIdle) {
-      await this.exited
     }
+    await this.retiringExited
   }
 
   private scheduleIdleRetire(): void {
@@ -237,8 +239,9 @@ export class JournalCheckpointWorkerController {
       const idle = this.worker
       this.retiringIdle = idle
       this.worker = undefined
-      void stopJournalCheckpointWorker(idle, this.exited)
-    }, JOURNAL_CHECKPOINT_IDLE_TEARDOWN_MS)
+      this.retiringExited = this.exited
+      void stopJournalCheckpointWorker(idle, this.retiringExited)
+    }, this.hooks.idleTeardownMs ?? JOURNAL_CHECKPOINT_IDLE_TEARDOWN_MS)
     this.idleTimer.unref()
   }
 
