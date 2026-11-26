@@ -9,6 +9,7 @@ import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution
 import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import { withRepositoryGitCause } from '../../../git/repository-git-cause'
 import { listRepoWorktreesForDetectedScan } from '../../../workspaces/catalog/repo-worktrees'
+import { isRepoFolderAbsent, RepoFolderMissingError } from './repo-folder-missing'
 import {
   getRegisteredWorktreeRootsRevision,
   registerWorktreeRootsForRepo
@@ -121,7 +122,15 @@ export async function listDetectedGitWorktrees(
           { family: 'catalog', reason: 'desktop-catalog', cache: 'refresh' },
           () => listRepoWorktreesForDetectedScan(repo, localWorktreeGitOptions)
         )
-        return worktrees.length > 0 ? { kind: 'rows', worktrees } : { kind: 'true-empty' }
+        if (worktrees.length > 0) {
+          return { kind: 'rows', worktrees }
+        }
+        // Why failed: a vanished folder is usually an unmounted volume, so rows must not be pruned or hidden.
+        // WSL/UNC stat can report a false ENOENT, so those routes keep their own checks.
+        return !wslDistroForPath(repo.path, localWorktreeGitOptions.wslDistro) &&
+          (await isRepoFolderAbsent(repo.path))
+          ? { kind: 'failed', error: new RepoFolderMissingError(repo.path) }
+          : { kind: 'true-empty' }
       },
       ...worktreeCatalogHygienePlan(store, repo, localWorktreeGitOptions, true)
     }
