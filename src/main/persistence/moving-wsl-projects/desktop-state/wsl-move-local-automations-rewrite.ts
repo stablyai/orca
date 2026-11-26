@@ -8,8 +8,11 @@ import {
   type WslMoveCutover
 } from '../../../../shared/wsl-move/wsl-move-cutover'
 import type { Store } from '../../loading-store/store'
-import { listWslMoveCutovers } from '../cutover-recovery/wsl-move-cutover-journal'
-import { runWslMoveHostAutomationsExclusive } from '../cutover-recovery/wsl-move-undo-host-automations'
+import {
+  listWslMoveCutovers,
+  writeWslMoveCutover
+} from '../cutover-recovery/wsl-move-cutover-journal'
+import { runWslMoveHostAutomationsExclusive } from '../cutover-recovery/wsl-move-host-automations-lock'
 import { registerWslMoveDesktopRewriteStore } from './wsl-move-desktop-rewrite-stores'
 
 export const WSL_MOVE_LOCAL_AUTOMATIONS_STORE_ID = 'local-automations'
@@ -26,15 +29,20 @@ export type WslMoveLocalAutomationsProfile = Pick<
 function disableWhileMoved(
   userDataPath: string,
   profile: WslMoveLocalAutomationsProfile,
-  migrationId: string
+  migrationId: string,
+  afterDisable: (move: WslMoveCutover) => Promise<void> = async () => {}
 ): Promise<void> {
   return runWslMoveHostAutomationsExclusive(async () => {
     const move = listWslMoveCutovers(userDataPath).find((c) => c.migrationId === migrationId)
+    if (!move) {
+      return
+    }
     // Only the ones that were on here: the rest are already off, and undo reads them from the host.
-    const ids = move?.automationsToReenable ?? []
+    const ids = move.automationsToReenable ?? []
     if (ids.length > 0) {
       profile.disableAutomations(new Set(ids))
     }
+    await afterDisable(move)
   })
 }
 
@@ -52,23 +60,32 @@ export function registerWslMoveLocalAutomationsStore(
 
 const COMMITTED = WSL_MOVE_CUTOVER_PHASES.indexOf('destination-committed')
 
-/** A move that left its rewrite phase before this store existed: its copies here are still on. */
+/** A move that left its rewrite phase before this store existed, not yet caught up. */
 function finishedBeforeLocalAutomations(cutover: WslMoveCutover): boolean {
   return (
     WSL_MOVE_CUTOVER_PHASES.indexOf(cutover.phase) > COMMITTED &&
-    !cutover.rewrittenStores.includes(WSL_MOVE_LOCAL_AUTOMATIONS_STORE_ID)
+    !cutover.rewrittenStores.includes(WSL_MOVE_LOCAL_AUTOMATIONS_STORE_ID) &&
+    !cutover.localAutomationsCaughtUp
   )
 }
 
 /**
- * Startup's one-time catch-up for those moves. Their ledger is closed, so nothing records it;
- * turning off what is already off changes nothing on the next launch.
+ * Startup's catch-up for those moves, once each. Their ledger is closed, so a mark beside it
+ * records the catch-up: a copy here the user turns back on afterwards stays on.
  */
 export async function disableLocalAutomationsOfEarlierWslMoves(
   userDataPath: string,
   profile: WslMoveLocalAutomationsProfile
 ): Promise<void> {
   for (const cutover of listWslMoveCutovers(userDataPath).filter(finishedBeforeLocalAutomations)) {
-    await disableWhileMoved(userDataPath, profile, cutover.migrationId)
+    await disableWhileMoved(userDataPath, profile, cutover.migrationId, async (move) => {
+      // The disable is on disk before the mark: a crash between them only repeats it.
+      await profile.flushPendingOrThrowAsync()
+      writeWslMoveCutover(userDataPath, {
+        ...move,
+        localAutomationsCaughtUp: true,
+        updatedAt: new Date().toISOString()
+      })
+    })
   }
 }

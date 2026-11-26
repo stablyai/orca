@@ -35,7 +35,7 @@ export function registerWslMoveDesktopRewriteRegistry(
   registerWslMoveRendererRewriteStores()
   // Off here before on there: never two live copies, even for a moment.
   registerWslMoveLocalAutomationsStore(dependencies.profile, dependencies.userDataPath)
-  registerWslMoveHostAutomationsStore(dependencies.hostAutomations)
+  registerWslMoveHostAutomationsStore(dependencies.hostAutomations, dependencies.userDataPath)
   // Last among main-side stores: it throws until browser sessions exist, pausing any store after it.
   registerWslMoveBrowserCookieStore(dependencies.browserCookies)
 }
