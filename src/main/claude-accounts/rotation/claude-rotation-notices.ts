@@ -13,7 +13,7 @@ export type RotationNoticeInput =
       toLabel: string | null
     }
   | { type: 'no-candidate'; limits: ClaudeAccountRotationLimit[] }
-  | { type: 'reverted' | 'revert_failed' | 'unexpected_account' }
+  | { type: 'reverted' | 'unexpected_account' }
 
 function describeLimits(limits: ClaudeAccountRotationLimit[]): string {
   return limits
@@ -79,15 +79,9 @@ export function rotationNotice(input: RotationNoticeInput): RotationNotice {
   }
   return {
     title,
-    body:
-      input.type === 'revert_failed'
-        ? translateMain(
-            'accounts.claude.rotation.notice.revertFailed',
-            'Could not undo a switch that a running session overwrote. Check the account folders in Settings.'
-          )
-        : translateMain(
-            'accounts.claude.rotation.notice.unexpectedAccount',
-            'After a switch, a folder signed in to an account Orca did not expect. Check the account folders in Settings.'
-          )
+    body: translateMain(
+      'accounts.claude.rotation.notice.unexpectedAccount',
+      'After a switch, a folder signed in to an account Orca did not expect. Check the account folders in Settings.'
+    )
   }
 }

@@ -216,9 +216,12 @@ export class ClaudeAccountRotationService {
         state,
         settings: rotation,
         deps: this.deps,
-        stillAllowed: async () =>
-          resolveClaudeAccountRotationSettings(this.options.store.getSettings()).enabled &&
-          !(await externalRotatorActive(this.options.router.userHome))
+        currentSettings: async () => {
+          const current = resolveClaudeAccountRotationSettings(this.options.store.getSettings())
+          const allowed =
+            current.enabled && !(await externalRotatorActive(this.options.router.userHome))
+          return allowed ? current : null
+        }
       })
       if (result?.note === 'swapped' && 'journal' in result) {
         this.afterSwap(result, labels, state)
@@ -276,7 +279,7 @@ export class ClaudeAccountRotationService {
     if (outcome === 'reverted') {
       this.refreshUsage(journal)
     }
-    if (outcome === 'reverted' || outcome === 'revert_failed' || outcome === 'unexpected_account') {
+    if (outcome === 'reverted' || outcome === 'unexpected_account') {
       this.options.notify(rotationNotice({ type: outcome }))
     }
   }

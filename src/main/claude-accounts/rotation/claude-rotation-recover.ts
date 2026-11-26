@@ -15,7 +15,7 @@ import {
   refreshLock,
   type RotationSwapDeps
 } from './claude-rotation-swap'
-import { accountHolding } from './claude-rotation-verify'
+import { accountHolding } from './claude-rotation-settle'
 
 /** Whether the first write of a cut-off swap landed in `a`, which is the login it holds now. */
 async function firstWriteLanded(
@@ -63,6 +63,17 @@ async function settle(journal: RotationJournal, deps: RotationSwapDeps): Promise
     return 'undecided'
   }
   if (landed === 'no') {
+    // A session in `a` can write its login back after both writes landed. `b` then holds the
+    // login of `a`, and the only copy of its own is the backup, so the post-swap check settles it.
+    if (hashB !== journal.bOldRefresh && hasRefreshToken(oauthB)) {
+      const inB = await accountHolding(oauthB, deps)
+      if (inB === null || journal.fromAccount === null) {
+        return 'undecided'
+      }
+      if (inB === journal.fromAccount) {
+        return 'already_finished'
+      }
+    }
     return end('nothing_written')
   }
   const saved = oauthOf(await deps.slots.read(ROTATION_JOURNAL_SERVICE_A))

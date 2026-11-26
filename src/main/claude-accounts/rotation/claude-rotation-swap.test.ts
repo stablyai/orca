@@ -14,7 +14,11 @@ import type { ClaudeAccountRotationSettings } from '../../../shared/agent-accoun
 import type { RotationCheckDeps } from './claude-rotation-candidates'
 import { checkRotationFolder } from './claude-rotation-check'
 import { externalRotatorActive } from './claude-rotation-folders'
-import type { ClaudeKeychainSlot, RotationSlotStore } from './claude-rotation-keychain'
+import {
+  ROTATION_JOURNAL_SERVICE_A,
+  type ClaudeKeychainSlot,
+  type RotationSlotStore
+} from './claude-rotation-keychain'
 import type { RotationFolder } from './claude-rotation-login-meta'
 import type { RotationUsage } from './claude-rotation-policy'
 import { RotationStateFiles } from './claude-rotation-state-files'
@@ -205,6 +209,51 @@ it('finishes or cancels a swap cut off mid-write without losing either login', a
   expect(late.keychain.slots.get('svc-b')).toEqual(refreshedA)
 })
 
+/** Orca's account records as two swappable fingerprints; the second save fails, as on a full disk. */
+function recordsFailingOnce(): NonNullable<RotationCheckDeps['records']> & {
+  swapped: () => boolean
+} {
+  let saves = 0
+  let swapped = false
+  return {
+    fingerprint: (id) => (swapped ? (id === 'a' ? 'rb' : 'ra') : `r${id}`),
+    exchange: async () => {
+      saves += 1
+      if (saves === 2) {
+        return false
+      }
+      swapped = !swapped
+      return true
+    },
+    swapped: () => swapped
+  }
+}
+
+it('settles both folders when a session wrote back after a swap cut off before its journal step', async () => {
+  // Both writes landed but the journal still says a_written. b then refreshed the login of a it
+  // was given, and the session in a wrote its old login back: the only copy of b's is the backup.
+  const { folders, keychain, deps, files } = setup(['a', 'b'])
+  await swapFolderLogins(folder(folders, 'a'), folder(folders, 'b'), request, deps)
+  const journal = await files.loadJournal()
+  if (!journal) {
+    throw new Error('missing journal')
+  }
+  await files.saveJournal({ ...journal, step: 'a_written', meta: undefined })
+  const refreshedA = {
+    ...slotOf('b'),
+    claudeAiOauth: { ...login('a'), refreshToken: 'refresh-a2' }
+  }
+  keychain.slots.set('svc-b', refreshedA)
+  keychain.slots.set('svc-a', slotOf('a'))
+  expect(await recoverInterruptedSwap(deps)).toBe('already_finished')
+  expect(await files.loadJournal()).not.toBeNull()
+  // The copy in a is spent once b refreshed it, so a takes b's login from the backup.
+  expect((await verifySwap(deps, true))?.outcome).toBe('ok')
+  expect(keychain.slots.get('svc-a')).toEqual({ ...slotOf('a'), claudeAiOauth: login('b') })
+  expect(keychain.slots.get('svc-b')).toEqual(refreshedA)
+  expect(await files.loadJournal()).toBeNull()
+})
+
 it('puts the old login of b back when the outgoing session writes its login back', async () => {
   const { folders, keychain, deps } = setup(['a', 'b'])
   const a = folder(folders, 'a')
@@ -221,44 +270,60 @@ it('puts the old login of b back when the outgoing session writes its login back
 
 it('keeps the journal until a rollback has also put the account details back', async () => {
   const { folders, keychain, deps, files } = setup(['a', 'b'])
-  let saves = 0
-  let swappedRecords = false
-  deps.records = {
-    fingerprint: (id) => (swappedRecords ? (id === 'a' ? 'rb' : 'ra') : `r${id}`),
-    exchange: async () => {
-      saves += 1
-      // The save after the rollback fails once, as on a full disk.
-      if (saves === 2) {
-        return false
-      }
-      swappedRecords = !swappedRecords
-      return true
-    }
-  }
+  const records = recordsFailingOnce()
+  deps.records = records
   const a = folder(folders, 'a')
   expect((await swapFolderLogins(a, folder(folders, 'b'), request, deps)).ok).toBe(true)
   keychain.slots.set('svc-a', slotOf('a'))
   expect((await verifySwap(deps, true))?.outcome).toBe('waiting')
   expect(keychain.slots.get('svc-b')).toEqual(slotOf('b'))
-  expect((await files.loadJournal())?.reverted).toBe(true)
+  expect(await files.loadJournal()).not.toBeNull()
   // b refreshes its restored login before the retry; the rollback is not mistaken for a conflict.
   const refreshedB = { ...slotOf('b'), claudeAiOauth: { ...login('b'), refreshToken: 'r-b2' } }
   keychain.slots.set('svc-b', refreshedB)
   expect((await verifySwap(deps, true))?.outcome).toBe('reverted')
   expect(keychain.slots.get('svc-b')).toEqual(refreshedB)
-  expect(swappedRecords).toBe(false)
+  expect(records.swapped()).toBe(false)
   expect(await files.loadJournal()).toBeNull()
 })
 
-it('does not clear the backups when a writes its old login back during the account lookup', async () => {
+it('checks both folders again before finishing a rollback whose details were not in place', async () => {
+  const { folders, keychain, deps, files } = setup(['a', 'b'])
+  const records = recordsFailingOnce()
+  deps.records = records
+  const a = folder(folders, 'a')
+  expect((await swapFolderLogins(a, folder(folders, 'b'), request, deps)).ok).toBe(true)
+  keychain.slots.set('svc-a', slotOf('a'))
+  expect((await verifySwap(deps, true))?.outcome).toBe('waiting')
+  expect(keychain.slots.get('svc-b')).toEqual(slotOf('b'))
+  // A session in a then refreshes the incoming login it had read, so the copy put back in b is
+  // spent and the login of a is left only in its backup: b takes that backup, finishing the swap.
+  const refreshedB = { ...slotOf('a'), claudeAiOauth: { ...login('b'), refreshToken: 'r-b2' } }
+  keychain.slots.set('svc-a', refreshedB)
+  expect((await verifySwap(deps, true))?.outcome).toBe('ok')
+  expect(keychain.slots.get('svc-a')).toEqual(refreshedB)
+  expect(keychain.slots.get('svc-b')).toEqual({ ...slotOf('b'), claudeAiOauth: login('a') })
+  expect(records.swapped()).toBe(true)
+  expect(JSON.parse(readFileSync(a.stateFile, 'utf8')).oauthAccount.emailAddress).toBe(
+    'b@example.test'
+  )
+  expect(await files.loadJournal()).toBeNull()
+})
+
+it('does not clear the backups when a writes its old login back while the details are placed', async () => {
   const { folders, keychain, deps, files } = setup(['a', 'b'])
   expect(
     (await swapFolderLogins(folder(folders, 'a'), folder(folders, 'b'), request, deps)).ok
   ).toBe(true)
-  const whoami = deps.whoami
-  deps.whoami = async (token) => {
-    keychain.slots.set('svc-a', slotOf('a'))
-    return whoami(token)
+  // Placing the details reads the backups after the folders were checked and the locks let go.
+  const read = keychain.read
+  let wroteBack = false
+  keychain.read = async (service) => {
+    if (service === ROTATION_JOURNAL_SERVICE_A && !wroteBack) {
+      wroteBack = true
+      keychain.slots.set('svc-a', slotOf('a'))
+    }
+    return read(service)
   }
   expect((await verifySwap(deps, true))?.outcome).toBe('waiting')
   expect(await files.loadJournal()).not.toBeNull()
@@ -437,14 +502,18 @@ it("follows each account's own switch, limits and priority", async () => {
   const { folders, keychain, deps, files } = setup(['a', 'b', 'c'])
   const five: Record<string, number> = { 'access-a': 95, 'access-b': 70, 'access-c': 5 }
   deps.fetchUsage = async (token) => ({ status: 'ok', usage: usage(five[token] ?? 0) })
-  const check = async (rotation: ClaudeAccountRotationSettings) =>
+  const check = async (
+    rotation: ClaudeAccountRotationSettings,
+    current: ClaudeAccountRotationSettings = rotation
+  ) =>
     checkRotationFolder({
       target: folder(folders, 'a'),
       folders: [...folders.values()],
       sessions: new Map(),
       state: await files.loadState(),
       settings: rotation,
-      deps
+      deps,
+      currentSettings: async () => current
     })
   const own = (enabled: boolean, fiveHourPercent: number | null = null) => ({
     enabled,
@@ -467,6 +536,10 @@ it("follows each account's own switch, limits and priority", async () => {
     { accountId: 'b', reason: 'also_near_limit' },
     { accountId: 'c', reason: 'account_off' }
   ])
+  expect(keychain.slots.get('svc-a')).toEqual(slotOf('a'))
+  // b is turned off while its usage is read: the check right before the write stops the swap.
+  const turnedOff = { ...settings, accounts: { [ACCOUNT.b]: own(false) } }
+  expect((await check(settings, turnedOff))?.note).toBe('swap_failed')
   expect(keychain.slots.get('svc-a')).toEqual(slotOf('a'))
   // Priority beats use: b (70%) ranks above c (5%).
   expect((await check(settings))?.note).toBe('swapped')

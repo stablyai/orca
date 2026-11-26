@@ -157,6 +157,8 @@ export function ClaudeAccountRotationAccounts({
           {rows.map(({ account, label }) => {
             const own = { ...SHARED_LIMITS, ...rotation.accounts[account] }
             const index = ranked.findIndex((entry) => matchesAccount(entry, account))
+            // An unranked account can take the place right after the ranked ones, none further down.
+            const places = index === -1 ? ranked.length + 1 : ranked.length
             return (
               <tr key={account}>
                 <td className="max-w-0 truncate px-1 py-1" title={label}>
@@ -217,7 +219,7 @@ export function ClaudeAccountRotationAccounts({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {rows.map((_, rank) => (
+                      {Array.from({ length: places }, (_, rank) => (
                         <SelectItem key={rank} value={String(rank + 1)}>
                           {String(rank + 1)}
                         </SelectItem>

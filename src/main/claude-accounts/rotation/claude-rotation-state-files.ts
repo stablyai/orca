@@ -47,8 +47,6 @@ export type RotationJournal = {
   /** Orca's account records before the swap, as fingerprints. */
   records?: { a: string | null; b: string | null }
   meta?: string
-  /** Set once `b` has its own login back, so a retry only restores the account details. */
-  reverted?: boolean
 }
 
 const LOG_MAX_BYTES = 1024 * 1024

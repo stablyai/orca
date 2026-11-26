@@ -57,8 +57,11 @@ export async function checkRotationFolder(args: {
   state: RotationState
   settings: ClaudeAccountRotationSettings
   deps: RotationCheckDeps
-  /** Asked again right before the first write: the setting may be turned off mid-check. */
-  stillAllowed?: () => Promise<boolean>
+  /**
+   * Read again right before the first write, since the setting or either account may be turned
+   * off mid-check. Null when rotation is off or another tool took over.
+   */
+  currentSettings?: () => Promise<ClaudeAccountRotationSettings | null>
 }): Promise<RotationCheckResult | null> {
   const { target, state, settings, deps } = args
   const now = deps.now()
@@ -187,7 +190,17 @@ export async function checkRotationFolder(args: {
         }
         // Last, so a change during the session read still stops the swap. The external tool takes
         // the same refresh locks before it writes, so it cannot write these slots while they are held.
-        return args.stillAllowed && !(await args.stillAllowed()) ? 'turned_off' : null
+        if (!args.currentSettings) {
+          return null
+        }
+        const current = await args.currentSettings()
+        if (current === null) {
+          return 'turned_off'
+        }
+        const off = [account, chosen.claudeAccount].some(
+          (id) => !rotationAccountSettings(current, id).enabled
+        )
+        return off ? 'account_off' : null
       }
     }
   )
