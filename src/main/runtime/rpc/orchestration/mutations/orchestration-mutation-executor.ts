@@ -85,8 +85,8 @@ export class OrchestrationMutationExecutor {
       : undefined
     const refusedBeforeWake =
       isPromptMutation && !existingPromptReceipt && (await isTerminalSendRefusedBeforeWake(params))
-    // Input the handler always refuses keeps no receipt, so nothing binds to (or wakes) a slept agent.
-    if (refusedBeforeWake && !requireExisting) {
+    // Input the handler always refuses keeps no receipt, so nothing binds to (or wakes) a slept agent; a replay gets the same refusal.
+    if (refusedBeforeWake) {
       return await invoke()
     }
     if (isPromptMutation && !existingPromptReceipt && !refusedBeforeWake) {

@@ -11,7 +11,6 @@ import { TerminalSend } from '../../../../../shared/rpc-contract/terminal/termin
 import type { RuntimeTerminalSend } from '../../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 import {
   assertTerminalSendExactPtyBinding,
-  assertTerminalSendTextWithinLimit,
   commitMobileInputFloorClaim,
   getTerminalSendGuardRefusedReason,
   terminalInputSourceForClient,
@@ -20,7 +19,10 @@ import {
   type MobileInputFloorClaimHolder
 } from './terminal-input-delivery'
 import { updateViewportForClient } from './terminal-viewport-update'
-import { isGuardedCombinedTerminalSend } from './terminal-send-pre-wake-refusal'
+import {
+  assertTerminalSendTextsWithinLimit,
+  isGuardedCombinedTerminalSend
+} from './terminal-send-pre-wake-refusal'
 import {
   ensureUnsupportedTerminalPromptReceipt,
   observeReplayedTerminalPrompt
@@ -62,8 +64,7 @@ export const TERMINAL_SEND_METHODS = [
         assertSequenceBinding
       ) => {
         const inputSource = terminalInputSourceForClient(params.client, caller)
-        await assertTerminalSendTextWithinLimit(params.text)
-        await assertTerminalSendTextWithinLimit(params.resolvedLaunchDraft?.text)
+        await assertTerminalSendTextsWithinLimit(params)
         if (params.text) {
           await assertLegacyAiVaultResumeCommandAllowed(params.text, () =>
             runtime.ensureStructuredAgentSessionHost()

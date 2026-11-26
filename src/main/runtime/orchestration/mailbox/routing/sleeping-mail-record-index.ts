@@ -118,6 +118,12 @@ export class SleepingMailRecordIndex {
     }
   }
 
+  /** Whether the pane's leaf still finds it; another record sharing the leaf can take or drop the entry. */
+  private leafIndexedTo(pane: string): boolean {
+    const leafId = parsePaneKey(pane)?.leafId
+    return !leafId || this.panesByLeaf.get(leafId) === pane
+  }
+
   private indexLeaf(pane: string, present: boolean): void {
     const leafId = parsePaneKey(pane)?.leafId
     if (!leafId) {
@@ -200,7 +206,9 @@ export class SleepingMailRecordIndex {
       if (
         before === record &&
         this.records.get(pane) === record &&
-        this.hostByPane.get(pane) === host
+        this.hostByPane.get(pane) === host &&
+        (!record.terminalHandle || this.panesByHandle.get(record.terminalHandle) === pane) &&
+        this.leafIndexedTo(pane)
       ) {
         continue
       }
