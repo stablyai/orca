@@ -15,17 +15,6 @@ import type {
 
 class RuntimeUploadSymlinkError extends Error {}
 
-/** Bytes this source contributes to the drop budget; 0 unless it staged. */
-export function stagedRuntimeUploadByteLength(source: StagedExternalImportSource): number {
-  if (source.status !== 'staged') {
-    return 0
-  }
-  return source.entries.reduce(
-    (total, entry) => (entry.kind === 'file' ? total + entry.byteLength : total),
-    0
-  )
-}
-
 /** @param totalBytesBefore Earlier staged bytes in this drop; the ceiling spans all sources.
  * @param options.nameExtensionlessImages Append a sniffed image suffix only in Orca-owned destinations. */
 export async function stageOneSourceForRuntimeUpload(

@@ -29,6 +29,17 @@ export type StagedRuntimeUploadSource =
 
 export type StageRuntimeUploadResult = { sources: StagedRuntimeUploadSource[] }
 
+/** Bytes this source contributes to the drop budget; 0 unless it staged. */
+export function stagedRuntimeUploadByteLength(source: StagedRuntimeUploadSource): number {
+  if (source.status !== 'staged') {
+    return 0
+  }
+  return source.entries.reduce(
+    (total, entry) => (entry.kind === 'file' ? total + entry.byteLength : total),
+    0
+  )
+}
+
 /** Renderer → main request to pump one staged file's bytes to the runtime. */
 export type RuntimeUploadFileStreamRequest = {
   environmentId: string
@@ -43,4 +54,9 @@ export type RuntimeUploadFileStreamRequest = {
   relativePath: string
   expectedEnvironmentPairingRevision?: number
   expectedEnvironmentRuntimeId?: string
+  /** Set to receive progress events and allow cancel; unique per file upload. */
+  uploadId?: string
 } & SshMutationExpectation
+
+/** Main → renderer: bytes of one file the runtime has acknowledged. */
+export type RuntimeUploadProgressEvent = { uploadId: string; sentBytes: number }

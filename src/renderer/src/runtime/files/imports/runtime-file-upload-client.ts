@@ -1,7 +1,11 @@
 import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { joinPath } from '@/lib/path'
 import { normalizeRelativePath } from '../../../../../shared/file-access/cross-platform-path'
-import type { StagedRuntimeUploadFileIdentity } from '../../../../../shared/file-import/runtime-upload-staging-contract'
+import type {
+  RuntimeUploadFileStreamRequest,
+  StagedRuntimeUploadFileIdentity
+} from '../../../../../shared/file-import/runtime-upload-staging-contract'
+import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import {
   DROP_STAGING_GITIGNORE_CONTENT,
   DROP_STAGING_RELATIVE_DIR
@@ -27,6 +31,12 @@ export type RuntimeUploadSource = {
   expected: StagedRuntimeUploadFileIdentity
 }
 
+/** Cancel and progress for one file; `onProgress` gets this file's bytes the runtime acknowledged. */
+export type RuntimeUploadTransfer = {
+  signal: AbortSignal
+  onProgress: (sentBytes: number) => void
+}
+
 /** Stream one staged file to a temp path, then commit it; the temp path is always cleaned up. */
 export async function uploadRuntimeFileWithoutClobber(
   session: RuntimeFileImportSession,
@@ -35,14 +45,15 @@ export async function uploadRuntimeFileWithoutClobber(
   source: RuntimeUploadSource,
   expectedSshConnectionGeneration?: number,
   expectedSshTargetId?: string,
-  expectedExecutionHostId?: 'local' | `ssh:${string}`
+  expectedExecutionHostId?: 'local' | `ssh:${string}`,
+  transfer?: RuntimeUploadTransfer
 ): Promise<void> {
   const tempRelativePath = makeRuntimeUploadTempPath(relativePath)
   try {
     session.assertCurrent()
     // Main owns file/socket handles and streams slices; renderer never loads the whole body.
     try {
-      await window.api.fs.uploadExternalFileToRuntime({
+      await streamUploadThroughMain(transfer, {
         environmentId: session.target.environmentId,
         sourceRootPath: source.sourceRootPath,
         entryRelativePath: source.entryRelativePath,
@@ -59,6 +70,8 @@ export async function uploadRuntimeFileWithoutClobber(
       // Import results expose this text directly; remove Electron’s remote-method wrapper.
       throw new Error(extractIpcErrorMessage(error, 'Upload failed'))
     }
+    // A cancel during the last slice must not still commit the file.
+    transfer?.signal.throwIfAborted()
     await callRuntimeFileImportMutation(
       session,
       'files.commitUpload',
@@ -86,6 +99,34 @@ export async function uploadRuntimeFileWithoutClobber(
       },
       15_000
     ).catch(() => {})
+  }
+}
+
+async function streamUploadThroughMain(
+  transfer: RuntimeUploadTransfer | undefined,
+  request: RuntimeUploadFileStreamRequest
+): Promise<void> {
+  if (!transfer) {
+    await window.api.fs.uploadExternalFileToRuntime(request)
+    return
+  }
+  transfer.signal.throwIfAborted()
+  const uploadId = createNonSecureContextUuid()
+  const stopProgress = window.api.fs.onRuntimeUploadProgress((event) => {
+    // Ids are per file, so a late event from an earlier file is never counted here.
+    if (event.uploadId === uploadId) {
+      transfer.onProgress(event.sentBytes)
+    }
+  })
+  const cancel = (): void => {
+    void window.api.fs.cancelRuntimeUpload({ uploadId }).catch(() => {})
+  }
+  transfer.signal.addEventListener('abort', cancel, { once: true })
+  try {
+    await window.api.fs.uploadExternalFileToRuntime({ ...request, uploadId })
+  } finally {
+    transfer.signal.removeEventListener('abort', cancel)
+    stopProgress()
   }
 }
 

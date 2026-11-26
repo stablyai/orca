@@ -24,6 +24,14 @@ import {
 } from './runtime-file-upload-client'
 import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import type { LocalFileAccess } from '../../../../../shared/file-access/local-file-access'
+import { stagedRuntimeUploadByteLength } from '../../../../../shared/file-import/runtime-upload-staging-contract'
+
+/** Byte progress across one runtime import; aborting stops it and rejects the whole import. */
+export type RuntimeImportTransfer = {
+  signal: AbortSignal
+  onTotal: (totalBytes: number) => void
+  onProgress: (sentBytes: number) => void
+}
 
 export async function importExternalPathsToRuntime(
   context: RuntimeFileOperationArgs,
@@ -36,6 +44,8 @@ export async function importExternalPathsToRuntime(
     access?: LocalFileAccess
     /** Remote `.orca/drops` uploads: name an extensionless image by its bytes. */
     nameExtensionlessImages?: boolean
+    /** Remote uploads only; local imports copy without progress. */
+    transfer?: RuntimeImportTransfer
   }
 ): Promise<{ results: ImportItemResult[] }> {
   const target = context.target
@@ -85,6 +95,12 @@ export async function importExternalPathsToRuntime(
     nameExtensionlessImages: options?.nameExtensionlessImages
   })
   importSession.assertCurrent()
+  const transfer = options?.transfer
+  transfer?.signal.throwIfAborted()
+  transfer?.onTotal(
+    staged.sources.reduce((total, source) => total + stagedRuntimeUploadByteLength(source), 0)
+  )
+  let uploadedBytes = 0
   const results: ImportItemResult[] = []
   const reservedNames = new Set<string>()
 
@@ -113,6 +129,7 @@ export async function importExternalPathsToRuntime(
       const destPath = joinPath(destinationDir, finalName)
       const destRelativePath = joinRuntimeRelativePath(destinationArgs.relativePath, finalName)
       for (const entry of source.entries) {
+        transfer?.signal.throwIfAborted()
         const entryRelativePath = joinRuntimeRelativePath(destRelativePath, entry.relativePath)
         if (entry.kind === 'directory') {
           await callRuntimeFileImportMutation(
@@ -148,8 +165,14 @@ export async function importExternalPathsToRuntime(
           context.expectedExecutionHostId ??
             (context.expectedSshTargetId
               ? `ssh:${encodeURIComponent(context.expectedSshTargetId)}`
-              : 'local')
+              : 'local'),
+          transfer && {
+            signal: transfer.signal,
+            onProgress: (sentBytes) => transfer.onProgress(uploadedBytes + sentBytes)
+          }
         )
+        uploadedBytes += entry.byteLength
+        transfer?.onProgress(uploadedBytes)
       }
       reservedNames.add(finalName)
       results.push({
@@ -172,6 +195,10 @@ export async function importExternalPathsToRuntime(
           }),
           15_000
         ).catch(() => {})
+      }
+      // Cancel ends the whole import, not just this source.
+      if (transfer?.signal.aborted) {
+        throw error
       }
       results.push({
         sourcePath: source.sourcePath,

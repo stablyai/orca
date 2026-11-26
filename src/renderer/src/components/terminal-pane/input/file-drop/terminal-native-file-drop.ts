@@ -2,6 +2,7 @@ import { toast } from 'sonner'
 
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { stageClientFilesForAgent } from '@/runtime/files/imports/agent-file-staging'
+import { showUploadProgressToast } from '@/lib/files/upload/upload-progress-toast'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import { parseWslUncPath, toWindowsWslPath } from '../../../../../../shared/file-access/wsl-paths'
@@ -130,7 +131,7 @@ async function uploadRuntimeDropPaths(
   }
 ): Promise<void> {
   const targetShell = getTerminalTargetShellForWorktreePath(args.worktreePath)
-  const pending = toast.loading(
+  const progress = showUploadProgressToast(
     translate(
       'auto.components.terminal.pane.terminal.drop.handler.uploadingFiles',
       'Uploading {{count}} files to runtime…',
@@ -149,8 +150,19 @@ async function uploadRuntimeDropPaths(
         expectedSshConnectionGeneration: args.expectedSshConnectionGeneration
       },
       args.dataPaths,
-      args.assertCurrent
+      args.assertCurrent,
+      {
+        transfer: {
+          signal: progress.signal,
+          onTotal: progress.setTotal,
+          onProgress: progress.update
+        }
+      }
     )
+    // Cancel puts nothing in the terminal, even when it lands after the last file finished.
+    if (progress.signal.aborted) {
+      return
+    }
     await pasteResolvedDropPaths({
       ...args,
       paths: staged.map(({ hostPath }) => hostPath),
@@ -159,9 +171,11 @@ async function uploadRuntimeDropPaths(
     })
     reportTerminalDropUploadSkipsAndFailures(skipped, failed)
   } catch (err) {
-    toast.error(terminalFileDropErrorMessage(err, 'upload'))
+    if (!progress.signal.aborted) {
+      toast.error(terminalFileDropErrorMessage(err, 'upload'))
+    }
   } finally {
-    toast.dismiss(pending)
+    progress.close()
   }
 }
 
