@@ -309,3 +309,71 @@ it('an abort after a refused attempt is refused, never read as sent', async () =
   expect(link).not.toHaveBeenCalled()
   expect(deliveries.waiting(SESSION)).toBe(false)
 })
+
+it('names the native positions of earlier screenshots in their chronological context', async () => {
+  rig = await createQueuedMessageTestRig({ starting: true })
+  const deliveries = new ChatDeliveries(vi.fn())
+  const png = Uint8Array.of(137, 80, 78, 71, 13, 10, 26, 10)
+  const request = {
+    deliveryId: 'compare',
+    text: 'Compare the before and after images',
+    signal: new AbortController().signal,
+    asker: {
+      userId: 'U1',
+      role: 'owner' as const,
+      place: { kind: 'public_channel' as const, id: 'C1' },
+      text: 'Compare the before and after images',
+      context: [],
+      earlierOwn: {
+        messages: [
+          {
+            at: 1,
+            text: 'Before',
+            messageRef: 'slack:T1:C1:1.0:1.0',
+            files: [{ id: 'FBEFORE', name: 'before.png', type: 'image/png' }]
+          },
+          {
+            at: 2,
+            text: 'After',
+            messageRef: 'slack:T1:C1:2.0:2.0',
+            files: [{ id: 'FAFTER', name: 'after.png', type: 'image/png' }]
+          }
+        ]
+      }
+    },
+    askerImages: connectorAskerImages({
+      reader:
+        () =>
+        async ({ fileId }) => ({
+          ok: true,
+          value: {
+            ok: true,
+            result: {
+              download: {
+                name: `${fileId}.png`,
+                url: 'https://fixture.invalid/image',
+                ticket: 'fixture'
+              }
+            }
+          }
+        }),
+      fetch: async () => new Response(png),
+      store: async (name) => `/attachments/${name}`
+    })
+  }
+  expect(await deliveries.deliver(chatHost(rig.host), KEY, CHAT, request)).toEqual({
+    outcome: 'accepted'
+  })
+  const { body } = await lastSent()
+  const [text, ...attachments] = body.blocks
+  expect(attachments).toEqual([
+    { type: 'image-ref', path: '/attachments/FAFTER.png' },
+    { type: 'image-ref', path: '/attachments/FBEFORE.png' }
+  ])
+  expect(text).toMatchObject({
+    type: 'text',
+    text: expect.stringMatching(
+      /file FBEFORE: before\.png, image\/png; attached to this turn as image 2\][\s\S]*file FAFTER: after\.png, image\/png; attached to this turn as image 1\]/
+    )
+  })
+})

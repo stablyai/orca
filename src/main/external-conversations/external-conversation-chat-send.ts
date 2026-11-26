@@ -210,10 +210,11 @@ function sendConnectorTurn(
   admit: () => void
 ) {
   const { asker, note, signal } = delivery
-  const attached = new Set([
-    ...carried.earlierBudget.fileIds,
-    ...images.map((image) => image.fileId)
-  ])
+  const attached = new Map(carried.imagePositions)
+  const carriedImageCount = carried.blocks.filter((block) => block.type === 'image-ref').length
+  for (const [index, image] of images.entries()) {
+    attached.set(image.fileId, carriedImageCount + index + 1)
+  }
   const text = asker
     ? connectorAskerPrompt(link.source, asker, note, { ...delivery, attached })
     : connectorPlainMessages([delivery, ...(delivery.later ?? [])], note)

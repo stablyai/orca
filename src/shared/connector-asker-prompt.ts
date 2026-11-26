@@ -160,22 +160,23 @@ type EarlierOwnFile = NonNullable<ConnectorEarlierOwn['messages'][number]['files
 function earlierOwnFile(
   file: EarlierOwnFile,
   ref: string | null,
-  attached: ReadonlySet<string> | undefined
+  attached: ReadonlyMap<string, number> | undefined
 ): string {
   if (ref === null || !isConnectorFileId(file.id)) {
     return notShown('a file in it')
   }
   const name = shownName(file.name) ?? 'a file'
   const type = isConnectorFileType(file.type) ? `, ${file.type}` : ''
-  if (attached?.has(file.id)) {
-    return `[Orca: file ${file.id}: ${name}${type}; attached to this turn]`
+  const position = attached?.get(file.id)
+  if (position !== undefined) {
+    return `[Orca: file ${file.id}: ${name}${type}; attached to this turn as image ${position}]`
   }
   return `[Orca: file ${file.id}: ${name}${type}; \`orca slack read ${ref} --download ${file.id}\` saves it]`
 }
 
 function earlierOwnParts(
   earlier: ConnectorEarlierOwn,
-  attached: ReadonlySet<string> | undefined
+  attached: ReadonlyMap<string, number> | undefined
 ): string[] {
   return [
     ...(earlier.more ? [notShown('they wrote more before these')] : []),
@@ -277,7 +278,7 @@ export function connectorAskerPrompt(
   timing: {
     sent?: ConnectorMessageTiming
     later?: readonly ConnectorLaterMessage[]
-    attached?: ReadonlySet<string>
+    attached?: ReadonlyMap<string, number>
   } = {}
 ): string {
   const later = timing.later ?? []

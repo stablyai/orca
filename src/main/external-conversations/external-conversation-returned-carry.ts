@@ -48,6 +48,7 @@ export type CarriedMessages = {
   /** Everyone who asked a carried message, nested carries included; null for one Orca can't name. */
   askedBy: (ConnectorMessageAsker | null)[]
   earlierBudget: EarlierImageBudget
+  imagePositions: ReadonlyMap<string, number>
 }
 
 export const NOTHING_CARRIED: CarriedMessages = {
@@ -56,6 +57,7 @@ export const NOTHING_CARRIED: CarriedMessages = {
   deliveryIds: [],
   askers: [],
   askedBy: [],
+  imagePositions: new Map(),
   earlierBudget: {
     count: AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT,
     bytes: AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES,
@@ -106,6 +108,8 @@ export async function carriedMessages(
     AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES -
     direct.reduce((total, image) => total + image.bytes, 0)
   let fileIds = new Set(direct.map((image) => image.fileId))
+  let imageCount = 0
+  const imagePositions = new Map<string, number>()
   const start = progress?.owner.read(progress.key, eligible) ?? 0
   let missingPrefix = start
   const carried: JournalReturnedCard[] = []
@@ -114,6 +118,7 @@ export async function carriedMessages(
   cards: for (let index = start; index < eligible.length; index += 1) {
     const each = eligible[index]!
     const cardFileIds = new Set(fileIds)
+    const cardPositions = new Map<string, number>()
     const ownBlocks: NativeChatBlock[] = []
     let cardBytes = 0
     let cardImages = 0
@@ -147,8 +152,13 @@ export async function carriedMessages(
       }
       if (fileId) {
         cardFileIds.add(fileId)
+        cardPositions.set(fileId, imageCount + cardImages)
       }
       ownBlocks.push(block)
+    }
+    imageCount += cardImages
+    for (const [fileId, position] of cardPositions) {
+      imagePositions.set(fileId, position)
     }
     count -= cardImages
     bytes -= cardBytes
@@ -161,6 +171,7 @@ export async function carriedMessages(
   }
   return {
     blocks,
+    imagePositions,
     earlierBudget: { count, bytes, fileIds },
     cards: carried.map(({ card }) => ({
       messageId: card.messageId,
