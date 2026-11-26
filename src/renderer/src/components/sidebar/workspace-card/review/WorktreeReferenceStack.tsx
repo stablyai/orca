@@ -58,6 +58,37 @@ function ReferenceGlyph({
   return <CircleDot className="text-muted-foreground" />
 }
 
+// Same signature means the same rendered glyph (icon + tone).
+function glyphSignature(item: WorkspaceAttachment, details: WorkspaceReferenceDetailsMap): string {
+  const review = workspaceReferenceReview(item, details[getWorkspaceAttachmentKey(item)])
+  if (review) {
+    const outcome = review.status && getProviderChecksOutcome(review.checksSummary, review.status)
+    return `review:${review.provider === 'gitlab' ? 'gitlab' : 'pr'}:${review.state}:${outcome}`
+  }
+  return item.provider === 'linear' || item.provider === 'jira' ? item.provider : 'issue'
+}
+
+// Ghosts identical to a glyph already drawn read as a blurred icon, not extra information.
+function distinctGhosts(
+  ordered: readonly WorkspaceAttachment[],
+  details: WorkspaceReferenceDetailsMap
+): WorkspaceAttachment[] {
+  const seen = new Set<string>()
+  const ghosts: WorkspaceAttachment[] = []
+  for (const item of ordered) {
+    const signature = glyphSignature(item, details)
+    if (seen.has(signature)) {
+      continue
+    }
+    seen.add(signature)
+    ghosts.push(item)
+    if (ghosts.length === 3) {
+      break
+    }
+  }
+  return ghosts.slice(1)
+}
+
 function priority(item: WorkspaceAttachment, details: WorkspaceReferenceDetailsMap): number {
   const key = getWorkspaceAttachmentKey(item)
   const detail = details[key]
@@ -135,8 +166,7 @@ export function WorktreeReferenceStack({
       className="workspace-reference-stack"
       data-workspace-reference-stack={front.type === 'issue' ? front.provider : 'review'}
     >
-      {ordered
-        .slice(1, 3)
+      {distinctGhosts(ordered, details)
         .toReversed()
         .map((item, index, ghosts) => (
           <span
