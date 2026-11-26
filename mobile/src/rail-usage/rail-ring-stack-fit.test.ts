@@ -44,12 +44,15 @@ describe('railRingStackFit', () => {
   it('shows only whole rings, labels included, cut in the gap after the last one', () => {
     const fit = railRingStackFit({ ...base, count: 5, room: 200 })
     // Three rings at pitch 54 end their labels at 12 + 2*54 + 46 = 166; a fourth would need 220 + peek.
-    expect(fit).toEqual({ gap: 13, paddingBottom: 7, height: 179, pitch: 54 })
+    expect(fit).toEqual({ gap: 13, paddingBottom: 17, height: 179, pitch: 54 })
     const laid = rings(fit, 5)
     expect(laid[1].top - laid[0].labelBottom).toBe(8)
     expect(fit.height!).toBeLessThanOrEqual(200)
     // The fade starts below the third label and above the fourth ring's top.
     expect(fit.height! - base.peek).toBeGreaterThanOrEqual(laid[2].labelBottom)
     expect(fit.height! - base.peek).toBeLessThanOrEqual(laid[3].top)
+    // Scrolled to the end, the last percent finishes at or above the fade.
+    const contentEnd = laid[4].labelBottom + fit.paddingBottom - base.overhang
+    expect(laid[4].labelBottom).toBeLessThanOrEqual(contentEnd - base.peek)
   })
 })
