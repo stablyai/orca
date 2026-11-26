@@ -79,12 +79,7 @@ export function applyWebSessionTabsStorePatch(
     const shouldCopyChatReadMarks = isWebClientLocation() && !state.chatReadMarksCopiedHere
     const builtPatch = buildPatch(state, changedAgentPaneKeys)
     const patch = shouldCopyChatReadMarks
-      ? copyWebClientChatReadMarksForPatch(
-          state,
-          builtPatch,
-          hostMirrorVerdict,
-          affectedWorkspaces
-        )
+      ? copyWebClientChatReadMarksForPatch(state, builtPatch, hostMirrorVerdict, affectedWorkspaces)
       : builtPatch
     markHostMirrorPatchFullResync(state, patch)
     mirroredAgentStatusChanged = patch !== state && Object.hasOwn(patch, 'agentStatusByPaneKey')

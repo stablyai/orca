@@ -30,7 +30,9 @@ export function copyWebClientChatReadMarksOnce(
     },
     sessionIds()
   )
-  return copied || complete ? { ...copied, ...(complete ? { chatReadMarksCopiedHere: true } : {}) } : null
+  return copied || complete
+    ? { ...copied, ...(complete ? { chatReadMarksCopiedHere: true } : {}) }
+    : null
 }
 
 /** Copy each chat once before a full inventory makes this device's migration complete. */

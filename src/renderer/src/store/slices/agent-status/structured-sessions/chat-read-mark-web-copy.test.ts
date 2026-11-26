@@ -55,9 +55,14 @@ it('does not enumerate when a copy already completed', () => {
     chatReadMarksCopiedHere: true
   }
   expect(
-    copyWebClientChatReadMarksForTabLists(state, () => {
-      throw new Error('should not enumerate')
-    }, [], true)
+    copyWebClientChatReadMarksForTabLists(
+      state,
+      () => {
+        throw new Error('should not enumerate')
+      },
+      [],
+      true
+    )
   ).toBeNull()
 })
 
