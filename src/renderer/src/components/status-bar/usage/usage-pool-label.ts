@@ -19,6 +19,7 @@ import {
 } from '../../../../../shared/agent-usage/display/grouped-usage-pool'
 import { WEEKLY_WINDOW_MINUTES } from '../../../../../shared/agent-usage/display/usage-provider-windows'
 import { USAGE_WARNING_PERCENT } from './usage-health-tone'
+import { validResetAt } from './usage-reset-caption'
 
 function formatShortPoolWindowName(bucket: RateLimitBucket, t: Translate = translate): string {
   return formatPoolWindowName(bucket, (minutes) =>
@@ -55,7 +56,10 @@ export function formatPoolWindowLabel(
 ): string {
   const label = formatShortPoolWindowName(bucket, t)
   // Show the reset once the pool turns yellow, by consumption whatever the % display.
-  if (clampUsedPercent(bucket.usedPercent) >= USAGE_WARNING_PERCENT && bucket.resetsAt != null) {
+  if (
+    clampUsedPercent(bucket.usedPercent) >= USAGE_WARNING_PERCENT &&
+    validResetAt(bucket.resetsAt) != null
+  ) {
     const countdown = formatRateLimitWindowChipLabel(bucket, now)
     return label ? `${label} (${countdown})` : countdown
   }

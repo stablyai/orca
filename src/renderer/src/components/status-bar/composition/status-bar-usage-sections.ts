@@ -6,7 +6,7 @@ import type { StatusBarUsageMode } from '../../../../../shared/status-bar/status
 import { isCursorUsageBucket } from '../../../../../shared/agent-usage/rate-limits/cursor-usage-buckets'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { formatRateLimitWindowChipLabel } from '../../../../../shared/agent-usage/rate-limits/rate-limit-window-label'
+import { formatRateLimitWindowChipLabel } from '../usage/rate-limit-window-localized-label'
 import { getUsageHeadlineSection, isScopedUsageWindow } from '../usage/usage-headline-sections'
 
 export type StatusBarUsageSection = {
