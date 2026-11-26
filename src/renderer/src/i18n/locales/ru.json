@@ -21972,7 +21972,9 @@
       },
       "messaging": {
         "usingTool": "Используется {{tool}}",
-        "todayAt": "Сегодня {{time}}"
+        "todayAt": "Сегодня {{time}}",
+        "messaged": "Сообщение для {{name}}",
+        "messageFrom": "Сообщение от {{name}}"
       }
     },
     "tab": {

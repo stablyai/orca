@@ -20948,7 +20948,9 @@
       },
       "messaging": {
         "usingTool": "Usando {{tool}}",
-        "todayAt": "Hoy {{time}}"
+        "todayAt": "Hoy {{time}}",
+        "messaged": "Mensaje enviado a {{name}}",
+        "messageFrom": "Mensaje de {{name}}"
       }
     },
     "tab": {

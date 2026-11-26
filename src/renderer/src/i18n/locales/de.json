@@ -21269,7 +21269,9 @@
       },
       "messaging": {
         "usingTool": "Verwendet {{tool}}",
-        "todayAt": "Heute {{time}}"
+        "todayAt": "Heute {{time}}",
+        "messaged": "Nachricht an {{name}}",
+        "messageFrom": "Nachricht von {{name}}"
       }
     },
     "tab": {

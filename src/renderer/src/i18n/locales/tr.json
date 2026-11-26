@@ -22932,7 +22932,9 @@
       },
       "messaging": {
         "usingTool": "{{tool}} kullanılıyor",
-        "todayAt": "Bugün {{time}}"
+        "todayAt": "Bugün {{time}}",
+        "messaged": "{{name}} adlı bota mesaj gönderildi",
+        "messageFrom": "{{name}} adlı bottan mesaj"
       }
     },
     "tab": {

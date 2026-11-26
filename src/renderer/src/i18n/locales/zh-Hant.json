@@ -22480,7 +22480,9 @@
       },
       "messaging": {
         "usingTool": "正在使用 {{tool}}",
-        "todayAt": "今天 {{time}}"
+        "todayAt": "今天 {{time}}",
+        "messaged": "已傳送訊息給 {{name}}",
+        "messageFrom": "來自 {{name}} 的訊息"
       }
     },
     "tab": {

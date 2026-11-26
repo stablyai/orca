@@ -22802,7 +22802,9 @@
       },
       "messaging": {
         "usingTool": "Usando {{tool}}",
-        "todayAt": "Hoje {{time}}"
+        "todayAt": "Hoje {{time}}",
+        "messaged": "Mensagem enviada a {{name}}",
+        "messageFrom": "Mensagem de {{name}}"
       }
     },
     "tab": {

@@ -327,6 +327,7 @@ function MessageRowContent(props: MessageRowProps): React.JSX.Element | null {
           <NativeChatSubagentEndingRow block={notice} messageId={message.id} />
         ) : (
           <NativeChatNoticeRow
+            messaging={props.messaging}
             block={notice}
             messageId={message.id}
             timestamp={message.timestamp}

@@ -22022,7 +22022,9 @@
       "htmlViewPreview": "预览",
       "messaging": {
         "usingTool": "正在使用 {{tool}}",
-        "todayAt": "今天 {{time}}"
+        "todayAt": "今天 {{time}}",
+        "messaged": "已发送消息给 {{name}}",
+        "messageFrom": "来自 {{name}} 的消息"
       }
     },
     "tab": {

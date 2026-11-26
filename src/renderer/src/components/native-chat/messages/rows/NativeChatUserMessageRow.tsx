@@ -1,3 +1,4 @@
+import { NativeChatBotMessageNote } from './NativeChatBotMessageNote'
 import { NativeChatSetupButton } from '../../host-access/NativeChatSetupButton'
 import { NativeChatTranscriptSignInNotice } from '../../host-access/NativeChatSignInRow'
 import { NativeChatUserBubble } from './NativeChatUserBubble'
@@ -108,6 +109,18 @@ export function NativeChatUserMessageRow({
   if (folded) {
     return <div ref={rowRef} hidden />
   }
+  const botSender =
+    messaging && from?.senders.length === 1 && from.senders[0]?.bot ? from.senders[0] : undefined
+  const senderCard = from ? (
+    <NativeChatAgentMessageCard
+      message={message}
+      from={from}
+      textAttachmentContent={structuredAttachments ? markdown : undefined}
+      runtimeContext={runtimeContext}
+      onRefolded={onRefolded}
+      defaultOpen={botSender !== undefined}
+    />
+  ) : null
   return (
     <div
       ref={rowRef}
@@ -130,13 +143,19 @@ export function NativeChatUserMessageRow({
         <NativeChatConnectorNoAccessNote messageId={message.id} asker={message.asker} />
       ) : null}
       {from ? (
-        <NativeChatAgentMessageCard
-          message={message}
-          from={from}
-          textAttachmentContent={structuredAttachments ? markdown : undefined}
-          runtimeContext={runtimeContext}
-          onRefolded={onRefolded}
-        />
+        botSender ? (
+          <NativeChatBotMessageNote
+            id={message.id}
+            label={t('components.native-chat.messaging.messageFrom', 'Message from {{name}}', {
+              name:
+                botSender.name ?? t('components.native-chat.agentMessage.unnamedSender', 'an agent')
+            })}
+          >
+            {senderCard}
+          </NativeChatBotMessageNote>
+        ) : (
+          senderCard
+        )
       ) : (
         <NativeChatUserBubble variant={messaging ? 'messaging' : 'default'}>
           {markdown ? (

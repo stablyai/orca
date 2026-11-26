@@ -21339,7 +21339,9 @@
       },
       "messaging": {
         "usingTool": "{{tool}} を使用中",
-        "todayAt": "今日 {{time}}"
+        "todayAt": "今日 {{time}}",
+        "messaged": "{{name}} にメッセージを送信",
+        "messageFrom": "{{name}} からのメッセージ"
       }
     },
     "tab": {

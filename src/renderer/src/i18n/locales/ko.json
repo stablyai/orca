@@ -22193,7 +22193,9 @@
       },
       "messaging": {
         "usingTool": "{{tool}} 사용 중",
-        "todayAt": "오늘 {{time}}"
+        "todayAt": "오늘 {{time}}",
+        "messaged": "{{name}}에게 메시지 전송",
+        "messageFrom": "{{name}}의 메시지"
       }
     },
     "tab": {

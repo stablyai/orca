@@ -1,3 +1,4 @@
+import { nativeChatAppearanceStyle } from './appearance/native-chat-appearance-style'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import type { BotRequestCard } from '../../../../shared/bots/bot-request-card'
 import { NativeChatBotRequestCard } from './NativeChatBotRequestCard'
@@ -46,13 +47,33 @@ function setup(): void {
   })
 }
 
-function Requests({ open }: { open?: boolean }): React.JSX.Element {
+function Requests({
+  open,
+  messaging = false
+}: {
+  open?: boolean
+  messaging?: boolean
+}): React.JSX.Element {
   return (
-    <div className="flex flex-col gap-1 bg-chat-pane p-4">
+    <div
+      className={
+        messaging
+          ? 'native-chat-appearance flex flex-col gap-3 bg-chat-pane p-4'
+          : 'flex flex-col gap-1 bg-chat-pane p-4'
+      }
+      style={
+        messaging
+          ? nativeChatAppearanceStyle({
+              theme: document.documentElement.classList.contains('dark') ? 'dark' : 'light'
+            })
+          : undefined
+      }
+    >
       {[asked, handed, notSent].map((card, index) => (
         <NativeChatBotRequestCard
           key={card.messageId ?? 'not-sent'}
           card={card}
+          messaging={messaging}
           cardId={`${open ? 'open' : 'closed'}-${index}`}
           timestamp={FIXTURE_AT + index * 60_000}
           fallback={card.subject}
@@ -108,4 +129,16 @@ export const pairedComputerAsks = defineFixture({
       ))}
     </div>
   )
+})
+
+export const messagingNotes = defineFixture({
+  width: 640,
+  setup,
+  render: () => <Requests messaging />
+})
+export const messagingNotesOpen = defineFixture({
+  width: 640,
+  setup,
+  render: () => <Requests messaging open />,
+  interact: openAll
 })

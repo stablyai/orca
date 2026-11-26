@@ -23140,7 +23140,9 @@
       },
       "messaging": {
         "usingTool": "Using {{tool}}",
-        "todayAt": "Today {{time}}"
+        "todayAt": "Today {{time}}",
+        "messaged": "Messaged {{name}}",
+        "messageFrom": "Message from {{name}}"
       }
     },
     "tab": {

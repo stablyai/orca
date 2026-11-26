@@ -17,6 +17,7 @@ import { NativeChatImportPlanCard } from './NativeChatImportPlanCard'
 import { NativeChatToolAddedCard } from './NativeChatToolAddedCard'
 
 type CardContext = {
+  messaging?: boolean
   messageId: string
   timestamp: number | null
   /** The host's line, for a bot this window doesn't list. */
@@ -37,12 +38,13 @@ const DESKTOP_BOT_CARDS: {
     <NativeChatImportPlanCard plan={plan} messageId={messageId} />
   ),
   importDone: (done) => <NativeChatImportDoneCard done={done} />,
-  botRequest: (card, { messageId, timestamp, fallback }) => (
+  botRequest: (card, { messageId, timestamp, fallback, messaging }) => (
     <NativeChatBotRequestCard
       card={card}
       cardId={messageId}
       timestamp={timestamp}
       fallback={fallback}
+      messaging={messaging}
     />
   ),
   googleSetup: (card, { fallback }) => <GoogleSetupChatCard card={card} fallback={fallback} />,
@@ -65,10 +67,11 @@ function drawCard<K extends NativeChatBlockBotCardKind>(
 export function nativeChatBotCard(
   block: NativeChatTextBlock,
   messageId: string,
-  timestamp: number | null = null
+  timestamp: number | null = null,
+  messaging = false
 ): React.JSX.Element | null {
   const card = nativeChatBotCardOf(block)
-  return card ? drawCard(card, { messageId, timestamp, fallback: block.text }) : null
+  return card ? drawCard(card, { messageId, timestamp, fallback: block.text, messaging }) : null
 }
 
 /** The card a whole message is drawn as. */
