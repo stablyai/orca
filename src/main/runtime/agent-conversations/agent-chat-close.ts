@@ -7,6 +7,8 @@ import { resolveLineageRunningSession } from '../orchestration/addressing/sessio
 import { agentConversationPlaces } from './agent-conversation-list'
 import type { ResolvedAgentConversation } from './agent-conversation-address'
 import { AgentConversationRefusal } from './agent-conversation-refusal'
+import { runsForBot } from '../../bots/bot-session-tabs'
+import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 
 /** `orca chat close`: close an open chat by its Orca session ID, as its tab's close button does. */
 export async function closeAgentChat(
@@ -34,7 +36,11 @@ export async function closeAgentChat(
       `Orca can't verify chat ${orcaSessionId}'s current conversation after /clear, so it closed nothing. Close the tab in Orca instead.`
     )
   }
-  if ((await agentConversationPlaces(ctx.runtime, resolved)).length === 0) {
+  // A bot keeps running its chat after the tab closes, so its status row outlives the tab.
+  const tablessBotRun =
+    getStructuredAgentSessionHost()?.getSessionTabId(running.sessionId) === null &&
+    runsForBot(ctx.runtime.bots, running.sessionId)
+  if (tablessBotRun || (await agentConversationPlaces(ctx.runtime, resolved)).length === 0) {
     throw new AgentConversationRefusal(CODES.notOpen, `Chat ${orcaSessionId} is not open.`)
   }
   await closeStructuredAgentSessionForUser(ctx.runtime, running.sessionId, () =>
