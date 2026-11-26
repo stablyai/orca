@@ -4,12 +4,6 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { NativeChatCodeBlock, NativeChatDeferredCodeBlock } from './NativeChatCodeBlock'
 
 // The grammar's wasm can't load here; a marker stands in for the colored tokens.
-// Whether every block's colors count as cached, as after the item was opened and left once.
-const cache = vi.hoisted(() => ({ hit: false }))
-vi.mock('@/lib/syntax-highlighting/use-highlighted-syntax', async (original) => ({
-  ...(await original<object>()),
-  hasFinishedSyntax: () => cache.hit
-}))
 vi.mock('./NativeChatHighlightedCode', () => ({
   NativeChatHighlightedCode: ({ code }: { code: string }) => <span data-token="">{code}</span>
 }))
@@ -18,7 +12,6 @@ vi.mock('./NativeChatHighlightedCode', () => ({
 let report: ((entries: { target: Element; isIntersecting: boolean }[]) => void) | null = null
 const observed = new Set<Element>()
 beforeEach(() => {
-  cache.hit = false
   observed.clear()
   vi.stubGlobal(
     'IntersectionObserver',
@@ -53,7 +46,7 @@ const show = (container: HTMLElement, visible: boolean) =>
     report?.([{ target: pre, isIntersecting: visible }])
   })
 
-it('colors chat blocks at once, never waiting to be seen', async () => {
+it('colors chat blocks at once, never waiting to be seen', () => {
   const { container } = render(<NativeChatCodeBlock language="ts">{code(3)}</NativeChatCodeBlock>)
   // Colored on the first render: no plain frame before an observer reports.
   expect(tokens(container)).toBe(1)
@@ -61,26 +54,22 @@ it('colors chat blocks at once, never waiting to be seen', async () => {
   expect(observed.size).toBe(0)
 })
 
-it('keeps item blocks off screen plain until seen, even when their colors are cached', async () => {
-  cache.hit = true
+it('keeps item blocks off screen plain until seen', () => {
   const { container } = render(
     <NativeChatDeferredCodeBlock language="ts">{code(4)}</NativeChatDeferredCodeBlock>
   )
-  await act(() => new Promise((resolve) => setTimeout(resolve, 20)))
   expect(tokens(container)).toBe(0)
   expect(observed.size).toBe(1)
   show(container, true)
   expect(tokens(container)).toBe(1)
 })
 
-it('keeps an item block colored once seen, as it scrolls away, its text grows or the cache drops it', async () => {
-  cache.hit = true
+it('keeps an item block colored once seen, as it scrolls away or its text grows', () => {
   const { container, rerender } = render(
     <NativeChatDeferredCodeBlock language="ts">{code(5)}</NativeChatDeferredCodeBlock>
   )
   show(container, true)
   show(container, false)
-  cache.hit = false
   rerender(<NativeChatDeferredCodeBlock language="ts">{code(6)}</NativeChatDeferredCodeBlock>)
   expect(tokens(container)).toBe(1)
   expect(observed.size).toBe(0)
