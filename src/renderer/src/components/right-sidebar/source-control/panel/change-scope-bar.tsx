@@ -276,7 +276,7 @@ export function SourceControlChangeScopeBar({
                     'ml-0.5 shrink-0 text-2xs tabular-nums text-muted-foreground',
                     // The × beside a picked scope needs the room first.
                     changeScope.kind === 'all'
-                      ? '@max-[228px]/change-scope:hidden'
+                      ? '@max-[216px]/change-scope:hidden'
                       : '@max-[256px]/change-scope:hidden'
                   )}
                   data-testid="source-control-change-scope-count"

@@ -1,4 +1,8 @@
 import { useRef, type ReactNode } from 'react'
+import {
+  useFilterResultsStartUnderStickyHeader,
+  useStickyFilterSpacerHeight
+} from './filter-results-scroll'
 import { useGitCommitActionsSupport } from '@/runtime/source-control/git/git-commit-actions-capability'
 import { shouldShowSourceControlCompareUnavailableCard } from './header-toolbar'
 import { shouldRenderCommitArea } from '../commit/component-gates'
@@ -24,6 +28,7 @@ export function SourceControlPanelContent({
   const embedded = useSourceControlScope() !== null
   const t = useTranslate()
   const commitFilesHeaderRef = useRef<HTMLButtonElement>(null)
+  const fileListHeaderRef = useRef<HTMLDivElement>(null)
   const {
     activeConnectionId,
     activeOpenRowKeys,
@@ -103,6 +108,18 @@ export function SourceControlPanelContent({
       : null
   // A commit's files still loading must not read as "No matching files" under a filter.
   const commitFilesPending = scopeKind === 'commit' && currentCommitFiles?.status !== 'ready'
+  const stickyFileListHeader = fileListHeader !== null && !embedded
+  const filterSpacerHeight = useStickyFilterSpacerHeight(
+    fileListScrollElement,
+    fileListHeaderRef,
+    stickyFileListHeader && Boolean(normalizedFilter || filterExpanded)
+  )
+  useFilterResultsStartUnderStickyHeader(
+    fileListHeaderRef,
+    fileListScrollElement,
+    normalizedFilter,
+    stickyFileListHeader
+  )
   const commitSurfaceShown =
     scopeKind !== 'commit' &&
     shouldRenderCommitArea(unresolvedConflicts.length, conflictOperation, recovery.supported)
@@ -158,6 +175,7 @@ export function SourceControlPanelContent({
 
       {fileListHeader ? (
         <div
+          ref={fileListHeaderRef}
           // Marks where the scroller's scroll-margin rule starts (see panel-ready).
           data-file-list-header={embedded ? undefined : ''}
           className={cn(
@@ -330,10 +348,8 @@ export function SourceControlPanelContent({
         </SourceControlBranchSection>
       ) : null}
 
-      {fileListHeader && !embedded && (normalizedFilter || filterExpanded) ? (
-        // While filtering, a viewport of room after the sticky header keeps a shrinking result
-        // list from clamping scrollTop, so the header and its input never move under the cursor.
-        <div aria-hidden="true" className="h-[calc(100%-35px)] shrink-0" />
+      {filterSpacerHeight > 0 ? (
+        <div aria-hidden="true" className="shrink-0" style={{ height: filterSpacerHeight }} />
       ) : null}
     </>
   )

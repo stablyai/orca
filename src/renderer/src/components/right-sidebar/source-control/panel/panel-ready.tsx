@@ -9,6 +9,7 @@ import { GitGraphOpenButton, useGitGraphSupport } from '../sync/git-graph-open-b
 import type { SourceControlRowOpenEvent } from '../listing/split-open'
 import { openGitGraph } from '@/lib/source-control/graph/git-graph-tab'
 import type { SourceControlPanelReadyProps } from './panel-props'
+import { cn } from '@/lib/class-names'
 import { SourceControlHeaderOverflowMenu } from './header-overflow-menu'
 import { useSourceControlScope } from './worktree-scope'
 
@@ -189,11 +190,13 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
 
         <div
           ref={setFileListScrollElement}
-          className={
+          className={cn(
             // Focused controls after the sticky file-list header scroll clear of it. Sections stay
             // direct children: the virtualized lists re-measure their offset from scroller children.
-            'relative flex flex-1 flex-col overflow-auto scrollbar-sleek pt-1 [&>[data-file-list-header]~*_*]:scroll-mt-[38px]'
-          }
+            'relative flex flex-1 flex-col overflow-auto scrollbar-sleek pt-1 [&>[data-file-list-header]~*_*]:scroll-mt-[38px]',
+            // Scroll anchoring would re-anchor to a vanished result row and move the stuck filter input.
+            !embedded && (filterExpanded || filterQuery.trim()) && '[overflow-anchor:none]'
+          )}
           style={{ paddingBottom: selectedKeys.size > 0 ? 50 : undefined }}
         >
           <SourceControlPanelContent {...props} fileListHeader={fileListHeader} />
