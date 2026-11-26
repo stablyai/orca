@@ -104,9 +104,8 @@ it('defers results again when the palette reopens during its close linger', asyn
 it('builds results once while unrelated store writes keep arriving', async () => {
   // Real scheduler: act() would apply the reveal without yielding, hiding a discarded, restarted build.
   vi.useRealTimers()
-  const reactGlobals = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
-  const previousActEnvironment = reactGlobals.IS_REACT_ACT_ENVIRONMENT
-  reactGlobals.IS_REACT_ACT_ENVIRONMENT = false
+  const previousActEnvironment: unknown = Reflect.get(globalThis, 'IS_REACT_ACT_ENVIRONMENT')
+  Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', false)
   const host = document.createElement('div')
   document.body.append(host)
   const root = createRoot(host)
@@ -117,18 +116,14 @@ it('builds results once while unrelated store writes keep arriving', async () =>
   }, 5)
   try {
     root.render(<WorktreeJumpPalette />)
-    await new Promise((resolve) => setTimeout(resolve, 20))
     useAppStore.setState({ activeModal: 'worktree-palette' })
-    const deadline = Date.now() + 4000
-    while (resultRowCount() === 0 && Date.now() < deadline) {
-      await new Promise((resolve) => setTimeout(resolve, 10))
-    }
-    expect(resultRowCount()).toBe(11)
+    // A restarted transition starves under the writes until React's ~5 s expiry.
+    await vi.waitFor(() => expect(resultRowCount()).toBe(11), { timeout: 4000, interval: 10 })
     expect(documentsBuilt.count).toBe(WORKSPACE_COUNT)
   } finally {
     clearInterval(churn)
     root.unmount()
     host.remove()
-    reactGlobals.IS_REACT_ACT_ENVIRONMENT = previousActEnvironment
+    Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', previousActEnvironment)
   }
 })
