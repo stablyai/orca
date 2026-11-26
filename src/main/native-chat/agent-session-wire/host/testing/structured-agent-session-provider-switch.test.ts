@@ -84,6 +84,7 @@ it('finishes the current reply before carrying its history into the next agent o
   if (!third.ok || !('queued' in third.value)) {
     throw new Error('Expected the third message to wait behind the second')
   }
+  const laterQueued = third.value.queued.messageId
   expect(chat.store.getRecord(SESSION)).toMatchObject({
     provider: 'codex',
     selectedProvider: { agent: 'claude' }
@@ -131,7 +132,7 @@ it('finishes the current reply before carrying its history into the next agent o
     providerIdentity: { provider: 'legacy', agent: 'claude', sessionId: THREAD, recordId: 'second' }
   })
   await eventually(async () => {
-    expect((await chat.handoff(third.value.queued.messageId))?.handedOverAt).toBeDefined()
+    expect((await chat.handoff(laterQueued))?.handedOverAt).toBeDefined()
     expect(chat.dispatch.mock.calls.at(-1)?.[0]).toMatchObject({
       body: { blocks: [{ type: 'text', text: 'Now update the changelog' }] },
       executionOptions: { effort: 'low' }

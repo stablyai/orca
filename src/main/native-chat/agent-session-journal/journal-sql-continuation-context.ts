@@ -162,7 +162,7 @@ function readJournalDomainContinuationPage(
   }
   // Unaccepted sends belong only to an uncleared context, matching the saved-prompt policy.
   if (clear > 0) {
-    const submissions: JournalContinuationPage['submissions'] = []
+    const submissions: JournalContinuationPage['submissions'][number][] = []
     // Seek by acceptance, then sort only the suffix into the same order as a full export.
     for (const row of db
       .prepare(`SELECT payload_json FROM journal_submission_attempts
