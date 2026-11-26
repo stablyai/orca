@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { WorkspaceLinkedItemSchema } from '../../workspace-attachments/workspace-linked-item-schema'
 import { WorkspaceAttachmentsSchema } from '../../workspace-attachments/workspace-attachment-schema'
 import { TaskSourceContextSchema } from '../../work-items/task-source-context-schema'
@@ -59,77 +60,87 @@ export function assertLinkedTaskSourceContextMatch(
   }
 }
 
-export const FolderWorkspaceCreate = z
-  .object({
-    ...FolderWorkspaceHookCreateShape,
-    projectGroupId: requiredString('Missing project group id'),
-    name: OptionalString,
-    folderPath: OptionalString.nullable().optional(),
-    connectionId: OptionalString.nullable().optional(),
-    linkedTask: FolderWorkspaceLinkedTask.optional(),
-    linkedItems: WorkspaceAttachmentsSchema.optional(),
-
-    linkedTaskSourceContext: TaskSourceContextSchema.nullable().optional(),
-    createdWithAgent: z.string().refine(isTuiAgent).optional(),
-    pendingFirstAgentMessageRename: z.boolean().optional()
-  })
-  .superRefine(assertLinkedTaskSourceContextMatch)
-  .superRefine(assertFolderWorkspaceStartup)
-
-// Hosts advertising the unique-id mutation capability refuse a shared folder id when this is set.
-const RequireUniqueId = z.boolean().optional()
-
-export const FolderWorkspaceUpdate = z.object({
-  folderWorkspaceId: requiredString('Missing folder workspace id'),
-  requireUniqueId: RequireUniqueId,
-  updates: z
+export const FolderWorkspaceCreate = lazyZodSchema(() =>
+  z
     .object({
+      ...FolderWorkspaceHookCreateShape,
+      projectGroupId: requiredString('Missing project group id'),
       name: OptionalString,
-      folderPath: OptionalString,
+      folderPath: OptionalString.nullable().optional(),
+      connectionId: OptionalString.nullable().optional(),
       linkedTask: FolderWorkspaceLinkedTask.optional(),
       linkedItems: WorkspaceAttachmentsSchema.optional(),
-      linkedItemsBase: WorkspaceAttachmentsSchema.optional(),
-      linkedItemsSelectionChanged: z.boolean().optional(),
+
       linkedTaskSourceContext: TaskSourceContextSchema.nullable().optional(),
-      comment: z.string().optional(),
-      isArchived: z.boolean().optional(),
-      isUnread: z.boolean().optional(),
-      isPinned: z.boolean().optional(),
-      sortOrder: OptionalFiniteNumber,
-      manualOrder: OptionalFiniteNumber,
-      workspaceStatus: OptionalString,
       createdWithAgent: z.string().refine(isTuiAgent).optional(),
-      pendingFirstAgentMessageRename: z.boolean().optional(),
-      firstAgentMessageRenameError: z.string().nullable().optional(),
-      lastActivityAt: OptionalFiniteNumber,
-      diffComments: z.array(DiffCommentSchema).optional(),
-      diffCommentsBase: z.array(DiffCommentSchema).optional()
+      pendingFirstAgentMessageRename: z.boolean().optional()
     })
     .superRefine(assertLinkedTaskSourceContextMatch)
-})
+    .superRefine(assertFolderWorkspaceStartup)
+)
 
-export const FolderWorkspaceSelector = z.object({
-  folderWorkspaceId: requiredString('Missing folder workspace id')
-})
+// Hosts advertising the unique-id mutation capability refuse a shared folder id when this is set.
+const RequireUniqueId = lazyZodSchema(() => z.boolean().optional())
 
-export const FolderWorkspaceDelete = FolderWorkspaceSelector.extend({
-  requireUniqueId: RequireUniqueId,
-  runHooks: z.boolean().optional(),
-  allowFailedArchiveHook: z.boolean().optional()
-})
-
-export const FolderWorkspacePathStatus = z.discriminatedUnion('scope', [
+export const FolderWorkspaceUpdate = lazyZodSchema(() =>
   z.object({
-    scope: z.literal('folder-workspace'),
-    folderWorkspaceId: requiredString('Missing folder workspace id')
-  }),
-  z.object({
-    scope: z.literal('project-group'),
-    projectGroupId: requiredString('Missing project group id')
-  }),
-  z.object({
-    scope: z.literal('path'),
-    path: requiredString('Missing folder path'),
-    connectionId: OptionalString.nullable().optional()
+    folderWorkspaceId: requiredString('Missing folder workspace id'),
+    requireUniqueId: RequireUniqueId,
+    updates: z
+      .object({
+        name: OptionalString,
+        folderPath: OptionalString,
+        linkedTask: FolderWorkspaceLinkedTask.optional(),
+        linkedItems: WorkspaceAttachmentsSchema.optional(),
+        linkedItemsBase: WorkspaceAttachmentsSchema.optional(),
+        linkedItemsSelectionChanged: z.boolean().optional(),
+        linkedTaskSourceContext: TaskSourceContextSchema.nullable().optional(),
+        comment: z.string().optional(),
+        isArchived: z.boolean().optional(),
+        isUnread: z.boolean().optional(),
+        isPinned: z.boolean().optional(),
+        sortOrder: OptionalFiniteNumber,
+        manualOrder: OptionalFiniteNumber,
+        workspaceStatus: OptionalString,
+        createdWithAgent: z.string().refine(isTuiAgent).optional(),
+        pendingFirstAgentMessageRename: z.boolean().optional(),
+        firstAgentMessageRenameError: z.string().nullable().optional(),
+        lastActivityAt: OptionalFiniteNumber,
+        diffComments: z.array(DiffCommentSchema).optional(),
+        diffCommentsBase: z.array(DiffCommentSchema).optional()
+      })
+      .superRefine(assertLinkedTaskSourceContextMatch)
   })
-])
+)
+
+export const FolderWorkspaceSelector = lazyZodSchema(() =>
+  z.object({
+    folderWorkspaceId: requiredString('Missing folder workspace id')
+  })
+)
+
+export const FolderWorkspaceDelete = lazyZodSchema(() =>
+  FolderWorkspaceSelector.extend({
+    requireUniqueId: RequireUniqueId,
+    runHooks: z.boolean().optional(),
+    allowFailedArchiveHook: z.boolean().optional()
+  })
+)
+
+export const FolderWorkspacePathStatus = lazyZodSchema(() =>
+  z.discriminatedUnion('scope', [
+    z.object({
+      scope: z.literal('folder-workspace'),
+      folderWorkspaceId: requiredString('Missing folder workspace id')
+    }),
+    z.object({
+      scope: z.literal('project-group'),
+      projectGroupId: requiredString('Missing project group id')
+    }),
+    z.object({
+      scope: z.literal('path'),
+      path: requiredString('Missing folder path'),
+      connectionId: OptionalString.nullable().optional()
+    })
+  ])
+)

@@ -32,6 +32,7 @@ import {
   type FileLinkExists
 } from '../../../../shared/native-chat/file-access/native-chat-file-link-tree'
 import { CommentMarkdownBlockLineContext } from './comment-markdown-code-renderers'
+import { MARKDOWN_CLOSING_FENCE, remarkMarkdownClosingFence } from './comment-markdown-code-fence'
 import { htmlRendersAsText, remarkUnknownHtmlAsText } from './comment-markdown-unknown-html-as-text'
 import { CommentMarkdownWords } from './CommentMarkdownWords'
 import {
@@ -87,12 +88,18 @@ export type CommentMarkdownExtension = {
   components: Components
 }
 
-function extensionRehypePlugins(extension: CommentMarkdownExtension): MarkdownPlugins {
+function extensionRehypePlugins(
+  extension: CommentMarkdownExtension | undefined,
+  trackCodeFences: boolean
+): MarkdownPlugins {
   const attributes: NonNullable<SanitizeSchema['attributes']> = {
     ...commentMarkdownSanitizeSchema.attributes
   }
-  for (const [tagName, names] of Object.entries(extension.sanitizeAttributes)) {
+  for (const [tagName, names] of Object.entries(extension?.sanitizeAttributes ?? {})) {
     attributes[tagName] = [...(attributes[tagName] ?? []), ...names]
+  }
+  if (trackCodeFences) {
+    attributes.code = [...(attributes.code ?? []), MARKDOWN_CLOSING_FENCE]
   }
   return [rehypeRaw, [rehypeSanitize, { ...commentMarkdownSanitizeSchema, attributes }]]
 }
@@ -175,9 +182,13 @@ const CommentMarkdown = React.memo(
       () => ({ ...components, span: CommentMarkdownWords }),
       [components]
     )
+    const trackCodeFences = renderCodeBlock !== undefined && variant === 'document'
     const activeRehypePlugins = React.useMemo<MarkdownPlugins>(
-      () => (extension ? extensionRehypePlugins(extension) : rehypePlugins),
-      [extension]
+      () =>
+        extension || trackCodeFences
+          ? extensionRehypePlugins(extension, trackCodeFences)
+          : rehypePlugins,
+      [extension, trackCodeFences]
     )
     const activeRemarkPlugins = React.useMemo(() => {
       const htmlPlugins = unknownHtmlAsText ? unknownHtmlAsTextRemarkPlugins : remarkPlugins
@@ -188,9 +199,18 @@ const CommentMarkdown = React.memo(
         ? [...basePlugins, remarkNativeChatFileLinks(fileLinkExists)]
         : basePlugins
       const withMath: RemarkPlugins = math ? [...plugins, remarkChatMath] : plugins
-      const withExtension = extension ? [...withMath, ...extension.remarkPlugins] : withMath
+      const withFences = trackCodeFences ? [...withMath, remarkMarkdownClosingFence] : withMath
+      const withExtension = extension ? [...withFences, ...extension.remarkPlugins] : withFences
       return githubRepo ? [...withExtension, remarkGitHubReferences(githubRepo)] : withExtension
-    }, [extension, fileLinkExists, githubRepo, math, singleTildeStrikethrough, unknownHtmlAsText])
+    }, [
+      extension,
+      fileLinkExists,
+      githubRepo,
+      math,
+      trackCodeFences,
+      singleTildeStrikethrough,
+      unknownHtmlAsText
+    ])
     const blocks = useMarkdownBlocks(
       content,
       growing,
@@ -238,6 +258,7 @@ const CommentMarkdown = React.memo(
                   fadeFrom !== undefined && (fadeFrom < blockEnd || held)
                     ? Math.min(block.text.length, Math.max(0, fadeFrom - block.start))
                     : undefined
+                const authored = markdownBlockContent(block)
                 return (
                   <CommentMarkdownBlockLineContext.Provider key={block.start} value={block.line}>
                     <MemoizedMarkdown
@@ -248,6 +269,7 @@ const CommentMarkdown = React.memo(
                       fadeFrom={blockFadeFrom}
                       fadeSettled={!held && index < blocks.length - 1}
                       fadeBase={block.start}
+                      authoredCodeFenceSource={trackCodeFences ? block.text : undefined}
                       {...(held
                         ? {
                             fadeHoldFrom: fadeHold.from - block.start,
@@ -262,13 +284,13 @@ const CommentMarkdown = React.memo(
                       }
                     >
                       {growing && index === blocks.length - 1 && !block.literalMath
-                        ? protectCodexFileCitations(markdownBlockContent(block), (source) =>
+                        ? protectCodexFileCitations(authored, (source) =>
                             remend(source, {
                               linkMode: 'text-only',
                               ...(math ? { katex: false, inlineKatex: false } : {})
                             })
                           )
-                        : markdownBlockContent(block)}
+                        : authored}
                     </MemoizedMarkdown>
                   </CommentMarkdownBlockLineContext.Provider>
                 )

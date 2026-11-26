@@ -251,10 +251,10 @@ function expression(value) {
   return result
 }
 
-const source = `${header}/*\n${license.trim()}\n*/\nimport { z } from 'zod'\nexport const ACP_SCHEMA_RELEASE = '${release}'\nexport const ACP_LEGACY_MODEL_SCHEMA_RELEASE = '${legacyRelease}'\nexport const ACP_PROTOCOL_VERSION = 1\n// An enum value this schema release does not name; \`string & {}\` keeps the known literals narrowable.\nconst otherString = z.custom<string & {}>((value) => typeof value === 'string')\n${ordered
+const source = `${header}/*\n${license.trim()}\n*/\nimport { z } from 'zod'\nimport { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'\nexport const ACP_SCHEMA_RELEASE = '${release}'\nexport const ACP_LEGACY_MODEL_SCHEMA_RELEASE = '${legacyRelease}'\nexport const ACP_PROTOCOL_VERSION = 1\n// An enum value this schema release does not name; \`string & {}\` keeps the known literals narrowable.\nconst otherString = lazyZodSchema(() => z.custom<string & {}>((value) => typeof value === 'string'))\n${ordered
   .map(
     (name) =>
-      `export const ${name}Schema = ${isStringEnum(definitions[name]) ? openEnum(definitions[name]) : expression(definitions[name])}\nexport type ${name} = z.infer<typeof ${name}Schema>\n`
+      `export const ${name}Schema = lazyZodSchema(() => ${isStringEnum(definitions[name]) ? openEnum(definitions[name]) : expression(definitions[name])})\nexport type ${name} = z.infer<typeof ${name}Schema>\n`
   )
   .join('\n')}`
 

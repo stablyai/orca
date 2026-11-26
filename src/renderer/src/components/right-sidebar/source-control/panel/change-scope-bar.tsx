@@ -14,6 +14,7 @@ import {
   type SourceControlChangeScope
 } from './change-scope'
 import type { SourceControlPanelReadyProps } from './panel-props'
+import { useSourceControlScope } from './worktree-scope'
 
 function fileCountLabel(t: Translate, count: number): string {
   return t('auto.components.right.sidebar.SourceControl.scopeFileCount', '{{count}} files', {
@@ -71,6 +72,7 @@ export function SourceControlChangeScopeBar({
   graphSupported
 }: SourceControlPanelReadyProps & { graphSupported: boolean }): React.JSX.Element {
   const t = useTranslate()
+  const placementWorkspaceId = useSourceControlScope()?.placementWorkspaceId
   const intlLocale = useIntlLocale()
   const scopeTriggerRef = useRef<HTMLButtonElement>(null)
   const {
@@ -290,7 +292,11 @@ export function SourceControlChangeScopeBar({
           historyState={gitHistoryState}
           graphSupported={graphSupported}
           onOpenGitGraph={() => {
-            void openGitGraph(currentWorktreeId, () => resolveSplitTargetGroupId())
+            void openGitGraph(
+              currentWorktreeId,
+              () => resolveSplitTargetGroupId(),
+              placementWorkspaceId
+            )
           }}
           onRetry={() => void refreshGitHistory({ wakeWslDistro: true })}
         />

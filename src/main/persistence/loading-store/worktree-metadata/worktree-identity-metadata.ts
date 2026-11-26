@@ -23,40 +23,11 @@ import {
 } from '../profile-writing/write-scheduling'
 import { mergeWorktreeMetaForWrite } from './worktree-meta-write-normalization'
 import { WORKTREE_METADATA_DOMAINS } from '../../profile-save-domains'
-import {
-  isLocalOnlyWorktreeMetaId,
-  worktreeMetaHostFor
-} from '../../../../shared/worktree/metadata/local-only-worktree-meta-ids'
+import { worktreeMetaHostFor } from '../../../../shared/worktree/metadata/local-only-worktree-meta-ids'
+import { resolveAliasIdentityKey } from './worktree-identity-alias'
 
 type MetadataRuntime = Pick<StoreRuntimeState, 'state'> &
   Partial<Pick<StoreRuntimeState, 'worktreeMetaWriteListeners'>>
-type WorktreeMetaState = Pick<
-  PersistedState,
-  'worktreeMeta' | 'worktreeMetaByIdentity' | 'worktreeIdentityAliases'
->
-
-export function resolveAliasIdentityKey(
-  state: WorktreeMetaState,
-  alias: string
-): string | undefined {
-  const identityKeys = state.worktreeIdentityAliases?.[alias] ?? []
-  if (identityKeys.length === 0) {
-    return undefined
-  }
-  const resolvable = identityKeys.filter((key) => state.worktreeMetaByIdentity?.[key])
-  const candidates = resolvable.length > 0 ? resolvable : identityKeys
-  // Deterministic tie-breaking keeps hosts consistent: newest activity, then greatest key.
-  const winner = candidates.reduce((best, key) => {
-    const bestTouch = state.worktreeMetaByIdentity?.[best]?.lastActivityAt ?? 0
-    const keyTouch = state.worktreeMetaByIdentity?.[key]?.lastActivityAt ?? 0
-    if (keyTouch !== bestTouch) {
-      return keyTouch > bestTouch ? key : best
-    }
-    return key > best ? key : best
-  })
-  return winner
-}
-
 export function pruneUnreferencedWorktreeIdentityMeta(
   state: PersistedState,
   candidates?: ReadonlySet<string>
@@ -187,54 +158,7 @@ export function getWorktreeMetaForHost(
   return !legacy?.hostId || legacy.hostId === executionHostId ? legacy : undefined
 }
 
-// Local-only IDs cannot belong to remote hosts even when legacy rows lack stamps.
-function isOtherHostsLocalOnlyRow(worktreeId: string, executionHostId: ExecutionHostId): boolean {
-  return executionHostId !== LOCAL_EXECUTION_HOST_ID && isLocalOnlyWorktreeMetaId(worktreeId)
-}
-
-export function getAllWorktreeMetaForHost(
-  runtime: { state: WorktreeMetaState },
-  executionHostId: ExecutionHostId
-): Record<string, WorktreeMeta> {
-  const state = runtime.state
-  const projected: Record<string, WorktreeMeta> = {}
-  const worktreeMeta = state.worktreeMeta
-  for (const worktreeId in worktreeMeta) {
-    if (
-      !Object.hasOwn(worktreeMeta, worktreeId) ||
-      isOtherHostsLocalOnlyRow(worktreeId, executionHostId)
-    ) {
-      continue
-    }
-    const meta = worktreeMeta[worktreeId]!
-    if (!meta.hostId || meta.hostId === executionHostId) {
-      projected[worktreeId] = meta
-    }
-  }
-  const aliases = state.worktreeIdentityAliases
-  for (const alias in aliases) {
-    if (
-      !Object.hasOwn(aliases, alias) ||
-      getExecutionHostIdFromWorktreeHostIdentity(alias) !== executionHostId
-    ) {
-      continue
-    }
-    const worktreeId = getWorktreeIdFromHostIdentity(alias)
-    const identityKey = resolveAliasIdentityKey(state, alias)
-    const meta = identityKey ? state.worktreeMetaByIdentity?.[identityKey] : undefined
-    if (
-      !worktreeId ||
-      isOtherHostsLocalOnlyRow(worktreeId, executionHostId) ||
-      !meta ||
-      (meta.hostId && meta.hostId !== executionHostId)
-    ) {
-      continue
-    }
-    projected[worktreeId] =
-      meta.hostId === executionHostId ? meta : { ...meta, hostId: executionHostId }
-  }
-  return projected
-}
+export { getAllWorktreeMetaForHost } from './worktree-host-meta-projection'
 
 export function setWorktreeMetaForHost(
   runtime: MetadataRuntime,
