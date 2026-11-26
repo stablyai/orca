@@ -61,7 +61,15 @@ export const hidden = defineFixture({
   render: () => <ChangingStatus visible={false} />
 })
 
-function TranscriptStatus({ reply = false, quiet = false }: { reply?: boolean; quiet?: boolean }) {
+function TranscriptStatus({
+  reply = false,
+  quiet = false,
+  reasoning = false
+}: {
+  reply?: boolean
+  quiet?: boolean
+  reasoning?: boolean
+}) {
   const [repliedAt] = useState(() => Date.now() - 30_000)
   const messages: NativeChatMessage[] = [
     {
@@ -81,10 +89,21 @@ function TranscriptStatus({ reply = false, quiet = false }: { reply?: boolean; q
       blocks: [{ type: 'text', text: 'Your meeting is tomorrow at 9:00.' }]
     })
   }
+  const thinking: NativeChatMessage = {
+    id: 'thinking-after-reply',
+    role: 'reasoning',
+    source: 'transcript',
+    timestamp: 3,
+    blocks: [{ type: 'text', text: 'Checking whether the meeting time changed.' }]
+  }
+  if (reasoning) {
+    messages.push(thinking)
+  }
   const slots = buildNativeChatTranscriptSlots({
     messages,
     turnKeys: messages.map(() => 'ask'),
     liveTurnKey: 'ask',
+    liveReasoningId: reasoning ? thinking.id : null,
     receipts: new Map(),
     turnStatuses: {
       active: { startedAt: quiet ? repliedAt - 2_000 : 1, workedSeconds: null, thinking: false },
@@ -118,10 +137,12 @@ function TranscriptStatus({ reply = false, quiet = false }: { reply?: boolean; q
         slots={slots}
         context={context}
         line={{
-          thinking: false,
+          thinking: reasoning,
           stopping: false,
           activityText: quiet ? null : 'Reading the PDF',
-          reasoning: null
+          reasoning: reasoning
+            ? { message: thinking, markdown: 'Checking whether the meeting time changed.' }
+            : null
         }}
         awaitingInput={false}
         visible
@@ -151,4 +172,13 @@ export const quietAfterReply = defineFixture({
   width: 640,
   setup: messagingSetup,
   render: () => <TranscriptStatus reply quiet />
+})
+
+export const reasoningAfterReply = defineFixture({
+  width: 640,
+  setup: messagingSetup,
+  render: () => <TranscriptStatus reply reasoning />,
+  interact: (frame) => {
+    frame.querySelector<HTMLButtonElement>('[data-native-chat-turn-activity] button')?.click()
+  }
 })

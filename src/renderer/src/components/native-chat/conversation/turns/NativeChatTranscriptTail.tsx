@@ -38,7 +38,7 @@ export function NativeChatTranscriptTail({
     frontier.message.role === 'assistant' &&
     block?.type === 'text' &&
     block.text.trim().length > 0
-  if (line && replying) {
+  if (line && replying && !line.reasoning) {
     return (
       <div
         className="-mt-3 flex min-h-6 items-center px-3.5 text-chat-foreground-faint"

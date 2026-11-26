@@ -2,6 +2,8 @@ import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import { MessageRow } from './NativeChatMessageRow'
 import { nativeChatAppearanceStyle } from '../../appearance/native-chat-appearance-style'
+import { useState } from 'react'
+import { NativeChatToolRunWindowProvider } from '../../tools/runs/native-chat-tool-run-window-context'
 
 const message: NativeChatMessage = {
   id: 'research-note',
@@ -51,3 +53,16 @@ export const receivedOpen = defineFixture({
     frame.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')?.click()
   }
 })
+
+function FindReceived() {
+  const [query, setQuery] = useState('')
+  return (
+    <NativeChatToolRunWindowProvider isVisible find={{ isOpen: true, query }}>
+      <button type="button" onClick={() => setQuery(query ? '' : 'hourly outlook')}>
+        Toggle Find
+      </button>
+      <Received />
+    </NativeChatToolRunWindowProvider>
+  )
+}
+export const receivedFind = defineFixture({ width: 640, render: () => <FindReceived /> })
