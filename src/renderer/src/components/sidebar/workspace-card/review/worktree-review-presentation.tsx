@@ -2,7 +2,7 @@ import {
   getProviderChecksOutcome,
   type CheckPresentationOutcome
 } from '../../../../../../shared/source-control/checks/provider-check-summary'
-import { createElement } from 'react'
+import { createElement, type ComponentType } from 'react'
 import { GitMerge } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { getReviewStateIcon } from '@/components/github/review-state-presentation'
@@ -87,12 +87,19 @@ export function ReviewIcon({
   variant?: 'provider' | 'generic'
   showChecks?: boolean
 }): React.JSX.Element {
-  const providerIcon =
-    variant === 'provider' && review.provider === 'gitlab' ? GitMerge : PullRequestIcon
-  const Icon = getReviewStateIcon(review.state) ?? providerIcon
+  const Icon = getReviewIconComponent(review, variant)
   return createElement(Icon, {
     className: cn(className, getReviewIconTone(review, showChecks))
   })
+}
+
+export function getReviewIconComponent(
+  review: Pick<WorktreeCardPrDisplay, 'state'> & Partial<Pick<WorktreeCardPrDisplay, 'provider'>>,
+  variant: 'provider' | 'generic' = 'provider'
+): ComponentType<{ className?: string }> {
+  const providerIcon =
+    variant === 'provider' && review.provider === 'gitlab' ? GitMerge : PullRequestIcon
+  return getReviewStateIcon(review.state) ?? providerIcon
 }
 
 export function getReviewIconTone(
