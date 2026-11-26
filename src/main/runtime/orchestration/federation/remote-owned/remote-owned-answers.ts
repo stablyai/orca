@@ -71,10 +71,10 @@ export function inServerTerms<T>(value: T, { server, forward, link }: ServerTerm
   }
   if (value instanceof Error) {
     const code = 'code' in value && typeof value.code === 'string' ? value.code : 'runtime_error'
-    const data = Object.entries(errorData(value) ?? {}).map(([field, inner]) => [
-      field,
-      swap(inner)
-    ])
+    // Downstream frame custody cannot prove the caller's request was unsent.
+    const data = Object.entries(errorData(value) ?? {})
+      .filter(([field]) => field !== 'requestSent')
+      .map(([field, inner]) => [field, swap(inner)])
     const error = new OrchestrationError(code, String(swap(value.message)), {
       ...Object.fromEntries(data),
       server

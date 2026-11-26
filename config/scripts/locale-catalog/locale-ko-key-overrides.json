@@ -1551,37 +1551,37 @@
     "ko": "모든 변경 사항 스테이징"
   },
   "auto.components.right.sidebar.source.control.primary.action.a5d1f7b036": {
-    "ko": "{{value0}}을(를) 만들기 전에 커밋을 게시하세요."
+    "ko": "{{value0}}을 만들기 전에 커밋을 게시하세요."
   },
   "auto.components.right.sidebar.source.control.primary.action.b6e2a8c147": {
-    "ko": "{{value0}}을(를) 만들기 전에 커밋을 푸시하세요."
+    "ko": "{{value0}}을 만들기 전에 커밋을 푸시하세요."
   },
   "auto.components.right.sidebar.source.control.primary.action.b8e4f2a901": {
     "ko": "원격 작업이 끝날 때까지 기다리세요."
   },
   "auto.components.right.sidebar.source.control.primary.action.c7f3b9d258": {
-    "ko": "{{value0}}을(를) 만들기 전에 이 브랜치를 동기화하세요."
+    "ko": "{{value0}}을 만들기 전에 이 브랜치를 동기화하세요."
   },
   "auto.components.right.sidebar.source.control.primary.action.c9f3a1b802": {
-    "ko": "{{value0}}을(를) 만들기 전에 충돌을 해결하세요."
+    "ko": "{{value0}}을 만들기 전에 충돌을 해결하세요."
   },
   "auto.components.right.sidebar.source.control.primary.action.d8a4c0e369": {
-    "ko": "{{value0}}을(를) 만들기 전에 인증하세요."
+    "ko": "{{value0}}을 만들기 전에 인증하세요."
   },
   "auto.components.right.sidebar.source.control.primary.action.e3b9d5f814": {
-    "ko": "기본 브랜치에서는 {{value0}}을(를) 만들 수 없습니다."
+    "ko": "기본 브랜치에서는 {{value0}}을 만들 수 없습니다."
   },
   "auto.components.right.sidebar.source.control.primary.action.e9b5d1f470": {
-    "ko": "{{value0}}을(를) 만들기 전에 브랜치를 체크아웃하세요."
+    "ko": "{{value0}}을 만들기 전에 브랜치를 체크아웃하세요."
   },
   "auto.components.right.sidebar.source.control.primary.action.f0c6e2a581": {
-    "ko": "이 브랜치는 아직 {{value0}}을(를) 만들 준비가 되지 않았습니다."
+    "ko": "이 브랜치는 아직 {{value0}}을 만들 준비가 되지 않았습니다."
   },
   "auto.components.right.sidebar.source.control.primary.action.f4c0e6a925": {
-    "ko": "{{value0}}을(를) 만들기 전에 변경 사항을 커밋하세요."
+    "ko": "{{value0}}을 만들기 전에 변경 사항을 커밋하세요."
   },
   "auto.components.right.sidebar.source.control.primary.action.h3i4j5k607": {
-    "ko": "이 브랜치에서 {{value0}}을(를) 만들 수 있는지 확인 중…"
+    "ko": "이 브랜치에서 {{value0}}을 만들 수 있는지 확인 중…"
   },
   "auto.components.right.sidebar.useFileDeletion.23e98f192f": {
     "ko": "원격 호스트의 파일을 영구적으로 삭제합니다. 이 작업은 되돌릴 수 없습니다."
@@ -2229,13 +2229,13 @@
     "ko": "Warp 테마를 Orca 터미널 테마로 가져옵니다."
   },
   "auto.components.settings.WarpThemeImportModal.found_in_source": {
-    "ko": "{{value0}}에서"
+    "ko": " ({{value0}})"
   },
   "auto.components.settings.WarpThemeImportModal.found_theme_one": {
     "ko": "테마 1개를 찾았습니다."
   },
   "auto.components.settings.WarpThemeImportModal.found_theme_other": {
-    "ko": "테마 {{value0}}개를 찾았습니다."
+    "ko": "테마 {{value0}}개를 찾았습니다"
   },
   "auto.components.settings.WarpThemeImportModal.import_theme_one": {
     "ko": "테마 1개 가져오기"
@@ -2272,6 +2272,9 @@
   },
   "auto.components.settings.WarpThemeImportModal.yaml_title": {
     "ko": "테마 YAML 가져오기"
+  },
+  "auto.components.settings.WarpThemeImportModal.found_theme": {
+    "ko": "테마 {{value0}}개를 찾았습니다"
   },
   "auto.components.settings.WorkspaceDirectorySetting.1a2b3c4d5e": {
     "ko": "클라이언트 기본값"
@@ -3698,6 +3701,9 @@
   "auto.components.stats.ClaudeUsagePane.rangeLast90Days": {
     "ko": "최근 90일"
   },
+  "auto.components.stats.ClaudeUsagePane.2d41fd45c6": {
+    "ko": " • 마지막 스캔 오류: {{value0}}"
+  },
   "auto.components.stats.CodexUsageDailyChart.1e6f62d7e3": {
     "ko": "추론"
   },
@@ -3719,6 +3725,9 @@
   "auto.components.stats.CodexUsagePane.rangeLast90Days": {
     "ko": "최근 90일"
   },
+  "auto.components.stats.CodexUsagePane.8a6655f7a2": {
+    "ko": " • 마지막 스캔 오류: {{value0}}"
+  },
   "auto.components.stats.OpenCodeUsagePane.349f7c3f5c": {
     "ko": "합계"
   },
@@ -3736,6 +3745,9 @@
   },
   "auto.components.stats.OpenCodeUsagePane.rangeLast90Days": {
     "ko": "최근 90일"
+  },
+  "auto.components.stats.OpenCodeUsagePane.6cc7782458": {
+    "ko": " • 마지막 스캔 오류: {{value0}}"
   },
   "auto.components.stats.UsageOverviewPane.6c00c46815": {
     "ko": "공급자를 활성화해 로컬 에이전트 로그를 스캔하고 통합 토큰 원장을 만드세요."
@@ -4666,6 +4678,9 @@
   },
   "auto.components.settings.ZcodePlanAccountsSection.detailsUnavailable": {
     "ko": "요금제 자격 증명 세부 정보는 Orca를 실행 중인 컴퓨터에서만 볼 수 있습니다."
+  },
+  "auto.components.settings.ZcodePlanAccountsSection.resetIn": {
+    "ko": " — {{value0}} 후 초기화"
   },
   "accounts.antigravity.changed": {
     "ko": "agy 자체 계정이 변경되었습니다. agy를 시작하기 전에 저장된 계정을 다시 선택하세요."
@@ -5600,8 +5615,14 @@
   "auto.components.skills.install.rowNew": {
     "ko": "새 스킬"
   },
+  "auto.components.skills.SkillDelete.placementJoin": {
+    "ko": "와 "
+  },
   "auto.components.right.sidebar.FileExplorerRow.a06551beee": {
     "ko": "Enter"
+  },
+  "auto.components.right.sidebar.github.pr.stack.confirmation.84f6f5b9eb": {
+    "ko": "포함됨: {{numbers}}. "
   },
   "browser.history.enterKey": {
     "ko": "Enter"

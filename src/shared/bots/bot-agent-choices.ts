@@ -86,3 +86,20 @@ export function botAgentChoices(
       )
   )
 }
+
+/** The host's default agent when a bot can start it there as it is now, not by installing it first:
+ *  the menu leads with chats the host runs now, so an install-first default doesn't beat a ready one. */
+export function readyBotDefaultAgent(
+  model: BotAgentMenuModel,
+  defaultAgent: string | null | undefined
+): BotAgent | undefined {
+  return botAgentChoices(model, undefined, true).find((agent) => agent === defaultAgent)
+}
+
+/** A new bot's agent from `choices`: the host's default agent when a bot can run it, else the first. */
+export function newBotAgent(
+  choices: readonly BotAgent[],
+  defaultAgent: string | null | undefined
+): BotAgent | undefined {
+  return choices.find((agent) => agent === defaultAgent) ?? choices[0]
+}

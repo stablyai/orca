@@ -7,7 +7,10 @@ import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirm
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { botToolErrorMessage } from '@/components/bots/bot-tools-client'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import type { DiscoveredMcpServer } from '../../../../../shared/mcp-servers/mcp-servers'
+import {
+  mcpMoveRemovesFrom,
+  type DiscoveredMcpServer
+} from '../../../../../shared/mcp-servers/mcp-servers'
 import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { importMcpServer, type McpServerView } from '@/runtime/mcp-servers/mcp-servers-client'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
@@ -92,7 +95,7 @@ export function McpServersPane({
     void (async () => {
       // One at a time: each move edits the same agent files.
       for (const server of servers) {
-        await importMcpServer(target, server.key, mode)
+        await importMcpServer(target, server, mode)
       }
     })()
       .then(() => {
@@ -112,7 +115,7 @@ export function McpServersPane({
   const move = async (servers: readonly DiscoveredMcpServer[]): Promise<void> => {
     const one = servers.length === 1 ? servers[0] : undefined
     const agentNames = mcpAgentNames(
-      [...new Set(servers.flatMap((server) => server.agents))],
+      [...new Set(servers.flatMap((server) => mcpMoveRemovesFrom(server)))],
       locale
     )
     const ok = await confirm({
@@ -141,7 +144,9 @@ export function McpServersPane({
     }
   }
 
-  const movable = discovered.filter((server) => server.movable)
+  const movable = discovered.filter(
+    (server) => server.movable && mcpMoveRemovesFrom(server).length > 0
+  )
   const foundAgents = mcpAgentNames(
     [...new Set(discovered.flatMap((server) => server.agents))],
     locale
