@@ -9,9 +9,11 @@ import { LabelledField, sendValue, type PluginDeclarativeEmit } from './PluginDe
 import {
   codeInputSegments,
   completionWordAt,
+  fitMaxLength,
   insideString,
   isCompletionWordChar,
   matchCompletions,
+  normalizeDiagnosticOffsets,
   normalizeLineBreaks,
   type PluginCodeInputCompletion
 } from './plugin-declarative-code-input-text'
@@ -72,10 +74,10 @@ export function PluginDeclarativeCodeInput({
   const open = items.length > 0
   const shown = Math.min(active, Math.max(0, items.length - 1))
   // Ranges were computed for the text the guest last saw; while typing runs ahead of it (or with no
-  // onChange, after any edit) they point elsewhere.
+  // onChange, after any edit) they point elsewhere. They count the guest's own line breaks.
   const diagnostics =
     caughtUp && (props.value === undefined || props.value === stored)
-      ? (props.diagnostics ?? [])
+      ? normalizeDiagnosticOffsets(stored, props.diagnostics ?? [])
       : []
   const segments = codeInputSegments(value, diagnostics, caret)
 
@@ -118,8 +120,11 @@ export function PluginDeclarativeCodeInput({
     const inserted = document.execCommand('insertText', false, text)
     accepting.current = false
     if (!inserted) {
-      change(value.slice(0, from) + text + value.slice(to))
-      const at = from + text.length
+      // Trim to maxLength as the native insertion would.
+      const room = (props.maxLength ?? Infinity) - (value.length - (to - from))
+      const fitted = fitMaxLength(text, room)
+      change(value.slice(0, from) + fitted + value.slice(to))
+      const at = from + fitted.length
       requestAnimationFrame(() => element.setSelectionRange(at, at))
     }
   }

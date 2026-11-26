@@ -17,8 +17,47 @@ export function normalizeLineBreaks(text: string): string {
   return text.replace(/\r\n?/g, '\n')
 }
 
+/**
+ * Moves diagnostic ranges given against `raw` onto `normalizeLineBreaks(raw)`: each CRLF before an
+ * offset counts once. An offset between `\r` and `\n` lands after the break.
+ */
+export function normalizeDiagnosticOffsets(
+  raw: string,
+  diagnostics: readonly PluginCodeInputDiagnostic[]
+): readonly PluginCodeInputDiagnostic[] {
+  if (!raw.includes('\r\n')) {
+    return diagnostics
+  }
+  const at = (offset: number): number => {
+    let removed = 0
+    for (let index = 1; index < Math.min(offset, raw.length); index += 1) {
+      if (raw[index] === '\n' && raw[index - 1] === '\r') {
+        removed += 1
+      }
+    }
+    return offset - removed
+  }
+  return diagnostics.map((diagnostic) => ({
+    ...diagnostic,
+    from: at(diagnostic.from),
+    to: at(diagnostic.to)
+  }))
+}
+
 const isLowSurrogate = (unit: number): boolean => unit >= 0xdc00 && unit <= 0xdfff
 const isHighSurrogate = (unit: number): boolean => unit >= 0xd800 && unit <= 0xdbff
+
+/**
+ * The part of `text` that fits in `room` UTF-16 units, as a textarea's `maxLength` trims an
+ * insertion; it never splits a surrogate pair.
+ */
+export function fitMaxLength(text: string, room: number): string {
+  if (text.length <= room) {
+    return text
+  }
+  const end = Math.max(0, room)
+  return isHighSurrogate(text.charCodeAt(end - 1)) ? text.slice(0, end - 1) : text.slice(0, end)
+}
 
 /**
  * The word that ends at `cursor`, which a completion replaces. It steps back by whole code points

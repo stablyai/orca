@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   codeInputSegments,
   completionWordAt,
+  fitMaxLength,
   insideString,
   matchCompletions,
+  normalizeDiagnosticOffsets,
   normalizeLineBreaks
 } from './plugin-declarative-code-input-text'
 
@@ -25,6 +27,29 @@ describe('completionWordAt', () => {
 describe('normalizeLineBreaks', () => {
   it('turns CRLF and lone CR into LF, as a textarea reports its value', () => {
     expect(normalizeLineBreaks('a\r\n$g\rb\nc')).toBe('a\n$g\nb\nc')
+  })
+})
+
+describe('normalizeDiagnosticOffsets', () => {
+  it('counts each CRLF before an offset once', () => {
+    const at = (raw: string, from: number, to: number): [number, number] => {
+      const [moved] = normalizeDiagnosticOffsets(raw, [{ from, to, message: 'x' }])
+      return [moved!.from, moved!.to]
+    }
+    expect(at('a\r\nbad', 3, 6)).toEqual([2, 5])
+    expect(at('a\r\nb\r\nc', 6, 7)).toEqual([4, 5])
+    // Between CR and LF lands after the break; lone CR and LF already count once.
+    expect(at('a\r\nb', 2, 4)).toEqual([2, 3])
+    expect(at('a\rb\nc', 4, 5)).toEqual([4, 5])
+  })
+})
+
+describe('fitMaxLength', () => {
+  it('keeps what fits in the room left, without splitting a surrogate pair', () => {
+    expect(fitMaxLength('total', 1)).toBe('t')
+    expect(fitMaxLength('total', 9)).toBe('total')
+    expect(fitMaxLength('total', -2)).toBe('')
+    expect(fitMaxLength('a\u{10400}', 2)).toBe('a')
   })
 })
 

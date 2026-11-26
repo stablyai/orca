@@ -172,6 +172,20 @@ it('counts offsets on CRLF text the way the textarea does', () => {
   expect(textarea.value).toBe('a\n$gt')
 })
 
+it('underlines diagnostics given against CRLF text where the guest meant', () => {
+  field({ ...base, defaultValue: 'a\r\nbad', diagnostics: [{ from: 3, to: 6, message: 'bad' }] })
+  const marks = [...document.querySelectorAll('[data-tone]')]
+  expect(marks.map((mark) => mark.textContent)).toEqual(['bad'])
+})
+
+it('trims an accepted suggestion to maxLength when it sets the value itself', () => {
+  const { textarea, emit } = field({ ...base, defaultValue: 'to', maxLength: 3 })
+  suggest(textarea, 2)
+  fireEvent.keyDown(textarea, { key: 'Tab' })
+  expect(textarea.value).toBe('tot')
+  expect(emit).toHaveBeenLastCalledWith('change', ['tot'], expect.anything())
+})
+
 it('offers every suggestion on Ctrl+Space and still replaces the typed word', () => {
   const { textarea } = field({
     ...base,
