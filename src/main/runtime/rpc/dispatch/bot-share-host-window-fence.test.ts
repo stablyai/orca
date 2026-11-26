@@ -110,7 +110,9 @@ it('opens a page on the teammate’s own computer, never on the host’s window'
     ['files.open', { worktree: 'id:wt', relativePath: 'a.ts', navigation: 'caller' }],
     ['terminal.split', { terminal: 't' }],
     ['agentSession.reveal', { sessionId: '00000000-0000-4000-8000-000000000001' }],
-    ['worktree.create', { repo: 'id:r', name: 'n', activate: true }]
+    ['worktree.create', { repo: 'id:r', name: 'n', activate: true }],
+    // Running its hooks activates the new workspace as `activate` does.
+    ['worktree.create', { repo: 'id:r', name: 'n', runHooks: true }]
   ] as const) {
     const refused = await asPairedDesktop(method, params)
     expect(refused, `${method} ${JSON.stringify(params)}`).toMatchObject({
@@ -180,4 +182,19 @@ it('leaves the tier’s refusals of the host’s own screen in place', async () 
 it('is never a teammate in a shipped build, whatever the switch says', () => {
   installFakeAppEnvironment({ isPackaged: () => true })
   expect(callerScopeOf(DESK_B)).toMatchObject({ kind: 'runtime-paired' })
+})
+
+it('reads each param on its own, and matches no page to a caller without a device', () => {
+  const runtime = new OrcaRuntimeService()
+  // A same-named key of another shape (agent.launch's placement) must not hide `navigation`.
+  expect(
+    reachesHostWindow(
+      'session.tabs.activate',
+      { worktree: 'id:wt', tabId: 't', navigation: 'host', placement: { groupId: 'g' } },
+      { runtime }
+    )
+  ).toBe(true)
+  const { pairedDeviceId: _, ...anonymous } = clientPage('anonymous-page', 'unused')
+  getRuntimeBrowserPageRegistry(runtime).publishClientPage(anonymous)
+  expect(reachesHostWindow('browser.goto', { page: 'anonymous-page' }, { runtime })).toBe(true)
 })

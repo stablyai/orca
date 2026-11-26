@@ -13,12 +13,15 @@ import classes from '../callers/teammate-method-classes.json'
 export type HostWindowCondition = keyof typeof classes.hostWindow.conditional
 export type HostWindowCaller = { runtime: OrcaRuntimeService; pairedDeviceId?: string }
 
+// Each field on its own: a method whose key of the same name has another shape (agent.launch's
+// `placement`) drops only that field, never the navigation or activation checks beside it.
 const Params = z.looseObject({
-  navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional(),
-  activate: z.boolean().optional(),
-  focus: z.boolean().optional(),
-  page: z.string().optional(),
-  placement: z.looseObject({ kind: z.string() }).optional()
+  navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional().catch(undefined),
+  activate: z.boolean().optional().catch(undefined),
+  runHooks: z.boolean().optional().catch(undefined),
+  focus: z.boolean().optional().catch(undefined),
+  page: z.string().optional().catch(undefined),
+  placement: z.looseObject({ kind: z.string() }).optional().catch(undefined)
 })
 type HostWindowParams = z.infer<typeof Params>
 
@@ -27,7 +30,12 @@ function ownClientPage(params: HostWindowParams, caller: HostWindowCaller): bool
   const page = params.page
     ? getRuntimeBrowserPageRegistry(caller.runtime).getPage(params.page)
     : null
-  return page !== null && page !== undefined && page.pairedDeviceId === caller.pairedDeviceId
+  return (
+    caller.pairedDeviceId !== undefined &&
+    page !== null &&
+    page !== undefined &&
+    page.pairedDeviceId === caller.pairedDeviceId
+  )
 }
 
 /** Each condition: true when these params stay off the host's window. */
@@ -35,8 +43,10 @@ export const HOST_WINDOW_CONDITIONS: Record<
   HostWindowCondition,
   (params: HostWindowParams, caller: HostWindowCaller) => boolean
 > = {
-  // Without a client kind the create activates on the host unless it names the caller.
-  activatesOnlyForCaller: (params) => params.activate !== true || params.navigation === 'caller',
+  // Without a client kind the create activates on the host unless it names the caller; running its
+  // hooks activates it as `activate` does.
+  activatesOnlyForCaller: (params) =>
+    (params.activate !== true && params.runHooks !== true) || params.navigation === 'caller',
   // Omitted navigation publishes the reveal for every screen, the host's included.
   callerNavigation: (params) => params.navigation === 'caller',
   clientPlacement: (params) => params.placement?.kind === 'client',
