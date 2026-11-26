@@ -102,6 +102,8 @@ export async function startHostOverRelay(
     hostOffline: boolean
     /** When each dial left, for gaps between them. */
     dialedAt: number[]
+    /** How many dials the cell has answered host offline: a dial counts in dialedAt before then. */
+    offlineAnswers: number
   } = {
     resumeHash: null,
     inviteSpent: false,
@@ -109,7 +111,8 @@ export async function startHostOverRelay(
     hostCell: 'cell.test',
     dialedHosts: [],
     hostOffline: false,
-    dialedAt: []
+    dialedAt: [],
+    offlineAnswers: 0
   }
   server.setMobileRelayPairingProvider({
     createPairingRelay: () => Promise.reject(new Error('not in this test')),
@@ -164,6 +167,7 @@ export async function startHostOverRelay(
         return { closeCode: MOBILE_RELAY_CLOSE_CODE.WRONG_CELL }
       }
       if (cellState.hostOffline) {
+        cellState.offlineAnswers += 1
         return { closeCode: MOBILE_RELAY_CLOSE_CODE.HOST_OFFLINE }
       }
       const kind =

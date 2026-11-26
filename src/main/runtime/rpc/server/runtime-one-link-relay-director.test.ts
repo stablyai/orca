@@ -132,8 +132,9 @@ describe('a desktop paired over Relay only, when its cell stops answering', () =
         host.link.request('status.get', { probe: true }, 1_000).catch(() => {})
       }, 100)
       cleanups.push(() => clearInterval(asking))
-      // Three 4404s: the next hold is at least 1.5 s.
-      await vi.waitFor(() => expect(host.cellState.dialedAt.length).toBeGreaterThanOrEqual(4), {
+      // Four dials answered 4404, so none is in flight (it would connect once the host is back) and
+      // the next waits out a hold of at least 6 s.
+      await vi.waitFor(() => expect(host.cellState.offlineAnswers).toBeGreaterThanOrEqual(4), {
         timeout: 15_000
       })
       const dials = host.cellState.dialedAt.length
