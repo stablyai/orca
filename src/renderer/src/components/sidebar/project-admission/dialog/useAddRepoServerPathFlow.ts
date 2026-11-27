@@ -23,6 +23,7 @@ import {
 import { getWindowsPathAccess } from '@/lib/files/os-open/windows-path-access'
 import type { AddRepoPathOptions } from '@/store/repos/repo-state'
 import { addRepoBusyLabels } from './add-repo-busy-labels'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 type ShowNestedRepoReview = (args: {
   scan: NestedRepoScanResult
@@ -120,104 +121,107 @@ export function useAddRepoServerPathFlow({
           ? addRepoBusyLabels.scanningRepositories()
           : addRepoBusyLabels.openingFolder()
       )
-      try {
-        if (kind === 'git') {
-          const attemptId = createNestedRepoTelemetryAttemptId()
-          const runtimeKind = getNestedRepoRuntimeKind(null)
-          const supportsStreamingScan = runtimeKind !== 'runtime'
-          const scanId = supportsStreamingScan ? createNestedRepoScanId() : null
-          if (scanId) {
-            setActiveNestedScanId(scanId, activeRuntimeEnvironmentId)
-            setNestedScanInProgress(true)
-          }
-          const scan = await scanNestedRepos(path, undefined, {
-            runtimeEnvironmentId: activeRuntimeEnvironmentId,
-            ...(scanId
-              ? {
-                  scanId,
-                  onProgress: (progressScan: NestedRepoScanResult) => {
-                    if (
-                      gen !== serverAddGenRef.current ||
-                      progressScan.selectedPathKind !== 'non_git_folder' ||
-                      progressScan.repos.length === 0
-                    ) {
-                      return
+      await runWithFinally(
+        async () => {
+          if (kind === 'git') {
+            const attemptId = createNestedRepoTelemetryAttemptId()
+            const runtimeKind = getNestedRepoRuntimeKind(null)
+            const supportsStreamingScan = runtimeKind !== 'runtime'
+            const scanId = supportsStreamingScan ? createNestedRepoScanId() : null
+            if (scanId) {
+              setActiveNestedScanId(scanId, activeRuntimeEnvironmentId)
+              setNestedScanInProgress(true)
+            }
+            const scan = await scanNestedRepos(path, undefined, {
+              runtimeEnvironmentId: activeRuntimeEnvironmentId,
+              ...(scanId
+                ? {
+                    scanId,
+                    onProgress: (progressScan: NestedRepoScanResult) => {
+                      if (
+                        gen !== serverAddGenRef.current ||
+                        progressScan.selectedPathKind !== 'non_git_folder' ||
+                        progressScan.repos.length === 0
+                      ) {
+                        return
+                      }
+                      showNestedRepoReview({
+                        scan: progressScan,
+                        selectedPath: path,
+                        connectionId: null,
+                        attemptId,
+                        runtimeKind,
+                        inProgress: true,
+                        scanId,
+                        runtimeEnvironmentId: activeRuntimeEnvironmentId
+                      })
                     }
-                    showNestedRepoReview({
-                      scan: progressScan,
-                      selectedPath: path,
-                      connectionId: null,
-                      attemptId,
-                      runtimeKind,
-                      inProgress: true,
-                      scanId,
-                      runtimeEnvironmentId: activeRuntimeEnvironmentId
-                    })
                   }
-                }
-              : {})
-          })
-          if (gen !== serverAddGenRef.current) {
-            return
-          }
-          setNestedScanInProgress(false)
-          setActiveNestedScanId(null)
-          track(
-            'add_repo_nested_scan_result',
-            buildNestedRepoScanTelemetry({
-              attemptId,
-              surface: 'sidebar',
-              runtimeKind,
-              scan
+                : {})
             })
+            if (gen !== serverAddGenRef.current) {
+              return
+            }
+            setNestedScanInProgress(false)
+            setActiveNestedScanId(null)
+            track(
+              'add_repo_nested_scan_result',
+              buildNestedRepoScanTelemetry({
+                attemptId,
+                surface: 'sidebar',
+                runtimeKind,
+                scan
+              })
+            )
+            if (scan?.selectedPathKind === 'non_git_folder' && scan.repos.length > 0) {
+              showNestedRepoReview({
+                scan,
+                selectedPath: path,
+                connectionId: null,
+                attemptId,
+                runtimeKind,
+                inProgress: false,
+                scanId,
+                runtimeEnvironmentId: activeRuntimeEnvironmentId
+              })
+              return
+            }
+          }
+          setAddProjectBusyLabel(
+            kind === 'git' ? addRepoBusyLabels.openingProject() : addRepoBusyLabels.openingFolder()
           )
-          if (scan?.selectedPathKind === 'non_git_folder' && scan.repos.length > 0) {
-            showNestedRepoReview({
-              scan,
-              selectedPath: path,
-              connectionId: null,
-              attemptId,
-              runtimeKind,
-              inProgress: false,
-              scanId,
-              runtimeEnvironmentId: activeRuntimeEnvironmentId
-            })
-            return
+          const options = {
+            runtimeEnvironmentId: activeRuntimeEnvironmentId,
+            onWindowsDriveRefusal
           }
-        }
-        setAddProjectBusyLabel(
-          kind === 'git' ? addRepoBusyLabels.openingProject() : addRepoBusyLabels.openingFolder()
-        )
-        const options = {
-          runtimeEnvironmentId: activeRuntimeEnvironmentId,
-          onWindowsDriveRefusal
-        }
-        const repo =
-          kind === 'folder'
-            ? await addNonGitFolder(path, options)
-            : await addRepoPath(path, kind, options)
-        if (gen !== serverAddGenRef.current) {
-          return
-        }
-        if (repo && isGitRepoKind(repo)) {
-          // A persisted repo should still reveal after a transient non-authoritative refresh.
-          const ownerOptions = worktreeRefreshOptions(activeRuntimeEnvironmentId ?? null)
-          await fetchWorktrees(repo.id, ownerOptions)
+          const repo =
+            kind === 'folder'
+              ? await addNonGitFolder(path, options)
+              : await addRepoPath(path, kind, options)
           if (gen !== serverAddGenRef.current) {
             return
           }
-          await onGitRepoReady(repo.id, 'runtime_server_path', ownerOptions.executionHostId)
-        } else if (repo) {
-          closeModal()
+          if (repo && isGitRepoKind(repo)) {
+            // A persisted repo should still reveal after a transient non-authoritative refresh.
+            const ownerOptions = worktreeRefreshOptions(activeRuntimeEnvironmentId ?? null)
+            await fetchWorktrees(repo.id, ownerOptions)
+            if (gen !== serverAddGenRef.current) {
+              return
+            }
+            await onGitRepoReady(repo.id, 'runtime_server_path', ownerOptions.executionHostId)
+          } else if (repo) {
+            closeModal()
+          }
+        },
+        () => {
+          if (gen === serverAddGenRef.current) {
+            setNestedScanInProgress(false)
+            setActiveNestedScanId(null)
+            setIsAddingServerPath(false)
+            setAddProjectBusyLabel(null)
+          }
         }
-      } finally {
-        if (gen === serverAddGenRef.current) {
-          setNestedScanInProgress(false)
-          setActiveNestedScanId(null)
-          setIsAddingServerPath(false)
-          setAddProjectBusyLabel(null)
-        }
-      }
+      )
     },
     [
       addRepoPath,

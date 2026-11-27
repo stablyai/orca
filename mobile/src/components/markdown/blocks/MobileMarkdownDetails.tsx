@@ -2,9 +2,10 @@ import { useState, type ReactNode } from 'react'
 import { Pressable, Text, View, type StyleProp, type TextStyle } from 'react-native'
 import { ChevronRight } from 'lucide-react-native'
 import { DisclosureChevron } from '../../list/DisclosureChevron'
-import { styles } from '../mobile-markdown-styles'
-import { colors, pressedStyle } from '../../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { stylesSheet } from '../mobile-markdown-styles'
+import { pressedStyle } from '../../../theme/mobile-theme'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
+import { useThemedStyles } from '../../../theme/themed-styles'
 
 /** A `<details>` section: closed unless authored `open`, like desktop and GitHub. */
 export function MobileMarkdownDetails({
@@ -18,7 +19,8 @@ export function MobileMarkdownDetails({
   summaryStyle: StyleProp<TextStyle>
   children: ReactNode
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const [expanded, setExpanded] = useState(open)
   return (
     <View style={styles.details}>

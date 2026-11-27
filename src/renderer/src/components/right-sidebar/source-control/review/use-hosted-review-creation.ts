@@ -25,6 +25,7 @@ import type { PullRequestGenerationFields } from '@/store/slices/hosted-review/g
 import { useGenerateBeforeCreatePullRequest } from '../../hosted-review/creation/use-generate-before-create-pull-request'
 import { createdReviewIsForeground } from '../../hosted-review/creation/created-review-foreground'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 /** Already-open and partial-stack failures can leave a real review that still needs linking. */
 export function useSourceControlHostedReviewCreation({
@@ -286,11 +287,10 @@ export function useSourceControlHostedReviewCreation({
       }
       // Hold the click through creation so eligibility refreshes cannot close the composer during generation.
       operationStore.setState({ isCreatingPr: true })
-      try {
-        await generateThenCreatePullRequest(stacked)
-      } finally {
-        operationStore.setState({ isCreatingPr: false })
-      }
+      await runWithFinally(
+        () => generateThenCreatePullRequest(stacked),
+        () => operationStore.setState({ isCreatingPr: false })
+      )
     },
     [activeWorktreeId, generateThenCreatePullRequest, operationStore]
   )

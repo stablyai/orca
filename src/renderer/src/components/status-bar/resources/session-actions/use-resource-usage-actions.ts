@@ -261,20 +261,19 @@ export function useResourceUsageActions({
           'The terminal could not be ended. Last-observed sessions are retained.'
         )
       )
-    } finally {
-      if (mountedRef.current) {
-        setKilling(false)
-        setKillConfirm(null)
-        // Why: killed row unmounts and focus would drop to <body>; park it on the popover body so keyboard users stay in the list.
-        cancelPopoverBodyFocusFrame()
-        if (popoverBodyRef.current) {
-          popoverBodyFocusFrameRef.current = requestAnimationFrame(() => {
-            popoverBodyFocusFrameRef.current = null
-            popoverBodyRef.current?.focus()
-          })
-        }
-        void refreshSessions()
+    }
+    if (mountedRef.current) {
+      setKilling(false)
+      setKillConfirm(null)
+      // Why: killed row unmounts and focus would drop to <body>; park it on the popover body so keyboard users stay in the list.
+      cancelPopoverBodyFocusFrame()
+      if (popoverBodyRef.current) {
+        popoverBodyFocusFrameRef.current = requestAnimationFrame(() => {
+          popoverBodyFocusFrameRef.current = null
+          popoverBodyRef.current?.focus()
+        })
       }
+      void refreshSessions()
     }
   }, [
     cancelPopoverBodyFocusFrame,

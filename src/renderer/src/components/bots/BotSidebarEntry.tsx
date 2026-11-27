@@ -59,13 +59,17 @@ export function BotSidebarEntry({
   home,
   isActive,
   onOpen,
-  drag
+  drag,
+  beginRename = false,
+  onBeginRenameConsumed
 }: {
   bot: Bot
   home: FolderWorkspace
   isActive: boolean
   onOpen: () => void
   drag?: BotSidebarEntryDrag
+  beginRename?: boolean
+  onBeginRenameConsumed?: () => void
 }): React.JSX.Element {
   // A disconnected server's row keeps its place in a drag but can't start one: nothing can save it.
   const offline = useBotHostOffline(bot.hostId)
@@ -140,6 +144,8 @@ export function BotSidebarEntry({
         isActive={isActive}
         onOpen={onOpen}
         dragHandle={drag !== undefined && !offline}
+        beginRename={beginRename}
+        onBeginRenameConsumed={onBeginRenameConsumed}
         // A down host's bot is its row alone, so it has nothing to fold.
         fold={
           offline

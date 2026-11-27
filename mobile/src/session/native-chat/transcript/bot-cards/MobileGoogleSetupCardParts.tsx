@@ -11,12 +11,13 @@ import type {
 import { errorMessage } from '../../../../../../src/shared/errors/error-message'
 import { MobileConnectorLogo } from '../../../../bots/MobileConnectorSourceIcon'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { colors, pressedStyle, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
+import { pressedStyle, spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 import type { RpcClient } from '../../../../transport/rpc/rpc-client-contract'
 import { scaledType } from '../messages/mobile-native-chat-message-styles'
 import { MobileBotCardFrame, MobileBotCardMeta } from './MobileBotCardFrame'
 import { answerMobileGoogleSetup } from './mobile-google-setup-store'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 
 /** What a setup card acts on: the chat's host, the bot, and its run as last read. */
 export type MobileGoogleSetupScope = {
@@ -92,6 +93,7 @@ export function MobileGoogleSetupFrame({
   fontScale: number
   children?: ReactNode
 }): React.JSX.Element {
+  const styles = useThemedStyles(stylesSheet)
   return (
     <MobileBotCardFrame
       avatar={avatar ?? <MobileConnectorLogo source="google" />}
@@ -134,6 +136,7 @@ export function MobileGoogleSetupReceipt({
   onChange?: () => void
   fontScale: number
 }): React.JSX.Element {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   return (
     <View style={styles.receipt}>
@@ -156,6 +159,7 @@ export function MobileGoogleSetupReceipt({
 
 /** A line with its key words in <b>, as the computer's notes are written. */
 function BoldMarked({ text, style }: { text: string; style: object[] }): React.JSX.Element {
+  const styles = useThemedStyles(stylesSheet)
   // Split on the tags, so every odd piece sat between <b> and </b>; a rising start keys each.
   const pieces = text
     .split(/<\/?b>/)
@@ -191,6 +195,7 @@ export function MobileGoogleSetupNotes({
   notes: readonly string[]
   fontScale: number
 }): React.JSX.Element {
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View style={styles.notes}>
       {notes.map((note, index) => (
@@ -216,6 +221,8 @@ export function MobileGoogleSetupOnComputer({
   text: string
   fontScale: number
 }): React.JSX.Element {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View style={styles.onComputer}>
       <Laptop size={14} color={colors.textMuted} />
@@ -233,6 +240,7 @@ export function MobileGoogleSetupMuted({
   text: string
   fontScale: number
 }): React.JSX.Element {
+  const styles = useThemedStyles(stylesSheet)
   return <Text style={[styles.muted, scaledType(typography.metaSize, fontScale, 4)]}>{text}</Text>
 }
 
@@ -243,12 +251,13 @@ export function MobileGoogleSetupError({
   text: string | null
   fontScale: number
 }): React.JSX.Element | null {
+  const styles = useThemedStyles(stylesSheet)
   return text ? (
     <Text style={[styles.error, scaledType(typography.metaSize, fontScale)]}>{text}</Text>
   ) : null
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   trailing: { color: colors.textMuted, marginLeft: 'auto' },
   trailingAsk: { color: colors.agentQuestion },
   muted: { color: colors.textMuted },

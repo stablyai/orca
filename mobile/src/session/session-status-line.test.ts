@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { translate } from '../i18n/mobile-i18n'
 import type { ConnectionVerdict } from '../transport/connection/connection-health'
 import {
   sessionConnectionVerdict,
@@ -11,18 +12,21 @@ import {
 const NOW = 1_000_000_000
 
 function verdict(overrides: Partial<SessionConnectionVerdictInputs> = {}): ConnectionVerdict {
-  return sessionConnectionVerdict({
-    state: 'reconnecting',
-    reconnectAttempts: 5,
-    lastConnectedAt: NOW - 5 * 60_000,
-    endpoint: 'ws://100.101.102.103:6768',
-    hostName: 'Work laptop',
-    pendingPath: null,
-    pairingRejected: false,
-    relayHostReachability: 'connecting',
-    nowMs: NOW,
-    ...overrides
-  })
+  return sessionConnectionVerdict(
+    {
+      state: 'reconnecting',
+      reconnectAttempts: 5,
+      lastConnectedAt: NOW - 5 * 60_000,
+      endpoint: 'ws://100.101.102.103:6768',
+      hostName: 'Work laptop',
+      pendingPath: null,
+      pairingRejected: false,
+      relayHostReachability: 'connecting',
+      nowMs: NOW,
+      ...overrides
+    },
+    translate
+  )
 }
 
 // The hook passes sessionRetryAvailable as retryShown; with canReconnect the line mirrors it.
@@ -36,7 +40,8 @@ function line(
     verdict: current,
     presentedConnState,
     pendingPath: overrides.pendingPath ?? null,
-    retryShown: sessionRetryAvailable(current, canReconnect)
+    retryShown: sessionRetryAvailable(current, canReconnect),
+    t: translate
   })
 }
 

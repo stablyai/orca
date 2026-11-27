@@ -8,10 +8,9 @@ export function useMobileSourceControlSections<TEntry extends MobileGitStatusEnt
   entries: readonly TEntry[],
   groupOrder: SourceControlGroupOrder
 ) {
-  // Section titles are translated inside the builder.
   const t = useMobileTranslation()
   return useMemo(
-    () => buildMobileSourceControlSections(entries, groupOrder),
+    () => buildMobileSourceControlSections(entries, groupOrder, t),
     [entries, groupOrder, t]
   )
 }

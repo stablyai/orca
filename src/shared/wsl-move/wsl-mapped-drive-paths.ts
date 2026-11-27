@@ -6,22 +6,25 @@
 import { z } from 'zod'
 import { normalizeRuntimePathForComparison } from '../file-access/cross-platform-path'
 import { parseWslUncPath, wslUncPathToLinux } from '../file-access/wsl-paths'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 
 /** A drive letter mapped to a distro share; `share` may be a folder inside the distro. */
 export type WslMappedDrive = { letter: string; share: string }
 
-export const WslMappedDrivesSchema = z
-  .array(
-    z.object({
-      letter: z.string().regex(/^[A-Z]$/),
-      share: z
-        .string()
-        .min(1)
-        .max(4_096)
-        .refine((share) => parseWslUncPath(share) !== null)
-    })
-  )
-  .max(26)
+export const WslMappedDrivesSchema = lazyZodSchema(() =>
+  z
+    .array(
+      z.object({
+        letter: z.string().regex(/^[A-Z]$/),
+        share: z
+          .string()
+          .min(1)
+          .max(4_096)
+          .refine((share) => parseWslUncPath(share) !== null)
+      })
+    )
+    .max(26)
+)
 
 const DRIVE_ABSOLUTE = /^([A-Za-z]):[\\/]([\s\S]*)$/
 const DRIVE_FILE_URL = /^file:\/\/\/([A-Za-z]):(\/[^?#]*)?([?#][\s\S]*)?$/i

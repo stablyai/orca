@@ -1122,6 +1122,81 @@ body[data-modal-overlay-open]
   scrollbar-color: auto;
 }
 
+@utility rail-page-row-gutter {
+  padding-inline-start: var(--rail-page-gutter);
+  padding-inline-end: var(--rail-page-row-end, var(--rail-page-gutter));
+}
+
+.rail-page-scroll-region {
+  --rail-page-row-end: max(
+    0px,
+    calc(var(--rail-page-gutter) - var(--rail-page-scrollbar-width, 0px))
+  );
+  --list-table-gutter-end: var(--rail-page-row-end);
+  scrollbar-gutter: stable;
+}
+
+[data-rail-page-container-gutter] {
+  /* The difference is the scrollbar's reserved width in a full-width row. */
+  --rail-page-row-end: max(0px, calc(var(--rail-page-gutter) - 100cqi + 100%));
+}
+
+.rail-page-container {
+  container: rail-page / inline-size;
+}
+
+[data-rail-page-search] {
+  inline-size: calc(var(--spacing) * 51);
+}
+
+[data-rail-page-search-trigger],
+[data-rail-page-search-close] {
+  display: none;
+}
+
+@container rail-page (width < 40rem) {
+  [data-rail-page-search] {
+    inline-size: calc(var(--spacing) * 7);
+  }
+
+  [data-rail-page-search-trigger] {
+    display: inline-flex;
+  }
+
+  [data-rail-page-search-close] {
+    display: inline-flex;
+  }
+
+  [data-rail-page-toolbar]:has(
+      [data-rail-page-search-field]:is(:focus-within, [data-expanded='true'])
+    )
+    [data-rail-page-views] {
+    visibility: hidden;
+  }
+
+  [data-rail-page-search-field] {
+    display: none;
+    position: absolute;
+    inset-inline: var(--rail-page-gutter);
+    top: 50%;
+    z-index: 10;
+    inline-size: auto;
+    gap: calc(var(--spacing) * 1);
+    translate: 0 -50%;
+    border-radius: var(--radius-md);
+    background: var(--background);
+  }
+
+  [data-rail-page-search-field]:focus-within,
+  [data-rail-page-search-field][data-expanded='true'] {
+    display: flex;
+  }
+
+  [data-rail-page-search-hint] {
+    display: none;
+  }
+}
+
 [data-bot-search-field-only] [data-bot-sidebar-list],
 [data-bot-search-field-only] [data-bot-sidebar-search] > .bot-sidebar-scrollbar {
   overscroll-behavior-y: auto;
@@ -2371,34 +2446,6 @@ html.native-shell .app-layout {
 
 .compact-agent-expansion-grid-expanded {
   grid-template-rows: 1fr;
-}
-
-/* A click on a down pane's veil points at its server card: two short shakes, or a brief outline without motion. */
-@keyframes remote-server-outage-nudge {
-  0%,
-  100% {
-    transform: translateX(0);
-  }
-
-  25% {
-    transform: translateX(-4px);
-  }
-
-  75% {
-    transform: translateX(4px);
-  }
-}
-
-.remote-server-outage-nudge {
-  animation: remote-server-outage-nudge 250ms ease-in-out 2;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .remote-server-outage-nudge {
-    animation: none;
-    outline: 2px solid var(--status-warning);
-    outline-offset: 2px;
-  }
 }
 
 /* Keep rotation on the compositor: JS style writes caused typing stalls (#12359). */

@@ -20,7 +20,8 @@ function PalettePage({
   notes = 0,
   picked = false,
   ratio = 0.5,
-  y = 0,
+  y = 1,
+  busy = false,
   hint = 'Click an element to add feedback for the agent.',
   waiting = false,
   findOpen = false,
@@ -30,8 +31,10 @@ function PalettePage({
   notes?: number
   picked?: boolean
   ratio?: number
-  /** Vertical place as a fraction of the free travel (0 = top). */
+  /** Vertical place as a fraction of the free travel (0 = top, 1 = the default bottom). */
   y?: number
+  /** A loud, colourful page, to check the palette still stands out. */
+  busy?: boolean
   hint?: string
   waiting?: boolean
   findOpen?: boolean
@@ -63,7 +66,14 @@ function PalettePage({
           </button>
         ) : null}
       </div>
-      <div className="p-4 text-sm text-muted-foreground">Page content</div>
+      {busy ? (
+        <div className="absolute inset-x-0 top-10 bottom-0 bg-[linear-gradient(120deg,#f97316,#ec4899_35%,#6366f1_65%,#22d3ee)] p-4 text-2xl leading-tight font-bold text-white">
+          Ship faster with Acme. Pricing · Docs · Blog · Ship faster with Acme. Pricing · Docs ·
+          Blog
+        </div>
+      ) : (
+        <div className="p-4 text-sm text-muted-foreground">Page content</div>
+      )}
       {findOpen ? (
         <BrowserFind
           browserPageId="sample-page"
@@ -181,9 +191,14 @@ export const movedLeft = defineFixture({
   render: () => <PalettePage initialTool="annotate" ratio={0} />
 })
 
-export const movedDown = defineFixture({
+export const movedUp = defineFixture({
   width: 900,
-  render: () => <PalettePage initialTool="copy" picked ratio={0.3} y={1} />
+  render: () => <PalettePage initialTool="copy" picked ratio={0.3} y={0} />
+})
+
+export const grabOverBusyPage = defineFixture({
+  width: 900,
+  render: () => <PalettePage initialTool="copy" busy />
 })
 
 export const narrow = defineFixture({
@@ -224,7 +239,7 @@ export const waitingForPageCompact = defineFixture({
 export const findGeometry = defineFixture({
   width: 650,
   interact: settleFit,
-  render: () => <PalettePage initialTool="annotate" ratio={0} findOpen />
+  render: () => <PalettePage initialTool="annotate" ratio={0} y={0} findOpen />
 })
 
 export const annotate560 = defineFixture({

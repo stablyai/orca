@@ -3,12 +3,12 @@ import { Pressable, Text, View } from 'react-native'
 import { MessageSquare, Plus, Users } from 'lucide-react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { ActionSheetModal } from '../components/sheets/ActionSheetModal'
-import { sessionTabBarStyles as styles } from '../session/tabs/MobileSessionTabBar'
-import { colors } from '../theme/mobile-theme'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { feedback, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import type { BotGroup } from '../../../src/shared/bots/bot-group'
 
-/** A group's rooms as the session tab bar draws tabs: the room you're in, the count of rooms, and +
+/** A group's rooms as the session's old tab bar drew tabs: the room you're in, the count of rooms, and +
  *  for a new thread. The original room comes first, then each thread as the desktop opened them. */
 export function MobileBotGroupRoomBar({
   group,
@@ -23,7 +23,8 @@ export function MobileBotGroupRoomBar({
   onOpenRoom: (threadId: string | undefined) => void
   onNewThread: () => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const [listing, setListing] = useState(false)
   const newThread = t('bots.groups.newThreadTab', 'New thread')
@@ -100,3 +101,64 @@ export function MobileBotGroupRoomBar({
     </View>
   )
 }
+
+// The session's former tab strip: the room you're in raised, the count and + as square cells.
+const stylesSheet = themedStyleSheet((colors) => ({
+  bar: {
+    height: 44,
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    borderTopWidth: 1,
+    borderTopColor: colors.borderSubtle
+  },
+  tabCell: {
+    flex: 1,
+    minWidth: 0,
+    backgroundColor: colors.bgRaised,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.textSecondary,
+    borderRightWidth: 1,
+    borderRightColor: colors.borderSubtle,
+    overflow: 'hidden'
+  },
+  tabPress: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingLeft: spacing.lg,
+    paddingRight: spacing.sm
+  },
+  tabContent: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  title: {
+    flexShrink: 1,
+    minWidth: 0,
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textPrimary
+  },
+  sideCell: {
+    width: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRightWidth: 1,
+    borderRightColor: colors.borderSubtle
+  },
+  lastCell: { borderRightWidth: 0 },
+  cellPressed: { backgroundColor: colors.translucentFill },
+  cellDisabled: { opacity: feedback.disabledOpacity },
+  countBox: {
+    minWidth: 19,
+    height: 19,
+    paddingHorizontal: 3,
+    borderRadius: 6,
+    borderWidth: 1.8,
+    borderColor: colors.textPrimary,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  countText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    fontVariant: ['tabular-nums']
+  }
+}))

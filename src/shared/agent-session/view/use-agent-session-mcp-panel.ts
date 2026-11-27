@@ -12,7 +12,10 @@ export type AgentSessionMcpRequest = (
 
 export type AgentSessionMcpPanelState = {
   /** null while the first read is in flight. */
-  result: Exclude<AgentSessionMcpResult, { status: 'ok' }> | { status: 'ok' } | null
+  result:
+    | Exclude<AgentSessionMcpResult, { status: 'ok' | 'not-running' }>
+    | { status: 'ok' | 'not-running' }
+    | null
   servers: readonly AgentSessionMcpServer[]
   /** The action in flight, one at a time. */
   pending: Exclude<AgentSessionMcpOperation, { action: 'status' }> | null
@@ -74,10 +77,17 @@ export function createAgentSessionMcpPanelHook({
             if (!server && reply.status === 'failed' && current.result?.status === 'ok') {
               return current
             }
-            // A failed action keeps the list; a failed first read replaces it.
+            // A failed action keeps the list; a failed first read replaces it. An agent at rest
+            // lists what its host knows its next start gets.
             return server && reply.status === 'failed'
               ? { ...current, pending, failure: { server, message: reply.message } }
-              : { ...current, pending, result: reply, servers: [], signIn: null }
+              : {
+                  ...current,
+                  pending,
+                  result: reply.status === 'not-running' ? { status: 'not-running' } : reply,
+                  servers: (reply.status === 'not-running' && reply.servers) || [],
+                  signIn: null
+                }
           }
           const signIn =
             reply.signIn ??

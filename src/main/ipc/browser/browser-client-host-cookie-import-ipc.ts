@@ -1,4 +1,5 @@
 import { BrowserWindow, ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import { browserCookieImportFailure } from '../../../shared/browser/cookies/browser-cookie-import-failure-copy'
 import type {
   BrowserCookieImportResult,
@@ -37,17 +38,19 @@ function clientHostCookieImportTarget(args: ClientHostCookieImportTargetArgs) {
   }
 }
 
-export function registerClientHostCookieImportHandlers(): void {
-  for (const channel of [
-    'browser:session:importFromBrowserForClientHost',
-    'browser:session:importCookiesForClientHost',
-    'browser:session:clientRouteImportSources'
-  ]) {
-    ipcMain.removeHandler(channel)
+export function registerClientHostCookieImportHandlers(ipc: IpcHandleRegistrar = ipcMain): void {
+  if (ipc === ipcMain) {
+    for (const channel of [
+      'browser:session:importFromBrowserForClientHost',
+      'browser:session:importCookiesForClientHost',
+      'browser:session:clientRouteImportSources'
+    ]) {
+      ipcMain.removeHandler(channel)
+    }
   }
 
   // Client-hosted pages import this desktop's logins; the remote runtime is usually headless.
-  ipcMain.handle(
+  ipc.handle(
     'browser:session:importFromBrowserForClientHost',
     async (
       event,
@@ -68,7 +71,7 @@ export function registerClientHostCookieImportHandlers(): void {
   )
 
   // The file comes from this desktop's picker, so no remote path is ever read here.
-  ipcMain.handle(
+  ipc.handle(
     'browser:session:importCookiesForClientHost',
     async (
       event,
@@ -85,7 +88,7 @@ export function registerClientHostCookieImportHandlers(): void {
   )
 
   // Overlay desktop imports unavailable to the server's profile records, or to an SSH host's.
-  ipcMain.handle(
+  ipc.handle(
     'browser:session:clientRouteImportSources',
     async (event, args: { environmentId?: unknown; sshTargetId?: unknown }) => {
       if (!isTrustedBrowserRenderer(event.sender)) {

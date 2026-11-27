@@ -212,6 +212,11 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
       const { runtimeState, sessions } = context()
       return runtimeState.startFlights.has(id) || sessions.get(id)?.child?.phase === 'starting'
     },
+    /** Its agent is attached, or a start is under way. */
+    agentRunning: (id: string): boolean => {
+      const { runtimeState, sessions } = context()
+      return runtimeState.startFlights.has(id) || sessions.get(id)?.child != null
+    },
     /** A decided start's acquire is still out, and no later start's child is attached. */
     startWindingDown: (id: string): boolean => {
       const { runtimeState, sessions } = context()

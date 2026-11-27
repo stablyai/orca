@@ -264,6 +264,7 @@ function isAgentSessionDeathEvidence(value: unknown): value is AgentSessionDeath
     isBoundedString(evidence.detail, MAX_AGENT_SESSION_DEATH_DETAIL_CHARS) &&
     isNonNegativeSafeInteger(observedAt) &&
     (ownerFence === undefined || isNonNegativeSafeInteger(ownerFence)) &&
+    (evidence.resumeByMail === undefined || evidence.resumeByMail === true) &&
     (lastProvenAliveAt === undefined ||
       (isNonNegativeSafeInteger(lastProvenAliveAt) && lastProvenAliveAt <= observedAt)) &&
     (runtimeEnd === undefined || isBoundedString(runtimeEnd, MAX_ID_LENGTH))

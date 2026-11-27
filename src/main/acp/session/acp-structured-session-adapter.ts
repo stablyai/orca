@@ -14,7 +14,7 @@ import type {
 import { rejectedAcpDispatch } from '../turns/acp-dispatch-rejection'
 import type { AcpStructuredSession } from './acp-structured-session-contract'
 
-import { applyAcpMessageOptions } from '../turns/acp-message-execution-options'
+import { applyAcpMessageOptions, mailModelCommand } from '../turns/acp-message-execution-options'
 import { AgentSessionOptionRejectedError } from '../../native-chat/agent-session-wire/options/structured-agent-session-option-error'
 import * as stop from '../turns/acp-structured-stop'
 import { acpDispatchPrompt } from '../turns/acp-prompt-content'
@@ -35,6 +35,7 @@ import {
   closeAcpChildSessions,
   stopAcpChildren
 } from '../turns/acp-structured-child-stop'
+import { acpChildKeptLaunchOutgrown, acpChildRelayOpenWork } from './acp-child-relay-open-work'
 import * as childState from './children/acp-structured-child'
 import { AcpStructuredChildren } from './children/acp-structured-child-lifecycle'
 import { AcpConversationCopies } from '../conversation-copy/acp-conversation-copies'
@@ -141,7 +142,6 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     signal?.throwIfAborted()
     input.onInputPreparation?.()
     return withAcpModelFallback(session, this.writeBound(session, signal), async (fallback) => {
-      const { command } = fallback
       const optionsApplied = await applyAcpMessageOptions(
         session,
         input.executionOptions,
@@ -149,14 +149,7 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
         () =>
           this.children.sessions.get(input.sessionId) === session && session.journalClosed === null,
         signal,
-        // The model command would cancel the turn mail joins; the next prompt applies that pick.
-        command && mail && session.turns.steersMail
-          ? async (value) => {
-              if (!session.turns.running) {
-                await command(value)
-              }
-            }
-          : command
+        mailModelCommand(fallback.command, mail && session.turns.steersMail, session.turns)
       )
       if (!optionsApplied) {
         return rejectedAcpDispatch(session)
@@ -298,6 +291,13 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
       ? Promise.resolve('unknown')
       : undefined
   }
+
+  relayOpenWork = (id: string) => acpChildRelayOpenWork(this.children.sessions.get(id))
+  keptLaunchOutgrown = (id: string, toolsOutdated: boolean, owesWork: () => Promise<boolean>) =>
+    acpChildKeptLaunchOutgrown(this.children.sessions.get(id), toolsOutdated, owesWork)
+
+  endedBeforeAcquire = (sessionId: string, generation: string): boolean =>
+    this.children.endedBeforeAcquire.get(sessionId) === generation
 
   holdsLiveProviderProcess = (sessionId: string, generation: string): boolean => {
     const session = this.children.sessions.get(sessionId)
