@@ -106,7 +106,7 @@ export const agentPromptBeforeHookPayloadSchema = lazyZodSchema(() =>
   })
 )
 
-const agentToolCall = {
+const createAgentToolCall = () => ({
   /** The agent CLI whose hook reported the call, e.g. `claude` or `codex`. */
   agent: z.string().min(1).max(64),
   workspaceId: z.string().min(1).max(2048).nullable(),
@@ -117,13 +117,13 @@ const agentToolCall = {
   input: z.unknown(),
   /** The agent's id for this call, when it reports one. */
   callId: z.string().min(1).max(256).optional()
-}
+})
 
-export const agentToolBeforeHookPayloadSchema = lazyZodSchema(() => z.object(agentToolCall))
+export const agentToolBeforeHookPayloadSchema = lazyZodSchema(() => z.object(createAgentToolCall()))
 
 export const agentToolAfterHookPayloadSchema = lazyZodSchema(() =>
   z.object({
-    ...agentToolCall,
+    ...createAgentToolCall(),
     /** The tool's result as the agent reports it, when it does. */
     output: z.unknown().optional()
   })

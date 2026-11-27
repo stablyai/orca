@@ -148,17 +148,14 @@ describe("the journal's attribution of each close", () => {
     })
   })
 
-  it('looks for a close among the item’s newest events only, unknown past them', () => {
+  it('finds a close however many events came after it', () => {
     const { store, add, now } = open()
     const uid = add('Ship it')
     const closedAt = now()
     store.close(uid, 'done', undefined, HOME, OWNER, closedAt)
-    const comment = () => store.comment(uid, 'More', HOME, [], now())
-    for (let i = 0; i < 199; i++) {
-      comment()
+    for (let i = 0; i < 500; i++) {
+      store.comment(uid, 'More', HOME, [], now())
     }
     expect(store.closes([{ uid, closedAt }])[uid]?.actsFor).toEqual(OWNER)
-    comment()
-    expect(store.closes([{ uid, closedAt }])).toEqual({})
   })
 })

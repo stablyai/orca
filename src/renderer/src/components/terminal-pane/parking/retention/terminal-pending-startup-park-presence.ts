@@ -13,7 +13,10 @@ export function usePendingStartupParkPresence(
       let presence: Record<string, true> | null = null
       for (const tab of terminalTabs) {
         if (state.pendingStartupByTabId[tab.id] !== undefined) {
-          ;(presence ??= {})[tab.id] = true
+          if (presence == null) {
+            presence = {}
+          }
+          presence[tab.id] = true
         }
       }
       return presence ?? EMPTY_PENDING_STARTUP

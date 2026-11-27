@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import {
   getCustomView,
   listCustomViewIssues,
@@ -14,8 +15,8 @@ import { clampLinearIssueListLimit } from '../../../shared/linear/issue-read-lim
 import type { LinearCustomViewModel } from '../../../shared/linear/project-types'
 import type { LinearWorkspaceSelection } from '../../../shared/linear/workspace-types'
 
-export function registerLinearCustomViewHandlers(): void {
-  ipcMain.handle(
+export function registerLinearCustomViewHandlers(ipc: IpcHandleRegistrar = ipcMain): void {
+  ipc.handle(
     'linear:listCustomViews',
     async (
       _event,
@@ -36,7 +37,7 @@ export function registerLinearCustomViewHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'linear:getCustomView',
     async (
       _event,
@@ -59,7 +60,7 @@ export function registerLinearCustomViewHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'linear:listCustomViewIssues',
     async (
       _event,
@@ -78,7 +79,7 @@ export function registerLinearCustomViewHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'linear:listCustomViewProjects',
     async (
       _event,

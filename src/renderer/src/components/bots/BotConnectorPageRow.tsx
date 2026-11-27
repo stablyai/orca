@@ -88,7 +88,10 @@ export function BotConnectorPageRow({
             </div>
             <div className="flex shrink-0 items-center gap-1.5 pt-0.5">
               {props.notice}
-              <RowFixOrStatus props={props} onOpen={open} />
+              <RowFixOrStatus
+                props={props.status?.listOnly ? { ...props, status: null } : props}
+                onOpen={open}
+              />
               {props.trailing}
               {actions ? (
                 <BotConnectorMenu

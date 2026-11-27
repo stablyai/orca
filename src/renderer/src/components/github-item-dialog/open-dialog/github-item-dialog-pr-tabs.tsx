@@ -1,4 +1,5 @@
 import React from 'react'
+import { ChecksPanelLoadingAnnouncement } from '@/components/right-sidebar/checks-panel/presentation/checks-panel-loading-announcement'
 import { FileText, ListChecks, LoaderCircle, MessageSquare, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -84,6 +85,11 @@ export function GitHubItemDialogPRTabs({
       onValueChange={(value) => setTab(value as ItemDialogTab)}
       className="flex h-full min-h-0 flex-col gap-0"
     >
+      {/* Why: stays mounted across tabs so one polite status covers a sustained cold read (same as the PR page). */}
+      <ChecksPanelLoadingAnnouncement
+        loading={loading && !detailsLoaded}
+        reviewKey={detailsCacheKey ?? ''}
+      />
       <TabsList
         variant="line"
         className="mx-4 mt-2 justify-start gap-3 border-b border-border/60 bg-transparent"

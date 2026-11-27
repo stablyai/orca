@@ -1,3 +1,4 @@
+import { runWithFinally } from '@/lib/run-with-finally'
 import { useNativeChatPaneLifetimeEffect } from '../../../pane/ownership/native-chat-pane-lifetime'
 import { useCallback, useRef } from 'react'
 import {
@@ -48,18 +49,21 @@ export function useStructuredAgentSessionCommandWrite(
       const release = holdStructuredAgentSessionSends(sessionId)
       setTimeout(release, AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS)
       let movedOn = false
-      try {
-        const outcome = await send()
-        movedOn = outcome.kind === 'done' && outcome.value.replacementSessionId !== undefined
-        return outcome
-      } finally {
-        if (movedOn && shown.current === sessionId) {
-          keptHold.current?.()
-          keptHold.current = release
-        } else {
-          release()
+      return await runWithFinally(
+        async () => {
+          const outcome = await send()
+          movedOn = outcome.kind === 'done' && outcome.value.replacementSessionId !== undefined
+          return outcome
+        },
+        () => {
+          if (movedOn && shown.current === sessionId) {
+            keptHold.current?.()
+            keptHold.current = release
+          } else {
+            release()
+          }
         }
-      }
+      )
     },
     [sessionId, write]
   )

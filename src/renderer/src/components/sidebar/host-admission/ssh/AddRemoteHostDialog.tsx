@@ -21,6 +21,7 @@ import {
   prefillFormFromSshConfigHost,
   saveNewSshHostFromForm
 } from './add-remote-host-ssh-actions'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 export type AddRemoteHostMode = 'ssh' | 'server' | 'wsl'
 
@@ -112,21 +113,22 @@ export function AddRemoteHostDialog({
 
   const saveSshHost = async () => {
     setIsSaving(true)
-    try {
-      const outcome = await saveNewSshHostFromForm({
-        form: sshForm,
-        ssh: window.api.ssh,
-        recordSshRepoReadoptions,
-        setSshTargetsMetadata,
-        recordFeatureInteraction
-      })
-      if (outcome === 'saved') {
-        reset()
-        onOpenChange(null)
-      }
-    } finally {
-      setIsSaving(false)
-    }
+    await runWithFinally(
+      async () => {
+        const outcome = await saveNewSshHostFromForm({
+          form: sshForm,
+          ssh: window.api.ssh,
+          recordSshRepoReadoptions,
+          setSshTargetsMetadata,
+          recordFeatureInteraction
+        })
+        if (outcome === 'saved') {
+          reset()
+          onOpenChange(null)
+        }
+      },
+      () => setIsSaving(false)
+    )
   }
 
   const loadSshConfigHosts = async (query = '', options?: { refresh?: boolean }) => {
@@ -219,25 +221,26 @@ export function AddRemoteHostDialog({
 
   const addAllConfigHostsToOrca = async () => {
     setIsBulkImporting(true)
-    try {
-      const result = await addAllSshConfigHostsToOrca({
-        ssh: window.api.ssh,
-        recordSshRepoReadoptions,
-        setSshTargetsMetadata,
-        recordFeatureInteraction
-      })
-      if (result.kind === 'added') {
-        reset()
-        onOpenChange(null)
-        return
-      }
-      if (result.kind === 'already-synced') {
-        // Reuse the loader to retain filtering and generation guards against in-flight searches.
-        await loadSshConfigHosts(configSearchQuery.current)
-      }
-    } finally {
-      setIsBulkImporting(false)
-    }
+    await runWithFinally(
+      async () => {
+        const result = await addAllSshConfigHostsToOrca({
+          ssh: window.api.ssh,
+          recordSshRepoReadoptions,
+          setSshTargetsMetadata,
+          recordFeatureInteraction
+        })
+        if (result.kind === 'added') {
+          reset()
+          onOpenChange(null)
+          return
+        }
+        if (result.kind === 'already-synced') {
+          // Reuse the loader to retain filtering and generation guards against in-flight searches.
+          await loadSshConfigHosts(configSearchQuery.current)
+        }
+      },
+      () => setIsBulkImporting(false)
+    )
   }
 
   const saveRemoteServer = async () => {
@@ -267,49 +270,52 @@ export function AddRemoteHostDialog({
     }
 
     setIsSaving(true)
-    try {
-      const result = await window.api.runtimeEnvironments.verifyAndAddFromPairingCode({
-        name: trimmedName,
-        pairingCode: trimmedPairingCode,
-        allowLoopback
-      })
-      if (!result.ok) {
-        toast.error(
-          result.kind === 'environment-save-failed'
-            ? remoteServerPairingFailureMessage(result)
-            : translateRemotePairingFailureDescription(
-                result.kind,
-                parsedServerLink.value.displayEndpoint
-              )
-        )
-        return
-      }
-      const environments = await window.api.runtimeEnvironments.list()
-      setRuntimeEnvironments(environments)
-      await readRuntimeHostStatusSnapshots()
-      toast.success(
-        result.updatedExisting
-          ? t(
-              'auto.components.sidebar.AddRemoteHostDialog.serverAlreadyPaired',
-              'This server is already paired as {{value0}}; updated its connection.',
-              { value0: result.environment.name }
+    await runWithFinally(
+      async () => {
+        try {
+          const result = await window.api.runtimeEnvironments.verifyAndAddFromPairingCode({
+            name: trimmedName,
+            pairingCode: trimmedPairingCode,
+            allowLoopback
+          })
+          if (!result.ok) {
+            toast.error(
+              result.kind === 'environment-save-failed'
+                ? remoteServerPairingFailureMessage(result)
+                : translateRemotePairingFailureDescription(
+                    result.kind,
+                    parsedServerLink.value.displayEndpoint
+                  )
             )
-          : t('auto.components.sidebar.AddRemoteHostDialog.serverSaved', 'Remote server added.')
-      )
-      reset()
-      onOpenChange(null)
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : t(
-              'auto.components.sidebar.AddRemoteHostDialog.serverSaveFailed',
-              'Failed to add remote server.'
-            )
-      )
-    } finally {
-      setIsSaving(false)
-    }
+            return
+          }
+          const environments = await window.api.runtimeEnvironments.list()
+          setRuntimeEnvironments(environments)
+          await readRuntimeHostStatusSnapshots()
+          toast.success(
+            result.updatedExisting
+              ? t(
+                  'auto.components.sidebar.AddRemoteHostDialog.serverAlreadyPaired',
+                  'This server is already paired as {{value0}}; updated its connection.',
+                  { value0: result.environment.name }
+                )
+              : t('auto.components.sidebar.AddRemoteHostDialog.serverSaved', 'Remote server added.')
+          )
+          reset()
+          onOpenChange(null)
+        } catch (error) {
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : t(
+                  'auto.components.sidebar.AddRemoteHostDialog.serverSaveFailed',
+                  'Failed to add remote server.'
+                )
+          )
+        }
+      },
+      () => setIsSaving(false)
+    )
   }
 
   const showSshConfigPicker = renderMode === 'ssh' && sshView === 'config-picker'

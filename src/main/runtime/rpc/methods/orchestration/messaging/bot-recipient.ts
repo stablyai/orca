@@ -15,6 +15,7 @@ import {
   type BotRequestConversation
 } from '../../../../../bots/bot-request-asker'
 import { readNewestBotActingTurn } from '../../../../../bots/bot-acting-turn-read'
+import { withCarriedAskers } from '../../../../../bots/bot-request-askers-of'
 import type {
   AutomationTriggeredBy,
   BotRequestAsker
@@ -185,19 +186,38 @@ export function workspaceOf(externalId: string): string | null {
   return externalId.split(':')[0] || null
 }
 
+export type ActingMail = {
+  sender: OrchestrationCallerIdentity
+  /** Whom a paired computer's sending turn acts for, beside this sender's own. */
+  carriedAskers?: readonly BotRequestAsker[]
+}
+
 /** Who the sender acts for; null for a bot's own worker mailing its own chat, which is ordinary mail. */
 export async function readActingSender(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
   callerSessionId: string | undefined,
+  { sender, carriedAskers }: ActingMail,
+  /** Null for a bot on another computer: its mail is never a bot's own chat here. */
+  receiving: ReceivingBot | null
+): Promise<ActingSender | null> {
+  const read = await readOwnActingSender(runtime, db, callerSessionId, sender, receiving)
+  return read && { ...read, turn: withCarriedAskers(read.turn, carriedAskers) }
+}
+
+async function readOwnActingSender(
+  runtime: OrcaRuntimeService,
+  db: OrchestrationDb,
+  callerSessionId: string | undefined,
   sender: OrchestrationCallerIdentity,
-  receiving: ReceivingBot
+  receiving: ReceivingBot | null
 ): Promise<ActingSender | null> {
   const creator = creatorSession(db, sender)
   if (creator.dispatchId) {
     const creatorBot = creator.sessionId ? botOfSession(runtime.bots, creator.sessionId) : null
     // Its own chat (or the Run it coordinates) is ordinary mail; the bot's other chats are other agents.
     if (
+      receiving &&
       creatorBot?.id === receiving.bot.id &&
       receiving.via === 'address' &&
       receiving.chat &&
@@ -206,7 +226,7 @@ export async function readActingSender(
       return null
     }
     if (creatorBot && creator.sessionId) {
-      if (isBotGroupMemberSession(creator.sessionId)) {
+      if (receiving && isBotGroupMemberSession(creator.sessionId)) {
         return refuse(BOT_REQUEST_GROUP_WORKER_REFUSAL)
       }
       const read = await readBotTurn(runtime, db, creator.sessionId)

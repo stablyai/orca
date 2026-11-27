@@ -163,15 +163,18 @@ export function MobileNativeChatAsk({
       return
     }
     const cur = selections[qi] ?? []
+    // A single-select's choice tapped again stays chosen; only multi-select untoggles.
+    if (!multi && cur.includes(optIndex)) {
+      return
+    }
     // Preview choices wait for Submit so inspecting alternatives never commits an answer.
     const keep = optIndex !== OTHER && askQuestionShowsPreviews(prompt.questions[qi])
-    const picked = !cur.includes(optIndex)
     const next = selections.map((s, i) =>
-      i === qi ? toggleAskOption(cur, optIndex, multi, keep || choosing) : s
+      i === qi ? toggleAskOption(cur, optIndex, multi, choosing) : s
     )
     setPicks(qi, next)
     autoAdvance.cancel()
-    if (picked && !multi && optIndex !== OTHER && !keep) {
+    if (!multi && optIndex !== OTHER && !keep) {
       autoAdvance.schedule(() => void advance(next))
     }
   }

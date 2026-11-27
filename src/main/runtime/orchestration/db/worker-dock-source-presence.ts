@@ -95,6 +95,13 @@ export class WorkerDockSourcePresence {
     }
   }
 
+  changedDispatchProgress(id: string): void {
+    const source = this.dispatchSources.get(id)
+    if (source) {
+      this.invalidate(source, false)
+    }
+  }
+
   forgetWorkers(): void {
     this.changedHistory()
     this.dispatchSources.clear()

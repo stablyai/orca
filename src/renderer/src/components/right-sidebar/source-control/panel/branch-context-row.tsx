@@ -1,5 +1,5 @@
 import React from 'react'
-import { ExternalLink, Loader2, RefreshCw } from 'lucide-react'
+import { Loader2, RefreshCw } from 'lucide-react'
 import type { GitBranchCompareSummary } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import type { GitBranchLineTotal } from '../../../../../../shared/git/status/git-status-types'
 import { useTranslate } from '@/i18n/use-translate'
@@ -14,7 +14,6 @@ import {
   resolveSourceControlDisplayedBaseRef,
   type SourceControlBranchContextStat
 } from './branch-context-stats'
-import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { RebasePausedStrip, type BaseRebaseActions } from './base-rebase-control'
 
 function ContextStat({ stat }: { stat: SourceControlBranchContextStat }): React.JSX.Element {
@@ -35,29 +34,6 @@ function ContextStat({ stat }: { stat: SourceControlBranchContextStat }): React.
         {stat.title}
       </TooltipContent>
     </Tooltip>
-  )
-}
-
-function ManualReviewLinkButton({
-  url
-}: {
-  url: string | null | undefined
-}): React.JSX.Element | null {
-  const t = useTranslate()
-  if (!url) {
-    return null
-  }
-  return (
-    <SourceControlHeaderIconButton
-      icon={ExternalLink}
-      label={t(
-        'auto.components.right.sidebar.SourceControl.4b4a7de138',
-        'Open review page in browser'
-      )}
-      onClick={() => {
-        openAppHttpLink(url)
-      }}
-    />
   )
 }
 
@@ -83,7 +59,6 @@ export function SourceControlBranchContextRow({
   compareBaseRef,
   headDisplay = null,
   headControl,
-  manualReviewUrl,
   branchLineTotal,
   reviewControl,
   rebase,
@@ -93,7 +68,6 @@ export function SourceControlBranchContextRow({
   compareBaseRef: string | null
   headDisplay?: WorktreeGitIdentityDisplay | null
   headControl?: React.ReactNode
-  manualReviewUrl?: string | null
   branchLineTotal?: GitBranchLineTotal | null
   reviewControl?: React.ReactNode
   rebase?: BaseRebaseActions | null
@@ -157,7 +131,7 @@ export function SourceControlBranchContextRow({
       />
     ) : null
 
-  const headRowShown = headDisplay != null || reviewControl != null || Boolean(manualReviewUrl)
+  const headRowShown = headDisplay != null || reviewControl != null
   if (!headRowShown && !statusLine) {
     return null
   }
@@ -174,7 +148,6 @@ export function SourceControlBranchContextRow({
           <span className="flex min-w-0 flex-1 items-center">
             {headDisplay ? (headControl ?? <HeadIdentity display={headDisplay} />) : null}
           </span>
-          <ManualReviewLinkButton url={manualReviewUrl} />
           {reviewControl}
         </div>
       ) : null}

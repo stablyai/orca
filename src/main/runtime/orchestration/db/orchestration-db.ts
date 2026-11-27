@@ -24,6 +24,7 @@ import { refreshOutstandingDeliveryTrigger } from './schema/migrate-v41'
 import { revokeAgentSessionPublicationFences } from '../../agent-session/agent-session-publication-fence'
 import { RUN_PANE_KEY_MATCH_SUFFIX_SQL } from './pane-key-match'
 import { installWorkerTerminalPriorOwnerIndex } from './worker-terminal/worker-terminal-prior-owner-index'
+import { STARTING_WORKER_TERMINAL_INDEX_SQL } from './worker-dispatch/worker-terminal-claim'
 import { UNRELEASED_MINTED_WORKER_TERMINAL_SQL } from './worker-terminal/worker-terminal-release'
 import { installWorkerDockSchema } from './schema/worker-dock-schema'
 import { WorkerDockSourcePresence } from './worker-dock-source-presence'
@@ -127,6 +128,7 @@ class OrchestrationDbCore {
       CREATE INDEX IF NOT EXISTS idx_remote_placements_run ON remote_placements(run_id);
       CREATE INDEX IF NOT EXISTS idx_worker_dispatches_agent_terminal_handle
         ON worker_dispatches(agent_terminal_handle) WHERE agent_terminal_handle IS NOT NULL;
+      ${STARTING_WORKER_TERMINAL_INDEX_SQL};
       CREATE INDEX IF NOT EXISTS idx_attempt_observation_facts_liveness
         ON attempt_observation_facts(dispatch_id) WHERE facet = 'liveness';
       CREATE INDEX IF NOT EXISTS idx_dispatch_creator_mailbox_work

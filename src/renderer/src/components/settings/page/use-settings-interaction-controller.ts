@@ -27,6 +27,8 @@ import {
 } from '../navigation/settings-navigation-foundations'
 import { cancelPendingSettingsTargetFocus } from '../navigation/settings-target-focus'
 
+const RESOLVED_WRITE_QUEUE = Promise.resolve()
+
 export type SettingsInteractionModel = Pick<
   SettingsStoreModel,
   | 'closeSettingsPage'
@@ -88,8 +90,7 @@ export function useSettingsInteractionController(model: SettingsInteractionModel
   const pendingFocusWatchRef = useRef<SettingsDeepLinkTargetWatch | null>(null)
   const repoHooksRequestSeqRef = useRef(0)
   const shortcutsEscapeConfirmUntilRef = useRef(0)
-  const sourceControlAiWriteQueueRef = useRef<Promise<void>>(undefined!)
-  sourceControlAiWriteQueueRef.current ??= Promise.resolve()
+  const sourceControlAiWriteQueueRef = useRef<Promise<void>>(RESOLVED_WRITE_QUEUE)
 
   const hasUnsavedSourceControlAiPromptChanges =
     hasUnsavedCommitPromptChanges || hasUnsavedBranchPromptChanges || hasUnsavedChatPromptChanges

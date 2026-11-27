@@ -21,6 +21,7 @@ import {
   type GoogleServiceChoice
 } from '../../../../../shared/google/google-scopes'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { joinSentences } from '../../../../../shared/text/sentence-joining'
 import { STATUS_DOT_CLASSES } from '../bot-connector-row-parts'
 import {
   googleAccountChoices,
@@ -95,16 +96,16 @@ export function GoogleAccountRow({
   const disconnect = async (revoke: boolean): Promise<void> => {
     const promoted =
       isDefault && nextDefault
-        ? ` ${t('bots.google.disconnect.promotes', '{{email}} becomes the default.', {
+        ? t('bots.google.disconnect.promotes', '{{email}} becomes the default.', {
             email: nextDefault
-          })}`
+          })
         : ''
     const confirmed = await confirm({
       title: t('bots.google.disconnect.title', 'Disconnect {{email}}?', {
         email: account.email
       }),
-      description:
-        (revoke
+      description: joinSentences([
+        revoke
           ? t(
               'bots.google.disconnect.revokeNote',
               'Bots stop using this account here, and Google cancels Orca’s access everywhere it was allowed.'
@@ -114,7 +115,9 @@ export function GoogleAccountRow({
             : t(
                 'bots.google.disconnect.removeNote',
                 'Bots stop using this account here. Bot settings stay, so Connect Google turns it back on.'
-              )) + promoted,
+              ),
+        promoted
+      ]),
       confirmLabel: t('bots.google.disconnect.confirm', 'Disconnect'),
       confirmVariant: 'destructive'
     })
