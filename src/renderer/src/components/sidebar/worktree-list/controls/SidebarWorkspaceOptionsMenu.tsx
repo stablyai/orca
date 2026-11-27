@@ -3,7 +3,6 @@ import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { useAppStore } from '@/store/index'
-import { WorktreeCardsKeptHintContent } from '../../workspace-card/template/WorktreeCardsIntroNotice'
 import { SidebarOptionsPopover } from './SidebarOptionsPopover'
 import { useWorkspaceOptionsFilterBadge } from './use-workspace-options-filter-badge'
 
@@ -11,6 +10,14 @@ const WorkspaceOptionsMenuItems = lazy(() =>
   import('./workspace-options-menu-items').then((module) => ({
     default: module.WorkspaceOptionsMenuItems
   }))
+)
+
+const LazyWorktreeCardsKeptHintContent = lazy(
+  () =>
+    import('../../workspace-card/template/WorktreeCardsIntroNotice').then((module) => ({
+      default: module.WorktreeCardsKeptHintContent
+    })),
+  { reloadKey: 'worktree-cards-kept-hint-content' }
 )
 
 const dismissKeptHint = (): void => useAppStore.getState().setWorktreeCardsIntroKeptHintOpen(false)
@@ -61,7 +68,11 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
       hint={{
         open: keptHintOpen,
         onDismiss: dismissKeptHint,
-        content: <WorktreeCardsKeptHintContent />
+        content: keptHintOpen ? (
+          <Suspense fallback={null}>
+            <LazyWorktreeCardsKeptHintContent />
+          </Suspense>
+        ) : null
       }}
     >
       <Suspense fallback={null}>
