@@ -67,14 +67,15 @@ function decode(data: string | undefined): string {
 
 /** Keep mixed sections in order; prefer plain text within each alternative. */
 export function bodyText(part: Part | undefined): string {
-  const select = (node: Part): Part[] => {
+  const select = (node: Part, relatedRoot = false): Part[] => {
     if (
       node.filename ||
-      node.headers?.some(
-        (entry) =>
-          entry.name.toLowerCase() === 'content-disposition' &&
-          entry.value.split(';', 1)[0].trim().toLowerCase() === 'attachment'
-      )
+      (!relatedRoot &&
+        node.headers?.some(
+          (entry) =>
+            entry.name.toLowerCase() === 'content-disposition' &&
+            /^\s*attachment(?=[\s;(]|$)/i.test(entry.value)
+        ))
     ) {
       return []
     }
@@ -88,12 +89,17 @@ export function bodyText(part: Part | undefined): string {
       )?.value
       let contentId: string | null = null
       try {
-        // MIME permits whitespace around =; preserve quoted parameter values while trimming it.
-        const normalized = contentType?.replace(
-          /("(?:\\.|[^"\\])*")|[ \t]*=[ \t]*/g,
-          (_token, quoted: string | undefined) => quoted ?? '='
+        // Normalize RFC mail whitespace without changing quoted parameter values.
+        const normalized = (contentType ?? 'multipart/related').replace(
+          /"(?:\\[\s\S]|[^"\\])*"?|[ \t\r\n]+/g,
+          (token, offset: number, source: string) => {
+            if (token.startsWith('"')) {
+              return token
+            }
+            return source[offset - 1] === '=' || source[offset + token.length] === '=' ? '' : ' '
+          }
         )
-        contentId = new MIMEType(normalized ?? 'multipart/related').params.get('start')
+        contentId = new MIMEType(normalized).params.get('start')
       } catch {
         // A missing or malformed header retains the implicit first-part root.
       }
@@ -105,9 +111,11 @@ export function bodyText(part: Part | undefined): string {
             )
           )
         : node.parts?.[0]
-      return root ? select(root) : []
+      return root ? select(root, true) : []
     }
-    const children = (node.parts ?? []).map(select).filter((child) => child.length > 0)
+    const children = (node.parts ?? [])
+      .map((child) => select(child))
+      .filter((child) => child.length > 0)
     if (node.mimeType === 'multipart/alternative') {
       return (
         children.findLast((child) => child.some((leaf) => leaf.mimeType === 'text/plain')) ??

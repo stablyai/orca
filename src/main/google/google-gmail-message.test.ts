@@ -34,6 +34,11 @@ it('keeps mixed body sections while selecting each nested alternative and exclud
         ...textPart('text/html', '<p>Attached document</p>'),
         filename: '',
         headers: [{ name: 'Content-Disposition', value: 'ATTACHMENT; filename=""' }]
+      },
+      {
+        mimeType: 'multipart/alternative',
+        headers: [{ name: 'Content-Disposition', value: 'Attachment; filename=""' }],
+        parts: [textPart('text/plain', 'Attached MIME body')]
       }
     ]
   }
@@ -73,6 +78,31 @@ it('does not let related CID resources replace the preferred plain body', () => 
         }
       ],
       parts: [{ mimeType: 'image/png' }, root]
+    })
+  ).toBe('HTML body')
+  expect(
+    bodyText({
+      ...related,
+      headers: [
+        {
+          name: 'Content-Type',
+          value: 'multipart/related; boundary="a; start = <decoy>"; start \t=\r\n "<body>"'
+        }
+      ],
+      parts: [{ mimeType: 'image/png' }, root]
+    })
+  ).toBe('HTML body')
+  expect(
+    bodyText({
+      ...related,
+      parts: [
+        {
+          ...root,
+          filename: '',
+          headers: [{ name: 'Content-Disposition', value: 'attachment' }]
+        },
+        resource
+      ]
     })
   ).toBe('HTML body')
 })
