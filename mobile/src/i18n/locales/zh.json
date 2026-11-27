@@ -8478,7 +8478,7 @@
     "addHeader": "添加请求头",
     "addButton": "添加",
     "sourceLabel": "服务器 URL 或启动命令",
-    "sourcePlaceholder": "https://… or npx …",
+    "sourcePlaceholder": "https://… 或 npx …",
     "sourceNote": "粘贴服务器 URL、启动命令或 mcpServers 配置",
     "details": "详情",
     "trust": "只添加你信任的软件",
