@@ -41,18 +41,18 @@ export class StructuredAgentSessionSinkQueue {
     source: Parameters<StructuredAgentSessionSinkSnapshots['bindLiveText']>[0]
   ): (() => void) => this.snapshots.bindLiveText(source)
 
-  liveText = (): readonly AgentJournalRenderItem[] => {
+  liveText = (readers?: events.LiveTextReaders): readonly AgentJournalRenderItem[] => {
     const target = this.target
     return !target || this.closed || this.failure !== null || this.snapshots.held
       ? []
-      : this.snapshots.readLiveText(target.journal.cursor().epoch)
+      : this.snapshots.readLiveText(target.journal.cursor().epoch, readers)
   }
 
   flushLiveText = (): void => this.snapshots.flushLiveText()
 
   publishLiveText = createLiveTextPublication(
     (operation) => this.submit(operation),
-    (bound) => this.target === bound,
+    () => this.target,
     this.liveText
   )
 

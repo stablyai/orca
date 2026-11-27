@@ -12,7 +12,6 @@ const IMAGE_ATTACHMENT_AGENTS: ReadonlySet<string> = new Set<string>([
   'claude',
   'openclaude',
   'codex',
-  'gemini',
   'cursor',
   'copilot',
   'droid',

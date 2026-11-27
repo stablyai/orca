@@ -60,6 +60,11 @@ it('isolates recalled replies across pages and restart, and does not mark failed
     }
   })
   const store: FeishuStore = {
+    credential: async (...args) => inbox.credential(...args),
+    finishReply: async (...args) => inbox.finishReply(...args),
+    postWindowStart: async (...args) => inbox.postWindowStart(...args),
+    replyState: async (...args) => inbox.replyState(...args),
+
     deliveryReady: async (...args) => inbox.deliveryReady(...args),
     deliveryFailed: async (...args) => inbox.deliveryFailed(...args),
     deliverySucceeded: async (...args) => inbox.deliverySucceeded(...args),

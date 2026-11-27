@@ -26,6 +26,7 @@ const OPS = [
   'sendingCard',
   'postedCard',
   'bindings',
+  'credential',
   'add',
   'remove',
   'pair',
@@ -46,7 +47,10 @@ const OPS = [
   'pendingReplies',
   'mayPostReply',
   'replyPosted',
-  'mayPost'
+  'mayPost',
+  'replyState',
+  'finishReply',
+  'postWindowStart'
 ] as const satisfies readonly (keyof FeishuInbox)[]
 type Op = (typeof OPS)[number]
 export const isFeishuOp = (op: string): op is Op => OPS.some((allowed) => allowed === op)

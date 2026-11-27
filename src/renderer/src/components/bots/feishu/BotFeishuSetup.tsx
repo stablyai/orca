@@ -3,6 +3,10 @@ import { createNonSecureContextUuid } from '../../../../../shared/identifiers/no
 import { botTarget } from '@/lib/bot-hosts'
 import { openOwnedHttpLink } from '@/lib/browser/navigation/http-link-routing'
 import { BotAppBrandLogo } from '../apps/BotAppBrandLogo'
+import { botHostHas } from '@/lib/bot-host-status'
+import { BOTS_FEISHU_SDK_CAPABILITY } from '../../../../../shared/bot-runtime-capabilities'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
@@ -31,6 +35,11 @@ export function BotFeishuSetup({
     () =>
       `lark-cli config init --new --name orca-feishu-${createNonSecureContextUuid().slice(0, 8)} --brand feishu`
   )
+  const sdkAvailable = botHostHas(bot.hostId, BOTS_FEISHU_SDK_CAPABILITY)
+  const [method, setMethod] = useState<'sdk' | 'cli'>(sdkAvailable ? 'sdk' : 'cli')
+  const [appId, setAppId] = useState('')
+  const [secret, setSecret] = useState('')
+  const sdk = sdkAvailable && method === 'sdk'
   const [cliMissing, setCliMissing] = useState(false)
   const [profiles, setProfiles] = useState<string[]>([])
   const [selected, select] = useState('')
@@ -40,7 +49,7 @@ export function BotFeishuSetup({
   const target = botTarget(bot)
   const off = state?.status === 'off'
   useEffect(() => {
-    if (!off) {
+    if (!off || sdk) {
       return
     }
     let alive = true
@@ -65,7 +74,7 @@ export function BotFeishuSetup({
     return () => {
       alive = false
     }
-  }, [bot, off, refresh])
+  }, [bot, off, refresh, sdk])
   const change = async (): Promise<void> => {
     setBusy(true)
     setError(false)
@@ -73,8 +82,13 @@ export function BotFeishuSetup({
       await feishuCall(
         bot,
         off ? 'connect' : 'remove',
-        off ? { botId: bot.id, profile: selected } : { botId: bot.id }
+        off
+          ? sdk
+            ? { botId: bot.id, appId: appId.trim(), appSecret: secret }
+            : { botId: bot.id, profile: selected }
+          : { botId: bot.id }
       )
+      setSecret('')
     } catch {
       setError(true)
     }
@@ -82,12 +96,39 @@ export function BotFeishuSetup({
   }
   const status = (s: FeishuLocalState['status']): string => {
     switch (s) {
+      case 'upload-permission':
+        return t(
+          'bots.feishu.uploadPermission',
+          'Enable IM file upload under App identity (tenant), then publish the permission. A user-only grant cannot authorize bot uploads.'
+        )
+      case 'disconnect-failed':
+        return t(
+          'bots.feishu.disconnectFailed',
+          'The listener has stopped. Disconnect again to release this app.'
+        )
+      case 'credentials-required':
+        return t(
+          'bots.feishu.credentialsRequired',
+          'The host could not open the stored app secret. Disconnect and enter the credentials again.'
+        )
       case 'off':
+        if (sdk) {
+          return t(
+            'bots.feishu.sdkHelp',
+            'Use the credentials from your Feishu app’s developer console. Orca stores the secret on the bot’s host.'
+          )
+        }
         return t(
           'bots.feishu.choose',
           'Choose a Feishu CLI profile on the computer that runs this bot.'
         )
       case 'cli-missing':
+        if (!off || sdk) {
+          return t(
+            'bots.feishu.installReconnect',
+            'Install lark-cli on the computer running this bot. Orca will retry the connection automatically.'
+          )
+        }
         return t(
           'bots.feishu.cliMissing',
           'Install lark-cli on the computer running this bot, then refresh profiles.'
@@ -127,12 +168,12 @@ export function BotFeishuSetup({
       case 'retrying':
         return t(
           'bots.feishu.retrying',
-          'Retrying. Check the CLI profile, permissions and long-connection subscription on the bot’s computer.'
+          'Retrying. Check the connection settings, app permissions and long-connection subscription.'
         )
       case 'paused':
         return t('bots.feishu.paused', 'This bot is paused or disabled.')
       case 'expired':
-        return t('bots.feishu.expired', 'Pairing expired. Disconnect and select the profile again.')
+        return t('bots.feishu.expired', 'Pairing expired. Disconnect and pair again.')
       case 'review':
         return t(
           'bots.feishu.review',
@@ -154,14 +195,60 @@ export function BotFeishuSetup({
           <BotAppBrandLogo app={{ id: 'feishu-local' }} />
           <DialogTitle>{t('bots.feishu.title', 'Feishu on this host')}</DialogTitle>
         </div>
+        {off && sdkAvailable ? (
+          <RadioGroup
+            layout="inline"
+            aria-label={t('bots.feishu.method', 'Connection method')}
+            value={method}
+            disabled={busy}
+            onValueChange={(v) => {
+              setMethod(v === 'cli' ? 'cli' : 'sdk')
+              setError(false)
+              setSecret('')
+            }}
+          >
+            <RadioGroupItem value="sdk" variant="pill">
+              {t('bots.feishu.credentials', 'App credentials')}
+            </RadioGroupItem>
+            <RadioGroupItem value="cli" variant="pill">
+              {t('bots.feishu.cliMethod', 'Local CLI')}
+            </RadioGroupItem>
+          </RadioGroup>
+        ) : null}
         <p className="text-sm text-muted-foreground" role="status">
           {state
-            ? status(off && cliMissing ? 'cli-missing' : state.status)
+            ? status(off && !sdk && cliMissing ? 'cli-missing' : state.status)
             : state === null
               ? t('bots.feishu.hostError', 'Could not read the bot’s host.')
               : t('bots.feishu.loading', 'Checking the host…')}
         </p>
-        {off ? (
+        {off && sdk ? (
+          <div className="grid gap-3">
+            <div className="grid gap-1.5">
+              <Label htmlFor="feishu-app-id">{t('bots.feishu.appId', 'App ID')}</Label>
+              <Input
+                id="feishu-app-id"
+                autoComplete="off"
+                spellCheck={false}
+                value={appId}
+                onChange={(e) => setAppId(e.target.value)}
+                disabled={busy}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="feishu-secret">{t('bots.feishu.appSecret', 'App secret')}</Label>
+              <Input
+                id="feishu-secret"
+                type="password"
+                autoComplete="off"
+                value={secret}
+                onChange={(e) => setSecret(e.target.value)}
+                disabled={busy}
+              />
+            </div>
+          </div>
+        ) : null}
+        {off && !sdk ? (
           <>
             <Label htmlFor="feishu-profile">{t('bots.feishu.profile', 'Feishu CLI profile')}</Label>
             <Select value={selected} onValueChange={select} disabled={!profiles.length || busy}>
@@ -199,13 +286,15 @@ export function BotFeishuSetup({
             >
               {t('bots.feishu.copyCommand', 'Copy setup command')}
             </Button>
-            <p className="text-xs text-muted-foreground">
-              {t(
-                'bots.feishu.scopes',
-                'Enable long connections and the Receive message event. Allow the app to read DMs, send messages and upload files.'
-              )}
-            </p>
           </>
+        ) : null}
+        {off ? (
+          <p className="text-xs text-muted-foreground">
+            {t(
+              'bots.feishu.scopes',
+              'Enable long connections and the Receive message event. Publish app permissions to read DMs, reply as the bot and upload IM files.'
+            )}
+          </p>
         ) : null}
         {state?.pairingText ? (
           <div className="space-y-2">
@@ -250,12 +339,12 @@ export function BotFeishuSetup({
           <p role="alert" className="text-xs text-destructive">
             {t(
               'bots.feishu.error',
-              'Check that lark-cli is installed on this host and the profile is available for this bot.'
+              'Check the selected setup method and confirm this app is available for this bot.'
             )}
           </p>
         ) : null}
         <div className="flex justify-end gap-2">
-          {off ? (
+          {off && !sdk ? (
             <Button variant="ghost" onClick={() => setRefresh((n) => n + 1)}>
               {t('bots.feishu.refresh', 'Refresh profiles')}
             </Button>
@@ -263,7 +352,14 @@ export function BotFeishuSetup({
           {state ? (
             <Button
               variant={off ? 'default' : 'outline'}
-              disabled={busy || (off && !selected)}
+              disabled={
+                busy ||
+                (off &&
+                  (sdk
+                    ? !/^cli_[a-fA-F0-9]{16}$/.test(appId.trim()) ||
+                      !/^[\x21-\x7e]{1,256}$/.test(secret)
+                    : !selected))
+              }
               onClick={() => void change()}
             >
               {off

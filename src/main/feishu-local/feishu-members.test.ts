@@ -6,7 +6,7 @@ import { FeishuMessageIngress } from './feishu-message-ingress'
 import { FeishuInbox } from './feishu-inbox'
 import { threadKey } from './feishu-route-key'
 import { feishuAsker } from '../../shared/bots/feishu-members'
-import { originalResource } from './feishu-resources'
+import { verifiedOriginal } from './feishu-message'
 import type { BotMember } from '../../shared/bot-types'
 import type { FeishuMessage } from './feishu-cli'
 
@@ -145,10 +145,11 @@ it('validates a member attachment against that sender, without treating them as 
     sender: { id: 'ou_member', id_type: 'open_id', sender_type: 'user' },
     body: { content: '{"image_key":"img_test"}' }
   }
-  const reply = { ok: true, identity: 'bot', data: { items: [message] } }
-  expect(originalResource(reply, b, 'om_resource', 'image', 'ou_member')?.key).toBe('img_test')
-  expect(originalResource(reply, b, 'om_resource', 'image', 'ou_other')).toBeNull()
-  expect(originalResource(reply, b, 'om_resource', 'image')).toBeNull()
+  const read = (sender: string) =>
+    verifiedOriginal([message], 'om_resource', b.chat, sender, 'image')
+  expect(read('ou_member')).toBe(message.body.content)
+  expect(read('ou_other')).toBeUndefined()
+  expect(read(b.owner)).toBeUndefined()
   expect(b.owner).toBe('ou_owner')
 })
 

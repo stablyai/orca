@@ -1374,7 +1374,7 @@
       "pairingInvalid": "Pareamento inválido — pareie novamente com seu desktop",
       "rePairDetail": "Pareie novamente com seu desktop",
       "reconnecting": "Reconectando…",
-      "relayAccessExpired": "Acesso ao Relay expirado para {{host}}",
+      "relayAccessRefused": "O Relay recusou o acesso para {{host}}",
       "relayConnectFailed": "Não foi possível conectar via Relay",
       "relayUnreachable": "Não foi possível acessar o Relay",
       "signInDetail": "Entre no Orca no seu desktop para se reconectar",
@@ -4733,11 +4733,16 @@
     }
   },
   "webShell": {
+    "downloadProgress": {
+      "megabytes": "{{received}} de {{total}} MB"
+    },
     "shellStateScreen": {
       "checkingHost": "Verificando host",
       "connectToDownload": "Conecte-se a este host para baixar a versão mais recente do app",
       "documentLoadFailed": "Não foi possível abrir o app baixado.",
       "downloadFailed": "Não foi possível baixar a versão mais recente do app deste host.",
+      "downloadProgressFromHost": "de {{host}} · {{progress}}",
+      "downloadingLatestApp": "Baixando a versão mais recente do app",
       "hostProfileUnreadable": "Não foi possível ler os dados deste host no seu dispositivo. Tente novamente.",
       "isolationUnavailable": "O WebView deste dispositivo é antigo demais para abrir o espaço de trabalho com segurança.",
       "openingWorkspace": "Abrindo espaço de trabalho",
@@ -5102,6 +5107,12 @@
                 "message": "O uso do Claude será atualizado na próxima vez que ele for executado."
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "Atualiza quando o Codex é executado",
+                "message": "O uso do Codex será atualizado na próxima vez que ele for executado."
+              }
+            },
             "1804cd8c3f": "Atualizando login",
             "bf2e739f18": "Login indisponível",
             "f8f0f9d8cc": "Problema de rede",
@@ -5304,7 +5315,9 @@
       "ask": {
         "replaced": "O agente fez uma nova pergunta. Leia e responda.",
         "replacedByNewer": "Substituída por uma pergunta mais recente",
-        "skipped": "Ignoradas"
+        "skipped": "Ignoradas",
+        "heldImagesLimit": "Suas respostas vão como um único comentário, que aceita até {{max}} fotos. Remova algumas e tente novamente.",
+        "heldSkillsLimit": "Suas respostas vão como um único comentário, que aceita até {{max}} habilidades. Remova algumas e tente novamente."
       }
     },
     "needs": {
@@ -5806,7 +5819,13 @@
         "github": "Menções e eventos em issues e PRs",
         "slack": "Mensagens e menções",
         "linear": "Issues atribuídas e menções",
-        "google": "Gmail, Agenda e Drive, como você"
+        "google": "Gmail, Agenda e Drive, como você",
+        "clickup": "Gerencie tarefas, listas e documentos",
+        "airtable": "Consulte e edite bases, tabelas e registros",
+        "todoist": "Adicione, organize e conclua tarefas",
+        "zapier": "Execute ações nos apps que você configurou no Zapier",
+        "granola": "Pesquise notas e transcrições de reuniões",
+        "intercom": "Pesquise conversas, contatos e artigos"
       },
       "composioLine": {
         "outlook": "E-mail, agenda e contatos",
@@ -5855,11 +5874,17 @@
       "continuesAt": "Continua às {{time}}",
       "continues": "Continua às {{time}}",
       "hitLimit": "Limite atingido · reinicia às {{time}}"
+    },
+    "new": {
+      "purposeTooLongForHost": "O Orca em {{host}} aceita até 200 caracteres para a finalidade. Encurte o texto ou atualize o Orca em {{host}}."
     }
   },
   "sidebar": {
     "cardSlot": {
       "working": "Trabalhando"
     }
+  },
+  "mcpServers": {
+    "agentBlocked": "Bloqueado pelas configurações do Claude da sua organização"
   }
 }

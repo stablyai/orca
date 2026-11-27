@@ -1,3 +1,5 @@
+import { migrateFeishuInbox } from './feishu-inbox-migrations'
+import { FeishuReplyCheckpoints } from './feishu-reply-checkpoints'
 import { FeishuReplyFiles } from './feishu-reply-files'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
@@ -17,6 +19,7 @@ const inReplyWindow = (first: number, now: number): boolean =>
 
 /** One database per installation. A CLI app can belong to just one Orca profile and bot. */
 export class FeishuInbox {
+  private checkpoints: FeishuReplyCheckpoints
   private db: Database.Database
   private cards: FeishuCardStore
   private responses: FeishuResponseStore
@@ -34,6 +37,8 @@ export class FeishuInbox {
       CREATE TABLE IF NOT EXISTS text_replies(account TEXT NOT NULL,id TEXT NOT NULL,mid TEXT NOT NULL,text TEXT NOT NULL,first_post INTEGER,message_id TEXT,review INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(account,id),FOREIGN KEY(account,mid) REFERENCES inbox(account,mid) ON DELETE CASCADE);
       CREATE INDEX IF NOT EXISTS pending_feishu_replies ON text_replies(account) WHERE message_id IS NULL AND review=0;
       CREATE INDEX IF NOT EXISTS review_feishu_messages ON inbox(account) WHERE review=1;`)
+    migrateFeishuInbox(this.db)
+    this.checkpoints = new FeishuReplyCheckpoints(this.db)
     this.files = new FeishuReplyFiles(this.db)
     this.failures = new FeishuDeliveryFailures(this.db)
     this.cards = new FeishuCardStore(this.db)
@@ -108,24 +113,42 @@ export class FeishuInbox {
   }
   bindings(scope: string): Binding[] {
     return this.db
-      .prepare('SELECT account,bot,profile,app,owner,chat,pairedAt FROM bindings WHERE scope=?')
+      .prepare(
+        'SELECT account,bot,CASE WHEN sealed_secret IS NULL THEN profile END AS profile,app,owner,chat,pairedAt FROM bindings WHERE scope=?'
+      )
       .all(scope)
       .map((row) => binding.parse(row))
   }
-  add(scope: string, bot: string, p: FeishuProfile): Binding {
+  add(
+    scope: string,
+    bot: string,
+    setup: FeishuProfile | { appId: string; sealedSecret: string }
+  ): Binding {
+    const sealed = 'sealedSecret' in setup ? setup.sealedSecret : null
+    if (sealed === '') {
+      throw new Error('Missing sealed Feishu credential')
+    }
     const b = {
       account: `local-feishu/${randomUUID()}`,
       bot,
-      profile: p.name,
-      app: p.appId,
+      profile: 'name' in setup ? setup.name : null,
+      app: setup.appId,
       owner: null,
       chat: null,
       pairedAt: null
     }
     this.db
-      .prepare('INSERT INTO bindings(account,scope,bot,profile,app) VALUES(?,?,?,?,?)')
-      .run(b.account, scope, bot, p.name, p.appId)
+      .prepare(
+        'INSERT INTO bindings(account,scope,bot,profile,app,sealed_secret) VALUES(?,?,?,?,?,?)'
+      )
+      .run(b.account, scope, bot, b.profile ?? b.app, b.app, sealed)
     return b
+  }
+  credential(account: string): string | null {
+    const value = this.db
+      .prepare('SELECT sealed_secret FROM bindings WHERE account=?')
+      .get(account)?.sealed_secret
+    return typeof value === 'string' ? value : null
   }
   remove(scope: string, bot: string, account: string): void {
     this.db
@@ -228,8 +251,10 @@ export class FeishuInbox {
       )
       .run(messageId, account, id)
   }
-  review(account: string, mid: string): void {
-    this.db.prepare('UPDATE inbox SET review=1 WHERE account=? AND mid=?').run(account, mid)
+  review(account: string, mid: string): boolean {
+    return !!this.db
+      .prepare('UPDATE inbox SET review=1 WHERE account=? AND mid=? AND review=0')
+      .run(account, mid).changes
   }
   needsReview(account: string): boolean {
     return (
@@ -245,7 +270,12 @@ export class FeishuInbox {
       )
     )
   }
-  /** A reply whose outcome was lost must only be retried within Feishu's one-hour UUID window. */
+  replyState = (...args: Parameters<FeishuReplyCheckpoints['replyState']>) =>
+    this.checkpoints.replyState(...args)
+  finishReply = (...args: Parameters<FeishuReplyCheckpoints['finishReply']>) =>
+    this.checkpoints.finishReply(...args)
+  postWindowStart = (...args: Parameters<FeishuReplyCheckpoints['postWindowStart']>) =>
+    this.checkpoints.postWindowStart(...args)
   mayPost(account: string, mid: string, now: number): boolean {
     this.db
       .prepare('UPDATE inbox SET first_post=? WHERE account=? AND mid=? AND first_post IS NULL')

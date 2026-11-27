@@ -1,16 +1,20 @@
+import { feishuConnectionState } from './feishu-connection-state'
+import { drainFeishuConnection } from './feishu-connection-delivery'
 import { FeishuPeopleDirectory } from './feishu-people'
-import { deliverFeishuMessages } from './feishu-deliveries'
 import { FeishuMessageIngress } from './feishu-message-ingress'
 import { FeishuInteractions } from './feishu-interactions'
-import { feishuProblem, FeishuHostError, type FeishuProblem } from './feishu-cli-status'
-import { randomBytes } from 'node:crypto'
+import { listProfiles } from './feishu-cli'
+import { FeishuPairing } from './feishu-pairing'
 import { setTimeout as delay } from 'node:timers/promises'
 import type { FeishuLocalState } from '../../shared/bots/feishu-local'
-import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { runtimeConversationHost } from '../external-conversations/external-conversation-runtime-host'
-import { drainFeishuOutbox } from './feishu-outbox'
-import { consumeFeishu, humanSentPairing, listProfiles, type FeishuMessage } from './feishu-cli'
+import type { FeishuMessage } from './feishu-message'
+import { feishuCliTransport } from './feishu-cli-transport'
+import { feishuProblem, FeishuHostError } from './feishu-cli-status'
+import { FeishuUploadPermissionError } from './feishu-transport'
+import { openFeishuSdk } from './feishu-sdk'
+import type { FeishuTransport } from './feishu-transport'
 import type { Binding } from './feishu-binding'
 import type { FeishuStore } from './feishu-store-ops'
 
@@ -19,15 +23,14 @@ export class FeishuConnection {
   private readonly controller = new AbortController()
   private readonly signal = this.controller.signal
   private phase: FeishuLocalState['status'] = 'connecting'
-  private code: string | undefined
-  private expires = 0
+  private pairing?: FeishuPairing
   private work: Promise<void> | undefined
+  private transport?: Promise<FeishuTransport>
   private consumer: Promise<void> | undefined
   private release?: () => void
-  private tick?: NodeJS.Timeout
   private retry?: NodeJS.Timeout
   private again = false
-  private deliveryRetry = false
+  private deliveryRetry: 'retrying' | 'upload-permission' | null = null
   private cardConsumer?: Promise<void>
   private readonly directory = new FeishuPeopleDirectory()
   private readonly ingress: FeishuMessageIngress
@@ -38,7 +41,10 @@ export class FeishuConnection {
     private readonly scope: string,
     readonly binding: Binding
   ) {
-    this.ingress = new FeishuMessageIngress(inbox, this.signal, () => this.bot()?.members ?? [])
+    this.ingress = new FeishuMessageIngress(inbox, this.signal, () => {
+      const bot = this.bot()
+      return bot ? bot.members : []
+    })
     this.interactions = new FeishuInteractions(
       runtime,
       inbox,
@@ -48,6 +54,7 @@ export class FeishuConnection {
       () => this.wake()
     )
   }
+
   private changed(): void {
     this.runtime.notifyBotsChanged({ botIds: [this.binding.bot], kinds: ['settings'] })
   }
@@ -57,26 +64,31 @@ export class FeishuConnection {
       this.changed()
     }
   }
-  start(pair: boolean): void {
-    if (pair) {
-      this.code = `Orca ${randomBytes(16).toString('hex')}`
-      this.expires = Date.now() + 5 * 60_000
+  start(secret: string | null, pair: boolean): void {
+    if (this.binding.profile === null && !secret) {
+      this.setPhase('credentials-required')
+      return
     }
-    if (!this.binding.owner && !this.code) {
+    if (!pair && !this.binding.owner) {
       this.setPhase('expired')
       return
     }
-    this.watch()
+
     if (pair) {
-      this.tick = setTimeout(() => {
-        if (this.code) {
-          this.setPhase('expired')
-          void this.stop()
-        }
-      }, 5 * 60_000).unref()
+      this.pairing = new FeishuPairing(() => {
+        this.setPhase('expired')
+        void this.stop()
+      })
     }
-    this.consumer = this.listen()
-    this.cardConsumer = this.interactions.listen(() => this.checkProfile())
+    this.watch()
+    this.transport =
+      this.binding.profile !== null
+        ? Promise.resolve(feishuCliTransport(this.binding.app, this.binding.profile, this.signal))
+        : openFeishuSdk(this.binding.app, secret!, this.signal)
+    this.consumer = this.listen(this.transport)
+    if (this.binding.profile !== null) {
+      this.cardConsumer = this.interactions.listen(() => this.checkProfile())
+    }
     this.wake()
   }
   watch(): void {
@@ -85,52 +97,31 @@ export class FeishuConnection {
       this.release = this.runtime
         .getExternalConversationSeam()
         ?.watch(runtimeConversationHost(this.runtime), (event) => {
-          this.interactions.event(event)
+          if (this.binding.profile !== null) {
+            this.interactions.event(event)
+          }
           if (event.kind === 'turn-ended' && event.conversation.source === 'feishu-local') {
             this.wake()
           }
         })
     }
   }
-  async state(): Promise<FeishuLocalState> {
-    const { account, profile } = this.binding
-    const status = (await this.inbox.needsReview(account))
-      ? 'review'
-      : !this.bot()
-        ? 'paused'
-        : this.deliveryRetry && this.phase === 'listening'
-          ? 'retrying'
-          : this.phase
-    return {
-      profile,
-      appId: this.binding.app,
-      ownerId: this.binding.owner ?? undefined,
-      status,
-      ...((status === 'pairing' || status === 'verification-failed') && this.code
-        ? { pairingText: this.code }
-        : {})
-    }
-  }
-  async people(query: string) {
-    await this.checkProfile()
-    if (!this.binding.owner) {
-      throw new Error('Pair this Feishu app first')
-    }
-    return this.directory.search(this.binding.app, query, this.signal)
-  }
-
-  private bot() {
-    return (this.runtime.bots.enabled() ? this.runtime.bots.list() : []).find(
-      (b) => b.id === this.binding.bot && !b.paused
+  state(): Promise<FeishuLocalState> {
+    return feishuConnectionState(
+      this.binding,
+      this.inbox,
+      this.phase,
+      this.deliveryRetry,
+      Boolean(this.bot()),
+      this.pairing
     )
   }
-  async stop(): Promise<void> {
-    this.controller.abort()
-    this.code = undefined
-    this.release?.()
-    clearTimeout(this.tick)
-    clearTimeout(this.retry)
-    await Promise.allSettled([this.consumer, this.cardConsumer, this.work])
+  async people(query: string) {
+    if (this.binding.profile === null || !this.binding.owner) {
+      throw new Error('Pair a local CLI connection before looking up members')
+    }
+    await this.checkProfile()
+    return this.directory.search(this.binding.app, query, this.signal)
   }
   private async checkProfile(): Promise<void> {
     const profiles = await listProfiles(this.signal)
@@ -138,24 +129,47 @@ export class FeishuConnection {
       throw new FeishuHostError('profile-changed')
     }
   }
-  private async listen(): Promise<void> {
+  private bot() {
+    return (
+      this.runtime.bots.enabled() &&
+      this.runtime.bots.list().find((b) => b.id === this.binding.bot && !b.paused)
+    )
+  }
+  async stop(): Promise<void> {
+    this.controller.abort()
+    this.pairing?.close()
+    this.pairing = undefined
+    this.release?.()
+    clearTimeout(this.retry)
+    await Promise.allSettled([this.consumer, this.cardConsumer, this.work])
+  }
+  private async listen(transport: Promise<FeishuTransport>): Promise<void> {
     let backoff = 1000
     while (!this.signal.aborted) {
-      let problem: FeishuProblem = 'retrying'
+      let problem: FeishuLocalState['status'] = 'retrying'
       try {
-        await this.checkProfile()
+        const api = await transport
         this.setPhase('connecting')
-        await consumeFeishu(
-          this.binding.app,
-          this.signal,
+        await api.listen(
           () => {
+            if (this.signal.aborted) {
+              return
+            }
             this.setPhase(this.binding.owner ? 'listening' : 'pairing')
             backoff = 1000
+            this.wake()
           },
-          (m) => this.receive(m)
+          () => {
+            if (!this.signal.aborted) {
+              this.setPhase('retrying')
+            }
+          },
+          (message) => this.receive(api, message)
         )
       } catch (error) {
-        problem = feishuProblem(error)
+        if (this.binding.profile !== null) {
+          problem = feishuProblem(error)
+        }
       }
       if (this.signal.aborted) {
         break
@@ -165,42 +179,44 @@ export class FeishuConnection {
       backoff = Math.min(backoff * 2, 30_000)
     }
   }
-  private async receive(m: FeishuMessage): Promise<void> {
+  private async receive(api: FeishuTransport, m: FeishuMessage): Promise<void> {
     if (!this.bot()) {
       return
     }
     const b = this.binding
     if (b.owner) {
-      await this.ingress.receive(b, m)
-      this.wake()
-    } else if (
-      m.chat_type === 'p2p' &&
-      m.message_type === 'text' &&
-      this.code &&
-      m.content === this.code &&
-      Date.now() < this.expires
-    ) {
-      try {
-        await this.confirm(m)
-      } catch {
-        if (!this.signal.aborted) {
-          this.setPhase('verification-failed')
-        }
+      if (b.owner !== m.sender_id || b.chat !== m.chat_id) {
+        return
       }
+      if (b.profile !== null) {
+        await this.ingress.receive(b, m)
+      } else if (m.chat_type === 'p2p') {
+        await this.inbox.accept(b, m)
+      }
+      this.wake()
+    } else if (m.message_type === 'text' && this.pairing?.matches(m.content)) {
+      await this.confirm(api, m, this.pairing)
     }
   }
-  private async confirm(m: FeishuMessage): Promise<void> {
-    if (
-      !(await humanSentPairing(this.binding.app, m, this.signal)) ||
-      this.signal.aborted ||
-      !this.bot() ||
-      Date.now() >= this.expires
-    ) {
+  private async confirm(
+    api: FeishuTransport,
+    m: FeishuMessage,
+    challenge: FeishuPairing
+  ): Promise<void> {
+    const result = await challenge.verify(
+      api,
+      m,
+      () => !this.signal.aborted && !this.binding.owner && Boolean(this.bot()),
+      () => this.inbox.pair(this.scope, this.binding, m)
+    )
+    if (this.signal.aborted) {
       return
     }
-    if ((await this.inbox.pair(this.scope, this.binding, m)) && !this.signal.aborted) {
-      this.code = undefined
-      clearTimeout(this.tick)
+    if (result === 'rejected') {
+      this.setPhase('verification-failed')
+    }
+    if (result === 'paired') {
+      this.pairing = undefined
       this.binding.owner = m.sender_id
       this.binding.chat = m.chat_id
       this.binding.pairedAt = Number(m.create_time)
@@ -210,27 +226,40 @@ export class FeishuConnection {
     }
   }
   wake(): void {
-    if (this.signal.aborted || !this.binding.owner || !this.bot()) {
+    if (
+      this.signal.aborted ||
+      !this.transport ||
+      !this.binding.owner ||
+      !this.bot() ||
+      this.retry
+    ) {
       return
     }
     if (this.work) {
       this.again = true
       return
     }
-    this.work = this.drain()
+    this.work = this.transport
+      .then((api) => this.drain(api))
       .then(async () => {
-        const retrying = await this.inbox.deliveryRetrying(this.binding.account)
-        if (retrying) {
+        if (
+          this.binding.profile !== null &&
+          (await this.inbox.deliveryRetrying(this.binding.account))
+        ) {
+          this.deliveryRetry = 'retrying'
           this.retryWork()
+          this.changed()
         }
-        if (this.deliveryRetry !== retrying) {
-          this.deliveryRetry = retrying
+        if (this.deliveryRetry && !this.retry) {
+          this.deliveryRetry = null
           this.changed()
         }
       })
-      .catch(() => {
-        if (!this.deliveryRetry) {
-          this.deliveryRetry = true
+      .catch((error: unknown) => {
+        const reason =
+          error instanceof FeishuUploadPermissionError ? 'upload-permission' : 'retrying'
+        if (reason !== this.deliveryRetry) {
+          this.deliveryRetry = reason
           this.changed()
         }
         this.retryWork()
@@ -252,53 +281,24 @@ export class FeishuConnection {
       this.wake()
     }, 15_000).unref()
   }
-  private async drain(): Promise<void> {
-    const b = this.binding
-    const seam = this.runtime.getExternalConversationSeam()
-    const bot = this.bot()
-    if (!b.owner || !b.chat || !seam || !bot) {
-      return
-    }
-    await deliverFeishuMessages(
-      this.runtime,
-      this.inbox,
-      b,
-      bot,
-      this.signal,
-      () => Boolean(this.bot()),
-      () => this.checkProfile(),
-      () => this.retryWork(),
-      () => this.changed()
-    )
-    const displayName = await this.ingress.displayName(b.app)
-    // Answer cards before draining their resulting user messages on the next pass.
-    try {
-      await this.interactions.drain(displayName)
-    } finally {
-      await this.sendOwed(displayName)
-    }
-  }
-  private async sendOwed(displayName: string): Promise<void> {
-    if (!this.binding.chat || !this.bot()) {
-      return
-    }
-    const journal = getStructuredAgentSessionHost()?.deps.store.connectorReplies()
-    if (!journal) {
-      await this.runtime.ensureStructuredAgentSessionHost()
-      this.retryWork()
-      return
-    }
-    await drainFeishuOutbox(
-      journal,
-      this.inbox,
-      this.binding,
-      this.signal,
-      () => !this.signal.aborted && Boolean(this.bot()),
-      () => this.checkProfile(),
-      () => this.changed(),
-      displayName,
-      this.interactions.cards,
-      this.runtime
+  private drain(api: FeishuTransport): Promise<void> {
+    return drainFeishuConnection(
+      {
+        runtime: this.runtime,
+        inbox: this.inbox,
+        binding: this.binding,
+        signal: this.signal,
+        bot: () => this.bot(),
+        checkProfile: () => this.checkProfile(),
+        retryWork: () => this.retryWork(),
+        changed: () => this.changed(),
+        repeat: () => {
+          this.again = true
+        },
+        ingress: this.ingress,
+        interactions: this.interactions
+      },
+      api
     )
   }
 }

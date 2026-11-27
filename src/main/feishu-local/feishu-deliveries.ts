@@ -1,3 +1,4 @@
+import type { FeishuTransport } from './feishu-transport'
 import { feishuAsker } from '../../shared/bots/feishu-members'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { Bot } from '../../shared/bot-types'
@@ -11,6 +12,7 @@ import { readThreadMute } from '../external-conversations/external-conversation-
 import { threadMuteSaves, threadMuteSaving } from '../connector-cloud/connector-thread-mute-saves'
 
 export async function deliverFeishuMessages(
+  api: FeishuTransport,
   runtime: OrcaRuntimeService,
   inbox: FeishuStore,
   b: Binding,
@@ -78,6 +80,7 @@ export async function deliverFeishuMessages(
       await checkProfile()
     }
     const { prompt, storedImages } = await feishuInput(
+      api,
       inbox,
       route ? { ...b, chat: route.chat } : b,
       row,

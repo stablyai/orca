@@ -3,7 +3,7 @@ import { z } from 'zod'
 export const binding = z.object({
   account: z.string(),
   bot: z.string(),
-  profile: z.string(),
+  profile: z.string().nullable(),
   app: z.string(),
   owner: z.string().nullable(),
   chat: z.string().nullable(),

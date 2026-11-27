@@ -1,3 +1,5 @@
+import type { FeishuMessage } from './feishu-message'
+import { feishuCliProcess } from './feishu-cli-process'
 import { runProcess, spawnProcess } from '@orca/process-host'
 import { signalProcessTree } from '@orca/process-host/process-tree-termination'
 import type { Readable } from 'node:stream'
@@ -30,7 +32,7 @@ const message = z.object({
   mentions: z
     .array(z.object({ id: z.string(), key: z.string(), name: z.string().optional() }))
     .optional(),
-  message_type: z.enum(['text', 'image', 'file']),
+  message_type: z.enum(['text', 'image', 'file', 'post']),
   create_time: z.string().regex(/^\d{13}$/),
   event_id: z.string().min(1).max(256),
   message_id: messageId,
@@ -42,7 +44,7 @@ const message = z.object({
     .max(64 * 1024)
     .refine((s) => s.trim().length > 0 && !s.includes('\0'))
 })
-export type FeishuMessage = z.infer<typeof message>
+export type { FeishuMessage } from './feishu-message'
 export function readFeishuMessage(line: string): FeishuMessage | null {
   try {
     return message.safeParse(JSON.parse(line)).data ?? null
@@ -57,7 +59,7 @@ export async function feishuCommand(
   input?: string | Uint8Array
 ): Promise<unknown> {
   const result = await runProcess({
-    program: 'lark-cli',
+    ...(await feishuCliProcess()),
     detached: process.platform !== 'win32',
     args,
     input,
@@ -155,7 +157,7 @@ export async function consumeFeishuEvent(
 ): Promise<void> {
   signal.throwIfAborted()
   const child = spawnProcess({
-    program: 'lark-cli',
+    ...(await feishuCliProcess()),
     args: ['--profile', app, 'event', 'consume', event, '--as', 'bot'],
     stdio: 'pipe',
     detached: process.platform !== 'win32'
@@ -212,52 +214,4 @@ export async function consumeFeishuEvent(
     clearTimeout(kill)
     clearTimeout(force)
   }
-}
-
-/** Confirm a pairing DM came from a human. The flattened event omits sender_type. */
-export async function humanSentPairing(
-  app: string,
-  m: FeishuMessage,
-  signal: AbortSignal
-): Promise<boolean> {
-  const response = await feishuCommand(
-    [
-      '--profile',
-      app,
-      'api',
-      'GET',
-      `/open-apis/im/v1/messages/${m.message_id}`,
-      '--as',
-      'bot',
-      '--params',
-      '{"user_id_type":"open_id"}'
-    ],
-    signal
-  )
-  const item = z.object({
-    message_id: z.literal(m.message_id),
-    chat_id: z.literal(m.chat_id),
-    msg_type: z.literal('text'),
-    body: z.object({
-      content: z.string().refine((raw) => {
-        try {
-          return JSON.parse(raw)?.text === m.content
-        } catch {
-          return false
-        }
-      })
-    }),
-    sender: z.object({
-      sender_type: z.literal('user'),
-      id: z.literal(m.sender_id),
-      id_type: z.literal('open_id')
-    })
-  })
-  return z
-    .object({
-      ok: z.literal(true),
-      identity: z.literal('bot'),
-      data: z.object({ items: z.tuple([item]) })
-    })
-    .safeParse(response).success
 }

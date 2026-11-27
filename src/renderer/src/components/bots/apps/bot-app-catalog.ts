@@ -84,7 +84,7 @@ export function directAppLine(app: BotDirectApp): string {
   }
   switch (app.connector) {
     case 'feishu-local':
-      return translate('bots.feishu.line', 'Private messages through Feishu CLI on this host')
+      return translate('bots.feishu.line', 'Private messages with your Feishu bot')
     case 'github':
       return translate('bots.apps.line.github', 'Mentions and events on issues and PRs')
     case 'slack':

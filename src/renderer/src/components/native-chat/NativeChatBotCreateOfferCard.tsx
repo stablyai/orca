@@ -277,7 +277,7 @@ function OfferCard({
           className="-mx-1 flex w-[calc(100%+0.5rem)] min-w-0 items-start justify-between gap-2 rounded-md px-1 text-left text-xs text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <span className="min-w-0">
-            <span className="block">{view.purpose}</span>
+            <span className={open ? 'block' : 'line-clamp-2'}>{view.purpose}</span>
             {view.takeover ? <span className="block">{view.takeover}</span> : null}
             {view.open?.note ? <span className="block">{view.open.note}</span> : null}
           </span>

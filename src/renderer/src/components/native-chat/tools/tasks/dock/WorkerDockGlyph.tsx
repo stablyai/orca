@@ -4,8 +4,9 @@ import { cn } from '@/lib/class-names'
 import type { WorkerDockGlyph as Glyph } from './worker-dock-card-order'
 
 /** One 12px status mark: amber question, red dot, yellow spinner, grey ring or green dot. The row's
- *  label carries the state for assistive technology, so the mark itself is decorative. */
-export function WorkerDockGlyph({ glyph }: { glyph: Glyph }) {
+ *  label carries the state for assistive technology, so the mark itself is decorative. `still`
+ *  draws running as a static dot, for the always-visible chip. */
+export function WorkerDockGlyph({ glyph, still = false }: { glyph: Glyph; still?: boolean }) {
   return (
     <span
       aria-hidden="true"
@@ -14,6 +15,8 @@ export function WorkerDockGlyph({ glyph }: { glyph: Glyph }) {
     >
       {glyph === 'ask' ? (
         <AgentQuestionIcon className="size-3" />
+      ) : glyph === 'running' && still ? (
+        <span className="block size-1.5 rounded-full bg-agent-working" />
       ) : glyph === 'running' ? (
         <AgentWorkingSpinner className="size-2.5" />
       ) : (

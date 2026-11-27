@@ -5,7 +5,11 @@
 import { useRef } from 'react'
 import { ScrollView, Text, View, type TextInputInstance } from 'react-native'
 import { House, MessageSquare } from 'lucide-react-native'
-import { BOTS_ITEM_COMMENT_ATTACHMENTS_RUNTIME_CAPABILITY } from '../../../../src/shared/bot-runtime-capabilities'
+import {
+  BOTS_ITEM_ATTACHMENT_STAGING_RUNTIME_CAPABILITY,
+  BOTS_ITEM_COMMENT_ATTACHMENTS_RUNTIME_CAPABILITY
+} from '../../../../src/shared/bot-runtime-capabilities'
+import { botItemAttachmentTarget } from '../../../../src/shared/agent-session/agent-session-attachments'
 import {
   formatBotItemNumber,
   isBotItemLive,
@@ -13,6 +17,7 @@ import {
   type BotItem
 } from '../../../../src/shared/bots/bot-items'
 import { botItemStatusName } from '../../../../src/shared/bots/bot-item-status-name'
+import { isBotItemReplyingTo } from '../../../../src/shared/bots/bot-item-replying'
 import type { BotChatTreeWorker } from '../../../../src/shared/bots/bot-chat-tree'
 import { ListGroup, ListRow, SectionHeader } from '../../components/list/ListGroup'
 import { MobileEdgeFade } from '../../components/list/MobileEdgeFade'
@@ -28,6 +33,7 @@ import type { BotItemQuestionStepsSend } from '../../../../src/shared/bots/use-b
 import { MobileBotItemActivity } from './MobileBotItemActivity'
 import { MobileBotItemCommentBox } from './MobileBotItemCommentBox'
 import { botItemOpenAsk, useMobileBotItemAskSlot } from './MobileBotItemAskCard'
+import { botItemAskCardKey } from './bot-item-ask-card-drafts'
 import { MobileNativeChatPromptStrip } from '../../session/native-chat/input/prompts/MobileNativeChatPromptStrip'
 import { MobileBotItemLinks } from './MobileBotItemLinks'
 import { botItemChatName, type BotItemSheet } from './MobileBotItemSheets'
@@ -40,7 +46,12 @@ import type { PhoneBotItemStepper } from './use-phone-bot-item-walk'
 import { MobileBotItemPageHeader } from './MobileBotItemPageHeader'
 import { MobileBotItemDescription } from './MobileBotItemDescription'
 import { usePhoneBotItemPendingComments } from './use-phone-bot-item-pending-comments'
-import { botItemCommentDraftKey, quoteIntoBotItemCommentDraft } from './bot-item-comment-drafts'
+import {
+  botItemCommentDraftKey,
+  quoteIntoBotItemCommentDraft,
+  useBotItemCommentDraftEmpty
+} from './bot-item-comment-drafts'
+import { useMobileNativeChatDraftInputs } from '../../session/native-chat/composer/drafts/mobile-native-chat-draft-inputs'
 import { useBotItemQuestionSteps } from './use-phone-bot-item-question-steps'
 import { MobileNativeChatComposerMenuHost } from '../../session/native-chat/composer/menus/MobileNativeChatComposerMenuHost'
 
@@ -89,8 +100,9 @@ export function MobileBotItemPage({
   const now = useNow(60_000)
   const lastEventId = view.events.at(-1)?.id ?? ''
   const takesImages = useRouteCapability(BOTS_ITEM_COMMENT_ATTACHMENTS_RUNTIME_CAPABILITY)
+  const stagesImages = useRouteCapability(BOTS_ITEM_ATTACHMENT_STAGING_RUNTIME_CAPABILITY)
   // One item on one host: its pending comments and its asks' held answers.
-  const itemKey = `${hostKey}\0${bot.id}\0${uid}`
+  const itemKey = botItemAskCardKey(hostKey, bot.id, uid)
   const pending = usePhoneBotItemPendingComments({
     client,
     key: itemKey,
@@ -111,20 +123,28 @@ export function MobileBotItemPage({
     jump.jumpToTail()
   }
   // `waitingLine`: the question the comment box names, until a reply is on its way.
+  // Its words and photos, as the comment box keeps them: a draft's start takes the line named then.
+  const noWords = useBotItemCommentDraftEmpty(botItemCommentDraftKey(hostId, uid))
+  const photos = useMobileNativeChatDraftInputs(uid, 'images')
+  const boxEmpty = noWords && photos.length === 0
   const { sent, quick, fromBox, waitingLine } = useBotItemQuestionSteps(
     itemKey,
     view.item,
     view.events,
     sendComment,
-    pending.shown
+    pending.shown,
+    boxEmpty
   )
-  // A reply already on its way answers the question, before the host's read says so.
-  const replying = pending.shown.some(({ failed }) => !failed)
+  const openAsk = view.item ? botItemOpenAsk(view.item, view.events) : null
+  // A reply already on its way answers its question, before the host's read says so.
+  const replying = pending.shown.some((entry) => isBotItemReplyingTo(entry, openAsk?.askId ?? null))
   const { askOpen, askShown, ...ask } = useMobileBotItemAskSlot({
-    ask: view.item ? botItemOpenAsk(view.item, view.events) : null,
+    itemKey,
+    ask: openAsk,
     online: online && !view.failed,
     replying,
     loaded: view.item !== null,
+    host: view.item ? { item: view.item, events: view.events } : null,
     onOpenWithCard: jump.top,
     send: quick
   })
@@ -331,7 +351,13 @@ export function MobileBotItemPage({
                   ? { ...waitingLine, asker: item.owner.name ?? bot.name }
                   : null
               }
-              attachTo={takesImages && !item.chat.gone ? item.chat.id : null}
+              attachTo={
+                stagesImages
+                  ? botItemAttachmentTarget(item.uid)
+                  : takesImages && !item.chat.gone
+                    ? item.chat.id
+                    : null
+              }
               hostId={hostId}
               bot={bot}
               fieldRef={commentField}

@@ -10,10 +10,16 @@ export class FeishuReplyFiles {
         .all()
         .some((c) => c.name === 'digest')
     ) {
+      const digest = this.db
+        .prepare('PRAGMA table_info(reply_files)')
+        .all()
+        .some((c) => c.name === 'sha256')
+        ? 'sha256'
+        : 'NULL'
       this.db.exec(`BEGIN IMMEDIATE;
         ALTER TABLE reply_files RENAME TO reply_files_old;
         CREATE TABLE reply_files(account TEXT NOT NULL,mid TEXT NOT NULL,name TEXT NOT NULL,bytes BLOB,file_key TEXT,posted INTEGER NOT NULL DEFAULT 0,digest TEXT,part TEXT NOT NULL,PRIMARY KEY(account,mid,name),FOREIGN KEY(account,mid) REFERENCES inbox(account,mid) ON DELETE CASCADE);
-        INSERT INTO reply_files(account,mid,name,bytes,file_key,posted,part) SELECT account,mid,name,bytes,file_key,posted,'file' FROM reply_files_old;
+        INSERT INTO reply_files(account,mid,name,bytes,file_key,posted,digest,part) SELECT account,mid,name,bytes,file_key,posted,${digest},'file' FROM reply_files_old;
         DROP TABLE reply_files_old;
         COMMIT;`)
     }
@@ -39,16 +45,21 @@ export class FeishuReplyFiles {
     if (Number(count?.count) >= 10) {
       throw new Error('A Feishu reply takes up to 10 files')
     }
-    this.db
-      .prepare('INSERT INTO reply_files(account,mid,name,bytes,digest,part) VALUES(?,?,?,?,?,?)')
+    const inserted = this.db
+      .prepare(
+        'INSERT INTO reply_files(account,mid,name,bytes,digest,part) SELECT account,mid,?,?,?,? FROM inbox WHERE account=? AND mid=? AND review=0 AND reply_done=0'
+      )
       .run(
-        account,
-        mid,
         name,
         bytes,
         digest,
-        `file:${createHash('sha256').update(name).digest('hex')}`
+        `file:${createHash('sha256').update(name).digest('hex')}`,
+        account,
+        mid
       )
+    if (!inserted.changes) {
+      throw new Error('This Feishu delivery cannot receive another file')
+    }
   }
   artifacts(account: string, mid: string) {
     return this.db

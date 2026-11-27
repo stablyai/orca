@@ -58,14 +58,15 @@ export class MobileRelayE2eeLink {
 
   constructor(options: MobileRelayE2eeLinkOptions) {
     this.options = options
-    this.socket = (options.createSocket ?? ((url) => receiveBinaryAsBase64(new WebSocket(url))))(
-      relayConnectWebSocketUrl(options.endpoint.cellUrl, options.endpoint.relayHostId)
-    )
+    // Why first: a malformed saved desktop key throws here, before any socket exists to leak.
     const session = MobileE2EEV2ClientSession.create({
       desktopPublicKeyB64: options.desktopPublicKeyB64,
       transport: 'relay',
       relayHostId: options.endpoint.relayHostId
     })
+    this.socket = (options.createSocket ?? ((url) => receiveBinaryAsBase64(new WebSocket(url))))(
+      relayConnectWebSocketUrl(options.endpoint.cellUrl, options.endpoint.relayHostId)
+    )
     this.channel = new MobileE2EEV2PhysicalChannel({
       session,
       socket: this.socket,

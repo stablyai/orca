@@ -5,7 +5,17 @@ import {
 import { z } from 'zod'
 export const FeishuLocalBot = z.strictObject({ botId: z.string().min(1) })
 export const FeishuLocalMembers = FeishuLocalBot.extend({ query: z.string().max(200) })
-export const FeishuLocalConnect = FeishuLocalBot.extend({ profile: z.string().min(1).max(128) })
+export const FeishuLocalConnect = z.union([
+  FeishuLocalBot.extend({ profile: z.string().min(1).max(128) }),
+  FeishuLocalBot.extend({
+    appId: z.string().regex(/^cli_[0-9a-fA-F]{16}$/),
+    appSecret: z
+      .string()
+      .min(1)
+      .max(256)
+      .regex(/^[\x21-\x7e]+$/)
+  })
+])
 
 export const FeishuGeneratedFile = z.strictObject({
   sessionId: z.string().min(1),

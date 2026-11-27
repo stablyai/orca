@@ -107,6 +107,8 @@ export function workerDockFixturePane(
     find?: React.ReactNode
     queued?: number
     promptReplacesComposer?: boolean
+    /** The real message box in place of the stand-in. */
+    composer?: React.ReactNode
   } = {}
 ) {
   const prompt = sections === 'question' || sections === 'both'
@@ -149,7 +151,9 @@ export function workerDockFixturePane(
         {sections === 'queue' || sections === 'both' ? (
           <NativeChatQueuedMessageList controller={queue(more.queued ?? 1)} chatWorktreeId={null} />
         ) : null}
-        {prompt && more.promptReplacesComposer ? null : (
+        {prompt && more.promptReplacesComposer ? null : more.composer ? (
+          more.composer
+        ) : (
           <div
             data-native-chat-composer-scope="fixture"
             className="shrink-0 px-3 pt-2 pb-4 sm:px-4"

@@ -1,9 +1,7 @@
 import React from 'react'
 import { toast } from 'sonner'
-import { RotateCcw, Settings } from 'lucide-react'
+import { RotateCcw } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Repo } from '../../../../../shared/repository/repo-types'
@@ -15,7 +13,6 @@ import {
   useRepositoryIconActions,
   type RepoAppearanceUpdate
 } from '../../settings/repository/identity/use-repository-icon-actions'
-import { getRepositoryIconSectionId } from '../../settings/repository/repository-settings-targets'
 import type { ProjectRemoteDisplay } from './project-remote-display'
 import {
   GlyphPanel,
@@ -47,18 +44,14 @@ export function ProjectAppearanceEditor({
   repo,
   remote,
   autoColor,
-  updateRepo,
-  onRequestClose
+  updateRepo
 }: {
   repo: Repo
   remote: ProjectRemoteDisplay | null
   autoColor: string
   updateRepo: (repoId: string, updates: RepoAppearanceUpdate) => void
-  onRequestClose: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
-  const openSettingsPage = useAppStore((state) => state.openSettingsPage)
   const actions = useRepositoryIconActions(repo, updateRepo)
   const [style, setStyle] = React.useState<IconStyle>(() => iconStyleOf(repo.repoIcon))
   const suggestedLetters = useSuggestedMonogram(repo)
@@ -82,16 +75,6 @@ export function ProjectAppearanceEditor({
     if (previewed) {
       setIcon(previewed.icon)
     }
-  }
-
-  const openIconSettings = (): void => {
-    onRequestClose()
-    openSettingsTarget({
-      pane: 'repo',
-      repoId: repo.id,
-      sectionId: getRepositoryIconSectionId(repo.id)
-    })
-    openSettingsPage()
   }
 
   const isDefault = repo.badgeColor === DEFAULT_REPO_BADGE_COLOR && repo.repoIcon == null
@@ -168,26 +151,6 @@ export function ProjectAppearanceEditor({
           <RotateCcw />
           {t('auto.components.repo.ProjectPeek.resetAppearance', 'Reset icon & color')}
         </Button>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="muted-field-icon"
-              size="icon-xs"
-              className="ml-auto"
-              aria-label={t(
-                'auto.components.repo.ProjectPeek.openSettingsPage',
-                'Open settings page'
-              )}
-              onClick={openIconSettings}
-            >
-              <Settings />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top" sideOffset={4}>
-            {t('auto.components.repo.ProjectPeek.openSettingsPage', 'Open settings page')}
-          </TooltipContent>
-        </Tooltip>
       </div>
     </>
   )

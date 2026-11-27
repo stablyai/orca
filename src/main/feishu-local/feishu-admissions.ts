@@ -44,6 +44,8 @@ export class FeishuAdmissions {
     control: { mentioned?: boolean; resume?: boolean } = {}
   ): void {
     if (
+      (b.profile === null &&
+        (m.sender_id !== b.owner || m.chat_type !== 'p2p' || m.chat_id !== b.chat)) ||
       !feishuAsker(b, members, m.sender_id) ||
       m.sender_type === 'bot' ||
       (m.chat_id !== b.chat && this.routes.message(b.account, m.message_id)?.chat !== m.chat_id) ||
@@ -83,7 +85,7 @@ export class FeishuAdmissions {
           resume: z.number().transform(Boolean),
           sender: z.string().nullable(),
           body: z.string(),
-          kind: z.enum(['text', 'image', 'file']),
+          kind: z.enum(['text', 'image', 'file', 'post']),
           context: feishuStoredContext,
           path: z.string().nullable()
         })
