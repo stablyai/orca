@@ -22,16 +22,16 @@ export type { PreflightRuntimeContext }
 import { hydrateShellPathForAgentDetection } from '../ipc/command-path/agent-detection-shell-path'
 import {
   execCommandInWslOrThrow,
-  execLocalPreflightCommandOrThrow
+  execLocalPreflightCommandOrThrow,
+  findRunnableLocalCommand,
+  isCommandAvailable
 } from '../ipc/preflight/preflight-command-exec'
 import {
-  detectCommandRuntime,
+  _resetDefaultWslGlabCache,
   detectDefaultWslGlab,
-  isWindowsHostDefault,
-  type CommandRuntime
-} from './preflight-command-runtime'
-import { buildLocalPreflightEnv } from '../ipc/preflight/preflight-local-env'
-import { withConfiguredProxyEnv } from '../network/configured-proxy-child-env'
+  isGlabAuthenticated,
+  isWindowsHostDefault
+} from './default-wsl-glab-preflight'
 import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import {
   detectRemoteWindowsTerminalCapabilities,
@@ -40,7 +40,6 @@ import {
 import { invalidateWslGuestEnvironment } from '../wsl/execution/wsl-guest-environment'
 import { prunePreflightWslCache } from '../wsl/discovery/preflight-wsl-cache'
 import { assertWslDistroRunningForExec } from '../wsl/discovery/wsl-background-exec-gate'
-import { deferUntilWslDistroRunning } from '../wsl/discovery/wsl-background-distro-gate'
 import {
   detectInstalledAgents,
   type InstalledAgentDetectionOptions
@@ -78,13 +77,13 @@ export type { RemoteWindowsTerminalCapabilities }
 
 // Collapse repeated Landing probes within an app session.
 let cached: PreflightStatus | null = null
+// Statuses whose native probe found no glab at all, as opposed to one that failed to run.
+const nativeGlabAbsent = new WeakSet<PreflightStatus>()
 // Cache per distro; a short TTL recovers unreachable distros whose failures appear as missing tooling.
 const WSL_PREFLIGHT_CACHE_TTL_MS = 30_000
 const MAX_WSL_PREFLIGHT_DISTRO_ENTRIES = 128
-const cachedByRuntime = new Map<string, { result: PreflightStatus; expiresAt: number }>()
-/** `refusedWslDistro`: the default distro was stopped, so its glab answer waits for it to run. */
-type PreflightExecution = { status: PreflightStatus; refusedWslDistro?: string }
-const preflightInFlight = new Map<string, Promise<PreflightExecution>>()
+const cachedByWslDistro = new Map<string, { result: PreflightStatus; expiresAt: number }>()
+const preflightInFlight = new Map<string, Promise<PreflightStatus>>()
 
 // Per-key generations and reset epochs prevent older probes repopulating refreshed/cleared caches.
 const latestPreflightRun = new Map<string, number>()
@@ -92,26 +91,45 @@ let preflightRunCounter = 0
 let preflightCacheEpoch = 0
 
 const LOCAL_PREFLIGHT_CACHE_KEY = 'local'
-const WINDOWS_HOST_DEFAULT_CACHE_KEY = 'windows-host-default'
 
-function preflightCacheKey(
-  wslTarget: WslPreflightTarget | null,
-  windowsHostDefault: boolean
-): string {
-  if (wslTarget) {
-    return `wsl:${wslTarget.distro ?? ''}`
-  }
-  return windowsHostDefault ? WINDOWS_HOST_DEFAULT_CACHE_KEY : LOCAL_PREFLIGHT_CACHE_KEY
+function preflightCacheKey(wslTarget: WslPreflightTarget | null): string {
+  return wslTarget ? `wsl:${wslTarget.distro ?? ''}` : LOCAL_PREFLIGHT_CACHE_KEY
 }
 
 /** @internal - tests need a clean preflight cache between cases. */
 export function _resetPreflightCache(): void {
   cached = null
-  cachedByRuntime.clear()
+  cachedByWslDistro.clear()
   preflightInFlight.clear()
   latestPreflightRun.clear()
   // In-flight probes must not repopulate the cleared cache.
   preflightCacheEpoch += 1
+  _resetDefaultWslGlabCache()
+}
+
+/** A CLI verdict and, on the local path, the exact copy that produced it. */
+type CommandRuntime = {
+  installed: boolean
+  wslTarget?: WslPreflightTarget
+  binary?: string
+  absent?: boolean
+}
+
+async function detectCommandRuntime(
+  command: string,
+  context?: PreflightRuntimeContext
+): Promise<CommandRuntime> {
+  const wslTarget = getPreflightWslTarget(context)
+  if (wslTarget) {
+    return (await isCommandAvailable(command, wslTarget))
+      ? { installed: true, wslTarget }
+      : { installed: false }
+  }
+  // Pin auth to the copy that passed --version, so PATH cannot select the dead shim again.
+  const probe = await findRunnableLocalCommand(command)
+  return probe.status === 'available'
+    ? { installed: true, binary: probe.binary }
+    : { installed: false, absent: probe.status === 'absent' }
 }
 
 export type RefreshAgentsResult = {
@@ -171,41 +189,35 @@ async function isGhAuthenticated(probe: CommandRuntime): Promise<boolean> {
   }
 }
 
-// glab versions split auth status across stdout/stderr; inspect both.
-async function isGlabAuthenticated(probe: CommandRuntime): Promise<boolean> {
-  try {
-    await (probe.wslTarget
-      ? execCommandInWslOrThrow(probe.wslTarget, `${quotePosixShell('glab')} auth status`)
-      : execLocalPreflightCommandOrThrow(probe.binary ?? 'glab', ['auth', 'status'], {
-          // `auth status` calls the GitLab API, so it needs the Settings proxy too.
-          env: withConfiguredProxyEnv(buildLocalPreflightEnv())
-        }))
-    return true
-  } catch (error) {
-    const stdout = (error as { stdout?: string }).stdout ?? ''
-    const stderr = (error as { stderr?: string }).stderr ?? ''
-    const output = `${stdout}\n${stderr}`
-    return output.includes('Logged in')
-  }
-}
-
 export async function runPreflightCheck(
   force = false,
   context?: PreflightRuntimeContext
 ): Promise<PreflightStatus> {
+  const status = await readPreflightStatus(force, context)
+  // A cwd-less glab call whose host copy is missing runs in the default distro, so report that copy.
+  if (!nativeGlabAbsent.has(status) || !isWindowsHostDefault(context)) {
+    return status
+  }
+  const glab = await detectDefaultWslGlab(force)
+  return glab ? { ...status, glab } : status
+}
+
+async function readPreflightStatus(
+  force: boolean,
+  context: PreflightRuntimeContext | undefined
+): Promise<PreflightStatus> {
   const wslTarget = getPreflightWslTarget(context)
-  const windowsHostDefault = !wslTarget && isWindowsHostDefault(context)
-  const cacheKey = preflightCacheKey(wslTarget, windowsHostDefault)
+  const cacheKey = preflightCacheKey(wslTarget)
   prunePreflightWslCache(
-    cachedByRuntime,
+    cachedByWslDistro,
     latestPreflightRun,
     Date.now(),
     MAX_WSL_PREFLIGHT_DISTRO_ENTRIES
   )
 
   if (!force) {
-    if (cacheKey !== LOCAL_PREFLIGHT_CACHE_KEY) {
-      const entry = cachedByRuntime.get(cacheKey)
+    if (wslTarget) {
+      const entry = cachedByWslDistro.get(cacheKey)
       if (entry && entry.expiresAt > Date.now()) {
         return entry.result
       }
@@ -214,51 +226,29 @@ export async function runPreflightCheck(
     }
     const inFlight = preflightInFlight.get(cacheKey)
     if (inFlight) {
-      return (await inFlight).status
+      return inFlight
     }
   }
 
   const runId = ++preflightRunCounter
   const epochAtStart = preflightCacheEpoch
   latestPreflightRun.set(cacheKey, runId)
-  if (force && !wslTarget && process.platform === 'win32') {
-    // Both native keys read the same host PATH, so a forced re-check must not leave the other stale.
-    const sibling =
-      cacheKey === LOCAL_PREFLIGHT_CACHE_KEY
-        ? WINDOWS_HOST_DEFAULT_CACHE_KEY
-        : LOCAL_PREFLIGHT_CACHE_KEY
-    if (sibling === LOCAL_PREFLIGHT_CACHE_KEY) {
-      cached = null
-    } else {
-      cachedByRuntime.delete(sibling)
-    }
-    preflightInFlight.delete(sibling)
-    latestPreflightRun.set(sibling, runId)
-  }
 
-  const run = executePreflightCheck(force, context, wslTarget, windowsHostDefault)
+  const run = executePreflightCheck(force, context, wslTarget)
   preflightInFlight.set(cacheKey, run)
   try {
-    const { status: result, refusedWslDistro } = await run
+    const result = await run
     // Superseded/reset probes may answer their caller but cannot populate the cache.
     const isCurrent =
       latestPreflightRun.get(cacheKey) === runId && epochAtStart === preflightCacheEpoch
     if (isCurrent) {
-      if (cacheKey !== LOCAL_PREFLIGHT_CACHE_KEY) {
-        cachedByRuntime.set(cacheKey, {
+      if (wslTarget) {
+        cachedByWslDistro.set(cacheKey, {
           result,
-          // The host default lasts the session like `cached`; a refused distro drops it once it runs.
-          expiresAt: wslTarget ? Date.now() + WSL_PREFLIGHT_CACHE_TTL_MS : Number.POSITIVE_INFINITY
+          expiresAt: Date.now() + WSL_PREFLIGHT_CACHE_TTL_MS
         })
-        if (refusedWslDistro) {
-          deferUntilWslDistroRunning(refusedWslDistro, 'preflight-host-default-glab', () => {
-            if (cachedByRuntime.get(cacheKey)?.result === result) {
-              cachedByRuntime.delete(cacheKey)
-            }
-          })
-        }
         prunePreflightWslCache(
-          cachedByRuntime,
+          cachedByWslDistro,
           latestPreflightRun,
           Date.now(),
           MAX_WSL_PREFLIGHT_DISTRO_ENTRIES
@@ -279,9 +269,8 @@ export async function runPreflightCheck(
 async function executePreflightCheck(
   force: boolean,
   context: PreflightRuntimeContext | undefined,
-  wslTarget: WslPreflightTarget | null,
-  windowsHostDefault: boolean
-): Promise<PreflightExecution> {
+  wslTarget: WslPreflightTarget | null
+): Promise<PreflightStatus> {
   if (wslTarget) {
     // Mounts and polls must not start a stopped distro (E9); window focus and retry clicks wake it.
     await assertWslDistroRunningForExec(wslTarget.distro)
@@ -297,14 +286,11 @@ async function executePreflightCheck(
     _resetKnownHostsCache()
   }
 
-  const [gitProbe, ghProbe, nativeGlabProbe] = await Promise.all([
+  const [gitProbe, ghProbe, glabProbe] = await Promise.all([
     detectCommandRuntime('git', context),
     detectCommandRuntime('gh', context),
     detectCommandRuntime('glab', context)
   ])
-  // Availability must match where a cwd-less glab call really runs, or the GitLab tab disappears.
-  const glabProbe =
-    windowsHostDefault && nativeGlabProbe.absent ? await detectDefaultWslGlab() : nativeGlabProbe
 
   const [ghAuthenticated, glabAuthenticated, bitbucket, azureDevOps, gitea] = await Promise.all([
     ghProbe.installed ? isGhAuthenticated(ghProbe) : Promise.resolve(false),
@@ -314,15 +300,16 @@ async function executePreflightCheck(
     getGiteaAuthStatus()
   ])
 
-  return {
-    status: {
-      git: { installed: gitProbe.installed },
-      gh: { installed: ghProbe.installed, authenticated: ghAuthenticated },
-      glab: { installed: glabProbe.installed, authenticated: glabAuthenticated },
-      bitbucket,
-      azureDevOps,
-      gitea
-    },
-    ...(glabProbe.refusedWslDistro ? { refusedWslDistro: glabProbe.refusedWslDistro } : {})
+  const status = {
+    git: { installed: gitProbe.installed },
+    gh: { installed: ghProbe.installed, authenticated: ghAuthenticated },
+    glab: { installed: glabProbe.installed, authenticated: glabAuthenticated },
+    bitbucket,
+    azureDevOps,
+    gitea
   }
+  if (glabProbe.absent) {
+    nativeGlabAbsent.add(status)
+  }
+  return status
 }
