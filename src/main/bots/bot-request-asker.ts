@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: preview merge of the sharing stack with main pushed this just over; split when the stack lands. */
 // Who a bot's running turn acts for: whom its conversation acts for (recorded when it started), and any
 // person the cloud stamped on a message the turn took, or another bot's request. Never the model's say-so.
 import type { AutomationRunMessage } from '../../shared/automations/automation-run-message'
@@ -168,45 +167,6 @@ function stampedAsker(
       ...(asker.messageRef ? { messageRef: asker.messageRef } : {})
     }
   }
-}
-
-/**
- * Whom a conversation Orca has no record for acts for, read from its first message: the person the
- * cloud stamped, the people a bot request was for, or the owner for the owner's own message, an event
- * no one asked through and an automation's prompt (from automations made before Orca recorded who made
- * them). Null before any message.
- */
-export function firstMessageActsFor(
-  items: readonly AgentJournalRenderItem[],
-  lookups: {
-    botRequestAskers: (messageId: string) => BotRequestAsker[] | null
-    conversationWorkspaceId: string | null
-    personName?: (accountId: string) => string | null
-  }
-): BotRequestAsker[] | null {
-  const first = items.find(isRootUserMessage)
-  if (!first || first.body.kind !== 'message') {
-    return null
-  }
-  const { body } = first
-  if (body.from) {
-    const mail = body.from.orchestration
-    const requested =
-      mail?.message === 'mail-notice'
-        ? mail.messages.flatMap((message) => lookups.botRequestAskers(message.messageId) ?? [])
-        : []
-    return requested.length > 0 ? distinctAskers(requested) : [...OWNER_ACTS_FOR]
-  }
-  const carried = carriedAskersOf(body, lookups.conversationWorkspaceId)
-  // A run acts for whom its automation was made for: a teammate's, them.
-  const own: BotRequestAsker[] = body.asker
-    ? [stampedAsker(body.asker, lookups.conversationWorkspaceId).asker]
-    : body.origin === 'connector' && !body.memorySource
-      ? [{ kind: 'unknown' }]
-      : body.automationRun
-        ? [...runActsFor(body.automationRun, lookups.personName ?? noName)]
-        : [...OWNER_ACTS_FOR]
-  return carried.length > 0 ? distinctAskers([...own, ...carried]) : own
 }
 
 /** Each turn's messages, newest turn first: the one that opened it and those steered into it. A

@@ -13,12 +13,12 @@ import { ConnectorAsker } from '../../shared/connector-asker-contract'
 import { storedConnectorAsker } from '../../shared/connector-message-asker'
 import { connectorAskerTagView } from '../../shared/connectors/connector-message-asker-view'
 import {
-  firstMessageActsFor,
   readBotActingTurn,
   turnActsForOwner,
   type BotActingTurnLookups,
   type BotRequestActsFor
 } from './bot-request-asker'
+import { firstMessageActsFor } from './first-message-acts-for'
 
 const t = (_key: string, fallback: string): string => fallback
 

@@ -77,8 +77,10 @@ export const ConnectorConnectRedeemParams = lazyZodSchema(() =>
 )
 
 /** One of the host account's linked Slack, GitHub or Linear people. */
-export const BotLinkedAccount = z.object({
-  source: z.enum(CONNECTOR_LINK_SOURCES),
-  workspaceId: Id,
-  userId: Id
-})
+export const BotLinkedAccount = lazyZodSchema(() =>
+  z.object({
+    source: z.enum(CONNECTOR_LINK_SOURCES),
+    workspaceId: Id,
+    userId: Id
+  })
+)

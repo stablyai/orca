@@ -2,6 +2,7 @@
 // method declares its `share` (an access below, or 'not-shared'), so none is allowed without its check
 // and none is added without a decision.
 import { z } from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 
 /** `chat`: the session it names must be one of the teammate's own chats on the shared bot.
  *  `bot`: the bot it names must be the shared bot; its handler lists only the teammate's chats.
@@ -21,15 +22,17 @@ export type BotShareMethodAccess =
 /** What a folder read names: the workspace selector, a path in it (absent for whole-folder reads), and
  *  whether it asks to follow symlinks. */
 export type BotFolderRead = z.infer<typeof BotFolderParams>
-const BotFolderParams = z.looseObject({
-  worktree: z.string(),
-  relativePath: z.string().optional(),
-  followSymlinks: z.boolean().optional()
-})
+const BotFolderParams = lazyZodSchema(() =>
+  z.looseObject({
+    worktree: z.string(),
+    relativePath: z.string().optional(),
+    followSymlinks: z.boolean().optional()
+  })
+)
 
-const SessionParams = z.looseObject({ sessionId: z.string() })
-const EnvelopeParams = z.looseObject({ envelope: SessionParams })
-const BotParams = z.looseObject({ botId: z.string() })
+const SessionParams = lazyZodSchema(() => z.looseObject({ sessionId: z.string() }))
+const EnvelopeParams = lazyZodSchema(() => z.looseObject({ envelope: SessionParams }))
+const BotParams = lazyZodSchema(() => z.looseObject({ botId: z.string() }))
 
 export const SHARE_BY_SESSION: BotShareMethodAccess = {
   kind: 'chat',
@@ -39,7 +42,7 @@ export const SHARE_BY_ENVELOPE_SESSION: BotShareMethodAccess = {
   kind: 'chat',
   sessionId: (params) => EnvelopeParams.safeParse(params).data?.envelope.sessionId
 }
-const PathParams = z.looseObject({ path: z.string() })
+const PathParams = lazyZodSchema(() => z.looseObject({ path: z.string() }))
 
 export const SHARE_BY_ATTACHMENT: BotShareMethodAccess = {
   kind: 'attachment',

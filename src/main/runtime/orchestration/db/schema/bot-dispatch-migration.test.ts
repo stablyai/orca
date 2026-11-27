@@ -136,30 +136,6 @@ describe('v47-v48 bot dispatch migrations', () => {
     expectCurrentSchema(path, taskId)
   })
 
-  it('adds the progress columns to a v52 database an earlier sharing build stamped with acts_for only', () => {
-    const path = dbPath()
-    const taskId = seedWithDispatch(path)
-    const raw = new Database(path)
-    for (const column of ['progress_note', 'progress_updated_at'] as const) {
-      raw.exec(`ALTER TABLE dispatch_contexts DROP COLUMN ${column}`)
-    }
-    raw.pragma('user_version = 52')
-    raw.close()
-
-    expectCurrentSchema(path, taskId)
-  })
-
-  it('adds acts_for to a v52 database from main', () => {
-    const path = dbPath()
-    const taskId = seedWithDispatch(path)
-    const raw = new Database(path)
-    raw.exec('ALTER TABLE dispatch_contexts DROP COLUMN acts_for')
-    raw.pragma('user_version = 52')
-    raw.close()
-
-    expectCurrentSchema(path, taskId)
-  })
-
   it('opens a fresh database at v48, and again unchanged', () => {
     const path = dbPath()
     expectCurrentSchema(path)

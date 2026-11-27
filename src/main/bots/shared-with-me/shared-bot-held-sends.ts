@@ -38,12 +38,13 @@ import {
   type SharedBotHeldAttachment
 } from './shared-bot-held-uploads'
 import type { SharedBotsCloud } from './shared-bots-cloud'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 
 // A new chat started live under the id its held messages name, and the session the host gave it.
-const NewChatParams = z.looseObject({ newChatId: z.string() })
-const StartedSession = z.looseObject({ sessionId: z.string() })
-const SessionParams = z.looseObject({ sessionId: z.string() })
-const EnvelopeParams = z.looseObject({ envelope: SessionParams })
+const NewChatParams = lazyZodSchema(() => z.looseObject({ newChatId: z.string() }))
+const StartedSession = lazyZodSchema(() => z.looseObject({ sessionId: z.string() }))
+const SessionParams = lazyZodSchema(() => z.looseObject({ sessionId: z.string() }))
+const EnvelopeParams = lazyZodSchema(() => z.looseObject({ envelope: SessionParams }))
 
 /** The chat a call names, as `sessionId` or in its mutation envelope. */
 const sessionIdOf = (params: unknown): string | undefined =>

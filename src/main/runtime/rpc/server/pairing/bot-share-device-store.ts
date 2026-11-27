@@ -16,6 +16,7 @@ import type { RelayDeviceBinding } from '../../../mobile-cloud-relay/pairing/rel
 import { isMissingFileError, quarantineCorruptRegistry } from './device-registry-corruption'
 import { validRelayBinding } from './device-registry-row-validation'
 import { BOT_SHARE_DEVICES_FILENAME } from './mobile-pairing-files'
+import { lazyZodSchema } from '../../../../../shared/schema/lazy-zod-schema'
 
 export type BotShareGrant = { botId: string; accountId: string; name: string }
 
@@ -42,20 +43,24 @@ export type BotShareDeviceLookup =
   // The file can't be read (or wasn't whole), which proves nothing absent.
   | { kind: 'unavailable' }
 
-const NonEmpty = z.string().min(1)
-const BotShareDeviceRow = z.looseObject({
-  deviceId: NonEmpty,
-  botId: NonEmpty,
-  accountId: NonEmpty,
-  name: z.string(),
-  scope: z.enum(['runtime', 'mobile']),
-  devicePublicKeyB64: z.string().refine(isDevicePublicKeyB64),
-  pairedAt: z.number().finite(),
-  relayBinding: z.unknown().optional(),
-  parentDeviceId: NonEmpty.optional(),
-  shareId: NonEmpty.optional()
-})
-const BotShareDevicesFile = z.object({ v: z.literal(1), devices: z.array(z.unknown()) })
+const NonEmpty = lazyZodSchema(() => z.string().min(1))
+const BotShareDeviceRow = lazyZodSchema(() =>
+  z.looseObject({
+    deviceId: NonEmpty,
+    botId: NonEmpty,
+    accountId: NonEmpty,
+    name: z.string(),
+    scope: z.enum(['runtime', 'mobile']),
+    devicePublicKeyB64: z.string().refine(isDevicePublicKeyB64),
+    pairedAt: z.number().finite(),
+    relayBinding: z.unknown().optional(),
+    parentDeviceId: NonEmpty.optional(),
+    shareId: NonEmpty.optional()
+  })
+)
+const BotShareDevicesFile = lazyZodSchema(() =>
+  z.object({ v: z.literal(1), devices: z.array(z.unknown()) })
+)
 
 /** A row is used only whole; one that fails its schema is refused, never read as anything else. */
 function parseRow(value: unknown): BotShareDevice | null {

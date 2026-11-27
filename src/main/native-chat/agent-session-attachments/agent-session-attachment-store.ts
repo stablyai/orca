@@ -1,6 +1,6 @@
-/* eslint-disable max-lines -- Why: preview merge of the sharing stack with main pushed this just over; split when the stack lands. */
 // Per-upload directories preserve original filenames without collisions; atomic commit hides partial bytes.
 
+import { AttachmentUploaderChats } from './agent-session-attachment-uploader-chats'
 import { readAttachmentTextChunk } from './agent-session-attachment-text-read'
 import type { AttachmentTextRequest } from '../../../shared/attachment-text/attachment-text-source'
 import { createHash, randomUUID } from 'node:crypto'
@@ -28,8 +28,6 @@ import {
 const UPLOAD_MAX_CONCURRENT = 8
 const UPLOAD_IDLE_TTL_MS = 5 * 60 * 1000
 const NOT_FOUND = 'Attachment upload was not found'
-// Uploads whose chat is remembered until a message claims them; the oldest go first past this.
-const UPLOADED_FOR_KEPT = 256
 const NOT_AN_IMAGE = 'Not an attachment image'
 const PREVIEW_TOO_LARGE = 'file_too_large'
 
@@ -68,7 +66,7 @@ export class AgentSessionAttachmentStore {
   private readonly pendingContent = new Set<string>()
   // The chat each upload this launch was made for: it reads its file back before any message claims it
   // (a composer chip's thumbnail), which a shared agent's guard asks the claims for.
-  private readonly uploadedFor = new Map<string, string>()
+  private readonly uploadedFor = new AttachmentUploaderChats()
 
   constructor(
     readonly rootDir: string,
@@ -167,13 +165,7 @@ export class AgentSessionAttachmentStore {
         finalPath
       )
       if (upload.sessionId !== null) {
-        this.uploadedFor.set(args.uploadId, upload.sessionId)
-      }
-      for (const oldest of this.uploadedFor.keys()) {
-        if (this.uploadedFor.size <= UPLOADED_FOR_KEPT) {
-          break
-        }
-        this.uploadedFor.delete(oldest)
+        this.uploadedFor.remember(args.uploadId, upload.sessionId)
       }
       return { path: finalPath, name: upload.name, byteLength: upload.receivedLength }
     } catch (error) {
@@ -273,7 +265,7 @@ export class AgentSessionAttachmentStore {
       return []
     }
     const claimed = (await this.options.claimingSessions?.(stored.uploadId)) ?? []
-    const uploader = this.uploadedFor.get(stored.uploadId)
+    const uploader = this.uploadedFor.chatOf(stored.uploadId)
     return uploader && !claimed.includes(uploader) ? [...claimed, uploader] : claimed
   }
 

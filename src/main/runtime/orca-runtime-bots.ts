@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: preview merge of the sharing stack with main pushed this just over; split when the stack lands. */
 import type { BotSessionHooks } from '../bots/bot-turn-ended'
 import { UNSET_BOT_SESSION_HOOKS } from '../bots/bot-session-hooks-unset'
 import { sessionRepliesInSlack } from '../external-conversations/external-conversation-links'
@@ -8,10 +7,7 @@ import type { AgentStatusOrchestrationContext } from '../../shared/agent-status/
 import type { BotAccessRequestWatch } from '../bots/bot-access-request-watch'
 import type { ConnectorGitHubInstallations } from '../connector-cloud/connector-github-installations'
 import { BotChangeNotices } from '../bots/bot-change-notices'
-import {
-  revokeDeletedBotShareDevices,
-  type BotShareDevices
-} from '../bots/team-share/bot-share-access'
+import { revokeDeletedBotShareDevices } from '../bots/team-share/bot-share-access'
 import { deleteAutomationsOfBot } from '../bots/bot-automations-removal'
 import { syncBotAutomationAgents } from '../bots/bot-automation-agent-sync'
 import { BotController } from '../bots/bot-controller'
@@ -25,7 +21,6 @@ import { journaledItemsNotice } from '../bots/bot-memory-journal-runtime'
 import { BotSharePicksStore } from '../bots/sharing/bot-share-picks-store'
 import { BotShareCandidates } from '../bots/sharing/bot-package-export'
 import type { BotShareClient } from '../bots/sharing/bot-share-client'
-import type { BotInviteCloudCall } from '../bots/team-share/bot-invite-email'
 import type { BotShareDownloadPolicy } from '../bots/sharing/bot-share-receive'
 import { BotShareService } from '../bots/sharing/bot-share-service'
 import { readBotShareable } from '../bots/sharing/bot-share-sources'
@@ -37,7 +32,7 @@ import type { WorkspaceLineage } from '../../shared/worktree/lineage-types'
 import { BotsDbWorkerClient } from '../bots/db-worker/bots-db-worker-client'
 import { profileAccountUserId } from '../orca-profiles/profile-account-user-id'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
-import { OrcaRuntimeWithLinearCommands } from './integrations/linear/linear-commands'
+import { OrcaRuntimeWithBotTeamShare } from './orca-runtime-bot-team-share'
 import { botStructuredSessionWiring, type WiredBot } from '../bots/bot-structured-session-wiring'
 import { botChatJournal } from '../bots/bot-chat-reads'
 import type { RuntimeStore } from './construction/runtime-store-contract'
@@ -54,7 +49,7 @@ import { runtimeBotItems } from '../bots/runtime-bot-items'
 import { botItemOfReport } from '../bots/bot-item-report-fact'
 import { listeningClients } from './orchestration/federation/client-asks/client-ask-listeners'
 
-export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands {
+export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithBotTeamShare {
   /** Set at construction (orcad: as its account installs); a profile switch publishes another
    *  active profile while this store lives on. */
   protected servedOrcaProfileId: string | null = null
@@ -67,24 +62,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   /** The host's GitHub orgs as its connector says them; null on a host without a connector. */
   connectorGitHubInstallations: Pick<ConnectorGitHubInstallations, 'track'> | null = null
 
-  /** The RPC server's teammate devices of shared bots, set as it is made; null without one. */
-  botShareDevices: BotShareDevices | null = null
-
   private readonly botWriteListeners = new Set<() => void>()
-  private readonly shareHostKeyListeners = new Set<() => void>()
-
-  /** The RPC server loaded its pairing identity: held messages now have a key to be sealed to, which
-   *  the connector's hello publishes (hostKey). */
-  onBotShareHostKeyReady(listener: () => void): () => void {
-    this.shareHostKeyListeners.add(listener)
-    return () => this.shareHostKeyListeners.delete(listener)
-  }
-
-  notifyBotShareHostKeyReady(): void {
-    for (const listener of this.shareHostKeyListeners) {
-      listener()
-    }
-  }
 
   /** Every bot record save or removal on this host, for its own readers (webhooks, avatars, the
    *  connector's hello); clients hear `botsChanged`. */
@@ -156,9 +134,6 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     this.botShareClient = { client, download }
     this.botShareService = null
   }
-
-  /** This host's signed-in Orca Cloud calls, set where its connector installs (desktop, serve, orcad). */
-  botCloudAuth: BotInviteCloudCall | null = null
 
   /** Sharing bots by link, made on first use (it needs the app's data folder). */
   botShares(): BotShareService {

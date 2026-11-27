@@ -9,20 +9,23 @@ import {
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
 import classes from '../callers/teammate-method-classes.json'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 
 export type HostWindowCondition = keyof typeof classes.hostWindow.conditional
 export type HostWindowCaller = { runtime: OrcaRuntimeService; pairedDeviceId?: string }
 
 // Each field on its own: a method whose key of the same name has another shape (agent.launch's
 // `placement`) drops only that field, never the navigation or activation checks beside it.
-const Params = z.looseObject({
-  navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional().catch(undefined),
-  activate: z.boolean().optional().catch(undefined),
-  runHooks: z.boolean().optional().catch(undefined),
-  focus: z.boolean().optional().catch(undefined),
-  page: z.string().optional().catch(undefined),
-  placement: z.looseObject({ kind: z.string() }).optional().catch(undefined)
-})
+const Params = lazyZodSchema(() =>
+  z.looseObject({
+    navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional().catch(undefined),
+    activate: z.boolean().optional().catch(undefined),
+    runHooks: z.boolean().optional().catch(undefined),
+    focus: z.boolean().optional().catch(undefined),
+    page: z.string().optional().catch(undefined),
+    placement: z.looseObject({ kind: z.string() }).optional().catch(undefined)
+  })
+)
 type HostWindowParams = z.infer<typeof Params>
 
 /** A page the caller's own computer hosts: pageless commands fall back to the host's active tab. */

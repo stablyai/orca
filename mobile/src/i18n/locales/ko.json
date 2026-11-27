@@ -6816,7 +6816,6 @@
       },
       "original": {
         "copiedFrom": "복사한 곳: {{who}}",
-        "sharedBy": "공유한 사람: {{who}}",
         "viewOriginal": "원본 보기",
         "originalGone": "더 이상 사용할 수 없음"
       },
@@ -6859,7 +6858,6 @@
       "updatedAt": "{{date}}에 업데이트됨",
       "upToDate": "최신 상태",
       "changedSince": "이후 봇이 변경됨",
-      "copy": "복사",
       "copyLink": "링크 복사",
       "secretFoundTitle": "시크릿 발견",
       "secretWhere": "{{where}} {{line}}번째 줄에 {{flag}}",

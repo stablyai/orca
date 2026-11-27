@@ -172,12 +172,19 @@ function hasConsistentLegacyAdoption(db: Database.Database): boolean {
   return true
 }
 
+// From v51 on every step only adds a column it finds missing, so a database missing one of these
+// (an earlier sharing build stamped v52 with acts_for but not main's progress columns) resumes just
+// before that column's step instead of replaying old migrations over its live data.
+const ADD_MISSING_COLUMN_STEPS_FROM = 51
+
 function hasCompletePostV6Schema(db: Database.Database, storedVersion: number): boolean {
   return (
     POST_V6_COLUMNS.every(([table, column]) => hasOrchestrationColumn(db, table, column)) &&
     VERSIONED_POST_V6_COLUMNS.every(
       ({ version, table, column }) =>
-        storedVersion < version || hasOrchestrationColumn(db, table, column)
+        storedVersion < version ||
+        version >= ADD_MISSING_COLUMN_STEPS_FROM ||
+        hasOrchestrationColumn(db, table, column)
     ) &&
     (storedVersion < 34 || hasNotNullOrchestrationColumn(db, 'deliveries', 'mailbox_handle')) &&
     VERSIONED_POST_V6_COLUMN_DEFAULTS.every(
@@ -194,6 +201,17 @@ function hasCompletePostV6Schema(db: Database.Database, storedVersion: number): 
   )
 }
 
+/** The step just before the earliest add-a-column step whose column this stamp lacks. */
+function firstMissingColumnStep(db: Database.Database, storedVersion: number): number {
+  const missing = VERSIONED_POST_V6_COLUMNS.filter(
+    ({ version, table, column }) =>
+      version >= ADD_MISSING_COLUMN_STEPS_FROM &&
+      version <= storedVersion &&
+      !hasOrchestrationColumn(db, table, column)
+  ).map(({ version }) => version - 1)
+  return Math.min(storedVersion, ...missing)
+}
+
 export function resolveOrchestrationMigrationStartVersion(
   db: Database.Database,
   storedVersion: number,
@@ -203,7 +221,7 @@ export function resolveOrchestrationMigrationStartVersion(
     return storedVersion
   }
   if (hasCompletePostV6Schema(db, storedVersion)) {
-    return storedVersion
+    return firstMissingColumnStep(db, storedVersion)
   }
   // Pre-Run databases may claim post-v6 versions while retaining the old tables.
   return Math.min(storedVersion, schemaVersion, 6)

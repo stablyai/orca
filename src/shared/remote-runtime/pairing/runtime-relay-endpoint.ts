@@ -3,6 +3,7 @@ import { unshippedTestSwitchOn } from '../../app-lifecycle/unshipped-test-switch
 import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import { PAIRING_RELAY_OFFER_FIELDS, type PairingRelay } from './mobile-relay-pairing-offer'
 import { encodePairingOffer, parsePairingCode } from './pairing'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
 /**
  * Test-only Relay reach for a paired runtime (dev builds, `ORCA_TEST_RUNTIME_RELAY_PAIRING`): the
@@ -34,15 +35,17 @@ export function isTestRelayRuntimeDevice(
   )
 }
 
-const RuntimeRelayReachSchema = z.object({
-  cellUrl: PAIRING_RELAY_OFFER_FIELDS.cellUrl,
-  relayHostId: PAIRING_RELAY_OFFER_FIELDS.relayHostId,
-  inviteToken: PAIRING_RELAY_OFFER_FIELDS.inviteToken,
-  inviteExpiresAt: z.number().int(),
-  // Where the client asks for the host's current cell when the one it knows stops answering.
-  directorUrl: PAIRING_RELAY_OFFER_FIELDS.directorUrl.optional(),
-  assignmentEpoch: PAIRING_RELAY_OFFER_FIELDS.assignmentEpoch.optional()
-})
+const RuntimeRelayReachSchema = lazyZodSchema(() =>
+  z.object({
+    cellUrl: PAIRING_RELAY_OFFER_FIELDS.cellUrl,
+    relayHostId: PAIRING_RELAY_OFFER_FIELDS.relayHostId,
+    inviteToken: PAIRING_RELAY_OFFER_FIELDS.inviteToken,
+    inviteExpiresAt: z.number().int(),
+    // Where the client asks for the host's current cell when the one it knows stops answering.
+    directorUrl: PAIRING_RELAY_OFFER_FIELDS.directorUrl.optional(),
+    assignmentEpoch: PAIRING_RELAY_OFFER_FIELDS.assignmentEpoch.optional()
+  })
+)
 
 export type RuntimeRelayReach = z.infer<typeof RuntimeRelayReachSchema>
 

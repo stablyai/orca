@@ -5,9 +5,10 @@
 import { z } from 'zod'
 import type { OrchestrationDb } from '../../runtime/orchestration/db/orchestration-db'
 import { hashCanonical } from '../../runtime/rpc/orchestration/mutations/orchestration-mutation-receipt'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 
 const NEW_CHAT_FINGERPRINT = 'bot-share:new-chat'
-const Opened = z.object({ sessionId: z.string().min(1) })
+const Opened = lazyZodSchema(() => z.object({ sessionId: z.string().min(1) }))
 
 export type BotShareNewChatKey = { botId: string; accountId: string; newChatId: string }
 
