@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto'
 import { EventEmitter } from 'node:events'
-import type { WebContents } from 'electron'
 import { expect, it, vi } from 'vitest'
 import { ProviderReceiptReaders } from '../../native-chat/agent-session-wire/publication/receipts/provider-receipt-readers'
 import { setProcessExitWatchNativeForTests } from '../../pty/process-retirement/native-process-exit-watch'
@@ -24,12 +23,7 @@ it('holds closed-window credit across a failed watch and releases it on later ex
   })
   const sender = new EventEmitter()
   const readers = new ProviderReceiptReaders(() => 'test')
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the window only calls the EventEmitter methods.
-  const window = new DesktopProviderReceiptWindow(
-    sender as unknown as WebContents,
-    readers,
-    () => {}
-  )
+  const window = new DesktopProviderReceiptWindow(sender, readers, () => {})
   const transport = window.transport
   let released = 0
   transport.signal.addEventListener('abort', () => released++)

@@ -59,10 +59,13 @@ export class ProviderReceiptReaders {
   }
 
   canStartRead(endpoint: ProviderReceiptDestination, identity: ProviderReceiptReader): boolean {
-    return this.canReply(endpoint, identity) && !!this.credits.get(endpoint.transport)?.reader
+    return (
+      this.canOpenPort(endpoint, identity) &&
+      this.credits.get(endpoint.transport)?.reader?.document === endpoint.document
+    )
   }
 
-  canReply(endpoint: ProviderReceiptDestination, identity: ProviderReceiptReader): boolean {
+  canOpenPort(endpoint: ProviderReceiptDestination, identity: ProviderReceiptReader): boolean {
     return this.ownsDocument(endpoint, identity, true) && this.credits.hasRoom(endpoint.transport)
   }
 

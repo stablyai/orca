@@ -1,4 +1,4 @@
-import type { WebContents } from 'electron'
+import type { EventEmitter } from 'node:events'
 import type { ProviderReceiptReader } from '../../../shared/rpc-contract/structured-agent-session/structured-agent-session-provider-receipts'
 import { inspectProcessSignal } from '../../daemon/endpoint/identity/daemon-process-inspection'
 import type { ProviderReceiptDestination } from '../../native-chat/agent-session-wire/publication/receipts/provider-receipt-credits'
@@ -25,7 +25,7 @@ export class DesktopProviderReceiptWindow {
   private stopTracking?: () => void
 
   constructor(
-    sender: WebContents,
+    sender: Pick<EventEmitter, 'on' | 'once' | 'off'>,
     private readonly readers: ProviderReceiptReaders,
     forget: () => void
   ) {

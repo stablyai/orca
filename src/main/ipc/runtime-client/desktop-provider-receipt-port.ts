@@ -121,7 +121,7 @@ export class DesktopProviderReceiptPort {
     const { endpoint } = document
     const previous = document.binding
     if (
-      !this.readers.canReply(endpoint, reader) ||
+      !this.readers.canOpenPort(endpoint, reader) ||
       (previous &&
         (previous.pending ||
           previous.reader.id !== reader.id ||
@@ -180,7 +180,7 @@ export class DesktopProviderReceiptPort {
       binding.pending = true
       void (async () => {
         let posted = false
-        const canPost = (): boolean => isCurrent() && this.readers.canReply(endpoint, reader)
+        const canPost = (): boolean => isCurrent() && this.readers.canOpenPort(endpoint, reader)
         try {
           if (request.kind !== 'read') {
             return
