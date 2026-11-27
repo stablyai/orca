@@ -34,7 +34,6 @@ import {
 import { loadHostCatalog } from '../host-catalog/host-store'
 import type { HostCatalogEntry } from '../host-catalog/host-profile'
 import { hostObserverOptions, type HostQuery } from '../query/host-query'
-import { isHostNotConnectedError } from '../query/host-query-errors'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   homeWorktreeCountsQuery,
@@ -50,6 +49,7 @@ import {
   projectHomeHostConnections
 } from './home-host-connection-projection'
 import { restoreHomeQueries } from './home-query-restore'
+import { homeWorktreeRead } from './home-worktree-read'
 import { useMobileHomeHostConnections } from './use-mobile-home-host-connections'
 
 export type MobileHomeData = ReturnType<typeof useMobileHomeData>
@@ -63,13 +63,6 @@ const homeQueryOptions = <TData>(
   query: HostQuery<typeof NO_HOST_LIST_INPUT, TData>,
   host: HomeHost
 ) => hostObserverOptions(query, host.client, host.hostId, HOST_LIST_TARGET, NO_HOST_LIST_INPUT)
-
-const readOf = (result: QueryObserverResult<HomeWorktreeCounts>) => ({
-  data: result.data,
-  dataUpdatedAt: result.dataUpdatedAt,
-  // A read refused because the desktop isn't connected yet says nothing about its list.
-  failed: result.isError && !isHostNotConnectedError(result.error)
-})
 
 export function useMobileHomeData() {
   const router = useRouter()
@@ -122,7 +115,7 @@ export function useMobileHomeData() {
       const byHost: Record<string, HostWorktreeInfo> = {}
       homeHosts.forEach(({ hostId }, at) => {
         const result = results[at]
-        const info = result && homeWorktreeInfo(hostId, readOf(result), isLive)
+        const info = result && homeWorktreeInfo(hostId, homeWorktreeRead(result), isLive)
         if (info) {
           byHost[hostId] = info
         }
