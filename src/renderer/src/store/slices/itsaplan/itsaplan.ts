@@ -202,7 +202,7 @@ export const createItsaplanSlice: StateCreator<AppState, [], [], ItsaplanSlice> 
       }
       return dedupe(`detail:${issueId}`, async () => {
         const gen = generation
-        const detail = await client().getIssue({ issueId })
+        const detail = await client().getIssue({ issueId, projectRef: opts?.projectRef })
         if (detail) {
           setIfCurrent(gen, (state) => ({
             itsaplanIssueDetails: { ...state.itsaplanIssueDetails, [issueId]: detail }
@@ -229,9 +229,9 @@ export const createItsaplanSlice: StateCreator<AppState, [], [], ItsaplanSlice> 
       return result
     },
 
-    updateItsaplanIssue: async (issueId, updates) => {
+    updateItsaplanIssue: async (issueId, updates, projectRef) => {
       const gen = generation
-      const result = await client().updateIssue({ issueId, updates })
+      const result = await client().updateIssue({ issueId, projectRef, updates })
       if (result.ok) {
         const updated = result.issue
         setIfCurrent(gen, (state) => {

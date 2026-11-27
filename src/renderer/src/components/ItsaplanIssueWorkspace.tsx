@@ -58,7 +58,7 @@ function ItsaplanIssueWorkspaceIssue({
   const [detailError, setDetailError] = useState<string | null>(null)
   useEffect(() => {
     let cancelled = false
-    void loadItsaplanIssueDetail(issue.id)
+    void loadItsaplanIssueDetail(issue.id, { projectRef: issue.projectRef })
       .catch((error: unknown) => {
         if (!cancelled) {
           setDetailError(getItsaplanErrorMessage(error))
@@ -72,7 +72,7 @@ function ItsaplanIssueWorkspaceIssue({
     return () => {
       cancelled = true
     }
-  }, [issue.id, loadItsaplanIssueDetail])
+  }, [issue.id, issue.projectRef, loadItsaplanIssueDetail])
   useEffect(() => {
     if (metadata) {
       return
@@ -185,7 +185,11 @@ function ItsaplanIssueWorkspaceIssue({
               </section>
             ) : null}
             {detail ? (
-              <ItsaplanIssueComments issueId={issue.id} comments={detail.comments} />
+              <ItsaplanIssueComments
+                issueId={issue.id}
+                projectRef={issue.projectRef}
+                comments={detail.comments}
+              />
             ) : null}
           </main>
           <aside className="flex min-w-0 flex-col gap-5">

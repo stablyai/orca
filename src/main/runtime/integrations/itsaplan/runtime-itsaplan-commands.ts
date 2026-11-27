@@ -55,7 +55,7 @@ export class RuntimeItsaplanCommands {
     return itsaplanListIssues(args)
   }
 
-  itsaplanGetIssue(args: { issueId: number }) {
+  itsaplanGetIssue(args: { issueId: number; projectRef?: string }) {
     return itsaplanGetIssue(args)
   }
 
@@ -63,7 +63,11 @@ export class RuntimeItsaplanCommands {
     return itsaplanCreateIssue(args)
   }
 
-  itsaplanUpdateIssue(args: { issueId: number; updates: ItsaplanIssueUpdate }) {
+  itsaplanUpdateIssue(args: {
+    issueId: number
+    projectRef?: string
+    updates: ItsaplanIssueUpdate
+  }) {
     return itsaplanUpdateIssue(args)
   }
 

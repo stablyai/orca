@@ -68,6 +68,7 @@ export async function itsaplanCreateIssue(
 
 export async function itsaplanUpdateIssue(args: {
   issueId: number
+  projectRef?: string
   updates: ItsaplanIssueUpdate
 }): Promise<ItsaplanResult<{ issue: ItsaplanIssue }>> {
   try {
@@ -76,7 +77,7 @@ export async function itsaplanUpdateIssue(args: {
       method: 'PATCH',
       body: args.updates
     })
-    const projectRef = await resolveItsaplanProjectRef(raw.projectId)
+    const projectRef = await resolveItsaplanProjectRef(raw.projectId, args.projectRef)
     const metadata = await itsaplanGetProjectMetadata({ projectRef })
     return { ok: true, issue: mapItsaplanIssue(raw, { metadata, appUrl }) }
   } catch (error) {

@@ -42,12 +42,25 @@ export async function itsaplanListProjects(args?: { query?: string }): Promise<I
 }
 
 /** Issue payloads carry only projectId; metadata is addressed by ref. */
-export async function resolveItsaplanProjectRef(projectId: number): Promise<string> {
-  const now = Date.now()
-  if (!projectIndexCache || projectIndexCache.expiresAt < now) {
-    projectIndexCache = { expiresAt: now + CACHE_TTL_MS, projects: await fetchProjects() }
+export async function resolveItsaplanProjectRef(
+  projectId: number,
+  knownRef?: string
+): Promise<string> {
+  if (
+    knownRef &&
+    (await itsaplanGetProjectMetadata({ projectRef: knownRef })).project.id === projectId
+  ) {
+    return knownRef
   }
-  const project = projectIndexCache.projects.find((candidate) => candidate.id === projectId)
+  const findProject = () =>
+    projectIndexCache?.projects.find((candidate) => candidate.id === projectId)
+  let project =
+    projectIndexCache && projectIndexCache.expiresAt >= Date.now() ? findProject() : undefined
+  if (!project) {
+    // A miss may be a project created or joined since the index was cached, so refetch once.
+    projectIndexCache = { expiresAt: Date.now() + CACHE_TTL_MS, projects: await fetchProjects() }
+    project = findProject()
+  }
   if (!project) {
     throw new ItsaplanApiError('notFound')
   }

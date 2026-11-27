@@ -160,3 +160,30 @@ describe('itsaplanGetIssue comments', () => {
     expect(decodeURIComponent(feedUrls[1])).toContain('"id":1')
   })
 })
+
+describe('itsaplanGetIssue project ref', () => {
+  it('uses the caller project ref when the project index does not list it', async () => {
+    setMainHttpClient({
+      fetch: async (url: string) => {
+        if (url.endsWith('/projects')) {
+          return jsonResponse([])
+        }
+        if (url.endsWith('/issues/8')) {
+          return jsonResponse({ ...rawIssue, id: 8, projectId: 6 })
+        }
+        if (url.includes('/feed')) {
+          return jsonResponse({ items: [], nextCursor: null })
+        }
+        if (url.includes('/issues?')) {
+          return jsonResponse([])
+        }
+        return jsonResponse({ ...board, project: { id: 6, ref: 'team.N', key: 'N', name: 'En' } })
+      },
+      proxySession: () => null
+    })
+
+    const detail = await itsaplanGetIssue({ issueId: 8, projectRef: 'team.N' })
+
+    expect(detail?.projectRef).toBe('team.N')
+  })
+})

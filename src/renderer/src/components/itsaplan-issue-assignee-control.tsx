@@ -19,7 +19,7 @@ export function ItsaplanIssueAssigneeControl({
   members: readonly ItsaplanMember[]
 }): React.JSX.Element {
   const t = useTranslate()
-  const [pending, update] = useItsaplanIssueUpdate(issue.id)
+  const [pending, update] = useItsaplanIssueUpdate(issue)
   const assignee = issue.assignee
   const knownAssignee = !assignee || members.some((member) => member.userId === assignee.userId)
   return (

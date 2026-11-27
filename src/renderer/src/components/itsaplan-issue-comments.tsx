@@ -12,9 +12,11 @@ import { formatRelativeTime } from './task-page/task-page-source-context'
 
 export function ItsaplanIssueComments({
   issueId,
+  projectRef,
   comments
 }: {
   issueId: number
+  projectRef: string
   comments: readonly ItsaplanComment[]
 }): React.JSX.Element {
   const t = useTranslate()
@@ -35,7 +37,7 @@ export function ItsaplanIssueComments({
           return
         }
         setDraft('')
-        return loadItsaplanIssueDetail(issueId, { force: true }).then(() => undefined)
+        return loadItsaplanIssueDetail(issueId, { force: true, projectRef }).then(() => undefined)
       })
       .catch(() => {
         toast.error(t('taskProviders.itsaplan.commentFailed', 'Failed to add the comment.'))

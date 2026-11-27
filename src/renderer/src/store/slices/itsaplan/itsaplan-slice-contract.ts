@@ -50,14 +50,15 @@ export type ItsaplanSlice = {
   itsaplanIssueDetails: Record<number, ItsaplanIssueDetail>
   loadItsaplanIssueDetail: (
     issueId: number,
-    opts?: { force?: boolean }
+    opts?: { force?: boolean; projectRef?: string }
   ) => Promise<ItsaplanIssueDetail | null>
   createItsaplanIssue: (
     args: ItsaplanCreateIssueArgs
   ) => Promise<ItsaplanResult<{ issue: ItsaplanIssue }>>
   updateItsaplanIssue: (
     issueId: number,
-    updates: ItsaplanIssueUpdate
+    updates: ItsaplanIssueUpdate,
+    projectRef?: string
   ) => Promise<ItsaplanResult<{ issue: ItsaplanIssue }>>
   addItsaplanComment: (
     issueId: number,

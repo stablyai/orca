@@ -116,6 +116,7 @@ async function readAllComments(issueId: number): Promise<ItsaplanComment[]> {
 
 export async function itsaplanGetIssue(args: {
   issueId: number
+  projectRef?: string
 }): Promise<ItsaplanIssueDetail | null> {
   const appUrl = await requireItsaplanAppUrl()
   let raw: RawIssueDetail
@@ -127,7 +128,7 @@ export async function itsaplanGetIssue(args: {
     }
     throw error
   }
-  const projectRef = await resolveItsaplanProjectRef(raw.projectId)
+  const projectRef = await resolveItsaplanProjectRef(raw.projectId, args.projectRef)
   const metadata = await itsaplanGetProjectMetadata({ projectRef })
   const [subtaskHits, comments] = await Promise.all([
     itsaplanRequest<RawIssueHit[]>(`${projectPath(projectRef)}/issues`, {

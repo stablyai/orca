@@ -28,10 +28,11 @@ export type ItsaplanApi = {
   listProjects: (args?: { query?: string }) => Promise<ItsaplanProject[]>
   getProjectMetadata: (args: { projectRef: string }) => Promise<ItsaplanProjectMetadata>
   listIssues: (args: ItsaplanIssueListQuery) => Promise<ItsaplanIssue[]>
-  getIssue: (args: { issueId: number }) => Promise<ItsaplanIssueDetail | null>
+  getIssue: (args: { issueId: number; projectRef?: string }) => Promise<ItsaplanIssueDetail | null>
   createIssue: (args: ItsaplanCreateIssueArgs) => Promise<ItsaplanResult<{ issue: ItsaplanIssue }>>
   updateIssue: (args: {
     issueId: number
+    projectRef?: string
     updates: ItsaplanIssueUpdate
   }) => Promise<ItsaplanResult<{ issue: ItsaplanIssue }>>
   addComment: (args: {

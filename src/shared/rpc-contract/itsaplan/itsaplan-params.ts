@@ -62,7 +62,9 @@ export const ListIssues = lazyZodSchema(() =>
   })
 )
 
-export const IssueId = lazyZodSchema(() => z.object({ issueId: IssueIdValue }))
+export const IssueId = lazyZodSchema(() =>
+  z.object({ issueId: IssueIdValue, projectRef: OptionalString })
+)
 
 export const CreateIssue = lazyZodSchema(() =>
   z.object({
@@ -80,6 +82,7 @@ export const CreateIssue = lazyZodSchema(() =>
 export const UpdateIssue = lazyZodSchema(() =>
   z.object({
     issueId: IssueIdValue,
+    projectRef: OptionalString,
     updates: z.object({
       title: OptionalString,
       description: OptionalPlainString,

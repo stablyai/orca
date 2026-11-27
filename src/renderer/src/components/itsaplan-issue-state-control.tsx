@@ -16,7 +16,7 @@ import type {
 } from '../../../shared/itsaplan/itsaplan-types'
 
 export function useItsaplanIssueUpdate(
-  issueId: number
+  issue: Pick<ItsaplanIssue, 'id' | 'projectRef'>
 ): [pending: boolean, update: (updates: ItsaplanIssueUpdate) => void] {
   const t = useTranslate()
   const updateItsaplanIssue = useAppStore((s) => s.updateItsaplanIssue)
@@ -24,13 +24,16 @@ export function useItsaplanIssueUpdate(
   const [pending, setPending] = useState(false)
   const update = (updates: ItsaplanIssueUpdate): void => {
     setPending(true)
-    void updateItsaplanIssue(issueId, updates)
+    void updateItsaplanIssue(issue.id, updates, issue.projectRef)
       .then((result) => {
         if (!result.ok) {
           toast.error(result.message)
           return
         }
-        return loadItsaplanIssueDetail(issueId, { force: true }).then(() => undefined)
+        return loadItsaplanIssueDetail(issue.id, {
+          force: true,
+          projectRef: issue.projectRef
+        }).then(() => undefined)
       })
       .catch(() => {
         toast.error(t('taskProviders.itsaplan.updateFailed', 'Failed to update the issue.'))
@@ -48,7 +51,7 @@ export function ItsaplanIssueStateControl({
   columns: readonly ItsaplanColumn[]
 }): React.JSX.Element {
   const t = useTranslate()
-  const [pending, update] = useItsaplanIssueUpdate(issue.id)
+  const [pending, update] = useItsaplanIssueUpdate(issue)
   const sortedColumns = [...columns].sort((a, b) => a.position - b.position)
   const knownColumn = sortedColumns.some((column) => column.id === issue.state.columnId)
   return (
