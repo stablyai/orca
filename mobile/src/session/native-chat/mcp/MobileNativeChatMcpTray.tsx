@@ -41,6 +41,7 @@ function McpTrayContent({ panel }: { panel: MobileStructuredMcpPanel }) {
       openUrl={openExternalLink}
       onClose={panel.close}
       onManage={panel.manage}
+      agentLabel={panel.agentLabel}
       listMaxHeight={Math.round(
         visibleHeight *
           (state.servers.some((server) => server.source === ORCA_MCP_SOURCE)

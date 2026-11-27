@@ -756,6 +756,7 @@
 3 src/main/mcp-servers/mcp-host-list-sign-in.ts # the host MCP list reuses the bot tools file and its synchronous credential store, read per user action as bots-tools.ts does
 10 src/main/mcp-servers/mcp-host-list.ts # the host MCP list reuses the bot tools file and its synchronous credential store, read per user action as bots-tools.ts does; +2 botOwnTools for a list from one credential store read, and botOwnTool now reading the store in its own file
 1 src/main/mcp-servers/mcp-shared-process-servers.ts # a shared server's relay request reads the host list as a launch does; only its one-time inline-header migration is synchronous
+1 src/main/mcp-servers/session-mcp-at-rest.ts # /mcp tray reads for a chat its agent can't list: one credential store read for the host list's sign-ins, as mcpServers.list does
 2 src/main/mcp-servers/session-mcp-launch.ts # per chat launch and turn: the bot launch read of its tools file and its revision check (moved from bot-structured-session-wiring.ts)
 1 src/main/mcp-servers/terminal/terminal-mcp-cli-support.ts # runWslProcess for a WSL CLI's --help/--version probe, once per CLI and distro per 10 minutes
 1 src/main/mcp-servers/terminal/terminal-mcp-launch.ts # the stale-terminal count reads the host list once per count (after an MCP edit or a host start), in place of one read per terminal

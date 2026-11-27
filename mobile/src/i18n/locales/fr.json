@@ -1166,7 +1166,7 @@
         "finishOnPage": "Terminez sur la page qui s’est ouverte",
         "needsAuth": "Connexion requise",
         "needsAuthAfterSend": "Connexion requise. Envoyez un message pour vous connecter ici.",
-        "off": "Désactivé",
+        "disabled": "Désactivé",
         "pending": "Connexion…",
         "tools_many": "{{count}} outils",
         "tools_one": "{{count}} outil",

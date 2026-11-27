@@ -1196,7 +1196,7 @@
         "finishOnPage": "Conclua na página que foi aberta",
         "needsAuth": "Login necessário",
         "needsAuthAfterSend": "Login necessário. Envie uma mensagem para entrar aqui.",
-        "off": "Desativado",
+        "disabled": "Desativado",
         "pending": "Conectando…",
         "tools_many": "{{count}} ferramentas",
         "tools_one": "{{count}} ferramenta",
