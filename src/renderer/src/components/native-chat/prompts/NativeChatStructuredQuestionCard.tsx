@@ -37,8 +37,6 @@ export function NativeChatStructuredQuestionCard({
         }
       }}
       onCancel={onCancel}
-      // Its host takes an answer for every question, so a skipped step is shown, never sent.
-      requiresEveryAnswer
       onCollapse={onCollapse}
       isSubmitting={isSubmitting}
       shouldFocus={shouldFocus}

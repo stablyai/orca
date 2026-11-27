@@ -15,9 +15,18 @@ import {
   DEFAULT_BOT_AVATAR_COLOR
 } from '../../../src/shared/bots/bot-avatar-color'
 import { BOT_NAME_MAX_LENGTH } from '../../../src/shared/bot-types'
+import {
+  BOT_AVATAR_OUTFITS,
+  wornBotOutfit,
+  type BotAvatarOutfit
+} from '../../../src/shared/bots/bot-avatar-outfit'
 import type { BotUpdateParams } from '../../../src/shared/rpc-contract/bots-params'
 import { TextField } from '../components/composer-input/TextField'
 import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
+import {
+  MobileSegmentedControl,
+  type MobileSegment
+} from '../components/controls/MobileSegmentedControl'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { ImageLibraryPermissionError } from '../platform/media-picking/media-picker-contract'
@@ -31,7 +40,10 @@ import type { SheetBot } from './bot-sheet-operations'
 import type { MobileBotAvatarSource } from './host-bot-row-facts'
 import { MobileBotAvatar } from './MobileBotAvatar'
 
-type IdentityUpdates = Pick<BotUpdateParams['updates'], 'name' | 'avatar' | 'avatarColor'>
+type IdentityUpdates = Pick<
+  BotUpdateParams['updates'],
+  'name' | 'avatar' | 'avatarColor' | 'avatarOutfit'
+>
 
 // Seven to a row: the 19 mascots end on a row of five, not one.
 const COLUMNS = 7
@@ -41,6 +53,8 @@ export function MobileBotIdentityPage(props: {
   avatar: MobileBotAvatarSource
   /** The host keeps a mascot's background; an older one drops it, so the row hides. */
   takesColor: boolean
+  /** The host keeps what a mascot wears; an older one refuses it, so the outfits hide. */
+  takesOutfit: boolean
   disabled: boolean
   banner: ReactNode
   onCancel: () => void
@@ -60,18 +74,33 @@ export function MobileBotIdentityPage(props: {
     return {
       name: bot.name,
       mascot: saved?.kind === 'mascot' ? saved.id : null,
-      color: bot.avatarColor ?? null
+      color: bot.avatarColor ?? null,
+      outfit: bot.avatarOutfit ?? null
     }
   })
   const [name, setName] = useState(opened.name)
   const [mascot, setMascot] = useState<BotMascotId | null>(opened.mascot)
   const [color, setColor] = useState<string | null>(opened.color)
+  // Unpicked, an outfit this version doesn't know draws as none and stays saved; picked, it is replaced.
+  const [picked, setOutfit] = useState<BotAvatarOutfit | null | undefined>(undefined)
+  const outfit = picked === undefined ? wornBotOutfit(opened.outfit) : picked
   const [photo, setPhoto] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [width, setWidth] = useState(0)
 
+  const [tab, setTab] = useState<'mascot' | 'color' | 'outfit'>('mascot')
+  const look = (
+    id: BotMascotId,
+    worn: BotAvatarOutfit | null,
+    tint: string | null = color
+  ): MobileBotAvatarSource => ({
+    kind: 'mascot',
+    id,
+    ...(tint ? { color: tint } : {}),
+    ...(worn ? { outfit: worn } : {})
+  })
   const preview: MobileBotAvatarSource = mascot
-    ? { kind: 'mascot', id: mascot, ...(color ? { color } : {}) }
+    ? look(mascot, outfit)
     : photo
       ? { kind: 'image', uri: `data:image/png;base64,${photo}` }
       : props.avatar
@@ -83,7 +112,10 @@ export function MobileBotIdentityPage(props: {
     const updates: IdentityUpdates = {
       ...(trimmed !== opened.name ? { name: trimmed } : {}),
       ...(mascot && mascot !== opened.mascot ? { avatar: mascotAvatar(mascot) } : {}),
-      ...(mascot && props.takesColor && color !== opened.color ? { avatarColor: color } : {})
+      ...(mascot && props.takesColor && color !== opened.color ? { avatarColor: color } : {}),
+      ...(mascot && props.takesOutfit && picked !== undefined && picked !== opened.outfit
+        ? { avatarOutfit: picked }
+        : {})
     }
     // A mascot picked after the photo replaces it.
     const png = mascot ? null : photo
@@ -141,6 +173,30 @@ export function MobileBotIdentityPage(props: {
     '#3a3f4b': t('bots.picture.colorGraphite', 'Graphite'),
     '#1f2126': t('bots.picture.colorInk', 'Ink')
   }
+  const outfitNames: Record<BotAvatarOutfit, string> = {
+    tie: t('bots.picture.outfitTie', 'Tie'),
+    detective: t('bots.picture.outfitDetective', 'Detective'),
+    'hard-hat': t('bots.picture.outfitHardHat', 'Hard hat'),
+    reviewer: t('bots.picture.outfitReviewer', 'Reviewer'),
+    'night-shift': t('bots.picture.outfitNightShift', 'Night shift'),
+    artist: t('bots.picture.outfitArtist', 'Artist'),
+    scientist: t('bots.picture.outfitScientist', 'Scientist'),
+    party: t('bots.picture.outfitParty', 'Party'),
+    security: t('bots.picture.outfitSecurity', 'Security')
+  }
+  // Color and Outfit dress the picked mascot, so a photo shows the mascots alone.
+  const tabs: MobileSegment<'mascot' | 'color' | 'outfit'>[] = mascot
+    ? [
+        { value: 'mascot', label: t('bots.picture.mascot', 'Mascot') },
+        ...(props.takesColor
+          ? [{ value: 'color' as const, label: t('bots.picture.color', 'Color') }]
+          : []),
+        ...(props.takesOutfit
+          ? [{ value: 'outfit' as const, label: t('bots.picture.outfit', 'Outfit') }]
+          : [])
+      ]
+    : []
+  const shown = tabs.some((entry) => entry.value === tab) ? tab : 'mascot'
   return (
     <>
       <SheetHeader
@@ -166,54 +222,68 @@ export function MobileBotIdentityPage(props: {
         returnKeyType="done"
         onSubmitEditing={() => void done()}
       />
-      <SectionHeader title={t('bots.picture.mascot', 'Mascot')} />
+      {tabs.length > 1 ? (
+        <MobileSegmentedControl
+          segments={tabs}
+          selected={shown}
+          onSelect={setTab}
+          fill
+          onSheet
+          tabs
+          style={styles.tabs}
+        />
+      ) : (
+        <SectionHeader title={t('bots.picture.mascot', 'Mascot')} />
+      )}
       <View
-        style={[styles.grid, { gap }]}
+        style={[styles.grid, { gap, minHeight: tabs.length > 1 ? 3 * tile + 2 * gap : 0 }]}
+        accessibilityRole="radiogroup"
+        accessibilityLabel={
+          tabs.find((entry) => entry.value === shown)?.label ?? t('bots.picture.mascot', 'Mascot')
+        }
         onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
       >
-        {tile > 0
-          ? PICKABLE_BOT_MASCOT_IDS.map((id, index) => (
-              <Pressable
-                key={id}
-                accessibilityRole="radio"
-                accessibilityState={{ checked: id === mascot, disabled: locked }}
-                accessibilityLabel={t('bots.picture.mascotN', 'Mascot {{n}} of {{total}}', {
-                  n: index + 1,
-                  total: PICKABLE_BOT_MASCOT_IDS.length
-                })}
-                disabled={locked}
-                onPress={() => setMascot(id)}
-                style={[styles.tile, id === mascot && styles.tileOn]}
-              >
-                <MobileBotAvatar
-                  avatar={{ kind: 'mascot', id, ...(color ? { color } : {}) }}
-                  size={tile - 6}
+        {tile === 0
+          ? null
+          : shown === 'color' && mascot
+            ? swatches.map((swatch) => (
+                <Tile
+                  key={swatch}
+                  label={colorNames[swatch] ?? swatch}
+                  checked={swatch === current}
+                  disabled={locked}
+                  onPress={() => setColor(swatch === DEFAULT_BOT_AVATAR_COLOR ? null : swatch)}
+                  avatar={look(mascot, outfit, swatch)}
+                  size={tile}
                 />
-              </Pressable>
-            ))
-          : null}
+              ))
+            : shown === 'outfit' && mascot
+              ? [null, ...BOT_AVATAR_OUTFITS].map((worn) => (
+                  <Tile
+                    key={worn ?? 'none'}
+                    label={worn ? outfitNames[worn] : t('bots.picture.outfitNone', 'No outfit')}
+                    checked={worn === outfit}
+                    disabled={locked}
+                    onPress={() => setOutfit(worn)}
+                    avatar={look(mascot, worn)}
+                    size={tile}
+                  />
+                ))
+              : PICKABLE_BOT_MASCOT_IDS.map((id, index) => (
+                  <Tile
+                    key={id}
+                    label={t('bots.picture.mascotN', 'Mascot {{n}} of {{total}}', {
+                      n: index + 1,
+                      total: PICKABLE_BOT_MASCOT_IDS.length
+                    })}
+                    checked={id === mascot}
+                    disabled={locked}
+                    onPress={() => setMascot(id)}
+                    avatar={look(id, null)}
+                    size={tile}
+                  />
+                ))}
       </View>
-      {mascot && props.takesColor ? (
-        <>
-          <SectionHeader title={t('bots.picture.background', 'Background color')} />
-          <View style={styles.swatches} accessibilityRole="radiogroup">
-            {swatches.map((swatch) => (
-              <Pressable
-                key={swatch}
-                accessibilityRole="radio"
-                accessibilityState={{ checked: swatch === current, disabled: locked }}
-                accessibilityLabel={colorNames[swatch] ?? swatch}
-                hitSlop={4}
-                disabled={locked}
-                onPress={() => setColor(swatch === DEFAULT_BOT_AVATAR_COLOR ? null : swatch)}
-                style={[styles.ring, swatch === current && styles.ringOn]}
-              >
-                <View style={[styles.swatch, { backgroundColor: swatch }]} />
-              </Pressable>
-            ))}
-          </View>
-        </>
-      ) : null}
       <ListGroup style={styles.photos}>
         <ListRow
           leading={<ImageUp size={18} color={colors.textSecondary} />}
@@ -233,9 +303,32 @@ export function MobileBotIdentityPage(props: {
   )
 }
 
+function Tile(props: {
+  label: string
+  checked: boolean
+  disabled: boolean
+  onPress: () => void
+  avatar: MobileBotAvatarSource
+  size: number
+}) {
+  return (
+    <Pressable
+      accessibilityRole="radio"
+      accessibilityState={{ checked: props.checked, disabled: props.disabled }}
+      accessibilityLabel={props.label}
+      disabled={props.disabled}
+      onPress={props.onPress}
+      style={[styles.tile, props.checked && styles.tileOn]}
+    >
+      <MobileBotAvatar avatar={props.avatar} size={props.size - 6} />
+    </Pressable>
+  )
+}
+
 const styles = themedStyleSheet(() => ({
   hero: { alignItems: 'center', paddingTop: spacing.sm, paddingBottom: spacing.lg },
-  grid: { flexDirection: 'row', flexWrap: 'wrap' },
+  tabs: { marginTop: spacing.lg, marginBottom: spacing.sm },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', alignContent: 'flex-start' },
   tile: {
     padding: 1,
     borderRadius: radii.control,
@@ -243,25 +336,5 @@ const styles = themedStyleSheet(() => ({
     borderColor: 'transparent'
   },
   tileOn: { borderColor: colors.textPrimary },
-  swatches: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    rowGap: spacing.sm
-  },
-  ring: {
-    padding: 2,
-    borderRadius: 999,
-    borderWidth: 2,
-    borderColor: 'transparent'
-  },
-  ringOn: { borderColor: colors.textPrimary },
-  swatch: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
   photos: { marginTop: spacing.lg }
 }))

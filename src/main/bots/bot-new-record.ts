@@ -27,6 +27,7 @@ export function newBotRecord(
     ...(input.permissionMode ? { permissionMode: input.permissionMode } : {}),
     avatar: input.avatar === undefined ? randomMascotAvatar(null) : input.avatar,
     ...(input.avatarColor ? { avatarColor: input.avatarColor } : {}),
+    ...(input.avatarOutfit ? { avatarOutfit: input.avatarOutfit } : {}),
     paused: false,
     notifications: { needsPermission: true, taskComplete: true, couldNotFinish: true },
     members: [],

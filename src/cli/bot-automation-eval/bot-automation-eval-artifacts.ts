@@ -121,6 +121,7 @@ function item(state: EvalHostState, number: number): BotItem {
     madeBy: null,
     question: null,
     closeNote: null,
+    wait: null,
     links: [],
     version: 1,
     lastEventId: 'e1',

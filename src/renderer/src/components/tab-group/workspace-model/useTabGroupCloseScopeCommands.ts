@@ -3,6 +3,8 @@ import { useAppStore } from '../../../store/index'
 import { captureWorkspaceEmptiedReaction } from '../../../lib/workspace/tabs/close/workspace-emptied-reaction'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import { useBulkTabCloseConfirmation } from '../../terminal/tab-lifecycle/use-bulk-tab-close-confirmation'
+import { displayedTabOrder } from '../../bots/bot-home-tab-order'
+import { directionalCloseIds } from './directional-close-ids'
 import type { BulkTabCloseScope } from '../../../../../shared/workspace-layout/tab-groups/bulk-tab-close-confirmation'
 
 export function useTabGroupCloseScopeCommands({
@@ -41,14 +43,13 @@ export function useTabGroupCloseScopeCommands({
       if (scope === 'others') {
         return tabs.filter((tab) => tab.id !== itemId && !tab.isPinned).map((tab) => tab.id)
       }
-      const index = group.tabOrder.indexOf(itemId)
-      if (index === -1) {
-        return []
-      }
-      const order =
-        scope === 'right' ? group.tabOrder.slice(index + 1) : group.tabOrder.slice(0, index)
-      const closableIds = new Set(tabs.filter((tab) => !tab.isPinned).map((tab) => tab.id))
-      return order.filter((id) => closableIds.has(id))
+      // Left and right of a tab as the bar draws them, with a bot's pinned Home first wherever it is stored.
+      return directionalCloseIds(
+        displayedTabOrder(group.tabOrder, tabs, worktreeId),
+        tabs,
+        itemId,
+        scope
+      )
     },
     [groupId, worktreeId]
   )

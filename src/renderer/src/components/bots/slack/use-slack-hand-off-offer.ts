@@ -6,7 +6,7 @@ import { useBotHostOrcaAccount } from '@/lib/bot-host-orca-account'
 import { useAppStore } from '@/store'
 import { botSlackApps, type Bot } from '../../../../../shared/bot-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
-import type { BotSlackSetupStep } from './use-bot-slack-setup'
+import type { BotSlackSetupStep } from './slack-setup-step'
 import { slackWorkspaces } from './SlackWorkspacesSettings'
 
 export type SlackHandOffOffer = { email: string; teamIds: string[] }

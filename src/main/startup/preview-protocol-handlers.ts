@@ -1,4 +1,3 @@
-import type { Store } from '../persistence/loading-store/store'
 import { installDocPreviewProtocolHandler } from '../browser/document-preview/doc-preview-protocol'
 import { installMediaPreviewProtocolHandler } from '../media/media-preview-protocol'
 import { installChatAddressPreviewProtocolHandler } from '../media/chat-address-preview-protocol'
@@ -8,10 +7,10 @@ import { installConnectorAvatarProtocolHandler } from '../connector-avatars/conn
 
 /** The protocol-scoped preview handlers, which must exist before any webview attaches, and the
  *  chat address preview IPC that issues grants for its protocol. */
-export function installPreviewProtocolHandlers(store: Store): void {
+export function installPreviewProtocolHandlers(): void {
   installMediaPreviewProtocolHandler()
   installChatAddressPreviewProtocolHandler()
-  registerChatAddressPreviewHandlers(store)
+  registerChatAddressPreviewHandlers()
   installJiraImageProtocolHandler()
   installConnectorAvatarProtocolHandler()
   installDocPreviewProtocolHandler()

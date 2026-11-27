@@ -1,4 +1,5 @@
 import type { HostedProviderRequest } from './daemon-provider-process-protocol'
+import type { ProviderRelayRequest } from './daemon-provider-relay-protocol'
 import type { TerminalStartFailure } from '../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import type {
   AsyncIoHealthRequest,
@@ -25,7 +26,7 @@ import type {
 } from '../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import type * as HistorySeedProtocol from '../history/seed-transfer/terminal-history-seed-transfer-protocol'
 import type * as PtyOwnerQueryProtocol from './daemon-pty-owner-query-protocol'
-import type { TerminalSnapshot } from './terminal-snapshot'
+import type { TerminalSnapshot, TerminalSnapshotReadOptions } from './terminal-snapshot'
 import type { SetLaunchNoteRequest } from './daemon-launch-note-protocol'
 
 export type SessionState = 'created' | 'spawning' | 'running' | 'exiting' | 'exited'
@@ -43,6 +44,8 @@ export type CreateOrAttachRequest = {
     env?: Record<string, string>
     envToDelete?: string[]
     command?: string
+    /** Optional; an old daemon ignores it. */
+    startupNotice?: string
     startupCommandDelivery?: StartupCommandDelivery
     launchAgent?: TuiAgent
     /** Rejects an absent session instead of interpreting mount uncertainty as create permission. */
@@ -197,10 +200,7 @@ export type ShutdownRequest = {
 export type GetSnapshotRequest = {
   id: string
   type: 'getSnapshot'
-  payload: {
-    sessionId: string
-    scrollbackRows?: number
-  }
+  payload: { sessionId: string } & TerminalSnapshotReadOptions
 }
 
 // Read applied dimensions to detect dropped or coerced fire-and-forget resizes.
@@ -243,6 +243,7 @@ export type TakePendingOutputResult = {
 
 export type DaemonRequest =
   | HostedProviderRequest
+  | ProviderRelayRequest
   | CreateOrAttachRequest
   | HistorySeedProtocol.TerminalHistorySeedTransferRequest
   | CancelCreateOrAttachRequest
@@ -291,12 +292,25 @@ export type RpcResponseError = {
 
 export type RpcResponse<T = unknown> = RpcResponseOk<T> | RpcResponseError
 
-export type GetSnapshotResult = {
-  snapshot: TerminalSnapshot | null
+export type GetSnapshotResult<Snapshot = TerminalSnapshot> = {
+  snapshot: Snapshot | null
 }
 
 export type ListSessionsResult = {
   sessions: SessionInfo[]
+  /** Daemon-owned chat agents still held, running or with output not yet collected (v63+). */
+  liveRelays?: number
+  /** Of those, the agents still running; only these end if the daemon stops (v63+). */
+  runningRelays?: number
+}
+
+/** Everything that would end if this daemon stopped: live PTYs plus live chat relays. */
+export function countLiveDaemonSessions(result: ListSessionsResult): number {
+  const relays = typeof result.liveRelays === 'number' ? result.liveRelays : 0
+  return (
+    result.sessions.filter((session) => session.isAlive).length +
+    (Number.isSafeInteger(relays) && relays > 0 ? relays : 0)
+  )
 }
 
 export type ShutdownIfIdleResult = {

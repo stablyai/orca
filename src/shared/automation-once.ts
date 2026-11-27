@@ -9,6 +9,8 @@ import type { Automation } from './automations/automation-definition'
 export type AutomationOnce = { by?: number }
 
 export const WAIT_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000
+/** The furthest a wait's deadline may be from when it was made. */
+export const WAIT_MAX_DEADLINE_MS = WAIT_EXPIRY_MS * 12
 
 /** When the tick takes it: its deadline, or its expiry without one. */
 export function onceDueAt(automation: Pick<Automation, 'once' | 'createdAt'>): number | null {
@@ -90,7 +92,7 @@ export function assertAutomationOnce(automation: Pick<Automation, 'once' | 'crea
   if (!Number.isFinite(by) || by <= automation.createdAt) {
     throw new Error('A run-once automation needs a --by time after it was made.')
   }
-  if (by > automation.createdAt + WAIT_EXPIRY_MS * 12) {
+  if (by > automation.createdAt + WAIT_MAX_DEADLINE_MS) {
     throw new Error('--by must be within a year.')
   }
 }

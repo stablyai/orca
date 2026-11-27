@@ -1,3 +1,4 @@
+import { BOTS_ITEM_WAITING_CAPABILITY } from '../../../shared/bot-runtime-capabilities'
 import { GIT_REVERT_CONFLICT_CLIENT_CAPABILITY } from '../../../shared/git/commands/git-commit-action'
 import { GIT_GRAPH_TAB_CAPABILITY } from '../../../shared/source-control/runtime/git-graph-capabilities'
 import type { RuntimeCapability } from '../../../shared/remote-runtime/protocol/protocol-version'
@@ -30,5 +31,7 @@ export const DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES: readonly RuntimeCapab
   // Treat closed launch tabs as silent cancellation instead of unknown failure.
   AGENT_LAUNCH_TAB_CLOSED_CLIENT_CAPABILITY,
   TERMINAL_QUICK_COMMAND_LONG_PROMPTS_RUNTIME_CAPABILITY,
-  TERMINAL_QUICK_COMMAND_LARGE_LISTS_RUNTIME_CAPABILITY
+  TERMINAL_QUICK_COMMAND_LARGE_LISTS_RUNTIME_CAPABILITY,
+  // Without it the host shows Waiting items to this window as In progress.
+  BOTS_ITEM_WAITING_CAPABILITY
 ] as const

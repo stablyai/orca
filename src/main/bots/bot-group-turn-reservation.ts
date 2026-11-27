@@ -17,7 +17,9 @@ export async function reserveGroupTurns(
   group: BotGroup,
   threadId: string | undefined,
   bots: readonly Bot[],
-  botIds: readonly string[]
+  botIds: readonly string[],
+  /** A turn's own operation id, such as an automation run's derived message id. */
+  operationIdOf: (botId: string) => string | undefined = () => undefined
 ): Promise<{
   turns: BotGroupTurn[]
   contexts: Map<string, string>
@@ -35,9 +37,9 @@ export async function reserveGroupTurns(
     if (!bot || !member) {
       return []
     }
-    const operationId = mintAgentSessionOperationId(Date.now())
+    const operationId = operationIdOf(botId) ?? mintAgentSessionOperationId(Date.now())
     contexts.set(operationId, botGroupContext(history, completed, member))
-    const { name: botName, avatar, avatarColor, agent } = bot
+    const { name: botName, avatar, avatarColor, avatarOutfit, agent } = bot
     return [
       {
         operationId,
@@ -45,6 +47,7 @@ export async function reserveGroupTurns(
         botName,
         avatar,
         ...(avatarColor ? { avatarColor } : {}),
+        ...(avatarOutfit ? { avatarOutfit } : {}),
         agent,
         sessionId: member.sessionId
       }

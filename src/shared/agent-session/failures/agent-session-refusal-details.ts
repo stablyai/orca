@@ -92,6 +92,10 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     'runtimeNotInstalled',
     /** The agent refuses Full access while it runs as root. */
     'fullAccessAsRoot',
+    /** A bot's tools would run without its limits: Orca's plugin for the agent is off. */
+    'botToolsNeedStatusHooks',
+    /** A bot's tools would run without its limits: the agent's shared process kept an older plugin. */
+    'botToolsGatewayOutdated',
     /** Orca's launch preparation on the host failed before any agent process was spawned. */
     'launchPreparationFailed',
     /** A terminal may still be writing the chat's conversation, so its agent did not start. */
@@ -150,6 +154,8 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     'journalCorrupt',
     /** Any other failed open, which can clear. */
     'journalUnavailable',
+    /** The disk refused the chat's write; it opens once space is freed. */
+    'journalStorageFull',
     /** A newer Orca wrote the journal, or this chat's rows; only an update writes past it. */
     'journalWrittenByNewerOrca'
   ],

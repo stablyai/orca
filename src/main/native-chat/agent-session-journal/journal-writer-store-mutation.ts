@@ -23,7 +23,7 @@ import type { AgentSessionStoreState } from '../../runtime/agent-session/records
 import { isReadableAgentSessionStoreOperation } from '../../runtime/agent-session/records/agent-session-store-row-rules'
 import { JournalSqlScope } from './journal-sql-scope'
 import { JournalSqlStatusContext } from './journal-sql-status-context'
-import { readJournalSqlUsageLimitContinueIdentity } from './journal-sql-status-cuts'
+import { readJournalSqlUsageLimitStopWithdrawal } from './journal-sql-status-cuts'
 import {
   attributeAgentSessionRuntimeRecord,
   type AgentSessionRuntimeFacts
@@ -164,7 +164,7 @@ export function resolveJournalWriterStoreMutation(
       : undefined
   const continueCut =
     head && (action || mutation.kind === 'rewind-complete')
-      ? readJournalSqlUsageLimitContinueIdentity(
+      ? readJournalSqlUsageLimitStopWithdrawal(
           new JournalSqlStatusContext(
             new JournalSqlScope(
               db,

@@ -29,6 +29,7 @@ import { shouldRetainStructuredAgentSessionLaunchTab } from '@/lib/agent-session
 import { executionHostIdForSessionTabsOwner } from '../../native-chat/local-sessions/local-structured-session-owner'
 import { isAgentSessionTabOfAnotherHost } from '../identity/mirror-row-ownership'
 import { isUnlistedCreatedChat } from '@/lib/agent-session/launch/pane/structured-agent-session-unlisted-created-chats'
+import { prepareAgentTabSnapshot } from './agent-tab-snapshot'
 
 export function prepareWebSessionTabsSnapshotBrowser(
   base: ReturnType<typeof prepareWebSessionTabsSnapshotBase>
@@ -49,17 +50,24 @@ export function prepareWebSessionTabsSnapshotBrowser(
   const targetGroupId = chooseTargetGroupId(state, snapshot)
   const hostGroupIdByTabId = buildHostGroupIdByTabId(snapshot.tabGroups)
   const currentUnifiedTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
-  const publishedAgentSessionIds = new Set(
-    snapshot.tabs.filter((tab) => tab.type === 'agent-session').map((tab) => tab.sessionId)
-  )
-  // A chat this frame publishes or replaces is its to rebuild, whichever host last showed it.
-  const claimedAgentSessionIds = new Set(publishedAgentSessionIds)
-  for (const tab of snapshot.tabs) {
-    if (tab.type === 'agent-session' && tab.replacesSessionId) {
-      claimedAgentSessionIds.add(tab.replacesSessionId)
-    }
-  }
   const snapshotExecutionHostId = executionHostIdForSessionTabsOwner(environmentId)
+  const {
+    mayAdoptInitialHostGroups,
+    directlyOpened,
+    directlyOpenedWithIncomingGroup,
+    framePublishesDirectChat,
+    publishedAgentSessionIds,
+    claimedAgentSessionIds,
+    projection
+  } = prepareAgentTabSnapshot({
+    state,
+    snapshot,
+    environmentId,
+    executionHostId: snapshotExecutionHostId,
+    currentTabs: currentUnifiedTabs,
+    hostGroupIdByTabId,
+    requestReceivedFrame: base.options?.requestReceivedFrame
+  })
   const agentSessionsAffirmed = hostSnapshotAffirmsAgentSessions(snapshot)
   const existingTabIndex = buildWebSessionExistingTabIndex({ unifiedTabs: currentUnifiedTabs })
   const reconcilesBrowserTabs =
@@ -140,13 +148,17 @@ export function prepareWebSessionTabsSnapshotBrowser(
   )
   const mirroredAgentTabs = buildMirroredAgentTabs(
     snapshot,
-    executionHostIdForSessionTabsOwner(environmentId),
+    snapshotExecutionHostId,
     hostGroupIdByTabId,
     targetGroupId,
     mirroredTerminalTabEntries.length + mirroredBrowserTabs.length + mirroredEditorTabs.length,
     currentUnifiedTabs,
-    now
+    now,
+    projection
   )
+  if (directlyOpened) {
+    mirroredAgentTabs.push(...directlyOpened.values())
+  }
   const mirroredEditorFileIds = new Set(mirroredEditorTabs.map((entry) => entry.file.id))
   const mirroredEditorHostTabIds = new Set(mirroredEditorTabs.map((entry) => entry.hostTabId))
   const mirroredOpenFiles = [
@@ -237,6 +249,10 @@ export function prepareWebSessionTabsSnapshotBrowser(
   return {
     ...base,
     targetGroupId,
+    mayAdoptInitialHostGroups,
+    directlyOpened,
+    directlyOpenedWithIncomingGroup,
+    framePublishesDirectChat,
     hostGroupIdByTabId,
     currentUnifiedTabs,
     existingTabIndex,

@@ -64,3 +64,11 @@ export function formatAutomationScheduleDescriptor(
 export function formatAutomationSchedule(scheduleExpression: string): string {
   return formatAutomationScheduleDescriptor(describeAutomationSchedule(scheduleExpression))
 }
+
+/** The schedule, with its time zone only when it isn't the phone's. */
+export function automationScheduleText(automation: { rrule: string; timezone: string }): string {
+  const schedule = formatAutomationSchedule(automation.rrule)
+  return automation.timezone === Intl.DateTimeFormat().resolvedOptions().timeZone
+    ? schedule
+    : `${schedule} · ${automation.timezone}`
+}

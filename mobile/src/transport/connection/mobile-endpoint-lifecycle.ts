@@ -24,6 +24,10 @@ import { MobileRelayDirectUpgradeController } from '../relay/mobile-relay-direct
 import { defaultCancelTimer, defaultScheduleTimer } from '../../platform/timer-scheduler'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import { skipsDirectEndpoint } from './undialable-direct-endpoint'
+import {
+  createHostDirectEndpointFollower,
+  type HostDirectEndpointFollower
+} from './host-direct-endpoint-follower'
 
 type EndpointLifecycle = {
   setForeground(foreground: boolean): void
@@ -43,12 +47,26 @@ export function startMobileEndpointLifecycle(
   let stopped = false
   let foreground = true
   let owner: EndpointOwner
+  // The desktop may move its direct address mid-session; the saved endpoint follows once the new one answers.
+  const directEndpoints = createHostDirectEndpointFollower({
+    client: logical,
+    hostId: initialHost.id,
+    saved: initialHost,
+    openDirect: (endpoint) => openHostDirect(initialHost, endpoint, onLog),
+    isForeground: () => foreground,
+    now: Date.now
+  })
+  const unsubscribeDirectEndpoints = logical.onStateChange((state) => {
+    if (state === 'connected') {
+      directEndpoints.onConnected()
+    }
+  })
 
   const startSupervisor = async (relay: MobileRelayEndpoint): Promise<void> => {
     if (stopped) {
       return
     }
-    const supervisor = createSupervisor(logical, initialHost, relay, onLog)
+    const supervisor = createSupervisor(logical, initialHost, directEndpoints, relay, onLog)
     owner.stop()
     owner = supervisor
     supervisor.setForeground(foreground)
@@ -56,7 +74,7 @@ export function startMobileEndpointLifecycle(
   }
 
   if (initialHost.relay) {
-    owner = createSupervisor(logical, initialHost, initialHost.relay, onLog)
+    owner = createSupervisor(logical, initialHost, directEndpoints, initialHost.relay, onLog)
     void owner.start()
   } else {
     owner = new MobileRelayDirectUpgradeController(logical, initialHost, {
@@ -74,6 +92,9 @@ export function startMobileEndpointLifecycle(
   return {
     setForeground(next) {
       foreground = next
+      if (!next) {
+        directEndpoints.cancel()
+      }
       owner.setForeground(next)
     },
     nudge(reason) {
@@ -81,27 +102,42 @@ export function startMobileEndpointLifecycle(
       // sync or a later supervisor swap would start with a stale background flag.
       if (reason !== 'network-change') {
         foreground = true
+        directEndpoints.refresh()
       }
       owner.nudge(reason)
     },
     stop() {
       stopped = true
+      unsubscribeDirectEndpoints()
+      directEndpoints.stop()
       owner.stop()
     }
   }
 }
 
+function openHostDirect(host: HostProfile, endpoint: string, onLog: ConnectionLogSink) {
+  return connect(endpoint, host.deviceToken, host.publicKeyB64, { onLog, hostId: host.id })
+}
+
 function createSupervisor(
   logical: StableLogicalRpcClient,
   host: HostProfile,
+  directEndpoints: HostDirectEndpointFollower,
   relay: MobileRelayEndpoint,
   onLog: ConnectionLogSink
 ): MobileEndpointSupervisor {
   return new MobileEndpointSupervisor(logical, host.id, relay, {
-    openDirect: () => connect(host.endpoint, host.deviceToken, host.publicKeyB64, { onLog }),
-    directPath: directPathForEndpoint(host.endpoint),
-    directProbeTimeoutMs: directProbeTimeoutMsForEndpoint(host.endpoint),
-    directUnavailable: skipsDirectEndpoint(host),
+    openDirect: () => openHostDirect(host, directEndpoints.directEndpoint(), onLog),
+    // Getters: each return probe reads the saved endpoint, which follows a moved desktop.
+    get directPath() {
+      return directPathForEndpoint(directEndpoints.directEndpoint())
+    },
+    get directProbeTimeoutMs() {
+      return directProbeTimeoutMsForEndpoint(directEndpoints.directEndpoint())
+    },
+    get directUnavailable() {
+      return skipsDirectEndpoint({ ...host, endpoint: directEndpoints.directEndpoint() })
+    },
     openRelay: (relay, credential, confirmReqId, onHostCloseReason) =>
       connectMobileRelayRpcSession({
         relay,
@@ -111,7 +147,8 @@ function createSupervisor(
         deviceToken: host.deviceToken,
         desktopPublicKeyB64: host.publicKeyB64,
         onHostCloseReason,
-        onLog
+        onLog,
+        hostId: host.id
       }),
     resolveRelay: resolveMobileRelayEndpoint,
     readBundle: readMobileRelayCredentialBundle,

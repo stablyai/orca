@@ -72,6 +72,15 @@ function setContentEditableCaretFromPoint(
   selection.addRange(range)
 }
 
+// Rich editors (ProseMirror) apply their own paste rules (file chips, pills, size limits) only to paste events.
+function editorHandledPasteEvent(target: HTMLElement, text: string): boolean {
+  const clipboardData = new DataTransfer()
+  clipboardData.setData('text/plain', text)
+  return !target.dispatchEvent(
+    new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData })
+  )
+}
+
 function insertTextIntoContentEditable(target: HTMLElement, text: string): boolean {
   const ownerDocument = target.ownerDocument
   if (
@@ -193,8 +202,13 @@ async function pasteIntoContentEditable(
 
   target.focus()
   setContentEditableCaretFromPoint(target, point)
+  // selectionchange must reach the editor first, or it pastes at its stale caret.
+  await (options.yieldToEventLoop ?? yieldToEventLoop)()
   if (!isContentEditablePasteTargetAvailable(target, options.canContinue)) {
     return false
+  }
+  if (editorHandledPasteEvent(target, text)) {
+    return true
   }
   if (largeByteLengthMeasurement.byteLength <= directMaxBytes) {
     return insertTextIntoContentEditable(target, text)
@@ -226,6 +240,10 @@ export function findEditablePrimarySelectionPasteTarget(
       return null
     }
     if (element.isContentEditable) {
+      // Focus sits on the editing host, not the block under the pointer (e.g. a ProseMirror <p>).
+      while (element.parentElement?.isContentEditable) {
+        element = element.parentElement
+      }
       return element
     }
     element = element.parentElement

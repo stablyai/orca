@@ -75,7 +75,9 @@ export function useConfirmBotAgentSwitch(): (
             </li>
           </ul>
         ),
-        confirmLabel: translate('bots.agentSwitch.action', 'Switch to {{agent}}', { agent })
+        confirmLabel: translate('bots.agentSwitch.action', 'Switch to {{agent}}', { agent }),
+        // A tab in the bot's agent picker switches agents with the picker still open.
+        aboveMenus: true
       })
     },
     [confirm]

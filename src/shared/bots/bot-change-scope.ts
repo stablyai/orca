@@ -45,6 +45,12 @@ export type BotChangeScope = {
   /** The host reads a list's items by uid, so a `workers` change can read just the loaded items that
    *  link a worker. Absent: an older host, whose lists read whole. */
   namesItems?: true
+  /** A `groups` change's rooms, by group id: an open room re-reads only when its group is named. Absent
+   *  (and an older host's notice): every room re-reads. */
+  groupIds?: readonly string[]
+  /** `groupIds` as a peer's notice carried it, unread: only an open room reads it (botGroupRoomConcerned),
+   *  so a reader that wants no room never walks the list. */
+  receivedGroupIds?: readonly unknown[]
 }
 
 /** The notice of these changed items, by bot; null for none. */
@@ -139,6 +145,8 @@ const ANY_KIND = '*'
 export type PendingBotChanges = {
   kinds: Map<BotChangeKind | typeof ANY_KIND, Set<string> | null>
   itemUids: Map<string, Set<string> | null>
+  /** The rooms a `groups` change named; null once one named none (every room), absent before any. */
+  groupIds?: Set<string> | null
 }
 
 export function pendingBotChanges(): PendingBotChanges {
@@ -151,6 +159,15 @@ export const BOT_CHANGE_ITEM_UIDS_MAX = 100
 export function addBotChange(pending: PendingBotChanges, scope: BotChangeScope): void {
   const kinds: readonly (BotChangeKind | typeof ANY_KIND)[] =
     scope.kinds && scope.kinds.length > 0 ? scope.kinds : [ANY_KIND]
+  if (kinds.includes('groups') || kinds.includes(ANY_KIND)) {
+    // A change naming no room (no list, or an empty one) reaches every room.
+    if (!scope.groupIds?.length || pending.groupIds === null) {
+      pending.groupIds = null
+    } else {
+      pending.groupIds ??= new Set()
+      scope.groupIds.forEach((id) => pending.groupIds?.add(id))
+    }
+  }
   for (const kind of kinds) {
     const bots = pending.kinds.get(kind)
     if (!scope.botIds) {
@@ -187,6 +204,7 @@ export function botChangeNotice(pending: PendingBotChanges): BotChangeScope {
   if (pending.kinds.has(ANY_KIND)) {
     return botIds ? { botIds } : {}
   }
+  const groupIds = pending.kinds.has('groups') && pending.groupIds ? [...pending.groupIds] : null
   const kinds = entries.map(([kind]) => kind).filter((kind) => kind !== ANY_KIND)
   const scoped = entries.flatMap(([kind, bots]) =>
     kind !== ANY_KIND && bots ? [[kind, [...bots]] as const] : []
@@ -204,8 +222,39 @@ export function botChangeNotice(pending: PendingBotChanges): BotChangeScope {
     kinds,
     ...(sameBots || scoped.length === 0 ? {} : { kindBots: Object.fromEntries(scoped) }),
     ...(named.length > 0 ? { itemUids: Object.fromEntries(named) } : {}),
-    ...(pending.kinds.has('workers') ? { namesItems: true as const } : {})
+    ...(pending.kinds.has('workers') ? { namesItems: true as const } : {}),
+    ...(groupIds ? { groupIds } : {})
   }
+}
+
+/** Whether an open room of `groupId` re-reads for this notice: a `groups` change (or one of any or an
+ *  unknown kind) that names its group or names none. */
+export function botGroupRoomConcerned(scope: BotChangeScope | undefined, groupId: string): boolean {
+  const known = new Set<string>(BOT_CHANGE_KINDS)
+  const kinds = scope?.kinds ?? []
+  // A kind this build does not know counts, as in botChangeConcerns.
+  if (kinds.some((kind) => !known.has(kind))) {
+    return true
+  }
+  if (kinds.length > 0 && !kinds.includes('groups')) {
+    return false
+  }
+  const listed = scope?.groupIds ?? scope?.receivedGroupIds
+  // A list with no room in it names none, so every room re-reads.
+  const rooms = listed ? namedRooms(listed) : null
+  return rooms && rooms.size > 0 ? rooms.has(groupId) : true
+}
+
+// Each notice's rooms as a set, built once however many open rooms ask.
+const roomSets = new WeakMap<readonly unknown[], ReadonlySet<string>>()
+
+function namedRooms(groupIds: readonly unknown[]): ReadonlySet<string> {
+  let rooms = roomSets.get(groupIds)
+  if (!rooms) {
+    rooms = new Set(groupIds.filter((id): id is string => typeof id === 'string'))
+    roomSets.set(groupIds, rooms)
+  }
+  return rooms
 }
 
 /** The scope a runtime event carries, read loosely (a peer of another version may send anything). */
@@ -223,12 +272,21 @@ export function readBotChangeScope(event: unknown): BotChangeScope | undefined {
       : undefined
   const kindBots = 'kindBots' in event ? readStringLists(event.kindBots) : undefined
   const needsYou = 'needsYou' in event ? readBotNeedsYouCounts(event.needsYou) : undefined
+  // Kept as sent: only an open room walks it, once per notice.
+  // A notice read once already (the preload's, a paired host's) carries it as `receivedGroupIds`.
+  const receivedGroupIds: readonly unknown[] | undefined =
+    'groupIds' in event && Array.isArray(event.groupIds)
+      ? event.groupIds
+      : 'receivedGroupIds' in event && Array.isArray(event.receivedGroupIds)
+        ? event.receivedGroupIds
+        : undefined
   return botIds || kinds
     ? {
         ...(botIds ? { botIds } : {}),
         ...(kinds ? { kinds } : {}),
         ...(kindBots ? { kindBots } : {}),
-        ...(needsYou ? { needsYou } : {})
+        ...(needsYou ? { needsYou } : {}),
+        ...(receivedGroupIds ? { receivedGroupIds } : {})
       }
     : undefined
 }

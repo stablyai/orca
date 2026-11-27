@@ -48,10 +48,10 @@ Every key an app theme may set in `tokens` (see [plugin themes](plugin-themes.md
 | `--host-badge` | Execution-host badge on workspaces (for example `Local`, an SSH host) | no | light: same as `--accent`; dark: `--accent` at 80% opacity |
 | `--host-badge-foreground` | Text on `--host-badge` | no | same as `--muted-foreground` |
 | `--tab-bar` | Strip behind tabs, including the title bar when tabs sit in it | no | same as `--card` |
-| `--tab-active` | Active tab | no | light: same as `--tab-bar`; dark: `--foreground` mixed 6% into `--tab-bar` |
+| `--tab-active` | Active tab | no | light: same as `--tab-bar`; dark: `--foreground` mixed into `--tab-bar`, up to 11%, as deep as keeps the active tab text and line as readable as at 6% (never under 6%) |
 | `--tab-active-foreground` | Active tab text, and inactive tab text on hover | no | same as `--foreground` |
 | `--tab-active-indicator` | Line marking the active tab and the active right sidebar tool | no | tab line: same as `--tab-active-foreground`; right sidebar tool line: same as `--foreground` |
-| `--tab-inactive` | Inactive tabs | no | light: `--foreground` mixed 4% into `--tab-bar`; dark: same as `--tab-bar` |
+| `--tab-inactive` | Inactive tabs | no | light: `--foreground` mixed into `--tab-bar`, up to 8%, as deep as keeps tab text as readable as at 4% (never under 4%); dark: same as `--tab-bar` |
 | `--tab-inactive-foreground` | Inactive tab text | no | same as `--muted-foreground` |
 | `--split-divider` | Divider between split tab groups | no | Orca's built-in color |
 | `--split-divider-hover` | Split divider while hovered or dragged | no | Orca's built-in color |
@@ -64,6 +64,7 @@ Every key an app theme may set in `tokens` (see [plugin themes](plugin-themes.md
 | `--chat-selection` | Selected text in chat; may be translucent, it paints over the chat | no | `--text-link` (else Orca's link blue) mixed into the chat background, up to 30% light and 40% dark, as deep as keeps selected text 4.5:1 (never under 15%) |
 | `--chat-selection-foreground` | Text inside a chat selection | no | same as `--foreground` |
 | `--text-link` | Links in Markdown previews, editors and agent chat | no | Orca's built-in color |
+| `--theme-accent-foreground` | Label on a fill of `--text-link` (the accent). Derived from the accent when omitted: near-black or white, whichever reads better. If no label reads on the accent, that fill uses Orca's accent instead; links keep the theme's | no | Orca's built-in color |
 | `--editor-selection` | Selected text in the code editor; keep it translucent so find matches show through. An unfocused editor shows it at half its opacity | no | `--ring` at 30% opacity |
 | `--diff-added` | Added-line hue: Monaco overview ruler and chat diff text | no | same as `--git-decoration-added` |
 | `--diff-added-background` | Added lines in diffs | no | light: `--diff-added` at 13% opacity; dark: `--diff-added` at 16% opacity |

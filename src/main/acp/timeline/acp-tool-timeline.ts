@@ -1,5 +1,4 @@
 import type { AcpItemOwnership } from './acp-item-ownership'
-import { createPatch } from 'diff'
 import { z } from 'zod'
 import type { AgentJournalToolCallItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
@@ -12,7 +11,7 @@ import type {
   ProviderTimelineEvent,
   ProviderTimelineJoin
 } from '../../native-chat/agent-session-timeline/provider-timeline-event'
-import { replacementPatch } from '../../native-chat/agent-session-timeline/provider-timeline-replacement-patch'
+import { boundedPatch } from '../../native-chat/agent-session-timeline/provider-timeline-bounded-patch'
 import { BoundedMap } from '../../../shared/collections/bounded-map'
 import type { AcpBackgroundTaskUpdate, AcpDialect } from '../acp-dialects/acp-dialect'
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
@@ -44,14 +43,6 @@ function outputText(update: ToolCallUpdate): string | undefined {
       .join('\n')
   }
   return JSON.stringify(update.rawOutput) ?? ''
-}
-
-function boundedDiffPatch(path: string, oldText: string, newText: string): string {
-  const patch =
-    oldText.length + newText.length <= 256 * 1024
-      ? createPatch(path, oldText, newText, undefined, undefined, { maxEditLength: 1024 })
-      : undefined
-  return patch ?? replacementPatch(path, oldText, newText)
 }
 
 // A pending call is waiting to start, often on a person's approval.
@@ -111,6 +102,12 @@ export class AcpToolTimeline {
       })
     }
     return { events, tasks }
+  }
+
+  /** The call with its whole input; a running journal copy holds only a preview. */
+  wholeCall(toolCallId: string, body: AgentJournalToolCallItem): AgentJournalToolCallItem {
+    const input = this.whole.get(toolCallId)?.input
+    return input === undefined ? body : { ...body, input }
   }
 
   /** Orca inferred this task from a call still running at its turn's end. */
@@ -266,7 +263,7 @@ export class AcpToolTimeline {
             kind: 'diff',
             path: content.path,
             patch: journalPayload(
-              boundedDiffPatch(content.path, content.oldText ?? '', content.newText)
+              boundedPatch(content.path, content.oldText ?? '', content.newText)
             )
           },
           join

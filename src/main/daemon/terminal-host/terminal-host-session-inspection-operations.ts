@@ -1,6 +1,6 @@
 import type { Session } from '../sessions/session'
 import type { TakePendingOutputResult } from '../protocol/daemon-rpc-contract'
-import type { TerminalSnapshot } from '../protocol/terminal-snapshot'
+import type { TerminalSnapshot, TerminalSnapshotReadOptions } from '../protocol/terminal-snapshot'
 
 export async function confirmTerminalHostForegroundProcess(
   session: Session | undefined,
@@ -36,13 +36,15 @@ export function getTerminalHostSnapshot(
 
 export async function getSettledTerminalHostSnapshot(
   session: Session | undefined,
-  opts: { scrollbackRows?: number }
-): Promise<TerminalSnapshot | null> {
+  opts: TerminalSnapshotReadOptions
+) {
   if (!session || !session.isAlive) {
     return null
   }
   await session.settleShellOwnershipConfirmation()
-  return session.getSnapshot(opts)
+  return opts.visibleProjection === true
+    ? session.getVisibleProjection()
+    : session.getSnapshot(opts)
 }
 
 export function getTerminalHostPartialEscapeTail(session: Session | undefined): string {

@@ -1,4 +1,11 @@
+import { z } from 'zod'
 import type { MessageRow } from '../../db/orchestration-records'
+import { readAnswerSenderSnapshot } from '../../../../../shared/agent-session/journal/answer-sender-snapshot'
+import {
+  pairedLabelComputer,
+  pairedSenderName,
+  savedPairedSender
+} from '../../../../../shared/orchestration/mailbox/paired-sender-name'
 import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../../../shared/orchestration/orchestration-rpc-contract'
 import type { OrchestrationCliCommand } from '../../workers/launch/orchestration-cli-command'
 import type { OrchestrationMailContent } from '../../../../../shared/agent-session/journal/agent-session-message-source'
@@ -11,6 +18,57 @@ import {
   type BotItemReportFact
 } from '../../../../../shared/bots/bot-item-report-hint'
 
+// The fields of this host's own bot-request record that name a paired sender, in every shape it
+// has saved them.
+const RecordedPairedSender = z.object({
+  fromBotName: z.string().nullish(),
+  fromPairedComputer: z.string().optional(),
+  fromPairedServer: z.string().optional(),
+  fromComputer: z.string().nullish()
+})
+
+/** A bot request from a paired computer is named as its record names it, so the header says what
+ *  the request does: a server it was pulled from by this computer's name for it, never the name the
+ *  sender gave. */
+function recordedPairedSender(
+  msg: MessageRow,
+  peerMail: MessageFormattingOptions['peerMail']
+): string | null {
+  const row = peerMail?.getBotRequest(msg.id)
+  if (!row) {
+    return null
+  }
+  let record: unknown
+  try {
+    record = JSON.parse(row.record)
+  } catch {
+    return null
+  }
+  const parsed = RecordedPairedSender.safeParse(record)
+  const paired = parsed.success ? savedPairedSender(parsed.data) : null
+  return paired ? pairedSenderName(paired) : null
+}
+
+function pairedSenderOf(
+  msg: MessageRow,
+  peerMail: MessageFormattingOptions['peerMail']
+): string | null {
+  const recorded = recordedPairedSender(msg, peerMail)
+  if (recorded) {
+    return recorded
+  }
+  const computer = pairedLabelComputer(msg.from_handle)
+  if (!computer || peerMail?.getPeerMailMessage(msg.id)?.sender_label !== msg.from_handle) {
+    return null
+  }
+  const saved = readAnswerSenderSnapshot(msg.answer_sender_snapshot)
+  const sender = saved?.party.address === msg.from_handle ? saved : undefined
+  return pairedSenderName({
+    computer: sender?.host ?? computer,
+    botName: sender?.bot ? sender.name : null
+  })
+}
+
 const BANNER_WIDTH = 60
 const SEPARATOR = '─'.repeat(BANNER_WIDTH)
 
@@ -22,6 +80,12 @@ export type MessageFormattingAuthority =
 
 export type MessageFormattingOptions = {
   authority?: MessageFormattingAuthority
+  /** Recorded links distinguish peer mail from local messages with similar sender labels; a bot
+   *  request's own record names a paired sender. */
+  peerMail?: {
+    getPeerMailMessage(id: string): { sender_label: string } | undefined
+    getBotRequest(id: string): { record: string } | undefined
+  }
   supportedActionHints?: readonly string[]
   /** The CLI name the recipient runs; a chat's reply line must name the one it has. */
   cliCommand?: OrchestrationCliCommand
@@ -90,9 +154,10 @@ export function formatMessageBannerWithContent(
         : authority === 'legacy_read_only'
           ? ' [LEGACY READ-ONLY]'
           : ''
-  const senderName = msg.from_handle.toUpperCase()
+  const paired = pairedSenderOf(msg, options.peerMail)
+  const from = paired ?? `${msg.from_handle.toUpperCase()} (${msg.from_handle})`
 
-  const header = `──── From: ${senderName} (${msg.from_handle})${priorityTag}${authorityTag} (${msg.type}) ────`
+  const header = `──── From: ${from}${priorityTag}${authorityTag} (${msg.type}) ────`
 
   const lines: string[] = [header]
   const appendField = (value: string, prefix = '', suffix = ''): readonly [number, number] => {

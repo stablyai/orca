@@ -1,23 +1,26 @@
 import { lstatSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { parse } from 'smol-toml'
 import SyncDatabase from '../sqlite/sync-database'
 import { tableExists } from '../opencode-usage/schema-helpers'
 import { writeSecureFile } from '../../shared/secure-storage/secure-file'
 import type { ManagedDataAccountProvider } from '../../shared/agent-accounts/managed-account-types'
 
-const credential = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('key'), key: z.string().min(1) }),
-  z.object({ type: z.literal('api'), key: z.string().min(1) }),
-  z.object({
-    type: z.literal('oauth'),
-    access: z.string().min(1),
-    refresh: z.string(),
-    expires: z.number().nonnegative()
-  }),
-  z.object({ type: z.literal('wellknown'), key: z.string().min(1), token: z.string().min(1) })
-])
+const credential = lazyZodSchema(() =>
+  z.discriminatedUnion('type', [
+    z.object({ type: z.literal('key'), key: z.string().min(1) }),
+    z.object({ type: z.literal('api'), key: z.string().min(1) }),
+    z.object({
+      type: z.literal('oauth'),
+      access: z.string().min(1),
+      refresh: z.string(),
+      expires: z.number().nonnegative()
+    }),
+    z.object({ type: z.literal('wellknown'), key: z.string().min(1), token: z.string().min(1) })
+  ])
+)
 
 function requireRegularFile(path: string): void {
   const stat = lstatSync(path)

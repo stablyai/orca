@@ -18,6 +18,7 @@ import type { NativeChatComposerImageAttachment } from './attachments/chips/nati
 import type { NativeChatOptionPickerRequest } from './session/options/controls/native-chat-option-picker-request'
 
 export type NativeChatComposerFieldProps = {
+  dock?: React.ReactNode
   editSession?: { cancel: () => void }
   /** Own draft persistence and native-drop routing by this pane so drops cannot land in another composer. */
   draftScopeKey: string
@@ -89,4 +90,6 @@ export type NativeChatComposerFieldProps = {
   agent?: string
   launchPrompt?: { placeholder: string }
   workspaceFooter?: React.ReactNode
+  /** Send opens `/btw` and `/side` drafts as side chats here. */
+  sideChat?: boolean
 }

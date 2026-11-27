@@ -1,8 +1,6 @@
 import { dirname } from 'node:path'
-import type {
-  AgentSessionExecutionLocation,
-  AgentSessionWorkspaceKind
-} from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import type { StructuredSessionRemovedWorkspaceKind } from '../../../../shared/agent-session/view/open-structured-agent-session'
 import {
   getRepoExecutionHostId,
   getRepoSshConnectionId,
@@ -36,7 +34,7 @@ import type { RuntimeWorktreeScanResult } from '../../workspaces/catalog/repo-wo
 export class StructuredWorkspaceUnavailable extends Error {
   constructor(
     readonly reason: 'removed' | 'unknown' | 'obsolete',
-    readonly workspaceKind?: AgentSessionWorkspaceKind
+    readonly workspaceKind?: StructuredSessionRemovedWorkspaceKind
   ) {
     super('Chat workspace is unavailable')
   }
@@ -99,10 +97,16 @@ export async function prepareStructuredWorkspaceAuthority(
     registered = () => store.getSettings().floatingTerminalCwd === configured
   } else {
     const parsed = splitWorktreeIdForFilesystem(workspaceId)
-    const owners = store
-      .getRepos()
-      .filter((row) => row.id === parsed?.repoId && getRepoExecutionHostId(row) === executionHostId)
-    if (!parsed || owners.length !== 1) {
+    if (!parsed) {
+      throw new StructuredWorkspaceUnavailable('unknown')
+    }
+    const rows = store.getRepos().filter((row) => row.id === parsed.repoId)
+    // Disconnected hosts keep their persisted rows, so no row anywhere means the project was removed.
+    if (rows.length === 0) {
+      throw new StructuredWorkspaceUnavailable('removed', 'project')
+    }
+    const owners = rows.filter((row) => getRepoExecutionHostId(row) === executionHostId)
+    if (owners.length !== 1) {
       throw new StructuredWorkspaceUnavailable('unknown')
     }
     repo = owners[0]

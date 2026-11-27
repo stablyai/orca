@@ -18,6 +18,8 @@ export function MobileBotAddToolPage(props: {
   bot: ToolsBot
   /** The bot's tool names, so the new one gets a free name. */
   taken: ReadonlySet<string>
+  /** An app's address with its blank at the default, to change before Add; its name on the bot. */
+  preset?: { source: string; name: string }
   hostName: string
   online: boolean
   banner: ReactNode
@@ -25,7 +27,7 @@ export function MobileBotAddToolPage(props: {
   onAdded: (tool: PhoneOwnTool) => Promise<void>
 }) {
   const t = useMobileTranslation()
-  const [source, setSource] = useState('')
+  const [source, setSource] = useState(props.preset?.source ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   useBackClaim(() => {
@@ -36,7 +38,9 @@ export function MobileBotAddToolPage(props: {
   })
   const typed = source.trim()
   const url = /^https?:\/\//i.test(typed)
-  const name = typed ? freeBotToolName(botToolNameFrom(typed), props.taken) : ''
+  const name = typed
+    ? freeBotToolName(props.preset?.name ?? botToolNameFrom(typed), props.taken)
+    : ''
   const add = () => {
     if (!props.client || !typed || saving || !props.online) {
       return
@@ -76,7 +80,6 @@ export function MobileBotAddToolPage(props: {
           setSource(next)
           setError(null)
         }}
-        monospace
         placeholder={t('bots.tools.sourcePlaceholder', 'https://… or npx …')}
         accessibilityLabel={t('bots.tools.sourceLabel', 'Server URL or start command')}
         autoCapitalize="none"
@@ -86,27 +89,11 @@ export function MobileBotAddToolPage(props: {
         returnKeyType="done"
         onSubmitEditing={add}
       />
-      {error ? (
-        <SettingsNote error>{error}</SettingsNote>
-      ) : (
-        <SettingsNote>
-          {t('bots.tools.scope', 'Only {{name}} gets it, in addition to your own tools.', {
-            name: props.bot.name
-          })}
-        </SettingsNote>
-      )}
+      {error ? <SettingsNote error>{error}</SettingsNote> : null}
       {typed ? (
         <SettingsSection
           title={t('bots.tools.details', 'Details')}
-          footer={
-            url
-              ? undefined
-              : t(
-                  'bots.tools.commandWarning',
-                  'The command runs in this bot’s home folder on {{host}}. Adding or saving can start it during the native check. Only add software you trust.',
-                  { host: props.hostName }
-                )
-          }
+          footer={url ? undefined : t('bots.tools.trust', 'Only add software you trust.')}
         >
           <ListRow
             key="type"

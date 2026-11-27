@@ -1,13 +1,11 @@
 import { basename } from 'node:path'
 import { realpath } from 'node:fs/promises'
 import { ipcMain, type IpcMainInvokeEvent } from 'electron'
-import type { Store } from '../persistence/loading-store/store'
 import type {
   ChatAddressPreviewRequest,
   ChatAddressPreviewResult
 } from '../../shared/file-preview/chat-address-preview'
 import { isTrustedBrowserRenderer } from '../ipc/browser/browser-renderer-trust'
-import { resolveLocalFileRequestPath } from '../ipc/filesystem/access/local-file-access-resolution'
 import {
   openLocalRegularFile,
   readLocalFileBounded,
@@ -69,18 +67,14 @@ function readyPreview(
   return result
 }
 
-async function loadLocalPreview(
-  grant: ChatPreviewGrant,
-  source: string,
-  store: Store
-): Promise<ReadyPreview> {
+// A pasted local filename is explicit user-file access, independent of workspace roots.
+async function loadLocalPreview(grant: ChatPreviewGrant, source: string): Promise<ReadyPreview> {
   const requested = await resolvePreviewLocalSymlinks(
     parsePreviewLocalPath(source),
     grant.controller.signal
   )
-  const authorized = await resolveLocalFileRequestPath(requested, { kind: 'user-file' }, store)
   grant.controller.signal.throwIfAborted()
-  const filePath = await realpath(authorized)
+  const filePath = await realpath(requested)
   assertPreviewLocalPath(filePath)
   grant.controller.signal.throwIfAborted()
   const { handle, stats } = await openLocalRegularFile(filePath)
@@ -187,8 +181,7 @@ async function loadNetworkPreview(
 
 export async function previewChatAddress(
   event: IpcMainInvokeEvent,
-  value: unknown,
-  store: Store
+  value: unknown
 ): Promise<ChatAddressPreviewResult> {
   const request = typeof value === 'object' && value !== null ? value : {}
   const id = 'id' in request && isValidPreviewId(request.id) ? request.id : ''
@@ -213,7 +206,7 @@ export async function previewChatAddress(
     const input = { id, source: request.source, allowPrivateNetwork }
     return /^https?:/i.test(input.source)
       ? await loadNetworkPreview(grant, input)
-      : await loadLocalPreview(grant, input.source, store)
+      : await loadLocalPreview(grant, input.source)
   } catch (error) {
     if (grant) {
       releaseChatPreviewGrant(grant)
@@ -226,10 +219,8 @@ export async function previewChatAddress(
   }
 }
 
-export function registerChatAddressPreviewHandlers(store: Store): void {
-  ipcMain.handle('fs:previewAddress', (event, request: unknown) =>
-    previewChatAddress(event, request, store)
-  )
+export function registerChatAddressPreviewHandlers(): void {
+  ipcMain.handle('fs:previewAddress', previewChatAddress)
   ipcMain.handle('fs:releaseAddressPreview', (event, request: unknown) => {
     if (!isTrustedBrowserRenderer(event.sender) || event.senderFrame !== event.sender.mainFrame) {
       throw new Error('Untrusted address preview release')

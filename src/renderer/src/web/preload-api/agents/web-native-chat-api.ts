@@ -18,13 +18,14 @@ export function createWebNativeChatApi(): NativeChatApi {
   return {
     // The full output stays on the host that ran the agent; the web client shows the message.
     getConversationNameFailureOutput: async () => null,
-    readSession: async (agent, sessionId, limit, transcriptPath) =>
+    readSession: async (agent, sessionId, limit, transcriptPath, options) =>
       parseRuntimeNativeChatReadSessionResult(
         await callRuntimeResult<unknown>('nativeChat.readSession', {
           agent,
           sessionId,
           limit,
           transcriptPath,
+          beforeOffset: options?.beforeOffset,
           capabilities: { transcriptSourceOrder: 1 }
         })
       ),

@@ -58,16 +58,14 @@ export function failedWorkerStartHasOutput(
 export function reportFailedWorkerStart(
   db: OrchestrationDb,
   worker: WorkerDispatchRow,
-  notify: (handle: string, messageType: string) => void
-): void {
+  notify: (handle: string, messageType: string) => void,
+  restartCutReason?: string
+): WorkerDispatchRow {
   const dispatch = db.getDispatchContextById(worker.dispatch_id)
-  if (!dispatch || worker.state !== 'failed') {
-    return
+  if (!dispatch || worker.state !== (restartCutReason ? 'starting' : 'failed')) {
+    return worker
   }
-  const settled =
-    dispatch.status === 'failed' || dispatch.status === 'circuit_broken'
-      ? dispatch.status
-      : undefined
+  let result = worker
   observeWorker(
     db,
     { kind: 'local', dispatch },
@@ -77,14 +75,23 @@ export function reportFailedWorkerStart(
       legacyStopKey: 'gone',
       gone: {
         from: `dispatch:${dispatch.id}`,
-        reason: 'lost',
-        cause: `it never started: ${worker.last_error ?? 'its start failed'}`,
+        reason: 'start-failed',
+        cause: restartCutReason ?? worker.last_error ?? undefined,
         lastOutput: undefined,
         leftover: describeLeftover(worker.residual_resources),
         ...(failedWorkerStartHasOutput(db, worker, dispatch) ? {} : { neverStarted: true })
       },
-      settle: () => settled
+      settle: () => {
+        if (restartCutReason) {
+          result = db.failWorkerStart(dispatch.id, worker.stage, restartCutReason)
+        }
+        const status = restartCutReason
+          ? db.getDispatchContextById(dispatch.id)?.status
+          : dispatch.status
+        return status === 'failed' || status === 'circuit_broken' ? status : undefined
+      }
     },
     { getDb: () => db, isWaitingForMail: () => false, notify }
   )
+  return result
 }

@@ -21,7 +21,9 @@ import type {
 import type {
   CodexRateLimitResetResult,
   RateLimitRuntimeTarget,
-  RateLimitState
+  RateLimitState,
+  RuntimeTargetUsageProvider,
+  RuntimeTargetUsageRead
 } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 
 export type UsageProviderSnapshot = {
@@ -67,11 +69,17 @@ export type MuseUsageApi = UsageProviderApi<MuseUsageSnapshot, MuseUsageBreakdow
 export type RateLimitsApi = {
   get: () => Promise<RateLimitState>
   refresh: () => Promise<RateLimitState>
+  refreshOnOwnerReturn: () => Promise<void>
   refreshCodexForTarget: (target: RateLimitRuntimeTarget) => Promise<RateLimitState>
   consumeCodexResetCredit: () => Promise<CodexRateLimitResetResult>
   refreshClaudeForTarget: (target: RateLimitRuntimeTarget) => Promise<RateLimitState>
   fetchInactiveClaudeAccounts: () => Promise<void>
   fetchInactiveCodexAccounts: () => Promise<void>
   refreshGrok: () => Promise<RateLimitState>
+  /** Null when this client cannot read another runtime's accounts (web). */
+  readUsageForRuntimeTarget: (
+    target: RateLimitRuntimeTarget,
+    providers: RuntimeTargetUsageProvider[]
+  ) => Promise<RuntimeTargetUsageRead | null>
   onUpdate: (callback: (state: RateLimitState) => void) => () => void
 }

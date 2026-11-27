@@ -5,7 +5,7 @@ import {
   closeStructuredAgentSessionChild,
   type StructuredAgentSessionCloseOutcome
 } from '../runtime/agent-session/lifecycle/structured-agent-session-close'
-import { retireChatRuns } from '../runtime/orchestration/db/runs/retired-chat-runs'
+import { retireChatRuns } from '../runtime/orchestration/db/runs/retired-coordinator-runs'
 
 type Closed = Pick<StructuredAgentSessionCloseOutcome, 'stopped' | 'reason'>
 

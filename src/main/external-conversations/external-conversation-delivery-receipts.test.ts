@@ -145,3 +145,23 @@ describe('DeliveryReceipts.recorded', () => {
     reopened.close()
   })
 })
+
+describe('DeliveryReceipts.heldByMute', () => {
+  it('replays only the same send the mute held, and refuses another payload under its id', async () => {
+    const { db } = fileDb()
+    const receipts = new DeliveryReceipts(() => db)
+    await receipts.run(KEY, 'held', 'connector.mute', ['mute'], async () => ({
+      outcome: 'accepted'
+    }))
+    await receipts.run(KEY, 'sent', 'connector.send', ['hi'], async () => ({ outcome: 'accepted' }))
+    await expect(receipts.heldByMute(KEY, 'held', ['mute'])).resolves.toEqual({
+      outcome: 'accepted'
+    })
+    await expect(receipts.heldByMute(KEY, 'held', ['hello'])).resolves.toEqual({
+      outcome: 'refused',
+      reason: 'delivery_id_reused'
+    })
+    expect(receipts.heldByMute(KEY, 'sent', ['hi'])).toBeNull()
+    db.close()
+  })
+})

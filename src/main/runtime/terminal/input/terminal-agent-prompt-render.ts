@@ -3,6 +3,7 @@ import type {
   RuntimeTerminalWait,
   RuntimeTerminalWaitCondition
 } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { RuntimeTerminalPromptSubmit } from '../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { isCompleteAgentPromptDraft } from '../../../../shared/agent-launch/startup/agent-prompt-injection'
 import { readTerminalComposerTypedText } from '../../../../shared/terminal/input/terminal-composer-draft'
@@ -16,14 +17,26 @@ const AGENT_PROMPT_RENDER_DRAFT_SETTLE_MS = 300
 // Claude shows its cursor before composer rendering settles.
 const CLAUDE_AGENT_PROMPT_RENDER_MARKER = '\x1b[?25h'
 
+type AgentPromptRenderWaitEnd = NonNullable<RuntimeTerminalPromptSubmit['renderWait']>
+
 export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRuntimeWithSubmitTerminalAgentPrompt {
+  /** A wait on an Agent-slept pane, answered as for an idle agent; null when the handle isn't slept. */
+  protected abstract waitForSleptAgent(
+    handle: string,
+    options?: {
+      condition?: RuntimeTerminalWaitCondition
+      timeoutMs?: number
+      signal?: AbortSignal
+    }
+  ): Promise<RuntimeTerminalWait> | null
+
   protected createAgentPromptRenderGate(
     ptyId: string,
     pasteIngestMs: number,
     prompt?: string
   ): {
     arm: () => void
-    wait: () => Promise<void>
+    wait: () => Promise<AgentPromptRenderWaitEnd>
     dispose: () => void
   } | null {
     const pty = this.ptysById.get(ptyId)
@@ -32,7 +45,7 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
     }
     let armed = false
     let observedMarker = false
-    let settled = false
+    let settled: AgentPromptRenderWaitEnd | null = null
     let ingested = pasteIngestMs <= 0
     // Arm and marker both set this cap; use an absolute deadline to avoid charging ingest twice.
     const ingestDeadlineAt = Date.now() + pasteIngestMs
@@ -40,8 +53,8 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
     let quietTimer: NodeJS.Timeout | null = null
     let hardTimer: NodeJS.Timeout | null = null
     let ingestTimer: NodeJS.Timeout | null = null
-    let resolveRender!: () => void
-    const rendered = new Promise<void>((resolve) => {
+    let resolveRender!: (end: AgentPromptRenderWaitEnd) => void
+    const rendered = new Promise<AgentPromptRenderWaitEnd>((resolve) => {
       resolveRender = resolve
     })
 
@@ -63,14 +76,14 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
         draftSettleTimer = null
       }
     }
-    const finish = (): void => {
+    const finish = (end: AgentPromptRenderWaitEnd): void => {
       if (settled) {
         return
       }
-      settled = true
+      settled = end
       composerProof = false
       clearGateTimers()
-      resolveRender()
+      resolveRender(end)
     }
     const armQuietTimer = (): void => {
       // Quiet starts after complete ingestion; silence during paste cannot settle it.
@@ -80,14 +93,14 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
       if (quietTimer) {
         clearTimeout(quietTimer)
       }
-      quietTimer = setTimeout(finish, CLAUDE_AGENT_PROMPT_RENDER_QUIET_MS)
+      quietTimer = setTimeout(() => finish('quiet'), CLAUDE_AGENT_PROMPT_RENDER_QUIET_MS)
     }
     const armHardTimer = (): void => {
       if (hardTimer) {
         clearTimeout(hardTimer)
       }
       hardTimer = setTimeout(
-        finish,
+        () => finish('cap'),
         CLAUDE_AGENT_PROMPT_RENDER_TIMEOUT_MS + Math.max(0, ingestDeadlineAt - Date.now())
       )
     }
@@ -115,7 +128,7 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
           draftMatchedAt ??= Date.now()
           const settleLeftMs = draftMatchedAt + AGENT_PROMPT_RENDER_DRAFT_SETTLE_MS - Date.now()
           if (settleLeftMs <= 0) {
-            finish()
+            finish('draft')
           } else if (!draftSettleTimer) {
             draftSettleTimer = setTimeout(() => {
               draftSettleTimer = null
@@ -168,12 +181,7 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
         armIngestTimer()
         armHardTimer()
       },
-      wait: async () => {
-        if (settled) {
-          return
-        }
-        await rendered
-      },
+      wait: () => (settled ? Promise.resolve(settled) : rendered),
       dispose: () => {
         composerProof = false
         unsubscribe()
@@ -198,8 +206,14 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
       signal?: AbortSignal
       launchReadiness?: boolean
       acceptsMidTurnInput?: boolean
+      outlivesRenderer?: true
     }
   ): Promise<RuntimeTerminalWait> {
+    // A slept agent waits as an idle one rather than waking for a read.
+    const slept = this.waitForSleptAgent(handle, options)
+    if (slept) {
+      return slept
+    }
     // Switch point: a saved pane main holds with no terminal yet starts first (once, shared).
     const starting = ORCA_LAYOUT_OWNER_IS_MAIN
       ? this.startRestoredHandlePane(handle, options ?? {})
@@ -219,6 +233,22 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
         }
       })
     }
-    return this.terminalWait.wait(handle, options)
+    const condition = options?.condition ?? 'exit'
+    const timeoutMs = options?.timeoutMs
+    const deadline = timeoutMs && timeoutMs > 0 ? Date.now() + timeoutMs : null
+    const settled = this.terminalWait.wait(handle, options)
+    // Why: Agent Sleep's stop ends the process, not the agent; the handle waits on as a slept agent.
+    return condition !== 'exit'
+      ? settled
+      : settled.then(
+          (result) =>
+            (result.status === 'exited' &&
+              this.waitForSleptAgent(handle, {
+                condition,
+                signal: options?.signal,
+                ...(deadline === null ? {} : { timeoutMs: Math.max(1, deadline - Date.now()) })
+              })) ||
+            result
+        )
   }
 }

@@ -1,6 +1,6 @@
 import { app, ipcMain } from 'electron'
 import { constants } from 'node:fs'
-import { copyFile, mkdir, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir } from 'node:fs/promises'
 import { basename, dirname } from 'node:path'
 import type { Store } from '../../../persistence/loading-store/store'
 import {
@@ -16,8 +16,8 @@ import { assertSshMutationExpectation } from '../../../ssh/connection/authority/
 import { renameLocalPathSerializedByDestination } from '../../../filesystem/destination-serialized-local-rename'
 import {
   assertNotExists,
-  rethrowWithUserMessage
-} from '../../../filesystem/local-file-io/filesystem-create-path-guards'
+  createLocalFile
+} from '../../../filesystem/local-file-io/filesystem-create-path'
 import type {
   ImportItemResult,
   ResolveDroppedPathsResult
@@ -54,13 +54,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
         throw new SshHostNotServedError(args.connectionId)
       }
       const filePath = windowsFsPath(await resolveDesktopAuthorizedPath(args.filePath, store))
-      await mkdir(dirname(filePath), { recursive: true })
-      try {
-        // Exclusive creation closes the existence-check race.
-        await writeFile(filePath, '', { encoding: 'utf-8', flag: 'wx' })
-      } catch (error) {
-        rethrowWithUserMessage(error, filePath)
-      }
+      await createLocalFile(filePath)
     }
   )
 

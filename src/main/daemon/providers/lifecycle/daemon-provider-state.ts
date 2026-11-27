@@ -142,6 +142,17 @@ export async function listLiveDaemonSessions(): Promise<SessionInfo[] | null> {
   return sessions?.map(({ protocolVersion: _protocolVersion, ...session }) => session) ?? null
 }
 
+/** Live sessions plus chat relays across every daemon generation; null when one cannot answer. */
+export async function countLiveDaemonSessionsAndRelays(): Promise<number | null> {
+  const counts = adapter
+    ? await listEveryDaemonGeneration(adapter, async (a) => {
+        const { sessions, liveRelays } = await a.listSessionsAndRelays()
+        return [sessions.length + liveRelays]
+      })
+    : null
+  return counts?.reduce((sum, count) => sum + count, 0) ?? null
+}
+
 /** Like listLiveDaemonSessions, with the protocol of the daemon generation owning each session. */
 export async function listLiveDaemonSessionsWithProtocol(): Promise<DaemonSessionInfo[] | null> {
   return adapter

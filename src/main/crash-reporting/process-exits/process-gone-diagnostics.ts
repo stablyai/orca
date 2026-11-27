@@ -148,6 +148,10 @@ function processMetricIdentity(metric: ProcessMetricLike): ProcessMetricIdentity
   }
 }
 
+export function readLiveProcessMetricDetails(): CrashReportDetails {
+  return getLiveProcessGoneMetrics().details
+}
+
 function getLiveProcessGoneMetrics(): LiveProcessGoneMetrics {
   try {
     const metrics = app.getAppMetrics()
@@ -198,11 +202,8 @@ function sampledProcessIdentities(metrics: ProcessMetricLike[]): PreGoneSampledP
 export function samplePreGoneProcessMetrics(nowMs: number = Date.now()): void {
   try {
     const metrics = app.getAppMetrics()
-    preGoneSample = {
-      details: collectProcessGoneMetricDetails(metrics),
-      processes: sampledProcessIdentities(metrics),
-      sampledAtMs: nowMs
-    }
+    const details = collectProcessGoneMetricDetails(metrics)
+    preGoneSample = { details, processes: sampledProcessIdentities(metrics), sampledAtMs: nowMs }
   } catch {
     // Preserve the last good sample when enumeration fails.
   }

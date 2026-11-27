@@ -36,6 +36,10 @@ export async function captureGoogleCookieClearTarget(
 ) {
   const state = useAppStore.getState()
   const parsedHost = parseExecutionHostId(hostId)
+  // An SSH host's jars aren't the profile's; Clear cookies covers them.
+  if (parsedHost?.kind === 'ssh') {
+    return { available: false }
+  }
   const environmentId = parsedHost?.kind === 'runtime' ? parsedHost.environmentId : null
   pairingRevision ??= environmentId ? getRuntimeEnvironmentRevision(environmentId) : undefined
   const targetLabel = translateBrowserSessionProfileLabel(

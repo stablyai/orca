@@ -1,6 +1,7 @@
 import { EventEmitter, once } from 'node:events'
 import { createServer, type Server, type RequestListener } from 'node:http'
 import { mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
+import type * as FsPromises from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { IpcMainInvokeEvent, WebContents } from 'electron'
@@ -15,11 +16,10 @@ import {
 } from './chat-address-preview-grants'
 import { CHAT_PREVIEW_MAX_TEXT_BYTES } from './chat-address-preview-content'
 import type { ChatAddressPreviewResult } from '../../shared/file-preview/chat-address-preview'
-import type { Store } from '../persistence/loading-store/store'
 import { setTrustedBrowserRendererWebContentsId } from '../ipc/browser/browser-renderer-trust'
 
-const { authorize, ipcHandle } = vi.hoisted(() => ({
-  authorize: vi.fn(async (path: string) => path),
+const { realpathOverride, ipcHandle } = vi.hoisted(() => ({
+  realpathOverride: vi.fn<(path: string) => Promise<string> | undefined>(),
   ipcHandle: vi.fn()
 }))
 vi.mock('electron', () => ({
@@ -27,9 +27,13 @@ vi.mock('electron', () => ({
   protocol: { handle: vi.fn() },
   session: { defaultSession: { resolveProxy: async () => 'DIRECT' } }
 }))
-vi.mock('../ipc/filesystem/access/local-file-access-resolution', () => ({
-  resolveLocalFileRequestPath: authorize
-}))
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof FsPromises>()
+  return {
+    ...actual,
+    realpath: (path: string) => realpathOverride(path) ?? actual.realpath(path)
+  }
+})
 
 function owner(id: number) {
   const events = new EventEmitter()
@@ -46,8 +50,6 @@ function owner(id: number) {
   return { sender, senderFrame: frame } as IpcMainInvokeEvent
 }
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: local file authorization is mocked and never reads Store in these fixtures.
-const store = {} as Store
 let directory: string
 let sender: IpcMainInvokeEvent
 let servers: Server[]
@@ -101,20 +103,17 @@ describe('desktop address preview resources', () => {
   it('reads named local UTF-8 and Markdown without workspace or remote routing', async () => {
     const filePath = join(directory, 'notes with spaces.md')
     await writeFile(filePath, '# Hello\nA local document.')
-    expect(
-      await previewChatAddress(sender, { id: 'notes', source: filePath }, store)
-    ).toMatchObject({
+    expect(await previewChatAddress(sender, { id: 'notes', source: filePath })).toMatchObject({
       status: 'ready',
       kind: 'markdown',
       content: '# Hello\nA local document.'
     })
-    expect(authorize).toHaveBeenCalledWith(filePath, { kind: 'user-file' }, store)
   })
 
   it('returns image bytes through a grant and revokes the URL on release', async () => {
     const path = join(directory, 'photo')
     await writeFile(path, png)
-    const result = await previewChatAddress(sender, { id: 'image', source: path }, store)
+    const result = await previewChatAddress(sender, { id: 'image', source: path })
     const url = readyUrl(result)
     const response = await handleChatAddressPreviewRequest(new Request(url, { referrer: '' }))
     expect(response.headers.get('content-type')).toBe('image/png')
@@ -126,14 +125,14 @@ describe('desktop address preview resources', () => {
   it('returns bounded PDF base64 and inert HTML text, not executable document URLs', async () => {
     const pdfPath = join(directory, 'document')
     await writeFile(pdfPath, '%PDF-1.7\nfixture')
-    expect(await previewChatAddress(sender, { id: 'pdf', source: pdfPath }, store)).toMatchObject({
+    expect(await previewChatAddress(sender, { id: 'pdf', source: pdfPath })).toMatchObject({
       status: 'ready',
       kind: 'pdf',
       content: Buffer.from('%PDF-1.7\nfixture').toString('base64')
     })
     const htmlPath = join(directory, 'index.html')
     await writeFile(htmlPath, '<script>fetch("http://private/")</script>')
-    const result = await previewChatAddress(sender, { id: 'html', source: htmlPath }, store)
+    const result = await previewChatAddress(sender, { id: 'html', source: htmlPath })
     expect(result).toMatchObject({ status: 'ready', kind: 'text' })
     expect(result).not.toHaveProperty('url')
   })
@@ -141,12 +140,13 @@ describe('desktop address preview resources', () => {
   it('does not fully read unknown binary files, and refuses oversized documents and image dimensions', async () => {
     const binary = join(directory, 'archive.bin')
     await writeFile(binary, Buffer.alloc(CHAT_PREVIEW_MAX_TEXT_BYTES + 1))
-    expect(await previewChatAddress(sender, { id: 'binary', source: binary }, store)).toMatchObject(
-      { status: 'ready', kind: 'file' }
-    )
+    expect(await previewChatAddress(sender, { id: 'binary', source: binary })).toMatchObject({
+      status: 'ready',
+      kind: 'file'
+    })
     const text = join(directory, 'large.txt')
     await writeFile(text, Buffer.alloc(CHAT_PREVIEW_MAX_TEXT_BYTES + 1, 65))
-    expect(await previewChatAddress(sender, { id: 'text', source: text }, store)).toMatchObject({
+    expect(await previewChatAddress(sender, { id: 'text', source: text })).toMatchObject({
       status: 'error',
       message: 'Preview file exceeds the size limit'
     })
@@ -154,35 +154,29 @@ describe('desktop address preview resources', () => {
     huge.writeUInt32BE(100_000, 16)
     const image = join(directory, 'huge.png')
     await writeFile(image, huge)
-    expect(await previewChatAddress(sender, { id: 'huge', source: image }, store)).toMatchObject({
+    expect(await previewChatAddress(sender, { id: 'huge', source: image })).toMatchObject({
       status: 'error',
       message: 'Image dimensions exceed the preview safety limit'
     })
   })
 
   it('refuses directories, network shares and untrusted or child-frame IPC callers', async () => {
+    expect(await previewChatAddress(sender, { id: 'directory', source: directory })).toMatchObject({
+      status: 'error'
+    })
     expect(
-      await previewChatAddress(sender, { id: 'directory', source: directory }, store)
+      await previewChatAddress(sender, { id: 'share', source: '//host/share/file' })
     ).toMatchObject({ status: 'error' })
-    authorize.mockClear()
-    expect(
-      await previewChatAddress(sender, { id: 'share', source: '//host/share/file' }, store)
-    ).toMatchObject({ status: 'error' })
-    expect(authorize).not.toHaveBeenCalled()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture replaces only getType to exercise caller rejection before any other member is read.
     const untrusted = {
       ...sender,
       sender: { ...sender.sender, isDestroyed: () => false, getType: () => 'webview' }
     } as IpcMainInvokeEvent
     expect(
-      await previewChatAddress(untrusted, { id: 'untrusted', source: directory }, store)
+      await previewChatAddress(untrusted, { id: 'untrusted', source: directory })
     ).toMatchObject({ status: 'error' })
     expect(
-      await previewChatAddress(
-        { ...sender, senderFrame: null },
-        { id: 'frame', source: directory },
-        store
-      )
+      await previewChatAddress({ ...sender, senderFrame: null }, { id: 'frame', source: directory })
     ).toMatchObject({ status: 'error' })
   })
 
@@ -191,14 +185,9 @@ describe('desktop address preview resources', () => {
     async (trustedId) => {
       setTrustedBrowserRendererWebContentsId(trustedId)
       expect(
-        await previewChatAddress(
-          sender,
-          { id: 'unpinned', source: join(directory, 'photo.png') },
-          store
-        )
+        await previewChatAddress(sender, { id: 'unpinned', source: join(directory, 'photo.png') })
       ).toMatchObject({ status: 'error', message: 'Untrusted address preview request' })
-      expect(authorize).not.toHaveBeenCalled()
-      registerChatAddressPreviewHandlers(store)
+      registerChatAddressPreviewHandlers()
       const release = ipcHandle.mock.calls.find(
         ([channel]) => channel === 'fs:releaseAddressPreview'
       )?.[1]
@@ -210,7 +199,7 @@ describe('desktop address preview resources', () => {
   it('authorizes the real requesting owner and refuses navigation/script/origin consumers', async () => {
     const path = join(directory, 'photo.png')
     await writeFile(path, png)
-    const url = readyUrl(await previewChatAddress(sender, { id: 'image', source: path }, store))
+    const url = readyUrl(await previewChatAddress(sender, { id: 'image', source: path }))
     expect(
       isAllowedChatPreviewRequest({ url, webContentsId: sender.sender.id, resourceType: 'image' })
     ).toBe(true)
@@ -259,15 +248,15 @@ describe('desktop address preview resources', () => {
       response.setHeader('Content-Type', 'image/png')
       response.end(png)
     })
-    expect(await previewChatAddress(sender, { id: 'remote', source }, store)).toMatchObject({
+    expect(await previewChatAddress(sender, { id: 'remote', source })).toMatchObject({
       status: 'permission-required'
     })
     expect(count).toBe(0)
-    const result = await previewChatAddress(
-      sender,
-      { id: 'remote', source, allowPrivateNetwork: true },
-      store
-    )
+    const result = await previewChatAddress(sender, {
+      id: 'remote',
+      source,
+      allowPrivateNetwork: true
+    })
     expect(result).toMatchObject({ status: 'ready', kind: 'image' })
     expect(count).toBe(2)
     const bytes = await (
@@ -302,7 +291,7 @@ describe('desktop address preview resources', () => {
       ['network', source]
     ]) {
       const url = readyUrl(
-        await previewChatAddress(sender, { id, source: address, allowPrivateNetwork: true }, store)
+        await previewChatAddress(sender, { id, source: address, allowPrivateNetwork: true })
       )
       const response = await handleChatAddressPreviewRequest(
         new Request(url, { referrer: '', headers: { Range: 'bytes=44-63' } })
@@ -322,28 +311,23 @@ describe('desktop address preview resources', () => {
       request.once('close', disconnected.resolve)
       received.resolve()
     })
-    const pending = previewChatAddress(
-      sender,
-      { id: 'pending', source, allowPrivateNetwork: true },
-      store
-    )
+    const pending = previewChatAddress(sender, { id: 'pending', source, allowPrivateNetwork: true })
     await received.promise
     releaseOwnedChatPreview(sender.sender.id, 'pending')
     expect(await pending).toMatchObject({ status: 'error' })
     await disconnected.promise
   })
 
-  it('refuses a symlink pointing at a network share before local authorization', async () => {
+  it('refuses a symlink pointing at a network share', async () => {
     if (process.platform === 'win32') {
       return
     }
     const path = join(directory, 'remote-link')
     await symlink('//server/share/private', path)
-    expect(await previewChatAddress(sender, { id: 'link', source: path }, store)).toMatchObject({
+    expect(await previewChatAddress(sender, { id: 'link', source: path })).toMatchObject({
       status: 'error',
       message: 'Network-share links cannot be previewed'
     })
-    expect(authorize).not.toHaveBeenCalled()
   })
 
   it('does not let a late canceled load revoke a replacement with the same renderer ID', async () => {
@@ -351,13 +335,13 @@ describe('desktop address preview resources', () => {
     await writeFile(path, png)
     const delayed = Promise.withResolvers<string>()
     const admitted = Promise.withResolvers<void>()
-    authorize.mockImplementationOnce(() => {
+    realpathOverride.mockImplementationOnce(() => {
       admitted.resolve()
       return delayed.promise
     })
-    const obsolete = previewChatAddress(sender, { id: 'same', source: path }, store)
+    const obsolete = previewChatAddress(sender, { id: 'same', source: path })
     await admitted.promise
-    const current = await previewChatAddress(sender, { id: 'same', source: path }, store)
+    const current = await previewChatAddress(sender, { id: 'same', source: path })
     const url = readyUrl(current)
     delayed.resolve(path)
     expect(await obsolete).toMatchObject({ status: 'error' })
@@ -379,7 +363,7 @@ describe('desktop address preview resources', () => {
       }
     })
     const url = readyUrl(
-      await previewChatAddress(sender, { id: 'stream', source, allowPrivateNetwork: true }, store)
+      await previewChatAddress(sender, { id: 'stream', source, allowPrivateNetwork: true })
     )
     const response = await handleChatAddressPreviewRequest(new Request(url, { referrer: '' }))
     const reader = response.body!.getReader()
@@ -391,7 +375,7 @@ describe('desktop address preview resources', () => {
   })
 
   it('checks ownership and trust on release IPC as well as creation', () => {
-    registerChatAddressPreviewHandlers(store)
+    registerChatAddressPreviewHandlers()
     const release = ipcHandle.mock.calls.find(
       ([channel]) => channel === 'fs:releaseAddressPreview'
     )?.[1]

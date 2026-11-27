@@ -7,6 +7,7 @@ import {
 } from '../../../../../../shared/native-chat/attachments/native-chat-image-reference'
 import { NATIVE_CHAT_PASTED_TEXT_TOKEN } from '../../paste/native-chat-pasted-text-reference'
 import {
+  botClientMentionToken,
   botMentionToken,
   splitBotMentions
 } from '../../../../../../shared/bots/bot-mention-context'
@@ -45,15 +46,18 @@ function botMentionContent(text: string): JSONContent[] {
   return splitBotMentions(text).map((part) =>
     typeof part === 'string'
       ? { type: 'text', text: part }
-      : {
-          type: BOT_MENTION_NODE,
-          attrs: {
-            id: part.id,
-            name: part.name,
-            chatId: part.chatId ?? '',
-            server: part.server ?? ''
+      : part.client
+        ? // The editor has no pill for a paired computer's bot yet, so its token stays as typed.
+          { type: 'text', text: botClientMentionToken(part, part.client) }
+        : {
+            type: BOT_MENTION_NODE,
+            attrs: {
+              id: part.id,
+              name: part.name,
+              chatId: part.chatId ?? '',
+              server: part.server ?? ''
+            }
           }
-        }
   )
 }
 

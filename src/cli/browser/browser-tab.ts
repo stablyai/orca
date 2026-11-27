@@ -1,3 +1,4 @@
+import { getWslCallerDistro } from '../hosts/wsl-caller-distro'
 import type {
   BrowserTabAnnotationsResult,
   BrowserTabCurrentResult,
@@ -6,6 +7,7 @@ import type {
   BrowserTabSwitchResult
 } from '../../shared/browser/runtime/runtime-browser-contracts'
 import type { CommandHandler } from '../dispatch/dispatch'
+import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { formatTabAnnotations, formatTabList, formatTabShow } from './browser-format'
 import { printResult } from '../output/command-result-output'
 import {
@@ -14,7 +16,8 @@ import {
   getPresentStringFlag,
   getRequiredStringFlag
 } from '../arguments/flags'
-import { RuntimeClientError } from '../runtime/connection/types'
+import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/connection/types'
+import { escapeTerminalControlCharacters } from '../../shared/terminal/output/terminal-control-character-escape'
 import { isBrowserTabSplitDirection } from '../../shared/browser/workspaces/browser-tab-split-direction'
 import { getBrowserWorktreeSelector } from '../workspace-selection/workspace-selector'
 import { getBrowserCommandTarget, getScopedBrowserWorktreeSelector } from './browser-command-target'
@@ -22,12 +25,17 @@ import { getBrowserCommandTarget, getScopedBrowserWorktreeSelector } from './bro
 export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
   'open-url': async ({ flags, client, cwd, json }) => {
     const url = getRequiredStringFlag(flags, 'url')
-    const worktree = await getScopedBrowserWorktreeSelector(flags, cwd, client)
-    const result = await client.call<{ browserPageId: string }>(
-      'browser.openUrl',
-      { url, worktree },
-      { timeoutMs: 60_000 }
-    )
+    let result: RuntimeRpcSuccess<{ browserPageId: string }>
+    try {
+      const worktree = await getScopedBrowserWorktreeSelector(flags, cwd, client)
+      result = await client.call<{ browserPageId: string }>(
+        'browser.openUrl',
+        { url, worktree },
+        { timeoutMs: 60_000 }
+      )
+    } catch (error) {
+      throw withOpenUrlYourselfLine(error, url)
+    }
     printResult(result, json, (v) => `Opened URL in tab ${v.browserPageId}`)
   },
   'tab list': async ({ flags, client, cwd, json }) => {
@@ -91,7 +99,9 @@ export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
         worktree,
         profileId,
         ...(split ? { split, ...(callerTabId ? { splitFromTabId: callerTabId } : {}) } : {}),
-        ...(flags.has('headless') ? { placement: { kind: 'server' } } : {})
+        ...(flags.has('headless') ? { placement: { kind: 'server' } } : {}),
+        // A CLI has no screen, so a paired caller's default 'caller' audience would show it nowhere.
+        ...(flags.has('focus') ? { activate: true, navigation: 'all' } : {})
       },
       { timeoutMs: 60_000 }
     )
@@ -109,7 +119,27 @@ export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
   exec: async ({ flags, client, cwd, json }) => {
     const command = getRequiredStringFlag(flags, 'command')
     const target = await getBrowserCommandTarget(flags, cwd, client)
-    const result = await client.call<unknown>('browser.exec', { command, ...target })
+    // A paired runtime reads another filesystem, so only a local caller's directory applies.
+    const result = await client.call<unknown>('browser.exec', {
+      command,
+      ...(client.isRemote ? {} : { cwd, wslDistro: getWslCallerDistro(cwd) ?? undefined }),
+      ...target
+    })
     printResult(result, json, (v) => JSON.stringify(v, null, 2))
   }
+}
+
+// Why: BROWSER callers are often phone-only or headless sessions; when no desktop opens the page, the URL is their way on (#48645).
+function withOpenUrlYourselfLine(error: unknown, url: string): Error {
+  // The URL comes from whatever process ran BROWSER, so keep its control bytes off the terminal.
+  const line = `\nOpen it in a browser yourself: ${escapeTerminalControlCharacters(url, true)}`
+  if (!(error instanceof Error)) {
+    return new RuntimeClientError('runtime_error', `${String(error)}${line}`)
+  }
+  // Amend in place: rebuilding would re-redact and copy the error's recovery data.
+  error.message += line
+  if (error instanceof RuntimeRpcFailureError) {
+    error.response.error.message = error.message
+  }
+  return error
 }
