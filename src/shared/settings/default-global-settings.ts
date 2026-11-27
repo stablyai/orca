@@ -250,6 +250,7 @@ export function buildDefaultSettings(args: {
     skipDeleteAutomationConfirm: false,
     skipDeleteArtifactConfirm: false,
     skipDeleteChatConfirm: false,
+    skipClearMarkdownReviewNotesConfirm: false,
     skipCodexRateLimitResetConfirm: false,
     defaultTaskViewPreset: 'all',
     defaultTaskSource: 'github',

@@ -1,4 +1,5 @@
 import type { DiffCommentOwner } from '@/store/slices/diff-comments/diff-comment-owner'
+import type { DiffCommentsSlice } from '@/store/slices/diff-comments/create-diff-comments-slice'
 import type React from 'react'
 import { EditorContent } from '@tiptap/react'
 import type { Editor } from '@tiptap/react'
@@ -59,7 +60,7 @@ type RichMarkdownEditorSurfaceProps = {
   commentOwner: DiffCommentOwner | null
   worktreeId: string
   filePath: string
-  markdownCommentsCount: number
+  markdownReviewNotes: readonly DiffComment[]
   reviewRailOpen: boolean
   reviewNotesCopied: boolean
   unsentMarkdownReviewScope: NotesSendMenuScope<MarkdownReviewNote>[]
@@ -125,6 +126,7 @@ type RichMarkdownEditorSurfaceProps = {
   onCopyReviewNotes: () => void
   onCopyReviewNote: (note: MarkdownReviewNote) => void
   onToggleReviewRail: () => void
+  clearDeliveredDiffComments: DiffCommentsSlice['clearDeliveredDiffComments']
   onReviewNotesDelivered: (notes: readonly MarkdownReviewNote[]) => void
   onReviewNoteSourceClick: (comment: DiffComment) => void
   onDeleteReviewComment: (commentId: string) => void
@@ -153,7 +155,7 @@ export function RichMarkdownEditorSurface({
   commentOwner,
   worktreeId,
   filePath,
-  markdownCommentsCount,
+  markdownReviewNotes,
   reviewRailOpen,
   reviewNotesCopied,
   unsentMarkdownReviewScope,
@@ -189,6 +191,7 @@ export function RichMarkdownEditorSurface({
   onCopyReviewNotes,
   onCopyReviewNote,
   onToggleReviewRail,
+  clearDeliveredDiffComments,
   onReviewNotesDelivered,
   onReviewNoteSourceClick,
   onDeleteReviewComment,
@@ -336,20 +339,22 @@ export function RichMarkdownEditorSurface({
           onCancelPopover={onCancelAnnotationPopover}
           onSubmit={onSubmitAnnotation}
         />
-        {markdownCommentsCount > 0 ? (
-          <RichMarkdownReviewRailActions
-            owner={commentOwner}
-            worktreeId={worktreeId}
-            filePath={filePath}
-            noteCount={markdownCommentsCount}
-            railOpen={reviewRailOpen}
-            notesCopied={reviewNotesCopied}
-            unsentScope={unsentMarkdownReviewScope}
-            onToggleRail={onToggleReviewRail}
-            onCopyNotes={onCopyReviewNotes}
-            onDelivered={onReviewNotesDelivered}
-          />
-        ) : null}
+        <RichMarkdownReviewRailActions
+          owner={commentOwner}
+          worktreeId={worktreeId}
+          filePath={filePath}
+          noteCount={markdownReviewNotes.length}
+          railOpen={reviewRailOpen}
+          notesCopied={reviewNotesCopied}
+          unsentScope={unsentMarkdownReviewScope}
+          onToggleRail={onToggleReviewRail}
+          onCopyNotes={onCopyReviewNotes}
+          notes={markdownReviewNotes}
+          onClearNotes={(targetOwner, snapshots) =>
+            clearDeliveredDiffComments(targetOwner, snapshots, { suppressLostOwnerToast: true })
+          }
+          onDelivered={onReviewNotesDelivered}
+        />
       </div>
     </div>
   )
