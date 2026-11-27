@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { branchAutoRenameFailureReason } from '../../../../../../shared/worktree/branch-auto-rename-failure-reason'
@@ -17,7 +17,19 @@ export type AutoNameFailure = {
   dismiss: () => void
 }
 
+/** One failure on one workspace: dismiss state never outlives it, even when the same error returns. */
+type FailureState = {
+  failure: string | null
+  dismissed: boolean
+  dismissing: boolean
+  canDismiss: boolean
+}
+
 const noop = (): void => {}
+
+function freshState(failure: string | null): FailureState {
+  return { failure, dismissed: false, dismissing: false, canDismiss: false }
+}
 
 /** A row's failed auto-name, shared by its row mark and its hover card section; null when there's none. */
 export function useAutoNameFailure({
@@ -31,63 +43,61 @@ export function useAutoNameFailure({
   error: string | undefined
 }): AutoNameFailure | null {
   const t = useTranslate()
-  const hasError = Boolean(error)
-  const [dismissedError, setDismissedError] = useState<string | null>(null)
-  const [dismissing, setDismissing] = useState(false)
-  const [canDismiss, setCanDismiss] = useState(false)
+  const failure = error ? JSON.stringify([executionHostId ?? null, worktreeId, error]) : null
+  const [state, setState] = useState(() => freshState(failure))
+  // A cleared error, another workspace or a new error starts over; late replies for the old one are dropped.
+  const current = state.failure === failure ? state : freshState(failure)
+  if (current !== state) {
+    setState(current)
+  }
+  const update = useCallback(
+    (owner: string, patch: Partial<FailureState>) =>
+      setState((prev) => (prev.failure === owner ? { ...prev, ...patch } : prev)),
+    []
+  )
   // Follows the row's lifetime, not the hover card's, so a retry keeps its spinner after the card closes.
   const retry = useBranchAutoRenameRetry({
-    open: hasError,
+    open: failure !== null,
     worktreeId,
     executionHostId,
     onRenamed: noop,
     onAttemptFinished: noop
   })
   useEffect(() => {
-    if (!hasError) {
+    if (failure === null) {
       return
     }
-    let live = true
-    void canDismissAutoName({ worktreeId, executionHostId }).then((value) => {
-      if (live) {
-        setCanDismiss(value)
-      }
-    })
-    return () => {
-      live = false
-    }
-  }, [hasError, worktreeId, executionHostId])
+    void canDismissAutoName({ worktreeId, executionHostId }).then((canDismiss) =>
+      update(failure, { canDismiss })
+    )
+  }, [failure, update, worktreeId, executionHostId])
 
   const retrying = retry.running
+  const { dismissed, dismissing } = current
   const dismiss = useCallback((): void => {
-    if (dismissing || retrying || !error) {
+    if (failure === null || dismissing || retrying) {
       return
     }
-    setDismissing(true)
+    update(failure, { dismissing: true })
     void dismissAutoName({ worktreeId, executionHostId })
-      .then((result) => {
-        if (result.dismissed) {
-          setDismissedError(error)
-        }
-      })
-      .catch(() => {})
-      .finally(() => setDismissing(false))
-  }, [dismissing, retrying, error, worktreeId, executionHostId])
+      .then((result) => update(failure, { dismissed: result.dismissed, dismissing: false }))
+      .catch(() => update(failure, { dismissing: false }))
+  }, [failure, dismissing, retrying, update, worktreeId, executionHostId])
 
-  if (!error || dismissedError === error) {
-    return null
-  }
   // A finished retry that didn't fail (e.g. deferred) says so; otherwise the stored error does.
-  const reason =
-    branchAutoRenameReasonText(retry.lastOutcome, t) ??
-    autoNameFailureReasonText(branchAutoRenameFailureReason(error), t)
-  return {
-    retrying,
-    canRetry: retry.availability === 'available',
-    canDismiss,
-    dismissing,
-    reason,
-    tryAgain: retry.tryAgain,
-    dismiss
-  }
+  const reason = error
+    ? (branchAutoRenameReasonText(retry.lastOutcome, t) ??
+      autoNameFailureReasonText(branchAutoRenameFailureReason(error), t))
+    : ''
+  const canRetry = retry.availability === 'available'
+  const { canDismiss } = current
+  const visible = Boolean(error) && !dismissed
+  // Stable while nothing changes, so the row's memoized context menu doesn't re-render with it.
+  return useMemo(
+    () =>
+      visible
+        ? { retrying, canRetry, canDismiss, dismissing, reason, tryAgain: retry.tryAgain, dismiss }
+        : null,
+    [visible, retrying, canRetry, canDismiss, dismissing, reason, retry.tryAgain, dismiss]
+  )
 }

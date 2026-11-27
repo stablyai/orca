@@ -23,6 +23,8 @@ import { WorktreeNotificationMuteMenuItem } from './WorktreeNotificationMuteMenu
 import { WslMovedWorkspaceUseHereMenuItem } from '@/components/wsl-move/WslMovedUseHereMenuItem'
 import { WslMoveFolderWorkspaceMenuItem } from '@/components/wsl-move/WslMoveProjectMenuItem'
 import { WorktreeContextMenuDeleteItems } from './WorktreeContextMenuDeleteItems'
+import { WorktreeAutoNameMenuItems } from './WorktreeAutoNameMenuItems'
+import type { AutoNameFailure } from '../../workspace-card/identity/use-auto-name-failure'
 import {
   WorktreeCopySubMenu,
   WorktreeLineageSubMenu,
@@ -40,7 +42,13 @@ import {
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 import { WorktreeHandToBotMenuItem } from '@/components/bots/hand-to-bot/WorktreeHandToBotMenuItem'
 
-export default function WorktreeContextMenuView({ model }: { model: WorktreeContextMenuModel }) {
+export default function WorktreeContextMenuView({
+  model,
+  autoNameFailure = null
+}: {
+  model: WorktreeContextMenuModel
+  autoNameFailure?: AutoNameFailure | null
+}) {
   const {
     children,
     contentClassName,
@@ -219,6 +227,9 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                   ? t('auto.components.sidebar.WorktreeContextMenu.697d0f6e1b', 'Unpin')
                   : t('auto.components.sidebar.WorktreeContextMenu.3baa7d6507', 'Pin')}
               </DropdownMenuItem>
+              {autoNameFailure ? (
+                <WorktreeAutoNameMenuItems failure={autoNameFailure} disabled={isDeleting} />
+              ) : null}
             </>
           )}
           <WorktreeStatusMenuItems

@@ -38,7 +38,12 @@ export function WorktreeCardAutoNameFailureSection({
       {canRetry || canDismiss ? (
         <div className="-mr-1 -mt-0.5 flex shrink-0 items-center gap-0.5">
           {canRetry ? (
-            <AutoNameAction label={tryAgain} disabled={retrying} onClick={failure.tryAgain}>
+            <AutoNameAction
+              label={tryAgain}
+              disabled={retrying}
+              busy={retrying}
+              onClick={failure.tryAgain}
+            >
               <RotateCw />
             </AutoNameAction>
           ) : null}
@@ -60,11 +65,13 @@ export function WorktreeCardAutoNameFailureSection({
 function AutoNameAction({
   label,
   disabled = false,
+  busy = false,
   onClick,
   children
 }: {
   label: string
   disabled?: boolean
+  busy?: boolean
   onClick: () => void
   children: React.ReactNode
 }): React.JSX.Element {
@@ -76,8 +83,14 @@ function AutoNameAction({
           variant="ghost-muted"
           size="icon-xs"
           aria-label={label}
-          disabled={disabled}
-          onClick={onClick}
+          // aria-disabled, not disabled: a native disabled button drops focus and its tooltip.
+          aria-disabled={disabled || undefined}
+          aria-busy={busy || undefined}
+          onClick={() => {
+            if (!disabled) {
+              onClick()
+            }
+          }}
           className="[&_svg]:size-3.5"
         >
           {children}

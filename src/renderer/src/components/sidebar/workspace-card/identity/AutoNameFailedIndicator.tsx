@@ -15,8 +15,7 @@ export function AutoNameFailedIndicator({
   onPointerDown: React.PointerEventHandler<HTMLButtonElement>
 }): React.JSX.Element {
   const t = useTranslate()
-  // The mark opens the row's one hover card; a popup of its own would sit under that card.
-  const openCard = (): void => card.detailsHoverControl.handleHoverOpenChange(true)
+  // The mark sits inside the row's hover-card trigger, so hover and keyboard focus open that one card.
   return (
     <button
       type="button"
@@ -26,11 +25,9 @@ export function AutoNameFailedIndicator({
           : t('auto.components.sidebar.AutoNameFailed.title', 'Couldn’t auto-name')
       }
       onPointerDown={onPointerDown}
-      onPointerEnter={openCard}
-      onFocus={openCard}
       onClick={(event) => {
         event.stopPropagation()
-        openCard()
+        card.detailsHoverControl.handleHoverOpenChange(true)
       }}
       onDoubleClick={(event) => event.stopPropagation()}
       className="inline-flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground/70 outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
