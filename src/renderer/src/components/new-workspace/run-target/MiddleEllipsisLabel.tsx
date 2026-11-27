@@ -1,7 +1,7 @@
 // A one-line label that loses its middle, not its end, when it doesn't fit: measured, so the "…" sits
 // right against both halves.
 import React, { useLayoutEffect, useRef, useState } from 'react'
-import { middleEllipsis } from '@/lib/middle-ellipsis'
+import { middleEllipsis } from './middle-ellipsis'
 
 let measureContext: CanvasRenderingContext2D | null | undefined
 

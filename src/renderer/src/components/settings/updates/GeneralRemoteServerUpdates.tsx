@@ -16,7 +16,12 @@ import type { UpdateCheckOptions } from '../../../../../shared/updater/update-st
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { AboutDisclosureRow } from './AboutDisclosureRow'
 import { RemoteServerAboutRow } from './RemoteServerAboutRow'
-import { ServerRestartConfirm } from './ServerRestartConfirm'
+import { ServerRestartButton } from './ServerRestartButton'
+import {
+  UPDATING_PHASES,
+  getServerRestartQuestion,
+  getSessionsMayDropLabel
+} from './server-restart-copy'
 
 const isEligible = (entry: RemoteServerUpdateEntry): boolean =>
   entry.phase === 'available' || entry.phase === 'failed'
@@ -41,7 +46,9 @@ function serverSummaryParts(entries: RemoteServerUpdateEntry[], t: Translate): S
   const parts: SummaryPart[] = [
     {
       count: available,
-      text: t('settings.about.servers.readyCount', '{{value0}} ready', { value0: available })
+      text: t('settings.about.servers.readyCount', '{{value0}} ready', {
+        value0: available
+      })
     },
     {
       count: current,
@@ -113,11 +120,48 @@ function ServerSummary({ parts }: { parts: SummaryPart[] }): React.JSX.Element {
         <span className="hidden @max-xs/about-row:inline">
           {first.text}
           {' · '}
-          {t('settings.about.servers.otherCount', '{{value0}} other', { value0: other })}
+          {t('settings.about.servers.otherCount', '{{value0}} other', {
+            value0: other
+          })}
         </span>
       ) : null}
     </>
   )
+}
+
+/** While updates run: "2 updating · 1 failed", with the failures in red. */
+function UpdatingSummary({
+  updating,
+  failed
+}: {
+  updating: number
+  failed: number
+}): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <>
+      {t('settings.about.servers.updatingCount', '{{value0}} updating', {
+        value0: updating
+      })}
+      {failed > 0 ? (
+        <>
+          {' · '}
+          <span className="text-destructive">
+            {t('settings.about.servers.failedCount', '{{value0}} failed', {
+              value0: failed
+            })}
+          </span>
+        </>
+      ) : null}
+    </>
+  )
+}
+
+/** Which button is waiting for its second click, bound to the servers it would restart. */
+type Armed = {
+  /** One server's id, or null for Update all. */
+  serverId: string | null
+  key: string
 }
 
 export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
@@ -131,12 +175,15 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
   const start = useAppStore((state) => state.startRemoteServerUpdates)
   const setDialogOpen = useAppStore((state) => state.setRemoteServerUpdateDialogOpen)
   const [open, setOpen] = useState(false)
+  const [armed, setArmed] = useState<Armed | null>(null)
   const toggleRef = useRef<HTMLButtonElement>(null)
   const bulkActionRef = useRef<HTMLDivElement>(null)
   const [snapshot, setSnapshot] = useState<Snapshot>({ phase: 'owed' })
   const refreshSnapshot = useCallback(
     (options?: UpdateCheckOptions): void => {
-      const request = refresh(options, { preserveFailureDetails: options === undefined })
+      const request = refresh(options, {
+        preserveFailureDetails: options === undefined
+      })
       setSnapshot({ phase: 'running', request })
       const settle = (next: Snapshot): void => {
         // Folding or another Check disowns this result, even if it settles during a reopen.
@@ -172,21 +219,49 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
   }, [setDialogOpen])
   useEffect(() => clearCheckOptions, [clearCheckOptions])
 
-  if (entries.length === 0) {
-    return null
-  }
-
   const eligible = entries.filter(isEligible)
   const busy = checking || running
   const authorizedCheck =
     snapshot.phase === 'ready' && snapshot.check.revision === revision ? snapshot.check : null
   const updatesBlocked = busy || !authorizedCheck
+  // The compact header has one control. If its check failed or went stale, offer a fresh check.
+  const needsRetry =
+    eligible.length > 0 &&
+    open &&
+    !busy &&
+    (snapshot.phase === 'failed' || (snapshot.phase === 'ready' && !authorizedCheck))
+  const targetsOf = (serverId: string | null): RemoteServerUpdateEntry[] =>
+    serverId === null ? eligible : eligible.filter((entry) => entry.environmentId === serverId)
+  const keyOf = (servers: RemoteServerUpdateEntry[]): string =>
+    servers.map((entry) => entry.environmentId).join('\n')
+  // The question is bound to the servers it named: if that set changes, an update starts, the
+  // list folds, or its check fails, it reverts unanswered and never re-arms by itself.
+  if (
+    armed &&
+    (armed.key !== keyOf(targetsOf(armed.serverId)) ||
+      running ||
+      needsRetry ||
+      (armed.serverId !== null && !open))
+  ) {
+    setArmed(null)
+  }
+
+  if (entries.length === 0) {
+    return null
+  }
+
   const focusServers = (): void => toggleRef.current?.focus()
-  const startConfirmed = (ids: string[]): void => {
-    if (busy || !authorizedCheck) {
+  const disarm = (): void => setArmed(null)
+  const arm = (serverId: string | null): void => {
+    setArmed({ serverId, key: keyOf(targetsOf(serverId)) })
+  }
+  const confirm = (serverId: string | null): void => {
+    const ids = targetsOf(serverId).map((entry) => entry.environmentId)
+    if (busy || !authorizedCheck || ids.length === 0) {
       return
     }
-    // The confirmed action's trigger can disappear as soon as its servers become queued.
+    setArmed(null)
+    // The armed button disappears as soon as its servers become queued.
     focusServers()
     void start(ids, authorizedCheck)
   }
@@ -205,13 +280,6 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
     refreshSnapshot(getUpdateCheckClickOptions(event))
   }
   const checkLabel = t('settings.about.action.checkForUpdates', 'Check for updates')
-  const updatingLabel = t('settings.about.servers.updating', 'Updating')
-  // The compact header has one control. If its check failed or went stale, offer a fresh check.
-  const needsRetry =
-    eligible.length > 0 &&
-    open &&
-    !busy &&
-    (snapshot.phase === 'failed' || (snapshot.phase === 'ready' && !authorizedCheck))
   const checkAction = (
     <Button
       ref={
@@ -243,9 +311,11 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
       {t('settings.about.action.check', 'Check')}
     </Button>
   )
-  const action =
-    eligible.length > 0 ? (
-      <div className="flex items-center gap-1">
+  const allArmed = armed !== null && armed.serverId === null
+  // Rows carry their own progress while updates run, so the header drops its control.
+  const action = running ? null : eligible.length > 0 ? (
+    <div className="flex items-center gap-1">
+      {allArmed ? null : (
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -253,7 +323,7 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
               variant="ghost-muted"
               size="icon-sm"
               className="@max-xs/about-row:hidden"
-              aria-label={running ? updatingLabel : checkLabel}
+              aria-label={checkLabel}
               disabled={busy}
               onClick={check}
             >
@@ -265,38 +335,46 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
             <span className="block text-muted-foreground">{getUpdateCheckHint()}</span>
           </TooltipContent>
         </Tooltip>
-        {needsRetry ? <div className="hidden @max-xs/about-row:block">{checkAction}</div> : null}
-        <div ref={bulkActionRef} className={needsRetry ? '@max-xs/about-row:hidden' : undefined}>
-          <ServerRestartConfirm
-            servers={eligible}
-            label={t('settings.about.servers.updateAll', 'Update all')}
-            variant="outline"
-            disabled={open ? updatesBlocked : busy}
-            disabledReason={
-              running
-                ? updatingLabel
-                : checking
-                  ? t('settings.about.status.checking', 'Checking…')
-                  : checkLabel
+      )}
+      {needsRetry ? <div className="hidden @max-xs/about-row:block">{checkAction}</div> : null}
+      <div ref={bulkActionRef} className={needsRetry ? '@max-xs/about-row:hidden' : undefined}>
+        <ServerRestartButton
+          label={t('settings.about.servers.updateAll', 'Update all')}
+          armedLabel={t('settings.about.servers.restartCount', 'Restart {{count}}?', {
+            count: eligible.length
+          })}
+          question={getServerRestartQuestion(eligible, t)}
+          armed={allArmed}
+          disabled={open ? updatesBlocked : busy}
+          confirmBlocked={updatesBlocked}
+          disabledReason={checking ? t('settings.about.status.checking', 'Checking…') : checkLabel}
+          onArm={() => {
+            arm(null)
+            // Arming from the folded header shows what would restart and re-checks it.
+            if (!open) {
+              setOpenAndRefresh(true)
             }
-            expansion={{
-              expanded: open,
-              failed: snapshot.phase === 'failed',
-              expand: () => setOpenAndRefresh(true)
-            }}
-            onConfirm={startConfirmed}
-            focusAfterConfirm={focusServers}
-          />
-        </div>
+          }}
+          onDisarm={disarm}
+          onConfirm={() => confirm(null)}
+        />
       </div>
-    ) : running ? (
-      <Button type="button" variant="outline" size="sm" disabled>
-        <Loader2 className="animate-spin" />
-        {updatingLabel}
-      </Button>
-    ) : (
-      checkAction
-    )
+    </div>
+  ) : (
+    checkAction
+  )
+
+  const updatingCount = entries.filter((entry) => UPDATING_PHASES.has(entry.phase)).length
+  const summary = allArmed ? (
+    <span className="text-status-warning-text">{getSessionsMayDropLabel(t)}</span>
+  ) : updatingCount > 0 ? (
+    <UpdatingSummary
+      updating={updatingCount}
+      failed={entries.filter((entry) => entry.phase === 'failed').length}
+    />
+  ) : (
+    <ServerSummary parts={serverSummaryParts(entries, t)} />
+  )
 
   return (
     <SearchableSetting
@@ -309,13 +387,12 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
         'Check and update paired Orca servers from this client.'
       )}
       keywords={['remote server', 'update all', 'paired', 'version']}
-      // SettingsGroup's 20px content inset and 1px card border.
-      className="@container/about-servers [--about-card-inset:calc(1.25rem_+_1px)]"
+      className="@container/about-servers"
     >
       <AboutDisclosureRow
         label={t('settings.about.servers.title', 'Servers')}
         toggleRef={toggleRef}
-        summary={<ServerSummary parts={serverSummaryParts(entries, t)} />}
+        summary={summary}
         open={open}
         onOpenChange={setOpenAndRefresh}
         control={action}
@@ -325,9 +402,11 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
               <RemoteServerAboutRow
                 key={entry.environmentId}
                 entry={entry}
+                armed={armed?.serverId === entry.environmentId}
                 disabled={updatesBlocked}
-                onUpdate={startConfirmed}
-                focusAfterConfirm={focusServers}
+                onArm={() => arm(entry.environmentId)}
+                onDisarm={disarm}
+                onConfirm={() => confirm(entry.environmentId)}
               />
             ))
           : null}
