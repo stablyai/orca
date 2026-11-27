@@ -61,14 +61,36 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor & {
   /** Streams whose open message a forced ack released: every ack is a cut until it ends, so a
    *  reattach moves the tail it replays to a continuation row instead of a fresh one. */
   const releasedOpen = new Set<string>()
-  const closeScope = (scope: string): void => {
-    releasedOpen.delete(scope)
-    open.delete(scope)
-    starts.delete(scope)
-    for (const id of toolsByScope.get(scope) ?? []) {
-      tools.delete(id)
+  /** Ends a scope as of `before`: what it opened earlier goes, what opened since stays. */
+  const closeScope = (scope: string, before: number): void => {
+    for (const map of [open, starts]) {
+      if ((map.get(scope) ?? before) < before) {
+        map.delete(scope)
+      }
     }
-    toolsByScope.delete(scope)
+    if (!open.has(scope)) {
+      releasedOpen.delete(scope)
+    }
+    for (const id of toolsByScope.get(scope) ?? []) {
+      if ((tools.get(id)?.seq ?? before) < before) {
+        dropTool(id)
+      }
+    }
+    if (toolsByScope.get(scope)?.size === 0) {
+      toolsByScope.delete(scope)
+    }
+  }
+  /** Scope ends (and a root result's lift), seen as lines are pushed, ahead of a paused reader:
+   *  each applies only once the reader is past it, so a crash before then still replays whole. */
+  const ends: { seq: number; scope: string; lift: boolean }[] = []
+  const endsThrough = (through: number): void => {
+    const due = ends.findIndex((end) => end.seq > through)
+    for (const end of ends.splice(0, due === -1 ? ends.length : due)) {
+      closeScope(end.scope, end.seq)
+      if (end.lift) {
+        keepAfter(end.seq)
+      }
+    }
   }
   /** A root result ends its turn, which the chat has saved: a replay never starts before it, so
    *  work still open past it (a background subagent's) is kept from the line after; a reattach
@@ -147,10 +169,7 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor & {
       if (frame.type === 'result') {
         // A turn's end closes its own streams, even one the CLI never finished; a background
         // subagent's work goes on past it.
-        closeScope(scopeOf(frame))
-        if (frame.parent_tool_use_id == null) {
-          keepAfter(seq)
-        }
+        ends.push({ seq, scope: scopeOf(frame), lift: frame.parent_tool_use_id == null })
       } else if (frame.type === 'system' && frame.subtype === 'task_notification') {
         // A subagent's end closes what it left open under its launching tool call; one naming no
         // call is found by its task, and otherwise closes nothing (never the root's stream).
@@ -162,7 +181,7 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor & {
         launchOf.delete(task)
         if (launch) {
           backgroundLaunches.delete(launch)
-          closeScope(`${String(frame.session_id ?? '')}/${launch}`)
+          ends.push({ seq, scope: `${String(frame.session_id ?? '')}/${launch}`, lift: false })
         }
       } else if (frame.type === 'system' && frame.subtype === 'task_started') {
         if (typeof frame.task_id === 'string' && typeof frame.tool_use_id === 'string') {
@@ -189,7 +208,7 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor & {
           dropTool(id)
           // A foreground subagent ends with its launching call's result.
           if (!backgroundLaunches.has(id)) {
-            closeScope(`${String(frame.session_id ?? '')}/${id}`)
+            ends.push({ seq, scope: `${String(frame.session_id ?? '')}/${id}`, lift: false })
           }
         }
       } else if (
@@ -220,6 +239,7 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor & {
     },
     // `through`: how far the reader took; without it a stopped message holds nothing.
     floor: (through?: number) => {
+      endsThrough(through ?? Number.POSITIVE_INFINITY)
       const held: number[] = []
       for (const [scope, stopped] of closed) {
         // Stops come in order, so the reader passed a prefix; the oldest left holds the scope.
