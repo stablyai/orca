@@ -9,6 +9,7 @@ import {
   requiredLabel,
   text
 } from './plugin-declarative-prop-schemas'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
 /** Form controls added in catalog 2 (Orca 1.4.247). Each value control follows the edit protocol. */
 
@@ -63,7 +64,7 @@ const radioGroupProps = z
     ...editAck
   })
   .strict()
-const finite = z.number().refine(Number.isFinite, 'must be finite')
+const finite = lazyZodSchema(() => z.number().refine(Number.isFinite, 'must be finite'))
 const sliderProps = z
   .object({
     label: requiredLabel,

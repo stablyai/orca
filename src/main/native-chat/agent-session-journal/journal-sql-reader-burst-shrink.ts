@@ -24,6 +24,13 @@ export class JournalSqlReaderBurstShrink {
     this.timer.unref?.()
   }
 
+  /** Arm the shrink timer if not already running, without resetting an in-progress countdown. */
+  ensureScheduled(): void {
+    if (this.timer === undefined) {
+      this.schedule()
+    }
+  }
+
   clear(): void {
     if (this.timer !== undefined) {
       clearTimeout(this.timer)

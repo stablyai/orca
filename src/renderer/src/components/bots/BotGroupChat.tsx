@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { useBots } from '@/lib/bot-catalog'
 import { useBotGroups } from '@/lib/bot-group-list'
+import { botGroupRoomLabel } from '@/lib/bot-group-room-label'
 import { useBotGroupTranscript } from './use-bot-group-transcript'
 import { useBotGroupRoomRead } from './use-bot-group-room-read'
 import {
@@ -63,13 +64,12 @@ export function BotGroupChat({
   const place = findBotGroupRoom(groups, roomId)
   const threadId = place?.threadId
   const found = place ? botGroupRoom(place.group, threadId) : undefined
-  // A thread's tab takes its name once the host names it from the first post.
-  const threadTitle = place?.group.threads?.find((thread) => thread.id === threadId)?.title
+  const roomName = place ? botGroupRoomLabel(place.group, threadId) : undefined
   useEffect(() => {
-    if (threadTitle) {
-      useAppStore.getState().setTabLabel(tabId, threadTitle)
+    if (roomName) {
+      useAppStore.getState().setTabLabel(tabId, roomName)
     }
-  }, [tabId, threadTitle])
+  }, [tabId, roomName])
   const bots = useBots()
 
   const [error, setError] = useState<string | null>(null)

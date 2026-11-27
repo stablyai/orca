@@ -22,6 +22,24 @@ type TerminalAgentSessionForkDialogProps = {
   onOpenChange: (open: boolean) => void
 }
 
+async function runForkDialogAction(
+  action: () => Promise<boolean>,
+  busyRef: { current: boolean },
+  setBusy: (busy: boolean) => void,
+  onOpenChange: (open: boolean) => void
+): Promise<void> {
+  busyRef.current = true
+  setBusy(true)
+  try {
+    if (await action()) {
+      onOpenChange(false)
+    }
+  } finally {
+    busyRef.current = false
+    setBusy(false)
+  }
+}
+
 export function TerminalAgentSessionForkDialog({
   open,
   fork,
@@ -35,32 +53,19 @@ export function TerminalAgentSessionForkDialog({
     if (!fork || busyRef.current) {
       return
     }
-    busyRef.current = true
-    setBusy(true)
-    try {
-      if (await copyAgentSessionForkContext(fork)) {
-        onOpenChange(false)
-      }
-    } finally {
-      busyRef.current = false
-      setBusy(false)
-    }
+    await runForkDialogAction(
+      () => copyAgentSessionForkContext(fork),
+      busyRef,
+      setBusy,
+      onOpenChange
+    )
   }
 
   const handleStartFork = async (): Promise<void> => {
     if (!fork || busyRef.current) {
       return
     }
-    busyRef.current = true
-    setBusy(true)
-    try {
-      if (await startAgentSessionFork(fork)) {
-        onOpenChange(false)
-      }
-    } finally {
-      busyRef.current = false
-      setBusy(false)
-    }
+    await runForkDialogAction(() => startAgentSessionFork(fork), busyRef, setBusy, onOpenChange)
   }
 
   const handleOpenChange = (nextOpen: boolean): void => {

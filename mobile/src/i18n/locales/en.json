@@ -3834,6 +3834,15 @@
         "message": "Message from",
         "notSentYet": "not sent yet"
       },
+      "unnamedRecipient": "an agent",
+      "recipientName": "{{name}}",
+      "event": {
+        "followedUp": "Sent follow-up",
+        "update": "Update",
+        "message": "Message",
+        "handedOff": "Handed off",
+        "task": "Task"
+      },
       "kind": {
         "started": "Started",
         "reopened": "Reopened",
@@ -7778,7 +7787,11 @@
         "signIn": "Sign in to GitHub",
         "pickSubtitle": "Choose the repositories it can work in"
       },
-      "allRepositoriesShort": "all repositories"
+      "allRepositoriesShort": "all repositories",
+      "ghSignedOut": {
+        "line": "gh is signed out on {{host}}. Run gh auth login there.",
+        "copy": "Copy {{text}}"
+      }
     },
     "connect": {
       "finishOnHost": "Finish connecting {{service}} in Orca on {{host}}.",

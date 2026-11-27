@@ -67,7 +67,8 @@ export function useCsvClipboard({
         return
       }
       if (initialRevision !== revision.current) {
-        throw new CsvPreviewError('paste-conflict')
+        fail(new CsvPreviewError('paste-conflict'))
+        return
       }
       pasteText(text)
     } catch (reason) {

@@ -130,6 +130,8 @@ function parseKept(text: string): Kept | null {
 
 type Asked = {
   open: readonly BotItemWaitingLine[]
+  /** Lines a draft started on keeps naming, though the box can't name them anew (picked ones). */
+  kept: readonly BotItemWaitingLine[]
   /** The item is read and waits on no question: every kept line is gone. */
   noQuestion: boolean
 }
@@ -142,13 +144,16 @@ function settleKept(
   seenEmpty: boolean,
   live: boolean,
   boxEmpty: boolean,
-  { open, noQuestion }: Asked,
+  { open, kept, noQuestion }: Asked,
   /** Drop lines no longer asked; off for a change in an event, whose `open` may predate it. */
   prune = true
 ): Kept {
   const asked = (id: string): boolean => open.some((line) => line.id === id)
-  // An open line other than it, or none at all on a read item: never a line still loading or on its way.
-  const gone = (id: string): boolean => !asked(id) && (open.length > 0 || noQuestion)
+  const keepable = (id: string): boolean => kept.some((line) => line.id === id)
+  // An open line other than it, or none at all on a read item: never a line still loading or on its
+  // way. A kept line goes once no draft holds it.
+  const gone = (id: string): boolean =>
+    !asked(id) && (keepable(id) ? boxEmpty : open.length > 0 || noQuestion)
   let { bound, wasEmpty, hidden } = stored ?? { bound: null, wasEmpty: seenEmpty, hidden: null }
   if (wasEmpty !== boxEmpty) {
     if (!boxEmpty && !live) {
@@ -191,7 +196,9 @@ export function createBotItemReplyTargetHook(
     open: readonly BotItemWaitingLine[],
     boxEmpty: boolean,
     /** The item is read and waits on no question. */
-    noQuestion = false
+    noQuestion = false,
+    /** Lines a draft started on keeps naming, though the box can't name them anew. */
+    kept: readonly BotItemWaitingLine[] = []
   ): BotItemReplyTarget {
     const key = botItemReplyTargetKey(scope)
     const subscribe = useCallback((listener: () => void) => store.subscribe(key, listener), [key])
@@ -199,7 +206,7 @@ export function createBotItemReplyTargetHook(
     const seen = useRef<{ key: string; empty: boolean } | null>(null)
     const live = seen.current?.key === key
     const seenEmpty = live && seen.current ? seen.current.empty : boxEmpty
-    const asked = { open, noQuestion }
+    const asked = { open, kept, noQuestion }
     const current = settleKept(parseKept(text), seenEmpty, live, boxEmpty, asked)
     const settled = serializeKept(current)
     useLayoutEffect(() => {
@@ -213,6 +220,7 @@ export function createBotItemReplyTargetHook(
       bound === 'none'
         ? null
         : ((bound && open.find((line) => line.id === bound.id)) ??
+          (bound && !boxEmpty ? kept.find((line) => line.id === bound.id) : null) ??
           (boxEmpty ? open[0] : null) ??
           null)
     // Read fresh, so a second change in the same event keeps the first.

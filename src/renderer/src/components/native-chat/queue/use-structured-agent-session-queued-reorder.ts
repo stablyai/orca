@@ -1,3 +1,4 @@
+import { runWithFinally } from '@/lib/run-with-finally'
 import { useCallback, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
@@ -76,32 +77,35 @@ export function useStructuredAgentSessionQueuedReorder(
       setPending(true)
       setPreview(optimistic)
       const isCurrent = capturePresentation()
-      try {
-        const result = await transport.write<AgentSessionQueuedMessageMoveResult>(
-          'agentSession.queuedMessageMove',
-          'agentSession.queuedMessageMove',
-          { messageId, ...anchor }
-        )
-        if (
-          result.kind !== 'done' ||
-          (result.value.status !== 'moved' && result.value.status !== 'unchanged')
-        ) {
-          setPreview((current) => (current === optimistic ? null : current))
-          if (isCurrent() && result.kind === 'not-done') {
-            toast.error(result.notice)
-          } else if (isCurrent() && result.kind === 'done') {
-            toast.error(
-              translate(
-                'components.native-chat.queuedMessages.moveChanged',
-                'The queue changed before this move. Try dragging the message again.'
+      await runWithFinally(
+        async () => {
+          const result = await transport.write<AgentSessionQueuedMessageMoveResult>(
+            'agentSession.queuedMessageMove',
+            'agentSession.queuedMessageMove',
+            { messageId, ...anchor }
+          )
+          if (
+            result.kind !== 'done' ||
+            (result.value.status !== 'moved' && result.value.status !== 'unchanged')
+          ) {
+            setPreview((current) => (current === optimistic ? null : current))
+            if (isCurrent() && result.kind === 'not-done') {
+              toast.error(result.notice)
+            } else if (isCurrent() && result.kind === 'done') {
+              toast.error(
+                translate(
+                  'components.native-chat.queuedMessages.moveChanged',
+                  'The queue changed before this move. Try dragging the message again.'
+                )
               )
-            )
+            }
           }
+        },
+        () => {
+          busy.current = false
+          setPending(false)
         }
-      } finally {
-        busy.current = false
-        setPending(false)
-      }
+      )
     },
     [cards, held, capturePresentation, scope, transport]
   )

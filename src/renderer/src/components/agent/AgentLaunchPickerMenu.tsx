@@ -45,15 +45,23 @@ export function useRetiredAgentPickerDrafts(
     // Built only for drafts that name a workspace or repo; a new bot's picker names neither.
     let workspaces: Set<string> | undefined
     let repos: Set<string> | undefined
-    const hasWorkspace = (id: string) =>
-      (workspaces ??= new Set([
-        ...Object.values(selectWorktreesByRepo(state) ?? {})
-          .flat()
-          .map((row) => row.id),
-        ...(selectFolderWorkspaces(state) ?? []).map((row) => `folder:${row.id}`)
-      ])).has(id)
-    const hasRepo = (id: string) =>
-      (repos ??= new Set((state.repos ?? []).map((repo) => repo.id))).has(id)
+    const hasWorkspace = (id: string) => {
+      if (workspaces == null) {
+        workspaces = new Set([
+          ...Object.values(selectWorktreesByRepo(state) ?? {})
+            .flat()
+            .map((row) => row.id),
+          ...(selectFolderWorkspaces(state) ?? []).map((row) => `folder:${row.id}`)
+        ])
+      }
+      return workspaces.has(id)
+    }
+    const hasRepo = (id: string) => {
+      if (repos == null) {
+        repos = new Set((state.repos ?? []).map((repo) => repo.id))
+      }
+      return repos.has(id)
+    }
     retireAgentPickerDrafts(
       entries,
       draftScope,
