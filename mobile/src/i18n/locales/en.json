@@ -82,6 +82,10 @@
     "nativeChatText": {
       "heading": "TEXT",
       "footer": "Pinch in a chat to change it; it saves here.",
+      "weight": "Text weight",
+      "weightLight": "Light",
+      "weightRegular": "Regular",
+      "weightMedium": "Medium",
       "size": "Text size",
       "sizeDefault": "Default",
       "sizePoints": "{{size}} pt",

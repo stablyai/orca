@@ -121,6 +121,10 @@
   }
 }
 
+.native-chat-appearance [data-native-chat-prompt-editor] {
+  font-weight: var(--chat-font-weight);
+}
+
 /* Whatever scrolls in a question card (a long question, its options, or the whole body in a short pane) fades at
    the bottom while more lies below, and the footer casts a rule and shadow over it; both clear
    at the end of the scroll. The dock itself fades the same way once it scrolls. */

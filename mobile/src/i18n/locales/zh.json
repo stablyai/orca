@@ -3963,6 +3963,10 @@
       "title": "聊天界面"
     },
     "nativeChatText": {
+      "weight": "字重",
+      "weightLight": "细体",
+      "weightRegular": "常规",
+      "weightMedium": "中等",
       "heading": "文字",
       "footer": "在聊天中双指缩放即可调整文字大小，调整结果会保存在这里",
       "size": "文字大小",

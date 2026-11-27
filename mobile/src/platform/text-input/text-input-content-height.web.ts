@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
-import type { TextInputInstance } from 'react-native'
+import type { TextInputInstance, TextStyle } from 'react-native'
 
 const COPIED_STYLES = [
   'fontFamily',
@@ -32,7 +32,8 @@ export function copyTextInputStyles(source: HTMLTextAreaElement, copy: HTMLEleme
 // Measure a hidden copy: resizing the live textarea clamps scrolling ancestors in WebKit.
 export function useTextInputContentHeight(
   input: RefObject<TextInputInstance | null>,
-  value: string
+  value: string,
+  fontWeight?: TextStyle['fontWeight']
 ): number | undefined {
   const [height, setHeight] = useState<number>()
   const mirror = useRef<HTMLTextAreaElement | null>(null)
@@ -82,7 +83,7 @@ export function useTextInputContentHeight(
   useLayoutEffect(() => {
     text.current = value
     measure()
-  }, [value, measure])
+  }, [value, fontWeight, measure])
 
   useEffect(() => {
     const source: unknown = input.current

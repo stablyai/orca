@@ -41,6 +41,8 @@ function scrollTopOf(event: unknown): number {
     : 0
 }
 
+import { useNativeChatTextSettings } from '../../preferences/native-chat-text-settings'
+
 export function MobileNativeChatComposerField({
   value,
   skillToken,
@@ -53,6 +55,7 @@ export function MobileNativeChatComposerField({
   ...props
 }: MobileNativeChatComposerFieldProps) {
   useMobileColorScheme()
+  const { fontWeight } = useNativeChatTextSettings()
   const allocation = useMobileNativeChatComposerAllocation()
   const [scrollTop, setScrollTop] = useState(0)
   const [fieldHeight, setFieldHeight] = useState(0)
@@ -73,9 +76,9 @@ export function MobileNativeChatComposerField({
   const shown = dictationPreview
     ? `${dictationPreview.before}${dictationPreview.text}${dictationPreview.after}`
     : value || placeholder || ''
-  const contentHeight = useTextInputContentHeight(input, shown)
+  const contentHeight = useTextInputContentHeight(input, shown, fontWeight)
   // Reserve the placeholder's lines so the first keystroke cannot shrink the box and drop the transcript.
-  const placeholderHeight = useTextInputContentHeight(input, placeholder ?? '')
+  const placeholderHeight = useTextInputContentHeight(input, placeholder ?? '', fontWeight)
   const windowHeight = useWindowDimensions().height
   const keyboardHeight = useKeyboardOcclusion()
   // RN Web already shrinks browser dimensions; shell WebViews report the keyboard separately.
@@ -104,7 +107,12 @@ export function MobileNativeChatComposerField({
       <TextInput
         ref={input}
         value={value}
-        style={[composerInputStyles.messageText, sizing, copied ? clearText().field : null]}
+        style={[
+          composerInputStyles.messageText,
+          { fontWeight },
+          sizing,
+          copied ? clearText().field : null
+        ]}
         onScroll={skillToken ? (event) => setScrollTop(scrollTopOf(event)) : undefined}
         placeholder={dictationPreview ? undefined : placeholder}
         {...props}
