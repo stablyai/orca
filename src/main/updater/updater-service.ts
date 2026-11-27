@@ -68,7 +68,7 @@ export function downloadUpdate(): void {
 }
 
 export function quitAndInstall(): void {
-  updater.quitAndInstall()
+  updater.quitAndInstall('manual')
 }
 
 export function snoozeRequiredUpdate(): Promise<void> {

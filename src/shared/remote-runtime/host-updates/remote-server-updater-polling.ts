@@ -1,5 +1,12 @@
-import type { RemoteServerUpdaterSnapshot } from '../../../../../shared/remote-runtime/host-catalog/remote-server-update'
-import { updaterMessageText } from '@/app-shell/updates/updater-message-copy'
+import type { RemoteServerUpdaterSnapshot } from '../host-catalog/remote-server-update'
+import type { UpdateStatus } from '../../updater/update-status-types'
+
+/** Carries the host's coded status so each client can word it in its own language. */
+export class RemoteServerUpdaterStatusError extends Error {
+  constructor(readonly status: Extract<UpdateStatus, { state: 'error' }>) {
+    super(status.message)
+  }
+}
 
 type PollingTransport = {
   getUpdaterStatus: (environmentId: string) => Promise<RemoteServerUpdaterSnapshot>
@@ -24,7 +31,7 @@ export async function pollRemoteServerUpdater(
   while (now() < deadline) {
     const snapshot = await transport.getUpdaterStatus(environmentId)
     if (snapshot.status.state === 'error') {
-      throw new Error(updaterMessageText(snapshot.status))
+      throw new RemoteServerUpdaterStatusError(snapshot.status)
     }
     onSnapshot(snapshot)
     if (accept(snapshot)) {
