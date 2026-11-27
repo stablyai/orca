@@ -14,9 +14,11 @@ import {
   type RuntimeRestartWait
 } from './runtime-restart-wait'
 import {
+  runtimeNotRunningError,
   runtimeRestartedSincePreflightError,
   runtimeRestartingError
 } from './runtime-restarting-error'
+import { isProcessRunning } from './runtime-pid-liveness'
 import type { RuntimeSourceFence } from './runtime-source-fence'
 import { sendRequest } from './transport'
 import { RuntimeClientError } from './types'
@@ -76,6 +78,9 @@ export async function sendLocalRuntimeRequest<TResult>(
       if (await retryDuringRestart(error)) {
         continue
       }
+      if (!restartWait.restart && isUnavailable(error) && !isProcessRunning(metadata.pid)) {
+        throw runtimeNotRunningError()
+      }
       throw restartingOr(error)
     }
     // After waiting out a restart, send only once the new runtime's graph serves, so the request isn't refused.
@@ -119,6 +124,10 @@ export async function sendLocalRuntimeRequest<TResult>(
         }
         if (restartWait.restart) {
           throw restartingOr(error)
+        }
+        // Stale metadata from an app that exited: say plainly it isn't running, not "busy, retry".
+        if (!isProcessRunning(metadata.pid)) {
+          throw runtimeNotRunningError()
         }
       }
       // A pre-send refusal has no outcome to recover; retry advice would resend the same bytes.

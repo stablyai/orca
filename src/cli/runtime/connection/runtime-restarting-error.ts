@@ -59,3 +59,12 @@ export function runtimeRestartedSincePreflightError(): RuntimeClientError {
     }
   )
 }
+
+/** No nextSteps, so the CLI adds its plain "Orca isn't running right now" guidance. */
+export function runtimeNotRunningError(): RuntimeClientError {
+  return new RuntimeClientError(
+    'runtime_unavailable',
+    'Orca is not running: the process that last served this profile has exited.',
+    { requestSent: false }
+  )
+}

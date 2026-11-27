@@ -32,11 +32,11 @@ export async function getCliStatus(
   try {
     response = await sendRequest<RuntimeStatus>(metadata, 'status.get', undefined, 1000)
   } catch (error) {
-    // A relaunch can leave its metadata behind; agents still need app.restarting from status.
+    // A relaunch can leave its metadata behind, as can an app that exited and never came back.
     if (
       error instanceof RuntimeClientError &&
       error.code === 'runtime_unavailable' &&
-      (await readActiveRuntimeRestart(userDataPath))
+      ((await readActiveRuntimeRestart(userDataPath)) || !isProcessRunning(metadata.pid))
     ) {
       return await offlineStatus(userDataPath, 'stale_bootstrap')
     }
