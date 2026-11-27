@@ -263,7 +263,6 @@
 1 src/renderer/src/components/pull-request-page/page/surface.tsx
 1 src/renderer/src/components/pull-request-page/reviewers/panel.tsx
 1 src/renderer/src/components/repo/RepoCombobox.tsx
-1 src/renderer/src/components/repo/toolchain/LocalGitToolchainScanBanner.tsx
 1 src/renderer/src/components/right-sidebar/activity-bar/use-right-sidebar-activity-items.ts
 3 src/renderer/src/components/right-sidebar/activity-bar/use-right-sidebar-tab-routing.ts
 1 src/renderer/src/components/right-sidebar/ai-vault/panel/AiVaultPanel.tsx
