@@ -5,17 +5,10 @@ import type { Store } from '../../persistence/loading-store/store'
 import type { PluginHostCallOutcome } from '../../../shared/plugins/frames/plugin-protocol'
 import { getPluginsDataDir } from '../../plugins/discovery/plugin-discovery'
 import { takeRequiredPluginFailures } from '../../plugins/catalog/required-plugin-failures'
-import {
-  applyPluginConsent,
-  applyPluginEnablement
-} from '../../plugins/activation/plugin-enablement'
-import { handlePluginPanelStateRequest } from '../../plugins/panels/panel-lifetime/plugin-panel-state'
 import type { PluginService } from '../../plugins/plugin-service'
 import { registerPluginFrameEntryHandlers, rendererPanelOwner } from './plugin-frame-entry-ipc'
 import { registerPluginPanelPushHandlers } from './plugin-panel-push-ipc'
-import { registerPluginSettingsHandlers } from './plugin-settings-ipc'
 import { registerPluginStatusBarHandlers } from './plugin-status-bar-ipc'
-import { registerPluginEditorSaveHookHandler } from './plugin-editor-save-hook-ipc'
 import { bindPluginFrameGuests } from '../../plugins/panels/guest-isolation/plugin-frame-guest-sessions'
 import { isQualifiedPluginKey } from '../../../shared/plugins/frames/plugin-tab-key'
 import { pluginConsentRequestSchema } from '../../../shared/plugins/approval/plugin-consent-request'
@@ -30,6 +23,8 @@ const PLUGIN_MANAGEMENT_IPC_CHANNELS = [
   'plugins:install',
   'plugins:remove'
 ] as const
+const PLUGIN_SETTINGS_IPC_CHANNELS = ['plugins:getSettings', 'plugins:setSetting'] as const
+const PLUGIN_EDITOR_SAVE_HOOK_IPC_CHANNELS = ['plugins:editorSaveHook'] as const
 
 export function parsePluginConsentArgs(args: unknown): z.infer<typeof pluginConsentRequestSchema> {
   return pluginConsentRequestSchema.parse(args)
@@ -93,6 +88,7 @@ export function registerPluginHandlers(
   ipcMain.handle('plugins:consent', async (_event, args: unknown) => {
     await pluginService.whenReady()
     const parsed = parsePluginConsentArgs(args)
+    const { applyPluginConsent } = await import('../../plugins/activation/plugin-enablement')
     await applyPluginConsent({
       store,
       pluginService,
@@ -106,6 +102,7 @@ export function registerPluginHandlers(
   ipcMain.handle('plugins:setEnabled', async (_event, args: unknown) => {
     await pluginService.whenReady()
     const parsed = setEnabledArgsSchema.parse(args)
+    const { applyPluginEnablement } = await import('../../plugins/activation/plugin-enablement')
     await applyPluginEnablement({
       store,
       pluginService,
@@ -119,9 +116,15 @@ export function registerPluginHandlers(
   registerPluginFrameEntryHandlers(store, pluginService)
   registerPluginPanelPushHandlers(pluginService)
   registerPluginStatusBarHandlers(pluginService)
-  registerPluginEditorSaveHookHandler()
-  registerPluginSettingsHandlers(pluginService)
 
+  registerLazyIpcHandleGroup(PLUGIN_EDITOR_SAVE_HOOK_IPC_CHANNELS, async (ipc) => {
+    const { registerPluginEditorSaveHookHandler } = await import('./plugin-editor-save-hook-ipc')
+    registerPluginEditorSaveHookHandler(ipc)
+  })
+  registerLazyIpcHandleGroup(PLUGIN_SETTINGS_IPC_CHANNELS, async (ipc) => {
+    const { registerPluginSettingsHandlers } = await import('./plugin-settings-ipc')
+    registerPluginSettingsHandlers(pluginService, ipc)
+  })
   registerLazyIpcHandleGroup(PLUGIN_MANAGEMENT_IPC_CHANNELS, async (ipc) => {
     const { registerPluginManagementHandlers } = await import('./plugin-management-ipc')
     registerPluginManagementHandlers(store, pluginService, ipc)
@@ -143,6 +146,8 @@ export function registerPluginHandlers(
   ipcMain.handle('plugins:panelState', async (event, args: unknown) => {
     await pluginService.whenReady()
     const owner = rendererPanelOwner(event.sender.id)
+    const { handlePluginPanelStateRequest } =
+      await import('../../plugins/panels/panel-lifetime/plugin-panel-state')
     return handlePluginPanelStateRequest(
       {
         pluginsDataDir: getPluginsDataDir(pluginService.options.userDataPath),
@@ -175,14 +180,16 @@ export function registerPluginHandlers(
       pluginService,
       marketplaceServices,
       () => store.getSettings(),
-      (pluginKey, reviewedFingerprint) =>
-        applyPluginConsent({
+      async (pluginKey, reviewedFingerprint) => {
+        const { applyPluginConsent } = await import('../../plugins/activation/plugin-enablement')
+        await applyPluginConsent({
           store,
           pluginService,
           pluginKey,
           reviewedFingerprint,
           decision: 'approve'
         })
+      }
     )
   }
 }
