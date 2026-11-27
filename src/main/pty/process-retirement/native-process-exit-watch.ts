@@ -4,6 +4,7 @@ import { createRequire } from 'node:module'
 type ProcessExitWatchNative = {
   /** A watch id, 0 when no such process exists, or null when this host cannot watch it. */
   watchProcessExit: (pid: number, onNotice: (exited?: boolean) => void) => number | null
+  watchProcessExitWithProof?: ProcessExitWatchNative['watchProcessExit']
   unwatchProcessExit: (id: number) => void
 }
 
@@ -55,15 +56,20 @@ function loadProcessExitWatchNative(): ProcessExitWatchNative | null {
 /** The notice distinguishes an observed exit from watch failure. 'gone' means the PID was absent. */
 export function watchProcessExit(
   pid: number,
-  onNotice: (exited: boolean) => void
+  onNotice: (exited: boolean) => void,
+  options?: { requireProof: true }
 ): ProcessExitWatch | 'gone' | null {
   const native = loadProcessExitWatchNative()
   if (!native || !Number.isSafeInteger(pid) || pid <= 0) {
     return null
   }
   let id: number | null
+  const watch = options?.requireProof ? native.watchProcessExitWithProof : native.watchProcessExit
+  if (!watch) {
+    return null
+  }
   try {
-    id = native.watchProcessExit(pid, (exited) => {
+    id = watch(pid, (exited) => {
       try {
         onNotice(exited === true)
       } catch {

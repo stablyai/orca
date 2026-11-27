@@ -83,14 +83,15 @@ export class DesktopProviderReceiptWindow {
     this.exitWatch?.dispose()
     this.exitWatch = undefined
     // Pin the process before posting. The watch outlives a closed WebContents with unread credit.
-    const watch = watchProcessExit(pid, (exited) => {
+    const onNotice = (exited: boolean): void => {
       if (exited) {
         this.rendererExited(pid)
       } else if (this.postedToPid === pid) {
         this.exitWatch = undefined
         this.collectExitedRenderer()
       }
-    })
+    }
+    const watch = watchProcessExit(pid, onNotice, { requireProof: true })
     if (!watch || watch === 'gone') {
       return false
     }

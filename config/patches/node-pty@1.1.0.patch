@@ -1392,7 +1392,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..d12eacb6662b89f58b46baec28c81619
  }
  #endif
  
-@@ -788,11 +1338,201 @@ done:
+@@ -788,11 +1338,202 @@ done:
   * Init
   */
  
@@ -1581,6 +1581,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..d12eacb6662b89f58b46baec28c81619
  Napi::Object init(Napi::Env env, Napi::Object exports) {
 +  exports.Set("foregroundProcessGroup", Napi::Function::New(env, PtyForegroundGroup));
 +  exports.Set("watchProcessExit", Napi::Function::New(env, OrcaWatchProcessExit));
++  exports.Set("watchProcessExitWithProof", Napi::Function::New(env, OrcaWatchProcessExit));
 +  exports.Set("unwatchProcessExit", Napi::Function::New(env, OrcaUnwatchProcessExit));
    exports.Set("fork",    Napi::Function::New(env, PtyFork));
    exports.Set("open",    Napi::Function::New(env, PtyOpen));
@@ -2411,7 +2412,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..492ca9a49aac95a06142c6a3c7c097f9
    return env.Undefined();
  }
  
-@@ -577,6 +1017,13 @@ Napi::Object init(Napi::Env env, Napi::Object exports) {
+@@ -577,6 +1017,14 @@ Napi::Object init(Napi::Env env, Napi::Object exports) {
    exports.Set("resize", Napi::Function::New(env, PtyResize));
    exports.Set("clear", Napi::Function::New(env, PtyClear));
    exports.Set("kill", Napi::Function::New(env, PtyKill));
@@ -2421,6 +2422,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..492ca9a49aac95a06142c6a3c7c097f9
 +  exports.Set("assignCurrentProcessToStrictJob", Napi::Function::New(env, PtyAssignCurrentProcessToStrictJob));
 +  exports.Set("setActiveProcessLimit", Napi::Function::New(env, PtySetActiveProcessLimit));
 +  exports.Set("watchProcessExit", Napi::Function::New(env, PtyWatchProcessExit));
++  exports.Set("watchProcessExitWithProof", Napi::Function::New(env, PtyWatchProcessExit));
 +  exports.Set("unwatchProcessExit", Napi::Function::New(env, PtyUnwatchProcessExit));
    return exports;
  };

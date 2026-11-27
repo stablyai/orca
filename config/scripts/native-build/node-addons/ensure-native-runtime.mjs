@@ -204,15 +204,19 @@ function runElectronCheck() {
     return { ok: false, error: electronExecutable.error }
   }
 
-  const result = spawnSync(electronExecutable.path, [scriptPath, CHILD_CHECK_FLAG], {
-    cwd: projectDir,
-    env: {
-      ...process.env,
-      ELECTRON_RUN_AS_NODE: '1'
-    },
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe']
-  })
+  const result = spawnSync(
+    electronExecutable.path,
+    [scriptPath, CHILD_CHECK_FLAG, '--runtime=electron'],
+    {
+      cwd: projectDir,
+      env: {
+        ...process.env,
+        ELECTRON_RUN_AS_NODE: '1'
+      },
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe']
+    }
+  )
 
   return parseChildCheckResult(result)
 }
@@ -360,6 +364,9 @@ function loadNodePtyNativeModule() {
   const nativeName = nodePtyNativeModuleName()
   // Windows node-pty defers native loading until terminal creation; bare require misses ABI failures.
   const native = loadNativeModule(nativeName)
+  if (runtime === 'electron' && typeof native.module.watchProcessExitWithProof !== 'function') {
+    throw new Error('stale node-pty build without renderer exit proof')
+  }
   const addonPath = nodePtyAddonPath(require.resolve('node-pty/lib/utils'), native, nativeName)
   assertNodePtyWindowsConptyRuntime(native?.dir, dirname(addonPath))
   assertNodePtyJobOwnership({ nativeName, native, addonPath })
