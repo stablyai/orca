@@ -85,6 +85,16 @@ function Stage({
   )
 }
 
+async function waitForDialog(frame: HTMLElement): Promise<void> {
+  const deadline = performance.now() + 3000
+  while (!frame.ownerDocument.querySelector('[role="dialog"], [role="alertdialog"]')) {
+    if (performance.now() > deadline) {
+      throw new Error('Timed out waiting for the access review dialog')
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+}
+
 function accessFixture(options: {
   width: 420 | 360 | 280
   people: Person[]
@@ -131,6 +141,8 @@ function accessFixture(options: {
             throw new Error('Access review trigger missing')
           }
           trigger.click()
+          // The confirmation surface is lazy-loaded, so the dialog mounts after the click.
+          await waitForDialog(frame)
         }
       : undefined
   })
