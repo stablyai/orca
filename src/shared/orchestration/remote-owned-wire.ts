@@ -43,7 +43,9 @@ export const RemoteOwnedWorkerMail = lazyZodSchema(() =>
       body: z.string(),
       payload: z.string().nullable(),
       priority: z.enum(['normal', 'high', 'urgent']),
-      threadId: z.string().nullable()
+      threadId: z.string().nullable(),
+      /** The message a reply answers; an older server omits it. */
+      replyTo: z.string().nullable().optional()
     }),
     dispatchId: z.string().min(1).nullable(),
     taskId: z.string().min(1).nullable()
@@ -61,7 +63,12 @@ export const RemoteOwnedWorkerState = lazyZodSchema(() =>
       status: z.enum(['pending', 'dispatched', 'completed', 'failed', 'circuit_broken']),
       workerState: z.string().min(1).nullable(),
       lastFailure: z.string().nullable(),
-      agent: z.string().nullable()
+      agent: z.string().nullable(),
+      // Absent from older servers. The workspace its worker runs in, and the server's Dispatch that
+      // started it (a worker's own helper) or that it continues (a follow-up), so home places it.
+      worktreeId: z.string().min(1).nullish(),
+      creatorDispatchId: z.string().min(1).nullish(),
+      followUpOf: z.string().min(1).nullish()
     }),
     task: z.object({
       status: z.enum(['pending', 'ready', 'dispatched', 'completed', 'failed', 'blocked']),

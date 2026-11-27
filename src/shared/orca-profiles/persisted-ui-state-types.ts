@@ -156,7 +156,7 @@ export type PersistedUIState = {
   _kimiStatusBarDefaultAdded?: boolean
   /** One-shot migration flag for adding the default-on MiniMax status item. */
   _minimaxStatusBarDefaultAdded?: boolean
-  /** One-shot migration flag for adding the default-on Antigravity status item. */
+  /** Retired with Antigravity usage; kept so older builds sharing the profile don't re-add the item. */
   _antigravityStatusBarDefaultAdded?: boolean
   /** One-shot migration flag for adding the default-on Grok status item. */
   _grokStatusBarDefaultAdded?: boolean

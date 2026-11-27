@@ -44,7 +44,10 @@ import { buildWorkflowSettingsSections } from './settings-navigation-workflow-se
 import { useWindowsTerminalCapabilityOwnerKey } from '../../../runtime/hosts/capabilities/useWindowsTerminalCapabilityOwnerKey'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { useMcpServersAvailable } from './use-mcp-servers-available'
-import { getOptInOnlyExperimentVisibility } from '../advanced/experimental-search'
+import {
+  getOptInOnlyExperimentVisibility,
+  type OptInOnlyExperimentVisibility
+} from '../advanced/experimental-search'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Translate } from '@/i18n/use-translate'
@@ -157,12 +160,14 @@ export function buildSettingsNavigationMetadata(
   ]
 }
 
-/** `pickedHost`: Settings' own host picker, which can show MCP servers on a host the default isn't. */
 const NO_SETTINGS_NAV_SECTIONS: SettingsNavSection[] = []
 
+/** `pickedHost`: Settings' own host picker, which can show MCP servers on a host the default isn't.
+ *  `optInOnlyExperimentRows`: the Settings page's per-visit rows; elsewhere the live settings decide. */
 export function useSettingsNavigationMetadata(
   pickedHost?: RuntimeClientTarget,
-  enabled = true
+  enabled = true,
+  optInOnlyExperimentRows?: OptInOnlyExperimentVisibility
 ): SettingsNavSection[] {
   const t = useTranslate()
   // The locale subscription must also invalidate the memo or labels retain the previous language.
@@ -173,7 +178,7 @@ export function useSettingsNavigationMetadata(
   const bots = useBots(botsEnabled)
   const projectHostSetupProjection = useProjectHostSetupProjection()
   const settings = useAppStore((state) => state.settings)
-  const optInOnlyExperiments = getOptInOnlyExperimentVisibility(settings)
+  const optInOnlyExperiments = optInOnlyExperimentRows ?? getOptInOnlyExperimentVisibility(settings)
   const [managedBrowserCreationEnabled, mobileEmulatorCreationEnabled] =
     useAppStoreWithHostStatuses((state, statuses) => {
       const policy = getClientCreationActionPolicy(state, state.activeWorktreeId, statuses)
