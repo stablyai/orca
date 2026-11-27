@@ -5679,11 +5679,8 @@
       "workers_other": "{{count}} 個工作者",
       "noMatches": "沒有符合「{{query}}」的代理程式",
       "emptyTitle": "沒有執行中的代理程式",
-      "pairDesktop": "配對電腦後，即可在這裡查看它的代理程式。",
       "emptyBody": "在任一工作區啟動代理程式，就會顯示在這裡。",
       "unread": "未讀",
-      "noDesktopTitle": "未連線任何電腦",
-      "noDesktopBody": "電腦連線後，代理程式就會顯示在這裡。",
       "hideWorkers": "隱藏 {{workers}}",
       "showWorkers": "顯示 {{workers}}"
     },
@@ -5702,29 +5699,17 @@
       "status": "狀態",
       "workspace": "工作區",
       "project": "專案",
-      "agent": "代理程式",
-      "desktop": "電腦"
+      "agent": "代理程式"
     },
     "options": {
       "groupBy": "分組依據",
       "showWorkers": "顯示工作者",
-      "open": "代理程式清單選項",
       "unreadOnly": "僅顯示未讀",
       "markAllRead": "標記全部已讀",
       "clearFinished": "清除已完成"
     },
     "search": {
-      "toggle": "搜尋代理程式",
       "placeholder": "搜尋代理程式"
-    },
-    "desktops": {
-      "pickerTitle": "顯示哪台電腦的代理程式",
-      "agents_one": "{{count}} 個代理程式",
-      "agents_other": "{{count}} 個代理程式",
-      "all": "所有電腦",
-      "offline": "離線",
-      "needsYou_one": "{{count}} 個需要你處理",
-      "needsYou_other": "{{count}} 個需要你處理"
     },
     "sections": {
       "needsYou": "需要你處理",

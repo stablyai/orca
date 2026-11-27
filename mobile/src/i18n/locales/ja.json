@@ -5314,11 +5314,8 @@
       "workers_other": "{{count}} 件のワーカー",
       "noMatches": "「{{query}}」に一致する Agent はありません",
       "emptyTitle": "実行中の Agent はありません",
-      "pairDesktop": "デスクトップとペアリングすると、その Agent がここに表示されます。",
       "emptyBody": "いずれかのワークスペースで Agent を開始すると、ここに表示されます。",
       "unread": "未読",
-      "noDesktopTitle": "デスクトップが接続されていません",
-      "noDesktopBody": "デスクトップが接続されると、Agent がここに表示されます。",
       "hideWorkers": "{{workers}} を非表示",
       "showWorkers": "{{workers}} を表示"
     },
@@ -5337,29 +5334,17 @@
       "status": "状態",
       "workspace": "ワークスペース",
       "project": "プロジェクト",
-      "agent": "Agent",
-      "desktop": "デスクトップ"
+      "agent": "Agent"
     },
     "options": {
       "groupBy": "グループ化",
       "showWorkers": "ワーカー Agent を表示",
-      "open": "Agent 一覧のオプション",
       "unreadOnly": "未読のみ",
       "markAllRead": "すべて既読にする",
       "clearFinished": "完了済みをクリア"
     },
     "search": {
-      "toggle": "Agent を検索",
       "placeholder": "Agent を検索"
-    },
-    "desktops": {
-      "pickerTitle": "Agent を表示するデスクトップ",
-      "agents_one": "{{count}} 個の Agent",
-      "agents_other": "{{count}} 個の Agent",
-      "all": "すべてのデスクトップ",
-      "offline": "オフライン",
-      "needsYou_one": "{{count}} 件が対応待ち",
-      "needsYou_other": "{{count}} 件が対応待ち"
     },
     "sections": {
       "needsYou": "確認が必要",
