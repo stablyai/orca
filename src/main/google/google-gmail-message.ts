@@ -111,11 +111,11 @@ function normalizeMimeHeader(value: string): string {
 function isAttachment(node: Part): boolean {
   return Boolean(
     node.filename ||
-      node.headers?.some(
-        (entry) =>
-          entry.name.toLowerCase() === 'content-disposition' &&
-          /^\s*attachment(?=[\s;(]|$)/i.test(entry.value)
-      )
+    node.headers?.some(
+      (entry) =>
+        entry.name.toLowerCase() === 'content-disposition' &&
+        /^\s*attachment(?=[\s;(]|$)/i.test(entry.value)
+    )
   )
 }
 

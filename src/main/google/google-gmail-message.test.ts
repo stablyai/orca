@@ -186,7 +186,9 @@ it('matches commented related content IDs without changing their case or throwin
   const first = textPart('text/plain', 'Implicit root')
   const root = {
     ...textPart('text/html', '<p>Selected root</p>'),
-    headers: [{ name: 'Content-ID', value: '(before) <Body@example.test> (outer (nested\\) note))' }]
+    headers: [
+      { name: 'Content-ID', value: '(before) <Body@example.test> (outer (nested\\) note))' }
+    ]
   }
   const malformed = {
     ...textPart('text/plain', 'Malformed resource'),
