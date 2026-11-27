@@ -1,3 +1,6 @@
+import { readFile } from 'node:fs/promises'
+import { writeQuietly } from './orchestration-db-compaction-files'
+
 const MIB = 1024 * 1024
 // Each copy rewrites the live data, so a file whose copies keep going stale waits longer each time: an
 // hour after the first, doubling up to a day. After this many it gives up, and the file keeps its size.
@@ -23,4 +26,28 @@ export function copyBudgetMs(liveBytes: number, attempts: number): number {
       2 ** Math.min(attempts - 1, MAX_BUDGET_DOUBLINGS),
     MAX_TIMER_MS
   )
+}
+
+/** `<unused copies> <start of the last, ms> [<count if the last copy is still in flight>]`, across sessions. */
+export async function readAttempts(
+  path: string
+): Promise<{ attempts: number; lastAttemptAt: number }> {
+  const [count, at, inFlight] = (await readFile(path, 'utf8').catch(() => ''))
+    .split(' ')
+    .map(Number)
+  // A copy still marked in flight never got swapped in: it counts.
+  return {
+    attempts: Math.max(count || 0, inFlight || 0),
+    lastAttemptAt: at || Number.NEGATIVE_INFINITY
+  }
+}
+
+/** In flight: the copy about to start counts as used unless a later write records otherwise. */
+export function writeAttempts(
+  path: string,
+  attempts: number,
+  at: number,
+  inFlight = false
+): Promise<boolean> {
+  return writeQuietly(path, inFlight ? `${attempts} ${at} ${attempts + 1}` : `${attempts} ${at}`)
 }

@@ -115,6 +115,8 @@ describe('OrchestrationDbCompaction', () => {
     expect(await copiesAfter(`2 ${now - 1.5 * hour}`)).toBe(false)
     expect(await copiesAfter(`2 ${now - 2.5 * hour}`)).toBe(true)
     expect(await copiesAfter(`3 ${now - 25 * hour}`)).toBe(false)
+    // A third copy still marked in flight (its outcome never recorded) counts.
+    expect(await copiesAfter(`2 ${now - 25 * hour} 3`)).toBe(false)
   })
 
   it('swaps in a copy after a burst left a drained WAL over 8 MiB', async () => {

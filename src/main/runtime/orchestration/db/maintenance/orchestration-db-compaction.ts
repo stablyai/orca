@@ -1,4 +1,4 @@
-import { link, readFile } from 'node:fs/promises'
+import { link } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import Database from '../../../../sqlite/sync-database'
 import type { OrchestrationDb } from '../orchestration-db'
@@ -7,19 +7,16 @@ import { runCompactionChild, type CompactionChild } from './orchestration-db-com
 import { renameFileWithWindowsRetryAsync } from '../../../../../shared/file-write/windows-retry-file-operations'
 import { syncDirectory } from '../../../../filesystem/durable-file-write'
 import { settleWithinMs } from '../../../../startup/quit/quit-teardown-deadline'
-import {
-  availableBytesIn,
-  removeQuietly,
-  sizeOf,
-  writeQuietly
-} from './orchestration-db-compaction-files'
+import { availableBytesIn, removeQuietly, sizeOf } from './orchestration-db-compaction-files'
 import {
   ATTEMPT_SPACING_MS,
   MAX_ATTEMPT_SPACING_MS,
   MAX_COPIES,
   MIN_COPY_BUDGET_MS,
   attemptSpacingMs,
-  copyBudgetMs
+  copyBudgetMs,
+  readAttempts,
+  writeAttempts
 } from './orchestration-db-compaction-schedule'
 
 const MIB = 1024 * 1024
@@ -63,6 +60,8 @@ export class OrchestrationDbCompaction {
   private quietTicks = 0
   // Copies this file has cost across sessions, and when the last one started.
   private attempts = 0
+  // The copy started this session and not yet counted, as used or swapped.
+  private uncounted = false
   private lastAttemptAt = Number.NEGATIVE_INFINITY
   // A full disk or a pinned WAL: retried hourly, without counting a copy.
   private heldAt = Number.NEGATIVE_INFINITY
@@ -115,11 +114,9 @@ export class OrchestrationDbCompaction {
       // From a session that quit or crashed part-way, or skipped its swap; cleared even where this is off.
       this.started = true
       await Promise.all([this.removeCopy(), removeQuietly(this.replacedPath)])
-      const [count, at] = (await readFile(this.attemptsPath, 'utf8').catch(() => ''))
-        .split(' ')
-        .map(Number)
-      this.attempts = count || 0
-      this.lastAttemptAt = at || Number.NEGATIVE_INFINITY
+      const record = await readAttempts(this.attemptsPath)
+      this.attempts = record.attempts
+      this.lastAttemptAt = record.lastAttemptAt
     }
     // Stopped during the reads above, not compacting here, or every copy went stale before a quit used it.
     if (this.stopped || !this.isEnabled() || (this.attempts >= MAX_COPIES && !this.ready)) {
@@ -178,14 +175,16 @@ export class OrchestrationDbCompaction {
       return
     }
     this.lastAttemptAt = now
-    // Kept before it starts, so a quit or crash mid-copy still waits its turn. Only a copy that went unused
-    // counts toward the cap, so nothing here needs undoing.
-    const kept = await writeQuietly(this.attemptsPath, `${this.attempts} ${now}`)
-    // A commit during that write would stale the copy before its watch starts.
+    // Marked in flight before it starts, so a copy whose outcome is never recorded (a quit, a crash or a
+    // failed write) still counts at the next launch: a failure errs toward fewer copies, never more.
+    const kept = await writeAttempts(this.attemptsPath, this.attempts, now, true)
+    // A commit during that write would stale the copy before its watch starts: no copy, so unmark it.
     if (!kept || this.stopped || this.stamp() !== stamp) {
       this.heldAt = now
+      await (kept && writeAttempts(this.attemptsPath, this.attempts, now))
       return
     }
+    this.uncounted = true
     const copied = await this.runChild(stamp, copyBudgetMs(state.liveBytes, this.attempts + 1))
     if (copied && !this.stopped && this.stamp() === stamp) {
       this.ready = { stamp, at: Date.now() }
@@ -194,10 +193,13 @@ export class OrchestrationDbCompaction {
     }
   }
 
-  /** A copy went unused: it counts toward the cap and the wait before the next one. */
-  private countDiscarded(): Promise<boolean> {
-    this.attempts++
-    return writeQuietly(this.attemptsPath, `${this.attempts} ${this.lastAttemptAt}`)
+  /** A copy went unused: it counts once toward the cap and the wait before the next one. */
+  private async countDiscarded(): Promise<void> {
+    if (this.uncounted) {
+      this.uncounted = false
+      this.attempts++
+      await writeAttempts(this.attemptsPath, this.attempts, this.lastAttemptAt)
+    }
   }
 
   /** Moves with any commit to the file, by any connection, since the observer opened. */
