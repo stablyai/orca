@@ -1,6 +1,5 @@
-import { Suspense, useEffect, useSyncExternalStore } from 'react'
+import { useEffect, useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
-import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
 import {
   localNativeChatRestartStore,
   useLocalRestartOffersEnabled,
@@ -9,13 +8,16 @@ import {
 } from '../offers/native-chat-resume-on-restart-store'
 import type { NativeChatRestartStore } from '../offers/native-chat-restart-runtime-store'
 import { useNativeChatRestartRuntimes } from '../offers/native-chat-restart-runtimes'
+import { createSharedChunkLoad } from './shared-chunk-load'
 
-const LazyConnectedNativeChatResumeToast = lazyWithRetry(
+// Why load before issuing: the toaster sizes a toast from its first render, and a Suspense fallback
+// measures 0px, which drops the hovered card below its anchor and makes it jump.
+const requestConnectedNativeChatResumeToast = createSharedChunkLoad(
   () =>
     import('./ConnectedNativeChatResumeToast').then((module) => ({
       default: module.ConnectedNativeChatResumeToast
     })),
-  { reloadKey: 'connected-native-chat-resume-toast' }
+  'connected-native-chat-resume-toast'
 )
 
 export function NativeChatResumeToasts(): React.JSX.Element {
@@ -32,7 +34,7 @@ export function NativeChatResumeToasts(): React.JSX.Element {
 }
 
 /** Shows the store's report while it has an open request and something to say. */
-function NativeChatResumeToastHost({
+export function NativeChatResumeToastHost({
   store,
   offerEnabled
 }: {
@@ -64,23 +66,32 @@ function NativeChatResumeToastHost({
         store.releaseFinishedNativeChatRestartRun()
       }
     }
-    // The report owns its timer so window visibility recovery can resume it.
-    toast.custom(
-      () => (
-        <Suspense fallback={null}>
-          <LazyConnectedNativeChatResumeToast store={store} toastId={id} />
-        </Suspense>
-      ),
-      {
-        id,
-        duration: Infinity,
-        closeButton: false,
-        unstyled: true,
-        onDismiss: snooze
-      }
-    )
+    const request = requestConnectedNativeChatResumeToast()
+    void request.loaded
+      .then(({ default: ConnectedNativeChatResumeToast }) => {
+        if (!owned) {
+          return
+        }
+        // The report owns its timer so window visibility recovery can resume it. Re-issues render the
+        // same component, so they update this toast in place instead of remounting it.
+        toast.custom(() => <ConnectedNativeChatResumeToast store={store} toastId={id} />, {
+          id,
+          duration: Infinity,
+          closeButton: false,
+          unstyled: true,
+          onDismiss: snooze
+        })
+      })
+      .catch((error: unknown) => {
+        console.warn('[native-chat-recovery] resume report failed to load:', error)
+        // Release only the open request, so the status bar can ask again; an unseen run stays for it.
+        if (owned) {
+          store.consumeNativeChatResumeOnRestartDialogRequest()
+        }
+      })
     return () => {
       owned = false
+      request.release()
       toast.dismiss(id)
     }
   }, [visible, id, store])
