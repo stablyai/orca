@@ -1,5 +1,11 @@
 // Own only complete marker-delimited blocks or provider-recognized content; orphan markers never own through EOF.
 
+import {
+  createTomlLineScanState,
+  isTomlStructuralLine,
+  updateTomlLineScanState
+} from '../../../codex/configuration/toml/config-toml-line-scan'
+
 export type ManagedTomlMarkers = {
   startMarker: string
   endMarker: string
@@ -29,20 +35,25 @@ type ScannedLine = {
   text: string
   offset: number
   endOffset: number
+  structural: boolean
 }
 
 // Keeps offsets on the raw text so CRLF terminators are spliced back verbatim.
 function scanLines(text: string): ScannedLine[] {
   const lines: ScannedLine[] = []
   let offset = 0
+  let state = createTomlLineScanState()
   while (offset < text.length) {
     const newlineIndex = text.indexOf('\n', offset)
     const endOffset = newlineIndex === -1 ? text.length : newlineIndex + 1
+    const line = text.slice(offset, endOffset).replace(/\r?\n$/, '')
     lines.push({
-      text: text.slice(offset, endOffset).replace(/\r?\n$/, ''),
+      text: line,
       offset,
-      endOffset
+      endOffset,
+      structural: isTomlStructuralLine(state)
     })
+    state = updateTomlLineScanState(state, line)
     offset = endOffset
   }
   return lines
@@ -62,9 +73,11 @@ export function findManagedTomlBlocks(
   markers: ManagedTomlMarkers
 ): ManagedTomlBlockRegion[] {
   const lines = scanLines(text)
-  // Match whole marker lines so user comments quoting a marker cannot claim surrounding text.
-  const isStart = (index: number): boolean => lines[index].text.trim() === markers.startMarker
-  const isEnd = (index: number): boolean => lines[index].text.trim() === markers.endMarker
+  // Markers inside string/array values are user data, not managed comments.
+  const isStart = (index: number): boolean =>
+    lines[index].structural && lines[index].text.trim() === markers.startMarker
+  const isEnd = (index: number): boolean =>
+    lines[index].structural && lines[index].text.trim() === markers.endMarker
 
   const regions: ManagedTomlBlockRegion[] = []
   for (let index = 0; index < lines.length; index++) {
@@ -105,6 +118,9 @@ export function findRecognizedManagedTables<T>(
   const texts = lines.map((line) => line.text)
   const tables: RecognizedManagedTable<T>[] = []
   for (let index = 0; index < lines.length; index++) {
+    if (!lines[index].structural) {
+      continue
+    }
     const match = recognize(texts, index)
     if (!match || match.lineCount <= 0) {
       continue
