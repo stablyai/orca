@@ -75,7 +75,9 @@ const ROWS_REPAIR_SQL =
   rowsRepairSql(
     'claude_harness_title_rows_version',
     `instr(rows.session, '"agent":"claude"') > 0 AND instr(rows.session, '"title":"<') > 0`
-  )
+  ) +
+  // Copilot rows whose totals added currentTokens and cache/reasoning subsets to model usage.
+  rowsRepairSql('copilot_usage_rows_version', `instr(rows.session, '"agent":"copilot"') > 0`)
 // Rows hold transcript-derived preview text; keep the directory user-only.
 const PRIVATE_DIRECTORY_MODE = 0o700
 // A ~2.3 KB row fills most of a 4 KB page; 8 KB pages fit three.
