@@ -32,7 +32,7 @@ import {
 } from '../skills/lazy-skills-handlers'
 import { registerWorkspacePortHandlers } from '../ports/workspace-ports'
 import { registerAutomationHandlers } from '../automations'
-import { registerKeybindingHandlers } from '../keybindings'
+import { registerLazyKeybindingHandlers } from '../lazy-keybindings-handlers'
 import { registerTelemetryHandlers } from '../telemetry'
 import { registerPluginHandlers } from '../plugins/plugins'
 import { registerUIHandlers, setTrustedUIRendererWebContentsId } from '../ui'
@@ -132,7 +132,7 @@ export async function registerCoreHandlers(
       registerAutomationHandlers(store, automations)
     }
     if (keybindings) {
-      registerKeybindingHandlers(keybindings, () => {
+      registerLazyKeybindingHandlers(keybindings, () => {
         void pluginService?.reconcileActivationState()
       })
     }

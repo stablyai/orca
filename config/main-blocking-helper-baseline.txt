@@ -623,7 +623,7 @@
 1 src/main/ipc/preflight/preflight-wsl-agent-detection.ts
 1 src/main/ipc/preflight/preflight-wsl-command.ts
 5 src/main/ipc/profiles/orca-profile-org-members-handlers.ts
-12 src/main/ipc/profiles/orca-profiles.ts
+1 src/main/ipc/profiles/orca-profiles.ts
 2 src/main/ipc/pty/delivery/producer-sync.ts
 2 src/main/ipc/pty/delivery/wire-session.ts
 8 src/main/ipc/pty/host-env/assembly.ts
