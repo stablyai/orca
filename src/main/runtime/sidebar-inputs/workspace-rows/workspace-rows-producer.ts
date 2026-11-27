@@ -101,7 +101,10 @@ export class WorkspaceRowsProducer {
       { consumesTerminalSideEffects: false }
     )
     // Folder workspace and lineage writes are catalog saves.
-    sources.store?.onStateWritten?.((domains) => {
+    sources.store?.onStateWritten?.((domains, options) => {
+      if (options?.onlyExternalConversationLinks) {
+        return
+      }
       const metadata =
         savedWorkspaceCatalog(domains) ||
         WORKTREE_METADATA_DOMAINS.some((domain) => domains?.includes(domain))

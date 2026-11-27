@@ -18,8 +18,12 @@ export function folderWorkspaceWriteOptions(
     workspace.externalConversations,
     updates.sortOrder === undefined && updates.name === undefined
   )
+  const options: StateWriteOptions | undefined =
+    updates.externalConversations !== undefined && Object.keys(updates).length === 1
+      ? { ...linkOptions, onlyExternalConversationLinks: true }
+      : linkOptions
   // A retired source server's folders are hidden by path, so a move can change the count.
   return previous.folderPath === workspace.folderPath
-    ? withUnreadStateHint(linkOptions, previous, workspace)
-    : linkOptions
+    ? withUnreadStateHint(options, previous, workspace)
+    : options
 }

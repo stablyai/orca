@@ -21,6 +21,8 @@ export type StateWriteOptions = {
     workspace: { worktreeId: string; sshHostId: ExecutionHostId | null }
     externalConversations: unknown
   }
+  /** A folder write changed only its links and write timestamp. */
+  onlyExternalConversationLinks?: true
   /** Set only when the write leaves every workspace's unread and archived flags unchanged. */
   preservesUnreadState?: boolean
 }
