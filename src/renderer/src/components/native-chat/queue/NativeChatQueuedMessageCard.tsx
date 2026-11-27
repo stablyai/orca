@@ -241,7 +241,8 @@ export function NativeChatQueuedMessageCard({
           className={cn(
             'min-w-0 flex-1',
             // The line fades out under the revealed tools; shown while acting, so a pressed tool never vanishes.
-            toolCount > 0 &&
+            !expanded &&
+              toolCount > 0 &&
               (busy
                 ? '[mask-image:var(--queued-tools-mask)]'
                 : 'group-hover/queued:[mask-image:var(--queued-tools-mask)] group-has-[:focus-visible]/queued:[mask-image:var(--queued-tools-mask)] [@media(hover:none)]:group-focus-within/queued:[mask-image:var(--queued-tools-mask)]')
