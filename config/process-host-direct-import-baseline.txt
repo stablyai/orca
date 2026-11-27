@@ -29,7 +29,7 @@ src/main/external-editors/external-editor-launch.ts
 src/main/git/command-runner/process-capture/exec-file-capture.ts
 src/main/git/command-runner/git-stream-child-spawn.ts
 src/main/git/command-runner/process-capture/spawn-command-capture.ts
-src/main/git/command-runner/process-capture/spawned-command-tree-kill.ts
+src/main/git/command-runner/process-capture/windows-taskkill-launch.ts
 src/main/git/command-runner/host-routing/wsl-aware-spawn.ts
 src/main/git/command-runner/host-routing/wsl-git-read-environment.ts
 src/main/github/execution/github-legacy-command.ts
