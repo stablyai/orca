@@ -84,6 +84,7 @@ export type TerminalState = {
       freshAgentLaunch?: FreshWorkspaceAgentLaunch
       agentArgsOverride?: string | null
       draftPrompt?: string
+      onSetupGateSettled?: (blocked: boolean) => void
       sessionOptions?: Record<string, SessionOptionValue>
       initialAgentStatus?: {
         agent: TuiAgent

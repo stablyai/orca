@@ -10,6 +10,7 @@ import { omitRecordKeys } from './record-key-omission'
 import { removeWorkspaceUnreadState } from '../../workspace-attention/workspace-unread-removal'
 import { removeWorktreeLayout } from '../../tabs/worktree-layout-lifecycle'
 import { omitSleepingAgentSessionsForWorktrees } from './sleeping-agent-session-omission'
+import { pruneRemovedWorktreeCreationDrafts } from './removed-worktree-creation-drafts'
 import {
   noticeRemovedUnsavedFiles,
   type ConfirmedUnsavedDiscards
@@ -54,6 +55,7 @@ export function applyRemoveWorktreeSuccessState(
     const removedActiveWorktree = s.activeWorktreeId === worktreeId
     return {
       editorBufferKeepRequest,
+      ...pruneRemovedWorktreeCreationDrafts(s, [{ id: worktreeId, hostId: executionHostId }]),
       ...removeWorkspaceUnreadState(s, [{ id: worktreeId }]),
       ...removeWorktreeLayout(s, {
         worktreeIds: new Set(worktreeIds),

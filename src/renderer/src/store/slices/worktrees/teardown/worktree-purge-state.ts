@@ -26,6 +26,7 @@ import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/h
 import type { AppState } from '../../../types'
 import type { WorktreePurgeTarget, WorktreePurgeTargets } from './worktree-purge-target'
 import { removeWorkspaceUnreadState } from '../../workspace-attention/workspace-unread-removal'
+import { pruneRemovedWorktreeCreationDrafts } from './removed-worktree-creation-drafts'
 
 /**
  * Builds a bulk cleanup patch and clears auxiliary warning records without requiring individual
@@ -78,6 +79,10 @@ export function buildWorktreePurgeState(
   const next = { ...s, ...patch }
   return {
     ...patch,
+    ...pruneRemovedWorktreeCreationDrafts(
+      next,
+      targets.filter(({ id }) => twinIds.has(id))
+    ),
     ...removeWorkspaceUnreadState(next, hostKeys),
     lastVisitedAtByWorktreeId: removeWorktreeVisitEntriesForTargets(
       next.lastVisitedAtByWorktreeId,
@@ -162,6 +167,7 @@ export function buildFullWorktreePurgeState(
 
   return {
     editorBufferKeepRequest,
+    ...pruneRemovedWorktreeCreationDrafts(s, normalizedTargets),
     ...removeWorkspaceUnreadState(
       s,
       [...worktreeIdSet].map((id) => ({ id }))

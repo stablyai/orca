@@ -22,6 +22,7 @@ export async function completeWorktreeCreation(args: {
   result?: CreatedWorktreeResult
   backendSpawned: boolean
   startupDraftDeferred?: boolean
+  setupGateBlocked?: Promise<boolean>
   /** The host was asked to plan the agent launch, so the desktop's plan never runs. */
   hostPlannedStartup: boolean
   focusOnCompletion: boolean
@@ -32,11 +33,16 @@ export async function completeWorktreeCreation(args: {
       .getState()
       .updatePendingWorktreeCreation(
         args.creationId,
-        deferredWorktreeCreationDraft(args.worktreeId, request)
+        deferredWorktreeCreationDraft(args.worktreeId, request, args.result?.worktree.hostId)
       )
   } else {
     if (args.result) {
-      retainDraftIfSetupBlocks(args.creationId, request, args.result)
+      retainDraftIfSetupBlocks(
+        args.creationId,
+        request,
+        args.result.worktree,
+        args.setupGateBlocked
+      )
     }
     // Why: clearing synchronously after activation lets React commit the panel-to-terminal swap in one frame.
     useAppStore.getState().removePendingWorktreeCreation(args.creationId, { cleanupVm: false })

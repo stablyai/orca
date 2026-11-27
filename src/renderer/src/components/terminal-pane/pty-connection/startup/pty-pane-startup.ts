@@ -34,6 +34,7 @@ export type PtyPaneStartup = {
   /** Explicit CLI override for host-owned agent launches; omission uses host settings. */
   agentArgsOverride?: string | null
   draftPrompt?: string
+  onSetupGateSettled?: (blocked: boolean) => void
   sessionOptions?: Record<string, SessionOptionValue>
   /** Main emits agent_started only after successful spawn. */
   telemetry?: EventProps<'agent_started'>

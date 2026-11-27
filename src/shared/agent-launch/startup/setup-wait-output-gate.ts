@@ -1,5 +1,6 @@
 import {
   SETUP_AGENT_WAIT_TIMEOUT_SECONDS,
+  SETUP_AGENT_RECHECK_TIMEOUT_SECONDS,
   SETUP_AGENT_BLOCKED_MESSAGE,
   SETUP_COMPLETE_MESSAGE,
   SETUP_FAILED_MESSAGE_PREFIX,
@@ -8,8 +9,9 @@ import {
 } from './setup-agent-sequencing'
 import { copyUtf16SuffixToOwnedString } from '../../text/owned-utf16-suffix'
 
-/** The wrapper itself gives up then, so no agent can start after it. */
-export const SETUP_WAIT_GATE_MAX_MS = SETUP_AGENT_WAIT_TIMEOUT_SECONDS * 1000
+/** The wrapper can read the marker one tick late, then verify the agent before reporting. */
+export const SETUP_WAIT_GATE_MAX_MS =
+  (SETUP_AGENT_WAIT_TIMEOUT_SECONDS + 1 + SETUP_AGENT_RECHECK_TIMEOUT_SECONDS) * 1000
 
 const SETUP_WAIT_END_LINES: readonly { line: string; phase: 'started' | 'failed' }[] = [
   { line: SETUP_COMPLETE_MESSAGE, phase: 'started' },

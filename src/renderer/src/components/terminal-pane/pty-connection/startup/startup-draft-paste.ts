@@ -69,6 +69,7 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
     clearStartupDraftPasteTimers()
   }
   session.notifyBlockedStartup = (reason: AgentProgramBlockReason): void => {
+    session.paneStartup?.onSetupGateSettled?.(true)
     notifyBlockedAgentStartup(
       reason,
       session.startupDraftPrompt ??
@@ -208,11 +209,12 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
     const gated = setupWaitGate.observe(data)
     if (gated.phase === 'started' || gated.phase === 'failed') {
       watchingSetup = false
-    }
-    if (gated.blocked) {
-      session.withholdStartupDraftPaste()
-      session.notifyBlockedStartup('unknown')
-      return
+      if (gated.blocked) {
+        session.withholdStartupDraftPaste()
+        session.notifyBlockedStartup('unknown')
+        return
+      }
+      session.paneStartup?.onSetupGateSettled?.(false)
     }
     if (!startupDraftReadyScanner || !waitingForDraft) {
       return
@@ -226,7 +228,7 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
         return abandonStartupDraft()
       }
       if (gated.phase === 'waiting') {
-        // Past the wrapper's own Setup limit no agent can start.
+        // Allow the wrapper to finish verification before the draft deadline.
         return armStartupDraftHardTimer(SETUP_WAIT_GATE_MAX_MS, abandonStartupDraft)
       }
       armStartupDraftHardTimer()

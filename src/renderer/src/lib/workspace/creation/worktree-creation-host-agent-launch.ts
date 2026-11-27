@@ -1,4 +1,6 @@
 import { useAppStore } from '@/store'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { resolveBackendDraftStartup } from '@/lib/workspace/creation/worktree-draft-startup-view-mode'
 import { toast } from 'sonner'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
@@ -51,11 +53,28 @@ export function windowStartupAfterCreate(
   agent: TuiAgent | null
   terminalOptions: CreationTerminalOptions
   startupDraftDeferred: boolean
+  setupGateBlocked?: Promise<boolean>
 } {
   const backendSpawned = Boolean(result.startupTerminal?.spawned || result.startupTerminal?.handle)
   const plan = planWindowStartup(request, result, backendSpawned)
+  const hostId =
+    result.worktree.hostId ?? request.workspaceRunContext?.hostId ?? request.executionHostId
+  // Main leaves default-tab startup to the window, whose pane sees the gate settle.
+  const rendererGate =
+    plan.startup?.launchConfig?.commandProvenance === 'generated' &&
+    request.launchDraftPrompt &&
+    result.setup?.waitForAgentStartup &&
+    result.defaultTabs?.tabs.length &&
+    (hostId ?? LOCAL_EXECUTION_HOST_ID) === LOCAL_EXECUTION_HOST_ID &&
+    !isWebClientLocation()
+      ? Promise.withResolvers<boolean>()
+      : undefined
   return {
     ...plan,
+    ...(plan.startup && rendererGate
+      ? { startup: { ...plan.startup, onSetupGateSettled: rendererGate.resolve } }
+      : {}),
+    setupGateBlocked: result.setupGateBlocked ?? rendererGate?.promise,
     startupDraftDeferred: Boolean(
       request.launchDraftPrompt &&
       result.startupTerminal?.handle &&

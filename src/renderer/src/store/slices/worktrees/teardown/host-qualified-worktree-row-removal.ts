@@ -8,6 +8,7 @@ import { resolveWorkspaceCleanupRemovalHostId } from '../../../../../../shared/w
 import { rememberAuthoritativelyRemovedWorktrees } from '../listing/authoritative-worktree-removal-memory'
 import { worktreeHostMatchOptions, worktreeMatchesHost } from '../listing/worktree-host-ownership'
 import { getWorktreeDeleteStateKey } from './worktree-delete-state'
+import { pruneRemovedWorktreeCreationDrafts } from './removed-worktree-creation-drafts'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 
 export function resolveSameIdSurvivingHostId(
@@ -124,6 +125,9 @@ export function dropConfirmedHostRow(
     delete nextDeleteState[getWorktreeDeleteStateKey(state, worktreeId, requiredExecutionHostId)]
     return {
       worktreesByRepo: nextWorktreesByRepo,
+      ...pruneRemovedWorktreeCreationDrafts(state, [
+        { id: worktreeId, hostId: requiredExecutionHostId }
+      ]),
       ...(nextDetectedWorktreesByRepo !== state.detectedWorktreesByRepo
         ? { detectedWorktreesByRepo: nextDetectedWorktreesByRepo }
         : {}),

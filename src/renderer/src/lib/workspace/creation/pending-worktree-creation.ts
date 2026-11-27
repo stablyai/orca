@@ -1,7 +1,7 @@
 import type { LaunchAgentStartupPromptPlan } from '@/lib/agent-session/launch/prompt/launch-agent-startup-prompt-plan'
 import type { agentPickerLaunchInputs } from '../../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
-import { worktreeIdsEqual } from '../../../../../shared/worktree/id'
+import { worktreeIdentityKey } from '../../../../../shared/worktree/id'
 import type {
   WorkspaceLinkedItem as FolderWorkspaceLinkedTask,
   GitPushTarget,
@@ -230,6 +230,11 @@ export function pendingCreationOpensNativeChat(
   )
 }
 
+const creatingIdsBySource = new WeakMap<
+  Readonly<Record<string, PendingWorktreeCreation>>,
+  Map<string, string>
+>()
+
 export function findPendingWorktreeCreationId(
   pendingCreations: Readonly<Record<string, PendingWorktreeCreation>> | undefined,
   worktreeId: string | null
@@ -237,14 +242,21 @@ export function findPendingWorktreeCreationId(
   if (!pendingCreations || !worktreeId) {
     return null
   }
-  return (
-    Object.values(pendingCreations).find(
-      (entry) =>
-        entry.status === 'creating' &&
-        entry.worktreeId !== undefined &&
-        worktreeIdsEqual(entry.worktreeId, worktreeId)
-    )?.creationId ?? null
-  )
+  let creatingIds = creatingIdsBySource.get(pendingCreations)
+  if (!creatingIds) {
+    // Workspace and terminal updates share the index until a creation changes.
+    creatingIds = new Map()
+    for (const entry of Object.values(pendingCreations)) {
+      if (entry.status === 'creating' && entry.worktreeId !== undefined) {
+        const key = worktreeIdentityKey(entry.worktreeId)
+        if (!creatingIds.has(key)) {
+          creatingIds.set(key, entry.creationId)
+        }
+      }
+    }
+    creatingIdsBySource.set(pendingCreations, creatingIds)
+  }
+  return creatingIds.size ? (creatingIds.get(worktreeIdentityKey(worktreeId)) ?? null) : null
 }
 
 export function findPendingLinkedWorkItemCreationId(
@@ -261,6 +273,7 @@ export function findPendingLinkedWorkItemCreationId(
   const match = Object.values(pendingCreations).find((entry) => {
     const pending = entry.request
     return (
+      entry.status === 'creating' &&
       pending.repoId === request.repoId &&
       pending.linkedIssue === request.linkedIssue &&
       pending.linkedPR === request.linkedPR &&

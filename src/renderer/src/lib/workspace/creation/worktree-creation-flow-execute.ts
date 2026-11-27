@@ -314,6 +314,7 @@ export async function executeWorktreeCreation(
     result,
     backendSpawned,
     startupDraftDeferred: windowStartup.startupDraftDeferred,
+    setupGateBlocked: windowStartup.setupGateBlocked,
     hostPlannedStartup: result.hostPlannedStartup === true,
     focusOnCompletion: shouldActivateOnCompletion
   })
