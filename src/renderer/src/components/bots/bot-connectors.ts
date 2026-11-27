@@ -9,7 +9,14 @@ import { Webhook } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { useBotGitHub } from '@/lib/bot-github-state'
 import { useBotLinear } from '@/lib/bot-linear-state'
-import { botLinearWorkspaces, botSlackApps, type Bot } from '../../../../shared/bot-types'
+import { useBotCliq } from '@/lib/bot-cliq-state'
+import {
+  botCliqBots,
+  botLinearWorkspaces,
+  botSlackApps,
+  type Bot
+} from '../../../../shared/bot-types'
+import { CliqIcon } from '../icons/CliqIcon'
 import { DiscordIcon } from '../icons/DiscordIcon'
 import { GitHubIcon } from '../icons/GitHubIcon'
 import { GoogleIcon } from '../icons/GoogleIcon'
@@ -18,7 +25,7 @@ import { SlackIcon } from '../icons/SlackIcon'
 import { useWebhooksConnector } from './webhooks/use-webhooks-connector'
 
 export type BotConnector = {
-  id: 'slack' | 'discord' | 'google' | 'linear' | 'github' | 'webhooks'
+  id: 'slack' | 'discord' | 'cliq' | 'google' | 'linear' | 'github' | 'webhooks'
   label: string
   Icon: ComponentType<{ className?: string }>
   /** False shows the connector as "Coming soon"; see useBotConnectorAvailable for Linear and GitHub. */
@@ -31,6 +38,7 @@ export type BotConnector = {
 export const BOT_CONNECTORS: readonly BotConnector[] = [
   { id: 'slack', label: 'Slack', Icon: SlackIcon, available: true, add: 'link' },
   { id: 'discord', label: 'Discord', Icon: DiscordIcon, available: false, add: 'link' },
+  { id: 'cliq', label: 'Zoho Cliq', Icon: CliqIcon, available: true, add: 'link' },
   { id: 'google', label: 'Google', Icon: GoogleIcon, available: true, add: 'link' },
   { id: 'linear', label: 'Linear', Icon: LinearIcon, available: true, add: 'link' },
   { id: 'github', label: 'GitHub', Icon: GitHubIcon, available: true, add: 'link' },
@@ -48,17 +56,26 @@ export const BOT_CONNECTORS: readonly BotConnector[] = [
 /** The connectors that link an account, for lists of linked accounts across bots. */
 export const ACCOUNT_CONNECTORS = BOT_CONNECTORS.filter((connector) => connector.add === 'link')
 
-/** Whether an account connector can be added now on the host: Linear and GitHub also wait for its cloud. */
+/** Whether an account connector can be added now on the host: Linear, GitHub and Cliq also wait for its cloud. */
 export function useBotConnectorAvailable(
   hostId: ExecutionHostId = LOCAL_EXECUTION_HOST_ID
 ): (connector: BotConnector) => boolean {
   const linear = useBotLinear(hostId)
   const github = useBotGitHub(hostId)
-  const cloudOn = { linear: cloudHasIt(linear.status), github: cloudHasIt(github.status) }
+  const cliq = useBotCliq(hostId)
+  const cloudOn = {
+    linear: cloudHasIt(linear.status),
+    github: cloudHasIt(github.status),
+    // Only the cloud's own answer offers Cliq: a failed read (signed out, offline) can't tell a cloud
+    // that has it from one that doesn't, and Cliq ships dark until the cloud does.
+    cliq: cliq.status === 'ready'
+  }
   return (connector) =>
     connector.available &&
     connector.add === 'link' &&
-    (connector.id === 'linear' || connector.id === 'github' ? cloudOn[connector.id] : true)
+    (connector.id === 'linear' || connector.id === 'github' || connector.id === 'cliq'
+      ? cloudOn[connector.id]
+      : true)
 }
 
 /** The same test the bot's Connectors settings use, for connectors a bot's own record shows. */
@@ -67,7 +84,8 @@ export function connectorAdded(bot: Bot, id: BotConnector['id']): boolean {
     (id === 'slack' && botSlackApps(bot).length > 0) ||
     (id === 'linear' && botLinearWorkspaces(bot).length > 0) ||
     (id === 'github' && bot.github !== null) ||
-    (id === 'google' && bot.google === true)
+    (id === 'google' && bot.google === true) ||
+    (id === 'cliq' && botCliqBots(bot).length > 0)
   )
 }
 
@@ -102,8 +120,10 @@ function cloudHasIt(status: 'loading' | 'off' | 'ready' | 'failed'): boolean {
 
 /** The action that adds access to a connected account connector, on its chat card and its row: GitHub's
  *  install page adds repositories or organizations, Slack and Linear another workspace. */
-export function connectorAddAccessLabel(id: 'slack' | 'linear' | 'github'): string {
+export function connectorAddAccessLabel(id: 'slack' | 'linear' | 'github' | 'cliq'): string {
   return id === 'github'
     ? translate('bots.connectors.addGitHubAccess', 'Add repositories or organizations')
-    : translate('bots.connectors.addAnotherWorkspace', 'Add another workspace')
+    : id === 'cliq'
+      ? translate('bots.connectors.addAnotherOrg', 'Add another org')
+      : translate('bots.connectors.addAnotherWorkspace', 'Add another workspace')
 }

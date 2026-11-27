@@ -6,6 +6,7 @@ import { StateIndicatorTooltip } from '@/components/agent/status/StateIndicatorT
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import type { BotChatOrigin, BotChatTreeChat } from '../../../../shared/bots/bot-chat-tree'
+import { CliqIcon } from '../icons/CliqIcon'
 import { GitHubIcon } from '../icons/GitHubIcon'
 import { LinearIcon } from '../icons/LinearIcon'
 import { usageLimitStopTip } from './BotUsageLimitMark'
@@ -15,6 +16,7 @@ import { SlackIcon } from '../icons/SlackIcon'
 const ORIGIN_ICONS = {
   home: House,
   slack: SlackIcon,
+  cliq: CliqIcon,
   linear: LinearIcon,
   github: GitHubIcon,
   automation: CalendarClock,
@@ -28,6 +30,8 @@ function useChatKindLabel(origin: BotChatOrigin): string {
       return t('bots.chats.home', 'Home Chat')
     case 'slack':
       return t('bots.chats.kindSlack', 'Slack thread')
+    case 'cliq':
+      return t('bots.chats.kindCliq', 'Cliq thread')
     case 'linear':
       return t('bots.chats.kindLinear', 'Linear issue')
     case 'github':

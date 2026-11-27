@@ -1,16 +1,5 @@
 import React, { useState } from 'react'
-import {
-  ChevronDown,
-  CircleCheck,
-  GitPullRequest,
-  Laptop,
-  Mail,
-  MessageSquare,
-  SquarePen,
-  UserRound,
-  ShieldCheck,
-  Undo2
-} from 'lucide-react'
+import { ChevronDown, CircleCheck, Laptop, Mail, UserRound, ShieldCheck, Undo2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
@@ -39,6 +28,7 @@ import {
   type GoogleReachArea
 } from '../../../../shared/bots/bot-access-reach'
 import { finalSentenceStop, joinSentences } from '../../../../shared/text/sentence-joining'
+import { CONNECTOR_ICON } from './bot-access-connector-icons'
 import { botAgentLabel, botErrorMessage } from './bot-presentation'
 import { useBotGoogleReach } from './google/google-connect-client'
 import { setBotGoogle } from './google/set-bot-google'
@@ -160,12 +150,6 @@ function permissionWords(
     detail: joinSentences([`${description}${finalSentenceStop(description)}`, ...notes]),
     Icon: NATIVE_CHAT_PERMISSION_MODE_ICONS[mode]
   }
-}
-
-const CONNECTOR_ICON: Record<BotAccessConnector, React.ElementType> = {
-  linear: SquarePen,
-  slack: MessageSquare,
-  github: GitPullRequest
 }
 
 function reachWords(

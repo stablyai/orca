@@ -59,6 +59,7 @@ export type BotDirectApp = { category: BotAppCategory; composio?: readonly strin
 export const DIRECT_APPS: readonly BotDirectApp[] = [
   { route: 'connector', connector: 'github', category: 'coding', composio: ['github'] },
   { route: 'connector', connector: 'slack', category: 'chat', composio: ['slack'] },
+  { route: 'connector', connector: 'cliq', category: 'chat' },
   { route: 'connector', connector: 'linear', category: 'docs', composio: ['linear'] },
   { route: 'connector', connector: 'google', category: 'mail', composio: ['gmail'] },
   ...BOT_MCP_APPS.map(
@@ -86,6 +87,8 @@ export function directAppLine(app: BotDirectApp): string {
       return translate('bots.apps.line.github', 'Mentions and events on issues and PRs')
     case 'slack':
       return translate('bots.apps.line.slack', 'Messages and mentions')
+    case 'cliq':
+      return translate('bots.apps.line.cliq', 'Messages, mentions and threads')
     case 'linear':
       return translate('bots.apps.line.linear', 'Assigned issues and mentions')
     case 'google':

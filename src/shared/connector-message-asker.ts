@@ -44,7 +44,17 @@ export function storedConnectorAsker(
 const LINK_HOSTS: Partial<Record<ConnectorSource, readonly string[]>> = {
   slack: ['app.slack.com'],
   github: ['github.com'],
-  linear: ['linear.app']
+  linear: ['linear.app'],
+  cliq: [
+    'cliq.zoho.com',
+    'cliq.zoho.eu',
+    'cliq.zoho.in',
+    'cliq.zoho.com.au',
+    'cliq.zoho.jp',
+    'cliq.zohocloud.ca',
+    'cliq.zoho.sa',
+    'cliq.zoho.uk'
+  ]
 }
 const AVATAR_HOSTS = [
   '.slack-edge.com',

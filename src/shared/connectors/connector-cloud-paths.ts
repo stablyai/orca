@@ -30,5 +30,8 @@ export const CONNECTOR_PATHS = {
   // GET lists the account's linked Slack, GitHub and Linear people; DELETE `…/<source>/<workspace id>/<user id>`.
   links: '/v1/connector/links',
   // GET `${shares}/mine`; POST `…/<share id>/accept`; POST and GET `…/<share id>/messages` (share-messages.ts).
-  shares: '/v1/shares'
+  shares: '/v1/shares',
+  // POST `${cliq}/connect` and `…/connect/redeem`; GET `…/state`; DELETE `…/orgs/<org id>`. A bot's own:
+  // POST `${bots}/<bot id>/cliq/bots`, GET and DELETE `…/cliq?org=`, GET `…/cliq/members?org=&q=`.
+  cliq: '/v1/connector/cliq'
 } as const

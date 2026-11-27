@@ -184,6 +184,13 @@
   {
     "filePath": "src/renderer/src/components/bots/bot-connectors.ts",
     "kind": "object-property:label",
+    "text": "Zoho Cliq",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/bots/bot-connectors.ts",
+    "kind": "object-property:label",
     "text": "Google",
     "dynamic": false,
     "count": 1

@@ -22,6 +22,11 @@ const BotLinearSetupDialog = lazy(() =>
     default: module.BotLinearSetupDialog
   }))
 )
+const BotCliqSetupDialog = lazy(() =>
+  import('./cliq/BotCliqSetupDialog').then((module) => ({
+    default: module.BotCliqSetupDialog
+  }))
+)
 const BotSlackSetupDialog = lazy(() =>
   import('./slack/BotSlackSetupDialog').then((module) => ({
     default: module.BotSlackSetupDialog
@@ -112,6 +117,13 @@ export function useConnectorSetup(bot: Bot): {
           bot={bot}
           open
           onOpenChange={(next) => setSetupOpen(next ? 'google-accounts' : null)}
+        />
+      ) : null}
+      {setupOpen === 'cliq' ? (
+        <BotCliqSetupDialog
+          bot={bot}
+          open
+          onOpenChange={(next) => setSetupOpen(next ? 'cliq' : null)}
         />
       ) : null}
       {setupOpen === 'google' ? (

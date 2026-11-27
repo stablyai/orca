@@ -9,6 +9,7 @@ import { WebhookNotice } from '../connector-webhook-contract'
 import { PrEvent } from '../connector-pr-event-contract'
 import { ConnectorAsker } from '../connector-asker-contract'
 import { lazyZodSchema } from '../schema/lazy-zod-schema'
+import { CONNECTOR_CLOUD_SOURCES } from './connector-cloud-sources'
 
 // Machine-side readers: they keep what this Orca uses and ignore fields a newer cloud adds.
 export const ConnectorErrorResponse = lazyZodSchema(() => z.object({ error: z.string().min(1) }))
@@ -21,8 +22,7 @@ export const ConnectorHelloResponse = lazyZodSchema(() =>
   })
 )
 
-/** Where an Orca Cloud conversation comes from. */
-export const CONNECTOR_CLOUD_SOURCES = ['slack', 'discord', 'linear', 'github', 'webhook'] as const
+export { CONNECTOR_CLOUD_SOURCES }
 
 /** A thread; a webhook has none, only its calls' trigger deliveries. */
 export const ConnectorConversation = lazyZodSchema(() =>

@@ -1,5 +1,5 @@
 // Who can ask the bot, every connector at once: each Slack workspace, Linear workspace and GitHub org's own whole list.
-import type { Bot, BotLinear } from '../../../../../shared/bot-types'
+import type { Bot, BotCliqBot, BotLinear } from '../../../../../shared/bot-types'
 import type { ConnectorGitHubInstallation } from '../../../../../shared/connector-bot-github-contract'
 import { BotNoConnectors } from '../../settings/bots/BotConnectorsSection'
 import { type BotConnectorEntry, useBotConnectorEntries } from '../bot-connector-entries'
@@ -8,12 +8,13 @@ import { ACCOUNT_CONNECTORS } from '../bot-connectors'
 import { BotWhoCanAskList, type BotWhoCanAskService } from '../BotWhoCanAskList'
 import { useGitHubCard } from '../github/BotGitHubCard'
 import { useLinearCard } from '../linear/BotLinearCard'
+import { useCliqCard } from '../cliq/BotCliqCard'
 import { useSlackWhoCanAsk } from '../slack/use-slack-who-can-ask'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { BotPairedServersWhoCanAsk } from './BotPairedServersWhoCanAsk'
 import { pairedServerAsksOn } from '../paired-server-asks-on'
 
-type PeopleEntry = Extract<BotConnectorEntry, { kind: 'slack' | 'linear' | 'github' }>
+type PeopleEntry = Extract<BotConnectorEntry, { kind: 'slack' | 'linear' | 'github' | 'cliq' }>
 
 function ConnectorPeople({
   bot,
@@ -60,6 +61,18 @@ function LinearPeople({
   return <ConnectorPeople bot={bot} entry={entry} people={useLinearCard(bot, linear).people} />
 }
 
+function CliqPeople({
+  bot,
+  entry,
+  cliq
+}: {
+  bot: Bot
+  entry: PeopleEntry
+  cliq: BotCliqBot
+}): React.JSX.Element {
+  return <ConnectorPeople bot={bot} entry={entry} people={useCliqCard(bot, cliq).people} />
+}
+
 function GitHubPeople({
   bot,
   entry,
@@ -77,7 +90,10 @@ function GitHubPeople({
 export function BotWhoCanAskPage({ bot }: { bot: Bot }): React.JSX.Element {
   const entries = useBotConnectorEntries(bot).filter(
     (entry): entry is PeopleEntry =>
-      entry.kind === 'slack' || entry.kind === 'linear' || entry.kind === 'github'
+      entry.kind === 'slack' ||
+      entry.kind === 'linear' ||
+      entry.kind === 'github' ||
+      entry.kind === 'cliq'
   )
   // Paired servers ask agents on this computer once it takes their asks: listed even with no connector.
   const pairedServers =
@@ -100,6 +116,8 @@ export function BotWhoCanAskPage({ bot }: { bot: Bot }): React.JSX.Element {
             return <SlackPeople key={entry.key} bot={bot} entry={entry} />
           case 'linear':
             return <LinearPeople key={entry.key} bot={bot} entry={entry} linear={entry.linear} />
+          case 'cliq':
+            return <CliqPeople key={entry.key} bot={bot} entry={entry} cliq={entry.cliq} />
           case 'github':
             return (
               <GitHubPeople

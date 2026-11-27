@@ -1,6 +1,7 @@
 export * from './access-request-messages.js'
 export * from './action-messages.js'
 export * from './bot-askers.js'
+export * from './cliq-messages.js'
 export * from './connect-login-seal.js'
 export * from './connect-messages.js'
 export * from './connector-endpoints.js'

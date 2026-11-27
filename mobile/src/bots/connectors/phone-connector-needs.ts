@@ -32,7 +32,8 @@ export type PhoneConnectorNeed = {
   page: ConnectorPage
 }
 
-/** Where a need is fixed: the connector's page, as the desktop's Open {{name}} opens its row. */
+/** Where a need is fixed: the connector's page, as the desktop's Open {{name}} opens its row;
+ *  null for Cliq, which has no page on the phone. */
 function needPage(entry: PhoneConnectorEntry): ConnectorPage | null {
   switch (entry.kind) {
     case 'slack':
@@ -50,6 +51,7 @@ function needPage(entry: PhoneConnectorEntry): ConnectorPage | null {
     case 'app':
       return { kind: 'tool', name: entry.tool.name, signIn: false }
     case 'webhooks':
+    case 'cliq':
       return null
   }
 }

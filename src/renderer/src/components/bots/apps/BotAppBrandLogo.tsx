@@ -4,6 +4,7 @@ import React, { useContext, type ComponentType } from 'react'
 import airtableLogo from '@/assets/connector-brands/airtable.svg'
 import atlassianLogo from '@/assets/connector-brands/atlassian.svg'
 import clickupLogo from '@/assets/connector-brands/clickup.svg'
+import cliqLogo from '@/assets/connector-brands/cliq.svg'
 import cloudflareLogo from '@/assets/connector-brands/cloudflare.svg'
 import context7Logo from '@/assets/connector-brands/context7.svg'
 import datadogLogo from '@/assets/connector-brands/datadog.svg'
@@ -30,6 +31,7 @@ import zapierLogo from '@/assets/connector-brands/zapier.svg'
 import { GitHubIcon } from '../../icons/GitHubIcon'
 import { GoogleIcon } from '../../icons/GoogleIcon'
 import { SlackIcon } from '../../icons/SlackIcon'
+import { CliqIcon } from '../../icons/CliqIcon'
 import { LinearIcon } from '../../icons/LinearIcon'
 import { BARE_LOGO_BOX, BotAppLogo, BotLogoBare } from './BotAppRow'
 import { cn } from '@/lib/class-names'
@@ -51,6 +53,7 @@ const BRANDS: Readonly<Record<string, BotAppBrand>> = {
   slack: { logo: slackLogo, Icon: SlackIcon },
   google: { logo: googleLogo, Icon: GoogleIcon },
   linear: { Icon: LinearIcon },
+  cliq: { logo: cliqLogo, Icon: CliqIcon },
   github: { Icon: GitHubIcon },
   vercel: { logo: vercelLogo, whiteMark: true },
   sentry: { logo: sentryLogo, whiteMark: true },

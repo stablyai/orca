@@ -22,6 +22,7 @@ import { BotAvatarColorSchema } from '../bots/bot-avatar-color'
 import { BotStoredOutfitSchema } from '../bots/bot-avatar-outfit'
 import { HANDED_WORKSPACES_MAX, HandedWorkspaceSchema } from '../bots/bot-made-for-workspaces'
 import { BotProposalSchema, BotProposalSeedSchema } from '../bots/bot-proposal'
+import { BotCliqBotsUpdateSchema } from '../bots/bot-cliq-members'
 import { BotLookAroundSchema } from '../bots/bot-look-around'
 import { BotLaunchSchema } from '../bots/bot-launch'
 import { BOT_OFFER_ALREADY_ANSWERED, BotOfferAnswerUpdateSchema } from '../bots/bot-offer-answers'
@@ -158,6 +159,8 @@ export const BotUpdate = lazyZodSchema(() =>
         linear: BotLinearSchema.nullable().optional(),
         linearWorkspaces: z.array(BotLinearSchema).max(BOT_MAX_CONNECTOR_WORKSPACES).optional(),
         github: BotGitHubSchema.nullable().optional(),
+        /** Every organization the bot has a Cliq bot in; an org's people go with it. */
+        cliqBots: BotCliqBotsUpdateSchema,
         skillProjects: z.array(z.string().min(1)).max(BOT_MAX_SKILL_PROJECTS).optional(),
         // Only the changed fields; the host merges them into the saved setting.
         lookAround: BotLookAroundSchema.omit({ since: true }).partial().optional(),
