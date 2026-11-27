@@ -25922,9 +25922,6 @@
       "workspacesToReview": "Espacios de trabajo que revisar",
       "workspaceDetails": "Detalles del espacio de trabajo seleccionado",
       "workspaceKept": "Se conservará"
-    },
-    "creation": {
-      "startupDraftNotDelivered": "El mensaje de inicio no se entregó. Tu borrador sigue disponible aquí."
     }
   },
   "mediaPreview": {

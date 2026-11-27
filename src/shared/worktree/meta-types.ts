@@ -15,7 +15,6 @@ import type { OrcaWorkspaceLayout } from './paths/orca-workspace-layout'
 import type { DiffComment, MobileDiffReviewState } from '../file-review/diff-comment-types'
 import type { SmartTier } from '../sidebar-list/sorting/sort-stamps'
 import type { ExternalConversationLink } from '../connectors/external-conversation-link'
-import type { BlockedWorktreeStartupDraft } from './create-types'
 
 export type ArchivedCheckout = {
   branch: string
@@ -112,6 +111,4 @@ export type WorktreeMeta = {
   cliProvenance?: CliWorkspaceProvenance
   /** System-owned connector threads whose agents run here; never published on `Worktree`. */
   externalConversations?: ExternalConversationLink[]
-  /** Desktop-only draft recovery. Never projected on `Worktree`. */
-  blockedStartupDraft?: BlockedWorktreeStartupDraft
 }

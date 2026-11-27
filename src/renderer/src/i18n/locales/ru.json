@@ -26687,9 +26687,6 @@
       "workspacesToReview": "Рабочие пространства для проверки",
       "workspaceDetails": "Сведения о выбранном рабочем пространстве",
       "workspaceKept": "Будет сохранено"
-    },
-    "creation": {
-      "startupDraftNotDelivered": "Стартовый запрос не был доставлен. Ваш черновик по-прежнему доступен здесь."
     }
   },
   "projectBoard": {

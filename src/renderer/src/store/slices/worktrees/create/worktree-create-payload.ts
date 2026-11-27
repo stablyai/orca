@@ -151,16 +151,10 @@ export function buildLocalWorktreeCreateArgs(
   request: WorktreeCreateRequest,
   attempt: WorktreeCreateAttempt
 ): CreateWorktreeArgs {
-  const launch = request.options?.creationAgentLaunch ?? request.options?.hostAgentLaunch
-  const prompt =
-    request.options?.creationAgentLaunch?.draft ?? launch?.prompt ?? request.options?.startupDraft
   return {
     repoId: request.repoId,
     ...sharedCreateFields(request, attempt),
     ...(request.startup ? { startup: request.startup } : {}),
-    ...(request.startup?.launchConfig?.commandProvenance === 'generated' && prompt?.trim()
-      ? { startupPromptForRecovery: prompt }
-      : {}),
     ...(request.creationId ? { creationId: request.creationId } : {})
   }
 }

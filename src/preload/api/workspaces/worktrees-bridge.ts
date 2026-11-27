@@ -3,10 +3,7 @@ import type {
   WorktreeBaseStatusEvent,
   WorktreeRemoteBranchConflictEvent
 } from '../../../shared/worktree/base-refs/base-ref-drift-types'
-import type {
-  BlockedWorktreeStartupDraft,
-  CreateWorktreeProgressEvent
-} from '../../../shared/worktree/create-types'
+import type { CreateWorktreeProgressEvent } from '../../../shared/worktree/create-types'
 import type {
   GitStatusMetadataChangedEvent,
   WorktreeHeadIdentity
@@ -31,33 +28,6 @@ export const worktreesApi = {
   scanStartingWslDistro: (args) => ipcRenderer.invoke('worktrees:scanStartingWslDistro', args),
 
   create: (args) => ipcRenderer.invoke('worktrees:create', args),
-
-  watchBlockedStartupDraft: (worktreeId, onDraft) => {
-    let active = true
-    let reported = false
-    const read = (): void => {
-      void ipcRenderer
-        .invoke('worktrees:readBlockedStartupDraft', worktreeId)
-        .then((draft: BlockedWorktreeStartupDraft | null) => {
-          if (active && !reported && draft) {
-            reported = true
-            onDraft(draft)
-          }
-        })
-        .catch(() => console.warn('[worktree-create] could not read the blocked startup draft'))
-    }
-    const listener = (_event: Electron.IpcRendererEvent, id: string): void => {
-      if (id === worktreeId) {
-        read()
-      }
-    }
-    ipcRenderer.on('worktrees:startupDraftBlocked', listener)
-    read()
-    return () => {
-      active = false
-      ipcRenderer.removeListener('worktrees:startupDraftBlocked', listener)
-    }
-  },
 
   adoptProvisionedRoot: (args) => ipcRenderer.invoke('worktrees:adoptProvisionedRoot', args),
 

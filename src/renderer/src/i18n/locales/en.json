@@ -25867,7 +25867,6 @@
       "workspaceKept": "Will be kept"
     },
     "creation": {
-      "startupDraftNotDelivered": "The startup prompt wasn’t delivered. Your draft is still available here.",
       "startupDraftDeferred": "Your worktree is ready. The agent draft is still available here."
     }
   },

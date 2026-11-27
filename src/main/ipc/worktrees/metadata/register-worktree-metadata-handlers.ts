@@ -69,7 +69,6 @@ export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): v
             }
           : validatedUpdates
       const sanitizedUpdates = stripOrcaProvenanceMetaUpdates(updates)
-      delete sanitizedUpdates.blockedStartupDraft
       // Late terminal activity must not resurrect a removed folder instance (#22712).
       if (isRemovedFolderWorkspaceInstance(store, args.worktreeId, executionHostId)) {
         return null
@@ -86,8 +85,7 @@ export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): v
         // Remote clients need rename pushes; per-click unread changes must remain event-free.
         runtime.notifyWorktreesChangedForRemoteClients(getRepoIdFromWorktreeId(args.worktreeId))
       }
-      const { blockedStartupDraft: _blockedStartupDraft, ...publicMeta } = meta
-      return publicMeta
+      return meta
     }
   )
 

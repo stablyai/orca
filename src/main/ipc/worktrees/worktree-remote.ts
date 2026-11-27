@@ -153,7 +153,6 @@ import {
   getSetupRunnerCommandPlatformForPath
 } from '../../../shared/agent-launch/startup/setup-runner-command'
 import { createSequencedSetupAgentCommands } from '../../../shared/agent-launch/startup/setup-agent-sequencing'
-import { sendToTrustedUIRenderer } from '../ui'
 import {
   createWorktreeCreateTimingRecorder,
   localWorktreeCreateExecutionHost,
@@ -409,7 +408,6 @@ async function spawnLocalStartupAndSetupTerminals(args: {
   setup: CreateWorktreeResult['setup']
   defaultTabs: CreateWorktreeResult['defaultTabs']
   createdWithAgent: CreateWorktreeArgs['createdWithAgent']
-  onSetupAgentBlocked?: () => void
   /** An automation's create is background work: its terminals never start a stopped WSL distro (E9). */
   automationCreate: boolean
 }): Promise<StagedStartupResult> {
@@ -458,7 +456,6 @@ async function spawnLocalStartupAndSetupTerminals(args: {
         ...(isTuiAgent(createdWithAgent) ? { launchAgent: createdWithAgent } : {}),
         ...(sequencedStartup.viewMode ? { viewMode: sequencedStartup.viewMode } : {}),
         startupCommandDelivery: sequencedStartup.startupCommandDelivery,
-        onSetupAgentBlocked: args.onSetupAgentBlocked,
         telemetry: sequencedStartup.telemetry,
         // Submitting renderer owns activation; background completion must not yank users who moved on (#9944).
         surfaceOwner: false,
@@ -1877,7 +1874,6 @@ async function performLocalWorktreeCreate(
 
   // Startup resolves the new id before lifecycle notifications invalidate runtime caches.
   runtime?.invalidateWorktreeCatalog?.(repo.id)
-  const recoveryText = args.startupPromptForRecovery
   const stagedStartup = await timing.time('spawn_startup_terminal', () =>
     spawnLocalStartupAndSetupTerminals({
       runtime,
@@ -1886,23 +1882,6 @@ async function performLocalWorktreeCreate(
       setup,
       defaultTabs,
       createdWithAgent: args.createdWithAgent,
-      ...(typeof recoveryText === 'string' && recoveryText.trim()
-        ? {
-            onSetupAgentBlocked: () => {
-              // Setup can finish after the window closes or the checkout is replaced.
-              if (
-                !worktree.instanceId ||
-                readWorktreeMetaForRepo(store, repo, worktreeId)?.instanceId !== worktree.instanceId
-              ) {
-                return
-              }
-              store.setWorktreeMeta(hostWorktreeTargetForRepo(worktreeId, repo), {
-                blockedStartupDraft: { text: recoveryText, outcome: 'not-delivered' }
-              })
-              sendToTrustedUIRenderer('worktrees:startupDraftBlocked', worktreeId)
-            }
-          }
-        : {}),
       automationCreate: Boolean(args.automationProvenance)
     })
   )

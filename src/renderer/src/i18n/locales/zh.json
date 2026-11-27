@@ -25496,9 +25496,6 @@
       "workspaceDetails": "所选工作区的详细信息",
       "workspaceKept": "将保留",
       "workspacesToReview": "要检查的工作区"
-    },
-    "creation": {
-      "startupDraftNotDelivered": "启动提示词未送达。你的草稿仍保留在这里。"
     }
   },
   "mediaPreview": {

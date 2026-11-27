@@ -148,8 +148,6 @@ export type CreateWorktreeArgs = {
   telemetrySource?: WorkspaceSource
   /** Optionally spawn the first terminal as soon as registration finishes. */
   startup?: WorktreeStartupLaunch
-  /** Desktop's original text, kept for recovery only if the generated launch is blocked. */
-  startupPromptForRecovery?: string
   /** Correlate concurrent background creates with renderer progress; synchronous callers may omit it. */
   creationId?: string
 }
@@ -175,8 +173,6 @@ export type AdoptProvisionedRootArgs = CreateWorktreeArgs & {
   expectedPath: string
   expectedRefHead?: string
 }
-
-export type BlockedWorktreeStartupDraft = { text: string; outcome: 'not-delivered' }
 
 export type CreateWorktreeResult = {
   /** The catalog this create produced; additive, older hosts omit it. */

@@ -25100,9 +25100,6 @@
       "workspacesToReview": "要檢查的工作區",
       "workspaceDetails": "所選工作區的詳細資訊",
       "workspaceKept": "將會保留"
-    },
-    "creation": {
-      "startupDraftNotDelivered": "啟動提示詞未送達。你的草稿仍保留在這裡。"
     }
   },
   "projectBoard": {

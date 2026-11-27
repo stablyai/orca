@@ -36,12 +36,7 @@ export abstract class OrcaRuntimeWithCreateTerminalSetupGate extends OrcaRuntime
       return gatedStartup ? { started: Promise.resolve(false), blocked: true } : undefined
     }
     const signal = this.getPtyLifecycleSignal(pty.ptyId)
-    const gate = waitForWorktreeSetupGate(
-      this.getWorktreeStartupReadinessHost(),
-      pty.ptyId,
-      signal,
-      opts.onSetupAgentBlocked
-    )
+    const gate = waitForWorktreeSetupGate(this.getWorktreeStartupReadinessHost(), pty.ptyId, signal)
     void gate
       .then((started) => {
         if (started && !signal.aborted) {

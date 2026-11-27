@@ -25860,9 +25860,6 @@
       "childrenChanged": "Alt çalışma alanları değişti. Çalışma alanı listesini inceleyip yeniden deneyin.",
       "childrenChangedClearPreserve": "Alt çalışma alanları değişti. Silinecekleri gözden geçirmek için bu seçeneğin işaretini kaldırın.",
       "detachFailed": "Alt çalışma alanlarının tümü ayrılamadı. Üst çalışma alanı silinmedi. {{error}}"
-    },
-    "creation": {
-      "startupDraftNotDelivered": "Başlangıç istemi iletilmedi. Taslağınız burada duruyor."
     }
   },
   "projectBoard": {

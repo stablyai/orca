@@ -25443,9 +25443,6 @@
       "workspacesToReview": "Zu prüfende Arbeitsbereiche",
       "workspaceDetails": "Details zum ausgewählten Arbeitsbereich",
       "workspaceKept": "Wird behalten"
-    },
-    "creation": {
-      "startupDraftNotDelivered": "Der Startprompt wurde nicht übermittelt. Dein Entwurf ist hier noch verfügbar."
     }
   },
   "projectBoard": {

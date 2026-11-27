@@ -26203,9 +26203,6 @@
       "workspacesToReview": "Espaços de trabalho para revisar",
       "workspaceDetails": "Detalhes do espaço de trabalho selecionado",
       "workspaceKept": "Será mantido"
-    },
-    "creation": {
-      "startupDraftNotDelivered": "O prompt de inicialização não foi entregue. Seu rascunho ainda está disponível aqui."
     }
   },
   "projectBoard": {
