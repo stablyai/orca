@@ -25079,6 +25079,9 @@
       "workspacesToReview": "確認するワークスペース",
       "workspaceDetails": "選択したワークスペースの詳細",
       "workspaceKept": "保持されます"
+    },
+    "creation": {
+      "startupDraftNotDelivered": "起動時のプロンプトは届きませんでした。下書きはここに残っています。"
     }
   },
   "mediaPreview": {

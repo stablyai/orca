@@ -25907,6 +25907,9 @@
       "workspacesToReview": "Espaces de travail à vérifier",
       "workspaceDetails": "Détails de l'espace de travail sélectionné",
       "workspaceKept": "Sera conservé"
+    },
+    "creation": {
+      "startupDraftNotDelivered": "Le message de démarrage n’a pas été transmis. Votre brouillon est toujours disponible ici."
     }
   },
   "mediaPreview": {

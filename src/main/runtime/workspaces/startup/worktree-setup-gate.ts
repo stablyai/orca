@@ -9,7 +9,8 @@ import type { WorktreeStartupReadinessHost } from './runtime-worktree-startup-re
 export function waitForWorktreeSetupGate(
   host: WorktreeStartupReadinessHost,
   ptyId: string,
-  signal: AbortSignal
+  signal: AbortSignal,
+  onBlocked?: () => void
 ): Promise<boolean | undefined> {
   if (signal.aborted) {
     return Promise.resolve(undefined)
@@ -26,9 +27,16 @@ export function waitForWorktreeSetupGate(
     const abort = (): void => finish(undefined)
     const timer = setTimeout(abort, SETUP_WAIT_GATE_MAX_MS)
     const observe = (data: string): void => {
-      const { phase } = gate.observe(data)
+      const { phase, blocked } = gate.observe(data)
       if (phase === 'started' || phase === 'failed') {
         finish(phase === 'started')
+        if (blocked && onBlocked) {
+          void Promise.resolve()
+            .then(onBlocked)
+            .catch(() =>
+              console.warn('[worktree-create] could not retain the blocked startup draft')
+            )
+        }
       }
     }
     signal.addEventListener('abort', abort, { once: true })

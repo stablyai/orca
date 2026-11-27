@@ -25484,6 +25484,9 @@
       "workspacesToReview": "검토할 워크스페이스",
       "workspaceDetails": "선택한 워크스페이스 세부 정보",
       "workspaceKept": "유지됨"
+    },
+    "creation": {
+      "startupDraftNotDelivered": "시작 프롬프트가 전달되지 않았습니다. 초안은 여기에서 계속 확인할 수 있습니다."
     }
   },
   "mediaPreview": {
