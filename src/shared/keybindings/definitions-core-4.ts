@@ -40,7 +40,7 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     scope: 'editor',
     searchKeywords: ['editor', 'navigation', 'history', 'cursor', 'forward', 'next'],
     defaultBindings: {
-      darwin: ['Ctrl+Shift+Minus'],
+      darwin: ['Ctrl+Shift+Underscore'],
       linux: ['Alt+ArrowRight'],
       win32: ['Alt+ArrowRight']
     }
