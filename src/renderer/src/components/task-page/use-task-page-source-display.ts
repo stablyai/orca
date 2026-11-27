@@ -26,6 +26,7 @@ export function useTaskPageSourceDisplay<Model extends TaskPageSourceDisplayInpu
     hostLabelById,
     selectedLinearWorkspace,
     selectedJiraSite,
+    itsaplanInstanceName,
     activeGithubTaskKind
   } = model
   // Why strict kind: Issues and PRs resolve independently; the other kind's repo is not this list's source.
@@ -59,7 +60,8 @@ export function useTaskPageSourceDisplay<Model extends TaskPageSourceDisplayInpu
         accountHostId: accountBackedTaskSourceHostId,
         hostLabelById,
         linearWorkspaceName,
-        jiraSiteName
+        jiraSiteName,
+        itsaplanInstanceName
       })
     }
     return getTaskSourceContextSummary({
@@ -84,6 +86,7 @@ export function useTaskPageSourceDisplay<Model extends TaskPageSourceDisplayInpu
     githubMode,
     hostLabelById,
     hostRegistryById,
+    itsaplanInstanceName,
     jiraSiteName,
     linearWorkspaceName,
     selectedRepos.length,
