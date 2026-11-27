@@ -1,7 +1,4 @@
-import {
-  SESSION_PARSE_ROWS_SCHEMA_SQL,
-  addSessionParseDependencyColumn
-} from './session-parse-cache-schema'
+import { SESSION_PARSE_ROWS_SCHEMA_SQL } from './session-parse-cache-schema'
 import { startSpan } from '../../observability/tracer'
 // Scanner-owned per-transcript rows persist changes without rewriting or capping the full working set.
 import { isSqliteCorruption } from '../../sqlite/sqlite-read-failure'
@@ -18,7 +15,7 @@ import type {
   SessionScopeCwdStamp
 } from './session-parse-cache-store'
 import {
-  ensureScopeCwdsTable,
+  ensureSessionParseTables,
   readScopeCwdRows,
   writeScopeCwdRows
 } from './session-scope-cwds-table'
@@ -250,10 +247,7 @@ function openDatabase(path: string): SyncDatabase {
     sql: `${SESSION_PARSE_ROWS_SCHEMA_SQL}${ROWS_REPAIR_SQL}`,
     directoryMode: PRIVATE_DIRECTORY_MODE,
     pageSize: PAGE_SIZE,
-    afterSchema: (db) => {
-      ensureScopeCwdsTable(db)
-      addSessionParseDependencyColumn(db)
-    }
+    afterSchema: ensureSessionParseTables
   })
   hardenSqliteDatabaseFiles(path)
   return db

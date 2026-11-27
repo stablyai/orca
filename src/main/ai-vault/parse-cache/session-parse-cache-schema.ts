@@ -1,5 +1,3 @@
-import type SyncDatabase from '../../sqlite/sync-database'
-
 export const SESSION_PARSE_ROWS_SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS rows(
@@ -19,18 +17,3 @@ CREATE TABLE IF NOT EXISTS rows(
 );
 CREATE INDEX IF NOT EXISTS rows_seen_at ON rows(seen_at);
 `
-
-/** Add the optional revision under the write lock without discarding existing parse rows. */
-export function addSessionParseDependencyColumn(db: SyncDatabase): void {
-  db.exec('BEGIN IMMEDIATE')
-  try {
-    const columns = db.prepare('PRAGMA table_info(rows)').all()
-    if (!columns.some((column) => column.name === 'dependency_signature')) {
-      db.exec('ALTER TABLE rows ADD COLUMN dependency_signature TEXT')
-    }
-    db.exec('COMMIT')
-  } catch (error) {
-    db.exec('ROLLBACK')
-    throw error
-  }
-}

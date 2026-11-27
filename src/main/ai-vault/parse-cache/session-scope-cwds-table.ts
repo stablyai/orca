@@ -83,15 +83,29 @@ export function writeScopeCwdRows(
   }
 }
 
-export function ensureScopeCwdsTable(db: SyncDatabase): void {
-  const current = db.prepare("SELECT value FROM meta WHERE key = 'scope_cwds_version'").get()
-  if (current?.value !== SCOPE_CWDS_VERSION) {
-    db.exec('DROP TABLE IF EXISTS scope_cwds')
+/** One writer lock protects both additive parse columns and independently versioned cwd rows. */
+export function ensureSessionParseTables(db: SyncDatabase): void {
+  db.exec('BEGIN IMMEDIATE')
+  try {
+    const current = db
+      .prepare(`SELECT
+        (SELECT value FROM meta WHERE key = 'scope_cwds_version') AS scope_version,
+        EXISTS(SELECT 1 FROM pragma_table_info('rows') WHERE name = 'dependency_signature')
+          AS has_dependency_signature`)
+      .get()
+    db.exec(`
+      ${current?.scope_version === SCOPE_CWDS_VERSION ? '' : 'DROP TABLE IF EXISTS scope_cwds;'}
+      ${SCOPE_CWDS_SQL}
+      ${current?.has_dependency_signature === 1 ? '' : 'ALTER TABLE rows ADD COLUMN dependency_signature TEXT;'}
+      INSERT OR REPLACE INTO meta(key, value) VALUES ('scope_cwds_version', '${SCOPE_CWDS_VERSION}');
+    `)
+    db.exec('COMMIT')
+  } catch (error) {
+    if (db.isTransaction) {
+      db.exec('ROLLBACK')
+    }
+    throw error
   }
-  db.exec(SCOPE_CWDS_SQL)
-  db.prepare("INSERT OR REPLACE INTO meta(key, value) VALUES ('scope_cwds_version', ?)").run(
-    SCOPE_CWDS_VERSION
-  )
 }
 
 function parseScopeCwdStamp(row: Record<string, unknown>): SessionScopeCwdStamp | null {

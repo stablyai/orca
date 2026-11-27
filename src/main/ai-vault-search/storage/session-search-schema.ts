@@ -126,21 +126,20 @@ export function openSessionSearchDatabase(path: string): SyncDatabase {
           AND EXISTS (SELECT 1 FROM files WHERE files.path = sessions.file_path
             AND files.session_row_id = sessions.id)
       `)
-      addSessionSearchPrefixHashColumn(db)
+      addSessionSearchFileColumns(db)
     }
   })
 }
 
 /** Version 8 indexes predate these columns; the write lock serializes concurrent openers. */
-export function addSessionSearchPrefixHashColumn(db: SyncDatabase): void {
+export function addSessionSearchFileColumns(db: SyncDatabase): void {
   db.exec('BEGIN IMMEDIATE')
   try {
     const columns = db.prepare('PRAGMA table_info(files)').all()
-    if (!columns.some((column) => asRecord(column)?.name === 'prefix_hash')) {
-      db.exec('ALTER TABLE files ADD COLUMN prefix_hash TEXT')
-    }
-    if (!columns.some((column) => asRecord(column)?.name === 'dependency_signature')) {
-      db.exec('ALTER TABLE files ADD COLUMN dependency_signature TEXT')
+    for (const name of ['prefix_hash', 'dependency_signature']) {
+      if (!columns.some((column) => asRecord(column)?.name === name)) {
+        db.exec(`ALTER TABLE files ADD COLUMN ${name} TEXT`)
+      }
     }
     db.exec('COMMIT')
   } catch (error) {
