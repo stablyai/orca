@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import {
   aiVaultSessionInScope,
   createAiVaultScopeCwdMatcher
@@ -15,28 +16,33 @@ import type { PluginRuntimeRpc } from './plugin-host-runtime-call'
  * The parts of an Agent Session History row the plugin host reads. Previews, prompts and the
  * account home stay behind; `filePath` and `codexHome` stay in main, for resume preparation only.
  */
-const historyRow = z.object({
-  agent: z.string(),
-  sessionId: z.string(),
-  title: z.string(),
-  cwd: z.string().nullable(),
-  cwdAliases: z.array(z.string()).optional(),
-  branch: z.string().nullable(),
-  filePath: z.string(),
-  codexHome: z.string().nullable(),
-  executionHostId: z.string(),
-  createdAt: z.string().nullable(),
-  updatedAt: z.string().nullable(),
-  modifiedAt: z.string(),
-  messageCount: z.number(),
-  totalTokens: z.number(),
-  subagent: z.unknown().nullable().optional()
-})
-const historyAnswer = z.object({
-  sessions: z.array(z.unknown()),
-  fingerprint: z.string().optional(),
-  unchanged: z.literal(true).optional()
-})
+const historyRow = lazyZodSchema(() =>
+  z.object({
+    agent: z.string(),
+    sessionId: z.string(),
+    title: z.string(),
+    cwd: z.string().nullable(),
+    cwdAliases: z.array(z.string()).optional(),
+    branch: z.string().nullable(),
+    filePath: z.string(),
+    codexHome: z.string().nullable(),
+    executionHostId: z.string(),
+    createdAt: z.string().nullable(),
+    updatedAt: z.string().nullable(),
+    modifiedAt: z.string(),
+    messageCount: z.number(),
+    totalTokens: z.number(),
+    subagent: z.unknown().nullable().optional()
+  })
+)
+const historyAnswer = lazyZodSchema(() =>
+  z.object({
+    sessions: z.array(z.unknown()),
+    hiddenRowCount: z.number().int().nonnegative().optional().catch(undefined),
+    fingerprint: z.string().optional(),
+    unchanged: z.literal(true).optional()
+  })
+)
 
 export type PluginHistorySession = {
   agent: string
@@ -137,7 +143,8 @@ async function readHistory(
       // The vault reports no truncation. An unscoped read keeps the newest 200; a scoped one has
       // per-source budgets (200 sessions per walked agent, 400 files per cwd-bucketed one), so
       // 200 or more rows means some source may have stopped at its budget.
-      depthReached: answer.sessions.length >= PLUGIN_AGENT_SESSION_LIST_LIMIT
+      depthReached:
+        answer.sessions.length + (answer.hiddenRowCount ?? 0) >= PLUGIN_AGENT_SESSION_LIST_LIMIT
     },
     ...(answer.fingerprint ? { fingerprint: answer.fingerprint } : {})
   }

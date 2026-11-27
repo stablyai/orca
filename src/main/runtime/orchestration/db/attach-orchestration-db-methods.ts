@@ -8,6 +8,7 @@ import { attachCoordinatorRunStore } from './coordinator-runs/coordinator-run-st
 import { attachDecisionGateStore } from './decision-gates/decision-gate-store'
 import { attachDispatchCompletion } from './dispatch-context/dispatch-completion'
 import { attachDispatchContextStore } from './dispatch-context/dispatch-context-store'
+import { attachDispatchProgress } from './dispatch-context/dispatch-progress'
 import { attachDispatchLinksById } from './dispatch-context/dispatch-links-by-id'
 import { attachSessionPartyRows } from './worker-terminal/session-party-rows'
 import { attachDispatchLookup } from './dispatch-context/dispatch-lookup'
@@ -133,6 +134,7 @@ export function attachOrchestrationDbMethods(ctor: { prototype: object }): void 
   attachDispatchLookup(ctor)
   attachDispatchDepth(ctor)
   attachDispatchCompletion(ctor)
+  attachDispatchProgress(ctor)
   attachWorkerReportSettlement(ctor)
   attachDecisionGateStore(ctor)
   attachCoordinatorRunStore(ctor)

@@ -85,17 +85,18 @@ export function structuredAgentStartJournal(
     destination: AgentStartDestination,
     entry: AgentJournalOrcaCardItem | OrcaStatusLine,
     observedAt: number
-  ): Promise<void> => {
+  ): Promise<boolean> => {
     const { sessionId } = destination
+    let contextKept = true
     const stillSameContext = () => {
       const current = deps().store.getConversation(sessionId)
-      return (
+      contextKept =
         current !== null &&
         (current.providerContextBoundary?.operationId ?? null) === destination.contextId
-      )
+      return contextKept
     }
     if (!stillSameContext()) {
-      return
+      return false
     }
     const { journal } = await conversation(sessionId)
     const identity = {
@@ -127,6 +128,13 @@ export function structuredAgentStartJournal(
     if (result.failure) {
       throw restoreJournalSqlFailure(result.failure)
     }
+    if (result.outcomes[0]?.kind === 'committed') {
+      return true
+    }
+    if (!contextKept) {
+      return false
+    }
+    return (await deps().journalDatabase.sessionEpoch(sessionId)) === destination.epoch
   }
 
   return { captureAgentStartDestination, appendAgentStart }

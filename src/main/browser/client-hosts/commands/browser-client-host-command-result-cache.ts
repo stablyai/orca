@@ -4,6 +4,7 @@ import type {
   PageState
 } from './browser-client-host-command-state'
 import { browserCommandCacheBytes } from './browser-command-cache-bytes'
+import { retainBrowserCommandEvent } from './browser-command-retention'
 
 export class BrowserClientHostCommandResultCache {
   private readonly pagesByRecord = new Map<CommandRecord, { page: PageState; bytes: number }>()
@@ -21,6 +22,9 @@ export class BrowserClientHostCommandResultCache {
   ) {}
 
   record(page: PageState, record: CommandRecord, retain = true): void {
+    const retained = retainBrowserCommandEvent(record.event)
+    record.event = retained.event
+    record.retainedUrlDigest = retained.urlDigest
     if (!retain) {
       this.evict(page, record.event.commandSequence, record)
       return

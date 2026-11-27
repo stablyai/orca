@@ -24,6 +24,7 @@ function stack(width: number, open: boolean, prompt = false, rows = running) {
 }
 
 export const folded320 = stack(320, false)
+export const oneFolded320 = stack(320, false, false, running.slice(0, 1))
 export const open320 = stack(320, true)
 export const promptFolded320 = stack(320, false, true)
 export const promptOpen320 = stack(320, true, true)

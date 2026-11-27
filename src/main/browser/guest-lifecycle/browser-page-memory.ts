@@ -1,5 +1,6 @@
 import { getBrowserPageIdleDiscard } from './browser-page-idle-discard'
 import { BrowserError } from '../browser-error'
+import { redactBrowserHistorySnapshot } from '../../../shared/browser/navigation/browser-history-redaction'
 import { isAgentRpcCaller } from '../../runtime/rpc/callers/rpc-caller-identity'
 import { getActiveRpcCaller } from '../../runtime/rpc/callers/active-call'
 import { readBrowserGuestDiscardProtection } from './manager/registration/browser-guest-discard-protection'
@@ -196,9 +197,11 @@ export function reserveBrowserPageDiscard(pageId: string, guest: Electron.WebCon
       return false
     }
     // pageState restores scroll and form contents; it can hold typed secrets, so it stays in memory only.
-    const entries = guest.navigationHistory
-      .getAllEntries()
-      .map((entry) => ({ url: entry.url, title: entry.title, pageState: entry.pageState }))
+    const entries = redactBrowserHistorySnapshot(
+      guest.navigationHistory
+        .getAllEntries()
+        .map((entry) => ({ url: entry.url, title: entry.title, pageState: entry.pageState }))
+    )
     const index = guest.navigationHistory.getActiveIndex()
     if (
       !entries.length ||
@@ -277,9 +280,7 @@ export function closeBrowserMemoryPage(pageId: string): void {
   }
 }
 
-export function browserMemoryGeneration(pageId: string): number | undefined {
-  return pages.get(pageId)?.generation
-}
+export const browserMemoryGeneration = (pageId: string) => pages.get(pageId)?.generation
 
 export async function waitForBrowserPageReady(
   pageId: string,

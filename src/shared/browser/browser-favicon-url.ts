@@ -1,4 +1,8 @@
-import { isEligibleLocalCertificateHost, isWildcardBindHost } from './navigation/browser-url'
+import {
+  isEligibleLocalCertificateHost,
+  isWildcardBindHost,
+  redactKagiSessionToken
+} from './navigation/browser-url'
 
 // Chromium emits icon updates only when the URL list changes; rendering and navigation listeners must share origin/icon rules.
 
@@ -13,7 +17,9 @@ export function displayableFaviconUrl(faviconUrl: string | null | undefined): st
   }
   try {
     const url = new URL(trimmed)
-    return url.protocol === 'http:' || url.protocol === 'https:' ? trimmed : null
+    return url.protocol === 'http:' || url.protocol === 'https:'
+      ? redactKagiSessionToken(trimmed)
+      : null
   } catch {
     return null
   }
