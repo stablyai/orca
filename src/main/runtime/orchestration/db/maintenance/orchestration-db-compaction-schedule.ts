@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises'
+import { removeStaleDurableWriteTempFiles } from '../../../../filesystem/durable-file-write'
 import { writeQuietly } from './orchestration-db-compaction-files'
 
 const MIB = 1024 * 1024
@@ -32,6 +33,8 @@ export function copyBudgetMs(liveBytes: number, attempts: number): number {
 export async function readAttempts(
   path: string
 ): Promise<{ attempts: number; lastAttemptAt: number }> {
+  // A write a quit or crash cut short leaves its temp file; the profile lock keeps that process gone.
+  await removeStaleDurableWriteTempFiles(path)
   let text: string
   try {
     text = await readFile(path, 'utf8')
