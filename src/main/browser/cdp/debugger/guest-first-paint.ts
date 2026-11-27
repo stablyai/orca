@@ -18,19 +18,28 @@ const AWAIT_FIRST_PAINT_EXPRESSION = `new Promise((resolve) => {
 const gatedDocumentByGuest = new WeakMap<WebContents, number>()
 // Cache already-painted guests until their next main-frame navigation to avoid a CDP probe per input.
 const paintedGuests = new WeakSet<WebContents>()
-const navigationWatchedGuests = new WeakSet<WebContents>()
+const navigationGenerationByGuest = new WeakMap<WebContents, number>()
 
-function markGuestPainted(guest: WebContents): void {
-  paintedGuests.add(guest)
-  if (navigationWatchedGuests.has(guest)) {
-    return
+function ensureNavigationGeneration(guest: WebContents): number {
+  const existing = navigationGenerationByGuest.get(guest)
+  if (existing !== undefined) {
+    return existing
   }
-  navigationWatchedGuests.add(guest)
+  navigationGenerationByGuest.set(guest, 0)
   guest.on('did-start-navigation', (_event, _url, isInPlace, isMainFrame) => {
     if (isMainFrame && !isInPlace) {
+      navigationGenerationByGuest.set(guest, (navigationGenerationByGuest.get(guest) ?? 0) + 1)
       paintedGuests.delete(guest)
     }
   })
+  return 0
+}
+
+function markGuestPainted(guest: WebContents, expectedGeneration: number): void {
+  // Ignore stale probe/wait resolutions if a new main-frame navigation started while awaiting.
+  if (navigationGenerationByGuest.get(guest) === expectedGeneration) {
+    paintedGuests.add(guest)
+  }
 }
 
 // Answers the document to gate, or null. A failed or timed-out probe means a busy page.
@@ -71,9 +80,10 @@ export async function waitForGuestFirstPaint(
   if (!isEmbeddedGuest(guest) || paintedGuests.has(guest)) {
     return
   }
+  const startGeneration = ensureNavigationGeneration(guest)
   const probe = await unpaintedDocument(send)
   if (probe.status === 'painted') {
-    markGuestPainted(guest)
+    markGuestPainted(guest, startGeneration)
     return
   }
   if (probe.status === 'unknown' || gatedDocumentByGuest.get(guest) === probe.timeOrigin) {
@@ -88,7 +98,7 @@ export async function waitForGuestFirstPaint(
       null
     )
     if (settled !== null) {
-      markGuestPainted(guest)
+      markGuestPainted(guest, startGeneration)
     }
   } finally {
     release()

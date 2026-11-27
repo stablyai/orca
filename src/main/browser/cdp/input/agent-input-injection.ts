@@ -9,9 +9,11 @@ const injectionDepth = new WeakMap<InjectionTarget, number>()
 const lastInjectionEndedAt = new WeakMap<InjectionTarget, number>()
 
 export function isAgentInjectingInput(webContents: InjectionTarget): boolean {
-  if ((injectionDepth.get(webContents) ?? 0) > 0) {
-    return true
-  }
+  return (injectionDepth.get(webContents) ?? 0) > 0
+}
+
+/** True briefly after injection finishes so delayed cross-origin iframe echoes stay attributable to paired viewers. */
+export function wasRecentlyInjectingInput(webContents: InjectionTarget): boolean {
   const endedAt = lastInjectionEndedAt.get(webContents)
   return endedAt !== undefined && Date.now() - endedAt <= RECENT_INJECTION_ECHO_MS
 }

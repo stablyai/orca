@@ -87,7 +87,18 @@ export function orcadClientPageCommand(
       openUrlForMobileOrClient({
         host,
         params,
-        signal: opts?.signal
+        signal: opts?.signal,
+        ...(engineAvailable()
+          ? {
+              createServerTab: async (...tabArgs) =>
+                requireCreatedPage(await createTab(host, tabArgs, forward, engineAvailable)),
+              closeServerTab: async (browserPageId: string, worktree: string) => {
+                await Promise.resolve(
+                  forward([{ worktree, page: browserPageId }], 'browserTabClose')
+                )
+              }
+            }
+          : {})
       })
   }
   if (name === 'browserTabCreate') {

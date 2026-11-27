@@ -1,8 +1,15 @@
 import type { WebContents } from 'electron'
 import { createGuestRawCdpSender } from '../debugger/guest-cdp-command'
+import { assertExpectedPageUrlForStep } from './browser-expected-page-url'
 import { mobileTouchClickExpression, readClickPoint } from './cdp-pointer-targets'
-import { readRecord, sendFrameSessionInput, settle } from './guest-frame-input-sessions'
+import {
+  readRecord,
+  sendFrameSessionInput,
+  settle,
+  type GuestSessionCdpSender
+} from './guest-frame-input-sessions'
 import { resolveCrossSitePointerTarget } from './offscreen-frame-pointer-route'
+import { assertRemoteCliPageAccess } from '../../routing/input-ownership/remote-cli-page-admission'
 
 export type ResolvedCrossSiteTouchClick = {
   x: number
@@ -29,8 +36,22 @@ export async function resolveCrossSiteMobileTouchClick(
   if (!target) {
     return null
   }
+  // Recheck admission and expected URL immediately before activation (after focus emulation awaits).
+  let guardError: unknown = null
+  const sendGuarded: GuestSessionCdpSender = (method, params, sessionId) => {
+    if (method === 'Runtime.evaluate') {
+      try {
+        assertRemoteCliPageAccess(webContents.id)
+        assertExpectedPageUrlForStep()
+      } catch (error) {
+        guardError = error
+        return Promise.reject(error)
+      }
+    }
+    return sendRaw(method, params, sessionId)
+  }
   const evaluated = await settle(
-    sendFrameSessionInput(webContents, sendRaw, target.sessionId, 'Runtime.evaluate', {
+    sendFrameSessionInput(webContents, sendGuarded, target.sessionId, 'Runtime.evaluate', {
       expression: mobileTouchClickExpression(
         target.framePoint.x,
         target.framePoint.y,
@@ -42,6 +63,20 @@ export async function resolveCrossSiteMobileTouchClick(
       silent: true
     })
   )
+  if (guardError !== null) {
+    throw guardError
+  }
+  if (evaluated.outcome === 'timeout') {
+    // An activating evaluate is already in flight and cannot be cancelled; avoid a duplicate fallback click.
+    return {
+      x,
+      y,
+      adjusted: false,
+      handled: allowDomActivation,
+      frameSessionId: target.sessionId,
+      framePoint: target.framePoint
+    }
+  }
   if (evaluated.outcome !== 'ok') {
     return null
   }

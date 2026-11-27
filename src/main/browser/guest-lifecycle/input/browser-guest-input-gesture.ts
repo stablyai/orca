@@ -1,5 +1,8 @@
 import type { WebContents } from 'electron'
-import { isAgentInjectingInput } from '../../cdp/input/agent-input-injection'
+import {
+  isAgentInjectingInput,
+  wasRecentlyInjectingInput
+} from '../../cdp/input/agent-input-injection'
 
 // Window-open details lack user activation; track browser-process input instead of page events.
 const ACTIVATING_MOUSE_TYPES: ReadonlySet<string> = new Set(['mouseDown', 'mouseUp'])
@@ -144,7 +147,12 @@ export function trackBrowserGuestInputGesture(
       lastGestureAt = now()
       syntheticGestureByGuest.delete(guest)
       lastGestureDomActivations = domActivationsByGuest.get(guest) ?? 0
-      lastGestureByAgent = isAgentInjectingInput(guest)
+      const activelyInjecting = isAgentInjectingInput(guest)
+      const pairedViewerEcho =
+        !activelyInjecting &&
+        wasRecentlyInjectingInput(guest) &&
+        isPairedViewerCommandRunning?.(guest.id) === true
+      lastGestureByAgent = activelyInjecting || pairedViewerEcho
       lastGestureFromThisDesktop =
         !lastGestureByAgent || isAgentCommandShownHere?.(guest.id) === true
       lastGestureFromPairedViewer =

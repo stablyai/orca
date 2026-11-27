@@ -48,6 +48,11 @@ export async function returnClientToPopupOpener(
     return
   }
   const snapshot = await runtime.getMobileSessionTabsForWorktree(popup.worktreeId)
+  // Bail out if the client explicitly chose another tab while awaiting the snapshot.
+  // (Popup retirement alone preserves stored selection.activeTabId via project().)
+  if (runtime.getActiveTabId(popup.pairedDeviceId, popup.worktreeId) !== popup.browserPageId) {
+    return
+  }
   const findByPageId = (pageId: string | undefined) =>
     pageId
       ? snapshot.tabs.find(
@@ -117,23 +122,18 @@ export async function followOpenedRendererLinkTabForClient(
   },
   link: ServerPageLinkTabPresentation
 ): Promise<void> {
-  const knownTabIds = new Set(
-    runtime.getStoredSnapshot(link.worktreeId)?.tabs.map((tab) => tab.id) ?? []
+  const findCreatedBrowserTab = (): RuntimeMobileSessionBrowserTab | undefined =>
+    runtime
+      .getStoredSnapshot(link.worktreeId)
+      ?.tabs.find(
+        (tab): tab is RuntimeMobileSessionBrowserTab =>
+          tab.type === 'browser' && tab.browserPageId === link.browserPageId
+      )
+  const added = await waitForGraphSyncValue(
+    runtime.graphSyncCallbacks,
+    findCreatedBrowserTab,
+    3_000
   )
-  const findAddedBrowserTab = (): RuntimeMobileSessionBrowserTab | undefined => {
-    const candidates =
-      runtime
-        .getStoredSnapshot(link.worktreeId)
-        ?.tabs.filter(
-          (tab): tab is RuntimeMobileSessionBrowserTab =>
-            tab.type === 'browser' && !knownTabIds.has(tab.id)
-        ) ?? []
-    return (
-      candidates.find((tab) => tab.url === link.url) ??
-      (candidates.length === 1 ? candidates[0] : undefined)
-    )
-  }
-  const added = await waitForGraphSyncValue(runtime.graphSyncCallbacks, findAddedBrowserTab, 3_000)
   if (!added) {
     return
   }

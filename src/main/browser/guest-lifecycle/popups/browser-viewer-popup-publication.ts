@@ -49,12 +49,12 @@ export function resolvePopupViewerTarget(input: {
   peekCreditDeviceId: (browserTabId: string) => string | null
   observed?: ObservedBrowserGuestGesture | null
 }): PopupViewerTarget {
-  if (
-    !input.isListedAsServerPage &&
-    input.observed?.byAgent === false &&
-    input.observed.fromThisDesktop
-  ) {
+  if (!input.isListedAsServerPage && input.observed?.fromThisDesktop) {
     return { shownToViewers: false, pairedDeviceId: null }
+  }
+  if (input.observed?.byAgent === true && input.observed.fromPairedViewer !== true) {
+    // An agent CLI must not pull a passive phone viewer onto its popup, even on a server page.
+    return { shownToViewers: input.isListedAsServerPage, pairedDeviceId: null }
   }
   const pairedDeviceId =
     (input.browserTabId !== null ? input.peekCreditDeviceId(input.browserTabId) : null) ??

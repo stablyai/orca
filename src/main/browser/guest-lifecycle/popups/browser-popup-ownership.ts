@@ -29,6 +29,6 @@ export type ServerPagePopupClosure = {
 /** A new tab opened from a page link (e.g. target="_blank") on a paired client's click. */
 export type ServerPageLinkTabPresentation = {
   worktreeId: string
-  url: string
+  browserPageId: string
   pairedDeviceId: string
 }

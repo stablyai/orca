@@ -108,7 +108,10 @@ export class RuntimeBrowserTabClose {
       ) {
         return { closed: true }
       }
-      if (this.targets.retireGhostBrowserSessionRow(worktreeId, popupPageId)) {
+      if (
+        !browserManager.isLivePopupPage(popupPageId) &&
+        this.targets.retireGhostBrowserSessionRow(worktreeId, popupPageId)
+      ) {
         return { closed: true }
       }
       const scope = worktreeId ? ' in this worktree' : ''

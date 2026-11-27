@@ -251,12 +251,26 @@ export function useMobileBrowserInteractions(args: MobileBrowserInteractionArgs)
   const handleResponderRelease = useCallback(
     (event: GestureResponderEvent, gesture: PanResponderGestureState) => {
       clearLongPressTimer()
+      const wasPanning = panRef.current !== null
       pinchRef.current = null
       panRef.current = null
       const start = startPointRef.current
       startPointRef.current = null
       const wasScrolling = scrollingRef.current
       scrollingRef.current = false
+      if (wasScrolling && !wasPanning) {
+        const deltaX = gesture.dx - lastWheelRef.current.dx
+        const deltaY = gesture.dy - lastWheelRef.current.dy
+        if (Math.abs(deltaX) + Math.abs(deltaY) >= 8) {
+          const release = readLocalTouchPoint(event.nativeEvent)
+          const point = release ? mapTouchPoint(release.x, release.y) : null
+          if (point) {
+            lastWheelRef.current = { dx: gesture.dx, dy: gesture.dy, at: Date.now() }
+            sendWheel(point, deltaX, deltaY, wheelGestureIdRef.current)
+          }
+        }
+        return
+      }
       if (!start || rightClickSentRef.current || wasScrolling) {
         return
       }
@@ -270,7 +284,7 @@ export function useMobileBrowserInteractions(args: MobileBrowserInteractionArgs)
         }
       }
     },
-    [clearLongPressTimer, mapTouchPoint, sendPointerClick]
+    [clearLongPressTimer, mapTouchPoint, sendPointerClick, sendWheel]
   )
 
   const panResponder = useMemo(

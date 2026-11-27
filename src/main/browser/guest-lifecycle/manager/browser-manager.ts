@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { webContents } from 'electron'
 import { BrowserCertificateTrustController } from '../../certificate-trust/browser-certificate-trust-controller'
 import '../../../../shared/orca-profiles/constants'
@@ -22,12 +23,19 @@ export class BrowserManager extends BrowserManagerEventForwarding {
         (url, activateTab) => {
           const pairedDeviceId = this.pageInputCredit.consume(browserTabId)
           const worktreeId = this.worktreeIdByTabId.get(browserTabId)
-          if (pairedDeviceId && worktreeId && activateTab) {
-            this.serverPageLinkTabPresenter?.({ worktreeId, url, pairedDeviceId })
+          const newBrowserPageId =
+            pairedDeviceId && worktreeId && activateTab ? randomUUID() : undefined
+          if (pairedDeviceId && worktreeId && newBrowserPageId) {
+            this.serverPageLinkTabPresenter?.({
+              worktreeId,
+              browserPageId: newBrowserPageId,
+              pairedDeviceId
+            })
           }
           renderer.send('browser:open-link-in-orca-tab', {
             browserPageId: browserTabId,
             url,
+            ...(newBrowserPageId ? { newBrowserPageId } : {}),
             // An agent's or paired viewer's link must not move the desktop user's view.
             ...(activateTab && !agentOpened && !pairedDeviceId ? {} : { activate: false })
           })

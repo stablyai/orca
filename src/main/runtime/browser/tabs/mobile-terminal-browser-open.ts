@@ -133,8 +133,10 @@ export function activeMobileViewerClientIdsForPane(
     snapshot?.tabs
       .filter(
         (t) =>
-          (tabId !== null &&
-            (t.id === tabId || (t.type === 'terminal' && t.parentTabId === tabId))) ||
+          (parsed
+            ? t.type === 'terminal' && t.parentTabId === parsed.tabId && t.leafId === parsed.leafId
+            : tabId !== null &&
+              (t.id === tabId || (t.type === 'terminal' && t.parentTabId === tabId))) ||
           (ptyId !== null && t.type === 'terminal' && t.ptyId === ptyId)
       )
       .map((t) => t.id) ?? (tabId ? [tabId] : [])

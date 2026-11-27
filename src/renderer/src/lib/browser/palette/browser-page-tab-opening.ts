@@ -11,8 +11,9 @@ export function openUrlInTabBesideBrowserPage(args: {
   url: string
   activate: boolean
   placement?: BrowserLinkPlacement
+  browserPageId?: string
 }): string | null {
-  const { sourcePageId, worktreeId, url, activate, placement } = args
+  const { sourcePageId, worktreeId, url, activate, placement, browserPageId } = args
   const store = useAppStore.getState()
   const sourcePage = findPage(store.browserPagesByWorkspace, sourcePageId)
   // Why: inherit the opener's cookie jar; the default profile would silently cross profiles.
@@ -24,6 +25,7 @@ export function openUrlInTabBesideBrowserPage(args: {
     // Why: a Kagi private-session search URL carries a token; only the stored URL is redacted.
     title: redactKagiSessionToken(url),
     activate,
+    ...(browserPageId ? { browserPageId } : {}),
     ...placement,
     ...(sourceUnifiedTab ? { afterTabId: sourceUnifiedTab.id } : {}),
     ...(sourceUnifiedTab?.executionHostId
