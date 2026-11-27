@@ -2,6 +2,7 @@ import { dirname } from 'node:path'
 import type { DaemonFileLog } from '../observability/daemon-file-log'
 import { PROVIDER_RELAY_PROTOCOL_VERSION } from '../protocol/daemon-provider-relay-protocol'
 import { ProviderRelayHost } from './provider-relay-host'
+import type { DaemonToolRelayFront } from '../tool-relay-front/daemon-tool-relay-front'
 
 type DaemonProviderRelayOptions = {
   tokenPath: string
@@ -18,7 +19,12 @@ type DaemonProviderRelayOptions = {
 /** The daemon's chat-agent host and the hello capability that tells an app it may use it. */
 export function createDaemonProviderRelays(options: DaemonProviderRelayOptions): {
   relays: ProviderRelayHost
-  identity: { providerRelay?: true; providerRelayKeep?: true; providerRelayAcks?: true }
+  identity: {
+    providerRelay?: true
+    providerRelayKeep?: true
+    providerRelayAcks?: true
+    toolRelayFront?: DaemonToolRelayFront
+  }
 } {
   const relays = new ProviderRelayHost({
     runtimeDir: dirname(options.tokenPath),
@@ -33,7 +39,12 @@ export function createDaemonProviderRelays(options: DaemonProviderRelayOptions):
   return {
     relays,
     identity: advertised
-      ? { providerRelay: true, providerRelayKeep: true, providerRelayAcks: true }
+      ? {
+          providerRelay: true,
+          providerRelayKeep: true,
+          providerRelayAcks: true,
+          ...(relays.toolRelayFront ? { toolRelayFront: relays.toolRelayFront } : {})
+        }
       : {}
   }
 }

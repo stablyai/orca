@@ -9,6 +9,7 @@ import {
   type ToolRelayFrontOpenResult,
   type ToolRelayFrontServeResult
 } from '../../daemon/protocol/daemon-tool-relay-front-protocol'
+import { openDaemonToolRelayConnection } from '../../daemon/transport/client/daemon-client-tool-relay-connection'
 import { jsonProperty } from '../../../shared/json-stream/json-value-property'
 import { providerRelayRoute } from '../../provider-relay/provider-relay-route'
 import { keptProviderRelay } from '../../provider-relay/provider-relay-launch-inventory'
@@ -142,7 +143,7 @@ export class ToolRelayFronts {
       return
     }
     try {
-      const { socket, remainder } = await client.openToolRelayConnection(frontConnectionId)
+      const { socket, remainder } = await openDaemonToolRelayConnection(client, frontConnectionId)
       if (remainder.length > 0) {
         socket.unshift(remainder)
       }

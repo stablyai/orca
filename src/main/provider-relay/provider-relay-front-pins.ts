@@ -31,3 +31,20 @@ export class ProviderRelayFrontMovedError extends Error {
     this.name = 'ProviderRelayFrontMovedError'
   }
 }
+
+/**
+ * Refuses a start on another daemon start than the chat's pinned front; `undo` first ends what that
+ * start already spawned. Nothing is refused for an unpinned chat or a start that names none.
+ */
+export async function refuseMovedProviderRelayFront(
+  chatKey: string,
+  daemonInstance: string | undefined,
+  undo?: () => Promise<unknown>
+): Promise<void> {
+  const pinned = pins.get(chatKey)
+  if (pinned === undefined || daemonInstance === undefined || daemonInstance === pinned) {
+    return
+  }
+  await undo?.().catch(() => {})
+  throw new ProviderRelayFrontMovedError(chatKey)
+}

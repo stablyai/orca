@@ -94,6 +94,6 @@ async function restore(directory: string): Promise<void> {
     import('../../runtime/agent-session/environment/shared-tool-process-callers'),
     import('../../runtime/agent-session/environment/shared-tool-caller-store')
   ])
-  await botToolRelay.serveFronts()
+  await botToolRelay.kept.serveFronts()
   callers.restoreKeptSharedToolCallers(await store.sharedToolCallerStore.load())
 }

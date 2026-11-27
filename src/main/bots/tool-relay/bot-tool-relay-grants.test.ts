@@ -14,18 +14,23 @@ import {
   type StoredRelayGrant
 } from './bot-tool-relay-grants'
 import { RelaySealedFile } from './relay-sealed-file'
+import { jsonProperty } from '../../../shared/json-stream/json-value-property'
 
 /** A keychain that seals by reversing the bytes, and can be locked or downgraded. */
-const keychain = { locked: false, sealing: 'os-keychain' as 'os-keychain' | 'none', opens: 0 }
+const keychain: { locked: boolean; sealing: 'os-keychain' | 'none'; opens: number } = {
+  locked: false,
+  sealing: 'os-keychain',
+  opens: 0
+}
 const store: SecretStore = {
   isEncryptionAvailable: () => true,
-  encryptString: (plain) => Buffer.from(plain, 'utf8').reverse(),
+  encryptString: (plain) => Buffer.from(Buffer.from(plain, 'utf8').toReversed()),
   decryptString: (cipher) => {
     keychain.opens += 1
     if (keychain.locked) {
       throw new Error('keychain locked')
     }
-    return Buffer.from(cipher).reverse().toString('utf8')
+    return Buffer.from(cipher.toReversed()).toString('utf8')
   },
   describeProtectionGap: () => (keychain.sealing === 'os-keychain' ? null : 'basic_text'),
   describeSealing: () =>
@@ -41,8 +46,10 @@ const grantsAt = (current?: (owner: string) => { bot?: string } | null) => {
   grants.configure(new RelaySealedFile(path, isStoredRelayGrant), current)
   return grants
 }
-const fileEntries = (): StoredRelayGrant[] =>
-  (JSON.parse(readFileSync(path, 'utf8')) as { entries: StoredRelayGrant[] }).entries
+const fileEntries = (): StoredRelayGrant[] => {
+  const entries = jsonProperty(JSON.parse(readFileSync(path, 'utf8')), 'entries')
+  return Array.isArray(entries) ? entries.filter(isStoredRelayGrant) : []
+}
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'relay-grants-'))

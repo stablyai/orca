@@ -1,6 +1,7 @@
 // Kept chats' shared-tool caller tokens, sealed at rest so a chat whose agent outlives the app keeps
 // its caller identity. Only the session id, run fence and grant owner are in the clear; the caller
 // payload carries the bot and MCP tokens, so it is sealed whole. One entry per kept chat run.
+import { jsonObject } from '../../../../shared/json-stream/json-value-property'
 import {
   relaySealingProtected,
   RelaySealedFile,
@@ -31,11 +32,9 @@ export type KeptSharedToolCaller = {
 }
 
 function isStoredCaller(value: unknown): value is StoredSharedToolCaller {
-  if (typeof value !== 'object' || value === null) {
-    return false
-  }
-  const entry = value as Record<string, unknown>
+  const entry = jsonObject(value)
   return (
+    entry !== null &&
     typeof entry.sessionId === 'string' &&
     typeof entry.runFence === 'number' &&
     Number.isSafeInteger(entry.runFence) &&
@@ -46,21 +45,23 @@ function isStoredCaller(value: unknown): value is StoredSharedToolCaller {
 
 function opened(entry: StoredSharedToolCaller): KeptSharedToolCaller | null {
   try {
-    const payload: unknown = JSON.parse(unsealRelaySecret(entry.sealed))
-    const { caller, token } = (payload ?? {}) as { caller?: unknown; token?: unknown }
-    if (
-      typeof token !== 'string' ||
-      typeof caller !== 'object' ||
-      caller === null ||
-      !Object.values(caller).every((value) => typeof value === 'string')
-    ) {
+    const payload = jsonObject(JSON.parse(unsealRelaySecret(entry.sealed)))
+    const token = payload?.token
+    const caller: Record<string, string> = {}
+    for (const [name, value] of Object.entries(jsonObject(payload?.caller) ?? {})) {
+      if (typeof value !== 'string') {
+        return null
+      }
+      caller[name] = value
+    }
+    if (typeof token !== 'string' || !jsonObject(payload?.caller)) {
       return null
     }
     return {
       sessionId: entry.sessionId,
       runFence: entry.runFence,
       owner: entry.owner,
-      caller: caller as Record<string, string>,
+      caller,
       token
     }
   } catch {
@@ -99,11 +100,11 @@ export class SharedToolCallerStore {
   ): Promise<KeptSharedToolCaller[]> {
     // Loaded when used: the relay's revoke reaches this store.
     const { botToolRelay } = await import('../../../bots/tool-relay/bot-tool-relay')
-    await botToolRelay.keptGrantsLoaded()
+    await botToolRelay.kept.loaded()
     let dropped = false
     for (const stored of await file.read()) {
       const kept =
-        keptToolCallerRun(stored.sessionId) === stored.runFence && botToolRelay.keeps(stored.owner)
+        keptToolCallerRun(stored.sessionId) === stored.runFence && botToolRelay.kept.keeps(stored.owner)
           ? opened(stored)
           : null
       if (kept) {

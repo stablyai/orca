@@ -1,6 +1,7 @@
 // A small versioned JSON file of sealed relay entries in Orca's app data. Writes are durable (temp
 // file flushed, then renamed) and run one at a time, so a later write never lands under an earlier.
 import { readFile } from 'node:fs/promises'
+import { jsonObject } from '../../../shared/json-stream/json-value-property'
 import { getSecretStore, hasSecretStore } from '../../../shared/secure-storage/secret-store'
 import { durableWriteTempPath, writeFileDurable } from '../../filesystem/durable-file-write'
 
@@ -43,15 +44,8 @@ export class RelaySealedFile<Entry> {
       return []
     }
     try {
-      const parsed: unknown = JSON.parse(text)
-      if (
-        typeof parsed !== 'object' ||
-        parsed === null ||
-        (parsed as { version?: unknown }).version !== 1
-      ) {
-        return []
-      }
-      const entries = (parsed as { entries?: unknown }).entries
+      const parsed = jsonObject(JSON.parse(text))
+      const entries = parsed?.version === 1 ? parsed.entries : undefined
       return Array.isArray(entries) ? entries.filter(this.isEntry) : []
     } catch {
       return []

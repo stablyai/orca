@@ -25,4 +25,4 @@ export type ToolRelayFrontConnectionEvent = {
 }
 
 export const TOOL_RELAY_FRONT_EVENT = 'toolRelayFrontConnection'
-export const TOOL_RELAY_HELLO_ROLE = 'tool-relay'
+export const TOOL_RELAY_HELLO_ROLE = 'tool-relay' as const

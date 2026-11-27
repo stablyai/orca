@@ -13,6 +13,7 @@ import {
   type DaemonStreamFraming
 } from '../transport/framing/daemon-stream-binary-framing'
 import type { DaemonRequest } from '../protocol/daemon-rpc-contract'
+import type { DaemonToolRelayFront } from '../tool-relay-front/daemon-tool-relay-front'
 
 // Kernel probe timing can exceed this idle delay; producer-stall recovery has its own bound.
 const STREAM_SOCKET_KEEPALIVE_DELAY_MS = 30_000
@@ -39,7 +40,8 @@ type DaemonClientConnectionOptions = {
     providerRelay?: true
     providerRelayKeep?: true
     providerRelayAcks?: true
-    toolRelayFront?: true
+    /** Advertised as `toolRelayFront`; its `tool-relay` connections are spliced into it. */
+    toolRelayFront?: DaemonToolRelayFront
   }
   log: DaemonFileLog
   streamDataBatcher: DaemonStreamDataBatcher
@@ -52,8 +54,6 @@ type DaemonClientConnectionOptions = {
   onControlReplaced: (clientId: string) => void
   onClientDisconnected: (clientId: string) => void
   onStreamDisconnected: (clientId: string) => void
-  /** An authenticated `tool-relay` connection, handed over with no listeners and nothing read past its hello. */
-  onToolRelaySocket?: (socket: Socket, clientId: string, frontConnectionId: string) => void
 }
 
 export class DaemonClientConnections {
@@ -147,10 +147,8 @@ export class DaemonClientConnections {
       socket.destroy()
       return
     }
-    const toolRelay =
-      hello.role === 'tool-relay' &&
-      this.options.onToolRelaySocket !== undefined &&
-      typeof hello.frontConnectionId === 'string'
+    const front = this.options.identity.toolRelayFront
+    const toolRelay = hello.role === 'tool-relay' && front !== undefined
     if (hello.role !== 'control' && hello.role !== 'stream' && !toolRelay) {
       this.options.log.log('client-hello-rejected', {
         reason: 'invalid-role',
@@ -203,10 +201,10 @@ export class DaemonClientConnections {
       return
     }
     if (toolRelay && hello.frontConnectionId !== undefined) {
-      // Its own connection, not a client's: it never counts toward the client pair.
+      // Its own connection, not a client's; nothing past its hello is read before the splice.
       socket.removeAllListeners('data')
       socket.pause()
-      this.options.onToolRelaySocket?.(socket, hello.clientId, hello.frontConnectionId)
+      front.splice(hello.frontConnectionId, socket, hello.clientId)
       return
     }
     if (hello.role === 'stream') {

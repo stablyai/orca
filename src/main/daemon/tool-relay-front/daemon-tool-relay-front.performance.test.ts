@@ -1,5 +1,6 @@
-import { connect, createServer, type Server, type Socket } from 'node:net'
+import { connect, createServer, Socket, type Server } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+// Guards this PR's front bounds: held connections, live pipes, and their release.
 import {
   DaemonToolRelayFront,
   TOOL_RELAY_FRONT_MAX_HELD,
@@ -47,7 +48,7 @@ async function appSocket(): Promise<Socket> {
 
 describe.skipIf(process.platform === 'win32')('tool relay front bounds', () => {
   it('holds at most 64 connections, answers the rest 503 at once, and frees each on splice and close', async () => {
-    front = new DaemonToolRelayFront()
+    front = new DaemonToolRelayFront('start-1')
     const port = await front.open()
     const announced: string[] = []
     const held = Array.from({ length: TOOL_RELAY_FRONT_MAX_HELD }, () => agent(port))
@@ -57,7 +58,7 @@ describe.skipIf(process.platform === 'win32')('tool relay front bounds', () => {
     expect(front.heldCount).toBe(TOOL_RELAY_FRONT_MAX_HELD)
 
     // Registering announces every held connection; each splice frees its hold for a pipe.
-    front.serve('app', (id) => announced.push(id))
+    front.serve('app', new Socket(), (id) => announced.push(id))
     expect(announced).toHaveLength(TOOL_RELAY_FRONT_MAX_HELD)
     for (const id of announced) {
       front.splice(id, await appSocket(), 'app')
@@ -74,7 +75,7 @@ describe.skipIf(process.platform === 'win32')('tool relay front bounds', () => {
   })
 
   it('answers a connection no app takes within the hold, and frees it', async () => {
-    front = new DaemonToolRelayFront(50)
+    front = new DaemonToolRelayFront('start-1', 50)
     const port = await front.open()
     const { answer } = agent(port)
     const text = await answer
@@ -85,30 +86,29 @@ describe.skipIf(process.platform === 'win32')('tool relay front bounds', () => {
   })
 
   it('keeps live pipes at 256 however many connections arrive', async () => {
-    front = new DaemonToolRelayFront()
+    front = new DaemonToolRelayFront('start-1')
     const port = await front.open()
     let spliced = 0
+    let handled = 0
     const answered: Promise<string>[] = []
-    front.serve('app', (id) => {
+    front.serve('app', new Socket(), (id) => {
       void appSocket().then((socket) => {
         if (front!.splice(id, socket, 'app')) {
           spliced += 1
         }
+        handled += 1
       })
     })
     for (let index = 0; index < TOOL_RELAY_FRONT_MAX_PIPES + 8; index += 1) {
-      const { answer } = agent(port)
-      answered.push(answer)
-      // Below the hold cap, so every refusal is the pipe cap's.
-      await vi.waitFor(() => expect(front!.heldCount).toBe(0))
+      answered.push(agent(port).answer)
+      // One at a time, so the hold cap never refuses: every refusal is the pipe cap's.
+      await vi.waitFor(() => expect(handled).toBe(index + 1))
     }
     expect(front.pipeCount).toBe(TOOL_RELAY_FRONT_MAX_PIPES)
     expect(spliced).toBe(TOOL_RELAY_FRONT_MAX_PIPES)
-    const refused = (await Promise.all(answered.slice(TOOL_RELAY_FRONT_MAX_PIPES))).filter((text) =>
-      text.includes('503')
-    )
-    expect(refused).toHaveLength(8)
+    const refused = await Promise.all(answered.slice(TOOL_RELAY_FRONT_MAX_PIPES))
+    expect(refused.every((text) => text.includes('503 Service Unavailable'))).toBe(true)
     front.clientGone('app')
     expect(front.pipeCount).toBe(0)
-  }, 30_000)
+  })
 })

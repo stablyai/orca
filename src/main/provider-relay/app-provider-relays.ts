@@ -1,6 +1,6 @@
 import type { DaemonClient } from '../daemon/transport/client/daemon-client'
-import type * as RelayProtocol from '../daemon/protocol/daemon-provider-relay-protocol'
 import type { ProviderRelayWorkMarkers } from './provider-relay-agent-markers'
+import { policyFor, type ProviderRelayOpenWork } from './provider-relay-detach-policy-for'
 export {
   dropListedProviderRelay,
   keptProviderRelaySpawnToken,
@@ -52,13 +52,10 @@ import { RelayedProviderChild } from './relayed-provider-child'
 import { daemonReadsFolder, providerRelaySpawnSpec } from './provider-relay-spawn-request'
 import { ProviderRelayCarriedWork } from './provider-relay-carried-work'
 import { relayedManagedProcess } from './relayed-managed-process'
-import { ProviderRelayFrontMovedError, providerRelayFrontPin } from './provider-relay-front-pins'
-export { ProviderRelayFrontMovedError, pinProviderRelayFront } from './provider-relay-front-pins'
+import { refuseMovedProviderRelayFront } from './provider-relay-front-pins'
 
 export type { ProviderRelayWorkMarkers } from './provider-relay-agent-markers'
-
-/** The provider's open work at detach, keyed as its markers key it. */
-export type ProviderRelayOpenWork = Record<string, string[][]>
+export type { ProviderRelayOpenWork } from './provider-relay-detach-policy-for'
 
 import type { ProviderRelayLaunch } from './provider-relay-launch'
 export type { ProviderRelayLaunch }
@@ -97,20 +94,6 @@ export const providerRelayRouteInstalled = (): boolean => providerRelayRoute() !
 /** The session host's journal barrier; acks wait on it so replay after a crash loses nothing. */
 export function installProviderRelayDurability(barrier: typeof durableFor): void {
   durableFor = barrier
-}
-
-function policyFor(
-  markers: ProviderRelayWorkMarkers,
-  open?: ProviderRelayOpenWork | null
-): RelayProtocol.ProviderRelayDetachPolicy {
-  return {
-    idleStopMs: providerRelayRoute()?.idleStopMs() ?? null,
-    markers: [...markers.markers],
-    ...(markers.requests ? { workRequests: [...markers.requests] } : {}),
-    ...(markers.quiet ? { quiet: [...markers.quiet] } : {}),
-    ...(markers.startApprovals ? { startApprovals: [...markers.startApprovals] } : {}),
-    ...(open ? { open } : {})
-  }
 }
 
 /** Lists the daemons' kept relays once per launch (again after a daemon that didn't answer). */
@@ -266,12 +249,8 @@ export async function launchRelayedProviderProcess(
     return kept
   }
   const client = await connected(await installed.current().catch(() => null))
-  // An agent holding one start's tool front never runs under another start.
-  const front = providerRelayFrontPin(relay.chatKey)
-  const instance = client?.getDaemonIdentity()?.launchNonce
-  if (front !== null && instance !== undefined && instance !== front) {
-    throw new ProviderRelayFrontMovedError(relay.chatKey)
-  }
+  // An agent given one daemon start's tool front never runs under another start.
+  await refuseMovedProviderRelayFront(relay.chatKey, client?.getDaemonIdentity()?.launchNonce)
   const spec = client ? providerRelaySpawnSpec(launch, client, installed.appVersion, relay) : null
   // Without kept state a reattach would have nothing to restore, so such a launch goes as today.
   const keeps = !relay.keep || client?.getDaemonIdentity()?.providerRelayKeep === true
@@ -290,10 +269,9 @@ export async function launchRelayedProviderProcess(
   if (!('relayId' in spawned)) {
     return null
   }
-  if (front !== null && spawned.daemonInstance !== front) {
-    await channel.close(spawned.relayId).catch(() => {})
-    throw new ProviderRelayFrontMovedError(relay.chatKey)
-  }
+  await refuseMovedProviderRelayFront(relay.chatKey, spawned.daemonInstance, () =>
+    channel.close(spawned.relayId)
+  )
   const child = relayedChild(channel, spawned.relayId, spawned.pid, relay)
   try {
     await child.start(0)

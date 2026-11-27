@@ -30,7 +30,11 @@ export function toolRelayRestartingAnswer(message = RESTARTING_MESSAGE, id: unkn
 
 type Held = { socket: Socket; timer: ReturnType<typeof setTimeout> }
 type Pipe = { front: Socket; app: Socket; clientId: string }
-type Serving = { clientId: string; announce: (frontConnectionId: string) => void }
+type Serving = {
+  clientId: string
+  control: Socket
+  announce: (frontConnectionId: string) => void
+}
 
 export class DaemonToolRelayFront {
   private server: Server | null = null
@@ -41,7 +45,11 @@ export class DaemonToolRelayFront {
   private readonly held = new Map<string, Held>()
   private readonly pipes = new Set<Pipe>()
 
-  constructor(private readonly holdMs = TOOL_RELAY_FRONT_HOLD_MS) {}
+  constructor(
+    /** The daemon start holding this front. */
+    readonly daemonInstance: string,
+    private readonly holdMs = TOOL_RELAY_FRONT_HOLD_MS
+  ) {}
 
   /** This start's front port, listening from the first ask until the daemon exits. */
   open(): Promise<number> {
@@ -71,9 +79,19 @@ export class DaemonToolRelayFront {
     return this.listening
   }
 
-  /** The app that answers this front's connections; replaces any earlier one. Null: no front yet. */
-  serve(clientId: string, announce: (frontConnectionId: string) => void): number | null {
-    this.serving = { clientId, announce }
+  /**
+   * The app that answers this front's connections, until its control connection closes; replaces
+   * any earlier one. Null: no front yet.
+   */
+  serve(
+    clientId: string,
+    control: Socket,
+    announce: (frontConnectionId: string) => void
+  ): number | null {
+    if (this.serving?.control !== control) {
+      control.once('close', () => this.clientGone(clientId, control))
+    }
+    this.serving = { clientId, control, announce }
     for (const id of this.held.keys()) {
       announce(id)
     }
@@ -81,12 +99,13 @@ export class DaemonToolRelayFront {
   }
 
   /** An app's control connection closed: it answers nothing more, and its pipes close. */
-  clientGone(clientId: string): void {
-    if (this.serving?.clientId === clientId) {
+  clientGone(clientId: string, control?: Socket): void {
+    if (this.serving?.clientId === clientId && (!control || this.serving.control === control)) {
       this.serving = null
     }
     for (const pipe of this.pipes) {
       if (pipe.clientId === clientId) {
+        this.pipes.delete(pipe)
         closePipe(pipe)
       }
     }

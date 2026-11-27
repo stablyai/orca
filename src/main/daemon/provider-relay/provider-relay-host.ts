@@ -12,6 +12,7 @@ import { ProviderRelayDetachedCap } from './provider-relay-detached-cap'
 import { ProviderRelayEndedRetention } from './provider-relay-ended-retention'
 import type { ProviderRelayStream } from './provider-relay-attachment'
 import { waitAtMost } from './provider-relay-bounded-wait'
+import { DaemonToolRelayFront } from '../tool-relay-front/daemon-tool-relay-front'
 import { readProviderRelayDetachPolicy } from './provider-relay-idle-stop'
 import { validProviderRelaySpawnSpec } from './provider-relay-spawn-spec'
 import {
@@ -51,9 +52,15 @@ export class ProviderRelayHost {
   private ready: Promise<Prepared> | null = null
   private disposed = false
   private disposing: Promise<void> | null = null
+  /** The loopback address this start holds for the agents it keeps; null where none relays. */
+  readonly toolRelayFront: DaemonToolRelayFront | null
 
   constructor(private readonly options: RelayHostOptions) {
     this.platform = options.platform ?? process.platform
+    this.toolRelayFront =
+      this.supported && options.daemonInstance
+        ? new DaemonToolRelayFront(options.daemonInstance)
+        : null
   }
 
   get daemonInstance(): string | null {
@@ -248,6 +255,7 @@ export class ProviderRelayHost {
 
   private async disposeOnce(): Promise<void> {
     this.disposed = true
+    this.toolRelayFront?.dispose()
     this.cap.stop()
     this.retention.dispose()
     const relays = [...this.relays.values()]

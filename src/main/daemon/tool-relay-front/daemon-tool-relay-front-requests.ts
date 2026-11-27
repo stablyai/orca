@@ -16,24 +16,19 @@ export function answerToolRelayFrontRequest(
   request: DaemonRequest,
   client: ConnectedDaemonClient | undefined,
   socket: Socket,
-  front: { front: DaemonToolRelayFront | null; daemonInstance: string | null }
+  front: DaemonToolRelayFront | null
 ): Promise<ToolRelayFrontOpenResult | ToolRelayFrontServeResult> | undefined {
   if (!TOOL_RELAY_FRONT_REQUEST_TYPES.has(request.type)) {
     return undefined
   }
-  const { daemonInstance } = front
-  if (
-    !client?.authenticatedPairEstablished ||
-    client.controlSocket !== socket ||
-    !front.front ||
-    !daemonInstance
-  ) {
+  if (!client?.authenticatedPairEstablished || client.controlSocket !== socket || !front) {
     return Promise.reject(new Error('Tool relay front unavailable'))
   }
+  const { daemonInstance } = front
   if (request.type === 'toolRelayFrontOpen') {
-    return front.front.open().then((port) => ({ port, daemonInstance }))
+    return front.open().then((port) => ({ port, daemonInstance }))
   }
-  const port = front.front.serve(client.clientId, (frontConnectionId) => {
+  const port = front.serve(client.clientId, socket, (frontConnectionId) => {
     const stream = client.streamSocket
     if (!stream || stream.destroyed) {
       return

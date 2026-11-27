@@ -4,6 +4,7 @@
 // that takes the host list reaches all of them with its own token.
 import { createHash, randomBytes } from 'node:crypto'
 import { resolve } from 'node:path'
+import { jsonObject } from '../../../shared/json-stream/json-value-property'
 import {
   relaySealingProtected,
   sealRelaySecret,
@@ -60,17 +61,14 @@ export function relayToolPath(path: string): RelayToolPath | null {
 export type StoredRelayGrant = { owner: string; folders: RelayFolders; sealedToken: string }
 
 export function isStoredRelayGrant(value: unknown): value is StoredRelayGrant {
-  if (typeof value !== 'object' || value === null) {
-    return false
-  }
-  const entry = value as Record<string, unknown>
-  const folders = entry.folders as Record<string, unknown> | null | undefined
+  const entry = jsonObject(value)
+  const folders = jsonObject(entry?.folders)
   return (
+    entry !== null &&
+    folders !== null &&
     typeof entry.owner === 'string' &&
     entry.owner.length > 0 &&
     typeof entry.sealedToken === 'string' &&
-    typeof folders === 'object' &&
-    folders !== null &&
     (folders.bot === undefined || typeof folders.bot === 'string') &&
     (folders.host === undefined || typeof folders.host === 'string')
   )
@@ -209,7 +207,7 @@ export class RelayGrants {
       return 'locked'
     }
     this.lastUnlockAt = this.now()
-    for (const entry of [...this.locked.values()]) {
+    for (const entry of this.locked.values()) {
       if (this.open(entry)) {
         this.locked.delete(entry.owner)
       }

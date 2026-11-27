@@ -25,10 +25,7 @@ import {
   prepareAcpStructuredLaunch
 } from '../launch/acp-structured-launch-preparation'
 import { acpProcessEnvironment } from '../launch/acp-structured-launch-resolution'
-import {
-  SharedToolProcessSession,
-  sharedToolCallerOwner
-} from '../../runtime/agent-session/environment/shared-tool-process-callers'
+import { acpSharedToolLaunch } from './acp-shared-tool-launch'
 import { AcpStructuredOptions } from '../options/acp-structured-options'
 import { AcpStructuredPrompts } from '../requests/acp-structured-prompts'
 import { acpRunRequests, acpToolFreeRun, stopAtToolWork } from './acp-tool-free-run'
@@ -104,34 +101,9 @@ export async function acquireAcpStructuredSession(input: {
   const connect = await acpLaunchConnect(deps, launch, closedBeforeSpawn)
   const { command, args, cwd } = launch
   const processLaunch = { command, args, cwd, ...acpProcessEnvironment(launch) }
-  // Until the process exits, only its session's tools can name the chat.
-  const launchedTools = SharedToolProcessSession.forLaunch(spec, launch.env, launch.version)
-  // A run that may outlive the app keeps its caller at rest first; one that can't is app-bound.
-  const keptTools =
-    launchedTools === null || launch.appBoundGrants === true || launch.toolFree !== undefined
-      ? true
-      : await launchedTools.keepAs({
-          sessionId,
-          runFence: acquire.fence,
-          owner: sharedToolCallerOwner(launch.env)
-        })
-  const relayed = await launchRelayedAcpAgent(
-    input,
-    keptTools ? launch : { ...launch, appBoundGrants: true },
-    processLaunch
-  ).catch((error: unknown) => {
-    launchedTools?.abandon()
-    throw error
-  })
-  // A kept agent's tools already hold the token its run kept from before this app started.
-  const reattachedTools = relayed?.reattached
-    ? SharedToolProcessSession.reattached(spec, launch.env, sessionId, acquire.fence, launch.version)
-    : null
-  if (reattachedTools) {
-    launchedTools?.discard()
-  }
-  const sharedTools: SharedToolProcessSession | null = reattachedTools ?? launchedTools
-  sharedTools?.settle(sessionId)
+  const tools = await acpSharedToolLaunch(launch, { sessionId, runFence: acquire.fence })
+  const relayed = await launchRelayedAcpAgent(input, tools.launch, processLaunch).catch(tools.abandon)
+  const sharedTools = tools.take(relayed?.reattached === true)
   const launchPermission = await keptAcpLaunchPermission(spec, relayed, launch, run)
   // Cancellation owns no connection yet: the relayed agent goes as a tracked one would.
   if (relayed && input.abandoned()) {

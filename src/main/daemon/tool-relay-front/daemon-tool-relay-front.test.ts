@@ -5,15 +5,17 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { DaemonClient } from '../transport/client/daemon-client'
+import { openDaemonToolRelayConnection } from '../transport/client/daemon-client-tool-relay-connection'
 import { DaemonServer } from '../server/daemon-server'
 import { getDaemonSocketPath } from '../launch/daemon-spawner'
 import { PROTOCOL_VERSION } from '../protocol/daemon-protocol-version'
+import { jsonProperty } from '../../../shared/json-stream/json-value-property'
 import type { ToolRelayFrontOpenResult } from '../protocol/daemon-tool-relay-front-protocol'
 
 const cleanups: (() => Promise<void> | void)[] = []
 
 afterEach(async () => {
-  for (const cleanup of cleanups.splice(0).reverse()) {
+  for (const cleanup of cleanups.splice(0).toReversed()) {
     await cleanup()
   }
 })
@@ -48,7 +50,9 @@ function agentCall(port: number, request: string): { socket: Socket; reply: Prom
   socket.write(request)
   let read = ''
   socket.on('data', (chunk) => (read += chunk.toString('utf8')))
-  cleanups.push(() => socket.destroy())
+  cleanups.push(() => {
+    socket.destroy()
+  })
   return { socket, reply: new Promise((resolve) => socket.once('close', () => resolve(read))) }
 }
 
@@ -56,13 +60,13 @@ function frontConnections(client: DaemonClient): () => Promise<string> {
   const ids: string[] = []
   const waiters: ((id: string) => void)[] = []
   client.onEvent((event) => {
-    const { event: name, payload } = event as { event?: string; payload?: { frontConnectionId?: string } }
-    if (name === 'toolRelayFrontConnection' && payload?.frontConnectionId) {
+    const id = jsonProperty(jsonProperty(event, 'payload'), 'frontConnectionId')
+    if (jsonProperty(event, 'event') === 'toolRelayFrontConnection' && typeof id === 'string') {
       const waiter = waiters.shift()
       if (waiter) {
-        waiter(payload.frontConnectionId)
+        waiter(id)
       } else {
-        ids.push(payload.frontConnectionId)
+        ids.push(id)
       }
     }
   })
@@ -96,8 +100,10 @@ describe.skipIf(process.platform === 'win32')('tool relay front protocol', () =>
     expect(stolen).not.toContain('POST /bot-tools')
 
     // The app's own connection gets the held request, and its answer reaches the agent.
-    const { socket: app } = await client.openToolRelayConnection(id)
-    cleanups.push(() => app.destroy())
+    const { socket: app } = await openDaemonToolRelayConnection(client, id)
+    cleanups.push(() => {
+      app.destroy()
+    })
     const request = await new Promise<string>((resolve) => {
       let seen = ''
       app.on('data', (chunk) => {
