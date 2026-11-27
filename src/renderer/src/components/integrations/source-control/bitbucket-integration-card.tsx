@@ -100,7 +100,8 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
   const connected = status === 'connected'
   const envManaged = currentConnection?.source === 'environment'
   const storedCredential = currentConnection?.source === 'stored'
-  const account = currentConnection?.account ?? statuses.bitbucketAccount
+  // The local preflight account describes this machine; a remote host's unknown account must not borrow it.
+  const account = currentConnection?.account ?? (remoteRuntime ? null : statuses.bitbucketAccount)
   // Only surface a base URL the user actually overrode; the default is noise.
   const baseUrlOverride =
     currentConnection?.baseUrl && currentConnection.baseUrl !== DEFAULT_API_BASE_URL
