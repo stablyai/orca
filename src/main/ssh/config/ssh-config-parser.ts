@@ -197,18 +197,17 @@ function splitOpenSshArguments(input: string): string[] {
   const args: string[] = []
   let current = ''
   let inQuotes = false
-  let escaped = false
 
-  for (const char of input) {
-    if (escaped) {
-      current += char
-      escaped = false
-      continue
-    }
-
-    if (inQuotes && char === '\\') {
-      escaped = true
-      continue
+  for (let index = 0; index < input.length; index++) {
+    const char = input[index]
+    if (char === '\\') {
+      const next = input[index + 1]
+      // Match OpenSSH argv_split: other backslashes, e.g. Windows path separators, stay literal.
+      if (next === '"' || next === "'" || next === '\\' || (!inQuotes && next === ' ')) {
+        current += next
+        index++
+        continue
+      }
     }
 
     if (char === '"') {

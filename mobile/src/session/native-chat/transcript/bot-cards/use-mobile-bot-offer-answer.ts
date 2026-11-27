@@ -1,15 +1,24 @@
 // An offer card's answer, kept on its bot as on the desktop: Not now (which tells the bot Dismiss) or
 // the card's own action, claimed on the host first so a second device or press sends nothing.
 import { useContext, useState } from 'react'
+import { BOTS_OFFER_ANSWER_RUNTIME_CAPABILITY } from '../../../../../../src/shared/bot-runtime-capabilities'
 import {
   answerBotOffer,
+  BOT_OFFER_DISMISS_ANSWER,
   type BotOfferAnswer
 } from '../../../../../../src/shared/bots/bot-offer-answers'
 import { errorMessage } from '../../../../../../src/shared/errors/error-message'
 import { botUpdate } from '../../../../bots/bot-sheet-operations'
 import { publishHostBot, useHostBotById } from '../../../../bots/host-bot-store'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { MobileBotCardSendContext, useMobileBotCardHost } from './mobile-bot-card-host'
+import { isRpcDeliveryUnknown } from '../../../../transport/rpc/rpc-delivery-ambiguity'
+import { useRouteCapability } from '../../../../worktree/execution-hosts/use-route-capability'
+import {
+  MobileBotCardSendContext,
+  mobileBotOfferTell,
+  useMobileBotCardHost
+} from './mobile-bot-card-host'
+import { botOfferAnswerSend } from './mobile-bot-card-operations'
 
 export type MobileBotOfferAnswer = {
   /** The bot is read, so its answers are known; until then the card's actions wait. */
@@ -20,14 +29,15 @@ export type MobileBotOfferAnswer = {
   error: string | null
   clearError: () => void
   dismiss: () => void
-  /** Tells the bot `text`, as if typed, and keeps `chosen` as this card's answer. */
+  /** Tells the bot `text` as a card answer (typed on an older host), and keeps `chosen` as this card's answer. */
   send: (text: string, chosen: readonly string[]) => void
 }
 
 export function useMobileBotOfferAnswer(botId: string, cardId: string): MobileBotOfferAnswer {
   const t = useMobileTranslation()
   const host = useMobileBotCardHost()
-  const send = useContext(MobileBotCardSendContext)
+  const card = useContext(MobileBotCardSendContext)
+  const takesCardAnswers = useRouteCapability(BOTS_OFFER_ANSWER_RUNTIME_CAPABILITY)
   const bot = useHostBotById(botId)
   const [error, setError] = useState<string | null>(null)
   const answer = bot?.offerAnswers?.find((entry) => entry.cardId === cardId)
@@ -40,6 +50,12 @@ export function useMobileBotOfferAnswer(botId: string, cardId: string): MobileBo
       return
     }
     setError(null)
+    const cardAnswer = takesCardAnswers
+      ? async (line: string, sessionId: string) =>
+          botOfferAnswerSend.interpret(
+            await botOfferAnswerSend.request(client, { botId, sessionId, text: line })
+          ).sent
+      : null
     void answerBotOffer(update, {
       update: async (offerAnswer) =>
         publishHostBot(
@@ -47,7 +63,8 @@ export function useMobileBotOfferAnswer(botId: string, cardId: string): MobileBo
           botUpdate.interpret(await botUpdate.request(client, { botId, updates: { offerAnswer } }))
             .bot
         ),
-      send: async () => (await send?.(text)) === true
+      send: async () => (await mobileBotOfferTell(card, cardAnswer, text)) === true,
+      deliveryUnknown: isRpcDeliveryUnknown
     })
       .then((outcome) => {
         if (outcome === 'refused') {
@@ -63,7 +80,13 @@ export function useMobileBotOfferAnswer(botId: string, cardId: string): MobileBo
     error,
     clearError: () => setError(null),
     dismiss: () =>
-      answerOffer({ cardId, dismissed: true }, t('chat.botCards.offer.dismiss', 'Dismiss')),
+      answerOffer(
+        { cardId, dismissed: true },
+        // The card answer keeps the words the bot was promised; typed stays as before.
+        takesCardAnswers && card?.sessionId
+          ? BOT_OFFER_DISMISS_ANSWER
+          : t('chat.botCards.offer.dismiss', 'Dismiss')
+      ),
     send: (text, chosen) => answerOffer({ cardId, sent: { chosen: [...chosen] } }, text)
   }
 }

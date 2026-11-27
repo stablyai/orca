@@ -7,7 +7,7 @@ import type {
   AgentJournalSubmission
 } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { isRunningAgentJournalTurn } from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
-import { typedInOrcaByPerson } from './bot-typed-in-orca'
+import { personSendsOf, typedInOrcaByPerson, type PersonSends } from './bot-typed-in-orca'
 import { isRootTurnRecord, turnMessages } from './bot-turn-messages'
 import { askedInThread } from '../external-conversations/external-conversation-leave-eligibility'
 
@@ -20,7 +20,7 @@ type Conversation = { source: string; externalId: string }
 
 function eligible(
   item: AgentJournalRenderItem,
-  submissions: readonly AgentJournalSubmission[],
+  sends: PersonSends,
   conversation: Conversation
 ): boolean {
   const body = item.body
@@ -32,7 +32,7 @@ function eligible(
     return false
   }
   if (body.origin === undefined) {
-    return typedInOrcaByPerson(item, submissions)
+    return typedInOrcaByPerson(item, sends)
   }
   if (body.origin !== 'connector' || body.memorySource || !body.asker) {
     return false
@@ -60,7 +60,8 @@ export function leaveThreadRefusal(
   if (messages.length === 0) {
     return 'leave_refused_stale'
   }
-  return messages.every((item) => eligible(item, submissions, conversation))
+  const sends = personSendsOf(submissions)
+  return messages.every((item) => eligible(item, sends, conversation))
     ? null
     : 'leave_refused_mixed'
 }

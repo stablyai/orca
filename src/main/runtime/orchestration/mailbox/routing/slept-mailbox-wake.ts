@@ -20,6 +20,8 @@ type WakeDeps = {
   currentPane?: (recorded: string) => string
 }
 
+type SleptBatch = { record: SleptMailRecord; sequence: number }
+
 /** Durable mail derives the obligation; only a proven wake suppresses the same unconsumed batch. */
 export class SleptMailboxWake {
   private readonly pending = new Map<
@@ -61,13 +63,14 @@ export class SleptMailboxWake {
     if (!db || !record || !mailWakeObligation(record)) {
       return null
     }
-    const sequence = this.selection(mailbox, reservedTypes)?.sequence
+    const sequence = this.selection(mailbox, reservedTypes, paneKey ?? undefined)?.sequence
     return sequence === undefined ? null : { record, sequence }
   }
 
-  private selection(mailbox: string, reservedTypes?: ReadonlySet<string>) {
+  /** `owner`: the owner pane the caller already read, so the Run or Dispatch is read once. */
+  private selection(mailbox: string, reservedTypes?: ReadonlySet<string>, owner?: string) {
     const db = this.deps.db()
-    const paneKey = db && this.ownerPane(db, mailbox)
+    const paneKey = owner ?? (db && this.ownerPane(db, mailbox))
     if (
       !db ||
       !paneKey ||
@@ -132,13 +135,18 @@ export class SleptMailboxWake {
     return this.owed.size > 0 || this.attempted.size > 0 || this.succeeded.size > 0
   }
 
-  trackedMailboxes(): string[] {
-    return [...this.owed.keys(), ...this.succeeded.keys()]
+  /** The mailboxes owed to, or already woken for, sleepers; with `onHost`, only those whose pane it names. */
+  trackedMailboxes(onHost: (paneKey: string) => boolean = () => true): string[] {
+    const tracked = [...this.owed, ...this.succeeded]
+    return tracked.flatMap(([mailbox, { paneKey }]) => (onHost(paneKey) ? [mailbox] : []))
   }
 
-  /** An availability edge: panes whose wake failed may be tried again; a pane's own edge, only it. */
-  retryFailed(paneKey?: string): void {
-    void (paneKey === undefined ? this.failed.clear() : this.failed.delete(paneKey))
+  /** An availability edge: panes whose wake failed may be tried again; a pane's own edge, only it;
+   *  a host's edge (`onHost`), only its panes. */
+  retryFailed(paneKey?: string, onHost: (paneKey: string) => boolean = () => true): void {
+    for (const failed of paneKey === undefined ? [...this.failed.keys()] : [paneKey]) {
+      void (onHost(failed) && this.failed.delete(failed))
+    }
   }
 
   /** Runs one publication pass: a wake it requests reuses the pass's own read of that mailbox. */
@@ -218,7 +226,9 @@ export class SleptMailboxWake {
     }
   }
 
-  request(mailbox: string, reservedTypes?: ReadonlySet<string>): void {
+  request(mailbox: string, reserved?: ReadonlySet<string>): void {
+    // An empty reservation selects the same batch as none, so it reuses the refresh's read too.
+    const reservedTypes = reserved?.size ? reserved : undefined
     if (reservedTypes || !this.passRefreshed?.has(mailbox)) {
       this.refresh(mailbox)
     }
@@ -260,9 +270,11 @@ export class SleptMailboxWake {
       }
       const [paneKey, request] = next
       this.pending.delete(paneKey)
-      this.inFlight.set(paneKey, this.batch(request.mailbox, request.reservedTypes)?.sequence ?? -1)
+      // The run starts in this same turn, so this read is also its first one.
+      const before = this.batch(request.mailbox, request.reservedTypes)
+      this.inFlight.set(paneKey, before?.sequence ?? -1)
       this.active++
-      void this.run(request.mailbox, request.reservedTypes)
+      void this.run(request.mailbox, before, request.reservedTypes)
         .catch(() => undefined)
         .finally(() => {
           this.inFlight.delete(paneKey)
@@ -272,8 +284,7 @@ export class SleptMailboxWake {
     }
   }
 
-  private async run(mailbox: string, reservedTypes?: ReadonlySet<string>): Promise<void> {
-    const before = this.batch(mailbox, reservedTypes)
+  private async run(mailbox: string, before: SleptBatch | null, reserved?: ReadonlySet<string>) {
     if (
       !before ||
       mailWakeObligation(before.record) !== 'automatic' ||
@@ -292,7 +303,7 @@ export class SleptMailboxWake {
       this.failed.set(before.record.paneKey, before.record.capturedAt)
       throw error
     }
-    const current = this.batch(mailbox, reservedTypes)
+    const current = this.batch(mailbox, reserved)
     if (
       !current ||
       current.record.paneKey !== before.record.paneKey ||

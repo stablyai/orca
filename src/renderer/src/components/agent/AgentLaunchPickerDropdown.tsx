@@ -4,7 +4,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
 import { AgentLaunchSurfaceButtons } from './AgentLaunchSetupFooter'
 import { AgentPickerAgentTabs, AgentPickerBlankTerminalPane } from './AgentPickerAgentRail'
-import type { AgentPickerChoice } from './agent-picker-search-rows'
+import { AgentPickerChoiceRows, type AgentPickerChoice } from './agent-picker-search-rows'
 import { useAgentPickerSetup } from './agent-launch-picker-drafts'
 import { useRetiredAgentPickerDrafts } from './AgentLaunchPickerMenu'
 import { chatUnavailableLabel, entrySetupLabel } from './launch-menu/agent-menu-row-presentation'
@@ -52,7 +52,7 @@ type AgentLaunchPickerDropdownProps = {
   onPaneChange: (agent: Agent) => void
   onPick: AgentLaunchPickerDropdownPick
   onClose: () => void
-  /** Rows under the card that are not agents. */
+  /** Rows under the card that are not agents; `leading` ones go over the agent tabs instead. */
   choices?: readonly AgentPickerChoice[]
   /** A tile ahead of the agent tabs, also listed by search; current when the form holds no agent. */
   blankTerminal?: AgentPickerChoice
@@ -62,6 +62,9 @@ type AgentLaunchPickerDropdownProps = {
 export function AgentLaunchPickerDropdown(props: AgentLaunchPickerDropdownProps) {
   const t = useTranslate()
   const { entries, agent, draftScope, onPaneChange, blankTerminal } = props
+  const leadingChoices = props.choices?.filter((choice) => choice.leading)
+  const underChoices = props.choices?.filter((choice) => !choice.leading)
+  const leadingRows = useRef<HTMLDivElement>(null)
   useRetiredAgentPickerDrafts(entries, draftScope, 'select')
   const [paneAgent, setPaneAgent] = useState(agent)
   // A typed-in query opens on an agent's search instead.
@@ -99,7 +102,8 @@ export function AgentLaunchPickerDropdown(props: AgentLaunchPickerDropdownProps)
   }
   return (
     <div
-      className="flex min-h-0 flex-col"
+      // Why: search and two model rows stay whole in a short window; the menu scrolls instead.
+      className="scrollbar-sleek flex min-h-0 flex-col overflow-y-auto [&_[cmdk-list]]:min-h-18 [&_[cmdk-root]]:min-h-28"
       data-agent-launch-picker="true"
       onKeyDownCapture={(event) => {
         // Shift+Tab from the search goes back to the agent tabs.
@@ -117,8 +121,32 @@ export function AgentLaunchPickerDropdown(props: AgentLaunchPickerDropdownProps)
         }
       }}
     >
+      {leadingChoices?.length ? (
+        <AgentPickerChoiceRows
+          ref={leadingRows}
+          top
+          choices={leadingChoices}
+          disabled={props.disabled}
+          onLeaveDown={() =>
+            leadingRows.current?.parentElement
+              ?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')
+              ?.focus()
+          }
+        />
+      ) : null}
       <AgentPickerAgentTabs
         entries={entries}
+        onLeaveUp={
+          leadingChoices?.length
+            ? () =>
+                [
+                  ...(leadingRows.current?.querySelectorAll<HTMLElement>('[role^="menuitem"]') ??
+                    [])
+                ]
+                  .at(-1)
+                  ?.focus()
+            : undefined
+        }
         pane={terminalPane ? null : pane.agent}
         blankTerminal={blankTerminal}
         defaultAgent={props.defaultAgent}
@@ -142,6 +170,8 @@ export function AgentLaunchPickerDropdown(props: AgentLaunchPickerDropdownProps)
         <AgentLaunchPickerPane
           key={pane.agent}
           {...props}
+          choices={underChoices}
+          leadingChoices={leadingChoices}
           initialQuery={switched ? '' : props.initialQuery}
           entry={pane}
           onShowAgent={showPane}
@@ -163,11 +193,13 @@ function AgentLaunchPickerPane({
   initialQuery,
   searchInputRef,
   choices,
+  leadingChoices,
   blankTerminal,
   onPick,
   onClose,
   onShowAgent
 }: AgentLaunchPickerDropdownProps & {
+  leadingChoices?: readonly AgentPickerChoice[]
   entry: AgentPickerEntry
   /** Shows another agent's pane, for a search pick that keeps the dropdown open. */
   onShowAgent: (agent: Agent) => void
@@ -275,7 +307,7 @@ function AgentLaunchPickerPane({
         onPick: pickSearchResult,
         onPickAgent: pickAgent,
         choices,
-        searchChoices: blankTerminal ? [blankTerminal] : undefined
+        searchChoices: [...(leadingChoices ?? []), ...(blankTerminal ? [blankTerminal] : [])]
       }}
       onDraftChange={(draft, edit) => {
         // Same as chats clears the permission through a choice edit, so a changed one counts too.

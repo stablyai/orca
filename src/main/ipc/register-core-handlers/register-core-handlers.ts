@@ -1,7 +1,7 @@
 import { app } from 'electron'
 import { registerAppHandlers } from '../app'
-import { registerWslMoveWiring } from '../wsl/wsl-move-driver-wiring'
-import { registerWslDriveProjectHandlers } from '../wsl/wsl-drive-project-handlers'
+import { canCreateWslHostService } from '../wsl/wsl-host-service-availability'
+import { registerNonWindowsWslIpcStubs } from '../wsl/non-windows-wsl-ipc-stubs'
 import { installProjectRuntimeGitRouter } from '../../workspaces/execution-host/project-runtime-git-router'
 import { registerCliHandlers } from '../cli'
 import { registerOrcaUninstallHandlers } from '../orca-uninstall'
@@ -226,8 +226,16 @@ export async function registerCoreHandlers(
     registerFilesystemWatcherHandlers()
     registerRuntimeHandlers(runtime)
     const hostsReady = registerRuntimeHostHandlers(store, lifecycleOptions.hostInitialization)
-    registerWslMoveWiring(store, runtime)
-    registerWslDriveProjectHandlers(store, runtime)
+    if (process.platform === 'win32' || canCreateWslHostService()) {
+      const [{ registerWslMoveWiring }, { registerWslDriveProjectHandlers }] = await Promise.all([
+        import('../wsl/wsl-move-driver-wiring'),
+        import('../wsl/wsl-drive-project-handlers')
+      ])
+      registerWslMoveWiring(store, runtime)
+      registerWslDriveProjectHandlers(store, runtime)
+    } else {
+      registerNonWindowsWslIpcStubs()
+    }
     installProjectRuntimeGitRouter(store)
     registerEphemeralVmHandlers(store, pluginService)
     // Session history and terminal resume are not chats; skip booting an empty chat journal host.

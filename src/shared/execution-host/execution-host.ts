@@ -92,13 +92,21 @@ export function isOwnedSshTargetId(targetId: string | null | undefined): boolean
   )
 }
 
+const LOCAL_PARSED_EXECUTION_HOST: ParsedExecutionHost = Object.freeze({
+  kind: 'local',
+  id: LOCAL_EXECUTION_HOST_ID
+})
+
 export function parseExecutionHostId(value: string | null | undefined): ParsedExecutionHost | null {
+  if (value === LOCAL_EXECUTION_HOST_ID) {
+    return LOCAL_PARSED_EXECUTION_HOST
+  }
   const normalized = normalizeHostPart(value)
   if (!normalized) {
     return null
   }
   if (normalized === LOCAL_EXECUTION_HOST_ID) {
-    return { kind: 'local', id: LOCAL_EXECUTION_HOST_ID }
+    return LOCAL_PARSED_EXECUTION_HOST
   }
   if (normalized.startsWith('ssh:')) {
     const encoded = normalized.slice('ssh:'.length)

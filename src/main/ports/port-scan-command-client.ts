@@ -21,8 +21,9 @@ import {
 // Backstop stalled workers within the 30s user-blocking scan budget; spawn stalls are measured in the worker.
 export const WORKER_STALL_GRACE_MS = 26_000
 export const CALL_DEADLINE_MS = PORT_SCAN_COMMAND_TIMEOUT_MS + WORKER_STALL_GRACE_MS
-// Outlast visible 30s polling; hidden windows stop polling and let this teardown expire.
-export const IDLE_TEARDOWN_MS = 5 * 60_000
+// Outlast visible polling: 30s focused, stretched 4x to 120s while visible-but-unfocused
+// (UNFOCUSED_POLL_SLOWDOWN); hidden windows stop polling and let this teardown expire.
+export const IDLE_TEARDOWN_MS = 150_000
 export const MAX_CONSECUTIVE_DEATHS = 3
 // One scan issues at most three commands; anything beyond this is pile-up.
 export const MAX_QUEUED_CALLS = 8
