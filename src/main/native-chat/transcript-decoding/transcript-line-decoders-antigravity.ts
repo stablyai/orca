@@ -1,6 +1,5 @@
 import { fileURLToPath } from 'node:url'
 import type { AgentSessionTokenUsage } from '../../../shared/agent-session/conversation-context/agent-session-context-usage'
-import { extractAntigravityUserRequest } from '../../../shared/agent-hook-listener/transcript-lines'
 import { NATIVE_CHAT_NOTICE_COPY } from '../../../shared/native-chat/transcript/notices/native-chat-notice'
 import {
   NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,
@@ -312,57 +311,4 @@ function antigravityServing(
 
 function tokenCount(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0
-}
-
-/** One agy transcript step as adoption chat history: the person's request or the model's reply text. */
-export function decodeAntigravityAdoptionLine(
-  line: string
-): { recordId: string; message: NativeChatMessage } | null {
-  const record = parseJsonObject(line)
-  if (!record) {
-    return null
-  }
-  const step = typeof record.step_index === 'number' ? String(record.step_index) : record.step_index
-  if (typeof step !== 'string' || !/^\d+$/.test(step)) {
-    return null
-  }
-  const source = extractString(record.source)
-  const type = extractString(record.type)
-  const content = typeof record.content === 'string' ? record.content : ''
-  const parsedTime = timestampMs(record.created_at)
-  const timestamp = Number.isFinite(parsedTime) ? parsedTime : null
-  const recordId = `step:${step}`
-  if (
-    (source === 'USER_EXPLICIT' || source === 'USER') &&
-    (type === 'USER_INPUT' || type === 'REQUEST')
-  ) {
-    const text = extractAntigravityUserRequest(content)
-    return text
-      ? {
-          recordId,
-          message: {
-            id: recordId,
-            role: 'user',
-            blocks: [{ type: 'text', text }],
-            timestamp,
-            source: 'transcript'
-          }
-        }
-      : null
-  }
-  if (source === 'MODEL' && type === 'PLANNER_RESPONSE' && content.trim()) {
-    const model = extractString(record.model)
-    return {
-      recordId,
-      message: {
-        id: recordId,
-        role: 'assistant',
-        blocks: [{ type: 'text', text: content }],
-        timestamp,
-        source: 'transcript',
-        ...(model ? { model } : {})
-      }
-    }
-  }
-  return null
 }

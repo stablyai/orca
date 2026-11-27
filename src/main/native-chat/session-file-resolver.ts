@@ -2,7 +2,7 @@ import { claudeProfileHistoryDirs } from '../claude-accounts/profiles/routing/cl
 import { homedir } from 'node:os'
 import { extname, join } from 'node:path'
 import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
-import { ANTIGRAVITY_HISTORY_ROOTS } from '../../shared/antigravity-session-origin'
+import { ANTIGRAVITY_HISTORY_ROOTS } from '../../shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
 import {
   resolveNativeChatTranscriptAgent,
   type NativeChatTranscriptAgent

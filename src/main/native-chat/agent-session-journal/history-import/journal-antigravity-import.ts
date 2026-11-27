@@ -1,5 +1,5 @@
 import { antigravityConversationIdFromTranscriptPath } from '../../../ai-vault/scanners/antigravity/session-scanner-antigravity-paths'
-import { decodeAntigravityAdoptionLine } from '../../transcript-decoding/transcript-line-decoders-antigravity'
+import { decodeAntigravityAdoptionLine } from '../../transcript-decoding/transcript-line-decoders-antigravity-adoption'
 import type { JournalReplacementItem } from '../context-epochs/journal-epoch-replacement'
 import type { JournalPayloadLimits } from '../item-lifecycle/journal-payload-bounds'
 import { readLegacyImportTranscript } from './journal-legacy-transcript-stream'

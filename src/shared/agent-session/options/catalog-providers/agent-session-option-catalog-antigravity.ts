@@ -1,5 +1,4 @@
 import { agentChoiceCliApply } from '../../../agent-launch/choices/agent-choice-cli-apply'
-import { parseAntigravityModels } from '../../../source-control/ai/generation/commit-message-model-parsers'
 import type {
   AgentSessionOptionCatalog,
   CatalogModel,
@@ -59,10 +58,17 @@ const ANTIGRAVITY_EFFORT: CatalogOption = {
 }
 
 function parseAntigravityCatalogModels(stdout: string): CatalogModel[] {
-  return parseAntigravityModels(stdout).map((model) => ({
-    ...model,
-    options: [ANTIGRAVITY_EFFORT]
-  }))
+  const seen = new Set<string>()
+  const models: CatalogModel[] = []
+  for (const line of stdout.split(/\r?\n/)) {
+    const [id, label, ...extra] = line.split('\t').map((field) => field.trim())
+    if (!id || !label || extra.length > 0 || seen.has(id)) {
+      continue
+    }
+    seen.add(id)
+    models.push({ id, label, options: [ANTIGRAVITY_EFFORT] })
+  }
+  return models
 }
 
 export const ANTIGRAVITY_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {

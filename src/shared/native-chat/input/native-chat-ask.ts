@@ -328,12 +328,11 @@ export function resolveNativeChatAsk(args: {
   transcriptSettled: boolean
   transcriptAsk?: AskPrompt | null
 }): AskPrompt | null {
-  return (
-    args.liveAsk ??
-    (args.transcriptSettled
-      ? args.transcriptAsk === undefined
-        ? extractPendingAsk(args.messages)
-        : args.transcriptAsk
-      : null)
-  )
+  if (args.liveAsk) {
+    return args.liveAsk
+  }
+  return args.transcriptSettled
+    ? (args.transcriptAsk ??
+        (args.transcriptAsk === null ? null : extractPendingAsk(args.messages)))
+    : null
 }

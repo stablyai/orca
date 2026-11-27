@@ -305,17 +305,11 @@ function sourceChanged(): Extract<LocalTranscriptReadResult, { ok: false }> {
 }
 
 function recordWarnings(malformed = 0, oversized = 0, scanLimited = false): string[] {
-  const warnings: string[] = []
-  if (malformed > 0) {
-    warnings.push(`${malformed} malformed transcript record(s) were skipped.`)
-  }
-  if (oversized > 0) {
-    warnings.push(`${oversized} oversized transcript record(s) were skipped.`)
-  }
-  if (scanLimited) {
-    warnings.push(
-      'Transcript scanning stopped at the bounded byte limit; continue with the cursor.'
-    )
-  }
-  return warnings
+  return [
+    ...(malformed > 0 ? [`${malformed} malformed transcript record(s) were skipped.`] : []),
+    ...(oversized > 0 ? [`${oversized} oversized transcript record(s) were skipped.`] : []),
+    ...(scanLimited
+      ? ['Transcript scanning stopped at the bounded byte limit; continue with the cursor.']
+      : [])
+  ]
 }

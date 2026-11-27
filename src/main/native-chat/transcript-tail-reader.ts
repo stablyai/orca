@@ -7,15 +7,11 @@ import type {
 } from '../../shared/native-chat/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat/native-chat-agent-support'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
-import { decodeAntigravityTranscriptLine } from './transcript-decoding/transcript-line-decoders-antigravity'
-import { decodeClaudeChatTranscriptLine } from './transcript-decoding/transcript-line-decoders-claude'
-import { decodeCodexTranscriptLine } from './transcript-decoding/transcript-line-decoders-codex'
-import { decodeGrokTranscriptLine } from './transcript-decoding/transcript-line-decoders-grok'
-import { decodeOmpTranscriptLine } from './transcript-decoding/transcript-line-decoders-omp'
 import {
-  decodedTranscriptMessages,
-  type TranscriptDecoderResult
-} from './transcript-streaming/transcript-stream-lines'
+  nativeChatLineDecoderForAgent,
+  type NativeChatLineDecoder
+} from './transcript-decoding/native-chat-line-decoder'
+import { decodedTranscriptMessages } from './transcript-streaming/transcript-stream-lines'
 import { transcriptFallbackId } from './transcript-streaming/transcript-fallback-id'
 import { inTranscriptFileOrder } from './transcript-streaming/transcript-file-order'
 import { extendTranscriptBoundary } from './transcript-watching/transcript-file-version'
@@ -35,22 +31,7 @@ import { wslTranscriptFsRefusal } from './transcript-filesystem/wsl-transcript-f
 
 export const MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES = 2 * 1024 * 1024
 
-export type NativeChatLineDecoder = (line: string, fallbackId: string) => TranscriptDecoderResult
-
-const LINE_DECODERS: Partial<
-  Record<ReturnType<typeof resolveNativeChatTranscriptAgent> & string, NativeChatLineDecoder>
-> = {
-  antigravity: decodeAntigravityTranscriptLine,
-  claude: decodeClaudeChatTranscriptLine,
-  codex: decodeCodexTranscriptLine,
-  grok: decodeGrokTranscriptLine,
-  omp: decodeOmpTranscriptLine
-}
-
-export function nativeChatLineDecoderForAgent(agent: AgentType): NativeChatLineDecoder | null {
-  const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
-  return transcriptAgent ? (LINE_DECODERS[transcriptAgent] ?? null) : null
-}
+export { nativeChatLineDecoderForAgent, type NativeChatLineDecoder }
 
 export async function readNativeChatTranscriptTailFile<L = NativeChatTurnLifecycle>(
   filePath: string,
