@@ -55,7 +55,14 @@ function QueryStripHarness({
               filtersOpen={filtersOpen}
               filterSummary={filterSummary}
               onQueryChange={(event) => setQuery(event.currentTarget.value)}
-              onKeyDown={() => {}}
+              onKeyDown={(event) => {
+                // Mirrors the panel's handler: Escape clears the query and leaves the field.
+                if (event.key === 'Escape') {
+                  event.preventDefault()
+                  inputRef.current?.blur()
+                  setQuery('')
+                }
+              }}
               onClearSearch={() => setQuery('')}
               onToggleCaseSensitive={() =>
                 setOptions((current) => ({ ...current, caseSensitive: !current.caseSensitive }))
@@ -104,6 +111,20 @@ export const withQuery = defineFixture({
 export const filtersSet = defineFixture({
   width: 332,
   render: () => <QueryStripHarness initialInclude="src/**" />
+})
+export const filtersSetMinWidth = defineFixture({
+  width: 252,
+  render: () => <QueryStripHarness initialInclude="src/**" />
+})
+/** Escape on a toggle, not the input, still clears the query and moves focus out of the field. */
+export const escapeFromToggle = defineFixture({
+  width: 332,
+  render: () => <QueryStripHarness initialQuery="useCart" />,
+  interact: (frame) => {
+    const toggle = frame.querySelector<HTMLButtonElement>('button[aria-pressed]')
+    toggle?.focus()
+    toggle?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+  }
 })
 export const namesView = defineFixture({
   width: 332,

@@ -61,11 +61,23 @@ export function SearchQueryRow({
   const pinOptions =
     query.length > 0 || caseSensitive || wholeWord || useRegex || filtersOpen || hasFilters
   const filtersLabel = t('fileSearch.filters.toggle', 'Toggle search details')
+  const handleFieldKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+    // Why: Escape clears and leaves from any control in the field, not only the input.
+    // The input handles its own keys behind the IME guard, so skip it here.
+    if (event.key !== 'Escape' || event.target instanceof HTMLInputElement) {
+      return
+    }
+    if (event.target instanceof HTMLElement) {
+      event.target.blur()
+    }
+    onKeyDown(event)
+  }
   return (
     <div className="@container">
       <div
         className={cn('group/search', EXPLORER_QUERY_FIELD_CLASS)}
         data-ignore-file-explorer-keys="true"
+        onKeyDown={handleFieldKeyDown}
       >
         <SearchIcon className="size-3.5 shrink-0 text-muted-foreground" />
         <ImeInput
