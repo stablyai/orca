@@ -58,9 +58,12 @@ export function formatAutomationRelativeTime(
 export function formatAutomationNextRun(
   value: number | null | undefined,
   now = Date.now(),
-  t?: Translate,
+  t: Translate = translate,
   intlLocale?: string
 ): string {
+  if (value && value <= now) {
+    return t('bots.upcoming.dueNow', 'Due now')
+  }
   return (
     formatAutomationRelativeTime(value, now, t, intlLocale) ??
     formatAutomationDateTime(value, t, intlLocale)
