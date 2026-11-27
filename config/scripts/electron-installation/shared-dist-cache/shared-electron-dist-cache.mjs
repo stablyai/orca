@@ -11,10 +11,18 @@ import {
   sharedTreeStagingPath
 } from '../../artifact-storage/atomic-publication/shared-tree-publish.mjs'
 import { isSharedPackageDir } from '../../native-build/node-addons/native-build-entry.cjs'
+import {
+  MONTEREY_DIST_MARKER_FILENAME,
+  MONTEREY_LOCAL_ENV
+} from '../../desktop-distribution/macos/macos-monterey-electron-weak-imports.cjs'
 
 const IDENTITY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
 // Sibling of path.txt, never inside dist: an install replaces dist wholesale.
 const MARKER_FILENAME = '.orca-shared-dist'
+
+function hasMontereyWeakImportsMarker(distPath) {
+  return existsSync(path.join(distPath, MONTEREY_DIST_MARKER_FILENAME))
+}
 
 // Return repository-wide shared Electron location or null for normal install; folder workspaces also use normal install.
 export function resolveSharedElectronDistEntry(options) {
@@ -22,6 +30,13 @@ export function resolveSharedElectronDistEntry(options) {
   const env = options.env ?? process.env
   // Packaging jobs get a fresh checkout per run, so a cache only adds a failure mode.
   if (env.CI === '1' || env.CI === 'true') {
+    return null
+  }
+  if (
+    env[MONTEREY_LOCAL_ENV] === '1' ||
+    (options.electronPackageDir &&
+      hasMontereyWeakImportsMarker(path.join(options.electronPackageDir, 'dist')))
+  ) {
     return null
   }
   if (![version, targetPlatform, targetArch].every((part) => IDENTITY_PATTERN.test(part ?? ''))) {
@@ -89,6 +104,9 @@ export function shareElectronDistFromCache(entry, stagePath, options) {
 
 // Publish via unique staging/atomic rename without lock: populated entry blocks racing replacement; usable entry is never overwritten.
 export function publishSharedElectronDist(distPath, entry, options = {}) {
+  if (hasMontereyWeakImportsMarker(distPath)) {
+    return false
+  }
   const { version, platformPath } = options
   const uuid = options.uuid ?? randomUUID
   const canValidate = Boolean(version) && Boolean(platformPath)
@@ -101,6 +119,10 @@ export function publishSharedElectronDist(distPath, entry, options = {}) {
   try {
     mkdirSync(entry.cacheRoot, { recursive: true })
     ;(options.share ?? shareTree)(distPath, stagePath)
+    if (hasMontereyWeakImportsMarker(distPath) || hasMontereyWeakImportsMarker(stagePath)) {
+      rmSync(stagePath, { recursive: true, force: true })
+      return false
+    }
     // Protect before publish: rename exposes entry immediately, and hardlink writes would mutate every worktree.
     ;(options.protect ?? makeTreeReadOnly)(stagePath)
   } catch {
@@ -122,7 +144,7 @@ function isUsable(entry, version, platformPath) {
 
 export function isUsableElectronDist(distPath, version, platformPath) {
   try {
-    if (!lstatSync(distPath).isDirectory()) {
+    if (!lstatSync(distPath).isDirectory() || hasMontereyWeakImportsMarker(distPath)) {
       return false
     }
     const installedVersion = readFileSync(path.join(distPath, 'version'), 'utf8')

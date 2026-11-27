@@ -17,6 +17,7 @@ import {
 } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { isMacMontereyLocalBuild } from '../../desktop-distribution/macos/macos-monterey-electron-weak-imports.cjs'
 import glibcVerification from '../linux/verify-linux-glibc-floor.cjs'
 import { linuxNativeToolchainImage } from '../linux/build-wayland-clipboard.mjs'
 
@@ -63,6 +64,9 @@ export function providerExecFingerprint(root, target, toolchain) {
   const hash = createHash('sha256').update(
     `${target}\0${toolchain}\0${process.env.CC ?? ''}\0${HOST_GLIBC_RUNTIME ?? ''}`
   )
+  if (toolchain === 'xcrun-clang' && isMacMontereyLocalBuild()) {
+    hash.update('\0monterey')
+  }
   const inputs = [SOURCE, 'config/scripts/native-build/posix/build-provider-exec.mjs']
   if (toolchain === 'docker') {
     inputs.push('native/wayland-clipboard/Dockerfile')
@@ -161,6 +165,9 @@ export function buildProviderExec({
   }
   const source = join(root, SOURCE)
   if (toolchain === 'xcrun-clang') {
+    const montereyLinkFlags = isMacMontereyLocalBuild()
+      ? ['-Wl,-U,_proc_signal_with_audittoken']
+      : []
     invoke('xcrun', [
       'clang',
       '-arch',
@@ -168,6 +175,7 @@ export function buildProviderExec({
       `-mmacosx-version-min=${MACOS_DEPLOYMENT_TARGET}`,
       ...WARNINGS,
       '-fstack-protector-strong',
+      ...montereyLinkFlags,
       source,
       '-o',
       output

@@ -183,6 +183,7 @@
     "build:win": "pnpm run build:desktop && pnpm run ensure:electron-runtime && electron-builder --config config/electron-builder.config.cjs --win",
     "build:icons": "bash resources/icon-source/generate.sh",
     "build:mac": "pnpm run build:desktop && pnpm run build:computer-macos && pnpm run build:keyboard-layout-macos && pnpm run build:process-footprint-macos && pnpm run build:socket-owner-macos && pnpm run build:notification-status-macos && pnpm run ensure:electron-runtime && node config/scripts/desktop-distribution/macos/build-mac-local.mjs",
+    "build:mac:monterey": "node config/scripts/desktop-distribution/macos/build-mac-monterey.mjs",
     "build:mac:release": "node config/scripts/desktop-distribution/macos/verify-macos-release-env.mjs && ORCA_MAC_RELEASE=1 pnpm run build:desktop && ORCA_MAC_RELEASE=1 pnpm run build:computer-macos && ORCA_MAC_RELEASE=1 pnpm run build:keyboard-layout-macos && ORCA_MAC_RELEASE=1 pnpm run build:process-footprint-macos && ORCA_MAC_RELEASE=1 pnpm run build:socket-owner-macos && ORCA_MAC_RELEASE=1 pnpm run build:notification-status-macos && pnpm run ensure:electron-runtime && ORCA_MAC_RELEASE=1 electron-builder --config config/electron-builder.config.cjs --mac",
     "build:linux": "pnpm run build:desktop && pnpm run ensure:electron-runtime && node config/scripts/desktop-distribution/linux/build-linux-local.mjs",
     "test:e2e": "pnpm run ensure:electron-runtime && npx playwright test --config tests/playwright.config.ts --project=electron-headless",

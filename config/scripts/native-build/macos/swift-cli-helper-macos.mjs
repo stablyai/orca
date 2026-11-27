@@ -2,8 +2,11 @@ import { execFileSync } from 'node:child_process'
 import { chmodSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { isMacMontereyLocalBuild } from '../../desktop-distribution/macos/macos-monterey-electron-weak-imports.cjs'
 
 const repoRoot = path.resolve(import.meta.dirname, '../../../..')
+const MONTEREY_LIBPROC_HELPERS = new Set(['process-footprint-macos', 'socket-owner-macos'])
+const MONTEREY_LIBPROC_HEADER = path.join(import.meta.dirname, 'macos-libproc-bridging-header.h')
 
 /** Builds a single-file Swift CLI helper from native/<nativeDir>/main.swift (universal unless --single-arch). */
 export function buildSwiftCliHelper({ nativeDir, executable, argv }) {
@@ -17,6 +20,10 @@ export function buildSwiftCliHelper({ nativeDir, executable, argv }) {
   const triples = argv.includes('--single-arch')
     ? [process.arch === 'arm64' ? 'arm64-apple-macosx' : 'x86_64-apple-macosx']
     : ['arm64-apple-macosx', 'x86_64-apple-macosx']
+  const bridgingHeaderArgs =
+    isMacMontereyLocalBuild() && MONTEREY_LIBPROC_HELPERS.has(nativeDir)
+      ? ['-import-objc-header', MONTEREY_LIBPROC_HEADER]
+      : []
   const workDir = mkdtempSync(path.join(tmpdir(), `${executable}-`))
   try {
     const builtBinaries = triples.map((triple) => {
@@ -28,6 +35,7 @@ export function buildSwiftCliHelper({ nativeDir, executable, argv }) {
           sourcePath,
           '-target',
           triple.replace('-apple-macosx', '-apple-macosx11.0'),
+          ...bridgingHeaderArgs,
           '-o',
           output
         ],

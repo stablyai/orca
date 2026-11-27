@@ -2,6 +2,24 @@ const { chmodSync, existsSync, readdirSync, readFileSync, writeFileSync } = requ
 const { execFileSync } = require('node:child_process')
 const { join, resolve } = require('node:path')
 const {
+  MONTEREY_MINIMUM_SYSTEM_VERSION,
+  isMacMontereyLocalBuild,
+  lowerExecutableMinimumOs,
+  resolveMontereyElectronDistDir,
+  weakenElectronFrameworkImports
+} = require('./scripts/desktop-distribution/macos/macos-monterey-electron-weak-imports.cjs')
+
+const isMacMontereyLocal = isMacMontereyLocalBuild(process.env)
+if (isMacMontereyLocal && process.platform !== 'darwin') {
+  throw new Error(
+    `ORCA_MAC_MONTEREY_LOCAL=1 requires a darwin build host (received platform=${process.platform}).`
+  )
+}
+const montereyElectronDist = isMacMontereyLocal
+  ? resolveMontereyElectronDistDir(process.env)
+  : undefined
+
+const {
   MACOS_FOLDER_USAGE_DESCRIPTIONS,
   applyMacHelperFolderUsageDescriptions
 } = require('./scripts/desktop-distribution/macos/macos-folder-usage-descriptions.cjs')
@@ -269,10 +287,19 @@ const macUsageDescriptions = {
 // Developer ID team that signs every release-channel mac build.
 const ORCA_MAC_TEAM_ID = '6CX3WHS9HZ'
 
+function assertMontereyPackTarget(context) {
+  if (isMacMontereyLocal && (context.electronPlatformName !== 'darwin' || context.arch !== 1)) {
+    throw new Error(
+      `ORCA_MAC_MONTEREY_LOCAL=1 supports only darwin x64 targets (received platform=${context.electronPlatformName}, arch=${context.arch}).`
+    )
+  }
+}
+
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
   appId,
   productName: 'Orca',
+  ...(montereyElectronDist ? { electronDist: montereyElectronDist } : {}),
   protocols: [{ name: 'Orca', schemes: ['orca'] }],
   toolsets: { appimage: '1.0.3' },
   ...(devChannelBuildVersion
@@ -426,6 +453,7 @@ module.exports = {
     orcadTemplateDir = join(__dirname, '..', orcadTemplateExtraResource.from),
     ensureProviderExec = ensureBundledProviderExec
   ) => {
+    assertMontereyPackTarget(context)
     // The template is the server every SSH host gets, so a dark test template must never ship.
     assertNotDarkBuild([join(__dirname, '..', 'out', 'main'), mobileWebBundleDir, orcadTemplateDir])
     assertPackagedNativeVariantsInstalled(context.electronPlatformName, context.arch)
@@ -451,6 +479,7 @@ module.exports = {
     )
   },
   afterPack: async (context) => {
+    assertMontereyPackTarget(context)
     if (context.electronPlatformName === 'win32') {
       packageWindowsWerHelper(context.appOutDir, context.packager.appInfo.productFilename)
     }
@@ -471,6 +500,13 @@ module.exports = {
       writeFileSync(join(resourcesDir, 'package-type'), 'AppImage')
     }
     if (context.electronPlatformName === 'darwin') {
+      if (isMacMontereyLocal) {
+        const appPath = join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`)
+        weakenElectronFrameworkImports(appPath)
+        lowerExecutableMinimumOs(
+          join(appPath, 'Contents', 'MacOS', context.packager.appInfo.productFilename)
+        )
+      }
       applyMacHelperFolderUsageDescriptions(
         join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`),
         context.packager.appInfo.productFilename
@@ -700,7 +736,7 @@ module.exports = {
     ],
     // Set for ONNX Runtime (#22690, #39135), now gone; transcribe-cpp needs 11.0, Electron 12.0. Kept until
     // Kelvin decides. The update-manifest gate reads this from Info.plist.
-    minimumSystemVersion: '13.4',
+    minimumSystemVersion: isMacMontereyLocal ? MONTEREY_MINIMUM_SYSTEM_VERSION : '13.4',
     icon: 'resources/build/icon.icns',
     entitlements: 'resources/build/entitlements.mac.plist',
     entitlementsInherit: 'resources/build/entitlements.mac.plist',
@@ -760,16 +796,12 @@ module.exports = {
         to: 'MacOS/orca-provider-exec'
       }
     ],
-    target: [
-      {
-        target: 'dmg',
-        arch: ['x64', 'arm64']
-      },
-      {
-        target: 'zip',
-        arch: ['x64', 'arm64']
-      }
-    ]
+    target: isMacMontereyLocal
+      ? [{ target: 'dir', arch: ['x64'] }]
+      : [
+          { target: 'dmg', arch: ['x64', 'arm64'] },
+          { target: 'zip', arch: ['x64', 'arm64'] }
+        ]
   },
   // Why: release builds should fail if signing is unavailable instead of
   // silently downgrading to ad-hoc artifacts that look shippable in CI logs.
