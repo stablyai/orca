@@ -6,7 +6,7 @@ import type { PersistedState } from '../../../shared/orca-profiles/persisted-sta
 import { registerLazySettingsImportAndAppIconHandlers } from './lazy-settings-import-and-app-icon-ipc'
 import type { AgentAwakeService } from '../../power/agent-awake-service'
 import { sanitizeFloatingWorkspaceDirectorySetting } from '../worktrees/floating-workspace-directory'
-import { applyAutomaticUpdatesSetting } from '../../updater/updater-service'
+import { applyAutomaticUpdatesSetting } from '../../updater/updater-service-slot'
 import { sanitizeNetworkSettings } from './network-settings-sanitization'
 import { normalizeAppIconId } from '../../../shared/app-lifecycle/identity/app-icon'
 import { normalizeUiLanguage } from '../../../shared/i18n/ui-language'

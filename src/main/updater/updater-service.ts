@@ -14,9 +14,21 @@ import type { ReleaseBuildListOptions } from './releases/updater-release-build-c
 import { UpdaterSetup, type UpdaterSetupOptions } from './lifecycle/updater-setup'
 import type { UpdateInstallMode } from './lifecycle/updater-state'
 import { setDesktopReportUpdateStatus } from '../orca-profiles/cloud-auth/desktop-client-report'
+import { registerUpdaterService } from './updater-service-slot'
 
 const updater = new UpdaterSetup()
 setDesktopReportUpdateStatus(() => updater.getUpdateStatus())
+registerUpdaterService({
+  getUpdateStatus: () => updater.getUpdateStatus(),
+  isQuittingForUpdate: () => updater.isQuittingForUpdate(),
+  isNativeUpdateInstallUnderWay: () => updater.isNativeUpdateInstallUnderWay(),
+  applyTeamPolicyBeforeQuit: () => updater.applyTeamPolicyBeforeQuit(),
+  applyAutomaticUpdatesSetting: (enabled) => {
+    if (enabled === true) {
+      updater.applyAutomaticUpdatesSetting()
+    }
+  }
+})
 
 export function resolveUpdateInstallMode(isServeMode: boolean): UpdateInstallMode {
   return updater.resolveUpdateInstallMode(isServeMode)
