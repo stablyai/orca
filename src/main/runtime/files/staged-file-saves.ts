@@ -33,6 +33,7 @@ type StagedSave = {
   tempPath: string
   totalBytes: number
   written: number
+  appending: boolean
   committing: boolean
   aborting: boolean
   // Every op on a save waits for the one before, so a temp is never removed or read mid-append.
@@ -94,6 +95,7 @@ export class StagedFileSaves {
       tempPath,
       totalBytes,
       written: 0,
+      appending: false,
       committing: false,
       aborting: false,
       pending: Promise.resolve(),
@@ -129,6 +131,12 @@ export class StagedFileSaves {
     if (save.committing) {
       throw new Error('staged_save_commit_in_progress')
     }
+    // Clients send a chunk after the last one lands; one still in flight means this one is out of
+    // order, and queuing it would hold its bytes in memory with no bound.
+    if (save.appending) {
+      throw new Error('staged_save_out_of_order')
+    }
+    save.appending = true
     this.touch(owner, saveId, save)
     return this.queue(save, async () => {
       // In order only: a retried or reordered chunk can't land twice or leave a gap.
@@ -137,6 +145,8 @@ export class StagedFileSaves {
       }
       await appendFile(save.tempPath, bytes)
       save.written += bytes.length
+    }).finally(() => {
+      save.appending = false
     })
   }
 

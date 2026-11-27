@@ -27,12 +27,17 @@ export async function createLocalFileFromSource(
   const handle = await open(filePath, 'wx').catch((error: unknown) => {
     throw createPathError(error, basename(filePath))
   })
+  let created: { dev: number; ino: number } | null = null
   try {
+    created = await handle.stat()
     await pipeline(createReadStream(sourcePath), handle.createWriteStream())
   } catch (error) {
-    // Only this call could have created it: 'wx' refuses a path that already exists.
     await handle.close().catch(() => {})
-    await rm(filePath, { force: true }).catch(() => {})
+    // Remove only the file this call created: something saved over it since is not ours to delete.
+    const current = await lstat(filePath).catch(() => null)
+    if (created && current?.dev === created.dev && current.ino === created.ino) {
+      await rm(filePath, { force: true }).catch(() => {})
+    }
     throw error
   }
 }

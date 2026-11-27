@@ -297,4 +297,22 @@ describe('a staged upload', () => {
     expect(readFileSync(taken, 'utf8')).toBe('mine')
     expect(temps()).toEqual([])
   })
+
+  it('refuses a chunk sent before the last one landed instead of holding it', async () => {
+    const staged = saves()
+    let release = () => {}
+    appendGate.hold = new Promise((resolve) => {
+      release = resolve
+    })
+    const { saveId } = await staged.begin('conn-1', at(join(root, 'a.bin')), 6, 'upload')
+    const first = staged.append('conn-1', saveId, 0, Buffer.from('abc'))
+    await expect(staged.append('conn-1', saveId, 3, Buffer.from('def'))).rejects.toThrow(
+      'staged_save_out_of_order'
+    )
+    release()
+    await first
+    await staged.append('conn-1', saveId, 3, Buffer.from('def'))
+    await staged.commitUpload('conn-1', saveId, same)
+    expect(readFileSync(join(root, 'a.bin'), 'utf8')).toBe('abcdef')
+  })
 })
