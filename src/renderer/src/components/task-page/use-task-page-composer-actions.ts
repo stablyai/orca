@@ -3,6 +3,7 @@ import { useCallback } from 'react'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { LinearWorkspaceSelection } from '../../../../shared/linear/workspace-types'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
+import type { ItsaplanIssue } from '../../../../shared/itsaplan/itsaplan-types'
 
 import { buildLinearWorkspaceSource } from '../../../../shared/new-workspace/workspace-source'
 import { getLinearIssueWorkspaceName } from '../../../../shared/workspace-name'
@@ -14,6 +15,7 @@ import { bindTaskPageJiraItemSourceContext } from './jira/task-page-jira-item-so
 import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import { shouldHideTaskPageListChrome } from './task-page-list-chrome-visibility'
 import { getJiraIssueWorkspaceSeed } from './task-page-source-context'
+import { openItsaplanIssueComposer } from './itsaplan/task-page-itsaplan-workspace-launch'
 import { findJiraIssueDefaultRepo } from '../../../../shared/jira/jira-project-reference'
 import { getRepoWorkspaceCreationTargetHint } from '@/lib/workspace/creation/project-host-workspace-target'
 export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) {
@@ -34,6 +36,9 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
     selectedLinearIssue,
     clearSelectedLinearIssue,
     selectedJiraIssue,
+    selectedItsaplanIssue,
+    itsaplanInstance,
+    itsaplanTaskSourceContext,
     linearMode,
     setLinearIssues,
     setLinearLoading,
@@ -236,11 +241,22 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
     },
     [openComposerForJiraItem]
   )
+  const openComposerForItsaplanItem = useCallback(
+    (issue: ItsaplanIssue): void =>
+      openItsaplanIssueComposer({
+        issue,
+        instanceId: itsaplanInstance?.id ?? null,
+        sourceContext: itsaplanTaskSourceContext,
+        repos: model.repos
+      }),
+    [itsaplanInstance?.id, itsaplanTaskSourceContext, model.repos]
+  )
   const taskPageListChromeHidden = shouldHideTaskPageListChrome({
     taskSource,
     hasGitHubDetail: Boolean(dialogWorkItem),
     hasGitLabDetail: Boolean(gitlabDialogItem),
     hasJiraDetail: Boolean(selectedJiraIssue),
+    hasItsaplanDetail: Boolean(selectedItsaplanIssue),
     hasLinearIssueDetail: Boolean(selectedLinearIssue),
     hasLinearProjectContext: Boolean(selectedLinearProject),
     hasLinearViewContext: Boolean(selectedLinearCustomView)
@@ -255,6 +271,7 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
     handleLinearAccessConnected: typeof handleLinearAccessConnected
     openComposerForJiraItem: typeof openComposerForJiraItem
     handleUseJiraItem: typeof handleUseJiraItem
+    openComposerForItsaplanItem: typeof openComposerForItsaplanItem
     taskPageListChromeHidden: typeof taskPageListChromeHidden
   }
   nextModel.openComposerForLinearItem = openComposerForLinearItem
@@ -266,6 +283,7 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
   nextModel.handleLinearAccessConnected = handleLinearAccessConnected
   nextModel.openComposerForJiraItem = openComposerForJiraItem
   nextModel.handleUseJiraItem = handleUseJiraItem
+  nextModel.openComposerForItsaplanItem = openComposerForItsaplanItem
   nextModel.taskPageListChromeHidden = taskPageListChromeHidden
   return nextModel
 }

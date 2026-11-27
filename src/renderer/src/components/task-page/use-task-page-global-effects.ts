@@ -25,7 +25,9 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationMod
     selectedLinearIssue,
     selectedJiraIssue,
     newLinearIssueOpen,
-    newJiraIssueOpen
+    newJiraIssueOpen,
+    selectedItsaplanIssue,
+    newItsaplanIssueOpen
   } = model
   const githubTasksBusy = githubListPending || tasksRefreshing || tasksFiltering
   useEffect(() => {
@@ -37,6 +39,8 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationMod
       newIssueOpen ||
       newLinearIssueOpen ||
       newJiraIssueOpen ||
+      selectedItsaplanIssue ||
+      newItsaplanIssueOpen ||
       activeModal !== 'none'
     ) {
       return
@@ -83,7 +87,9 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationMod
     newLinearIssueOpen,
     newJiraIssueOpen,
     selectedLinearIssue,
-    selectedJiraIssue
+    selectedJiraIssue,
+    selectedItsaplanIssue,
+    newItsaplanIssueOpen
   ])
   useEffect(() => {
     if (!preflightStatusCurrent || !preflightStatusChecked) {

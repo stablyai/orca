@@ -48,7 +48,11 @@ export function TaskPageSourceBar({
     setLinearConnectOpen,
     handleLinearWorkspaceChange,
     handleLinearTeamSelectionChange,
-    handleLinearScopeOpen
+    handleLinearScopeOpen,
+    itsaplanConnected,
+    itsaplanProjects,
+    itsaplanProjectRef,
+    selectItsaplanProject
   } = model
   return (
     <div className="flex items-center justify-between gap-2">
@@ -219,6 +223,23 @@ export function TaskPageSourceBar({
             </Select>
           ) : null}
         </div>
+      ) : null}
+      {taskSource === 'itsaplan' && itsaplanConnected && itsaplanProjects?.length ? (
+        <Select value={itsaplanProjectRef ?? undefined} onValueChange={selectItsaplanProject}>
+          <SelectTrigger
+            className="h-8 w-[220px] rounded-md border-border/50 bg-muted/50 text-xs font-medium shadow-sm"
+            aria-label={t('taskProviders.itsaplan.project', 'Project')}
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {itsaplanProjects.map((project) => (
+              <SelectItem key={project.ref} value={project.ref}>
+                {project.key} · {project.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       ) : null}
     </div>
   )

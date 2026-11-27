@@ -11,6 +11,7 @@ import { useTaskPageGitHubIssueDraft } from './github/issue-creation/use-task-pa
 import { useTaskPageDetailRouting } from './use-task-page-detail-routing'
 import { useTaskPageLinearViewState } from './linear/use-task-page-linear-view-state'
 import { useTaskPageJiraListState } from './jira/use-task-page-jira-list-state'
+import { useTaskPageItsaplanListState } from './itsaplan/use-task-page-itsaplan-list-state'
 import { useTaskPageResumeRestoration } from './use-task-page-resume-restoration'
 import { useTaskPageProviderMetadata } from './use-task-page-provider-metadata'
 import { useTaskPageGitLabLoading } from './gitlab/use-task-page-gitlab-loading'
@@ -54,7 +55,8 @@ export default function TaskPage(): React.JSX.Element {
   const stage10 = useTaskPageDetailRouting(stage9)
   const stage11 = useTaskPageLinearViewState(stage10)
   const stage12 = useTaskPageJiraListState(stage11)
-  const stage13 = useTaskPageResumeRestoration(stage12)
+  const stage12b = useTaskPageItsaplanListState(stage12)
+  const stage13 = useTaskPageResumeRestoration(stage12b)
   const stage14 = useTaskPageProviderMetadata(stage13)
   const stage15 = useTaskPageGitLabLoading(stage14)
   const stage16 = useTaskPageLinearListSelection(stage15)
