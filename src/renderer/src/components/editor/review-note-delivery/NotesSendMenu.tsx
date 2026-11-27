@@ -1,8 +1,11 @@
 import { useAppStore } from '@/store/index'
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
-import type { DiffCommentOwner } from '@/store/slices/diff-comments/diff-comment-owner'
+import {
+  readOwnedDiffComments,
+  type DiffCommentOwner
+} from '@/store/slices/diff-comments/diff-comment-owner'
 import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
-import { Send, Sparkles } from 'lucide-react'
+import { Send } from 'lucide-react'
 import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { useLatchedOpen } from '@/app-shell/root-surfaces/use-latched-open'
 import type { AgentSendPopoverTargetMode } from '@/store/slices/ui/ui-slice-contract-core'
@@ -17,6 +20,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
+import { SendNotesButton, type SendNotesButtonSize } from './SendNotesButton'
 
 const ReviewNotesSendMenuContent = lazy(() =>
   import('./ReviewNotesSendMenuContent').then((module) => ({
@@ -27,9 +31,9 @@ import type { DiffCommentDeliverySnapshot } from '@/store/slices/diff-comments/c
 import {
   diffCommentSendKey,
   holdNotesForSend,
-  isNoteInFlight,
-  useNotesInFlightVersion
+  isNoteInFlight
 } from '@/components/notes/delivery/notes-send-in-flight'
+import { useNotesInFlightVersion } from '@/components/notes/delivery/use-notes-in-flight-version'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { recomputeOn } from '@/lib/recompute-on'
@@ -46,8 +50,11 @@ export type NotesSendMenuScope<TNote> = {
   formatPrompt: (notes: readonly TNote[]) => string
 }
 
-type SendableNotesScope<TNote> = Omit<NotesSendMenuScope<TNote>, 'formatPrompt'> & {
-  prompt: string
+type SendableNotesScope<TNote> = NotesSendMenuScope<TNote>
+
+// Formatting is deferred to the open menu: closed menus re-render on every note change.
+function scopePrompt<TNote>(scope: SendableNotesScope<TNote>): string {
+  return scope.notes.length > 0 ? scope.formatPrompt(scope.notes) : ''
 }
 
 export type NotesSendMenuProps<TNote> = {
@@ -61,17 +68,21 @@ export type NotesSendMenuProps<TNote> = {
   source?: AgentSendPopoverTargetMode['source']
   targetModeLabel?: string
   triggerClassName?: string
-  triggerLabel?: string
-  triggerCount?: number
-  actionLabel?: string
   disabledTooltip?: string
   iconClassName?: string
   align?: 'start' | 'center' | 'end'
+  /**
+   * The shared "Send N notes" trigger. Count, Sending… and the opened send all come from the
+   * requested scope (defaultScopeId); it is hidden when that scope has nothing to send.
+   */
+  batchTrigger?: { size?: SendNotesButtonSize; flush?: boolean }
+  /** Rendered at the bottom of the menu, e.g. Copy and Clear. */
+  menuFooter?: React.ReactNode
   // Drive exactly one mounted instance with each keyboard-open nonce.
   openRequestNonce?: number | null
   // Check expiry on the opening commit; render clocks can lag or freeze.
   openRequestExpiresAt?: number | null
-  onOpenRequestHandled?: () => void
+  onClaimOpenRequest?: () => boolean
   onDelivered: (notes: readonly TNote[]) => void
 }
 
@@ -90,17 +101,16 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
   source = 'diff-notes',
   targetModeLabel,
   triggerClassName,
-  triggerLabel,
-  triggerCount,
-  actionLabel,
   disabledTooltip,
   iconClassName = 'size-3.5',
   align = 'end',
+  batchTrigger,
+  menuFooter,
   openRequestNonce = null,
   openRequestExpiresAt = null,
-  onOpenRequestHandled,
+  onClaimOpenRequest,
   onDelivered
-}: NotesSendMenuProps<TNote>): React.JSX.Element {
+}: NotesSendMenuProps<TNote>): React.JSX.Element | null {
   const t = useTranslate()
   const [sendMenuOpen, setSendMenuOpen] = useState(false)
   const sendMenuMounted = useLatchedOpen(sendMenuOpen)
@@ -110,12 +120,12 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
   const sendableScopes = useMemo<SendableNotesScope<TNote>[]>(
     () =>
       recomputeOn([inFlightVersion], () =>
-        scopes.map(({ formatPrompt, ...scope }) => {
-          const notes = owner
+        scopes.map((scope) => ({
+          ...scope,
+          notes: owner
             ? scope.notes.filter((note) => !isNoteInFlight(diffCommentSendKey(owner, note)))
             : []
-          return { ...scope, notes, prompt: notes.length > 0 ? formatPrompt(notes) : '' }
-        })
+        }))
       ),
     [inFlightVersion, owner, scopes]
   )
@@ -127,7 +137,19 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
     const requested = enabledScopes.find((scope) => scope.id === defaultScopeId)
     return requested ?? enabledScopes[0] ?? null
   }, [defaultScopeId, enabledScopes])
-  const hasDeliverableNotes = enabledScopes.length > 0
+  // Batch triggers never fall back to another scope: a held file must not open the all-notes send.
+  const requestedScope = batchTrigger
+    ? (sendableScopes.find((scope) => scope.id === defaultScopeId) ?? sendableScopes[0] ?? null)
+    : null
+  const requestedExisting = batchTrigger
+    ? (scopes.find((scope) => scope.id === requestedScope?.id)?.notes.length ?? 0)
+    : 0
+  const primaryScope = batchTrigger
+    ? requestedScope && requestedScope.notes.length > 0
+      ? requestedScope
+      : null
+    : defaultScope
+  const hasDeliverableNotes = batchTrigger ? primaryScope !== null : enabledScopes.length > 0
   // Notes only on their way to an agent are not sent yet.
   const disabledReason = !owner
     ? undefined
@@ -152,6 +174,23 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
     [markDelivered, owner]
   )
 
+  const canSendNotes = useCallback(
+    (notes: readonly TNote[]) => () => {
+      if (!owner || notes.length === 0) {
+        return false
+      }
+      const current = readOwnedDiffComments(useAppStore.getState(), owner)
+      const pendingKeys = new Set(
+        current?.filter((note) => !note.sentAt).map((note) => diffCommentSendKey(owner, note))
+      )
+      return notes.every((note) => {
+        const key = diffCommentSendKey(owner, note)
+        return pendingKeys.has(key) && !isNoteInFlight(key)
+      })
+    },
+    [owner]
+  )
+
   const openTargetMode = useCallback(
     (scope: SendableNotesScope<TNote>) => {
       if (scope.notes.length === 0) {
@@ -161,31 +200,39 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
         id: targetModeId,
         worktreeId,
         source,
-        prompt: scope.prompt,
+        prompt: scopePrompt(scope),
         label: targetModeLabel ?? scope.label,
         launchSource: 'notes_send',
+        canSendPrompt: canSendNotes(scope.notes),
         onPromptDelivered: () => markDelivered(scope.notes),
         onPromptHandedOff: holdInFlight(scope.notes)
       })
     },
-    [holdInFlight, markDelivered, source, targetModeId, targetModeLabel, worktreeId]
+    [canSendNotes, holdInFlight, markDelivered, source, targetModeId, targetModeLabel, worktreeId]
   )
 
   const handleOpenChange = useCallback(
     (open: boolean) => {
       setSendMenuOpen(open)
       if (open) {
-        if (defaultScope) {
-          openTargetMode(defaultScope)
+        if (primaryScope) {
+          openTargetMode(primaryScope)
         }
       } else {
         useAppStore.getState().closeAgentSendPopoverTargetMode(targetModeId)
       }
     },
-    [defaultScope, openTargetMode, targetModeId]
+    [primaryScope, openTargetMode, targetModeId]
   )
 
   const effectiveSendMenuOpen = sendMenuOpen && ownsTargetMode
+  const openPrompts = useMemo(
+    () =>
+      effectiveSendMenuOpen
+        ? new Map(sendableScopes.map((scope) => [scope.id, scopePrompt(scope)]))
+        : null,
+    [effectiveSendMenuOpen, sendableScopes]
+  )
   if (sendMenuOpen && !ownsTargetMode) {
     // Clear stale local open state before painting another target’s menu.
     setSendMenuOpen(false)
@@ -198,74 +245,89 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
     [targetModeId]
   )
 
+  const batchHidden = Boolean(batchTrigger) && (!owner || requestedExisting === 0)
   useEffect(() => {
-    if (openRequestNonce == null) {
+    // A send primed before the last note went away must not stay pickable from the sidebar.
+    if (batchHidden) {
+      useAppStore.getState().closeAgentSendPopoverTargetMode(targetModeId)
+    }
+  }, [batchHidden, targetModeId])
+
+  useEffect(() => {
+    if (openRequestNonce == null || !onClaimOpenRequest) {
       return
     }
-    // Consume even expired or undeliverable requests so a later mount cannot reopen them.
-    const expired = openRequestExpiresAt != null && Date.now() >= openRequestExpiresAt
-    if (!expired && hasDeliverableNotes && defaultScope) {
-      handleOpenChange(true)
+    let cancelled = false
+    // Let mount effects settle so Strict Mode replay cannot dismiss a newly opened picker.
+    queueMicrotask(() => {
+      if (cancelled || !onClaimOpenRequest()) {
+        return
+      }
+      // Consume even expired or undeliverable requests so a later mount cannot reopen them.
+      const expired = openRequestExpiresAt != null && Date.now() >= openRequestExpiresAt
+      if (!expired && hasDeliverableNotes && primaryScope) {
+        handleOpenChange(true)
+      }
+    })
+    return () => {
+      cancelled = true
     }
-    onOpenRequestHandled?.()
   }, [
     openRequestNonce,
     openRequestExpiresAt,
     hasDeliverableNotes,
-    defaultScope,
+    primaryScope,
     handleOpenChange,
-    onOpenRequestHandled
+    onClaimOpenRequest
   ])
+
+  // Unknown owner: whether the notes are held cannot be told yet, so show nothing.
+  if (batchHidden) {
+    return null
+  }
+
+  const trigger = batchTrigger ? (
+    <DropdownMenuTrigger asChild>
+      <SendNotesButton
+        count={requestedScope?.notes.length ?? 0}
+        sending={!hasDeliverableNotes}
+        size={batchTrigger.size}
+        flush={batchTrigger.flush}
+        onMouseDown={(event) => event.stopPropagation()}
+        onClick={(event) => event.stopPropagation()}
+      />
+    </DropdownMenuTrigger>
+  ) : (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className={cn(
+              'inline-flex items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground',
+              triggerClassName
+            )}
+            disabled={!hasDeliverableNotes}
+            aria-description={hasDeliverableNotes ? undefined : disabledReason}
+            aria-label={enabledSendTooltip(t)}
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <Send className={iconClassName} />
+          </button>
+        </DropdownMenuTrigger>
+      </TooltipTrigger>
+      {hasDeliverableNotes || disabledReason ? (
+        <TooltipContent side="bottom" sideOffset={6}>
+          {hasDeliverableNotes ? enabledSendTooltip(t) : disabledReason}
+        </TooltipContent>
+      ) : null}
+    </Tooltip>
+  )
 
   return (
     <DropdownMenu modal={false} open={effectiveSendMenuOpen} onOpenChange={handleOpenChange}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className={cn(
-                'inline-flex items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground',
-                triggerClassName
-              )}
-              disabled={!hasDeliverableNotes}
-              aria-label={
-                triggerLabel
-                  ? t(
-                      'auto.components.editor.NotesSendMenu.433928cd9f',
-                      'Send {{value0}} to an agent',
-                      { value0: triggerLabel }
-                    )
-                  : enabledSendTooltip(t)
-              }
-              // A disabled button can't take focus, so its tooltip never reaches screen readers.
-              aria-description={hasDeliverableNotes ? undefined : disabledReason}
-              onMouseDown={(event) => event.stopPropagation()}
-              onClick={(event) => event.stopPropagation()}
-            >
-              {triggerLabel ? (
-                <>
-                  <Sparkles className="size-3 text-violet-500 dark:text-violet-400" />
-                  <span className="whitespace-nowrap">{triggerLabel}</span>
-                  {triggerCount !== undefined ? (
-                    <span className="rounded-full bg-background/80 px-1 text-[10px] tabular-nums text-muted-foreground">
-                      {triggerCount}
-                    </span>
-                  ) : null}
-                  <span className="mx-0.5 h-3 w-px bg-border/70" aria-hidden />
-                </>
-              ) : null}
-              <Send className={iconClassName} />
-              {actionLabel ? <span className="whitespace-nowrap">{actionLabel}</span> : null}
-            </button>
-          </DropdownMenuTrigger>
-        </TooltipTrigger>
-        {hasDeliverableNotes || disabledReason ? (
-          <TooltipContent side="bottom" sideOffset={6}>
-            {hasDeliverableNotes ? enabledSendTooltip(t) : disabledReason}
-          </TooltipContent>
-        ) : null}
-      </Tooltip>
+      {trigger}
       {sendMenuMounted ? (
         <DropdownMenuContent
           align={align}
@@ -293,9 +355,10 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
                       <ReviewNotesSendMenuContent
                         worktreeId={worktreeId}
                         groupId={groupId}
-                        prompt={scope.prompt}
+                        prompt={openPrompts?.get(scope.id) ?? ''}
                         promptDelivery="submit-after-ready"
                         launchSource="notes_send"
+                        canSendPrompt={canSendNotes(scope.notes)}
                         onPromptDelivered={() => markDelivered(scope.notes)}
                         onPromptHandedOff={holdInFlight(scope.notes)}
                       />
@@ -309,9 +372,10 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
               <ReviewNotesSendMenuContent
                 worktreeId={worktreeId}
                 groupId={groupId}
-                prompt={defaultScope?.prompt ?? ''}
+                prompt={(defaultScope && openPrompts?.get(defaultScope.id)) ?? ''}
                 promptDelivery="submit-after-ready"
                 launchSource="notes_send"
+                canSendPrompt={canSendNotes(defaultScope?.notes ?? [])}
                 onPromptDelivered={() => {
                   if (defaultScope) {
                     markDelivered(defaultScope.notes)
@@ -321,6 +385,7 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
               />
             </Suspense>
           )}
+          {menuFooter}
         </DropdownMenuContent>
       ) : null}
     </DropdownMenu>
