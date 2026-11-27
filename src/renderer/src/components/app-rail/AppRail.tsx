@@ -270,6 +270,7 @@ export function AppRail({
   return (
     <nav
       aria-label={navigationLabel}
+      data-app-rail-nav=""
       className="flex min-h-0 w-10 flex-1 shrink-0 flex-col border-r border-worktree-sidebar-border bg-worktree-sidebar"
       style={style}
     >

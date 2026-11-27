@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../../lazy-ipc-handle-group'
 import { getLocalWorktreeCatalogVersion } from '../../../workspaces/catalog/local-worktree-scan-generation'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
@@ -33,10 +34,13 @@ import {
 } from '../../../runtime/workspaces/lifecycle/workspace-lifecycle-commands'
 import { worktreeHostIdentity } from '../../../persistence/worktree-meta-host-identity'
 
-export function registerWorktreeRemovalHandlers(context: WorktreeIpcContext): void {
+export function registerWorktreeRemovalHandlers(
+  context: WorktreeIpcContext,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
   const { store, options, worktreeRemovalsInFlight } = context
 
-  ipcMain.handle('worktrees:previewNestedRemoval', async (_event, args: RemoveWorktreeArgs) => {
+  ipc.handle('worktrees:previewNestedRemoval', async (_event, args: RemoveWorktreeArgs) => {
     const { repoId, worktreePath } = parseWorktreeId(args.worktreeId)
     const repo = resolveRepoForExecutionHost(store, repoId, args.hostId)
     if (!repo) {
@@ -135,7 +139,7 @@ export function registerWorktreeRemovalHandlers(context: WorktreeIpcContext): vo
       }
     }
   }
-  ipcMain.handle('worktrees:remove', (_event, args: RemoveWorktreeArgs) => {
+  ipc.handle('worktrees:remove', (_event, args: RemoveWorktreeArgs) => {
     const repo = resolveRepoForExecutionHost(
       store,
       parseWorktreeId(args.worktreeId).repoId,

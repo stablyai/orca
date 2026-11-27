@@ -20,6 +20,8 @@ import { formatCreditCount } from '../../../../../shared/agent-usage/display/cre
 import { ProviderIcon } from './provider-usage-panel'
 import { USAGE_WARNING_PERCENT } from './usage-health-tone'
 import { UsageBar } from './usage-meter'
+import { UsageErrorAlert } from './UsageErrorAlert'
+import { getProviderDisplayName } from '../../../../../shared/agent-usage/display/usage-provider-windows'
 import { getOwnerNotSetUpLabelParts } from '../../../../../shared/agent-usage/status-copy/owner-not-set-up-copy'
 import {
   getProviderUsageErrorMessage,
@@ -323,11 +325,18 @@ export function ProviderSegment({
   }
 
   if (p.status === 'error' && !tightest) {
+    if (calm) {
+      return (
+        <span className="inline-flex items-center gap-1 text-muted-foreground">
+          <ProviderIcon provider={provider} />
+          {!compact && <span className="text-[11px] font-medium">{statusLabel}</span>}
+        </span>
+      )
+    }
     return (
       <span className="inline-flex items-center gap-1 text-muted-foreground">
+        <UsageErrorAlert label={`${getProviderDisplayName(provider)}: ${statusLabel}`} />
         <ProviderIcon provider={provider} />
-        {!calm && <AlertTriangle size={11} className="text-muted-foreground/80" />}
-        {!compact && <span className="text-[11px] font-medium">{statusLabel}</span>}
       </span>
     )
   }

@@ -10,7 +10,7 @@ import { clearActiveToolFieldsUpdate, deriveInteractivePrompt } from '../../inte
 import { serializeOmpPlanReviewPrompt } from '../../../native-chat/input/questions/omp-plan-review-prompt'
 import type { PiAgentKind } from '../../../agent-launch/catalog/pi-agent-kind'
 
-/** OMP's `ask` carries the same questions/options payload as Pi's question tool. */
+/** Raw question-tool input: Pi's questions/options, or OMP's `ask` HTML form (18.18.3+). */
 function serializeQuestionPrompt(toolInput: unknown): string | undefined {
   if (toolInput === undefined || toolInput === null) {
     return undefined

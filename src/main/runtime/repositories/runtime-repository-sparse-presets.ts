@@ -1,9 +1,5 @@
 import { randomUUID } from 'node:crypto'
 import type { Repo } from '../../../shared/repository/repo-types'
-import {
-  normalizeSparsePresetDirectories,
-  normalizeSparsePresetName
-} from '../../ipc/repos/sparse-preset-validation'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 
@@ -31,6 +27,8 @@ export class RuntimeRepositorySparsePresets {
     }
     const repo = await this.deps.resolveRepo(repoSelector)
     assertWslMoveRepoWritable(store, repo)
+    const { normalizeSparsePresetDirectories, normalizeSparsePresetName } =
+      await import('../../ipc/repos/sparse-preset-validation')
     const name = normalizeSparsePresetName(args.name)
     const directories = normalizeSparsePresetDirectories(args.directories)
     const now = Date.now()

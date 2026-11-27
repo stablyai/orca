@@ -4072,7 +4072,7 @@
         "99c2755218": "Issues suchen oder JQL eingeben, z. B. project = ABC",
         "2ff9fd71fd": "Jira-Issues aktualisieren",
         "0b65d3fb2c": "Linear-Projekte suchen…",
-        "eec0c5c079": "Linear-Issues suchen…",
+        "eec0c5c079": "Suchen…",
         "8964184a8b": "Linear aktualisieren",
         "3feb524d42": "Neues Linear-Issue",
         "0cbf7e5cf3": "Linear-Aufgabenmodus",
@@ -15570,8 +15570,6 @@
                 "pendingCount_other": "{{count}} ausstehend",
                 "unresolvedCount_one": "{{count}} ungelöst",
                 "unresolvedCount_other": "{{count}} ungelöst",
-                "sendQueuedCommentsToAi_one": "{{count}} Kommentar aus der Warteschlange an die KI senden",
-                "sendQueuedCommentsToAi_other": "{{count}} Kommentare aus der Warteschlange an die KI senden",
                 "conflictsBlockThisMr": "Konflikte blockieren diesen MR",
                 "conflictsBlockThisPr": "Konflikte blockieren diesen PR",
                 "copyComment": "Kommentar kopieren",
@@ -17612,10 +17610,6 @@
           "39b6b9e4e4": "Auf Branch committet"
         },
         "CombinedDiffViewer": {
-          "1da745c551": "Gesendet",
-          "84898c548d": "Leeren",
-          "88b70d0ef5": "Kopieren",
-          "bb84b4c374": "KI-Notizen",
           "948a5fd6c8": "Notizen löschen",
           "0f806a2ab1": "Abbrechen",
           "b6c3b84476": "Dateibaum anzeigen",
@@ -17625,7 +17619,6 @@
           "820ec01f24": "Dateien mit Konflikten werden separat geprüft",
           "fd8892b120": "Keine Änderungen zum Anzeigen",
           "eb5f40e49c": "Diese Diff-Ansicht schließt ungelöste Konflikte aus, da die normale Zwei-Wege-Diff-Verarbeitung Konflikte nicht sicher verarbeiten kann.",
-          "45cf23b418": "Die Notizen konnten nicht gelöscht werden.",
           "ec5053c7f5": "Nebeneinander",
           "f786fd54e1": "Untereinander",
           "ea08dae15b": "Alle einklappen",
@@ -17640,19 +17633,12 @@
           "noExtension": "(keine Dateiendung)",
           "diffLoadTimedOut": "Der Diff wurde nicht vollständig geladen.",
           "diffLoadFailed": "Der Diff konnte nicht geladen werden.",
-          "moreNotesInSourceControl_one": "{{count}} weitere Notiz in der Quellcodeverwaltung",
-          "moreNotesInSourceControl_other": "{{count}} weitere Notizen in der Quellcodeverwaltung",
-          "clearNotesConfirm_one": "{{count}} Notiz aus diesem Worktree löschen?",
-          "clearNotesConfirm_other": "{{count}} Notizen aus diesem Worktree löschen?",
           "changedFilesVs_one": "{{count}} geänderte Datei gegenüber {{baseRef}}",
           "changedFilesVs_other": "{{count}} geänderte Dateien gegenüber {{baseRef}}",
           "changedFilesIn_one": "{{count}} geänderte Datei in {{compareRef}}",
           "changedFilesIn_other": "{{count}} geänderte Dateien in {{compareRef}}",
           "changedFiles_one": "{{count}} geänderte Datei",
           "changedFiles_other": "{{count}} geänderte Dateien",
-          "showAiNotes_one": "{{count}} KI-Notiz anzeigen",
-          "showAiNotes_other": "{{count}} KI-Notizen anzeigen",
-          "send": "Senden",
           "openDiff": "Diff öffnen",
           "openInEditor": "Im Editor öffnen",
           "skippedConflictsExcluded": "{{count}} ungelöste Konflikte wurden aus dieser Diff-Ansicht ausgeschlossen."
@@ -17854,7 +17840,6 @@
           "b1bfc04034": "Ausgewählter Text",
           "f37b98999e": "Diese Notiz",
           "2b2b31382c": "Metadaten",
-          "bb629de58a": "Notizen für Agenten kopieren",
           "322afab6ff": "Review-Notizen",
           "0f9969a159": "Zur ersten Review-Notiz springen",
           "12052c639c": "Suche schließen",
@@ -17927,7 +17912,6 @@
         },
         "NotesSendMenu": {
           "44dc5e60a6": "Notizen senden",
-          "433928cd9f": "{{value0}} an einen Agenten senden",
           "thisNote": "Diese Notiz",
           "noteAlreadySent": "Notiz bereits gesendet",
           "sendNotesToAgent": "Notizen an einen Agenten senden",
@@ -18013,8 +17997,6 @@
           "3ababd949d": "Review-Notizen"
         },
         "RichMarkdownReviewRailActions": {
-          "636394af72": "Notizen für Agenten kopieren",
-          "a807596997": "Notizen kopiert",
           "8aaf2c4c69": "Review-Notizen anzeigen",
           "af02dc2456": "Review-Notizen ausblenden"
         },
@@ -18897,8 +18879,6 @@
             "b5ba6085de": "Frage",
             "143204e423": "Änderung",
             "b71dc3d930": "Erneut verbinden",
-            "d51ef37351": "Kopieren",
-            "6f4ab3592b": "Kopiert",
             "168350ae6a": "Ein Element anklicken oder mit dem Mauszeiger darauf zeigen, dann C zum Kopieren oder S für einen Screenshot drücken.",
             "777b5bc4ec": "Ein Element anklicken, um Feedback für den Agenten hinzuzufügen.",
             "b733a91bd9": "Feedback für das ausgewählte Element hinzufügen.",
@@ -18936,9 +18916,7 @@
             "devToolsDockRight": "Rechts andocken",
             "devToolsDockBottom": "Unten andocken",
             "devToolsUndock": "In separatem Fenster öffnen",
-            "devToolsClose": "DevTools schließen",
-            "11c5084aa2": "Anmerkungen entfernen",
-            "734e4343ec": "Browser-Anmerkungen entfernen"
+            "devToolsClose": "DevTools schließen"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "Abbrechen",
@@ -24149,6 +24127,26 @@
         "cancel": "Abbrechen",
         "tryAgain": "Erneut versuchen"
       }
+    },
+    "notes": {
+      "sendButton": {
+        "sendCommentsToAgent_one": "{{count}} Kommentar an einen Agenten senden",
+        "clearPageNotes_one": "{{count}} Notiz von dieser Seite löschen?",
+        "sendShort": "{{count}} senden",
+        "clearNotes": "Notizen löschen…",
+        "sending": "Wird gesendet…",
+        "sendCommentsToAgent_other": "{{count}} Kommentare an einen Agenten senden",
+        "sendNotes_other": "{{count}} Notizen senden",
+        "sendNotesToAgent_one": "{{count}} Notiz an einen Agenten senden",
+        "sendNotes_one": "{{count}} Notiz senden",
+        "sendComments_other": "{{count}} Kommentare senden",
+        "sendComments_one": "{{count}} Kommentar senden",
+        "copyNotes": "Notizen kopieren",
+        "clearPageNotes_other": "{{count}} Notizen von dieser Seite löschen?",
+        "sendNotesToAgent_other": "{{count}} Notizen an einen Agenten senden",
+        "sentNotesStillListed": "Notizen gesendet, aber noch in der Liste.",
+        "removeSentNotes": "Entfernen"
+      }
     }
   },
   "dashboardPopout": {
@@ -24600,6 +24598,9 @@
         "planModelWithoutThinking": "Modell „{{model}}“ unterstützt keine Einstellung des Denkaufwands.",
         "planThinkingLevelInvalid": "Die Denkstufe „{{level}}“ ist für {{model}} nicht gültig.",
         "openCodeInvalidEvents": "OpenCode hat ungültige JSON-Ereignisse zurückgegeben.",
+        "antigravityInvalidEvents": "Antigravity hat ungültige JSON-Ereignisse zurückgegeben.",
+        "antigravityInvalidResult": "Antigravity hat ein ungültiges Ergebnis zurückgegeben.",
+        "antigravityNoFinalResult": "Antigravity hat kein abschließendes Ergebnis zurückgegeben.",
         "kimiUnreadableOutput": "Kimi hat eine Ausgabe zurückgegeben, die Orca nicht lesen konnte. Erneut versuchen.",
         "kimiSessionOccupied": "Kimi konnte diese Sitzung nicht verwenden, da sie in einem anderen Client aktiv ist. Die Sitzung dort stoppen oder den Client beenden und erneut versuchen.",
         "kimiInterrupted": "Kimi wurde vor Abschluss der Textgenerierung unterbrochen. Erneut versuchen.",
@@ -25367,7 +25368,9 @@
     "failed": "Suche fehlgeschlagen. Erneut versuchen.",
     "filters": {
       "toggle": "Suchdetails ein-/ausblenden",
-      "active": "{{count}} aktiv"
+      "active": "{{count}} aktiv",
+      "includeSummary": "Einschließen: {{patterns}}",
+      "excludeSummary": "Ausschließen: {{patterns}}"
     },
     "noResults": "Keine Ergebnisse. Eine andere Suche versuchen oder die Filter anpassen."
   },

@@ -156,6 +156,9 @@ export function runWatchdog(
       completedSpans: null,
       powerEvents,
       initialSleepAssociated,
+      ...(config.processMetadata?.appVersion
+        ? { appVersion: config.processMetadata.appVersion }
+        : {}),
       ...(kind === 'heartbeat-stall' ? { workerSends: recentWorkerSends(now) } : {}),
       ...(options.tier ? { tier: options.tier } : {}),
       ...(options.recovered ? { selfRecovered: true } : {})

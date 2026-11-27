@@ -4511,7 +4511,7 @@
         "99c2755218": "Найдите задачи или введите JQL, например project = ABC",
         "2ff9fd71fd": "Обновить задачи Jira",
         "0b65d3fb2c": "Поиск проектов Linear…",
-        "eec0c5c079": "Поиск задач Linear…",
+        "eec0c5c079": "Поиск…",
         "8964184a8b": "Обновить Linear",
         "3feb524d42": "Новая задача Linear",
         "0cbf7e5cf3": "Режим задач Linear",
@@ -16341,10 +16341,6 @@
                 "unresolvedCount_few": "не решено: {{count}}",
                 "unresolvedCount_many": "не решено: {{count}}",
                 "unresolvedCount_other": "не решено: {{count}}",
-                "sendQueuedCommentsToAi_one": "Отправить ИИ {{count}} комментарий из очереди",
-                "sendQueuedCommentsToAi_few": "Отправить ИИ {{count}} комментария из очереди",
-                "sendQueuedCommentsToAi_many": "Отправить ИИ {{count}} комментариев из очереди",
-                "sendQueuedCommentsToAi_other": "Отправить ИИ {{count}} комментария из очереди",
                 "conflictsBlockThisMr": "Конфликты блокируют этот MR",
                 "conflictsBlockThisPr": "Конфликты блокируют этот PR",
                 "copyComment": "Копировать комментарий",
@@ -18445,10 +18441,6 @@
           "39b6b9e4e4": "Закоммичено в ветке"
         },
         "CombinedDiffViewer": {
-          "1da745c551": "Отправлено",
-          "84898c548d": "Очистить",
-          "88b70d0ef5": "Копировать",
-          "bb84b4c374": "Заметки ИИ",
           "948a5fd6c8": "Удалить заметки",
           "0f806a2ab1": "Отмена",
           "b6c3b84476": "Показать дерево файлов",
@@ -18460,7 +18452,6 @@
           "820ec01f24": "Конфликтующие файлы проверяются отдельно",
           "fd8892b120": "Нет изменений для отображения",
           "eb5f40e49c": "Неразрешённые конфликты исключены: обычное двустороннее сравнение небезопасно для их просмотра.",
-          "45cf23b418": "Не удалось удалить заметки.",
           "ec5053c7f5": "Рядом",
           "f786fd54e1": "В одном столбце",
           "ea08dae15b": "Свернуть всё",
@@ -18475,14 +18466,6 @@
           "noExtension": "(без расширения)",
           "diffLoadTimedOut": "Загрузка сравнения не завершилась.",
           "diffLoadFailed": "Не удалось загрузить сравнение.",
-          "moreNotesInSourceControl_one": "Ещё {{count}} заметка в разделе «Управление версиями»",
-          "moreNotesInSourceControl_few": "Ещё {{count}} заметки в разделе «Управление версиями»",
-          "moreNotesInSourceControl_many": "Ещё {{count}} заметок в разделе «Управление версиями»",
-          "moreNotesInSourceControl_other": "Ещё {{count}} заметки в разделе «Управление версиями»",
-          "clearNotesConfirm_one": "Удалить {{count}} заметку из этого рабочего дерева?",
-          "clearNotesConfirm_few": "Удалить {{count}} заметки из этого рабочего дерева?",
-          "clearNotesConfirm_many": "Удалить {{count}} заметок из этого рабочего дерева?",
-          "clearNotesConfirm_other": "Удалить {{count}} заметки из этого рабочего дерева?",
           "changedFilesVs_one": "{{count}} изменённый файл по сравнению с {{baseRef}}",
           "changedFilesVs_few": "{{count}} изменённых файла по сравнению с {{baseRef}}",
           "changedFilesVs_many": "{{count}} изменённых файлов по сравнению с {{baseRef}}",
@@ -18495,11 +18478,6 @@
           "changedFiles_few": "{{count}} изменённых файла",
           "changedFiles_many": "{{count}} изменённых файлов",
           "changedFiles_other": "{{count}} изменённого файла",
-          "showAiNotes_one": "Показать {{count}} заметку ИИ",
-          "showAiNotes_few": "Показать {{count}} заметки ИИ",
-          "showAiNotes_many": "Показать {{count}} заметок ИИ",
-          "showAiNotes_other": "Показать {{count}} заметки ИИ",
-          "send": "Отправить",
           "openDiff": "Открыть сравнение",
           "openInEditor": "Открыть в редакторе",
           "skippedConflictsExcluded": "Неразрешённые конфликты ({{count}}) исключены из этого просмотра изменений."
@@ -18709,7 +18687,6 @@
           "b1bfc04034": "Выделенный текст",
           "f37b98999e": "Эта заметка",
           "2b2b31382c": "Метаданные документа",
-          "bb629de58a": "Скопировать заметки для агента",
           "322afab6ff": "Заметки ревью",
           "0f9969a159": "Перейти к первой заметке ревью",
           "12052c639c": "Закрыть поиск",
@@ -18782,7 +18759,6 @@
         },
         "NotesSendMenu": {
           "44dc5e60a6": "Отправить заметки",
-          "433928cd9f": "Отправить {{value0}} агенту",
           "thisNote": "Эта заметка",
           "noteAlreadySent": "Заметка уже отправлена",
           "sendNotesToAgent": "Отправить заметки агенту",
@@ -18868,8 +18844,6 @@
           "3ababd949d": "Заметки ревью"
         },
         "RichMarkdownReviewRailActions": {
-          "636394af72": "Скопировать заметки для агента",
-          "a807596997": "Заметки скопированы",
           "8aaf2c4c69": "Показать заметки ревью",
           "af02dc2456": "Скрыть заметки ревью"
         },
@@ -19766,8 +19740,6 @@
             "b5ba6085de": "Вопрос",
             "143204e423": "Изменить",
             "b71dc3d930": "Подключиться снова",
-            "d51ef37351": "Копировать",
-            "6f4ab3592b": "Скопировано",
             "168350ae6a": "Нажмите элемент или наведите на него курсор, затем нажмите C для копирования или S для снимка экрана.",
             "777b5bc4ec": "Нажмите элемент, чтобы добавить отзыв для агента.",
             "b733a91bd9": "Добавьте отзыв к выбранному элементу.",
@@ -19805,9 +19777,7 @@
             "devToolsDockRight": "Закрепить справа",
             "devToolsDockBottom": "Закрепить снизу",
             "devToolsUndock": "Открыть в отдельном окне",
-            "devToolsClose": "Закрыть инструменты разработчика",
-            "11c5084aa2": "Удалить заметки",
-            "734e4343ec": "Удалить заметки браузера"
+            "devToolsClose": "Закрыть инструменты разработчика"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "Отмена",
@@ -25357,6 +25327,36 @@
         "cancel": "Отмена",
         "tryAgain": "Повторить"
       }
+    },
+    "notes": {
+      "sendButton": {
+        "sendCommentsToAgent_one": "Отправить агенту {{count}} комментарий",
+        "clearPageNotes_few": "Удалить {{count}} заметки с этой страницы?",
+        "sendComments_many": "Отправить {{count}} комментариев",
+        "sendNotes_many": "Отправить {{count}} заметок",
+        "sendCommentsToAgent_other": "Отправить агенту {{count}} комментария",
+        "sendNotes_one": "Отправить {{count}} заметку",
+        "sendCommentsToAgent_few": "Отправить агенту {{count}} комментария",
+        "clearPageNotes_one": "Удалить {{count}} заметку с этой страницы?",
+        "sendShort": "Отправить {{count}}",
+        "clearNotes": "Удалить заметки…",
+        "sendNotes_other": "Отправить {{count}} заметки",
+        "sendNotesToAgent_few": "Отправить агенту {{count}} заметки",
+        "sendNotesToAgent_many": "Отправить агенту {{count}} заметок",
+        "sendComments_few": "Отправить {{count}} комментария",
+        "sendComments_one": "Отправить {{count}} комментарий",
+        "copyNotes": "Копировать заметки",
+        "sendComments_other": "Отправить {{count}} комментария",
+        "clearPageNotes_many": "Удалить {{count}} заметок с этой страницы?",
+        "sendNotes_few": "Отправить {{count}} заметки",
+        "sendCommentsToAgent_many": "Отправить агенту {{count}} комментариев",
+        "sending": "Отправка…",
+        "sendNotesToAgent_one": "Отправить агенту {{count}} заметку",
+        "clearPageNotes_other": "Удалить {{count}} заметки с этой страницы?",
+        "sendNotesToAgent_other": "Отправить агенту {{count}} заметки",
+        "sentNotesStillListed": "Заметки отправлены, но остались в списке.",
+        "removeSentNotes": "Убрать"
+      }
     }
   },
   "dashboardPopout": {
@@ -25814,6 +25814,9 @@
         "planModelWithoutThinking": "Модель «{{model}}» не поддерживает настройку глубины рассуждений.",
         "planThinkingLevelInvalid": "Глубина рассуждений «{{level}}» недопустима для {{model}}.",
         "openCodeInvalidEvents": "OpenCode вернул некорректные события JSON.",
+        "antigravityInvalidEvents": "Antigravity вернул некорректные события JSON.",
+        "antigravityInvalidResult": "Antigravity вернул некорректный результат.",
+        "antigravityNoFinalResult": "Antigravity не вернул итоговый результат.",
         "kimiUnreadableOutput": "Kimi вернул вывод, который Orca не удалось прочитать. Повторите попытку.",
         "kimiSessionOccupied": "Kimi не удалось использовать эту сессию, поскольку она активна в другом клиенте. Остановите сессию там или закройте тот клиент, затем повторите попытку.",
         "kimiInterrupted": "Kimi был прерван до завершения создания текста. Повторите попытку.",
@@ -26605,7 +26608,9 @@
     "failed": "Не удалось выполнить поиск. Попробуйте снова.",
     "filters": {
       "toggle": "Показать или скрыть параметры поиска",
-      "active": "Активных: {{count}}"
+      "active": "Активных: {{count}}",
+      "includeSummary": "Включить: {{patterns}}",
+      "excludeSummary": "Исключить: {{patterns}}"
     },
     "noResults": "Нет результатов. Попробуйте другой запрос или измените фильтры."
   },

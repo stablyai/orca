@@ -15,6 +15,7 @@ import { extractString } from '../../../../shared/text/trimmed-string'
 import { parseJsonObject } from '../../../ai-vault/parsing/session-json-object'
 import { asRecord } from '../../../ai-vault/parsing/session-record-fields'
 
+import { readKimiWireSessionWorkDir } from '../../../ai-vault/scanners/kimi/session-scanner-kimi-paths'
 import { parseHermesSqliteSessionViaWorker } from '../../../ai-vault/scanners/hermes/session-scanner-hermes-worker'
 import { readOpenCodeTranscriptSignalViaWorker } from '../../../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn'
 import { samePiDirectory } from '../../../pi/rpc/launch/rpc-launch-resolution'
@@ -35,9 +36,11 @@ export type AdoptedTranscriptSource = {
   conversationStore?: string
 }
 
+type AdoptedSourceIdentity = { sessionId: string | null; cwd: string | null }
+
 export async function assertAdoptedSourceIdentity(
   source: AdoptedTranscriptSource,
-  actual: { sessionId: string | null; cwd: string | null },
+  actual: AdoptedSourceIdentity,
   requireCwd = true,
   signal?: AbortSignal,
   agent?: AgentType
@@ -117,7 +120,7 @@ export function adoptedTranscriptSourceObserver(input: {
   let cwd: string | null = null
   let sawCodexMetadata = false
   /** The conversation's recorded identity, read after every line is observed. */
-  const identity = async (): Promise<{ sessionId: string | null; cwd: string | null }> => {
+  const identity = async (): Promise<AdoptedSourceIdentity> => {
     if (input.agent === 'grok') {
       const summaryPath = join(dirname(input.filePath), 'summary.json')
       if (!(await admitTranscriptPath(dirname(input.filePath), summaryPath))) {
@@ -130,7 +133,10 @@ export function adoptedTranscriptSourceObserver(input: {
       sessionId = extractString(summary?.id) ?? sessionIdFromFileName(dirname(input.filePath))
       cwd = extractString(summary?.cwd)
     }
-    if (input.agent === 'pi' && sessionIdFromFileName(input.filePath) !== sessionId) {
+    if (
+      (input.agent === 'pi' || input.agent === 'droid') &&
+      sessionIdFromFileName(input.filePath) !== sessionId
+    ) {
       throw new Error('The saved conversation header does not match its file identity.')
     }
     // Moved or copied chats keep their old cwd; Claude and Grok resume from the cwd's bucket regardless.
@@ -139,25 +145,31 @@ export function adoptedTranscriptSourceObserver(input: {
     }
     return { sessionId, cwd }
   }
+  function observeRecord(record: Record<string, unknown> | null): boolean {
+    if (!record) {
+      return cwd !== null
+    }
+    if (input.agent === 'claude') {
+      sessionId = extractString(record.sessionId) ?? sessionId
+      cwd ??= extractString(record.cwd)
+    } else if (input.agent === 'codex' && record.type === 'session_meta' && !sawCodexMetadata) {
+      sawCodexMetadata = true
+      const payload = asRecord(record.payload)
+      sessionId = extractString(payload?.id) ?? sessionId
+    } else if (
+      ((input.agent === 'omp' || input.agent === 'pi') && record.type === 'session') ||
+      (input.agent === 'droid' && record.type === 'session_start')
+    ) {
+      sessionId = extractString(record.id)
+      cwd = extractString(record.cwd)
+    }
+    return cwd !== null
+  }
+
   return {
     /** True once the line stream has given the conversation's folder. */
     observe(line: string): boolean {
-      const record = parseJsonObject(line)
-      if (!record) {
-        return cwd !== null
-      }
-      if (input.agent === 'claude') {
-        sessionId = extractString(record.sessionId) ?? sessionId
-        cwd ??= extractString(record.cwd)
-      } else if (input.agent === 'codex' && record.type === 'session_meta' && !sawCodexMetadata) {
-        sawCodexMetadata = true
-        const payload = asRecord(record.payload)
-        sessionId = extractString(payload?.id) ?? sessionId
-      } else if ((input.agent === 'omp' || input.agent === 'pi') && record.type === 'session') {
-        sessionId = extractString(record.id)
-        cwd = extractString(record.cwd)
-      }
-      return cwd !== null
+      return observeRecord(parseJsonObject(line))
     },
     identity,
     async validate() {
@@ -191,7 +203,7 @@ async function readAdoptedOpenCodeIdentity(
   dbPath: string,
   source: AdoptedTranscriptSource,
   signal?: AbortSignal
-): Promise<{ sessionId: string | null; cwd: string | null }> {
+): Promise<AdoptedSourceIdentity> {
   const metadata = await readOpenCodeTranscriptSignalViaWorker(
     { dbPath, sessionId: source.providerSessionId },
     signal
@@ -218,6 +230,10 @@ const ADOPTED_FOLDER_HEAD_BYTES = 16 * 1024 * 1024
 const ADOPTED_SUMMARY_BYTES = 1024 * 1024
 
 function folderCheckedTranscriptAgent(agent: AgentType) {
+  // Droid and Kimi load a session only in the folder it was saved in.
+  if (agent === 'droid' || agent === 'kimi') {
+    return agent
+  }
   const transcriptAgent = agent === 'pi' ? 'omp' : resolveNativeChatTranscriptAgent(agent)
   return transcriptAgent === 'codex' ? null : transcriptAgent
 }
@@ -256,6 +272,8 @@ export async function resolveAdoptedTranscriptFolder(
     let actual: { cwd: string | null } | null = null
     if (input.agent === 'hermes') {
       actual = await readAdoptedHermesIdentity(input.filePath, source)
+    } else if (input.agent === 'kimi') {
+      actual = { cwd: await readKimiWireSessionWorkDir(input.filePath) }
     } else if (transcriptAgent === 'opencode') {
       actual = await readAdoptedOpenCodeIdentity(input.filePath, source, input.signal)
     } else if (transcriptAgent) {

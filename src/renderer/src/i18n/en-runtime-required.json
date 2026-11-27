@@ -268,12 +268,6 @@
           "changedFilesVs_other": "{{count}} changed files vs {{baseRef}}",
           "changedFiles_one": "{{count}} changed file",
           "changedFiles_other": "{{count}} changed files",
-          "clearNotesConfirm_one": "Clear {{count}} note from this worktree?",
-          "clearNotesConfirm_other": "Clear {{count}} notes from this worktree?",
-          "moreNotesInSourceControl_one": "{{count}} more note in Source Control",
-          "moreNotesInSourceControl_other": "{{count}} more notes in Source Control",
-          "showAiNotes_one": "Show {{count}} AI note",
-          "showAiNotes_other": "Show {{count}} AI notes",
           "skippedConflictsExcluded": "{{count}} unresolved conflicts were excluded from this diff view.",
           "skippedConflictsExcluded_one": "{{count}} unresolved conflict was excluded from this diff view.",
           "skippedConflictsExcluded_other": "{{count}} unresolved conflicts were excluded from this diff view."
@@ -479,8 +473,6 @@
                 "pendingChecks_other": "{{count}} checks pending",
                 "pendingCount_one": "{{count}} pending",
                 "pendingCount_other": "{{count}} pending",
-                "sendQueuedCommentsToAi_one": "Send {{count}} queued comment to AI",
-                "sendQueuedCommentsToAi_other": "Send {{count}} queued comments to AI",
                 "unresolvedChecks_one": "{{count}} check unresolved",
                 "unresolvedChecks_other": "{{count}} checks unresolved",
                 "unresolvedCount_one": "{{count}} unresolved",
@@ -3232,6 +3224,20 @@
         "waitMoment": "Wait a moment."
       }
     },
+    "notes": {
+      "sendButton": {
+        "clearPageNotes_one": "Clear {{count}} note from this page?",
+        "clearPageNotes_other": "Clear {{count}} notes from this page?",
+        "sendCommentsToAgent_one": "Send {{count}} comment to an agent",
+        "sendCommentsToAgent_other": "Send {{count}} comments to an agent",
+        "sendComments_one": "Send {{count}} comment",
+        "sendComments_other": "Send {{count}} comments",
+        "sendNotesToAgent_one": "Send {{count}} note to an agent",
+        "sendNotesToAgent_other": "Send {{count}} notes to an agent",
+        "sendNotes_one": "Send {{count}} note",
+        "sendNotes_other": "Send {{count}} notes"
+      }
+    },
     "onboarding": {
       "integrations": {
         "capabilities": {
@@ -3871,6 +3877,9 @@
         "agentCouldNotStart": "{{label}} could not be started. Check the agent command in Settings and try again.",
         "agentFailedToStart": "{{label}} failed to start. Check the agent command in Settings and try again.",
         "agentReportedError": "{{label}} reported an error.",
+        "antigravityInvalidEvents": "Antigravity returned invalid JSON events.",
+        "antigravityInvalidResult": "Antigravity returned an invalid result.",
+        "antigravityNoFinalResult": "Antigravity returned no final result.",
         "chatNameAgentUnsupported": "Choose a supported chat name agent for this action in Settings -> Chat -> Chat names. Supported agents: {{agents}}, or Custom command.",
         "chatNameCustomCommandEmpty": "Custom command is empty. Add one in Settings -> Chat -> Chat names.",
         "cliFailed": "{{label}} CLI command failed with code {{exitCode}}.",

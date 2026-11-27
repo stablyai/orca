@@ -1736,7 +1736,9 @@
         "permissionAcceptEditsDescription": "Aprova edições e comandos de arquivo; pede aprovação para o restante",
         "permissionAutoDescription": "Analisa os pedidos de aprovação por você",
         "permissionFullAccessCodexDescription": "Nunca pede aprovação; pode editar qualquer arquivo e usar a rede",
-        "permissionFullAccessDescription": "Nunca pede aprovação antes de edições ou comandos"
+        "permissionFullAccessDescription": "Nunca pede aprovação antes de edições ou comandos",
+        "permissionAgentSettings": "Configurações do {{agent}}",
+        "permissionFromAgentSettings": "{{mode}}, conforme as configurações do {{agent}}"
       },
       "turnDiff": {
         "partial": "Diff parcial",
@@ -3246,7 +3248,7 @@
       "collapse": "Recolher"
     },
     "nativeChatCliFork": {
-      "resumeInNewCli": "Retomar em nova CLI"
+      "continueInTerminal": "Continuar no terminal"
     },
     "nativeChatFloatingControls": {
       "scrollToLatest": "Rolar até o conteúdo mais recente"
@@ -3802,6 +3804,18 @@
       "terminalTitle": "Texto do terminal",
       "pointsAndColumns": "{{points}} · {{count}} colunas",
       "moreTerminal": "Mais configurações do terminal"
+    },
+    "terminalChatContinuation": {
+      "busy": "Outro chat ou terminal está sendo aberto. Aguarde e tente novamente.",
+      "continueInChat": "Continuar no chat",
+      "failed": "Não foi possível continuar no chat. {{detail}}",
+      "failedAfterClose": "Não foi possível continuar no chat. {{detail}} A conversa está no Histórico de Agentes.",
+      "otherJob": "{{process}} está em execução neste terminal. Encerre-o e continue no chat.",
+      "terminalChanged": "Este terminal mudou enquanto o Orca o verificava. Tente novamente.",
+      "tryAgain": "Tente novamente.",
+      "unavailable": "Os chats do {{agent}} não estão disponíveis neste computador.",
+      "uncheckable": "O Orca não conseguiu verificar o que está em execução neste terminal. Tente novamente.",
+      "unconfirmed": "O Orca não conseguiu confirmar que o chat foi aberto. Verifique suas abas antes de tentar novamente."
     }
   },
   "settings": {
@@ -3963,9 +3977,6 @@
       "toggleMode": "Alternar",
       "updateFailed": "Não foi possível atualizar",
       "loading": "Carregando configurações de voz…"
-    },
-    "agents": {
-      "permissionOwnAll": "Configurações próprias dos agentes"
     },
     "voiceTranscribeOn": {
       "heading": "Transcrever em",
@@ -4408,6 +4419,9 @@
       "agentCouldNotStart": "Não foi possível iniciar {{label}}. Verifique o comando do agente em Configurações e tente novamente.",
       "agentFailedToStart": "Falha ao iniciar {{label}}. Verifique o comando do agente em Configurações e tente novamente.",
       "agentReportedError": "{{label}} relatou um erro.",
+      "antigravityInvalidEvents": "Antigravity retornou eventos JSON inválidos.",
+      "antigravityInvalidResult": "Antigravity retornou um resultado inválido.",
+      "antigravityNoFinalResult": "Antigravity não retornou nenhum resultado final.",
       "chatNameAgentUnsupported": "Escolha um agente compatível para gerar nomes dos chats nesta ação em Configurações -> Chat -> Nomes dos chats. Agentes suportados: {{agents}}, ou Comando personalizado.",
       "chatNameCustomCommandEmpty": "O comando personalizado está vazio. Adicione um em Configurações -> Chat -> Nomes dos chats.",
       "cliFailed": "O comando CLI de {{label}} falhou com o código {{exitCode}}.",

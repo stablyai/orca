@@ -202,7 +202,10 @@ export function AppWorkspaceShell(props: {
         'The app is still running. Retry the shell or use the menu to report the crash details.'
       )}
     >
-      <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
+      <div
+        className="flex flex-row flex-1 min-h-0 overflow-hidden"
+        data-rail-page-active={layout.listHiddenByRailPage ? '' : undefined}
+      >
         {/* Keep the non-workspace titlebar from spanning the right sidebar. */}
         <div className="flex flex-col flex-1 min-w-0 min-h-0">
           {/* Workspace tab groups reach the top; other pages retain the titlebar. */}
