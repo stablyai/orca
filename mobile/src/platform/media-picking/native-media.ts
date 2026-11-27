@@ -15,6 +15,7 @@ import type {
   StagedMedia
 } from '../../mobile-web-shell/native-capabilities/media-handle-registry'
 import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES as MEDIA_STAGED_MAX_BYTES } from '../../../../src/shared/clipboard/clipboard-image'
+import { MOBILE_PICKED_FILE_MAX_BYTES } from './media-picker-contract'
 import { MobileImageBase64Accumulator } from '../../files/attachments/mobile-image-base64-accumulator'
 
 // Stage native media behind handles because raw/base64 image sizes exceed reply caps; inject device calls to test provider/cancel/size failures.
@@ -46,6 +47,7 @@ export type NativeMediaDeps = {
   // Bound selection by remaining registry room when the picker supports a limit.
   readonly launchLibrary: (options: { multiple: boolean; limit: number }) => Promise<PickerResult>
   readonly launchFiles: (options: { multiple: boolean; limit: number }) => Promise<PickerResult>
+  readonly launchVideos: (options: { multiple: boolean; limit: number }) => Promise<PickerResult>
   readonly readClipboardImage: () => Promise<{
     readonly data: string
     readonly size?: { readonly width: number; readonly height: number }
@@ -68,15 +70,16 @@ export function createNativeMediaVerbServer(
   deps: NativeMediaDeps
 ): (verb: BridgeNativeVerb, params: unknown) => Promise<unknown> {
   // Read authoritative staged-file sizes: picker metadata can be absent or wrong.
-  function stage(assets: readonly PickedAsset[]): StagedMedia[] {
+  // Files stream to an upload; library and clipboard items are images the page reads whole.
+  function stage(assets: readonly PickedAsset[], ceiling = MEDIA_STAGED_MAX_BYTES): StagedMedia[] {
     const staged: StagedMedia[] = []
     // Delete only owned files; provider URIs are never ours to unlink.
     const owned: string[] = []
     try {
       for (const asset of assets) {
-        const uri = adopt(asset, owned)
+        const uri = adopt(asset, owned, ceiling)
         const { size } = deps.openFile(uri)
-        refuseOverStagingCeiling(size)
+        refuseOverStagingCeiling(size, ceiling)
         const name = pickedName(asset)
         staged.push({
           uri,
@@ -97,7 +100,7 @@ export function createNativeMediaVerbServer(
   }
 
   // Adopt provider URIs into cache so release/TTL can delete the file without touching the provider’s original.
-  function adopt(asset: PickedAsset, owned: string[]): string {
+  function adopt(asset: PickedAsset, owned: string[], ceiling: number): string {
     if (deps.ownsStagedUri(asset.uri)) {
       owned.push(asset.uri)
       return asset.uri
@@ -107,7 +110,7 @@ export function createNativeMediaVerbServer(
     if (weighed <= 0) {
       throw new Error(`a picked item could not be weighed before reading it: ${asset.uri}`)
     }
-    refuseOverStagingCeiling(weighed)
+    refuseOverStagingCeiling(weighed, ceiling)
     const copy = deps.copyIntoCache(asset.uri)
     // Reject an unowned copy before recording ownership; neither it nor the provider’s original is ours to unlink.
     if (!deps.ownsStagedUri(copy)) {
@@ -117,11 +120,11 @@ export function createNativeMediaVerbServer(
     return copy
   }
 
-  function refuseOverStagingCeiling(size: number): void {
-    if (size > MEDIA_STAGED_MAX_BYTES) {
+  function refuseOverStagingCeiling(size: number, ceiling: number): void {
+    if (size > ceiling) {
       throw new BridgeNativeVerbRefusedError(
         'native_media_too_large',
-        `a picked item is ${size} bytes, over the ${MEDIA_STAGED_MAX_BYTES} this shell stages`
+        `a picked item is ${size} bytes, over the ${ceiling} this shell stages`
       )
     }
   }
@@ -183,9 +186,13 @@ export function createNativeMediaVerbServer(
 
     // Expo’s OS library picker needs no permission preflight; an extra denial could block a pick the OS would allow.
     const assets = readAssets(
-      await (source === 'library'
-        ? deps.launchLibrary({ multiple, limit: room })
-        : deps.launchFiles({ multiple, limit: room }))
+      await (
+        source === 'library'
+          ? deps.launchLibrary
+          : source === 'videos'
+            ? deps.launchVideos
+            : deps.launchFiles
+      )({ multiple, limit: room })
     )
     if (!isCurrent()) {
       for (const asset of assets) {
@@ -195,7 +202,10 @@ export function createNativeMediaVerbServer(
       }
       return []
     }
-    return stage(withinRoom(assets))
+    return stage(
+      withinRoom(assets),
+      source === 'library' ? MEDIA_STAGED_MAX_BYTES : MOBILE_PICKED_FILE_MAX_BYTES
+    )
   }
 
   // Decode chunks before joining; concatenating independently padded base64 corrupts the file.

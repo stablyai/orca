@@ -1,12 +1,13 @@
 import * as z from 'zod'
-import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../../../src/shared/clipboard/clipboard-image'
+import { MOBILE_PICKED_FILE_MAX_BYTES } from '../../../platform/media-picking/media-picker-contract'
 import { MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } from '../../../files/attachments/mobile-clipboard-image-upload-chunk'
 
 // Picked media exceeds frame/reply ceilings, especially after base64; stage behind a handle and read chunks before release.
 // Keep grant segments lowercase: media.readChunk would fail manifest grammar and reject the whole bundle.
 
 // Clipboard images use the same pick/stage/read path; keep clipboard.read text-only rather than returning oversized inline images.
-export const BRIDGE_MEDIA_SOURCES = ['library', 'files', 'clipboard'] as const
+// Videos come from the photo library but stage like files, for the streaming upload.
+export const BRIDGE_MEDIA_SOURCES = ['library', 'files', 'clipboard', 'videos'] as const
 
 export type BridgeMediaSource = (typeof BRIDGE_MEDIA_SOURCES)[number]
 
@@ -26,7 +27,7 @@ const BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/
 
 const handleSchema = z.string().min(1).max(BRIDGE_MEDIA_HANDLE_MAX_CHARS)
 
-const byteOffsetSchema = z.number().int().min(0).max(CLIPBOARD_IMAGE_MAX_SOURCE_BYTES)
+const byteOffsetSchema = z.number().int().min(0).max(MOBILE_PICKED_FILE_MAX_BYTES)
 
 // Dimensions are optional because document pickers may report files without raster metadata; only pre-read preview sizing uses them.
 export const mediaItemSchema = z.strictObject({

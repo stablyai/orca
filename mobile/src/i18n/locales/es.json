@@ -3163,7 +3163,9 @@
       "files": "Archivos",
       "photos": "Fotos",
       "skills": "Habilidades",
-      "workspaceFile": "Archivo del espacio de trabajo"
+      "workspaceFile": "Archivo del espacio de trabajo",
+      "videos": "Videos",
+      "videoSource": "De tu fototeca"
     },
     "nativeChatCardHeaderAction": {
       "collapse": "Contraer"

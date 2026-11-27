@@ -19,7 +19,6 @@ import { useBackClaim } from '../../navigation/use-back-claim'
 import { useMediaPicker } from '../../platform/media-picking/media-picker'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
 import { colors } from '../../theme/mobile-theme'
-import { decodeBase64Bytes } from '../../transport/encryption/base64-byte-codec'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { PhoneBot } from '../host-bots-operations'
 import {
@@ -32,6 +31,7 @@ import { useRouteCapability } from '../../worktree/execution-hosts/use-route-cap
 import { BOTS_GOOGLE_PHONE_SIGN_IN_RUNTIME_CAPABILITY } from '../../../../src/shared/bot-runtime-capabilities'
 import type { GoogleSignInAsk } from './connector-pages'
 import type { PhoneGoogle } from './phone-google-accounts'
+import { readPickedFileText } from '../../platform/media-picking/picked-file-text'
 
 export function MobileBotGoogleConnect(props: {
   client: RpcClient | null
@@ -133,7 +133,7 @@ export function MobileBotGoogleConnect(props: {
     }
     void (async () => {
       for await (const file of picker.pickFiles()) {
-        const text = new TextDecoder().decode(decodeBase64Bytes(file.base64))
+        const text = await readPickedFileText(file)
         googleClientImport.interpret(
           await googleClientImport.request(client, { file: text }, { failWhenDisconnected: true })
         )

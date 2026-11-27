@@ -3,7 +3,7 @@ import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { MAX_FILE_RANGE_READ_BYTES } from '../../file-content/file-range-read'
 import {
   AGENT_SESSION_ATTACHMENT_CHUNK_BASE64_CHARS,
-  AGENT_SESSION_ATTACHMENT_MAX_BYTES
+  AGENT_SESSION_ATTACHMENT_UPLOAD_MAX_BYTES
 } from '../../agent-session/agent-session-attachments'
 import { isValidBase64 } from '../clipboard/clipboard-params'
 import { Identifier, SessionId } from './structured-agent-session-identifiers'
@@ -16,13 +16,14 @@ const AttachmentUploadFile = {
     .number()
     .int()
     .nonnegative()
-    .max(AGENT_SESSION_ATTACHMENT_MAX_BYTES, 'Attachment is too large')
+    .max(AGENT_SESSION_ATTACHMENT_UPLOAD_MAX_BYTES, 'Attachment is too large')
 }
 
 export const AttachmentUploadStartParams = lazyZodSchema(() =>
   z.union([
     z.strictObject({ sessionId: SessionId, ...AttachmentUploadFile }),
-    z.strictObject({ item: z.uuid(), ...AttachmentUploadFile })
+    z.strictObject({ item: z.uuid(), ...AttachmentUploadFile }),
+    z.strictObject({ terminal: z.string().min(1).max(256), ...AttachmentUploadFile })
   ])
 )
 

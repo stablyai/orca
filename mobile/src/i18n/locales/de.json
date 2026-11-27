@@ -3061,7 +3061,9 @@
       "files": "Dateien",
       "photos": "Fotos",
       "skills": "Skills",
-      "workspaceFile": "Datei im Arbeitsbereich"
+      "workspaceFile": "Datei im Arbeitsbereich",
+      "videos": "Videos",
+      "videoSource": "Aus deiner Fotomediathek"
     },
     "nativeChatCardHeaderAction": {
       "collapse": "Einklappen"

@@ -35,6 +35,7 @@ import {
 import { useMobileNativeChatImageUpload } from './use-mobile-native-chat-image-upload'
 import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
 import type { StructuredMobileSendAttachment } from '../delivery/use-mobile-structured-send-with-outcome'
+import type { MobilePickedFileSource } from '../../../../platform/media-picking/media-picker-contract'
 
 type CurrentRef<T> = { readonly current: T }
 type ShowToast = (message: string, durationMs?: number) => void
@@ -92,6 +93,8 @@ export type MobileNativeChatImageAttachments = {
   readonly isAttaching: boolean
   readonly attachImage: (source: MobileImageSource | MobilePastedImages) => Promise<void>
   readonly removeAttachment: (id: string) => void
+  /** A terminal-backed chat's Files and Videos: each streams to the host and its path joins the draft. */
+  readonly attachFiles?: (from: MobilePickedFileSource) => Promise<void>
   /** Ride any pending images along with `text`, then submit; clears the sent
    *  chips (and only those) once the send is accepted. */
   readonly sendNativeChat: (text: string, intent?: MobileNativeChatSendIntent) => Promise<boolean>

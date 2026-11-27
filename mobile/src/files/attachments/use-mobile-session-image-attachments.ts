@@ -6,6 +6,7 @@ import type {
   MobileNativeChatSendOutcome
 } from '../../session/native-chat/composer/delivery/mobile-native-chat-send'
 import type { StructuredMobileSendAttachment } from '../../session/native-chat/composer/delivery/use-mobile-structured-send-with-outcome'
+import { useMemo } from 'react'
 import { useMobileImageAttachment } from './use-mobile-image-attachment'
 import {
   useMobileNativeChatImageAttachments,
@@ -15,6 +16,7 @@ import {
   useMobileNativeChatFileAttachments,
   type MobileNativeChatFileAttachments
 } from '../../session/native-chat/composer/attachments/use-mobile-native-chat-file-attachments'
+import { useMobileNativeChatTerminalFileAttachments } from '../../session/native-chat/composer/attachments/use-mobile-native-chat-terminal-file-attachments'
 
 type CurrentRef<T> = { readonly current: T }
 
@@ -99,7 +101,14 @@ export function useMobileSessionImageAttachments({
     enabled: structuredNativeChat && connState === 'connected',
     showToast
   })
-  const nativeChatImages = useMobileNativeChatImageAttachments({
+  const attachTerminalFiles = useMobileNativeChatTerminalFileAttachments({
+    client,
+    terminal: structuredNativeChat ? null : activeHandle,
+    scopeKey: nativeChatScopeKey,
+    enabled: !structuredNativeChat && connState === 'connected',
+    showToast
+  })
+  const images = useMobileNativeChatImageAttachments({
     client,
     agent,
     activeHandleRef,
@@ -120,5 +129,9 @@ export function useMobileSessionImageAttachments({
     onAttachSuccess: onSuccess,
     onError
   })
+  const nativeChatImages = useMemo(
+    () => (attachTerminalFiles ? { ...images, attachFiles: attachTerminalFiles } : images),
+    [attachTerminalFiles, images]
+  )
   return { attachImage, isAttaching, nativeChatImages, nativeChatFiles }
 }

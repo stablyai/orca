@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import type { BridgeMediaItem } from '../../mobile-web-shell/bridge/native-capabilities/bridge-media-verbs'
 import {
+  readStagedMediaBytes,
   readStagedMediaItem,
   releaseAllStagedMedia,
   releaseStagedMedia
@@ -11,13 +12,16 @@ import {
   type NativeVerbs
 } from '../../mobile-web-shell/bridge/native-capabilities/use-native-verbs'
 import {
+  MOBILE_PICKED_FILE_MAX_BYTES,
   MobileFileTooLargeError,
   type MediaPicker,
   type MobileImageSource,
+  type MobilePickedFileSource,
   type PickedMobileFile,
   type PickedMobileImage
 } from './media-picker-contract'
 import { isPickedImageMime, mobilePickedFileFallbackName } from './mobile-picked-file-name'
+import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../../src/shared/clipboard/clipboard-image'
 
 // Read staged handles in chunks because images exceed reply caps; release every handle, including unused extras, before the eight-item registry fills.
 // Refusals reject; only user cancellation returns an empty selection.
@@ -58,6 +62,9 @@ async function* readPicked(
         source === 'files' && !isPickedImageMime(item.mime)
           ? await pickedFileName(verbs, item, index)
           : undefined
+      if (item.byteLength > CLIPBOARD_IMAGE_MAX_SOURCE_BYTES) {
+        throw new MobileFileTooLargeError(fileName ?? null, CLIPBOARD_IMAGE_MAX_SOURCE_BYTES)
+      }
       const base64 = await readStagedMediaItem(verbs, item)
       // Release before yielding because callers may stop after one image and strand scarce handles.
       unread.shift()
@@ -69,9 +76,12 @@ async function* readPicked(
   }
 }
 
-async function pickFileItems(verbs: NativeVerbs): Promise<readonly BridgeMediaItem[]> {
+async function pickFileItems(
+  verbs: NativeVerbs,
+  from: MobilePickedFileSource
+): Promise<readonly BridgeMediaItem[]> {
   try {
-    return await verbs.pickMedia('files', true)
+    return await verbs.pickMedia(from, true)
   } catch (error) {
     throw error instanceof NativeVerbError && error.reason === 'native_media_too_large'
       ? new MobileFileTooLargeError(null)
@@ -87,13 +97,23 @@ async function* readPickedFiles(
   try {
     let index = 0
     while (unread.length > 0) {
-      const item = unread[0]!
+      const item = unread.shift()!
       index += 1
-      const name = await pickedFileName(verbs, item, index)
-      const base64 = await readStagedMediaItem(verbs, item)
-      unread.shift()
-      await releaseStagedMedia(verbs, item.handle)
-      yield { name, mime: item.mime, byteLength: item.byteLength, base64 }
+      try {
+        const name = await pickedFileName(verbs, item, index)
+        if (item.byteLength > MOBILE_PICKED_FILE_MAX_BYTES) {
+          throw new MobileFileTooLargeError(name)
+        }
+        // Held until the caller asks for the next file: its upload reads the handle while this generator waits.
+        yield {
+          name,
+          mime: item.mime,
+          byteLength: item.byteLength,
+          readBytes: () => readStagedMediaBytes(verbs, item)
+        }
+      } finally {
+        await releaseStagedMedia(verbs, item.handle)
+      }
     }
   } finally {
     await releaseAllStagedMedia(verbs, unread)
@@ -116,9 +136,9 @@ export function useMediaPicker(): MediaPicker {
           yield* readPicked(verbs, await verbs.pickMedia(source, true), source)
         }
       }),
-      pickFiles: () => ({
+      pickFiles: (from = 'files') => ({
         [Symbol.asyncIterator]: async function* () {
-          yield* readPickedFiles(verbs, await pickFileItems(verbs))
+          yield* readPickedFiles(verbs, await pickFileItems(verbs, from))
         }
       })
     }),

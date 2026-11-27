@@ -3056,7 +3056,9 @@
       "files": "ファイル",
       "photos": "写真",
       "skills": "スキル",
-      "workspaceFile": "ワークスペースファイル"
+      "workspaceFile": "ワークスペースファイル",
+      "videos": "ビデオ",
+      "videoSource": "写真ライブラリから"
     },
     "nativeChatCardHeaderAction": {
       "collapse": "折りたたむ"

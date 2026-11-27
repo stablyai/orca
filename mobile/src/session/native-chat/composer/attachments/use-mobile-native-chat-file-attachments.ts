@@ -8,10 +8,12 @@ import {
 import { useCallback } from 'react'
 import type { RpcClient } from '../../../../transport/rpc/rpc-client-contract'
 import { useMediaPicker } from '../../../../platform/media-picking/media-picker'
-import type { PickedMobileFile } from '../../../../platform/media-picking/media-picker-contract'
-import { encodeBase64Bytes } from '../../../../transport/encryption/base64-byte-codec'
+import type {
+  MobilePickedFileSource,
+  PickedMobileFile
+} from '../../../../platform/media-picking/media-picker-contract'
 import { agentSessionPastedTextName } from '../../../../../../src/shared/agent-session/agent-session-attachments'
-import { uploadMobileAgentSessionAttachment } from '../../../../files/attachments/mobile-agent-session-attachment-upload'
+import { uploadMobileAgentSessionAttachmentBytes } from '../../../../files/attachments/mobile-agent-session-attachment-upload'
 import {
   uploadPickedNativeChatFiles,
   type PendingNativeChatFile
@@ -21,7 +23,7 @@ type ShowToast = (message: string, durationMs?: number) => void
 
 export type MobileNativeChatFileAttachments = {
   readonly files: readonly PendingNativeChatFile[]
-  readonly attachFiles: () => Promise<void>
+  readonly attachFiles: (from?: MobilePickedFileSource) => Promise<void>
   /** Stores a long paste as a "Pasted text" file, as desktop does; null when no upload can start. */
   readonly attachPastedText: ((text: string) => Promise<void>) | null
   // Drop only files removed or carried by this send; attachments added while sending must survive.
@@ -71,10 +73,11 @@ export function useMobileNativeChatFileAttachments(args: {
           canContinue: () => destination.active,
           picked: picked(),
           upload: (file) =>
-            uploadMobileAgentSessionAttachment(client, {
+            uploadMobileAgentSessionAttachmentBytes(client, {
               sessionId,
               name: file.name,
-              base64: file.base64
+              byteLength: file.byteLength,
+              bytes: file.readBytes()
             }),
           nextId: createUuidV4,
           onPicked: (file) => updateScope(destination, (current) => [...current, file]),
@@ -101,7 +104,10 @@ export function useMobileNativeChatFileAttachments(args: {
     },
     [client, enabled, scopeKey, sessionId, showToast, updateScope]
   )
-  const attachFiles = useCallback(() => attach(() => picker.pickFiles()), [attach, picker])
+  const attachFiles = useCallback(
+    (from?: MobilePickedFileSource) => attach(() => picker.pickFiles(from)),
+    [attach, picker]
+  )
   const attachPastedText = useCallback(
     (text: string) =>
       attach(async function* () {
@@ -110,7 +116,9 @@ export function useMobileNativeChatFileAttachments(args: {
           name: agentSessionPastedTextName(Date.now(), createUuidV4()),
           mime: 'text/plain',
           byteLength: bytes.byteLength,
-          base64: encodeBase64Bytes(bytes)
+          readBytes: async function* () {
+            yield bytes
+          }
         }
       }),
     [attach]

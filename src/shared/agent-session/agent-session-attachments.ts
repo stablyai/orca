@@ -7,6 +7,9 @@ export const AGENT_SESSION_ATTACHMENTS_DIR_NAME = 'agent-session-attachments'
 
 export const AGENT_SESSION_ATTACHMENT_MAX_BYTES = 50 * 1024 * 1024
 
+/** Chunked uploads append to a file on the host, so this bounds disk, not memory; phone videos need the room. */
+export const AGENT_SESSION_ATTACHMENT_UPLOAD_MAX_BYTES = 200 * 1024 * 1024
+
 // Agents shrink images before their APIs see them, so these bound host memory, not API limits.
 export const AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT = 20
 export const AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES = 64 * 1024 * 1024
@@ -141,10 +144,20 @@ export function botItemAttachmentTarget(uid: string): string {
   return `item:${uid}`
 }
 
+/** A terminal-backed chat has no session, so its uploads name the terminal instead. */
+export function agentSessionAttachmentTerminalTarget(terminal: string): string {
+  return `terminal:${terminal}`
+}
+
 export function agentSessionAttachmentUploadDestination(
   target: string
-): { item: string } | { sessionId: string } {
-  return target.startsWith('item:') ? { item: target.slice('item:'.length) } : { sessionId: target }
+): { item: string } | { terminal: string } | { sessionId: string } {
+  if (target.startsWith('item:')) {
+    return { item: target.slice('item:'.length) }
+  }
+  return target.startsWith('terminal:')
+    ? { terminal: target.slice('terminal:'.length) }
+    : { sessionId: target }
 }
 
 export type AgentSessionAttachmentPathUploadResult = {

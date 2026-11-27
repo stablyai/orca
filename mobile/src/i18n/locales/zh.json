@@ -3427,7 +3427,9 @@
       "files": "文件",
       "photos": "照片",
       "skills": "技能",
-      "workspaceFile": "工作区文件"
+      "workspaceFile": "工作区文件",
+      "videos": "视频",
+      "videoSource": "来自你的照片图库"
     },
     "nativeChatCardHeaderAction": {
       "collapse": "收起"

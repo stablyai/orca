@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import type { AgentSessionConversationCommand } from '../../../../../../src/shared/agent-session/conversation-context/agent-session-conversation-command'
 import type { MobileNativeChatStructuredComposer } from './mobile-native-chat-structured-composer'
+import type { MobilePickedFileSource } from '../../../../platform/media-picking/media-picker-contract'
 import type { MobileNativeChatFileAttachments } from '../attachments/use-mobile-native-chat-file-attachments'
 import type { useMobileStructuredSessionCommands } from './use-mobile-structured-session-commands'
 import type { MobileStructuredThreadGoal } from '../../input/tasks/use-mobile-structured-thread-goal'
@@ -45,7 +46,9 @@ export function useMobileNativeChatStructuredComposer(args: {
             catalog,
             onSlashMenuOpen: refresh,
             onSlashMenuDemand: setMenuOpen,
-            onAttachFiles: acceptsFiles ? () => void attachFiles() : undefined,
+            onAttachFiles: acceptsFiles
+              ? (from: MobilePickedFileSource) => void attachFiles(from)
+              : undefined,
             onAttachPastedText:
               acceptsFiles && attachPastedText
                 ? (text: string) => void attachPastedText(text)
