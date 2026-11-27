@@ -1,9 +1,10 @@
 // @protected-copy
+import React from 'react'
 import { toast } from 'sonner'
+import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
 import { Button } from '../../../ui/button'
 import { getDeleteWorktreeToastCopy } from './delete-worktree-toast'
 import { useTranslate } from '@/i18n/use-translate'
-import { DeleteNestedWorktreesDialog } from './DeleteNestedWorktreesDialog'
 import { WorktreeForceDeleteButton } from './WorktreeForceDeleteButton'
 import { isNestedWorktreeRemovalError } from '../../../../../../shared/worktree/removal/nested-removal'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
@@ -14,6 +15,14 @@ import {
   type WorktreeForceDeleteReason,
   type WorktreeRemovalTarget
 } from '../../../../../../shared/worktree/removal/removal'
+
+const LazyDeleteNestedWorktreesDialog = lazyWithRetry(
+  () =>
+    import('./DeleteNestedWorktreesDialog').then((module) => ({
+      default: module.DeleteNestedWorktreesDialog
+    })),
+  { reloadKey: 'delete-nested-worktrees-dialog' }
+)
 
 type DeleteWorktreeFailureToastOptions = {
   error: string
@@ -93,12 +102,14 @@ function DeleteWorktreeFailureToastBody({
           </Button>
         ) : null}
         {nestedRemovalTarget ? (
-          <DeleteNestedWorktreesDialog
-            target={nestedRemovalTarget}
-            worktreeName={worktreeName}
-            onDeleted={onNestedDeleted}
-            dismissToast={() => toast.dismiss(toastId)}
-          />
+          <React.Suspense fallback={null}>
+            <LazyDeleteNestedWorktreesDialog
+              target={nestedRemovalTarget}
+              worktreeName={worktreeName}
+              onDeleted={onNestedDeleted}
+              dismissToast={() => toast.dismiss(toastId)}
+            />
+          </React.Suspense>
         ) : null}
         {canForceDelete ? (
           <WorktreeForceDeleteButton

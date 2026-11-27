@@ -3,21 +3,9 @@ import { lazyZodSchema } from '../../../../../../../shared/schema/lazy-zod-schem
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import { isTuiAgent } from '../../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { DispatchContextRow } from '../../../../../orchestration/db/orchestration-records'
+import { parseRecordedWorkerLaunchOptions } from '../start/launch/worker-launch-preferences'
 
 const EARLIER_WORK_CLIP = 2_000
-
-const StartOptions = lazyZodSchema(() =>
-  z.looseObject({
-    agent: z.string().nullish(),
-    launch: z
-      .looseObject({
-        requested: z
-          .looseObject({ model: z.string().nullish(), effort: z.string().nullish() })
-          .nullish()
-      })
-      .nullish()
-  })
-)
 
 const WorkerReport = lazyZodSchema(() =>
   z.looseObject({
@@ -41,15 +29,11 @@ export function parseStartOptions(raw: string): {
   model?: string
   effort?: string
 } {
-  const parsed = StartOptions.safeParse(parseJson(raw))
-  if (!parsed.success) {
-    return {}
-  }
-  const requested = parsed.data.launch?.requested
+  const parsed = parseRecordedWorkerLaunchOptions(raw)
   return {
-    agent: isTuiAgent(parsed.data.agent) ? parsed.data.agent : undefined,
-    model: requested?.model ?? undefined,
-    effort: requested?.effort ?? undefined
+    agent: isTuiAgent(parsed.agent) ? parsed.agent : undefined,
+    model: parsed.model,
+    effort: parsed.effort
   }
 }
 

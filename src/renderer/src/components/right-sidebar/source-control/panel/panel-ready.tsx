@@ -10,7 +10,10 @@ import type { SourceControlRowOpenEvent } from '../listing/split-open'
 import { openGitGraph } from '@/lib/source-control/graph/git-graph-tab'
 import type { SourceControlPanelReadyProps } from './panel-props'
 import { cn } from '@/lib/class-names'
-import { SourceControlHeaderOverflowMenu } from './header-overflow-menu'
+import {
+  SourceControlHeaderOverflowMenu,
+  type SourceControlPanelActions
+} from './header-overflow-menu'
 import { useSourceControlScope } from './worktree-scope'
 
 export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
@@ -44,7 +47,6 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
     isCreatePrIntentInFlight,
     isCreatingPr,
     isExecutingBulk,
-    manualReviewUrl,
     openHostedReviewInChecks,
     prGenerating,
     isGitHistoryVisible,
@@ -70,7 +72,14 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
   const embedded = scope !== null
   // A folder card's Graph opens in the folder workspace that shows the card.
   const placementWorkspaceId = scope?.placementWorkspaceId
-  const panelActions = {
+  const openGraph = (event?: SourceControlRowOpenEvent): void => {
+    void openGitGraph(
+      currentWorktreeId,
+      () => resolveSplitTargetGroupId(event),
+      placementWorkspaceId
+    )
+  }
+  const panelActions: SourceControlPanelActions = {
     sourceControlViewMode,
     viewModeToggleDisabled: settings === null,
     onToggleViewMode: handleToggleSourceControlViewMode,
@@ -78,20 +87,15 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
     onRefreshBranchCompare: () => void refreshBranchCompare(),
     branchCompareRefreshDisabled: !branchSummary || branchSummary.status === 'loading',
     diffCommentCount,
-    onExpandNotes: () => setDiffCommentsExpanded(true)
+    onExpandNotes: () => setDiffCommentsExpanded(true),
+    onOpenGitGraph: isGitHistoryVisible ? () => openGraph() : undefined,
+    gitGraphDisabled: graphSupport.support !== true
   }
   const filter = {
     filterQuery,
     filterExpanded,
     onFilterQueryChange: setFilterQuery,
     onFilterExpandedChange: setFilterExpanded
-  }
-  const openGraph = (event: SourceControlRowOpenEvent): void => {
-    void openGitGraph(
-      currentWorktreeId,
-      () => resolveSplitTargetGroupId(event),
-      placementWorkspaceId
-    )
   }
 
   // Sits under the commit composer, so it renders inside the scrolling content.
@@ -100,16 +104,6 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
       {...props}
       graphSupported={graphSupport.support === true}
       filter={embedded ? null : filter}
-      graphControl={
-        embedded ? null : (
-          <GitGraphOpenButton
-            worktreeId={currentWorktreeId}
-            support={graphSupport}
-            onOpen={openGraph}
-            iconOnly
-          />
-        )
-      }
       overflowMenu={
         embedded ? null : (
           <SourceControlHeaderOverflowMenu panelActions={panelActions} triggerClassName="size-5" />
@@ -152,7 +146,6 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
           branchLineTotal={branchLineTotal}
           compareBaseRef={compareBaseRef}
           headDisplay={gitIdentityDisplay}
-          manualReviewUrl={manualReviewUrl}
           rebase={
             model.baseRebaseState.kind === 'none'
               ? null

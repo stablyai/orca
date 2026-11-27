@@ -1,9 +1,9 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
-import { TEXT_INPUT_FONT_SIZE } from '../../../platform/text-input/text-input-font-size'
+import { COMPOSER_TEXT_SIZE } from '../../../components/composer-input/composer-input-styles'
 
-export const prTabStyles = themedStyleSheet(() => ({
+export const prTabStylesSheet = themedStyleSheet((colors) => ({
   container: { flex: 1, backgroundColor: colors.bgBase },
   dockBar: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: spacing.sm },
   scroll: { flex: 1 },
@@ -136,15 +136,16 @@ export const prTabStyles = themedStyleSheet(() => ({
   }
 }))
 
-export const prSheetStyles = themedStyleSheet(() => ({
-  body: { paddingHorizontal: spacing.lg, paddingBottom: spacing.lg, gap: spacing.md },
-  note: { color: colors.textSecondary, fontSize: 13 },
-  error: { color: colors.statusRed, fontSize: 13 },
+export const prSheetStylesSheet = themedStyleSheet((colors) => ({
+  // Groups span the sheet like every other sheet's; text lines up with the rows' 16 pt inset.
+  body: { paddingBottom: spacing.lg, gap: spacing.md },
+  note: { color: colors.textSecondary, fontSize: 13, paddingHorizontal: spacing.lg },
+  error: { color: colors.statusRed, fontSize: 13, paddingHorizontal: spacing.lg },
   state: { color: colors.textSecondary, fontSize: typography.metaSize },
   approved: { color: colors.statusGreen },
   field: {
-    fontSize: TEXT_INPUT_FONT_SIZE,
-    paddingHorizontal: spacing.md,
+    fontSize: COMPOSER_TEXT_SIZE,
+    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md
   },
   multiline: { minHeight: 160, maxHeight: 320, textAlignVertical: 'top' }

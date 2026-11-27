@@ -20,6 +20,7 @@ import {
 import { useRepoMap } from '@/store/repos/use-repository-catalog'
 import { cn } from '@/lib/class-names'
 import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-keyboard-event'
+import { isCommandInputCaretKey } from '@/lib/keyboard/command-input-caret-keys'
 import { useWorktreeActivityStatuses } from '../../workspace-card/activity/use-worktree-activity-statuses'
 import { WorktreeParentPickerRow } from './WorktreeParentPickerRow'
 import { getEligibleWorktreeParents } from './worktree-parent-candidates'
@@ -89,7 +90,7 @@ export function handleWorktreeParentPickerKeyDown<Candidate>({
   moveHighlight,
   selectParent
 }: WorktreeParentPickerKeyboardArgs<Candidate>): void {
-  if (isImeCompositionKeyDown(event) || candidates.length === 0) {
+  if (isImeCompositionKeyDown(event) || candidates.length === 0 || isCommandInputCaretKey(event)) {
     return
   }
   const navigate = (nextIndex: number): void => {

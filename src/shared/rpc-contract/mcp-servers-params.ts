@@ -26,13 +26,13 @@ const PasteSource = lazyZodSchema(() =>
 
 // `workspaces`: where it's on from the start, in the same write (a repo's "Add a server for this
 // repo"); all workspaces without it.
-const AddedWorkspaces = { workspaces: McpServerWorkspacesSchema.optional() }
+const addedWorkspaces = () => ({ workspaces: McpServerWorkspacesSchema.optional() })
 
 export const McpServerAdd = lazyZodSchema(() =>
   z.union([
     // `name` renames a paste that names one server; a paste naming several adds each.
-    z.strictObject({ source: PasteSource, name: ServerName.optional(), ...AddedWorkspaces }),
-    z.strictObject({ config: BotToolInputSchema, ...AddedWorkspaces })
+    z.strictObject({ source: PasteSource, name: ServerName.optional(), ...addedWorkspaces() }),
+    z.strictObject({ config: BotToolInputSchema, ...addedWorkspaces() })
   ])
 )
 
@@ -60,18 +60,18 @@ export const McpServerProblems = lazyZodSchema(() =>
 export const McpServerSignInStart = lazyZodSchema(() =>
   z.object({ id: ServerId, mode: z.enum(['routed', 'paste']) })
 )
-const SignInFlow = { flowId: z.string().min(1).max(64) }
-export const McpServerSignInFlow = lazyZodSchema(() => z.object(SignInFlow))
+const signInFlow = () => ({ flowId: z.string().min(1).max(64) })
+export const McpServerSignInFlow = lazyZodSchema(() => z.object(signInFlow()))
 export const McpServerSignInWait = lazyZodSchema(() =>
   z.object({
-    ...SignInFlow,
+    ...signInFlow(),
     afterRevision: z.number().int().nonnegative().default(0)
   })
 )
 // Only the query the browser returned with; the host never fetches a client's address.
 export const McpServerSignInFinish = lazyZodSchema(() =>
   z.object({
-    ...SignInFlow,
+    ...signInFlow(),
     query: z.string().trim().min(1).max(8_192)
   })
 )

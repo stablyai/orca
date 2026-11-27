@@ -6,7 +6,8 @@ import {
   type ConnectionVerdict
 } from '../transport/connection/connection-health'
 import type { ConnectionState } from '../transport/connection/connection-state'
-import { MOBILE_SESSION_STATUS_LABELS } from '../transport/connection/mobile-session-connection-copy'
+import { mobileSessionStatusLabel } from '../transport/connection/mobile-session-connection-copy'
+import type { Translate } from '../i18n/mobile-i18n'
 import type { MobileConnectionPath } from '../transport/connection/stable-logical-rpc-client'
 import type { RelayHostReachability } from '../transport/relay/relay-host-reachability'
 
@@ -26,10 +27,11 @@ export type SessionConnectionVerdictInputs = {
 // The retry count includes Relay failures, so without relay evidence a Tailscale-pinned host
 // would read "check Tailscale" while Relay is being dialed or has named the real cause.
 export function sessionConnectionVerdict(
-  inputs: SessionConnectionVerdictInputs
+  inputs: SessionConnectionVerdictInputs,
+  t: Translate
 ): ConnectionVerdict {
   const { hostName, ...rest } = inputs
-  return classifyConnection({ ...rest, hostName: hostName ?? undefined })
+  return classifyConnection({ ...rest, hostName: hostName ?? undefined }, t)
 }
 
 /** Verdicts the header shows at once, as the host header does: an outage or a refused pairing. */
@@ -53,11 +55,12 @@ export function sessionStatusLine(args: {
   pendingPath: MobileConnectionPath | null
   /** sessionRetryAvailable, so the suffix appears exactly when the line is a retry button. */
   retryShown: boolean
+  t: Translate
 }): SessionStatusLine {
   const { verdict } = args
   // Why: errors skip the calm window, like the host header; a short drop never produces one.
   if (isSessionErrorVerdict(verdict)) {
-    return { label: verdictDisplayLabel(verdict), withRetrySuffix: args.retryShown }
+    return { label: verdictDisplayLabel(verdict, args.t), withRetrySuffix: args.retryShown }
   }
   if (args.presentedConnState === 'connected') {
     return null
@@ -65,7 +68,10 @@ export function sessionStatusLine(args: {
   if (args.pendingPath === 'relay' && isConnectionDialing(verdict)) {
     return { label: verdict.label, withRetrySuffix: false }
   }
-  return { label: MOBILE_SESSION_STATUS_LABELS[args.presentedConnState], withRetrySuffix: false }
+  return {
+    label: mobileSessionStatusLabel(args.presentedConnState, args.t),
+    withRetrySuffix: false
+  }
 }
 
 /** The header dot: the calmed state with no verdict during a hidden drop, else the verdict's severity. */

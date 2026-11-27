@@ -3,8 +3,7 @@
 import { ScrollView, View } from 'react-native'
 import { useAutomationSheet } from '../automations/AutomationSheets'
 import { BotAutomationEditor } from '../automations/BotAutomationEditor'
-import { colors } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { useHostBotsEntry } from './host-bot-store'
 import { MobileBotAutomationsTab } from './MobileBotAutomationsTab'
@@ -23,6 +22,7 @@ export function useBotPanelAutomations(
   pager: { open: (page: `automation:${string}`) => void; close: () => void },
   showToast: (message: string, durationMs?: number) => void
 ) {
+  const styles = useThemedStyles(stylesSheet)
   const hostBots = useHostBotsEntry(props.hostKey)
   const { present, host: sheets } = useAutomationSheet()
   const { bot, activity } = props.routeBot
@@ -71,6 +71,6 @@ export function useBotPanelAutomations(
   return { tab, page, sheets, present }
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   page: { flex: 1, backgroundColor: colors.sheetSurface }
 }))

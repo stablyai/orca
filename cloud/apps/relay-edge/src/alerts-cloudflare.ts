@@ -42,6 +42,34 @@ function tally(groups: Group[] | undefined, namespaces?: Set<string>, options: C
   return { cf_invocations: invocations, cf_errors: errors }
 }
 
+const MAX_FIELD = 200
+const MAX_TEXT = 500
+
+// Bounded, with the account id and token scrubbed: Cloudflare's error text can echo them.
+function clean(value: unknown, secrets: string[], max = MAX_FIELD): string | undefined {
+  if (typeof value !== 'string' && typeof value !== 'number') { return undefined }
+  const text = secrets.reduce((out, secret) => out.split(secret).join('[redacted]'), String(value))
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text
+}
+
+// One line per failed read, every run: the hourly warning alone loses the reason. Never throws, so
+// the original failure is always what the caller sees.
+function readFailed(reason: string, script: string, status: number, startedMs: number, secrets: string[], errors: unknown = []): Error {
+  const list: unknown[] = Array.isArray(errors) ? errors.slice(0, 5) : []
+  const detail = list.map((e) => {
+    const item = (e && typeof e === 'object' ? e : {}) as { message?: unknown; path?: unknown; extensions?: { code?: unknown } }
+    const path = Array.isArray(item.path) ? item.path.slice(0, 10).map((part) => clean(part, secrets, 64) ?? '?') : undefined
+    return { message: clean(item.message, secrets), path, code: clean(item.extensions?.code, secrets, 64) }
+  })
+  try {
+    console.error(`cloudflare analytics read failed ${JSON.stringify({ reason, script, status, durationMs: Date.now() - startedMs, errors: detail })}`)
+  } catch {
+    // Logging is best effort.
+  }
+  const text = clean(detail.map((e) => [e.code, e.message].filter(Boolean).join(': ')).filter(Boolean).join('; '), [], MAX_TEXT)
+  return new Error(text ? `${reason}: ${text}` : reason)
+}
+
 const add = (a: Counts, b: Counts): Counts => ({
   cf_invocations: a.cf_invocations + b.cf_invocations,
   cf_errors: a.cf_errors + b.cf_errors
@@ -56,6 +84,9 @@ export async function cloudflareErrors(env: AlertsEnv, windowMin: number, lagMin
   const namespaceIds = (env.CF_DO_NAMESPACE_IDS ?? '').split(',').map((id) => id.trim()).filter(Boolean)
   const namespaces = namespaceIds.length > 0 ? new Set(namespaceIds) : undefined
   const at = (minutes: number) => new Date(nowMs - minutes * 60_000).toISOString()
+  const script = env.CF_SCRIPT_NAME || DEFAULT_SCRIPT_NAME
+  const startedMs = Date.now()
+  const secrets = [token, env.ACCOUNT_ID].filter((value): value is string => typeof value === 'string' && value.length > 0)
   const response = await fetch(GRAPHQL_URL, {
     method: 'POST',
     headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
@@ -63,7 +94,7 @@ export async function cloudflareErrors(env: AlertsEnv, windowMin: number, lagMin
       query: cloudflareQuery(namespaces !== undefined),
       variables: {
         a: env.ACCOUNT_ID,
-        script: env.CF_SCRIPT_NAME || DEFAULT_SCRIPT_NAME,
+        script,
         ...(namespaces ? { ns: namespaceIds } : {}),
         s0: at(windowMin + lagMin),
         e0: at(lagMin),
@@ -72,13 +103,13 @@ export async function cloudflareErrors(env: AlertsEnv, windowMin: number, lagMin
       }
     })
   })
-  if (!response.ok) { throw new Error(`cloudflare analytics query failed: ${response.status}`) }
+  if (!response.ok) { throw readFailed(`cloudflare analytics query failed: ${response.status}`, script, response.status, startedMs, secrets) }
   const body = (await response.json()) as {
     data?: { viewer?: { accounts?: Record<string, Group[] | undefined>[] } }
-    errors?: unknown[] | null
+    errors?: unknown
   }
   const account = body.data?.viewer?.accounts?.[0]
-  if ((body.errors && body.errors.length > 0) || !account) { throw new Error('cloudflare analytics query returned errors') }
+  if ((Array.isArray(body.errors) && body.errors.length > 0) || !account) { throw readFailed('cloudflare analytics query returned errors', script, response.status, startedMs, secrets, body.errors) }
   return [
     add(tally(account.w0), namespaces ? tally(account.o0, namespaces, options) : tally([])),
     add(tally(account.w1), namespaces ? tally(account.o1, namespaces, options) : tally([]))

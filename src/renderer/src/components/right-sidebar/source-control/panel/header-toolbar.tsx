@@ -40,7 +40,6 @@ type SourceControlHeaderToolbarProps = SourceControlFileFilterProps & {
   compareBaseRef: string | null
   headControl?: React.ReactNode
   headDisplay?: WorktreeGitIdentityDisplay | null
-  manualReviewUrl?: string | null
   branchLineTotal?: GitBranchLineTotal | null
   rebase?: BaseRebaseActions | null
   /** Labeled Git Graph button; null where the context has no Git history (folders). */
@@ -68,7 +67,6 @@ export function SourceControlHeaderToolbar({
   compareBaseRef,
   headDisplay = null,
   headControl,
-  manualReviewUrl,
   branchLineTotal,
   rebase,
   graphControl,
@@ -103,7 +101,6 @@ export function SourceControlHeaderToolbar({
       compareBaseRef={compareBaseRef}
       headDisplay={headDisplay}
       headControl={headControl}
-      manualReviewUrl={manualReviewUrl}
       branchLineTotal={branchLineTotal}
       reviewControl={reviewControl}
       rebase={rebase}

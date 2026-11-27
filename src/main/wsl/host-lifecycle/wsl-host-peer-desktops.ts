@@ -1,5 +1,6 @@
 /** R39: a WSL host's server lives in the Linux login's ~/.orca, so another Orca on this computer may share it. */
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { ORCAD_PEER_DESKTOPS_RUNTIME_CAPABILITY } from '../../../shared/remote-runtime/protocol/orcad-runtime-capabilities'
 import {
   ORCAD_PEER_DESKTOPS_METHOD,
@@ -13,7 +14,9 @@ export type WslHostPeerDesktops =
   /** An older server can't say: Remove keeps today's teardown. */
   | { kind: 'unsupported' }
 
-const StatusCapabilitiesSchema = z.looseObject({ capabilities: z.array(z.string()).optional() })
+const StatusCapabilitiesSchema = lazyZodSchema(() =>
+  z.looseObject({ capabilities: z.array(z.string()).optional() })
+)
 
 /**
  * Another Orca counts only while its control socket is open on the server right now; a closed one

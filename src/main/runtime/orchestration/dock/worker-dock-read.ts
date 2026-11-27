@@ -161,7 +161,7 @@ export function readWorkerDock(
         ? db.db
             .prepare(`SELECT f.dispatch_id, f.source, f.changed_at, f.report_id, f.reason,
       w.start_options, w.created_at, w.last_error, w.state,
-      EXISTS(SELECT 1 FROM federated_dispatches remote WHERE remote.dispatch_id = f.dispatch_id) AS remote, d.last_failure, COALESCE(t.task_title, t.spec) AS title, t.display_name
+      EXISTS(SELECT 1 FROM federated_dispatches remote WHERE remote.dispatch_id = f.dispatch_id) AS remote, d.last_failure, d.progress_note, COALESCE(t.task_title, t.spec) AS title, t.display_name
       FROM json_each(?) selected CROSS JOIN worker_dock_facts f ON f.dispatch_id = selected.value
       CROSS JOIN worker_dispatches w ON w.dispatch_id = f.dispatch_id
       CROSS JOIN dispatch_contexts d ON d.id = f.dispatch_id CROSS JOIN tasks t ON t.id = d.task_id`)
@@ -175,6 +175,7 @@ export function readWorkerDock(
         throw new Error('Worker dock snapshot changed inside its read transaction.')
       }
       const launch = launchOptions(row.start_options)
+      const active = row.state === 'starting' || row.state === 'ready'
       return WorkerDockEntry.parse({
         ...identity,
         source,
@@ -184,6 +185,9 @@ export function readWorkerDock(
         changedAt: identity.changedAt,
         startedAt: epoch(row.created_at),
         reason: row.reason ?? null,
+        ...(active && typeof row.progress_note === 'string' && row.progress_note
+          ? { progressNote: row.progress_note }
+          : {}),
         resultId: row.report_id ?? null,
         stoppable: row.state === 'ready' || row.state === 'start_unknown',
         ownerActionsAvailable: row.remote !== 1

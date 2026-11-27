@@ -23,7 +23,6 @@ import {
   type BotItemActivityEntry
 } from '../../../../src/shared/bots/bot-item-activity'
 import { botItemActorName } from '../../../../src/shared/bots/bot-item-actor-name'
-import { botItemStatusName } from '../../../../src/shared/bots/bot-item-status-name'
 import {
   BOT_ITEM_STATUSES,
   type BotItem,
@@ -41,11 +40,12 @@ import {
   type MobileBotItemAttachmentSource
 } from './MobileBotItemCommentAttachments'
 import { formatPhoneSnoozeTime } from './bot-item-snooze-time'
-import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import type { Translate } from '../../i18n/mobile-i18n'
-import { colors, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { fieldName, statusWord, str } from './bot-item-activity-words'
+import { intlLocaleFor } from '../../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../../i18n/use-mobile-translation'
+import { spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import { MobileBotItemCommentCard } from './MobileBotItemCommentCard'
 import { MobileBotItemStatusIcon } from './MobileBotItemStatusIcon'
@@ -53,25 +53,10 @@ import { useMobileMessageTime } from '../../session/native-chat/transcript/messa
 
 const ICON = 13
 
-function str(value: unknown): string {
-  return typeof value === 'string' ? value : ''
-}
-
-function fieldName(field: string, t: Translate): string {
-  return field === 'doneMeans'
-    ? t('bots.items.field.doneMeansLower', 'done means')
-    : field === 'description'
-      ? t('bots.items.field.description', 'description')
-      : t('bots.items.field.title', 'title')
-}
-
-function statusWord(value: unknown, t: Translate): string {
-  const status = BOT_ITEM_STATUSES.find((entry) => entry === value)
-  return status ? botItemStatusName(status, t) : str(value)
-}
-
 /** "changed done means ⌄": the before and after open on tap, as on the desktop. */
 function FieldChange({ by, field, change }: { by: string; field: string; change: unknown }) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const [open, setOpen] = useState(false)
   const diff: { from?: unknown; to?: unknown } =
@@ -105,7 +90,9 @@ function FieldChange({ by, field, change }: { by: string; field: string; change:
 }
 
 function EventLine({ event, item }: { event: BotItemEvent; item: BotItem }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const by = botItemActorName(event, item, t)
   const { data } = event
   switch (event.kind) {
@@ -169,7 +156,7 @@ function EventLine({ event, item }: { event: BotItemEvent; item: BotItem }) {
           <Text style={styles.actor}>{by}</Text>{' '}
           {typeof data.until === 'number'
             ? t('bots.items.activity.snoozed', 'snoozed this until {{when}}', {
-                when: formatPhoneSnoozeTime(data.until, event.at)
+                when: formatPhoneSnoozeTime(data.until, event.at, intlLocale)
               })
             : t('bots.items.activity.snoozedBare', 'snoozed this')}
         </Text>
@@ -190,6 +177,7 @@ function EventLine({ event, item }: { event: BotItemEvent; item: BotItem }) {
 }
 
 function WorkerLine({ entry }: { entry: Extract<BotItemActivityEntry, { kind: 'worker' }> }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const title = <Text style={styles.actor}>{entry.link.title ?? entry.link.ref}</Text>
   if (entry.phase === 'started') {
@@ -222,6 +210,7 @@ function WorkerLine({ entry }: { entry: Extract<BotItemActivityEntry, { kind: 'w
 type LineEntry = Exclude<BotItemActivityEntry, { kind: 'comment' }>
 
 function EntryIcon({ entry }: { entry: LineEntry }) {
+  const colors = useMobileColors()
   if (entry.kind === 'worker') {
     if (entry.phase === 'started') {
       return <Play size={ICON} color={colors.textMuted} />
@@ -277,7 +266,7 @@ export function MobileBotItemActivity({
   /** Quotes a comment's words into the comment box. */
   onQuote: (text: string) => void
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const time = useMobileMessageTime()
   const still = useReducedMotionEnabled() === true
@@ -391,7 +380,7 @@ export function MobileBotItemActivity({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   event: {
     flexDirection: 'row',
     alignItems: 'flex-start',

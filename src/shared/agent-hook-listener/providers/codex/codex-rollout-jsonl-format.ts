@@ -8,6 +8,8 @@ export type JsonlCursor = {
   filePath?: string
   offset: number
   carry: string
+  /** Bytes up to the next newline finish a line that is skipped: oversized, or its start was never read. */
+  discardingLine?: boolean
 }
 
 export type JsonRecord = Record<string, unknown>
@@ -44,6 +46,7 @@ export type JsonlCursorBytes = {
   filePath: string
   offset: number
   carry: string
+  discardingLine?: boolean
   /** Where unread bytes begin: the cursor offset, or 0 after the file shrank. */
   from: number
   start: number
@@ -61,8 +64,8 @@ export function planJsonlRead(
   const from = size < cursor.offset ? 0 : cursor.offset
   const length = Math.min(size - from, TRANSCRIPT_READ_MAX_BYTES)
   const start = size - from > length ? size - length : from
-  const { filePath, offset, carry } = cursor
-  return { filePath, offset, carry, from, start, length, bytes: NO_BYTES }
+  const { filePath, offset, carry, discardingLine } = cursor
+  return { filePath, offset, carry, discardingLine, from, start, length, bytes: NO_BYTES }
 }
 
 /** The part of `read` the cursor has not consumed; undefined when the read cannot serve the cursor's position. */
@@ -73,7 +76,11 @@ export function alignJsonlCursorBytes(
   if (cursor.filePath !== read.filePath) {
     return undefined
   }
-  if (cursor.offset === read.offset && cursor.carry === read.carry) {
+  if (
+    cursor.offset === read.offset &&
+    cursor.carry === read.carry &&
+    !!cursor.discardingLine === !!read.discardingLine
+  ) {
     return read
   }
   // Another reader consumed a prefix (or all) of these bytes since they were read; whatever remains is still new.
@@ -89,6 +96,7 @@ export function alignJsonlCursorBytes(
     filePath: read.filePath,
     offset: cursor.offset,
     carry: cursor.carry,
+    discardingLine: cursor.discardingLine,
     from: cursor.offset,
     start: cursor.offset,
     bytes: cursor.offset >= end ? NO_BYTES : read.bytes.subarray(cursor.offset - read.start)
@@ -109,21 +117,28 @@ export function applyJsonlCursorBytes(
     return 'stale'
   }
   const carry = read.from === read.offset ? read.carry : ''
+  const discardingLine = read.from === read.offset && !!read.discardingLine
   if (read.failed) {
     cursor.offset = read.from
     cursor.carry = carry
+    cursor.discardingLine = discardingLine
     return undefined
   }
   if (read.bytes.length === 0) {
     cursor.offset = read.from
     cursor.carry = carry
+    cursor.discardingLine = discardingLine
     return []
   }
-  const skippedPrefix = read.start !== read.from
+  const skippedPrefix = read.start !== read.from || discardingLine
   const content = `${skippedPrefix ? '' : carry}${read.bytes.toString('utf8')}`
   const lines = content.split('\n')
   cursor.offset = read.start + read.bytes.length
-  cursor.carry = lines.pop() ?? ''
+  const tail = lines.pop() ?? ''
+  cursor.discardingLine =
+    (skippedPrefix && lines.length === 0) ||
+    Buffer.byteLength(tail, 'utf8') > TRANSCRIPT_LINE_MAX_BYTES
+  cursor.carry = cursor.discardingLine ? '' : tail
   if (skippedPrefix) {
     lines.shift()
   }

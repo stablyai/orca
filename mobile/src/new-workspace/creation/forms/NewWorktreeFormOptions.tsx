@@ -2,14 +2,14 @@ import { Text, View } from 'react-native'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type { SetupDecision as WorkspaceCreateSetupDecision } from '../../../../../src/shared/worktree/create-types'
 import type { useMobileComposerSource } from '../../source-selection/use-mobile-composer-source'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { AutoHeight } from '../../../components/motion/AutoHeight'
 import { TextField } from '../../../components/composer-input/TextField'
 import { SectionHeader } from '../../../components/list/ListGroup'
-import { newWorktreeFormStyles as styles } from './new-worktree-form-styles'
+import { newWorktreeFormStylesSheet } from './new-worktree-form-styles'
 import type { SetupRunPolicy } from './new-worktree-modal-types'
 import { NewWorkspaceSetupScriptField } from './NewWorkspaceSetupScriptField'
 import { SmartWorkspaceAdvancedFields } from './SmartWorkspaceAdvancedFields'
+import { useThemedStyles } from '../../../theme/themed-styles'
 
 type SetupDecision = Exclude<WorkspaceCreateSetupDecision, 'inherit'>
 
@@ -31,7 +31,7 @@ export function NewWorktreeFormOptions(props: {
   onRunSetupChange: (run: boolean) => void
   onWaitForSetupChange: (wait: boolean) => void
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(newWorktreeFormStylesSheet)
   const t = useMobileTranslation()
   return (
     <>

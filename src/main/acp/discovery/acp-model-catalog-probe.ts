@@ -32,7 +32,6 @@ import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
 import { checkAcpLaunchVersion } from '../launch/acp-launch-version'
 import { prepareAcpListingAccount } from './acp-listing-account'
 import { acpLaunchSpecForAccount } from '../launch/acp-launch-command'
-import { agentSessionAccountHomePath } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import {
   resolveAcpLaunchInvocation,
   type AcpLaunchInvocationDeps
@@ -44,7 +43,7 @@ import {
 } from './acp-listing-session-models'
 import { AcpAgentExitedError } from '../transport/acp-errors'
 import { signedOutAsUnavailable } from './acp-listing-signed-out'
-import { discardAcpListingSessions } from './acp-listing-session-discard'
+import { acpListingSessionDiscard } from './acp-listing-session-discard'
 import { sealSharedToolProcessChild } from '../../runtime/agent-session/environment/structured-session-child-env'
 import { usesModelSpecificAcpEfforts } from '../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 
@@ -232,19 +231,14 @@ export function createAcpModelCatalogProbe(
                   run
                 )
               } finally {
-                const accountHomePath = agentSessionAccountHomePath(accountHome)
-                if (accountHomePath) {
-                  await discardAcpListingSessions(spec.agent, listing, started, listingProcess, {
-                    cwd: sessionCwd,
-                    accountHomePath,
-                    // Unbounded by the listing's signal: a cancelled listing still discards its session.
-                    runAgent: (agentArgs) =>
-                      (deps.runListing ?? runAgentModelCatalogListing)(
-                        { ...launch, args: [...prefixArgs, ...agentArgs] },
-                        { site: `${spec.agent}-listing-discard` }
-                      )
-                  })
-                }
+                await acpListingSessionDiscard(
+                  spec.agent,
+                  listing,
+                  accountHome,
+                  sessionCwd,
+                  { ...launch, prefixArgs },
+                  deps.runListing
+                )?.(started, listingProcess)
                 await folder?.remove()
               }
             }

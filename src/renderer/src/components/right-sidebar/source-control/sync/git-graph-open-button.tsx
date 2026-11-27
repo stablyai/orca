@@ -56,15 +56,12 @@ export function useGitGraphSupport(worktreeId: string, enabled = true): GitGraph
 export function GitGraphOpenButton({
   worktreeId,
   support: { support, recheck },
-  onOpen,
-  iconOnly = false
+  onOpen
 }: {
   worktreeId: string
   /** From `useGitGraphSupport`, owned by the panel so the scope menu shares one probe. */
   support: GitGraphSupport
   onOpen?: (event: SourceControlRowOpenEvent) => void
-  /** Icon with a tooltip, for the file-list header's tool cluster. */
-  iconOnly?: boolean
 }) {
   const t = useTranslate()
   // The toolbar hides this button while the filter is open; when it returns unsupported, the host may have updated since.
@@ -82,11 +79,9 @@ export function GitGraphOpenButton({
   const button = (
     <Button
       type="button"
-      variant={iconOnly ? 'ghost-muted' : 'ghost'}
-      size={iconOnly ? 'icon-xs' : 'xs'}
-      className={iconOnly ? 'size-5' : undefined}
+      variant="ghost"
+      size="xs"
       disabled={support !== true}
-      aria-label={iconOnly ? label : undefined}
       data-testid="source-control-git-graph-button"
       onClick={(event) => {
         if (onOpen) {
@@ -97,20 +92,11 @@ export function GitGraphOpenButton({
       }}
     >
       <GitGraph className="size-3.5" />
-      {iconOnly ? null : label}
+      {label}
     </Button>
   )
   if (support !== false) {
-    return iconOnly ? (
-      <Tooltip>
-        <TooltipTrigger asChild>{button}</TooltipTrigger>
-        <TooltipContent side="bottom" sideOffset={6}>
-          {label}
-        </TooltipContent>
-      </Tooltip>
-    ) : (
-      button
-    )
+    return button
   }
   // Disabled buttons swallow pointer events, so the wrapper carries the explanation.
   return (

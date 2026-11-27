@@ -1,8 +1,10 @@
 import { automationOrphanIssueText } from './automation-orphan-issue-copy'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import type { Translate } from '../i18n/mobile-i18n'
+import { intlLocaleFor } from '../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../i18n/use-mobile-translation'
+import { useThemedStyles } from '../theme/themed-styles'
 import { useEffect, useRef, useState } from 'react'
-import { Text, View, type HostInstance } from 'react-native'
+import { View, type HostInstance } from 'react-native'
 import { Ellipsis, History, Pencil, Play, Trash2 } from 'lucide-react-native'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
@@ -26,7 +28,8 @@ import { SettingsNote, SettingsSection } from '../settings/settings-screen-frame
 import { automationScheduleText } from './automation-schedule-label'
 import { mobileTuiAgentLabel } from '../agents/mobile-tui-agents'
 import type { MobileAutomationRow } from './automation-reply-schema'
-import { automationStyles as styles } from './automation-styles'
+import type { AutomationEditorSection } from './AutomationEditor'
+import { automationStylesSheet } from './automation-styles'
 
 export function AutomationDetail(props: {
   row: MobileAutomationRow
@@ -35,9 +38,11 @@ export function AutomationDetail(props: {
   projectName: string | undefined
   onBack: () => void
   onToggle: (enabled: boolean) => void
+  /** Opens the editor on the section a row shows. */
+  onEdit: (section: AutomationEditorSection) => void
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const { automation, item } = props.row
   // Back returns to the list, as the bar's back button does.
   useBackClaim(() => {
@@ -128,10 +133,13 @@ export function AutomationDetail(props: {
       : []
   const workspace = workspaces.length === 1 ? workspaces[0] : undefined
   const unavailable = t('automations.mobile.unavailable', 'Unavailable')
+  const editable = !props.disabled && item.selector.kind !== 'orphan'
+  const drill = (section: AutomationEditorSection) =>
+    editable ? { navigates: true, onPress: () => props.onEdit(section) } : {}
   return (
     <>
       {item.selector.kind === 'orphan' ? (
-        <SettingsNote error>{automationOrphanIssueText(item.selector.issue)}</SettingsNote>
+        <SettingsNote error>{automationOrphanIssueText(item.selector.issue, t)}</SettingsNote>
       ) : null}
       <SettingsSection first>
         <ListRow
@@ -153,30 +161,32 @@ export function AutomationDetail(props: {
       <SettingsSection title={t('automations.mobile.schedule', 'Schedule')}>
         <ListRow
           title={t('automations.mobile.repeats', 'Repeats')}
-          value={automationScheduleText(automation)}
+          value={automationScheduleText(automation, t, intlLocale)}
+          {...drill('when')}
         />
         <ListRow
           title={t('automations.mobile.agent', 'Agent')}
           value={mobileTuiAgentLabel(automation.agentId)}
           valueIcon={<MobileAgentIcon agentId={automation.agentId} size={13} />}
+          {...drill('where')}
         />
         <ListRow
           title={t('automations.mobile.project', 'Project')}
           value={props.projectName ?? setup?.label ?? unavailable}
+          {...drill('where')}
         />
         <ListRow
           title={t('automations.mobile.workspace', 'Workspace')}
           value={
             automation.workspaceMode === 'existing'
               ? workspace?.displayName || unavailable
-              : t('automations.mobile.newOnePerRun', 'New one per run')
+              : t('automations.mobile.newEachRun', 'New each run')
           }
+          {...drill('where')}
         />
       </SettingsSection>
       <SettingsSection title={t('automations.mobile.instructions', 'Instructions')}>
-        <Text selectable style={styles.instructions}>
-          {automation.prompt}
-        </Text>
+        <ListRow title={automation.prompt} wrapTitle {...drill('prompt')} />
       </SettingsSection>
     </>
   )
@@ -193,12 +203,14 @@ type DetailMenuActions = {
 export function automationDetailBar(
   row: MobileAutomationRow,
   onBack: () => void,
-  actions: DetailMenuActions
+  actions: DetailMenuActions,
+  t: Translate,
+  intlLocale: string
 ): AutomationHeaderBar {
   return {
     page: {
       title: row.automation.name,
-      subtitle: automationNextRunShortLabel(row.automation),
+      subtitle: automationNextRunShortLabel(row.automation, t, intlLocale),
       onBack
     },
     trailing: <AutomationDetailMenu {...actions} name={row.automation.name} />
@@ -272,7 +284,7 @@ function AutomationDetailMenu(props: DetailMenuActions & { name: string }) {
 /** Run now, the detail's one action, in the bar at the foot of the screen. */
 export function AutomationRunNowBar(props: { disabled: boolean; onRun: () => Promise<boolean> }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const styles = useThemedStyles(automationStylesSheet)
   const control = useMobilePendingControl<'run'>()
   return (
     <View style={styles.bottomBar}>

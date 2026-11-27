@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import { z } from 'zod'
 import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { BrowserExtensionContextMenuPayload } from '../../../shared/browser/extensions/browser-extension-context-menu-types'
@@ -25,17 +26,21 @@ const actionMenuArgs = lazyZodSchema(() =>
 )
 
 /** Extension items in Orca's page and toolbar-button menus; main owns what was clicked on. */
-export function registerBrowserExtensionContextMenuHandlers(): void {
-  ipcMain.removeHandler(CLICK_CHANNEL)
-  ipcMain.removeHandler(ACTION_MENU_CHANNEL)
-  ipcMain.handle(CLICK_CHANNEL, (event, args: unknown): boolean => {
+export function registerBrowserExtensionContextMenuHandlers(
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
+  if (ipc === ipcMain) {
+    ipcMain.removeHandler(CLICK_CHANNEL)
+    ipcMain.removeHandler(ACTION_MENU_CHANNEL)
+  }
+  ipc.handle(CLICK_CHANNEL, (event, args: unknown): boolean => {
     const parsed = clickArgs.safeParse(args)
     if (!isTrustedBrowserRenderer(event.sender) || !parsed.success) {
       return false
     }
     return runBrowserExtensionContextMenuClick(parsed.data)
   })
-  ipcMain.handle(
+  ipc.handle(
     ACTION_MENU_CHANNEL,
     (event, args: unknown): BrowserExtensionContextMenuPayload | null => {
       const parsed = actionMenuArgs.safeParse(args)

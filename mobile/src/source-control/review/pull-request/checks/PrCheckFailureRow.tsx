@@ -5,13 +5,12 @@ import {
   CircleX,
   ExternalLink,
   MoreHorizontal,
-  RotateCw,
   Sparkles,
   SquareTerminal
 } from 'lucide-react-native'
-import { colors, pressedStyle, radii, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { pressedStyle, radii, spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import type { Translate } from '../../../../i18n/mobile-i18n'
 import { openExternalLink } from '../../../../platform/external-links/external-link'
@@ -35,9 +34,7 @@ export function PrCheckFailureRow({
   fixLabel,
   onFix,
   fixBusy,
-  fixAvailable,
-  onRerun,
-  rerunBusy
+  fixAvailable
 }: {
   check: PRCheckDetail
   entry: DetailEntry | undefined
@@ -48,10 +45,9 @@ export function PrCheckFailureRow({
   onFix: () => void
   fixBusy: boolean
   fixAvailable: boolean
-  onRerun: () => void
-  rerunBusy: boolean
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const clipboard = useClipboardWriter()
   const [open, setOpen] = useState(initiallyOpen)
@@ -60,7 +56,7 @@ export function PrCheckFailureRow({
   const [copyFailed, setCopyFailed] = useState(false)
   const menuRef = useRef<HostInstance>(null)
   const details = entry?.status === 'loaded' ? entry.details : null
-  const content = details ? presentCheckDetail(details) : null
+  const content = details ? presentCheckDetail(details, t) : null
   const annotation = content?.annotations[0] ?? null
   const step = content?.jobs[0]?.failedSteps[0] ?? null
   const fallbackLine = step?.name ?? content?.summaryLines[1] ?? null
@@ -208,12 +204,6 @@ export function PrCheckFailureRow({
                 busy={fixBusy}
                 disabled={!fixAvailable}
               />
-              <PrMiniButton
-                icon={RotateCw}
-                label={t('pullRequest.screens.rerun', 'Rerun')}
-                onPress={onRerun}
-                busy={rerunBusy}
-              />
             </View>
           ) : null}
           {copyFailed ? (
@@ -263,7 +253,7 @@ function checkDuration(
 
 const INDENT = LIST_LEADING_SLOT + spacing.md
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   row: { paddingHorizontal: LIST_ROW_PADDING, paddingVertical: spacing.md, gap: spacing.sm },
   head: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   headMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.md },

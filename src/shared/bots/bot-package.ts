@@ -1,6 +1,7 @@
 // A shared bot, as its link carries it: the bot.json schema, the parts its archive may hold, and the
 // pure mapping from a parsed package to the bot it creates. No filesystem work here.
 import * as z from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 import type { AutomationBotResultsTo } from '../automation-bot-target'
 import { AUTOMATION_EVENT_KINDS } from '../automation-event-triggers'
 import { GOOGLE_EVENT_SOURCES } from '../automation-google-triggers'
@@ -23,16 +24,18 @@ export const BOT_PACKAGE_SKILLS_MAX = 64
 export const BOT_PACKAGE_SETUP_NOTE_MAX = 2000
 
 /** Skill and memory names: they become folder and file names, so the skill name rules apply. */
-const PartName = z.string().refine((name) => {
-  try {
-    validateSkillPackageName(name)
-    return true
-  } catch {
-    return false
-  }
-}, 'Use lowercase letters, digits and dashes')
-const PartId = z.string().regex(/^[a-z0-9-]{1,32}$/)
-const Prompt = z.string().min(1).max(20_000)
+const PartName = lazyZodSchema(() =>
+  z.string().refine((name) => {
+    try {
+      validateSkillPackageName(name)
+      return true
+    } catch {
+      return false
+    }
+  }, 'Use lowercase letters, digits and dashes')
+)
+const PartId = lazyZodSchema(() => z.string().regex(/^[a-z0-9-]{1,32}$/))
+const Prompt = lazyZodSchema(() => z.string().min(1).max(20_000))
 
 /** Where a copy's results go, by kind only: the channel or issue is the recipient's to pick. */
 export const BOT_PACKAGE_RESULTS = ['chat', 'slack-channel', 'linear-issue', 'none'] as const
@@ -40,68 +43,72 @@ export const BOT_PACKAGE_EVENT_RESULTS = [...BOT_PACKAGE_RESULTS, 'thread'] as c
 export const BOT_PACKAGE_CONNECTORS = ['github', 'slack', 'linear', 'google', 'composio'] as const
 const EVENT_SOURCES = ['slack', 'github', 'linear', ...GOOGLE_EVENT_SOURCES] as const
 
-const EventSuggestionSchema = z
-  .object({
-    id: PartId,
-    name: z.string().min(1).max(200),
-    prompt: Prompt,
-    source: z.enum(EVENT_SOURCES),
-    event: z.string().min(1).max(64),
-    textContains: z.string().min(1).max(200).optional(),
-    results: z.enum(BOT_PACKAGE_EVENT_RESULTS)
-  })
-  .refine((suggestion) => {
-    const kinds: readonly string[] = AUTOMATION_EVENT_KINDS[suggestion.source]
-    return kinds.includes(suggestion.event)
-  })
+const EventSuggestionSchema = lazyZodSchema(() =>
+  z
+    .object({
+      id: PartId,
+      name: z.string().min(1).max(200),
+      prompt: Prompt,
+      source: z.enum(EVENT_SOURCES),
+      event: z.string().min(1).max(64),
+      textContains: z.string().min(1).max(200).optional(),
+      results: z.enum(BOT_PACKAGE_EVENT_RESULTS)
+    })
+    .refine((suggestion) => {
+      const kinds: readonly string[] = AUTOMATION_EVENT_KINDS[suggestion.source]
+      return kinds.includes(suggestion.event)
+    })
+)
 
-export const BotPackageV1Schema = z.object({
-  schemaVersion: z.literal(BOT_PACKAGE_SCHEMA_VERSION),
-  name: BotNameSchema,
-  /** A mascot by id, with its tile color and outfit, or the archive's avatar.png; absent, the recipient's
-   *  default mascot. An older importer drops the color and outfit and lists them as not included. */
-  avatar: z
-    .union([
-      z.object({
-        mascot: z.enum(BOT_MASCOT_IDS),
-        color: BotAvatarColorSchema.optional().catch(undefined),
-        outfit: BotStoredOutfitSchema.optional().catch(undefined)
-      }),
-      z.object({ image: z.literal(BOT_PACKAGE_AVATAR_PATH) })
-    ])
-    .optional(),
-  purpose: z.string().max(BOT_PACKAGE_PURPOSE_MAX),
-  /** The sharer's agent; the recipient picks their own. */
-  agentHint: BotAgentReadSchema,
-  skills: z.array(z.object({ name: PartName })).max(BOT_PACKAGE_SKILLS_MAX),
-  tools: z
-    .array(
-      z.object({
-        id: PartId,
-        name: z.string().regex(BOT_TOOL_NAME_PATTERN),
-        url: BotToolUrl,
-        headerNames: z.array(z.string().regex(BOT_TOOL_HEADER_NAME_PATTERN)).max(16)
-      })
-    )
-    .max(32),
-  connectors: z.array(z.object({ kind: z.enum(BOT_PACKAGE_CONNECTORS) })).max(8),
-  schedules: z
-    .array(
-      z.object({
-        id: PartId,
-        name: z.string().min(1).max(200),
-        prompt: Prompt,
-        rrule: z.string().min(1).max(512),
-        timezone: z.string().min(1).max(64).optional(),
-        results: z.enum(BOT_PACKAGE_RESULTS)
-      })
-    )
-    .max(32),
-  eventSuggestions: z.array(EventSuggestionSchema).max(32),
-  memory: z.array(z.object({ topic: PartName })).max(64),
-  /** Shown to the recipient verbatim, as untrusted text. */
-  setupNote: z.string().max(BOT_PACKAGE_SETUP_NOTE_MAX).optional()
-})
+export const BotPackageV1Schema = lazyZodSchema(() =>
+  z.object({
+    schemaVersion: z.literal(BOT_PACKAGE_SCHEMA_VERSION),
+    name: BotNameSchema,
+    /** A mascot by id, with its tile color and outfit, or the archive's avatar.png; absent, the recipient's
+     *  default mascot. An older importer drops the color and outfit and lists them as not included. */
+    avatar: z
+      .union([
+        z.object({
+          mascot: z.enum(BOT_MASCOT_IDS),
+          color: BotAvatarColorSchema.optional().catch(undefined),
+          outfit: BotStoredOutfitSchema.optional().catch(undefined)
+        }),
+        z.object({ image: z.literal(BOT_PACKAGE_AVATAR_PATH) })
+      ])
+      .optional(),
+    purpose: z.string().max(BOT_PACKAGE_PURPOSE_MAX),
+    /** The sharer's agent; the recipient picks their own. */
+    agentHint: BotAgentReadSchema,
+    skills: z.array(z.object({ name: PartName })).max(BOT_PACKAGE_SKILLS_MAX),
+    tools: z
+      .array(
+        z.object({
+          id: PartId,
+          name: z.string().regex(BOT_TOOL_NAME_PATTERN),
+          url: BotToolUrl,
+          headerNames: z.array(z.string().regex(BOT_TOOL_HEADER_NAME_PATTERN)).max(16)
+        })
+      )
+      .max(32),
+    connectors: z.array(z.object({ kind: z.enum(BOT_PACKAGE_CONNECTORS) })).max(8),
+    schedules: z
+      .array(
+        z.object({
+          id: PartId,
+          name: z.string().min(1).max(200),
+          prompt: Prompt,
+          rrule: z.string().min(1).max(512),
+          timezone: z.string().min(1).max(64).optional(),
+          results: z.enum(BOT_PACKAGE_RESULTS)
+        })
+      )
+      .max(32),
+    eventSuggestions: z.array(EventSuggestionSchema).max(32),
+    memory: z.array(z.object({ topic: PartName })).max(64),
+    /** Shown to the recipient verbatim, as untrusted text. */
+    setupNote: z.string().max(BOT_PACKAGE_SETUP_NOTE_MAX).optional()
+  })
+)
 
 export type BotPackageV1 = z.infer<typeof BotPackageV1Schema>
 export type BotPackageConnector = (typeof BOT_PACKAGE_CONNECTORS)[number]

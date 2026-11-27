@@ -11,6 +11,7 @@ import {
   PLUGIN_MANIFEST_V2_SINCE,
   PLUGIN_SCHEMA_SINCE_V1
 } from '../manifest/plugin-schema-field-docs'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
 export const PLUGIN_COMMAND_LIMIT = 256
 /** First release that reads `commands[].replaces`. */
@@ -19,7 +20,7 @@ export const PLUGIN_COMMAND_REPLACES_SINCE = '1.4.248'
 // Why `workspace`: folder workspaces exist too; format 1's `worktree` is rewritten on parse.
 // Why `when`: it is meant to grow into an expression (`workspaceKind == folder`, `remote`) in
 // which the bare `global` and `workspace` stay valid, so the shape never has to change.
-export const pluginCommandWhenSchema = z.enum(['global', 'workspace'])
+export const pluginCommandWhenSchema = lazyZodSchema(() => z.enum(['global', 'workspace']))
 /** Why not `=== 'workspace'`: hosts from before the rename still send `worktree`. */
 export function isWorkspaceScopedPluginContext(context: string | undefined): boolean {
   return context !== undefined && context !== 'global'

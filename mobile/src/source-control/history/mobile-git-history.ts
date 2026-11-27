@@ -1,5 +1,5 @@
-import { translate } from '../../i18n/mobile-i18n'
-import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
+import { translate, type Translate } from '../../i18n/mobile-i18n'
+import { formatCommitTime } from './mobile-commit-time'
 import type {
   MobileGitHistoryBranchRange,
   MobileGitHistoryItem,
@@ -20,66 +20,27 @@ export type MobileCommitRow = {
   relativeTime: string
 }
 
-export function formatCommitTime(timestampMs: number | null | undefined, nowMs: number): string {
-  // Epoch zero is valid; test nullishness instead of truthiness.
-  if (timestampMs == null) {
-    return ''
-  }
-  const delta = nowMs - timestampMs
-  if (delta < 60_000) {
-    return translate('sourceControl.gitHistory.justNow', 'just now')
-  }
-  const minutes = Math.floor(delta / 60_000)
-  if (minutes < 60) {
-    const count = minutes
-    return count === 1
-      ? translate('sourceControl.gitHistory.minutes_one', '{{count}}m', { count })
-      : translate('sourceControl.gitHistory.minutes_other', '{{count}}m', { count })
-  }
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) {
-    const count = hours
-    return count === 1
-      ? translate('sourceControl.gitHistory.hours_one', '{{count}}h', { count })
-      : translate('sourceControl.gitHistory.hours_other', '{{count}}h', { count })
-  }
-  const days = Math.floor(hours / 24)
-  if (days < 30) {
-    const count = days
-    return count === 1
-      ? translate('sourceControl.gitHistory.days_one', '{{count}}d', { count })
-      : translate('sourceControl.gitHistory.days_other', '{{count}}d', { count })
-  }
-  const months = Math.floor(days / 30)
-  if (months < 12) {
-    const count = months
-    return count === 1
-      ? translate('sourceControl.gitHistory.months_one', '{{count}}mo', { count })
-      : translate('sourceControl.gitHistory.months_other', '{{count}}mo', { count })
-  }
-  const count = Math.floor(months / 12)
-  return count === 1
-    ? translate('sourceControl.gitHistory.years_one', '{{count}}y', { count })
-    : translate('sourceControl.gitHistory.years_other', '{{count}}y', { count })
-}
-
-export function toMobileCommitRow(item: MobileGitHistoryItem, nowMs: number): MobileCommitRow {
+export function toMobileCommitRow(
+  item: MobileGitHistoryItem,
+  nowMs: number,
+  t: Translate
+): MobileCommitRow {
   return {
     id: item.id,
     shortId: item.displayId ?? item.id.slice(0, 7),
-    subject:
-      item.subject || translate('sourceControl.gitHistory.noCommitMessage', '(no commit message)'),
+    subject: item.subject || t('sourceControl.gitHistory.noCommitMessage', '(no commit message)'),
     author: item.author ?? '',
     parentId: item.parentIds[0] ?? null,
-    relativeTime: formatCommitTime(item.timestamp, nowMs)
+    relativeTime: formatCommitTime(item.timestamp, nowMs, t)
   }
 }
 
 export function mapMobileCommitRows(
   result: MobileGitHistoryResult,
-  nowMs: number
+  nowMs: number,
+  t: Translate
 ): MobileCommitRow[] {
-  return result.items.map((item) => toMobileCommitRow(item, nowMs))
+  return result.items.map((item) => toMobileCommitRow(item, nowMs, t))
 }
 
 export type MobileGitHistoryPageRequest = {
@@ -163,9 +124,13 @@ export type MobileCommitsView =
     }
   | { kind: 'flat'; rows: MobileCommitListRow[] }
 
-function toMobileCommitListRow(item: MobileGitHistoryItem, nowMs: number): MobileCommitListRow {
+function toMobileCommitListRow(
+  item: MobileGitHistoryItem,
+  nowMs: number,
+  t: Translate
+): MobileCommitListRow {
   return {
-    ...toMobileCommitRow(item, nowMs),
+    ...toMobileCommitRow(item, nowMs, t),
     insertions: item.statistics?.insertions ?? 0,
     deletions: item.statistics?.deletions ?? 0
   }
@@ -173,16 +138,17 @@ function toMobileCommitListRow(item: MobileGitHistoryItem, nowMs: number): Mobil
 
 export function buildMobileCommitsView(
   pages: MobileGitHistoryPages,
-  nowMs: number
+  nowMs: number,
+  t: Translate
 ): MobileCommitsView {
   const { branch } = pages
   if (!branch) {
-    return { kind: 'flat', rows: pages.items.map((item) => toMobileCommitListRow(item, nowMs)) }
+    return { kind: 'flat', rows: pages.items.map((item) => toMobileCommitListRow(item, nowMs, t)) }
   }
   const notPushed: MobileCommitListRow[] = []
   const onOrigin: MobileCommitListRow[] = []
   for (const item of pages.items) {
-    ;(item.pushed === true ? onOrigin : notPushed).push(toMobileCommitListRow(item, nowMs))
+    ;(item.pushed === true ? onOrigin : notPushed).push(toMobileCommitListRow(item, nowMs, t))
   }
   return {
     kind: 'branch',
@@ -206,7 +172,11 @@ export type MobileCommitDetail = {
   date: string
 }
 
-export function buildMobileCommitDetail(item: MobileGitHistoryItem): MobileCommitDetail {
+export function buildMobileCommitDetail(
+  item: MobileGitHistoryItem,
+  t: Translate,
+  intlLocale: string
+): MobileCommitDetail {
   const lines = (item.message ?? item.subject ?? '').split(/\r?\n/)
   const coAuthors: string[] = []
   const bodyLines = lines.slice(1).filter((line) => {
@@ -218,24 +188,19 @@ export function buildMobileCommitDetail(item: MobileGitHistoryItem): MobileCommi
   })
   const author = item.author ?? ''
   return {
-    subject:
-      item.subject || translate('sourceControl.gitHistory.noCommitMessage', '(no commit message)'),
+    subject: item.subject || t('sourceControl.gitHistory.noCommitMessage', '(no commit message)'),
     body: bodyLines.join('\n').trim(),
     author:
       coAuthors.length > 0
-        ? translate(
-            'sourceControl.commitDetail.authorWithCoAuthors',
-            '{{author}}, with {{coAuthors}}',
-            {
-              author,
-              coAuthors: coAuthors.join(', ')
-            }
-          )
+        ? t('sourceControl.commitDetail.authorWithCoAuthors', '{{author}}, with {{coAuthors}}', {
+            author,
+            coAuthors: coAuthors.join(', ')
+          })
         : author,
     date:
       item.timestamp == null
         ? ''
-        : new Date(item.timestamp).toLocaleString(getUiIntlLocale(), {
+        : new Date(item.timestamp).toLocaleString(intlLocale, {
             dateStyle: 'medium',
             timeStyle: 'short'
           })
@@ -277,7 +242,10 @@ function timelineItems(
   }))
 }
 
-export function buildMobileCommitsListItems(view: MobileCommitsView): MobileCommitsListItem[] {
+export function buildMobileCommitsListItems(
+  view: MobileCommitsView,
+  t: Translate
+): MobileCommitsListItem[] {
   if (view.kind === 'flat') {
     return timelineItems(view.rows, null, false)
   }
@@ -287,7 +255,7 @@ export function buildMobileCommitsListItems(view: MobileCommitsView): MobileComm
     items.push({
       kind: 'section',
       key: 'not-pushed',
-      title: translate('sourceControl.commits.notPushed', 'Not pushed {{count}}', {
+      title: t('sourceControl.commits.notPushed', 'Not pushed {{count}}', {
         count: view.notPushedCount
       }),
       push: true
@@ -298,7 +266,7 @@ export function buildMobileCommitsListItems(view: MobileCommitsView): MobileComm
     items.push({
       kind: 'section',
       key: 'on-origin',
-      title: translate('sourceControl.commits.onOrigin', 'On origin {{count}}', {
+      title: t('sourceControl.commits.onOrigin', 'On origin {{count}}', {
         count: view.onOriginCount
       }),
       push: false

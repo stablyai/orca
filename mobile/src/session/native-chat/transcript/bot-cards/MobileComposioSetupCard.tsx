@@ -11,8 +11,8 @@ import { useBotPanelOpener } from '../../../../bots/bot-item-open'
 import { TextField } from '../../../../components/composer-input/TextField'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { openExternalLink } from '../../../../platform/external-links/external-link'
-import { colors, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
+import { typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 import { scaledType } from '../messages/mobile-native-chat-message-styles'
 import { MobileNativeChatNoticePill } from '../notices/MobileNativeChatNoticePill'
 import { MobileBotCardActions } from './MobileBotCardFrame'
@@ -34,6 +34,8 @@ import {
   MobileGoogleSetupOnComputer,
   MobileGoogleSetupReceipt
 } from './MobileGoogleSetupCardParts'
+import { composerInputStylesSheet } from '../../../../components/composer-input/composer-input-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 
 function KeyCard({
   scope,
@@ -42,6 +44,8 @@ function KeyCard({
   scope: MobileComposioScope
   hostLabel: string
 }): React.JSX.Element {
+  const composerInputStyles = useThemedStyles(composerInputStylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { client, hostKey, card, view, fontScale } = scope
   const [changing, setChanging] = useState(false)
@@ -105,7 +109,7 @@ function KeyCard({
       {asking ? (
         <>
           <TextField
-            label={t('chat.botCards.composio.keyLabel', 'Composio API key')}
+            accessibilityLabel={t('chat.botCards.composio.keyLabel', 'Composio API key')}
             placeholder={t('chat.botCards.composio.keyPlaceholder', 'Paste your key')}
             value={key}
             onChangeText={setKey}
@@ -115,6 +119,7 @@ function KeyCard({
             monospace
             editable={!busy}
             onSubmitEditing={trimmed && !busy ? save : undefined}
+            style={composerInputStyles.filledField}
           />
           <MobileGoogleSetupMuted
             text={
@@ -175,6 +180,7 @@ function KeyCard({
 }
 
 function ReadyCard({ scope }: { scope: MobileComposioScope }): React.JSX.Element | null {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { card, view, botName, fontScale } = scope
   const panel = useBotPanelOpener(card.botId)
@@ -251,6 +257,7 @@ export function MobileComposioSetupCard({
   fallback: string
   fontScale: number
 }): React.JSX.Element | null {
+  const styles = useThemedStyles(stylesSheet)
   const host = useMobileBotCardHost()
   const bot = useHostBotById(card.botId)
   const view = useMobileComposio(host?.client ?? null, host?.hostKey ?? null, card.botId)
@@ -279,6 +286,6 @@ export function MobileComposioSetupCard({
   }
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   fallback: { color: colors.textMuted }
 }))

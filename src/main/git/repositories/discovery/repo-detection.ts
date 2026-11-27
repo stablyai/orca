@@ -1,9 +1,15 @@
 import { existsSync, statSync } from 'node:fs'
 import { basename, dirname, resolve } from 'node:path'
 import { normalizeRuntimePathSeparators } from '../../../../shared/file-access/cross-platform-path'
-import { parseWslUncPath, toWindowsWslPath } from '../../../../shared/file-access/wsl-paths'
+import {
+  isWslUncPath,
+  parseWslUncPath,
+  toWindowsWslPath
+} from '../../../../shared/file-access/wsl-paths'
 import { scanGitMarkerSync } from './repo-git-marker-scan'
 import { resolveRealPathSync } from '../../../../shared/file-access/real-path-sync'
+import { extractExecError } from '../../command-runner/process-capture/exec-error'
+import { isLocalGitRuntimeRouterInstalled } from '../../command-runner/host-routing/local-git-runtime-route'
 import {
   gitRepoOutput,
   runGitRepoCommands,
@@ -17,10 +23,16 @@ type GitRepoProbe = {
   insideWorkTree?: boolean
   gitDir?: string
   commonDir?: string
+  ownershipError?: string
 }
 
-export type GitRepoRegistrationInfo = {
+export type GitRepoAccess = {
   isRepo: boolean
+  /** Git's safe.directory refusal; registering anyway would persist a project with no worktrees. */
+  ownershipError?: string
+}
+
+export type GitRepoRegistrationInfo = GitRepoAccess & {
   rootPath: string
   /** Git toplevel of the main checkout when the path is a linked worktree. */
   mainRepoPath: string | null
@@ -28,23 +40,25 @@ export type GitRepoRegistrationInfo = {
 
 let warnedMarkerFallbackThisSession = false
 
-function* isGitRepoCommands(path: string): GitRepoCommands<boolean> {
+function* inspectGitRepoAccessCommands(path: string): GitRepoCommands<GitRepoAccess> {
   try {
     if (!statSync(path, { throwIfNoEntry: false })?.isDirectory()) {
-      return false
+      return { isRepo: false }
     }
   } catch {
-    return false
+    return { isRepo: false }
   }
 
-  return isGitRepoFromProbe(path, (yield* probeGitRepo(path)).result)
+  const probe = yield* probeGitRepo(path)
+  return { isRepo: isGitRepoFromProbe(path, probe), ownershipError: probe.ownershipError }
 }
 
-function isGitRepoFromProbe(path: string, result: GitRepoProbeResult): boolean {
+function isGitRepoFromProbe(path: string, { result, ownershipError }: GitRepoProbe): boolean {
   if (result === 'repo') {
     return true
   }
-  if (result === 'not-repo') {
+  // Why: the .git marker would accept a repo Git refuses to operate on.
+  if (result === 'not-repo' || ownershipError) {
     return false
   }
 
@@ -84,9 +98,21 @@ function* probeGitRepo(path: string, includeLocation = false): GitRepoCommands<G
         ? yield* readGitRepoDirectories(path)
         : { gitDir, commonDir }
     return { result, insideWorkTree: insideWorkTree === 'true', ...location }
-  } catch {
-    return { result: 'indeterminate' }
+  } catch (error) {
+    return { result: 'indeterminate', ownershipError: readGitOwnershipError(path, error) }
   }
+}
+
+function readGitOwnershipError(path: string, error: unknown): string | undefined {
+  // Why: detection runs host Git, but with WSL hosts the project may run a distro's Git that trusts it.
+  if (isLocalGitRuntimeRouterInstalled() || isWslUncPath(path)) {
+    return undefined
+  }
+  const { stderr } = extractExecError(error)
+  const fatal = /^fatal: /m.exec(stderr)
+  const message = fatal ? stderr.slice(fatal.index + fatal[0].length).trimEnd() : ''
+  // Current "dubious ownership" and 2022 "unsafe repository" refusals both end with this command.
+  return message.includes('git config --global --add safe.directory') ? `Git ${message}` : undefined
 }
 
 function* inspectGitRepoForRegistrationCommands(
@@ -100,7 +126,7 @@ function* inspectGitRepoForRegistrationCommands(
     return { isRepo: false, rootPath: path, mainRepoPath: null }
   }
   const probe = yield* probeGitRepo(path)
-  const isRepo = isGitRepoFromProbe(path, probe.result)
+  const isRepo = isGitRepoFromProbe(path, probe)
   let rootPath = path
   let mainRepoPath: string | null = null
   if (isRepo && probe.insideWorkTree) {
@@ -149,7 +175,7 @@ function* inspectGitRepoForRegistrationCommands(
   } else if (isRepo) {
     rootPath = rootPathFromMarker(path)
   }
-  return { isRepo, rootPath, mainRepoPath }
+  return { isRepo, ownershipError: probe.ownershipError, rootPath, mainRepoPath }
 }
 
 function* getGitRepoRootCommands(path: string): GitRepoCommands<string> {
@@ -237,11 +263,11 @@ export function normalizeGitRepoRootForInputPath(inputPath: string, rootPath: st
 }
 
 export function isGitRepo(path: string): boolean {
-  return runGitRepoCommandsSync(isGitRepoCommands(path))
+  return runGitRepoCommandsSync(inspectGitRepoAccessCommands(path)).isRepo
 }
 
-export function isGitRepoAsync(path: string): Promise<boolean> {
-  return runGitRepoCommands(isGitRepoCommands(path))
+export function inspectGitRepoAccessAsync(path: string): Promise<GitRepoAccess> {
+  return runGitRepoCommands(inspectGitRepoAccessCommands(path))
 }
 
 export function inspectGitRepoForRegistration(path: string): GitRepoRegistrationInfo {
