@@ -56,7 +56,7 @@ export function agentListPreview(
 
 /** The project to name before the workspace; null when the workspace name already is it or a bot names the row. */
 export function agentListProjectName(entry: HomeAgentEntry): string | null {
-  const project = oneLine(entry.repo)
+  const project = entry.repo?.replace(/[\r\n]+/g, ' ').trim()
   return entry.bot || !project || entry.repo === entry.workspaceName ? null : project
 }
 

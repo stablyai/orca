@@ -314,9 +314,9 @@ const MobileAgentListRow = memo(function MobileAgentListRow(props: {
                 <MobileAgentIcon agentId={agent.agentType} size={13} />
               ) : null}
               {project ? (
-                // Its own line so a long repo name truncates without hiding the workspace.
+                // Its own text so a long repo shrinks with the workspace, keeping both ends of its name.
                 <View style={styles.placeLine}>
-                  <Text style={[styles.place, styles.project]} numberOfLines={1}>
+                  <Text style={styles.place} numberOfLines={1} ellipsizeMode="middle">
                     {project}
                   </Text>
                   <Text style={styles.place} numberOfLines={1}>
@@ -374,7 +374,6 @@ const stylesSheet = themedStyleSheet((colors) => ({
   footer: { flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 0 },
   place: { flexShrink: 1, fontSize: 12, color: colors.textMuted },
   placeLine: { flexDirection: 'row', flexShrink: 1, minWidth: 0 },
-  project: { maxWidth: '50%' },
   trailing: { flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: 'auto' },
   workers: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   workersLabel: { fontSize: 12, fontWeight: '500', color: colors.textSecondary },
