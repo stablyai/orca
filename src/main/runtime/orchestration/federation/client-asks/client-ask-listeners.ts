@@ -27,9 +27,21 @@ export type ClientAskListener = {
   seenAt: number
   /** `systemPowerGeneration()` then: a suspend or resume since means it hasn't been seen awake since. */
   powerGeneration: number
+  /** The pull that put this here: only it may end or refresh it, since one session's pulls overlap
+   *  across a reconnect. */
+  pullId: number
 }
 
-export type ClientAskPull = { key: string; session: string; powerGeneration: number }
+export type ClientAskPull = {
+  key: string
+  session: string
+  powerGeneration: number
+  pullId: number
+}
+
+// Each started pull's identity, so an older pull of the same session ending late never touches the
+// state a newer one installed.
+let lastPullId = 0
 
 /** How recently a computer must have pulled for `orca bot list` to show it: over twice the longest
  *  pull's wait, so one pulling steadily is never missed between pulls. */
@@ -123,7 +135,8 @@ export function clientAskPullStarted(
     bots: pull.bots ?? [],
     ...(pull.moreBots ? { moreBots: true as const } : {}),
     seenAt: now,
-    powerGeneration: generation
+    powerGeneration: generation,
+    pullId: (lastPullId += 1)
   })
   const ofDevice = [...listeners].filter(
     ([other, listener]) => other !== key && listener.deviceId === caller.deviceId
@@ -137,10 +150,11 @@ export function clientAskPullStarted(
       listeners.delete(other)
     }
   }
-  return { key, session: pull.session, powerGeneration: generation }
+  return { key, session: pull.session, powerGeneration: generation, pullId: lastPullId }
 }
 
-/** An answered pull keeps its session; one whose caller went away ends it. Either touches only its own session. */
+/** An answered pull keeps its session; one whose caller went away ends it. Either touches only the
+ *  state its own pull installed: a newer pull of the same session (a reconnect) supersedes it. */
 export function clientAskPullEnded(
   owner: ClientAskListenerOwner,
   pull: ClientAskPull,
@@ -150,7 +164,7 @@ export function clientAskPullEnded(
 ): void {
   const listeners = listenersOf(owner)
   const current = listeners.get(pull.key)
-  if (current?.session !== pull.session) {
+  if (current?.session !== pull.session || current.pullId !== pull.pullId) {
     return
   }
   if (outcome === 'caller_gone') {

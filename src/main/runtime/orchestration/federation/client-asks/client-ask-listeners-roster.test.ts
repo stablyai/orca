@@ -11,6 +11,7 @@ import {
   clientAskPullEnded,
   clientAskPullStarted,
   connectedClientRosters,
+  listeningClients,
   requireListeningClient
 } from './client-ask-listeners'
 
@@ -246,11 +247,65 @@ describe('a suspend or resume on this computer', () => {
     pull('device_a', 'install_a', 'Mac A', 2)
     // B's open pull is answered after the resume: that proves nothing about B now.
     clientAskPullEnded(owner, before, 'answered', 1_500, 2)
+    expect(listeningClients(owner, 'install_b')[0]?.seenAt).toBe(1_000)
 
     // Well inside the lease, so only the power events can leave B out.
     expect(connectedClientRosters(owner, 2_000, 2).map((client) => client.onClient)).toEqual([
       'install_a'
     ])
     expect(requireListeningClient(owner, 'install_a', '', 2_000, 2).deviceId).toBe('device_a')
+  })
+
+  const one = (owner: ReturnType<typeof serverOwner>, at: number, generation: number) =>
+    clientAskPullStarted(
+      owner,
+      { deviceId: 'device_a', fingerprint: 'fp_a' },
+      { session: 'same', installationId: 'install_a', name: 'Mac A' },
+      at,
+      generation
+    )!
+
+  it("never lets an older pull of the same session end or refresh the newer one's state", () => {
+    for (const [oldGeneration, newGeneration] of [
+      [0, 2],
+      [2, 2]
+    ] as const) {
+      const owner = serverOwner()
+      // The session's pull open before a reconnect, then the one after it.
+      const older = one(owner, 1_000, oldGeneration)
+      one(owner, 1_200, newGeneration)
+      clientAskPullEnded(owner, older, 'answered', 1_400, newGeneration)
+      expect(listeningClients(owner, 'install_a')[0]?.seenAt).toBe(1_200)
+      clientAskPullEnded(owner, older, 'caller_gone', 1_500, newGeneration)
+
+      expect(connectedClientRosters(owner, 2_000, newGeneration)).toHaveLength(1)
+      expect(requireListeningClient(owner, 'install_a', '', 2_000, newGeneration).deviceId).toBe(
+        'device_a'
+      )
+    }
+  })
+
+  it('counts a computer seen before it again once it pulls after it, and keeps it on an answer', () => {
+    const owner = serverOwner()
+    one(owner, 1_000, 0)
+    expect(connectedClientRosters(owner, 1_100, 2)).toEqual([])
+    const after = one(owner, 1_200, 2)
+    expect(connectedClientRosters(owner, 1_300, 2)).toHaveLength(1)
+    clientAskPullEnded(owner, after, 'answered', 1_400, 2)
+    expect(listeningClients(owner, 'install_a')[0]?.seenAt).toBe(1_400)
+  })
+
+  it('still routes to a lone computer seen before it, though the list leaves it out', () => {
+    const owner = serverOwner()
+    one(owner, 1_000, 0)
+    expect(connectedClientRosters(owner, 2_000, 2)).toEqual([])
+    expect(requireListeningClient(owner, 'install_a', '', 2_000, 2).deviceId).toBe('device_a')
+  })
+
+  it('counts a suspend alone, before any resume', () => {
+    const owner = serverOwner()
+    one(owner, 1_000, 0)
+    expect(connectedClientRosters(owner, 1_100, 0)).toHaveLength(1)
+    expect(connectedClientRosters(owner, 1_100, 1)).toEqual([])
   })
 })
