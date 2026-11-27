@@ -13,8 +13,10 @@ import type {
   BrowserNetworkLogResult
 } from '../../../shared/browser/runtime/runtime-browser-contracts'
 import { BrowserError } from '../browser-error'
-import { parseShellArgs } from '../../../shared/shell-args'
-import { assertAgentBrowserPassthroughStaysOnPage } from './protocol/agent-browser-passthrough-arguments'
+import {
+  assertAgentBrowserPassthroughStaysOnPage,
+  splitAgentBrowserCommandLine
+} from './protocol/agent-browser-passthrough-arguments'
 import {
   resolveCallerPassthroughPaths,
   type AgentBrowserPassthroughCaller
@@ -262,7 +264,7 @@ export class AgentBrowserBridge extends AgentBrowserBridgeInteractionCommands {
     browserPageId?: string,
     caller?: AgentBrowserPassthroughCaller
   ): Promise<unknown> {
-    const parsed = parseShellArgs(command.trim())
+    const parsed = splitAgentBrowserCommandLine(command, { keepEmptyWords: true })
     assertAgentBrowserPassthroughStaysOnPage(parsed)
     const args = resolveCallerPassthroughPaths(parsed, caller)
     return this.enqueueTargetedCommand(
