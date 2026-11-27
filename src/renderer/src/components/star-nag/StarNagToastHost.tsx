@@ -78,11 +78,15 @@ export function StarNagToastHost(): null {
       }
       dismissActiveToast()
       const shown = generation
-      void loadStarNagToast().then(({ default: StarNagToast }) => {
-        if (shown === generation) {
-          showToast(StarNagToast, payload.mode === 'web')
-        }
-      })
+      void loadStarNagToast()
+        .then(({ default: StarNagToast }) => {
+          if (shown === generation) {
+            showToast(StarNagToast, payload.mode === 'web')
+          }
+        })
+        .catch((error: unknown) => {
+          console.warn('[star-nag] toast failed to load:', error)
+        })
     })
     const unsubscribeHide = window.api.starNag.onHide(dismissActiveToast)
     return () => {

@@ -51,35 +51,39 @@ function useHeldUpdateToast(): void {
       return
     }
     let current = true
-    void loadPluginUpdateReviewToast().then(({ default: PluginUpdateReviewToast }) => {
-      // Why shown again on resize: sonner measures a toast only when it is shown, and a stale height
-      // drops the hovered card under the window edge and overlaps the toasts stacked behind it.
-      // Why current: a resize from an older render must not bring back the notices it showed.
-      const show = (): void => {
-        if (!current) {
-          return
-        }
-        toast.custom(
-          () => (
-            <PluginUpdateReviewToast
-              key={pluginUpdateReviewNoticesKey(notices)}
-              notices={notices}
-              onResolved={resolvePluginUpdateReviews}
-              onResize={show}
-            />
-          ),
-          {
-            id: TOAST_ID,
-            duration: Infinity,
-            closeButton: false,
-            unstyled: true,
-            // Why: a swipe or Escape dismisses it too, and those notices are then handled.
-            onDismiss: () => resolvePluginUpdateReviews(notices)
+    void loadPluginUpdateReviewToast()
+      .then(({ default: PluginUpdateReviewToast }) => {
+        // Why shown again on resize: sonner measures a toast only when it is shown, and a stale height
+        // drops the hovered card under the window edge and overlaps the toasts stacked behind it.
+        // Why current: a resize from an older render must not bring back the notices it showed.
+        const show = (): void => {
+          if (!current) {
+            return
           }
-        )
-      }
-      show()
-    })
+          toast.custom(
+            () => (
+              <PluginUpdateReviewToast
+                key={pluginUpdateReviewNoticesKey(notices)}
+                notices={notices}
+                onResolved={resolvePluginUpdateReviews}
+                onResize={show}
+              />
+            ),
+            {
+              id: TOAST_ID,
+              duration: Infinity,
+              closeButton: false,
+              unstyled: true,
+              // Why: a swipe or Escape dismisses it too, and those notices are then handled.
+              onDismiss: () => resolvePluginUpdateReviews(notices)
+            }
+          )
+        }
+        show()
+      })
+      .catch((error: unknown) => {
+        console.warn('[plugins] update review toast failed to load:', error)
+      })
     return () => {
       current = false
     }

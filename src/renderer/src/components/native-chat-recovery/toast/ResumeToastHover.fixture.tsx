@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type { ResumeCandidate, ResumeFailure } from '../tree/native-chat-resume-on-restart-grouping'
@@ -61,12 +62,23 @@ function stubStore(): NativeChatRestartStore {
   }
 }
 
-function Corner(): React.JSX.Element {
+function Corner({ stacked = false }: { stacked?: boolean }): React.JSX.Element {
   const [store] = useState(stubStore)
+  // Issued before the report's chunk resolves, so the report lands in front of it.
+  useEffect(() => {
+    if (!stacked) {
+      return
+    }
+    const id = `fixture-hover-other-${++nextHost}`
+    toast('Copied demo-branch to the clipboard', { id, duration: Infinity })
+    return () => {
+      toast.dismiss(id)
+    }
+  }, [stacked])
   // transform pins the app's fixed-position toaster to this frame instead of the viewport.
   return (
     <div
-      className="relative h-40 overflow-hidden bg-background"
+      className={`relative overflow-hidden bg-background ${stacked ? 'h-56' : 'h-40'}`}
       style={{ transform: 'translateZ(0)' }}
     >
       <div className="absolute inset-x-0 bottom-0 h-10 border-t border-border bg-sidebar" />
@@ -89,20 +101,34 @@ function card(frame: HTMLElement): HTMLElement {
 // 600px is the narrowest main window, where the toaster also switches to its narrow layout.
 export const corner = defineFixture({ width: 600, render: () => <Corner /> })
 
+async function expectStillOnHover(frame: HTMLElement): Promise<void> {
+  // Past the chunk load and the toaster's 400ms enter transition.
+  await wait(800)
+  const before = card(frame).getBoundingClientRect().top
+  card(frame).dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
+  card(frame).dispatchEvent(new MouseEvent('mousemove', { bubbles: true }))
+  await wait(600)
+  const after = card(frame).getBoundingClientRect().top
+  if (Math.abs(after - before) > 0.5) {
+    throw new Error(`Hovering moved the resume report by ${after - before}px`)
+  }
+}
+
 /** Hovering expands the toaster; the report must stay exactly where it was. */
 export const hoverStaysPut = defineFixture({
   width: 600,
   render: () => <Corner />,
+  interact: expectStillOnHover
+})
+
+/** With another toast behind it, hovering fans that one out above; the report still stays put. */
+export const stackedHoverStaysPut = defineFixture({
+  width: 600,
+  render: () => <Corner stacked />,
   interact: async (frame) => {
-    // Past the chunk load and the toaster's 400ms enter transition.
-    await wait(800)
-    const before = card(frame).getBoundingClientRect().top
-    card(frame).dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
-    card(frame).dispatchEvent(new MouseEvent('mousemove', { bubbles: true }))
-    await wait(600)
-    const after = card(frame).getBoundingClientRect().top
-    if (Math.abs(after - before) > 0.5) {
-      throw new Error(`Hovering moved the resume report by ${after - before}px`)
+    await expectStillOnHover(frame)
+    if (frame.querySelectorAll('[data-sonner-toast]').length !== 2) {
+      throw new Error('Expected the report stacked in front of one other toast')
     }
   }
 })

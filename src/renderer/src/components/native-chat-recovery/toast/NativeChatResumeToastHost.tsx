@@ -67,8 +67,8 @@ export function NativeChatResumeToastHost({
         store.releaseFinishedNativeChatRestartRun()
       }
     }
-    void loadConnectedNativeChatResumeToast().then(
-      ({ default: ConnectedNativeChatResumeToast }) => {
+    void loadConnectedNativeChatResumeToast()
+      .then(({ default: ConnectedNativeChatResumeToast }) => {
         if (!owned) {
           return
         }
@@ -81,8 +81,14 @@ export function NativeChatResumeToastHost({
           unstyled: true,
           onDismiss: snooze
         })
-      }
-    )
+      })
+      .catch((error: unknown) => {
+        console.warn('[native-chat-recovery] resume report failed to load:', error)
+        // Release only the open request, so the status bar can ask again; an unseen run stays for it.
+        if (owned) {
+          store.consumeNativeChatResumeOnRestartDialogRequest()
+        }
+      })
     return () => {
       owned = false
       toast.dismiss(id)
