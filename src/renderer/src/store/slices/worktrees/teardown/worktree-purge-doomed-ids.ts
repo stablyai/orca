@@ -23,6 +23,10 @@ export function collectWorktreePurgeDoomedIds(
   const fileIds: string[] = []
   for (const id of worktreeIdSet) {
     tabs.push(...(s.tabsByWorktree[id] ?? []))
+    // Why unifiedTabs too: structured chat tabs live only in unifiedTabsByWorktree, so their pane keys would survive otherwise.
+    for (const tab of s.unifiedTabsByWorktree?.[id] ?? []) {
+      tabs.push({ id: tab.id, ptyId: null })
+    }
     for (const workspace of s.browserTabsByWorktree[id] ?? []) {
       browserWorkspaceIds.push(workspace.id)
     }

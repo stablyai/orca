@@ -25,6 +25,21 @@ export function createWorktreePurgeOmitters(
       obj,
       [...worktreeIdSet].map((id) => (isWorkspaceKey(id) ? id : worktreeWorkspaceKey(id)))
     )
+  const omitWorkspaceSessionKeyByWorktree = <T>(
+    obj: Record<string, T> | undefined
+  ): Record<string, T> => {
+    if (!obj) {
+      return {}
+    }
+    const keys: string[] = []
+    for (const id of worktreeIdSet) {
+      keys.push(id)
+      if (!isWorkspaceKey(id)) {
+        keys.push(worktreeWorkspaceKey(id))
+      }
+    }
+    return omitRecordKeys(obj, keys)
+  }
   const pruneRightSidebarTabByWorktree = (): AppState['rightSidebarTabByWorktree'] => {
     const omitted = omitByWorktree(s.rightSidebarTabByWorktree)
     let changed = omitted !== s.rightSidebarTabByWorktree
@@ -74,6 +89,7 @@ export function createWorktreePurgeOmitters(
   return {
     omitByWorktree,
     omitWorkspaceLineageByWorktree,
+    omitWorkspaceSessionKeyByWorktree,
     pruneRightSidebarTabByWorktree,
     omitByTabId,
     omitByPtyId,

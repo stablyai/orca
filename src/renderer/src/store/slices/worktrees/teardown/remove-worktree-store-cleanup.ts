@@ -52,6 +52,16 @@ export function applyRemoveWorktreeSuccessState(
       ? s.openFiles.some((f) => f.id === s.activeFileId && f.worktreeId === worktreeId)
       : false
     const removedActiveWorktree = s.activeWorktreeId === worktreeId
+    const doomedTabIds = new Set(tabIds)
+    for (const tab of s.unifiedTabsByWorktree?.[worktreeId] ?? []) {
+      doomedTabIds.add(tab.id)
+    }
+    const sleptPaneKeysToOmit = s.structuredChatSleptAtByPaneKey
+      ? Object.keys(s.structuredChatSleptAtByPaneKey).filter((paneKey) => {
+          const sep = paneKey.indexOf(':')
+          return sep > 0 && doomedTabIds.has(paneKey.slice(0, sep))
+        })
+      : []
     return {
       editorBufferKeepRequest,
       ...removeWorkspaceUnreadState(s, [{ id: worktreeId }]),
@@ -65,6 +75,18 @@ export function applyRemoveWorktreeSuccessState(
       workspaceLineageByChildKey: omitRecordKeys(s.workspaceLineageByChildKey, [
         worktreeWorkspaceKey(worktreeId)
       ]),
+      contestedPrimaryHostBySessionKey: omitRecordKeys(s.contestedPrimaryHostBySessionKey, [
+        worktreeId,
+        worktreeWorkspaceKey(worktreeId)
+      ]),
+      ...(s.structuredChatSleptAtByPaneKey
+        ? {
+            structuredChatSleptAtByPaneKey: omitRecordKeys(
+              s.structuredChatSleptAtByPaneKey,
+              sleptPaneKeysToOmit
+            )
+          }
+        : {}),
       runtimePaneTitlesByTabId: omitByTabId(s.runtimePaneTitlesByTabId),
       automaticAgentResumeClaimsByTabId: omitByTabId(s.automaticAgentResumeClaimsByTabId),
       nativeChatLaunchPromptByTabId: omitByTabId(s.nativeChatLaunchPromptByTabId),
