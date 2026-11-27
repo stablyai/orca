@@ -34,7 +34,7 @@ const relayed = (server: BotToolServer): server is BotToolServer & { credential:
 
 /** A session's servers ready for its CLI; only `SessionMcpTools.for` makes one, so no saved value slips through. */
 export class SessionMcpTools {
-  static readonly none = new SessionMcpTools([], {}, {}, false, new Set())
+  static readonly none = new SessionMcpTools([], {}, {}, false, new Set(), null)
   // A private member makes the type nominal: a plain object with the same fields isn't one.
   declare private readonly nominal: true
 
@@ -47,7 +47,12 @@ export class SessionMcpTools {
     /** Some server goes through the relay, so the CLI must reach loopback directly. */
     readonly relayed: boolean,
     /** Which of `servers` came from the host's list, which the `/mcp` tray shows as Orca's. */
-    readonly hostNames: ReadonlySet<string>
+    readonly hostNames: ReadonlySet<string>,
+    /**
+     * The daemon start whose tool relay front the servers' address is: its token is kept at rest,
+     * so the agent may outlive this app on that start. Null: the address and token end with the app.
+     */
+    readonly front: string | null
   ) {}
 
   /**
@@ -59,7 +64,13 @@ export class SessionMcpTools {
    */
   static async for(
     relay: Pick<BotToolRelay, 'grant'>,
-    launch: { bot: SessionMcpBot; agent: string; terminal?: boolean },
+    launch: {
+      bot: SessionMcpBot
+      agent: string
+      terminal?: boolean
+      /** A chat's launch (its session id), whose agent may outlive the app on a daemon front. */
+      keepFor?: string
+    },
     sources: { own?: readonly BotToolServer[]; host?: SessionHostMcpServers | undefined }
   ): Promise<SessionMcpTools> {
     const own = sources.own ?? []
@@ -76,16 +87,24 @@ export class SessionMcpTools {
     if (!launch.bot && !hostRelayed) {
       return host.length === 0
         ? SessionMcpTools.none
-        : new SessionMcpTools(host, {}, {}, false, new Set(host.map((server) => server.name)))
+        : new SessionMcpTools(
+            host,
+            {},
+            {},
+            false,
+            new Set(host.map((server) => server.name)),
+            null
+          )
     }
     // A bot that takes the host list keeps its reach to it even while none of its servers is relayed.
     const folders: RelayFolders = {
       ...(launch.bot ? { bot: launch.bot.folder } : {}),
       ...(sources.host ? { host: sources.host.folder } : {})
     }
-    const { origin, token } = await relay.grant(
+    const { origin, token, front } = await relay.grant(
       launch.bot?.botId ?? MCP_HOST_LIST_RELAY_OWNER,
-      folders
+      folders,
+      launch.keepFor === undefined ? {} : { keepFor: launch.keepFor }
     )
     const tokenName = launch.bot ? BOT_TOOLS_TOKEN_ENV : MCP_TOKEN_ENV
     // Claude and Pi expand `${VAR}` in a server's headers, so their config names only the variable.
@@ -116,20 +135,24 @@ export class SessionMcpTools {
       commandsOnly ? {} : tokenEnv,
       commandsOnly ? tokenEnv : {},
       own.some(relayed) || hostRelayed,
-      new Set(host.map((server) => server.name))
+      new Set(host.map((server) => server.name)),
+      front ?? null
     )
   }
 
   /**
    * The launch carries a token this run of Orca's tool relay issued (a bot's, or a delivered server
-   * addressed through the relay), which ends with this app. Read after `beside`: a relayed server
-   * the agent's own one replaced reaches the CLI with no token.
+   * addressed through the relay), which ends with this app; one kept at rest behind a daemon front
+   * doesn't. Read after `beside`: a relayed server the agent's own one replaced reaches the CLI with
+   * no token.
    */
   get appBound(): boolean {
     return (
+      this.front === null &&
+      (
       Object.keys(this.env).length > 0 ||
       Object.keys(this.commandEnv).length > 0 ||
-      this.servers.some((server) => 'url' in server && server.headers?.authorization !== undefined)
+      this.servers.some((server) => 'url' in server && server.headers?.authorization !== undefined))
     )
   }
 
@@ -149,7 +172,8 @@ export class SessionMcpTools {
         this.env,
         this.commandEnv,
         this.relayed,
-        new Set([...this.hostNames].filter((name) => !skipped.has(name)))
+        new Set([...this.hostNames].filter((name) => !skipped.has(name))),
+        this.front
       ),
       skipped: [...skipped]
     }

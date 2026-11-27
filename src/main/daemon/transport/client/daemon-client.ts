@@ -284,6 +284,31 @@ export class DaemonClient {
     })
   }
 
+  /**
+   * Its own authenticated connection for one held tool relay front connection; what the daemon
+   * splices in follows the hello, so the socket comes back paused with any bytes already read.
+   */
+  async openToolRelayConnection(
+    frontConnectionId: string
+  ): Promise<{ socket: Socket; remainder: Buffer }> {
+    const socket = await connectDaemonSocket(this.socketPath, CONNECT_TIMEOUT_MS)
+    try {
+      const hello = await sendDaemonHello({
+        socket,
+        token: readDaemonClientToken(this.tokenPath),
+        protocolVersion: this.protocolVersion,
+        clientId: this.clientId,
+        role: 'tool-relay',
+        frontConnectionId,
+        timeoutMs: CONNECT_TIMEOUT_MS
+      })
+      return { socket, remainder: hello.remainder }
+    } catch (error) {
+      socket.destroy()
+      throw error
+    }
+  }
+
   onEvent(listener: (event: unknown) => void): () => void {
     return this.eventListeners.add(listener)
   }

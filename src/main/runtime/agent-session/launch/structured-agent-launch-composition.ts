@@ -2,6 +2,7 @@
 
 import { toolFreeSession, type ReadOnlySessionMode } from '../../../bots/bot-look-around-policy'
 import { SessionMcpTools } from '../../../mcp-servers/session-mcp-tools'
+import { pinProviderRelayFront } from '../../../provider-relay/provider-relay-front-pins'
 import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
@@ -219,11 +220,15 @@ async function composedPart<L>(
             : linkedSkills)())
     })(),
     // A read-only session gets none: Look around keeps every tool off.
-    toolServers: once(async () =>
-      readOnly || !sources.resolveToolServers
-        ? SessionMcpTools.none
-        : sources.resolveToolServers(record, await launchDirectory())
-    ),
+    toolServers: once(async () => {
+      const tools =
+        readOnly || !sources.resolveToolServers
+          ? SessionMcpTools.none
+          : await sources.resolveToolServers(record, await launchDirectory())
+      // An agent given a daemon start's tool front may only run under that start.
+      pinProviderRelayFront(record.sessionId, tools.front)
+      return tools
+    }),
     linkedSkills: once(async () =>
       toolFree
         ? NO_LINKED_SKILLS
@@ -245,6 +250,8 @@ async function composedPart<L>(
     readOnly,
     toolFree
   }
+  // A launch that resolves no tools leaves no earlier launch's pin behind.
+  pinProviderRelayFront(record.sessionId, null)
   await sources.prepareLaunch?.(record, await launchDirectory())
   const composed = await part(basis, identity)
   return {

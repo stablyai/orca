@@ -6,6 +6,7 @@ import {
 } from '../../../provider-relay/app-provider-relays'
 import { watchProviderRelayInstance } from '../../../provider-relay/provider-relay-instance-signals'
 import { agentSessionRunPlacement } from '../../../../shared/agent-session/lifecycle/agent-session-run-placement'
+import { installKeptToolCallerRuns } from '../../../bots/tool-relay/kept-tool-grants'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 import type { StructuredAgentSessionHostSession } from '../host/structured-agent-session-host-types'
 
@@ -73,6 +74,11 @@ export class StructuredAgentSessionKeptOpens {
         this.release(chatKey)
       }
       return verdict
+    })
+    // A kept shared-tool caller is restored only while its chat's placement still names its run.
+    installKeptToolCallerRuns((chatKey) => {
+      const placement = agentSessionRunPlacement(input.record(chatKey) ?? {})
+      return placement?.kind === 'relayed' ? placement.fence : null
     })
   }
 

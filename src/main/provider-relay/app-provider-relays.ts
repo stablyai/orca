@@ -52,6 +52,8 @@ import { RelayedProviderChild } from './relayed-provider-child'
 import { daemonReadsFolder, providerRelaySpawnSpec } from './provider-relay-spawn-request'
 import { ProviderRelayCarriedWork } from './provider-relay-carried-work'
 import { relayedManagedProcess } from './relayed-managed-process'
+import { ProviderRelayFrontMovedError, providerRelayFrontPin } from './provider-relay-front-pins'
+export { ProviderRelayFrontMovedError, pinProviderRelayFront } from './provider-relay-front-pins'
 
 export type { ProviderRelayWorkMarkers } from './provider-relay-agent-markers'
 
@@ -264,6 +266,12 @@ export async function launchRelayedProviderProcess(
     return kept
   }
   const client = await connected(await installed.current().catch(() => null))
+  // An agent holding one start's tool front never runs under another start.
+  const front = providerRelayFrontPin(relay.chatKey)
+  const instance = client?.getDaemonIdentity()?.launchNonce
+  if (front !== null && instance !== undefined && instance !== front) {
+    throw new ProviderRelayFrontMovedError(relay.chatKey)
+  }
   const spec = client ? providerRelaySpawnSpec(launch, client, installed.appVersion, relay) : null
   // Without kept state a reattach would have nothing to restore, so such a launch goes as today.
   const keeps = !relay.keep || client?.getDaemonIdentity()?.providerRelayKeep === true
@@ -281,6 +289,10 @@ export async function launchRelayedProviderProcess(
   }
   if (!('relayId' in spawned)) {
     return null
+  }
+  if (front !== null && spawned.daemonInstance !== front) {
+    await channel.close(spawned.relayId).catch(() => {})
+    throw new ProviderRelayFrontMovedError(relay.chatKey)
   }
   const child = relayedChild(channel, spawned.relayId, spawned.pid, relay)
   try {

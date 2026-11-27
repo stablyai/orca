@@ -39,6 +39,7 @@ type DaemonClientConnectionOptions = {
     providerRelay?: true
     providerRelayKeep?: true
     providerRelayAcks?: true
+    toolRelayFront?: true
   }
   log: DaemonFileLog
   streamDataBatcher: DaemonStreamDataBatcher
@@ -51,6 +52,8 @@ type DaemonClientConnectionOptions = {
   onControlReplaced: (clientId: string) => void
   onClientDisconnected: (clientId: string) => void
   onStreamDisconnected: (clientId: string) => void
+  /** An authenticated `tool-relay` connection, handed over with no listeners and nothing read past its hello. */
+  onToolRelaySocket?: (socket: Socket, clientId: string, frontConnectionId: string) => void
 }
 
 export class DaemonClientConnections {
@@ -144,7 +147,11 @@ export class DaemonClientConnections {
       socket.destroy()
       return
     }
-    if (hello.role !== 'control' && hello.role !== 'stream') {
+    const toolRelay =
+      hello.role === 'tool-relay' &&
+      this.options.onToolRelaySocket !== undefined &&
+      typeof hello.frontConnectionId === 'string'
+    if (hello.role !== 'control' && hello.role !== 'stream' && !toolRelay) {
       this.options.log.log('client-hello-rejected', {
         reason: 'invalid-role',
         role: hello.role
@@ -178,6 +185,7 @@ export class DaemonClientConnections {
                 ...(identity.providerRelay ? { providerRelay: true } : {}),
                 ...(identity.providerRelayKeep ? { providerRelayKeep: true } : {}),
                 ...(identity.providerRelayAcks ? { providerRelayAcks: true } : {}),
+                ...(identity.toolRelayFront ? { toolRelayFront: true } : {}),
                 pid: process.pid,
                 startedAtMs: identity.startedAtMs,
                 launchNonce: identity.launchNonce,
@@ -192,6 +200,13 @@ export class DaemonClientConnections {
 
     if (hello.role === 'control') {
       this.installControlSocket(socket, hello.clientId)
+      return
+    }
+    if (toolRelay && hello.frontConnectionId !== undefined) {
+      // Its own connection, not a client's: it never counts toward the client pair.
+      socket.removeAllListeners('data')
+      socket.pause()
+      this.options.onToolRelaySocket?.(socket, hello.clientId, hello.frontConnectionId)
       return
     }
     if (hello.role === 'stream') {

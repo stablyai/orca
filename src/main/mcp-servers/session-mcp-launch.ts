@@ -25,7 +25,8 @@ import { SessionMcpTools, type SessionHostMcpServers } from './session-mcp-tools
 // it is restarts (its digest names the grant, never a token refresh or a lost sign-in).
 onMcpHostListSignInChanged(() => advanceBotToolsEpoch(mcpHostListFolder()))
 
-type LaunchRecord = { provider: string; location: { workspaceId: string } }
+/** `sessionId`: a chat's, whose agent may keep its tools across a restart (absent: a check's). */
+type LaunchRecord = { sessionId?: string; provider: string; location: { workspaceId: string } }
 type HostWorkspace = { key: string | null } | 'any'
 
 /** What a launch read of the host list: the server set this session resolved, and how to read it again. */
@@ -101,7 +102,11 @@ export async function sessionMcpLaunchTools(
     const host = read?.host ?? botHostMcpAccess(bot.hostMcpServers === true, deps.hostFolder)
     const tools = await SessionMcpTools.for(
       relay,
-      { bot: { botId: bot.id, folder: launchDirectory }, agent: record.provider },
+      {
+        bot: { botId: bot.id, folder: launchDirectory },
+        agent: record.provider,
+        ...(record.sessionId ? { keepFor: record.sessionId } : {})
+      },
       { own: own.servers, ...(host ? { host } : {}) }
     )
     return { tools, launched: { bot: own.launched, host: read?.launched ?? null } }
@@ -114,7 +119,15 @@ export async function sessionMcpLaunchTools(
   // Recorded even with no server on, so turning one on reaches the session's next turn.
   const tools =
     read.host.servers.length > 0
-      ? await SessionMcpTools.for(relay, { bot: null, agent: record.provider }, { host: read.host })
+      ? await SessionMcpTools.for(
+          relay,
+          {
+            bot: null,
+            agent: record.provider,
+            ...(record.sessionId ? { keepFor: record.sessionId } : {})
+          },
+          { host: read.host }
+        )
       : SessionMcpTools.none
   return { tools, launched: { bot: null, host: read.launched } }
 }

@@ -2,6 +2,7 @@
 // token, and Orca adds the tool's saved headers or its own sign-in's token and streams it to the
 // real server and back. A host list command server Orca runs once is reached through it too.
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
+import type { Socket } from 'node:net'
 import { resolve } from 'node:path'
 import { BoundedMap } from '../../../shared/collections/bounded-map'
 import { COMPOSIO_HEADER_SOURCE } from '../../../shared/composio/composio-apps'
@@ -21,13 +22,22 @@ import {
 import { RelayAdmission, type RelayCall } from './bot-tool-relay-admission'
 import { composioHeaderSource } from './bot-tool-relay-composio'
 import {
+  isStoredRelayGrant,
   MCP_HOST_LIST_RELAY_OWNER,
   RelayGrants,
   relayToolPath,
   type RelayFolders
 } from './bot-tool-relay-grants'
+import { ToolRelayFronts } from './bot-tool-relay-fronts'
+import { RelaySealedFile } from './relay-sealed-file'
+import { keptGrantOwnerFolders, keptToolGrantsConfig, keptToolGrantsPath } from './kept-tool-grants'
+import { forgetKeptSharedToolCallers } from '../../runtime/agent-session/environment/shared-tool-caller-store'
 import { header, readBody, RelayRefusal } from './bot-tool-relay-requests'
-import { answerSignInNeeded, answerUnavailable } from './bot-tool-relay-sign-in-answer'
+import {
+  answerCredentialsLocked,
+  answerSignInNeeded,
+  answerUnavailable
+} from './bot-tool-relay-sign-in-answer'
 import {
   sendUpstream,
   streamUpstreamResponse,
@@ -57,6 +67,8 @@ export class BotToolRelay {
   private readonly sessions = new BoundedMap<string, string>({ maxEntries: MAX_TRACKED_SESSIONS })
   private readonly problems = new BoundedMap<string, string>({ maxEntries: MAX_TRACKED_PROBLEMS })
   private readonly admission = new RelayAdmission()
+  /** The daemon-held addresses agents kept across a restart reach this relay by. */
+  readonly fronts = new ToolRelayFronts((socket) => this.accept(socket))
 
   constructor(
     private readonly fetchUpstream: RelayFetch,
@@ -69,9 +81,51 @@ export class BotToolRelay {
    * The relay's address and the owner's token for this run of Orca; starts listening on first use.
    * The token reaches only `folders`, as the owner's latest launch named them.
    */
-  async grant(owner: string, folders: RelayFolders): Promise<{ origin: string; token: string }> {
+  async grant(
+    owner: string,
+    folders: RelayFolders,
+    /** A chat's launch, whose agent may outlive this app: it gets a daemon-held front when it can. */
+    options: { keepFor?: string } = {}
+  ): Promise<RelayGrantAnswer> {
+    await this.loaded()
     const port = await this.listen()
-    return { origin: `http://127.0.0.1:${port}`, token: this.grants.grant(owner, folders) }
+    const token = this.grants.grant(owner, folders)
+    const front = options.keepFor === undefined ? null : await this.fronts.current(options.keepFor)
+    if (front && (await this.grants.keep(owner))) {
+      return { origin: front.origin, token, front: front.daemonInstance }
+    }
+    return { origin: `http://127.0.0.1:${port}`, token }
+  }
+
+  /** Resolves once the kept grants are open (none when nothing is kept). */
+  keptGrantsLoaded(): Promise<void> {
+    return this.loaded()
+  }
+
+  /** Opens the kept grants, then answers every daemon start's front. */
+  async serveFronts(): Promise<void> {
+    await this.loaded()
+    await this.fronts.serveAll()
+  }
+
+  /**
+   * The kept grants, opened once before any is used. Kept only where desktop startup configured
+   * them (macOS and Linux); anywhere else every grant ends with the app, as before.
+   */
+  private loaded(): Promise<void> {
+    const config = keptToolGrantsConfig()
+    if (config && !this.grants.configured) {
+      this.grants.configure(
+        new RelaySealedFile(keptToolGrantsPath(config.directory), isStoredRelayGrant),
+        keptGrantOwnerFolders(config)
+      )
+    }
+    return this.grants.load()
+  }
+
+  /** Whether `owner`'s grant is kept in the file (opened or still locked). */
+  keeps(owner: string): boolean {
+    return this.grants.holds(owner)
   }
 
   /** The bot a token was granted to in this run of Orca; null once revoked or from another run. */
@@ -80,10 +134,18 @@ export class BotToolRelay {
     return owner === MCP_HOST_LIST_RELAY_OWNER ? null : owner
   }
 
-  /** A deleted bot's token stops working at once, and its open calls are cut. */
-  revoke(botId: string): void {
-    this.grants.revoke(botId)
-    this.admission.abortWhere((call) => call.botId === botId, CREDENTIAL_ENDED)
+  /**
+   * A deleted bot's token stops working, and its open calls are cut. Its kept chats' caller entries
+   * go first, then its own entry, each durably, before the token ends.
+   */
+  async revoke(botId: string): Promise<void> {
+    try {
+      await this.loaded().catch(() => {})
+      await forgetKeptSharedToolCallers(botId)
+      await this.grants.revoke(botId)
+    } finally {
+      this.admission.abortWhere((call) => call.botId === botId, CREDENTIAL_ENDED)
+    }
   }
 
   /** Why the tool's server last refused, for the Tools row; null when it hasn't. */
@@ -93,6 +155,7 @@ export class BotToolRelay {
 
   /** Stops listening, drops open calls, and forgets every token, session and problem. */
   close(): void {
+    this.fronts.close()
     this.processes()?.close()
     this.admission.abortWhere(() => true, CREDENTIAL_ENDED)
     this.stopListeningForEnds?.()
@@ -105,6 +168,20 @@ export class BotToolRelay {
     this.grants.clear()
     this.sessions.clear()
     this.problems.clear()
+  }
+
+  /** A front's connection, opened by this app to its daemon: served as one made to this server. */
+  private accept(socket: Socket): void {
+    this.listen().then(
+      () => {
+        if (this.server) {
+          this.server.emit('connection', socket)
+        } else {
+          socket.destroy()
+        }
+      },
+      () => socket.destroy()
+    )
   }
 
   private listen(): Promise<number> {
@@ -147,13 +224,8 @@ export class BotToolRelay {
     let call: RelayCall | null = null
     let label = ''
     try {
-      const port = this.port
-      const host = req.headers.host
       // A browser page can reach loopback too; Orca's agents send no Origin and name this address.
-      if (
-        req.headers.origin !== undefined ||
-        (host !== `127.0.0.1:${port}` && host !== `localhost:${port}`)
-      ) {
+      if (req.headers.origin !== undefined || !this.answersHost(req.headers.host)) {
         throw new RelayRefusal(403, 'Not allowed.')
       }
       const match = relayToolPath(req.url ?? '')
@@ -164,8 +236,14 @@ export class BotToolRelay {
       if (!['POST', 'GET', 'DELETE'].includes(method)) {
         throw new RelayRefusal(405, 'Method not allowed.')
       }
+      await this.loaded()
       const auth = /^Bearer (\S+)$/.exec(req.headers.authorization ?? '')
-      const grant = auth?.[1] ? this.grants.of(auth[1]) : undefined
+      const known = auth?.[1] ? (this.grants.of(auth[1]) ?? this.grants.unlock(auth[1])) : undefined
+      if (known === 'locked') {
+        await answerCredentialsLocked(req, res)
+        return
+      }
+      const grant = known
       if (!grant) {
         throw new RelayRefusal(401, 'This tool needs the bot’s Orca token.')
       }
@@ -208,6 +286,13 @@ export class BotToolRelay {
         this.admission.release(call)
       }
     }
+  }
+
+  /** This server's own address, or a daemon-held front it answers for. */
+  private answersHost(host: string | undefined): boolean {
+    const match = /^(?:127\.0\.0\.1|localhost):(\d+)$/.exec(host ?? '')
+    const port = match ? Number(match[1]) : null
+    return port !== null && (port === this.port || this.fronts.serves(port))
   }
 
   private fail(
@@ -339,6 +424,9 @@ export class BotToolRelay {
     await streamUpstreamResponse(res, upstream, signal)
   }
 }
+
+/** A grant's address and token; `front` names the daemon start whose front the origin is. */
+export type RelayGrantAnswer = { origin: string; token: string; front?: string }
 
 /** The relay for this process; upstream calls follow Orca's proxy settings. */
 export const botToolRelay = new BotToolRelay(

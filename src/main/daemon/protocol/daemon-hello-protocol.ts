@@ -3,7 +3,9 @@ export type HelloMessage = {
   version: number
   token: string
   clientId: string
-  role: 'control' | 'stream'
+  /** `tool-relay`: the app's connection for one held tool relay front connection (`frontConnectionId`). */
+  role: 'control' | 'stream' | 'tool-relay'
+  frontConnectionId?: string
   /** Stream framing the client can read. Daemons that predate it ignore it and stay on NDJSON. */
   streamFraming?: string
 }
@@ -23,6 +25,8 @@ export type DaemonEndpointIdentity = {
   providerRelayKeep?: true
   /** Takes several relays' acks in one `relayAcks`; without it the app sends `relayAck` each. */
   providerRelayAcks?: true
+  /** Holds a loopback tool relay front for the agents it keeps (`toolRelayFrontOpen`). */
+  toolRelayFront?: true
 }
 
 export type HelloResponse = {

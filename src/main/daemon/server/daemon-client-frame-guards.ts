@@ -14,7 +14,8 @@ export function isHelloFrame(value: unknown): value is HelloMessage {
     typeof value.version === 'number' &&
     typeof value.token === 'string' &&
     typeof value.clientId === 'string' &&
-    typeof value.role === 'string'
+    typeof value.role === 'string' &&
+    (value.frontConnectionId === undefined || typeof value.frontConnectionId === 'string')
   )
 }
 

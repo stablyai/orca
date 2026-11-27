@@ -12,6 +12,8 @@ import { DaemonRequestRouter } from './daemon-request-router'
 import { answerProviderRequest } from './daemon-provider-requests'
 import type { ProviderRelayHost } from '../provider-relay/provider-relay-host'
 import { answerProviderRelayRequest } from '../provider-relay/provider-relay-requests'
+import { DaemonToolRelayFront } from '../tool-relay-front/daemon-tool-relay-front'
+import { answerToolRelayFrontRequest } from '../tool-relay-front/daemon-tool-relay-front-requests'
 import { createDaemonProviderRelays } from '../provider-relay/daemon-provider-relays'
 import { DaemonServerLifecycle } from './daemon-server-lifecycle'
 import type { DaemonServerOptions } from './daemon-server-options'
@@ -55,6 +57,9 @@ export class DaemonServer {
   private readonly requestRouter: DaemonRequestRouter
   private readonly providerWork: Parameters<typeof answerProviderRequest>[3]
   private readonly relays: ProviderRelayHost
+  /** Null where agents aren't relayed (Windows, or a daemon without an identity). */
+  private readonly toolRelayFront: DaemonToolRelayFront | null
+  private readonly daemonInstance: string | null
   private stopStreamBacklogProbe: () => void = () => {}
   private readonly terminalPolicy: HostTerminalPolicy
   private terminalPolicyNonce = ''
@@ -121,6 +126,9 @@ export class DaemonServer {
       log: this.log
     })
     this.relays = relays.relays
+    this.daemonInstance = launchNonce
+    this.toolRelayFront =
+      relays.identity.providerRelay && launchNonce ? new DaemonToolRelayFront() : null
     this.connections = new DaemonClientConnections({
       token,
       protocolVersion,
@@ -131,7 +139,8 @@ export class DaemonServer {
         appVersion: options.appVersion ?? null,
         spawnerExecPath: options.spawnerExecPath ?? null,
         ...(this.providerWork.providerSpawn ? { providerSpawn: true as const } : {}),
-        ...relays.identity
+        ...relays.identity,
+        ...(this.toolRelayFront ? { toolRelayFront: true as const } : {})
       },
       log: this.log,
       streamDataBatcher: this.streamDataBatcher,
@@ -162,12 +171,19 @@ export class DaemonServer {
         this.historySeedTransfers.clearOwner(clientId)
         this.streamDataBatcher.clear(clientId)
         this.attachments.detachClientSessions(clientId)
+        this.toolRelayFront?.clientGone(clientId)
       },
       onStreamDisconnected: (clientId) => {
         this.preparations.cancelForClient(clientId)
         this.streamDataBatcher.clear(clientId)
         this.attachments.detachClientSessions(clientId)
-      }
+      },
+      ...(this.toolRelayFront
+        ? {
+            onToolRelaySocket: (socket: Socket, clientId: string, frontConnectionId: string) =>
+              this.toolRelayFront?.splice(frontConnectionId, socket, clientId)
+          }
+        : {})
     })
     this.endpoint = new DaemonEndpointLifecycle({
       socketPath: options.socketPath,
@@ -272,6 +288,7 @@ export class DaemonServer {
     this.stopStreamBacklogProbe()
     this.transientFactRelay.dispose()
     this.preparations.cancelAll()
+    this.toolRelayFront?.dispose()
     // Both finish before shutdown goes on, even when one of them fails.
     const disposed = await Promise.allSettled([this.host.dispose(), this.relays.dispose()])
     const failure = disposed.find((result) => result.status === 'rejected')
@@ -307,6 +324,10 @@ export class DaemonServer {
         ) ??
         answerProviderRequest(request, this.connections.get(clientId), socket, this.providerWork) ??
         answerProviderRelayRequest(request, this.connections.get(clientId), socket, this.relays) ??
+        answerToolRelayFrontRequest(request, this.connections.get(clientId), socket, {
+          front: this.toolRelayFront,
+          daemonInstance: this.daemonInstance
+        }) ??
         answerAutomaticWorkRequest(request, this.automaticWork, this.endpoint) ??
         this.requestRouter.route(clientId, request),
       () => this.lifecycle.startPendingShutdownReply(clientId, request.id)
