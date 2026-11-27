@@ -191,8 +191,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithBots {
       subscriptions: this.subscriptions,
       mobileNotifications: this.mobileNotifications,
       accounts: this.accounts,
-      mobileSpeech: this.mobileSpeech,
-      mobileDictation: this.mobileDictation,
+      mobileSpeechOwners: this.mobileSpeechOwners,
       browserDrivers: this.browserDrivers,
       messageWaiters: this.messageWaiters
     })
