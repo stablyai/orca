@@ -1,266 +1,129 @@
-import type { ReactNode } from 'react'
 import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tasks-connection-presentation'
-import { translate as t } from '../../i18n/mobile-i18n'
-import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
-import { openExternalLink } from '../../platform/external-links/external-link'
-import { Text, View } from 'react-native'
-import type { PickerOption } from '../../components/sheets/PickerModal'
-import { styles } from '../mobile-tasks-legacy-styles'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import {
-  LINEAR_GROUP_OPTIONS,
-  LINEAR_ORDER_OPTIONS,
-  LINEAR_VIEW_OPTIONS,
-  PROJECT_VIEW_DEFAULT_SORT,
-  SORT_OPTIONS
-} from '../task-list/mobile-tasks-options'
-import { cycleMobileTasksGitHubProjectSort } from '../project-board/mobile-tasks-github-project-pickers'
+  BottomDrawer,
+  OptionPager,
+  useOptionPager,
+  type OptionPagerControls
+} from '../../components/bottom-drawer/BottomDrawer'
+import { useBottomDrawerModalHostBackClaim } from '../../components/bottom-drawer/bottom-drawer-modal-host-scope'
+import { useBackClaim } from '../../navigation/use-back-claim'
+import { MobileSegmentedControl } from '../../components/controls/MobileSegmentedControl'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
-import { ListGroup, SectionHeader, ListRow } from '../../components/list/ListGroup'
+import { spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet } from '../../theme/themed-styles'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { GITHUB_KIND_OPTIONS } from '../task-list/mobile-tasks-options'
+import {
+  mobileTasksFilterCount,
+  resetMobileTasksFilters,
+  selectMobileTasksGitHubKind,
+  selectMobileTasksProvider
+} from './mobile-tasks-filter-selection'
+import { MobileTasksFilterPage, type MobileTasksFilterPageKey } from './mobile-tasks-filter-pages'
+import {
+  ChoiceSection,
+  GitHubItemsSections,
+  GitHubProjectSections,
+  GitLabSections,
+  JiraSections,
+  LinearSections
+} from './mobile-tasks-filter-sections'
 
-/** How many Filter & display settings differ from their defaults; the Filter chip shows it. */
-export function mobileTasksFilterCount(model: ConnectionPresentationModel): number {
-  const {
-    githubMode,
-    githubProjectHiddenFieldIds,
-    githubProjectSortOverride,
-    linearGroupBy,
-    linearOrderBy,
-    linearViewMode,
-    provider,
-    taskSort
-  } = model
-  if (provider === 'github' && githubMode === 'project') {
-    return (githubProjectSortOverride ? 1 : 0) + (githubProjectHiddenFieldIds.size > 0 ? 1 : 0)
+function FilterSheetContent({
+  model,
+  pager
+}: {
+  model: ConnectionPresentationModel
+  pager: OptionPagerControls<MobileTasksFilterPageKey>
+}) {
+  useMobileColorScheme()
+  const tr = useMobileTranslation()
+  const { provider, providerOptions, githubMode, setShowFilterSheet } = model
+  const done = {
+    label: tr('tasks.filterSheet.done', 'Done'),
+    onPress: () => setShowFilterSheet(false)
   }
-  if (provider === 'linear') {
-    return (
-      (linearViewMode !== 'list' ? 1 : 0) +
-      (linearGroupBy !== 'none' ? 1 : 0) +
-      (linearOrderBy !== 'priority' ? 1 : 0)
-    )
-  }
-  return taskSort !== 'updated' ? 1 : 0
-}
-
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
+  const connected =
+    !(provider === 'linear' && !model.linearConnected) &&
+    !(provider === 'jira' && !model.jiraConnection.connected)
+  const page = pager.page ? (
+    <MobileTasksFilterPage model={model} page={pager.page} onBack={pager.close} done={done} />
+  ) : null
+  const main = (
     <>
-      <SectionHeader title={title} />
-      <ListGroup>{children}</ListGroup>
-    </>
-  )
-}
-
-// Single-choice rows that apply as they're tapped; the sheet stays open to change more.
-function choiceSection<T extends string>(
-  title: string,
-  options: readonly PickerOption<T>[],
-  selected: string,
-  onSelect: (value: T) => void
-) {
-  return (
-    <Section title={title}>
-      {options.map((option) => (
-        <ListRow
-          key={option.value}
-          title={option.label}
-          subtitle={option.subtitle}
-          selected={option.value === selected}
-          disabled={option.disabled}
-          onPress={() => onSelect(option.value)}
-        />
-      ))}
-    </Section>
-  )
-}
-
-// Rows with their own sheet open it in place of this one rather than stacking over it.
-function openFromFilterSheet(model: ConnectionPresentationModel, open: () => void) {
-  model.setShowFilterSheet(false)
-  open()
-}
-
-function renderGitHubItemsSections(model: ConnectionPresentationModel) {
-  const { githubIssueSourceLabel, githubIssueSourceRows, setShowGitHubIssueSourcePicker } = model
-  return (
-    <>
-      {choiceSection(
-        t('tasks.filterSheet.sortBy', 'Sort by'),
-        SORT_OPTIONS,
-        model.taskSort,
-        model.setTaskSort
-      )}
-      {githubIssueSourceRows.length > 0 ? (
-        <Section title={t('tasks.filterSheet.issueSource', 'Issue source')}>
-          <ListRow
-            title={t('tasks.filterSheet.issueSourceRow', 'Upstream or origin')}
-            value={githubIssueSourceLabel}
-            navigates
-            onPress={() => openFromFilterSheet(model, () => setShowGitHubIssueSourcePicker(true))}
-          />
-        </Section>
-      ) : null}
-    </>
-  )
-}
-
-function renderGitHubProjectSections(model: ConnectionPresentationModel) {
-  const {
-    activeGitHubProjectView,
-    githubProjectAvailableSummaryFields,
-    githubProjectFieldsLabel,
-    githubProjectSortOptions,
-    githubProjectSortOverride,
-    githubProjectTable,
-    selectedGitHubProjectViewUrl,
-    setShowGitHubProjectFieldsPicker,
-    setShowGitHubProjectViewPicker,
-    visibleGitHubProjectRows
-  } = model
-  return (
-    <>
-      <Section title={t('tasks.filterSheet.view', 'View')}>
-        <ListRow
-          title={t('tasks.filterSheet.projectView', 'Project view')}
-          subtitle={
-            !githubProjectTable
-              ? undefined
-              : visibleGitHubProjectRows.length === 1
-                ? t('tasks.filterSheet.projectItems_one', '{{count}} item', { count: 1 })
-                : t('tasks.filterSheet.projectItems_other', '{{count}} items', {
-                    count: visibleGitHubProjectRows.length
-                  })
-          }
-          value={activeGitHubProjectView?.name ?? t('tasks.filterSheet.chooseView', 'Choose')}
-          navigates
-          disabled={!githubProjectTable && !activeGitHubProjectView}
-          onPress={() => openFromFilterSheet(model, () => setShowGitHubProjectViewPicker(true))}
-        />
-        {selectedGitHubProjectViewUrl ? (
-          <ListRow
-            title={t('tasks.githubViewControls.openView', 'Open view in GitHub')}
-            onPress={() => void openExternalLink(selectedGitHubProjectViewUrl)}
-          />
-        ) : null}
-      </Section>
-      {githubProjectTable
-        ? choiceSection(
-            t('tasks.filterSheet.sortBy', 'Sort by'),
-            githubProjectSortOptions,
-            githubProjectSortOverride?.fieldId ?? PROJECT_VIEW_DEFAULT_SORT,
-            (fieldId) => cycleMobileTasksGitHubProjectSort(model, fieldId)
-          )
-        : null}
-      {githubProjectAvailableSummaryFields.length > 0 ? (
-        <Section title={t('tasks.filterSheet.showOnRows', 'Show on rows')}>
-          <ListRow
-            title={t('tasks.filterSheet.projectFields', 'Project fields')}
-            value={githubProjectFieldsLabel}
-            navigates
-            onPress={() => openFromFilterSheet(model, () => setShowGitHubProjectFieldsPicker(true))}
-          />
-        </Section>
-      ) : null}
-    </>
-  )
-}
-
-function renderLinearSections(model: ConnectionPresentationModel) {
-  const {
-    linearWorkspaceLabel,
-    linearWorkspaces,
-    setShowLinearDisplayPicker,
-    setShowLinearWorkspacePicker,
-    bindLinearAccountHost
-  } = model
-  return (
-    <>
-      {linearWorkspaces.length > 1 ? (
-        <Section title={t('tasks.filterSheet.workspace', 'Workspace')}>
-          <ListRow
-            title={t('tasks.filterSheet.linearWorkspace', 'Linear workspace')}
-            value={linearWorkspaceLabel}
-            navigates
-            onPress={() =>
-              openFromFilterSheet(model, () => {
-                bindLinearAccountHost()
-                setShowLinearWorkspacePicker(true)
-              })
+      <SheetHeader
+        title={tr('tasks.filterSheet.title', 'Filter')}
+        leading={{
+          label: tr('tasks.filterSheet.reset', 'Reset'),
+          onPress: () => resetMobileTasksFilters(model),
+          disabled: mobileTasksFilterCount(model) === 0
+        }}
+        trailing={done}
+      />
+      {providerOptions.length > 1 ? (
+        <MobileSegmentedControl
+          segments={providerOptions}
+          selected={provider}
+          onSelect={(next) => {
+            if (next !== provider) {
+              selectMobileTasksProvider(model, next)
             }
-          />
-        </Section>
-      ) : null}
-      {choiceSection(
-        t('tasks.filterSheet.layout', 'Layout'),
-        LINEAR_VIEW_OPTIONS,
-        model.linearViewMode,
-        model.setLinearViewMode
-      )}
-      {choiceSection(
-        t('tasks.filterSheet.groupBy', 'Group by'),
-        LINEAR_GROUP_OPTIONS,
-        model.linearGroupBy,
-        model.setLinearGroupBy
-      )}
-      {choiceSection(
-        t('tasks.filterSheet.orderBy', 'Order by'),
-        LINEAR_ORDER_OPTIONS,
-        model.linearOrderBy,
-        model.setLinearOrderBy
-      )}
-      <Section title={t('tasks.filterSheet.showOnRows', 'Show on rows')}>
-        <ListRow
-          title={t('tasks.filterSheet.displayProperties', 'Display properties')}
-          navigates
-          onPress={() => openFromFilterSheet(model, () => setShowLinearDisplayPicker(true))}
+          }}
+          fill
+          onSheet
+          testIDPrefix="mobile-tasks-provider-"
+          style={styles.segmented}
         />
-      </Section>
+      ) : null}
+      {provider === 'github' ? (
+        <ChoiceSection
+          title={tr('tasks.filterSheet.show', 'Show')}
+          options={GITHUB_KIND_OPTIONS}
+          selected={githubMode === 'project' ? 'project' : model.githubKind}
+          onSelect={(kind) => selectMobileTasksGitHubKind(model, kind)}
+        />
+      ) : null}
+      {!connected ? null : provider === 'github' && githubMode === 'project' ? (
+        <GitHubProjectSections model={model} pager={pager} />
+      ) : provider === 'github' ? (
+        <GitHubItemsSections model={model} pager={pager} />
+      ) : provider === 'gitlab' ? (
+        <GitLabSections model={model} pager={pager} />
+      ) : provider === 'linear' ? (
+        <LinearSections model={model} pager={pager} />
+      ) : (
+        <JiraSections model={model} pager={pager} />
+      )}
     </>
   )
+  return <OptionPager pager={pager} main={main} page={page} />
 }
 
-/** Sort, layout, grouping, fields and source in one sheet, so the chip row keeps only scopes. */
-export function renderMobileTasksFilterSheet(model: ConnectionPresentationModel) {
-  const { appliedQuery, githubMode, provider, setShowFilterSheet, showFilterSheet, taskUiReady } =
-    model
+/** Source, what to show, scope and sort in one sheet; pickers push inside it instead of replacing it. */
+export function MobileTasksFilterSheet({ model }: { model: ConnectionPresentationModel }) {
+  const pager = useOptionPager<MobileTasksFilterPageKey>()
+  const back = pager.page
+    ? () => {
+        pager.close()
+        return true
+      }
+    : null
+  // Back from a page returns to the main sheet; the drawer's own claim closes it from there.
+  useBottomDrawerModalHostBackClaim(back)
+  useBackClaim(back)
   return (
     <BottomDrawer
-      visible={taskUiReady && showFilterSheet}
-      onClose={() => setShowFilterSheet(false)}
+      visible={model.taskUiReady && model.showFilterSheet}
+      onClose={() => model.setShowFilterSheet(false)}
+      onAfterClose={pager.forget}
+      scrollResetKey={pager.page}
     >
-      <View style={styles.filterSheetHeader}>
-        <SheetHeader
-          title={t('tasks.filterSheet.title', 'Filter & display')}
-          trailing={{
-            label: t('tasks.filterSheet.done', 'Done'),
-            onPress: () => setShowFilterSheet(false)
-          }}
-        />
-      </View>
-      {provider === 'github' && githubMode === 'project' ? (
-        renderGitHubProjectSections(model)
-      ) : provider === 'github' ? (
-        renderGitHubItemsSections(model)
-      ) : provider === 'linear' ? (
-        renderLinearSections(model)
-      ) : (
-        <>
-          {choiceSection(
-            t('tasks.filterSheet.sortBy', 'Sort by'),
-            SORT_OPTIONS,
-            model.taskSort,
-            model.setTaskSort
-          )}
-          {provider === 'jira' && appliedQuery.trim().length > 0 ? (
-            <Text style={styles.filterFootnote}>
-              {t(
-                'tasks.filterSheet.jqlReplacesPreset',
-                'Your JQL search replaces the Show preset. Clear the search to pick one again.'
-              )}
-            </Text>
-          ) : null}
-        </>
-      )}
+      <FilterSheetContent model={model} pager={pager} />
     </BottomDrawer>
   )
 }
+
+const styles = themedStyleSheet(() => ({
+  segmented: { marginBottom: spacing.xs }
+}))

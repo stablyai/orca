@@ -3,13 +3,16 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 
 export const botToolsPath = (folder: string): string => join(folder, '.orca', 'bot-tools.json')
 
-const ToolsFile = z.object({
-  servers: z.array(z.unknown())
-})
-const NamedTool = z.object({ url: z.string(), credential: z.string() })
+const ToolsFile = lazyZodSchema(() =>
+  z.object({
+    servers: z.array(z.unknown())
+  })
+)
+const NamedTool = lazyZodSchema(() => z.object({ url: z.string(), credential: z.string() }))
 
 /** The URL of the tool in `folder`'s tools file that names `credentialId`, or null when none does. */
 export async function botToolUrlOf(folder: string, credentialId: string): Promise<string | null> {

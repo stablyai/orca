@@ -61,13 +61,21 @@ export async function startAcpStructuredSession(
       },
       onConnectionLost: (session, error) => children.connectionLost(session, error),
       onSettled: (settlement) => deps.onDispatchSettledLate?.({ sessionId, ...settlement }),
-      forceClose: (id, reason) => children.stopAfterFailure(id, reason)
+      forceClose: (id, reason) => children.stopAfterFailure(id, reason),
+      interrupt: (id, reason) => children.interrupt(id, reason)
     })
     if (attempt.signal.aborted) {
       session.dispose()
       throw new Error('closed while starting')
     }
     children.sessions.set(sessionId, session)
+    // Snapshot: a kept agent that exits later did take what this app sent it.
+    if (session.connection.kept?.agentExited) {
+      session.endedBeforeAcquire = true
+      children.endedBeforeAcquire.set(sessionId, generation)
+    } else {
+      children.endedBeforeAcquire.delete(sessionId)
+    }
     return acquisition
   } catch (error) {
     children.endings.retire(sessionId, generation)

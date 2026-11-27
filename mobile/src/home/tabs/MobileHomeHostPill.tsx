@@ -45,7 +45,7 @@ export function MobileHomeHostPill(props: {
         leading={<View style={[styles.dot, { backgroundColor: dot }]} />}
         accessibilityLabel={
           choosable
-            ? t('home.tabs.chooseDesktop', '{{desktop}}, choose another desktop', {
+            ? t('home.tabs.chooseComputer', '{{desktop}}, choose another computer', {
                 desktop: title
               })
             : title

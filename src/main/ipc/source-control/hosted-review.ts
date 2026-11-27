@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import { posix, resolve } from 'node:path'
 
 import type { Repo } from '../../../shared/repository/repo-types'
@@ -113,8 +114,12 @@ function normalizeRemoteHostedReviewPath(remotePath: string): string {
   return normalized.length > 1 ? normalized.replace(/\/+$/, '') : normalized
 }
 
-export function registerHostedReviewHandlers(store: Store, stats: StatsCollector): void {
-  ipcMain.handle('hostedReview:forBranch', async (_event, args: HostedReviewForBranchArgs) => {
+export function registerHostedReviewHandlers(
+  store: Store,
+  stats: StatsCollector,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
+  ipc.handle('hostedReview:forBranch', async (_event, args: HostedReviewForBranchArgs) => {
     const repo = assertRegisteredRepoForBranch(args, store)
     const localGitOptions = {
       ...getLocalProjectGhExecOptions(store, repo),
@@ -156,7 +161,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
     return hostedReviewForBranchReply(read, args.reportReadOutcome)
   })
 
-  ipcMain.handle(
+  ipc.handle(
     'hostedReview:getCreationEligibility',
     async (_event, args: HostedReviewCreationEligibilityArgs) => {
       const repo = assertRegisteredRepoForBranch(args, store)
@@ -178,7 +183,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
     }
   )
 
-  ipcMain.handle('hostedReview:create', async (_event, args: CreateHostedReviewArgs) => {
+  ipc.handle('hostedReview:create', async (_event, args: CreateHostedReviewArgs) => {
     const repo = assertRegisteredRepo(args.repoPath, store, args.repoId)
     const worktreePath = await resolveHostedReviewWorktreePath(repo, store, args.worktreePath)
     const localGitOptions = {
@@ -220,46 +225,41 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
     return result
   })
 
-  ipcMain.handle(
-    'hostedReview:createStacked',
-    async (_event, args: CreateStackedHostedReviewArgs) => {
-      const repo = assertRegisteredRepo(args.repoPath, store, args.repoId)
-      const worktreePath = await resolveHostedReviewWorktreePath(repo, store, args.worktreePath)
-      const localGitOptions = {
-        ...getLocalProjectGhExecOptions(store, repo),
-        admissionTier: 'interactive' as const
-      }
-      const sharedLinkPaths = getRepoSshConnectionId(repo) ? [] : getWorktreeSharedLinkPaths(repo)
-      const executionOptions = {
-        ...(Object.keys(localGitOptions).length > 0
-          ? { localGitExecOptions: localGitOptions }
-          : {}),
-        ...(sharedLinkPaths.length > 0 ? { sharedLinkPaths } : {})
-      }
-      const input = {
-        provider: args.provider,
-        base: args.base,
-        head: args.head,
-        title: args.title,
-        body: args.body,
-        draft: args.draft,
-        ...(args.useTemplate !== undefined ? { useTemplate: args.useTemplate } : {})
-      }
-      const result = await createStackedHostedReview(
-        worktreePath,
-        input,
-        getStoredRepoExecutionHostId(repo),
-        executionOptions
-      )
-      if (result.ok && !stats.hasCountedPR(result.url)) {
-        stats.record({
-          type: 'pr_created',
-          at: Date.now(),
-          repoId: repo.id,
-          meta: { prNumber: result.number, prUrl: result.url }
-        })
-      }
-      return result
+  ipc.handle('hostedReview:createStacked', async (_event, args: CreateStackedHostedReviewArgs) => {
+    const repo = assertRegisteredRepo(args.repoPath, store, args.repoId)
+    const worktreePath = await resolveHostedReviewWorktreePath(repo, store, args.worktreePath)
+    const localGitOptions = {
+      ...getLocalProjectGhExecOptions(store, repo),
+      admissionTier: 'interactive' as const
     }
-  )
+    const sharedLinkPaths = getRepoSshConnectionId(repo) ? [] : getWorktreeSharedLinkPaths(repo)
+    const executionOptions = {
+      ...(Object.keys(localGitOptions).length > 0 ? { localGitExecOptions: localGitOptions } : {}),
+      ...(sharedLinkPaths.length > 0 ? { sharedLinkPaths } : {})
+    }
+    const input = {
+      provider: args.provider,
+      base: args.base,
+      head: args.head,
+      title: args.title,
+      body: args.body,
+      draft: args.draft,
+      ...(args.useTemplate !== undefined ? { useTemplate: args.useTemplate } : {})
+    }
+    const result = await createStackedHostedReview(
+      worktreePath,
+      input,
+      getStoredRepoExecutionHostId(repo),
+      executionOptions
+    )
+    if (result.ok && !stats.hasCountedPR(result.url)) {
+      stats.record({
+        type: 'pr_created',
+        at: Date.now(),
+        repoId: repo.id,
+        meta: { prNumber: result.number, prUrl: result.url }
+      })
+    }
+    return result
+  })
 }

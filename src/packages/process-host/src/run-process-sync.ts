@@ -18,6 +18,8 @@ function runResolvedProcessSync(spec: ProcessSpec, resolved: ResolvedSpawn): Pro
       ...resolved.options,
       input: spec.input,
       timeout: spec.timeoutMs === null ? undefined : (spec.timeoutMs ?? DEFAULT_PROCESS_TIMEOUT_MS),
+      // Synchronous waits cannot escalate later when a child ignores SIGTERM.
+      killSignal: 'SIGKILL',
       maxBuffer: spec.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES,
       // Keep raw output without applying the nonexistent 'buffer' encoding to string stdin.
       encoding: null

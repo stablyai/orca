@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { readActiveClaudeKeychainCredentialsStrict } from '../../../claude-accounts/runtime-auth/keychain'
 import type { ClaudeRuntimeAuthPreparation } from '../../../claude-accounts/runtime-auth/runtime-auth-types'
@@ -30,18 +31,20 @@ type ClaudeOAuthCredentialReadOptions = {
   /** System Default only: a managed profile never reads another login's item. */
   unsuffixedKeychainFallback?: boolean
 }
-const schema = z.object({
-  claudeAiOauth: z
-    .object({
-      accessToken: z.string().optional(),
-      refreshToken: z.string().optional(),
-      refreshTokenExpiresAt: z.unknown().optional(),
-      // Plan metadata never decides whether the token is usable.
-      subscriptionType: z.unknown().optional(),
-      rateLimitTier: z.unknown().optional()
-    })
-    .optional()
-})
+const schema = lazyZodSchema(() =>
+  z.object({
+    claudeAiOauth: z
+      .object({
+        accessToken: z.string().optional(),
+        refreshToken: z.string().optional(),
+        refreshTokenExpiresAt: z.unknown().optional(),
+        // Plan metadata never decides whether the token is usable.
+        subscriptionType: z.unknown().optional(),
+        rateLimitTier: z.unknown().optional()
+      })
+      .optional()
+  })
+)
 export function parseClaudeOAuthCredentialsJson(
   raw: string,
   source: ClaudeOAuthCredentialSource

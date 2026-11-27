@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { readNodeFileSyncWithinLimit } from '../../file-content/node-bounded-file-reader'
 import { writeSecureJsonFileWithinLimit } from '../../secure-storage/bounded-secure-json-file'
 import { hardenExistingSecureFile } from '../../secure-storage/secure-file'
@@ -17,10 +18,12 @@ export function getEphemeralVmWriteAheadRuntimeStorePath(userDataPath: string): 
   return join(userDataPath, EPHEMERAL_VM_WRITE_AHEAD_RUNTIMES_FILE)
 }
 
-const WriteAheadRuntimeStoreSchema = z.object({
-  version: z.literal(1),
-  runtimes: z.array(EphemeralVmRuntimeRecordSchema)
-})
+const WriteAheadRuntimeStoreSchema = lazyZodSchema(() =>
+  z.object({
+    version: z.literal(1),
+    runtimes: z.array(EphemeralVmRuntimeRecordSchema)
+  })
+)
 
 /** The main file wins: a crash between flipping to running and pruning the sidecar leaves both copies. */
 export function withWriteAheadRuntimes(

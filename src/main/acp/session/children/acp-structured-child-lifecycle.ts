@@ -45,6 +45,8 @@ export class AcpStructuredChildren {
   readonly sessions = new Map<string, AcpStructuredChild>()
   /** Children that ended before they were ready answer for that ending, open included. */
   readonly endings = new AgentSessionStartEndings()
+  /** Per chat, its acquisition that reattached a kept agent which had already ended. */
+  readonly endedBeforeAcquire = new Map<string, string>()
   readonly starts = new ProviderAcquisitionStarts<AcpStructuredConnection>()
   constructor(private readonly deps: AcpStructuredSessionAdapterDeps) {}
   capturePendingOutput: StructuredAgentSessionAdapter['capturePendingOutput'] = (input) => {
@@ -80,6 +82,18 @@ export class AcpStructuredChildren {
         error
       })
     })
+  }
+
+  /** Orca ends the run itself: its turn ends interrupted now, so a reply the agent still sends
+   *  before it exits can't settle it, then the child stops. */
+  interrupt(sessionId: string, reason: string): void {
+    const session = this.sessions.get(sessionId)
+    if (session && isAcpReadySession(session) && !session.closeRequested) {
+      session.failureClose ??= reason
+      const interrupted = { state: 'interrupted' as const, completedAt: this.now() }
+      closeAcpSessionJournal(session, reason, new Error(reason), interrupted)
+    }
+    this.stopAfterFailure(sessionId, reason)
   }
 
   /** Requires root exit; reports unproven descendant cleanup separately. */
@@ -186,6 +200,7 @@ export class AcpStructuredChildren {
         sessionId: session.sessionId,
         fence: session.fence,
         acquisitionGeneration: session.acquisitionGeneration,
+        ...(session.endedBeforeAcquire ? { endedBeforeAcquire: true as const } : {}),
         observedAt,
         cause: session.closeRequested ? 'requested-close' : 'unexpected-exit',
         reason:

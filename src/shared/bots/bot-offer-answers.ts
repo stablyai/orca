@@ -1,27 +1,45 @@
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 // What the owner answered on a bot's offer cards, card by card. Kept on the bot, so a card reads its own answer
 // after a reload or on another device, and one card's answer never touches another's.
 import * as z from 'zod'
 
-export const BotOfferAnswerSchema = z.object({
-  /** The transcript row the card is drawn on. */
-  cardId: z.string().min(1).max(512),
-  /** The owner pressed Dismiss. */
-  dismissed: z.literal(true).optional(),
-  /** The owner took the card's action, on these: workspace ids, or import item indices. */
-  sent: z.object({ chosen: z.array(z.string().min(1).max(4096)).max(64) }).optional()
-})
+export const BotOfferAnswerSchema = lazyZodSchema(() =>
+  z.object({
+    /** The transcript row the card is drawn on. */
+    cardId: z.string().min(1).max(512),
+    /** The owner pressed Dismiss. */
+    dismissed: z.literal(true).optional(),
+    /** The owner took the card's action, on these: workspace ids, or import item indices. */
+    sent: z.object({ chosen: z.array(z.string().min(1).max(4096)).max(64) }).optional()
+  })
+)
 
 export type BotOfferAnswer = z.infer<typeof BotOfferAnswerSchema>
+
+/** `bots.offer.answer`: a press on an offer card, which the bot hears as a card answer queued behind its running turn. */
+export const BotOfferAnswerParams = lazyZodSchema(() =>
+  z.object({
+    botId: z.string().min(1, 'Missing bot id'),
+    /** The chat the card sits in; the bot's Chat when absent. */
+    sessionId: z.string().min(1).optional(),
+    text: z.string().trim().min(1).max(100_000)
+  })
+)
+
+/** What Not now tells the bot, in the words its create-offer result promised. */
+export const BOT_OFFER_DISMISS_ANSWER = 'Dismiss'
 
 const BOT_OFFER_ANSWER_FIELDS = ['dismissed', 'sent'] as const
 type BotOfferAnswerField = (typeof BOT_OFFER_ANSWER_FIELDS)[number]
 
 /** `bots.update`'s `offerAnswer`: an answer, written only while its fields are unanswered when `claim` is set, or
  *  `release`, which takes a field back off after its send was refused. */
-export const BotOfferAnswerUpdateSchema = BotOfferAnswerSchema.extend({
-  claim: z.literal(true).optional(),
-  release: z.enum(BOT_OFFER_ANSWER_FIELDS).optional()
-})
+export const BotOfferAnswerUpdateSchema = lazyZodSchema(() =>
+  BotOfferAnswerSchema.extend({
+    claim: z.literal(true).optional(),
+    release: z.enum(BOT_OFFER_ANSWER_FIELDS).optional()
+  })
+)
 
 export type BotOfferAnswerUpdate = z.infer<typeof BotOfferAnswerUpdateSchema>
 
@@ -59,6 +77,9 @@ export async function answerBotOffer(
     update: (offerAnswer: BotOfferAnswerUpdate) => Promise<unknown>
     /** Tells the bot; false when the chat refused it. */
     send: () => Promise<boolean>
+    /** The send threw after it may have reached the host (a lost reply): the claim stays, so a second
+     *  press can't tell the bot twice. */
+    deliveryUnknown?: (error: unknown) => boolean
   }
 ): Promise<BotOfferAnswerOutcome> {
   const field: BotOfferAnswerField = answer.sent ? 'sent' : 'dismissed'
@@ -71,10 +92,14 @@ export async function answerBotOffer(
     throw error
   }
   let sent = false
+  let maybeSent = false
   try {
     sent = await ops.send()
+  } catch (error) {
+    maybeSent = ops.deliveryUnknown?.(error) === true
+    throw error
   } finally {
-    if (!sent) {
+    if (!sent && !maybeSent) {
       await ops.update({ cardId: answer.cardId, release: field })
     }
   }

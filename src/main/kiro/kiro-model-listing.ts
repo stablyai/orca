@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import type { AgentSessionModelOption } from '../../shared/agent-session/options/model-catalog/agent-session-model-option'
 import { labelFromModelId } from '../../shared/agent-session/options/model-catalog/model-id-label'
 
@@ -15,12 +16,14 @@ const KIRO_UNCONFIRMED_EFFORTS = [
   { value: 'max', label: 'Max' }
 ]
 
-const listingSchema = z.looseObject({
-  models: z.array(
-    z.looseObject({ model_id: z.string().min(1), description: z.string().optional() })
-  ),
-  default_model: z.string().optional()
-})
+const listingSchema = lazyZodSchema(() =>
+  z.looseObject({
+    models: z.array(
+      z.looseObject({ model_id: z.string().min(1), description: z.string().optional() })
+    ),
+    default_model: z.string().optional()
+  })
+)
 
 export function parseKiroModelListing(stdout: string): AgentSessionModelOption[] {
   let json: unknown

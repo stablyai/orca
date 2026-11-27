@@ -4,10 +4,6 @@ import { WORKTREE_ROW_LAYOUT } from '../worktree/row-presentation/worktree-list-
 import { themedStyleSheet } from '../theme/themed-styles'
 
 export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
-  errorText: {
-    color: colors.statusRed,
-    fontSize: typography.bodySize
-  },
   list: {
     paddingBottom: spacing.lg
   },
@@ -50,17 +46,6 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.borderSubtle,
     marginLeft: WORKTREE_ROW_LAYOUT.textInset
-  },
-  filterModalSubtitle: {
-    fontSize: typography.metaSize,
-    color: colors.textMuted
-  },
-  optionPending: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    marginBottom: spacing.sm
   },
   optionSectionGap: {
     height: spacing.xs

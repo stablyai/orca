@@ -1,4 +1,4 @@
-import { safeStorage } from 'electron'
+import { app, safeStorage } from 'electron'
 import { guardedSafeStorage, safeStorageWithheldReason } from './safe-storage-availability'
 import type { SecretSealing, SecretStore } from '../../shared/secure-storage/secret-store'
 
@@ -17,6 +17,11 @@ export class ElectronSecretStore implements SecretStore {
 
   describeProtectionGap(): string | null {
     return assessSecretProtection().gap
+  }
+
+  mockKeychain(): boolean {
+    // Chromium's own switch table: every form it accepts (-, --, =value) is the one its keychain reads.
+    return app.commandLine.hasSwitch('use-mock-keychain')
   }
 
   describeSealing(): SecretSealing {

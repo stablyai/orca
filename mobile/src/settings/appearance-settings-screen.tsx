@@ -16,7 +16,9 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { SettingsScreen, SettingsSection } from './settings-screen-frame'
 import { UiLanguageSettingsSection } from './ui-language-settings-section'
 
-function appearanceOptions(t: Translate): { value: MobileAppearancePreference; label: string }[] {
+export function appearanceOptions(
+  t: Translate
+): { value: MobileAppearancePreference; label: string }[] {
   return [
     { value: 'system', label: t('settings.appearance.theme.system', 'System') },
     { value: 'light', label: t('settings.appearance.theme.light', 'Light') },
@@ -46,7 +48,7 @@ export default function AppearanceSettingsScreen() {
       <SettingsSection
         first
         radioGroup
-        title={t('settings.appearance.theme.heading', 'THEME')}
+        title={t('settings.appearance.theme.heading', 'Theme')}
         footer={t(
           'settings.appearance.theme.description',
           'System follows this device’s light or dark setting.'
@@ -66,7 +68,7 @@ export default function AppearanceSettingsScreen() {
 
       <SettingsSection
         radioGroup
-        title={t('settings.appearance.usage.heading', 'USAGE PERCENTAGES')}
+        title={t('settings.appearance.usage.heading', 'Usage percentages')}
         footer={t(
           'settings.appearance.usage.description',
           'Usage bars on Home and Accounts show how much of each limit is used or left. Saved on this phone.'

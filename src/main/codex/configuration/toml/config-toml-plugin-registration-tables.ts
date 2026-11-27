@@ -81,9 +81,11 @@ export function readCodexRegistrationEntries(config: string): Map<string, CodexR
 }
 
 /**
- * Roots and registration keys a config defines other than through `[root.name]` headers. A root
- * defined inline, by dotted keys or as `[[root]]` takes no appended table; a bare `[root]` blocks only
- * the names it defines. A `[root.name]` table appended there could redefine a key.
+ * Roots and registration keys a config defines other than through `[root.name]` headers, where an
+ * appended `[root.name]` table would redefine a key. A root assigned whole (`root = { ... }`) or
+ * declared as `[[root]]` takes no appended table; a name assigned or dotted under it (`root.name = ...`,
+ * `root.name.enabled = ...`, or keys under a bare `[root]`) blocks only that name. Other names may
+ * still get their own tables, as TOML allows beside dotted keys.
  */
 export function readCodexRegistrationRootsDefinedOutsideTables(config: string): Set<string> {
   const roots = new Set<string>()
@@ -112,7 +114,7 @@ export function readCodexRegistrationRootsDefinedOutsideTables(config: string): 
     const path = [...table, ...key.segments]
     const root = path[0]
     if (table.length < 2 && isCodexRegistrationRoot(root)) {
-      roots.add(table.length === 1 ? getCodexRegistrationKey(root, path[1]!) : root)
+      roots.add(path.length === 1 ? root : getCodexRegistrationKey(root, path[1]!))
     }
   }
   return roots

@@ -102,6 +102,10 @@ export type StubOptions = {
   /** A web or phone window, whose bots run on its paired server: `paste` signs in there by paste;
    *  `finishing` has the pasted address being exchanged; `old-host` runs an Orca that can't. */
   host?: 'paste' | 'finishing' | 'old-host'
+  /** A Google setup run the host still has open for every bot. */
+  googleSetupRunning?: boolean
+  /** gh is signed out on the host the bot runs on. */
+  ghSignedOut?: boolean
   /** The bot's hooks and the calls each one lists; none by default. */
   webhooks?: { hooks: WebhookSummary[]; calls: WebhookCallRow[] }
 }
@@ -198,7 +202,8 @@ export function stub(options: StubOptions): void {
             defaultBotId: null,
             linkedAccounts: []
           }
-        ]
+        ],
+        ...(options.ghSignedOut ? { gh: 'signed-out' } : {})
       }
     }),
     users: notAnswered,
@@ -234,6 +239,22 @@ export function stub(options: StubOptions): void {
       bots: []
     }),
     'bots.list': () => ({ bots }),
+    'bots.googleSetup.read': () => ({
+      run: options.googleSetupRunning
+        ? {
+            id: 'run-left-open',
+            botId: base.id,
+            state: 'running',
+            mode: 'guide-here',
+            steps: {},
+            answers: {},
+            startedAt: 1,
+            updatedAt: 1,
+            revision: 1
+          }
+        : null,
+      blocker: null
+    }),
     'webhooks.list': () => ({ hooks: options.webhooks?.hooks ?? [] }),
     'webhooks.calls': () => ({ calls: options.webhooks?.calls ?? [] }),
     'bots.tools.list': () => ({

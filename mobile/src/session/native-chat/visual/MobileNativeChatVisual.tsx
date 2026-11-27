@@ -186,7 +186,7 @@ const styles = themedStyleSheet(() => ({
     borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.bgPanel,
+    backgroundColor: colors.chatPanel,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle
   },

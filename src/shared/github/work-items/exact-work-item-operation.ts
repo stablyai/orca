@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { SlugRepo } from '../../rpc-contract/github/github-repo-target-params'
 import { ExpectedRuntimeSourceSchema } from '../../remote-runtime/rpc/runtime-rpc-envelope'
 
@@ -8,10 +9,12 @@ const methods = new Set([
   'github.listLabels',
   'github.listAssignableUsers'
 ])
-const exactShape = z.object({
-  ownerRepo: SlugRepo,
-  expectedRuntimeSource: ExpectedRuntimeSourceSchema
-})
+const exactShape = lazyZodSchema(() =>
+  z.object({
+    ownerRepo: SlugRepo,
+    expectedRuntimeSource: ExpectedRuntimeSourceSchema
+  })
+)
 
 // Only the complete opt-in pair promises enforcement; old independently optional fields stay optional.
 export function classifyExactGitHubOperation(method: string, params: unknown, envelope: unknown) {

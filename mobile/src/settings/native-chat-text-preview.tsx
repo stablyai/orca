@@ -20,6 +20,7 @@ export function NativeChatTextPreview({ fontScale: chatScale }: { fontScale: num
   // Native text grows with the phone's Text Size and the chat page's doesn't; undo it so sizes match the chat.
   const fontScale = chatScale / useWindowDimensions().fontScale
   const prose = useNativeChatProseText(fontScale)
+  const mine = useNativeChatProseText(fontScale, true)
   return (
     <View
       style={styles.preview}
@@ -31,7 +32,7 @@ export function NativeChatTextPreview({ fontScale: chatScale }: { fontScale: num
           <MobileNativeChatMarkdown
             content={t('settings.nativeChatText.previewQuestion', 'Why is the resume test flaky?')}
             tone="userMessage"
-            {...prose}
+            {...mine}
           />
         </View>
       </View>
@@ -43,6 +44,7 @@ export function NativeChatTextPreview({ fontScale: chatScale }: { fontScale: num
           'settings.nativeChatText.previewAnswer',
           'The test waits on `setTimeout(0)` while the stream is still flushing, so it passes only when the flush wins.'
         )}\n\n${CODE}`}
+        tone="reply"
         {...prose}
       />
     </View>
@@ -55,7 +57,7 @@ const styles = themedStyleSheet(() => ({
     padding: spacing.md,
     marginBottom: spacing.lg,
     borderRadius: radii.surface,
-    backgroundColor: colors.bgBase,
+    backgroundColor: colors.chatCanvas,
     borderWidth: 1,
     borderColor: colors.borderSubtle
   }

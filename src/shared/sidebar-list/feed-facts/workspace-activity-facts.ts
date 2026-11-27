@@ -1,3 +1,4 @@
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import * as z from 'zod'
 import type { AgentStatusEntry } from '../../agent-status/contracts/agent-status-types'
 import {
@@ -5,28 +6,36 @@ import {
   type HostScopedWorktreeKey
 } from '../../worktree/host-qualified-identity'
 
-const LiveAgentWorktreeStatusSchema = z.enum(['working', 'monitoring', 'permission'])
+const LiveAgentWorktreeStatusSchema = lazyZodSchema(() =>
+  z.enum(['working', 'monitoring', 'permission'])
+)
 
 /** Host-observed activity that prevents sleeping; lost contact is unverifiable, never gone. */
-const WorkspaceActivityFactsSchema = z.object({
-  terminal: z.enum(['live', 'unverifiable']).nullable(),
-  browser: z.boolean(),
-  structuredChat: z.boolean(),
-  /** The strongest fresh, unfinished agent. */
-  agent: LiveAgentWorktreeStatusSchema.nullable()
-})
+const WorkspaceActivityFactsSchema = lazyZodSchema(() =>
+  z.object({
+    terminal: z.enum(['live', 'unverifiable']).nullable(),
+    browser: z.boolean(),
+    structuredChat: z.boolean(),
+    /** The strongest fresh, unfinished agent. */
+    agent: LiveAgentWorktreeStatusSchema.nullable()
+  })
+)
 
 /** Only workspaces with some activity are listed; an absent id has none. */
-export const WorkspaceActivityFactsSnapshotSchema = z.object({
-  revision: z.number(),
-  facts: z.record(z.string(), WorkspaceActivityFactsSchema)
-})
+export const WorkspaceActivityFactsSnapshotSchema = lazyZodSchema(() =>
+  z.object({
+    revision: z.number(),
+    facts: z.record(z.string(), WorkspaceActivityFactsSchema)
+  })
+)
 
 /** Server-owned activity; its clients add browser/chat tabs. */
-export const HostReportedActivitySchema = WorkspaceActivityFactsSchema.pick({
-  terminal: true,
-  agent: true
-})
+export const HostReportedActivitySchema = lazyZodSchema(() =>
+  WorkspaceActivityFactsSchema.pick({
+    terminal: true,
+    agent: true
+  })
+)
 
 export type LiveAgentWorktreeStatus = z.infer<typeof LiveAgentWorktreeStatusSchema>
 export type WorkspaceActivityFacts = z.infer<typeof WorkspaceActivityFactsSchema>

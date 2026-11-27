@@ -5,6 +5,7 @@
  */
 import { join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { readNodeFileWithinLimit } from '../../../shared/file-content/node-bounded-file-reader'
 import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 import {
@@ -22,22 +23,24 @@ import {
 const FILE_NAME = 'wsl-mapped-drive-answers.json'
 const MAX_FILE_BYTES = 64 * 1024
 
-const AnswersSchema = z.object({
-  version: z.literal(1),
-  answers: z
-    .array(
-      z.object({
-        letter: z.string().regex(/^[A-Z]$/),
-        share: z
-          .string()
-          .max(4_096)
-          .refine((share) => parseWslUncPath(share) !== null)
-          .nullable(),
-        at: z.number().finite()
-      })
-    )
-    .max(26)
-})
+const AnswersSchema = lazyZodSchema(() =>
+  z.object({
+    version: z.literal(1),
+    answers: z
+      .array(
+        z.object({
+          letter: z.string().regex(/^[A-Z]$/),
+          share: z
+            .string()
+            .max(4_096)
+            .refine((share) => parseWslUncPath(share) !== null)
+            .nullable(),
+          at: z.number().finite()
+        })
+      )
+      .max(26)
+  })
+)
 
 function sharesOf(answers: readonly WslMappedDriveAnswer[]): string {
   return JSON.stringify(

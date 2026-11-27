@@ -1,3 +1,4 @@
+import { registerAcpRelayAgent } from '../../../acp/process/acp-relay-work-markers'
 import { AcpAtRestCommandCatalog } from '../../../acp/discovery/acp-at-rest-commands'
 import { resolveNativeChatVisualsSkillLocation } from '../../../native-chat/conversation-files/native-chat-visuals-skill-location'
 import { withSupportedCodexCli } from '../../../codex/structured/launch/codex-cli-installation-error'
@@ -15,7 +16,7 @@ import { journalSqlReads } from '../../../native-chat/agent-session-journal/jour
 import { createStructuredClaudeRuntimeAdapter } from './structured-claude-runtime-adapter'
 import { nameChatFromClaudeRename } from '../naming/claude-user-rename'
 import { claudeAtRestDiscovery, codexAtRestSkillRoots } from './structured-agent-at-rest-discovery'
-import { acpListingNeedsChatFolder } from '../../../acp/discovery/acp-model-discovery-policy'
+import { acpListsCommandsAtRest } from '../../../acp/discovery/acp-model-discovery-policy'
 import type { AcpLaunchSpec } from '../../../acp/launch/acp-launch-contract'
 import { acpStructuredAgentDefinition } from '../../../acp/session/acp-structured-agent-definitions'
 import type { SavedProviderTurnReads } from '../../../native-chat/agent-session-journal/journal-provider-turn-saved'
@@ -168,6 +169,7 @@ function createClaudeAdapter(
 function createAcpAdapter(
   spec: AcpLaunchSpec
 ): StructuredAgentRuntimeRegistration['createAdapter'] {
+  registerAcpRelayAgent(spec)
   return (context) => {
     const { deps, followUps } = context
     const savedSession = savedProviderTurns(context)
@@ -189,8 +191,8 @@ function createAcpAdapter(
         ...deps.acpLaunchCommand,
         dataDirectory: deps.stateDirectory
       },
-      // Agents that list models in a throwaway chat-folder session report commands there too.
-      ...(acpListingNeedsChatFolder(spec.modelDiscovery)
+      // A throwaway session in the chat's folder reports the commands that chat gets.
+      ...(acpListsCommandsAtRest(spec.modelDiscovery)
         ? {
             atRestCommands: new AcpAtRestCommandCatalog(spec, {
               ...deps.acpLaunchCommand,
@@ -219,6 +221,20 @@ function createAcpAdapter(
           : createAcpAgentConnection),
       onChildWorkEvidence: (sessionId, evidence, producer) =>
         context.host()?.publishChildWorkEvidence(sessionId, evidence, producer),
+      keptWork: async (sessionId) => {
+        const work = await context.host()?.currentWork(sessionId)
+        // The oldest unanswered send is the prompt the agent owes; later ones are queued behind it.
+        const send = work?.restatedSubmissions()[0]
+        const turn = work?.activeTurn()
+        const body = turn?.item.body
+        const sentAt =
+          body?.kind === 'turn' ? (body.requestedAt ?? body.startedAt) : send?.submittedAt
+        return {
+          turnId: turn?.turnId ?? null,
+          unansweredSendId: send?.clientMessageId ?? null,
+          sentAt: sentAt ?? null
+        }
+      },
       ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
       onDispatchSettledLate: followUps.onDispatchSettledLate,
       logger: deps.logger,

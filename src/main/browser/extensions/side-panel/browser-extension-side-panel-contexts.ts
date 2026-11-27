@@ -1,20 +1,23 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { getBrowserExtensionDocumentId } from '../tabs-and-windows/browser-extension-document-ids'
 import { findBrowserExtensionSidePanels } from './browser-extension-side-panel-host'
 
-export const browserExtensionContextFilterSchema = z
-  .object({
-    contextIds: z.array(z.string()).optional(),
-    contextTypes: z.array(z.string()).optional(),
-    documentIds: z.array(z.string()).optional(),
-    documentOrigins: z.array(z.string()).optional(),
-    documentUrls: z.array(z.string()).optional(),
-    frameIds: z.array(z.number()).optional(),
-    incognito: z.boolean().optional(),
-    tabIds: z.array(z.number()).optional(),
-    windowIds: z.array(z.number()).optional()
-  })
-  .loose()
+export const browserExtensionContextFilterSchema = lazyZodSchema(() =>
+  z
+    .object({
+      contextIds: z.array(z.string()).optional(),
+      contextTypes: z.array(z.string()).optional(),
+      documentIds: z.array(z.string()).optional(),
+      documentOrigins: z.array(z.string()).optional(),
+      documentUrls: z.array(z.string()).optional(),
+      frameIds: z.array(z.number()).optional(),
+      incognito: z.boolean().optional(),
+      tabIds: z.array(z.number()).optional(),
+      windowIds: z.array(z.number()).optional()
+    })
+    .loose()
+)
 
 type ContextFilter = z.infer<typeof browserExtensionContextFilterSchema>
 

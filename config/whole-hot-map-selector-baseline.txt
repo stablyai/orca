@@ -64,6 +64,3 @@
 1 src/renderer/src/components/worktree-jump/state/use-worktree-jump-palette-store-state.ts:lastVisitedAtByWorktreeId
 1 src/renderer/src/components/worktree-jump/state/use-worktree-jump-palette-store-state.ts:paneForegroundAgentByPaneKey
 1 src/renderer/src/components/worktree-jump/state/use-worktree-jump-palette-store-state.ts:unifiedTabsByWorktree
-1 src/renderer/src/components/wsl-move/WslMoveDialog.tsx:terminalLayoutsByTabId
-1 src/renderer/src/components/wsl-move/WslMoveDialog.tsx:unifiedTabsByWorktree
-1 src/renderer/src/components/wsl-move/WslMovedProjectsSection.tsx:unifiedTabsByWorktree

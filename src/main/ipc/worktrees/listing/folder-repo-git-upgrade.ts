@@ -11,7 +11,7 @@ import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import { findExtraFolderWorkspaceIds } from '../../../workspaces/catalog/folder-workspace-meta-presence'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { isWslUncPath } from '../../../../shared/file-access/wsl-paths'
-import { resolveFolderToGitConversion } from '../../../workspaces/catalog/folder-repo-git-conversion'
+import { inspectFolderToGitConversion } from '../../../workspaces/catalog/folder-repo-git-conversion'
 import { prepareLocalWorktreeRootForRepo } from '../../../workspaces/creation/worktree-root-preparation'
 import { invalidateAuthorizedRootsCache } from '../removal/registered-worktree-roots-cache'
 import { notifyReposChanged } from '../../repos/repos-changed-notification'
@@ -45,6 +45,14 @@ let activeWatch: UpgradeWatch | null = null
 // Re-probe rejected Git markers only after their identity changes.
 const rejectedMarkers = new Map<string, string>()
 
+// Trusting a repo edits Git config, not .git, so ownership refusals retry on a doubling backoff.
+const UNTRUSTED_RETRY_MIN_MS = 2 * 60_000
+const UNTRUSTED_RETRY_MAX_MS = 30 * 60_000
+const untrustedMarkers = new Map<
+  string,
+  { signature: string; retryAtMs: number; retryDelayMs: number }
+>()
+
 // Local stat cannot observe SSH roots; WSL UNC roots follow their existing runtime watch policy.
 function isUpgradeCandidate(repo: Repo): boolean {
   return (
@@ -73,17 +81,19 @@ async function readGitMarkerSignature(repoPath: string): Promise<string | null> 
 /** Hide external worktrees only when stored and Git root spellings match, or symlinked projects could lose their only workspace. */
 async function resolveUpgrade(
   repoPath: string
-): Promise<{ folderUpgradeGitRootPath?: string; externalWorktreeVisibility?: 'hide' } | null> {
-  const conversion = await resolveFolderToGitConversion(repoPath)
+): Promise<
+  { folderUpgradeGitRootPath?: string; externalWorktreeVisibility?: 'hide' } | 'untrusted' | null
+> {
+  const { conversion, ownershipError } = await inspectFolderToGitConversion(repoPath)
   if (!conversion) {
-    return null
+    return ownershipError ? 'untrusted' : null
   }
   return conversion.rootSpellingMatches
     ? { ...conversion.updates, externalWorktreeVisibility: 'hide' }
     : conversion.updates
 }
 
-type UpgradeResult = 'upgraded' | 'blocked' | 'rejected'
+type UpgradeResult = 'upgraded' | 'blocked' | 'untrusted' | 'rejected'
 
 async function upgradeFolderRepo(watch: UpgradeWatch, repoId: string): Promise<UpgradeResult> {
   // Re-read after the marker stat: the repo can be removed or already upgraded mid-tick.
@@ -105,6 +115,9 @@ async function upgradeFolderRepo(watch: UpgradeWatch, repoId: string): Promise<U
     hasExtraFolderWorkspaces(watch.store, latest)
   ) {
     return 'blocked'
+  }
+  if (updates === 'untrusted') {
+    return 'untrusted'
   }
   if (!updates) {
     return 'rejected'
@@ -144,6 +157,11 @@ async function pollOnce(watch: UpgradeWatch): Promise<void> {
     if (signature === null || rejectedMarkers.get(key) === signature) {
       continue
     }
+    const untrusted = untrustedMarkers.get(key)
+    const backingOff = untrusted?.signature === signature
+    if (backingOff && performance.now() < untrusted.retryAtMs) {
+      continue
+    }
     const result = await upgradeFolderRepo(watch, repo.id)
     if (watch.disposed) {
       return
@@ -151,10 +169,24 @@ async function pollOnce(watch: UpgradeWatch): Promise<void> {
     if (result === 'rejected') {
       rejectedMarkers.set(key, signature)
     }
+    if (result === 'untrusted') {
+      const retryDelayMs = backingOff
+        ? Math.min(untrusted.retryDelayMs * 2, UNTRUSTED_RETRY_MAX_MS)
+        : UNTRUSTED_RETRY_MIN_MS
+      untrustedMarkers.set(key, {
+        signature,
+        retryAtMs: performance.now() + retryDelayMs,
+        retryDelayMs
+      })
+    } else {
+      untrustedMarkers.delete(key)
+    }
   }
-  for (const key of rejectedMarkers.keys()) {
-    if (!liveKeys.has(key)) {
-      rejectedMarkers.delete(key)
+  for (const markers of [rejectedMarkers, untrustedMarkers]) {
+    for (const key of markers.keys()) {
+      if (!liveKeys.has(key)) {
+        markers.delete(key)
+      }
     }
   }
 }
@@ -246,6 +278,7 @@ export function stopFolderRepoGitUpgradeWatch(): void {
   watch.disposed = true
   setFolderRepoGitUpgradeWakeListener(null)
   rejectedMarkers.clear()
+  untrustedMarkers.clear()
   if (watch.timer) {
     clearTimeout(watch.timer)
     watch.timer = null

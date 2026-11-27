@@ -34,11 +34,7 @@ import type { AcpStructuredSessionAdapterDeps } from '../acp-structured-session-
 import { AcpStructuredTurns } from '../../turns/acp-structured-turns'
 import type { AcpStructuredTurnsDeps } from '../../turns/acp-turn-dispatch-contract'
 import { acpNoModelSelected } from '../../turns/acp-model-command'
-import {
-  assertAcpStartingSession,
-  isAcpReadySession,
-  type AcpStructuredChild
-} from '../children/acp-structured-child'
+import { assertAcpStartingSession, type AcpStructuredChild } from '../children/acp-structured-child'
 
 type AcpHandshakeInput = {
   acquire: StructuredAgentSessionAcquireInput
@@ -240,7 +236,8 @@ export async function initializeAcpStructuredSession(
   assertStarting()
   liveLane.apply(liveLane.translator.contextModels(started.response.models, now()))
   const mode = spec.permissionModeConfig
-  if (mode && acquire.permissionMode !== 'own') {
+  // A kept agent runs with the mode it had; a mid-turn change could be refused and end it.
+  if (mode && acquire.permissionMode !== 'own' && !connection.kept) {
     // Fail startup rather than silently use a different permission mode.
     const wanted = acquire.permissionMode ?? 'ask'
     const requested = child.permissionModes?.[wanted]
@@ -293,24 +290,20 @@ export async function initializeAcpStructuredSession(
     liveLane.apply(acpSessionNotRestoredRow(key, started.sessionId, agentName))
   }
   assertStarting()
-  Object.assign(child, {
-    childStops,
+  child.childStops = childStops
+  child.lane = liveLane
+  child.turns = new AcpStructuredTurns({
+    steeringSessionId: spec.dialect.sessionSteering?.(initialized) ? started.sessionId : undefined,
+    connection,
+    withdrawRequests: () => prompts.withdrawAll(),
     lane: liveLane,
-    turns: new AcpStructuredTurns({
-      connection,
-      withdrawRequests: () => prompts.withdrawAll(),
-      lane: liveLane,
-      agentName,
-      compactCommand: spec.dialect.compactCommand,
-      now,
-      settle: onSettled,
-      sessionLost: input.onSessionLost,
-      modelRefusal: (error) => acpNoModelSelected(spec.dialect, options, error)
-    })
+    agentName,
+    compactCommand: spec.dialect.compactCommand,
+    now,
+    settle: onSettled,
+    sessionLost: input.onSessionLost,
+    modelRefusal: (error) => acpNoModelSelected(spec.dialect, options, error)
   })
-  if (!isAcpReadySession(child)) {
-    throw new Error('ACP session did not open')
-  }
   return {
     link,
     reportedOptions: options.observedCurrent(child.permissionModes),

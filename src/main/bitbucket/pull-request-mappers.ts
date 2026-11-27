@@ -9,6 +9,7 @@ export type RawBitbucketPullRequest = {
   id?: number
   title?: string
   state?: string | null
+  draft?: boolean | null
   updated_on?: string | null
   links?: {
     html?: {
@@ -33,7 +34,7 @@ export type RawBitbucketPullRequest = {
 export type BitbucketPullRequestInfo = {
   number: number
   title: string
-  state: 'open' | 'closed' | 'merged'
+  state: 'open' | 'draft' | 'closed' | 'merged'
   url: string
   status: CheckStatus
   checksSummary?: ProviderCheckSummary
@@ -110,10 +111,11 @@ export function mapBitbucketPullRequest(
     return null
   }
   const headSha = raw.source?.commit?.hash?.trim()
+  const state = mapBitbucketPullRequestState(raw.state)
   return {
     number: raw.id,
     title: raw.title,
-    state: mapBitbucketPullRequestState(raw.state),
+    state: state === 'open' && raw.draft ? 'draft' : state,
     url: raw.links.html.href,
     status,
     ...(checksSummary ? { checksSummary } : {}),

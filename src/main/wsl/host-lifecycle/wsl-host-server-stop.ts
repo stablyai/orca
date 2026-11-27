@@ -1,5 +1,6 @@
 /** Stop terminals by handle, then managed-decommission orcad/daemon. Claim stopped only with zero-session census, exact serving-orcad identity and retired daemon evidence. */
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { errorMessage } from '../../../shared/errors/error-message'
 import type { OrcadDecommissionResult } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-decommission'
 import { ORCAD_MANAGED_REMOTE_PORT } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
@@ -127,13 +128,16 @@ export type WslHostRuntimeAccess = {
 }
 
 // Only what removal reads from each live terminal.
-const TerminalHandlesSchema = z.object({
-  terminals: z.array(z.object({ handle: z.string().min(1), worktreeId: z.string() }))
-}) satisfies z.ZodType<{
-  terminals: Pick<RuntimeTerminalListResult['terminals'][number], 'handle' | 'worktreeId'>[]
-}>
+const TerminalHandlesSchema = lazyZodSchema(
+  () =>
+    z.object({
+      terminals: z.array(z.object({ handle: z.string().min(1), worktreeId: z.string() }))
+    }) satisfies z.ZodType<{
+      terminals: Pick<RuntimeTerminalListResult['terminals'][number], 'handle' | 'worktreeId'>[]
+    }>
+)
 
-const RuntimeIdSchema = z.object({ runtimeId: z.string().min(1) })
+const RuntimeIdSchema = lazyZodSchema(() => z.object({ runtimeId: z.string().min(1) }))
 
 /** Closing terminals, counting what is left and naming the serving orcad, all through its RPC. */
 export function wslHostRuntimeStopSteps(
@@ -145,7 +149,7 @@ export function wslHostRuntimeStopSteps(
       readWslHostPeerDesktops((method, params) => access.call(environmentId, method, params)),
     endTerminals: async () => {
       const list = TerminalHandlesSchema.parse(
-        await access.call(environmentId, 'terminal.list', { limit: 1000 })
+        await access.call(environmentId, 'terminal.list', { limit: 1000, includePreview: false })
       )
       const leftovers: WslHostTerminalLeftover[] = []
       // Close by handle so deleted-project terminals remain addressable; one refusal must not skip other terminals/server stop.

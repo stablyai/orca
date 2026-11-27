@@ -4,6 +4,7 @@
 import { readFile, stat } from 'node:fs/promises'
 import { basename } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../../../shared/schema/lazy-zod-schema'
 import {
   AGENT_SESSION_ATTACHMENT_MAX_BYTES,
   sanitizeAgentSessionAttachmentName,
@@ -20,7 +21,9 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 
 const CALL_TIMEOUT_MS = 30_000
 const MB = 1024 * 1024
-const ShownItem = z.object({ item: z.object({ chat: z.object({ id: z.string().min(1) }) }) })
+const ShownItem = lazyZodSchema(() =>
+  z.object({ item: z.object({ chat: z.object({ id: z.string().min(1) }) }) })
+)
 
 function refused(message: string): OrchestrationError {
   return new OrchestrationError('invalid_argument', `${message} Nothing was sent.`, {

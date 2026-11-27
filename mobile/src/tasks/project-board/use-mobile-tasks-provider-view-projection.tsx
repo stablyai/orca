@@ -24,7 +24,6 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
   const colorScheme = useMobileColorScheme()
   const {
     activeGitHubProject,
-    defaultGitHubPreset,
     githubKind,
     githubMode,
     githubPreset,
@@ -53,22 +52,6 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
     effectiveRepoIds
   } = model
   const githubPresetOptions = githubKind === 'prs' ? PR_PRESETS : ISSUE_PRESETS
-  const githubPresetPickerOptions = useMemo(
-    () =>
-      githubPresetOptions.map((option) =>
-        option.value === defaultGitHubPreset
-          ? {
-              ...option,
-              subtitle: option.subtitle
-                ? t('tasks.providerViewProjection.defaultSubtitle', '{{subtitle}} · Default', {
-                    subtitle: option.subtitle
-                  })
-                : t('tasks.providerViewProjection.default', 'Default')
-            }
-          : option
-      ),
-    [defaultGitHubPreset, githubPresetOptions, t]
-  )
   const githubPresetLabel =
     githubPresetOptions.find((preset) => preset.value === githubPreset)?.label ??
     t('tasks.providerViewProjection.openState', 'Open')
@@ -266,7 +249,6 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
   }, [githubProjectSearch, githubProjectTable?.selectedView.filter])
   return Object.assign(model, {
     githubPresetOptions,
-    githubPresetPickerOptions,
     githubPresetLabel,
     gitlabFilterLabel,
     jiraFilterLabel,

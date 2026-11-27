@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import {
   PREPARED_CHECKOUT_MISS_REASONS,
   PREPARED_CHECKOUT_ORIGINS,
@@ -11,7 +12,7 @@ import {
 
 // Numbers and closed enums exclude repo-identifying paths/branches/refs/errors. Fields are optional for folder workspaces and untimed creates.
 
-const durationMsSchema = z.number().int().nonnegative().optional()
+const durationMsSchema = lazyZodSchema(() => z.number().int().nonnegative().optional())
 
 export const WORKTREE_COUNT_BUCKETS = [
   '1',
@@ -62,11 +63,11 @@ type _PhaseDurationSync = [_PhaseKeys] extends [_PhaseDurationKeys]
 const _phaseDurationSyncCheck: _PhaseDurationSync = true
 void _phaseDurationSyncCheck
 
-const countSchema = z.number().int().nonnegative().optional()
+const countSchema = lazyZodSchema(() => z.number().int().nonnegative().optional())
 
 const workspaceCreateContextProperties = {
-  create_entry_point: z.enum(WORKSPACE_CREATE_ENTRY_POINTS).optional(),
-  execution_host: z.enum(WORKTREE_CREATE_EXECUTION_HOSTS).optional(),
+  create_entry_point: lazyZodSchema(() => z.enum(WORKSPACE_CREATE_ENTRY_POINTS).optional()),
+  execution_host: lazyZodSchema(() => z.enum(WORKTREE_CREATE_EXECUTION_HOSTS).optional()),
   /** Most other worktree creates running in this app at once during this one. */
   concurrent_creates: countSchema,
   /** Most prepared-checkout builds and discards running at once during this create, not counting
@@ -75,17 +76,19 @@ const workspaceCreateContextProperties = {
 }
 
 const preparedCheckoutProperties = {
-  prepared_checkout: z.enum(['hit', 'miss']).optional(),
+  prepared_checkout: lazyZodSchema(() => z.enum(['hit', 'miss']).optional()),
   /** Hit only: the reset the prepared checkout needed before it was handed over. */
-  prepared_checkout_reset: z.enum(PREPARED_CHECKOUT_RESETS).optional(),
+  prepared_checkout_reset: lazyZodSchema(() => z.enum(PREPARED_CHECKOUT_RESETS).optional()),
   /** Hit only: the new-worktree UI's prefetch, the automatic burst replacement, or that
    *  replacement which the prefetch then asked for too. */
-  prepared_checkout_origin: z.enum(PREPARED_CHECKOUT_ORIGINS).optional(),
+  prepared_checkout_origin: lazyZodSchema(() => z.enum(PREPARED_CHECKOUT_ORIGINS).optional()),
   /** Hit only: from the start of the prepared checkout's build to it being ready. */
   prepared_checkout_build_ms: durationMsSchema,
   /** Hit only: how long it sat ready before this create claimed it; 0 when the create waited. */
   prepared_checkout_idle_ms: durationMsSchema,
-  prepared_checkout_miss_reason: z.enum(PREPARED_CHECKOUT_MISS_REASONS).optional()
+  prepared_checkout_miss_reason: lazyZodSchema(() =>
+    z.enum(PREPARED_CHECKOUT_MISS_REASONS).optional()
+  )
 }
 
 export const workspaceCreatedTimingProperties = {
@@ -97,16 +100,16 @@ export const workspaceCreatedTimingProperties = {
   ...phaseDurationProperties,
   ...preparedCheckoutProperties,
   ...workspaceCreateContextProperties,
-  worktree_count_bucket: z.enum(WORKTREE_COUNT_BUCKETS).optional(),
-  repo_file_count_bucket: z.enum(REPO_FILE_COUNT_BUCKETS).optional(),
-  post_checkout_hook: z.enum(POST_CHECKOUT_HOOK_PRESENCE_VALUES).optional()
+  worktree_count_bucket: lazyZodSchema(() => z.enum(WORKTREE_COUNT_BUCKETS).optional()),
+  repo_file_count_bucket: lazyZodSchema(() => z.enum(REPO_FILE_COUNT_BUCKETS).optional()),
+  post_checkout_hook: lazyZodSchema(() => z.enum(POST_CHECKOUT_HOOK_PRESENCE_VALUES).optional())
 }
 
 /** `untimed` = the create failed outside every timed phase. */
 export const WORKSPACE_CREATE_FAILED_PHASE_VALUES = [...WORKTREE_CREATE_PHASES, 'untimed'] as const
 
 export const workspaceCreateFailedProperties = {
-  failed_phase: z.enum(WORKSPACE_CREATE_FAILED_PHASE_VALUES).optional(),
+  failed_phase: lazyZodSchema(() => z.enum(WORKSPACE_CREATE_FAILED_PHASE_VALUES).optional()),
   /** Elapsed time from the start of the create to the failure. */
   total_ms: durationMsSchema,
   ...preparedCheckoutProperties,

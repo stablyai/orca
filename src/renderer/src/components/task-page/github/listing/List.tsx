@@ -1,3 +1,4 @@
+import { RailPageScroll } from '@/components/rail-page/RailPage'
 import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
 import { useAppStore } from '@/store/index'
 import { cn } from '@/lib/class-names'
@@ -54,14 +55,12 @@ export function TaskPageGitHubList({
   } = model
   return (
     // Join the table shell to filter chrome without a doubled seam.
-    <div className="flex min-h-0 min-w-0 max-h-full flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border/50 bg-background shadow-sm">
-      <div
+    <div className="@container flex min-h-0 min-w-0 max-h-full flex-col overflow-hidden bg-background">
+      <RailPageScroll
+        containerGutter
         ref={githubListScrollRef}
         data-task-list-scroll="github"
         className="min-h-0 flex-initial overflow-auto scrollbar-sleek scrollbar-sleek-lg"
-        style={{
-          scrollbarGutter: 'stable'
-        }}
         onScroll={(event) => {
           const state = useAppStore.getState()
           if (state.activeView !== 'tasks' || state.taskPageData.openGitHubWorkItem) {
@@ -89,7 +88,7 @@ export function TaskPageGitHubList({
         <div
           // Why: z-40 must beat the rows' sticky left cells (z-20); this stacking context's z sets the whole header's level.
           className={cn(
-            'sticky top-0 z-40 grid h-8 gap-3 border-b border-border/50 px-3 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground [&>span]:flex [&>span]:items-center',
+            'sticky top-0 z-40 grid h-8 gap-3 border-b border-border/50 rail-page-row-gutter text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground [&>span]:flex [&>span]:items-center',
             GITHUB_TASK_HEADER_SURFACE_CLASS,
             githubTaskGridClass
           )}
@@ -232,7 +231,13 @@ export function TaskPageGitHubList({
             {Array.from({
               length: 12
             }).map((_, i) => (
-              <div key={i} className={cn('grid min-h-12 gap-3 px-3 py-2.5', githubTaskGridClass)}>
+              <div
+                key={i}
+                className={cn(
+                  'grid min-h-12 gap-3 rail-page-row-gutter py-2.5',
+                  githubTaskGridClass
+                )}
+              >
                 <div className={GITHUB_TASK_STICKY_ID_CELL_CLASS}>
                   <div className="h-6 w-16 animate-pulse rounded-md bg-muted/70" />
                 </div>
@@ -298,7 +303,7 @@ export function TaskPageGitHubList({
         ) : null}
 
         <TaskPageGitHubRows model={model} />
-      </div>
+      </RailPageScroll>
 
       {/* Why: pagination sits outside the scroll container so it
                   remains pinned at the bottom of the panel rather than

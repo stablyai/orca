@@ -207,6 +207,35 @@ it('keeps Jira smart links active and ordinary hard breaks readable', () => {
   ).toBe('https://example.com/a_b?x=1&y=2\nnext line')
 })
 
+it('renders inline Jira dates as UTC calendar dates and skips unusable timestamps', () => {
+  const date = (timestamp: string) => ({ type: 'date', attrs: { timestamp } })
+  expect(
+    adfToMarkdownText({
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'Ship on ' },
+            date('1690344879000'),
+            { type: 'text', text: '.' }
+          ]
+        },
+        {
+          type: 'paragraph',
+          content: [
+            date('0'),
+            { type: 'text', text: ' / ' },
+            date('-86400000'),
+            { type: 'text', text: ' /' },
+            date('9'.repeat(20))
+          ]
+        }
+      ]
+    })
+  ).toBe('Ship on 2023-07-26.\n\n1970-01-01 / 1969-12-31 /')
+})
+
 it('retains reference destinations used by inert source fallbacks', async () => {
   const doc = await markdownToAdf(
     '[local][doc] ![plot][img]\n\n[doc]: ../readme.md\n[img]: ../plot.png'
@@ -668,4 +697,38 @@ it('keeps ambiguous URL authorities active through real Markdown read-back', asy
       ]
     })
   }
+})
+
+it('keeps expand titles ahead of their bodies, including nestedExpand inside a table', () => {
+  const paragraph = (text: string) => ({ type: 'paragraph', content: [{ type: 'text', text }] })
+  const doc = {
+    type: 'doc',
+    content: [
+      { type: 'expand', attrs: { title: ' Linux *only* ' }, content: [paragraph('Reproduce.')] },
+      { type: 'expand', attrs: { title: '' }, content: [paragraph('Untitled body.')] },
+      {
+        type: 'table',
+        content: [
+          {
+            type: 'tableRow',
+            content: [
+              {
+                type: 'tableCell',
+                content: [
+                  {
+                    type: 'nestedExpand',
+                    attrs: { title: 'Expected result' },
+                    content: [paragraph('Keep the session.')]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+  expect(adfToMarkdownText(doc)).toBe(
+    '**Linux \\*only\\***\n\nReproduce.\n\nUntitled body.\n\n**Expected result**\n\nKeep the session.'
+  )
 })

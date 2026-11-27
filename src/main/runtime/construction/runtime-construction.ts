@@ -50,7 +50,7 @@ import { RuntimeClientSettingsController } from '../client/settings/runtime-clie
 import { RuntimeSessionSearchSettingsController } from '../integrations/ai-vault/runtime-session-search-settings'
 import { RuntimeAutomationController } from '../integrations/automations/runtime-automation-controller'
 import { RuntimeOrchestrationFederation } from '../orchestration/federation/runtime-orchestration-federation'
-import { configureAiVaultSessionSources } from '../../ai-vault/discovery/ai-vault-scan-roots'
+import { configureAiVaultSessionSources } from '../../ai-vault/discovery/ai-vault-session-sources-registry'
 import { configureHostReadableTranscriptPathSources } from '../../native-chat/transcript-discovery/host-readable-transcript-path'
 import { createEphemeralAgentSessionClaimSigner } from '../agent-session/ownership/agent-session-claim-identity'
 import { registerConptyDa1OverrideInstaller } from '../terminal/output/terminal-model-query-authority'
@@ -191,8 +191,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithBots {
       subscriptions: this.subscriptions,
       mobileNotifications: this.mobileNotifications,
       accounts: this.accounts,
-      mobileSpeech: this.mobileSpeech,
-      mobileDictation: this.mobileDictation,
+      mobileSpeechOwners: this.mobileSpeechOwners,
       browserDrivers: this.browserDrivers,
       messageWaiters: this.messageWaiters
     })

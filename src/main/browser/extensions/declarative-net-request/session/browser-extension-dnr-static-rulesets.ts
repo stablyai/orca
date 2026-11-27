@@ -1,9 +1,9 @@
 import { readFile } from 'node:fs/promises'
-import { isAbsolute, relative, resolve } from 'node:path'
 import {
   buildDnrRulesetInSlices,
   type DnrInvalidRulePolicy
 } from '../rule-compilation/ruleset-builder'
+import { resolveInsideExtensionDirectory } from '../../installation/browser-extension-manifest'
 import type { DnrRulesetIndex } from '../indexing/ruleset-index'
 import type { DnrRulesetSource } from '../rule-compilation/rule-types'
 
@@ -85,8 +85,14 @@ function yieldWhenOverBudget(): Promise<void> {
 
 export type DnrRulesBuild = { ok: true; built: DnrBuiltRuleset } | { ok: false; error: string }
 
-/** Static rulesets skip invalid rules; API updates ('error') reject on the first one. */
-const BUILD_CANCELLED = new Error('Rules build cancelled')
+const BUILD_CANCELLED_MESSAGE = 'Rules build cancelled'
+
+// Avoid a module-level Error sentinel: V8's unformatted stack trace pins the module-loader frames (~15 MiB).
+class DnrRulesBuildCancelledError extends Error {
+  constructor() {
+    super(BUILD_CANCELLED_MESSAGE)
+  }
+}
 
 /** `cancelled` ends the build at its next slice, e.g. once the extension it was for unloads. */
 export async function buildDnrRules(
@@ -99,7 +105,7 @@ export async function buildDnrRules(
   const pause = async (): Promise<void> => {
     await yieldWhenOverBudget()
     if (cancelled?.()) {
-      throw BUILD_CANCELLED
+      throw new DnrRulesBuildCancelledError()
     }
   }
   let result: Awaited<ReturnType<typeof buildDnrRulesetInSlices>>
@@ -111,8 +117,8 @@ export async function buildDnrRules(
       pause
     )
   } catch (error) {
-    if (error === BUILD_CANCELLED) {
-      return { ok: false, error: BUILD_CANCELLED.message }
+    if (error instanceof DnrRulesBuildCancelledError) {
+      return { ok: false, error: BUILD_CANCELLED_MESSAGE }
     }
     throw error
   }
@@ -134,9 +140,8 @@ async function loadStaticRuleset(
   extension: Pick<Electron.Extension, 'id' | 'path'>,
   ruleset: DnrManifestRuleset
 ): Promise<DnrBuiltRuleset | null> {
-  const file = resolve(extension.path, ruleset.path.replace(/^\/+/, ''))
-  const inside = relative(extension.path, file)
-  if (inside.startsWith('..') || isAbsolute(inside)) {
+  const file = resolveInsideExtensionDirectory(extension.path, ruleset.path)
+  if (!file) {
     return null
   }
   const rules: unknown = JSON.parse(await readFile(file, 'utf8'))

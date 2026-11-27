@@ -341,7 +341,7 @@ const styles = themedStyleSheet(() => ({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
     borderRadius: radii.surface,
-    backgroundColor: colors.bgPanel,
+    backgroundColor: colors.chatPanel,
     padding: spacing.md,
     gap: spacing.sm
   },

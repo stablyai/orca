@@ -47,7 +47,15 @@ export function createFilesystemHandlerContext(
     downloadSessions.delete(transferId)
     session.disposeRendererLifetime()
     clearTimeout(session.cleanupTimer)
-    await session.handle.close().catch(() => {})
+    try {
+      await session.handle.close()
+    } catch (error) {
+      // Why: close can report a lost write (e.g. EIO on network mounts); never promote that file.
+      if (!cleanupTemp) {
+        await cleanupLocalTransferPath(session.tempPath)
+        throw error
+      }
+    }
     if (cleanupTemp) {
       await cleanupLocalTransferPath(session.tempPath)
     }
