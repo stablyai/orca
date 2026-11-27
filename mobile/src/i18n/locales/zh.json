@@ -750,6 +750,14 @@
         "task": "任务来自",
         "update": "更新来自",
         "message": "消息来自"
+      },
+      "unnamedRecipient": "一个智能体",
+      "event": {
+        "followedUp": "已发送后续消息",
+        "update": "更新",
+        "message": "消息",
+        "handedOff": "已移交",
+        "task": "任务"
       }
     },
     "hostOutage": {

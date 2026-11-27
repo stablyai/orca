@@ -62,12 +62,15 @@ const discoveredQuery = defineHostQuery({
   signal: { events: ['mcpServersChanged'] }
 })
 
-// Installs rarely change; the new-tab picker reads them as rarely.
+// Installs rarely change; the new-tab picker reads them as rarely. Servers apply to the agents in
+// the configured Windows Agent runtime, as on desktop; older hosts ignore the flag (native).
 const agentsQuery = defineHostQuery({
   family: 'mcpServers.agents',
   fetch: async (client) => {
     const detected = new Set(
-      preflightDetectAgentsRead.interpret(await preflightDetectAgentsRead.request(client))
+      preflightDetectAgentsRead.interpret(
+        await preflightDetectAgentsRead.request(client, { configuredWindowsRuntime: true })
+      )
     )
     return MOBILE_AGENT_CATALOG.filter((agent) => detected.has(agent.id)).map((agent) => agent.id)
   },
@@ -113,14 +116,26 @@ export function useMcpServersData(hostId: string, client: RpcClient | null, enab
 
   const { refetch: refetchList } = list
   const { refetch: refetchDiscovered } = discovered
+  const { refetch: refetchAgents } = agents
   // A host without the capability is never asked, even on focus.
   const reread = useCallback(() => {
     if (enabled) {
       // Joins a read already out (the mount's, or the host's notice) instead of sending another.
       void refetchList({ cancelRefetch: false })
       void refetchDiscovered({ cancelRefetch: false })
+      // A failed read (a stopped WSL distro) is retried on focus; a held list keeps its long cache.
+      // Read here, not as a dependency, so the error itself cannot re-run this focus callback.
+      const agentsKey = hostQueryKey(
+        hostId,
+        agentsQuery.family,
+        HOST_LIST_TARGET,
+        NO_HOST_LIST_INPUT
+      )
+      if (queryClient.getQueryState(agentsKey)?.status === 'error') {
+        void refetchAgents({ cancelRefetch: false })
+      }
     }
-  }, [enabled, refetchList, refetchDiscovered])
+  }, [enabled, refetchList, refetchDiscovered, queryClient, hostId, refetchAgents])
   useFocusEffect(reread)
 
   /** A change's answer shows at once; the re-read after it catches what else changed. */

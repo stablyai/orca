@@ -70,7 +70,7 @@ export function useTerminalWindowWakeRecovery({
       // Focus and visibility often fire together; keep one immediate recovery and one settled RAF pass.
       if (wakeRecoveryFrameId !== null) {
         // A coalesced settled pass may only strengthen: later focus must not cancel a genuine wake’s atlas clear.
-        settledClearGlyphAtlases ||= clearGlyphAtlases
+        settledClearGlyphAtlases = settledClearGlyphAtlases || clearGlyphAtlases
         return
       }
       const manager = managerRef.current
@@ -127,7 +127,7 @@ export function useTerminalWindowWakeRecovery({
       let deferred = false
       for (const pane of manager.getPanes?.() ?? []) {
         const state = repairPaneWebglCanvasDpr(pane)
-        deferred ||= state === 'deferred'
+        deferred = deferred || state === 'deferred'
         if (state === 'repaired') {
           presentPaneViewport(pane)
         }

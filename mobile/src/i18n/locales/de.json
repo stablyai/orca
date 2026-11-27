@@ -745,7 +745,16 @@
       "kind": {
         "started": "Gestartet",
         "reopened": "Erneut geöffnet",
-        "followedUp": "Folgenachricht",
+        "followedUp": "Folgenachricht an",
+        "handedOff": "Übergeben an",
+        "task": "Aufgabe"
+      },
+      "unnamedRecipient": "einen Agenten",
+      "recipientName": "an {{name}}",
+      "event": {
+        "followedUp": "Folgenachricht gesendet",
+        "update": "Update",
+        "message": "Nachricht",
         "handedOff": "Übergeben",
         "task": "Aufgabe"
       }

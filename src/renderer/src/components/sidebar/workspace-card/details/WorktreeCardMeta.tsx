@@ -24,6 +24,7 @@ import { WorktreeCardTaskDetailSection } from '../review/WorktreeCardTaskDetailS
 import { getWorktreeCardTaskActions } from '../review/worktree-card-task-actions'
 import { WorktreeCardOriginDetailSections } from './WorktreeCardBotDetailSection'
 import { WorktreeCardHoverIdentityHeader } from './WorktreeCardHoverIdentityHeader'
+import { WorktreeCardAutoNameFailureSection } from './WorktreeCardAutoNameFailureSection'
 import {
   CommentMarkdownAsync,
   preloadCommentMarkdown
@@ -50,6 +51,7 @@ export function WorktreeCardDetailsHover({
   workspaceTitle,
   identityOrder = 'workspace-first',
   workspaceTitleRenameDisabled = false,
+  autoNameFailure,
   detailsAfter,
   openDelay = 250,
   closeDelay = 120,
@@ -143,6 +145,7 @@ export function WorktreeCardDetailsHover({
       cliProvenance,
       bot
     }) &&
+    !autoNameFailure &&
     !detailsAfter
   ) {
     return children
@@ -191,6 +194,10 @@ export function WorktreeCardDetailsHover({
               onWorkspaceTitleEditingChange={handleWorkspaceTitleEditingChange}
             />
           )}
+
+          {autoNameFailure ? (
+            <WorktreeCardAutoNameFailureSection failure={autoNameFailure} />
+          ) : null}
 
           {!showAttachmentCollection ? (
             <>

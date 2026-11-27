@@ -36,6 +36,7 @@ export function registerTerminalSubscribeBinaryControlFrames(
   if (!registerBinaryStreamHandler) {
     return () => {}
   }
+  let inputTail: Promise<unknown> = Promise.resolve()
   return registerBinaryStreamHandler(streamId, (frame) => {
     if (controls.isClosed()) {
       return
@@ -48,20 +49,26 @@ export function registerTerminalSubscribeBinaryControlFrames(
       if (isTerminalInputLockedForClient(runtime, ptyId, params.client)) {
         return
       }
-      void controls.getDesktopClaimTail().then(async (claimed) => {
-        if (!claimed || isTerminalInputLockedForClient(runtime, ptyId, params.client)) {
-          return
-        }
-        const outcome = await sendTerminalStreamInput(runtime, {
-          terminal: params.terminal,
-          text,
-          client: params.client,
-          isMobile
+      const claimTail = controls.getDesktopClaimTail()
+      const arrivedAt = performance.now()
+      inputTail = inputTail
+        .then(() => claimTail)
+        .then(async (claimed) => {
+          if (!claimed || isTerminalInputLockedForClient(runtime, ptyId, params.client)) {
+            return
+          }
+          const outcome = await sendTerminalStreamInput(runtime, {
+            terminal: params.terminal,
+            text,
+            client: params.client,
+            isMobile,
+            arrivedAt
+          })
+          if (!controls.isClosed() && outcome === 'rejected' && supportsWriteUnavailable) {
+            controls.sendFrame(TerminalStreamOpcode.WriteUnavailable)
+          }
         })
-        if (!controls.isClosed() && outcome === 'rejected' && supportsWriteUnavailable) {
-          controls.sendFrame(TerminalStreamOpcode.WriteUnavailable)
-        }
-      })
+        .catch(() => undefined)
       return
     }
     if (frame.opcode === TerminalStreamOpcode.Resize && params.client) {

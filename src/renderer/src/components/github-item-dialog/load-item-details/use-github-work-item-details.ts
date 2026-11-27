@@ -139,6 +139,17 @@ export function useGitHubWorkItemDetails({
         ? cachedEntry.error
         : null
   const detailsLoaded = Boolean(details)
+  // Why: an uncached item's first commit precedes the effect below that marks its read pending.
+  // Count a read that effect will start as pending, so empty copy never paints before a read confirms it.
+  const detailsReadOwed =
+    !!workItem &&
+    !!effectiveRepoId &&
+    !!detailsCacheKey &&
+    canUseDetailsRepoContext &&
+    !invalidOpenedItem &&
+    (!binding || cache.current(binding)) &&
+    (!cachedEntry || !!cachedEntry.rereadOwed)
+  const detailsPending = !details && !error && (loading || detailsReadOwed)
 
   // Invalidation keeps shown details without changing fetch dependencies; a tick starts the one owed read.
   const [refetchTick, setRefetchTick] = useState(0)
@@ -304,6 +315,7 @@ export function useGitHubWorkItemDetails({
     loading,
     error,
     detailsLoaded,
+    detailsPending,
     displayWorkItem,
     addressedWorkItem,
     appendOptimisticComment,

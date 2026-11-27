@@ -127,7 +127,7 @@ export function consumeCodebuddySessionLine(state: CodebuddySessionParseState, l
       seedFirstUserPrompt: !isMetaUserTurn
     })
     if (text && !isMetaUserTurn) {
-      state.firstUserTitle ??= text
+      state.firstUserTitle ??= normalizeTitleText(text)
     }
     return
   }

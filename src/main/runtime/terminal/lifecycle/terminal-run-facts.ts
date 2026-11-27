@@ -49,6 +49,7 @@ export class TerminalRunFactsRegister {
   // Why apart from the run record: input must count on a PTY main adopted without a commit.
   private readonly lastInputAtByPtyId = new Map<string, number>()
   private readonly lastDrivingInputAtByPtyId = new Map<string, number>()
+  private readonly heldMailNoticeAtByPtyId = new Map<string, number>()
   private readonly lastTypedInputAtByPtyId = new Map<string, number>()
   private readonly userOpenedByPtyId = new Set<string>()
   private readonly unattributedDraftSeenAtByPtyId = new Map<string, number>()
@@ -99,6 +100,7 @@ export class TerminalRunFactsRegister {
     if (!sameProcess) {
       this.lastInputAtByPtyId.delete(commit.id)
       this.lastDrivingInputAtByPtyId.delete(commit.id)
+      this.heldMailNoticeAtByPtyId.delete(commit.id)
       this.lastTypedInputAtByPtyId.delete(commit.id)
       this.userOpenedByPtyId.delete(commit.id)
       this.unattributedDraftSeenAtByPtyId.delete(commit.id)
@@ -168,6 +170,15 @@ export class TerminalRunFactsRegister {
     return this.lastDrivingInputAtByPtyId.get(ptyId) ?? null
   }
 
+  /** A mailbox notice stayed in the composer after its Enters: its draft holds delivery as typing does. */
+  noteHeldMailNotice(ptyId: string, now = Date.now()): void {
+    this.heldMailNoticeAtByPtyId.set(ptyId, now)
+  }
+
+  readHeldMailNoticeAt(ptyId: string): number | null {
+    return this.heldMailNoticeAtByPtyId.get(ptyId) ?? null
+  }
+
   /** Like readLastDrivingInputAt, but only input that can change what the program reads as text:
    *  pointer reports (hover, clicks, wheel) don't count. */
   readLastTypedInputAt(ptyId: string): number | null {
@@ -213,6 +224,7 @@ export class TerminalRunFactsRegister {
     this.runsByPtyId.delete(ptyId)
     this.lastInputAtByPtyId.delete(ptyId)
     this.lastDrivingInputAtByPtyId.delete(ptyId)
+    this.heldMailNoticeAtByPtyId.delete(ptyId)
     this.lastTypedInputAtByPtyId.delete(ptyId)
     this.userOpenedByPtyId.delete(ptyId)
     this.unattributedDraftSeenAtByPtyId.delete(ptyId)

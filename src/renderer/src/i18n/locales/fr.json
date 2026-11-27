@@ -14194,7 +14194,8 @@
             "741ff8a0d2": "Pusher & créer {{value0}}"
           },
           "FileExplorer": {
-            "79b1537dd3": "Sélectionnez un espace de travail pour parcourir les fichiers"
+            "79b1537dd3": "Sélectionnez un espace de travail pour parcourir les fichiers",
+            "2f4483d6c4": "Aucun fichier ne correspond à ce filtre"
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "Nouveau dossier",
@@ -14237,6 +14238,7 @@
             "31b4c3195d": "Plus d'actions de l'explorateur",
             "d95e30fe28": "Actualiser l'explorateur",
             "6026b16950": "Tout réduire",
+            "c1f3f3ec70": "Rechercher dans le contenu des fichiers",
             "openInApp": "Ouvrir dans {{app}}"
           },
           "FileExplorerTreeStatus": {
@@ -14349,6 +14351,19 @@
             "localPortInUse": "Le port {{port}} est déjà utilisé. Choisissez un autre port local.",
             "localPortRequiresPrivileges": "Le port {{port}} nécessite des privilèges élevés. Utilisez un port local ≥ 1024."
           },
+          "Search": {
+            "1abfb25a66": "Saisissez pour rechercher dans les fichiers",
+            "d56d140747": "Appuyez sur Entrée pour rechercher",
+            "98c8435e36": "Sélectionnez un espace de travail pour rechercher",
+            "dcc294f28d": "(résultats tronqués)",
+            "resultsInFiles": "{{results}} dans {{files}}",
+            "resultCount_one": "{{count}} résultat",
+            "resultCount_other": "{{count}} résultats",
+            "resultCount_many": "{{count}} résultats",
+            "fileCount_one": "{{count}} fichier",
+            "fileCount_other": "{{count}} fichiers",
+            "fileCount_many": "{{count}} fichiers"
+          },
           "SearchFilters": {
             "01e4671ccf": "fichiers à exclure (ex. *.min.js, dist/**)",
             "0a6412a895": "Fichiers à exclure",
@@ -14358,9 +14373,11 @@
           "SearchHeader": {
             "6234a5ef85": "Utiliser une expression régulière",
             "4567e6e0b6": "Mot entier uniquement",
-            "464ae3974f": "Respecter la casse"
+            "464ae3974f": "Respecter la casse",
+            "693cbeadd0": "Recherche"
           },
           "SearchQueryRow": {
+            "queryLabel": "Rechercher dans les fichiers",
             "clearLabel": "Effacer la recherche"
           },
           "SearchResultItems": {
@@ -15549,6 +15566,16 @@
             "remoteDescription": "« {{value0}} » sera supprimée de {{value2}}. Une fois supprimée, elle ne pourra plus être reprise depuis la ligne de commande de {{value1}} non plus.",
             "confirm": "Supprimer"
           },
+          "FileExplorerNameFilter": {
+            "26fb73c6e3": "Rechercher des fichiers",
+            "4d5a6b2a49": "Effacer le filtre de fichiers",
+            "7a9fb1e6aa": "Contenu"
+          },
+          "FileExplorerViewSwitch": {
+            "c4e9a2b713": "Noms",
+            "b3c8f1a902": "Filtrer les fichiers par nom",
+            "f8a2c4d1e0": "Mode de recherche de l'explorateur"
+          },
           "GitHistoryCommitFiles": {
             "b2c3d4e5f6": "Aucune modification de fichier dans ce commit"
           },
@@ -16197,34 +16224,11 @@
             "0bb39f8fe6": "Envoyer",
             "69334b4b10": "Dictée vocale",
             "29f2d13839": "Saisissez une commande…",
-            "817090af40": "Ctrl+C",
-            "53ff909568": "Tab",
-            "4930eaaae7": "Esc",
             "fa22927f13": "Coller",
             "985373052e": "Basculer en mode téléphone",
-            "58a9ee6003": "avec mise en forme des tool calls. Je vous ajoute le diff ensuite ?",
-            "aa64b519c6": "écran de terminal. Palette Tokyonight, police Menlo, véritable claude",
-            "e75112c834": "J'ai remplacé la diapositive pair-scan par un",
-            "3ce3e8c892": "14 réussis, 1 ignoré (1,8 s)",
-            "4b3666f9a9": "src/cache/worktree-cache.test.ts",
-            "1d448b69f7": "PASS",
-            "d39445686a": "src/transport/host-store.test.ts",
-            "a6e7cdc688": "pnpm test --filter mobile",
-            "21b67dfc92": "Bash",
-            "d6d1041a1c": "⎿ Diapositive pair-scan remplacée par une session de terminal",
-            "336c0e070e": "mobile/orca-mobile-sidebar-mock-v3.html",
-            "6d4ebd5833": "Édition",
-            "fc83e0d5ef": "⎿ Lecture de 2103 lignes",
-            "80cc356591": "Lecture",
-            "2c10d43745": "claude",
-            "e0f98be657": "orca/feat-mobile-page",
-            "2defc05141": "dev@mac",
-            "da121ba48d": "PLAN.md",
-            "e4befee569": "shell",
             "606aa93192": "Fichiers",
             "94febb0976": "Contrôle de code source",
             "8d6516312d": "2 terminaux · claude actif",
-            "8432787c4e": "feat/mobile-page",
             "8fd998acd3": "Retour"
           },
           "WorktreeListSlide": {
@@ -18179,8 +18183,6 @@
             "fa6ea61de3": "Annuler",
             "c2ef0359b9": "Copier le contenu",
             "f2d0c22d67": "Supprimer l'annotation {{value0}}",
-            "11c5084aa2": "Effacer les annotations",
-            "734e4343ec": "Effacer les annotations du navigateur",
             "95af781091": "Envoyer un retour à un agent",
             "ac39b9366b": "Envoyer",
             "366bf5d62c": "Nouvel onglet",
@@ -18214,21 +18216,14 @@
             "b71dc3d930": "Reconnecter",
             "d51ef37351": "Copier",
             "6f4ab3592b": "Copied",
-            "499b31b84e": "Tout copier",
             "168350ae6a": "Cliquez ou survolez un élément, puis appuyez sur C pour copier ou S pour capturer.",
-            "e852e20cea": "Copié — appuyez sur S pour capturer, ou sélectionnez un autre élément",
             "777b5bc4ec": "Cliquez sur un élément pour ajouter un retour pour l'agent.",
             "b733a91bd9": "Ajouter un retour pour l'élément sélectionné.",
             "4328a0a062": "Échec de la capture : {{value0}}",
             "759f32af29": "Téléchargement",
             "4300f38145": "Téléchargement depuis {{value0}}{{value1}}",
-            "cc4a071d3a": "Annoter un élément de la page ({{value0}})",
             "572046436a": "Navigateur distant",
             "b313a7275b": "Ouverture du navigateur distant",
-            "ea6af700da": "{{value0}} annotation",
-            "c13693fe27": "{{value0}} annotations",
-            "074f0ed10b": "{{value0}} annotation prête. Sélectionnez un autre élément ou copiez tous les retours.",
-            "a2164a6e5a": "{{value0}} annotations prêtes. Sélectionnez un autre élément ou copiez tous les retours.",
             "9f6f2e8c19": "Le chemin du fichier téléchargé est indisponible.",
             "0c79b7634d": "Impossible d'ouvrir le fichier téléchargé. Il a peut-être été déplacé ou supprimé.",
             "397d9dc923": "Impossible d'afficher le fichier téléchargé. Il a peut-être été déplacé ou supprimé.",
@@ -18239,7 +18234,9 @@
             "756bfc25c9": "Ouvert",
             "09a9489aa5": "Afficher",
             "2a4c4b8e1f": "Copier",
-            "fileUrlUnsupported": "Cet onglet du navigateur ne peut pas ouvrir les fichiers locaux. Utilisez plutôt \"Ouvrir l'aperçu sur le côté\" sur le fichier."
+            "fileUrlUnsupported": "Cet onglet du navigateur ne peut pas ouvrir les fichiers locaux. Utilisez plutôt \"Ouvrir l'aperçu sur le côté\" sur le fichier.",
+            "11c5084aa2": "Effacer les annotations",
+            "734e4343ec": "Effacer les annotations du navigateur"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "Annuler",
@@ -18322,8 +18319,6 @@
                     "c16f932cb3": "Sauvegarder",
                     "024467ceac": "Annuler",
                     "449d2c2629": "Intention d'annotation",
-                    "38d320108c": "Réduire les annotations",
-                    "9f209891a7": "Développer les annotations",
                     "includePageDetails": "Inclure les détails de la page",
                     "copyFeedback": "Copier les commentaires",
                     "copyFeedbackWithPageDetails": "Copier les commentaires avec les détails de la page"
@@ -20737,7 +20732,6 @@
         "expand": "Développer"
       },
       "question": {
-        "step": "Étape {{value0}}",
         "otherPlaceholder": "Saisissez votre réponse",
         "cancel": "Annuler",
         "send": "Valider",
@@ -20749,12 +20743,11 @@
         "recommended": "Recommandé",
         "stepOf": "{{value0}} sur {{value1}}",
         "answered": "Répondue",
-        "title": "Question",
         "previous": "Question précédente",
         "nextQuestion": "Question suivante",
         "back": "Retour",
         "skipAndSubmit": "Passer et envoyer",
-        "stepLabel": "{{value0}}, {{value1}} sur {{value2}} : {{value3}}"
+        "questionStepLabel": "{{value0}}, {{value1}} sur {{value2}}"
       },
       "approval": {
         "needsNewerOrca": "Cette demande nécessite une version plus récente d'Orca.",
@@ -21095,6 +21088,13 @@
           "followedUp": "Suivi",
           "handedOff": "Transféré",
           "task": "Tâche"
+        },
+        "unnamedRecipient": "un agent",
+        "event": {
+          "followedUp": "Suivi envoyé",
+          "update": "Mise à jour",
+          "message": "Message",
+          "handedOff": "Transféré"
         }
       },
       "goal": {
@@ -24381,10 +24381,13 @@
       "label": "Racine de l’explorateur",
       "full": "Racine du dépôt",
       "back": "Revenir à {{path}}",
+      "searchScope": "Portée : fichiers de l’espace de travail",
       "retry": "Réessayer",
       "sparseStatus": "Extraction partielle",
       "scopeDetails": "À propos de la portée de l’extraction partielle",
       "scopeExplanation": "Le sélecteur de dossiers change l’affichage, pas les fichiers extraits. La racine du dépôt inclut les fichiers extraits à la racine et dans les dossiers parents.",
+      "searchExplanation": "Noms filtre le dossier affiché. Contenu recherche dans tout l’espace de travail. Les fichiers exclus de l’extraction partielle ne sont pas recherchés.",
+      "findInFolder": "Rechercher dans {{path}}",
       "folderLoadError": "Impossible de charger ce dossier :",
       "emptyFolder": "Aucun fichier dans ce dossier"
     },
@@ -24799,7 +24802,8 @@
     "filters": {
       "toggle": "Afficher ou masquer les détails de la recherche",
       "active": "{{count}} actifs"
-    }
+    },
+    "noResults": "Aucun résultat. Essayez une autre recherche ou ajustez vos filtres."
   },
   "resourceManager": {
     "pty": {
