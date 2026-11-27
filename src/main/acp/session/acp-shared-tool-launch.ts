@@ -51,12 +51,12 @@ export async function acpSharedToolLaunch<
         : null
       if (restored) {
         launched?.discard()
-        restored.settle(run.sessionId)
+        await restored.settle(run.sessionId)
         return restored
       }
       // A reattached agent whose kept caller the keychain won't open yet keeps that entry, carried
       // to this run, so its tools have their identity once it opens.
-      launched?.settle(run.sessionId, reattached ? run.runFence : undefined)
+      await launched?.settle(run.sessionId, reattached ? run.runFence : undefined)
       return launched
     }
   }

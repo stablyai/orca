@@ -1,6 +1,5 @@
 import { installProviderProcessHost } from '../../provider-process/provider-process-spawn'
 import { configureKeptToolGrants } from '../../bots/tool-relay/kept-tool-grants'
-import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import { installProviderRelayRoute } from '../../provider-relay/app-provider-relays'
 import { nativeChatIdleStopMs } from '../../../shared/native-chat/settings/native-chat-idle-stop'
 import { recordCodexMigrationPtySpawn } from '../../codex/history/backfill/desktop-codex-session-migration'
@@ -240,11 +239,15 @@ export function bindTerminalRuntimeStartupServices(
       appVersion: app.getVersion(),
       idleStopMs: () => nativeChatIdleStopMs(state.store?.getSettings())
     })
-    // Bots' tool grants kept across a restart, for agents that outlive the app on the daemon.
-    configureKeptToolGrants({
-      directory: getProfileUserDataPath(),
-      bots: () => state.store?.getBots() ?? null
-    })
+    // Bots' tool grants kept across a restart, for agents that outlive the app on the daemon. Each
+    // Orca profile keeps its own, since only its own bots decide which stay.
+    const profileDirectory = state.activeOrcaProfile?.profileDirectory
+    if (profileDirectory) {
+      configureKeptToolGrants({
+        directory: profileDirectory,
+        bots: () => state.store?.getBots() ?? null
+      })
+    }
   }
   state.firstWindowStartupServicesReady = services.then((value) => value.firstWindowReady)
   state.localPtyStartupReady = services.then((value) => value.localPtyReady)

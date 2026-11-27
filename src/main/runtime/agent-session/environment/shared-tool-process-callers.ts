@@ -42,6 +42,8 @@ export class SharedToolProcessSession {
   private kept: KeptSharedToolCaller | null = null
   /** At its end, whether its agent runs on (handed to its daemon at quit), so the entry stays. */
   private outlivesApp: () => boolean = () => false
+  /** Retires the chat's earlier kept entries, once this run is placed. */
+  private retireEarlier: (() => void) | null = null
 
   private constructor(
     private readonly token: string,
@@ -126,17 +128,25 @@ export class SharedToolProcessSession {
   }
 
   /**
-   * This session is the chat's run's caller now: every other kept entry of the chat retires, except,
-   * with `carryLockedTo`, one the keychain hasn't opened yet, which moves to that run.
+   * This session is the chat's run's caller now, durably (with `carryLockedTo`, an entry the
+   * keychain hasn't opened yet moves to that run instead). The chat's other entries retire once its
+   * run is placed, when its tools get their identity (`publishFor`).
    */
-  settle(sessionId: string, carryLockedTo?: number): void {
-    void sharedToolCallerStore.settle(sessionId, this.kept, carryLockedTo).catch(() => {})
+  async settle(sessionId: string, carryLockedTo?: number): Promise<void> {
+    const stays = await sharedToolCallerStore
+      .adopt(sessionId, this.kept, carryLockedTo)
+      .catch(() => this.kept?.runFence)
+    this.retireEarlier = () => {
+      void sharedToolCallerStore.retireExcept(sessionId, stays).catch(() => {})
+    }
   }
 
   /** `opened` once its session's tools have their identity. A chat that fails to publish keeps no
    *  identity and refuses; a bot's session doesn't start, since without its token it would pass as
    *  the owner, past the bot's own limits. */
   async publishFor<T extends { link?: { handle: { nativeId: string } } }>(opened: T): Promise<T> {
+    this.retireEarlier?.()
+    this.retireEarlier = null
     await this.publish(opened.link?.handle.nativeId)
     return opened
   }

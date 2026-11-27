@@ -228,7 +228,7 @@ export class RelayGrants {
       return 'locked'
     }
     for (const entry of this.locked.values()) {
-      await this.open(entry)
+      await this.open(entry, true)
     }
     return this.of(token) ?? (this.locked.size > 0 ? 'locked' : undefined)
   }
@@ -262,16 +262,15 @@ export class RelayGrants {
    * Opens a stored token: it becomes the owner's current one, as the file holds it. Async, since on
    * Linux only the async keychain path recovers once a keyring locked at startup is unlocked.
    */
-  private async open(entry: StoredRelayGrant): Promise<boolean> {
+  private async open(entry: StoredRelayGrant, retry = false): Promise<boolean> {
     let token: string
     try {
       token = await unsealRelaySecret(entry.sealedToken)
     } catch {
       return false
     }
-    const retried = this.locked.get(entry.owner)
-    // Revoked, or loaded as another entry, while the keychain answered.
-    if (retried ? retried !== entry : this.kept.has(entry.owner)) {
+    // A retried entry revoked while the keychain answered stays gone: its token never comes back.
+    if (retry ? this.locked.get(entry.owner) !== entry : this.kept.has(entry.owner)) {
       return false
     }
     this.locked.delete(entry.owner)

@@ -16,11 +16,13 @@ import { RelaySealedFile } from './relay-sealed-file'
 import { answerCredentialsLocked } from './bot-tool-relay-sign-in-answer'
 
 /**
- * Event streams a front carries at once. The daemon pipes at most `TOOL_RELAY_FRONT_MAX_PIPES` per
- * front and can't tell a stream from a call, so streams stop short of it: calls and cleanup always
- * get a pipe, since idle keep-alive connections close within seconds.
+ * The daemon pipes at most `TOOL_RELAY_FRONT_MAX_PIPES` connections per front and can't tell a
+ * stream from a call, so the app budgets them: event streams stop short of the cap so calls get a
+ * pipe, and everything but cleanup stops short of it so DELETE does. Idle keep-alive connections
+ * close within seconds.
  */
 export const FRONT_STREAM_BUDGET = TOOL_RELAY_FRONT_MAX_PIPES - 64
+export const FRONT_OPEN_BUDGET = TOOL_RELAY_FRONT_MAX_PIPES - 16
 
 /** A grant's address and token; `front` names the daemon start whose front the origin is. */
 export type RelayGrantAnswer = { origin: string; token: string; front?: string }
@@ -30,7 +32,7 @@ export class KeptRelayGrants {
   readonly fronts: ToolRelayFronts
   /** Each front connection's front, by port. */
   private readonly frontOf = new WeakMap<Socket, number>()
-  private readonly frontStreams = new Map<number, number>()
+  private readonly frontCounts = new Map<number, { streams: number; open: number }>()
 
   /** `server`: the relay's HTTP server, listening; a front's connection is served as one made to it. */
   constructor(server: () => Promise<Server | null>) {
@@ -120,31 +122,37 @@ export class KeptRelayGrants {
   }
 
   /**
-   * Admits a call by `admit`; a GET stream through a front also needs a slot of the front's stream
-   * budget until its response ends. Refused, its connection closes, so its daemon pipe frees now.
+   * Admits a call by `admit`. Through a front, a GET stream also needs one of the front's stream
+   * slots, and anything but cleanup leaves the cleanup reserve free, until its response ends.
+   * Refused, its connection closes, so its daemon pipe frees now.
    */
   admitThroughFront<Call>(
     req: Pick<IncomingMessage, 'method' | 'socket'>,
     res: { shouldKeepAlive: boolean; once(event: 'close', listener: () => void): unknown },
     admit: () => Call | null
   ): Call | null {
-    const port = req.method === 'GET' ? this.frontOf.get(req.socket) : undefined
+    const port = this.frontOf.get(req.socket)
     if (port === undefined) {
       return admit()
     }
-    const streams = this.frontStreams.get(port) ?? 0
-    const call = streams < FRONT_STREAM_BUDGET ? admit() : null
+    const counts = this.frontCounts.get(port) ?? { streams: 0, open: 0 }
+    const stream = req.method === 'GET'
+    const fits =
+      req.method === 'DELETE' ||
+      (counts.open < FRONT_OPEN_BUDGET && (!stream || counts.streams < FRONT_STREAM_BUDGET))
+    const call = fits ? admit() : null
     if (!call) {
       res.shouldKeepAlive = false
       return null
     }
-    this.frontStreams.set(port, streams + 1)
+    counts.open += 1
+    counts.streams += stream ? 1 : 0
+    this.frontCounts.set(port, counts)
     res.once('close', () => {
-      const left = (this.frontStreams.get(port) ?? 1) - 1
-      if (left > 0) {
-        this.frontStreams.set(port, left)
-      } else {
-        this.frontStreams.delete(port)
+      counts.open -= 1
+      counts.streams -= stream ? 1 : 0
+      if (counts.open === 0) {
+        this.frontCounts.delete(port)
       }
     })
     return call

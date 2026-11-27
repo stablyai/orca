@@ -15,11 +15,13 @@ import { jsonProperty } from '../../../shared/json-stream/json-value-property'
  * A keychain that seals by reversing the bytes, and can be locked or downgraded. Its sync decrypt is
  * dead, as Linux's stays once the keyring was locked at startup: only the async path opens entries.
  */
-const keychain: { locked: boolean; sealing: 'os-keychain' | 'none'; opens: number } = {
-  locked: false,
-  sealing: 'os-keychain',
-  opens: 0
-}
+const keychain: {
+  locked: boolean
+  sealing: 'os-keychain' | 'none'
+  opens: number
+  /** Holds each decrypt's answer until it settles. */
+  answer: Promise<void>
+} = { locked: false, sealing: 'os-keychain', opens: 0, answer: Promise.resolve() }
 const store: SecretStore = {
   isEncryptionAvailable: () => true,
   encryptString: (plain) => Buffer.from(Buffer.from(plain, 'utf8').toReversed()),
@@ -28,6 +30,7 @@ const store: SecretStore = {
   },
   decryptStringAsync: async (cipher) => {
     keychain.opens += 1
+    await keychain.answer
     if (keychain.locked) {
       throw new Error('keychain locked')
     }
@@ -55,7 +58,12 @@ const fileEntries = (): StoredRelayGrant[] => {
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'relay-grants-'))
   path = join(dir, 'bot-tool-relay-grants.json')
-  Object.assign(keychain, { locked: false, sealing: 'os-keychain', opens: 0 })
+  Object.assign(keychain, {
+    locked: false,
+    sealing: 'os-keychain',
+    opens: 0,
+    answer: Promise.resolve()
+  })
   clock = 0
   setSecretStore(store)
 })
@@ -125,5 +133,25 @@ describe('kept relay grants', () => {
     clock += RELAY_UNLOCK_RETRY_MS
     expect(await next.unlock(token)).toMatchObject({ owner: 'scout' })
     expect(await next.unlock('unknown')).toBeUndefined()
+  })
+
+  it('a revoke while the keychain answers a retry never brings the token back', async () => {
+    const first = grantsAt()
+    const token = first.grant('scout', { bot: '/bots/scout' })
+    await first.keep('scout')
+    keychain.locked = true
+    const next = grantsAt()
+    await next.load()
+
+    keychain.locked = false
+    clock += RELAY_UNLOCK_RETRY_MS
+    let answer = (): void => {}
+    keychain.answer = new Promise((resolve) => (answer = resolve))
+    const retry = next.unlock(token)
+    await next.revoke('scout')
+    answer()
+    expect(await retry).toBeUndefined()
+    expect(next.of(token)).toBeUndefined()
+    expect(next.holds('scout')).toBe(false)
   })
 })

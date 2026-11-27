@@ -149,11 +149,19 @@ export class SharedToolCallerStore {
     if (this.locked.size === 0 || !this.throttle.due()) {
       return []
     }
-    const opening = [...this.locked].slice(0, UNLOCK_BATCH)
+    const opening: Entry[] = []
+    for (const entry of this.locked) {
+      if (opening.push(entry) === UNLOCK_BATCH) {
+        break
+      }
+    }
     const kept: KeptSharedToolCaller[] = []
     for (const entry of opening) {
       if (await this.open(entry)) {
         kept.push(entry.kept!)
+      } else if (this.locked.delete(entry)) {
+        // Still locked: to the back, so the next retry reaches the entries after it.
+        this.locked.add(entry)
       }
     }
     return kept
@@ -225,34 +233,47 @@ export class SharedToolCallerStore {
   async settle(
     sessionId: string,
     current: KeptSharedToolCaller | null,
-    /** A reattached run's fence: a still-locked entry of the chat moves to it instead of going. */
     carryLockedTo?: number
   ): Promise<void> {
+    await this.retireExcept(sessionId, await this.adopt(sessionId, current, carryLockedTo))
+  }
+
+  /**
+   * Durably writes the run's entry and leaves the chat's others, so a crash before the run's
+   * placement is saved still finds the entry the saved placement names. Returns the run's fence.
+   */
+  async adopt(
+    sessionId: string,
+    current: KeptSharedToolCaller | null,
+    /** A reattached run's fence: a still-locked entry of the chat moves to it. */
+    carryLockedTo?: number
+  ): Promise<number | undefined> {
     await this.load()
     const runs = [...(this.chats.get(sessionId)?.values() ?? [])]
     const carried =
       carryLockedTo === undefined ? undefined : runs.find((entry) => entry.kept === null)
-    const writes: Promise<unknown>[] = []
     if (carried && carryLockedTo !== undefined) {
       // The reattached agent holds that entry's token, so the run's caller is it, not `current`.
       const moved: Entry = { stored: { ...carried.stored, runFence: carryLockedTo }, kept: null }
       this.put(moved)
-      writes.push(this.files?.put(moved.stored) ?? Promise.resolve())
-    } else if (
-      current &&
-      this.chats.get(sessionId)?.get(current.runFence)?.kept?.token !== current.token
-    ) {
+      await this.files?.put(moved.stored).catch(() => {})
+      return carryLockedTo
+    }
+    if (current && this.chats.get(sessionId)?.get(current.runFence)?.kept?.token !== current.token) {
       // A reattached caller is sealed already: its earlier entry's sealing is reused, not redone.
       const sealed = runs.find((entry) => entry.kept?.token === current.token)?.stored.sealed
       await this.keep(current, sealed)
     }
-    const stays = carried ? carryLockedTo : current?.runFence
-    for (const entry of runs) {
-      if (entry.stored.runFence !== stays) {
-        writes.push(this.retire(entry))
-      }
-    }
-    await Promise.all(writes.map((write) => write.catch(() => {})))
+    return current?.runFence
+  }
+
+  /** Every entry of the chat but the run at `fence` retires. */
+  async retireExcept(sessionId: string, fence: number | undefined): Promise<void> {
+    await this.load()
+    const going = [...(this.chats.get(sessionId)?.values() ?? [])].filter(
+      (entry) => entry.stored.runFence !== fence
+    )
+    await Promise.all(going.map((entry) => this.retire(entry).catch(() => {})))
   }
 
   /** Removes exactly this entry (its launch failed); other runs of the chat stay. */
