@@ -10,6 +10,7 @@ import {
   resolveClaudePaneFolder,
   type ClaudeHostFolders
 } from '../../../../../../shared/agent-accounts/claude/claude-pane-account-folder'
+import { pinnedClaudeAccountIdForPane } from '@/lib/claude-launch-account'
 import { getRendererAppPlatform } from '../../../../app-shell/platform/renderer-app-platform'
 import {
   isClaudeRunning,
@@ -89,6 +90,7 @@ type ScannedPane =
 function scanPane(
   pane: LocalClaudePane,
   args: {
+    state: AppState
     saved: readonly ClaudeManagedAccount[]
     host: ClaudeHostFolders | undefined
     hostSwitch: boolean
@@ -101,6 +103,11 @@ function scanPane(
     return args.hostSwitch && isWslLane(pane.laneKey)
       ? { group: 'cantMove', pane, reason: 'wsl-terminal' }
       : null
+  }
+  if (
+    pinnedClaudeAccountIdForPane(args.state, makePaneKey(pane.tabId, pane.leafId), pane.worktreeId)
+  ) {
+    return null
   }
   if (!pane.resumable) {
     return { group: 'cantMove', pane, reason: 'no-session', stranded: true }
@@ -167,6 +174,7 @@ export async function findClaudeSwitchSessions(args: {
   const state = useAppStore.getState()
   const hostSwitch = isHostTarget(args.target)
   const scanArgs = {
+    state,
     saved: state.settings?.claudeManagedAccounts ?? [],
     host: hostSwitch ? args.host : undefined,
     hostSwitch,

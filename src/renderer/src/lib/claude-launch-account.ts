@@ -9,6 +9,7 @@ import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
 import { getIndexedWorktreeById } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { claudeAccountPinningUnsupportedReasonInState } from '@/components/settings/repository-claude-account'
+import { pinnedClaudeTabAccountId } from '@/lib/claude-tab-account-label'
 import { runtimeTargetForRepoOwner } from '@/lib/workspace/ownership/repo-runtime-owner'
 import type { RuntimeClientTarget } from '../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
@@ -101,4 +102,26 @@ export function relaunchWithClaudeAccount(
       ...(override ? { claudeAccountId: override } : {})
     })
   }
+}
+
+export function pinnedClaudeAccountIdForPane(
+  state: AppState,
+  paneKey: string,
+  worktreeId: string
+): string | null {
+  const repo = findLaunchRepo(state, { worktreeId })
+  const sleeping = state.sleepingAgentSessionsByPaneKey[paneKey]
+  const record = sleeping?.agent === 'claude' ? sleeping : undefined
+  return pinnedClaudeTabAccountId(
+    {
+      statusAccountId:
+        state.agentStatusByPaneKey.get(paneKey)?.claudeAccountId ?? record?.claudeAccountId,
+      launchConfig: state.agentLaunchConfigByPaneKey[paneKey]?.launchConfig ?? record?.launchConfig
+    },
+    {
+      pinningUnsupported: repo
+        ? claudeAccountPinningUnsupportedReasonInState(state, repo) !== null
+        : false
+    }
+  )
 }

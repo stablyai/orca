@@ -1,5 +1,6 @@
 import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
+import { pinnedClaudeAccountIdForPane } from '@/lib/claude-launch-account'
 import { useAppStore } from '@/store/index'
 import { buildAgentResumeStartupPlan } from '../../../../../shared/agent-launch/startup/tui-agent-resume-startup'
 import {
@@ -83,11 +84,14 @@ export function resolveAgentAccountRestartResumeStartup(
       ? sleeping.launchConfig
       : undefined
   const resumeTarget = resolveAccountRestartLaunchTarget(state, args, projectRuntime)
+  const pinnedAccountId =
+    agent === 'claude' ? pinnedClaudeAccountIdForPane(state, paneKey, args.worktreeId) : null
   const startupPlan = buildAgentResumeStartupPlan({
     agent,
     providerSession,
     cmdOverrides: state.settings?.agentCmdOverrides ?? {},
     ...resolveResumeLaunchRecipe(launchConfig, agent, providerSession),
+    ...(pinnedAccountId ? { claudeAccountId: pinnedAccountId } : {}),
     platform: resumeTarget.platform,
     agentHostPlatform: resumeTarget.agentHostPlatform,
     shell: resumeTarget.shell,
