@@ -262,7 +262,7 @@ export function useMobileNativeChatSessionOptions(
     surface
   ])
 
-  const liveSnapshot = useSyncExternalStore(
+  const live = useSyncExternalStore(
     surface?.subscribe ?? subscribeEmpty,
     surface?.getSnapshot ?? getEmptySnapshot,
     surface?.getSnapshot ?? getEmptySnapshot
@@ -270,11 +270,8 @@ export function useMobileNativeChatSessionOptions(
   const fileModel = args.sessionReport?.model ?? null
   // The catalog names a family; the session file names the version that actually answered.
   const snapshot = useMemo(
-    () =>
-      fileModel
-        ? liveSnapshot.map((descriptor) => withAnsweringModelLabel(descriptor, fileModel))
-        : liveSnapshot,
-    [fileModel, liveSnapshot]
+    () => (fileModel ? live.map((entry) => withAnsweringModelLabel(entry, fileModel)) : live),
+    [fileModel, live]
   )
 
   const track = useCallback(
