@@ -69,6 +69,12 @@ const DROID_SESSIONS_DIR = join(homedir(), '.factory', 'sessions')
 const DROID_PROJECTS_DIR = join(homedir(), '.factory', 'projects')
 const CLINE_SESSIONS_DIR =
   process.env.CLINE_SESSION_DATA_DIR?.trim() || join(homedir(), '.cline', 'data', 'sessions')
+// Vibe 3.x stores each session in $VIBE_HOME/logs/session/session_<ts>_<id>/{messages.jsonl,meta.json}.
+const VIBE_SESSIONS_DIR = join(
+  resolveAbsoluteDirOverride(process.env.VIBE_HOME, join(homedir(), '.vibe')),
+  'logs',
+  'session'
+)
 
 /** Shared discovery rules constrain which paths the delete validator accepts. */
 export type AiVaultAgentSource = {
@@ -297,12 +303,17 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
   },
   'mistral-vibe': {
     rootDirs: (options, wslHomeDirs) =>
-      sessionRootDirs(
-        options.mistralVibeSessionsDir ?? join(homedir(), '.vibe', 'sessions'),
-        wslHomeDirs,
-        ['.vibe', 'sessions']
-      ),
-    extensions: ['.jsonl']
+      sessionRootDirs(options.mistralVibeSessionsDir ?? VIBE_SESSIONS_DIR, wslHomeDirs, [
+        '.vibe',
+        'logs',
+        'session'
+      ]),
+    extensions: ['.jsonl'],
+    // Skip the active/ locks, plugins/ and unified/ harness directories beside the sessions.
+    directoryPredicate: (name, depth) => depth === 0 && name.startsWith('session_'),
+    filePredicate: (filePath) => basename(filePath) === 'messages.jsonl',
+    // meta.json carries the session id, title, cwd and stats; its mtime tracks freshness.
+    contentDependencyPath: (filePath) => join(dirname(filePath), 'meta.json')
   }
 }
 

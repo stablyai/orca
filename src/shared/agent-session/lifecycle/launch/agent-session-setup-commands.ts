@@ -131,10 +131,9 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
   },
   {
     agent: 'mistral-vibe',
+    // Signs in via Mistral AI Studio OAuth (browser-auth) or MISTRAL_API_KEY.
     loginCommand: ['vibe-acp', '--setup'],
-    installCommand: 'uv tool install --python 3.12 mistral-vibe',
-    // Mistral Vibe signs in via Mistral AI Studio OAuth (browser-auth) or MISTRAL_API_KEY.
-    windowsInstallScript: 'uv tool install --python 3.12 mistral-vibe'
+    installCommand: 'uv tool install --python 3.12 mistral-vibe'
   }
 ] as const
 

@@ -247,11 +247,13 @@ export const deliverCopilotInstructions = givenEachStart(async ({ text, folder, 
   return { env: { COPILOT_CUSTOM_INSTRUCTIONS_DIRS: inherited ? `${inherited},${dir}` : dir } }
 })
 
-// Vibe (mistral-vibe) keeps instructions with the session via its app-server's session store.
-// Passing via sessionMeta on new_session keeps the preamble across reopens (verified live on 3.1.5).
-export const deliverVibeInstructions = keptWithSession(async ({ text }) => ({
-  sessionMeta: { vibe: { system_prompt: text } }
-}))
+// Vibe builds its system prompt from AGENTS.md files at session/new (walk-up from the cwd plus
+// $VIBE_HOME/AGENTS.md) and keeps it with the session, so a reopened chat keeps the preamble it
+// began with. new_session discards extra kwargs, so sessionMeta cannot carry the text.
+export const deliverVibeInstructions = keptWithSession(async ({ text, cwd }) => {
+  await writeFolderContextFile(cwd, 'AGENTS.md', 'Mistral Vibe', text)
+  return {}
+})
 
 async function instructionsRoot(dataDirectory: string, sessionId: string): Promise<string> {
   const root = join(dataDirectory, 'acp-instructions')

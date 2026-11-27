@@ -5,33 +5,33 @@ import { directoryAccountBinding } from '../acp/launch/acp-account-binding'
 import { deliverVibeInstructions } from '../acp/launch/acp-instructions'
 import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import { VIBE_SESSION_HISTORY } from './vibe-session-history'
-import { VIBE_TRANSCRIPT_IMPORT } from './vibe-transcript-import'
 
 export const VIBE_ACP_LAUNCH_SPEC: AcpLaunchSpec = {
   agent: 'mistral-vibe',
   command: 'vibe-acp',
-  // Model selection: vibe-acp accepts a --model alias on new_session via ACP's sessionMeta.
-  // Orca passes it through sessionMeta; the ACP server reads it on session creation.
+  // Why no launch-line model: `vibe-acp` rejects a --model argument, and its new_session discards
+  // extra kwargs, so sessionMeta cannot carry it either. The saved model is applied through the
+  // session's own model config option instead (the default path for specs without launchesWithModel).
   args: () => [],
   env: {},
-  // Vibe-acp launches with a model option that names its alias (mistral-large, mistral-small, etc.).
-  launchesWithModel: true,
   dialect: VIBE_ACP_DIALECT,
-  // Vibe uses browser OAuth sign-in via Mistral AI Studio, plus an optional API key.
+  // Vibe signs in via browser OAuth through Mistral AI Studio; a MISTRAL_API_KEY in the environment
+  // authenticates without an ACP authenticate call.
   loginCommand: agentSessionSetupFor('mistral-vibe')?.loginCommand ?? [],
-  authMethod: ({ advertised, env }) => {
-    // vibe-acp advertises `browser-auth` in initialize. It also accepts MISTRAL_API_KEY.
-    if (advertised.includes('browser-auth') && !env.MISTRAL_API_KEY) {
+  authMethod: ({ advertised }) => {
+    // Only ever answer with an auth method the server advertised; vibe-acp rejects anything else.
+    if (advertised.includes('browser-auth')) {
       return 'browser-auth'
-    }
-    if (env.MISTRAL_API_KEY) {
-      return 'mistral.api_key'
     }
     return undefined
   },
   authMethodUnavailableMessage: 'Sign in via Mistral AI Studio or set MISTRAL_API_KEY.',
   account: directoryAccountBinding('VIBE_HOME', (homePath) => join(homePath, '.vibe')),
-  installDirectories: ({ homePath }) => [join(homePath, '.vibe', 'bin')],
+  // `uv tool install` puts the binaries in ~/.local/bin; the curl install.sh puts them in ~/.vibe/bin.
+  installDirectories: ({ homePath }) => [
+    join(homePath, '.local', 'bin'),
+    join(homePath, '.vibe', 'bin')
+  ],
   minimumVersions: ['3.1.0'],
   // Vibe has its own permission modes; map Orca's modes to vibe's.
   // vibe-acp modes: ask, accept-edits, smart-approve, auto-approve
@@ -50,10 +50,10 @@ export const VIBE_ACP_LAUNCH_SPEC: AcpLaunchSpec = {
   instructions: deliverVibeInstructions,
   compaction: true,
   compactionInstructions: true,
-  transcriptImport: VIBE_TRANSCRIPT_IMPORT,
+  // Vibe's session journal format is not documented; transcript import is off until it is.
+  transcriptImport: null,
   sessionHistory: VIBE_SESSION_HISTORY,
-  // Vibe-acp starts the app-server in headless mode; no terminal.
-  // No own MCP servers for vibe-acp
+  // vibe-acp runs headless and connects only the client's MCP servers, none of its own.
   ownMcpServers: async () => [],
   // Vibe pty launcher uses the unified harness; every session lands in history.
   keepsEverySession: true

@@ -253,6 +253,10 @@ export function normalizeProviderEvent(input: {
     }
     case 'kiro':
       payload = normalizeKiroEvent(state, eventName, promptText, paneKey, hookPayload)
+      break
+    case 'mistral-vibe':
+      // Vibe's ACP turns carry the state; a terminal hook envelope has no status payload.
+      payload = null
   }
   const replyCandidate = state.eventReplyCandidate
   state.eventReplyCandidate = undefined
