@@ -30044,6 +30044,30 @@
         "failedFor": "无法为 {{name}} 生成头像"
       }
     },
+    "folders": {
+      "actions": "{{name}} 的文件夹操作",
+      "createChildDescription": "在 {{name}} 中创建子文件夹。",
+      "createChildTitle": "新建子文件夹",
+      "createConfirm": "创建文件夹",
+      "createDescription": "在机器人侧栏中创建文件夹。",
+      "createTitle": "新建文件夹",
+      "move": "移动文件夹…",
+      "moveBot": "移动到文件夹…",
+      "moveBotDescription": "为 {{name}} 选择文件夹。",
+      "moveBotTitle": "移动机器人",
+      "moveConfirm": "移动",
+      "moveDescription": "选择 {{name}} 的目标位置。",
+      "moveTitle": "移动文件夹",
+      "nameLabel": "文件夹名称",
+      "remove": "移除文件夹…",
+      "removeConfirm": "移除文件夹",
+      "removeDescription": "移除 {{name}}？其中的机器人和子文件夹将移到 {{parent}}。",
+      "removeTitle": "移除文件夹",
+      "renameDescription": "为 {{name}} 选择新名称。",
+      "renameConfirm": "保存",
+      "renameTitle": "重命名文件夹",
+      "root": "顶层"
+    },
     "section": {
       "scrollLeft": "向左滚动 · 隐藏 {{amount}} 个",
       "scrollRight": "向右滚动 · 隐藏 {{amount}} 个",
@@ -30055,7 +30079,7 @@
       "expand": "展开 Bots",
       "collapse": "折叠 Bots",
       "summary": "{{action}}，{{total}} 个 bot，{{attention}} 项需要你处理，{{unread}} 个未读，{{working}} 个工作中",
-      "new": "新建 bot 或群组",
+      "new": "新建机器人、群组或文件夹",
       "expandAll": "展开所有 bots",
       "collapseAll": "折叠所有 bots"
     },

@@ -1,10 +1,7 @@
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { callBotRpc } from '@/lib/bot-hosts'
 import { useFloatingProjectGroupHeaderDrag } from '@/components/sidebar/worktree-list/drag/use-floating-project-group-header-drag'
-import {
-  ROOT_PROJECT_GROUP_HEADER_BUCKET,
-  type ProjectGroupHeaderDragItem
-} from '@/components/sidebar/worktree-list/drag/project-group-header-drop'
+import { getProjectGroupHeaderDragBucketKey } from '@/components/sidebar/worktree-list/drag/project-group-header-drop'
 import { WorktreeSidebarDropIndicator } from '@/components/sidebar/worktree-list/drag/WorktreeSidebarDropIndicator'
 import { SidebarSectionHeader } from '@/components/sidebar/SidebarSectionHeader'
 import { selectActiveBotGroupRoomId } from '@/lib/bot-group-catalog'
@@ -47,6 +44,11 @@ import { BotsRevealProvider } from './bots-sidebar-reveal-context'
 import { SidebarBotsEmptyState } from './SidebarBotsEmptyState'
 import { BotSidebarVirtualRows } from './BotSidebarVirtualRows'
 import { botSidebarVirtualScrollers } from './bot-sidebar-virtual-scroll'
+import { BotFolderDialogs, type BotFolderDialogState } from './BotFolderDialogs'
+import { BotSidebarFolderRow } from './BotSidebarFolderRow'
+import { useBotSidebarFolderRows } from './use-bot-sidebar-folder-rows'
+import { getBotSidebarFolderGroupKey } from '../../../../shared/bots/bot-sidebar-folders'
+import { unfoldBotSidebarEntry } from './unfold-bot-sidebar-folders'
 
 /** Lists bots from this computer and paired servers in the sidebar. */
 export function SidebarBotsSection({
@@ -80,6 +82,7 @@ export function SidebarBotsSection({
   }
   const [importOpen, setImportOpen] = useState(false)
   const [editingGroup, setEditingGroup] = useState<BotGroup | 'new' | null>(null)
+  const [folderDialog, setFolderDialog] = useState<BotFolderDialogState | null>(null)
   const [pendingRenameKey, setPendingRenameKey] = useState<string | null>(null)
   // Bots and groups share one list and one order; the folded header shows bots only.
   const savedEntries = useMemo(
@@ -87,6 +90,7 @@ export function SidebarBotsSection({
     [bots, groups, folderWorkspaces]
   )
   const entries = useBotSidebarArrangement(savedEntries)
+  const { treeRows, botIdsByBucket, dragItemById, hasFolders } = useBotSidebarFolderRows(entries)
   const listRef = useRef<HTMLDivElement>(null)
   // Search shows the list in place and nothing drags while it is open. Its toggle lives only in the
   // unfolded header, so a search always starts unfolded.
@@ -109,25 +113,6 @@ export function SidebarBotsSection({
   const collapseAll = useBotCollapseAll(entries, savedEntries)
   const facts = useBotPreviewFacts(rows)
   const preview = summarizeBotPreview(facts)
-  // Bots reorder through the project-group header drag: one root bucket, each bot's order saved on its host.
-  const botIdsByBucket = useMemo(
-    () => new Map([[ROOT_PROJECT_GROUP_HEADER_BUCKET, entries.map(({ id }) => id)]]),
-    [entries]
-  )
-  const dragItemById = useMemo(
-    () =>
-      new Map<string, ProjectGroupHeaderDragItem>(
-        // An entry never placed takes no order, so the first drop writes one for every entry.
-        entries.map((entry) => [
-          entry.id,
-          {
-            parentGroupId: null,
-            tabOrder: (entry.kind === 'bot' ? entry.bot : entry.group).sidebarOrder ?? -1
-          }
-        ])
-      ),
-    [entries]
-  )
   const commitOrder = useCallback(
     (id: string, sidebarOrder: number) => {
       const entry = entries.find((candidate) => candidate.id === id)
@@ -155,17 +140,12 @@ export function SidebarBotsSection({
     onCommitProjectGroupTabOrder: commitOrder,
     getScrollContainer: () => listRef.current
   })
-  const listShown = !collapsed && entries.length > 0
+  const listShown = !collapsed && treeRows.length > 0
   const reveal = useBotsSidebarReveal(listRef, listShown, savedEntries, search.endForReveal)
-  const handleRenameFromPreview = useCallback(
-    (entryKey: string) => {
-      setPendingRenameKey(entryKey)
-      if (useAppStore.getState().collapsedGroups.has(BOTS_GROUP_KEY)) {
-        toggleCollapsedGroup(BOTS_GROUP_KEY)
-      }
-    },
-    [toggleCollapsedGroup]
-  )
+  const handleRenameFromPreview = useCallback((entryKey: string) => {
+    setPendingRenameKey(entryKey)
+    unfoldBotSidebarEntry(entryKey)
+  }, [])
   if (pendingRenameKey !== null && !entries.some((entry) => entry.id === pendingRenameKey)) {
     setPendingRenameKey(null)
   }
@@ -241,6 +221,7 @@ export function SidebarBotsSection({
                 onNewBot={openNewBot}
                 onImport={() => setImportOpen(true)}
                 onNewGroup={() => setEditingGroup('new')}
+                onNewFolder={() => setFolderDialog({ type: 'create', parentId: null })}
               />
             </>
           )
@@ -264,32 +245,50 @@ export function SidebarBotsSection({
             data-bot-sidebar-list=""
             className={cn(
               'bot-sidebar-scrollbar relative flex min-h-0 flex-col overflow-y-auto overscroll-y-contain [overflow-anchor:none]',
-              entries.length > 0 && 'pb-1 px-1',
+              treeRows.length > 0 && 'pb-1 px-1',
               collapsed && 'hidden'
             )}
           >
             {/* A room kept after its last bot went still lists, so it can be opened or deleted. */}
-            {savedEntries.length > 0 && entries.length === 0 ? (
+            {savedEntries.length > 0 && treeRows.length === 0 ? (
               collapsed ? null : (
                 <div className="px-4 text-xs text-muted-foreground">
                   {t('bots.options.allHidden', 'All bots are paused and hidden.')}
                 </div>
               )
-            ) : entries.length === 0 ? (
+            ) : treeRows.length === 0 ? (
               collapsed ? null : (
                 <SidebarBotsEmptyState onNewBot={openNewBot} />
               )
             ) : collapsed ? null : (
               <>
                 <BotSidebarVirtualRows
-                  entries={entries}
+                  entries={treeRows}
                   listRef={listRef}
                   draggingId={drag.state.draggingGroupId}
                   revealId={pendingRenameKey ?? reveal.request?.target.entryKey}
-                  renderEntry={(entry, index) => {
+                  renderEntry={(row) => {
+                    if (row.kind === 'folder') {
+                      return (
+                        <BotSidebarFolderRow
+                          folder={row.folder}
+                          depth={row.depth}
+                          expanded={row.expanded}
+                          hasChildren={row.hasChildren}
+                          onToggle={() =>
+                            toggleCollapsedGroup(getBotSidebarFolderGroupKey(row.folder.id))
+                          }
+                          onAction={setFolderDialog}
+                        />
+                      )
+                    }
+                    const { entry } = row
                     const entryDrag: BotSidebarEntryDrag | undefined = draggable
                       ? {
-                          index,
+                          bucket: getProjectGroupHeaderDragBucketKey({
+                            parentGroupId: row.folderId
+                          }),
+                          index: row.bucketIndex,
                           dragging: drag.state.draggingGroupId === entry.id,
                           settling: drag.state.draggingGroupId !== null,
                           offset: drag.state.previewOffsetsById?.get(entry.id) ?? 0,
@@ -310,17 +309,37 @@ export function SidebarBotsSection({
                         />
                       </BotSidebarDragFrame>
                     ) : (
-                      <BotSidebarEntry
-                        bot={entry.bot}
-                        home={entry.home}
-                        isActive={activeWorkspaceId === folderWorkspaceKey(entry.home.id)}
-                        onOpen={onOpenBot}
-                        drag={entryDrag}
-                        beginRename={pendingRenameKey === entry.id}
-                        onBeginRenameConsumed={() =>
-                          setPendingRenameKey((current) => (current === entry.id ? null : current))
+                      <div
+                        style={
+                          row.depth
+                            ? { paddingInlineStart: `min(${row.depth * 12}px, 40%)` }
+                            : undefined
                         }
-                      />
+                      >
+                        <BotSidebarEntry
+                          bot={entry.bot}
+                          home={entry.home}
+                          isActive={activeWorkspaceId === folderWorkspaceKey(entry.home.id)}
+                          onOpen={onOpenBot}
+                          drag={entryDrag}
+                          beginRename={pendingRenameKey === entry.id}
+                          onBeginRenameConsumed={() =>
+                            setPendingRenameKey((current) =>
+                              current === entry.id ? null : current
+                            )
+                          }
+                          onMoveToFolder={
+                            hasFolders
+                              ? () =>
+                                  setFolderDialog({
+                                    type: 'moveBot',
+                                    entryKey: entry.id,
+                                    name: entry.bot.name
+                                  })
+                              : undefined
+                          }
+                        />
+                      </div>
                     )
                   }}
                 />
@@ -342,6 +361,9 @@ export function SidebarBotsSection({
       ) : null}
       {importOpen ? (
         <LazyImportBotDialog open={importOpen} onOpenChange={setImportOpen} onCreated={onOpenBot} />
+      ) : null}
+      {folderDialog ? (
+        <BotFolderDialogs state={folderDialog} onClose={() => setFolderDialog(null)} />
       ) : null}
       {editingGroup ? (
         <LazyBotGroupMembersDialog

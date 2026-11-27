@@ -5,6 +5,7 @@ import {
   BellOff,
   BellRing,
   Copy,
+  FolderInput,
   Pause,
   Pencil,
   Play,
@@ -69,11 +70,13 @@ export function BotSidebarRowMenuContent({
 export function BotRowMenuItems({
   bot,
   home,
-  offline
+  offline,
+  onMoveToFolder
 }: {
   bot: Bot
   home: FolderWorkspace
   offline: boolean
+  onMoveToFolder?: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   const run = (work: Promise<unknown>): void => {
@@ -92,6 +95,12 @@ export function BotRowMenuItems({
         {bot.paused ? <Play className="size-3.5" /> : <Pause className="size-3.5" />}
         {bot.paused ? t('bots.row.resume', 'Resume bot') : t('bots.row.pause', 'Pause bot')}
       </ContextMenuItem>
+      {onMoveToFolder ? (
+        <ContextMenuItem onSelect={onMoveToFolder}>
+          <FolderInput className="size-3.5" />
+          {t('bots.folders.moveBot', 'Move to folder…')}
+        </ContextMenuItem>
+      ) : null}
       <ContextMenuSeparator />
       <ContextMenuItem onSelect={() => window.api.ui.writeClipboardText(home.folderPath)}>
         <Copy className="size-3.5" />

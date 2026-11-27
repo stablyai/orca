@@ -23,6 +23,7 @@ import {
 import { findBotsRevealElement, wantedDepth } from './bots-sidebar-reveal-dom'
 import { startBotsRevealGlow, type BotsRevealGlow } from './bots-sidebar-reveal-glow'
 import type { BotsRevealContextValue, BotsRevealRequest } from './bots-sidebar-reveal-context'
+import { unfoldBotSidebarEntry } from './unfold-bot-sidebar-folders'
 import { seekDistantBotSidebarRow } from './bot-sidebar-virtual-scroll'
 
 /** Long enough for a paired server's chat read; past it, the bot row stands as the reveal. */
@@ -211,7 +212,6 @@ export function useBotsSidebarReveal(
         return
       }
       beforeRevealRef.current()
-      const store = useAppStore.getState()
       const toUnfold = new Set<string>([BOTS_GROUP_KEY])
       const wanted = wantedDepth(target)
       const homeId =
@@ -224,11 +224,7 @@ export function useBotsSidebarReveal(
           toUnfold.add(getWorktreeLineageGroupKey(ancestor))
         }
       }
-      for (const key of toUnfold) {
-        if (store.collapsedGroups.has(key)) {
-          store.toggleCollapsedGroup(key)
-        }
-      }
+      unfoldBotSidebarEntry(target.entryKey, toUnfold)
       stop(live.current)
       nonceRef.current += 1
       const next: BotsRevealRequest = {

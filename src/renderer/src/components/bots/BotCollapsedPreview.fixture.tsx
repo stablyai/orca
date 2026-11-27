@@ -222,7 +222,7 @@ export const plusMenu = defineFixture({
     </ConfirmationDialogProvider>
   ),
   interact: async () => {
-    const trigger = document.querySelector('[aria-label="New bot or group"]')
+    const trigger = document.querySelector('[aria-label="New bot, group, or folder"]')
     trigger?.dispatchEvent(
       new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' })
     )

@@ -23,6 +23,8 @@ type MainOwnedUIState =
   | 'starNagAgentValueMomentAppVersion'
   // Desktop-local replay queue: a paired client must not overwrite it.
   | 'pendingRuntimeRepoRemovals'
+  // Folder organization belongs to the desktop profile.
+  | 'botSidebarFolders'
   // The moved-to-WSL list exists only on the desktop that moved the projects.
   | 'wslMovedSectionCollapsed'
   | 'hiddenWslMovedProjectKeys'

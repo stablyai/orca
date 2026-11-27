@@ -27,6 +27,7 @@ import type { ChangelogData, UpdateStatus } from '../../../../../shared/updater/
 import type { StatusBarUsageMode } from '../../../../../shared/status-bar/status-bar-usage-mode'
 import type { PersistedUIWriteBaseline } from './persisted-ui-write-baseline'
 import type { UISliceCore } from './ui-slice-contract-core'
+import type { BotSidebarFolderState } from '../../../../../shared/bots/bot-sidebar-folders'
 import type { BotSidebarView } from '../../../../../shared/bots/bot-sidebar-view'
 import type { BotChatFold } from '../../../../../shared/bots/bot-chat-tree'
 
@@ -65,6 +66,8 @@ export type UISlicePreferences = {
   setHideBotCreatedWorkspaces: (v: boolean) => void
   botSidebarView: BotSidebarView
   setBotSidebarView: (patch: Partial<BotSidebarView>) => void
+  botSidebarFolders: BotSidebarFolderState
+  setBotSidebarFolders: (state: BotSidebarFolderState) => void
   botChatFolds: Record<string, BotChatFold>
   /** A chat's manual fold, shared by Activity and the sidebar; undefined while it folds by default. */
   botChatFold: (hostId: string, botId: string, chatId: string) => BotChatFold | undefined
