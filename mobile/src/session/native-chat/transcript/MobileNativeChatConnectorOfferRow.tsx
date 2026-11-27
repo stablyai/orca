@@ -129,7 +129,8 @@ export function MobileNativeChatConnectorOfferRow({
     connected && offer.source === 'github',
     0
   )
-  const ghOut = github.view.status === 'ready' && ghSignedOut(github.view.value)
+  const ghOut =
+    offer.source === 'github' && github.view.status === 'ready' && ghSignedOut(github.view.value)
   const panel = useBotPanelOpener(offer.botId)
   const openSetup = panel ? () => panel.open({ settings: connectPage(offer.source, bot) }) : null
   // As the desktop: an offer naming another workspace of a source the bot has adds that workspace.
