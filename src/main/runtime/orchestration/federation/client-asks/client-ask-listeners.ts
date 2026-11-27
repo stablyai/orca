@@ -9,7 +9,7 @@ import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { OrchestrationError } from '../../orchestration-error'
 import type { BotRosterClient } from '../../../../../shared/bot-roster'
 import { toSafeDisplayLine } from '../../../../../shared/text/display-text-safety'
-import { monotonicMsOfWakeSignal } from '../../../../power/wake-signal-clock'
+import { systemPowerGeneration } from '../../../../power/system-power-lifecycle'
 import type { PeerMailClientAsksPull } from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 
 export type ClientAskListener = {
@@ -25,9 +25,11 @@ export type ClientAskListener = {
   moreBots?: true
   /** When a pull of its last started or was answered, on `monotonicNow`'s clock. */
   seenAt: number
+  /** `systemPowerGeneration()` then: a suspend or resume since means it hasn't been seen awake since. */
+  powerGeneration: number
 }
 
-export type ClientAskPull = { key: string; session: string }
+export type ClientAskPull = { key: string; session: string; powerGeneration: number }
 
 /** How recently a computer must have pulled for `orca bot list` to show it: over twice the longest
  *  pull's wait, so one pulling steadily is never missed between pulls. */
@@ -42,12 +44,13 @@ export function monotonicNow(): number {
   return performance.now()
 }
 
-// performance.now() stops while the system sleeps on Linux, so a computer seen before the last resume
-// counts as live only once it pulls again; one still connected pulls again at once.
-const isLive = (listener: ClientAskListener, now: number): boolean =>
+// performance.now() stops while the system sleeps on Linux, so a computer last seen before this
+// computer's latest suspend or resume counts as live only once it pulls again; one still connected
+// pulls again at once. A headless server gets no power events, so there only the lease applies.
+const isLive = (listener: ClientAskListener, now: number, generation: number): boolean =>
+  listener.powerGeneration === generation &&
   now - listener.seenAt >= 0 &&
-  now - listener.seenAt <= CLIENT_ROSTER_LIVE_MS &&
-  listener.seenAt >= (monotonicMsOfWakeSignal('resume') ?? Number.NEGATIVE_INFINITY)
+  now - listener.seenAt <= CLIENT_ROSTER_LIVE_MS
 
 /** The runtime whose server the computers listen on; a test's runtimes keep separate listeners. */
 export type ClientAskListenerOwner = Pick<OrcaRuntimeService, 'getOrchestrationDb'>
@@ -75,7 +78,8 @@ export function clientAskPullStarted(
   owner: ClientAskListenerOwner,
   caller: { deviceId: string; fingerprint: string },
   pull: z.infer<typeof PeerMailClientAsksPull>,
-  now: number = monotonicNow()
+  now: number = monotonicNow(),
+  generation: number = systemPowerGeneration()
 ): ClientAskPull | null {
   const listeners = listenersOf(owner)
   const key = keyOf(caller.deviceId, pull.installationId)
@@ -118,7 +122,8 @@ export function clientAskPullStarted(
     session: pull.session,
     bots: pull.bots ?? [],
     ...(pull.moreBots ? { moreBots: true as const } : {}),
-    seenAt: now
+    seenAt: now,
+    powerGeneration: generation
   })
   const ofDevice = [...listeners].filter(
     ([other, listener]) => other !== key && listener.deviceId === caller.deviceId
@@ -132,7 +137,7 @@ export function clientAskPullStarted(
       listeners.delete(other)
     }
   }
-  return { key, session: pull.session }
+  return { key, session: pull.session, powerGeneration: generation }
 }
 
 /** An answered pull keeps its session; one whose caller went away ends it. Either touches only its own session. */
@@ -140,7 +145,8 @@ export function clientAskPullEnded(
   owner: ClientAskListenerOwner,
   pull: ClientAskPull,
   outcome: 'answered' | 'caller_gone',
-  now: number = monotonicNow()
+  now: number = monotonicNow(),
+  generation: number = systemPowerGeneration()
 ): void {
   const listeners = listenersOf(owner)
   const current = listeners.get(pull.key)
@@ -149,7 +155,8 @@ export function clientAskPullEnded(
   }
   if (outcome === 'caller_gone') {
     listeners.delete(pull.key)
-  } else {
+  } else if (pull.powerGeneration === generation) {
+    // A pull begun before a suspend or resume proves nothing about the computer after it.
     current.seenAt = now
   }
 }
@@ -178,10 +185,13 @@ const PLAIN_ID = /^[\w-]{1,100}$/
  *  names, which came from that computer, stay one line. One pass over the listeners. */
 export function connectedClientRosters(
   owner: ClientAskListenerOwner,
-  now: number = monotonicNow()
+  now: number = monotonicNow(),
+  generation: number = systemPowerGeneration()
 ): BotRosterClient[] {
   // Only computers seen within the lease count, so one that went silent never hides a live one.
-  const listeners = [...listenersOf(owner).values()].filter((listener) => isLive(listener, now))
+  const listeners = [...listenersOf(owner).values()].filter((listener) =>
+    isLive(listener, now, generation)
+  )
   // How many listeners a selector matches, by id or by name, counting one matching both once.
   const byId = new Map<string, number>()
   const byName = new Map<string, number>()
@@ -237,10 +247,12 @@ export function requireListeningClient(
   owner: ClientAskListenerOwner,
   selector: string,
   nothingDone: string,
-  now: number = monotonicNow()
+  now: number = monotonicNow(),
+  generation: number = systemPowerGeneration()
 ): ClientAskListener {
   const matched = listeningClients(owner, selector)
-  const live = matched.length > 1 ? matched.filter((listener) => isLive(listener, now)) : matched
+  const live =
+    matched.length > 1 ? matched.filter((listener) => isLive(listener, now, generation)) : matched
   const listening = live.length === 1 ? live : matched
   if (listening.length > 1) {
     throw new OrchestrationError(
