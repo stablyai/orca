@@ -45,6 +45,7 @@ async function probeMeEndpoint(apiUrl: string, fetchImpl: typeof fetch): Promise
     return (
       typeof body === 'object' &&
       body !== null &&
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: body is checked to be a non-null object above.
       typeof (body as { authenticated?: unknown }).authenticated === 'boolean'
     )
   } catch {
@@ -55,6 +56,7 @@ async function probeMeEndpoint(apiUrl: string, fetchImpl: typeof fetch): Promise
 
 export async function detectItsaplanApiUrl(
   appUrlInput: string,
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: mainFetch is Electron net.fetch, call-compatible with global fetch.
   fetchImpl: typeof fetch = ((url, init) =>
     getMainHttpClient().fetch(String(url), init)) as typeof fetch
 ): Promise<ItsaplanResult<{ appUrl: string; apiUrl: string }>> {

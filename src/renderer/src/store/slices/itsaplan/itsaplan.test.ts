@@ -39,6 +39,7 @@ function issue(id: number, columnId: number): ItsaplanIssue {
 
 function createTestStore() {
   return create<AppState>()(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the test store carries only the slice and settings under test.
     (...a) => ({ settings: null, ...createItsaplanSlice(...a) }) as unknown as AppState
   )
 }

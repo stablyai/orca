@@ -5,6 +5,7 @@ import { prepareLoadedProfileSettings } from './prepare-loaded-profile-settings'
 
 function prepare(settings: Record<string, unknown>) {
   const defaults = getDefaultPersistedState('/home/test')
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture only fills the settings fields under test.
   const parsed = { ...defaults, settings: { ...defaults.settings, ...settings } } as PersistedState
   return prepareLoadedProfileSettings(parsed, defaults, vi.fn())
 }

@@ -147,11 +147,13 @@ export async function itsaplanRequest<T>(path: string, init?: ItsaplanRequestIni
   const url = buildUrl(instance.apiUrl, path, init?.query)
   await acquire()
   try {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: mainFetch is Electron net.fetch, call-compatible with global fetch.
     let response = await sendWithKey(url, apiKey, init, mainFetch as typeof fetch)
     if (response.status === 429) {
       const delay = retryAfterMs(response)
       await response.body?.cancel()
       await new Promise((resolve) => setTimeout(resolve, delay))
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: mainFetch is Electron net.fetch, call-compatible with global fetch.
       response = await sendWithKey(url, apiKey, init, mainFetch as typeof fetch)
     }
     if (!response.ok) {
@@ -159,9 +161,11 @@ export async function itsaplanRequest<T>(path: string, init?: ItsaplanRequestIni
       throw new ItsaplanApiError(classifyItsaplanResponse(response.status), response.status)
     }
     if (response.status === 204) {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a 204 has no body, so callers asking for void get undefined.
       return undefined as T
     }
     try {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the API response is trusted to match the caller-declared shape; there is no runtime schema.
       return (await response.json()) as T
     } catch {
       throw new ItsaplanApiError('requestFailed', response.status, 'Unexpected response.')
@@ -174,6 +178,7 @@ export async function itsaplanRequest<T>(path: string, init?: ItsaplanRequestIni
 export async function verifyItsaplanKey(
   apiUrl: string,
   apiKey: string,
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: mainFetch is Electron net.fetch, call-compatible with global fetch.
   fetchImpl: typeof fetch = mainFetch as typeof fetch
 ): Promise<ItsaplanResult<{ viewer: ItsaplanViewer }>> {
   try {
@@ -182,6 +187,7 @@ export async function verifyItsaplanKey(
       const code = classifyItsaplanResponse(response.status)
       return { ok: false, error: code, message: FAILURE_TEXT[code] }
     }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every field is narrowed from unknown before use.
     const body = (await response.json()) as {
       authenticated?: unknown
       user?: { id?: unknown; name?: unknown; email?: unknown }

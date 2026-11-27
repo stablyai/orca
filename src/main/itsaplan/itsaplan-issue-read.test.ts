@@ -79,6 +79,7 @@ describe('itsaplanListIssues', () => {
       filters: { assignee: 'me' }
     }).catch((caught: unknown) => caught)
 
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the caught value is the error thrown by the call under test.
     expect((error as Error).message.startsWith('unreachable:')).toBe(true)
   })
 })

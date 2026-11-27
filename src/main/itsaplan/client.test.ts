@@ -38,6 +38,7 @@ describe('classifyItsaplanResponse', () => {
 
 describe('verifyItsaplanKey', () => {
   it('treats authenticated:false as an invalid key', async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double implements only the fetch surface the code under test reads.
     const fetchImpl = (async () =>
       jsonResponse({ authenticated: false })) as unknown as typeof fetch
     expect(await verifyItsaplanKey('https://api.example.com', 'k', fetchImpl)).toMatchObject({
@@ -47,6 +48,7 @@ describe('verifyItsaplanKey', () => {
   })
 
   it('returns the viewer when authenticated', async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double implements only the fetch surface the code under test reads.
     const fetchImpl = (async () =>
       jsonResponse({
         authenticated: true,
@@ -67,11 +69,15 @@ describe('itsaplanRequest', () => {
     const error = await itsaplanRequest('/issues/1').catch((caught: unknown) => caught)
 
     expect(error).toBeInstanceOf(ItsaplanApiError)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the caught value is the error thrown by the call under test.
     expect((error as ItsaplanApiError).code).toBe('invalidApiKey')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the caught value is the error thrown by the call under test.
     expect((error as Error).message).toBe('invalidApiKey: API key invalid, reconnect.')
     expect(JSON.stringify(error)).not.toContain('secret-key-k')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: vitest types mock calls loosely; the mock is called with (url, init).
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
     expect(url).toBe('https://api.example.com/issues/1')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the client always sends a plain headers record.
     expect((init.headers as Record<string, string>)['x-api-key']).toBe('secret-key-k')
   })
 
@@ -81,6 +87,7 @@ describe('itsaplanRequest', () => {
 
     await itsaplanRequest('/projects/t.K/issues', { query: { labelIds: [1, 2], limit: 5 } })
 
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: vitest types mock calls loosely; the mock is called with (url).
     expect((fetchMock.mock.calls[0] as unknown as [string])[0]).toBe(
       'https://api.example.com/projects/t.K/issues?labelIds=1%2C2&limit=5'
     )
@@ -92,6 +99,7 @@ describe('itsaplanRequest', () => {
 
     await itsaplanRequest('/projects')
 
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: vitest types mock calls loosely; the mock is called with (url, init).
     const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
     expect(init.redirect).toBe('error')
   })
@@ -104,6 +112,7 @@ describe('itsaplanRequest', () => {
       proxySession: () => null
     })
     const error = await itsaplanRequest('/projects').catch((caught: unknown) => caught)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the caught value is the error thrown by the call under test.
     expect((error as ItsaplanApiError).code).toBe('requestFailed')
   })
 })

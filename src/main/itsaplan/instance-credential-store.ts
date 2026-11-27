@@ -44,6 +44,7 @@ function normalizeInstance(input: unknown): ItsaplanInstance | null {
   if (!input || typeof input !== 'object') {
     return null
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: input is checked to be a non-null object above.
   const { id, appUrl, apiUrl } = input as Record<string, unknown>
   if (typeof id !== 'string' || typeof appUrl !== 'string' || typeof apiUrl !== 'string') {
     return null
@@ -57,6 +58,7 @@ function readInstanceFileFromDisk(): ItsaplanInstanceFile {
     return { instances: [] }
   }
   try {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: instances is re-validated entry by entry by normalizeInstance.
     const parsed = JSON.parse(readFileSync(path, { encoding: 'utf-8' })) as {
       instances?: unknown
     }

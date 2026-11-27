@@ -45,6 +45,7 @@ describe('itsaplanApiUrlCandidates', () => {
 
 describe('detectItsaplanApiUrl', () => {
   it('skips an HTML catch-all and accepts the next JSON probe', async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double implements only the fetch surface the code under test reads.
     const fetchImpl = (async (url: string) =>
       url === 'https://app.example.com/api/me'
         ? new Response('<html>', { status: 200, headers: { 'content-type': 'text/html' } })
@@ -57,6 +58,7 @@ describe('detectItsaplanApiUrl', () => {
   })
 
   it('reports unreachable when every probe throws', async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double implements only the fetch surface the code under test reads.
     const fetchImpl = (async () => {
       throw new TypeError('fetch failed')
     }) as unknown as typeof fetch
@@ -67,6 +69,7 @@ describe('detectItsaplanApiUrl', () => {
   })
 
   it('reports apiNotFound when probes answer without the me shape', async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double implements only the fetch surface the code under test reads.
     const fetchImpl = (async () => jsonResponse({ hello: 1 })) as unknown as typeof fetch
     expect(await detectItsaplanApiUrl('https://app.example.com', fetchImpl)).toMatchObject({
       ok: false,

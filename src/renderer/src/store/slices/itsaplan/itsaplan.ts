@@ -21,6 +21,7 @@ let inflight = new Map<string, Promise<unknown>>()
 function dedupe<T>(key: string, start: () => Promise<T>): Promise<T> {
   const existing = inflight.get(key)
   if (existing) {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each dedupe key is always used with one result type.
     return existing as Promise<T>
   }
   const request = start().finally(() => {
