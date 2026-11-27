@@ -6,7 +6,7 @@ import {
 import { formatAgentTypeLabel } from '../../agent-status/presentation/agent-type-label'
 import type { AgentJournalApprovalItem } from '../../agent-session/journal/agent-session-journal-types'
 import type { AgentJournalApprovalSubject } from '../../agent-session/journal/agent-session-journal-approval-subject'
-import { parseAskFromStatus, resolveNativeChatAsk } from './native-chat-ask'
+import { extractPendingAsk, parseAskFromStatus } from './native-chat-ask'
 import type { AskPrompt } from './questions/native-chat-ask-types'
 import type { NativeChatMessage } from '../native-chat-types'
 import { parseOmpPlanReviewPrompt } from './questions/omp-plan-review-prompt'
@@ -184,11 +184,13 @@ export function resolveNativeChatInteractivePromptCard(args: {
   }
   // Codex's async questions come from the transcript, which knows which ones were answered.
   const liveAsk = statusCard?.prompt.replyAsMessage ? null : (statusCard?.prompt ?? null)
-  const prompt = resolveNativeChatAsk({
-    liveAsk,
-    messages: args.messages,
-    transcriptSettled: args.transcriptSettled,
-    transcriptAsk: args.transcriptAsk
-  })
+  // Live status wins; transcript history is consulted only after its read settles.
+  const prompt =
+    liveAsk ??
+    (args.transcriptSettled
+      ? args.transcriptAsk === undefined
+        ? extractPendingAsk(args.messages)
+        : args.transcriptAsk
+      : null)
   return prompt ? { kind: 'question', prompt } : null
 }
