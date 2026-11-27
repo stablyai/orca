@@ -50,11 +50,14 @@ export async function targetEvent(
   return { calendar, event }
 }
 
-export function eventLength(event: CalendarEvent): { minutes: number | null; days: number } {
+export function eventLength(event: CalendarEvent): { milliseconds: number | null; days: number } {
   if (event.start.date && event.end.date) {
     const days = (Date.parse(event.end.date) - Date.parse(event.start.date)) / 86_400_000
-    return { minutes: null, days: Math.max(1, days) }
+    return { milliseconds: null, days: Math.max(1, days) }
   }
   const ms = Date.parse(event.end.dateTime ?? '') - Date.parse(event.start.dateTime ?? '')
-  return { minutes: Number.isFinite(ms) ? Math.round(ms / 60_000) : DEFAULT_EVENT_MINUTES, days: 0 }
+  return {
+    milliseconds: Number.isFinite(ms) ? ms : DEFAULT_EVENT_MINUTES * 60_000,
+    days: 0
+  }
 }

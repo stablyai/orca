@@ -176,7 +176,13 @@ export async function updateCalendarEvent(
               end: { kind: 'day' as const, date: addDays(start.date, length.days - 1) },
               minutes: null
             }
-          : { end: null, minutes: length.minutes }
+          : {
+              end:
+                length.milliseconds === null
+                  ? null
+                  : { kind: 'time' as const, ms: start.ms + length.milliseconds },
+              minutes: null
+            }
     Object.assign(patch, startAndEnd(start, kept.end, kept.minutes, timeZone))
   }
   if (args.with.length > 0 || args.without.length > 0) {
