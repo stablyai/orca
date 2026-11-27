@@ -12,7 +12,6 @@ import {
 } from '../../../../src/shared/bots/bot-share-skill-picks'
 import { TextField } from '../../components/composer-input/TextField'
 import { ListRow } from '../../components/list/ListGroup'
-import { MobileSwitch } from '../../components/controls/MobileSwitch'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { SettingsSection } from '../../settings/settings-screen-frame'
 import { colors, radii, spacing } from '../../theme/mobile-theme'
@@ -62,6 +61,7 @@ export function ShareTickRow(props: {
       detail={props.detail}
       disabled={props.disabled || !props.onToggle}
       accessibilityRole="checkbox"
+      checked={props.on}
       onPress={props.onToggle ? () => props.onToggle?.(!props.on) : undefined}
       accessory={
         props.onPreview ? (
@@ -272,60 +272,52 @@ function MemoryList({ ctx }: { ctx: ShareContext }) {
   const full = picked.length >= BOT_SHARE_MAX_PICKS
   const total = notes.reduce((sum, note) => sum + note.lines, 0)
   return (
-    <>
-      <SettingsSection first>
-        <ListRow
-          title={t('bots.share.all', 'All')}
-          value={
-            notes.length > BOT_SHARE_MAX_PICKS
-              ? t('bots.share.memoryLimit', 'Up to {{count}} files', { count: BOT_SHARE_MAX_PICKS })
-              : botShareLines(total)
-          }
-          accessory={
-            <MobileSwitch
-              value={allPicked}
-              accessibilityLabel={t('bots.share.all', 'All')}
-              onValueChange={(on) => ctx.select({ memory: on ? most : [] })}
-            />
-          }
-        />
-      </SettingsSection>
-      <SettingsSection>
-        {notes.map((note) => {
-          const spots = ctx.spots.filter((spot) => spot.part === `memory:${note.topic}`)
-          const [flag] = spots
-          const on = picked.includes(note.topic)
-          return (
-            <ShareTickRow
-              key={note.topic}
-              title={note.topic}
-              subtitle={flag ? undefined : botShareLines(note.lines)}
-              detail={
-                flag ? (
-                  <FlagLine secret={spots.some((spot) => spot.flag.kind === 'secret')}>
-                    {t('bots.share.flagOnLine', '{{flag}} on line {{line}}', {
-                      flag: botShareFlagLabel(flag.flag.kind),
-                      line: flag.flag.line ?? 1
-                    })}
-                  </FlagLine>
-                ) : undefined
-              }
-              on={on}
-              disabled={full && !on}
-              onToggle={(next) => ctx.select({ memory: toggled(picked, note.topic, next) })}
-              onPreview={() =>
-                ctx.open({
-                  kind: 'part',
-                  part: `memory:${note.topic}`,
-                  title: note.topic,
-                  detail: t('bots.share.memory', 'Memory')
-                })
-              }
-            />
-          )
-        })}
-      </SettingsSection>
-    </>
+    <SettingsSection first>
+      <ShareTickRow
+        key="all"
+        title={t('bots.share.all', 'All')}
+        subtitle={
+          notes.length > BOT_SHARE_MAX_PICKS
+            ? t('bots.share.memoryLimit', 'Up to {{count}} files', { count: BOT_SHARE_MAX_PICKS })
+            : botShareLines(total)
+        }
+        on={allPicked}
+        onToggle={(on) => ctx.select({ memory: on ? most : [] })}
+      />
+      {notes.map((note) => {
+        const spots = ctx.spots.filter((spot) => spot.part === `memory:${note.topic}`)
+        const [flag] = spots
+        const on = picked.includes(note.topic)
+        return (
+          <ShareTickRow
+            key={note.topic}
+            title={note.topic}
+            subtitle={flag ? undefined : botShareLines(note.lines)}
+            detail={
+              flag ? (
+                <FlagLine secret={spots.some((spot) => spot.flag.kind === 'secret')}>
+                  {t('bots.share.flagOnLine', '{{flag}} on line {{line}}', {
+                    flag: botShareFlagLabel(flag.flag.kind),
+                    line: flag.flag.line ?? 1
+                  })}
+                </FlagLine>
+              ) : undefined
+            }
+            on={on}
+            disabled={full && !on}
+            onToggle={(next) => ctx.select({ memory: toggled(picked, note.topic, next) })}
+            onPreview={() =>
+              ctx.open({
+                kind: 'part',
+                part: `memory:${note.topic}`,
+                title: note.topic,
+                detail: t('bots.share.memory', 'Memory')
+              })
+            }
+          />
+        )
+      })}
+    </SettingsSection>
   )
 }
 

@@ -50,6 +50,13 @@ export function collapseHomePath(path: string, homeDirectory: string): string {
   return path
 }
 
+/** The host-side folder where Replace and the executor move old copies, in the home's own separator. */
+export function skillBackupDirectory(homeDirectory: string): string {
+  const separator = /^[a-z]:[\\/]|^\\\\/iu.test(homeDirectory) ? '\\' : '/'
+  const home = homeDirectory.replace(/[\\/]+$/u, '')
+  return [home, '.agents', '.orca-skill-backups'].join(separator)
+}
+
 function agentNames(agents: readonly string[]): string[] {
   return agents.flatMap((agent) => {
     const name = SKILL_INSTALL_PROVIDERS.find((provider) => provider.id === agent)?.displayName

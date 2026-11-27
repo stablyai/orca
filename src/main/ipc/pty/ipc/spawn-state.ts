@@ -1,4 +1,5 @@
 import type { PtySpawnSizeSeed } from '../spawn/spawn-options-assembly'
+import type { TerminalMcpPaneLaunch } from '../../../mcp-servers/terminal/terminal-mcp-launch'
 import type { StartupCwdFallback } from '../../../../shared/shell/launch/startup-cwd-fallback'
 import type { PtyRegistrationClaim } from '../../../runtime/terminal/records/runtime-terminal-state-records'
 import type { PaneSpawnOperation } from '../pane/pane-spawn-operation'
@@ -86,6 +87,8 @@ export type PtyIpcSpawnState = {
   /** The host's verdict on the spawn's resume; a refused one starts the pane's plain shell. */
   resumeAdmission: ResumeSpawnAdmission | null
   launchCommand: string | undefined
+  /** What the host's MCP server list gave the pane, recorded at commit. */
+  terminalMcp?: TerminalMcpPaneLaunch | null
   env: Record<string, string> | undefined
   selectedCodexHomePath: string | null
   spawnEnv: Record<string, string> | undefined

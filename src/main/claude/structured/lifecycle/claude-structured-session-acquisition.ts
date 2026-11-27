@@ -50,7 +50,7 @@ export async function acquireClaudeSession({
   let liveSession: sessionState.ClaudeSession | null = null
   let firstRootInit: sessionState.ClaudeSession['firstRootInit']
   let observedLeafUuid: string | null = null,
-    expectedProviderSessionId: string | null = null
+    launched: { providerSessionId: string; resumesTranscript: boolean } | null = null
   // Preserve the CLI diagnostic when SDK cleanup reports a generic error.
   let childEnded: Error | null = null
   const initProof = proof.createClaudeInitProof()
@@ -85,9 +85,8 @@ export async function acquireClaudeSession({
       return
     }
     const init = proof.readClaudeInit(message)
-    if (proof.readClaudeFrameString(message, 'session_id') !== expectedProviderSessionId) {
-      // Foreign init frames refuse startup; ordinary foreign frames are ignored.
-      if (init || (message.type === 'system' && message.subtype === 'init')) {
+    if (proof.readClaudeFrameString(message, 'session_id') !== launched?.providerSessionId) {
+      if (launched && proof.claudeForeignFrameRefusesStartup(message, launched)) {
         initProof.refuse()
       }
       return
@@ -184,7 +183,7 @@ export async function acquireClaudeSession({
       previous,
       attempt
     })
-    expectedProviderSessionId = launch.providerSessionId
+    launched = launch
     // Granted from this final launch before the connection can deliver a request.
     const permissions = claudeLaunchPermissions({ sessionId, prompts, emit }, launch)
     naming?.launch(launch)

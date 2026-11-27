@@ -3,7 +3,6 @@
 import { createReadStream } from 'node:fs'
 import { open, type FileHandle } from 'node:fs/promises'
 import { join } from 'node:path'
-import { Unzip, UnzipInflate } from 'fflate'
 import { writeAll } from './runtime-archive-download'
 
 export async function extractPinnedZipMembers(
@@ -13,6 +12,7 @@ export async function extractPinnedZipMembers(
   label: string,
   signal: AbortSignal
 ): Promise<void> {
+  const { Unzip, UnzipInflate } = await import('fflate')
   const expected = new Map(members.map((member) => [member.path, member.bytes]))
   const written = new Map<string, number>()
   const pending: { name: string; data: Uint8Array }[] = []

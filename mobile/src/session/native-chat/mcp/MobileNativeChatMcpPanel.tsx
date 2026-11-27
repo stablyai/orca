@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
-import { X } from 'lucide-react-native'
+import { ChevronRight, X } from 'lucide-react-native'
 import type {
   AgentSessionMcpOperation,
   AgentSessionMcpServer,
@@ -27,6 +27,7 @@ import {
   mobileMcpTraySummary
 } from './mobile-native-chat-mcp-server-copy'
 import { mcpPanelStyles as styles } from './mobile-native-chat-mcp-panel-styles'
+import { composerInputStyles } from '../../../components/composer-input/composer-input-styles'
 
 type McpAction = Exclude<AgentSessionMcpOperation, { action: 'status' }>
 
@@ -36,6 +37,8 @@ export type MobileNativeChatMcpPanelProps = AgentSessionMcpPanelState & {
   dismissSignIn: () => void
   openUrl: (url: string) => void
   onClose: () => void
+  /** Opens the host's MCP servers page; null on a host without one. */
+  onManage?: (() => void) | null
   /** The server list's cap, so the tray and composer stay on screen above the keyboard. */
   listMaxHeight: number
 }
@@ -75,6 +78,16 @@ export function MobileNativeChatMcpPanel(props: MobileNativeChatMcpPanelProps): 
         </Pressable>
       </View>
       <McpTrayBody {...props} t={t} />
+      {props.onManage ? (
+        <Pressable
+          accessibilityRole="link"
+          style={({ pressed }) => [styles.footer, pressed && styles.pressed]}
+          onPress={props.onManage}
+        >
+          <Text style={styles.footerText}>{t('chat.mcp.manage', 'Manage MCP servers')}</Text>
+          <ChevronRight size={15} color={colors.textMuted} strokeWidth={2.2} />
+        </Pressable>
+      ) : null}
     </View>
   )
 }
@@ -304,7 +317,7 @@ function McpPasteBox({
       </Text>
       <View style={styles.pasteRow}>
         <TextField
-          style={styles.pasteField}
+          style={[composerInputStyles.filledField, styles.pasteField]}
           value={address}
           onChangeText={setAddress}
           placeholder={t('chat.mcp.pastePlaceholder', 'Paste address')}

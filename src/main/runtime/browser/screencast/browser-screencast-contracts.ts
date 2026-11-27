@@ -40,6 +40,10 @@ export type BrowserScreencastParams = {
   driverEvents?: 1
   // The viewer hears the page's downloads start and end: `downloadRequested`, `downloadFinished`.
   downloads?: 1
+  // With `downloads`: each finished download this host saved carries a `copyId` only this device can stream.
+  downloadCopyStreams?: 1
+  // The viewer saves the page as a PDF when its own input makes the page print: `print` events.
+  prints?: 1
 } & BrowserCommandTargetParams
 
 export type BrowserScreencastStartResult = {
@@ -70,7 +74,7 @@ export type ActiveBrowserScreencastSubscriber = {
   frameCredit: { credit: BrowserScreencastFrameCredit; release: () => void } | null
   pointerEvents: boolean
   contextMenus: boolean
-  // Present while the viewer hears the page's prompts, its own file pickers, the agent cursor or downloads.
+  // Present while the viewer hears the page's prompts, its own file pickers and prints, the agent cursor or downloads.
   stopViewerEvents: (() => void) | null
 }
 

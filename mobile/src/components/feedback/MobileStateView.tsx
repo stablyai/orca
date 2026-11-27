@@ -14,6 +14,9 @@ import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { describeLoadError } from './load-error-description'
 
+// (44 - 32) / 2: the button's real touch target reaches 44 pt.
+const ACTION_TARGET_PADDING = 6
+
 export type MobileStateAction = { label: string; onPress: () => void }
 
 type MobileStateViewProps = {
@@ -26,6 +29,8 @@ type MobileStateViewProps = {
   /** Raw text a person can open for support, never shown by default. */
   details?: string | null
   action?: MobileStateAction | null
+  /** A second action beside the first, such as Back next to an update link. */
+  secondaryAction?: MobileStateAction | null
   loading?: boolean
   /** Keeps the content centred above a floating bottom bar. */
   bottomInset?: number
@@ -41,6 +46,7 @@ export function MobileStateView({
   message,
   details,
   action,
+  secondaryAction,
   loading = false,
   bottomInset = 0,
   children
@@ -58,33 +64,66 @@ export function MobileStateView({
       <Text style={loading ? styles.message : styles.title}>{title}</Text>
       {message ? <Text style={styles.message}>{message}</Text> : null}
       {details ? <MobileStateDetails details={details} /> : null}
-      {action ? <MobileStateButton label={action.label} onPress={action.onPress} /> : null}
+      {action && secondaryAction ? (
+        <View style={styles.actions}>
+          <MobileStateButton label={secondaryAction.label} onPress={secondaryAction.onPress} />
+          <MobileStateButton label={action.label} onPress={action.onPress} />
+        </View>
+      ) : action ? (
+        <MobileStateButton label={action.label} onPress={action.onPress} />
+      ) : null}
       {children ? <View style={styles.children}>{children}</View> : null}
     </View>
   )
 }
 
-/** The one action a centred state offers, such as Retry. */
+/** The one action a centred state offers, such as Retry; `inRow`, a row's small line button (a wait's Cancel). */
 export function MobileStateButton({
   label,
   onPress,
-  disabled
-}: MobileStateAction & { disabled?: boolean }) {
+  disabled,
+  inRow = false,
+  accessibilityLabel
+}: MobileStateAction & { disabled?: boolean; inRow?: boolean; accessibilityLabel?: string }) {
   useMobileColorScheme()
+  const a11y = {
+    onPress,
+    disabled,
+    accessibilityRole: 'button',
+    accessibilityLabel,
+    accessibilityState: { disabled }
+  } as const
+  if (inRow) {
+    return (
+      <Pressable
+        {...a11y}
+        style={({ pressed }) => [
+          styles.action,
+          styles.actionInRow,
+          pressed && styles.actionPressed,
+          disabled && styles.actionDisabled
+        ]}
+        hitSlop={8}
+      >
+        <Text style={styles.actionText}>{label}</Text>
+      </Pressable>
+    )
+  }
+  // The page ignores hitSlop, so the 44 pt target is real padding around the 32 pt button.
   return (
-    <Pressable
-      style={({ pressed }) => [
-        styles.action,
-        pressed && styles.actionPressed,
-        disabled && styles.actionDisabled
-      ]}
-      onPress={onPress}
-      disabled={disabled}
-      hitSlop={8}
-      accessibilityRole="button"
-      accessibilityState={{ disabled }}
-    >
-      <Text style={styles.actionText}>{label}</Text>
+    <Pressable {...a11y} style={styles.actionTarget}>
+      {({ pressed }) => (
+        <View
+          style={[
+            styles.action,
+            styles.actionInTarget,
+            pressed && styles.actionPressed,
+            disabled && styles.actionDisabled
+          ]}
+        >
+          <Text style={styles.actionText}>{label}</Text>
+        </View>
+      )}
     </Pressable>
   )
 }
@@ -256,6 +295,14 @@ const styles = themedStyleSheet(() => ({
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgRaised
   },
+  actionTarget: {
+    marginTop: spacing.sm - ACTION_TARGET_PADDING,
+    paddingVertical: ACTION_TARGET_PADDING
+  },
+  actionInTarget: { marginTop: 0 },
+  // bgRaised is a dark group's own fill, so the edge alone draws it there, as a line button.
+  actionInRow: { marginTop: 0, borderColor: colors.floatingCardBorder },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: spacing.sm },
   actionPressed: { opacity: feedback.pressedOpacity },
   actionDisabled: { opacity: 0.5 },
   actionText: {

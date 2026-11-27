@@ -75,6 +75,14 @@ export function openAgentSessionRecordStoreOnce(
     stateDirectory: location.stateDirectory,
     opened: openRecordStore(location).then(
       (opened) => {
+        if (opened.journalDatabase.readOnly) {
+          location.logger.warn(
+            'old chat journal: not checked (store uses a newer schema; opened read-only)',
+            {
+              scope: 'old-chat-history-cleanup-open'
+            }
+          )
+        }
         slot.database = opened.journalDatabase
         if (!slot.retire) {
           slot.store = opened.store

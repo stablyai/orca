@@ -113,7 +113,9 @@ export async function readArtifactRateLimitResponse(
     : retryAfterSeconds !== null
       ? `Try again in ${formatWait(retryAfterSeconds)}.`
       : 'Try again later.'
-  const message = `${withSentenceEnd(serverMessage ?? 'Artifact sharing is rate limited')} ${when}`
+  const summary = withSentenceEnd(serverMessage ?? 'Artifact sharing is rate limited')
+  // Servers that send resetAt already name the retry time in the message.
+  const message = serverMessage && resetAt ? summary : `${summary} ${when}`
   const scope = body.scope === 'account' || body.scope === 'network' ? body.scope : null
   const error = new ArtifactCloudRateLimitError(
     message,

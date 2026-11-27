@@ -27,6 +27,7 @@ import { MobileNativeChatNoticePill } from '../notices/MobileNativeChatNoticePil
 import { mobileBotToolAddedSay } from './mobile-bot-card-copy'
 import { useMobileBotCardHost } from './mobile-bot-card-host'
 import { MobileBotCardActions } from './MobileBotCardFrame'
+import { composerInputStyles } from '../../../../components/composer-input/composer-input-styles'
 
 export function MobileBotToolAddedCard({
   added,
@@ -157,6 +158,7 @@ export function MobileBotToolAddedCard({
             returnKeyType="done"
             editable={!attempt.finishing}
             onSubmitEditing={finish}
+            style={composerInputStyles.filledField}
           />
           <MobileBotCardActions>
             <MobileNativeChatNoticePill

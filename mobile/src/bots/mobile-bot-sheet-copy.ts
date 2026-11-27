@@ -10,6 +10,7 @@ import type { WorktreeStatus } from '../../../src/shared/worktree/row-display/wo
 import { isConnectorSource } from '../../../src/shared/automation-event-triggers'
 import { automationUnheardSources } from '../../../src/shared/bot-event-sources'
 import { CONNECTOR_SOURCE_NAMES } from '../../../src/shared/connectors/external-conversation-link'
+import { joinSentences } from '../../../src/shared/text/sentence-joining'
 import { translate } from '../i18n/mobile-i18n'
 import { getUiIntlLocale } from '../i18n/ui-intl-locale'
 import type { AgentDotState } from '../worktree/agent-lineage/agent-row-display'
@@ -67,6 +68,19 @@ const SOURCE_EVENT_FALLBACKS: Partial<Record<string, () => string>> = {
   github: () => translate('bots.events.githubFallback', 'On a GitHub event'),
   linear: () => translate('bots.events.linearFallback', 'On a Linear event'),
   webhook: () => translate('bots.events.webhookFallback', 'When its webhook is called')
+}
+
+export function botSkillsListedNote(agent: AgentType, botName: string): string {
+  return joinSentences([
+    translate('bots.skills.listedTitle', '{{agent}} can’t load these skills directly.', {
+      agent: botAgentLabel(agent)
+    }),
+    translate(
+      'bots.skills.listedBody',
+      '{{bot}} gets a list of them in its instructions and reads one when it fits. They won’t appear in its / menu.',
+      { bot: botName }
+    )
+  ])
 }
 
 export function eventLabel(trigger: { source: string; event?: string }): string {

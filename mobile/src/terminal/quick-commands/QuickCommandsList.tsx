@@ -4,6 +4,7 @@ import { colors, radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { MobileAgentIcon } from '../../components/icons/MobileAgentIcon'
+import { composerInputStyles } from '../../components/composer-input/composer-input-styles'
 import { TextField } from '../../components/composer-input/TextField'
 import { MOBILE_AGENT_CATALOG } from '../../agents/mobile-agent-catalog'
 import type { TerminalQuickCommand } from '../../../../src/shared/terminal/quick-commands/terminal-quick-command-types'
@@ -59,6 +60,7 @@ export function QuickCommandsList({
       {showSearch ? (
         <TextField
           leading={<Search size={16} color={colors.textMuted} />}
+          style={composerInputStyles.filledField}
           value={query}
           onChangeText={onQueryChange}
           placeholder={t('session.quickCommandsList.searchPlaceholder', 'Search quick commands...')}

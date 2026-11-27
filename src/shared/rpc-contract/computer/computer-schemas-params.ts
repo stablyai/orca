@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import {
   OptionalBoolean,
   OptionalFiniteNumber,
@@ -12,28 +13,32 @@ import {
   computerUsePressKeyValidationMessage
 } from '../../computer/computer-use-key-spec'
 
-export const OptionalNonNegativeInt = z.number().int().nonnegative().optional()
+export const OptionalNonNegativeInt = lazyZodSchema(() => z.number().int().nonnegative().optional())
 
-export const OptionalPositiveInt = z.number().int().positive().optional()
+export const OptionalPositiveInt = lazyZodSchema(() => z.number().int().positive().optional())
 
-export const ComputerTarget = z.object({
-  app: requiredString('Missing app'),
-  session: OptionalString,
-  worktree: OptionalString
-})
+export const ComputerTarget = lazyZodSchema(() =>
+  z.object({
+    app: requiredString('Missing app'),
+    session: OptionalString,
+    worktree: OptionalString
+  })
+)
 
-export const ComputerObserveTargetBase = ComputerTarget.extend({
-  noScreenshot: OptionalBoolean,
-  // Older runtimes strip these and return the full-size PNG; the result's screenshot says what it is.
-  screenshotFormat: z.enum(['png', 'jpeg']).optional(),
-  screenshotScale: z.number().positive().finite().optional(),
-  screenshotMaxEdge: OptionalPositiveInt,
-  restoreWindow: OptionalBoolean,
-  // Older runtimes strip this and return the full tree, so callers need no capability check.
-  treeDiff: OptionalBoolean,
-  windowId: OptionalNonNegativeInt,
-  windowIndex: OptionalNonNegativeInt
-})
+export const ComputerObserveTargetBase = lazyZodSchema(() =>
+  ComputerTarget.extend({
+    noScreenshot: OptionalBoolean,
+    // Older runtimes strip these and return the full-size PNG; the result's screenshot says what it is.
+    screenshotFormat: z.enum(['png', 'jpeg']).optional(),
+    screenshotScale: z.number().positive().finite().optional(),
+    screenshotMaxEdge: OptionalPositiveInt,
+    restoreWindow: OptionalBoolean,
+    // Older runtimes strip this and return the full tree, so callers need no capability check.
+    treeDiff: OptionalBoolean,
+    windowId: OptionalNonNegativeInt,
+    windowIndex: OptionalNonNegativeInt
+  })
+)
 
 export function validateWindowTarget(
   value: { windowId?: number; windowIndex?: number },
@@ -60,190 +65,218 @@ export function validateComputerTarget(
   validateWindowTarget(value, ctx)
 }
 
-export const ComputerObserveTarget = ComputerObserveTargetBase.extend({
-  // Reads one element's subtree. Older runtimes strip it, and their result has no rootElementIndex.
-  rootElementIndex: OptionalNonNegativeInt
-}).superRefine(validateComputerTarget)
+export const ComputerObserveTarget = lazyZodSchema(() =>
+  ComputerObserveTargetBase.extend({
+    // Reads one element's subtree. Older runtimes strip it, and their result has no rootElementIndex.
+    rootElementIndex: OptionalNonNegativeInt
+  }).superRefine(validateComputerTarget)
+)
 
-export const ListApps = z.object({}).strict()
+export const ListApps = lazyZodSchema(() => z.object({}).strict())
 
-export const LaunchApp = z
-  .object({
-    app: requiredString('Missing app'),
-    // Only with the user's OK: the app comes to the front and takes the keyboard.
-    activate: z.boolean().optional()
+export const LaunchApp = lazyZodSchema(() =>
+  z
+    .object({
+      app: requiredString('Missing app'),
+      // Only with the user's OK: the app comes to the front and takes the keyboard.
+      activate: z.boolean().optional()
+    })
+    .strict()
+)
+
+export const ListWindows = lazyZodSchema(() =>
+  z
+    .object({
+      app: requiredString('Missing app')
+    })
+    .strict()
+)
+
+export const Click = lazyZodSchema(() =>
+  ComputerObserveTargetBase.extend({
+    elementIndex: OptionalNonNegativeInt,
+    x: OptionalFiniteNumber,
+    y: OptionalFiniteNumber,
+    clickCount: OptionalPositiveInt,
+    mouseButton: z.enum(['left', 'right', 'middle']).optional(),
+    modifiers: z.string().optional()
+  }).superRefine((value, ctx) => {
+    validateComputerTarget(value, ctx)
+    const hasElement = value.elementIndex !== undefined
+    const hasX = value.x !== undefined
+    const hasY = value.y !== undefined
+    if (!hasElement && !(hasX && hasY)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Click requires --element-index or both --x and --y'
+      })
+    }
+    if (hasX !== hasY) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Click coordinates require both --x and --y'
+      })
+    }
+    if (hasElement && (hasX || hasY)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Click accepts either --element-index or coordinate flags, not both'
+      })
+    }
+    if (value.modifiers !== undefined) {
+      const message = computerUseClickModifiersValidationMessage(value.modifiers)
+      if (message) {
+        ctx.addIssue({ code: 'custom', message })
+      }
+    }
   })
-  .strict()
+)
 
-export const ListWindows = z
-  .object({
-    app: requiredString('Missing app')
+export const PerformSecondaryAction = lazyZodSchema(() =>
+  ComputerObserveTargetBase.extend({
+    elementIndex: OptionalNonNegativeInt,
+    action: requiredString('Missing action')
+  }).superRefine((value, ctx) => {
+    validateComputerTarget(value, ctx)
+    if (value.elementIndex === undefined) {
+      ctx.addIssue({ code: 'custom', message: 'Missing element index' })
+    }
   })
-  .strict()
+)
 
-export const Click = ComputerObserveTargetBase.extend({
-  elementIndex: OptionalNonNegativeInt,
-  x: OptionalFiniteNumber,
-  y: OptionalFiniteNumber,
-  clickCount: OptionalPositiveInt,
-  mouseButton: z.enum(['left', 'right', 'middle']).optional(),
-  modifiers: z.string().optional()
-}).superRefine((value, ctx) => {
-  validateComputerTarget(value, ctx)
-  const hasElement = value.elementIndex !== undefined
-  const hasX = value.x !== undefined
-  const hasY = value.y !== undefined
-  if (!hasElement && !(hasX && hasY)) {
-    ctx.addIssue({
-      code: 'custom',
-      message: 'Click requires --element-index or both --x and --y'
-    })
-  }
-  if (hasX !== hasY) {
-    ctx.addIssue({
-      code: 'custom',
-      message: 'Click coordinates require both --x and --y'
-    })
-  }
-  if (hasElement && (hasX || hasY)) {
-    ctx.addIssue({
-      code: 'custom',
-      message: 'Click accepts either --element-index or coordinate flags, not both'
-    })
-  }
-  if (value.modifiers !== undefined) {
-    const message = computerUseClickModifiersValidationMessage(value.modifiers)
+export const Scroll = lazyZodSchema(() =>
+  ComputerObserveTargetBase.extend({
+    elementIndex: OptionalNonNegativeInt,
+    x: OptionalFiniteNumber,
+    y: OptionalFiniteNumber,
+    direction: z.enum(['up', 'down', 'left', 'right']),
+    pages: z.number().positive().optional()
+  }).superRefine((value, ctx) => {
+    validateComputerTarget(value, ctx)
+    const hasElement = value.elementIndex !== undefined
+    const hasX = value.x !== undefined
+    const hasY = value.y !== undefined
+    if (!hasElement && !(hasX && hasY)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Scroll requires --element-index or both --x and --y'
+      })
+    }
+    if (hasX !== hasY) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Scroll coordinates require both --x and --y'
+      })
+    }
+    if (hasElement && (hasX || hasY)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Scroll accepts either --element-index or coordinate flags, not both'
+      })
+    }
+  })
+)
+
+export const Drag = lazyZodSchema(() =>
+  ComputerObserveTargetBase.extend({
+    fromElementIndex: OptionalNonNegativeInt,
+    toElementIndex: OptionalNonNegativeInt,
+    fromX: OptionalFiniteNumber,
+    fromY: OptionalFiniteNumber,
+    toX: OptionalFiniteNumber,
+    toY: OptionalFiniteNumber
+  }).superRefine((value, ctx) => {
+    validateComputerTarget(value, ctx)
+    const hasElementPair =
+      value.fromElementIndex !== undefined && value.toElementIndex !== undefined
+    const hasPartialElementPair =
+      value.fromElementIndex !== undefined || value.toElementIndex !== undefined
+    const coordinateKeys = [value.fromX, value.fromY, value.toX, value.toY]
+    const hasCoordinatePair = coordinateKeys.every((coordinate) => coordinate !== undefined)
+    const hasPartialCoordinatePair = coordinateKeys.some((coordinate) => coordinate !== undefined)
+    if (hasElementPair && hasCoordinatePair) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Drag accepts either element indexes or coordinate flags, not both'
+      })
+    }
+    if (!hasElementPair && !hasCoordinatePair) {
+      ctx.addIssue({
+        code: 'custom',
+        message:
+          'Drag requires --from-element-index and --to-element-index, or all coordinate flags'
+      })
+    }
+    if (hasPartialElementPair && !hasElementPair) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Drag element targeting requires both --from-element-index and --to-element-index'
+      })
+    }
+    if (hasPartialCoordinatePair && !hasCoordinatePair) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Drag coordinates require --from-x, --from-y, --to-x, and --to-y'
+      })
+    }
+  })
+)
+
+export const TypeText = lazyZodSchema(() =>
+  ComputerObserveTargetBase.extend({
+    elementIndex: OptionalNonNegativeInt,
+    text: requiredString('Missing text')
+  }).superRefine(validateComputerTarget)
+)
+
+export const PressKey = lazyZodSchema(() =>
+  ComputerObserveTargetBase.extend({
+    key: requiredString('Missing key'),
+    allowSystemShortcut: OptionalBoolean
+  }).superRefine((value, ctx) => {
+    validateComputerTarget(value, ctx)
+    const message = computerUsePressKeyValidationMessage(value.key)
     if (message) {
       ctx.addIssue({ code: 'custom', message })
     }
-  }
-})
+  })
+)
 
-export const PerformSecondaryAction = ComputerObserveTargetBase.extend({
-  elementIndex: OptionalNonNegativeInt,
-  action: requiredString('Missing action')
-}).superRefine((value, ctx) => {
-  validateComputerTarget(value, ctx)
-  if (value.elementIndex === undefined) {
-    ctx.addIssue({ code: 'custom', message: 'Missing element index' })
-  }
-})
+export const Hotkey = lazyZodSchema(() =>
+  ComputerObserveTargetBase.extend({
+    key: requiredString('Missing key'),
+    allowSystemShortcut: OptionalBoolean
+  }).superRefine((value, ctx) => {
+    validateComputerTarget(value, ctx)
+    const message = computerUseHotkeyValidationMessage(value.key)
+    if (message) {
+      ctx.addIssue({ code: 'custom', message })
+    }
+  })
+)
 
-export const Scroll = ComputerObserveTargetBase.extend({
-  elementIndex: OptionalNonNegativeInt,
-  x: OptionalFiniteNumber,
-  y: OptionalFiniteNumber,
-  direction: z.enum(['up', 'down', 'left', 'right']),
-  pages: z.number().positive().optional()
-}).superRefine((value, ctx) => {
-  validateComputerTarget(value, ctx)
-  const hasElement = value.elementIndex !== undefined
-  const hasX = value.x !== undefined
-  const hasY = value.y !== undefined
-  if (!hasElement && !(hasX && hasY)) {
-    ctx.addIssue({
-      code: 'custom',
-      message: 'Scroll requires --element-index or both --x and --y'
-    })
-  }
-  if (hasX !== hasY) {
-    ctx.addIssue({
-      code: 'custom',
-      message: 'Scroll coordinates require both --x and --y'
-    })
-  }
-  if (hasElement && (hasX || hasY)) {
-    ctx.addIssue({
-      code: 'custom',
-      message: 'Scroll accepts either --element-index or coordinate flags, not both'
-    })
-  }
-})
+export const ComputerPermissions = lazyZodSchema(() =>
+  z.object({
+    id: z.enum(['accessibility', 'screenshots']).optional(),
+    // Older hosts drop it and open as before; Settings buttons leave it off so a click always opens.
+    skipGranted: z.boolean().optional()
+  })
+)
 
-export const Drag = ComputerObserveTargetBase.extend({
-  fromElementIndex: OptionalNonNegativeInt,
-  toElementIndex: OptionalNonNegativeInt,
-  fromX: OptionalFiniteNumber,
-  fromY: OptionalFiniteNumber,
-  toX: OptionalFiniteNumber,
-  toY: OptionalFiniteNumber
-}).superRefine((value, ctx) => {
-  validateComputerTarget(value, ctx)
-  const hasElementPair = value.fromElementIndex !== undefined && value.toElementIndex !== undefined
-  const hasPartialElementPair =
-    value.fromElementIndex !== undefined || value.toElementIndex !== undefined
-  const coordinateKeys = [value.fromX, value.fromY, value.toX, value.toY]
-  const hasCoordinatePair = coordinateKeys.every((coordinate) => coordinate !== undefined)
-  const hasPartialCoordinatePair = coordinateKeys.some((coordinate) => coordinate !== undefined)
-  if (hasElementPair && hasCoordinatePair) {
-    ctx.addIssue({
-      code: 'custom',
-      message: 'Drag accepts either element indexes or coordinate flags, not both'
-    })
-  }
-  if (!hasElementPair && !hasCoordinatePair) {
-    ctx.addIssue({
-      code: 'custom',
-      message: 'Drag requires --from-element-index and --to-element-index, or all coordinate flags'
-    })
-  }
-  if (hasPartialElementPair && !hasElementPair) {
-    ctx.addIssue({
-      code: 'custom',
-      message: 'Drag element targeting requires both --from-element-index and --to-element-index'
-    })
-  }
-  if (hasPartialCoordinatePair && !hasCoordinatePair) {
-    ctx.addIssue({
-      code: 'custom',
-      message: 'Drag coordinates require --from-x, --from-y, --to-x, and --to-y'
-    })
-  }
-})
+export const PasteText = lazyZodSchema(() =>
+  ComputerObserveTargetBase.extend({
+    text: requiredString('Missing text')
+  }).superRefine(validateComputerTarget)
+)
 
-export const TypeText = ComputerObserveTargetBase.extend({
-  elementIndex: OptionalNonNegativeInt,
-  text: requiredString('Missing text')
-}).superRefine(validateComputerTarget)
-
-export const PressKey = ComputerObserveTargetBase.extend({
-  key: requiredString('Missing key'),
-  allowSystemShortcut: OptionalBoolean
-}).superRefine((value, ctx) => {
-  validateComputerTarget(value, ctx)
-  const message = computerUsePressKeyValidationMessage(value.key)
-  if (message) {
-    ctx.addIssue({ code: 'custom', message })
-  }
-})
-
-export const Hotkey = ComputerObserveTargetBase.extend({
-  key: requiredString('Missing key'),
-  allowSystemShortcut: OptionalBoolean
-}).superRefine((value, ctx) => {
-  validateComputerTarget(value, ctx)
-  const message = computerUseHotkeyValidationMessage(value.key)
-  if (message) {
-    ctx.addIssue({ code: 'custom', message })
-  }
-})
-
-export const ComputerPermissions = z.object({
-  id: z.enum(['accessibility', 'screenshots']).optional(),
-  // Older hosts drop it and open as before; Settings buttons leave it off so a click always opens.
-  skipGranted: z.boolean().optional()
-})
-
-export const PasteText = ComputerObserveTargetBase.extend({
-  text: requiredString('Missing text')
-}).superRefine(validateComputerTarget)
-
-export const SetValue = ComputerObserveTargetBase.extend({
-  elementIndex: OptionalNonNegativeInt,
-  value: requiredStringAllowingEmpty('Missing value')
-}).superRefine((value, ctx) => {
-  validateComputerTarget(value, ctx)
-  if (value.elementIndex === undefined) {
-    ctx.addIssue({ code: 'custom', message: 'Missing element index' })
-  }
-})
+export const SetValue = lazyZodSchema(() =>
+  ComputerObserveTargetBase.extend({
+    elementIndex: OptionalNonNegativeInt,
+    value: requiredStringAllowingEmpty('Missing value')
+  }).superRefine((value, ctx) => {
+    validateComputerTarget(value, ctx)
+    if (value.elementIndex === undefined) {
+      ctx.addIssue({ code: 'custom', message: 'Missing element index' })
+    }
+  })
+)

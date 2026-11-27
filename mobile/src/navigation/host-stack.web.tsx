@@ -127,8 +127,7 @@ function HostStackView({ animation }: { animation: HostStackAnimation }) {
 
   return (
     // Render descriptors bare like NavigatorSlot; NavigationContent cannot run in this view-only rerender.
-    // Disable taps mid-slide so repeated row taps cannot push duplicate screens.
-    <View style={styles.stack} pointerEvents={transition ? 'none' : 'auto'}>
+    <View style={styles.stack}>
       {drawn.map((route) => {
         const leaving = transition?.kind === 'pop' && route.key === transition.leaving.key
         const descriptor = leaving ? transition.descriptors[route.key] : descriptors[route.key]
@@ -144,6 +143,9 @@ function HostStackView({ animation }: { animation: HostStackAnimation }) {
           </StackScreen>
         )
       })}
+      {/* Cover taps mid-slide so repeated row taps cannot push duplicate screens. Not pointer-events none:
+          iOS WebKit never lets an iframe that loads under it scroll by touch (a pushed HTML preview). */}
+      {transition ? <View style={styles.tapShield} testID="host-stack-tap-shield" /> : null}
     </View>
   )
 }
@@ -203,6 +205,11 @@ const styles = themedStyleSheet(() => ({
   },
   transparent: {
     backgroundColor: 'transparent'
+  },
+  tapShield: {
+    ...StyleSheet.absoluteFill,
+    // Above the screens even if one ever sets its own z-index.
+    zIndex: 1
   },
   hidden: {
     display: 'none'

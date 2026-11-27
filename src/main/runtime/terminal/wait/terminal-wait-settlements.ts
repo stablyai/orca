@@ -21,6 +21,7 @@ import { openCodeComposerHoldsDraft } from '../../../../shared/terminal/input/op
 import { piComposerHoldsDraft } from '../../../../shared/terminal/input/pi-composer'
 import { isMailboxTerminalTakingInput } from '../../orchestration/mailbox/routing/mailbox-owner'
 import type { MailboxDeliveryHold } from '../../orchestration/mailbox/delivery-hold/mailbox-delivery-hold'
+import { tuiAgentDisplayName } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import { receiptMailboxOwnershipHold } from '../../orchestration/mailbox/delivery-hold/receipt-mailbox-ownership'
 
 const DIALOG_HOLD_RECHECK_MS = 2000
@@ -179,6 +180,15 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     if (!pty) {
       return 'no-terminal'
     }
+    // Why: Agent Sleep is stopping this agent; its mail waits for the slept-agent wake, not this process.
+    if (this.intentionalPtyStops.isReversibleStopInFlight(ptyId)) {
+      return {
+        kind: 'asleep',
+        agentName: tuiAgentDisplayName(this.getPaneTerminalAgent(ptyId) ?? '') ?? 'The agent',
+        openTab: true,
+        waking: true
+      }
+    }
     const hold = this.ptyDeliveryHold(ptyId)
     if (hold) {
       return { kind: hold }
@@ -210,7 +220,13 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     const facts = this.terminalRunFacts
     const state = this.readWholeScreenModel(ptyId)
     const draft = !!state && this.hasComposerDraft(ptyId, state.emulator.getCursorLineContext())
-    const drivingInputAt = facts.readLastDrivingInputAt(ptyId)
+    const typedAt = facts.readLastDrivingInputAt(ptyId)
+    const heldNoticeAt = facts.readHeldMailNoticeAt(ptyId)
+    // A held mailbox notice is a draft Orca typed: no later notice is typed over it.
+    const drivingInputAt =
+      typedAt === null || heldNoticeAt === null
+        ? (typedAt ?? heldNoticeAt)
+        : Math.max(typedAt, heldNoticeAt)
     const unattributed = drivingInputAt === null && facts.readProcessStartedAt(ptyId) === null
     // Why: main saw every input to a process it started, so with no typing there the draft is Orca's
     // launch text; a process it attached to, as after a restart, may hold one typed before, which a

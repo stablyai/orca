@@ -9,6 +9,7 @@ import { AI_VAULT_METHODS } from './history/ai-vault'
 import { AUTOMATION_METHODS } from './automations/automations'
 import { REPO_METHODS } from './projects/repo'
 import { WORKTREE_METHODS } from './workspaces/worktree'
+import { WORKTREE_AUTO_NAME_METHODS } from './workspaces/worktree-auto-name-methods'
 import { WORKSPACE_CLEANUP_RUNNER_METHODS } from './workspaces/workspace-cleanup-runner-methods'
 import { WORKTREE_ARCHIVE_METHODS } from './workspaces/worktree-archive-methods'
 import { AGENT_ACTIVITY_METHODS } from './workspaces/agent-activity-methods'
@@ -59,6 +60,7 @@ import { SPEECH_METHODS } from './speech/speech'
 import { CLIENT_UI_METHODS } from './client-state/client-ui'
 import { CLIENT_EVENT_METHODS } from './client-events/client-events'
 import { WORKSPACE_PORT_METHODS } from './workspace-ports/workspace-ports'
+import { NETWORK_PORT_FORWARD_METHODS } from './workspace-ports/network-port-forward'
 import { LINK_PREVIEW_METHODS } from './link-preview/link-preview'
 import { PLUGIN_METHODS } from './plugins/plugins'
 import { PLUGIN_VIEW_METHODS } from './plugins/plugin-view'
@@ -108,13 +110,18 @@ import { GOOGLE_SETUP_SAVED_KEY_METHODS } from './bots-google-setup-saved-key'
 import { BOT_REQUEST_OUTCOME_METHOD } from './bots-request-outcome'
 import { WORKTREE_RELEASE_BOT_HOME_METHOD } from './bots-home-release'
 import { BOT_CREATE_OFFER_METHOD } from './bots-create-offer'
+import { BOT_OFFER_ANSWER_METHOD } from './bots-offer-answer'
 import { BOT_TEMPLATE_METHODS } from './bots-templates'
 import { BOT_IMPORT_METHODS } from './bots-import'
 import { BOT_SHARE_METHODS } from './bots-share'
 import { BOT_SHARE_RECEIVE_METHODS } from './bots-share-receive'
 import { BOT_CONNECTORS_METHOD } from './bots-connectors'
 import { BOT_TOOLS_METHODS } from './bots-tools'
+import { BOT_TOOLS_HOST_MCP_METHODS } from './bots-tools-host-mcp'
 import { BOT_TOOLS_OWNED_SIGN_IN_METHODS } from './bots-tools-owned-sign-in'
+import { MCP_SERVER_METHODS } from './mcp-servers'
+import { MCP_SERVER_SIGN_IN_METHODS } from './mcp-servers-sign-in'
+import { MCP_SERVER_PASTE_METHODS } from './mcp-servers-paste'
 import { BOT_COMPOSIO_METHODS } from './bots-composio'
 import { BOT_COMPOSIO_EVENTS_METHODS } from './bots-composio-events'
 import { WEBHOOK_METHODS } from './webhooks'
@@ -140,6 +147,7 @@ const CORE_RPC_METHODS = [
   ...AUTOMATION_METHODS,
   ...REPO_METHODS,
   ...WORKTREE_METHODS,
+  ...WORKTREE_AUTO_NAME_METHODS,
   ...WORKSPACE_CLEANUP_RUNNER_METHODS,
   ...WORKTREE_ARCHIVE_METHODS,
   ...AGENT_ACTIVITY_METHODS,
@@ -177,13 +185,18 @@ const BOT_RPC_METHODS = [
   BOT_REQUEST_OUTCOME_METHOD,
   WORKTREE_RELEASE_BOT_HOME_METHOD,
   BOT_CREATE_OFFER_METHOD,
+  BOT_OFFER_ANSWER_METHOD,
   ...BOT_TEMPLATE_METHODS,
   ...BOT_IMPORT_METHODS,
   ...BOT_SHARE_METHODS,
   ...BOT_SHARE_RECEIVE_METHODS,
   BOT_CONNECTORS_METHOD,
   ...BOT_TOOLS_METHODS,
+  ...BOT_TOOLS_HOST_MCP_METHODS,
   ...BOT_TOOLS_OWNED_SIGN_IN_METHODS,
+  ...MCP_SERVER_METHODS,
+  ...MCP_SERVER_SIGN_IN_METHODS,
+  ...MCP_SERVER_PASTE_METHODS,
   ...BOT_COMPOSIO_METHODS,
   ...BOT_COMPOSIO_EVENTS_METHODS,
   ...WEBHOOK_METHODS
@@ -201,6 +214,7 @@ const SERVICE_RPC_METHODS = [
   ...DESKTOP_BROWSER_BRIDGE_RPC_METHODS,
   ...BROWSER_CLIENT_FILE_CHANNEL_METHODS,
   ...BROWSER_NETWORK_TUNNEL_METHODS,
+  ...NETWORK_PORT_FORWARD_METHODS,
   ...ORCHESTRATION_METHODS,
   ...NOTIFICATION_METHODS,
   ...STATS_METHODS,

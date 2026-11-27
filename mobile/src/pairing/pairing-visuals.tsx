@@ -27,19 +27,6 @@ export function waitForBeat(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-/** One numbered instruction above the scanner. */
-export function Step({ number, text }: { number: number; text: string }) {
-  useMobileColorScheme()
-  return (
-    <View style={scanStyles.step}>
-      <View style={scanStyles.stepBadge}>
-        <Text style={scanStyles.stepNumber}>{number}</Text>
-      </View>
-      <Text style={scanStyles.stepText}>{text}</Text>
-    </View>
-  )
-}
-
 /** The QR guide's four corners; they squeeze in once a code decodes, or dim under Reduce Motion. */
 export function ScanReticle({ size, decoded }: { size: number; decoded: boolean }) {
   useMobileColorScheme()

@@ -1,6 +1,7 @@
 // Calendar changes for "starting soon" rules: a sync token says cheaply whether anything changed, and
 // a time-bounded list of the coming day is the schedule rules fire from.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import type { CalendarEventSummary } from '../../shared/google/google-read-types'
 import { MAX_MINUTES_BEFORE } from '../../shared/automation-google-triggers'
 import { GoogleToolError, parseGoogleJson, type GoogleApi } from './google-api-client'
@@ -10,15 +11,19 @@ import { CALENDAR, EventSchema, eventSummary } from './google-calendar-read'
 const MAX_SEED_PAGES = 40
 const MAX_SCHEDULE_PAGES = 4
 
-const SyncPageSchema = z.object({
-  items: z.array(z.object({ id: z.string() })).default([]),
-  nextPageToken: z.string().optional(),
-  nextSyncToken: z.string().optional()
-})
-const SchedulePageSchema = z.object({
-  items: z.array(EventSchema).default([]),
-  nextPageToken: z.string().optional()
-})
+const SyncPageSchema = lazyZodSchema(() =>
+  z.object({
+    items: z.array(z.object({ id: z.string() })).default([]),
+    nextPageToken: z.string().optional(),
+    nextSyncToken: z.string().optional()
+  })
+)
+const SchedulePageSchema = lazyZodSchema(() =>
+  z.object({
+    items: z.array(EventSchema).default([]),
+    nextPageToken: z.string().optional()
+  })
+)
 
 export type UpcomingEvent = {
   summary: CalendarEventSummary

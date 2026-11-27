@@ -1,5 +1,6 @@
 // Composio's answers as Orca reads them: the shapes it checks, and how each becomes Orca's own type.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import type {
   ComposioApp,
   ComposioAppSignIn,
@@ -16,80 +17,102 @@ export const COMPOSIO_EVENTS = [TRIGGER_EVENT, EXPIRED_EVENT]
 
 export type ComposioWebhookSubscription = { id: string; url: string; secret: string | null }
 
-export const Subscription = z.object({
-  id: z.string().min(1),
-  webhook_url: z.string(),
-  secret: z.string().nullish()
-})
-export const SubscriptionPage = z.object({ items: z.array(Subscription) })
-export const RotatedSecret = z.object({ secret: z.string().nullish() })
-export const TriggerPage = z.object({ items: z.array(z.unknown()) })
-export const TriggerType = z.object({
-  name: z.string().min(1),
-  toolkit: z.object({ slug: z.string() })
-})
+export const Subscription = lazyZodSchema(() =>
+  z.object({
+    id: z.string().min(1),
+    webhook_url: z.string(),
+    secret: z.string().nullish()
+  })
+)
+export const SubscriptionPage = lazyZodSchema(() => z.object({ items: z.array(Subscription) }))
+export const RotatedSecret = lazyZodSchema(() => z.object({ secret: z.string().nullish() }))
+export const TriggerPage = lazyZodSchema(() => z.object({ items: z.array(z.unknown()) }))
+export const TriggerType = lazyZodSchema(() =>
+  z.object({
+    name: z.string().min(1),
+    toolkit: z.object({ slug: z.string() })
+  })
+)
 
 export function subscriptionOf(item: z.infer<typeof Subscription>): ComposioWebhookSubscription {
   return { id: item.id, url: item.webhook_url, secret: item.secret ?? null }
 }
 
-export const Toolkit = z.object({
-  slug: z.string().min(1),
-  name: z.string().min(1),
-  no_auth: z.boolean().optional(),
-  auth_schemes: z.array(z.string()).optional(),
-  // One app's own page names its sign-in kinds here instead of in auth_schemes.
-  auth_config_details: z.array(z.object({ mode: z.string() })).nullish(),
-  composio_managed_auth_schemes: z.array(z.string()).optional(),
-  meta: z
-    .object({
-      description: z.string().nullish(),
-      logo: z.string().nullish(),
-      categories: z.array(z.object({ name: z.string().nullish() }).partial()).nullish()
-    })
-    .partial()
-    .optional()
-})
-export const ToolkitPage = z.object({ items: z.array(Toolkit), next_cursor: z.string().nullish() })
+export const Toolkit = lazyZodSchema(() =>
+  z.object({
+    slug: z.string().min(1),
+    name: z.string().min(1),
+    no_auth: z.boolean().optional(),
+    auth_schemes: z.array(z.string()).optional(),
+    // One app's own page names its sign-in kinds here instead of in auth_schemes.
+    auth_config_details: z.array(z.object({ mode: z.string() })).nullish(),
+    composio_managed_auth_schemes: z.array(z.string()).optional(),
+    meta: z
+      .object({
+        description: z.string().nullish(),
+        logo: z.string().nullish(),
+        categories: z.array(z.object({ name: z.string().nullish() }).partial()).nullish()
+      })
+      .partial()
+      .optional()
+  })
+)
+export const ToolkitPage = lazyZodSchema(() =>
+  z.object({ items: z.array(Toolkit), next_cursor: z.string().nullish() })
+)
 
-export const Session = z.object({
-  session_id: z.string().min(1),
-  mcp: z.object({ url: z.string() })
-})
-export const SessionConfig = z.object({
-  config: z.object({ auth_configs: z.record(z.string(), z.string()).nullish() }).nullish()
-})
-export const AuthConfigPage = z.object({
-  items: z.array(
-    z.object({
-      id: z.string().min(1),
-      status: z.string().nullish(),
-      toolkit: z.object({ slug: z.string() })
-    })
-  ),
-  next_cursor: z.string().nullish()
-})
-export const TriggerInstancePage = z.object({
-  items: z.array(z.object({ id: z.string().min(1), trigger_name: z.string() })),
-  next_cursor: z.string().nullish()
-})
-export const Link = z.object({
-  redirect_url: z.string().url(),
-  connected_account_id: z.string().min(1)
-})
+export const Session = lazyZodSchema(() =>
+  z.object({
+    session_id: z.string().min(1),
+    mcp: z.object({ url: z.string() })
+  })
+)
+export const SessionConfig = lazyZodSchema(() =>
+  z.object({
+    config: z.object({ auth_configs: z.record(z.string(), z.string()).nullish() }).nullish()
+  })
+)
+export const AuthConfigPage = lazyZodSchema(() =>
+  z.object({
+    items: z.array(
+      z.object({
+        id: z.string().min(1),
+        status: z.string().nullish(),
+        toolkit: z.object({ slug: z.string() })
+      })
+    ),
+    next_cursor: z.string().nullish()
+  })
+)
+export const TriggerInstancePage = lazyZodSchema(() =>
+  z.object({
+    items: z.array(z.object({ id: z.string().min(1), trigger_name: z.string() })),
+    next_cursor: z.string().nullish()
+  })
+)
+export const Link = lazyZodSchema(() =>
+  z.object({
+    redirect_url: z.string().url(),
+    connected_account_id: z.string().min(1)
+  })
+)
 
-export const Account = z.object({
-  id: z.string().min(1),
-  user_id: z.string().nullish(),
-  toolkit: z.object({ slug: z.string() }),
-  status: z.string(),
-  status_reason: z.string().nullish(),
-  state: z
-    .object({ val: z.object({ displayName: z.string().nullish() }).partial().nullish() })
-    .partial()
-    .nullish()
-})
-export const AccountPage = z.object({ items: z.array(Account), next_cursor: z.string().nullish() })
+export const Account = lazyZodSchema(() =>
+  z.object({
+    id: z.string().min(1),
+    user_id: z.string().nullish(),
+    toolkit: z.object({ slug: z.string() }),
+    status: z.string(),
+    status_reason: z.string().nullish(),
+    state: z
+      .object({ val: z.object({ displayName: z.string().nullish() }).partial().nullish() })
+      .partial()
+      .nullish()
+  })
+)
+export const AccountPage = lazyZodSchema(() =>
+  z.object({ items: z.array(Account), next_cursor: z.string().nullish() })
+)
 
 // Sign-in kinds with no OAuth app behind them: Composio's own page asks for the key or password.
 export const FORM_SCHEMES = new Set(['API_KEY', 'BEARER_TOKEN', 'BASIC', 'BASIC_WITH_JWT'])

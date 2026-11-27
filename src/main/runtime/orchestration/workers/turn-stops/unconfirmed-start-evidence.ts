@@ -33,6 +33,8 @@ export type UnconfirmedStartEvidence = {
   withheld?: true
   /** It was the continue prompt a restart resume typed, not the start's brief. */
   continuePrompt?: true
+  /** It was a typed notice of new mail to a worker already on its task. */
+  mailNotice?: true
 }
 
 /** A resumed worker's continue prompt Orca left unsent, as its alert says it. */

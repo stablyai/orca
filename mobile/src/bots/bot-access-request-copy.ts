@@ -10,12 +10,8 @@ import { CONNECTOR_SOURCE_NAMES } from '../../../src/shared/connectors/external-
 import type { HostStatusReply } from '../transport/hosts/host-status-reply-schema'
 import { normalizeMachineName } from '../../../src/shared/remote-runtime/host-metadata/machine-name'
 import type { AgentChatPermissionMode } from '../../../src/shared/agent-launch/permissions/agent-chat-permission-mode'
-import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
-import { isTuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent-config'
 import {
   botAccessConfirm,
-  botAccessReach,
-  botReachLineText,
   botStartingPermission,
   type BotAccessConfirmRow,
   type BotAccessConnector
@@ -26,7 +22,6 @@ import {
   mobileBotAccessNames,
   mobileBotAccessPlace
 } from './mobile-bot-access-copy'
-import { mobilePermissionModeCopy } from './mobile-permission-mode-copy'
 
 /** What the phone knows of a bot's access. */
 export type PhoneAccessBot = {
@@ -42,27 +37,6 @@ export function phoneAccessHost(status: HostStatusReply | undefined): BotAccessH
     kind: 'unknown',
     name: normalizeMachineName(status?.machineName) || null
   }
-}
-
-export function phoneBotReachLines(
-  bot: PhoneAccessBot,
-  t: Translate
-): { title: string; detail?: string }[] {
-  const permission = botStartingPermission(bot, null)
-  return botAccessReach({
-    agent: bot.agent,
-    permission,
-    connector: null,
-    google: bot.google === true ? null : []
-  }).map((line) =>
-    botReachLineText(line, {
-      name: bot.name,
-      agentLabel: isTuiAgent(bot.agent) ? TUI_AGENT_DISPLAY_NAMES[bot.agent] : bot.agent,
-      place: mobileBotAccessPlace(t, bot.accessHost ?? { kind: 'unknown', name: null }),
-      mode: (mode) => mobilePermissionModeCopy(bot.agent, mode, t),
-      copy: (id, values) => mobileBotAccessCopy(t, id, values)
-    })
-  )
 }
 
 function accessPlace(connector: string, workspace: string | null, t: Translate): string {

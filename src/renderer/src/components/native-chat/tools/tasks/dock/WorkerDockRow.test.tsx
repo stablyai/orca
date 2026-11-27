@@ -37,9 +37,7 @@ function HeldRow({
   return (
     <WorkerDockRow
       row={useWorkerDockStructuralValue(row)}
-      narrow={false}
       mixed={false}
-      modelColumn={false}
       visible
       pending={false}
       onOpen={() => {}}
@@ -81,9 +79,7 @@ it.each([
     <TooltipProvider>
       <WorkerDockRow
         row={row}
-        narrow={false}
         mixed={false}
-        modelColumn={false}
         visible
         pending={false}
         onOpen={() => {}}
@@ -100,9 +96,7 @@ it('keeps a focused Stop unavailable when its accepted failure arrives', () => {
     <TooltipProvider>
       <WorkerDockRow
         row={row}
-        narrow={false}
         mixed={false}
-        modelColumn={false}
         visible
         pending={false}
         onOpen={() => {}}

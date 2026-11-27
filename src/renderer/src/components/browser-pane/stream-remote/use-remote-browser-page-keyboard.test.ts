@@ -36,7 +36,8 @@ it('pastes only the plain text into a streamed page, even when the clipboard car
       closeMissingRemotePage: vi.fn(),
       scheduleRemoteTabInfoRefresh: vi.fn(),
       setPaneNotice: vi.fn(),
-      closeSelectPopupForPageInput: vi.fn()
+      closeSelectPopupForPageInput: vi.fn(),
+      readSelectPopupAfterKey: vi.fn()
     })
     return createElement('img', { alt: 'Streamed page', onPaste: handleRemoteScreenshotPaste })
   }

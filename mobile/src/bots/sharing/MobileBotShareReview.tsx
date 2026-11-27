@@ -15,7 +15,6 @@ import { colors, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { MobileBotAvatar } from '../MobileBotAvatar'
-import { MobileBotTextButton } from '../MobileBotTextButton'
 import { botShareCheckSummary, botShareFlagLabel } from './bot-share-copy'
 import type { PhoneShareReview } from './bot-share-receive-operations'
 import { reviewAvatar } from './bot-share-review-avatar'
@@ -159,41 +158,37 @@ export function MobileBotShareReviewOverview(props: {
           })}
         </Text>
       </View>
-      {first ? (
-        <SettingsSection>
+      <SettingsSection>
+        {first ? (
           <ListRow
-            leading={
-              <TriangleAlert size={18} color={secret ? colors.statusRed : colors.statusAmber} />
-            }
-            wrapTitle
-            title={
+            key="check"
+            title={t('bots.share.safetyCheck', 'Safety check')}
+            subtitle={
               spots.length === 1
-                ? t('bots.share.review.oneFlag', '{{summary}}: {{flag}} in {{where}}', {
-                    summary: botShareCheckSummary(spots),
-                    flag: botShareFlagLabel(first.flag.kind).toLowerCase(),
+                ? t('bots.share.review.flagIn', '{{flag}} in {{where}}', {
+                    flag: botShareFlagLabel(first.flag.kind),
                     where: first.part?.startsWith('skill:')
                       ? first.part.slice('skill:'.length)
                       : first.where
                   })
                 : botShareCheckSummary(spots)
             }
-            accessory={
-              <MobileBotTextButton
-                label={t('bots.share.view', 'View')}
-                onPress={() =>
-                  ctx.open(
-                    (spots.length === 1 ? reviewFlagPage(first, t) : null) ?? {
-                      kind: 'list',
-                      list: 'check'
-                    }
-                  )
+            subtitleLines={1}
+            accessibilityLabel={`${t('bots.share.safetyCheck', 'Safety check')}, ${
+              spots.length === 1 ? botShareFlagLabel(first.flag.kind) : botShareCheckSummary(spots)
+            }`}
+            accessory={<FlagMark flag={secret ? 'secret' : 'warning'} />}
+            navigates
+            onPress={() =>
+              ctx.open(
+                (spots.length === 1 ? reviewFlagPage(first, t) : null) ?? {
+                  kind: 'list',
+                  list: 'check'
                 }
-              />
+              )
             }
           />
-        </SettingsSection>
-      ) : null}
-      <SettingsSection>
+        ) : null}
         {row(t('bots.share.soul', 'Soul'), soulLines, flagOf(spots, 'soul'), () =>
           ctx.open({
             kind: 'part',

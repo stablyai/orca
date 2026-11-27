@@ -1,15 +1,9 @@
 // A coordinator chat's closed worker prompts, each one status line after the message before it was
 // asked, in the desktop's words (NativeChatWorkerApprovalReceipt): shield, sentence, time; the
-// command and any coordinator reason open under it.
+// command, any coordinator reason and Open worker open under it.
 import { createContext, memo, useContext, useMemo } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import {
-  ArrowUpRight,
-  ShieldCheck,
-  ShieldMinus,
-  ShieldQuestion,
-  ShieldX
-} from 'lucide-react-native'
+import { ShieldCheck, ShieldMinus, ShieldQuestion, ShieldX } from 'lucide-react-native'
 import { anchorNativeChatTimedRows } from '../../../../../../src/shared/native-chat/transcript/native-chat-timed-row-anchors'
 import {
   workerApprovalRecord,
@@ -20,7 +14,7 @@ import { readShellApprovalDetail } from '../../../../../../src/shared/agent-sess
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import type { Translate } from '../../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { colors, pressedStyle, spacing, typography } from '../../../../theme/mobile-theme'
+import { colors, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { MobileAgentMessageOpenContext } from '../agent-messages/mobile-agent-message-context'
@@ -28,6 +22,8 @@ import { workerOpener } from '../../input/prompts/MobileNativeChatWorkerApproval
 import type { MobileWorkerApproval } from '../../input/prompts/use-mobile-worker-approvals'
 import { MobileNativeChatEventName, MobileNativeChatEventRow } from './MobileNativeChatEventRow'
 import { MONO_SIZE, scaledType, styles as rowStyles } from './mobile-native-chat-message-styles'
+import { styles as runStyles } from '../mobile-automation-run-row-styles'
+import { RECORD_SENTENCE_KEEP as KEEP, recordSentenceParts } from './native-chat-record-sentence'
 
 type Placed = ReadonlyMap<string, readonly MobileWorkerApproval[]>
 
@@ -120,14 +116,14 @@ function WorkerApprovalReceipt({
   const record = workerApprovalRecord(approval)
   const Icon = TONE_ICON[record.tone]
   const values = { tool: record.tool, task: entry.worker.label }
-  const parts = sentenceParts(recordSentence(t, record.sentence), values)
+  const parts = recordSentenceParts(recordSentence(t, record.sentence), values)
   const { detail, tool } = approval.summary
   const command = detail
     ? (readShellApprovalDetail(detail, tool, undefined)?.command ?? detail)
     : null
   const text = scaledType(typography.metaSize, fontScale)
   const details =
-    command || record.reason ? (
+    command || record.reason || openWorker ? (
       <>
         {record.reason ? (
           <Text selectable style={[styles.detail, text]}>
@@ -145,6 +141,13 @@ function WorkerApprovalReceipt({
             {command}
           </Text>
         ) : null}
+        {openWorker ? (
+          <Pressable accessibilityRole="link" onPress={openWorker} style={runStyles.linkRow}>
+            <Text style={[runStyles.link, scaledType(typography.metaSize, fontScale, 4)]}>
+              {t('chat.workerApproval.openWorker', 'Open worker')}
+            </Text>
+          </Pressable>
+        ) : null}
       </>
     ) : null
   return (
@@ -152,19 +155,6 @@ function WorkerApprovalReceipt({
       testID={`worker-approval-receipt:${approval.approvalId}`}
       icon={<Icon size={14} color={colors.textMuted} strokeWidth={2} />}
       label={parts.map((part) => part.text).join('')}
-      action={
-        openWorker ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t('chat.workerApproval.openWorker', 'Open worker')}
-            hitSlop={12}
-            onPress={openWorker}
-            style={({ pressed }) => pressed && pressedStyle}
-          >
-            <ArrowUpRight size={14} color={colors.textMuted} />
-          </Pressable>
-        ) : null
-      }
       timestamp={Date.parse(entry.at)}
       details={details}
       disclosureKey={`worker-approval:${approval.approvalId}`}
@@ -181,25 +171,6 @@ function WorkerApprovalReceipt({
     </MobileNativeChatEventRow>
   )
 }
-
-/** The sentence split at its `<tool>`/`<task>` marks, filled after the split so a name can't add one. */
-function sentenceParts(
-  sentence: string,
-  values: { tool: string; task: string }
-): { text: string; name: string | null }[] {
-  const fill = (part: string) =>
-    part.replaceAll(KEEP.tool, () => values.tool).replaceAll(KEEP.task, () => values.task)
-  return sentence
-    .split(/(<tool>.*?<\/tool>|<task>.*?<\/task>)/)
-    .filter(Boolean)
-    .map((part) => {
-      const named = /^<(tool|task)>(.*)<\/\1>$/.exec(part)
-      return { text: fill(named ? named[2]! : part), name: named ? named[1]! : null }
-    })
-}
-
-// Stand-ins no translation holds: sentenceParts swaps in the names after the split.
-const KEEP = { tool: '\u0001', task: '\u0002' }
 
 function recordSentence(t: Translate, sentence: WorkerApprovalRecordSentence): string {
   switch (sentence) {
@@ -253,8 +224,8 @@ function recordSentence(t: Translate, sentence: WorkerApprovalRecordSentence): s
       )
     case 'autoDenied':
       return t(
-        'chat.workerApproval.record.autoDenied',
-        '<tool>{{tool}}</tool> for <task>{{task}}</task> denied automatically after 2:00',
+        'chat.workerApproval.record.timedOut',
+        '<tool>{{tool}}</tool> for <task>{{task}}</task> timed out',
         KEEP
       )
     case 'waitsInTerminal':

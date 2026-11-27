@@ -71,22 +71,25 @@ export class BotShareService {
     selection: BotShareSelection,
     options: { setupNote?: string; last?: boolean; localOnly?: boolean } & BotShareSkillsRead = {}
   ): Promise<BotSharePrepared> {
-    // Before any await, so the dialog's builds replace each other in the order they were asked for.
-    const skills = this.skillReads.forBuild(bot.id, options)
-    const saved = options.last ? ((await this.deps.picks?.get(bot.id)) ?? undefined) : undefined
-    const found = options.localOnly
-      ? null
-      : await this.deps.client.findPackageId(botPackageName(bot.id))
-    const shareable = await this.deps.readShareable(bot, skills)
-    const last = saved && restoredPicks(saved, shareable)
-    const candidate = await this.deps.candidates.prepare({
-      bot,
-      shareable,
-      selection: last?.selection ?? selection,
-      setupNote: last?.setupNote ?? options.setupNote,
-      packageId: (found?.status === 'ok' && found.value) || randomUUID()
+    // Placed before any await, so the dialog's builds replace each other in the order they were asked
+    // for, and an older build's candidate never replaces a newer one's.
+    return this.skillReads.placed(bot.id, options, async (skills) => {
+      const saved = options.last ? ((await this.deps.picks?.get(bot.id)) ?? undefined) : undefined
+      const found = options.localOnly
+        ? null
+        : await this.deps.client.findPackageId(botPackageName(bot.id))
+      const shareable = await this.deps.readShareable(bot, skills)
+      const last = saved && restoredPicks(saved, shareable)
+      const candidate = await this.deps.candidates.prepare({
+        bot,
+        shareable,
+        selection: last?.selection ?? selection,
+        setupNote: last?.setupNote ?? options.setupNote,
+        packageId: (found?.status === 'ok' && found.value) || randomUUID(),
+        place: skills.build
+      })
+      return last ? { candidate, last } : { candidate }
     })
-    return last ? { candidate, last } : { candidate }
   }
 
   /** The exact text of one part of the bot, as the candidate was built from it. */

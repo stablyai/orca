@@ -2,13 +2,7 @@ import type { ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { ChevronRight, X } from 'lucide-react-native'
 import { AGENT_WORKING_COLOR, WorkingRing } from '../../../../agents/presentation/AgentStateDot'
-import {
-  colors,
-  getMobileColorScheme,
-  radii,
-  spacing,
-  typography
-} from '../../../../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileNativeChatDisclosure } from '../viewport/mobile-native-chat-disclosure-store'
@@ -71,6 +65,7 @@ export function MobileNativeChatEventRow({
   fontScale,
   onLongPress,
   wordsLines = 1,
+  subtitle,
   testID
 }: {
   icon: ReactNode
@@ -90,6 +85,8 @@ export function MobileNativeChatEventRow({
   onLongPress?: () => void
   /** Lines the words may take; 0 lets a summary whose facts must all show wrap freely. */
   wordsLines?: number
+  /** A second line under the words, always shown; the action then sits at the row's end. */
+  subtitle?: ReactNode
   testID?: string
 }): React.JSX.Element {
   useMobileColorScheme()
@@ -127,17 +124,26 @@ export function MobileNativeChatEventRow({
         >
           <MobileNativeChatEventIcon badge={badge}>{icon}</MobileNativeChatEventIcon>
         </View>
-        <Text
-          pointerEvents={toggles ? 'none' : 'auto'}
-          numberOfLines={wordsLines}
-          style={[styles.words, type]}
-        >
-          {typeof children === 'function' ? children(toggles && open) : children}
-        </Text>
-        {action ? <View style={[styles.action, line]}>{action}</View> : null}
-        <View pointerEvents="none" style={styles.spacer} />
+        {/* box-none keeps a subtitle's own buttons tappable over the row's button. */}
+        <View pointerEvents="box-none" style={subtitle ? styles.stack : styles.wordsBox}>
+          <Text
+            pointerEvents={toggles ? 'none' : 'auto'}
+            numberOfLines={wordsLines}
+            style={[styles.words, type]}
+          >
+            {typeof children === 'function' ? children(toggles && open) : children}
+          </Text>
+          {subtitle}
+        </View>
+        {action ? (
+          <View style={subtitle ? styles.trailing : [styles.action, line]}>{action}</View>
+        ) : null}
+        {subtitle ? null : <View pointerEvents="none" style={styles.spacer} />}
         {toggles ? (
-          <View pointerEvents="none" style={[styles.icon, line, open && styles.chevronOpen]}>
+          <View
+            pointerEvents="none"
+            style={[styles.icon, subtitle ? styles.trailing : line, open && styles.chevronOpen]}
+          >
             <ChevronRight size={ICON} color={colors.textMuted} strokeWidth={2} />
           </View>
         ) : null}
@@ -179,7 +185,11 @@ const styles = themedStyleSheet(() => ({
   pressed: { backgroundColor: colors.translucentFill },
   icon: { flexShrink: 0, justifyContent: 'center' },
   chevronOpen: { transform: [{ rotate: '90deg' }] },
-  words: { flexShrink: 1, minWidth: 0, color: colors.textMuted },
+  wordsBox: { flexShrink: 1, minWidth: 0 },
+  stack: { flex: 1, minWidth: 0 },
+  words: { color: colors.textMuted },
+  // Centred on the words and their subtitle, past the stack's minimum gap.
+  trailing: { flexShrink: 0, alignSelf: 'center', marginLeft: spacing.xxs },
   name: { color: colors.textPrimary },
   action: { flexShrink: 0, justifyContent: 'center' },
   spacer: { flex: 1, minWidth: spacing.sm },
@@ -194,8 +204,8 @@ const styles = themedStyleSheet(() => ({
     paddingBottom: spacing.sm,
     gap: spacing.xs,
     borderRadius: radii.tile,
-    // The quietest fill each scheme has, as the desktop's comment fill.
-    backgroundColor: getMobileColorScheme() === 'dark' ? colors.bgPanel : colors.bgRaised
+    // The quietest fill that still reads on the chat canvas, as the desktop's comment fill.
+    backgroundColor: colors.bgRaised
   },
   mark: { width: ICON, height: ICON, alignItems: 'center', justifyContent: 'center' },
   badge: {
@@ -207,7 +217,7 @@ const styles = themedStyleSheet(() => ({
     borderRadius: radii.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.bgBase
+    backgroundColor: colors.chatCanvas
   },
   spinner: { width: 7, height: 7, borderRadius: radii.pill, borderWidth: 1.5 },
   failed: {

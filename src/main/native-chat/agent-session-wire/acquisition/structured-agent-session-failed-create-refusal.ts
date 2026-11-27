@@ -1,3 +1,4 @@
+import { keptProviderRelayUnreachableWithin } from '../../../provider-relay/provider-relay-kept-rebind'
 import {
   isAgentSessionWireRefusalCode,
   refuse,
@@ -83,13 +84,16 @@ export function failedAcquisitionSettlement(
     }
     return { exitProof: 'unproven', outcome: { status: 'failed', ...outcome } }
   }
-  const exitProof = isAgentSessionPreSpawnError(error)
-    ? 'processless'
-    : error instanceof AgentSessionAcquisitionRootExitObservedError
-      ? error.deathEvidenceKind === 'kill-delivered'
-        ? 'kill-delivered'
-        : 'root-exit-observed'
-      : 'exit-proven'
+  // An unreachable kept agent is unknown, not exited: no death evidence may resettle its last run.
+  const exitProof = keptProviderRelayUnreachableWithin(error)
+    ? 'unproven'
+    : isAgentSessionPreSpawnError(error)
+      ? 'processless'
+      : error instanceof AgentSessionAcquisitionRootExitObservedError
+        ? error.deathEvidenceKind === 'kill-delivered'
+          ? 'kill-delivered'
+          : 'root-exit-observed'
+        : 'exit-proven'
   const raw = error instanceof Error ? error.message : String(error)
   const details = failedAcquisitionDetails(error)
   const message =

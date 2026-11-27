@@ -178,7 +178,8 @@ function MobileNativeChatBackgroundTasksImpl({
     [view.children, view.tasks, view.settledTasks, rowContext, t]
   )
   const now = useNow(1_000, view.show && backgroundTasksStripTicks(groups, expanded))
-  if (!view.show) {
+  // A coordinator's feed can hold only its workers' presence; they have their own strip.
+  if (!view.show || (view.workerDock && groups.length === 0 && !view.incomplete)) {
     return null
   }
   // Elapsed anchors are host-stamped; read them on the host's clock, as the turn bar's start is.

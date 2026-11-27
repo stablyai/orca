@@ -18,6 +18,7 @@ import {
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 import { isWorkspaceDocPageId } from '../../browser/document-preview/doc-preview-guest-policy'
+import { whenBrowserPartitionReadyForPage } from '../../browser/extensions/profile-sessions/browser-extension-page-readiness'
 import {
   freeBrowserClientPageGuest,
   wakeBrowserClientPage
@@ -61,7 +62,15 @@ export function registerBrowserGuestDiscardHandlers(): void {
   ipcMain.removeHandler('browser:preparePageAttach')
   ipcMain.handle(
     'browser:preparePageAttach',
-    (event, args: { browserPageId?: unknown; partition?: unknown; url?: unknown }) => {
+    async (
+      event,
+      args: {
+        browserPageId?: unknown
+        partition?: unknown
+        url?: unknown
+        waited?: unknown
+      }
+    ) => {
       if (
         !isTrustedBrowserRenderer(event.sender) ||
         typeof args?.browserPageId !== 'string' ||
@@ -74,7 +83,17 @@ export function registerBrowserGuestDiscardHandlers(): void {
       if (!url) {
         throw new Error('Invalid browser page URL')
       }
-      return prepareBrowserPageAttach(args.browserPageId, event.sender.id, args.partition, url)
+      const marker = prepareBrowserPageAttach(
+        args.browserPageId,
+        event.sender.id,
+        args.partition,
+        url
+      )
+      // The guest is created only once the profile's extensions have started (see the readiness).
+      if (args.waited !== true) {
+        await whenBrowserPartitionReadyForPage(args.partition)
+      }
+      return marker
     }
   )
   ipcMain.removeAllListeners('browser:reserveGuestDiscard')

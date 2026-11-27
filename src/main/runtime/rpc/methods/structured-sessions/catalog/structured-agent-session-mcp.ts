@@ -3,6 +3,7 @@ import {
   type AgentSessionMcpResult
 } from '../../../../../../shared/agent-session/options/protocol/agent-session-mcp'
 import { defineMethod } from '../../../core'
+import { withOrcaMcpSource } from '../../../../../mcp-servers/session-host-mcp-delivery'
 import { requireInstalledStructuredHost } from '../creation/structured-agent-session-gate'
 import { AgentSessionMcpParams } from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-mcp-params'
 
@@ -23,7 +24,7 @@ export const STRUCTURED_AGENT_SESSION_MCP_METHODS = [
       const accountHome = await host.deps.launchAccountHome?.(saved).catch(() => null)
       const record = accountHome ? { ...saved, accountHome } : saved
       try {
-        return await manage(record, operation)
+        return withOrcaMcpSource(sessionId, await manage(record, operation))
       } catch (error) {
         return { status: 'failed', message: agentSessionMcpFailureMessage(error) }
       }

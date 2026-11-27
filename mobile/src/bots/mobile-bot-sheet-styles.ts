@@ -13,11 +13,5 @@ export const sheetStyles = themedStyleSheet(() => ({
     fontSize: 13,
     color: colors.textSecondary
   },
-  // Monochrome emphasis: red is kept for destructive confirms.
-  alert: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    marginTop: 2
-  }
+  textButtonAccent: { fontWeight: '500', color: colors.accentBlue }
 }))

@@ -1,14 +1,10 @@
-import {
-  formatUsageLimitResetClock,
-  type AgentSessionUsageLimit
-} from '../../../../../../src/shared/agent-session/failures/agent-session-usage-limit'
+import type { AgentSessionUsageLimit } from '../../../../../../src/shared/agent-session/failures/agent-session-usage-limit'
 import type { NativeChatUsageLimitAutoContinueKind } from '../../../../../../src/shared/native-chat/transcript/continuation/native-chat-usage-limit-auto-continue'
 import type { Translate } from '../../../../i18n/mobile-i18n'
-import { getUiIntlLocale } from '../../../../i18n/ui-intl-locale'
+import { mobileUsageLimitClock } from '../../../../bots/mobile-usage-limit-copy'
 
-/** A reset time in the phone's UI language. */
 function usageLimitResetClock(resetsAt: number): string {
-  return formatUsageLimitResetClock(resetsAt, Date.now(), getUiIntlLocale())
+  return mobileUsageLimitClock(resetsAt, Date.now())
 }
 
 /** The card's headline; the reset time and what Orca will do sit on its status line. */

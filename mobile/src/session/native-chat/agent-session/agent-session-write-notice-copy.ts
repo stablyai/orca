@@ -4,6 +4,7 @@ import type {
   AgentSessionWriteNoticePart,
   AgentSessionWriteNoticeSentence
 } from '../../../../../src/shared/agent-session/failures/agent-session-write-notice-copy'
+import { joinSentences } from '../../../../../src/shared/text/sentence-joining'
 import { translate } from '../../../i18n/mobile-i18n'
 import { sayMobileAgentSessionFailure } from './agent-session-failure-copy'
 
@@ -72,6 +73,13 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
       'session.writeNotice.historyUnavailable',
       "Orca couldn't open this chat's history right now."
     ),
+  diskFull: () =>
+    translate(
+      'session.writeNotice.diskFull',
+      'The disk on the computer running this chat is full.'
+    ),
+  freeDiskSpace: () =>
+    translate('session.writeNotice.freeDiskSpace', 'Free up space on that disk, then try again.'),
   savedInOtherFolder: () =>
     translate(
       'session.writeNotice.savedInOtherFolder',
@@ -251,8 +259,8 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
 export function mobileAgentSessionWriteNoticeText(
   parts: readonly AgentSessionWriteNoticePart[]
 ): string {
-  return parts
-    .map((part) =>
+  return joinSentences(
+    parts.map((part) =>
       typeof part === 'string'
         ? SENTENCES[part]()
         : 'text' in part
@@ -266,5 +274,5 @@ export function mobileAgentSessionWriteNoticeText(
                 sayMobileAgentSessionFailure
               )
     )
-    .join(' ')
+  )
 }

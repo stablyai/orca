@@ -46,6 +46,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (
   prVisibleRefreshGeneration: 0,
   visibleReviewWorktreeIds: [],
   visibleReviewCardWorktreeIds: [],
+  visibleItemPageReviewWorktreeIds: [],
   workItemsCache: {},
   workItemsInvalidationNonce: 0,
   projectViewCache: {},

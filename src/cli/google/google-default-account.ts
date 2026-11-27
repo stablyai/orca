@@ -23,7 +23,8 @@ export const GOOGLE_DEFAULT_HANDLERS: Record<string, CommandHandler> = {
       )
       return
     }
-    const status = await ctx.client.call<GoogleStatusView>('google.status', {})
+    // As the caller: a bot limited to some accounts hears the default its own calls use.
+    const status = await ctx.client.call<GoogleStatusView>('google.status', caller())
     const defaultAccount = status.result.defaultAccount
     if (defaultAccount === undefined) {
       throw new RuntimeClientError(

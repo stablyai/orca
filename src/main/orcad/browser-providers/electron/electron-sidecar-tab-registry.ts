@@ -1,29 +1,32 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { BrowserError } from '../../../browser/browser-error'
 
-const CertificateFailure = z
-  .object({ browserPageId: z.string() })
-  .passthrough()
-  .nullable()
-  .optional()
-export const ElectronSidecarTabSchema = z
-  .object({
-    browserPageId: z.string(),
-    index: z.number().optional(),
-    active: z.boolean().optional(),
-    certificateFailure: CertificateFailure,
-    openerBrowserPageId: z.string().optional(),
-    worktreeId: z.string().nullable().optional()
-  })
-  .passthrough()
-const ElectronSidecarResult = z
-  .object({
-    browserPageId: z.string().optional(),
-    sourceBrowserPageId: z.string().optional(),
-    tab: ElectronSidecarTabSchema.optional(),
-    worktreeId: z.string().nullable().optional()
-  })
-  .passthrough()
+const CertificateFailure = lazyZodSchema(() =>
+  z.object({ browserPageId: z.string() }).passthrough().nullable().optional()
+)
+export const ElectronSidecarTabSchema = lazyZodSchema(() =>
+  z
+    .object({
+      browserPageId: z.string(),
+      index: z.number().optional(),
+      active: z.boolean().optional(),
+      certificateFailure: CertificateFailure,
+      openerBrowserPageId: z.string().optional(),
+      worktreeId: z.string().nullable().optional()
+    })
+    .passthrough()
+)
+const ElectronSidecarResult = lazyZodSchema(() =>
+  z
+    .object({
+      browserPageId: z.string().optional(),
+      sourceBrowserPageId: z.string().optional(),
+      tab: ElectronSidecarTabSchema.optional(),
+      worktreeId: z.string().nullable().optional()
+    })
+    .passthrough()
+)
 
 type ElectronSidecarTab = z.infer<typeof ElectronSidecarTabSchema>
 

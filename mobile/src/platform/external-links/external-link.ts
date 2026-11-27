@@ -6,17 +6,14 @@ export function canOpenExternalLink(_url: string): boolean {
   return true
 }
 
-export function openExternalLink(url: string): void {
+/** Resolves false when no app took the URL, such as a `mailto:` with no mail app installed. */
+export async function openExternalLink(url: string): Promise<boolean> {
   try {
-    void Linking.openURL(url).catch((error: unknown) => {
-      report(url, error)
-    })
+    await Linking.openURL(url)
+    return true
   } catch (error) {
-    // Empty URLs throw before openURL returns a promise, so the promise catch cannot see them.
-    report(url, error)
+    // Empty URLs throw before openURL returns a promise; both cases land here.
+    console.warn('[platform] could not open a URL', { url }, error)
+    return false
   }
-}
-
-function report(url: string, error: unknown): void {
-  console.warn('[platform] could not open a URL', { url }, error)
 }

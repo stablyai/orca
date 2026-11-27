@@ -148,9 +148,16 @@ export function applyBrowserRecordUpdates(context: BrowserRecordContext) {
           ? writableWebSessionTabsRecord(state, 'remoteBrowserPageHandlesByPageId', batchContext)
           : nextRemoteBrowserPageHandlesByPageId
       annotateBrowserPageHandles(nextRemoteBrowserPageHandlesByPageId, [page.id])
+      // Re-placed on the server, it is no longer this desktop's to keep hosting.
+      const placedHere =
+        currentHandle?.placedHere === true &&
+        placement?.kind !== 'server' &&
+        currentHandle.environmentId === environmentId &&
+        currentHandle.remotePageId === remotePageId
       nextRemoteBrowserPageHandlesByPageId[page.id] = {
         environmentId,
         remotePageId,
+        ...(placedHere ? { placedHere: true as const } : {}),
         ...(initializationPresentation ? { initializationPresentation } : {}),
         ...(browserProfileId ? { browserProfileId } : {}),
         ...(placement ? { placement } : {})

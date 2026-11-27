@@ -5,13 +5,17 @@ import { useWslHostServerFilesMissing } from '../../../../runtime/hosts/wsl/use-
 import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'
 import { wslHostAddRefusalMessage, wslHostStatusDetailMessage } from './wsl-host-failure-text'
 import { addWslHostDistro } from './add-wsl-host-distro'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 export function AddWslHostDialogBody({
+  initialDistro,
   adding,
   onAddingChange,
   onAdded,
   onCancel
 }: {
+  /** A distro already picked elsewhere (Add host › WSL distro). */
+  initialDistro?: string
   adding: boolean
   onAddingChange: (adding: boolean) => void
   onAdded: () => void
@@ -21,7 +25,7 @@ export function AddWslHostDialogBody({
   // Missing server files prevent adding any distro, so avoid listing through wsl.exe.
   const list = useWslDistroList(!serverFilesMissing)
   const distros = list.distros
-  const [chosenDistro, setChosenDistro] = useState('')
+  const [chosenDistro, setChosenDistro] = useState(initialDistro ?? '')
   const [error, setError] = useState<string | null>(null)
   const [addingDistro, setAddingDistro] = useState<string | null>(null)
   const [wait, setWait] = useState<string | null>(null)
@@ -55,22 +59,25 @@ export function AddWslHostDialogBody({
     setWait(null)
     setAddingDistro(selected.name)
     onAddingChange(true)
-    try {
-      const result = await addWslHostDistro(wslHostAddRequest(selected))
-      if (!result.ok) {
-        setError(wslHostAddRefusalMessage(result))
-        if (result.kind === 'distro-stopped') {
-          // It stopped after the list was read; the fresh state turns the button into Start and add.
-          list.refresh()
+    await runWithFinally(
+      async () => {
+        try {
+          const result = await addWslHostDistro(wslHostAddRequest(selected))
+          if (!result.ok) {
+            setError(wslHostAddRefusalMessage(result))
+            if (result.kind === 'distro-stopped') {
+              // It stopped after the list was read; the fresh state turns the button into Start and add.
+              list.refresh()
+            }
+            return
+          }
+          onAdded()
+        } catch (cause) {
+          setError(readIpcErrorDetail(cause) ?? String(cause))
         }
-        return
-      }
-      onAdded()
-    } catch (cause) {
-      setError(readIpcErrorDetail(cause) ?? String(cause))
-    } finally {
-      onAddingChange(false)
-    }
+      },
+      () => onAddingChange(false)
+    )
   }
 
   return (

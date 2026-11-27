@@ -99,6 +99,8 @@ export type BrowserPage = {
   remoteBrowserPageId?: string | null
   /** The remote page was hosted by this desktop, not the runtime; it must not restore as streamed. */
   remoteBrowserPageClientHosted?: boolean
+  /** This desktop itself placed it here, so a relaunch keeps hosting it whatever Settings › Browser says. */
+  remoteBrowserPagePlacedHere?: boolean
   /** Active CDP viewport emulation preset. null = default (fill pane, no CDP override) */
   viewportPresetId?: BrowserViewportPresetId | null
   /** Set on a page that shows a workspace document; absent on every page that shows a URL. */

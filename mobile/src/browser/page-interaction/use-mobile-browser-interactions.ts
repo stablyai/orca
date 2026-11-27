@@ -19,7 +19,6 @@ import {
   type BrowserTouchLayout,
   type BrowserZoomState
 } from './browser-touch-geometry'
-import type { BrowserPointerModifier } from '../pane-view/MobileBrowserPointerModifiers'
 import type { BrowserDialogState } from '../screencast/mobile-browser-stream-events'
 import type { BrowserPageCommandSend, BrowserPageParams } from './use-mobile-browser-request'
 import type { BrowserScreencastFrameMetadata } from '../screencast/browser-screencast-protocol'
@@ -41,23 +40,21 @@ type MobileBrowserInteractionArgs = {
   client: RpcClient | null
   /** True while a dialog or prompt card covers the page, so touches never reach the page under it. */
   pageCoveredRef: { current: boolean }
+  /** Set when a card covered the page mid-touch; the rest of that touch never reaches the page. */
+  gestureCancelledRef: { current: boolean }
   frameGeometry: BrowserFrameGeometry | null
   frameMetadataRef: { current: BrowserScreencastFrameMetadata | null }
-  keyboardValue: string
   layoutRef: { current: BrowserTouchLayout | null }
   longPressTimerRef: { current: ReturnType<typeof setTimeout> | null }
   onToast: (message: string, durationMs?: number) => void
   pageParams: () => BrowserPageParams | null
   panRef: { current: PanGesture | null }
   pinchRef: { current: PinchGesture | null }
-  pointerModifiers: BrowserPointerModifier[]
   sendBrowserRequest: SendBrowserRequest
   setDialog: Dispatch<SetStateAction<BrowserDialogState | null>>
   setError: Dispatch<SetStateAction<string | null>>
-  setKeyboardValue: Dispatch<SetStateAction<string>>
   scrollingRef: { current: boolean }
   startPointRef: { current: { x: number; y: number; t: number } | null }
-  setPointerModifiers: Dispatch<SetStateAction<BrowserPointerModifier[]>>
   setZoom: Dispatch<SetStateAction<BrowserZoomState>>
   zoomRef: { current: BrowserZoomState }
 }
@@ -67,22 +64,19 @@ export function useMobileBrowserInteractions(args: MobileBrowserInteractionArgs)
     clearLongPressTimer,
     client,
     pageCoveredRef,
+    gestureCancelledRef,
     frameGeometry,
     frameMetadataRef,
-    keyboardValue,
     layoutRef,
     longPressTimerRef,
     onToast,
     pageParams,
     panRef,
     pinchRef,
-    pointerModifiers,
     scrollingRef,
     sendBrowserRequest,
     setDialog,
     setError,
-    setKeyboardValue,
-    setPointerModifiers,
     setZoom,
     startPointRef,
     zoomRef
@@ -90,32 +84,22 @@ export function useMobileBrowserInteractions(args: MobileBrowserInteractionArgs)
   const rightClickSentRef = useRef(false)
   const lastWheelRef = useRef({ dx: 0, dy: 0, at: 0 })
   const wheelGestureIdRef = useRef(0)
-  const {
-    mapTouchPoint,
-    sendDialogCommand,
-    sendKeyboardText,
-    sendKeypress,
-    sendPointerClick,
-    sendWheel,
-    togglePointerModifier
-  } = useMobileBrowserCommands({
-    client,
-    frameMetadataRef,
-    keyboardValue,
-    layoutRef,
-    onToast,
-    pageParams,
-    pointerModifiers,
-    sendBrowserRequest,
-    setDialog,
-    setError,
-    setKeyboardValue,
-    setPointerModifiers,
-    zoomRef
-  })
+  const { mapTouchPoint, pageInput, sendDialogCommand, sendPointerClick, sendWheel } =
+    useMobileBrowserCommands({
+      client,
+      frameMetadataRef,
+      layoutRef,
+      onToast,
+      pageParams,
+      sendBrowserRequest,
+      setDialog,
+      setError,
+      zoomRef
+    })
 
   const handleResponderGrant = useCallback(
     (event: GestureResponderEvent) => {
+      gestureCancelledRef.current = false
       const pinch = createPinchGesture(event, frameGeometry, zoomRef.current)
       if (pinch) {
         clearLongPressTimer()
@@ -162,6 +146,9 @@ export function useMobileBrowserInteractions(args: MobileBrowserInteractionArgs)
 
   const handleResponderMove = useCallback(
     (event: GestureResponderEvent, gesture: PanResponderGestureState) => {
+      if (gestureCancelledRef.current) {
+        return
+      }
       const startedPinch = pinchRef.current
         ? null
         : createPinchGesture(event, frameGeometry, zoomRef.current)
@@ -288,5 +275,5 @@ export function useMobileBrowserInteractions(args: MobileBrowserInteractionArgs)
     [clearLongPressTimer, handleResponderGrant, handleResponderMove, handleResponderRelease]
   )
 
-  return { panResponder, sendDialogCommand, sendKeyboardText, sendKeypress, togglePointerModifier }
+  return { panResponder, pageInput, sendDialogCommand }
 }

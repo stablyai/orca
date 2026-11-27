@@ -12,19 +12,17 @@ export function BotPreviewEdge({
   count,
   attention,
   signal,
-  width,
   onPage
 }: {
   direction: -1 | 1
   count: number
   attention: number
   signal: BotPreviewSignal
-  width: number
   onPage: (direction: -1 | 1, keyboard: boolean) => void
 }) {
   const t = useTranslate()
   if (count === 0) {
-    return <span aria-hidden className="shrink-0" style={{ width }} />
+    return null
   }
   const action =
     direction === -1
@@ -41,23 +39,21 @@ export function BotPreviewEdge({
         ? t('sidebar.cardSlot.working', 'Working')
         : null
   const accessibleLabel = hint ? `${action} · ${hint}` : action
-  const displayCount = count < 100 ? `+${count}` : count < 1000 ? String(count) : '1k+'
+  const Chevron = direction === -1 ? ChevronLeft : ChevronRight
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <button
           type="button"
           aria-label={accessibleLabel}
-          className="group pointer-events-auto relative flex shrink-0 cursor-pointer items-center justify-center text-3xs font-medium text-muted-foreground tabular-nums outline-none hover:text-foreground focus-visible:z-10"
-          style={{ width }}
+          className={cn(
+            'pointer-events-auto absolute inset-y-0 z-30 grid w-3 cursor-pointer place-items-center from-worktree-sidebar to-transparent text-worktree-sidebar-foreground/85 outline-none hover:text-worktree-sidebar-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-worktree-sidebar-ring',
+            direction === -1 ? 'left-0 bg-linear-to-r' : 'right-0 bg-linear-to-l'
+          )}
           onClick={(event) => onPage(direction, event.detail === 0)}
         >
-          {direction === -1 ? <ChevronLeft aria-hidden className="size-1.5 shrink-0" /> : null}
-          <span className="relative flex size-5 shrink-0 items-center justify-center rounded-full bg-muted ring-2 ring-sidebar group-hover:ring-sidebar-ring group-focus-visible:outline-2 group-focus-visible:outline-offset-2 group-focus-visible:outline-ring group-focus-visible:outline-solid">
-            <span className="leading-none tracking-tight">{displayCount}</span>
-            <BotPreviewPip signal={signal} animateWorking={false} onCounter />
-          </span>
-          {direction === 1 ? <ChevronRight aria-hidden className="size-1.5 shrink-0" /> : null}
+          <Chevron aria-hidden className="size-2.5" />
+          <BotPreviewPip signal={signal} onEdge />
         </button>
       </TooltipTrigger>
       <TooltipContent side="bottom">{accessibleLabel}</TooltipContent>
@@ -67,12 +63,10 @@ export function BotPreviewEdge({
 
 export function BotPreviewPip({
   signal,
-  animateWorking,
-  onCounter = false
+  onEdge = false
 }: {
   signal: BotPreviewSignal
-  animateWorking: boolean
-  onCounter?: boolean
+  onEdge?: boolean
 }) {
   if (signal === null) {
     return null
@@ -80,7 +74,7 @@ export function BotPreviewPip({
   if (signal === 'unread') {
     return (
       <span
-        className={cn(unreadAlertDotClassName, 'z-10', onCounter && '-bottom-1')}
+        className={cn(unreadAlertDotClassName, 'z-10', onEdge && 'right-0.5 -bottom-0.5')}
         aria-hidden="true"
       />
     )
@@ -89,17 +83,17 @@ export function BotPreviewPip({
     <span
       aria-hidden="true"
       className={cn(
-        'pointer-events-none absolute z-10 flex size-3 items-center justify-center rounded-full bg-sidebar',
-        onCounter ? 'right-0 -bottom-2' : '-right-1 -bottom-1',
-        !onCounter && signal === 'attention' && 'size-3.5'
+        'pointer-events-none absolute z-10 flex size-3 items-center justify-center rounded-full',
+        onEdge ? 'right-0 -bottom-1 bg-worktree-sidebar' : '-right-1 -bottom-1 bg-sidebar',
+        !onEdge && signal === 'attention' && 'size-3.5'
       )}
     >
       {signal === 'attention' ? (
-        <AgentQuestionIcon className={onCounter ? 'size-2.5' : 'size-3'} />
-      ) : animateWorking ? (
-        <AgentWorkingSpinner className="size-2.5" />
-      ) : (
+        <AgentQuestionIcon className={onEdge ? 'size-2.5' : 'size-3'} />
+      ) : onEdge ? (
         <CircleDashed aria-hidden className="size-2.5 text-agent-working" />
+      ) : (
+        <AgentWorkingSpinner className="size-2.5" />
       )}
     </span>
   )

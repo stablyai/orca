@@ -55,7 +55,11 @@ export async function openStructuredAgentSessionProviderChild(
     if (outcome === 'ready') {
       return
     }
-    if (!(outcome instanceof Error)) {
+    // A kept agent that ended before this acquisition fails no start: its send goes to a fresh one.
+    const endedBefore =
+      child.generation !== null &&
+      context.deps.adapter.endedBeforeAcquire?.(sessionId, child.generation) === true
+    if (!(outcome instanceof Error) || endedBefore) {
       startupAttempts.released(sessionId, child)
       return
     }

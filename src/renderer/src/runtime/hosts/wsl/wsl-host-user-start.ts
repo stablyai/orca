@@ -17,7 +17,11 @@ const starting = new Map<string, Promise<boolean>>()
  * One explicit connect: main hands it to the WSL host, which refuses a host whose Remove is pending
  * instead of keeping it (E11). Repeated clicks while it boots share one start.
  */
-export function startWslHostAndReloadProjects(environmentId: string): Promise<boolean> {
+export function startWslHostAndReloadProjects(
+  environmentId: string,
+  /** `quiet`: the caller decides whether a failure is told (New bot waits on main first). */
+  { quiet = false }: { quiet?: boolean } = {}
+): Promise<boolean> {
   const pending = starting.get(environmentId)
   if (pending) {
     return pending
@@ -34,9 +38,11 @@ export function startWslHostAndReloadProjects(environmentId: string): Promise<bo
       // Why lazy: terminal creation imports this module, and most never start a host.
       const { connectRuntimeHostAndReloadProjects } =
         await import('@/components/status-bar/host-connections/runtime-environment-explicit-connect')
-      return await connectRuntimeHostAndReloadProjects(environmentId, failure)
+      return await connectRuntimeHostAndReloadProjects(environmentId, quiet ? null : failure)
     } catch {
-      toast.error(failure)
+      if (!quiet) {
+        toast.error(failure)
+      }
       return false
     }
   })().finally(() => starting.delete(environmentId))

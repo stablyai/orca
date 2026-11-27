@@ -29,4 +29,17 @@ describe('page-drawn client capabilities', () => {
     expect(changes).toBe(2)
     stop()
   })
+
+  it('sends the new list when the page changes while the handshake advertises the old one', async () => {
+    const sent: unknown[] = []
+    await settleMobileRuntimeCapabilities(async (_method, params) => {
+      sent.push(params)
+      // The page for this host finishes loading before the host replies.
+      notePageVersion('host-c', 4)
+      return { id: '1', ok: true, result: {} }
+    }, 'host-c')
+    expect(sent).toHaveLength(2)
+    expect(sent[0]).not.toEqual(ROWS)
+    expect(sent[1]).toEqual(ROWS)
+  })
 })

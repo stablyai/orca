@@ -3,8 +3,11 @@
 import { googleClientView, type GoogleClientView } from '../../shared/google/google-client-config'
 import { googleClientFile, parseGoogleClientFile } from './google-client-file'
 import {
+  GOOGLE_BOT_ACCOUNTS_RUNTIME_CAPABILITY,
   GOOGLE_CONNECT_RUNTIME_CAPABILITY,
   GOOGLE_TRIGGERS_RUNTIME_CAPABILITY,
+  GOOGLE_SETUP_NEW_APP_RUNTIME_CAPABILITY,
+  GOOGLE_CONNECTED_ANSWER_RUNTIME_CAPABILITY,
   type GoogleAccountView,
   type GoogleClientKeyState,
   type GoogleSignInPrompt,
@@ -17,7 +20,11 @@ import {
   type GoogleServiceChoice
 } from '../../shared/google/google-scopes'
 import { CallerOwnedSignInFlows } from '../runtime/caller-owned-sign-in-flows'
-import { googleAccessToken, GoogleAccountUnavailableError } from './google-account-tokens'
+import {
+  googleAccessToken,
+  GoogleAccountUnavailableError,
+  googleRefusalText
+} from './google-account-tokens'
 import {
   hasGoogleAccount,
   listGoogleAccounts,
@@ -33,6 +40,7 @@ import {
 import { checkGoogleServices } from './google-readiness'
 import { googleCallbackQuery, googlePromptExpectation } from './google-sign-in-return'
 import {
+  GOOGLE_SIGN_IN_TTL_MS,
   runGoogleSignIn,
   type GoogleSignInDeps,
   type GoogleSignInOptions
@@ -50,9 +58,14 @@ export function googleAccountView(record: GoogleAccountRecord): GoogleAccountVie
     email: record.email,
     status: record.status,
     ...(record.reason ? { reason: record.reason } : {}),
+    ...(record.googleError ? { googleError: googleRefusalText(record.googleError) } : {}),
     services: record.services,
     ...(record.checkedAt ? { checkedAt: record.checkedAt } : {}),
-    connectedAt: record.connectedAt
+    connectedAt: record.connectedAt,
+    app: {
+      clientId: record.client.clientId,
+      ...(record.projectId ? { projectId: record.projectId } : {})
+    }
   }
 }
 
@@ -97,7 +110,10 @@ export class GoogleConnect {
         },
         describeFailure: (message) => ({ error: message.slice(0, 600) }),
         busyMessage:
-          'A Google sign-in is already running on this computer. Finish or cancel it first.'
+          'A Google sign-in is already running on this computer. Finish or cancel it first.',
+        // Google's page is often finished at this computer while the phone that started it sleeps; its
+        // link still ends the flow. The extra minute covers picking the app and the exchange after Allow.
+        ownerSilenceMs: GOOGLE_SIGN_IN_TTL_MS + 60_000
       }
     )
   }
@@ -176,15 +192,17 @@ export class GoogleConnect {
   }
 
   /** Re-reads every connected account's services; a grant Google ended shows as Reconnect. */
-  async checkAccounts(): Promise<GoogleAccountView[]> {
+  async checkAccounts(only?: (email: string) => boolean): Promise<GoogleAccountView[]> {
     const deps = { http: this.deps.http, now: this.deps.now }
+    // `only`: the accounts worth checking (a bot's own); the rest keep their last check.
+    const listed = (await listGoogleAccounts()).filter(({ email }) => !only || only(email))
     await Promise.all(
-      (await listGoogleAccounts()).map(async ({ email }) => {
+      listed.map(async ({ email }) => {
         // An unreadable account is listed as Reconnect; googleAccessToken says it isn't connected.
         try {
           const accessToken = await googleAccessToken(email, deps)
           const record = await readGoogleAccount(email)
-          if (!record) {
+          if (!record?.refreshToken) {
             return
           }
           const services = await checkGoogleServices({
@@ -194,7 +212,11 @@ export class GoogleConnect {
             choices: record.choices ?? grantedGoogleChoices(record.grantedScopes),
             ...(record.projectId ? { projectId: record.projectId } : {})
           })
-          await saveGoogleAccount({ ...record, services, checkedAt: this.deps.now() })
+          // A refresh that ended the grant during the probes wins.
+          await saveGoogleAccount(
+            { ...record, services, checkedAt: this.deps.now() },
+            record.refreshToken
+          )
         } catch (error) {
           if (!(error instanceof GoogleAccountUnavailableError)) {
             throw error
@@ -223,7 +245,9 @@ export class GoogleConnect {
     const options: GoogleSignInOptions = { ...rest, choices }
     const back =
       options.callerLoopbackPort === undefined ? 'host' : `caller-${options.callerLoopbackPort}`
-    const route: Route = `${back}:${choices.join(',')}`
+    // The account and app pick the client, so a start for another one isn't this flow.
+    const account = options.loginHint?.toLowerCase() ?? 'new'
+    const route: Route = `${back}:${account}:${options.currentApp ? 'current' : 'own'}:${choices.join(',')}`
     return toWire(this.flows.start(owner, route, options))
   }
 
@@ -307,5 +331,13 @@ export function getGoogleConnect(): GoogleConnect | null {
 }
 
 export function googleRuntimeCapabilities(): string[] {
-  return installed ? [GOOGLE_CONNECT_RUNTIME_CAPABILITY, GOOGLE_TRIGGERS_RUNTIME_CAPABILITY] : []
+  return installed
+    ? [
+        GOOGLE_CONNECT_RUNTIME_CAPABILITY,
+        GOOGLE_TRIGGERS_RUNTIME_CAPABILITY,
+        GOOGLE_CONNECTED_ANSWER_RUNTIME_CAPABILITY,
+        GOOGLE_SETUP_NEW_APP_RUNTIME_CAPABILITY,
+        GOOGLE_BOT_ACCOUNTS_RUNTIME_CAPABILITY
+      ]
+    : []
 }

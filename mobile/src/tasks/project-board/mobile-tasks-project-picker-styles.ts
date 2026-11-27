@@ -2,7 +2,7 @@ import { themedStyleSheet } from '../../theme/themed-styles'
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, concentricRadius } from '../../theme/mobile-theme'
 
-import { FIELD_MIN_HEIGHT } from '../../components/composer-input/composer-input-styles'
+import { FIELD_ROW_HEIGHT } from '../../components/composer-input/composer-input-styles'
 
 export const mobileTasksProjectPickerStyles = themedStyleSheet(() => ({
   boardContainer: {
@@ -154,7 +154,7 @@ export const mobileTasksProjectPickerStyles = themedStyleSheet(() => ({
     flex: 1
   },
   projectPasteButton: {
-    minHeight: FIELD_MIN_HEIGHT,
+    minHeight: FIELD_ROW_HEIGHT,
     alignItems: 'center',
     justifyContent: 'center'
   },

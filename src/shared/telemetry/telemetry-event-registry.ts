@@ -5,6 +5,7 @@ import {
   onboardingLanguageRequestedSchema
 } from './schemas/telemetry-onboarding-language-schemas'
 import { agentTokenUsageDailySchema } from './schemas/telemetry-agent-token-usage-schema'
+import { codexLegacyHistoryImportSchema } from './schemas/telemetry-codex-legacy-history-event-schemas'
 import { legacyJournalRetirementSchema } from './schemas/telemetry-legacy-journal-retirement-schema'
 import {
   agentDashboardActiveSchema,
@@ -264,6 +265,7 @@ export const eventSchemas = {
 
   wsl_usage_snapshot: wslUsageSnapshotSchema,
 
+  codex_legacy_history_import: codexLegacyHistoryImportSchema,
   legacy_journal_retirement: legacyJournalRetirementSchema,
 
   plugin_installed: pluginInstalledSchema,

@@ -82,7 +82,7 @@ export function BrowserPageToolbar({
   onOpenFind,
   shareableArtifactFile,
   currentBrowserUrl,
-  externalUrl
+  onOpenExternal
 }: {
   browserPageId: string
   workspaceId: string
@@ -122,7 +122,7 @@ export function BrowserPageToolbar({
   onOpenFind: () => void
   shareableArtifactFile: { filePath: string } | null
   currentBrowserUrl: string
-  externalUrl: string | null
+  onOpenExternal: (() => void) | null
 }): React.JSX.Element {
   const siteDisplaySource = useLocalBrowserPageSiteDisplaySource(browserPageId)
   const applyViewportPreset = (nextId: BrowserViewportPresetId | null): void =>
@@ -264,7 +264,7 @@ export function BrowserPageToolbar({
             onFind: onOpenFind,
             onHardReload: () => runReloadTrigger('hard-reload'),
             onOpenDevTools: () => void window.api.browser.openDevTools({ browserPageId }),
-            onOpenExternal: externalUrl ? () => void window.api.shell.openUrl(externalUrl) : null
+            onOpenExternal
           }}
           extensionsSub={
             extensionToolbar ? (

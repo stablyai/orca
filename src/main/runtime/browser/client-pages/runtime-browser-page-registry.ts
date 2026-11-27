@@ -1,3 +1,4 @@
+import { redactBrowserMetadata } from '../../../../shared/browser/browser-metadata-redaction'
 import {
   sameRuntimeBrowserPlacement,
   type RuntimeBrowserClientPlacement
@@ -330,7 +331,7 @@ export function getRuntimeBrowserPageRegistry(runtime: WeakKey): RuntimeBrowserP
 }
 
 function freezePage(page: RuntimeBrowserClientPage): RuntimeBrowserClientPage {
-  return Object.freeze(page)
+  return Object.freeze(redactBrowserMetadata(page))
 }
 
 function assertIdentity(value: string): void {

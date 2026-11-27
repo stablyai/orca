@@ -10,7 +10,7 @@ import {
 } from './native-chat-turn-status-copy'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import type { AgentTurnOutcome } from '../../../../../../src/shared/agent-status/lifecycle/agent-turn-outcome'
-import { colors, spacing, typography } from '../../../../theme/mobile-theme'
+import { colors, feedback, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { useNow } from '../../../../hooks/use-now'
@@ -29,7 +29,8 @@ export function MobileNativeChatTurnStatus({
   workedSeconds,
   verdict,
   expanded = false,
-  onToggleExpanded
+  onToggleExpanded,
+  trailing
 }: {
   pendingLabel?: string
   startedAt: number | null
@@ -37,6 +38,8 @@ export function MobileNativeChatTurnStatus({
   verdict?: AgentTurnOutcome
   expanded?: boolean
   onToggleExpanded?: () => void
+  /** At the row's end, inside its hairline, while the turn is unsettled: a group turn's Stop. */
+  trailing?: React.ReactNode
 }): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -68,8 +71,14 @@ export function MobileNativeChatTurnStatus({
         }
       >
         {identity}
-        {bot?.showName ? <Text style={styles.label}>{bot.name}</Text> : null}
-        <Text style={styles.label}>{label}</Text>
+        {bot?.showName ? (
+          <Text style={styles.name} numberOfLines={1}>
+            {bot.name}
+          </Text>
+        ) : null}
+        <Text style={[styles.label, bot?.showName && styles.labelBesideName]} numberOfLines={1}>
+          {label}
+        </Text>
         <View style={expanded ? styles.caretOpen : undefined}>
           <ChevronRight size={14} color={colors.textMuted} strokeWidth={2} />
         </View>
@@ -80,10 +89,15 @@ export function MobileNativeChatTurnStatus({
   return (
     <View style={[styles.row, styles.bar]}>
       {identity}
-      {bot?.showName ? <Text style={styles.label}>{bot.name}</Text> : null}
-      <Text style={styles.label} numberOfLines={1}>
+      {bot?.showName ? (
+        <Text style={styles.name} numberOfLines={1}>
+          {bot.name}
+        </Text>
+      ) : null}
+      <Text style={[styles.label, bot?.showName && styles.labelBesideName]} numberOfLines={1}>
         {label}
       </Text>
+      {trailing ? <View style={styles.trailing}>{trailing}</View> : null}
     </View>
   )
 }
@@ -101,12 +115,27 @@ const styles = themedStyleSheet(() => ({
     borderBottomColor: colors.borderSubtle
   },
   pressed: {
-    opacity: 0.6
+    opacity: feedback.pressedOpacity
+  },
+  // A room names who spoke, as a chat's header names its agent.
+  name: {
+    color: colors.textPrimary,
+    fontSize: typography.bodySize,
+    fontWeight: '600',
+    flexShrink: 1
   },
   label: {
     color: colors.textMuted,
     fontSize: typography.bodySize,
     flexShrink: 1
+  },
+  // A long name truncates first, so the status stays whole on its one line.
+  labelBesideName: {
+    flexShrink: 0,
+    maxWidth: '60%'
+  },
+  trailing: {
+    marginLeft: 'auto'
   },
   caretOpen: {
     transform: [{ rotate: '90deg' }]

@@ -52,7 +52,11 @@ export const browserRouteSessionRegistry = new BrowserRouteSessionRegistry({
       throw new Error('browser_route_partition_profile_unavailable')
     }
     // Keep remote profile permissions in the session; their ids may collide with local profiles.
-    return installBrowserRoutePartitionPolicies(profile, partition, { sitePermissions: 'session' })
+    // The server's agents can script these pages, so pages never read the desktop clipboard.
+    return installBrowserRoutePartitionPolicies(profile, partition, {
+      sitePermissions: 'session',
+      clipboardRead: false
+    })
   },
   clearPolicies: ({ partition }) => {
     browserSessionRegistry.clearRoutePartitionPolicies(partition)
@@ -86,7 +90,8 @@ export const browserRouteWebContentsRegistry = new BrowserRouteWebContentsRegist
   openNewTabPopup: (source, request, observed, childOpener) =>
     browserManager.openNewTabPopup(source, request, observed, childOpener),
   releaseAgentLead: (openerWebContentsId) => browserManager.releaseAgentLead(openerWebContentsId),
-  isAgentCommandShownHere: (webContentsId) => browserManager.isAgentCommandShownHere(webContentsId)
+  isAgentCommandShownHere: (webContentsId) => browserManager.isAgentCommandShownHere(webContentsId),
+  isPersonCommandRunning: (webContentsId) => browserManager.isPersonCommandRunning(webContentsId)
 })
 routeWebContentsRegistryRef.current = browserRouteWebContentsRegistry
 

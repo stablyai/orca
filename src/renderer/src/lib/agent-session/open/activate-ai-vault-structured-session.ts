@@ -23,9 +23,13 @@ import type {
   StructuredSessionOpenDeps
 } from '../../../../../shared/agent-session/view/open-structured-agent-session'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { nativeChatRestartStillStarting } from '@/components/native-chat-recovery/offers/native-chat-restart-runtimes'
+import { showChatOpenUnavailable, type ChatOpenUnavailable } from './chat-open-failure-toast'
+import { parseOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
+import { cancelPendingBotThreadOpen } from './bot-thread-open-lifecycle'
 
 type StructuredSessionActivationDeps = StructuredSessionOpenAdapterDeps & {
-  unavailable: (agent?: string) => void
+  unavailable: (agent?: string, context?: ChatOpenUnavailable) => void
   gone: (agent?: string) => void
   hostCannotOpen: (agent?: string) => void
 }
@@ -39,11 +43,6 @@ export type StructuredSessionOpenFeedback = Pick<
 
 /** The open remedies' words, so labelled opens (the orchestration panel) say the same thing. */
 export const structuredSessionOpenFeedbackText = {
-  unavailable: () =>
-    translate(
-      'auto.lib.activateAiVaultStructuredSession.unavailable',
-      'The structured agent session is not available yet. Retry in a moment.'
-    ),
   gone: () =>
     translate(
       'auto.lib.activateAiVaultStructuredSession.gone',
@@ -68,7 +67,7 @@ export const structuredSessionOpenFeedbackText = {
 }
 
 export const structuredSessionOpenFeedback: StructuredSessionOpenFeedback = {
-  unavailable: () => toast.error(structuredSessionOpenFeedbackText.unavailable()),
+  unavailable: (agent, context) => showChatOpenUnavailable(context, agent),
   gone: () => toast.error(structuredSessionOpenFeedbackText.gone()),
   hostCannotOpen: () => toast.error(structuredSessionOpenFeedbackText.hostCannotOpen())
 }
@@ -76,7 +75,7 @@ export const structuredSessionOpenFeedback: StructuredSessionOpenFeedback = {
 /** Read only structuredSession so history clicks and drag payloads follow the same reveal path. */
 export async function activateAiVaultStructuredSession(
   session: Pick<AiVaultSession, 'structuredSession'> & { agent?: string },
-  deps?: StructuredSessionActivationDeps,
+  options?: { deps: StructuredSessionActivationDeps; retry: () => Promise<unknown> },
   target?: RuntimeClientTarget
 ): Promise<boolean> {
   if (!session.structuredSession) {
@@ -85,38 +84,67 @@ export async function activateAiVaultStructuredSession(
   // A group member's session reopens the room it talks in, not the member's own chat.
   const room = botGroupRoomOfRow(readBotGroups(), session)
   if (room) {
+    if (!options?.deps.signal) {
+      cancelPendingBotThreadOpen()
+    }
     await openBotGroupRoom(room.group, room.roomId, room.label)
     return true
   }
   await openDesktopStructuredSession(
     { kind: 'history', structuredSession: session.structuredSession, agent: session.agent },
-    target,
-    deps
+    {
+      target,
+      deps: options?.deps,
+      retry: options?.retry ?? (() => activateAiVaultStructuredSession(session, undefined, target))
+    }
   )
   return true
 }
 
+type DesktopStructuredSessionOpenOptions = {
+  target?: RuntimeClientTarget
+  deps?: StructuredSessionActivationDeps
+  locate?: StructuredSessionOpenDeps['locate']
+  feedback?: StructuredSessionOpenFeedback
+  retry?: 'open' | (() => Promise<unknown>)
+}
+
 export function openDesktopStructuredSession(
   source: StructuredSessionOpenSource,
-  host?: RuntimeClientTarget,
-  deps?: StructuredSessionActivationDeps,
-  locate?: StructuredSessionOpenDeps['locate'],
-  feedback?: StructuredSessionOpenFeedback
+  options: DesktopStructuredSessionOpenOptions = {}
 ): Promise<StructuredSessionOpenResult> {
+  const { target, deps, locate, feedback, retry } = options
+  if (!deps?.signal) {
+    cancelPendingBotThreadOpen()
+  }
   // Read when the open starts: the selection may move before it settles.
-  const pairedHostId = openingPairedHostId(source, host)
+  const pairedHostId = openingPairedHostId(source, target)
+  const retryOpen = retry === 'open' ? () => openDesktopStructuredSession(source, options) : retry
   return openDesktopStructuredSessionInteraction(source, {
-    target: host,
+    target,
     deps,
     locate,
-    present: (result) =>
+    present: (result, owner) =>
       presentDesktopStructuredSession(
         result,
         source,
         feedback ?? deps ?? structuredSessionOpenFeedback,
-        pairedHostId
+        pairedHostId,
+        { owner, retry: retryOpen }
       )
   })
+}
+
+/** The chat an open is for, when the source names one before the host answers. */
+function openingSessionId(source: StructuredSessionOpenSource): string | undefined {
+  return source.kind === 'history'
+    ? source.structuredSession.sessionId
+    : source.kind === 'notification'
+      ? source.sessionId
+      : (source.party.orcaSessionId ??
+        source.fallback?.sessionId ??
+        parseOrcaSessionAddress(source.party.address) ??
+        undefined)
 }
 
 /** The host an open targets, so its same-id workspace is selected, never a twin on another host. */
@@ -165,7 +193,8 @@ function presentDesktopStructuredSession(
   result: StructuredSessionOpenResult,
   source: StructuredSessionOpenSource,
   deps: StructuredSessionOpenFeedback,
-  pairedHostId: ExecutionHostId | null
+  pairedHostId: ExecutionHostId | null,
+  opening: { owner: RuntimeClientTarget; retry?: () => Promise<unknown> }
 ): void {
   if (result.kind === 'opened') {
     const workspace = result.target.worktreeId
@@ -226,7 +255,19 @@ function presentDesktopStructuredSession(
         toast.error(structuredSessionOpenFeedbackText.notLocated(agent))
       }
     } else {
-      deps.unavailable(agent)
+      const sessionId = openingSessionId(source)
+      const { code, detail } = result.failure
+      const { retry } = opening
+      deps.unavailable(agent, {
+        starting: !!sessionId && nativeChatRestartStillStarting(opening.owner, sessionId),
+        detail: detail ?? code,
+        retry:
+          retry &&
+          (() =>
+            void Promise.resolve()
+              .then(retry)
+              .catch(() => {}))
+      })
     }
   }
 }

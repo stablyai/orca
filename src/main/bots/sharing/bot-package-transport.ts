@@ -1,3 +1,4 @@
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 // A shared bot's transport manifest: package identity and every file with its role and hashes. These
 // are the rules the Orca Cloud connector service checks bot envelopes by, kept the same here.
 import { createHash } from 'node:crypto'
@@ -20,9 +21,11 @@ export const BOT_TRANSPORT_MANIFEST_PATH = 'dev.orca.bot-sharing/manifest.json'
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/
 const SHA256_PATTERN = /^[a-f0-9]{64}$/
 
-const BotTransportFileSchema = SkillPackageFileSchema.extend({
-  role: z.string().regex(/^(?:manifest|soul|avatar|memory|skill:[a-z0-9-]{1,64})$/)
-}).strict()
+const BotTransportFileSchema = lazyZodSchema(() =>
+  SkillPackageFileSchema.extend({
+    role: z.string().regex(/^(?:manifest|soul|avatar|memory|skill:[a-z0-9-]{1,64})$/)
+  }).strict()
+)
 
 // The bot's name and purpose appear on the public landing page: short, one line, nothing unsafe.
 export const BOT_DISPLAY_NAME_MAX = 80
@@ -37,33 +40,35 @@ export function isLandingText(value: string, maximum: number): boolean {
   return value === value.trim() && value.length <= maximum && !hasUnsafeText(value)
 }
 
-const BotTransportManifestV1Schema = z
-  .object({
-    schemaVersion: z.literal(1),
-    kind: z.literal('bot'),
-    packageId: z.string().regex(ID_PATTERN),
-    versionId: z.string().regex(ID_PATTERN),
-    /** The cloud package name, `bot-<id>`: what *Update link* finds the package by. */
-    name: z.string().refine((name) => {
-      try {
-        validateSkillPackageName(name)
-        return true
-      } catch {
-        return false
-      }
-    }),
-    /** The bot's own name; bot.json's `name`. */
-    displayName: z
-      .string()
-      .min(1)
-      .refine((value) => isLandingText(value, BOT_DISPLAY_NAME_MAX)),
-    /** The bot's one-line purpose. */
-    description: z.string().refine((value) => isLandingText(value, BOT_DESCRIPTION_MAX)),
-    createdAt: z.iso.datetime({ offset: true }),
-    files: z.array(BotTransportFileSchema).min(2).max(512),
-    botDigest: z.string().regex(SHA256_PATTERN)
-  })
-  .strict()
+const BotTransportManifestV1Schema = lazyZodSchema(() =>
+  z
+    .object({
+      schemaVersion: z.literal(1),
+      kind: z.literal('bot'),
+      packageId: z.string().regex(ID_PATTERN),
+      versionId: z.string().regex(ID_PATTERN),
+      /** The cloud package name, `bot-<id>`: what *Update link* finds the package by. */
+      name: z.string().refine((name) => {
+        try {
+          validateSkillPackageName(name)
+          return true
+        } catch {
+          return false
+        }
+      }),
+      /** The bot's own name; bot.json's `name`. */
+      displayName: z
+        .string()
+        .min(1)
+        .refine((value) => isLandingText(value, BOT_DISPLAY_NAME_MAX)),
+      /** The bot's one-line purpose. */
+      description: z.string().refine((value) => isLandingText(value, BOT_DESCRIPTION_MAX)),
+      createdAt: z.iso.datetime({ offset: true }),
+      files: z.array(BotTransportFileSchema).min(2).max(512),
+      botDigest: z.string().regex(SHA256_PATTERN)
+    })
+    .strict()
+)
 
 export type BotTransportManifest = z.infer<typeof BotTransportManifestV1Schema>
 export type BotTransportFile = z.infer<typeof BotTransportFileSchema>

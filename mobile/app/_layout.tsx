@@ -226,11 +226,14 @@ export default function RootLayout() {
                 <Stack.Screen name="settings" options={{ headerShown: false }} />
                 <Stack.Screen name="appearance-settings" options={{ headerShown: false }} />
                 <Stack.Screen name="terminal-settings" options={{ headerShown: false }} />
+                <Stack.Screen name="terminal-font-settings" options={{ headerShown: false }} />
+                <Stack.Screen name="terminal-keys" options={{ headerShown: false }} />
                 <Stack.Screen name="native-chat-settings" options={{ headerShown: false }} />
                 <Stack.Screen name="browser-settings" options={{ headerShown: false }} />
                 <Stack.Screen name="voice-settings" options={{ headerShown: false }} />
                 <Stack.Screen name="notifications" options={{ headerShown: false }} />
                 <Stack.Screen name="troubleshoot" options={{ headerShown: false }} />
+                <Stack.Screen name="troubleshoot-issue" options={{ headerShown: false }} />
                 <Stack.Screen name="connection-log" options={{ headerShown: false }} />
                 <Stack.Screen name="about" options={{ headerShown: false }} />
                 <Stack.Screen name="h" options={{ headerShown: false }} />

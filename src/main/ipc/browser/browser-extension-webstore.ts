@@ -1,12 +1,17 @@
 import { ipcMain } from 'electron'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { BrowserExtensionWebStoreInstallResult } from '../../../shared/browser/extensions/browser-extension-webstore'
 import { respondToBrowserExtensionInstallPrompt } from '../../browser/extensions/permissions/browser-extension-install-prompt'
 import { installBrowserExtensionFromWebStore } from '../../browser/extensions/web-store/browser-extension-webstore-service'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 
-const installArgs = z.object({ profileId: z.string().min(1), input: z.string().min(1).max(2048) })
-const promptResponse = z.object({ requestId: z.string().min(1), accepted: z.boolean() })
+const installArgs = lazyZodSchema(() =>
+  z.object({ profileId: z.string().min(1), input: z.string().min(1).max(2048) })
+)
+const promptResponse = lazyZodSchema(() =>
+  z.object({ requestId: z.string().min(1), accepted: z.boolean() })
+)
 
 /** Settings "Add from Chrome Web Store" and the install prompt's answer; trusted renderer only. */
 export function registerBrowserExtensionWebStoreHandlers(): void {

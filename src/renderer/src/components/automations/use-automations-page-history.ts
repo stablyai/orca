@@ -94,6 +94,12 @@ function revealReturnedRow(element: HTMLElement): void {
 // A page's title, or on the list and Runs pages (which have none) their named search field.
 const PAGE_FOCUS_TARGET = '[data-automations-page-title], [data-automations-page-search]'
 
+function resolvePageFocusTarget(container: HTMLElement): HTMLElement | undefined {
+  return Array.from(container.querySelectorAll<HTMLElement>(PAGE_FOCUS_TARGET)).find(
+    (element) => element.getClientRects().length > 0
+  )
+}
+
 const RETURN_HIGHLIGHT_MS = 1500
 // How long a returned-to row keeps focus through a list that is still re-rendering.
 const RETURN_SETTLE_MS = 1000
@@ -229,7 +235,7 @@ export function useAutomationsPageFocus(
       // Why: the row never came back (the refetch dropped it); land on the page's own target
       // rather than leaving focus on the body.
       if (!stillOurs && !container.querySelector(selector)) {
-        container.querySelector<HTMLElement>(PAGE_FOCUS_TARGET)?.focus({ preventScroll: false })
+        resolvePageFocusTarget(container)?.focus({ preventScroll: false })
       }
     }
     const attempt = (): void => {
@@ -244,9 +250,7 @@ export function useAutomationsPageFocus(
       }
       const element =
         (selector ? container.querySelector<HTMLElement>(selector) : null) ??
-        (selector && performance.now() < giveUpAt
-          ? null
-          : container.querySelector<HTMLElement>(PAGE_FOCUS_TARGET))
+        (selector && performance.now() < giveUpAt ? null : resolvePageFocusTarget(container))
       if (element) {
         if (selector && element.matches(selector)) {
           // Why: focus set from code after a pointer click draws no ring, so mark the row
