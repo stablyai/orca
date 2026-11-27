@@ -51,6 +51,7 @@ export function createBotGroupTurnDetailsHook({
       read: typeof read
     } | null>(null)
     const pending = useRef<AbortController | null>(null)
+    const reload = useRef<(before?: BotGroupTurnDetailCursor) => void>(() => {})
     useEffect(() => () => pending.current?.abort(), [read, visible])
     const page = storedPage?.read === read ? storedPage : null
     const loading = visible && request?.read === read && !request.controller.signal.aborted
@@ -82,6 +83,13 @@ export function createBotGroupTurnDetailsHook({
           }
         })
     }
+    reload.current = load
+
+    useEffect(() => {
+      if (visible && open && readOnOpen && page === null && !loading) {
+        reload.current()
+      }
+    }, [visible, open, readOnOpen, page, loading])
 
     const toggle = () => {
       setOpen(!expanded)

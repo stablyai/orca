@@ -93,6 +93,51 @@ it("sends each ended turn's saved reply and end, cut per turn, and never stores 
   expect(refreshed.updatedPosts?.[0].turns[0].reply).toBe(finished.reply)
 })
 
+it('keeps a removed member’s frozen result rows in the bounded room page', () => {
+  const orchestration = new OrchestrationDb(':memory:')
+  databases.push(orchestration)
+  const store = new BotGroupStore(orchestration.db)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- The page fixture only needs the store.
+  const groups = { store, mailTurnChecks: new Map() } as unknown as BotGroupRuntime
+  store.put({
+    id: 'group-1',
+    name: 'Crew',
+    hostId: 'local',
+    revision: 1,
+    folder: 'crew',
+    folderWorkspaceId: 'home-1',
+    createdAt: 1,
+    members: [],
+    replyMode: { kind: 'mentions' }
+  })
+  const frozenItems: AgentJournalRenderItem[] = [
+    {
+      itemId: 'turn',
+      revision: 1,
+      sequence: 1,
+      observedAt: 1,
+      body: { kind: 'turn', state: 'completed', outcome: 'failure', completedAt: 2, startedAt: 1 }
+    },
+    {
+      itemId: 'worker',
+      revision: 1,
+      sequence: 2,
+      observedAt: 2,
+      body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Saved result' }] }
+    }
+  ]
+  store.append({
+    id: 'removed',
+    groupId: 'group-1',
+    author: { kind: 'owner' },
+    text: 'Run it',
+    createdAt: 1,
+    turns: [turn('removed', { revoked: true, frozenItems })]
+  })
+  const [page] = readBotGroup(groups, 'group-1', undefined, undefined, []).messages
+  expect(page.turns[0]).toMatchObject({ revoked: true, end: 'failed', frozenItems })
+})
+
 it('cuts a long reply on a whole line and reopens a code block the cut began inside', () => {
   const tail = 'const b = 2\n```\n\nDone, with **bold** prose.'
   const cut = botGroupPageReply(`${'```ts\n'}${'const a = 1\n'.repeat(1_000)}${tail}`)

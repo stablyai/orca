@@ -56,21 +56,28 @@ async function waitForTurnPage(
   const key = JSON.stringify([input.groupId, input.threadId, input.operationId, input.before])
   let running = reads.get(key)
   if (!running) {
-    if (reads.size >= MAX_GROUP_DETAIL_READS) {
-      throw new Error('Too many group turn detail reads are running.')
+    while (reads.size >= MAX_GROUP_DETAIL_READS) {
+      await waitForDetailSlot(groups, signal)
+      running = reads.get(key)
+      if (running) {
+        break
+      }
     }
-    const controller = new AbortController()
-    const pending = {
-      controller,
-      viewers: 0,
-      page: readTurnPage(groups, input, controller.signal).finally(() => {
-        if (reads.get(key) === pending) {
-          reads.delete(key)
-        }
-      })
+    if (!running) {
+      const controller = new AbortController()
+      const pending = {
+        controller,
+        viewers: 0,
+        page: readTurnPage(groups, input, controller.signal).finally(() => {
+          if (reads.get(key) === pending) {
+            reads.delete(key)
+            groups.turnDetailWaiters.shift()?.()
+          }
+        })
+      }
+      reads.set(key, pending)
+      running = pending
     }
-    reads.set(key, pending)
-    running = pending
   }
   running.viewers++
   try {
@@ -79,8 +86,32 @@ async function waitForTurnPage(
     if (--running.viewers === 0 && reads.get(key) === running) {
       reads.delete(key)
       running.controller.abort()
+      groups.turnDetailWaiters.shift()?.()
     }
   }
+}
+
+function waitForDetailSlot(groups: BotGroupRuntime, signal?: AbortSignal): Promise<void> {
+  signal?.throwIfAborted()
+  return new Promise((resolve, reject) => {
+    const wake = () => {
+      cleanup()
+      resolve()
+    }
+    const abort = () => {
+      cleanup()
+      reject(signal?.reason)
+    }
+    const cleanup = () => {
+      const index = groups.turnDetailWaiters.indexOf(wake)
+      if (index !== -1) {
+        groups.turnDetailWaiters.splice(index, 1)
+      }
+      signal?.removeEventListener('abort', abort)
+    }
+    groups.turnDetailWaiters.push(wake)
+    signal?.addEventListener('abort', abort, { once: true })
+  })
 }
 
 async function readTurnPage(

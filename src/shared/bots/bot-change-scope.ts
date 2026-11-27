@@ -295,9 +295,7 @@ export function botGroupChangedPosts(
   // A regular room change has no post IDs to target. Re-read the visible page rather than assuming
   // that the newest page is the only place that can have changed.
   const recover =
-    !scope ||
-    (scope.overflowRoomPosts?.includes(key) ?? false) ||
-    (!scope.scopedRoomPosts && !posts)
+    !scope || (scope.overflowRoomPosts?.includes(key) ?? false) || !scope.scopedRoomPosts
   return scope?.scopedRoomPosts && !posts && !recover ? null : { ids: posts ?? [], recover }
 }
 

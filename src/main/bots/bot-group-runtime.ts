@@ -147,6 +147,8 @@ export class BotGroupRuntime {
   /** Operations whose native admission is in flight. */
   readonly deliveries = new Set<string>()
   readonly turnDetailReads = new Map<string, BotGroupTurnRead>()
+  /** FIFO waiters for the bounded cross-client detail-read slots. */
+  readonly turnDetailWaiters: (() => void)[] = []
   readonly turnDetailViewers = new Map<string, AbortController>()
   /** Mail turns being checked for a dead attempt, last found open, or whose chat answers for them now. */
   readonly mailTurnChecks = new Map<

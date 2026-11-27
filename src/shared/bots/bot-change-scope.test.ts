@@ -88,3 +88,15 @@ it('recovers an open transcript for an unscoped room change', () => {
   )
   expect(changed).toEqual({ ids: [], recover: true })
 })
+
+it('recovers older loaded posts when a general notice merges with named posts', () => {
+  const changed = botGroupChangedPosts(
+    readBotChangeScope({
+      kinds: ['groups'],
+      groupIds: ['room-a'],
+      groupPosts: { 'room-a': ['newest-post'] }
+    }),
+    'room-a'
+  )
+  expect(changed).toEqual({ ids: ['newest-post'], recover: true })
+})

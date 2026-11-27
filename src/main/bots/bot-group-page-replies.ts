@@ -54,15 +54,7 @@ export function projectBotGroupRoomPost(message: BotGroupMessage): BotGroupMessa
     turns: message.turns.map(({ turnItemId: _turnItemId, roomReply, ...record }, index) => {
       const { frozenItems } = record
       const turn =
-        frozenItems !== undefined
-          ? {
-              ...record,
-              ...botGroupTurnEnd(frozenItems),
-              frozenHistory: true as const,
-              frozenItems: undefined,
-              workerDispatchIds: undefined
-            }
-          : record
+        frozenItems !== undefined ? { ...record, ...botGroupTurnEnd(frozenItems) } : record
       const source =
         roomReply ??
         (typeof turn.reply === 'string' ? turn.reply : undefined) ??
