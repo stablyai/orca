@@ -38,6 +38,8 @@ describe('a filter that matches nothing on a host that has automations', () => {
     )
     const { filteredRows, hasListItems, searchCounts } = result.current
     expect(filteredRows).toEqual([])
+    // The host has rows: a held refresh must keep the toolbar and the clearable pill, not the skeleton.
+    expect(hasListItems).toBe(true)
     const state = resolveAutomationListEmptyState({
       resolution: {
         effective: { kind: 'all' },
