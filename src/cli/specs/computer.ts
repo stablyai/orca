@@ -59,8 +59,17 @@ export const COMPUTER_COMMAND_SPECS: CommandSpec[] = [
     path: ['computer', 'get-app-state'],
     summary: 'Capture a compact accessibility snapshot of an app',
     usage:
-      'orca computer get-app-state --app <name|bundle|pid:N> [--window-id <id> | --window-index <n>] [--worktree <selector> | --session <id>] [--element-index <n>] [--query <text>] [--max-elements <n>] [--restore-window] [--no-screenshot] [--screenshot-format <png|jpeg>] [--screenshot-scale <n>] [--screenshot-max-edge <px>] [--json]',
-    allowedFlags: [...COMPUTER_OBSERVE_FLAGS, 'element-index', 'query', 'max-elements']
+      'orca computer get-app-state --app <name|bundle|pid:N> [--window-id <id> | --window-index <n>] [--worktree <selector> | --session <id>] [--element-index <n>] [--query <text>] [--max-elements <n>] [--restore-window] [--no-screenshot | --select-screenshot-window] [--screenshot-format <png|jpeg>] [--screenshot-scale <n>] [--screenshot-max-edge <px>] [--json]',
+    allowedFlags: [
+      ...COMPUTER_OBSERVE_FLAGS,
+      'element-index',
+      'query',
+      'max-elements',
+      'select-screenshot-window'
+    ],
+    notes: [
+      'On GNOME Wayland, --select-screenshot-window opens the system window-sharing picker. The image is labeled user-selected-window and is not tied to the accessibility target or its coordinates.'
+    ]
   },
   {
     path: ['computer', 'wait'],

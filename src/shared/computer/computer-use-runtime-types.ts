@@ -84,6 +84,7 @@ export type ComputerScreenshotData = {
   width: number
   height: number
   scale: number
+  scope?: 'user-selected-window'
   path?: string
   dataOmitted?: boolean
   expiresAt?: string
@@ -170,6 +171,7 @@ export type ComputerProviderCapabilities = {
     }
     observation: {
       screenshot: boolean
+      userSelectedWindowScreenshot?: boolean
       annotatedScreenshot: boolean
       elementFrames: boolean
       ocr: boolean

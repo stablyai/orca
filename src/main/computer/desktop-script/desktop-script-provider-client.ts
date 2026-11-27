@@ -132,6 +132,9 @@ export class DesktopScriptProviderClient {
       windowId: optionalNumberParam(params, 'windowId'),
       windowIndex: optionalNumberParam(params, 'windowIndex'),
       ...screenshotRequestParams(params),
+      ...(this.platform === 'linux' && params.selectScreenshotWindow === true
+        ? { selectScreenshotWindow: true }
+        : {}),
       restoreWindow: params.restoreWindow === true
     })
     return this.rememberAndRender(app, response, params.noScreenshot === true, params)

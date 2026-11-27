@@ -68,8 +68,21 @@ export function validateComputerTarget(
 export const ComputerObserveTarget = lazyZodSchema(() =>
   ComputerObserveTargetBase.extend({
     // Reads one element's subtree. Older runtimes strip it, and their result has no rootElementIndex.
-    rootElementIndex: OptionalNonNegativeInt
-  }).superRefine(validateComputerTarget)
+    rootElementIndex: OptionalNonNegativeInt,
+    selectScreenshotWindow: OptionalBoolean
+  }).superRefine((value, ctx) => {
+    validateComputerTarget(value, ctx)
+    if (
+      value.selectScreenshotWindow &&
+      (value.noScreenshot || value.restoreWindow || value.rootElementIndex !== undefined)
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        message:
+          'Window selection cannot be combined with --no-screenshot, --restore-window or --element-index'
+      })
+    }
+  })
 )
 
 export const ListApps = lazyZodSchema(() => z.object({}).strict())

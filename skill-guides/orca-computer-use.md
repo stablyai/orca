@@ -166,6 +166,8 @@ Start a closed app with `ORCA computer launch-app <app>`, not `open -a` or `Star
 
 ## Screenshots
 
+On GNOME Wayland, ask the user before invoking `orca-ide computer get-app-state --app <app> --select-screenshot-window --json`. The user chooses a window in the OS dialog. A result with `screenshot.scope: "user-selected-window"` is not matched to the accessibility target; use the image only for observation, never for action coordinates. Without an agreed window selection, use `--no-screenshot` when the accessibility tree is sufficient.
+
 `get-app-state` and actions request screenshots by default unless `--no-screenshot` is
 passed. A successful `--json` capture is normally saved at `result.screenshot.path`; if that
 path is absent, use the inline base64 `result.screenshot.data`. Pretty output does not save

@@ -59,6 +59,7 @@ export type BridgeSnapshot = {
   windowId?: number | null
   windowIndex?: number | null
   windowBounds?: BridgeFrame | null
+  screenshotScope?: 'user-selected-window'
   screenshotBase64?: string | null
   screenshotFormat?: 'png' | 'jpeg' | null
   screenshotWidth?: number | null
@@ -162,6 +163,7 @@ export type BridgeRequest = {
   windowBounds?: BridgeFrame | null
   windowId?: number
   windowIndex?: number
+  selectScreenshotWindow?: boolean
   noScreenshot?: boolean
   screenshotFormat?: 'jpeg'
   screenshotScale?: number

@@ -1058,6 +1058,8 @@ def within_capture_limit(width, height):
 def capture_wayland_png(bounds, request, app, window):
     backend = wayland_screenshot_backend()
     if backend is None:
+        if gnome_wayland_session():
+            return screenshot_failure("GNOME Wayland requires --select-screenshot-window and user approval to capture a window; use --no-screenshot for the tree only")
         return screenshot_failure(UNSUPPORTED_WAYLAND_SCREENSHOT)
     if app is None or window is None:
         return screenshot_failure("Wayland screenshots need a target window")
@@ -1266,6 +1268,131 @@ def portal_screenshot_png(bus):
     return data
 
 
+SCREENCAST_IFACE = "org.freedesktop.portal.ScreenCast"
+PORTAL_DESKTOP_PATH = "/org/freedesktop/portal/desktop"
+WINDOW_SOURCE = 2
+
+
+def portal_window_available(bus):
+    result = bus_call(bus, PORTAL_SERVICE, PORTAL_DESKTOP_PATH, "org.freedesktop.DBus.Properties",
+                      "Get", GLib.Variant("(ss)", (SCREENCAST_IFACE, "AvailableSourceTypes")), "(v)")
+    return bool(result.unpack()[0] & WINDOW_SOURCE)
+
+
+def screencast_request(bus, method, signature, args, options, deadline):
+    token = "orca_" + uuid.uuid4().hex
+    sender = bus.get_unique_name()[1:].replace(".", "_")
+    expected = f"/org/freedesktop/portal/desktop/request/{sender}/{token}"
+    owner = bus_name_owner(bus, PORTAL_SERVICE)
+    if owner is None:
+        raise ValueError("the ScreenCast portal is unavailable")
+    answer = []
+    subscription = bus.signal_subscribe(owner, "org.freedesktop.portal.Request", "Response", expected, None,
+                                        Gio.DBusSignalFlags.NONE,
+                                        lambda _b, _s, _p, _i, _n, values: answer.append(values.unpack()))
+    handle = expected
+    try:
+        options = {**options, "handle_token": GLib.Variant("s", token)}
+        handle = bus_call(bus, owner, PORTAL_DESKTOP_PATH, SCREENCAST_IFACE, method,
+                          GLib.Variant(signature, (*args, options)), "(o)", 2000).unpack()[0]
+        if handle != expected or not pump_until(lambda: bool(answer), max(0, deadline - time.monotonic())):
+            raise ValueError("the ScreenCast portal did not complete the window request")
+        response, result = answer[0]
+        if response != 0:
+            raise ValueError("window sharing was cancelled or denied")
+        return result
+    finally:
+        bus.signal_unsubscribe(subscription)
+        if not answer:
+            attempt(lambda: bus_call(bus, owner, handle, "org.freedesktop.portal.Request", "Close"))
+
+
+def require_single_window_stream(streams):
+    # The portal does not attest that the picked window matches any AT-SPI target.
+    if len(streams) != 1 or streams[0][1].get("source_type") != WINDOW_SOURCE:
+        raise ValueError("the ScreenCast portal did not identify a single window stream")
+    return streams[0][0]
+
+
+def capture_pipewire_frame(Gst, fd, node):
+    pipeline = Gst.parse_launch(
+        'pipewiresrc name=source ! videoconvert ! videoscale ! video/x-raw,width=[1,1280],height=[1,1280] '
+        '! pngenc snapshot=true ! appsink name=frame sync=false max-buffers=1 drop=true'
+    )
+    source = pipeline.get_by_name("source")
+    source.set_property("fd", fd)
+    source.set_property("path", str(node))
+    sink = pipeline.get_by_name("frame")
+    try:
+        if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
+            raise ValueError("the PipeWire window stream could not start")
+        sample = sink.emit("try-pull-sample", 3 * Gst.SECOND)
+        if sample is None:
+            raise ValueError("the PipeWire window stream returned no frame")
+        buffer = sample.get_buffer()
+        if not 0 < buffer.get_size() <= MAX_WAYLAND_PNG_BYTES:
+            raise ValueError("the PipeWire window frame exceeds the screenshot byte limit")
+        return buffer.extract_dup(0, buffer.get_size())
+    finally:
+        pipeline.set_state(Gst.State.NULL)
+
+
+def gnome_wayland_session():
+    return wayland_session() and "gnome" in os.environ.get("XDG_CURRENT_DESKTOP", "").lower().split(":")
+
+
+def capture_user_selected_window(request):
+    if not gnome_wayland_session():
+        return screenshot_failure("user-selected window capture requires GNOME Wayland")
+    try:
+        if GdkPixbuf is None:
+            raise ValueError("window capture requires GdkPixbuf")
+        try:
+            gi.require_version("Gst", "1.0")
+            from gi.repository import Gst
+        except (ImportError, ValueError) as error:
+            raise ValueError("window capture needs GStreamer and the GStreamer PipeWire plugin") from error
+        Gst.init(None)
+        if not all(Gst.ElementFactory.find(name) for name in ("pipewiresrc", "pngenc", "appsink", "videoconvert", "videoscale")):
+            raise ValueError("window capture needs GStreamer video, PNG and PipeWire plugins")
+        bus = session_bus()
+        if bus is None or not portal_window_available(bus):
+            raise ValueError("the ScreenCast portal does not advertise window capture")
+        token = "orca_" + uuid.uuid4().hex
+        sender = bus.get_unique_name()[1:].replace(".", "_")
+        session = f"/org/freedesktop/portal/desktop/session/{sender}/{token}"
+        deadline = time.monotonic() + 12
+        try:
+            created = screencast_request(bus, "CreateSession", "(a{sv})", (),
+                                        {"session_handle_token": GLib.Variant("s", token)}, deadline)
+            if created.get("session_handle") != session:
+                raise ValueError("the ScreenCast portal returned an unexpected session")
+            screencast_request(bus, "SelectSources", "(oa{sv})", (session,), {
+                "types": GLib.Variant("u", WINDOW_SOURCE),
+                "multiple": GLib.Variant("b", False),
+            }, deadline)
+            result = screencast_request(bus, "Start", "(osa{sv})", (session, ""), {}, deadline)
+            node = require_single_window_stream(result.get("streams", []))
+            reply, fd_list = bus.call_with_unix_fd_list_sync(
+                PORTAL_SERVICE, PORTAL_DESKTOP_PATH, SCREENCAST_IFACE, "OpenPipeWireRemote",
+                GLib.Variant("(oa{sv})", (session, {})), GLib.VariantType.new("(h)"),
+                Gio.DBusCallFlags.NONE, 2000, None, None
+            )
+            fd = fd_list.get(reply.unpack()[0])
+            try:
+                frame = capture_pipewire_frame(Gst, fd, node)
+            finally:
+                os.close(fd)
+            pixbuf = decode_png(frame)
+            if pixbuf is None:
+                raise ValueError("the PipeWire frame is not a PNG")
+            return bounded_screenshot_payload(pixbuf, request)
+        finally:
+            attempt(lambda: bus_call(bus, PORTAL_SERVICE, session, "org.freedesktop.portal.Session", "Close"))
+    except Exception as error:
+        return screenshot_failure("User-selected Wayland window capture failed: " + str(error)[:300])
+
+
 def crop_workspace_png(data, rect, workspace):
     image = decode_png(data)
     if image is None:
@@ -1472,7 +1599,8 @@ def window_json(app, index, window):
     }
 
 
-def make_snapshot(query, screenshot_request, window_id=None, window_index=None, restore=False, root=None):
+def make_snapshot(query, screenshot_request, window_id=None, window_index=None, restore=False, root=None,
+                  select_window=False):
     app = find_app(query)
     window_index, window = choose_window(app, window_id, window_index)
     if restore:
@@ -1497,8 +1625,11 @@ def make_snapshot(query, screenshot_request, window_id=None, window_index=None, 
     selection = selected_text(window)
     app_info = app_json(app)
     window_title = name_of(window)
-    screenshot = capture_png(bounds, screenshot_request, app, window) if screenshot_request is not None else None
-    if screenshot_request is not None and bounds is None and placement.window_coords:
+    screenshot = None
+    if screenshot_request is not None:
+        screenshot = (capture_user_selected_window(screenshot_request) if select_window else
+                      capture_png(bounds, screenshot_request, app, window))
+    if screenshot_request is not None and not select_window and bounds is None and placement.window_coords:
         screenshot = screenshot_failure("GTK 4 screenshot skipped: Orca can't tell where this window sits on screen; "
                                         "use --no-screenshot and trust the tree")
     geometry = GeometryReader()
@@ -1514,6 +1645,7 @@ def make_snapshot(query, screenshot_request, window_id=None, window_index=None, 
         "windowIndex": window_index,
         "windowBounds": bounds.to_json() if bounds else None,
         "screenshotBase64": screenshot.get("base64") if screenshot else None,
+        **({"screenshotScope": "user-selected-window"} if select_window and screenshot and screenshot.get("base64") else {}),
         "screenshotFormat": screenshot.get("format") if screenshot else None,
         "screenshotWidth": screenshot.get("width") if screenshot else None,
         "screenshotHeight": screenshot.get("height") if screenshot else None,
@@ -1557,7 +1689,8 @@ def handshake_response():
         "supports": {
             "apps": {"list": True, "bundleIds": False, "pids": True},
             "windows": {"list": True, "targetById": False, "targetByIndex": True, "focus": False, "moveResize": False},
-            "observation": {"screenshot": has_screenshot, "annotatedScreenshot": False, "elementFrames": True, "ocr": False, "disabledState": True},
+            "observation": {"screenshot": has_screenshot, "annotatedScreenshot": False, "elementFrames": True, "ocr": False, "disabledState": True,
+                            **({"userSelectedWindowScreenshot": True} if gnome_wayland_session() else {})},
             "actions": {
                 "click": True,
                 "typeText": True,
@@ -2549,6 +2682,7 @@ def run_operation(operation):
                 operation.get("windowIndex"),
                 bool(operation.get("restoreWindow")),
                 operation.get("root"),
+                operation.get("selectScreenshotWindow") is True,
             ),
         }
 
