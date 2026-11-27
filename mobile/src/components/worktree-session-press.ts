@@ -78,7 +78,7 @@ export function useWorktreeRowSession<T extends SessionRowTarget>(
     onLongPress: ((paneKey: string) => void) | undefined
   }
   pressedStyle: <S>(
-    active: boolean,
+    active: boolean | undefined,
     styles: { worktreeRowActivePressed: S; worktreeRowPressed: S }
   ) => S | null
 } {
@@ -128,7 +128,7 @@ export function useWorktreeRowSession<T extends SessionRowTarget>(
 
 function rowPressedStyle<S>(
   claimed: boolean,
-  active: boolean,
+  active: boolean | undefined,
   styles: { worktreeRowActivePressed: S; worktreeRowPressed: S }
 ): S | null {
   if (claimed) {

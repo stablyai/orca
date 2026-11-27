@@ -1,3 +1,4 @@
+import { translate } from '../i18n/mobile-i18n'
 import { agentDisplayLabel } from '../worktree/agent-lineage/agent-row-display'
 import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
 import { getSelectedSidebarSession, setSelectedSidebarSession } from './selected-sidebar-session'
@@ -17,7 +18,7 @@ export function sidebarSessionAction(
   return {
     worktree,
     paneKey,
-    label: row ? agentDisplayLabel(row, now) : worktree.displayName || worktree.repo
+    label: row ? agentDisplayLabel(row, now, translate) : worktree.displayName || worktree.repo
   }
 }
 

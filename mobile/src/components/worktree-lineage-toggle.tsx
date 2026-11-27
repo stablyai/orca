@@ -1,8 +1,9 @@
 import { ChevronDown, ChevronRight, GitBranch } from 'lucide-react-native'
 import { Pressable, Text } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, feedback, radii, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
+import { feedback, radii, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import type { WorkspaceListItem } from '../worktree/workspace-list/workspace-list-types'
 
 // Grows the 20 pt pill to a 44 pt target without pushing the row apart.
@@ -18,6 +19,8 @@ export function WorktreeLineageToggle({
   onToggle: (item: WorkspaceListItem) => void
 }) {
   const t = useMobileTranslation()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <Pressable
       style={({ pressed }) => [styles.lineageToggle, pressed && styles.lineageTogglePressed]}
@@ -44,7 +47,7 @@ export function WorktreeLineageToggle({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   lineageToggle: {
     alignSelf: 'flex-start',
     flexDirection: 'row',

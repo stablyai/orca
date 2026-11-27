@@ -1,3 +1,4 @@
+import { translate } from '../i18n/mobile-i18n'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/worktree/catalog/runtime-worktree-contracts'
 import {
   agentDisplayLabel,
@@ -25,7 +26,7 @@ export function sidebarSessionJumps(
   return flattenAgentRowLineage(agents).map((node) => ({
     paneKey: node.row.paneKey,
     depth: node.depth,
-    label: agentDisplayLabel(node.row, now),
+    label: agentDisplayLabel(node.row, now, translate),
     agentType: node.row.agentType,
     dotState: agentDotState(node.row, now)
   }))

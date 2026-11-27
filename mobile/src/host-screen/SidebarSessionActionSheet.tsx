@@ -3,8 +3,8 @@ import { Pressable, Text, View } from 'react-native'
 import { ActionSheetContent } from '../components/sheets/ActionSheetModal'
 import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { hostScreenStyles as styles } from './host-screen-styles'
+import { useThemedStyles } from '../theme/themed-styles'
+import { hostScreenStylesSheet } from './host-screen-styles'
 import type { SidebarSessionAction } from './sidebar-session-action'
 
 type Props = {
@@ -15,7 +15,6 @@ type Props = {
 }
 
 export function SidebarSessionActionSheet({ session, onDismiss, onOpen, onCloseSession }: Props) {
-  useMobileColorScheme()
   return (
     <BottomDrawer visible={session != null} onClose={onDismiss}>
       {session == null ? null : (
@@ -92,6 +91,7 @@ function SessionCloseConfirm({
   onConfirm: () => void
 }) {
   const t = useMobileTranslation()
+  const styles = useThemedStyles(hostScreenStylesSheet)
   return (
     <View>
       <View style={styles.confirmContent}>
