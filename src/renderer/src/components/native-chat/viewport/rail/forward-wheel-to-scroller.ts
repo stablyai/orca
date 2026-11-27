@@ -6,14 +6,14 @@ const WHEEL_DELTA_PAGE = 2
 /** Nominal line height for line-mode wheel deltas, which arrive as ~3 per notch. */
 const WHEEL_LINE_PX = 16
 
+type WheelLike = Pick<WheelEvent, 'deltaY' | 'deltaMode' | 'ctrlKey'>
+
 /**
- * Scrolls `element` by a wheel gesture and returns the pixel delta it moved, or null for a
- * pinch-zoom (`ctrlKey`), which the caller must leave alone.
+ * The pixel delta a wheel gesture moves `element` by, or null for a pinch-zoom (`ctrlKey`), which
+ * the caller must leave alone. Read it before scrolling: a rail decides whether the gesture leaves
+ * the end from the position it started at.
  */
-export function forwardWheelToScroller(
-  element: HTMLElement,
-  event: Pick<WheelEvent, 'deltaY' | 'deltaMode' | 'ctrlKey'>
-): number | null {
+export function wheelScrollDelta(element: HTMLElement, event: WheelLike): number | null {
   if (event.ctrlKey) {
     return null
   }
@@ -23,7 +23,15 @@ export function forwardWheelToScroller(
       : event.deltaMode === WHEEL_DELTA_PAGE
         ? element.clientHeight
         : 1
-  const deltaPx = event.deltaY * scale
-  element.scrollTop += deltaPx
+  return event.deltaY * scale
+}
+
+/** Scrolls `element` by a wheel gesture and returns the pixel delta it moved, or null for a
+ *  pinch-zoom (`ctrlKey`), which the caller must leave alone. */
+export function forwardWheelToScroller(element: HTMLElement, event: WheelLike): number | null {
+  const deltaPx = wheelScrollDelta(element, event)
+  if (deltaPx !== null) {
+    element.scrollTop += deltaPx
+  }
   return deltaPx
 }

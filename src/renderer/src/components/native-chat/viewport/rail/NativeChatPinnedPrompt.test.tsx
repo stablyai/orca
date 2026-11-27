@@ -58,6 +58,18 @@ describe('NativeChatPinnedPrompt', () => {
     expect(onReaderScroll).toHaveBeenCalledWith(40)
   })
 
+  it('reports the gesture while the transcript is still where the gesture started', () => {
+    // The rail declares the reader left the end by reading scrollTop, so the report has to arrive
+    // before this handler moves the transcript.
+    const onReaderScroll = render()
+    scroller.scrollTop = 12
+    const seen: number[] = []
+    onReaderScroll.mockImplementation(() => seen.push(scroller.scrollTop))
+    const header = container.querySelector('[data-native-chat-pinned-prompt]')!.closest('div')!
+    fireEvent.wheel(header, { deltaY: -40 })
+    expect(seen).toEqual([12])
+  })
+
   it('leaves a pinch-zoom over the header alone', () => {
     const onReaderScroll = render()
     const header = container.querySelector('[data-native-chat-pinned-prompt]')!.closest('div')!

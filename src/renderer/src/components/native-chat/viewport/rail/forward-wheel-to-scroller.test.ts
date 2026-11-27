@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { forwardWheelToScroller } from './forward-wheel-to-scroller'
+import { forwardWheelToScroller, wheelScrollDelta } from './forward-wheel-to-scroller'
 
 const scroller = (scrollTop = 0, clientHeight = 400): HTMLElement =>
   ({ scrollTop, clientHeight }) as HTMLElement
@@ -29,5 +29,23 @@ describe('forwardWheelToScroller', () => {
     const element = scroller(100)
     expect(forwardWheelToScroller(element, wheel(40, 0, true))).toBeNull()
     expect(element.scrollTop).toBe(100)
+  })
+})
+
+describe('wheelScrollDelta', () => {
+  it('reports the delta without moving the scroller, so a caller can read scrollTop first', () => {
+    const element = scroller(48)
+    expect(wheelScrollDelta(element, wheel(-40))).toBe(-40)
+    expect(element.scrollTop).toBe(48)
+  })
+
+  it('is null for a pinch-zoom, as forwardWheelToScroller is', () => {
+    expect(wheelScrollDelta(scroller(100), wheel(40, 0, true))).toBeNull()
+  })
+
+  it('converts the same units forwardWheelToScroller moves by', () => {
+    const element = scroller(0, 400)
+    expect(wheelScrollDelta(element, wheel(3, 1))).toBe(48)
+    expect(wheelScrollDelta(element, wheel(2, 2))).toBe(800)
   })
 })

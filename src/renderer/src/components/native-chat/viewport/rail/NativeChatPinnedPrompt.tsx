@@ -6,7 +6,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { NativeChatRailItem } from './native-chat-message-rail-items'
 import { findNativeChatPinnedPrompt } from './native-chat-pinned-prompt'
-import { forwardWheelToScroller } from './forward-wheel-to-scroller'
+import { wheelScrollDelta } from './forward-wheel-to-scroller'
 
 /** Keeps focus where the reader was typing: a pointer press never moves it here. */
 function keepFocus(event: React.MouseEvent): void {
@@ -46,10 +46,14 @@ export function NativeChatPinnedPrompt({
         if (!element) {
           return
         }
-        const deltaPx = forwardWheelToScroller(element, event)
-        if (deltaPx !== null) {
-          onReaderScroll?.(deltaPx)
+        // Reported before the scroll: the rail reads scrollTop to decide whether this gesture
+        // leaves the end of the transcript.
+        const deltaPx = wheelScrollDelta(element, event)
+        if (deltaPx === null) {
+          return
         }
+        onReaderScroll?.(deltaPx)
+        element.scrollTop += deltaPx
       }}
     >
       <div className="mx-auto flex w-full min-w-0 max-w-(--chat-content-max-width) items-center px-[5px]">

@@ -7,7 +7,7 @@ import {
   selectNativeChatRailTicks,
   type NativeChatRailItem
 } from './native-chat-message-rail-items'
-import { forwardWheelToScroller } from './forward-wheel-to-scroller'
+import { wheelScrollDelta } from './forward-wheel-to-scroller'
 import { nativeChatRailItemLabel } from './native-chat-rail-item-label'
 import { NativeChatRailMessagePanel } from './NativeChatRailMessagePanel'
 import type { NativeChatMessageRailState } from './use-native-chat-message-rail'
@@ -217,10 +217,14 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
               if (!element) {
                 return
               }
-              const deltaPx = forwardWheelToScroller(element, event)
-              if (deltaPx !== null) {
-                onReaderScroll?.(deltaPx)
+              // Reported before the scroll: railWheel reads scrollTop to decide whether this
+              // gesture leaves the end of the transcript.
+              const deltaPx = wheelScrollDelta(element, event)
+              if (deltaPx === null) {
+                return
               }
+              onReaderScroll?.(deltaPx)
+              element.scrollTop += deltaPx
             }}
             // Dimmed at rest; hover, keyboard focus or scrolling light it, and it fades back once idle.
             className={cn(
