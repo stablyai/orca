@@ -44,9 +44,10 @@ export const CLI_CLIENT_CAPABILITIES = [
   RUNTIME_RPC_STAGED_REPLY_CLIENT_CAPABILITY
 ] as const
 
-// `agent read` prints chats as text the host projects, so it reads every chat agent; only that
-// request says so, leaving how other commands launch and list chats unchanged.
-const AGENT_READ_CLIENT_CAPABILITIES = [
+// `agent read` prints chats as text the host projects, and `agent reveal` opens one in the host's
+// window, so each reaches every chat agent; only those requests say so, leaving how other commands
+// launch and list chats unchanged.
+const CHAT_CLIENT_CAPABILITIES = [
   ...CLI_CLIENT_CAPABILITIES,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
@@ -54,8 +55,10 @@ const AGENT_READ_CLIENT_CAPABILITIES = [
   PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY
 ] as const
 
+const CHAT_METHODS = new Set(['agent.read', 'agentSession.reveal'])
+
 function clientCapabilitiesFor(method: string) {
-  return method === 'agent.read' ? AGENT_READ_CLIENT_CAPABILITIES : CLI_CLIENT_CAPABILITIES
+  return CHAT_METHODS.has(method) ? CHAT_CLIENT_CAPABILITIES : CLI_CLIENT_CAPABILITIES
 }
 
 export async function sendWebSocketRequest<TResult>(
