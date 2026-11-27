@@ -1,6 +1,9 @@
 import type { ProviderRelayKeepSpec } from '../../daemon/protocol/daemon-provider-relay-protocol'
 import type { RelayedProviderChild } from '../../provider-relay/relayed-provider-child'
 import { readClaudeReportedPermissionMode } from '../structured/startup/claude-structured-init-proof'
+import type { McpServerConfig } from '@anthropic-ai/claude-agent-sdk'
+import { mcpServerSetKey, type McpServerIdentity } from '../../mcp-servers/mcp-server-set-key'
+import { settleRelayedReplay } from '../../provider-relay/relayed-provider-replay-settle'
 
 /** Claude's own word on its mode: its init, and the status line it writes for each mode change
  *  (the CLI writes these keys first and in this order). */
@@ -16,16 +19,49 @@ export const CLAUDE_RELAY_KEEP: ProviderRelayKeepSpec = {
 
 /** The note a relay launched with no permission flag carries: Claude runs the user's own settings. */
 const OWN_SETTINGS_NOTE = 'own-settings'
+/** The note's word for the key of the MCP servers the agent launched with. */
+const TOOLS_NOTE = 'tools='
 
-/** The keep spec for a launch's arguments, noting a launch that left the mode to Claude's settings. */
-export function claudeRelayKeepFor(args: readonly string[]): ProviderRelayKeepSpec {
+/** The keep spec for a launch's arguments and MCP-set key, noting a launch that left the mode to
+ *  Claude's settings, and the servers it was given. */
+export function claudeRelayKeepFor(
+  args: readonly string[],
+  toolsKey?: string
+): ProviderRelayKeepSpec {
   const flagged = args.some(
     (arg) =>
       arg === '--dangerously-skip-permissions' ||
       arg === '--permission-mode' ||
       arg.startsWith('--permission-mode=')
   )
-  return flagged ? CLAUDE_RELAY_KEEP : { ...CLAUDE_RELAY_KEEP, note: OWN_SETTINGS_NOTE }
+  const words = [
+    ...(flagged ? [] : [OWN_SETTINGS_NOTE]),
+    ...(toolsKey ? [TOOLS_NOTE + toolsKey] : [])
+  ]
+  return words.length > 0 ? { ...CLAUDE_RELAY_KEEP, note: words.join(' ') } : CLAUDE_RELAY_KEEP
+}
+
+const noteWords = (child: RelayedProviderChild): string[] =>
+  child.attachResult?.launchNote?.split(' ') ?? []
+
+/** The key of the MCP servers a Claude launch gives its agent (none: 'none'). */
+export function claudeLaunchToolsKey(
+  servers: Readonly<Record<string, McpServerConfig>> | undefined
+): Promise<string> {
+  const identities = Object.entries(servers ?? {}).map(([name, config]): McpServerIdentity => ({
+    name,
+    ...(config.type ? { type: config.type } : {}),
+    ...('url' in config ? { url: config.url, headers: config.headers } : {}),
+    ...('command' in config ? { command: config.command, args: config.args, env: config.env } : {})
+  }))
+  return mcpServerSetKey(identities)
+}
+
+/** The kept agent launched with other MCP servers than `currentKey` names; one from a build that
+ *  noted none had none only if the launch now has none. */
+function claudeKeptToolsOutgrown(child: RelayedProviderChild, currentKey: string): boolean {
+  const word = noteWords(child).find((each) => each.startsWith(TOOLS_NOTE))
+  return (word?.slice(TOOLS_NOTE.length) ?? 'none') !== currentKey
 }
 
 export type ClaudeKeptMode = {
@@ -60,7 +96,7 @@ export function feedClaudeKeptModeLines(
     }
     confirmed = mode ?? confirmed
   }
-  const ownLaunch = child.attachResult?.launchNote === OWN_SETTINGS_NOTE
+  const ownLaunch = noteWords(child).includes(OWN_SETTINGS_NOTE)
   return {
     confirmedMode: confirmed,
     ownSettings: ownLaunch && launched != null && confirmed === launched
@@ -77,5 +113,28 @@ function readKeptMode(line: string): string | null | undefined {
     return isRecord(frame) ? readClaudeReportedPermissionMode(frame) : undefined
   } catch {
     return undefined
+  }
+}
+
+/** See `StructuredAgentSessionAdapter.keptLaunchOutgrown`, for an agent reattached for a launch
+ *  with these MCP servers (and app-bound grants it lacks, when `appBound`): a fresh agent is owed when it
+ *  lacks either, and not before the reattach's replay is acked; with no turn running, the owed
+ *  check waits for that ack first (bounded). */
+export async function claudeKeptLaunchOutgrown(
+  child: RelayedProviderChild,
+  launch: { mcpServers?: Readonly<Record<string, McpServerConfig>> },
+  appBound?: true
+): Promise<(turnRunning: boolean) => Promise<boolean | undefined>> {
+  // A key that can't be made matches no note: a fresh agent is owed.
+  const key = await claudeLaunchToolsKey(launch.mcpServers).catch(() => '')
+  const owed = appBound === true || claudeKeptToolsOutgrown(child, key)
+  return async (turnRunning) => {
+    if (owed && !turnRunning) {
+      await settleRelayedReplay(child)
+    }
+    if (!child.replayAcked()) {
+      return false
+    }
+    return owed || undefined
   }
 }

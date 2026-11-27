@@ -158,9 +158,8 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     }
   }
 
-  bindPromptItemId(sessionId: string, journalItemId: string, promptKey: string): void {
+  bindPromptItemId = (sessionId: string, journalItemId: string, promptKey: string): void =>
     this.sessions.get(sessionId)?.prompts.bindJournalItemId(journalItemId, promptKey)
-  }
 
   dispatch: StructuredAgentSessionAdapter['dispatch'] = (input) => {
     const { requestTimeoutMs, logger } = this.deps
@@ -210,6 +209,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   holdsDispatch = (sessionId: string): boolean => claudeHoldsDispatch(this.sessions.get(sessionId))
   requiresModelTransitionRestart = claudeOptions.claudeModelTransitionRestart(this.sessions)
   permissionModeRequiresAcquisition = keptPermission.requiresAcquisition(this.sessions)
+  keptLaunchOutgrown = keptPermission.launchOutgrown(this.sessions)
   applyPermissionMode = keptPermission.applyLive(this.sessions, () => this.deps.requestTimeoutMs)
   permissionPickedWhileStarting = keptPermission.pickedWhileStarting(this.sessions)
   runningPermissionMode = keptPermission.runningMode(this.sessions)

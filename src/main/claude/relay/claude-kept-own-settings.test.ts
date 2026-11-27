@@ -77,14 +77,4 @@ describe('a kept Claude agent and "your Claude settings"', () => {
       }
     }
   })
-
-  it('owes a fresh agent for every pick once the launch carries tool grants the kept agent lacks', () => {
-    for (const choice of LAUNCHES) {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the check reads only these fields
-      const session = {
-        connection: { kept: { ownSettings: true, freshOwed: true } }
-      } as unknown as ClaudeSession
-      expect(requiresAcquisition(new Map([['s', session]]))('s', choice)).toBe(true)
-    }
-  })
 })

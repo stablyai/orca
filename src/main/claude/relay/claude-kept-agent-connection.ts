@@ -20,7 +20,7 @@ import { withLostProviderOutcome } from '../../provider-process/provider-process
 import { withObservedProviderExit } from '../../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 import { createClaudeControlSurface } from '../sdk-transport/claude-agent-sdk-control-requests'
 import { relayedClaudeChildTree } from './claude-relayed-child-tree'
-import { feedClaudeKeptModeLines } from './claude-relay-kept-mode'
+import { claudeKeptLaunchOutgrown, feedClaudeKeptModeLines } from './claude-relay-kept-mode'
 import { DaemonProtocolError } from '../../daemon/protocol/daemon-errors'
 
 /** Present on a connection to an agent that kept running while Orca was closed. */
@@ -36,8 +36,8 @@ export type ClaudeKeptAgentRelay = {
   confirmedMode: string | null | undefined
   /** It runs the user's own Claude settings, as launched: only then does that choice keep it. */
   ownSettings: boolean
-  /** Reattached for a launch whose tool grants it lacks: the next send goes to a fresh agent. */
-  freshOwed?: true
+  /** Reattached for a launch whose tools it lacks: a fresh agent is due once its replay is acked. */
+  launchOutgrown: (turnRunning: boolean) => Promise<boolean | undefined>
 }
 
 export type ClaudeKeptAgentConnection = ClaudeStreamJsonConnection & {
@@ -138,7 +138,7 @@ export async function openKeptClaudeAgentConnection(
   chatKey: string,
   launch: ClaudeStreamJsonLaunch,
   handlers: ClaudeStreamJsonConnectionHandlers = {},
-  freshOwed?: true
+  appBound?: true
 ): Promise<ClaudeKeptAgentConnection | null> {
   let query: ClaudeKeptAgentQuery | null = null
   // Reattach only: nothing is spawned, so the command is never run.
@@ -154,6 +154,7 @@ export async function openKeptClaudeAgentConnection(
     return null
   }
   const { managed, child } = relayed
+  const launchOutgrown = await claudeKeptLaunchOutgrown(child, launch.options, appBound)
   const reattachedStdout = handlers.onReattach?.()
   // Ahead of every replayed or pending line, so a waiting request reads the mode Claude confirmed.
   const mode = feedClaudeKeptModeLines(child, handlers.onStdout)
@@ -314,7 +315,7 @@ export async function openKeptClaudeAgentConnection(
       taskIds: claudeRelayAttachTaskIds(child.attachResult),
       workCarried: child.attachResult?.openWork !== undefined,
       ...mode,
-      ...(freshOwed ? { freshOwed: true as const } : {})
+      launchOutgrown
     },
     exited: exited.promise,
     spawned: Promise.resolve(),

@@ -1,7 +1,10 @@
 import { withOrcaClaudeChatEntrypoint } from '../../../shared/agent-launch/startup/claude-chat-entrypoint'
 import { awaitProviderChildSpawn, type ProviderChild } from '../../provider-process/provider-child'
 import type { ProviderProcessSpawner } from '../../provider-process/provider-process-spawn'
-import type { SpawnOptions as ClaudeAgentSdkSpawnOptions } from '@anthropic-ai/claude-agent-sdk'
+import type {
+  McpServerConfig,
+  SpawnOptions as ClaudeAgentSdkSpawnOptions
+} from '@anthropic-ai/claude-agent-sdk'
 import { spawnProcess } from '@orca/process-host'
 import {
   spawnManagedProviderProcess,
@@ -13,7 +16,7 @@ import {
   providerRelayRouteInstalled
 } from '../../provider-relay/app-provider-relays'
 import { CLAUDE_RELAY_WORK_MARKERS } from '../relay/claude-relay-markers'
-import { claudeRelayKeepFor } from '../relay/claude-relay-kept-mode'
+import { claudeLaunchToolsKey, claudeRelayKeepFor } from '../relay/claude-relay-kept-mode'
 import { ClaudeRelaySpawnStandIn } from '../relay/claude-relay-spawn-stand-in'
 import { relayedClaudeChildTree } from '../relay/claude-relayed-child-tree'
 import { claudeRelaySdkRecordTaking } from '../relay/claude-relay-sdk-record-taking'
@@ -78,6 +81,8 @@ export function createClaudeCodeProcessSpawn(
     prefixArgs?: readonly string[]
     /** The chat whose agent should run under the terminal daemon, so it outlives a restart. */
     relayChatKey?: string
+    /** Its MCP servers, keyed in the relay's note so a reattach knows the set it launched with. */
+    options?: { mcpServers?: Readonly<Record<string, McpServerConfig>> }
   },
   onStdout?: (chunk: Buffer | string) => void
 ): ClaudeCodeProcessSpawn {
@@ -122,10 +127,12 @@ export function createClaudeCodeProcessSpawn(
         observeStdoutWithReader(standIn.stdout, onStdout)
       }
       bound = (async () => {
+        // A key that can't be made leaves the note without one: a later reattach starts afresh.
+        const toolsKey = await claudeLaunchToolsKey(launch?.options?.mcpServers).catch(() => '')
         const kept = await launchRelayedProviderProcess(processLaunch, {
           chatKey: relayChatKey,
           markers: CLAUDE_RELAY_WORK_MARKERS,
-          keep: claudeRelayKeepFor(args),
+          keep: claudeRelayKeepFor(args, toolsKey),
           inheritedEnv,
           only: 'spawn'
         })

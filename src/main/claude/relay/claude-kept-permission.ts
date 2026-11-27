@@ -188,9 +188,6 @@ export function requiresAcquisition(
     if (!session) {
       return undefined
     }
-    if (keptClaudeAgentRelay(session.connection)?.freshOwed) {
-      return true
-    }
     // Claude's own settings have no mode to send: only an agent launched on them and still in the
     // mode they gave it has them; any other (a live pick, an earlier app's launch) is replaced.
     if (mode === 'own') {
@@ -200,6 +197,16 @@ export function requiresAcquisition(
       return own ? undefined : true
     }
     return bypassRefused(session, mode)
+  }
+}
+
+/** See `StructuredAgentSessionAdapter.keptLaunchOutgrown`: a kept agent the launch's tools outgrew
+ *  is replaced, like a tools change, only once its replay is durable; none answers for others. */
+export function launchOutgrown(sessions: Sessions): NonNullable<Adapter['keptLaunchOutgrown']> {
+  return async (sessionId) => {
+    const session = keptSession(sessions, sessionId)
+    const running = (session?.translator?.currentTurnId ?? null) !== null
+    return session ? keptClaudeAgentRelay(session.connection)?.launchOutgrown(running) : undefined
   }
 }
 
