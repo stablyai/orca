@@ -102,30 +102,37 @@ const NOTIFIER_TARGETS: { [K in keyof RuntimeNotifier]-?: 'event' | Target } = {
   claudeAccountSelected: 'event'
 }
 
+const NOTIFIER_METHOD_TARGETS = new Map<string, 'event' | Target>(Object.entries(NOTIFIER_TARGETS))
+
+/** True for every notifier method: NOTIFIER_TARGETS names each, by its type. */
+function isNotifierMethod(name: string | symbol): name is keyof RuntimeNotifier {
+  return typeof name === 'string' && NOTIFIER_METHOD_TARGETS.has(name)
+}
+
 /** The notifier as the runtime holds it: a call a teammate may not make throws before the window sees it. */
 export function guardNotifierForTeammates(
   notifier: RuntimeNotifier,
   admit: HostWindowAdmission,
   lookups: Lookups
 ): RuntimeNotifier {
-  const guarded: RuntimeNotifier = { ...notifier }
-  for (const [name, target] of Object.entries(NOTIFIER_TARGETS)) {
-    // Notifiers are plain objects (runtime-window-lifecycle.ts): their methods are own properties.
-    const method: unknown = Object.getOwnPropertyDescriptor(notifier, name)?.value
-    if (target === 'event' || typeof method !== 'function') {
-      continue
-    }
-    Object.defineProperty(guarded, name, {
-      enumerable: true,
-      value: (...args: unknown[]): unknown => {
+  return new Proxy(notifier, {
+    get(held, name) {
+      if (!isNotifierMethod(name)) {
+        return undefined
+      }
+      const method = held[name]
+      const target = NOTIFIER_METHOD_TARGETS.get(name)
+      if (!target || target === 'event' || typeof method !== 'function') {
+        return method
+      }
+      return (...args: unknown[]): unknown => {
         if (!admit(target(args, lookups))) {
           throw new TeammateHostTabWriteError(null, `host window ${name}`)
         }
-        return method.apply(notifier, args)
+        return Function.prototype.apply.call(method, held, args)
       }
-    })
-  }
-  return guarded
+    }
+  })
 }
 
 // Every renderer request channel; one not listed is refused to a teammate.
