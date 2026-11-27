@@ -2,6 +2,7 @@ import { getCellHeight, getTotalScale } from './cell-metrics'
 import { updateScrollIndicator } from './viewport-transform'
 import type { TerminalDocumentScope } from '../document-scope'
 import { cancelDocumentFrame, scheduleDocumentFrame } from '../document-frame-registry'
+import { shouldRouteScrollToTerminalInput } from '../surface-input/mouse-input-encoding'
 
 export function clampNormalScrollLines(scope: TerminalDocumentScope, lines: number) {
   if (!scope.term || !scope.term.buffer || !scope.term.buffer.active || lines === 0) {
@@ -86,6 +87,49 @@ export function queuedNormalBufferScrollReachesRow(scope: TerminalDocumentScope)
     effectiveCellH > 0 &&
     Math.abs(scope.smoothScrollOffsetY - scope.pendingNormalScrollDeltaY) >= effectiveCellH
   )
+}
+
+// Coast physics shared with the surface momentum loop in surface-touch-gestures.
+export const RELEASE_VELOCITY_MAX_AGE_MS = 100
+
+export const COAST_FRAME_MS = 16
+
+export const COAST_FRICTION = 0.972
+
+export const COAST_MIN_VEL = 0.012
+
+// Tap dispatch decides the tap before the surface touchend starts momentum, so predict the coast: a release that would carry a full row is a flick, not a tap.
+export function releaseWouldCoastARow(scope: TerminalDocumentScope) {
+  if (Date.now() - scope.touchGesture.lastTime > RELEASE_VELOCITY_MAX_AGE_MS) {
+    return false
+  }
+  const vel = Math.abs(scope.touchGesture.velY)
+  if (vel <= COAST_MIN_VEL) {
+    return false
+  }
+  // Mirror momentumStep: friction before each frame delta and a stop at the floor velocity that an endless geometric sum ignores.
+  let carry = 0
+  let v = vel
+  for (;;) {
+    v *= COAST_FRICTION
+    if (v < COAST_MIN_VEL) {
+      break
+    }
+    carry += v * COAST_FRAME_MS
+  }
+  // The release inherits the gesture’s uncommitted sub-row offset, signed into the flick’s direction so
+  // opposing movement reduces the predicted carry instead of being clipped to zero.
+  // A queued frame whose deltas netted to zero is a reset, not an offset against the visible row.
+  const queuedFrameReset =
+    scope.normalScrollFrameId !== null && scope.pendingNormalScrollDeltaY === 0
+  const rawPending = shouldRouteScrollToTerminalInput(scope)
+    ? scope.touchGesture.accumDelta
+    : queuedFrameReset
+      ? 0
+      : scope.pendingNormalScrollDeltaY - scope.smoothScrollOffsetY
+  const pending = rawPending * Math.sign(scope.touchGesture.velY)
+  const effectiveCellH = getCellHeight(scope) * getTotalScale(scope)
+  return effectiveCellH > 0 && carry + pending >= effectiveCellH
 }
 
 export function resetSmoothScrollOffset(scope: TerminalDocumentScope) {
