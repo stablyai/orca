@@ -12,8 +12,9 @@ import { availableBytesIn, removeQuietly, sizeOf } from './orchestration-db-comp
 const MIB = 1024 * 1024
 // Maintenance minutes with no write before copying; a write after the copy makes it stale.
 const QUIET_TICKS = 5
-// Each copy rewrites the live data, so a file whose copies keep going stale waits longer each time:
-// an hour after the first, doubling up to a day, and never gives up.
+// Each copy rewrites the live data, so a file whose copies keep going stale waits longer each time: an
+// hour after the first, doubling up to a day. After this many it gives up, and the file keeps its size.
+const MAX_COPIES = 3
 const ATTEMPT_SPACING_MS = 60 * 60_000
 const MAX_ATTEMPT_SPACING_MS = 24 * ATTEMPT_SPACING_MS
 // The copy blocks no one; this only bounds the disk and CPU it uses, at a slow disk's pace.
@@ -67,7 +68,8 @@ export class OrchestrationDbCompaction {
   // Copies this file has cost across sessions, and when the last one started.
   private attempts = 0
   private lastAttemptAt = Number.NEGATIVE_INFINITY
-  private diskShortAt = Number.NEGATIVE_INFINITY
+  // A full disk or a pinned WAL: retried hourly, without counting a copy.
+  private heldAt = Number.NEGATIVE_INFINITY
   private copying: CompactionChild | undefined
   private running: Promise<boolean> | undefined
   private ready: { stamp: string; at: number } | undefined
@@ -123,8 +125,8 @@ export class OrchestrationDbCompaction {
       this.attempts = count || 0
       this.lastAttemptAt = at || Number.NEGATIVE_INFINITY
     }
-    // Stopped during the reads above, or not compacting here.
-    if (this.stopped || !this.isEnabled()) {
+    // Stopped during the reads above, not compacting here, or every copy went stale before a quit used it.
+    if (this.stopped || !this.isEnabled() || (this.attempts >= MAX_COPIES && !this.ready)) {
       return
     }
     const state = readFileState(this.orchestrationDb.db)
@@ -149,26 +151,16 @@ export class OrchestrationDbCompaction {
     if (
       this.quietTicks < this.quietTicksNeeded ||
       now - this.lastAttemptAt < attemptSpacingMs(this.attempts) ||
-      now - this.diskShortAt < ATTEMPT_SPACING_MS
+      now - this.heldAt < ATTEMPT_SPACING_MS
     ) {
       return
     }
     // Room for the copy beside the file, with as much again to spare.
     if ((await availableBytesIn(dirname(this.filename))) < 2 * state.liveBytes) {
-      this.diskShortAt = now
+      this.heldAt = now
       return
     }
     if (this.stopped) {
-      return
-    }
-    this.attempts++
-    this.lastAttemptAt = now
-    // Counted before it starts, so a quit or crash mid-copy still counts.
-    const counted = await writeFile(this.attemptsPath, `${this.attempts} ${now}`).then(
-      () => true,
-      () => false
-    )
-    if (!counted || this.stopped) {
       return
     }
     // Drained off main first, so a valid copy leaves quit's checkpoint on main nothing to copy. A drained WAL
@@ -185,7 +177,18 @@ export class OrchestrationDbCompaction {
     // No copy in vain: a reader pinned frames, quit would refuse the WAL, or a commit since the drain left
     // frames for main to copy at quit (only a truncation, which empties the WAL, may move the stamp).
     const settled = walAfter === 0 || (walAfter <= MAX_WAL_BYTES && stamp === beforeDrain)
-    if (!drained || !settled || this.stopped) {
+    if (!drained || !settled) {
+      this.heldAt = now
+      return
+    }
+    this.attempts++
+    this.lastAttemptAt = now
+    // Counted before it starts, so a quit or crash mid-copy still counts.
+    const counted = await writeFile(this.attemptsPath, `${this.attempts} ${now}`).then(
+      () => true,
+      () => false
+    )
+    if (!counted || this.stopped) {
       return
     }
     // Doubled with each attempt, so a disk slower than assumed still finishes one in the end.
