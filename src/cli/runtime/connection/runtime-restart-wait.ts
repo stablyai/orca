@@ -10,8 +10,8 @@ import { isProcessRunning } from './runtime-pid-liveness'
 const ABANDONED_QUIT_AFTER_MS = 45_000
 export const RUNTIME_RESTART_WAIT_BUDGET_MS = 30_000
 const RUNTIME_RESTART_POLL_MS = 1_000
-// A restarted runtime publishes metadata about half a second before its graph serves.
-export const RUNTIME_GRAPH_READY_POLL_MS = 250
+// A restarted runtime publishes metadata about half a second before its graph serves; back off from there.
+export const RUNTIME_GRAPH_READY_FIRST_POLL_MS = 250
 
 // Socket errors that fire before connect, so the request was never sent.
 const CONNECT_FAILURE_CODES = new Set(['ECONNREFUSED', 'ENOENT', 'ENOTSOCK'])
@@ -67,10 +67,15 @@ export class RuntimeRestartWait {
     this.budgetMs = options.budgetMs ?? RUNTIME_RESTART_WAIT_BUDGET_MS
   }
 
-  /** A reached runtime ends the restart, so a long-lived client gets a fresh budget next time. */
+  /** A served request ends the restart, so a long-lived client gets a fresh budget next time. */
   settle(runtimeId: string): void {
     this.deadline = null
     this.restart = null
+    this.servedBy = runtimeId
+  }
+
+  /** A status answer names the runtime but doesn't prove its graph serves, so the restart stays open. */
+  noteAnsweredBy(runtimeId: string): void {
     this.servedBy = runtimeId
   }
 
@@ -102,6 +107,8 @@ export class RuntimeRestartWait {
     this.deadline ??= now + this.budgetMs
     const remaining = this.deadline - now
     if (remaining <= 0) {
+      // A later call on a reused client gets its own budget.
+      this.deadline = null
       return false
     }
     await this.sleep(Math.min(RUNTIME_RESTART_POLL_MS, remaining))

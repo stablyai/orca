@@ -10,7 +10,7 @@ import { isRequestUnsent } from './client-error-recovery'
 import { runtimeAccessDeniedError } from './runtime-access-denied'
 import {
   isConnectFailureCode,
-  RUNTIME_GRAPH_READY_POLL_MS,
+  RUNTIME_GRAPH_READY_FIRST_POLL_MS,
   type RuntimeRestartWait
 } from './runtime-restart-wait'
 import {
@@ -47,6 +47,7 @@ export async function sendLocalRuntimeRequest<TResult>(
     restartWait.restart && isUnavailable(error)
       ? runtimeRestartingError(restartWait.restart)
       : error
+  let graphPollMs = RUNTIME_GRAPH_READY_FIRST_POLL_MS
   for (;;) {
     let metadata: RuntimeMetadata
     try {
@@ -82,8 +83,9 @@ export async function sendLocalRuntimeRequest<TResult>(
       restartWait.restart &&
       request.method !== 'status.get' &&
       !(await isGraphReady(metadata)) &&
-      (await restartWait.pause(RUNTIME_GRAPH_READY_POLL_MS))
+      (await restartWait.pause(graphPollMs))
     ) {
+      graphPollMs = Math.min(graphPollMs * 2, 1_000)
       continue
     }
     let socketErrorCode: unknown
@@ -103,7 +105,11 @@ export async function sendLocalRuntimeRequest<TResult>(
           ...(request.requestSelection ? { requestSelection: request.requestSelection } : {})
         }
       )
-      restartWait.settle(metadata.runtimeId)
+      if (request.method === 'status.get') {
+        restartWait.noteAnsweredBy(metadata.runtimeId)
+      } else {
+        restartWait.settle(metadata.runtimeId)
+      }
       return { metadata, response }
     } catch (error) {
       // Only a refused connect proves nothing was sent; a dropped request may have applied.
@@ -123,8 +129,14 @@ export async function sendLocalRuntimeRequest<TResult>(
 
 async function isGraphReady(metadata: RuntimeMetadata): Promise<boolean> {
   try {
-    const status = await sendRequest<RuntimeStatus>(metadata, 'status.get', undefined, 1000)
-    return status.ok && status.result.graphStatus === 'ready'
+    const status = await sendRequest<{ graphStatus?: RuntimeStatus['graphStatus'] }>(
+      metadata,
+      'status.get',
+      { probe: true },
+      1000
+    )
+    // Runtimes that predate graphStatus in the probe can't say; send as before.
+    return status.ok && (status.result.graphStatus ?? 'ready') === 'ready'
   } catch {
     return false
   }

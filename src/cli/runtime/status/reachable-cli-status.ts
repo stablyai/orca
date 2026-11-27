@@ -1,7 +1,7 @@
 import type { CliStatusResult } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RuntimeRpcSuccess } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { RuntimeClient } from '../client'
-import { RUNTIME_GRAPH_READY_POLL_MS, RuntimeRestartWait } from '../connection/runtime-restart-wait'
+import { RuntimeRestartWait } from '../connection/runtime-restart-wait'
 import { runtimeRestartingError } from '../connection/runtime-restarting-error'
 
 /** Status for a capability preflight: waits out an announced local restart like any other call. */
@@ -19,9 +19,7 @@ export async function readReachableCliStatus(
     ) {
       return status
     }
-    const retry = reachable
-      ? await restartWait.pause(RUNTIME_GRAPH_READY_POLL_MS)
-      : await restartWait.shouldRetry()
+    const retry = reachable ? await restartWait.pause() : await restartWait.shouldRetry()
     if (!retry) {
       if (!reachable && restartWait.restart) {
         throw runtimeRestartingError(restartWait.restart)
