@@ -49,6 +49,7 @@ import {
 
 const REPO = '/fixture/repo'
 const WORKTREE = '/fixture/wt'
+const DRIVE_REPO = 'C:\\fixture\\repo'
 const ORIGIN = 'https://example.invalid/acme/app.git'
 const FORK = 'https://example.invalid/fork/app.git'
 const REMOTES = [
@@ -86,13 +87,47 @@ async function answerResolver(pushDefault?: string, cwd = REPO): Promise<void> {
   ;(await take('remote', cwd)).resolve({ stdout: REMOTES, stderr: '' })
 }
 
-async function releaseSignature(index: number, value: string | undefined): Promise<void> {
+async function releaseSignature(
+  index: number,
+  value: string | undefined,
+  afterResume?: () => void
+): Promise<void> {
   await flush()
   const gate = h.signatureGates[index]
   if (!gate) {
     throw new Error(`No signature read #${index}`)
   }
   gate(value)
+  if (afterResume) {
+    queueMicrotask(afterResume)
+  }
+}
+
+function prepareDriveRouteFlip(): () => void {
+  Object.defineProperty(process, 'platform', { value: 'win32' })
+  let distro: string | undefined
+  setLocalGitRuntimeRouter(() => distro)
+  return () => {
+    distro = 'Ubuntu'
+  }
+}
+
+async function startTornUpstreamRetry() {
+  h.holdSignatures = true
+  const lookup = getTrackedUpstreamBranch(DRIVE_REPO, 'feature')
+  await releaseSignature(0, 'S0')
+  await answerRefs('refs/remotes/origin/first-attempt', DRIVE_REPO)
+  await releaseSignature(1, 'S1')
+  await releaseSignature(2, 'S1')
+  return { lookup, refs: await take('for-each-ref', DRIVE_REPO) }
+}
+
+function completeRetryRefs(refs: PendingGit, completed: boolean): void {
+  if (completed) {
+    refs.resolve({ stdout: 'refs/heads/feature\0refs/remotes/fork/retry\n', stderr: '' })
+  } else {
+    refs.reject(new Error('raw capture aborted'))
+  }
 }
 
 function entryFor(path = REPO) {
@@ -308,6 +343,22 @@ describe('tracked upstream snapshot concurrency', () => {
     await expect(waiter).resolves.toEqual({ remoteName: 'fork', branchName: 'current' })
   })
 
+  it('re-probes when a signed host join cannot read its current signature', async () => {
+    const older = getTrackedUpstreamBranch(REPO, 'feature')
+    const refs = await take('for-each-ref')
+    const waiter = getTrackedUpstreamBranch(REPO, 'feature')
+    h.holdSignatures = true
+    refs.resolve({ stdout: 'refs/heads/feature\0refs/remotes/origin/feature\n', stderr: '' })
+    await releaseSignature(0, 'S0')
+    await expect(older).resolves.toEqual({ remoteName: 'origin', branchName: 'feature' })
+    expect(entryFor()?.gitConfigSignature).toBe('S0')
+    h.holdSignatures = false
+    h.signature = 'S1'
+    await releaseSignature(1, undefined)
+    await answerRefs('refs/remotes/fork/current')
+    await expect(waiter).resolves.toEqual({ remoteName: 'fork', branchName: 'current' })
+  })
+
   it('re-probes when a second unsigned join is already expired', async () => {
     const now = 1_000_000
     const clock = vi.spyOn(Date, 'now').mockReturnValue(now)
@@ -381,15 +432,20 @@ describe('tracked upstream snapshot concurrency', () => {
       'Cannot establish the branch review source'
     )
     const refs = await take('for-each-ref')
-    expect(entryFor()).toBe(entry)
-    await expect(getTrackedUpstreamBranch(REPO, 'feature')).resolves.toEqual({
-      remoteName: 'origin',
-      branchName: 'feature'
-    })
+    const duringRefresh = entryFor()
+    const background = getTrackedUpstreamBranch(REPO, 'feature')
     refs.resolve({ stdout: 'refs/heads/feature\0refs/remotes/fork/unpublished\n', stderr: '' })
     ;(await take('config')).reject(new Error('config unreadable'))
     await review
-    expect(entryFor()).toBe(entry)
+    const afterRefresh = entryFor()
+    await flush()
+    // Let the older behavior settle too so this regression can run against C1.
+    h.pending
+      .shift()
+      ?.resolve({ stdout: 'refs/heads/feature\0refs/remotes/fork/re-probed\n', stderr: '' })
+    await expect(background).resolves.toEqual({ remoteName: 'origin', branchName: 'feature' })
+    expect(duringRefresh).toBe(entry)
+    expect(afterRefresh).toBe(entry)
     await expect(getTrackedUpstreamBranch(REPO, 'feature')).resolves.toEqual({
       remoteName: 'origin',
       branchName: 'feature'
@@ -488,6 +544,72 @@ describe('tracked upstream snapshot concurrency', () => {
     await expect(hit).resolves.toEqual({ remoteName: 'fork', branchName: 'current' })
     expect(trackedUpstreamSnapshotCache.get(hostKey)).toBe(host)
     expect(entryFor(repo)?.gitConfigSignature).toBeUndefined()
+  })
+
+  it.each([true, false])(
+    'retains only the retry raw map after its final route check (capture completed: %s)',
+    async (completed) => {
+      const flipRoute = prepareDriveRouteFlip()
+      const hostKey = getTrackedUpstreamRoute(DRIVE_REPO).cacheKey
+      const { lookup, refs } = await startTornUpstreamRetry()
+      const probe = trackedUpstreamSnapshotInFlight.get(hostKey)
+      completeRetryRefs(refs, completed)
+      await releaseSignature(3, 'S1', flipRoute)
+
+      expect(await probe).toMatchObject({ coherent: true, probeFailed: !completed })
+      await expect(lookup).resolves.toEqual(
+        completed ? { remoteName: 'fork', branchName: 'retry' } : null
+      )
+      expect(trackedUpstreamSnapshotCache.size).toBe(0)
+      expect(h.pending).toEqual([])
+    }
+  )
+
+  it.each([true, false])(
+    'retains only the retry raw map when superseder validation sees a route flip (capture completed: %s)',
+    async (completed) => {
+      const flipRoute = prepareDriveRouteFlip()
+      const hostKey = getTrackedUpstreamRoute(DRIVE_REPO).cacheKey
+      const { lookup, refs } = await startTornUpstreamRetry()
+      const forced = getTrackedUpstreamBranch(DRIVE_REPO, 'feature', null, {}, true)
+      await releaseSignature(3, 'S1')
+      await answerRefs('refs/remotes/origin/superseder', DRIVE_REPO)
+      await releaseSignature(4, 'S1')
+      await expect(forced).resolves.toEqual({ remoteName: 'origin', branchName: 'superseder' })
+      const persisted = trackedUpstreamSnapshotCache.get(hostKey)
+
+      completeRetryRefs(refs, completed)
+      await releaseSignature(5, 'S1')
+      await flush()
+      expect(h.signatureGates).toHaveLength(7)
+      flipRoute()
+      await releaseSignature(6, 'S1')
+      await expect(lookup).resolves.toEqual(
+        completed ? { remoteName: 'fork', branchName: 'retry' } : null
+      )
+      expect(trackedUpstreamSnapshotCache.get(hostKey)).toBe(persisted)
+      expect(entryFor(DRIVE_REPO)).toBeUndefined()
+      expect(h.pending).toEqual([])
+    }
+  )
+
+  it('rejects a review snapshot when the final route check fails after its bounded retry', async () => {
+    const flipRoute = prepareDriveRouteFlip()
+    h.holdSignatures = true
+    const lookup = expect(getReviewBranchSource(DRIVE_REPO, 'feature')).rejects.toThrow(
+      'Cannot establish the branch review source'
+    )
+    await releaseSignature(0, 'S0')
+    await answerRefs('refs/remotes/origin/first-attempt', DRIVE_REPO)
+    await answerResolver(undefined, DRIVE_REPO)
+    await releaseSignature(1, 'S1')
+    await releaseSignature(2, 'S1')
+    await answerRefs('refs/remotes/fork/retry', DRIVE_REPO)
+    await answerResolver('fork', DRIVE_REPO)
+    await releaseSignature(3, 'S1', flipRoute)
+    await lookup
+    expect(trackedUpstreamSnapshotCache.size).toBe(0)
+    expect(h.pending).toEqual([])
   })
 
   it('lets a forced lookup bypass an in-flight probe without the old probe publishing', async () => {

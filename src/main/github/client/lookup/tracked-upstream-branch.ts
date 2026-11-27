@@ -90,7 +90,13 @@ async function getTrackedUpstreamSnapshot(
   }
   // A probe that saw config or its Git route change may mix both sides; one fresh attempt is usually coherent.
   const second = await lookupTrackedUpstreamSnapshot(...args)
-  return second.coherent ? second : { ...second, probeFailed: true }
+  return second.coherent ? second : failTrackedUpstreamSnapshot(second)
+}
+
+function failTrackedUpstreamSnapshot(
+  result: TrackedUpstreamSnapshotProbeResult
+): TrackedUpstreamSnapshotProbeResult {
+  return { ...result, cacheable: false, coherent: false, probeFailed: true }
 }
 
 function snapshotFromEntry(
@@ -194,7 +200,7 @@ async function lookupTrackedUpstreamSnapshot(
   try {
     result = await probe
     if (!routeIsCurrent()) {
-      return TRACKED_UPSTREAM_ROUTE_CHANGED
+      return failTrackedUpstreamSnapshot(result)
     }
     superseded = trackedUpstreamSnapshotGenerations.get(cacheKey) !== generation
     if (result.cacheable && !superseded && result.expiresAt > Date.now()) {
@@ -223,7 +229,7 @@ async function lookupTrackedUpstreamSnapshot(
     if (fresh && fresh.publishedSeq > startSeq && serves(fresh)) {
       const valid = await validate(fresh)
       if (!routeIsCurrent()) {
-        return TRACKED_UPSTREAM_ROUTE_CHANGED
+        return failTrackedUpstreamSnapshot(result)
       }
       if (valid) {
         return snapshotFromEntry(fresh)
