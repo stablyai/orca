@@ -11,6 +11,7 @@ import { columnLetters, columnNumber, quotedTab, splitA1 } from '../../shared/go
 import { TOOL_OUTPUT_MAX_CHARS } from '../../shared/tool-output-limits'
 import { GoogleToolError, parseGoogleJson, type GoogleApi } from './google-api-client'
 import { requireDriveId } from './google-drive-files'
+import { indexSheetRowsByKey } from './google-sheets-upsert-index'
 
 const SHEETS = 'https://sheets.googleapis.com/v4/spreadsheets'
 // Room under the output cap for Orca's own lines around the table.
@@ -252,6 +253,7 @@ export async function upsertSheet(
   const existing = current.values.map((row) => row.map((cell) => asText(cell).trim()))
   const header = existing[0] ?? []
   const keyIndex = keyColumn(header, args.key, origin.column)
+  const rowForKey = indexSheetRowsByKey(existing, keyIndex)
   // Keys match the stored text; the formula escape applies only to what gets written.
   const formulas = args.formulas === true
   // A header row passed along with the data is not a row to add.
@@ -263,8 +265,8 @@ export async function upsertSheet(
     if (!key) {
       throw new GoogleToolError(`A row has no value in the key column ${args.key}.`)
     }
-    const at = existing.findIndex((line, index) => index > 0 && line[keyIndex] === key)
-    if (at === -1) {
+    const at = rowForKey.get(key)
+    if (at === undefined) {
       additions.push(row)
       continue
     }
