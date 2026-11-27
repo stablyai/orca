@@ -1,25 +1,24 @@
 import { randomBytes } from 'node:crypto'
-import { linkSync, rmSync } from 'node:fs'
-import { readFile, stat } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { link, readFile, rm, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import {
-  bestEffortFsyncDirectorySync,
-  writeSecureFile
-} from '../../shared/secure-storage/secure-file'
-import { readPrivateWindowsFile } from '../../shared/secure-storage/secure-path-windows-acl'
+  getSecretStore,
+  hasSecretStore,
+  type SecretStore
+} from '../../shared/secure-storage/secret-store'
 
-const SECRET_FILE = 'mcp-server-set-key.secret'
+const SECRET_FILE = 'mcp-server-set-key.sealed'
 const SECRET_HEX = /^[0-9a-f]{64}$/
 
 let secret: Promise<Buffer> | null = null
 
 /**
- * This install's key for `mcpServerSetKey`: 32 random bytes in userData, published whole and
- * restricted to this user (an owner-only ACL on Windows), and reused only while it still is. One
- * that can't be read privately, or stored where only this user can read it, stays in memory for
- * this run alone: a kept agent's next launch then reads as changed and gets a fresh agent, which
- * is safe.
+ * This install's key for `mcpServerSetKey`: 32 random bytes kept in userData sealed by Orca's
+ * secret store (the OS keychain, or a key kept on this host), so the file itself needs no
+ * privacy. Where nothing can seal it, or it can't be read back, the key lives in memory for this
+ * run alone: a kept agent's next launch then reads as changed and gets a fresh agent, which is
+ * safe.
  */
 export function mcpServerSetKeySecret(): Promise<Buffer> {
   secret ??= loadSecret().catch(() => randomBytes(32))
@@ -29,31 +28,29 @@ export function mcpServerSetKeySecret(): Promise<Buffer> {
 const hasCode = (error: unknown, code: string): boolean =>
   error instanceof Error && 'code' in error && error.code === code
 
-/** The kept secret, or null when there is none; throws when it isn't private or well formed. */
-async function readPrivate(path: string): Promise<Buffer | null> {
-  let text: string
-  if (process.platform === 'win32') {
-    // The ACL is checked on the same handle the bytes are read through.
-    const bytes = readPrivateWindowsFile(path, 128)
-    if (!bytes) {
+function sealingStore(): SecretStore | null {
+  if (!hasSecretStore()) {
+    return null
+  }
+  const store = getSecretStore()
+  const kind = store.describeSealing?.().kind
+  return store.isEncryptionAvailable() && (kind === 'os-keychain' || kind === 'host-key')
+    ? store
+    : null
+}
+
+/** The kept secret, or null when there is none; throws when it can't be unsealed or is malformed. */
+async function readSealed(store: SecretStore, path: string): Promise<Buffer | null> {
+  let sealed: Buffer
+  try {
+    sealed = await readFile(path)
+  } catch (error) {
+    if (hasCode(error, 'ENOENT')) {
       return null
     }
-    text = bytes.toString('utf8')
-  } else {
-    try {
-      const info = await stat(path)
-      if ((info.mode & 0o077) !== 0 || info.uid !== process.getuid?.()) {
-        throw new Error('MCP server set key secret is readable by others')
-      }
-      text = await readFile(path, 'utf8')
-    } catch (error) {
-      if (hasCode(error, 'ENOENT')) {
-        return null
-      }
-      throw error
-    }
+    throw error
   }
-  const kept = text.trim()
+  const kept = store.decryptString(sealed).trim()
   if (!SECRET_HEX.test(kept)) {
     throw new Error('MCP server set key secret is malformed')
   }
@@ -61,39 +58,35 @@ async function readPrivate(path: string): Promise<Buffer | null> {
 }
 
 async function loadSecret(): Promise<Buffer> {
+  const store = sealingStore()
+  if (!store) {
+    return randomBytes(32)
+  }
   const path = join(getCanonicalUserDataPath(), SECRET_FILE)
-  const kept = await readPrivate(path)
+  const kept = await readSealed(store, path)
   if (kept) {
     return kept
   }
   const fresh = randomBytes(32)
+  const hex = fresh.toString('hex')
+  const sealed = await (store.encryptStringAsync?.(hex) ??
+    Promise.resolve(store.encryptString(hex)))
   const staging = `${path}.${process.pid}.${randomBytes(4).toString('hex')}.staging`
   try {
-    // Staged whole and restricted first, then linked in: no reader sees a partial or open file.
-    if (!writeSecureFile(staging, fresh.toString('hex'), { durable: true, ownerOnly: true })) {
-      return fresh
+    // Written whole, then linked in: no reader sees a partial file, and the first to link wins.
+    await writeFile(staging, sealed)
+    await link(staging, path)
+    return fresh
+  } catch (error) {
+    if (!hasCode(error, 'EEXIST')) {
+      throw error
     }
-    try {
-      linkSync(staging, path)
-    } catch (error) {
-      if (!hasCode(error, 'EEXIST')) {
-        throw error
-      }
-      // Another process published first: its secret is the install's.
-      const winner = await readPrivate(path)
-      if (!winner) {
-        throw error
-      }
-      return winner
+    const winner = await readSealed(store, path)
+    if (!winner) {
+      throw error
     }
+    return winner
   } finally {
-    // Once published, a failed cleanup or sync never replaces the key this run uses.
-    try {
-      rmSync(staging, { force: true })
-    } catch {}
+    await rm(staging, { force: true }).catch(() => undefined)
   }
-  try {
-    bestEffortFsyncDirectorySync(dirname(path))
-  } catch {}
-  return fresh
 }
