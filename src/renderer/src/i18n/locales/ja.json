@@ -1538,11 +1538,36 @@
         "browserBlockGuidanceMany": "ブラウザープロセス (PID {{pids}}) を終了してから再試行してください。サーバーは動作し続けます。",
         "blocked": "ブロック中",
         "heldNarrow": "{{version}} {{date}}から",
-        "notes": "ノート"
+        "notes": "ノート",
+        "checking": "確認中…",
+        "upToDate": "最新",
+        "heldUntil": "{{version}} は {{date}} まで保留",
+        "available": "{{version}} を利用可能",
+        "latestForMac": "この Mac の最新版",
+        "ready": "{{version}} 準備完了",
+        "installing": "{{version}} をインストール中…",
+        "installOnQuit": "終了してインストール",
+        "installBlocked": "インストールがブロックされました",
+        "updateFailed": "更新に失敗しました",
+        "checkFailed": "確認に失敗しました",
+        "failed": "失敗",
+        "hideDetails": "詳細を隠す",
+        "showDetails": "詳細を表示",
+        "hide": "隠す",
+        "details": "詳細",
+        "copyDetails": "詳細をコピー",
+        "copied": "コピーしました",
+        "copyFailed": "詳細をコピーできませんでした。",
+        "downloadingPercent": "ダウンロード中 {{percent}}"
       },
       "action": {
         "checkHeldNow": "今すぐ {{version}} を確認します。遅延設定は変わりません。",
-        "check": "確認"
+        "check": "確認",
+        "update": "更新",
+        "retry": "再試行",
+        "skipDelay": "遅延をスキップ",
+        "restart": "再起動",
+        "checkForUpdates": "アップデートを確認"
       },
       "channel": {
         "unknownVersion": "Orca {{version}} はリリースビルドではないため、ここではチャネルを変更できません。"

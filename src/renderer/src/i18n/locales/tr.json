@@ -2291,11 +2291,36 @@
         "browserBlockGuidanceMany": "Tarayıcı işlemlerini (PID {{pids}}) sonlandırıp yeniden deneyin. Sunucuları çalışmaya devam eder.",
         "blocked": "Engellendi",
         "heldNarrow": "{{version}}: {{date}}",
-        "notes": "Notlar"
+        "notes": "Notlar",
+        "checking": "Denetleniyor…",
+        "upToDate": "Güncel",
+        "heldUntil": "{{version}} {{date}} tarihine kadar beklemede",
+        "available": "{{version}} mevcut",
+        "latestForMac": "Bu Mac için en son",
+        "ready": "{{version}} kuruluma hazır",
+        "installing": "{{version}} yükleniyor…",
+        "installOnQuit": "Yüklemek için çıkın",
+        "installBlocked": "Yükleme engellendi",
+        "updateFailed": "Güncelleme başarısız",
+        "checkFailed": "Denetim başarısız",
+        "failed": "Başarısız",
+        "hideDetails": "Ayrıntıları gizle",
+        "showDetails": "Ayrıntıları göster",
+        "hide": "Gizle",
+        "details": "Ayrıntılar",
+        "copyDetails": "Ayrıntıları kopyala",
+        "copied": "Kopyalandı",
+        "copyFailed": "Ayrıntılar kopyalanamadı.",
+        "downloadingPercent": "İndiriliyor {{percent}}"
       },
       "action": {
         "checkHeldNow": "{{version}} sürümünü şimdi denetle. Gecikme ayarınız aynı kalır.",
-        "check": "Denetle"
+        "check": "Denetle",
+        "update": "Güncelle",
+        "retry": "Yeniden dene",
+        "skipDelay": "Gecikmeyi atla",
+        "restart": "Yeniden başlat",
+        "checkForUpdates": "Güncellemeleri denetle"
       },
       "channel": {
         "unknownVersion": "Orca {{version}} bir sürüm derlemesi değil, bu yüzden kanalı burada değiştirilemez."

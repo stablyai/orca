@@ -2291,11 +2291,36 @@
         "browserBlockGuidanceMany": "Beende die Browser-Prozesse (PIDs {{pids}}) und versuche es erneut. Ihre Server laufen weiter.",
         "blocked": "Blockiert",
         "heldNarrow": "{{version}} ab {{date}}",
-        "notes": "Notizen"
+        "notes": "Notizen",
+        "checking": "Wird geprüft…",
+        "upToDate": "Aktuell",
+        "heldUntil": "{{version}} zurückgestellt bis {{date}}",
+        "available": "{{version}} verfügbar",
+        "latestForMac": "Neueste für diesen Mac",
+        "ready": "{{version}} bereit",
+        "installing": "{{version}} wird installiert…",
+        "installOnQuit": "Zum Installieren beenden",
+        "installBlocked": "Installation blockiert",
+        "updateFailed": "Update fehlgeschlagen",
+        "checkFailed": "Prüfung fehlgeschlagen",
+        "failed": "Fehler",
+        "hideDetails": "Details ausblenden",
+        "showDetails": "Details anzeigen",
+        "hide": "Ausblenden",
+        "details": "Details",
+        "copyDetails": "Details kopieren",
+        "copied": "Kopiert",
+        "copyFailed": "Details konnten nicht kopiert werden.",
+        "downloadingPercent": "Lädt {{percent}}"
       },
       "action": {
         "checkHeldNow": "Jetzt nach {{version}} suchen. Deine Verzögerungseinstellung bleibt gleich.",
-        "check": "Prüfen"
+        "check": "Prüfen",
+        "update": "Update",
+        "retry": "Wiederholen",
+        "skipDelay": "Verzögerung überspringen",
+        "restart": "Neu starten",
+        "checkForUpdates": "Nach Updates suchen"
       },
       "channel": {
         "unknownVersion": "Orca {{version}} ist kein Release-Build, daher lässt sich der Kanal hier nicht ändern."

@@ -1540,11 +1540,36 @@
         "browserBlockGuidanceMany": "结束浏览器进程（PID {{pids}}）后重试。这些服务器会继续运行。",
         "blocked": "已阻止",
         "heldNarrow": "{{version}} {{date}}起",
-        "notes": "说明"
+        "notes": "说明",
+        "checking": "正在检查…",
+        "upToDate": "已是最新",
+        "heldUntil": "{{version}} 暂缓至 {{date}}",
+        "available": "{{version}} 可用",
+        "latestForMac": "此 Mac 的最新版本",
+        "ready": "{{version}} 已就绪",
+        "installing": "正在安装 {{version}}…",
+        "installOnQuit": "退出以安装",
+        "installBlocked": "安装被阻止",
+        "updateFailed": "更新失败",
+        "checkFailed": "检查失败",
+        "failed": "失败",
+        "hideDetails": "隐藏详情",
+        "showDetails": "显示详情",
+        "hide": "隐藏",
+        "details": "详情",
+        "copyDetails": "复制详情",
+        "copied": "已复制",
+        "copyFailed": "无法复制详情。",
+        "downloadingPercent": "正在下载 {{percent}}"
       },
       "action": {
         "checkHeldNow": "立即检查 {{version}}。你的延迟设置保持不变。",
-        "check": "检查"
+        "check": "检查",
+        "update": "更新",
+        "retry": "重试",
+        "skipDelay": "跳过延迟",
+        "restart": "重启",
+        "checkForUpdates": "检查更新"
       },
       "channel": {
         "unknownVersion": "Orca {{version}} 不是正式发布版本，因此无法在此更改其渠道。"

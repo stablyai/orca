@@ -3202,11 +3202,36 @@
         "browserBlockGuidanceMany": "Encerre os processos do navegador (PIDs {{pids}}) e tente de novo. Os servidores continuam em execução.",
         "blocked": "Bloqueado",
         "heldNarrow": "{{version}} em {{date}}",
-        "notes": "Notas"
+        "notes": "Notas",
+        "checking": "Verificando…",
+        "upToDate": "Atualizado",
+        "heldUntil": "{{version}} em espera até {{date}}",
+        "available": "{{version}} disponível",
+        "latestForMac": "Mais recente para este Mac",
+        "ready": "{{version}} pronta",
+        "installing": "Instalando {{version}}…",
+        "installOnQuit": "Saia para instalar",
+        "installBlocked": "Instalação bloqueada",
+        "updateFailed": "Falha na atualização",
+        "checkFailed": "Falha na verificação",
+        "failed": "Falhou",
+        "hideDetails": "Ocultar detalhes",
+        "showDetails": "Mostrar detalhes",
+        "hide": "Ocultar",
+        "details": "Detalhes",
+        "copyDetails": "Copiar detalhes",
+        "copied": "Copiado",
+        "copyFailed": "Não foi possível copiar os detalhes.",
+        "downloadingPercent": "Baixando {{percent}}"
       },
       "action": {
         "checkHeldNow": "Verificar {{version}} agora. Sua configuração de atraso continua a mesma.",
-        "check": "Verificar"
+        "check": "Verificar",
+        "update": "Atualizar",
+        "retry": "Repetir",
+        "skipDelay": "Pular atraso",
+        "restart": "Reiniciar",
+        "checkForUpdates": "Verificar atualizações"
       },
       "channel": {
         "unknownVersion": "O Orca {{version}} não é uma versão de lançamento, então o canal não pode ser alterado aqui."

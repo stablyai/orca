@@ -1944,11 +1944,36 @@
         "browserBlockGuidanceMany": "Arrêtez les processus du navigateur (PID {{pids}}), puis réessayez. Leurs serveurs continuent de tourner.",
         "blocked": "Bloqué",
         "heldNarrow": "{{version}} dès {{date}}",
-        "notes": "Notes"
+        "notes": "Notes",
+        "checking": "Vérification…",
+        "upToDate": "À jour",
+        "heldUntil": "{{version}} en attente jusqu’au {{date}}",
+        "available": "{{version}} disponible",
+        "latestForMac": "Dernière pour ce Mac",
+        "ready": "{{version}} prête",
+        "installing": "Installation de {{version}}…",
+        "installOnQuit": "Quitter pour installer",
+        "installBlocked": "Installation bloquée",
+        "updateFailed": "Échec de la mise à jour",
+        "checkFailed": "Échec de la vérification",
+        "failed": "Échec",
+        "hideDetails": "Masquer les détails",
+        "showDetails": "Afficher les détails",
+        "hide": "Masquer",
+        "details": "Détails",
+        "copyDetails": "Copier les détails",
+        "copied": "Copié",
+        "copyFailed": "Impossible de copier les détails.",
+        "downloadingPercent": "Téléchargement {{percent}}"
       },
       "action": {
         "checkHeldNow": "Rechercher {{version}} maintenant. Votre réglage de délai reste inchangé.",
-        "check": "Vérifier"
+        "check": "Vérifier",
+        "update": "Mettre à jour",
+        "retry": "Réessayer",
+        "skipDelay": "Ignorer le délai",
+        "restart": "Redémarrer",
+        "checkForUpdates": "Rechercher des mises à jour"
       },
       "channel": {
         "unknownVersion": "Orca {{version}} n'est pas une version publiée, son canal ne peut donc pas être changé ici."

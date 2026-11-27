@@ -2381,11 +2381,36 @@
         "browserBlockGuidanceMany": "Завершите процессы браузера (PID {{pids}}) и повторите попытку. Их серверы продолжат работу.",
         "blocked": "Заблокировано",
         "heldNarrow": "{{version}} с {{date}}",
-        "notes": "Заметки"
+        "notes": "Заметки",
+        "checking": "Проверка…",
+        "upToDate": "Актуально",
+        "heldUntil": "{{version}} отложено до {{date}}",
+        "available": "Доступна {{version}}",
+        "latestForMac": "Последняя для этого Mac",
+        "ready": "{{version}} готова",
+        "installing": "Установка {{version}}…",
+        "installOnQuit": "Выйдите для установки",
+        "installBlocked": "Установка заблокирована",
+        "updateFailed": "Ошибка обновления",
+        "checkFailed": "Ошибка проверки",
+        "failed": "Ошибка",
+        "hideDetails": "Скрыть подробности",
+        "showDetails": "Подробности",
+        "hide": "Скрыть",
+        "details": "Подробнее",
+        "copyDetails": "Копировать подробности",
+        "copied": "Скопировано",
+        "copyFailed": "Не удалось скопировать подробности.",
+        "downloadingPercent": "Загрузка {{percent}}"
       },
       "action": {
         "checkHeldNow": "Проверить {{version}} сейчас. Настройка задержки не изменится.",
-        "check": "Проверка"
+        "check": "Проверка",
+        "update": "Обновить",
+        "retry": "Повторить",
+        "skipDelay": "Пропустить",
+        "restart": "Перезапуск",
+        "checkForUpdates": "Проверить обновления"
       },
       "channel": {
         "unknownVersion": "Orca {{version}} — не релизная сборка, поэтому канал здесь изменить нельзя."

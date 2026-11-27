@@ -1547,11 +1547,36 @@
         "browserBlockGuidanceMany": "브라우저 프로세스(PID {{pids}})를 종료한 뒤 다시 시도하세요. 서버는 계속 실행됩니다.",
         "blocked": "차단됨",
         "heldNarrow": "{{version}} {{date}}부터",
-        "notes": "노트"
+        "notes": "노트",
+        "checking": "확인 중…",
+        "upToDate": "최신 상태",
+        "heldUntil": "{{version}} {{date}}까지 보류",
+        "available": "{{version}} 사용 가능",
+        "latestForMac": "이 Mac용 최신 버전",
+        "ready": "{{version}} 준비됨",
+        "installing": "{{version}} 설치 중…",
+        "installOnQuit": "종료하여 설치",
+        "installBlocked": "설치 차단됨",
+        "updateFailed": "업데이트 실패",
+        "checkFailed": "확인 실패",
+        "failed": "실패",
+        "hideDetails": "세부 정보 숨기기",
+        "showDetails": "세부 정보 보기",
+        "hide": "숨기기",
+        "details": "세부 정보",
+        "copyDetails": "세부 정보 복사",
+        "copied": "복사됨",
+        "copyFailed": "세부 정보를 복사할 수 없습니다.",
+        "downloadingPercent": "다운로드 중 {{percent}}"
       },
       "action": {
         "checkHeldNow": "지금 {{version}}을(를) 확인합니다. 지연 설정은 그대로 유지됩니다.",
-        "check": "확인"
+        "check": "확인",
+        "update": "업데이트",
+        "retry": "다시 시도",
+        "skipDelay": "지연 건너뛰기",
+        "restart": "다시 시작",
+        "checkForUpdates": "업데이트 확인"
       },
       "channel": {
         "unknownVersion": "Orca {{version}}은(는) 릴리스 빌드가 아니어서 여기서 채널을 변경할 수 없습니다."

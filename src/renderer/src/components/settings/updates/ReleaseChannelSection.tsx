@@ -119,13 +119,14 @@ export function ReleaseChannelSection(): React.JSX.Element {
 
   // Wait for the running version/channel before loading; a stable-placeholder request would be discarded.
   useEffect(() => {
-    if (appVersion === null) {
+    // A build that isn't a release version has no channel to switch from, so nothing is offered.
+    if (appVersion === null || runningChannel === null) {
       return
     }
     setBuilds(null)
     setSelectedTag(null)
     void loadBuilds(activeChannel)
-  }, [activeChannel, appVersion, loadBuilds])
+  }, [activeChannel, appVersion, runningChannel, loadBuilds])
 
   const selectedBuild = useMemo(
     () => builds?.find((build) => build.tag === selectedTag) ?? null,
@@ -229,7 +230,7 @@ export function ReleaseChannelSection(): React.JSX.Element {
                 selectedTag={selectedTag}
                 runningVersion={appVersion}
                 onSelect={setSelectedTag}
-                disabled={loading || !builds || builds.length === 0}
+                disabled={runningChannel === null || loading || !builds || builds.length === 0}
                 placeholder={
                   loading || (builds === null && loadError === null)
                     ? t(
@@ -254,7 +255,7 @@ export function ReleaseChannelSection(): React.JSX.Element {
                 )}
                 disabled={loading || versionLoading}
                 onClick={() =>
-                  appVersion === null
+                  runningChannel === null
                     ? loadVersion()
                     : void loadBuilds(activeChannel, { force: true })
                 }
@@ -265,7 +266,7 @@ export function ReleaseChannelSection(): React.JSX.Element {
                 variant="outline"
                 size="sm"
                 type="button"
-                disabled={!selectedBuild || busy || isRunningBuild}
+                disabled={runningChannel === null || !selectedBuild || busy || isRunningBuild}
                 onClick={() => {
                   if (!selectedBuild) {
                     return

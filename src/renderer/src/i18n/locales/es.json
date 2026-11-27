@@ -1566,11 +1566,36 @@
         "browserBlockGuidanceMany": "Finaliza los procesos del navegador (PID {{pids}}) y vuelve a intentarlo. Sus servidores siguen en marcha.",
         "blocked": "Bloqueado",
         "heldNarrow": "{{version}} desde {{date}}",
-        "notes": "Notas"
+        "notes": "Notas",
+        "checking": "Comprobando…",
+        "upToDate": "Actualizado",
+        "heldUntil": "{{version}} en espera hasta {{date}}",
+        "available": "{{version}} disponible",
+        "latestForMac": "Última para este Mac",
+        "ready": "{{version}} lista",
+        "installing": "Instalando {{version}}…",
+        "installOnQuit": "Sal para instalar",
+        "installBlocked": "Instalación bloqueada",
+        "updateFailed": "Error al actualizar",
+        "checkFailed": "Error al comprobar",
+        "failed": "Error",
+        "hideDetails": "Ocultar detalles",
+        "showDetails": "Ver detalles",
+        "hide": "Ocultar",
+        "details": "Detalles",
+        "copyDetails": "Copiar detalles",
+        "copied": "Copiado",
+        "copyFailed": "No se pudieron copiar los detalles.",
+        "downloadingPercent": "Descargando {{percent}}"
       },
       "action": {
         "checkHeldNow": "Buscar {{version}} ahora. Tu ajuste de retraso no cambia.",
-        "check": "Buscar"
+        "check": "Buscar",
+        "update": "Actualizar",
+        "retry": "Reintentar",
+        "skipDelay": "Omitir retraso",
+        "restart": "Reiniciar",
+        "checkForUpdates": "Buscar actualizaciones"
       },
       "channel": {
         "unknownVersion": "Orca {{version}} no es una versión publicada, así que aquí no se puede cambiar su canal."

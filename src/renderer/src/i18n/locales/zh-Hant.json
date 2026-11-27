@@ -2252,11 +2252,36 @@
         "browserBlockGuidanceMany": "結束瀏覽器程序（PID {{pids}}）後重試。這些伺服器會繼續執行。",
         "blocked": "已封鎖",
         "heldNarrow": "{{version}} {{date}}起",
-        "notes": "說明"
+        "notes": "說明",
+        "checking": "正在檢查…",
+        "upToDate": "已是最新",
+        "heldUntil": "{{version}} 暫緩至 {{date}}",
+        "available": "{{version}} 可用",
+        "latestForMac": "此 Mac 的最新版本",
+        "ready": "{{version}} 已就緒",
+        "installing": "正在安裝 {{version}}…",
+        "installOnQuit": "結束以安裝",
+        "installBlocked": "安裝遭封鎖",
+        "updateFailed": "更新失敗",
+        "checkFailed": "檢查失敗",
+        "failed": "失敗",
+        "hideDetails": "隱藏詳細資料",
+        "showDetails": "顯示詳細資料",
+        "hide": "隱藏",
+        "details": "詳細資料",
+        "copyDetails": "複製詳細資料",
+        "copied": "已複製",
+        "copyFailed": "無法複製詳細資料。",
+        "downloadingPercent": "正在下載 {{percent}}"
       },
       "action": {
         "checkHeldNow": "立即檢查 {{version}}。你的延遲設定保持不變。",
-        "check": "檢查"
+        "check": "檢查",
+        "update": "更新",
+        "retry": "重試",
+        "skipDelay": "略過延遲",
+        "restart": "重新啟動",
+        "checkForUpdates": "檢查更新"
       },
       "channel": {
         "unknownVersion": "Orca {{version}} 不是正式發行版本，因此無法在此變更其通道。"
