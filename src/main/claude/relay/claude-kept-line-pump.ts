@@ -24,16 +24,31 @@ export function createClaudeKeptLinePump(input: {
   let stopped = false
   /** The agent exited: a pause that never lifts must not hold its exit. */
   let final = false
+  /** Bounds the one pause wait under way (drains run one at a time) once the agent exits. */
+  let bound: (() => void) | undefined
   let draining: Promise<void> = Promise.resolve()
 
-  // At exit, a pause that never lifts (a failed journal read keeps its hold) gives up the rest,
-  // untaken: the chat recovers it from Claude's transcript.
+  // From the exit on, even for a wait begun before it, a pause that never lifts (a failed journal
+  // read keeps its hold) gives up the rest, untaken: the chat recovers it from Claude's transcript.
   const waitPause = (): Promise<boolean> => {
-    const pause = input.paused()?.then(() => true)
+    // A hold that rejects is gone as surely as one that lifts.
+    const pause = input.paused()?.then(
+      () => true,
+      () => true
+    )
     if (!pause) {
       return Promise.resolve(true)
     }
-    return final ? withTimeout(pause, FINAL_DRAIN_PAUSE_WAIT_MS, false) : pause
+    if (final) {
+      return withTimeout(pause, FINAL_DRAIN_PAUSE_WAIT_MS, false)
+    }
+    return new Promise<boolean>((resolve) => {
+      bound = () => void withTimeout(pause, FINAL_DRAIN_PAUSE_WAIT_MS, false).then(resolve)
+      void pause.then((lifted) => {
+        bound = undefined
+        resolve(lifted)
+      })
+    })
   }
 
   const pump = (): Promise<void> => {
@@ -76,6 +91,7 @@ export function createClaudeKeptLinePump(input: {
     /** The agent exited: its last partial line counts, and a held pause is waited on only so long. */
     finish(): Promise<void> {
       final = true
+      bound?.()
       if (partial.length > 0) {
         lines.push(partial)
         partial = ''
