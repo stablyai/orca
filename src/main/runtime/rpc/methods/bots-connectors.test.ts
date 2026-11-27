@@ -7,9 +7,15 @@ vi.mock('node:os', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   hostname: () => 'm4-air'
 }))
+const gh = vi.hoisted((): { error: Error } => ({
+  error: Object.assign(new Error('Command failed: gh auth token'), {
+    stderr: 'no oauth token found for github.com\n',
+    code: 1
+  })
+}))
 vi.mock('../../../git/command-runner/hosted-cli/gh-exec-file', () => ({
   ghExecFileAsync: async () => {
-    throw Object.assign(new Error('not logged in'), { code: 4 })
+    throw gh.error
   }
 }))
 vi.mock('../../../bots/bot-session-tabs', () => ({
@@ -42,5 +48,19 @@ describe('orca bot connectors', () => {
     expect(await gitHubLine(false)).toBe(
       'GitHub: `gh`, as your owner. gh is signed out on this computer. Ask your owner to run `gh auth login` here.'
     )
+  })
+
+  it("doesn't call gh signed out when its read timed out", async () => {
+    vi.useFakeTimers()
+    vi.advanceTimersByTime(60_000)
+    gh.error = Object.assign(new Error('Command failed: gh auth token'), {
+      killed: true,
+      signal: 'SIGTERM',
+      stderr: ''
+    })
+    expect(await gitHubLine(false)).toBe(
+      "GitHub: `gh`, as your owner. Orca couldn't read gh's sign-in on this computer; `gh auth status` shows it."
+    )
+    vi.useRealTimers()
   })
 })

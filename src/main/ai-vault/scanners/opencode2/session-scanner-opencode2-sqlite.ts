@@ -27,6 +27,7 @@ import {
 import SyncDatabase from '../../../sqlite/sync-database'
 import { columnExists, tableExists } from '../../../opencode-usage/schema-helpers'
 import { withOpenCode2SessionParts } from '../../../native-chat/transcript-history/opencode/opencode2-session-parts'
+import { OPENCODE_TRANSCRIPT_MAX_ROW_BYTES } from '../../../native-chat/transcript-history/opencode/transcript-opencode-part-blocks'
 import type {
   TranscriptMessage,
   TranscriptMessageSink
@@ -214,11 +215,22 @@ function* readCaptureRows(db: SyncDatabase, sessionId: string): Generator<Previe
     }
     batch.push(parseOpenCode2MessageRow(value))
     if (batch.length === CAPTURE_PART_BATCH) {
-      yield* withOpenCode2SessionParts(db, sessionId, batch)
+      yield* withCappedSessionParts(db, sessionId, batch)
       batch = []
     }
   }
-  yield* withOpenCode2SessionParts(db, sessionId, batch)
+  yield* withCappedSessionParts(db, sessionId, batch)
+}
+
+// Same per-message cap as transcript pages, so one batch can't load unbounded part data before the capture budget counts it.
+function withCappedSessionParts(
+  db: SyncDatabase,
+  sessionId: string,
+  batch: PreviewRow[]
+): PreviewRow[] {
+  return withOpenCode2SessionParts(db, sessionId, batch, OPENCODE_TRANSCRIPT_MAX_ROW_BYTES).filter(
+    (row) => typeof row.data === 'string'
+  )
 }
 
 /** Read v2 metadata and previews; absent required session schema returns null, while database errors propagate. */
