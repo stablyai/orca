@@ -29,8 +29,8 @@ export async function finishManagedOrcadRouteMove(
   for (const route of leftRoutes) {
     claims.releaseForUserRemoval(route.id, environmentId)
   }
-  await claims.flush(args.signal)
   try {
+    await claims.flush(args.signal)
     return await ensureOrcadManagedTunnel(userDataPath, environmentId)
   } finally {
     for (const route of leftRoutes) {
