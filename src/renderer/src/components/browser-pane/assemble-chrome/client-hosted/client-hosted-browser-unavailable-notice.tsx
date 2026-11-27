@@ -47,9 +47,10 @@ export function ClientHostedBrowserUnavailableNotice({
     }
   }, [onOtherDesktop, runtimeEnvironmentId])
   return (
-    <div className="absolute inset-0 flex items-center justify-center px-4 text-center">
-      {/* Relative so the Details box hangs below without re-centering the block under the pointer. */}
-      <div className="relative flex max-w-sm flex-col items-center">
+    <div className="absolute inset-0 scrollbar-sleek flex overflow-y-auto p-4 text-center">
+      {/* m-auto (not justify-center) keeps a tall block scrollable from the top in short panes.
+          Relative so the Details box hangs below without re-centering the block under the pointer. */}
+      <div className="relative m-auto flex max-w-sm flex-col items-center">
         <Globe className="size-5 text-muted-foreground" />
         <div className="mt-3 text-balance text-[15px] font-semibold leading-5 text-foreground">
           {runtimeCanHostPage
