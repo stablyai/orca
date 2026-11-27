@@ -14,8 +14,8 @@ import { customEditorTakeover } from './plugin-custom-editor-takeover'
 import { fileList } from './plugin-contribution-file-list'
 import {
   fontContributionRows,
+  chromeContributionRows,
   mcpServerContributionRows,
-  statusBarContributionRows,
   vmRecipeContributionRows,
   statusBarItemTitles,
   withMode
@@ -66,6 +66,7 @@ export type PluginContributionSource = {
   statusBarItems: readonly string[]
   /** Each server's name with its URL or the command line that starts it. */
   mcpServers: readonly { name: string; detail: string }[]
+  worktreeBadges: readonly string[]
 }
 
 export const EMPTY_CONTRIBUTION_SOURCE: PluginContributionSource = {
@@ -80,7 +81,8 @@ export const EMPTY_CONTRIBUTION_SOURCE: PluginContributionSource = {
   vmRecipes: [],
   newFiles: [],
   statusBarItems: [],
-  mcpServers: []
+  mcpServers: [],
+  worktreeBadges: []
 }
 
 /** "recipes/ubuntu-dev.json" → "Ubuntu dev"; manifests name these files by path only. */
@@ -93,6 +95,7 @@ export function nameFromContributionPath(path: string): string {
   return words ? words.charAt(0).toUpperCase() + words.slice(1) : path
 }
 
+/** What an installed plugin's manifest contributes, in the shape of Orca's live registrations. */
 export function manifestContributionSource(manifest: PluginManifest): PluginContributionSource {
   const { contributes } = manifest
   // Why label: the source shares the shape of Orca's live registrations, which name it so.
@@ -116,7 +119,8 @@ export function manifestContributionSource(manifest: PluginManifest): PluginCont
     vmRecipes: contributes.vmRecipes.map((recipe) => nameFromContributionPath(recipe.path)),
     newFiles: contributes.newFiles,
     statusBarItems: statusBarItemTitles(contributes.statusBarItems),
-    mcpServers: contributes.mcpServers.map(pluginMcpServerListing)
+    mcpServers: contributes.mcpServers.map(pluginMcpServerListing),
+    worktreeBadges: contributes.worktreeBadges.map((badge) => badge.title)
   }
 }
 
@@ -159,7 +163,8 @@ export function summaryContributionSource(
     statusBarItems: of('statusBarItems').map((item) => item.name),
     // Why no detail: install checks a summary's names, not its details, so a catalog's address or
     // command line could differ from what runs.
-    mcpServers: of('mcpServers').map((item) => ({ name: item.name, detail: '' }))
+    mcpServers: of('mcpServers').map((item) => ({ name: item.name, detail: '' })),
+    worktreeBadges: of('worktreeBadges').map((item) => item.name)
   }
 }
 
@@ -301,7 +306,7 @@ export function describePluginContributions(
       tone: 'default'
     })
   }
-  rows.push(...statusBarContributionRows(source.statusBarItems, t))
+  rows.push(...chromeContributionRows(source, t))
   rows.push(...mcpServerContributionRows(source.mcpServers, t))
   rows.push(...vmRecipeContributionRows(source.vmRecipes, t))
   return rows

@@ -45,6 +45,7 @@ Use the lowest `execution` profile that covers the request; it decides what the 
 | Changing or refusing terminal text, workspace creates or agent launches and prompts | `trusted-worker`; `main`, `contributes.hooks`                       | `--template hook`; `references/recipes.md`       |
 | A virtual machine environment recipe                                                | `declarative`; `contributes.vmRecipes`                              | hand-written; fields in `references/manifest.md` |
 | A status bar item (a worker can update it)                                          | `declarative`; `contributes.statusBarItems`                         | `references/recipes.md`                          |
+| A badge on workspaces holding a marker file, with commands for that workspace       | `trusted-worker`; `contributes.worktreeBadges`, `workspace:read`    | `references/recipes.md`; example `hello-orca`    |
 
 Examples are in `examples/plugins/` of github.com/stablyai/orca. Sidebar cards, task sources,
 connections, MCP servers and skills are reserved and not buildable yet: say so instead of faking

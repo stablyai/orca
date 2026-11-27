@@ -4,14 +4,26 @@
   "id": "hello-orca",
   "name": "Hello Orca",
   "version": "1.0.0",
-  "description": "Sample plugin combining a panel, a worker command, and event subscriptions.",
-  "engines": { "orca": ">=1.4.246" },
+  "description": "Sample plugin combining a panel, worker commands, a workspace badge, and event subscriptions.",
+  "engines": { "orca": ">=1.4.256" },
   "pluginApi": 1,
   "main": "main.mjs",
   "contributes": {
     "panels": [{ "id": "hello", "title": "Hello Orca", "icon": "plug", "entry": "panel.html" }],
-    "commands": [{ "id": "hello-ping", "title": "Hello: Ping" }],
-    "events": [{ "on": "workspace.created" }, { "on": "agent.status.changed" }]
+    "commands": [
+      { "id": "hello-ping", "title": "Hello: Ping" },
+      { "id": "hello-folder", "title": "Hello: Show folder", "when": "workspace" }
+    ],
+    "events": [{ "on": "workspace.created" }, { "on": "agent.status.changed" }],
+    "worktreeBadges": [
+      {
+        "id": "node-project",
+        "title": "Node project",
+        "icon": "package",
+        "when": { "pathExists": ["package.json"] },
+        "commands": ["hello-folder"]
+      }
+    ]
   },
   "capabilities": [
     { "kind": "workspace:read" },

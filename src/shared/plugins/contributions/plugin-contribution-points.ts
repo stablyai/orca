@@ -59,6 +59,11 @@ import {
   PLUGIN_SETTING_LIMIT,
   pluginSettingContributionSchema
 } from './plugin-settings-contribution'
+import {
+  PLUGIN_WORKTREE_BADGE_LIMIT,
+  PLUGIN_WORKTREE_BADGES_SINCE,
+  pluginWorktreeBadgeContributionSchema
+} from './plugin-worktree-badge-contribution'
 
 /** Every `contributes` key, in manifest order. Adding a point starts here. */
 export const PLUGIN_CONTRIBUTION_POINTS = [
@@ -78,7 +83,8 @@ export const PLUGIN_CONTRIBUTION_POINTS = [
   'newFiles',
   'settings',
   'statusBarItems',
-  'mcpServers'
+  'mcpServers',
+  'worktreeBadges'
 ] as const
 
 export type PluginContributionPoint = (typeof PLUGIN_CONTRIBUTION_POINTS)[number]
@@ -244,6 +250,12 @@ export const pluginContributesFields = {
     PLUGIN_MCP_SERVER_LIMIT,
     'MCP servers Orca offers to the agents it launches on this host, listed under From plugins in Settings → MCP servers.',
     PLUGIN_MCP_SERVERS_SINCE
+  ),
+  worktreeBadges: contributionList(
+    pluginWorktreeBadgeContributionSchema,
+    PLUGIN_WORKTREE_BADGE_LIMIT,
+    "Icons beside each workspace whose folder holds a marker path; each opens the plugin's workspace commands for that workspace.",
+    PLUGIN_WORKTREE_BADGES_SINCE
   )
 } satisfies Record<PluginContributionPoint, z.ZodType>
 
@@ -295,5 +307,7 @@ export const PLUGIN_CONTRIBUTION_POINT_POLICY: Record<
   // Why declarative: a static item only names its own command; updating it needs a worker.
   statusBarItems: { execution: 'declarative', catalogType: null, bindsContent: false },
   // Why bound: a command server runs on the host for every agent session, so approval names it.
-  mcpServers: { execution: 'declarative', catalogType: 'instructions', bindsContent: true }
+  mcpServers: { execution: 'declarative', catalogType: 'instructions', bindsContent: true },
+  // Why declarative: a badge only names the plugin's own workspace commands, which need a worker.
+  worktreeBadges: { execution: 'declarative', catalogType: null, bindsContent: false }
 }

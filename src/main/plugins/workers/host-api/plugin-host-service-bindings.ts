@@ -18,6 +18,7 @@ import {
   type PluginListedTerminal
 } from './plugin-workspace-projection'
 import type { PluginAppearanceService } from '../../appearance/plugin-appearance-service'
+import type { PluginCommandWorkspaceResolver } from '../../commands/plugin-command-invocation'
 import type { PluginEditorTypographySource } from '../../appearance/plugin-editor-typography'
 
 export type PluginRuntimeDelegate = {
@@ -49,6 +50,8 @@ export type PluginRuntimeDelegate = {
   listAgentTaskTitles?(): ReadonlyMap<string, string>
   /** The runtime RPC the `orca` CLI calls, in process; absent where none is bound. */
   callRuntime?: PluginRuntimeRpc
+  /** The workspace a user ran a workspace command on; absent where no runtime is bound. */
+  resolveCommandWorkspace?: PluginCommandWorkspaceResolver
 }
 
 export function bindPluginHostServices(input: {

@@ -50,6 +50,7 @@
 - `settings` (SettingContribution[], since 1.4.246): Settings Orca shows under the plugin in Settings; code reads them with `settings.get` (`settings:own`). At most 64.
 - `statusBarItems` (StatusBarItemContribution[], since 1.4.248): Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. With `main`, the worker runs for as long as the plugin is enabled. At most 8.
 - `mcpServers` (McpServerContribution[], since 1.4.276): MCP servers Orca offers to the agents it launches on this host, listed under From plugins in Settings → MCP servers. At most 16.
+- `worktreeBadges` (WorktreeBadgeContribution[], since 1.4.256): Icons beside each workspace whose folder holds a marker path; each opens the plugin's workspace commands for that workspace. At most 16.
 
 Reserved (must stay empty arrays): `agentHarnesses`, `skills`, `taskSources`, `connections`, `sidebarCards`.
 
@@ -204,6 +205,19 @@ An MCP server Orca offers to the agents it launches, beside the user’s own.
 - `command` (string, since 1.4.276): Executable that starts a local (stdio) server.
 - `args` (string[], since 1.4.276): Arguments for `command`.
 - `env` (object, since 1.4.276): Environment variables for `command`; nothing secret.
+
+## WorktreeBadgeContribution
+
+An icon beside the name of each workspace whose folder holds a marker path; it opens a menu of workspace commands. Needs `workspace:read`, since a command run from it receives the folder.
+
+- `id` (string, required, since 1.4.256): Badge id, unique among this plugin's worktree badges.
+- `title` (string, required, since 1.4.256): Tooltip, accessible name and menu heading of the badge.
+- `icon` (one of activity, bar-chart-3, bell, blocks, book, bot, bug, calendar, cloud, code, database, file-text, flag, folder, gauge, globe, hammer, layers, lightbulb, package, plug, puzzle, rocket, star, terminal, wrench, zap, add, remove, delete, edit, refresh, search, settings, check, close, info, warning, error, open-external, copy, download, upload, play, pause, stop, more, expand, collapse, next, filter, branch, file, agent, link | string, required, since 1.4.256): A name from the panel icon set, or the path of a monochrome `.svg` (at most 32 KB) that Orca draws in the text color.
+- `when` (object, required, since 1.4.256): When Orca shows the badge. Orca checks it; the plugin is not asked.
+- `when.pathExists` (string[], required, since 1.4.256): The badge shows when the workspace folder holds any of these paths, relative to the folder. At most 8.
+- `when.searchDepth` (integer, since 1.4.256): Also look for `pathExists` in subfolders this many levels down, and list each folder that holds one; its commands then run on that folder. Hidden folders, `node_modules`, symbolic links and folders inside a match are skipped, and the search stops after 256 folders. Defaults to 0, the workspace folder only.
+- `when.host` ("local" | "any", since 1.4.256): `local` leaves out workspaces on SSH hosts, such as for commands that start a desktop app. Defaults to `any`.
+- `commands` (string[], required, since 1.4.256): Ids of this plugin's worker commands with `when: "workspace"`, offered from the badge and the workspace's context menu. At most 8.
 
 ## Capability
 

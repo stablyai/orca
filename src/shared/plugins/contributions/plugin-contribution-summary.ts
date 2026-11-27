@@ -101,6 +101,7 @@ export function pluginContributionSummary(
       (newFile) => newFile.title,
       (newFile) => newFile.extension
     ),
+    ...named('worktreeBadges', c.worktreeBadges, (badge) => badge.title),
     // Each item's text, or its id when it shows only an icon.
     ...named('statusBarItems', c.statusBarItems, (item) => item.text || item.id),
     ...named('mcpServers', c.mcpServers, (server) => server.name, pluginMcpServerSummaryDetail)

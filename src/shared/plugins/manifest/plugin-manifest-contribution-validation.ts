@@ -7,6 +7,7 @@ import {
 } from '../contributions/plugin-event-contribution'
 import type { PluginFileMatch } from '../contributions/plugin-file-match'
 import { validatePluginStatusBarItems } from '../contributions/plugin-status-bar-item-contribution'
+import { validatePluginWorktreeBadges } from '../contributions/plugin-worktree-badge-contribution'
 
 type IdentifiedContribution = { id: string }
 type PathContribution = { path: string }
@@ -35,6 +36,7 @@ type ContributionValidationManifest = {
     settings: { key: string }[]
     statusBarItems: { id: string; command?: string }[]
     mcpServers: { name: string }[]
+    worktreeBadges: { id: string; commands: string[] }[]
   }
   capabilities: { kind: string }[]
 }
@@ -60,6 +62,7 @@ function rejectDuplicateValues(
   }
 }
 
+/** Flags duplicate ids, names and keys in contribution points, and entries missing a requirement. */
 export function validatePluginManifestContributions(
   manifest: ContributionValidationManifest,
   ctx: RefinementCtx
@@ -173,6 +176,7 @@ export function validatePluginManifestContributions(
   }
 
   validatePluginStatusBarItems(manifest.contributes, ctx)
+  validatePluginWorktreeBadges(manifest, ctx)
   const commands = new Map(manifest.contributes.commands.map((command) => [command.id, command]))
   for (const [index, command] of manifest.contributes.commands.entries()) {
     if (command.action !== undefined && !isPluginCommandAliasActionId(command.action)) {

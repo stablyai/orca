@@ -53,7 +53,8 @@ function useInstalledPluginContributionSource(
       vmRecipes: plugin.vmRecipes?.map((recipe) => recipe.name) ?? [],
       newFiles: plugin.newFiles ?? [],
       statusBarItems: statusBarItemTitles(plugin.statusBarItems),
-      mcpServers: plugin.mcpServers ?? []
+      mcpServers: plugin.mcpServers ?? [],
+      worktreeBadges: plugin.worktreeBadges?.map((badge) => badge.title) ?? []
     }
   }, [plugin, appThemes, terminalThemes, iconThemes, syntaxes, languagePacks, failures])
 }

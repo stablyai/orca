@@ -71,6 +71,21 @@ keep their value and `visible: false` hides it. Bind a key to the same command w
 `contributes.keybindings` (`{ "command", "key": "Mod+Shift+K" }`).
 `ORCA plugin shot <plugin-key> --status-bar` saves a PNG of the status bar with the item drawn.
 
+## A badge on workspaces of one kind
+
+Declare it in `contributes.worktreeBadges` (`{ "id", "title", "icon", "when": { "pathExists",
+"searchDepth"?, "host"? }, "commands" }`, `engines.orca` `>=1.4.256`, `workspace:read`). Orca
+checks `pathExists` itself and shows the icon beside each workspace whose folder holds one of the
+paths; `"searchDepth": 1` to `3` also searches that many subfolder levels (skipping hidden
+folders, `node_modules`, symbolic links and folders inside a match, at most 256 folders) and lists
+each matching folder in the badge's menu. `"host": "local"` leaves out SSH workspaces, and a
+paired Orca server's workspaces get no badges. `icon` is a panel icon name or a monochrome `.svg`
+in the plugin. Each of `commands` is a worker command with `"when": "workspace"`; run from the
+badge, the workspace's context menu, the palette or a shortcut, its handler gets
+`{ worktree: { path, displayName, branch, host }, folder?: { path, relativePath } }`, where
+`folder` is the subfolder picked from the badge's list. A handler that returns `{ message }`
+shows it as a toast.
+
 ## Changing or refusing what Orca does (hooks)
 
 `trusted-worker` with `main`; list each hook in `contributes.hooks` (`{ "event": "terminal.send" }`)
