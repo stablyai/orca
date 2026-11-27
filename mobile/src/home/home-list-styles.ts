@@ -33,6 +33,7 @@ export const homeListStyles = themedStyleSheet(() => ({
   // Matches a heading's top gap for a group that has none.
   headinglessGroup: { marginTop: 20 },
   group: { backgroundColor: colors.bgPanel, borderRadius: radii.surface, overflow: 'hidden' },
+  search: { marginBottom: spacing.sm },
   row: { flexDirection: 'row', alignItems: 'flex-start', paddingLeft: ROW_LEADING_PADDING },
   rowPressed: { backgroundColor: colors.bgRaised },
   rowDisabled: { opacity: 0.45 },
