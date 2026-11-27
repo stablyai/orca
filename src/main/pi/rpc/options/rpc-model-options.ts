@@ -13,11 +13,13 @@ export type PiRpcRequester = {
   ): Promise<unknown>
 }
 
-export const modelSchema = piRpcModelSchema.safeExtend({
-  provider: z.string().min(1),
-  id: z.string().min(1),
-  thinkingLevelMap: z.record(z.string(), z.string().nullable()).optional()
-})
+export const modelSchema = lazyZodSchema(() =>
+  piRpcModelSchema.safeExtend({
+    provider: z.string().min(1),
+    id: z.string().min(1),
+    thinkingLevelMap: z.record(z.string(), z.string().nullable()).optional()
+  })
+)
 const modelsSchema = lazyZodSchema(() => z.object({ models: z.array(modelSchema) }))
 
 export function piModelOptionId(provider: string, modelId: string): string {

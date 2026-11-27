@@ -39,6 +39,7 @@ const buttonVariants = cva(
         ghost: 'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
         // A quiet secondary action under a title, such as a toast's "Show list": muted until hovered.
         'ghost-muted': mutedGhostButtonClasses,
+        // `ghost-muted` for a Details toggle that stays filled while its list is open.
         'ghost-muted-disclosure': `${mutedGhostButtonClasses} aria-expanded:bg-accent aria-expanded:text-accent-foreground`,
         // A row action over its hovered row's accent fill, where ghost's accent hover would not show.
         'ghost-on-accent': `text-accent-foreground hover:bg-foreground/10 ${disabledOnAccentButtonClasses}`,
@@ -102,6 +103,8 @@ const buttonVariants = cva(
         // A ghost name inside a row label: `inline`'s height, padded so its hover fill clears the text.
         inlineChip: 'h-6 gap-1 px-1.5',
         sm: 'h-8 gap-1.5 rounded-md px-3 has-[>svg]:px-2.5',
+        // A rail page's header and toolbar bands: every control there is 28px.
+        toolbar: 'h-7 gap-1.5 rounded-md px-2.5 text-xs has-[>svg]:px-2',
         'responsive-sm':
           'h-8 gap-1.5 rounded-md px-3 has-[>svg]:px-2.5 @max-xs:gap-1 @max-xs:px-1.5 @max-xs:text-xs @max-xs:has-[>svg]:px-1.5',
         pill: "h-7 gap-1.5 rounded-full px-3 text-xs [&_svg:not([class*='size-'])]:size-3",
@@ -114,6 +117,8 @@ const buttonVariants = cva(
         // The dictation pill's round finish button.
         'icon-xs-round': "size-6 rounded-full [&_svg:not([class*='size-'])]:size-3",
         'icon-sm': 'size-8',
+        // Icon form of `toolbar`, for a rail page's 28px bands.
+        'icon-toolbar': 'size-7 rounded-md',
         // The chat composer's round Send/Stop/Steer, and its compact form for one-line boxes.
         'icon-round': 'size-8 rounded-full pointer-coarse:size-10',
         'icon-round-compact': 'size-6 rounded-full pointer-coarse:size-8',

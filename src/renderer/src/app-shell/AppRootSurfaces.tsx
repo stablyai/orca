@@ -17,7 +17,7 @@ import { NativeChatResumeToasts } from '../components/native-chat-recovery/toast
 import { McpStaleTerminalsStartupOffer } from '../components/settings/mcp-servers/McpStaleTerminalsStartupOffer'
 import { StarNagToastHost } from '../components/star-nag/StarNagToastHost'
 import { LanguagePackDiscoveryHost } from '../components/languages/LanguagePackDiscoveryHost'
-import { PluginInstallTrustDialogHost } from '../components/plugins/dialogs/PluginInstallTrustDialog'
+import { PluginInstallTrustDialogHost } from '../components/plugins/dialogs/PluginInstallTrustDialogHost'
 import { TelemetryFirstLaunchSurface } from '../components/onboarding/telemetry/TelemetryFirstLaunchSurface'
 import { ZoomOverlay } from './chrome/ZoomOverlay'
 import { WslMoveDialogHost } from '../components/wsl-move/WslMoveDialog'

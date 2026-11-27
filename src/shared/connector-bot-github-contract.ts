@@ -10,10 +10,10 @@ export const GITHUB_BOT_MENTION = '@orca-bots'
 // Exactly the cloud's (connector-contract), so both sides accept the same ids and logins.
 /** GitHub's numeric ids (users, installations), as strings. */
 export const GITHUB_ID_PATTERN = /^[1-9][0-9]{0,19}$/
-const GitHubId = z.string().regex(GITHUB_ID_PATTERN)
+const GitHubId = lazyZodSchema(() => z.string().regex(GITHUB_ID_PATTERN))
 /** A GitHub user or organization name, Enterprise Managed Users' `_shortcode` included. */
 export const GITHUB_LOGIN_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,38}$/
-const GitHubLogin = z.string().regex(GITHUB_LOGIN_PATTERN)
+const GitHubLogin = lazyZodSchema(() => z.string().regex(GITHUB_LOGIN_PATTERN))
 
 const GitHubUser = lazyZodSchema(() =>
   z.object({
@@ -64,7 +64,10 @@ export const ConnectorGitHubState = lazyZodSchema(() =>
       })
     ),
     /** The first linked user's default (see `accounts`). */
-    defaultBotId: z.string().nullable()
+    defaultBotId: z.string().nullable(),
+    /** gh's sign-in on the host that answered, which its bots act through; set by the host, never
+     *  by the cloud. Absent from an older host; a value this build doesn't know reads as absent. */
+    gh: z.enum(['signed-in', 'signed-out', 'missing']).optional().catch(undefined)
   })
 )
 export type ConnectorGitHubState = z.infer<typeof ConnectorGitHubState>
@@ -108,6 +111,11 @@ export function gitHubLoginFor(state: ConnectorGitHubState, installationId: stri
     state.account?.login ??
     null
   )
+}
+
+/** gh is signed out on the host that answered, so its bots can't act on GitHub as their owner. */
+export function ghSignedOut(state: ConnectorGitHubState | null): boolean {
+  return state?.gh === 'signed-out'
 }
 
 /** Linked, with an installation: a bot turned on for GitHub answers there. */

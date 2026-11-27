@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import type { GitLabIssueUpdate, GitLabWorkItem } from '../../../shared/gitlab/gitlab-types'
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import type { Store } from '../../persistence/loading-store/store'
@@ -26,21 +27,18 @@ import {
   repoConnectionId
 } from './gitlab-repo-access'
 
-export function registerGitLabIssueHandlers(store: Store): void {
-  ipcMain.handle(
-    'gitlab:issue',
-    async (_event, args: GitLabRepoSelectorArgs & { number: number }) => {
-      const repo = assertRegisteredRepo(args, store)
-      return getIssue(
-        repo.path,
-        args.number,
-        repoConnectionId(repo),
-        ...localGitOptionArgs(store, repo)
-      )
-    }
-  )
+export function registerGitLabIssueHandlers(store: Store, ipc: IpcHandleRegistrar = ipcMain): void {
+  ipc.handle('gitlab:issue', async (_event, args: GitLabRepoSelectorArgs & { number: number }) => {
+    const repo = assertRegisteredRepo(args, store)
+    return getIssue(
+      repo.path,
+      args.number,
+      repoConnectionId(repo),
+      ...localGitOptionArgs(store, repo)
+    )
+  })
 
-  ipcMain.handle(
+  ipc.handle(
     'gitlab:listIssues',
     async (
       _event,
@@ -90,7 +88,7 @@ export function registerGitLabIssueHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'gitlab:createIssue',
     async (_event, args: GitLabRepoSelectorArgs & { title: string; body: string }) => {
       const repo = assertRegisteredRepo(args, store)
@@ -105,7 +103,7 @@ export function registerGitLabIssueHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'gitlab:updateIssue',
     async (
       _event,
@@ -124,7 +122,7 @@ export function registerGitLabIssueHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'gitlab:addIssueComment',
     async (_event, args: GitLabRepoSelectorArgs & { number: number; body: string }) => {
       const repo = assertRegisteredRepo(args, store)
@@ -140,7 +138,7 @@ export function registerGitLabIssueHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle('gitlab:listLabels', async (_event, args: GitLabRepoSelectorArgs) => {
+  ipc.handle('gitlab:listLabels', async (_event, args: GitLabRepoSelectorArgs) => {
     const repo = assertRegisteredRepo(args, store)
     return listLabels(
       repo.path,
@@ -150,7 +148,7 @@ export function registerGitLabIssueHandlers(store: Store): void {
     )
   })
 
-  ipcMain.handle('gitlab:listAssignableUsers', async (_event, args: GitLabRepoSelectorArgs) => {
+  ipc.handle('gitlab:listAssignableUsers', async (_event, args: GitLabRepoSelectorArgs) => {
     const repo = assertRegisteredRepo(args, store)
     return listAssignableUsers(
       repo.path,

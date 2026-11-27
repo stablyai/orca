@@ -192,14 +192,16 @@ export function proposalSoul(name: string, seed: BotProposalSeed): string {
 
 export const BOT_CREATE_OFFER_PRESENTATION = 'bot-create-offer'
 
-export const BotCreateOfferSchema = z.object({
-  /** The bot that proposed it. */
-  botId: z.string().min(1),
-  /** This card's own id: creating from it, directly or through Edit, records the new bot against it. */
-  offerId: z.string().min(1),
-  proposal: BotProposalSchema,
-  offeredAt: z.number()
-})
+export const BotCreateOfferSchema = lazyZodSchema(() =>
+  z.object({
+    /** The bot that proposed it. */
+    botId: z.string().min(1),
+    /** This card's own id: creating from it, directly or through Edit, records the new bot against it. */
+    offerId: z.string().min(1),
+    proposal: BotProposalSchema,
+    offeredAt: z.number()
+  })
+)
 
 export type BotCreateOffer = z.infer<typeof BotCreateOfferSchema>
 

@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react'
+import { SquareTerminal } from 'lucide-react'
 import { AgentQuestionIcon } from '@/components/agent/status/AgentQuestionIcon'
 import { AgentWorkingSpinner } from '@/components/agent/status/AgentWorkingSpinner'
 import { handleDotWaveAnimationStart } from '@/components/ui/shared-animation-clock'
@@ -32,7 +33,16 @@ function WorkerDockDotGrid() {
 /** One 12px status mark: amber question, red dot, yellow spinner, grey ring or green dot. The row's
  *  label carries the state for assistive technology, so the mark itself is decorative. `chip`
  *  draws running as a quiet dot grid instead of the spinner, for the always-visible chip. */
-export function WorkerDockGlyph({ glyph, chip = false }: { glyph: Glyph; chip?: boolean }) {
+export function WorkerDockGlyph({
+  glyph,
+  chip = false,
+  terminal = false
+}: {
+  glyph: Glyph
+  chip?: boolean
+  /** The chip lists only background commands: running draws a terminal instead of the worker grid. */
+  terminal?: boolean
+}) {
   return (
     <span
       aria-hidden="true"
@@ -41,6 +51,8 @@ export function WorkerDockGlyph({ glyph, chip = false }: { glyph: Glyph; chip?: 
     >
       {glyph === 'ask' ? (
         <AgentQuestionIcon className="size-3" />
+      ) : glyph === 'running' && chip && terminal ? (
+        <SquareTerminal data-worker-dock-terminal="" className="size-3 text-agent-working" />
       ) : glyph === 'running' && chip ? (
         <WorkerDockDotGrid />
       ) : glyph === 'running' ? (

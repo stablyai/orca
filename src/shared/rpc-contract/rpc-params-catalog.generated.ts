@@ -14,6 +14,7 @@ import {
   BotGroupDelete,
   BotGroupNewThread,
   BotGroupRead,
+  BotGroupRenameThread,
   BotGroupReorder,
   BotGroupSend,
   BotGroupStop,
@@ -199,6 +200,16 @@ import {
   BotItemsShow
 } from './bots-items-params'
 import {
+  BotAccessDecide,
+  BotAccessRedeem,
+  BotCreate,
+  BotCreateOfferRequest,
+  BotDelete,
+  BotSkillProjectsScan,
+  BotUpdate,
+  WorktreeReleaseBotHome
+} from './bots-lifecycle-params'
+import {
   BotConnectorOffer,
   BotConnectors,
   BotLookAroundSet,
@@ -211,8 +222,6 @@ import {
   BotUpNextSeen
 } from './bots-look-around-params'
 import {
-  BotAccessDecide,
-  BotAccessRedeem,
   BotActivityRead,
   BotChat,
   BotChatReset,
@@ -221,19 +230,13 @@ import {
   BotChats,
   BotChatsOwn,
   BotChatsSeen,
-  BotCreate,
-  BotCreateOfferRequest,
-  BotDelete,
   BotMemoryEdit,
   BotMemoryForget,
   BotMemoryUndo,
   BotRoster,
   BotRunSendAgainParams,
   BotSessionStart,
-  BotSkillProjectsScan,
-  BotTakeOverParams,
-  BotUpdate,
-  WorktreeReleaseBotHome
+  BotTakeOverParams
 } from './bots-params'
 import {
   BotSharePartView,
@@ -279,14 +282,8 @@ import {
   GrabViewportBridge
 } from './browser/browser-grab-params'
 import { BrowserIdentitySet, ProfileCreate } from './browser/browser-identity-params'
-import { Screenshot, Snapshot } from './browser/browser-observation-params'
 import {
   Check,
-  ClipboardWrite,
-  CookieDelete,
-  CookieGet,
-  CookieSet,
-  DialogAccept,
   Drag,
   Element,
   Eval,
@@ -294,31 +291,19 @@ import {
   Fill,
   Find,
   FullScreenshot,
-  Geolocation,
   Get,
   Goto,
   Highlight,
-  InterceptEnable,
   Is,
   KeyboardInsert,
   Keypress,
   LimitParam,
-  MouseButton,
-  MouseWheel,
-  MouseXY,
   ProfileClearCookies,
   ProfileDelete,
   ProfileImportFromBrowser,
   Scroll,
   Select,
   SelectorPath,
-  SetCredentials,
-  SetDevice,
-  SetHeaders,
-  SetMedia,
-  SetOffline,
-  StorageKey,
-  StorageKeyValue,
   TabClose,
   TabCurrent,
   TabList,
@@ -328,8 +313,28 @@ import {
   TabSwitch,
   Type,
   Upload,
-  Viewport,
   Wait
+} from './browser/browser-interaction-params'
+import { Screenshot, Snapshot } from './browser/browser-observation-params'
+import {
+  ClipboardWrite,
+  CookieDelete,
+  CookieGet,
+  CookieSet,
+  DialogAccept,
+  Geolocation,
+  InterceptEnable,
+  MouseButton,
+  MouseWheel,
+  MouseXY,
+  SetCredentials,
+  SetDevice,
+  SetHeaders,
+  SetMedia,
+  SetOffline,
+  StorageKey,
+  StorageKeyValue,
+  Viewport
 } from './browser/browser-params'
 import {
   DownloadCopyStream,
@@ -949,33 +954,35 @@ import { ReadVisualParams } from './structured-agent-session/agent-session-visua
 import { SkipAsyncQuestionsParams } from './structured-agent-session/skip-async-questions-params'
 import { AutoReviewApprovalParams } from './structured-agent-session/structured-agent-session-auto-review-params'
 import { ContinueInterruptedParams } from './structured-agent-session/structured-agent-session-continue-params'
+import {
+  AttachParams,
+  CancelParams,
+  CreateParams,
+  CreateSupportParams,
+  OptionsParams,
+  QueuedMessageActionParams,
+  QueuedMessagesResumeParams,
+  RespondParams,
+  SendParams,
+  SetOptionParams
+} from './structured-agent-session/structured-agent-session-core-params'
 import { ContinuationContextParams } from './structured-agent-session/structured-agent-session-identifiers'
 import { AgentSessionMcpParams } from './structured-agent-session/structured-agent-session-mcp-params'
 import {
   AcknowledgeAttentionParams,
   AgentsParams,
-  AttachParams,
   AvailabilityParams,
-  CancelParams,
   ConversationCommandParams,
-  CreateParams,
-  CreateSupportParams,
   HandoffStatusParams,
   HistoryParams,
   HoldParams,
   ItemParams,
   ModelCatalogParams,
-  OptionsParams,
-  QueuedMessageActionParams,
-  QueuedMessagesResumeParams,
-  RespondParams,
   RestartLaunchSettledParams,
   RestartResumableParams,
   RestartResumeParams,
   RevealParams,
   RewindParams,
-  SendParams,
-  SetOptionParams,
   SleepWorkspaceParams,
   SubscribeTurnCompletionsParams,
   ThreadGoalParams,
@@ -1341,6 +1348,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'bots.groups.list': null,
   'bots.groups.newThread': BotGroupNewThread,
   'bots.groups.read': BotGroupRead,
+  'bots.groups.renameThread': BotGroupRenameThread,
   'bots.groups.reorder': BotGroupReorder,
   'bots.groups.send': BotGroupSend,
   'bots.groups.stop': BotGroupStop,

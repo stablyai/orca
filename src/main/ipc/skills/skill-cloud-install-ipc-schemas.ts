@@ -9,7 +9,7 @@ const skillCloudInstallProvidersSchema = lazyZodSchema(() =>
   z.array(z.string().min(1).max(64)).max(64)
 )
 
-const installDestinationFields = {
+const createInstallDestinationFields = () => ({
   operationId: z.string().min(1).max(128).optional(),
   environmentId: skillCloudInstallEnvironmentIdSchema.optional(),
   destination: SkillInstallDestinationSchema,
@@ -17,14 +17,14 @@ const installDestinationFields = {
   conflictResolution: z
     .enum(['replace-unmodified', 'replace-and-discard-local', 'cancel'])
     .optional()
-} as const
+})
 
 export const skillCloudShareInstallSchema = lazyZodSchema(() =>
   z
     .object({
       shareId: z.string().min(1).max(128),
       versionId: z.string().min(1).max(128),
-      ...installDestinationFields
+      ...createInstallDestinationFields()
     })
     .strict()
 )
@@ -49,7 +49,7 @@ export const skillCloudPackageVersionInstallSchema = lazyZodSchema(() =>
     .object({
       packageId: z.string().min(1).max(128),
       versionId: z.string().min(1).max(128),
-      ...installDestinationFields
+      ...createInstallDestinationFields()
     })
     .strict()
 )

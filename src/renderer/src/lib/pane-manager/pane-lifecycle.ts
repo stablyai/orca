@@ -17,6 +17,7 @@ import {
 import { installTerminalLinkifierHoverResetOnWrite } from './terminal-input/terminal-linkifier-hover-reset-on-write'
 import { attachDomRendererFocusClassSync } from './pane-focus/pane-dom-focus-class-sync'
 import { attachDomBlockFill } from './terminal-rendering/terminal-dom-block-fill'
+import { detachHiddenDomRenderer } from './terminal-rendering/terminal-hidden-dom-renderer'
 import {
   attachWebgl,
   cancelPendingWebglRefresh,
@@ -104,6 +105,8 @@ export function openTerminal(
   }
   if (pane.gpuRenderingEnabled) {
     attachWebgl(pane)
+  } else if (pane.webglAttachmentDeferred) {
+    detachHiddenDomRenderer(pane.terminal)
   }
 
   attachPaneFitResizeObserver(pane)

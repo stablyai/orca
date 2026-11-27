@@ -21,22 +21,22 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useResponsiveLayout } from '../../layout/responsive-layout'
 import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import type { HomeStatsSummary } from '../../stats/home-stats-total'
-import { colors, spacing } from '../../theme/mobile-theme'
-import '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing } from '../../theme/mobile-theme'
+import { useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { useHostClient } from '../../transport/connection/host-client-hooks'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import type { HostProfile } from '../../host-catalog/host-profile'
 import { useHostDisplay } from '../../host-descriptors/use-host-display'
 import { formatTimeAgo } from '../../worktree/agent-lineage/agent-row-display'
-import { homeListStyles } from '../home-list-styles'
+import { homeListStylesSheet } from '../home-list-styles'
 import { MobileHomeSectionHeading } from '../MobileHomeSectionHeading'
 import { MobileHomeStats } from '../MobileHomeStats'
 import { HOME_EASE_OUT } from './home-tabs'
 import { selectHomeUsageSections, type HomeUsageCard } from './home-usage-cards'
 import { MobileHomeHostPill, useHomeTabHost } from './MobileHomeHostPill'
 import { MobileHomeTabHeader, MobileHomeTabHeaderButton } from './MobileHomeTabHeader'
-import { mobileHomeUsageStyles as styles } from './mobile-home-usage-styles'
+import { mobileHomeUsageStylesSheet } from './mobile-home-usage-styles'
 import { getManagedAccountPrimaryLabel } from '../../../../src/shared/agent-accounts/managed-account-display-names'
 
 const PROVIDER_TITLES: Record<ProviderKey, string> = { claude: 'Claude Code', codex: 'Codex' }
@@ -51,8 +51,8 @@ export function MobileHomeUsageTab(props: {
   bottomInset: number
   onOpenAccounts: (hostId: string) => void
 }) {
+  const styles = useThemedStyles(mobileHomeUsageStylesSheet)
   const t = useMobileTranslation()
-  useMobileColorScheme()
   const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
   const { host, pick } = useHomeTabHost(props.hosts, props.connectedHosts)
   const { client } = useHostClient(host?.id)
@@ -118,7 +118,7 @@ export function MobileHomeUsageTab(props: {
           />
         ) : (
           <UsageEmpty
-            message={t('home.usage.pairDesktop', 'Pair a desktop to see agent account usage.')}
+            message={t('home.usage.pairComputer', 'Pair a computer to see agent account usage.')}
           />
         )}
       </ScrollView>
@@ -133,8 +133,10 @@ function HostUsage(props: {
   first: boolean
   onOpenAccounts: (hostId: string) => void
 }) {
+  const styles = useThemedStyles(mobileHomeUsageStylesSheet)
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const homeListStyles = useThemedStyles(homeListStylesSheet)
   const reducedMotion = useReducedMotionEnabled() === true
   const desktop = useHostDisplay(props.host).title
   // Why: the reset countdowns and "Updated" note only flip on minute boundaries.
@@ -162,7 +164,10 @@ function HostUsage(props: {
   if (sections.length === 0) {
     return (
       <UsageEmpty
-        message={t('home.usage.addAccounts', 'Add accounts from desktop Settings → Accounts.')}
+        message={t(
+          'home.usage.addAccountsOnComputer',
+          'Add accounts in Orca on your computer, in Settings → Accounts.'
+        )}
       />
     )
   }
@@ -182,7 +187,7 @@ function HostUsage(props: {
                 : now - section.updatedAt < 60_000
                   ? t('home.usage.updatedJustNow', 'Updated just now')
                   : t('home.usage.updatedAgo', 'Updated {{time}} ago', {
-                      time: formatTimeAgo(section.updatedAt, now)
+                      time: formatTimeAgo(section.updatedAt, now, t)
                     })
             }
           />
@@ -213,8 +218,9 @@ function UsageCard(props: {
   reducedMotion: boolean
   onPress: () => void
 }) {
+  const styles = useThemedStyles(mobileHomeUsageStylesSheet)
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
   const [pressed, setPressed] = useState(false)
   const { card } = props
   const title =
@@ -238,7 +244,7 @@ function UsageCard(props: {
       accessibilityLabel={[title, subtitle, card.active ? t('home.usage.active', 'Active') : null]
         .filter(Boolean)
         .join(', ')}
-      accessibilityHint={t('home.usage.openAccountsHint', 'Opens this desktop’s accounts')}
+      accessibilityHint={t('home.usage.openComputerAccountsHint', 'Opens this computer’s accounts')}
       onPressIn={() => setPressed(true)}
       onPressOut={() => setPressed(false)}
       onPress={props.onPress}
@@ -303,12 +309,13 @@ function UsageMeter(props: {
   now: number
   reducedMotion: boolean
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(mobileHomeUsageStylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const usageWindow = props.card.limits?.[props.windowKey] ?? null
   const bar = getUsageBarState(props.card.limits, usageWindow, props.card.fetching)
   const display = useUsagePercentageDisplay()
-  const { shown, color } = usageBarFill(bar.usedPercent, bar.unavailable, display)
+  const { shown, color } = usageBarFill(bar.usedPercent, bar.unavailable, display, colors)
   const reset = getWindowResetLabel(usageWindow, props.now)
   const width = useSharedValue(props.reducedMotion ? (shown ?? 0) : 0)
 
@@ -348,8 +355,9 @@ function UsageMeter(props: {
 }
 
 function UsageEmpty(props: { message: string }) {
+  const styles = useThemedStyles(mobileHomeUsageStylesSheet)
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
   return (
     <View style={styles.empty}>
       <Gauge size={28} color={colors.textMuted} />

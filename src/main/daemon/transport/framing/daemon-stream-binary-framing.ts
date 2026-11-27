@@ -3,7 +3,7 @@
  * Frame: [kind u8][body length u32 BE][body].
  * EVENT body: UTF-8 JSON; DATA body: [meta length u16 BE][meta JSON][data bytes].
  * DATA metadata omits payload.data, which the reader restores from the bytes. Relay line events
- * (`relayData`, `relayPending`, `relayInitialize`) use the same DATA frame, with the raw line as the
+ * (`relayData`, `relayPending`, `relayInitialize`, `relayKept`) use the same DATA frame, with the raw line as the
  * bytes and `payload.line` restored instead, so an agent line is never JSON-escaped on the wire.
  */
 import { NDJSON_MAX_LINE_BYTES } from '../../../../shared/json-stream/main-process-ndjson-framer'
@@ -105,12 +105,12 @@ export function encodeBinaryStreamDataFrame(
 }
 
 /** Relay events whose line travels as the DATA frame's raw bytes. */
-const RELAY_LINE_EVENTS = new Set(['relayData', 'relayPending', 'relayInitialize'])
+const RELAY_LINE_EVENTS = new Set(['relayData', 'relayPending', 'relayInitialize', 'relayKept'])
 
 /** A relay line piece as a DATA frame; null for a line UTF-8 can't carry, which goes as JSON instead. */
 export function encodeBinaryRelayLineFrame(
   relayId: string,
-  event: 'relayData' | 'relayPending' | 'relayInitialize',
+  event: 'relayData' | 'relayPending' | 'relayInitialize' | 'relayKept',
   payload: { seq: number; more?: true },
   line: string
 ): Buffer | null {
