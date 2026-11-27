@@ -1,17 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import { claudeReadOnlyOptions } from '../../claude-structured-read-only-options'
+import type { ClaudeStructuredSdkOptions } from './claude-structured-launch-resolution'
 import { withOwnOrcaReads } from './claude-own-orca-reads'
 
 const CLI = '"${ORCA_CLI_COMMAND:-orca}"'
 const RESOLVED = { ORCA_CLI_COMMAND: '/Applications/Orca.app/Contents/Resources/bin/orca' }
 
-/** What the launch's hooks answer for one Bash call: 'allow', or undefined when none answers. */
+/** What a launch's hooks answer for one Bash call, or undefined when none answers. */
 async function answer(
+  options: ClaudeStructuredSdkOptions,
   toolInput: Record<string, unknown>,
-  env: Record<string, string> = RESOLVED,
-  platform: NodeJS.Platform = 'darwin'
+  permissionMode = 'default'
 ): Promise<string | undefined> {
-  const options = withOwnOrcaReads({}, env, platform)
   for (const matcher of options.hooks?.PreToolUse ?? []) {
     for (const hook of matcher.hooks) {
       const output = await hook(
@@ -22,7 +22,8 @@ async function answer(
           tool_use_id: 't',
           session_id: 's',
           transcript_path: '',
-          cwd: '/'
+          cwd: '/',
+          permission_mode: permissionMode
         },
         't',
         { signal: new AbortController().signal }
@@ -35,6 +36,8 @@ async function answer(
   }
   return undefined
 }
+
+const chat = withOwnOrcaReads({}, RESOLVED, 'darwin')
 
 describe('a Claude chat answers its own Orca reads', () => {
   it.each([
@@ -50,22 +53,30 @@ describe('a Claude chat answers its own Orca reads', () => {
     ['orca bot list', undefined],
     [`echo "exit=\${pipestatus[1]}"`, undefined]
   ])('%s', async (command, decision) => {
-    expect(await answer({ command })).toBe(decision)
+    expect(await answer(chat, { command })).toBe(decision)
+  })
+
+  it('answers only in modes that would ask', async () => {
+    const read = { command: `${CLI} bot list` }
+    expect(await answer(chat, read, 'acceptEdits')).toBe('allow')
+    for (const mode of ['dontAsk', 'auto', 'plan', 'bypassPermissions']) {
+      expect(await answer(chat, read, mode)).toBe(undefined)
+    }
   })
 
   it('leaves a retry outside the sandbox to the owner', async () => {
-    expect(await answer({ command: `${CLI} bot list`, dangerouslyDisableSandbox: true })).toBe(
-      undefined
-    )
+    const retry = { command: `${CLI} bot list`, dangerouslyDisableSandbox: true }
+    expect(await answer(chat, retry)).toBe(undefined)
   })
 
   it('answers nothing where the variable names no CLI, or on Windows', async () => {
-    expect(await answer({ command: `${CLI} bot list` }, {})).toBe(undefined)
-    expect(await answer({ command: `${CLI} bot list` }, RESOLVED, 'win32')).toBe(undefined)
+    const read = { command: `${CLI} bot list` }
+    expect(await answer(withOwnOrcaReads({}, {}, 'darwin'), read)).toBe(undefined)
+    expect(await answer(withOwnOrcaReads({}, RESOLVED, 'win32'), read)).toBe(undefined)
   })
 
-  it("keeps a read-only run's own hook", () => {
-    const readOnly = claudeReadOnlyOptions('look-around')
-    expect(withOwnOrcaReads(readOnly, RESOLVED, 'darwin').hooks).toBe(readOnly.hooks)
+  it('keeps a read-only run refusing writes', async () => {
+    const lookAround = withOwnOrcaReads(claudeReadOnlyOptions('look-around'), RESOLVED, 'darwin')
+    expect(await answer(lookAround, { command: `${CLI} bot reply --text 'hi'` })).toBe('deny')
   })
 })
