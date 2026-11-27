@@ -1,7 +1,7 @@
 // The host's Linear or GitHub link as its Orca Cloud answers it, like the desktop's bot-linear-state and
 // bot-github-state: read on the route's reads and on refresh; a host the phone can't reach keeps the last.
 // `failed` carries the host's code, linear_off and github_off included.
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect } from 'react'
 import {
   BOT_GITHUB_OFF,
   type ConnectorGitHubState
@@ -14,6 +14,13 @@ import { hostReadClient } from '../../query/host-read-client'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { HOST_OFFLINE, slackCall } from './bot-slack-operations'
 import { gitHubStateRead, linearStateRead } from './bot-connector-people-operations'
+import {
+  connectorReadCells,
+  connectorReadKey,
+  setConnectorRead,
+  useConnectorRead,
+  type ConnectorReadCell
+} from './phone-connector-reads'
 
 export type PhoneAccountView<Value> =
   | { status: 'loading' }
@@ -35,23 +42,32 @@ function readGitHub(client: RpcClient): Promise<Answer<ConnectorGitHubState>> {
   return slackCall(() => gitHubStateRead.request(hostReadClient(client)), gitHubStateRead.interpret)
 }
 
+type AccountCell<Value> = ConnectorReadCell<PhoneAccountView<Value>> & {
+  reading: { again: boolean; done: Promise<void> } | null
+}
+
+const accountCells = <Value>() =>
+  connectorReadCells((): AccountCell<Value> => ({ value: { status: 'loading' }, reading: null }))
+const linearCells = accountCells<ConnectorLinearState>()
+const gitHubCells = accountCells<ConnectorGitHubState>()
+
 function useConnectorAccount<Value>(
   client: RpcClient | null,
+  cell: AccountCell<Value>,
   read: (client: RpcClient) => Promise<Answer<Value>>,
   enabled: boolean,
   again: number
 ): { view: PhoneAccountView<Value>; refresh: () => Promise<void> } {
-  const [view, setView] = useState<PhoneAccountView<Value>>({ status: 'loading' })
+  const view = useConnectorRead(cell)
   // One read at a time, so a slow host still lands; a refresh asked for meanwhile runs once after it,
   // and its caller waits for that read too.
-  const reading = useRef<{ again: boolean; done: Promise<void> } | null>(null)
   const refresh = useCallback((): Promise<void> => {
     if (!client) {
       return Promise.resolve()
     }
-    if (reading.current) {
-      reading.current.again = true
-      return reading.current.done
+    if (cell.reading) {
+      cell.reading.again = true
+      return cell.reading.done
     }
     const flight = { again: true, done: Promise.resolve() }
     flight.done = (async () => {
@@ -62,7 +78,9 @@ function useConnectorAccount<Value>(
           if (!answer.ok && answer.error === HOST_OFFLINE) {
             return
           }
-          setView((shown) =>
+          const shown = cell.value
+          setConnectorRead(
+            cell,
             answer.ok
               ? { status: 'ready', value: answer.value }
               : // A background failure keeps what showed; signed out or off is news the owner acts on.
@@ -72,12 +90,12 @@ function useConnectorAccount<Value>(
           )
         }
       } finally {
-        reading.current = null
+        cell.reading = null
       }
     })()
-    reading.current = flight
+    cell.reading = flight
     return flight.done
-  }, [client, read])
+  }, [client, cell, read])
   useEffect(() => {
     if (enabled) {
       void refresh()
@@ -86,10 +104,33 @@ function useConnectorAccount<Value>(
   return { view, refresh }
 }
 
-export function usePhoneLinearAccount(client: RpcClient | null, enabled: boolean, again: number) {
-  return useConnectorAccount(client, readLinear, enabled, again)
+/** The host's Linear link, one answer for every surface of `hostKey`'s bots. */
+export function usePhoneLinearAccount(
+  client: RpcClient | null,
+  hostKey: string,
+  enabled: boolean,
+  again: number
+) {
+  return useConnectorAccount(
+    client,
+    linearCells(connectorReadKey(hostKey, 'linear')),
+    readLinear,
+    enabled,
+    again
+  )
 }
 
-export function usePhoneGitHubAccount(client: RpcClient | null, enabled: boolean, again: number) {
-  return useConnectorAccount(client, readGitHub, enabled, again)
+export function usePhoneGitHubAccount(
+  client: RpcClient | null,
+  hostKey: string,
+  enabled: boolean,
+  again: number
+) {
+  return useConnectorAccount(
+    client,
+    gitHubCells(connectorReadKey(hostKey, 'github')),
+    readGitHub,
+    enabled,
+    again
+  )
 }

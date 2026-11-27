@@ -7,7 +7,7 @@ import type { ZodType, output } from 'zod'
 export type BrowserExtensionCaller = {
   extension: Electron.Extension
   session: Electron.Session
-  /** Local browser profile whose session loaded the extension. */
+  /** Extension profile whose session loaded the extension: a local profile, or an SSH or This-device page's. */
   browserProfileId: string
   /** Set for extension pages (tabs, popouts, popups). */
   webContents?: Electron.WebContents

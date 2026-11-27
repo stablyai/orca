@@ -4,12 +4,15 @@ import type {
   FocusEventHandler,
   FormEvent,
   KeyboardEventHandler,
-  PointerEvent,
   PointerEventHandler,
   RefObject,
   WheelEventHandler
 } from 'react'
 import { cn } from '@/lib/class-names'
+import {
+  ComposingKeyboardProxy,
+  recordComposingKeyboardProxyAnchor
+} from '@/lib/text-input/ime/composing-keyboard-proxy'
 import { getEmulatorScreenAriaLabel } from './emulator-screen-aria-label'
 import { EmulatorScreenStreamContent } from './emulator-screen-stream-content'
 import type {
@@ -18,25 +21,6 @@ import type {
   VisualStreamGeometry
 } from '../frame/emulator-device-frame-layout'
 import { useTranslate } from '@/i18n/use-translate'
-
-// Gap between the composing text and the screen edge or the tapped point.
-const PROXY_MARGIN_PX = 8
-
-// Puts the composing text just under the last tap (where the guest's field usually is), inside the screen.
-function placeKeyboardProxy(proxy: HTMLTextAreaElement): void {
-  const screen = proxy.parentElement
-  if (!screen) {
-    return
-  }
-  const width = screen.clientWidth
-  const height = screen.clientHeight
-  const x = Number(screen.dataset.tapX ?? width / 2)
-  const y = Number(screen.dataset.tapY ?? height * 0.75)
-  const clamp = (value: number, max: number) =>
-    Math.max(PROXY_MARGIN_PX, Math.min(value, max - PROXY_MARGIN_PX))
-  proxy.style.left = `${clamp(x - proxy.offsetWidth / 2, width - proxy.offsetWidth)}px`
-  proxy.style.top = `${clamp(y + PROXY_MARGIN_PX, height - proxy.offsetHeight)}px`
-}
 
 type EmulatorScreenSurfaceProps = {
   deviceId?: string
@@ -93,11 +77,6 @@ export function EmulatorScreenSurface({
 }: EmulatorScreenSurfaceProps) {
   const t = useTranslate()
   const ariaLabel = getEmulatorScreenAriaLabel(isLive, keyboardCaptureActive, t)
-  const recordTapPoint = (event: PointerEvent<HTMLDivElement>): void => {
-    const rect = event.currentTarget.getBoundingClientRect()
-    event.currentTarget.dataset.tapX = String(event.clientX - rect.left)
-    event.currentTarget.dataset.tapY = String(event.clientY - rect.top)
-  }
   return (
     <div
       className={cn(
@@ -113,7 +92,7 @@ export function EmulatorScreenSurface({
       }}
       onPointerCancel={onPointerCancel}
       onPointerDown={onPointerDown}
-      onPointerDownCapture={recordTapPoint}
+      onPointerDownCapture={recordComposingKeyboardProxyAnchor}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onBlur={onBlur}
@@ -134,26 +113,11 @@ export function EmulatorScreenSurface({
       aria-label={ariaLabel}
     >
       {isLive ? (
-        <textarea
+        <ComposingKeyboardProxy
           ref={keyboardProxyRef}
           data-emulator-keyboard-proxy=""
           aria-label={ariaLabel}
-          autoCapitalize="off"
-          autoComplete="off"
-          autoCorrect="off"
-          spellCheck={false}
-          rows={1}
-          tabIndex={-1}
-          className="pointer-events-none absolute top-0 left-0 z-10 m-0 size-px resize-none overflow-hidden whitespace-pre border-0 bg-transparent p-0 text-transparent caret-transparent opacity-0 outline-none [field-sizing:content] data-[composing]:size-auto data-[composing]:max-w-[calc(100%-16px)] data-[composing]:rounded-md data-[composing]:border data-[composing]:border-border data-[composing]:bg-popover data-[composing]:px-2 data-[composing]:py-1 data-[composing]:text-sm data-[composing]:text-popover-foreground data-[composing]:caret-current data-[composing]:opacity-100 data-[composing]:shadow-floating"
-          onCompositionStart={(event) => {
-            event.currentTarget.dataset.composing = ''
-            placeKeyboardProxy(event.currentTarget)
-          }}
-          onCompositionUpdate={(event) => placeKeyboardProxy(event.currentTarget)}
-          onCompositionEnd={(event) => {
-            delete event.currentTarget.dataset.composing
-            onKeyboardProxyCompositionEnd(event)
-          }}
+          onCompositionEnd={onKeyboardProxyCompositionEnd}
           onInput={onKeyboardProxyInput}
         />
       ) : null}

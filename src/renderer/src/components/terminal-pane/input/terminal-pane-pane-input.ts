@@ -11,6 +11,10 @@ import {
 import { installTerminalImeCompositionTracker } from './ime/terminal-ime-composition-tracker'
 import { installTerminalImeComposerPlaceholderMask } from './ime/terminal-ime-composer-placeholder-mask'
 import { createTerminalKittyOrphanKeyupGuard } from './keyboard/terminal-kitty-orphan-keyup-guard'
+import {
+  encodeKittyUnidentifiedSpaceRelease,
+  resolveKittyUnidentifiedSpacePress
+} from './keyboard/terminal-kitty-unidentified-space'
 import { installTerminalImeNativeTextForwarder } from './ime/terminal-ime-native-text-forwarder'
 import { installTerminalIosHangulPreedit } from './ime/terminal-ios-hangul-preedit'
 import { createTerminalIosHangulPreeditRenderer } from './ime/terminal-ios-hangul-preedit-overlay'
@@ -52,11 +56,14 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
   } = context
   let pendingTerminalInterruptKeyup = false
   let claimedNonLatinControlChordCode: string | null = null
+  let claimedKittyUnidentifiedSpacePress = false
   const pendingTerminalImeCandidateKeyReleases = createTerminalImePendingCandidateKeyReleases()
   const isMac = navigator.userAgent.includes('Mac')
-  // Android/ChromeOS UAs also contain "Linux"; scope the candidate-key policy to desktop Linux.
-  const isLinux =
-    !isMac && navigator.userAgent.includes('Linux') && !/Android|CrOS/.test(navigator.userAgent)
+  // Desktop Linux (not Android/ChromeOS) and HarmonyOS PC ArkWeb, whose UA omits "Linux", both commit IME text as insertText.
+  const usesLinuxImePolicy =
+    !isMac &&
+    ((navigator.userAgent.includes('Linux') && !/Android|CrOS/.test(navigator.userAgent)) ||
+      isOpenHarmonyDesktopUserAgent(navigator.userAgent))
   const isIosWeb = isCurrentPlatformIosWeb()
   const imeCompositionTracker = installTerminalImeCompositionTracker(pane.terminal.element)
   const imeComposerPlaceholderMask = installTerminalImeComposerPlaceholderMask(pane.terminal)
@@ -80,7 +87,7 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
   })
   // Why Linux too: fcitx4 commits a candidate pick as the Space/digit keydown's insertText (#28213).
   const imeNativeTextForwarder =
-    (isMac || isLinux) && !isIosWeb
+    (isMac || usesLinuxImePolicy) && !isIosWeb
       ? installTerminalImeNativeTextForwarder({
           terminalElement: pane.terminal.element,
           isComposing: () => imeCompositionTracker.isActive(),
@@ -105,7 +112,23 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
         imeCompositionTracker.isCandidateKeyGuardActive() || pendingCandidateReleaseGuardActive,
       pendingCandidateKeyReleaseActive: pendingCandidateReleaseGuardActive,
       isMac,
-      isLinux
+      isLinux: usesLinuxImePolicy
+    }
+    if (claimedKittyUnidentifiedSpacePress && event.code === 'Space') {
+      if (event.type === 'keyup') {
+        // Before IME suppression: a composing keyup still ends the press this handler reported.
+        claimedKittyUnidentifiedSpacePress = false
+        clearTerminalImePendingCandidateKeyRelease(pendingTerminalImeCandidateKeyReleases, event)
+        const release = encodeKittyUnidentifiedSpaceRelease(event, getKittyKeyboardFlags())
+        if (release) {
+          pane.terminal.input(release)
+        }
+        return false
+      }
+      if (event.type === 'keydown' && !event.repeat) {
+        // A fresh press proves the claimed keyup was missed.
+        claimedKittyUnidentifiedSpacePress = false
+      }
     }
     if (shouldSuppressTerminalImeKeyboardEvent(event, imeKeyboardOptions)) {
       clearTerminalImePendingCandidateKeyRelease(pendingTerminalImeCandidateKeyReleases, event)
@@ -174,18 +197,33 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
     if (imeNativeTextForwarder.claimKeyEvent(event)) {
       return false
     }
+    const kittyKeyboardFlags = getKittyKeyboardFlags()
     const shouldBypass = shouldBypassXtermKeyboardEvent(event, {
       isMac,
       isIosWeb,
       hasSelection: pane.terminal.hasSelection(),
-      kittyKeyboardFlags: getKittyKeyboardFlags()
+      kittyKeyboardFlags
     })
-    return !shouldBypass
+    if (shouldBypass) {
+      return false
+    }
+    const unidentifiedSpacePress = resolveKittyUnidentifiedSpacePress(event, kittyKeyboardFlags)
+    if (unidentifiedSpacePress) {
+      claimedKittyUnidentifiedSpacePress = true
+      pane.terminal.input(unidentifiedSpacePress)
+      return false
+    }
+    return true
   }
 
   pane.terminal.attachCustomKeyEventHandler((event) =>
     kittyOrphanKeyupGuard.filter(event, resolveXtermKeyEvent(event), getKittyKeyboardFlags())
   )
+}
+
+function isOpenHarmonyDesktopUserAgent(userAgent: string): boolean {
+  // Scoped to ArkWeb PC UAs, the only HarmonyOS device type whose IME commit trace (#36015) was recorded.
+  return /\(PC;[^)]*\bOpenHarmony\b/i.test(userAgent)
 }
 
 export type { PaneInputContext }

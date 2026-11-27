@@ -11,6 +11,7 @@ import type { Bot } from '../bot-types'
 import { botAccessCopy, type BotAccessCopyId } from './bot-access-copy'
 import type { GoogleAccountView } from '../google/google-connect-types'
 import type { GoogleService } from '../google/google-scopes'
+import { finalSentenceStop, joinSentences } from '../text/sentence-joining'
 
 /** The permission new bot conversations start in; null when this side can't know it (the agent's own
  *  settings, or an app default the phone can't read). */
@@ -132,8 +133,8 @@ export const GOOGLE_REACH_COPY: Record<GoogleReachArea | 'unknown', BotAccessCop
   unknown: 'reachGoogleUnknown'
 }
 
-/** One reach line in English, for a side without translation (the phone). `mode` words a permission
- *  mode as that side shows it. */
+/** One reach line for a side that words it itself (the phone). `mode` words a permission mode as that
+ *  side shows it; `copy` translates the table, English when absent. */
 export function botReachLineText(
   line: BotReachLine,
   context: {
@@ -141,37 +142,42 @@ export function botReachLineText(
     agentLabel: string
     place: { computer: string }
     mode: (mode: AgentChatPermissionMode) => { label: string; description: string }
+    copy?: (id: BotAccessCopyId, values?: Record<string, string | number>) => string
   }
 ): { title: string; detail?: string } {
   const { name } = context
+  const copy = context.copy ?? botAccessCopy
   switch (line.kind) {
     case 'computer':
       return {
-        title: botAccessCopy('reachComputer', context.place),
-        detail: botAccessCopy('reachComputerDetail')
+        title: copy('reachComputer', context.place),
+        detail: copy('reachComputerDetail')
       }
     case 'permission': {
       const { mode, fellBackFrom } = line.permission
       const notes = line.notes.map((id) =>
-        botAccessCopy(id, {
+        copy(id, {
           name,
           agent: context.agentLabel,
           mode: fellBackFrom ? context.mode(fellBackFrom).label : ''
         })
       )
       if (!mode) {
-        return { title: botAccessCopy('reachPermissionUnknown'), detail: notes.join(' ') }
+        return { title: copy('reachPermissionUnknown'), detail: joinSentences(notes) }
       }
       const words = context.mode(mode)
       return {
-        title: botAccessCopy('reachPermission', { mode: words.label }),
-        detail: [`${words.description}.`, ...notes].join(' ')
+        title: copy('reachPermission', { mode: words.label }),
+        detail: joinSentences([
+          `${words.description}${finalSentenceStop(words.description)}`,
+          ...notes
+        ])
       }
     }
     case 'connector':
-      return { title: botAccessCopy(CONNECTOR_REACH_COPY[line.connector], { name }) }
+      return { title: copy(CONNECTOR_REACH_COPY[line.connector], { name }) }
     case 'google':
-      return { title: botAccessCopy(GOOGLE_REACH_COPY[line.area ?? 'unknown']) }
+      return { title: copy(GOOGLE_REACH_COPY[line.area ?? 'unknown']) }
   }
 }
 

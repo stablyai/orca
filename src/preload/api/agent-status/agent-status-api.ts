@@ -31,6 +31,10 @@ export type AgentStatusApi = {
       ptyId?: string
     }) => void
   ) => () => void
+  /** A terminal worker's restart resume now waits on a person beside the cut chats. */
+  onRestartOffersChanged?: (callback: () => void) => () => void
+  /** Whether a terminal worker's restart resume waits on a person now. */
+  hasRestartOffers?: () => Promise<boolean>
   getMigrationUnsupportedSnapshot: () => Promise<MigrationUnsupportedPtyEntry[]>
   /** Drop a paneKey from the main-process hook cache and on-disk last-status file. Fire-and-forget. */
   drop: (paneKey: string) => void

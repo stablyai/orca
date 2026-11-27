@@ -19,6 +19,8 @@ export const LAST_STATUS_FILE_VERSION = 2
 // Saved status only seeds the "restored, unconfirmed" view after a restart, so routine saves can
 // wait minutes; authority changes bypass the window and quit, hook-disable and stop flush now.
 export const STATUS_PERSIST_MIN_INTERVAL_MS = 3 * 60_000
+// Coalesces many agents' turn edges into one save; a crash loses at most this window of them.
+export const STATUS_TURN_EDGE_PERSIST_INTERVAL_MS = 1_000
 // A failed save (often another connection's lock) retries on its own short backoff.
 export const STATUS_PERSIST_RETRY_MIN_MS = 1_000
 export const STATUS_PERSIST_RETRY_MAX_MS = 30_000

@@ -6,6 +6,7 @@ import { agentJournalItemRowOrigin } from '../../../shared/agent-session/journal
 import { agentJournalLinkageFields } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import {
   agentSessionPromptQuestions,
+  isAgentSessionQuestionAnswered,
   legacyAgentSessionQuestionAnswers
 } from '../../../shared/agent-session/requests/prompts/agent-session-question-answer'
 import { nativeChatReceiptAnswers } from '../../../shared/native-chat/input/questions/native-chat-resolution-receipt'
@@ -22,8 +23,11 @@ function questionInterpretation(body: AgentJournalQuestionItem): string[] {
   return agentSessionPromptQuestions(body).flatMap((question) => {
     const heading = `Question ${JSON.stringify(question.id)}${question.header ? ` (${question.header})` : ''}`
     const answer = answers?.find((entry) => entry.questionId === question.id)
-    if (!answer || (answer.optionIds.length === 0 && answer.other === undefined)) {
+    if (!answer) {
       return [heading, 'Submitted answer: unavailable']
+    }
+    if (!isAgentSessionQuestionAnswered(question, answer)) {
+      return [heading, 'Skipped: the user submitted no answer to this question']
     }
     return [
       heading,

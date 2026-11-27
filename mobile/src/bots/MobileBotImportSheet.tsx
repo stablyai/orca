@@ -1,17 +1,22 @@
 // Import from another app, from New bot: pick a bot OpenClaw, Hermes or OpenBot keeps on the bot's computer, or
 // the folder an old bot exported there; the new bot's first turn brings it over. The desktop's ImportBotDialog.
-import { useState, type ReactNode } from 'react'
-import { ScrollView, Text, View } from 'react-native'
-import { ArrowRight, Plus } from 'lucide-react-native'
+import { useRef, useState, type ReactElement, type ReactNode } from 'react'
+import { ScrollView, Text, View, type HostInstance } from 'react-native'
+import { Ellipsis, Plus } from 'lucide-react-native'
 import { BottomDrawer, OptionPager, useOptionPager } from '../components/bottom-drawer/BottomDrawer'
 import { useBottomDrawerModalHostBackClaim } from '../components/bottom-drawer/bottom-drawer-modal-host-scope'
 import { TextField } from '../components/composer-input/TextField'
 import { LIST_LEADING_INSET, ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
+import { MessageBox } from '../components/composer-input/MessageBox'
+import { NavBarButton } from '../components/nav-bar/NavBarButton'
+import { PullDownMenu } from '../components/nav-bar/PullDownMenu'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
+import { SheetPrimaryButton } from '../components/sheets/SheetPrimaryButton'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useBackClaim } from '../navigation/use-back-claim'
 import { useClipboardWriter } from '../platform/clipboard/clipboard'
 import { triggerError } from '../platform/haptics/haptics'
+import { SettingsNote, SettingsSection } from '../settings/settings-screen-frame'
 import { colors, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -21,6 +26,7 @@ import { botInitial } from '../../../src/shared/bots/bot-avatar-fallback'
 import {
   BOT_IMPORT_APP_LABELS,
   BOT_IMPORT_EXPORT_PROMPT,
+  BOT_IMPORT_REPLY_MAX,
   botNameFromExportFolder,
   type BotImportCandidate,
   type BotImportSource
@@ -28,9 +34,12 @@ import {
 import type { BotCreateParams } from '../../../src/shared/rpc-contract/bots-params'
 import { getRuntimePathBasename } from '../../../src/shared/file-access/cross-platform-path'
 import type { BotImportSourcesRead } from './bot-import-host-reads'
+import type { ListedBot } from './host-bots-operations'
 import { MobileBotAvatar } from './MobileBotAvatar'
+import { MobileBotImportHero } from './MobileBotImportHero'
 import { MobileBotExportFolderPage, type ExportFolder } from './MobileBotExportFolderPage'
 import { MobileBotImportExportSteps } from './MobileBotImportExportSteps'
+import { groupFieldStyles } from './MobileNewBotPickers'
 
 export type BotImportFrom = NonNullable<BotCreateParams['importFrom']>
 
@@ -50,10 +59,15 @@ export function MobileBotImportSheet(props: {
   read: BotImportSourcesRead
   /** The new bot's picture, with its shuffle. */
   picture: ReactNode
-  /** Runs on and Agent, as New bot shows them. */
-  runsOn: ReactNode
+  /** Runs on and Agent, as New bot's rows, and the note under them. */
+  pickerRows: readonly ReactElement[]
+  pickerNote: ReactNode
   /** The computer is reachable and has said which agents it has. */
   ready: boolean
+  /** The computer's bots, for the one an earlier import made. */
+  bots: readonly ListedBot[]
+  /** Opens that bot's Home Chat with `draft`; null where this sheet can't open a bot. */
+  onUpdate: ((bot: ListedBot, draft: string) => void) | null
   creating: boolean
   error: string | null
   onBack: () => void
@@ -72,6 +86,10 @@ export function MobileBotImportSheet(props: {
   const [folder, setFolder] = useState<ExportFolder | null>(null)
   const [reply, setReply] = useState('')
   const [copied, setCopied] = useState(false)
+  // Make a new bot instead: a pick imported before names another bot rather than updating it.
+  const [copying, setCopying] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuAnchor = useRef<HostInstance>(null)
   useBottomDrawerModalHostBackClaim(pager.page ? pager.close : null)
   useBackClaim(
     pager.page
@@ -105,7 +123,23 @@ export function MobileBotImportSheet(props: {
         ? pick.bot.name.slice(0, BOT_NAME_MAX_LENGTH)
         : '')
   const trimmed = name.trim()
-  const again = pick?.bot.importedAs && !trimmed ? pick.bot.importedAs : null
+  const imported = pick?.bot.importedAs ?? null
+  const madeBefore = imported ? (props.bots.find((bot) => bot.id === imported.botId) ?? null) : null
+  // The bot an earlier import made gets the new things, instead of a second bot; one this sheet
+  // can't open is imported again under a new name.
+  const again = imported && madeBefore && props.onUpdate && !copying && !trimmed ? imported : null
+  const existing = again ? madeBefore : null
+  const update =
+    existing && pick && props.onUpdate
+      ? () =>
+          props.onUpdate?.(
+            existing,
+            t('bots.import.updateDraft', 'Bring over anything new from {{name}} in {{app}}.', {
+              name: pick.bot.name,
+              app: BOT_IMPORT_APP_LABELS[pick.source.app]
+            })
+          )
+      : null
   const importFrom: BotImportFrom | null = exporting
     ? folder && {
         app: 'export',
@@ -137,6 +171,7 @@ export function MobileBotImportSheet(props: {
     if (view === 'export' && picks.length > 0) {
       setTypedName(null)
       setView('pick')
+      setCopying(false)
     } else {
       props.onBack()
     }
@@ -199,6 +234,7 @@ export function MobileBotImportSheet(props: {
               onPress={() => {
                 setPickedKey(key)
                 setTypedName(null)
+                setCopying(false)
               }}
             />
           )
@@ -211,7 +247,6 @@ export function MobileBotImportSheet(props: {
             </View>
           }
           title={t('bots.import.otherApp', 'Another app…')}
-          subtitle={t('bots.import.otherAppNote', 'Your old bot copies its files for you')}
           navigates
           onPress={() => {
             setTypedName(null)
@@ -227,88 +262,118 @@ export function MobileBotImportSheet(props: {
       <SheetHeader
         title={t('bots.import.title', 'Import from another app')}
         onBack={{ label: t('common.back', 'Back'), onPress: back }}
-        trailing={{
-          label: t('bots.new.create', 'Create'),
-          onPress: () => importFrom && canCreate && props.onCreate(trimmed, importFrom),
-          disabled: !canCreate,
-          busy: props.creating
-        }}
+        {...(again
+          ? {
+              trailingButtons: (
+                <NavBarButton
+                  ref={menuAnchor}
+                  icon={Ellipsis}
+                  accessibilityLabel={t('bots.import.more', 'More actions')}
+                  onPress={() => setMenuOpen(true)}
+                />
+              )
+            }
+          : {
+              trailing: {
+                label: t('bots.new.create', 'Create'),
+                onPress: () => importFrom && canCreate && props.onCreate(trimmed, importFrom),
+                disabled: !canCreate,
+                busy: props.creating
+              }
+            })}
       />
       <ScrollView
         style={styles.page}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.hero}>
-          <View style={styles.heroSide}>
-            {oldName ? (
-              <MobileBotAvatar avatar={{ kind: 'text', text: botInitial(oldName) }} size={56} />
-            ) : (
-              <View style={[styles.oldTile, styles.dashed]}>
-                <Text style={styles.unknown}>?</Text>
-              </View>
-            )}
-            <Text style={styles.heroLabel} numberOfLines={1}>
-              {oldLabel}
-            </Text>
-          </View>
-          <ArrowRight size={20} color={colors.textMuted} />
-          <View style={styles.heroSide}>
-            {props.picture}
-            <Text style={styles.heroLabel} numberOfLines={1}>
-              {t('bots.import.newBot', 'New bot')}
-            </Text>
-          </View>
-        </View>
-        <Text style={styles.lead}>
-          {exporting
-            ? t(
-                'bots.import.exportDescription',
-                'Ask your old bot for a copy of itself, then give the copy to your new bot.'
-              )
-            : t('bots.import.description', 'Your new bot reads the old one and sets itself up.')}
-        </Text>
-        <TextField
-          value={name}
-          onChangeText={setTypedName}
-          placeholder={
-            again
-              ? t('bots.import.nameAnother', 'Name a new bot')
-              : t('bots.new.namePlaceholder', 'Name your bot')
-          }
-          maxLength={BOT_NAME_MAX_LENGTH}
-          autoCorrect={false}
-          returnKeyType="done"
+        <MobileBotImportHero
+          oldName={oldName}
+          oldLabel={oldLabel}
+          picture={props.picture}
+          existing={existing}
         />
-        {again ? (
-          <Text style={styles.note}>
-            {t('bots.import.importedBefore', '{{bot}} came from this bot', { bot: again.name })}
-          </Text>
-        ) : null}
         {exporting ? (
           <MobileBotImportExportSteps
-            hostLabel={props.hostLabel}
             noneFound={nothingFound && read.status === 'ready'}
             copied={copied}
             onCopy={copy}
             folder={folder}
             onRemoveFolder={() => setFolder(null)}
             onChooseFolder={props.client ? () => pager.open('folder') : null}
-            reply={reply}
-            onReply={setReply}
           />
         ) : (
           pickList
         )}
-        <View style={styles.runsOn}>{props.runsOn}</View>
+        {again ? null : (
+          <SettingsSection>
+            <TextField
+              key="name"
+              value={name}
+              onChangeText={setTypedName}
+              placeholder={
+                pick?.bot.importedAs
+                  ? t('bots.import.nameAnother', 'Name a new bot')
+                  : t('bots.new.namePlaceholder', 'Name your bot')
+              }
+              maxLength={BOT_NAME_MAX_LENGTH}
+              autoFocus={copying}
+              autoCorrect={false}
+              returnKeyType="done"
+              style={groupFieldStyles.line}
+            />
+            {exporting && folder ? (
+              <MessageBox
+                key="reply"
+                value={reply}
+                onChangeText={setReply}
+                maxLength={BOT_IMPORT_REPLY_MAX}
+                placeholder={t('bots.import.replyPlaceholder', 'Paste its reply, if it wrote one')}
+                accessibilityLabel={t('bots.import.replyLabel', 'Its reply')}
+                style={groupFieldStyles.lines}
+              />
+            ) : null}
+            {props.pickerRows}
+          </SettingsSection>
+        )}
+        {again ? null : props.pickerNote}
         {read.status === 'failed' ? (
-          <Text style={styles.error}>
+          <SettingsNote error>
             {t('bots.list.updateOrcaOn', 'Update Orca on {{host}}', { host: props.hostLabel })}
-          </Text>
+          </SettingsNote>
         ) : null}
-        {props.error ? <Text style={styles.error}>{props.error}</Text> : null}
-        <Text style={styles.foot}>{t('bots.import.keysStay', 'Keys and logins stay behind')}</Text>
+        {props.error ? <SettingsNote error>{props.error}</SettingsNote> : null}
+        {again ? null : (
+          <SettingsNote>{t('bots.import.keysStay', 'Keys and logins stay behind')}</SettingsNote>
+        )}
       </ScrollView>
+      {again ? (
+        <View style={styles.foot}>
+          <SheetPrimaryButton
+            label={t('bots.import.update', 'Update {{bot}}', { bot: again.name })}
+            disabled={!update}
+            onPress={() => update?.()}
+          />
+        </View>
+      ) : null}
+      <PullDownMenu
+        visible={menuOpen && again !== null}
+        anchorRef={menuAnchor}
+        onClose={() => setMenuOpen(false)}
+        groups={[
+          [
+            {
+              label: t('bots.import.makeNew', 'Make a new bot instead'),
+              icon: Plus,
+              closeBeforePress: true,
+              onPress: () => {
+                setTypedName(null)
+                setCopying(true)
+              }
+            }
+          ]
+        ]}
+      />
     </View>
   )
 
@@ -348,23 +413,6 @@ export function MobileBotImportSheet(props: {
 
 const styles = themedStyleSheet(() => ({
   page: { flex: 1 },
-  hero: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.lg,
-    paddingTop: spacing.sm
-  },
-  heroSide: { alignItems: 'center', gap: spacing.xs, maxWidth: 120 },
-  heroLabel: { fontSize: 12, color: colors.textSecondary },
-  oldTile: {
-    width: 56,
-    height: 56,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  unknown: { fontSize: 22, color: colors.textMuted },
   tile: {
     width: TILE,
     height: TILE,
@@ -373,27 +421,6 @@ const styles = themedStyleSheet(() => ({
     justifyContent: 'center'
   },
   dashed: { borderWidth: 1, borderStyle: 'dashed', borderColor: colors.borderSubtle },
-  lead: {
-    fontSize: 13,
-    color: colors.textMuted,
-    textAlign: 'center',
-    marginTop: spacing.sm,
-    marginBottom: spacing.md
-  },
   count: { fontSize: 13, color: colors.textMuted },
-  note: {
-    fontSize: 13,
-    color: colors.textMuted,
-    marginTop: spacing.sm,
-    paddingHorizontal: spacing.xs
-  },
-  runsOn: { marginTop: spacing.md },
-  error: { fontSize: 13, color: colors.statusRed, marginTop: spacing.sm },
-  foot: {
-    fontSize: 13,
-    color: colors.textMuted,
-    marginTop: spacing.sm,
-    marginBottom: spacing.lg,
-    paddingHorizontal: spacing.xs
-  }
+  foot: { paddingTop: spacing.md }
 }))

@@ -4,8 +4,6 @@ import type { StatusBarItem } from '../ui-chrome/ui-chrome-types'
 export const DEFAULT_STATUS_BAR_ITEMS: StatusBarItem[] = [
   'claude',
   'codex',
-  'gemini',
-  'antigravity',
   'opencode-go',
   'kimi',
   'minimax',
@@ -24,7 +22,6 @@ const DEFAULT_ON_STATUS_BAR_ITEMS = [
   ['_portsStatusBarDefaultAdded', 'ports'],
   ['_kimiStatusBarDefaultAdded', 'kimi'],
   ['_minimaxStatusBarDefaultAdded', 'minimax'],
-  ['_antigravityStatusBarDefaultAdded', 'antigravity'],
   ['_grokStatusBarDefaultAdded', 'grok'],
   ['_cursorStatusBarDefaultAdded', 'cursor'],
   ['_zcodeStatusBarDefaultAdded', 'zcode'],
@@ -38,6 +35,10 @@ export function migrateStatusBarItems(items: readonly string[] | undefined): Sta
   const source = Array.isArray(items) ? items : DEFAULT_STATUS_BAR_ITEMS
   const out: string[] = []
   for (const id of source) {
+    // Gemini CLI and Antigravity usage were removed; profiles and older peers may still list them.
+    if (id === 'gemini' || id === 'antigravity') {
+      continue
+    }
     const mapped = id === 'memory' || id === 'sessions' ? 'resource-usage' : id
     if (!out.includes(mapped)) {
       out.push(mapped)

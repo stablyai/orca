@@ -34,7 +34,7 @@ import type {
 } from '../../shared/workspace-session/workspace-session-state-types'
 import {
   applyWorkspaceSessionEntriesPatch,
-  fieldsStoredDifferently,
+  storedDifferently,
   type WorkspaceSessionEntriesPatch,
   type WorkspaceSessionEntriesPatchResult
 } from '../../shared/workspace-session/workspace-session-entries-patch'
@@ -174,8 +174,12 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
         return result
       }
       // Normalization, fences and main's sleep records can store something else, saved or not.
-      const normalizedFields = fieldsStoredDifferently(store.getWorkspaceSession(hostId), args)
-      return normalizedFields.length > 0 ? { ...result, normalizedFields } : result
+      const differ = storedDifferently(store.getWorkspaceSession(hostId), args)
+      return {
+        ...result,
+        ...(differ.fields.length > 0 ? { normalizedFields: differ.fields } : {}),
+        ...(Object.keys(differ.entries).length > 0 ? { normalizedEntries: differ.entries } : {})
+      }
     }
   )
 

@@ -20,17 +20,25 @@ export function botPlaceClient(paired: RpcClient, place: BotHomePlace): RpcClien
 }
 
 /** Opens a bot's Home on its paired computer's screen; the host starts its Home Chat first, which
- *  never fails the open. */
-export function useOpenBotHome(): (place: BotHomePlace, bot: HostBot) => void {
+ *  never fails the open. `homeDraft` lands in that chat's composer. `current` false by the time the
+ *  host answers drops the open. `standalone` opens it in place of that computer's list, for Home,
+ *  whose bot lists span computers. */
+export function useOpenBotHome({ standalone = false } = {}): (
+  place: BotHomePlace,
+  bot: HostBot,
+  options?: { homeDraft?: string; current?: () => boolean }
+) => void {
   const openMobileSession = useOpenMobileSession()
   const clients = useRpcClientContext()
   return useCallback(
-    (place, bot) => {
+    (place, bot, { homeDraft, current } = {}) => {
       const openHome = () =>
         openMobileSession({
           hostId: place.pairedHostId,
           worktreeId: botHomeWorktreeId(bot),
           name: bot.name,
+          standalone,
+          ...(homeDraft ? { homeDraft } : {}),
           ...(place.executionHost === LOCAL_EXECUTION_HOST_ID
             ? {}
             : { executionHost: place.executionHost })
@@ -42,8 +50,12 @@ export function useOpenBotHome(): (place: BotHomePlace, bot: HostBot) => void {
         openHome()
         return
       }
-      void ensureBotHomeChat(botPlaceClient(client, place), bot.id).then(openHome)
+      void ensureBotHomeChat(botPlaceClient(client, place), bot.id).then(() => {
+        if (current?.() !== false) {
+          openHome()
+        }
+      })
     },
-    [clients, openMobileSession]
+    [clients, openMobileSession, standalone]
   )
 }

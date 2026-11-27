@@ -30,16 +30,13 @@ export type PtyProcessInspectionOptions = {
   includeUnattached?: boolean
 }
 
-/** Steady polls may skip the Windows escaped-child table read when the caller asked, or when the
- *  foreground already names an agent: the completion poll then never reads child evidence. */
+/** Steady polls may skip the Windows escaped-child table read only when the foreground names an agent.
+ *  A shell-only job is no proof for a Store shell, and the read that finds a shell alone ends the pane's re-checks. */
 export function steadyPollJudgesByJobMembership(
-  options: Pick<PtyProcessInspectionOptions, 'steadyState' | 'jobMembershipOnly'> | undefined,
+  options: Pick<PtyProcessInspectionOptions, 'steadyState'> | undefined,
   foregroundProcess: string | null
 ): boolean {
-  return (
-    options?.steadyState === true &&
-    (options.jobMembershipOnly === true || recognizeAgentProcess(foregroundProcess) !== null)
-  )
+  return options?.steadyState === true && recognizeAgentProcess(foregroundProcess) !== null
 }
 
 export async function inspectPtyProviderProcess(

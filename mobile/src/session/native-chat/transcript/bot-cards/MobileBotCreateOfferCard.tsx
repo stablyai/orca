@@ -11,6 +11,7 @@ import {
   botCreateOfferView,
   botProposalDetails
 } from '../../../../../../src/shared/bots/bot-create-offer-view'
+import { botTemplateText } from '../../../../../../src/shared/bots/bot-template-text'
 import {
   botCreateOfferState,
   proposalCreateParams,
@@ -22,7 +23,6 @@ import { publishHostBot, useHostBotById, useHostBotsEntry } from '../../../../bo
 import { mobileBotAvatarSource } from '../../../../bots/host-bot-row-facts'
 import { workspaceLineageRead, type PhoneBot } from '../../../../bots/host-bots-operations'
 import { MobileBotAvatar } from '../../../../bots/MobileBotAvatar'
-import { publishBotLink } from '../../../../bots/pending-bot-link'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { colors, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
@@ -110,7 +110,9 @@ export function MobileBotCreateOfferCard({
     )
   }
   const { proposal } = offer
-  const view = botCreateOfferView(offer, state, created, taken, say)
+  const view = botCreateOfferView(offer, state, created, taken, say, (text) =>
+    botTemplateText(text, t)
+  )
   const fromOffer = { botId: proposer.id, offerId: offer.offerId }
   // The new bot runs on its proposer's agent. One this build doesn't know isn't made directly; Edit picks one.
   const agent = isBotAgent(proposer.agent) ? proposer.agent : null
@@ -119,7 +121,9 @@ export function MobileBotCreateOfferCard({
       proposal,
       ...(agent ? { agent } : {}),
       fromOffer,
-      origin: botCreateOfferOrigin(proposal, proposer.name, say),
+      origin: botCreateOfferOrigin(proposal, proposer.name, say, (text) =>
+        botTemplateText(text, t)
+      ),
       templatePackages: takesTemplates
     })
   const fail = (caught: unknown) =>
@@ -178,7 +182,7 @@ export function MobileBotCreateOfferCard({
     >
       {open ? (
         <View style={styles.details}>
-          {botProposalDetails(proposal).map((detail) => (
+          {botProposalDetails(proposal, (text) => botTemplateText(text, t)).map((detail) => (
             <Text
               key={detail.label}
               style={[styles.detail, scaledType(typography.metaSize, fontScale)]}
@@ -237,7 +241,7 @@ export function MobileBotCreateOfferCard({
         <MobileBotCardActions>
           <MobileNativeChatNoticePill
             label={say('open')}
-            onPress={() => publishBotLink({ kind: 'bot', botId: created.id })}
+            onPress={() => host.openBotHome(created)}
           />
         </MobileBotCardActions>
       ) : null}

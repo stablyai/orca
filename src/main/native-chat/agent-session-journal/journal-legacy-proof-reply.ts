@@ -23,7 +23,13 @@ export function legacyProofReply(
     if (!(error instanceof JournalLegacyRetentionError)) {
       throw error
     }
-    const page = { next: null, sessions: [], retained: error.message, reason: error.reason }
+    const page = {
+      next: null,
+      sessions: [],
+      retained: error.message,
+      reason: error.reason,
+      artifact: error.artifact
+    }
     return { type: 'legacy-proof', id, page }
   }
 }

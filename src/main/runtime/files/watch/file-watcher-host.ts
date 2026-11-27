@@ -9,10 +9,8 @@ import {
   isWatcherProcessFailure,
   type WatcherProcessFailure
 } from '../../../ipc/filesystem/watcher-process/parcel-watcher-process-failure'
-import {
-  WATCHER_IGNORE_DIRS,
-  buildParcelWatcherIgnoreOptions
-} from '../../../ipc/filesystem/watchers/filesystem-watcher-ignore'
+import { buildParcelWatcherIgnoreOptions } from '../../../ipc/filesystem/watchers/filesystem-watcher-ignore'
+import { WATCHER_IGNORE_DIRS } from '../../../../shared/file-watch/watcher-ignore-dirs'
 import { createRuntimeRootOwnershipReleaser } from './runtime-root-watch-ownership'
 import { closeRuntimeRootWatch } from './runtime-root-watch-teardown'
 import {

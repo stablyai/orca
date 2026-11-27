@@ -55,6 +55,8 @@ export function makeState(
     agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
     agentStatusEpoch: 0,
     browserCertificateFailuresByPageId: {},
+    browserAudiblePageIds: {},
+    browserAudioMutedTabIds: {},
     browserPagesByWorkspace: {},
     browserTabsByWorktree: {},
     groupsByWorktree: {},

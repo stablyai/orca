@@ -1,6 +1,7 @@
 // The newest release of each agent CLI users install themselves, looked up at most hourly.
 
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { getMainHttpClient } from '../network/http-client'
 import { CLAUDE_MANAGED_RUNTIME } from '../claude/managed-runtime/claude-managed-runtime'
 
@@ -13,14 +14,18 @@ export type AgentCliReleaseSource =
 
 const ACP_REGISTRY = 'https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json'
 const REFRESH_MS = 60 * 60_000
+/** No single release lookup waits longer than this, so a version check always settles. */
+export const RELEASE_LOOKUP_TIMEOUT_MS = 10_000
 const VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/
 
-const npmLatestSchema = z.object({ version: z.string().regex(VERSION) })
-const githubReleaseSchema = z.object({ tag_name: z.string() })
+const npmLatestSchema = lazyZodSchema(() => z.object({ version: z.string().regex(VERSION) }))
+const githubReleaseSchema = lazyZodSchema(() => z.object({ tag_name: z.string() }))
 // Other entries may change shape; only the agents Orca reads must parse.
-const acpRegistrySchema = z.object({
-  agents: z.array(z.object({ id: z.string(), version: z.unknown() }))
-})
+const acpRegistrySchema = lazyZodSchema(() =>
+  z.object({
+    agents: z.array(z.object({ id: z.string(), version: z.unknown() }))
+  })
+)
 
 /** Asks at most hourly with one request in flight; a failure waits out the hour on the last answer. */
 function hourly<T>(name: string, fetchValue: () => Promise<T>): () => Promise<T | null> {
@@ -58,10 +63,10 @@ function lookUpVersion(key: string, fetchVersion: () => Promise<string>): Promis
 }
 
 async function fetchJson(url: string, accept?: string): Promise<unknown> {
-  const response = await getMainHttpClient().fetch(
-    url,
-    accept ? { headers: { Accept: accept } } : {}
-  )
+  const response = await getMainHttpClient().fetch(url, {
+    ...(accept ? { headers: { Accept: accept } } : {}),
+    signal: AbortSignal.timeout(RELEASE_LOOKUP_TIMEOUT_MS)
+  })
   if (!response.ok) {
     await response.body?.cancel().catch(() => undefined)
     throw new Error(`${url} answered ${response.status}`)
@@ -101,9 +106,11 @@ const acpRegistryLookup = hourly('ACP registry', acpRegistryVersions)
 
 async function refreshClaudeLatest(): Promise<string | null> {
   // Shares Orca's own Claude lookup, which follows the user's update channel.
-  await CLAUDE_MANAGED_RUNTIME.refreshPin?.().catch((error: unknown) => {
-    console.warn('[agent-cli-update] Claude release lookup failed:', error)
-  })
+  await CLAUDE_MANAGED_RUNTIME.refreshPin?.(AbortSignal.timeout(RELEASE_LOOKUP_TIMEOUT_MS)).catch(
+    (error: unknown) => {
+      console.warn('[agent-cli-update] Claude release lookup failed:', error)
+    }
+  )
   return CLAUDE_MANAGED_RUNTIME.pin()?.version ?? null
 }
 

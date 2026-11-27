@@ -311,3 +311,77 @@ export const answeredQuestion = defineFixture({
     </div>
   )
 })
+
+const waitSet = Date.now() - 50 * 60_000
+const waitingItem = makeTestBotItem(214, {
+  title: 'Polish the Items empty state',
+  owner: { botId: fixtureCos.id, name: 'Designer' },
+  status: 'waiting',
+  wait: { text: 'Claude usage resets Nov 26, 9:00 AM; it continues on its own then', at: waitSet }
+})
+const waitingView = {
+  ...snoozedView,
+  item: waitingItem,
+  events: [
+    { id: 'e60', kind: 'made' as const, actor: asker, data: {}, at: waitSet - 3 * 3_600_000 },
+    {
+      id: 'e61',
+      kind: 'commented' as const,
+      actor: asker,
+      data: {
+        text: 'The new copy and spacing are on the branch; the dark screenshots aren’t done yet.'
+      },
+      at: waitSet - 60_000
+    },
+    {
+      id: 'e62',
+      kind: 'status' as const,
+      actor: asker,
+      data: { from: 'working', to: 'waiting', note: waitingItem.wait!.text },
+      at: waitSet
+    }
+  ]
+}
+
+// Waiting: its move shows last as the Waiting on card, with no tag or buttons.
+export const waitingOn = defineFixture({
+  width: 360,
+  render: () => (
+    <div className="flex h-[520px] flex-col bg-sidebar">
+      <BotItemBody
+        bot={{ ...fixtureCos, name: 'Designer' }}
+        item={waitingItem}
+        view={waitingView}
+      />
+    </div>
+  )
+})
+
+// Waiting… on a Waiting item edits what it waits on; its card shows though its move isn't loaded.
+export const waitingPick = defineFixture({
+  width: 360,
+  render: () => (
+    <div className="flex h-[520px] flex-col bg-sidebar">
+      <BotItemBody
+        bot={{ ...fixtureCos, name: 'Designer' }}
+        item={waitingItem}
+        view={{ ...waitingView, events: waitingView.events.slice(0, 2) }}
+      />
+    </div>
+  ),
+  interact: async (frame) => {
+    frame.querySelector<HTMLButtonElement>('h2 + div button')?.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+        pointerType: 'mouse'
+      })
+    )
+    await new Promise((resolve) => setTimeout(resolve, 160))
+    ;[...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+      .find((entry) => entry.textContent?.includes('Waiting'))
+      ?.click()
+    await new Promise((resolve) => setTimeout(resolve, 200))
+  }
+})

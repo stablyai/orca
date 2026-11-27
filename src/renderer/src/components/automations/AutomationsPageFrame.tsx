@@ -12,7 +12,7 @@ export const AUTOMATIONS_PAGE_CONTAINER_CLASS = 'w-full px-3 md:px-5'
 export const AutomationsPageNoticeContext = createContext<React.ReactNode>(null)
 
 // Below this header width, secondary header actions fold into the overflow menu.
-const COMPACT_HEADER_WIDTH_PX = 576
+export const COMPACT_HEADER_WIDTH_PX = 576
 
 function useIsNarrowerThan(ref: React.RefObject<HTMLElement | null>, widthPx: number): boolean {
   const [narrow, setNarrow] = useState(false)
@@ -41,6 +41,7 @@ export function AutomationsPageFrame({
   actions,
   notice,
   bodyScroll = 'page',
+  compactBelowPx = COMPACT_HEADER_WIDTH_PX,
   children
 }: {
   nav: React.ReactNode
@@ -50,17 +51,16 @@ export function AutomationsPageFrame({
   notice?: React.ReactNode
   /** 'page' scrolls the whole body; 'content' lets a list inside own its scrolling. */
   bodyScroll?: 'page' | 'content'
+  /** Header width under which `actions` fold; wider for a longer set of actions. */
+  compactBelowPx?: number
   children: React.ReactNode
 }): React.JSX.Element {
   const headerRef = useRef<HTMLDivElement>(null)
-  const compact = useIsNarrowerThan(headerRef, COMPACT_HEADER_WIDTH_PX)
+  const compact = useIsNarrowerThan(headerRef, compactBelowPx)
   const pageNotice = useContext(AutomationsPageNoticeContext)
   return (
     <>
-      <header
-        className="shrink-0 border-b border-border/60"
-        style={{ paddingRight: 'var(--window-controls-width, 0px)' }}
-      >
+      <header className="shrink-0 border-b border-border/60">
         <div
           ref={headerRef}
           className={cn(AUTOMATIONS_PAGE_CONTAINER_CLASS, 'flex min-h-12 items-center gap-3')}

@@ -3,6 +3,7 @@
 // desktop's startBotHostSignIn.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as z from 'zod'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { isOrcaCloudSignInPage } from '../../../../src/shared/orca-account-server-sign-in'
 import { openExternalLink } from '../../platform/external-links/external-link'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
@@ -50,8 +51,6 @@ const signInCancel = bindDeferredRpcOperation(
 // The wait answers when the flow changes; past this the call ends and the wait asks again.
 const WAIT_TIMEOUT_MS = 60_000
 const RETRY_MS = 2_000
-// English like the computer's own sign-in errors, which this line shows as they come.
-const OTHER_SITE_ERROR = 'The computer sent a sign-in link for another site, so it wasn’t opened.'
 
 export type HostOrcaSignIn =
   | { phase: 'idle' }
@@ -68,9 +67,16 @@ export function useHostOrcaSignIn(
   const flowRef = useRef<string | null>(null)
   const signedIn = useRef(onSignedIn)
   const clientRef = useRef(client)
+  const t = useMobileTranslation()
+  const otherSiteError = t(
+    'bots.share.signInOtherSite',
+    'The computer sent a sign-in link for another site, so it wasn’t opened.'
+  )
+  const otherSite = useRef(otherSiteError)
   useEffect(() => {
     signedIn.current = onSignedIn
     clientRef.current = client
+    otherSite.current = otherSiteError
   })
 
   const follow = useCallback(async (host: RpcClient, from: Flow) => {
@@ -102,7 +108,7 @@ export function useHostOrcaSignIn(
         // Only Orca Cloud's own page: anything else the computer sends is never opened here.
         flowRef.current = null
         void signInCancel.request(host, { flowId: flow.flowId }).catch(() => undefined)
-        setView({ phase: 'failed', error: OTHER_SITE_ERROR })
+        setView({ phase: 'failed', error: otherSite.current })
         return
       }
       if (url && !opened) {

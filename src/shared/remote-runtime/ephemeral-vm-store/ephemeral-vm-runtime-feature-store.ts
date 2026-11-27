@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { readNodeFileSyncWithinLimit } from '../../file-content/node-bounded-file-reader'
 import {
   JsonStringifyByteLimitError,
@@ -16,24 +17,28 @@ import {
 const EPHEMERAL_VM_RUNTIME_FEATURES_FILE = 'orca-ephemeral-vm-runtime-features.json'
 export const MAX_EPHEMERAL_VM_RUNTIME_FEATURE_STORE_FILE_BYTES = 1024 * 1024
 
-const EphemeralVmRuntimeFeatureEntrySchema = z
-  .object({
-    id: z.string().min(1),
-    recipeId: z.string().min(1),
-    createdAt: z.number().finite(),
-    recipeCheckoutMode: z.enum(['orca-worktree', 'provisioned-root']).optional(),
-    resultCheckoutMode: z.literal('provisioned-root').optional()
-  })
-  .strict()
+const EphemeralVmRuntimeFeatureEntrySchema = lazyZodSchema(() =>
+  z
+    .object({
+      id: z.string().min(1),
+      recipeId: z.string().min(1),
+      createdAt: z.number().finite(),
+      recipeCheckoutMode: z.enum(['orca-worktree', 'provisioned-root']).optional(),
+      resultCheckoutMode: z.literal('provisioned-root').optional()
+    })
+    .strict()
+)
 
 export type EphemeralVmRuntimeFeatureEntry = z.infer<typeof EphemeralVmRuntimeFeatureEntrySchema>
 
-const EphemeralVmRuntimeFeatureStoreSchema = z
-  .object({
-    version: z.literal(1),
-    records: z.array(z.unknown())
-  })
-  .strict()
+const EphemeralVmRuntimeFeatureStoreSchema = lazyZodSchema(() =>
+  z
+    .object({
+      version: z.literal(1),
+      records: z.array(z.unknown())
+    })
+    .strict()
+)
 
 export type EphemeralVmRuntimeFeatureStoreSnapshot =
   | {

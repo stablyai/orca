@@ -19,7 +19,7 @@ type PushBadgeSyncOptions = {
   registry: PushDispatcherRegistry
   runtime: {
     countUnreadWorkspaces: () => number
-    onWorkspaceRecordsWritten: (listener: () => void) => () => void
+    onUnreadStateWritten: (listener: () => void) => () => void
   }
 }
 
@@ -50,7 +50,7 @@ export class PushBadgeSync {
 
   start(): void {
     this.stopped = false
-    this.unsubscribe ??= this.runtime.onWorkspaceRecordsWritten(() => this.request())
+    this.unsubscribe ??= this.runtime.onUnreadStateWritten(() => this.request())
     this.request()
   }
 

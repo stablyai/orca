@@ -1,4 +1,4 @@
-import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react'
+import type { MutableRefObject, RefObject } from 'react'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import type { ShareableBrowserArtifactFile } from '../describe-page/browser-artifact-upload'
 import type { GrabModeHook } from '../annotate/grab/useGrabMode'
@@ -6,6 +6,7 @@ import { BrowserPageToolbar } from './browser-page-toolbar'
 import { BrowserPageDownloadList } from '../navigate/browser-page-download-list'
 import { BrowserPageChromeBanners } from './feedback/browser-page-chrome-banners'
 import type { useBrowserPageReloadActions } from '../navigate/use-browser-page-reload-actions'
+import type { BrowserResourceNotice } from '../navigate/use-browser-page-resource-notices'
 import type { useBrowserPageNavigationDownloads } from '../navigate/use-browser-page-navigation-downloads'
 import type { useBrowserPageGrabAnnotations } from '../annotate/grab/use-browser-page-grab-annotations'
 import type { useBrowserPageAnnotationSend } from '../annotate/delivery/use-browser-page-annotation-send'
@@ -37,7 +38,7 @@ export function BrowserPageChromeHeader({
   markupCancel,
   shareableArtifactFile,
   currentBrowserUrl,
-  externalUrl,
+  onOpenExternal,
   isBlankTab,
   resourceNotice,
   setResourceNotice
@@ -64,10 +65,10 @@ export function BrowserPageChromeHeader({
   markupCancel: () => void
   shareableArtifactFile: ShareableBrowserArtifactFile | null
   currentBrowserUrl: string
-  externalUrl: string | null
+  onOpenExternal: (() => void) | null
   isBlankTab: boolean
-  resourceNotice: string | null
-  setResourceNotice: Dispatch<SetStateAction<string | null>>
+  resourceNotice: BrowserResourceNotice | null
+  setResourceNotice: (notice: string | null) => void
 }): React.JSX.Element {
   return (
     <div ref={chromeHeaderRef} className="pointer-events-auto shrink-0">
@@ -108,7 +109,7 @@ export function BrowserPageChromeHeader({
         onOpenFind={onOpenFind}
         shareableArtifactFile={shareableArtifactFile}
         currentBrowserUrl={currentBrowserUrl}
-        externalUrl={externalUrl}
+        onOpenExternal={onOpenExternal}
       />
       <BrowserPageDownloadList
         visibleDownloads={nav.visibleDownloads}
@@ -117,8 +118,10 @@ export function BrowserPageChromeHeader({
         onDismissDownload={nav.dismissBrowserDownload}
       />
       <BrowserPageChromeBanners
+        showGrabBanner={false}
         resourceNotice={resourceNotice}
         setResourceNotice={setResourceNotice}
+        onReloadPage={() => reload.reloadWebviewOrRecoverGuest(false)}
         tools={{ grab, grabAnnotations, annotationSend }}
         worktreeId={worktreeId}
       />

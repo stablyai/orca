@@ -4,13 +4,13 @@ import { parseGitRevListAheadBehindCounts } from '../../git/refs/git-rev-list-ou
 import { isShowRefNoMatchError } from '../../git/refs/git-show-ref-no-match'
 import type { LocalBaseRefRefreshResult } from './base-ref-drift-types'
 
+type BranchUse = { reserved: boolean; ownerPath?: string; sharedCheckout?: true }
+
 /** Share one policy across local/WSL main and SSH relay. exec rejects nonzero exits with Git output attached. */
 export type LocalBaseBranchGit = {
   exec: (args: string[], cwd: string) => Promise<{ stdout: string }>
-  /** Each worktree's path and checked-out branch as a full ref, as this host reports them. */
-  listWorktrees: (repoPath: string) => Promise<readonly { path: string; branch?: string | null }[]>
-  /** Full refs a rebase or bisect in any worktree has reserved; their worktrees list a detached HEAD. */
-  listReservedBranches: (repoPath: string) => Promise<ReadonlySet<string>>
+  /** Whether a rebase or bisect reserves the branch (its worktree shows a detached HEAD), else the path of the worktree that has it checked out, as this host reports it; `sharedCheckout` when no one checkout of the branch itself can be fast-forwarded (several share it, or one has the branch it aliases). `occupancyOnly` callers only need to know it is checked out. */
+  readBranchUse: (repo: string, ref: string, occupancyOnly?: boolean) => Promise<BranchUse>
   /** Runs `update-ref args` unless the branch is in use, rechecked once admitted, just before Git starts; false when skipped. */
   updateRefUnlessInUse: (repoPath: string, fullRef: string, args: string[]) => Promise<boolean>
 }
@@ -71,11 +71,13 @@ function ownerFastForwardArgs(branch: string, targetOid: string): string[] {
   ]
 }
 
-/** Read-only inspection of local drift. A checked-out branch is reported only when strictly behind, so its checkout stays silent otherwise; `skipCheckedOut` stops before walking its history. */
+type InspectOptions = { skipCheckedOut?: boolean; skipShared?: boolean; occupancyOnly?: boolean }
+
+/** Read-only inspection of local drift. A checked-out branch is reported only when strictly behind, so its checkout stays silent otherwise; `skipCheckedOut` (or `skipShared`, for a branch several checkouts share) stops before walking its history; `occupancyOnly` skips locating the owner. */
 export async function inspectLocalBaseBranch(
   git: LocalBaseBranchGit,
   refs: LocalBaseBranchRefs,
-  { skipCheckedOut = false }: { skipCheckedOut?: boolean } = {}
+  { skipCheckedOut = false, skipShared = false, occupancyOnly = false }: InspectOptions = {}
 ): Promise<LocalBaseBranchInspection> {
   const { repoPath, fullRef, remoteTrackingRef } = refs
   let localOid: string
@@ -93,20 +95,18 @@ export async function inspectLocalBaseBranch(
       : { status: 'skipped_not_fast_forward' }
   }
 
-  let owner: { path: string } | undefined
+  let use: BranchUse
   try {
     // Git's in-use rule also counts a branch a rebase or bisect has reserved.
-    if ((await git.listReservedBranches(repoPath)).has(fullRef)) {
-      return { status: 'nothing_to_do' }
-    }
-    owner = (await git.listWorktrees(repoPath)).find((wt) => wt.branch === fullRef)
+    use = await git.readBranchUse(repoPath, fullRef, skipCheckedOut || occupancyOnly)
   } catch {
     return { status: 'skipped_error' }
   }
-  if (owner && skipCheckedOut) {
+  const owner = use.ownerPath
+  if (use.reserved || (owner && (skipCheckedOut || (skipShared && use.sharedCheckout)))) {
     return { status: 'nothing_to_do' }
   }
-  const ownerPath = owner ? { ownerWorktreePath: owner.path } : {}
+  const ownerPath = owner ? { ownerWorktreePath: owner } : {}
 
   let counts: ReturnType<typeof parseGitRevListAheadBehindCounts>
   try {
@@ -175,7 +175,7 @@ export async function fastForwardCheckedOutLocalBaseBranch(
   git: LocalBaseBranchGit,
   refs: LocalBaseBranchRefs
 ): Promise<void> {
-  const inspection = await inspectLocalBaseBranch(git, refs)
+  const inspection = await inspectLocalBaseBranch(git, refs, { skipShared: true })
   if (inspection.status !== 'behind' || !inspection.ownerWorktreePath) {
     return
   }

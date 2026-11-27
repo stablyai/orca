@@ -18,6 +18,8 @@ export type StructuredAgentSessionRestartCut = {
   exitUnproven?: true
   /** Orca handed the cut back to the agent but never saw it taken: it may be running. */
   continuationUnconfirmed?: true
+  /** The lead's turn had finished; only its background work was cut. */
+  leadDone?: true
 }
 
 export type RestartContinuationOptions = {

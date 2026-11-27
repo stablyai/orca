@@ -1,5 +1,3 @@
-import type { ProviderRateLimits } from '../../agent-usage/rate-limits/rate-limit-types'
-
 export type AntigravityAccountSummary = {
   id: string
   email: string | null
@@ -7,8 +5,6 @@ export type AntigravityAccountSummary = {
   authMethod: string
   createdAt: number
   updatedAt: number
-  /** Last reading verified as this account on this runtime; null when never read, absent from older hosts. */
-  usage?: ProviderRateLimits | null
 }
 
 export type AntigravityAccountState = {
@@ -32,6 +28,9 @@ export type AntigravityAccountState = {
    *  Absent when the saved method isn't Google account, the route didn't answer in time, on older
    *  hosts and on WSL; Settings shows the Google sign-in choice only where it is present. */
   chatGoogleSignInInUse?: 'agy' | 'orca'
+  /** Host only: new Gemini API key chats run on agy (in a home Orca owns) with the
+   *  method and credential saved here. Absent from older hosts, which run them on the server. */
+  chatKeyOnAgy?: boolean
 }
 
 export const ANTIGRAVITY_CHAT_SIGN_IN_PHASES = [

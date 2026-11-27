@@ -270,6 +270,7 @@ const styles = themedStyleSheet(() => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    maxWidth: '100%',
     height: 38,
     paddingHorizontal: 14,
     borderRadius: radii.pill,

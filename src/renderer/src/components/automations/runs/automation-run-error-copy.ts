@@ -94,6 +94,17 @@ const COPY: Record<
     return typeof distro === 'string'
       ? translate('automations.runFailures.wslDistroStopped', EN.wslDistroStopped, { distro })
       : null
+  },
+  botsOff: () => translate('automations.runFailures.botsOff', EN.botsOff),
+  botsOffByTeam: () => translate('automations.runFailures.botsOffByTeam', EN.botsOffByTeam),
+  botMissing: () => translate('automations.runFailures.botMissing', EN.botMissing),
+  botFolderMissing: () =>
+    translate('automations.runFailures.botFolderMissing', EN.botFolderMissing),
+  botPaused: (params) => {
+    const bot = params?.bot
+    return typeof bot === 'string'
+      ? translate('automations.runFailures.botPaused', EN.botPaused, { bot })
+      : null
   }
 }
 

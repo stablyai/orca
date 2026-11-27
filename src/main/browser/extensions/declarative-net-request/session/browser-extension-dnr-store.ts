@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../../shared/schema/lazy-zod-schema'
 import {
   BrowserExtensionProfileDocumentStore,
   closeBrowserExtensionProfileDocumentStoreOnQuit
@@ -11,14 +12,16 @@ import type { DnrRule } from '../rule-compilation/rule-types'
  * enabled static rulesets and disabled static rule ids (both reset when the extension updates),
  * and the action-count badge option. Session rules live only in memory (see below).
  */
-const dnrStateSchema = z.object({
-  dynamicRules: z.array(z.unknown()).default([]),
-  /** The version the static-ruleset choices below were made for. */
-  extensionVersion: z.string().optional(),
-  enabledRulesetIds: z.array(z.string()).optional(),
-  disabledRuleIds: z.record(z.string(), z.array(z.number().int())).default({}),
-  displayActionCountAsBadgeText: z.boolean().default(false)
-})
+const dnrStateSchema = lazyZodSchema(() =>
+  z.object({
+    dynamicRules: z.array(z.unknown()).default([]),
+    /** The version the static-ruleset choices below were made for. */
+    extensionVersion: z.string().optional(),
+    enabledRulesetIds: z.array(z.string()).optional(),
+    disabledRuleIds: z.record(z.string(), z.array(z.number().int())).default({}),
+    displayActionCountAsBadgeText: z.boolean().default(false)
+  })
+)
 
 export type BrowserExtensionDnrState = z.infer<typeof dnrStateSchema>
 

@@ -1,5 +1,6 @@
 import type { JournalKeyedMap, JournalKeyedSet } from '../journal-keyed-storage'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { AgentJournalTurnScopeSchema } from '../../../../shared/agent-session/journal/agent-session-journal-schemas'
 import { AgentSessionExecutionOptionsSchema } from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -137,7 +138,7 @@ function checked<T>(schema: z.ZodType): z.ZodType<T> {
   // SAFETY: the strict schema admits only keys the type declares (checked at the end of this file);
   // decoding keeps the stored value as it is.
   const strict = strictStorage(schema)
-  return z.custom<T>((value) => strict.safeParse(value).success)
+  return lazyZodSchema(() => z.custom<T>((value) => strict.safeParse(value).success))
 }
 
 type State = JournalReducerState

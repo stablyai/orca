@@ -109,6 +109,8 @@ export function demoteRuntimeMobileAgentStatus(
     paneKey: status.paneKey,
     stateHistory: [],
     agentType: status.agentType,
+    ...(status.terminalHandle ? { terminalHandle: status.terminalHandle } : {}),
+    ...(status.orchestration ? { orchestration: status.orchestration } : {}),
     ...completedTurnFields(status),
     ...(status.providerSession ? { providerSession: status.providerSession } : {}),
     ...(status.orcaSessionId !== undefined ? { orcaSessionId: status.orcaSessionId } : {})

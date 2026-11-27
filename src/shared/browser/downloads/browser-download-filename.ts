@@ -29,6 +29,24 @@ export function normalizeBrowserDownloadFilename(
     : safeName
 }
 
+/** Windows reads names like `NUL.txt` or `COM1 .log` as devices, so most tools can't open them. */
+export function escapeWindowsDeviceName(filename: string, platform: NodeJS.Platform): string {
+  if (platform !== 'win32') {
+    return filename
+  }
+  const stem = filename.split('.', 1)[0].trimEnd()
+  return WINDOWS_RESERVED_FILENAME.test(stem) ? `_${filename}` : filename
+}
+
+/** A name another machine sent for a file saved here: no folders, and not a hidden file. */
+export function normalizeIncomingDownloadFilename(
+  filename: string,
+  platform: NodeJS.Platform
+): string {
+  const visible = normalizeBrowserDownloadFilename(filename, platform).replace(/^[.\s]+/u, '')
+  return normalizeBrowserDownloadFilename(visible || 'download', platform)
+}
+
 export function buildBrowserDownloadCollisionCandidate(filename: string, suffix: number): string {
   if (suffix === 0) {
     return filename

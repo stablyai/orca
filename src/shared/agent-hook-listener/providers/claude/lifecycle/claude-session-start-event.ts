@@ -21,7 +21,7 @@ export function normalizeClaudeSessionStart(
   }
   // New sessions must not inherit old child/task/cron gates.
   state.claudeSubagentRosterByPaneKey.delete(paneKey)
-  state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+  state.claudeRunningNonAgentTasksByPaneKey.delete(paneKey)
   state.claudeActiveSessionCronPaneKeys.delete(paneKey)
   state.claudeLaunchedBackgroundTasksByPaneKey.delete(paneKey)
   // New sessions start a new main-agent clock.

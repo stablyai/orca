@@ -61,7 +61,7 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
     pty.lastAgentStatus !== 'working' &&
     pty.lastAgentStatus !== 'permission'
   ) {
-    const updatedAt = Math.max(status.updatedAt, titleEvidenceAt ?? 0)
+    const updatedAt = Math.max(status.updatedAt, ptyStatusEvidenceAt(pty, titleEvidenceAt ?? 0))
     return updatedAt === status.updatedAt
       ? status
       : { ...status, updatedAt, evidenceObservedAt: agentStatusAuthorityObservedAt(status) }
@@ -82,6 +82,7 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
     stateHistory: [],
     ...(status.agentType ? { agentType: status.agentType } : {}),
     ...(status.terminalHandle ? { terminalHandle: status.terminalHandle } : {}),
+    ...(status.orchestration ? { orchestration: status.orchestration } : {}),
     ...(status.worktreeId ? { worktreeId: status.worktreeId } : {}),
     ...(status.tabId ? { tabId: status.tabId } : {}),
     ...(status.terminalTitle ? { terminalTitle: status.terminalTitle } : {}),

@@ -1,4 +1,4 @@
-import { cancelSettingsListReveal } from '../../section-layout/settings-list-scroll'
+import { revealInstalledAgentChoice } from './installed-agent-choice-reveal'
 import { useEffect, useId, type JSX, type ReactNode } from 'react'
 import { Check, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
@@ -8,7 +8,6 @@ import { normalizeAgentDefaultSurface } from '../../../../../../shared/native-ch
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { useImmediateMutation } from '@/hooks/useImmediateMutation'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { motionSafeScrollBehavior } from '@/hooks/theme/usePrefersReducedMotion'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store/index'
@@ -17,7 +16,7 @@ import {
   ChatSurfacePreview,
   TerminalSurfacePreview
 } from '../../../agent/launch-settings/AgentDefaultSurfacePreviews'
-import { AGENT_DEFAULT_SURFACE_SECTION_ID, AGENTS_INSTALLED_SECTION_ID } from '../agents-search'
+import { AGENT_DEFAULT_SURFACE_SECTION_ID } from '../agents-search'
 import { SettingsRow } from '../../form-controls/SettingsFormControls'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import { Button } from '../../../ui/button'
@@ -171,19 +170,6 @@ export function AgentDefaultSurfaceSection({
       onError: agentSettingsSaveFailed
     })
   }
-  const showInstalledList = (): void => {
-    cancelSettingsListReveal()
-    const list = document.getElementById(AGENTS_INSTALLED_SECTION_ID)
-    list?.scrollIntoView({ behavior: motionSafeScrollBehavior(), block: 'start' })
-    const row = list
-      ?.querySelector('[data-settings-scroll-list]')
-      ?.querySelector<HTMLElement>('[data-agent-opens-as]')
-    row?.scrollIntoView({ behavior: motionSafeScrollBehavior(), block: 'nearest' })
-    const choice =
-      row?.querySelector<HTMLElement>('[role="radiogroup"] [aria-checked="true"]') ??
-      row?.querySelector<HTMLElement>('[role="radiogroup"] [role="radio"]')
-    ;(choice ?? list)?.focus({ preventScroll: true })
-  }
   if (presentation === 'switch') {
     return (
       <SettingsGroup>
@@ -278,7 +264,7 @@ export function AgentDefaultSurfaceSection({
           <div className="mt-3 flex justify-end">
             <button
               type="button"
-              onClick={showInstalledList}
+              onClick={revealInstalledAgentChoice}
               className="inline-flex items-center gap-0.5 rounded-sm text-[13px] font-medium underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             >
               {t('settings.agents.defaultSurfacePerAgent', 'Choose per agent')}

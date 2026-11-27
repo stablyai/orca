@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import type { BotAgent } from '../../../../shared/bot-types'
-import type { BotAgentSetup } from './BotAgentLaunchPicker'
+import type { BotAgentChatDefault, BotAgentSetup } from './BotAgentLaunchPicker'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   agentChatPermissionModes,
   savedChatPermissionMode
 } from '../../../../shared/agent-launch/permissions/agent-chat-permission-support'
 import type { AgentChatPermissionMode } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import { newBotAgent } from '../../../../shared/bots/bot-agent-choices'
+import type { BotAgentMenu } from './use-bot-agent-choices'
 
 /** The owner's permission for the bot, whichever agent it ends up on: a mode, or the chats' own. */
 export type BotPermissionIntent = AgentChatPermissionMode | 'inherit'
@@ -63,28 +65,49 @@ function nextIntent(
   return next.permissionMode === current.permissionMode ? intent : next.permissionMode
 }
 
-/** A new bot's agent, model and permissions on `hostId`. Follows the first agent that computer has,
- *  on its defaults, until the owner picks one it has; a pick made for another computer starts over,
- *  since its model and options may not be offered there.
+/** A new bot's agent, model and permissions on `hostId`. Follows that computer's default agent (else
+ *  its first) on its defaults, until the owner picks one it has; a pick made for another computer
+ *  starts over, since its model and options may not be offered there.
  *  With `keptPermission` (a bot from a link), the owner's permission is kept apart from the agent:
  *  it starts there and follows every agent that offers it, until the owner picks another. */
 export function useBotAgentSetup(
-  choices: readonly BotAgent[],
+  { choices, defaultAgent }: Pick<BotAgentMenu, 'choices' | 'defaultAgent'>,
   hostId: ExecutionHostId,
   initialAgent?: BotAgent,
   keptPermission?: AgentChatPermissionMode
 ) {
-  const first: BotAgentSetup = { agent: initialAgent ?? 'claude' }
-  const [picked, setPicked] = useState<{ hostId: ExecutionHostId | null; setup: BotAgentSetup }>({
-    hostId: null,
-    setup: first
-  })
+  // `chat-default`: the owner chose Chat default, so it follows each computer's default agent.
+  const [picked, setPicked] = useState<
+    { hostId: ExecutionHostId; setup: BotAgentSetup } | 'chat-default' | null
+  >(null)
   const [intent, setIntent] = useState<BotPermissionIntent | undefined>(keptPermission)
-  const own = picked.hostId === null || picked.hostId === hostId ? picked.setup : first
-  const followed = choices.includes(own.agent) ? own : { agent: choices[0] ?? own.agent }
+  const fallback = newBotAgent(choices, defaultAgent)
+  const chatDefaultAgent = fallback ?? defaultAgent ?? 'claude'
+  const own =
+    picked === 'chat-default'
+      ? { agent: chatDefaultAgent }
+      : picked?.hostId === hostId
+        ? picked.setup
+        : { agent: initialAgent ?? chatDefaultAgent }
+  const followed = choices.includes(own.agent) ? own : { agent: fallback ?? own.agent }
   const setup = intent === undefined ? followed : withIntent(followed, intent)
   return {
     setup,
+    chatDefault: {
+      /** Nothing chosen: the computer's default agent on the owner's chat defaults. */
+      chosen:
+        setup.agent === chatDefaultAgent &&
+        !setup.launch &&
+        !setup.permissionMode &&
+        (intent === undefined || intent === 'inherit'),
+      /** Drops the owner's agent, model, options and permission choices, a kept one included. */
+      onChoose: () => {
+        if (intent !== undefined) {
+          setIntent('inherit')
+        }
+        setPicked('chat-default')
+      }
+    } satisfies BotAgentChatDefault,
     /** The permission Create writes for a kept one, even on an agent that can't offer it yet. */
     intent,
     /** `permissionPicked` when the owner chose the permission, even the one already shown. */
@@ -96,7 +119,7 @@ export function useBotAgentSetup(
     },
     reset: () => {
       setIntent(keptPermission)
-      setPicked({ hostId: null, setup: first })
+      setPicked(null)
     }
   }
 }

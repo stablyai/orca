@@ -2,6 +2,7 @@
 // images are committed inline-image files in this host's chat attachment store, under chat's limits;
 // files ride in the text as `@path`. Every store upload the comment names is claimed for the item's chat
 // before the event is written, so the chat's claims and sweep keep it exactly as long as that chat's own pastes.
+import { botFailure, botFailureEnglish, type BotFailure } from '../../shared/bots/bot-failure-copy'
 import { isAbsolute } from 'node:path'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { isAgentInlineImagePath } from '../../shared/native-chat/input/composer/agent-inline-image-types'
@@ -21,11 +22,13 @@ import {
   type BotAttachmentStore
 } from './bot-attachment-images'
 import { BotItemError } from './bot-item-error'
+import { botItemCommentAttachmentBody } from './bot-item-comment-attachment-body'
+import type { AdmittedCommentClaim } from './bot-item-comment-admitted-claims'
 
 const COMMENT_IMAGE_LABELS = {
-  plural: 'Comments',
-  singular: 'A comment',
-  surface: 'on a comment'
+  tooMany: 'commentImagesTooMany',
+  tooLarge: 'commentImagesTooLarge',
+  notStored: 'commentImageNotStored'
 } as const
 
 export type BotItemCommentAttachmentDeps = {
@@ -38,7 +41,12 @@ export type BotItemCommentAttachmentDeps = {
   chat: () => Promise<{ sessionId: string; title: string | null } | null>
 }
 
-export type BotItemCommentAttached = { text: string; images: BotItemCommentImage[] }
+export type BotItemCommentAttached = {
+  text: string
+  images: BotItemCommentImage[]
+  /** The uploads claimed for the item's chat, when the comment names any. */
+  claimed?: AdmittedCommentClaim
+}
 
 /** The comment's text and images, named and sized on this host, once each upload it names is claimed
  *  for the item's chat; a text-only comment naming no upload touches nothing. `files`: files on this
@@ -53,17 +61,17 @@ export async function admitBotItemCommentAttachments(
   if (!store) {
     // Unclaimed bytes would be swept under the comment, so anything naming an upload waits for the store.
     if (paths.length > 0 || files.length > 0 || hasAttachmentStoreReference(commentText)) {
-      throw refused("This computer can't take attachments right now. Comment again in a moment.")
+      throw refused(botFailure('commentAttachmentsUnavailable'))
     }
     return { text: commentText, images: [] }
   }
   const relative = files.find((path) => !isAbsolute(path))
   if (relative !== undefined) {
-    throw refused(`${relative}: name the file by its full path.`)
+    throw refused(botFailure('commentFileNotAbsolute', { path: relative }))
   }
   const others = files.filter((path) => !isAgentInlineImagePath(path))
   if (others.length > BOT_ITEM_COMMENT_FILE_MAX_COUNT) {
-    throw refused(`Comments take up to ${BOT_ITEM_COMMENT_FILE_MAX_COUNT} files besides images.`)
+    throw refused(botFailure('commentFilesTooMany', { max: BOT_ITEM_COMMENT_FILE_MAX_COUNT }))
   }
   const local = deps.local ? [...paths, ...files.filter(isAgentInlineImagePath)] : paths
   if (deps.local) {
@@ -82,32 +90,34 @@ export async function admitBotItemCommentAttachments(
     : commentText.trim()
       ? `${commentText.trimEnd()}\n\n${references}`
       : references
-  const body: AgentJournalMessageItem = {
-    kind: 'message',
-    role: 'user',
-    blocks: [
-      { type: 'text', text },
-      ...images.map(({ path }) => ({ type: 'image-ref' as const, path }))
-    ]
-  }
-  if (agentSessionAttachmentReferences(store.rootDir, body).size === 0) {
+  const body = botItemCommentAttachmentBody(text, images)
+  const uploadIds = agentSessionAttachmentReferences(store.rootDir, body)
+  if (uploadIds.size === 0) {
     return { text, images }
   }
   const chat = await deps.chat()
   if (!chat) {
-    throw refused("This item's chat was deleted, so files can't be attached here.")
+    throw refused(botFailure('commentChatDeleted'))
   }
-  if (!deps.claim) {
-    throw refused("Couldn't attach the files. Comment again in a moment.")
-  }
-  await claimAttachmentBody(deps.claim, [chat.sessionId], body, {
-    logPrefix: '[bots] items: claiming comment attachments failed',
-    retryMessage: "Couldn't attach the files. Comment again in a moment.",
-    refused
-  })
-  return { text, images }
+  await claimBotItemCommentAttachments(deps.claim, chat.sessionId, body)
+  return { text, images, claimed: { sessionId: chat.sessionId, uploadIds } }
 }
 
-function refused(message: string): BotItemError {
-  return new BotItemError('invalid_argument', message)
+async function claimBotItemCommentAttachments(
+  claim: AgentSessionAttachmentClaimer | null,
+  sessionId: string,
+  body: AgentJournalMessageItem
+): Promise<void> {
+  if (!claim) {
+    throw refused(botFailure('commentAttachFailed'))
+  }
+  await claimAttachmentBody(claim, [sessionId], body, {
+    logPrefix: '[bots] items: claiming comment attachments failed',
+    retry: botFailure('commentAttachFailed'),
+    refused
+  })
+}
+
+function refused(failure: BotFailure): BotItemError {
+  return new BotItemError('invalid_argument', botFailureEnglish(failure), { botFailure: failure })
 }

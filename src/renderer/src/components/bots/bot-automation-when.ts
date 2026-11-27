@@ -62,6 +62,8 @@ function githubLabel(event: GitHubTrigger['event']): string {
       return translate('bots.automations.on.githubCiFailed', 'When CI fails')
     case 'ci_passed':
       return translate('bots.automations.on.githubCiPassed', 'When CI passes')
+    case 'ci_finished':
+      return translate('bots.automations.on.githubCiFinished', 'When CI finishes')
     case 'pr_conflicted':
       return translate(
         'bots.automations.on.githubPrConflicted',

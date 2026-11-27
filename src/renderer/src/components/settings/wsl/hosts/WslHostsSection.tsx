@@ -165,7 +165,7 @@ export function WslHostsSection({
                 ? getWslHostsPausedLabel(t)
                 : t(
                     'auto.components.settings.wslHosts.description',
-                    'Orca runs a server inside each distro. Opening a project never starts a stopped distro: click Start, open a new terminal, or connect it here.'
+                    'Orca runs a server inside each distro. To start a stopped distro, click Start, open a terminal, or connect it here.'
                   ))}
           </p>
         </div>
@@ -221,7 +221,7 @@ export function WslHostsSection({
                     {notWslHost
                       ? t(
                           'auto.components.settings.wslHosts.notStartedAsWslHost',
-                          "This host's server was started by an SSH host, not as a WSL host, so projects can't move here. Restart it as a WSL host to fix this."
+                          "An SSH host started this server, so projects can't move here. Restart it as a WSL host to fix this."
                         )
                       : deferred
                         ? `${t(
@@ -262,6 +262,7 @@ export function WslHostsSection({
                     <WslMoveOrchestratorStatusLine distro={distro} />
                   ) : undefined
                 }
+                stackPrimaryActionOnNarrow={notWslHost}
                 primaryAction={
                   notWslHost ? (
                     <Button

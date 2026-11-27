@@ -26,6 +26,7 @@ import {
 } from './session-scanner-opencode2-message'
 import SyncDatabase from '../../../sqlite/sync-database'
 import { columnExists, tableExists } from '../../../opencode-usage/schema-helpers'
+import { withOpenCode2SessionParts } from '../../../native-chat/transcript-history/opencode/opencode2-session-parts'
 import type {
   TranscriptMessage,
   TranscriptMessageSink
@@ -39,6 +40,8 @@ const OPENCODE2_MESSAGE_TABLE = 'session_message'
 const OPENCODE2_PREVIEW_LIMIT = 5
 // Bound preview probes: a single inline message can contain large tool output.
 const OPENCODE2_PREVIEW_MESSAGE_WINDOW = 100
+// Capture rows looked up in session_part per query.
+const CAPTURE_PART_BATCH = 100
 
 type SessionRow = {
   id: string
@@ -57,6 +60,7 @@ type SessionRow = {
 }
 
 type PreviewRow = {
+  id: string
   type: string | null
   data: string
   time_created: number
@@ -175,8 +179,8 @@ function buildPreviewQuery(db: SyncDatabase): string | null {
   if (!canReadOpenCode2Messages(db)) {
     return null
   }
-  return `SELECT type, data, time_created
-          FROM (SELECT type, data, time_created, seq FROM ${OPENCODE2_MESSAGE_TABLE}
+  return `SELECT id, type, data, time_created
+          FROM (SELECT id, type, data, time_created, seq FROM ${OPENCODE2_MESSAGE_TABLE}
                 WHERE session_id = ?
                   AND type IN ('user','assistant')
                 ORDER BY time_created DESC, seq DESC
@@ -188,7 +192,7 @@ function buildPreviewQuery(db: SyncDatabase): string | null {
 function canReadOpenCode2Messages(db: SyncDatabase): boolean {
   return (
     canCountOpenCode2Messages(db) &&
-    ['data', 'time_created', 'seq'].every((column) =>
+    ['id', 'data', 'time_created', 'seq'].every((column) =>
       columnExists(db, OPENCODE2_MESSAGE_TABLE, column)
     )
   )
@@ -199,17 +203,22 @@ function* readCaptureRows(db: SyncDatabase, sessionId: string): Generator<Previe
     throw new Error('OpenCode 2 transcript schema is unreadable')
   }
   const rows = db
-    .prepare(`SELECT type, data, time_created FROM session_message
+    .prepare(`SELECT id, type, data, time_created FROM session_message
     WHERE session_id = ? AND type IN ('user','assistant','tool') ORDER BY time_created, seq`)
     .iterate(sessionId)
   let count = 0
+  let batch: PreviewRow[] = []
   for (const value of rows) {
-    const row = parseOpenCode2MessageRow(value)
     if (++count > OPENCODE_CAPTURE_RECORD_LIMIT) {
       throw new Error('OpenCode 2 transcript exceeds capture limits; no partial read was published')
     }
-    yield { type: row.type, data: row.data, time_created: row.time_created }
+    batch.push(parseOpenCode2MessageRow(value))
+    if (batch.length === CAPTURE_PART_BATCH) {
+      yield* withOpenCode2SessionParts(db, sessionId, batch)
+      batch = []
+    }
   }
+  yield* withOpenCode2SessionParts(db, sessionId, batch)
 }
 
 /** Read v2 metadata and previews; absent required session schema returns null, while database errors propagate. */
@@ -259,10 +268,14 @@ export async function parseOpenCode2SqliteSession(args: {
     if (args.messages?.active || previewSql) {
       const probedRows =
         previewSql && !args.messages?.active
-          ? db
-              .prepare(previewSql)
-              .all(sessionId, OPENCODE2_PREVIEW_LIMIT + 1)
-              .map(parseOpenCode2MessageRow)
+          ? withOpenCode2SessionParts(
+              db,
+              sessionId,
+              db
+                .prepare(previewSql)
+                .all(sessionId, OPENCODE2_PREVIEW_LIMIT + 1)
+                .map(parseOpenCode2MessageRow)
+            )
           : []
       if (probedRows.length > OPENCODE2_PREVIEW_LIMIT) {
         accumulator.previewMessagesTruncated = true

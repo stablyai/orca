@@ -114,6 +114,8 @@ const COPY: Record<UpdaterFailureCode, (param: Param, count: CountParam) => stri
       'updates.failure.linuxPackageMetadataUnusable',
       UPDATER_FAILURE_COPY.linuxPackageMetadataUnusable
     ),
+  teamUpdatePolicy: () =>
+    translate('updates.failure.teamUpdatePolicy', 'Your team manages Orca updates.'),
   unknownReleaseChannel: (param) => {
     const channel = param('channel')
     return channel === null

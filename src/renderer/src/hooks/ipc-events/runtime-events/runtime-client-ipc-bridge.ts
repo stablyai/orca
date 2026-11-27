@@ -11,7 +11,7 @@ import { applyNativeChatLaunchDraftResolved } from '@/runtime/native-chat/launch
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import {
   refreshRuntimeEnvironmentCatalog,
-  setRuntimeEnvironmentCatalogRefresher
+  setRuntimeEnvironmentCatalogSource
 } from '@/runtime/rpc/environment-revisions/runtime-environment-pairing-refresh'
 import {
   applyRuntimeEnvironmentSshStateChanged,
@@ -122,6 +122,10 @@ export function registerRuntimeClientIpcBridge(
       requestProjectRefresh(environmentId)
       return
     }
+    if (event.type === 'agentCliUpdateFinished') {
+      useAppStore.getState().recheckAgentCliUpdates({ kind: 'environment', environmentId })
+      return
+    }
     if (emitRuntimeClientWindowEvent(environmentId, event)) {
       return
     }
@@ -209,10 +213,11 @@ export function registerRuntimeClientIpcBridge(
       })
   }
 
-  setRuntimeEnvironmentCatalogRefresher(async () => {
-    useAppStore.getState().setRuntimeEnvironments(await window.api.runtimeEnvironments.list())
+  setRuntimeEnvironmentCatalogSource({
+    list: () => window.api.runtimeEnvironments.list(),
+    publish: (environments) => useAppStore.getState().setRuntimeEnvironments(environments)
   })
-  unsubs.push(() => setRuntimeEnvironmentCatalogRefresher(null))
+  unsubs.push(() => setRuntimeEnvironmentCatalogSource(null))
   // `orca environment add/rm` edits the registry without any renderer request (#25251).
   const stopCatalogChanged = window.api.runtimeEnvironments?.onCatalogChanged?.(() => {
     void refreshRuntimeEnvironmentCatalog()
@@ -256,6 +261,7 @@ export function registerRuntimeClientIpcBridge(
               requestProjectRefresh(environmentId)
               // Changes during the outage were lost, not queued: reads from before prove nothing now.
               emitPairedBotsStreamCameBack(environmentId)
+              useAppStore.getState().recheckAgentCliUpdates({ kind: 'environment', environmentId })
             },
             markEnvironmentSshStateStale: () =>
               useAppStore.getState().markEnvironmentSshStateStale(environmentId),

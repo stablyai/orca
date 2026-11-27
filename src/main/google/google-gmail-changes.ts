@@ -2,6 +2,7 @@
 // check. When Gmail no longer has that point (history expired, about a week but sometimes hours), the
 // checker starts again from now and fires nothing old.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { mailboxAddress, splitAddresses } from '../../shared/google/email-address-list'
 import { parseGoogleJson, type GoogleApi } from './google-api-client'
 import { header, MessageSchema, sentAt, type Message } from './google-gmail-message'
@@ -16,31 +17,35 @@ const MESSAGE_READS_AT_ONCE = 10
 // Mail no rule should ever start on: the owner's own, unsent, junk or deleted.
 const IGNORED_LABELS = new Set(['SENT', 'DRAFT', 'SPAM', 'TRASH', 'CHAT'])
 
-const ProfileSchema = z.object({ historyId: z.string() })
-const HistorySchema = z.object({
-  historyId: z.string(),
-  nextPageToken: z.string().optional(),
-  history: z
-    .array(
-      z.object({
-        messagesAdded: z
-          .array(
-            z.object({
-              message: z.object({
-                id: z.string(),
-                threadId: z.string(),
-                labelIds: z.array(z.string()).optional()
+const ProfileSchema = lazyZodSchema(() => z.object({ historyId: z.string() }))
+const HistorySchema = lazyZodSchema(() =>
+  z.object({
+    historyId: z.string(),
+    nextPageToken: z.string().optional(),
+    history: z
+      .array(
+        z.object({
+          messagesAdded: z
+            .array(
+              z.object({
+                message: z.object({
+                  id: z.string(),
+                  threadId: z.string(),
+                  labelIds: z.array(z.string()).optional()
+                })
               })
-            })
-          )
-          .optional()
-      })
-    )
-    .default([])
-})
-const LabelsSchema = z.object({
-  labels: z.array(z.object({ id: z.string(), name: z.string() })).default([])
-})
+            )
+            .optional()
+        })
+      )
+      .default([])
+  })
+)
+const LabelsSchema = lazyZodSchema(() =>
+  z.object({
+    labels: z.array(z.object({ id: z.string(), name: z.string() })).default([])
+  })
+)
 
 export type NewMail = {
   id: string

@@ -1,6 +1,7 @@
 import { classifyClaudeBackgroundTaskKind } from './claude-background-task-kind'
 import { isAgentChildWorkKind } from '../../../../agent-status/child-work/agent-status-child-work-liveness'
 import { runsOrcaOrchestrationWait } from '../../../../cli/orca-cli-invocations'
+import { redactString } from '../../../../observability/redactor'
 
 const CLAUDE_TERMINAL_BACKGROUND_TASK_STATUSES = new Set([
   'idle',
@@ -34,6 +35,20 @@ export type ClaudeBackgroundAgentTask = {
   teammate: boolean
 }
 
+// Claude keeps its artifact live-updates and presence sockets open all session and leaves them out of its own in-flight work, but hook rows drop the ambient flag.
+const CLAUDE_AMBIENT_ARTIFACT_MONITOR_PREFIXES = [
+  'live updates for artifact ',
+  'presence on artifact '
+]
+
+function isClaudeAmbientArtifactMonitor(taskType: string, description: unknown): boolean {
+  return (
+    taskType === 'monitor' &&
+    typeof description === 'string' &&
+    CLAUDE_AMBIENT_ARTIFACT_MONITOR_PREFIXES.some((prefix) => description.startsWith(prefix))
+  )
+}
+
 /** Absent/malformed inventory on older Claude builds means retain the tracked roster; never clear it. */
 export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unknown>): {
   present: boolean
@@ -44,6 +59,8 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
   runningNonAgentTaskIds: string[]
   /** Running shells blocked on `orca orchestration check --wait`, which recovers them after a listener restart. */
   runningAgentWaitIds: string[]
+  /** What each running shell-like entry runs (its command, else its description), except worker waits. */
+  runningNonAgentTaskCommands: string[]
 } {
   const raw = hookPayload['background_tasks']
   if (!Array.isArray(raw)) {
@@ -53,7 +70,8 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
       truncated: false,
       hasRunningNonAgentTask: false,
       runningNonAgentTaskIds: [],
-      runningAgentWaitIds: []
+      runningAgentWaitIds: [],
+      runningNonAgentTaskCommands: []
     }
   }
   const tasks: ClaudeBackgroundAgentTask[] = []
@@ -61,6 +79,7 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
   let hasRunningNonAgentTask = false
   const runningNonAgentTaskIds: string[] = []
   const runningAgentWaitIds: string[] = []
+  const runningNonAgentTaskCommands: string[] = []
   for (const item of raw) {
     if (typeof item !== 'object' || item === null) {
       truncated = true
@@ -77,6 +96,9 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
       hasRunningNonAgentTask ||= !isTerminal
       continue
     }
+    if (isClaudeAmbientArtifactMonitor(taskType, obj.description)) {
+      continue
+    }
     const isAgentTask = isAgentChildWorkKind(classifyClaudeBackgroundTaskKind(taskType))
     // Why: future non-agent types and nonterminal labels must fail active; only typed agent rows or explicit terminal states can safely retire work.
     if (!isAgentTask && !isTerminal) {
@@ -87,6 +109,13 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
         if (runsOrcaOrchestrationWait(obj.command)) {
           runningAgentWaitIds.push(id)
         }
+      }
+      const command = [obj.command, obj.description].find(
+        (text): text is string => typeof text === 'string' && text.trim().length > 0
+      )
+      if (!runsOrcaOrchestrationWait(obj.command)) {
+        // Why: these reach worker status, the CLI and the orchestration DB, so credentials never leave here.
+        runningNonAgentTaskCommands.push(command ? redactString(command.trim()) : 'background task')
       }
     }
     if (!isAgentTask) {
@@ -110,6 +139,7 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
     truncated,
     hasRunningNonAgentTask,
     runningNonAgentTaskIds,
-    runningAgentWaitIds
+    runningAgentWaitIds,
+    runningNonAgentTaskCommands
   }
 }

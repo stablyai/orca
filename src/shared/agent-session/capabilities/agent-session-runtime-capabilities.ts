@@ -11,7 +11,10 @@ import { AGENT_SESSION_RESUME_RUNTIME_CAPABILITIES } from '../lifecycle/resume/a
 import { AGENT_SESSION_STOP_RUNTIME_CAPABILITIES } from '../lifecycle/stopping/agent-session-stop-capabilities'
 import { AGENT_SESSION_WORKSPACE_SLEEP_MARK_RUNTIME_CAPABILITY } from '../lifecycle/stopping/agent-session-workspace-sleep'
 import { STRUCTURED_AGENT_SESSION_SURFACE_RUNTIME_CAPABILITIES } from './structured-agent-session-surface-capabilities'
-import { AGENT_SESSION_DELETE_RUNTIME_CAPABILITY } from '../chat-deletion/orca-chat-delete'
+import {
+  AGENT_SESSION_DELETE_RUNTIME_CAPABILITY,
+  AGENT_SESSION_PHONE_DELETE_RUNTIME_CAPABILITY
+} from '../chat-deletion/orca-chat-delete'
 
 export const AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY =
   'agent-session.session-boundary.v1' as const
@@ -21,6 +24,9 @@ export const AGENT_SESSION_CREATE_OPTIONS_RUNTIME_CAPABILITY =
   'agent-session.create-options.v1' as const
 // Older launch schemas reject unknown fields; advertise before clients send keyboard support.
 export const AGENT_SESSION_KEYBOARD_RUNTIME_CAPABILITY = 'agent-session.keyboard.v1' as const
+// Older launch schemas reject unknown fields; advertise before clients send terminal theme params.
+export const AGENT_SESSION_THEME_PARAMS_RUNTIME_CAPABILITY =
+  'agent-session.theme-params.v1' as const
 // Strict older launch schemas cannot accept a section's transient trust owner.
 export const AGENT_SESSION_TRUST_WORKTREE_RUNTIME_CAPABILITY =
   'agent-session.trust-worktree.v1' as const
@@ -144,6 +150,11 @@ export const AGENT_SESSION_TOOL_OUTPUT_APPEND_RUNTIME_CAPABILITY =
 export const AGENT_SESSION_PROMPT_SUGGESTIONS_RUNTIME_CAPABILITY =
   'agent-session.prompt-suggestions.v1' as const
 
+// The host takes `capabilities.liveTextViewer` and `shown` on subscribe, and `agentSession.liveTextShown`;
+// it sends live text only to a viewer that says it is shown. Older hosts' params predate both.
+export const AGENT_SESSION_LIVE_TEXT_VIEWER_RUNTIME_CAPABILITY =
+  'agent-session.live-text-viewer.v1' as const
+
 // The host appends CI result lines to chats that opened or pushed to a PR; older hosts write none.
 export const AGENT_SESSION_PR_EVENTS_RUNTIME_CAPABILITY = 'agent-session.pr-events.v1' as const
 
@@ -159,6 +170,7 @@ export const AGENT_SESSION_RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
     AGENT_SESSION_CREATE_OPTIONS_RUNTIME_CAPABILITY,
     AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
     AGENT_SESSION_KEYBOARD_RUNTIME_CAPABILITY,
+    AGENT_SESSION_THEME_PARAMS_RUNTIME_CAPABILITY,
     AGENT_SESSION_TRUST_WORKTREE_RUNTIME_CAPABILITY,
     STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
     AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY,
@@ -181,6 +193,7 @@ export const AGENT_SESSION_RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
     ...AGENT_SESSION_ATTENTION_RUNTIME_CAPABILITIES,
     AGENT_SESSION_WORKSPACE_SLEEP_MARK_RUNTIME_CAPABILITY,
     AGENT_SESSION_DELETE_RUNTIME_CAPABILITY,
+    AGENT_SESSION_PHONE_DELETE_RUNTIME_CAPABILITY,
     AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
     AGENT_SESSION_REWIND_RECOVERY_CAPABILITY,
     AGENT_SESSION_PHONE_REWIND_RUNTIME_CAPABILITY,
@@ -205,5 +218,6 @@ export const AGENT_SESSION_RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
     AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY,
     AGENT_SESSION_TOOL_OUTPUT_APPEND_RUNTIME_CAPABILITY,
     AGENT_SESSION_PROMPT_SUGGESTIONS_RUNTIME_CAPABILITY,
+    AGENT_SESSION_LIVE_TEXT_VIEWER_RUNTIME_CAPABILITY,
     ...AGENT_SESSION_RESUME_RUNTIME_CAPABILITIES
   ] as const)()
