@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import {
   ORCHESTRATION_PEER_BOT_MAIL_RUNTIME_CAPABILITY,
+  ORCHESTRATION_PEER_GROUP_MAIL_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_MAIL_FILES_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_MAIL_TYPES_RUNTIME_CAPABILITY
@@ -87,7 +88,8 @@ export async function requirePeerMailServer(
   runtime: PeerMailRuntime,
   selector: string,
   toBot = false,
-  type?: z.infer<typeof PeerMailMessageType>
+  type?: z.infer<typeof PeerMailMessageType>,
+  group = false
 ): Promise<OrchestrationWorkerServer & { takesFiles: boolean }> {
   const server = await runtime.resolveOrchestrationWorkerServer(selector)
   const status = RuntimeStatusCapabilities.safeParse(
@@ -138,6 +140,16 @@ export async function requirePeerMailServer(
   }
   const takesFiles =
     status.data.capabilities?.includes(ORCHESTRATION_PEER_MAIL_FILES_RUNTIME_CAPABILITY) === true
+  if (
+    group &&
+    !status.data.capabilities?.includes(ORCHESTRATION_PEER_GROUP_MAIL_RUNTIME_CAPABILITY)
+  ) {
+    throw new OrchestrationError(
+      'server_mail_unsupported',
+      `Update Orca on ${server.name} to receive group mentions outside Home. Nothing was sent.`,
+      { ...NOTHING_SENT, server: server.name }
+    )
+  }
   return { ...server, takesFiles }
 }
 
@@ -163,6 +175,7 @@ export async function deliverPeerMail(
     threadId?: string
     replyTo?: string
     chat?: string
+    group?: { id: string; threadId?: string }
     item?: string
     attachments?: readonly string[]
     sender: PeerMailSender
@@ -184,6 +197,7 @@ export async function deliverPeerMail(
       ...(message.threadId ? { threadId: message.threadId } : {}),
       ...(message.replyTo ? { replyTo: message.replyTo } : {}),
       ...(message.chat ? { chat: message.chat } : {}),
+      ...(message.group ? { group: message.group } : {}),
       ...(message.item ? { item: message.item } : {}),
       ...(message.attachments?.length ? { attachments: message.attachments } : {}),
       sender: message.sender,

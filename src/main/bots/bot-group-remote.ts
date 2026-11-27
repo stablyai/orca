@@ -156,7 +156,7 @@ async function requireRemoteComputer(groups: BotGroupRuntime, environmentId: str
   let name = environmentId
   try {
     name = (await groups.runtime.resolveOrchestrationWorkerServer(environmentId)).name
-    return await requirePeerMailServer(groups.runtime, environmentId, true, 'question')
+    return await requirePeerMailServer(groups.runtime, environmentId, true, 'question', true)
   } catch (error) {
     if (error instanceof OrchestrationError && error.code === 'server_mail_unsupported') {
       throw new BotFailureError('groupPeerTooOld', { host: name })
@@ -168,8 +168,8 @@ async function requireRemoteComputer(groups: BotGroupRuntime, environmentId: str
 
 /**
  * Hands a new post's remote questions to their computers, after the room queue has let go: each is
- * the owner's own question, to the chat the bot had as its Home Chat when it joined (never another
- * bot by name). A refusal before admission is `failed`; anything else that went wrong is `unknown`,
+ * the owner's own question, in the remote bot's isolated conversation for this room. A refusal
+ * before admission is `failed`; anything else that went wrong is `unknown`,
  * since that computer may have taken it. Nothing is retried or resent.
  */
 export async function deliverRemoteAsks(
@@ -216,6 +216,10 @@ export async function deliverRemoteAsks(
                   id: ask.requestId,
                   to: `bot:${ask.botId}`,
                   chat: ask.chatSessionId,
+                  group: {
+                    id: message.groupId,
+                    ...(message.threadId ? { threadId: message.threadId } : {})
+                  },
                   senderLabel: `${group.name} on ${machine}`,
                   subject: `In ${group.name}: ${remoteQuestionSummary(message)}`,
                   body: bodies?.get(ask.requestId),

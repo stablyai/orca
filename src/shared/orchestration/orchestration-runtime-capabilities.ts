@@ -62,6 +62,9 @@ export const ORCHESTRATION_PEER_MAIL_TYPES_RUNTIME_CAPABILITY =
 /** Peer mail also reaches its bots (`bot:`, `--chat`, questions), admitted as its own bot mail is. */
 export const ORCHESTRATION_PEER_BOT_MAIL_RUNTIME_CAPABILITY =
   'orchestration.peer-bot-mail.v1' as const
+/** Remote group mentions run outside Home and return their final answer to the originating room. */
+export const ORCHESTRATION_PEER_GROUP_MAIL_RUNTIME_CAPABILITY =
+  'orchestration.peer-group-mail.v1' as const
 /** Peer mail about a bot's item also carries files uploaded here for that item's chat. */
 export const ORCHESTRATION_PEER_MAIL_FILES_RUNTIME_CAPABILITY =
   'orchestration.peer-mail-files.v1' as const
@@ -104,6 +107,7 @@ export const ORCHESTRATION_RUNTIME_CAPABILITIES = [
   ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_MAIL_TYPES_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_BOT_MAIL_RUNTIME_CAPABILITY,
+  ORCHESTRATION_PEER_GROUP_MAIL_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_MAIL_FILES_RUNTIME_CAPABILITY,
   ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY,
   ORCHESTRATION_CHAT_LINEAGE_RUNTIME_CAPABILITY

@@ -12,6 +12,8 @@ import type {
 } from '../runtime/orchestration/mailbox/structured-pointer/structured-mailbox-pointer-host-contract'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { isBotGroupMemberSession } from '../../shared/bots/bot-group'
+import { isRemoteBotGroupSession } from '../../shared/bots/bot-remote-group-session'
+import { recordRemoteGroupSend } from './bot-remote-group-session'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import { BotGroupStore } from './bot-group-store'
 import { migrateBotGroupHomes } from './bot-group-home-migration'
@@ -100,11 +102,16 @@ export function botMailOwner(runtime: OrcaRuntimeService): StructuredMailOwner {
   return {
     mailHeld: (sessionId) => pausedBotChatHoldsMail(runtime, sessionId),
     beforeSend: (input) =>
-      isBotGroupMemberSession(input.sessionId) && runtimeBotGroups(runtime).reserveMailTurn(input),
+      isRemoteBotGroupSession(input.sessionId)
+        ? recordRemoteGroupSend(runtime, input)
+        : isBotGroupMemberSession(input.sessionId) &&
+          runtimeBotGroups(runtime).reserveMailTurn(input),
     narrowBatch: (sessionId, messages) =>
-      isBotGroupMemberSession(sessionId)
-        ? runtimeBotGroups(runtime).narrowMailBatch(sessionId, messages)
-        : { messages, ended: [] }
+      isRemoteBotGroupSession(sessionId)
+        ? { messages: messages.slice(0, 1), ended: [] }
+        : isBotGroupMemberSession(sessionId)
+          ? runtimeBotGroups(runtime).narrowMailBatch(sessionId, messages)
+          : { messages, ended: [] }
   }
 }
 

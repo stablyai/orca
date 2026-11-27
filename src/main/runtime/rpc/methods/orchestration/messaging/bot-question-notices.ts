@@ -10,6 +10,7 @@ import {
   type BotRequestNoticeWhy
 } from '../../../../../bots/bot-request-view'
 import { ensureSenderRecords, tellSender } from './bot-request-sender-notice'
+import { remoteGroupAnswers } from '../../../../../bots/bot-remote-group-answer'
 
 type FailureWords = {
   requestId: string
@@ -73,8 +74,12 @@ export async function botQuestionNotices(
     messageIds.map((id) => db.getMessageById(id))
   )
   const { why, reason } = await noticeWords(taker, readChat)
+  const answer = await remoteGroupAnswers(runtime, taker, messageIds)
   const outcome = taker.startsWith('dropped:') ? 'dropped' : 'unanswered'
   return ({ messageId }) => {
+    if (answer(messageId)) {
+      return 'told'
+    }
     const message = db.getMessageById(messageId)
     return !message || tellSender(runtime, db, message, outcome, why, reason)
       ? 'told'

@@ -16,6 +16,7 @@ import { AUTOMATION_EVENT_SOURCE_NAMES } from '../automations/automation-event-p
 
 /** What Orca keeps beside the mail: never written from the sender's own fields. */
 export type BotRequestRecord = {
+  remoteGroup?: { sessionId: string; operationId?: string }
   group?: BotGroupPeerScope
   fromBotId: string | null
   fromBotName: string | null

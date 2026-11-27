@@ -1,6 +1,7 @@
 // `bots.chats`: a bot's chats that mail can reach, newest first, so a bot can pick one by title and
 // last ask and send it `--chat <id>`.
 import type { Bot } from '../../../../shared/bot-types'
+import { isRemoteBotGroupSession } from '../../../../shared/bots/bot-remote-group-session'
 import type { BotChatRow } from '../../../../shared/bots/bot-chat-row'
 import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type { BotRosterEntry } from '../../../../shared/bot-roster'
@@ -161,7 +162,11 @@ export function botChatRecordRow(
   rootOf: (id: string) => string,
   homeRoot: string | null
 ): Omit<BotChatRow, 'self' | 'closed'> | null {
-  if (!isOrcaSessionId(record.sessionId) || clearedInto(record) !== null) {
+  if (
+    !isOrcaSessionId(record.sessionId) ||
+    isRemoteBotGroupSession(record.sessionId) ||
+    clearedInto(record) !== null
+  ) {
     return null
   }
   const id = rootOf(record.sessionId)
