@@ -1,5 +1,6 @@
 import { ShortcutKeyCombo } from '../ui/ShortcutKeyCombo'
 import { WorktreeJumpPaletteTaskSearchStatus } from './tasks/worktree-jump-palette-task-search-status'
+import { useRef } from 'react'
 import type React from 'react'
 import { X } from 'lucide-react'
 import { CommandDialog, CommandEmpty, CommandInput, CommandList } from '@/components/ui/command'
@@ -14,7 +15,10 @@ import { WorkspaceEmojiSuggestionPopover } from '@/components/workspace-emoji/Wo
 import type { WorktreeJumpPaletteController } from './use-worktree-jump-palette-controller'
 import { WorktreeJumpPaletteEntry } from './rows/worktree-jump-palette-entry'
 import { FooterKey, PaletteState } from './rows/worktree-jump-palette-row-content'
-import { WorktreeJumpPaletteSearchShortcutOffer } from './worktree-jump-palette-search-shortcut-offer'
+import {
+  WorktreeJumpPaletteSearchShortcutOffer,
+  type SearchShortcutAcceptRef
+} from './worktree-jump-palette-search-shortcut-offer'
 import {
   getWorktreeJumpPaletteEmptyState,
   getWorktreeJumpPaletteResultCount
@@ -36,6 +40,8 @@ export function WorktreeJumpPaletteSurface({
     (item) => item.id === controller.commandSelectedItemId
   )
   const modKey = navigator.userAgent.includes('Mac') ? '⌘' : 'Ctrl'
+  // Set by the Search shortcut card while it offers Mod+Enter; a selected task row keeps the chord.
+  const acceptSearchShortcutRef: SearchShortcutAcceptRef = useRef(null)
   const emptyState = getWorktreeJumpPaletteEmptyState(controller, t)
   const resultCount = getWorktreeJumpPaletteResultCount(controller)
   const { scoped, botsEnabled } = controller.botScope
@@ -82,14 +88,20 @@ export function WorktreeJumpPaletteSurface({
           if (!resultsReady && (RESULT_KEYS.has(event.key) || event.ctrlKey || event.metaKey)) {
             revealResultsNow()
           }
-          if (
-            selectedTask &&
+          const modEnter =
             event.key === 'Enter' &&
             (navigator.userAgent.includes('Mac') ? event.metaKey : event.ctrlKey)
-          ) {
+          if (selectedTask && modEnter) {
             event.preventDefault()
             event.stopPropagation()
             controller.handleSelectTask(selectedTask.result, true)
+            return
+          }
+          const acceptSearchShortcut = acceptSearchShortcutRef.current
+          if (modEnter && acceptSearchShortcut) {
+            event.preventDefault()
+            event.stopPropagation()
+            acceptSearchShortcut()
             return
           }
           if (
@@ -162,6 +174,10 @@ export function WorktreeJumpPaletteSurface({
         side="bottom"
         contentClassName="w-80"
       />
+      <WorktreeJumpPaletteSearchShortcutOffer
+        acceptShortcutRef={acceptSearchShortcutRef}
+        modEnterFree={!selectedTask}
+      />
       {botsEnabled && !scoped ? (
         <span id={scopeHintId} className="sr-only">
           {t('bots.palette.scopeHint', 'Type @ to show only bots')}
@@ -220,11 +236,9 @@ export function WorktreeJumpPaletteSurface({
           onRetry={controller.retryTaskSearch}
         />
       </CommandList>
-      {/* Wraps so the Search offer keeps a readable width and the hints move to their own row when narrow. */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-border/60 px-3.5 py-2.5 text-[11px] text-muted-foreground/82">
-        <WorktreeJumpPaletteSearchShortcutOffer />
+      <div className="flex items-center justify-end border-t border-border/60 px-3.5 py-2.5 text-[11px] text-muted-foreground/82">
         {/* Wraps on narrow windows and long translations instead of clipping its first keys. */}
-        <div className="ml-auto flex flex-wrap items-center justify-end gap-x-2 gap-y-1">
+        <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1">
           {selectedTask ? (
             <>
               <ShortcutKeyCombo keys={[modKey, 'Enter']} />

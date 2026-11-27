@@ -1,6 +1,5 @@
 import React, { useState } from 'react'
-import { Button } from '../../ui/button'
-import { SettingsRow } from '../form-controls/SettingsFormControls'
+import { SettingsRow, SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
 import { useTranslate } from '@/i18n/use-translate'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '../../../store/index'
@@ -15,10 +14,7 @@ import type {
   SearchShortcutChoice,
   SearchShortcutChoiceResult
 } from '../../../../../shared/keybindings/types'
-import {
-  searchShortcutOptInIsEffective,
-  type SearchShortcutOwner
-} from '../../../../../shared/keybindings/search-shortcut-opt-in'
+import type { SearchShortcutOwner } from '../../../../../shared/keybindings/search-shortcut-opt-in'
 import { localizeKeybindingDefinition } from './keybinding-title-copy'
 
 export function SearchShortcutOptInControl({
@@ -30,14 +26,17 @@ export function SearchShortcutOptInControl({
   return state ? <SearchShortcutOptInRow state={state} /> : null
 }
 
+type SearchKeyOption = 'legacy' | 'mod-k'
+
 function SearchShortcutOptInRow({ state }: { state: SearchShortcutOfferState }): React.JSX.Element {
   const t = useTranslate()
   const setSearchShortcutChoice = useAppStore((s) => s.setSearchShortcutChoice)
   const mountedRef = useMountedRef()
   const [pending, setPending] = useState(false)
   const [notice, setNotice] = useState<SearchShortcutChoiceResult['outcome'] | 'error' | null>(null)
-  const keys = { key: state.searchKeyLabel, legacyKey: state.legacyKeyLabel }
   const accepted = state.offer.kind === 'accepted'
+  // The toggle is the undo: it is offered whenever a choice can be made or reverted.
+  const toggleable = accepted || state.offer.kind === 'eligible'
 
   const choose = async (choice: SearchShortcutChoice): Promise<void> => {
     setPending(true)
@@ -50,18 +49,14 @@ function SearchShortcutOptInRow({ state }: { state: SearchShortcutOfferState }):
     }
   }
 
-  const description = describeOffer(state, t)
+  const title = t('searchShortcutOptIn.searchTitle', 'Search shortcut')
   return (
     <SettingsRow
       id="search-shortcut-opt-in"
-      label={
-        searchShortcutOptInIsEffective(state.offer)
-          ? t('searchShortcutOptIn.acceptedTitle', 'Search uses {{key}}', keys)
-          : t('searchShortcutOptIn.title', 'Use {{key}} for Search', keys)
-      }
+      label={title}
       description={
         <>
-          {description}
+          {describeOffer(state, t)}
           {notice === 'unconfirmed' ? (
             <span className="block text-muted-foreground" role="status">
               {t(
@@ -69,7 +64,7 @@ function SearchShortcutOptInRow({ state }: { state: SearchShortcutOfferState }):
                 "Couldn't confirm the change was saved. This row shows what's active now."
               )}
             </span>
-          ) : notice === 'unchanged' || notice === 'error' ? (
+          ) : notice === 'unchanged' || notice === 'refused' || notice === 'error' ? (
             <span className="block text-destructive" role="alert">
               {t('searchShortcutOptIn.failed', "Couldn't switch. Your shortcuts are unchanged.")}
             </span>
@@ -77,19 +72,21 @@ function SearchShortcutOptInRow({ state }: { state: SearchShortcutOfferState }):
         </>
       }
       control={
-        accepted ? (
-          <Button
+        toggleable ? (
+          <SettingsSegmentedControl<SearchKeyOption>
+            value={accepted ? 'mod-k' : 'legacy'}
+            onChange={(next) => {
+              if (!pending && next !== (accepted ? 'mod-k' : 'legacy')) {
+                void choose(next === 'mod-k' ? 'accepted' : 'dismissed')
+              }
+            }}
+            ariaLabel={title}
             size="sm"
-            variant="outline"
-            disabled={pending}
-            onClick={() => void choose('dismissed')}
-          >
-            {t('searchShortcutOptIn.undo', 'Undo')}
-          </Button>
-        ) : state.offer.kind === 'eligible' ? (
-          <Button size="sm" disabled={pending} onClick={() => void choose('accepted')}>
-            {t('searchShortcutOptIn.use', 'Use {{key}}', keys)}
-          </Button>
+            options={[
+              { value: 'legacy', label: state.legacyKeyLabel, disabled: pending },
+              { value: 'mod-k', label: state.searchKeyLabel, disabled: pending }
+            ]}
+          />
         ) : null
       }
     />
@@ -101,24 +98,32 @@ function describeOffer(
   t: ReturnType<typeof useTranslate>
 ): string {
   const keys = { key: state.searchKeyLabel, legacyKey: state.legacyKeyLabel }
+  const mac = state.platform === 'darwin'
   switch (state.offer.kind) {
     case 'accepted':
       if (state.offer.owners.length > 0) {
         return t(
           'searchShortcutOptIn.acceptedTaken',
-          '{{key}} is also assigned to {{actions}}. Change that shortcut to use {{key}} for Search, or undo.',
+          '{{key}} is also assigned to {{actions}}. Change that shortcut to use {{key}} for Search, or switch back to {{legacyKey}}.',
           { ...keys, actions: ownerTitles(state.offer.owners) }
         )
       }
-      return state.offer.searchOnModK
+      if (!state.offer.searchOnModK) {
+        return t(
+          'searchShortcutOptIn.acceptedCustom',
+          'Search uses a custom shortcut. Choosing {{legacyKey}} returns this profile to its previous Search and clear defaults.',
+          keys
+        )
+      }
+      return mac
         ? t(
-            'searchShortcutOptIn.acceptedDetail',
-            'Search opens with {{key}}, and {{key}} no longer clears terminals.',
+            'searchShortcutOptIn.acceptedDetailMac',
+            '{{key}} opens Search and no longer clears the terminal.',
             keys
           )
         : t(
-            'searchShortcutOptIn.acceptedCustom',
-            'Search uses a custom shortcut. Undo returns this profile to its previous Search and clear defaults.',
+            'searchShortcutOptIn.acceptedDetailOther',
+            '{{key}} opens Search and no longer cuts lines in the terminal unless Shortcuts in terminal is Terminal first.',
             keys
           )
     case 'custom-search':
@@ -138,22 +143,21 @@ function describeOffer(
         "Your keybindings file couldn't be read. Fix it or restart Orca, then try again."
       )
     case 'eligible': {
-      const detail =
-        state.platform === 'darwin'
-          ? t(
-              'searchShortcutOptIn.detailMac',
-              'Open Search with {{key}}, like new profiles. {{key}} in terminals will stop clearing.',
-              keys
-            )
-          : t(
-              'searchShortcutOptIn.detailOther',
-              'Open Search with {{key}}, like new profiles. In terminals {{key}} will open Search instead of clearing, and the shell no longer gets {{key}} (delete to end of line) unless Shortcuts in terminal is Terminal first.',
-              keys
-            )
+      const cost = mac
+        ? t(
+            'searchShortcutOptIn.settingsCostMac',
+            'If you choose {{key}}, it no longer clears the terminal.',
+            keys
+          )
+        : t(
+            'searchShortcutOptIn.settingsCostOther',
+            'If you choose {{key}}, it no longer cuts lines in the terminal unless Shortcuts in terminal is Terminal first.',
+            keys
+          )
       const legacy = state.offer.keepsLegacyKey
         ? ` ${t('searchShortcutOptIn.legacyKeeps', '{{legacyKey}} keeps working.', keys)}`
         : ''
-      return `${detail}${legacy} ${t(
+      return `${cost}${legacy} ${t(
         'searchShortcutOptIn.profileOnly',
         'Only this profile changes; your custom shortcuts are kept.'
       )}`
