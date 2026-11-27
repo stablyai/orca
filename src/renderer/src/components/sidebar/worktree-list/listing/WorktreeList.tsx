@@ -190,9 +190,13 @@ const WorktreeList = React.memo(function WorktreeList({
       )
     )
   }, [allProjectsCollapsed, projectCollapseKeys, setCollapsedGroups])
+  // Full-page Tasks/Activity views have no selected worktree card.
+  const activeCardWorktreeId =
+    activeView === 'tasks' || activeView === 'activity' ? null : currentSidebarWorktreeId
   const selection = useSidebarWorktreeSelection({
     sectionRows: rowModel.sectionRows,
-    pinnedDisplayPolicy
+    pinnedDisplayPolicy,
+    active: { worktreeId: activeCardWorktreeId, hostId: activeWorkspaceExecutionHostId }
   })
   const statusMutations = useWorktreeStatusMutations({
     workspaceStatuses: boardStatuses,
@@ -320,10 +324,7 @@ const WorktreeList = React.memo(function WorktreeList({
         hostOptions={rowModel.hostOptions}
         occurrencePlan={rowModel.occurrencePlan}
         visibleProjectRepoIdsBySection={visibleProjectRepoIdsBySection}
-        // Full-page Tasks/Activity views have no selected worktree card.
-        activeWorktreeId={
-          activeView === 'tasks' || activeView === 'activity' ? null : currentSidebarWorktreeId
-        }
+        activeWorktreeId={activeCardWorktreeId}
         activeWorkspaceExecutionHostId={activeWorkspaceExecutionHostId}
         currentWorktreeId={currentSidebarWorktreeId}
         groupBy={groupBy}

@@ -31,6 +31,8 @@ export function createCodexAppServerRecordDispatcher(input: {
   handlers: CodexAppServerConnectionHandlers
   writeResponse: (payload: Record<string, unknown>) => void
   onProtocolFailure: (error: Error) => void
+  /** Replies through this id answer a previous app's requests (a reattach's replay): not ours. */
+  previousAppRequestsThrough?: number
 }): {
   addPending: (id: number, waiter: CodexPendingRequest) => void
   deletePending: (id: number) => void
@@ -85,6 +87,9 @@ export function createCodexAppServerRecordDispatcher(input: {
       return
     }
     const waiter = pending.get(message.id)
+    if (!waiter && message.id <= (input.previousAppRequestsThrough ?? 0)) {
+      return
+    }
     if (!waiter) {
       // Late/unmatched replies belong in diagnostics; no waiting call can interpret them.
       const timedOutMethod = timedOutMethods.get(message.id)

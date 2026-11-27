@@ -52,6 +52,7 @@ export const LINT_STEPS = [
   'check:path-literal-ratchet',
   'check:host-list-render-ratchet',
   'check:whole-hot-map-selector-ratchet',
+  'check:zod-prefer-lazy-ratchet',
   'verify:skill-bundle-manifest',
   'check:reliability-gates',
   'verify:bundled-skill-guides',

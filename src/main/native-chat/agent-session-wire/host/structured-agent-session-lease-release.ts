@@ -11,6 +11,7 @@ import {
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionEndedEvent } from '../providers/structured-agent-session-adapter'
+import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 
 export type StructuredAgentSessionLeaseStore = Pick<
   AgentSessionRecordStore,
@@ -26,6 +27,7 @@ export async function releaseStoredStructuredAgentSessionOwnerAfterExit(input: {
   deathEvidenceKind?: 'kill-delivered'
   exitObservedAt?: number
   exitReason?: string
+  unexpectedExitJournal?: AgentSessionJournal
 }): Promise<AgentSessionRecord> {
   const record = input.store.getRecord(input.sessionId)
   if (
@@ -35,13 +37,22 @@ export async function releaseStoredStructuredAgentSessionOwnerAfterExit(input: {
   ) {
     throw new Error('agent_session_checkpoint_stale')
   }
+  // Check the same failure hold as agent mail admission once, while settling this exit.
+  const journal = input.unexpectedExitJournal
+  const canResumeByMail =
+    journal &&
+    (await journal.queuedMessages.failureHolds().then(
+      (held) => !held,
+      () => false
+    ))
   return releaseStoredAgentSessionOwnerAfterSurfaceClose(input.store, {
     sessionId: input.sessionId,
     expectedFence: input.expectedFence,
     now: input.now,
     ...(input.deathEvidenceKind ? { deathEvidenceKind: input.deathEvidenceKind } : {}),
     ...(input.exitObservedAt === undefined ? {} : { exitObservedAt: input.exitObservedAt }),
-    ...(input.exitReason ? { exitReason: input.exitReason } : {})
+    ...(input.exitReason ? { exitReason: input.exitReason } : {}),
+    ...(canResumeByMail ? { resumeByMail: true } : {})
   })
 }
 
@@ -72,7 +83,8 @@ export async function releaseExitedStructuredAgentSessionOwner(
   sessionId: string,
   fence: number,
   exit: StructuredAgentSessionChildExit,
-  observedAt: number
+  observedAt: number,
+  resumableJournal?: AgentSessionJournal
 ): Promise<boolean> {
   let released = false
   try {
@@ -83,6 +95,7 @@ export async function releaseExitedStructuredAgentSessionOwner(
       now: context.now(),
       exitObservedAt: observedAt,
       exitReason: exit.reason,
+      ...(!exit.expected && resumableJournal ? { unexpectedExitJournal: resumableJournal } : {}),
       ...(exit.deathEvidenceKind ? { deathEvidenceKind: exit.deathEvidenceKind } : {})
     })
     released = true

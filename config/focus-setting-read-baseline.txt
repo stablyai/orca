@@ -96,7 +96,6 @@
 1 src/renderer/src/components/sidebar/workspace-board/surface/WorkspaceKanbanDrawer.tsx
 1 src/renderer/src/components/sidebar/workspace-board/surface/use-visible-workspace-kanban-worktree-ids.ts
 1 src/renderer/src/components/sidebar/workspace-card/controller/use-worktree-card-controller.ts
-1 src/renderer/src/components/sidebar/workspace-card/details/use-worktree-card-review-details.ts
 1 src/renderer/src/components/sidebar/workspace-card/review/WorkspaceAttachmentSearch.tsx
 1 src/renderer/src/components/sidebar/workspace-card/review/use-workspace-reference-details.ts
 2 src/renderer/src/components/sidebar/workspace-card/review/workspace-reference-details.ts

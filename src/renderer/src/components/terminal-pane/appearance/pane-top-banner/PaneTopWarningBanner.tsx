@@ -138,6 +138,8 @@ export type PaneTopBannerProps = {
   /** A short label set before the title, e.g. what kind of pane this is. */
   badge?: string
   primaryAction: React.ReactNode
+  /** Quiet tone only: `start` sets the action right after the title, clear of controls over the pane's top-right corner. */
+  actionPlacement?: 'start' | 'end'
   /** Quiet tone only: the share of time left, drawn as a line along the bottom edge. */
   progress?: number
   onDismiss?: () => void
@@ -182,6 +184,7 @@ export function PaneTopBanner({
   icon,
   badge,
   primaryAction,
+  actionPlacement = 'end',
   progress,
   onDismiss,
   onDontShowAgain,
@@ -203,14 +206,22 @@ export function PaneTopBanner({
         role={announcement === undefined ? 'status' : undefined}
         data-tone="quiet"
         className={cn(
-          // Why these insets: the text starts at the terminal's first column, and the action ends where the terminal's last
+          // Why these insets: the text starts at the terminal's first column, and the content ends where the terminal's last
           // column does or, under floating pane controls, a gap before them.
-          'relative flex h-8 items-center gap-2 border-b border-border pr-[max(var(--pane-padding-x,4px),calc(var(--orca-pane-top-banner-controls-inset,0px)+0.5rem))] pl-(--pane-padding-x,4px) text-xs',
+          'relative flex h-8 items-center border-b border-border pr-[max(var(--pane-padding-x,4px),calc(var(--orca-pane-top-banner-controls-inset,0px)+0.5rem))] pl-(--pane-padding-x,4px) text-xs',
+          actionPlacement === 'start' ? 'gap-1' : 'gap-2',
           className
         )}
       >
         {announcement === undefined ? null : <BannerLiveRegion announcement={announcement} />}
-        <p className="min-w-0 flex-1 truncate text-muted-foreground">{title}</p>
+        <p
+          className={cn(
+            'min-w-0 truncate text-muted-foreground',
+            actionPlacement === 'end' && 'flex-1'
+          )}
+        >
+          {title}
+        </p>
         {primaryAction}
         {progress === undefined ? null : (
           <span

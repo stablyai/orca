@@ -6,14 +6,9 @@ import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import { prepareKimiTextTaskPolicy } from './source-control-kimi-policy'
-import { parse as parseJson, type ParseError } from 'jsonc-parser'
 import { z } from 'zod'
-import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { findOptionOccurrence } from '../../../shared/cli/command-option-occurrence'
-import {
-  compactRecipeOptions,
-  KIMI_VALUE_OPTIONS
-} from '../../../shared/source-control/ai/generation/commit-message-generation-options'
+import { KIMI_VALUE_OPTIONS } from '../../../shared/source-control/ai/generation/commit-message-generation-options'
 import type { CommitMessagePlan } from '../../../shared/source-control/ai/generation/commit-message-plan'
 import { isNamingOnlyTextAgent } from '../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import { wslDistroForCommand } from '../../../shared/file-access/wsl-paths'
@@ -29,18 +24,7 @@ import type {
   TextGenerationOperation
 } from '../source-control-text-generation-types'
 
-const object = lazyZodSchema(() => z.record(z.string(), z.unknown()))
-const strings = lazyZodSchema(() => z.array(z.string()))
-const settingsOptions = [
-  '--settings',
-  '--model',
-  '--effort',
-  '--agent',
-  '--input-format',
-  '--output-format'
-]
 const codexExclusions = [...CODEX_DISABLE_PLUGINS_ARGS, '-c', 'features.apps=false']
-const AG_DENIES = ['write_file(*)', 'command(*)', 'mcp(*)', 'read_url(*)', 'execute_url(*)']
 
 async function recipeFile(
   file: string,
@@ -78,91 +62,6 @@ async function recipeFile(
   const content = await readFile(path.resolve(target.cwd, expanded), 'utf8')
   signal.throwIfAborted()
   return content
-}
-
-function jsonObject(text: string): Record<string, unknown> {
-  const errors: ParseError[] = []
-  const value: unknown = parseJson(text.replace(/^\uFEFF/, ''), errors, {
-    allowTrailingComma: true
-  })
-  if (errors.length) {
-    throw new Error('Invalid text task settings')
-  }
-  return object.parse(value)
-}
-
-async function antigravityPolicy(
-  plan: CommitMessagePlan<GenerationArgument>,
-  target: LocalGenerationTarget,
-  signal: AbortSignal
-) {
-  let settings: Record<string, unknown> = {}
-  let cursor = 0
-  const optionTokens = generationOptionTokens(plan.args)
-  for (;;) {
-    const option = findOptionOccurrence(
-      optionTokens,
-      ['--settings'],
-      true,
-      settingsOptions,
-      cursor,
-      'required'
-    )
-    if (!option) {
-      break
-    }
-    if (!option.value) {
-      throw new Error('Missing text task settings')
-    }
-    const next = jsonObject(
-      option.value.trimStart().startsWith('{')
-        ? option.value
-        : await recipeFile(option.value, target, signal, plan.env)
-    )
-    const previousPermissions = object.parse(settings.permissions ?? {})
-    const nextPermissions = object.parse(next.permissions ?? {})
-    settings = {
-      ...settings,
-      ...next,
-      permissions: {
-        ...previousPermissions,
-        ...nextPermissions,
-        ...Object.fromEntries(
-          ['allow', 'ask', 'deny'].map((key) => [
-            key,
-            [
-              ...new Set([
-                ...strings.parse(previousPermissions[key] ?? []),
-                ...strings.parse(nextPermissions[key] ?? [])
-              ])
-            ]
-          ])
-        )
-      }
-    }
-    cursor = option.index + option.consumed
-  }
-  const permissions = object.parse(settings.permissions ?? {})
-  const allow = strings.parse(permissions.allow ?? [])
-  const deny = strings.parse(permissions.deny ?? [])
-  const composed = {
-    ...settings,
-    toolPermission: 'request-review',
-    allowNonWorkspaceAccess: true,
-    permissions: {
-      ...permissions,
-      allow: [...new Set([...allow, 'read_file(*)'])],
-      deny: [...new Set([...deny, ...AG_DENIES])]
-    }
-  }
-  return {
-    ...plan,
-    args: [
-      ...compactRecipeOptions(plan.args, ['--settings'], settingsOptions),
-      '--settings',
-      { value: JSON.stringify(composed), literal: true as const }
-    ]
-  }
 }
 
 function dshPolicy(
@@ -229,16 +128,6 @@ export function prepareSourceControlReadOnlyPlan(input: {
         return plan
       }
       throw new Error('The agent cannot apply the text task tool policy')
-    }
-    if (input.agentId === 'antigravity') {
-      const help = await probe([...(plan.policyProbeArgs ?? []), '--help'])
-      if (![help.stdout, help.stderr].some((text) => /^\s*--settings(?:[= \t]|$)/m.test(text))) {
-        if (naming) {
-          return plan
-        }
-        throw new Error('The agent cannot apply session-only text task settings')
-      }
-      return antigravityPolicy(plan, target, signal)
     }
     if (input.agentId === 'kimi') {
       const selected = findOptionOccurrence(

@@ -119,7 +119,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           ),
           sidebarOpen: typeof ui.sidebarOpen === 'boolean' ? ui.sidebarOpen : true,
           rightSidebarOpen: typeof ui.rightSidebarOpen === 'boolean' ? ui.rightSidebarOpen : true,
-          ...normalizeRightSidebarRoute(ui.rightSidebarTab),
+          ...normalizeRightSidebarRoute(ui.rightSidebarTab, ui.rightSidebarExplorerView),
           ...sanitizeActivityBarArrangement(ui, s),
           groupBy: (ui.groupBy as UISlice['groupBy'] | 'parent') === 'parent' ? 'repo' : ui.groupBy,
           sortBy,

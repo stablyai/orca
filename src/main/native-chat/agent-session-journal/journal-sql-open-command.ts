@@ -35,7 +35,8 @@ export function applyJournalSqlOpenCommand(
   savedAt: number
 ) {
   const opened = applyJournalSqlEditLeaseCommand(db, stateDirectory, command, savedAt)
-  const { recover } = command.operation
+  const requested = command.operation.recover
+  const recover = requested === 'keptWriter' ? undefined : requested
   const { target } = command
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: open returns its physical pre-recovery cursor.
   const openedThrough = opened.value as AgentJournalCursor
@@ -46,7 +47,10 @@ export function applyJournalSqlOpenCommand(
         .prepare('SELECT highest_fence FROM journal_chat_state WHERE session_id=? AND epoch=?')
         .get(target.sessionId, target.epoch)!.highest_fence
     )
-  settleOpeningLiveWork(db, target, savedAt)
+  // A kept writer's background work still runs; if it ended instead, its exit settles that work.
+  if (requested !== 'keptWriter') {
+    settleOpeningLiveWork(db, target, savedAt)
+  }
   const recovery: JournalOpenRecoveryResult = { failures: [], reopenFloor: null }
   const attempt = <Value>(
     step: JournalOpenRecoveryResult['failures'][number]['step'],
