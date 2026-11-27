@@ -126,9 +126,9 @@ export function StatusBarUsageEmptyCta({
             size="sm"
             disabled={getUsageOwnerHostScope(remoteOwner) === null}
             onClick={handleOpenSettings}
-            className="mt-0.5 h-7 w-full text-xs"
+            className="mt-0.5 h-auto min-h-7 w-full whitespace-normal"
           >
-            <span className="min-w-0 truncate">
+            <span className="min-w-0 text-xs break-words">
               {remoteOwner
                 ? t(
                     'auto.components.status.bar.StatusBarUsageEmptyCta.remoteOpenAccounts',
