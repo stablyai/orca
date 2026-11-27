@@ -140,6 +140,7 @@ test.describe('terminal copy under kitty release reporting (#17606)', () => {
     try {
       await scrollAndSelectRows(orcaPage, 20, 'scrollback line 25', 'scrollback line 26')
       await focusActiveTerminalInput(orcaPage)
+      await expect(orcaPage.locator('.xterm:has(.xterm-helper-textarea:focus)')).toBeVisible()
       const before = await readViewport(orcaPage)
       expect(before.viewportY).toBeLessThan(before.baseY)
       await orcaPage.screenshot({ path: testInfo.outputPath('before-copy.png') })
