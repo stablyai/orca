@@ -2043,8 +2043,8 @@ private func clickPointer(
     foreground: Bool,
     element: AXUIElement? = nil
 ) throws -> UnfocusedTargetClick? {
-    try requireUncontendedInput(snapshot, foreground: foreground, sendsKeys: false)
     if foreground {
+        try requireUncontendedInput(snapshot, foreground: true, sendsKeys: false)
         return try Input.click(at: point, button: button, count: count, modifiers: modifiers, targetWindow: snapshot)
     }
     guard let hitElement = element ?? elementAtPoint(point, pid: snapshot.app.pid) else {
@@ -2055,6 +2055,8 @@ private func clickPointer(
     if element == nil {
         try requireNoForegroundEffect(clickEffect(button: button, modifiers: modifiers, on: hitElement))
     }
+    // Why: checked after the hit-test reads so typing that starts during them still refuses the click.
+    try requireUncontendedInput(snapshot, foreground: false, sendsKeys: false)
     try withTransportErrors {
         try BackgroundInputTransport.click(
             backgroundTarget(snapshot),
