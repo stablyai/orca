@@ -62,7 +62,11 @@ export async function endCodexSharedThreads(input: {
     ...(connection.watcherPid !== undefined ? { watcherPid: connection.watcherPid } : {}),
     timeoutMs: END_TIMEOUT_MS
   }).catch(() => false)
-  await unsubscribeCodexThreads(input.reads, threads, END_TIMEOUT_MS).catch(() => false)
   // Stopped as a close counts it: each turn was read and, if running, interrupted.
-  return interrupts.every((read) => read.status === 'fulfilled')
+  const stopped = interrupts.every((read) => read.status === 'fulfilled')
+  if (stopped) {
+    // A thread that may still run stays subscribed: what it says next is held, not missed.
+    await unsubscribeCodexThreads(input.reads, threads, END_TIMEOUT_MS).catch(() => false)
+  }
+  return stopped
 }
