@@ -229,11 +229,8 @@ export function runWatchdog(
       // No resolution snapshot: its wall time would count the sleep as silence.
       update(record.id, { selfRecovered: true })
       openReceiptWindow(record.id)
-      reportRecovered(
-        record.id,
-        unresponsiveMs,
-        record.detectedAt - record.durationMs + unresponsiveMs
-      )
+      const endedAt = record.detectedAt - record.durationMs + unresponsiveMs
+      reportRecovered(record.id, unresponsiveMs, endedAt)
     },
     onStallMissed: (durationMs, startedAt) => {
       const endedAt = Date.now()
