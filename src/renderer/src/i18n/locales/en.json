@@ -6011,6 +6011,7 @@
           },
           "SshStatusSegment": {
             "3ad70e0365": "Manage Remote Hosts…",
+            "manageSshHosts": "Manage SSH Hosts…",
             "6e8a9a4242": "Remote Hosts",
             "fdc57e9970": "Remote host connection status",
             "59b553e2aa": "Disconnect",

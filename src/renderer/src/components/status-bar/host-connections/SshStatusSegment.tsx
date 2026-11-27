@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '../../../store/index'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { getHostDisplayLabelOverrides } from '../../../../../shared/execution-host/host-setting-overrides'
@@ -172,6 +173,13 @@ export function SshStatusSegment(): React.JSX.Element | null {
     ...runtimeHostRows.map((host) => runtimeHostStatusForOverall(host.state, host.blockedReason))
   ]
   const connectedHostCount = statuses.filter((status) => status === 'connected').length
+  // Why: SSH rows are managed in the SSH Hosts pane, which web clients don't have.
+  const showManageSshHosts = targets.length > 0 && !isWebClientLocation()
+  const openHostSettings = (pane: 'servers' | 'ssh'): void => {
+    recordFeatureInteraction('ssh')
+    openSettingsTarget({ pane, repoId: null })
+    setActiveView('settings')
+  }
   const openRecovery = (host: {
     id: string
     label: string
@@ -277,15 +285,14 @@ export function SshStatusSegment(): React.JSX.Element | null {
           </DropdownMenuItem>
         ) : null}
         <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onSelect={() => {
-            recordFeatureInteraction('ssh')
-            openSettingsTarget({ pane: 'servers', repoId: null })
-            setActiveView('settings')
-          }}
-        >
+        <DropdownMenuItem onSelect={() => openHostSettings('servers')}>
           {t('auto.components.status.bar.SshStatusSegment.3ad70e0365', 'Manage Remote Hosts…')}
         </DropdownMenuItem>
+        {showManageSshHosts ? (
+          <DropdownMenuItem onSelect={() => openHostSettings('ssh')}>
+            {t('auto.components.status.bar.SshStatusSegment.manageSshHosts', 'Manage SSH Hosts…')}
+          </DropdownMenuItem>
+        ) : null}
       </DropdownMenuContent>
       <SshHostFindPopover
         open={findOpen}
