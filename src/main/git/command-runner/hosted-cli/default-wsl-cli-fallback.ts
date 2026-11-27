@@ -16,7 +16,7 @@ import {
  * not boot a stopped distro (E9), so a stopped or unverifiable one refuses with its own error rather
  * than "not installed"; inside a user act for that distro it may still start it.
  */
-export async function admittedDefaultWslCliDistro(): Promise<string | null> {
+async function admittedDefaultWslCliDistro(): Promise<string | null> {
   const distro = await defaultWslCliDistroAsync()
   // Gate before resolveCommand: building a wsl.exe command notes the distro as launched (woken).
   const blocked = distro ? await blockedWslDistroForExec(distro) : null

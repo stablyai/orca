@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { _resetPreflightCache, runPreflightCheck } from './agent-detection'
-import { blockedWslDistroForExec } from '../wsl/discovery/wsl-background-exec-gate'
+import { assertWslDistroRunningForExec } from '../wsl/discovery/wsl-background-exec-gate'
+import { WslDistroStoppedError } from '../wsl/filesystem/wsl-unc-access-gate'
 import { isCommandAvailable } from '../ipc/preflight/preflight-command-exec'
 
 // Native Windows has git and gh but no glab; only the default distro "Ubuntu" has glab.
@@ -16,12 +17,9 @@ vi.mock('../ipc/preflight/preflight-command-exec', () => ({
   execLocalPreflightCommandOrThrow: vi.fn(async () => ({ stdout: 'Logged in', stderr: '' }))
 }))
 vi.mock('../git/command-runner/host-routing/wsl-command-resolution', () => ({
-  defaultWslCliDistro: () => 'Ubuntu',
-  defaultWslCliDistroAsync: async () => 'Ubuntu',
-  resolveCommand: vi.fn()
+  defaultWslCliDistroAsync: async () => 'Ubuntu'
 }))
 vi.mock('../wsl/discovery/wsl-background-exec-gate', () => ({
-  blockedWslDistroForExec: vi.fn(async () => null),
   assertWslDistroRunningForExec: vi.fn(async () => undefined)
 }))
 vi.mock('../pty/environment/windows-environment-path', () => ({
@@ -57,7 +55,9 @@ afterEach(() => {
 
 it('reports glab from the default distro when no workspace names a runtime, as cwd-less glab calls use it', async () => {
   // A stopped default distro is never booted for a background read, and nothing stale is kept.
-  vi.mocked(blockedWslDistroForExec).mockResolvedValueOnce({ distro: 'Ubuntu', state: 'stopped' })
+  vi.mocked(assertWslDistroRunningForExec).mockRejectedValueOnce(
+    new WslDistroStoppedError('Ubuntu')
+  )
   await expect(runPreflightCheck()).resolves.toMatchObject({ glab: { installed: false } })
   expect(isCommandAvailable).not.toHaveBeenCalledWith('glab', { distro: 'Ubuntu' })
 

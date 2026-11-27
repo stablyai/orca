@@ -15,8 +15,10 @@ import { mergePersistedWindowsPathAsync } from '../pty/environment/windows-envir
 import type { WslPreflightTarget } from '../ipc/preflight/preflight-wsl-agent-detection'
 import {
   getPreflightWslTarget,
+  isWindowsHostDefault,
   type PreflightRuntimeContext
 } from '../ipc/preflight/preflight-runtime-target'
+import { defaultWslCliDistroAsync } from '../git/command-runner/host-routing/wsl-command-resolution'
 
 export type { PreflightRuntimeContext }
 import { hydrateShellPathForAgentDetection } from '../ipc/command-path/agent-detection-shell-path'
@@ -26,12 +28,8 @@ import {
   findRunnableLocalCommand,
   isCommandAvailable
 } from '../ipc/preflight/preflight-command-exec'
-import {
-  _resetDefaultWslGlabCache,
-  detectDefaultWslGlab,
-  isGlabAuthenticated,
-  isWindowsHostDefault
-} from './default-wsl-glab-preflight'
+import { buildLocalPreflightEnv } from '../ipc/preflight/preflight-local-env'
+import { withConfiguredProxyEnv } from '../network/configured-proxy-child-env'
 import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import {
   detectRemoteWindowsTerminalCapabilities,
@@ -104,7 +102,6 @@ export function _resetPreflightCache(): void {
   latestPreflightRun.clear()
   // In-flight probes must not repopulate the cleared cache.
   preflightCacheEpoch += 1
-  _resetDefaultWslGlabCache()
 }
 
 /** A CLI verdict and, on the local path, the exact copy that produced it. */
@@ -189,17 +186,45 @@ async function isGhAuthenticated(probe: CommandRuntime): Promise<boolean> {
   }
 }
 
+// glab versions split auth status across stdout/stderr; inspect both.
+async function isGlabAuthenticated(probe: CommandRuntime): Promise<boolean> {
+  try {
+    await (probe.wslTarget
+      ? execCommandInWslOrThrow(probe.wslTarget, `${quotePosixShell('glab')} auth status`)
+      : execLocalPreflightCommandOrThrow(probe.binary ?? 'glab', ['auth', 'status'], {
+          // `auth status` calls the GitLab API, so it needs the Settings proxy too.
+          env: withConfiguredProxyEnv(buildLocalPreflightEnv())
+        }))
+    return true
+  } catch (error) {
+    const stdout = (error as { stdout?: string }).stdout ?? ''
+    const stderr = (error as { stderr?: string }).stderr ?? ''
+    const output = `${stdout}\n${stderr}`
+    return output.includes('Logged in')
+  }
+}
+
 export async function runPreflightCheck(
   force = false,
   context?: PreflightRuntimeContext
 ): Promise<PreflightStatus> {
   const status = await readPreflightStatus(force, context)
-  // A cwd-less glab call whose host copy is missing runs in the default distro, so report that copy.
   if (!nativeGlabAbsent.has(status) || !isWindowsHostDefault(context)) {
     return status
   }
-  const glab = await detectDefaultWslGlab(force)
-  return glab ? { ...status, glab } : status
+  // A cwd-less glab call whose host copy is missing runs in the default distro; report that copy
+  // from the same per-distro entry a workspace in that distro reads.
+  const distro = await defaultWslCliDistroAsync()
+  if (!distro) {
+    return status
+  }
+  try {
+    const { glab } = await readPreflightStatus(force, { wslDistro: distro })
+    return glab ? { ...status, glab } : status
+  } catch {
+    // A stopped distro is not booted for a background read (E9); the next read asks again.
+    return status
+  }
 }
 
 async function readPreflightStatus(
