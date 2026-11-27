@@ -1,7 +1,11 @@
-import React from 'react'
+import React, { Suspense } from 'react'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import type { Repo } from '../../../../../shared/repository/repo-types'
-import { ProjectPeek } from './ProjectPeek'
+
+const ProjectPeek = lazy(() =>
+  import('./ProjectPeek').then((module) => ({ default: module.ProjectPeek }))
+)
 
 // Why: the content portals out of the DOM but React still bubbles its events to the card underneath,
 // which would select, drag, or rename the workspace on every edit click.
@@ -113,7 +117,11 @@ export function ProjectPeekPopover({
         }}
         onDragStart={stopPropagation}
       >
-        <ProjectPeek repo={repo} onRequestClose={requestClose} />
+        {open ? (
+          <Suspense fallback={null}>
+            <ProjectPeek repo={repo} onRequestClose={requestClose} />
+          </Suspense>
+        ) : null}
       </PopoverContent>
     </Popover>
   )
