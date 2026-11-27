@@ -72,6 +72,7 @@ Siri / CarPlay ─> App Intent (Swift, app target) ─HTTPS + Siri token─> wat
    ```bash
    cd mobile && ORCA_SIRI=1 npx expo run:ios --device --configuration Release
    ```
+   - Or use `modules/orca-siri/install-siri-build.sh --clean`. It builds under `com.<user>.orca.mobile`, picks the connected iPhone and checks the build has the intents. Run it with no options to reinstall the last build, for example after deleting the app by mistake: both apps are named Orca.
    - Add `ORCA_IOS_BUNDLE_ID=...` to use your own team. Xcode must be signed in to that team (Settings → Accounts). Otherwise it falls back to a wildcard profile, which can't carry Push Notifications.
    - Add `ORCA_WATCH_SPIKE=1` too if you want the Watch test row.
    - If the install step fails with "error reading pair record", replug and unlock the phone, then install the built app: `xcrun devicectl device install app --device <udid> <DerivedData>/Build/Products/Release-iphoneos/Orca.app`.
