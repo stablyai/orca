@@ -132,3 +132,21 @@ it('lets neither a dismissal nor a resume start while the other is in flight', a
   await dismissal
   store.dispose()
 })
+
+it("always follows the host's own launch action, even while a dismissal is in flight", async () => {
+  const store = await occurrence()
+  const dismissal = store.dismissNativeChatRestartOffer(['b'])
+  const launch = store.continueNativeChatRestartOffer(['a'], 'launch', [chat('a')])
+  expect(sent).toEqual([['a']])
+  expect(
+    store.getNativeChatRestartRun()?.entries.map((entry) => entry.candidate.sessionId)
+  ).toEqual(['a'])
+  dismissReply()
+  reply({
+    attempted: ['a'],
+    continued: [{ sessionId: 'a', outcome: 'continued' }],
+    skipped: new Set()
+  })
+  await Promise.all([dismissal, launch])
+  store.dispose()
+})

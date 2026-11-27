@@ -190,9 +190,11 @@ export function createNativeChatRestartOccurrence(
     startedBy: ResumeRunStarter = 'user',
     took?: NativeChatRestartOffer['candidates']
   ): Promise<void> {
-    // Checked before any await, so an activation while one is in flight, even in the same tick, sends nothing.
-    const requested = unsentResumeIds(run, sessionIds)
-    if (!current() || actionsBegun !== actionsSettled || requested.length === 0) {
+    // Checked before any await, so an activation while one is in flight, even in the same tick, sends
+    // nothing. The host's own launch action already started its chats, so it is always followed.
+    const hostTook = took !== undefined
+    const requested = hostTook ? [...new Set(sessionIds)] : unsentResumeIds(run, sessionIds)
+    if (!current() || requested.length === 0 || (!hostTook && actionsBegun !== actionsSettled)) {
       return
     }
     const issued = ++actionsBegun
