@@ -408,10 +408,11 @@
     },
     "clientHosted": {
       "preparationFailed": "Bu masaüstünde uzak tarayıcı başlatılamadı. Eşlenen bağlantıyı kontrol edip tekrar deneyin.",
-      "unavailableTitle": "İstemci taraflı tarayıcı kullanılamıyor",
-      "unavailableDescription": "Bu sayfa şu anda bu masaüstünde kullanılamıyor.",
-      "unavailableOtherDesktopDescription": "Bu sayfa başka bir masaüstünde açık.",
-      "unavailableHostOfflineDescription": "{{host}} çevrimdışı. Yeniden bağlandığında bu sayfa burada yeniden yüklenecek.",
+      "runsOnServerTitle": "Bu sekme sunucunuzda çalışıyor",
+      "runsOnServerBody": "Devam etmek için orada açın.",
+      "details": "Ayrıntılar",
+      "noBrowserTitle": "Bu sekme burada açılamıyor",
+      "noBrowserBody": "Bu sunucuda tarayıcı yok.",
       "download": {
         "started": "{{filename}} indiriliyor…",
         "completed": "{{filename}} indirildi",
@@ -436,9 +437,9 @@
       "reload": "Yenile"
     },
     "reopenOnServer": {
-      "action": "Sunucuda yeniden aç",
-      "pending": "Yeniden açılıyor…",
-      "caveat": "Bu işlem, uzak sunucuda bu sayfanın son adresinde yeni bir sayfa açar. Oturum açma durumu ve diğer geçici sayfa verileri farklı olabilir, form gönderiminden gelen bir sayfa boş açılır.",
+      "action": "Sunucuda aç",
+      "pending": "Açılıyor…",
+      "caveat": "Bu sayfanın son adresinde sunucuda açılır. Oturum durumu farklı olabilir.",
       "failed": "Bu sayfa uzak sunucuda açılamadı. Bağlantıyı kontrol edip tekrar deneyin."
     },
     "deviceMove": {
@@ -4404,7 +4405,7 @@
         "99c2755218": "Sorun arayın veya JQL girin; ör. project = ABC",
         "2ff9fd71fd": "Jira sorunlarını yenile",
         "0b65d3fb2c": "Linear projelerinde ara...",
-        "eec0c5c079": "Linear sorunlarında ara…",
+        "eec0c5c079": "Ara...",
         "8964184a8b": "Linear'ı yenile",
         "3feb524d42": "Yeni Linear sorunu",
         "0cbf7e5cf3": "Linear görev modu",
@@ -15910,8 +15911,6 @@
                 "pendingCount_one": "{{count}} bekleyen",
                 "unresolvedCount_other": "{{count}} çözülmemiş",
                 "unresolvedCount_one": "{{count}} çözülmemiş",
-                "sendQueuedCommentsToAi_other": "Kuyruktaki {{count}} yorumu AI'ya gönder",
-                "sendQueuedCommentsToAi_one": "Kuyruktaki {{count}} yorumu AI'ya gönder",
                 "conflictsBlockThisMr": "Çakışmalar bu MR'ı engelliyor",
                 "conflictsBlockThisPr": "Çakışmalar bu PR'ı engelliyor",
                 "copyComment": "Yorumu kopyala",
@@ -17952,10 +17951,6 @@
           "39b6b9e4e4": "Branch'e Commit'lendi"
         },
         "CombinedDiffViewer": {
-          "1da745c551": "Gönderildi",
-          "84898c548d": "Temizle",
-          "88b70d0ef5": "Kopyala",
-          "bb84b4c374": "AI notları",
           "948a5fd6c8": "Notları Temizle",
           "0f806a2ab1": "İptal",
           "b6c3b84476": "Dosya ağacını göster",
@@ -17965,7 +17960,6 @@
           "820ec01f24": "Conflict'li dosyalar ayrı incelenir",
           "fd8892b120": "Görüntülenecek değişiklik yok",
           "eb5f40e49c": "Bu diff görünümü, normal iki yönlü diff işleyişi conflict'e karşı güvenli olmadığından çözülmemiş conflict'leri hariç tutar.",
-          "45cf23b418": "Notlar temizlenemedi.",
           "ec5053c7f5": "Yan Yana",
           "f786fd54e1": "Satır İçi",
           "ea08dae15b": "Tümünü Daralt",
@@ -17980,19 +17974,12 @@
           "noExtension": "(uzantı yok)",
           "diffLoadTimedOut": "Diff yüklemesi tamamlanamadı.",
           "diffLoadFailed": "Diff yüklenemedi.",
-          "moreNotesInSourceControl_other": "Kaynak Kontrolü bölümünde {{count}} not daha",
-          "moreNotesInSourceControl_one": "Kaynak Kontrolü bölümünde {{count}} not daha",
-          "clearNotesConfirm_other": "Bu worktree'deki {{count}} not temizlensin mi?",
-          "clearNotesConfirm_one": "Bu worktree'deki {{count}} not temizlensin mi?",
           "changedFilesVs_other": "{{baseRef}} ile karşılaştırıldığında {{count}} dosya değişti",
           "changedFilesVs_one": "{{baseRef}} ile karşılaştırıldığında {{count}} dosya değişti",
           "changedFilesIn_other": "{{compareRef}} içinde {{count}} dosya değişti",
           "changedFilesIn_one": "{{compareRef}} içinde {{count}} dosya değişti",
           "changedFiles_other": "{{count}} değişen dosya",
           "changedFiles_one": "{{count}} değişen dosya",
-          "showAiNotes_other": "{{count}} AI notunu göster",
-          "showAiNotes_one": "{{count}} AI notunu göster",
-          "send": "Gönder",
           "openDiff": "Diff'i aç",
           "openInEditor": "Düzenleyicide aç",
           "skippedConflictsExcluded": "{{count}} çözülmemiş conflict bu diff görünümünden hariç tutuldu."
@@ -18194,7 +18181,6 @@
           "b1bfc04034": "Seçili metin",
           "f37b98999e": "Bu not",
           "2b2b31382c": "Front Matter",
-          "bb629de58a": "Notları ajan için kopyala",
           "322afab6ff": "İnceleme notları",
           "0f9969a159": "İlk inceleme notuna git",
           "12052c639c": "Aramayı kapat",
@@ -18267,7 +18253,6 @@
         },
         "NotesSendMenu": {
           "44dc5e60a6": "Notları gönder",
-          "433928cd9f": "{{value0}} bir ajana gönder",
           "thisNote": "Bu not",
           "noteAlreadySent": "Not zaten gönderildi",
           "sendNotesToAgent": "Notları bir ajana gönder",
@@ -18353,8 +18338,6 @@
           "3ababd949d": "İnceleme notları"
         },
         "RichMarkdownReviewRailActions": {
-          "636394af72": "Notları ajan için kopyala",
-          "a807596997": "Notlar kopyalandı",
           "8aaf2c4c69": "İnceleme notlarını göster",
           "af02dc2456": "İnceleme notlarını gizle"
         },
@@ -19237,8 +19220,6 @@
             "b5ba6085de": "Soru",
             "143204e423": "Değişiklik",
             "b71dc3d930": "Yeniden bağlan",
-            "d51ef37351": "Kopyala",
-            "6f4ab3592b": "Kopyalandı",
             "168350ae6a": "Bir öğeye tıklayın veya üzerine gelin, ardından kopyalamak için C, ekran görüntüsü almak için S tuşuna basın.",
             "777b5bc4ec": "Ajan için geri bildirim eklemek üzere bir öğeye tıklayın.",
             "b733a91bd9": "Seçili öğe için geri bildirim ekleyin.",
@@ -19277,12 +19258,9 @@
             "devToolsDockBottom": "Alta sabitle",
             "devToolsUndock": "Ayrı pencerede aç",
             "devToolsClose": "DevTools'u kapat",
-            "499b31b84e": "Tümünü Kopyala",
             "e852e20cea": "Kopyalandı, ekran görüntüsü almak için S'ye basın veya başka bir öğe seçin",
             "074f0ed10b": "{{value0}} ek açıklama hazır. Başka bir öğe seçin veya tüm geri bildirimi kopyalayın.",
-            "a2164a6e5a": "{{value0}} ek açıklama hazır. Başka bir öğe seçin veya tüm geri bildirimi kopyalayın.",
-            "11c5084aa2": "Ek açıklamaları temizle",
-            "734e4343ec": "Tarayıcı ek açıklamalarını temizle"
+            "a2164a6e5a": "{{value0}} ek açıklama hazır. Başka bir öğe seçin veya tüm geri bildirimi kopyalayın."
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "İptal",
@@ -24560,6 +24538,26 @@
       "selectedSubmitFailed": "Notlar seçilen terminale yapıştırılmış olabilir ancak Orca bunları gönderemedi.",
       "activeSubmitFailed": "Notlar etkin terminale yapıştırılmış olabilir ancak Orca bunları gönderemedi.",
       "notWritableSelection": "{{target}} ajanı seçilen içeriği kabul etmedi."
+    },
+    "notes": {
+      "sendButton": {
+        "sendCommentsToAgent_one": "{{count}} yorumu bir ajana gönder",
+        "clearPageNotes_one": "Bu sayfadaki {{count}} not silinsin mi?",
+        "sendShort": "{{count}} gönder",
+        "clearNotes": "Notları temizle…",
+        "sending": "Gönderiliyor…",
+        "sendCommentsToAgent_other": "{{count}} yorumu bir ajana gönder",
+        "sendNotes_other": "{{count}} notu gönder",
+        "sendNotesToAgent_one": "{{count}} notu bir ajana gönder",
+        "sendNotes_one": "{{count}} notu gönder",
+        "sendComments_other": "{{count}} yorumu gönder",
+        "sendComments_one": "{{count}} yorumu gönder",
+        "copyNotes": "Notları kopyala",
+        "clearPageNotes_other": "Bu sayfadaki {{count}} not silinsin mi?",
+        "sendNotesToAgent_other": "{{count}} notu bir ajana gönder",
+        "sentNotesStillListed": "Notlar gönderildi ama hâlâ listede.",
+        "removeSentNotes": "Kaldır"
+      }
     }
   },
   "dashboardPopout": {
@@ -25015,6 +25013,9 @@
         "planModelWithoutThinking": "\"{{model}}\" modeli düşünme çabası düzeyini desteklemiyor.",
         "planThinkingLevelInvalid": "\"{{level}}\" düşünme düzeyi {{model}} için geçerli değil.",
         "openCodeInvalidEvents": "OpenCode geçersiz JSON olayları döndürdü.",
+        "antigravityInvalidEvents": "Antigravity geçersiz JSON olayları döndürdü.",
+        "antigravityInvalidResult": "Antigravity geçersiz bir sonuç döndürdü.",
+        "antigravityNoFinalResult": "Antigravity nihai bir sonuç döndürmedi.",
         "kimiUnreadableOutput": "Kimi, Orca'nın okuyamadığı bir çıktı döndürdü. Yeniden deneyin.",
         "kimiSessionOccupied": "Bu oturum başka bir istemcide etkin olduğundan Kimi'de kullanılamadı. Oturumu orada durdurun veya o istemciden çıkıp yeniden deneyin.",
         "kimiInterrupted": "Kimi, metin oluşturmayı tamamlamadan kesintiye uğradı. Yeniden deneyin.",
@@ -25787,7 +25788,9 @@
     "failed": "Arama başarısız oldu. Tekrar deneyin.",
     "filters": {
       "toggle": "Arama ayrıntılarını aç/kapat",
-      "active": "{{count}} etkin"
+      "active": "{{count}} etkin",
+      "includeSummary": "Dahil et: {{patterns}}",
+      "excludeSummary": "Hariç tut: {{patterns}}"
     },
     "noResults": "Sonuç yok. Farklı bir arama yapın veya filtrelerinizi ayarlayın."
   },

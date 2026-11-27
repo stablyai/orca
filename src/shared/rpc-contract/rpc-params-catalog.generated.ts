@@ -452,7 +452,8 @@ import {
   FileSaveAbort,
   FileSaveBegin,
   FileSaveChunk,
-  FileSaveCommit
+  FileSaveCommit,
+  FileUploadCommit
 } from './filesystem/files-staged-save-params'
 import { FileOpen, FileWatch, WorktreeSelector } from './filesystem/files-target-params'
 import {
@@ -1654,6 +1655,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'files.stat': FileTreePath,
   'files.statTerminalArtifact': TerminalArtifactFile,
   'files.unwatch': FileUnwatch,
+  'files.uploadBegin': FileSaveBegin,
+  'files.uploadCommit': FileUploadCommit,
   'files.watch': FileWatch,
   'files.write': FileWrite,
   'files.writeBase64': FileWriteBase64,

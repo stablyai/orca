@@ -1,9 +1,5 @@
 import { OrcaRuntimeWithGetWorktreeTerminalProvisioningHost } from '../startup/workspace-terminal-provisioning'
-import {
-  prepareGroupFolderCreation,
-  groupFolderCreationIsUserAct,
-  type RuntimeGroupFolderCreateInput
-} from './runtime-group-folder-setup'
+import type { RuntimeGroupFolderCreateInput } from './runtime-group-folder-setup'
 import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -11,10 +7,6 @@ import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent
 import type { RuntimeNavigationTarget } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import type { RuntimeLocalWorktreeTerminalPorts } from '../startup/runtime-local-worktree-terminal-startup'
 import { wslUserAct } from '../startup/workspace-create-activation'
-import {
-  buildWorktreeStartupForAgent,
-  buildWorktreeStartupForDraft
-} from '../startup/runtime-worktree-agent-startup'
 import { resolveStartupAgentLaunchRuntime } from '../../terminal/launch/agent-launch-scope-runtime'
 import { projectGroupHookOwner } from '../../../../shared/workspace-setup/hooks/workspace-hook-owner'
 import type { TerminalCreateOptions } from '../../terminal/launch/terminal-create-options'
@@ -27,6 +19,13 @@ export abstract class OrcaRuntimeWithGroupFolderSetup extends OrcaRuntimeWithGet
     draftAgent?: TuiAgent | null
   ) => {
     const store = this.requireStore()
+    const [
+      { prepareGroupFolderCreation, groupFolderCreationIsUserAct },
+      { buildWorktreeStartupForAgent, buildWorktreeStartupForDraft }
+    ] = await Promise.all([
+      import('./runtime-group-folder-setup'),
+      import('../startup/runtime-worktree-agent-startup')
+    ])
     const worktree = this.folderWorkspaceToResolvedWorktree(workspace)
     const activation: { wslUserAct?: true } = groupFolderCreationIsUserAct(input)
       ? { wslUserAct: true }

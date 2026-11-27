@@ -1,4 +1,4 @@
-import type { Dir } from 'node:fs'
+import type { Dir, Dirent } from 'node:fs'
 import { lstat, opendir, readdir } from 'node:fs/promises'
 import path from 'node:path'
 import {
@@ -33,9 +33,13 @@ export async function checkExecutableFile(
 }
 
 export async function readDetectionDirectory(dir: string): Promise<DetectionDirectoryListing> {
-  let directory: Dir
+  let directory: Dir | Dirent[]
   try {
-    directory = await opendir(dir, { bufferSize: MAX_DETECTION_DIRECTORY_ENTRIES + 1 })
+    // Windows opendir can report a failed open as success with no handle and crash; readdir reports it (#50875).
+    directory =
+      process.platform === 'win32'
+        ? await readdir(dir, { withFileTypes: true })
+        : await opendir(dir, { bufferSize: MAX_DETECTION_DIRECTORY_ENTRIES + 1 })
   } catch (error) {
     if (isMissingPathError(error)) {
       return new Map()

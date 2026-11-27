@@ -1,4 +1,4 @@
-import { readdir, stat } from 'node:fs/promises'
+import { readdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import {
   HERMES_PROFILE_NAME,
@@ -10,6 +10,7 @@ import {
   type StructuredAgentTranscriptImport
 } from '../native-chat/conversation-adoption/structured-agent-cli-conversations'
 import { admitTranscriptPath } from '../native-chat/transcript-discovery/transcript-path-admission'
+import { isTranscriptFile } from '../native-chat/transcript-discovery/transcript-file-presence'
 import { resolveHermesActiveProfileHome } from './hermes-default-home'
 
 async function profileHomes(root: string): Promise<string[]> {
@@ -25,21 +26,6 @@ async function profileHomes(root: string): Promise<string[]> {
       .sort()
   } catch {
     return []
-  }
-}
-
-async function isFile(path: string): Promise<boolean> {
-  try {
-    return (await stat(path)).isFile()
-  } catch (error) {
-    if (
-      error instanceof Error &&
-      'code' in error &&
-      (error.code === 'ENOENT' || error.code === 'ENOTDIR')
-    ) {
-      return false
-    }
-    throw error
   }
 }
 
@@ -72,7 +58,7 @@ export const HERMES_TRANSCRIPT_IMPORT: StructuredAgentTranscriptImport = {
     return [...new Set(homes)].map((path) => ({ variable: selectedAccountHome.variable, path }))
   },
   findTranscript: async ({ providerSessionId, store: dbPath }) => {
-    if (!(await isFile(dbPath))) {
+    if (!(await isTranscriptFile(dbPath))) {
       return null
     }
     const { hasHermesSessionViaWorker } =

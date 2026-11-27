@@ -4,7 +4,6 @@ import type {
 } from './runtime-project-group-contract'
 export type { RuntimeProjectGroupDependencies } from './runtime-project-group-contract'
 import { projectGroupHookOwner } from '../../../shared/workspace-setup/hooks/workspace-hook-owner'
-import { RuntimeRepositoryHooksCommands } from './runtime-repository-hooks-commands'
 import { getEffectiveSetupRunPolicy } from '../../workspace-hooks/effective-hook-config'
 import { getSetupConfig } from '../../../shared/workspace-setup/hooks/orca-hook-setup-config'
 import type { FolderWorkspaceCreateResult } from '../../../shared/folder-workspaces/folder-workspace-create'
@@ -17,6 +16,7 @@ import type {
   ProjectGroupUpdate
 } from '../../../shared/project/groups/project-group-types'
 import type { Repo } from '../../../shared/repository/repo-types'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { getRepoExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type {
   FolderWorkspacePathStatus,
@@ -37,12 +37,10 @@ import {
   assertUniqueIdWhenRequired,
   type FolderWorkspaceMutationOptions
 } from './folder-workspace-unique-id-mutation'
-import {
+import type {
   deleteFolderWorkspaceRow,
-  type FolderWorkspaceDeleteOptions
+  FolderWorkspaceDeleteOptions
 } from './folder-workspace-deletion'
-import { createFolderWorkspaceWithPluginHooks } from '../../plugins/hooks/workspace-create-plugin-hook'
-import { resolveWorktreeStartupDraftAgent } from '../workspaces/startup/runtime-worktree-agent-startup'
 import {
   assertWslMoveRepoWritable,
   isLocalWslMoveRow,
@@ -75,6 +73,7 @@ export class RuntimeProjectGroupController {
     if (!owner) {
       throw new Error('folder_workspace_project_group_not_found')
     }
+    const { RuntimeRepositoryHooksCommands } = await import('./runtime-repository-hooks-commands')
     const checked = await new RuntimeRepositoryHooksCommands({
       resolveRepo: async () => owner,
       readCreateSourceHooks: async () => undefined
@@ -200,26 +199,32 @@ export class RuntimeProjectGroupController {
       throw new FolderWorkspaceCreateRefusedError(pathRefusal)
     }
     // An inventory timeout must leave the draft retryable before registration or setup.
-    const draftAgent =
+    let draftAgent: TuiAgent | null | undefined
+    if (
       this.deps.finishFolderCreation &&
       (!input.rendererOwnsSetup || input.agentLaunchMode === 'structured') &&
       !input.startupCommand &&
       input.startupDraft?.trim()
-        ? await resolveWorktreeStartupDraftAgent({
-            repo: projectGroupHookOwner(group) ?? {
-              path: folderPath,
-              connectionId,
-              executionHostId: getRepoExecutionHostId({
-                executionHostId: group.executionHostId,
-                connectionId
-              })
-            },
-            settings: store.getSettings(),
-            requestedAgent: input.startupAgent ?? input.createdWithAgent,
-            afterPublication: input.afterPublication
+    ) {
+      const { resolveWorktreeStartupDraftAgent } =
+        await import('../workspaces/startup/runtime-worktree-agent-startup')
+      draftAgent = await resolveWorktreeStartupDraftAgent({
+        repo: projectGroupHookOwner(group) ?? {
+          path: folderPath,
+          connectionId,
+          executionHostId: getRepoExecutionHostId({
+            executionHostId: group.executionHostId,
+            connectionId
           })
-        : undefined
+        },
+        settings: store.getSettings(),
+        requestedAgent: input.startupAgent ?? input.createdWithAgent,
+        afterPublication: input.afterPublication
+      })
+    }
     const { terminalImageViewerSupported: _viewer, ...createInput } = input
+    const { createFolderWorkspaceWithPluginHooks } =
+      await import('../../plugins/hooks/workspace-create-plugin-hook')
     const workspace = await createFolderWorkspaceWithPluginHooks(createInput, (request) =>
       createFolder({
         ...request,
@@ -304,6 +309,8 @@ export class RuntimeProjectGroupController {
     folderWorkspaceId: string,
     options: FolderWorkspaceDeleteOptions = {}
   ): ReturnType<typeof deleteFolderWorkspaceRow> {
-    return deleteFolderWorkspaceRow(this.deps, folderWorkspaceId, options)
+    return import('./folder-workspace-deletion').then(({ deleteFolderWorkspaceRow: removeRow }) =>
+      removeRow(this.deps, folderWorkspaceId, options)
+    )
   }
 }

@@ -1831,6 +1831,55 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..7faf664ba23cd2bfe1b16cae5d9c1912
 +function isTextNode(node: Node): node is Text {
 +  return node.nodeType === Node.TEXT_NODE;
  }
+diff --git a/src/browser/renderer/dom/DomRenderer.ts b/src/browser/renderer/dom/DomRenderer.ts
+index 70e9c3a6d130d687b7f6c70ca8e8b518a8bee654..7d0ecdbccfb6039475ab1e47b7799da0b97ea78b 100644
+--- a/src/browser/renderer/dom/DomRenderer.ts
++++ b/src/browser/renderer/dom/DomRenderer.ts
+@@ -236,14 +236,10 @@ export class DomRenderer extends Disposable implements IRenderer {
+       `}`;
+     styles +=
+       `@keyframes ${blinkAnimationBlockId} {` +
+-      ` 0% {` +
++      ` 0%, 50% {` +
+       `  background-color: ${colors.cursor.css};` +
+       `  color: ${colors.cursorAccent.css};` +
+       ` }` +
+-      ` 50% {` +
+-      `  background-color: inherit;` +
+-      `  color: ${colors.cursor.css};` +
+-      ` }` +
+       `}`;
+     // Cursor
+     styles +=
+@@ -253,21 +249,19 @@ export class DomRenderer extends Disposable implements IRenderer {
+       `${this._terminalSelector} .${Constants.ROW_CONTAINER_CLASS}.${Constants.FOCUS_CLASS} .${RowCss.CURSOR_CLASS}.${RowCss.CURSOR_BLINK_CLASS}.${RowCss.CURSOR_STYLE_BAR_CLASS} {` +
+       ` animation: ${blinkAnimationBarId} 1s step-end infinite;` +
+       `}` +
++      // Orca: step-start makes the off half jump to the implicit 100% keyframe: the cell's own colours.
+       `${this._terminalSelector} .${Constants.ROW_CONTAINER_CLASS}.${Constants.FOCUS_CLASS} .${RowCss.CURSOR_CLASS}.${RowCss.CURSOR_BLINK_CLASS}.${RowCss.CURSOR_STYLE_BLOCK_CLASS} {` +
+-      ` animation: ${blinkAnimationBlockId} 1s step-end infinite;` +
++      ` animation: ${blinkAnimationBlockId} 1s step-start infinite;` +
+       `}` +
+       // Disable cursor blinking when idle
+       `${this._terminalSelector} .${Constants.ROW_CONTAINER_CLASS}.${Constants.CURSOR_BLINK_IDLE_CLASS} .${RowCss.CURSOR_CLASS}.${RowCss.CURSOR_BLINK_CLASS} {` +
+       ` animation: none !important;` +
+       `}` +
+-      // !important helps fix an issue where the cursor will not render on top of the selection,
+-      // however it's very hard to fix this issue and retain the blink animation without the use of
+-      // !important. So this edge case fails when cursor blink is on.
+-      `${this._terminalSelector} .${Constants.ROW_CONTAINER_CLASS} .${RowCss.CURSOR_CLASS}.${RowCss.CURSOR_STYLE_BLOCK_CLASS} {` +
+-      ` background-color: ${colors.cursor.css};` +
+-      ` color: ${colors.cursorAccent.css};` +
+-      `}` +
+-      `${this._terminalSelector} .${Constants.ROW_CONTAINER_CLASS} .${RowCss.CURSOR_CLASS}.${RowCss.CURSOR_STYLE_BLOCK_CLASS}:not(.${RowCss.CURSOR_BLINK_CLASS}) {` +
++      // Orca: every block cursor that is not animating; !important beats inline cell colours (RGB
++      // bg, selection). A blinking one can't use it, as it would also beat the animation.
++      `${this._terminalSelector} .${Constants.ROW_CONTAINER_CLASS} .${RowCss.CURSOR_CLASS}.${RowCss.CURSOR_STYLE_BLOCK_CLASS}:not(.${RowCss.CURSOR_BLINK_CLASS}),` +
++      `${this._terminalSelector} .${Constants.ROW_CONTAINER_CLASS}:not(.${Constants.FOCUS_CLASS}) .${RowCss.CURSOR_CLASS}.${RowCss.CURSOR_STYLE_BLOCK_CLASS},` +
++      `${this._terminalSelector} .${Constants.ROW_CONTAINER_CLASS}.${Constants.CURSOR_BLINK_IDLE_CLASS} .${RowCss.CURSOR_CLASS}.${RowCss.CURSOR_STYLE_BLOCK_CLASS} {` +
+       ` background-color: ${colors.cursor.css} !important;` +
+       ` color: ${colors.cursorAccent.css} !important;` +
+       `}` +
 diff --git a/src/browser/renderer/dom/DomRendererRowFactory.ts b/src/browser/renderer/dom/DomRendererRowFactory.ts
 index 6ae089a4387de14488f39f5dab7024cffdcd9d10..9deba6019223f2e26bcf7534fc43eae2522b89ae 100644
 --- a/src/browser/renderer/dom/DomRendererRowFactory.ts

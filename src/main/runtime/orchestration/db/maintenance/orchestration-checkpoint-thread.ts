@@ -117,8 +117,9 @@ setTimeout(tick, interval);
  * a busy disk and turned single-row status writes into half-second stalls. Main keeps only a far
  * backstop. The worker spawns lazily once the WAL reaches a checkpointable size and retires after
  * quiet periods; a worker that fails or exits unexpectedly hands checkpoints back to main at once.
+ * Returns the undo, which resolves once every thread, and with it its connection, is gone.
  */
-export function checkpointOffMainThread(orchestrationDb: OrchestrationDb): () => void {
+export function checkpointOffMainThread(orchestrationDb: OrchestrationDb): () => Promise<void> {
   const { db } = orchestrationDb
   const main = db
     .prepare('PRAGMA database_list')
@@ -126,7 +127,7 @@ export function checkpointOffMainThread(orchestrationDb: OrchestrationDb): () =>
     .find((row) => row.name === 'main')
   const filename = typeof main?.file === 'string' ? main.file : ''
   if (!filename) {
-    return () => {}
+    return () => Promise.resolve()
   }
   const walPath = `${filename}-wal`
   const previous = Number(db.pragma('wal_autocheckpoint', { simple: true }))
@@ -254,17 +255,22 @@ export function checkpointOffMainThread(orchestrationDb: OrchestrationDb): () =>
   db.pragma(`wal_autocheckpoint = ${MAIN_CHECKPOINT_BACKSTOP_PAGES}`)
   void probeWal()
 
-  const stop = (): void => {
-    if (!stopped) {
+  let exited: Promise<void> | undefined
+  const stop = (): Promise<void> => {
+    if (!exited) {
       stopped = true
       forget()
       clearWatch()
-      const active = worker
+      // A retiring thread may still hold its connection; wait for it too.
+      const threads = new Set([worker, retiringIdle].filter((thread) => thread !== null))
       worker = null
       retiringIdle = null
-      active?.terminate().catch(() => {})
+      exited = Promise.all([...threads].map((thread) => thread.terminate().catch(() => {}))).then(
+        () => {}
+      )
       restore()
     }
+    return exited
   }
   // The thread's connection must not outlive this one, which a reopen would then contend with.
   const forget = orchestrationDb.onClose(stop)
