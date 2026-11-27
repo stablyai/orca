@@ -3,8 +3,14 @@ import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { ArrowRight, ExternalLink } from 'lucide-react'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
+import { cn } from '@/lib/class-names'
+
+const GITLAB_ITEM_GRID_CLASS =
+  'grid grid-cols-[80px_minmax(0,3fr)_120px_110px_50px] @max-xl:grid-cols-[48px_minmax(0,1fr)_76px_50px] gap-3 px-3 py-2'
+
 export function TaskPageGitLabItemList({
   model
 }: {
@@ -22,12 +28,19 @@ export function TaskPageGitLabItemList({
     handleUseGitLabItem
   } = model
   return (
-    <div className="flex min-h-0 max-h-full flex-col rounded-md border border-t-0 border-border/50 bg-muted/50 overflow-hidden rounded-t-none shadow-sm">
-      <div className="flex-none grid grid-cols-[80px_minmax(0,3fr)_120px_110px_50px] gap-3 border-b border-border/50 px-3 py-2 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+    <div className="@container flex min-h-0 max-h-full flex-col rounded-md border border-t-0 border-border/50 bg-muted/50 overflow-hidden rounded-t-none shadow-sm">
+      <div
+        className={cn(
+          GITLAB_ITEM_GRID_CLASS,
+          'flex-none border-b border-border/50 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground'
+        )}
+      >
         <span>{t('auto.components.TaskPage.eb10c32872', 'ID')}</span>
         <span>{t('auto.components.TaskPage.16cba35bee', 'Title')}</span>
         <span>{t('auto.components.TaskPage.00b7ffb952', 'Type / State')}</span>
-        <span>{t('auto.components.TaskPage.f362667d55', 'Updated')}</span>
+        <span className="@max-xl:hidden">
+          {t('auto.components.TaskPage.f362667d55', 'Updated')}
+        </span>
         <span />
       </div>
       <div
@@ -47,16 +60,13 @@ export function TaskPageGitLabItemList({
             {Array.from({
               length: 12
             }).map((_, i) => (
-              <div
-                key={i}
-                className="grid w-full gap-3 px-3 py-2 grid-cols-[80px_minmax(0,3fr)_120px_110px_50px]"
-              >
-                <div className="h-4 w-16 animate-pulse rounded bg-muted/70" />
+              <div key={i} className={cn(GITLAB_ITEM_GRID_CLASS, 'w-full')}>
+                <div className="h-4 w-16 max-w-full animate-pulse rounded bg-muted/70" />
                 <div>
                   <div className="h-4 w-3/5 animate-pulse rounded bg-muted/70" />
                 </div>
-                <div className="h-3 w-20 animate-pulse rounded bg-muted/60" />
-                <div className="h-3 w-20 animate-pulse rounded bg-muted/60" />
+                <div className="h-3 w-20 max-w-full animate-pulse rounded bg-muted/60" />
+                <div className="h-3 w-20 animate-pulse rounded bg-muted/60 @max-xl:hidden" />
                 <div />
               </div>
             ))}
@@ -89,21 +99,42 @@ export function TaskPageGitLabItemList({
                   openGitLabDetailPage(item)
                 }
               }}
-              className="grid w-full cursor-pointer gap-3 px-3 py-2 text-left grid-cols-[80px_minmax(0,3fr)_120px_110px_50px] hover:bg-muted/50"
+              className={cn(
+                GITLAB_ITEM_GRID_CLASS,
+                'w-full cursor-pointer text-left hover:bg-muted/50'
+              )}
             >
               <span className="font-mono text-xs text-muted-foreground">
                 {/* Why: GitLab uses !N for MRs and #N for issues — match gitlab.com so rows map to web links. */}
                 {item.type === 'mr' ? '!' : '#'}
                 {item.number}
               </span>
-              <span className="min-w-0 truncate text-sm">{item.title}</span>
+              <div className="min-w-0">
+                <span className="block truncate text-sm" title={item.title}>
+                  {item.title}
+                </span>
+                {item.labels.length > 0 ? (
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {item.labels.map((label) => (
+                      <Badge
+                        key={label}
+                        variant="referenceLabel"
+                        className="max-w-full"
+                        title={label}
+                      >
+                        <span className="truncate">{label}</span>
+                      </Badge>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
               <span className="text-xs text-muted-foreground">
                 {item.type === 'mr'
                   ? t('auto.components.TaskPage.e224d76876', 'MR')
                   : t('auto.components.TaskPage.b1eaa18ace', 'Issue')}{' '}
                 · {item.state}
               </span>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-xs text-muted-foreground @max-xl:hidden">
                 {item.updatedAt ? new Date(item.updatedAt).toLocaleDateString(intlLocale) : ''}
               </span>
               <div className="flex items-center justify-end gap-1">
