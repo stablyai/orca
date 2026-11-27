@@ -9,6 +9,11 @@ import { savedChatUiWithTerminalDefaultView } from '../../applying-settings/term
 
 import type { StoreRuntimeState } from '../store-runtime-state'
 
+const PRIOR_DEFAULTS_FOR_EXISTING_PROFILES = {
+  experimentalAppRail: false,
+  nativeChatMarkNewMessages: true
+} as const
+
 type LoadedCohortMigrationOperationsRuntime = Pick<StoreRuntimeState, 'loadNeedsSave'>
 
 export class LoadedCohortMigrationOperations {
@@ -130,17 +135,25 @@ export class LoadedCohortMigrationOperations {
     return { ...state, settings: { ...state.settings, experimentalNewWorktreeCardStyle: false } }
   }
 
-  /** App rail defaults on for new profiles; profiles saved before without a choice keep it off. */
-  keepAppRailOffForExistingProfiles(state: PersistedState, savedProfile: unknown): PersistedState {
+  /** Profiles saved before a new-profile default changed, without a choice, keep the old behavior. */
+  keepPriorDefaultsForExistingProfiles(
+    state: PersistedState,
+    savedProfile: unknown
+  ): PersistedState {
     if (!isRecord(savedProfile) || isTelemetryOnlyProfile(savedProfile)) {
       return state
     }
     const saved = isRecord(savedProfile.settings) ? savedProfile.settings : undefined
-    if (typeof saved?.experimentalAppRail === 'boolean') {
+    const kept = Object.fromEntries(
+      Object.entries(PRIOR_DEFAULTS_FOR_EXISTING_PROFILES).filter(
+        ([key]) => typeof saved?.[key] !== 'boolean'
+      )
+    )
+    if (Object.keys(kept).length === 0) {
       return state
     }
     this.runtime.loadNeedsSave = true
-    return { ...state, settings: { ...state.settings, experimentalAppRail: false } }
+    return { ...state, settings: { ...state.settings, ...kept } }
   }
 
   migrateTelemetry(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {

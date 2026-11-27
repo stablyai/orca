@@ -39,8 +39,8 @@ export type NativeChatGlobalSettings = {
   nativeChatPromptSuggestions?: boolean
 }
 
-/** Not written into default settings, so flipping this reaches everyone who never chose. */
-const NATIVE_CHAT_MARKS_NEW_MESSAGES_BY_DEFAULT = true
+/** Matches the new-profile default; profiles saved before it without a choice are pinned on at load. */
+const NATIVE_CHAT_MARKS_NEW_MESSAGES_BY_DEFAULT = false
 
 export function nativeChatMarksNewMessages(
   settings: { readonly nativeChatMarkNewMessages?: unknown } | null | undefined

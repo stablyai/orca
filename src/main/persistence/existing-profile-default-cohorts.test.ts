@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { nativeChatMarksNewMessages } from '../../shared/native-chat/settings/native-chat-appearance-settings'
 import { closeTestStores, createStore, testState, writeDataFile } from './persistence-test-harness'
 
 vi.mock('electron', () => ({
@@ -9,9 +10,9 @@ vi.mock('electron', () => ({
   safeStorage: { isEncryptionAvailable: () => false }
 }))
 
-describe('app rail default cohort', () => {
+describe('existing-profile default cohorts', () => {
   beforeEach(() => {
-    testState.dir = mkdtempSync(join(tmpdir(), 'orca-app-rail-default-'))
+    testState.dir = mkdtempSync(join(tmpdir(), 'orca-default-cohorts-'))
   })
 
   afterEach(async () => {
@@ -68,5 +69,25 @@ describe('app rail default cohort', () => {
       }
     })
     expect(createStore().getSettings().experimentalAppRail).toBe(true)
+  })
+
+  it('marks new chat messages only for existing profiles without a choice', async () => {
+    const fresh = createStore()
+    expect(nativeChatMarksNewMessages(fresh.getSettings())).toBe(false)
+    await fresh.flushAsync()
+    await closeTestStores()
+    expect(nativeChatMarksNewMessages(createStore().getSettings())).toBe(false)
+    await closeTestStores()
+
+    writeDataFile(legacyProfile({ theme: 'dark' }))
+    const existing = createStore()
+    expect(nativeChatMarksNewMessages(existing.getSettings())).toBe(true)
+    await existing.flushAsync()
+    await closeTestStores()
+    expect(nativeChatMarksNewMessages(createStore().getSettings())).toBe(true)
+    await closeTestStores()
+
+    writeDataFile(legacyProfile({ nativeChatMarkNewMessages: false }))
+    expect(nativeChatMarksNewMessages(createStore().getSettings())).toBe(false)
   })
 })
