@@ -9,7 +9,8 @@ import type { BrowserAnnotateTool } from './use-browser-annotate-tool-switch'
 import {
   PALETTE_EDGE_INSET_PX,
   PALETTE_HINT_LINE_PX,
-  paletteRatioPercent
+  paletteRatioPercent,
+  paletteTooltipOffset
 } from './palette-placement'
 import { usePaletteDrag } from './use-palette-drag'
 import { usePaletteFitLevel } from './use-palette-fit-level'
@@ -28,6 +29,7 @@ import { focusAnnotateButtonNear, isEditableFocus, useToolLabelsFit } from './pa
 
 type ToolOption = {
   tool: BrowserAnnotateTool
+  key: 'A' | 'G' | 'D'
   icon: LucideIcon
   label: string
   tooltip: string
@@ -149,6 +151,7 @@ export function BrowserAnnotateToolPalette({
   const options: ToolOption[] = [
     {
       tool: 'copy',
+      key: 'G',
       icon: Crosshair,
       label: t('browser.toolbar.grab', 'Grab'),
       tooltip: showKeyHints
@@ -157,6 +160,7 @@ export function BrowserAnnotateToolPalette({
     },
     {
       tool: 'annotate',
+      key: 'A',
       icon: MessageSquarePlus,
       label: t('browser.toolbar.annotate', 'Annotate'),
       tooltip: showKeyHints
@@ -165,6 +169,7 @@ export function BrowserAnnotateToolPalette({
     },
     {
       tool: 'draw',
+      key: 'D',
       icon: PenTool,
       label: t('browser.toolbar.draw', 'Draw'),
       tooltip: showKeyHints
@@ -187,6 +192,8 @@ export function BrowserAnnotateToolPalette({
   const showHint =
     Boolean(hint) && (fitLevel === 0 || hintKeepsWhenCompact) && !dragging && left !== null
   usePaletteHintHeight(hintRef, showHint, setHintHeight)
+  const tooltipOffset = paletteTooltipOffset(showHint, hintPlacement, hintHeight, popupSide)
+  const tooltipPlacement = { side: popupSide, sideOffset: tooltipOffset }
   const hasActions =
     activeTool === 'draw' ? drawHasActions : activeTool === 'copy' || annotateActions !== null
   useGrabLabelAvoidArea({
@@ -256,7 +263,7 @@ export function BrowserAnnotateToolPalette({
         aria-label={t('browser.annotatePalette.label', 'Annotate tools')}
         className={cn(
           // Frosted glass with a hairline and deep shadow, so it stands out over any page.
-          'absolute z-40 flex w-max items-center gap-1 rounded-xl border border-black/14 bg-floating-surface p-1 text-xs text-popover-foreground shadow-[0_10px_27px_rgba(0,0,0,0.27),0_1px_2px_rgba(0,0,0,0.12)] backdrop-blur-[14px] backdrop-saturate-[1.4] transition-opacity duration-100 dark:border-white/16',
+          'absolute z-40 flex w-max items-center gap-1 rounded-xl border border-black/14 bg-floating-surface p-1 text-xs text-popover-foreground shadow-[0_10px_27px_rgba(0,0,0,0.27),0_1px_2px_rgba(0,0,0,0.12)] backdrop-blur-[14px] backdrop-saturate-[1.4] transition-opacity duration-100 dark:border-white/16 dark:shadow-[0_10px_27px_rgba(0,0,0,0.27),0_1px_2px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.08)]',
           seeThrough ? 'pointer-events-none opacity-15' : 'pointer-events-auto',
           snapping && 'transition-[left,top] duration-150 ease-out',
           left === null && 'invisible'
@@ -271,12 +278,12 @@ export function BrowserAnnotateToolPalette({
         <div
           role="group"
           aria-label={t('browser.annotatePalette.tools', 'Tool')}
-          className="order-1 flex shrink-0 items-center gap-0.5"
+          className="order-1 flex shrink-0 items-center gap-1"
         >
           <span
             ref={labelProbeRef}
             aria-hidden
-            className="pointer-events-none invisible absolute flex items-center gap-0.5 font-medium whitespace-nowrap"
+            className="pointer-events-none invisible absolute flex items-center gap-1 font-medium whitespace-nowrap"
           >
             {options.map((option) => (
               <span key={option.tool} className="flex h-6.5 items-center gap-1.5 px-2">
@@ -317,15 +324,7 @@ export function BrowserAnnotateToolPalette({
                     aria-pressed={checked}
                     aria-busy={waiting || undefined}
                     aria-label={accessibleLabel}
-                    aria-keyshortcuts={
-                      !showKeyHints
-                        ? undefined
-                        : option.tool === 'annotate'
-                          ? 'A'
-                          : option.tool === 'copy'
-                            ? 'G'
-                            : 'D'
-                    }
+                    aria-keyshortcuts={showKeyHints ? option.key : undefined}
                     tabIndex={checked ? 0 : -1}
                     // aria-disabled, not disabled: a disabled button shows no tooltip, and this one says why.
                     aria-disabled={unavailable || undefined}
@@ -337,7 +336,7 @@ export function BrowserAnnotateToolPalette({
                           ? 'w-6 justify-center'
                           : 'w-7 justify-center',
                       checked
-                        ? 'bg-theme-accent-fill text-theme-accent-foreground [box-shadow:0_2px_8px_color-mix(in_srgb,var(--color-theme-accent-fill)_55%,transparent)]'
+                        ? 'bg-theme-accent-fill text-theme-accent-foreground shadow-[0_2px_8px_color-mix(in_srgb,var(--color-theme-accent-fill)_55%,transparent)]'
                         : 'text-popover-foreground/80 hover:bg-accent/70 hover:text-popover-foreground'
                     )}
                     onClick={() => {
@@ -356,7 +355,7 @@ export function BrowserAnnotateToolPalette({
                     {showToolLabels ? <span>{option.label}</span> : null}
                   </button>
                 </TooltipTrigger>
-                <TooltipContent data-annotate-palette-tooltip="" side={popupSide} sideOffset={6}>
+                <TooltipContent data-annotate-palette-tooltip="" {...tooltipPlacement}>
                   {unavailable && unavailableReason
                     ? unavailableReason
                     : waiting
@@ -400,7 +399,11 @@ export function BrowserAnnotateToolPalette({
           className="order-1 mx-0.5 h-4 w-px shrink-0 bg-black/14 dark:bg-white/16"
           aria-hidden
         />
-        <PaletteDoneButton discardsDrawing={discardsDrawing} onDone={onDone} />
+        <PaletteDoneButton
+          discardsDrawing={discardsDrawing}
+          onDone={onDone}
+          tooltipOffset={tooltipOffset}
+        />
         {/* Last in DOM so keyboard users reach the tools first; shown first visually. */}
         {/* Kept while dragging, so a resize that removes the room can't detach the grip mid-drag. */}
         {canMove || dragging ? (
@@ -409,6 +412,7 @@ export function BrowserAnnotateToolPalette({
             verticalPercent={verticalPercent}
             dragging={dragging}
             gripProps={gripProps}
+            tooltipOffset={tooltipOffset}
           />
         ) : null}
       </div>

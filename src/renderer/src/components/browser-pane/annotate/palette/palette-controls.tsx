@@ -80,10 +80,12 @@ export function PaletteGrabActions({
 /** Leaves the mode. Leaving Draw with strokes drops them (with an Undo toast), so it says Discard there. */
 export function PaletteDoneButton({
   discardsDrawing,
-  onDone
+  onDone,
+  tooltipOffset
 }: {
   discardsDrawing: boolean
   onDone: () => void
+  tooltipOffset: number
 }): React.JSX.Element {
   const t = useTranslate()
   const popupSide = useAnnotatePalettePopupSide()
@@ -105,7 +107,7 @@ export function PaletteDoneButton({
           <X className="size-3.5" />
         </Button>
       </TooltipTrigger>
-      <TooltipContent data-annotate-palette-tooltip="" side={popupSide} sideOffset={6}>
+      <TooltipContent data-annotate-palette-tooltip="" side={popupSide} sideOffset={tooltipOffset}>
         {discardsDrawing
           ? t('browser.annotatePalette.discardDrawingTitle', 'Discard drawing (Esc)')
           : t('browser.annotatePalette.doneTitle', 'Done (Esc)')}
@@ -122,12 +124,14 @@ export function PaletteGrip({
   percent,
   verticalPercent,
   dragging,
-  gripProps
+  gripProps,
+  tooltipOffset
 }: {
   percent: number
   verticalPercent: number
   dragging: boolean
   gripProps: ReturnType<typeof usePaletteDrag>['gripProps']
+  tooltipOffset: number
 }): React.JSX.Element {
   const t = useTranslate()
   const popupSide = useAnnotatePalettePopupSide()
@@ -169,7 +173,7 @@ export function PaletteGrip({
           <GripVertical className="size-3" />
         </div>
       </TooltipTrigger>
-      <TooltipContent data-annotate-palette-tooltip="" side={popupSide} sideOffset={6}>
+      <TooltipContent data-annotate-palette-tooltip="" side={popupSide} sideOffset={tooltipOffset}>
         {t(
           'browser.annotatePalette.moveAnywhereTooltip',
           'Drag or use arrow keys to move · double-click to reset · hold {{key}} to see under',
