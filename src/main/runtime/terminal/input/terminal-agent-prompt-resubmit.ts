@@ -60,8 +60,8 @@ export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntime
   }
 
   /** Arms, before a typed mailbox notice's Enter, the same held-prompt retry a send gets: at most one
-   *  more Enter while the composer shows exactly the notice. Resolves true when it still waits there;
-   *  null when the agent is busy, whose queued notice starts no turn to confirm it by. */
+   *  more Enter while the composer shows exactly the notice. Resolves true when it still waits there
+   *  or the screen can't be read; null when the agent is busy, whose queued notice starts no turn to confirm it by. */
   protected armMailNoticeSubmitCheck(
     handle: string,
     ptyId: string,
@@ -109,9 +109,12 @@ export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntime
           return false
         }
         const draft = await this.readHeldPromptDraft(ptyId, openCode)
-        return isCurrent() && isHeldAgentPromptDraft(draft, notice, 1 + resubmits)
+        // An unreadable screen can't show the notice was taken: report it as one that may wait.
+        return (
+          isCurrent() && (draft === null || isHeldAgentPromptDraft(draft, notice, 1 + resubmits))
+        )
       } catch {
-        return false
+        return isCurrent()
       }
     }
   }
@@ -151,7 +154,7 @@ export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntime
         const holdsPrompt = async (): Promise<boolean> =>
           prompt !== undefined &&
           isHeldAgentPromptDraft(
-            await this.readHeldPromptDraft(ptyId, openCode),
+            (await this.readHeldPromptDraft(ptyId, openCode)) ?? undefined,
             prompt,
             1 + resubmits
           )
@@ -188,11 +191,18 @@ export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntime
     return resubmits
   }
 
-  private async readHeldPromptDraft(ptyId: string, openCode: boolean): Promise<string | undefined> {
+  /** The composer's text: undefined when empty, null when the screen could not be read. */
+  private async readHeldPromptDraft(
+    ptyId: string,
+    openCode: boolean
+  ): Promise<string | null | undefined> {
     // Why: this read also catches the emulator up to the latest output.
     const screen = await this.readCurrentTerminalWaitScreen(ptyId)
-    if (!openCode || !screen) {
-      return screen?.draft
+    if (!screen) {
+      return null
+    }
+    if (!openCode) {
+      return screen.draft
     }
     // Why: OpenCode's composer has no prompt glyph, so read its box from the caught-up grid.
     const context = this.readWholeScreenModel(ptyId)?.emulator.getCursorLineContext()

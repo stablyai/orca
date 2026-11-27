@@ -37,6 +37,8 @@ afterEach(() => {
  *  composer on the `takesEnter`th Enter; Windows Codex can keep earlier Enters as newlines. */
 async function deliverToCodex(options: {
   takesEnter: number
+  /** The screen can't be read once the notice is typed. */
+  unreadable?: true
   userText?: string
   /** Mail that arrives while the first notice's Enter is checked, and after. */
   moreMail?: true
@@ -54,6 +56,7 @@ async function deliverToCodex(options: {
       sequence++
     )
   let enters = 0
+  let unreadable: { mockRestore: () => void } | undefined
   write.mockImplementation((_ptyId: string, data: string) => {
     if (isMailboxPointer(data)) {
       paint(`${data.trim()}${options.userText ?? ''}`)
@@ -64,6 +67,12 @@ async function deliverToCodex(options: {
   })
   try {
     await driveToLiveIdle(runtime)
+    if (options.unreadable) {
+      // The prototype method every composer read goes through.
+      unreadable = vi
+        .spyOn(Object.getPrototypeOf(runtime), 'readCurrentTerminalWaitScreen')
+        .mockResolvedValue(null)
+    }
     const run = createBoundRun(db, 'Notice submit')
     insertDirectRunMessage(db, run.id, 'Mail')
     runtime.deliverPendingMessagesForHandle(TERMINAL_HANDLE)
@@ -82,6 +91,7 @@ async function deliverToCodex(options: {
       reported: vi.mocked(reportHeldMailNotice).mock.calls.length
     }
   } finally {
+    unreadable?.mockRestore()
     db.close()
   }
 }
@@ -110,6 +120,14 @@ it('types no later notice over one still held in the composer', async () => {
   expect(await deliverToCodex({ takesEnter: 0, moreMail: true })).toEqual({
     pointers: 1,
     enters: 2,
+    reported: 1
+  })
+})
+
+it('tells the coordinator when the screen cannot be read after the Enter', async () => {
+  expect(await deliverToCodex({ takesEnter: 1, unreadable: true })).toEqual({
+    pointers: 1,
+    enters: 1,
     reported: 1
   })
 })
