@@ -88,12 +88,13 @@ export function bodyText(part: Part | undefined): string {
 export function attachmentsOf(message: Message): GmailAttachment[] {
   const found: GmailAttachment[] = []
   const walk = (node: Part): void => {
-    if (node.filename && node.body?.attachmentId && node.partId) {
+    const body = node.body
+    if (node.filename && body && (body.attachmentId || body.data !== undefined) && node.partId) {
       found.push({
         ref: `gmail:att:${message.id}:${node.partId}`,
         name: node.filename,
         ...(node.mimeType ? { type: node.mimeType } : {}),
-        ...(node.body.size !== undefined ? { size: node.body.size } : {})
+        ...(body.size !== undefined ? { size: body.size } : {})
       })
     }
     node.parts?.forEach(walk)
