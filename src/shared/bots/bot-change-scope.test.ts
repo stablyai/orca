@@ -1,7 +1,9 @@
 import { expect, it } from 'vitest'
 import {
   addBotChange,
+  botChangeConcerns,
   botChangeNotice,
+  botGroupChangedPosts,
   botGroupRoomConcerned,
   pendingBotChanges,
   readBotChangeScope,
@@ -48,4 +50,53 @@ it('re-reads only the rooms a window named, and every room once a change names n
 it('keeps the rooms a notice names when a window reads a notice the bridge already read', () => {
   const bridged = structuredClone(readBotChangeScope({ kinds: ['groups'], groupIds: ['room-a'] }))
   expect(rooms(readBotChangeScope(bridged))).toEqual(['room-a'])
+})
+
+it('keeps a saved-post notice local to transcript readers unless the room catalog changed too', () => {
+  const saved = {
+    kinds: ['groups'],
+    groupIds: ['room-a'],
+    groupPosts: { 'room-a': ['post-id'] },
+    roomPostsOnly: true
+  } satisfies BotChangeScope
+  const transcript = notice(saved)
+  expect(rooms(transcript)).toEqual(['room-a'])
+  expect(transcript?.groupPosts).toEqual({ 'room-a': ['post-id'] })
+  expect(botChangeConcerns(transcript, { kinds: ['groups'], roomPosts: true })).toBe(true)
+  expect(botChangeConcerns(transcript, { kinds: ['groups'] })).toBe(false)
+  expect(botChangeConcerns(notice(saved, { kinds: ['groups'] }), { kinds: ['groups'] })).toBe(true)
+})
+
+it('does not mark a coalesced bot edit as room-post-only', () => {
+  const changed = notice(
+    { botIds: ['bot-1'], kinds: ['bot'] },
+    {
+      kinds: ['groups'],
+      groupIds: ['room-a'],
+      groupPosts: { 'room-a': ['post-id'] },
+      scopedRoomPosts: true,
+      roomPostsOnly: true
+    }
+  )
+  expect(changed?.roomPostsOnly).toBeUndefined()
+})
+
+it('recovers an open transcript for an unscoped room change', () => {
+  const changed = botGroupChangedPosts(
+    readBotChangeScope({ kinds: ['groups'], groupIds: ['room-a'] }),
+    'room-a'
+  )
+  expect(changed).toEqual({ ids: [], recover: true })
+})
+
+it('recovers older loaded posts when a general notice merges with named posts', () => {
+  const changed = botGroupChangedPosts(
+    readBotChangeScope({
+      kinds: ['groups'],
+      groupIds: ['room-a'],
+      groupPosts: { 'room-a': ['newest-post'] }
+    }),
+    'room-a'
+  )
+  expect(changed).toEqual({ ids: ['newest-post'], recover: true })
 })

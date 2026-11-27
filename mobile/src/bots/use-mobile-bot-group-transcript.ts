@@ -1,8 +1,20 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useReducer,
+  useRef,
+  useState
+} from 'react'
 import { isBotAgent } from '../../../src/shared/bot-types'
 import { AppState } from 'react-native'
 import {
+  botGroupReplyBodies,
+  drainBotGroupPostUpdates,
+  pendingBotGroupPosts,
   reduceBotGroupTranscript,
+  restoreBotGroupReplies,
   type BotGroupTranscript,
   type BotGroupTranscriptAction
 } from '../../../src/shared/bots/bot-group-transcript'
@@ -14,6 +26,7 @@ import { startHostBotRefresh } from './host-bot-refresh'
 import {
   botChangeBotIds,
   botChangeConcerns,
+  botGroupChangedPosts,
   botGroupRoomConcerned,
   type BotChangeKind,
   type BotChangeScope
@@ -94,6 +107,7 @@ export function useMobileBotGroupTranscript(
 ) {
   const [room, dispatch] = useReducer(reduceRoomTranscript, { threadId, data: null })
   const data = room.threadId === threadId ? room.data : null
+  const pendingPosts = useEffectEvent(() => pendingBotGroupPosts(data, groupId))
   const apply = useCallback(
     (action: BotGroupTranscriptAction) => dispatch({ threadId, action }),
     [threadId]
@@ -115,7 +129,10 @@ export function useMobileBotGroupTranscript(
     }
     let closed = false
     let request = 0
+    let replies: ReadonlyMap<string, string> = new Map()
+    let updates: string[] = []
     const refresh = (changed?: BotChangeScope) => {
+      const changedPosts = botGroupChangedPosts(changed, groupId, threadId)
       const rooms = botChangeConcerns(changed, { kinds: ['groups'] })
       // An items or workers change naming no bot can change every member's list; another bot's
       // changes nothing a member's list shows. A group change reaches the lists only by moving their
@@ -144,25 +161,61 @@ export function useMobileBotGroupTranscript(
       // A groups change naming other rooms leaves this one as it is.
       const room =
         botChangeConcerns(changed, { kinds: ['bot'] }) ||
-        (botChangeConcerns(changed, { kinds: ['groups'] }) &&
+        (changedPosts !== null &&
+          botChangeConcerns(changed, { kinds: ['groups'], roomPosts: true }) &&
           botGroupRoomConcerned(changed, groupId))
       if (!room) {
         return
       }
       const current = ++request
+      const held = replies
+      updates = [
+        ...new Set([
+          ...updates,
+          ...(changedPosts?.ids ?? []),
+          ...(changedPosts?.recover ? pendingPosts() : [])
+        ])
+      ]
+      const currentRead = () => !closed && current === request
       void Promise.all([
-        groupRead.request(client, { groupId, threadId }),
-        readHostBots(client, hostBotsKey(hostId))
+        groupRead.request(client, {
+          groupId,
+          threadId,
+          knownReplyKeys: [...held.keys()].slice(-1_280),
+          updatedPostIds: updates.slice(0, 40)
+        }),
+        changed?.roomPostsOnly ? undefined : readHostBots(client, hostBotsKey(hostId))
       ])
-        .then(([reply, bots]) => {
+        .then(async ([reply, bots]) => {
           if (closed || current !== request) {
             return
           }
-          apply({ kind: 'recent', page: groupRead.interpret(reply) })
-          if (bots.kind === 'bots') {
+          const page = restoreBotGroupReplies(groupRead.interpret(reply), held)
+          replies = botGroupReplyBodies(page)
+          updates = [...(page.deferredPostIds ?? []), ...updates.slice(40)]
+          apply({ kind: 'recent', page })
+          if (bots?.kind === 'bots') {
             setBots(bots.bots)
             setNeedsYou((last) => (sameCounts(last, bots.needsYou) ? last : bots.needsYou))
           }
+          await drainBotGroupPostUpdates(
+            updates,
+            async (ids) =>
+              groupRead.interpret(
+                await groupRead.request(client, {
+                  groupId,
+                  threadId,
+                  knownReplyKeys: [],
+                  updatedPostIds: ids,
+                  updatesOnly: true
+                })
+              ),
+            currentRead,
+            (updated, remaining) => {
+              updates = remaining
+              apply({ kind: 'updated', page: updated })
+            }
+          )
         })
         .catch((error: unknown) => {
           if (!closed) {
@@ -175,7 +228,7 @@ export function useMobileBotGroupTranscript(
       appState: AppState,
       refresh,
       listed: () => true,
-      interest: () => ({ kinds: [...ROOM_KINDS, ...ITEM_KINDS, ...ASK_KINDS] })
+      interest: () => ({ kinds: [...ROOM_KINDS, ...ITEM_KINDS, ...ASK_KINDS], roomPosts: true })
     })
     return () => {
       closed = true
@@ -191,7 +244,8 @@ export function useMobileBotGroupTranscript(
         await groupRead.request(client, {
           groupId,
           threadId,
-          beforeSequence: data.messages[0]?.sequence
+          beforeSequence: data.messages[0]?.sequence,
+          knownReplyKeys: []
         })
       )
       apply({ kind: 'earlier', page: result })
@@ -204,20 +258,22 @@ export function useMobileBotGroupTranscript(
     () =>
       data?.group.members.flatMap((member) => {
         const bot = bots.find((bot) => bot.id === member.botId)
-        return bot && isBotAgent(bot.agent)
-          ? [
-              {
-                sessionId: member.sessionId,
-                agent: bot.agent,
-                operationIds:
-                  data?.messages.flatMap((message) =>
-                    message.turns
-                      .filter((turn) => turn.sessionId === member.sessionId && !turn.revoked)
-                      .map((turn) => turn.operationId)
-                  ) ?? []
-              }
-            ]
-          : []
+        if (!bot || !isBotAgent(bot.agent)) {
+          return []
+        }
+        const turns = data.messages.flatMap((message) =>
+          message.turns.filter((turn) => turn.sessionId === member.sessionId && !turn.revoked)
+        )
+        return [
+          {
+            sessionId: member.sessionId,
+            agent: bot.agent,
+            operationIds: turns.map((turn) => turn.operationId),
+            pendingOperationIds: turns.flatMap((turn) =>
+              turn.end === undefined && turn.reply === undefined ? [turn.operationId] : []
+            )
+          }
+        ]
       }) ?? [],
     [data?.group.members, bots, data?.messages]
   )

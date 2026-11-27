@@ -4,8 +4,7 @@ import { BotAvatarColorSchema } from './bot-avatar-color'
 import { BotStoredOutfitSchema } from './bot-avatar-outfit'
 import { isAdmissibleAgentJournalRenderItem } from '../agent-session/journal/agent-session-journal-schemas'
 import type { AgentJournalRenderItem } from '../agent-session/journal/agent-session-journal-types'
-import type { NativeChatBlock, NativeChatMessage } from '../native-chat/native-chat-types'
-import { isQuietBotResult, quietBotResultText } from '../bot-quiet-result'
+import type { NativeChatBlock } from '../native-chat/native-chat-types'
 import { AutomationRunMessageSchema } from '../automations/automation-run-message'
 
 // Read back through readBotFailure, which drops a code this build doesn't know.
@@ -98,7 +97,7 @@ export const BotGroupSchema = z.object({
 })
 
 /** One native operation a post started; the bot's name, avatar and agent as they were then. */
-const BotGroupTurnSchema = z.object({
+export const BotGroupTurnSchema = z.object({
   operationId: z.string(),
   botId: z.string(),
   botName: z.string(),
@@ -117,6 +116,19 @@ const BotGroupTurnSchema = z.object({
   /** The finished reply, saved when the turn ended; null when it ended without one. Absent while
    *  the turn runs, and on turns saved before replies were. */
   reply: z.string().nullable().optional(),
+  /** How the turn ended and how long it worked, saved with `reply`; absent while it runs and on
+   *  turns saved before this was. The room draws an ended turn from these, never from loaded rows. */
+  end: z.enum(['finished', 'stopped', 'failed']).optional().catch(undefined),
+  workedMs: z.number().nonnegative().optional().catch(undefined),
+  endedAt: z.number().nonnegative().optional().catch(undefined),
+  turnItemId: z.string().optional(),
+  hadWork: z.literal(true).optional(),
+  /** The visible answer at settlement. The whole reply tail is still used for quoting. */
+  roomReply: z.string().max(4_000).optional().catch(undefined),
+  /** A room read may omit a preview the reader already holds under this key. */
+  replyKey: z.string().optional(),
+  /** A frozen transcript that the room can open in bounded pages. */
+  frozenHistory: z.literal(true).optional(),
   /** Its answer to another member's request: sent as mail, so its own chat shows only the call. */
   answer: z.string().optional(),
   /** The members its reply named, saved as their hand-offs were reserved: a replay wakes none. */
@@ -252,62 +264,6 @@ export function startsBotGroupRequest(
 export type BotGroupLatest = z.infer<typeof BotGroupLatestSchema>
 export type BotGroupPeerScope = z.infer<typeof BotGroupPeerScopeSchema>
 export type LegacyBotGroup = z.infer<typeof LegacyBotGroupSchema>
-
-const WORD_CHARACTER = /[\p{L}\p{N}]/u
-
-/** Whether a turn's own words already say its answer to a member's request, as whole words: an
- *  answer of `42` is not said by `142 files`. */
-function holdsAnswer(words: string, answer: string): boolean {
-  const said = answer.trim()
-  for (let at = words.indexOf(said); at !== -1; at = words.indexOf(said, at + 1)) {
-    const before = words[at - 1] ?? ''
-    const after = words[at + said.length] ?? ''
-    if (!WORD_CHARACTER.test(before) && !WORD_CHARACTER.test(after)) {
-      return true
-    }
-  }
-  return false
-}
-
-/** A turn's reply as room history: its answer to a member's request added unless the reply
- *  already says it, and a quiet reply's marker dropped. Null when neither has words. */
-export function botGroupTurnReplyText(
-  reply: string | null | undefined,
-  answer: string | undefined
-): string | null {
-  const said = reply && isQuietBotResult(reply) ? quietBotResultText(reply) : (reply ?? '')
-  if (!answer?.trim() || holdsAnswer(said, answer)) {
-    return said || null
-  }
-  return said ? `${said}\n\n${answer}` : answer
-}
-
-/** A turn's rows as the room draws them on desktop and mobile: its answer to a member's request
- *  closes them, unless its own words already said it. */
-export function withBotGroupTurnAnswer(
-  messages: NativeChatMessage[],
-  turn: Pick<BotGroupTurn, 'operationId' | 'answer'>
-): NativeChatMessage[] {
-  const words = messages
-    .flatMap((message) =>
-      message.role === 'assistant'
-        ? message.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
-        : []
-    )
-    .join('\n')
-  return turn.answer?.trim() && !holdsAnswer(words, turn.answer)
-    ? [
-        ...messages,
-        {
-          id: `${turn.operationId}:answer`,
-          role: 'assistant',
-          blocks: [{ type: 'text', text: turn.answer }],
-          timestamp: null,
-          source: 'transcript'
-        }
-      ]
-    : messages
-}
 
 /** An owner post's transcript blocks for desktop and mobile message rows. */
 export function botGroupOwnerMessageBlocks(

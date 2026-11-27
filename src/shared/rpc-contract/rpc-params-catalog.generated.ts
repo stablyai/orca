@@ -17,6 +17,7 @@ import {
   BotGroupReorder,
   BotGroupSend,
   BotGroupStop,
+  BotGroupTurnRows,
   BotGroupUpdate
 } from '../bots/bot-group'
 import { BotOfferAnswerParams } from '../bots/bot-offer-answers'
@@ -1340,6 +1341,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'bots.groups.reorder': BotGroupReorder,
   'bots.groups.send': BotGroupSend,
   'bots.groups.stop': BotGroupStop,
+  'bots.groups.turnRows': BotGroupTurnRows,
   'bots.groups.update': BotGroupUpdate,
   'bots.import.done': BotImportDoneCard,
   'bots.import.plan': BotImportPlanCard,

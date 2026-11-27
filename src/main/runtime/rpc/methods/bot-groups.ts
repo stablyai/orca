@@ -1,6 +1,7 @@
 import {
   BotGroupCreate,
   BotGroupRead,
+  BotGroupTurnRows,
   BotGroupSend,
   BotGroupUpdate,
   BotGroupStop,
@@ -84,7 +85,23 @@ export const BOT_GROUP_METHODS = [
       return runtimeBotGroups(context.runtime).read(
         params.groupId,
         params.beforeSequence,
-        params.threadId
+        params.threadId,
+        params.knownReplyKeys,
+        params.updatedPostIds,
+        params.updatesOnly
+      )
+    }
+  }),
+  defineMethod({
+    name: 'bots.groups.turnRows',
+    permission: 'workspace',
+    params: BotGroupTurnRows,
+    handler: async (params, context) => {
+      assertBotGroupOwner(context)
+      return runtimeBotGroups(context.runtime).turnRows(
+        params,
+        context.signal,
+        context.connectionId
       )
     }
   }),

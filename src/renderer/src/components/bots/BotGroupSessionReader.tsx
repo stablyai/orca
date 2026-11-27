@@ -18,7 +18,10 @@ export const BotGroupSessionReader = memo(function BotGroupSessionReader({
 }: {
   /** The group's host, which runs its members' sessions. */
   target: RuntimeClientTarget
-  turn: Pick<BotGroupTurn, 'sessionId' | 'agent'> & { operationIds: readonly string[] }
+  turn: Pick<BotGroupTurn, 'sessionId' | 'agent'> & {
+    operationIds: readonly string[]
+    pendingOperationIds: readonly string[]
+  }
   visible: boolean
   report: (sessionId: string, session: BotGroupSession | null) => void
 }): null {
@@ -45,7 +48,7 @@ export const BotGroupSessionReader = memo(function BotGroupSessionReader({
       hasOlder &&
       !loadingOlder &&
       // Page only for a turn the session admitted; queued or refused ones have no older rows to find.
-      turn.operationIds.some(
+      turn.pendingOperationIds.some(
         (id) =>
           groupTurnItems(id).length === 0 &&
           botGroupOperationAdmitted(
@@ -61,7 +64,7 @@ export const BotGroupSessionReader = memo(function BotGroupSessionReader({
     hasOlder,
     loadingOlder,
     loadOlder,
-    turn.operationIds,
+    turn.pendingOperationIds,
     groupTurnItems,
     controller.journalItems,
     controller.submissions

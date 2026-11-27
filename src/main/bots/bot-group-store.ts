@@ -1,7 +1,6 @@
 import {
   BotGroupLatestSchema,
   BotGroupSchema,
-  BotGroupMessageSchema,
   LegacyBotGroupSchema,
   type LegacyBotGroup
 } from '../../shared/bots/bot-group-schema'
@@ -15,17 +14,17 @@ import type {
   BotGroupTurn
 } from '../../shared/bots/bot-group'
 import { createBotGroupTables, withoutClearedRoster } from './bot-group-store-tables'
-
-// The row's sequence is the message order; the record keeps everything else.
-const MessageRecordSchema = BotGroupMessageSchema.omit({ sequence: true })
+import { BotGroupPostRead } from './bot-group-post-read'
 
 export type PendingGroupTurn = { message: BotGroupMessage; turn: BotGroupTurn }
 
 export class BotGroupStore {
+  private readonly posts: BotGroupPostRead
   /** False when this open couldn't index older posts' questions, so their mail must wait. */
   readonly remoteAsksIndexed: boolean
 
   constructor(readonly db: Database) {
+    this.posts = new BotGroupPostRead(db)
     this.remoteAsksIndexed = createBotGroupTables(db)
   }
 
@@ -154,6 +153,7 @@ export class BotGroupStore {
 
   /** The group and everything kept for it: messages, pending sends, operation and worker links. */
   deleteGroup(groupId: string): void {
+    this.posts.dropGroup(groupId)
     const ofGroup = 'SELECT id FROM bot_group_messages WHERE group_id = ?'
     const operations = `SELECT operation_id FROM bot_group_operations WHERE message_id IN (${ofGroup})`
     this.transaction(() => {
@@ -176,37 +176,33 @@ export class BotGroupStore {
     limit = 40,
     beforeSequence = Number.MAX_SAFE_INTEGER
   ): BotGroupMessage[] {
-    return this.db
-      .prepare(
-        'SELECT sequence, record FROM bot_group_messages WHERE group_id = ? AND sequence < ? ORDER BY sequence DESC LIMIT ?'
-      )
-      .all(groupId, beforeSequence, limit)
-      .toReversed()
-      .map((row) => this.messageRow(row))
+    return this.posts.messages(groupId, limit, beforeSequence)
   }
 
-  /** One room's messages: a thread's, or the original room's when `threadId` is absent. */
   roomMessages(
     groupId: string,
     threadId: string | undefined,
     limit = 40,
     beforeSequence = Number.MAX_SAFE_INTEGER
   ): BotGroupMessage[] {
-    return this.db
-      .prepare(
-        `SELECT sequence, record FROM bot_group_messages WHERE group_id = ? AND sequence < ?
-           AND coalesce(json_extract(record, '$.threadId'), '') = ? ORDER BY sequence DESC LIMIT ?`
-      )
-      .all(groupId, beforeSequence, threadId ?? '', limit)
-      .toReversed()
-      .map((row) => this.messageRow(row))
+    return this.posts.roomMessages(groupId, threadId, limit, beforeSequence)
+  }
+
+  roomPageMessages(
+    groupId: string,
+    threadId: string | undefined,
+    limit: number,
+    beforeSequence?: number
+  ): BotGroupMessage[] {
+    return this.posts.roomMessages(groupId, threadId, limit, beforeSequence, true)
   }
 
   message(id: string): BotGroupMessage | null {
-    const row = this.db
-      .prepare('SELECT sequence, record FROM bot_group_messages WHERE id = ?')
-      .get(id)
-    return row ? this.messageRow(row) : null
+    return this.posts.message(id)
+  }
+
+  roomPageMessage(id: string): BotGroupMessage | null {
+    return this.posts.roomPost(id)
   }
 
   /** The post that asked this remote question. */
@@ -218,10 +214,15 @@ export class BotGroupStore {
   }
 
   operationMessage(operationId: string): BotGroupMessage | null {
-    const row = this.db
-      .prepare('SELECT message_id FROM bot_group_operations WHERE operation_id = ?')
-      .get(operationId)
-    return row ? this.message(String(row.message_id)) : null
+    const id = this.posts.operationMessageId(operationId)
+    return id === undefined ? null : this.posts.message(id)
+  }
+
+  detailSource(operationId: string): { messageId: string; version: number } | undefined {
+    const messageId = this.posts.operationMessageId(operationId)
+    return messageId === undefined
+      ? undefined
+      : { messageId, version: this.posts.detailVersion(messageId) }
   }
 
   /** Stores a post with each turn's pending context, owed until native admission. */
@@ -267,6 +268,7 @@ export class BotGroupStore {
     this.transaction(() => {
       const { error: _error, failure: _failure, ...turn } = message.turns[0]
       this.update({ ...message, turns: [{ ...turn, operationId }] })
+      this.posts.invalidateArchive(messageId)
       this.link(operationId, messageId)
     })
   }
@@ -278,11 +280,19 @@ export class BotGroupStore {
   }
 
   bindWorker(dispatchId: string, operationId: string): void {
-    this.db
+    const added = this.db
       .prepare(
         'INSERT OR IGNORE INTO bot_group_worker_operations(dispatch_id, operation_id) VALUES (?, ?)'
       )
       .run(dispatchId, operationId)
+    if (Number(added.changes) > 0) {
+      const row = this.db
+        .prepare('SELECT message_id FROM bot_group_operations WHERE operation_id = ?')
+        .get(operationId)
+      if (row) {
+        this.posts.invalidate(String(row.message_id))
+      }
+    }
   }
 
   /** The group operation that started this worker. */
@@ -327,31 +337,21 @@ export class BotGroupStore {
     } catch (error) {
       this.db.exec('ROLLBACK TO bot_group_write')
       this.db.exec('RELEASE bot_group_write')
+      this.posts.clear()
       throw error
     }
   }
 
-  update({ sequence: _sequence, ...message }: BotGroupMessage): void {
-    const turns = message.turns.map(({ workerDispatchIds: _workers, ...turn }) => turn)
+  update({ sequence: _sequence, ...message }: BotGroupMessage, archiveChanged = false): void {
+    const turns = message.turns.map(
+      ({ workerDispatchIds: _workers, replyKey: _replyKey, ...turn }) => turn
+    )
     this.db
       .prepare('UPDATE bot_group_messages SET record = ? WHERE id = ? AND group_id = ?')
       .run(JSON.stringify({ ...message, turns }), message.id, message.groupId)
-  }
-
-  private messageRow(row: Record<string, unknown>): BotGroupMessage {
-    const message = MessageRecordSchema.parse(JSON.parse(String(row.record)))
-    const workers = this.db.prepare(
-      'SELECT dispatch_id FROM bot_group_worker_operations WHERE operation_id = ? ORDER BY rowid'
-    )
-    return {
-      ...message,
-      sequence: Number(row.sequence),
-      turns: message.turns.map(({ workerDispatchIds: _stored, ...turn }) => {
-        const dispatchIds = workers
-          .all(turn.operationId)
-          .map((worker) => String(worker.dispatch_id))
-        return dispatchIds.length > 0 ? { ...turn, workerDispatchIds: dispatchIds } : turn
-      })
+    this.posts.invalidate(message.id)
+    if (archiveChanged) {
+      this.posts.invalidateArchive(message.id)
     }
   }
 }

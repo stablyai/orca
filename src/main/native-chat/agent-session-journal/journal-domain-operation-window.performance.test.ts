@@ -17,8 +17,12 @@ import type { Send } from './journal-operation-window-sends'
 import { codexTurnLifecycleIdentity } from '../../codex/structured/journal/codex-structured-journal-translation-turns'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import {
+  agentJournalItemKey,
+  agentJournalSubmissionKey
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { readJournalDomainRoomTurnPage } from './journal-domain-room-turn-page'
 
 // #47529: opening one ended turn of a bot group room reads it through the operation window. Guards
 // the bounded read: the rows and sends it returns stay fixed however many turns the chat ran after
@@ -209,6 +213,108 @@ function chat(
   db.exec('COMMIT')
   return db
 }
+
+it('opens a bounded room detail page from a long turn with a newer turn already present', () => {
+  for (const count of [1_000, 10_000]) {
+    const db = chat(1)
+    const identity = codexTurnLifecycleIdentity('chat', 'long')
+    const turnItemId = agentJournalItemKey(identity)
+    const turnScope = { kind: 'turn' as const, turnItemId }
+    let time = 1_800_000_001_000
+    db.exec('BEGIN IMMEDIATE')
+    applyJournalDomainItem(
+      db,
+      target,
+      {
+        kind: 'item',
+        identity,
+        body: { kind: 'turn', turnId: 'long', state: 'running', startedAt: time },
+        options: { turnScope: { kind: 'thread' }, fence: 1 }
+      },
+      time++
+    )
+    applyJournalDomainItem(
+      db,
+      target,
+      {
+        kind: 'item',
+        identity: { provider: 'orca', clientMessageId: 'long-answer' },
+        body: {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [{ type: 'text', text: 'Answer from the long turn' }]
+        },
+        options: { turnScope, fence: 1 }
+      },
+      time++
+    )
+    for (let i = 0; i < count; i++) {
+      const id = `long-work-${i}`
+      applyJournalDomainItem(
+        db,
+        target,
+        {
+          kind: 'item',
+          identity: { provider: 'orca', clientMessageId: id },
+          body: { kind: 'tool-call', name: 'shell', callId: id, input: {}, state: 'completed' },
+          options: { turnScope, fence: 1 }
+        },
+        time++
+      )
+    }
+    applyJournalDomainItem(
+      db,
+      target,
+      {
+        kind: 'item',
+        identity,
+        body: {
+          kind: 'turn',
+          turnId: 'long',
+          state: 'completed',
+          outcome: 'success',
+          durationMs: 2_700_000
+        },
+        options: { turnScope: { kind: 'thread' }, fence: 1 }
+      },
+      time++
+    )
+    applyJournalDomainItem(
+      db,
+      target,
+      {
+        kind: 'item',
+        identity: codexTurnLifecycleIdentity('chat', 'newer'),
+        body: { kind: 'turn', turnId: 'newer', state: 'completed', outcome: 'success' },
+        options: { turnScope: { kind: 'thread' }, fence: 1 }
+      },
+      time++
+    )
+    db.exec('COMMIT')
+    const scope = new JournalSqlScope(db, 'chat', 'epoch')
+    try {
+      const first = readJournalDomainRoomTurnPage(scope, {
+        operationId: 'room-operation',
+        turnItemId
+      })
+      const answerId = agentJournalSubmissionKey('long-answer')
+      expect(first.items).toHaveLength(130)
+      expect(first.items.map(({ itemId }) => itemId)).toEqual(
+        expect.arrayContaining([turnItemId, answerId])
+      )
+      expect(first.before?.[0]).toBeGreaterThan(0)
+      const earlier = readJournalDomainRoomTurnPage(scope, {
+        operationId: 'room-operation',
+        turnItemId,
+        before: first.before
+      })
+      expect(earlier.items).toHaveLength(130)
+      expect(earlier.items.at(-1)!.sequence).toBeLessThan(first.before![0])
+    } finally {
+      db.close()
+    }
+  }
+})
 
 function openFirstTurn(db: Database, ...operationIds: string[]) {
   const scope = new JournalSqlScope(db, 'chat', 'epoch')

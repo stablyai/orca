@@ -258,8 +258,11 @@ export class JournalSqlReaderPool {
     return response.result
   }
 
-  async point(request: JournalSqlPointRead): Promise<JournalSqlPointReadResult> {
-    const response = await this.slot().request({ kind: 'point', request })
+  async point(
+    request: JournalSqlPointRead,
+    signal?: AbortSignal
+  ): Promise<JournalSqlPointReadResult> {
+    const response = await this.slot().request({ kind: 'point', request }, { signal })
     if (response.type !== 'point') {
       throw new Error('journal reader returned no point result')
     }

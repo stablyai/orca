@@ -250,6 +250,7 @@ export function MobileBotGroupRoom({
               key={message.id}
               message={message}
               client={client}
+              visible={visible && connected}
               bots={bots}
               sessions={sessions}
               onStop={(botId) => void stop(botId)}

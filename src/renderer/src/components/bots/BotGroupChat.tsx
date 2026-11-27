@@ -105,7 +105,7 @@ export function BotGroupChat({
     }
     const bySession = new Map<
       string,
-      Pick<Turn, 'sessionId' | 'agent'> & { operationIds: string[] }
+      Pick<Turn, 'sessionId' | 'agent'> & { operationIds: string[]; pendingOperationIds: string[] }
     >()
     for (const member of group.members) {
       const bot = bots.find((bot) => bot.id === member.botId && bot.hostId === group.hostId)
@@ -113,18 +113,29 @@ export function BotGroupChat({
         bySession.set(member.sessionId, {
           sessionId: member.sessionId,
           agent: bot.agent,
-          operationIds: []
+          operationIds: [],
+          pendingOperationIds: []
         })
       }
     }
     for (const message of messages) {
       for (const turn of message.turns) {
-        if (!turn.revoked) {
-          bySession.set(turn.sessionId, {
+        if (turn.revoked) {
+          continue
+        }
+        let reader = bySession.get(turn.sessionId)
+        if (!reader) {
+          reader = {
             sessionId: turn.sessionId,
             agent: turn.agent,
-            operationIds: [...(bySession.get(turn.sessionId)?.operationIds ?? []), turn.operationId]
-          })
+            operationIds: [],
+            pendingOperationIds: []
+          }
+          bySession.set(turn.sessionId, reader)
+        }
+        reader.operationIds.push(turn.operationId)
+        if (turn.end === undefined && turn.reply === undefined) {
+          reader.pendingOperationIds.push(turn.operationId)
         }
       }
     }
@@ -326,6 +337,8 @@ export function BotGroupChat({
                         <BotGroupTurn
                           key={turn.operationId}
                           hostId={data.group.hostId}
+                          groupId={data.group.id}
+                          threadId={threadId}
                           turn={turn}
                           tabId={tabId}
                           isVisible={isVisible}

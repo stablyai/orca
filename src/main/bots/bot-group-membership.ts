@@ -242,19 +242,22 @@ async function retireMembers(groups: BotGroupRuntime, next: BotGroup): Promise<B
       }
       // A retired turn is owed nothing more, so its pending send goes with it.
       groups.store.delivered(retired.map((turn) => turn.operationId))
-      groups.store.update({
-        ...message,
-        turns: message.turns.map((turn) => {
-          const read = frozen.get(turn.sessionId)
-          return read
-            ? {
-                ...turn,
-                revoked: true,
-                frozenItems: read(turn.operationId, turn.workerDispatchIds)
-              }
-            : turn
-        })
-      })
+      groups.store.update(
+        {
+          ...message,
+          turns: message.turns.map((turn) => {
+            const read = frozen.get(turn.sessionId)
+            return read
+              ? {
+                  ...turn,
+                  revoked: true,
+                  frozenItems: read(turn.operationId, turn.workerDispatchIds)
+                }
+              : turn
+          })
+        },
+        true
+      )
     }
   })
   await closeSessions(groups, leaving)

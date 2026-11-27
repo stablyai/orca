@@ -16,13 +16,17 @@ import {
   type BotGroupMember,
   type BotGroupMessage
 } from './bot-group-schema'
+import { BOT_GROUP_SAVED_REPLY_MAX } from './bot-group-reply-preview'
 
+export { BotGroupReplyMode, botGroupOwnerMessageBlocks } from './bot-group-schema'
 export {
-  BotGroupReplyMode,
-  botGroupOwnerMessageBlocks,
+  BOT_GROUP_PAGE_REPLY_MAX,
+  botGroupPageReply,
   botGroupTurnReplyText,
+  botGroupTurnShowsNothing,
   withBotGroupTurnAnswer
-} from './bot-group-schema'
+} from './bot-group-reply-preview'
+export { BotGroupRead, BotGroupTurnRows } from './bot-group-read-schema'
 export type {
   BotGroup,
   BotGroupLatest,
@@ -117,9 +121,6 @@ export const BotGroupCreate = z.object({
   name: BotNameSchema,
   botIds: z.array(z.string().min(1)).min(1).max(32),
   remoteBots: RemoteBots.optional()
-})
-export const BotGroupRead = Room.extend({
-  beforeSequence: z.number().int().positive().optional()
 })
 export const BotGroupUpdate = Revision.extend({
   name: BotNameSchema.optional(),
@@ -281,7 +282,7 @@ export function botGroupCompletedReply(
         : []
     )
     .join('\n')
-  return full ? { text: full.slice(-16_000), full, completedAt } : null
+  return full ? { text: full.slice(-BOT_GROUP_SAVED_REPLY_MAX), full, completedAt } : null
 }
 
 /** What a member has not seen: posts and replies since it was last asked (all, if new), newest kept

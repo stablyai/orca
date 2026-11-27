@@ -20,8 +20,14 @@ const PAGE_ANSWER_MAX = 16_000
 export function presentPageAnswers(messages: readonly BotGroupMessage[]): BotGroupMessage[] {
   let budget = PAGE_ANSWER_BUDGET
   const take = (text: string) => {
-    const kept = text.slice(0, Math.max(0, Math.min(PAGE_ANSWER_MAX, budget)))
-    budget -= kept.length
+    let kept = text.slice(0, Math.min(PAGE_ANSWER_MAX, budget))
+    let bytes = Buffer.byteLength(JSON.stringify(kept)) - 2
+    if (bytes > budget) {
+      // Even a lone escaped UTF-16 code unit fits in six bytes.
+      kept = kept.slice(0, Math.floor(budget / 6))
+      bytes = Buffer.byteLength(JSON.stringify(kept)) - 2
+    }
+    budget -= bytes
     return kept
   }
   const shown = new Map<string, BotGroupMessage>()
@@ -30,7 +36,7 @@ export function presentPageAnswers(messages: readonly BotGroupMessage[]): BotGro
       ? message.turns.map((turn) => (turn.answer ? { ...turn, answer: take(turn.answer) } : turn))
       : message.turns
     if (!message.remoteAsks?.length) {
-      shown.set(message.id, { ...message, turns })
+      shown.set(message.id, turns === message.turns ? message : { ...message, turns })
       continue
     }
     shown.set(message.id, {

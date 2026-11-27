@@ -38,10 +38,14 @@ const IN_PLACE: {
   [K in OrchestrationReadName]: (
     connection: OrchestrationDbConnection,
     args: OrchestrationReads[K]['args']
-  ) => OrchestrationReads[K]['value']
+  ) => OrchestrationReads[K]['value'] | Promise<OrchestrationReads[K]['value']>
 } = {
   connectorWorkerCandidates: (connection, args) =>
-    readConnectorWorkerCandidates(connection, args.sessionIds, args.now)
+    readConnectorWorkerCandidates(connection, args.sessionIds, args.now),
+  botGroupTurnSource: async (connection, args) => {
+    const { readBotGroupTurnSource } = await import('../../../../bots/bot-group-turn-source')
+    return readBotGroupTurnSource(connection.db, args)
+  }
 }
 
 /** The file a connection reads; empty for an in-memory database. */
@@ -74,6 +78,7 @@ export class OrchestrationReaderClient {
       },
       // A timed-out read can still be inside SQLite; never start a second thread beside it.
       awaitRetirement: true,
+      finishActiveOnAbort: true,
       createUnavailableError: (message) => new Error(`orchestration read failed: ${message}`),
       describeTimeout: (ms) => `the orchestration reader timed out after ${ms}ms`,
       describeExit: (code) => `the orchestration reader exited with code ${code}`,
@@ -86,8 +91,10 @@ export class OrchestrationReaderClient {
   async read<K extends OrchestrationReadName>(
     connection: OrchestrationDbConnection,
     read: K,
-    args: OrchestrationReads[K]['args']
+    args: OrchestrationReads[K]['args'],
+    signal?: AbortSignal
   ): Promise<OrchestrationReads[K]['value']> {
+    signal?.throwIfAborted()
     let path = this.files.get(connection)
     if (path === undefined) {
       path = orchestrationDbFile(connection)
@@ -99,7 +106,8 @@ export class OrchestrationReaderClient {
     const response = await this.queue.dispatch(
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `read` and `args` share K, which the union cannot correlate.
       (id) => ({ id, path, read, args }) as OrchestrationReaderRequest,
-      this.timeoutMs
+      this.timeoutMs,
+      signal
     )
     if (!response.ok) {
       throw new Error(response.error)

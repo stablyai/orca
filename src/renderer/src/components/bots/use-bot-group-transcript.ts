@@ -1,22 +1,35 @@
-import { useEffect, useReducer } from 'react'
+import { useEffect, useEffectEvent, useReducer } from 'react'
 import { onBotsChanged } from '@/lib/bots-changed-window-event'
 import type { BotRef } from '@/lib/bot-hosts'
 import { callBotGroupRpc } from '@/lib/bot-group-rpc'
-import { botGroupRoomConcerned } from '../../../../shared/bots/bot-change-scope'
 import {
+  botGroupChangedPosts,
+  botGroupRoomConcerned
+} from '../../../../shared/bots/bot-change-scope'
+import {
+  botGroupReplyBodies,
+  drainBotGroupPostUpdates,
+  pendingBotGroupPosts,
   reduceBotGroupTranscript,
+  restoreBotGroupReplies,
   type BotGroupTranscript
 } from '../../../../shared/bots/bot-group-transcript'
 
 function readPage(
   group: BotRef,
   threadId: string | undefined,
-  beforeSequence?: number
+  beforeSequence?: number,
+  knownReplyKeys: readonly string[] = [],
+  updatedPostIds?: readonly string[],
+  updatesOnly?: true
 ): Promise<BotGroupTranscript> {
   return callBotGroupRpc(group, 'bots.groups.read', {
     groupId: group.id,
     threadId,
-    beforeSequence
+    beforeSequence,
+    knownReplyKeys,
+    updatedPostIds,
+    updatesOnly
   })
 }
 
@@ -30,6 +43,7 @@ export function useBotGroupTranscript(
   setError: (message: string | null) => void
 ) {
   const [data, apply] = useReducer(reduceBotGroupTranscript, null)
+  const pendingPosts = useEffectEvent((id: string) => pendingBotGroupPosts(data, id))
   const groupId = group?.id
   const hostId = group?.hostId
   useEffect(() => {
@@ -39,13 +53,30 @@ export function useBotGroupTranscript(
     const ref = { hostId, id: groupId }
     let closed = false
     let request = 0
-    const read = () => {
+    let replies: ReadonlyMap<string, string> = new Map()
+    let updates: string[] = []
+    const read = (changed: readonly string[] = pendingPosts(groupId)) => {
+      updates = [...new Set([...updates, ...changed])]
       const current = ++request
-      void readPage(ref, threadId)
-        .then((page) => {
+      const held = replies
+      const currentRead = () => !closed && request === current
+      void readPage(ref, threadId, undefined, [...held.keys()].slice(-1_280), updates.slice(0, 40))
+        .then(async (page) => {
           if (!closed && request === current) {
-            apply({ kind: 'recent', page })
+            const complete = restoreBotGroupReplies(page, held)
+            replies = botGroupReplyBodies(complete)
+            updates = [...(page.deferredPostIds ?? []), ...updates.slice(40)]
+            apply({ kind: 'recent', page: complete })
             setError(null)
+            await drainBotGroupPostUpdates(
+              updates,
+              (ids) => readPage(ref, threadId, undefined, [], ids, true),
+              currentRead,
+              (updated, remaining) => {
+                updates = remaining
+                apply({ kind: 'updated', page: updated })
+              }
+            )
           }
         })
         .catch((error: unknown) => !closed && setError(String(error)))
@@ -54,11 +85,14 @@ export function useBotGroupTranscript(
     const stopListening = onBotsChanged(
       (_host, scope) => {
         if (botGroupRoomConcerned(scope, groupId)) {
-          read()
+          const changed = botGroupChangedPosts(scope, groupId, threadId)
+          if (changed) {
+            read(changed.recover ? [...changed.ids, ...pendingPosts(groupId)] : changed.ids)
+          }
         }
       },
       hostId,
-      { kinds: ['groups'] }
+      { kinds: ['groups'], roomPosts: true }
     )
     return () => {
       closed = true
