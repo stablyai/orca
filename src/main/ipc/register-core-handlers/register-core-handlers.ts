@@ -35,7 +35,6 @@ import { registerWorkspacePortHandlers } from '../ports/workspace-ports'
 import { registerAutomationHandlers } from '../automations'
 import { registerKeybindingHandlers } from '../keybindings'
 import { registerTelemetryHandlers } from '../telemetry'
-import { registerShellHandlers } from '../shell/shell'
 import { registerPluginHandlers } from '../plugins/plugins'
 import { registerUIHandlers, setTrustedUIRendererWebContentsId } from '../ui'
 import { registerLazyEmulatorHandlers } from '../emulator/lazy-emulator-handlers'
@@ -150,7 +149,6 @@ export async function registerCoreHandlers(
       onBeforeRelaunch: lifecycleOptions.onBeforeRelaunch
     })
     registerBrowserHandlers(store)
-    registerShellHandlers(store)
     registerSessionHandlers(store, runtime)
     registerUIHandlers(store, { isDashboardPopoutRenderer })
     registerLazyEmulatorHandlers((id) => runtime.getEmulatorBridge()?.getIosVideoStreamUrl(id))
