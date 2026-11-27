@@ -13,7 +13,8 @@ function harness() {
     onHangDetected: (ms) => events.push(`hang:${ms}`),
     onHangResolved: (ms) => events.push(`resolved:${ms}`),
     onStallMissed: (ms) => events.push(`missed:${ms}`),
-    onEpisodeEndedBySleep: () => events.push('slept')
+    onEpisodeEndedBySleep: () => events.push('slept'),
+    onEpisodeRecoveredAfterSleep: (ms) => events.push(`woke-recovered:${ms}`)
   })
   // Main is silent while the worker keeps ticking.
   const silentFor = (ms: number): void => {
@@ -30,7 +31,7 @@ function harness() {
 
 describe('hang watchdog detection loop: sleep is never main-thread silence', () => {
   for (const wakeOrder of ['heartbeat-first', 'tick-first'] as const) {
-    it(`ends a detected hang at a long sleep (${wakeOrder})`, () => {
+    it(`stops a detected hang's silence at a long sleep and keeps it recovered (${wakeOrder})`, () => {
       const { loop, events, silentFor, sleep } = harness()
       silentFor(50_000)
       sleep(3_600_000)
@@ -41,9 +42,17 @@ describe('hang watchdog detection loop: sleep is never main-thread silence', () 
         loop.tick()
         loop.recordHeartbeat()
       }
-      expect(events).toEqual(['stall:10000', 'hang:50000', 'slept'])
+      expect(events).toEqual(['stall:10000', 'hang:50000', 'woke-recovered:50000'])
     })
   }
+
+  it('treats silence that continues after the wake as a new episode', () => {
+    const { events, silentFor, sleep } = harness()
+    silentFor(50_000)
+    sleep(3_600_000)
+    silentFor(15_000)
+    expect(events).toEqual(['stall:10000', 'hang:50000', 'slept', 'stall:10000'])
+  })
 
   it('resolves a stall when main relays a suspend, so a short sleep cannot promote it to a hang', () => {
     const { loop, events, silentFor, sleep } = harness()

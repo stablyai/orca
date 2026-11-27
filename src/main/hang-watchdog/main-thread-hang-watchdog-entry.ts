@@ -220,6 +220,17 @@ export function runWatchdog(
     onEpisodeEndedBySleep: () => {
       activeStallId = null
     },
+    onEpisodeRecoveredAfterSleep: (unresponsiveMs) => {
+      const record = activeStallId ? find(activeStallId) : undefined
+      activeStallId = null
+      if (!record) {
+        return
+      }
+      // No resolution snapshot: its wall time would count the sleep as silence.
+      update(record.id, { selfRecovered: true })
+      openReceiptWindow(record.id)
+      reportRecovered(record.id, unresponsiveMs, record.detectedAt - record.durationMs + unresponsiveMs)
+    },
     onStallMissed: (durationMs, startedAt) => {
       const endedAt = Date.now()
       if (!suspendedSince(recentPower, startedAt)) {
