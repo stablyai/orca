@@ -8,6 +8,9 @@ import { localOrchestrationCliCommand } from '../orchestration/workers/launch/or
 import { RuntimeOrchestrationSenderNames } from '../orchestration/mailbox/senders/runtime-orchestration-sender-names'
 import { isStructuredWorkerHandle } from '../../../shared/orchestration/workers/structured-worker-handle'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/agent-session/identity/orca-session-address-prefix'
+import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+import type { LaunchedAgentForeground } from '../terminal/wait/launched-agent-foreground'
 import { resolveStructuredWorkerAuthority } from '../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import { OrcaRuntimeWithAgentOrchestrationDependencies } from '../orchestration/crew/runtime-agent-orchestration-dependencies'
 import { RuntimeTerminalAgentPresence } from '../terminal/query/runtime-terminal-agent-presence'
@@ -159,6 +162,10 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
   })
 
   protected abstract readonly ptyForegroundAgent: RuntimePtyForegroundAgent
+  abstract readLaunchedAgentForeground(
+    ptyId: string,
+    agent: TuiAgent
+  ): Promise<LaunchedAgentForeground>
 
   protected readonly openCodeRunLifetime = new OpenCodeRunLifetimeStatus({
     isStopping: (ptyId) =>
@@ -226,7 +233,13 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
       isStructuredWorkerHandle(handle) || handle.startsWith(ORCA_SESSION_ADDRESS_PREFIX),
     canProbePtyLiveness: () => Boolean(this.ptyController?.probePtyLiveness),
     controllerKnowsPtyIsLive: (ptyId) => this.controllerKnowsPtyIsLive(ptyId),
-    isLeafPtyProvenAbsent: (ptyId) => this.isLeafPtyProvenAbsent(ptyId)
+    isLeafPtyProvenAbsent: (ptyId) => this.isLeafPtyProvenAbsent(ptyId),
+    foregroundShellProbe: (ptyId) => {
+      const agent = this.getPaneTerminalAgent(ptyId)
+      return isTuiAgent(agent)
+        ? async () => (await this.readLaunchedAgentForeground(ptyId, agent)) === 'shell'
+        : null
+    }
   })
 
   protected readonly orchestrationMailboxPointerDelivery = new OrchestrationMailboxPointerDelivery({

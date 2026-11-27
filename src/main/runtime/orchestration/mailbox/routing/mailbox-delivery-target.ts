@@ -12,6 +12,8 @@ type OrchestrationMailboxDeliveryTargetDependencies = {
   canProbePtyLiveness: () => boolean
   controllerKnowsPtyIsLive: (ptyId: string) => boolean
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
+  /** Reads whether a shell, not the pane's agent, is in front; null when the pane names no agent. */
+  foregroundShellProbe: (ptyId: string) => (() => Promise<boolean>) | null
 }
 
 export class OrchestrationMailboxDeliveryTarget {
@@ -80,17 +82,21 @@ export class OrchestrationMailboxDeliveryTarget {
         }
   }
 
-  deferForAbsenceProbe(
+  /** Type only after async proof that the PTY exists and its agent, not a shell, is in front:
+   *  the agent's status outlives its exit, so mail would run in the shell it left. */
+  deferForTerminalProbe(
     ptyId: string,
     mailboxHandle: string,
-    skipAbsenceProbe: boolean | undefined,
+    skipProbe: boolean | undefined,
     redeliver: (mailboxHandle: string) => void
   ): boolean {
-    if (
-      skipAbsenceProbe ||
-      !this.deps.canProbePtyLiveness() ||
-      this.deps.controllerKnowsPtyIsLive(ptyId)
-    ) {
+    if (skipProbe) {
+      return false
+    }
+    const probeAbsence =
+      this.deps.canProbePtyLiveness() && !this.deps.controllerKnowsPtyIsLive(ptyId)
+    const probeShell = this.deps.foregroundShellProbe(ptyId)
+    if (!probeAbsence && !probeShell) {
       return false
     }
     // A coordinator of several Runs can defer one mailbox per Run on the same probe.
@@ -101,11 +107,14 @@ export class OrchestrationMailboxDeliveryTarget {
     }
     const mailboxes = new Set([mailboxHandle])
     this.probeDeferredMailboxes.set(ptyId, mailboxes)
-    void this.deps
-      .isLeafPtyProvenAbsent(ptyId)
-      .then((absent) => {
+    void Promise.all([
+      probeAbsence ? this.deps.isLeafPtyProvenAbsent(ptyId) : false,
+      probeShell ? probeShell() : false
+    ])
+      .then(([absent, shellInFront]) => {
         this.probeDeferredMailboxes.delete(ptyId)
-        if (!absent) {
+        // Held mail stays unread; the next agent status edge delivers it.
+        if (!absent && !shellInFront) {
           for (const deferredMailbox of mailboxes) {
             setTimeout(() => redeliver(deferredMailbox), 0)
           }
