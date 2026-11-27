@@ -1,6 +1,6 @@
 import React, { useEffect, useId } from 'react'
 import { openBotSettings } from './bot-settings-open'
-import { ChevronDown, Copy, Pause, Play, Server, Settings, Share2, Trash2 } from 'lucide-react'
+import { ChevronDown, Copy, Pause, Play, Server, Settings, Trash2, UserPlus } from 'lucide-react'
 import { toast } from 'sonner'
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu'
 import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
@@ -165,7 +165,7 @@ export function BotRow({
               </ContextMenuItem>
               {sharingOffered ? (
                 <ContextMenuItem disabled={offline} onSelect={() => setSharing('people')}>
-                  <Share2 className="size-3.5" />
+                  <UserPlus className="size-3.5" />
                   {t('bots.row.share', 'Share…')}
                 </ContextMenuItem>
               ) : null}
