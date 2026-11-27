@@ -198,10 +198,11 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
         .then((probes) => {
           clearTimeout(probeTimeout)
           decide(() => {
-            if (
-              probes[0]?.verdict === 'exited' ||
-              settings?.skipCloseTerminalWithRunningProcessConfirm
-            ) {
+            const probe = probes[0]
+            // Unverified is not "running": a local pane closes; only a remote pane's silence still asks.
+            const busy =
+              probe?.verdict === 'live' || (probe?.verdict === 'unverifiable' && probe.remote)
+            if (!busy || settings?.skipCloseTerminalWithRunningProcessConfirm) {
               close()
             } else {
               confirmClose()
