@@ -231,18 +231,21 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
           setError(buildPartialRepositoryNotice(page.failedCount, selectedHostedRepos.length))
         }
         // Pages stay as read so a full page still asks for the next; only the rows drop repeats.
-        const nextPages = [...githubPages, page.items]
-        setGithubPages(nextPages)
-        const seen = new Set<string>()
-        setItems(
-          nextPages.flat().filter((item) => {
-            if (seen.has(item.key)) {
-              return false
-            }
-            seen.add(item.key)
-            return true
-          })
-        )
+        setGithubPages([...githubPages, page.items])
+        // Shown rows carry edits made since their page loaded, so they win over the stored pages.
+        setItems((current) => {
+          const seen = new Set(current.map((item) => item.key))
+          return [
+            ...current,
+            ...page.items.filter((item) => {
+              if (seen.has(item.key)) {
+                return false
+              }
+              seen.add(item.key)
+              return true
+            })
+          ]
+        })
       } catch (err) {
         if (isCurrent()) {
           setStoppedAt({ generation, page: targetPage })

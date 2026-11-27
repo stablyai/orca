@@ -22,6 +22,7 @@ export function tasksLinearWorkspaceMountAdapters(
       const model = (): ConnectionPresentationModel =>
         mountFixture<ConnectionPresentationModel>({
           client,
+          linearAccountBindingRef: { current: null },
           linearWorkspaceOptions: [
             { value: 'workspace-a', label: 'Acme' },
             { value: 'workspace-b', label: 'Beta' }

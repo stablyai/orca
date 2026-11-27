@@ -1,7 +1,11 @@
 import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tasks-connection-presentation'
 import { Plus, SlidersHorizontal } from 'lucide-react-native'
 import { getTaskPresetQuery } from '../../../../src/shared/work-items/task-preset-query'
-import { scopeGitHubTaskSearch } from '../../../../src/shared/work-items/task-github-search'
+import {
+  getDefaultPresetForGitHubTaskKind,
+  getGitHubTaskKind,
+  scopeGitHubTaskSearch
+} from '../../../../src/shared/work-items/task-github-search'
 import { translate } from '../../i18n/mobile-i18n'
 import { BottomSearchBar } from '../../components/nav-bar/BottomSearchBar'
 import { mobileTasksFilterCount } from './mobile-tasks-filter-selection'
@@ -56,7 +60,12 @@ export function renderMobileTasksSearchControl(
     taskUiReady
   } = model
   const searchable = mobileTasksSearchable(model)
-  const presetQuery = getTaskPresetQuery(githubPreset)
+  // A restored custom query can keep PR scope with no stored preset; typed words narrow that scope.
+  const presetQuery = getTaskPresetQuery(
+    getGitHubTaskKind(githubPreset, '') === githubKind
+      ? githubPreset
+      : getDefaultPresetForGitHubTaskKind(githubKind)
+  )
   return (
     <BottomSearchBar
       // GitHub's preset query is the filter sheet's; the field holds only what was typed on top of it.
