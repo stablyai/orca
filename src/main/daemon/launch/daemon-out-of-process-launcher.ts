@@ -194,7 +194,8 @@ export function createOutOfProcessLauncher(
       }
       // Lazily stage the Windows host outside the NSIS updater's kill zone; null falls back to the installed host.
       const relocatedHost = await materializeRelocatedDaemonHost()
-      pruneDaemonHostStaging()
+      // Deleting an abandoned copy must not delay this launch.
+      void pruneDaemonHostStaging()
       const forkEntryPath = relocatedHost ? relocatedHost.entryPath : entryPath
       if (generation && 'fallback' in generation) {
         console.warn(

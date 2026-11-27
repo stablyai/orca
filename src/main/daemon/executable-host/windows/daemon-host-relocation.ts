@@ -281,11 +281,11 @@ async function materializeOnce(): Promise<RelocatedDaemonHost | null> {
   return findRelocatedDaemonHostAsync(sources, inventory.fingerprint)
 }
 
-export function pruneOldDaemonHosts(evidence: PinnedDaemonVersionsEvidence): void {
+export async function pruneOldDaemonHosts(evidence: PinnedDaemonVersionsEvidence): Promise<void> {
   if (!isPackagedElectronWin32()) {
     return
   }
-  pruneDaemonHostStaging()
+  await pruneDaemonHostStaging()
   if (evidence.status === 'unverifiable') {
     console.warn(`[daemon] Skipping daemon-host prune: ${evidence.reason}`)
     return
@@ -305,14 +305,14 @@ export function pruneOldDaemonHosts(evidence: PinnedDaemonVersionsEvidence): voi
     }
     // Only a complete runtime-directory listing permits treating unrecorded versions as unowned.
     const verdict = evidence.versionLiveness.get(entry.name) ?? { status: 'exited' }
-    reclaimUnownedDaemonHostDir(verdict, join(root, entry.name))
+    await reclaimUnownedDaemonHostDir(verdict, join(root, entry.name))
   }
 }
 
 /** Reclaim only copies whose writer positively exited, independently of daemon pid publication. */
-export function pruneDaemonHostStaging(): void {
+export async function pruneDaemonHostStaging(): Promise<void> {
   if (isPackagedElectronWin32()) {
-    reclaimAbandonedDaemonHostStaging(
+    await reclaimAbandonedDaemonHostStaging(
       join(getDaemonHostRootDir(), getAppEnvironment().getVersion())
     )
   }

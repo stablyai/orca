@@ -79,7 +79,7 @@ export async function initDaemonPtyProvider(
   // Publish the spawner and adapter together after initialization succeeds.
   const info = await newSpawner.ensureRunning()
   // Reclaim superseded hosts after every adoption or spawn, retaining current and live-pinned versions.
-  pruneOldDaemonHosts(collectPinnedDaemonVersions(runtimeDir))
+  void pruneOldDaemonHosts(collectPinnedDaemonVersions(runtimeDir))
   const launchMode = newSpawner.getHandle()?.mode
   const quarantine = newSpawner.getHandle()?.quarantine
   logDaemonMilestone('daemon-current-ready')

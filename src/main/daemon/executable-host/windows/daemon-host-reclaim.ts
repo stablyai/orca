@@ -1,4 +1,5 @@
-import { readdirSync, rmSync } from 'node:fs'
+import { readdirSync } from 'node:fs'
+import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { ProcessLivenessVerdict } from '../../endpoint/identity/daemon-incarnation-evidence-types'
 import { inspectProcessLiveness } from '../../endpoint/identity/daemon-process-inspection'
@@ -21,22 +22,21 @@ function stagingWriterVerdict(name: string): ProcessLivenessVerdict {
 }
 
 // Only positive exit evidence permits deletion; unknown verdicts must preserve the directory.
-export function reclaimUnownedDaemonHostDir(
+// Async so deleting a ~1.8k-file runtime never blocks Electron main.
+export async function reclaimUnownedDaemonHostDir(
   verdict: ProcessLivenessVerdict,
   hostDir: string
-): void {
+): Promise<void> {
   if (verdict.status !== 'exited') {
     return
   }
-  try {
-    rmSync(hostDir, { recursive: true, force: true })
-  } catch {
+  await rm(hostDir, { recursive: true, force: true }).catch(() => {
     // Still locked or already gone — retry on a future launch.
-  }
+  })
 }
 
 /** Daemons never run from staging; only its copying process can keep it live. */
-export function reclaimAbandonedDaemonHostStaging(versionRoot: string): void {
+export async function reclaimAbandonedDaemonHostStaging(versionRoot: string): Promise<void> {
   let entries
   try {
     entries = readdirSync(versionRoot, { withFileTypes: true })
@@ -49,7 +49,7 @@ export function reclaimAbandonedDaemonHostStaging(versionRoot: string): void {
     }
     const dir = join(versionRoot, entry.name)
     if (entry.name.startsWith(STAGING_PREFIX)) {
-      reclaimUnownedDaemonHostDir(stagingWriterVerdict(entry.name), dir)
+      await reclaimUnownedDaemonHostDir(stagingWriterVerdict(entry.name), dir)
     }
   }
 }

@@ -202,7 +202,7 @@ async function copyVerifiedFile(sourcePath: string, dest: string, sha256: string
 }
 
 /**
- * Copy through libuv so the ~1.8k-file, ~275 MiB runtime never blocks Electron main.
+ * Copy through libuv so the ~1.8k-file, ~275 MiB runtime doesn't hold Electron main; only per-file hashing runs there.
  * Files named in expectedHashes (posix destRel -> sha256) must match those hashes.
  */
 export async function executeManifest(

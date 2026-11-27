@@ -182,12 +182,12 @@ function ageRecordPastQuarantineFloor(recordPath: string): void {
 }
 
 describe('pruneOldDaemonHosts', () => {
-  it('removes unpinned non-current version dirs, keeping current and pinned', () => {
+  it('removes unpinned non-current version dirs, keeping current and pinned', async () => {
     const root = getDaemonHostRootDir()
     for (const v of ['9.9.9', '1.0.0', '2.0.0']) {
       mkdirSync(join(root, v), { recursive: true })
     }
-    pruneOldDaemonHosts({
+    await pruneOldDaemonHosts({
       status: 'complete',
       versionLiveness: new Map([['2.0.0', { status: 'live' }]])
     })
@@ -196,7 +196,7 @@ describe('pruneOldDaemonHosts', () => {
     expect(existsSync(join(root, '1.0.0'))).toBe(false)
   })
 
-  it('keeps a host when its pid liveness query is permission denied', () => {
+  it('keeps a host when its pid liveness query is permission denied', async () => {
     const root = getDaemonHostRootDir()
     const runtimeDir = join(userDataDir, 'daemon')
     mkdirSync(join(root, '8.0.0'), { recursive: true })
@@ -214,13 +214,13 @@ describe('pruneOldDaemonHosts', () => {
       status: 'complete',
       versionLiveness: new Map([['8.0.0', { status: 'live' }]])
     })
-    pruneOldDaemonHosts(evidence)
+    await pruneOldDaemonHosts(evidence)
 
     expect(existsSync(join(root, '8.0.0'))).toBe(true)
     killSpy.mockRestore()
   })
 
-  it('keeps a host when its pid liveness query is unavailable', () => {
+  it('keeps a host when its pid liveness query is unavailable', async () => {
     const root = getDaemonHostRootDir()
     const runtimeDir = join(userDataDir, 'daemon')
     mkdirSync(join(root, '7.0.0'), { recursive: true })
@@ -241,14 +241,14 @@ describe('pruneOldDaemonHosts', () => {
         ['7.0.0', { status: 'unverifiable', reason: 'the daemon process could not be queried' }]
       ])
     })
-    pruneOldDaemonHosts(evidence)
+    await pruneOldDaemonHosts(evidence)
 
     expect(existsSync(join(root, '7.0.0'))).toBe(true)
     expect(existsSync(join(root, '6.0.0'))).toBe(false)
     killSpy.mockRestore()
   })
 
-  it('skips pruning when the runtime directory cannot be read', () => {
+  it('skips pruning when the runtime directory cannot be read', async () => {
     const root = getDaemonHostRootDir()
     mkdirSync(join(root, '1.0.0'), { recursive: true })
 
@@ -258,11 +258,11 @@ describe('pruneOldDaemonHosts', () => {
       status: 'unverifiable',
       reason: 'the daemon runtime directory could not be read'
     })
-    pruneOldDaemonHosts(evidence)
+    await pruneOldDaemonHosts(evidence)
     expect(existsSync(join(root, '1.0.0'))).toBe(true)
   })
 
-  it('keeps a version live when any of its pid records is live', () => {
+  it('keeps a version live when any of its pid records is live', async () => {
     const root = getDaemonHostRootDir()
     const runtimeDir = join(userDataDir, 'daemon')
     mkdirSync(join(root, '7.0.0'), { recursive: true })
@@ -288,7 +288,7 @@ describe('pruneOldDaemonHosts', () => {
       status: 'complete',
       versionLiveness: new Map([['7.0.0', { status: 'live' }]])
     })
-    pruneOldDaemonHosts(evidence)
+    await pruneOldDaemonHosts(evidence)
 
     expect(existsSync(join(root, '7.0.0'))).toBe(true)
     killSpy.mockRestore()
@@ -320,7 +320,7 @@ describe('pruneOldDaemonHosts', () => {
     killSpy.mockRestore()
   })
 
-  it('never quarantines a corrupt record that was just written', () => {
+  it('never quarantines a corrupt record that was just written', async () => {
     // wx creates the record before writing it; a fresh empty file may still belong to a live publisher.
     const root = getDaemonHostRootDir()
     const runtimeDir = join(userDataDir, 'daemon')
@@ -339,12 +339,12 @@ describe('pruneOldDaemonHosts', () => {
     })
     expect(existsSync(pidPath)).toBe(true)
     expect(existsSync(join(runtimeDir, 'daemon-v7.pid.corrupt'))).toBe(false)
-    pruneOldDaemonHosts(evidence)
+    await pruneOldDaemonHosts(evidence)
     expect(existsSync(join(root, '1.0.0'))).toBe(true)
     warnSpy.mockRestore()
   })
 
-  it('vetoes pruning while a pid salvaged from a corrupt record still answers', () => {
+  it('vetoes pruning while a pid salvaged from a corrupt record still answers', async () => {
     const root = getDaemonHostRootDir()
     const runtimeDir = join(userDataDir, 'daemon')
     mkdirSync(join(root, '1.0.0'), { recursive: true })
@@ -363,13 +363,13 @@ describe('pruneOldDaemonHosts', () => {
         'the daemon pid file could not be parsed and salvaged pid 4242 may still be running: daemon-v7.pid'
     })
     expect(existsSync(pidPath)).toBe(true)
-    pruneOldDaemonHosts(evidence)
+    await pruneOldDaemonHosts(evidence)
     expect(existsSync(join(root, '1.0.0'))).toBe(true)
     warnSpy.mockRestore()
     killSpy.mockRestore()
   })
 
-  it('quarantines a corrupt record naming no live pid so pruning resumes next launch', () => {
+  it('quarantines a corrupt record naming no live pid so pruning resumes next launch', async () => {
     const root = getDaemonHostRootDir()
     const runtimeDir = join(userDataDir, 'daemon')
     mkdirSync(join(root, '1.0.0'), { recursive: true })
@@ -384,7 +384,7 @@ describe('pruneOldDaemonHosts', () => {
       status: 'unverifiable',
       reason: 'the daemon pid file could not be parsed and was quarantined: daemon-v7.pid'
     })
-    pruneOldDaemonHosts(evidence)
+    await pruneOldDaemonHosts(evidence)
     expect(existsSync(join(root, '1.0.0'))).toBe(true)
     expect(existsSync(pidPath)).toBe(false)
     expect(readFileSync(join(runtimeDir, 'daemon-v7.pid.corrupt'), 'utf8')).toBe(
@@ -393,12 +393,12 @@ describe('pruneOldDaemonHosts', () => {
 
     const nextEvidence = collectPinnedDaemonVersions(runtimeDir)
     expect(nextEvidence).toEqual({ status: 'complete', versionLiveness: new Map() })
-    pruneOldDaemonHosts(nextEvidence)
+    await pruneOldDaemonHosts(nextEvidence)
     expect(existsSync(join(root, '1.0.0'))).toBe(false)
     warnSpy.mockRestore()
   })
 
-  it('vetoes pruning without quarantine when a pid record cannot be read', (ctx) => {
+  it('vetoes pruning without quarantine when a pid record cannot be read', async (ctx) => {
     // process.platform is mocked; permission fixtures depend on the actual host.
     if (originalPlatform === 'win32') {
       return ctx.skip()
@@ -423,16 +423,16 @@ describe('pruneOldDaemonHosts', () => {
       reason: 'the daemon pid file could not be read: daemon-v7.pid'
     })
     expect(existsSync(pidPath)).toBe(true)
-    pruneOldDaemonHosts(evidence)
+    await pruneOldDaemonHosts(evidence)
     expect(existsSync(join(root, '1.0.0'))).toBe(true)
   })
 
-  it('reclaims nothing for a packaged host with no asar root (orcad on win32)', () => {
+  it('reclaims nothing for a packaged host with no asar root (orcad on win32)', async () => {
     const root = getDaemonHostRootDir()
     mkdirSync(join(root, '1.0.0'), { recursive: true })
     hostApp.appPath = join(installDir, 'resources', 'app')
     installHostApp()
-    pruneOldDaemonHosts({ status: 'complete', versionLiveness: new Map() })
+    await pruneOldDaemonHosts({ status: 'complete', versionLiveness: new Map() })
     // Node hosts do not own this Electron runtime layout and cannot authorize its cleanup.
     expect(existsSync(join(root, '1.0.0'))).toBe(true)
   })
