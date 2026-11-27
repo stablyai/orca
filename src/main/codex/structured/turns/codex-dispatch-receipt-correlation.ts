@@ -1,3 +1,4 @@
+import type { CodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalTurnJoin } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 export const MAX_CODEX_PENDING_DISPATCH_ECHOES = 256
@@ -178,4 +179,21 @@ export function createCodexDispatchReceiptCorrelation(
       echoedJoins.clear()
     }
   }
+}
+
+export function readCodexDispatchEcho(
+  item: { type: string; id: string } & Record<string, unknown>,
+  identity: AgentJournalItemIdentity,
+  echoes?: Pick<CodexDispatchEchoes, 'receipt'>
+): { clientMessageId: string; providerIdentity: AgentJournalItemIdentity } | null {
+  if (item.type !== 'userMessage' || identity.provider !== 'codex') {
+    return null
+  }
+  const clientMessageId =
+    typeof item.clientId === 'string' && item.clientId.length > 0
+      ? item.clientId
+      : echoes?.receipt(identity, item.content)
+  return typeof clientMessageId === 'string' && clientMessageId.length > 0
+    ? { clientMessageId, providerIdentity: identity }
+    : null
 }

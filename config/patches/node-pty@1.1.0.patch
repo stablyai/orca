@@ -1392,7 +1392,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..d12eacb6662b89f58b46baec28c81619
  }
  #endif
  
-@@ -788,11 +1338,201 @@ done:
+@@ -788,11 +1338,202 @@ done:
   * Init
   */
  
@@ -1477,22 +1477,22 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..d12eacb6662b89f58b46baec28c81619
 +
 +static void OrcaExitWatchReady(uv_poll_t* handle, int status, int events) {
 +  OrcaExitWatch* watch = static_cast<OrcaExitWatch*>(handle->data);
++  bool exited = status == 0 && (events & UV_READABLE) != 0;
 +#if defined(__APPLE__)
-+  if (status == 0) {
++  if (exited) {
 +    struct kevent event = {0};
 +    struct timespec immediate = {0, 0};
-+    if (HANDLE_EINTR(kevent(watch->fd, NULL, 0, &event, 1, &immediate)) == 0) {
-+      return;
-+    }
++    int count = HANDLE_EINTR(kevent(watch->fd, NULL, 0, &event, 1, &immediate));
++    if (count == 0) return;
++    exited = count == 1 && (event.flags & EV_ERROR) == 0 && (event.fflags & NOTE_EXIT) != 0;
 +  }
 +#endif
-+  // A poll error is reported as exit too: the caller only re-reads the foreground.
 +  Napi::Env env = watch->callback.Env();
 +  Napi::HandleScope scope(env);
 +  Napi::Function callback = watch->callback.Value();
 +  OrcaStopExitWatch(watch);
 +  try {
-+    callback.MakeCallback(env.Global(), {});
++    callback.MakeCallback(env.Global(), {Napi::Boolean::New(env, exited)});
 +  } catch (const Napi::Error&) {
 +    // The callback owns its errors; an escaped one must not unwind into libuv.
 +  }
@@ -1581,6 +1581,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..d12eacb6662b89f58b46baec28c81619
  Napi::Object init(Napi::Env env, Napi::Object exports) {
 +  exports.Set("foregroundProcessGroup", Napi::Function::New(env, PtyForegroundGroup));
 +  exports.Set("watchProcessExit", Napi::Function::New(env, OrcaWatchProcessExit));
++  exports.Set("watchProcessExitWithProof", Napi::Function::New(env, OrcaWatchProcessExit));
 +  exports.Set("unwatchProcessExit", Napi::Function::New(env, OrcaUnwatchProcessExit));
    exports.Set("fork",    Napi::Function::New(env, PtyFork));
    exports.Set("open",    Napi::Function::New(env, PtyOpen));
@@ -2456,7 +2457,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..f649cbc15d11f4c55889fc0d6889c0a8
 +    OrcaReleaseExitWatch(found->second);
 +    if (env != nullptr && !callback.IsEmpty()) {
 +      try {
-+        callback.Call({});
++        callback.Call({Napi::Boolean::New(env, true)});
 +      } catch (const Napi::Error&) {
 +        // The callback owns its errors.
 +      }
@@ -2516,7 +2517,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..f649cbc15d11f4c55889fc0d6889c0a8
  * Init
  */
  
-@@ -577,6 +1057,13 @@
+@@ -577,6 +1057,14 @@
    exports.Set("resize", Napi::Function::New(env, PtyResize));
    exports.Set("clear", Napi::Function::New(env, PtyClear));
    exports.Set("kill", Napi::Function::New(env, PtyKill));
@@ -2526,6 +2527,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..f649cbc15d11f4c55889fc0d6889c0a8
 +  exports.Set("assignCurrentProcessToStrictJob", Napi::Function::New(env, PtyAssignCurrentProcessToStrictJob));
 +  exports.Set("setActiveProcessLimit", Napi::Function::New(env, PtySetActiveProcessLimit));
 +  exports.Set("watchProcessExit", Napi::Function::New(env, PtyWatchProcessExit));
++  exports.Set("watchProcessExitWithProof", Napi::Function::New(env, PtyWatchProcessExit));
 +  exports.Set("unwatchProcessExit", Napi::Function::New(env, PtyUnwatchProcessExit));
    return exports;
  };

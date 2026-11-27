@@ -1,3 +1,4 @@
+import type { StructuredAgentSessionProviderReceipts } from './structured-agent-session-provider-receipts'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { WorkerDockPresence } from '../../../../shared/agent-session/background-tasks/agent-session-background-task-wire'
 import type {
@@ -151,6 +152,7 @@ export type StructuredAgentSessionEndedChild = StructuredAgentSessionProviderChi
 
 /** Conversation state outlives its provider children. */
 export type StructuredAgentSessionHostSession = {
+  providerReceipts?: StructuredAgentSessionProviderReceipts
   workChanged?: () => void
   activityRead?: Promise<void>
   switchCommand?: {

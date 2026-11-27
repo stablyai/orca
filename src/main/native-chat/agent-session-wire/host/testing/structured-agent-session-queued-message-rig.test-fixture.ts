@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect } from 'vitest'
@@ -27,7 +27,7 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data.test-fixture'
-import { closeTestJournalHostDatabase } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { disposeTestJournalHostProfile } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { seedQueuedRigLegacyJournal } from './structured-agent-session-queued-legacy-journal.test-fixture'
 import { createStructuredAgentSessionLogger } from '../structured-agent-session-logger'
 import {
@@ -43,6 +43,7 @@ export type QueuedMessageTestRig = Awaited<ReturnType<typeof createQueuedMessage
 
 export async function createQueuedMessageTestRig(
   options: QueuedRigProviderOptions & {
+    writerBundle?: (root: string) => Promise<string>
     sessionId?: string
     legacyInputs?: true
     idleSweep?: StructuredAgentSessionHostDeps['idleSweep']
@@ -62,10 +63,11 @@ export async function createQueuedMessageTestRig(
   const SESSION = options.sessionId ?? DEFAULT_SESSION
   const root = await mkdtemp(join(tmpdir(), 'orca-queued-messages-'))
   resetHostTestOperationIds()
+  const writerPath = await options.writerBundle?.(root)
+  const journalDatabase = await openTestAgentSessionDatabase(root, writerPath)
   let store = await openTestAgentSessionRecordStore(root)
   const provider = createQueuedRigProvider(store, options, () => host)
   const { dispatch, compact, cancelTurn, closeSession, setOption } = provider
-  const journalDatabase = await openTestAgentSessionDatabase(root)
   const makeHost = () =>
     new StructuredAgentSessionHost({
       agents: claudeAndCodexDeclared(),
@@ -283,12 +285,6 @@ export async function createQueuedMessageTestRig(
     await Promise.resolve()
   }
 
-  async function dispose(): Promise<void> {
-    await host.flushAllStreamedEvents()
-    await closeTestJournalHostDatabase(root)
-    await rm(root, { recursive: true, force: true })
-  }
-
   return {
     root,
     get store() {
@@ -328,6 +324,6 @@ export async function createQueuedMessageTestRig(
     restartOffers,
     resume,
     proveStart,
-    dispose
+    dispose: () => disposeTestJournalHostProfile(root, () => host.flushAllStreamedEvents())
   }
 }

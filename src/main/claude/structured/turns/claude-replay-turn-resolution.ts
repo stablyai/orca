@@ -29,10 +29,11 @@ export type ClaudeReplayTurnOrigin = {
 export function resolveClaudeReplayTurn(
   session: ClaudeSession,
   message: Record<string, unknown>,
-  onSettledLate?: ClaudeLateDispatchSettlement
+  onSettledLate?: ClaudeLateDispatchSettlement,
+  onReceipt?: (waiter: ClaudeDispatchWaiter) => void
 ): ClaudeReplayTurnOrigin | null {
   if (message.type === 'command_lifecycle') {
-    observeClaudeCommandLifecycle(session, message, onSettledLate)
+    observeClaudeCommandLifecycle(session, message, onSettledLate, onReceipt)
     return null
   }
   if (claudeSessionStateEndsTurn(message)) {

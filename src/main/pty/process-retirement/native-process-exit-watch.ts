@@ -3,7 +3,8 @@ import { createRequire } from 'node:module'
 /** node-pty's patched addon (config/patches/node-pty@1.1.0.patch): kqueue NOTE_EXIT, pidfd or a Windows wait. */
 type ProcessExitWatchNative = {
   /** A watch id, 0 when no such process exists, or null when this host cannot watch it. */
-  watchProcessExit: (pid: number, onExit: () => void) => number | null
+  watchProcessExit: (pid: number, onNotice: (exited?: boolean) => void) => number | null
+  watchProcessExitWithProof?: ProcessExitWatchNative['watchProcessExit']
   unwatchProcessExit: (id: number) => void
 }
 
@@ -52,20 +53,25 @@ function loadProcessExitWatchNative(): ProcessExitWatchNative | null {
   return cachedNative
 }
 
-/** Fires onExit once when pid exits; 'gone' when it already has, null when the host cannot watch it. */
+/** The notice distinguishes an observed exit from watch failure. 'gone' means the PID was absent. */
 export function watchProcessExit(
   pid: number,
-  onExit: () => void
+  onNotice: (exited: boolean) => void,
+  options?: { requireProof: true }
 ): ProcessExitWatch | 'gone' | null {
   const native = loadProcessExitWatchNative()
   if (!native || !Number.isSafeInteger(pid) || pid <= 0) {
     return null
   }
   let id: number | null
+  const watch = options?.requireProof ? native.watchProcessExitWithProof : native.watchProcessExit
+  if (!watch) {
+    return null
+  }
   try {
-    id = native.watchProcessExit(pid, () => {
+    id = watch(pid, (exited) => {
       try {
-        onExit()
+        onNotice(exited === true)
       } catch {
         // An exit notice is advisory; it must never unwind into the native event loop.
       }

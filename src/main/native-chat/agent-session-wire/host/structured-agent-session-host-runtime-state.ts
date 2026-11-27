@@ -1,3 +1,4 @@
+import { createHostedEventSink } from './structured-agent-session-event-sink-ownership'
 import {
   sameProviderChild,
   heldProviderChildReader
@@ -8,10 +9,9 @@ import { createRestartReconciler } from '../recovery/structured-agent-session-re
 import { StructuredAgentSessionDeliveryOrder } from '../delivery/structured-agent-session-delivery-order'
 import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import {
-  createDeferredStructuredAgentSessionEventSink,
-  type DeferredStructuredAgentSessionEventSink,
-  type StructuredAgentSessionSinkBarrier
+import type {
+  DeferredStructuredAgentSessionEventSink,
+  StructuredAgentSessionSinkBarrier
 } from '../journal-ingress/structured-agent-session-event-sink'
 import type {
   StructuredAgentSessionHostSession,
@@ -230,19 +230,12 @@ export class StructuredAgentSessionHostRuntimeState {
 
   /** Cache only after adoption so failed attempts cannot leave queues for later attaches. */
   mintEventSink(sessionId: string): DeferredStructuredAgentSessionEventSink {
-    const minted: DeferredStructuredAgentSessionEventSink =
-      createDeferredStructuredAgentSessionEventSink({
-        sessionId,
-        logger: this.deps.logger,
-        onWorkChanged: () => this.refreshActivity(sessionId),
-        onFailed: (error) => {
-          // Attempt sinks cannot force down the session’s adopted provider.
-          if (this.eventSinks.get(sessionId) === minted) {
-            this.onEventSinkFailure?.(sessionId, error)
-          }
-        }
-      })
-    return minted
+    return createHostedEventSink(this.sessions, this.eventSinks, {
+      sessionId,
+      logger: this.deps.logger,
+      onWorkChanged: () => this.refreshActivity(sessionId),
+      onFailed: (error) => this.onEventSinkFailure?.(sessionId, error)
+    })
   }
 
   adoptEventSink(sessionId: string, sink: DeferredStructuredAgentSessionEventSink): void {
@@ -255,6 +248,7 @@ export class StructuredAgentSessionHostRuntimeState {
   }
 
   discardEventSink(sessionId: string): void {
+    this.sessions.get(sessionId)?.providerReceipts?.retire(sessionId)
     this.eventSinks.delete(sessionId)
     this.refreshActivity(sessionId)
   }

@@ -1,8 +1,7 @@
 import type { AgentSessionAcquisition } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { openClaudeStreamJsonConnection } from '../../claude-stream-json-connection'
 import { claudeLaunchPermissions } from '../permissions/claude-structured-inbound-control'
-import * as replay from '../turns/claude-replay-turn-resolution'
-import { claudeFrameSendFacts } from '../turns/claude-command-lifecycle'
+import { deliverClaudeReplayFrame } from './claude-structured-event-delivery'
 import { claudeSessionStateEndsTurn } from '../turns/claude-session-state-turn-over'
 import { settleClaudeTurnEndWaiters } from '../turns/claude-request-end-wait'
 import * as proof from '../startup/claude-structured-init-proof'
@@ -123,51 +122,33 @@ export async function acquireClaudeSession({
         settleClaudeTurnEndWaiters(liveSession)
       }
     }
-    // Publish the echoed turn before settling its send to avoid transient idle status.
-    const settlements: sessionState.ClaudeLateDispatchOutcome[] = []
-    const turnOrigin = liveSession
-      ? replay.resolveClaudeReplayTurn(liveSession, message, (settlement) =>
-          settlements.push(settlement)
-        )
-      : null
-    const startsTurn = turnOrigin !== null
-    // Use host time for turn endpoints; provider timestamps may use a different clock.
-    const observedAt =
-      startsTurn || message.type === 'result' ? { observedAt: deps.now?.() ?? Date.now() } : {}
-    const requestedAt = turnOrigin?.requestedAt
-    const sendFacts = claudeFrameSendFacts(liveSession, message, startsTurn)
-    replay.withClaudeReplaySettlements(
-      liveSession,
-      settlements,
-      () =>
-        deliver(message, () => {
-          if (liveSession && (modelReport || permissionChanged)) {
-            callbacks.emit(liveSession, input.events, {
-              type: 'options-reported',
-              sessionId,
-              fence: liveSession.fence,
-              acquisitionGeneration: liveSession.acquisitionGeneration,
-              reportedOptions: {
-                ...modelReport,
-                reportedPermissionMode: observedOptions.reportedPermissionMode
-              }
-            })
-          }
+    deliverClaudeReplayFrame({
+      session: liveSession,
+      sessionId,
+      message,
+      now: () => deps.now?.() ?? Date.now(),
+      deliver: (run) => deliver(message, run),
+      isCurrent: () => sessions.get(sessionId) === liveSession,
+      onReceipt: input.events?.recordProviderReceipt,
+      onSettledLate: (settlement) => deps.onDispatchSettledLate?.({ sessionId, ...settlement }),
+      emit: (event) => {
+        if (liveSession && (modelReport || permissionChanged)) {
           callbacks.emit(liveSession, input.events, {
-            type: 'message',
+            type: 'options-reported',
             sessionId,
-            message,
-            ...(startsTurn ? { startsTurn: true } : {}),
-            ...(requestedAt === null || requestedAt === undefined ? {} : { requestedAt }),
-            ...(turnOrigin?.clientMessageId ? { clientMessageId: turnOrigin.clientMessageId } : {}),
-            ...sendFacts,
-            ...observedAt
+            fence: liveSession.fence,
+            acquisitionGeneration: liveSession.acquisitionGeneration,
+            reportedOptions: {
+              ...modelReport,
+              reportedPermissionMode: observedOptions.reportedPermissionMode
+            }
           })
-          // Final snapshots and the turn settlement must reach the journal before its leaf can move.
-          recordTurnEnd(liveSession, message, leafAtFrame)
-        }),
-      (settlement) => deps.onDispatchSettledLate?.({ sessionId, ...settlement })
-    )
+        }
+        callbacks.emit(liveSession, input.events, event)
+        // Final snapshots and the turn settlement must reach the journal before its leaf can move.
+        recordTurnEnd(liveSession, message, leafAtFrame)
+      }
+    })
   }
   const emit = (event: Parameters<typeof callbacks.emit>[2]): void =>
     deliver(event, () => callbacks.emit(liveSession, input.events, event))

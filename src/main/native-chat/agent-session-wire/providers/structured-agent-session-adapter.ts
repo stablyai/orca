@@ -1,3 +1,4 @@
+import type { JournalHandoverIdentity } from '../../agent-session-journal/journal-store-contracts'
 import type { StructuredMessageSteeringInputs } from '../../../../shared/agent-session/options/codex-message-compiler'
 import type {
   AgentSessionMcpOperation,
@@ -51,7 +52,7 @@ import type {
   StructuredAgentSessionAcquisitionReceipt as AcquisitionReceipt
 } from '../startup/structured-agent-session-startup-attempt-contract'
 import type { AgentSessionCreatePhaseRecorder } from '../../../observability/agent-session-instrumentation'
-import type { AgentSessionStartFailure } from '../startup/structured-agent-session-start-failure'
+import type { AgentSessionStartFailure as StartFailure } from '../startup/structured-agent-session-start-failure'
 import type {
   StructuredAgentSessionProviderOpen,
   StructuredAgentSessionProviderOpenResult
@@ -77,6 +78,7 @@ export type AgentSessionAcquisition = {
 
 /** The host creates the command’s running turn; the child translator ends it and writes its result. */
 export type StructuredAgentSessionCommandRun = {
+  handover?: JournalHandoverIdentity
   clientMessageId: string
   turnId: string
   identity: AgentJournalItemIdentity
@@ -219,6 +221,8 @@ export type StructuredAgentSessionAdapter = AdapterControls & {
     /** Abort only before provider write, preserving the original signal reason so the host knows it was unwritten. */
     signal?: AbortSignal
     fence: number
+    /** Read at provider enqueue, after any fresh handover replaced the initial attempt. */
+    handover?: () => JournalHandoverIdentity | undefined
     /** Preserve submission time as the opened turn’s requestedAt. */
     requestedAt?: number
     beforeDispatch?: () => Promise<void>
@@ -299,10 +303,7 @@ export type StructuredAgentSessionAdapter = AdapterControls & {
   /** This acquisition reattached a kept agent that had already ended; it only replays its output. */
   endedBeforeAcquire?(sessionId: string, acquisitionGeneration: string): boolean
   /** This exact acquisition's ending before the host committed it ready, as the adapter reads it. */
-  startupEnding?(
-    sessionId: string,
-    acquisitionGeneration: string
-  ): AgentSessionStartFailure | undefined
+  startupEnding?(sessionId: string, acquisitionGeneration: string): StartFailure | undefined
   /** The start's owner finished: nothing reads this acquisition's ending any more. */
   retireStartup?(sessionId: string, acquisitionGeneration: string): void
   /** Undefined preserves the client catalog when the provider reports none. */

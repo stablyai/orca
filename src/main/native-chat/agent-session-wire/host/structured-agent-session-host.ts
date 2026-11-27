@@ -33,10 +33,10 @@ export class StructuredAgentSessionHost {
     delivery: () => this.conversationDelivery,
     opened: (id) => usageLimit.opened(this.usageLimitContinue, this.queued, id),
     workChanged: (id) => this.runtimeState.refreshActivity(id),
-    logger: () => this.deps.logger,
-    now: () => this.now(),
-    observeRows: () => this.deps.observeCommittedRows
+    deps: () => this.deps,
+    now: () => this.now()
   })
+  readonly providerReceipts = this.sessions.providerReceipts
   private readonly queued = wireQueuedMessages(this.sessions, () => this.mutationContext())
   // Journal publication renews idle activity.
   private readonly clientDelivery = new StructuredAgentSessionClientDelivery(

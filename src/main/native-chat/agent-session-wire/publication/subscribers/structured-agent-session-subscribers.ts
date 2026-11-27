@@ -15,15 +15,11 @@ import {
   emitSubscriberFrame,
   subscriberCommandsChanged
 } from './agent-session-subscriber-frame-fields'
-import {
-  publishSubscriberSnapshot,
-  type SubscriberDeliveryPort
-} from './agent-session-subscriber-catch-up'
+import type { SubscriberDeliveryPort } from './agent-session-subscriber-catch-up'
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
 import * as liveText from './agent-session-subscriber-live-text'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 import { rememberLatestPerSession } from './structured-agent-session-activity-retention'
-import { resumeSubscriber } from './agent-session-stop-note-refresh'
 import { SubscriberFrameSuperseded } from './agent-session-subscriber-frame-capture'
 import type { SubscriberDeliveryRetention } from './agent-session-subscriber-delivery-lane'
 import { SubscriberLanes } from './agent-session-subscriber-lane-runners'
@@ -38,6 +34,7 @@ export class AgentSessionSubscribers {
   private readonly lanes = new SubscriberLanes({
     deliveryPort: () => this.deliveryPort(),
     now: () => this.now(),
+    sendLiveTail: (subscriber, journal, fence) => this.sendLiveTail(subscriber, journal, fence),
     isActive: (subscriber) => this.isActive(subscriber),
     fail: (subscriber, error) => this.fail(subscriber, error)
   })
@@ -81,44 +78,45 @@ export class AgentSessionSubscribers {
   open(
     input: AgentSessionSubscribeInput & { journal: AgentSessionJournal; fence: number }
   ): () => void {
-    const { journal, ...fields } = input
+    const { journal, attachProviderReceipts, ...fields } = input
+    const session = this.bySession.get(input.sessionId) ?? new Map<string, Subscriber>()
+    const replaced = session.get(input.id)
+    const receipts = attachProviderReceipts?.(() => journal.cursor())
+    if (replaced) {
+      replaced.closeProviderReceipts?.()
+      this.lanes.clear(replaced)
+    }
     const liveCursor = journal.cursor()
     const subscriber: Subscriber = {
       ...fields,
+      openProviderReceipts: receipts?.reachedHead,
+      closeProviderReceipts: receipts?.close,
       readForkMarker: () => this.hooks.readForkMarker?.(fields.sessionId),
       cursor: input.cursor ?? { epoch: liveCursor.epoch, sequence: 0 },
       boundedFrames: input.boundedFrames === true,
       readsCurrentRequests: input.readsCurrentRequests === true,
       snapshotCatchUp: input.snapshotCatchUp !== false
     }
-    const session = this.bySession.get(input.sessionId) ?? new Map<string, Subscriber>()
     subscriber.stopped = this.lanes.of(subscriber).stopped
-    const replaced = session.get(input.id)
-    if (replaced) {
-      this.lanes.clear(replaced)
-    }
     session.set(input.id, subscriber)
     this.bySession.set(input.sessionId, session)
     liveText.noteLiveTextReadersChanged(session)
     this.viewerShows.watch(subscriber, input.onLiveTextShown)
 
     this.forkMarkers.add(subscriber)
-    this.enqueue(subscriber, async () => {
-      const hostNow = this.now()
-      const port = this.deliveryPort(input.sessionId, journal)
-      if (input.cursor) {
-        await resumeSubscriber(port, subscriber, journal, hostNow, () =>
-          this.forkMarkers.refresh(subscriber, journal, true)
-        )
-      } else {
-        await publishSubscriberSnapshot(port, subscriber, journal, input.fence, hostNow)
-        subscriber.forkMarkerView = JSON.stringify(subscriber.readForkMarker?.())
-      }
-      await this.sendLiveTail(subscriber, journal, input.fence)
+    this.lanes.open(subscriber, journal, input.cursor !== undefined, {
+      port: () => this.deliveryPort(input.sessionId, journal),
+      refreshForkMarkers: () => this.forkMarkers.refresh(subscriber, journal, true)
     })
     this.promptSuggestions.opened(subscriber)
     const { sessionId, id } = subscriber
-    return () => this.close(sessionId, id)
+    return () => {
+      // An asynchronous local receipt subscription can finish after its replacement opens.
+      // Its disposer owns only that registration. Preserve the legacy stream cleanup semantics.
+      if (!attachProviderReceipts || this.isActive(subscriber)) {
+        this.close(sessionId, id)
+      }
+    }
   }
 
   close(sessionId: string, id: string): void {
@@ -201,10 +199,7 @@ export class AgentSessionSubscribers {
     const hostNow = this.now()
     const port = this.deliveryPort(sessionId, journal)
     for (const subscriber of this.subscribers(sessionId)) {
-      this.enqueue(subscriber, async () => {
-        await publishSubscriberSnapshot(port, subscriber, journal, fence, hostNow)
-        await this.sendLiveTail(subscriber, journal, fence)
-      })
+      this.lanes.snapshot(subscriber, journal, port, fence, hostNow)
     }
     this.hooks.onJournalPublished?.(sessionId, journal)
   }
@@ -330,6 +325,7 @@ export class AgentSessionSubscribers {
   }
 
   private drop(subscriber: Subscriber): void {
+    subscriber.closeProviderReceipts?.()
     this.lanes.clear(subscriber)
     const session = this.bySession.get(subscriber.sessionId)
     session?.delete(subscriber.id)

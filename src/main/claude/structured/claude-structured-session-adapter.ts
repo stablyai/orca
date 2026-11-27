@@ -178,7 +178,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   nameProviderConversation: StructuredAgentSessionAdapter['nameProviderConversation'] = (input) =>
     this.naming?.accept(input)
   compact: NonNullable<StructuredAgentSessionAdapter['compact']> = (input) =>
-    dispatchClaudeCommand(this.session(input.sessionId), input.command)
+    dispatchClaudeCommand(this.session(input.sessionId), input.command, input.fence)
 
   cancelTurn: StructuredAgentSessionAdapter['cancelTurn'] = (request) =>
     cancelClaudeStructuredTurn({

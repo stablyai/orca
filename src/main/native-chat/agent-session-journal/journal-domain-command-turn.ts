@@ -15,7 +15,7 @@ import {
 } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { structuredAgentSessionCommandTurn } from '../../../shared/agent-session/view/structured-agent-session-command-turn-identity'
 import type { JournalWriterOperation } from './journal-writer-command'
-import type { JournalCommandOpenResult } from './journal-store-contracts'
+import type { JournalCommandOpenResult, JournalHandoverIdentity } from './journal-store-contracts'
 import { applyJournalDomainDispatch } from './journal-domain-dispatch'
 import { applyJournalDomainItem } from './journal-domain-item'
 import {
@@ -64,6 +64,7 @@ export function applyJournalDomainCommandTurn(
     operation.kind === 'command-open'
       ? { ...operation.input, state: 'pending' as const }
       : operation.input.dispatch
+  let handover: JournalHandoverIdentity | undefined
   const restoreDispatchEvents = checkpointJournalRequestEvents(db)
   db.exec('SAVEPOINT journal_command_dispatch')
   try {
@@ -75,6 +76,7 @@ export function applyJournalDomainCommandTurn(
     )
     db.exec('RELEASE journal_command_dispatch')
     appendJournalDomainInputCommit(result, commit)
+    handover = commit.handover
   } catch (error) {
     db.exec('ROLLBACK TO journal_command_dispatch; RELEASE journal_command_dispatch')
     restoreDispatchEvents()
@@ -132,7 +134,13 @@ export function applyJournalDomainCommandTurn(
       }
       db.exec('RELEASE journal_command_turn')
       appendJournalDomainInputCommit(result, step)
-      result.value = { value: { turn, running } }
+      result.value = {
+        value: {
+          turn,
+          running,
+          handover
+        }
+      }
     } else {
       const previous = readJournalDomainDispatchItem(db, target, turn.itemId)
       const running = readAgentJournalTurn(previous?.item.body)

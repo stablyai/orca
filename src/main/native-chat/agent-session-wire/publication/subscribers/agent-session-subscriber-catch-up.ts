@@ -267,14 +267,14 @@ async function emitCaughtUp(
   }
 }
 
-export async function publishSubscriberSnapshot(
+export function publishSubscriberSnapshot(
   port: SubscriberDeliveryPort,
   subscriber: Subscriber,
   journal: AgentSessionJournal,
   fence: number,
   hostNow: number
-): Promise<void> {
-  await unlessSuperseded(publishSnapshotFrame(port, subscriber, journal, fence, { hostNow }))
+): Promise<SubscriberFrameCapture<unknown> | undefined> {
+  return unlessSuperseded(publishSnapshotFrame(port, subscriber, journal, fence, { hostNow }))
 }
 
 async function publishSnapshotFrame(

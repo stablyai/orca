@@ -1,3 +1,4 @@
+import type { JournalHandoverIdentity } from './journal-store-contracts'
 import type { JournalPromptDispatch } from './journal-writer-changes'
 import type Database from '../../sqlite/sync-database'
 import type {
@@ -95,6 +96,7 @@ export type JournalDomainSubmissionCoordinate = {
 
 export type JournalDomainSubmissionCommit<Value = AgentJournalCursor | null | undefined> = {
   promptDispatches?: JournalPromptDispatch[]
+  handover?: JournalHandoverIdentity
   cursor: AgentJournalCursor
   value: Value
   /** Empty means the legacy no-op would not invoke its row-bound receipt. */

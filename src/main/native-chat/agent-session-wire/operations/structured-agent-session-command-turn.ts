@@ -1,3 +1,4 @@
+import type { JournalHandoverIdentity } from '../../agent-session-journal/journal-store-contracts'
 import { isStructuredAgentSessionStopNote } from '../../../../shared/agent-session/view/structured-agent-session-stop-note-identity'
 export {
   isStructuredAgentSessionStopNote,
@@ -133,6 +134,7 @@ export type StructuredAgentSessionCommandHandoverContext = {
   readWork?: JournalWorkReader
   failureTextContext?: AgentSessionFailureWordsContext
   record: () => AgentSessionRecord | null
+  registerProviderReceipt?: (handover: JournalHandoverIdentity | undefined) => void
   /** Recheck execution-host ownership at admission and handover. */
   currentWork?: () => Promise<StructuredAgentSessionCurrentWork | null>
   childWork: () => readonly AgentChildWorkView[] | undefined
@@ -171,14 +173,21 @@ export async function handOverStructuredAgentSessionCommand(
     )
     return
   }
-  const { turn, running } = await openCommandTurn(ctx, submission)
+  const { turn, running, handover } = await openCommandTurn(ctx, submission)
+  ctx.registerProviderReceipt?.(handover)
   const instructions = body.command?.instructions
   let admission: AgentSessionCommandAdmission
   try {
     admission = await ctx.adapter.compact!({
       sessionId: ctx.sessionId,
       fence: ctx.fence,
-      command: { clientMessageId, ...turn, running, ...(instructions ? { instructions } : {}) }
+      command: {
+        clientMessageId,
+        ...turn,
+        running,
+        handover,
+        ...(instructions ? { instructions } : {})
+      }
     })
   } catch (error) {
     // Ready-child writes can lose replies after running; never infer non-delivery from throws.

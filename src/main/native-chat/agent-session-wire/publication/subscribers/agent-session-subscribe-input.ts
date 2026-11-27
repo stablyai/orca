@@ -1,3 +1,4 @@
+import type { ProviderReceiptInterest } from '../receipts/provider-receipt-readers'
 import type { LiveTextReaders } from '../../journal-ingress/structured-agent-session-event-sink'
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
@@ -15,6 +16,7 @@ import type { AgentSessionSubscribeEvent } from '../../../../../shared/agent-ses
 import type { SubscriberHostWork, SubscriberLiveRow } from './agent-session-subscriber-live-text'
 
 export type AgentSessionSubscribeInput = {
+  attachProviderReceipts?: (cursor: () => AgentJournalCursor) => ProviderReceiptInterest | undefined
   commandsOnRequest?: boolean
   id: string
   sessionId: string
@@ -47,6 +49,8 @@ export type AgentSessionSubscribeInput = {
 export type AgentSessionSubscriberEmit = (event: AgentSessionSubscribeEvent) => void
 export type Subscriber = {
   id: string
+  openProviderReceipts?: () => void
+  closeProviderReceipts?: () => void
   emit: AgentSessionSubscriberEmit
   end?: (cause: unknown) => void
   cursor: AgentJournalCursor

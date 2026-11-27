@@ -25,7 +25,7 @@ export async function resumeSubscriber(
   journal: AgentSessionJournal,
   hostNow: number,
   refreshForkMarkers: () => Promise<void>
-): Promise<void> {
+): Promise<boolean> {
   let frame = await deliverToSubscriber(port, {
     subscriber,
     journal,
@@ -39,6 +39,7 @@ export async function resumeSubscriber(
   ) {
     frame = await deliverToSubscriber(port, { subscriber, journal, hostNow, emitCheckpoint: false })
   }
+  return frame !== undefined
 }
 
 /** Correct notes after stale in-flight pages, at the position of the frame just delivered: each

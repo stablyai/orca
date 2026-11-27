@@ -12,12 +12,15 @@ const { nodePtyNativeModuleName } = require('./native-build-entry.cjs')
 
 const NODE_PTY_CONPTY_RUNTIME_FILES = ['conpty.dll', 'OpenConsole.exe']
 
-function probeNativeBuildDir(moduleName, dir) {
+function probeNativeBuildDir(moduleName, dir, requireExitProof = false) {
   if (moduleName === 'node-pty') {
     const nativeName = nodePtyNativeModuleName()
     const addonPath = join(dir, `${nativeName}.node`)
     const native = { dir, module: require(addonPath) }
     assertNodePtyJobOwnership({ nativeName, native, addonPath })
+    if (requireExitProof && typeof native.module.watchProcessExitWithProof !== 'function') {
+      throw new Error('stale node-pty build without renderer exit proof')
+    }
     if (process.platform === 'darwin') {
       accessSync(join(dir, 'spawn-helper'), constants.X_OK)
     }
@@ -44,7 +47,7 @@ function probeNativeBuildDir(moduleName, dir) {
 if (require.main === module) {
   const [moduleName, dir] = process.argv.slice(2)
   try {
-    probeNativeBuildDir(moduleName, dir)
+    probeNativeBuildDir(moduleName, dir, process.argv.includes('--require-exit-proof'))
   } catch (error) {
     console.error(`${moduleName}: ${error instanceof Error ? error.message : String(error)}`)
     process.exit(1)

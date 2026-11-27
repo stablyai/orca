@@ -1,3 +1,5 @@
+import type { ProviderReceiptDestination } from '../../native-chat/agent-session-wire/publication/receipts/provider-receipt-credits'
+import type { ProviderReceiptReaders } from '../../native-chat/agent-session-wire/publication/receipts/provider-receipt-readers'
 import type { DeclareOrcaAccountParams } from '../../../shared/remote-runtime/pairing/paired-desktop-account-contract'
 import type { RuntimeClientCapabilities } from './callers/runtime-client-capabilities'
 import type { ZodError, ZodType } from 'zod'
@@ -130,6 +132,12 @@ export type RpcContext = {
   runtime: OrcaRuntimeService
   // Release long-poll handlers immediately when the client disconnects.
   signal?: AbortSignal
+  // Assigned only by the local Electron dispatcher, never by a paired client.
+  localProviderReceipts?: {
+    endpoint: ProviderReceiptDestination
+    readers: ProviderReceiptReaders
+    attached?: (accepted: boolean) => void
+  }
   // Cleanup is socket-scoped so sibling sockets sharing a device token survive.
   connectionId?: string
   // An unsubscribe cannot retire a registration created after its dispatch began.

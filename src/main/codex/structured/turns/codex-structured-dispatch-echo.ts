@@ -73,7 +73,7 @@ export type CodexDispatchEchoes = {
   /** Submission origin retained while the send remains armed. */
   requestOrigin: (clientMessageId: string) => CodexDispatchRequestOrigin | null
   /** A turn/start reply named the turn this send opened, recorded at reply receipt. */
-  repliedTurn: (clientMessageId: string, threadId: string, turnId: string) => void
+  repliedTurn: (clientMessageId: string, threadId: string, turnId: string) => boolean
   /** Earliest armed send whose turn/start reply named this turn; hook-refused prompts never echo. */
   turnOpener: (
     threadId: string,
@@ -276,6 +276,7 @@ export function createCodexDispatchEchoes(
       if (entry) {
         entry.openedTurn = { threadId, turnId }
       }
+      return entry !== undefined
     },
     turnOpener: (threadId, turnId) => {
       // Sends are armed in sequence order, so the first match is the earliest.
@@ -305,21 +306,4 @@ export function createCodexDispatchEchoes(
       return armed.size
     }
   }
-}
-
-export function readCodexDispatchEcho(
-  item: { type: string; id: string } & Record<string, unknown>,
-  identity: AgentJournalItemIdentity,
-  echoes?: CodexDispatchEchoes
-): { clientMessageId: string; providerIdentity: AgentJournalItemIdentity } | null {
-  if (item.type !== 'userMessage' || identity.provider !== 'codex') {
-    return null
-  }
-  const clientMessageId =
-    typeof item.clientId === 'string' && item.clientId.length > 0
-      ? item.clientId
-      : echoes?.receipt(identity, item.content)
-  return typeof clientMessageId === 'string' && clientMessageId.length > 0
-    ? { clientMessageId, providerIdentity: identity }
-    : null
 }

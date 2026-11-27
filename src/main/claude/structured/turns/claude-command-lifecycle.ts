@@ -1,3 +1,5 @@
+import { publishProviderReceipt } from '../../../native-chat/agent-session-wire/journal-ingress/provider-receipt-publication'
+import type { StructuredAgentSessionTransitionSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-transition'
 // Lifecycle frames can reject only unstarted sends; completed alone leaves delivery uncertain.
 
 import {
@@ -16,7 +18,11 @@ import { readClaudeFrameString } from '../startup/claude-structured-init-proof'
 import { claudeText } from '../journal/claude-structured-item-translation'
 import { isRootClaudeFrame } from './claude-turn-opening'
 import type { ClaudeLateDispatchSettlement } from './claude-replay-turn-resolution'
-import type { ClaudeSession, ClaudeStartedSend } from '../claude-structured-session-state'
+import type {
+  ClaudeDispatchWaiter,
+  ClaudeSession,
+  ClaudeStartedSend
+} from '../claude-structured-session-state'
 
 const UNSTARTED_VERDICT = {
   cancelled: 'cancelled',
@@ -31,7 +37,8 @@ function isTerminalState(state: unknown): state is keyof typeof UNSTARTED_VERDIC
 export function observeClaudeCommandLifecycle(
   session: ClaudeSession,
   message: Record<string, unknown>,
-  onSettledLate?: ClaudeLateDispatchSettlement
+  onSettledLate?: ClaudeLateDispatchSettlement,
+  onReceipt?: (waiter: ClaudeDispatchWaiter) => void
 ): void {
   const commandUuid = readClaudeFrameString(message, 'command_uuid')
   // Echoed sends leave both lists and cannot be rejected here.
@@ -43,8 +50,17 @@ export function observeClaudeCommandLifecycle(
   }
   const state = message.state
   if (state === 'started' || (state === 'queued' && waiter.commandLifecycle !== 'started')) {
+    const first = waiter.commandLifecycle === undefined
     // Redelivery can emit queued again after started.
     waiter.commandLifecycle = state
+    if (
+      first &&
+      !waiter.retired &&
+      waiter.dispatchFence === session.fence &&
+      readClaudeFrameString(message, 'session_id') === session.providerSessionId
+    ) {
+      onReceipt?.(waiter)
+    }
   } else if (isTerminalState(state) && waiter.commandLifecycle === 'started') {
     releaseClaudeDispatchWaitersInDoubt(
       session,
@@ -65,6 +81,31 @@ export function observeClaudeCommandLifecycle(
       [waiter],
       DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED,
       onSettledLate
+    )
+  }
+}
+
+export function recordClaudeDispatchReceipt(
+  session: ClaudeSession,
+  waiter: ClaudeDispatchWaiter,
+  observedAt: number,
+  record: StructuredAgentSessionTransitionSink['recordProviderReceipt']
+): void {
+  if (
+    record &&
+    waiter.clientMessageId !== null &&
+    waiter.handover !== undefined &&
+    waiter.dispatchFence === session.fence &&
+    session.dispatchWaiters.includes(waiter)
+  ) {
+    const { clientMessageId, handover, dispatchFence: fence } = waiter
+    publishProviderReceipt(() =>
+      record({
+        clientMessageId,
+        fence,
+        ...handover,
+        observedAt
+      })
     )
   }
 }

@@ -120,6 +120,7 @@ export function applyJournalDomainDispatch(
           scope = derived
         }
       }
+      result.handover = { handoverCursor: nextCursor, attempt: attempt.ordinal }
       handover = {
         sequence,
         at: savedAt,

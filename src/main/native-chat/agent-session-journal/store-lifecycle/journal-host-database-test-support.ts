@@ -1,3 +1,4 @@
+import { rm } from 'node:fs/promises'
 import { insertJournalDomainQueueRow } from '../journal-domain-queue-rows'
 import type { QueuedMessageRow } from '../queued-messages/queued-message-table'
 import {
@@ -50,6 +51,18 @@ export async function closeTestJournalHostDatabase(stateDirectory: string): Prom
   await closeTestAgentSessionDatabase(directory)
   await opened.get(directory)?.close()
   opened.delete(directory)
+}
+
+export async function disposeTestJournalHostProfile(
+  stateDirectory: string,
+  flush: () => Promise<void>
+): Promise<void> {
+  try {
+    await flush()
+  } finally {
+    await closeTestJournalHostDatabase(stateDirectory)
+    await rm(stateDirectory, { recursive: true, force: true })
+  }
 }
 
 export async function closeTestJournalHostDatabases(): Promise<void> {

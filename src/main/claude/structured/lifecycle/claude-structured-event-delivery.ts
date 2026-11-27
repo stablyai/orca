@@ -1,3 +1,17 @@
+import {
+  claudeFrameSendFacts,
+  recordClaudeDispatchReceipt
+} from '../turns/claude-command-lifecycle'
+import {
+  resolveClaudeReplayTurn,
+  withClaudeReplaySettlements,
+  type ClaudeLateDispatchSettlement
+} from '../turns/claude-replay-turn-resolution'
+import type { StructuredAgentSessionTransitionSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-transition'
+import type {
+  ClaudeDispatchWaiter,
+  ClaudeLateDispatchOutcome
+} from '../claude-structured-session-state'
 import { ClaudePluginInputError } from '../../sdk-transport/claude-plugin-ui'
 import { claudePromptCardWritten } from '../../child-work/claude-child-work-evidence'
 import type {
@@ -94,6 +108,59 @@ export function emitClaudeStructuredSessionEvent({
   publishChildWork(event.sessionId, session, event.type === 'message' ? event.message : null)
   // Child waiting requires the card to be durable.
   void claudePromptCardWritten(session, event)?.then(() => publishChildWork(event.sessionId))
+}
+
+export function deliverClaudeReplayFrame(input: {
+  session: ClaudeSession | null
+  sessionId: string
+  message: Record<string, unknown>
+  now: () => number
+  deliver: (run: () => void) => void
+  isCurrent: () => boolean
+  onReceipt: StructuredAgentSessionTransitionSink['recordProviderReceipt']
+  onSettledLate: ClaudeLateDispatchSettlement
+  emit: (event: Extract<ClaudeStructuredSessionEvent, { type: 'message' }>) => void
+}): void {
+  const { session, sessionId, message } = input
+  const settlements: ClaudeLateDispatchOutcome[] = []
+  let receipt: { waiter: ClaudeDispatchWaiter; observedAt: number } | undefined
+  const origin = session
+    ? resolveClaudeReplayTurn(
+        session,
+        message,
+        (settlement) => settlements.push(settlement),
+        (waiter) => {
+          receipt = { waiter, observedAt: input.now() }
+        }
+      )
+    : null
+  const startsTurn = origin !== null
+  // Use host time for turn endpoints; provider timestamps may use a different clock.
+  const observedAt = startsTurn || message.type === 'result' ? input.now() : undefined
+  const requestedAt = origin?.requestedAt
+  const sendFacts = claudeFrameSendFacts(session, message, startsTurn)
+  // Publish the echoed turn before settling its send to avoid transient idle status.
+  withClaudeReplaySettlements(
+    session,
+    settlements,
+    () =>
+      input.deliver(() => {
+        if (receipt && session && input.isCurrent()) {
+          recordClaudeDispatchReceipt(session, receipt.waiter, receipt.observedAt, input.onReceipt)
+        }
+        input.emit({
+          type: 'message',
+          sessionId,
+          message,
+          ...(startsTurn ? { startsTurn: true } : {}),
+          ...(requestedAt == null ? {} : { requestedAt }),
+          ...(origin?.clientMessageId ? { clientMessageId: origin.clientMessageId } : {}),
+          ...sendFacts,
+          ...(observedAt === undefined ? {} : { observedAt })
+        })
+      }),
+    input.onSettledLate
+  )
 }
 
 export function deliverClaudeConnectionEvent(

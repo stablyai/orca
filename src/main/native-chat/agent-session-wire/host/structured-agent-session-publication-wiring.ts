@@ -4,10 +4,7 @@ import { StructuredAgentSessionConversations } from './structured-agent-session-
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionClientDelivery } from '../publication/subscribers/structured-agent-session-client-delivery'
 import type { StructuredAgentSessionConversationDelivery } from '../delivery/structured-agent-session-host-delivery'
-import {
-  deferredStructuredAgentSessionLogger,
-  type StructuredAgentSessionLogger
-} from './structured-agent-session-logger'
+import { deferredStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 /** Resolve collaborators only when called: host fields are wired before constructor initialization. */
 export function createStructuredAgentSessionPublicationWiring(input: {
@@ -15,14 +12,13 @@ export function createStructuredAgentSessionPublicationWiring(input: {
   delivery: () => StructuredAgentSessionConversationDelivery
   opened: (id: string) => void
   workChanged?: (id: string) => void
-  logger: () => StructuredAgentSessionLogger
+  deps: () => StructuredAgentSessionHostDeps
   now: () => number
-  observeRows: () => StructuredAgentSessionHostDeps['observeCommittedRows']
 }): StructuredAgentSessionConversations {
   return new StructuredAgentSessionConversations({
     observe: (id, journal, rows) => {
       input.client().requestFailures.observe(id, journal, rows)
-      input.observeRows()?.(id, journal, rows)
+      input.deps().observeCommittedRows?.(id, journal, rows)
       observeNativeChatPromptSubmissions(journal, rows)
     },
     forget: (id) => {
@@ -39,9 +35,17 @@ export function createStructuredAgentSessionPublicationWiring(input: {
       }
     },
     deliverSettleEdge: (id, journal) => input.delivery().afterSettleEdge(id, journal),
-    logger: deferredStructuredAgentSessionLogger(input.logger),
+    logger: deferredStructuredAgentSessionLogger(() => input.deps().logger),
     onOpened: input.opened,
     workChanged: input.workChanged,
+    currentFence: (id) => {
+      const lease = input.deps().store.getRecord(id)?.lease
+      return lease?.claimStatus === 'live' &&
+        !lease.unreconciled &&
+        lease.handoffStage !== 'recovering'
+        ? lease.runtimeFence
+        : undefined
+    },
     now: input.now
   })
 }

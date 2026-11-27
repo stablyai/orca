@@ -1,3 +1,4 @@
+import type { JournalHandoverIdentity } from '../../../native-chat/agent-session-journal/journal-store-contracts'
 import { randomUUID } from 'node:crypto'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { claudePromptUuidForSubmission } from '../lifecycle/claude-structured-session-id'
@@ -6,6 +7,8 @@ import {
   forgetRetiredWaiter,
   forgetWaiter,
   retireWaiter,
+  MAX_ACTIVE_DISPATCH_WAITERS,
+  withdrawClaudeDispatchReceipt,
   waitForReplay
 } from './claude-structured-dispatch-waiters'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -44,8 +47,6 @@ import {
   type StructuredAgentSessionAdmitFreshInput
 } from '../../../native-chat/agent-session-wire/delivery/structured-agent-session-input-admission'
 
-const MAX_ACTIVE_DISPATCH_WAITERS = 64
-
 export function settleCancelledClaudeDispatchWaiters(
   session: ClaudeSession,
   cancelledUuids: readonly string[],
@@ -82,6 +83,7 @@ export function rejectClaudeDispatchWaiters(
     }
   }
   for (const waiter of activeWaiters) {
+    withdrawClaudeDispatchReceipt(session, waiter)
     forgetWaiter(session, waiter)
     waiter.resolve(null)
     report(waiter)
@@ -129,6 +131,8 @@ export async function dispatchClaudeTurn(
     body: AgentJournalMessageItem
     requestedAt?: number
     sentUuid?: string
+    fence?: number
+    handover?: () => JournalHandoverIdentity | undefined
     signal?: AbortSignal
     admitFreshInput?: StructuredAgentSessionAdmitFreshInput
   },
@@ -163,7 +167,9 @@ export async function dispatchClaudeTurn(
       sentUuid,
       claudeDispatchContentKey(content),
       input.clientMessageId ?? null,
-      input.requestedAt ?? null
+      input.requestedAt ?? null,
+      input.fence ?? session.fence,
+      input.handover?.()
     )
     if (renamesSession) {
       replay.waiter.renamesSession = true

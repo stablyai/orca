@@ -41,7 +41,11 @@ export function nativeBuildEnvironment(env = process.env, platform = process.pla
 }
 
 // Fresh Node/Electron-as-Node load is the usability proof; return failure reason or null.
-export function checkNativeBuildDirLoads(moduleName, dir, { executable = process.execPath } = {}) {
+export function checkNativeBuildDirLoads(
+  moduleName,
+  dir,
+  { executable = process.execPath, requireExitProof = false } = {}
+) {
   if (
     moduleName === '@vscode/windows-process-tree' &&
     inspectWindowsProcessTreeAddon(join(dir, 'windows_process_tree.node')) !== 'clean'
@@ -52,7 +56,7 @@ export function checkNativeBuildDirLoads(moduleName, dir, { executable = process
   try {
     result = runProcessSync({
       program: executable,
-      args: [PROBE_SCRIPT, moduleName, dir],
+      args: [PROBE_SCRIPT, moduleName, dir, ...(requireExitProof ? ['--require-exit-proof'] : [])],
       env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
       timeoutMs: 60_000
     })

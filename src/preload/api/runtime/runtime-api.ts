@@ -1,3 +1,4 @@
+import type { ProviderReceiptCursor } from '../../../shared/rpc-contract/structured-agent-session/structured-agent-session-provider-receipts'
 import type {
   RendererStatusPublication,
   RendererStatusAck
@@ -33,12 +34,16 @@ import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../shared/r
 import type { WslOrcadAccountNotAppliedEvent } from '../../../shared/remote-runtime/wsl-hosts/wsl-orcad-account-notice'
 
 export type RuntimeEnvironmentSubscriptionHandle = {
+  /** Local receipt reader membership. Null means use the ordinary echo path. */
+  receiptSubscription?: string | null
   unsubscribe: () => void
   sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => void
 }
 
 export type RuntimeApi = {
   runtime: {
+    providerReceiptReadV1?: true
+    discardProviderReceiptReply?: (revision: ProviderReceiptCursor) => void
     syncAgentStatus: (batch: RendererStatusPublication) => Promise<RendererStatusAck>
     syncWindowGraph: (
       graph: RuntimeRendererSyncWindowGraph

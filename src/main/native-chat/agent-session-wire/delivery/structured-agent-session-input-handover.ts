@@ -37,13 +37,15 @@ export async function beginStructuredAgentSessionInputHandover(
   next: AgentJournalSubmission,
   isDisposed: () => boolean
 ): Promise<StructuredAgentSessionPendingHandover | null> {
+  const { journal, providerReceipts } = session
+  const { clientMessageId } = next
   let binding = awaitedChild
   let recorder = deps.recordRanOptions?.(sessionId, binding.fence)
   const ownsInput = () => deps.sessions.get(sessionId) === session
   const isBound = () => deps.sessions.get(sessionId) === session && session.child === binding
   const isCurrent = () => isBound() && !binding.close
   const toolsDue = async () =>
-    (await deps.launchToolsRefreshDue?.(sessionId, next.clientMessageId)) === true
+    (await deps.launchToolsRefreshDue?.(sessionId, clientMessageId)) === true
   const validate = (signal?: AbortSignal) =>
     assertStructuredAgentSessionInputReady({
       deps,
@@ -60,8 +62,8 @@ export async function beginStructuredAgentSessionInputHandover(
     if (!(error instanceof StructuredAgentSessionInputNotAdmitted) || !error.outcome) {
       throw error
     }
-    await session.journal.resolveDispatch({
-      clientMessageId: next.clientMessageId,
+    await journal.resolveDispatch({
+      clientMessageId: clientMessageId,
       fence: binding.fence,
       ...error.outcome
     })
@@ -71,12 +73,14 @@ export async function beginStructuredAgentSessionInputHandover(
   return beginSubmissionHandover(
     {
       sessionId,
-      journal: session.journal,
+      journal,
       fence: awaitedChild.fence,
       adapter: deps.adapter,
       agents: deps.agents,
       failureTextContext: failureTextContext,
       record: () => deps.record(sessionId),
+      registerProviderReceipt: (handover) =>
+        providerReceipts?.register(sessionId, journal, binding, clientMessageId, handover),
       turnContext: deps.turnContext,
 
       admitFreshInput: async (enqueue, signal, prepare, kind = 'fresh') => {
@@ -98,7 +102,7 @@ export async function beginStructuredAgentSessionInputHandover(
           if (await toolsDue()) {
             return { kind: 'acquire' as const, reason: 'tools' as const }
           }
-          const retained = await deps.retainedWork?.(sessionId, next.clientMessageId)
+          const retained = await deps.retainedWork?.(sessionId, clientMessageId)
           await validate(signal)
           admission = enqueue(mode ?? 'own', retained === true, body)
           return admission
@@ -115,13 +119,9 @@ export async function beginStructuredAgentSessionInputHandover(
         }
       },
       continueInput: async (signal, rebind, reason = 'auto') => {
-        const failed = (
-          cause: StartFailure['cause'],
-          fence: number,
-          startKey = next.clientMessageId
-        ) =>
+        const failed = (cause: StartFailure['cause'], fence: number, startKey = clientMessageId) =>
           failedStructuredAgentSessionInputContinuation(
-            session.journal,
+            journal,
             failureTextContext,
             cause,
             fence,
@@ -168,7 +168,7 @@ export async function beginStructuredAgentSessionInputHandover(
               await validate(signal)
               if (
                 !ownsInput() ||
-                !continuingStructuredAgentSessionInput(session.journal, next.clientMessageId)
+                !continuingStructuredAgentSessionInput(journal, clientMessageId)
               ) {
                 throw new Error('input continuation no longer owns its submission')
               }
@@ -184,7 +184,7 @@ export async function beginStructuredAgentSessionInputHandover(
               }
               await (deps.stopPermissionTransitionChild
                 ? deps.stopPermissionTransitionChild(sessionId)
-                : deps.retireOutgrownChild(sessionId, next.clientMessageId))
+                : deps.retireOutgrownChild(sessionId, clientMessageId))
               signal?.throwIfAborted()
               const ended = session.lastEndedChild
               if (
@@ -197,7 +197,7 @@ export async function beginStructuredAgentSessionInputHandover(
               ) {
                 throw new Error('input continuation lost its provider binding')
               }
-              return deps.startProviderChild(sessionId, next.clientMessageId)
+              return deps.startProviderChild(sessionId, clientMessageId)
             }),
             signal
           )
@@ -234,7 +234,7 @@ export async function beginStructuredAgentSessionInputHandover(
                     ? structuredAgentSessionEndedChildFailure(ended)
                     : undefined) ?? { failure: agentSessionFailureFact('startFailed') },
                   child?.fence ?? deps.conversationFence(sessionId),
-                  child?.generation ?? next.clientMessageId
+                  child?.generation ?? clientMessageId
                 )
               }
               binding = current

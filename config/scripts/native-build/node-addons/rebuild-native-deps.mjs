@@ -245,7 +245,10 @@ function buildSharedElectronModule(moduleName) {
     checkBuildDir: (dir) =>
       isCrossHostRebuild
         ? sharedNativeBuild.checkNativeBuildDirArtifacts(moduleName, dir, target)
-        : sharedNativeBuild.checkNativeBuildDirLoads(moduleName, dir, { executable }),
+        : sharedNativeBuild.checkNativeBuildDirLoads(moduleName, dir, {
+            executable,
+            requireExitProof: true
+          }),
     log: (message) => console.log(`[rebuild] ${message}`)
   })
 }
@@ -509,28 +512,19 @@ function getPatchedNodePtyRebuildReason() {
     rebuildPlatform
   )
   const missingArtifact = artifactPaths.find((artifactPath) => !existsSync(artifactPath))
-
-  if (!missingArtifact) {
-    return null
-  }
-
-  return 'Patched node-pty build artifacts are missing; rebuilding from source.'
+  return missingArtifact
+    ? 'Patched node-pty build artifacts are missing; rebuilding from source.'
+    : null
 }
 
 function requiresPatchedNodePtySourceBuild() {
-  if (!onlyModules.includes('node-pty')) {
-    return false
-  }
-  if (rebuildPlatform !== osPlatform() || rebuildArch !== process.arch) {
-    return false
-  }
-
-  const nodePtyPatchPath = resolve(projectDir, 'config', 'patches', 'node-pty@1.1.0.patch')
-  if (!existsSync(nodePtyPatchPath)) {
-    return false
-  }
-
-  return existsSync(resolve(projectDir, 'node_modules', 'node-pty'))
+  return (
+    onlyModules.includes('node-pty') &&
+    rebuildPlatform === osPlatform() &&
+    rebuildArch === process.arch &&
+    existsSync(resolve(projectDir, 'config', 'patches', 'node-pty@1.1.0.patch')) &&
+    existsSync(resolve(projectDir, 'node_modules', 'node-pty'))
+  )
 }
 
 function probeElectronNativeModules(moduleNames) {
@@ -595,6 +589,9 @@ function loadNativeModule(moduleName) {
     )
     assertNodePtyWindowsConptyRuntime(native.dir, require('node:path').dirname(addonPath))
     assertNodePtyJobOwnership({ nativeName, native, addonPath })
+    if (typeof native.module.watchProcessExitWithProof !== 'function') {
+      throw new Error('stale node-pty build without renderer exit proof')
+    }
     if (requirePatchedNodePtySourceBuild && !isSourceBuildDir(native.dir)) {
       throw new Error(
         'node-pty resolved to ' +

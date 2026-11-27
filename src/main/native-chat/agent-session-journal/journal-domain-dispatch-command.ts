@@ -60,5 +60,11 @@ export function applyJournalDomainDispatchCommand(
     },
     savedAt
   )
-  return { ...result, value: carried }
+  return {
+    ...result,
+    value: {
+      carried,
+      handover: result.handover
+    }
+  }
 }

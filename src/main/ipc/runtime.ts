@@ -7,15 +7,9 @@ import type {
   RuntimeSyncWindowGraphResult,
   RuntimeTerminalDriverState
 } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import type { RuntimeRpcResponse } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/browser/client-hosting/client-hosted-browser-rows'
 import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../shared/terminal/viewport/terminal-fit-restore-deadline'
-import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from './runtime-client/desktop-renderer-runtime-capabilities'
-import { RpcDispatcher } from '../runtime/rpc/dispatcher'
-import { DESKTOP_RPC_CALLER } from '../runtime/rpc/callers/rpc-caller-identity'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/orchestration/orchestration-runtime-capabilities'
-import { ALL_RPC_METHODS } from '../runtime/rpc/methods/rpc-method-registry'
-import { DesktopRuntimeSenderLifecycle } from './runtime-client/desktop-runtime-sender-lifecycle'
+import { registerDesktopRuntimeRpcHandlers } from './runtime-client/desktop-runtime-rpc-handlers'
 import { toWorkspaceLifecycleResult } from '../ephemeral-vm/workspace-lifecycle-result'
 import { publishMobileProjectSections } from '../runtime/sidebar-inputs/catalog/mobile-project-sections-snapshot'
 
@@ -29,13 +23,10 @@ function boundTerminalFitRestore(pending: Promise<boolean>): Promise<boolean> {
 }
 
 export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
+  registerDesktopRuntimeRpcHandlers(runtime)
   const pendingTerminalFitRestores = new Map<string, Promise<boolean>>()
-  const desktopSenders = new DesktopRuntimeSenderLifecycle(runtime)
   ipcMain.removeHandler('runtime:syncWindowGraph')
   ipcMain.removeHandler('runtime:getStatus')
-  ipcMain.removeHandler('runtime:call')
-  ipcMain.removeHandler('runtime:subscribe')
-  ipcMain.removeAllListeners('runtime:unsubscribe')
   ipcMain.removeHandler('ephemeralVm:resumeWorkspace')
   ipcMain.removeHandler('ephemeralVm:suspendWorkspace')
 
@@ -95,96 +86,6 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
     // Match status.get's capped name wait; later reads pick up a lookup that is still running.
     await runtime.machineNameReady()
     return runtime.getStatus()
-  })
-
-  // Registry build walks every method; do it once, not per IPC call.
-  const dispatcher = new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS })
-
-  ipcMain.handle(
-    'runtime:call',
-    async (
-      event,
-      args: {
-        method: string
-        params?: unknown
-        orchestration?: { contractVersion: number; requestId: string }
-      }
-    ): Promise<RuntimeRpcResponse<unknown>> => {
-      if (event.senderFrame !== event.sender.mainFrame) {
-        throw new Error('Runtime RPC call must originate from the current main frame')
-      }
-      return dispatcher.dispatch(
-        {
-          id: 'desktop-ipc',
-          authToken: 'desktop-ipc',
-          // The renderer ships with this main process, so it always speaks the current contract.
-          orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-          method: args.method,
-          params: args.params,
-          ...(args.orchestration
-            ? {
-                orchestrationContractVersion: args.orchestration.contractVersion,
-                orchestrationRequestId: args.orchestration.requestId
-              }
-            : {})
-        },
-        {
-          clientId: 'desktop-renderer',
-          caller: DESKTOP_RPC_CALLER,
-          clientKind: 'runtime',
-          connectionId: desktopSenders.connectionIdFor(event.sender),
-          clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES
-        }
-      )
-    }
-  )
-
-  ipcMain.handle(
-    'runtime:subscribe',
-    (
-      event,
-      args: { subscriptionId: string; method: string; params?: unknown }
-    ): { subscribed: boolean } => {
-      if (event.senderFrame !== event.sender.mainFrame) {
-        throw new Error('Runtime subscription must originate from the current main frame')
-      }
-      const senderSubscriptions = desktopSenders.subscriptionsFor(event.sender)
-      const connectionId = desktopSenders.connectionIdFor(event.sender)
-      const previous = senderSubscriptions.get(args.subscriptionId)
-      previous?.abort()
-      const controller = new AbortController()
-      senderSubscriptions.set(args.subscriptionId, controller)
-      const channel = `runtime:subscription:${args.subscriptionId}`
-      // Streaming outlives dispatch setup; unsubscribe or sender retirement owns cancellation.
-      void dispatcher.dispatchStreamingObjects(
-        {
-          id: args.subscriptionId,
-          authToken: 'desktop-ipc',
-          method: args.method,
-          params: args.params
-        },
-        (response) => {
-          if (!controller.signal.aborted && !event.sender.isDestroyed()) {
-            event.sender.send(channel, response)
-          }
-        },
-        {
-          signal: controller.signal,
-          clientId: 'desktop-renderer',
-          caller: DESKTOP_RPC_CALLER,
-          clientKind: 'runtime',
-          connectionId,
-          clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES
-        }
-      )
-      return { subscribed: true }
-    }
-  )
-
-  ipcMain.on('runtime:unsubscribe', (event, args: { subscriptionId: string }) => {
-    const senderSubscriptions = desktopSenders.existingSubscriptionsFor(event.sender)
-    senderSubscriptions?.get(args.subscriptionId)?.abort()
-    senderSubscriptions?.delete(args.subscriptionId)
   })
 
   ipcMain.removeHandler('runtime:getTerminalFitOverrides')

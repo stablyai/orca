@@ -1,3 +1,4 @@
+import { StructuredAgentSessionProviderReceipts } from './structured-agent-session-provider-receipts'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalWriterCommit } from '../../agent-session-journal/journal-writer-changes'
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
@@ -24,6 +25,7 @@ export class StructuredAgentSessionConversations extends Map<
   string,
   StructuredAgentSessionHostSession
 > {
+  readonly providerReceipts: StructuredAgentSessionProviderReceipts
   private readonly observers = new Map<string, Set<{ observer: PublicationObserver }>>()
   private readonly attachments = new Map<
     string,
@@ -50,9 +52,14 @@ export class StructuredAgentSessionConversations extends Map<
       onOpened?: (sessionId: string) => void
       workChanged?: (sessionId: string) => void
       now: () => number
+      currentFence?: (sessionId: string) => number | undefined
     }
   ) {
     super()
+    this.providerReceipts = new StructuredAgentSessionProviderReceipts(
+      (id) => this.get(id),
+      (id) => delivery.currentFence?.(id)
+    )
     this.settledTurns = new StructuredAgentSessionSettledTurnRoutes(delivery.logger)
     this.snapshots = new StructuredAgentSessionSnapshotRoutes(delivery.logger)
   }
@@ -61,7 +68,11 @@ export class StructuredAgentSessionConversations extends Map<
     [...this].flatMap(([sessionId, { child }]) => (child ? [sessionId] : []))
 
   override set(sessionId: string, session: StructuredAgentSessionHostSession): this {
-    session.workChanged = () => this.delivery.workChanged?.(sessionId)
+    session.providerReceipts = this.providerReceipts
+    session.workChanged = () => {
+      this.providerReceipts.revalidate(sessionId)
+      this.delivery.workChanged?.(sessionId)
+    }
     const { journal } = session
     if (this.get(sessionId)?.journal === journal) {
       this.touch(sessionId)
@@ -72,6 +83,7 @@ export class StructuredAgentSessionConversations extends Map<
       return this
     }
     this.attachments.get(sessionId)?.release()
+    this.providerReceipts.retire(sessionId)
     let queued = false
     let inputChanged = false
     const source = {
@@ -87,6 +99,7 @@ export class StructuredAgentSessionConversations extends Map<
       if (!current()) {
         return
       }
+      this.providerReceipts.committed(sessionId, journal, commit)
       this.publish(sessionId, 'commit', commit)
       session.workChanged?.()
       this.settledTurns.deliver(sessionId, journal, commit)
@@ -124,6 +137,7 @@ export class StructuredAgentSessionConversations extends Map<
     })
     const releaseReplacing = journal.epochReplacements.observe((replaced) => {
       if (current()) {
+        this.providerReceipts.retire(sessionId)
         this.snapshots.replacing(sessionId, journal, replaced)
       }
     })
@@ -253,6 +267,7 @@ export class StructuredAgentSessionConversations extends Map<
       return
     }
     this.ended = true
+    this.providerReceipts.close()
     for (const id of this.observers.keys()) {
       this.publish(id, 'end')
     }
@@ -261,6 +276,7 @@ export class StructuredAgentSessionConversations extends Map<
 
   override delete(sessionId: string): boolean {
     this.attachments.get(sessionId)?.release()
+    this.providerReceipts.retire(sessionId)
     this.attachments.delete(sessionId)
     this.delivery.forget?.(sessionId)
     this.activity.delete(sessionId)

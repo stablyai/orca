@@ -1,3 +1,7 @@
+import type {
+  ProviderReceiptHandover,
+  ProviderReceiptObservation
+} from '../host/structured-agent-session-provider-receipts'
 import type { JournalTimelineItemResolution } from '../../agent-session-journal/writing/journal-timeline-resolution'
 import type {
   JournalStepOutcome,
@@ -45,6 +49,8 @@ export type StructuredAgentSessionTransition = {
 }
 
 export type StructuredAgentSessionTransitionSink = {
+  withdrawProviderReceipt?(handover: ProviderReceiptHandover): void | Promise<void>
+  recordProviderReceipt?(receipt: ProviderReceiptObservation): void | Promise<void>
   tryAppendTransition?(
     transition: StructuredAgentSessionTransition
   ): StructuredAgentSessionSinkAdmission
@@ -52,7 +58,7 @@ export type StructuredAgentSessionTransitionSink = {
 
 export function createStructuredAgentSessionTransitionMembers(
   queue: StructuredAgentSessionSinkQueue
-): Required<StructuredAgentSessionTransitionSink> {
+): Pick<Required<StructuredAgentSessionTransitionSink>, 'tryAppendTransition'> {
   return { tryAppendTransition: transitionAppend(queue) }
 }
 
