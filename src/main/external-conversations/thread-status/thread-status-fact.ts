@@ -5,6 +5,7 @@ import type {
   ExternalConversationLink,
   ThreadStatusFact
 } from '../../../shared/connectors/external-conversation-link'
+import { writeLinkFact } from '../external-conversation-link-writes'
 import { allLinks, type ExternalConversationLinkStore } from '../external-conversation-links'
 import { linesToday, utcDay } from './thread-status-decide'
 import { THREAD_STATUS_REPLY_PREFIX } from './thread-status-lines'
@@ -54,10 +55,11 @@ export function nextDueStep(step: Armed['dueStep']): Armed['dueStep'] {
   return step === 0 ? 1 : 2
 }
 
-/** A saved line decided too long ago, or before a line the thread saw since: never posted. */
+/** A saved line decided too long ago, or no later than a bot line the thread saw since: never
+ *  posted. Orca's own line before it was the one it followed, so only a bot's can overtake it. */
 export function stalePending(fact: ThreadStatusFact, now: number, maxMs: number): boolean {
   const { pending, armed } = fact
-  return !!pending && (now - pending.at > maxMs || (armed?.lastLineAt ?? 0) > pending.at)
+  return !!pending && (now - pending.at > maxMs || (armed?.lastBotAt ?? 0) >= pending.at)
 }
 
 export function withoutPending(fact: ThreadStatusFact): ThreadStatusFact {
@@ -78,4 +80,17 @@ export function statusReplyId(link: Thread, runAt: number, seq: number): string 
 
 export function armedLinks(store: ExternalConversationLinkStore) {
   return [...allLinks(store)].filter(({ link }) => link.threadStatus?.armed !== undefined)
+}
+
+/** Keeps the fact on its link; a failed write is logged, and this process still has its state. */
+export function writeThreadStatus(
+  store: ExternalConversationLinkStore,
+  link: Thread,
+  threadStatus: ThreadStatusFact
+): void {
+  try {
+    writeLinkFact(store, link, { threadStatus })
+  } catch (error) {
+    console.warn('[connectors] could not keep a thread’s status lines on its link', error)
+  }
 }

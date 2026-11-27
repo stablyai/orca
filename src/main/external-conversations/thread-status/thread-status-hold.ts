@@ -54,3 +54,8 @@ export async function threadStatusAnswerHeld(
     () => true
   )
 }
+
+/** Which link, pane and turn an answer read was for: a result for another turn says nothing. */
+export function answerReadKey(link: ExternalConversationLink, turnId: number | null): string {
+  return JSON.stringify([link.source, link.externalId, link.sessionId, link.paneKey, turnId])
+}

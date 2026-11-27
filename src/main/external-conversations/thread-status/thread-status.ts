@@ -2,12 +2,10 @@
 // started them: posted as new replies when the thread hears nothing for a while, never waking the
 // bot. Kept on the thread's link, so a restart neither repeats nor forgets one.
 import { cloudConversation } from '../../../shared/connectors/connector-cloud-contract'
-import { slackMirrorAvailable } from '../../../shared/connectors/slack-mirror-state'
 import type {
   ExternalConversationLink,
   ThreadStatusFact
 } from '../../../shared/connectors/external-conversation-link'
-import { writeLinkFact } from '../external-conversation-link-writes'
 import { findLink, findLinkForPane } from '../external-conversation-links'
 import type {
   ConversationWorkersRead,
@@ -19,25 +17,27 @@ import {
   armedFact,
   armedLinks,
   disarmedFact,
-  stalePending,
   statusReplyId,
   withArmed,
   withBotLine,
   withHostLine,
   withoutPending,
-  withTurnEnd
+  withTurnEnd,
+  writeThreadStatus
 } from './thread-status-fact'
-import { threadStatusAnswerHeld, threadStatusHeldNow } from './thread-status-hold'
+import { answerReadKey, threadStatusAnswerHeld, threadStatusHeldNow } from './thread-status-hold'
 import { threadLinesOf } from './thread-status-lines'
+import { savedLineNow, type SavedLineNow } from './thread-status-owed'
 import { sendThreadStatusLine } from './thread-status-send'
 import { ThreadStatusWaits } from './thread-status-waits'
-import { idOf, unrefTimer, type ThreadStatusDeps } from './thread-status-deps'
+import {
+  idOf,
+  threadStatusEligible,
+  ThreadStatusTicks,
+  type ThreadStatusDeps
+} from './thread-status-deps'
 
 export type { ThreadStatusCloud, ThreadStatusDeps } from './thread-status-deps'
-
-const TICK_MS = 60_000
-// A line decided longer ago than this is dropped, never posted with a stale elapsed time.
-const PENDING_MAX_MS = 10 * 60_000
 
 type Thread = Pick<ExternalConversationLink, 'source' | 'externalId'>
 
@@ -45,19 +45,25 @@ export class ThreadStatus implements ConversationWorkersWatcher {
   private readonly views = new Map<string, ConversationWorkerView>()
   // Armed threads by id: the clock runs while there are any.
   private readonly armed = new Map<string, Thread>()
-  // Threads deciding or sending a line: one at a time each.
+  // Threads deciding or sending a line: one at a time each, and again once done when asked meanwhile.
   private readonly busy = new Set<string>()
+  private readonly again = new Set<string>()
   // Threads whose last line the cloud refused as a conflict: a second in a row stops them.
   private readonly conflicted = new Set<string>()
   // When the cloud said a thread's line may go again, by thread id.
   private readonly notBefore = new Map<string, number>()
   private readonly waits: ThreadStatusWaits
-  private timer: { cancel: () => void } | null = null
+  // One tick a minute while some thread is armed.
+  private readonly ticks: ThreadStatusTicks
+  private readonly write = (link: Thread, fact: ThreadStatusFact) =>
+    writeThreadStatus(this.deps.store, link, fact)
   private readonly now: () => number
 
   constructor(private readonly deps: ThreadStatusDeps) {
     this.now = deps.now ?? Date.now
     this.waits = new ThreadStatusWaits(this.now)
+    const armed = () => [...this.armed.values()]
+    this.ticks = new ThreadStatusTicks(deps.setTick, armed, (thread) => this.evaluate(thread))
     // Lines a bot posts before the first watch still move an armed thread's clock.
     for (const { link } of armedLinks(deps.store)) {
       this.armed.set(idOf(link), link)
@@ -81,13 +87,17 @@ export class ThreadStatus implements ConversationWorkersWatcher {
     }
     // A turn end's answer is still on its way to the thread: the next tick decides, never this read.
     if (fact?.armed) {
-      this.write(link, withTurnEnd({ ...fact, armed: fact.armed }, this.now()))
-    } else if (view.open && this.eligible(link) && mayArm(fact, this.now())) {
+      writeThreadStatus(
+        this.deps.store,
+        link,
+        withTurnEnd({ ...fact, armed: fact.armed }, this.now())
+      )
+    } else if (view.open && threadStatusEligible(this.deps, link) && mayArm(fact, this.now())) {
       this.write(link, armedFact(fact, this.now()))
     }
     if (findLink(this.deps.store, link)?.link.threadStatus?.armed) {
       this.armed.set(idOf(link), link)
-      this.schedule()
+      this.ticks.start()
     }
   }
 
@@ -111,7 +121,7 @@ export class ThreadStatus implements ConversationWorkersWatcher {
       this.armed.set(idOf(link), link)
       void this.evaluate(link)
     }
-    this.schedule()
+    this.ticks.start()
   }
 
   /** A connector call settled: the lines it put in armed threads move their clocks. */
@@ -153,18 +163,11 @@ export class ThreadStatus implements ConversationWorkersWatcher {
     }
   }
 
-  private eligible(link: ExternalConversationLink): boolean {
-    return (
-      slackMirrorAvailable(link) &&
-      !link.muted &&
-      !link.mirrorBlocked &&
-      !(link.bot && this.deps.botRefused?.(link.bot.botId))
-    )
-  }
-
   private async evaluate(thread: Thread): Promise<void> {
     const id = idOf(thread)
     if (this.busy.has(id)) {
+      // A read or line meanwhile is decided as soon as this one is done, not a tick later.
+      this.again.add(id)
       return
     }
     this.busy.add(id)
@@ -174,6 +177,9 @@ export class ThreadStatus implements ConversationWorkersWatcher {
       console.warn('[connectors] could not post a thread’s status line', error)
     } finally {
       this.busy.delete(id)
+    }
+    if (this.again.delete(id)) {
+      await this.evaluate(thread)
     }
   }
 
@@ -190,41 +196,47 @@ export class ThreadStatus implements ConversationWorkersWatcher {
       return
     }
     this.armed.set(id, thread)
-    this.schedule()
+    this.ticks.start()
     if ((this.notBefore.get(id) ?? 0) > this.now()) {
       return
     }
-    if (stalePending(found.fact, this.now(), PENDING_MAX_MS)) {
-      this.write(found.link, withoutPending(found.fact))
-    }
-    const decide = (held: boolean) => {
+    const decide = (held: (link: ExternalConversationLink) => boolean) => {
       const current = read()
       const view = current ? this.views.get(current.link.paneKey) : undefined
-      const eligible = !!current && this.eligible(current.link)
-      const input = { now: this.now(), fact: current?.fact, view, held, eligible }
-      return { current, decided: decideThreadStatus(input) }
+      const eligible = !!current && threadStatusEligible(this.deps, current.link)
+      const input = { now: this.now(), fact: current?.fact, view, eligible }
+      return {
+        current,
+        decided: decideThreadStatus({ ...input, held: !!current && held(current.link) })
+      }
     }
-    // A saved line goes again only as a new one would: unheld, still due and still the same kind.
-    const unheld = decide(false)
-    if (unheld.decided.kind !== 'post') {
-      return unheld.decided.kind === 'disarm' && unheld.current
-        ? this.disarm(unheld.current.link, unheld.current.fact)
-        : undefined
+    // A saved line goes again only as a new one would: unheld, still due and still the same line.
+    const unheld = decide(() => false)
+    if (unheld.decided.kind === 'disarm' && unheld.current) {
+      return this.disarm(unheld.current.link, unheld.current.fact)
+    }
+    if (unheld.decided.kind !== 'post' || this.heldNow(found.link)) {
+      return
     }
     const { link } = found
     const lastTurnId = this.views.get(link.paneKey)?.lastTurnId ?? null
+    const readAt = this.now()
     const answerHeld = await threadStatusAnswerHeld(this.deps, link, lastTurnId)
-    // Read again after the wait: a turn, a line or a settle meanwhile decides afresh.
-    const { current, decided } = decide(answerHeld || this.heldNow(link))
-    if (!current || decided.kind === 'wait') {
+    // A read for a turn the pane has since moved past says nothing: the next tick reads again.
+    const after = read()?.link
+    const fresh = !!after && this.answerKey(after) === answerReadKey(link, lastTurnId)
+    this.waits.answerRead(id, fresh && !answerHeld ? this.answerKey(link) : null, readAt)
+    // Read again after the wait, on the link as it is now: a turn, a line or a settle decides afresh.
+    const { current, decided } = decide((now) => answerHeld || this.heldNow(now))
+    if (!fresh || !current || decided.kind === 'wait') {
       return
     }
     if (decided.kind === 'disarm') {
       return this.disarm(current.link, current.fact)
     }
-    const saved = current.fact.pending
-    if (saved && saved.stop === decided.stop) {
-      return await this.send(current.link)
+    const saved = current.fact.pending ? this.settleSaved(current.link) : 'drop'
+    if (saved !== 'drop') {
+      return saved === 'send' ? await this.send(current.link) : undefined
     }
     const seq = current.fact.seq + 1
     const pending = {
@@ -233,30 +245,30 @@ export class ThreadStatus implements ConversationWorkersWatcher {
       at: this.now(),
       stop: decided.stop
     }
-    this.write(current.link, { ...withArmed(current.fact, current.armed, { seq }), pending })
+    this.write(current.link, {
+      ...withArmed(current.fact, current.armed, { seq }),
+      pending
+    })
     await this.send(current.link)
   }
 
   private async send(given: ExternalConversationLink): Promise<void> {
-    const cloud = this.deps.cloud()
-    const conversation = cloudConversation(given)
-    if (!cloud || cloud.cloudFeatures() === null || !conversation) {
-      return
-    }
     try {
       await this.deps.flush?.()
     } catch {
       // Not on disk yet: a restart could decide another line, so this one waits for its save.
       return
     }
+    // Asked again after the save, with nothing awaited between this and the post.
+    const cloud = this.deps.cloud()
     const link = findLink(this.deps.store, given)?.link
     const pending = link?.threadStatus?.pending
-    // Asked again after the save, with nothing awaited before the post, and before each retry.
-    const owed = () => !!pending && this.stillOwed(given, pending.replyId)
-    if (!link || !pending || !owed()) {
+    const conversation = link && cloudConversation(link)
+    if (!cloud || !link || !pending || !conversation || this.settleSaved(link) !== 'send') {
       return
     }
-    const sent = await sendThreadStatusLine(cloud, conversation, pending, owed)
+    // One try: the next tick sends it again under the same id once every check passes again.
+    const sent = await sendThreadStatusLine(cloud, conversation, pending, () => false)
     const id = idOf(link)
     this.notBefore.delete(id)
     if (sent.kind === 'later' && sent.retryAfterMs) {
@@ -269,34 +281,43 @@ export class ThreadStatus implements ConversationWorkersWatcher {
     }
     const current = findLink(this.deps.store, link)?.link
     const fact = current?.threadStatus
-    if (sent.kind === 'later' || !current || fact?.pending?.replyId !== pending.replyId) {
+    if (!current || fact?.pending?.replyId !== pending.replyId) {
       return
     }
-    if (sent.kind === 'never') {
-      console.warn('[connectors] stopped a thread’s status lines the cloud refused')
-      return this.disarm(current, fact)
+    if (sent.kind === 'later') {
+      return void this.settleSaved(current)
     }
-    // A conflict drops the line; a second in a row stops the thread's lines.
-    if (this.conflicted.delete(id)) {
+    // A refusal stops the thread's lines; a conflict drops the line, and a second in a row stops them.
+    if (sent.kind === 'never' || this.conflicted.has(id)) {
       return this.disarm(current, fact)
     }
     this.conflicted.add(id)
     this.write(current, withoutPending(fact))
   }
 
-  /** Whether this saved line may still go now, by all that is known without waiting: the same
-   *  line a fresh decision would post, nothing holding it, and none seen in the thread since. */
-  private stillOwed(thread: Thread, replyId: string): boolean {
-    const link = findLink(this.deps.store, thread)?.link
-    const fact = link?.threadStatus
-    const now = this.now()
-    if (!link || fact?.pending?.replyId !== replyId || stalePending(fact, now, PENDING_MAX_MS)) {
-      return false
+  /** What the saved line comes to now, by all that is known without waiting; a line no longer
+   *  owed is dropped, or its run stopped, at once rather than a tick later. */
+  private settleSaved(link: ExternalConversationLink): SavedLineNow {
+    const fact = link.threadStatus
+    const verdict = savedLineNow({
+      now: this.now(),
+      fact,
+      view: this.views.get(link.paneKey),
+      eligible: threadStatusEligible(this.deps, link),
+      held: this.heldNow(link),
+      answerClear: this.waits.answerClearFor(idOf(link), this.answerKey(link), link.paneKey),
+      cloudReady: (this.deps.cloud()?.cloudFeatures() ?? null) !== null
+    })
+    if (fact && verdict === 'disarm') {
+      this.disarm(link, fact)
+    } else if (fact && verdict === 'drop') {
+      this.write(link, withoutPending(fact))
     }
-    const view = this.views.get(link.paneKey)
-    const eligible = this.eligible(link)
-    const decided = decideThreadStatus({ now, fact, view, eligible, held: this.heldNow(link) })
-    return decided.kind === 'post' && decided.stop === fact.pending.stop
+    return verdict
+  }
+
+  private answerKey(link: ExternalConversationLink): string {
+    return answerReadKey(link, this.views.get(link.paneKey)?.lastTurnId ?? null)
   }
 
   private heldNow(link: ExternalConversationLink): boolean {
@@ -315,30 +336,5 @@ export class ThreadStatus implements ConversationWorkersWatcher {
     this.waits.forgetThread(id)
     this.notBefore.delete(id)
     this.conflicted.delete(id)
-  }
-
-  private write(link: Thread, threadStatus: ThreadStatusFact): void {
-    try {
-      writeLinkFact(this.deps.store, link, { threadStatus })
-    } catch (error) {
-      console.warn('[connectors] could not keep a thread’s status lines on its link', error)
-    }
-  }
-
-  // One tick a minute while some thread is armed.
-  private schedule(): void {
-    if (this.timer || this.armed.size === 0) {
-      return
-    }
-    const tick = () => {
-      this.timer = null
-      for (const thread of this.armed.values()) {
-        void this.evaluate(thread)
-      }
-      this.schedule()
-    }
-    this.timer = this.deps.setTick
-      ? this.deps.setTick(tick, TICK_MS)
-      : unrefTimer(setTimeout(tick, TICK_MS))
   }
 }

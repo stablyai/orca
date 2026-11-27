@@ -9,8 +9,12 @@ const TURN_END_SETTLE_MS = 2 * 60_000
 export class ThreadStatusWaits {
   // Open prompts each armed conversation showed, by conversation id.
   private readonly prompts = new Map<string, Set<string>>()
+  // The link and turn each thread's latest answer read found nothing unsent for, and when it began.
+  private readonly answerClear = new Map<string, { key: string; at: number }>()
   // Panes whose turn just ended, until when their lines wait for its answer.
   private readonly settling = new Map<string, number>()
+  // When each pane's latest turn ended, as told: a read begun before it is for an older turn.
+  private readonly endedAt = new Map<string, number>()
 
   constructor(private readonly now: () => number) {}
 
@@ -35,6 +39,7 @@ export class ThreadStatusWaits {
 
   turnEnding(paneKey: string): void {
     this.settling.set(paneKey, this.now() + TURN_END_SETTLE_MS)
+    this.endedAt.set(paneKey, this.now())
   }
 
   settlingNow(paneKey: string): boolean {
@@ -45,11 +50,29 @@ export class ThreadStatusWaits {
     return until !== undefined && until > this.now()
   }
 
+  /** `key`: the link and turn a read begun at `at` found clear; null when it held the line. */
+  answerRead(id: string, key: string | null, at: number): void {
+    if (key === null) {
+      this.answerClear.delete(id)
+    } else {
+      this.answerClear.set(id, { key, at })
+    }
+  }
+
+  /** The latest read found this link and turn clear, and no turn of the pane ended since it began. */
+  answerClearFor(id: string, key: string, paneKey: string): boolean {
+    const read = this.answerClear.get(id)
+    const ended = this.endedAt.get(paneKey)
+    return read?.key === key && (ended === undefined || ended < read.at)
+  }
+
   forgetThread(id: string): void {
     this.prompts.delete(id)
+    this.answerClear.delete(id)
   }
 
   forgetPane(paneKey: string): void {
     this.settling.delete(paneKey)
+    this.endedAt.delete(paneKey)
   }
 }

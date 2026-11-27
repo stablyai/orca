@@ -500,13 +500,16 @@ describe('ThreadStatus', () => {
   })
 
   it('posts nothing that changed while its save or answer read was waiting', async () => {
-    const changes: [string, (run: ReturnType<typeof harness>) => void | Promise<void>][] = [
-      ['a turn starts', (run) => void (run.clock.running = run.clock.now)],
-      ['a turn ends', (run) => run.status.turnEnding(PANE)],
-      ['the bot answers', (run) => run.botSaid()],
-      ['the work settles', (run) => run.polled(view({ activity: 'none', open: false }))]
+    type Run = ReturnType<typeof harness>
+    // What changes during the save, and what becomes of the saved line: kept for later, dropped,
+    // or its run stopped at once.
+    const changes: [(run: Run) => void | Promise<void>, 'kept' | 'dropped' | 'disarmed'][] = [
+      [(run) => void (run.clock.running = run.clock.now), 'kept'],
+      [(run) => run.status.turnEnding(PANE), 'kept'],
+      [(run) => run.botSaid(), 'dropped'],
+      [(run) => run.polled(view({ activity: 'none', open: false })), 'disarmed']
     ]
-    for (const [, change] of changes) {
+    for (const [change, becomes] of changes) {
       const save = deferred()
       const run = harness(botHome(), { flush: () => save.promise })
       await run.turnEnded()
@@ -516,6 +519,13 @@ describe('ThreadStatus', () => {
       save.release()
       await run.settle()
       expect(run.sent).toHaveLength(0)
+      expect(
+        {
+          kept: run.fact()?.pending !== undefined,
+          dropped: !!run.fact()?.armed && run.fact()?.pending === undefined,
+          disarmed: run.fact()?.armed === undefined
+        }[becomes]
+      ).toBe(true)
       await closeTestStores()
     }
 
@@ -528,6 +538,121 @@ describe('ThreadStatus', () => {
     await answering.settle()
     expect(answering.sent).toHaveLength(0)
     expect(answering.fact()?.pending).toBeUndefined()
+    await closeTestStores()
+
+    // An owner's mirror post fails during the read: the link as it is now holds the line.
+    const mirrorRead = deferred<boolean>()
+    const mirrored = botHome()
+    const held = harness(mirrored, { answerPending: () => mirrorRead.promise })
+    await held.turnEnded()
+    await held.advance(30 * MIN)
+    const { link, workspace } = findLink(mirrored, THREAD)!
+    writeLink(mirrored, workspace, {
+      ...link,
+      mirrorHeld: [{ event: { kind: 'turn-ended', turnId: 7 }, waiting: ['item-1'] }]
+    })
+    mirrorRead.release(false)
+    await held.settle()
+    expect(held.sent).toHaveLength(0)
+    expect(held.fact()?.pending).toBeUndefined()
+  })
+
+  it('replaces a saved update the workers no longer bear out, and waits out a lost hello', async () => {
+    const save = deferred()
+    const run = harness(botHome(), { flush: () => save.promise })
+    await run.turnEnded()
+    await run.advance(30 * MIN)
+    // The worker goes idle while "still working" waits on its save.
+    await run.polled(view({ activity: 'idle' }))
+    save.release()
+    await run.settle()
+    expect(run.sent.map(({ replyId, text }) => [replyId, text.slice(0, 10)])).toEqual([
+      [statusReplyId(THREAD, START, 2), 'Still open']
+    ])
+    await closeTestStores()
+
+    const hello = deferred()
+    const options = { flush: () => hello.promise, features: true }
+    const offline = harness(botHome(), options)
+    await offline.turnEnded()
+    await offline.advance(30 * MIN)
+    options.features = false
+    hello.release()
+    await offline.settle()
+    expect(offline.sent).toHaveLength(0)
+    options.features = true
+    await offline.advance(MIN)
+    expect(offline.sent.map((body) => body.replyId)).toEqual([statusReplyId(THREAD, START, 1)])
+  })
+
+  it('never posts a saved stop line beside a bot line of the same moment', async () => {
+    const save = deferred()
+    let paused = false
+    const run = harness(botHome(), { flush: () => (paused ? save.promise : Promise.resolve()) })
+    await run.turnEnded()
+    await run.advance(30 * MIN)
+    expect(run.sent).toHaveLength(1)
+    paused = true
+    await run.polled(view({ activity: 'idle', open: false }))
+    expect(run.fact()?.pending?.stop).toBe(true)
+    run.botSaid()
+    save.release()
+    await run.settle()
+    expect(run.sent).toHaveLength(1)
+    expect(run.fact()?.pending).toBeUndefined()
+  })
+
+  it("waits for a later turn's unsent answer that ended while a read or save was waiting", async () => {
+    for (const waitsOn of ['read', 'save'] as const) {
+      const earlier = deferred<boolean>()
+      const save = deferred()
+      let laterUnsent = true
+      const store = botHome()
+      const run = harness(store, {
+        answerPending: (_link, turnId) =>
+          turnId === 8
+            ? Promise.resolve(laterUnsent)
+            : waitsOn === 'read'
+              ? earlier.promise
+              : Promise.resolve(false),
+        flush: () => (waitsOn === 'save' ? save.promise : Promise.resolve())
+      })
+      await run.turnEnded()
+      await run.advance(30 * MIN)
+      // Turn 8 ends meanwhile; its answer is still in the outbox once its settle window passes.
+      await run.turnEnded(view({ lastTurnId: 8 }))
+      await run.advance(3 * MIN)
+      earlier.release(false)
+      save.release()
+      await run.advance(2 * MIN)
+      expect(run.sent).toHaveLength(0)
+      laterUnsent = false
+      await run.advance(MIN)
+      expect(run.sent).toHaveLength(1)
+      await closeTestStores()
+    }
+  })
+
+  it('stops retrying a line once a turn starts during the backoff', async () => {
+    const tries: number[] = []
+    const store = botHome()
+    const run = harness(store, {
+      cloud: () => ({
+        cloudFeatures: () => new Set<string>(),
+        reply: (_body, proceed) => {
+          tries.push(run.clock.now)
+          // Busy; a person asks during the backoff, before the transport's next try.
+          run.clock.running = run.clock.now
+          if (proceed?.()) {
+            tries.push(run.clock.now)
+          }
+          return Promise.resolve({ ok: false, status: 503, error: null })
+        }
+      })
+    })
+    await run.turnEnded()
+    await run.advance(30 * MIN)
+    expect(tries).toHaveLength(1)
   })
 
   it("starts a run's conflicts over: one 409 in a new run never stops it", async () => {

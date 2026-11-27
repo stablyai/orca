@@ -1,5 +1,6 @@
 // What the thread status lines reach: the link store, the cloud, the reply outbox and the clock.
 import type { ExternalConversationLink } from '../../../shared/connectors/external-conversation-link'
+import { slackMirrorAvailable } from '../../../shared/connectors/slack-mirror-state'
 import type { LeaveLinesCloud } from '../external-conversation-leave-lines'
 import type { ExternalConversationLinkStore } from '../external-conversation-links'
 
@@ -41,4 +42,44 @@ export function unrefTimer(timer: ReturnType<typeof setTimeout>): { cancel: () =
 
 export function idOf(link: Thread): string {
   return JSON.stringify([link.source, link.externalId])
+}
+
+/** A Slack bot thread or DM that isn't muted, blocked or its bot's refused. */
+export function threadStatusEligible(
+  deps: Pick<ThreadStatusDeps, 'botRefused'>,
+  link: ExternalConversationLink
+): boolean {
+  return (
+    slackMirrorAvailable(link) &&
+    !link.muted &&
+    !link.mirrorBlocked &&
+    !(link.bot && deps.botRefused?.(link.bot.botId))
+  )
+}
+
+const TICK_MS = 60_000
+
+/** One tick a minute while some thread is armed; each tick evaluates every armed thread. */
+export class ThreadStatusTicks {
+  private timer: { cancel: () => void } | null = null
+
+  constructor(
+    private readonly setTick: ThreadStatusDeps['setTick'],
+    private readonly armed: () => readonly Thread[],
+    private readonly evaluate: (thread: Thread) => Promise<void>
+  ) {}
+
+  start(): void {
+    if (this.timer || this.armed().length === 0) {
+      return
+    }
+    const tick = () => {
+      this.timer = null
+      for (const thread of this.armed()) {
+        void this.evaluate(thread)
+      }
+      this.start()
+    }
+    this.timer = this.setTick ? this.setTick(tick, TICK_MS) : unrefTimer(setTimeout(tick, TICK_MS))
+  }
 }

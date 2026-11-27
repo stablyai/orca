@@ -93,13 +93,14 @@ export function decideThreadStatus({
   if (linesToday(fact, now) >= THREAD_STATUS_DAY_CAP - 1) {
     return stop
   }
-  const elapsed = threadStatusElapsed(now - armed.at)
+  return { kind: 'post', text: threadStatusUpdate(view, now - armed.at), stop: false }
+}
+
+/** The update for workers in this state, `elapsedMs` into the run. */
+export function threadStatusUpdate(view: ThreadStatusView, elapsedMs: number): string {
+  const elapsed = threadStatusElapsed(elapsedMs)
   const working = view.activity !== 'idle' || view.helpersRunning
-  return {
-    kind: 'post',
-    text: working ? THREAD_STATUS_WORKING_LINE(elapsed) : THREAD_STATUS_IDLE_LINE(elapsed),
-    stop: false
-  }
+  return working ? THREAD_STATUS_WORKING_LINE(elapsed) : THREAD_STATUS_IDLE_LINE(elapsed)
 }
 
 /** `35 min`, `1 h 30 min`, `5 h`. */
