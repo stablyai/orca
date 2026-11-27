@@ -14,6 +14,10 @@ import {
 import { getTerminalQuickCommandBodySize } from '../../../../shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
 import {
+  duplicateTerminalQuickCommand,
+  getDuplicateTerminalQuickCommandLabel
+} from '../../../../shared/terminal/quick-commands/terminal-quick-command-duplicate'
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -37,7 +41,8 @@ import {
   createTerminalQuickCommandDialogDraftMemory,
   switchTerminalQuickCommandDialogAction
 } from './terminal-quick-command-dialog-draft'
-import { useTranslate } from '@/i18n/use-translate'
+import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 
 type TerminalQuickCommandDialogMode = 'add' | 'edit'
 
@@ -64,12 +69,38 @@ export function createTerminalQuickCommandDraft(
   scope: TerminalQuickCommandScope = { type: 'global' }
 ): TerminalQuickCommand {
   return {
-    id: `quick-command-${createBrowserUuid()}`,
+    id: createTerminalQuickCommandId(),
     label: '',
     command: '',
     appendEnter: true,
     scope
   }
+}
+
+/** Unsaved copy for the add dialog; `siblingLabels` are the labels it must not collide with. */
+export function createTerminalQuickCommandDuplicate(
+  source: TerminalQuickCommand,
+  siblingLabels: readonly string[],
+  t: Translate = translate
+): TerminalQuickCommand {
+  const label = getDuplicateTerminalQuickCommandLabel(siblingLabels, (copyNumber) =>
+    copyNumber === 1
+      ? t(
+          'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.a348b4b458',
+          '{{value0}} (copy)',
+          { value0: source.label }
+        )
+      : t(
+          'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.bc0050b9cc',
+          '{{value0}} (copy {{value1}})',
+          { value0: source.label, value1: copyNumber }
+        )
+  )
+  return duplicateTerminalQuickCommand(source, { id: createTerminalQuickCommandId(), label })
+}
+
+function createTerminalQuickCommandId(): string {
+  return `quick-command-${createBrowserUuid()}`
 }
 
 export function TerminalQuickCommandDialog({
