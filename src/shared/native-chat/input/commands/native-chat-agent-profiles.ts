@@ -29,6 +29,8 @@ export type NativeChatAgentProfile = {
   textDrivenCommands?: readonly string[]
   /** The agent's own /goal resumes a paused goal with `/goal resume`. */
   resumesOwnGoal?: true
+  /** The agent accepts /goal pause while its goal is running. */
+  pausesOwnGoal?: true
 }
 
 // Both lines read `.claude/skills` beside their own folders, and 2.x reports no skill as a command.
@@ -85,7 +87,9 @@ const NATIVE_CHAT_AGENT_PROFILES: Record<NativeChatAgent, NativeChatAgentProfile
   pi: {
     skillPrefix: '/',
     skillSourceOwner: 'pi',
-    skillNamePrefix: 'skill:'
+    skillNamePrefix: 'skill:',
+    resumesOwnGoal: true,
+    pausesOwnGoal: true
   },
   // Copilot reads Claude's project skills, not its home ones, and reports skills only in a session.
   copilot: {

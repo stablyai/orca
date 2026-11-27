@@ -9,6 +9,7 @@ import type { JsonlRpcRecord } from '../../jsonl-rpc/peer'
 import { piRpcDialogPresentation, type PiRpcDialogPresentation } from './rpc-extension-dialogs'
 import { PiRpcBackgroundWork } from './background-work/rpc-background-work'
 import { PiRpcSubagents } from './rpc-subagents'
+import { readPiRpcThreadGoal } from './rpc-thread-goal'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
 
 type Callback = { presentation: PiRpcDialogPresentation; claimed: boolean; bytes: number }
@@ -17,11 +18,13 @@ const DECORATION = new Set(['notify', 'setStatus', 'setWidget', 'setTitle', 'set
 export class PiRpcDialogCallbacks {
   private readonly pending = new Map<string, Callback>()
   private pendingBytes = 0
+  private lastThreadGoal?: string
+  private threadGoalRevision = 0
   /** Its frames never reach presentation, the pending cap, or cancelAll at turn end. */
   readonly backgroundWork: PiRpcBackgroundWork
   private readonly subagents: PiRpcSubagents
   constructor(
-    private readonly lane: JsonlRpcTimelineLane,
+    private readonly lane: Pick<JsonlRpcTimelineLane, 'apply' | 'isRequestRow'>,
     private readonly send: (frame: JsonlRpcRecord) => Promise<void>,
     private readonly onFailed: (error: Error) => void,
     backgroundWorkDirectory: string | null,
@@ -40,6 +43,26 @@ export class PiRpcDialogCallbacks {
 
   receive(frame: JsonlRpcRecord): void {
     if (this.backgroundWork.receive(frame) || this.subagents.receive(frame)) {
+      return
+    }
+    const threadGoal = readPiRpcThreadGoal(frame)
+    if (threadGoal) {
+      const snapshot = JSON.stringify(threadGoal)
+      if (this.lastThreadGoal !== snapshot) {
+        this.lastThreadGoal = snapshot
+        this.lane.apply([
+          {
+            type: 'item.close',
+            item: `pi-thread-goal:${++this.threadGoalRevision}`,
+            body: {
+              kind: 'status',
+              presentation: 'thread-goal',
+              text: threadGoal.state === 'set' ? threadGoal.goal.objective : '',
+              threadGoal
+            }
+          }
+        ])
+      }
       return
     }
     if (typeof frame.method === 'string' && DECORATION.has(frame.method)) {

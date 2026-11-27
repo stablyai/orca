@@ -21,6 +21,13 @@ import type { NativeChatBlock, NativeChatRole } from '../../native-chat/native-c
 import type { AgentMessageSource } from './agent-session-message-source'
 import type { AgentSessionExecutionOptions } from '../options/protocol/agent-session-execution-options'
 import type { AgentJournalOrcaCardItem } from '../../agent-journal-orca-card-items'
+import type { AgentJournalThreadGoalState } from './agent-session-journal-thread-goal-types'
+export {
+  AGENT_JOURNAL_THREAD_GOAL_STATUSES,
+  type AgentJournalThreadGoal,
+  type AgentJournalThreadGoalState,
+  type AgentJournalThreadGoalStatus
+} from './agent-session-journal-thread-goal-types'
 export type {
   AgentJournalAgentHandoffItem,
   AgentJournalAgentStartItem
@@ -253,35 +260,6 @@ export type AgentJournalTurnLifecycle = {
    *  once the provider opened one. Nothing else re-derives it after the command settles. */
   providerTurnId?: string
 }
-
-/** Provider thread-goal lifecycle. Open like other persisted vocabularies: a
- *  status a newer provider reports must not turn a row malformed. */
-export const AGENT_JOURNAL_THREAD_GOAL_STATUSES = [
-  'active',
-  'paused',
-  'blocked',
-  'usageLimited',
-  'budgetLimited',
-  'complete'
-] as const
-export type AgentJournalThreadGoalStatus = (typeof AGENT_JOURNAL_THREAD_GOAL_STATUSES)[number]
-
-/** The provider's goal as last journaled. Timestamps are epoch ms on the
- *  provider's clock; counters are as of `updatedAt`. */
-export type AgentJournalThreadGoal = {
-  objective: string
-  status: AgentJournalThreadGoalStatus
-  tokenBudget: number | null
-  tokensUsed: number
-  timeUsedSeconds: number
-  createdAt: number
-  updatedAt: number
-}
-
-/** A goal transition in typed form, so readers never parse a bounded frame head. */
-export type AgentJournalThreadGoalState =
-  | { state: 'set'; goal: AgentJournalThreadGoal }
-  | { state: 'cleared' }
 
 type AgentJournalStatusItemFields = {
   kind: 'status'

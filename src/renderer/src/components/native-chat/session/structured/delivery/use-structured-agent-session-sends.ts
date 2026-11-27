@@ -116,7 +116,9 @@ export function useStructuredAgentSessionSends(args: {
       if (!text.trim() && attachments.length === 0) {
         return false
       }
-      const delivery = structuredAgentSessionQueueRequest(queue, request?.alternate)
+      const delivery = request?.immediate
+        ? undefined
+        : structuredAgentSessionQueueRequest(queue, request?.alternate)
       const captured = sendSelection?.() ?? { options: sendOptions?.() }
       const sent = sendStructuredAgentSessionMessage({
         sessionId,

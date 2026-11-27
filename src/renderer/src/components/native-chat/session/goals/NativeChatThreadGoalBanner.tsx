@@ -48,10 +48,11 @@ export function NativeChatThreadGoalBanner(props: {
   goal: AgentSessionGoalDisplay
   objectiveContent?: React.ReactNode
   pending: boolean
-  /** False where only the agent's own `/goal` changes the goal, which has no pause. */
+  /** False where only the agent's own `/goal` changes the goal. */
   hostChanges: boolean
   /** The agent's own `/goal` resumes a paused goal. */
   agentResumes?: boolean
+  agentPauses?: boolean
   /** The composer cannot admit another message or the session is working. */
   sendUnavailable: boolean
   /** The host may take no turn now: Resume, and a clear that enters a turn, are held. */
@@ -69,9 +70,10 @@ export function NativeChatThreadGoalBanner(props: {
   const label = nativeChatThreadGoalStatusLabel(goal.status, runningTurn !== null, t)
   const statusChange = agentSessionThreadGoalOfferedStatusChange(goal.status, {
     hostChanges: props.hostChanges,
-    agentResumes: props.agentResumes === true
+    agentResumes: props.agentResumes === true,
+    agentPauses: props.agentPauses === true
   })
-  // An agent-owned change is a message that must enter a fresh turn, like a composer send.
+  // Agent-owned resume and clear use the ordinary composer send path.
   const agentCommandUnavailable =
     !props.hostChanges && (props.sendUnavailable || props.startsHeld === true)
   if (label === null) {
@@ -135,6 +137,11 @@ export function NativeChatThreadGoalBanner(props: {
           </GoalAction>
         </div>
       </div>
+      {expanded && goal.statusDetail ? (
+        <p className="max-h-40 overflow-y-auto px-3 pt-1 pb-2 whitespace-pre-wrap break-words text-sm text-foreground scrollbar-sleek">
+          {goal.statusDetail}
+        </p>
+      ) : null}
       {expanded && goal.lastCheck ? (
         <div className="max-h-40 overflow-y-auto px-3 pt-1 pb-2 whitespace-pre-wrap break-words text-sm text-foreground scrollbar-sleek">
           <p className="mb-1 text-xs font-semibold text-muted-foreground">
