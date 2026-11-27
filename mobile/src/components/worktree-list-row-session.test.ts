@@ -7,7 +7,9 @@ import {
   getWorktreeCardDetails
 } from '../../../src/shared/worktree/row-display/card-properties'
 import { setSelectedSidebarSession } from '../host-screen/selected-sidebar-session'
-import { colors } from '../theme/mobile-theme'
+import { getMobilePalette } from '../theme/mobile-theme'
+
+const colors = getMobilePalette()
 import type { Worktree, WorktreeRowView } from '../worktree/workspace-list/workspace-list-types'
 import { WorktreeListRow } from '../worktree/row-presentation/WorktreeListRow'
 
@@ -26,6 +28,7 @@ vi.mock('react-native', () => ({
     addEventListener: () => ({ remove: () => {} })
   },
   Pressable: 'Pressable',
+  findNodeHandle: () => 1,
   StyleSheet: { create: <T>(styles: T) => styles },
   Text: 'Text',
   View: 'View'

@@ -3,7 +3,9 @@ import { View } from 'react-native'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/worktree/catalog/runtime-worktree-contracts'
-import { colors, spacing } from '../theme/mobile-theme'
+import { getMobilePalette, spacing } from '../theme/mobile-theme'
+
+const colors = getMobilePalette()
 import { WorktreeAgentRow } from '../worktree/agent-lineage/presentation/WorktreeAgentRow'
 
 function findByHostType(root: ReactTestInstance, hostType: string): ReactTestInstance {

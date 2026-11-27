@@ -3,7 +3,9 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { clearDisclosuresForTests } from '../worktree/agent-lineage/agent-child-disclosure'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/worktree/catalog/runtime-worktree-contracts'
-import { colors } from '../theme/mobile-theme'
+import { getMobilePalette } from '../theme/mobile-theme'
+
+const colors = getMobilePalette()
 import { WorktreeAgentList } from '../worktree/agent-lineage/presentation/WorktreeAgentList'
 
 function findAllByHostType(root: ReactTestInstance, hostType: string): ReactTestInstance[] {
