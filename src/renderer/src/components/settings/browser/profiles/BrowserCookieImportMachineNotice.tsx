@@ -3,6 +3,7 @@ import { DropdownMenuLabel } from '../../../ui/dropdown-menu'
 import { useAppStore } from '../../../../store/index'
 import { useTranslate } from '@/i18n/use-translate'
 import { isRemoteCliControlAllowed } from '../../../../../../shared/remote-runtime/ssh/ssh-remote-cli-control'
+import { joinSentences } from '../../../../../../shared/text/sentence-joining'
 import type {
   BrowserPageCookieImportRoute,
   BrowserSshPageCookieImportRoute
@@ -91,18 +92,20 @@ function RoutedPageCookieImportNotice({
         {t('browser.cookieImport.routedPage.label', 'Browsers on this device')}
       </DropdownMenuLabel>
       <p className="max-w-60 px-2 pb-1.5 text-[11px] leading-4 text-muted-foreground">
-        {t(
-          'browser.cookieImport.routedPage.destination',
-          'Imports into the browser for {{host}}.',
-          { host: hostLabel }
-        )}
-        {hostAgentsCanBrowse
-          ? ` ${t(
-              'browser.cookieImport.routedPage.hostAgents',
-              'Agents on {{host}} can use these sign-ins, but can’t read the cookies.',
-              { host: hostLabel }
-            )}`
-          : null}
+        {joinSentences([
+          t(
+            'browser.cookieImport.routedPage.destination',
+            'Imports into the browser for {{host}}.',
+            { host: hostLabel }
+          ),
+          hostAgentsCanBrowse
+            ? t(
+                'browser.cookieImport.routedPage.hostAgents',
+                'Agents on {{host}} can use these sign-ins, but can’t read the cookies.',
+                { host: hostLabel }
+              )
+            : ''
+        ])}
       </p>
     </>
   )
