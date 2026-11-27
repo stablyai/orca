@@ -1,5 +1,6 @@
 import process from 'node:process'
 import { startBackendCore } from '../../backend/core-runtime'
+import { seedClaudePinnedPtyRegistry } from '../../claude-accounts/claude-pty-account-registries-startup'
 import { resolveUserDataPath } from './orcad-app-paths'
 import { prepareOrcadCliLauncher } from '../serve-startup/orcad-cli-launcher'
 import { installOrcadHostAdapters, runOrcadQuitHandlers } from './orcad-host-adapters'
@@ -16,6 +17,7 @@ export async function startOrcad(options: OrcadOptions = {}): Promise<OrcadHandl
   const userDataPath = resolveUserDataPath()
   // Override inherited data roots so CLI-shared Codex homes resolve on this host.
   process.env.ORCA_USER_DATA_PATH = userDataPath
+  await seedClaudePinnedPtyRegistry(userDataPath)
   return startBackendCore({
     userDataPath,
     supervised: process.env[ORCA_SERVE_SUPERVISED_ENV] === '1',

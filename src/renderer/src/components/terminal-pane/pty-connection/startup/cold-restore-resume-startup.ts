@@ -115,17 +115,16 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
         session.executionHostId
       )
     })
+    const pinnedAccountId =
+      launchConfig?.claudeAccountId ??
+      matchingSleepingRecord?.launchConfig?.claudeAccountId ??
+      matchingSleepingRecord?.claudeAccountId
     const startupPlan = buildAgentResumeStartupPlan({
       agent,
       providerSession,
       cmdOverrides: state.settings?.agentCmdOverrides ?? {},
       ...resolveResumeLaunchRecipe(launchConfig, agent, providerSession),
-      ...((launchConfig?.claudeAccountId ?? matchingSleepingRecord?.claudeAccountId)
-        ? {
-            claudeAccountId:
-              launchConfig?.claudeAccountId ?? matchingSleepingRecord?.claudeAccountId
-          }
-        : {}),
+      ...(pinnedAccountId ? { claudeAccountId: pinnedAccountId } : {}),
       platform: resumeTarget.platform,
       agentHostPlatform: resumeTarget.agentHostPlatform,
       shell: resumeTarget.shell,
