@@ -122,16 +122,16 @@ function headline(view: ResumeToastView, t: Translate, machineName?: string): st
 function HeadlineIcon({ view }: { view: ResumeToastView }): React.JSX.Element {
   if (view.phase === 'resuming') {
     return (
-      <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none" />
+      <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none" />
     )
   }
   if (view.counts.needsYou > 0) {
-    return <AlertCircle className="size-4 shrink-0 text-status-warning" />
+    return <AlertCircle className="size-3.5 shrink-0 text-status-warning" />
   }
   if (view.phase === 'finished') {
-    return <CheckCircle2 className="size-4 shrink-0 text-status-success" />
+    return <CheckCircle2 className="size-3.5 shrink-0 text-status-success" />
   }
-  return <RotateCcw className="size-4 shrink-0 text-muted-foreground" />
+  return <RotateCcw className="size-3.5 shrink-0 text-muted-foreground" />
 }
 
 /** The resume-on-restart report: one line, a Resume when nothing was sent, chats behind Details. */
@@ -176,7 +176,8 @@ export function NativeChatResumeToast({
       aria-labelledby={titleId}
       className="w-full overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-floating"
     >
-      <div className="flex min-w-0 items-start gap-2.5 py-2.5 pr-2 pl-3.5">
+      {/* Header and rows share one icon column (12px in) and one text column (34px in). */}
+      <div className="flex min-w-0 items-start gap-2 py-2.5 pr-2 pl-3">
         <span className="mt-0.5 inline-flex">
           <HeadlineIcon view={view} />
         </span>
@@ -269,7 +270,7 @@ export function NativeChatResumeToast({
             )}
           </div>
         )}
-        <div className="space-y-1.5 border-t border-border px-3.5 py-2.5 text-xs text-muted-foreground">
+        <div className="space-y-1.5 border-t border-border px-3 py-2.5 text-xs text-muted-foreground">
           {/* Balanced, so a longer locale wraps into even lines instead of orphaning a word; CJK breaks only between phrases. */}
           <p className="text-balance break-keep">
             {offering

@@ -20242,7 +20242,7 @@
         "close": "Cerrar",
         "listLabel": "Agentes",
         "untitled": "Agente sin título",
-        "botChat": "{{bot}} · {{chat}}",
+        "botChat": "{{chat}} · {{bot}}",
         "willAsk": "Orca pedirá continuar. Los mensajes en cola pueden enviarse.",
         "asked": "Orca pidió continuar. Los mensajes en cola pueden enviarse.",
         "resumedAutomatically": "Reanudado automáticamente.",

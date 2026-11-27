@@ -22082,7 +22082,7 @@
         "close": "Fechar",
         "listLabel": "Agentes",
         "untitled": "Agente sem título",
-        "botChat": "{{bot}} · {{chat}}",
+        "botChat": "{{chat}} · {{bot}}",
         "willAsk": "O Orca pede para continuar. Mensagens na fila podem ser enviadas.",
         "asked": "O Orca pediu para continuar. Mensagens na fila podem ser enviadas.",
         "resumedAutomatically": "Retomado automaticamente.",

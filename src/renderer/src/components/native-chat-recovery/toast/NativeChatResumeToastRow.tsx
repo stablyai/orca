@@ -107,9 +107,9 @@ export function NativeChatResumeToastRow({
   const t = useTranslate()
   const actions = rowActions(row, remote, t)
   const name = bot
-    ? t('auto.components.NativeChatResumeToast.botChat', '{{bot}} · {{chat}}', {
-        bot: bot.name,
-        chat: chatName
+    ? t('auto.components.NativeChatResumeToast.botChat', '{{chat}} · {{bot}}', {
+        chat: chatName,
+        bot: bot.name
       })
     : chatName
   const reason = row.openOnly
@@ -134,7 +134,7 @@ export function NativeChatResumeToastRow({
                 <p className="truncate text-xs text-foreground/90">{chatName}</p>
                 {bot && (
                   <p className="mt-0.5 flex min-w-0 items-center gap-1 text-[11px] leading-snug text-muted-foreground">
-                    <BotAvatar bot={bot} className="size-3.5 rounded-sm border-0 text-[9px]" />
+                    <BotAvatar bot={bot} className="size-3.5 rounded-full border-0 text-[9px]" />
                     <span className="min-w-0 truncate">{bot.name}</span>
                   </p>
                 )}
@@ -148,10 +148,7 @@ export function NativeChatResumeToastRow({
         </div>
         {reason && (
           // One line beside the buttons; a long activity label truncates, its full text on hover.
-          <p
-            className="mt-0.5 truncate text-[11px] leading-snug text-muted-foreground"
-            title={reason}
-          >
+          <p className="mt-0.5 truncate text-[11px] leading-snug text-foreground/75" title={reason}>
             {reason}
           </p>
         )}
@@ -169,7 +166,8 @@ export function NativeChatResumeToastRow({
                       : 'ghost'
                 }
                 size="xs"
-                className={action === 'dismiss' ? 'ml-auto' : undefined}
+                // Dismiss's text, not its padding, ends on the times' edge.
+                className={action === 'dismiss' ? '-mr-2 ml-auto' : undefined}
                 // Open is read-only, so it stays available while a resume runs.
                 disabled={busy && action !== 'open'}
                 aria-label={`${actionLabel(action, row, t)}: ${name}`}

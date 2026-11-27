@@ -20878,7 +20878,7 @@
         "close": "Kapat",
         "listLabel": "Ajanlar",
         "untitled": "Başlıksız ajan",
-        "botChat": "{{bot}} · {{chat}}",
+        "botChat": "{{chat}} · {{bot}}",
         "willAsk": "Orca, ajanlardan devam etmelerini ister. Sıradaki iletiler gönderilebilir.",
         "asked": "Orca, ajanlardan devam etmelerini istedi. Sıradaki iletiler gönderilebilir.",
         "resumedAutomatically": "Otomatik olarak devam ettirildi.",
