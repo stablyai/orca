@@ -1031,7 +1031,7 @@
 1 src/main/ports/local-workspace-port-scanner.ts
 1 src/main/ports/port-scan-command-client.ts
 3 src/main/preflight/agent-command-detection.ts
-2 src/main/preflight/agent-detection.ts # glab auth env = the same cached /proc/mounts read the exec helper does by default
+1 src/main/preflight/agent-detection.ts
 1 src/main/preflight/installed-agent-detection.ts
 1 src/main/project-groups/nested-repo-discovery.ts
 2 src/main/provider-process/managed-provider-process.ts
