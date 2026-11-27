@@ -1,99 +1,118 @@
 import { BotMemoryUpdatedNoteSchema } from '../../../shared/bots/bot-memory-updated-note'
 // What a bot's chat adds to a saved journal, declared so strict storage keeps it.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { storedRefusalReference } from './durable-rows/journal-storage-refusal-schema'
 
-const text = z.string().optional()
+const text = lazyZodSchema(() => z.string().optional())
 
-export const storedConnectorAsker = z.object({
-  source: z.string(),
-  userId: z.string(),
-  name: text,
-  role: z.string(),
-  place: z.object({ kind: z.string(), id: z.string() }),
-  url: text,
-  avatarUrl: text,
-  messageRef: text,
-  noAccess: z.array(z.object({ name: text, text: z.string() })).optional(),
-  via: z.object({ userId: z.string(), name: z.string() }).optional(),
-  app: z.literal(true).optional()
-})
+export const storedConnectorAsker = lazyZodSchema(() =>
+  z.object({
+    source: z.string(),
+    userId: z.string(),
+    name: text,
+    role: z.string(),
+    place: z.object({ kind: z.string(), id: z.string() }),
+    url: text,
+    avatarUrl: text,
+    messageRef: text,
+    noAccess: z.array(z.object({ name: text, text: z.string() })).optional(),
+    via: z.object({ userId: z.string(), name: z.string() }).optional(),
+    app: z.literal(true).optional()
+  })
+)
 
-export const storedAutomationResultNote = z.object({
-  automationId: z.string(),
-  automationName: z.string(),
-  botName: z.string(),
-  runId: z.string(),
-  sessionId: text,
-  trigger: z.string(),
-  outcome: z.string(),
-  result: z.string(),
-  at: z.number(),
-  readWith: text
-})
+export const storedAutomationResultNote = lazyZodSchema(() =>
+  z.object({
+    automationId: z.string(),
+    automationName: z.string(),
+    botName: z.string(),
+    runId: z.string(),
+    sessionId: text,
+    trigger: z.string(),
+    outcome: z.string(),
+    result: z.string(),
+    at: z.number(),
+    readWith: text
+  })
+)
 
-export const storedBotContextNote = z.object({ botId: z.string(), changed: z.array(z.string()) })
+export const storedBotContextNote = lazyZodSchema(() =>
+  z.object({ botId: z.string(), changed: z.array(z.string()) })
+)
 
-export const storedConnectorOffer = z.object({
-  botId: z.string(),
-  source: z.string(),
-  workspace: text,
-  addAccess: z.literal(true).optional(),
-  signIn: z.literal(true).optional()
-})
+export const storedConnectorOffer = lazyZodSchema(() =>
+  z.object({
+    botId: z.string(),
+    source: z.string(),
+    workspace: text,
+    addAccess: z.literal(true).optional(),
+    signIn: z.literal(true).optional()
+  })
+)
 
-export const storedBotRequestCard = z.object({
-  toBotId: z.string(),
-  toBotName: z.string(),
-  purpose: z.string(),
-  subject: z.string(),
-  messageId: text,
-  refusal: text,
-  client: z.object({ installationId: z.string(), computer: z.string() }).optional()
-})
+export const storedBotRequestCard = lazyZodSchema(() =>
+  z.object({
+    toBotId: z.string(),
+    toBotName: z.string(),
+    purpose: z.string(),
+    subject: z.string(),
+    messageId: text,
+    refusal: text,
+    client: z.object({ installationId: z.string(), computer: z.string() }).optional()
+  })
+)
 
 /** Saved by builds that had bot take-over; still read so those chats open, as their plain text. */
-const legacyHandoffOffer = z.object({
-  botId: z.string(),
-  area: z.string(),
-  workspaces: z.array(z.object({ id: z.string(), name: z.string(), detail: z.string() }))
-})
+const legacyHandoffOffer = lazyZodSchema(() =>
+  z.object({
+    botId: z.string(),
+    area: z.string(),
+    workspaces: z.array(z.object({ id: z.string(), name: z.string(), detail: z.string() }))
+  })
+)
 
-export const storedBotCreateOffer = z.object({
-  botId: z.string(),
-  offerId: z.string(),
-  proposal: z.object({
-    name: z.string(),
-    purpose: z.string(),
-    watches: text,
-    does: text,
-    reports: text,
-    automations: z.array(z.string()).optional(),
-    templateId: text,
-    mascot: text,
-    worktrees: z.array(z.object({ id: z.string(), name: z.string() })).optional()
-  }),
-  offeredAt: z.number()
-})
+export const storedBotCreateOffer = lazyZodSchema(() =>
+  z.object({
+    botId: z.string(),
+    offerId: z.string(),
+    proposal: z.object({
+      name: z.string(),
+      purpose: z.string(),
+      watches: text,
+      does: text,
+      reports: text,
+      automations: z.array(z.string()).optional(),
+      templateId: text,
+      mascot: text,
+      worktrees: z.array(z.object({ id: z.string(), name: z.string() })).optional()
+    }),
+    offeredAt: z.number()
+  })
+)
 
-const importLine = z.string()
+const importLine = lazyZodSchema(() => z.string())
 
-export const storedBotImportPlan = z.object({
-  botId: z.string(),
-  app: importLine,
-  name: importLine,
-  again: z.boolean().optional(),
-  items: z.array(z.object({ group: z.string(), what: importLine, to: text, why: importLine }))
-})
+export const storedBotImportPlan = lazyZodSchema(() =>
+  z.object({
+    botId: z.string(),
+    app: importLine,
+    name: importLine,
+    again: z.boolean().optional(),
+    items: z.array(z.object({ group: z.string(), what: importLine, to: text, why: importLine }))
+  })
+)
 
-export const storedBotImportDone = z.object({
-  botId: z.string(),
-  app: importLine,
-  name: importLine,
-  created: z.array(z.object({ kind: z.string(), what: importLine, detail: text })),
-  stayed: z.array(importLine),
-  paused: z.number()
-})
+export const storedBotImportDone = lazyZodSchema(() =>
+  z.object({
+    botId: z.string(),
+    app: importLine,
+    name: importLine,
+    created: z.array(z.object({ kind: z.string(), what: importLine, detail: text })),
+    stayed: z.array(importLine),
+    paused: z.number()
+  })
+)
 
 const resultPlace = { ref: text, label: text }
 
@@ -150,37 +169,39 @@ export const storedWaitEnded = {
 }
 
 /** What a run's message or its Couldn't start card keeps: the run as delivered. */
-export const storedAutomationRun = z.object({
-  runId: z.string(),
-  automation: storedAutomationSaved.automation,
-  trigger: z.string(),
-  scheduledFor: z.number().optional(),
-  wait: storedWaitEnded.ending.optional(),
-  toConversation: z.literal(true).optional(),
-  event: z
-    .object({
-      source: z.string(),
-      event: z.string(),
-      occurredAt: z.number(),
-      place: text,
-      url: text,
-      actor: text,
-      replayed: z.literal(true).optional(),
-      text,
-      textShortened: z.literal(true).optional(),
-      asker: text,
-      webhook: z
-        .object({
-          hookId: z.string(),
-          callId: z.string(),
-          sample: z.literal(true).optional(),
-          firstCall: z.literal(true).optional()
-        })
-        .optional()
-    })
-    .optional(),
-  instructionsLength: z.number()
-})
+export const storedAutomationRun = lazyZodSchema(() =>
+  z.object({
+    runId: z.string(),
+    automation: storedAutomationSaved.automation,
+    trigger: z.string(),
+    scheduledFor: z.number().optional(),
+    wait: storedWaitEnded.ending.optional(),
+    toConversation: z.literal(true).optional(),
+    event: z
+      .object({
+        source: z.string(),
+        event: z.string(),
+        occurredAt: z.number(),
+        place: text,
+        url: text,
+        actor: text,
+        replayed: z.literal(true).optional(),
+        text,
+        textShortened: z.literal(true).optional(),
+        asker: text,
+        webhook: z
+          .object({
+            hookId: z.string(),
+            callId: z.string(),
+            sample: z.literal(true).optional(),
+            firstCall: z.literal(true).optional()
+          })
+          .optional()
+      })
+      .optional(),
+    instructionsLength: z.number()
+  })
+)
 
 export const storedAutomationRunNotStarted = {
   run: storedAutomationRun,

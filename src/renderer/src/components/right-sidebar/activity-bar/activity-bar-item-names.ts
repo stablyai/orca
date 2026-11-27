@@ -16,6 +16,14 @@ export function activityItemTooltip(item: ActivityBarItem): string {
   return item.shortcut ? `${name} (${item.shortcut})` : name
 }
 
+/** The item's own status, else the PR checks status for the Checks tab. */
+export function activityItemStatus(
+  item: ActivityBarItem,
+  checksStatus: ActivityItemStatus | null | undefined
+): ActivityItemStatus | null {
+  return item.statusIndicator ?? (item.id === 'checks' ? (checksStatus ?? null) : null)
+}
+
 /** The status word announced after the name; empty when the status needs no word. */
 export function activityItemStatusSuffix(
   status: ActivityItemStatus | null | undefined,

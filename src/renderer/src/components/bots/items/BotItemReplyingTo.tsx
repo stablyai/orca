@@ -6,6 +6,7 @@ import { X } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { BotItemWaitingLine } from '../../../../../shared/bots/bot-item-question-answers'
+import type { BotItemReplyMarkState } from '../../../../../shared/bots/bot-item-reply-target'
 import {
   glowNativeChatComposer,
   useNativeChatComposerGlow
@@ -27,8 +28,8 @@ export type BotItemReplyMark = {
   crowded: boolean
 }
 
-/** The box's reply mark and placeholder for the waiting question, if any: the mark hides per question,
- *  and comes back with `show` (Type your answer); `reveal` shows its question in Activity; `glowing` is
+/** The box's reply mark and placeholder for the waiting question, if any: the mark hides per question
+ *  (`closed`, kept with the box's draft), and comes back with `show` (Type your answer); `reveal` shows its question in Activity; `glowing` is
  *  the composer's one glow. The question's placeholder stacks the box where it would cut beside the
  *  controls (`field` is the text's slot in their row), and gives way to the plain one where even its own
  *  row cuts it. */
@@ -37,10 +38,10 @@ export function useBotItemReplyMark(
   field: RefObject<HTMLDivElement | null>,
   question: BotItemWaitingQuestion | null,
   scopeKey: string,
+  closed: BotItemReplyMarkState,
   onReveal?: (eventId: string) => void
 ): BotItemReplyMark {
   const t = useTranslate()
-  const [hidden, setHidden] = useState<string | null>(null)
   const long = question?.replies
     ? t('bots.items.comment.replyOrPick', 'Reply or pick an option')
     : t('bots.items.comment.replyTo', 'Reply to {{name}}…', { name: question?.asker ?? '' })
@@ -57,12 +58,12 @@ export function useBotItemReplyMark(
   const focusText = (): void =>
     box.current?.querySelector<HTMLElement>('[contenteditable]')?.focus()
   return {
-    quote: question && hidden !== question.id ? question : null,
+    quote: question && !closed.hidden ? question : null,
     hide: () => {
-      setHidden(question?.id ?? null)
+      closed.hide()
       focusText()
     },
-    show: () => setHidden(null),
+    show: closed.show,
     reveal: () => {
       if (question) {
         onReveal?.(question.eventId)

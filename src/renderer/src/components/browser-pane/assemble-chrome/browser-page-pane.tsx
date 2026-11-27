@@ -1,3 +1,5 @@
+import { useWebviewInputLock } from '../host-guest/input/use-webview-input-lock'
+import { useBrowserPageAnnotateTools } from '../annotate/palette/use-browser-page-annotate-tools'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/class-names'
@@ -172,12 +174,13 @@ export function BrowserPagePane({
     isActive,
     toolsDisabled: isBlankTab,
     markupIsActive: markup.isActive,
+    paletteKeys: true,
     containerRef,
     guestSurfaceRef: webviewRef,
     trackingContainer: pageViewport?.container ?? null,
     trackingScroller: pageViewport?.scroller ?? null,
     currentDocumentUrl: browserTab.url,
-    shortcuts: { workspaceId, chromeShortcutScope }
+    shortcuts: { workspaceId, chromeShortcutScope, bind: false }
   })
   const nav = useBrowserPageNavigationDownloads({
     browserTabId: browserTab.id,
@@ -195,7 +198,7 @@ export function BrowserPagePane({
     addressBarInputRef,
     browserTabUrl: browserTab.url
   })
-  useBrowserPageWebviewLifecycle({
+  const { documentGeneration } = useBrowserPageWebviewLifecycle({
     browserTabId: browserTab.id,
     browserTabUrl: browserTab.url,
     browserTabLoading: browserTab.loading,
@@ -261,6 +264,17 @@ export function BrowserPagePane({
     chromeShortcutScope,
     setFindOpen
   })
+  const toolSwitch = useBrowserPageAnnotateTools({
+    grab,
+    grabAnnotations,
+    markup,
+    browserTab,
+    documentGeneration,
+    isBlankTab,
+    isActive,
+    workspaceId,
+    chromeShortcutScope
+  })
   useBrowserPageWebviewShortcuts({
     browserTabId: browserTab.id,
     workspaceId,
@@ -292,14 +306,7 @@ export function BrowserPagePane({
   )
   const showFailureOverlay = Boolean(browserTab.loadError) && !isBlankTab
 
-  useEffect(() => {
-    const webview = webviewRef.current
-    if (!webview) {
-      return
-    }
-    // Why: Electron webviews keep receiving native input under a React overlay unless their own hit testing is disabled.
-    webview.style.pointerEvents = inputLocked ? 'none' : 'auto'
-  }, [inputLocked])
+  useWebviewInputLock(webviewRef, inputLocked)
 
   useEffect(() => {
     const webview = webviewRef.current
@@ -351,12 +358,12 @@ export function BrowserPagePane({
         grab={grab}
         grabAnnotations={grabAnnotations}
         annotationSend={annotationSend}
-        elementTools={elementTools}
+        elementTools={{ ...elementTools, onStartIntent: toolSwitch.toggleTool }}
         notes={notes}
         onOpenFind={() => setFindOpen(true)}
         markupIsActive={markup.isActive}
-        markupStart={markup.start}
-        markupCancel={markup.cancel}
+        markupStart={async () => toolSwitch.selectTool('draw')}
+        markupCancel={toolSwitch.exit}
         shareableArtifactFile={shareableArtifactFile}
         currentBrowserUrl={currentBrowserUrl}
         onOpenExternal={externalUrl ? () => openExternalUrl(externalUrl) : null}
@@ -369,6 +376,8 @@ export function BrowserPagePane({
             <BrowserPageViewportOverlays
               isActive={isActive}
               markup={markup}
+              toolSwitch={toolSwitch}
+              canPickElements={!isBlankTab && !browserTab.loadError}
               feedbackBadgeRef={zoom.feedbackBadgeRef}
               findOpen={findOpen}
               setFindOpen={setFindOpen}

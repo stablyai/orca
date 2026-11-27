@@ -87,9 +87,7 @@ export function useSourceControlReviewContext(panelState: SourceControlPanelStat
     activeRepo,
     activeWorktree,
     branchName,
-    compareBaseRef,
     hostedReview,
-    hostedReviewCreation,
     hostedReviewEntry,
     remoteStatus
   })
