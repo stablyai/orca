@@ -93,10 +93,10 @@ function attach(
   }
 }
 
-it('delivers the authorized private attach once and strips native history before cold restore', async () => {
+it('delivers the authorized private attach once and strips only private native history before cold restore', async () => {
   const raw = 'https://kagi.com/search?q=one&token=attach-secret'
   const first = attach(81, 'persist:profile', raw, [
-    { url: 'https://example.test/a', title: 'A', pageState: 'opaque-referrer' },
+    { url: 'https://example.test/a', title: 'A', pageState: 'ordinary-scroll-state' },
     { url: raw, title: raw, pageState: 'opaque-private-state' }
   ])
   expect(first.guest.loadURL).toHaveBeenCalledWith(raw)
@@ -106,7 +106,7 @@ it('delivers the authorized private attach once and strips native history before
   const second = attach(82)
   expect(second.guest.navigationHistory.restore).toHaveBeenCalledWith({
     entries: [
-      { url: 'https://example.test/a', title: 'A' },
+      { url: 'https://example.test/a', title: 'A', pageState: 'ordinary-scroll-state' },
       { url: 'https://kagi.com/search?q=one', title: 'https://kagi.com/search?q=one' }
     ],
     index: 1
