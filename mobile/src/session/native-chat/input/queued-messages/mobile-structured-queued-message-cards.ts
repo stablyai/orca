@@ -1,6 +1,7 @@
 import { stripSentImagePromptMarkers } from '../../../../../../src/shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import type { AgentSessionFailureFact } from '../../../../../../src/shared/agent-session/failures/agent-session-failure'
 import { mobileAgentSessionWriteNoticeText } from '../../agent-session/agent-session-write-notice-copy'
+import type { Translate } from '../../../../i18n/mobile-i18n'
 import type { AgentJournalSubmission } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import {
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
@@ -26,7 +27,8 @@ export type MobileQueuedMessageCard = QueuedMessageCard & {
 function queuedMessageCardCaption(
   card: QueuedMessageCard,
   agentName: string | undefined,
-  statedFailures: readonly AgentSessionFailureFact[]
+  statedFailures: readonly AgentSessionFailureFact[],
+  t: Translate
 ): string | null {
   switch (card.hold) {
     case 'returned': {
@@ -36,7 +38,7 @@ function queuedMessageCardCaption(
       }
       return notice === 'withdrawn'
         ? 'Stopped before it was sent'
-        : mobileAgentSessionWriteNoticeText(notice)
+        : mobileAgentSessionWriteNoticeText(notice, t)
     }
     case 'paused':
       // Absent or unknown (newer host) marker: a plain pause, promising no release rule.
@@ -57,6 +59,7 @@ function queuedMessageCardCaption(
 export function mobileQueuedMessageCards(
   queuedMessages: readonly AgentSessionQueuedMessage[] | null | undefined,
   submissions: readonly AgentJournalSubmission[],
+  t: Translate,
   facts: {
     agentWorking?: boolean
     queuePaused?: boolean
@@ -74,6 +77,6 @@ export function mobileQueuedMessageCards(
       )
     }),
     needsAttention: queuedMessageCardNeedsAttention(card),
-    caption: queuedMessageCardCaption(card, facts.agentName, facts.statedFailures ?? [])
+    caption: queuedMessageCardCaption(card, facts.agentName, facts.statedFailures ?? [], t)
   }))
 }

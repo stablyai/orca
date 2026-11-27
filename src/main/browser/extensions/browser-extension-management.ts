@@ -39,7 +39,10 @@ import {
 import { notifyBrowserExtensionListChanged } from './installation/browser-extension-list-changes'
 import { reviewHeldBrowserExtensionUpdate } from './web-store/browser-extension-webstore-updater'
 import { withBrowserExtensionLock } from './installation/browser-extension-mutation-lock'
-import { isBrowserExtensionSupportEnabled } from './browser-extension-support'
+import {
+  BROWSER_EXTENSION_SUPPORT_DISABLED_ERROR,
+  isBrowserExtensionSupportEnabled
+} from './browser-extension-support'
 import {
   withExtensionEnabled,
   withoutExtension
@@ -60,7 +63,11 @@ import {
 
 async function settle(action: () => Promise<void>): Promise<BrowserExtensionActionResult> {
   if (!isBrowserExtensionSupportEnabled()) {
-    return { ok: false, error: 'Turn on browser extensions in Settings › Browser › Extensions' }
+    return {
+      ok: false,
+      error: BROWSER_EXTENSION_SUPPORT_DISABLED_ERROR,
+      failure: { reason: 'support-disabled' }
+    }
   }
   try {
     await action()

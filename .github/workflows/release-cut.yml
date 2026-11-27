@@ -1295,12 +1295,16 @@ jobs:
         if: matrix.platform == 'linux-x64' || matrix.platform == 'linux-arm64'
         uses: nick-fields/retry@v4
         with:
-          timeout_minutes: 10
+          # Why: backstop only; the smoke's per-phase limits fail a stall in about a minute.
+          timeout_minutes: 8
           max_attempts: 3
           retry_wait_seconds: 30
           command: >-
             node config/scripts/desktop-distribution/runtime-verification/run-linux-packaged-node-pty-floor-smoke.mjs
             --app-dir ${{ matrix.unpacked_dir }}
+        env:
+          # Why: the public Ubuntu archive stalls apt-get update on x64 runners; ports.ubuntu.com (arm64) is fine.
+          ORCA_NODE_PTY_FLOOR_APT_MIRROR: ${{ matrix.platform == 'linux-x64' && 'http://azure.archive.ubuntu.com/ubuntu' || '' }}
 
       # Why: SignPath signs GitHub workflow artifacts, so Windows builds must
       # upload only after the production-signed installer has been returned.

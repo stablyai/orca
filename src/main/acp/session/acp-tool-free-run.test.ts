@@ -154,11 +154,14 @@ describe('a tool-free ACP run', () => {
       agent.notify('session/update', toolCall)
       setImmediate(() => agent.reply(frame, { stopReason: 'end_turn' }))
     })
-    session.turns!.dispatch({
-      clientMessageId: 'tidy-1',
-      prompt: [{ type: 'text', text: 'Tidy your memory' }],
-      requestedAt: 1
-    })
+    session.turns!.dispatch(
+      {
+        clientMessageId: 'tidy-1',
+        prompt: [{ type: 'text', text: 'Tidy your memory' }],
+        requestedAt: 1
+      },
+      'cancel'
+    )
     for (let i = 0; i < 5; i++) {
       await tick()
     }

@@ -204,6 +204,7 @@ function importWorkerMail(
     type: mail.message.type,
     priority: mail.message.priority,
     threadId: mail.message.threadId ?? undefined,
+    replyTo: mail.message.replyTo ?? undefined,
     payload: mail.message.payload ?? undefined,
     runId: link.run_id
   })
@@ -228,7 +229,9 @@ function importWorkerState(
   adoptRemoteAttempt(db, link, {
     taskId: dispatch.taskId,
     dispatchId: dispatch.id,
-    agent: dispatch.agent
+    agent: dispatch.agent,
+    worktreeId: dispatch.worktreeId,
+    earlierDispatchId: dispatch.followUpOf ?? dispatch.creatorDispatchId
   })
   const record = recordRemoteDispatchState(
     db,

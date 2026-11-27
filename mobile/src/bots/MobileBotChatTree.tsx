@@ -7,9 +7,9 @@ import { MobileSearchField } from '../components/controls/MobileSearchField'
 import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
 import { useNow } from '../hooks/use-now'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import { formatTimeAgo } from '../worktree/agent-lineage/agent-row-display'
 import {
   CHAT_TREE_CAPS,
@@ -77,6 +77,7 @@ function useChatLine(bot: TreeBot, chat: BotChatTreeChat, folded: boolean): stri
 }
 
 function StepLink({ label, onPress }: { label: string; onPress: () => void }) {
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View style={styles.step}>
       <MobileBotTextButton label={label} onPress={onPress} />
@@ -100,7 +101,8 @@ function ChatGroup({
   actions: BotChatTreeActions
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const fold = useBotChatFold(hostKey, bot.id, chat.chatId)
   const [shown, setShown] = useState<BotChatTreeShown>(BOT_CHAT_TREE_FIRST_SHOWN)
   const hasWorkers = chat.runningTotal + chat.finishedTotal > 0
@@ -146,7 +148,7 @@ function ChatGroup({
             subtitle={line || undefined}
             leading={<ChatLeading chat={chat} />}
             strong={chat.unread}
-            value={chat.lastActiveAt > 0 ? formatTimeAgo(chat.lastActiveAt, now) : undefined}
+            value={chat.lastActiveAt > 0 ? formatTimeAgo(chat.lastActiveAt, now, t) : undefined}
             accessory={
               <>
                 {chat.unseen ? (
@@ -256,7 +258,7 @@ export function MobileBotChatTree({
   actions: BotChatTreeActions
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   // As on the desktop: a group room session's row stays out, its workers under Home Chat.
   const chats = useMemo(
     () => botOwnChatTree({ chats: [...treeChats], workspaceChats: {} }).chats,
@@ -327,7 +329,7 @@ export function MobileBotChatTree({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   step: { paddingLeft: spacing.xl + spacing.md, paddingVertical: 2 },
   count: { fontSize: 13, color: colors.textMuted },
   search: { marginBottom: spacing.sm },

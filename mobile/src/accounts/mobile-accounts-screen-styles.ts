@@ -1,8 +1,8 @@
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { LIST_ROW_PADDING } from '../components/list/ListGroup'
 
-export const styles = themedStyleSheet(() => ({
+export const stylesSheet = themedStyleSheet((colors) => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase

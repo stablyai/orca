@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path'
 import { errnoCodeOrUnknown } from '../../shared/errors/errno-code'
 import { parseAgentSessionAttachmentStorePath } from '../native-chat/agent-session-attachments/agent-session-attachment-references'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import {
   AGENT_SESSION_ATTACHMENT_MAX_BYTES,
   sanitizeAgentSessionAttachmentName
@@ -23,18 +24,24 @@ import { verifiedOriginal } from './feishu-message'
 import type { FeishuTransport } from './feishu-transport'
 
 export type ResourceKind = 'image' | 'file'
-const imageKey = z.string().regex(/^img_[a-zA-Z0-9_-]{1,192}$/)
-const fileKey = z.string().regex(/^file_[a-zA-Z0-9_-]{1,192}$/)
-const postBody = z.object({ title: z.string().optional(), content: z.array(z.array(z.unknown())) })
-const postElement = z.discriminatedUnion('tag', [
-  z.object({ tag: z.literal('img'), image_key: imageKey }),
-  z.object({ tag: z.enum(['text', 'a', 'md']), text: z.string() })
-])
-const savedPost = z.object({
-  prompt: z.string(),
-  storedImages: z.array(z.string()).max(MAX_ASKER_IMAGES),
-  skippedImages: z.boolean().optional()
-})
+const imageKey = lazyZodSchema(() => z.string().regex(/^img_[a-zA-Z0-9_-]{1,192}$/))
+const fileKey = lazyZodSchema(() => z.string().regex(/^file_[a-zA-Z0-9_-]{1,192}$/))
+const postBody = lazyZodSchema(() =>
+  z.object({ title: z.string().optional(), content: z.array(z.array(z.unknown())) })
+)
+const postElement = lazyZodSchema(() =>
+  z.discriminatedUnion('tag', [
+    z.object({ tag: z.literal('img'), image_key: imageKey }),
+    z.object({ tag: z.enum(['text', 'a', 'md']), text: z.string() })
+  ])
+)
+const savedPost = lazyZodSchema(() =>
+  z.object({
+    prompt: z.string(),
+    storedImages: z.array(z.string()).max(MAX_ASKER_IMAGES),
+    skippedImages: z.boolean().optional()
+  })
+)
 
 function postInput(value: unknown): { prompt: string; keys: string[] } {
   const localized = z.record(z.string(), postBody).safeParse(value).data

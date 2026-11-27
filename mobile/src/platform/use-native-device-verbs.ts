@@ -14,6 +14,7 @@ import { serveNativeAnnounceVerb } from './accessibility/native-accessibility-an
 import { serveNativeLinkOpenVerb } from './external-links/native-link-open-verb'
 import { createNativeMediaVerbServer } from './media-picking/native-media'
 import { discardStagedMedia, nativeMediaDeviceDeps } from './media-picking/native-media-device'
+import { recomputeOn } from '../hooks/recompute-on'
 
 export type NativeDeviceVerb = Exclude<
   BridgeNativeVerb,
@@ -30,9 +31,15 @@ export function useNativeDeviceVerbs(
     [registry]
   )
   // A new session is a new document; close any mic its predecessor left open.
-  const audio = useMemo(() => createNativeAudioCapture(nativeAudioDeviceEngine), [sessionId])
+  const audio = useMemo(
+    () => recomputeOn([sessionId], () => createNativeAudioCapture(nativeAudioDeviceEngine)),
+    [sessionId]
+  )
   useEffect(() => () => audio.dispose(), [audio])
-  const speech = useMemo(() => createNativeSpeechServer(nativeSpeechDeviceEngine), [sessionId])
+  const speech = useMemo(
+    () => recomputeOn([sessionId], () => createNativeSpeechServer(nativeSpeechDeviceEngine)),
+    [sessionId]
+  )
   useEffect(() => () => speech.dispose(), [speech])
   return useMemo(
     () => (verb, params) => {

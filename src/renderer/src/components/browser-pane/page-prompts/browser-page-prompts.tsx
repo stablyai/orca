@@ -9,10 +9,6 @@ import {
   useConfirmationDialog,
   type ConfirmationDialogContextValue
 } from '@/components/dismiss/confirmation/confirmation-dialog-context'
-import { externalAppPrompt } from './browser-external-app-prompt'
-import { httpAuthPrompt } from './browser-http-auth-prompt'
-import { javaScriptDialogPrompt } from './browser-javascript-dialog-prompt'
-import { sitePermissionPrompt } from './browser-site-permission-prompt'
 
 /** How the window asks one kind of page prompt. */
 export type BrowserPagePromptHandler<K extends BrowserPagePromptKind> = {
@@ -26,28 +22,47 @@ export type BrowserPagePromptHandler<K extends BrowserPagePromptKind> = {
   onFailed?: (details: BrowserPagePromptDetails<K>) => void
 }
 
-const PROMPT_HANDLERS: { [K in BrowserPagePromptKind]: BrowserPagePromptHandler<K> } = {
-  'external-app': externalAppPrompt,
-  'http-auth': httpAuthPrompt,
-  'javascript-dialog': javaScriptDialogPrompt,
-  'site-permission': sitePermissionPrompt
+type BrowserPagePromptHandlers = {
+  [K in BrowserPagePromptKind]: BrowserPagePromptHandler<K>
+}
+
+let promptHandlersPromise: Promise<BrowserPagePromptHandlers> | null = null
+
+function loadBrowserPagePromptHandlers(): Promise<BrowserPagePromptHandlers> {
+  if (!promptHandlersPromise) {
+    promptHandlersPromise = import('./browser-page-prompt-handlers')
+      .then((module) => module.BROWSER_PAGE_PROMPT_HANDLERS)
+      .catch((error: unknown) => {
+        promptHandlersPromise = null
+        throw error
+      })
+  }
+  return promptHandlersPromise
 }
 
 /** Asks a page prompt the way this window does; streamed server pages ask through it too. */
-export function askBrowserPagePrompt<K extends BrowserPagePromptKind>(
+export async function askBrowserPagePrompt<K extends BrowserPagePromptKind>(
   confirm: ConfirmationDialogContextValue,
   request: BrowserPagePromptRequest<K>,
   signal: AbortSignal
 ): Promise<BrowserPagePromptAnswer<K> | null> {
-  const handler: BrowserPagePromptHandler<K> = PROMPT_HANDLERS[request.kind]
+  const handlers = await loadBrowserPagePromptHandlers()
+  if (signal.aborted) {
+    return null
+  }
+  const handler: BrowserPagePromptHandler<K> = handlers[request.kind]
   return handler.ask(confirm, request.details, signal)
 }
 
 export function reportBrowserPagePromptFailed<K extends BrowserPagePromptKind>(
   request: BrowserPagePromptRequest<K>
 ): void {
-  const handler: BrowserPagePromptHandler<K> = PROMPT_HANDLERS[request.kind]
-  handler.onFailed?.(request.details)
+  void loadBrowserPagePromptHandlers()
+    .then((handlers) => {
+      const handler: BrowserPagePromptHandler<K> = handlers[request.kind]
+      handler.onFailed?.(request.details)
+    })
+    .catch(() => {})
 }
 
 async function answerPrompt<K extends BrowserPagePromptKind>(

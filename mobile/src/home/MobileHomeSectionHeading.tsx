@@ -1,8 +1,8 @@
 import type { LucideIcon } from 'lucide-react-native'
 import { Pressable, Text, View } from 'react-native'
-import { colors } from '../theme/mobile-theme'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { homeListStyles as styles } from './home-list-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
+import { homeListStylesSheet } from './home-list-styles'
+import { useThemedStyles } from '../theme/themed-styles'
 
 const ASIDE_HIT_SLOP = { top: 10, bottom: 10, left: 12, right: 12 } as const
 
@@ -17,7 +17,8 @@ export function MobileHomeSectionHeading(props: {
   /** Turns the aside into a link. */
   onAsidePress?: () => void
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(homeListStylesSheet)
+  const colors = useMobileColors()
   const AsideIcon = props.asideIcon
   return (
     <View style={[styles.sectionHeadingRow, props.first && styles.firstSectionHeading]}>

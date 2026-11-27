@@ -43,10 +43,13 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
   ): RuntimeHeadlessTerminal {
     let state: RuntimeHeadlessTerminal | null = null
     const pathFlavor = this.pathFlavorForPty(this.ptysById.get(ptyId))
+    // When the owning daemon holds authoritative scrollback, avoid duplicating 5,000 rows (~5.7 MiB/terminal) in main.
+    const providerOwnsScrollback =
+      this.ptyController?.canProvideAuthoritativeBufferSnapshot?.(ptyId) === true
     const emulator = new HeadlessEmulator({
       cols: dims.cols,
       rows: dims.rows,
-      scrollback: this.headlessTerminalScrollbackRows,
+      scrollback: providerOwnsScrollback ? 0 : this.headlessTerminalScrollbackRows,
       pathFlavor,
       remotePosixFileUriAuthority:
         !!this.ptysById.get(ptyId)?.connectionId && pathFlavor !== 'win32',
@@ -79,6 +82,7 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
       emulator,
       outputSequence: 0,
       writeChain: Promise.resolve(),
+      providerOwnsScrollback,
       ownership: new PtyShellOwnershipMirror(async () => {
         const controller = this.ptyController
         const lifecycleGeneration = this.getPtyLifecycleGeneration(ptyId)

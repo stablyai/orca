@@ -12,6 +12,7 @@ import {
   salvagedOptional,
   salvagingArray
 } from '../../validation/zod-salvage'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
 /** Resolve senders through the storing host's orchestration mailbox address (dispatch:<id> for federation), never a pane key. */
 export type AgentMessageSender = Readonly<{
@@ -97,63 +98,75 @@ export function agentMessageSenderName(value: unknown): string | null {
   return normalizeAgentSessionConversationName(value)
 }
 
-const orcaSessionIdSchema = z.custom<OrcaSessionId>(
-  (value) => typeof value === 'string' && isOrcaSessionId(value)
+const orcaSessionIdSchema = lazyZodSchema(() =>
+  z.custom<OrcaSessionId>((value) => typeof value === 'string' && isOrcaSessionId(value))
 )
 
-const contentRangeSchema = z.tuple([z.number().int().nonnegative(), z.number().int().nonnegative()])
-const mailContentSchema = z.object({
-  subject: contentRangeSchema,
-  body: contentRangeSchema.optional(),
-  payload: contentRangeSchema.optional()
-})
+const contentRangeSchema = lazyZodSchema(() =>
+  z.tuple([z.number().int().nonnegative(), z.number().int().nonnegative()])
+)
+const mailContentSchema = lazyZodSchema(() =>
+  z.object({
+    subject: contentRangeSchema,
+    body: contentRangeSchema.optional(),
+    payload: contentRangeSchema.optional()
+  })
+)
 
-const mailNoticeSchema = z.object({
-  message: z.literal('mail-notice'),
-  mailbox: z.string(),
-  dispatchId: z.string().nullable(),
-  messages: z.array(
-    z.object({
-      messageId: z.string(),
-      runId: z.string(),
-      from: z.string(),
-      content: salvagedOptional('content', mailContentSchema)
-    })
-  )
-})
+const mailNoticeSchema = lazyZodSchema(() =>
+  z.object({
+    message: z.literal('mail-notice'),
+    mailbox: z.string(),
+    dispatchId: z.string().nullable(),
+    messages: z.array(
+      z.object({
+        messageId: z.string(),
+        runId: z.string(),
+        from: z.string(),
+        content: salvagedOptional('content', mailContentSchema)
+      })
+    )
+  })
+)
 
-const taskSchema = z.object({
-  message: z.literal('task'),
-  runId: z.string(),
-  taskId: z.string(),
-  dispatchId: z.string()
-})
+const taskSchema = lazyZodSchema(() =>
+  z.object({
+    message: z.literal('task'),
+    runId: z.string(),
+    taskId: z.string(),
+    dispatchId: z.string()
+  })
+)
 
-const senderSchema = z.object({
-  party: z.object({
-    address: z.string().min(1),
-    terminalHandle: z.string().nullable(),
-    orcaSessionId: orcaSessionIdSchema.nullable()
-  }),
-  // Any bounded string: a kind a newer build knows still draws as its first letter.
-  agent: salvagedOptional('agent', z.string().min(1).max(AGENT_TYPE_MAX_LENGTH)),
-  relation: salvagedOptional('relation', z.enum(['worker', 'coordinator', 'none'])),
-  toConversation: salvagedOptional('toConversation', z.literal(true)),
-  bot: salvagedOptional('bot', z.literal(true)),
-  host: salvagedOptional('host', z.string().transform(agentMessageSenderName).pipe(z.string())),
-  botAvatar: salvagedOptional('botAvatar', z.string().min(1).max(200)),
-  name: z.unknown().transform(agentMessageSenderName)
-})
+const senderSchema = lazyZodSchema(() =>
+  z.object({
+    party: z.object({
+      address: z.string().min(1),
+      terminalHandle: z.string().nullable(),
+      orcaSessionId: orcaSessionIdSchema.nullable()
+    }),
+    // Any bounded string: a kind a newer build knows still draws as its first letter.
+    agent: salvagedOptional('agent', z.string().min(1).max(AGENT_TYPE_MAX_LENGTH)),
+    relation: salvagedOptional('relation', z.enum(['worker', 'coordinator', 'none'])),
+    toConversation: salvagedOptional('toConversation', z.literal(true)),
+    bot: salvagedOptional('bot', z.literal(true)),
+    host: salvagedOptional('host', z.string().transform(agentMessageSenderName).pipe(z.string())),
+    botAvatar: salvagedOptional('botAvatar', z.string().min(1).max(200)),
+    name: z.unknown().transform(agentMessageSenderName)
+  })
+)
 
 // Parse separately so malformed senders or newer orchestration kinds never turn an agent message into a human message.
-const sourceSchema = z.object({
-  kind: openEnum(['agent'], 'agent'),
-  senders: salvagedField('senders', salvagingArray(senderSchema), () => []),
-  orchestration: salvagedOptional(
-    'orchestration',
-    z.discriminatedUnion('message', [mailNoticeSchema, taskSchema])
-  ).transform((orchestration) => orchestration ?? null)
-})
+const sourceSchema = lazyZodSchema(() =>
+  z.object({
+    kind: openEnum(['agent'], 'agent'),
+    senders: salvagedField('senders', salvagingArray(senderSchema), () => []),
+    orchestration: salvagedOptional(
+      'orchestration',
+      z.discriminatedUnion('message', [mailNoticeSchema, taskSchema])
+    ).transform((orchestration) => orchestration ?? null)
+  })
+)
 
 /** The one reader of a stored or published `from`: undefined (the person's) when it is absent
  *  or not an agent's at all. */

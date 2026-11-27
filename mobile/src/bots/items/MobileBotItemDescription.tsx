@@ -3,13 +3,14 @@ import { Pressable, Text, View } from 'react-native'
 import { MobileNativeChatMarkdown } from '../../session/native-chat/transcript/message-content/MobileNativeChatMarkdown'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { INLINE_TEXT_SELECTION } from '../../platform/text-selection/inline-text-selection'
-import { colors, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
+import { spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 
 const DESCRIPTION_LINES_HEIGHT = 3 * 20
 
 /** The description's first three lines, then Show more; Markdown, as the desktop draws it. */
 export function MobileBotItemDescription({ text }: { text: string }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const [open, setOpen] = useState(false)
   const [height, setHeight] = useState(0)
@@ -34,7 +35,7 @@ export function MobileBotItemDescription({ text }: { text: string }) {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   description: { marginTop: spacing.xs, gap: spacing.xs },
   clamped: { maxHeight: DESCRIPTION_LINES_HEIGHT, overflow: 'hidden' },
   showMore: { fontSize: 13, fontWeight: '600', color: colors.textPrimary }

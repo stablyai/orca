@@ -64,6 +64,12 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
     opts: { scrollbackRows?: number } = {}
   ) {
     if (!this.providerSnapshotPreferredPtys.has(ptyId)) {
+      if (
+        (opts.scrollbackRows ?? 0) > 0 &&
+        this.headlessTerminals.get(ptyId)?.providerOwnsScrollback
+      ) {
+        return this.serializeProviderTerminalBuffer(ptyId, opts)
+      }
       return null
     }
     // Pre-attach bytes are only a suffix; older providers can fall back to the renderer.

@@ -1,17 +1,20 @@
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import { FeishuGroupPolicy } from '../../shared/bots/feishu-local'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import type { FeishuGroupRoute } from './feishu-message'
-export const binding = z.object({
-  account: z.string(),
-  bot: z.string(),
-  profile: z.string().nullable(),
-  app: z.string(),
-  owner: z.string().nullable(),
-  chat: z.string().nullable(),
-  pairedAt: z.number().int().nullable(),
-  group: FeishuGroupPolicy.optional()
-})
+export const binding = lazyZodSchema(() =>
+  z.object({
+    account: z.string(),
+    bot: z.string(),
+    profile: z.string().nullable(),
+    app: z.string(),
+    owner: z.string().nullable(),
+    chat: z.string().nullable(),
+    pairedAt: z.number().int().nullable(),
+    group: FeishuGroupPolicy.optional()
+  })
+)
 export type Binding = z.infer<typeof binding>
 export function dmKey(b: Binding) {
   return {

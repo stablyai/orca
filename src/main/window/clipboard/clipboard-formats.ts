@@ -4,11 +4,13 @@ export function nativeClipboardFormat(format: string): string {
   return `electron application/osclipboard;format="${format}"`
 }
 
-export async function readClipboardBuffer(
+type ClipboardItems = Awaited<ReturnType<typeof clipboard.read>>
+
+async function readItemsBuffer(
+  items: ClipboardItems,
   format: string,
   assertByteLength?: (length: number) => void
 ): Promise<Buffer> {
-  const items = await clipboard.read()
   for (const type of [format, nativeClipboardFormat(format)]) {
     const item = items.find((entry) => entry.types.includes(type))
     if (!item) {
@@ -47,9 +49,22 @@ export async function writeClipboardPng(buffer: Buffer): Promise<void> {
   ])
 }
 
-export const clipboardFormatReader = {
-  readBuffer: readClipboardBuffer,
-  availableFormats: async (): Promise<string[]> =>
-    (await clipboard.read()).flatMap((item) => item.types),
-  has: (format: string): Promise<boolean> => clipboard.has(nativeClipboardFormat(format))
+export type ClipboardFormatReader = {
+  availableFormats: () => Promise<string[]>
+  readBuffer: (format: string, assertByteLength?: (length: number) => void) => Promise<Buffer>
+  has: (format: string) => Promise<boolean>
+}
+
+/** Reads the clipboard at most once per request: each read() re-enumerates every native format. */
+export function clipboardFormatSnapshot(): ClipboardFormatReader {
+  let items: Promise<ClipboardItems> | null = null
+  const read = (): Promise<ClipboardItems> => (items ??= clipboard.read())
+  return {
+    availableFormats: async () => (await read()).flatMap((item) => item.types),
+    readBuffer: async (format, assertByteLength) =>
+      readItemsBuffer(await read(), format, assertByteLength),
+    // Electron's has() is membership in this same type list, enumerated again.
+    has: async (format) =>
+      (await read()).some((item) => item.types.includes(nativeClipboardFormat(format)))
+  }
 }

@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import {
   BROWSER_EXTENSION_WEB_STORE_CHANNEL,
   isChromeWebStoreUrl,
@@ -20,33 +21,38 @@ import {
 
 /** The store page's one IPC channel: every call is checked against the sender, never the payload. */
 
-const idArg = z.string().max(64)
-const requestSchema = z.discriminatedUnion('method', [
-  z.object({
-    method: z.literal('beginInstallWithManifest3'),
-    args: z
-      .tuple([
-        z.object({
-          id: idArg,
-          manifest: z.string().min(1).max(2_000_000),
-          localizedName: z.string().max(1000).nullish(),
-          iconUrl: z.string().max(8192).nullish()
-        })
-      ])
-      .rest(z.unknown())
-  }),
-  z.object({ method: z.literal('completeInstall'), args: z.tuple([idArg]).rest(z.unknown()) }),
-  z.object({
-    method: z.literal('getExtensionStatus'),
-    args: z.tuple([idArg, z.string().max(2_000_000).nullish()]).rest(z.unknown())
-  }),
-  z.object({ method: z.literal('management.getAll'), args: z.array(z.unknown()) }),
-  z.object({ method: z.literal('management.uninstall'), args: z.tuple([idArg]).rest(z.unknown()) }),
-  z.object({
-    method: z.literal('management.setEnabled'),
-    args: z.tuple([idArg, z.boolean()]).rest(z.unknown())
-  })
-])
+const idArg = lazyZodSchema(() => z.string().max(64))
+const requestSchema = lazyZodSchema(() =>
+  z.discriminatedUnion('method', [
+    z.object({
+      method: z.literal('beginInstallWithManifest3'),
+      args: z
+        .tuple([
+          z.object({
+            id: idArg,
+            manifest: z.string().min(1).max(2_000_000),
+            localizedName: z.string().max(1000).nullish(),
+            iconUrl: z.string().max(8192).nullish()
+          })
+        ])
+        .rest(z.unknown())
+    }),
+    z.object({ method: z.literal('completeInstall'), args: z.tuple([idArg]).rest(z.unknown()) }),
+    z.object({
+      method: z.literal('getExtensionStatus'),
+      args: z.tuple([idArg, z.string().max(2_000_000).nullish()]).rest(z.unknown())
+    }),
+    z.object({ method: z.literal('management.getAll'), args: z.array(z.unknown()) }),
+    z.object({
+      method: z.literal('management.uninstall'),
+      args: z.tuple([idArg]).rest(z.unknown())
+    }),
+    z.object({
+      method: z.literal('management.setEnabled'),
+      args: z.tuple([idArg, z.boolean()]).rest(z.unknown())
+    })
+  ])
+)
 
 type StoreSenderLookups = {
   isOrcaBrowserTab: (webContentsId: number) => boolean

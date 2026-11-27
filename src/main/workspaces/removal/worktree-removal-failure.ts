@@ -14,9 +14,9 @@ export async function failureLeftByGit(
   const message = error instanceof Error ? error.message : String(error)
   const failure = {
     message: message.replace(
-      / Close (?:that program|any program using it) and delete again\.$/,
+      /(?:, then| and) delete again\.$/,
       () =>
-        ` Close any program using it, then retry deletion. If you removed the folder at ${record.worktreePath} yourself, retry deletion to finish cleanup.`
+        `, then retry deletion. If you removed the folder at ${record.worktreePath} yourself, retry deletion to finish cleanup.`
     ),
     failedAt: Date.now()
   }

@@ -27,6 +27,7 @@ import { getActiveChecksStatus } from '../checks-panel/status/active-checks-stat
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { ActivityBarItem } from './activity-bar-buttons'
+import { activityItemStatus } from './activity-bar-item-names'
 import { useBotForWorkspace, useBotGroupForWorkspace } from '../../bots/bot-workspace'
 import { useFocusedChatWorkers } from '@/lib/focused-chat-workers'
 import { useBotNeedsYouCount, useBotNow } from '../../bots/use-bot-now'
@@ -157,7 +158,7 @@ export function useRightSidebarActivityItems({
           isGroupHome,
           hasChatWorkers
         }),
-        (item) => item.statusIndicator ?? (item.id === 'checks' ? checksStatus : null)
+        (item) => activityItemStatus(item, checksStatus)
       ),
     [
       activityItems,

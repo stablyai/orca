@@ -43,6 +43,7 @@ export function useArtifactPagination(
 ): {
   accountIdentity: string | null
   artifacts: readonly ArtifactListItem[]
+  hasLoadedCurrentPage: boolean
   error: string | null
   loading: boolean
   loadingMore: boolean
@@ -206,6 +207,7 @@ export function useArtifactPagination(
   return {
     accountIdentity,
     artifacts,
+    hasLoadedCurrentPage: currentPage !== null && accountIdentity !== null,
     error,
     loading,
     loadingMore,

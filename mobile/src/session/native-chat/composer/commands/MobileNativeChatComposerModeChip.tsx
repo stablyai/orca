@@ -1,12 +1,12 @@
 import { Pressable, Text } from 'react-native'
 import { X, type LucideIcon } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { radii, spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import {
   COMPOSER_CONTROL_HIT_SLOP,
   COMPOSER_CONTROL_SIZE,
-  composerInputStyles
+  composerInputStylesSheet
 } from '../../../../components/composer-input/composer-input-styles'
 
 /** Touch has no hover, so the exit affordance always shows. */
@@ -25,7 +25,9 @@ export function MobileNativeChatComposerModeChip({
   disabled?: boolean
   onExit: () => void
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const composerInputStyles = useThemedStyles(composerInputStylesSheet)
   return (
     <Pressable
       accessibilityRole="button"
@@ -48,7 +50,7 @@ export function MobileNativeChatComposerModeChip({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   chip: {
     height: COMPOSER_CONTROL_SIZE,
     flexDirection: 'row',

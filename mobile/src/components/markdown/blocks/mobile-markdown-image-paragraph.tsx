@@ -3,7 +3,6 @@ import { Fragment, type ReactNode } from 'react'
 import { View } from 'react-native'
 import { MarkdownText } from '../mobile-markdown-text'
 import { renderInline } from '../parsing/mobile-markdown-inline'
-import { styles } from '../mobile-markdown-styles'
 import type { MarkdownBlockContext, ParagraphText } from './mobile-markdown-blocks'
 
 function isBlankInline(node: PhrasingContent): boolean {
@@ -55,7 +54,7 @@ export function renderImageParagraph(
   flushRun()
   // One wrapper whatever the part count, so a growing paragraph never remounts its images.
   return (
-    <View key={key} style={styles.imageParagraph}>
+    <View key={key} style={ctx.styles.imageParagraph}>
       {parts}
     </View>
   )

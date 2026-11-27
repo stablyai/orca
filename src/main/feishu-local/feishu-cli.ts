@@ -3,32 +3,37 @@ import { runProcess, spawnProcess } from '@orca/process-host'
 import { signalProcessTree } from '@orca/process-host/process-tree-termination'
 import type { Readable } from 'node:stream'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 
 import { FeishuReplyTargetGone, FeishuPermissionError } from './feishu-transport'
 import { feishuDiagnostic, feishuProblem, FeishuHostError } from './feishu-cli-status'
 
 const EVENT = 'im.message.receive_v1'
-const appId = z.string().regex(/^cli_[a-zA-Z0-9]+$/)
-const openId = z.string().regex(/^ou_[a-zA-Z0-9_-]{1,120}$/)
-const messageId = z.string().regex(/^om_[a-zA-Z0-9_-]{1,120}$/)
-const chatId = z.string().regex(/^oc_[a-zA-Z0-9_-]{1,120}$/)
-const profile = z.object({ name: z.string().min(1).max(128), appId: z.string(), brand: z.string() })
+const appId = lazyZodSchema(() => z.string().regex(/^cli_[a-zA-Z0-9]+$/))
+const openId = lazyZodSchema(() => z.string().regex(/^ou_[a-zA-Z0-9_-]{1,120}$/))
+const messageId = lazyZodSchema(() => z.string().regex(/^om_[a-zA-Z0-9_-]{1,120}$/))
+const chatId = lazyZodSchema(() => z.string().regex(/^oc_[a-zA-Z0-9_-]{1,120}$/))
+const profile = lazyZodSchema(() =>
+  z.object({ name: z.string().min(1).max(128), appId: z.string(), brand: z.string() })
+)
 export type FeishuProfile = z.infer<typeof profile>
-const message = z.object({
-  type: z.literal(EVENT),
-  chat_type: z.literal('p2p'),
-  message_type: z.enum(['text', 'image', 'file']),
-  create_time: z.string().regex(/^\d{13}$/),
-  event_id: z.string().min(1).max(256),
-  message_id: messageId,
-  chat_id: chatId,
-  sender_id: openId,
-  content: z
-    .string()
-    .min(1)
-    .max(64 * 1024)
-    .refine((s) => s.trim().length > 0 && !s.includes('\0'))
-})
+const message = lazyZodSchema(() =>
+  z.object({
+    type: z.literal(EVENT),
+    chat_type: z.literal('p2p'),
+    message_type: z.enum(['text', 'image', 'file']),
+    create_time: z.string().regex(/^\d{13}$/),
+    event_id: z.string().min(1).max(256),
+    message_id: messageId,
+    chat_id: chatId,
+    sender_id: openId,
+    content: z
+      .string()
+      .min(1)
+      .max(64 * 1024)
+      .refine((s) => s.trim().length > 0 && !s.includes('\0'))
+  })
+)
 export type FeishuMessage = z.infer<typeof message>
 export function readFeishuMessage(line: string): FeishuMessage | null {
   try {
