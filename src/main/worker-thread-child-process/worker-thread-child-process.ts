@@ -23,8 +23,8 @@ export { isWorkerChildStdinWriteError, WorkerThreadChildProcess }
 
 // #27362: Windows code-integrity hashing can block CreateProcessW for seconds on the calling loop. Spawn in a worker and fail closed if unavailable (#11161).
 
-// Amortize worker startup across nearby probes.
-export const IDLE_TEARDOWN_MS = 2 * 60_000
+// Amortize worker startup across nearby probes without holding an idle isolate for minutes.
+export const IDLE_TEARDOWN_MS = 45_000
 
 const WORKER_ENTRY_FILENAME = 'worker-thread-child-process-entry.js'
 

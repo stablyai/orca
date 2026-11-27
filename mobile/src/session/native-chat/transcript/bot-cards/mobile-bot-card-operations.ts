@@ -79,6 +79,17 @@ export const googleSetupRead = bindDeferredRpcOperation(
   })
 )
 
+/** Tells a bot an offer card's answer as a hidden card answer, queued behind its running turn. */
+export const botOfferAnswerSend = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'bots.offer.answer',
+    method: 'bots.offer.answer',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('bot-offer-answered', z.looseObject({ sent: z.boolean() }))
+  })
+)
+
 /** Records the owner's card answer; the host replies with the run and where it's stuck now. */
 export const googleSetupAnswer = bindDeferredRpcOperation(
   defineRpcOperation({

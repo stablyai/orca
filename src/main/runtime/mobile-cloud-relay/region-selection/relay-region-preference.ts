@@ -33,6 +33,7 @@ import {
   type RelayRegionCatalog,
   type RelayRegionProbeReport
 } from './relay-region-probe'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 
 const RELAY_REGION_CACHE_FILENAME = 'orca-relay-region-preference.json'
 const CACHE_MAX_BYTES = 8 * 1024
@@ -43,15 +44,17 @@ const SWITCH_MINIMUM_MS = 25
 const SWITCH_RATIO = 0.8
 const FAR_CELL_RATIO = 3
 
-const RelayRegionCacheSchema = z
-  .object({
-    v: z.literal(2),
-    directorUrl: z.string().max(2_048),
-    region: RelayRegionSchema.nullable(),
-    latencyMs: z.number().finite().nonnegative().max(60_000).optional(),
-    expiresAt: z.number().int().positive().max(Number.MAX_SAFE_INTEGER)
-  })
-  .strict()
+const RelayRegionCacheSchema = lazyZodSchema(() =>
+  z
+    .object({
+      v: z.literal(2),
+      directorUrl: z.string().max(2_048),
+      region: RelayRegionSchema.nullable(),
+      latencyMs: z.number().finite().nonnegative().max(60_000).optional(),
+      expiresAt: z.number().int().positive().max(Number.MAX_SAFE_INTEGER)
+    })
+    .strict()
+)
 
 type RelayRegionCache = z.infer<typeof RelayRegionCacheSchema>
 

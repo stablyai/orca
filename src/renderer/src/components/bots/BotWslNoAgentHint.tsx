@@ -1,35 +1,41 @@
-// New bot on a WSL host with no Linux agent: how to install one there, re-checked while it shows.
+// New bot on a WSL host with no Linux agent: how to install one there, re-checked on return or request.
 import React, { useEffect } from 'react'
-import { AlertCircle, Check, Copy } from 'lucide-react'
+import { AlertCircle, Check, Copy, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { useTranslate } from '@/i18n/use-translate'
 import { useClipboardTextCopyFeedback } from '@/hooks/clipboard/use-clipboard-text-copy-feedback'
 import { useAppStore } from '@/store'
-import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
+import { getRuntimeAgentInventoryKey } from '@/store/slices/agent-inventory/runtime-agent-inventory-key'
 import { agentSessionInstallCommand } from '../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 
-const REPROBE_MS = 10_000
+function reprobeWslAgents(environmentId: string, userInitiated = false): void {
+  void useAppStore
+    .getState()
+    .refreshRuntimeDetectedAgents(
+      environmentId,
+      null,
+      userInitiated ? { userInitiated: true } : undefined
+    )
+    .catch(() => {})
+}
 
-/** Re-reads the host's agents every 10 s and on focus, so one installed in a terminal shows up. */
-function useWslAgentReprobe(environmentId: string): void {
+/** Re-reads the host's agents when returning to Orca, so one installed in a terminal shows up. */
+function useWslAgentReprobeOnReturn(environmentId: string): void {
   useEffect(() => {
-    const probe = (): void => {
-      void useAppStore
-        .getState()
-        .refreshRuntimeDetectedAgents(environmentId)
-        .catch(() => {})
+    const onFocus = (): void => {
+      reprobeWslAgents(environmentId)
     }
-    // Paused while hidden and slowed while unfocused; regaining focus checks at once.
-    const stop = installWindowVisibilityInterval({
-      run: probe,
-      intervalMs: REPROBE_MS,
-      slowWhileUnfocused: true
-    })
-    window.addEventListener('focus', probe)
+    const onVisibilityChange = (): void => {
+      if (document.visibilityState === 'visible') {
+        reprobeWslAgents(environmentId)
+      }
+    }
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibilityChange)
     return () => {
-      stop()
-      window.removeEventListener('focus', probe)
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
     }
   }, [environmentId])
 }
@@ -42,7 +48,9 @@ export function BotWslNoAgentHint({
   environmentId: string
 }): React.JSX.Element {
   const t = useTranslate()
-  useWslAgentReprobe(environmentId)
+  useWslAgentReprobeOnReturn(environmentId)
+  const inventoryKey = getRuntimeAgentInventoryKey(environmentId)
+  const isRefreshing = useAppStore((s) => s.isRefreshingRuntimeAgents[inventoryKey] ?? false)
   const command = agentSessionInstallCommand('claude', 'linux') ?? ''
   const { copyText, status } = useClipboardTextCopyFeedback(command)
   return (
@@ -74,10 +82,20 @@ export function BotWslNoAgentHint({
             </Button>
           </div>
         ) : null}
-        <p role="status" className="flex items-center gap-1.5 text-2xs text-muted-foreground">
-          <LoadingSpinner className="size-3" />
-          {t('bots.new.wslNoAgent.checking', 'Checking again…')}
-        </p>
+        <div className="flex items-center gap-2 pt-0.5">
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
+            disabled={isRefreshing}
+            onClick={() => reprobeWslAgents(environmentId, true)}
+          >
+            {isRefreshing ? <LoadingSpinner className="size-3" /> : <RefreshCw />}
+            {isRefreshing
+              ? t('bots.new.wslNoAgent.checking', 'Checking again…')
+              : t('bots.new.wslNoAgent.checkAgain', 'Check again')}
+          </Button>
+        </div>
       </div>
     </div>
   )

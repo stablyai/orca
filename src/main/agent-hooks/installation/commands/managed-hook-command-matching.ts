@@ -1,48 +1,30 @@
-import {
-  getWindowsNativeHookAgent,
-  WINDOWS_NATIVE_HOOK_EXECUTABLE_NAME
-} from './windows-native-hook-executable'
+import { getWindowsNativeHookAgent } from './windows-native-hook-executable'
+import { isOwnedManagedHookCommand, NATIVE_EXE_SUFFIX } from './managed-hook-command-ownership'
 
 import type { HookCommandConfig, HookDefinition } from '../configuration/hook-config-schema'
 import { isPlainObject } from '../configuration/hooks-json-read'
 
-// Match script names so reinstalls sweep entries from old and parallel installations.
+const POSIX_SIMPLE_SHELL_EXECUTABLE = /^(?:\/bin\/sh|sh|bash|cmd|cmd\.exe)$/i
+const CMD_EXECUTABLE = /^cmd(?:\.exe)?$/i
+const POWERSHELL_EXECUTABLE = /(?:^|\/)(?:powershell(?:\.exe)?|pwsh(?:\.exe)?)$/i
+
+// Match only commands whose ownership by Orca is established, so user-maintained or composite
+// commands that merely reference an Orca hook are never removed.
 export function createManagedCommandMatcher(scriptFileName: string): (command: unknown) => boolean {
   const scriptStem = scriptFileName.replace(/\.(?:cmd|ps1|sh)$/, '')
   // Sweep every platform suffix after a platform switch.
-  const needles = [
-    `agent-hooks/${scriptFileName}`,
-    `agent-hooks/${scriptStem}.cmd`,
-    `agent-hooks/${scriptStem}.ps1`,
-    `agent-hooks/${scriptStem}.sh`
-  ]
-  // The native executable selects its provider through argv[1].
-  const nativeHook = `agent-hooks/${WINDOWS_NATIVE_HOOK_EXECUTABLE_NAME} ${getWindowsNativeHookAgent(scriptFileName)} `
+  const scriptNames = new Set([
+    scriptFileName,
+    `${scriptStem}.cmd`,
+    `${scriptStem}.ps1`,
+    `${scriptStem}.sh`
+  ])
+  const agentName = getWindowsNativeHookAgent(scriptFileName)
   // hooks.json is user-editable, so a command may not be a string.
-  return (command) => {
-    if (typeof command !== 'string' || !command) {
-      return false
-    }
-    const decodedCommand = decodePowerShellEncodedCommand(command)
-    const searchText = decodedCommand ? `${command}\n${decodedCommand}` : command
-    const normalizedCommand = searchText.replaceAll('\\', '/')
-    return (
-      needles.some((needle) => normalizedCommand.includes(needle)) ||
-      normalizedCommand.split('\n').some((line) => `${line} `.includes(nativeHook))
-    )
-  }
-}
-
-function decodePowerShellEncodedCommand(command: string): string | null {
-  const match = command.match(/\s-EncodedCommand\s+(\S+)/i)
-  if (!match) {
-    return null
-  }
-  try {
-    return Buffer.from(match[1], 'base64').toString('utf16le')
-  } catch {
-    return null
-  }
+  return (command) =>
+    typeof command === 'string' &&
+    command.trim().length > 0 &&
+    isOwnedManagedHookCommand(command, scriptNames, agentName)
 }
 
 export function removeManagedCommands(
@@ -93,11 +75,35 @@ export function removeManagedCommands(
 }
 
 function hookHasManagedCommand(hook: HookCommandConfig, matches: (value?: string) => boolean) {
-  if (!isPlainObject(hook)) {
+  if (!isPlainObject(hook) || typeof hook.command !== 'string') {
     return false
   }
   const args = Array.isArray(hook.args) ? hook.args : []
-  return matches(hook.command) || args.some((arg) => typeof arg === 'string' && matches(arg))
+  if (args.length === 0) {
+    return matches(hook.command)
+  }
+  if (!args.every((arg): arg is string => typeof arg === 'string')) {
+    return false
+  }
+  const normalizedCommand = hook.command.trim().replaceAll('\\', '/')
+  if (POSIX_SIMPLE_SHELL_EXECUTABLE.test(normalizedCommand)) {
+    if (args.length === 1) {
+      return matches(args[0])
+    }
+    const commandFlag = CMD_EXECUTABLE.test(normalizedCommand) ? '/c' : '-c'
+    if (args.length === 2 && args[0] === commandFlag) {
+      return matches(args[1])
+    }
+    if (commandFlag === '/c' && args.length === 3 && args[0] === '/d' && args[1] === '/c') {
+      return matches(args[2])
+    }
+    return false
+  }
+  if (POWERSHELL_EXECUTABLE.test(normalizedCommand) || NATIVE_EXE_SUFFIX.test(normalizedCommand)) {
+    // Joining is only faithful when each configured argument is a single token.
+    return args.every((arg) => /^\S+$/.test(arg)) && matches(`${hook.command} ${args.join(' ')}`)
+  }
+  return false
 }
 
 // Users may opt a managed hook into async; keep that choice when the hook is rewritten.

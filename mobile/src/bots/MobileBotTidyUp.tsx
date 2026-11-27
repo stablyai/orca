@@ -15,9 +15,9 @@ import {
   DrillRow,
   SwitchRow
 } from '../host-screen/workspace-options/workspace-option-rows'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { intlLocaleFor } from '../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../i18n/use-mobile-translation'
 import { useBackClaim } from '../navigation/use-back-claim'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { lookedWhen } from './bot-up-next-copy'
 import type { SheetBot } from './bot-sheet-operations'
 import { SettingsNote, SettingsSection } from '../settings/settings-screen-frame'
@@ -40,7 +40,7 @@ export function MobileTidyUpSection(props: {
   onTidyNow: () => void
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const setting = botTidyUp(props.bot)
   const last = props.view?.last ?? null
   return (
@@ -71,7 +71,7 @@ export function MobileTidyUpSection(props: {
             <ListRow
               key="last"
               title={t('bots.tidyUp.lastTidied', 'Last tidied')}
-              value={last ? lookedWhen(last.at) : t('bots.tidyUp.never', 'Not yet')}
+              value={last ? lookedWhen(last.at, t, intlLocale) : t('bots.tidyUp.never', 'Not yet')}
               navigates={last !== null}
               onPress={last ? () => props.onOpen('summary') : undefined}
             />,
@@ -108,6 +108,7 @@ function SummaryGroup(props: { title: string; lines: string[] }) {
 
 function Summary(props: { run: Run; busy: boolean; onUndo: (rowId: string) => void }) {
   const t = useMobileTranslation()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const { run } = props
   const minutes = Math.max(1, Math.round(run.tookMs / 60_000))
   const tidied = [
@@ -126,7 +127,7 @@ function Summary(props: { run: Run; busy: boolean; onUndo: (rowId: string) => vo
     <>
       <SettingsNote>
         {[
-          lookedWhen(run.at),
+          lookedWhen(run.at, t, intlLocale),
           t('bots.tidyUp.readChats', 'read {{count}} chats', { count: run.chats }),
           t('bots.tidyUp.took', 'took {{value}} min', { value: minutes })
         ].join(' · ')}
@@ -169,7 +170,6 @@ export function MobileTidyUpPage(props: {
   banner: ReactNode
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
   useBackClaim(() => {
     props.onBack()
     return true

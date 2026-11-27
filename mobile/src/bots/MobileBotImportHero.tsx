@@ -3,9 +3,9 @@ import type { ReactNode } from 'react'
 import { Text, View } from 'react-native'
 import { ArrowRight } from 'lucide-react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import { botInitial } from '../../../src/shared/bots/bot-avatar-fallback'
 import { mobileBotAvatarSource } from './host-bot-row-facts'
 import type { ListedBot } from './host-bots-operations'
@@ -17,7 +17,8 @@ export function MobileBotImportHero(props: {
   picture: ReactNode
   existing: ListedBot | null
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const { existing } = props
   return (
@@ -49,7 +50,7 @@ export function MobileBotImportHero(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   hero: {
     flexDirection: 'row',
     alignItems: 'center',

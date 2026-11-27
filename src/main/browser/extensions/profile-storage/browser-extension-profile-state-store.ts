@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { CoalescingFileWriter } from '../../../filesystem/coalescing-file-writer'
 import {
   durableWriteTempPath,
@@ -13,36 +14,42 @@ import { getBrowserExtensionProfileDataDirectory } from './browser-extension-pro
 const STATE_FILE_NAME = 'profile-state.json'
 const PERSIST_DELAY_MS = 250
 
-const contextMenuItemSchema = z.object({
-  id: z.union([z.string(), z.number()]),
-  parentId: z.union([z.string(), z.number()]).optional(),
-  type: z.enum(['normal', 'checkbox', 'radio', 'separator']),
-  title: z.string().optional(),
-  checked: z.boolean().optional(),
-  contexts: z.array(z.string()),
-  documentUrlPatterns: z.array(z.string()).optional(),
-  targetUrlPatterns: z.array(z.string()).optional(),
-  enabled: z.boolean(),
-  visible: z.boolean()
-})
+const contextMenuItemSchema = lazyZodSchema(() =>
+  z.object({
+    id: z.union([z.string(), z.number()]),
+    parentId: z.union([z.string(), z.number()]).optional(),
+    type: z.enum(['normal', 'checkbox', 'radio', 'separator']),
+    title: z.string().optional(),
+    checked: z.boolean().optional(),
+    contexts: z.array(z.string()),
+    documentUrlPatterns: z.array(z.string()).optional(),
+    targetUrlPatterns: z.array(z.string()).optional(),
+    enabled: z.boolean(),
+    visible: z.boolean()
+  })
+)
 
-const privacySettingSchema = z.object({ value: z.unknown(), setAt: z.number() })
+const privacySettingSchema = lazyZodSchema(() =>
+  z.object({ value: z.unknown(), setAt: z.number() })
+)
 
-const extensionStateSchema = z.object({
-  removalGeneration: z.number().int().nonnegative().default(0),
-  grantedPermissions: z.array(z.string()).default([]),
-  grantedOrigins: z.array(z.string()).default([]),
-  contextMenus: z.array(contextMenuItemSchema).default([]),
-  /** scripting.RegisteredContentScript records, kept as Chrome shaped them. */
-  contentScripts: z.array(z.record(z.string(), z.unknown())).default([]),
-  privacy: z.record(z.string(), privacySettingSchema).default({}),
-  /** Scripts this profile's worker registration was made from; a mismatch re-registers it. */
-  workerSignature: z.string().optional(),
-  /** Versions at the last load; absent means runtime.onInstalled has not fired in this profile. */
-  lastLoaded: z.object({ extensionVersion: z.string(), chromiumVersion: z.string() }).optional(),
-  /** sidePanel.setPanelBehavior; Chrome keeps it across restarts, unlike the panel options. */
-  openSidePanelOnActionClick: z.boolean().optional()
-})
+const extensionStateSchema = lazyZodSchema(() =>
+  z.object({
+    removalGeneration: z.number().int().nonnegative().default(0),
+    grantedPermissions: z.array(z.string()).default([]),
+    grantedOrigins: z.array(z.string()).default([]),
+    contextMenus: z.array(contextMenuItemSchema).default([]),
+    /** scripting.RegisteredContentScript records, kept as Chrome shaped them. */
+    contentScripts: z.array(z.record(z.string(), z.unknown())).default([]),
+    privacy: z.record(z.string(), privacySettingSchema).default({}),
+    /** Scripts this profile's worker registration was made from; a mismatch re-registers it. */
+    workerSignature: z.string().optional(),
+    /** Versions at the last load; absent means runtime.onInstalled has not fired in this profile. */
+    lastLoaded: z.object({ extensionVersion: z.string(), chromiumVersion: z.string() }).optional(),
+    /** sidePanel.setPanelBehavior; Chrome keeps it across restarts, unlike the panel options. */
+    openSidePanelOnActionClick: z.boolean().optional()
+  })
+)
 
 export type StoredContextMenuItem = z.infer<typeof contextMenuItemSchema>
 export type BrowserExtensionProfileState = z.infer<typeof extensionStateSchema>

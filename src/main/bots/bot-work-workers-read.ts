@@ -60,6 +60,7 @@ export async function readWorkers(
       agent: read?.agent ?? null,
       state: read?.state ?? 'unverifiable',
       idle: read ? read.state === 'working' && !sessionWorkerIsWorking(read) : false,
+      ...(read?.progressNote ? { progressNote: read.progressNote } : {}),
       stopped: durable?.state === 'stopped' || durable?.state === 'abandoned',
       // Only the start itself: a continued worker ran, whatever its newest follow-up did.
       startFailed:

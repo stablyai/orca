@@ -5,7 +5,7 @@ import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { MessageRow } from '../../db/orchestration-records'
 import { canonicalOrcaSessionId } from '../../addressing/session-lineage/canonical-orca-session-id'
 import { isOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address'
-import { BOT_ITEM_MAIL_SENDER } from '../../../../../shared/bots/bot-item-note-runs'
+import { BOT_ITEM_MAIL_SENDER } from '../../../../../shared/bots/bot-item-mail-sender'
 
 /** The request a reply answers: its answer payload names it, else its thread is it. */
 function answeredRequestId(

@@ -1,3 +1,4 @@
+import { RailPageScroll } from '@/components/rail-page/RailPage'
 import React, { useEffect, useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Loader2 } from 'lucide-react'
@@ -65,8 +66,8 @@ export function AutomationRunsTable({
   )
 
   return (
-    <div className="flex min-h-[15rem] flex-1 flex-col overflow-hidden rounded-lg border border-border/60 bg-card">
-      <div
+    <div className="flex min-h-[15rem] flex-1 flex-col overflow-hidden">
+      <RailPageScroll
         ref={scrollRef}
         className="scrollbar-sleek flex min-h-0 flex-1 flex-col overflow-auto"
         onScroll={(event) => {
@@ -81,7 +82,7 @@ export function AutomationRunsTable({
         <div
           className={cn(
             AUTOMATION_RUNS_DASHBOARD_GRID_CLASS,
-            'sticky top-0 z-10 shrink-0 border-b border-border/60 bg-card px-4 py-2 text-2xs font-semibold uppercase tracking-wider text-muted-foreground'
+            'sticky top-0 z-10 shrink-0 border-b border-border/60 bg-background rail-page-row-gutter py-2 text-2xs font-semibold uppercase tracking-wider text-muted-foreground'
           )}
         >
           <AutomationRunTableHeaderCells withAutomation />
@@ -125,7 +126,7 @@ export function AutomationRunsTable({
                     data-automation-run-key={automationRunFocusKey(entry.row.key, entry.run.id)}
                     className={cn(
                       AUTOMATION_RUNS_DASHBOARD_GRID_CLASS,
-                      'items-center px-4 py-2.5 text-left text-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50'
+                      'items-center rail-page-row-gutter py-2.5 text-left text-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50'
                     )}
                     onClick={() => onOpenRun(entry)}
                   >
@@ -153,7 +154,7 @@ export function AutomationRunsTable({
             })}
           </div>
         )}
-      </div>
+      </RailPageScroll>
     </div>
   )
 }

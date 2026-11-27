@@ -111,6 +111,32 @@ describe('Slack reads', () => {
     }
     expect((await readdir(cwd)).sort()).toEqual(['F3', 'F3-2', 'F3-3'])
   })
+
+  it('saves a Windows device-named file under a name Windows tools can open', async () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    try {
+      const cwd = await mkdtemp(join(tmpdir(), 'slack-read-'))
+      await writeFile(join(cwd, '_NUL.txt'), 'stale')
+      vi.stubGlobal('fetch', async () => new Response('bytes', { status: 200 }))
+      for (const name of ['NUL.txt', 'con', 'COM1 .log', 'CONSOLE.txt']) {
+        await runRead(
+          { ref: SLACK_REF, download: 'F4' },
+          { download: { id: 'F4', name, url: 'https://cloud.test/f/F4', ticket: 't4' } },
+          cwd
+        )
+      }
+      expect((await readdir(cwd)).sort()).toEqual([
+        'CONSOLE.txt',
+        '_COM1 .log',
+        '_NUL-2.txt',
+        '_NUL.txt',
+        '_con'
+      ])
+    } finally {
+      Object.defineProperty(process, 'platform', platform)
+    }
+  })
 })
 
 function refusingClient(result: Record<string, string>) {

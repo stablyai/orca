@@ -32,7 +32,11 @@ import { applyAllAgentsPermission } from '../../../../../shared/agent-launch/per
 import { NotificationStep } from '../../onboarding/NotificationStep'
 import { useAppStore } from '@/store/index'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
+import {
+  getProviderRuntimeContextKey,
+  useProviderRuntimeSessionGeneration
+} from '@/runtime/hosts/observations/provider-runtime-context'
+import { recomputeOn } from '@/lib/recompute-on'
 import { useTranslate } from '@/i18n/use-translate'
 
 import { getLocalizedFeatureWallSetupChecklistCopy } from './feature-wall-setup-checklist-localized-copy'
@@ -267,7 +271,10 @@ function TaskSourcesAction(): React.JSX.Element {
   const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
   const settings = useAppStore((s) => s.settings)
-  const providerRuntimeContextKey = getProviderRuntimeContextKey(settings)
+  const providerRuntimeSessionGeneration = useProviderRuntimeSessionGeneration()
+  const providerRuntimeContextKey = recomputeOn([providerRuntimeSessionGeneration], () =>
+    getProviderRuntimeContextKey(settings)
+  )
 
   useEffect(() => {
     void refreshPreflightStatus()

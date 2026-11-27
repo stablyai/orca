@@ -23,6 +23,9 @@ export type RemoteDispatchRow = {
   task_settled_here: number
   created_at: string
   updated_at: string
+  creator_orca_session_id: string | null
+  creator_pane_key: string | null
+  worktree_id: string | null
 }
 
 const SETTLED_WORKER_STATES = ['succeeded', 'failed', 'stopped', 'abandoned']
@@ -98,29 +101,6 @@ export function countRemoteDispatches(db: OrchestrationDb, runId: string | undef
       : db.db.prepare('SELECT COUNT(*) AS count FROM remote_dispatches WHERE run_id = ?').get(runId)
   ) as { count: number }
   return row.count
-}
-
-/** Identity only: which server runs the Dispatch and for which Task. State comes from the server's queue. */
-export function ensureRemoteDispatchRecord(
-  db: OrchestrationDb,
-  link: RemoteRunLinkRow,
-  identity: { dispatchId: string; taskId: string; agent?: string | null }
-): RemoteDispatchRow {
-  db.db
-    .prepare(
-      `INSERT INTO remote_dispatches (dispatch_id, conversation_id, run_id, environment_id, task_id, agent)
-       VALUES (?, ?, ?, ?, ?, ?)
-       ON CONFLICT(dispatch_id) DO UPDATE SET agent = COALESCE(remote_dispatches.agent, excluded.agent)`
-    )
-    .run(
-      identity.dispatchId,
-      link.conversation_id,
-      link.run_id,
-      link.environment_id,
-      identity.taskId,
-      identity.agent ?? null
-    )
-  return writtenRow(getRemoteDispatch(db, identity.dispatchId), `Dispatch ${identity.dispatchId}`)
 }
 
 /** The server's state for the Dispatch, applied in its queue order. A terminal state sends any stop owed at once: its receipt is now the proof. */

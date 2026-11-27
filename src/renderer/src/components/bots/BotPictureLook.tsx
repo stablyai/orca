@@ -1,7 +1,7 @@
 // A mascot's look under the picture carousel: its tile color and what it wears.
 import { Plus } from 'lucide-react'
 import { HangerIcon } from '@/components/icons/HangerIcon'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { ColorPicker } from '@/components/ui/color-picker'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
@@ -189,20 +189,25 @@ function BotPictureOutfitGrid({
   )
 }
 
-/** The mascot's look under the carousel: the color row, ending in a hanger that opens the outfits under
- *  it. Either half is absent when the host can't store it. */
+/** The mascot's look under the carousel: the color row, then the outfits while the avatar's outfit
+ *  badge has them open. Either half is absent when the host can't store it. */
 export function BotPictureLook({
   id,
   color,
   onColorChange,
   outfit,
-  onOutfitChange
+  onOutfitChange,
+  outfitsOpen = false,
+  outfitsId
 }: {
   id: BotMascotId
   color: string | null
   onColorChange?: (color: string | null) => void
   outfit: BotAvatarOutfit | null
   onOutfitChange?: (outfit: BotAvatarOutfit | null) => void
+  outfitsOpen?: boolean
+  /** The outfit grid's id, for the badge's aria-controls. */
+  outfitsId?: string
 }): React.JSX.Element {
   const t = useTranslate()
   const names: Record<BotAvatarOutfit, string> = {
@@ -216,35 +221,15 @@ export function BotPictureLook({
     party: t('bots.new.outfitParty', 'Party'),
     security: t('bots.new.outfitSecurity', 'Security')
   }
-  const outfitLabel = t('bots.new.pictureOutfit', 'Outfit')
   return (
-    <Collapsible className="flex flex-col items-center">
-      <div className="mt-2 flex flex-wrap items-center justify-center gap-1">
-        {onColorChange ? <BotPictureColors color={color} onChange={onColorChange} /> : null}
-        {onOutfitChange ? (
-          <>
-            {onColorChange ? <span aria-hidden className="mx-0.5 h-3 w-px bg-input" /> : null}
-            <Tooltip>
-              <CollapsibleTrigger asChild>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label={outfitLabel}
-                    className="flex size-4 cursor-pointer items-center justify-center rounded-full border border-border bg-muted text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 data-[state=open]:border-foreground data-[state=open]:bg-foreground data-[state=open]:text-popover"
-                  >
-                    <HangerIcon className="size-3" />
-                  </button>
-                </TooltipTrigger>
-              </CollapsibleTrigger>
-              <TooltipContent side="bottom" sideOffset={4}>
-                {outfitLabel}
-              </TooltipContent>
-            </Tooltip>
-          </>
-        ) : null}
-      </div>
+    <Collapsible open={outfitsOpen} className="flex flex-col items-center">
+      {onColorChange ? (
+        <div className="mt-2 flex flex-wrap items-center justify-center gap-1">
+          <BotPictureColors color={color} onChange={onColorChange} />
+        </div>
+      ) : null}
       {onOutfitChange ? (
-        <CollapsibleContent animation="height">
+        <CollapsibleContent id={outfitsId} animation="height">
           <div className="pt-1">
             <BotPictureOutfitGrid
               id={id}
@@ -257,5 +242,47 @@ export function BotPictureLook({
         </CollapsibleContent>
       ) : null}
     </Collapsible>
+  )
+}
+
+/** The outfit badge on the carousel's current mascot: opens the outfits under the color row. */
+export function BotOutfitBadge({
+  open,
+  controls,
+  onOpenChange
+}: {
+  open: boolean
+  controls: string
+  onOpenChange: (open: boolean) => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  const label = t('bots.new.pictureOutfit', 'Outfit')
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          aria-label={label}
+          aria-expanded={open}
+          aria-controls={controls}
+          onClick={() => onOpenChange(!open)}
+          // ←/→ would move the carousel, which can drop this badge while it holds focus.
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+              event.stopPropagation()
+            }
+          }}
+          className={cn(
+            'flex size-6 cursor-pointer items-center justify-center rounded-full border border-border bg-popover text-muted-foreground shadow-[0_0_0_2px_var(--floating-surface)] outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50',
+            open && 'border-foreground bg-foreground text-popover hover:text-popover'
+          )}
+        >
+          <HangerIcon className="size-3.5" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={4}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
   )
 }

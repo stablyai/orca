@@ -7,9 +7,11 @@ import {
   useLeasedSenderSelector,
   useStableSenderTarget
 } from './native-chat-agent-message-sender-source'
-import { agentMessageSenderLabel } from '../../../../../../shared/agent-session/view/messages/agent-message-presentation'
+import {
+  agentMessageSavedName,
+  resolveAgentMessageSenderName
+} from '../../../../../../shared/agent-session/view/messages/agent-message-presentation'
 import { translate } from '@/i18n/i18n'
-import { useTranslate } from '@/i18n/use-translate'
 import type { Translate } from '@/i18n/use-translate'
 import {
   structuredChatTabBySessionId,
@@ -191,24 +193,27 @@ export function useAgentMessageSenderBot(
 }
 
 /** Live chat names follow the sender's chat on the receiving chat's host; CLI names stay as recorded. */
-export function useAgentMessageSenderLabel(
-  sender: AgentMessageSender,
+export function useAgentMessageSenderName(
+  sender: AgentMessageSender | undefined,
   chatWorktreeId: string | null,
   target?: RuntimeClientTarget,
   dispatchId?: string
-): string {
-  const t = useTranslate()
+): string | null {
   const chat = useAgentMessageSenderChat(sender, chatWorktreeId, target, dispatchId)
   const bot = useBotForWorkspace(chat.worktreeId)
   const conversationName = useStructuredConversationName(chat.host, chat.sessionId)
-  return agentMessageSenderLabel({
+  if (!sender) {
+    return null
+  }
+  return resolveAgentMessageSenderName({
     localChat: Boolean(chat.sessionId),
     // A paired server's bot is not in this computer's catalog; its host's saved name says so.
-    botName: bot?.name ?? (sender.bot ? sender.name : null),
+    botName:
+      agentMessageSavedName(bot ?? undefined) ??
+      (sender.bot ? agentMessageSavedName(sender) : null),
     customLabel: chat.tab?.customLabel,
     conversationName,
     snapshotName: sender.name,
-    tabLabel: chat.tab?.label,
-    fallback: unnamedSenderLabel(t)
+    tabLabel: chat.tab?.label
   })
 }
