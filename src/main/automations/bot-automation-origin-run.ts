@@ -6,6 +6,13 @@ import type {
 } from '../../shared/automations/automation-definition'
 import type { AutomationOriginThread } from '../../shared/automation-bot-target'
 import type { AutomationRun } from '../../shared/automations/history/automation-run'
+import type { Automation } from '../../shared/automations/automation-definition'
+import type { AutomationRunMessage } from '../../shared/automations/automation-run-message'
+import type { AutomationEventAsker } from './automation-event-prompt'
+import { captureAutomationRunMessage } from './automation-run-message-capture'
+import { automationRunMemoryLabel } from '../bots/bot-turn-source'
+import { automationRunOperationId } from './launch/automation-run-operation'
+import { automationResultsLine } from './bot-automation-thread-route'
 import type { Bot } from '../../shared/bot-types'
 import {
   automationResultsSentence,
@@ -74,9 +81,7 @@ export function effectiveResultsSentence(
 ): string {
   const origin = target.originThread
   if (routed.threadPost) {
-    const thread = sameConversation(origin, routed.threadPost)
-      ? originThreadText(origin)
-      : "the event's thread"
+    const thread = threadPlace(origin, routed.threadPost)
     const copy = routed.copyTo
       ? automationResultsSentence({ runsIn: 'new', resultsTo: routed.copyTo })
           .replace(/^Your final message posts as /, ', and a copy posts as ')
@@ -84,12 +89,21 @@ export function effectiveResultsSentence(
       : ''
     return `Your final message posts as a reply in ${thread}${copy}.`
   }
+  // A thread it answers without a post is the event's own, bound to its conversation.
   return automationResultsSentence({
     runsIn: routed.runsIn,
     ...(routed.runsIn === 'chat' && target.chat ? { chat: target.chat } : {}),
     resultsTo: routed.resultsTo,
-    ...(origin ? { originThread: origin } : {})
+    ...(origin && routed.resultsTo !== 'thread' ? { originThread: origin } : {})
   })
+}
+
+/** A thread a run posts into, as people name it: the one it was made in, or the event's. */
+export function threadPlace(
+  origin: AutomationOriginThread | undefined,
+  conversation: ConversationKey
+): string {
+  return sameConversation(origin, conversation) ? originThreadText(origin) : "the event's thread"
 }
 
 /** Whether a conversation is the thread the automation was made in, by source and id. */
@@ -102,4 +116,34 @@ export function sameConversation(
     origin.source === conversation.source &&
     origin.externalId === conversation.externalId
   )
+}
+
+/** The run's message as one conversation takes it. In the thread's chat a wait is told to write its
+ *  own first line; a new conversation standing in for that gone chat (fallback) is not, as Orca
+ *  puts the line on its own post, and no longer claims the chat's thread turn. */
+export function runMessage(
+  automation: Automation,
+  run: AutomationRun,
+  prompt: string,
+  asker: AutomationEventAsker | null,
+  { fallback, inOriginChat }: { fallback: boolean; inOriginChat: boolean }
+): { text: string; fields: BotRunFields; automationRun: AutomationRunMessage | undefined } {
+  const resultsLine = automationResultsLine(automation, run)
+  const text = [
+    prompt,
+    ...(resultsLine ? ['', resultsLine] : []),
+    ...(!fallback && inOriginChat && automation.once && automation.bot?.chat?.toConversation
+      ? ['', originProvenanceInstruction(automation)]
+      : [])
+  ].join('\n')
+  const captured = captureAutomationRunMessage(automation, run, text, asker)
+  const automationRun =
+    captured && fallback ? (({ toConversation: _gone, ...rest }) => rest)(captured) : captured
+  const fields: BotRunFields = {
+    memorySource: automationRunMemoryLabel(automation.name, run.event),
+    ...(run.triggeredBy ? { triggeredBy: run.triggeredBy } : {}),
+    ...(automationRun ? { automationRun } : {}),
+    messageId: automationRunOperationId(run, 'run-message')
+  }
+  return { text, fields, automationRun }
 }

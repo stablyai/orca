@@ -86,6 +86,7 @@ describe('a result posted into the thread its automation was made in', () => {
     const replies: unknown[][] = []
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial fixture; the code under test reads only these fields
     const deps = {
+      cloudSignedOut: () => false,
       turnForOf: async () => 'owner',
       replyInThread: (...args: unknown[]) => {
         replies.push(args)
@@ -163,5 +164,58 @@ describe('a result posted into its thread when the chat that answers it was gone
         text: '_From the automation “Redo the review”, created in the Slack thread in #design._\n\nRedone.'
       })
     ])
+  })
+})
+
+describe('a thread post and its copy, each on its own', () => {
+  const conversation = { source: 'slack', externalId: 'T1:C1:1.2' } as const
+  const copyTo = { channel: 'C9', label: '#news' } as const
+  const bot = {
+    botId: 'b1',
+    runsIn: 'chat',
+    resultsTo: copyTo,
+    originThread: { ...conversation, place: '#design', sessionId: 'thread-chat' }
+  } as const
+  async function deliver(options: { threadOk: boolean; signedOut?: boolean }) {
+    const posts: unknown[] = []
+    const notes: string[] = []
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial fixture; the code under test reads only these fields
+    const deps = {
+      cloudSignedOut: () => options.signedOut === true,
+      turnForOf: async () => 'owner',
+      noteToRun: async (_session: string, _id: string, text: string) => {
+        notes.push(text)
+      },
+      replyInThread: () =>
+        Promise.resolve(options.threadOk ? { ok: true, value: {} } : { ok: false }),
+      postAsBot: (_bot: unknown, body: unknown) => {
+        posts.push(body)
+        return Promise.resolve({ ok: true, value: undefined })
+      }
+    } as unknown as BotRunDeliveryDependencies
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial fixture; the code under test reads only these fields
+    const completion = await deliverBotRunResult(deps, {
+      automation: { id: 'a1', name: 'Redo the review', dtstart: 1, bot },
+      run: { id: 'r1', trigger: 'scheduled' },
+      bot: { id: 'b1', name: 'Ranger' },
+      target: { runsIn: 'new', resultsTo: 'thread', threadPost: conversation, copyTo },
+      sessionId: 'run-conv',
+      ended: { outcome: 'success', message: 'Redone.' }
+    } as unknown as BotRunResult)
+    return { completion, posts, notes }
+  }
+
+  it('still posts the copy when the thread refused its post, and says so', async () => {
+    const { completion, posts } = await deliver({ threadOk: false })
+    expect(posts).toHaveLength(1)
+    expect(completion.error).toBe("The result couldn't be posted.")
+  })
+
+  it('says how to sign in when the host is signed out, for the thread and the copy', async () => {
+    const { completion, posts, notes } = await deliver({ threadOk: true, signedOut: true })
+    expect(posts).toEqual([])
+    expect(notes).toHaveLength(2)
+    expect(completion.error).toContain('Not posted to Slack')
+    expect(completion.error).toContain("The copy wasn't posted: Not posted to Slack")
   })
 })

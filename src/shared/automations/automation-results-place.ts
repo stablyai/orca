@@ -29,7 +29,10 @@ export function originThreadText(thread: AutomationOriginThread | undefined): st
 
 /** Every place a run's final message goes, the thread first: a run in a chat that answers a thread
  *  answers there, and a channel or issue named besides gets a copy. */
-export function automationResultsPlaces(target: ResultsTarget): AutomationResultsPlace[] {
+export function automationResultsPlaces(
+  target: ResultsTarget,
+  hasEvents = false
+): AutomationResultsPlace[] {
   const inThread = target.runsIn === 'chat' && target.chat?.toConversation === true
   const thread: AutomationResultsPlace[] = inThread
     ? [{ kind: 'thread', where: originThreadText(target.originThread) }]
@@ -46,12 +49,14 @@ export function automationResultsPlaces(target: ResultsTarget): AutomationResult
     return thread
   }
   if (resultsTo === 'thread') {
-    return [
-      {
-        kind: 'thread',
-        where: target.originThread ? originThreadText(target.originThread) : "the event's thread"
-      }
-    ]
+    const origin = target.originThread && originThreadText(target.originThread)
+    // Events answer in their own threads or issues; the one it was made in takes the rest.
+    const where = !origin
+      ? "the event's thread"
+      : hasEvents
+        ? `each event's thread or issue, and at its deadline or for an event without one, ${origin}`
+        : origin
+    return [{ kind: 'thread', where }]
   }
   if (resultsTo === 'none') {
     return [{ kind: 'none' }]
@@ -68,8 +73,8 @@ const CLI_PLACE = {
 }
 
 /** `results to: ...` as `automations show` prints it. */
-export function formatAutomationResultsTo(target: ResultsTarget): string {
-  const places = automationResultsPlaces(target).map((place) => {
+export function formatAutomationResultsTo(target: ResultsTarget, hasEvents = false): string {
+  const places = automationResultsPlaces(target, hasEvents).map((place) => {
     switch (place.kind) {
       case 'orca':
         return place.where === 'run-chat'

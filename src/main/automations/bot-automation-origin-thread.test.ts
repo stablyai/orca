@@ -10,6 +10,7 @@ import {
   type BotRunThreads
 } from './bot-automation-launch'
 import { runRoutes, type RunRoute } from './bot-run-thread-posts'
+import { originProvenanceInstruction } from './bot-automation-origin-run'
 
 const ORIGIN = {
   source: 'slack',
@@ -38,12 +39,20 @@ function dispatch(automation: Partial<Automation>, harness: Harness = {}) {
   const answers = [...(harness.takesMail ?? [true])]
   const calls: string[] = []
   const send = { sessionId: 'run-chat', clientMessageId: 'm1', fingerprint: 'f' }
+  let routeAtStart: RunRoute | undefined
+  let liveSession = 'run-chat'
   const sent = (name: string) => async () => {
     calls.push(name)
     return send
   }
   const sessions = {
-    startConversation: vi.fn<BotAutomationSessions['startConversation']>(sent('startConversation')),
+    // A new conversation takes the id the dispatcher names; its route must already be there.
+    startConversation: vi.fn<BotAutomationSessions['startConversation']>(async (_bot, input) => {
+      calls.push('startConversation')
+      routeAtStart = input.sessionId ? runRoutes.of(input.sessionId) : undefined
+      liveSession = input.sessionId ?? 'run-chat'
+      return { ...send, sessionId: liveSession }
+    }),
     sendToBotChat: vi.fn(sent('sendToBotChat')),
     sendToSession: vi.fn(sent('sendToSession')),
     sendToChat: vi.fn(sent('sendToChat')),
@@ -64,7 +73,7 @@ function dispatch(automation: Partial<Automation>, harness: Harness = {}) {
   const results: BotRunResults = {
     watch: async () => ({
       next: async () => {
-        live = runRoutes.of('run-chat')
+        live = runRoutes.of(liveSession)
         return { outcome: 'success', message: 'Redone.' }
       },
       dispose: () => {}
@@ -87,6 +96,8 @@ function dispatch(automation: Partial<Automation>, harness: Harness = {}) {
     couldNotStart,
     textSent,
     live: () => live,
+    routeAtStart: () => routeAtStart,
+    session: () => liveSession,
     run: async () => {
       const launched = await launch({
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial fixture; the code under test reads only these fields
@@ -132,18 +143,21 @@ const OWN_AGENT = {
 } as const
 
 describe('a run that posts into the thread its automation was made in', () => {
-  it('posts its result there, and its live replies go there too', async () => {
+  it('posts its result there, and its live replies go there from the start', async () => {
     const h = dispatch({ bot: OWN_AGENT })
     const result = await h.run()
     expect(result.target).toMatchObject({ resultsTo: 'thread', threadPost: ORIGIN_KEY })
-    expect(h.live()).toEqual({
+    const route = {
       botId: 'b1',
       threadPost: { conversation: ORIGIN_KEY, place: 'the Slack thread in #design' },
       sentence: 'Your final message posts as a reply in the Slack thread in #design.'
-    })
+    }
+    // Registered under the conversation's own id before its first message, so an early reply works.
+    expect(h.routeAtStart()).toEqual(route)
+    expect(h.live()).toEqual(route)
     // Only while it runs; it started this conversation, so it lets it go after.
-    expect(runRoutes.of('run-chat')).toBeUndefined()
-    expect(h.sessions.release).toHaveBeenCalledWith('run-chat')
+    expect(runRoutes.of(h.session())).toBeUndefined()
+    expect(h.sessions.release).toHaveBeenCalledWith(h.session())
   })
 
   it('tells the run where its final message goes', async () => {
@@ -218,6 +232,8 @@ const IN_ORIGIN_CHAT = {
   originThread: ORIGIN
 } as const
 
+// The instruction as the code writes it now, so a negative check can't pass on retired words.
+const CURRENT_INSTRUCTION = originProvenanceInstruction({ name: 'Redo the review' })
 const PROVENANCE =
   '[Orca: if you answer, begin your final message with this exact line, unchanged, then a blank line, then your answer; if you stay silent (NO_REPLY), leave it out: _From the automation “Redo the review”, created in this thread._]'
 
@@ -228,7 +244,7 @@ describe('a run in the chat that answers its thread', () => {
     const h = dispatch({ bot: IN_ORIGIN_CHAT })
     await h.run()
     expect(h.calls).toEqual(['sendToOpenChat'])
-    expect(h.textSent()).not.toContain('start your final message')
+    expect(h.textSent()).not.toContain(CURRENT_INSTRUCTION)
   })
 
   it('has a wait open its answer with where it came from', async () => {
@@ -236,9 +252,8 @@ describe('a run in the chat that answers its thread', () => {
     await h.run()
     expect(h.calls).toEqual(['sendToOpenChat'])
     expect(h.textSent()).toContain(PROVENANCE)
-    expect(h.live()?.sentence).toBe(
-      'Your final message posts as a reply in the Slack thread in #design.'
-    )
+    // The thread's chat is shared with other turns, so no run's route is published there.
+    expect(h.live()).toBeUndefined()
   })
 
   it('posts into the thread from one new conversation when the chat closed before the run', async () => {
@@ -250,11 +265,11 @@ describe('a run in the chat that answers its thread', () => {
     expect(result.target).toMatchObject(GONE_TO_THREAD)
     // Orca puts the line on its own post, so the new conversation isn't told to write it, and its
     // message no longer claims the gone chat's thread turn.
-    expect(h.textSent()).not.toContain('start your final message')
+    expect(h.textSent()).not.toContain(CURRENT_INSTRUCTION)
     expect(
       h.sessions.startConversation.mock.calls[0]![1].run?.automationRun?.toConversation
     ).toBeUndefined()
-    expect(h.sessions.release).toHaveBeenCalledWith('run-chat')
+    expect(h.sessions.release).toHaveBeenCalledWith(h.session())
   })
 
   it('does the same when the chat closes while its prompt goes', async () => {
@@ -304,5 +319,78 @@ describe('a run in the chat that answers its thread', () => {
     const h = dispatch({ bot: { ...IN_ORIGIN_CHAT, chat: { sessionId: 'other' } } })
     await h.run()
     expect(h.calls).toEqual(['sendToBotChat'])
+  })
+})
+
+describe('which runs move into the thread when its chat is gone', () => {
+  it('not a recurring one whose results go to another channel', async () => {
+    // Made in the thread, but sent elsewhere by name: it continues the chat without answering there.
+    const elsewhere = {
+      botId: 'b1',
+      runsIn: 'chat',
+      chat: { sessionId: 'thread-chat', homeIfGone: true },
+      resultsTo: { channel: 'C9', label: '#news' },
+      originThread: ORIGIN
+    } as const
+    const h = dispatch({ bot: elsewhere }, { openChat: 'gone' })
+    const result = await h.run()
+    expect(h.calls).toEqual(['sendToBotChat'])
+    expect(result.target.threadPost).toBeUndefined()
+  })
+
+  it('not a run started by hand', async () => {
+    const h = dispatch({ bot: IN_ORIGIN_CHAT }, { trigger: 'manual', openChat: 'gone' })
+    const result = await h.run()
+    expect(h.calls).toEqual(['sendToBotChat'])
+    expect(result.target.threadPost).toBeUndefined()
+  })
+})
+
+describe('a run posting into the thread from a chat others share', () => {
+  it('publishes no reply route for that chat', async () => {
+    const h = dispatch({
+      bot: { ...OWN_AGENT, agentSetup: undefined, runsIn: 'chat', chat: { sessionId: 'other' } }
+    })
+    const result = await h.run()
+    expect(result.target).toMatchObject({ resultsTo: 'thread', threadPost: ORIGIN_KEY })
+    expect(h.live()).toBeUndefined()
+  })
+})
+
+describe('what an event run of a thread automation is told', () => {
+  const watch: Partial<Automation> = {
+    on: [{ id: 'e1', source: 'slack', event: 'message' }],
+    bot: { botId: 'b1', runsIn: 'new', resultsTo: 'thread', originThread: ORIGIN }
+  }
+
+  it('names its own event thread when the event brought one', async () => {
+    const h = dispatch(watch, {
+      trigger: 'event',
+      event: { conversation: EVENT_THREAD },
+      adopts: true
+    })
+    await h.run()
+    expect(h.textSent()).toContain(
+      "[Orca: Your final message posts as a reply in the event's thread.]"
+    )
+    expect(h.live()?.sentence).toBe("Your final message posts as a reply in the event's thread.")
+  })
+
+  it('names the Linear issue for an issue event', async () => {
+    const h = dispatch(watch, {
+      trigger: 'event',
+      event: { source: 'linear', event: 'commented', subject: 'ENG-42' }
+    })
+    await h.run()
+    expect(h.textSent()).toContain('[Orca: Your final message posts as a comment on ENG-42.]')
+    expect(h.live()?.sentence).toBe('Your final message posts as a comment on ENG-42.')
+  })
+
+  it('names the thread it was made in for an event with none of its own', async () => {
+    const h = dispatch(watch, { trigger: 'event', event: {} })
+    await h.run()
+    expect(h.textSent()).toContain(
+      '[Orca: Your final message posts as a reply in the Slack thread in #design.]'
+    )
   })
 })

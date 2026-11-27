@@ -175,7 +175,7 @@ export function formatAutomationShow(result: AutomationShowPayload): string {
     ...(automation.bot
       ? [
           formatRunsInChat(automation) ?? `runs in: ${automation.bot.runsIn}`,
-          formatAutomationResultsTo(automation.bot)
+          formatAutomationResultsTo(automation.bot, Boolean(automation.on?.length))
         ]
       : []),
     ...(automation.once ? [`once: ${formatOnce(automation)}`] : []),

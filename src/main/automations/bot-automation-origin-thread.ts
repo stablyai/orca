@@ -61,11 +61,18 @@ export function routeToOriginThread(
     hasEvents: boolean
     /** The chat that made it, as the host looked it up: null once gone, undefined when not looked up. */
     originChat?: { title: string | null } | null
+    /** Results name a pasted link the cloud couldn't look up: never the thread's own channel. */
+    unverifiedLink?: boolean
   }
 ): AutomationBotTarget {
   const thread = target.originThread
   const originChat = originChatOf(target)
-  if (!thread || options.hasEvents || sentElsewhere(target, thread, originChat)) {
+  if (
+    !thread ||
+    options.hasEvents ||
+    options.unverifiedLink ||
+    sentElsewhere(target, thread, originChat)
+  ) {
     return target
   }
   const otherChat = target.runsIn === 'chat' && target.chat && target.chat.sessionId !== originChat
@@ -106,14 +113,14 @@ export function originThreadNote(
   if (!thread || !inThread) {
     return null
   }
+  const namedChannel = typeof asked.resultsTo === 'object' && typeof saved.resultsTo !== 'object'
   const flags = [
     ...(given.runsIn &&
     (asked.runsIn !== saved.runsIn || asked.chat?.sessionId !== saved.chat?.sessionId)
       ? ['--runs-in']
       : []),
     ...(given.resultsTo &&
-    typeof asked.resultsTo === 'object' &&
-    typeof saved.resultsTo !== 'object'
+    (namedChannel || (asked.resultsTo === 'chat' && saved.resultsTo === 'thread'))
       ? ['--results-to']
       : [])
   ]
@@ -121,8 +128,7 @@ export function originThreadNote(
     return null
   }
   const how = saved.runsIn === 'chat' ? 'runs in this chat and replies' : 'posts its result'
-  const why = flags.includes('--results-to')
-    ? " (--results-to named this thread's own channel)"
-    : ''
+  const why =
+    given.resultsTo && namedChannel ? " (--results-to named this thread's own channel)" : ''
   return `Made while answering ${originThreadText(thread)}, so it ${how} there: this overrode ${flags.join(' and ')}${why}. To post in a different channel instead, name that channel with --results-to channel:<channel>.`
 }

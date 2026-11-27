@@ -29,3 +29,19 @@ describe('the note on a thread automation that overrode flags', () => {
     expect(originThreadNote(asked, SAVED, { runsIn: false, resultsTo: false })).toBeNull()
   })
 })
+
+describe('the note on an explicit --results-to chat that became the thread', () => {
+  it('names the flag, with no channel explanation', () => {
+    const saved: AutomationBotTarget = {
+      botId: 'b1',
+      runsIn: 'new',
+      resultsTo: 'thread',
+      originThread: ORIGIN
+    }
+    const note = originThreadNote({ botId: 'b1', runsIn: 'new', resultsTo: 'chat' }, saved, {
+      runsIn: false,
+      resultsTo: true
+    })
+    expect(note).toContain('this overrode --results-to.')
+  })
+})

@@ -6,17 +6,15 @@ import type {
 } from '../../shared/automations/automation-definition'
 import type { AutomationRun } from '../../shared/automations/history/automation-run'
 import type { Bot } from '../../shared/bot-types'
-import {
-  CONNECTOR_CLIENT_LIMITS,
-  type ConnectorBotPostAnswer,
-  type ConnectorTurnFor
+import type {
+  ConnectorBotPostAnswer,
+  ConnectorTurnFor
 } from '../../shared/connectors/connector-cloud-contract'
 import { botTurnFor } from './bot-turn-for'
 import {
   formatOrcaSessionAddress,
   isOrcaSessionId
 } from '../../shared/agent-session/identity/orca-session-address'
-import { capAnswer } from '../connector-cloud/connector-snapshot'
 import type { ConnectorResult } from '../connector-cloud/connector-cloud-request'
 import type { ConnectorBotPostBody } from '../connector-cloud/connector-replies'
 import type { ConversationKey } from '../external-conversations/external-conversation-types'
@@ -41,8 +39,7 @@ import { tuiAgentDisplayName } from '../../shared/agent-launch/catalog/tui-agent
 import { ANSWERED_TOGETHER_NOTICE } from '../../shared/automations/history/automation-run-answered-together'
 import * as resultNote from './bot-run-result-note'
 import { writeStructuredAgentSessionOrcaNote } from '../native-chat/agent-session-wire/structured-agent-session-orca-note'
-import { withProvenance } from './bot-run-result-provenance'
-import { noteNotices, POST_COPY, postToPlace } from './bot-run-place-post'
+import { postToPlace, postToThread } from './bot-run-place-post'
 import { watchBotTurnEnds, type BotRunUnavailable, type BotTurnEnd } from './bot-run-turn-watch'
 import { orcaSignInServer } from './orca-sign-in-server'
 import { orcaCloudNeedsSignIn, type OrcaSignInServer } from '../../shared/bots/host-orca-sign-in'
@@ -115,6 +112,7 @@ const COPY = {
   failed: (outcome: string) => `The bot's turn ended without finishing (${outcome}).`,
   chatResult: (automation: string, message: string) => `Result of "${automation}":\n\n${message}`,
   chatFailed: "The result couldn't be sent to the bot's Chat.",
+  copyFailed: (why: string) => `The copy wasn't posted: ${why}`,
   notInThread:
     "Orca Cloud didn't link this event to a thread, so the result stayed in this run's conversation.",
   unavailable: {
@@ -173,24 +171,11 @@ export async function deliverBotRunResult(
     return { ...completed, error: COPY.notInThread }
   }
   if (message && !isQuietBotResult(message) && resultsTo === 'thread' && target.threadPost) {
-    const origin = automation.bot?.originThread
-    const into =
-      origin?.source === target.threadPost.source &&
-      origin.externalId === target.threadPost.externalId
-    const words = into ? withProvenance(message, automation, true) : message
-    const text = capAnswer(words, CONNECTOR_CLIENT_LIMITS.maxLastAssistantMessageBytes)
-    const posted = await deps.replyInThread(
-      target.threadPost,
-      `run-result:${result.run.id}`,
-      text,
-      await deps.turnForOf(result.sessionId)
-    )
-    if (!posted?.ok) {
-      return { ...completed, error: posted ? POST_COPY.postFailed : POST_COPY.cloudOff }
-    }
-    await noteNotices(deps, result, posted.value.notices)
+    // Each place is tried on its own: a thread that refused the post still leaves the copy.
+    const threadError = await postToThread(deps, result, target.threadPost, message)
     const copyError = target.copyTo && (await postToPlace(deps, result, target.copyTo, message))
-    return copyError ? { ...completed, error: copyError } : completed
+    const error = [threadError, copyError && COPY.copyFailed(copyError)].filter(Boolean).join(' ')
+    return error ? { ...completed, error } : completed
   }
   // A run in the Chat already left its result there; one linked to its event's thread posts it there.
   if (

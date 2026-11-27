@@ -49,13 +49,17 @@ export async function botAutomationCreateRules(
   // The chat a thread's automation runs in was Orca's choice: closed before the save, the thread
   // still gets the answer (inOriginThread), so it isn't refused here. A chat named by id still is.
   const ownChat =
-    input.bot?.chat !== undefined && input.bot.chat.sessionId === originChatOf(input.bot)
+    input.bot?.chat?.homeIfGone === true && input.bot.chat.sessionId === originChatOf(input.bot)
   const inChat = ownChat ? input.bot : await withCheckedBotChat(input.bot, bot, lookups.botChat)
   const placed = bot
     ? await withPatchPlaceRefs(lookups.placeRefs(), bot.id, { on: rules, bot: inChat })
     : {}
   const on = placed.on ?? rules
-  return { on, bot: await inOriginThread(lookups, bot, placed.bot ?? inChat, Boolean(on?.length)) }
+  const routed = await inOriginThread(lookups, bot, placed.bot ?? inChat, {
+    hasEvents: Boolean(on?.length),
+    asked: input.bot?.resultsTo
+  })
+  return { on, bot: routed }
 }
 
 /** A target made answering a thread, routed to answer there; its places must already be refs. */
@@ -63,7 +67,7 @@ async function inOriginThread(
   lookups: Pick<BotAutomationLookups, 'botChat'>,
   bot: Bot | null | undefined,
   target: AutomationBotTarget | undefined,
-  hasEvents: boolean
+  { hasEvents, asked }: { hasEvents: boolean; asked?: AutomationBotTarget['resultsTo'] }
 ): Promise<AutomationBotTarget | undefined> {
   const chatId = originChatOf(target)
   if (!target?.originThread || !bot) {
@@ -72,7 +76,26 @@ async function inOriginThread(
   // The chat is looked up only when the target would run there.
   const originChat =
     hasEvents || target.agentSetup || !chatId ? undefined : await lookups.botChat(bot, chatId)
-  return routeToOriginThread(target, { hasEvents, originChat })
+  return routeToOriginThread(target, {
+    hasEvents,
+    originChat,
+    unverifiedLink: unverifiedLink(asked, target.resultsTo)
+  })
+}
+
+/** A pasted link the cloud couldn't look up keeps only its channel id, which names no workspace, so
+ *  it can't be taken for the thread's own channel. */
+function unverifiedLink(
+  asked: AutomationBotTarget['resultsTo'] | undefined,
+  placed: AutomationBotTarget['resultsTo']
+): boolean {
+  return (
+    typeof asked === 'object' &&
+    'channel' in asked &&
+    /^https?:\/\//i.test(asked.channel) &&
+    typeof placed === 'object' &&
+    !placed.ref
+  )
 }
 
 export async function patchBotAutomationUpdate(
@@ -107,6 +130,7 @@ export async function patchBotAutomationUpdate(
       patch.on = await withTriggerPeople(lookups.triggerPeople(bot), patch.on, current.on)
     }
   }
+  const asked = patch.bot?.resultsTo
   Object.assign(
     patch,
     await withPatchPlaceRefs(lookups.placeRefs(), current.bot.botId, patch, current)
@@ -114,9 +138,9 @@ export async function patchBotAutomationUpdate(
   // An edit of where it runs or answers, or of whether events start it, is routed as on create.
   const hasEvents = Boolean((patch.on ?? current.on)?.length)
   if (patch.bot) {
-    patch.bot = await inOriginThread(lookups, bot, patch.bot, hasEvents)
+    patch.bot = await inOriginThread(lookups, bot, patch.bot, { hasEvents, asked })
   } else if (patch.on !== undefined && current.bot.originThread) {
-    const routed = await inOriginThread(lookups, bot, current.bot, hasEvents)
+    const routed = await inOriginThread(lookups, bot, current.bot, { hasEvents })
     if (JSON.stringify(routed) !== JSON.stringify(current.bot)) {
       patch.bot = routed
     }
@@ -126,7 +150,13 @@ export async function patchBotAutomationUpdate(
 /** Clients can't send the thread an automation was made in, so an edit keeps the saved one. */
 export function withOriginThread<Target extends AutomationBotTarget | undefined>(
   next: Target,
-  saved: Pick<AutomationBotTarget, 'originThread'>
+  saved: Pick<AutomationBotTarget, 'originThread' | 'chat'>
 ): Target {
-  return next && saved.originThread ? { ...next, originThread: saved.originThread } : next
+  if (!next || !saved.originThread) {
+    return next
+  }
+  // A target saved before the thread kept its chat carries that chat forward, before the edit
+  // can clear the chat that names it.
+  const sessionId = originChatOf(saved)
+  return { ...next, originThread: { ...saved.originThread, ...(sessionId ? { sessionId } : {}) } }
 }

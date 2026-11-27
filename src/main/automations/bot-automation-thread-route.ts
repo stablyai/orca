@@ -10,6 +10,7 @@ import { runResultsSentence } from '../../shared/automations/automation-results-
 import type { LinkableChat } from '../external-conversations/external-conversation-chat-delivery'
 import type { ConversationKey } from '../external-conversations/external-conversation-types'
 import type { BotRunThreads } from './bot-automation-launch'
+import { answersOriginThread } from './bot-automation-origin-run'
 
 /** Where a run that answers in its event's thread goes: into the chat that owns the thread, its own
  *  chat that takes the thread, or a chat that leaves the thread alone and posts its result there. */
@@ -70,16 +71,25 @@ export function threadResults(
 }
 
 /** The wake note's last line: where the run's final message goes. Run by hand, a thread's run is in
- *  no thread, so its result stays in its conversation. */
+ *  no thread, so its result stays in its conversation; an event that brought its own thread or
+ *  Linear issue answers there, not in the thread the automation was made in. */
 export function automationResultsLine(
   automation: Pick<Automation, 'bot'>,
-  run: Pick<AutomationRun, 'trigger'>
+  run: Pick<AutomationRun, 'trigger' | 'event'>
 ): string | null {
   const target = automation.bot
   if (!target) {
     return null
   }
-  return `[Orca: ${runResultsSentence(target, run.trigger)}]`
+  const ownThread =
+    target.resultsTo === 'thread' && run.trigger === 'event' && !answersOriginThread(run)
+  const issue = run.event?.source === 'linear' ? run.event.subject : undefined
+  const routed = !ownThread
+    ? target
+    : issue
+      ? { ...target, resultsTo: { linearIssue: issue } }
+      : { ...target, originThread: undefined }
+  return `[Orca: ${runResultsSentence(routed, run.trigger)}]`
 }
 
 /** An event run meant for its thread that got none: no thread on the event, or an older cloud. */

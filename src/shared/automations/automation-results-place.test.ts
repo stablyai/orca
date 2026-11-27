@@ -60,3 +60,13 @@ describe('where a bot automation says its results go', () => {
     )
   })
 })
+
+describe('where an event automation made in a thread says its results go', () => {
+  it('names each event thread first, then the thread it was made in', () => {
+    expect(
+      formatAutomationResultsTo({ ...base, resultsTo: 'thread', originThread: THREAD }, true)
+    ).toBe(
+      "results to: each event's thread or issue, and at its deadline or for an event without one, the Slack thread in #design (a reply in the thread)"
+    )
+  })
+})

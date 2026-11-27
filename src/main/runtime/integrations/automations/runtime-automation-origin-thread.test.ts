@@ -173,3 +173,30 @@ describe('editing where it answers', () => {
     }
   )
 })
+
+describe('saving a thread automation, in the cases C3 found', () => {
+  it('refuses a missing chat the caller chose by id, even the thread chat', async () => {
+    await expect(
+      created({ runsIn: 'chat', chat: { sessionId: 'thread-chat' }, resultsTo: 'chat' }, null)
+    ).rejects.toThrow('has no chat chat:thread-chat')
+  })
+
+  it("posts top-level for a link the cloud couldn't look up, never as the thread's channel", async () => {
+    const failing: ConnectorRefResolver = async () => {
+      throw new Error('cloud unavailable')
+    }
+    const link = 'https://partner.slack.com/archives/C08NLB8LXCP'
+    const saved = await created({ resultsTo: { channel: link } }, undefined, failing)
+    expect(saved).toMatchObject({ runsIn: 'new', resultsTo: { channel: 'C08NLB8LXCP' } })
+  })
+
+  it('keeps the chat of a target saved before the thread kept it when an edit clears the chat', async () => {
+    const { sessionId: _kept, ...older } = ORIGIN
+    const bot2 = await edited(
+      { bot: { botId: 'b1', ...IN_THREAD_CHAT, originThread: older } },
+      // An edit to --runs-in new sends no chat.
+      { bot: { botId: 'b1', runsIn: 'new', resultsTo: 'chat' } }
+    )
+    expect(bot2).toEqual({ botId: 'b1', originThread: ORIGIN, ...IN_THREAD_CHAT })
+  })
+})
