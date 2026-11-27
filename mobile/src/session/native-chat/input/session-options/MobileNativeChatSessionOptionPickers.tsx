@@ -58,6 +58,7 @@ export type MobileNativeChatSessionOptionPickersProps = {
 }
 
 type PresentationProps = {
+  agent: string | null
   presentation: MobileNativeChatPickerPresentation | null
   onNavigate: (page: string | null) => void
   onDrawerOpen: (page: string) => void
@@ -74,6 +75,7 @@ export function MobileNativeChatSessionOptionPickers({
   controller,
   isWorking,
   sendInFlight = false,
+  agent,
   presentation,
   onNavigate,
   onDrawerOpen,
@@ -185,7 +187,9 @@ export function MobileNativeChatSessionOptionPickers({
   return (
     <View style={styles.pillSlot}>
       <ModelPill
-        primary={primary}
+        primary={
+          model && agent === 'hermes' ? primary.replace(/^(.+?) · (.+)$/u, '$2 · $1') : primary
+        }
         secondary={secondary}
         warning={permissionColor !== undefined}
         icon={permissionIcon}

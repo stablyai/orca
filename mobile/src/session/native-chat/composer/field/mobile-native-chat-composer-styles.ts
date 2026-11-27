@@ -1,11 +1,16 @@
 import { spacing } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { composerInputStyles } from '../../../../components/composer-input/composer-input-styles'
+import {
+  COMPOSER_CONTROL_SIZE,
+  composerInputStyles
+} from '../../../../components/composer-input/composer-input-styles'
 
 /** Space above the composer box; the queue box above reaches through it. */
 export const COMPOSER_INSET_TOP = 6
 /** How far a box docked on the composer's top edge reaches under it, past its rounded corners. */
 export const COMPOSER_TUCK = 12
+// Reserve two control widths for the pill so a warning icon still leaves room for text.
+export const COMPOSER_ATTACH_AND_MODEL_MIN_WIDTH = COMPOSER_CONTROL_SIZE * 3 + spacing.sm
 
 export const mobileNativeChatComposerStyles = themedStyleSheet(() => ({
   composerInset: {
@@ -28,6 +33,11 @@ export const mobileNativeChatComposerStyles = themedStyleSheet(() => ({
     alignItems: 'center',
     maxWidth: '100%',
     gap: spacing.sm
+  },
+  stackedAttachAndModel: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    width: '100%'
   },
   // One line while dictating: a long computer name truncates instead of wrapping and growing the composer.
   dictationLeading: {
