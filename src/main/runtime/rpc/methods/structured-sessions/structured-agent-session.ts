@@ -2,6 +2,7 @@ import { STRUCTURED_AGENT_SESSION_CANCEL_METHOD } from '../structured-agent-sess
 import { STRUCTURED_AGENT_SESSION_MCP_METHODS } from './catalog/structured-agent-session-mcp'
 import { STRUCTURED_AGENT_SESSION_AUTO_REVIEW_METHODS } from './conversation/structured-agent-session-auto-review-approval'
 import { STRUCTURED_AGENT_SESSION_ACCOUNT_USAGE_METHODS } from './catalog/structured-agent-session-account-usage'
+import { STRUCTURED_AGENT_SESSION_CROSS_VENDOR_HANDOFF_METHODS } from './conversation/structured-agent-session-cross-vendor-handoff'
 import { STRUCTURED_AGENT_SESSION_USAGE_LIMIT_CONTINUE_METHODS } from './catalog/structured-agent-session-usage-limit-continue'
 import { STRUCTURED_AGENT_SESSION_SKIP_ASYNC_QUESTIONS_METHODS } from './conversation/structured-agent-session-skip-async-questions'
 import { STRUCTURED_AGENT_SESSION_CLOSE_METHOD } from './conversation/structured-agent-session-close-method'
@@ -217,6 +218,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
   ...STRUCTURED_AGENT_SESSION_RENAME_METHODS,
   ...STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS,
   ...STRUCTURED_AGENT_SESSION_USAGE_LIMIT_CONTINUE_METHODS,
+  ...STRUCTURED_AGENT_SESSION_CROSS_VENDOR_HANDOFF_METHODS,
   ...STRUCTURED_AGENT_SESSION_SKIP_ASYNC_QUESTIONS_METHODS,
   ...STRUCTURED_AGENT_SESSION_STATUS_METHODS,
   ...STRUCTURED_AGENT_SESSION_TURN_COMPLETION_METHODS,

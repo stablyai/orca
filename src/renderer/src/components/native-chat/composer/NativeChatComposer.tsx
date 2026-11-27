@@ -1,6 +1,7 @@
 import { NativeChatTextAttachmentScope } from '../media/text/NativeChatTextAttachments'
 import { forwardRef } from 'react'
 import { NativeChatComposerPane } from './NativeChatComposerPane'
+import { NativeChatCrossVendorContext } from '../session/options/cross-vendor/native-chat-cross-vendor-context'
 import type {
   NativeChatComposerHandle,
   NativeChatComposerProps
@@ -13,7 +14,11 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
         key={props.paneKey}
         enabled={Boolean(props.structuredTransport)}
       >
-        <NativeChatComposerPane {...props} ref={ref} />
+        <NativeChatCrossVendorContext.Provider
+          value={props.structuredTransport?.crossVendor ?? null}
+        >
+          <NativeChatComposerPane {...props} ref={ref} />
+        </NativeChatCrossVendorContext.Provider>
       </NativeChatTextAttachmentScope>
     )
   }

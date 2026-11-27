@@ -949,6 +949,7 @@ import {
 } from './structured-agent-session/agent-session-attachment-params'
 import { CurrentRequestsParams } from './structured-agent-session/agent-session-current-requests-params'
 import { ReadVisualParams } from './structured-agent-session/agent-session-visual-params'
+import { CrossVendorHandoffParams } from './structured-agent-session/cross-vendor-handoff-params'
 import { SkipAsyncQuestionsParams } from './structured-agent-session/skip-async-questions-params'
 import { AutoReviewApprovalParams } from './structured-agent-session/structured-agent-session-auto-review-params'
 import { ContinueInterruptedParams } from './structured-agent-session/structured-agent-session-continue-params'
@@ -1211,6 +1212,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.conversationOutline': OptionsParams,
   'agentSession.create': CreateParams,
   'agentSession.createSupport': CreateSupportParams,
+  'agentSession.crossVendorHandoff': CrossVendorHandoffParams,
   'agentSession.currentRequests': CurrentRequestsParams,
   'agentSession.delete': OptionsParams,
   'agentSession.ensure': AttachParams,

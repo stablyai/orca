@@ -30,6 +30,8 @@ import { NativeChatModelCombobox } from './NativeChatModelCombobox'
 import { useNativeChatPickerFocusReturn } from '../../../composer/focus/native-chat-picker-focus-return'
 import { NativeChatSessionOptionRows } from './NativeChatSessionOptionRows'
 import { NativeChatSessionOptionWriteGroup } from './NativeChatSessionOptionWriteGroup'
+import { useNativeChatCrossVendor } from '../cross-vendor/native-chat-cross-vendor-context'
+import { NativeChatCrossVendorFrame } from '../cross-vendor/NativeChatCrossVendorPicker'
 
 export type NativeChatSessionOptionPickersProps = {
   surface: SessionOptionsSurface | null
@@ -164,12 +166,15 @@ function SessionOptionPopover(props: {
 }): React.JSX.Element {
   const t = useTranslate()
   const { model, options, pendingIds, demandModelCatalog } = props
-  const canOpen = [model, ...options].some(
-    (descriptor) =>
-      descriptor.settable &&
-      !pendingIds.has(descriptor.id) &&
-      (!props.isWorking || descriptor.transport === 'agent-session')
-  )
+  const crossVendor = useNativeChatCrossVendor() !== null
+  const canOpen =
+    crossVendor ||
+    [model, ...options].some(
+      (descriptor) =>
+        descriptor.settable &&
+        !pendingIds.has(descriptor.id) &&
+        (!props.isWorking || descriptor.transport === 'agent-session')
+    )
   // Why here: this unmounts with the pill, so a picker that went away comes back closed.
   const [open, setOpen] = useState(false)
   const [seenRequest, setSeenRequest] = useState<NativeChatOptionPickerRequest | null>(null)
@@ -274,7 +279,7 @@ function SessionOptionPopover(props: {
         align="end"
         side="top"
         collisionPadding={8}
-        className="flex w-96 max-w-(--radix-popover-content-available-width) flex-col"
+        className={`flex ${crossVendor ? 'w-[30rem]' : 'w-96'} max-w-(--radix-popover-content-available-width) flex-col`}
         onOpenAutoFocus={(event) => {
           const content = event.currentTarget
           const optionId = requestedOptionId
@@ -306,43 +311,45 @@ function SessionOptionPopover(props: {
           }
         }}
       >
-        {model.kind.type === 'select' && !model.action ? (
-          <NativeChatModelCombobox
-            choices={model.kind.choices}
-            currentValue={model.fallbackModel ?? model.kind.currentValue}
-            readOnly={!model.settable}
-            readOnlyReason={modelReason}
-            busy={pendingIds.has(model.id)}
-            onSelect={(value) => set(model, value)}
-            cliUpdate={props.cliUpdate}
-          />
-        ) : (
-          <NativeChatSessionOptionWriteGroup
-            busy={pendingIds.has(model.id)}
-            className="flex flex-col p-1"
-          >
-            {modelReason && !model.settable ? (
-              <div className="px-2 py-1 text-xs text-muted-foreground">{modelReason}</div>
-            ) : null}
-            <Button
-              type="button"
-              variant="ghost"
-              size="xs"
-              disabled={!model.settable}
-              className="w-full justify-start"
-              onClick={() => act(model)}
+        <NativeChatCrossVendorFrame open={open}>
+          {model.kind.type === 'select' && !model.action ? (
+            <NativeChatModelCombobox
+              choices={model.kind.choices}
+              currentValue={model.fallbackModel ?? model.kind.currentValue}
+              readOnly={!model.settable}
+              readOnlyReason={modelReason}
+              busy={pendingIds.has(model.id)}
+              onSelect={(value) => set(model, value)}
+              cliUpdate={props.cliUpdate}
+            />
+          ) : (
+            <NativeChatSessionOptionWriteGroup
+              busy={pendingIds.has(model.id)}
+              className="flex flex-col p-1"
             >
-              {nativeChatSessionOptionActionLabel(model, say)}
-            </Button>
-          </NativeChatSessionOptionWriteGroup>
-        )}
-        <NativeChatSessionOptionRows
-          options={options}
-          shownReason={model.settable ? null : modelReason}
-          pendingIds={pendingIds}
-          onSet={set}
-          onAction={act}
-        />
+              {modelReason && !model.settable ? (
+                <div className="px-2 py-1 text-xs text-muted-foreground">{modelReason}</div>
+              ) : null}
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                disabled={!model.settable}
+                className="w-full justify-start"
+                onClick={() => act(model)}
+              >
+                {nativeChatSessionOptionActionLabel(model, say)}
+              </Button>
+            </NativeChatSessionOptionWriteGroup>
+          )}
+          <NativeChatSessionOptionRows
+            options={options}
+            shownReason={model.settable ? null : modelReason}
+            pendingIds={pendingIds}
+            onSet={set}
+            onAction={act}
+          />
+        </NativeChatCrossVendorFrame>
       </PopoverContent>
     </Popover>
   )
