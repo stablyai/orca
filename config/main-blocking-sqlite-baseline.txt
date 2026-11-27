@@ -14,7 +14,7 @@
 5 src/main/codex/history/index/codex-state-db.ts
 44 src/main/github/pr-watch/pr-check-event-tables.ts
 14 src/main/github/pr-watch/pr-pending-actions.ts
-18 src/main/github/pr-watch/pr-watch-tables.ts
+16 src/main/github/pr-watch/pr-watch-tables.ts
 7 src/main/managed-data-accounts/credential-capture.ts
 19 src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts
 4 src/main/native-chat/agent-session-journal/database/journal-checkpoint-owner.ts
