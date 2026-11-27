@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { translate } from '@/i18n/i18n'
 import { remoteRuntimeEgressCopy } from './browser-egress-indicator'
 
-const copy = (viewer: 'own-computer' | 'teammate' | null | undefined) =>
+const copy = (viewer: 'own-computer' | 'teammate' | 'unknown') =>
   remoteRuntimeEgressCopy(translate, { presentation: 'client-hosted', viewer, hostLabel: 'Mac' })
 
 describe('client-hosted remote egress copy', () => {
@@ -15,12 +15,13 @@ describe('client-hosted remote egress copy', () => {
   })
 
   it('keeps the through-the-host copy for the owner’s own computers', () => {
-    for (const viewer of ['own-computer', null, undefined] as const) {
-      expect(copy(viewer)).toEqual({
-        description: 'Browsing through Mac',
-        detail:
-          'The page renders on this device. Network traffic and DNS go through the remote host.'
-      })
-    }
+    expect(copy('own-computer')).toEqual({
+      description: 'Browsing through Mac',
+      detail: 'The page renders on this device. Network traffic and DNS go through the remote host.'
+    })
+  })
+
+  it('claims no route while the viewer is unknown', () => {
+    expect(copy('unknown')).toBeNull()
   })
 })

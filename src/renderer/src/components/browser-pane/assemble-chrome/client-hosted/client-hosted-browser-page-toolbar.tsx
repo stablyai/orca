@@ -117,6 +117,7 @@ export function ClientHostedBrowserPageToolbar({
             <RemoteRuntimeEgressIndicator
               runtimeEnvironmentId={runtimeEnvironmentId}
               presentation="client-hosted"
+              browserPageId={browserPageId}
             />
           }
           trailing={

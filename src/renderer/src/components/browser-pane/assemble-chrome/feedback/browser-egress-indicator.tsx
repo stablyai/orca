@@ -18,8 +18,10 @@ import { getHostSettingOverride } from '../../../../../../shared/execution-host/
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { resolveSshWorkspaceBrowserRouteEligibility } from '@/lib/browser/workspace/ssh-workspace-browser-route-eligibility'
 import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
-import { useClientHostViewer } from '@/runtime/browser/client-hosting/use-client-host-viewer'
-import type { BrowserClientHostViewer } from '../../../../../../shared/browser/client-hosting/browser-client-host-placement'
+import {
+  useClientHostViewer,
+  type ClientHostViewerAnswer
+} from '@/runtime/browser/client-hosting/use-client-host-viewer'
 import type { Translate } from '@/i18n/use-translate'
 
 function runtimeHostLabel(
@@ -163,15 +165,15 @@ export function SshEgressIndicator({
   )
 }
 
-/** A teammate's page sends only loopback through the shared host (browserRouteProxyBypassRules). */
+/** A teammate's page sends only loopback through the shared host (browserRouteProxyBypassRules); null while unknown. */
 export function remoteRuntimeEgressCopy(
   t: Translate,
   args: {
     presentation: 'client-hosted' | 'streamed'
-    viewer: BrowserClientHostViewer | null | undefined
+    viewer: ClientHostViewerAnswer
     hostLabel: string
   }
-): { description: string; detail: string } {
+): { description: string; detail: string } | null {
   const value = { value0: args.hostLabel }
   if (args.presentation === 'streamed') {
     return {
@@ -181,6 +183,9 @@ export function remoteRuntimeEgressCopy(
         'The page runs on the remote host and streams to this device.'
       )
     }
+  }
+  if (args.viewer === 'unknown') {
+    return null
   }
   if (args.viewer === 'teammate') {
     return {
@@ -211,10 +216,12 @@ export function remoteRuntimeEgressCopy(
 /** Remote-runtime browser pages: client-hosted (renders here) or streamed from the host. */
 export function RemoteRuntimeEgressIndicator({
   runtimeEnvironmentId,
-  presentation
+  presentation,
+  browserPageId
 }: {
   runtimeEnvironmentId: string
   presentation: 'client-hosted' | 'streamed'
+  browserPageId: string
 }): React.JSX.Element {
   const t = useTranslate()
   const settings = useAppStore((s) => s.settings)
@@ -223,14 +230,19 @@ export function RemoteRuntimeEgressIndicator({
       s.runtimeEnvironments.find((environment) => environment.id === runtimeEnvironmentId)?.name
   )
   const hostLabel = runtimeHostLabel(settings, runtimeEnvironmentId, environmentName)
-  const viewer = useClientHostViewer(runtimeEnvironmentId, presentation === 'client-hosted')
-  const { description, detail } = remoteRuntimeEgressCopy(t, { presentation, viewer, hostLabel })
+  const clientHosted = presentation === 'client-hosted'
+  const viewer = useClientHostViewer(runtimeEnvironmentId, browserPageId, clientHosted)
+  const copy = remoteRuntimeEgressCopy(t, { presentation, viewer, hostLabel })
+  if (!copy) {
+    // Where traffic goes depends on whose host this is; claim nothing until that is known.
+    return <Server className="size-3.5 shrink-0 text-muted-foreground" />
+  }
   return (
     <EgressIndicatorButton
       icon={<Server className="size-3.5" />}
       egress="remote"
-      description={description}
-      detail={detail}
+      description={copy.description}
+      detail={copy.detail}
       settingsSectionId={BROWSER_CLIENT_HOSTED_REMOTE_SETTINGS_TARGET_ID}
     />
   )
