@@ -1088,25 +1088,13 @@
     },
     "customKeyModal": {
       "add": "Hinzufügen",
-      "addShortcut": "Tastenkürzel hinzufügen",
-      "command": "Befehl",
       "commandPlaceholder": "z. B. pnpm build",
       "editing": "Bearbeitung",
       "function": "Funktionstasten",
       "key": "Taste",
-      "label": "Bezeichnung",
-      "labelPlaceholder": "z. B. Kompilieren",
-      "manageShortcuts": "Tastenkürzel verwalten",
-      "manageShortcutsHint": "Tastenkürzel einblenden, ausblenden oder neu anordnen",
-      "modifiers": "Modifikatortasten",
-      "moreKeys": "WEITERE TASTEN",
       "navigation": "Navigation",
-      "pickKey": "Taste auswählen",
       "pressEnter": "Enter drücken",
-      "shortcutCombo": "Tastenkombination",
-      "shortcutComboHint": "Tastenkombinationen mit Ctrl, Alt und Shift erstellen",
-      "textMacro": "Textmakro",
-      "textMacroHint": "Benutzerdefinierten Textbefehl senden"
+      "labelPlaceholder": "z. B. Kompilieren"
     },
     "dictationSetupSheet": {
       "description": "Ein Modell herunterladen oder auswählen und das Diktat auf dem gekoppelten Computer aktivieren – alles von hier aus.",
@@ -1147,8 +1135,6 @@
       "tooLargeMessage": "Dieser Diff ist zu groß für die mobile Vorschau."
     },
     "diffReviewDrawers": {
-      "addNote": "Notiz hinzufügen",
-      "cancelNote": "Notizeingabe abbrechen",
       "clearSentNotes": "Gesendete Notizen löschen",
       "copyNotes": "Notizen kopieren",
       "deleteNote": "Notiz löschen",
@@ -1157,12 +1143,10 @@
       "discardTitle": "Änderungen verwerfen?",
       "editNote": "Notiz bearbeiten",
       "fileNote": "Dateinotiz",
-      "lineNumber": "Zeile {{lineNumber}}",
       "loadingSessions": "Agentensitzungen werden geladen…",
       "newAgentSession": "Neue Agentensitzung",
       "openInSession": "In Sitzung öffnen",
       "reviewNote": "Review-Notiz",
-      "saveLineNote": "Notiz zu Zeile {{lineNumber}} speichern",
       "sendNotes": "Notizen senden",
       "sendNotesLabel": "Notizen an den Agenten senden",
       "viewedFiles_one": "{{count}} Datei angesehen",
@@ -1176,10 +1160,7 @@
       "discardChanges": "Änderungen verwerfen",
       "rangeLine": "Zeile {{line}}",
       "rangeLines": "Zeilen {{startLine}}–{{line}}",
-      "sendToAgent": "An {{agent}} senden",
-      "sendToAnAgent": "An Agenten senden",
       "rangePlaceholder": "Was soll hier geändert werden?",
-      "commentOnGitHub": "Auf GitHub kommentieren",
       "sendUnsentNotes": "Ungesendete Notizen senden",
       "statusUnreadable": "Der Status dieses Hosts konnte nicht gelesen werden. Erneuter Versuch…",
       "terminal": "Terminal",
@@ -1212,7 +1193,6 @@
       "title": "Änderungen"
     },
     "diffReviewLine": {
-      "addNoteOnLine": "Notiz zu Zeile {{number}} hinzufügen",
       "addedLine": "Hinzugefügte Zeile",
       "addedLineNumber": "Hinzugefügte Zeile {{number}}",
       "contextLine": "Kontextzeile",
@@ -1879,9 +1859,6 @@
       "backToSession": "Zurück zur Sitzung",
       "closeFiles": "Dateien schließen",
       "emptyState": "Keine Dateien gefunden",
-      "filterPlaceholder": "Dateien filtern",
-      "noMatchesHint": "Nur bereits geöffnete Ordner werden durchsucht.",
-      "clearFilter": "Filter zurücksetzen",
       "loading": "Dateien werden geladen…",
       "loadFailed": "Dateien konnten nicht geladen werden.",
       "title": "Dateien",
@@ -1895,13 +1872,8 @@
       "openFolder": "Ordner {{name}} öffnen",
       "previewFile": "Vorschau der Datei {{name}} anzeigen",
       "retryLoading": "{{path}} erneut laden",
-      "searchAll": "Alle durchsuchen",
-      "searchAllIn": "Ganz {{folder}} durchsuchen",
       "ignored": "Durch .gitignore ignoriert",
-      "searched": "{{loaded}} von {{total}} in {{folder}} durchsucht.",
-      "searching": "{{folder}} wird durchsucht… {{loaded}} von {{total}}",
-      "showMore": "{{rows}} weitere anzeigen",
-      "unavailable": "Auf Mobilgeräten nicht verfügbar"
+      "showMore": "{{rows}} weitere anzeigen"
     },
     "fileExplorerRowActions": {
       "copyName": "Namen kopieren",
@@ -2347,7 +2319,6 @@
       "daysAgo_other": "vor {{count}} Tagen",
       "deleteConfirmMessage": "Dadurch wird der Kommentar auf GitHub dauerhaft gelöscht.",
       "editPlaceholder": "Kommentar bearbeiten…",
-      "replyToComment": "Auf Kommentar antworten",
       "hoursAgo_one": "vor {{count}} Std.",
       "hoursAgo_other": "vor {{count}} Std.",
       "justNow": "gerade eben",
@@ -2356,39 +2327,22 @@
       "monthsAgo_one": "vor {{count}} Monat",
       "monthsAgo_other": "vor {{count}} Monaten",
       "reply": "Antworten",
-      "editComment": "Kommentar bearbeiten",
-      "deleteComment": "Kommentar löschen",
-      "unresolveThread": "Thread als ungelöst markieren",
-      "resolveThread": "Thread als erledigt markieren",
       "resolve": "Erledigen",
-      "replyPlaceholder": "Antwort schreiben…",
       "unresolve": "Als ungelöst markieren",
       "yearsAgo_one": "vor {{count}} Jahr",
-      "yearsAgo_other": "vor {{count}} Jahren",
-      "resolved": "erledigt",
-      "openOnGitHub": "Kommentar auf GitHub öffnen"
+      "yearsAgo_other": "vor {{count}} Jahren"
     },
     "commentsSection": {
-      "all": "Alle",
-      "humans": "Menschen",
-      "bots": "Bots",
-      "noBotComments": "Keine Kommentare von Bots.",
-      "noHumanComments": "Keine Kommentare von Menschen.",
       "comment": "Kommentieren",
       "resolvedThreadSingle": "Erledigter Thread von {{author}}",
       "resolvedThreadCount": "Erledigter Thread von {{author}} ({{count}})",
-      "resolvedCommentSingle": "Erledigter Kommentar von {{author}}",
-      "resolvedCommentCount": "Erledigter Kommentar von {{author}} ({{count}})",
       "commentsLoadFailedRetry": "Kommentare konnten nicht geladen werden.",
       "description": "Beschreibung",
       "descriptionLoadFailed": "Beschreibung konnte nicht geladen werden. Zum erneuten Laden auf „Aktualisieren“ tippen.",
       "noComments": "Noch keine Kommentare.",
       "noDescription": "Keine Beschreibung angegeben.",
       "showMore": "{{count}} weitere anzeigen",
-      "addCommentPlaceholder": "Kommentar hinzufügen…",
-      "title": "Kommentare",
-      "commentsLoadFailed": "Kommentare konnten nicht geladen werden. Zum erneuten Laden auf „Aktualisieren“ tippen.",
-      "showMoreOf": "{{count}} von {{remaining}} weiteren anzeigen"
+      "title": "Kommentare"
     },
     "linkPrForm": {
       "linkButton": "Pull Request verknüpfen",
@@ -2494,14 +2448,6 @@
       "stateOpen": "Offen",
       "unavailable": "Checks nicht verfügbar"
     },
-    "prCommentAudienceLabels": {
-      "all": "Alle",
-      "bots": "Bots",
-      "humans": "Menschen",
-      "noBotComments": "Keine Kommentare von Bots.",
-      "noComments": "Noch keine Kommentare.",
-      "noHumanComments": "Keine Kommentare von Menschen."
-    },
     "tab": {
       "updated": "aktualisiert {{time}}",
       "moreActions": "Weitere Pull-Request-Aktionen",
@@ -2564,7 +2510,6 @@
       "failedAfter": "Fehlgeschlagen nach {{duration}}",
       "failed": "Fehlgeschlagen",
       "checkActions": "Weitere Optionen für {{name}}",
-      "rerun": "Erneut ausführen",
       "copyErrorFailed": "Der Fehler konnte nicht kopiert werden.",
       "durationSeconds": "{{seconds}} s",
       "durationMinutes": "{{minutes}} min {{seconds}} s",
@@ -2698,19 +2643,12 @@
       "messageModeLabel": "Nachrichtenmodus: Schreiben, dann senden. Zum Tastenmodus wechseln",
       "moreKeys": "Weitere Tasten und Aktionen",
       "showKeyboard": "Tastatur anzeigen",
-      "dismissKeyboardHint": "Blendet die Bildschirmtastatur aus und lässt die aktuelle Terminal-Sitzung geöffnet.",
-      "switchToDesktopMode": "In den Desktop-Modus wechseln",
-      "switchToPhoneMode": "In den Smartphone-Modus wechseln",
-      "pasteFromClipboard": "Aus der Zwischenablage einfügen",
-      "paste": "Einfügen",
-      "addCustomShortcut": "Benutzerdefiniertes Tastenkürzel hinzufügen"
+      "pasteFromClipboard": "Aus der Zwischenablage einfügen"
     },
     "activeContent": {
-      "createTab": "Tab erstellen",
       "creatingTab": "Wird erstellt…",
       "fileTitle": "Datei",
       "loadingTerminal": "Terminal wird geladen",
-      "noTabs": "Keine Tabs in dieser Sitzung",
       "retryLoadingTerminal": "Terminal erneut laden",
       "terminalTakingLonger": "Das Laden des Terminals dauert länger als erwartet"
     },
@@ -2796,25 +2734,14 @@
       "workflow": "Arbeitsablauf im Hintergrund"
     },
     "browserTabActionSheet": {
-      "forward": "Vorwärts",
-      "reload": "Neu laden",
       "hardReload": "Ohne Cache neu laden",
       "title": "Browser"
     },
     "bulkCloseSheetActions": {
       "closeOtherTabs": "Andere Tabs schließen"
     },
-    "bulkTabClose": {
-      "confirm": "Tabs schließen",
-      "description": "Die ausgewählten Tabs werden geschlossen. Angeheftete Tabs bleiben geöffnet.",
-      "titleEditors": "Alle Editor-Tabs schließen?",
-      "titleLeft": "Tabs links schließen?",
-      "titleOthers": "Andere Tabs schließen?",
-      "titleRight": "Tabs rechts schließen?"
-    },
     "commandDock": {
       "liveInputHint": "Eingegebener Text wird direkt an das aktive Terminal gesendet",
-      "tapToShowKeyboard": "Tippen, um die Tastatur anzuzeigen",
       "liveInputLabel": "Live-Eingabe im Terminal"
     },
     "contentRow": {
@@ -3200,7 +3127,6 @@
     },
     "sheets": {
       "browser": "Browser",
-      "browserStreamingUnavailable": "Dieser Host kann keine Browser-Tabs streamen",
       "chat": "Chat",
       "cli": "CLI",
       "cliOnly": "Nur CLI",
@@ -3217,7 +3143,6 @@
       "file": "Datei",
       "markdown": "Markdown",
       "markdownNote": "Markdown-Notiz",
-      "newBrowser": "Neuen Browser öffnen",
       "newTab": "Neuer Tab",
       "notesCopied": "Notizen kopiert",
       "notesHint": "Eine Agentensitzung für die aktuellen Notizen auswählen.",
@@ -3236,7 +3161,6 @@
       "shellWsl": "WSL",
       "terminalName": "Terminal-Name",
       "unsavedMarkdown": "Ungespeicherte Markdown-Änderungen",
-      "urlPrompt": "URL eingeben oder für einen neuen Tab leer lassen.",
       "allowAutoClose": "Automatisches Schließen erlauben",
       "agents": "Agenten",
       "renameTerminalFailed": "Das Terminal konnte nicht umbenannt werden. {{reason}}"
@@ -3263,20 +3187,12 @@
       "switchToDesktop": "Zum Desktop-Modus wechseln",
       "switchToPhone": "Zum Smartphone-Modus wechseln"
     },
-    "terminalInputActions": {
-      "attachFileHint": "Lange drücken, um stattdessen eine Datei anzuhängen",
-      "attachPhoto": "Foto anhängen",
-      "sendingImage": "Bild wird gesendet"
-    },
     "terminalLiveInputStatus": {
       "listening": "Hört zu",
-      "liveInput": "Direkte Eingabe",
       "preparingMic": "Mikrofon wird vorbereitet",
       "processing": "Wird verarbeitet",
       "releaseMicHint": "Zum Stoppen Mikrofon loslassen",
-      "startingMic": "Mikrofon wird gestartet",
-      "uploadingImage": "Bild wird auf den Host hochgeladen",
-      "uploadingImageTitle": "Bild wird hochgeladen"
+      "startingMic": "Mikrofon wird gestartet"
     },
     "terminalRecords": {
       "defaultTitle": "Terminal"
@@ -3513,8 +3429,6 @@
       "waitMoment": "Einen Moment warten."
     },
     "workerAutoClose": {
-      "running": "Temporärer Orchestrierungs-Worker · Schließt sich 2 Minuten nach Abschluss",
-      "finished": "Temporärer Orchestrierungs-Worker abgeschlossen · Schließt sich in {{countdown}}",
       "keepOpen": "Offen halten"
     },
     "terminalLayoutSheet": {
@@ -3536,17 +3450,14 @@
     "terminalMoreKeys": {
       "sendKey": "{{label}} senden",
       "paste": "Einfügen",
-      "sending": "Wird gesendet…",
       "photo": "Foto",
       "file": "Datei",
       "desktopWidth": "Desktopbreite",
       "phoneWidth": "Telefonbreite",
       "keys": "Tasten",
-      "combos": "Kombinationen",
       "yourKeys": "Deine Tasten",
       "deleteKeyHint": "Gedrückt halten, um diese Taste zu löschen",
-      "addCustomKey": "Benutzerdefinierte Taste hinzufügen",
-      "addKey": "Taste hinzufügen"
+      "addCustomKey": "Benutzerdefinierte Taste hinzufügen"
     },
     "terminalPaneView": {
       "focusedPane": "{{title}}, fokussiert",
@@ -3644,7 +3555,6 @@
     "tabBar": {
       "oneTab": "1 Tab",
       "tabCount": "{{count}} Tabs",
-      "anotherNeedsYou": "ein anderer Tab benötigt dich",
       "actionsHint": "Zeigt Aktionen für diesen Tab",
       "next": "Nächster Tab",
       "previous": "Vorheriger Tab",
@@ -3937,12 +3847,7 @@
     },
     "commitFailurePanel": {
       "fix": "Beheben",
-      "fixWithAi": "Commit-Fehler mit KI beheben",
       "hideDetails": "Details ausblenden",
-      "hideFailureDetails": "Details zum Commit-Fehler ausblenden",
-      "showDetails": "Details anzeigen",
-      "showFailureDetails": "Details zum Commit-Fehler anzeigen",
-      "summary": "Commit fehlgeschlagen.",
       "title": "Commit fehlgeschlagen"
     },
     "commitMessageAi": {
@@ -3962,10 +3867,7 @@
       "cancelGeneration": "Generierung der Commit-Nachricht abbrechen",
       "commitMessageDisabled": "Commit-Nachricht deaktiviert. Keine vorgemerkten Dateien.",
       "commitMessagePlaceholder": "Commit-Nachricht",
-      "emptyMessage": "Der Worktree ist sauber.",
-      "emptyTitle": "Keine lokalen Änderungen",
       "generateMessage": "Commit-Nachricht mit KI generieren",
-      "reconnecting": "Verbindung zum Desktop wird wiederhergestellt…",
       "regenerateHint": "Nachricht leeren, um sie neu zu generieren."
     },
     "createPrAction": {
@@ -4107,7 +4009,6 @@
       "updateDesktop": "Orca auf diesem Host aktualisieren, um die Quellcodeverwaltung mobil zu nutzen."
     },
     "modals": {
-      "currentBranch": "aktuell",
       "discardButton": "Verwerfen",
       "discardConfirmMessage": "Änderungen an „{{path}}“ verwerfen? Dies kann nicht rückgängig gemacht werden.",
       "discardTitle": "Änderung verwerfen?",
@@ -4404,13 +4305,6 @@
       "behind": "{{count}} zurück",
       "upToDate": "Aktuell",
       "switchBranch": "Von {{branch}} auf anderen Branch wechseln",
-      "mergeInProgress": "Merge läuft",
-      "rebaseInProgress": "Rebase läuft",
-      "cherryPickInProgress": "Cherry-Pick läuft",
-      "filesNeedDecision_one": "Vor dem Abschließen ist für {{count}} Datei eine Entscheidung nötig.",
-      "filesNeedDecision_other": "Vor dem Abschließen ist für {{count}} Dateien eine Entscheidung nötig.",
-      "conflictsResolved": "Alle Konflikte sind gelöst. Über die Leiste unten abschließen.",
-      "continueOnComputer": "Alle Konflikte sind gelöst. Zum Abschließen auf dem Computer fortfahren.",
       "commits_one": "{{count}} Commit",
       "commits_other": "{{count}} Commits",
       "conflictsMayRemain": "Nicht alle Dateien werden aufgelistet, daher können noch Konflikte bestehen. Auf dem Computer prüfen."
@@ -5654,7 +5548,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Computer koppeln",
       "pairRequired": "Kopple dieses Telefon mit einem Computer, um diesen Link zu öffnen, und öffne den Link dann erneut.",

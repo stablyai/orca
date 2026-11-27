@@ -1405,25 +1405,13 @@
     },
     "customKeyModal": {
       "add": "添加",
-      "addShortcut": "添加快捷键",
-      "command": "命令",
       "commandPlaceholder": "例如：pnpm build",
       "editing": "编辑键",
       "function": "功能键",
       "key": "按键",
-      "label": "标签",
-      "labelPlaceholder": "例如：构建",
-      "manageShortcuts": "管理快捷键",
-      "manageShortcutsHint": "显示、隐藏快捷键或调整其顺序",
-      "modifiers": "修饰键",
-      "moreKeys": "更多按键",
       "navigation": "导航键",
-      "pickKey": "选择按键",
       "pressEnter": "按下 Enter",
-      "shortcutCombo": "快捷键组合",
-      "shortcutComboHint": "使用 Ctrl、Alt 和 Shift 设置组合键",
-      "textMacro": "文本宏",
-      "textMacroHint": "发送自定义文本命令"
+      "labelPlaceholder": "例如：构建"
     },
     "dictationSetupSheet": {
       "description": "在此即可下载或选择模型，并在已配对的电脑上启用听写",
@@ -1464,8 +1452,6 @@
       "tooLargeMessage": "此差异过大，无法在移动端预览"
     },
     "diffReviewDrawers": {
-      "addNote": "添加备注",
-      "cancelNote": "取消备注编辑",
       "clearSentNotes": "清除已发送的备注",
       "copyNotes": "复制备注",
       "deleteNote": "删除注释",
@@ -1474,12 +1460,10 @@
       "discardTitle": "放弃文件更改",
       "editNote": "编辑备注",
       "fileNote": "文件备注",
-      "lineNumber": "第 {{lineNumber}} 行",
       "loadingSessions": "正在加载智能体会话…",
       "newAgentSession": "新建智能体会话",
       "openInSession": "在会话中打开",
       "reviewNote": "评审备注",
-      "saveLineNote": "保存第 {{lineNumber}} 行的备注",
       "sendNotes": "发送备注",
       "sendNotesLabel": "向智能体发送备注",
       "viewedFiles_one": "已查看 {{count}} 个文件",
@@ -1493,10 +1477,7 @@
       "discardChanges": "放弃更改",
       "rangeLine": "第 {{line}} 行",
       "rangeLines": "第 {{startLine}}–{{line}} 行",
-      "sendToAgent": "发送给 {{agent}}",
-      "sendToAnAgent": "发送给智能体",
       "rangePlaceholder": "这里应该怎么改？",
-      "commentOnGitHub": "在 GitHub 上评论",
       "sendUnsentNotes": "发送未发送的备注",
       "statusUnreadable": "无法读取此主机的状态。正在重试…",
       "terminal": "终端",
@@ -1529,7 +1510,6 @@
       "title": "更改"
     },
     "diffReviewLine": {
-      "addNoteOnLine": "在第 {{number}} 行添加备注",
       "addedLine": "新增行",
       "addedLineNumber": "第 {{number}} 行（新增）",
       "contextLine": "上下文行",
@@ -2221,9 +2201,6 @@
       "backToSession": "返回会话",
       "closeFiles": "关闭文件",
       "emptyState": "未找到文件",
-      "filterPlaceholder": "筛选文件",
-      "noMatchesHint": "只会搜索你已打开过的文件夹",
-      "clearFilter": "清除筛选",
       "loading": "正在加载文件…",
       "loadFailed": "无法加载文件",
       "title": "文件",
@@ -2231,19 +2208,14 @@
     },
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} 在移动端不可用",
+      "ignored": "被 .gitignore 忽略",
       "loadFolderFailed": "无法加载文件夹",
       "loadedOfTotal": "{{loaded}} / {{total}}",
       "loading": "加载中…",
       "openFolder": "打开文件夹 {{name}}",
       "previewFile": "预览文件 {{name}}",
       "retryLoading": "重试加载 {{path}}",
-      "searchAll": "全部搜索",
-      "searchAllIn": "搜索整个 {{folder}}",
-      "ignored": "被 .gitignore 忽略",
-      "searched": "已在 {{folder}} 中搜索 {{total}} 项中的 {{loaded}} 项。",
-      "searching": "正在搜索 {{folder}}… {{loaded}} / {{total}}",
-      "showMore": "再显示 {{rows}} 项",
-      "unavailable": "移动端不可用"
+      "showMore": "再显示 {{rows}} 项"
     },
     "fileExplorerRowActions": {
       "copyName": "复制名称",
@@ -2712,7 +2684,6 @@
       "daysAgo_other": "{{count}} 天前",
       "deleteConfirmMessage": "这将永久删除 GitHub 上的这条评论",
       "editPlaceholder": "编辑评论…",
-      "replyToComment": "回复评论",
       "hoursAgo_one": "{{count}} 小时前",
       "hoursAgo_other": "{{count}} 小时前",
       "justNow": "刚刚",
@@ -2721,38 +2692,21 @@
       "monthsAgo_one": "{{count}} 个月前",
       "monthsAgo_other": "{{count}} 个月前",
       "reply": "回复",
-      "editComment": "编辑评论",
-      "deleteComment": "删除评论",
-      "unresolveThread": "将话题标记为未解决",
-      "resolveThread": "解决话题",
       "resolve": "解决",
-      "replyPlaceholder": "写下回复…",
       "unresolve": "标记为未解决",
       "yearsAgo_one": "{{count}} 年前",
-      "yearsAgo_other": "{{count}} 年前",
-      "resolved": "已解决",
-      "openOnGitHub": "在 GitHub 上打开评论"
+      "yearsAgo_other": "{{count}} 年前"
     },
     "commentsSection": {
       "comment": "评论",
       "resolvedThreadSingle": "{{author}} 发起的话题（已解决）",
       "resolvedThreadCount": "{{author}} 发起的话题（已解决，{{count}} 条）",
-      "resolvedCommentSingle": "{{author}} 的评论（已解决）",
-      "resolvedCommentCount": "{{author}} 的评论（已解决，{{count}} 条）",
       "commentsLoadFailedRetry": "无法加载评论",
-      "commentsLoadFailed": "无法加载评论。请点按刷新重试",
-      "showMoreOf": "再显示 {{count}} 条（还剩 {{remaining}} 条）",
       "description": "描述",
       "descriptionLoadFailed": "无法加载描述。请点按刷新重试",
-      "all": "全部",
-      "humans": "人类",
-      "bots": "机器人",
-      "noBotComments": "没有机器人评论",
       "noComments": "还没有评论",
       "noDescription": "没有提供描述",
-      "noHumanComments": "没有人类评论",
       "showMore": "再显示 {{count}} 条",
-      "addCommentPlaceholder": "添加评论…",
       "title": "评论"
     },
     "linkPrForm": {
@@ -2859,14 +2813,6 @@
       "stateOpen": "开放",
       "unavailable": "检查不可用"
     },
-    "prCommentAudienceLabels": {
-      "all": "全部",
-      "bots": "机器人",
-      "humans": "人类",
-      "noBotComments": "没有机器人评论",
-      "noComments": "还没有评论",
-      "noHumanComments": "没有人类评论"
-    },
     "tab": {
       "updated": "更新于 {{time}}",
       "moreActions": "更多 PR 操作",
@@ -2929,7 +2875,6 @@
       "failedAfter": "{{duration}} 后失败",
       "failed": "失败",
       "checkActions": "{{name}} 的更多操作",
-      "rerun": "重新运行",
       "copyErrorFailed": "无法复制错误信息",
       "durationSeconds": "{{seconds}} 秒",
       "durationMinutes": "{{minutes}} 分 {{seconds}} 秒",
@@ -3063,19 +3008,12 @@
       "messageModeLabel": "消息模式：输入后发送。切换到按键模式",
       "moreKeys": "更多按键和操作",
       "showKeyboard": "显示键盘",
-      "dismissKeyboardHint": "隐藏软键盘，并保持当前终端会话打开",
-      "switchToDesktopMode": "切换到桌面模式",
-      "switchToPhoneMode": "切换到手机模式",
-      "pasteFromClipboard": "从剪贴板粘贴",
-      "paste": "Paste",
-      "addCustomShortcut": "添加自定义快捷键"
+      "pasteFromClipboard": "从剪贴板粘贴"
     },
     "activeContent": {
-      "createTab": "创建标签页",
       "creatingTab": "创建中…",
       "fileTitle": "文件",
       "loadingTerminal": "正在加载终端",
-      "noTabs": "此会话中没有标签页",
       "retryLoadingTerminal": "重试加载终端",
       "terminalTakingLonger": "终端加载时间超出预期"
     },
@@ -3161,25 +3099,14 @@
       "workflow": "后台工作流程"
     },
     "browserTabActionSheet": {
-      "forward": "前进",
-      "reload": "重新加载",
       "hardReload": "硬刷新",
       "title": "浏览器"
     },
     "bulkCloseSheetActions": {
       "closeOtherTabs": "关闭其他标签页"
     },
-    "bulkTabClose": {
-      "confirm": "关闭标签页",
-      "description": "选中的标签页将关闭。固定的标签页将保持打开",
-      "titleEditors": "关闭所有编辑器标签页？",
-      "titleLeft": "关闭左侧标签页？",
-      "titleOthers": "关闭其他标签页？",
-      "titleRight": "关闭右侧标签页？"
-    },
     "commandDock": {
       "liveInputHint": "输入的文本会直接发送到当前终端",
-      "tapToShowKeyboard": "轻点以显示键盘",
       "liveInputLabel": "终端实时输入"
     },
     "contentRow": {
@@ -3566,7 +3493,6 @@
     },
     "sheets": {
       "browser": "浏览器",
-      "browserStreamingUnavailable": "此主机无法串流浏览器标签页",
       "chat": "聊天",
       "cli": "CLI",
       "cliOnly": "仅限 CLI",
@@ -3583,7 +3509,6 @@
       "file": "文件",
       "markdown": "Markdown",
       "markdownNote": "Markdown 笔记",
-      "newBrowser": "新浏览器",
       "newTab": "新标签页",
       "notesCopied": "注释已复制",
       "notesHint": "选择接收当前注释的智能体会话",
@@ -3602,7 +3527,6 @@
       "shellWsl": "WSL",
       "terminalName": "终端名称",
       "unsavedMarkdown": "未保存的 Markdown 更改",
-      "urlPrompt": "输入 URL，或留空以新建标签页",
       "allowAutoClose": "允许自动关闭",
       "agents": "智能体",
       "renameTerminalFailed": "无法重命名终端。{{reason}}"
@@ -3629,20 +3553,12 @@
       "switchToDesktop": "切换到桌面模式",
       "switchToPhone": "切换到手机模式"
     },
-    "terminalInputActions": {
-      "attachFileHint": "长按可改为附加文件",
-      "attachPhoto": "附加照片",
-      "sendingImage": "正在发送图片"
-    },
     "terminalLiveInputStatus": {
       "listening": "正在聆听",
-      "liveInput": "实时输入",
       "preparingMic": "正在准备麦克风",
       "processing": "处理中",
       "releaseMicHint": "松开麦克风按钮即可停止",
-      "startingMic": "正在启动麦克风",
-      "uploadingImage": "正在将图片上传到主机",
-      "uploadingImageTitle": "正在上传图片"
+      "startingMic": "正在启动麦克风"
     },
     "terminalRecords": {
       "defaultTitle": "终端"
@@ -3879,8 +3795,6 @@
       "waitMoment": "请稍候"
     },
     "workerAutoClose": {
-      "running": "临时协作工作者 · 完成 2 分钟后关闭",
-      "finished": "临时协作工作者已完成 · 将在 {{countdown}} 后关闭",
       "keepOpen": "保持打开"
     },
     "terminalLayoutSheet": {
@@ -3902,17 +3816,14 @@
     "terminalMoreKeys": {
       "sendKey": "发送 {{label}}",
       "paste": "Paste",
-      "sending": "发送中…",
       "photo": "照片",
       "file": "文件",
       "desktopWidth": "桌面宽度",
       "phoneWidth": "手机宽度",
       "keys": "按键",
-      "combos": "组合键",
       "yourKeys": "你的按键",
       "deleteKeyHint": "长按以删除此按键",
-      "addCustomKey": "添加自定义按键",
-      "addKey": "添加按键"
+      "addCustomKey": "添加自定义按键"
     },
     "terminalPaneView": {
       "focusedPane": "{{title}}，已聚焦",
@@ -4002,7 +3913,6 @@
     "tabBar": {
       "oneTab": "1 个标签页",
       "tabCount": "{{count}} 个标签页",
-      "anotherNeedsYou": "另一个标签页需要你处理",
       "actionsHint": "显示此标签页的操作",
       "next": "下一个标签页",
       "previous": "上一个标签页",
@@ -4331,12 +4241,7 @@
     },
     "commitFailurePanel": {
       "fix": "修复",
-      "fixWithAi": "使用 AI 修复提交失败",
       "hideDetails": "隐藏详情",
-      "hideFailureDetails": "隐藏提交失败详情",
-      "showDetails": "显示详情",
-      "showFailureDetails": "显示提交失败详情",
-      "summary": "提交失败",
       "title": "提交失败"
     },
     "commitMessageAi": {
@@ -4356,10 +4261,7 @@
       "cancelGeneration": "取消生成提交信息",
       "commitMessageDisabled": "提交信息输入已禁用。没有已暂存的文件",
       "commitMessagePlaceholder": "提交信息",
-      "emptyMessage": "工作树无更改",
-      "emptyTitle": "无本地更改",
       "generateMessage": "使用 AI 生成提交信息",
-      "reconnecting": "正在重新连接桌面…",
       "regenerateHint": "清除消息以重新生成"
     },
     "createPrAction": {
@@ -4501,7 +4403,6 @@
       "updateDesktop": "请更新此主机上的 Orca，以在手机上使用源代码控制"
     },
     "modals": {
-      "currentBranch": "当前",
       "discardButton": "放弃",
       "discardConfirmMessage": "放弃对“{{path}}”的更改？此操作无法撤销",
       "discardTitle": "放弃更改",
@@ -4798,13 +4699,6 @@
       "behind": "落后 {{count}}",
       "upToDate": "已是最新",
       "switchBranch": "从 {{branch}} 切换分支",
-      "mergeInProgress": "合并进行中",
-      "rebaseInProgress": "变基进行中",
-      "cherryPickInProgress": "挑选进行中",
-      "filesNeedDecision_one": "还有 {{count}} 个文件需要你做出选择，才能完成",
-      "filesNeedDecision_other": "还有 {{count}} 个文件需要你做出选择，才能完成",
-      "conflictsResolved": "所有冲突均已解决，请在下方操作栏中完成",
-      "continueOnComputer": "所有冲突均已解决，请在电脑上继续完成",
       "commits_one": "{{count}} 个提交",
       "commits_other": "{{count}} 个提交",
       "conflictsMayRemain": "并非所有文件都已列出，可能仍有冲突，请在电脑上检查"

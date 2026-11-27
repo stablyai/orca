@@ -25568,7 +25568,9 @@
       "chatOtherWindow": "Başka bir pencerede oturum açma işlemi sürüyor.",
       "chatPageDidntOpen": "Sayfa açılmadı mı?",
       "chatPasteCode": "Kodu yapıştır",
-      "chatPasteCodeLabel": "Oturum açtıktan sonra Google'ın gösterdiği kod veya o sayfanın adresi"
+      "chatPasteCodeLabel": "Oturum açtıktan sonra Google'ın gösterdiği kod veya o sayfanın adresi",
+      "launchesUse": "Yeni agy başlatmaları bu hesabı kullanır",
+      "loginNow": "agy'nin şu anki oturumu"
     },
     "claude": {
       "added": "Hesap eklendi. Başlatacağınız bir sonraki Claude'da kullanmak için bu hesabı seçin.",

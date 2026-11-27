@@ -52,7 +52,8 @@ export function MobileSessionHeader({
     openBotPanel,
     terminalResume,
     connState,
-    statusDot
+    statusDot,
+    showEmptyState
   } = controller
   // A switched-back terminal shows its last screen at once; only a slow catch-up shows the refresh line.
   const catchingUp = useSyncExternalStore(terminalResume.subscribe, terminalResume.anyCatchingUp)
@@ -73,14 +74,16 @@ export function MobileSessionHeader({
   const itemsInBar = itemsOnPhone && routeBot !== null
   const homeChatId = routeBot?.bot.chatSessionId
   const sourceControlInBar = !isFloatingWorkspaceRoute && !actionsCollapsed && !itemsInBar
-  const tabStrip = hasTabs ? (
-    <MobileSessionTabBar
-      controller={controller}
-      inTopBar={tabsInTopBar}
-      actionsCollapsed={actionsCollapsed}
-      homeChatId={homeChatId ?? null}
-    />
-  ) : null
+  // With every tab closed the bar stays, so + is where it always is.
+  const tabStrip =
+    hasTabs || showEmptyState ? (
+      <MobileSessionTabBar
+        controller={controller}
+        inTopBar={tabsInTopBar}
+        actionsCollapsed={actionsCollapsed}
+        homeChatId={homeChatId ?? null}
+      />
+    ) : null
   const leading = (
     <>
       {revealSidebar ? (

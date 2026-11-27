@@ -1083,25 +1083,13 @@
     },
     "customKeyModal": {
       "add": "追加",
-      "addShortcut": "ショートカットを追加",
-      "command": "コマンド",
       "commandPlaceholder": "例：pnpm build",
       "editing": "編集",
       "function": "ファンクションキー",
       "key": "キー",
-      "label": "ラベル",
-      "labelPlaceholder": "例：ビルド",
-      "manageShortcuts": "ショートカットを管理",
-      "manageShortcutsHint": "ショートカットキーの表示・非表示・並べ替え",
-      "modifiers": "修飾キー",
-      "moreKeys": "その他のキー",
       "navigation": "ナビゲーション",
-      "pickKey": "キーを選択",
       "pressEnter": "Enter を押す",
-      "shortcutCombo": "キーの組み合わせ",
-      "shortcutComboHint": "Ctrl、Alt、Shift を使ったキーの組み合わせを作成",
-      "textMacro": "テキストマクロ",
-      "textMacroHint": "カスタムのテキストコマンドを送信"
+      "labelPlaceholder": "例：ビルド"
     },
     "dictationSetupSheet": {
       "description": "ここからモデルをダウンロードまたは選択し、ペアリング済みのコンピュータでディクテーションを有効にできます。",
@@ -1142,8 +1130,6 @@
       "tooLargeMessage": "この差分は大きすぎるため、モバイルではプレビューできません。"
     },
     "diffReviewDrawers": {
-      "addNote": "メモを追加",
-      "cancelNote": "メモの入力をキャンセル",
       "clearSentNotes": "送信済みのメモをクリア",
       "copyNotes": "メモをコピー",
       "deleteNote": "メモの削除",
@@ -1152,12 +1138,10 @@
       "discardTitle": "ファイルの変更を破棄",
       "editNote": "メモを編集",
       "fileNote": "ファイルのメモ",
-      "lineNumber": "{{lineNumber}} 行目",
       "loadingSessions": "Agent セッションを読み込み中…",
       "newAgentSession": "新規 Agent セッション",
       "openInSession": "セッションで開く",
       "reviewNote": "レビューメモ",
-      "saveLineNote": "{{lineNumber}} 行目のメモを保存",
       "sendNotes": "メモを送信",
       "sendNotesLabel": "Agent にメモを送信",
       "viewedFiles_one": "閲覧済みのファイル {{count}} 件",
@@ -1171,10 +1155,7 @@
       "discardChanges": "変更を破棄",
       "rangeLine": "{{line}} 行目",
       "rangeLines": "{{startLine}}–{{line}} 行目",
-      "sendToAgent": "{{agent}} に送信",
-      "sendToAnAgent": "Agent に送信",
       "rangePlaceholder": "ここで何を変更しますか？",
-      "commentOnGitHub": "GitHub でコメント",
       "sendUnsentNotes": "未送信のメモを送信",
       "statusUnreadable": "このホストの状態を読み取れませんでした。再試行中…",
       "terminal": "ターミナル",
@@ -1207,7 +1188,6 @@
       "title": "変更点"
     },
     "diffReviewLine": {
-      "addNoteOnLine": "{{number}} 行目にメモを追加",
       "addedLine": "追加された行",
       "addedLineNumber": "追加された行（{{number}} 行目）",
       "contextLine": "変更のない行",
@@ -1874,9 +1854,6 @@
       "backToSession": "セッションに戻る",
       "closeFiles": "ファイル一覧を閉じる",
       "emptyState": "ファイルが見つかりません。",
-      "filterPlaceholder": "ファイルをフィルター",
-      "noMatchesHint": "検索対象は、開いたことのあるフォルダーのみです。",
-      "clearFilter": "フィルターをクリア",
       "loading": "ファイルを読み込み中…",
       "loadFailed": "ファイルを読み込めませんでした。",
       "title": "ファイル",
@@ -1890,13 +1867,8 @@
       "openFolder": "フォルダー「{{name}}」を開く",
       "previewFile": "ファイル「{{name}}」をプレビュー",
       "retryLoading": "{{path}} の読み込みを再試行",
-      "searchAll": "すべて検索",
-      "searchAllIn": "{{folder}} をすべて検索",
       "ignored": ".gitignore によって無視される",
-      "searched": "{{folder}} の {{total}} 件中 {{loaded}} 件を検索しました。",
-      "searching": "{{folder}} を検索中… {{total}} 件中 {{loaded}} 件",
-      "showMore": "さらに {{rows}} 件を表示",
-      "unavailable": "モバイルでは利用不可"
+      "showMore": "さらに {{rows}} 件を表示"
     },
     "fileExplorerRowActions": {
       "copyName": "名前をコピー",
@@ -2342,7 +2314,6 @@
       "daysAgo_other": "{{count}} 日前",
       "deleteConfirmMessage": "GitHub 上のコメントを完全に削除します。",
       "editPlaceholder": "コメントを編集…",
-      "replyToComment": "コメントに返信",
       "hoursAgo_one": "{{count}} 時間前",
       "hoursAgo_other": "{{count}} 時間前",
       "justNow": "たった今",
@@ -2351,39 +2322,22 @@
       "monthsAgo_one": "{{count}} か月前",
       "monthsAgo_other": "{{count}} か月前",
       "reply": "返事",
-      "editComment": "コメントを編集",
-      "deleteComment": "コメントを削除",
-      "unresolveThread": "スレッドを未解決に戻す",
-      "resolveThread": "スレッドを解決",
       "resolve": "解決",
-      "replyPlaceholder": "返信を入力…",
       "unresolve": "未解決に戻す",
       "yearsAgo_one": "{{count}} 年前",
-      "yearsAgo_other": "{{count}} 年前",
-      "resolved": "解決済み",
-      "openOnGitHub": "GitHub でコメントを開く"
+      "yearsAgo_other": "{{count}} 年前"
     },
     "commentsSection": {
-      "all": "全て",
-      "humans": "人間",
-      "bots": "ボット",
-      "noBotComments": "ボットのコメントはありません。",
-      "noHumanComments": "ユーザーによるコメントはありません。",
       "comment": "コメント",
       "resolvedThreadSingle": "{{author}} の解決済みスレッド",
       "resolvedThreadCount": "{{author}} の解決済みスレッド（{{count}}）",
-      "resolvedCommentSingle": "{{author}} の解決済みコメント",
-      "resolvedCommentCount": "{{author}} の解決済みコメント（{{count}}）",
       "commentsLoadFailedRetry": "コメントを読み込めませんでした。",
       "description": "説明",
       "descriptionLoadFailed": "説明を読み込めませんでした。「更新」をタップして再試行してください。",
       "noComments": "コメントはまだありません。",
       "noDescription": "説明はありません。",
       "showMore": "さらに {{count}} 件を表示",
-      "addCommentPlaceholder": "コメントを追加…",
-      "title": "コメント",
-      "commentsLoadFailed": "コメントを読み込めませんでした。「更新」をタップして再試行してください。",
-      "showMoreOf": "残り {{remaining}} 件中 {{count}} 件をさらに表示"
+      "title": "コメント"
     },
     "linkPrForm": {
       "linkButton": "PR をリンク",
@@ -2489,14 +2443,6 @@
       "stateOpen": "オープン",
       "unavailable": "チェックは利用できません"
     },
-    "prCommentAudienceLabels": {
-      "all": "全て",
-      "bots": "ボット",
-      "humans": "人間",
-      "noBotComments": "ボットのコメントはありません。",
-      "noComments": "コメントはまだありません。",
-      "noHumanComments": "ユーザーによるコメントはありません。"
-    },
     "tab": {
       "updated": "更新: {{time}}",
       "moreActions": "PR のその他の操作",
@@ -2559,7 +2505,6 @@
       "failedAfter": "{{duration}} 後に失敗",
       "failed": "失敗",
       "checkActions": "{{name}} のその他の操作",
-      "rerun": "再実行",
       "copyErrorFailed": "エラーをコピーできませんでした。",
       "durationSeconds": "{{seconds}}秒",
       "durationMinutes": "{{minutes}}分 {{seconds}}秒",
@@ -2693,19 +2638,12 @@
       "messageModeLabel": "メッセージモード：入力してから送信します。キーモードに切り替える",
       "moreKeys": "その他のキーと操作",
       "showKeyboard": "キーボードを表示",
-      "dismissKeyboardHint": "現在のターミナルセッションを開いたまま、ソフトウェアキーボードを非表示にします。",
-      "switchToDesktopMode": "デスクトップモードに切り替え",
-      "switchToPhoneMode": "スマートフォンモードに切り替え",
-      "pasteFromClipboard": "クリップボードから貼り付け",
-      "paste": "貼り付け",
-      "addCustomShortcut": "カスタムショートカットを追加"
+      "pasteFromClipboard": "クリップボードから貼り付け"
     },
     "activeContent": {
-      "createTab": "タブを作成",
       "creatingTab": "作成中…",
       "fileTitle": "ファイル",
       "loadingTerminal": "ターミナルを読み込み中…",
-      "noTabs": "このセッションにはタブがありません。",
       "retryLoadingTerminal": "ターミナルの読み込みを再試行",
       "terminalTakingLonger": "ターミナルの読み込みに予想以上の時間がかかっています。"
     },
@@ -2791,25 +2729,14 @@
       "workflow": "バックグラウンドワークフロー"
     },
     "browserTabActionSheet": {
-      "forward": "進む",
-      "reload": "リロード",
       "hardReload": "ハードリロード",
       "title": "ブラウザ"
     },
     "bulkCloseSheetActions": {
       "closeOtherTabs": "他のタブを閉じる"
     },
-    "bulkTabClose": {
-      "confirm": "タブを閉じる",
-      "description": "選択したタブを閉じます。ピン留めしたタブは開いたままになります。",
-      "titleEditors": "すべてのエディタータブを閉じますか？",
-      "titleLeft": "左側のタブを閉じますか？",
-      "titleOthers": "他のタブを閉じますか？",
-      "titleRight": "右側のタブを閉じますか？"
-    },
     "commandDock": {
       "liveInputHint": "入力したテキストは、選択中のターミナルに直接送信されます。",
-      "tapToShowKeyboard": "タップしてキーボードを表示",
       "liveInputLabel": "ターミナルへのリアルタイム入力"
     },
     "contentRow": {
@@ -3195,7 +3122,6 @@
     },
     "sheets": {
       "browser": "ブラウザ",
-      "browserStreamingUnavailable": "このホストはブラウザタブをストリーミングできません",
       "chat": "チャット",
       "cli": "CLI",
       "cliOnly": "CLI のみ",
@@ -3212,7 +3138,6 @@
       "file": "ファイル",
       "markdown": "Markdown",
       "markdownNote": "Markdown ノート",
-      "newBrowser": "新規ブラウザ",
       "newTab": "新規タブ",
       "notesCopied": "メモをコピーしました。",
       "notesHint": "現在のメモの送信先となる Agent セッションを選択してください。",
@@ -3231,7 +3156,6 @@
       "shellWsl": "WSL",
       "terminalName": "ターミナル名",
       "unsavedMarkdown": "Markdown の未保存の変更",
-      "urlPrompt": "URL を入力してください。空欄のままにすると新規タブが開きます。",
       "allowAutoClose": "自動終了を許可",
       "agents": "Agent",
       "renameTerminalFailed": "ターミナルの名前を変更できませんでした。{{reason}}"
@@ -3258,20 +3182,12 @@
       "switchToDesktop": "デスクトップ表示に切り替え",
       "switchToPhone": "スマートフォン表示に切り替え"
     },
-    "terminalInputActions": {
-      "attachFileHint": "長押しすると、写真の代わりにファイルを添付できます。",
-      "attachPhoto": "写真を添付",
-      "sendingImage": "画像を送信中…"
-    },
     "terminalLiveInputStatus": {
       "listening": "聞き取り中",
-      "liveInput": "リアルタイム入力",
       "preparingMic": "マイクを準備中",
       "processing": "処理中",
       "releaseMicHint": "マイクボタンから指を離すと停止",
-      "startingMic": "マイクを起動中",
-      "uploadingImage": "ホストに画像をアップロード中",
-      "uploadingImageTitle": "画像をアップロード中"
+      "startingMic": "マイクを起動中"
     },
     "terminalRecords": {
       "defaultTitle": "ターミナル"
@@ -3508,8 +3424,6 @@
       "waitMoment": "しばらくお待ちください。"
     },
     "workerAutoClose": {
-      "running": "一時的なオーケストレーションワーカー · 完了の2分後に閉じます",
-      "finished": "一時的なオーケストレーションワーカーが完了しました · {{countdown}}後に閉じます",
       "keepOpen": "開いたままにする"
     },
     "terminalLayoutSheet": {
@@ -3531,17 +3445,14 @@
     "terminalMoreKeys": {
       "sendKey": "{{label}}を送信",
       "paste": "貼り付け",
-      "sending": "送信中…",
       "photo": "写真",
       "file": "ファイル",
       "desktopWidth": "デスクトップ幅",
       "phoneWidth": "スマートフォン幅",
       "keys": "キー",
-      "combos": "組み合わせ",
       "yourKeys": "自分のキー",
       "deleteKeyHint": "長押ししてこのキーを削除",
-      "addCustomKey": "カスタムキーを追加",
-      "addKey": "キーを追加"
+      "addCustomKey": "カスタムキーを追加"
     },
     "terminalPaneView": {
       "focusedPane": "{{title}}、フォーカス中",
@@ -3639,7 +3550,6 @@
     "tabBar": {
       "oneTab": "1 個のタブ",
       "tabCount": "{{count}} 個のタブ",
-      "anotherNeedsYou": "別のタブで確認が必要です",
       "actionsHint": "このタブの操作を表示します",
       "next": "次のタブ",
       "previous": "前のタブ",
@@ -3932,12 +3842,7 @@
     },
     "commitFailurePanel": {
       "fix": "修正",
-      "fixWithAi": "AI によるコミット失敗の修正",
       "hideDetails": "詳細を非表示",
-      "hideFailureDetails": "コミット失敗の詳細を非表示",
-      "showDetails": "詳細を表示",
-      "showFailureDetails": "コミット失敗の詳細を表示",
-      "summary": "コミットに失敗しました。",
       "title": "コミットに失敗しました"
     },
     "commitMessageAi": {
@@ -3957,10 +3862,7 @@
       "cancelGeneration": "コミットメッセージの生成をキャンセル",
       "commitMessageDisabled": "コミットメッセージは入力できません。ステージ済みのファイルがありません。",
       "commitMessagePlaceholder": "コミットメッセージ",
-      "emptyMessage": "ワークツリーに変更はありません。",
-      "emptyTitle": "ローカルの変更なし",
       "generateMessage": "AIでコミットメッセージを生成",
-      "reconnecting": "デスクトップに再接続中…",
       "regenerateHint": "再生成するには、メッセージをクリアしてください。"
     },
     "createPrAction": {
@@ -4102,7 +4004,6 @@
       "updateDesktop": "モバイルでソース管理を使うには、このホストの Orca を更新してください。"
     },
     "modals": {
-      "currentBranch": "現在",
       "discardButton": "破棄",
       "discardConfirmMessage": "「{{path}}」への変更を破棄しますか？この操作は取り消せません。",
       "discardTitle": "変更を破棄",
@@ -4399,13 +4300,6 @@
       "behind": "{{count}} コミット遅れ",
       "upToDate": "最新",
       "switchBranch": "{{branch}} からブランチを切り替え",
-      "mergeInProgress": "マージ進行中",
-      "rebaseInProgress": "リベース進行中",
-      "cherryPickInProgress": "チェリーピック進行中",
-      "filesNeedDecision_one": "完了するには、{{count}} 件のファイルについて選択が必要です。",
-      "filesNeedDecision_other": "完了するには、{{count}} 件のファイルについて選択が必要です。",
-      "conflictsResolved": "すべての競合が解決されました。下のバーから完了してください。",
-      "continueOnComputer": "すべての競合が解決されました。完了するには、コンピュータで続行してください。",
       "commits_one": "{{count}} 件のコミット",
       "commits_other": "{{count}} 件のコミット",
       "conflictsMayRemain": "一部のファイルが表示されていないため、競合が残っている可能性があります。コンピュータで確認してください。"
@@ -5649,7 +5543,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "コンピュータをペアリング",
       "pairRequired": "このリンクを開くには、このスマートフォンをコンピュータとペアリングしてから、もう一度リンクを開いてください。",

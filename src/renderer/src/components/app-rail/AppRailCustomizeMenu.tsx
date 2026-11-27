@@ -28,9 +28,13 @@ export function useMenuHeldInPlace(
     setAlignOffset(0)
   }, [open, anchorRef])
   useLayoutEffect(() => {
+    const openedTop = openedTopRef.current
+    if (openedTop === null) {
+      return
+    }
     const top = anchorRef.current?.getBoundingClientRect().top
-    if (openedTopRef.current !== null && top !== undefined) {
-      setAlignOffset(openedTopRef.current - top)
+    if (top !== undefined) {
+      setAlignOffset(openedTop - top)
     }
   }, [moveKey, anchorRef])
   // Radix's default "partial" stickiness would pull the menu back to touch the moved anchor.

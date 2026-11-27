@@ -25989,7 +25989,9 @@
       "chatOtherWindow": "O login está em andamento em outra janela.",
       "chatPageDidntOpen": "A página não abriu?",
       "chatPasteCode": "Cole o código",
-      "chatPasteCodeLabel": "O código que o Google mostra depois que você entra, ou o endereço dessa página"
+      "chatPasteCodeLabel": "O código que o Google mostra depois que você entra, ou o endereço dessa página",
+      "launchesUse": "Novas execuções do agy usam esta conta",
+      "loginNow": "Login atual do agy"
     },
     "claude": {
       "added": "Conta adicionada. Selecione-a para usar no próximo Claude que iniciar.",

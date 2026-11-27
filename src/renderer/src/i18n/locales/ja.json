@@ -24706,7 +24706,9 @@
       "chatPageDidntOpen": "ページが開きませんでしたか？",
       "chatPasteCode": "コードを貼り付け",
       "chatPasteCodeLabel": "サインイン後に Google が表示するコード、またはそのページのアドレス",
-      "apiKeyGet": "APIキーを取得する"
+      "apiKeyGet": "APIキーを取得する",
+      "launchesUse": "新しく起動する agy はこのアカウントを使います",
+      "loginNow": "現在の agy のログイン"
     },
     "claude": {
       "added": "アカウントを追加しました。次に起動する Claude で使用するには、これを選択してください。",

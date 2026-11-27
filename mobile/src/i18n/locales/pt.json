@@ -1133,25 +1133,13 @@
     },
     "customKeyModal": {
       "add": "Adicionar",
-      "addShortcut": "Adicionar atalho",
-      "command": "Comando",
       "commandPlaceholder": "Ex.: pnpm build",
       "editing": "Edição",
       "function": "Função",
       "key": "Tecla",
-      "label": "Rótulo",
-      "labelPlaceholder": "Ex.: Compilar",
-      "manageShortcuts": "Gerenciar atalhos",
-      "manageShortcutsHint": "Mostrar, ocultar ou reordenar teclas de atalho",
-      "modifiers": "Modificadores",
-      "moreKeys": "MAIS TECLAS",
       "navigation": "Navegação",
-      "pickKey": "Selecione uma tecla",
       "pressEnter": "Pressionar Enter",
-      "shortcutCombo": "Combinação de teclas",
-      "shortcutComboHint": "Crie combinações com Ctrl, Alt e Shift",
-      "textMacro": "Macro de texto",
-      "textMacroHint": "Envie um comando de texto personalizado"
+      "labelPlaceholder": "Ex.: Compilar"
     },
     "dictationSetupSheet": {
       "description": "Baixe ou selecione um modelo e ative o ditado no computador pareado — tudo por aqui.",
@@ -1193,8 +1181,6 @@
       "unchangedLines_many": "{{count}} linhas inalteradas"
     },
     "diffReviewDrawers": {
-      "addNote": "Adicionar nota",
-      "cancelNote": "Cancelar nota",
       "clearSentNotes": "Limpar notas enviadas",
       "copyNotes": "Copiar notas",
       "deleteNote": "Excluir nota",
@@ -1203,12 +1189,10 @@
       "discardTitle": "Descartar arquivo",
       "editNote": "Editar nota",
       "fileNote": "Nota do arquivo",
-      "lineNumber": "Linha {{lineNumber}}",
       "loadingSessions": "Carregando sessões de agentes…",
       "newAgentSession": "Nova sessão de agente",
       "openInSession": "Abrir na sessão",
       "reviewNote": "Nota de revisão",
-      "saveLineNote": "Salvar nota na linha {{lineNumber}}",
       "sendNotes": "Enviar notas",
       "sendNotesLabel": "Enviar notas ao agente",
       "sendUnsentNotes": "Enviar notas não enviadas",
@@ -1230,10 +1214,7 @@
       "discardChanges": "Descartar alterações",
       "rangeLine": "Linha {{line}}",
       "rangeLines": "Linhas {{startLine}}–{{line}}",
-      "sendToAnAgent": "Enviar para agente",
       "rangePlaceholder": "O que deve mudar aqui?",
-      "commentOnGitHub": "Comente no GitHub",
-      "sendToAgent": "Enviar para {{agent}}",
       "viewedFiles_many": "{{count}} arquivos visualizados",
       "notes_many": "{{count}} notas"
     },
@@ -1262,7 +1243,6 @@
       "jumpToFile": "{{fileName}}, pule para outro arquivo"
     },
     "diffReviewLine": {
-      "addNoteOnLine": "Adicionar nota na linha {{number}}",
       "addedLine": "Linha adicionada",
       "addedLineNumber": "Linha {{number}} adicionada",
       "contextLine": "Linha de contexto",
@@ -1942,9 +1922,6 @@
       "loadFailed": "Não foi possível carregar os arquivos",
       "title": "Arquivos",
       "truncatedList": "{{worktreeLabel}} - Mostrando os primeiros 5000",
-      "filterPlaceholder": "Filtrar arquivos",
-      "noMatchesHint": "Somente as pastas que você abriu serão pesquisadas.",
-      "clearFilter": "Limpar filtro",
       "loading": "Carregando arquivos…"
     },
     "fileExplorerRow": {
@@ -1955,13 +1932,8 @@
       "openFolder": "Abrir pasta {{name}}",
       "previewFile": "Pré-visualizar arquivo {{name}}",
       "retryLoading": "Tentar carregar {{path}} novamente",
-      "searchAll": "Pesquisar tudo",
-      "searchAllIn": "Pesquisar todo o {{folder}}",
       "ignored": "Ignorado pelo .gitignore",
-      "searched": "{{loaded}} de {{total}} pesquisados em {{folder}}.",
-      "searching": "Pesquisando {{folder}}… {{loaded}} de {{total}}",
-      "showMore": "Mostrar mais {{rows}}",
-      "unavailable": "Indisponível no celular"
+      "showMore": "Mostrar mais {{rows}}"
     },
     "fileExplorerRowActions": {
       "copyName": "Copiar Nome",
@@ -2425,15 +2397,7 @@
       "unresolve": "Reabrir",
       "yearsAgo_many": "há {{count}} anos",
       "yearsAgo_one": "há {{count}} ano",
-      "yearsAgo_other": "há {{count}} anos",
-      "resolved": "resolvido",
-      "openOnGitHub": "Abrir comentário no GitHub",
-      "replyToComment": "Responder ao comentário",
-      "editComment": "Editar comentário",
-      "deleteComment": "Excluir comentário",
-      "unresolveThread": "Reabrir discussão",
-      "resolveThread": "Resolver thread",
-      "replyPlaceholder": "Escreva uma resposta…"
+      "yearsAgo_other": "há {{count}} anos"
     },
     "commentsSection": {
       "comment": "Comentar",
@@ -2443,18 +2407,8 @@
       "noDescription": "Nenhuma descrição fornecida.",
       "showMore": "Mostrar mais {{count}}",
       "title": "Comentários",
-      "all": "Todos",
-      "humans": "Humanos",
-      "bots": "Robôs",
-      "noBotComments": "Nenhum comentário de bot.",
-      "noHumanComments": "Nenhum comentário humano.",
-      "commentsLoadFailed": "Não foi possível carregar os comentários. Toque em atualizar para tentar novamente.",
-      "showMoreOf": "Mostrar {{count}} mais de {{remaining}}",
-      "addCommentPlaceholder": "Adicione um comentário…",
       "resolvedThreadSingle": "Thread resolvida de {{author}}",
       "resolvedThreadCount": "Tópico resolvido por {{author}} ({{count}})",
-      "resolvedCommentSingle": "Comentário resolvido de {{author}}",
-      "resolvedCommentCount": "Comentário resolvido por {{author}} ({{count}})",
       "commentsLoadFailedRetry": "Não foi possível carregar os comentários."
     },
     "linkPrForm": {
@@ -2567,14 +2521,6 @@
       "stateOpen": "Aberto",
       "unavailable": "Verificações indisponíveis"
     },
-    "prCommentAudienceLabels": {
-      "all": "Todos",
-      "bots": "Bots",
-      "humans": "Humanos",
-      "noBotComments": "Nenhum comentário de bot.",
-      "noComments": "Ainda não há comentários.",
-      "noHumanComments": "Nenhum comentário humano."
-    },
     "prSidebarCreateEmptyState": {
       "branchNotLinked": "{{branch}} não está vinculada a um PR aberto.",
       "currentBranchNotLinked": "A branch atual não está vinculada a um PR aberto.",
@@ -2666,7 +2612,6 @@
       "openOnGitHub": "Abrir no GitHub",
       "failedAfter": "Falha após {{duration}}",
       "failed": "Falhou",
-      "rerun": "Executar novamente",
       "copyErrorFailed": "Não foi possível copiar o erro.",
       "durationMinutes": "{{minutes}}min {{seconds}}s",
       "failing": "Com falha",
@@ -2779,22 +2724,15 @@
       "messageModeLabel": "Modo de mensagem: escreva e depois envie. Mudar para o modo de teclas",
       "moreKeys": "Mais teclas e ações",
       "showKeyboard": "Mostrar teclado",
-      "dismissKeyboardHint": "Oculta o teclado virtual e mantém a sessão atual do terminal aberta.",
-      "switchToDesktopMode": "Alternar para o modo desktop",
-      "switchToPhoneMode": "Mudar para o modo celular",
       "pasteFromClipboard": "Colar da área de transferência",
-      "paste": "Colar",
-      "addCustomShortcut": "Adicionar atalho personalizado",
       "control": "Ctrl",
       "alt": "Alt",
       "shift": "Shift"
     },
     "activeContent": {
-      "createTab": "Criar Aba",
       "creatingTab": "Criando…",
       "fileTitle": "Arquivo",
       "loadingTerminal": "Carregando terminal",
-      "noTabs": "Nenhuma aba nesta sessão",
       "retryLoadingTerminal": "Tentar carregar o terminal novamente",
       "terminalTakingLonger": "O terminal está demorando mais que o esperado"
     },
@@ -2896,26 +2834,15 @@
       "workflow": "Fluxo de trabalho em segundo plano"
     },
     "browserTabActionSheet": {
-      "forward": "Avançar",
-      "reload": "Recarregar",
       "hardReload": "Forçar recarregamento",
       "title": "Navegador"
     },
     "bulkCloseSheetActions": {
       "closeOtherTabs": "Fechar Outras Abas"
     },
-    "bulkTabClose": {
-      "confirm": "Fechar abas",
-      "description": "As abas selecionadas serão fechadas. As abas fixadas continuarão abertas.",
-      "titleEditors": "Fechar todas as abas do editor?",
-      "titleLeft": "Fechar abas à esquerda?",
-      "titleOthers": "Fechar outras abas?",
-      "titleRight": "Fechar abas à direita?"
-    },
     "commandDock": {
       "liveInputHint": "O texto digitado é enviado diretamente ao terminal ativo.",
-      "liveInputLabel": "Entrada em tempo real no terminal",
-      "tapToShowKeyboard": "Toque para mostrar o teclado"
+      "liveInputLabel": "Entrada em tempo real no terminal"
     },
     "contentRow": {
       "dismissCreationWarning": "Dispensar aviso de criação do espaço de trabalho"
@@ -3304,7 +3231,6 @@
     },
     "sheets": {
       "browser": "Navegador",
-      "browserStreamingUnavailable": "Este host não pode transmitir abas do navegador",
       "chat": "Chat",
       "cli": "CLI",
       "cliOnly": "Somente CLI",
@@ -3321,7 +3247,6 @@
       "file": "Arquivo",
       "markdown": "Markdown",
       "markdownNote": "Nota em Markdown",
-      "newBrowser": "Novo Navegador",
       "newTab": "Nova Aba",
       "notesCopied": "Notas copiadas",
       "notesHint": "Selecione uma sessão de agente para as notas atuais.",
@@ -3340,7 +3265,6 @@
       "shellWsl": "WSL",
       "terminalName": "Nome do terminal",
       "unsavedMarkdown": "Alterações em Markdown não salvas",
-      "urlPrompt": "Digite uma URL ou deixe em branco para abrir uma nova aba.",
       "allowAutoClose": "Permitir fechamento automático",
       "agents": "Agentes",
       "renameTerminalFailed": "Não foi possível renomear o terminal. {{reason}}"
@@ -3367,20 +3291,12 @@
       "switchToDesktop": "Alternar para o modo desktop",
       "switchToPhone": "Alternar para o modo celular"
     },
-    "terminalInputActions": {
-      "attachFileHint": "Mantenha pressionado para anexar um arquivo em vez de uma foto",
-      "attachPhoto": "Anexar uma foto",
-      "sendingImage": "Enviando imagem"
-    },
     "terminalLiveInputStatus": {
       "listening": "Ouvindo",
-      "liveInput": "Entrada em tempo real",
       "preparingMic": "Preparando microfone",
       "processing": "Processando",
       "releaseMicHint": "Solte o microfone para parar",
-      "startingMic": "Ativando microfone",
-      "uploadingImage": "Enviando imagem para o host",
-      "uploadingImageTitle": "Enviando imagem"
+      "startingMic": "Ativando microfone"
     },
     "terminalRecords": {
       "defaultTitle": "Terminal"
@@ -3617,8 +3533,6 @@
       "mailOwnerUnconfirmed": "Orca não conseguiu confirmar se esta mensagem ainda se destina a este chat."
     },
     "workerAutoClose": {
-      "running": "Agente de orquestração temporário · Fecha 2 minutos após terminar",
-      "finished": "Agente de orquestração temporário concluído · Fecha em {{countdown}}",
       "keepOpen": "Manter aberto"
     },
     "terminalLayoutSheet": {
@@ -3640,17 +3554,14 @@
     "terminalMoreKeys": {
       "sendKey": "Enviar {{label}}",
       "paste": "Colar",
-      "sending": "Enviando…",
       "photo": "Foto",
       "file": "Arquivo",
       "desktopWidth": "Largura de desktop",
       "phoneWidth": "Largura de celular",
       "keys": "Teclas",
-      "combos": "Combinações",
       "yourKeys": "Suas teclas",
       "deleteKeyHint": "Mantenha pressionado para excluir esta tecla",
-      "addCustomKey": "Adicionar tecla personalizada",
-      "addKey": "Adicionar tecla"
+      "addCustomKey": "Adicionar tecla personalizada"
     },
     "terminalPaneView": {
       "focusedPane": "{{title}}, em foco",
@@ -3749,7 +3660,6 @@
     "tabBar": {
       "oneTab": "1 aba",
       "tabCount": "Abas: {{count}}",
-      "anotherNeedsYou": "outra aba precisa de você",
       "actionsHint": "Mostra ações para esta aba",
       "next": "Próxima aba",
       "previous": "Aba anterior",
@@ -4048,12 +3958,7 @@
     },
     "commitFailurePanel": {
       "fix": "Corrigir",
-      "fixWithAi": "Corrigir falha de commit com IA",
       "hideDetails": "Ocultar detalhes",
-      "hideFailureDetails": "Ocultar detalhes da falha no commit",
-      "showDetails": "Mostrar detalhes",
-      "showFailureDetails": "Mostrar detalhes da falha no commit",
-      "summary": "Falha no commit.",
       "title": "Falha no commit"
     },
     "commitMessageAi": {
@@ -4073,10 +3978,7 @@
       "cancelGeneration": "Cancelar geração da mensagem de commit",
       "commitMessageDisabled": "Mensagem de commit desativada. Nenhum arquivo no stage.",
       "commitMessagePlaceholder": "Mensagem de commit",
-      "emptyMessage": "A árvore de trabalho está limpa.",
-      "emptyTitle": "Nenhuma alteração local",
       "generateMessage": "Gerar mensagem de commit com IA",
-      "reconnecting": "Reconectando ao desktop…",
       "regenerateHint": "Limpe a mensagem para gerar novamente."
     },
     "createPrAction": {
@@ -4230,7 +4132,6 @@
       "updateDesktop": "Atualize o Orca neste host para usar o controle de versão no celular."
     },
     "modals": {
-      "currentBranch": "atual",
       "discardButton": "Descartar",
       "discardConfirmMessage": "Descartar alterações em \"{{path}}\"? Esta ação não pode ser desfeita.",
       "discardTitle": "Descartar alteração?",
@@ -4534,17 +4435,9 @@
       "behind": "{{count}} atrás",
       "upToDate": "Atualizada",
       "switchBranch": "Mudar branch de {{branch}}",
-      "mergeInProgress": "Merge em andamento",
-      "rebaseInProgress": "Rebase em andamento",
-      "cherryPickInProgress": "Cherry-pick em andamento",
-      "filesNeedDecision_one": "{{count}} arquivo precisa de uma decisão antes de você concluir.",
-      "filesNeedDecision_other": "{{count}} arquivos precisam de uma decisão antes de você terminar.",
-      "conflictsResolved": "Todos os conflitos foram resolvidos. Conclua na barra abaixo.",
-      "continueOnComputer": "Todo conflito é resolvido. Continue no seu computador para terminar.",
       "commits_one": "{{count}} commit",
       "commits_other": "{{count}} commits",
       "conflictsMayRemain": "Nem todos os arquivos estão listados, portanto, os conflitos podem permanecer. Verifique no seu computador.",
-      "filesNeedDecision_many": "{{count}} arquivos precisam de uma decisão antes de você terminar.",
       "commits_many": "{{count}} commits"
     },
     "fileList": {
@@ -5802,7 +5695,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Emparelhar um computador",
       "pairRequired": "Para abrir este link, emparelhe este telefone com um computador e abra o link novamente.",

@@ -24721,7 +24721,9 @@
       "chatOtherWindow": "El inicio de sesión está en curso en otra ventana.",
       "chatPageDidntOpen": "¿No se abrió la página?",
       "chatPasteCode": "Pega el código",
-      "chatPasteCodeLabel": "El código que muestra Google después de iniciar sesión, o la dirección de esa página"
+      "chatPasteCodeLabel": "El código que muestra Google después de iniciar sesión, o la dirección de esa página",
+      "launchesUse": "Los nuevos inicios de agy usan esta cuenta",
+      "loginNow": "Sesión actual de agy"
     },
     "claude": {
       "added": "Cuenta agregada. Selecciónala para usarla en el próximo Claude que inicies.",

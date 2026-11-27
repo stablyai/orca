@@ -1,5 +1,5 @@
-import { findNodeAtLocation, parseTree, type Node } from 'jsonc-parser'
-import { skipTrivia } from './json-property-removal'
+import { parseTree } from 'jsonc-parser'
+import { findActiveJsonNode, skipTrivia } from './json-property-removal'
 
 function lineIndent(text: string, offset: number): string {
   return /^[ \t]*/.exec(text.slice(text.lastIndexOf('\n', offset - 1) + 1))?.[0] ?? ''
@@ -16,8 +16,7 @@ export function insertJsonProperties(
   properties: readonly (readonly [string, unknown])[]
 ): string | null {
   const tree = parseTree(text, [], { allowTrailingComma: true })
-  const object: Node | undefined =
-    tree && path.length > 0 ? findNodeAtLocation(tree, [...path]) : tree
+  const object = findActiveJsonNode(tree, path)
   if (!object || object.type !== 'object') {
     return null
   }
