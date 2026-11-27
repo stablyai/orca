@@ -3,6 +3,7 @@
 import { readFile, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from './lazy-ipc-handle-group'
 import { z } from 'zod'
 import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { GOOGLE_CLIENT_FILE_MAX_BYTES } from '../../shared/google/google-client-config'
@@ -84,19 +85,21 @@ function watchDownloads(event: Electron.IpcMainInvokeEvent): Promise<GoogleSetup
   })
 }
 
-export function registerGoogleSetupHandlers(): void {
-  ipcMain.removeHandler('googleSetup:pickClientFile')
-  ipcMain.handle('googleSetup:pickClientFile', (event) => pickClientFile(event))
-  ipcMain.removeHandler('googleSetup:saveAppFile')
-  ipcMain.handle('googleSetup:saveAppFile', (event, raw: unknown) => saveAppFile(event, raw))
-  ipcMain.removeHandler('googleSetup:watchDownloads')
-  ipcMain.handle('googleSetup:watchDownloads', (event) => watchDownloads(event))
-  ipcMain.removeHandler('googleSetup:stopWatchingDownloads')
-  ipcMain.handle('googleSetup:stopWatchingDownloads', (event) => {
+export function registerGoogleSetupHandlers(ipc: IpcHandleRegistrar = ipcMain): void {
+  if (ipc === ipcMain) {
+    ipcMain.removeHandler('googleSetup:pickClientFile')
+    ipcMain.removeHandler('googleSetup:saveAppFile')
+    ipcMain.removeHandler('googleSetup:watchDownloads')
+    ipcMain.removeHandler('googleSetup:stopWatchingDownloads')
+    ipcMain.removeHandler('googleSetup:findDownloadedKey')
+  }
+  ipc.handle('googleSetup:pickClientFile', (event) => pickClientFile(event))
+  ipc.handle('googleSetup:saveAppFile', (event, raw: unknown) => saveAppFile(event, raw))
+  ipc.handle('googleSetup:watchDownloads', (event) => watchDownloads(event))
+  ipc.handle('googleSetup:stopWatchingDownloads', (event) => {
     downloadWatches.get(event.sender.id)?.()
   })
-  ipcMain.removeHandler('googleSetup:findDownloadedKey')
-  ipcMain.handle(
+  ipc.handle(
     'googleSetup:findDownloadedKey',
     (_event, raw: unknown): Promise<GoogleSetupFoundKey | null> => {
       const { since, projectId } = FindKeyArgs.parse(raw)

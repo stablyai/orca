@@ -4,10 +4,10 @@ import {
   LIST_LEADING_SLOT,
   LIST_ROW_PADDING
 } from '../components/list/ListGroup'
-import { colors, spacing } from '../theme/mobile-theme'
+import { spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 
-export const styles = themedStyleSheet(() => ({
+export const stylesSheet = themedStyleSheet((colors) => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase

@@ -20,9 +20,8 @@ import { useBackClaim } from '../../navigation/use-back-claim'
 import { useClipboardReader } from '../../platform/clipboard/clipboard'
 import { openExternalLink } from '../../platform/external-links/external-link'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
-import { colors } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { PhoneBot } from '../host-bots-operations'
 import { MobileBotTextButton } from '../MobileBotTextButton'
@@ -55,7 +54,8 @@ export function MobileBotSlackSetup(props: {
   /** Installed, after Try it: the workspace's page takes over. */
   onInstalled: (teamId: string) => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const setup = usePhoneSlackSetup({ ...props, t })
   const { step } = setup
@@ -364,7 +364,7 @@ export function MobileBotSlackSetup(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   // The token is the steps' last row: no box of its own, its text under the steps' titles.
   tokenRow: {
     borderWidth: 0,

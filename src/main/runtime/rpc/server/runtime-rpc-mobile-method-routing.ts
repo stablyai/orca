@@ -282,6 +282,7 @@ export const EXECUTION_HOST_METHODS = [
   'terminal.createAgentSession',
   'terminal.ensureAgentSession',
   'terminal.focus',
+  'terminal.inspectProcess',
   'terminal.isRunningAgent',
   'terminal.list',
   'terminal.multiplex',

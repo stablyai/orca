@@ -1,10 +1,3 @@
-import { normalizeJiraQuickFilterState } from '../../shared/jira/jira-quick-filters'
-import { JiraQuickFilterStateParam } from '../../shared/rpc-contract/jira/jira-quick-filter-params'
-import {
-  normalizeJiraSavedFilterState,
-  mutateJiraSavedFilterState
-} from '../../shared/jira/jira-saved-filters'
-import { JiraSavedFilterMutationParam } from '../../shared/rpc-contract/jira/jira-saved-filter-params'
 import { BrowserWindow, ipcMain, webContents, type WebContents } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
 import type { PersistedUIState } from '../../shared/orca-profiles/persisted-ui-state-types'
@@ -14,6 +7,14 @@ import {
   isTrustedMainRendererSender,
   type MainRendererSender
 } from './renderer-requests/main-renderer-sender-trust'
+import { registerLazyIpcHandleGroup } from './lazy-ipc-handle-group'
+
+const UI_JIRA_FILTER_IPC_CHANNELS = [
+  'ui:getJiraQuickFilters',
+  'ui:setJiraQuickFilters',
+  'ui:getJiraSavedFilters',
+  'ui:mutateJiraSavedFilters'
+] as const
 
 let trustedUIRendererWebContentsId: number | null = null
 
@@ -62,22 +63,9 @@ export function registerUIHandlers(
 ): void {
   store.onUIChanged((ui) => sendToTrustedUIRenderer('ui:stateChanged', ui))
 
-  ipcMain.handle('ui:getJiraQuickFilters', () =>
-    normalizeJiraQuickFilterState(store.getUI().jiraQuickFilterState)
-  )
-  ipcMain.handle('ui:setJiraQuickFilters', (_event, input: unknown) => {
-    const state = normalizeJiraQuickFilterState(JiraQuickFilterStateParam.parse(input))
-    store.updateUI({ jiraQuickFilterState: state })
-    return state
-  })
-  ipcMain.handle('ui:getJiraSavedFilters', () =>
-    normalizeJiraSavedFilterState(store.getUI().jiraSavedFilterState)
-  )
-  ipcMain.handle('ui:mutateJiraSavedFilters', (_event, input: unknown) => {
-    const mutation = JiraSavedFilterMutationParam.parse(input)
-    const state = mutateJiraSavedFilterState(store.getUI().jiraSavedFilterState, mutation)
-    store.updateUI({ jiraSavedFilterState: state })
-    return state
+  registerLazyIpcHandleGroup(UI_JIRA_FILTER_IPC_CHANNELS, async (ipc) => {
+    const { registerUiJiraFilterHandlers } = await import('./ui-jira-filters-ipc')
+    registerUiJiraFilterHandlers(store, ipc)
   })
   ipcMain.handle('ui:get', () => {
     return store.getUI()

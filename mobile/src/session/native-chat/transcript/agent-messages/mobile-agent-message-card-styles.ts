@@ -1,7 +1,7 @@
-import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
+import { radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 
-export const styles = themedStyleSheet(() => ({
+export const stylesSheet = themedStyleSheet((colors) => ({
   compactCard: {
     borderWidth: 1,
     borderColor: colors.borderSubtle,

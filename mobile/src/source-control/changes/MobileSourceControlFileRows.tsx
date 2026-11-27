@@ -2,13 +2,12 @@ import type { ReactNode } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { SwipeRowActions } from '../../components/list/SwipeRowActions'
 import { Minus, Plus, Undo2 } from 'lucide-react-native'
-import { colors } from '../../theme/mobile-theme'
 import { STATUS_LABELS } from '../../../../src/shared/git/status/git-status-labels'
 import type {
   GitConflictKind,
   GitFileStatus
 } from '../../../../src/shared/git/status/git-status-types'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { MobileDiffLineStats } from '../review/diff-screen/MobileDiffReviewFileSummary'
@@ -17,9 +16,10 @@ import type {
   MobileGitStatusEntryView
 } from './mobile-source-control-screen-state'
 import type { MobileSourceControlState } from '../use-mobile-source-control-state'
-import { styles } from '../mobile-source-control-styles'
+import { stylesSheet } from '../mobile-source-control-styles'
 import { mobileConflictResolutionLabel } from '../conflicts/mobile-source-control-conflict-actions'
 import { getUnstageablePaths, statusColor } from './mobile-git-status'
+import { useThemedStyles } from '../../theme/themed-styles'
 
 export type FileRowState = Pick<
   MobileSourceControlState,
@@ -75,13 +75,14 @@ function FileRowBody({
   /** Wrapping buttons under the name, e.g. a conflict's resolutions, so the name keeps its width. */
   actions?: ReactNode
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const { name, folder } = splitGitPath(path)
   const subtitle = detail ? (folder ? `${detail} · ${folder}` : detail) : folder
   return (
     <>
       <View style={styles.statusBadge}>
-        <Text style={[styles.statusBadgeText, { color: statusColor(status) }]}>
+        <Text style={[styles.statusBadgeText, { color: statusColor(status, colors) }]}>
           {STATUS_LABELS[status]}
         </Text>
       </View>
@@ -112,7 +113,8 @@ export function ChangeFileRow({
   item: MobileGitStatusEntryView
   state: FileRowState
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { busyAction, openDiffForFile, resolveConflict, runGitAction, setDiscardTarget } = state
   const rowBusy =
@@ -261,7 +263,7 @@ export function BranchFileRow({
   entry: MobileBranchEntryView
   state: Pick<FileRowState, 'busyAction' | 'openDiffForFile'>
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   return (
     <Pressable
@@ -302,6 +304,6 @@ export function BranchFileRow({
 
 // The row stays opaque (Discard waits behind it), so the press is a translucent layer over it.
 function PressWash() {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   return <View pointerEvents="none" style={styles.fileRowPressed} />
 }

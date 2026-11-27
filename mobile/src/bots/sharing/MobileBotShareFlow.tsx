@@ -7,14 +7,15 @@ import { BOT_SHARE_ERRORS } from '../../../../src/shared/bots/bot-share-errors'
 import { botShareFlagSpot } from '../../../../src/shared/bots/bot-share-flag-spots'
 import { ListRow, SectionHeader } from '../../components/list/ListGroup'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
-import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { intlLocaleFor } from '../../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { useBottomDrawerModalHostBackClaim } from '../../components/bottom-drawer/bottom-drawer-modal-host-scope'
 import { useClipboardWriter } from '../../platform/clipboard/clipboard'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
-import { colors, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { MobileBotAvatarSource } from '../host-bot-row-facts'
 import { MobileBotAvatar } from '../MobileBotAvatar'
@@ -57,7 +58,9 @@ export type ShareFlowProps = {
 
 export function MobileBotShareFlow(props: ShareFlowProps) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const { client, bot, linkState } = props
   const { read, setLink, reread } = linkState
   const link = read.kind === 'read' ? read.link : null
@@ -266,7 +269,7 @@ export function MobileBotShareFlow(props: ShareFlowProps) {
                     )}`
                 : [
                     t('bots.share.updatedAt', 'Updated {{date}}', {
-                      date: botShareDate(link.updatedAt, true)
+                      date: botShareDate(link.updatedAt, intlLocale, true)
                     }),
                     upToDate === null
                       ? null
@@ -295,7 +298,7 @@ export function MobileBotShareFlow(props: ShareFlowProps) {
                 leading={<ShieldAlert size={18} color={colors.statusRed} />}
                 title={t('bots.share.secretFoundTitle', 'Secret found')}
                 subtitle={t('bots.share.secretWhere', '{{flag}} in {{where}}, line {{line}}', {
-                  flag: botShareFlagLabel(secret.flag.kind),
+                  flag: botShareFlagLabel(secret.flag.kind, t),
                   where: secret.where,
                   line: secret.flag.line ?? 1
                 })}
@@ -369,7 +372,7 @@ export function MobileBotShareFlow(props: ShareFlowProps) {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   hero: {
     alignItems: 'center',
     gap: spacing.xs,

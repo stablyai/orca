@@ -11,8 +11,10 @@ config.watchFolders = Array.from(new Set([...(config.watchFolders ?? []), shared
 
 // RN 0.88 registers assets through the bare `react-native/asset-registry` import, which Metro resolves from
 // the asset's own folder. Shared assets live outside mobile/, so fall back to mobile's react-native.
+// React Compiler also compiles those shared files, whose `react/compiler-runtime` import must reach mobile's React.
 config.resolver.extraNodeModules = {
   ...config.resolver.extraNodeModules,
+  react: path.join(projectRoot, 'node_modules', 'react'),
   'react-native': path.join(projectRoot, 'node_modules', 'react-native')
 }
 

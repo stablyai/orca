@@ -8,12 +8,15 @@ import type {
   AgentPickerDraft,
   AgentPickerEntry
 } from '../../../../../shared/agent-launch/picker/agent-launch-picker'
-import { DirectWorkItemSetupDialog } from '../setup/DirectWorkItemSetupDialog'
 import { agentChoicePending } from '@/lib/agent-session/launch/inventory/host-chat-program'
 import type { AgentLaunchSurface } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
-import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
+import {
+  AgentSettingsDialog,
+  DirectWorkItemSetupDialog,
+  HostedAddRepoDialog
+} from './composer-lazy-dialogs'
 import {
   Dialog,
   DialogContent,
@@ -22,9 +25,8 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import NewWorkspaceComposerCard from '@/components/new-workspace/composer/NewWorkspaceComposerCard'
-import AgentSettingsDialog, {
-  restoreAgentSettingsInvoker
-} from '@/components/agent/AgentSettingsDialog'
+import { restoreAgentSettingsInvoker } from '@/components/agent/restore-agent-settings-invoker'
+import { useLatchedOpen } from '@/app-shell/root-surfaces/use-latched-open'
 import { useComposerHostedAddProject } from '../project-selection/use-composer-hosted-add-project'
 import { useComposerState } from '@/hooks/useComposerState'
 import {
@@ -47,14 +49,6 @@ import { getFolderWorkspacePrimaryActionLabel } from '@/components/sidebar/works
 import { useAgentMenuObservation } from '@/components/agent/launch-menu/use-new-tab-agent-menu-rows'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
-// Keep Add Project’s clone/SSH machinery outside the composer entry render, matching App loading.
-const HostedAddRepoDialog = lazyWithRetry(
-  () => import('@/components/sidebar/project-admission/dialog/AddRepoDialog'),
-  {
-    reloadKey: 'composer-add-repo'
-  }
-)
-
 export default function NewWorkspaceComposerModal(): React.JSX.Element | null {
   const visible = useAppStore((s) => s.activeModal === 'new-workspace-composer')
   const modalData = useAppStore((s) => s.modalData as ComposerModalData | undefined)
@@ -66,7 +60,9 @@ export default function NewWorkspaceComposerModal(): React.JSX.Element | null {
 
   if (modalData?.directSetup) {
     return (
-      <DirectWorkItemSetupDialog key={modalData.directSetup.id} request={modalData.directSetup} />
+      <Suspense fallback={null}>
+        <DirectWorkItemSetupDialog key={modalData.directSetup.id} request={modalData.directSetup} />
+      </Suspense>
     )
   }
 
@@ -161,6 +157,7 @@ function QuickTabBody({
   })
   // Layer agent settings over the composer so edits retain the typed workspace/repo selection.
   const [agentSettingsOpen, setAgentSettingsOpen] = useState(false)
+  const agentSettingsMounted = useLatchedOpen(agentSettingsOpen)
   const agentSettingsInvoker = useRef<HTMLButtonElement | null>(null)
   // User picks outrank newly detected preferences. Derive from an override so detection stays current without an effect-driven extra commit.
   const [quickAgentOverride, setQuickAgentOverride] = useState<TuiAgent | null | undefined>(
@@ -397,15 +394,19 @@ function QuickTabBody({
         onAddProjectEntryRequest={handleOpenAddProjectEntryRequest}
         onNestedDialogOpenChange={handleNestedDialogOpenChange}
       />
-      <AgentSettingsDialog
-        open={agentSettingsOpen}
-        onOpenChange={setAgentSettingsOpen}
-        onCloseAutoFocus={(event) => {
-          const invoker = agentSettingsInvoker.current
-          agentSettingsInvoker.current = null
-          restoreAgentSettingsInvoker(event, invoker)
-        }}
-      />
+      {agentSettingsMounted ? (
+        <Suspense fallback={null}>
+          <AgentSettingsDialog
+            open={agentSettingsOpen}
+            onOpenChange={setAgentSettingsOpen}
+            onCloseAutoFocus={(event) => {
+              const invoker = agentSettingsInvoker.current
+              agentSettingsInvoker.current = null
+              restoreAgentSettingsInvoker(event, invoker)
+            }}
+          />
+        </Suspense>
+      ) : null}
       {addProjectMounted ? (
         <Suspense fallback={null}>
           <HostedAddRepoDialog hosted={addProjectController} />

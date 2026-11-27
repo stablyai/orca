@@ -8,12 +8,12 @@ import { toolHost } from '../../../../src/shared/bots/bot-share-review-files'
 import { textLineCount } from '../../../../src/shared/bots/bot-text-scan'
 import { ListRow } from '../../components/list/ListGroup'
 import { SheetPrimaryButton } from '../../components/sheets/SheetPrimaryButton'
-import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../../i18n/use-mobile-translation'
+import { intlLocaleFor } from '../../i18n/ui-intl-locale'
 import { SettingsSection } from '../../settings/settings-screen-frame'
-import { colors, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { MobileBotAvatar } from '../MobileBotAvatar'
 import { botShareCheckSummary, botShareFlagLabel } from './bot-share-copy'
 import type { PhoneShareReview } from './bot-share-receive-operations'
@@ -85,7 +85,7 @@ export const flagOf = (
     : null
 
 export function FlagMark({ flag }: { flag: 'secret' | 'warning' | null }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   if (!flag) {
     return null
   }
@@ -105,7 +105,8 @@ export function MobileBotShareReviewOverview(props: {
   } | null
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
+  const styles = useThemedStyles(stylesSheet)
   const { ctx, choosing } = props
   const { review, spots } = ctx
   const { bot } = review
@@ -120,7 +121,7 @@ export function MobileBotShareReviewOverview(props: {
   const count = (value: number) => (value > 0 ? String(value) : none)
   const [first] = spots
   const secret = spots.some((spot) => spot.flag.kind === 'secret')
-  const date = new Intl.DateTimeFormat(getUiIntlLocale(), {
+  const date = new Intl.DateTimeFormat(intlLocale, {
     month: 'short',
     day: 'numeric',
     year: 'numeric'
@@ -166,16 +167,18 @@ export function MobileBotShareReviewOverview(props: {
             subtitle={
               spots.length === 1
                 ? t('bots.share.review.flagIn', '{{flag}} in {{where}}', {
-                    flag: botShareFlagLabel(first.flag.kind),
+                    flag: botShareFlagLabel(first.flag.kind, t),
                     where: first.part?.startsWith('skill:')
                       ? first.part.slice('skill:'.length)
                       : first.where
                   })
-                : botShareCheckSummary(spots)
+                : botShareCheckSummary(spots, t)
             }
             subtitleLines={1}
             accessibilityLabel={`${t('bots.share.safetyCheck', 'Safety check')}, ${
-              spots.length === 1 ? botShareFlagLabel(first.flag.kind) : botShareCheckSummary(spots)
+              spots.length === 1
+                ? botShareFlagLabel(first.flag.kind, t)
+                : botShareCheckSummary(spots, t)
             }`}
             accessory={<FlagMark flag={secret ? 'secret' : 'warning'} />}
             navigates
@@ -298,7 +301,7 @@ export function ReviewToolTicks(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   hero: {
     alignItems: 'center',
     gap: spacing.xs,

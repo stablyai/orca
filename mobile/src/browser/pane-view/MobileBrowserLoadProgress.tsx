@@ -1,10 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { Animated, Easing, Platform, StyleSheet, View } from 'react-native'
 import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
-import { colors, radii } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-
+import { radii } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 // Match desktop progress: delay fast loads, ease toward 90%, finish on real stop.
 const SHOW_DELAY_MS = 200
 const TRICKLE_STEPS: [atMs: number, scale: number][] = [
@@ -35,7 +33,7 @@ export function MobileBrowserLoadProgress({
   loading: boolean
   failed: boolean
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const scale = useRef(new Animated.Value(0)).current
   const opacity = useRef(new Animated.Value(0)).current
   const runningRef = useRef<{
@@ -118,7 +116,7 @@ export function MobileBrowserLoadProgress({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   clip: {
     ...StyleSheet.absoluteFill,
     borderRadius: radii.pill,

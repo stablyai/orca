@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { X } from 'lucide-react-native'
-import { colors, spacing, pressedStyle } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing, pressedStyle } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 
 // Monochrome notice reports vanished target; failure uses one red rule for action refusal without taking screen.
@@ -22,7 +22,8 @@ export function HostRouteNoticeBanner({
   action?: { label: string; onPress: () => void }
   onDismiss?: () => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   return (
     <View
@@ -57,7 +58,7 @@ export function HostRouteNoticeBanner({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   banner: {
     flexDirection: 'row',
     alignItems: 'center',

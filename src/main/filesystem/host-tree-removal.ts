@@ -10,8 +10,8 @@ import { join, win32 } from 'node:path'
 import { lstat, lstatBigInt, readUtf8File, readdir, rm, rmdir, unlink } from './asar-transparent-fs'
 import { isWindowsAbsolutePathLike } from '../../shared/file-access/cross-platform-path'
 import { isWslUncPath } from '../../shared/file-access/wsl-paths'
-import { stripWin32LongPathPrefix } from '../../shared/file-access/windows-path-access'
 import { removeTree } from '../../shared/file-write/windows-transient-lock-removal'
+import { describeRemovalFailure } from './host-tree-removal-failure'
 
 /** Convert a native host filesystem path to the Win32 long-path namespace. */
 export function toHostFilesystemPath(targetPath: string): string {
@@ -304,19 +304,4 @@ export async function removeHostEmptyDirectory(targetPath: string): Promise<void
     }
     throw error
   }
-}
-
-// Failed-delete rows show this message; name the blocking file instead of Node's error text.
-function describeRemovalFailure(error: unknown): unknown {
-  const code = error instanceof Error && 'code' in error ? error.code : undefined
-  const path = error instanceof Error && 'path' in error ? error.path : undefined
-  if (path === undefined || (code !== 'EBUSY' && code !== 'EPERM' && code !== 'EACCES')) {
-    return error
-  }
-  const file = stripWin32LongPathPrefix(String(path))
-  const message =
-    code === 'EBUSY'
-      ? `${file} is open in another program. Close that program and delete again.`
-      : `${file} could not be deleted; it may be read-only or open in another program. Close any program using it and delete again.`
-  return Object.assign(new Error(message, { cause: error }), { code, path: file })
 }

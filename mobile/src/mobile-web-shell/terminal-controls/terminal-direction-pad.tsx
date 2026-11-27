@@ -13,10 +13,10 @@ import {
   TERMINAL_ACCESSORY_REPEAT_DELAY_MS,
   TERMINAL_ACCESSORY_REPEAT_INTERVAL_MS
 } from '../../terminal/key-input/terminal-accessory-repeat'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { translate } from '../../i18n/mobile-i18n'
+import { radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import type { Translate } from '../../i18n/mobile-i18n'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 
 export const TERMINAL_DIRECTION_KEYS = ['arrowUp', 'arrowLeft', 'arrowRight', 'arrowDown'] as const
 type DirectionKey = (typeof TERMINAL_DIRECTION_KEYS)[number]
@@ -29,14 +29,14 @@ const DIRECTIONS = [
   { key: 'arrowDown', glyph: '↓' }
 ] as const
 
-function directionLabel(key: DirectionKey): string {
+function directionLabel(key: DirectionKey, t: Translate): string {
   return key === 'arrowUp'
-    ? translate('mobileWebShell.terminalDirectionPad.up', 'D-pad up')
+    ? t('mobileWebShell.terminalDirectionPad.up', 'D-pad up')
     : key === 'arrowLeft'
-      ? translate('mobileWebShell.terminalDirectionPad.left', 'D-pad left')
+      ? t('mobileWebShell.terminalDirectionPad.left', 'D-pad left')
       : key === 'arrowRight'
-        ? translate('mobileWebShell.terminalDirectionPad.right', 'D-pad right')
-        : translate('mobileWebShell.terminalDirectionPad.down', 'D-pad down')
+        ? t('mobileWebShell.terminalDirectionPad.right', 'D-pad right')
+        : t('mobileWebShell.terminalDirectionPad.down', 'D-pad down')
 }
 
 export const TerminalDirectionPad = forwardRef<
@@ -48,7 +48,8 @@ export const TerminalDirectionPad = forwardRef<
     onInteractionStart: () => void
   }
 >(function TerminalDirectionPad({ enabled, width, onKey, onInteractionStart }, ref) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const t = useMobileTranslation()
   const [repeat] = useState(() => createTerminalAccessoryRepeatController<DirectionKey>())
   const delivery = useRef({ enabled, onKey })
   useLayoutEffect(() => {
@@ -84,8 +85,8 @@ export const TerminalDirectionPad = forwardRef<
     <Pressable
       key={direction.key}
       accessibilityRole="button"
-      accessibilityLabel={directionLabel(direction.key)}
-      accessibilityHint={translate(
+      accessibilityLabel={directionLabel(direction.key, t)}
+      accessibilityHint={t(
         'mobileWebShell.terminalDirectionPad.hint',
         'Sends an arrow key. Hold to repeat.'
       )}
@@ -151,7 +152,7 @@ export const TerminalDirectionPad = forwardRef<
   )
 })
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   pad: { alignSelf: 'center', gap: spacing.xs, paddingVertical: spacing.xs },
   middle: { flexDirection: 'row', gap: spacing.xs },
   key: {

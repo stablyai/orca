@@ -3,11 +3,12 @@ import { Check, ChevronLeft, ChevronRight, MessageSquare, Plus, X } from 'lucide
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type { MobileDiffReviewQueueItem } from '../diff-state/mobile-diff-review-queue'
-import { colors, spacing } from '../../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
-import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
+import { spacing } from '../../../theme/mobile-theme'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
+import { mobileDiffReviewStylesSheet } from './mobile-diff-review-screen-styles'
 import { canMarkMobileDiffReviewItemViewed } from './MobileDiffReviewFileSummary'
 import type { LineRange } from './MobileDiffReviewLines'
+import { useThemedStyles } from '../../../theme/themed-styles'
 
 type Props = {
   busyAction: string | null
@@ -32,7 +33,8 @@ export function MobileDiffReviewFooter({
   onClearSelection
 }: Props) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(mobileDiffReviewStylesSheet)
   const insets = useSafeAreaInsets()
   // A conflicted or submodule-only change can't be staged here, so it just moves on.
   const stages = item.scope === 'unstaged' && item.canStage

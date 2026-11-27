@@ -12,8 +12,9 @@ import {
 import { Pressable, Text, View } from 'react-native'
 import type { MobileRenderableRepoIcon } from '../../host-screen/host-screen-reply-schema'
 import { triggerMediumImpact } from '../../platform/haptics/haptics'
-import { colors, spacing } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing } from '../../theme/mobile-theme'
+import { useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type {
   WorkspaceListItem,
@@ -41,7 +42,7 @@ import { HostKindIcon } from '../../components/icons/HostKindIcon'
 import { MobileRepoIcon } from '../../components/icons/MobileRepoIcon'
 import { WorktreeAgentList } from '../agent-lineage/presentation/WorktreeAgentList'
 import { WorktreeMetaGlyphs, prStateColor } from './WorktreeMetaGlyphs'
-import { worktreeListRowStyles as styles } from './worktree-list-row-styles'
+import { worktreeListRowStylesSheet } from './worktree-list-row-styles'
 import { PrStateIcon } from '../../source-control/review/status/PrStateIcon'
 import { WorktreeUnsavedName } from './WorktreeUnsavedName'
 import { SwipeRowActions } from '../../components/list/SwipeRowActions'
@@ -97,7 +98,8 @@ function WorktreeListRowComponent({
   pinned = false,
   onTogglePin
 }: Props) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(worktreeListRowStylesSheet)
   const t = useMobileTranslation()
   // Only a bot's worker line reads the clock here; other rows leave ticking to their agent list.
   const now = useNow(30_000, Boolean(view.botWorkspace))
@@ -117,7 +119,7 @@ function WorktreeListRowComponent({
   const showRepoInMetaRow = !cardDetails.repoInTitle && !shouldHideRepo
   const hostId = view.hostContextHostId ?? item.hostId
   const prState = item.linkedPR?.state ?? ''
-  const prColor = prStateColor(prState)
+  const prColor = prStateColor(prState, colors)
   const hostAccessibilityLabel = [view.hostContextLabel, view.hostContextHealthLabel]
     .filter(Boolean)
     .join(', ')

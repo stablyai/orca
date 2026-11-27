@@ -22,9 +22,9 @@ import type { GitFileStatus } from '../../../../src/shared/git/status/git-status
 import { statusColor } from '../../source-control/changes/mobile-git-status'
 import type { DecorateFileRow } from './use-mobile-file-explorer-decorations'
 import { triggerMediumImpact, triggerSelection } from '../../platform/haptics/haptics'
-import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { colors, spacing } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { useMobileTranslation, useMobileUiLocale } from '../../i18n/use-mobile-translation'
+import { spacing, type MobilePalette } from '../../theme/mobile-theme'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import {
   DIRECTORY_PAGE_SIZE,
   type FileExplorerRow,
@@ -33,10 +33,11 @@ import {
   type TreeNode
 } from './file-tree'
 import type { FolderPagingStatus } from './use-mobile-file-explorer-paging'
-import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
-import { fileExplorerStyles as styles } from './mobile-file-explorer-styles'
+import { intlLocaleFor } from '../../i18n/ui-intl-locale'
+import { fileExplorerStylesSheet } from './mobile-file-explorer-styles'
 import { canPreviewMobileFileRow } from '../preview/mobile-file-preview-navigation'
 import { TailClippedText } from '../../components/list/TailClippedText'
+import { useThemedStyles } from '../../theme/themed-styles'
 
 type Props = {
   item: FileExplorerRow
@@ -51,13 +52,14 @@ type Props = {
   onShowMore: (relativePath: string) => void
 }
 
-function formatCount(count: number): string {
-  return count.toLocaleString(getUiIntlLocale())
+function formatCount(count: number, locale: string): string {
+  return count.toLocaleString(locale)
 }
 
 export function MobileFileExplorerRow(props: Props) {
+  const styles = useThemedStyles(fileExplorerStylesSheet)
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
   const {
     item,
     maximumIndentation,
@@ -138,10 +140,15 @@ function FolderPagingRow(props: {
   status: FolderPagingStatus | undefined
   onShowMore: (relativePath: string) => void
 }) {
+  const styles = useThemedStyles(fileExplorerStylesSheet)
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const locale = intlLocaleFor(useMobileUiLocale())
   const { item, paddingLeft, status, onShowMore } = props
-  const counts = { loaded: formatCount(item.loaded), total: formatCount(item.total) }
+  const counts = {
+    loaded: formatCount(item.loaded, locale),
+    total: formatCount(item.total, locale)
+  }
   const busy = status === 'loading'
 
   if (status === 'failed') {
@@ -176,7 +183,7 @@ function FolderPagingRow(props: {
         {busy
           ? t('files.fileExplorerRow.loading', 'Loading…')
           : t('files.fileExplorerRow.showMore', 'Show {{rows}} more', {
-              rows: formatCount(Math.min(DIRECTORY_PAGE_SIZE, item.total - item.loaded))
+              rows: formatCount(Math.min(DIRECTORY_PAGE_SIZE, item.total - item.loaded), locale)
             })}
       </Text>
       <Text style={styles.entryCount}>
@@ -187,8 +194,8 @@ function FolderPagingRow(props: {
 }
 
 // As desktop's tree: a modified name is amber, so it doesn't read as dimmed like an ignored one.
-function treeStatusColor(status: GitFileStatus): string {
-  return status === 'modified' ? colors.gitDecorationModified : statusColor(status)
+function treeStatusColor(status: GitFileStatus, colors: MobilePalette): string {
+  return status === 'modified' ? colors.gitDecorationModified : statusColor(status, colors)
 }
 
 function isTreeNode(item: FileExplorerRow): item is TreeNode {
@@ -204,13 +211,19 @@ function TreeRow(props: {
   onToggleDirectory: (relativePath: string) => void
   onOpenActions: (node: TreeNode) => void
 }) {
+  const styles = useThemedStyles(fileExplorerStylesSheet)
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const locale = intlLocaleFor(useMobileUiLocale())
   const { item, paddingLeft, expanded, decorate, onPreviewFile, onToggleDirectory, onOpenActions } =
     props
   const isDirectory = item.kind === 'directory'
   const { status, ignored } = decorate(item.relativePath, isDirectory)
-  const decorationColor = status ? treeStatusColor(status) : ignored ? colors.textMuted : undefined
+  const decorationColor = status
+    ? treeStatusColor(status, colors)
+    : ignored
+      ? colors.textMuted
+      : undefined
   const isExpanded = expanded.has(item.relativePath)
   const previewable =
     item.kind !== 'directory' &&
@@ -291,7 +304,7 @@ function TreeRow(props: {
         ) : null}
       </View>
       {item.entryCount !== undefined ? (
-        <Text style={styles.entryCount}>{formatCount(item.entryCount)}</Text>
+        <Text style={styles.entryCount}>{formatCount(item.entryCount, locale)}</Text>
       ) : null}
       {status ? (
         <Text style={[styles.statusLetter, { color: decorationColor }]}>
@@ -313,6 +326,7 @@ const NAME_END = 6
 
 /** One line that cuts a long file name in the middle, so `a.test.ts` and `a.ts` stay apart (the page ignores ellipsizeMode). */
 function FileName({ name, style }: { name: string; style: StyleProp<TextStyle> }) {
+  const styles = useThemedStyles(fileExplorerStylesSheet)
   const dot = name.lastIndexOf('.')
   const keep = dot > 0 ? name.length - dot + NAME_END : NAME_END * 2
   if (name.length <= keep * 2) {

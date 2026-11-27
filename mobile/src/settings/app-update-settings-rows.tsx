@@ -2,7 +2,6 @@ import { ListRow } from '../components/list/ListGroup'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { KnownAppUpdate } from '../storage/app-update-preferences'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { SettingsSection } from './settings-screen-frame'
 
 export type AppUpdateCheckRowStatus = 'idle' | 'checking' | 'up-to-date' | 'failed'
@@ -75,7 +74,6 @@ export function AppUpdateSettingsRows(props: {
   onCheck?: () => void
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
   const checkValue = checkRowValue(t, props.checkStatus, props.lastCheckedAt, props.now)
   const { available, onUpdate } = props
   if (!available && !props.onCheck) {

@@ -1,10 +1,9 @@
 import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tasks-connection-presentation'
 import { useRef, useState } from 'react'
 import { View, type TextInputInstance } from 'react-native'
-import { translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
-import { groupFieldStyles } from '../../components/composer-input/composer-input-styles'
+import { groupFieldStylesSheet } from '../../components/composer-input/composer-input-styles'
 import { MessageBox } from '../../components/composer-input/MessageBox'
 import { TextField } from '../../components/composer-input/TextField'
 import { ListGroup, ListRow } from '../../components/list/ListGroup'
@@ -12,7 +11,7 @@ import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
 import { PickerModal } from '../../components/sheets/PickerModal'
 import { openExternalLink } from '../../platform/external-links/external-link'
-import { styles } from '../mobile-tasks-legacy-styles'
+import { stylesSheet } from '../mobile-tasks-legacy-styles'
 import { getRepoBadgeColor } from '../repositories/mobile-tasks-repository-presentation'
 import type { RepoSummary, LinearTeam } from '../mobile-tasks-provider-detail-types'
 import {
@@ -20,6 +19,7 @@ import {
   issueSourceSlug
 } from '../item-detail/mobile-tasks-reviewer-linear'
 import { TASK_SECONDARY_DRAWER_Z_INDEX } from '../task-list/mobile-tasks-options'
+import { useThemedStyles } from '../../theme/themed-styles'
 
 export function renderMobileTasksCreateDrawer(model: ConnectionPresentationModel) {
   return <MobileTasksCreateDrawer model={model} />
@@ -27,6 +27,8 @@ export function renderMobileTasksCreateDrawer(model: ConnectionPresentationModel
 
 // New issue, drawn like New bot: Cancel · New issue · Create, then the fields and pickers as one group.
 function MobileTasksCreateDrawer({ model }: { model: ConnectionPresentationModel }) {
+  const groupFieldStyles = useThemedStyles(groupFieldStylesSheet)
+  const styles = useThemedStyles(stylesSheet)
   const {
     createBody,
     createTask,
@@ -57,7 +59,7 @@ function MobileTasksCreateDrawer({ model }: { model: ConnectionPresentationModel
       ? selectedCreateGitHubSources
       : null
   const fileInSlug = (preference: 'upstream' | 'origin') =>
-    issueSourceSlug(preference === 'origin' ? sources?.prs : sources?.upstreamCandidate)
+    issueSourceSlug(t, preference === 'origin' ? sources?.prs : sources?.upstreamCandidate)
   const close = () => {
     setShowCreateTargetPicker(false)
     setShowCreateTask(false)
@@ -176,6 +178,7 @@ export function renderMobileTasksCreateTargetPicker(model: ConnectionPresentatio
     setShowCreateTargetPicker,
     showCreateTargetPicker,
     showCreateTask,
+    t,
     taskUiReady
   } = model
   return (
@@ -183,8 +186,8 @@ export function renderMobileTasksCreateTargetPicker(model: ConnectionPresentatio
       visible={taskUiReady && showCreateTask && showCreateTargetPicker}
       title={
         provider === 'linear'
-          ? translate('tasks.tasksCreateDrawers.linearTeam', 'Linear Team')
-          : translate('tasks.tasksCreateDrawers.repository', 'Repository')
+          ? t('tasks.tasksCreateDrawers.linearTeam', 'Linear Team')
+          : t('tasks.tasksCreateDrawers.repository', 'Repository')
       }
       options={createTargetOptions}
       selected={
@@ -207,6 +210,7 @@ export function renderMobileTasksCreateTargetPicker(model: ConnectionPresentatio
 export function renderMobileTasksLinearConnectDrawer(model: ConnectionPresentationModel) {
   const {
     connectLinearAccount,
+    groupFieldStyles,
     linearApiKeyDraft,
     linearConnectError,
     linearConnectState,
@@ -215,6 +219,7 @@ export function renderMobileTasksLinearConnectDrawer(model: ConnectionPresentati
     setLinearConnectState,
     setShowLinearConnect,
     showLinearConnect,
+    t,
     taskUiReady
   } = model
   const connecting = linearConnectState === 'connecting'
@@ -230,14 +235,14 @@ export function renderMobileTasksLinearConnectDrawer(model: ConnectionPresentati
       onClose={close}
     >
       <SheetHeader
-        title={translate('tasks.tasksCreateDrawers.connectLinear', 'Connect Linear')}
+        title={t('tasks.tasksCreateDrawers.connectLinear', 'Connect Linear')}
         leading={{
-          label: translate('common.cancel', 'Cancel'),
+          label: t('common.cancel', 'Cancel'),
           onPress: close,
           disabled: connecting
         }}
         trailing={{
-          label: translate('tasks.tasksCreateDrawers.connect', 'Connect'),
+          label: t('tasks.tasksCreateDrawers.connect', 'Connect'),
           onPress: () => void connectLinearAccount(),
           disabled: !linearApiKeyDraft.trim(),
           busy: connecting
@@ -252,7 +257,7 @@ export function renderMobileTasksLinearConnectDrawer(model: ConnectionPresentati
             setLinearConnectError('')
           }
         }}
-        placeholder={translate('tasks.tasksCreateDrawers.personalApiKey', 'Personal API key')}
+        placeholder={t('tasks.tasksCreateDrawers.personalApiKey', 'Personal API key')}
         autoFocus
         autoCapitalize="none"
         autoCorrect={false}
@@ -265,7 +270,7 @@ export function renderMobileTasksLinearConnectDrawer(model: ConnectionPresentati
         <SettingsNote error>{linearConnectError}</SettingsNote>
       ) : (
         <SettingsNote>
-          {translate(
+          {t(
             'tasks.tasksCreateDrawers.keySecurityHint',
             'Your key is encrypted via the host OS keychain and stored locally.'
           )}
@@ -273,7 +278,7 @@ export function renderMobileTasksLinearConnectDrawer(model: ConnectionPresentati
       )}
       <SettingsSection>
         <ListRow
-          title={translate('tasks.tasksCreateDrawers.linearSettingsLink', 'Open Linear settings')}
+          title={t('tasks.tasksCreateDrawers.linearSettingsLink', 'Open Linear settings')}
           accent
           accessibilityRole="link"
           onPress={() => void openExternalLink('https://linear.app/settings/account/security')}
@@ -287,6 +292,7 @@ export function renderMobileTasksWorkspaceCreateTargetPicker(model: ConnectionPr
   const {
     openWorkspaceCreate,
     repoPickerHandoff,
+    t,
     taskUiReady,
     workspaceRepoOptions,
     workspaceRepoPickerItem,
@@ -295,7 +301,7 @@ export function renderMobileTasksWorkspaceCreateTargetPicker(model: ConnectionPr
   return (
     <PickerModal
       visible={taskUiReady && workspaceRepoPickerItem != null}
-      title={translate('tasks.tasksCreateDrawers.createWorkspaceIn', 'Create Workspace In')}
+      title={t('tasks.tasksCreateDrawers.createWorkspaceIn', 'Create Workspace In')}
       options={workspaceRepoOptions}
       selected={workspaceRepos[0]?.id ?? ''}
       onSelect={(repoId) => {

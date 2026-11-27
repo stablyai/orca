@@ -4405,7 +4405,7 @@
         "99c2755218": "Search issues or enter JQL, e.g. project = ABC",
         "2ff9fd71fd": "Refresh Jira issues",
         "0b65d3fb2c": "Search Linear projects...",
-        "eec0c5c079": "Search Linear issues...",
+        "eec0c5c079": "Search...",
         "8964184a8b": "Refresh Linear",
         "3feb524d42": "New Linear issue",
         "0cbf7e5cf3": "Linear task mode",
@@ -14292,7 +14292,12 @@
             "rollbackStopIncomplete": "Not done: Orca couldn’t confirm the current server exited, so it did not roll back. Check orcad.log in the server’s install folder under ~/.orca-remote on the host before trying again.",
             "failed": "Orca couldn’t finish this on the server. Try again.",
             "defaultServer": "Not done: this server is the default host for new projects. Choose another one under New projects open on before stopping it.",
-            "wslMoveRunning": "Not done: a project is moving onto this server. Orca updates it once the move finishes."
+            "wslMoveRunning": "Not done: a project is moving onto this server. Orca updates it once the move finishes.",
+            "recoveryRequired": "Not done: an interrupted update or stop holds this host. Use Recover or Cancel stop if Orca offers it, then try again.",
+            "snapshotSpace": "Not done: this host has no room for the copy Orca takes before updating. Free space on the host, then try again.",
+            "policyRefused": "Not done: Orca won’t activate this build on this host. Check the host and update again, or update Orca first if a newer Orca last ran it.",
+            "hostNewer": "Not done: a newer Orca last ran this host’s server. Update Orca, then try again.",
+            "preflightFailed": "Not done: the new Orca server failed its startup check on this host, so Orca left the host as it was."
           },
           "reassurance": "Runs on each host, reached over your own SSH connection. Your code and files stay where they are. Only Orca’s list of projects, tabs and terminals moves to the host."
         },
@@ -15905,8 +15910,6 @@
                 "pendingCount_other": "{{count}} pending",
                 "unresolvedCount_one": "{{count}} unresolved",
                 "unresolvedCount_other": "{{count}} unresolved",
-                "sendQueuedCommentsToAi_one": "Send {{count}} queued comment to AI",
-                "sendQueuedCommentsToAi_other": "Send {{count}} queued comments to AI",
                 "conflictsBlockThisMr": "Conflicts block this MR",
                 "conflictsBlockThisPr": "Conflicts block this PR",
                 "copyComment": "Copy comment",
@@ -17947,10 +17950,6 @@
           "39b6b9e4e4": "Committed on Branch"
         },
         "CombinedDiffViewer": {
-          "1da745c551": "Sent",
-          "84898c548d": "Clear",
-          "88b70d0ef5": "Copy",
-          "bb84b4c374": "AI notes",
           "948a5fd6c8": "Clear Notes",
           "0f806a2ab1": "Cancel",
           "b6c3b84476": "Show file tree",
@@ -17960,7 +17959,6 @@
           "820ec01f24": "Conflicted files are reviewed separately",
           "fd8892b120": "No changes to display",
           "eb5f40e49c": "This diff view excludes unresolved conflicts because the normal two-way diff pipeline is not conflict-safe.",
-          "45cf23b418": "Failed to clear notes.",
           "ec5053c7f5": "Side by Side",
           "f786fd54e1": "Inline",
           "ea08dae15b": "Collapse All",
@@ -17975,19 +17973,12 @@
           "noExtension": "(no extension)",
           "diffLoadTimedOut": "Diff did not finish loading.",
           "diffLoadFailed": "Unable to load diff.",
-          "moreNotesInSourceControl_one": "{{count}} more note in Source Control",
-          "moreNotesInSourceControl_other": "{{count}} more notes in Source Control",
-          "clearNotesConfirm_one": "Clear {{count}} note from this worktree?",
-          "clearNotesConfirm_other": "Clear {{count}} notes from this worktree?",
           "changedFilesVs_one": "{{count}} changed file vs {{baseRef}}",
           "changedFilesVs_other": "{{count}} changed files vs {{baseRef}}",
           "changedFilesIn_one": "{{count}} changed file in {{compareRef}}",
           "changedFilesIn_other": "{{count}} changed files in {{compareRef}}",
           "changedFiles_one": "{{count}} changed file",
           "changedFiles_other": "{{count}} changed files",
-          "showAiNotes_one": "Show {{count}} AI note",
-          "showAiNotes_other": "Show {{count}} AI notes",
-          "send": "Send",
           "openDiff": "Open diff",
           "openInEditor": "Open in editor",
           "skippedConflictsExcluded": "{{count}} unresolved conflicts were excluded from this diff view."
@@ -18189,7 +18180,6 @@
           "b1bfc04034": "Selected text",
           "f37b98999e": "This note",
           "2b2b31382c": "Front Matter",
-          "bb629de58a": "Copy notes for agent",
           "322afab6ff": "Review notes",
           "0f9969a159": "Jump to first review note",
           "12052c639c": "Close search",
@@ -18262,7 +18252,6 @@
         },
         "NotesSendMenu": {
           "44dc5e60a6": "Send notes",
-          "433928cd9f": "Send {{value0}} to an agent",
           "thisNote": "This note",
           "noteAlreadySent": "Note already sent",
           "sendNotesToAgent": "Send notes to an agent",
@@ -18351,8 +18340,6 @@
           "3ababd949d": "Review notes"
         },
         "RichMarkdownReviewRailActions": {
-          "636394af72": "Copy notes for agent",
-          "a807596997": "Copied notes",
           "8aaf2c4c69": "Show review notes",
           "af02dc2456": "Hide review notes"
         },
@@ -19232,8 +19219,6 @@
             "b5ba6085de": "Question",
             "143204e423": "Change",
             "b71dc3d930": "Reconnect",
-            "d51ef37351": "Copy",
-            "6f4ab3592b": "Copied",
             "168350ae6a": "Click or hover an element, then press C to copy or S to screenshot.",
             "777b5bc4ec": "Click an element to add feedback for the agent.",
             "b733a91bd9": "Add feedback for the selected element.",
@@ -19272,12 +19257,9 @@
             "devToolsDockBottom": "Dock to bottom",
             "devToolsUndock": "Open in separate window",
             "devToolsClose": "Close DevTools",
-            "499b31b84e": "Copy All",
             "e852e20cea": "Copied — press S to screenshot, or select another element",
             "074f0ed10b": "{{value0}} annotation ready. Select another element or copy all feedback.",
-            "a2164a6e5a": "{{value0}} annotations ready. Select another element or copy all feedback.",
-            "11c5084aa2": "Clear annotations",
-            "734e4343ec": "Clear browser annotations"
+            "a2164a6e5a": "{{value0}} annotations ready. Select another element or copy all feedback."
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "Cancel",
@@ -22724,6 +22706,7 @@
         "readFailed": "Couldn’t load",
         "retry": "Retry",
         "empty": "None set up for this chat",
+        "unreported": "{{agent}} doesn’t report connection status",
         "cancel": "Cancel",
         "reconnect": "Reconnect",
         "toggle": "Use {{name}}",
@@ -24554,6 +24537,26 @@
         "filesStayLine": "Its files stay on {{host}}.",
         "removing": "Removing…"
       }
+    },
+    "notes": {
+      "sendButton": {
+        "sendCommentsToAgent_one": "Send {{count}} comment to an agent",
+        "clearPageNotes_one": "Clear {{count}} note from this page?",
+        "sendShort": "Send {{count}}",
+        "clearNotes": "Clear notes…",
+        "sending": "Sending…",
+        "sendCommentsToAgent_other": "Send {{count}} comments to an agent",
+        "sendNotes_other": "Send {{count}} notes",
+        "sendNotesToAgent_one": "Send {{count}} note to an agent",
+        "sendNotes_one": "Send {{count}} note",
+        "sendComments_other": "Send {{count}} comments",
+        "sendComments_one": "Send {{count}} comment",
+        "copyNotes": "Copy notes",
+        "clearPageNotes_other": "Clear {{count}} notes from this page?",
+        "sendNotesToAgent_other": "Send {{count}} notes to an agent",
+        "sentNotesStillListed": "Notes sent, but they're still in the list.",
+        "removeSentNotes": "Remove"
+      }
     }
   },
   "dashboardPopout": {
@@ -25009,6 +25012,9 @@
         "planModelWithoutThinking": "Model \"{{model}}\" does not support a thinking effort level.",
         "planThinkingLevelInvalid": "Thinking level \"{{level}}\" is not valid for {{model}}.",
         "openCodeInvalidEvents": "OpenCode returned invalid JSON events.",
+        "antigravityInvalidEvents": "Antigravity returned invalid JSON events.",
+        "antigravityInvalidResult": "Antigravity returned an invalid result.",
+        "antigravityNoFinalResult": "Antigravity returned no final result.",
         "kimiUnreadableOutput": "Kimi returned output Orca couldn't read. Try again.",
         "kimiSessionOccupied": "Kimi couldn't use this session because it is active in another client. Stop the session there or exit that client, then try again.",
         "kimiInterrupted": "Kimi was interrupted before it finished generating text. Try again.",
@@ -25778,7 +25784,9 @@
     "failed": "Search failed. Try again.",
     "filters": {
       "toggle": "Toggle search details",
-      "active": "{{count}} active"
+      "active": "{{count}} active",
+      "includeSummary": "Include: {{patterns}}",
+      "excludeSummary": "Exclude: {{patterns}}"
     },
     "noResults": "No results. Try another search or adjust your filters."
   },

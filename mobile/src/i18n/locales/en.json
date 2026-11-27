@@ -174,9 +174,6 @@
       "dictationOffFooter": "Talk instead of typing in chats and terminals.",
       "swipeToDelete": "Swipe a downloaded model left to delete it."
     },
-    "agents": {
-      "permissionOwnAll": "Agents' own settings"
-    },
     "voiceTranscribeOn": {
       "heading": "Transcribe on",
       "automatic": "Automatic",
@@ -1681,7 +1678,9 @@
         "permissionAcceptEditsDescription": "Approves file edits and file commands; asks for the rest",
         "permissionAutoDescription": "Reviews approval requests for you",
         "permissionFullAccessCodexDescription": "Never asks; can edit any file and use the network",
-        "permissionFullAccessDescription": "Never asks before edits or commands"
+        "permissionFullAccessDescription": "Never asks before edits or commands",
+        "permissionAgentSettings": "{{agent}} settings",
+        "permissionFromAgentSettings": "{{mode}}, from {{agent}} settings"
       },
       "goal": {
         "sentAsGoal": "Sent as goal"
@@ -2684,7 +2683,7 @@
       "goal": "Set a goal"
     },
     "nativeChatCliFork": {
-      "resumeInNewCli": "Resume in New CLI"
+      "continueInTerminal": "Continue in terminal"
     },
     "nativeChatRenderData": {
       "notFoundTitle": "Can't find this conversation yet",
@@ -3294,6 +3293,18 @@
       "needsYou": "Needs you",
       "files": "Files",
       "otherWorkspaces": "Other workspaces"
+    },
+    "terminalChatContinuation": {
+      "busy": "Another chat or terminal is opening. Wait, then try again.",
+      "continueInChat": "Continue in chat",
+      "failed": "Couldn't continue in chat. {{detail}}",
+      "failedAfterClose": "Couldn't continue in chat. {{detail}} The conversation is in Agent History.",
+      "otherJob": "{{process}} is running in this terminal. Quit it, then continue in chat.",
+      "terminalChanged": "This terminal changed while Orca checked it. Try again.",
+      "tryAgain": "Try again.",
+      "unavailable": "{{agent}} chats aren't available on this computer.",
+      "uncheckable": "Orca couldn't check what's running in this terminal. Try again.",
+      "unconfirmed": "Orca couldn't confirm the chat opened. Check your tabs before trying again."
     }
   },
   "chat": {
@@ -3875,7 +3886,7 @@
         "waitingForSignIn": "Waiting for sign-in…",
         "tools_one": "{{count}} tool",
         "tools_other": "{{count}} tools",
-        "off": "Off",
+        "disabled": "Disabled",
         "notStarted": "Not started"
       },
       "title": "MCP servers",
@@ -3884,6 +3895,7 @@
       "readFailed": "Couldn't load MCP servers.",
       "retry": "Retry",
       "empty": "No MCP servers are set up for this chat.",
+      "unreported": "{{agent}} doesn't report connection status.",
       "signIn": "Sign in",
       "reconnect": "Reconnect",
       "toggleLabel": "Use {{name}}",
@@ -4659,6 +4671,9 @@
     },
     "textGenerationFailure": {
       "openCodeInvalidEvents": "OpenCode returned invalid JSON events.",
+      "antigravityInvalidEvents": "Antigravity returned invalid JSON events.",
+      "antigravityInvalidResult": "Antigravity returned an invalid result.",
+      "antigravityNoFinalResult": "Antigravity returned no final result.",
       "kimiUnreadableOutput": "Kimi returned output Orca couldn't read. Try again.",
       "kimiSessionOccupied": "Kimi couldn't use this session because it is active in another client. Stop the session there or exit that client, then try again.",
       "kimiInterrupted": "Kimi was interrupted before it finished generating text. Try again.",

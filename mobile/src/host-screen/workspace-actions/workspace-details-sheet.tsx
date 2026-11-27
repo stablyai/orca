@@ -8,9 +8,9 @@ import {
   SquareTerminal,
   StickyNote
 } from 'lucide-react-native'
-import { colors, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { prStateColor } from '../../worktree/row-presentation/WorktreeMetaGlyphs'
 import { PrStateIcon } from '../../source-control/review/status/PrStateIcon'
 import {
@@ -61,8 +61,9 @@ function checkLabels(t: Translate): Record<string, string> {
 }
 
 export function WorkspaceDetailsSheet(props: { row: Worktree; onOpenLink: (url: string) => void }) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
-  useMobileColorScheme()
   const { row, onOpenLink } = props
   const origin = buildWorkspaceOrigin(row)
   const OriginIcon = origin?.kind === 'automation' ? CalendarClock : SquareTerminal
@@ -118,9 +119,9 @@ function originLabel(origin: WorkspaceOrigin, t: Translate): string {
 }
 
 function ReviewIcon({ item }: { item: WorkspaceDetailLink }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   const state = item.state ?? ''
-  const color = prStateColor(state)
+  const color = prStateColor(state, colors)
   // GitLab draws every open MR with the merge glyph.
   if (item.type === 'mr' && state !== 'closed' && state !== 'draft') {
     return <GitMerge size={ICON_SIZE} color={color} />
@@ -129,7 +130,7 @@ function ReviewIcon({ item }: { item: WorkspaceDetailLink }) {
 }
 
 function LinkIcon({ item }: { item: WorkspaceDetailLink }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   if (item.type !== 'issue') {
     return <ReviewIcon item={item} />
   }
@@ -154,8 +155,8 @@ function linkMeta(item: WorkspaceDetailLink, t: Translate): string {
 }
 
 function LinkRow({ item, onOpen }: { item: WorkspaceDetailLink; onOpen: (url: string) => void }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
-  useMobileColorScheme()
   const url = item.url
   const meta = linkMeta(item, t)
   return (
@@ -182,7 +183,7 @@ function LinkRow({ item, onOpen }: { item: WorkspaceDetailLink; onOpen: (url: st
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   group: {
     marginBottom: spacing.md
   },

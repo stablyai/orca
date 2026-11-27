@@ -1,8 +1,8 @@
 import { Platform, StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 
-export const mobileDiffReviewLayoutStyles = themedStyleSheet(() => ({
+export const mobileDiffReviewLayoutStylesSheet = themedStyleSheet((colors) => ({
   screen: { flex: 1 },
   safeArea: {
     flex: 1,

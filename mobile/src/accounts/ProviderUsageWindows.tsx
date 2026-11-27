@@ -11,7 +11,7 @@ import type { ProviderRateLimits } from './accounts-snapshot'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 
 const SESSION_WINDOW_MINUTES = 300
 const EMPTY_SECTIONS: UsageWindowSection[] = [
@@ -60,6 +60,7 @@ export function ProviderUsageWindows({
   /** Account rows keep empty session/weekly bars so a not-yet-read account still shows its windows. */
   showEmptyWindows?: boolean
 }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const sections = (limits ? getUsageWindowSections(limits) : EMPTY_SECTIONS).filter(
     (section) => showEmptyWindows || section.window !== null
@@ -91,7 +92,7 @@ export function ProviderUsageWindows({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   windows: {
     flexDirection: 'row',
     flexWrap: 'wrap',

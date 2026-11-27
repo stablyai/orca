@@ -5,9 +5,9 @@ import { Plus } from 'lucide-react-native'
 import { StatusDot } from '../../components/feedback/StatusDot'
 import { useNow } from '../../hooks/use-now'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { colors, feedback, getMobileColorScheme, radii, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { feedback, radii, spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import type { MobileSessionController } from '../use-mobile-session-controller'
 import type { MobileSessionTabSummary } from './mobile-session-tab-rows'
 import { MobileSessionOtherWorkspaces } from './MobileSessionOtherWorkspaces'
@@ -42,7 +42,8 @@ export function MobileSessionSidebar({
   place: string
   connectionIssue: boolean
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const insets = useSafeAreaInsets()
   const tabs = useTabSummaries(summaries)
@@ -150,10 +151,10 @@ export function MobileSessionSidebar({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors, scheme) => ({
   panel: {
     flex: 1,
-    backgroundColor: getMobileColorScheme() === 'dark' ? colors.bgPanel : colors.bgRaised
+    backgroundColor: scheme === 'dark' ? colors.bgPanel : colors.bgRaised
   },
   // Row fills run 8 pt in from the panel's left and 4 from its right, so marks sit 20 pt in.
   content: { paddingLeft: spacing.sm, paddingRight: spacing.xs },

@@ -3646,7 +3646,7 @@
         "99c2755218": "搜索议题或输入 JQL，例如 project = ABC",
         "2ff9fd71fd": "刷新 Jira 议题",
         "0b65d3fb2c": "搜索 Linear 项目...",
-        "eec0c5c079": "搜索 Linear 议题...",
+        "eec0c5c079": "搜索...",
         "8964184a8b": "刷新 Linear",
         "3feb524d42": "新建 Linear 议题",
         "0cbf7e5cf3": "Linear 任务模式",
@@ -12707,7 +12707,12 @@
             "terminalRun": "在终端中运行命令（包括 SSH）",
             "terminalRead": "读取终端的输出（包括 SSH）",
             "workspaceWrite": "打开你的工作区和文件，并运行内置命令",
-            "agentLaunch": "在你的工作区中启动智能体（包括 SSH）"
+            "agentLaunch": "在你的工作区中启动智能体（包括 SSH）",
+            "appearanceWrite": "发布并选择桌面应用、编辑器和终端的颜色",
+            "workspaceCreate": "在你的本地和 SSH 项目中创建工作区（新的 Git 分支和工作树）；项目的设置脚本会按该项目的设置运行",
+            "automationRead": "读取你的自动化：名称、提示词、智能体、项目、工作区和计划",
+            "automationWrite": "创建按计划在你的项目中启动智能体的自动化（即使插件未运行也会按时启动），并更改或删除你的自动化（更改或删除不是该插件创建的自动化前，以及更改带有额外智能体设置的自动化所运行的内容前，Orca 都会先询问你）",
+            "historyRead": "读取这台电脑上你过往的智能体会话列表，来源是 Orca 支持的编码智能体的历史文件，在 Windows 上还包括正在运行的 WSL 发行版中的这些文件（不包括 SSH 或其他机器、Antigravity IDE 对话或子智能体对话记录）：每个会话的标题（通常是第一条消息的开头）、智能体、工作区、分支、时间，以及消息数和 Token 数；绝不读取对话本身"
           },
           "decisionFailed": "无法保存权限决定，请重试",
           "fullAccessWarning": "完全访问：作为普通程序运行，可以读取你的文件、使用你已保存的登录信息和 SSH 密钥、使用网络、运行其他程序，并控制 Orca（包括你的终端和智能体）",
@@ -13534,7 +13539,12 @@
             "rollbackStopIncomplete": "未完成：Orca 无法确认当前服务器已退出，因此未回滚，请先查看主机上 ~/.orca-remote 中服务器安装文件夹内的 orcad.log 再重试",
             "failed": "Orca 无法在服务器上完成此操作，请重试",
             "defaultServer": "未执行：此服务器是新项目的默认主机，停止前请在“新项目打开位置”中选择其他主机",
-            "wslMoveRunning": "未完成：有项目正在移到此服务器上。移动完成后，Orca 会更新它"
+            "wslMoveRunning": "未完成：有项目正在移到此服务器上。移动完成后，Orca 会更新它",
+            "recoveryRequired": "未完成：中断的更新或停止操作正占用此主机，如果 Orca 提供“恢复”或“取消停止”，请使用后重试",
+            "snapshotSpace": "未完成：此主机没有足够空间存放 Orca 在更新前创建的副本，请释放主机空间后重试",
+            "policyRefused": "未完成：Orca 不会在此主机上激活此构建版本，请检查主机后重新更新；如果上次运行它的是较新的 Orca 版本，请先更新 Orca",
+            "hostNewer": "未完成：上次运行此主机服务器的是较新的 Orca 版本，请更新 Orca 后重试",
+            "preflightFailed": "未完成：新的 Orca 服务器未通过此主机上的启动检查，因此 Orca 未改动此主机"
           },
           "reassurance": "在各个主机上运行，通过你自己的 SSH 连接访问，你的代码和文件留在原处，只有 Orca 的项目、标签页和终端列表会移到该主机"
         },
@@ -15010,7 +15020,6 @@
                 "failingCount_other": "{{count}} 个失败",
                 "pendingCount_other": "{{count}} 个等待中",
                 "unresolvedCount_other": "{{count}} 个未解决",
-                "sendQueuedCommentsToAi_other": "发送 {{count}} 条排队评论给 AI",
                 "conflictsBlockThisMr": "冲突阻止了此 MR",
                 "conflictsBlockThisPr": "冲突阻止了此 PR",
                 "copyComment": "复制评论",
@@ -17032,10 +17041,6 @@
           "39b6b9e4e4": "已提交到分支"
         },
         "CombinedDiffViewer": {
-          "1da745c551": "发送",
-          "84898c548d": "清除",
-          "88b70d0ef5": "复制",
-          "bb84b4c374": "AI 笔记",
           "948a5fd6c8": "清除笔记",
           "0f806a2ab1": "取消",
           "b6c3b84476": "显示文件树",
@@ -17045,7 +17050,6 @@
           "820ec01f24": "冲突文件单独评审",
           "fd8892b120": "没有显示任何变化",
           "eb5f40e49c": "此差异视图排除了未解决的冲突，因为普通的双向差异管道不是冲突安全的",
-          "45cf23b418": "无法清除笔记",
           "ec5053c7f5": "并排",
           "f786fd54e1": "内联",
           "ea08dae15b": "全部折叠",
@@ -17060,13 +17064,9 @@
           "noExtension": "（无扩展名）",
           "diffLoadTimedOut": "差异加载未完成",
           "diffLoadFailed": "无法加载差异",
-          "moreNotesInSourceControl_other": "源代码控制中还有 {{count}} 条笔记",
-          "clearNotesConfirm_other": "清除此工作树中的 {{count}} 条笔记？",
           "changedFilesVs_other": "相比 {{baseRef}}，有 {{count}} 个文件更改",
           "changedFilesIn_other": "{{compareRef}} 中有 {{count}} 个已更改文件",
           "changedFiles_other": "{{count}} 个已更改文件",
-          "showAiNotes_other": "显示 {{count}} 条 AI 笔记",
-          "send": "发送",
           "openDiff": "打开差异",
           "openInEditor": "在编辑器中打开",
           "skippedConflictsExcluded": "{{count}} 个未解决的冲突已被排除在此差异视图之外"
@@ -17262,7 +17262,6 @@
           "b1bfc04034": "选定的文本",
           "f37b98999e": "此注",
           "2b2b31382c": "前言",
-          "bb629de58a": "复制备注给代理",
           "322afab6ff": "复习笔记",
           "0f9969a159": "跳转到第一个评论笔记",
           "12052c639c": "关闭搜索",
@@ -17335,7 +17334,6 @@
         },
         "NotesSendMenu": {
           "44dc5e60a6": "发送笔记",
-          "433928cd9f": "将 {{value0}} 发送给代理",
           "thisNote": "这条笔记",
           "noteAlreadySent": "笔记已发送",
           "sendNotesToAgent": "将笔记发送给智能体",
@@ -17421,8 +17419,6 @@
           "3ababd949d": "复习笔记"
         },
         "RichMarkdownReviewRailActions": {
-          "636394af72": "复制备注给代理",
-          "a807596997": "复制笔记",
           "8aaf2c4c69": "显示评论笔记",
           "af02dc2456": "隐藏评论注释"
         },
@@ -18300,8 +18296,6 @@
             "b472c5fe03": "添加浏览器注释",
             "b5ba6085de": "疑问",
             "143204e423": "改变",
-            "d51ef37351": "复制",
-            "6f4ab3592b": "已复制",
             "168350ae6a": "单击或悬停一个元素，然后按 C 进行复制或按 S 进行屏幕截图",
             "777b5bc4ec": "单击一个元素可为代理添加反馈",
             "b733a91bd9": "为所选元素添加反馈",
@@ -18341,12 +18335,9 @@
             "devToolsDockBottom": "停靠到底部",
             "devToolsUndock": "在单独窗口中打开",
             "devToolsClose": "关闭 DevTools",
-            "499b31b84e": "全部复制",
             "e852e20cea": "已复制 — 按 S 进行屏幕截图，或选择另一个元素",
             "074f0ed10b": "{{value0}} 条注释已准备好，请选择另一个元素或复制所有反馈",
-            "a2164a6e5a": "{{value0}} 条注释已准备好，请选择另一个元素或复制所有反馈",
-            "11c5084aa2": "清晰的注释",
-            "734e4343ec": "清除浏览器注释"
+            "a2164a6e5a": "{{value0}} 条注释已准备好，请选择另一个元素或复制所有反馈"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "取消",
@@ -23512,6 +23503,21 @@
         "finish": "完成",
         "pasteLanded": "登录后，请粘贴最终跳转到的页面地址"
       }
+    },
+    "notes": {
+      "sendButton": {
+        "sending": "正在发送…",
+        "sendShort": "发送 {{count}} 条",
+        "clearNotes": "清除备注…",
+        "sendCommentsToAgent_other": "将 {{count}} 条评论发送给智能体",
+        "sendNotes_other": "发送 {{count}} 条备注",
+        "sendComments_other": "发送 {{count}} 条评论",
+        "clearPageNotes_other": "清除此页面中的 {{count}} 条备注？",
+        "copyNotes": "复制备注",
+        "sendNotesToAgent_other": "将 {{count}} 条备注发送给智能体",
+        "sentNotesStillListed": "备注已发送，但仍在列表中。",
+        "removeSentNotes": "移除"
+      }
     }
   },
   "dashboardPopout": {
@@ -24638,6 +24644,9 @@
         "planModelWithoutThinking": "模型“{{model}}”不支持思考强度设置",
         "planThinkingLevelInvalid": "思考级别“{{level}}”对 {{model}} 无效",
         "openCodeInvalidEvents": "OpenCode 返回了无效的 JSON 事件",
+        "antigravityInvalidEvents": "Antigravity 返回了无效的 JSON 事件",
+        "antigravityInvalidResult": "Antigravity 返回了无效的结果",
+        "antigravityNoFinalResult": "Antigravity 未返回最终结果",
         "kimiUnreadableOutput": "Kimi 返回了 Orca 无法读取的输出。请重试",
         "kimiSessionOccupied": "Kimi 无法使用此会话，因为它在另一个客户端中处于活动状态。请在该客户端中停止会话或退出该客户端，然后重试",
         "kimiInterrupted": "Kimi 在完成文本生成前被中断。请重试",
@@ -25361,7 +25370,9 @@
     "failed": "搜索失败，再试一次",
     "filters": {
       "toggle": "切换搜索详情",
-      "active": "{{count}} 个已启用"
+      "active": "{{count}} 个已启用",
+      "includeSummary": "包含：{{patterns}}",
+      "excludeSummary": "排除：{{patterns}}"
     },
     "noResults": "没有结果。请尝试其他搜索或调整筛选条件"
   },

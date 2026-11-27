@@ -2,27 +2,31 @@ import type { DiffCommentOwner } from '@/store/slices/diff-comments/diff-comment
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 
-/** A clear confirmation on the copy shown when it opened; `count` stands in once that copy is gone. */
+/** A clear confirmation for the exact notes listed when it opened; notes added later stay. */
 export type PendingDiffCommentsClear =
-  | { kind: 'all'; worktreeId: string; owner: DiffCommentOwner; count: number }
-  | { kind: 'file'; worktreeId: string; owner: DiffCommentOwner; filePath: string; count: number }
+  | { kind: 'all'; worktreeId: string; owner: DiffCommentOwner; ids: readonly string[] }
+  | {
+      kind: 'file'
+      worktreeId: string
+      owner: DiffCommentOwner
+      filePath: string
+      ids: readonly string[]
+    }
 
-type DiffCommentWithPath = {
-  filePath: string
-}
-
+/** How many captured notes still exist; `comments` is null once that copy is gone, which keeps the count. */
 export function countPendingDiffCommentsClear(
   pending: PendingDiffCommentsClear | null,
   activeWorktreeId: string | null | undefined,
-  comments: readonly DiffCommentWithPath[]
+  comments: readonly { id: string }[] | null
 ): number {
   if (!pending || pending.worktreeId !== activeWorktreeId) {
     return 0
   }
-  if (pending.kind === 'all') {
-    return comments.length
+  if (!comments) {
+    return pending.ids.length
   }
-  return comments.filter((comment) => comment.filePath === pending.filePath).length
+  const present = new Set(comments.map((comment) => comment.id))
+  return pending.ids.filter((id) => present.has(id)).length
 }
 
 export function resolvePendingDiffCommentsClear(args: {
@@ -43,12 +47,12 @@ export function resolvePendingDiffCommentsClear(args: {
 
 export function formatPendingDiffCommentsClearDescription(
   pending: PendingDiffCommentsClear | null,
-  count: number,
   t: Translate = translate
 ): string {
   if (!pending) {
     return ''
   }
+  const count = pending.ids.length
   if (pending.kind === 'all') {
     return t(
       'auto.components.right.sidebar.SourceControl.clearNotesFromWorkspace',

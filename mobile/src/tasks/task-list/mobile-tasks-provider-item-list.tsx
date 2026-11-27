@@ -1,7 +1,6 @@
 import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tasks-connection-presentation'
-import { translate } from '../../i18n/mobile-i18n'
 import { View, ActivityIndicator, FlatList } from 'react-native'
-import { colors, spacing, type MobileColorScheme } from '../../theme/mobile-theme'
+import { spacing, type MobileColorScheme } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { openExternalLink } from '../../platform/external-links/external-link'
 import { SectionHeader } from '../../components/list/ListGroup'
@@ -11,28 +10,29 @@ import type { TaskListEntry } from '../mobile-tasks-project-workspace-types'
 
 // Names what the list holds, since the controls that chose it sit in the filter sheet.
 function listHeading(model: ConnectionPresentationModel): string {
+  const { t } = model
   if (model.hasSearch) {
-    return translate('tasks.providerItemList.results', 'Results')
+    return t('tasks.providerItemList.results', 'Results')
   }
   if (model.provider === 'github') {
     switch (model.githubPreset) {
       case 'my-issues':
-        return translate('tasks.providerItemList.assignedToYou', 'Assigned to you')
+        return t('tasks.providerItemList.assignedToYou', 'Assigned to you')
       case 'prs':
-        return translate('tasks.providerItemList.openPullRequests', 'Open pull requests')
+        return t('tasks.providerItemList.openPullRequests', 'Open pull requests')
       case 'my-prs':
-        return translate('tasks.providerItemList.yourPullRequests', 'Your pull requests')
+        return t('tasks.providerItemList.yourPullRequests', 'Your pull requests')
       case 'review':
-        return translate('tasks.providerItemList.needsYourReview', 'Needs your review')
+        return t('tasks.providerItemList.needsYourReview', 'Needs your review')
       case 'issues':
-        return translate('tasks.providerItemList.openIssues', 'Open issues')
+        return t('tasks.providerItemList.openIssues', 'Open issues')
     }
   }
   if (model.provider === 'jira') {
     return model.jiraFilterLabel
   }
   return model.gitlabView === 'todos'
-    ? translate('tasks.providerItemList.todos', 'To-dos')
+    ? t('tasks.providerItemList.todos', 'To-dos')
     : model.gitlabFilterLabel
 }
 
@@ -46,6 +46,7 @@ export function renderMobileTasksProviderItemList(
   bottomBarHeight: number
 ) {
   const {
+    colors,
     displayedEntries,
     githubCanLoadUncountedNextPage,
     githubCanShowPagination,
@@ -61,6 +62,7 @@ export function renderMobileTasksProviderItemList(
     sortedItems,
     taskUiReady
   } = model
+  const styles = stylesSheet.resolve(colorScheme)
   // The last list, kept before Tasks is ready, is read-only.
   const setActionItem = taskUiReady ? model.setActionItem : ignoreKeptRowPress
   const listState = renderMobileTasksListState(model, sortedItems.length, bottomBarHeight)
@@ -132,7 +134,7 @@ export function renderMobileTasksProviderItemList(
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   heading: { marginHorizontal: spacing.lg },
   footer: { paddingVertical: spacing.lg, alignItems: 'center' }
 }))

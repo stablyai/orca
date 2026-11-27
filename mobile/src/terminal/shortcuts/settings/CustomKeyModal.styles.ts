@@ -1,7 +1,7 @@
-import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 
-export const customKeyModalStyles = themedStyleSheet(() => ({
+export const customKeyModalStylesSheet = themedStyleSheet((colors) => ({
   kinds: {
     marginTop: spacing.xs,
     marginBottom: spacing.md

@@ -1,9 +1,8 @@
 import { Text, View } from 'react-native'
 import { CircleAlert, FolderTree, KeyRound, WifiOff } from 'lucide-react-native'
 import { MobileNoMatchState, MobileStateView } from '../../components/feedback/MobileStateView'
-import { colors, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import {
   isConnectionOutage,
   verdictDisplayLabel
@@ -72,7 +71,7 @@ export function HostWorkspaceListStates(
     return (
       <MobileStateView
         icon={WifiOff}
-        title={verdictDisplayLabel(connectionVerdict)}
+        title={verdictDisplayLabel(connectionVerdict, t)}
         message={
           (isConnectionOutage(connectionVerdict) ? connectionVerdict.detail : undefined) ??
           t(
@@ -147,7 +146,7 @@ export function HostWorkspaceListStates(
 /** A list this page cannot build; shown above the rows it already holds, so it never blanks. */
 export function HostWorkspaceListReopen({ aboveRows }: { aboveRows: boolean }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View style={aboveRows ? styles.aboveRows : styles.centered}>
       <Text style={styles.emptyText}>
@@ -163,7 +162,7 @@ export function HostWorkspaceListReopen({ aboveRows }: { aboveRows: boolean }) {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   centered: {
     flex: 1,
     alignItems: 'center',

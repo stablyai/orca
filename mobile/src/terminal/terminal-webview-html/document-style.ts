@@ -1,9 +1,9 @@
-import { colors, paletteForScheme, radii, spacing, typography } from '../../theme/mobile-theme'
+import { paletteForScheme, radii, spacing, typography } from '../../theme/mobile-theme'
 
 // Only native WebViews own document roots; injecting these rules on the page would restyle the app beyond terminal unmount.
 export const TERMINAL_DOCUMENT_ROOT_STYLE = `  * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
-    background: ${colors.terminalBg};
+    background: ${paletteForScheme('dark').terminalBg};
     overflow: hidden;
     width: 100%;
     height: 100%;

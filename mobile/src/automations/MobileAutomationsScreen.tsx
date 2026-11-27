@@ -1,5 +1,4 @@
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useRef, useState } from 'react'
 import { useLocalSearchParams } from 'expo-router'
 import { View } from 'react-native'
@@ -19,11 +18,12 @@ import { useBottomDrawerFollowUp } from '../components/bottom-drawer/use-bottom-
 import { useReachableServerClients } from '../worktree/execution-hosts/use-reachable-server-clients'
 import { AutomationManager } from './AutomationManager'
 import { leaveThrough, type AutomationLeaveGuard } from './AutomationEditorNavigation'
-import { automationStyles as styles } from './automation-styles'
+import { automationStylesSheet } from './automation-styles'
+import { useThemedStyles } from '../theme/themed-styles'
 
 export function MobileAutomationsScreen() {
+  const styles = useThemedStyles(automationStylesSheet)
   const t = useMobileTranslation()
-  useMobileColorScheme()
   const params = useLocalSearchParams<{
     hostId?: string | string[]
     new?: string | string[]

@@ -3,7 +3,7 @@ import { CircleAlert, SquareTerminal } from 'lucide-react-native'
 import { MobileOfflineState, MobileStateView } from '../components/feedback/MobileStateView'
 import { describeLoadError } from '../components/feedback/load-error-description'
 import { formatOfflineAsOfTime } from '../components/host-connection/offline-as-of-time'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { useMobileTranslation, useMobileUiLocale } from '../i18n/use-mobile-translation'
 import type { ConnectionState } from '../transport/connection/connection-state'
 import { useLastSessionTabsAt } from './tabs/mobile-session-last-tabs'
 
@@ -112,6 +112,7 @@ function OfflineUnderLastTabs({
   onReconnect: (() => void) | null
 }) {
   const t = useMobileTranslation()
+  const locale = useMobileUiLocale()
   const asOf = useLastSessionTabsAt(lastTabs.hostId, lastTabs.worktreeId)
   return (
     <MobileOfflineState
@@ -120,7 +121,7 @@ function OfflineUnderLastTabs({
         asOf === null
           ? undefined
           : t('session.contentState.tabsAsOf', 'Tabs as of {{time}}', {
-              time: formatOfflineAsOfTime(asOf)
+              time: formatOfflineAsOfTime(asOf, t, locale)
             })
       }
       onReconnect={onReconnect}

@@ -3,11 +3,14 @@ import { View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MobileRichMarkdownEditor } from '../../components/rich-markdown/MobileRichMarkdownEditor'
 import { markdownReaderStatusText } from './mobile-markdown-reader-status'
-import { colors } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import type { MobilePalette } from '../../theme/mobile-theme'
+import { useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
+import { intlLocaleFor } from '../../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../../i18n/use-mobile-translation'
 import type { Translate } from '../../i18n/mobile-i18n'
-import { styles } from '../../session/mobile-session-styles'
+import type { SupportedUiLocale } from '../../../../src/shared/i18n/ui-locale'
+import { stylesSheet } from '../../session/mobile-session-styles'
 import type { MarkdownDocState } from './session-document-state'
 import { MobileLoadErrorState, MobileStateView } from '../../components/feedback/MobileStateView'
 import { Presence } from '../../components/motion/AutoHeight'
@@ -45,8 +48,11 @@ export function MarkdownReader({
   /** The session's keyboard lift, which leaves out the safe area under the content. */
   keyboardLift: number
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
+  const locale = useMobileUiLocale()
+  const intlLocale = intlLocaleFor(locale)
   const insets = useSafeAreaInsets()
   const [editing, setEditing] = useState(false)
   const ready = doc?.status === 'ready' ? doc : null
@@ -67,12 +73,12 @@ export function MarkdownReader({
   }
 
   const bar = editDraft.offer
-    ? offerBar(editDraft.offer, t, {
+    ? offerBar(editDraft.offer, t, intlLocale, colors, {
         onDiscard: editDraft.discardOffer,
         onRestore: editDraft.restore,
         onCopy: () => onCopy(editDraft.offer?.content ?? '')
       })
-    : noteBar(doc, t, { onSave, onDiscard, onRefresh })
+    : noteBar(doc, t, locale, colors, { onSave, onDiscard, onRefresh })
 
   return (
     <View style={styles.markdownEditor}>
@@ -94,9 +100,11 @@ export function MarkdownReader({
 function noteBar(
   doc: ReadyMarkdownDoc,
   t: Translate,
+  locale: SupportedUiLocale,
+  colors: MobilePalette,
   actions: { onSave: () => void; onDiscard: () => void; onRefresh: () => void }
 ): MobileMarkdownNoteBarProps | null {
-  const status = markdownReaderStatusText(doc)
+  const status = markdownReaderStatusText(doc, t, locale)
   const reason = status
     ? { text: status, color: doc.saveError ? colors.statusRed : undefined }
     : undefined
@@ -135,11 +143,13 @@ function noteBar(
 function offerBar(
   offer: DocumentEditDraftOffer,
   t: Translate,
+  intlLocale: string,
+  colors: MobilePalette,
   actions: { onDiscard: () => void; onRestore: () => void; onCopy: () => void }
 ): MobileMarkdownNoteBarProps {
   return {
     reason: {
-      text: documentEditDraftOfferText(offer, t),
+      text: documentEditDraftOfferText(offer, t, intlLocale),
       color: offer.baseMatches ? undefined : colors.statusAmber
     },
     quiet: { label: t('files.unsavedEditsOffer.discard', 'Discard'), onPress: actions.onDiscard },

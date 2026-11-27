@@ -9,9 +9,9 @@ import {
 import { MobileNativeChatDiffCard } from './MobileNativeChatDiffCard'
 import { useMobileNativeChatDisclosure } from '../viewport/mobile-native-chat-disclosure-store'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
-import { colors, pressedStyle, spacing } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
+import { pressedStyle, spacing } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 import { TOOL_ROW_HEIGHT, toolType } from './mobile-native-chat-tool-styles'
 import { nativeChatEditFileBaseName } from '../../../../../../src/shared/native-chat/tools/native-chat-edit-model'
 
@@ -22,6 +22,8 @@ function FileRow({
   file: NativeChatTurnDiffFile
   fontScale: number
 }): React.JSX.Element {
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const [open, setOpen] = useMobileNativeChatDisclosure(
     `turn-diff:${file.edits[0]?.target.messageId}:${file.path}`,
     false
@@ -79,7 +81,8 @@ export function MobileNativeChatTurnDiffRollup({
   diff: NativeChatTurnDiff
   fontScale: number
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const turnKey = diff.files[0]?.edits[0]?.target.messageId
   const [open, setOpen] = useMobileNativeChatDisclosure(`turn-diff-open:${turnKey}`, false)
@@ -136,7 +139,7 @@ export function MobileNativeChatTurnDiffRollup({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   rollup: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,

@@ -1,6 +1,5 @@
 import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tasks-connection-presentation'
-import { translate } from '../../i18n/mobile-i18n'
-import { colors, type MobileColorScheme } from '../../theme/mobile-theme'
+import type { MobileColorScheme } from '../../theme/mobile-theme'
 import { TaskProviderLogo } from '../../components/icons/TaskProviderLogo'
 import { renderMobileTasksGitHubProjectList } from '../project-board/mobile-tasks-github-project-list'
 import { renderMobileTasksLinearList } from '../providers/linear/mobile-tasks-linear-list'
@@ -14,6 +13,7 @@ export function renderMobileTasksListSurface(
   colorScheme: MobileColorScheme,
   bottomBarHeight: number
 ) {
+  const { t, colors } = model
   const {
     githubMode,
     linearConnected,
@@ -46,7 +46,7 @@ export function renderMobileTasksListSurface(
           setError(
             err instanceof Error
               ? err.message
-              : translate('tasks.listSurface.jiraStatusFailed', 'Failed to read Jira status')
+              : t('tasks.listSurface.jiraStatusFailed', 'Failed to read Jira status')
           )
         })
       }}
@@ -54,15 +54,15 @@ export function renderMobileTasksListSurface(
   ) : provider === 'linear' && !linearConnected ? (
     <MobileStateView
       iconElement={<TaskProviderLogo provider="linear" size={24} color={colors.textMuted} />}
-      title={translate('tasks.listSurface.connectLinearTitle', 'Connect your Linear account')}
-      message={translate(
+      title={t('tasks.listSurface.connectLinearTitle', 'Connect your Linear account')}
+      message={t(
         'tasks.listSurface.connectLinearMessage',
         'Browse and start work on your assigned Linear issues directly from Tasks.'
       )}
       action={
         taskUiReady
           ? {
-              label: translate('tasks.listSurface.connectLinearButton', 'Connect Linear'),
+              label: t('tasks.listSurface.connectLinearButton', 'Connect Linear'),
               onPress: () => {
                 setLinearApiKeyDraft('')
                 setLinearConnectState('idle')

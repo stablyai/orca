@@ -6,12 +6,13 @@ import { CircleCheck } from 'lucide-react-native'
 import { LIST_ROW_PADDING } from '../../components/list/ListGroup'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { PhoneBot } from '../host-bots-operations'
-import { colors, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 export function MobileBotItemsAllClear() {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   return (
     <View style={styles.row}>
@@ -26,7 +27,7 @@ export function MobileBotGroupItemsAllClear({ members }: { members: readonly Pho
   return members.every((bot) => bot.paused) ? null : <MobileBotItemsAllClear />
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   row: {
     minHeight: 48,
     flexDirection: 'row',

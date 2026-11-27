@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { evaluate, type WakeAlertsEnv } from '../src/alerts'
 
-const healthy = { socket_open: 400, refuse_401: 3, refuse_country: 0, keys_unavailable: 0, admin_failures: 0, wakes: 1000, wake_no_socket: 10, wake_error: 0, events: 3000, reconnects: 380, reconnects_late: 5, drops: 60, replaced: 50 }
+const healthy = { socket_open: 400, refuse_401: 3, refuse_country: 0, keys_unavailable: 0, object_unavailable: 0, admin_failures: 0, wakes: 1000, wake_no_socket: 10, wake_error: 0, events: 3000, reconnects: 380, reconnects_late: 5, drops: 60, replaced: 50 }
 type Row = typeof healthy
 const env: WakeAlertsEnv = {
   ACCOUNT_ID: 'acct',
@@ -105,6 +105,12 @@ describe('wake alerts', () => {
   it('fires on failed wakes, which Cloudflare error counts never see', async () => {
     expect((await run({ wake_error: 2 })).fired).toEqual([])
     expect((await run({ wake_error: 3 })).fired).toEqual(['FIRING wake-errors: 3 wakes failed in 15 min, of 1000 wakes'])
+  })
+
+  it('fires on failed object forwards above the cloudflare-errors floor and share', async () => {
+    expect((await run({ object_unavailable: 3 })).fired).toEqual([])
+    expect((await run({ socket_open: 4000, object_unavailable: 30 })).fired).toEqual([])
+    expect((await run({ object_unavailable: 30 })).fired).toEqual(['FIRING object-unavailable: upgrades whose object forward failed 30 = 6.9% of 433 upgrades in 15 min'])
   })
 
   it('fires on a reconnect surge, admin failures, and silence after traffic', async () => {

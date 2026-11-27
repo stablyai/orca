@@ -3,11 +3,12 @@ import { Animated, Easing, Platform, Pressable, View } from 'react-native'
 import { ArrowDown } from 'lucide-react-native'
 import { SHEET_CURVE } from '../../../components/motion/sheet-motion-values'
 import { useReducedMotionEnabled } from '../../../platform/accessibility/use-reduced-motion'
-import { colors, feedback } from '../../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
-import { styles } from '../mobile-native-chat-view-styles'
+import { feedback } from '../../../theme/mobile-theme'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
+import { stylesSheet } from '../mobile-native-chat-view-styles'
 import { MobileEdgeFade } from '../../../components/list/MobileEdgeFade'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
+import { useThemedStyles } from '../../../theme/themed-styles'
 
 const JUMP_EASING = Easing.bezier(...SHEET_CURVE)
 
@@ -22,7 +23,8 @@ export function MobileNativeChatFloatingControls({
   /** A chat on the chat canvas; bot screens on other grounds draw none. */
   canvasFades?: boolean
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const reducedMotion = useReducedMotionEnabled() === true
   const shown = useRef(new Animated.Value(showJumpToTail ? 1 : 0)).current
