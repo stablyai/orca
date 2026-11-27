@@ -24,11 +24,11 @@ import {
 } from '../process/acp-agent-connection'
 import { acpClientInfo } from '../launch/acp-client-info'
 import { acpRunFolder } from '../launch/acp-private-temp'
-import { prepareAcpListingAccount } from './acp-listing-account'
-import { enterAcpListingGate } from './acp-listing-launch-gate'
+import { enterAcpListingAccount } from './acp-listing-account'
 import { acpListingSessionDiscard } from './acp-listing-session-discard'
 import { supportsAcpStructuredLocation } from '../session/acp-structured-location-support'
 import { checkAcpLaunchVersion } from '../launch/acp-launch-version'
+import { acpChatHomeNow } from '../launch/acp-launch-home-before-first-turn'
 import {
   resolveAcpLaunchInvocation,
   type AcpLaunchInvocationDeps
@@ -77,12 +77,11 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
         ),
       scan: (record, cwd, isCurrent, _generation, contextSignal, _admitted, demand) => {
         const signal = AbortSignal.any([lifetime.signal, contextSignal])
-        let answer: (value: AtRestCommandScan) => void = () => {}
-        let fail: (reason: unknown) => void = () => {}
-        const result = new Promise<AtRestCommandScan>((resolve, reject) => {
-          answer = resolve
-          fail = reject
-        })
+        const {
+          promise: result,
+          resolve: answer,
+          reject: fail
+        } = Promise.withResolvers<AtRestCommandScan>()
         const check = () => {
           signal.throwIfAborted()
           if (!isCurrent()) {
@@ -120,7 +119,7 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
           }
           let folder: Awaited<ReturnType<typeof acpRunFolder>> | undefined
           let owned: AcpDiscoveryConnection | undefined
-          let gate: ReturnType<typeof enterAcpListingGate> | undefined
+          let gate: Awaited<ReturnType<typeof enterAcpListingAccount>> | undefined
           // Sessions an agent without ACP delete keeps; removed once its process has exited.
           const started: string[] = []
           let discardSessions: ReturnType<typeof acpListingSessionDiscard> = null
@@ -130,8 +129,10 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
           }
           try {
             check()
+            // A chat before its first message starts on the sign-in method picked since.
+            const accountHome = await awaitAcpDiscovery(acpChatHomeNow(spec, record, deps), signal)
             const invocation = await awaitAcpDiscovery(
-              resolveAcpLaunchInvocation(spec, record.accountHome, {
+              resolveAcpLaunchInvocation(spec, accountHome, {
                 ...deps,
                 resolveWorkingDirectory: () => cwd
               }),
@@ -191,14 +192,13 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
             check()
             // Like a model listing: no scan while the sign-in method changes, and the files a
             // start writes for the method saved now.
-            gate = enterAcpListingGate(launchSpec.launchGate, signal)
-            const sessionSignal = gate.signal ?? signal
             const auth = invocation.antigravityChatAuth
-            await prepareAcpListingAccount(launchSpec, launch.env, auth, check)
+            gate = await enterAcpListingAccount(launchSpec, launch.env, auth, signal, check)
+            const gated = gate.signal
             discardSessions = acpListingSessionDiscard(
               spec.agent,
               listing,
-              record.accountHome,
+              accountHome,
               cwd,
               launch
             )
@@ -228,13 +228,13 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
             )
             owned = connection
             unclosed.add(connection)
-            const discovery = runAcpSessionDiscovery(connection, sessionSignal, (checkSession) =>
+            const discovery = runAcpSessionDiscovery(connection, gated, (checkSession) =>
               readAcpSessionCommands({
                 connection,
                 dialect: launchSpec.dialect,
                 onInitialize: (initialized) => observeAcpForkSupport(spec.agent, initialized),
                 cwd,
-                signal: sessionSignal,
+                signal: gated,
                 check: () => {
                   checkSession()
                   check()

@@ -124,12 +124,14 @@ export async function readAcpSessionCommands(input: {
     if (!deletes && !input.disposableStorage) {
       return { commands: undefined, fromAgent: false }
     }
-    const started = await awaitAcpDiscovery(
-      connection.start({ cwd: input.cwd, mcpServers: [] }),
-      signal
+    const starting = connection.start({ cwd: input.cwd, mcpServers: [] })
+    // A session that answers after a cancel is still the caller's to dispose of.
+    void starting.then(
+      (session) => input.onSession?.(session.sessionId),
+      () => {}
     )
+    const started = await awaitAcpDiscovery(starting, signal)
     nativeId = started.sessionId
-    input.onSession?.(started.sessionId)
     try {
       check()
       if (provisional?.sessionId === nativeId) {
