@@ -45,11 +45,13 @@ const openSignInPage = (url: string): void => {
 export function NativeChatMcpTray({
   sessionId,
   target,
+  agentLabel,
   opens,
   onClose
 }: {
   sessionId: string
   target: RuntimeClientTarget
+  agentLabel: string
   opens: number
   onClose: () => void
 }): React.JSX.Element {
@@ -75,6 +77,7 @@ export function NativeChatMcpTray({
   return (
     <NativeChatMcpTrayView
       state={panel}
+      agentLabel={agentLabel}
       runtime={target.kind === 'local' ? 'local' : 'remote'}
       run={(operation) => void panel.run(operation)}
       retry={retry}
@@ -89,6 +92,7 @@ export function NativeChatMcpTray({
 
 type McpTrayViewProps = {
   state: AgentSessionMcpPanelState
+  agentLabel: string
   runtime: 'local' | 'remote'
   run: (operation: McpServerAction) => void
   retry: () => void
@@ -104,7 +108,8 @@ export function NativeChatMcpTrayView(props: McpTrayViewProps): React.JSX.Elemen
   const t = useTranslate()
   const title = t('components.native-chat.mcp.title', 'MCP servers')
   const closeLabel = t('components.native-chat.mcp.close', 'Close')
-  const listed = props.state.result?.status === 'ok' && props.state.servers.length > 0
+  // An agent at rest lists what its next start gets under the line saying it isn't running.
+  const listed = props.state.result !== null && props.state.servers.length > 0
   return (
     <NativeChatComposerTabStrip layout="stack" data-native-chat-mcp-tray="">
       <section
@@ -172,7 +177,7 @@ export function NativeChatMcpTrayView(props: McpTrayViewProps): React.JSX.Elemen
 const SEPARATOR = ' · '
 
 /** The header's words after the title: the counts, or the one line a panel-level state needs. */
-function McpTrayStatus({ state }: McpTrayViewProps): React.JSX.Element | null {
+function McpTrayStatus({ state, agentLabel }: McpTrayViewProps): React.JSX.Element | null {
   const t = useTranslate()
   const loading = useDeferredPending(state.result === null)
   if (state.result === null) {
@@ -196,7 +201,13 @@ function McpTrayStatus({ state }: McpTrayViewProps): React.JSX.Element | null {
           ? (state.result.message ?? t('components.native-chat.mcp.readFailed', 'Couldn’t load'))
           : state.servers.length === 0
             ? t('components.native-chat.mcp.empty', 'None set up for this chat')
-            : null
+            : state.servers.some((server) => server.status === 'unreported')
+              ? t(
+                  'components.native-chat.mcp.unreported',
+                  '{{agent}} doesn’t report connection status',
+                  { agent: agentLabel }
+                )
+              : null
   if (line !== null) {
     return (
       <span title={line}>
@@ -219,6 +230,7 @@ function McpTrayStatus({ state }: McpTrayViewProps): React.JSX.Element | null {
 
 function McpTrayList({
   state,
+  agentLabel,
   runtime,
   run,
   dismissSignIn,
@@ -237,7 +249,13 @@ function McpTrayList({
       )}
     >
       {groups.map((group) => {
-        const label = group.source === null ? undefined : mcpSourceLabel(group.source, t)
+        // Servers the agent reports no source for are its own; beside other groups, say whose.
+        const label =
+          group.source !== null
+            ? mcpSourceLabel(group.source, t)
+            : groups.length > 1
+              ? agentLabel
+              : undefined
         return (
           <div key={group.source ?? ''}>
             {label ? (

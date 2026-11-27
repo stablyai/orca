@@ -40,6 +40,8 @@ export type MobileNativeChatMcpPanelProps = AgentSessionMcpPanelState & {
   onClose: () => void
   /** Opens the host's MCP servers page; null on a host without one. */
   onManage?: (() => void) | null
+  /** The chat's agent, as the header names it. */
+  agentLabel: string
   /** The server list's cap, so the tray and composer stay on screen above the keyboard. */
   listMaxHeight: number
 }
@@ -51,7 +53,18 @@ export function MobileNativeChatMcpPanel(props: MobileNativeChatMcpPanelProps): 
   const colors = useMobileColors()
   const t = useMobileTranslation()
   const listed = props.result?.status === 'ok' && props.servers.length > 0
-  const summary = listed ? mobileMcpTraySummary(props.servers, props.signIn, t) : []
+  const summary = !listed
+    ? []
+    : props.servers.some((server) => server.status === 'unreported')
+      ? [
+          {
+            text: t('chat.mcp.unreported', "{{agent}} doesn't report connection status", {
+              agent: props.agentLabel
+            }),
+            attention: false
+          }
+        ]
+      : mobileMcpTraySummary(props.servers, props.signIn, t)
   return (
     <View
       style={[queuedMessageStyles.box, queuedMessageStyles.composerTab]}
@@ -103,10 +116,14 @@ function McpTrayBody(props: MobileNativeChatMcpPanelProps & { t: Translate }) {
     return null
   }
   if (result.status === 'not-running') {
+    // An agent at rest lists what its next start gets, as its host reads it.
     return (
-      <Notice
-        text={t('chat.mcp.notRunning', 'MCP servers connect when you send your next message.')}
-      />
+      <>
+        <Notice
+          text={t('chat.mcp.notRunning', 'MCP servers connect when you send your next message.')}
+        />
+        {servers.length > 0 ? <McpServerList {...props} /> : null}
+      </>
     )
   }
   if (result.status === 'unsupported') {
@@ -132,6 +149,12 @@ function McpTrayBody(props: MobileNativeChatMcpPanelProps & { t: Translate }) {
   if (servers.length === 0) {
     return <Notice text={t('chat.mcp.empty', 'No MCP servers are set up for this chat.')} />
   }
+  return <McpServerList {...props} />
+}
+
+function McpServerList(props: MobileNativeChatMcpPanelProps & { t: Translate }) {
+  const { servers, t } = props
+  const groups = groupAgentSessionMcpServers(servers)
   return (
     <ScrollView
       style={[styles.list, { maxHeight: props.listMaxHeight }]}
@@ -139,11 +162,12 @@ function McpTrayBody(props: MobileNativeChatMcpPanelProps & { t: Translate }) {
       keyboardShouldPersistTaps="handled"
       nestedScrollEnabled
     >
-      {groupAgentSessionMcpServers(servers).map((group) => (
+      {groups.map((group) => (
         <View key={group.source ?? ''}>
-          {group.source === null ? null : (
+          {/* Servers the agent reports no source for are its own; beside other groups, say whose. */}
+          {group.source === null && groups.length === 1 ? null : (
             <Text style={[trayStripStyles.groupLabel, styles.groupLabel]}>
-              {mobileMcpSourceLabel(group.source, t)}
+              {group.source === null ? props.agentLabel : mobileMcpSourceLabel(group.source, t)}
             </Text>
           )}
           {group.servers.map((server) => (
@@ -288,6 +312,7 @@ function StatusMark({ status }: { status: AgentSessionMcpServer['status'] }) {
       return <View style={[styles.dot, styles.dotFailed]} />
     case 'disabled':
     case 'not-started':
+    case 'unreported':
       return <View style={[styles.dot, styles.dotDisabled]} />
     case 'pending':
       return <View style={styles.dotPending} />
