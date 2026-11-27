@@ -8,11 +8,28 @@ const LARGE_BINDING_BYTES = 64 * 1024
 
 function hasLargeBinding(parameters: SqliteBindings): boolean {
   let bytes = 0
+  let stringCodeUnits = 0
   for (const value of parameters) {
-    bytes +=
-      typeof value === 'string' ? value.length : ArrayBuffer.isView(value) ? value.byteLength : 0
+    if (typeof value === 'string') {
+      bytes += value.length
+      stringCodeUnits += value.length
+    } else if (ArrayBuffer.isView(value)) {
+      bytes += value.byteLength
+    }
     if (bytes > LARGE_BINDING_BYTES) {
       return true
+    }
+  }
+  // UTF-8 needs at most three bytes per UTF-16 unit; small bindings need no string scan.
+  if (bytes + stringCodeUnits * 2 <= LARGE_BINDING_BYTES) {
+    return false
+  }
+  for (const value of parameters) {
+    if (typeof value === 'string') {
+      bytes += Buffer.byteLength(value, 'utf8') - value.length
+      if (bytes > LARGE_BINDING_BYTES) {
+        return true
+      }
     }
   }
   return false
