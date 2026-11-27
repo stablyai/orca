@@ -16,7 +16,8 @@ import { antigravityExecutorErrorWords } from './antigravity-executor-error'
 import { antigravityQuotaFailure, isAntigravityQuotaNotice } from './antigravity-quota-notice'
 import {
   ANTIGRAVITY_EFFORT_LEVELS,
-  ANTIGRAVITY_LEVEL_SUFFIX
+  ANTIGRAVITY_LEVEL_SUFFIX,
+  composeAntigravityLaunchModel
 } from '../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-antigravity'
 
 // The server's question forms open with only a count; each field's title is the real question.
@@ -186,13 +187,39 @@ function noticeFailure(notice: string, at: number) {
     : words
 }
 
-// Model options list families; availableModels lists each level as "<family>-<level>".
+// Model options list families; availableModels lists each level as "<family>-<level>". agy lists
+// the Orchestrator models unsuffixed, but `--effort` still sets their thinking level, so they
+// offer the levels the CLI accepts with an unchanged id (#50508).
+const ANTIGRAVITY_UNSUFFIXED_EFFORTS = ['low', 'medium', 'high'] as const
+
+function unsuffixedEfforts(model: ModelInfo) {
+  // One `exec`, kept: the suffix pattern is shared state, so a second call can start mid-string.
+  const suffix = ANTIGRAVITY_LEVEL_SUFFIX.exec(model.modelId)
+  const id = composeAntigravityLaunchModel(model.modelId, undefined)
+  return id === model.modelId && suffix === null && id.includes('orchestrator')
+    ? {
+        efforts: ANTIGRAVITY_UNSUFFIXED_EFFORTS.map((value) => ({
+          value,
+          label: value[0]!.toUpperCase() + value.slice(1)
+        }))
+      }
+    : undefined
+}
+
+function modelEfforts(model: ModelInfo) {
+  return unsuffixedEfforts(model) ?? { efforts: [] }
+}
+
 function familyEfforts(family: string, models: readonly ModelInfo[]) {
   const efforts = ANTIGRAVITY_EFFORT_LEVELS.flatMap((value) => {
     const variant = models.find((model) => model.modelId === `${family}-${value}`)
     return variant ? [{ value, label: /\(([^()]+)\)$/.exec(variant.name)?.[1] ?? value }] : []
   })
-  return efforts.length > 0 ? { efforts } : undefined
+  if (efforts.length > 0) {
+    return { efforts }
+  }
+  const model = models.find((entry) => entry.modelId === family)
+  return model ? unsuffixedEfforts(model) : undefined
 }
 
 /** The model choices a chat offers: a family for levels listed as "<family>-<level>" (two or
@@ -276,6 +303,7 @@ export const ANTIGRAVITY_ACP_DIALECT: AcpDialect = {
   toolName: (update) => (update.kind === 'execute' ? 'execute' : undefined),
   // Logout would clear the account shared by every Antigravity chat on this host.
   withheldCommands: ['logout'],
+  modelEfforts,
   familyEfforts,
   listedSelection: antigravityListedFamilySelection
 }
