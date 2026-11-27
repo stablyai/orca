@@ -93,7 +93,6 @@
 1 src/renderer/src/components/editor/combined-diff/resolve-changes/use-combined-diff-entry-set.ts
 9 src/renderer/src/components/editor/combined-diff/resolve-changes/use-combined-diff-section-index-map.ts
 1 src/renderer/src/components/editor/combined-diff/resolve-changes/use-combined-diff-section-row-keys.ts
-1 src/renderer/src/components/editor/combined-diff/review-controls/use-combined-diff-notes-actions.ts
 1 src/renderer/src/components/editor/combined-diff/scroll-viewport/use-combined-diff-virtualizer.ts
 1 src/renderer/src/components/editor/csv/CsvViewer.tsx
 1 src/renderer/src/components/editor/csv/editing/clipboard/useCsvClipboard.ts
@@ -101,7 +100,6 @@
 1 src/renderer/src/components/editor/csv/grid/CsvGrid.tsx
 1 src/renderer/src/components/editor/csv/preview/useCsvPagedPreview.ts
 1 src/renderer/src/components/editor/diff/large-files/useDiffViewerLargeDiffLifecycle.ts
-2 src/renderer/src/components/editor/diff/monaco-view/DiffViewer.tsx
 1 src/renderer/src/components/editor/diff/review/DiffNotesSendMenu.tsx
 1 src/renderer/src/components/editor/external-changes/ExternalFileChangeCompareDialog.tsx
 2 src/renderer/src/components/editor/file-drop/use-editor-group-file-drop-owner.ts
@@ -114,17 +112,13 @@
 1 src/renderer/src/components/editor/markdown-preview/render-tree/use-markdown-preview-components.tsx
 1 src/renderer/src/components/editor/markdown-preview/review/MarkdownPreviewAnnotationComposer.tsx
 1 src/renderer/src/components/editor/markdown-preview/surface/MarkdownPreview.tsx
-1 src/renderer/src/components/editor/markdown-preview/surface/MarkdownPreviewSurface.tsx
 1 src/renderer/src/components/editor/markdown-preview/surface/use-markdown-preview-foundation.ts
 1 src/renderer/src/components/editor/markdown-preview/viewport/VirtualMarkdownPreviewBody.tsx
 1 src/renderer/src/components/editor/markdown-preview/viewport/usePreserveSectionDuringExternalEdit.ts
 1 src/renderer/src/components/editor/markdown/documents/MarkdownTemplatePicker.tsx
 1 src/renderer/src/components/editor/markdown/documents/use-markdown-document-watch-refresh.ts
-1 src/renderer/src/components/editor/markdown/documents/useMarkdownDocuments.ts
 1 src/renderer/src/components/editor/markdown/navigation/VirtualMarkdownTableOfContents.tsx
-1 src/renderer/src/components/editor/model-lifetime/buffer-text/use-monaco-content-sync-bridge.ts
 5 src/renderer/src/components/editor/monaco/MonacoEditor.tsx
-1 src/renderer/src/components/editor/monaco/use-monaco-editor-mount.ts
 1 src/renderer/src/components/editor/monaco/use-plugin-syntax-language.ts
 1 src/renderer/src/components/editor/notebook/cells/IpynbCellEditor.tsx
 1 src/renderer/src/components/editor/panel/EditorPanelShell.tsx
@@ -137,12 +131,9 @@
 1 src/renderer/src/components/editor/rich-markdown/images/useLocalImagePick.ts
 9 src/renderer/src/components/editor/rich-markdown/instance/RichMarkdownEditor.tsx
 1 src/renderer/src/components/editor/rich-markdown/instance/useRichMarkdownEditorInstance.ts
-3 src/renderer/src/components/editor/rich-markdown/instance/useRichMarkdownProgrammaticSync.ts
-1 src/renderer/src/components/editor/rich-markdown/links/RichMarkdownLinkBubble.tsx
 2 src/renderer/src/components/editor/rich-markdown/links/useLinkBubble.ts
 4 src/renderer/src/components/editor/rich-markdown/review/useRichMarkdownReviewController.ts
 1 src/renderer/src/components/editor/rich-markdown/review/useRichMarkdownReviewData.ts
-1 src/renderer/src/components/editor/rich-markdown/review/useRichMarkdownReviewRailController.ts
 12 src/renderer/src/components/editor/rich-markdown/tables/RichMarkdownTableControls.tsx
 1 src/renderer/src/components/emulator-pane/agent-setup/use-mobile-emulator-agent-setup-state.ts
 3 src/renderer/src/components/emulator-pane/session/use-emulator-pane-session.ts

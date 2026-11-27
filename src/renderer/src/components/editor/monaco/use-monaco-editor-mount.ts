@@ -29,6 +29,21 @@ import {
 function ignoreCursorLine(): void {}
 
 // Read changing inputs through refs so retained Monaco listeners do not require remounts.
+function withMountProgrammaticContentSync(
+  modelKey: string,
+  isApplyingRef: { current: boolean },
+  run: () => void
+): void {
+  beginProgrammaticContentSync(modelKey)
+  isApplyingRef.current = true
+  try {
+    run()
+  } finally {
+    isApplyingRef.current = false
+    endProgrammaticContentSync(modelKey)
+  }
+}
+
 export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
   const {
     fileId,
@@ -130,9 +145,7 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
         // Why: no live model holds the truth, so drop the stale cache once to reload from disk.
         requestStaleCacheReload(fileIdRef.current, contentRef.current)
       } else {
-        beginProgrammaticContentSync(modelKey)
-        isApplyingProgrammaticContentRef.current = true
-        try {
+        withMountProgrammaticContentSync(modelKey, isApplyingProgrammaticContentRef, () => {
           if (
             syncContentOnMount(
               editorInstance,
@@ -143,10 +156,7 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
           ) {
             lastSyncedContentRef.current = contentRef.current
           }
-        } finally {
-          isApplyingProgrammaticContentRef.current = false
-          endProgrammaticContentSync(modelKey)
-        }
+        })
       }
 
       setupCopy(editorInstance, monaco, filePath, propsRef)
