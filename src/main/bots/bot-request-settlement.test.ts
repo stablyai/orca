@@ -297,10 +297,13 @@ it('tells the asker of a request folded into a turn when that turn ends, and not
     'unanswered',
     null
   ])
+  // Settled requests are read, so the chat's next check doesn't hand them over again as new.
+  expect(db.getUnreadMessages('orca_session_id:chat').map((m) => m.id)).toEqual([r3])
 
   turn('turn-b', 'm3', 'success')
   await settleBotRequestTurn(runtime(), 'chat', 'turn-b', { outcome: 'success' })
   expect(db.getBotRequestOutcome(r3)).toBe('unanswered')
+  expect(db.getUnreadMessages('orca_session_id:chat')).toEqual([])
 })
 
 it('tells the asker its request failed when the turn that answered it fails', async () => {

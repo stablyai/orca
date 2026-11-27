@@ -76,11 +76,8 @@ export async function botQuestionNotices(
   const outcome = taker.startsWith('dropped:') ? 'dropped' : 'unanswered'
   return ({ messageId }) => {
     const message = db.getMessageById(messageId)
-    if (!message) {
-      return 'told'
-    }
-    // Read with its outcome, so a handover that left it unread (a pointer) never hands it over again.
-    const settled = () => db.markAsRead([message.id], { kind: 'orca' })
-    return tellSender(runtime, db, message, outcome, why, reason, settled) ? 'told' : 'unverified'
+    return !message || tellSender(runtime, db, message, outcome, why, reason)
+      ? 'told'
+      : 'unverified'
   }
 }

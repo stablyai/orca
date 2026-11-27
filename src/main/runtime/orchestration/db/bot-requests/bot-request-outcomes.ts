@@ -4,6 +4,7 @@
 import type { MessageRow } from '../orchestration-records'
 import type { OrchestrationDb } from '../orchestration-db'
 import type { BotRequestRow } from './bot-request-store'
+import { readSettledRequestMail } from '../messages/settled-request-mail'
 
 export const BOT_REQUEST_OUTCOMES = ['answered', 'posted', 'unanswered', 'dropped'] as const
 export type BotRequestOutcome = (typeof BOT_REQUEST_OUTCOMES)[number]
@@ -16,17 +17,22 @@ CREATE TABLE IF NOT EXISTS bot_request_outcomes (
 );
 `
 
-/** Records an outcome unless one stands; true when this one was recorded. */
+/** Records an outcome unless one stands, and reads its mail; true when this one was recorded.
+ *  `continues`: the chat reruns the turn after a usage limit, so the mail stays for it to read. */
 export function recordBotRequestOutcome(
   this: OrchestrationDb,
   messageId: string,
-  outcome: BotRequestOutcome
+  outcome: BotRequestOutcome,
+  continues = false
 ): boolean {
   const recorded =
     this.db
       .prepare('INSERT OR IGNORE INTO bot_request_outcomes (message_id, outcome) VALUES (?, ?)')
       .run(messageId, outcome).changes > 0
   settleAwaitedQuestion(this, messageId)
+  if (recorded && !continues) {
+    readSettledRequestMail(this, messageId)
+  }
   return recorded
 }
 

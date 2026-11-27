@@ -58,7 +58,8 @@ export function tellSender(
     return true
   }
   const body = botRequestUnansweredText(record, why, reason)
-  if (tellPeerSender(runtime, db, request, outcome, body, settled)) {
+  const continues = why === 'failed-continues'
+  if (tellPeerSender(runtime, db, request, outcome, body, continues, settled)) {
     return true
   }
   const sender = reachableSender(runtime, db, request)
@@ -68,7 +69,7 @@ export function tellSender(
   // The outcome and its notice commit together, so a crash can't record one without the other.
   const told = runLifecycleWriteTransaction(db.db, 'bot_request_notice', () => {
     settled()
-    if (!db.recordBotRequestOutcome(request.id, outcome) || sender === 'gone') {
+    if (!db.recordBotRequestOutcome(request.id, outcome, continues) || sender === 'gone') {
       return null
     }
     return db.insertMessage({
@@ -94,6 +95,7 @@ function tellPeerSender(
   request: MessageRow,
   outcome: BotRequestOutcome,
   body: string,
+  continues: boolean,
   settled: () => void
 ): boolean {
   const route = db.getPeerMailMessage(request.id)
@@ -106,7 +108,7 @@ function tellPeerSender(
   // The outcome and its queued notice commit together.
   const queued = runLifecycleWriteTransaction(db.db, 'bot_request_peer_notice', () => {
     settled()
-    if (!db.recordBotRequestOutcome(request.id, outcome)) {
+    if (!db.recordBotRequestOutcome(request.id, outcome, continues)) {
       return false
     }
     queuePeerMailReply(db, conversation.conversation_id, generateId('msg'), {
