@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { RailPageFilterButton } from '@/components/rail-page/RailPageToolbar'
 import {
@@ -85,6 +85,31 @@ function ActivePill({
   )
 }
 
+const DRILL_IN_FOCUSABLE_SELECTOR =
+  'button:not(:disabled), input:not(:disabled), [tabindex]:not([tabindex="-1"])'
+
+function cycleDrillInFocus(container: HTMLElement | null, reverse: boolean): void {
+  if (!container) {
+    return
+  }
+  const focusables = Array.from(
+    container.querySelectorAll<HTMLElement>(DRILL_IN_FOCUSABLE_SELECTOR)
+  ).filter((el) => el.offsetParent !== null)
+  if (focusables.length === 0) {
+    return
+  }
+  const activeIndex = focusables.findIndex(
+    (el) => el === document.activeElement || el.contains(document.activeElement)
+  )
+  const nextIndex =
+    activeIndex === -1
+      ? reverse
+        ? focusables.length - 1
+        : 0
+      : (activeIndex + (reverse ? -1 : 1) + focusables.length) % focusables.length
+  focusables[nextIndex]?.focus()
+}
+
 export default function PRFilterDropdowns({
   parsed,
   defaultFilters,
@@ -99,8 +124,21 @@ export default function PRFilterDropdowns({
 }: Props): React.JSX.Element {
   const [openSection, setOpenSection] = useState<SectionKey | null>(null)
   const [popoverOpen, setPopoverOpen] = useState(false)
+  const drillInRef = useRef<HTMLDivElement>(null)
   // Each author pick reloads the list, so keep the authors visible at open as candidates.
   const [authorLoginsAtOpen, setAuthorLoginsAtOpen] = useState<string[]>([])
+
+  useEffect(() => {
+    if (kind !== 'prs' || !popoverOpen || openSection === null) {
+      return
+    }
+    const frame = requestAnimationFrame(() => {
+      drillInRef.current
+        ?.querySelector<HTMLInputElement>('[cmdk-input]:not(:disabled)')
+        ?.focus({ preventScroll: true })
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [kind, popoverOpen, openSection])
   const owner = primarySlug?.owner ?? null
   const repo = primarySlug?.repo ?? null
   const hasPrimarySlug = popoverOpen && owner !== null && repo !== null
@@ -238,11 +276,20 @@ export default function PRFilterDropdowns({
             />
           ) : (
             <div
+              ref={drillInRef}
               onKeyDown={(event) => {
-                // Keep Command search typing and arrow navigation out of Radix menu typeahead.
-                if (event.key !== 'Escape' && event.key !== 'Tab') {
-                  event.stopPropagation()
+                if (event.key === 'Escape') {
+                  return
                 }
+                if (event.key === 'Tab') {
+                  // Radix DropdownMenu calls preventDefault() on Tab; manage drill-in focus order directly.
+                  event.preventDefault()
+                  event.stopPropagation()
+                  cycleDrillInFocus(drillInRef.current, event.shiftKey)
+                  return
+                }
+                // Keep Command search typing and arrow navigation out of Radix menu typeahead.
+                event.stopPropagation()
               }}
             >
               {sectionDetail}

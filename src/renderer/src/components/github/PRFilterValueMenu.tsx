@@ -1,8 +1,9 @@
 import React from 'react'
 import { ChevronRight } from 'lucide-react'
 import {
-  DropdownMenuCheckboxItem,
   DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
@@ -82,28 +83,35 @@ export function PRFilterValueMenu({
           />
         </DropdownMenuSubTrigger>
         <DropdownMenuSubContent className="min-w-[140px]">
-          {stateOptions.map(({ id, label }) => (
-            <DropdownMenuCheckboxItem
-              key={id}
-              checked={activeState === id}
-              onSelect={() => {
-                // Why: re-applying the active state would only rewrite the query and refetch the same rows.
-                if (activeState !== id) {
-                  onChange({ state: id })
-                }
-              }}
-              onContextMenu={
-                id === 'open' && onSetDefaultPreset
-                  ? (event) => {
-                      event.preventDefault()
-                      onSetDefaultPreset('prs')
-                    }
-                  : undefined
+          <DropdownMenuRadioGroup
+            value={activeState}
+            onValueChange={(value) => {
+              const option = stateOptions.find((entry) => entry.id === value)
+              // Why: re-applying the active state would only rewrite the query and refetch the same rows.
+              if (option && activeState !== option.id) {
+                onChange({ state: option.id })
               }
-            >
-              {label}
-            </DropdownMenuCheckboxItem>
-          ))}
+            }}
+          >
+            {stateOptions.map(({ id, label }) => (
+              <DropdownMenuRadioItem
+                key={id}
+                value={id}
+                indicator="check"
+                onSelect={(event) => event.preventDefault()}
+                onContextMenu={
+                  id === 'open' && onSetDefaultPreset
+                    ? (event) => {
+                        event.preventDefault()
+                        onSetDefaultPreset('prs')
+                      }
+                    : undefined
+                }
+              >
+                {label}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
         </DropdownMenuSubContent>
       </DropdownMenuSub>
 
@@ -115,27 +123,34 @@ export function PRFilterValueMenu({
           />
         </DropdownMenuSubTrigger>
         <DropdownMenuSubContent className="min-w-[140px]">
-          {whoOptions.map(({ id, label }) => (
-            <DropdownMenuCheckboxItem
-              key={id}
-              checked={activeWho === id}
-              onSelect={() => {
-                if (activeWho !== id) {
-                  onChange(gitHubPRWhoChange(id))
-                }
-              }}
-              onContextMenu={
-                activeState === 'open' && onSetDefaultPreset
-                  ? (event) => {
-                      event.preventDefault()
-                      onSetDefaultPreset(gitHubPRWhoPreset(id))
-                    }
-                  : undefined
+          <DropdownMenuRadioGroup
+            value={activeWho ?? ''}
+            onValueChange={(value) => {
+              const option = whoOptions.find((entry) => entry.id === value)
+              if (option && activeWho !== option.id) {
+                onChange(gitHubPRWhoChange(option.id))
               }
-            >
-              {label}
-            </DropdownMenuCheckboxItem>
-          ))}
+            }}
+          >
+            {whoOptions.map(({ id, label }) => (
+              <DropdownMenuRadioItem
+                key={id}
+                value={id}
+                indicator="check"
+                onSelect={(event) => event.preventDefault()}
+                onContextMenu={
+                  activeState === 'open' && onSetDefaultPreset
+                    ? (event) => {
+                        event.preventDefault()
+                        onSetDefaultPreset(gitHubPRWhoPreset(id))
+                      }
+                    : undefined
+                }
+              >
+                {label}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
         </DropdownMenuSubContent>
       </DropdownMenuSub>
 

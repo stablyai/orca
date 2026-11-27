@@ -201,9 +201,11 @@ function DropdownMenuRadioItem({
   className,
   children,
   density,
+  indicator = 'dot',
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.RadioItem> & {
   density?: MenuDensity
+  indicator?: 'dot' | 'check'
 }) {
   const rowDensity = useMenuDensity(density)
   return (
@@ -214,7 +216,11 @@ function DropdownMenuRadioItem({
     >
       <span className={MENU_ITEM_INDICATOR_CLASS}>
         <DropdownMenuPrimitive.ItemIndicator>
-          <CircleIcon className="size-2 fill-current" />
+          {indicator === 'check' ? (
+            <CheckIcon className="size-3.5" />
+          ) : (
+            <CircleIcon className="size-2 fill-current" />
+          )}
         </DropdownMenuPrimitive.ItemIndicator>
       </span>
       {children}
