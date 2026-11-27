@@ -13,7 +13,7 @@ import { registerGitHubHandlers } from '../source-control/github'
 import { registerLazyGitLabHandlers } from '../source-control/lazy-gitlab-handlers'
 import { registerLazyLinearHandlers } from '../linear/lazy-linear-handlers'
 import { registerLazyJiraHandlers } from '../jira/lazy-jira-handlers'
-import { registerCrashReportingHandlers } from '../crash-reporting/crash-reporting'
+import { registerLazyCrashReportingHandlers } from '../crash-reporting/lazy-crash-reporting-handlers'
 import { registerStatsHandlers } from '../stats'
 import { registerRateLimitHandlers } from '../rate-limits'
 import { registerRuntimeHandlers } from '../runtime'
@@ -121,7 +121,7 @@ export async function registerCoreHandlers(
     registerLazyLinearHandlers()
     registerLazyJiraHandlers(store, commitMessageAgentEnv)
     if (crashReports) {
-      registerCrashReportingHandlers(crashReports)
+      registerLazyCrashReportingHandlers(crashReports)
     }
     registerStatsHandlers(stats)
     registerNotificationHandlers(store, runtime)
