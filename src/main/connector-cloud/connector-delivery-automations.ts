@@ -8,14 +8,18 @@ import type { TurnAutomations } from './connector-turn-automations'
 export async function recordedInTurn(
   seam: ExternalConversationSeam,
   key: ConnectorConversation,
-  inTurn: TurnAutomations | null,
-  done: Promise<ConnectorDeliveryResult>
+  done: Promise<ConnectorDeliveryResult>,
+  automations: () => TurnAutomations | null
 ): Promise<ConnectorDeliveryResult> {
   const result = await done
-  if (!inTurn || result.outcome !== 'accepted') {
+  if (result.outcome !== 'accepted' || result.muted || result.inTurn) {
     return result
   }
   try {
+    const inTurn = automations()
+    if (!inTurn) {
+      return result
+    }
     await inTurn.record(seam.linkedChat(key))
   } catch (error) {
     console.warn('[connectors] could not record the automations a turn ran', error)

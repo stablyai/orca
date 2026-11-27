@@ -230,15 +230,16 @@ export function dispatchDelivery(
     }
   }
   const key = delivery.conversation
+  const prepareAutomations = (request: RequestDelivery) =>
+    request.automations?.length || laterAutomations.length
+      ? (machine.turnAutomations?.([...(request.automations ?? []), ...laterAutomations]) ?? null)
+      : null
   let done: Promise<ConnectorDeliveryResult>
   switch (delivery.kind) {
     case 'start': {
       const target = startTarget!
       const { agent, prompt, asker } = delivery
-      const inTurn = !knownRequest
-        ? (machine.turnAutomations?.([...(delivery.automations ?? []), ...laterAutomations]) ??
-          null)
-        : null
+      const inTurn = knownRequest ? null : prepareAutomations(delivery)
       const thread = asker ? connectorThreadNote(key.source, asker) : null
       const input = {
         agent,
@@ -253,16 +254,14 @@ export function dispatchDelivery(
       done = recordedInTurn(
         seam,
         key,
-        inTurn,
-        settle(async () => (await seam.start(host, key, deliveryId, input)).initial)
+        settle(async () => (await seam.start(host, key, deliveryId, input)).initial),
+        // An admitted receipt may have committed before the automation history was recorded.
+        () => (knownRequest ? prepareAutomations(delivery) : inTurn)
       )
       break
     }
     case 'send': {
-      const inTurn = !knownRequest
-        ? (machine.turnAutomations?.([...(delivery.automations ?? []), ...laterAutomations]) ??
-          null)
-        : null
+      const inTurn = knownRequest ? null : prepareAutomations(delivery)
       const { text, asker } = delivery
       const message = {
         text,
@@ -276,8 +275,8 @@ export function dispatchDelivery(
       done = recordedInTurn(
         seam,
         key,
-        inTurn,
-        settle(() => seam.send(host, key, deliveryId, message))
+        settle(() => seam.send(host, key, deliveryId, message)),
+        () => (knownRequest ? prepareAutomations(delivery) : inTurn)
       )
       break
     }
