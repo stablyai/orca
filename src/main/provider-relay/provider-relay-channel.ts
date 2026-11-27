@@ -51,6 +51,8 @@ export class ProviderRelayChannel {
   private stopDisconnects: (() => void) | null = null
   /** The client forgets its daemon's identity on disconnect, before telling us; a reattach compares against this. */
   private lastDaemonPid: number | null = null
+  /** Attaches asked per relay on this connection, so a failed one never hands back a later one. */
+  private readonly attaches = new Map<string, number>()
 
   private readonly acks: ProviderRelayAckBatch
 
@@ -104,11 +106,17 @@ export class ProviderRelayChannel {
     policy: ProviderRelayDetachPolicy
   ): Promise<ProviderRelayAttachResult> {
     this.partial.delete(relayId)
+    this.attaches.set(relayId, this.attachNumber(relayId) + 1)
     return this.client.request(
       'relayAttach',
       { relayId, fromSeq, policy },
       RELAY_REQUEST_TIMEOUT_MS
     )
+  }
+
+  /** The latest attach asked of `relayId` on this connection. */
+  attachNumber(relayId: string): number {
+    return this.attaches.get(relayId) ?? 0
   }
 
   write(relayId: string, data: string): Promise<unknown> {

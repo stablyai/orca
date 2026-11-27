@@ -18,12 +18,17 @@ export function fakeProviderRelayChannel(members: {
   detach?: (relayId: string) => Promise<unknown>
 }): { channel: ProviderRelayChannel; sink: () => ProviderRelaySink } {
   let bound: ProviderRelaySink | null = null
+  let attaches = 0
   const fake = {
     bind: (_relayId: string, sink: ProviderRelaySink) => {
       bound = sink
       return () => {}
     },
-    attach: members.attach,
+    attach: () => {
+      attaches += 1
+      return members.attach()
+    },
+    attachNumber: () => attaches,
     ack: members.ack ?? (async () => ({})),
     scheduleAck: (run: () => void) => {
       const timer = setTimeout(run, 1_000)

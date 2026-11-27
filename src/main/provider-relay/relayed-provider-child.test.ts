@@ -177,4 +177,36 @@ describe('relayed provider child', () => {
     expect(detached).toEqual(['r'])
     expect(child.outcomeLost).toBe(true)
   })
+
+  it('a failed reattach never hands back an attach a later one made on the same connection', async () => {
+    let attaches = 0
+    const detached: string[] = []
+    const stalled = Promise.withResolvers<typeof EMPTY_RELAY_ATTACH>()
+    const relay = fakeProviderRelayChannel({
+      attach: async () => {
+        attaches += 1
+        return attaches === 2 ? stalled.promise : EMPTY_RELAY_ATTACH
+      },
+      detach: async (relayId) => {
+        detached.push(relayId)
+        return {}
+      }
+    })
+    const child = new RelayedProviderChild({
+      channel: relay.channel,
+      relayId: 'r',
+      pid: 42,
+      policy
+    })
+    await child.start(0)
+    child.releaseOutput()
+    relay.sink().disconnected()
+    await turns()
+    // A retry attaches the relay on the same connection while the stalled reattach is unanswered.
+    await relay.channel.attach('r', 0, policy())
+    stalled.reject(new Error('Request timed out'))
+    await turns()
+
+    expect(detached).toEqual([])
+  })
 })
