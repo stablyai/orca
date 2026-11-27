@@ -168,7 +168,6 @@
 1 src/shared/attachment-text/attachment-text-source.ts
 1 src/shared/automations/automation-run-message.ts
 4 src/shared/bot-tools.ts
-12 src/shared/bot-types.ts
 1 src/shared/bots/bot-agent-setup.ts
 1 src/shared/bots/bot-avatar-color.ts
 1 src/shared/bots/bot-avatar-outfit.ts
@@ -176,7 +175,6 @@
 2 src/shared/bots/bot-chat-tree-schema.ts
 1 src/shared/bots/bot-connector-offer.ts
 8 src/shared/bots/bot-first-look.ts
-12 src/shared/bots/bot-group.ts
 3 src/shared/bots/bot-import-cards.ts
 2 src/shared/bots/bot-import.ts
 3 src/shared/bots/bot-item-ask.ts
@@ -216,7 +214,6 @@
 1 src/shared/connector-webhook-contract.ts
 2 src/shared/connector-webhook-routes.ts
 1 src/shared/connector-work-link-contract.ts
-17 src/shared/connectors/connector-cloud-contract.ts
 1 src/shared/connectors/connector-failure-contract.ts
 2 src/shared/connectors/connector-slack-mirror-contract.ts
 1 src/shared/editor/formatting/editor-formatter.ts
