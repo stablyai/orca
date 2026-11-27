@@ -13534,7 +13534,12 @@
             "rollbackStopIncomplete": "未完成：Orca 无法确认当前服务器已退出，因此未回滚，请先查看主机上 ~/.orca-remote 中服务器安装文件夹内的 orcad.log 再重试",
             "failed": "Orca 无法在服务器上完成此操作，请重试",
             "defaultServer": "未执行：此服务器是新项目的默认主机，停止前请在“新项目打开位置”中选择其他主机",
-            "wslMoveRunning": "未完成：有项目正在移到此服务器上。移动完成后，Orca 会更新它"
+            "wslMoveRunning": "未完成：有项目正在移到此服务器上。移动完成后，Orca 会更新它",
+            "recoveryRequired": "未完成：中断的更新或停止操作正占用此主机，如果 Orca 提供“恢复”或“取消停止”，请使用后重试",
+            "snapshotSpace": "未完成：此主机没有足够空间存放 Orca 在更新前创建的副本，请释放主机空间后重试",
+            "policyRefused": "未完成：Orca 不会在此主机上激活此构建版本，请检查主机后重新更新；如果上次运行它的是较新的 Orca 版本，请先更新 Orca",
+            "hostNewer": "未完成：上次运行此主机服务器的是较新的 Orca 版本，请更新 Orca 后重试",
+            "preflightFailed": "未完成：新的 Orca 服务器未通过此主机上的启动检查，因此 Orca 未改动此主机"
           },
           "reassurance": "在各个主机上运行，通过你自己的 SSH 连接访问，你的代码和文件留在原处，只有 Orca 的项目、标签页和终端列表会移到该主机"
         },
