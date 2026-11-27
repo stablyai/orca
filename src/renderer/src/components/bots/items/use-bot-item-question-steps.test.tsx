@@ -270,6 +270,33 @@ it("keeps a reopened line's draft on it across a restart", () => {
   expect(hook.result.current.steps!.picks.map((pick) => pick?.words ?? null)).toEqual([words, 'No'])
 })
 
+it('posts a plain comment typed after a reopened line folds back, its pick kept', () => {
+  for (const restart of [false, true]) {
+    const uid = `reopen-folded-${restart}`
+    let run = steps(uid)
+    act(() => run.hook.result.current.steps!.pick(0, 'Yes'))
+    act(() => run.hook.result.current.steps!.pick(1, 'No'))
+    act(() => run.hook.result.current.steps!.reopen(0))
+    if (restart) {
+      run.hook.unmount()
+      run = steps(uid)
+    } else {
+      act(() => run.hook.result.current.steps!.pick(0, 'Yes'))
+    }
+    const words = 'Thanks, looks good'
+    act(() =>
+      updateNativeChatComposerDraft(
+        botItemCommentDraftScope(bot, uid),
+        { text: words },
+        'immediate'
+      )
+    )
+    expect(run.hook.result.current.waitingLine).toBeNull()
+    enter(run.hook, words)
+    expect(run.posted.map(({ text }) => text)).toEqual([`${HOSTS} → Yes\n${GO} → No\n${words}`])
+  }
+})
+
 it('holds an answer with images, files and skills like a pick; Send posts them all as one comment', () => {
   const { hook, posted } = steps('files')
   const skill = { name: 'review', path: '/skills/review/SKILL.md' }

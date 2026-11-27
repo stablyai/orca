@@ -115,7 +115,7 @@ function Card({
     picks: picks.map((pick, index) => (lines.includes(index) ? pick : null)),
     lines,
     pick: (index, words) => {
-      setReopened(null)
+      setReopened((at) => (at === index ? null : at))
       setPicks((previous) =>
         previous.map((held, at) =>
           at === index && !botItemHeldAnswerIsReply(held, words) ? botItemHeldAnswer(words) : held

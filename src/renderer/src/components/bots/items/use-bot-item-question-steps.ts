@@ -35,7 +35,6 @@ import {
 import {
   botItemWaitsOnNoQuestion,
   createBotItemReplyTargetHook,
-  readBotItemReplyTargetLineId,
   type BotItemReplyMarkState
 } from '../../../../../shared/bots/bot-item-reply-target'
 import type {
@@ -171,13 +170,8 @@ export function useBotItemQuestionSteps(
   const picks = shape.decisions.map((_, at) => (lines.includes(at) ? (held[at] ?? null) : null))
   const [reopenedAt, setReopenedAt] = useState<{ askId: string; index: number } | null>(null)
   const reopened = reopenedAt?.askId === askId && picks[reopenedAt.index] ? reopenedAt.index : null
-  // A draft started on a picked line stays its answer, even once the line folds or the app restarts.
-  const drafting = boxEmpty
-    ? null
-    : readBotItemReplyTargetLineId(botItemReplyTargetDrafts, boxScope)
   const eligible = (index: number): boolean =>
-    lines.includes(index) &&
-    (!picks[index] || index === reopened || drafting === `${askId}:${index}`)
+    lines.includes(index) && (!picks[index] || index === reopened)
   // The line the box's draft answers, taken when its first words arrived (typed, pasted, dictated or
   // restored alike: the box's draft store says). A one-question ask's line goes once its answer is
   // on its way.
@@ -186,11 +180,13 @@ export function useBotItemQuestionSteps(
     : oneLine && !pending.some((entry) => !entry.failed && entry.intent?.askId === oneLine.eventId)
       ? [oneLine]
       : []
+  // A draft started on a picked line stays its answer, even once the line folds or the app restarts.
   const target = useBotItemReplyTarget(
     boxScope,
     open,
     boxEmpty,
-    botItemWaitsOnNoQuestion(item, asked, eventsRead)
+    botItemWaitsOnNoQuestion(item, asked, eventsRead),
+    waiting ? lines.map((index) => botItemAskLine(askId, shape, index)) : []
   )
   // Stored picks: a line a comment answered by name loses its pick; one on its way keeps it, to
   // recover if the host refuses it.
@@ -272,7 +268,8 @@ export function useBotItemQuestionSteps(
       }
       const answer = botItemHeldAnswer(text, paths, skills)
       const line = shape.decisions.findIndex((_, index) => replyingTo === `${askId}:${index}`)
-      const answering = line !== -1 && eligible(line)
+      // The reply target decides which line the box names; it names only open lines.
+      const answering = line !== -1 && lines.includes(line)
       // The held answers go as one comment: what one comment can't carry stays in the box.
       const over = botItemHeldAnswersOverLimit(
         answering ? picks.map((pick, at) => (at === line ? answer : pick)) : [...picks, answer]
