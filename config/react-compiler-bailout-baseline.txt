@@ -698,7 +698,6 @@
 2 src/renderer/src/lib/work-items/github/useGitHubTaskItems.ts
 2 src/renderer/src/hooks/useImmediateMutation.ts
 1 src/renderer/src/lib/agent-session/launch/inventory/host-chat-program-acquisition.ts
-2 src/renderer/src/lib/agent-session/launch/inventory/useDetectedAgents.ts
 2 src/renderer/src/lib/connector-setup-open.ts
 1 src/renderer/src/lib/files/search/quick-open-file-history.ts
 1 src/renderer/src/lib/list-interaction/use-windowed-command-virtualizer.ts
