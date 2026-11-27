@@ -340,7 +340,7 @@ export function NativeChatQueuedMessageCard({
           ) : null}
           {/* Every row keeps its own Steer at rest, since each sends that one message. A command never
               steers: its Send shows only while the agent is idle. */}
-          {actionable && !card.waitsForAgent ? (
+          {card.hold !== 'sending' && !card.waitsForAgent ? (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
