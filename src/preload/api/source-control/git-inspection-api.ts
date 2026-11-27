@@ -4,6 +4,7 @@ import type {
   GitCommitCompareResult,
   GitDiffResult
 } from '../../../shared/git/diff/git-diff-compare-types'
+import type { GitSubmoduleRepo } from '../../../shared/git/status/git-submodule-repo-types'
 import type { GitMutationInFlight } from '../../../shared/git/commands/git-mutation-in-flight'
 import type {
   GitConflictOperation,
@@ -111,6 +112,10 @@ export type GitInspectionApi = {
     connectionId?: string
     pushTarget?: GitPushTarget
   }) => Promise<GitUpstreamStatus>
+  submoduleRepos: (args: {
+    worktreePath: string
+    connectionId?: string
+  }) => Promise<GitSubmoduleRepo[]>
   branchDiff: (args: {
     worktreePath: string
     compare: {
