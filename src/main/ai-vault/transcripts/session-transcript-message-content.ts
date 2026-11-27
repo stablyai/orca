@@ -58,12 +58,25 @@ export function transcriptMessagesFromContent(
 }
 
 export function transcriptMessagesFromDecodedMessage(
-  decoded: DecodedSessionMessage
+  decoded: DecodedSessionMessage,
+  options?: { preserveBlockOrder?: boolean }
 ): TranscriptMessage[] {
   const messages: TranscriptMessage[] = []
   const textRole = transcriptMessageRole(decoded.role)
   const textParts: string[] = []
+  const flushTextRun = (): void => {
+    if (textRole && textParts.length > 0) {
+      pushMessage(messages, textRole, boundedJoinedText(textParts), decoded.timestamp)
+    }
+    textParts.length = 0
+  }
   for (const block of decoded.blocks) {
+    if (
+      options?.preserveBlockOrder &&
+      (block.kind === 'tool_call' || block.kind === 'tool_result')
+    ) {
+      flushTextRun()
+    }
     if (block.kind === 'tool_call') {
       pushMessage(messages, 'tool', toolCallTextFromDecoded(block), decoded.timestamp)
     } else if (block.kind === 'tool_result') {
@@ -71,6 +84,10 @@ export function transcriptMessagesFromDecodedMessage(
     } else {
       textParts.push(block.text)
     }
+  }
+  if (options?.preserveBlockOrder) {
+    flushTextRun()
+    return messages
   }
   if (textRole && textParts.length > 0) {
     const content = boundedJoinedText(textParts)

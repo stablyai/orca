@@ -174,7 +174,9 @@ export async function consumeOpenCodeMessages(
       const timestamp = timeObjectValue(message.time, 'created')
       const content =
         message.content ?? (await readOpenCodeMessageParts(storageRoot, message.id, signal))
-      const hasPreview = addSessionContent(accumulator, role, content, timestamp)
+      const hasPreview = addSessionContent(accumulator, role, content, timestamp, {
+        preserveBlockOrder: message.content == null
+      })
       if (!hasPreview) {
         addPreviewMessage(accumulator, {
           role,
