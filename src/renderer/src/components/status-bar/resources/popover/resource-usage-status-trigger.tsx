@@ -60,9 +60,14 @@ export function renderResourceUsageStatusTrigger(
             ) : null}
             <MemoryStick className={cn('size-3', commitToneClass ?? 'text-muted-foreground')} />
             {appMemoryLabel !== null && (
-              <span className="text-[11px] tabular-nums text-foreground">{appMemoryLabel}</span>
+              // Why: min width keeps neighbours still as the value moves between MB and GB.
+              <span className="min-w-[6ch] text-[11px] tabular-nums text-foreground">
+                {appMemoryLabel}
+              </span>
             )}
-            <Terminal className="size-3 text-muted-foreground" />
+            <Terminal
+              className={cn('size-3 text-muted-foreground', appMemoryLabel !== null && 'ml-2.5')}
+            />
             <span className="text-[11px] tabular-nums text-muted-foreground">
               {triggerSessionCount}
               {orphanCount > 0 && (
