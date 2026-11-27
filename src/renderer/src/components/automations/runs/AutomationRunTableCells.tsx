@@ -1,5 +1,6 @@
 import React from 'react'
 import { cn } from '@/lib/class-names'
+import { LIST_TABLE_SPAN_TRACKS_CLASS } from '@/lib/list-interaction/list-table-layout'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { AutomationRunStatus } from '../../../../../shared/automations/history/automation-run'
 import { formatAutomationDateTime } from '../automation-page-parts'
@@ -9,11 +10,9 @@ import { formatAutomationRunLabel } from './automation-run-identity-label'
 import type { AutomationRunWorkspaceDisplay } from './automation-run-workspace-display'
 
 // Run | Result | Workspace | Spend — shared by an automation's history and the Runs page.
-export const AUTOMATION_RUN_TABLE_GRID_CLASS =
-  'grid w-full grid-cols-[minmax(9rem,1fr)_minmax(6rem,8.5rem)_minmax(8rem,1.2fr)_minmax(4rem,5rem)] gap-3'
+export const AUTOMATION_RUN_TABLE_GRID_CLASS = `grid ${LIST_TABLE_SPAN_TRACKS_CLASS} grid-cols-[minmax(9rem,1fr)_minmax(6rem,8.5rem)_minmax(8rem,1.2fr)_minmax(4rem,5rem)] gap-3`
 // The Runs page adds the automation after the run.
-export const AUTOMATION_RUNS_DASHBOARD_GRID_CLASS =
-  'grid w-full grid-cols-[minmax(8rem,.8fr)_minmax(10rem,1.2fr)_minmax(6rem,8.5rem)_minmax(8rem,1fr)_minmax(4rem,5rem)] gap-3'
+export const AUTOMATION_RUNS_DASHBOARD_GRID_CLASS = `grid ${LIST_TABLE_SPAN_TRACKS_CLASS} grid-cols-[minmax(8rem,.8fr)_minmax(10rem,1.2fr)_minmax(6rem,8.5rem)_minmax(8rem,1fr)_minmax(4rem,5rem)] gap-3`
 
 export function AutomationRunTableHeaderCells({
   withAutomation = false

@@ -1,6 +1,7 @@
 import React, { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { cn } from '@/lib/class-names'
+import { LIST_TABLE_SPAN_TRACKS_CLASS } from '@/lib/list-interaction/list-table-layout'
 import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { getAutomationUsageStatusLabel } from './automation-usage-model'
@@ -275,7 +276,10 @@ export function AutomationRunHistory({
                   key={virtualRow.key}
                   data-index={virtualRow.index}
                   ref={virtualizer.measureElement}
-                  className="absolute left-0 top-0 w-full border-b border-border/50"
+                  className={cn(
+                    'absolute left-0 top-0 border-b border-border/50',
+                    LIST_TABLE_SPAN_TRACKS_CLASS
+                  )}
                   style={{ transform: `translateY(${virtualRow.start - scrollMargin}px)` }}
                 >
                   <button

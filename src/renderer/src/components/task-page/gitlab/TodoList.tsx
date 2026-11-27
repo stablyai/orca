@@ -1,4 +1,6 @@
 import { RailPageScroll } from '@/components/rail-page/RailPage'
+import { cn } from '@/lib/class-names'
+import { LIST_TABLE_SPAN_TRACKS_CLASS } from '@/lib/list-interaction/list-table-layout'
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { ExternalLink } from 'lucide-react'
@@ -28,7 +30,10 @@ export function TaskPageGitLabTodoList({
             }).map((_, i) => (
               <div
                 key={i}
-                className="grid w-full gap-3 rail-page-row-gutter py-2 grid-cols-[110px_minmax(0,3fr)_minmax(120px,1.2fr)_110px_50px]"
+                className={cn(
+                  'grid gap-3 rail-page-row-gutter py-2 grid-cols-[110px_minmax(0,3fr)_minmax(120px,1.2fr)_110px_50px]',
+                  LIST_TABLE_SPAN_TRACKS_CLASS
+                )}
               >
                 <div className="h-4 w-20 animate-pulse rounded bg-muted/70" />
                 <div>
@@ -64,7 +69,10 @@ export function TaskPageGitLabTodoList({
                   openAppHttpLink(todo.targetUrl)
                 }
               }}
-              className="grid w-full cursor-pointer gap-3 rail-page-row-gutter py-2 text-left grid-cols-[110px_minmax(0,3fr)_minmax(120px,1.2fr)_110px_50px] hover:bg-muted/50"
+              className={cn(
+                'grid cursor-pointer gap-3 rail-page-row-gutter py-2 text-left grid-cols-[110px_minmax(0,3fr)_minmax(120px,1.2fr)_110px_50px] hover:bg-muted/50',
+                LIST_TABLE_SPAN_TRACKS_CLASS
+              )}
               title={
                 todo.targetType === 'MergeRequest'
                   ? t('auto.components.TaskPage.a0544fb653', 'MR !{{value0}}', {

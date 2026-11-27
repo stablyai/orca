@@ -7,6 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { translateUnassignedLabel } from '@/i18n/unassigned-label'
 import { cn } from '@/lib/class-names'
+import { LIST_TABLE_SPAN_TRACKS_CLASS } from '@/lib/list-interaction/list-table-layout'
 import type { LinearProjectSummary } from '../../../../../../shared/linear/project-types'
 import {
   linearProjectBacklogLabel,
@@ -64,7 +65,10 @@ function LinearProjectTableSkeleton(): React.JSX.Element {
       {Array.from({ length: 10 }).map((_, index) => (
         <div
           key={index}
-          className="grid gap-3 px-3 py-3 md:grid-cols-[minmax(180px,1.5fr)_110px_100px_90px_120px_110px_80px_70px]"
+          className={cn(
+            'grid gap-3 px-3 py-3 md:grid-cols-[minmax(180px,1.5fr)_110px_100px_90px_120px_110px_80px_70px]',
+            LIST_TABLE_SPAN_TRACKS_CLASS
+          )}
         >
           <div className="h-4 w-4/5 animate-pulse rounded bg-muted/70" />
           <div className="h-4 w-20 animate-pulse rounded bg-muted/60" />
@@ -153,6 +157,7 @@ export function LinearProjectTableContent({
             }}
             className={cn(
               'group/row grid min-h-12 cursor-pointer grid-cols-[minmax(180px,1.5fr)_110px_100px_90px_120px_110px_80px_70px] items-center gap-3 px-3 py-2 text-left transition hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+              LIST_TABLE_SPAN_TRACKS_CLASS,
               selected && 'bg-accent'
             )}
           >

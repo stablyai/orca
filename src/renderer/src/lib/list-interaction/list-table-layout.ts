@@ -9,6 +9,9 @@ export const LIST_TABLE_HEADER_CLASS =
 export const LIST_TABLE_ROW_CLASS =
   'group/list-table-row w-full min-h-11 scroll-mt-8 cursor-pointer items-center gap-3 ps-[var(--list-table-gutter,0.75rem)] pe-[var(--list-table-gutter-end,var(--list-table-gutter,0.75rem))] py-3 text-left text-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50'
 
+// Why: a table whose tracks outgrow a narrow pane must widen its rows/header too, or hover, dividers and header tint stop short when scrolled sideways.
+export const LIST_TABLE_SPAN_TRACKS_CLASS = 'w-fit min-w-full'
+
 export const LIST_TABLE_ROW_SELECTED_CLASS = 'bg-accent text-accent-foreground'
 
 // Flatten tint for opaque sticky cells; pseudo-element strips cover gutters/gaps so scrolled columns cannot show through.

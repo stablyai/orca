@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react'
 import { ArrowDown, ArrowUp, ArrowUpDown, Columns3 } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/class-names'
+import { LIST_TABLE_SPAN_TRACKS_CLASS } from '@/lib/list-interaction/list-table-layout'
 import ColumnResizeHandle from './ColumnResizeHandle'
 import ProjectGroupHeader from '../ProjectGroupHeader'
 import ProjectRow from './ProjectRow'
@@ -206,7 +207,7 @@ export default function ProjectViewList({
       {groups.map((g) => {
         const expanded = !collapsed.has(g.key)
         return (
-          <div key={g.key}>
+          <div key={g.key} className={LIST_TABLE_SPAN_TRACKS_CLASS}>
             {table.selectedView.groupByFields[0] ? (
               <ProjectGroupHeader
                 group={g}
@@ -278,7 +279,10 @@ function ProjectHeaderRow({
   const t = useTranslate()
   return (
     <div
-      className="sticky top-0 z-10 grid items-center gap-3 border-b border-border/60 bg-background/95 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground backdrop-blur"
+      className={cn(
+        'sticky top-0 z-10 grid items-center gap-3 border-b border-border/60 bg-background/95 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground backdrop-blur',
+        LIST_TABLE_SPAN_TRACKS_CLASS
+      )}
       style={{ gridTemplateColumns: gridTemplate }}
     >
       {fields.map((f, idx) => {

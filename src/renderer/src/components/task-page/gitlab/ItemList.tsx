@@ -1,4 +1,6 @@
 import { RailPageScroll } from '@/components/rail-page/RailPage'
+import { cn } from '@/lib/class-names'
+import { LIST_TABLE_SPAN_TRACKS_CLASS } from '@/lib/list-interaction/list-table-layout'
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
@@ -45,7 +47,10 @@ export function TaskPageGitLabItemList({
             }).map((_, i) => (
               <div
                 key={i}
-                className="grid w-full gap-3 rail-page-row-gutter py-2 grid-cols-[80px_minmax(0,3fr)_120px_110px_50px]"
+                className={cn(
+                  'grid gap-3 rail-page-row-gutter py-2 grid-cols-[80px_minmax(0,3fr)_120px_110px_50px]',
+                  LIST_TABLE_SPAN_TRACKS_CLASS
+                )}
               >
                 <div className="h-4 w-16 animate-pulse rounded bg-muted/70" />
                 <div>
@@ -85,7 +90,10 @@ export function TaskPageGitLabItemList({
                   openGitLabDetailPage(item)
                 }
               }}
-              className="grid w-full cursor-pointer gap-3 rail-page-row-gutter py-2 text-left grid-cols-[80px_minmax(0,3fr)_120px_110px_50px] hover:bg-muted/50"
+              className={cn(
+                'grid cursor-pointer gap-3 rail-page-row-gutter py-2 text-left grid-cols-[80px_minmax(0,3fr)_120px_110px_50px] hover:bg-muted/50',
+                LIST_TABLE_SPAN_TRACKS_CLASS
+              )}
             >
               <span className="font-mono text-xs text-muted-foreground">
                 {/* Why: GitLab uses !N for MRs and #N for issues — match gitlab.com so rows map to web links. */}
