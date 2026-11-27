@@ -112,7 +112,8 @@ export class DelegatedPhoneGrantCache {
       return false
     }
     const entry = this.entries.get(environmentId)
-    if (!entry) {
+    // An older server answered nothing about phones; one upgraded in place is checked again.
+    if (!entry || entry.result?.kind === 'update-needed') {
       return await this.servers.has(environmentId)
     }
     const listed = new Set(phones.map((phone) => phone.phoneKey))
@@ -130,29 +131,25 @@ export class DelegatedPhoneGrantCache {
 
   private async runChecks(environmentId: string): Promise<void> {
     try {
-      await this.checkUntilSettled(environmentId)
+      do {
+        this.checkAgain.delete(environmentId)
+        try {
+          if (await this.needsSync(environmentId)) {
+            const host = await this.hosts.resolve(environmentId)
+            // A relayed request may have sent the list while this resolved the server.
+            if (host && (await this.needsSync(environmentId))) {
+              await this.sync(host)
+            }
+          }
+        } catch {
+          // Unreachable: the server stays recorded, so its return or the next change retries.
+        }
+      } while (this.checkAgain.has(environmentId))
     } finally {
-      // Same tick as the last check-again read, so no trigger lands in between.
+      // Same continuation as the last check-again read, so no trigger lands in between.
       this.checking.delete(environmentId)
       this.checkAgain.delete(environmentId)
     }
-  }
-
-  private async checkUntilSettled(environmentId: string): Promise<void> {
-    do {
-      this.checkAgain.delete(environmentId)
-      try {
-        if (await this.needsSync(environmentId)) {
-          const host = await this.hosts.resolve(environmentId)
-          // A relayed request may have sent the list while this resolved the server.
-          if (host && (await this.needsSync(environmentId))) {
-            await this.sync(host)
-          }
-        }
-      } catch {
-        // Unreachable: the server stays recorded, so its return or the next change retries.
-      }
-    } while (this.checkAgain.has(environmentId))
   }
 
   private sync(host: MobileDesktopRelayHost): Promise<DelegatedPhoneGrants> {
