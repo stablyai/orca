@@ -20,7 +20,8 @@ import { FIRST_PANE_ID } from '../../../../../../shared/workspace-layout/pane-ke
 import {
   resolveRuntimePaneTitleLeafIdFromRoot,
   resolveRuntimePaneTitleLeafIdFromSparseSlots,
-  collectRuntimePaneLeafIds
+  collectRuntimePaneLeafIds,
+  liveSlotIdsAreDense
 } from '../../../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
 import {
   isTerminalLeafId,
@@ -81,10 +82,7 @@ export function buildTitleDerivedAgentRows(args: TitleDerivedAgentRowsInput): Da
       const liveSlotIds = paneTitleEntries
         .map(([paneId]) => Number(paneId))
         .filter((paneId) => paneId >= FIRST_PANE_ID)
-      // Only dense live IDs retain mount/replay creation order; closing a pane makes IDs sparse.
-      const liveSlotsAreDense =
-        liveSlotIds.length === leafIds.length &&
-        liveSlotIds.every((paneId, index) => paneId === FIRST_PANE_ID + index)
+      const liveSlotsAreDense = liveSlotIdsAreDense(liveSlotIds, leafIds.length)
       for (const [paneId, title] of paneTitleEntries) {
         const slot = Number(paneId)
         const leafId = resolveLeafIdForTitleFallback({

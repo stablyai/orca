@@ -1,6 +1,7 @@
 import { parkedTerminalTabCoverage } from '../output-watchers/parked-terminal-tab-coverage'
 /** Keep unrestorable live PTYs mounted through force-park so remount cannot orphan their shells. */
 import { isEvictionExemptTerminalPty } from './terminal-hidden-worktree-retention'
+import { getTabIdsResumingInPlace } from '../../session-restore/spawn-deferral/pane-spawn-deferral-registry'
 import '../output-watchers/terminal-parked-tab-watchers'
 import type { ParkableTerminalTabModel } from '../output-watchers/terminal-parked-watcher-reconciliation'
 
@@ -23,8 +24,10 @@ export function selectEvictionExemptTerminalTabIds(
   tabs: readonly ParkableTerminalTabModel[]
 ): ReadonlySet<string> {
   const exemptTabIds = new Set<string>()
+  // Why: a pane with a start in flight may still hold the PTY it replaces; unmounting it would kill that PTY.
+  const resumingTabIds = getTabIdsResumingInPlace()
   for (const tab of tabs) {
-    if (isEvictionExemptTerminalTab(tab, worktreeId)) {
+    if (resumingTabIds.has(tab.id) || isEvictionExemptTerminalTab(tab, worktreeId)) {
       exemptTabIds.add(tab.id)
     }
   }

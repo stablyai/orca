@@ -98,7 +98,7 @@ describe('worktree catalog freshness', () => {
       {
         kind: 'runtime',
         maxAgeMs: 5_000,
-        verifier: { ceilingMs: 8_000, timeoutMs: 1_000, probe: () => Promise.resolve('fp') }
+        verifier: { ceilingMs: 8_000, probe: () => Promise.resolve({ fingerprint: 'fp' }) }
       },
       scans.plan
     )
@@ -107,5 +107,58 @@ describe('worktree catalog freshness', () => {
     expect((await verified).observation?.outcome).toMatchObject({
       worktrees: [{ path: '/repos/freshness/v2' }]
     })
+  })
+
+  it('never vouches for rows with a fingerprint that observed a mutation their scan missed', async () => {
+    const target = repoFor('probe-order')
+    let adminState = 'v1'
+    let releaseProbe: () => void = () => {}
+    const probeGate = new Promise<void>((resolve) => (releaseProbe = resolve))
+    const pending: (() => void)[] = []
+    const plan = {
+      // Git observes admin state when it runs, not when the flight is created.
+      scan: () => {
+        const seen = adminState
+        return new Promise<WorktreeCatalogOutcome>((resolve) =>
+          pending.push(() =>
+            resolve({
+              kind: 'rows',
+              worktrees: [
+                {
+                  path: seen,
+                  head: 'a',
+                  branch: 'refs/heads/main',
+                  isBare: false,
+                  isMainWorktree: true
+                }
+              ]
+            })
+          )
+        )
+      }
+    }
+    const requirement = {
+      kind: 'runtime' as const,
+      maxAgeMs: 5_000,
+      verifier: {
+        ceilingMs: 60_000,
+        probe: () => probeGate.then(() => ({ fingerprint: adminState }))
+      }
+    }
+
+    const first = readWorktreeCatalog(target, 'local:default', requirement, plan)
+    // The repo mutates while the pre-scan probe is still reading.
+    adminState = 'v2'
+    releaseProbe()
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    vi.setSystemTime(1_000)
+    pending.shift()!()
+    await first
+
+    // Past the window the probe matches the stored fingerprint, so the rows it vouches for must be v2.
+    vi.setSystemTime(10_000)
+    const reused = await readWorktreeCatalog(target, 'local:default', requirement, plan)
+    expect(pending).toHaveLength(0)
+    expect(reused.observation?.outcome).toMatchObject({ worktrees: [{ path: 'v2' }] })
   })
 })

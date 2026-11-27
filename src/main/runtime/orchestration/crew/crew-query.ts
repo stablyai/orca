@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { OrchestrationCoordinatorKey } from '../addressing/orchestration-caller-identity'
 import type { OrchestrationDb } from '../db/orchestration-db'
@@ -10,35 +11,37 @@ import {
 } from '../../../../shared/orchestration/approvals/worker-approval-payload'
 import { readApprovalReport } from '../workers/approvals/worker-approval-report'
 
-const nullable = z.string().nullable()
-export const CrewAssignment = z.object({
-  ordinal: z.number(),
-  id: z.string(),
-  run_id: z.string(),
-  task_id: z.string(),
-  assignee_handle: nullable,
-  assignee_pane_key: nullable,
-  assignee_orca_session_id: nullable,
-  creator_handle: nullable,
-  creator_pane_key: nullable,
-  creator_orca_session_id: nullable,
-  creator_dispatch_id: nullable,
-  status: z.string(),
-  completed_at: nullable,
-  spec: z.string(),
-  task_title: nullable,
-  display_name: nullable,
-  task_status: z.string(),
-  coordinator_handle: nullable,
-  coordinator_pane_key: nullable,
-  coordinator_session: nullable,
-  stage: nullable,
-  agent: nullable,
-  host_label: nullable,
-  assignee_process: nullable,
-  resource_incarnation: nullable,
-  resource_host_scope: nullable
-})
+const nullable = lazyZodSchema(() => z.string().nullable())
+export const CrewAssignment = lazyZodSchema(() =>
+  z.object({
+    ordinal: z.number(),
+    id: z.string(),
+    run_id: z.string(),
+    task_id: z.string(),
+    assignee_handle: nullable,
+    assignee_pane_key: nullable,
+    assignee_orca_session_id: nullable,
+    creator_handle: nullable,
+    creator_pane_key: nullable,
+    creator_orca_session_id: nullable,
+    creator_dispatch_id: nullable,
+    status: z.string(),
+    completed_at: nullable,
+    spec: z.string(),
+    task_title: nullable,
+    display_name: nullable,
+    task_status: z.string(),
+    coordinator_handle: nullable,
+    coordinator_pane_key: nullable,
+    coordinator_session: nullable,
+    stage: nullable,
+    agent: nullable,
+    host_label: nullable,
+    assignee_process: nullable,
+    resource_incarnation: nullable,
+    resource_host_scope: nullable
+  })
+)
 export type CrewAssignmentRow = z.infer<typeof CrewAssignment>
 
 // `+d.rowid`: the sort key must not steer the plan; a bare rowid makes SQLite scan for ORDER BY.
@@ -91,13 +94,15 @@ export function readCrewAssignmentIds(db: OrchestrationDb, ids: string[]): CrewA
   )
 }
 
-const Traffic = z.object({
-  peer: z.string(),
-  direction: z.enum(['to', 'from']),
-  sequence: z.number(),
-  body: z.string(),
-  created_at: z.string()
-})
+const Traffic = lazyZodSchema(() =>
+  z.object({
+    peer: z.string(),
+    direction: z.enum(['to', 'from']),
+    sequence: z.number(),
+    body: z.string(),
+    created_at: z.string()
+  })
+)
 export type CrewTraffic = z.infer<typeof Traffic>
 
 // Only an agent's own words can be a row's latest line: Orca's failure notices (escalations), empty setup

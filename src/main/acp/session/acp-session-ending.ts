@@ -81,6 +81,7 @@ export function endAcpStructuredSession(
     ...(failureClose !== null && !session.closeRequested ? { closedByOrca: true as const } : {}),
     fence: session.fence,
     acquisitionGeneration: session.acquisitionGeneration,
+    ...(session.endedBeforeAcquire ? { endedBeforeAcquire: true as const } : {}),
     observedAt
   })
 }

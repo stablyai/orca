@@ -1,5 +1,6 @@
-import { Activity, memo, useCallback, useMemo, useState } from 'react'
+import { Activity, memo, Suspense, useCallback, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import type { Tab, TabGroup } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { useAppStore } from '@/store'
 import { useWindowBackdropActive } from '@/app-shell/appearance/window-backdrop'
@@ -9,12 +10,15 @@ import {
 } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { ActivityPortalContainer } from '@/components/ui/activity-portal-container'
 import { RetainedPaneHost } from '../../../tab-group/retained-pane/RetainedPaneHost'
-import NativeChatView from '../../NativeChatView'
-import { BotGroupChat } from '../../../bots/BotGroupChat'
 import { NativeChatComposerEditorOwner } from '../../composer/editor/native-chat-composer-editor-owner'
 import { NativeChatHostOutageOwner } from '../../host-access/native-chat-host-outage-owner'
 import { NativeChatPaneLifetime } from '../ownership/native-chat-pane-lifetime'
 import { isStructuredTab } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
+
+const NativeChatView = lazy(() => import('../../NativeChatView'))
+const BotGroupChat = lazy(() =>
+  import('../../../bots/BotGroupChat').then((module) => ({ default: module.BotGroupChat }))
+)
 
 type StructuredAgentSessionTab = Tab & {
   contentType: 'agent-session'
@@ -64,16 +68,18 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
           <NativeChatComposerEditorOwner>
             <ActivityPortalContainer visible={isActive}>
               <Activity mode={effectsConnected ? 'visible' : 'hidden'}>
-                <NativeChatView
-                  mode="structured"
-                  tabId={tab.id}
-                  groupId={groupId}
-                  sessionId={tab.entityId}
-                  agent={tab.agentSessionAgent}
-                  isVisible={isActive}
-                  isFocusedGroup={isFocusedGroup}
-                  target={target}
-                />
+                <Suspense fallback={null}>
+                  <NativeChatView
+                    mode="structured"
+                    tabId={tab.id}
+                    groupId={groupId}
+                    sessionId={tab.entityId}
+                    agent={tab.agentSessionAgent}
+                    isVisible={isActive}
+                    isFocusedGroup={isFocusedGroup}
+                    target={target}
+                  />
+                </Suspense>
               </Activity>
             </ActivityPortalContainer>
           </NativeChatComposerEditorOwner>
@@ -106,12 +112,14 @@ const RoomOverlaySlot = memo(function RoomOverlaySlot({
       data-room-overlay-tab-id={tab.id}
       onFocusOwningGroup={onFocusOwningGroup}
     >
-      <BotGroupChat
-        roomId={tab.entityId}
-        tabId={tab.id}
-        isVisible={isActive}
-        isFocusedGroup={isFocusedGroup}
-      />
+      <Suspense fallback={null}>
+        <BotGroupChat
+          roomId={tab.entityId}
+          tabId={tab.id}
+          isVisible={isActive}
+          isFocusedGroup={isFocusedGroup}
+        />
+      </Suspense>
     </RetainedPaneHost>
   )
 })

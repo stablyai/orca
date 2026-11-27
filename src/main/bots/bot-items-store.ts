@@ -31,7 +31,9 @@ export class BotItemsStore extends BotItemsOwner {
         ON item_events(item_uid, json_extract(data, '$.requestId'))
         WHERE kind = 'commented' AND json_extract(data, '$.requestId') IS NOT NULL;
         CREATE INDEX IF NOT EXISTS idx_item_events_owed_attachment_comments
-        ON item_events(id) WHERE ${OWED_ATTACHMENT_COMMENTS}`)
+        ON item_events(id) WHERE ${OWED_ATTACHMENT_COMMENTS};
+        CREATE INDEX IF NOT EXISTS idx_item_events_status_at
+        ON item_events(item_uid, created_at) WHERE kind = 'status'`)
     }
     if (path !== ':memory:') {
       hardenSqliteDatabaseFiles(path)

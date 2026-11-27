@@ -2,17 +2,20 @@ import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-
 import type { UsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import { getProviderDisplayName } from '../../../../../shared/agent-usage/display/usage-provider-windows'
 import type { Translate } from '@/i18n/use-translate'
-import { getStatusBarUsageSections } from '../composition/status-bar-usage-sections'
+import type { StatusBarUsageSection } from '../composition/status-bar-usage-sections'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
 
-/** What a compact chip stands for, named in full: "Claude Fable 96% used", "Cursor Models 64% used". */
+/**
+ * What a compact chip stands for, named in full: "Claude Fable 96% used", "Cursor Models 64% used".
+ * Why the caller passes the headline: chips already derived it, so the title must not re-derive it.
+ */
 export function formatUsageChipTitle(
   p: ProviderRateLimits,
+  headline: StatusBarUsageSection | undefined,
   display: UsagePercentageDisplay,
   t: Translate
 ): string {
   const providerName = getProviderDisplayName(p.provider)
-  const headline = getStatusBarUsageSections(p, 'compact', t)[0]
   if (!headline) {
     return providerName
   }

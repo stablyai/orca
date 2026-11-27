@@ -279,7 +279,7 @@ export class ConnectorReplyOutbox {
   ): Promise<number | null> {
     let left = owed.length
     for (const row of owed) {
-      const { outcome, prose, answerDeliveryId, filledAt, toolsRan } = row.fill
+      const { outcome, prose, answerDeliveryId, filledAt, turnStartedAt, toolsRan } = row.fill
       const conversation = cloudConversation(row.conversation)
       if (outcome !== 'quiet' && conversation) {
         // Checked just before the wire: still this account, still the kill switch's hello.
@@ -291,7 +291,7 @@ export class ConnectorReplyOutbox {
         const posted = await client.post({
           replyId: drainReplyId(row.deliveryId),
           conversation,
-          turnId: filledAt,
+          turnId: turnStartedAt ?? filledAt,
           text:
             outcome === 'answered' && prose
               ? prose

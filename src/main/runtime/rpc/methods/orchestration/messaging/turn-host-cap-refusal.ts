@@ -13,7 +13,10 @@ import type { ChatRequestError } from '../../../../orchestration/workers/turn-st
 // The chat's own newest starts; a turn that failed on the cap made one of them.
 const RECENT_STARTS = 20
 
-function turnStartedAt(snapshot: AgentJournalSnapshot | null, turnId: string): number | null {
+function turnStartedAt(
+  snapshot: AgentJournalSnapshot | null | undefined,
+  turnId: string
+): number | null {
   const item = snapshot?.items.find(
     (entry) =>
       isRootAgentJournalItem(entry) &&

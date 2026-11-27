@@ -3,9 +3,9 @@ import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'rea
 import { Maximize2, X } from 'lucide-react-native'
 import type { NativeChatVisualDirective } from '../../../../../src/shared/native-chat/visuals/native-chat-visual-directive'
 import { useWindowSafeAreaInsets } from '../../../layout/side-safe-area'
-import { colors, radii, spacing, typography, pressedStyle } from '../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { radii, spacing, typography, pressedStyle } from '../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../theme/themed-styles'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import type { MobileNativeChatVisualSource } from './mobile-native-chat-visual-read'
 import { MOBILE_NATIVE_CHAT_VISUAL_INITIAL_HEIGHT } from './mobile-native-chat-visual-host-document'
 import { MobileNativeChatVisualFrame } from './MobileNativeChatVisualFrame'
@@ -14,7 +14,8 @@ import type { MobileNativeChatVisualRender } from './mobile-native-chat-visual-c
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 
 function MobileNativeChatVisualPlaceholder() {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View style={[styles.frame, styles.placeholder]}>
       <ActivityIndicator size="small" color={colors.textMuted} />
@@ -41,7 +42,8 @@ export const MobileNativeChatVisual = memo(function MobileNativeChatVisual({
   directive: NativeChatVisualDirective
   source: MobileNativeChatVisualSource
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const { state, retry } = useMobileNativeChatVisual(source, directive.file)
   const [frameFailed, setFrameFailed] = useState(false)
@@ -121,7 +123,8 @@ function MobileNativeChatVisualFullscreen({
   onClose: () => void
   onFailed: () => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const insets = useWindowSafeAreaInsets()
   return (
@@ -162,7 +165,7 @@ function MobileNativeChatVisualFullscreen({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   frame: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
@@ -186,7 +189,7 @@ const styles = themedStyleSheet(() => ({
     borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.bgPanel,
+    backgroundColor: colors.chatPanel,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle
   },

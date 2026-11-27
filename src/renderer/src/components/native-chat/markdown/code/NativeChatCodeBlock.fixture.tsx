@@ -30,3 +30,33 @@ export const snippet = defineFixture({
   width: 560,
   render: () => block('<div class="card">hi</div>')
 })
+
+const longPath =
+  "Error: Cannot find module '/Users/someone/Documents/projects/orca/centralized-notification/out/cli/index.js'\n    at Module._resolveFilename (node:internal/modules/cjs/loader:1145:15)"
+const unlabeled = (code: string) => (
+  <div className="native-chat-appearance bg-background p-4">
+    <NativeChatCodeBlock>{code}</NativeChatCodeBlock>
+  </div>
+)
+// Focus reveals the hover-only actions, so the shot shows them over the code.
+const revealActions = (frame: HTMLElement) =>
+  frame.querySelector<HTMLButtonElement>('[data-native-chat-code-block] button')?.focus()
+
+export const unlabeledLongPath = defineFixture({
+  width: 560,
+  render: () => unlabeled(longPath),
+  interact: revealActions
+})
+export const unlabeledNarrow = defineFixture({
+  width: 320,
+  render: () => unlabeled(longPath),
+  interact: revealActions
+})
+export const unlabeledWrapped = defineFixture({
+  width: 320,
+  render: () => unlabeled(longPath),
+  interact: (frame) => {
+    frame.querySelector<HTMLButtonElement>('[data-native-chat-code-block] button')?.click()
+    revealActions(frame)
+  }
+})

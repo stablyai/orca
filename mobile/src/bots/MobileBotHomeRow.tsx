@@ -1,6 +1,6 @@
 import type React from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { ChevronDown, ChevronRight, Gauge, Lightbulb } from 'lucide-react-native'
+import { ChevronDown, ChevronRight } from 'lucide-react-native'
 import { botGroupRowLine } from '../../../src/shared/bots/bot-sidebar-entries'
 import {
   splitBotSearchText,
@@ -15,19 +15,23 @@ import {
   mobileBotRowNeedsYou
 } from './mobile-bot-row-line'
 import { useMobileBotUsageLimitStop } from './use-mobile-bot-usage-limit-stop'
-import { colors, feedback, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
+import { feedback, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import { AgentSpinner } from '../agents/presentation/AgentSpinner'
-import { MobileBotItemStatusIcon } from './items/MobileBotItemStatusIcon'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { intlLocaleFor } from '../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../i18n/use-mobile-translation'
 import { useSharedNow } from '../hooks/use-now'
 import { HostContextPill } from '../worktree/row-presentation/HostContextPill'
-import { MobileBotAvatar } from './MobileBotAvatar'
 import { MobileBotFaceStack } from './MobileBotFaceStack'
 import { MobileConnectorSourceIcon } from './MobileConnectorSourceIcon'
-import type { BotRowStatus } from '../../../src/shared/bots/bot-row-status'
-import type { WorktreeStatus } from '../../../src/shared/worktree/row-display/worktree-status-rollup'
-import type { MobileBotAvatarSource, MobileBotGroupRowFacts } from './host-bot-row-facts'
+import {
+  MobileBotNeedsYouCount,
+  MobileBotRowAvatar,
+  MobileBotRowStatus,
+  MobileBotUpNextCount
+} from './MobileBotRowBadges'
+import type { MobileBotGroupRowFacts } from './host-bot-row-facts'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 
 /** The bot's home opens through the same workspace control as every other row. */
 export function MobileBotHomeRow({
@@ -48,12 +52,15 @@ export function MobileBotHomeRow({
   onLongPress?: () => void
   onToggle?: () => void
 }) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const now = useSharedNow(30_000)
   const bot = view.botFacts!
   // The desktop row's line, from its Chat's and threads' agent rows; waits while nothing works. A
   // search that found the bot by what it's for shows that in its place.
-  const line = bot.searchPurpose ? null : mobileBotRowLine(bot, item.agents ?? [], now)
+  const line = bot.searchPurpose ? null : mobileBotRowLine(bot, item.agents ?? [], now, t)
   // The line's count, so the badge never disagrees with it; a down host's row keeps its last, greyed.
   const needsYou = mobileBotRowNeedsYou(bot.line, item.agents ?? [], now)
   // A down server's bot shows only where it runs and that computer's word: its last activity isn't live.
@@ -62,10 +69,17 @@ export function MobileBotHomeRow({
   // A server's sessions aren't on its paired computer's feed; a search's purpose line keeps its place.
   const feedHost = down || bot.host || bot.searchPurpose ? null : pairedHostId
   const stop = useMobileBotUsageLimitStop(feedHost, bot.workspaceIds, now)
-  const limitText = mobileBotRowLimitText(stop, line, { ...bot.line, dot: bot.dot }, now)
+  const limitText = mobileBotRowLimitText(
+    stop,
+    line,
+    { ...bot.line, dot: bot.dot },
+    now,
+    t,
+    intlLocale
+  )
   const lineText =
     limitText ??
-    (line ? mobileBotRowLineText(line, now) : (bot.searchPurpose?.text ?? bot.statusLine))
+    (line ? mobileBotRowLineText(line, now, t) : (bot.searchPurpose?.text ?? bot.statusLine))
   // The line names who waits on an access answer, since nothing else on the row says it.
   const preview = down
     ? ''
@@ -74,7 +88,7 @@ export function MobileBotHomeRow({
       : lineText
   const age =
     !down && !limitText && line?.kind === 'activity' && line.at !== null
-      ? formatTimeAgo(line.at, now)
+      ? formatTimeAgo(line.at, now, t)
       : null
   // The desktop's mark before a thread's label, which leads an activity line.
   const placeSource =
@@ -189,90 +203,13 @@ export function MobileBotGroupRow({
       title={item.displayName}
       unread={item.unread}
       preview={line.text}
-      age={line.at === null ? null : formatTimeAgo(line.at, now)}
+      age={line.at === null ? null : formatTimeAgo(line.at, now, t)}
       active={item.isActive}
       divider={divider}
       disabled={isReadOnly}
       onPress={onPress}
       onLongPress={onLongPress}
     />
-  )
-}
-
-/** A bot's 32 pt picture with its status at the corner, or the amber gauge on a usage limit. */
-export function MobileBotRowAvatar({
-  avatar,
-  dot,
-  stopped = false,
-  surface
-}: {
-  avatar: MobileBotAvatarSource
-  dot: BotRowStatus | null
-  stopped?: boolean
-  surface?: string
-}) {
-  return (
-    <>
-      <MobileBotAvatar avatar={avatar} size={32} />
-      {stopped ? (
-        <View style={[styles.status, surface ? { backgroundColor: surface } : null]}>
-          <Gauge size={12} color={colors.statusAmber} />
-        </View>
-      ) : (
-        <MobileBotRowStatus dot={dot} surface={surface} />
-      )}
-    </>
-  )
-}
-
-/** A row picture's status at its corner, ringed in the surface it sits on; none draws nothing. */
-export function MobileBotRowStatus({
-  dot,
-  surface
-}: {
-  dot: WorktreeStatus | null
-  /** The row's background, when it isn't the page's (a grouped panel). */
-  surface?: string
-}) {
-  return dot && dot !== 'active' && dot !== 'done' ? (
-    <View style={[styles.status, surface ? { backgroundColor: surface } : null]}>
-      <AgentSpinner status={dot} />
-    </View>
-  ) : null
-}
-
-/** A bot's items that need you: an orange dot and the count, in the Up next count's muted style. */
-export function MobileBotNeedsYouCount({ count }: { count: number }) {
-  const t = useMobileTranslation()
-  return (
-    <View
-      style={styles.upNext}
-      accessible
-      accessibilityRole="image"
-      accessibilityLabel={t('bots.items.needYouCount', '{{count}} items need you', {
-        count,
-        defaultValue_one: '{{count}} item needs you'
-      })}
-    >
-      <MobileBotItemStatusIcon status="needs_you" size={6} />
-      <Text style={styles.count}>{count}</Text>
-    </View>
-  )
-}
-
-/** A bot's new Up next suggestions, in the fold's muted count style, as the desktop's lightbulb. */
-function MobileBotUpNextCount({ count }: { count: number }) {
-  const t = useMobileTranslation()
-  return (
-    <View
-      style={styles.upNext}
-      accessible
-      accessibilityRole="image"
-      accessibilityLabel={t('bots.upNext.newInUpNext', '{{count}} new in Suggestions', { count })}
-    >
-      <Lightbulb size={12} color={colors.textMuted} />
-      <Text style={styles.count}>{count}</Text>
-    </View>
   )
 }
 
@@ -315,6 +252,7 @@ export function MobileBotRowView({
   onLongPress?: () => void
   titleTrailing?: React.ReactNode
 }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   return (
     <Pressable
@@ -359,6 +297,7 @@ export function MobileBotRowView({
 
 /** A search's matched words drawn bold within the line, keyed by where each starts. */
 function BoldMatches({ text, ranges }: { text: string; ranges: readonly BotSearchRange[] }) {
+  const styles = useThemedStyles(stylesSheet)
   const parts = splitBotSearchText(text, ranges)
   const starts = parts.map((_, at) =>
     parts.slice(0, at).reduce((length, part) => length + part.text.length, 0)
@@ -378,7 +317,7 @@ function BoldMatches({ text, ranges }: { text: string; ranges: readonly BotSearc
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -397,14 +336,6 @@ const styles = themedStyleSheet(() => ({
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.borderSubtle
   },
-  status: {
-    position: 'absolute',
-    right: -5,
-    bottom: -5,
-    borderRadius: 12,
-    backgroundColor: colors.bgBase,
-    padding: 1
-  },
   main: { flex: 1, minWidth: 0 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   title: { flex: 1, fontSize: 15, color: colors.textPrimary, fontWeight: '500' },
@@ -419,7 +350,6 @@ const styles = themedStyleSheet(() => ({
     justifyContent: 'flex-end'
   },
   count: { fontSize: 13, color: colors.textMuted },
-  upNext: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   activity: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: 3 },
   preview: { flex: 1, fontSize: 13, color: colors.textMuted },
   previewUnread: { color: colors.textSecondary },

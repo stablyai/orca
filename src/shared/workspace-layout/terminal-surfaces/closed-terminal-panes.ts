@@ -3,6 +3,7 @@ import {
   CLOSED_TERMINAL_TAB_TOMBSTONE_TTL_MS as CLOSED_TERMINAL_PANE_TTL_MS,
   pruneClosedTerminalTabTombstones
 } from './closed-terminal-tab-tombstones'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
 /** Remember layout-dropped panes until terminal exit can retire their records by PTY/incarnation. Main layout writes, exit cleanup reads; bound by TTL/per-host cap. Older builds ignore this. */
 export type ClosedTerminalPane = {
@@ -14,12 +15,14 @@ export type ClosedTerminalPane = {
 
 export type ClosedTerminalPanesByPaneKey = Record<string, ClosedTerminalPane>
 
-export const closedTerminalPaneSchema = z.object({
-  ptyId: z.string().min(1),
-  incarnationId: z.string().min(1),
-  worktreeId: z.string().min(1),
-  closedAt: z.number().int().nonnegative()
-})
+export const closedTerminalPaneSchema = lazyZodSchema(() =>
+  z.object({
+    ptyId: z.string().min(1),
+    incarnationId: z.string().min(1),
+    worktreeId: z.string().min(1),
+    closedAt: z.number().int().nonnegative()
+  })
+)
 
 export function recordClosedTerminalPanes(
   map: ClosedTerminalPanesByPaneKey | undefined,

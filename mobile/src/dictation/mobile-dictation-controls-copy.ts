@@ -1,4 +1,4 @@
-import { translate } from '../i18n/mobile-i18n'
+import type { Translate } from '../i18n/mobile-i18n'
 import type {
   MobileDictationEngineShown,
   MobileDictationKeptFailure
@@ -12,50 +12,50 @@ export type MobileDictationMicState = { starting: boolean; active: boolean; proc
 
 // One set of dictation labels for the chat composer, the terminal and the pill.
 export const dictationControlsCopy = {
-  start: () => translate('dictation.controls.start', 'Dictate'),
-  starting: () => translate('dictation.controls.starting', 'Starting dictation'),
-  stop: () => translate('dictation.controls.stop', 'Stop and insert'),
-  finishing: () => translate('dictation.controls.finishing', 'Finishing dictation'),
-  cancel: () => translate('dictation.controls.cancel', 'Cancel dictation'),
-  discard: () => translate('dictation.controls.discard', 'Discard recording'),
-  retry: () => translate('dictation.controls.retry', 'Retry dictation'),
-  retryShort: () => translate('dictation.controls.retryShort', 'Retry'),
-  recordingKept: () => translate('dictation.failure.recordingKept', 'Recording kept'),
-  mic: ({ starting, active, processing }: MobileDictationMicState) =>
+  start: (t: Translate) => t('dictation.controls.start', 'Dictate'),
+  starting: (t: Translate) => t('dictation.controls.starting', 'Starting dictation'),
+  stop: (t: Translate) => t('dictation.controls.stop', 'Stop and insert'),
+  finishing: (t: Translate) => t('dictation.controls.finishing', 'Finishing dictation'),
+  cancel: (t: Translate) => t('dictation.controls.cancel', 'Cancel dictation'),
+  discard: (t: Translate) => t('dictation.controls.discard', 'Discard recording'),
+  retry: (t: Translate) => t('dictation.controls.retry', 'Retry dictation'),
+  retryShort: (t: Translate) => t('dictation.controls.retryShort', 'Retry'),
+  recordingKept: (t: Translate) => t('dictation.failure.recordingKept', 'Recording kept'),
+  mic: ({ starting, active, processing }: MobileDictationMicState, t: Translate) =>
     starting
-      ? dictationControlsCopy.starting()
+      ? dictationControlsCopy.starting(t)
       : active
-        ? dictationControlsCopy.stop()
+        ? dictationControlsCopy.stop(t)
         : processing
-          ? dictationControlsCopy.finishing()
-          : dictationControlsCopy.start(),
-  finishingOn: (computer: string | null) =>
+          ? dictationControlsCopy.finishing(t)
+          : dictationControlsCopy.start(t),
+  finishingOn: (computer: string | null, t: Translate) =>
     computer
-      ? translate('dictation.status.finishingOn', 'Finishing on {{computer}}', { computer })
-      : translate('dictation.status.finishingOnComputer', 'Finishing on the computer'),
-  movedTo: (computer: string | null) =>
+      ? t('dictation.status.finishingOn', 'Finishing on {{computer}}', { computer })
+      : t('dictation.status.finishingOnComputer', 'Finishing on the computer'),
+  movedTo: (computer: string | null, t: Translate) =>
     computer
-      ? translate('dictation.status.movedTo', 'Moved to {{computer}}', { computer })
-      : translate('dictation.status.movedToComputer', 'Moved to the computer')
+      ? t('dictation.status.movedTo', 'Moved to {{computer}}', { computer })
+      : t('dictation.status.movedToComputer', 'Moved to the computer')
 }
 
-export function dictationSpokenDuration(elapsedSeconds: number): string {
+export function dictationSpokenDuration(elapsedSeconds: number, t: Translate): string {
   const minutes = Math.floor(elapsedSeconds / 60)
   const count = elapsedSeconds % 60
   const seconds =
     count === 1
-      ? translate('dictation.controls.durationSeconds_one', '{{count}} second', { count })
-      : translate('dictation.controls.durationSeconds_other', '{{count}} seconds', { count })
+      ? t('dictation.controls.durationSeconds_one', '{{count}} second', { count })
+      : t('dictation.controls.durationSeconds_other', '{{count}} seconds', { count })
   if (minutes === 0) {
     return seconds
   }
   const minuteText =
     minutes === 1
-      ? translate('dictation.controls.durationMinutes_one', '{{count}} minute', { count: minutes })
-      : translate('dictation.controls.durationMinutes_other', '{{count}} minutes', {
+      ? t('dictation.controls.durationMinutes_one', '{{count}} minute', { count: minutes })
+      : t('dictation.controls.durationMinutes_other', '{{count}} minutes', {
           count: minutes
         })
-  return translate('dictation.controls.durationMinutesSeconds', '{{minutes}} {{seconds}}', {
+  return t('dictation.controls.durationMinutesSeconds', '{{minutes}} {{seconds}}', {
     minutes: minuteText,
     seconds
   })
@@ -65,52 +65,48 @@ export function dictationSpokenDuration(elapsedSeconds: number): string {
 export function dictationMeterLabel(
   elapsedSeconds: number,
   engine: MobileDictationEngineShown['kind'] | null,
-  computer: string | null
+  computer: string | null,
+  t: Translate
 ): string {
-  const duration = dictationSpokenDuration(elapsedSeconds)
+  const duration = dictationSpokenDuration(elapsedSeconds, t)
   if (engine === 'phone') {
-    return translate('dictation.controls.meterOnPhone', 'Recording, {{duration}}, on this phone', {
+    return t('dictation.controls.meterOnPhone', 'Recording, {{duration}}, on this phone', {
       duration
     })
   }
   if (engine === 'computer') {
     return computer
-      ? translate('dictation.controls.meterOn', 'Recording, {{duration}}, on {{computer}}', {
+      ? t('dictation.controls.meterOn', 'Recording, {{duration}}, on {{computer}}', {
           duration,
           computer
         })
-      : translate(
-          'dictation.controls.meterOnComputer',
-          'Recording, {{duration}}, on the computer',
-          {
-            duration
-          }
-        )
+      : t('dictation.controls.meterOnComputer', 'Recording, {{duration}}, on the computer', {
+          duration
+        })
   }
-  return translate('dictation.controls.meter', 'Recording, {{duration}}', { duration })
+  return t('dictation.controls.meter', 'Recording, {{duration}}', { duration })
 }
 
 // The few words a kept failure shows in the composer row; the full message is too long for it.
-export function dictationFailureReason(failure: MobileDictationKeptFailure): string {
+export function dictationFailureReason(failure: MobileDictationKeptFailure, t: Translate): string {
   return (
-    dictationKeptFailureCause(failure) ??
-    translate('dictation.failure.stopped', 'Dictation stopped')
+    dictationKeptFailureCause(failure, t) ?? t('dictation.failure.stopped', 'Dictation stopped')
   )
 }
 
 // Why a kept failure stopped, when it is known; null for the generic stop.
-export function dictationKeptFailureCause({
-  message,
-  offline
-}: MobileDictationKeptFailure): string | null {
-  if (offline || dictationFailureMessage(message) === dictationSessionLostMessage()) {
-    return translate('dictation.failure.connectionLost', 'Connection lost')
+export function dictationKeptFailureCause(
+  { message, offline }: MobileDictationKeptFailure,
+  t: Translate
+): string | null {
+  if (offline || dictationFailureMessage(message, t) === dictationSessionLostMessage(t)) {
+    return t('dictation.failure.connectionLost', 'Connection lost')
   }
   if (message === MOBILE_DICTATION_CONNECTION_SLOW_ERROR_MESSAGE) {
-    return translate('dictation.failure.connectionSlow', 'Connection too slow')
+    return t('dictation.failure.connectionSlow', 'Connection too slow')
   }
-  if (message === phoneDictationFailedMessage()) {
-    return translate('dictation.failure.phoneStopped', 'Stopped on this phone')
+  if (message === phoneDictationFailedMessage(t)) {
+    return t('dictation.failure.phoneStopped', 'Stopped on this phone')
   }
   return null
 }

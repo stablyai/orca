@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ActivityIndicator, Platform, Pressable, Text, View } from 'react-native'
-import { colors, spacing, typography, pressedStyle } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing, typography, pressedStyle } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { MobileLoadErrorState } from '../../components/feedback/MobileStateView'
-import { styles as markdownStyles } from '../../components/markdown/mobile-markdown-styles'
+import { stylesSheet as markdownStylesSheet } from '../../components/markdown/mobile-markdown-styles'
 import { MobileImageViewer } from '../media/presentation/MobileImageViewer'
 import { MobileImageViewerActions } from '../../session/native-chat/visual/MobileImageViewerActions'
 import type { MobileFilePreviewRpcSender } from '../preview/mobile-file-preview-operations'
@@ -32,7 +32,9 @@ export function MobileMarkdownPreviewImage({
   width,
   onOpenLink
 }: Props) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const markdownStyles = useThemedStyles(markdownStylesSheet)
   const t = useMobileTranslation()
   const [load, setLoad] = useState<{ uri?: string; error?: string }>({})
   const [attempt, setAttempt] = useState(0)
@@ -132,7 +134,7 @@ export function MobileMarkdownPreviewImage({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   frame: { gap: spacing.xs },
   imageButton: { alignSelf: 'flex-start', maxWidth: '100%' },
   caption: { color: colors.textSecondary, fontSize: typography.metaSize }

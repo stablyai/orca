@@ -27,7 +27,7 @@ import {
 import {
   rewrittenPaths,
   sharerRawFiles,
-  withoutRefusedSkills,
+  withoutRefusedParts,
   writeContentFolder
 } from './bot-package-content-files'
 import { BOT_DISPLAY_NAME_MAX, isLandingText, landingLine } from './bot-package-transport'
@@ -154,9 +154,9 @@ export class BotShareCandidates {
       input.shareable,
       withNote(botPackageFor(input.bot, input.shareable, input.selection))
     )
-    // A picked skill that couldn't be read goes out of the manifest and the choices, with why; the
-    // candidate keeps the bot's own view of its parts for opening them.
-    const packed = withoutRefusedSkills(input.shareable, refused)
+    // A picked skill or note that couldn't be read goes out of the manifest and the choices, with
+    // why; the candidate keeps the bot's own view of its parts for opening them.
+    const packed = withoutRefusedParts(input.shareable, refused)
     const declared = withNote(botPackageFor(input.bot, packed, input.selection))
     const content = buildBotPackageContent({ bot: declared, files: raw })
     if (this.candidates.size >= MAX_CANDIDATES) {

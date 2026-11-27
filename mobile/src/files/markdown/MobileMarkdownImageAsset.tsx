@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ActivityIndicator, Image } from 'react-native'
-import { colors } from '../../theme/mobile-theme'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { isSvgDataUri, MobileSvgImage } from '../media/presentation/MobileSvgImage'
 
 export type MobileMarkdownImageAssetProps = {
@@ -26,6 +26,7 @@ function MobileMarkdownRasterImage({
   availableWidth,
   onError
 }: MobileMarkdownImageAssetProps) {
+  const colors = useMobileColors()
   const [size, setSize] = useState<{ width: number; height: number } | null>(null)
   useEffect(() => {
     let live = true

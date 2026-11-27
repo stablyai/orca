@@ -11,10 +11,12 @@ import { MobileNativeChatRowOverlaysHost } from '../session/native-chat/transcri
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { BotGroupTranscript } from '../../../src/shared/bots/bot-group-transcript'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import { groupStyles as styles } from './mobile-bot-group-styles'
+import { groupStylesSheet } from './mobile-bot-group-styles'
 import { MobileBotFaceStack } from './MobileBotFaceStack'
 import type { MobileBotAvatarSource } from './host-bot-row-facts'
 import type { Translate } from '../i18n/mobile-i18n'
+import { useThemedStyles } from '../theme/themed-styles'
+
 const READER_SCROLL_MS = 300
 const EMPTY_FACES = 34
 /** Names an empty room lists before "and N more". */
@@ -48,6 +50,7 @@ export function MobileBotGroupTranscript({
   members: readonly { id: string; name: string; avatar: MobileBotAvatarSource }[]
   children: ReactNode
 }) {
+  const styles = useThemedStyles(groupStylesSheet)
   const t = useMobileTranslation()
   const hasItems = Boolean(data?.messages.length)
   const tail = useMobileNativeChatTailFollow({ scopeKey: roomId, hasItems })

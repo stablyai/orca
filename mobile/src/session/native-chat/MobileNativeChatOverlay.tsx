@@ -14,7 +14,10 @@ import { useMobileNativeChatComposerTray } from './composer/menus/use-mobile-nat
 import { useMobileNativeChatVisualRenderer } from './visual/MobileNativeChatVisual'
 import { MobileNativeChatVisualContext } from './visual/mobile-native-chat-visual-context'
 import { MobileNativeChatRootItemSourceContext } from './transcript/projection/mobile-native-chat-item-read'
-import { useMobileNativeChatMessageDetail } from './transcript/projection/use-mobile-native-chat-message-detail'
+import {
+  useMobileNativeChatDetailSource,
+  useMobileNativeChatMessageDetail
+} from './transcript/projection/use-mobile-native-chat-message-detail'
 import {
   MobileNativeChatReplyRevealsContext,
   useMobileNativeChatReplyReveals
@@ -167,32 +170,7 @@ function MobileNativeChatOverlayContent({
   const visuals = useMobileNativeChatVisualRenderer(controller.nativeChatVisualSource)
   const replyReveals = useMobileNativeChatReplyReveals(folded, streaming !== null, sendSurfaceId)
   const itemSource = controller.nativeChatItemSource
-  const committedDetail = useMemo(
-    () => ({ current: fullContent.detail }),
-    [itemSource?.client, itemSource?.sessionId]
-  )
-  useLayoutEffect(() => {
-    committedDetail.current = fullContent.detail
-  }, [committedDetail, fullContent.detail])
-  const load = useCallback(
-    async (id: string) => {
-      if (!committedDetail.current) {
-        throw new Error('Message unavailable')
-      }
-      await committedDetail.current.load(id)
-    },
-    [committedDetail]
-  )
-  const detailSource = useMemo(
-    () =>
-      itemSource
-        ? {
-            ...itemSource,
-            messageDetail: fullContent.detail ? { ...fullContent.detail, load } : null
-          }
-        : null,
-    [itemSource, fullContent.detail, load]
-  )
+  const detailSource = useMobileNativeChatDetailSource(itemSource, fullContent.detail)
   const { mentionFiles, markdownLinks, openFile } = useMobileNativeChatFiles({
     controller,
     worktreePath,
@@ -348,6 +326,7 @@ function MobileNativeChatOverlayContent({
                       onLoadEarlier={session.loadEarlier}
                       onSend={images.sendNativeChat}
                       sendSurfaceId={sendSurfaceId}
+                      sessionId={sessionId}
                       getSendCompletionGeneration={getSendCompletionGeneration}
                       getComposerEditGeneration={controller.getChatComposerEditGeneration}
                       pending={controller.chatPending}
