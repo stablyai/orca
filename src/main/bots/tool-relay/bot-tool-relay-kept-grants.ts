@@ -125,7 +125,7 @@ export class KeptRelayGrants {
    */
   admitThroughFront<Call>(
     req: Pick<IncomingMessage, 'method' | 'socket'>,
-    res: Pick<ServerResponse, 'shouldKeepAlive' | 'once'>,
+    res: { shouldKeepAlive: boolean; once(event: 'close', listener: () => void): unknown },
     admit: () => Call | null
   ): Call | null {
     const port = req.method === 'GET' ? this.frontOf.get(req.socket) : undefined
