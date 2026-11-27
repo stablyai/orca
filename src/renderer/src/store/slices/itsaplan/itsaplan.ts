@@ -68,18 +68,19 @@ export const createItsaplanSlice: StateCreator<AppState, [], [], ItsaplanSlice> 
     itsaplanIssueLists: {},
     itsaplanIssueDetails: {},
 
-    refreshItsaplanStatus: async () => {
-      const gen = generation
-      let status: ItsaplanConnectionStatus
-      try {
-        status = await client().status()
-      } catch {
-        // Settle out of the null "checking" state so setup UI does not spin forever.
-        status = DISCONNECTED_STATUS
-      }
-      setIfCurrent(gen, { itsaplanStatus: status })
-      return status
-    },
+    refreshItsaplanStatus: () =>
+      dedupe('status', async () => {
+        const gen = generation
+        let status: ItsaplanConnectionStatus
+        try {
+          status = await client().status()
+        } catch {
+          // Settle out of the null "checking" state so setup UI does not spin forever.
+          status = DISCONNECTED_STATUS
+        }
+        setIfCurrent(gen, { itsaplanStatus: status })
+        return status
+      }),
 
     connectItsaplan: async (args) => {
       const result = await client().connect(args)
