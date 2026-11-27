@@ -21447,7 +21447,18 @@
         "unlisted": "バックグラウンド処理を実行中",
         "unread": "ワーカーを読み込めませんでした",
         "unreadDetail": "読み込みが終わると、ここにワーカーが表示されます",
-        "chipLabel": "{{label}}、最新: {{title}}"
+        "chipLabel": "{{label}}、最新: {{title}}",
+        "backgroundCommandCount_other": "{{count}} 件のバックグラウンドコマンド",
+        "commandCount_other": "{{count}} 件のコマンド",
+        "mixedRegion": "ワーカーとバックグラウンドコマンド",
+        "commandsRegion": "バックグラウンドコマンド",
+        "stopCommands": "コマンドを停止",
+        "stopSubagentsAndCommands": "サブ Agent とコマンドを停止",
+        "workersKeepRunning": "ワーカーは実行を続けます",
+        "clearFailedWorkers": "失敗したワーカーをクリア",
+        "mixedCount": "{{workers}} · {{commands}}",
+        "mixedCountSpoken": "{{workers}}、{{commands}}",
+        "stopSubagents": "サブ Agent を停止"
       },
       "webhookSetup": {
         "heading": "Webhook を設定",

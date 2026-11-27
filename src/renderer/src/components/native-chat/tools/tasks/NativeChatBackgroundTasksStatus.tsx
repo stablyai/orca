@@ -53,6 +53,8 @@ export function NativeChatBackgroundTasksStatus(liveProps: {
   workerRows?: ReadonlyMap<string, WorkerDockRowView>
   workerIdentities?: readonly {
     id: string
+    /** Absent on an orchestration worker's identity. */
+    kind?: string
     state: WorkerDockRowView['state']
     changedAt: number | null
     settlement: string | null

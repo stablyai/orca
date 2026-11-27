@@ -22968,7 +22968,20 @@
         "unlisted": "Arka plan işi çalışıyor",
         "unread": "Çalışanlar yüklenemedi",
         "unreadDetail": "Çalışanlar yüklendiğinde burada görünecek",
-        "chipLabel": "{{label}}, en son: {{title}}"
+        "chipLabel": "{{label}}, en son: {{title}}",
+        "backgroundCommandCount_one": "{{count}} arka plan komutu",
+        "backgroundCommandCount_other": "{{count}} arka plan komutu",
+        "commandCount_one": "{{count}} komut",
+        "commandCount_other": "{{count}} komut",
+        "mixedRegion": "Çalışanlar ve arka plan komutları",
+        "commandsRegion": "Arka plan komutları",
+        "stopCommands": "Komutları durdur",
+        "stopSubagentsAndCommands": "Alt ajanları ve komutları durdur",
+        "workersKeepRunning": "Çalışanlar çalışmaya devam eder",
+        "clearFailedWorkers": "Başarısız çalışanları temizle",
+        "mixedCount": "{{workers}} · {{commands}}",
+        "mixedCountSpoken": "{{workers}}, {{commands}}",
+        "stopSubagents": "Alt ajanları durdur"
       },
       "webhookSetup": {
         "heading": "Webhook kur",
