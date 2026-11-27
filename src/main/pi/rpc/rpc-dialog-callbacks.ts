@@ -9,10 +9,10 @@ import type { JsonlRpcRecord } from '../../jsonl-rpc/peer'
 import { piRpcDialogPresentation, type PiRpcDialogPresentation } from './rpc-extension-dialogs'
 import { PiRpcBackgroundWork } from './background-work/rpc-background-work'
 import { PiRpcSubagents } from './rpc-subagents'
+import { PiRpcExtensionUi } from './rpc-extension-ui'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
 
 type Callback = { presentation: PiRpcDialogPresentation; claimed: boolean; bytes: number }
-const DECORATION = new Set(['notify', 'setStatus', 'setWidget', 'setTitle', 'setEditorText'])
 
 export class PiRpcDialogCallbacks {
   private readonly pending = new Map<string, Callback>()
@@ -20,15 +20,19 @@ export class PiRpcDialogCallbacks {
   /** Its frames never reach presentation, the pending cap, or cancelAll at turn end. */
   readonly backgroundWork: PiRpcBackgroundWork
   private readonly subagents: PiRpcSubagents
+  /** Pi's fire-and-forget UI: drawn in the chat, unlike the dialogs below that wait for an answer. */
+  private readonly extensionUi: PiRpcExtensionUi
   constructor(
     private readonly lane: JsonlRpcTimelineLane,
     private readonly send: (frame: JsonlRpcRecord) => Promise<void>,
     private readonly onFailed: (error: Error) => void,
     backgroundWorkDirectory: string | null,
-    onChildWork: (evidence: AgentChildWorkEvidence[]) => void
+    onChildWork: (evidence: AgentChildWorkEvidence[]) => void,
+    generation: string
   ) {
     this.backgroundWork = new PiRpcBackgroundWork(backgroundWorkDirectory)
     this.subagents = new PiRpcSubagents(onChildWork)
+    this.extensionUi = new PiRpcExtensionUi(lane, generation)
   }
 
   /** The child exited: its dialogs and any probe awaiting an answer can never be answered. */
@@ -36,13 +40,15 @@ export class PiRpcDialogCallbacks {
     this.cancelAll()
     this.backgroundWork.end()
     this.subagents.end()
+    this.extensionUi.end()
   }
 
   receive(frame: JsonlRpcRecord): void {
+    // Orca's own status keys first: they drive child work and idle probes, not the chat's strips.
     if (this.backgroundWork.receive(frame) || this.subagents.receive(frame)) {
       return
     }
-    if (typeof frame.method === 'string' && DECORATION.has(frame.method)) {
+    if (this.extensionUi.receive(frame)) {
       return
     }
     const presentation = piRpcDialogPresentation(frame)
