@@ -20592,7 +20592,9 @@
         "resumedMany_one": "Fortgesetzt: {{count}} Agent",
         "resumedMany_other": "Fortgesetzt: {{count}} Agenten",
         "needYou_one": "{{count}} braucht dich",
-        "needYou_other": "{{count}} brauchen dich"
+        "needYou_other": "{{count}} brauchen dich",
+        "resumedCount_one": "Fortgesetzt: {{count}}",
+        "resumedCount_other": "Fortgesetzt: {{count}}"
       },
       "RunTargetCombobox": {
         "noWslDistros": "Keine WSL-Distributionen gefunden",

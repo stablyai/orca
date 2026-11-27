@@ -20923,8 +20923,10 @@
         "resumedOne": "Devam ettirildi: {{name}}",
         "resumedMany_one": "Devam ettirildi: {{count}} ajan",
         "resumedMany_other": "Devam ettirildi: {{count}} ajan",
-        "needYou_one": "{{count}} tanesi sizi bekliyor",
-        "needYou_other": "{{count}} tanesi sizi bekliyor"
+        "needYou_one": "{{count}} sizi bekliyor",
+        "needYou_other": "{{count}} sizi bekliyor",
+        "resumedCount_one": "Sürdürüldü: {{count}}",
+        "resumedCount_other": "Sürdürüldü: {{count}}"
       },
       "RunTargetCombobox": {
         "noWslDistros": "WSL dağıtımı bulunamadı",

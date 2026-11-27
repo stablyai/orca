@@ -20519,7 +20519,10 @@
         "resumedMany_other": "Repris : {{count}} agents",
         "needYou_one": "{{count}} a besoin de vous",
         "needYou_many": "{{count}} ont besoin de vous",
-        "needYou_other": "{{count}} ont besoin de vous"
+        "needYou_other": "{{count}} ont besoin de vous",
+        "resumedCount_one": "Repris : {{count}}",
+        "resumedCount_many": "Repris : {{count}}",
+        "resumedCount_other": "Repris : {{count}}"
       },
       "RunTargetCombobox": {
         "noWslDistros": "Aucune distro WSL trouvée",

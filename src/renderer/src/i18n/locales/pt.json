@@ -22046,9 +22046,12 @@
         "resumedMany_one": "Retomado: {{count}} agente",
         "resumedMany_many": "Retomados: {{count}} agentes",
         "resumedMany_other": "Retomados: {{count}} agentes",
-        "needYou_one": "{{count}} precisa de você",
-        "needYou_many": "{{count}} precisam de você",
-        "needYou_other": "{{count}} precisam de você"
+        "needYou_one": "{{count}} aguarda você",
+        "needYou_many": "{{count}} aguardam você",
+        "needYou_other": "{{count}} aguardam você",
+        "resumedCount_one": "Retomado: {{count}}",
+        "resumedCount_many": "Retomados: {{count}}",
+        "resumedCount_other": "Retomados: {{count}}"
       },
       "RunTargetCombobox": {
         "noWslDistros": "Nenhuma distribuição WSL encontrada",
