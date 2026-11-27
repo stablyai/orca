@@ -12,7 +12,9 @@ vi.mock('electron', async () => {
     powerMonitor: new EventEmitter()
   }
 })
-vi.mock('../mac-install/macos-shipit-scheduling', () => ({ configureMacShipItScheduling: () => {} }))
+vi.mock('../mac-install/macos-shipit-scheduling', () => ({
+  configureMacShipItScheduling: () => {}
+}))
 vi.mock('../electron-updater-loader', () => ({ loadElectronAutoUpdater: () => jsUpdater }))
 vi.mock('../releases/updater-prerelease-feed', () => ({
   fetchNewerReleaseTagsWithReadiness: async () => ({ state: 'ready', tags: ['v1.4.280'] })
