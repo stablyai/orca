@@ -152,7 +152,10 @@ export function useActivityTerminalPortalStatus(
       return disposeFrame
     }
 
-    const readinessLatch = (readinessLatchRef.current ??= createActivityPortalReadinessLatch())
+    if (readinessLatchRef.current == null) {
+      readinessLatchRef.current = createActivityPortalReadinessLatch()
+    }
+    const readinessLatch = readinessLatchRef.current
 
     const updateReadiness = (status: ActivityTerminalPortalReadiness['status']): void => {
       const nextStatus = readinessLatch.next(status)

@@ -20571,7 +20571,6 @@
         "expand": "展開"
       },
       "question": {
-        "step": "ステップ {{value0}}",
         "otherPlaceholder": "答えを入力してください",
         "cancel": "キャンセル",
         "send": "送信",
@@ -20583,12 +20582,11 @@
         "recommended": "おすすめ",
         "stepOf": "{{value0}} / {{value1}}",
         "answered": "回答済み",
-        "title": "質問",
         "previous": "前の質問",
         "nextQuestion": "次の質問",
         "back": "戻る",
         "skipAndSubmit": "スキップして送信",
-        "stepLabel": "{{value0}}、{{value1}} / {{value2}}：{{value3}}"
+        "questionStepLabel": "{{value0}}、{{value1}} / {{value2}}"
       },
       "approval": {
         "needsNewerOrca": "このリクエストには新しいバージョンの Orca が必要です。",

@@ -97,11 +97,8 @@ export function useMarkdownDocuments(
   }, [])
 
   const refreshMarkdownDocuments = useCallback(
-    async (
-      requireFresh = false,
-      freshAfter?: number,
-      background = freshAfter !== undefined
-    ): Promise<void> => {
+    async (requireFresh = false, freshAfter?: number, backgroundArg?: boolean): Promise<void> => {
+      const background = backgroundArg ?? freshAfter !== undefined
       if (!worktreeId || !worktreePath) {
         return
       }

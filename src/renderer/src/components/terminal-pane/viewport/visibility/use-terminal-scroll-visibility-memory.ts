@@ -37,6 +37,18 @@ type TerminalScrollVisibilityMemory = {
 
 const FOLLOW_OUTPUT_FLUSH_CHARS = 256 * 1024
 
+function runWithSuppressedScrollTracking(
+  suppressRef: { current: boolean },
+  callback: () => void
+): void {
+  suppressRef.current = true
+  try {
+    callback()
+  } finally {
+    suppressRef.current = false
+  }
+}
+
 export function useTerminalScrollVisibilityMemory({
   managerRef,
   terminalManager,
@@ -91,12 +103,7 @@ export function useTerminalScrollVisibilityMemory({
   )
 
   const withSuppressedScrollTracking = useCallback((callback: () => void): void => {
-    suppressScrollTrackingRef.current = true
-    try {
-      callback()
-    } finally {
-      suppressScrollTrackingRef.current = false
-    }
+    runWithSuppressedScrollTracking(suppressScrollTrackingRef, callback)
   }, [])
 
   const applyPendingFollowOutputRequests = useCallback((): boolean => {

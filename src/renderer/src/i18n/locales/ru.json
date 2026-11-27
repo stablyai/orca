@@ -21376,7 +21376,6 @@
         "expand": "Развернуть"
       },
       "question": {
-        "step": "Шаг {{value0}}",
         "otherPlaceholder": "Введите ответ",
         "cancel": "Отмена",
         "send": "Ответить",
@@ -21388,12 +21387,11 @@
         "recommended": "Рекомендуется",
         "stepOf": "{{value0}} из {{value1}}",
         "answered": "Есть ответ",
-        "title": "Вопрос",
         "previous": "Предыдущий вопрос",
         "nextQuestion": "Следующий вопрос",
         "back": "Назад",
         "skipAndSubmit": "Пропустить и отправить",
-        "stepLabel": "{{value0}}, {{value1}} из {{value2}}: {{value3}}"
+        "questionStepLabel": "{{value0}}, {{value1}} из {{value2}}"
       },
       "ask": {
         "awaiting": "Ждёт вашего ответа:",

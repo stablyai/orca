@@ -29,7 +29,9 @@ import { readTerminalCursorLineContext } from '../../../shared/terminal/input/te
 import type { TerminalGridReadOptions } from '../../../shared/terminal/viewport/terminal-line-applied-columns'
 import {
   readHeadlessTerminalRows,
+  readHeadlessTerminalBottomLines,
   readHeadlessTerminalLines,
+  readHeadlessTerminalVisibleRange,
   type HeadlessTerminalRow
 } from './headless-terminal-rows'
 
@@ -304,6 +306,10 @@ export class HeadlessEmulator {
     return readHeadlessTerminalLines(this.terminal)
   }
 
+  getBottomVisibleLines(maxNonBlank: number, maxRows: number): string[] {
+    return readHeadlessTerminalBottomLines(this.terminal, maxNonBlank, maxRows)
+  }
+
   getVisibleRows(options?: TerminalGridReadOptions): HeadlessTerminalRow[] {
     return readHeadlessTerminalRows(this.terminal, undefined, options)
   }
@@ -316,14 +322,8 @@ export class HeadlessEmulator {
     return this.terminal.modes.synchronizedOutputMode
   }
 
-  getVisibleBufferRange(): { start: number; endExclusive: number; totalLength: number } {
-    const buffer = this.terminal.buffer.active
-    const start = buffer.viewportY
-    return {
-      start,
-      endExclusive: Math.min(buffer.length, start + this.terminal.rows),
-      totalLength: buffer.length
-    }
+  getVisibleBufferRange() {
+    return readHeadlessTerminalVisibleRange(this.terminal)
   }
 
   getCursorLineContext(rowsAbove = this.terminal.rows, options?: TerminalGridReadOptions) {
