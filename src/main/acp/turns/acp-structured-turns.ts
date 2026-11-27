@@ -15,6 +15,9 @@ import {
   AcpConnectionClosedError
 } from '../transport/acp-errors'
 import { acpPromptRejection } from './acp-prompt-failure'
+import { AcpTurnIdleWaiters } from './acp-turn-idle-waiters'
+import type { PromptResponse } from '../generated/acp-protocol.generated'
+import type { AcpPromptOpening } from '../timeline/acp-prompt-turns'
 
 export class AcpStructuredTurns {
   private active: Send | null = null
@@ -23,7 +26,7 @@ export class AcpStructuredTurns {
   private readonly steers: AcpPendingSteers
   /** Mail joins a running prompt through the steering extension instead of cancelling it. */
   readonly steersMail: boolean
-  private readonly idleWaiters = new Set<() => void>()
+  private readonly idleWaiters = new AcpTurnIdleWaiters()
   private ended = false
   private stopAt: number | null = null
   // Steers still preparing their controls; they hold their place like queued steers.
@@ -125,23 +128,8 @@ export class AcpStructuredTurns {
 
   whenIdle(signal?: AbortSignal, scope: 'all' | 'prompt' = 'all'): Promise<void> {
     const promptOnly = scope === 'prompt'
-    if (this.ended || signal?.aborted || (!this.active && (promptOnly || !this.holdsSteers))) {
-      return Promise.resolve()
-    }
-    const { promise, resolve } = Promise.withResolvers<void>()
-    const finish = (): void => {
-      this.idleWaiters.delete(wake)
-      signal?.removeEventListener('abort', finish)
-      resolve()
-    }
-    const wake = (): void => {
-      if (this.ended || promptOnly || !this.holdsSteers) {
-        finish()
-      }
-    }
-    this.idleWaiters.add(wake)
-    signal?.addEventListener('abort', finish, { once: true })
-    return promise
+    const idle = () => this.ended || (!this.active && (promptOnly || !this.holdsSteers))
+    return signal?.aborted || idle() ? Promise.resolve() : this.idleWaiters.wait(idle, signal)
   }
 
   /** A steer whose controls must run as a prompt first holds its place until released: Stop
@@ -225,6 +213,18 @@ export class AcpStructuredTurns {
     this.notifyIdle()
   }
 
+  /** An earlier app's prompt to a kept agent: its answer ends the open turn; its send settles here. */
+  adoptEarlier(id: string, answered: () => Promise<PromptResponse>, ...opening: AcpPromptOpening) {
+    if (!this.active && !this.ended) {
+      const at = this.deps.now()
+      const opened = this.deps.lane.translator.openPrompt(id, at, ...opening)
+      this.deps.lane.apply(opened.events)
+      this.steers.unsettled.add(id)
+      this.active = { clientMessageId: id, prompt: [], requestedAt: at, adopted: true }
+      this.run(this.active, opened.promptId, answered())
+    }
+  }
+
   private start(send: Send): void {
     const { lane } = this.deps
     // A new message is not covered by a Stop of the agent's own earlier turn.
@@ -236,13 +236,13 @@ export class AcpStructuredTurns {
     this.run(send, opened.promptId)
   }
 
-  private run(send: Send, promptId: string): void {
+  private run(send: Send, promptId: string, earlier?: Promise<PromptResponse>): void {
     const { lane } = this.deps
     // Inject identity only for dialects that echo it on turn events.
     const meta = lane.translator.injectsPromptIdentity
       ? { promptId, requestId: promptId }
       : undefined
-    const answered = this.deps.connection.prompt(send.prompt, meta)
+    const answered = earlier ?? this.deps.connection.prompt(send.prompt, meta)
     if (this.preparingSteers > 0) {
       this.cancelForSteer()
     } else {
@@ -293,6 +293,9 @@ export class AcpStructuredTurns {
       this.steers.reject(send.clientMessageId, acpPromptRejection(refusal, signedOut, noModel))
     } else {
       lane.apply(lane.translator.promptFailed(send.clientMessageId, error, this.deps.now()))
+      if (send.adopted) {
+        this.accept(send.clientMessageId)
+      }
     }
     this.finishAndRetireIfLost(send, lane.translator.sessionLost(error) ? error : undefined)
   }
@@ -340,10 +343,6 @@ export class AcpStructuredTurns {
   }
 
   private notifyIdle(): void {
-    if (!this.active) {
-      for (const wake of this.idleWaiters) {
-        wake()
-      }
-    }
+    this.idleWaiters.wake()
   }
 }

@@ -12,7 +12,8 @@ import {
   googleSetupChoiceLocked
 } from '../../../../../../src/shared/google/google-setup-card-view'
 import { GOOGLE_SETUP_MODES } from '../../../../../../src/shared/google/google-setup-run'
-import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
+import { intlLocaleFor } from '../../../../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../../../../i18n/use-mobile-translation'
 import { MobileNativeChatAskOptionRow } from '../../input/prompts/MobileNativeChatAskOptionRow'
 import { MobileNativeChatNoticePill } from '../notices/MobileNativeChatNoticePill'
 import { MobileBotCardActions } from './MobileBotCardFrame'
@@ -167,6 +168,7 @@ export function MobileGoogleSetupServicesCard({
   scope: MobileGoogleSetupScope
 }): React.JSX.Element {
   const t = useMobileTranslation()
+  const locale = intlLocaleFor(useMobileUiLocale())
   const { run, fontScale } = scope
   const { busy, error, reopened, reopen, answer } = useMobileGoogleSetupAnswer(scope)
   const answered = googleSetupAnsweredServices(run)
@@ -189,7 +191,7 @@ export function MobileGoogleSetupServicesCard({
         answered ? (
           <MobileGoogleSetupReceipt
             text={t('chat.botCards.google.receipt.chose', '✓ You chose {{what}}', {
-              what: googleServicesList(t, answered)
+              what: googleServicesList(t, locale, answered)
             })}
             fontScale={fontScale}
             {...(googleSetupChoiceChangeable(run)

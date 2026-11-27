@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { TAB_DRAG_ACTIVATION_DISTANCE_PX } from '../../tab-group/drag/useTabDragSplit'
 import { beginTabStripPointerGesture } from './tab-strip-pointer-gesture'
 import { isAgentInputMovingFocus } from '../../browser-pane/host-guest/input/agent-input-focus-guard'
@@ -22,7 +22,9 @@ export function useTabStripPointerActivation({
   ) => void
 } {
   const onActivateRef = useRef(onActivate)
-  onActivateRef.current = onActivate
+  useLayoutEffect(() => {
+    onActivateRef.current = onActivate
+  })
   const cleanupRef = useRef<(() => void) | null>(null)
 
   const retirePendingActivation = useCallback(() => cleanupRef.current?.(), [])

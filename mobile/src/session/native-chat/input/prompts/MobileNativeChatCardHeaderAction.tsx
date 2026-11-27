@@ -1,7 +1,7 @@
 import { Keyboard, Pressable, StyleSheet, View } from 'react-native'
 import { ChevronDown, X } from 'lucide-react-native'
-import { colors, pressedStyle } from '../../../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { pressedStyle } from '../../../../theme/mobile-theme'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { MobilePendingButton } from '../../../../components/controls/MobilePendingButton'
 
@@ -20,7 +20,7 @@ export function MobileNativeChatCardHeaderAction<Prompt>({
   /** This card's cancel is on its way. */
   cancelPending?: boolean
 }): React.JSX.Element | null {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   if (!onCancel && !onCollapse) {
     return null

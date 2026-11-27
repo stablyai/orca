@@ -24,6 +24,7 @@ import {
 import type { DiffComment } from '../../../../../src/shared/file-review/diff-comment-types'
 import type { DiffNotesDelivery } from './mobile-review-comment-state'
 import type { MobileSessionDocumentReadersModel } from '../../../files/session-documents/use-mobile-session-document-readers'
+import { recomputeOn } from '../../../hooks/recompute-on'
 
 // Why: a queued request must not wait untimed for a reconnect and stall the notes behind it.
 const NOTES_REQUEST_OPTIONS: SendRequestOptions = { failWhenDisconnected: true }
@@ -50,7 +51,10 @@ export function useMobileSessionDiffComments(scope: MobileSessionDocumentReaders
     sendingDiffCommentIdsRef.current
   )
   // Why: a reply or failure for another workspace or connection must not touch these notes.
-  const notesSync = useMemo(() => createReviewNotesSync(), [client, worktreeId])
+  const notesSync = useMemo(
+    () => recomputeOn([client, worktreeId], () => createReviewNotesSync()),
+    [client, worktreeId]
+  )
   const showDiffComments = useCallback(
     (sync: ReviewNotesSync): void => {
       if (!sync.active) {

@@ -1,9 +1,9 @@
 import { useRef } from 'react'
 import { ScrollView, StyleSheet, Text, View, type ScrollViewInstance } from 'react-native'
 import type { ConnectionLogEntry } from '../../diagnostics/connection/connection-log-types'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { radii, spacing, typography, type MobilePalette } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 type Props = {
   entries: ConnectionLogEntry[]
@@ -12,7 +12,7 @@ type Props = {
   fillAvailableHeight?: boolean
 }
 
-const levelColor = (): Record<ConnectionLogEntry['level'], string> => ({
+const levelColor = (colors: MobilePalette): Record<ConnectionLogEntry['level'], string> => ({
   info: colors.textSecondary,
   success: colors.statusGreen,
   warn: colors.statusAmber,
@@ -39,7 +39,8 @@ function formatTime(ts: number, baseTs: number): string {
 }
 
 export function ConnectionLog({ entries, title, fillAvailableHeight = false }: Props) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const scrollRef = useRef<ScrollViewInstance | null>(null)
 
   if (entries.length === 0) {
@@ -47,7 +48,7 @@ export function ConnectionLog({ entries, title, fillAvailableHeight = false }: P
   }
   const baseTs = entries[0]!.ts
   const keyOccurrences = new Map<string, number>()
-  const levelColors = levelColor()
+  const levelColors = levelColor(colors)
 
   return (
     <View
@@ -92,7 +93,7 @@ export function ConnectionLog({ entries, title, fillAvailableHeight = false }: P
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   container: {
     width: '100%',
     backgroundColor: colors.bgPanel,

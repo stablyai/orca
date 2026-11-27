@@ -132,13 +132,15 @@ export class SharedControlAppHeartbeat {
       return
     }
     const now = this.now()
+    const answeredAt = this.lastAnswerAt
     const timeoutMs = this.options.timeoutMs ?? SHARED_CONTROL_APP_HEARTBEAT_TIMEOUT_MS
     await this.args.probe(timeoutMs).then(
       () => this.settle(generation, true),
       (error: unknown) => {
         // Why: a deadline that fired late means this process slept (Windows timers count through suspend).
         const late = this.now() - now > timeoutMs * 1.5
-        this.settle(generation, isTimeout(error) && !late ? false : null)
+        const answeredSinceProbe = this.lastAnswerAt !== answeredAt
+        this.settle(generation, isTimeout(error) && !late && !answeredSinceProbe ? false : null)
       }
     )
   }

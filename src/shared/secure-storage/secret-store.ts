@@ -19,6 +19,8 @@ export type SecretStore = {
   describeProtectionGap(): string | null
   /** Absent on stores that cannot tell; callers treat that as unsealed. */
   describeSealing?(): SecretSealing
+  /** True when the OS keychain is a test mock that seals with a fixed password. */
+  mockKeychain?(): boolean
 }
 
 /** Keep the installed store through vi.resetModules; a module-local slot would disappear from re-imported graphs. */

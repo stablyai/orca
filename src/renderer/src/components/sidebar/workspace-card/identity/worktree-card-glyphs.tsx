@@ -26,3 +26,27 @@ export function PullRequestIcon({ className }: { className?: string }): React.JS
     </svg>
   )
 }
+
+export function DetachedHeadIcon({ className }: { className?: string }): React.JSX.Element {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={className}
+    >
+      <g transform="rotate(-16 12 9.2)">
+        <ellipse cx={12} cy={9.2} rx={5.2} ry={6.3} />
+        <path d="M7 8.6c1.6.6 3.3.9 5 .9s3.4-.3 5-.9" />
+        <path d="M12.4 3c.8 1.9 1 4.1 1 6.2s-.2 4.3-1 6.2" />
+      </g>
+      <circle cx={12} cy={20} r={1.7} fill="currentColor" />
+      <path d="M5.5 20h4.8" />
+      <path d="M13.7 20h4.8" />
+    </svg>
+  )
+}

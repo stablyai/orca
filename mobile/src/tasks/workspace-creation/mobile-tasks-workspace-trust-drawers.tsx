@@ -1,14 +1,14 @@
 import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tasks-connection-presentation'
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
-import { View, Text, Pressable, ActivityIndicator } from 'react-native'
+import { View, Text } from 'react-native'
 import { MessageBox } from '../../components/composer-input/MessageBox'
 import { TextField } from '../../components/composer-input/TextField'
-import { colors, pressedStyle } from '../../theme/mobile-theme'
+import { SheetHeader } from '../../components/nav-bar/SheetHeader'
+import { SettingsNote } from '../../settings/settings-screen-frame'
 import { Check, X } from 'lucide-react-native'
 import { TASK_SECONDARY_DRAWER_Z_INDEX } from '../task-list/mobile-tasks-options'
 import { setupSourceLabel } from '../repositories/mobile-tasks-repository-presentation'
 import { LIST_LEADING_INSET, ListGroup, ListRow } from '../../components/list/ListGroup'
-import { styles } from '../mobile-tasks-legacy-styles'
 import { translate } from '../../i18n/mobile-i18n'
 import { OrcaHookTrustDrawer } from '../../components/hook-trust/OrcaHookTrustDrawer'
 import type { CreateSetupApproval } from '../../new-workspace/creation/setup-hook-trust'
@@ -21,8 +21,10 @@ import type { OrcaYamlTrustPrompt } from '../mobile-tasks-project-workspace-type
 export function renderMobileTasksWorkspaceSparseDrawer(model: ConnectionPresentationModel) {
   const {
     canSaveWorkspaceSparseDraft,
+    groupFieldStyles,
     saveWorkspaceSparsePreset,
     setWorkspaceSparseDraft,
+    t,
     taskUiReady,
     workspaceCreateDraft,
     workspaceSparseDraft,
@@ -43,83 +45,59 @@ export function renderMobileTasksWorkspaceSparseDrawer(model: ConnectionPresenta
     >
       {workspaceSparseDraft ? (
         <View>
-          <View style={styles.sheetHeader}>
-            <Text style={styles.sheetTitle}>
-              {workspaceSparseDraft.mode === 'new'
-                ? translate('tasks.workspaceTrustDrawers.newSparsePreset', 'New Sparse Preset')
-                : translate('tasks.workspaceTrustDrawers.editSparsePreset', 'Edit Sparse Preset')}
-            </Text>
-          </View>
-          <View style={styles.detailGroup}>
-            <View style={styles.detailSection}>
-              <Text style={styles.detailSectionTitle}>
-                {translate('tasks.workspaceTrustDrawers.nameLabel', 'Name')}
-              </Text>
-              <TextField
-                value={workspaceSparseDraft.name}
-                onChangeText={(name) => setWorkspaceSparseDraft({ ...workspaceSparseDraft, name })}
-                placeholder={translate(
-                  'tasks.workspaceTrustDrawers.namePlaceholder',
-                  'Renderer UI'
-                )}
-                autoCapitalize="none"
-                autoCorrect={false}
-                maxLength={80}
-              />
-            </View>
-            <View style={styles.detailSection}>
-              <Text style={styles.detailSectionTitle}>
-                {translate('tasks.workspaceTrustDrawers.directoriesLabel', 'Directories')}
-              </Text>
-              <MessageBox
-                value={workspaceSparseDraft.directoriesText}
-                onChangeText={(directoriesText) =>
-                  setWorkspaceSparseDraft({ ...workspaceSparseDraft, directoriesText })
-                }
-                placeholder={'src/renderer\npackages/ui'}
-                autoCapitalize="none"
-                autoCorrect={false}
-                monospace
-              />
-            </View>
-            <Text style={workspaceSparseDraftError ? styles.detailError : styles.detailMuted}>
-              {workspaceSparseDraftError ??
-                (count === 1
-                  ? translate(
-                      'tasks.workspaceTrustDrawers.directories_one',
-                      '{{count}} directory',
-                      { count }
-                    )
-                  : translate(
-                      'tasks.workspaceTrustDrawers.directories_other',
-                      '{{count}} directories',
-                      { count }
-                    ))}
-            </Text>
-          </View>
-          <View style={styles.drawerActionRow}>
-            <Pressable
-              style={({ pressed }) => [styles.secondaryActionButton, pressed && pressedStyle]}
-              disabled={workspaceSparseSaving}
-              onPress={() => setWorkspaceSparseDraft(null)}
-            >
-              <Text style={styles.secondaryActionText}>{translate('common.cancel', 'Cancel')}</Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                styles.primaryActionButton,
-                !canSaveWorkspaceSparseDraft ? styles.fieldButtonDisabled : undefined,
-                pressed && pressedStyle
-              ]}
-              disabled={!canSaveWorkspaceSparseDraft}
-              onPress={() => void saveWorkspaceSparsePreset()}
-            >
-              {workspaceSparseSaving ? (
-                <ActivityIndicator size="small" color={colors.bgBase} />
-              ) : null}
-              <Text style={styles.primaryActionText}>{translate('common.save', 'Save')}</Text>
-            </Pressable>
-          </View>
+          <SheetHeader
+            title={
+              workspaceSparseDraft.mode === 'new'
+                ? t('tasks.workspaceTrustDrawers.newSparsePreset', 'New Sparse Preset')
+                : t('tasks.workspaceTrustDrawers.editSparsePreset', 'Edit Sparse Preset')
+            }
+            leading={{
+              label: t('common.cancel', 'Cancel'),
+              onPress: () => setWorkspaceSparseDraft(null),
+              disabled: workspaceSparseSaving
+            }}
+            trailing={{
+              label: t('common.save', 'Save'),
+              onPress: () => void saveWorkspaceSparsePreset(),
+              disabled: !canSaveWorkspaceSparseDraft,
+              busy: workspaceSparseSaving
+            }}
+          />
+          <ListGroup style={groupFieldStyles.underHeader}>
+            <TextField
+              key="name"
+              value={workspaceSparseDraft.name}
+              onChangeText={(name) => setWorkspaceSparseDraft({ ...workspaceSparseDraft, name })}
+              placeholder={t('tasks.workspaceTrustDrawers.nameLabel', 'Name')}
+              autoCapitalize="none"
+              autoCorrect={false}
+              maxLength={80}
+              style={groupFieldStyles.line}
+            />
+            <MessageBox
+              key="directories"
+              value={workspaceSparseDraft.directoriesText}
+              onChangeText={(directoriesText) =>
+                setWorkspaceSparseDraft({ ...workspaceSparseDraft, directoriesText })
+              }
+              placeholder={'src/renderer\npackages/ui'}
+              accessibilityLabel={t('tasks.workspaceTrustDrawers.directoriesLabel', 'Directories')}
+              autoCapitalize="none"
+              autoCorrect={false}
+              monospace
+              style={groupFieldStyles.lines}
+            />
+          </ListGroup>
+          <SettingsNote error={workspaceSparseDraftError != null}>
+            {workspaceSparseDraftError ??
+              (count === 1
+                ? t('tasks.workspaceTrustDrawers.directories_one', '{{count}} directory', {
+                    count
+                  })
+                : t('tasks.workspaceTrustDrawers.directories_other', '{{count}} directories', {
+                    count
+                  }))}
+          </SettingsNote>
         </View>
       ) : null}
     </BottomDrawer>
@@ -127,7 +105,16 @@ export function renderMobileTasksWorkspaceSparseDrawer(model: ConnectionPresenta
 }
 
 export function renderMobileTasksSetupTrustDrawer(model: ConnectionPresentationModel) {
-  const { createWorkspace, creatingKey, setSetupPrompt, setupPrompt, taskUiReady } = model
+  const {
+    colors,
+    createWorkspace,
+    creatingKey,
+    setSetupPrompt,
+    setupPrompt,
+    styles,
+    t,
+    taskUiReady
+  } = model
   return (
     <BottomDrawer
       visible={taskUiReady && setupPrompt != null}
@@ -138,10 +125,10 @@ export function renderMobileTasksSetupTrustDrawer(model: ConnectionPresentationM
         <View>
           <View style={styles.sheetHeader}>
             <Text style={styles.sheetTitle}>
-              {translate('tasks.workspaceTrustDrawers.setupTitle', 'Run Setup Script?')}
+              {t('tasks.workspaceTrustDrawers.setupTitle', 'Run Setup Script?')}
             </Text>
             <Text style={styles.sheetSubtitle}>
-              {translate(
+              {t(
                 'tasks.workspaceTrustDrawers.setupSubtitle',
                 '{{name}} requires a setup choice before creating this workspace.',
                 {
@@ -163,11 +150,8 @@ export function renderMobileTasksSetupTrustDrawer(model: ConnectionPresentationM
               key="action-1"
               title={
                 creatingKey === setupPrompt.item.key
-                  ? translate('tasks.workspaceTrustDrawers.creating', 'Creating...')
-                  : translate(
-                      'tasks.workspaceTrustDrawers.runSetupAndCreate',
-                      'Run setup and create'
-                    )
+                  ? t('tasks.workspaceTrustDrawers.creating', 'Creating...')
+                  : t('tasks.workspaceTrustDrawers.runSetupAndCreate', 'Run setup and create')
               }
               leading={<Check size={16} color={colors.textPrimary} />}
               disabled={creatingKey === setupPrompt.item.key}
@@ -187,10 +171,7 @@ export function renderMobileTasksSetupTrustDrawer(model: ConnectionPresentationM
             />
             <ListRow
               key="action-2"
-              title={translate(
-                'tasks.workspaceTrustDrawers.skipSetupAndCreate',
-                'Create without setup'
-              )}
+              title={t('tasks.workspaceTrustDrawers.skipSetupAndCreate', 'Create without setup')}
               leading={<X size={16} color={colors.textPrimary} />}
               disabled={creatingKey === setupPrompt.item.key}
               onPress={() =>

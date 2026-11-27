@@ -3,7 +3,6 @@ import { AppState } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import type { NotificationSettingsOperations } from './notification-settings-operations'
 import { ListRow } from '../components/list/ListGroup'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { NotificationPermissionState } from '../notifications/delivery-policy/notification-permissions'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { MobileSwitch } from '../components/controls/MobileSwitch'
@@ -27,7 +26,6 @@ export default function NotificationsScreen({
   description?: string
   children?: (enabled: boolean) => ReactNode
 }) {
-  useMobileColorScheme()
   const t = useMobileTranslation()
   const [saving, setSaving] = useState(false)
   const savingRef = useRef(false)

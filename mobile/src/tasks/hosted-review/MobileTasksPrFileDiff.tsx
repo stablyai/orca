@@ -7,11 +7,11 @@ import {
 import { Text, View } from 'react-native'
 import { MobileSyntaxSegments } from '../../components/code-presentation/MobileSyntaxSegments'
 import { MessageBox } from '../../components/composer-input/MessageBox'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { MAX_RENDERED_PR_DIFF_LINES } from '../task-list/mobile-tasks-options'
 import type { GitHubPRFileContents } from '../mobile-tasks-provider-detail-types'
-import { styles } from '../mobile-tasks-legacy-styles'
+import { stylesSheet } from '../mobile-tasks-legacy-styles'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { useThemedStyles } from '../../theme/themed-styles'
 
 export function formatDiffLineNumber(value: number | undefined): string {
   return value === undefined ? '    ' : value.toString().padStart(4, ' ')
@@ -42,7 +42,7 @@ export function GitHubPrFileDiff({
   onCommentDraftChange: (key: string, value: string) => void
   onSubmitComment: (line: number) => void
 }): ReactNode {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const diffPreview = useMemo(
     () =>

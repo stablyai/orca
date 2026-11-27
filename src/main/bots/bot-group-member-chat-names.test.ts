@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import type { BotGroup } from '../../shared/bots/bot-group'
+import { BotGroupRenameThread, type BotGroup } from '../../shared/bots/bot-group'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
@@ -12,6 +12,7 @@ import SyncDatabase from '../sqlite/sync-database'
 import type { BotGroupRuntime } from './bot-group-runtime'
 import { BotGroupStore } from './bot-group-store'
 import { nameBotGroupMemberChats } from './bot-group-member-chat-names'
+import { renameBotGroupThread } from './bot-group-thread-rename'
 
 const ROOM = 'bot-group-member-room'
 const THREAD = 'bot-group-member-thread'
@@ -72,8 +73,9 @@ function rooms(threadTitle?: string) {
   }
   store.put(group)
   const runtime = { ensureStructuredAgentSessionHost: async () => undefined }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: naming reads the room store and the installed host.
-  return { store, group, groups: { store, runtime } as unknown as BotGroupRuntime }
+  const groups = { store, runtime, queues: new Map(), changed: () => {} }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: naming and renaming read the room store, its queues and the installed host.
+  return { store, group, groups: groups as unknown as BotGroupRuntime }
 }
 
 afterEach(() => setStructuredAgentSessionHost(null))
@@ -89,6 +91,21 @@ describe("a member chat's name", () => {
     // A pass handed the room as an earlier save left it still writes the room as saved now.
     await nameBotGroupMemberChats(groups, [group])
     expect([title(ROOM), title(THREAD)]).toEqual(['Ship', 'Notes'])
+  })
+
+  it("follows a thread its owner renamed, on one line and cut as a first post's name", async () => {
+    const { title } = chats({ [ROOM]: {}, [THREAD]: {} })
+    const { groups, store } = rooms('Draft the release notes for the next version')
+    const rename = (name: string) =>
+      BotGroupRenameThread.safeParse({ groupId: 'room-1', threadId: 'thread-1', title: name })
+    expect(rename(' \n ').success).toBe(false)
+    expect(rename('x'.repeat(100)).data?.title).toHaveLength(80)
+    const saved = await renameBotGroupThread(groups, rename('  Release\n  notes ').data!)
+    expect(store.get('room-1').threads?.[0].title).toBe('Release notes')
+    // No roster change: a post composed before the rename still sends.
+    expect(saved.revision).toBe(1)
+    await nameBotGroupMemberChats(groups, [saved])
+    expect([title(ROOM), title(THREAD)]).toEqual(['Release', 'Release notes'])
   })
 
   it('opens no chat host when there are no rooms to name', async () => {

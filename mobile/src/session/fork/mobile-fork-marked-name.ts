@@ -1,4 +1,4 @@
-import { translate } from '../../i18n/mobile-i18n'
+import type { Translate } from '../../i18n/mobile-i18n'
 import type { AgentSessionConversationNames } from '../../../../src/shared/agent-session/conversation-naming/agent-session-conversation-names'
 import type { AgentSessionConversationName } from '../../../../src/shared/agent-session/agent-session-wire'
 import {
@@ -13,22 +13,22 @@ import {
 } from '../../../../src/shared/agent-session/conversation-naming/agent-session-fork-name-order'
 
 /** A forked chat's title in the locale's order: the "Fork ·" mark and the name as separate parts. */
-export function mobileForkMarkedNameParts(): ForkMarkedNamePart[] {
+export function mobileForkMarkedNameParts(t: Translate): ForkMarkedNamePart[] {
   return forkMarkedNameParts(
-    translate('chat.fork.markedName', '{{mark}} {{name}}', {
+    t('chat.fork.markedName', '{{mark}} {{name}}', {
       ...FORK_MARKED_NAME_SLOTS,
       interpolation: { escapeValue: false }
     })
   )
 }
 
-export function mobileForkMark(): string {
-  return translate('chat.fork.mark', 'Fork ·')
+export function mobileForkMark(t: Translate): string {
+  return t('chat.fork.mark', 'Fork ·')
 }
 
 /** What a screen reader hears for a forked chat's title. */
-export function mobileForkAccessibleName(name: string): string {
-  return translate('chat.fork.accessibleName', 'Fork: {{name}}', {
+export function mobileForkAccessibleName(name: string, t: Translate): string {
+  return t('chat.fork.accessibleName', 'Fork: {{name}}', {
     name,
     interpolation: { escapeValue: false }
   })

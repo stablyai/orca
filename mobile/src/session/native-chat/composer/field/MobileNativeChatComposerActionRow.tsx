@@ -1,45 +1,84 @@
 import { useState, type ComponentProps, type ReactNode } from 'react'
 import { View } from 'react-native'
-import type { SessionOptionDescriptor } from '../../../../../../src/shared/native-chat/input/native-chat-session-options'
 import { spacing } from '../../../../theme/mobile-theme'
+import { useThemedStyles } from '../../../../theme/themed-styles'
 import {
   COMPOSER_CONTROL_SIZE,
-  composerInputStyles as inputStyles
+  composerInputStylesSheet
 } from '../../../../components/composer-input/composer-input-styles'
-import {
-  COMPOSER_ATTACH_AND_MODEL_MIN_WIDTH,
-  mobileNativeChatComposerStyles as styles
-} from './mobile-native-chat-composer-styles'
+import { mobileNativeChatComposerStylesSheet } from './mobile-native-chat-composer-styles'
 import { MobileNativeChatDictationLeading } from '../dictation/MobileNativeChatDictationLeading'
+import { MobileNativeChatComposerModeRow } from './MobileNativeChatComposerModeRow'
 
 export function MobileNativeChatComposerActionRow({
-  hasMic,
-  optionSnapshot,
-  leadingExtras,
+  collapsed,
+  hasAttachment,
+  modeRow,
   children,
-  ...leading
-}: Omit<ComponentProps<typeof MobileNativeChatDictationLeading>, 'modelOnOwnRow'> & {
-  hasMic: boolean
-  optionSnapshot?: readonly SessionOptionDescriptor[]
-  leadingExtras: ReactNode
+  ...dictation
+}: Omit<ComponentProps<typeof MobileNativeChatDictationLeading>, 'children' | 'unwrapped'> & {
+  collapsed: boolean
+  hasAttachment: boolean
+  modeRow: Omit<
+    ComponentProps<typeof MobileNativeChatComposerModeRow>,
+    'collapsed' | 'modelOnOwnRow' | 'hasPicker' | 'hasExtras' | 'extrasMaxWidth' | 'onExtrasWidth'
+  >
+  children: ReactNode
 }): React.JSX.Element {
+  const styles = useThemedStyles(mobileNativeChatComposerStylesSheet)
+  const inputStyles = useThemedStyles(composerInputStylesSheet)
   const [width, setWidth] = useState<number>()
-  const trailingControls = 1 + Number(!!leading.trailing) + Number(hasMic)
+  const [trailingWidth, setTrailingWidth] = useState(COMPOSER_CONTROL_SIZE)
+  const [extrasWidth, setExtrasWidth] = useState(0)
+  const snapshot = modeRow.sessionOptions?.controller.snapshot
+  const hasPicker = !collapsed && snapshot?.some(({ id }) => id !== 'interactionMode') === true
+  const hasExtras =
+    !collapsed &&
+    Boolean(
+      modeRow.roomReplies ||
+      modeRow.goalChip ||
+      snapshot?.some(
+        ({ id, kind }) =>
+          id === 'interactionMode' && kind.type === 'select' && kind.currentValue === 'plan'
+      )
+    )
+  const controlsWidth = (hasAttachment ? COMPOSER_CONTROL_SIZE + spacing.sm : 0) + trailingWidth
+  // Reserve room for the warning icon, chevron, and a readable model prefix.
   const minWidth =
-    COMPOSER_ATTACH_AND_MODEL_MIN_WIDTH + trailingControls * (COMPOSER_CONTROL_SIZE + spacing.sm)
-  const hasModelPicker = optionSnapshot?.some(({ id }) => id !== 'interactionMode') ?? false
-  const modelOnOwnRow = hasModelPicker && width !== undefined && width < minWidth
+    controlsWidth +
+    spacing.sm +
+    3 * COMPOSER_CONTROL_SIZE +
+    (hasExtras ? extrasWidth + spacing.sm : 0)
+  const modelOnOwnRow = hasPicker && width !== undefined && width < minWidth
+  // Cap the chip group the same way in both layouts so wrapping can't change the threshold calculation.
+  const extrasMaxWidth =
+    hasPicker && width !== undefined ? Math.max(0, width - controlsWidth - spacing.sm) : undefined
 
   return (
     <View
-      style={[inputStyles.actionRow, modelOnOwnRow && styles.wrappedActionRow]}
-      onLayout={hasModelPicker ? (event) => setWidth(event.nativeEvent.layout.width) : undefined}
+      style={[
+        inputStyles.actionRow,
+        collapsed && styles.pillActionRow,
+        modelOnOwnRow && styles.wrappedActionRow
+      ]}
+      onLayout={hasPicker ? (event) => setWidth(event.nativeEvent.layout.width) : undefined}
       testID="native-chat-composer-actions"
     >
-      <MobileNativeChatDictationLeading {...leading} modelOnOwnRow={modelOnOwnRow}>
-        {leadingExtras}
+      <MobileNativeChatDictationLeading {...dictation} unwrapped>
+        <MobileNativeChatComposerModeRow
+          {...modeRow}
+          {...{ collapsed, modelOnOwnRow, hasPicker, hasExtras, extrasMaxWidth }}
+          onExtrasWidth={hasPicker ? setExtrasWidth : undefined}
+        />
       </MobileNativeChatDictationLeading>
-      {children}
+      <View
+        style={styles.actionRowTrailing}
+        onLayout={
+          hasPicker ? (event) => setTrailingWidth(event.nativeEvent.layout.width) : undefined
+        }
+      >
+        {children}
+      </View>
     </View>
   )
 }

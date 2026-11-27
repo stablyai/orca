@@ -43,7 +43,7 @@ export function useGitLabPipelineActions(
         const result = await gitLabApiFor(repoSelector).jobTrace({
           ...repoSelector,
           jobId: job.id,
-          projectRef: details?.item.projectRef ?? item.projectRef ?? null
+          projectRef: job.projectRef ?? details?.item.projectRef ?? item.projectRef ?? null
         })
         if (!mountedRef.current) {
           return
@@ -89,7 +89,7 @@ export function useGitLabPipelineActions(
         const result = await gitLabApiFor(repoSelector).retryJob({
           ...repoSelector,
           jobId: job.id,
-          projectRef: details?.item.projectRef ?? item.projectRef ?? null
+          projectRef: job.projectRef ?? details?.item.projectRef ?? item.projectRef ?? null
         })
         if (!ownsResult()) {
           return

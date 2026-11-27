@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 import type { MobileRelayHost } from '../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import type { HostBotListing } from './host-bot-listing'
 import { keepServerBotListing, readKeptServerBotListings } from './kept-server-bot-listings'
+import { useKeptByKey } from '../hooks/use-kept-by-key'
 
 /** Starts each listed server from its kept listing, keeps each newer read, and forgets a server once the desktop stops listing it. */
 export function useKeptServerBotListings(args: {
@@ -13,9 +14,8 @@ export function useKeptServerBotListings(args: {
 }): void {
   const { pairedHostId, serverHosts, listings, setListings } = args
   // The ids alone: the hosts array changes on every health update.
-  const serverIdsKey = serverHosts.map((host) => host.hostId).join('\n')
-  // serverIdsKey stands for these ids.
-  const serverIds = useMemo(() => serverHosts.map((host) => host.hostId), [serverIdsKey])
+  const ids = serverHosts.map((host) => host.hostId)
+  const serverIds = useKeptByKey(ids.join('\n'), ids)
   // A server is seeded once its read has landed; one read out at a time per server.
   const seeded = useRef(new Set<string>())
   const reading = useRef(new Set<string>())

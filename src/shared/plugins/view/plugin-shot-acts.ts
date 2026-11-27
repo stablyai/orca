@@ -36,27 +36,41 @@ export type PluginShotQuery = z.infer<typeof pluginShotQuerySchema>
 const keyText = lazyZodSchema(() => z.string().min(1).max(QUERY_TEXT_MAX))
 
 const ACT_SCHEMAS = {
-  press: z.strictObject({ press: pluginShotQuerySchema }),
-  type: z.strictObject({
-    type: pluginShotQuerySchema,
-    text: z.string().max(TYPE_TEXT_MAX),
-    replace: z.boolean().optional(),
-    submit: z.boolean().optional()
-  }),
-  select: z.strictObject({ select: pluginShotQuerySchema, value: z.string().max(QUERY_TEXT_MAX) }),
-  toggle: z.strictObject({ toggle: pluginShotQuerySchema }),
-  slide: z.strictObject({ slide: pluginShotQuerySchema, value: z.number().finite() }),
-  sort: z.strictObject({ sort: pluginShotQuerySchema, column: keyText }),
-  selectRows: z.strictObject({
-    selectRows: pluginShotQuerySchema,
-    keys: z.array(keyText).max(PLUGIN_SHOT_MAX_ROW_KEYS)
-  }),
-  activateRow: z.strictObject({ activateRow: pluginShotQuerySchema, key: keyText }),
-  loadMore: z.strictObject({ loadMore: pluginShotQuerySchema }),
-  expand: z.strictObject({ expand: pluginShotQuerySchema, key: keyText }),
-  collapse: z.strictObject({ collapse: pluginShotQuerySchema, key: keyText }),
-  selectItem: z.strictObject({ selectItem: pluginShotQuerySchema, key: keyText }),
-  activateItem: z.strictObject({ activateItem: pluginShotQuerySchema, key: keyText })
+  press: lazyZodSchema(() => z.strictObject({ press: pluginShotQuerySchema })),
+  type: lazyZodSchema(() =>
+    z.strictObject({
+      type: pluginShotQuerySchema,
+      text: z.string().max(TYPE_TEXT_MAX),
+      replace: z.boolean().optional(),
+      submit: z.boolean().optional()
+    })
+  ),
+  select: lazyZodSchema(() =>
+    z.strictObject({ select: pluginShotQuerySchema, value: z.string().max(QUERY_TEXT_MAX) })
+  ),
+  toggle: lazyZodSchema(() => z.strictObject({ toggle: pluginShotQuerySchema })),
+  slide: lazyZodSchema(() =>
+    z.strictObject({ slide: pluginShotQuerySchema, value: z.number().finite() })
+  ),
+  sort: lazyZodSchema(() => z.strictObject({ sort: pluginShotQuerySchema, column: keyText })),
+  selectRows: lazyZodSchema(() =>
+    z.strictObject({
+      selectRows: pluginShotQuerySchema,
+      keys: z.array(keyText).max(PLUGIN_SHOT_MAX_ROW_KEYS)
+    })
+  ),
+  activateRow: lazyZodSchema(() =>
+    z.strictObject({ activateRow: pluginShotQuerySchema, key: keyText })
+  ),
+  loadMore: lazyZodSchema(() => z.strictObject({ loadMore: pluginShotQuerySchema })),
+  expand: lazyZodSchema(() => z.strictObject({ expand: pluginShotQuerySchema, key: keyText })),
+  collapse: lazyZodSchema(() => z.strictObject({ collapse: pluginShotQuerySchema, key: keyText })),
+  selectItem: lazyZodSchema(() =>
+    z.strictObject({ selectItem: pluginShotQuerySchema, key: keyText })
+  ),
+  activateItem: lazyZodSchema(() =>
+    z.strictObject({ activateItem: pluginShotQuerySchema, key: keyText })
+  )
 }
 
 export const pluginShotActSchema = lazyZodSchema(() =>

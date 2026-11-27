@@ -1,6 +1,7 @@
 // Tidy-up: a bot tidies its own memory overnight. The setting lives on the bot; absent means on,
 // each night. A run's summary and the Home Chat line it leaves are read by desktop and phone alike.
 import * as z from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 import type {
   AgentJournalItemBody,
   AgentJournalPlainStatusItem
@@ -18,13 +19,15 @@ export const TIDY_UP_EVERY_LABELS: Record<TidyUpEvery, string> = {
  *  catches up once it is awake, until the next night starts. */
 export const TIDY_UP_HOURS = { from: 3, until: 8 } as const
 
-export const BotTidyUpSchema = z.object({
-  on: z.boolean(),
-  // A choice a newer client saved reads as the default rather than voiding the bot.
-  every: z.enum(TIDY_UP_EVERY_CHOICES).catch('night').optional(),
-  /** When it was last turned on; absent, it has been on since the bot was made. */
-  since: z.number().optional()
-})
+export const BotTidyUpSchema = lazyZodSchema(() =>
+  z.object({
+    on: z.boolean(),
+    // A choice a newer client saved reads as the default rather than voiding the bot.
+    every: z.enum(TIDY_UP_EVERY_CHOICES).catch('night').optional(),
+    /** When it was last turned on; absent, it has been on since the bot was made. */
+    since: z.number().optional()
+  })
+)
 
 export type BotTidyUp = { on: boolean; every: TidyUpEvery; since?: number }
 
@@ -53,24 +56,26 @@ export function patchTidyUp(
 }
 
 /** What one tidy-up changed, as its summary lists it. */
-export const BotTidyUpSummarySchema = z.object({
-  at: z.number(),
-  tookMs: z.number(),
-  chats: z.number(),
-  /** Its one History row, which Undo reverts; null when only memory/ files changed. */
-  rowId: z.string().nullable(),
-  /** Facts it added from the owner's chats. */
-  learned: z.array(z.string()),
-  /** Facts a newer line replaced, moved to the archive marked so. */
-  replaced: z.array(z.string()),
-  filed: z.array(z.object({ topic: z.string(), count: z.number() })),
-  /** Old lines moved to the archive. */
-  moved: z.number(),
-  /** Repeats merged into one line. */
-  merged: z.number(),
-  /** Why each op a tidy-up on operations asked for was skipped; absent on other tidy-ups. */
-  skipped: z.array(z.string()).optional()
-})
+export const BotTidyUpSummarySchema = lazyZodSchema(() =>
+  z.object({
+    at: z.number(),
+    tookMs: z.number(),
+    chats: z.number(),
+    /** Its one History row, which Undo reverts; null when only memory/ files changed. */
+    rowId: z.string().nullable(),
+    /** Facts it added from the owner's chats. */
+    learned: z.array(z.string()),
+    /** Facts a newer line replaced, moved to the archive marked so. */
+    replaced: z.array(z.string()),
+    filed: z.array(z.object({ topic: z.string(), count: z.number() })),
+    /** Old lines moved to the archive. */
+    moved: z.number(),
+    /** Repeats merged into one line. */
+    merged: z.number(),
+    /** Why each op a tidy-up on operations asked for was skipped; absent on other tidy-ups. */
+    skipped: z.array(z.string()).optional()
+  })
+)
 
 export type BotTidyUpSummary = z.infer<typeof BotTidyUpSummarySchema>
 
@@ -85,20 +90,22 @@ export function tidyUpChangeCount(summary: BotTidyUpSummary): number {
 }
 
 /** A bot's Tidy-up as Settings and the phone show it. */
-export const BotTidyUpViewSchema = z.object({
-  setting: z.object({ on: z.boolean(), every: z.enum(TIDY_UP_EVERY_CHOICES) }),
-  /** The last tidy-up that changed something. */
-  last: BotTidyUpSummarySchema.extend({ undone: z.boolean() }).nullable(),
-  running: z.boolean(),
-  /** Why it turned itself off, when it did after failing too often; null otherwise. */
-  turnedOff: z.string().nullable(),
-  /** `turnedOff` by code; read with `readBotFailure`. */
-  turnedOffFailure: z.unknown().optional(),
-  /** The last run's failure, when it failed. */
-  error: z.string().nullable(),
-  /** `error` by code, for clients to translate; read with `readBotFailure`. */
-  failure: z.unknown().optional()
-})
+export const BotTidyUpViewSchema = lazyZodSchema(() =>
+  z.object({
+    setting: z.object({ on: z.boolean(), every: z.enum(TIDY_UP_EVERY_CHOICES) }),
+    /** The last tidy-up that changed something. */
+    last: BotTidyUpSummarySchema.extend({ undone: z.boolean() }).nullable(),
+    running: z.boolean(),
+    /** Why it turned itself off, when it did after failing too often; null otherwise. */
+    turnedOff: z.string().nullable(),
+    /** `turnedOff` by code; read with `readBotFailure`. */
+    turnedOffFailure: z.unknown().optional(),
+    /** The last run's failure, when it failed. */
+    error: z.string().nullable(),
+    /** `error` by code, for clients to translate; read with `readBotFailure`. */
+    failure: z.unknown().optional()
+  })
+)
 
 export type BotTidyUpView = z.infer<typeof BotTidyUpViewSchema>
 

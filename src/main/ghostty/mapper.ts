@@ -22,6 +22,10 @@ const PALETTE_INDEX_MAP: Record<number, keyof TerminalColorOverrides> = {
   15: 'brightWhite'
 }
 
+// Mirrors Ghostty's std.fmt.parseInt(u8, s, 0): optional sign, decimal or 0x/0o/0b, `_` only between digits.
+const PALETTE_INDEX_RE =
+  /^([+-]?)(\d(?:[\d_]*\d)?|0x[\da-f](?:[\da-f_]*[\da-f])?|0o[0-7](?:[0-7_]*[0-7])?|0b[01](?:[01_]*[01])?)$/i
+
 type FieldAssignment = { key: keyof GlobalSettings; value: unknown }
 
 // Accepts `background-blur` (bool, radius, macos-glass-*) and its legacy `background-blur-radius` spelling.
@@ -130,8 +134,13 @@ export function mapGhosttyToOrca(
         }
         const idxStr = entry.slice(0, eqIdx).trim()
         const color = entry.slice(eqIdx + 1).trim()
-        const index = Number.parseInt(idxStr, 10)
-        if (Number.isNaN(index) || !HEX_COLOR_RE.test(color)) {
+        const indexMatch = PALETTE_INDEX_RE.exec(idxStr)
+        if (!indexMatch || !HEX_COLOR_RE.test(color)) {
+          continue
+        }
+        const index = Number(indexMatch[2].replaceAll('_', ''))
+        // u8 parsing rejects every negative value except zero.
+        if (indexMatch[1] === '-' && index !== 0) {
           continue
         }
         const mapped = PALETTE_INDEX_MAP[index]

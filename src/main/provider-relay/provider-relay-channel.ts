@@ -1,6 +1,6 @@
 import type { DaemonClient } from '../daemon/transport/client/daemon-client'
 import { jsonProperty } from '../../shared/json-stream/json-value-property'
-import type { ProviderRelayAckFlags } from './relayed-provider-output'
+import type { ProviderRelayAckFlags } from './relayed-provider-cut-keys'
 import { ProviderRelayAckBatch } from './provider-relay-ack-batch'
 import type {
   ProviderRelayAckWantedEvent,
@@ -11,7 +11,8 @@ import type {
   ProviderRelayListResult,
   ProviderRelaySpawnResult,
   ProviderRelaySpawnSpec,
-  ProviderRelayDetachPolicy
+  ProviderRelayDetachPolicy,
+  ProviderRelayKeepSpec
 } from '../daemon/protocol/daemon-provider-relay-protocol'
 
 const RELAY_REQUEST_TIMEOUT_MS = 10_000
@@ -38,6 +39,7 @@ function isRelayEvent(raw: unknown): raw is ChannelEvent {
       name === 'relayPending' ||
       name === 'relayInitialize' ||
       name === 'relayAckWanted' ||
+      name === 'relayKept' ||
       name === 'relayExit')
   )
 }
@@ -85,15 +87,26 @@ export class ProviderRelayChannel {
     }
   }
 
+  /** Forgets an attach nobody took (it failed, or its agent had ended): its child and held output
+   *  are no longer reachable from here. */
+  release(relayId: string): void {
+    this.sinks.delete(relayId)
+    this.partial.delete(relayId)
+    if (this.sinks.size === 0) {
+      this.stopListening()
+    }
+  }
+
   spawn(
     spec: ProviderRelaySpawnSpec,
     chatKey: string,
     policy: ProviderRelayDetachPolicy,
-    agent: string
+    agent: string,
+    keep?: ProviderRelayKeepSpec
   ): Promise<ProviderRelaySpawnResult> {
     return this.client.request(
       'relaySpawn',
-      { spec, chatKey, agent, policy },
+      keep ? { spec, chatKey, agent, policy, keep } : { spec, chatKey, agent, policy },
       RELAY_SPAWN_TIMEOUT_MS
     )
   }
@@ -101,12 +114,14 @@ export class ProviderRelayChannel {
   attach(
     relayId: string,
     fromSeq: number,
-    policy: ProviderRelayDetachPolicy
+    policy: ProviderRelayDetachPolicy,
+    /** Ask for the kept lines; only a reattach at launch reads them. */
+    kept = false
   ): Promise<ProviderRelayAttachResult> {
     this.partial.delete(relayId)
     return this.client.request(
       'relayAttach',
-      { relayId, fromSeq, policy },
+      kept ? { relayId, fromSeq, policy, kept } : { relayId, fromSeq, policy },
       RELAY_REQUEST_TIMEOUT_MS
     )
   }

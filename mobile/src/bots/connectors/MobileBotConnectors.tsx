@@ -14,8 +14,7 @@ import {
   useMobileComposio
 } from '../../session/native-chat/transcript/bot-cards/mobile-composio-store'
 import { SettingsSection } from '../../settings/settings-screen-frame'
-import { colors } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { useHostBotsEntry } from '../host-bot-store'
 import { memberRemoval } from '../bot-sheet-operations'
@@ -100,7 +99,7 @@ function ConnectorsPage(
   props: ConnectorsContext &
     ConnectorsActions & { banner: ReactNode; webhooksRow: ReactNode; onBack: () => void }
 ) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { bot, reads, hostKey } = props.routeBot
   const [page, setPage] = useState<Page>(props.initialPage ?? { kind: 'list' })
@@ -262,7 +261,8 @@ function ConnectorsPage(
     online: props.online,
     setPage,
     save: props.online ? props.save : null,
-    t
+    t,
+    colors
   })
   return (
     <>
