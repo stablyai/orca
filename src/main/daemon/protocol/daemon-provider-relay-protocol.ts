@@ -6,8 +6,8 @@ export type ProviderRelayCapability = 'providerRelay' | 'providerRelayKeep' | 'p
 /**
  * The hello capabilities a relaying daemon of each protocol advertises. An app adopts any running
  * daemon of its own protocol, even one an older bundle started, so a new capability needs a
- * PROTOCOL_VERSION bump and a new row; a shipped row never changes. v63 bundles differ, so its row
- * is what every v63 daemon has.
+ * PROTOCOL_VERSION bump and a new row; a shipped row never changes. v63 bundles differ; its row is
+ * the set all of them share.
  */
 export const PROVIDER_RELAY_CAPABILITIES_BY_PROTOCOL: Readonly<
   Record<number, readonly ProviderRelayCapability[]>

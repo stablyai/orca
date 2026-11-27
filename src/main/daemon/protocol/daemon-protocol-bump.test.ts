@@ -1,5 +1,9 @@
 import { expect, it } from 'vitest'
-import { PROTOCOL_VERSION } from './daemon-protocol-version'
+import contractJson from '../../../shared/remote-runtime/orcad-distribution/local-build-compatibility-contract.json'
+import {
+  LOCAL_BUILD_COMPATIBILITY_CONTRACT
+} from '../../../shared/remote-runtime/orcad-distribution/local-build-compatibility-contract'
+import { PREVIOUS_DAEMON_PROTOCOL_VERSIONS, PROTOCOL_VERSION } from './daemon-protocol-version'
 import {
   PROVIDER_RELAY_CAPABILITIES_BY_PROTOCOL,
   providerRelayCapabilities
@@ -19,4 +23,13 @@ it('a relay capability ships only with a daemon protocol bump', () => {
   expect(providerRelayCapabilities(PROTOCOL_VERSION)).toEqual(SHIPPED[newest])
   expect(providerRelayCapabilities(63)).toEqual(SHIPPED[63])
   expect(providerRelayCapabilities(62)).toEqual([])
+})
+
+// Packaging says hello to the built daemon with the contract's version, which must match its own.
+it('the build compatibility contract follows the daemon protocol', () => {
+  const attachable = [...PREVIOUS_DAEMON_PROTOCOL_VERSIONS, PROTOCOL_VERSION]
+  for (const contract of [LOCAL_BUILD_COMPATIBILITY_CONTRACT, contractJson]) {
+    expect(contract.daemonProtocolVersion).toBe(PROTOCOL_VERSION)
+    expect(contract.attachableDaemonProtocolVersions).toEqual(attachable)
+  }
 })
