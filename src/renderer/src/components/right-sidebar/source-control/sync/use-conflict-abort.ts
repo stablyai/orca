@@ -14,6 +14,7 @@ import type { SourceControlWorktreeContext } from '../listing/use-worktree-conte
 import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-operation-state'
 import { refreshSourceControlAfterRemoteAction } from './remote-refresh'
 import type { SourceControlStatusRefresh } from './use-status-refresh'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 export function useSourceControlConflictAbort({
   activeRepoTarget,
@@ -81,57 +82,62 @@ export function useSourceControlConflictAbort({
 
       const connectionId = sourceControlConnectionId(scope, activeWorktreeId)
       operationStore.setState({ isAbortingOperation: true, remoteActionError: null })
-      try {
-        const context = {
-          // Abort on the repo owner, which may differ from the focused host.
-          target: requireGitOwnerTarget(activeRepoTarget),
-          worktreeId: activeWorktreeId,
-          worktreePath,
-          connectionId
-        }
-        const abortGitOperation = isRebase ? abortRuntimeGitRebase : abortRuntimeGitMerge
-        await abortGitOperation(context)
-      } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : isRebase
-              ? translate(
-                  'auto.components.right.sidebar.SourceControl.abortRebaseFailedFallback',
-                  'Failed to abort rebase'
-                )
-              : translate(
-                  'auto.components.right.sidebar.SourceControl.abortMergeFailedFallback',
-                  'Failed to abort merge'
-                )
-        toast.error(
-          isRebase
-            ? translate(
-                'auto.components.right.sidebar.SourceControl.abortRebaseFailed',
-                'Abort rebase failed'
-              )
-            : translate(
-                'auto.components.right.sidebar.SourceControl.abortMergeFailed',
-                'Abort merge failed'
-              ),
-          { description: message }
-        )
-        operationStore.setState({
-          remoteActionError: {
-            kind: isRebase ? 'abort_rebase' : 'abort_merge',
-            message,
-            rawError: message
+      await runWithFinally(
+        async () => {
+          try {
+            const context = {
+              // Abort on the repo owner, which may differ from the focused host.
+              target: requireGitOwnerTarget(activeRepoTarget),
+              worktreeId: activeWorktreeId,
+              worktreePath,
+              connectionId
+            }
+            const abortGitOperation = isRebase ? abortRuntimeGitRebase : abortRuntimeGitMerge
+            await abortGitOperation(context)
+          } catch (error) {
+            const message =
+              error instanceof Error
+                ? error.message
+                : isRebase
+                  ? translate(
+                      'auto.components.right.sidebar.SourceControl.abortRebaseFailedFallback',
+                      'Failed to abort rebase'
+                    )
+                  : translate(
+                      'auto.components.right.sidebar.SourceControl.abortMergeFailedFallback',
+                      'Failed to abort merge'
+                    )
+            toast.error(
+              isRebase
+                ? translate(
+                    'auto.components.right.sidebar.SourceControl.abortRebaseFailed',
+                    'Abort rebase failed'
+                  )
+                : translate(
+                    'auto.components.right.sidebar.SourceControl.abortMergeFailed',
+                    'Abort merge failed'
+                  ),
+              { description: message }
+            )
+            operationStore.setState({
+              remoteActionError: {
+                kind: isRebase ? 'abort_rebase' : 'abort_merge',
+                message,
+                rawError: message
+              }
+            })
           }
-        })
-      } finally {
-        operationStore.setState({ isAbortingOperation: false })
-        refreshSourceControlAfterRemoteAction({
-          worktreeId: activeWorktreeId,
-          refreshGitStatus: refreshActiveGitStatusAfterMutation,
-          refreshBranchCompare: refreshBranchCompareRef.current,
-          refreshGitHistory: refreshGitHistoryRef.current
-        })
-      }
+        },
+        () => {
+          operationStore.setState({ isAbortingOperation: false })
+          refreshSourceControlAfterRemoteAction({
+            worktreeId: activeWorktreeId,
+            refreshGitStatus: refreshActiveGitStatusAfterMutation,
+            refreshBranchCompare: refreshBranchCompareRef.current,
+            refreshGitHistory: refreshGitHistoryRef.current
+          })
+        }
+      )
     },
     [
       scope,

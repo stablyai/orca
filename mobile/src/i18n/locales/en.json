@@ -5,19 +5,19 @@
         "system": "System",
         "light": "Light",
         "dark": "Dark",
-        "heading": "THEME",
+        "heading": "Theme",
         "description": "System follows this device’s light or dark setting."
       },
       "title": "Appearance",
       "language": {
         "systemWithCurrent": "System ({{language}})",
-        "heading": "LANGUAGE",
+        "heading": "Language",
         "description": "System follows this device’s language. Permission prompts always use the device language."
       },
       "usage": {
         "used": "Used",
         "remaining": "Remaining",
-        "heading": "USAGE PERCENTAGES",
+        "heading": "Usage percentages",
         "description": "Usage bars on Home and Accounts show how much of each limit is used or left. Saved on this phone."
       }
     },
@@ -42,8 +42,6 @@
       "lastCheckedDays_one": "Last checked {{count}}d ago",
       "lastCheckedDays_other": "Last checked {{count}}d ago",
       "updateToVersion": "Update to Orca {{version}}",
-      "update": "Update",
-      "installedVersion": "Version {{version}}",
       "checkUpdatesStatus": "Check for updates, {{status}}",
       "checkUpdates": "Check for updates"
     },
@@ -55,7 +53,7 @@
       "phoneBrowser": "Phone browser",
       "phoneBrowserDescription": "Open in Safari, Chrome, or another browser on this phone.",
       "title": "Browser",
-      "linksHeading": "LINKS",
+      "linksHeading": "Links",
       "terminalAndChatLinksDescription": "Choose where web links tapped in terminal output and chat open.",
       "loadFailed": "Could not load browser preferences. Try again.",
       "saveFailed": "Could not save browser preferences. Try again.",
@@ -64,23 +62,23 @@
     "menuItems": {
       "appearance": "Appearance",
       "terminal": "Terminal",
-      "chatUi": "Chat UI",
       "browser": "Browser",
       "voice": "Voice",
       "notifications": "Notifications",
       "troubleshooting": "Troubleshooting",
-      "about": "About"
+      "about": "About",
+      "chat": "Chat",
+      "updateAvailable": "Update available"
     },
     "nativeChatSettingsScreen": {
-      "title": "Chat UI",
-      "defaultViewHeading": "DEFAULT VIEW",
+      "defaultViewHeading": "Default view",
       "defaultViewDescription": "Choose how supported agent sessions (Claude, Codex, and other chat-capable agents) open on this device. Terminal shows the raw CLI; Chat UI shows a chat interface like the desktop app. You can still switch any individual session from its long-press menu.",
       "openInChatUi": "Open sessions in Chat UI",
       "on": "On",
       "off": "Off"
     },
     "nativeChatText": {
-      "heading": "TEXT",
+      "heading": "Text",
       "footer": "Pinch in a chat to change it; it saves here.",
       "size": "Text size",
       "sizeDefault": "Default",
@@ -151,7 +149,7 @@
       "retryCleanup": "Retry clearing pairing credentials"
     },
     "menuScreen": {
-      "privacyPolicy": "Privacy Policy",
+      "privacyPolicy": "Privacy policy",
       "support": "Support"
     },
     "uiLanguageSettingsSection": {
@@ -169,14 +167,14 @@
       "title": "Voice",
       "connectDesktop": "Connect to a desktop to manage voice settings.",
       "loadFailedMessage": "Failed to load voice settings.",
-      "dictationHeading": "DICTATION",
+      "dictationHeading": "Dictation",
       "enableDictation": "Enable Voice Dictation",
       "dictationDescription": "Dictate text into any focused pane on your desktop.",
       "dictationMode": "Dictation Mode",
       "dictationModeDescription": "Toggle: press once to start, again to stop. Hold: dictate while held.",
       "dictationModeWithAutoDescription": "Auto: tap to start and stop; on your computer, holding the shortcut records until you let go. Hold: dictate while held. Toggle: press once to start, again to stop.",
       "autoMode": "Auto",
-      "speechModelHeading": "SPEECH MODEL",
+      "speechModelHeading": "Speech model",
       "speechModel": "Speech Model",
       "loading": "Loading voice settings…"
     },
@@ -184,7 +182,7 @@
       "permissionOwnAll": "Agents' own settings"
     },
     "voiceTranscribeOn": {
-      "heading": "TRANSCRIBE ON",
+      "heading": "Transcribe on",
       "description": "Speech heard on this phone stays on it. Automatic uses your computer when this phone can’t transcribe.",
       "automatic": "Automatic",
       "phone": "This phone",
@@ -299,39 +297,32 @@
       "description": "Get agent alerts even when the app is closed. Delivered through Orca’s push service and Apple or Google."
     },
     "pairConfirm": {
-      "connectTimedOut": "Couldn't connect within {{seconds}}s — see log below for where it stalled",
       "pairingFailed": "Pairing failed: {{error}}",
-      "title": "Pair with this desktop?",
-      "description": "You opened a pairing link from your desktop. Confirm to add it to your hosts.",
       "pairButton": "Pair",
       "connecting": "Connecting…",
-      "pairingLog": "Pairing log",
-      "backToHome": "Back to home"
+      "backToHome": "Back to home",
+      "pairThisComputer": "Pair with this computer?",
+      "onlyYourOwn": "Only pair with a computer you trust."
     },
     "pairScan": {
       "invalidQrCode": "Not a valid Orca QR code",
-      "downloadQrCode": "That's the download code. Scan the pairing code in step 2 on your desktop.",
       "invalidPairingCode": "Not a valid pairing code — copy it from your computer and paste again",
-      "connectTimedOut": "Couldn't connect within {{seconds}}s — see log below for where it stalled",
       "pairingFailed": "Pairing failed: {{error}}",
-      "title": "Pair with desktop",
-      "cameraDisabledTitle": "Camera Access Disabled",
-      "cameraPermissionDescription": "Scan the QR code from Orca on your desktop, or paste the pairing code instead.",
-      "cameraDisabledDescription": "Enable camera access in Settings, or paste the pairing code instead.",
       "openSettings": "Open Settings",
-      "pasteInstead": "Paste code instead",
       "pasteCodeTitle": "Paste pairing code",
       "pasteCodeMessage": "Copy the code shown under the QR on your computer.",
       "pasteCodePlaceholder": "orca://pair?code=... or paste the code",
-      "openDesktopStep": "Open Orca on your computer",
-      "openMobileSettingsStep": "Go to Settings → Mobile",
-      "scanCodeStep": "Scan the QR code",
-      "pastePairingCode": "Paste pairing code",
       "connecting": "Connecting…",
-      "pairingLog": "Pairing log",
-      "tryAgain": "Try Again",
-      "codeNoLongerValid": "This pairing code expired, was already used, or was replaced. Show a new code on your desktop and scan again.",
-      "runtimeAccessLink": "This link is for another Orca app. Scan the code in Settings → Mobile on your computer, or run orca pair --mobile on your server."
+      "runtimeAccessLink": "This link is for another Orca app. Scan the code in Settings → Mobile on your computer, or run orca pair --mobile on your server.",
+      "couldNotPair": "Couldn’t pair",
+      "pasteCode": "Paste code",
+      "retry": "Try again",
+      "cameraOff": "Camera is off",
+      "allowCameraOrPaste": "Allow the camera to scan, or paste the code.",
+      "allowCamera": "Allow camera",
+      "pointAtCode": "Point at the code in Orca on your computer",
+      "scanCode": "Scan code",
+      "downloadCodeScanned": "That’s the download code. Scan the pairing code in Settings → Mobile on your computer."
     },
     "pair": {
       "missingCode": "Missing pairing code",
@@ -344,15 +335,15 @@
       "restoreAfterSeconds_one": "After {{count}}s",
       "restoreAfterSeconds_other": "After {{count}}s",
       "title": "Terminal",
-      "leaveAppHeading": "WHEN YOU LEAVE THE APP",
+      "leaveAppHeading": "When you leave the app",
       "leaveAppDescription": "While you're using a terminal on your phone, Orca shrinks it to fit your screen. When you close the app or switch away, this controls whether it stays at phone size (so interactive CLI tools don't reflow) or resizes back to your desktop. You can always use Restore on the desktop banner to resize manually.",
       "noPairedDesktops": "No paired desktops yet. Pair one to control terminal behavior.",
       "restoreHost": "Restore {{name}}",
       "previewColumns_one": "{{count}} column",
       "previewColumns_other": "{{count}} columns",
       "previewLabel": "Terminal preview",
-      "previewHeading": "PREVIEW",
-      "fontHeading": "FONT",
+      "previewHeading": "Preview",
+      "fontHeading": "Font",
       "fontDescription": "Pinch in a terminal to change the size; it saves here. Only changes this device, not the desktop terminal.",
       "font": "Font",
       "size": "Size",
@@ -373,6 +364,10 @@
       "systemMono": "System mono",
       "defaultFont": "Default",
       "resetFont": "Reset font settings"
+    },
+    "pairing": {
+      "connectTimedOut": "Your computer didn’t answer in {{seconds}} seconds.",
+      "codeExpired": "This code expired or was already used. Show a new one on your computer."
     }
   },
   "appMove": {
@@ -438,12 +433,9 @@
     "sessionHistoryList": {
       "messages_one": "{{count}} message",
       "messages_other": "{{count}} messages",
-      "currentWorktree": "current worktree",
       "resumeSession": "Resume agent session",
       "continueInCli": "Continue in CLI",
-      "hidePreview": "Hides the recent messages.",
-      "showPreview": "Shows the recent messages.",
-      "you": "You"
+      "thisWorkspace": "This workspace"
     },
     "panel": {
       "workspace": "Workspace",
@@ -454,16 +446,15 @@
       "unknownHostPlatform": "Unable to determine host platform.",
       "sessionQueued": "Agent session queued.",
       "resumeFailed": "Failed to resume session.",
-      "title": "Agent Session History",
+      "title": "Agent history",
       "refreshSessions": "Refresh agent sessions",
-      "unavailable": "Agent Session History Unavailable",
+      "unavailable": "Agent history unavailable",
       "updateHost": "Update Orca on this host to browse agent session history.",
       "placeholder": "Search sessions, repo:, path:",
       "skipped_one": "{{count}} transcript skipped",
       "skipped_other": "{{count}} transcripts skipped",
       "noSessions": "No agent sessions",
       "noSearchResults": "No sessions match your search.",
-      "emptyScope": "No past agent sessions in this scope.",
       "hideDetails": "Hide details",
       "showDetails": "Show details",
       "loading": "Loading agent sessions…",
@@ -484,7 +475,7 @@
     },
     "worktreeNavigationActions": {
       "sourceControl": "Source Control",
-      "agentSessionHistory": "Agent Session History"
+      "agentSessionHistory": "Agent history"
     },
     "resume": {
       "hostConnectionChanged": "Host connection changed. Retry resume."
@@ -739,15 +730,8 @@
       "update": "Update"
     },
     "emptyState": {
-      "openDesktopTitle": "Open Orca desktop",
-      "openDesktopDescription": "Go to Settings → Mobile and generate a pairing QR code.",
-      "scanCodeTitle": "Scan the code",
-      "connectedTitle": "You're connected",
-      "connectedDescription": "Your desktop will appear here. Everything is encrypted end-to-end.",
-      "title": "Connect your desktop",
-      "description": "Pair with Orca on your computer to check on your agents, jump into any terminal, and drive work from your phone.",
-      "pairDesktopButton": "Pair desktop",
-      "scanCodeBelowDescription": "Tap Pair desktop below, then point your camera at the QR code on your screen."
+      "connectComputer": "Connect your computer",
+      "openSettingsMobile": "Open Orca on your computer, then Settings → Mobile."
     },
     "listFooter": {
       "hostPickerTitle": "Open Tasks On"
@@ -1050,7 +1034,7 @@
       "tasks": "Tasks",
       "terminal": "Terminal",
       "sourceControl": "Source Control",
-      "agentSessionHistory": "Agent Session History",
+      "agentSessionHistory": "Agent history",
       "changes": "Changes",
       "pullRequest": "Pull Request",
       "workspace": "Workspace",
@@ -1078,17 +1062,14 @@
     "onboardingPage": {
       "sessionViewTitle": "How should sessions open?",
       "notificationsTitle": "Don’t miss when an agent needs you",
-      "sessionViewDescription": "Choose whether supported agent sessions open in the terminal or Chat UI on this device. Press and hold a session tab to switch its view, or change the default any time in Settings → Chat UI.",
-      "notificationsDescription": "Get a notification on this phone when an agent finishes or is waiting — even if you aren’t using the app.",
-      "notificationsDisclosure": "Delivered through Orca’s push service after your desktop has been idle for 3 minutes. Change this anytime in Settings.",
       "useChatUi": "Use Chat UI",
-      "openInChatUi": "Open sessions in Chat UI",
       "keepTerminal": "Keep terminal",
       "openInTerminal": "Open sessions in the terminal",
       "enableNotifications": "Enable notifications",
-      "enableAgentNotifications": "Enable agent notifications",
       "notNow": "Not now",
-      "skipNotifications": "Skip notifications for now"
+      "skipNotifications": "Skip notifications for now",
+      "sessionViewLine": "You can change this any time in Settings → Chat UI.",
+      "notificationsLine": "Orca’s push service tells this phone when an agent finishes or needs you while your computer is idle."
     },
     "notificationOnboardingPreview": {
       "codexFinished": "Codex finished",
@@ -1224,23 +1205,16 @@
       "editing": "Editing",
       "navigation": "Navigation",
       "function": "Function",
-      "addShortcut": "Add Shortcut",
-      "shortcutCombo": "Shortcut Combo",
-      "pickKey": "Pick a key",
-      "textMacro": "Text Macro",
-      "shortcutComboHint": "Build Ctrl, Alt, and Shift key chords",
-      "textMacroHint": "Send custom text command",
-      "manageShortcuts": "Manage Shortcuts",
-      "manageShortcutsHint": "Show, hide, or reorder shortcut keys",
-      "modifiers": "Modifiers",
       "key": "Key",
-      "moreKeys": "More keys",
       "add": "Add",
-      "label": "Label",
-      "labelPlaceholder": "e.g. Build",
-      "command": "Command",
       "commandPlaceholder": "e.g. pnpm build",
-      "pressEnter": "Press Enter"
+      "pressEnter": "Press Enter",
+      "title": "Add a key",
+      "letterOrSymbol": "Letter, number or symbol",
+      "keyCombo": "Key combo",
+      "text": "Text",
+      "name": "Name on the key",
+      "labelPlaceholder": "e.g. Build"
     },
     "dragReorderRow": {
       "dragToReorder": "Drag to reorder",
@@ -1319,13 +1293,9 @@
       "loadingSessions": "Loading agent sessions...",
       "unsentNotes_one": "{{count}} unsent notes",
       "unsentNotes_other": "{{count}} unsent notes",
-      "editNote": "Edit Note",
-      "addNote": "Add Note",
-      "lineNumber": "Line {{lineNumber}}",
+      "editNote": "Edit note",
       "fileNote": "File note",
-      "cancelNote": "Cancel note",
       "reviewNote": "Review note",
-      "saveLineNote": "Save note on line {{lineNumber}}",
       "deleteNote": "Delete note",
       "sendNotesLabel": "Send notes to agent",
       "viewedFiles_one": "{{count}} file viewed",
@@ -1339,10 +1309,12 @@
       "discardChanges": "Discard Changes",
       "rangeLine": "Line {{line}}",
       "rangeLines": "Lines {{startLine}}–{{line}}",
-      "sendToAgent": "Send to {{agent}}",
-      "sendToAnAgent": "Send to agent",
       "rangePlaceholder": "What should change here?",
-      "commentOnGitHub": "Comment on GitHub"
+      "send": "Send",
+      "sendTo": "Send to",
+      "agentInWorkspace": "{{agent}} in this workspace",
+      "anAgentInWorkspace": "Agent in this workspace",
+      "gitHubOnPr": "GitHub, on PR #{{number}}"
     },
     "diffReviewFileSummary": {
       "changed": "Changed",
@@ -1360,7 +1332,10 @@
       "nextFile": "Next file",
       "stageNext": "Stage · next file",
       "viewedNext": "Viewed · next file",
-      "nextFileButton": "Next file"
+      "nextFileButton": "Next file",
+      "commentOnLine": "Comment on line {{line}}",
+      "commentOnLines": "Comment on lines {{startLine}}–{{line}}",
+      "clearSelection": "Clear selection"
     },
     "diffReviewHeader": {
       "title": "Changes",
@@ -1374,8 +1349,8 @@
       "deletedLine": "Deleted line",
       "contextLineNumber": "Context line {{number}}",
       "contextLine": "Context line",
-      "addNoteOnLine": "Add note on line {{number}}",
-      "editNoteOnLine": "Edit note on line {{number}}"
+      "editNoteOnLine": "Edit note on line {{number}}",
+      "selectLine": "Select line {{number}}"
     },
     "hostCard": {
       "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} active",
@@ -1554,14 +1529,14 @@
     "terminalShortcutSettings": {
       "resetDefaults": "Reset Defaults",
       "resetDescription": "Show every built-in shortcut key in the original order",
-      "customShortcuts": "CUSTOM SHORTCUTS",
+      "customShortcuts": "Custom shortcuts",
       "empty": "No custom shortcuts defined yet.",
       "removeShortcut": "Remove {{label}}",
       "addShortcut": "Add Custom Shortcut…",
       "addDescription": "Create key combo or text macro",
-      "moreKeys": "MORE KEYS",
+      "moreKeys": "More keys",
       "moreKeysDescription": "These keys sit under ⋯ on the terminal key row. Toggle keys to show or hide them, and hold the grip to drag a key into the order you want. A key already on the row, like Esc or the arrows, is left out of ⋯.",
-      "directionPad": "DIRECTION PAD",
+      "directionPad": "Direction pad",
       "showDirectionPad": "Show D-pad",
       "showDirectionPadDescription": "Pin the arrow pad in the side rail. Without it, the rail lists the arrow keys.",
       "showShortcut": "Show {{label}} shortcut"
@@ -1800,6 +1775,9 @@
     "smartRailRow": {
       "title": "Smart rail",
       "subtitle": "Shows keys for what your agent is doing"
+    },
+    "diffReviewScreen": {
+      "backToDiff": "Back to diff"
     }
   },
   "pullRequest": {
@@ -1852,40 +1830,22 @@
       "monthsAgo_other": "{{count}}mo ago",
       "yearsAgo_one": "{{count}}y ago",
       "yearsAgo_other": "{{count}}y ago",
-      "resolved": "resolved",
-      "openOnGitHub": "Open comment on GitHub",
       "editPlaceholder": "Edit comment…",
-      "replyToComment": "Reply to comment",
       "reply": "Reply",
-      "editComment": "Edit comment",
-      "deleteComment": "Delete comment",
-      "unresolveThread": "Unresolve thread",
-      "resolveThread": "Resolve thread",
       "unresolve": "Unresolve",
       "resolve": "Resolve",
-      "replyPlaceholder": "Write a reply…",
       "deleteConfirmMessage": "This permanently deletes the comment on GitHub."
     },
     "commentsSection": {
-      "all": "All",
-      "humans": "Humans",
-      "bots": "Bots",
-      "noBotComments": "No bot comments.",
-      "noHumanComments": "No human comments.",
       "noComments": "No comments yet.",
       "description": "Description",
       "descriptionLoadFailed": "Could not load description. Tap refresh to try again.",
       "noDescription": "No description provided.",
       "title": "Comments",
-      "commentsLoadFailed": "Could not load comments. Tap refresh to try again.",
-      "showMoreOf": "Show {{count}} more of {{remaining}}",
       "showMore": "Show {{count}} more",
-      "addCommentPlaceholder": "Add a comment…",
       "comment": "Comment",
       "resolvedThreadSingle": "Resolved thread by {{author}}",
       "resolvedThreadCount": "Resolved thread by {{author}} ({{count}})",
-      "resolvedCommentSingle": "Resolved comment by {{author}}",
-      "resolvedCommentCount": "Resolved comment by {{author}} ({{count}})",
       "commentsLoadFailedRetry": "Could not load comments."
     },
     "reviewersSection": {
@@ -1991,14 +1951,6 @@
       "stateDraft": "Draft",
       "stateClosed": "Closed"
     },
-    "prCommentAudienceLabels": {
-      "all": "All",
-      "humans": "Humans",
-      "bots": "Bots",
-      "noBotComments": "No bot comments.",
-      "noHumanComments": "No human comments.",
-      "noComments": "No comments yet."
-    },
     "tab": {
       "updated": "updated {{time}}",
       "moreActions": "More pull request actions",
@@ -2061,7 +2013,6 @@
       "failedAfter": "Failed after {{duration}}",
       "failed": "Failed",
       "checkActions": "More for {{name}}",
-      "rerun": "Rerun",
       "copyErrorFailed": "Could not copy the error.",
       "durationSeconds": "{{seconds}}s",
       "durationMinutes": "{{minutes}}m {{seconds}}s",
@@ -2100,7 +2051,8 @@
       "fixWith": "Fix with {{agent}}",
       "live": "Live",
       "askToFix": "Ask {{agent}} to fix",
-      "askAiToFix": "Ask AI to fix"
+      "askAiToFix": "Ask AI to fix",
+      "rerunFailed": "Rerun failed checks"
     },
     "reviewersSheet": {
       "approvals_one": "{{count}} approval",
@@ -2270,10 +2222,9 @@
       "title": "Files",
       "truncatedList": "{{worktreeLabel}} - Showing first 5000",
       "emptyState": "No files found",
-      "filterPlaceholder": "Filter files",
-      "noMatchesHint": "Only folders you have opened are searched.",
-      "clearFilter": "Clear filter",
-      "loading": "Loading files…"
+      "loading": "Loading files…",
+      "searching": "Searching…",
+      "searchPlaceholder": "Search files"
     },
     "fileMarkdownPreview": {
       "viewSource": "View Markdown source",
@@ -2328,19 +2279,14 @@
       "open": "Open PDF"
     },
     "fileExplorerRow": {
-      "loading": "Loading...",
+      "loading": "Loading…",
       "loadFolderFailed": "Unable to load folder",
       "retryLoading": "Retry loading {{path}}",
       "openFolder": "Open folder {{name}}",
       "fileUnavailable": "{{name}} unavailable on mobile",
       "previewFile": "Preview file {{name}}",
-      "unavailable": "Unavailable on mobile",
       "showMore": "Show {{rows}} more",
       "loadedOfTotal": "{{loaded}} of {{total}}",
-      "searched": "Searched {{loaded}} of {{total}} in {{folder}}.",
-      "searching": "Searching {{folder}}… {{loaded}} of {{total}}",
-      "searchAll": "Search all",
-      "searchAllIn": "Search all of {{folder}}",
       "ignored": "Ignored by .gitignore"
     },
     "fileExplorerRowActions": {
@@ -2374,19 +2320,15 @@
   "session": {
     "browserTabActionSheet": {
       "title": "Browser",
-      "forward": "Forward",
-      "reload": "Reload",
       "hardReload": "Hard reload"
     },
     "terminalLiveInputStatus": {
       "listening": "Listening",
       "processing": "Processing",
       "startingMic": "Starting mic",
-      "liveInput": "Live input",
-      "uploadingImageTitle": "Uploading image",
       "releaseMicHint": "Release mic to stop",
       "preparingMic": "Preparing microphone",
-      "uploadingImage": "Uploading image to host"
+      "uploading": "Uploading…"
     },
     "markdownReader": {
       "readOnly": "Read only",
@@ -2445,26 +2387,20 @@
       "messageModeLabel": "Message mode: write, then send. Switch to Keys mode",
       "moreKeys": "More keys and actions",
       "showKeyboard": "Show keyboard",
-      "dismissKeyboardHint": "Hides the software keyboard and keeps the current terminal session open.",
-      "switchToDesktopMode": "Switch to desktop mode",
-      "switchToPhoneMode": "Switch to phone mode",
-      "pasteFromClipboard": "Paste from clipboard",
-      "paste": "Paste",
-      "addCustomShortcut": "Add custom shortcut"
+      "pasteFromClipboard": "Paste from clipboard"
     },
     "activeContent": {
-      "noTabs": "No tabs in this session",
       "creatingTab": "Creating...",
-      "createTab": "Create Tab",
       "fileTitle": "File",
       "terminalTakingLonger": "Terminal is taking longer than expected",
       "loadingTerminal": "Loading terminal",
-      "retryLoadingTerminal": "Retry loading terminal"
+      "noTabs": "No tabs open",
+      "noTabsStart": "Start an agent or a terminal."
     },
     "commandDock": {
       "liveInputLabel": "Live terminal input",
       "liveInputHint": "Typed text is sent directly to the active terminal",
-      "tapToShowKeyboard": "Tap to show keyboard"
+      "typeIntoTerminal": "Type into terminal"
     },
     "contentRow": {
       "dismissCreationWarning": "Dismiss workspace creation warning"
@@ -2489,17 +2425,13 @@
       "loading": "Loading file…"
     },
     "header": {
-      "workspaceDetailsHint": "Shows the full workspace name and where it is",
       "showSidebar": "Show sidebar",
       "backToWorktrees": "Back to worktrees",
       "terminalTitle": "Terminal",
       "reconnectToDesktop": "Reconnect to desktop",
-      "openSourceControl": "Open source control",
       "moreActions": "More session actions",
       "terminalLayout": "Terminal layout",
-      "newTab": "New tab",
       "quickCommands": "Quick commands",
-      "fileExplorer": "File explorer",
       "sourceControl": "Source control",
       "itemsNeedYou": "Items, {{count}} need you",
       "items": "Items",
@@ -2508,25 +2440,23 @@
     "headerMoreActionsSheet": {
       "agentHistory": "Agent History",
       "agentHistoryHint": "Browse and resume agent sessions",
-      "checks": "Checks",
-      "checksHint": "Open pull request checks"
+      "checks": "Checks"
     },
     "routeScreen": {
       "openingWorkspace": "Opening workspace"
     },
     "sheets": {
-      "newTab": "New Tab",
+      "newTab": "New tab",
       "terminal": "Terminal",
       "browser": "Browser",
-      "browserStreamingUnavailable": "This host can't stream browser tabs",
-      "markdownNote": "Markdown Note",
+      "markdownNote": "Markdown note",
       "sendReviewNotes": "Send Review Notes",
       "notesHint": "Choose an agent session for the current notes.",
       "copyNotes": "Copy Notes",
       "notesCopied": "Notes copied",
       "copyNotesFailed": "Couldn't copy notes",
       "markdown": "Markdown",
-      "copyPath": "Copy Path",
+      "copyPath": "Copy path",
       "file": "File",
       "chat": "Chat",
       "cli": "CLI",
@@ -2539,11 +2469,9 @@
       "discardChanges": "Discard Changes",
       "discardMessage": "Replace the phone draft with the latest desktop file?",
       "discard": "Discard",
-      "newBrowser": "New Browser",
-      "urlPrompt": "Enter a URL, or leave blank for a new tab.",
       "shortcut": "Shortcut",
       "removeShortcutMessage": "Remove this custom shortcut?",
-      "renameTerminal": "Rename Terminal",
+      "renameTerminal": "Rename terminal",
       "renameTerminalFailed": "Couldn't rename the terminal. {{reason}}",
       "terminalName": "Terminal name",
       "allowAutoClose": "Allow Auto-Close",
@@ -2558,14 +2486,8 @@
       "copyLinkFailed": "Couldn't copy link"
     },
     "tabStrip": {
-      "newTab": "New tab",
       "quickCommandsUpdateRequired": "Desktop update required for quick commands",
       "checkingCapabilities": "Checking desktop capabilities — try again in a moment"
-    },
-    "terminalInputActions": {
-      "sendingImage": "Sending image",
-      "attachPhoto": "Attach a photo",
-      "attachFileHint": "Long press to attach a file instead"
     },
     "quickCommandEditorForm": {
       "terminalCommand": "Terminal Command",
@@ -2709,15 +2631,13 @@
       "stateUnverifiableCount_other": "{{value0}} with status unavailable"
     },
     "bulkCloseSheetActions": {
-      "closeOtherTabs": "Close Other Tabs"
+      "closeOtherTabs": "Close other tabs"
     },
     "bulkTabClose": {
-      "titleOthers": "Close other tabs?",
-      "titleRight": "Close tabs to the right?",
-      "titleLeft": "Close tabs to the left?",
-      "titleEditors": "Close all editor tabs?",
-      "description": "The selected tabs will be closed. Pinned tabs will stay open.",
-      "confirm": "Close tabs"
+      "titleOthers_one": "Close {{count}} other tab?",
+      "titleOthers_other": "Close {{count}} other tabs?",
+      "confirm_one": "Close {{count}} tab",
+      "confirm_other": "Close {{count}} tabs"
     },
     "diffReviewLoaders": {
       "committedChangesUnavailable": "Committed changes unavailable",
@@ -2818,10 +2738,10 @@
       "messageNotSent": "Message not sent"
     },
     "terminalActionSheetActions": {
-      "switchToDesktop": "Switch to Desktop",
-      "switchToPhone": "Switch to Phone",
+      "switchToDesktop": "Switch to desktop",
+      "switchToPhone": "Switch to phone",
       "rename": "Rename",
-      "clearTerminal": "Clear Terminal"
+      "clearTerminal": "Clear terminal"
     },
     "terminalRecords": {
       "defaultTitle": "Terminal"
@@ -3200,42 +3120,46 @@
       "tryAgain": "Try again."
     },
     "workerAutoClose": {
-      "running": "Temporary orchestration worker · Closes 2 minutes after it finishes",
-      "finished": "Temporary orchestration worker finished · Closes in {{countdown}}",
-      "keepOpen": "Keep open"
+      "keepOpen": "Keep open",
+      "running": "Closes 2 min after it finishes",
+      "finished": "Closes in {{countdown}}"
     },
     "terminalMoreKeys": {
       "sendKey": "Send {{label}}",
       "paste": "Paste",
-      "sending": "Sending…",
       "photo": "Photo",
       "file": "File",
       "desktopWidth": "Desktop width",
       "phoneWidth": "Phone width",
       "keys": "Keys",
-      "combos": "Combos",
       "yourKeys": "Your keys",
       "deleteKeyHint": "Long press to delete this key",
       "addCustomKey": "Add custom key",
-      "addKey": "Add key"
+      "title": "More keys",
+      "interrupt": "Interrupt",
+      "endOfInput": "End of input",
+      "clearScreen": "Clear screen",
+      "suspend": "Suspend",
+      "searchHistory": "Search history",
+      "lineStart": "Start of line",
+      "lineEnd": "End of line",
+      "deleteWord": "Delete word",
+      "deleteLine": "Delete to line start",
+      "shortcuts": "Shortcuts",
+      "add": "Add"
     },
     "terminalLayoutSheet": {
       "title": "Terminal layout",
       "oneTerminal": "One terminal",
-      "selected": "Selected",
       "auto": "Auto",
-      "autoHint": "Split to fit the available space",
       "sideBySide": "Side by side",
-      "sideBySideHint": "Two columns, even with the sidebar open",
       "stacked": "Stacked",
-      "stackedHint": "Two rows in any orientation",
-      "selectedHint": "Selected · {{hint}}"
+      "needsSecondTerminal": "Open a second terminal first"
     },
     "terminalPaneView": {
       "focusedPane": "{{title}}, focused",
       "terminal": "Terminal",
-      "tapToFocusPane": "{{title}}, tap to focus",
-      "inputPane": "{{title}} · Input"
+      "tapToFocusPane": "{{title}}, tap to focus"
     },
     "terminalSplitLayout": {
       "saveFailedTitle": "Layout could not be saved",
@@ -3308,26 +3232,36 @@
       "everythingElse": "Everything else",
       "closeTab": "Close {{title}}",
       "panes_one": "{{count}} pane",
-      "panes_other": "{{count}} panes"
+      "panes_other": "{{count}} panes",
+      "stopTitle": "Stop and close?",
+      "stopWaiting": "{{title}} is waiting for you. Closing the tab stops it.",
+      "stopWorking": "{{title}} is still working. Closing the tab stops it.",
+      "stopConfirm": "Stop and close",
+      "olderCount": "{{count}} older",
+      "closeFinished_one": "Close {{count}} finished tab",
+      "closeFinished_other": "Close {{count}} finished tabs",
+      "closeFinishedTitle_one": "Close {{count}} finished tab?",
+      "closeFinishedTitle_other": "Close {{count}} finished tabs?"
     },
     "tabMenu": {
-      "closeTab": "Close Tab"
+      "closeTab": "Close tab"
     },
     "tabRows": {
       "browser": "Browser",
       "markdown": "Markdown note",
       "file": "File",
       "chat": "Chat",
-      "terminal": "Terminal"
+      "terminal": "Terminal",
+      "asks": "Asks",
+      "allowTool": "Allow {{tool}}?"
     },
     "tabBar": {
       "oneTab": "1 tab",
       "tabCount": "{{count}} tabs",
-      "anotherNeedsYou": "another tab needs you",
       "actionsHint": "Shows actions for this tab",
-      "next": "Next tab",
-      "previous": "Previous tab",
-      "hint": "Shows all tabs"
+      "hint": "Shows all tabs",
+      "needYou_one": "{{count}} needs you",
+      "needYou_other": "{{count}} need you"
     },
     "textSizeSheet": {
       "chatTitle": "Chat text",
@@ -3344,6 +3278,15 @@
     },
     "orcaCommands": {
       "desktopOnly": "Available in the desktop app"
+    },
+    "terminalInputActions": {
+      "attach": "Attach a photo or file"
+    },
+    "sidebar": {
+      "backTo": "Back to {{title}}",
+      "needsYou": "Needs you",
+      "files": "Files",
+      "otherWorkspaces": "Other workspaces"
     }
   },
   "chat": {
@@ -3833,6 +3776,15 @@
         "update": "Update from",
         "message": "Message from",
         "notSentYet": "not sent yet"
+      },
+      "unnamedRecipient": "an agent",
+      "recipientName": "{{name}}",
+      "event": {
+        "followedUp": "Sent follow-up",
+        "update": "Update",
+        "message": "Message",
+        "handedOff": "Handed off",
+        "task": "Task"
       },
       "kind": {
         "started": "Started",
@@ -4330,9 +4282,9 @@
     "commitDropdown": {
       "commit": "Commit",
       "commitStagedChanges": "Commit staged changes",
-      "commitPush": "Commit & Push",
-      "commitForcePush": "Commit & Force Push",
-      "commitSync": "Commit & Sync",
+      "commitPush": "Commit & push",
+      "commitForcePush": "Commit & force push",
+      "commitSync": "Commit & sync",
       "checkingBranchStatus": "Checking branch status…",
       "checkingPrStatus": "Checking PR status…",
       "prAlreadyMerged": "PR is already merged",
@@ -4385,11 +4337,11 @@
     },
     "remoteDropdown": {
       "push": "Push",
-      "forcePush": "Force Push",
+      "forcePush": "Force push",
       "pull": "Pull",
       "fastForward": "Fast-forward",
       "sync": "Sync",
-      "publishBranch": "Publish Branch",
+      "publishBranch": "Publish branch",
       "publishPrStatus": "PR Status",
       "publishLinkedReview": "Linked Review",
       "publishNoBranch": "No Branch",
@@ -4506,13 +4458,10 @@
     },
     "commitFailurePanel": {
       "title": "Commit failed",
-      "summary": "Commit failed.",
-      "fixWithAi": "Fix commit failure with AI",
       "fix": "Fix",
-      "hideFailureDetails": "Hide commit failure details",
-      "showFailureDetails": "Show commit failure details",
       "hideDetails": "Hide details",
-      "showDetails": "Show details"
+      "failedWith": "Commit failed: {{reason}}",
+      "details": "Details"
     },
     "gitHistoryList": {
       "loadFailed": "Failed to load history",
@@ -4527,14 +4476,13 @@
       "completeMerge": "Complete merge"
     },
     "content": {
-      "reconnecting": "Reconnecting to desktop...",
-      "emptyTitle": "No local changes",
-      "emptyMessage": "Working tree is clean.",
       "commitMessageDisabled": "Commit message disabled. No staged files.",
       "commitMessagePlaceholder": "Commit message",
       "regenerateHint": "Clear the message to regenerate.",
       "cancelGeneration": "Cancel commit message generation",
-      "generateMessage": "Generate commit message with AI"
+      "generateMessage": "Generate commit message with AI",
+      "reconnectingToComputer": "Reconnecting…",
+      "noChanges": "No changes"
     },
     "fileRows": {
       "bothModified": "Both modified",
@@ -4561,16 +4509,15 @@
       "title": "Source Control",
       "openNumberedPrWeb": "Open pull request #{{number}} on the web",
       "openPrWeb": "Open pull request on the web",
-      "refresh": "Refresh source control",
+      "refresh": "Refresh",
       "moreActions": "More source control actions"
     },
     "modals": {
-      "discardTitle": "Discard Change",
+      "discardTitle": "Discard change",
       "discardConfirmMessage": "Discard changes to \"{{path}}\"? This cannot be undone.",
       "discardButton": "Discard",
-      "switchBranchTitle": "Switch Branch",
-      "currentBranch": "current",
-      "prCreatedTitle": "Pull Request Created",
+      "switchBranchTitle": "Switch branch",
+      "prCreatedTitle": "Pull request created",
       "openPrWithWarning": "Open it in your browser?\n\n{{warning}}",
       "openPrMessage": "Open it in your browser?"
     },
@@ -4667,7 +4614,10 @@
       "aborting": "Aborting…",
       "abortMerge": "Abort merge",
       "abortRebase": "Abort rebase",
-      "abortOperation": "Abort {{operation}}"
+      "abortOperation": "Abort {{operation}}",
+      "confirmRebaseTitle": "Abort the rebase?",
+      "confirmMergeTitle": "Abort the merge?",
+      "confirmMessage": "The branch goes back to where it was, and the resolved files are lost."
     },
     "hubTab": {
       "changes": "Changes",
@@ -4857,16 +4807,11 @@
       "behind": "{{count}} behind",
       "upToDate": "Up to date",
       "switchBranch": "Switch branch from {{branch}}",
-      "mergeInProgress": "Merge in progress",
-      "rebaseInProgress": "Rebase in progress",
-      "cherryPickInProgress": "Cherry-pick in progress",
-      "filesNeedDecision_one": "{{count}} file needs a decision before you can finish.",
-      "filesNeedDecision_other": "{{count}} files need a decision before you can finish.",
-      "conflictsResolved": "Every conflict is resolved. Finish from the bar below.",
-      "continueOnComputer": "Every conflict is resolved. Continue on your computer to finish.",
       "commits_one": "{{count}} commit",
       "commits_other": "{{count}} commits",
-      "conflictsMayRemain": "Not every file is listed, so conflicts may remain. Check on your computer."
+      "conflictsMayRemain": "Not every file is listed, so conflicts may remain. Check on your computer.",
+      "pausedToResolve": "{{operation}} · {{count}} to resolve",
+      "continueOnComputerShort": "Continue on your computer to finish."
     },
     "fileList": {
       "stageAll": "Stage all",
@@ -4956,18 +4901,7 @@
       "createWorkspaceIn": "Create Workspace In"
     },
     "filterPickers": {
-      "fieldsTitle": "Project Fields",
-      "fieldsSubtitle": "Choose which Project fields appear on item cards.",
-      "noFields": "This view has no extra fields to show.",
-      "fieldShown": "Shown on cards",
-      "fieldHidden": "Hidden from cards",
-      "gitlabView": "GitLab View",
-      "gitlabFilter": "GitLab Filter",
-      "linearFilter": "Linear Filter",
-      "linearWorkspace": "Linear Workspace",
       "switchWorkspaceFailed": "Failed to switch workspace",
-      "teamsTitle": "Linear Teams",
-      "teamsSubtitle": "Choose which teams appear in Tasks.",
       "allTeams": "All teams",
       "teams_one": "{{count}} team",
       "teams_other": "{{count}} teams",
@@ -4975,8 +4909,6 @@
       "linearIssue": "Linear issue",
       "loadingStates": "Loading states...",
       "noStates": "No states available",
-      "jiraFilter": "Jira Filter",
-      "jiraSite": "Jira Site",
       "statesFailed": "Couldn't load states. Reopen to try again."
     },
     "githubProjectList": {
@@ -5100,9 +5032,6 @@
     "linearList": {
       "changeStatusFrom": "Change status from {{status}}"
     },
-    "listDisplayPickers": {
-      "displayPropertiesTitle": "Display Properties"
-    },
     "listSurface": {
       "updateDesktopTitle": "Update Orca on this host",
       "updateDesktopMessage": "This mobile Tasks view needs a newer Orca on this host.",
@@ -5145,7 +5074,6 @@
       "labels": "Labels",
       "issues": "Issues",
       "githubIssuesDescription": "GitHub issues",
-      "pullRequests": "PRs",
       "githubPullRequestsDescription": "GitHub pull requests",
       "projects": "Projects",
       "githubProjectsDescription": "GitHub Projects views",
@@ -5163,7 +5091,8 @@
       "myTodosDescription": "Pending GitLab todos",
       "updatedSortDescription": "Newest activity first",
       "repository": "Repository",
-      "repositorySortDescription": "Group by repository, then newest activity"
+      "repositorySortDescription": "Group by repository, then newest activity",
+      "pullRequestsKind": "Pull requests"
     },
     "projectComments": {
       "comments_one": "{{count}} comment",
@@ -5248,59 +5177,20 @@
       "binaryFile": "Binary file.",
       "fileUnavailable": "File contents unavailable."
     },
-    "providerControls": {
-      "projectMergeRequests": "Project MRs",
-      "myTodos": "My Todos",
-      "reposLabel": "Repositories: {{repos}}",
-      "filterCount": "Filter · {{count}}",
-      "filter": "Filter",
-      "filterLabel": "Filter and display"
-    },
-    "providerItemList": {
-      "previousPage": "Previous page",
-      "selectPage": "Select page, Page {{page}}",
-      "selectPageOfTotal": "Select page, Page {{page}} of {{total}}",
-      "page": "Page {{page}}",
-      "pageOfTotal": "Page {{page}} of {{total}}",
-      "nextPage": "Next page",
-      "intoBranch": "into {{base}}",
-      "kindAndStatus": "{{kind}}, {{status}}"
-    },
     "providerPickers": {
-      "repos": "Repositories",
-      "repoDescription": "Choose which repositories to query.",
       "allRepositories": "All repositories",
-      "issueSources": "GitHub Issue Sources",
-      "issueSourcesDescription": "Choose whether each repository queries and creates work from upstream or origin.",
-      "noIssueSources": "No alternate issue sources available.",
-      "queryingSource": "Querying {{source}}",
-      "upstream": "Upstream",
-      "origin": "Origin",
-      "githubView": "GitHub View",
-      "pullRequests": "Pull Requests",
-      "issues": "Issues",
-      "pages": "GitHub Pages",
-      "pageHint": "Jump to a loaded or available result page.",
-      "pageNumber": "Page {{page}}",
-      "pageLoaded": "Loaded",
-      "pageNotLoaded": "Loads older results"
+      "upstreamSource": "Upstream · {{slug}}",
+      "originSource": "Origin · {{slug}}"
     },
     "reviewerLinear": {
       "unassigned": "Unassigned",
       "issues": "Issues"
     },
     "screenChrome": {
-      "refreshGitHub": "Refresh GitHub work",
-      "refreshGitLab": "Refresh GitLab work items",
-      "refreshLinear": "Refresh Linear",
-      "refreshJira": "Refresh Jira issues",
       "title": "Tasks",
       "newGitHubIssue": "New GitHub issue",
-      "newLinearIssue": "New Linear issue"
-    },
-    "searchControl": {
-      "projectPlaceholder": "Search project view...",
-      "providerPlaceholder": "Search {{provider}} tasks..."
+      "newLinearIssue": "New Linear issue",
+      "more": "More"
     },
     "workspaceCreateDrawer": {
       "title": "Create Workspace",
@@ -5390,7 +5280,6 @@
       "unsupportedLayout": "Unsupported layout on mobile"
     },
     "providerViewProjection": {
-      "defaultSubtitle": "{{subtitle}} · Default",
       "default": "Default",
       "openState": "Open",
       "allSites": "All sites",
@@ -5437,32 +5326,28 @@
     },
     "pagination": {
       "pageUnreachable": "Page {{page}} is beyond what GitHub search can return.",
-      "loadPageFailed": "Page {{page}} could not be loaded from GitHub.",
-      "noMoreResults": "No more results on page {{page}}."
+      "loadPageFailed": "Page {{page}} could not be loaded from GitHub."
     },
     "filterSheet": {
-      "sortBy": "Sort by",
       "issueSource": "Issue source",
-      "issueSourceRow": "Upstream or origin",
       "view": "View",
-      "projectView": "Project view",
-      "projectItems_one": "{{count}} item",
-      "projectItems_other": "{{count}} items",
-      "chooseView": "Choose",
       "showOnRows": "Show on rows",
-      "projectFields": "Project fields",
       "workspace": "Workspace",
-      "linearWorkspace": "Linear workspace",
       "layout": "Layout",
       "groupBy": "Group by",
       "orderBy": "Order by",
-      "displayProperties": "Display properties",
       "title": "Filter & display",
       "done": "Done",
-      "jqlReplacesPreset": "Your JQL search replaces the Show preset. Clear the search to pick one again."
-    },
-    "jiraViewControls": {
-      "jqlSearch": "JQL search"
+      "repositories": "Repositories",
+      "sort": "Sort",
+      "project": "Project",
+      "fields": "Fields",
+      "teams": "Teams",
+      "site": "Site",
+      "backToFilter": "Back to Filter",
+      "which": "Which",
+      "show": "Show",
+      "whichAfterSearch": "Which (clear the search to change)"
     },
     "itemComments": {
       "noComments": "No comments yet",
@@ -5479,7 +5364,27 @@
     "runtimeHydration": {
       "loadFailed": "Failed to load Tasks settings"
     },
-    "rerunUnsuccessful": "Retry checks"
+    "rerunUnsuccessful": "Retry checks",
+    "searchControl": {
+      "viewPlaceholder": "Search this view",
+      "pullRequestsPlaceholder": "Search pull requests",
+      "issuesPlaceholder": "Search issues",
+      "sourcePlaceholder": "Search {{provider}}",
+      "filter": "Filter"
+    },
+    "row": {
+      "draft": "Draft",
+      "approved": "Approved"
+    },
+    "providerItemList": {
+      "results": "Results",
+      "assignedToYou": "Assigned to you",
+      "openPullRequests": "Open pull requests",
+      "yourPullRequests": "Your pull requests",
+      "needsYourReview": "Needs your review",
+      "openIssues": "Open issues",
+      "todos": "To-dos"
+    }
   },
   "terminal": {
     "webView": {
@@ -5513,7 +5418,7 @@
       "code": "code {{code}}",
       "rendererCrashed": "renderer crashed",
       "title": "Terminal failed to load",
-      "reload": "Reload"
+      "message": "The session on your computer is still running."
     },
     "webviewNotificationDispatch": {
       "unknownError": "Unknown terminal error"
@@ -7778,7 +7683,11 @@
         "signIn": "Sign in to GitHub",
         "pickSubtitle": "Choose the repositories it can work in"
       },
-      "allRepositoriesShort": "all repositories"
+      "allRepositoriesShort": "all repositories",
+      "ghSignedOut": {
+        "line": "gh is signed out on {{host}}. Run gh auth login there.",
+        "copy": "Copy {{text}}"
+      }
     },
     "connect": {
       "finishOnHost": "Finish connecting {{service}} in Orca on {{host}}.",
@@ -8013,17 +7922,7 @@
   },
   "automations": {
     "mobile": {
-      "baseBranchOptional": "Base branch (optional)",
-      "workspaceSetupScript": "Workspace setup script",
-      "useProjectSettings": "Use project settings",
-      "runSetupScript": "Run setup script",
-      "skipSetupScript": "Skip setup script",
       "reuseAgentSession": "Reuse agent session",
-      "extraAgentArguments": "Extra agent arguments",
-      "precheckCommandOptional": "Precheck command (optional)",
-      "precheckTimeoutSeconds": "Precheck timeout (seconds)",
-      "missedRunGraceMinutes": "Missed-run grace (minutes)",
-      "choose": "Choose…",
       "allAutomations": "All automations",
       "runOnSchedule": "Run {{name}} on schedule",
       "schedule": "Schedule",
@@ -8032,36 +7931,20 @@
       "project": "Project",
       "unavailable": "Unavailable",
       "workspace": "Workspace",
-      "newWorkspacePerRun": "New workspace per run",
       "instructions": "Instructions",
       "runNow": "Run now",
       "edit": "Edit",
       "deleteAutomation": "Delete automation",
-      "savedAgent": "{{agent}} (saved)",
       "chooseAProjectSetUpOnThisHost": "Choose a project set up on this host.",
       "editAutomation": "Edit automation",
       "newAutomation": "New automation",
       "cancel": "Cancel",
-      "editorStep": "{{step}} of 3 · {{section}}",
-      "retryProjectLoading": "Retry project loading",
-      "loadingProjects": "Loading projects…",
       "name": "Name",
-      "projectAndHostSetup": "Project and host setup",
       "savedTarget": "Saved target",
-      "useAnExistingWorkspace": "Use an existing workspace",
-      "existingWorkspace": "Existing workspace",
       "savedWorkspace": "Saved workspace",
       "loadMoreWorkspaces": "Load more workspaces",
-      "thisHostSWorkspaceInventoryIsIncompleteRefreshOrLoadMoreWorkspaces": "This host’s workspace inventory is incomplete. Refresh or load more workspaces.",
-      "agentDetecting": "Agent · detecting…",
       "installAndEnableAnAgentOnThisHostThenRetry": "Install and enable an agent on this host, then retry.",
-      "hideAdvancedOptions": "Hide advanced options",
-      "advancedOptions": "Advanced options",
-      "chooseAnAgent": "Choose an agent",
       "back": "Back",
-      "continue": "Continue",
-      "saveChanges": "Save changes",
-      "createAutomation": "Create automation",
       "loadingAutomations": "Loading automations…",
       "letYourAgentsWorkOnASchedule": "Let your agents work on a schedule",
       "createAnAutomationToRunATaskOnThisHost": "Create an automation to run a task on this host.",
@@ -8111,13 +7994,8 @@
       "weekly": "Weekly",
       "customCronOrRRULE": "Custom cron or RRULE",
       "cadence": "Cadence",
-      "cronOrRRULE": "Cron or RRULE",
-      "minuteFromHHMM": "Minute (from HH:MM)",
-      "timeHHMM24Hour": "Time (HH:MM, 24 hour)",
-      "useATimeSuchAs0900": "Use a time such as 09:00.",
       "day": "Day",
       "timeZone": "Time zone",
-      "runsOnTheSelectedHostKeepThatHostAvailableAtTheScheduledTime": "Runs on the selected host. Keep that host available at the scheduled time.",
       "host": "Host",
       "pairedHost": "Paired host",
       "chooseHost": "Automations on {{host}}, choose another host",
@@ -8149,21 +8027,45 @@
       "unknownResult": "Unknown result",
       "notReported": "Not reported",
       "searchOptions": "Search options",
-      "task": "Task",
-      "review": "Review",
       "discardChangesTitle": "Discard changes?",
       "discardChangesMessage": "Unsaved edits to this automation will be lost.",
       "discard": "Discard",
       "keepEditing": "Keep editing",
       "on": "On",
       "repeats": "Repeats",
-      "newOnePerRun": "New one per run",
       "moreActions": "More actions",
       "noRunsYet": "No runs yet",
       "nextRunToday": "Next run today at {{time}}",
       "nextRunTomorrow": "Next run tomorrow at {{time}}",
       "nextRunWeekday": "Next run {{day}} at {{time}}",
-      "nextRunDate": "Next run {{date}}"
+      "nextRunDate": "Next run {{date}}",
+      "newEachRun": "New each run",
+      "where": "Where",
+      "add": "Add",
+      "advanced": "Advanced",
+      "none": "None",
+      "catchUpNever": "Never",
+      "catchUpHours_one": "Within {{count}} hour",
+      "catchUpHours_other": "Within {{count}} hours",
+      "catchUpMinutes_one": "Within {{count}} minute",
+      "catchUpMinutes_other": "Within {{count}} minutes",
+      "timeoutMinutes": "{{count}} min",
+      "timeoutSeconds": "{{count}} sec",
+      "catchUp": "Catch up missed runs",
+      "baseBranch": "Base branch",
+      "defaultBranch": "Default",
+      "setupScript": "Setup script",
+      "setupProject": "Project default",
+      "setupRun": "Run",
+      "setupSkip": "Skip",
+      "agentArguments": "Agent arguments",
+      "beforeEachRun": "Before each run",
+      "checkCommand": "Check command",
+      "timeLimit": "Time limit",
+      "existingWorkspaces": "Existing workspaces",
+      "notSet": "Not set",
+      "catchUpHours": "Within {{count}} hours",
+      "catchUpMinutes": "Within {{count}} minutes"
     },
     "orphanIssues": {
       "hostReselection": "Edit this automation and reselect its host before running it.",
@@ -8274,7 +8176,6 @@
         }
       },
       "TaskPage": {
-        "99c2755218": "Search issues or enter JQL, e.g. project = ABC",
         "jiraTextMatchesNotice": "Showing text matches. Jira couldn't run this search as JQL."
       },
       "editor": {
@@ -8494,13 +8395,13 @@
       "workers_other": "{{count}} workers",
       "noMatches": "No agents match “{{query}}”",
       "emptyTitle": "No agents running",
-      "pairDesktop": "Pair a desktop to see its agents here.",
       "emptyBody": "Start an agent in any workspace and it shows up here.",
       "unread": "Unread",
-      "noDesktopTitle": "No desktop connected",
-      "noDesktopBody": "Agents show up here once a desktop connects.",
       "hideWorkers": "Hide {{workers}}",
-      "showWorkers": "Show {{workers}}"
+      "showWorkers": "Show {{workers}}",
+      "pairComputer": "Pair a computer to see its agents here.",
+      "noComputerTitle": "No computer connected",
+      "noComputerBody": "Agents show up here once a computer connects."
     },
     "actions": {
       "offlineHint": "Its desktop is offline.",
@@ -8518,28 +8419,18 @@
       "workspace": "Workspace",
       "project": "Project",
       "agent": "Agent",
-      "desktop": "Desktop"
+      "computer": "Computer"
     },
     "options": {
       "groupBy": "Group by",
       "showWorkers": "Show worker agents",
-      "open": "Agent list options",
       "unreadOnly": "Unread only",
       "markAllRead": "Mark all read",
-      "clearFinished": "Clear finished"
+      "clearFinished": "Clear finished",
+      "more": "More"
     },
     "search": {
-      "toggle": "Search agents",
       "placeholder": "Search agents"
-    },
-    "desktops": {
-      "pickerTitle": "Show agents on",
-      "agents_one": "{{count}} agent",
-      "agents_other": "{{count}} agents",
-      "all": "All desktops",
-      "offline": "Offline",
-      "needsYou_one": "{{count}} needs you",
-      "needsYou_other": "{{count}} need you"
     },
     "sections": {
       "needsYou": "Needs you",
@@ -8560,6 +8451,16 @@
     "activity": {
       "needsWindow": "Couldn’t update. Open Orca on {{desktop}}.",
       "failed": "Couldn’t update the agent list."
+    },
+    "filterSheet": {
+      "title": "Filter",
+      "activeLabel": "Filter, {{count}} active",
+      "reset": "Reset",
+      "done": "Done",
+      "computer": "Computer",
+      "allComputers": "All computers",
+      "show": "Show",
+      "workers": "Workers"
     }
   },
   "sidebar": {

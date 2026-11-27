@@ -1,5 +1,5 @@
 import { OrchestrationError } from '../../orchestration-error'
-import { BOT_ITEM_MAIL_SENDER } from '../../../../../shared/bots/bot-item-note-runs'
+import { BOT_ITEM_MAIL_SENDER } from '../../../../../shared/bots/bot-item-mail-sender'
 
 export type OrcaAuthoredMail = 'item-mail' | 'bot-request'
 

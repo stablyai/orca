@@ -34,7 +34,8 @@ it.each([
       />
     </TooltipProvider>
   )
-  const opener = within(screen.getByRole('region', { name: 'Workers' })).getAllByRole('button')[0]
+  // The only list in the card, named by what it holds (workers or background commands).
+  const opener = within(screen.getByRole('region')).getAllByRole('button')[0]
   fireEvent.click(opener)
   if (opens === 'agent') {
     expect(agent).toHaveBeenCalledWith('task-7')

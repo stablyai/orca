@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { app } from 'electron'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { SKILL_INSTALL_UPDATE_REQUIRED_MESSAGE } from '../../../shared/skills/capabilities/skill-install-capability'
 import {
   SkillBundleInstallPreviewRequestSchema,
@@ -23,24 +24,28 @@ import { callRuntimeEnvironment } from '../runtime-environments/requests/runtime
 import { handleMainWindowSkillIpc } from './skill-ipc-main-window'
 import { getRuntimeEnvironmentRegistryRoot } from '../runtime-environments/catalog/runtime-environment-registry-root'
 
-const environmentIdSchema = z.string().min(1).max(128)
-const skillNameSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/)
-const installPreviewSchema = z
-  .object({
-    environmentId: environmentIdSchema.optional(),
-    package: SkillPackageIdentitySchema,
-    name: skillNameSchema,
-    destination: SkillInstallDestinationSchema
-  })
-  .strict()
-const removeSchema = z
-  .object({
-    environmentId: environmentIdSchema.optional(),
-    name: skillNameSchema,
-    destination: SkillInstallDestinationSchema,
-    conflictResolution: z.enum(['replace-and-discard-local', 'cancel']).optional()
-  })
-  .strict()
+const environmentIdSchema = lazyZodSchema(() => z.string().min(1).max(128))
+const skillNameSchema = lazyZodSchema(() => z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/))
+const installPreviewSchema = lazyZodSchema(() =>
+  z
+    .object({
+      environmentId: environmentIdSchema.optional(),
+      package: SkillPackageIdentitySchema,
+      name: skillNameSchema,
+      destination: SkillInstallDestinationSchema
+    })
+    .strict()
+)
+const removeSchema = lazyZodSchema(() =>
+  z
+    .object({
+      environmentId: environmentIdSchema.optional(),
+      name: skillNameSchema,
+      destination: SkillInstallDestinationSchema,
+      conflictResolution: z.enum(['replace-and-discard-local', 'cancel']).optional()
+    })
+    .strict()
+)
 
 type BundlePreviewInput = z.infer<typeof SkillBundleInstallPreviewRequestSchema> & {
   environmentId?: string

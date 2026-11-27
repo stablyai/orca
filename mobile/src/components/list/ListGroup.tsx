@@ -138,6 +138,8 @@ type ListRowProps = {
   subtitleColor?: string
   /** A status after the subtitle on its line, in its tone's colour: "Daily at 9 AM · Needs sign-in". */
   subtitleNote?: { text: string; color: string }
+  /** A status before the subtitle, in its tone's colour, kept when a long subtitle cuts: "Checks failed · acme-web #482". */
+  subtitleLead?: { text: string; color: string }
   /** A muted mark in a fixed-width column before the title, e.g. a step's number. */
   marker?: string
   /** A muted mark inline before the title, e.g. an item's `#35`, so titles keep one start. */
@@ -185,6 +187,7 @@ export function ListRow({
   subtitleMono = false,
   subtitleColor,
   subtitleNote,
+  subtitleLead,
   marker,
   titlePrefix,
   subtitleLines = 2,
@@ -242,6 +245,12 @@ export function ListRow({
             ]}
             numberOfLines={subtitleLines}
           >
+            {subtitleLead ? (
+              <>
+                <Text style={{ color: subtitleLead.color }}>{subtitleLead.text}</Text>
+                {' · '}
+              </>
+            ) : null}
             {subtitle}
             {subtitleNote ? (
               <Text style={{ color: subtitleNote.color }}>{` · ${subtitleNote.text}`}</Text>

@@ -5976,7 +5976,6 @@
           "c13b82793c": "Gestionar instalaciones",
           "aee7b99cc6": "Instalar desde un enlace",
           "filterProvider": "Filtrar por agente",
-          "filterSource": "Filtrar por origen",
           "allSources": "Todo",
           "clearFilters": "Borrar filtros",
           "closeSkills": "Cerrar skills",
@@ -16503,34 +16502,11 @@
             "0bb39f8fe6": "Enviar",
             "69334b4b10": "Dictado de voz",
             "29f2d13839": "Escribe un comando…",
-            "817090af40": "Ctrl+C",
-            "53ff909568": "Tab",
-            "4930eaaae7": "Esc",
             "fa22927f13": "Pegar",
             "985373052e": "Cambiar al modo teléfono",
-            "58a9ee6003": "formato de tool-call. ¿Quieres que agregue el diff a continuación?",
-            "aa64b519c6": "pantalla del terminal. Paleta Tokyonight, Menlo, real claude",
-            "e75112c834": "Reemplacé la diapositiva de escaneo de emparejamiento por una de alta fidelidad",
-            "3ce3e8c892": "14 aprobados, 1 omitido (1,8 s)",
-            "4b3666f9a9": "src/cache/worktree-cache.test.ts",
-            "1d448b69f7": "PASS",
-            "d39445686a": "src/transport/host-store.test.ts",
-            "a6e7cdc688": "pnpm test --filter mobile",
-            "21b67dfc92": "Bash",
-            "d6d1041a1c": "⎿ Se reemplazó la diapositiva de escaneo de emparejamiento por una sesión de terminal",
-            "336c0e070e": "mobile/orca-mobile-sidebar-mock-v3.html",
-            "6d4ebd5833": "Editar",
-            "fc83e0d5ef": "⎿ Leídas 2103 líneas",
-            "80cc356591": "Leer",
-            "2c10d43745": "claude",
-            "e0f98be657": "orca/feat-mobile-page",
-            "2defc05141": "dev@mac",
-            "da121ba48d": "PLAN.md",
-            "e4befee569": "shell",
             "606aa93192": "Archivos",
             "94febb0976": "Control de código fuente",
             "8d6516312d": "2 terminales · claude activo",
-            "8432787c4e": "feat/mobile-page",
             "8fd998acd3": "Atrás"
           },
           "WorktreeListSlide": {
@@ -19028,7 +19004,6 @@
           "failed": "Fallida",
           "succeeded": "Correcta",
           "neverRan": "Nunca se ejecutó",
-          "filters": "Filtros",
           "clear": "Limpiar filtros",
           "removeFilter": "Eliminar filtro de {{value0}}"
         },
@@ -21450,6 +21425,13 @@
           "followedUp": "Seguimiento",
           "handedOff": "Traspasado",
           "task": "Tarea"
+        },
+        "unnamedRecipient": "un agente",
+        "event": {
+          "followedUp": "Seguimiento enviado",
+          "update": "Actualización",
+          "message": "Mensaje",
+          "handedOff": "Traspasado"
         }
       },
       "goal": {
@@ -21546,6 +21528,7 @@
       "explicitChatWslMoveToHost": "El chat no está disponible en una carpeta WSL abierta desde Windows. Ejecuta el proyecto en un host WSL para chatear allí, o abre el agente en una terminal.",
       "explicitChatWslRunAsHost": "Ejecutar {{distro}} como host",
       "structuredSessionTerminalNotVisible": "Orca abrió {{value0}} en una terminal, pero no pudo mostrarlo aquí cuando finalizó el lanzamiento. Se mantuvo el borrador de tu chat.",
+      "explicitChatWorkspaceAccess": "Orca no tiene permiso para abrir esta carpeta del espacio de trabajo. Verifique los permisos de la carpeta e inténtelo de nuevo.",
       "explicitChatUnavailable": "Este espacio de trabajo no puede ejecutar el chat. Verifique la instalación del agente o ábralo en una terminal.",
       "goalControl": {
         "settingsRejected": "Codex no pudo aplicar el modelo y el esfuerzo seleccionados. No se envió este cambio de objetivo. Revisa la selección e inténtalo de nuevo.",
@@ -22215,7 +22198,20 @@
         "unlisted": "Trabajo en segundo plano en ejecución",
         "unread": "No se pudieron cargar los trabajadores",
         "unreadDetail": "Los trabajadores aparecerán aquí cuando se carguen",
-        "chipLabel": "{{label}}, el más reciente: {{title}}"
+        "chipLabel": "{{label}}, el más reciente: {{title}}",
+        "backgroundCommandCount_one": "{{count}} comando en segundo plano",
+        "backgroundCommandCount_many": "{{count}} comandos en segundo plano",
+        "backgroundCommandCount_other": "{{count}} comandos en segundo plano",
+        "commandCount_one": "{{count}} comando",
+        "commandCount_many": "{{count}} comandos",
+        "commandCount_other": "{{count}} comandos",
+        "mixedRegion": "Trabajadores y comandos en segundo plano",
+        "commandsRegion": "Comandos en segundo plano",
+        "stopSubagentsAndCommands": "Detener subagentes y comandos",
+        "workersKeepRunning": "Los trabajadores siguen en ejecución",
+        "clearFailedWorkers": "Borrar trabajadores con error",
+        "mixedCount": "{{workers}} · {{commands}}",
+        "mixedCountSpoken": "{{workers}}, {{commands}}"
       },
       "webhookSetup": {
         "heading": "Configura un webhook",
@@ -24727,7 +24723,9 @@
       "chatOtherWindow": "El inicio de sesión está en curso en otra ventana.",
       "chatPageDidntOpen": "¿No se abrió la página?",
       "chatPasteCode": "Pega el código",
-      "chatPasteCodeLabel": "El código que muestra Google después de iniciar sesión, o la dirección de esa página"
+      "chatPasteCodeLabel": "El código que muestra Google después de iniciar sesión, o la dirección de esa página",
+      "launchesUse": "Los nuevos inicios de agy usan esta cuenta",
+      "loginNow": "Sesión actual de agy"
     },
     "claude": {
       "added": "Cuenta agregada. Selecciónala para usarla en el próximo Claude que inicies.",

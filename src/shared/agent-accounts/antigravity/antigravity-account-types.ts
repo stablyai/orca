@@ -17,6 +17,9 @@ export type AntigravityAccountState = {
     identityKnown: boolean
   } | null
   selectedAccountId: string | null
+  /** New agy launches put the selected account back when another saved one took agy's login.
+   *  Absent from older hosts, Windows and WSL, where a moved login stays as it is. */
+  restoresSelectionAtLaunch?: true
   /** Host only: new chats run on agy and its signed-in account; false runs them elsewhere, or on a
    *  signed-out agy (`chatAgySignedOut`). Absent from older hosts and WSL. */
   chatUsesAgy?: boolean

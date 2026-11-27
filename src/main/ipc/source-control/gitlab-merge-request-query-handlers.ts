@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import type { Store } from '../../persistence/loading-store/store'
 import type { GitLabMRInvolvement } from '../../../shared/gitlab/gitlab-types'
@@ -22,8 +23,11 @@ import {
   repoConnectionId
 } from './gitlab-repo-access'
 
-export function registerGitLabMergeRequestQueryHandlers(store: Store): void {
-  ipcMain.handle(
+export function registerGitLabMergeRequestQueryHandlers(
+  store: Store,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
+  ipc.handle(
     'gitlab:mrForBranch',
     async (
       _event,
@@ -40,7 +44,7 @@ export function registerGitLabMergeRequestQueryHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle('gitlab:mr', async (_event, args: GitLabRepoSelectorArgs & { iid: number }) => {
+  ipc.handle('gitlab:mr', async (_event, args: GitLabRepoSelectorArgs & { iid: number }) => {
     const repo = assertRegisteredRepo(args, store)
     return getMergeRequest(
       repo.path,
@@ -50,7 +54,7 @@ export function registerGitLabMergeRequestQueryHandlers(store: Store): void {
     )
   })
 
-  ipcMain.handle(
+  ipc.handle(
     'gitlab:listMRs',
     async (
       _event,

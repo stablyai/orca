@@ -1,13 +1,16 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
 import type { AcpDialect } from './acp-dialect'
 
-const copilotToolResultSchema = z.looseObject({
-  content: z.string(),
-  contents: z
-    .array(z.looseObject({ type: z.string(), exitCode: z.number().int().optional() }))
-    .optional()
-})
+const copilotToolResultSchema = lazyZodSchema(() =>
+  z.looseObject({
+    content: z.string(),
+    contents: z
+      .array(z.looseObject({ type: z.string(), exitCode: z.number().int().optional() }))
+      .optional()
+  })
+)
 
 const SHELL_EXIT_TRAILER = /\n?<shellId: [^>\n]+ completed with exit code -?\d+>\s*$/u
 

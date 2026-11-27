@@ -145,7 +145,7 @@ export function VoiceTranscribeOnSection() {
     <SettingsSection
       first
       radioGroup
-      title={t('settings.voiceTranscribeOn.heading', 'TRANSCRIBE ON')}
+      title={t('settings.voiceTranscribeOn.heading', 'Transcribe on')}
       footer={t(
         'settings.voiceTranscribeOn.description',
         'Speech heard on this phone stays on it. Automatic uses your computer when this phone can’t transcribe.'

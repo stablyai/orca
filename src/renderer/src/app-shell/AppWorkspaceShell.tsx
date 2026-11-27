@@ -263,7 +263,11 @@ export function AppWorkspaceShell(props: {
                     <RightSidebarToggle />
                   </div>
                 )}
-                <div ref={pageColumnRef} className="flex flex-1 min-w-0 min-h-0 flex-col">
+                <div
+                  ref={pageColumnRef}
+                  data-app-page-column=""
+                  className="flex flex-1 min-w-0 min-h-0 flex-col"
+                >
                   {layout.shouldMountTerminalWorkbench ? (
                     <TerminalWorkbenchContainer isVisible={layout.terminalWorkbenchVisible}>
                       <Suspense fallback={null}>

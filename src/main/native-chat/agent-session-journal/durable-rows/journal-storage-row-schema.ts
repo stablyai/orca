@@ -24,7 +24,7 @@ import {
 // ignoring keys this build does not use.
 
 const value = lazyZodSchema(() => z.unknown().optional())
-const envelope = {
+const createEnvelope = () => ({
   v: value,
   epoch: value,
   seq: value,
@@ -33,11 +33,11 @@ const envelope = {
   recovered: value,
   turnScope: AgentJournalTurnScopeSchema.optional(),
   ...AgentJournalProducerLinkageFields
-}
+})
 const provenance = { ownerFence: value, executionOwner: value, echoOf: value }
 const legacyOptions = lazyZodSchema(() => z.record(z.string(), z.unknown()).optional())
 
-const itemMutation = {
+const createItemMutation = () => ({
   kind: z.literal('item'),
   itemId: value,
   revision: value,
@@ -46,8 +46,12 @@ const itemMutation = {
   observedAt: value,
   ...provenance,
   ...AgentJournalProducerLinkageFields
-}
-const tombstoneMutation = { kind: z.literal('tombstone'), itemId: value, revision: value }
+})
+const createTombstoneMutation = () => ({
+  kind: z.literal('tombstone'),
+  itemId: value,
+  revision: value
+})
 
 const queuedChange = lazyZodSchema(() =>
   z.object({
@@ -63,107 +67,126 @@ const queuedChange = lazyZodSchema(() =>
     returned: z.object({ reason: value, rejection: storedFailureFact.optional() }).optional()
   })
 )
-const otherQueueChanges = [
-  z.object({ op: z.literal('edited'), body: storedMessageBody }),
-  z.object({ op: z.literal('moved'), position: value }),
-  z.object({ op: z.literal('held'), holdReason: value }),
-  z.object({ op: z.literal('withdrawn') })
-] as const
+const createOtherQueueChanges = () =>
+  [
+    z.object({ op: z.literal('edited'), body: storedMessageBody }),
+    z.object({ op: z.literal('moved'), position: value }),
+    z.object({ op: z.literal('held'), holdReason: value }),
+    z.object({ op: z.literal('withdrawn') })
+  ] as const
 const queueChange = lazyZodSchema(() =>
-  z.discriminatedUnion('op', [queuedChange, ...otherQueueChanges])
+  z.discriminatedUnion('op', [queuedChange, ...createOtherQueueChanges()])
 )
 const sourceQueueChange = lazyZodSchema(() =>
   z.discriminatedUnion('op', [
     queuedChange.extend({ recovers: z.string().optional() }),
-    ...otherQueueChanges
+    ...createOtherQueueChanges()
   ])
 )
 
-const commonRows = [
-  z.object({
-    ...envelope,
-    kind: z.literal('epoch'),
-    inputOrderLineage: value,
-    reason: value,
-    providerHandle: storedProviderHandle,
-    historyOrigin: value
-  }),
-  z.object({
-    ...envelope,
-    ...provenance,
-    kind: z.literal('item'),
-    itemId: value,
-    revision: value,
-    body: storedItemBody
-  }),
-  z.object({
-    ...envelope,
-    kind: z.literal('tombstone'),
-    itemId: value,
-    revision: value,
-    stopEvent: z.object({ reason: value, turnId: value, at: value, caller: value }).optional(),
-    queueResume: value,
-    queueReopen: value,
-    queueReopenSince: value,
-    queueClear: z
-      .object({ operationId: value, messageIds: z.array(value), lifted: value })
-      .optional(),
-    retireSubmission: value
-  }),
-  z.object({
-    ...envelope,
-    kind: z.literal('submission'),
-    inputOrderContext: value,
-    clientMessageId: value,
-    payloadFingerprint: value,
-    providerHandle: storedProviderHandle,
-    body: storedMessageBody,
-    handoverRecorded: value,
-    queuedMessageId: value,
-    origin: value,
-    source: z.object({ kind: value }).optional(),
-    options: legacyOptions
-  }),
-  z.object({
-    ...envelope,
-    kind: z.literal('dispatch'),
-    clientMessageId: value,
-    state: value,
-    providerItemId: value,
-    reason: value,
-    carries: z.array(value).optional(),
-    rejection: storedFailureFact.optional(),
-    keptAsQueuedMessageId: value,
-    answeredInTurn: z.object({ turnItemId: value, via: value }).nullable().optional()
-  }),
-  z.object({
-    ...envelope,
-    kind: z.literal('lifecycle-batch'),
-    settlementId: value,
-    mutations: z.array(
-      z.discriminatedUnion('kind', [z.object(itemMutation), z.object(tombstoneMutation)])
-    )
-  })
-] as const
+const createCommonRows = () => {
+  const envelope = createEnvelope()
+  return [
+    z.object({
+      ...envelope,
+      kind: z.literal('epoch'),
+      inputOrderLineage: value,
+      reason: value,
+      providerHandle: storedProviderHandle,
+      historyOrigin: value
+    }),
+    z.object({
+      ...envelope,
+      ...provenance,
+      kind: z.literal('item'),
+      itemId: value,
+      revision: value,
+      body: storedItemBody
+    }),
+    z.object({
+      ...envelope,
+      kind: z.literal('tombstone'),
+      itemId: value,
+      revision: value,
+      stopEvent: z.object({ reason: value, turnId: value, at: value, caller: value }).optional(),
+      queueResume: value,
+      queueReopen: value,
+      queueReopenSince: value,
+      queueClear: z
+        .object({ operationId: value, messageIds: z.array(value), lifted: value })
+        .optional(),
+      retireSubmission: value
+    }),
+    z.object({
+      ...envelope,
+      kind: z.literal('submission'),
+      inputOrderContext: value,
+      clientMessageId: value,
+      payloadFingerprint: value,
+      providerHandle: storedProviderHandle,
+      body: storedMessageBody,
+      handoverRecorded: value,
+      queuedMessageId: value,
+      origin: value,
+      source: z.object({ kind: value }).optional(),
+      options: legacyOptions
+    }),
+    z.object({
+      ...envelope,
+      kind: z.literal('dispatch'),
+      clientMessageId: value,
+      state: value,
+      providerItemId: value,
+      reason: value,
+      carries: z.array(value).optional(),
+      rejection: storedFailureFact.optional(),
+      keptAsQueuedMessageId: value,
+      answeredInTurn: z.object({ turnItemId: value, via: value }).nullable().optional()
+    }),
+    z.object({
+      ...envelope,
+      kind: z.literal('lifecycle-batch'),
+      settlementId: value,
+      mutations: z.array(
+        z.discriminatedUnion('kind', [
+          z.object(createItemMutation()),
+          z.object(createTombstoneMutation())
+        ])
+      )
+    })
+  ] as const
+}
 const storedRow = lazyZodSchema(() =>
   z.discriminatedUnion('kind', [
-    ...commonRows,
-    z.object({ ...envelope, kind: z.literal('queue'), messageId: value, change: queueChange })
+    ...createCommonRows(),
+    z.object({
+      ...createEnvelope(),
+      kind: z.literal('queue'),
+      messageId: value,
+      change: queueChange
+    })
   ])
 )
-const strictRow = strictStorage(storedRow)
+let strictRowCache: z.ZodType | null = null
+const getStrictRow = (): z.ZodType => (strictRowCache ??= strictStorage(storedRow))
 const sourceRowDeclaration = lazyZodSchema(() =>
   z.discriminatedUnion('kind', [
-    ...commonRows,
-    z.object({ ...envelope, kind: z.literal('queue'), messageId: value, change: sourceQueueChange })
+    ...createCommonRows(),
+    z.object({
+      ...createEnvelope(),
+      kind: z.literal('queue'),
+      messageId: value,
+      change: sourceQueueChange
+    })
   ])
 )
-const sourceRow = strictStorage(sourceRowDeclaration)
+let sourceRowCache: z.ZodType | null = null
+const getSourceRow = (): z.ZodType => (sourceRowCache ??= strictStorage(sourceRowDeclaration))
 
 /** True when an input row holds a key or union tag this build does not declare; main's reader
  * judges every value. */
 export function journalRowDeclaresMore(row: unknown, sourceAnnotations = false): boolean {
-  return storageVerdict(sourceAnnotations ? sourceRow : strictRow, row) === 'newer'
+  return storageVerdict(sourceAnnotations ? getSourceRow() : getStrictRow(), row) === 'newer'
 }
 
 export type JournalRowsAreDeclared = StorageDeclaresAll<

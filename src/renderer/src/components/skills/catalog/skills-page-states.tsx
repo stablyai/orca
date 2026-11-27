@@ -1,4 +1,5 @@
 import { BookOpen, Download, RefreshCw } from 'lucide-react'
+import { RailPageNotice } from '@/components/rail-page/RailPage'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
@@ -10,11 +11,18 @@ export function SkillsListSkeleton(): React.JSX.Element {
   const t = useTranslate()
   return (
     <div>
-      <p className="px-2 py-2 text-xs text-muted-foreground" role="status" aria-live="polite">
+      <p
+        className="px-(--rail-page-gutter) py-2 text-xs text-muted-foreground"
+        role="status"
+        aria-live="polite"
+      >
         {t('auto.components.skills.SkillsPage.cd7893fbc1', 'Scanning skills')}
       </p>
       {SKELETON_ROWS.map((row) => (
-        <div key={row} className="flex items-start gap-3 border-b border-border/50 px-2 py-2.5">
+        <div
+          key={row}
+          className="flex items-start gap-3 border-b border-border/50 px-(--rail-page-gutter) py-2.5"
+        >
           <div className="mt-0.5 size-4 shrink-0 animate-pulse rounded bg-muted/70" />
           <div className="min-w-0 flex-1 space-y-2">
             <div className="h-3.5 w-48 animate-pulse rounded bg-muted/70" />
@@ -125,12 +133,14 @@ export function SkillsScanErrorBand({
 export function SkillsRemoteShareNotice({ hostLabel }: { hostLabel: string }): React.JSX.Element {
   const t = useTranslate()
   return (
-    <p className="border-b border-border/50 px-2 py-2 text-xs text-muted-foreground">
-      {t(
-        'auto.components.skills.SkillsPage.remoteShareNotice',
-        'These skills live on {{host}}. Open Skills on that machine to share them.',
-        { host: hostLabel }
-      )}
-    </p>
+    <RailPageNotice>
+      <p className="text-xs text-muted-foreground">
+        {t(
+          'auto.components.skills.SkillsPage.remoteShareNotice',
+          'These skills live on {{host}}. Open Skills on that machine to share them.',
+          { host: hostLabel }
+        )}
+      </p>
+    </RailPageNotice>
   )
 }

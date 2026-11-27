@@ -93,7 +93,7 @@ const actions: BotItemQuickReplyActions = {
   type: () => {}
 }
 
-/** The card with its picks kept here, so a fixture's clicks pick, swap and clear as in the app.
+/** The card with its picks kept here, so a fixture's clicks pick, swap and reopen as in the app.
  *  `answered`: lines a posted comment, or a send on its way, answered. */
 function Card({
   shape,
@@ -107,23 +107,24 @@ function Card({
   const [picks, setPicks] = useState(() =>
     picked.map((pick) => (typeof pick === 'string' ? botItemHeldAnswer(pick) : pick))
   )
+  const [reopened, setReopened] = useState<number | null>(null)
   const lines = shape.decisions.flatMap((_, index) => (answered[index] ? [] : [index]))
   const steps: BotItemQuestionSteps = {
     askId: 'q1',
     shape,
     picks: picks.map((pick, index) => (lines.includes(index) ? pick : null)),
     lines,
-    pick: (index, words) =>
+    pick: (index, words) => {
+      setReopened((at) => (at === index ? null : at))
       setPicks((previous) =>
         previous.map((held, at) =>
-          at === index
-            ? botItemHeldAnswerIsReply(held, words)
-              ? null
-              : botItemHeldAnswer(words)
-            : held
+          at === index && !botItemHeldAnswerIsReply(held, words) ? botItemHeldAnswer(words) : held
         )
-      ),
+      )
+    },
     bind: () => {},
+    reopened,
+    reopen: setReopened,
     send: () => (picks.some(Boolean) ? 'sent' : lines.length > 0 ? 'empty' : 'none'),
     sending: false
   }

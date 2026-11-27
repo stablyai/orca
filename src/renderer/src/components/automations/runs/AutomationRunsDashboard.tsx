@@ -1,6 +1,5 @@
-import React, { useDeferredValue, useMemo, useState } from 'react'
-import { AlertCircle, ListFilter, RefreshCw, Search } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import React, { useDeferredValue, useMemo, useRef, useState } from 'react'
+import { AlertCircle, Search } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -13,8 +12,11 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { RailPageBody, RailPageNotice, RAIL_PAGE_GUTTER_X } from '@/components/rail-page/RailPage'
+import { RailPageSearch } from '@/components/rail-page/RailPageSearch'
+import { RailPageFilterButton, RailPageToolbar } from '@/components/rail-page/RailPageToolbar'
+import { cn } from '@/lib/class-names'
 import { Input } from '@/components/ui/input'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { AutomationListRow } from '../listing/automation-list-row-identity'
@@ -48,6 +50,8 @@ function SummaryCard({ label, value }: { label: string; value: number }): React.
 }
 
 export function AutomationRunsDashboard({
+  tabs,
+  notice,
   rows,
   entries,
   failures,
@@ -55,10 +59,11 @@ export function AutomationRunsDashboard({
   hasMore,
   onLoadMore,
   now,
-  onRefresh,
   onOpenRun,
   worktreeForRun
 }: {
+  tabs: React.ReactNode
+  notice: React.ReactNode
   rows: readonly AutomationListRow[]
   entries: readonly AutomationRunsDashboardEntry[]
   failures: readonly AutomationRunsDashboardFailure[]
@@ -66,12 +71,12 @@ export function AutomationRunsDashboard({
   hasMore: boolean
   onLoadMore: () => void
   now: number
-  onRefresh: () => void
   onOpenRun: (entry: AutomationRunsDashboardEntry) => void
   worktreeForRun: (entry: AutomationRunsDashboardEntry) => Worktree | null
 }): React.JSX.Element {
   const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
+  const inputRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
   const [status, setStatus] = useState<AutomationRunsStatusFilter>('all')
@@ -115,142 +120,124 @@ export function AutomationRunsDashboard({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col pt-4">
-      <div className="flex min-h-0 w-full flex-1 flex-col">
-        <div className="mb-3 flex shrink-0 items-end gap-2">
-          <div className="relative w-full max-w-xs">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={t(
-                'auto.components.automations.AutomationRunsDashboard.search',
-                'Search runs…'
-              )}
-              aria-label={t(
-                'auto.components.automations.AutomationRunsDashboard.searchLabel',
-                'Search runs'
-              )}
-              data-automations-page-search=""
-              className="h-8 pl-8 text-xs"
-            />
-          </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button type="button" variant="outline" size="sm" className="h-8 text-xs">
-                <ListFilter className="size-3.5" />
-                {t('auto.components.automations.AutomationRunsDashboard.filters', 'Filters')}
-                {activeFilterCount > 0 ? (
-                  <span className="rounded-full bg-foreground px-1.5 text-[10px] font-semibold leading-4 text-background">
-                    {activeFilterCount}
-                  </span>
-                ) : null}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger>
-                  {t('auto.components.automations.AutomationRunsDashboard.host', 'Host')}
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent className="scrollbar-sleek max-h-80 overflow-y-auto">
-                  <DropdownMenuCheckboxItem
-                    checked={hostKeys.length === 0}
-                    onCheckedChange={() => setHostKeys([])}
-                  >
-                    {t('auto.components.automations.hostPicker.allHosts', 'All hosts')}
-                  </DropdownMenuCheckboxItem>
-                  {hostOptions.map((host) => (
+    <>
+      <RailPageToolbar
+        start={tabs}
+        end={
+          <>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <RailPageFilterButton activeCount={activeFilterCount} />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    {t('auto.components.automations.AutomationRunsDashboard.host', 'Host')}
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="scrollbar-sleek max-h-80 overflow-y-auto">
                     <DropdownMenuCheckboxItem
-                      key={host.key}
-                      checked={hostKeys.includes(host.key)}
-                      onCheckedChange={() => toggleHost(host.key)}
-                      onSelect={(event) => event.preventDefault()}
+                      checked={hostKeys.length === 0}
+                      onCheckedChange={() => setHostKeys([])}
                     >
-                      {host.label}
+                      {t('auto.components.automations.hostPicker.allHosts', 'All hosts')}
                     </DropdownMenuCheckboxItem>
-                  ))}
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-              <DropdownMenuSeparator />
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger>
-                  {t('auto.components.automations.AutomationRunsDashboard.status', 'Status')}
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent>
-                  <DropdownMenuRadioGroup
-                    value={status}
-                    onValueChange={(value) => setStatus(value as AutomationRunsStatusFilter)}
-                  >
-                    {Object.entries(STATUS_LABELS).map(([value, label]) => (
-                      <DropdownMenuRadioItem key={value} value={value}>
-                        {t(
-                          `auto.components.automations.AutomationRunsDashboard.status.${label.key}`,
-                          label.fallback
-                        )}
-                      </DropdownMenuRadioItem>
+                    {hostOptions.map((host) => (
+                      <DropdownMenuCheckboxItem
+                        key={host.key}
+                        checked={hostKeys.includes(host.key)}
+                        onCheckedChange={() => toggleHost(host.key)}
+                        onSelect={(event) => event.preventDefault()}
+                      >
+                        {host.label}
+                      </DropdownMenuCheckboxItem>
                     ))}
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label={t(
-                  'auto.components.automations.AutomationRunsDashboard.refresh',
-                  'Refresh runs'
-                )}
-                onClick={onRefresh}
-                disabled={loading}
-                className="shrink-0 border border-border bg-background shadow-none hover:bg-muted/50"
-              >
-                <RefreshCw className={loading ? 'size-4 animate-spin' : 'size-4'} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={6}>
-              {t('auto.components.automations.AutomationRunsDashboard.refresh', 'Refresh runs')}
-            </TooltipContent>
-          </Tooltip>
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+                <DropdownMenuSeparator />
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    {t('auto.components.automations.AutomationRunsDashboard.status', 'Status')}
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent>
+                    <DropdownMenuRadioGroup
+                      value={status}
+                      onValueChange={(value) => setStatus(value as AutomationRunsStatusFilter)}
+                    >
+                      {Object.entries(STATUS_LABELS).map(([value, label]) => (
+                        <DropdownMenuRadioItem key={value} value={value}>
+                          {t(
+                            `auto.components.automations.AutomationRunsDashboard.status.${label.key}`,
+                            label.fallback
+                          )}
+                        </DropdownMenuRadioItem>
+                      ))}
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <RailPageSearch inputRef={inputRef} hasValue={query !== ''} focusTarget="automations">
+              <div className="relative w-full">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  ref={inputRef}
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder={t(
+                    'auto.components.automations.AutomationRunsDashboard.search',
+                    'Search runs…'
+                  )}
+                  aria-label={t(
+                    'auto.components.automations.AutomationRunsDashboard.searchLabel',
+                    'Search runs'
+                  )}
+                  data-automations-page-search=""
+                  data-rail-page-focus-target=""
+                  density="compact"
+                  surface="background"
+                  inset="leadingIcon"
+                  adornment={query === '' ? 'shortcut' : 'none'}
+                />
+              </div>
+            </RailPageSearch>
+          </>
+        }
+      />
+      <RailPageNotice>{notice}</RailPageNotice>
+      <RailPageBody>
+        <div
+          className={cn('my-3 grid shrink-0 grid-cols-2 gap-2 md:grid-cols-4', RAIL_PAGE_GUTTER_X)}
+        >
+          <SummaryCard
+            label={t(
+              'auto.components.automations.AutomationRunsDashboard.successful24h',
+              'Successful · 24h'
+            )}
+            value={counts.successful24h}
+          />
+          <SummaryCard
+            label={t(
+              'auto.components.automations.AutomationRunsDashboard.failed24h',
+              'Failed · 24h'
+            )}
+            value={counts.failed24h}
+          />
+          <SummaryCard
+            label={t(
+              'auto.components.automations.AutomationRunsDashboard.successful7d',
+              'Successful · 7d'
+            )}
+            value={counts.successful7d}
+          />
+          <SummaryCard
+            label={t('auto.components.automations.AutomationRunsDashboard.failed7d', 'Failed · 7d')}
+            value={counts.failed7d}
+          />
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col">
-          <div className="mb-3 grid shrink-0 grid-cols-2 gap-2 md:grid-cols-4">
-            <SummaryCard
-              label={t(
-                'auto.components.automations.AutomationRunsDashboard.successful24h',
-                'Successful · 24h'
-              )}
-              value={counts.successful24h}
-            />
-            <SummaryCard
-              label={t(
-                'auto.components.automations.AutomationRunsDashboard.failed24h',
-                'Failed · 24h'
-              )}
-              value={counts.failed24h}
-            />
-            <SummaryCard
-              label={t(
-                'auto.components.automations.AutomationRunsDashboard.successful7d',
-                'Successful · 7d'
-              )}
-              value={counts.successful7d}
-            />
-            <SummaryCard
-              label={t(
-                'auto.components.automations.AutomationRunsDashboard.failed7d',
-                'Failed · 7d'
-              )}
-              value={counts.failed7d}
-            />
-          </div>
-
-          {visibleFailures.length > 0 ? (
-            <div className="mb-3 flex items-start gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-foreground">
+        {visibleFailures.length > 0 ? (
+          <RailPageNotice>
+            <div className="flex items-start gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-foreground">
               <AlertCircle className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
               <span>
                 {t(
@@ -264,18 +251,18 @@ export function AutomationRunsDashboard({
                 )}
               </span>
             </div>
-          ) : null}
+          </RailPageNotice>
+        ) : null}
 
-          <AutomationRunsTable
-            entries={visibleEntries}
-            loading={loading}
-            hasMore={hasMore}
-            onLoadMore={onLoadMore}
-            onOpenRun={onOpenRun}
-            worktreeForRun={worktreeForRun}
-          />
-        </div>
-      </div>
-    </div>
+        <AutomationRunsTable
+          entries={visibleEntries}
+          loading={loading}
+          hasMore={hasMore}
+          onLoadMore={onLoadMore}
+          onOpenRun={onOpenRun}
+          worktreeForRun={worktreeForRun}
+        />
+      </RailPageBody>
+    </>
   )
 }

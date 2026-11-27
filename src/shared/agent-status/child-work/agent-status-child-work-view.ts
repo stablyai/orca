@@ -105,14 +105,14 @@ function resolvedOwner(
     : undefined
 }
 
-/** Every surface starts here; foreground Codex tools stay in status records and tool rows. */
+/** Every surface starts here. A foreground command (any provider's ordinary tool call) stays in status
+ *  records and its transcript tool row; it shows once it moves to the background. */
 export function projectAgentChildWorkViews(
   records: readonly AgentChildWorkInput[],
   aliases: readonly AgentChildWorkViewAlias[]
 ): AgentChildWorkView[] {
   const visible = records.filter(
-    (record) =>
-      record.provider !== 'codex' || record.kind !== 'command' || record.residency !== 'foreground'
+    (record) => record.kind !== 'command' || record.residency !== 'foreground'
   )
   const byId = new Map(visible.map((record) => [record.childWorkId, record]))
   const aliasesByChild = groupedBy(aliases, (alias) => alias.childWorkId)

@@ -2,6 +2,7 @@ import { paintBottomRowBackdrop } from './bottom-row-backdrop'
 import { repositionOverlay } from '../selection/selection-overlay'
 import { shouldRouteScrollToTerminalInput } from '../surface-input/mouse-input-encoding'
 import type { TerminalDocumentScope } from '../document-scope'
+import { notify } from '../host-bridge/host-notify'
 import { getCellWidth, getTotalScale } from './cell-metrics'
 
 // First live output can widen a buffer measured during replay; permit one fresh fit before preserving user zoom.
@@ -45,7 +46,23 @@ export function updateTransform(scope: TerminalDocumentScope) {
   }
 }
 
+// Scrollback the app owns (alt screen, mouse modes) has no "latest" to jump back to.
+export function reportScrolledUp(scope: TerminalDocumentScope) {
+  const active = scope.term?.buffer?.active
+  if (!active) {
+    return
+  }
+  const baseY = active.baseY || 0
+  const scrolledUp =
+    baseY > 0 && active.viewportY < baseY && !shouldRouteScrollToTerminalInput(scope)
+  if (scrolledUp !== scope.reportedScrolledUp) {
+    scope.reportedScrolledUp = scrolledUp
+    notify(scope, { type: 'scrolled-up', scrolledUp })
+  }
+}
+
 export function updateScrollIndicator(scope: TerminalDocumentScope, reveal: boolean) {
+  reportScrolledUp(scope)
   if (
     !scope.scrollIndicator ||
     !scope.scrollThumb ||

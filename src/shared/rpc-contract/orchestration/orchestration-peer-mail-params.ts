@@ -8,6 +8,9 @@ export const PeerMailMessageType = lazyZodSchema(() =>
 
 const LINE = lazyZodSchema(() => z.string().max(500))
 
+/** The most agents a paired computer names on a pull as ones this Orca's agents may ask. */
+export const PAIRED_CLIENT_BOTS_MAX = 100
+
 /** Who sent peer mail, from the sending Orca's own records; the receiver shows it beside `senderLabel`. */
 export const PeerMailSender = lazyZodSchema(() =>
   z.object({
@@ -40,7 +43,10 @@ export const PeerMailDeliverParams = lazyZodSchema(() =>
     item: OptionalString,
     /** With `item`: files the sender uploaded to this Orca's attachment store for the item's chat. */
     attachments: z.array(z.string().min(1).max(4096)).max(30).optional(),
-    sender: PeerMailSender.optional()
+    sender: PeerMailSender.optional(),
+    /** Whom the sending turn acts for, read by the receiver one by one so it drops a kind it doesn't
+     *  know; an older Orca omits it. */
+    askers: z.array(z.unknown()).max(100).optional()
   })
 )
 
@@ -54,6 +60,15 @@ export const PeerMailClientAsksPull = lazyZodSchema(() =>
     name: LINE,
     /** The fingerprint this Orca saw for it under its last pairing, when that pairing was replaced. */
     previousPairing: z.string().min(1).max(200).optional(),
+    /** Its agents a person always lets this Orca's agents ask, so `orca bot list` here can name
+     *  them; an older computer omits it, and a malformed list is dropped, never the pull. */
+    bots: z
+      .array(z.object({ id: z.string().regex(/^[\w-]{1,100}$/), name: LINE }))
+      .max(PAIRED_CLIENT_BOTS_MAX)
+      .optional()
+      .catch(undefined),
+    /** It allows more agents than `bots` could name. */
+    moreBots: z.boolean().optional().catch(undefined),
     /** Ends the session now; the pull answers at once. */
     leave: z.boolean().optional()
   })

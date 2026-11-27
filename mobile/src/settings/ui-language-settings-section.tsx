@@ -35,7 +35,7 @@ export function UiLanguageSettingsSection() {
   return (
     <SettingsSection
       radioGroup
-      title={t('settings.appearance.language.heading', 'LANGUAGE')}
+      title={t('settings.appearance.language.heading', 'Language')}
       footer={t(
         'settings.appearance.language.description',
         'System follows this device’s language. Permission prompts always use the device language.'
