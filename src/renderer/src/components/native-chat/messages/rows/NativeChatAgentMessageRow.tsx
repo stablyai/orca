@@ -22,7 +22,7 @@ const REVEAL =
 /** The time keeps its slot and only shows on hover or focus, so the chevron after it never moves.
  *  A narrow chat shows a row button's time in its open message instead. */
 const TIME =
-  'min-w-16 shrink-0 text-right can-hover:invisible can-hover:group-hover/agent-row:visible can-hover:group-has-[:focus-visible]/agent-row:visible @max-[360px]/agent-row:hidden!'
+  'min-w-16 shrink-0 text-right can-hover:invisible can-hover:group-hover/agent-row:visible can-hover:group-has-[:focus-visible]/agent-row:visible @max-[400px]/agent-row:hidden!'
 
 /** How much wider an element's text is than its box, to the fraction of a pixel: the text is laid out
  *  whole even where it is drawn cut or the box has no width. Whole-pixel scroll widths miss a line a
@@ -177,7 +177,7 @@ export function NativeChatAgentMessageRow({
           'group/agent-row relative -mx-1 flex w-[calc(100%+0.5rem)] min-h-6 items-center gap-1.5 rounded-md px-1 font-sans text-sm leading-relaxed text-chat-foreground-faint',
           toggles && 'hover:bg-foreground/[0.04]',
           previewShown &&
-            '@max-[360px]/agent-row:flex-wrap @max-[360px]/agent-row:gap-y-0 @max-[360px]/agent-row:pb-1'
+            '@max-[400px]/agent-row:flex-wrap @max-[400px]/agent-row:gap-y-0 @max-[400px]/agent-row:pb-1'
         )}
       >
         {toggles ? (
@@ -213,7 +213,7 @@ export function NativeChatAgentMessageRow({
             // row's end leaves too little, the name, then its items, cut short. Several items can need
             // more than the cap, so it clips sideways only, keeping focus rings whole.
             'flex min-w-0 max-w-[max(100cqw-13rem,14rem)] shrink items-center overflow-x-clip gap-1 font-medium whitespace-nowrap text-chat-foreground',
-            '@max-[360px]/agent-row:max-w-fit @max-[360px]/agent-row:shrink @max-[360px]/agent-row:grow @max-[360px]/agent-row:basis-0'
+            '@max-[400px]/agent-row:max-w-fit @max-[400px]/agent-row:shrink @max-[400px]/agent-row:grow @max-[400px]/agent-row:basis-0'
           )}
         >
           {names(!toggles)}
@@ -228,7 +228,7 @@ export function NativeChatAgentMessageRow({
             className={cn(
               content,
               'min-w-0 max-w-[48ch] grow basis-0 truncate',
-              '@max-[360px]/agent-row:order-last @max-[360px]/agent-row:max-w-none @max-[360px]/agent-row:basis-full @max-[360px]/agent-row:pl-5'
+              '@max-[400px]/agent-row:order-last @max-[400px]/agent-row:max-w-none @max-[400px]/agent-row:basis-full @max-[400px]/agent-row:pl-5'
             )}
           >
             {preview}
@@ -265,7 +265,7 @@ export function NativeChatAgentMessageRow({
       {shown ? (
         <NativeChatEventDetails id={detailsId} clamp findActive={findActive} rows={false}>
           {timestamp !== null ? (
-            <span className="hidden @max-[360px]/agent-row:block">
+            <span className="hidden @max-[400px]/agent-row:block">
               <NativeChatMessageTimestamp timestamp={timestamp} />
             </span>
           ) : null}

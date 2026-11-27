@@ -285,14 +285,14 @@ export const openNarrow = defineFixture({
   interact: openTwo
 })
 export const keyboardFocus = defineFixture({
-  width: 480,
+  width: 466,
   store,
   render: rows,
   interact: focusFirst
 })
 // Just past the wrapped layout, with yesterday's row focused so its wide time shows.
 export const between = defineFixture({
-  width: 440,
+  width: 466,
   store,
   render: rows,
   interact: (frame) =>
