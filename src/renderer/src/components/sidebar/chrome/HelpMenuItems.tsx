@@ -11,12 +11,10 @@ import {
   School,
   ScrollText
 } from 'lucide-react'
-import { toast } from 'sonner'
 import logo from '../../../../../../resources/logo.svg'
 import { DiscordIcon } from '../../icons/DiscordIcon'
 import { useAppStore } from '@/store/index'
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
-import { useMountedRef } from '@/hooks/useMountedRef'
 import { showOnboardingFromRenderer } from '../../onboarding/show-onboarding-event'
 import { SetupGuideProgressRing } from '../../setup-guide/SetupGuideProgressRing'
 import { useTranslate } from '@/i18n/use-translate'
@@ -107,14 +105,14 @@ export function HelpMenuItems({
   milestones,
   dividers,
   isRestartingOrca,
-  onRestartingOrcaChange,
+  onRestartOrca,
   onOpenFeedback,
   lastShowOnboardingAtRef
 }: {
   milestones: SetupMilestones | null
   dividers: HelpMenuDividers
   isRestartingOrca: boolean
-  onRestartingOrcaChange: (restarting: boolean) => void
+  onRestartOrca: () => void
   onOpenFeedback: () => void
   lastShowOnboardingAtRef: React.RefObject<number>
 }): React.JSX.Element {
@@ -123,7 +121,6 @@ export function HelpMenuItems({
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const updateStatus = useAppStore((s) => s.updateStatus)
   const updateCheckModifiersRef = React.useRef(NO_UPDATE_CHECK_MODIFIERS)
-  const mountedRef = useMountedRef()
   const updateCheckHint = getUpdateCheckHint()
 
   const handleShowOnboarding = (): void => {
@@ -133,25 +130,6 @@ export function HelpMenuItems({
     }
     lastShowOnboardingAtRef.current = now
     void showOnboardingFromRenderer()
-  }
-
-  const handleRestartOrca = (): void => {
-    if (isRestartingOrca) {
-      return
-    }
-    onRestartingOrcaChange(true)
-    toast.info(t('auto.components.sidebar.SidebarSettingsHelpMenu.5161eef55d', 'Restarting Orca…'))
-    void window.api.app.restart().catch((error) => {
-      if (mountedRef.current) {
-        onRestartingOrcaChange(false)
-        toast.error(
-          t('auto.components.sidebar.SidebarSettingsHelpMenu.4e8f5710d3', "Couldn't restart Orca."),
-          {
-            description: error instanceof Error ? error.message : undefined
-          }
-        )
-      }
-    })
   }
 
   const openShortcutsSettings = (): void => {
@@ -238,7 +216,7 @@ export function HelpMenuItems({
         {t('auto.components.sidebar.SidebarSettingsHelpMenu.29c56f30ee', 'Check for Updates')}
       </DropdownMenuItem>
       {innerSeparator}
-      <DropdownMenuItem onSelect={handleRestartOrca} disabled={isRestartingOrca}>
+      <DropdownMenuItem onSelect={onRestartOrca} disabled={isRestartingOrca}>
         <RotateCw className="size-3.5" />
         {t('auto.components.sidebar.SidebarSettingsHelpMenu.ad3d3ed7f1', 'Restart Orca')}
       </DropdownMenuItem>

@@ -1,5 +1,8 @@
 import React, { useState } from 'react'
+import { toast } from 'sonner'
 import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
+import { useMountedRef } from '@/hooks/useMountedRef'
+import { useTranslate } from '@/i18n/use-translate'
 import type * as SidebarFeedbackDialogModule from '../sidebar-feedback/SidebarFeedbackDialog'
 
 // Keep feedback off the boot graph; menu warming and selection share the same lazy module entry.
@@ -55,8 +58,29 @@ export function useHelpMenuController(
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   // Retain the mounted dialog through its closing animation.
   const [feedbackDialogMounted, setFeedbackDialogMounted] = useState(false)
+  const t = useTranslate()
   const [isRestartingOrca, setIsRestartingOrca] = useState(false)
   const lastShowOnboardingAtRef = React.useRef(0)
+  const mountedRef = useMountedRef()
+
+  // Owned here, not by the menu items: selecting Restart closes the menu and unmounts the items,
+  // so a failure handled there would never clear isRestartingOrca or show the error.
+  const handleRestartOrca = (): void => {
+    if (isRestartingOrca) {
+      return
+    }
+    setIsRestartingOrca(true)
+    toast.info(t('auto.components.sidebar.SidebarSettingsHelpMenu.5161eef55d', 'Restarting Orca…'))
+    void window.api.app.restart().catch((error) => {
+      if (mountedRef.current) {
+        setIsRestartingOrca(false)
+        toast.error(
+          t('auto.components.sidebar.SidebarSettingsHelpMenu.4e8f5710d3', "Couldn't restart Orca."),
+          { description: error instanceof Error ? error.message : undefined }
+        )
+      }
+    })
+  }
 
   const handleMenuOpenChange = (open: boolean): void => {
     if (open) {
@@ -77,7 +101,7 @@ export function useHelpMenuController(
           milestones={milestones}
           dividers={dividers}
           isRestartingOrca={isRestartingOrca}
-          onRestartingOrcaChange={setIsRestartingOrca}
+          onRestartOrca={handleRestartOrca}
           onOpenFeedback={handleOpenFeedback}
           lastShowOnboardingAtRef={lastShowOnboardingAtRef}
         />
