@@ -6400,7 +6400,7 @@
                   "ariaLabel": "Resource Manager, {{sessions}}",
                   "ariaLabelWithSpaceScan": "Resource Manager, {{sessions}}, {{spaceScan}}",
                   "appMemory": "Orca app memory: {{memory}}",
-                  "appMemoryAndSessions": "Orca app memory {{memory}} (app windows only, not terminals or agents), {{sessions}}"
+                  "appMemoryAndSessions": "Orca app memory {{memory}} (Orca’s own processes, not terminals or agent CLIs), {{sessions}}"
                 }
               }
             }

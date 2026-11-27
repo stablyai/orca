@@ -96,7 +96,7 @@ export function getResourceManagerAriaLabel(
       ? formatTerminalSessionCount(args.sessionCount, t)
       : t(
           'auto.components.status.bar.resource.manager.terminal.copy.appMemoryAndSessions',
-          'Orca app memory {{memory}} (app windows only, not terminals or agents), {{sessions}}',
+          'Orca app memory {{memory}} (Orca’s own processes, not terminals or agent CLIs), {{sessions}}',
           {
             memory: args.appMemoryLabel,
             sessions: formatTerminalSessionCount(args.sessionCount, t)
