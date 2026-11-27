@@ -164,22 +164,15 @@ export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel)
     },
     [handleApplyTaskSearch]
   )
-  const nextModel = model as typeof model & {
-    applyPRFilterChange: typeof applyPRFilterChange
-    handleApplyTaskSearch: typeof handleApplyTaskSearch
-    handleTaskSearchChange: typeof handleTaskSearchChange
-    handleSetDefaultTaskPreset: typeof handleSetDefaultTaskPreset
-    handleSelectGithubTaskKind: typeof handleSelectGithubTaskKind
-    handleResetGithubTaskSearch: typeof handleResetGithubTaskSearch
-    handleTaskSearchKeyDown: typeof handleTaskSearchKeyDown
+  return {
+    ...model,
+    applyPRFilterChange,
+    handleApplyTaskSearch,
+    handleTaskSearchChange,
+    handleSetDefaultTaskPreset,
+    handleSelectGithubTaskKind,
+    handleResetGithubTaskSearch,
+    handleTaskSearchKeyDown
   }
-  nextModel.applyPRFilterChange = applyPRFilterChange
-  nextModel.handleApplyTaskSearch = handleApplyTaskSearch
-  nextModel.handleTaskSearchChange = handleTaskSearchChange
-  nextModel.handleSetDefaultTaskPreset = handleSetDefaultTaskPreset
-  nextModel.handleSelectGithubTaskKind = handleSelectGithubTaskKind
-  nextModel.handleResetGithubTaskSearch = handleResetGithubTaskSearch
-  nextModel.handleTaskSearchKeyDown = handleTaskSearchKeyDown
-  return nextModel
 }
 export type TaskPageSearchActionsModel = ReturnType<typeof useTaskPageSearchActions>

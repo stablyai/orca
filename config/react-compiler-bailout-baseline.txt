@@ -471,7 +471,7 @@
 1 src/renderer/src/components/task-page/github/issue-status/StatusCell.tsx
 1 src/renderer/src/components/task-page/github/listing/AssigneesCell.tsx
 3 src/renderer/src/components/task-page/github/listing/use-task-page-github-list-state.ts
-3 src/renderer/src/components/task-page/github/listing/use-task-page-github-search-pagination.ts
+2 src/renderer/src/components/task-page/github/listing/use-task-page-github-search-pagination.ts
 7 src/renderer/src/components/task-page/github/mutations/use-task-page-github-mutation-state.ts
 1 src/renderer/src/components/task-page/github/mutations/useTaskPageGitHubWorkItemMutation.ts
 2 src/renderer/src/components/task-page/github/pull-requests/MergeCell.tsx
@@ -518,7 +518,6 @@
 38 src/renderer/src/components/task-page/use-task-page-provider-state.ts
 31 src/renderer/src/components/task-page/use-task-page-repo-selection.ts
 13 src/renderer/src/components/task-page/use-task-page-runtime-hosts.ts
-7 src/renderer/src/components/task-page/use-task-page-search-actions.ts
 3 src/renderer/src/components/task-page/use-task-page-source-summary.ts
 1 src/renderer/src/components/task-page/use-task-page-store-bindings.ts
 5 src/renderer/src/components/task-page/use-task-page-workspace-actions.ts
