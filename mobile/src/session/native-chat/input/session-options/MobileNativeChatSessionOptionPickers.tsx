@@ -177,9 +177,12 @@ export function MobileNativeChatSessionOptionPickers({
   const permissionDeferred = permission
     ? mobileDeferredPermissionSummary(permission, t)?.full
     : null
+  const permissionReported = mobileReportedPermissionAccessibleValue(permission, t)
+  // The model pill names permission only to warn; a reported Full access also says it comes from the settings.
+  const modelPermission = permissionDeferred ?? (permissionColor ? permissionReported : undefined)
   const secondary = (model && nativeChatOptionValuesLabel(options, say)) || null
-  // The pill shows only the model; its spoken name still carries effort and a deferred pick.
-  const modelValue = [primary, secondary, model && permissionDeferred].filter(Boolean).join(' ')
+  // The pill shows only the model; its spoken name still carries effort and the permission it warns about.
+  const modelValue = [primary, secondary, model && modelPermission].filter(Boolean).join(' ')
 
   const closePicker = (): void => onNavigate(null)
   const goHome = (): void => onNavigate(SESSION_OPTIONS_HOME)
@@ -222,7 +225,7 @@ export function MobileNativeChatSessionOptionPickers({
         leading={controller.heldPick ? Clock : undefined}
         accessibleName={
           model
-            ? permissionColor && !permissionDeferred
+            ? permissionColor && !modelPermission
               ? t(
                   'chat.sessionOptionPickers.modelFullAccessLabel',
                   'Model, {{value}}, full access',
@@ -232,10 +235,7 @@ export function MobileNativeChatSessionOptionPickers({
                 )
               : t('chat.sessionOptionPickers.modelLabel', 'Model, {{value}}', { value: modelValue })
             : t('chat.sessionOptionPickers.permissionsLabel', 'Permissions, {{value}}', {
-                value:
-                  permissionDeferred ??
-                  mobileReportedPermissionAccessibleValue(permission, t) ??
-                  primary
+                value: permissionDeferred ?? permissionReported ?? primary
               })
         }
         disabled={!canOpen}
