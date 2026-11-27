@@ -6,6 +6,7 @@ import type { DeviceEntry, DeviceOrcaAccount, PairedDeviceTypist } from './pairi
 import type { BotShareDevice, BotShareDeviceStore } from './pairing/bot-share-device-store'
 import type { DeviceSelfRpcContext } from '../core'
 import { pairedDeviceTypistOf } from './pairing/paired-device-typist'
+import { botSharePersonName } from '../../../../shared/bots/bot-home-of'
 import { botShareCallerScopeOf, callerScopeOf } from './pairing/device-principal'
 import type {
   DelegatedPhone,
@@ -164,7 +165,8 @@ export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
     // A shared agent's teammate (their desktop or its phone) types as the account the share names.
     const teammate = this.botShareDevices?.get(deviceId)
     if (teammate) {
-      return { id: teammate.accountId, name: teammate.name }
+      const bot = this.runtime.bots.list().find((entry) => entry.id === teammate.botId)
+      return { id: teammate.accountId, name: botSharePersonName(bot ?? {}, teammate.accountId) }
     }
     const registry = this.deviceRegistry
     return registry

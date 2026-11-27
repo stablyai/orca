@@ -16,7 +16,7 @@ import {
 import { botShareScopedView } from '../../../bots/team-share/bot-share-scoped-view'
 import { botChatTreeForViewer, type BotChatTreeViewer } from '../../../bots/bot-chat-tree-viewer'
 import { NO_HOME_CHAT_ID } from '../../../../shared/bots/bot-chat-tree-model'
-import { botHomePlaceholderId, botSharePersonName } from '../../../../shared/bots/bot-home-of'
+import { botHomePlaceholderId } from '../../../../shared/bots/bot-home-of'
 
 export const BOT_CHAT_TREE_METHODS = [
   defineMethod({
@@ -40,10 +40,7 @@ export const BOT_CHAT_TREE_METHODS = [
             accountId: share.accountId,
             owns: botShareChatFilter(runtime, share)
           }
-        : {
-            kind: 'owner',
-            personName: (accountId) => botSharePersonName(bot ?? {}, accountId)
-          }
+        : { kind: 'owner', bot: bot ?? {} }
       const view = botChatTreeForViewer(tree, viewer, { page: params.chatId !== undefined })
       return share ? view : withBotChatPeople(runtime, bot, view)
     }

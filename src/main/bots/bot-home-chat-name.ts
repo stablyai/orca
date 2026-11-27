@@ -1,7 +1,12 @@
 // A Home Chat bears its person's Home name exactly while a pointer names it; a Home a new one
 // replaced gives the name up and becomes an ordinary chat of the agent's.
 import type { Bot } from '../../shared/bot-types'
-import { BOT_HOME_NAME, botHomeName, botHomes, type BotHomeOf } from '../../shared/bots/bot-home-of'
+import {
+  BOT_HOME_NAME,
+  botHomes,
+  legacyTeammateHomeNames,
+  type BotHomeOf
+} from '../../shared/bots/bot-home-of'
 import { isOrcaSessionId } from '../../shared/agent-session/identity/orca-session-address'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
@@ -39,9 +44,10 @@ export function botHomeRootOf(host: Pick<BotHomeHost, 'deps'>): (sessionId: stri
   return (id) => (isOrcaSessionId(id) ? resolve(id) : id)
 }
 
-/** A new Home Chat takes its person's Home name. The Home it replaced keeps no tab, even when its
- *  stop won but its tab bookkeeping lost a race, so no restore reopens it; and it gives up the exact
- *  name it was given, so it is named from its content. */
+/** A new Home Chat: the owner's is named Home; a teammate's is stored unnamed, and every read titles
+ *  it from their share row (agent-session-record-home-names.ts). The Home it replaced keeps no tab,
+ *  even when its stop won but its tab bookkeeping lost a race, so no restore reopens it; and it gives
+ *  up any name Orca gave it (older builds saved "<name>’s Home"), so it is named from its content. */
 export async function nameNewHome(
   host: BotHomeHost,
   bot: Bot,
@@ -49,13 +55,16 @@ export async function nameNewHome(
   sessionId: string,
   replaced: string | null | undefined
 ): Promise<void> {
-  const name = botHomeName(bot, of)
-  await host.setUserConversationName(sessionId, name, 'rename')
+  if (of === 'owner') {
+    await host.setUserConversationName(sessionId, BOT_HOME_NAME, 'rename')
+  }
   if (replaced && host.isSessionTabVisible(replaced)) {
     await host.setSessionTabVisibility(replaced, false)
   }
   if (replaced && of !== 'owner') {
-    await releaseName(host, replaced, name)
+    for (const name of legacyTeammateHomeNames(bot, of)) {
+      await releaseName(host, replaced, name)
+    }
   }
   await releaseReplacedHomes(host, bot)
 }

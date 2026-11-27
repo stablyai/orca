@@ -1,3 +1,10 @@
+import type { TeammateHomeBots } from '../records/agent-session-record-home-names'
+import type { AgentSessionRecordStoreLocation } from '../records/agent-session-record-store-slot'
+import {
+  localAgentSessionRecordStoreLocation,
+  startLocalAgentSessionRecordStoreOpen,
+  type AgentSessionRecordStoreStartupOpen
+} from '../records/local-agent-session-record-store-startup-open'
 import { ensureStructuredAgentModelCatalogOwner } from '../model-catalog/structured-agent-model-catalog-wiring'
 import type { StructuredAgentModelCatalogDeps } from './structured-agent-runtime-registration-types'
 import { resolveStructuredCodexAccountKind } from '../environment/structured-agent-account-home'
@@ -27,6 +34,26 @@ import {
 import { usageLimitAccountSources } from './usage-limit-account-usage'
 
 export abstract class RuntimeStructuredAgentHost extends OrcaRuntimeWithStartTuiIdleVisibleReadProbe {
+  /** The bots every record-store open of this runtime titles teammates' Homes by. */
+  protected readonly teammateHomeBots: TeammateHomeBots = () => this.store?.getBots?.() ?? []
+
+  /** The local record store as every opener of this runtime opens it. */
+  protected recordStoreLocation(): AgentSessionRecordStoreLocation {
+    return localAgentSessionRecordStoreLocation(
+      this.legacyStructuredSessionTabIds,
+      this.teammateHomeBots
+    )
+  }
+
+  /** Starts the saved-chat open early; the next startup restoration consumes this attempt. */
+  beginStructuredAgentSessionStartupOpen(
+    maintenanceAfter: Promise<void>,
+    open?: AgentSessionRecordStoreStartupOpen
+  ): void {
+    this.structuredAgentSessionStartupOpen =
+      open ?? startLocalAgentSessionRecordStoreOpen(this.recordStoreLocation(), maintenanceAfter)
+  }
+
   /** Apply the host-owning desktop's account overlay to configured agent environment. */
   protected structuredAgentLaunchEnv(
     agent: StructuredAgentId,

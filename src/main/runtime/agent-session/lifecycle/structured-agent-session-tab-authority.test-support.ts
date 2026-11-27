@@ -148,6 +148,7 @@ export async function openAuthorityRuntime(
     stateDirectory: root,
     hostId: 'local',
     legacySessionTabIds: runtime.capturedSelection(),
+    teammateHomeBots: () => [],
     logger: createStructuredAgentSessionLogger()
   })
   // Exercise the production admission route before the real host installer reuses its slot.

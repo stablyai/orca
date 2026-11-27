@@ -34,7 +34,6 @@ const TEAMMATE = { botId: 'bot-1', accountId: 'usr_mate' }
 const SCOPE: BotShareCallerScope = {
   kind: 'bot-share',
   ...TEAMMATE,
-  name: 'Mate',
   workspaceTier: true
 }
 const OTHER = { botId: 'bot-1', accountId: 'usr_other' }
@@ -72,6 +71,8 @@ const share = (accountId: string, name: string) => ({
   acceptedAt: 1
 })
 
+const SHARED = { shares: [share(TEAMMATE.accountId, 'Mate'), share(OTHER.accountId, 'Other')] }
+
 /** Devices: the owner's `owner-*` computers and phone; Mate's desk and phone; Other's desk. */
 function shareDevices(): BotShareDevices {
   return {
@@ -84,7 +85,8 @@ function shareDevices(): BotShareDevices {
     revokeBotSharePhone: vi.fn(),
     getE2EEPublicKey: () => null,
     reachedAccounts: () => new Map(),
-    deliverBotShareHeldMessage: vi.fn()
+    deliverBotShareHeldMessage: vi.fn(),
+    syncBotShareDeviceNames: vi.fn()
   }
 }
 
@@ -109,13 +111,13 @@ async function rig(options: { home?: 'rig' | 'other'; opened?: AuthorityRig } = 
       makeTestBot({
         id: TEAMMATE.botId,
         folderWorkspaceId: homeFolder,
-        shares: [share(TEAMMATE.accountId, 'Mate'), share(OTHER.accountId, 'Other')]
+        ...SHARED
       })
     )
     for (const sessionId of [B, C]) {
       opened.runtime
         .getOrchestrationDb()
-        .recordBotConversationActsFor(sessionId, { actsFor: [botShareAsker(SCOPE)] })
+        .recordBotConversationActsFor(sessionId, { actsFor: [botShareAsker(SHARED, SCOPE)] })
     }
   }
   profile = opened.profile
@@ -132,7 +134,7 @@ async function rig(options: { home?: 'rig' | 'other'; opened?: AuthorityRig } = 
     callerScope: deviceId.startsWith('mate-')
       ? SCOPE
       : deviceId.startsWith('other-')
-        ? { ...SCOPE, ...OTHER, name: 'Other' }
+        ? { ...SCOPE, ...OTHER }
         : { kind: 'runtime-paired' as const, grants: [] }
   })
   const send = (deviceId: string, method: string, params: unknown) =>
@@ -421,7 +423,7 @@ it('lists a teammate’s chats in the owner’s chat list under their name; the 
     .object({ sessionId: z.string() })
     .parse(await r.call('mate-desk', 'bots.session.start', { botId: TEAMMATE.botId }))
   expect(readBotConversationActsFor(r.runtime, started.sessionId)?.actsFor).toEqual([
-    botShareAsker(SCOPE)
+    botShareAsker(SHARED, SCOPE)
   ])
   const Tree = z.object({
     chats: z.array(z.looseObject({ chatId: z.string(), person: z.unknown().optional() }))

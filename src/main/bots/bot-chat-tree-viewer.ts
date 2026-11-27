@@ -1,5 +1,6 @@
 // One chats tree on the agent's host, projected for whoever reads it: the owner sees every chat, with
 // teammates' Homes named as theirs; a teammate sees their own chats, with their Home as the Home row.
+import { teammateHomeTitle } from '../runtime/agent-session/records/agent-session-record-home-names'
 import type { BotChatTreeChat, BotChatTreeRead } from '../../shared/bots/bot-chat-tree'
 import {
   HOME_CHAT_TITLE,
@@ -7,10 +8,15 @@ import {
   type BotChatHostChat,
   type BotChatHostTree
 } from '../../shared/bots/bot-chat-tree-model'
-import { botHomePlaceholderAccount, type BotHomeOf } from '../../shared/bots/bot-home-of'
+import type { Bot } from '../../shared/bot-types'
+import {
+  botHomePlaceholderAccount,
+  botSharePersonName,
+  type BotHomeOf
+} from '../../shared/bots/bot-home-of'
 
 export type BotChatTreeViewer =
-  | { kind: 'owner'; personName: (accountId: string) => string }
+  | { kind: 'owner'; bot: Pick<Bot, 'shares'> }
   | { kind: 'teammate'; accountId: string; owns: (chatId: string) => boolean }
 
 function wireChat({ whoseHome: _internal, ...chat }: BotChatHostChat): BotChatTreeChat {
@@ -52,12 +58,12 @@ function ownerView(
     if (isPlaceholder(chat) && chat.runningTotal === 0) {
       return []
     }
-    const name = viewer.personName(of.accountId)
+    // A Home not made yet has no record to be titled by.
     return [
       {
         ...wireChat(chat),
-        homeOf: name,
-        ...(isPlaceholder(chat) ? { title: `${name}’s Home` } : {})
+        homeOf: botSharePersonName(viewer.bot, of.accountId),
+        ...(isPlaceholder(chat) ? { title: teammateHomeTitle(viewer.bot, of.accountId) } : {})
       }
     ]
   })

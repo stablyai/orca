@@ -165,6 +165,7 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
     withPRWatchRecovery({
       stateDirectory: deps.stateDirectory,
       legacySessionTabIds: deps.legacySessionTabIds ?? [],
+      teammateHomeBots: deps.teammateHomeBots,
       hostId: deps.hostId,
       logger
     })

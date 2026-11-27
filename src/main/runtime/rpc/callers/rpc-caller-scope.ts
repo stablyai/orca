@@ -21,7 +21,6 @@ export type BotShareCallerScope = {
   kind: 'bot-share'
   botId: string
   accountId: string
-  name: string
   /** Their Orca works in the agent's workspaces (`bots.share-workspaces.v1`): every method as
    *  teammate-method-classes.json classifies it, each list kept to the agent's workspaces. */
   workspaceTier?: true

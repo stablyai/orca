@@ -89,7 +89,6 @@ describe('share accept on the host', () => {
     expect(mintOffer).toHaveBeenCalledWith({
       botId: 'bot-1',
       accountId: 'acct-alice',
-      name: 'Alice',
       devicePublicKey: key(device.publicKey)
     })
     const [botId, shareId, body] = putOffer.mock.calls[0]!
@@ -113,7 +112,8 @@ describe('share accept on the host', () => {
     const bots = { list: () => [{ id: 'bot-1', shares: listed }] }
     const store = new BotShareDeviceStore(
       mkdtempSync(join(tmpdir(), 'orca-share-race-')),
-      (grant) => botSharedWithAccount(bots.list(), grant)
+      (grant) => botSharedWithAccount(bots.list(), grant),
+      (grant) => grant.accountId
     )
     let deviceId = ''
     const { value, putOffer } = deps({ ok: true })

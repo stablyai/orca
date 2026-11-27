@@ -61,7 +61,7 @@ export async function createQueuedMessageTestRig(
   const SESSION = options.sessionId ?? DEFAULT_SESSION
   const root = await mkdtemp(join(tmpdir(), 'orca-queued-messages-'))
   resetHostTestOperationIds()
-  let store = await openTestAgentSessionRecordStore(root)
+  let store = await openTestAgentSessionRecordStore(root, options)
   const provider = createQueuedRigProvider(store, options, () => host)
   const { dispatch, compact, cancelTurn, closeSession, setOption } = provider
   const journalDatabase = await openTestAgentSessionDatabase(root)
@@ -248,7 +248,7 @@ export async function createQueuedMessageTestRig(
   async function crashRestartHostFromDisk(): Promise<void> {
     await host.collaboratorsForTests().runtimeState.stopLeaseRenewal()
     await store.renewLeases([])
-    store = await openTestAgentSessionRecordStore(root)
+    store = await openTestAgentSessionRecordStore(root, options)
     host = makeHost()
   }
 

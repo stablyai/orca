@@ -57,11 +57,21 @@ const viewerAlice = {
   owns: botShareChatFilter(sources, {
     kind: 'bot-share',
     botId: 'bot-1',
-    accountId: ALICE,
-    name: 'Alice'
+    accountId: ALICE
   })
 }
-const owner = { kind: 'owner' as const, personName: () => 'Alice' }
+const aliceShare = (accountId: string) => ({
+  kind: 'account' as const,
+  shareId: `share-${accountId}`,
+  accountId,
+  name: 'Alice',
+  email: 'alice@example.com',
+  addedAt: 1
+})
+const owner = {
+  kind: 'owner' as const,
+  bot: { shares: [aliceShare(ALICE), aliceShare(ALICE_TOO)] }
+}
 
 function chat(chatId: string, fields: Partial<BotChatHostFacts> = {}): BotChatHostFacts {
   return {
