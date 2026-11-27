@@ -1,3 +1,4 @@
+import { AVATAR_PACK_CUSTOM_SCHEME } from '../../avatar-packs/avatar-pack-protocol'
 import { BROWSER_EXTENSION_API_CUSTOM_SCHEME } from '../../browser/extensions/api-runtime/browser-extension-api-scheme'
 import { CONNECTOR_AVATAR_CUSTOM_SCHEME } from '../../connector-avatars/connector-avatar-protocol'
 import { JIRA_IMAGE_CUSTOM_SCHEME } from '../../jira/attachments/image-protocol'
@@ -12,5 +13,6 @@ export const PRIVILEGED_CUSTOM_SCHEMES: Electron.CustomScheme[] = [
   BROWSER_EXTENSION_API_CUSTOM_SCHEME,
   PLUGIN_IMAGE_CUSTOM_SCHEME,
   PLUGIN_FRAME_CUSTOM_SCHEME,
-  CONNECTOR_AVATAR_CUSTOM_SCHEME
+  CONNECTOR_AVATAR_CUSTOM_SCHEME,
+  AVATAR_PACK_CUSTOM_SCHEME
 ]

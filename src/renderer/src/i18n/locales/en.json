@@ -1819,7 +1819,25 @@
       "soulStats": "{{lines}} lines · {{words}} words",
       "soulDoubleClickHint": "Double-click to edit",
       "soulEmpty": "No instructions yet. Double-click or select Edit to write.",
-      "teamDisabled": "Bots are turned off by your team."
+      "teamDisabled": "Bots are turned off by your team.",
+      "avatarPacks": {
+        "title": "Animated avatar packs",
+        "description": "Replace static bot icons with animated vector characters that follow each bot’s live activity.",
+        "enable": "Enable animated avatar packs",
+        "enableDescription": "Animate bot icons as agents read, edit, run commands, think, or sleep.",
+        "packsLocation": "Avatar packs folder",
+        "packsLocationDescription": "Folder containing catalog_index.json and avatar packs. Defaults to ~/.orca/avatar-packs.",
+        "browse": "Browse",
+        "save": "Save",
+        "emptyTitle": "No avatar packs found",
+        "emptyDescription": "Select a folder with catalog_index.json to load animated avatar packs.",
+        "chooseFolder": "Choose folder",
+        "defaultPack": "Default avatar pack",
+        "defaultPackDescription": "Used for bots without an individual animated character.",
+        "previewTitle": "Action preview",
+        "previewDescription": "Previewing {{pack}} in {{state}} state. Bots switch states automatically as their agents work.",
+        "packsPlaceholder": "~/.orca/avatar-packs"
+      }
     },
     "windowMaterial": {
       "description": "What shows behind translucent terminals. Requires restart.",
@@ -30930,6 +30948,27 @@
         "expired": "The sign-in expired. Try again.",
         "couldNotSignIn": "Couldn’t sign in. Try again."
       }
+    },
+    "avatarPacks": {
+      "state": {
+        "idle": "Idle",
+        "think": "Think",
+        "run": "Run",
+        "read": "Read",
+        "edit": "Edit",
+        "help": "Help",
+        "done": "Done",
+        "asleep": "Asleep",
+        "dizzy": "Dizzy"
+      },
+      "tabAnimated": "Animated packs",
+      "tabClassic": "Classic mascots",
+      "resetToClassic": "Use classic mascot",
+      "emptyTitle": "No animated avatar packs found",
+      "emptyDescription": "Choose a folder containing catalog_index.json, or place packs in ~/.orca/avatar-packs.",
+      "chooseFolder": "Choose folder",
+      "openSettings": "Bot settings",
+      "previewAction": "Preview action"
     }
   },
   "plugins": {

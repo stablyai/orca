@@ -263,7 +263,9 @@ export function NewBotDialog({
   // A mascot's band is its tile color; a picture's is its background's, read when it was taken in.
   const band = picture.shownUpload
     ? pictureTintFor(picture.shownUpload)
-    : (picture.color ?? DEFAULT_BOT_AVATAR_COLOR)
+    : picture.animatedAvatar
+      ? null
+      : (picture.color ?? DEFAULT_BOT_AVATAR_COLOR)
   const bandStyle: React.CSSProperties & { '--new-bot-band': string } = {
     '--new-bot-band': band ?? DEFAULT_BOT_AVATAR_COLOR
   }

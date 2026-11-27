@@ -72,9 +72,12 @@ export type ParsedBotAvatar =
   | { kind: 'mascot'; id: BotMascotId }
   /** `version` names the upload's bytes, so a new one is never shown from an old cache. */
   | { kind: 'upload'; version: string }
+  /** Stored under `mascot:pack/<pack>/<index>` so older Orcas fall back to the bot's initial. */
+  | { kind: 'avatar-pack'; pack: string; charIndex: number }
   | { kind: 'emoji'; emoji: string }
 
 const MASCOT_PREFIX = 'mascot:'
+const AVATAR_PACK_MASCOT_PREFIX = 'mascot:pack/'
 const UPLOAD_PREFIX = 'upload:'
 
 export function isBotMascotId(value: string): value is BotMascotId {
@@ -89,6 +92,14 @@ export function uploadAvatar(version: string): string {
   return `${UPLOAD_PREFIX}${version}`
 }
 
+export function avatarPackAvatar(pack: string, charIndex: number): string {
+  return `${AVATAR_PACK_MASCOT_PREFIX}${pack}/${Math.max(0, Math.trunc(charIndex))}`
+}
+
+export function isAvatarPackAvatar(value: string | null): boolean {
+  return parseBotAvatar(value)?.kind === 'avatar-pack'
+}
+
 export function isUploadAvatar(value: string | null): boolean {
   return value?.startsWith(UPLOAD_PREFIX) === true
 }
@@ -96,6 +107,21 @@ export function isUploadAvatar(value: string | null): boolean {
 /** Null shows the bot's initial; an unknown mascot id (from a newer Orca) does too. */
 export function parseBotAvatar(value: string | null): ParsedBotAvatar | null {
   if (!value) {
+    return null
+  }
+  if (value.startsWith(AVATAR_PACK_MASCOT_PREFIX)) {
+    const rest = value.slice(AVATAR_PACK_MASCOT_PREFIX.length)
+    const slashIdx = rest.indexOf('/')
+    if (slashIdx > 0 && !rest.includes('/', slashIdx + 1)) {
+      const pack = rest.slice(0, slashIdx)
+      const indexPart = rest.slice(slashIdx + 1)
+      if (/^[A-Za-z0-9_-]+$/.test(pack) && /^\d+$/.test(indexPart)) {
+        const charIndex = Number.parseInt(indexPart, 10)
+        if (Number.isSafeInteger(charIndex) && charIndex >= 0) {
+          return { kind: 'avatar-pack', pack, charIndex }
+        }
+      }
+    }
     return null
   }
   if (value.startsWith(MASCOT_PREFIX)) {
