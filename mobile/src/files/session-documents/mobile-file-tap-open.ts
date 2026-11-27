@@ -4,6 +4,7 @@ import type { RuntimeTerminalPathResolution } from '../../../../src/shared/termi
 import { filesystemPathToFileUri } from '../../../../src/shared/file-links/file-uri-path'
 import { createMobileFilePreviewHref } from '../preview/mobile-file-preview-route'
 import { classifyMobileArtifact } from '../preview/mobile-artifact-kind'
+import { resolveMissingTerminalFileTap } from '../../session/mobile-file-tap-fallback-resolve'
 import { fileTapOpenRun } from './mobile-file-tap-operations'
 import { terminalArtifactPathResolve as fileTapPathResolve } from '../preview/mobile-file-preview-operations'
 import { mapWithConcurrency } from '../../../../src/shared/concurrency/map-with-concurrency'
@@ -21,6 +22,13 @@ const FILE_TAP_RESOLVE_CONCURRENCY = 8
 export type FileTapSessionTab = {
   id: string
   relativePath?: string
+  filePath?: string
+}
+
+export type MobileFileTapResolvedConfirmation = {
+  title: string
+  displayPath: string
+  copyPath: string
 }
 
 export type MobileFileTapFailure = {
@@ -37,8 +45,11 @@ export type OpenMobileFileTapOptions<T extends FileTapSessionTab> = {
   terminalHandle?: string | null
   cwd?: string | null
   nativeChatContext?: RuntimeNativeChatFileContext | null
+  pathText?: string
+  line?: number | null
+  column?: number | null
   // Every reading of the tapped text; like desktop, the longest that exists opens.
-  candidates: readonly ParsedFileLinkLocation[]
+  candidates?: readonly ParsedFileLinkLocation[]
   pushPreviewRoute: (href: ReturnType<typeof createMobileFilePreviewHref>) => void
   openBrowser: (url: string) => void
   triggerOpenFeedback: () => void
@@ -48,8 +59,13 @@ export type OpenMobileFileTapOptions<T extends FileTapSessionTab> = {
   getActivationState: (activated: boolean) => OpenedMobileSessionTabActivationState
   switchSessionTab: (tab: T) => void
   scheduleDelayedAction: (callback: () => void, delayMs: number) => unknown
-  // Callers choose whether unresolved guesses need feedback.
+  // Callers choose whether unresolved guesses need feedback; omit for silent misses.
   onOpenFailed?: (failure: MobileFileTapFailure) => void
+  /** Optional confirmation hook invoked once the host confirms the tapped path
+   *  is an existing file. Calling `proceed` completes the open without a second
+   *  resolve round-trip. */
+  confirmResolvedOpen?: (target: MobileFileTapResolvedConfirmation, proceed: () => void) => void
+  onRevealFileLine?: (relativePath: string, line: number) => void
   // Given by surfaces where a link to another workspace's root should open that workspace.
   openWorkspace?: (worktreeId: string) => void
 }
@@ -99,8 +115,7 @@ function linkedWorkspaceId<T extends FileTapSessionTab>(
     : null
 }
 
-function existingFileTapResolution<T extends FileTapSessionTab>(
-  options: OpenMobileFileTapOptions<T>,
+function interpretFileTapResolution(
   response: RpcResponse | null
 ): RuntimeTerminalPathResolution | null {
   const accepted = response ? fileTapPathResolve.interpret(response) : null
@@ -108,17 +123,61 @@ function existingFileTapResolution<T extends FileTapSessionTab>(
     return null
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-  const resolved = accepted.value as RuntimeTerminalPathResolution
-  return resolved.exists && (!resolved.isDirectory || linkedWorkspaceId(options, resolved))
+  return accepted.value as RuntimeTerminalPathResolution
+}
+
+function existingFileTapResolution<T extends FileTapSessionTab>(
+  options: OpenMobileFileTapOptions<T>,
+  response: RpcResponse | null
+): RuntimeTerminalPathResolution | null {
+  const resolved = interpretFileTapResolution(response)
+  return resolved?.exists && (!resolved.isDirectory || linkedWorkspaceId(options, resolved))
     ? resolved
     : null
+}
+
+function mobileFileTapReadings<T extends FileTapSessionTab>(
+  options: OpenMobileFileTapOptions<T>
+): readonly ParsedFileLinkLocation[] {
+  if (options.candidates && options.candidates.length > 0) {
+    return options.candidates
+  }
+  if (options.pathText) {
+    return [
+      {
+        pathText: options.pathText,
+        line: options.line ?? null,
+        column: options.column ?? null
+      }
+    ]
+  }
+  return []
+}
+
+function withFileTapLocation<T extends FileTapSessionTab>(
+  options: OpenMobileFileTapOptions<T>,
+  target: ParsedFileLinkLocation
+): OpenMobileFileTapOptions<T> {
+  return {
+    ...options,
+    pathText: target.pathText,
+    line: target.line,
+    column: target.column
+  }
+}
+
+function fileTapFailurePath<T extends FileTapSessionTab>(
+  options: OpenMobileFileTapOptions<T>,
+  reading?: { target: ParsedFileLinkLocation }
+): string {
+  return reading?.target.pathText ?? options.candidates?.[0]?.pathText ?? options.pathText ?? ''
 }
 
 function reportOpenFailure<T extends FileTapSessionTab>(
   options: OpenMobileFileTapOptions<T>,
   failure: MobileFileTapFailure = {
     kind: 'failed',
-    pathText: options.candidates[0]?.pathText ?? ''
+    pathText: fileTapFailurePath(options)
   }
 ): void {
   if (
@@ -133,15 +192,21 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
   options: OpenMobileFileTapOptions<T>
 ): Promise<void> {
   const readings = await mapWithConcurrency(
-    options.candidates,
+    mobileFileTapReadings(options),
     FILE_TAP_RESOLVE_CONCURRENCY,
     async (target) => {
       // Why: a reading the host cannot answer must not hide a sibling.
       const response = await requestFileTapResolution(options, target.pathText).catch(() => null)
-      return { target, response, resolved: existingFileTapResolution(options, response) }
+      const resolution = interpretFileTapResolution(response)
+      return {
+        target,
+        response,
+        resolution,
+        resolved: existingFileTapResolution(options, response)
+      }
     }
   )
-  const found = readings.reduce<(typeof readings)[number] | undefined>(
+  let found = readings.reduce<(typeof readings)[number] | undefined>(
     (best, reading) =>
       reading.resolved && (!best || reading.target.pathText.length > best.target.pathText.length)
         ? reading
@@ -149,24 +214,41 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
     undefined
   )
   if (!found?.resolved) {
+    const miss = readings.reduce<(typeof readings)[number] | undefined>(
+      (best, reading) =>
+        reading.resolution &&
+        !reading.resolution.exists &&
+        !reading.resolution.isDirectory &&
+        (!best || reading.target.pathText.length > best.target.pathText.length)
+          ? reading
+          : best,
+      undefined
+    )
+    if (
+      miss?.resolution &&
+      shouldActivateOpenedMobileSessionTab(options.getActivationState(false))
+    ) {
+      const recovered = await resolveMissingTerminalFileTap(
+        withFileTapLocation(options, miss.target),
+        miss.resolution
+      )
+      if (recovered?.exists && !recovered.isDirectory) {
+        found = { ...miss, resolution: recovered, resolved: recovered }
+      }
+    }
+  }
+  if (!found?.resolved) {
     const refused = readings.find((reading) => reading.response && !reading.response.ok)
     reportOpenFailure(options, {
       kind: refused ? 'failed' : 'unresolved',
-      pathText: (refused?.target ?? options.candidates[0])?.pathText ?? '',
-      message: refused?.response?.ok === false ? refused.response.error.message : undefined
+      pathText: fileTapFailurePath(options, refused),
+      ...(refused?.response?.ok === false ? { message: refused.response.error.message } : {})
     })
     return
   }
-  await openResolvedMobileFileTap(options, found.target, found.resolved).catch(() =>
-    reportOpenFailure(options, { kind: 'failed', pathText: found.target.pathText })
-  )
-}
-
-async function openResolvedMobileFileTap<T extends FileTapSessionTab>(
-  options: OpenMobileFileTapOptions<T>,
-  target: ParsedFileLinkLocation,
-  resolved: RuntimeTerminalPathResolution
-): Promise<void> {
+  const { target } = found
+  const resolved = found.resolved
+  const located = withFileTapLocation(options, target)
   // Not a failure: the user moved off the source tab mid-resolve.
   if (!shouldActivateOpenedMobileSessionTab(options.getActivationState(false))) {
     return
@@ -177,21 +259,80 @@ async function openResolvedMobileFileTap<T extends FileTapSessionTab>(
     options.openWorkspace?.(linkedWorkspace)
     return
   }
+  if (options.confirmResolvedOpen) {
+    const targetAbsolutePath =
+      resolved.openTarget && resolved.openTarget.kind !== 'unsupported'
+        ? resolved.openTarget.absolutePath
+        : null
+    const displayBasePath =
+      resolved.relativePath ||
+      targetAbsolutePath ||
+      resolved.absolutePath ||
+      target.pathText
+    const copyPath =
+      targetAbsolutePath ||
+      resolved.absolutePath ||
+      resolved.relativePath ||
+      target.pathText
+    const locationSuffix =
+      target.line !== null
+        ? `:${target.line}${target.column !== null ? `:${target.column}` : ''}`
+        : ''
+    options.triggerOpenFeedback()
+    options.confirmResolvedOpen(
+      {
+        title: displayNameFromPath(displayBasePath) ?? 'File',
+        displayPath: `${displayBasePath}${locationSuffix}`,
+        copyPath
+      },
+      () => {
+        void completeResolvedMobileFileTapOpen(located, resolved, false).catch(() => {
+          reportOpenFailure(located, { kind: 'failed', pathText: target.pathText })
+        })
+      }
+    )
+    return
+  }
+  await completeResolvedMobileFileTapOpen(located, resolved, true)
+}
+
+async function completeResolvedMobileFileTapOpen<T extends FileTapSessionTab>(
+  options: OpenMobileFileTapOptions<T>,
+  resolved: RuntimeTerminalPathResolution,
+  triggerFeedback: boolean
+): Promise<void> {
   const resolvedWorktreeId = resolved.worktree?.trim() || options.worktreeId
   const resolvedWorktree = `id:${resolvedWorktreeId}`
   const resolvedWorktreeName =
     resolvedWorktreeId === options.worktreeId ? options.worktreeName : undefined
-
-  if (resolved.openTarget?.kind === 'absolute-file') {
+  const target = resolved.openTarget
+  const isAbsoluteFile = target?.kind === 'absolute-file'
+  const openedPath =
+    target?.kind === 'absolute-file'
+      ? target.absolutePath
+      : target?.kind === 'worktree-file'
+        ? target.relativePath
+        : resolved.relativePath
+  if (!openedPath) {
+    reportOpenFailure(options, { kind: 'failed', pathText: options.pathText ?? '' })
+    return
+  }
+  if (triggerFeedback) {
     options.triggerOpenFeedback()
+  }
+
+  const pushAbsolutePreview = (): void => {
+    if (target?.kind !== 'absolute-file') {
+      return
+    }
     options.pushPreviewRoute(
       createMobileFilePreviewHref({
         hostId: options.hostId,
         worktreeId: resolvedWorktreeId,
         source: 'terminalArtifact',
-        absolutePath: resolved.openTarget.absolutePath,
-        grantId: resolved.openTarget.grantId,
-        pathText: target.pathText,
+        absolutePath: target.absolutePath,
+        grantId: target.grantId,
+        pathText: options.pathText,
         ...(options.cwd && options.cwd.trim().length > 0 ? { cwd: options.cwd } : {}),
         ...(options.terminalHandle && options.terminalHandle.trim().length > 0
           ? { terminal: options.terminalHandle }
@@ -202,24 +343,14 @@ async function openResolvedMobileFileTap<T extends FileTapSessionTab>(
               nativeChatSession: options.nativeChatContext.sessionId
             }
           : {}),
-        name: displayNameFromPath(resolved.openTarget.absolutePath),
-        ...(target.line !== null ? { line: String(target.line) } : {}),
-        ...(target.column !== null ? { column: String(target.column) } : {}),
+        name: displayNameFromPath(target.absolutePath),
+        ...(options.line != null ? { line: String(options.line) } : {}),
+        ...(options.column != null ? { column: String(options.column) } : {}),
         ...(resolvedWorktreeName ? { worktreeName: resolvedWorktreeName } : {})
       })
     )
-    return
   }
 
-  const openedPath =
-    resolved.openTarget?.kind === 'worktree-file'
-      ? resolved.openTarget.relativePath
-      : resolved.relativePath
-  if (!openedPath) {
-    reportOpenFailure(options, { kind: 'failed', pathText: target.pathText })
-    return
-  }
-  options.triggerOpenFeedback()
   const pushWorktreePreview = (): void =>
     options.pushPreviewRoute(
       createMobileFilePreviewHref({
@@ -228,15 +359,25 @@ async function openResolvedMobileFileTap<T extends FileTapSessionTab>(
         source: 'worktree',
         relativePath: openedPath,
         name: displayNameFromPath(openedPath),
-        ...(target.line !== null ? { line: String(target.line) } : {}),
-        ...(target.column !== null ? { column: String(target.column) } : {}),
+        ...(options.line != null ? { line: String(options.line) } : {}),
+        ...(options.column != null ? { column: String(options.column) } : {}),
         ...(resolvedWorktreeName ? { worktreeName: resolvedWorktreeName } : {})
       })
     )
-  if (resolvedWorktreeId !== options.worktreeId || target.line !== null || target.column !== null) {
-    pushWorktreePreview()
+  if (isAbsoluteFile && options.nativeChatContext) {
+    pushAbsolutePreview()
     return
   }
+
+  if (resolvedWorktreeId !== options.worktreeId) {
+    if (isAbsoluteFile) {
+      pushAbsolutePreview()
+    } else {
+      pushWorktreePreview()
+    }
+    return
+  }
+
   if (
     classifyMobileArtifact(openedPath) === 'html' &&
     resolved.openTarget?.kind === 'worktree-file' &&
@@ -245,34 +386,89 @@ async function openResolvedMobileFileTap<T extends FileTapSessionTab>(
     options.openBrowser(filesystemPathToFileUri(resolved.openTarget.absolutePath))
     return
   }
-  const openResponse = await fileTapOpenRun.request(
-    options.client,
-    { worktree: resolvedWorktree, relativePath: openedPath },
-    { timeoutMs: 15_000 }
-  )
+
+  const openLine =
+    options.line != null && Number.isSafeInteger(options.line) && options.line >= 1
+      ? options.line
+      : undefined
+  const openPosition =
+    openLine !== undefined
+      ? {
+          line: openLine,
+          ...(options.column != null &&
+          Number.isSafeInteger(options.column) &&
+          options.column >= 1
+            ? { column: options.column }
+            : {})
+        }
+      : {}
+
+  let openResponse: RpcResponse
+  try {
+    openResponse = await fileTapOpenRun.request(
+      options.client,
+      { worktree: resolvedWorktree, relativePath: openedPath, ...openPosition },
+      { timeoutMs: 15_000 }
+    )
+  } catch {
+    if (isAbsoluteFile) {
+      pushAbsolutePreview()
+      return
+    }
+    reportOpenFailure(options, { kind: 'failed', pathText: options.pathText ?? '' })
+    return
+  }
+
   // Why: a host with no desktop window opens no editor tabs; the preview route reads the file through files.read.
   if (isRendererUnavailableReply(openResponse)) {
     // Not a failure: the user moved off the source tab during the call.
     if (!shouldActivateOpenedMobileSessionTab(options.getActivationState(false))) {
       return
     }
-    pushWorktreePreview()
+    if (isAbsoluteFile) {
+      pushAbsolutePreview()
+    } else {
+      pushWorktreePreview()
+    }
     return
   }
+
   const opened = fileTapOpenRun.interpret(openResponse)
-  if (!opened.accepted) {
-    reportOpenFailure(options, {
-      kind: 'failed',
-      pathText: target.pathText,
-      message: openResponse.ok ? undefined : openResponse.error.message
-    })
+  if (!opened.accepted || !opened.value.opened) {
+    if (isAbsoluteFile) {
+      pushAbsolutePreview()
+      return
+    }
+    const pathText = options.pathText ?? ''
+    if (!opened.accepted && !openResponse.ok) {
+      reportOpenFailure(options, {
+        kind: 'failed',
+        pathText,
+        message: openResponse.error.message
+      })
+      return
+    }
+    reportOpenFailure(options, { kind: 'failed', pathText })
     return
   }
-  if (!opened.value.opened) {
-    reportOpenFailure(options, { kind: 'failed', pathText: target.pathText })
-    return
+
+  if (
+    openLine !== undefined &&
+    shouldActivateOpenedMobileSessionTab(options.getActivationState(false))
+  ) {
+    options.onRevealFileLine?.(openedPath, openLine)
   }
   scheduleOpenedWorktreeTabActivation(options, openedPath)
+}
+
+function matchesTabPath(candidate: unknown, target: string): boolean {
+  if (typeof candidate !== 'string') {
+    return false
+  }
+  if (candidate === target) {
+    return true
+  }
+  return candidate.replace(/\\/g, '/').toLowerCase() === target.replace(/\\/g, '/').toLowerCase()
 }
 
 function scheduleOpenedWorktreeTabActivation<T extends FileTapSessionTab>(
@@ -288,7 +484,12 @@ function scheduleOpenedWorktreeTabActivation<T extends FileTapSessionTab>(
     if (!shouldActivateOpenedMobileSessionTab(options.getActivationState(activated))) {
       return
     }
-    const opened = options.getSessionTabs().find((tab) => tab.relativePath === openedPath)
+    const opened = options
+      .getSessionTabs()
+      .find(
+        (tab) =>
+          matchesTabPath(tab.relativePath, openedPath) || matchesTabPath(tab.filePath, openedPath)
+      )
     if (!opened) {
       return
     }
@@ -303,6 +504,6 @@ function scheduleOpenedWorktreeTabActivation<T extends FileTapSessionTab>(
   options.scheduleDelayedAction(() => void activateOpenedTab(), 1800)
 }
 
-function displayNameFromPath(path: string): string | undefined {
+export function displayNameFromPath(path: string): string | undefined {
   return path.split(/[\\/]/).findLast(Boolean)
 }

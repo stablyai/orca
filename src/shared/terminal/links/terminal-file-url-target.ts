@@ -15,13 +15,18 @@ type LineHashLocation = { line: number; column: number | null }
 function parseFileUrlLineHash(hash: string): LineHashLocation | null {
   const trimmed = hash.startsWith('#') ? hash.slice(1) : hash
   // Why: a `#L11-L13` or `#L11-13` range opens at its first line.
-  const match = /^L(\d+)(?:C(\d+))?(?:-L?\d+(?:C\d+)?)?$/i.exec(trimmed)
+  const match = /^(?:L|line-?)(\d+)(?:C(\d+))?(?:-(?:L|line-?)?\d+(?:C\d+)?)?$/i.exec(trimmed)
   if (!match) {
     return null
   }
+  const line = Number(match[1])
+  const column = match[2] ? Number(match[2]) : null
+  if (line < 1 || (column !== null && column < 1)) {
+    return null
+  }
   return {
-    line: Number(match[1]),
-    column: match[2] ? Number(match[2]) : null
+    line,
+    column
   }
 }
 
