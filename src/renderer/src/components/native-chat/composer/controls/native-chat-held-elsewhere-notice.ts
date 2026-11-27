@@ -4,8 +4,10 @@
 /** Files a refused message named that another chat's draft holds now, and that chat. */
 export type NativeChatHeldElsewhere = {
   count: number
-  /** The conversation whose draft holds them; absent when no chat (a pending creation) does. */
+  /** The one conversation whose draft holds them all; absent when no chat (a pending creation) does. */
   ownerSessionId?: string
+  /** Drafts of more than one chat hold them, so no single chat is named. */
+  severalChats?: true
 }
 
 const notices = new Map<string, NativeChatHeldElsewhere>()
@@ -30,7 +32,11 @@ export function noteNativeChatFilesHeldElsewhere(
     }
     return
   }
-  if (current?.count === held.count && current.ownerSessionId === held.ownerSessionId) {
+  if (
+    current?.count === held.count &&
+    current.ownerSessionId === held.ownerSessionId &&
+    current.severalChats === held.severalChats
+  ) {
     return
   }
   notices.set(sessionId, held)

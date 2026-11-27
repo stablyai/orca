@@ -1,5 +1,7 @@
 // @vitest-environment happy-dom
 import { beforeEach, expect, it } from 'vitest'
+import { createElement, Fragment } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 
 // Nothing is stood in: staging, the held-elsewhere store and the wording run for real.
 const { nativeChatBrowserFileRefusal } = await import('./native-chat-browser-file-refusal')
@@ -58,13 +60,79 @@ it('says one line with the count and owning chat, and opens it', () => {
     { label: 'Fix login bug', open: () => (opened += 1) },
     () => {}
   )
-  expect(notice.text).toBe('Not sent — 2 attachments are still in your draft in Fix login bug')
+  expect(notice.text).toBe('Not sent — 2 attachments in Fix login bug')
   expect(notice.text).not.toContain('\n')
+  expect(notice.kind).toBe('error')
+  expect(notice.stackActionWhenNarrow).toBe(true)
   expect(notice.action?.label).toBe('Open chat')
   notice.action?.onClick()
   expect(opened).toBe(1)
 
   const single = nativeChatHeldElsewhereNotice({ count: 1 }, null, () => {})
-  expect(single.text).toBe("Not sent — 1 attachment is still in another chat's draft")
+  expect(single.text).toBe('Not sent — 1 attachment in another chat')
   expect(single.action).toBeUndefined()
+})
+
+// The chat name is the person's own text: it sits in its own truncating span with its full name as
+// the tooltip, and is never read as markup.
+it('puts the chat name in its own truncating span', () => {
+  const label = 'Fix <b>login</b> {{count}} bug'
+  const notice = nativeChatHeldElsewhereNotice(
+    { count: 1, ownerSessionId: 'owner-chat' },
+    { label, open: () => {} },
+    () => {}
+  )
+  expect(notice.text).toBe(`Not sent — 1 attachment in ${label}`)
+  const html = renderToStaticMarkup(createElement(Fragment, null, notice.content))
+  expect(html).toContain('Not sent — 1 attachment in <span')
+  expect(html).toContain('class="inline-block max-w-[12ch] truncate')
+  expect(html).toContain('title="Fix &lt;b&gt;login&lt;/b&gt; {{count}} bug"')
+  expect(html).not.toContain('<b>')
+})
+
+// Files another chat holds are attributed to one chat only when that one chat's draft holds them all.
+it('names no chat when the held files are in more than one chat', () => {
+  const first = 'orca-browser-file:held/one.png'
+  const second = 'orca-browser-file:held/two.png'
+  stageNativeChatDraftFile(structuredAgentSessionDraftScopeKey('owner-one'), first)
+  stageNativeChatDraftFile(structuredAgentSessionDraftScopeKey('owner-two'), second)
+
+  expect(nativeChatBrowserFileRefusal([first, second], 'refusing-c')).toBeNull()
+  const held = readNativeChatHeldElsewhere('refusing-c')
+  expect(held).toEqual({ count: 2, severalChats: true })
+  const notice = nativeChatHeldElsewhereNotice(held!, null, () => {})
+  expect(notice.text).toBe('Not sent — attachments in other chats')
+  expect(notice.action).toBeUndefined()
+
+  // The control: both in one chat's draft name that chat.
+  stageNativeChatDraftFile(structuredAgentSessionDraftScopeKey('owner-one'), second)
+  nativeChatBrowserFileRefusal([first, second], 'refusing-c')
+  expect(readNativeChatHeldElsewhere('refusing-c')).toEqual({
+    count: 2,
+    ownerSessionId: 'owner-one'
+  })
+})
+
+// A queued card's Save is not a send: it says the edit wasn't saved, in its own words, and leaves the
+// composer's "Not sent" notice alone.
+it('words a queued-card Save refusal for Save, not as a send', () => {
+  const elsewhere = 'orca-browser-file:held/card.png'
+  stageNativeChatDraftFile(structuredAgentSessionDraftScopeKey('owner-card'), elsewhere)
+
+  const parts = nativeChatBrowserFileRefusal([elsewhere], 'refusing-d', 'queued-edit')
+  expect(agentSessionWriteNoticeText(parts!)).toBe(
+    "1 attachment is in another chat's draft. Your edit wasn't saved."
+  )
+  expect(readNativeChatHeldElsewhere('refusing-d')).toBeNull()
+
+  const mixed = nativeChatBrowserFileRefusal(
+    [elsewhere, 'orca-browser-file:gone/old.png'],
+    'refusing-d',
+    'queued-edit'
+  )
+  expect(agentSessionWriteNoticeText(mixed!)).toBe(
+    "1 attachment is in another chat's draft. Can't send old.png from this chat. Your edit wasn't saved. Remove it and attach it again."
+  )
+  expect(agentSessionWriteNoticeText(mixed!)).not.toMatch(/not sent/i)
+  expect(readNativeChatHeldElsewhere('refusing-d')).toBeNull()
 })

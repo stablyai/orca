@@ -174,11 +174,12 @@ const { hydrateNativeChatComposerDrafts } =
   await import('@/components/native-chat/drafts/native-chat-composer-draft-load')
 
 /** Saved drafts have not loaded yet; `scope` has `saved` waiting in storage. */
-const beforeLoad = (scope: string, saved: StoredNativeChatComposerDraft): void => {
+const beforeLoad = (scope: string, saved: StoredNativeChatComposerDraft) => {
   clearNativeChatComposerDraftsForTests()
   const storage = createMemoryNativeChatComposerDraftStorage()
   storage.drafts.set(scope, saved)
   setNativeChatComposerDraftStorageForTests(storage)
+  return storage
 }
 const savedEarlier: StoredNativeChatComposerDraft = {
   text: 'saved earlier',
@@ -225,14 +226,34 @@ const committed = async (scope: string): Promise<void> => {
   )
 }
 
+/**
+ * Like `beforeLoad`, but the load's read waits for `release`. The move's own write starts the load, so
+ * without the hold it lands before anything after the move (an editor applying the caret, a later
+ * image step) can happen first.
+ */
+const beforeHeldLoad = (scope: string, saved: StoredNativeChatComposerDraft) => {
+  const storage = beforeLoad(scope, saved)
+  let release = (): void => {}
+  const held = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const loadAll = storage.loadAll
+  storage.loadAll = async () => {
+    await held
+    return loadAll()
+  }
+  return { release: () => release() }
+}
+
 // D11-05 / C15-05. A load that already read the committed move has nothing to replay. The live
 // placement still stands, rebased past the stored prefix: no cold-start placement replaces it.
 it('keeps a pending placement when the load already holds the committed move', async () => {
   const scope = structuredAgentSessionDraftScopeKey('placement-committed-pending')
-  beforeLoad(scope, savedEarlier)
+  const { release } = beforeHeldLoad(scope, savedEarlier)
   move('committed-pending', '', { text: 'hello world' }, { from: 6, to: 11 })
   await committed(scope)
 
+  release()
   await hydrateNativeChatComposerDrafts()
 
   const loaded = readNativeChatComposerDraft(scope)
@@ -245,11 +266,13 @@ it('keeps a pending placement when the load already holds the committed move', a
 // The same committed read after the editor applied the placement: nothing is armed again.
 it('does not rearm an applied placement when the load already holds the committed move', async () => {
   const scope = structuredAgentSessionDraftScopeKey('placement-committed-applied')
-  beforeLoad(scope, savedEarlier)
+  const { release } = beforeHeldLoad(scope, savedEarlier)
   const placed = move('committed-applied', '', { text: 'hello world' }, { from: 6, to: 11 })
   await committed(scope)
+  expect(positionOf(scope)).toBe(placed.position)
   placed.position!.pending = false
 
+  release()
   await hydrateNativeChatComposerDrafts()
 
   expect(readNativeChatComposerDraft(scope).text).toBe('saved earlier\n\nhello world')
@@ -262,12 +285,14 @@ it.each([true, false])(
   'keeps a live placement through a committed prefix and image-only suffix (pending %s)',
   async (pending) => {
     const scope = structuredAgentSessionDraftScopeKey(`placement-mixed-${pending}`)
-    beforeLoad(scope, savedEarlier)
+    const { release } = beforeHeldLoad(scope, savedEarlier)
     const placed = move(`mixed-${pending}`, '', { text: 'hello world' }, { from: 6, to: 11 })
     await committed(scope)
+    expect(positionOf(scope)).toBe(placed.position)
     placed.position!.pending = pending
     appendToNativeChatComposerDraft(scope, { images: [{ id: 'late', path: 'blob:late' }] })
 
+    release()
     await hydrateNativeChatComposerDrafts()
 
     const loaded = readNativeChatComposerDraft(scope)

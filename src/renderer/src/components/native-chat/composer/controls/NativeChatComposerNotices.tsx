@@ -102,8 +102,26 @@ function NoticeRow({ notice }: { notice: NativeChatComposerNotice }): React.JSX.
           ? AlertCircle
           : Paperclip
   const dismissLabel = t('components.native-chat.notices.dismiss', 'Dismiss')
+  const stack = notice.stackActionWhenNarrow === true && notice.action !== undefined
+  const sentence = (
+    <p
+      className={cn(
+        'min-w-0 flex-1 select-text py-px leading-5 [overflow-wrap:anywhere]',
+        'text-muted-foreground',
+        isError && 'text-foreground',
+        isHostWarning && 'text-destructive',
+        stack && 'self-stretch'
+      )}
+    >
+      {notice.content ?? notice.text}
+    </p>
+  )
+  const action = notice.action ? <NoticeAction {...notice.action} /> : null
   return (
-    <li data-notice-kind={notice.kind} className={cn(isError && 'bg-destructive/5')}>
+    <li
+      data-notice-kind={notice.kind}
+      className={cn(isError && 'bg-destructive/5', stack && '@container/notice')}
+    >
       <div className="flex items-start gap-2 px-2.5 py-1.5">
         <Icon
           aria-hidden
@@ -114,17 +132,17 @@ function NoticeRow({ notice }: { notice: NativeChatComposerNotice }): React.JSX.
             isHostWarning && 'text-destructive'
           )}
         />
-        <p
-          className={cn(
-            'min-w-0 flex-1 select-text py-px leading-5 [overflow-wrap:anywhere]',
-            'text-muted-foreground',
-            isError && 'text-foreground',
-            isHostWarning && 'text-destructive'
-          )}
-        >
-          {notice.content ?? notice.text}
-        </p>
-        {notice.action ? <NoticeAction {...notice.action} /> : null}
+        {stack ? (
+          <div className="flex min-w-0 flex-1 flex-col items-start gap-1 @[26rem]/notice:flex-row @[26rem]/notice:gap-2">
+            {sentence}
+            {action}
+          </div>
+        ) : (
+          <>
+            {sentence}
+            {action}
+          </>
+        )}
         {notice.onDismiss ? (
           <Button
             type="button"

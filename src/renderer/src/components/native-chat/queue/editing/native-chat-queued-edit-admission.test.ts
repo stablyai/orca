@@ -35,7 +35,13 @@ it('refuses a queued-card update naming a browser file, keeping the card and the
   updateNativeChatComposerDraft(edit.scopeKey, { text }, 'immediate')
 
   expect(nativeChatQueuedEditAdmission(edit, true, false, 'queued-refused')).toEqual({
-    refused: agentSessionWriteNoticeText(nativeChatBrowserFileRefusalParts([stale]))
+    refused: agentSessionWriteNoticeText(
+      nativeChatBrowserFileRefusalParts([stale], 'notDoneQueuedEdit')
+    )
+  })
+  // Save words its own refusal: the edit wasn't saved, never that a message wasn't sent.
+  expect(nativeChatQueuedEditAdmission(edit, true, false, 'queued-refused')).not.toMatchObject({
+    refused: expect.stringMatching(/not sent/i)
   })
   expect(edit.body).toBe(body)
   expect(body).toEqual(card())

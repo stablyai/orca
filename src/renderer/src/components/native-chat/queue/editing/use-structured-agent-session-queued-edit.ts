@@ -240,9 +240,7 @@ export function useStructuredAgentSessionQueuedEdit(args: StructuredQueuedEditAr
     }
     if ('refused' in admission) {
       // Refused before any write: the card stays as it was and the edit stays open.
-      if (admission.refused) {
-        toast.error(admission.refused)
-      }
+      toast.error(admission.refused)
       return
     }
     const { input, edited } = admission

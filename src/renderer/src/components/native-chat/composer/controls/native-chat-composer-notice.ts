@@ -24,6 +24,8 @@ export type NativeChatComposerNotice = NativeChatComposerNoticeContent & {
     status?: React.ReactNode
   }
   onDismiss?: () => void
+  /** In a narrow row the action goes under the text, so a one-line sentence keeps its one line. */
+  stackActionWhenNarrow?: boolean
   /** A not-signed-in notice: one neutral line whose own button signs in. */
   signIn?: NativeChatSignInNoticeView
   /** The host's fuller words under a sign-in notice, collapsed so the notice stays one line. */

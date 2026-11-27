@@ -21670,10 +21670,14 @@
         "modelsLoading": "Loading models…",
         "signInForModels": "Sign in to see the models you can use.",
         "browserFilesNotHere": "Can't send {{names}} from this chat.",
-        "heldInOtherChat_one": "Not sent — {{count}} attachment is still in your draft in {{chat}}",
-        "heldInOtherChat_other": "Not sent — {{count}} attachments are still in your draft in {{chat}}",
-        "heldInAnotherChat_one": "Not sent — {{count}} attachment is still in another chat's draft",
-        "heldInAnotherChat_other": "Not sent — {{count}} attachments are still in another chat's draft",
+        "heldInOtherChat_one": "Not sent — {{count}} attachment in {{chat}}",
+        "heldInOtherChat_other": "Not sent — {{count}} attachments in {{chat}}",
+        "heldInAnotherChat_one": "Not sent — {{count}} attachment in another chat",
+        "heldInAnotherChat_other": "Not sent — {{count}} attachments in another chat",
+        "heldInOtherChats": "Not sent — attachments in other chats",
+        "queuedEditHeldInAnotherChat_one": "{{count}} attachment is in another chat's draft.",
+        "queuedEditHeldInAnotherChat_other": "{{count}} attachments are in another chat's draft.",
+        "queuedEditHeldInOtherChats": "Some attachments are in other chats' drafts.",
         "openOwningChat": "Open chat"
       },
       "tool": {

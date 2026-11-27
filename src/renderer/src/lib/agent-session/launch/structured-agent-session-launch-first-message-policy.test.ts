@@ -17,7 +17,7 @@ function retainedOpening(firstMessage?: StructuredAgentSessionFirstMessage) {
     worktree: 'id:wt',
     agent: 'codex',
     randomUuid: () => '00000000-0000-4000-8000-000000000000',
-    now: 1,
+    now: 1_700_000_000_000,
     ...(firstMessage ? { firstMessage } : {})
   })
 }

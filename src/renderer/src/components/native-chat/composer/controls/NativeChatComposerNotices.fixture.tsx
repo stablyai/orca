@@ -179,26 +179,34 @@ export const codexTooOldUpdateFailed = codexTooOld('failed')
 export const codexTooOldOnServer = codexTooOld('idle', 'Build server')
 
 // Seeded, synthetic: a Retry refused because its two images are still in another chat's draft.
-const heldElsewhere = nativeChatHeldElsewhereNotice(
-  { count: 2, ownerSessionId: 'fixture-owner' },
-  { label: 'Fix login redirect', open: () => {} },
-  () => {}
+const heldElsewhere = (label = 'Fix login redirect') =>
+  nativeChatHeldElsewhereNotice(
+    { count: 2, ownerSessionId: 'fixture-owner' },
+    { label, open: () => {} },
+    () => {}
+  )
+const LONG_TITLE = 'Investigate flaky checkout redirect after the payment provider timeout'
+
+const heldFixture = (width: number, notice: ReturnType<typeof heldElsewhere>) =>
+  defineFixture({
+    width,
+    render: () => (
+      <div className="native-chat-appearance p-4">
+        <NativeChatComposerNotices notices={[notice]} />
+      </div>
+    )
+  })
+
+export const heldInOtherChat = heldFixture(720, heldElsewhere())
+export const heldInOtherChatNarrow = heldFixture(360, heldElsewhere())
+export const heldInOtherChatLongTitle = heldFixture(720, heldElsewhere(LONG_TITLE))
+export const heldInOtherChatLongTitleNarrow = heldFixture(360, heldElsewhere(LONG_TITLE))
+// No open chat to name (a pending creation's draft holds it), and files spread over two chats.
+export const heldInAnotherChatNarrow = heldFixture(
+  360,
+  nativeChatHeldElsewhereNotice({ count: 1 }, null, () => {})
 )
-
-export const heldInOtherChat = defineFixture({
-  width: 720,
-  render: () => (
-    <div className="native-chat-appearance p-4">
-      <NativeChatComposerNotices notices={[heldElsewhere]} />
-    </div>
-  )
-})
-
-export const heldInOtherChatNarrow = defineFixture({
-  width: 360,
-  render: () => (
-    <div className="native-chat-appearance p-4">
-      <NativeChatComposerNotices notices={[heldElsewhere]} />
-    </div>
-  )
-})
+export const heldInOtherChatsNarrow = heldFixture(
+  360,
+  nativeChatHeldElsewhereNotice({ count: 3, severalChats: true }, null, () => {})
+)

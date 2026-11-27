@@ -148,9 +148,12 @@ export function reserveStructuredAgentSessionSend(
       const current = held()
       if (current) {
         clearTimeout(deadline)
-        handBack(current, null)
-        // Empty when another notice already says why (a file held in another chat's draft).
-        publishStructuredAgentSessionSends(entry.sessionId, { notice: notice || null })
+        if (!notice) {
+          // Empty when another notice already says why (a file held in another chat's draft).
+          publishStructuredAgentSessionSends(entry.sessionId, { notice: null })
+        }
+        // Why the hand-back words it: a hand-back that threw adds that the message wasn't saved.
+        handBack(current, notice ? [{ text: notice }] : null)
         settleReservation('returned')
       }
     },

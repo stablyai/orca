@@ -50,11 +50,13 @@ export function nativeChatUnsendableMessageBody(
 const NAMES_SHOWN = 3
 
 /**
- * What a refused write says about files this chat can't send: their names, that it was not sent, and
- * to attach them again. Not "expired": the file may be intact, in another chat's draft.
+ * What a refused write says about files this chat can't send: their names, what didn't happen (the
+ * message wasn't sent, or a queued card's edit wasn't saved), and to attach them again. Not
+ * "expired": the file may be intact, in another chat's draft.
  */
 export function nativeChatBrowserFileRefusalParts(
-  references: readonly string[]
+  references: readonly string[],
+  notDone: 'notDoneSend' | 'notDoneQueuedEdit' = 'notDoneSend'
 ): AgentSessionWriteNoticePart[] {
   const names = references.map((reference) => basename(reference))
   const shown = names.slice(0, NAMES_SHOWN).join(', ')
@@ -66,7 +68,7 @@ export function nativeChatBrowserFileRefusalParts(
         { names: names.length > NAMES_SHOWN ? `${shown}…` : shown }
       )
     },
-    'notDoneSend',
+    notDone,
     references.length > 1 ? 'reattachFiles' : 'reattachFile'
   ]
 }

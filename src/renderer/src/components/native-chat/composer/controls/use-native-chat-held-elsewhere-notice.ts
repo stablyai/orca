@@ -10,47 +10,62 @@ import {
   subscribeToNativeChatHeldElsewhere,
   type NativeChatHeldElsewhere
 } from './native-chat-held-elsewhere-notice'
+import { nativeChatHeldElsewhereSentence } from './native-chat-held-elsewhere-sentence'
 
 /**
  * One line: the message wasn't sent, and how many of its files are still in which chat's draft, with
- * a button to open that chat. Without an open chat to name, it names none and offers nothing.
+ * a button to open that chat. Files in more than one chat, or in no open chat, name none and offer
+ * nothing. The chat name truncates and the button stacks under a narrow row, so the text stays one line.
  */
 export function nativeChatHeldElsewhereNotice(
   held: NativeChatHeldElsewhere,
   owner: { label: string; open: () => void } | null,
   dismiss: () => void
 ): NativeChatComposerNotice {
-  const count = { count: held.count }
-  return {
-    key: 'held-elsewhere',
-    kind: 'attachment',
-    text: owner
-      ? translate(
-          'components.native-chat.composer.heldInOtherChat',
-          'Not sent — {{count}} attachments are still in your draft in {{chat}}',
-          {
-            ...count,
-            chat: owner.label,
-            defaultValue_one: 'Not sent — {{count}} attachment is still in your draft in {{chat}}'
-          }
-        )
-      : translate(
-          'components.native-chat.composer.heldInAnotherChat',
-          "Not sent — {{count}} attachments are still in another chat's draft",
-          {
-            ...count,
-            defaultValue_one: "Not sent — {{count}} attachment is still in another chat's draft"
-          }
-        ),
-    ...(owner
-      ? {
-          action: {
-            label: translate('components.native-chat.composer.openOwningChat', 'Open chat'),
-            onClick: owner.open
-          }
+  const base = { key: 'held-elsewhere', kind: 'error', onDismiss: dismiss } as const
+  if (held.severalChats) {
+    return {
+      ...base,
+      text: translate(
+        'components.native-chat.composer.heldInOtherChats',
+        'Not sent — attachments in other chats'
+      )
+    }
+  }
+  if (!owner) {
+    return {
+      ...base,
+      text: translate(
+        'components.native-chat.composer.heldInAnotherChat',
+        'Not sent — {{count}} attachments in another chat',
+        {
+          count: held.count,
+          defaultValue_one: 'Not sent — {{count}} attachment in another chat'
         }
-      : {}),
-    onDismiss: dismiss
+      )
+    }
+  }
+  const sentence = nativeChatHeldElsewhereSentence(
+    (chat) =>
+      translate(
+        'components.native-chat.composer.heldInOtherChat',
+        'Not sent — {{count}} attachments in {{chat}}',
+        {
+          count: held.count,
+          chat,
+          defaultValue_one: 'Not sent — {{count}} attachment in {{chat}}'
+        }
+      ),
+    owner.label
+  )
+  return {
+    ...base,
+    ...sentence,
+    stackActionWhenNarrow: true,
+    action: {
+      label: translate('components.native-chat.composer.openOwningChat', 'Open chat'),
+      onClick: owner.open
+    }
   }
 }
 
