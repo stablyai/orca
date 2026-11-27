@@ -56,6 +56,83 @@ it('replaces a checkpoint worker that dies, and the replacement checkpoints the 
   await checkpointedBy(2)
 })
 
+it('close waits for a retiring idle worker even after a new worker replaced it', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'journal-checkpoint-retire-'))
+  cleanup.push(() => rmSync(root, { recursive: true }))
+  const filename = join(root, 'chat.db')
+  const writer = new Database(filename)
+  cleanup.push(() => writer.close())
+  writer.exec(`PRAGMA page_size=512; PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;
+    CREATE TABLE writes(id INTEGER PRIMARY KEY, body BLOB);`)
+  type Fake = EventEmitter & {
+    postMessage: (message: { type: string; id?: number }) => void
+    unref: () => void
+    terminate: () => Promise<number>
+    exit: () => void
+    stopped: boolean
+  }
+  const fakes: Fake[] = []
+  const makeFake = (): Fake => {
+    const connection = new Database(filename)
+    // Only the first worker answers its startup check, so it goes idle and retires; close stops the second.
+    const answers = fakes.length === 0
+    const fake: Fake = Object.assign(new EventEmitter(), {
+      stopped: false,
+      postMessage(message: { type: string; id?: number }) {
+        if (message.type === 'stop') {
+          connection.close()
+          fake.stopped = true
+          return
+        }
+        connection.prepare('PRAGMA wal_checkpoint(PASSIVE)').get()
+        fake.emit('message', { type: 'checked', id: message.id, ran: true })
+      },
+      unref: () => {},
+      terminate: async () => {
+        fake.exit()
+        return 0
+      },
+      exit: () => fake.emit('exit', 0)
+    })
+    queueMicrotask(() => {
+      if (fake.stopped || !answers) {
+        return
+      }
+      connection.prepare('PRAGMA wal_checkpoint(PASSIVE)').get()
+      fake.emit('message', { type: 'checked', id: 0, ran: true })
+    })
+    fakes.push(fake)
+    return fake
+  }
+  const owner = new JournalCheckpointOwner(writer, filename, {
+    idleTeardownMs: 10,
+    factory: makeFake
+  })
+  cleanup.push(() => owner.close())
+  writer.prepare('INSERT INTO writes VALUES(?, zeroblob(1500000))').run(1)
+  owner.afterCommit()
+  await vi.waitFor(() => expect(fakes).toHaveLength(1))
+  // The first worker catches up, goes idle, and is asked to stop, but its thread has not exited yet.
+  await vi.waitFor(() => expect(fakes[0]!.stopped).toBe(true))
+  writer.prepare('INSERT INTO writes VALUES(?, zeroblob(1500000))').run(2)
+  owner.afterCommit()
+  await vi.waitFor(() => expect(fakes).toHaveLength(2))
+  let closed = false
+  const closing = owner.close().then(() => {
+    closed = true
+  })
+  await vi.waitFor(() => expect(fakes[1]!.stopped).toBe(true))
+  fakes[1]!.exit()
+  // Drain microtasks: a close that skipped the retiring worker would have resolved by now.
+  for (let i = 0; i < 10; i += 1) {
+    await Promise.resolve()
+  }
+  expect(closed).toBe(false)
+  fakes[0]!.exit()
+  await closing
+  expect(closed).toBe(true)
+})
+
 it('lets saves past the WAL ceiling while a live worker stays inside one checkpoint', async () => {
   const root = mkdtempSync(join(tmpdir(), 'journal-checkpoint-stall-'))
   cleanup.push(() => rmSync(root, { recursive: true }))

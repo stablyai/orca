@@ -1,5 +1,5 @@
 // Why: daemons survive app updates, so wire behavior must be version-gated.
-// v63 verifies that an automatically ended workspace terminal is still idle.
+// v63 adds the provider relay (`relaySpawn` and friends), and verifies that an automatically ended workspace terminal is still idle.
 // v62 asks a reattached Windows ConPTY program to redraw too, so new terminals start on that daemon.
 // v61 enables image previews in the Codex shell function for new terminals.
 // v60 accepts `requestRepaint`, which asks a reattached program to redraw without sending it input.

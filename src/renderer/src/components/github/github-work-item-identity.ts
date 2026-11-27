@@ -2,7 +2,7 @@ import { githubProjectHost } from '../../../../shared/github/projects/project-id
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 
-import { parseGitHubItemRepository } from '../../../../shared/github/work-items/work-item-target'
+import { resolveGitHubItemUrlRepository } from '../../../../shared/github/work-items/work-item-target'
 
 /** Project rows may belong to another repo; route mutations by their slug instead of the active workspace. */
 export type GitHubWorkItemProjectOrigin = {
@@ -19,7 +19,7 @@ export type GitHubWorkItemProjectOrigin = {
 
 // Pin the GitHub host for every PR mutation so process GH_HOST cannot redirect the item.
 export function resolvePullRequestRepo(
-  item: Pick<GitHubWorkItem, 'prRepo' | 'url'>,
+  item: Pick<GitHubWorkItem, 'prRepo' | 'url' | 'apiHost'>,
   projectOrigin?: Pick<GitHubWorkItemProjectOrigin, 'owner' | 'repo' | 'host'>
 ): GitHubOwnerRepo | null {
   const repo =
@@ -31,7 +31,7 @@ export function resolvePullRequestRepo(
           host: projectOrigin.host
         }
       : null) ??
-    parseGitHubItemRepository(item.url)
+    resolveGitHubItemUrlRepository(item)
   return repo ? { ...repo, host: githubProjectHost(repo.host) } : null
 }
 

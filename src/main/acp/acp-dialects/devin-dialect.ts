@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { AcpDialect, AcpRequestPresentation } from './acp-dialect'
 import {
   ACP_FORM_ELICITATION_METHOD,
@@ -8,9 +9,11 @@ import { isAcpUrlElicitation } from '../requests/acp-url-elicitation'
 import { AcpRpcError } from '../transport/acp-errors'
 
 const CLOUD_SETUP_META_PREFIX = 'cognition.ai/cloudSetup'
-const askUserQuestionSchema = z.looseObject({
-  _meta: z.looseObject({ 'cognition.ai/allowOther': z.literal(true) })
-})
+const askUserQuestionSchema = lazyZodSchema(() =>
+  z.looseObject({
+    _meta: z.looseObject({ 'cognition.ai/allowOther': z.literal(true) })
+  })
+)
 
 // Only ask_user_question gets a card: /cloud-setup forms may ask for secrets that the transcript keeps.
 function askUserQuestionPresentation(params: unknown): AcpRequestPresentation {

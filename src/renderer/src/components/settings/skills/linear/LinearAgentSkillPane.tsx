@@ -17,7 +17,11 @@ import { getLinearUsageExamples } from '@/lib/work-items/linear/linear-usage-exa
 import type { SkillUsageExample } from '@/lib/skills/examples/skill-usage-example'
 import { useLinearProviderConnected } from '@/lib/work-items/linear/useLinearProviderConnected'
 import { normalizeVisibleTaskProviders } from '../../../../../../shared/work-items/task-providers'
-import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
+import {
+  getProviderRuntimeContextKey,
+  useProviderRuntimeSessionGeneration
+} from '@/runtime/hosts/observations/provider-runtime-context'
+import { recomputeOn } from '@/lib/recompute-on'
 import { AgentSkillSetupPanel } from '../../../skills/setup/AgentSkillSetupPanel'
 import { LinearAgentSkillGuide } from './LinearAgentSkillGuide'
 import { LinearAgentSkillNotes } from './LinearAgentSkillNotes'
@@ -69,8 +73,12 @@ export function LinearAgentSkillPane(): React.JSX.Element {
   const visibleInTasks = normalizeVisibleTaskProviders(settings?.visibleTaskProviders).includes(
     'linear'
   )
+  const providerRuntimeSessionGeneration = useProviderRuntimeSessionGeneration()
+  const providerRuntimeContextKey = recomputeOn([providerRuntimeSessionGeneration], () =>
+    getProviderRuntimeContextKey(settings)
+  )
   const connectionChecking =
-    linearStatusContextKey !== getProviderRuntimeContextKey(settings) || !linearStatusChecked
+    linearStatusContextKey !== providerRuntimeContextKey || !linearStatusChecked
 
   const skillPanel = (
     <AgentSkillSetupPanel

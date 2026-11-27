@@ -42,6 +42,10 @@ export type BotChatTreeDispatch = {
   worktreeId: string | null
   /** Its Task's title, for search; absent when the host read none. */
   title?: string
+  /** The paired server that runs it as its own; this host keeps no worker record for it. */
+  serverEnvironmentId?: string
+  /** The agent that server named for it. */
+  agent?: string
 }
 
 /** A row that is not a Dispatch of the bot's: a handed-over agent or a terminal-only automation run. */
@@ -233,9 +237,20 @@ export function botChatTreeDispatchWorker(
       startedAt: dispatch.at,
       ...(dispatch.settled ? { settledAt: dispatch.at } : {}),
       ...(dispatch.settled && dispatch.undated ? { settledUndated: true as const } : {}),
-      ...(dispatch.worktreeId ? { placedWorktreeId: dispatch.worktreeId } : {}),
+      ...(dispatch.worktreeId && !dispatch.serverEnvironmentId
+        ? { placedWorktreeId: dispatch.worktreeId }
+        : {}),
       ...(note ? { note } : {}),
-      dispatchId: dispatch.id
+      dispatchId: dispatch.id,
+      // A paired server's own worker: its record there names its host and workspace.
+      ...(dispatch.serverEnvironmentId
+        ? {
+            hostId: toRuntimeExecutionHostId(dispatch.serverEnvironmentId),
+            host: 'remote' as const,
+            ...(dispatch.worktreeId ? { worktreeId: dispatch.worktreeId } : {})
+          }
+        : {}),
+      ...(dispatch.agent ? { agent: dispatch.agent } : {})
     }
   }
   const state = workerState(worker)

@@ -7,7 +7,6 @@ import {
   formatCrashReportText,
   formatUncapturedCrashReportText
 } from '../../../shared/crash-reporting/crash-reporting'
-import { submitFeedback } from '../feedback/feedback'
 import type { CrashReportStore } from '../../crash-reporting/reports/crash-report-store'
 import {
   diagnosticBundleForReportOnlyRetry,
@@ -44,6 +43,8 @@ export async function submitCrashReport(
   store: CrashReportStore,
   args: CrashReportSubmitArgs
 ): Promise<CrashReportSubmitResult> {
+  // Keep feedback.ts out of the boot module graph; crash submission is the only eager importer.
+  const { submitFeedback } = await import('../feedback/feedback')
   const report = await getRequestedCrashReport(store, args)
   if (!report) {
     const diagnosticUpload = await prepareCrashDiagnosticBundle(

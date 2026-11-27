@@ -51,7 +51,7 @@ export function MobileSourceControlHeader({
   const actions: ActionSheetAction[] = [
     {
       id: 'refresh',
-      label: t('sourceControl.header.refresh', 'Refresh source control'),
+      label: t('sourceControl.header.refresh', 'Refresh'),
       icon: RefreshCw,
       disabled: ioBusy,
       onPress: onRefresh

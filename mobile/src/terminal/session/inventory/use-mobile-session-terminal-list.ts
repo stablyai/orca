@@ -9,6 +9,7 @@ import {
 import type { MobileSessionTerminalStreamDisplayModel } from '../streaming/use-mobile-session-terminal-stream-display'
 import { MobileTerminalInventoryRequest } from './mobile-terminal-inventory-request'
 import type { MobileTerminalInventoryRefreshOptions } from './use-mobile-terminal-inventory-recovery'
+import { recomputeOn } from '../../../hooks/recompute-on'
 
 export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamDisplayModel) {
   const {
@@ -36,7 +37,7 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
   } = scope
   const lastKnownTerminalCountRef = useRef(0)
   const terminalInventoryRequest = useMemo(
-    () => new MobileTerminalInventoryRequest(),
+    () => recomputeOn([client, hostId, worktreeId], () => new MobileTerminalInventoryRequest()),
     [client, hostId, worktreeId]
   )
 

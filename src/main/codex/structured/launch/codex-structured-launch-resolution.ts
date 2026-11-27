@@ -210,6 +210,8 @@ export function codexStructuredLaunchPart(
         prefixArgs,
         // A custom command may be a wrapper that depends on its folder; it never shares a server.
         ...(configuredProgram ? { customCommand: true } : {}),
+        // A token this app's tool relay issued for this run ends with it, so the agent does too.
+        ...(tools.appBound ? { appBoundGrants: true as const } : {}),
         // Before the user's args: a later -c table replaces this one, so their hooks.state wins.
         args: [...prefixArgs, ...codexOrcaHooksOffArgs(codexHome), ...args, 'app-server'],
         codexHome: accountHome.path,

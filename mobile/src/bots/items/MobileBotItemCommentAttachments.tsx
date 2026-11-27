@@ -14,10 +14,8 @@ import { MobileImageViewer } from '../../files/media/presentation/MobileImageVie
 import { readHostChatImage } from '../../session/native-chat/visual/mobile-native-chat-image-preview'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { colors, feedback, radii, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-
+import { feedback, radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 const SHOWN = 5
 const GAP = 6
 const ONE_MAX_HEIGHT = 220
@@ -75,6 +73,7 @@ function Tile({
   height: number | null
   onOpen: () => void
 }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const [aspect, setAspect] = useState<number | null>(null)
   const { read } = reads
@@ -195,7 +194,7 @@ export function MobileBotItemCommentAttachments({
   data: Record<string, unknown>
   children?: ReactNode
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const images = botItemCommentImages(data)
   const { files } = botItemCommentFiles(typeof data.text === 'string' ? data.text : '')
   const t = useMobileTranslation()
@@ -286,7 +285,7 @@ export function MobileBotItemCommentAttachments({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: GAP, marginTop: spacing.xs },
   tile: {
     borderRadius: radii.surface,

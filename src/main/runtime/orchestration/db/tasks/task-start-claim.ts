@@ -18,7 +18,7 @@ import {
 export function claimTaskForStart(
   db: OrchestrationDb,
   task: TaskRow,
-  start: { retryOf?: string; onServer?: string }
+  start: { retryOf?: string; onServer?: string; retriesAttemptHere?: boolean }
 ): { priorFailures: number } {
   const placement = getLiveRemotePlacement(db, task.id)
   if (placement?.state === 'reserved') {
@@ -28,7 +28,8 @@ export function claimTaskForStart(
       task
     )
   }
-  if (start.onServer !== undefined) {
+  // A retry of an attempt that ran here is checked as a retry here, wherever it is placed.
+  if (start.onServer !== undefined && !start.retriesAttemptHere) {
     // The server checks the rest of the retry chain on its own attempt; here it must be the Task's latest.
     if (
       start.retryOf !== undefined &&

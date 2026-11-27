@@ -16,13 +16,13 @@ import { BottomDrawer } from '../../../../components/bottom-drawer/BottomDrawer'
 import { SheetHeader } from '../../../../components/nav-bar/SheetHeader'
 import { LIST_LEADING_INSET, ListGroup } from '../../../../components/list/ListGroup'
 import { MobileBotWorkerRow } from '../../../../bots/MobileBotWorkerRow'
-import { colors, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { MobileAgentMessageOpenContext } from '../../transcript/agent-messages/mobile-agent-message-context'
 import { dispatchOpener } from '../prompts/MobileNativeChatWorkerApproval'
 import type { MobileWorkerApproval } from '../prompts/use-mobile-worker-approvals'
-import { trayStripStyles as strip } from './mobile-native-chat-tray-strip-styles'
+import { trayStripStylesSheet } from './mobile-native-chat-tray-strip-styles'
 
 type DockRow = WorkerDockEntry & { question?: string }
 
@@ -134,7 +134,9 @@ function MobileNativeChatWorkerDockImpl({
   /** Open worker approvals: their workers read as waiting on you, and the card answers them. */
   approvals: readonly MobileWorkerApproval[]
 }): React.JSX.Element | null {
-  useMobileColorScheme()
+  const strip = useThemedStyles(trayStripStylesSheet)
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const openSender = useContext(MobileAgentMessageOpenContext)
   const [open, setOpen] = useState(false)
@@ -249,7 +251,7 @@ function MobileNativeChatWorkerDockImpl({
 
 export const MobileNativeChatWorkerDock = memo(MobileNativeChatWorkerDockImpl)
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   line: {
     flex: 1,
     minWidth: 0,

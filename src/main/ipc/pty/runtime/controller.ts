@@ -38,6 +38,7 @@ import {
   writePtyFromRuntimeController
 } from './operations'
 import {
+  canProvideAuthoritativeBufferSnapshotFromRuntimeController,
   serializeProviderBufferFromRuntimeController,
   supportsVisibleProjectionSnapshotFromRuntimeController
 } from './provider-buffer-snapshot'
@@ -120,6 +121,8 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
     },
     serializeProviderBuffer: serializeProviderBufferFromRuntimeController,
     supportsVisibleProjectionSnapshot: supportsVisibleProjectionSnapshotFromRuntimeController,
+    canProvideAuthoritativeBufferSnapshot:
+      canProvideAuthoritativeBufferSnapshotFromRuntimeController,
     hasRendererSerializer: (ptyId) => hasRendererSerializerFromRuntimeController(ptyId),
     getRendererSerializerGeneration: (ptyId) =>
       getRendererSerializerGenerationFromRuntimeController(ptyId),

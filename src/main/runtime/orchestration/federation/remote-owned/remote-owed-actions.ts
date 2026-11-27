@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../../shared/schema/lazy-zod-schema'
 import { mapWithConcurrency } from '../../../../../shared/concurrency/map-with-concurrency'
 import {
   HelperStopOutcome,
@@ -71,12 +72,14 @@ async function closeOnPairingChange(
   return false
 }
 
-const StopReceipt = z.object({
-  state: z.string(),
-  alreadySettled: z.boolean(),
-  helperStopError: z.string().optional(),
-  helpers: z.array(HelperStopOutcome).optional()
-})
+const StopReceipt = lazyZodSchema(() =>
+  z.object({
+    state: z.string(),
+    alreadySettled: z.boolean(),
+    helperStopError: z.string().optional(),
+    helpers: z.array(HelperStopOutcome).optional()
+  })
+)
 
 /** Proof a stop is done: the worker stopped or had already settled, and so did every helper, unless the user kept it open. */
 export function isRemoteStopProof(receipt: unknown): boolean {

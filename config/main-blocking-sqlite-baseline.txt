@@ -4,17 +4,7 @@
 13 src/main/ai-vault-search/storage/session-search-schema.ts
 20 src/main/ai-vault/parse-cache/session-parse-cache-database.ts
 13 src/main/ai-vault/parse-cache/session-scope-cwds-table.ts
-1 src/main/ai-vault/scanners/hermes/hermes-state-db-activity.ts
-16 src/main/ai-vault/scanners/hermes/hermes-state-db-conversations.ts
-4 src/main/ai-vault/scanners/hermes/hermes-state-db-messages.ts
-6 src/main/ai-vault/scanners/hermes/hermes-state-db-schema.ts
-2 src/main/ai-vault/scanners/hermes/session-scanner-hermes-sqlite.ts
-2 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-capture.ts
-4 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-list.ts
 2 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-open.ts
-6 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite.ts
-6 src/main/ai-vault/scanners/opencode2/session-scanner-opencode2-sqlite-list.ts
-10 src/main/ai-vault/scanners/opencode2/session-scanner-opencode2-sqlite.ts
 13 src/main/bots/bot-group-store-tables.ts # store-open table setup moved out of the store, keep-field triggers and the incremental remote-ask index pass (one-shot startup)
 50 src/main/bots/bot-group-store.ts # +3: one indexed remote-ask insert per post on append and its by-request lookup
 5 src/main/browser-passwords/browser-password-chromium-import.ts
@@ -24,7 +14,7 @@
 5 src/main/codex/history/index/codex-state-db.ts
 44 src/main/github/pr-watch/pr-check-event-tables.ts
 14 src/main/github/pr-watch/pr-pending-actions.ts
-18 src/main/github/pr-watch/pr-watch-tables.ts
+16 src/main/github/pr-watch/pr-watch-tables.ts
 7 src/main/managed-data-accounts/credential-capture.ts
 19 src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts
 4 src/main/native-chat/agent-session-journal/database/journal-checkpoint-owner.ts
@@ -46,9 +36,6 @@
 8 src/main/native-chat/agent-session-journal/writing/command-receipt-table.ts
 2 src/main/native-chat/agent-session-journal/writing/journal-goal-attachment-inverse.ts
 4 src/main/native-chat/agent-session-journal/writing/mail-withdrawal-receipts.ts
-10 src/main/native-chat/transcript-history/opencode/transcript-opencode-sqlite-query.ts
-14 src/main/native-chat/transcript-history/opencode/transcript-opencode2-fork-coverage.ts
-10 src/main/native-chat/transcript-history/opencode/transcript-opencode2-sqlite.ts
 13 src/main/persistence/moving-wsl-projects/desktop-state/wsl-move-orchestration-history-rewrite.ts
 8 src/main/persistence/profile-state/automation-runs/profile-state-automation-runs-migration.ts
 4 src/main/persistence/profile-state/automation-runs/profile-state-automation-runs-reader.ts

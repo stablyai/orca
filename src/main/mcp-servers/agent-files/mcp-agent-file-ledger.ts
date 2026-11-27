@@ -5,29 +5,34 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { isDeepStrictEqual } from 'node:util'
 import { MCP_FILE_AGENTS } from '../../../shared/mcp-servers/mcp-servers'
 import { renameFileWithWindowsRetryAsync } from '../../../shared/file-write/windows-retry-file-operations'
 
-const FileRecordSchema = z.object({
-  agent: z.enum(MCP_FILE_AGENTS),
-  /** No file was there before Orca's first entry. */
-  created: z.boolean(),
-  /** The JSON file had no servers' table before Orca added one. */
-  addedTable: z.boolean(),
-  /** The file without Orca's entries (null: no file), as of Orca's last write. */
-  before: z.string().nullable(),
-  /** The whole file as Orca last wrote it; while it still reads so, `before` is exact. */
-  written: z.string(),
-  /** Each entry's value as written, by name (JSON files, which have no markers). */
-  entries: z.record(z.string(), z.unknown())
-})
+const FileRecordSchema = lazyZodSchema(() =>
+  z.object({
+    agent: z.enum(MCP_FILE_AGENTS),
+    /** No file was there before Orca's first entry. */
+    created: z.boolean(),
+    /** The JSON file had no servers' table before Orca added one. */
+    addedTable: z.boolean(),
+    /** The file without Orca's entries (null: no file), as of Orca's last write. */
+    before: z.string().nullable(),
+    /** The whole file as Orca last wrote it; while it still reads so, `before` is exact. */
+    written: z.string(),
+    /** Each entry's value as written, by name (JSON files, which have no markers). */
+    entries: z.record(z.string(), z.unknown())
+  })
+)
 export type McpAgentFileRecord = z.infer<typeof FileRecordSchema>
 
-const LedgerSchema = z.object({
-  version: z.literal(1),
-  files: z.record(z.string(), FileRecordSchema)
-})
+const LedgerSchema = lazyZodSchema(() =>
+  z.object({
+    version: z.literal(1),
+    files: z.record(z.string(), FileRecordSchema)
+  })
+)
 type Ledger = z.infer<typeof LedgerSchema>
 
 export class McpAgentFileLedger {

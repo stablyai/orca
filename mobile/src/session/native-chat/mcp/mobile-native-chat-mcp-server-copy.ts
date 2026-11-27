@@ -2,7 +2,10 @@ import type {
   AgentSessionMcpServer,
   AgentSessionMcpSignIn
 } from '../../../../../src/shared/agent-session/options/protocol/agent-session-mcp'
-import { agentSessionMcpServerDisplayName } from '../../../../../src/shared/agent-session/view/agent-session-mcp-server-presentation'
+import {
+  agentSessionMcpServerDisplayName,
+  ORCA_MCP_SOURCE
+} from '../../../../../src/shared/agent-session/view/agent-session-mcp-server-presentation'
 import type { Translate } from '../../../i18n/mobile-i18n'
 
 export function mobileMcpSourceLabel(source: string, t: Translate): string {
@@ -38,7 +41,8 @@ export function mobileMcpServerStatusLine(server: AgentSessionMcpServer, t: Tran
     case 'pending':
       return t('chat.mcp.status.pending', 'Connecting…')
     case 'needs-auth':
-      return server.canSignIn
+      // Orca signs in to its own servers, from its MCP servers page.
+      return server.canSignIn || server.source === ORCA_MCP_SOURCE
         ? t('chat.mcp.status.needsAuth', 'Needs sign-in')
         : t('chat.mcp.status.needsAuthAfterSend', 'Needs sign-in. Send a message to sign in here.')
     case 'failed':
@@ -46,9 +50,11 @@ export function mobileMcpServerStatusLine(server: AgentSessionMcpServer, t: Tran
         ? t('chat.mcp.status.failedReason', 'Failed: {{error}}', { error: server.error })
         : t('chat.mcp.status.failed', 'Failed')
     case 'disabled':
-      return t('chat.mcp.status.off', 'Off')
+      return t('chat.mcp.status.disabled', 'Disabled')
     case 'not-started':
       return t('chat.mcp.status.notStarted', 'Not started')
+    case 'unreported':
+      return ''
   }
 }
 

@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto'
 import { refuseWslHostWindowsDrivePath } from '../terminal/launch/wsl-host-windows-drive-guard'
-import { mkdir } from 'node:fs/promises'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/repository/appearance/repo-badge-color'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -9,30 +8,16 @@ import {
 import type { Repo } from '../../../shared/repository/repo-types'
 import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import { getGitCloneFailureMessage } from '../../../shared/git/remotes/git-clone-failure-message'
-import {
-  cleanupClaimedCloneTarget,
-  claimCloneTarget,
-  deriveValidatedClonePath,
-  getClonePathComparisonKey,
-  getSavedProjectPathKeys
-} from '../../git/repositories/cloning/repo-clone-path'
-import { gitSpawnAfterWindowsEnvironmentReady } from '../../git/command-runner/git-spawn'
-import { promptGuardGitEnv } from '../../git/command-runner/git-environment/git-process-env'
-import { reuseSavedCloneTarget } from '../../git/repositories/cloning/saved-clone-target'
-import { checkCloneTarget } from '../../git/repositories/cloning/clone-target-check'
 import type {
   CloneTargetArgs,
   CloneTargetCheck
 } from '../../../shared/git/clone/clone-target-check'
 import { runWithGitReadCacheInvalidation } from '../../git/source-control/git-read-cache-invalidation'
 import { invalidateAuthorizedRootsCache } from '../../ipc/worktrees/removal/registered-worktree-roots-cache'
-import { detectRepoLocalMetadata } from '../../repository-icons/repo-icon-autodetect'
 import { getRepoName } from '../../git/repositories/repository-name'
-import { inspectGitRepoForRegistrationAsync } from '../../git/repositories/discovery/repo-detection'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { runtimeRepoIsRegistrationCandidate } from '../workspaces/catalog/runtime-worktree-selection'
-import { resolveClonedFolderConversion } from '../../workspaces/catalog/folder-repo-git-conversion'
 import { findExtraFolderWorkspaceIds } from '../../workspaces/catalog/folder-workspace-meta-presence'
 
 type RuntimeRepositoryCloneDependencies = {
@@ -46,6 +31,7 @@ type RuntimeRepositoryCloneDependencies = {
 function findRegistrationCandidateAt(
   store: RuntimeStore,
   pathKeys: string[],
+  getClonePathComparisonKey: (repoPath: string) => string,
   executionHostId?: ExecutionHostId | null
 ): Repo | undefined {
   return store
@@ -70,9 +56,14 @@ export class RuntimeRepositoryCloneController {
     if (!store) {
       throw new Error('runtime_unavailable')
     }
+    const [{ checkCloneTarget }, { getClonePathComparisonKey }] = await Promise.all([
+      import('../../git/repositories/cloning/clone-target-check'),
+      import('../../git/repositories/cloning/repo-clone-path')
+    ])
     return checkCloneTarget(
       { ...args, url: args.url.trim(), destination: args.destination.trim() },
-      (pathKeys) => findRegistrationCandidateAt(store, pathKeys, executionHostId),
+      (pathKeys) =>
+        findRegistrationCandidateAt(store, pathKeys, getClonePathComparisonKey, executionHostId),
       LOCAL_EXECUTION_HOST_ID
     )
   }
@@ -91,6 +82,8 @@ export class RuntimeRepositoryCloneController {
     if (!trimmedDestination) {
       throw new Error('Clone destination is required')
     }
+    const { deriveValidatedClonePath, getClonePathComparisonKey } =
+      await import('../../git/repositories/cloning/repo-clone-path')
     const clonePath = deriveValidatedClonePath({
       url: trimmedUrl,
       destination: trimmedDestination,
@@ -131,15 +124,38 @@ export class RuntimeRepositoryCloneController {
     if (!store) {
       throw new Error('runtime_unavailable')
     }
+    const [
+      {
+        cleanupClaimedCloneTarget,
+        claimCloneTarget,
+        ensureCloneDestination,
+        getClonePathComparisonKey,
+        getSavedProjectPathKeys
+      },
+      { reuseSavedCloneTarget },
+      { gitSpawnAfterWindowsEnvironmentReady },
+      { promptGuardGitEnv },
+      { resolveClonedFolderConversion },
+      { inspectGitRepoForRegistrationAsync },
+      { detectRepoLocalMetadata }
+    ] = await Promise.all([
+      import('../../git/repositories/cloning/repo-clone-path'),
+      import('../../git/repositories/cloning/saved-clone-target'),
+      import('../../git/command-runner/git-spawn'),
+      import('../../git/command-runner/git-environment/git-process-env'),
+      import('../../workspaces/catalog/folder-repo-git-conversion'),
+      import('../../git/repositories/discovery/repo-detection'),
+      import('../../repository-icons/repo-icon-autodetect')
+    ])
     let savedPathKeys = await getSavedProjectPathKeys(clonePath)
     const findSaved = (): Repo | undefined =>
-      findRegistrationCandidateAt(store, savedPathKeys, executionHostId)
+      findRegistrationCandidateAt(store, savedPathKeys, getClonePathComparisonKey, executionHostId)
     const reused = await reuseSavedCloneTarget(findSaved, trimmedUrl, LOCAL_EXECUTION_HOST_ID)
     if (reused) {
       return reused
     }
 
-    await mkdir(trimmedDestination, { recursive: true })
+    await ensureCloneDestination(trimmedDestination)
     const claimedTarget = await claimCloneTarget(clonePath)
     let proc: Awaited<ReturnType<typeof gitSpawnAfterWindowsEnvironmentReady>>
     try {

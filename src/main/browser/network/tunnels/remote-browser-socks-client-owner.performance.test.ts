@@ -1,5 +1,14 @@
+import { EventEmitter } from 'node:events'
 import { connect, createServer, type Server, type Socket } from 'node:net'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
+import {
+  resetWindowsSecurityLoadForTests,
+  setWindowsSecurityForTests
+} from '../../../../shared/secure-storage/windows-security-addon'
+import {
+  createFakeWindowsSecurity,
+  FAKE_USER_SID
+} from '../../../../shared/secure-storage/windows-security-addon.test-fixture'
 import { isOwnDarwinConnection } from './darwin-socket-owner-helper'
 import { useVouchingSocketOwnerHelper } from './darwin-socket-owner-helper.test-fixture'
 import {
@@ -96,4 +105,73 @@ describe.skipIf(process.platform === 'win32')('macOS owner lookups for departed 
     },
     30_000
   )
+})
+
+// STA-18556: the departure watch only serves macOS's queued helper; Windows and Linux admissions
+// must not create a controller, register a close listener or start a read for it.
+describe('owner admission off macOS', () => {
+  const realPlatform = process.platform
+  const RealAbortController = globalThis.AbortController
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', { value: realPlatform })
+    globalThis.AbortController = RealAbortController
+    resetWindowsSecurityLoadForTests()
+  })
+
+  it.each([
+    ['win32', 100],
+    ['win32', 1_000],
+    ['linux', 100],
+    ['linux', 1_000]
+  ] as const)('on %s does no departure work for %i admissions', async (platform, n) => {
+    Object.defineProperty(process, 'platform', { value: platform })
+    const security = createFakeWindowsSecurity()
+    security.tcpClientOwnerAsync = async () => ({ pid: 7, sid: FAKE_USER_SID })
+    setWindowsSecurityForTests(security)
+    let controllers = 0
+    globalThis.AbortController = class extends RealAbortController {
+      constructor() {
+        super()
+        controllers++
+      }
+    }
+    let closeListeners = 0
+    let reads = 0
+    const admission = createSocksClientAdmission('port forward')
+    await Promise.all(
+      Array.from(
+        { length: n },
+        (_, index) =>
+          new Promise<void>((settled) => {
+            const socket = Object.assign(new EventEmitter(), {
+              remoteAddress: '127.0.0.1',
+              remotePort: 20_000 + index,
+              localAddress: '127.0.0.1',
+              localPort: 5173,
+              destroyed: false,
+              read: () => {
+                reads++
+                return null
+              },
+              destroy() {
+                this.destroyed = true
+                settled()
+              }
+            })
+            socket.on('newListener', (event) => {
+              if (event === 'close') {
+                closeListeners++
+              }
+            })
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: admission reads only these members.
+            admission(socket as unknown as Socket, settled)
+          })
+      )
+    )
+    expect({ controllers, closeListeners, reads }).toEqual({
+      controllers: 0,
+      closeListeners: 0,
+      reads: 0
+    })
+  })
 })

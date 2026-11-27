@@ -5,7 +5,12 @@ export type JsonRpcPrefix =
   | { kind: 'response-unknown' }
   | { kind: 'unknown' }
 
-type LeadingProperty = { key: string; value?: string | number }
+export type LeadingProperty = {
+  key: string
+  value?: string | number
+  /** A number cut off by the prefix or malformed, unlike a valueless literal or container. */
+  unreadableNumber?: true
+}
 
 function readJsonStringEnd(value: string, start: number): number | null {
   if (value[start] !== '"') {
@@ -73,20 +78,49 @@ function skipJsonLiteral(value: string, start: number): number | null {
   return null
 }
 
-function leadingJsonRpcProperties(prefix: string): LeadingProperty[] {
+/**
+ * The leading top-level fields of a JSON object, read without parsing it. With `stopAtContainer`,
+ * the scan ends at the first object or array value (its key is still listed), so an envelope's
+ * `params`/`result` payload is never walked.
+ */
+type LeadingScanOptions = { stopAtContainer?: boolean; maxFields?: number }
+
+export function leadingJsonProperties(
+  prefix: string,
+  options: LeadingScanOptions = {}
+): LeadingProperty[] {
+  return leadingJsonEnvelope(prefix, options).properties
+}
+
+/**
+ * As `leadingJsonProperties`; `complete` is true only when the scan reached a container value or the
+ * closing brace, so no field was cut off by the prefix's end or skipped past the field limit.
+ */
+export function leadingJsonEnvelope(
+  prefix: string,
+  options: LeadingScanOptions = {}
+): { properties: LeadingProperty[]; complete: boolean } {
   const properties: LeadingProperty[] = []
+  let complete = false
   let cursor = 0
   const skipWhitespace = (): void => {
     while (/\s/.test(prefix[cursor] ?? '')) {
       cursor += 1
     }
   }
+  /** Steps past the separator after a value; true when another field follows. */
+  const next = (): boolean => {
+    skipWhitespace()
+    complete = prefix[cursor] === '}'
+    cursor += 1
+    return prefix[cursor - 1] === ','
+  }
   skipWhitespace()
   if (prefix[cursor] !== '{') {
-    return properties
+    return { properties, complete }
   }
   cursor += 1
-  while (properties.length < 8) {
+  while (properties.length < (options.maxFields ?? 8)) {
     skipWhitespace()
     const keyEnd = readJsonStringEnd(prefix, cursor)
     if (keyEnd === null) {
@@ -107,27 +141,27 @@ function leadingJsonRpcProperties(prefix: string): LeadingProperty[] {
     skipWhitespace()
     if (prefix[cursor] === '{' || prefix[cursor] === '[') {
       properties.push({ key: String(key) })
+      if (options.stopAtContainer) {
+        complete = true
+        break
+      }
       const valueEnd = skipJsonContainer(prefix, cursor)
       if (valueEnd === null) {
         break
       }
       cursor = valueEnd
-      skipWhitespace()
-      if (prefix[cursor] !== ',') {
+      if (!next()) {
         break
       }
-      cursor += 1
       continue
     }
     const literalEnd = skipJsonLiteral(prefix, cursor)
     if (literalEnd !== null) {
       properties.push({ key: String(key) })
       cursor = literalEnd
-      skipWhitespace()
-      if (prefix[cursor] !== ',') {
+      if (!next()) {
         break
       }
-      cursor += 1
       continue
     }
     const stringEnd = readJsonStringEnd(prefix, cursor)
@@ -138,44 +172,49 @@ function leadingJsonRpcProperties(prefix: string): LeadingProperty[] {
         break
       }
       cursor = stringEnd
-      skipWhitespace()
-      if (prefix[cursor] !== ',') {
+      if (!next()) {
         break
       }
-      cursor += 1
       continue
     }
-    const match = /^-?(?:0|[1-9]\d*)/.exec(prefix.slice(cursor))
-    if (!match) {
+    // The whole JSON number, ended by a delimiter, so `1e3` or a `12` cut from `123` is never read
+    // as another id.
+    const rest = prefix.slice(cursor)
+    const match = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/.exec(rest)
+    const numberEnd = cursor + (match?.[0].length ?? 0)
+    if (!match || !/[\s,}]/.test(prefix[numberEnd] ?? '')) {
+      if (match || /^-?$/.test(rest)) {
+        properties.push({ key: String(key), unreadableNumber: true })
+      }
       break
     }
     properties.push({ key: String(key), value: Number(match[0]) })
-    cursor += match[0].length
-    skipWhitespace()
-    if (prefix[cursor] !== ',') {
+    cursor = numberEnd
+    if (!next()) {
       break
     }
-    cursor += 1
   }
-  return properties
+  return { properties, complete }
 }
 
 export function classifyJsonRpcPrefix(prefix: string): JsonRpcPrefix {
   // Inspect complete top-level fields only; nested result/params must not impersonate JSON-RPC envelope keys.
-  const properties = leadingJsonRpcProperties(prefix)
+  const properties = leadingJsonProperties(prefix)
   const method = properties.find((property) => property.key === 'method')?.value
-  const id = properties.find((property) => property.key === 'id')?.value
+  const idProperty = properties.find((property) => property.key === 'id')
+  const id = idProperty?.value
   if (typeof method === 'string' && (typeof id === 'number' || typeof id === 'string')) {
     return { kind: 'server-request', id, method }
   }
   if (
     typeof id === 'number' &&
-    properties.some((property) => property.key === 'id') &&
     properties.some((property) => property.key === 'result' || property.key === 'error')
   ) {
     return { kind: 'response', id }
   }
-  if (typeof id === 'number') {
+  // A numeric id cut off by the prefix could belong to any pending call; a cut server request lands
+  // here too, since answering a guessed id could cancel another live request.
+  if (typeof id === 'number' || idProperty?.unreadableNumber) {
     return { kind: 'response-unknown' }
   }
   if (typeof method === 'string' && properties.some((property) => property.key === 'params')) {

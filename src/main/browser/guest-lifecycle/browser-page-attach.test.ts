@@ -56,6 +56,19 @@ function openTab(pageId: string, url: string, outcome: Outcome = 'loads') {
 }
 
 describe('claimBrowserPageFirstLoad', () => {
+  it('matches the exact private first-load target without accepting another bearer', async () => {
+    const url = 'https://kagi.com/search?token=first-load-secret&q=one'
+    const { guest, loads } = openTab('page-private', url)
+    expect(
+      claimBrowserPageFirstLoad('page-private', 'https://kagi.com/search?token=other&q=one')
+    ).toBeNull()
+    const claimed = claimBrowserPageFirstLoad('page-private', url)
+    expect(claimed?.guest).toBe(guest)
+    await claimed?.load
+    expect(claimBrowserPageFirstLoad('page-private', url)).toBeNull()
+    expect(loads).toEqual([url])
+  })
+
   it('hands a created tab its own first load once, so its URL is requested once', async () => {
     const url = 'https://example.com/callback?code=1'
     const { guest, loads } = openTab('page-once', url)

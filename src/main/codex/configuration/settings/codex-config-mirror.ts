@@ -81,7 +81,10 @@ function mirrorSystemConfigIntoManagedCodexHome(homes: CodexSettingsPromotionHom
     // Keep the baseline: it must describe a config this pass published. The guard is still owed.
     return { ran: false, complete: false }
   }
-  reportCodexConfigSyncOutcome(homes.runtimeHomePath, getCodexConfigSyncStatus(homes))
+  // The WSL guest reports the status it reads after the pass instead.
+  if (!homes.guestHome) {
+    reportCodexConfigSyncOutcome(homes.runtimeHomePath, getCodexConfigSyncStatus(homes))
+  }
   if (mirrorResult.status === 'skipped-missing-source') {
     // Bootstrap seeded homes only; advancing an existing baseline would strand unmirrored changes.
     const seeded = !readCodexSettingsBaseline(homes.runtimeHomePath)
@@ -136,10 +139,9 @@ export function syncSystemConfigIntoLegacySharedCodexHome(
     systemHomePath: getSystemCodexHomePath()
   }
 ): void {
-  const systemConfigPath = join(homes.systemHomePath, 'config.toml')
   const runtimeConfigPath = join(homes.runtimeHomePath, 'config.toml')
   recoverInterruptedGuardedFileOperation(runtimeConfigPath)
-  const systemConfigObservation = observeAgentStateFile(systemConfigPath)
+  const systemConfigObservation = observeAgentStateFile(join(homes.systemHomePath, 'config.toml'))
   if (systemConfigObservation.kind === 'indeterminate') {
     throw systemConfigObservation.error
   }
