@@ -1,4 +1,5 @@
 import { useNativeChatPaneLifetimeEffect } from '../../pane/ownership/native-chat-pane-lifetime'
+import { useNativeChatConversationKey } from './use-native-chat-conversation-key'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
@@ -36,8 +37,8 @@ export function useNativeChatContextClearFloor(
   rows: readonly AgentJournalRenderItem[]
   clearing: boolean
   clears: number
-  /** The sequence of the latest `/clear` this transcript starts from, 0 for none. */
-  floor: number
+  /** Names the conversation shown: its journal and the latest `/clear` it starts from. */
+  conversationKey: string
   /** Call as this view's /clear goes out; the returned restore shows the transcript again if refused. */
   onClearSent: () => () => void
 } {
@@ -123,11 +124,12 @@ export function useNativeChatContextClearFloor(
 
   const floor = current.floor
   const rows = useMemo(() => streamedRowsFromFloor(items, floor), [floor, items])
+  const conversationKey = useNativeChatConversationKey(epoch, floor)
   return {
     rows,
     clearing: fading !== null || awaitingDivider,
     clears: current.clears,
-    floor,
+    conversationKey,
     onClearSent
   }
 }

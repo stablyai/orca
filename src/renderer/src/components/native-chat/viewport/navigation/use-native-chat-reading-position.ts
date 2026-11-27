@@ -68,7 +68,10 @@ export function useNativeChatReadingPosition({
   messageIdAt: (index: number) => string | null
   /** The message a waiting row shows. */
   waitingMessageIdAt: (index: number) => string | null
-  jumpTo: (position: NativeChatReadingPosition, settled: (result: HistoryJumpResult) => void) => void
+  jumpTo: (
+    position: NativeChatReadingPosition,
+    settled: (result: HistoryJumpResult) => void
+  ) => void
 }): () => boolean {
   const tab = useContext(NativeChatViewTabContext)
   const key = `reading-position:${positionKey}`
@@ -83,6 +86,7 @@ export function useNativeChatReadingPosition({
   })
   // Leaving reads the rows while they are still laid out, before a hide takes them off the page.
   useLayoutEffect(() => {
+    const container = scrollRef.current
     if (!isVisible || !ready || !tab) {
       return
     }
@@ -91,10 +95,13 @@ export function useNativeChatReadingPosition({
         restoringRef.current = null
         return
       }
-      const container = scrollRef.current
       const next =
         container && !latest.current.readerAtEnd()
-          ? readingPositionOf(container, latest.current.messageIdAt, latest.current.waitingMessageIdAt)
+          ? readingPositionOf(
+              container,
+              latest.current.messageIdAt,
+              latest.current.waitingMessageIdAt
+            )
           : null
       if (next === null && freshMountRef.current) {
         return

@@ -105,6 +105,8 @@ export function FindBar() {
         close: () => {},
         open: undefined,
         onKeyDownCapture: () => {},
+        takeOpenFocus: () => false,
+        isOpenedHere: () => false,
         rootRef,
         barRef,
         inputRef,

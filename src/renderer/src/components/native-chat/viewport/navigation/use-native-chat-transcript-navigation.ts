@@ -52,7 +52,7 @@ function waitingRowOf(
   const index = waitingSlots.findIndex(
     (_, at) => nativeChatSlotKeyAt(waitingSlots, at) === messageId
   )
-  return index < 0
+  return index === -1
     ? null
     : (container?.querySelector<HTMLElement>(`[data-native-chat-waiting-index="${index}"]`) ?? null)
 }

@@ -7,7 +7,6 @@ import { NativeChatUsageLimitActionsProvider } from './usage/NativeChatUsageLimi
 import { useNativeChatHandOff } from './pane/actions/use-native-chat-hand-off'
 import { useNativeChatStructuredPaneNotices } from '@/components/native-chat/messages/notices/use-native-chat-structured-pane-notices'
 import { useRef, useState } from 'react'
-import { useNativeChatConversationKey } from './conversation/projection/use-native-chat-conversation-key'
 import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { useStructuredChatLiveSession } from './session/structured/use-structured-chat-live-session'
 import { NativeChatStructuredPromptCard } from './prompts/NativeChatStructuredPromptCard'
@@ -110,10 +109,6 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     transportEnabled: provisionalLaunch.transportEnabled,
     ...(provisionalLaunch.launch ? { launch: provisionalLaunch.launch } : {})
   })
-  const conversationKey = useNativeChatConversationKey(
-    controller.epoch,
-    controller.contextClear.floor
-  )
   useRecheckNativeChatFileLinksWhenTurnEnds(controller.isWorking)
   const { composerError, reportComposerError } = useNativeChatComposerError(
     controller.commandRefusalCauses
@@ -310,7 +305,6 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                                 find={surface.find}
                                 // A rewind or a /clear replaces the conversation; nothing the old one held carries over.
                                 key={`${controller.epoch}:${controller.contextClear.clears}`}
-                                conversationKey={conversationKey}
                                 paneKey={paneKey}
                                 ref={submits.messageListRef}
                                 session={session}

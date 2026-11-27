@@ -1,6 +1,6 @@
 import { rowsBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
-import { useNativeChatViewState } from '../../pane/ownership/native-chat-view-memory'
+import { useNativeChatViewStateRef } from '../../pane/ownership/native-chat-view-memory'
 import { useHostStructuredAgent } from '@/runtime/native-chat/agent-catalogs/use-host-structured-agent'
 import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import {
@@ -107,11 +107,10 @@ export function useNativeChatFork(input: {
   // Reserved at the click, before any await, so a second click never starts a second fork.
   const inFlight = useRef(false)
   // Kept with the chat tab: a view released mid-fork returns still waiting on it, so it can't start a second.
-  const [pendingItemId, setPendingItemId] = useNativeChatViewState<string | null>('fork-pending', null)
-  const pendingRef = useRef(pendingItemId)
-  useLayoutEffect(() => {
-    pendingRef.current = pendingItemId
-  })
+  const [pendingItemId, setPendingItemId, pendingRef] = useNativeChatViewStateRef<string | null>(
+    'fork-pending',
+    null
+  )
   const request = useCallback(
     (
       throughItemId: string,

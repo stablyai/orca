@@ -197,7 +197,6 @@ export function NativeChatSubagentTranscripts({
                   journalLatestTurn={props.journalLatestTurn}
                   subagentRoster={props.subagentRoster}
                   subagentView={shown}
-                  conversationKey={props.conversationKey}
                   isVisible={isVisible}
                   isWorking={false}
                   expandSignal={props.expandSignal}

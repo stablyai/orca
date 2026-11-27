@@ -1,4 +1,3 @@
-import { rowsBesideStreamedText } from '../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import type { BotChatIdentity } from '../bots/use-bot-chat-identity'
 import { nativeChatTranscriptOuterClass } from './appearance/native-chat-appearance-style'
 import { NativeChatTranscriptViewport } from './NativeChatTranscriptViewport'
@@ -17,6 +16,7 @@ import { useNativeChatQuestionReceipts } from './conversation/projection/use-nat
 import { useNativeChatTaskListPredecessors } from './tools/use-native-chat-task-list-predecessors'
 import { NativeChatDockedTaskList } from './tools/tasks/NativeChatDockedTaskList'
 import { useNativeChatTurnStatus } from './conversation/turns/use-native-chat-turn-status'
+import { useNativeChatTranscriptThinking } from './conversation/turns/use-native-chat-transcript-thinking'
 import { NativeChatAwaitingInputRow } from './prompts/NativeChatAwaitingInputRow'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { NativeChatTurnActivity } from '../../../../shared/native-chat/transcript/turns/native-chat-turn-activity'
@@ -61,7 +61,6 @@ import type {
   AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionLatestTurn } from '../../../../shared/agent-session/agent-session-wire'
-import { isStructuredAgentSessionThinking } from '../../../../shared/agent-session/view/structured-agent-session-live-turn'
 import type { NativeChatSettledTurns } from '../../../../shared/native-chat/transcript/turns/native-chat-turn-status'
 import { useNativeChatTurnDiffs } from './tools/diffs/use-native-chat-turn-diffs'
 import { useNativeChatTurnOpenedPullRequests } from './tools/pull-requests/use-native-chat-turn-opened-pull-requests'
@@ -97,12 +96,9 @@ export function NativeChatMessageList({
   runtimeContext,
   botHome,
   turnBot,
-  structuredAttachments = false,
-  conversationKey = ''
+  structuredAttachments = false
 }: {
   turnBot?: BotChatIdentity | null
-  /** Names the conversation a rewind or /clear replaced, so its view state never carries over. */
-  conversationKey?: string
   ref?: Parameters<typeof useNativeChatMessageListHandle>[0]
   session: NativeChatLiveSession
   structuredAttachments?: boolean
@@ -141,7 +137,7 @@ export function NativeChatMessageList({
   const receipts = useNativeChatQuestionReceipts(journalItems)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
-  const transcriptKey = `${session.agent}:${session.sessionId ?? ''}:${subagentView?.agentId ?? ''}:${conversationKey}`
+  const transcriptKey = `${session.agent}:${session.sessionId ?? ''}:${subagentView?.agentId ?? ''}:${session.conversationKey ?? ''}`
   const [expandedTurnIds, toggleExpandedTurn] = useNativeChatExpandedTurns(transcriptKey)
 
   const { hasMore, loadingEarlier, loadEarlier } = session
@@ -186,15 +182,7 @@ export function NativeChatMessageList({
   const turns = scope.conversationTurns
   const turnDiffs = useNativeChatTurnDiffs(showTurnDiffs && !turnBot ? turns : null, rowsInOrder)
   const openedPullRequests = useNativeChatTurnOpenedPullRequests(turns, rowsInOrder)
-  // Only real tail reasoning counts as thinking; an in-flight request with no output does not.
-  // Reads roles and lifecycles, never reply text, so it holds while a reply streams.
-  const structureItems = journalItems && rowsBesideStreamedText(journalItems)
-  const thinking = useMemo(
-    () =>
-      subagentId === null &&
-      isStructuredAgentSessionThinking({ items: structureItems ?? [], latestTurn }),
-    [structureItems, latestTurn, subagentId]
-  )
+  const thinking = useNativeChatTranscriptThinking(journalItems, latestTurn, subagentId !== null)
   // The clock starts once the opening message lands, not while it still says "Sending…".
   const turnWorking =
     working && (liveTurnKey === undefined || deliveryNotices?.get(liveTurnKey)?.sending !== true)

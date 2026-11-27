@@ -22,7 +22,6 @@ import { shownStructuredAgentSessionAsyncQuestions } from '../../../../../shared
 import type { StructuredAgentSessionAsyncQuestionSkip } from './use-structured-agent-session-async-question-skip'
 import { projectionBesideStreamedText } from '../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 
-
 // Skips a released view left behind, by tab, so closing the tab sweeps them; a rewind leaves old scopes, so few are kept.
 const KEPT_ASYNC_SCOPES_PER_TAB = 8
 const keptAsyncScopesByTab = new Map<string, Set<string>>()

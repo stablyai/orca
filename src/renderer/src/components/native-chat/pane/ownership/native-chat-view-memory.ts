@@ -2,8 +2,11 @@ import {
   createContext,
   useCallback,
   useContext,
+  useLayoutEffect,
+  useRef,
   useState,
   useSyncExternalStore,
+  type RefObject,
   type SetStateAction
 } from 'react'
 
@@ -138,6 +141,19 @@ export function useNativeChatViewState<T>(
     [tab, key, initial, keepNewest]
   )
   return [tab ? kept : local, setValue]
+}
+
+/** `useNativeChatViewState` plus the value last rendered, for guards inside stable callbacks. */
+export function useNativeChatViewStateRef<T>(
+  key: string,
+  initial: T
+): [T, (action: SetStateAction<T>) => void, RefObject<T>] {
+  const [value, setValue] = useNativeChatViewState(key, initial)
+  const shown = useRef(value)
+  useLayoutEffect(() => {
+    shown.current = value
+  })
+  return [value, setValue, shown]
 }
 
 /** A tab-kept value read once when the view mounts; without a key or a tab, nothing is kept. */

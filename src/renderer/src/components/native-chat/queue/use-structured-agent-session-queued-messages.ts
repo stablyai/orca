@@ -5,8 +5,8 @@ import {
 } from './use-structured-agent-session-queued-reorder'
 // Host owns durable queued drafts; this pane routes card/header actions and holds only open-edit typing.
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
-import { useNativeChatViewState } from '../pane/ownership/native-chat-view-memory'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useNativeChatViewStateRef } from '../pane/ownership/native-chat-view-memory'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { AgentJournalSubmission } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -173,11 +173,10 @@ export function useStructuredAgentSessionQueuedMessages(args: {
   // Refs close same-frame double-click/chord races before disabled state renders.
   const inFlightRef = useRef(new Map<string, QueuedMessagesPendingAction>())
   // Kept with the chat tab: a view released mid-request returns still excluding what that request holds.
-  const [inFlight, setInFlight] = useNativeChatViewState('queue-in-flight', NONE_IN_FLIGHT)
-  const shownInFlight = useRef(inFlight)
-  useLayoutEffect(() => {
-    shownInFlight.current = inFlight
-  })
+  const [inFlight, setInFlight, shownInFlight] = useNativeChatViewStateRef(
+    'queue-in-flight',
+    NONE_IN_FLIGHT
+  )
   const run = useCallback(
     async <T>(
       keys: readonly string[],
@@ -192,11 +191,7 @@ export function useStructuredAgentSessionQueuedMessages(args: {
       setInFlight((current) => new Map([...current, ...keys.map((key) => [key, pending] as const)]))
       return await runWithFinally(action, () => {
         keys.forEach((key) => held.delete(key))
-        setInFlight((current) => {
-          const next = new Map(current)
-          keys.forEach((key) => next.delete(key))
-          return next.size === 0 ? NONE_IN_FLIGHT : next
-        })
+        setInFlight((current) => new Map([...current].filter(([key]) => !keys.includes(key))))
       })
     },
     [setInFlight]

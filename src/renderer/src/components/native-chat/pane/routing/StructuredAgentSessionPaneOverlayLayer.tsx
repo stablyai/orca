@@ -1,4 +1,13 @@
-import { Activity, memo, Suspense, useCallback, useId, useLayoutEffect, useMemo, useRef } from 'react'
+import {
+  Activity,
+  memo,
+  Suspense,
+  useCallback,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef
+} from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import type { Tab, TabGroup } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
@@ -91,16 +100,16 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
               <ActivityPortalContainer visible={isActive}>
                 <Activity mode={effectsConnected ? 'visible' : 'hidden'}>
                   <Suspense fallback={null}>
-                  <NativeChatView
-                    mode="structured"
-                    tabId={tab.id}
-                    groupId={groupId}
-                    sessionId={tab.entityId}
-                    agent={tab.agentSessionAgent}
-                    isVisible={isActive}
-                    isFocusedGroup={isFocusedGroup}
-                    target={target}
-                  />
+                    <NativeChatView
+                      mode="structured"
+                      tabId={tab.id}
+                      groupId={groupId}
+                      sessionId={tab.entityId}
+                      agent={tab.agentSessionAgent}
+                      isVisible={isActive}
+                      isFocusedGroup={isFocusedGroup}
+                      target={target}
+                    />
                   </Suspense>
                 </Activity>
               </ActivityPortalContainer>

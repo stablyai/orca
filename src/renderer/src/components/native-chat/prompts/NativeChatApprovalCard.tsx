@@ -110,12 +110,7 @@ export function NativeChatApprovalCard({
     open: quietDetailOpen,
     setOpen: setQuietDetailOpen,
     showsToggle: showsQuietDetailToggle
-  } = useNativeChatApprovalQuietDetail(
-    quiet ? (approval.detail ?? null) : null,
-    approval.toolName,
-    approval.description,
-    memoryKey
-  )
+  } = useNativeChatApprovalQuietDetail(approval, quiet, memoryKey)
   const hasContext = Boolean(
     countdown ||
     approval.description ||
