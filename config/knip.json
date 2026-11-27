@@ -61,6 +61,7 @@
     "src/main/orcad/launcher.ts",
     "src/main/claude-accounts/profiles/wsl/claude-profile-wsl-entry.ts",
     "src/main/codex/history/shared-store/codex-account-history-wsl-entry.ts",
+    "src/main/codex/configuration/settings/codex-config-sync-wsl-entry.ts",
     "src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-process-entry.ts",
     "src/wsl-guest/wsl-browser-network-relay.ts",
     "src/renderer/src/space.tsx",

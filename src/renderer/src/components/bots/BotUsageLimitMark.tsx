@@ -1,6 +1,6 @@
 // A bot chat, worker or run stopped on its usage limit: the usage-limit row's amber gauge, the
 // same whether Orca continues it at the reset or not; only the words and the tooltip differ.
-import { Gauge } from 'lucide-react'
+import { GaugeMaxIcon } from '@/components/icons/GaugeMaxIcon'
 import { StateIndicatorTooltip } from '@/components/agent/status/StateIndicatorTooltip'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -53,7 +53,7 @@ export function UsageLimitStopMark({
   return (
     <StateIndicatorTooltip label={tip}>
       <span role="img" aria-label={tip} className="inline-flex shrink-0">
-        <Gauge className={cn('size-3 text-status-warning', className)} aria-hidden />
+        <GaugeMaxIcon className={cn('size-3 text-status-warning', className)} />
       </span>
     </StateIndicatorTooltip>
   )

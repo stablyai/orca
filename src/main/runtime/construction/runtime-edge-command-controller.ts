@@ -109,6 +109,7 @@ const BROWSER_COMMAND_NAMES = [
   'browserGrabSetMode',
   'browserGrabAwait',
   'browserGrabCancel',
+  'browserGrabPickedPresent',
   'browserGrabCaptureSelection',
   'browserGrabExtractHover',
   'browserGrabViewportBridge',

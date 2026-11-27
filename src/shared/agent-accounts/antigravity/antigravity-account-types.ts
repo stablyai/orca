@@ -1,5 +1,3 @@
-import type { ProviderRateLimits } from '../../agent-usage/rate-limits/rate-limit-types'
-
 export type AntigravityAccountSummary = {
   id: string
   email: string | null
@@ -7,8 +5,6 @@ export type AntigravityAccountSummary = {
   authMethod: string
   createdAt: number
   updatedAt: number
-  /** Last reading verified as this account on this runtime; null when never read, absent from older hosts. */
-  usage?: ProviderRateLimits | null
 }
 
 export type AntigravityAccountState = {

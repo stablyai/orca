@@ -7,6 +7,7 @@ import { agentCliUpdateHostTarget } from '@/store/slices/runtime-host-updates/ag
 import { useAgentCliUpdateGroups } from '@/components/agent-cli-update/use-agent-cli-update-groups'
 import {
   AgentCliUpdateList,
+  agentCliUpdateBusy,
   agentCliUpdateStartable,
   runAgentCliUpdateRow,
   type AgentCliUpdateGroup
@@ -32,7 +33,7 @@ export function AgentCliUpdateStatusSegment(): React.JSX.Element | null {
   if (rows.length === 0) {
     return null
   }
-  const busy = rows.some((row) => row.run?.phase === 'running')
+  const busy = rows.some(agentCliUpdateBusy)
   const failed = rows.some((row) => row.run?.phase === 'failed')
   const segment = busy
     ? {

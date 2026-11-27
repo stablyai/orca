@@ -107,6 +107,73 @@ If the remote is missing **make**, a **C++ compiler**, and **python3**, Orca sti
 
 Install the tools, then reconnect so the relay can install native modules.
 
+## Windows hosts
+
+Orca can use a Windows PC as an SSH host. OpenSSH Server needs Windows 10 build 1809 or later, or Windows Server 2019 or later. If that PC already runs the Orca desktop app, a [Remote Orca Server](/docs/remote-servers) is usually simpler, because it needs no OpenSSH Server setup. To use SSH instead, prepare the PC once. Microsoft's [Get started with OpenSSH for Windows](https://learn.microsoft.com/windows-server/administration/openssh/openssh_install_firstuse) covers each step in more detail.
+
+### 1. Install OpenSSH Server
+
+Install **OpenSSH Server** from **Optional features** in Settings (search Settings for "Optional features", because its location varies by Windows version), or run this in PowerShell as an administrator:
+
+```powershell
+Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
+```
+
+### 2. Start the sshd service
+
+Whichever way you installed it, start the service and make it start with Windows. In PowerShell as an administrator:
+
+```powershell
+Start-Service sshd
+Set-Service -Name sshd -StartupType Automatic
+```
+
+If Orca says nothing accepted the connection, the `sshd` service is usually not running.
+
+### 3. Check the firewall rule
+
+Installing OpenSSH Server creates and enables an inbound firewall rule named `OpenSSH-Server-In-TCP` for port 22. Check it:
+
+```powershell
+Get-NetFirewallRule -Name OpenSSH-Server-In-TCP | Select-Object Name, Enabled, Profile
+```
+
+- If `Enabled` is `False` and `Profile` lists only the network types you want SSH on, turn it on with `Enable-NetFirewallRule -Name OpenSSH-Server-In-TCP`.
+- If no rule is found, create one that allows SSH only on networks Windows treats as private:
+
+  ```powershell
+  New-NetFirewallRule -Name OpenSSH-Server-In-TCP -DisplayName 'OpenSSH Server (sshd)' -Enabled True -Direction Inbound -Protocol TCP -Action Allow -LocalPort 22 -Profile Private
+  ```
+
+For other setups, such as a different port or network profile, see Microsoft's [Windows Firewall overview](https://learn.microsoft.com/windows/security/operating-system-security/network-security/windows-firewall/).
+
+Your laptop still needs a network path to the PC, such as a home network you trust or Tailscale. Don't forward port 22 to the public internet.
+
+### 4. Sign in
+
+You don't need a separate Windows user. The account you already use can sign in over SSH once one of the methods below works for it. A separate standard account is optional, for example to limit what agents on that PC can reach.
+
+- **User name:** run `whoami` on the PC. It prints `computer\name` for a local account and `domain\name` for a domain account. For a local account, use the part after the backslash. For a domain account, use the full `domain\name` form.
+- **Password:** password sign-in uses the account's Windows password. If you sign in to Windows with a Microsoft account, that is the Microsoft account password, not your Windows Hello PIN. Some accounts, such as passwordless Microsoft accounts, have no password SSH can use.
+- **Key:** Microsoft supports key sign-in for local and Active Directory accounts. Where the public key goes depends on the account:
+  - **Standard account:** `.ssh\authorized_keys` in the profile folder of the account you sign in as, usually `C:\Users\<name>\.ssh\authorized_keys`.
+  - **Administrator account:** `sshd` ignores the profile file and reads `C:\ProgramData\ssh\administrators_authorized_keys` instead. By default every administrator account on the PC shares this one file, so a key added there can sign in as any of them. Only SYSTEM and the Administrators group may have access to that file, each with full control. In PowerShell as an administrator:
+
+    ```powershell
+    Add-Content -Force -Path "$env:ProgramData\ssh\administrators_authorized_keys" -Value '<your public key>'
+    icacls.exe "$env:ProgramData\ssh\administrators_authorized_keys" /inheritance:r /grant "*S-1-5-32-544:F" /grant "*S-1-5-18:F"
+    ```
+
+    `/inheritance:r` removes inherited entries but keeps entries set directly on the file. Run `icacls.exe "$env:ProgramData\ssh\administrators_authorized_keys"` afterwards and remove any entry other than SYSTEM and Administrators.
+
+Windows OpenSSH does not support signing in with a Microsoft Entra ID account, by password or by key. Use a local or Active Directory account on that PC instead.
+
+Microsoft's [key-based authentication guide](https://learn.microsoft.com/windows-server/administration/openssh/openssh_keymanagement) has more detail.
+
+### 5. Tools and file transfer
+
+Install Git and the agent CLIs you use on the PC, and sign in to them there. Orca installs its own server over SSH on first connect. Keep the default `Subsystem sftp sftp-server.exe` line in `C:\ProgramData\ssh\sshd_config`: without SFTP, Orca can only write files reliably when PowerShell 7 is installed on the PC.
+
 ## Port forwarding
 
 For remote worktrees, the right sidebar shows a **Ports** tab (toggle with `Cmd+Shift+I`). Orca scans `/proc/net/tcp` on the remote and lists listening ports under **Detected** — one click forwards them to your laptop. You can also add forwards manually, edit them, or remove them. Forwards persist across app restarts and SSH reconnects, and privileged remote ports auto-remap locally (e.g. remote 80 → local 10080).

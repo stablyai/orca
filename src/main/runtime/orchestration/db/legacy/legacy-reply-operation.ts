@@ -84,6 +84,7 @@ export function commitLegacyReplyOperation(
         subject: 'Re: Question',
         body: params.body,
         threadId: question.message_id,
+        replyTo: question.message_id,
         runId: principal.run_id,
         deliveryContract: 'legacy_direct'
       })

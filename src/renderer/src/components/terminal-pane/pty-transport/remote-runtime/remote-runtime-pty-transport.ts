@@ -22,7 +22,7 @@ import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-p
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { readTerminalSpawnDeferral } from '../../../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import { remoteRestoreSpawnIntentParams } from '../../../../runtime/hosted-terminals/restoration/remote-restore-spawn-intent'
-import { createAgentSessionKeyboardOptions } from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-keyboard-capability'
+import { createAgentSessionTerminalOptions } from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-terminal-options'
 import {
   agentProviderSessionForHostEnsure,
   restoreSourcePaneOptions
@@ -415,15 +415,20 @@ export function createRemoteRuntimePtyTransport(
     const wantsRevival = recovery.isActive || recovery.currentPhase === 'disconnected'
     if (wantsRevival && !unregisterControlReadyReviver) {
       // Why: a backoff advances and a latched pane replays its attach, exactly as online/resume/Reconnect would.
+      const replay = (): boolean => recovery.retryNow() || (transport.retryRecovery?.() ?? false)
       unregisterControlReadyReviver = registerRemoteRuntimePtyControlReadyReviver(
         runtimeEnvironmentId,
-        () => {
-          if (destroyed) {
-            return false
-          }
-          // Why: a ready control socket proves sign-in finished, whatever the replay meets next.
-          setAwaitingSshSignIn(false)
-          return recovery.retryNow() || (transport.retryRecovery?.() ?? false)
+        {
+          onControlReady: () => {
+            if (destroyed) {
+              return false
+            }
+            // Why: a ready control socket proves sign-in finished, whatever the replay meets next.
+            setAwaitingSshSignIn(false)
+            return replay()
+          },
+          // Why skip sign-in: a manual retry would only raise another prompt; the pane's own Sign in owns that.
+          onManualRetry: () => !destroyed && !awaitingSshSignIn && replay()
         }
       )
     } else if (!wantsRevival && unregisterControlReadyReviver) {
@@ -635,7 +640,10 @@ export function createRemoteRuntimePtyTransport(
   const terminalCreateMutationId = createBrowserUuid()
   // Replay one stable host operation after lost responses so reconnect cannot launch a second agent.
   const agentCreateOperation = createAgentSessionCreateOperation()
-  const agentKeyboardOptions = createAgentSessionKeyboardOptions(terminalKittyKeyboardProtocol)
+  const agentTerminalOptions = createAgentSessionTerminalOptions(
+    terminalKittyKeyboardProtocol,
+    terminalColorQueryReplies
+  )
   const outputProcessor = createPtyOutputProcessor({
     onTitleChange,
     onBell,
@@ -3754,7 +3762,7 @@ export function createRemoteRuntimePtyTransport(
         return result
       }
       const hostAuthorityCreate = async (epoch = connectLifecycleEpoch) => {
-        const keyboardOptions = await agentKeyboardOptions(createEnvironmentId)
+        const terminalOptions = await agentTerminalOptions(createEnvironmentId)
         const freshInputs =
           freshLaunch && launchAgentToSend
             ? await pairedAgentLaunchInputs({
@@ -3797,7 +3805,7 @@ export function createRemoteRuntimePtyTransport(
                   'terminal.ensureAgentSession',
                   {
                     kind: 'explicit',
-                    ...keyboardOptions,
+                    ...terminalOptions,
                     ...originOptions,
                     ...sourcePaneOptions,
                     worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
@@ -3821,7 +3829,7 @@ export function createRemoteRuntimePtyTransport(
                   'terminal.createAgentSession',
                   withAgentSessionCreateOperationId(
                     {
-                      ...keyboardOptions,
+                      ...terminalOptions,
                       ...sectionTrustOptions,
                       ...(opts.trustWorktreeId && opts.cwd ? { startupCwd: opts.cwd } : {}),
                       worktree: toRuntimeTerminalWorktreeSelector(worktreeId),

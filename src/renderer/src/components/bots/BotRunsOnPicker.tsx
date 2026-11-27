@@ -16,7 +16,11 @@ import type { NewTabAgentMenuModel } from '../agent/launch-menu/new-tab-agent-me
 import { launchModelLabel } from '../agent/AgentLaunchPicker'
 import { usePickedAgentModel } from '../agent/agent-launch-setup-state'
 import { COMBOBOX_FIELD_SHELL } from '../new-workspace/type-ahead/type-ahead-combobox-styles'
-import { BotAgentLaunchPicker, type BotAgentSetup } from './BotAgentLaunchPicker'
+import {
+  BotAgentLaunchPicker,
+  type BotAgentChatDefault,
+  type BotAgentSetup
+} from './BotAgentLaunchPicker'
 import {
   botCreateHostBlockedHint,
   useServerUpdatable,
@@ -76,7 +80,8 @@ export function BotRunsOnPicker({
   onAddHost,
   name,
   showSubmitFeedback = false,
-  variant = 'row'
+  variant = 'row',
+  chatDefault
 }: {
   /** The computer it runs on (`useBotCreateHost`). */
   hostChoice: BotCreateHostChoice
@@ -95,6 +100,8 @@ export function BotRunsOnPicker({
   showSubmitFeedback?: boolean
   /** `row` is a boxed summary that opens to the fields; `fields` shows Computer and Agent side by side. */
   variant?: 'row' | 'fields'
+  /** Chat default as the Agent menu's first choice (`useBotAgentSetup`). */
+  chatDefault?: BotAgentChatDefault
 }): React.JSX.Element {
   const t = useTranslate()
   const computerErrorId = useId()
@@ -251,6 +258,7 @@ export function BotRunsOnPicker({
               onChange={onSetupChange}
               keptPermission={keptPermission}
               showChatDefaultHint={!fields}
+              chatDefault={chatDefault}
             />
           )}
         </div>
