@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { app } from 'electron'
 import { hasTrustedPackageManagerFor } from './linux-package-install-command'
@@ -109,16 +109,37 @@ export function getLinuxRootPackageType(): LinuxRootPackageType | null {
 // electron-builder's deb.packageName. dpkg writes this list for every package it installs.
 const DPKG_FILE_LIST = '/var/lib/dpkg/info/orca-ide.list'
 
+/**
+ * electron-updater's AppImage updater stays inactive without $APPIMAGE, the file it replaces;
+ * its checks then resolve with no result, which used to settle as "not available".
+ * Repackagers that ship the extracted tree (e.g. an AUR package) keep the AppImage marker.
+ */
+function isAppImageWithoutUpdateTarget(): boolean {
+  if (process.platform !== 'linux' || !app.isPackaged || getLinuxPackageType() !== 'non-root') {
+    return false
+  }
+  const appImagePath = process.env.APPIMAGE
+  if (!isAbsolutePathString(appImagePath)) {
+    return true
+  }
+  try {
+    return statSync(appImagePath, { throwIfNoEntry: false })?.isFile() !== true
+  } catch {
+    return true
+  }
+}
+
 /** Repackagers can inherit deb/rpm markers; require the same manager discovery used for installation. */
 export function isExternallyManagedLinuxInstall(): boolean {
   if (cachedExternallyManaged === undefined) {
     const packageType = getLinuxRootPackageType()
     cachedExternallyManaged =
-      packageType !== null &&
-      (!hasTrustedPackageManagerFor(packageType) ||
-        // Why: Arch ships dpkg, and a pacman package built from our .deb keeps the deb marker.
-        // `dpkg -i` there unpacks over pacman's files before its dependency check fails.
-        (packageType === 'deb' && !existsSync(DPKG_FILE_LIST)))
+      packageType === null
+        ? isAppImageWithoutUpdateTarget()
+        : !hasTrustedPackageManagerFor(packageType) ||
+          // Why: Arch ships dpkg, and a pacman package built from our .deb keeps the deb marker.
+          // `dpkg -i` there unpacks over pacman's files before its dependency check fails.
+          (packageType === 'deb' && !existsSync(DPKG_FILE_LIST))
   }
   return cachedExternallyManaged
 }

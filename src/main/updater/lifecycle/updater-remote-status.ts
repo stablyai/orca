@@ -7,7 +7,10 @@ import type {
   RemoteServerUpdateSupport
 } from '../../../shared/remote-runtime/host-catalog/remote-server-update'
 import { hasServeUpdateSupervisor } from '../serve-update-handoff'
-import { getLinuxPackageType } from '../linux-package/linux-update-package-type'
+import {
+  getLinuxPackageType,
+  isExternallyManagedLinuxInstall
+} from '../linux-package/linux-update-package-type'
 import { UpdaterNudge } from '../nudges/updater-nudge'
 import type { UpdateInstallMode } from './updater-state'
 
@@ -36,7 +39,9 @@ export abstract class UpdaterRemoteStatus extends UpdaterNudge {
       this.updateInstallMode === 'unsupported-headless-serve' ||
       linuxPackageType === 'deb' ||
       linuxPackageType === 'rpm' ||
-      linuxPackageType === 'unusable'
+      linuxPackageType === 'unusable' ||
+      // Same classification the local updater uses: it cannot install over this copy either.
+      isExternallyManagedLinuxInstall()
     ) {
       return {
         installMode: this.updateInstallMode,
