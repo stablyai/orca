@@ -377,7 +377,7 @@ export function TaskPageGitHubListChrome({
                 density="compact"
                 surface="background"
                 inset="leadingIcon"
-                adornment={taskSearchInput === defaultQuery ? 'shortcut' : 'trailing'}
+                adornment={taskSearchInput === defaultQuery ? 'shortcutAndClear' : 'trailing'}
               />
               {taskSearchInput || appliedTaskSearch ? (
                 <button
