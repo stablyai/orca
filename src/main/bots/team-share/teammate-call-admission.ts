@@ -12,16 +12,25 @@ import {
 } from '../../runtime/rpc/dispatch/bot-share-call-admission'
 import { withTeammateLists } from './teammate-workspace-lists'
 
+import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
+
 type Admitted = { method: RpcMethod | RpcStreamingMethod; params: unknown }
 
-function namedObject(params: unknown, key: string): unknown {
-  return typeof params === 'object' && params !== null ? Reflect.get(params, key) : null
-}
+const NamedWorkspace = lazyZodSchema(() =>
+  z.looseObject({
+    worktree: z.string().optional().catch(undefined),
+    target: z
+      .looseObject({ worktree: z.string().optional().catch(undefined) })
+      .optional()
+      .catch(undefined)
+  })
+)
 
 /** `worktree` as a call names it, at the top level or in a launch's `target`. */
 function namedWorktree(params: unknown): string | null {
-  const named = namedObject(params, 'worktree')
-  return typeof named === 'string' ? named : null
+  const named = NamedWorkspace.safeParse(params).data
+  return named?.worktree ?? named?.target?.worktree ?? null
 }
 
 /** Rule 4: in their own Home a teammate's list holds their chats, so nothing they call opens, moves or
@@ -35,7 +44,7 @@ async function writesHostTabsInOwnHome(
   if (!writesHostTabList(methodName)) {
     return false
   }
-  const named = namedWorktree(params) ?? namedWorktree(namedObject(params, 'target'))
+  const named = namedWorktree(params)
   return named !== null && (await context.runtime.namesTeammateHome(named, scope))
 }
 

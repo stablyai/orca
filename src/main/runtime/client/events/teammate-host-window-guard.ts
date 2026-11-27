@@ -2,6 +2,8 @@
 // renderer requests, ask `activeCallMayTouchHostTabs` for the workspace each call opens, focuses or
 // drives a tab in. A teammate's call reaches the window only in a shared (worker) workspace.
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import type { RendererRequest } from '../../construction/runtime-desktop-surface'
 import { TeammateHostTabWriteError } from '../../session-tabs/person/host-tab-list-admission'
 import type { RuntimeNotifier } from './runtime-notifier-contract'
@@ -36,16 +38,18 @@ export function hostWindowLookups(
 
 type Target = (args: readonly unknown[], lookups: Lookups) => string | null
 
-function stringField(value: unknown, key: string): string | null {
-  const field: unknown =
-    typeof value === 'object' && value !== null ? Reflect.get(value, key) : undefined
-  return typeof field === 'string' ? field : null
-}
+const NamesWorktree = lazyZodSchema(() => z.looseObject({ worktreeId: z.string() }))
+const NamesBrowserPage = lazyZodSchema(() => z.looseObject({ browserPageId: z.string() }))
+
 /** The workspace named by argument `index`, or by that argument's `worktreeId`. */
 const worktreeArg =
   (index: number): Target =>
-  (args) =>
-    typeof args[index] === 'string' ? args[index] : stringField(args[index], 'worktreeId')
+  (args) => {
+    const named = args[index]
+    return typeof named === 'string'
+      ? named
+      : (NamesWorktree.safeParse(named).data?.worktreeId ?? null)
+  }
 const tabArg: Target = ([tabId], lookups) =>
   typeof tabId === 'string' ? lookups.worktreeOfTab(tabId) : null
 
@@ -104,27 +108,29 @@ export function guardNotifierForTeammates(
   admit: HostWindowAdmission,
   lookups: Lookups
 ): RuntimeNotifier {
-  const targets = new Map<string, 'event' | Target>(Object.entries(NOTIFIER_TARGETS))
-  return new Proxy(notifier, {
-    get(held, name, receiver) {
-      const method: unknown = Reflect.get(held, name, receiver)
-      const target = typeof name === 'string' ? targets.get(name) : undefined
-      if (!target || target === 'event' || typeof method !== 'function') {
-        return method
-      }
-      return (...args: unknown[]): unknown => {
-        if (!admit(target(args, lookups))) {
-          throw new TeammateHostTabWriteError(null, `host window ${String(name)}`)
-        }
-        return Reflect.apply(method, held, args)
-      }
+  const guarded: RuntimeNotifier = { ...notifier }
+  for (const [name, target] of Object.entries(NOTIFIER_TARGETS)) {
+    // Notifiers are plain objects (runtime-window-lifecycle.ts): their methods are own properties.
+    const method: unknown = Object.getOwnPropertyDescriptor(notifier, name)?.value
+    if (target === 'event' || typeof method !== 'function') {
+      continue
     }
-  })
+    Object.defineProperty(guarded, name, {
+      enumerable: true,
+      value: (...args: unknown[]): unknown => {
+        if (!admit(target(args, lookups))) {
+          throw new TeammateHostTabWriteError(null, `host window ${name}`)
+        }
+        return method.apply(notifier, args)
+      }
+    })
+  }
+  return guarded
 }
 
 // Every renderer request channel; one not listed is refused to a teammate.
 const browserPage: Target = ([payload], lookups) => {
-  const browserPageId = stringField(payload, 'browserPageId')
+  const browserPageId = NamesBrowserPage.safeParse(payload).data?.browserPageId
   return browserPageId ? lookups.worktreeOfBrowserPage(browserPageId) : null
 }
 const RENDERER_REQUEST_TARGETS = new Map<string, Target>([

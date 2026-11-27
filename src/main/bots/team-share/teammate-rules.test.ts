@@ -96,7 +96,7 @@ function paramKeys(schema: unknown): string[] {
   }
   if ('shape' in schema && typeof schema.shape === 'object' && schema.shape !== null) {
     // A launch names its workspace in `target`, read as `target.worktree`.
-    const target: unknown = Reflect.get(schema.shape, 'target')
+    const target = 'target' in schema.shape ? schema.shape.target : undefined
     return [
       ...Object.keys(schema.shape),
       ...(target ? paramKeys(target).map((key) => `target.${key}`) : [])
