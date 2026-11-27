@@ -7,6 +7,7 @@ import {
   type MobileFilePreviewRouter
 } from '../../files/preview/mobile-file-preview-navigation'
 import type { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { splitFilePathLineSuffix } from '../../components/markdown/links/markdown-file-path-detection'
 
 /** Opens a file an item links or a comment attaches, from the bot's home (`worktreeId`); a path
  *  outside the bot's folder, or an attachment with no phone preview, is refused with a toast. */
@@ -36,8 +37,10 @@ export function openBotItemFile(input: {
     toast(t('bots.items.comment.fileOnComputer', 'Open {{name}} on your computer.', { name }))
     return
   }
+  // `notes.md:12` opens notes.md at line 12.
+  const { path: filePath, line, column } = splitFilePathLineSuffix(path)
   // Only a file in the bot's folder opens, as on the desktop.
-  if (!isBotFolderPath(path)) {
+  if (!isBotFolderPath(filePath)) {
     toast(t('bots.items.link.fileOutside', "{{path}} isn't in this bot's folder", { path }))
     return
   }
@@ -46,8 +49,10 @@ export function openBotItemFile(input: {
     {
       hostId,
       worktreeId,
-      relativePath: path.replace(/^\.\//, ''),
-      name: path.split('/').at(-1) ?? path
+      relativePath: filePath.replace(/^\.\//, ''),
+      name: filePath.split('/').at(-1) ?? filePath,
+      ...(line !== null ? { line: String(line) } : {}),
+      ...(column !== null ? { column: String(column) } : {})
     },
     { embedded: true, onRequestClose }
   )

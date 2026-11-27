@@ -1709,7 +1709,9 @@
         "permissionAcceptEditsDescription": "ファイルの編集とファイル操作コマンドを承認し、それ以外は確認します",
         "permissionAutoDescription": "承認リクエストを代わりに審査します",
         "permissionFullAccessCodexDescription": "確認しません。任意のファイルを編集し、ネットワークを使用できます",
-        "permissionFullAccessDescription": "編集やコマンドの前に確認しません"
+        "permissionFullAccessDescription": "編集やコマンドの前に確認しません",
+        "permissionAgentSettings": "{{agent}} の設定",
+        "permissionFromAgentSettings": "{{mode}}（{{agent}} の設定より）"
       },
       "goal": {
         "sentAsGoal": "ゴールとして送信されました"
@@ -3837,9 +3839,6 @@
       "toggleMode": "トグル",
       "updateFailed": "更新できませんでした"
     },
-    "agents": {
-      "permissionOwnAll": "Agent 独自の設定"
-    },
     "voiceTranscribeOn": {
       "heading": "文字起こしの場所",
       "automatic": "自動",
@@ -4264,6 +4263,9 @@
       "agentCouldNotStart": "{{label}} を起動できませんでした。設定で Agent のコマンドを確認し、もう一度お試しください。",
       "agentFailedToStart": "{{label}} の起動に失敗しました。設定で Agent のコマンドを確認し、もう一度お試しください。",
       "agentReportedError": "{{label}} がエラーを報告しました。",
+      "antigravityInvalidEvents": "Antigravity が無効な JSON イベントを返しました。",
+      "antigravityInvalidResult": "Antigravity が無効な結果を返しました。",
+      "antigravityNoFinalResult": "Antigravity が最終結果を返しませんでした。",
       "chatNameAgentUnsupported": "この操作に対応するチャット名生成用の Agent を設定 -> チャット -> チャット名で選択してください。対応 Agent: {{agents}}、またはカスタムコマンド。",
       "chatNameCustomCommandEmpty": "カスタムコマンドが空です。設定 -> チャット -> チャット名で追加してください。",
       "cliFailed": "{{label}} の CLI コマンドがコード {{exitCode}} で失敗しました。",

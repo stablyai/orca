@@ -3428,7 +3428,7 @@
         "99c2755218": "Busca issues o escribe JQL, p. ej. project = ABC",
         "2ff9fd71fd": "Actualizar issues de Jira",
         "0b65d3fb2c": "Buscar proyectos de Linear...",
-        "eec0c5c079": "Buscar issues de Linear...",
+        "eec0c5c079": "Buscar...",
         "8964184a8b": "Actualizar Linear",
         "3feb524d42": "Nuevo issue de Linear",
         "0cbf7e5cf3": "Modo de tarea Linear",
@@ -15107,9 +15107,6 @@
                 "unresolvedCount_one": "{{count}} sin resolver",
                 "unresolvedCount_other": "{{count}} sin resolver",
                 "unresolvedCount_many": "{{count}} sin resolver",
-                "sendQueuedCommentsToAi_one": "Enviar {{count}} comentario en cola a la IA",
-                "sendQueuedCommentsToAi_other": "Enviar {{count}} comentarios en cola a la IA",
-                "sendQueuedCommentsToAi_many": "Enviar {{count}} comentarios en cola a la IA",
                 "conflictsBlockThisMr": "Los conflictos bloquean este MR",
                 "conflictsBlockThisPr": "Los conflictos bloquean este PR",
                 "copyComment": "Copiar comentario",
@@ -17164,10 +17161,6 @@
           "39b6b9e4e4": "Commits en la rama"
         },
         "CombinedDiffViewer": {
-          "1da745c551": "Enviado",
-          "84898c548d": "Borrar",
-          "88b70d0ef5": "Copiar",
-          "bb84b4c374": "Notas de IA",
           "948a5fd6c8": "Borrar notas",
           "0f806a2ab1": "Cancelar",
           "b6c3b84476": "Mostrar árbol de archivos",
@@ -17178,7 +17171,6 @@
           "820ec01f24": "Los archivos en conflicto se revisan por separado",
           "fd8892b120": "No hay cambios para mostrar",
           "eb5f40e49c": "Esta vista de diff excluye los conflictos sin resolver porque el pipeline normal de diff de dos vías no es seguro para conflictos.",
-          "45cf23b418": "No se pudieron borrar las notas.",
           "ec5053c7f5": "Lado a lado",
           "f786fd54e1": "En línea",
           "ea08dae15b": "Contraer todo",
@@ -17193,12 +17185,6 @@
           "noExtension": "(sin extensión)",
           "diffLoadTimedOut": "El diff no terminó de cargarse.",
           "diffLoadFailed": "No se pudo cargar el diff.",
-          "moreNotesInSourceControl_one": "{{count}} nota más en Control de código fuente",
-          "moreNotesInSourceControl_other": "{{count}} notas más en Control de código fuente",
-          "moreNotesInSourceControl_many": "{{count}} notas más en Control de código fuente",
-          "clearNotesConfirm_one": "¿Borrar {{count}} nota de este worktree?",
-          "clearNotesConfirm_other": "¿Borrar {{count}} notas de este worktree?",
-          "clearNotesConfirm_many": "¿Borrar {{count}} notas de este worktree?",
           "changedFilesVs_one": "{{count}} archivo modificado respecto a {{baseRef}}",
           "changedFilesVs_other": "{{count}} archivos modificados respecto a {{baseRef}}",
           "changedFilesVs_many": "{{count}} archivos modificados respecto a {{baseRef}}",
@@ -17208,10 +17194,6 @@
           "changedFiles_one": "{{count}} archivo modificado",
           "changedFiles_other": "{{count}} archivos modificados",
           "changedFiles_many": "{{count}} archivos modificados",
-          "showAiNotes_one": "Mostrar {{count}} nota de IA",
-          "showAiNotes_other": "Mostrar {{count}} notas de IA",
-          "showAiNotes_many": "Mostrar {{count}} notas de IA",
-          "send": "Enviar",
           "openDiff": "Abrir diff",
           "openInEditor": "Abrir en el editor",
           "skippedConflictsExcluded": "Se excluyeron {{count}} conflictos no resueltos de esta vista de diff."
@@ -17414,7 +17396,6 @@
           "b1bfc04034": "Texto seleccionado",
           "f37b98999e": "Esta nota",
           "2b2b31382c": "Front matter",
-          "bb629de58a": "Copiar notas para el agente",
           "322afab6ff": "Notas de revisión",
           "0f9969a159": "Saltar a la primera nota de revisión",
           "12052c639c": "Cerrar búsqueda",
@@ -17487,7 +17468,6 @@
         },
         "NotesSendMenu": {
           "44dc5e60a6": "Enviar notas",
-          "433928cd9f": "Enviar {{value0}} a un agente",
           "thisNote": "Esta nota",
           "noteAlreadySent": "Nota ya enviada",
           "sendNotesToAgent": "Enviar notas a un agente",
@@ -17573,8 +17553,6 @@
           "3ababd949d": "Notas de revisión"
         },
         "RichMarkdownReviewRailActions": {
-          "636394af72": "Copiar notas para el agente",
-          "a807596997": "notas copiadas",
           "8aaf2c4c69": "Mostrar notas de revisión",
           "af02dc2456": "Ocultar notas de revisión"
         },
@@ -18485,8 +18463,6 @@
             "b472c5fe03": "Agregar anotación del navegador",
             "b5ba6085de": "Pregunta",
             "143204e423": "Cambiar",
-            "d51ef37351": "Copiar",
-            "6f4ab3592b": "Copiado",
             "168350ae6a": "Haz clic o pon el cursor sobre un elemento, luego presiona C para copiar o S para hacer una captura de pantalla.",
             "777b5bc4ec": "Haz clic en un elemento para agregar comentarios para el agente.",
             "b733a91bd9": "Agrega comentarios para el elemento seleccionado.",
@@ -18506,9 +18482,7 @@
             "09a9489aa5": "Mostrar",
             "2a4c4b8e1f": "Copiar",
             "b71dc3d930": "Reconectar",
-            "fileUrlUnsupported": "Esta pestaña del navegador no puede abrir archivos locales. Usa \"Abrir vista previa al lado\" en el archivo.",
-            "11c5084aa2": "Borrar anotaciones",
-            "734e4343ec": "Borrar anotaciones del navegador"
+            "fileUrlUnsupported": "Esta pestaña del navegador no puede abrir archivos locales. Usa \"Abrir vista previa al lado\" en el archivo."
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "Cancelar",
@@ -23859,6 +23833,31 @@
         "cancel": "Cancelar",
         "tryAgain": "Reintentar"
       }
+    },
+    "notes": {
+      "sendButton": {
+        "sendCommentsToAgent_one": "Enviar {{count}} comentario a un agente",
+        "sendNotes_many": "Enviar {{count}} notas",
+        "sendComments_many": "Enviar {{count}} comentarios",
+        "sendCommentsToAgent_other": "Enviar {{count}} comentarios a un agente",
+        "sendNotes_one": "Enviar {{count}} nota",
+        "clearPageNotes_one": "¿Borrar {{count}} nota de esta página?",
+        "sendShort": "Enviar {{count}}",
+        "clearNotes": "Borrar notas…",
+        "sendNotes_other": "Enviar {{count}} notas",
+        "sendNotesToAgent_many": "Enviar {{count}} notas a un agente",
+        "sendComments_one": "Enviar {{count}} comentario",
+        "copyNotes": "Copiar notas",
+        "sendComments_other": "Enviar {{count}} comentarios",
+        "clearPageNotes_many": "¿Borrar {{count}} notas de esta página?",
+        "sendCommentsToAgent_many": "Enviar {{count}} comentarios a un agente",
+        "sending": "Enviando…",
+        "sendNotesToAgent_one": "Enviar {{count}} nota a un agente",
+        "clearPageNotes_other": "¿Borrar {{count}} notas de esta página?",
+        "sendNotesToAgent_other": "Enviar {{count}} notas a un agente",
+        "sentNotesStillListed": "Notas enviadas, pero siguen en la lista.",
+        "removeSentNotes": "Quitar"
+      }
     }
   },
   "dashboardPopout": {
@@ -25530,6 +25529,9 @@
         "planModelWithoutThinking": "El modelo «{{model}}» no admite un nivel de esfuerzo de razonamiento.",
         "planThinkingLevelInvalid": "El nivel de razonamiento «{{level}}» no es válido para {{model}}.",
         "openCodeInvalidEvents": "OpenCode devolvió eventos JSON no válidos.",
+        "antigravityInvalidEvents": "Antigravity devolvió eventos JSON no válidos.",
+        "antigravityInvalidResult": "Antigravity devolvió un resultado no válido.",
+        "antigravityNoFinalResult": "Antigravity no devolvió ningún resultado final.",
         "kimiUnreadableOutput": "Kimi devolvió una salida que Orca no pudo leer. Vuelve a intentarlo.",
         "kimiSessionOccupied": "Kimi no pudo usar esta sesión porque está activa en otro cliente. Detén la sesión allí o sal de ese cliente y vuelve a intentarlo.",
         "kimiInterrupted": "Kimi se interrumpió antes de terminar de generar texto. Vuelve a intentarlo.",

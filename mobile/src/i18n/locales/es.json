@@ -1768,7 +1768,9 @@
         "permissionAcceptEditsDescription": "Aprueba ediciones y comandos de archivos; pregunta por lo demás",
         "permissionAutoDescription": "Revisa las solicitudes de aprobación por ti",
         "permissionFullAccessCodexDescription": "Nunca pregunta; puede editar cualquier archivo y usar la red",
-        "permissionFullAccessDescription": "Nunca pregunta antes de ediciones o comandos"
+        "permissionFullAccessDescription": "Nunca pregunta antes de ediciones o comandos",
+        "permissionAgentSettings": "Configuración de {{agent}}",
+        "permissionFromAgentSettings": "{{mode}}, según la configuración de {{agent}}"
       },
       "goal": {
         "sentAsGoal": "Enviado como objetivo"
@@ -3958,9 +3960,6 @@
       "toggleMode": "Alternar",
       "updateFailed": "No se pudo actualizar"
     },
-    "agents": {
-      "permissionOwnAll": "Configuración propia de los agentes"
-    },
     "voiceTranscribeOn": {
       "heading": "Transcribir en",
       "automatic": "Automático",
@@ -4402,6 +4401,9 @@
       "agentCouldNotStart": "No se pudo iniciar {{label}}. Revisa el comando del agente en Ajustes y vuelve a intentarlo.",
       "agentFailedToStart": "No se pudo iniciar {{label}}. Revisa el comando del agente en Ajustes y vuelve a intentarlo.",
       "agentReportedError": "{{label}} informó de un error.",
+      "antigravityInvalidEvents": "Antigravity devolvió eventos JSON no válidos.",
+      "antigravityInvalidResult": "Antigravity devolvió un resultado no válido.",
+      "antigravityNoFinalResult": "Antigravity no devolvió ningún resultado final.",
       "chatNameAgentUnsupported": "Elige un agente compatible para generar nombres de chats en esta acción en Ajustes -> Chat -> Nombres de chats. Agentes compatibles: {{agents}}, o «Comando personalizado».",
       "chatNameCustomCommandEmpty": "El comando personalizado está vacío. Añade uno en Ajustes -> Chat -> Nombres de chats.",
       "cliFailed": "El comando CLI de {{label}} falló con el código {{exitCode}}.",

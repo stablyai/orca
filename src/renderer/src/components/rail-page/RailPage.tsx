@@ -87,9 +87,9 @@ export function RailPage({
           ref={attachRoot}
           data-rail-page=""
           className={cn(
-            'relative mr-2 mb-2 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-background text-foreground shadow-xs',
+            'relative m-2 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border-border bg-background @min-[40rem]/rail-page:border text-foreground shadow-xs',
             '[--rail-page-gutter:24px] @max-[40rem]/rail-page:[--rail-page-gutter:16px] [--list-table-gutter:var(--rail-page-gutter)]',
-            '@max-[40rem]/rail-page:m-0 @max-[40rem]/rail-page:rounded-none @max-[40rem]/rail-page:border-r-0 @max-[40rem]/rail-page:border-b-0 @max-[40rem]/rail-page:shadow-none',
+            '@max-[40rem]/rail-page:m-0 @max-[40rem]/rail-page:rounded-none @max-[40rem]/rail-page:shadow-none',
             className
           )}
           {...props}

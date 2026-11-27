@@ -1768,7 +1768,9 @@
         "permissionAcceptEditsDescription": "Approuve les modifications et commandes de fichiers ; demande pour le reste",
         "permissionAutoDescription": "Examine les demandes d’approbation pour vous",
         "permissionFullAccessCodexDescription": "Ne demande jamais ; peut modifier n’importe quel fichier et utiliser le réseau",
-        "permissionFullAccessDescription": "Ne demande jamais avant les modifications ou les commandes"
+        "permissionFullAccessDescription": "Ne demande jamais avant les modifications ou les commandes",
+        "permissionAgentSettings": "Paramètres de {{agent}}",
+        "permissionFromAgentSettings": "{{mode}}, d’après les paramètres de {{agent}}"
       },
       "goal": {
         "sentAsGoal": "Envoyé comme objectif"
@@ -3958,9 +3960,6 @@
       "toggleMode": "Bascule",
       "updateFailed": "Impossible de mettre à jour"
     },
-    "agents": {
-      "permissionOwnAll": "Paramètres propres aux agents"
-    },
     "voiceTranscribeOn": {
       "heading": "Transcrire sur",
       "automatic": "Automatique",
@@ -4402,6 +4401,9 @@
       "agentCouldNotStart": "Impossible de démarrer {{label}}. Vérifiez la commande de l’agent dans les Paramètres et réessayez.",
       "agentFailedToStart": "Le démarrage de {{label}} a échoué. Vérifiez la commande de l’agent dans les Paramètres et réessayez.",
       "agentReportedError": "{{label}} a signalé une erreur.",
+      "antigravityInvalidEvents": "Antigravity a renvoyé des événements JSON invalides.",
+      "antigravityInvalidResult": "Antigravity a renvoyé un résultat invalide.",
+      "antigravityNoFinalResult": "Antigravity n’a renvoyé aucun résultat final.",
       "chatNameAgentUnsupported": "Choisissez un agent de nommage des chats pris en charge pour cette action dans Paramètres -> Chat -> Noms des chats. Agents pris en charge : {{agents}}, ou « Commande personnalisée ».",
       "chatNameCustomCommandEmpty": "La commande personnalisée est vide. Ajoutez-en une dans Paramètres -> Chat -> Noms des chats.",
       "cliFailed": "La commande CLI de {{label}} a échoué avec le code {{exitCode}}.",

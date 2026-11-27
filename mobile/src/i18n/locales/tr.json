@@ -1818,7 +1818,9 @@
         "permissionAcceptEditsDescription": "Dosya düzenlemelerini ve dosya komutlarını onaylar; diğer işlemler için sorar",
         "permissionAutoDescription": "Onay isteklerini sizin yerinize değerlendirir",
         "permissionFullAccessCodexDescription": "Asla sormaz; tüm dosyaları düzenleyebilir ve ağı kullanabilir",
-        "permissionFullAccessDescription": "Düzenleme veya komutlardan önce asla sormaz"
+        "permissionFullAccessDescription": "Düzenleme veya komutlardan önce asla sormaz",
+        "permissionAgentSettings": "{{agent}} ayarları",
+        "permissionFromAgentSettings": "{{mode}}, {{agent}} ayarlarından"
       },
       "goal": {
         "sentAsGoal": "Hedef olarak gönderildi"
@@ -4106,9 +4108,6 @@
       "dictationOffFooter": "Sohbetlerde ve terminallerde yazmak yerine konuşun.",
       "swipeToDelete": "İndirilen modeli silmek için sola kaydırın."
     },
-    "agents": {
-      "permissionOwnAll": "Ajanların kendi ayarları"
-    },
     "voiceTranscribeOn": {
       "heading": "Yazıya dökme yeri",
       "automatic": "Otomatik",
@@ -4547,6 +4546,9 @@
       "agentCouldNotStart": "{{label}} başlatılamadı. Ayarlar bölümündeki ajan komutunu kontrol edip yeniden deneyin.",
       "agentFailedToStart": "{{label}} başlatılamadı. Ayarlar bölümündeki ajan komutunu kontrol edip yeniden deneyin.",
       "agentReportedError": "{{label}} bir hata bildirdi.",
+      "antigravityInvalidEvents": "Antigravity geçersiz JSON olayları döndürdü.",
+      "antigravityInvalidResult": "Antigravity geçersiz bir sonuç döndürdü.",
+      "antigravityNoFinalResult": "Antigravity nihai bir sonuç döndürmedi.",
       "chatNameAgentUnsupported": "Bu eylem için Ayarlar -> Sohbet -> Sohbet adları bölümünde desteklenen bir sohbet adı oluşturma ajanı seçin. Desteklenen ajanlar: {{agents}} veya Özel komut.",
       "chatNameCustomCommandEmpty": "Özel komut boş. Ayarlar -> Sohbet -> Sohbet adları bölümünde bir komut ekleyin.",
       "cliFailed": "{{label}} CLI komutu {{exitCode}} hata koduyla sonlandı.",

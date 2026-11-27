@@ -349,9 +349,8 @@ export default function RichMarkdownEditor({
       markdownReviewContent={markdownReviewContent}
       worktreeId={worktreeId}
       filePath={filePath}
-      markdownCommentsCount={review.markdownComments.length}
+      markdownComments={review.markdownComments}
       reviewRailOpen={review.reviewRailOpen}
-      reviewNotesCopied={review.reviewNotesCopied}
       unsentMarkdownReviewScope={review.unsentMarkdownReviewScope}
       linkBubble={linkBubble}
       isEditingLink={isEditingLink}

@@ -174,9 +174,6 @@
       "dictationOffFooter": "Talk instead of typing in chats and terminals.",
       "swipeToDelete": "Swipe a downloaded model left to delete it."
     },
-    "agents": {
-      "permissionOwnAll": "Agents' own settings"
-    },
     "voiceTranscribeOn": {
       "heading": "Transcribe on",
       "automatic": "Automatic",
@@ -1678,7 +1675,9 @@
         "permissionAcceptEditsDescription": "Approves file edits and file commands; asks for the rest",
         "permissionAutoDescription": "Reviews approval requests for you",
         "permissionFullAccessCodexDescription": "Never asks; can edit any file and use the network",
-        "permissionFullAccessDescription": "Never asks before edits or commands"
+        "permissionFullAccessDescription": "Never asks before edits or commands",
+        "permissionAgentSettings": "{{agent}} settings",
+        "permissionFromAgentSettings": "{{mode}}, from {{agent}} settings"
       },
       "goal": {
         "sentAsGoal": "Sent as goal"
@@ -4636,6 +4635,9 @@
     },
     "textGenerationFailure": {
       "openCodeInvalidEvents": "OpenCode returned invalid JSON events.",
+      "antigravityInvalidEvents": "Antigravity returned invalid JSON events.",
+      "antigravityInvalidResult": "Antigravity returned an invalid result.",
+      "antigravityNoFinalResult": "Antigravity returned no final result.",
       "kimiUnreadableOutput": "Kimi returned output Orca couldn't read. Try again.",
       "kimiSessionOccupied": "Kimi couldn't use this session because it is active in another client. Stop the session there or exit that client, then try again.",
       "kimiInterrupted": "Kimi was interrupted before it finished generating text. Try again.",

@@ -1710,7 +1710,9 @@
         "permissionAcceptEditsDescription": "核准檔案編輯和檔案命令；其餘操作會詢問",
         "permissionAutoDescription": "代你審查核准要求",
         "permissionFullAccessCodexDescription": "從不詢問；可以編輯任何檔案並使用網路",
-        "permissionFullAccessDescription": "編輯或執行命令前從不詢問"
+        "permissionFullAccessDescription": "編輯或執行命令前從不詢問",
+        "permissionAgentSettings": "{{agent}} 設定",
+        "permissionFromAgentSettings": "{{mode}}，來自 {{agent}} 設定"
       },
       "goal": {
         "sentAsGoal": "作為目標傳送"
@@ -3837,9 +3839,6 @@
       "toggleMode": "切換",
       "updateFailed": "無法更新"
     },
-    "agents": {
-      "permissionOwnAll": "各代理程式自身的設定"
-    },
     "voiceTranscribeOn": {
       "heading": "轉寫位置",
       "automatic": "自動",
@@ -4264,6 +4263,9 @@
       "agentCouldNotStart": "無法啟動 {{label}}。請在「設定」中檢查代理程式的命令，然後再試一次。",
       "agentFailedToStart": "{{label}} 啟動失敗。請在「設定」中檢查代理程式的命令，然後再試一次。",
       "agentReportedError": "{{label}} 回報錯誤。",
+      "antigravityInvalidEvents": "Antigravity 傳回無效的 JSON 事件。",
+      "antigravityInvalidResult": "Antigravity 傳回無效的結果。",
+      "antigravityNoFinalResult": "Antigravity 未傳回最終結果。",
       "chatNameAgentUnsupported": "請在「設定 -> 聊天 -> 聊天名稱」中，為此操作選擇支援的聊天命名代理程式。支援的代理程式：{{agents}}，或選擇「自訂命令」。",
       "chatNameCustomCommandEmpty": "自訂命令為空白。請在「設定 -> 聊天 -> 聊天名稱」中新增。",
       "cliFailed": "{{label}} CLI 命令執行失敗，結束代碼為 {{exitCode}}。",

@@ -17,13 +17,11 @@ import { registeredPtyCount } from '../memory/pty-registry'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { refuseRealtimeSchedulingUnderZeroRtTime } from './linux-runtime/linux-realtime-scheduling-guard'
 import { recordProcessGoneCrash } from './main-window/main-window-lifecycle-flags'
-import { handleGpuChildCrash } from './gpu-recovery/gpu-lifecycle'
 import { isGpuFallbackCrashCandidate } from '../crash-reporting/recovery/gpu-crash-fallback-decision'
 import { mainProcessState as state } from './main-process-state'
 import { isNativeUpdateInstallUnderWay } from '../updater/updater-service'
 import { initializeMainProcessObservers, startUsageBackend } from './main-process-observers'
 import { runAfterFirstWindowShown } from './main-window/first-window-deferral'
-import { startClaudeCodeThemeSync } from '../claude/theme-sync/claude-code-theme-sync-schedule'
 import {
   composeDesktopCore,
   type DesktopCoreNative
@@ -67,7 +65,13 @@ function startProcessCrashObservers(): void {
     ) {
       const crashedAt = performance.now()
       void state.gpuCrashDiagnostics?.record()
-      void handleGpuChildCrash(details.reason, details.exitCode ?? null, crashedAt)
+      void import('./gpu-recovery/gpu-lifecycle')
+        .then(({ handleGpuChildCrash }) =>
+          handleGpuChildCrash(details.reason, details.exitCode ?? null, crashedAt)
+        )
+        .catch((error: unknown) =>
+          console.warn('[gpu] Could not load GPU child crash handler:', error)
+        )
     }
   })
 }
@@ -102,14 +106,20 @@ function startThemeAndSpeech(store: Store, fallbackMs: number): void {
     startWarmupOnce()
   }, fallbackMs)
   runAfterFirstWindowShown(() => {
-    startClaudeCodeThemeSync({
-      getSettings: () => store.getSettings(),
-      onSettingsChanged: (listener) => store.onSettingsChanged(listener),
-      systemPrefersDark: () => nativeTheme.shouldUseDarkColors,
-      onSystemThemeChanged: (listener) => nativeTheme.on('updated', listener),
-      onAppFocused: (listener) => app.on('browser-window-focus', listener),
-      userDataPath: app.getPath('userData')
-    })
+    void import('../claude/theme-sync/claude-code-theme-sync-schedule')
+      .then(({ startClaudeCodeThemeSync }) => {
+        startClaudeCodeThemeSync({
+          getSettings: () => store.getSettings(),
+          onSettingsChanged: (listener) => store.onSettingsChanged(listener),
+          systemPrefersDark: () => nativeTheme.shouldUseDarkColors,
+          onSystemThemeChanged: (listener) => nativeTheme.on('updated', listener),
+          onAppFocused: (listener) => app.on('browser-window-focus', listener),
+          userDataPath: app.getPath('userData')
+        })
+      })
+      .catch((error: unknown) =>
+        console.warn('[claude] Could not load Claude Code theme sync:', error)
+      )
   }, fallbackMs)
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
 }
