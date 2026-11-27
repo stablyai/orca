@@ -110,7 +110,7 @@ export async function acquireAcpStructuredSession(input: {
     await relayed.managed.close().catch(() => undefined)
   }
   const fullAccess = launchPermission.permission === 'full-access'
-  const connection = connect(processLaunch, {
+  const connection = shared.connecting(connect)(processLaunch, {
     ...(relayed ? { relayed } : {}),
     clientInfo: acpClientInfo(spec),
     // Only a chat can show a URL request's card, so other connections never advertise it.
