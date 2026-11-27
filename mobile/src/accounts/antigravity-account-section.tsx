@@ -5,7 +5,7 @@ import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/agent-launch/catalo
 import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
 import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors } from '../theme/mobile-theme'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { startRuntimeCapabilityProbe } from '../transport/connection/runtime-capability-probe'
 import type { ProviderRateLimits } from './accounts-snapshot'
@@ -17,7 +17,8 @@ import {
   selectAntigravityAccount,
   type AntigravityAccountState
 } from './provider-account-operations'
-import { styles } from './mobile-accounts-screen-styles'
+import { useThemedStyles } from '../theme/themed-styles'
+import { stylesSheet } from './mobile-accounts-screen-styles'
 
 /** Saved agy accounts on the host, or null where the host can't list them. */
 export function useAntigravityAccounts(
@@ -113,6 +114,8 @@ export function AntigravityAccountSection({
   onSelect: (accountId: string) => void
 }) {
   const t = useMobileTranslation()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   if (!state || state.accounts.length === 0) {
     return null
   }

@@ -20,7 +20,8 @@ import {
   useAntigravityAccounts
 } from './antigravity-account-section'
 import { selectDataAccount } from './provider-account-operations'
-import { styles } from './mobile-accounts-screen-styles'
+import { useThemedStyles } from '../theme/themed-styles'
+import { stylesSheet } from './mobile-accounts-screen-styles'
 
 /** The sections after Claude and Codex: OpenCode and Devin profiles, saved Antigravity accounts, and every other provider's usage. */
 export function ProviderAccountSections({
@@ -47,6 +48,7 @@ export function ProviderAccountSections({
   onNotice: (notice: { title: string; message: string }) => void
 }) {
   const t = useMobileTranslation()
+  const styles = useThemedStyles(stylesSheet)
   const [antigravityAccounts, setAntigravityAccounts] = useAntigravityAccounts(
     client,
     live,

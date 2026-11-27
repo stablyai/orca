@@ -4,8 +4,9 @@ import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
 import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors } from '../theme/mobile-theme'
-import { styles } from './mobile-accounts-screen-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
+import { useThemedStyles } from '../theme/themed-styles'
+import { stylesSheet } from './mobile-accounts-screen-styles'
 
 export type ManagedDataProvider = 'opencode' | 'devin'
 
@@ -28,6 +29,8 @@ export function ManagedDataAccountSection({
   onSelect: (provider: ManagedDataProvider, accountId: string | null) => void
 }) {
   const t = useMobileTranslation()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const state = snapshot[provider]
   if (!state || state.accounts.length === 0) {
     return null
