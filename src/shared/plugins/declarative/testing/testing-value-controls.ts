@@ -112,13 +112,17 @@ export function createValueControls() {
         )
       }
       const base = replace ? '' : String(current(element).value)
-      // A rendered CodeInput reports its text with `\n` only, so its edits build on that text.
-      let value = element.type === 'CodeInput' ? base.replace(/\r\n?/g, '\n') : base
+      // A rendered CodeInput holds its text with `\n` only, both the seed its edits build on
+      // and the line breaks typed into it.
+      const lf = (raw: string) => raw.replace(/\r\n?/g, '\n')
+      const code = element.type === 'CodeInput'
+      let value = code ? lf(base) : base
+      const typed = code ? lf(text) : text
       const edits: ControlEdit[] = []
       if (replace) {
         edits.push(edit(element, value))
       }
-      for (const character of text) {
+      for (const character of typed) {
         value += character
         edits.push(edit(element, value))
       }
