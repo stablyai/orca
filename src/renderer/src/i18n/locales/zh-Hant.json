@@ -442,7 +442,9 @@
       "clientHostedTooltip": "透過 {{value0}} 瀏覽",
       "streamedTooltip": "在 {{value0}} 上瀏覽",
       "clientHostedDetail": "頁面在此裝置上呈現。網路流量和 DNS 透過遠端主機。",
-      "streamedDetail": "頁面在遠端主機上執行，並以串流方式傳送到這台裝置。"
+      "streamedDetail": "頁面在遠端主機上執行，並以串流方式傳送到這台裝置。",
+      "teammateTooltip": "透過 {{value0}} 瀏覽 localhost",
+      "teammateDetail": "頁面在此裝置上呈現。localhost 頁面透過共用主機；其他網站從你的網路載入。"
     },
     "remote": {
       "findUnavailable": "頁面從遠端主機串流時，無法使用「在頁面中尋找」。",

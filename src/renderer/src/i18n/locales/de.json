@@ -464,7 +464,9 @@
       "clientHostedTooltip": "Surfen über {{value0}}",
       "streamedTooltip": "Surfen auf {{value0}}",
       "clientHostedDetail": "Die Seite wird auf diesem Gerät dargestellt. Netzwerkverkehr und DNS laufen über den Remote-Host.",
-      "streamedDetail": "Die Seite läuft auf dem Remote-Host und wird auf dieses Gerät gestreamt."
+      "streamedDetail": "Die Seite läuft auf dem Remote-Host und wird auf dieses Gerät gestreamt.",
+      "teammateTooltip": "Localhost über {{value0}}",
+      "teammateDetail": "Die Seite wird auf diesem Gerät dargestellt. Localhost-Seiten laufen über den freigegebenen Host; andere Websites laden über dein Netzwerk."
     },
     "remote": {
       "findUnavailable": "Die Seitensuche ist nicht verfügbar, während diese Seite vom Remote-Host gestreamt wird.",

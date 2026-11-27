@@ -24107,7 +24107,9 @@
       "clientHostedTooltip": "Navegando a través de {{value0}}",
       "streamedTooltip": "Navegando en {{value0}}",
       "clientHostedDetail": "La página se renderiza en este dispositivo. El tráfico de red y el DNS pasan por el host remoto.",
-      "streamedDetail": "La página se ejecuta en el host remoto y se transmite a este dispositivo."
+      "streamedDetail": "La página se ejecuta en el host remoto y se transmite a este dispositivo.",
+      "teammateTooltip": "Navegando localhost a través de {{value0}}",
+      "teammateDetail": "La página se renderiza en este dispositivo. Las páginas de localhost pasan por el host compartido; los demás sitios se cargan desde tu red."
     },
     "remote": {
       "findUnavailable": "Buscar en la página no está disponible mientras esta página se transmite desde el host remoto.",

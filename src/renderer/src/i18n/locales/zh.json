@@ -23751,7 +23751,9 @@
       "clientHostedTooltip": "正通过 {{value0}} 浏览",
       "streamedTooltip": "正在 {{value0}} 上浏览",
       "clientHostedDetail": "页面在此设备上渲染，网络流量和 DNS 仍通过远程主机",
-      "streamedDetail": "页面在远程主机上运行，并流式传输到此设备"
+      "streamedDetail": "页面在远程主机上运行，并流式传输到此设备",
+      "teammateTooltip": "正通过 {{value0}} 浏览 localhost",
+      "teammateDetail": "页面在此设备上渲染。localhost 页面通过共享主机，其他网站从你的网络加载。"
     },
     "remote": {
       "findUnavailable": "当页面从远程主机流式传输时，无法使用页内查找",

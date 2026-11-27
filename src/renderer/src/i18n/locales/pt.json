@@ -1403,7 +1403,9 @@
       "clientHostedTooltip": "Navegando através de {{value0}}",
       "streamedTooltip": "Navegando em {{value0}}",
       "clientHostedDetail": "A página é renderizada neste dispositivo. O tráfego de rede e o DNS passam pelo host remoto.",
-      "streamedDetail": "A página é executada no host remoto e transmitida para este dispositivo."
+      "streamedDetail": "A página é executada no host remoto e transmitida para este dispositivo.",
+      "teammateTooltip": "Navegando localhost através de {{value0}}",
+      "teammateDetail": "A página é renderizada neste dispositivo. Páginas de localhost passam pelo host compartilhado; outros sites carregam pela sua rede."
     },
     "remote": {
       "findUnavailable": "Localizar na página não está disponível enquanto esta página é transmitida do host remoto.",

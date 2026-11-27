@@ -23771,7 +23771,9 @@
       "clientHostedTooltip": "{{value0}}을(를) 탐색하는 중",
       "streamedTooltip": "{{value0}}에서 탐색 중",
       "clientHostedDetail": "페이지가 이 기기에서 렌더링됩니다. 네트워크 트래픽과 DNS는 원격 호스트를 통과합니다.",
-      "streamedDetail": "페이지는 원격 호스트에서 실행되고 이 기기로 스트리밍됩니다."
+      "streamedDetail": "페이지는 원격 호스트에서 실행되고 이 기기로 스트리밍됩니다.",
+      "teammateTooltip": "{{value0}}을(를) 통해 localhost 탐색 중",
+      "teammateDetail": "페이지가 이 기기에서 렌더링됩니다. localhost 페이지는 공유 호스트를 거치고, 다른 사이트는 내 네트워크에서 로드됩니다."
     },
     "remote": {
       "findUnavailable": "이 페이지가 원격 호스트에서 스트리밍되는 동안에는 페이지에서 찾기를 사용할 수 없습니다.",
