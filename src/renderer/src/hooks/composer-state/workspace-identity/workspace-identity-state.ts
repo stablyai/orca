@@ -116,7 +116,7 @@ export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
   // Branch-as-name selections get source pills; checkout-base picks must not hide the typed name.
   const [baseBranchNamesWorkspace, setBaseBranchNamesWorkspace] = useState(
     () =>
-      !(!persistDraft && initialBaseBranchIsStartPoint) &&
+      !initialBaseBranchIsStartPoint &&
       resolveDraftBaseBranchNamesWorkspace({
         persistDraft,
         draftValue: newWorkspaceDraft?.baseBranchNamesWorkspace
