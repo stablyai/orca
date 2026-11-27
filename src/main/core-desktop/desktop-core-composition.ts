@@ -55,7 +55,7 @@ import { startWorkspaceCleanupRunner } from '../workspaces/cleanup/workspace-cle
 import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
 import { installHookStatusSessionTabsRepublish } from '../agent-hooks/runtime/hook-status-session-tabs-republish'
 import { installRepoMaintenanceIdleGate } from '../workspaces/catalog/repo-maintenance-idle-gate'
-import { recoverPendingSkillTransactions } from '../skills/transaction-state/skill-transaction-startup-recovery'
+import { recoverPendingSkillTransactionsLazy } from '../skills/transaction-state/lazy-skill-transaction-startup-recovery'
 import { initCohortClassifier } from '../telemetry/cohort-classifier'
 import { initOnboardingCohortClassifier } from '../telemetry/onboarding-cohort-classifier'
 import { StatsCollector } from '../stats/collector'
@@ -116,7 +116,7 @@ function startCoreObservers(core: DesktopCore, store: Store, deps: DesktopCoreCo
     agentHookServer,
     () => core.runtime
   )
-  core.skillTransactionRecovery = recoverPendingSkillTransactions(
+  core.skillTransactionRecovery = recoverPendingSkillTransactionsLazy(
     join(paths.userData, 'skill-installs')
   )
   void core.skillTransactionRecovery
