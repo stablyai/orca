@@ -172,7 +172,7 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
   }
 
   /** The caller owns the store write; this publishes only its current raw surface. */
-  projectStructuredAgentSessionTab(input: StructuredSessionRawPublicationInput): void {
+  protected projectStructuredAgentSessionTab(input: StructuredSessionRawPublicationInput): void {
     // Publication supplies the owner's result, including an explicit absence; direct restores read it.
     const savedOrder =
       'savedOrder' in input

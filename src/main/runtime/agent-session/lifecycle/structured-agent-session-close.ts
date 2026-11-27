@@ -29,6 +29,8 @@ export type StructuredSessionSurfaceRuntime = Pick<
 
 export type StructuredSessionSurface = {
   tableId: string | null
+  /** Landed in a teammate's own list: the host's tab is not this write's. */
+  personList?: true
   presentation?: ReturnType<
     StructuredSessionSurfaceRuntime['captureStructuredAgentSessionPresentation']
   >

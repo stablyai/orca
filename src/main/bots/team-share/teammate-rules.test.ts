@@ -138,8 +138,7 @@ describe('a teammate’s own Home tab list (rule 4)', () => {
 
   it('reads the workspace of every host-list writer it refuses early in a teammate’s Home', () => {
     // A chats-only teammate reaches none of them; the workspace tier's call names its workspace
-    // (`worktree`, or a launch's `target.worktree`). One naming none still meets the store's and the
-    // window's guards.
+    // (`worktree`, or a launch's `target.worktree`). One naming none is refused at admission.
     for (const name of hostList) {
       const method = byName.get(name)!
       expect(method.share, name).toBe('not-shared')
@@ -189,6 +188,14 @@ describe('a teammate’s own Home tab list (rule 4)', () => {
     )
     expect(calls.length).toBeGreaterThan(10)
     expect(calls.filter((call) => !source.test(call.named))).toEqual([])
+    // The host's own state names only the host's terminals' tabs.
+    expect(
+      calls.filter(
+        (call) =>
+          call.named === 'HOST_STATE_PERSON' &&
+          !call.at.includes('session-tabs/terminal-retirement/')
+      )
+    ).toEqual([])
     // No ambient person: no async-context scope, and no write point that throws on one.
     const ambient =
       /getActiveTeammate|runWithActiveTeammate|TeammateHostTabWriteError|admitWritesBy/

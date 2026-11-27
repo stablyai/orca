@@ -217,8 +217,10 @@ async function rig(options: { home?: 'rig' | 'other'; opened?: AuthorityRig } = 
         saved: savedIds(opened),
         visible: [B, C, O].filter((id) => opened.host.isSessionTabVisible(id))
       }),
-    reveal: (deviceId: string, sessionId: string) =>
-      call(deviceId, 'agentSession.reveal', { sessionId, navigation: 'caller' }),
+    reveal: async (deviceId: string, sessionId: string) =>
+      expect(
+        await call(deviceId, 'agentSession.reveal', { sessionId, navigation: 'caller' })
+      ).toMatchObject({ ok: true }),
     activate: (deviceId: string, sessionId: string) =>
       call(deviceId, 'session.tabs.activate', {
         worktree,
@@ -418,6 +420,15 @@ it('moves a teammate’s tab an older build saved in the owner’s list to their
   await fresh.reveal('owner-phone', B)
   await fresh.runtime['backfillBotBackgroundChats']()
   expect(await fresh.hostChats()).toEqual([O, B])
+  // Two more restarts: the saved marker survives loading, so the move never runs again.
+  let again = fresh
+  for (let restart = 0; restart < 2; restart += 1) {
+    again = await rig({ opened: await physicalReload(again) })
+    await again.runtime['backfillBotBackgroundChats']()
+    await chatTabCommandsSettled()
+    expect(await again.hostChats()).toEqual([O, B])
+    expect(sessions(await again.list('mate-desk'))).toEqual([C])
+  }
 })
 
 it('lists a teammate’s chats in the owner’s chat list under their name; the owner opening one changes only the owner’s list', async () => {

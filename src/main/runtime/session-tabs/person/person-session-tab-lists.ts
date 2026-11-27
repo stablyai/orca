@@ -209,9 +209,10 @@ export class PersonSessionTabLists {
     }
     if (this.movedHomes.size > 0) {
       persisted[TEAMMATE_MOVED_HOMES_ROW] = Object.fromEntries(
+        // A non-null pick, so loading the saved selections keeps the row.
         [...this.movedHomes].map((home) => [
           home,
-          { activeTabId: null, activeGroupId: null, activeTabIdByGroupId: {} }
+          { activeTabId: 'moved', activeGroupId: null, activeTabIdByGroupId: {} }
         ])
       )
     }

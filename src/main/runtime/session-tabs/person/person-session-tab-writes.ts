@@ -96,6 +96,7 @@ export abstract class OrcaRuntimeWithPersonSessionTabWrites extends OrcaRuntimeW
     input.workspaceAuthority?.committed()
     input.capture?.({
       tableId: null,
+      personList: true,
       presentation: {
         raw: this.currentLocalStructuredSessionPresentation(input.sessionId),
         saved: []

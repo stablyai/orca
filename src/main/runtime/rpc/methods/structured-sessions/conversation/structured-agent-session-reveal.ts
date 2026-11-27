@@ -54,6 +54,7 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
         })
       }
       let publication: StructuredSessionSurface | null = null
+      let personList = false
       let revealed: StructuredAgentSessionReveal
       try {
         const host = requireStructuredHost(ctx)
@@ -143,12 +144,15 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
           agent: revealed.agent,
           capture: (surface) => {
             publication = surface
+            personList = surface.personList === true
           },
           activate: params.navigation !== 'caller',
           ...(params.navigation ? { navigation: params.navigation } : {})
         })
         check()
+        // A teammate's own list holds the tab; the host's tab, open or not, is someone else's.
         if (
+          !personList &&
           !structuredSessionSurfaceIsCurrent(
             requireStructuredHost(ctx),
             revealed.sessionId,

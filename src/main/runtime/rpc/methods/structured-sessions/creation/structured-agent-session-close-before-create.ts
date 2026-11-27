@@ -1,5 +1,6 @@
 // Main remembers close-before-create because its layout-owning window has no local cancel tombstone; refuse pending creates or close them on arrival.
 
+import { callerTabPerson } from '../../../../../bots/team-share/teammate-rules'
 import { closeCapturedStructuredSession } from '../../../../agent-session/lifecycle/structured-session-captured-close'
 import {
   type AgentSessionWireRefusal,
@@ -97,6 +98,11 @@ async function closeCreatedChat(
   sessionId: string,
   surface: StructuredSessionSurface | null
 ): Promise<void> {
+  // A teammate's create landed in their own list: close it there; the host's tab is not this create's.
+  if (surface?.personList) {
+    ctx.runtime.closeChatTabs({ people: [callerTabPerson(ctx.callerScope)], sessionId })
+    return
+  }
   const host = getStructuredAgentSessionHost()
   if (!host) {
     return
