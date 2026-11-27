@@ -2,7 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { ItsaplanProjectReference } from '../../../../../shared/itsaplan/itsaplan-project-reference'
 import type { ItsaplanProject } from '../../../../../shared/itsaplan/itsaplan-types'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import { taskSourceRuntimeTarget } from '@/lib/work-items/task-source-runtime-target'
+import { createItsaplanClientForTarget } from '@/runtime/itsaplan/runtime-itsaplan-client'
 import { useAppStore } from '@/store/index'
 import {
   WorkItemScopePicker,
@@ -80,6 +83,30 @@ async function saveDefaultProject(
   }
 }
 
+const NO_PROJECTS: ItsaplanProject[] = []
+
+type HostProjectInventory = {
+  source: RuntimeClientTarget
+  instanceId: string | null
+  projects: ItsaplanProject[]
+  error: string | null
+}
+
+async function loadHostProjectInventory(
+  source: RuntimeClientTarget
+): Promise<HostProjectInventory> {
+  const client = createItsaplanClientForTarget(source)
+  try {
+    const status = await client.status()
+    const instanceId = status.instance?.id ?? null
+    const projects = instanceId === null ? [] : await client.listProjects()
+    return { source, instanceId, projects, error: null }
+  } catch (caught) {
+    const error = caught instanceof Error ? caught.message : String(caught)
+    return { source, instanceId: null, projects: [], error }
+  }
+}
+
 export function RepositoryItsaplanProjectSection({
   repo,
   updateRepo,
@@ -90,39 +117,29 @@ export function RepositoryItsaplanProjectSection({
   forceVisible?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
-  const instanceId = useAppStore((s) => s.itsaplanStatus?.instance?.id ?? null)
-  const loadItsaplanProjects = useAppStore((s) => s.loadItsaplanProjects)
-  const [projects, setProjects] = useState<ItsaplanProject[]>([])
-  const [loading, setLoading] = useState(instanceId !== null)
+  const hostId = getRepoExecutionHostId(repo)
+  const source = useMemo(() => taskSourceRuntimeTarget({ hostId }), [hostId])
+  const [inventory, setInventory] = useState<HostProjectInventory | null>(null)
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (instanceId === null) {
-      return
-    }
     let cancelled = false
-    loadItsaplanProjects()
-      .then((loaded) => {
-        if (!cancelled) {
-          setProjects(loaded)
-          setError(null)
-        }
-      })
-      .catch((caught: unknown) => {
-        if (!cancelled) {
-          setError(caught instanceof Error ? caught.message : String(caught))
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      })
+    void loadHostProjectInventory(source).then((next) => {
+      if (!cancelled) {
+        setInventory(next)
+      }
+    })
     return () => {
       cancelled = true
     }
-  }, [instanceId, loadItsaplanProjects])
+  }, [source])
+
+  const current = inventory?.source === source ? inventory : null
+  const loading = current === null
+  const instanceId = current?.instanceId ?? null
+  const projects = current?.projects ?? NO_PROJECTS
+  const error = saveError ?? current?.error ?? null
 
   const options = useMemo<WorkItemScopeOption<ItsaplanProjectReference>[]>(
     () =>
@@ -141,8 +158,8 @@ export function RepositoryItsaplanProjectSection({
 
   const applyProject = async (project: ItsaplanProjectReference | null) => {
     setSaving(true)
-    setError(null)
-    setError(await saveDefaultProject(repo, project, updateRepo, t))
+    setSaveError(null)
+    setSaveError(await saveDefaultProject(repo, project, updateRepo, t))
     setSaving(false)
   }
 
@@ -173,7 +190,7 @@ export function RepositoryItsaplanProjectSection({
         emptyLabel={t('components.RepositoryItsaplanProjectSection.empty', 'No projects found.')}
         disabled={loading || saving || instanceId === null}
       />
-      {instanceId === null ? (
+      {!loading && instanceId === null ? (
         <p className="text-xs text-muted-foreground">
           {t(
             'components.RepositoryItsaplanProjectSection.connect',

@@ -21,6 +21,8 @@ export type ItsaplanIssueListEntry = {
 
 export type ItsaplanSlice = {
   itsaplanStatus: ItsaplanConnectionStatus | null
+  // getProviderRuntimeContextKey the status and caches were read under.
+  itsaplanStatusContextKey: string | null
   refreshItsaplanStatus: () => Promise<ItsaplanConnectionStatus>
   connectItsaplan: (args: {
     appUrl: string

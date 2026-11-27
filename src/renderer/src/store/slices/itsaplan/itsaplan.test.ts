@@ -8,12 +8,14 @@ import { createItsaplanSlice } from './itsaplan'
 const listIssues = vi.fn()
 const updateIssue = vi.fn()
 const disconnect = vi.fn()
+const status = vi.fn()
 
 vi.mock('@/runtime/itsaplan/runtime-itsaplan-client', () => ({
   createRuntimeItsaplanClient: () => ({
     listIssues: (...args: unknown[]) => listIssues(...args),
     updateIssue: (...args: unknown[]) => updateIssue(...args),
-    disconnect: (...args: unknown[]) => disconnect(...args)
+    disconnect: (...args: unknown[]) => disconnect(...args),
+    status: (...args: unknown[]) => status(...args)
   })
 }))
 
@@ -49,6 +51,7 @@ describe('itsaplan slice', () => {
     listIssues.mockReset()
     updateIssue.mockReset()
     disconnect.mockReset().mockResolvedValue(undefined)
+    status.mockReset().mockResolvedValue({ connected: true, viewer: null, instance: null })
   })
 
   it('uses one cache key regardless of label id order', () => {
@@ -101,6 +104,19 @@ describe('itsaplan slice', () => {
     await store.getState().disconnectItsaplan()
     resolveList([issue(4, 1)])
     await pending
+
+    expect(store.getState().itsaplanIssueLists).toEqual({})
+  })
+
+  it('drops cached lists when the status is refreshed for another runtime', async () => {
+    listIssues.mockResolvedValue([issue(4, 1)])
+    const store = createTestStore()
+    await store.getState().refreshItsaplanStatus()
+    await store.getState().loadItsaplanIssues({ projectRef: 'a.E', filters: {} })
+
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the slice reads only activeRuntimeEnvironmentId.
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-b' } } as unknown as AppState)
+    await store.getState().refreshItsaplanStatus()
 
     expect(store.getState().itsaplanIssueLists).toEqual({})
   })

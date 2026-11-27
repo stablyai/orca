@@ -266,7 +266,7 @@
 1 src/renderer/src/store/slices/editor/opening/open-file-apply.ts
 1 src/renderer/src/store/slices/hosted-review/hosted-review-cache-identity.ts
 1 src/renderer/src/store/slices/hosted-review/refresh/visible-hosted-review-refresh-targets.ts
-2 src/renderer/src/store/slices/itsaplan/itsaplan.ts
+3 src/renderer/src/store/slices/itsaplan/itsaplan.ts
 5 src/renderer/src/store/slices/jira/jira-collection-read-actions.ts
 32 src/renderer/src/store/slices/jira/jira-connection-actions.ts
 8 src/renderer/src/store/slices/jira/jira-issue-read-actions.ts

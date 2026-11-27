@@ -1,13 +1,17 @@
 import type { ItsaplanApi } from '../../../../preload/api/work-items/itsaplan-api'
 import { rowLessSourceTarget } from '../hosts/selection/default-creation-host'
 import type { RowLessSource as RuntimeItsaplanSettings } from '../hosts/selection/default-creation-host'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { callRuntimeRpc } from '../rpc/calls/runtime-rpc-call'
 
 const REQUEST_TIMEOUT_MS = 30_000
 const ADMIN_TIMEOUT_MS = 15_000
 
 export function createRuntimeItsaplanClient(settings: RuntimeItsaplanSettings): ItsaplanApi {
-  const target = rowLessSourceTarget(settings)
+  return createItsaplanClientForTarget(rowLessSourceTarget(settings))
+}
+
+export function createItsaplanClientForTarget(target: RuntimeClientTarget): ItsaplanApi {
   const route = <T>(
     method: keyof ItsaplanApi,
     args: unknown,

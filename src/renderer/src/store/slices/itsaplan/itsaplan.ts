@@ -1,6 +1,7 @@
 import type { StateCreator } from 'zustand'
 import { createRuntimeItsaplanClient } from '@/runtime/itsaplan/runtime-itsaplan-client'
 import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
+import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import type {
   ItsaplanConnectionStatus,
   ItsaplanIssue,
@@ -41,6 +42,7 @@ function replaceIssue(issues: ItsaplanIssue[], updated: ItsaplanIssue): Itsaplan
 
 export const createItsaplanSlice: StateCreator<AppState, [], [], ItsaplanSlice> = (set, get) => {
   const client = () => createRuntimeItsaplanClient(defaultScopeSource(get().settings))
+  const runtimeContextKey = () => getProviderRuntimeContextKey(get().settings)
   // Bumped on disconnect/reconnect so reads and writes started for the old account never land.
   let generation = 0
   const setIfCurrent = (
@@ -64,13 +66,21 @@ export const createItsaplanSlice: StateCreator<AppState, [], [], ItsaplanSlice> 
 
   return {
     itsaplanStatus: null,
+    itsaplanStatusContextKey: null,
     itsaplanProjects: null,
     itsaplanProjectMetadata: {},
     itsaplanIssueLists: {},
     itsaplanIssueDetails: {},
 
-    refreshItsaplanStatus: () =>
-      dedupe('status', async () => {
+    refreshItsaplanStatus: () => {
+      const contextKey = runtimeContextKey()
+      const previousKey = get().itsaplanStatusContextKey
+      if (previousKey !== null && previousKey !== contextKey) {
+        // Another runtime owns a different account, so drop everything read under the old one.
+        resetConnectionScope()
+        set({ itsaplanStatus: null, itsaplanStatusContextKey: null })
+      }
+      return dedupe(`status:${contextKey}`, async () => {
         const gen = generation
         let status: ItsaplanConnectionStatus
         try {
@@ -79,9 +89,12 @@ export const createItsaplanSlice: StateCreator<AppState, [], [], ItsaplanSlice> 
           // Settle out of the null "checking" state so setup UI does not spin forever.
           status = DISCONNECTED_STATUS
         }
-        setIfCurrent(gen, { itsaplanStatus: status })
+        if (runtimeContextKey() === contextKey) {
+          setIfCurrent(gen, { itsaplanStatus: status, itsaplanStatusContextKey: contextKey })
+        }
         return status
-      }),
+      })
+    },
 
     connectItsaplan: async (args) => {
       const result = await client().connect(args)
@@ -99,7 +112,10 @@ export const createItsaplanSlice: StateCreator<AppState, [], [], ItsaplanSlice> 
       resetConnectionScope()
       await client().disconnect()
       resetConnectionScope()
-      set({ itsaplanStatus: DISCONNECTED_STATUS })
+      set({
+        itsaplanStatus: DISCONNECTED_STATUS,
+        itsaplanStatusContextKey: runtimeContextKey()
+      })
     },
 
     loadItsaplanProjects: async (opts) => {

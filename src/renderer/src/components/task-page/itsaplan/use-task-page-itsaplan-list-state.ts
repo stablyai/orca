@@ -32,9 +32,17 @@ export function getItsaplanInstanceName(appUrl: string | null | undefined): stri
 }
 
 export function useTaskPageItsaplanListState(model: TaskPageJiraListStateModel) {
-  const { taskSource, primaryRepo, accountBackedTaskSourceHostId, fallbackTaskSourceProjectId } =
-    model
+  const {
+    taskSource,
+    primaryRepo,
+    accountBackedTaskSourceHostId,
+    fallbackTaskSourceProjectId,
+    providerRuntimeContextKey
+  } = model
   const itsaplanStatus = useAppStore((s) => s.itsaplanStatus)
+  const itsaplanStatusCurrent = useAppStore(
+    (s) => s.itsaplanStatusContextKey === providerRuntimeContextKey
+  )
   const refreshItsaplanStatus = useAppStore((s) => s.refreshItsaplanStatus)
   const itsaplanProjects = useAppStore((s) => s.itsaplanProjects)
   const loadItsaplanProjects = useAppStore((s) => s.loadItsaplanProjects)
@@ -51,11 +59,11 @@ export function useTaskPageItsaplanListState(model: TaskPageJiraListStateModel) 
   const [newItsaplanIssueOpen, setNewItsaplanIssueOpen] = useState(false)
 
   useEffect(() => {
-    if (!itsaplanActive || itsaplanStatus !== null) {
+    if (!itsaplanActive || (itsaplanStatus !== null && itsaplanStatusCurrent)) {
       return
     }
     void refreshItsaplanStatus().catch(() => setItsaplanStatusFailed(true))
-  }, [itsaplanActive, itsaplanStatus, refreshItsaplanStatus])
+  }, [itsaplanActive, itsaplanStatus, itsaplanStatusCurrent, refreshItsaplanStatus])
 
   const [itsaplanProjectsError, setItsaplanProjectsError] = useState<string | null>(null)
   useEffect(() => {
