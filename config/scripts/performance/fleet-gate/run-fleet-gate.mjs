@@ -21,11 +21,12 @@ import {
 } from './fleet-gate-run-dirs.mjs'
 import { startVirtualDisplay } from './fleet-gate-display.mjs'
 import { waitForAppWindow } from './fleet-gate-app-ready.mjs'
-import { parseArgs } from './fleet-gate-args.mjs'
+import { NEW_ONLY_SCENARIOS, parseArgs } from './fleet-gate-args.mjs'
 import { hotPathChanges, isHotPath } from './fleet-gate-hot-paths.mjs'
 import { installMainProbeIn, resetMainProbe, snapshotMainProbe } from './fleet-gate-main-probe.mjs'
 import { installRendererProbe } from './fleet-gate-renderer-probe.mjs'
 import { burstRows, compareRuns, formatTable, windowMetrics } from './fleet-gate-report.mjs'
+import { appMemorySoakOnce, appMemorySoakRows } from './fleet-gate-app-memory-soak.mjs'
 import { chatMemoryOnce, chatMemoryRows } from './fleet-gate-chat-memory.mjs'
 import {
   BURST_CHATS,
@@ -477,9 +478,7 @@ async function main() {
   const runs = []
   const schedule = buildCounterbalancedSchedule(options.runs, 'old', 'new')
   const runsRoot = gateRunDir
-  const windowScenarios = options.scenarios.filter(
-    (name) => name !== 'burst' && name !== 'chat-memory'
-  )
+  const windowScenarios = options.scenarios.filter((name) => !NEW_ONLY_SCENARIOS.includes(name))
   const bursts = []
   // Each run removes its own copy; the gate's folder (runsRoot) goes when the gate exits.
   for (const pair of windowScenarios.length > 0 ? schedule : []) {
@@ -543,16 +542,37 @@ async function main() {
       }))
     )
   }
+  // Hours long, so never in the default set: a nightly run asks for it with --scenarios.
+  const soak = []
+  if (options.scenarios.includes('app-memory-soak')) {
+    soak.push(
+      await appMemorySoakOnce({
+        launchCopy,
+        arm: 'new',
+        sha: shas.new,
+        buildDir: builds.new,
+        seedDir: seed.seedDir,
+        outDir,
+        repoRoot,
+        options,
+        runDir: path.join(runsRoot, 'soak-new')
+      }).catch((error) => ({
+        arm: 'new',
+        incomplete: [`soak: ${String(error?.message ?? error)}`]
+      }))
+    )
+  }
   const census = runs.find((entry) => entry.census)?.census
   const rows = [
     ...compareRuns(runs, windowScenarios),
     ...burstRows(bursts),
-    ...chatMemoryRows(chatMemory)
+    ...chatMemoryRows(chatMemory),
+    ...appMemorySoakRows(soak)
   ]
   const notes = [...new Set(runs.flatMap((entry) => entry.notes))]
   const incomplete = [
     ...new Set(
-      [...runs, ...bursts, ...chatMemory].flatMap((entry) =>
+      [...runs, ...bursts, ...chatMemory, ...soak].flatMap((entry) =>
         entry.incomplete.map((reason) => `${String(entry.arm)} ${String(reason)}`)
       )
     )
@@ -575,7 +595,7 @@ async function main() {
   )
   fs.writeFileSync(
     `${stem}.json`,
-    `${JSON.stringify({ oldSha, newSha, result, hot, census, incomplete, runs, bursts, chatMemory, rows }, null, 2)}\n`
+    `${JSON.stringify({ oldSha, newSha, result, hot, census, incomplete, runs, bursts, chatMemory, soak, rows }, null, 2)}\n`
   )
   fs.writeFileSync(`${stem}.txt`, `${text}\n`)
   console.log('=== FLEET GATE TABLE ===')

@@ -131,7 +131,7 @@ export async function createChatBurst(page, count, offset, prompt) {
             .call({ method: 'agentSession.create', params })
             .catch((error) => ({ ok: false, error: String(error?.message ?? error) }))
           return reply.ok && reply.result?.ok !== false
-            ? { sessionId }
+            ? { sessionId, worktreeId: worktree.id }
             : {
                 refusal: JSON.stringify(reply.error ?? reply.result?.refusal ?? reply).slice(0, 200)
               }
@@ -140,6 +140,7 @@ export async function createChatBurst(page, count, offset, prompt) {
       return {
         requested: worktrees.length,
         sessionIds: replies.filter((reply) => reply.sessionId).map((reply) => reply.sessionId),
+        sessions: replies.filter((reply) => reply.sessionId),
         refused: replies.filter((reply) => reply.refusal).map((reply) => reply.refusal)
       }
     },
