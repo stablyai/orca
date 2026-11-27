@@ -1,37 +1,40 @@
-import { translate } from '../../../../i18n/mobile-i18n'
+import type { Translate } from '../../../../i18n/mobile-i18n'
 import type { SessionOptionDescriptor } from '../../../../../../src/shared/native-chat/input/native-chat-session-options'
 import {
   nativeChatSessionChoiceLabel,
   selectedNativeChatChoice
 } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-session-option-labels'
-import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
+import { mobileNativeChatSessionOptionSay } from './native-chat-session-option-copy'
 
 /** The value a drill-in row shows beside its label; desktop lists the choices in place instead. */
-export function mobileSessionOptionSummaryValue(descriptor: SessionOptionDescriptor): string {
+export function mobileSessionOptionSummaryValue(
+  descriptor: SessionOptionDescriptor,
+  t: Translate
+): string {
   // Show the boolean value consistently with its switch; the source marker separately expresses whether it is confirmed.
   if (descriptor.kind.type === 'boolean') {
     return descriptor.kind.currentValue
-      ? translate('chat.sessionOptionCopy.on', 'On')
-      : translate('chat.sessionOptionCopy.off', 'Off')
+      ? t('chat.sessionOptionCopy.on', 'On')
+      : t('chat.sessionOptionCopy.off', 'Off')
   }
   if (descriptor.valueSource === 'unknown') {
     return descriptor.id === 'permissionMode'
-      ? translate('chat.sessionOptionCopy.permissions', 'Permissions')
-      : translate('chat.sessionOptionCopy.notSet', 'Not set')
+      ? t('chat.sessionOptionCopy.permissions', 'Permissions')
+      : t('chat.sessionOptionCopy.notSet', 'Not set')
   }
   if (
     descriptor.id === 'permissionMode' &&
     descriptor.kind.type === 'select' &&
     descriptor.kind.currentValue === 'own'
   ) {
-    return translate('settings.agents.permissionOwnAll', "Agents' own settings")
+    return t('settings.agents.permissionOwnAll', "Agents' own settings")
   }
   const choice = selectedNativeChatChoice(descriptor)
   if (!choice) {
-    return translate('chat.sessionOptionCopy.notSet', 'Not set')
+    return t('chat.sessionOptionCopy.notSet', 'Not set')
   }
   if (descriptor.id === 'permissionMode') {
-    const deferred = deferredPermissionSummary(descriptor, choice)
+    const deferred = deferredPermissionSummary(descriptor, choice, t)
     if (deferred) {
       return deferred.compact
     }
@@ -39,26 +42,29 @@ export function mobileSessionOptionSummaryValue(descriptor: SessionOptionDescrip
   if (descriptor.id === 'permissionMode' && descriptor.description) {
     return descriptor.description
   }
-  return nativeChatSessionChoiceLabel(choice, say, descriptor.id)
+  return nativeChatSessionChoiceLabel(choice, mobileNativeChatSessionOptionSay(t), descriptor.id)
 }
 
 type DeferredPermissionSummary = { saved: string; compact: string; timing: string; full: string }
 
 /** A permission pick saved for the next message while another launch mode runs, in every length mobile shows. */
 export function mobileDeferredPermissionSummary(
-  descriptor: SessionOptionDescriptor
+  descriptor: SessionOptionDescriptor,
+  t: Translate
 ): DeferredPermissionSummary | null {
   if (descriptor.id !== 'permissionMode' || descriptor.kind.type !== 'select') {
     return null
   }
   const choice = selectedNativeChatChoice(descriptor)
-  return choice ? deferredPermissionSummary(descriptor, choice) : null
+  return choice ? deferredPermissionSummary(descriptor, choice, t) : null
 }
 
 function deferredPermissionSummary(
   descriptor: SessionOptionDescriptor,
-  choice: NonNullable<ReturnType<typeof selectedNativeChatChoice>>
+  choice: NonNullable<ReturnType<typeof selectedNativeChatChoice>>,
+  t: Translate
 ): DeferredPermissionSummary | null {
+  const say = mobileNativeChatSessionOptionSay(t)
   if (
     descriptor.kind.type !== 'select' ||
     descriptor.valueSource !== 'dispatched' ||
@@ -70,7 +76,7 @@ function deferredPermissionSummary(
   const activeLabel = active
     ? nativeChatSessionChoiceLabel(active, say, descriptor.id)
     : descriptor.activeValue === 'own'
-      ? translate('settings.agents.permissionOwnAll', "Agents' own settings")
+      ? t('settings.agents.permissionOwnAll', "Agents' own settings")
       : null
   if (!activeLabel) {
     return null
@@ -78,17 +84,17 @@ function deferredPermissionSummary(
   const saved = nativeChatSessionChoiceLabel(choice, say, descriptor.id)
   return {
     saved,
-    compact: translate(
+    compact: t(
       'chat.sessionOptionCopy.permissionAppliesNextMessageCompact',
       '{{saved}} · next message',
       { saved }
     ),
-    timing: translate(
+    timing: t(
       'chat.sessionOptionCopy.permissionAppliesNextMessageTiming',
       'Applies next message · running {{active}}',
       { active: activeLabel }
     ),
-    full: translate(
+    full: t(
       'chat.sessionOptionCopy.permissionAppliesNextMessage',
       '{{saved}} applies to your next message; running {{active}}',
       { saved, active: activeLabel }

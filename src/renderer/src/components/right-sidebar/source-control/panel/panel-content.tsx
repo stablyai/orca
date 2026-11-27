@@ -1,9 +1,10 @@
-import { useRef } from 'react'
+import { useRef, type ReactNode } from 'react'
+import { useStickyFilterScroll } from './filter-results-scroll'
 import { useGitCommitActionsSupport } from '@/runtime/source-control/git/git-commit-actions-capability'
 import { shouldShowSourceControlCompareUnavailableCard } from './header-toolbar'
 import { shouldRenderCommitArea } from '../commit/component-gates'
 import { SourceControlBranchSection, branchSectionCountTitle } from '../listing/branch-section'
-import { SourceControlContentStatus } from '../listing/content-status'
+import { SourceControlContentStatus, SourceControlFilterFeedback } from '../listing/content-status'
 import { SourceControlUncommittedSections } from '../listing/uncommitted-sections'
 import { CompareUnavailable } from '../sync/compare-summary'
 import { SourceControlCommitSurface } from './commit-surface'
@@ -11,13 +12,20 @@ import { SourceControlForkPushNotice } from './fork-push-notice'
 import type { SourceControlPanelReadyProps } from './panel-props'
 import { useTranslate } from '@/i18n/use-translate'
 import { CommitScopeFilesStatus } from './commit-scope-files-status'
+import { useSourceControlScope } from './worktree-scope'
+import { cn } from '@/lib/class-names'
 
 const NO_COMMENT_COUNTS = new Map<string, number>()
 
-export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
+export function SourceControlPanelContent({
+  fileListHeader = null,
+  ...props
+}: SourceControlPanelReadyProps & { fileListHeader?: ReactNode }) {
   const { activeWorktree, currentWorktreeId, model, worktreePath } = props
+  const embedded = useSourceControlScope() !== null
   const t = useTranslate()
   const commitFilesHeaderRef = useRef<HTMLButtonElement>(null)
+  const fileListHeaderRef = useRef<HTMLDivElement>(null)
   const {
     activeConnectionId,
     activeOpenRowKeys,
@@ -33,6 +41,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     expandedSubmoduleKeys,
     fileFilterState,
     fileListScrollElement,
+    filterExpanded,
     filterQuery,
     filteredBranchEntries,
     handleAbortOperationForConflict,
@@ -59,6 +68,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     openBranchAllDiffs,
     openCommitFile,
     openCommittedDiff,
+    openHistoryCommitDiff,
     openConflictReview,
     refreshActiveGitStatus,
     refreshBranchCompare,
@@ -96,6 +106,17 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
       : null
   // A commit's files still loading must not read as "No matching files" under a filter.
   const commitFilesPending = scopeKind === 'commit' && currentCommitFiles?.status !== 'ready'
+  const stickyFileListHeader = fileListHeader !== null && !embedded
+  const stickyFilterActive = stickyFileListHeader && Boolean(normalizedFilter || filterExpanded)
+  const filterSpacerRef = useStickyFilterScroll(
+    fileListHeaderRef,
+    fileListScrollElement,
+    normalizedFilter,
+    stickyFilterActive
+  )
+  const commitSurfaceShown =
+    scopeKind !== 'commit' &&
+    shouldRenderCommitArea(unresolvedConflicts.length, conflictOperation, recovery.supported)
   const showGenericEmptyState =
     scopeKind === 'all' &&
     statusReadError === undefined &&
@@ -136,19 +157,41 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
         hasFilteredUncommittedEntries={hasFilteredUncommittedEntries}
         hasFilteredBranchEntries={hasFilteredBranchEntries || commitFilesPending}
         filterQuery={filterQuery}
+        filterFeedbackInline={!fileListHeader}
       />
 
       {/* Keep CommitArea through clean/mid-commit states (#1448); only active conflict operations replace the action surface. */}
       <SourceControlForkPushNotice pushTarget={activeWorktree.pushTarget ?? null} />
 
-      {scopeKind !== 'commit' &&
-        shouldRenderCommitArea(
-          unresolvedConflicts.length,
-          conflictOperation,
-          recovery.supported
-        ) && (
-          <SourceControlCommitSurface {...props} showGenericEmptyState={showGenericEmptyState} />
-        )}
+      {commitSurfaceShown && (
+        <SourceControlCommitSurface {...props} showGenericEmptyState={showGenericEmptyState} />
+      )}
+
+      {fileListHeader ? (
+        <div
+          ref={fileListHeaderRef}
+          // Marks where the scroller's scroll-margin rule starts (see panel-ready).
+          data-file-list-header={embedded ? undefined : ''}
+          className={cn(
+            // Sticky in the selected panel so its tools stay in reach while the list scrolls;
+            // -top-1 cancels the scroller's pt-1 so rows cannot show above it.
+            !embedded && 'sticky -top-1 z-10 bg-sidebar',
+            commitSurfaceShown && 'border-t border-border'
+          )}
+        >
+          {fileListHeader}
+        </div>
+      ) : null}
+
+      {fileListHeader ? (
+        <SourceControlFilterFeedback
+          normalizedFilter={normalizedFilter}
+          filterTooLarge={fileFilterState.tooLarge}
+          hasFilteredUncommittedEntries={hasFilteredUncommittedEntries}
+          hasFilteredBranchEntries={hasFilteredBranchEntries || commitFilesPending}
+          filterQuery={filterQuery}
+        />
+      ) : null}
 
       {hasFilteredUncommittedEntries && (
         <SourceControlUncommittedSections
@@ -267,6 +310,12 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
           label={t('auto.components.right.sidebar.SourceControl.scopeCommitFiles', 'Files')}
           sectionKey="commit"
           headerButtonRef={commitFilesHeaderRef}
+          // The whole-commit diff, as View all opens it for the other sections.
+          onViewAll={
+            currentCommitFiles?.status === 'ready' && currentCommitFiles.entries.length > 0
+              ? () => void openHistoryCommitDiff(changeScope.commit)
+              : undefined
+          }
           activeOpenRowKeys={activeOpenRowKeys}
           filteredBranchEntries={filteredBranchEntries}
           collapsedSections={collapsedSections}
@@ -297,6 +346,11 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
             />
           ) : null}
         </SourceControlBranchSection>
+      ) : null}
+
+      {stickyFilterActive ? (
+        // Height is fitted by useStickyFilterScroll so the stuck header never moves while filtering.
+        <div ref={filterSpacerRef} aria-hidden="true" className="shrink-0" />
       ) : null}
     </>
   )

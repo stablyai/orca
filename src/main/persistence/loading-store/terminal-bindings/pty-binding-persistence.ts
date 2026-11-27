@@ -3,7 +3,7 @@ import { parseExecutionHostId } from '../../../../shared/execution-host/executio
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../../restoring-sessions/workspace-session-write-rollback'
-import { clearReplacedPaneBinding } from './replaced-pane-binding'
+import { clearReplacedPaneBinding, replacedPaneBindingState } from './replaced-pane-binding'
 
 import type { PtyBindingSourceExpectation } from '../store'
 
@@ -115,22 +115,16 @@ export class PtyBindingPersistenceOperations {
     }
     return runtime.runDurableMutation(() => {
       const session = sessions.getWorkspaceSession(resolved)
-      const currentId =
-        session.terminalLayoutsByTabId[binding.tabId]?.ptyIdsByLeafId?.[binding.leafId]
-      if (!currentId) {
+      const state = replacedPaneBindingState(session, binding)
+      if (state === 'unbound') {
         return { value: true, persist: 'if-dirty', writtenHostIds: [] }
       }
-      if (currentId !== binding.ptyId) {
-        return { value: false, persist: false, writtenHostIds: [] }
-      }
       if (
-        fence &&
-        session.terminalPtyIncarnationsByPaneKey?.[makePaneKey(binding.tabId, binding.leafId)] !==
-          fence.incarnationId
+        state === 'taken' ||
+        (fence &&
+          session.terminalPtyIncarnationsByPaneKey?.[makePaneKey(binding.tabId, binding.leafId)] !==
+            fence.incarnationId)
       ) {
-        return { value: false, persist: false, writtenHostIds: [] }
-      }
-      if (!session.tabsByWorktree[binding.worktreeId]?.some((tab) => tab.id === binding.tabId)) {
         return { value: false, persist: false, writtenHostIds: [] }
       }
       const retired = clearReplacedPaneBinding(session, { ...binding, parentTabId: binding.tabId })

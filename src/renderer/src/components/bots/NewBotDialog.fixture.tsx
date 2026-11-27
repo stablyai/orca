@@ -324,68 +324,105 @@ const fromLink = (width: 340 | 480) => ({
 export const link340 = defineFixture(fromLink(340))
 export const link480 = defineFixture(fromLink(480))
 
-// The shared link in the locales with the longest Use chat defaults: the footer stays on one row.
-const linkIn = (language: 'de' | 'es' | 'ru') => ({
-  ...fromLink(340),
-  interact: async (frame: HTMLElement) => {
-    fromLink(340).interact(frame)
-    await i18n.changeLanguage(await loadRendererUiLanguage(language))
-    await new Promise((resolve) => setTimeout(resolve, 200))
-    const footer = document.querySelector<HTMLElement>('[data-slot="dialog-footer"]')
-    const start = footer?.querySelector<HTMLElement>('[data-slot="dialog-footer-start"]')
-    const actions = footer?.querySelector<HTMLElement>('[data-slot="dialog-footer-actions"]')
-    if (!start?.textContent || !actions) {
-      throw new Error('Use chat defaults must show for a link that keeps Ask')
-    }
-    if (Math.abs(start.getBoundingClientRect().top - actions.getBoundingClientRect().top) > 8) {
-      throw new Error('The footer must stay on one row')
-    }
-  }
-})
-export const linkDe340 = defineFixture(linkIn('de'))
-export const linkEs340 = defineFixture(linkIn('es'))
-export const linkRu340 = defineFixture(linkIn('ru'))
-
-// A model picked, so Use chat defaults shows on the footer's left.
-const pickModelOnly = async (): Promise<void> => {
-  const trigger = document.querySelector<HTMLElement>(
-    '[role="dialog"] [role="group"][aria-label="Agent"] button'
-  )
-  trigger?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
-  await new Promise((resolve) => setTimeout(resolve, 400))
-  const label = [...document.querySelectorAll<HTMLElement>('[role="menu"] *')].find(
-    (node) => node.childElementCount === 0 && node.textContent?.trim() === 'Opus'
-  )
-  const opus = label?.closest<HTMLElement>('[role="option"]')
-  opus?.click()
-  await new Promise((resolve) => setTimeout(resolve, 300))
+const settle = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+const openAgentMenu = async (): Promise<void> => {
+  document
+    .querySelector<HTMLElement>('[role="dialog"] [data-agent-launch-picker-trigger]')
+    ?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+  await settle(400)
+}
+const closeMenu = async (): Promise<void> => {
   document.activeElement?.dispatchEvent(
     new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
   )
-  const focused = document.activeElement
-  if (focused instanceof HTMLElement) {
-    focused.blur()
-  }
-  await new Promise((resolve) => setTimeout(resolve, 300))
+  await settle(300)
 }
-const pickModel = async (): Promise<void> => {
+// Claude on Opus, so Chat default is not the setup.
+const pickOpus = async (): Promise<void> => {
   await FILLED()
-  await pickModelOnly()
+  await openAgentMenu()
+  const label = [...document.querySelectorAll<HTMLElement>('[role="menu"] *')].find(
+    (node) => node.childElementCount === 0 && node.textContent?.trim() === 'Opus'
+  )
+  label?.closest<HTMLElement>('[role="option"]')?.click()
+  await settle(300)
+  await closeMenu()
 }
-export const chatDefaultsTemplate340 = defineFixture({
-  ...newBotFixture(340),
-  interact: pickModelOnly
-})
-export const chatDefaults340 = defineFixture({ ...newBotFixture(340), interact: pickModel })
-export const chatDefaults480 = defineFixture({ ...newBotFixture(480), interact: pickModel })
-export const chatDefaultsFocus340 = defineFixture({
-  ...newBotFixture(340),
-  interact: async () => {
-    await pickModel()
-    const link = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
-      (button) => button.textContent === 'Use chat defaults'
-    )
-    link?.focus()
-    await new Promise((resolve) => setTimeout(resolve, 100))
+const chatDefaultRow = () =>
+  document.querySelector<HTMLElement>('[role="menu"] [role="menuitemcheckbox"]')
+const inLanguage = async (language?: 'de' | 'es' | 'ru'): Promise<void> => {
+  if (language) {
+    await i18n.changeLanguage(await loadRendererUiLanguage(language))
+    await settle(200)
   }
+}
+// The same dialog, framed wide and tall enough to show the whole open menu.
+const menuFixture = (width: 340 | 480) => ({
+  ...newBotFixture(width),
+  width: width + 32 + 340,
+  render: () => <NewBotFixtureStage width={width} height={1000} />
 })
+// The menu over a picked model: Chat default first, unchecked.
+const chatDefaultMenu = (width: 340 | 480, language?: 'de' | 'es' | 'ru') =>
+  defineFixture({
+    ...menuFixture(width),
+    interact: async () => {
+      await inLanguage(language)
+      await pickOpus()
+      await openAgentMenu()
+      if (chatDefaultRow()?.getAttribute('aria-checked') !== 'false') {
+        throw new Error('Chat default must lead the menu, unchecked while a model is picked')
+      }
+    }
+  })
+// After picking Chat default: the field reads it, muted, on one line, and focus stays on the field.
+const chatDefaultPicked = (width: 340 | 480, language?: 'de' | 'es' | 'ru') =>
+  defineFixture({
+    ...newBotFixture(width),
+    interact: async () => {
+      await inLanguage(language)
+      await pickOpus()
+      await openAgentMenu()
+      chatDefaultRow()?.click()
+      await settle(400)
+      const trigger = document.querySelector<HTMLElement>(
+        '[role="dialog"] [data-agent-launch-picker-trigger]'
+      )
+      const label = trigger?.querySelector<HTMLElement>('span.truncate')
+      if (!trigger || !label || !label.classList.contains('text-muted-foreground')) {
+        throw new Error('The Agent field must read Chat default, muted')
+      }
+      if (label.scrollWidth > label.clientWidth + 1) {
+        throw new Error(
+          `Chat default must fit the field: ${label.scrollWidth}/${label.clientWidth}px`
+        )
+      }
+      if (label.scrollHeight > label.clientHeight + 1 || document.activeElement !== trigger) {
+        throw new Error('Chat default must stay on one line with focus on the Agent field')
+      }
+    }
+  })
+// Reopened on Chat default: its row is checked.
+const chatDefaultChecked = (width: 340 | 480) =>
+  defineFixture({
+    ...menuFixture(width),
+    interact: async () => {
+      await FILLED()
+      await openAgentMenu()
+      if (chatDefaultRow()?.getAttribute('aria-checked') !== 'true') {
+        throw new Error('With nothing chosen, Chat default must be checked')
+      }
+    }
+  })
+export const chatDefaultMenu340 = chatDefaultMenu(340)
+export const chatDefaultMenu480 = chatDefaultMenu(480)
+export const chatDefaultPicked340 = chatDefaultPicked(340)
+export const chatDefaultPicked480 = chatDefaultPicked(480)
+export const chatDefaultChecked340 = chatDefaultChecked(340)
+export const chatDefaultChecked480 = chatDefaultChecked(480)
+export const chatDefaultMenuDe340 = chatDefaultMenu(340, 'de')
+export const chatDefaultMenuEs340 = chatDefaultMenu(340, 'es')
+export const chatDefaultMenuRu340 = chatDefaultMenu(340, 'ru')
+export const chatDefaultPickedDe340 = chatDefaultPicked(340, 'de')
+export const chatDefaultPickedEs340 = chatDefaultPicked(340, 'es')
+export const chatDefaultPickedRu340 = chatDefaultPicked(340, 'ru')

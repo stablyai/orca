@@ -1,8 +1,7 @@
-import { useCallback, useContext, useMemo } from 'react'
-import { Text, View } from 'react-native'
-import { styles } from './mobile-session-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { useCallback, useEffect, useMemo } from 'react'
+import { View } from 'react-native'
+import { stylesSheet } from './mobile-session-styles'
+import { useThemedStyles } from '../theme/themed-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { MobileSessionContentRow } from './MobileSessionContentRow'
 import { MobileSessionHeader } from './MobileSessionHeader'
@@ -10,52 +9,36 @@ import { MobileSessionSheets } from './MobileSessionSheets'
 import { MobileWorkerAutoCloseStrip } from './tabs/MobileWorkerAutoCloseStrip'
 import { BotChatOpenContext, BotItemOpenContext, BotPanelOpenContext } from '../bots/bot-item-open'
 import { openBotChatTab } from './bot-chat-tab-open'
-import { AnchoredDetailCardLayer } from '../components/detail-cards/AnchoredDetailCard'
-import { StatusDot } from '../components/feedback/StatusDot'
 import { useResponsiveLayout } from '../layout/responsive-layout'
-import { WorkspaceServerContext } from '../worktree/execution-hosts/workspace-server-context'
-import { useSessionTitleCard } from './tabs/use-session-title-card'
-import { useDetailCardScope } from '../components/detail-cards/use-detail-card-scope'
-import { useShellSideRail } from '../layout/use-shell-side-rail'
+import { MobileSessionSidebar } from './tabs/MobileSessionSidebar'
+import { MobileSessionSidebarStage } from './tabs/MobileSessionSidebarStage'
+import { useMobileSessionSidebar } from './tabs/use-mobile-session-sidebar'
+import { SidebarPageDragContext } from './tabs/sidebar-page-drag'
+import { useMobileSessionTabSummaryChannel } from './tabs/use-mobile-session-tab-summaries'
+import { useSessionRouteRequest } from './use-session-route-request'
 
 export function MobileSessionSurface({ controller }: { controller: MobileSessionController }) {
-  useMobileColorScheme()
-  const t = useMobileTranslation()
+  const styles = useThemedStyles(stylesSheet)
   const { setMobileSessionRootRef } = controller
-  const server = useContext(WorkspaceServerContext)
   const layout = useResponsiveLayout()
-  const sideRail = useShellSideRail()
-  const hasTabs = controller.visibleTabs.length > 0
-  const besideTabs = (layout.isLandscapePhone || sideRail) && hasTabs
-  const titleVisible =
-    !sideRail || !hasTabs || controller.showConnectionRetry || controller.connectionEscalated
-  // The compact Duo header removes the opener, so its card must yield with it.
-  const obscured = Boolean(
-    !titleVisible ||
-    controller.showHeaderMoreActions ||
-    controller.showCreateTabDrawer ||
-    controller.showTerminalLayout ||
-    controller.textSizeSheet != null ||
-    (controller.showQuickCommands && controller.quickCommandsSupported === true) ||
-    controller.pendingDiffNotesDelivery != null ||
-    controller.actionTarget != null ||
-    controller.markdownActionTarget != null ||
-    controller.fileActionTarget != null ||
-    controller.browserActionTarget != null ||
-    controller.agentSessionActionTarget != null ||
-    controller.bulkCloseConfirm.visible ||
-    controller.leaveDrafts != null ||
-    controller.discardMarkdownTarget != null ||
-    controller.renameTarget != null ||
-    controller.showCreateBrowserModal ||
-    controller.showCustomKeyModal ||
-    controller.showDictationSetup ||
-    controller.deleteKeyTarget != null
-  )
-  const details = useSessionTitleCard(besideTabs, obscured)
   const { itemsOnPhone, openBotPanel, openNativeSession, worktreeId, sessionTabs } = controller
   const { switchSessionTab, activeSessionTabId, routeBot } = controller
   const homeChatId = routeBot?.bot.chatSessionId
+  // From the wide layout up the sidebar docks as a column; a phone, sideways too, slides the session aside.
+  const sidebar = useMobileSessionSidebar(layout.isWideLayout)
+  const summaries = useMobileSessionTabSummaryChannel()
+  // A notification naming a tab here lands on that tab, not behind the sidebar.
+  const paneRequest = useSessionRouteRequest('paneKey')
+  const { open: sidebarOpen, docked: sidebarDocked, close: closeSidebar } = sidebar
+  useEffect(() => {
+    if (paneRequest && sidebarOpen && !sidebarDocked) {
+      closeSidebar()
+    }
+  }, [paneRequest])
+  const connectionIssue =
+    controller.presentedConnState !== 'connected' ||
+    controller.connectionEscalated ||
+    controller.showConnectionRetry
   const openItem = useMemo(
     () => (itemsOnPhone ? (itemUid: string) => openBotPanel({ item: itemUid }) : null),
     [itemsOnPhone, openBotPanel]
@@ -91,38 +74,42 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
       ),
     [homeChatId, sessionTabs, activeSessionTabId, switchSessionTab, openNativeSession, worktreeId]
   )
-  useDetailCardScope({ ...details, obscured })
-  // Only a proven local record belongs to this route's desktop or server.
-  const hostName =
-    controller.worktreeHostId === 'local' ? (server ? server.name : controller.hostName) : null
   return (
     <View ref={setMobileSessionRootRef} style={styles.container}>
-      <View style={styles.kavInner}>
-        <MobileSessionHeader controller={controller} details={details} />
-        <MobileWorkerAutoCloseStrip controller={controller} />
-        {/* A chat's item chips open the item's page in the bot panel. */}
-        <BotItemOpenContext.Provider value={openItem}>
-          <BotChatOpenContext.Provider value={openChat}>
-            <BotPanelOpenContext.Provider value={panelOpener}>
-              <MobileSessionContentRow controller={controller} />
-            </BotPanelOpenContext.Provider>
-          </BotChatOpenContext.Provider>
-        </BotItemOpenContext.Provider>
-      </View>
-      <AnchoredDetailCardLayer
-        card={details}
-        obscured={obscured}
-        title={controller.worktreeName || t('session.header.terminalTitle', 'Terminal')}
-        detail={controller.worktreePath}
-        footer={
-          hostName ? (
-            <>
-              <StatusDot state={controller.connState} verdict={controller.connectionVerdict} />
-              <Text style={styles.sessionMetaText}>{hostName}</Text>
-            </>
-          ) : null
+      <MobileSessionSidebarStage
+        sidebar={sidebar}
+        cardLabel={controller.activeSessionTab?.title || controller.worktreeName}
+        panel={
+          <MobileSessionSidebar
+            controller={controller}
+            sidebar={sidebar}
+            summaries={summaries}
+            place={controller.terminalSummary}
+            connectionIssue={connectionIssue}
+          />
         }
-      />
+      >
+        <View style={styles.kavInner}>
+          <MobileSessionHeader
+            controller={controller}
+            homeChatId={homeChatId ?? null}
+            summaries={summaries}
+            sidebar={sidebar}
+            connectionIssue={connectionIssue}
+          />
+          <MobileWorkerAutoCloseStrip controller={controller} />
+          {/* A chat's item chips open the item's page in the bot panel. */}
+          <BotItemOpenContext.Provider value={openItem}>
+            <BotChatOpenContext.Provider value={openChat}>
+              <BotPanelOpenContext.Provider value={panelOpener}>
+                <SidebarPageDragContext.Provider value={sidebar.pageDrag}>
+                  <MobileSessionContentRow controller={controller} />
+                </SidebarPageDragContext.Provider>
+              </BotPanelOpenContext.Provider>
+            </BotChatOpenContext.Provider>
+          </BotItemOpenContext.Provider>
+        </View>
+      </MobileSessionSidebarStage>
       <MobileSessionSheets controller={controller} />
     </View>
   )

@@ -6,13 +6,12 @@ import {
   type McpServerCatalogEntry
 } from '../../../src/shared/mcp-servers/mcp-server-catalog'
 import type { Translate } from '../i18n/mobile-i18n'
-import { getUiIntlLocale } from '../i18n/ui-intl-locale'
 import type { PhoneMcpServer, PhoneMcpWorkspaces } from './mcp-server-operations'
 
 export const ALL_MCP_WORKSPACES: PhoneMcpWorkspaces = { later: true, on: [], off: [] }
 
-function listOf(names: readonly string[]): string {
-  return new Intl.ListFormat(getUiIntlLocale(), { type: 'unit', style: 'short' }).format(names)
+function listOf(names: readonly string[], intlLocale: string): string {
+  return new Intl.ListFormat(intlLocale, { type: 'unit', style: 'short' }).format(names)
 }
 
 /** `mcp.linear.app` on a row, `mcp.linear.app/mcp` under a page's title; a command as `npx server-postgres`. */
@@ -80,13 +79,17 @@ export const isMcpWorkspaceOn = (workspaces: PhoneMcpWorkspaces, key: string): b
 export function mcpWorkspacesValue(
   workspaces: PhoneMcpWorkspaces,
   names: ReadonlyMap<string, string>,
-  t: Translate
+  t: Translate,
+  intlLocale: string
 ): string {
   // Past two names a row's value would crowd its label out, so it counts them instead.
   const named = (keys: readonly string[]) =>
     keys.length > 2
       ? t('mcpServers.workspacesCount', '{{count}} workspaces', { count: keys.length })
-      : listOf(keys.map((key) => names.get(key) ?? key.replace(/^folder:/, '')))
+      : listOf(
+          keys.map((key) => names.get(key) ?? key.replace(/^folder:/, '')),
+          intlLocale
+        )
   if (workspaces.later) {
     const { off } = workspaces
     return off.length === 0

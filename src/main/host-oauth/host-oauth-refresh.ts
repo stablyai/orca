@@ -2,6 +2,7 @@
 // refreshed here when due or refused, one refresh per login at a time, and handed back to its owner
 // to save, or to forget when the provider says the grant is gone.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { inlineUntrusted } from '../../shared/quoted-text-fence'
 
 const REFRESH_TIMEOUT_MS = 15_000
@@ -58,22 +59,28 @@ export type HostOAuthRefresherConfig<TLogin> = {
   ended: (id: string, login: TLogin, refusal: HostOAuthRefusal) => void | Promise<void>
 }
 
-const TokenResponse = z.object({
-  access_token: z.string().min(1),
-  refresh_token: z.string().min(1).optional(),
-  expires_in: z.number().positive(),
-  scope: z.string().min(1).optional()
-})
+const TokenResponse = lazyZodSchema(() =>
+  z.object({
+    access_token: z.string().min(1),
+    refresh_token: z.string().min(1).optional(),
+    expires_in: z.number().positive(),
+    scope: z.string().min(1).optional()
+  })
+)
 // The provider's words are kept and shown, so they arrive as one plain, bounded line.
-const ProviderText = z
-  .string()
-  .transform((text) => inlineUntrusted(text.replace(/\p{Cc}/gu, ' '), 200))
-  .pipe(z.string().min(1))
-const ErrorResponse = z.object({
-  error: ProviderText,
-  error_subtype: ProviderText.optional().catch(undefined),
-  error_description: ProviderText.optional().catch(undefined)
-})
+const ProviderText = lazyZodSchema(() =>
+  z
+    .string()
+    .transform((text) => inlineUntrusted(text.replace(/\p{Cc}/gu, ' '), 200))
+    .pipe(z.string().min(1))
+)
+const ErrorResponse = lazyZodSchema(() =>
+  z.object({
+    error: ProviderText,
+    error_subtype: ProviderText.optional().catch(undefined),
+    error_description: ProviderText.optional().catch(undefined)
+  })
+)
 
 export type HostOAuthRefresher = {
   /** Refreshes when due, or now when the provider refused the token (force). */

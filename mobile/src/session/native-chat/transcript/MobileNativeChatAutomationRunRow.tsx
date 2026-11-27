@@ -23,13 +23,16 @@ import { botAutomationWhenParts } from '../../../../../src/shared/bots/bot-autom
 import { formatAutomationScheduleDescriptor } from '../../../automations/automation-schedule-label'
 import { MobileSourceCopyButton } from '../../../components/code-presentation/MobileSourceCopyButton'
 import { automationRunMark } from '../../../../../src/shared/automations/automation-chat-row'
-import { colors, typography } from '../../../theme/mobile-theme'
+import { typography } from '../../../theme/mobile-theme'
 import { openExternalLink } from '../../../platform/external-links/external-link'
 import { MobileAutomationRunInstructions } from './MobileAutomationRunInstructions'
-import { scaledType, styles as chat } from './messages/mobile-native-chat-message-styles'
+import {
+  scaledType,
+  stylesSheet as chatStylesSheet
+} from './messages/mobile-native-chat-message-styles'
 import { mobileNativeChatRowId } from './viewport/mobile-native-chat-reading-place'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
-import { styles } from './mobile-automation-run-row-styles'
+import { stylesSheet } from './mobile-automation-run-row-styles'
 import { MobileNativeChatBotIdentityContext } from '../mobile-native-chat-bot-identity'
 import { useMobileBotCardHost } from './bot-cards/mobile-bot-card-host'
 import { MobileNativeChatNoticePill } from './notices/MobileNativeChatNoticePill'
@@ -37,31 +40,42 @@ import { botRunSendAgain } from '../../../bots/bot-sheet-operations'
 import { mobileBotRefusalText } from '../../../bots/mobile-bot-refusal-text'
 import { useBotPanelOpener } from '../../../bots/bot-item-open'
 import { triggerError } from '../../../platform/haptics/haptics'
-import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
+import { intlLocaleFor } from '../../../i18n/ui-intl-locale'
+import type { Translate } from '../../../i18n/mobile-i18n'
+import { useMobileTranslation, useMobileUiLocale } from '../../../i18n/use-mobile-translation'
 import {
   MobileAutomationRowFrame,
   mobileAutomationRowTime as time,
   mobileAutomationWordingTime
 } from './MobileAutomationRowFrame'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
+import { useThemedStyles } from '../../../theme/themed-styles'
 
 /** An automation's row wording, in English: a run's as saved when it ran, or the automation's own. */
 export function useMobileAutomationRowWording(
   automation: Pick<AutomationRunMessage['automation'], 'dtstart' | 'rrule' | 'on'>
 ): AutomationRunWording {
+  const t = useMobileTranslation()
+  const locale = intlLocaleFor(useMobileUiLocale())
   return useMemo(() => {
     const schedule = botAutomationWhenParts(automation).find((part) => part.kind === 'schedule')
     return {
       say: sayAutomationRunEnglish,
       formatTime: (at) => mobileAutomationWordingTime(at),
       schedule:
-        schedule?.kind === 'schedule' ? formatAutomationScheduleDescriptor(schedule.schedule) : ''
+        schedule?.kind === 'schedule'
+          ? formatAutomationScheduleDescriptor(schedule.schedule, t, locale)
+          : ''
     }
-  }, [automation])
+  }, [automation, t, locale])
 }
 
 /** The send's error, or why its chat was refused in chat's words; the phone's copy names no computer. */
-function startErrorText(failure: Pick<MergedRunFailure, 'error' | 'refusal'>): string {
-  return failure.refusal ? mobileBotRefusalText(failure.refusal) : failure.error
+function startErrorText(
+  failure: Pick<MergedRunFailure, 'error' | 'refusal'>,
+  t: Translate
+): string {
+  return failure.refusal ? mobileBotRefusalText(failure.refusal, t) : failure.error
 }
 
 /** A transcript message that is an automation's run, or one no chat took, as its row. */
@@ -74,6 +88,8 @@ export function MobileAutomationRunMessage({
   rowKey?: string
   fontScale: number
 }): React.JSX.Element | null {
+  const chat = useThemedStyles(chatStylesSheet)
+  const t = useMobileTranslation()
   const notStarted = message.automationRunNotStarted
   const run = notStarted?.run ?? message.automationRun
   if (!run) {
@@ -91,7 +107,10 @@ export function MobileAutomationRunMessage({
         text={text}
         timestamp={message.timestamp}
         {...(notStarted
-          ? { error: startErrorText(notStarted), resend: notStarted.sentAgain ? 'sent' : 'offer' }
+          ? {
+              error: startErrorText(notStarted, t),
+              resend: notStarted.sentAgain ? 'sent' : 'offer'
+            }
           : {})}
         earlierFailures={mergedRunFailures(message)}
         fontScale={fontScale}
@@ -125,6 +144,9 @@ export function MobileNativeChatAutomationRunRow({
   earlierFailures?: readonly MergedRunFailure[]
   fontScale: number
 }): React.JSX.Element {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const t = useMobileTranslation()
   const wording = useMobileAutomationRowWording(run.automation)
   const { say } = wording
   const notStarted = state === 'not-started'
@@ -207,7 +229,7 @@ export function MobileNativeChatAutomationRunRow({
                 .join(' · ')}
             </Text>
             <Text selectable style={[styles.error, body]}>
-              {startErrorText(failure)}
+              {startErrorText(failure, t)}
             </Text>
           </View>
         ))}
@@ -289,6 +311,7 @@ function MobileAutomationSendAgain({
   /** The host's refusal, or null as a new send starts. */
   onError: (error: string | null) => void
 }): React.JSX.Element | null {
+  const styles = useThemedStyles(stylesSheet)
   const { say } = wording
   const t = useMobileTranslation()
   const bot = useContext(MobileNativeChatBotIdentityContext)

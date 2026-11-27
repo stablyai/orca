@@ -1,6 +1,14 @@
 import type { AcpListingSession, AcpSessionModelDiscovery } from './acp-model-discovery-policy'
 import type { ProviderAcquisitionConnection } from '../../provider-process/provider-acquisition-starts'
 import { waitForProviderExitUntil } from '../../provider-process/provider-process-exit-deadline'
+import {
+  runAgentModelCatalogListing,
+  type AgentModelCatalogListingLaunch
+} from '../../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
+import {
+  agentSessionAccountHomePath,
+  type AgentSessionAccountHome
+} from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 
 const LISTING_EXIT_WAIT_MS = 5_000
 
@@ -24,4 +32,38 @@ export async function discardAcpListingSessions(
       console.warn(`[acp-model-catalog] ${agent} kept a listing session:`, error)
     })
   }
+}
+
+/** The listing's discard, run with its own binary, account and environment; null when the agent
+ *  keeps no session to remove or the account has no home folder. */
+export function acpListingSessionDiscard(
+  agent: string,
+  listing: AcpSessionModelDiscovery,
+  accountHome: AgentSessionAccountHome,
+  /** Where the listing's session ran. */
+  cwd: string,
+  launch: Omit<AgentModelCatalogListingLaunch, 'args'> & { prefixArgs: readonly string[] },
+  runListing: typeof runAgentModelCatalogListing = runAgentModelCatalogListing
+):
+  | ((
+      sessionIds: readonly string[],
+      listingProcess?: Pick<ProviderAcquisitionConnection, 'onExit'>
+    ) => Promise<void>)
+  | null {
+  const accountHomePath = listing.discardSession ? agentSessionAccountHomePath(accountHome) : null
+  if (!accountHomePath) {
+    return null
+  }
+  const { prefixArgs, ...base } = launch
+  return (sessionIds, listingProcess) =>
+    discardAcpListingSessions(agent, listing, sessionIds, listingProcess, {
+      cwd,
+      accountHomePath,
+      // Unbounded by the listing's signal: a cancelled listing still discards its session.
+      runAgent: (agentArgs) =>
+        runListing(
+          { ...base, args: [...prefixArgs, ...agentArgs] },
+          { site: `${agent}-listing-discard` }
+        )
+    })
 }

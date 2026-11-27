@@ -1,3 +1,4 @@
+import { redactKagiSessionToken } from '../../../../shared/browser/navigation/browser-url'
 import type { WebSocket } from 'ws'
 import type { ServerResponse } from 'node:http'
 import type { WebContents } from 'electron'
@@ -99,8 +100,8 @@ export class CdpTargetDiscovery {
     return {
       targetId: 'orca-proxy-target',
       type: 'page',
-      title: destroyed ? '' : this.webContents.getTitle(),
-      url: destroyed ? '' : this.webContents.getURL(),
+      title: destroyed ? '' : redactKagiSessionToken(this.webContents.getTitle()),
+      url: destroyed ? '' : redactKagiSessionToken(this.webContents.getURL()),
       attached: true,
       canAccessOpener: false
     }

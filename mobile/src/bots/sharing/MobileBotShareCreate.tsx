@@ -13,13 +13,13 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { triggerError } from '../../platform/haptics/haptics'
 import { SettingsNote } from '../../settings/settings-screen-frame'
 import { spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { botCreate } from '../bot-sheet-operations'
 import type { ListedBot, PhoneBot } from '../host-bots-operations'
 import { mobileBotAvatarSource } from '../host-bot-row-facts'
-import { groupFieldStyles, NewBotPicture } from '../MobileNewBotPickers'
+import { NewBotPicture } from '../MobileNewBotPickers'
+import { groupFieldStylesSheet } from '../../components/composer-input/composer-input-styles'
 import { botShareErrorMessage } from './bot-share-copy'
 import { botShareMoved, type PhoneShareReview } from './bot-share-receive-operations'
 import { ReviewToolTicks } from './MobileBotShareReview'
@@ -67,8 +67,9 @@ export function MobileBotShareCreate(props: {
   onMoved: (why: 'updated' | 'stopped' | 'expired') => void
   onCreated: (bot: PhoneBot) => void
 }) {
+  const groupFieldStyles = useThemedStyles(groupFieldStylesSheet)
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
-  useMobileColorScheme()
   const { review } = props
   const { avatar, permission } = props.draft
   const setName = (name: string) => props.setDraft((draft) => ({ ...draft, name }))
@@ -227,6 +228,6 @@ export function MobileBotShareCreate(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   picture: { alignItems: 'center', paddingTop: spacing.sm, paddingBottom: spacing.lg }
 }))

@@ -118,22 +118,11 @@ export function renderTmuxFormat(
 
 export function tmuxSendKeysText(tokens: string[], literal: boolean): string {
   if (literal) {
-    return tokens.join(' ')
+    return tokens.join('')
   }
   let result = ''
-  let pendingSpace = false
   for (const token of tokens) {
-    const special = tmuxSpecialKeyText(token)
-    if (special !== null) {
-      result += special
-      pendingSpace = false
-      continue
-    }
-    if (pendingSpace) {
-      result += ' '
-    }
-    result += token
-    pendingSpace = true
+    result += tmuxSpecialKeyText(token) ?? token
   }
   return result
 }

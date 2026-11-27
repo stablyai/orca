@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { ORCA_SCRUB_SAFE_PANE_ENV } from '../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
 import { readInjectedAgentSessionId } from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
+import { hasHtmlFenceCandidate } from '../../shared/markdown/html-document-fences'
 import {
   CONNECTOR_REPLY_MAX_FILES,
   type ConnectorActionArgs
@@ -261,25 +262,27 @@ export const BOT_REPLY_HANDLERS: Record<string, CommandHandler> = {
     let pages: { files: number; sent: Awaited<ReturnType<typeof replyWithFiles>> } | undefined
     const replied =
       text && files.length === 0 && !offered
-        ? await reply(sessionId !== undefined).catch(async (error: unknown) => {
-            if (
-              !(
-                error instanceof RuntimeClientError &&
-                error.code === CONNECTOR_REPLY_HTML_PAGE_AS_FILE
-              ) ||
-              !sessionId
-            ) {
-              return refusalOf(error)
+        ? await reply(sessionId !== undefined && hasHtmlFenceCandidate(text)).catch(
+            async (error: unknown) => {
+              if (
+                !(
+                  error instanceof RuntimeClientError &&
+                  error.code === CONNECTOR_REPLY_HTML_PAGE_AS_FILE
+                ) ||
+                !sessionId
+              ) {
+                return refusalOf(error)
+              }
+              // Whole HTML pages go to Slack as files with the rest of the words, or inline as before.
+              pages =
+                (await replyWithHtmlPages(
+                  text,
+                  (found) => stageReplyFiles(client, sessionId, found),
+                  (ids, rest) => postStaged(client, sessionId, ids, rest)
+                )) ?? undefined
+              return pages ? undefined : reply(false).catch(refusalOf)
             }
-            // Whole HTML pages go to Slack as files with the rest of the words, or inline as before.
-            pages =
-              (await replyWithHtmlPages(
-                text,
-                (found) => stageReplyFiles(client, sessionId, found),
-                (ids, rest) => postStaged(client, sessionId, ids, rest)
-              )) ?? undefined
-            return pages ? undefined : reply(false).catch(refusalOf)
-          })
+          )
         : undefined
     const envelope = replied ?? attached ?? pages?.sent ?? offered ?? reacted
     if (!envelope) {

@@ -9,7 +9,6 @@ import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
-import { colors } from '../../theme/mobile-theme'
 import { MobileGoogleMark } from '../MobileConnectorSourceIcon'
 import { connectorAccountErrorMessage } from './mobile-connector-account-copy'
 import { HOST_OFFLINE } from './bot-slack-operations'
@@ -19,6 +18,7 @@ import type { PhoneBot } from '../host-bots-operations'
 import type { PhoneGoogle } from './phone-google-accounts'
 import { GOOGLE_SIGN_IN_FAILED } from './connect-host-trip'
 import { CONNECT_NOT_ROUTED, usePhoneConnectTrip, useSignInOnOpen } from './use-phone-connect-trip'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 function signInError(code: string, hostName: string, t: Translate): string {
   if (code === HOST_OFFLINE || code === CONNECT_NOT_ROUTED) {
@@ -44,6 +44,7 @@ export function MobileBotGoogleSignIn(props: {
   onClose: () => void
   onSignedIn: () => void
 }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { hostName, ask } = props
   const { trip, start, cancel, showSignIn } = usePhoneConnectTrip('google', props.google.refresh)

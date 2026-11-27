@@ -89,7 +89,8 @@ export function getWindowResetLabel(window: RateLimitWindow | null, now: number)
 export function getOtherUsageProviders(snapshot: AccountsSnapshot): ProviderRateLimits[] {
   const providers: ProviderRateLimits[] = []
   for (const [slot, value] of Object.entries(snapshot.rateLimits)) {
-    if (slot === 'claude' || slot === 'codex') {
+    // Older hosts still publish Antigravity usage, which Orca no longer shows.
+    if (slot === 'claude' || slot === 'codex' || slot === 'antigravity') {
       continue
     }
     const parsed = ProviderRateLimitsSchema.safeParse(value)

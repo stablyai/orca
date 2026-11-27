@@ -18,9 +18,7 @@ import { loadHosts, peekHosts } from '../host-catalog/host-store'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useBackClaim } from '../navigation/use-back-claim'
 import { useRouteHandoff } from '../navigation/route-handoff'
-import { colors } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import { useHostClient } from '../transport/connection/host-client-hooks'
 import { useRouteCapability } from '../worktree/execution-hosts/use-route-capability'
 import { McpPageFrame } from './McpPageFrame'
@@ -53,7 +51,7 @@ function useHostName(hostId: string): string {
 }
 
 export function MobileMcpServersScreen() {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const router = useRouteHandoff()
   const insets = useSafeAreaInsets()
@@ -256,7 +254,7 @@ export function MobileMcpServersScreen() {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   page: { flex: 1, backgroundColor: colors.sheetSurface },
   sheet: { flex: 1 }
 }))

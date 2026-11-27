@@ -1,7 +1,7 @@
 import { HERMES_TRANSCRIPT_RUNTIME_CAPABILITY } from '../../../../../src/shared/native-chat/native-chat-hermes-capability'
 import { MessageSquare, SquareTerminal } from 'lucide-react-native'
 import type { ActionSheetAction } from '../../../components/sheets/ActionSheetModal'
-import { translate } from '../../../i18n/mobile-i18n'
+import type { Translate } from '../../../i18n/mobile-i18n'
 import { resolveMobileNativeChat, type MobileNativeChatTab } from './mobile-native-chat-eligibility'
 
 type ToggleTab = MobileNativeChatTab & {
@@ -17,6 +17,7 @@ export function getMobileNativeChatToggleActions(args: {
   nativeChatTranscriptIsLocalReadable: boolean
   onClose: () => void
   onToggle: (tabId: string) => void
+  t: Translate
 }): ActionSheetAction[] {
   const { terminalHandle, tabs, isTabChatView, onClose, onToggle } = args
   const tab = terminalHandle
@@ -37,8 +38,8 @@ export function getMobileNativeChatToggleActions(args: {
     {
       id: 'toggleChatView',
       label: isChat
-        ? translate('session.nativeChatToggleAction.switchToTerminalView', 'Switch to terminal')
-        : translate('session.nativeChatToggleAction.switchToChatView', 'Switch to chat'),
+        ? args.t('session.nativeChatToggleAction.switchToTerminalView', 'Switch to terminal')
+        : args.t('session.nativeChatToggleAction.switchToChatView', 'Switch to chat'),
       icon: isChat ? SquareTerminal : MessageSquare,
       onPress: () => {
         onClose()

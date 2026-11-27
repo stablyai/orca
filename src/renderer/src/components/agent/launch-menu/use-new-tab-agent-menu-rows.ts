@@ -212,11 +212,10 @@ export function useAgentMenuObservation(
     if (unresolvedTarget) {
       return 'not-yet-known'
     }
-    answerContext ??= buildRouteInputForStatuses(state, hostStatuses, {
-      agent,
-      workspace,
-      ...(launchCwd ? { tuiCustomization: { cwd: launchCwd } } : {})
-    })
+    if (!answerContext) {
+      const tui = launchCwd ? { tuiCustomization: { cwd: launchCwd } } : {}
+      answerContext = buildRouteInputForStatuses(state, hostStatuses, { agent, workspace, ...tui })
+    }
     const route = { ...answerContext, agent }
     const preliminary = hostChatAnswer(roster ? { ...route, hostStructuredAgents: roster } : route)
     if (!roster || !['yes', 'not-yet-known', 'not-on-host'].includes(preliminary)) {

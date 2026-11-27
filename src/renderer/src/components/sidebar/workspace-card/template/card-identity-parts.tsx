@@ -1,5 +1,4 @@
 import React from 'react'
-import { DetachedHeadBadge } from '@/components/source-control/DetachedHeadBadge'
 import { useWslHostDistro, WslHostMark } from '@/components/wsl-host-mark/WslHostMark'
 import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import CacheTimer from '../activity/CacheTimer'
@@ -7,6 +6,7 @@ import { TruncatedSidebarLabel } from '../../../ui/truncated-sidebar-label'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 import {
   WorktreeCardDeleteQuickAction,
+  WorktreeCardDetachedHeadBadge,
   WorktreeCardPrimaryBadge,
   WorktreeCardPrimaryStar,
   WorktreeCardRepoChip,
@@ -122,14 +122,11 @@ export const CARD_IDENTITY_PARTS = {
       hostLabel={card.runtimeHostLabel}
     />
   )),
-  RenameError: part(['hasHoverDetails'], (props, _children, card) =>
-    card.worktree.firstAgentMessageRenameError ? (
+  RenameError: part([], (_props, _children, card) =>
+    card.autoNameFailure ? (
       <AutoNameFailedIndicator
         card={card}
-        hasHoverDetails={props.hasHoverDetails === true}
-        worktreeId={card.worktree.id}
-        executionHostId={card.worktree.hostId}
-        error={card.worktree.firstAgentMessageRenameError}
+        failure={card.autoNameFailure}
         onPointerDown={card.stopQuickActionPointerPropagation}
       />
     ) : null
@@ -173,13 +170,12 @@ export const CARD_IDENTITY_PARTS = {
   FolderPath: part([], (_props, _children, { worktree }) => (
     <WorktreeCardFolderPath path={worktree.path} />
   )),
-  DetachedHead: part([], (_props, _children, { detachedHeadDisplay }) =>
-    detachedHeadDisplay ? (
-      <DetachedHeadBadge
-        display={detachedHeadDisplay}
-        label="sidebar"
-        side="right"
-        className="h-[16px]"
+  DetachedHead: part(['hasHoverDetails'], (props, _children, card) =>
+    card.detachedHeadDisplay ? (
+      <WorktreeCardDetachedHeadBadge
+        card={card}
+        hasHoverDetails={props.hasHoverDetails === true}
+        display={card.detachedHeadDisplay}
       />
     ) : null
   ),
