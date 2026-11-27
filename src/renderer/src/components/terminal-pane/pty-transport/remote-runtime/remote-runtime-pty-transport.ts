@@ -415,15 +415,20 @@ export function createRemoteRuntimePtyTransport(
     const wantsRevival = recovery.isActive || recovery.currentPhase === 'disconnected'
     if (wantsRevival && !unregisterControlReadyReviver) {
       // Why: a backoff advances and a latched pane replays its attach, exactly as online/resume/Reconnect would.
+      const replay = (): boolean => recovery.retryNow() || (transport.retryRecovery?.() ?? false)
       unregisterControlReadyReviver = registerRemoteRuntimePtyControlReadyReviver(
         runtimeEnvironmentId,
-        () => {
-          if (destroyed) {
-            return false
-          }
-          // Why: a ready control socket proves sign-in finished, whatever the replay meets next.
-          setAwaitingSshSignIn(false)
-          return recovery.retryNow() || (transport.retryRecovery?.() ?? false)
+        {
+          onControlReady: () => {
+            if (destroyed) {
+              return false
+            }
+            // Why: a ready control socket proves sign-in finished, whatever the replay meets next.
+            setAwaitingSshSignIn(false)
+            return replay()
+          },
+          // Why skip sign-in: a manual retry would only raise another prompt; the pane's own Sign in owns that.
+          onManualRetry: () => !destroyed && !awaitingSshSignIn && replay()
         }
       )
     } else if (!wantsRevival && unregisterControlReadyReviver) {

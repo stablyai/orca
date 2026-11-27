@@ -6,6 +6,7 @@ import type { RuntimeBrowserCommandTargets } from './browser-command-targets'
 import type { RuntimeBrowserTabQueries } from '../tabs/browser-tab-queries'
 import type { RuntimeBrowserCommands } from './browser-commands'
 import { BROWSER_COMMANDS_WITHOUT_PAGE_ADMISSION } from './browser-commands-without-page-admission'
+import { pageAdmissionSignal } from './browser-page-admission-cancel'
 
 type BrowserPageCommand = (
   params: BrowserCommandTargetParams & { index?: number },
@@ -68,7 +69,8 @@ export function admitBrowserPageCommands(
             ? 'answer'
             : name === 'browserReload' || name === 'browserGoto'
               ? 'recover'
-              : 'ordinary'
+              : 'ordinary',
+          pageAdmissionSignal(params)
         )
       }
     )

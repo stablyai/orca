@@ -3,6 +3,7 @@ import type { CoordinatorRunStoreMethods } from './coordinator-runs/coordinator-
 import type { DecisionGateStoreMethods } from './decision-gates/decision-gate-store'
 import type { DispatchCompletionMethods } from './dispatch-context/dispatch-completion'
 import type { DispatchContextStoreMethods } from './dispatch-context/dispatch-context-store'
+import type { DispatchProgressMethods } from './dispatch-context/dispatch-progress'
 import type { DispatchLinksByIdMethods } from './dispatch-context/dispatch-links-by-id'
 import type { SessionPartyRowsMethods } from './worker-terminal/session-party-rows'
 import type { DispatchLookupMethods } from './dispatch-context/dispatch-lookup'
@@ -131,6 +132,7 @@ export type OrchestrationDbMethods = AttemptObservationStoreMethods &
   DispatchLookupMethods &
   DispatchDepthMethods &
   DispatchCompletionMethods &
+  DispatchProgressMethods &
   WorkerReportSettlementMethods &
   DecisionGateStoreMethods &
   CoordinatorRunStoreMethods &

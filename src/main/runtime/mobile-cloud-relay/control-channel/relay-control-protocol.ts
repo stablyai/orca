@@ -134,9 +134,11 @@ export const RelayDeviceRevokedMessageSchema = lazyZodSchema(() =>
   z.object({ type: z.literal('device-revoked'), reqId: OpaqueIdSchema }).strict()
 )
 
-export const RelayDeviceCredentialInstalledMessageSchema = DeviceCredentialInstalledSchema.extend({
-  type: z.literal('device-credential-installed')
-}).strict()
+export const RelayDeviceCredentialInstalledMessageSchema = lazyZodSchema(() =>
+  DeviceCredentialInstalledSchema.extend({
+    type: z.literal('device-credential-installed')
+  }).strict()
+)
 
 export const RelayDeviceCredentialInstallStatusResultMessageSchema = lazyZodSchema(() =>
   z.union([
@@ -160,9 +162,11 @@ export const RelayDeviceCredentialInstallStatusResultMessageSchema = lazyZodSche
   ])
 )
 
-export const RelayDeviceResumeConfirmedMessageSchema = DeviceResumeConfirmedSchema.extend({
-  type: z.literal('device-resume-confirmed')
-}).strict()
+export const RelayDeviceResumeConfirmedMessageSchema = lazyZodSchema(() =>
+  DeviceResumeConfirmedSchema.extend({
+    type: z.literal('device-resume-confirmed')
+  }).strict()
+)
 
 // Strip new fields instead of rejecting newer relay retry hints.
 export const RelayControlErrorMessageSchema = lazyZodSchema(() =>

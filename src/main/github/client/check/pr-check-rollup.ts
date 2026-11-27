@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
 import { githubHostExecOptions } from '../../repositories/github-repository-host'
 import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
@@ -51,72 +52,82 @@ export function prCheckRollupFields(kind?: ConnectionKind, detailed = false): st
   } } }`
 }
 
-const checkConclusion = z.enum([
-  'ACTION_REQUIRED',
-  'CANCELLED',
-  'FAILURE',
-  'NEUTRAL',
-  'SKIPPED',
-  'STALE',
-  'STARTUP_FAILURE',
-  'SUCCESS',
-  'TIMED_OUT'
-])
-const contextSchema = z.discriminatedUnion('__typename', [
-  z.object({
-    __typename: z.literal('CheckRun'),
-    name: z.string().optional(),
-    databaseId: z.number().nullish(),
-    status: z.enum(['COMPLETED', 'IN_PROGRESS', 'QUEUED', 'REQUESTED', 'WAITING', 'PENDING']),
-    conclusion: checkConclusion.nullable(),
-    detailsUrl: z.string().nullish(),
-    url: z.string().nullish(),
-    startedAt: z.string().nullish(),
-    completedAt: z.string().nullish(),
-    checkSuite: z.object({
-      databaseId: z.number(),
-      workflowRun: z.object({ databaseId: z.number().nullish() }).nullish()
-    })
-  }),
-  z.object({
-    __typename: z.literal('StatusContext'),
-    context: z.string().optional(),
-    state: z.enum(['ERROR', 'EXPECTED', 'FAILURE', 'PENDING', 'SUCCESS']),
-    targetUrl: z.string().nullish(),
-    createdAt: z.string().nullish()
-  })
-])
-const pageInfoSchema = z.object({ hasNextPage: z.boolean(), endCursor: z.string().nullable() })
-const suiteSchema = z.object({
-  databaseId: z.number(),
-  conclusion: checkConclusion.nullable(),
-  url: z.string().nullish(),
-  app: z.object({ name: z.string().nullish(), slug: z.string().nullish() }).nullish()
-})
-
-export const prCheckRollupCommitsSchema = z.object({
-  nodes: z
-    .array(
-      z.object({
-        commit: z.object({
-          oid: z.string().min(1),
-          statusCheckRollup: z
-            .object({
-              contexts: z.object({ nodes: z.array(contextSchema), pageInfo: pageInfoSchema })
-            })
-            .nullable()
-            .optional(),
-          checkSuites: z
-            .object({
-              nodes: z.array(suiteSchema),
-              pageInfo: pageInfoSchema
-            })
-            .optional()
-        })
+const checkConclusion = lazyZodSchema(() =>
+  z.enum([
+    'ACTION_REQUIRED',
+    'CANCELLED',
+    'FAILURE',
+    'NEUTRAL',
+    'SKIPPED',
+    'STALE',
+    'STARTUP_FAILURE',
+    'SUCCESS',
+    'TIMED_OUT'
+  ])
+)
+const contextSchema = lazyZodSchema(() =>
+  z.discriminatedUnion('__typename', [
+    z.object({
+      __typename: z.literal('CheckRun'),
+      name: z.string().optional(),
+      databaseId: z.number().nullish(),
+      status: z.enum(['COMPLETED', 'IN_PROGRESS', 'QUEUED', 'REQUESTED', 'WAITING', 'PENDING']),
+      conclusion: checkConclusion.nullable(),
+      detailsUrl: z.string().nullish(),
+      url: z.string().nullish(),
+      startedAt: z.string().nullish(),
+      completedAt: z.string().nullish(),
+      checkSuite: z.object({
+        databaseId: z.number(),
+        workflowRun: z.object({ databaseId: z.number().nullish() }).nullish()
       })
-    )
-    .max(1)
-})
+    }),
+    z.object({
+      __typename: z.literal('StatusContext'),
+      context: z.string().optional(),
+      state: z.enum(['ERROR', 'EXPECTED', 'FAILURE', 'PENDING', 'SUCCESS']),
+      targetUrl: z.string().nullish(),
+      createdAt: z.string().nullish()
+    })
+  ])
+)
+const pageInfoSchema = lazyZodSchema(() =>
+  z.object({ hasNextPage: z.boolean(), endCursor: z.string().nullable() })
+)
+const suiteSchema = lazyZodSchema(() =>
+  z.object({
+    databaseId: z.number(),
+    conclusion: checkConclusion.nullable(),
+    url: z.string().nullish(),
+    app: z.object({ name: z.string().nullish(), slug: z.string().nullish() }).nullish()
+  })
+)
+
+export const prCheckRollupCommitsSchema = lazyZodSchema(() =>
+  z.object({
+    nodes: z
+      .array(
+        z.object({
+          commit: z.object({
+            oid: z.string().min(1),
+            statusCheckRollup: z
+              .object({
+                contexts: z.object({ nodes: z.array(contextSchema), pageInfo: pageInfoSchema })
+              })
+              .nullable()
+              .optional(),
+            checkSuites: z
+              .object({
+                nodes: z.array(suiteSchema),
+                pageInfo: pageInfoSchema
+              })
+              .optional()
+          })
+        })
+      )
+      .max(1)
+  })
+)
 
 type CheckCommits = z.infer<typeof prCheckRollupCommitsSchema>
 type CheckCommit = CheckCommits['nodes'][number]['commit']
@@ -128,18 +139,20 @@ export type PRCheckPages = {
   suites: PRCheckSuite[]
 }
 type CheckPage = { number: number; headRefOid: string; commits: CheckCommits }
-const pageSchema = z.object({
-  data: z.object({
-    repository: z.object({
-      pullRequest: z.object({
-        number: z.number(),
-        headRefOid: z.string(),
-        commits: prCheckRollupCommitsSchema
+const pageSchema = lazyZodSchema(() =>
+  z.object({
+    data: z.object({
+      repository: z.object({
+        pullRequest: z.object({
+          number: z.number(),
+          headRefOid: z.string(),
+          commits: prCheckRollupCommitsSchema
+        })
       })
-    })
-  }),
-  errors: z.array(z.unknown()).optional()
-})
+    }),
+    errors: z.array(z.unknown()).optional()
+  })
+)
 
 async function collectPRCheckPages(
   first: CheckPage,

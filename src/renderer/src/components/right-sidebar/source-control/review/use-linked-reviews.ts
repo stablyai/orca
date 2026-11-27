@@ -1,14 +1,10 @@
 import { useMemo } from 'react'
-import type {
-  HostedReviewCreationEligibility,
-  HostedReviewInfo
-} from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
+import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import {
   hasPositiveHostedReviewNumberLink,
   hasResolvableHostedReviewPushTargetLink,
   resolveHostedReviewPushTargetForActions
 } from '../../../../../../shared/source-control/hosted-review/hosted-review-push-target'
-import { buildSourceControlManualReviewUrlFromContext } from './manual-review-url'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 
 export function useSourceControlLinkedReviews({
@@ -16,9 +12,7 @@ export function useSourceControlLinkedReviews({
   activeRepo,
   activeWorktree,
   branchName,
-  compareBaseRef,
   hostedReview,
-  hostedReviewCreation,
   hostedReviewEntry,
   remoteStatus
 }: {
@@ -26,9 +20,7 @@ export function useSourceControlLinkedReviews({
   activeRepo: SourceControlWorktreeContext['activeRepo']
   activeWorktree: SourceControlWorktreeContext['activeWorktree']
   branchName: string
-  compareBaseRef: string | null
   hostedReview: HostedReviewInfo | null
-  hostedReviewCreation: HostedReviewCreationEligibility | null
   hostedReviewEntry: SourceControlWorktreeContext['hostedReviewEntry']
   remoteStatus: SourceControlWorktreeContext['remoteStatus']
 }) {
@@ -38,41 +30,6 @@ export function useSourceControlLinkedReviews({
   const linkedBitbucketPR = activeWorktree?.linkedBitbucketPR ?? null
   const linkedAzureDevOpsPR = activeWorktree?.linkedAzureDevOpsPR ?? null
   const linkedGiteaPR = activeWorktree?.linkedGiteaPR ?? null
-  const manualReviewUrl = useMemo(
-    () =>
-      buildSourceControlManualReviewUrlFromContext({
-        hostedReviewProvider: hostedReview?.provider ?? null,
-        hostedReviewCreationProvider: hostedReviewCreation?.provider ?? null,
-        linkedGitHubPR,
-        fallbackGitHubPRNumber,
-        linkedGitLabMR,
-        linkedBitbucketPR,
-        linkedAzureDevOpsPR,
-        linkedGiteaPR,
-        baseRef: compareBaseRef,
-        branchName,
-        repoRemoteName: activeRepo?.gitRemoteIdentity?.remoteName ?? null,
-        repoRemoteUrl: activeRepo?.gitRemoteIdentity?.remoteUrl ?? null,
-        pushTarget: activeWorktree?.pushTarget ?? null,
-        upstreamName: remoteStatus?.upstreamName ?? null
-      }),
-    [
-      activeRepo?.gitRemoteIdentity?.remoteName,
-      activeRepo?.gitRemoteIdentity?.remoteUrl,
-      activeWorktree?.pushTarget,
-      branchName,
-      compareBaseRef,
-      fallbackGitHubPRNumber,
-      hostedReview?.provider,
-      hostedReviewCreation?.provider,
-      linkedAzureDevOpsPR,
-      linkedBitbucketPR,
-      linkedGitHubPR,
-      linkedGitLabMR,
-      linkedGiteaPR,
-      remoteStatus?.upstreamName
-    ]
-  )
   const hasHostedReviewLink = hasPositiveHostedReviewNumberLink({
     linkedGitHubPR,
     fallbackGitHubPR: fallbackGitHubPRNumber,
@@ -127,7 +84,6 @@ export function useSourceControlLinkedReviews({
     linkedGitHubPR,
     linkedGitLabMR,
     linkedGiteaPR,
-    manualReviewUrl,
     remoteStatusForActions
   }
 }

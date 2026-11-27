@@ -43,7 +43,9 @@ export const RemoteOwnedWorkerMail = lazyZodSchema(() =>
       body: z.string(),
       payload: z.string().nullable(),
       priority: z.enum(['normal', 'high', 'urgent']),
-      threadId: z.string().nullable()
+      threadId: z.string().nullable(),
+      /** The message a reply answers; an older server omits it. */
+      replyTo: z.string().nullable().optional()
     }),
     dispatchId: z.string().min(1).nullable(),
     taskId: z.string().min(1).nullable()
