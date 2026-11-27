@@ -9,6 +9,8 @@ import {
   type CodexHistoryRecord
 } from '../../transcript-history/codex/codex-local-history'
 
+export const MAX_LEGACY_IMPORT_RECORD_BYTES = 16 * 1024 * 1024
+
 export async function readLegacyImportTranscript(
   input: { filePath: string; codex: boolean; roots?: readonly string[] },
   visit: (line: string, fallbackId: string, recordId?: string, selected?: boolean) => null,
@@ -29,7 +31,7 @@ export async function readLegacyImportTranscript(
         0,
         visit,
         true,
-        16 * 1024 * 1024
+        MAX_LEGACY_IMPORT_RECORD_BYTES
       )
 }
 

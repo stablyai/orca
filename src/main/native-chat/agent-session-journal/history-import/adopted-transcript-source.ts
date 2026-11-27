@@ -35,9 +35,11 @@ export type AdoptedTranscriptSource = {
   conversationStore?: string
 }
 
+type AdoptedSourceIdentity = { sessionId: string | null; cwd: string | null }
+
 export async function assertAdoptedSourceIdentity(
   source: AdoptedTranscriptSource,
-  actual: { sessionId: string | null; cwd: string | null },
+  actual: AdoptedSourceIdentity,
   requireCwd = true,
   signal?: AbortSignal,
   agent?: AgentType
@@ -117,7 +119,7 @@ export function adoptedTranscriptSourceObserver(input: {
   let cwd: string | null = null
   let sawCodexMetadata = false
   /** The conversation's recorded identity, read after every line is observed. */
-  const identity = async (): Promise<{ sessionId: string | null; cwd: string | null }> => {
+  const identity = async (): Promise<AdoptedSourceIdentity> => {
     if (input.agent === 'grok') {
       const summaryPath = join(dirname(input.filePath), 'summary.json')
       if (!(await admitTranscriptPath(dirname(input.filePath), summaryPath))) {
@@ -139,25 +141,28 @@ export function adoptedTranscriptSourceObserver(input: {
     }
     return { sessionId, cwd }
   }
+  function observeRecord(record: Record<string, unknown> | null): boolean {
+    if (!record) {
+      return cwd !== null
+    }
+    if (input.agent === 'claude') {
+      sessionId = extractString(record.sessionId) ?? sessionId
+      cwd ??= extractString(record.cwd)
+    } else if (input.agent === 'codex' && record.type === 'session_meta' && !sawCodexMetadata) {
+      sawCodexMetadata = true
+      const payload = asRecord(record.payload)
+      sessionId = extractString(payload?.id) ?? sessionId
+    } else if ((input.agent === 'omp' || input.agent === 'pi') && record.type === 'session') {
+      sessionId = extractString(record.id)
+      cwd = extractString(record.cwd)
+    }
+    return cwd !== null
+  }
+
   return {
     /** True once the line stream has given the conversation's folder. */
     observe(line: string): boolean {
-      const record = parseJsonObject(line)
-      if (!record) {
-        return cwd !== null
-      }
-      if (input.agent === 'claude') {
-        sessionId = extractString(record.sessionId) ?? sessionId
-        cwd ??= extractString(record.cwd)
-      } else if (input.agent === 'codex' && record.type === 'session_meta' && !sawCodexMetadata) {
-        sawCodexMetadata = true
-        const payload = asRecord(record.payload)
-        sessionId = extractString(payload?.id) ?? sessionId
-      } else if ((input.agent === 'omp' || input.agent === 'pi') && record.type === 'session') {
-        sessionId = extractString(record.id)
-        cwd = extractString(record.cwd)
-      }
-      return cwd !== null
+      return observeRecord(parseJsonObject(line))
     },
     identity,
     async validate() {
@@ -191,7 +196,7 @@ async function readAdoptedOpenCodeIdentity(
   dbPath: string,
   source: AdoptedTranscriptSource,
   signal?: AbortSignal
-): Promise<{ sessionId: string | null; cwd: string | null }> {
+): Promise<AdoptedSourceIdentity> {
   const metadata = await readOpenCodeTranscriptSignalViaWorker(
     { dbPath, sessionId: source.providerSessionId },
     signal

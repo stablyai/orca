@@ -34,7 +34,15 @@ function claudeIdentity(
   agent: AgentType,
   sessionId: string
 ): AgentJournalItemIdentity {
-  const record = parseRecord(line)
+  return claudeLegacyIdentity(parseRecord(line), lineIndex, agent, sessionId)
+}
+
+function claudeLegacyIdentity(
+  record: unknown,
+  lineIndex: number,
+  agent: AgentType,
+  sessionId: string
+): AgentJournalItemIdentity {
   const uuid = stringField(record, 'uuid')
   if (!uuid) {
     return { provider: 'legacy', agent, sessionId, recordId: `#${lineIndex}` }
