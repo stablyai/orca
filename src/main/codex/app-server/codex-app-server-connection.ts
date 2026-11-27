@@ -325,7 +325,8 @@ export function spawnRelayedCodexAppServerConnection(relay: {
   chatKey: string
   only?: 'reattach'
 }): typeof spawnCodexAppServerConnection {
-  return (launch, handlers = {}) => connectCodexAppServer(launch, handlers, spawnProcess, false, relay)
+  return (launch, handlers = {}) =>
+    connectCodexAppServer(launch, handlers, spawnProcess, false, relay)
 }
 
 export function openCodexAppServerConnection(

@@ -79,7 +79,6 @@ export function isStoredRelayGrant(value: unknown): value is StoredRelayGrant {
 /** A kept owner's token; `entry` is null until it is sealed, `durable` once it is in the file. */
 type KeptToken = { token: string; entry: StoredRelayGrant | null; durable: Promise<boolean> }
 
-
 const resolvedFolders = (folders: RelayFolders): RelayFolders => ({
   ...(folders.bot ? { bot: resolve(folders.bot) } : {}),
   ...(folders.host ? { host: resolve(folders.host) } : {})

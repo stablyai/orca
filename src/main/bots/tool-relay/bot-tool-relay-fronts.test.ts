@@ -79,5 +79,4 @@ describe.skipIf(process.platform === 'win32')('tool relay fronts', () => {
     // The relay parsed it: no bearer is refused by its own check, as on its own port.
     expect(answer).toMatch(/^HTTP\/1\.1 401 /)
   })
-
 })
