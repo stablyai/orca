@@ -77,16 +77,7 @@ describe("the Items tab's person pick", () => {
   })
   const OWNERS_COPY = { shares: [share('acct-a', 'Alice Park'), share('acct-b', 'Bo Chen')] }
   // Alice's copy, as the host lists it to her share device.
-  const ALICES_COPY = {
-    shareViewer: {
-      accountId: 'acct-a',
-      ownerName: 'Jinwoo',
-      teammates: [
-        { accountId: 'acct-a', name: 'Alice Park' },
-        { accountId: 'acct-b', name: 'Bo Chen' }
-      ]
-    }
-  }
+  const ALICES_COPY = { shareViewer: { accountId: 'acct-a', ownerName: 'Jinwoo' } }
   const names = (entries: ReturnType<typeof botPeoplePicker>) =>
     entries?.map((entry) => `${entry.pick.kind}:${entry.name}`)
 

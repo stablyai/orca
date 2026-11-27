@@ -38,7 +38,6 @@ export function botPersonPickName(
 /** The owner's Items filter people, labelled: "<name> (you)" first. Null for an agent shared with no
  *  one and on a teammate's copy, which lists only their own items. */
 export function useBotItemsPeople(bot: Bot): BotPersonPickLabelled[] | null {
-  const t = useTranslate()
   const ownerLabel = useBotOwnPersonLabel(bot)
   const entries = botPeoplePicker(bot, null)
   if (!entries) {
@@ -46,7 +45,7 @@ export function useBotItemsPeople(bot: Bot): BotPersonPickLabelled[] | null {
   }
   return entries.map((entry, index) => ({
     pick: entry.pick,
-    label: index === 0 ? ownerLabel : (entry.name ?? t('bots.items.filter.owner', 'Owner'))
+    label: index === 0 ? ownerLabel : (entry.name ?? '')
   }))
 }
 

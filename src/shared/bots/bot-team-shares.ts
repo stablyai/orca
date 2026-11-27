@@ -57,14 +57,13 @@ export const BotSharePeopleFields = {
   itemsSeenBy: lazyZodSchema(() =>
     z.record(z.string(), z.number().int().nonnegative()).optional().catch(undefined)
   ),
-  /** On a teammate's copy only: who is looking, the owner's name (null signed out) and the usable
-   *  teammates, as its host names them for the Items filter. Absent on the owner's own. */
+  /** On a teammate's copy only: who is looking and the owner's name (null signed out), for whose an
+   *  item's activity is. Absent on the owner's own. */
   shareViewer: lazyZodSchema(() =>
     z
       .object({
         accountId: z.string(),
-        ownerName: z.string().nullable(),
-        teammates: z.array(z.object({ accountId: z.string(), name: z.string() }))
+        ownerName: z.string().nullable()
       })
       .optional()
       .catch(undefined)

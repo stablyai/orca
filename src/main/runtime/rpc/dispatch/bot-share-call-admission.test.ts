@@ -448,9 +448,11 @@ describe('the share guard', () => {
       expect(await titles({ botId: SHARED.id, person: 'acct-bob' })).toEqual(['Bob’s'])
       expect(errorCode(await call('bots.items.owner.list', { botId: OTHER.id }))).toBe('not_found')
       // Any of the shared bot's items opens by number or uid; another bot's does not.
-      expect(
-        errorCode(await call('bots.items.owner.show', { botId: SHARED.id, item: ownersUid }))
-      ).toBeNull()
+      for (const item of [ownersUid, String(store.get(ownersUid)!.number)]) {
+        expect(
+          errorCode(await call('bots.items.owner.show', { botId: SHARED.id, item }))
+        ).toBeNull()
+      }
       expect(
         errorCode(await call('bots.items.owner.show', { botId: SHARED.id, item: otherBotsUid }))
       ).toBe('not_found')

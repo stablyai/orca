@@ -155,7 +155,7 @@ function BotActivityTab({
     setReturnTo(null)
     setFilterState(next)
   }
-  // Whose items, per screen: a shared bot opens on the viewer's own, the owner's or a teammate's.
+  // Whose items, per screen: the owner's shared bot opens on their own; a teammate's copy has no pick.
   const entries = useBotItemsPeople(bot)
   const [picked, setPicked] = useState<BotChatPersonPick | null>(null)
   const pick = botItemsPersonPick(entries, picked)
