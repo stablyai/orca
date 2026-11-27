@@ -1,8 +1,5 @@
 import React, { useEffect, useId } from 'react'
-import { openBotSettings } from './bot-settings-open'
-import { ChevronDown, Copy, Pause, Play, Server, Settings, Trash2 } from 'lucide-react'
-import { toast } from 'sonner'
-import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu'
+import { ChevronDown, Server } from 'lucide-react'
 import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
 import { useTranslate } from '@/i18n/use-translate'
 import { openBotHome, updateBot } from '@/lib/bot-catalog'
@@ -20,13 +17,13 @@ import {
 import { BotAvatar } from './BotAvatar'
 import { FOLD_TOGGLE_CLASS } from './BotChatRowControls'
 import { botRowLineAge, BotRowLineView } from './BotRowActivityLine'
+import { BotRowMenuFooter, BotRowMenuItems } from './BotRowContextMenu'
 import { BotSidebarRow } from './BotSidebarRow'
 import { revealBotHome } from './BotHoverNeedsYou'
 import { BotHoverDetails, useBotRowDetails } from './BotHoverDetails'
 import { usageLimitStopTip } from './BotUsageLimitMark'
 import { BotUpNextCount } from './BotUpNextCount'
 import { revealBotUpNext } from './bot-up-next-reveal'
-import { useDeleteBot } from './use-delete-bot'
 import { setBotPurpose } from './bot-purpose-cache'
 import { botSidebarEntryKey } from './bot-sidebar-entry-keys'
 
@@ -46,6 +43,8 @@ type BotRowProps = {
   fold?: BotRowFold | null
   /** The Bots section's reorder: this row is where a drag starts. */
   dragHandle?: boolean
+  beginRename?: boolean
+  onBeginRenameConsumed?: () => void
 }
 
 export function BotRow({
@@ -54,7 +53,9 @@ export function BotRow({
   isActive,
   onOpen,
   fold = null,
-  dragHandle = false
+  dragHandle = false,
+  beginRename = false,
+  onBeginRenameConsumed
 }: BotRowProps): React.JSX.Element {
   const t = useTranslate()
   const details = useBotRowDetails(bot, home)
@@ -76,10 +77,6 @@ export function BotRow({
       openBotFromSidebar(bot, onOpen)
     }
   }
-  const run = (work: Promise<unknown>): void => {
-    work.catch((error: unknown) => toast.error(botErrorMessage(error)))
-  }
-  const handleDelete = useDeleteBot(bot)
   return (
     <BotSidebarRow
       avatar={<BotAvatar bot={bot} className="size-8 rounded-md text-sm" />}
@@ -94,6 +91,8 @@ export function BotRow({
       dimmed={bot.paused || offline}
       actionsDisabled={offline}
       dragHandle={dragHandle}
+      beginRename={beginRename}
+      onBeginRenameConsumed={onBeginRenameConsumed}
       onOpen={open}
       onRename={async (name) => {
         try {
@@ -146,39 +145,8 @@ export function BotRow({
           onOpenHome={() => openBotHomePanelFromSidebar(bot, onOpen)}
         />
       )}
-      menuItems={
-        <>
-          <ContextMenuItem onSelect={() => openBotSettings(bot.id)}>
-            <Settings className="size-3.5" />
-            {t('bots.row.settings', 'Bot settings…')}
-          </ContextMenuItem>
-          <ContextMenuItem
-            disabled={offline}
-            onSelect={() => run(updateBot(bot, { paused: !bot.paused }))}
-          >
-            {bot.paused ? <Play className="size-3.5" /> : <Pause className="size-3.5" />}
-            {bot.paused ? t('bots.row.resume', 'Resume bot') : t('bots.row.pause', 'Pause bot')}
-          </ContextMenuItem>
-          <ContextMenuSeparator />
-          <ContextMenuItem onSelect={() => window.api.ui.writeClipboardText(home.folderPath)}>
-            <Copy className="size-3.5" />
-            {t('bots.row.copyPath', 'Copy Path')}
-          </ContextMenuItem>
-        </>
-      }
-      menuFooter={
-        <>
-          <ContextMenuSeparator />
-          <ContextMenuItem
-            variant="destructive"
-            disabled={offline}
-            onSelect={() => void handleDelete()}
-          >
-            <Trash2 className="size-3.5" />
-            {t('bots.row.delete', 'Delete bot')}
-          </ContextMenuItem>
-        </>
-      }
+      menuItems={<BotRowMenuItems bot={bot} home={home} offline={offline} />}
+      menuFooter={<BotRowMenuFooter bot={bot} offline={offline} />}
     />
   )
 }
