@@ -12,7 +12,8 @@ export type MetricEvent =
   // Every refusal the Worker or object sends: label '<status or code>', reason 'token' | 'country' | 'shape' | 'frame';
   // a 'token' refusal's detail is the check that failed (jwt.ts WAKE_REFUSE_CODES).
   | 'refuse'
-  // Upgrade answered 503 because no key set could be obtained: label 'keys_unavailable'.
+  // Upgrade answered 503: label 'keys_unavailable' (no key set could be obtained) or
+  // 'object_unavailable' (the forward to the host's object failed).
   | 'upgrade'
   // Pre-auth request refused by the per-source limiter: label 'wake' | 'health'.
   | 'preauth_limited'
