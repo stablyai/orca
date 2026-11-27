@@ -15,7 +15,7 @@ it('keeps only function names and script basenames in allocation stacks', () => 
   })
   const head = frame(0, '(root)', '', [
     frame(1, 'saveSession', 'file:///Users/alice/Apps/Orca.app/out/main/index.js', [
-      frame(2, 'stringify', 'C:\\Users\\alice\\AppData\\Orca\\out\\main\\index.js?x=1'),
+      frame(2, 'client acme', 'C:\\Users\\alice\\AppData\\Orca\\out\\main\\index.js?x=1'),
       frame(3, '/home/alice/notes/key', '/home/alice/notes/alice plan.js')
     ])
   ])
@@ -25,7 +25,7 @@ it('keeps only function names and script basenames in allocation stacks', () => 
     alloc_1_kb: 3072,
     alloc_1_stack: '(unnamed) ?:10 < saveSession index.js:10',
     alloc_2_kb: 2048,
-    alloc_2_stack: 'stringify index.js:10 < saveSession index.js:10',
+    alloc_2_stack: '(unnamed) index.js:10 < saveSession index.js:10',
     alloc_3_kb: 1024,
     alloc_3_stack: 'saveSession index.js:10'
   })

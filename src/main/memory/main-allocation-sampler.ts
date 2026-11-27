@@ -15,7 +15,6 @@ const TOP_STACKS = 20
 const STACK_FRAMES = 8
 const STACK_MAX_CHARS = 400
 const TOP_CHANNELS = 20
-/** Bounds the per-message size walk so a huge payload costs at most this many visits. */
 const SIZE_WALK_BUDGET = 2_000
 const MB = 2 ** 20
 
@@ -55,6 +54,8 @@ export async function sampleMainAllocations(
     const heapGrowthMB = Math.round(process.memoryUsage().heapUsed / MB - heapBeforeMB)
     const { profile } = await session.post('HeapProfiler.stopSampling')
     return {
+      // The window starts once the spike is seen, so a burst that already ended reads as quiet.
+      allocationWindow: 'after-spike',
       allocationWindowMs: windowMs,
       allocationWindowHeapGrowthMB: heapGrowthMB,
       ...summarizeAllocationProfile(profile.head),
@@ -114,19 +115,19 @@ export function summarizeAllocationProfile(head: ProfileNode): Details {
 function formatFrame(frame: ProfileNode['callFrame']): string {
   const file = frame.url.split(/[?#]/)[0].split(/[/\\]/).pop() ?? ''
   const safeFile = /^[\w.-]{1,60}$/.test(file) ? file : file ? '?' : ''
-  // V8 infers names from computed keys, so a name can be a path or user data; keep plain identifiers only.
-  const name = /^[\w$.<>()[\] -]{1,60}$/.test(frame.functionName)
-    ? frame.functionName
-    : frame.functionName
-      ? '(unnamed)'
-      : '(anonymous)'
-  return safeFile ? `${name} ${safeFile}:${frame.lineNumber + 1}` : name
+  // V8 names functions after computed keys, which can be repo, branch or file names; keep identifier chains only.
+  const name =
+    /^[\w$]{1,60}(\.[\w$<>]{1,60}){0,4}$/.test(frame.functionName) ||
+    /^\((anonymous|root|program|idle|garbage collector|V8 API)\)$/.test(frame.functionName)
+      ? frame.functionName
+      : frame.functionName
+        ? '(unnamed)'
+        : '(anonymous)'
+  const line = frame.lineNumber >= 0 ? `:${frame.lineNumber + 1}` : ''
+  return safeFile ? `${name} ${safeFile}${line}` : name
 }
 
-/**
- * Wraps handlers only for the window; Electron reads its invoke map directly, so values are swapped.
- * Frame-scoped `webContents.ipc` listeners are not counted.
- */
+// Electron reads its invoke map directly, so handler values are swapped; frame-scoped ipc is not counted.
 function startIpcTally(): () => IpcTally {
   const tally = new Map<string, ChannelTally>()
   let stopped = false
@@ -153,6 +154,7 @@ function startIpcTally(): () => IpcTally {
   let emitWrapper: typeof ipcMain.emit | null = null
   let contentsProto: { send?: unknown } | null = null
   let originalSend: unknown = undefined
+  let sendWasOwn = false
   let sendWrapper: InvokeHandler | null = null
   const restore = (): void => {
     stopped = true
@@ -166,7 +168,11 @@ function startIpcTally(): () => IpcTally {
       ipcMain.emit = originalEmit
     }
     if (contentsProto && sendWrapper && contentsProto.send === sendWrapper) {
-      contentsProto.send = originalSend
+      if (sendWasOwn) {
+        contentsProto.send = originalSend
+      } else {
+        delete contentsProto.send
+      }
     }
   }
   try {
@@ -212,6 +218,7 @@ function startIpcTally(): () => IpcTally {
         }
       : null
     if (contentsProto && sendWrapper) {
+      sendWasOwn = Object.hasOwn(contentsProto, 'send')
       contentsProto.send = sendWrapper
     }
   } catch (error) {
@@ -229,7 +236,7 @@ function startIpcTally(): () => IpcTally {
   }
 }
 
-/** Ranked by calls: bytes count only top-level strings, buffers and arrays, so most object payloads read 0. */
+/** Ranked by calls, since bytes skip object payloads. */
 function summarizeIpcTally({ tally, rendererSendsTallied }: IpcTally): Details {
   const details: Details = {
     ipcChannels: tally.size,
@@ -254,9 +261,8 @@ function safeChannel(channel: unknown): string {
   return typeof channel === 'string' && /^[\w:.-]{1,80}$/.test(channel) ? channel : '(other)'
 }
 
-/** Strings, buffers and arrays only: listing a large object's keys costs O(keys) before any budget applies. */
+/** Skips objects: listing a large object's keys costs O(keys) before any budget applies. */
 export function approxBytes(value: unknown): number {
-  // Only array index reads spend budget; each queued value is then read once, so the cap bounds both.
   let budget = SIZE_WALK_BUDGET
   let bytes = 0
   const pending: unknown[] = [value]
