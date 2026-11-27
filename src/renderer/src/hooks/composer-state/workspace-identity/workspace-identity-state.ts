@@ -4,6 +4,7 @@ import type { ComposerAgentRows } from '../card-projection/composer-agent-rows-t
 type WorkspaceIdentityStateInput = Pick<
   ComposerModel,
   | 'initialBaseBranch'
+  | 'initialBaseBranchIsStartPoint'
   | 'initialParentWorktreeId'
   | 'initialLinearBranchName'
   | 'initialLinkedWorkItem'
@@ -50,6 +51,7 @@ export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
   const {
     agentLaunchWorkspace,
     initialBaseBranch,
+    initialBaseBranchIsStartPoint,
     initialParentWorktreeId,
     initialLinearBranchName,
     initialLinkedWorkItem,
@@ -114,8 +116,7 @@ export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
   // Branch-as-name selections get source pills; checkout-base picks must not hide the typed name.
   const [baseBranchNamesWorkspace, setBaseBranchNamesWorkspace] = useState(
     () =>
-      // A base seeded alongside a parent is only the checkout start point, never the name.
-      !(!persistDraft && initialParentWorktreeId && initialBaseBranch) &&
+      !(!persistDraft && initialBaseBranchIsStartPoint) &&
       resolveDraftBaseBranchNamesWorkspace({
         persistDraft,
         draftValue: newWorkspaceDraft?.baseBranchNamesWorkspace

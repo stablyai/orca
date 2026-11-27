@@ -29,6 +29,7 @@ export type ComposerStateInput = {
   initialWorkspaceTarget?: WorkspaceCreationTargetHint | null
   initialWorkspaceStatus?: WorkspaceStatus
   initialBaseBranch?: string
+  initialBaseBranchIsStartPoint?: boolean
   initialParentWorktreeId?: string
   persistDraft: boolean
   onCreated?: () => void
@@ -54,6 +55,7 @@ export function useComposerTargetStore(options: ComposerStateInput, decisions: C
     initialWorkspaceTarget = null,
     initialWorkspaceStatus,
     initialBaseBranch,
+    initialBaseBranchIsStartPoint,
     initialParentWorktreeId,
     persistDraft,
     onCreated,
@@ -174,6 +176,7 @@ export function useComposerTargetStore(options: ComposerStateInput, decisions: C
     initialWorkspaceTarget,
     initialWorkspaceStatus,
     initialBaseBranch,
+    initialBaseBranchIsStartPoint,
     initialParentWorktreeId,
     persistDraft,
     onCreated,

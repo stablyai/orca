@@ -3,6 +3,9 @@ import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID
 } from '../../../../../../shared/execution-host/execution-host'
+import { withTimeout } from '../../../../../../shared/concurrency/promise-timeout-fallback'
+import { deriveLegacyLocalBranchName } from '../../../../../../shared/worktree/base-refs/base-ref-search-result'
+import { getRuntimeRepoBaseRefDefault } from '@/runtime/source-control/references/runtime-repo-client'
 import { getRepoWorkspaceCreationTargetHint } from '@/lib/workspace/creation/project-host-workspace-target'
 import { resolveReviewRepository } from '@/lib/source-control/review/review-owner'
 import {
@@ -38,6 +41,36 @@ function resolveChildWorktreeRepository(repos: readonly Repo[], worktree: Worktr
       worktree.hostId ??
       (worktree.runtimeOwnerEnvironmentId?.trim() ? undefined : LOCAL_EXECUTION_HOST_ID)
   })
+}
+
+// Past this the composer opens with the parent branch instead of stalling on a slow host.
+const DEFAULT_BASE_LOOKUP_TIMEOUT_MS = 1500
+
+/** The parent's branch as a base, or undefined to keep the project's default base. */
+async function resolveChildWorktreeBase(
+  repo: Repo,
+  worktree: Pick<Worktree, 'branch' | 'head'>
+): Promise<string | undefined> {
+  const branch = worktree.branch.replace(/^refs\/heads\//, '')
+  // An unborn branch reports an all-zero head and cannot be a base.
+  if (!branch || !/[^0]/.test(worktree.head)) {
+    return undefined
+  }
+  // A local branch can lag the remote ref that the pin or the repo default already tracks.
+  const tracks = (baseRef: string | null | undefined): boolean =>
+    Boolean(baseRef) && deriveLegacyLocalBranchName(baseRef ?? '') === branch
+  if (tracks(repo.worktreeBaseRef)) {
+    return undefined
+  }
+  // Failure or timeout keeps the parent: dropping it would silently branch off the default.
+  const defaultBaseRef = await withTimeout(
+    getRuntimeRepoBaseRefDefault(getRepoExecutionHostId(repo), repo.id).then(
+      (result) => result.defaultBaseRef
+    ),
+    DEFAULT_BASE_LOOKUP_TIMEOUT_MS,
+    null
+  )
+  return tracks(defaultBaseRef) ? undefined : `refs/heads/${branch}`
 }
 
 export function useWorktreeContextMenuCommands(args: {
@@ -184,17 +217,21 @@ export function useWorktreeContextMenuCommands(args: {
       focus: 'displayName'
     })
   }, [args])
-  const handleNewChildWorktree = useCallback(() => {
+  const handleNewChildWorktree = useCallback(async () => {
     const state = args.getState()
     const repo = resolveChildWorktreeRepository(state.repos, args.worktree)
     if (!repo || !canCreateChildWorktree({ ...args, repo })) {
       return
     }
     args.setMenuOpenState(false)
-    // Empty for detached or bare checkouts, which keep the project default base.
-    const parentBranch = args.worktree.branch.replace(/^refs\/heads\//, '')
+    const modalBefore = args.getState().activeModal
+    const initialBaseBranch = await resolveChildWorktreeBase(repo, args.worktree)
+    // The lookup can be slow on a remote host; never replace a modal opened meanwhile.
+    if (args.getState().activeModal !== modalBefore) {
+      return
+    }
     args.openModal('new-workspace-composer', {
-      ...(parentBranch ? { initialBaseBranch: `refs/heads/${parentBranch}` } : {}),
+      ...(initialBaseBranch ? { initialBaseBranch, initialBaseBranchIsStartPoint: true } : {}),
       initialRepoId: repo.id,
       initialWorkspaceTarget: getRepoWorkspaceCreationTargetHint(repo, state.projectHostSetups),
       initialParentWorktreeId: args.worktree.id,

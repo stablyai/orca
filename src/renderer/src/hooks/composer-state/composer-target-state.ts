@@ -94,6 +94,7 @@ export function useComposerTargetState(
       selectedProjectGroup: initialTargetState.selectedProjectGroup
     })?.target.workspace,
     initialBaseBranch: composerTargetStore.initialBaseBranch,
+    initialBaseBranchIsStartPoint: composerTargetStore.initialBaseBranchIsStartPoint,
     initialParentWorktreeId: composerTargetStore.initialParentWorktreeId,
     initialLinearBranchName: sourceContextState.initialLinearBranchName,
     initialLinkedWorkItem: composerTargetStore.initialLinkedWorkItem,

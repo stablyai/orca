@@ -153,6 +153,7 @@ function QuickTabBody({
     initialWorkspaceStatus: modalData.initialWorkspaceStatus,
     initialParentWorktreeId: modalData.initialParentWorktreeId,
     ...(modalData.initialBaseBranch ? { initialBaseBranch: modalData.initialBaseBranch } : {}),
+    initialBaseBranchIsStartPoint: modalData.initialBaseBranchIsStartPoint,
     persistDraft: false,
     onCreated: onClose,
     isSubmissionCancelled,
@@ -248,6 +249,12 @@ function QuickTabBody({
           prefilledName: cardProps.name,
           initialRepoId: cardProps.repoId,
           initialBaseBranch: cardProps.baseBranch,
+          // A branch or review picked as the source since then owns the base and its pill.
+          initialBaseBranchIsStartPoint:
+            modalData.initialBaseBranchIsStartPoint &&
+            !['branch', 'github-pr', 'gitlab-mr'].includes(
+              cardProps.smartNameSelection?.kind ?? ''
+            ),
           initialWorkspaceTarget:
             cardProps.selectedProjectId && cardProps.selectedRepoExecutionHostId
               ? {
