@@ -6472,7 +6472,7 @@
       "tidyUpBadTopic": "Le dernier rangement a nommé un fichier de sujet qu’Orca ne peut pas écrire, rien n’a donc changé.",
       "tidyUpTooLong": "Le MEMORY.md du dernier rangement dépassait {{max}} lignes et n’était pas plus court, rien n’a donc changé.",
       "tidyUpTooManyRemoved": "Le dernier rangement a retiré trop de lignes à la fois, rien n’a donc changé.",
-      "tidyUpTooManyAdded": "Le dernier rangement a ajouté trop de nouvelles lignes à la fois, rien n’a donc changé.",
+      "tidyUpTooManyAdded": "Le dernier rangement a ajouté plus de {{max}} nouvelles lignes à la fois, rien n’a donc changé.",
       "tidyUpNotCopied": "Le dernier rangement a classé une ligne absente de MEMORY.md ; les nouveaux faits vont dans MEMORY.md, rien n’a donc changé.",
       "tidyUpTooManyFiled": "Le dernier rangement a classé plus de {{max}} lignes à la fois, rien n’a donc changé.",
       "tidyUpChanged": "MEMORY.md a changé pendant le dernier rangement, rien n’a donc changé.",

@@ -28492,7 +28492,7 @@
       "tidyUpBadTopic": "La última limpieza indicó un archivo de tema que Orca no puede escribir, así que no cambió nada.",
       "tidyUpTooLong": "El MEMORY.md de la última limpieza superaba las {{max}} líneas y no era más corto, así que no cambió nada.",
       "tidyUpTooManyRemoved": "La última limpieza quitó demasiadas líneas a la vez, así que no cambió nada.",
-      "tidyUpTooManyAdded": "La última limpieza añadió demasiadas líneas nuevas a la vez, así que no cambió nada.",
+      "tidyUpTooManyAdded": "La última limpieza añadió más de {{max}} líneas nuevas a la vez, así que no cambió nada.",
       "tidyUpNotCopied": "La última limpieza archivó una línea que MEMORY.md no tiene; los datos nuevos van en MEMORY.md, así que no cambió nada.",
       "tidyUpTooManyFiled": "La última limpieza archivó más de {{max}} líneas a la vez, así que no cambió nada.",
       "tidyUpChanged": "MEMORY.md cambió durante la última limpieza, así que no cambió nada.",

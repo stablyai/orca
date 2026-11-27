@@ -6301,7 +6301,7 @@
       "tidyUpBadTopic": "前回の整理が Orca の書き込めないトピックファイルを指定したため、何も変更されていません。",
       "tidyUpTooLong": "前回の整理の MEMORY.md は {{max}} 行を超えたまま短くならなかったため、何も変更されていません。",
       "tidyUpTooManyRemoved": "前回の整理が一度に多くの行を削除しすぎたため、何も変更されていません。",
-      "tidyUpTooManyAdded": "前回の整理が一度に多くの新しい行を追加しすぎたため、何も変更されていません。",
+      "tidyUpTooManyAdded": "前回の整理が一度に {{max}} 行を超える新しい行を追加したため、何も変更されていません。",
       "tidyUpNotCopied": "前回の整理が MEMORY.md にない行を振り分けました。新しい事実は MEMORY.md に入れるため、何も変更されていません。",
       "tidyUpTooManyFiled": "前回の整理が一度に {{max}} 行を超えて振り分けたため、何も変更されていません。",
       "tidyUpChanged": "前回の整理中に MEMORY.md が変更されたため、何も変更されていません。",

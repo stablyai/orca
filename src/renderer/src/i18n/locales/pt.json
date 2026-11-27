@@ -30708,7 +30708,7 @@
       "tidyUpBadTopic": "A última arrumação indicou um arquivo de tópico que o Orca não pode gravar, então nada mudou.",
       "tidyUpTooLong": "O MEMORY.md da última arrumação passava de {{max}} linhas e não ficou mais curto, então nada mudou.",
       "tidyUpTooManyRemoved": "A última arrumação removeu linhas demais de uma vez, então nada mudou.",
-      "tidyUpTooManyAdded": "A última arrumação adicionou linhas novas demais de uma vez, então nada mudou.",
+      "tidyUpTooManyAdded": "A última arrumação adicionou mais de {{max}} linhas novas de uma vez, então nada mudou.",
       "tidyUpNotCopied": "A última arrumação arquivou uma linha que o MEMORY.md não tem; fatos novos vão no MEMORY.md, então nada mudou.",
       "tidyUpTooManyFiled": "A última arrumação arquivou mais de {{max}} linhas de uma vez, então nada mudou.",
       "tidyUpChanged": "O MEMORY.md mudou durante a última arrumação, então nada mudou.",
