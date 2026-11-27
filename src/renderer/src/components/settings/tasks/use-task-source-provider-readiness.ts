@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkillNames
@@ -29,6 +29,7 @@ export function useTaskSourceProviderReadiness(
   const jiraStatusChecked = useAppStore((s) => s.jiraStatusChecked)
   const jiraStatusContextKey = useAppStore((s) => s.jiraStatusContextKey)
   const itsaplanStatus = useAppStore((s) => s.itsaplanStatus)
+  const refreshItsaplanStatus = useAppStore((s) => s.refreshItsaplanStatus)
   const linearConnected = useLinearProviderConnected()
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
   const linearStatusContextKey = useAppStore((s) => s.linearStatusContextKey)
@@ -63,6 +64,11 @@ export function useTaskSourceProviderReadiness(
   // Null until the first status read; the setup card treats that as still checking.
   const itsaplanChecking = itsaplanStatus === null
   const itsaplanConnected = itsaplanStatus?.connected === true
+  useEffect(() => {
+    if (itsaplanChecking) {
+      void refreshItsaplanStatus()
+    }
+  }, [itsaplanChecking, refreshItsaplanStatus])
   const linearChecking =
     linearStatusContextKey !== providerRuntimeContextKey || !linearStatusChecked
   // Normalization returns a new array, so memoize by provider contents.
