@@ -123,11 +123,8 @@ export default function RichMarkdownEditor({
     worktreeRoot
   })
   const openAnnotationPopoverRef = useRef(review.openAnnotationPopover)
-  const { tableOfContentsItems, navigateToTableOfContentsItem } = useRichMarkdownTableOfContents(
-    showTableOfContents,
-    content,
-    scrollContainerRef
-  )
+  const { tableOfContentsItems, activeTocId, navigateToTableOfContentsItem } =
+    useRichMarkdownTableOfContents(showTableOfContents, content, scrollContainerRef)
 
   const reconcileRoundTripRef = useRichMarkdownReconcileRoundTrip({
     htmlSuperscriptLinkContext,
@@ -367,6 +364,7 @@ export default function RichMarkdownEditor({
       annotationPopover={review.annotationPopover}
       markdownSourceLineOffset={markdownSourceLineOffset}
       tableOfContentsItems={tableOfContentsItems}
+      activeTocId={activeTocId}
       showTableOfContents={showTableOfContents}
       searchState={search.searchState}
       searchActions={search.searchActions}

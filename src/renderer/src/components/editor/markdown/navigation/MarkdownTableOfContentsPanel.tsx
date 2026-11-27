@@ -22,6 +22,7 @@ import {
 type MarkdownTableOfContentsPanelProps = {
   virtualized?: boolean
   items: MarkdownTocItem[]
+  activeId?: string | null
   onClose: () => void
   onNavigate: (id: string) => void
 }
@@ -32,6 +33,7 @@ const TOC_EXPAND_ALL_LEVEL: MarkdownTocLevel = 5
 export function MarkdownTableOfContentsPanel({
   virtualized = false,
   items,
+  activeId,
   onClose,
   onNavigate
 }: MarkdownTableOfContentsPanelProps): React.JSX.Element {
@@ -173,6 +175,7 @@ export function MarkdownTableOfContentsPanel({
               item={item}
               depth={depth}
               collapsedIds={collapsedIds}
+              activeId={activeId}
               onNavigate={onNavigate}
               onToggleCollapsed={toggleCollapsed}
               renderChildren={false}
@@ -188,6 +191,7 @@ export function MarkdownTableOfContentsPanel({
                 collapsedIds={collapsedIds}
                 depth={0}
                 item={item}
+                activeId={activeId}
                 onNavigate={onNavigate}
                 onToggleCollapsed={toggleCollapsed}
               />

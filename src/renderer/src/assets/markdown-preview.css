@@ -192,8 +192,13 @@
   line-height: 1.25;
 }
 
-.markdown-toc-row:hover {
+.markdown-toc-row:hover,
+.markdown-toc-row[data-active='true'] {
   background: var(--accent);
+}
+
+.markdown-toc-row[data-active='true'] .markdown-toc-title {
+  font-weight: 500;
 }
 
 .markdown-toc-disclosure {
