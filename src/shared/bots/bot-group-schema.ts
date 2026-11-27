@@ -57,14 +57,30 @@ export const BotGroupRemoteBotsSchema = z
 /** Sessions of members that left a room: its history still opens there; they grant no access. */
 const FormerSessionIds = z.array(z.string().min(1)).optional()
 
+export const BOT_GROUP_THREAD_TITLE_MAX_LENGTH = 80
+
+/** A thread's name given by hand: on one line and cut as its first post's name is, never empty.
+ *  Bounded before the collapse so a huge title costs no more than a long one. */
+export const BotGroupThreadName = z
+  .string()
+  .transform((title) =>
+    title
+      .slice(0, 4 * BOT_GROUP_THREAD_TITLE_MAX_LENGTH)
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, BOT_GROUP_THREAD_TITLE_MAX_LENGTH)
+      .trimEnd()
+  )
+  .pipe(z.string().min(1, 'Missing thread name'))
+
 /** Another room in the group, opened from its tab's + menu: every member on a fresh session. */
 const BotGroupThreadSchema = z.object({
   id: z.string().min(1),
   createdAt: z.number(),
   members: z.array(BotGroupMemberSchema),
   formerSessionIds: FormerSessionIds,
-  /** Its first post, cut to a line, which names its tab. */
-  title: z.string().max(80).optional()
+  /** Its first post cut to a line, or the name its owner gave it; names its tab. */
+  title: z.string().max(BOT_GROUP_THREAD_TITLE_MAX_LENGTH).optional()
 })
 
 /** The room's newest post, for the sidebar row's preview; `authorName` is null for the owner. */
