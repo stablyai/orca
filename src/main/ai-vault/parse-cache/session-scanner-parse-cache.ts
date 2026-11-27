@@ -87,6 +87,7 @@ function resumableStateFactoryFor(
     case 'opencode2':
     case 'zcode':
     case 'rovo':
+    case 'mistral-vibe':
       return null
   }
 }

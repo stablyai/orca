@@ -218,6 +218,7 @@ function buildAgentResumeInvocation(
     case 'devin':
     case 'openclaw':
     case 'droid':
+    case 'mistral-vibe':
     case 'jcode':
     // OMP/Prime use the same --resume form with absolute transcript paths.
     // falls through

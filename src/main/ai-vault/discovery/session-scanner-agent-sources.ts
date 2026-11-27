@@ -294,6 +294,15 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     extensions: ['.jsonl'],
     // Exclude log, SQLite and materialized-projection sidecars.
     filePredicate: (filePath) => basename(filePath) === 'session.jsonl'
+  },
+  'mistral-vibe': {
+    rootDirs: (options, wslHomeDirs) =>
+      sessionRootDirs(
+        options.mistralVibeSessionsDir ?? join(homedir(), '.vibe', 'sessions'),
+        wslHomeDirs,
+        ['.vibe', 'sessions']
+      ),
+    extensions: ['.jsonl']
   }
 }
 

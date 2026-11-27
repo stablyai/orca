@@ -86,6 +86,9 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
         eventName === 'userPromptSubmit' ||
         eventName === 'UserPromptSubmit'
       )
+    case 'mistral-vibe':
+      // TODO: Vibe uses ACP; map its events when known
+      return false
   }
 }
 
@@ -130,6 +133,7 @@ export function isTurnEndEvent(source: AgentHookSource, eventName: unknown): boo
     case 'pi':
     case 'omp':
     case 'prime-agent':
+    case 'mistral-vibe':
       // Why: their done events are status snapshots or milestones that can repeat within one turn.
       return false
   }
@@ -255,5 +259,8 @@ export function extractToolFields(
       return extractJcodeToolFields(eventName, hookPayload)
     case 'kiro':
       return extractKiroToolFields(eventName, hookPayload)
+    case 'mistral-vibe':
+      // TODO: Implement Vibe tool field extraction
+      return {}
   }
 }

@@ -30,6 +30,7 @@ export const RESUMABLE_TUI_AGENTS = [
   'copilot',
   'cursor',
   'kimi',
+  'mistral-vibe',
   'muse',
   'zcode',
   'dsh',
@@ -206,7 +207,8 @@ export function extractAgentProviderSession(
     case 'qoder':
     case 'codebuddy':
     case 'claude':
-    case 'codex': {
+    case 'codex':
+    case 'mistral-vibe': {
       const id = readSessionId(payload, ['session_id'])
       return id ? withTranscriptPath({ key: 'session_id', id }, payload) : null
     }

@@ -25,6 +25,7 @@ export const AI_VAULT_AGENTS = [
   'droid',
   'cline',
   'kimi',
+  'mistral-vibe',
   'muse',
   'jcode',
   'kiro'
@@ -87,6 +88,7 @@ export const AI_VAULT_AGENT_LABELS = {
   droid: 'Droid',
   cline: 'Cline',
   kimi: 'Kimi',
+  'mistral-vibe': 'Mistral Vibe',
   muse: 'Muse',
   jcode: 'Jcode',
   kiro: 'Kiro'

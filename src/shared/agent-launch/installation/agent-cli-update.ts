@@ -20,6 +20,7 @@ export const AGENT_CLI_UPDATE_AGENTS = [
   'qwen-code',
   'devin',
   'codebuddy',
+  'mistral-vibe',
   'antigravity'
 ] as const
 export type AgentCliUpdateAgent = (typeof AGENT_CLI_UPDATE_AGENTS)[number]

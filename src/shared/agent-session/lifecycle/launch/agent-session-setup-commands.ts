@@ -128,6 +128,13 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
     loginEnv: { AGY_CLI_DISABLE_AUTO_UPDATE: 'true' },
     installCommand: 'curl -fsSL https://antigravity.google/cli/install.sh | bash',
     windowsInstallScript: 'https://antigravity.google/cli/install.ps1'
+  },
+  {
+    agent: 'mistral-vibe',
+    loginCommand: ['vibe-acp', '--setup'],
+    installCommand: 'uv tool install --python 3.12 mistral-vibe',
+    // Mistral Vibe signs in via Mistral AI Studio OAuth (browser-auth) or MISTRAL_API_KEY.
+    windowsInstallScript: 'uv tool install --python 3.12 mistral-vibe'
   }
 ] as const
 

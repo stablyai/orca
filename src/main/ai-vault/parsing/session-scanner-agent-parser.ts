@@ -167,5 +167,8 @@ export async function parseAgentSessionFile(
       return parseJcodeSessionFile(candidate.file, platform, messages, signal)
     case 'kiro':
       return parseKiroSessionFile(candidate.file, platform, messages, onSkippedRecords, signal)
+    case 'mistral-vibe':
+      // TODO: Implement Vibe session parser
+      return null
   }
 }

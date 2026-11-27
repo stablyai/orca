@@ -49,7 +49,23 @@ const BOT_AGENTS_OLDER_BUILDS_READ: ReadonlySet<string> = new Set([
   'opencode',
   'omp',
   'pi',
-  'antigravity'
+  'antigravity',
+  'cursor',
+  'hermes',
+  'copilot',
+  'opencode2',
+  'kimi',
+  'kiro',
+  'aug',
+  'goose',
+  'kilo',
+  'mimo-code',
+  'droid',
+  'qwen-code',
+  'cline',
+  'devin',
+  'codebuddy',
+  'mistral-vibe'
 ])
 
 /** Bots saved where an older build, after a rollback, cannot drop them: it ignores keys it does not know. */

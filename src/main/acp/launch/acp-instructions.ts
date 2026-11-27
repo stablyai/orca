@@ -247,6 +247,12 @@ export const deliverCopilotInstructions = givenEachStart(async ({ text, folder, 
   return { env: { COPILOT_CUSTOM_INSTRUCTIONS_DIRS: inherited ? `${inherited},${dir}` : dir } }
 })
 
+// Vibe (mistral-vibe) keeps instructions with the session via its app-server's session store.
+// Passing via sessionMeta on new_session keeps the preamble across reopens (verified live on 3.1.5).
+export const deliverVibeInstructions = keptWithSession(async ({ text }) => ({
+  sessionMeta: { vibe: { system_prompt: text } }
+}))
+
 async function instructionsRoot(dataDirectory: string, sessionId: string): Promise<string> {
   const root = join(dataDirectory, 'acp-instructions')
   await clearEarlierRunsOnce(root, sessionId, (path) => rm(path, { recursive: true, force: true }))

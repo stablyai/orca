@@ -88,6 +88,8 @@ export function getAgentResumeArgv(
       return providerSession.key === 'session_id'
         ? ['hermes', ...hermesStateDbProfileArgs(providerSession.transcriptPath), '--resume', id]
         : null
+    case 'mistral-vibe':
+      return providerSession.key === 'session_id' ? ['vibe', '--session-id', id] : null
   }
 }
 
