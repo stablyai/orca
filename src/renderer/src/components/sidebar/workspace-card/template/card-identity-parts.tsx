@@ -14,7 +14,15 @@ import {
   WorktreeCardSparseBadge
 } from '../identity/worktree-card-header-items'
 import { WorktreeCardNotificationsMutedBadge } from '../identity/WorktreeCardNotificationsMutedBadge'
-import { AutoNameFailedIndicator } from '../identity/AutoNameFailedIndicator'
+import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
+
+const LazyAutoNameFailedIndicator = lazyWithRetry(
+  () =>
+    import('../identity/AutoNameFailedIndicator').then((module) => ({
+      default: module.AutoNameFailedIndicator
+    })),
+  { reloadKey: 'auto-name-failed-indicator' }
+)
 import {
   WorktreeCardConflictBadge,
   WorktreeCardFolderPath
@@ -124,11 +132,13 @@ export const CARD_IDENTITY_PARTS = {
   )),
   RenameError: part([], (_props, _children, card) =>
     card.autoNameFailure ? (
-      <AutoNameFailedIndicator
-        card={card}
-        failure={card.autoNameFailure}
-        onPointerDown={card.stopQuickActionPointerPropagation}
-      />
+      <React.Suspense fallback={null}>
+        <LazyAutoNameFailedIndicator
+          card={card}
+          failure={card.autoNameFailure}
+          onPointerDown={card.stopQuickActionPointerPropagation}
+        />
+      </React.Suspense>
     ) : null
   ),
   PrimaryBadge: part(['hasHoverDetails'], (props, _children, card) => (

@@ -24,7 +24,15 @@ import { WorktreeCardTaskDetailSection } from '../review/WorktreeCardTaskDetailS
 import { getWorktreeCardTaskActions } from '../review/worktree-card-task-actions'
 import { WorktreeCardOriginDetailSections } from './WorktreeCardBotDetailSection'
 import { WorktreeCardHoverIdentityHeader } from './WorktreeCardHoverIdentityHeader'
-import { WorktreeCardAutoNameFailureSection } from './WorktreeCardAutoNameFailureSection'
+import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
+
+const LazyWorktreeCardAutoNameFailureSection = lazyWithRetry(
+  () =>
+    import('./WorktreeCardAutoNameFailureSection').then((module) => ({
+      default: module.WorktreeCardAutoNameFailureSection
+    })),
+  { reloadKey: 'worktree-card-auto-name-failure-section' }
+)
 import {
   CommentMarkdownAsync,
   preloadCommentMarkdown
@@ -196,7 +204,9 @@ export function WorktreeCardDetailsHover({
           )}
 
           {autoNameFailure ? (
-            <WorktreeCardAutoNameFailureSection failure={autoNameFailure} />
+            <React.Suspense fallback={null}>
+              <LazyWorktreeCardAutoNameFailureSection failure={autoNameFailure} />
+            </React.Suspense>
           ) : null}
 
           {!showAttachmentCollection ? (
