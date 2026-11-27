@@ -87,3 +87,24 @@ export function openLinkedFileInEditor(
       reveal
     )
 }
+
+/** Opens a resolved target; an explicit preview open renders Markdown, and any other file opens as source. */
+export function openLinkedFile(
+  file: Omit<OpenFile, 'id' | 'isDirty' | 'language' | 'mode'>,
+  intent: EditorOpenLinkIntent | null,
+  position: { line: number | null; column: number | null },
+  isCurrentRequest: () => boolean,
+  markdownPreview: boolean
+): boolean {
+  if (markdownPreview && detectLanguage(file.filePath) === 'markdown') {
+    // Reuses the file's open preview tab, like Source Control's "Open Markdown Preview".
+    useAppStore
+      .getState()
+      .openMarkdownPreview(
+        { ...file, language: 'markdown' },
+        intent?.targetGroupId ? { targetGroupId: intent.targetGroupId } : undefined
+      )
+    return true
+  }
+  return openLinkedFileInEditor(file, intent, position, isCurrentRequest) !== null
+}

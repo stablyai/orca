@@ -5,6 +5,7 @@ import { openDetectedFilePath } from '@/components/terminal-pane/links/files/ter
 import type { ExplicitFileOpenDestination } from '@/components/terminal-pane/links/files/terminal-file-open-failure'
 import { isHtmlFilePath } from '@/components/terminal-pane/links/files/local-html-file-destinations'
 import { canShowWorkspaceFileBrowserAction } from '@/lib/browser/documents/file-preview'
+import { editorChangedFileView } from '@/lib/files/open/changed-file-view'
 import type { AppState } from '@/store/types'
 import { isTerminalLinkActionActivation } from '@/components/terminal-pane/links/gestures/terminal-link-activation'
 import { useAppStore } from '../../../../store/index'
@@ -28,7 +29,7 @@ export type NativeChatFileOpener = {
   worktreePath: string
   /** The href's absolute path in this chat's workspace, or null when it does not resolve. */
   resolvePath: (href: string) => string | null
-  /** Where an explicit open of the href goes right now: a page the Orca Browser can show, else the editor. */
+  /** Where an explicit open of the href goes right now: a page the Orca Browser can show, rendered Markdown, else the editor. */
   destinationFor: (href: string) => ExplicitFileOpenDestination
   /** Opens at exactly `destination`, ignoring link-click settings; a browser failure toasts, never the editor. */
   open: (href: string, options: { destination: ExplicitFileOpenDestination }) => void
@@ -40,10 +41,14 @@ export function nativeChatExplicitFileDestination(
   absolutePath: string
 ): ExplicitFileOpenDestination {
   // Mirror the router: only .html/.htm go to a browser, and only where this workspace can show one.
-  return isHtmlFilePath(absolutePath) &&
+  if (
+    isHtmlFilePath(absolutePath) &&
     canShowWorkspaceFileBrowserAction(state, worktreeId, absolutePath)
-    ? 'orca-browser'
-    : 'editor'
+  ) {
+    return 'orca-browser'
+  }
+  // Chat opens files to read them, so Markdown opens rendered rather than in the user's editor view.
+  return editorChangedFileView(absolutePath) === 'markdown' ? 'markdown-preview' : 'editor'
 }
 
 function createNativeChatExplicitFileOpener(

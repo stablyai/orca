@@ -34,7 +34,7 @@ import { captureEditorOpenLinkIntent } from '@/store/slices/editor/tabs/editor-o
 import { beginLinkOpenRequest as reserveDetectedFilePathOpenTurn } from '@/lib/links/link-open-request'
 import { openTerminalHtmlFileInBrowser } from './terminal-file-link-browser-open'
 import { refuseOpenInGroupRequest } from './terminal-file-open-in-group-toast'
-import { isExplicitEditorScopeKept, openLinkedFileInEditor } from './terminal-file-link-editor-open'
+import { isExplicitEditorScopeKept, openLinkedFile } from './terminal-file-link-editor-open'
 import { resolveLinkedFileEditorTarget } from '../../host-files/terminal-file-editor-target'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { httpLinkDirectClickDestination } from '@/lib/browser/navigation/http-link-destinations'
@@ -301,7 +301,7 @@ export function openDetectedFilePath(
       })
     }
 
-    const opened = openLinkedFileInEditor(
+    const opened = openLinkedFile(
       {
         filePath: mappedFilePath,
         relativePath,
@@ -319,7 +319,8 @@ export function openDetectedFilePath(
       },
       linkIntent,
       { line, column },
-      isCurrentRequest
+      isCurrentRequest,
+      deps.explicitDestination === 'markdown-preview'
     )
     if (!opened) {
       refuseExplicitNonEditorRoute()

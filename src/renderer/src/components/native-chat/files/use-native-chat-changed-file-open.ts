@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useWorkspaceFileBrowserActionPredicate } from '@/lib/browser/documents/file-preview'
-import { changedFileOpenLabel } from '@/lib/files/open/changed-file-view'
+import { changedFileOpenLabel, editorChangedFileView } from '@/lib/files/open/changed-file-view'
 import { isHtmlFilePath } from '@/components/terminal-pane/links/files/local-html-file-destinations'
 import { createNativeChatFileHref } from '../../../../../shared/native-chat/file-access/native-chat-href-routing'
 import { useNativeChatFileOpen } from '../links/actions/native-chat-link-click-context'
@@ -21,7 +21,12 @@ export function useNativeChatChangedFileOpen(path: string): NativeChatFileCardAc
   if (!opener) {
     return null
   }
-  const shown = page && canShowPage(absolutePath) ? 'orca-browser' : 'editor'
+  const shown =
+    page && canShowPage(absolutePath)
+      ? 'orca-browser'
+      : absolutePath !== null && editorChangedFileView(absolutePath) === 'markdown'
+        ? 'markdown-preview'
+        : 'editor'
   const label = changedFileOpenLabel(shown, t)
   return {
     label,
@@ -29,7 +34,6 @@ export function useNativeChatChangedFileOpen(path: string): NativeChatFileCardAc
     tooltip: t('components.native-chat.tool.openCurrentFile', '{{action}} (current version)', {
       action: label
     }),
-    glyph: shown,
     // The click-time capability wins over the rendered label if it changed in between.
     onOpen: () => opener.open(href, { destination: opener.destinationFor(href) })
   }

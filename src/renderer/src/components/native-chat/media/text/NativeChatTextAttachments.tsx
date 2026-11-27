@@ -97,7 +97,6 @@ function AttachmentButton({
         action={{
           label: previewLabel,
           tooltip: previewLabel,
-          glyph: 'attachment-preview',
           onOpen: () => visible && (opener ? opener(path) : setOpen(true))
         }}
       />

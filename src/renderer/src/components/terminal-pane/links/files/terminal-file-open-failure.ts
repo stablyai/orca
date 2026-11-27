@@ -5,4 +5,4 @@ export type FileOpenFailure = {
 }
 
 /** An explicit open button's destination, chosen by the caller instead of link routing. */
-export type ExplicitFileOpenDestination = 'orca-browser' | 'editor'
+export type ExplicitFileOpenDestination = 'orca-browser' | 'markdown-preview' | 'editor'

@@ -1,18 +1,16 @@
 import type { ReactNode } from 'react'
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon'
 import { cn } from '@/lib/class-names'
-import { ChangedFileOpenIcon, type FileOpenGlyph } from '@/lib/files/open/ChangedFileOpenIcon'
 
-/** The card's single open target; the trailing glyph only names where it goes. */
+/** The card's single open target; its label and tooltip name where it goes. */
 export type NativeChatFileCardAction = {
   label: string
   tooltip: string
-  glyph: FileOpenGlyph
   onOpen: () => void
 }
 
 /**
- * One file a chat message carries: a type badge, its name, a meta line and where it opens. `row` is the
+ * One file a chat message carries: a type badge, its name and a meta line; clicking opens it. `row` is the
  * dense turn-summary line; `card` is the two-line attachment card. Without an action it is inert.
  */
 export function NativeChatFileCard({
@@ -44,7 +42,7 @@ export function NativeChatFileCard({
       </span>
       {row ? (
         <>
-          {/* The directory gives way first, then the name; meta and glyph always stay whole. */}
+          {/* The directory gives way first, then the name; meta always stays whole. */}
           <span className="min-w-0 truncate font-mono text-chat-foreground">{name}</span>
           <span className="min-w-0 flex-1 truncate text-right font-mono">{detail}</span>
           <span className="flex shrink-0 items-center gap-1 whitespace-nowrap">{meta}</span>
@@ -55,9 +53,6 @@ export function NativeChatFileCard({
           <span className="truncate text-xs">{meta}</span>
         </span>
       )}
-      <span className="flex size-3.5 shrink-0 items-center justify-center">
-        {action ? <ChangedFileOpenIcon target={action.glyph} className="size-3.5" /> : null}
-      </span>
     </>
   )
   const className = cn(
