@@ -28,9 +28,9 @@ import { ListRow } from '../../components/list/ListGroup'
 import { SheetPrimaryButton } from '../../components/sheets/SheetPrimaryButton'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { SettingsSection } from '../../settings/settings-screen-frame'
-import { colors, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { MobileBotTextButton } from '../MobileBotTextButton'
 import { botShareCheckSummary, botShareLines } from './bot-share-copy'
 import type { useHostOrcaSignIn } from './use-host-orca-sign-in'
@@ -64,6 +64,7 @@ function PartRow(props: {
   accessory?: ReactNode
   onOpen?: () => void
 }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const opens = Boolean(props.onOpen) && !props.empty
   const value = props.empty ? t('bots.share.none', 'None') : props.value
@@ -98,7 +99,7 @@ export function ShareOverview(props: {
   first: boolean
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
   const icon = (Icon: typeof Smile, color: string = colors.textSecondary) => (
     <Icon size={18} color={color} />
   )
@@ -146,7 +147,7 @@ export function ShareOverview(props: {
     (spot) => spot.flag.kind === 'secret' && spot.part?.startsWith('memory:')
   )
   const secrets = spots.filter((spot) => spot.flag.kind === 'secret').length
-  const lines = botShareLines(available.soulLines)
+  const lines = botShareLines(available.soulLines, t)
   const CheckIcon = secrets > 0 ? ShieldAlert : spots.length > 0 ? TriangleAlert : ShieldCheck
   return (
     <>
@@ -245,7 +246,7 @@ export function ShareOverview(props: {
           )}
           title={t('bots.share.safetyCheck', 'Safety check')}
           tone={secrets > 0 ? 'secret' : spots.length > 0 ? 'warning' : undefined}
-          value={botShareCheckSummary(spots)}
+          value={botShareCheckSummary(spots, t)}
           onOpen={spots.length > 0 ? list('check') : undefined}
         />
       </SettingsSection>
@@ -270,7 +271,8 @@ export function ShareFoot(props: {
   onDone: () => void
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const { phase, link, signIn } = props
   const busy = phase.kind === 'busy'
   if (phase.kind === 'done') {
@@ -366,7 +368,7 @@ export function ShareFoot(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   toned: { fontSize: 15, flexShrink: 1 },
   secret: { color: colors.statusRed },
   warning: { color: colors.statusAmber },

@@ -128,7 +128,7 @@ export function getWorkspaceAttachmentUrlScope(item: WorkspaceAttachment): strin
       url.origin +
       url.pathname
         .replace(
-          /\/(?:pull|pulls|issues|merge_requests|pull-requests|pullrequest|browse|issue)\/[^/]+(?:\/.*)?$/,
+          /\/(?:pull|pulls|issues|merge_requests|pull-requests|pullrequest|browse|issue|-\/work_items)\/[^/]+(?:\/.*)?$/,
           ''
         )
         .replace(/\/-$/, '')

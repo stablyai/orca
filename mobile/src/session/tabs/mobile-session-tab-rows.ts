@@ -1,7 +1,15 @@
 import { agentListPreview } from '../../agents/agent-list-row-text'
 import { agentStatusGroup } from '../../agents/agent-list-rows'
 import { AGENT_LIST_STATUS_RANK } from '../../../../src/shared/agent-status/presentation/agent-list-status'
-import { translate } from '../../i18n/mobile-i18n'
+import {
+  agentToolDisplayName,
+  agentToolPreviewInput
+} from '../../../../src/shared/agent-status/presentation/agent-tool-preview'
+import { parseAskFromStatus } from '../../../../src/shared/native-chat/input/native-chat-ask'
+import { parseNativeChatApprovalEnvelope } from '../../../../src/shared/native-chat/input/approvals/native-chat-approval-envelope'
+import { isAskUserQuestionTool } from '../../../../src/shared/agent-status/lifecycle/agent-question-answered-intent'
+import { CODEX_ASYNC_QUESTION_TOOL } from '../../../../src/shared/native-chat/input/questions/codex-async-question-input'
+import type { Translate } from '../../i18n/mobile-i18n'
 import {
   getMobileSessionTabTitle,
   getMobileTerminalTabHostAgentIdentity,
@@ -101,18 +109,18 @@ function tabContent(
   }
 }
 
-export function mobileSessionTabKindLabel(tab: MobileSessionTab): string {
+export function mobileSessionTabKindLabel(tab: MobileSessionTab, t: Translate): string {
   switch (tab.type) {
     case 'browser':
-      return translate('session.tabRows.browser', 'Browser')
+      return t('session.tabRows.browser', 'Browser')
     case 'markdown':
-      return translate('session.tabRows.markdown', 'Markdown note')
+      return t('session.tabRows.markdown', 'Markdown note')
     case 'file':
-      return translate('session.tabRows.file', 'File')
+      return t('session.tabRows.file', 'File')
     case 'agent-session':
-      return translate('session.tabRows.chat', 'Chat')
+      return t('session.tabRows.chat', 'Chat')
     case 'terminal':
-      return translate('session.tabRows.terminal', 'Terminal')
+      return t('session.tabRows.terminal', 'Terminal')
   }
 }
 
@@ -137,13 +145,14 @@ export function mobileSessionTabAgentId(
 export function buildMobileSessionTabSummary(
   tab: MobileSessionTab,
   terminals: HostTerminals,
-  now: number
+  now: number,
+  t: Translate
 ): MobileSessionTabSummary {
   const hostAgentIdentity = getMobileTerminalTabHostAgentIdentity(tab, terminals)
   const dotState = mobileSessionTabDotState(tab, now)
   return {
     tab,
-    title: getMobileSessionTabTitle(tab, hostAgentIdentity),
+    title: getMobileSessionTabTitle(tab, t, hostAgentIdentity),
     agentId: tabAgentId(tab, hostAgentIdentity),
     dotState,
     group: tabGroup(dotState),
@@ -151,11 +160,69 @@ export function buildMobileSessionTabSummary(
   }
 }
 
-// Why: the preview scans each agent's last message, so only the open sheet pays for it (STA-15103).
-export function buildMobileSessionTabRow(summary: MobileSessionTabSummary): MobileSessionTabRow {
+// A path keeps its end in view, as the sidebar's rows do.
+export const isPathTitle = (title: string) => /[\\/]/.test(title)
+
+const oneLine = (text: string) => text.replace(/\s+/g, ' ').trim()
+
+// Question tools wait for an answer, not a permission; Copilot reports its ask_user as blocked.
+const isQuestionTool = (toolName: string | undefined) =>
+  isAskUserQuestionTool(toolName) ||
+  toolName === CODEX_ASYNC_QUESTION_TOOL ||
+  toolName?.replaceAll(/[^a-z]/gi, '').toLowerCase() === 'askuser'
+
+/**
+ * What a waiting agent wants, as its ask card puts it: the question, or the tool it needs allowed.
+ * Null when the host sent neither (older hosts), so the row keeps its usual preview. A tab's status
+ * and a workspace's agent row both carry these fields.
+ */
+export function mobileAgentAskLine(
+  status: { interactivePrompt?: string; toolName?: string | null; toolInput?: string | null },
+  dotState: AgentDotState | undefined,
+  t: Translate
+): { stateWord: string; content: string } | null {
+  const { interactivePrompt } = status
+  const toolName = status.toolName ?? undefined
+  const question = parseAskFromStatus(interactivePrompt, toolName)?.questions[0]?.question
+  if (question) {
+    return { stateWord: t('session.tabRows.asks', 'Asks'), content: oneLine(question) }
+  }
+  // Claude reports a permission request as waiting, with the approval in its prompt.
+  const approval = parseNativeChatApprovalEnvelope(interactivePrompt)
+  if (approval) {
+    return {
+      stateWord: t('session.tabRows.allowTool', 'Allow {{tool}}?', {
+        tool: agentToolDisplayName(approval.tool)
+      }),
+      content: oneLine(approval.summary ?? agentToolPreviewInput(status, false))
+    }
+  }
+  // Only a permission wait asks to allow its tool; a question tool without its prompt keeps the preview.
+  const tool = agentToolDisplayName(toolName)
+  if (!tool || isQuestionTool(toolName) || (dotState !== 'blocked' && dotState !== 'permission')) {
+    return null
+  }
+  return {
+    stateWord: t('session.tabRows.allowTool', 'Allow {{tool}}?', { tool }),
+    content: oneLine(agentToolPreviewInput(status, false))
+  }
+}
+
+// Why: the preview scans each agent's last message, so only a waiting agent's row (the one line the
+// sidebar draws) pays for it, and only while the sidebar shows (STA-15103).
+export function buildMobileSessionTabRow(
+  summary: MobileSessionTabSummary,
+  t: Translate
+): MobileSessionTabRow {
   const { tab, title, dotState } = summary
-  const stateWord = dotState && dotState !== 'idle' ? agentStateLabel(dotState) : ''
-  const content = tabContent(tab, title, dotState)
+  const ask =
+    summary.group === 'needs-you' && tab.type === 'terminal' && tab.agentStatus
+      ? mobileAgentAskLine(tab.agentStatus, dotState, t)
+      : null
+  const stateWord =
+    ask?.stateWord ?? (dotState && dotState !== 'idle' ? agentStateLabel(dotState, t) : '')
+  const content =
+    ask?.content ?? (summary.group === 'needs-you' ? tabContent(tab, title, dotState) : '')
   const timeAt =
     tab.type === 'terminal' && tab.agentStatus && !tab.agentStatus.restoredUnconfirmed
       ? agentRowTimeAt(tab.agentStatus)

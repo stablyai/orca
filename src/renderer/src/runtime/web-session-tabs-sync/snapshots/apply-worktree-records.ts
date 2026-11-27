@@ -20,6 +20,7 @@ export function applyWorktreeRecordUpdates(context: WorktreeRecordContext) {
     nextUnifiedTabs,
     nextGroups,
     clientOwnedPlacement,
+    adoptsInitialHostGroups,
     retainedUnifiedTabs,
     mirroredUnifiedTabs,
     mirroredTerminalIds,
@@ -43,15 +44,14 @@ export function applyWorktreeRecordUpdates(context: WorktreeRecordContext) {
     batchContext
   )
 
-  // Group membership is the source of truth for a client-owned placement.
+  // Group membership is the source of truth for client placement and initial host adoption.
   const placedUnifiedTabs = (() => {
-    if (!clientOwnedPlacement?.groups || !nextUnifiedTabs) {
+    const groups = clientOwnedPlacement?.groups ?? (adoptsInitialHostGroups ? nextGroups : null)
+    if (!groups || !nextUnifiedTabs) {
       return nextUnifiedTabs
     }
     const groupIdByTabId = new Map(
-      clientOwnedPlacement.groups.flatMap((group) =>
-        group.tabOrder.map((tabId) => [tabId, group.id] as const)
-      )
+      groups.flatMap((group) => group.tabOrder.map((tabId) => [tabId, group.id] as const))
     )
     let changed = false
     const placed = nextUnifiedTabs.map((tab) => {

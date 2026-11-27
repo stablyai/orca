@@ -11,6 +11,7 @@ import { E2EE_KEYPAIR_FILENAME } from '../../shared/remote-runtime/host-store/ru
 import { writeNewE2EEKeypair } from './rpc/server/pairing/e2ee-keypair'
 import { DEVICE_REGISTRY_FILENAME } from './rpc/server/pairing/mobile-pairing-files'
 import { HOST_INSTALLATION_FILENAME } from './hosts/platform-probe/host-descriptor'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 
 export const HOST_INSTANCE_FILENAME = 'orca-host-instance.json'
 export const ORCA_INSTANCE_ID_ENV = 'ORCA_INSTANCE_ID'
@@ -28,13 +29,15 @@ const BACKUP_NAME_RE = /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z-[0-9a-f]{6}$
 
 /** `instanceId` is hashed so the file never republishes a provisioner value. `rotating` is written
  * only once every new file is staged beside the live one; a start that sees it publishes them. */
-const HostInstanceMarkerSchema = z.object({
-  v: z.literal(1),
-  instanceId: z.string().min(1).optional(),
-  rotating: z.literal(true).optional(),
-  /** Backup folder for the files a `rotating` publish replaces; stable across an interrupted publish. */
-  backup: z.string().optional()
-})
+const HostInstanceMarkerSchema = lazyZodSchema(() =>
+  z.object({
+    v: z.literal(1),
+    instanceId: z.string().min(1).optional(),
+    rotating: z.literal(true).optional(),
+    /** Backup folder for the files a `rotating` publish replaces; stable across an interrupted publish. */
+    backup: z.string().optional()
+  })
+)
 type HostInstanceMarker = z.infer<typeof HostInstanceMarkerSchema>
 
 export type HostIdentityOutcome =

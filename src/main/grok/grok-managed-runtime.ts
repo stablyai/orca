@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import { createBrotliDecompress } from 'node:zlib'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { getMainHttpClient } from '../network/http-client'
 import type { ManagedAgentCli, ManagedRuntimePin } from '../node-runtime/managed-runtime-release'
 import { followLatestRelease } from '../node-runtime/managed-runtime-latest-release'
@@ -18,14 +19,16 @@ const LABEL = 'Grok'
 const REGISTRY = 'https://registry.npmjs.org'
 const PACKAGE = '@xai-official/grok'
 
-const latestSchema = z.object({ version: z.string().regex(/^\d+\.\d+\.\d+$/) })
-const platformPackageSchema = z.object({
-  version: z.string(),
-  dist: z.object({
-    tarball: z.string().url().startsWith(`${REGISTRY}/`),
-    integrity: z.string().startsWith('sha512-')
+const latestSchema = lazyZodSchema(() => z.object({ version: z.string().regex(/^\d+\.\d+\.\d+$/) }))
+const platformPackageSchema = lazyZodSchema(() =>
+  z.object({
+    version: z.string(),
+    dist: z.object({
+      tarball: z.string().url().startsWith(`${REGISTRY}/`),
+      integrity: z.string().startsWith('sha512-')
+    })
   })
-})
+)
 
 /** The npm package holding this host's build; its Linux builds are static, so they run on musl too. */
 function grokPlatformPackage(

@@ -203,7 +203,9 @@ export function useBotPictureSetting(
     const pending = !known && replacesUpload
     const previousPng = pending ? readBotAvatarPng(bot).catch(() => null) : Promise.resolve(known)
     beforeUpload.current = { kept: previous, shown: live.shown, png: previousPng }
-    setKept({ id: live.nextKeptId++, avatar: null, png, after, replaced: live.kept })
+    const id = live.nextKeptId
+    live.nextKeptId += 1
+    setKept({ id, avatar: null, png, after, replaced: live.kept })
     show({ kind: 'custom' })
     if (pending) {
       live.waits += 1
@@ -272,7 +274,9 @@ export function useBotPictureSetting(
     nextChoice()
     const choice = savedChoice(avatar)
     if (choice.kind === 'custom') {
-      setKept(keptFrom(avatar, live.nextKeptId++, live.kept?.after ?? -1))
+      const id = live.nextKeptId
+      live.nextKeptId += 1
+      setKept(keptFrom(avatar, id, live.kept?.after ?? -1))
     }
     show(choice)
     live.saved = live.desired = choiceKey(choice, live.kept)

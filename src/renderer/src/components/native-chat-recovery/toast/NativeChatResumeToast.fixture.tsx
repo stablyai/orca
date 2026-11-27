@@ -65,18 +65,6 @@ function finishedRun(
 
 const NARROW = 360
 
-export const offerManual = defineFixture({
-  width: NARROW,
-  render: () => (
-    <NativeChatResumeToast
-      view={resumeToastView(null, twelve.slice(0, 3), new Map())}
-      listedAt={NOW}
-      onDismissAll={noop}
-      {...actions}
-    />
-  )
-})
-
 export const offerManualDetails = defineFixture({
   width: NARROW,
   render: () => (
@@ -116,6 +104,75 @@ export const allResumed = defineFixture({
   )
 })
 
+/** One agent, longest name: the whole report is one line. */
+export const oneResumed = defineFixture({
+  width: NARROW,
+  render: () => (
+    <NativeChatResumeToast
+      view={resumeToastView(finishedRun(twelve.slice(0, 1), 'launch'), [], new Map())}
+      listedAt={NOW}
+      {...actions}
+    />
+  )
+})
+
+export const oneResuming = defineFixture({
+  width: NARROW,
+  render: () => (
+    <NativeChatResumeToast
+      view={resumeToastView(
+        { ...finishedRun(twelve.slice(0, 1), 'launch'), inFlight: true, continued: undefined },
+        twelve.slice(0, 1),
+        new Map()
+      )}
+      listedAt={NOW}
+      {...actions}
+    />
+  )
+})
+
+export const oneFailed = defineFixture({
+  width: NARROW,
+  render: () => (
+    <NativeChatResumeToast
+      view={resumeToastView(
+        finishedRun(twelve.slice(0, 1), 'launch'),
+        [],
+        new Map([[notAttached.sessionId, notAttached]])
+      )}
+      listedAt={NOW}
+      {...actions}
+    />
+  )
+})
+
+export const allResumedDetails = defineFixture({
+  width: NARROW,
+  render: () => (
+    <NativeChatResumeToast
+      view={resumeToastView(finishedRun(twelve.slice(0, 3), 'launch'), [], new Map())}
+      listedAt={NOW}
+      defaultExpanded
+      {...actions}
+    />
+  )
+})
+
+export const threeOneFailed = defineFixture({
+  width: NARROW,
+  render: () => (
+    <NativeChatResumeToast
+      view={resumeToastView(
+        finishedRun(twelve.slice(0, 3), 'launch'),
+        [],
+        new Map([[notAttached.sessionId, notAttached]])
+      )}
+      listedAt={NOW}
+      {...actions}
+    />
+  )
+})
+
 /** Worst case: twelve chats with long names, one needing the person, Details open. */
 export const twelveOneNeedsYou = defineFixture({
   width: NARROW,
@@ -133,21 +190,6 @@ export const twelveOneNeedsYou = defineFixture({
   )
 })
 
-export const twelveOneNeedsYouCollapsed = defineFixture({
-  width: NARROW,
-  render: () => (
-    <NativeChatResumeToast
-      view={resumeToastView(
-        finishedRun(twelve, 'launch'),
-        [],
-        new Map([[notAttached.sessionId, notAttached]])
-      )}
-      listedAt={NOW}
-      {...actions}
-    />
-  )
-})
-
 export const remoteServer = defineFixture({
   width: NARROW,
   render: () => (
@@ -158,6 +200,133 @@ export const remoteServer = defineFixture({
       {...actions}
     />
   )
+})
+
+export const remoteOneResumed = defineFixture({
+  width: NARROW,
+  render: () => (
+    <NativeChatResumeToast
+      view={resumeToastView(finishedRun(twelve.slice(0, 1), 'user'), [], new Map())}
+      machineName="build-server-02"
+      listedAt={NOW}
+      {...actions}
+    />
+  )
+})
+
+export const remoteOneFailed416 = defineFixture({
+  width: 448,
+  render: () => (
+    <NativeChatResumeToast
+      view={resumeToastView(
+        finishedRun(twelve.slice(0, 3), 'user'),
+        [],
+        new Map([[notAttached.sessionId, notAttached]])
+      )}
+      machineName="build-server-02"
+      listedAt={NOW}
+      {...actions}
+    />
+  )
+})
+
+export const remoteOneFailedGerman = defineFixture({
+  width: NARROW,
+  render: () => (
+    <NativeChatResumeToast
+      view={resumeToastView(
+        finishedRun(twelve.slice(0, 3), 'user'),
+        [],
+        new Map([[notAttached.sessionId, notAttached]])
+      )}
+      machineName="build-server-02"
+      listedAt={NOW}
+      {...actions}
+    />
+  ),
+  interact: async () => {
+    await setRendererUiLanguage('de')
+    await new Promise((resolve) => setTimeout(resolve, 300))
+  }
+})
+
+/** Launch auto-resume leaves an agent waiting on an approval for the person; nothing failed. */
+function waitingOnApproval(index: number): ResumeCandidate {
+  return {
+    ...chat(index),
+    activity: { state: 'blocked', prompts: [{ kind: 'approval', label: 'Run tests' }], tasks: [] }
+  }
+}
+
+export const twoResumedOneLeftForPerson = defineFixture({
+  width: NARROW,
+  render: () => (
+    <NativeChatResumeToast
+      view={resumeToastView(
+        finishedRun(twelve.slice(1, 3), 'launch'),
+        [waitingOnApproval(0)],
+        new Map()
+      )}
+      listedAt={NOW}
+      {...actions}
+    />
+  )
+})
+
+export const twoResumedOneLeftForPersonRemoteTurkish = defineFixture({
+  width: NARROW,
+  render: () => (
+    <NativeChatResumeToast
+      view={resumeToastView(
+        finishedRun(twelve.slice(1, 3), 'user'),
+        [waitingOnApproval(0)],
+        new Map()
+      )}
+      machineName="build-server-02"
+      listedAt={NOW}
+      {...actions}
+    />
+  ),
+  interact: async () => {
+    await setRendererUiLanguage('tr')
+    await new Promise((resolve) => setTimeout(resolve, 300))
+  }
+})
+
+export const oneLeftForPerson = defineFixture({
+  width: NARROW,
+  render: () => (
+    <NativeChatResumeToast
+      view={resumeToastView(finishedRun([], 'launch'), [waitingOnApproval(0)], new Map())}
+      listedAt={NOW}
+      {...actions}
+    />
+  )
+})
+
+/** The host refused one without filing a failure while it is still offered: a failure, open only. */
+export const refusedStillOffered = defineFixture({
+  width: NARROW,
+  render: () => {
+    const run = finishedRun(twelve.slice(0, 3), 'launch')
+    return (
+      <NativeChatResumeToast
+        view={resumeToastView(
+          {
+            ...run,
+            continued: run.continued?.map((entry, index) =>
+              index === 0 ? { ...entry, outcome: 'refused' as const } : entry
+            )
+          },
+          [twelve[0]!],
+          new Map()
+        )}
+        listedAt={NOW}
+        defaultExpanded
+        {...actions}
+      />
+    )
+  }
 })
 
 type FixtureLanguage =

@@ -41,3 +41,8 @@ export function withMcpAgentProblems(list: Omit<McpHostList, 'agentProblems'>): 
   }
   return Object.keys(problems).length > 0 ? { ...list, agentProblems: problems } : list
 }
+
+/** Whether a launch learned that `agent`'s sessions on this host get none of the list. */
+export function hasMcpAgentProblem(agent: string): boolean {
+  return terminalOff.has(agent) || (agent === 'claude' && claudeBlocked)
+}

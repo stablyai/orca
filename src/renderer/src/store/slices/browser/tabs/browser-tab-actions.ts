@@ -1,6 +1,7 @@
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host/execution-host'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import { translate } from '@/i18n/i18n'
+import { queueKagiPrivateInitialNavigation } from '@/lib/kagi-private-initial-navigation'
 import {
   assertManagedBrowserMaterializationAllowed,
   getClientCreationActionPolicy
@@ -59,6 +60,9 @@ export function createBrowserTabActions(
         browserPageId,
         options?.docLocation
       )
+      if (!options?.browserRuntimeEnvironmentId && !options?.docLocation) {
+        queueKagiPrivateInitialNavigation(page.id, url)
+      }
       if (
         !options?.browserRuntimeEnvironmentId &&
         !options?.docLocation &&

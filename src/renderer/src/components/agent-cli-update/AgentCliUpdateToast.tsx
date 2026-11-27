@@ -28,7 +28,8 @@ export function AgentCliUpdateToast({
   failed: number
   /** Whether Update has CLIs to start; an offer of hand-updated CLIs only has none. */
   canUpdate: boolean
-  items: readonly AgentCliUpdateToastItem[]
+  /** Called only while the list is open. */
+  items: () => readonly AgentCliUpdateToastItem[]
   listOpen: boolean
   onToggleList: () => void
   onClose: () => void

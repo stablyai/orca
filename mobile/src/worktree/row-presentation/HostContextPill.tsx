@@ -1,7 +1,8 @@
 import { Text, View } from 'react-native'
 import type { ExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
 import { HostKindIcon } from '../../components/icons/HostKindIcon'
-import { worktreeListRowStyles as styles } from './worktree-list-row-styles'
+import { worktreeListRowStylesSheet } from './worktree-list-row-styles'
+import { useThemedStyles } from '../../theme/themed-styles'
 
 /** The computer a row runs on, as the desktop's workspace pill: its icon, name, and its word while down. */
 export function HostContextPill({
@@ -13,6 +14,7 @@ export function HostContextPill({
   label: string | undefined
   healthLabel: string | undefined
 }) {
+  const styles = useThemedStyles(worktreeListRowStylesSheet)
   return (
     <View
       style={[styles.childBadge, styles.hostBadge]}

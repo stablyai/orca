@@ -16,7 +16,7 @@ vi.mock('../../../../i18n/use-mobile-translation', () => ({
   useMobileTranslation: () => (_key: string, fallback: string) => fallback
 }))
 vi.mock('../messages/mobile-native-chat-message-styles', () => ({
-  styles: {},
+  stylesSheet: { resolve: () => ({}) },
   scaledType: () => ({})
 }))
 vi.mock('./MobileNativeChatPacedProse', () => ({

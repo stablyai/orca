@@ -121,24 +121,37 @@ export class SessionMcpTools {
   }
 
   /**
+   * The launch carries a token this run of Orca's tool relay issued (a bot's, or a delivered server
+   * addressed through the relay), which ends with this app. Read after `beside`: a relayed server
+   * the agent's own one replaced reaches the CLI with no token.
+   */
+  get appBound(): boolean {
+    return (
+      Object.keys(this.env).length > 0 ||
+      Object.keys(this.commandEnv).length > 0 ||
+      this.servers.some((server) => 'url' in server && server.headers?.authorization !== undefined)
+    )
+  }
+
+  /**
    * Without the host list's servers named like one of the agent's own (`taken`), which would merge
    * into or shadow it; the agent's own server runs instead. A bot's own servers are kept.
    */
   beside(taken: Iterable<string>): { tools: SessionMcpTools; skipped: string[] } {
     const names = new Set(taken)
-    const skipped = [...this.hostNames].filter((name) => names.has(name))
-    if (skipped.length === 0) {
-      return { tools: this, skipped }
+    const skipped = new Set([...this.hostNames].filter((name) => names.has(name)))
+    if (skipped.size === 0) {
+      return { tools: this, skipped: [] }
     }
     return {
       tools: new SessionMcpTools(
-        this.servers.filter((server) => !skipped.includes(server.name)),
+        this.servers.filter((server) => !skipped.has(server.name)),
         this.env,
         this.commandEnv,
         this.relayed,
-        new Set([...this.hostNames].filter((name) => !names.has(name)))
+        new Set([...this.hostNames].filter((name) => !skipped.has(name)))
       ),
-      skipped
+      skipped: [...skipped]
     }
   }
 }

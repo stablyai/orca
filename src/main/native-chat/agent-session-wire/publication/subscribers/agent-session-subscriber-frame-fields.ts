@@ -10,6 +10,7 @@ import type {
 import type { AgentSessionBackgroundTaskState } from '../../../../../shared/agent-session/background-tasks/agent-session-background-task-wire'
 import type { QueuePublication } from '../../delivery/structured-agent-session-queued-publication'
 import { boundedFrames } from '../history/agent-session-bounded-frames'
+import { rememberSubscriberHostWork } from './agent-session-subscriber-live-text'
 // Deduplicate against last sent values only; withheld fields must not suppress final replacements.
 
 export type SubscriberFieldState = {
@@ -213,4 +214,5 @@ export async function emitSubscriberFrame(
   if (built.backgroundTasks !== undefined) {
     subscriber.backgroundTasks = built.backgroundTasks
   }
+  rememberSubscriberHostWork(subscriber, event)
 }

@@ -1,13 +1,12 @@
 import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tasks-connection-presentation'
-import { translate } from '../../i18n/mobile-i18n'
 import { View, Text, Pressable } from 'react-native'
 import type { ReactNode } from 'react'
+import type { Translate } from '../../i18n/mobile-i18n'
 import { MessageBox } from '../../components/composer-input/MessageBox'
-import { colors, pressedStyle } from '../../theme/mobile-theme'
+import { pressedStyle } from '../../theme/mobile-theme'
 import { X } from 'lucide-react-native'
 import { MobileMarkdown } from '../../components/markdown/MobileMarkdown'
-import { composerInputStyles } from '../../components/composer-input/composer-input-styles'
-import { styles } from '../mobile-tasks-legacy-styles'
+import { composerInputStylesSheet } from '../../components/composer-input/composer-input-styles'
 import {
   discussionSummary,
   detailCommentGroupId,
@@ -23,14 +22,18 @@ import type { DetailComment } from '../mobile-tasks-provider-detail-types'
 import { SHOW_MOBILE_COMMENT_THREAD_TOOLS } from '../task-list/mobile-tasks-options'
 import { projectRowType } from '../item-detail/mobile-tasks-item-mapping'
 
-function resolvedCommentCountLabel(count: number): string {
+function resolvedCommentCountLabel(t: Translate, count: number): string {
   return count === 1
-    ? translate('tasks.projectComments.comments_one', '{{count}} comment', { count })
-    : translate('tasks.projectComments.comments_other', '{{count}} comments', { count })
+    ? t('tasks.projectComments.comments_one', '{{count}} comment', { count })
+    : t('tasks.projectComments.comments_other', '{{count}} comments', { count })
 }
 
 export function renderMobileTasksProjectComments(model: ConnectionPresentationModel) {
   const {
+    colorScheme,
+    colors,
+    styles,
+    t,
     addProjectRowComment,
     deleteProjectRowComment,
     expandedResolvedCommentGroups,
@@ -52,6 +55,7 @@ export function renderMobileTasksProjectComments(model: ConnectionPresentationMo
     toggleProjectGitHubReviewThread,
     updateProjectRowComment
   } = model
+  const composerStyles = composerInputStylesSheet.resolve(colorScheme)
   if (!projectRowItem) {
     return null
   }
@@ -59,15 +63,15 @@ export function renderMobileTasksProjectComments(model: ConnectionPresentationMo
     <View style={styles.detailSection}>
       <View style={styles.detailSectionHeader}>
         <Text style={styles.detailSectionTitle}>
-          {translate('tasks.projectComments.discussion', 'Discussion')}
+          {t('tasks.projectComments.discussion', 'Discussion')}
         </Text>
         <Text style={styles.detailSectionMeta}>
-          {discussionSummary(projectRowDetail.comments.length)}
+          {discussionSummary(t, projectRowDetail.comments.length)}
         </Text>
       </View>
       {projectRowDetail.comments.length === 0 ? (
         <Text style={styles.detailMuted}>
-          {translate('tasks.projectComments.noComments', 'No comments.')}
+          {t('tasks.projectComments.noComments', 'No comments.')}
         </Text>
       ) : (
         projectDetailCommentGroups.map((group) => {
@@ -91,14 +95,10 @@ export function renderMobileTasksProjectComments(model: ConnectionPresentationMo
               >
                 <Text style={styles.resolvedCommentTitle} numberOfLines={1}>
                   {group.kind === 'thread'
-                    ? translate(
-                        'tasks.projectComments.resolvedThreadBy',
-                        'Resolved thread by {{author}}',
-                        {
-                          author: commentAuthor(root)
-                        }
-                      )
-                    : translate(
+                    ? t('tasks.projectComments.resolvedThreadBy', 'Resolved thread by {{author}}', {
+                        author: commentAuthor(root)
+                      })
+                    : t(
                         'tasks.projectComments.resolvedCommentBy',
                         'Resolved comment by {{author}}',
                         {
@@ -108,8 +108,8 @@ export function renderMobileTasksProjectComments(model: ConnectionPresentationMo
                 </Text>
                 <Text style={styles.detailSectionMeta}>
                   {count > 1
-                    ? resolvedCommentCountLabel(count)
-                    : translate('tasks.projectComments.show', 'Show')}
+                    ? resolvedCommentCountLabel(t, count)
+                    : t('tasks.projectComments.show', 'Show')}
                 </Text>
               </Pressable>
             )
@@ -143,19 +143,19 @@ export function renderMobileTasksProjectComments(model: ConnectionPresentationMo
                     style={styles.stackedInput}
                     value={projectEditingCommentDraft}
                     onChangeText={setProjectEditingCommentDraft}
-                    placeholder={translate('tasks.projectComments.editComment', 'Edit comment')}
+                    placeholder={t('tasks.projectComments.editComment', 'Edit comment')}
                     onSend={() => void updateProjectRowComment(projectRowItem, comment)}
                     canSend={!projectMutating && projectEditingCommentDraft.trim().length > 0}
-                    sendAccessibilityLabel={translate('common.save', 'Save')}
+                    sendAccessibilityLabel={t('common.save', 'Save')}
                     trailing={
                       <Pressable
                         accessibilityRole="button"
-                        accessibilityLabel={translate('common.cancel', 'Cancel')}
+                        accessibilityLabel={t('common.cancel', 'Cancel')}
                         disabled={projectMutating}
                         style={({ pressed }) => [
-                          composerInputStyles.ghostButton,
-                          projectMutating && composerInputStyles.disabled,
-                          pressed && composerInputStyles.pressed
+                          composerStyles.ghostButton,
+                          projectMutating && composerStyles.disabled,
+                          pressed && composerStyles.pressed
                         ]}
                         onPress={() => {
                           setProjectEditingCommentId(null)
@@ -169,7 +169,7 @@ export function renderMobileTasksProjectComments(model: ConnectionPresentationMo
                 ) : (
                   <>
                     <MobileMarkdown content={comment.body} />
-                    {renderCommentReactions(comment)}
+                    {renderCommentReactions(styles, comment)}
                     {SHOW_MOBILE_COMMENT_THREAD_TOOLS ? (
                       <>
                         <MessageBox
@@ -181,10 +181,10 @@ export function renderMobileTasksProjectComments(model: ConnectionPresentationMo
                               [commentId]: next
                             }))
                           }
-                          placeholder={translate('tasks.projectComments.reply', 'Reply')}
+                          placeholder={t('tasks.projectComments.reply', 'Reply')}
                           onSend={() => void replyToProjectGitHubComment(projectRowItem, comment)}
                           canSend={!projectMutating && !!(itemReplyDrafts[commentId] ?? '').trim()}
-                          sendAccessibilityLabel={translate('tasks.projectComments.reply', 'Reply')}
+                          sendAccessibilityLabel={t('tasks.projectComments.reply', 'Reply')}
                         />
                         <View style={[styles.inlineActionRow, styles.stackedInput]}>
                           {projectRowType(projectRowItem) === 'pr' && comment.threadId ? (
@@ -200,11 +200,8 @@ export function renderMobileTasksProjectComments(model: ConnectionPresentationMo
                             >
                               <Text style={styles.inlineSaveText}>
                                 {comment.isResolved
-                                  ? translate('tasks.projectComments.reopenThread', 'Reopen thread')
-                                  : translate(
-                                      'tasks.projectComments.resolveThread',
-                                      'Resolve thread'
-                                    )}
+                                  ? t('tasks.projectComments.reopenThread', 'Reopen thread')
+                                  : t('tasks.projectComments.resolveThread', 'Resolve thread')}
                               </Text>
                             </Pressable>
                           ) : null}
@@ -219,9 +216,7 @@ export function renderMobileTasksProjectComments(model: ConnectionPresentationMo
                               setProjectEditingCommentDraft(comment.body)
                             }}
                           >
-                            <Text style={styles.inlineSaveText}>
-                              {translate('common.edit', 'Edit')}
-                            </Text>
+                            <Text style={styles.inlineSaveText}>{t('common.edit', 'Edit')}</Text>
                           </Pressable>
                           <Pressable
                             style={({ pressed }) => [
@@ -232,7 +227,7 @@ export function renderMobileTasksProjectComments(model: ConnectionPresentationMo
                             onPress={() => void deleteProjectRowComment(projectRowItem, comment)}
                           >
                             <Text style={styles.inlineDeleteText}>
-                              {translate('common.delete', 'Delete')}
+                              {t('common.delete', 'Delete')}
                             </Text>
                           </Pressable>
                         </View>

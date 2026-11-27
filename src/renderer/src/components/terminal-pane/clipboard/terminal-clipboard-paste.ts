@@ -22,6 +22,8 @@ type PasteTerminalClipboardDeps = {
   readClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
   saveClipboardImageAsTempFile: SaveClipboardImageAsTempFile
   copiedFiles?: TerminalClipboardCopiedFiles
+  /** Paths from a DOM paste event; Chromium reads CF_HDROP-only copies (e.g. Zoom) that main cannot. */
+  eventCopiedFilePaths?: string[]
   pasteText: (text: string, options?: TerminalPasteTextOptions) => boolean | Promise<boolean>
   connectionId?: string | null
   runtimeEnvironmentId?: string | null
@@ -48,6 +50,7 @@ export async function pasteTerminalClipboard({
   readClipboardText,
   saveClipboardImageAsTempFile,
   copiedFiles,
+  eventCopiedFilePaths = [],
   pasteText,
   connectionId,
   runtimeEnvironmentId,
@@ -68,7 +71,9 @@ export async function pasteTerminalClipboard({
     }
     // Image-only clipboards can reject text reads; still try the screenshot path.
   }
-  const copiedFilePaths = await copiedFilePathsRead
+  const mainCopiedFilePaths = await copiedFilePathsRead
+  const copiedFilePaths =
+    mainCopiedFilePaths.length > 0 ? mainCopiedFilePaths : eventCopiedFilePaths
   // Unlabelled files beside a picture (screenshot tools, Windows image files) keep the image path.
   if (
     copiedFiles &&

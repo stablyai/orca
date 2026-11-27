@@ -1,6 +1,6 @@
 /** `name` as the child will see it; Windows names are case-insensitive. */
 export function envValue(
-  env: Readonly<Record<string, string>>,
+  env: Readonly<Record<string, string | undefined>>,
   name: string,
   platform: NodeJS.Platform = process.platform
 ): string | undefined {
@@ -12,7 +12,7 @@ export function envValue(
   const values = Object.entries(env)
     .filter(([key]) => key.toUpperCase() === upper)
     .map(([, value]) => value)
-  return values.find((value) => value.trim()) ?? values[0]
+  return values.find((value) => value?.trim()) ?? values[0]
 }
 
 /** Whether `env` itself carries a non-empty GEMINI_API_KEY: what agy will start with. */

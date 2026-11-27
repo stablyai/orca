@@ -38,7 +38,7 @@ describe('codexBotToolsThreadConfig', () => {
       ]
     })
 
-    expect(codexBotToolsThreadConfig(tools, ['notion', 'docs'])).toEqual({
+    expect(codexBotToolsThreadConfig(tools, new Set(['notion', 'docs']))).toEqual({
       'mcp_servers.docs.command': 'npx',
       'mcp_servers.docs.args': ['docs-mcp']
     })

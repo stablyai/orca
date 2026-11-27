@@ -16,6 +16,7 @@ import {
 } from './mobile-structured-agent-session-rpc'
 import { mobileStructuredSendDelivery } from '../composer/delivery/mobile-structured-send-delivery'
 import type { MobileNativeChatSendErrorReporter } from '../composer/delivery/use-mobile-native-chat-send-error'
+import { translate } from '../../../i18n/mobile-i18n'
 
 export async function sendMobileStructuredAgentSessionMessage(input: {
   client: RpcClient
@@ -46,7 +47,9 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
   const body = structuredAgentSessionSendBody(input.text, input.attachments, input.skills)
   // The host refuses it unexplained, so say why here and keep the draft.
   if (structuredAgentSessionBlocksTooLarge(body.blocks)) {
-    input.onError(mobileAgentSessionWriteNoticeText(AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS))
+    input.onError(
+      mobileAgentSessionWriteNoticeText(AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS, translate)
+    )
     return 'rejected'
   }
   // Use one operation id per Send action so separate taps cannot replay each other.

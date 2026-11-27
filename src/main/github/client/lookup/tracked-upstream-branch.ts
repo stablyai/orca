@@ -1,6 +1,7 @@
 import {
-  readGitReviewBranchSources,
-  type GitReviewBranchSource
+  createGitReviewBranchSourceResolver,
+  type GitReviewBranchSource,
+  type GitReviewBranchSourceResolver
 } from '../../../../shared/git/remotes/git-review-branch-source'
 import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
 import { readLocalGitConfigSignature } from '../../repositories/local-git-config-signature'
@@ -16,12 +17,15 @@ import {
   parseTrackedUpstreamBranch,
   getCacheableTrackedUpstreamSnapshot,
   doesTrackedUpstreamCacheConfigSignatureMatch,
-  getTrackedUpstreamBranchCacheKey,
+  parseRawTrackedUpstreamBranches,
+  resolveTrackedUpstreamBranchCacheKey,
   type TrackedUpstreamBranch,
   type TrackedUpstreamSnapshotProbeResult
 } from './tracked-upstream-cache'
 import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host/execution-host'
+const EMPTY_UPSTREAMS_MAP = new Map<string, TrackedUpstreamBranch | null>()
+
 export async function getTrackedUpstreamBranch(
   repoPath: string,
   branchName: string,
@@ -34,6 +38,10 @@ export async function getTrackedUpstreamBranch(
     connectionId,
     localGitOptions
   )
+  if (snapshot.rawUpstreamsByBranchName) {
+    const raw = snapshot.rawUpstreamsByBranchName.get(branchName)
+    return raw ? parseTrackedUpstreamRef(raw) : null
+  }
   return snapshot.upstreamsByBranchName.get(branchName) ?? null
 }
 
@@ -52,7 +60,8 @@ export async function getReviewBranchSource(
     true,
     force
   )
-  const source = snapshot.reviewSources?.get(branchName)
+  const source =
+    snapshot.reviewSourceResolver?.(branchName) ?? snapshot.reviewSources?.get(branchName)
   if (snapshot.probeFailed || !source || source instanceof Error) {
     throw new Error('Cannot establish the branch review source')
   }
@@ -67,12 +76,25 @@ async function getTrackedUpstreamSnapshot(
   includeReviewSources = false,
   force = false
 ): Promise<TrackedUpstreamSnapshotProbeResult> {
-  const cacheKey = getTrackedUpstreamBranchCacheKey(repoPath, connectionId, localGitOptions)
+  const cacheKey = await resolveTrackedUpstreamBranchCacheKey(
+    repoPath,
+    connectionId,
+    localGitOptions
+  )
   const serves = (
-    value: Pick<TrackedUpstreamSnapshotProbeResult, 'upstreamsByBranchName' | 'reviewSources'>
+    value: Pick<
+      TrackedUpstreamSnapshotProbeResult,
+      | 'upstreamsByBranchName'
+      | 'rawUpstreamsByBranchName'
+      | 'reviewSources'
+      | 'reviewSourceResolver'
+    >
   ): boolean =>
-    value.upstreamsByBranchName.has(branchName) &&
-    (!includeReviewSources || value.reviewSources?.has(branchName) === true)
+    (value.rawUpstreamsByBranchName?.has(branchName) === true ||
+      value.upstreamsByBranchName.has(branchName)) &&
+    (!includeReviewSources ||
+      value.reviewSourceResolver !== undefined ||
+      value.reviewSources?.has(branchName) === true)
   const cached = trackedUpstreamSnapshotCache.get(cacheKey)
   if (
     cached &&
@@ -117,9 +139,17 @@ async function getTrackedUpstreamSnapshot(
     const result = await probe
     if (result.cacheable && trackedUpstreamSnapshotGenerations.get(cacheKey) === generation) {
       trackedUpstreamSnapshotCache.set(cacheKey, {
-        ...(result.gitConfigSignature ? { gitConfigSignature: result.gitConfigSignature } : {}),
+        ...(result.gitConfigSignature
+          ? { gitConfigSignature: result.gitConfigSignature, gitConfigSignatureRepoPath: repoPath }
+          : {}),
         upstreamsByBranchName: getCacheableTrackedUpstreamSnapshot(result.upstreamsByBranchName),
+        ...(result.rawUpstreamsByBranchName
+          ? { rawUpstreamsByBranchName: result.rawUpstreamsByBranchName }
+          : {}),
         ...(result.reviewSources ? { reviewSources: result.reviewSources } : {}),
+        ...(result.reviewSourceResolver
+          ? { reviewSourceResolver: result.reviewSourceResolver }
+          : {}),
         expiresAt: Date.now() + TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS
       })
       pruneTrackedUpstreamSnapshotCache(Date.now())
@@ -150,21 +180,20 @@ export async function probeTrackedUpstreamSnapshot(
     connectionId: connectionId ?? null,
     ...localGitOptions
   })
-  let { probeFailed, upstreamsByBranchName } = await probeTrackedUpstreamBranches(
+  let { probeFailed, rawUpstreamsByBranchName } = await probeRawTrackedUpstreamBranches(
     repoPath,
     connectionId,
     localGitOptions
   )
-  let reviewSources: Map<string, GitReviewBranchSource | Error> | undefined
+  let reviewSourceResolver: GitReviewBranchSourceResolver | undefined
   if (reviewBranchName && !probeFailed) {
     try {
       requireReachableGitRoute(getConnectionExecutionHostId(connectionId))
-      if (!upstreamsByBranchName.has(reviewBranchName)) {
-        upstreamsByBranchName.set(reviewBranchName, null)
+      if (!rawUpstreamsByBranchName.has(reviewBranchName)) {
+        rawUpstreamsByBranchName.set(reviewBranchName, '')
       }
-      reviewSources = await readGitReviewBranchSources(
-        (args) => gitExecFileAsync(args, { cwd: repoPath, ...localGitOptions }),
-        upstreamsByBranchName.keys()
+      reviewSourceResolver = await createGitReviewBranchSourceResolver((args) =>
+        gitExecFileAsync(args, { cwd: repoPath, ...localGitOptions })
       )
     } catch {
       probeFailed = true
@@ -185,18 +214,19 @@ export async function probeTrackedUpstreamSnapshot(
     cacheable: !configSignatureChanged && !probeFailed,
     probeFailed,
     ...(gitConfigSignature ? { gitConfigSignature } : {}),
-    upstreamsByBranchName,
-    ...(reviewSources ? { reviewSources } : {})
+    upstreamsByBranchName: EMPTY_UPSTREAMS_MAP,
+    rawUpstreamsByBranchName,
+    ...(reviewSourceResolver ? { reviewSourceResolver } : {})
   }
 }
 
-export async function probeTrackedUpstreamBranches(
+async function probeRawTrackedUpstreamBranches(
   repoPath: string,
   connectionId?: string | null,
   localGitOptions: { wslDistro?: string; admissionTier?: GitAdmissionTier } = {}
 ): Promise<{
   probeFailed: boolean
-  upstreamsByBranchName: Map<string, TrackedUpstreamBranch | null>
+  rawUpstreamsByBranchName: Map<string, string>
 }> {
   const args = ['for-each-ref', '--format=%(refname)%00%(upstream)', 'refs/heads']
   requireReachableGitRoute(getConnectionExecutionHostId(connectionId))
@@ -208,11 +238,34 @@ export async function probeTrackedUpstreamBranches(
     })
     return {
       probeFailed: false,
-      upstreamsByBranchName: parseTrackedUpstreamBranches(result.stdout)
+      rawUpstreamsByBranchName: parseRawTrackedUpstreamBranches(result.stdout)
     }
   } catch {
+    return { probeFailed: true, rawUpstreamsByBranchName: new Map() }
+  }
+}
+
+export async function probeTrackedUpstreamBranches(
+  repoPath: string,
+  connectionId?: string | null,
+  localGitOptions: { wslDistro?: string; admissionTier?: GitAdmissionTier } = {}
+): Promise<{
+  probeFailed: boolean
+  upstreamsByBranchName: Map<string, TrackedUpstreamBranch | null>
+}> {
+  const { probeFailed, rawUpstreamsByBranchName } = await probeRawTrackedUpstreamBranches(
+    repoPath,
+    connectionId,
+    localGitOptions
+  )
+  if (probeFailed) {
     return { probeFailed: true, upstreamsByBranchName: new Map() }
   }
+  const upstreamsByBranchName = new Map<string, TrackedUpstreamBranch | null>()
+  for (const [branch, raw] of rawUpstreamsByBranchName) {
+    upstreamsByBranchName.set(branch, parseTrackedUpstreamRef(raw))
+  }
+  return { probeFailed: false, upstreamsByBranchName }
 }
 
 export function parseTrackedUpstreamBranches(

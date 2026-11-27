@@ -29,6 +29,7 @@ import {
 } from '../../../../../../shared/agent-session/identity/orca-session-address'
 import { lookupOrcaAgentSession } from '../../../../orchestration/mailbox/routing/structured-session-mail-address'
 import { runLifecycleWriteTransaction } from '../../../../orchestration/db/lifecycle-write-transaction-runner'
+import { replySubject } from '../../../../../../shared/orchestration/mailbox/reply-subject'
 
 // Session senders resolve against the session records, which a restart leaves uninstalled until asked.
 export async function ensureSenderRecords(
@@ -73,7 +74,7 @@ export function tellSender(
     return db.insertMessage({
       from: request.to_handle,
       to: sender.to,
-      subject: `Re: ${request.subject}`,
+      subject: replySubject(request.subject),
       body,
       threadId: request.thread_id ?? request.id,
       runId: sender.runId
@@ -111,9 +112,10 @@ function tellPeerSender(
     queuePeerMailReply(db, conversation.conversation_id, generateId('msg'), {
       senderLabel,
       fromAddress: request.to_handle,
-      subject: `Re: ${request.subject}`,
+      subject: replySubject(request.subject),
       body,
       threadId: request.thread_id ?? request.id,
+      replyTo: request.id,
       sender,
       notice: { requestId: request.id }
     })

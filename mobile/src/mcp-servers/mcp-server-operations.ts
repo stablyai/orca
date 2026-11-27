@@ -53,7 +53,8 @@ const AgentProblemsSchema = z
   .record(
     z.string(),
     z.looseObject({
-      kind: z.enum(['blocked', 'terminal-off']).catch('blocked'),
+      // A kind this app doesn't know keeps its host's line, not the org-policy one.
+      kind: z.string(),
       detail: z.string()
     })
   )
@@ -166,6 +167,8 @@ const DiscoveredSchema = z.looseObject({
   detail: z.string(),
   transport: z.enum(['http', 'command']).catch('http'),
   agents: z.array(z.string()).catch([]),
+  // Absent from older hosts, which take it out of every agent.
+  removesFrom: z.array(z.string()).optional().catch(undefined),
   files: z.array(z.string()).catch([]),
   projectNames: z.array(z.string()).catch([]),
   movable: z.boolean().catch(false)

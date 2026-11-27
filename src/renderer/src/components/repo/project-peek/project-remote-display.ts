@@ -2,6 +2,7 @@ import type { Repo } from '../../../../../shared/repository/repo-types'
 import { buildGitHubRepoUrl } from '../../../../../shared/github/repositories/links'
 import { normalizeGitRemoteUrl } from '../../../../../shared/git/remotes/git-remote-identity'
 import { getGitRemoteProviderIdentity } from '../../../../../shared/project/host-setup/project-host-setup-projection'
+import { parseRemoteRepo } from '../../right-sidebar/source-control/review/remote-repo'
 
 export type ProjectRemoteDisplay = {
   provider: 'github' | 'gitlab' | 'other'
@@ -42,10 +43,9 @@ export function getProjectRemoteDisplay(repo: RemoteRepo): ProjectRemoteDisplay 
       webUrl: buildGitHubRepoUrl(github)
     }
   }
-  const normalized = repo.gitRemoteIdentity?.remoteUrl
-    ? normalizeGitRemoteUrl(repo.gitRemoteIdentity.remoteUrl)
-    : null
-  if (!normalized) {
+  const remoteUrl = repo.gitRemoteIdentity?.remoteUrl
+  const normalized = remoteUrl ? normalizeGitRemoteUrl(remoteUrl) : null
+  if (!remoteUrl || !normalized) {
     return null
   }
   const slash = normalized.indexOf('/')
@@ -58,6 +58,7 @@ export function getProjectRemoteDisplay(repo: RemoteRepo): ProjectRemoteDisplay 
     owner: null,
     name: null,
     host: host === 'gitlab.com' ? null : host,
-    webUrl: `https://${normalized}`
+    // The identity key drops the scheme and port that self-hosted http(s) forges need.
+    webUrl: parseRemoteRepo(remoteUrl)?.webBaseUrl ?? `https://${normalized}`
   }
 }

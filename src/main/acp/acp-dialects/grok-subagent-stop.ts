@@ -1,15 +1,18 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { AcpDialect } from './acp-dialect'
 import { grokSubagentNotification } from './grok-subagents'
 
-const response = z.object({
-  error: z.null().optional(),
-  result: z.object({
-    subagentId: z.string(),
-    cancelled: z.boolean(),
-    outcome: z.looseObject({ kind: z.string(), status: z.string().optional() }).optional()
+const response = lazyZodSchema(() =>
+  z.object({
+    error: z.null().optional(),
+    result: z.object({
+      subagentId: z.string(),
+      cancelled: z.boolean(),
+      outcome: z.looseObject({ kind: z.string(), status: z.string().optional() }).optional()
+    })
   })
-})
+)
 
 export const grokSubagentStop: NonNullable<AcpDialect['subagentStop']> = {
   probe: { method: '_x.ai/subagent/cancel', params: {} },

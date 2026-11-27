@@ -17,12 +17,55 @@ import {
   observeStructuredWorker,
   resolveStructuredWorkerIdentity
 } from '../../terminal-authority/structured-sessions/structured-worker-authority'
-import { sessionIdFromStructuredWorkerIncarnation } from '../../terminal-authority/structured-sessions/structured-worker-identity'
+import {
+  sessionIdFromStructuredWorkerIncarnation,
+  structuredWorkerIdentities,
+  structuredWorkerIdentityFromRow
+} from '../../terminal-authority/structured-sessions/structured-worker-identity'
+import { structuredWorkerOwned } from '../../terminal-authority/structured-sessions/structured-worker-custody'
 import { chatAssigneeSessionId, observeChatAssignee } from './chat-assignee'
 
 export type SessionWorkerSubject = {
   agentTerminalHandle: string | null
-  resource?: { processIncarnation?: string | null } | null
+  resource?: {
+    processIncarnation?: string | null
+    paneKey?: string | null
+    worktreeId?: string | null
+    hostScope?: string | null
+  } | null
+}
+
+/** Agent-slept terminal workers read as live and idle; their pane's kept status row is their activity. */
+export function withSleptAgentWorkers(
+  observe: (worker: SessionWorkerSubject) => FleetSessionObservation | undefined,
+  statuses: readonly FleetAgentStatusEvidence[],
+  sleptAgentHandle: (paneKey: string) => string | null
+): (worker: SessionWorkerSubject) => FleetSessionObservation | undefined {
+  let byPane: Map<string, FleetAgentStatusEvidence> | null = null
+  return (worker) => {
+    const observed = observe(worker)
+    const paneKey = worker.resource?.paneKey
+    // Only the worker's own handle: another conversation slept in its old pane is not this worker.
+    if (
+      observed ||
+      !paneKey ||
+      !worker.agentTerminalHandle ||
+      sleptAgentHandle(paneKey) !== worker.agentTerminalHandle
+    ) {
+      return observed
+    }
+    if (!byPane) {
+      byPane = new Map()
+      for (const status of statuses) {
+        const key = status.activity.paneKey
+        if (key && !byPane.has(key)) {
+          byPane.set(key, status)
+        }
+      }
+    }
+    const activity = byPane.get(paneKey)
+    return activity ? { status: 'live', activity } : { status: 'live' }
+  }
 }
 
 /** The session a structured worker was minted for, known before (and without) verifying it. */
@@ -49,9 +92,10 @@ export function createSessionWorkerLivenessReader(
     | readonly FleetAgentStatusEvidence[]
     | ((paneKey: string) => FleetAgentStatusEvidence | undefined),
   records: AgentSessionRecordReader | null = readAgentSessionRecordStore(),
-  // A chat assignee's party, from the database unless a caller read its rows already.
-  parties: SessionPartyReader | null | undefined = db
+  options: { parties?: SessionPartyReader | null; includeResumeGuidance?: true } = {}
 ): (worker: SessionWorkerSubject) => FleetSessionObservation | undefined {
+  // A chat assignee's party, from the database unless a caller read its rows already.
+  const { parties = db } = options
   const resolveSession = createLineageRunningSessionResolver(records)
   let statusByPane: Map<string, FleetAgentStatusEvidence> | undefined
   // A session's status row lives at its derived pane key, not the worker's minted one.
@@ -87,11 +131,33 @@ export function createSessionWorkerLivenessReader(
     }
     const observed = observeStructuredWorker({ sessionId }, { resolveSession })
     const running = resolveSession(sessionId)
+    if (observed.status === 'exited') {
+      if (
+        options.includeResumeGuidance &&
+        running.kind === 'here' &&
+        running.record.ownerObservation.deathEvidence?.resumeByMail === true &&
+        structuredWorkerOwned(running)
+      ) {
+        const resource = worker.resource
+        const identity =
+          structuredWorkerIdentities.get(handle) ??
+          (resource &&
+            structuredWorkerIdentityFromRow({
+              terminal_handle: handle,
+              pane_key: resource.paneKey ?? null,
+              process_incarnation: resource.processIncarnation ?? null,
+              worktree_id: resource.worktreeId ?? null,
+              host_scope: resource.hostScope ?? null
+            }))
+        if (identity?.sessionId === sessionId) {
+          return { status: 'exited', canResume: true }
+        }
+      }
+      return { status: 'exited' }
+    }
     return observed.status === 'live'
       ? live(running.kind === 'here' ? running.sessionId : sessionId)
-      : observed.status === 'exited'
-        ? { status: 'exited' }
-        : { status: 'unverifiable', detail: observed.reason ?? 'The session cannot be verified.' }
+      : { status: 'unverifiable', detail: observed.reason ?? 'The session cannot be verified.' }
   }
 }
 

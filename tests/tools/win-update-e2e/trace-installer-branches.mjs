@@ -1,19 +1,10 @@
 import { readFileSync, writeFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
-import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const require = createRequire(import.meta.url)
-const builderRequire = createRequire(require.resolve('electron-builder/package.json'))
-const builderRoot = path.dirname(builderRequire.resolve('app-builder-lib/package.json'))
-const processChecks = path.join(
-  builderRoot,
-  'templates/nsis/include/allowOnlyOneInstallerInstance.nsh'
-)
 const hooks = fileURLToPath(
   new URL('../../../config/nsis/orca-installer-hooks.nsh', import.meta.url)
 )
-const capabilityCheck = fileURLToPath(
+const processCheck = fileURLToPath(
   new URL('../../../config/nsis/orca-process-check.nsh', import.meta.url)
 )
 
@@ -56,31 +47,6 @@ function insertAfter(source, anchor, insertion) {
   return replaceOnce(source, anchor, `${anchor}\n${insertion}`)
 }
 
-let checks = readFileSync(processChecks, 'utf8').replaceAll('\r\n', '\n')
-checks = traceMacro + checks
-checks = insertAfter(
-  checks,
-  '!macro FIND_PROCESS _FILE _RETURN',
-  '  !insertmacro ORCA_E2E_TRACE "find image=${_FILE} branch=$IsPowerShellAvailable"'
-)
-checks = insertAfter(
-  checks,
-  '!macro KILL_PROCESS _FILE _FORCE',
-  '  !insertmacro ORCA_E2E_TRACE "kill image=${_FILE} force=${_FORCE} branch=$IsPowerShellAvailable"'
-)
-checks = replaceOnce(
-  checks,
-  '  Pop $0\n!macroend ',
-  '  Pop $0\n  !insertmacro ORCA_E2E_TRACE "kill-result=$0"\n!macroend '
-)
-const findCall = '!insertmacro FIND_PROCESS "${APP_EXECUTABLE_FILENAME}" $R0'
-if (checks.split(findCall).length !== 4) {
-  throw new Error('Expected three find-process calls')
-}
-checks = checks.replaceAll(
-  findCall,
-  () => `${findCall}\n    !insertmacro ORCA_E2E_TRACE "find-result=$R0"`
-)
 let uninstall = readFileSync(hooks, 'utf8').replaceAll('\r\n', '\n')
 uninstall = insertAfter(
   uninstall,
@@ -92,24 +58,19 @@ uninstall = insertAfter(
   '  ${ifNot} ${isUpdated}',
   '    !insertmacro ORCA_E2E_TRACE "genuine-uninstall daemon sweep"'
 )
-let capability = readFileSync(capabilityCheck, 'utf8').replaceAll('\r\n', '\n')
-capability = insertAfter(
-  capability,
-  '  Pop $0',
-  '  !insertmacro ORCA_E2E_TRACE "capability=$0 powershell=$PowerShellPath"'
-)
-capability = replaceOnce(
-  capability,
-  '  !insertmacro _CHECK_APP_RUNNING',
-  '  !insertmacro ORCA_E2E_TRACE "selected-branch=$IsPowerShellAvailable (0=path,1=image)"\n  !insertmacro _CHECK_APP_RUNNING'
+let check = readFileSync(processCheck, 'utf8').replaceAll('\r\n', '\n')
+check = traceMacro + check
+check = replaceOnce(
+  check,
+  '    ${If} $R7 == 0\n    ${AndIf} $R0 <> -1',
+  '    !insertmacro ORCA_E2E_TRACE "install-dir-processes=$R7 snapshot=$R0 since-grace-ms=$1 first-terminate=$2"\n    ${If} $R7 == 0\n    ${AndIf} $R0 <> -1'
 )
 
 if (!process.argv.includes('--check')) {
   if (process.env.GITHUB_ACTIONS !== 'true' || process.platform !== 'win32') {
     throw new Error('Installer tracing may only patch a disposable Windows CI checkout')
   }
-  writeFileSync(processChecks, checks)
   writeFileSync(hooks, uninstall)
-  writeFileSync(capabilityCheck, capability)
+  writeFileSync(processCheck, check)
 }
 console.log('Validated installer/uninstaller branch-trace anchors')

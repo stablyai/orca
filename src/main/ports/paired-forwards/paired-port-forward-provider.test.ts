@@ -1,7 +1,8 @@
 import { connect } from 'node:net'
 import { networkInterfaces } from 'node:os'
 import { Duplex, PassThrough } from 'node:stream'
-import { describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { useVouchingSocketOwnerHelper } from '../../browser/network/tunnels/darwin-socket-owner-helper.test-fixture'
 import { browserTunnelTargetBlockReason } from '../../browser/network/tunnels/browser-network-tunnel-destination-policy'
 import { holdsIpv6Loopback, PairedPortForwardProvider } from './paired-port-forward-provider'
 import type { PairedPortForwardTunnel } from './paired-port-forward-tunnel'
@@ -60,6 +61,13 @@ function roundTrip(port: number, payload: string, host = '127.0.0.1'): Promise<s
 }
 
 describe('PairedPortForwardProvider', () => {
+  // On macOS every forward checks its connections' owner through the bundled helper.
+  let restoreOwnerHelper = async (): Promise<void> => {}
+  beforeAll(async () => {
+    restoreOwnerHelper = (await useVouchingSocketOwnerHelper()).restore
+  })
+  afterAll(() => restoreOwnerHelper())
+
   it('listens on both loopbacks only, is fenced from paired tunnels, and frees the port on close', async () => {
     const opened: { host: string; port: number }[] = []
     const forward = await new PairedPortForwardProvider().start(echoTunnel(opened), {

@@ -1,3 +1,4 @@
+import { discardKagiPrivateInitialNavigation } from '@/lib/kagi-private-initial-navigation'
 import { copyBrowserPageHandles } from '@/store/slices/browser/hosts/browser-initialization-presentation-ownership'
 import type {
   BrowserSlice,
@@ -67,6 +68,9 @@ export function createBrowserCloseActions(
               .find((tab) => tab.contentType === 'browser' && tab.entityId === tabId)?.worktreeId ??
             owningWorktreeId
           const closedPages = s.browserPagesByWorkspace[tabId] ?? []
+          for (const page of closedPages) {
+            discardKagiPrivateInitialNavigation(page.id)
+          }
           const nextBrowserPagesByWorkspace = { ...s.browserPagesByWorkspace }
           delete nextBrowserPagesByWorkspace[tabId]
           const nextBrowserAnnotationsByPageId = { ...s.browserAnnotationsByPageId }

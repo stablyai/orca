@@ -27,6 +27,8 @@ import { resolveDispatchCreator } from '../runs/dispatch-creator'
 import { checkedWorkerOrigin } from '../../bots-items-worker-origin'
 import { decideStartMode, noteTerminalFallbackOnItem } from './start/worker-chat-lineage'
 import { withKeepOpenDefault } from './start/worker-keep-open-default'
+import { withRetryWorkerLaunchDefaults } from './start/worker-retry-launch-defaults'
+import type { WorkerStartInput } from './start/worker-start-input'
 import { withTerminalUsage } from './start/worker-start-terminal-usage'
 import {
   linkWorkerToQuestion,
@@ -74,7 +76,7 @@ export async function startWorker(
   if (startParams.origin !== undefined && startParams.on) {
     throw new OrchestrationError(
       'invalid_argument',
-      'worker-start --item starts workers on this computer, where the item is. No effects were applied.',
+      "--item can't be combined with --on: worker-start --item starts workers on this computer, where the item is. No effects were applied.",
       { effectsApplied: false }
     )
   }
@@ -147,7 +149,7 @@ export async function startWorker(
 
 /** What every start checks and binds before it is placed, here or on a paired server. */
 export async function prepareWorkerStart(
-  params: z.infer<typeof WorkerStartParams>,
+  params: WorkerStartInput,
   {
     runtime,
     orchestrationCompatibilityEvidence,
@@ -279,23 +281,16 @@ export async function prepareWorkerStart(
         )
       }
     })
-    const spec = [
-      params.spec,
-      placement.delivery === 'started_fresh' ? placement.earlierWork : undefined
-    ]
+    const { delivery, worktreeId, reopen, retainedChat, earlierWork, ...launchPlacement } =
+      placement
+    const spec = [params.spec, delivery === 'started_fresh' ? earlierWork : undefined]
       .filter(Boolean)
       .join('\n\n')
-    params = {
-      ...params,
-      worktree: `id:${placement.worktreeId}`,
-      ...(placement.terminal ? { terminal: placement.terminal } : {}),
-      ...(placement.agent ? { agent: placement.agent } : {}),
-      ...(placement.model ? { model: placement.model } : {}),
-      ...(placement.effort ? { effort: placement.effort } : {}),
-      spec
-    }
-    followUp = { ...followUp, reopen: placement.reopen, earlierWork: placement.earlierWork }
+    params = { ...params, worktree: `id:${worktreeId}`, ...launchPlacement, spec }
+    followUp = { ...followUp, reopen, retainedChat, earlierWork }
     await assertWorkerStartTaskSpecWithinPromptBudget(spec)
+  } else {
+    params = withRetryWorkerLaunchDefaults(runtime, db, existingTask?.id, params)
   }
   return {
     params,

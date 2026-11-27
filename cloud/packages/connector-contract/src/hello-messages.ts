@@ -5,7 +5,7 @@ import { readHelloTriggers } from './trigger-messages.js'
 import { WebhookHookIdSchema } from './webhook-messages.js'
 import { webhookRuleId } from './webhook-names.js'
 import { CONNECTOR_PLACE_SOURCES, ConnectorHostDescription } from './connector-wire-scalars.js'
-import { BotPurposeSchema, ConnectorBotShareSchema, SharePublicKeySchema } from './share-messages.js'
+import { AgentCardSchema, BotPurposeSchema, ConnectorBotShareSchema, SharePublicKeySchema } from './share-messages.js'
 import { ConnectorHelloWakeOfferSchema } from './wake-messages.js'
 
 export const CONNECTOR_PROMPT_KINDS = ['approval', 'question'] as const
@@ -105,7 +105,10 @@ export const ConnectorBotSchema = z.object({
   sharedWith: z.array(ConnectorBotShareSchema).max(CONNECTOR_LIMITS.maxBotShares).optional(),
   // What the owner says the bot is for, shown to the people it is shared with (botPurpose on
   // `${shares}/mine`). Absent from an older machine, and when the owner wrote none.
-  botPurpose: BotPurposeSchema.optional()
+  botPurpose: BotPurposeSchema.optional(),
+  // Its mascot and services, for the invite of someone it is shared with (agentCard on
+  // `${shares}/mine`). Absent from an older machine, and when it is shared with no one.
+  agentCard: AgentCardSchema
 })
 
 export const ConnectorHelloRequestSchema = z

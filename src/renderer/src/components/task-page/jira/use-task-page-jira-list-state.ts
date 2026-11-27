@@ -37,7 +37,7 @@ import {
   ipcOrRuntimeTargetForHostId,
   runtimeTargetEnvironmentId
 } from '@/runtime/rpc/targets/runtime-client-target'
-import { getEnvironmentRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
+import { useEnvironmentRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
 const EMPTY_JIRA_PRIORITIES: JiraPrioritiesBySite = new Map()
 
@@ -152,8 +152,11 @@ export function useTaskPageJiraListState(model: TaskPageLinearViewStateModel) {
     // Why: result refreshes replace the issue array; depend on the represented sites, not identity.
     return JSON.stringify([...new Set(siteIds)].sort())
   }, [jiraIssues, selectedJiraSiteId])
+  const ownerContextKey = useEnvironmentRuntimeContextKey(
+    owner ? runtimeTargetEnvironmentId(owner) : null
+  )
   const priorityScopeKey = JSON.stringify([
-    owner ? getEnvironmentRuntimeContextKey(runtimeTargetEnvironmentId(owner)) : null,
+    owner ? ownerContextKey : null,
     jiraTaskSourceContext ? getTaskSourceCacheScope(jiraTaskSourceContext) : null,
     jiraPrioritySiteIdsKey
   ])

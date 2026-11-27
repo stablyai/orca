@@ -19,8 +19,7 @@ import { useNow } from '../hooks/use-now'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { botHomeWorktreeId, hostBotsKey } from './host-bots-read'
 import type { PhoneBot } from './host-bots-operations'
@@ -69,7 +68,7 @@ export function MobileBotGroupItems({
   /** Opens one of the group's rooms: the original's (undefined) or a thread's. */
   onOpenRoom: (threadId: string | undefined) => void
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const router = useRouteHandoff()
   const pager = useOptionPager<Page>()
@@ -98,6 +97,7 @@ export function MobileBotGroupItems({
   const read = useMobileBotGroupItems({
     visible,
     client,
+    hostKey: hostBotsKey(hostId),
     groupId,
     bots,
     reads,
@@ -366,7 +366,7 @@ export function MobileBotGroupItems({
     </>
   )
 }
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   root: { flex: 1 },
   scrollContent: { paddingBottom: spacing.lg }
 }))

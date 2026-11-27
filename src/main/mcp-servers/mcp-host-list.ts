@@ -3,12 +3,14 @@
 // workspaces and shared-process choice ride on the entry's extra keys, which bot tools keep as they are.
 import { createHash, randomUUID } from 'node:crypto'
 import { z } from 'zod'
-import { freeBotToolName, type BotToolInput, type BotToolServer } from '../../shared/bot-tools'
-import type {
-  McpAgentFiles,
-  McpFileAgent,
-  McpServer,
-  McpServerWorkspaces
+import type { BotOwnTool, BotToolInput, BotToolServer } from '../../shared/bot-tools'
+import {
+  McpServerWorkspacesSchema,
+  mergeMcpServerWorkspaces,
+  type McpAgentFiles,
+  type McpFileAgent,
+  type McpServer,
+  type McpServerWorkspaces
 } from '../../shared/mcp-servers/mcp-servers'
 import { botToolDetailsOf, resolveBotToolInput } from '../bots/bot-tool-details'
 import {
@@ -16,7 +18,7 @@ import {
   withSavedBotToolHeaders
 } from '../bots/bot-tool-credentials'
 import {
-  botOwnTool,
+  botOwnTools,
   botToolEntries,
   changeBotToolEntries,
   readBotToolsSnapshot
@@ -27,19 +29,19 @@ import { classifyAddedBotTool } from '../bots/tool-oauth/bot-tool-owned-sign-in'
 import { mcpHostListFolder } from './mcp-host-list-folder'
 import { McpServersError } from './mcp-servers-error'
 import { assertNotFromPlugin, pluginViewOf } from './mcp-plugin-server-mark'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 
-const AgentFilesSchema = z.record(z.string(), z.unknown())
+const AgentFilesSchema = lazyZodSchema(() => z.record(z.string(), z.unknown()))
 const ID_PATTERN = /^[A-Za-z0-9_-]{8,64}$/
 
 export type HostEntry = BotToolEntry & { id: string }
 
 const gone = (): McpServersError =>
   new McpServersError('mcp_server_gone', 'This server is no longer on this host.')
-const nameTaken = (name: string): McpServersError =>
+export const nameTaken = (name: string): McpServersError =>
   new McpServersError('mcp_server_name_taken', `This host already has a server named ${name}.`)
 
-function viewOf(entry: HostEntry, folder: string): McpServer {
-  const { signIn, ...tool } = botOwnTool(entry.server, folder)
+function viewOf(entry: HostEntry, { signIn, ...tool }: BotOwnTool): McpServer {
   return {
     ...settingsOf(entry.extras),
     id: entry.id,
@@ -92,7 +94,7 @@ export async function readHostEntries(folder: string): Promise<HostList> {
 }
 
 /** The file's `agentFiles`: which agents' own MCP file the user let Orca keep its servers in. */
-function agentFilesOf(file: Readonly<Record<string, unknown>>): McpAgentFiles {
+export function agentFilesOf(file: Readonly<Record<string, unknown>>): McpAgentFiles {
   const stored = AgentFilesSchema.safeParse(file.agentFiles).data ?? {}
   const allowed = (agent: McpFileAgent): boolean => stored[agent] === true
   return { grok: allowed('grok'), cursor: allowed('cursor'), droid: allowed('droid') }
@@ -106,9 +108,33 @@ export async function entryById(folder: string, id: string): Promise<HostEntry> 
   return entry
 }
 
-/** The server as the write stored it: its credential id and sign-in are the file's, not the input's. */
+/** The servers as the write stored them: credential ids and sign-ins are the file's, not the input's. */
+export async function storedViews(folder: string, ids: readonly string[]): Promise<McpServer[]> {
+  if (ids.length === 0) {
+    return []
+  }
+  const wanted = new Set(ids)
+  const byId = new Map(
+    (await readHostEntries(folder)).entries.flatMap((entry) =>
+      wanted.has(entry.id) ? [[entry.id, entry] as const] : []
+    )
+  )
+  const entries = ids.map((id) => {
+    const entry = byId.get(id)
+    if (!entry) {
+      throw gone()
+    }
+    return entry
+  })
+  const tools = botOwnTools(
+    entries.map((entry) => entry.server),
+    folder
+  )
+  return entries.map((entry, i) => viewOf(entry, tools[i]!))
+}
+
 export async function storedView(folder: string, id: string): Promise<McpServer> {
-  return viewOf(await entryById(folder, id), folder)
+  return (await storedViews(folder, [id]))[0]!
 }
 
 /** The server's own settings and saved values, never its switches. */
@@ -129,7 +155,14 @@ export async function readMcpHostList(
   folder = mcpHostListFolder()
 ): Promise<{ servers: McpServer[]; agentFiles: McpAgentFiles }> {
   const { entries, file } = await readHostEntries(folder)
-  return { servers: entries.map((entry) => viewOf(entry, folder)), agentFiles: agentFilesOf(file) }
+  const tools = botOwnTools(
+    entries.map((entry) => entry.server),
+    folder
+  )
+  return {
+    servers: entries.map((entry, i) => viewOf(entry, tools[i]!)),
+    agentFiles: agentFilesOf(file)
+  }
 }
 
 /** The user's consent, or its withdrawal, for Orca to keep its servers in `agent`'s own MCP file. */
@@ -142,36 +175,6 @@ export async function setMcpAgentFileAllowed(
     topLevel: (file) => ({ ...file, agentFiles: { ...agentFilesOf(file), [agent]: allowed } })
   })
   return (await readMcpHostList(folder)).agentFiles
-}
-
-/**
- * Adds `given`, as a server Orca signs in to when its address asks for a sign-in. A name from a
- * paste that's taken gets a free one (`linear-2`); a name the user gave is refused instead.
- */
-export async function addMcpServer(
-  given: BotToolServer,
-  {
-    nameGiven,
-    signal,
-    workspaces
-  }: { nameGiven: boolean; signal?: AbortSignal; workspaces?: McpServerWorkspaces },
-  folder = mcpHostListFolder()
-): Promise<McpServer> {
-  const { server, signIn } = await classifyAddedBotTool(given, signal)
-  const id = randomUUID()
-  await changeHostEntries(
-    folder,
-    (entries) => {
-      const taken = new Set(entries.map((entry) => entry.server.name))
-      if (nameGiven && taken.has(server.name)) {
-        throw nameTaken(server.name)
-      }
-      const named = { ...server, name: freeBotToolName(server.name, taken) }
-      return [...entries, { server: named, extras: workspaces ? { id, workspaces } : { id }, id }]
-    },
-    { credentials: signIn }
-  )
-  return storedView(folder, id)
 }
 
 /**
@@ -265,19 +268,40 @@ export function setMcpServerAgentEnabled(
   return changeMcpServerExtras(
     id,
     (entry) => {
-      const off = settingsOf(entry.extras).agentsOff.filter((other) => other !== agent)
+      const { agentsOff } = settingsOf(entry.extras)
+      if (agentsOff.includes(agent) !== enabled) {
+        return entry.extras
+      }
+      const off = agentsOff.filter((other) => other !== agent)
       return { ...entry.extras, agentsOff: enabled ? off : [...off, agent] }
     },
     folder
   )
 }
 
+/**
+ * With `base` (the choice the editor showed), only what the editor changed is written, so a save
+ * from another client since then survives; without it (an older client), `workspaces` replaces it.
+ */
 export function setMcpServerWorkspaces(
   id: string,
   workspaces: McpServerWorkspaces,
-  folder = mcpHostListFolder()
+  { base, folder = mcpHostListFolder() }: { base?: McpServerWorkspaces; folder?: string } = {}
 ): Promise<McpServer> {
-  return changeMcpServerExtras(id, (entry) => ({ ...entry.extras, workspaces }), folder)
+  return changeMcpServerExtras(
+    id,
+    (entry) => {
+      const stored = settingsOf(entry.extras).workspaces
+      // Parsed again: a merge past the schema's caps would read back as on nowhere.
+      const next = base
+        ? McpServerWorkspacesSchema.parse(mergeMcpServerWorkspaces(stored, base, workspaces))
+        : workspaces
+      return JSON.stringify(next) === JSON.stringify(stored)
+        ? entry.extras
+        : { ...entry.extras, workspaces: next }
+    },
+    folder
+  )
 }
 
 export function setMcpServerSharedProcess(
@@ -294,7 +318,9 @@ export function setMcpServerSharedProcess(
           'Only a server Orca starts with a command can share one process.'
         )
       }
-      return { ...entry.extras, sharedProcess: enabled }
+      return settingsOf(entry.extras).sharedProcess === enabled
+        ? entry.extras
+        : { ...entry.extras, sharedProcess: enabled }
     },
     folder
   )

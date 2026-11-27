@@ -2,7 +2,7 @@ import { editorTabWorkspace } from '@/store/slices/editor/tabs/workspace-editor-
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { Eye, ShieldAlert, Pin } from 'lucide-react'
+import { Eye, ShieldAlert } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { TabHoverCard } from '../strip/TabHoverCard'
 import { basename } from '@/lib/path'
@@ -270,7 +270,6 @@ export default function EditorFileTab({
       ) : (
         tabIcon(`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`)
       )}
-      {isPinned && <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />}
       <span className="mr-1 flex min-w-0 flex-1 items-baseline gap-1">
         {isRenaming ? (
           <Input

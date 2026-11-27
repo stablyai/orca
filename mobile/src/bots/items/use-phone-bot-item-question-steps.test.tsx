@@ -63,3 +63,42 @@ it('binds a card answer to the ask it shows', () => {
   expect(questionId).toBe('e2')
   expect(intent).toMatchObject({ askId: 'e2', answers: ['Yes'] })
 })
+
+it('holds a photo answer until the last line is answered, then posts every answer as one comment', () => {
+  const two: BotItemEvent = {
+    ...asked('e3', 'Merge?'),
+    data: {
+      text: 'Two questions',
+      ask: {
+        questions: ['Merge?', 'Tag it?'].map((prompt) => ({ prompt, options: [{ label: 'Yes' }] }))
+      }
+    }
+  }
+  const send = vi.fn<BotItemQuestionStepsSend>()
+  let steps: ReturnType<typeof useBotItemQuestionSteps> | null = null
+  function Steps() {
+    steps = useBotItemQuestionSteps(
+      'host\0bot\0uid-photo',
+      makeTestBotItem(2, { status: 'needs_you', waitingAsk: 'e3' }),
+      [two],
+      send,
+      [],
+      true
+    )
+    return null
+  }
+  act(() => {
+    tree = create(createElement(Steps))
+  })
+  act(() => {
+    expect(steps!.fromBox('[Image #1] this one', ['/shot.png'], 'e3:0')).toBeNull()
+  })
+  expect(send).not.toHaveBeenCalled()
+  act(() => {
+    expect(steps!.fromBox('[Image #1] and here', ['/tag.png'], 'e3:1')).toBeNull()
+  })
+  expect(send).toHaveBeenCalledTimes(1)
+  const [text, paths] = send.mock.calls[0]!
+  expect(text).toBe('Merge? → [Image #1] this one\nTag it? → [Image #2] and here')
+  expect(paths).toEqual(['/shot.png', '/tag.png'])
+})

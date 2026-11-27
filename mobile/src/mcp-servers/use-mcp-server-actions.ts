@@ -2,7 +2,11 @@
 // file, Move, Remove), shows the host's answer at once, and says it applies to new sessions with a
 // Restart action once the host can count the terminals still on the old list.
 import { useCallback, useRef, useState } from 'react'
-import { MCP_FILE_AGENTS, type McpFileAgent } from '../../../src/shared/mcp-servers/mcp-servers'
+import {
+  MCP_FILE_AGENTS,
+  mcpMoveRemovesFrom,
+  type McpFileAgent
+} from '../../../src/shared/mcp-servers/mcp-servers'
 import { formatAgentTypeLabel } from '../../../src/shared/agent-status/presentation/agent-type-label'
 import type { Translate } from '../i18n/mobile-i18n'
 import { getUiIntlLocale } from '../i18n/ui-intl-locale'
@@ -177,14 +181,19 @@ export function useMcpServerActions(args: {
     [list, enable, run, t]
   )
 
-  // Each write names the whole choice, so they go one at a time in the order they were made.
+  // Writes go one at a time in the order they were made; a tap's names the choice it edited
+  // (`base`), so the host keeps what another client saved meanwhile.
   const workspaceWrites = useRef<Promise<void>>(Promise.resolve())
   const setWorkspaces = useCallback(
-    (server: PhoneMcpServer, workspaces: PhoneMcpWorkspaces): Promise<void> => {
+    (
+      server: PhoneMcpServer,
+      workspaces: PhoneMcpWorkspaces,
+      base?: PhoneMcpWorkspaces
+    ): Promise<void> => {
       const write = workspaceWrites.current.then(() =>
         change(async (live) =>
           mcpServerSetWorkspaces.interpret(
-            await mcpServerSetWorkspaces.request(live, { id: server.id, workspaces })
+            await mcpServerSetWorkspaces.request(live, { id: server.id, workspaces, base })
           )
         )
       )
@@ -218,9 +227,11 @@ export function useMcpServerActions(args: {
     (server: PhoneMcpServer, onRemoved: () => void) =>
       setConfirm({
         title: t('mcpServers.removeTitle', 'Remove {{name}}?', { name: mcpServerTitle(server) }),
+        // One line for every server: what goes depends on host state the phone can't see for sure
+        // (a credential another entry shares, one this host can't open, a read still pending).
         message: t(
-          'mcpServers.removeMessage',
-          'New sessions won’t have it. You can add it again any time.'
+          'mcpServers.removeMessageSavedData',
+          'Sessions using it may lose access now. This can delete any saved headers, environment variables or sign-in for it. If so, you may need to re-enter them or sign in again to get that access back.'
         ),
         confirmLabel: t('mcpServers.remove', 'Remove'),
         destructive: true,
@@ -253,7 +264,7 @@ export function useMcpServerActions(args: {
           'Orca removes it from {{agents}} settings and keeps a backup.',
           {
             agents: new Intl.ListFormat(getUiIntlLocale(), { type: 'conjunction' }).format(
-              entry.agents.map(mcpAgentName)
+              mcpMoveRemovesFrom(entry).map(mcpAgentName)
             )
           }
         ),
@@ -261,7 +272,13 @@ export function useMcpServerActions(args: {
         onConfirm: () =>
           void run(async (live) => {
             applyServer(
-              mcpServerMove.interpret(await mcpServerMove.request(live, { key: entry.key })).server
+              mcpServerMove.interpret(
+                await mcpServerMove.request(live, {
+                  key: entry.key,
+                  // The agents this confirm named: the host takes it out of no other.
+                  ...(entry.removesFrom ? { agents: entry.removesFrom } : {})
+                })
+              ).server
             )
           })
       }),

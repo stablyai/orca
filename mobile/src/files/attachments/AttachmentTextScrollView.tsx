@@ -5,7 +5,8 @@ import type {
   AttachmentTextWindow
 } from '../../../../src/shared/attachment-text/attachment-text-source'
 import { AttachmentTextViewport } from '../../../../src/shared/attachment-text/attachment-text-viewport'
-import { chatAttachmentPreviewStyles as styles } from '../preview/mobile-file-preview-styles'
+import { chatAttachmentPreviewStylesSheet } from '../preview/mobile-file-preview-styles'
+import { useThemedStyles } from '../../theme/themed-styles'
 
 function scrollElement(view: ScrollViewInstance | null): HTMLElement | null {
   if (Platform.OS !== 'web') {
@@ -27,6 +28,7 @@ export function AttachmentTextScrollView({
   revision: number
   demand: (window: AttachmentTextWindow) => void
 }) {
+  const styles = useThemedStyles(chatAttachmentPreviewStylesSheet)
   const scroll = useRef<ScrollViewInstance>(null)
   const viewport = useRef<ScrollViewInstance>(null)
   const nativeOffset = useRef(0)

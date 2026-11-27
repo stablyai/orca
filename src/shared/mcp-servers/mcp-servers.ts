@@ -1,6 +1,7 @@
 // The MCP servers a host gives its agents' sessions: one list per host, kept beside bot tools in the
 // same file format, with which agents and workspaces each server is on for.
 import * as z from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 import type { BotToolSignInStatus } from '../bot-tool-sign-in'
 import { isFloatingWorkspaceId } from '../workspace/identity/floating-workspace-worktree'
 import { normalizeWorkspaceSessionKeyToWorkspaceId } from '../workspace/identity/workspace-scope'
@@ -16,29 +17,37 @@ export const MCP_SERVER_AGENT_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/
  * A repo id, or `folder:<id>` for a folder workspace: never a worktree id (`<repo>::<path>`), so a
  * choice holds for every worktree of the repo.
  */
-export const McpServerWorkspaceKey = z
-  .string()
-  .min(1)
-  .max(512)
-  .refine(
-    (key) => !key.includes('::') && !key.startsWith('worktree:'),
-    'Name a repo or folder workspace, not a worktree'
-  )
+export const McpServerWorkspaceKey = lazyZodSchema(() =>
+  z
+    .string()
+    .min(1)
+    .max(512)
+    .refine(
+      (key) => !key.includes('::') && !key.startsWith('worktree:'),
+      'Name a repo or folder workspace, not a worktree'
+    )
+)
 
 /**
  * Where a server is on: a workspace in `on` has it, one in `off` doesn't, and any other (one added
  * later) follows `later`. "All workspaces" is `{ later: true, on: [], off: [] }`.
  */
-export const McpServerWorkspacesSchema = z
-  .strictObject({
-    later: z.boolean(),
-    on: z.array(McpServerWorkspaceKey).max(1000),
-    off: z.array(McpServerWorkspaceKey).max(1000)
-  })
-  .refine(
-    (workspaces) => !workspaces.on.some((key) => workspaces.off.includes(key)),
-    'A workspace is either on or off'
-  )
+export const McpServerWorkspacesSchema = lazyZodSchema(() =>
+  z
+    .strictObject({
+      later: z.boolean(),
+      on: z.array(McpServerWorkspaceKey).max(1000),
+      off: z.array(McpServerWorkspaceKey).max(1000)
+    })
+    .refine(({ on, off }) => {
+      // Every launch parses each server's choice, and the usual one has an empty side.
+      if (on.length === 0 || off.length === 0) {
+        return true
+      }
+      const offKeys = new Set(off)
+      return !on.some((key) => offKeys.has(key))
+    }, 'A workspace is either on or off')
+)
 export type McpServerWorkspaces = z.infer<typeof McpServerWorkspacesSchema>
 
 export const ALL_MCP_SERVER_WORKSPACES: McpServerWorkspaces = { later: true, on: [], off: [] }
@@ -104,12 +113,25 @@ export type DiscoveredMcpServer = {
   detail: string
   transport: 'http' | 'command'
   agents: string[]
+  /**
+   * The agents Move takes it out of: those whose sessions on the host get Orca's list. The others
+   * keep their copy. Absent from older hosts, which take it out of every agent.
+   */
+  removesFrom?: string[]
   /** The absolute config paths it came from. */
   files: string[]
   /** Empty for a user-level server; for a local-scope one, the repos or folders it's limited to. */
   projectNames: string[]
   /** False for a repo's own files (shared with the team): listed, never moved. */
   movable: boolean
+}
+
+/** The agents Move takes a discovered server out of. */
+export function mcpMoveRemovesFrom(server: {
+  agents: readonly string[]
+  removesFrom?: readonly string[] | undefined
+}): readonly string[] {
+  return server.removesFrom ?? server.agents
 }
 
 export type McpServerTypedFailureCode =
@@ -155,4 +177,29 @@ export function isMcpServerOnInWorkspace(
     return false
   }
   return workspaces.later
+}
+
+/**
+ * `next` applied onto `stored` as the edit it was from `base`: only the workspaces (and `later`)
+ * the editor changed take `next`'s value; every other one keeps what `stored` says, so another
+ * client's save since `base` survives.
+ */
+export function mergeMcpServerWorkspaces(
+  stored: McpServerWorkspaces,
+  base: McpServerWorkspaces,
+  next: McpServerWorkspaces
+): McpServerWorkspaces {
+  const later = base.later === next.later ? stored.later : next.later
+  // Sets, not the lists' includes: up to 1000 keys a list, each looked up three times.
+  const lookup = ({ later: byDefault, on, off }: McpServerWorkspaces) => {
+    const onSet = new Set(on)
+    const offSet = new Set(off)
+    return (key: string): boolean => onSet.has(key) || (byDefault && !offSet.has(key))
+  }
+  const [inStored, inBase, inNext] = [lookup(stored), lookup(base), lookup(next)]
+  const keys = new Set([stored, base, next].flatMap((value) => [...value.on, ...value.off]))
+  const isOn = (key: string): boolean => (inBase(key) === inNext(key) ? inStored(key) : inNext(key))
+  return later
+    ? { later, on: [], off: [...keys].filter((key) => !isOn(key)) }
+    : { later, on: [...keys].filter(isOn), off: [] }
 }

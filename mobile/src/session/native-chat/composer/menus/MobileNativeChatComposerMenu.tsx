@@ -5,9 +5,9 @@ import { Pressable, ScrollView, StyleSheet, Text, View, type HostInstance } from
 import { AtSign, FileText, Folder, Package, Terminal } from 'lucide-react-native'
 import type { NativeChatPickerItem } from '../../../../../../src/shared/native-chat/input/composer/native-chat-picker-items'
 import { isFolderPath } from '../../../../../../src/shared/quick-open/quick-open-folder-paths'
-import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { radii, spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { COMPOSER_MENU_MAX_HEIGHT } from './mobile-native-chat-composer-menu-size'
 import type { BotChatRow } from '../../../../../../src/shared/bots/bot-chat-row'
 import type { MentionBot } from './use-mobile-native-chat-mention-bots'
@@ -84,7 +84,7 @@ export function MobileNativeChatComposerMenu({
   onOpenBotChats?: (row: Extract<ComposerMenuRow, { kind: 'bot' }>) => void
   nestedScrollEnabled?: boolean
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View testID="native-chat-composer-menu-card" style={styles.card}>
       <ScrollView
@@ -121,7 +121,8 @@ function MenuRow({
   row: Exclude<ComposerMenuRow, MentionBotRow>
   onPick: (row: ComposerMenuRow) => void
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const Icon =
     row.kind === 'skill'
       ? Package
@@ -177,7 +178,7 @@ function MenuRow({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   card: {
     flexShrink: 1,
     marginHorizontal: 10,
@@ -186,7 +187,7 @@ const styles = themedStyleSheet(() => ({
     borderRadius: radii.floating,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.composerBorder,
-    backgroundColor: colors.bgPanel,
+    backgroundColor: colors.chatPanel,
     overflow: 'hidden'
   },
   scroll: {

@@ -11,7 +11,11 @@ import {
 } from '../bots/bot-tools-revision'
 import { onMcpHostListSignInChanged } from './mcp-host-list-sign-in'
 import { botToolRelay, type BotToolRelay } from '../bots/tool-relay/bot-tool-relay'
-import { mcpServersWithDigestsForLaunch } from './mcp-host-list-launch'
+import {
+  mcpHostListAtEpoch,
+  mcpServersWithDigestsForLaunch,
+  type McpHostListRead
+} from './mcp-host-list-launch'
 import { mcpHostListFolder } from './mcp-host-list-folder'
 import { botHostMcpAccess } from './bot-host-mcp-access'
 import { isMcpServersFeatureEnabled } from './mcp-servers-feature'
@@ -45,7 +49,8 @@ type HostRead = { host: SessionHostMcpServers; launched: HostLaunchedTools }
 async function hostServersFor(
   agent: string,
   workspace: HostWorkspace,
-  given: string | undefined
+  given: string | undefined,
+  read?: (folder: string, epoch: number) => ReturnType<McpHostListRead>
 ): Promise<HostRead | undefined> {
   if (!isMcpServersFeatureEnabled()) {
     return undefined
@@ -57,7 +62,8 @@ async function hostServersFor(
     const { servers, sharedProcesses, digests } = await mcpServersWithDigestsForLaunch(
       agent,
       workspace,
-      folder
+      folder,
+      read ? (listFolder) => read(listFolder, epoch) : undefined
     )
     return {
       host: { folder, servers, sharedProcesses },
@@ -150,7 +156,7 @@ export async function sessionLaunchToolsChanged(
     host.epoch = epoch
     return false
   }
-  const now = await hostServersFor(host.agent, host.workspace, host.folder)
+  const now = await hostServersFor(host.agent, host.workspace, host.folder, mcpHostListAtEpoch)
   if (!now && isMcpServersFeatureEnabled()) {
     // The list can't be read now: the next turn compares again, so a change isn't lost.
     return false
