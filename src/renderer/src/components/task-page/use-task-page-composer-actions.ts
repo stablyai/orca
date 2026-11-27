@@ -13,7 +13,7 @@ import { translate } from '@/i18n/i18n'
 import { bindTaskPageJiraItemSourceContext } from './jira/task-page-jira-item-source-context'
 import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import { shouldHideTaskPageListChrome } from './task-page-list-chrome-visibility'
-import { getJiraIssueWorkspaceSeed } from './task-page-source-context'
+import { getJiraIssueWorkspaceName } from './task-page-source-context'
 import { findJiraIssueDefaultRepo } from '../../../../shared/jira/jira-project-reference'
 import { getRepoWorkspaceCreationTargetHint } from '@/lib/workspace/creation/project-host-workspace-target'
 export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) {
@@ -223,7 +223,7 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
         initialWorkspaceTarget: mappedRepo
           ? getRepoWorkspaceCreationTargetHint(mappedRepo, useAppStore.getState().projectHostSetups)
           : undefined,
-        prefilledName: getJiraIssueWorkspaceSeed(issue),
+        prefilledName: getJiraIssueWorkspaceName(issue),
         telemetrySource: 'sidebar'
       })
     },

@@ -17,7 +17,10 @@ import {
   getLinkedWorkItemWorkspaceName,
   getLinkedWorkItemSuggestedName
 } from '../../../../shared/workspace/naming/workspace-name'
-import { getJiraIssueKeyCasingSeedOptions } from '@/lib/work-items/jira/jira-issue-key-casing'
+import {
+  buildJiraWorkspaceSource,
+  getWorkspaceSourceName
+} from '../../../../shared/new-workspace/workspace-source'
 import {
   type TaskSourceContext,
   getTaskSourceCacheScope
@@ -68,19 +71,9 @@ export function getGitLabWorkItemWorkspaceSeed(item: GitLabWorkItem): string {
     })?.seedName ?? getLinkedWorkItemSuggestedName(item)
   )
 }
-export function getJiraIssueWorkspaceSeed(issue: JiraIssue): string {
-  return (
-    getLinkedWorkItemWorkspaceName(
-      {
-        type: 'issue',
-        provider: 'jira',
-        number: 0,
-        title: `${issue.key} ${issue.title}`,
-        jiraIdentifier: issue.key
-      },
-      getJiraIssueKeyCasingSeedOptions()
-    )?.seedName ?? getLinkedWorkItemSuggestedName(issue)
-  )
+// Why: the composer shows the issue title as an editable name; submit still derives the branch seed.
+export function getJiraIssueWorkspaceName(issue: JiraIssue): string {
+  return getWorkspaceSourceName(buildJiraWorkspaceSource(issue)).displayName
 }
 /** The GitHub fan-out's repo arguments; a repo on a host known unreachable is marked, not dialled. */
 export function getTaskPageGitHubRepoArgs(

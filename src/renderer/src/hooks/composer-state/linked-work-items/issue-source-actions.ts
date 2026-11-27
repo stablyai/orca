@@ -46,12 +46,7 @@ import {
   getSmartNameSelection as getFolderSmartNameSelection
 } from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-selection'
 import { getLinearLinkedWorkItemBranchName } from '@/lib/work-items/linear/linear-linked-work-item'
-import {
-  getLinearIssueWorkspaceName,
-  getLinkedWorkItemSuggestedName,
-  getLinkedWorkItemWorkspaceName
-} from '../../../../../shared/workspace/naming/workspace-name'
-import { getJiraIssueKeyCasingSeedOptions } from '@/lib/work-items/jira/jira-issue-key-casing'
+import { getLinearIssueWorkspaceName } from '../../../../../shared/workspace/naming/workspace-name'
 import '@/lib/workspace/creation/new-workspace'
 import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/name-field/smart-workspace-name-field-model'
@@ -180,9 +175,8 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
       branchAutoNameRef.current = ''
       setLinkedWorkItem(linkedItem)
       setLinkedTaskSourceContext(sourceContext)
-      const suggestedName =
-        getLinkedWorkItemWorkspaceName(linkedItem, getJiraIssueKeyCasingSeedOptions())?.seedName ??
-        getLinkedWorkItemSuggestedName(linkedItem)
+      // Why: show the issue title as an editable name; submit still derives the branch seed.
+      const suggestedName = getLinkedItemDisplayName(linkedItem)
       // Why: the Jira lookup is async, so a name the user typed while it resolved must survive.
       if (
         suggestedName &&

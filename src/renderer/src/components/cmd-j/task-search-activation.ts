@@ -21,7 +21,7 @@ import {
   type TaskSourceContext
 } from '../../../../shared/work-items/task-source-context'
 import type { CmdJTaskSearchResult } from './task-search-results'
-import { getJiraIssueWorkspaceSeed } from '../task-page/task-page-source-context'
+import { getJiraIssueWorkspaceName } from '../task-page/task-page-source-context'
 
 function sourceMatches(source: TaskSourceContext, target: TaskSourceContext): boolean {
   if (source.provider !== target.provider || source.hostId !== target.hostId) {
@@ -95,7 +95,7 @@ export function openCmdJTask(result: CmdJTaskSearchResult, createWorkspace = fal
       task.provider === 'linear'
         ? getLinearIssueWorkspaceName(task.issue)
         : task.provider === 'jira'
-          ? getJiraIssueWorkspaceSeed(task.issue)
+          ? getJiraIssueWorkspaceName(task.issue)
           : (getLinkedWorkItemWorkspaceName(linkedWorkItem)?.seedName ??
             getLinkedWorkItemSuggestedName(linkedWorkItem))
     queueMicrotask(() =>
