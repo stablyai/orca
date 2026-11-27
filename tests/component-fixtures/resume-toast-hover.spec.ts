@@ -133,7 +133,15 @@ for (const theme of ['dark', 'light'] as const) {
   test.describe(theme, () => {
     test('the toaster is in its narrow layout at the narrowest window', async ({ page }) => {
       await openScene(page, 'corner', theme)
-      expect(await page.evaluate(() => matchMedia('(max-width: 600px)').matches)).toBe(true)
+      // Wide, the toaster is capped at its 26rem --width (416px here); narrow, it spans its container.
+      const { toaster, container } = await page
+        .locator('[data-sonner-toaster]')
+        .evaluate((element) => ({
+          toaster: element.getBoundingClientRect().width,
+          container: element.parentElement?.getBoundingClientRect().width ?? 0
+        }))
+      expect(toaster).toBeGreaterThan(416 + TOLERANCE)
+      expect(Math.abs(toaster - container)).toBeLessThanOrEqual(TOLERANCE)
     })
 
     test('hovering the report alone leaves it in place through expand and leave', async ({
