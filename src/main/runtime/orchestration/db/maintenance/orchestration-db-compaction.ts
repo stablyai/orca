@@ -139,7 +139,7 @@ export class OrchestrationDbCompaction {
         return
       }
       this.ready = undefined
-      await this.removeCopy()
+      await Promise.all([this.removeCopy(), this.countDiscarded()])
     }
     this.quietTicks = activity === this.lastActivity ? this.quietTicks + 1 : 0
     this.lastActivity = activity
@@ -177,25 +177,27 @@ export class OrchestrationDbCompaction {
       this.heldAt = now
       return
     }
-    this.attempts++
     this.lastAttemptAt = now
-    // Counted before it starts, so a quit or crash mid-copy still counts.
-    const counted = await writeQuietly(this.attemptsPath, `${this.attempts} ${now}`)
-    if (!counted || this.stopped || this.stamp() !== stamp) {
-      // No copy, so no count: a commit during the write would stale it before its watch starts.
-      this.attempts--
+    // Kept before it starts, so a quit or crash mid-copy still waits its turn. Only a copy that went unused
+    // counts toward the cap, so nothing here needs undoing.
+    const kept = await writeQuietly(this.attemptsPath, `${this.attempts} ${now}`)
+    // A commit during that write would stale the copy before its watch starts.
+    if (!kept || this.stopped || this.stamp() !== stamp) {
       this.heldAt = now
-      if (counted) {
-        await writeQuietly(this.attemptsPath, `${this.attempts} ${now}`)
-      }
       return
     }
-    const copied = await this.runChild(stamp, copyBudgetMs(state.liveBytes, this.attempts))
+    const copied = await this.runChild(stamp, copyBudgetMs(state.liveBytes, this.attempts + 1))
     if (copied && !this.stopped && this.stamp() === stamp) {
       this.ready = { stamp, at: Date.now() }
     } else if (!this.stopped) {
-      await this.removeCopy()
+      await Promise.all([this.removeCopy(), this.countDiscarded()])
     }
+  }
+
+  /** A copy went unused: it counts toward the cap and the wait before the next one. */
+  private countDiscarded(): Promise<boolean> {
+    this.attempts++
+    return writeQuietly(this.attemptsPath, `${this.attempts} ${this.lastAttemptAt}`)
   }
 
   /** Moves with any commit to the file, by any connection, since the observer opened. */
@@ -294,15 +296,14 @@ export class OrchestrationDbCompaction {
     }
     const giveUp = async (kind: 'busy' | 'stale'): Promise<OrchestrationDbSwap> => {
       closeLock()
-      await this.dropCopy()
+      await Promise.all([this.dropCopy(), this.countDiscarded()])
       return { kind }
     }
     try {
       const beforeBytes = await sizeOf(this.filename)
       const walBytes = await sizeOf(`${this.filename}-wal`)
       if (beforeBytes === null || (walBytes ?? 0) > MAX_WAL_BYTES) {
-        await this.dropCopy()
-        return { kind: 'busy' }
+        return await giveUp('busy')
       }
       // From here on nothing else in this process can reach the file.
       refuseOrchestrationDbWritesForReplacement(this.filename)
@@ -363,7 +364,7 @@ export class OrchestrationDbCompaction {
       }
     } catch (error) {
       closeLock()
-      await this.dropCopy()
+      await Promise.all([this.dropCopy(), this.countDiscarded()])
       return { kind: 'failed', error: String(error) }
     }
   }

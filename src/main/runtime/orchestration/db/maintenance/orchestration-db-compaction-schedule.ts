@@ -11,10 +11,9 @@ const MAX_BUDGET_DOUBLINGS = 6
 // Node fires a longer timer after 1 ms.
 const MAX_TIMER_MS = 2_147_483_647
 
+/** Since the last copy started; an hour even when none went unused yet (a quit or crash cut it short). */
 export function attemptSpacingMs(attempts: number): number {
-  return attempts === 0
-    ? 0
-    : Math.min(ATTEMPT_SPACING_MS * 2 ** (attempts - 1), MAX_ATTEMPT_SPACING_MS)
+  return Math.min(ATTEMPT_SPACING_MS * 2 ** Math.max(attempts - 1, 0), MAX_ATTEMPT_SPACING_MS)
 }
 
 /** Doubled with each attempt, so a disk slower than assumed still finishes one in the end. */
