@@ -56,6 +56,7 @@ describe('spawnWorkerThread heap limit', () => {
     }
   })
 
+  // Filling a 512 MB worker heap takes seconds on a loaded CI runner.
   it('a worker that runs out of heap fails only its own call; the next call gets a fresh worker', async () => {
     asMainProcess()
     // A process-wide --max-old-space-size (CI's NODE_OPTIONS) overrides a worker's own limit.
@@ -96,6 +97,5 @@ describe('spawnWorkerThread heap limit', () => {
     } finally {
       queue.dispose()
     }
-    // Filling a 512 MB worker heap takes seconds on a loaded CI runner.
   }, 60_000)
 })
