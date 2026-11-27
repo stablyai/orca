@@ -40,7 +40,9 @@ export function useFileExplorerNameFilter({
     enabled: hasNameFilterQuery && !queryTooLarge,
     worktreeId: activeWorktreeId,
     query,
-    hostFilterWhenCapped: true
+    hostFilterWhenCapped: true,
+    // The text scan waits on this listing, so it must never read as settled before it starts.
+    reportLoadingOnEnable: true
   })
   const [showAllQuery, setShowAllQuery] = useState<string | null>(null)
   const showAll = showAllQuery === query

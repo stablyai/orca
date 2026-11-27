@@ -117,16 +117,26 @@ export function HookProbe({
   states,
   query,
   worktreeId,
-  recentPaths
+  recentPaths,
+  reportLoadingOnEnable
 }: {
   enabled: boolean
   states: RuntimeFileListState[]
   query?: string
   recentPaths?: readonly string[]
   worktreeId: string | null
+  reportLoadingOnEnable?: boolean
 }): null {
   // Record every render before effects can settle ownership changes.
-  states.push(useRuntimeFileListForWorktree({ enabled, worktreeId, query, recentPaths }))
+  states.push(
+    useRuntimeFileListForWorktree({
+      enabled,
+      worktreeId,
+      query,
+      recentPaths,
+      reportLoadingOnEnable
+    })
+  )
   return null
 }
 
@@ -153,6 +163,7 @@ export async function renderProbe(args: {
   query?: string
   recentPaths?: readonly string[]
   worktreeId: string | null
+  reportLoadingOnEnable?: boolean
 }): Promise<Root> {
   const container = document.createElement('div')
   document.body.appendChild(container)

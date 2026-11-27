@@ -63,6 +63,7 @@ export function useRuntimeFileListForWorktree({
   worktreeId,
   query,
   hostFilterWhenCapped = false,
+  reportLoadingOnEnable = false,
   recentPaths
 }: {
   enabled: boolean
@@ -71,6 +72,11 @@ export function useRuntimeFileListForWorktree({
   recentPaths?: readonly string[]
   /** When a local listing hits its cap, re-list with `query` applied as the Explorer name filter on the host. */
   hostFilterWhenCapped?: boolean
+  /**
+   * Report loading from the first enabled render, for callers that wait on the listing. Off, a
+   * reopened picker shows its cached rows for that render instead.
+   */
+  reportLoadingOnEnable?: boolean
 }): RuntimeFileListState {
   // Why: folder workspaces live in the known-worktree catalog, not worktreesByRepo.
   const worktree = useFileListWorktree(worktreeId)
@@ -139,9 +145,12 @@ export function useRuntimeFileListForWorktree({
   useEffect(() => {
     if (!enabled) {
       setCappedLocalListing(null)
-      // Why: a local listing's key ignores the query, so recording it here would make the first
-      // enabled render report settled before its request starts.
-      setLoadingRequest({ requestKey: DISABLED_REQUEST_KEY, loading: false })
+      // Why: a local listing's key ignores the query, so recording it here makes the first enabled
+      // render report settled before its request starts; a caller that waits on the listing opts out.
+      setLoadingRequest({
+        requestKey: reportLoadingOnEnable ? DISABLED_REQUEST_KEY : requestKey,
+        loading: false
+      })
       setListedOperationOwner({ kind: 'unresolved' })
       return
     }
@@ -277,6 +286,7 @@ export function useRuntimeFileListForWorktree({
     }
   }, [
     enabled,
+    reportLoadingOnEnable,
     eligibleRecentCache,
     recentKey,
     eligibilityKey,
