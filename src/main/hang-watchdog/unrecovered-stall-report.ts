@@ -8,8 +8,10 @@ export async function importUnrecoveredStallReport(
   store: CrashReportStore,
   record: HangObservation
 ): Promise<void> {
-  // Records from builds that predate the version stamp cannot be attributed safely.
-  if (!record.appVersion) {
+  // Pre-stamp records cannot be attributed; a completed sample is filed by the native importer instead.
+  const native = record.native
+  const sampled = native?.state === 'completed' && native.exitCode === 0 && !native.timedOut
+  if (!record.appVersion || (sampled && native?.reportTruncated === false)) {
     return
   }
   const sameBuild = record.appVersion === app.getVersion()
@@ -31,7 +33,7 @@ export async function importUnrecoveredStallReport(
       endedUnresponsive: true,
       unresponsiveAtLeastMs: Math.round(hangObservationUnresponsiveMs(record)),
       tier: record.tier ?? 'hang',
-      nativeCapture: record.native ? 'partial' : 'none'
+      nativeCapture: record.native?.state ?? 'none'
     }
   })
 }

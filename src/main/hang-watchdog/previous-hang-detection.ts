@@ -151,7 +151,16 @@ function observationDetails(record: HangObservation, omitted: number): CrashRepo
 export function findUnrecoveredStall(
   observations: readonly HangObservation[]
 ): HangObservation | null {
-  const record = observations.findLast((item) => item.kind === 'heartbeat-stall')
+  // Last stall per run: a later launch's recovered stall must not hide an earlier run's unrecovered one.
+  const lastPerRun = new Map<number, HangObservation>()
+  for (const item of observations) {
+    if (item.kind === 'heartbeat-stall') {
+      lastPerRun.set(item.parentPid, item)
+    }
+  }
+  const record = [...lastPerRun.values()].findLast(
+    (item) => !item.selfRecovered && !item.resolution && !item.watchdogGap
+  )
   if (
     !record ||
     record.selfRecovered ||

@@ -8,6 +8,7 @@ import {
   statSync,
   writeFileSync
 } from 'node:fs'
+import { open, rename } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
   asHangObservations,
@@ -24,7 +25,7 @@ export function hangDetectionMarkerPath(userDataPath: string): string {
   return join(userDataPath, 'main-thread-hang.json')
 }
 
-export function writeHangDetectionMarker(markerPath: string, marker: StoredHangMarker): void {
+function serializeHangDetectionMarker(marker: StoredHangMarker): string {
   const collection = 'version' in marker ? asHangObservations(marker) : null
   if (
     'version' in marker &&
@@ -38,6 +39,11 @@ export function writeHangDetectionMarker(markerPath: string, marker: StoredHangM
   if (Buffer.byteLength(text) > 32 * 1024) {
     throw new Error('Hang observations exceed byte bound')
   }
+  return text
+}
+
+export function writeHangDetectionMarker(markerPath: string, marker: StoredHangMarker): void {
+  const text = serializeHangDetectionMarker(marker)
   const temporaryPath = `${markerPath}.tmp`
   const fd = openSync(temporaryPath, 'w', 0o600)
   try {
@@ -47,6 +53,23 @@ export function writeHangDetectionMarker(markerPath: string, marker: StoredHangM
     closeSync(fd)
   }
   renameSync(temporaryPath, markerPath)
+}
+
+/** The watchdog's write: a stalled disk must not block the loop that escalates and spawns sample. */
+export async function writeHangDetectionMarkerAsync(
+  markerPath: string,
+  marker: StoredHangMarker
+): Promise<void> {
+  const text = serializeHangDetectionMarker(marker)
+  const temporaryPath = `${markerPath}.async.tmp`
+  const file = await open(temporaryPath, 'w', 0o600)
+  try {
+    await file.chmod(0o600)
+    await file.writeFile(text)
+  } finally {
+    await file.close()
+  }
+  await rename(temporaryPath, markerPath)
 }
 
 export function readAvailableHangDetectionMarker(
@@ -87,4 +110,45 @@ export function consumeHangDetectionMarker(markerPath: string): StoredHangMarker
     // A marker that cannot be deleted may produce a duplicate breadcrumb, but cannot block startup.
   }
   return marker
+}
+
+/** Coalesces watchdog writes: one in flight, the newest marker wins, nothing blocks the caller. */
+export function createHangMarkerWriter(markerPath: string): {
+  write: (marker: StoredHangMarker) => void
+  /** Shutdown only: main answered, so a sync write is safe and lands before exit. */
+  writeNow: (marker: StoredHangMarker) => void
+} {
+  let latest: StoredHangMarker | null = null
+  let writing = false
+  const run = (): void => {
+    const marker = latest
+    if (!marker) {
+      return
+    }
+    latest = null
+    writing = true
+    void writeHangDetectionMarkerAsync(markerPath, marker)
+      .catch(() => {})
+      .finally(() => {
+        writing = false
+        run()
+      })
+  }
+  return {
+    write: (marker) => {
+      latest = marker
+      if (!writing) {
+        run()
+      }
+    },
+    writeNow: (marker) => {
+      // An in-flight async rename may land after this; queueing the same state makes the chain end on it.
+      latest = writing ? marker : null
+      try {
+        writeHangDetectionMarker(markerPath, marker)
+      } catch {
+        // Optional diagnostics must not fail shutdown.
+      }
+    }
+  }
 }

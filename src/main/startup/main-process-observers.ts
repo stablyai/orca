@@ -24,6 +24,7 @@ import { setCodexTrustGrantTelemetry } from '../codex/trust/grants/codex-trust-g
 import { initObservability } from '../observability/index'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { reportPreviousHangDetection } from '../hang-watchdog/previous-hang-detection'
+import { trackUnrecoveredStallImport } from '../hang-watchdog/previous-unrecovered-stall-import'
 import type { NativeHangTelemetry } from '../hang-watchdog/previous-native-hang-telemetry'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { mainProcessState as state } from './main-process-state'
@@ -122,11 +123,15 @@ export function initializeMainProcessObservers(store: Store): void {
   const { unrecoveredStall } = previousHang
   if (unrecoveredStall && state.crashReports) {
     const store = state.crashReports
-    void import('../hang-watchdog/unrecovered-stall-report')
-      .then(({ importUnrecoveredStallReport }) =>
-        importUnrecoveredStallReport(store, unrecoveredStall)
-      )
-      .catch((error) => console.warn('[hang-watchdog] Failed to record unrecovered stall:', error))
+    trackUnrecoveredStallImport(
+      import('../hang-watchdog/unrecovered-stall-report')
+        .then(({ importUnrecoveredStallReport }) =>
+          importUnrecoveredStallReport(store, unrecoveredStall)
+        )
+        .catch((error) =>
+          console.warn('[hang-watchdog] Failed to record unrecovered stall:', error)
+        )
+    )
   }
   if (state.hangDetection) {
     const marker = state.hangDetection

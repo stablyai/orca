@@ -4,7 +4,7 @@ export const inFlightSubmissions = new Set<string>()
 export const submittedReportIds = new Set<string>()
 
 const MAX_SUBMITTED_REPORT_IDS = 256
-// Help → Report Crash reopens a recently dismissed prompt, never an old report from another build.
+// Help → Report Crash reopens a recently dismissed prompt, never an old one.
 const MAX_REOPENED_DISMISSED_REPORT_AGE_MS = 24 * 60 * 60 * 1000
 
 export function rememberSubmittedReportId(reportId: string): void {

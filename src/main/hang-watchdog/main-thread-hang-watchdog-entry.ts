@@ -1,7 +1,7 @@
 import { isHangWatchdogWorkerData } from './hang-watchdog-worker-protocol'
 import { isMainThread, parentPort, workerData } from 'node:worker_threads'
 import { createHangWatchdogDetectionLoop } from './hang-watchdog-detection-loop'
-import { readAvailableHangDetectionMarker, writeHangDetectionMarker } from './hang-detection-marker'
+import { createHangMarkerWriter, readAvailableHangDetectionMarker } from './hang-detection-marker'
 import {
   asHangObservations,
   emptyHangObservations,
@@ -53,27 +53,22 @@ export function runWatchdog(
   let recentPower: HangPowerReceipt[] = []
   let sleepPeriod: SleepPeriod | null = null
   let receiptWindow: { id: string; until: number; remaining: number } | null = null
+  const writer = config.markerPath ? createHangMarkerWriter(config.markerPath) : null
+  // Neither the read nor the queued async write throws, so a failure cannot stop the observer.
   const save = (): void => {
-    if (!config.markerPath) {
+    const existing =
+      existingUnavailable && config.markerPath
+        ? readAvailableHangDetectionMarker(config.markerPath)
+        : null
+    if (!writer || existing === undefined) {
       return
     }
-    try {
-      if (existingUnavailable) {
-        const existing = readAvailableHangDetectionMarker(config.markerPath)
-        if (existing === undefined) {
-          return
-        }
-        observations = mergeHangObservations(
-          asHangObservations(existing) ?? emptyHangObservations(),
-          observations,
-          activeStallId
-        )
-        existingUnavailable = false
-      }
-      writeHangDetectionMarker(config.markerPath, observations)
-    } catch {
-      // Optional diagnostics must not terminate the independent observer.
+    if (existingUnavailable) {
+      const stored = asHangObservations(existing) ?? emptyHangObservations()
+      observations = mergeHangObservations(stored, observations, activeStallId)
+      existingUnavailable = false
     }
+    writer.write(observations)
   }
   const find = (id: string): HangObservation | undefined =>
     observations.observations.find((item) => item.id === id)
@@ -256,7 +251,7 @@ export function runWatchdog(
   const checkTimer = setInterval(() => {
     loop.tick()
     // A last tick that stops short of escalation shows the watchdog itself was blocked.
-    if (activeStallId) {
+    if (activeStallId && find(activeStallId)?.tier === 'stall') {
       update(activeStallId, { watchdogTickAt: Date.now() })
     }
   }, config.checkIntervalMs)
@@ -292,6 +287,12 @@ export function runWatchdog(
         }
       }
     } else if (message.type === 'shutdown') {
+      // Main sent this, so it answered: a stall still open here ended in a clean quit.
+      if (activeStallId) {
+        update(activeStallId, { selfRecovered: true, resolution: captureHangSnapshot() })
+        activeStallId = null
+        writer?.writeNow(observations)
+      }
       stopped = true
       clearTimeout(preload)
       receiptWindow = null
