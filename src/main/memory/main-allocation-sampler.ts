@@ -1,10 +1,11 @@
 import { ipcMain, webContents } from 'electron'
 import type { HeapProfiler } from 'node:inspector'
 import { Session } from 'node:inspector/promises'
-import { isRecord } from '../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 import type { CrashReportDetailValue } from '../../shared/crash-reporting/crash-reporting'
 
 /** Names what main allocates in a spike, for one bounded window; records hold names only, never arguments or paths. */
+/** Opt-in: stopping the sampler forces a full GC (~100 ms at 400 MB of heap, ~270 ms at 1.2 GB). */
+export const MAIN_ALLOCATION_SAMPLING_ENV = 'ORCA_MAIN_ALLOCATION_SAMPLING'
 export const MAIN_ALLOCATION_WINDOW_MS = 15_000
 /** Mean bytes between samples; coarse enough that ~250 MB of churn yields ~500 samples. */
 const SAMPLING_INTERVAL_BYTES = 512 * 1024
@@ -213,15 +214,6 @@ function summarizeIpcTally(tally: Map<string, ChannelTally>): Details {
   return details
 }
 
-/** Plain data only, so the walk never runs a class getter. */
-function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  if (!isRecord(value)) {
-    return false
-  }
-  const proto: unknown = Object.getPrototypeOf(value)
-  return proto === Object.prototype || proto === null
-}
-
 function isInvokeHandler(value: unknown): value is InvokeHandler {
   return typeof value === 'function'
 }
@@ -230,7 +222,7 @@ function safeChannel(channel: unknown): string {
   return typeof channel === 'string' && /^[\w:.-]{1,80}$/.test(channel) ? channel : '(other)'
 }
 
-/** Rough payload size; stops after a fixed number of visits so a huge payload stays cheap. */
+/** Strings, buffers and arrays only: listing a large object's keys costs O(keys) before any budget applies. */
 export function approxBytes(value: unknown): number {
   let budget = SIZE_WALK_BUDGET
   let bytes = 0
@@ -247,14 +239,6 @@ export function approxBytes(value: unknown): number {
       bytes += item.byteLength
     } else if (Array.isArray(item)) {
       pending.push(...item.slice(0, Math.max(0, budget - pending.length)))
-    } else if (isPlainRecord(item)) {
-      for (const key in item) {
-        if (pending.length >= budget) {
-          break
-        }
-        bytes += key.length
-        pending.push(item[key])
-      }
     }
   }
   return bytes
