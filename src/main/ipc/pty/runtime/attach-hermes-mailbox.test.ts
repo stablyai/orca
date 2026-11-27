@@ -1,5 +1,22 @@
 import '../../../runtime/rpc/dispatch/testing/unused-default-rpc-methods.test-fixture'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { setAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
+
+// The reattach paint ledger reads userData. A missing environment rejects that read and leaves mail unmarked.
+const paintLedgerDir = mkdtempSync(join(tmpdir(), 'hermes-attach-mail-'))
+setAppEnvironment({
+  getPath: () => paintLedgerDir,
+  getAppPath: () => paintLedgerDir,
+  getVersion: () => '0.0.0',
+  isPackaged: () => false,
+  getCliLauncherPath: () => null,
+  onWillQuit: () => {},
+  exit: () => {},
+  getAppMetrics: () => []
+})
 import { settledWriteStub } from '../../../providers/testing/settled-pty-write-stub'
 import type { IPtyProvider } from '../../../providers/pty/provider-contract'
 import { OrchestrationDb } from '../../../runtime/orchestration/db/orchestration-db'
@@ -102,7 +119,8 @@ describe('mail to a Hermes terminal attached without a renderer', () => {
         await runtime.serializeMainTerminalBuffer(PTY_ID)
         runtime.onPtyData(PTY_ID, '\x1b]0;Hermes ready\x07', Date.now())
         runtime.notifyMessageArrived(mailbox, 'status')
-        await vi.advanceTimersByTimeAsync(1000)
+        // Enter waits 500ms, then the held-prompt check waits out its second before the row is marked.
+        await vi.advanceTimersByTimeAsync(4000)
 
         if (ready) {
           expect(write.mock.calls.map(([, data]) => data)).toEqual([
