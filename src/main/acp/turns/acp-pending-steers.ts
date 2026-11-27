@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import {
   agentSessionFailureFact,
   type SubmissionRejectionFact
@@ -13,7 +14,9 @@ import type {
 } from './acp-turn-dispatch-contract'
 
 type Steer = { send: AcpTurnSend; mode: AcpSteerMode | 'wait' }
-const steeringReply = z.looseObject({ outcome: z.enum(['injected', 'promptRequired', 'failed']) })
+const steeringReply = lazyZodSchema(() =>
+  z.looseObject({ outcome: z.enum(['injected', 'promptRequired', 'failed']) })
+)
 
 /** The provider keeps custody from admission through injection or the next prompt. */
 export class AcpPendingSteers {
