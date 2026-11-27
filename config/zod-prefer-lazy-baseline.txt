@@ -30,7 +30,6 @@
 5 src/main/bots/sharing/bot-share-client.ts
 1 src/main/bots/sharing/bot-share-picks-store.ts
 1 src/main/bots/sharing/bot-share-receive.ts
-1 src/main/bots/tool-oauth/bot-tool-oauth-discovery.ts
 1 src/main/bots/tool-oauth/bot-tool-oauth.ts
 1 src/main/browser/agent-browser/commands/agent-browser-bridge-capture-commands.ts
 1 src/main/browser/agent-browser/commands/agent-browser-bridge-mouse-commands.ts
