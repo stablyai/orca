@@ -6,7 +6,6 @@ import { defineOrchestrationMethod } from '../access/orchestration-method-access
 import { startFederatedWorker } from '../../../../orchestration/legacy-remote-home/federated-worker-start'
 import { startLocalWorker } from './start/local-worker-start'
 import type { WorkerFollowUp } from './follow-up/worker-follow-up-placement'
-import { assertFollowUpRunsOnRequestedAccount } from './follow-up/worker-follow-up-account'
 import { withWorkerStartNext } from '../receipt-next'
 import { resolveOrchestrationCaller } from '../runs/run-scope'
 import {
@@ -276,7 +275,6 @@ export async function prepareWorkerStart(
         )
       }
     })
-    assertFollowUpRunsOnRequestedAccount(runtime, params.account, placement)
     const { delivery, worktreeId, reopen, retainedChat, earlierWork, ...launchPlacement } =
       placement
     const spec = [params.spec, delivery === 'started_fresh' ? earlierWork : undefined]
