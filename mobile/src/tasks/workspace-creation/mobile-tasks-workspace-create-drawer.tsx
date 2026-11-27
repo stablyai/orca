@@ -181,10 +181,7 @@ export function renderMobileTasksWorkspaceCreateDrawer(
                 workspaceAgentDetectionPending
                   ? t('tasks.workspaceCreateDrawer.detectingAgents', 'Detecting agents...')
                   : workspaceCreateRequiresSshConnection
-                    ? t(
-                        'tasks.workspaceCreateDrawer.connectRepositoryAction',
-                        'Connect repository'
-                      )
+                    ? t('tasks.workspaceCreateDrawer.connectRepositoryAction', 'Connect repository')
                     : t('tasks.workspaceCreateDrawer.createWorkspace', 'Create workspace')
               }
               busy={creating}

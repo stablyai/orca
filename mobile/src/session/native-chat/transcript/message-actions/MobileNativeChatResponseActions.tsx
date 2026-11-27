@@ -43,7 +43,7 @@ export function MobileNativeChatResponseActions({
   )
 }
 
-const stylesSheet = themedStyleSheet((colors) => ({
+const stylesSheet = themedStyleSheet(() => ({
   // Two 44 pt targets side by side: 24 pt boxes, 10 pt slop each, so they never overlap.
   actions: {
     flexDirection: 'row',

@@ -81,10 +81,7 @@ export function renderMobileTasksWorkspaceSparseDrawer(model: ConnectionPresenta
                 setWorkspaceSparseDraft({ ...workspaceSparseDraft, directoriesText })
               }
               placeholder={'src/renderer\npackages/ui'}
-              accessibilityLabel={t(
-                'tasks.workspaceTrustDrawers.directoriesLabel',
-                'Directories'
-              )}
+              accessibilityLabel={t('tasks.workspaceTrustDrawers.directoriesLabel', 'Directories')}
               autoCapitalize="none"
               autoCorrect={false}
               monospace

@@ -228,6 +228,6 @@ export function MobileBotShareCreate(props: {
   )
 }
 
-const stylesSheet = themedStyleSheet((colors) => ({
+const stylesSheet = themedStyleSheet(() => ({
   picture: { alignItems: 'center', paddingTop: spacing.sm, paddingBottom: spacing.lg }
 }))

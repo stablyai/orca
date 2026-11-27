@@ -21,7 +21,6 @@ import {
 import { pressedStyle } from '../../../../theme/mobile-theme'
 import { triggerSelection } from '../../../../platform/haptics/haptics'
 import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
-import type { Translate } from '../../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { MessageBox } from '../../../../components/composer-input/MessageBox'
 import { MobilePendingButton } from '../../../../components/controls/MobilePendingButton'
@@ -59,14 +58,6 @@ type Props = {
   questionKeys?: readonly string[]
   /** Unsent picks and typed words kept by question key, so a card that closes opens with them. */
   drafts?: MobileNativeChatAskDrafts
-}
-
-function confirmLabels(t: Translate) {
-  return {
-    submit: t('chat.ask.send', 'Send'),
-    next: t('chat.ask.next', 'Next'),
-    skip: t('chat.ask.skip', 'Skip')
-  }
 }
 
 // Sentinel index for the free-text "Other…" row (never a real option index).
@@ -230,11 +221,9 @@ export function MobileNativeChatAsk({
   const advance = async (sel = selections): Promise<void> => {
     autoAdvance.cancel()
     const unanswered = askUnansweredRequired(prompt.questions, (i) => isAnswered(i, sel))
-    if (isLast && unanswered === -1) {
-      await submit(sel)
-    } else {
-      showStep((i) => (isLast ? unanswered : Math.min(i + 1, total - 1)))
-    }
+    await (isLast && unanswered === -1
+      ? submit(sel)
+      : Promise.resolve(showStep((i) => (isLast ? unanswered : Math.min(i + 1, total - 1)))))
   }
 
   const cancel = async (control: 'confirm' | 'cancel'): Promise<void> => {
@@ -415,7 +404,13 @@ export function MobileNativeChatAsk({
           </Text>
         ) : null}
         <MobilePendingButton
-          label={confirmLabels(t)[confirmSkips && isLast ? 'submit' : confirmLabel]}
+          label={
+            (confirmSkips && isLast) || confirmLabel === 'submit'
+              ? t('chat.ask.send', 'Send')
+              : confirmLabel === 'next'
+                ? t('chat.ask.next', 'Next')
+                : t('chat.ask.skip', 'Skip')
+          }
           pending={confirmBusy}
           disabled={submitting || confirmBlocked || (confirmSkips && isLast)}
           onPress={confirm}

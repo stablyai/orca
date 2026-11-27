@@ -23,7 +23,6 @@ import {
   NO_HOST_LIST_INPUT
 } from '../host-screen/catalog/host-list-queries'
 import { useNow } from '../hooks/use-now'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
   loadMobileOnboardingSteps,
   mobileOnboardingDestination
@@ -44,12 +43,10 @@ import { homeWorktreeInfo, type HostWorktreeInfo } from '../worktree/catalog/hom
 import { homeStatsQuery } from '../stats/home-stats-summary-read'
 import { totalHomeStats, type HomeStatsRow } from '../stats/home-stats-total'
 import { useHomeBots } from './bots/use-home-bots'
-import {
-  homeUnreachableHostIds,
-  projectHomeHostConnections
-} from './home-host-connection-projection'
+import { projectHomeHostConnections } from './home-host-connection-projection'
 import { restoreHomeQueries } from './home-query-restore'
 import { homeWorktreeRead } from './home-worktree-read'
+import { useHomeUnreachableHosts } from './use-home-unreachable-hosts'
 import { useMobileHomeHostConnections } from './use-mobile-home-host-connections'
 
 export type MobileHomeData = ReturnType<typeof useMobileHomeData>
@@ -67,7 +64,6 @@ const homeQueryOptions = <TData>(
 export function useMobileHomeData() {
   const router = useRouter()
   const queryClient = useQueryClient()
-  const t = useMobileTranslation()
   const [hostCatalog, setHostCatalog] = useState<HostCatalogEntry[]>([])
   // Until the catalog read lands, an empty list says nothing; a paired user must not see first-run.
   const [hostCatalogLoaded, setHostCatalogLoaded] = useState(false)
@@ -270,20 +266,10 @@ export function useMobileHomeData() {
   const stats = useMemo(() => totalHomeStats(statsByHost, hostIds), [statsByHost, hostIds])
   const hostConnections = useMemo(() => projectHomeHostConnections(allClients), [allClients])
   const { autoConnectHostIds, hostAttempts } = connections
-  // Keyed by its members, so a retry that moves no desktop in or out keeps Home's rows as they are.
-  const unreachableKey = useMemo(
-    () =>
-      homeUnreachableHostIds(
-        hosts,
-        { autoConnectHostIds, hostAttempts, hostConnections, hostLastConnected, hostStates },
-        now,
-        t
-      ).join('\n'),
-    [hosts, autoConnectHostIds, hostAttempts, hostConnections, hostLastConnected, hostStates, now, t]
-  )
-  const unreachableHosts = useMemo(
-    () => new Set(unreachableKey ? unreachableKey.split('\n') : []),
-    [unreachableKey]
+  const unreachableHosts = useHomeUnreachableHosts(
+    hosts,
+    { autoConnectHostIds, hostAttempts, hostConnections, hostLastConnected, hostStates },
+    now
   )
   // A desktop still dialing may yet connect; one Home never dials or gave up on won't.
   const hostsConnecting = hosts.some(

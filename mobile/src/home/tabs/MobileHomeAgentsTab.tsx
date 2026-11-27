@@ -307,7 +307,7 @@ function AgentsEmpty(props: { title: string; message?: string }) {
   return <MobileHomeTabEmpty icon={SquareTerminal} {...props} />
 }
 
-const stylesSheet = themedStyleSheet((colors) => ({
+const stylesSheet = themedStyleSheet(() => ({
   content: { paddingHorizontal: spacing.lg },
   connecting: { alignItems: 'center', paddingVertical: spacing.xl, marginTop: 32 }
 }))

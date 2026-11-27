@@ -16,7 +16,7 @@ import {
   nativeChatModelSearchIndex,
   nativeChatModelSearchMatcher
 } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-model-search'
-import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
+import { mobileNativeChatSessionOptionSay } from './native-chat-session-option-copy'
 import {
   browsedSelectItems,
   selectItemRow,
@@ -54,6 +54,7 @@ export function MobileNativeChatModelSearchList({
   const styles = useThemedStyles(stylesSheet)
   const colorScheme = useMobileColorScheme()
   const t = useMobileTranslation()
+  const say = mobileNativeChatSessionOptionSay(t)
   const [query, setQuery] = useState('')
   // Decided on arrival, so a listing that grows mid-visit never raises the keyboard.
   const [autoFocus] = useState(() => browsableCount(model) >= FOCUS_FROM)

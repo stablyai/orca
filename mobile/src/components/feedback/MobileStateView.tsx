@@ -2,13 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { CircleAlert, SearchX, WifiOff, type LucideIcon } from 'lucide-react-native'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import {
-  feedback,
-  radii,
-  spacing,
-  typography,
-  pressedStyle
-} from '../../theme/mobile-theme'
+import { feedback, radii, spacing, typography, pressedStyle } from '../../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { describeLoadError } from './load-error-description'

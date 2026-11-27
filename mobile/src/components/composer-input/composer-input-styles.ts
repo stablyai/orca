@@ -208,7 +208,7 @@ const unframed = {
   backgroundColor: 'transparent'
 } as const
 
-export const groupFieldStylesSheet = themedStyleSheet((colors) => ({
+export const groupFieldStylesSheet = themedStyleSheet(() => ({
   line: { ...unframed, minHeight: FIELD_ROW_HEIGHT, paddingHorizontal: FIELD_ROW_INSET },
   lines: { ...unframed, ...FIELD_ROWS_PADDING },
   // A form's first group under its SheetHeader.

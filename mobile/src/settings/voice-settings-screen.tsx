@@ -393,6 +393,6 @@ export default function VoiceSettingsScreen({
   )
 }
 
-const stylesSheet = themedStyleSheet((colors) => ({
+const stylesSheet = themedStyleSheet(() => ({
   models: { paddingHorizontal: spacing.lg, paddingBottom: spacing.lg }
 }))

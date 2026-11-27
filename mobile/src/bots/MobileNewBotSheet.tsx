@@ -434,6 +434,6 @@ function NewBotForm(props: NewBotSheetProps) {
   )
 }
 
-const stylesSheet = themedStyleSheet((colors) => ({
+const stylesSheet = themedStyleSheet(() => ({
   picture: { alignItems: 'center', paddingTop: spacing.sm, paddingBottom: spacing.lg }
 }))

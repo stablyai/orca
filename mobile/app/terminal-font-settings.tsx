@@ -65,6 +65,6 @@ export default function TerminalFontSettingsScreen() {
   )
 }
 
-const stylesSheet = themedStyleSheet((colors) => ({
+const stylesSheet = themedStyleSheet(() => ({
   preview: { marginBottom: spacing.lg }
 }))

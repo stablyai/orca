@@ -268,6 +268,6 @@ export default function TerminalSettingsScreen() {
   )
 }
 
-const stylesSheet = themedStyleSheet((colors) => ({
+const stylesSheet = themedStyleSheet(() => ({
   preview: { marginBottom: spacing.lg }
 }))

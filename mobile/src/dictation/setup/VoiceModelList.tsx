@@ -98,7 +98,9 @@ export function VoiceModelList({
           const row = (guardPress: (onPress: () => void) => () => void) => (
             <ListRow
               title={label}
-              subtitle={modelSubtitle(model, action === 'needs-api-key', t, intlLocale) || undefined}
+              subtitle={
+                modelSubtitle(model, action === 'needs-api-key', t, intlLocale) || undefined
+              }
               selected={ready ? action === 'in-use' : undefined}
               busy={anyBusy}
               accessory={
@@ -149,6 +151,6 @@ export function VoiceModelList({
   )
 }
 
-const stylesSheet = themedStyleSheet((colors) => ({
+const stylesSheet = themedStyleSheet(() => ({
   disabled: { opacity: feedback.disabledOpacity }
 }))

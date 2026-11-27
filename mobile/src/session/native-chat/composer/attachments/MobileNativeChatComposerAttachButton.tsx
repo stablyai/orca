@@ -231,6 +231,6 @@ function AddToMessageSheet({
   )
 }
 
-const stylesSheet = themedStyleSheet((colors) => ({
+const stylesSheet = themedStyleSheet(() => ({
   group: { marginTop: spacing.lg }
 }))

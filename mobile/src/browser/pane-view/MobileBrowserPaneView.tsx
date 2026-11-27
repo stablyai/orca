@@ -6,8 +6,6 @@ import {
   TextInput,
   View,
   type PanResponderInstance,
-  type StyleProp,
-  type ViewStyle,
   type HostInstance
 } from 'react-native'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'

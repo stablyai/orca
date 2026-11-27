@@ -401,6 +401,6 @@ export function PrCreateSheet({ tab }: { tab: MobilePrTab }) {
 
 const TITLE_LINES = { min: 1, max: 3 }
 
-const stylesSheet = themedStyleSheet((colors) => ({
+const stylesSheet = themedStyleSheet(() => ({
   loading: { padding: spacing.xl, alignItems: 'center' }
 }))

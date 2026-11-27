@@ -130,6 +130,6 @@ export function MobileHomeFeedTab(props: {
   )
 }
 
-const stylesSheet = themedStyleSheet((colors) => ({
+const stylesSheet = themedStyleSheet(() => ({
   content: { paddingHorizontal: spacing.lg }
 }))

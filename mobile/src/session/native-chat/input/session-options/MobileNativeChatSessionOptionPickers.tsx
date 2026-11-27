@@ -32,6 +32,7 @@ import {
   descriptorRowElements,
   ModelPill,
   SessionOptionCaption,
+  SessionOptionLockCaption,
   SessionOptionSummaryRow,
   showsSessionOptionAsSwitch
 } from './MobileNativeChatSessionOptionRows'
@@ -303,14 +304,17 @@ export function MobileNativeChatSessionOptionPickers({
                         onInvokeAction: () => invokeAction(activeDescriptor),
                         ...(activeDescriptor === model ? { moreChoices: moreModels } : {}),
                         ...(permissionView
-                          ? { choiceLeading: (value: string) => permissionChoiceLeading(colors, value) }
+                          ? {
+                              choiceLeading: (value: string) =>
+                                permissionChoiceLeading(colors, value)
+                            }
                           : {})
                       },
                       t
                     )}
                   </ListGroup>
                 )}
-                {showWorkingNotice ? <LockCaption /> : null}
+                {showWorkingNotice ? <SessionOptionLockCaption /> : null}
                 {sessionOptionDispatchUnconfirmed(activeDescriptor) ? (
                   <SessionOptionCaption>
                     {t(
@@ -333,7 +337,7 @@ export function MobileNativeChatSessionOptionPickers({
                     )}
                   </ListGroup>
                 ) : null}
-                {showWorkingNotice ? <LockCaption /> : null}
+                {showWorkingNotice ? <SessionOptionLockCaption /> : null}
                 {permission ? (
                   <>
                     <SectionHeader
@@ -373,18 +377,6 @@ export function MobileNativeChatSessionOptionPickers({
         ) : null}
       </BottomDrawer>
     </View>
-  )
-}
-
-function LockCaption(): React.JSX.Element {
-  const t = useMobileTranslation()
-  return (
-    <SessionOptionCaption>
-      {t(
-        'chat.sessionOptionPickers.settingsLocked',
-        'Model settings unlock when this turn finishes.'
-      )}
-    </SessionOptionCaption>
   )
 }
 

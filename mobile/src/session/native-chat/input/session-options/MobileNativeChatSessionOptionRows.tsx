@@ -23,13 +23,25 @@ import {
   loneFastTier,
   speedButtonTiers
 } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-session-speed-tiers'
-import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
+import { mobileNativeChatSessionOptionSay } from './native-chat-session-option-copy'
 import { orderEffortLevels } from '../../../../../../src/shared/agent-session/options/view/effort-level-order'
 import { MobileSwitch } from '../../../../components/controls/MobileSwitch'
 
 export function SessionOptionCaption({ children }: { children: string }): React.JSX.Element {
   const styles = useThemedStyles(stylesSheet)
   return <Text style={styles.caption}>{children}</Text>
+}
+
+export function SessionOptionLockCaption(): React.JSX.Element {
+  const t = useMobileTranslation()
+  return (
+    <SessionOptionCaption>
+      {t(
+        'chat.sessionOptionPickers.settingsLocked',
+        'Model settings unlock when this turn finishes.'
+      )}
+    </SessionOptionCaption>
+  )
 }
 
 /** One target for the chat's options: the model's name (or a value), with Full access's shield. */
@@ -179,6 +191,7 @@ export function descriptorRowElements(
   }: DescriptorRowsProps,
   t: Translate
 ): ReactElement[] {
+  const say = mobileNativeChatSessionOptionSay(t)
   const locked = disabled || !descriptor.settable
   // Why: flip-only and agent-picker options are actions, not values or radio choices.
   if (descriptor.action) {
@@ -293,7 +306,7 @@ export function selectItemRow(
   return (
     <ListRow
       key={item.value}
-      title={nativeChatSessionChoiceLabel(item, say, descriptor.id)}
+      title={nativeChatSessionChoiceLabel(item, mobileNativeChatSessionOptionSay(t), descriptor.id)}
       subtitle={item.description}
       leading={choiceLeading ? (choiceLeading(item.value) ?? null) : undefined}
       selected={item.value === marked}

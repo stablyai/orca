@@ -47,9 +47,7 @@ type ImportPick = { source: BotImportSource; bot: BotImportCandidate }
 
 const TILE = 28
 
-function pickKey(pick: ImportPick): string {
-  return `${pick.source.app}:${pick.bot.agent}`
-}
+const pickKey = (pick: ImportPick): string => `${pick.source.app}:${pick.bot.agent}`
 
 export function MobileBotImportSheet(props: {
   visible: boolean

@@ -30,14 +30,8 @@ function mobileNativeChatEmptyStateCopy(
   switch (kind) {
     case 'notFound':
       return {
-        title: t(
-          'session.nativeChatRenderData.notFoundTitle',
-          "Can't find this conversation yet"
-        ),
-        subtitle: t(
-          'session.nativeChatRenderData.notFoundMessage',
-          'Send a message to start one.'
-        )
+        title: t('session.nativeChatRenderData.notFoundTitle', "Can't find this conversation yet"),
+        subtitle: t('session.nativeChatRenderData.notFoundMessage', 'Send a message to start one.')
       }
     case 'empty':
       return {

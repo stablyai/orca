@@ -9,7 +9,9 @@ import { getMobilePalette, type MobilePalette } from '../../theme/mobile-theme'
 import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 /** The selection menu's colours from the app's current scheme. */
-export function terminalChromeColors(palette: MobilePalette = getMobilePalette()): TerminalChromeColors {
+export function terminalChromeColors(
+  palette: MobilePalette = getMobilePalette()
+): TerminalChromeColors {
   return {
     surface: palette.bgRaised,
     text: palette.textPrimary,

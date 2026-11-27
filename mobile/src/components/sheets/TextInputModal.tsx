@@ -158,7 +158,7 @@ export function TextInputSheetContent({
   )
 }
 
-const stylesSheet = themedStyleSheet((colors) => ({
+const stylesSheet = themedStyleSheet(() => ({
   // The note's inset moves to the row, so the icon sits where note text starts.
   notice: {
     flexDirection: 'row',
