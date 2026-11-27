@@ -1,4 +1,6 @@
 import type { TabActivationIntent } from '../../../../src/shared/workspace-layout/tab-groups/tab-activation-intent'
+import type { MobileSessionTab } from './mobile-session-tabs'
+import type { PendingSessionSelection } from './pending-session-selection'
 import '../../transport/connection/stable-logical-rpc-client'
 import { LogicalClientCutoverError } from '../../transport/connection/logical-client-cutover-error'
 import { sessionTabActivate } from './mobile-session-tab-write-operations'
@@ -81,6 +83,75 @@ export function focusMobileTerminal(
     'terminal.focus',
     terminal
   )
+}
+
+export type PendingCrossWorktreeTabTarget = {
+  worktreeId: string
+  tabId: string
+  leafId?: string
+  terminalHandle?: string
+}
+
+let pendingCrossWorktreeTabTarget: PendingCrossWorktreeTabTarget | null = null
+
+export function setPendingCrossWorktreeTabTarget(
+  target: PendingCrossWorktreeTabTarget | null
+): void {
+  if (!target) {
+    pendingCrossWorktreeTabTarget = null
+    return
+  }
+  const worktreeId = target.worktreeId.startsWith('id:')
+    ? target.worktreeId.slice(3)
+    : target.worktreeId
+  pendingCrossWorktreeTabTarget = worktreeId ? { ...target, worktreeId } : null
+}
+
+export function consumePendingCrossWorktreeTabTarget(
+  worktree: string
+): PendingCrossWorktreeTabTarget | null {
+  const normalized = worktree.startsWith('id:') ? worktree.slice(3) : worktree
+  if (!normalized || pendingCrossWorktreeTabTarget?.worktreeId !== normalized) {
+    return null
+  }
+  const target = pendingCrossWorktreeTabTarget
+  pendingCrossWorktreeTabTarget = null
+  return target
+}
+
+export function resolveCrossWorktreePendingSelection(
+  worktree: string,
+  tabs: readonly MobileSessionTab[]
+): { kind: 'terminal'; handle: string; tabId: string } | { kind: 'tab'; tabId: string } | null {
+  const target = consumePendingCrossWorktreeTabTarget(worktree)
+  if (!target) {
+    return null
+  }
+  const matched = tabs.find(
+    (tab) =>
+      tab.id === target.tabId ||
+      (tab.type === 'terminal' &&
+        Boolean(target.terminalHandle) &&
+        tab.terminal === target.terminalHandle)
+  )
+  if (!matched) {
+    return null
+  }
+  if (matched.type === 'terminal' && typeof matched.terminal === 'string' && matched.terminal) {
+    return { kind: 'terminal', handle: matched.terminal, tabId: matched.id }
+  }
+  return { kind: 'tab', tabId: matched.id }
+}
+
+export function applyPendingCrossWorktreeSelection(
+  worktree: string,
+  tabs: readonly MobileSessionTab[],
+  pendingSelectionRef: { current: PendingSessionSelection | null }
+): void {
+  const crossTarget = resolveCrossWorktreePendingSelection(worktree, tabs)
+  if (crossTarget) {
+    pendingSelectionRef.current = crossTarget
+  }
 }
 
 export function activateMobileSessionTab(

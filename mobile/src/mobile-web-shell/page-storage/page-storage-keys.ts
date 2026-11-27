@@ -55,7 +55,9 @@ export const PAGE_STORAGE_EXACT_KEYS = [
   /** The New Tab sheet's Chat or CLI pick. */
   'orca:newAgentSurface',
   /** Whether usage bars show the percentage used or remaining. */
-  'orca:usagePercentageDisplay'
+  'orca:usagePercentageDisplay',
+  /** Cross-workspace MRU session cards stored on host. */
+  'orca:recent-session-cards'
 ] as const
 
 /**
@@ -68,7 +70,8 @@ export const NEGOTIATED_PAGE_STORAGE_KEYS = [
   'orca:terminalFontStyle',
   'orca:nativeChatText',
   'orca:newAgentSurface',
-  'orca:usagePercentageDisplay'
+  'orca:usagePercentageDisplay',
+  'orca:recent-session-cards'
 ] as const
 
 /** Whether a page that declared `storageKeys` (null: declared nothing) reads this key in `init`. */

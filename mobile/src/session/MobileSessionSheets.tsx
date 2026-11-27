@@ -19,6 +19,7 @@ import { MobileAgentSessionTabActionSheet } from './tabs/MobileAgentSessionTabAc
 import { MobileTerminalTabActionSheet } from './tabs/MobileTerminalTabActionSheet'
 import { mobileSessionTabMenuHeader } from './tabs/MobileSessionTabMark'
 import { MobileSessionBotSheet } from './MobileSessionBotSheet'
+import { MobileSessionRecentCardsSheet } from './RecentSessionCardsSheet'
 import { MobileNewTabSheet } from './tabs/MobileNewTabSheet'
 import { MobileNewHomeChatConfirm } from './MobileNewHomeChatConfirm'
 import {
@@ -100,6 +101,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
   )
   return (
     <>
+      <MobileSessionRecentCardsSheet controller={controller} />
       <MobileSessionBotSheet controller={controller} />
       <MobileSessionTerminalLayoutSheet
         controller={controller}

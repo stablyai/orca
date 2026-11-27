@@ -9,6 +9,8 @@ import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { MobileSessionHeaderMoreMenu } from './MobileSessionHeaderMoreMenu'
 import { MobileSourceControlButton } from './MobileSourceControlButton'
 import { MobileSessionTabBar } from './tabs/MobileSessionTabBar'
+import { MobileSessionTabStrip } from './tabs/MobileSessionTabStrip'
+import { useMobileSessionTabBarMode } from './tabs/use-mobile-session-tab-bar-mode'
 import { MobileSessionTitleBlock } from './MobileSessionTitleBlock'
 import type { SessionTitleCard } from './tabs/use-session-title-card'
 import { styles } from './mobile-session-styles'
@@ -64,6 +66,7 @@ export function MobileSessionHeader({
   const revealSidebar = useHostSidebarReveal()
   const topChrome = useTopChromeSpace()
   const sideRail = useShellSideRail()
+  const { mode: tabBarMode } = useMobileSessionTabBarMode()
   // Why: a sideways phone is ~390pt tall, so the tabs share the top bar instead of taking a second row.
   const hasTabs = visibleTabs.length > 0
   const tabsInTopBar = (layout.isLandscapePhone || sideRail) && hasTabs
@@ -74,12 +77,20 @@ export function MobileSessionHeader({
   const homeChatId = routeBot?.bot.chatSessionId
   const sourceControlInBar = !isFloatingWorkspaceRoute && !actionsCollapsed && !itemsInBar
   const tabStrip = hasTabs ? (
-    <MobileSessionTabBar
-      controller={controller}
-      inTopBar={tabsInTopBar}
-      actionsCollapsed={actionsCollapsed}
-      homeChatId={homeChatId ?? null}
-    />
+    tabBarMode === 'classic-strip' ? (
+      <MobileSessionTabStrip
+        controller={controller}
+        inTopBar={tabsInTopBar}
+        actionsCollapsed={actionsCollapsed}
+      />
+    ) : (
+      <MobileSessionTabBar
+        controller={controller}
+        inTopBar={tabsInTopBar}
+        actionsCollapsed={actionsCollapsed}
+        homeChatId={homeChatId ?? null}
+      />
+    )
   ) : null
   const leading = (
     <>

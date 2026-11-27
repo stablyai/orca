@@ -1,7 +1,8 @@
 import { useRouter } from 'expo-router'
-import { useState } from 'react'
-import { Platform } from 'react-native'
+import { useEffect, useState, useSyncExternalStore } from 'react'
+import { Platform, Pressable, Text, View } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
+import { Minus, Plus } from 'lucide-react-native'
 import { ListRow } from '../components/list/ListGroup'
 import { MobileSegmentedControl } from '../components/controls/MobileSegmentedControl'
 import { MobileSwitch } from '../components/controls/MobileSwitch'
@@ -15,7 +16,18 @@ import {
   useNativeChatTextSettingsSnapshot,
   type NativeChatFont
 } from '../session/native-chat/preferences/native-chat-text-settings'
+import {
+  getRecentSessionCardsMaxDisplaySync,
+  hydrateRecentSessionCards,
+  MAX_RECENT_SESSION_CARDS_LIMIT,
+  MIN_RECENT_SESSION_CARDS_DISPLAY,
+  setRecentSessionCardsMaxDisplay,
+  subscribeRecentSessionCards
+} from '../session/recent-session-cards'
+import { useMobileSessionTabBarMode } from '../session/tabs/use-mobile-session-tab-bar-mode'
 import { useMobileDefaultSessionViewPreference } from '../session/use-mobile-default-session-view-preference'
+import { colors, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
   nativeChatLineSpacingSegments,
@@ -62,6 +74,17 @@ export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => vo
   const { defaultView, setDefaultView } = useMobileDefaultSessionViewPreference()
   const chatDefault = defaultView === 'chat'
   const label = t('settings.nativeChatSettingsScreen.openInChatUi', 'Open sessions in Chat UI')
+  const { mode: tabBarMode, setMode: setTabBarMode } = useMobileSessionTabBarMode()
+  const recentMaxDisplay = useSyncExternalStore(
+    subscribeRecentSessionCards,
+    getRecentSessionCardsMaxDisplaySync,
+    getRecentSessionCardsMaxDisplaySync
+  )
+  useEffect(() => {
+    void hydrateRecentSessionCards().catch(() => {})
+  }, [])
+  const canDecreaseRecent = recentMaxDisplay > MIN_RECENT_SESSION_CARDS_DISPLAY
+  const canIncreaseRecent = recentMaxDisplay < MAX_RECENT_SESSION_CARDS_LIMIT
 
   // The slider's gesture needs a root here, as Terminal settings has.
   return (
@@ -152,6 +175,79 @@ export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => vo
           />
         </SettingsSection>
 
+        <SettingsSection
+          title={t('settings.nativeChat.recentlyUsed', 'RECENTLY USED')}
+          footer={t(
+            'settings.nativeChat.recentlyUsedFooter',
+            'Customize the tab bar layout and how many recent tabs appear (default 7).'
+          )}
+        >
+          <ListRow
+            key="tabBarMode"
+            title={t('settings.nativeChat.compactTabStrip', 'Compact tab strip')}
+            subtitle={
+              tabBarMode === 'classic-strip'
+                ? t(
+                    'settings.nativeChat.compactTabStripOn',
+                    'Narrow scrollable tabs in the top bar'
+                  )
+                : t(
+                    'settings.nativeChat.compactTabStripOff',
+                    'Single full-width active tab in the top bar'
+                  )
+            }
+            accessory={
+              <MobileSwitch
+                accessibilityLabel={t('settings.nativeChat.compactTabStrip', 'Compact tab strip')}
+                value={tabBarMode === 'classic-strip'}
+                onValueChange={(next) => setTabBarMode(next ? 'classic-strip' : 'single-tab')}
+              />
+            }
+          />
+          <ListRow
+            key="maxRecentItems"
+            title={t('settings.nativeChat.maxRecentItems', 'Max recent items')}
+            subtitle={`${recentMaxDisplay} ${t('settings.nativeChat.cardsUnit', 'cards')}`}
+            accessory={
+              <View style={styles.stepper}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t(
+                    'settings.nativeChat.decreaseMaxRecent',
+                    'Decrease max recent items'
+                  )}
+                  disabled={!canDecreaseRecent}
+                  onPress={() => setRecentSessionCardsMaxDisplay(recentMaxDisplay - 1)}
+                  style={({ pressed }) => [
+                    styles.stepperButton,
+                    !canDecreaseRecent && styles.stepperButtonDisabled,
+                    pressed && canDecreaseRecent && styles.stepperButtonPressed
+                  ]}
+                >
+                  <Minus size={16} color={colors.textPrimary} />
+                </Pressable>
+                <Text style={styles.stepperValue}>{recentMaxDisplay}</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t(
+                    'settings.nativeChat.increaseMaxRecent',
+                    'Increase max recent items'
+                  )}
+                  disabled={!canIncreaseRecent}
+                  onPress={() => setRecentSessionCardsMaxDisplay(recentMaxDisplay + 1)}
+                  style={({ pressed }) => [
+                    styles.stepperButton,
+                    !canIncreaseRecent && styles.stepperButtonDisabled,
+                    pressed && canIncreaseRecent && styles.stepperButtonPressed
+                  ]}
+                >
+                  <Plus size={16} color={colors.textPrimary} />
+                </Pressable>
+              </View>
+            }
+          />
+        </SettingsSection>
+
         <SettingsSection>
           <ListRow
             key="reset"
@@ -165,3 +261,34 @@ export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => vo
     </GestureHandlerRootView>
   )
 }
+
+const styles = themedStyleSheet(() => ({
+  stepper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.bgRaised,
+    borderRadius: 8,
+    padding: 4
+  },
+  stepperButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  stepperButtonPressed: {
+    backgroundColor: colors.bgPanel
+  },
+  stepperButtonDisabled: {
+    opacity: 0.35
+  },
+  stepperValue: {
+    minWidth: 24,
+    fontSize: typography.bodySize,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    textAlign: 'center'
+  }
+}))

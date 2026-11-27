@@ -2894,6 +2894,8 @@
       "sourceControl": "Quellcodeverwaltung",
       "newTab": "Neuen Tab erstellen",
       "quickCommands": "Schnellbefehle",
+      "switchToSingleTabBar": "Zur Vollbreite-Tableiste wechseln",
+      "switchToCompactTabStrip": "Zur kompakten Tableiste wechseln",
       "items": "Einträge",
       "textSize": "Textgröße"
     },
@@ -3116,7 +3118,8 @@
     "tabStrip": {
       "checkingCapabilities": "Desktop-Funktionen werden geprüft – gleich erneut versuchen",
       "newTab": "Neuen Tab erstellen",
-      "quickCommandsUpdateRequired": "Desktop-Update für Schnellbefehle erforderlich"
+      "quickCommandsUpdateRequired": "Desktop-Update für Schnellbefehle erforderlich",
+      "tabStatus": "{{title}}, {{status}}"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Terminal leeren",
@@ -3502,6 +3505,19 @@
     "orcaCommands": {
       "desktopOnly": "In der Desktop-App verfügbar"
     },
+    "recentSessionCards": {
+      "decreaseLimit": "Limit für letzte Karten verringern",
+      "increaseLimit": "Limit für letzte Karten erhöhen",
+      "cardClosed": "Karte wurde geschlossen",
+      "waitingForHost": "Warte auf Host…",
+      "workspaceGone": "Arbeitsbereich existiert nicht mehr",
+      "cardClosedOpeningWorkspace": "Karte wurde geschlossen; Arbeitsbereich wird geöffnet"
+    },
+    "tabsSheet": {
+      "recentCaption": "Zuletzt in allen Bereichen",
+      "recentSegment": "Zuletzt",
+      "workspaceSegment": "Dieser Bereich ({{count}})"
+    },
     "tabBar": {
       "oneTab": "1 Tab",
       "tabCount": "{{count}} Tabs",
@@ -3688,6 +3704,17 @@
       "download": "Für dieses Telefon herunterladen",
       "downloadSize": "Etwa {{size}} MB",
       "phoneChecking": "Wird geprüft…"
+    },
+    "nativeChat": {
+      "recentlyUsed": "ZULETZT VERWENDET",
+      "recentlyUsedFooter": "Layout der Tableiste und Anzahl angezeigter letzter Tabs anpassen (Standard 7).",
+      "compactTabStrip": "Kompakte Tableiste",
+      "compactTabStripOn": "Schmale scrollbare Tabs in der oberen Leiste",
+      "compactTabStripOff": "Einzelner aktiver Tab in voller Breite oben",
+      "maxRecentItems": "Max. letzte Einträge",
+      "cardsUnit": "Karten",
+      "decreaseMaxRecent": "Max. letzte Einträge verringern",
+      "increaseMaxRecent": "Max. letzte Einträge erhöhen"
     }
   },
   "sourceControl": {
@@ -5939,6 +5966,8 @@
       "working": "In Arbeit"
     }
   },
+  "recentSessionCardsSectionTitle": "Zuletzt verwendet",
+  "recentSessionCardsEmpty": "Noch keine weiteren letzten Karten",
   "mcpServers": {
     "agentBlocked": "Durch die Claude-Einstellungen deiner Organisation blockiert"
   }

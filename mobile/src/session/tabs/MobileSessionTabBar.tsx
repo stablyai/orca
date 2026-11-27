@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { Bell, Plus } from 'lucide-react-native'
+import { Plus } from 'lucide-react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, {
   Easing,
@@ -29,6 +29,7 @@ import {
   isForkedChatTab,
   type MobileSessionTabSummary
 } from './mobile-session-tab-rows'
+import { MobileSessionTabCountButton } from './MobileSessionTabCountButton'
 import { MobileSessionTabMark } from './MobileSessionTabMark'
 import { MobileSessionTabsSheet } from './MobileSessionTabsSheet'
 import { MobileForkMarkedName } from '../fork/MobileForkMarkedName'
@@ -87,6 +88,8 @@ export function MobileSessionTabBar({
     handleOpenNewTab,
     switchSessionTab,
     openSessionTabActionSheetAfterKeyboardDismiss,
+    showRecentSessionCards,
+    setShowRecentSessionCards,
     visibleTabs,
     terminals
   } = controller
@@ -118,7 +121,6 @@ export function MobileSessionTabBar({
   const othersNeedYou = rows.some(
     (row) => row.tab.id !== activeSessionTabId && row.group === 'needs-you'
   )
-  const [sheetOpen, setSheetOpen] = useState(false)
 
   const reducedMotion = useDrawerReducedMotion()
   const offset = useSharedValue(0)
@@ -193,13 +195,6 @@ export function MobileSessionTabBar({
     .filter(Boolean)
     .join(', ')
   const anyUnread = rows.some((row) => row.unread)
-  const countAccessibilityLabel = [
-    countLabel,
-    anyUnread ? t('agents.list.unread', 'Unread') : null,
-    othersNeedYou ? t('session.tabBar.anotherNeedsYou', 'another tab needs you') : null
-  ]
-    .filter(Boolean)
-    .join(', ')
   const createDisabled = createTabBusy || connState !== 'connected'
   const openTabActions = () => {
     // The click a drag release produces on the web belongs to the drag.
@@ -267,23 +262,14 @@ export function MobileSessionTabBar({
           </Pressable>
         </View>
       </GestureDetector>
-      <Pressable
-        style={({ pressed }) => [
-          styles.sideCell,
-          actionsCollapsed && !inTopBar && styles.lastCell,
-          pressed && styles.cellPressed
-        ]}
-        onPress={() => setSheetOpen(true)}
-        accessibilityRole="button"
-        accessibilityLabel={countAccessibilityLabel}
-        accessibilityHint={t('session.tabBar.hint', 'Shows all tabs')}
-      >
-        <View style={styles.countBox}>
-          <Text style={styles.countText}>{tabCount}</Text>
-          {othersNeedYou ? <View style={styles.alert} /> : null}
-        </View>
-        {anyUnread ? <Bell size={12} color={colors.statusAmber} fill={colors.statusAmber} /> : null}
-      </Pressable>
+      <MobileSessionTabCountButton
+        count={rows.length}
+        anyUnread={anyUnread}
+        othersNeedYou={othersNeedYou}
+        active={showRecentSessionCards}
+        isLastCell={actionsCollapsed && !inTopBar}
+        onPress={() => setShowRecentSessionCards(true)}
+      />
       {/* A collapsed bar's + lives in the header's ⋯ menu. */}
       {!actionsCollapsed ? (
         <Pressable
@@ -305,8 +291,8 @@ export function MobileSessionTabBar({
       <MobileSessionTabsSheet
         controller={controller}
         tabs={rows}
-        visible={sheetOpen}
-        onClose={() => setSheetOpen(false)}
+        visible={showRecentSessionCards}
+        onClose={() => setShowRecentSessionCards(false)}
       />
     </View>
   )

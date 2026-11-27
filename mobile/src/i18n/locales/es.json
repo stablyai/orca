@@ -2546,6 +2546,8 @@
       "sourceControl": "Control de código fuente",
       "newTab": "Nueva pestaña",
       "quickCommands": "Comandos rápidos",
+      "switchToSingleTabBar": "Cambiar a barra de pestañas completa",
+      "switchToCompactTabStrip": "Cambiar a barra de pestañas compacta",
       "items": "Elementos"
     },
     "headerMoreActionsSheet": {
@@ -2761,7 +2763,8 @@
     "tabStrip": {
       "checkingCapabilities": "Comprobando las funciones del escritorio. Inténtalo de nuevo en un momento.",
       "newTab": "Nueva pestaña",
-      "quickCommandsUpdateRequired": "Actualiza el escritorio para usar los comandos rápidos."
+      "quickCommandsUpdateRequired": "Actualiza el escritorio para usar los comandos rápidos.",
+      "tabStatus": "{{title}}, {{status}}"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Limpiar terminal",
@@ -3081,6 +3084,19 @@
     "browserProfile": {
       "default": "Predeterminado"
     },
+    "recentSessionCards": {
+      "decreaseLimit": "Reducir límite de tarjetas recientes",
+      "increaseLimit": "Aumentar límite de tarjetas recientes",
+      "cardClosed": "La tarjeta se cerró",
+      "waitingForHost": "Esperando al host…",
+      "workspaceGone": "El espacio de trabajo ya no existe",
+      "cardClosedOpeningWorkspace": "Tarjeta cerrada; abriendo espacio de trabajo"
+    },
+    "tabsSheet": {
+      "recentCaption": "Recientes entre espacios",
+      "recentSegment": "Recientes",
+      "workspaceSegment": "Este espacio ({{count}})"
+    },
     "tabBar": {
       "oneTab": "1 pestaña",
       "tabCount": "Pestañas: {{count}}",
@@ -3292,6 +3308,17 @@
       "download": "Descargar para este teléfono",
       "downloadSize": "Unos {{size}} MB",
       "phoneChecking": "Comprobando…"
+    },
+    "nativeChat": {
+      "recentlyUsed": "USADOS RECIENTEMENTE",
+      "recentlyUsedFooter": "Personaliza el diseño de la barra de pestañas y cuántas pestañas recientes se muestran (predeterminado 7).",
+      "compactTabStrip": "Barra de pestañas compacta",
+      "compactTabStripOn": "Pestañas estrechas desplazables en la barra superior",
+      "compactTabStripOff": "Una sola pestaña activa de ancho completo arriba",
+      "maxRecentItems": "Máx. elementos recientes",
+      "cardsUnit": "tarjetas",
+      "decreaseMaxRecent": "Reducir máx. elementos recientes",
+      "increaseMaxRecent": "Aumentar máx. elementos recientes"
     },
     "sharedLinks": {
       "bots": "Bots"
@@ -5760,6 +5787,8 @@
       "working": "Trabajando"
     }
   },
+  "recentSessionCardsSectionTitle": "Usados recientemente",
+  "recentSessionCardsEmpty": "Aún no hay otras tarjetas recientes",
   "mcpServers": {
     "category": {
       "coding": "Programación",
