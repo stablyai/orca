@@ -33,6 +33,20 @@ vi.mock('react-native', () => ({
   Text: 'Text',
   View: 'View'
 }))
+vi.mock('./list/SwipeRowActions', () => ({
+  SwipeRowActions: ({
+    children
+  }: {
+    children: (
+      guardPress: (onPress: () => void) => () => void,
+      guardDragRelease: (onPress: () => void) => () => void
+    ) => unknown
+  }) =>
+    children(
+      (onPress) => onPress,
+      (onPress) => onPress
+    )
+}))
 vi.mock('lucide-react-native', () => ({
   Bell: 'Bell',
   ChevronDown: 'ChevronDown',

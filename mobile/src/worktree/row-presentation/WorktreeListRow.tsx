@@ -395,6 +395,8 @@ function WorktreeListRowComponent({
                   pressed && styles.lineageTogglePressed
                 ]}
                 hitSlop={LINEAGE_TOGGLE_HIT_SLOP}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: !view.lineageCollapsed }}
                 onPress={(event) => {
                   event.stopPropagation()
                   guardDragRelease(() => onToggleLineage({ row: item, view }))()
