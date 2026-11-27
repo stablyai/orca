@@ -13,6 +13,7 @@ import type { CodexSharedServerProcessSweep } from './codex-shared-server-chat-w
 import { endCodexSharedThreads } from './codex-shared-server-thread-end'
 import { CODEX_SHARED_REATTACH_READS } from './codex-shared-server-reattach'
 import { mapSettledWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
+import { PrioritySemaphore } from '../../../../shared/concurrency/priority-semaphore'
 import type { CodexSharedServerFrame } from './codex-shared-server-frames'
 import type { CodexSharedLeaseRelay } from './codex-shared-lease-host'
 import type { CodexSharedServerLease } from './codex-shared-server-lease'
@@ -58,7 +59,24 @@ export class CodexSharedServerKeep implements CodexSharedLeaseRelay, CodexShared
   private quitOpen: Work | null | undefined
   private handedOff = false
 
+  /** Every metadata read on this server (reattach, retries, cleanup) shares these four permits. */
+  private readonly readPermits = new PrioritySemaphore(CODEX_SHARED_REATTACH_READS)
+
   constructor(private readonly server: CodexKeptServer) {}
+
+  /** The server's connection with its reads limited to four at once, across every caller. */
+  limited(connection: CodexAppServerConnection): Pick<CodexAppServerConnection, 'request'> {
+    return {
+      request: async (method, params, options) => {
+        const release = await this.readPermits.acquire(0)
+        try {
+          return await connection.request(method, params, options)
+        } finally {
+          release()
+        }
+      }
+    }
+  }
 
   private get relay() {
     return this.server.physicalConnection?.relay
@@ -225,7 +243,9 @@ export class CodexSharedServerKeep implements CodexSharedLeaseRelay, CodexShared
       this.server.recovery.dueUnresolved(),
       CODEX_SHARED_REATTACH_READS,
       async (root) => {
-        const source = await readSource(connection, root, SOFT_READ_TIMEOUT_MS).catch(() => null)
+        const source = await readSource(this.limited(connection), root, SOFT_READ_TIMEOUT_MS).catch(
+          () => null
+        )
         if (!source || !this.server.recovery.holds(root)) {
           return
         }
@@ -245,6 +265,7 @@ export class CodexSharedServerKeep implements CodexSharedLeaseRelay, CodexShared
     if (connection) {
       await endCodexSharedThreads({
         connection,
+        reads: this.limited(connection),
         threads,
         workload,
         serverPid: this.server.pid,

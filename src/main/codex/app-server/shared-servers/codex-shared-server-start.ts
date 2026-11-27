@@ -12,6 +12,8 @@ export type CodexSharedServerRelayed = {
   chatKey: string
   attach?: KeptProviderRelay
   expected?: readonly CodexRecoveredChat[]
+  /** Deleted chats whose part it still runs: ended under their own tag once it is attached. */
+  ended?: readonly CodexRecoveredChat[]
 }
 
 /**
@@ -22,8 +24,9 @@ export type CodexSharedServerRelayed = {
 export async function startCodexSharedServer(
   server: CodexSharedServer,
   connect: typeof spawnCodexAppServerConnection,
-  expected: readonly CodexRecoveredChat[] | undefined
+  relayed: CodexSharedServerRelayed | undefined
 ): Promise<void> {
+  const { expected, ended = [] } = relayed ?? {}
   const connection = await connect(server.spec.launch, {
     onNotification: (method, params) => {
       server.turns.observe(method, params)
@@ -58,11 +61,18 @@ export async function startCodexSharedServer(
   }
   if (expected && connection.relay?.reattached) {
     const unwanted = await recoverCodexSharedServerThreads({
-      connection,
+      connection: server.keep.limited(connection),
       recovery: server.recovery,
       expected
     })
     connection.relay.releaseOutput()
-    void server.keep.endThreads(unwanted, null)
+    const deleted = new Set(ended.map((chat) => chat.threadId))
+    void server.keep.endThreads(
+      unwanted.filter((threadId) => !deleted.has(threadId)),
+      null
+    )
+    for (const chat of ended) {
+      void server.keep.endThreads([chat.threadId], chat.workload)
+    }
   }
 }

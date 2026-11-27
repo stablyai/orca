@@ -162,7 +162,7 @@ export async function deleteOrcaChat(
     // It never reads for its Runs again: their open worker asks are told now.
     retireChatRuns(runtime, record.sessionId)
     // An agent the terminal host still keeps for it (or its kept output) goes with it.
-    dropListedProviderRelay(record.sessionId)
+    dropListedProviderRelay(record.sessionId, false, record)
   }
   if (bot) {
     for (const record of chat.records) {

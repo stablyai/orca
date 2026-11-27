@@ -13,9 +13,12 @@ import {
 import { providerRelayRunGate } from '../../../provider-relay/provider-relay-run-liveness'
 import { providerRelayRebinding } from '../../../provider-relay/provider-relay-kept-rebind'
 import {
+  providerRelayPlacedRun,
   providerRelayPlacedRunOf,
   providerRelayRunsPlacedOn
 } from '../../../provider-relay/provider-relay-placed-records'
+import { providerRelayRunLiveness } from '../../../provider-relay/provider-relay-run-liveness'
+import { forgetListedProviderRelayChat } from '../../../provider-relay/provider-relay-launch-inventory'
 import type { CodexRecoveredChat } from './codex-shared-server-recovery'
 
 /** A chat's last run on a shared server: which relay and daemon start, and its commands' tag. */
@@ -38,6 +41,34 @@ function codexThreadOf(record: AgentSessionRecord): string | null {
   return handle &&
     isAgentSessionProviderHandleInNamespace(handle, CODEX_STRUCTURED_HANDLE_NAMESPACE)
     ? handle.nativeId
+    : null
+}
+
+/**
+ * A deleted chat's pooled run, when its daemon start still keeps it: its relay, now listed for this
+ * one ask, and its part to end. Null when the run is gone or can't be reached.
+ */
+export async function codexDeletedPooledRun(record: AgentSessionRecord): Promise<{
+  relay: KeptProviderRelay
+  run: CodexPooledRun
+  chat: CodexRecoveredChat
+} | null> {
+  const placed = providerRelayPlacedRun(record)
+  const threadId = codexThreadOf(record)
+  const workload = placed?.placement.workload
+  if (!placed || !threadId || !workload) {
+    return null
+  }
+  const verdict = await providerRelayRunLiveness(record, { fresh: true }).catch(() => 'unknown')
+  const relay = keptProviderRelay(record.sessionId)
+  forgetListedProviderRelayChat(record.sessionId)
+  const { relayId, daemon } = placed.placement
+  return verdict === 'kept' && relay
+    ? {
+        relay,
+        run: { relayId, daemon, workload },
+        chat: { sessionId: record.sessionId, threadId, workload }
+      }
     : null
 }
 

@@ -71,7 +71,7 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
           codexSharedRelayAs(relayed.chatKey, this.keep, relayed.attach)
         )
       : connect
-    this.ready = startCodexSharedServer(this, retiringHungCodexServers(opener), relayed?.expected)
+    this.ready = startCodexSharedServer(this, retiringHungCodexServers(opener), relayed)
   }
 
   /** The transport, once connected (startCodexSharedServer sets it). */

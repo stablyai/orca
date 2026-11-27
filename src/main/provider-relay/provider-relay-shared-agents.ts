@@ -1,8 +1,15 @@
 import type { ProviderRelayInfo } from '../daemon/protocol/daemon-provider-relay-protocol'
 import type { KeptProviderRelay } from './provider-relay-launch-inventory'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 
-/** `relay` null: the chat wasn't listed here, so every shared agent attached here is told. */
-type Dropped = (chatKey: string, relay: KeptProviderRelay | null) => void
+/** `relay` null: the chat wasn't listed here, so every shared integration is told. `deleted`: its
+ *  record as it was before deletion forgot it. */
+export type SharedProviderRelayDropped = (
+  chatKey: string,
+  relay: KeptProviderRelay | null,
+  deleted?: AgentSessionRecord
+) => void
+type Dropped = SharedProviderRelayDropped
 
 /** Integrations whose one agent serves many chats: a chat's drop never closes it, its owner does. */
 const sharedAgents = new Map<string, Dropped>()
@@ -38,8 +45,8 @@ export function providerRelayAttachedByOther(info: ProviderRelayInfo): boolean {
 }
 
 /** A deleted chat no relay was listed for: every shared integration hears it. */
-export function sharedProviderRelayChatDropped(chatKey: string): void {
+export function sharedProviderRelayChatDropped(chatKey: string, deleted?: AgentSessionRecord) {
   for (const dropped of sharedAgents.values()) {
-    dropped(chatKey, null)
+    dropped(chatKey, null, deleted)
   }
 }

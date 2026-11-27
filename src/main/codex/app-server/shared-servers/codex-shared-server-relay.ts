@@ -5,6 +5,7 @@ import {
   type ProviderRelayWorkMarkers
 } from '../../../provider-relay/app-provider-relays'
 import type { ProviderRelayAckFloor } from '../../../provider-relay/relayed-provider-output'
+import type { SharedProviderRelayDropped } from '../../../provider-relay/provider-relay-shared-agents'
 import { createCodexRelayAckFloor } from '../codex-relay-ack-floor'
 import { CODEX_RELAY_WORK_MARKERS, type CodexAppServerRelayAs } from '../codex-app-server-relay'
 
@@ -12,7 +13,7 @@ import { CODEX_RELAY_WORK_MARKERS, type CodexAppServerRelayAs } from '../codex-a
 export const CODEX_SHARED_RELAY_AGENT = 'codex-shared'
 
 /** Who hears that a deleted chat no longer wants its part of a kept shared server. */
-let chatDropped: ((chatKey: string, relay: KeptProviderRelay | null) => void) | null = null
+let chatDropped: SharedProviderRelayDropped | null = null
 
 export function onCodexSharedRelayChatDropped(listener: typeof chatDropped): void {
   chatDropped = listener
@@ -20,7 +21,7 @@ export function onCodexSharedRelayChatDropped(listener: typeof chatDropped): voi
 
 registerReattachableProviderRelayAgent(CODEX_SHARED_RELAY_AGENT, {
   provider: 'codex',
-  shared: { dropped: (chatKey, relay) => chatDropped?.(chatKey, relay) }
+  shared: { dropped: (chatKey, relay, deleted) => chatDropped?.(chatKey, relay, deleted) }
 })
 
 /** The relay's own key: the server's launch key, and a part unique to this server. */

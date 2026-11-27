@@ -52,6 +52,12 @@ export class CodexSharedServerRecovery {
   private readonly groupOf = new Map<string, RecoveryGroup>()
   private readonly bySession = new Map<string, RecoveryGroup>()
   private heldBytes = 0
+  /** Groups holding frames, so the floor and the byte bound never visit the empty ones. */
+  private readonly withFrames = new Set<RecoveryGroup>()
+  /** Groups with no chat yet, so a retry never visits the expected ones. */
+  private readonly unresolved = new Set<RecoveryGroup>()
+  /** An unknown thread's frames were let go at the cap: every chat that claims gets a cut. */
+  private cutEverything = false
   /** The reattach couldn't list every loaded thread: an unknown thread's frames are held too. */
   discoveryPartial = false
 
@@ -93,6 +99,7 @@ export class CodexSharedServerRecovery {
     const existing = this.groupOf.get(chat.threadId)
     if (existing && existing.root === chat.threadId) {
       existing.chat = chat
+      this.unresolved.delete(existing)
       this.bySession.set(chat.sessionId, existing)
       return
     }
@@ -127,6 +134,12 @@ export class CodexSharedServerRecovery {
     if (!group || group.collapsed) {
       return false
     }
+    if (this.groups.size >= this.maxIdentities && !this.groupOf.has(child)) {
+      // Roots alone fill the cap: nothing can collapse, so the child isn't tracked and the
+      // family that would have held it gets the cut.
+      group.cut = true
+      return false
+    }
     const current = this.groupOf.get(child)
     if (current === group) {
       return true
@@ -146,19 +159,20 @@ export class CodexSharedServerRecovery {
   }
 
   hold(threadId: string, frame: CodexSharedServerFrame): boolean {
-    // Bounded: past the identity cap an unknown thread gets today's unrouted handling.
-    if (
-      this.discoveryPartial &&
-      !this.groupOf.has(threadId) &&
-      this.identities < this.maxIdentities
-    ) {
-      this.holdUnowned(threadId)
+    if (this.discoveryPartial && !this.groupOf.has(threadId)) {
+      if (this.identities < this.maxIdentities) {
+        this.holdUnowned(threadId)
+      } else {
+        // Past the cap an unknown thread gets today's unrouted handling; any chat may own it.
+        this.cutAll()
+      }
     }
     const group = this.groupOf.get(threadId)
     if (!group) {
       return false
     }
     const bytes = frameBytes(frame)
+    this.withFrames.add(group)
     group.frames.push({ frame, bytes })
     group.bytes += bytes
     this.heldBytes += bytes
@@ -169,7 +183,7 @@ export class CodexSharedServerRecovery {
   /** The first held frame's seq, for the relay's ack floor. */
   floor(): number | null {
     let floor: number | null = null
-    for (const group of this.groups.values()) {
+    for (const group of this.withFrames) {
       const seq = group.frames.find((held) => typeof held.frame.seq === 'number')?.frame.seq
       if (typeof seq === 'number' && (floor === null || seq < floor)) {
         floor = seq
@@ -193,8 +207,8 @@ export class CodexSharedServerRecovery {
   /** Unresolved roots due a read again (one per 10 s each), marked read now. */
   dueUnresolved(now = Date.now()): string[] {
     const due: string[] = []
-    for (const group of this.groups.values()) {
-      if (group.chat === null && now - group.readAt >= 10_000) {
+    for (const group of this.unresolved) {
+      if (now - group.readAt >= 10_000) {
         group.readAt = now
         due.push(group.root)
       }
@@ -220,10 +234,25 @@ export class CodexSharedServerRecovery {
   private add(group: RecoveryGroup): void {
     this.groups.set(group.root, group)
     this.groupOf.set(group.root, group)
+    group.cut ||= this.cutEverything
+    if (group.chat === null) {
+      this.unresolved.add(group)
+    }
+  }
+
+  private cutAll(): void {
+    if (!this.cutEverything) {
+      this.cutEverything = true
+      for (const group of this.groups.values()) {
+        group.cut = true
+      }
+    }
   }
 
   private remove(group: RecoveryGroup): CodexRecoveredGroup {
     this.groups.delete(group.root)
+    this.withFrames.delete(group)
+    this.unresolved.delete(group)
     for (const threadId of group.threads.keys()) {
       this.groupOf.delete(threadId)
     }
@@ -241,6 +270,11 @@ export class CodexSharedServerRecovery {
 
   private merge(from: RecoveryGroup, into: RecoveryGroup, parent: string): void {
     this.groups.delete(from.root)
+    this.withFrames.delete(from)
+    this.unresolved.delete(from)
+    if (from.frames.length > 0) {
+      this.withFrames.add(into)
+    }
     for (const [threadId, link] of from.threads) {
       into.threads.set(threadId, threadId === from.root ? parent : link)
       this.groupOf.set(threadId, into)
@@ -262,7 +296,7 @@ export class CodexSharedServerRecovery {
     }
     over += room / 8
     while (over > 0) {
-      const largest = this.largest((group) => group.bytes)
+      const largest = this.largest((group) => group.bytes, this.withFrames)
       if (!largest) {
         return
       }
@@ -288,7 +322,8 @@ export class CodexSharedServerRecovery {
 
   /** Past the identity cap, the group with the most descendants collapses to its root. */
   private boundIdentities(): void {
-    while (this.groupOf.size > this.maxIdentities) {
+    // Only descendants can collapse; roots are bounded by the chats and the reattach listing.
+    while (this.groupOf.size > this.maxIdentities && this.groupOf.size > this.groups.size) {
       const largest = this.largest((group) => group.threads.size - 1)
       if (!largest) {
         return
@@ -317,10 +352,13 @@ export class CodexSharedServerRecovery {
     }
   }
 
-  private largest(size: (group: RecoveryGroup) => number): RecoveryGroup | null {
+  private largest(
+    size: (group: RecoveryGroup) => number,
+    among: Iterable<RecoveryGroup> = this.groups.values()
+  ): RecoveryGroup | null {
     let best: RecoveryGroup | null = null
     let bestSize = 0
-    for (const group of this.groups.values()) {
+    for (const group of among) {
       const value = size(group)
       if (value > bestSize) {
         best = group

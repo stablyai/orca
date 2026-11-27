@@ -4,11 +4,7 @@ import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 import { providerRelayChannel, type ProviderRelayChannel } from './provider-relay-channel'
 import { readFile } from 'node:fs/promises'
 import { spawnTokenFromEnvironBlock } from '../runtime/agent-session/ownership/agent-session-spawn-token-readback'
-import {
-  forgetProviderRelayRunVerdict,
-  providerRelayRunAskUnfenced,
-  providerRelayRunUnknown
-} from './provider-relay-run-verdicts'
+import { providerRelayRunAskUnfenced, providerRelayRunUnknown } from './provider-relay-run-verdicts'
 export {
   beginProviderRelayRunAsk,
   forgetIdleProviderRelayRunVerdict,
@@ -22,8 +18,7 @@ export {
 import {
   providerRelayAgentShared,
   registerSharedProviderRelayAgent,
-  sharedProviderRelayChatDropped,
-  sharedProviderRelayDropped
+  type SharedProviderRelayDropped
 } from './provider-relay-shared-agents'
 
 const LIST_TIMEOUT_MS = 3_000
@@ -66,7 +61,7 @@ export function registerReattachableProviderRelayAgent(
     opensEnded?: boolean
     provider?: string
     /** One agent serves many chats; `dropped` hears a chat (deleted) that no longer wants its part. */
-    shared?: { dropped: (chatKey: string, relay: KeptProviderRelay | null) => void }
+    shared?: { dropped: SharedProviderRelayDropped }
   } = {}
 ): void {
   reattachableAgents.add(agent)
@@ -353,29 +348,6 @@ export function forgetKeptProviderRelay(chatKey: string, relay: KeptProviderRela
 export function keptRunningProviderRelayPid(chatKey: string): number | null {
   const relay = keptProviderRelay(chatKey)
   return relay && keptProviderRelayOutstanding(relay.info) ? relay.info.pid : null
-}
-
-/** Ended relays found at launch are dropped once their chat cold-resumes. */
-/** `keepUnread`: output no app took stays with the daemon (it expires there); a deleted chat drops it. */
-export function dropListedProviderRelay(chatKey: string, keepUnread = false): void {
-  if (!keepUnread) {
-    forgetProviderRelayRunVerdict(chatKey)
-  }
-  const relay = keptProviderRelay(chatKey)
-  if (!relay && !keepUnread) {
-    // Its part of a shared agent this app already attached (and claimed for no one) goes too.
-    sharedProviderRelayChatDropped(chatKey)
-  }
-  if (relay) {
-    forgetKeptProviderRelay(chatKey, relay)
-    const shared = sharedProviderRelayDropped(relay.info.agent)
-    if (shared) {
-      // Other chats still ride it: only this chat's part goes.
-      shared(chatKey, relay)
-    } else if (!keepUnread || !keptProviderRelayUnread(relay.info)) {
-      void relay.channel.close(relay.info.relayId).catch(() => {})
-    }
-  }
 }
 
 /** Chats whose agent this app reattached from the last run; it stays true after that agent ends. */

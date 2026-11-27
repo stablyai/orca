@@ -1,6 +1,6 @@
 import type { DaemonClient } from '../daemon/transport/client/daemon-client'
+export { dropListedProviderRelay } from './provider-relay-chat-drop'
 export {
-  dropListedProviderRelay,
   keptProviderRelaySpawnToken,
   keptRunningProviderRelayPid,
   providerRelayKeptFromLastRun,

@@ -18,6 +18,8 @@ const END_TIMEOUT_MS = 5_000
  */
 export async function endCodexSharedThreads(input: {
   connection: CodexAppServerConnection
+  /** The server's shared, limited reads. */
+  reads: Pick<CodexAppServerConnection, 'request'>
   threads: readonly string[]
   /** The chat's tag; null for threads no chat's record names (only Codex's own list is stopped). */
   workload: string | null
@@ -30,7 +32,7 @@ export async function endCodexSharedThreads(input: {
   }
   await mapSettledWithConcurrency(threads, CODEX_SHARED_REATTACH_READS, async (threadId) => {
     const page = readRecord(
-      await connection.request(
+      await input.reads.request(
         'thread/turns/list',
         { threadId, sortDirection: 'desc', limit: 1 },
         { timeoutMs: END_TIMEOUT_MS }
@@ -38,7 +40,7 @@ export async function endCodexSharedThreads(input: {
     )
     const turn = readRecord(Array.isArray(page.data) ? page.data[0] : null)
     if (typeof turn.id === 'string' && readCodexTurnStatus(turn) === 'inProgress') {
-      await connection.request(
+      await input.reads.request(
         'turn/interrupt',
         { threadId, turnId: turn.id },
         { timeoutMs: END_TIMEOUT_MS }
