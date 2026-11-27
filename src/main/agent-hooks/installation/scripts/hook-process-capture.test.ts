@@ -111,6 +111,31 @@ describe('Claude hook process capture cache', () => {
         await rm(cacheFile)
         expect(await run(prompt)).toBe(fresh)
         await expect(readFile(cacheFile)).rejects.toThrow()
+
+        // A ps that finds nothing (the recorded process is gone) empties the record instead of keeping it reusable.
+        const deadPid = 2 ** 22 + 1
+        await writeFile(
+          cacheFile,
+          `header\n${deadPid} 8:launch-1 {"pid":${deadPid},"platform":"darwin","startTime":"cached"}\n`
+        )
+        const direct = (payload: string) =>
+          runProcess({
+            program: '/bin/sh',
+            args: [scriptPath],
+            env: {
+              HOME: home,
+              PATH: '/usr/bin:/bin',
+              ORCA_PANE_KEY: 'presence-test-pane',
+              ORCA_AGENT_LAUNCH_TOKEN: 'launch-1',
+              ORCA_AGENT_HOOK_ENDPOINT: endpoint,
+              ORCA_HOOK_AGENT_PID: String(deadPid)
+            },
+            input: payload,
+            timeoutMs: 5000
+          })
+        await direct(prompt)
+        expect(await readFile(cacheFile, 'utf8')).toBe('header\n')
+        expect((await direct(toolEvent)).stdout).toBe('{}\n')
       } finally {
         await rm(home, { recursive: true, force: true })
       }

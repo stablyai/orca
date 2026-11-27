@@ -39,7 +39,9 @@ export function buildHookProcessCapture(options: { reuseOnToolEvents?: boolean }
         // cache made, and never over another live agent sharing the pane, which would evict it on every switch.
         '      orca_agent_owner=${orca_agent_cached%% *}',
         '      case "$orca_agent_owner" in ""|*[!0-9]*|"$orca_agent_pid") ;; *) ! kill -0 "$orca_agent_owner" 2>/dev/null || orca_agent_cache= ;; esac',
-        '      [ -z "$orca_agent_process" ] || [ ! -f "$orca_agent_cache" ] || [ "$orca_agent_pid" != "${ORCA_HOOK_AGENT_PID:-}" ] || [ "$orca_agent_cached" = "$orca_agent_key $orca_agent_process" ] || orca_hook_cache_write "$orca_agent_cache" "$orca_agent_header" "$orca_agent_key $orca_agent_process"',
+        // A failed ps empties the record, so a later tool event can't reuse another process's answer.
+        '      orca_agent_record=${orca_agent_process:+"$orca_agent_key $orca_agent_process"}',
+        '      [ ! -f "$orca_agent_cache" ] || [ "$orca_agent_pid" != "${ORCA_HOOK_AGENT_PID:-}" ] || [ "$orca_agent_cached" = "$orca_agent_record" ] || orca_hook_cache_write "$orca_agent_cache" "$orca_agent_header" "$orca_agent_record"',
         '    fi'
       ]
     : DARWIN_PS_CAPTURE
