@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react'
+import React, { useMemo } from 'react'
 import { useTabStripOverflowNavigation } from './strip/tab-strip-overflow-navigation'
 import { useTabStripDragScrollHandlers } from './strip/tab-strip-drag-scroll'
 import type { TabBarProps } from './tab-bar-props'
@@ -176,13 +176,10 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
   )
   const attachFileDropOwner = useEditorGroupFileDropOwner({ worktreeId, groupId })
   const { clearPendingNewTabMenuFocusOnUnmount } = createMenu
-  const surfaceRef = useCallback(
-    (node: HTMLDivElement | null) => {
-      clearPendingNewTabMenuFocusOnUnmount(node)
-      attachFileDropOwner(node)
-    },
-    [attachFileDropOwner, clearPendingNewTabMenuFocusOnUnmount]
-  )
+  const surfaceRef = (node: HTMLDivElement | null): void => {
+    clearPendingNewTabMenuFocusOnUnmount(node)
+    attachFileDropOwner(node)
+  }
   const tabStripDragScroll = useTabStripDragScrollHandlers(tabStripNavigation.scrollTabStrip, {
     start: tabStripNavigation.tabStripOverflowState.canScrollStart,
     end: tabStripNavigation.tabStripOverflowState.canScrollEnd
