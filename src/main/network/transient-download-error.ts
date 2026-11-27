@@ -18,26 +18,36 @@ const RETRYABLE_NODE_ERROR_CODES = new Set([
   'EHOSTUNREACH',
   'EAI_AGAIN',
   'ENOTFOUND',
-  'ERR_STREAM_PREMATURE_CLOSE'
+  'ERR_STREAM_PREMATURE_CLOSE',
+  'UND_ERR_SOCKET',
+  'UND_ERR_CONNECT_TIMEOUT',
+  'UND_ERR_HEADERS_TIMEOUT',
+  'UND_ERR_BODY_TIMEOUT'
 ])
 const RETRYABLE_HTTP_STATUSES = new Set([408, 416, 425, 429, 500, 502, 503, 504])
 
 export function isRetryableDownloadError(error: unknown): boolean {
-  if (!(error instanceof Error)) {
-    return false
+  const seen = new Set<Error>()
+  while (error instanceof Error && !seen.has(error)) {
+    seen.add(error)
+    const downloadError: HttpStatusError = error
+    if (downloadError.retryable !== undefined) {
+      return downloadError.retryable
+    }
+    const statusCode = downloadError.httpStatusCode
+    if (statusCode !== undefined) {
+      return RETRYABLE_HTTP_STATUSES.has(statusCode)
+    }
+    const code = 'code' in error && typeof error.code === 'string' ? error.code : null
+    if (
+      RETRYABLE_NET_ERROR.test(error.message) ||
+      error.message.includes('without network activity') ||
+      (code !== null && RETRYABLE_NODE_ERROR_CODES.has(code))
+    ) {
+      return true
+    }
+    // Node fetch wraps connection and body failures in TypeError with the transport as its cause.
+    error = error.cause
   }
-  const downloadError: HttpStatusError = error
-  if (downloadError.retryable === true) {
-    return true
-  }
-  const statusCode = downloadError.httpStatusCode
-  if (statusCode !== undefined) {
-    return RETRYABLE_HTTP_STATUSES.has(statusCode)
-  }
-  const code = 'code' in error && typeof error.code === 'string' ? error.code : null
-  return (
-    RETRYABLE_NET_ERROR.test(error.message) ||
-    error.message.includes('without network activity') ||
-    (code !== null && RETRYABLE_NODE_ERROR_CODES.has(code))
-  )
+  return false
 }
