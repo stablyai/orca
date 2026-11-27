@@ -2133,7 +2133,15 @@
       "defaultSurfaceServerDescription": "O padrão para os agentes que o próprio {{host}} inicia, como pela CLI ou por workers de orquestração. Os agentes que você abre neste computador seguem a escolha de Este computador.",
       "permissionMixed": "Misto",
       "choiceChipTooltip": "Adicionado por {{choice}}. Remova-o para usar o padrão.",
-      "choiceChipRemove": "Remover {{flag}}"
+      "choiceChipRemove": "Remover {{flag}}",
+      "doubaoSignIn": {
+        "check": "Verificar login",
+        "checking": "Verificando login…",
+        "verified": "Sessão iniciada neste host",
+        "signedOut": "Faça login neste host",
+        "unverified": "Não foi possível verificar o login neste host",
+        "copy": "Copiar comando de login"
+      }
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "link simbólico",
@@ -3456,6 +3464,7 @@
           "mimo_code_label": "MiMo Code",
           "opencode2_label": "OpenCode 2",
           "freebuff_label": "Freebuff",
+          "doubao_label": "Doubao",
           "muse_label": "Muse",
           "dsh_label": "DeepSeek Harness",
           "qoder_label": "Qoder CLI",
@@ -27017,6 +27026,12 @@
     "waitForImageUploads": "Aguarde o envio das imagens terminar e tente Criar PR novamente."
   },
   "agentPicker": {
+    "doubaoSshModels": {
+      "action": "Ver modelos do Doubao…",
+      "title": "Modelos do Doubao neste host SSH",
+      "failed": "Não foi possível listar os modelos do Doubao. Verifique a conexão SSH e a CLI do Doubao neste host e tente novamente.",
+      "empty": "A CLI do Doubao não retornou nenhum modelo."
+    },
     "refreshModels": "Atualizar modelos",
     "catalogUnsupportedLaunch": "Os modelos de {{agent}} não estão disponíveis neste host. Suas escolhas atuais continuam valendo.",
     "catalogLoadFailed": "Não foi possível carregar os modelos de {{agent}}.",
@@ -27033,6 +27048,9 @@
     "argumentsHint": "Aplica-se apenas às inicializações pela CLI.",
     "launchChat": "Iniciar chat",
     "launchTerminal": "Iniciar terminal",
+    "resumeById": "Retomar uma sessão pelo ID",
+    "doubaoSessionId": "ID da sessão exibido ao sair do Doubao",
+    "resumeTerminal": "Retomar",
     "setByArguments": "Definido pelos seus argumentos",
     "searchModels": "Pesquisar modelos",
     "noModels": "Nenhum modelo corresponde à pesquisa.",

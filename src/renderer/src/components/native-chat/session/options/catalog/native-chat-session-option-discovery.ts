@@ -7,7 +7,11 @@ import {
 } from '../../../../../../../shared/source-control/ai/generation/commit-message-host-key'
 import { runtimeTargetForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
 import { hasExplicitTuiLaunchCommand } from '../../../../../../../shared/agent-launch/startup/tui-agent-launch-command-override'
-import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
+import {
+  getConnectionIdForWorktreeCopy,
+  getConnectionIdFromState
+} from '@/lib/workspace/ownership/connection-owner-resolution'
+import type { ExecutionHostId } from '../../../../../../../shared/execution-host/execution-host'
 import {
   getLocalProjectExecutionRuntimeContext,
   getWslDistroFromPath
@@ -68,15 +72,19 @@ export function resolveNativeChatModelDiscoveryContext(
 /** How to ask a worktree's owner for models; null when the owner cannot be named. */
 export function resolveWorktreeModelDiscoveryRuntime(
   state: ReturnType<typeof useAppStore.getState>,
-  worktreeId: string | null
+  worktreeId: string | null,
+  copy?: { hostId: ExecutionHostId; path: string }
 ): RuntimeGitContext | null {
-  const connectionId = getConnectionIdFromState(state, worktreeId)
+  const connectionId =
+    worktreeId && copy
+      ? getConnectionIdForWorktreeCopy(state, worktreeId, copy.hostId)
+      : getConnectionIdFromState(state, worktreeId)
   if (worktreeId && connectionId === undefined) {
     return null
   }
   // Why: discovery asks the worktree's owner; an owner the rows can't name gets no models.
   const target = worktreeId
-    ? runtimeTargetForWorkspaceOwner(state, { workspaceId: worktreeId })
+    ? runtimeTargetForWorkspaceOwner(state, { workspaceId: worktreeId, hostId: copy?.hostId })
     : ({ kind: 'local' } as const)
   if (!target) {
     return null
@@ -85,7 +93,7 @@ export function resolveWorktreeModelDiscoveryRuntime(
     target,
     prefs: state.settings,
     worktreeId,
-    worktreePath: selectFileListWorktree(state, worktreeId)?.path ?? '',
+    worktreePath: copy?.path ?? selectFileListWorktree(state, worktreeId)?.path ?? '',
     ...(connectionId ? { connectionId } : {})
   }
 }

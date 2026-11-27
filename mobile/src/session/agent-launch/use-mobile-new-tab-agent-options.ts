@@ -1,3 +1,4 @@
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { hashKey, useQueryClient } from '@tanstack/react-query'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
@@ -62,6 +63,7 @@ export function useMobileNewTabAgentOptions(args: {
   surfaceChoice: NewTabAgentSurfaceChoice | null
 } {
   const { client, connState, hostId, open } = args
+  const t = useMobileTranslation()
   const queryClient = useQueryClient()
   const connected = client !== null && connState === 'connected'
   const { detection, settings, target, input, settingsSignalled } = useMobileAgentLaunchQueries({
@@ -130,9 +132,9 @@ export function useMobileNewTabAgentOptions(args: {
   const listed = useMemo(
     () =>
       loadState === 'loaded' && detected?.kind === 'detected'
-        ? newTabAgentOptionsFrom(settings.data?.settings, detected.detectedAgents)
+        ? newTabAgentOptionsFrom(settings.data?.settings, detected.detectedAgents, t)
         : NO_OPTIONS,
-    [detected, loadState, settings.data]
+    [detected, loadState, settings.data, t]
   )
   // The host runs an agent as a chat only when its agents list has it.
   const structuredHost =

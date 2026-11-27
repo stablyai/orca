@@ -6,6 +6,7 @@ import {
 import { formatAgentTypeLabel } from '../../../../src/shared/agent-status/presentation/agent-type-label'
 import { colors } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { MobileAgentIcon } from '../../components/icons/MobileAgentIcon'
 
@@ -18,12 +19,13 @@ export function BotLineAgentLogos({
   /** The row's surface, which the gap between logos shows, as MobileBotFaceStack does. */
   ringColor?: string
 }) {
+  const t = useMobileTranslation()
   useMobileColorScheme()
   const { size, step, gap } = BOT_WORKSPACE_LINE_LOGO
   return (
     <View
       style={{ width: (agent.agentTypes.length - 1) * step + size, height: size }}
-      accessibilityLabel={agent.agentTypes.map((type) => formatAgentTypeLabel(type)).join(', ')}
+      accessibilityLabel={agent.agentTypes.map((type) => formatAgentTypeLabel(type, t)).join(', ')}
     >
       {agent.agentTypes.map((type, index) => {
         // Later logos sit on earlier ones; a ring in the row's colour keeps them apart.

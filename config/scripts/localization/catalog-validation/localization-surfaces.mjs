@@ -1,6 +1,13 @@
 import path from 'node:path'
 
 // Copy both surfaces render; each resolves it in its own catalog through an injected translator.
+const AGENT_DISPLAY_NAMES = path.join(
+  'src',
+  'shared',
+  'agent-launch',
+  'catalog',
+  'tui-agent-display-names.ts'
+)
 const USAGE_STATUS_COPY_ROOT = path.join('src', 'shared', 'agent-usage', 'status-copy')
 
 // Desktop and mobile ship separate catalogs under one contract: same call shape, key rules and gates.
@@ -36,6 +43,7 @@ export const LOCALIZATION_SURFACES = {
         'accounts',
         'agent-session-usage-account-label.ts'
       ),
+      AGENT_DISPLAY_NAMES,
       USAGE_STATUS_COPY_ROOT
     ],
     runtimeRequiredPath: path.join('src', 'renderer', 'src', 'i18n', 'en-runtime-required.json'),
@@ -79,6 +87,7 @@ export const LOCALIZATION_SURFACES = {
         'accounts',
         'agent-session-usage-account-label.ts'
       ),
+      AGENT_DISPLAY_NAMES,
       USAGE_STATUS_COPY_ROOT
     ],
     runtimeRequiredPath: path.join('mobile', 'src', 'i18n', 'en-runtime-required.json'),

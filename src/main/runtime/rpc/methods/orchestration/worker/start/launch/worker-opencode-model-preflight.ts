@@ -1,3 +1,4 @@
+import { assertDoubaoWorkerModel } from './doubao-worker-model-preflight'
 import {
   prepareFederationConfiguredWorkerStart,
   resolveWorkerConfiguredAgentParams
@@ -34,7 +35,7 @@ export async function resolveLocalWorkerStartLaunch(args: {
   existingWorktree: string
   targetLabel: WorkerStartSelectorLabel
   runtime: OrcaRuntimeService
-  resolveTarget: () => Promise<{ repo?: string; worktree?: string }>
+  resolveTarget: () => Promise<{ repo: string } | { worktree: string }>
 }) {
   const { createsWorktree, existingWorktree, targetLabel, runtime, resolveTarget } = args
   const launchParams = await refuseUnmatchedWorkerSelector(targetLabel, () =>
@@ -67,6 +68,15 @@ export async function resolveLocalWorkerStartLaunch(args: {
     runtime,
     openCodeModelLaunchSupported
   })
+  if (prepared.agent === 'doubao' && launchParams.model) {
+    await refuseUnmatchedWorkerSelector(targetLabel, async () =>
+      assertDoubaoWorkerModel(
+        runtime,
+        { ...launchParams, agent: prepared.agent },
+        await resolveTarget()
+      )
+    )
+  }
   const warning = probeDropWarning ?? prepared.launch.warning
   return { ...prepared, ...(warning ? { warning } : {}) }
 }
@@ -85,5 +95,15 @@ export async function prepareFederationWorkerLaunchOnHost(
     (await probeWorkerOpenCodeModelLaunchSupport(args.runtime, params, {
       worktree: params.worktree
     }))
-  return prepareFederationConfiguredWorkerStart({ ...args, params, openCodeModelLaunchSupported })
+  const prepared = await prepareFederationConfiguredWorkerStart({
+    ...args,
+    params,
+    openCodeModelLaunchSupported
+  })
+  await assertDoubaoWorkerModel(
+    args.runtime,
+    { ...params, agent: prepared.agent },
+    args.createsWorktree && params.repo ? { repo: params.repo } : { worktree: params.worktree }
+  )
+  return prepared
 }

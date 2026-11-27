@@ -1,4 +1,5 @@
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+import { createHash } from 'node:crypto'
 import {
   InFlightPromiseDedupe,
   stableInFlightKey
@@ -57,6 +58,15 @@ export function discoverModelsWithHostCache(
   input: ModelDiscoveryCacheInput,
   probe: () => Promise<DiscoverCommitMessageModelsResult>
 ): Promise<DiscoverCommitMessageModelsResult> {
+  if (input.agentId === 'doubao') {
+    // Concurrent listings contend for Doubao's account lock. A later read must reflect account switches.
+    const key = createHash('sha256')
+      .update(
+        stableInFlightKey([input.agentId, input.agentCommandOverride, input.options, input.env])
+      )
+      .digest('hex')
+    return inFlight.run(key, probe)
+  }
   const accountDirVar = ACCOUNT_DIR_VAR[input.agentId]
   if (!accountDirVar) {
     return probe()

@@ -1,6 +1,7 @@
 import type { SourceControlLaunchActionId } from '../../../../src/shared/source-control/ai/recipes/source-control-ai-actions'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { TUI_AGENT_DISPLAY_NAMES as MOBILE_TUI_AGENT_LABELS } from '../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
+import { mobileTuiAgentLabel } from '../../agents/mobile-tui-agents'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useLocalSearchParams } from 'expo-router'
 import { firstParam } from '../../navigation/route-param-reader'
 import { agentLaunchContextOf, useMobileAgentLaunchQueries } from './mobile-agent-launch-queries'
@@ -18,6 +19,7 @@ export function useMobileLaunchAgentLabel(args: {
   actionId: SourceControlLaunchActionId | null
   enabled: boolean
 }): string | null {
+  const t = useMobileTranslation()
   const { client, worktreeId, hostCapabilities, actionId, enabled } = args
   const context = agentLaunchContextOf(
     useMobileAgentLaunchQueries({
@@ -40,7 +42,7 @@ export function useMobileLaunchAgentLabel(args: {
     hostCapabilities,
     registeredAgents
   })
-  return agent.kind === 'agent' ? MOBILE_TUI_AGENT_LABELS[agent.agent] : null
+  return agent.kind === 'agent' ? mobileTuiAgentLabel(agent.agent, t) : null
 }
 
 // Labels sit in workspace routes, whose path names the paired host.

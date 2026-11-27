@@ -1218,7 +1218,15 @@
       "hideAgentDetails": "隱藏 {{agent}} 詳細資訊",
       "defaultAutoBadge": "預設 · 自動",
       "newAgentsTitle": "新代理程式",
-      "defaultSurfaceServerDescription": "{{host}} 自行啟動代理程式時的預設開啟方式，例如透過它的 CLI 或編排工作行程啟動。你從這台電腦開啟的代理程式，則依照本機的設定。"
+      "defaultSurfaceServerDescription": "{{host}} 自行啟動代理程式時的預設開啟方式，例如透過它的 CLI 或編排工作行程啟動。你從這台電腦開啟的代理程式，則依照本機的設定。",
+      "doubaoSignIn": {
+        "check": "檢查登入狀態",
+        "checking": "正在檢查登入狀態…",
+        "verified": "已在此主機登入",
+        "signedOut": "請在此主機登入",
+        "unverified": "無法驗證此主機的登入狀態",
+        "copy": "複製登入指令"
+      }
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "符號連結",
@@ -2333,6 +2341,7 @@
           "fc80296033": "Devin",
           "da41abbdd4": "Ante",
           "060d152fb5": "Trae",
+          "doubao_label": "豆包",
           "muse_label": "Muse",
           "dsh_label": "DeepSeek Harness",
           "qoder_label": "Qoder CLI",
@@ -27793,6 +27802,12 @@
     "rerunUnsuccessful": "重新執行未成功的檢查"
   },
   "agentPicker": {
+    "doubaoSshModels": {
+      "action": "檢視豆包模型…",
+      "title": "這部 SSH 主機上的豆包模型",
+      "failed": "無法列出豆包模型。請檢查 SSH 連線和這部主機上的豆包 CLI，然後再試一次。",
+      "empty": "豆包 CLI 沒有傳回任何模型。"
+    },
     "refreshModels": "重新整理模型",
     "catalogUnsupportedLaunch": "此主機上無法使用 {{agent}} 模型。目前的選擇仍會套用。",
     "catalogLoadFailed": "無法載入 {{agent}} 模型。",
@@ -27815,6 +27830,9 @@
     "argumentsHint": "僅適用於 CLI 啟動。",
     "launchChat": "啟動聊天",
     "launchTerminal": "啟動終端機",
+    "resumeById": "依 ID 恢復工作階段",
+    "doubaoSessionId": "豆包結束時顯示的工作階段 ID",
+    "resumeTerminal": "恢復",
     "select": "選擇代理程式",
     "promptPlaceholder": "新增提示詞（選填）：/ 選擇技能，@ 選擇檔案",
     "promptPlaceholderFilesOnly": "新增提示詞（選填）：@ 選擇檔案",

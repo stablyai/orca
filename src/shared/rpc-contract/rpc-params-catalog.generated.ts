@@ -2092,6 +2092,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'plugins.uninstall': PluginUninstallParams,
   'plugins.update': PluginUpdateParams,
   'preflight.check': PreflightCheck,
+  'preflight.checkDoubaoSignIn': null,
   'preflight.detectAgents': PreflightProjectAgentDetection,
   'preflight.detectRemoteAgents': PreflightDetectRemoteAgents,
   'preflight.detectRemoteWindowsTerminalCapabilities':

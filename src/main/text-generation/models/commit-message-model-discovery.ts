@@ -42,6 +42,7 @@ import type {
 export type CommitMessageModelDiscoveryLocalOptions = {
   cwd?: string
   wslDistro?: string
+  agentEnv?: Record<string, string>
 }
 
 type DiscoverModelsLocalInput = {
@@ -70,9 +71,12 @@ export async function discoverModelsLocal(
   if (!planned.ok) {
     return { success: false, error: planned.error }
   }
+  const commandEnv = input.options.agentEnv
+    ? { ...input.options.agentEnv, ...planned.plan.env }
+    : planned.plan.env
   const env = mergeCommandEnvironment(
     input.env,
-    planned.plan.env,
+    commandEnv,
     input.options.wslDistro ? 'linux' : process.platform
   )
   const attempt = await runClaudeBackgroundAttempts({
@@ -123,10 +127,12 @@ async function discoverModelsOnce(
           args: plan.args,
           cwd: input.options.cwd,
           env: input.options.wslDistro ? input.env : env,
-          commandEnv: plan.env,
+          commandEnv: input.options.agentEnv
+            ? { ...input.options.agentEnv, ...plan.env }
+            : plan.env,
           wslDistro: input.options.wslDistro,
           stdinMode: plan.stdinPayload === null && !appServer ? 'ignore' : 'pipe',
-          useCwdForNative: false
+          useCwdForNative: input.agentId === 'doubao'
         })
         if (appServer && child.stdin) {
           const stdin = child.stdin

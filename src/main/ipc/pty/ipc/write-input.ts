@@ -233,7 +233,11 @@ export function createPtyWriteInput(deps: {
     args: PtyWritePayload,
     verify = false
   ): boolean | Promise<boolean> => {
+    const doubaoSubmit = runtime?.prepareDoubaoComposerSubmit?.(args.id, args.data, args.inputKind)
     const observe = (accepted: boolean): boolean => {
+      if (!accepted) {
+        doubaoSubmit?.rejected()
+      }
       if (
         accepted &&
         args.inputKind === 'driving' &&
@@ -243,8 +247,22 @@ export function createPtyWriteInput(deps: {
       }
       return accepted
     }
-    const result = writePtyProviderInput(provider, args, verify)
-    return typeof result === 'boolean' ? observe(result) : result.then(observe)
+    try {
+      const result = writePtyProviderInput(
+        provider,
+        doubaoSubmit ? { ...args, data: doubaoSubmit.data } : args,
+        verify
+      )
+      return typeof result === 'boolean'
+        ? observe(result)
+        : result.then(observe, (error: unknown) => {
+            doubaoSubmit?.rejected()
+            throw error
+          })
+    } catch (error) {
+      doubaoSubmit?.rejected()
+      throw error
+    }
   }
 
   const writePtyInput = (args: PtyWritePayload): boolean | Promise<boolean> => {

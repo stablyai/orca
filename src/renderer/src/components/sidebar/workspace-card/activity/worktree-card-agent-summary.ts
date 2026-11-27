@@ -243,7 +243,7 @@ export function summarizeAgentIdentities(
 ): string {
   return agents
     .map((agent) => {
-      const agentLabel = formatAgentTypeLabel(agent.agentType)
+      const agentLabel = formatAgentTypeLabel(agent.agentType, t)
       const stateLabel = formatSummaryStateLabel(getAgentDotState(agent), t)
       return t('sidebar.agentSummary.agentIdentityState', '{{agent}} {{status}}', {
         agent: agentLabel,

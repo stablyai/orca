@@ -4,6 +4,7 @@ import {
 } from '../../agent-session/options/launch/agent-session-option-agent-args'
 import { getAgentSessionOptionLaunchCatalog } from '../../agent-session/options/agent-session-option-catalog'
 import { PI_THINKING_LEVELS } from '../../agent-session/options/reconciliation/structured-agent-session-effective-effort'
+import { DOUBAO_EFFORT_LEVELS } from '../../agent-session/options/model-catalog/doubao-model-list-probe'
 import { findOptionOccurrence } from '../../cli/command-option-occurrence'
 import {
   quoteStartupArg,
@@ -50,6 +51,7 @@ const EXTRA_AGENT_ARG_OPTIONS: Partial<Record<TuiAgent, readonly ExtraAgentArgOp
   codebuddy: [MODEL_OPTION, { kind: 'effort', aliases: ['--effort'] }],
   // Cursor composes effort into the model id, so only the model is a flag.
   cursor: [MODEL_OR_M_OPTION],
+  doubao: [MODEL_OPTION, { kind: 'effort', aliases: ['--effort'], values: DOUBAO_EFFORT_LEVELS }],
   grok: [MODEL_OR_M_OPTION, { kind: 'effort', aliases: ['--effort', '--reasoning-effort'] }],
   omp: [MODEL_OPTION],
   pi: [

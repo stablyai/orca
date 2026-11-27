@@ -90,6 +90,12 @@ const AGENT_CLI_UPDATE_DEFINITIONS: Record<AgentCliUpdateAgent, AgentCliUpdateDe
     plan: selfUpdate('upgrade')
   },
   opencode2: { latest: () => npm('@opencode/cli'), plan: selfUpdate('upgrade') },
+  // The npm launcher reads the active native runtime from the user's data directory.
+  doubao: {
+    updatesOutsideLauncher: true,
+    latest: () => npm('@bytedance/doubao-cli'),
+    plan: selfUpdate('update')
+  },
   omp: { latest: () => npm('@oh-my-pi/pi-coding-agent'), plan: selfUpdate('update') },
   // An npm install's loader runs the newest copy in Copilot's package cache.
   copilot: {

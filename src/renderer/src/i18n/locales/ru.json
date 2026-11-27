@@ -1083,6 +1083,14 @@
       "hideAgentDetails": "Скрыть сведения о {{agent}}",
       "defaultAutoBadge": "По умолчанию · Авто",
       "newAgentsTitle": "Новые агенты",
+      "doubaoSignIn": {
+        "check": "Проверить вход",
+        "checking": "Проверяем вход…",
+        "verified": "Вход на этом хосте выполнен",
+        "signedOut": "Войдите на этом хосте",
+        "unverified": "Не удалось проверить вход на этом хосте",
+        "copy": "Скопировать команду входа"
+      },
       "defaultSurfaceServerDescription": "Вариант по умолчанию для агентов, которых {{host}} запускает сам, например из своего CLI или как исполнителей оркестрации. Агенты, которых вы открываете с этого компьютера, следуют выбору «Этот компьютер»."
     },
     "followSymlinkedDirectoriesKeywords": {
@@ -1897,6 +1905,7 @@
           "fc80296033": "Devin",
           "da41abbdd4": "Ante",
           "060d152fb5": "Trae",
+          "doubao_label": "Doubao",
           "muse_label": "Muse",
           "dsh_label": "DeepSeek Harness",
           "qoder_label": "Qoder CLI",
@@ -27218,6 +27227,12 @@
     }
   },
   "agentPicker": {
+    "doubaoSshModels": {
+      "action": "Посмотреть модели Doubao…",
+      "title": "Модели Doubao на этом SSH-хосте",
+      "failed": "Не удалось получить список моделей Doubao. Проверьте SSH-соединение и CLI Doubao на этом хосте, затем повторите попытку.",
+      "empty": "CLI Doubao не вернул ни одной модели."
+    },
     "refreshModels": "Обновить модели",
     "catalogUnsupportedLaunch": "Модели {{agent}} недоступны на этом сервере. Текущий выбор по-прежнему применяется.",
     "catalogLoadFailed": "Не удалось загрузить модели {{agent}}.",
@@ -27240,6 +27255,9 @@
     "argumentsHint": "Применяется только при запуске через CLI.",
     "launchChat": "Запустить чат",
     "launchTerminal": "Запустить терминал",
+    "resumeById": "Продолжить сеанс по ID",
+    "doubaoSessionId": "ID сеанса, показанный при выходе из Doubao",
+    "resumeTerminal": "Продолжить",
     "select": "Выбрать агента",
     "promptPlaceholder": "Добавить запрос (необязательно): / — навыки, @ — файлы",
     "promptPlaceholderFilesOnly": "Добавить запрос (необязательно): @ — файлы",

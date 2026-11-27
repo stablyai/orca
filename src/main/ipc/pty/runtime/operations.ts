@@ -44,8 +44,13 @@ export function writePtyFromRuntimeController(
   inputKind: TerminalInputKind,
   options?: { waitForSettlement: true }
 ): boolean | WriteSettlement | Promise<WriteSettlement> {
-  const observeAcceptedInput = (): void => {
-    if (isDrivingInputKind(inputKind) && ptyOwnership.get(ptyId) === LOCAL_EXECUTION_HOST_ID) {
+  const observeInput = (accepted: boolean): void => {
+    if (!accepted) {
+      doubaoSubmit?.rejected()
+    } else if (
+      isDrivingInputKind(inputKind) &&
+      ptyOwnership.get(ptyId) === LOCAL_EXECUTION_HOST_ID
+    ) {
       deps.runtime?.observeClaudeTerminalEvidence?.(ptyId, { kind: 'input', data })
       deps.runtime?.noteRuntimeTerminalInput?.(ptyId)
     }
@@ -56,34 +61,40 @@ export function writePtyFromRuntimeController(
   } catch {
     return options?.waitForSettlement ? writeRefused('provider_unavailable') : false
   }
+  const doubaoSubmit = deps.runtime?.prepareDoubaoComposerSubmit?.(ptyId, data, inputKind)
+  const input = doubaoSubmit?.data ?? data
   if (options?.waitForSettlement) {
     // Refuse unsupported settlement before effects; fire-and-forget acceptance cannot clear durable mailbox reservations.
     if (!provider.writeWithSettlement) {
+      doubaoSubmit?.rejected()
       return writeRefused('provider_cannot_settle')
     }
     deps.runtime?.terminalRunFacts?.recordInput(ptyId, inputKind, data)
     try {
-      const result = provider.writeWithSettlement(ptyId, data)
+      const result = provider.writeWithSettlement(ptyId, input)
       const observe = (settlement: WriteSettlement): WriteSettlement => {
-        if (settlement.outcome === 'accepted') {
-          observeAcceptedInput()
-        }
+        observeInput(settlement.outcome === 'accepted')
         return settlement
       }
-      return isSettledWrite(result) ? observe(result) : result.then(observe)
+      return isSettledWrite(result)
+        ? observe(result)
+        : result.then(observe, (error: unknown) => {
+            doubaoSubmit?.rejected()
+            throw error
+          })
     } catch {
+      doubaoSubmit?.rejected()
       // A synchronous throw cannot prove the transport took nothing.
       return writeUnverifiable('provider_threw_after_handoff', true)
     }
   }
   deps.runtime?.terminalRunFacts?.recordInput(ptyId, inputKind, data)
   try {
-    const accepted = provider.write(ptyId, data) !== false
-    if (accepted) {
-      observeAcceptedInput()
-    }
+    const accepted = provider.write(ptyId, input) !== false
+    observeInput(accepted)
     return accepted
   } catch {
+    doubaoSubmit?.rejected()
     return false
   }
 }

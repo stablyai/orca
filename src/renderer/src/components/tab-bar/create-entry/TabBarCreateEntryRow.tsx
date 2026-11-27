@@ -182,6 +182,7 @@ export function EntryActionRow({
       <div role="none" onPointerMove={onHover}>
         <AgentLaunchSetupButton
           entry={setupEntry}
+          allowSessionResume
           seed={agentOption.setup}
           preset={agentOption.preset}
           draftId={

@@ -59,7 +59,7 @@ function AgentTerminalFrame({
         </span>
         {title}
         <span className="text-[11px] text-muted-foreground">
-          {formatAgentTypeLabel(card.agentType)} ·{' '}
+          {formatAgentTypeLabel(card.agentType, t)} ·{' '}
           {agentStateLabel(dashboardCardDisplayState(card))}
         </span>
         <Button

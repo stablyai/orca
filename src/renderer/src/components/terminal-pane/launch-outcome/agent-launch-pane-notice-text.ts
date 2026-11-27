@@ -47,7 +47,7 @@ export function agentLaunchPaneNoticeText(
   t: Translate = translate
 ): string {
   const agent =
-    tuiAgentDisplayName(agentId ?? '') ??
+    tuiAgentDisplayName(agentId ?? '', t) ??
     t('auto.components.terminal.pane.AgentLaunchPaneNotice.agent', 'The agent')
   if (refusal.initialOutputDiagnostic === 'git-bash-console-capacity') {
     const explanation = t(

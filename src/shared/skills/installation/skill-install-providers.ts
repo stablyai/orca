@@ -162,6 +162,12 @@ export const SKILL_INSTALL_PROVIDERS = Object.freeze([
     workspaceSegments: null
   },
   {
+    id: 'doubao',
+    displayName: 'Doubao',
+    globalSegments: null,
+    workspaceSegments: null
+  },
+  {
     id: 'pi',
     displayName: 'Pi',
     globalSegments: null,

@@ -1300,7 +1300,15 @@
       "hideAgentDetails": "Hide {{agent}} details",
       "defaultAutoBadge": "Default · Auto",
       "newAgentsTitle": "New agents",
-      "defaultSurfaceServerDescription": "The default for agents {{host}} starts itself, such as from its CLI or orchestration workers. Agents you open from this computer follow This computer's choice."
+      "defaultSurfaceServerDescription": "The default for agents {{host}} starts itself, such as from its CLI or orchestration workers. Agents you open from this computer follow This computer's choice.",
+      "doubaoSignIn": {
+        "check": "Check sign-in",
+        "checking": "Checking sign-in…",
+        "verified": "Signed in on this host",
+        "signedOut": "Sign in on this host",
+        "unverified": "Could not verify sign-in on this host",
+        "copy": "Copy sign-in command"
+      }
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "symlink",
@@ -2687,6 +2695,7 @@
           "fc80296033": "Devin",
           "da41abbdd4": "Ante",
           "060d152fb5": "Trae",
+          "doubao_label": "Doubao",
           "muse_label": "Muse",
           "dsh_label": "DeepSeek Harness",
           "qoder_label": "Qoder CLI",
@@ -27183,6 +27192,12 @@
     "waitForImageUploads": "Wait for images to finish uploading, then retry Create PR."
   },
   "agentPicker": {
+    "doubaoSshModels": {
+      "action": "View Doubao models…",
+      "title": "Doubao models on this SSH host",
+      "failed": "Couldn’t list Doubao models. Check the SSH connection and the Doubao CLI on this host, then try again.",
+      "empty": "The Doubao CLI returned no models."
+    },
     "refreshModels": "Refresh models",
     "catalogUnsupportedLaunch": "{{agent}} models are unavailable on this host. Your current choices still apply.",
     "catalogLoadFailed": "Could not load {{agent}} models.",
@@ -27200,6 +27215,9 @@
     "argumentsHint": "Applies only to CLI launches.",
     "launchChat": "Launch chat",
     "launchTerminal": "Launch terminal",
+    "resumeById": "Resume a session by ID",
+    "doubaoSessionId": "Session ID shown by Doubao on exit",
+    "resumeTerminal": "Resume",
     "sameAsTextDefault": "Same as default · {{value0}}",
     "effortDefault": "Default",
     "setByArguments": "Set by your Arguments",

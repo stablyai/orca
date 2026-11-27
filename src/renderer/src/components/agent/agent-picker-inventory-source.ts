@@ -1,4 +1,8 @@
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import { useMemo } from 'react'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { getAgentLabels } from '@/lib/agent-catalog/agent-catalog'
+import { recomputeOn } from '@/lib/recompute-on'
 import { useAppViewExternalStore } from '@/store/retained-views/app-state-view'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 
@@ -43,7 +47,17 @@ export function createAgentPickerInventorySource(
 export function useAgentPickerInventoryEntries(
   source: AgentPickerInventorySource
 ): AgentPickerEntry[] {
-  return useAppViewExternalStore(source.subscribe, source.getSnapshot, source.getSnapshot)
+  const entries = useAppViewExternalStore(source.subscribe, source.getSnapshot, source.getSnapshot)
+  // A language change updates the picker without replacing its host inventory or active drafts.
+  const labels = recomputeOn([useUiLanguageRevision()], getAgentLabels)
+  return useMemo(
+    () =>
+      entries.map((entry) => {
+        const label = labels.get(entry.agent)
+        return label && label !== entry.label ? { ...entry, label } : entry
+      }),
+    [entries, labels]
+  )
 }
 
 export type AgentPickerAcquisitionObserver = {

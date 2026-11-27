@@ -584,6 +584,14 @@
       "hideAgentDetails": "Ocultar detalles de {{agent}}",
       "defaultAutoBadge": "Predet. · Auto",
       "newAgentsTitle": "Agentes nuevos",
+      "doubaoSignIn": {
+        "check": "Comprobar inicio de sesión",
+        "checking": "Comprobando el inicio de sesión…",
+        "verified": "Sesión iniciada en este equipo",
+        "signedOut": "Inicia sesión en este equipo",
+        "unverified": "No se pudo verificar el inicio de sesión en este equipo",
+        "copy": "Copiar comando de inicio de sesión"
+      },
       "defaultSurfaceServerDescription": "El valor predeterminado para los agentes que {{host}} inicia por sí mismo, como desde su CLI o los trabajadores de orquestación. Los agentes que abres desde este equipo siguen la elección de Este equipo."
     },
     "followSymlinkedDirectoriesKeywords": {
@@ -1720,6 +1728,7 @@
           "060d152fb5": "Trae",
           "d443a47995": "Prime Agent",
           "mimo_code_label": "MiMo Code",
+          "doubao_label": "Doubao",
           "muse_label": "Muse",
           "zcode_label": "ZCode",
           "codebuddy_label": "CodeBuddy",
@@ -27060,6 +27069,12 @@
     "waitForImageUploads": "Espera a que terminen de subirse las imágenes y vuelve a intentar Crear PR."
   },
   "agentPicker": {
+    "doubaoSshModels": {
+      "action": "Ver modelos de Doubao…",
+      "title": "Modelos de Doubao en este host SSH",
+      "failed": "No se pudieron listar los modelos de Doubao. Comprueba la conexión SSH y la CLI de Doubao en este host y vuelve a intentarlo.",
+      "empty": "La CLI de Doubao no devolvió ningún modelo."
+    },
     "refreshModels": "Actualizar modelos",
     "catalogUnsupportedLaunch": "Los modelos de {{agent}} no están disponibles en este equipo. Tus opciones actuales se siguen aplicando.",
     "catalogLoadFailed": "No se pudieron cargar los modelos de {{agent}}.",
@@ -27076,6 +27091,9 @@
     "argumentsHint": "Solo se aplica a los inicios de CLI.",
     "launchChat": "Iniciar chat",
     "launchTerminal": "Iniciar terminal",
+    "resumeById": "Reanudar una sesión por ID",
+    "doubaoSessionId": "ID de sesión que Doubao muestra al salir",
+    "resumeTerminal": "Reanudar",
     "setByArguments": "Definido por tus argumentos",
     "searchModels": "Buscar modelos",
     "noModels": "Ningún modelo coincide con tu búsqueda.",

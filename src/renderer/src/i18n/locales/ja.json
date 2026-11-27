@@ -579,6 +579,14 @@
       "hideAgentDetails": "{{agent}} の詳細を非表示",
       "defaultAutoBadge": "デフォルト · 自動",
       "newAgentsTitle": "新しい Agent",
+      "doubaoSignIn": {
+        "check": "ログイン状態を確認",
+        "checking": "ログイン状態を確認中…",
+        "verified": "このホストにログイン済みです",
+        "signedOut": "このホストでログインしてください",
+        "unverified": "このホストのログイン状態を確認できませんでした",
+        "copy": "ログインコマンドをコピー"
+      },
       "defaultSurfaceServerDescription": "{{host}} が自ら起動する Agent（CLI やオーケストレーションのワーカーからの起動など）のデフォルトです。このコンピュータから開く Agent は「このコンピュータ」の選択に従います。"
     },
     "followSymlinkedDirectoriesKeywords": {
@@ -1694,6 +1702,7 @@
           "060d152fb5": "Trae",
           "d443a47995": "Prime Agent",
           "mimo_code_label": "MiMo Code",
+          "doubao_label": "Doubao",
           "muse_label": "Muse",
           "opencode2_label": "OpenCode 2",
           "codebuddy_label": "CodeBuddy",
@@ -26264,6 +26273,12 @@
     "waitForImageUploads": "画像のアップロードが完了するまで待ってから、もう一度 [PR を作成] を実行してください。"
   },
   "agentPicker": {
+    "doubaoSshModels": {
+      "action": "Doubao のモデルを表示…",
+      "title": "この SSH ホストの Doubao モデル",
+      "failed": "Doubao のモデル一覧を取得できませんでした。SSH 接続とこのホストの Doubao CLI を確認してから、もう一度お試しください。",
+      "empty": "Doubao CLI からモデルが返されませんでした。"
+    },
     "refreshModels": "モデルを更新",
     "catalogUnsupportedLaunch": "このホストでは{{agent}}のモデルを利用できません。現在の選択はそのまま適用されます。",
     "catalogLoadFailed": "{{agent}} のモデルを読み込めませんでした。",
@@ -26280,6 +26295,9 @@
     "argumentsHint": "CLI での起動にのみ適用されます。",
     "launchChat": "チャットを起動",
     "launchTerminal": "ターミナルを起動",
+    "resumeById": "ID でセッションを再開",
+    "doubaoSessionId": "Doubao の終了時に表示されるセッション ID",
+    "resumeTerminal": "再開",
     "setByArguments": "引数で設定",
     "searchModels": "モデルを検索",
     "noModels": "検索に一致するモデルがありません。",

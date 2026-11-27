@@ -14,6 +14,7 @@ import {
 } from './environment-doctor-check'
 import { checkGit, probeGitCheckout, type GitCheckoutProbe } from './environment-doctor-git'
 import { checkSetup } from './environment-doctor-setup'
+import { checkDoubaoSignIn } from './doubao-sign-in-check'
 
 export type {
   EnvironmentDoctorCommandResult,
@@ -121,11 +122,24 @@ async function checkAgents(
       })
     ]
   }
-  const probed = agents.filter((agent) => AGENT_SIGN_IN_PROBES[agent])
-  const others = agents.filter((agent) => !AGENT_SIGN_IN_PROBES[agent])
+  const probed = agents.filter((agent) => agent === 'doubao' || AGENT_SIGN_IN_PROBES[agent])
+  const others = agents.filter((agent) => !probed.includes(agent))
   const checks = await Promise.all(
     probed.map(async (agent): Promise<EnvironmentDoctorCheck> => {
       const name = tuiAgentDisplayName(agent) ?? agent
+      if (agent === 'doubao') {
+        const status = await checkDoubaoSignIn(deps, worktreePath)
+        if (status === 'signed-in') {
+          return check('agents', 'agent.doubao', 'pass', 'Doubao is installed and signed in.')
+        }
+        return status === 'signed-out'
+          ? check('agents', 'agent.doubao', 'warn', 'Doubao is not signed in.', {
+              remediation: 'Run `doubao login` in this environment.'
+            })
+          : check('agents', 'agent.doubao', 'warn', 'Could not verify Doubao sign-in.', {
+              remediation: 'Run `doubao auth status --verify` in this environment.'
+            })
+      }
       const probe = AGENT_SIGN_IN_PROBES[agent]
       const result = await runSafely(deps, probe.command, probe.args, {
         cwd: worktreePath,

@@ -579,7 +579,15 @@
       "newAgentsTitle": "新智能体",
       "defaultSurfaceServerDescription": "{{host}} 自行启动的智能体（例如通过其 CLI 或编排工作者启动）所用的默认设置。你从这台电脑打开的智能体遵循“这台电脑”的选择",
       "hideAgentDetails": "隐藏 {{agent}} 详情",
-      "showAgentDetails": "显示 {{agent}} 详情"
+      "showAgentDetails": "显示 {{agent}} 详情",
+      "doubaoSignIn": {
+        "check": "检查登录状态",
+        "checking": "正在检查登录状态…",
+        "verified": "已在此主机登录",
+        "signedOut": "请在此主机登录",
+        "unverified": "无法验证此主机的登录状态",
+        "copy": "复制登录命令"
+      }
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "符号链接",
@@ -1957,6 +1965,7 @@
           "060d152fb5": "Trae",
           "d443a47995": "Prime Agent",
           "mimo_code_label": "MiMo Code",
+          "doubao_label": "豆包",
           "muse_label": "Muse",
           "opencode2_label": "OpenCode 2",
           "codebuddy_label": "CodeBuddy",
@@ -26557,6 +26566,12 @@
     "waitForImageUploads": "请等待图片上传完成，然后重试创建 PR"
   },
   "agentPicker": {
+    "doubaoSshModels": {
+      "action": "查看豆包模型…",
+      "title": "此 SSH 主机上的豆包模型",
+      "failed": "无法列出豆包模型。请检查 SSH 连接和此主机上的豆包 CLI，然后重试。",
+      "empty": "豆包 CLI 未返回任何模型。"
+    },
     "refreshModels": "刷新模型",
     "catalogUnsupportedLaunch": "此主机上无法使用 {{agent}} 模型。当前选择仍会生效。",
     "catalogLoadFailed": "无法加载 {{agent}} 模型",
@@ -26572,6 +26587,9 @@
     "argumentsHint": "仅适用于 CLI 启动。",
     "launchChat": "启动聊天",
     "launchTerminal": "启动终端",
+    "resumeById": "按 ID 恢复会话",
+    "doubaoSessionId": "豆包退出时显示的会话 ID",
+    "resumeTerminal": "恢复",
     "setByArguments": "由参数设置",
     "searchModels": "搜索模型",
     "noModels": "没有与搜索匹配的模型。",

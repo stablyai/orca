@@ -81,7 +81,7 @@ export function discoveredModelsResult(
   const defaultModelId =
     spec.defaultModelId === 'default' || models.some((model) => model.id === spec.defaultModelId)
       ? spec.defaultModelId
-      : models[0].id
+      : (models.find((model) => model.isDefault)?.id ?? models[0].id)
   return staticModelDiscoveryResult(spec, models, defaultModelId, 'probe')
 }
 

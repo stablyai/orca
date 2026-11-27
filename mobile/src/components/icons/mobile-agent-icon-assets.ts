@@ -12,6 +12,7 @@ export const MOBILE_AGENT_ICON_ASSETS: Partial<Record<TuiAgent, ImageSourcePropT
   'mimo-code': require('../../../../src/shared/agent-icons/mimo-code.png'),
   ante: require('../../../../src/shared/agent-icons/ante.png'),
   trae: require('../../../../src/shared/agent-icons/trae.png'),
+  doubao: require('../../../../src/shared/agent-icons/doubao.png'),
   'prime-agent': require('../../../../src/shared/agent-icons/prime-agent.png'),
   codebuddy: require('../../../../src/shared/agent-icons/codebuddy.png'),
   qoder: require('../../../../src/shared/agent-icons/qoder.png'),

@@ -14,6 +14,7 @@ import {
 } from '../runtime/agent-session/launch/structured-agent-launch-support'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { acpLaunchSpecFor } from '../acp/launch/acp-launch-registry'
+import { isDoubaoNpmLauncher } from './doubao-npm-launcher'
 
 export type AgentCliUpdateSettings = LaunchEnvironmentSettings &
   Partial<Pick<GlobalSettings, 'agentCmdOverrides' | 'disabledTuiAgents'>>
@@ -62,7 +63,8 @@ export async function findOwnAgentCli(
   // Orca's own copies live in its data folder and update without asking.
   if (
     !realPath ||
-    isPathInsideOrEqual(join(getProfileUserDataPath(), 'agent-runtimes'), realPath)
+    isPathInsideOrEqual(join(getProfileUserDataPath(), 'agent-runtimes'), realPath) ||
+    (agent === 'doubao' && !(await isDoubaoNpmLauncher(program, realPath)))
   ) {
     return null
   }

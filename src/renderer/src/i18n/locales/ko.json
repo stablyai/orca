@@ -579,7 +579,15 @@
       "hideAgentDetails": "{{agent}} 세부 정보 숨기기",
       "defaultAutoBadge": "기본값 · 자동",
       "newAgentsTitle": "새 에이전트",
-      "defaultSurfaceServerDescription": "{{host}}이(가) CLI나 오케스트레이션 워커 등으로 직접 시작하는 에이전트의 기본값입니다. 이 컴퓨터에서 여는 에이전트는 이 컴퓨터의 선택을 따릅니다."
+      "defaultSurfaceServerDescription": "{{host}}이(가) CLI나 오케스트레이션 워커 등으로 직접 시작하는 에이전트의 기본값입니다. 이 컴퓨터에서 여는 에이전트는 이 컴퓨터의 선택을 따릅니다.",
+      "doubaoSignIn": {
+        "check": "로그인 상태 확인",
+        "checking": "로그인 상태 확인 중…",
+        "verified": "이 호스트에 로그인됨",
+        "signedOut": "이 호스트에서 로그인하세요",
+        "unverified": "이 호스트의 로그인 상태를 확인할 수 없습니다",
+        "copy": "로그인 명령 복사"
+      }
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "심볼릭 링크",
@@ -1704,6 +1712,7 @@
           "060d152fb5": "Trae",
           "d443a47995": "Prime Agent",
           "mimo_code_label": "MiMo Code",
+          "doubao_label": "Doubao",
           "muse_label": "Muse",
           "opencode2_label": "OpenCode 2",
           "codebuddy_label": "CodeBuddy",
@@ -26677,6 +26686,12 @@
     "waitForImageUploads": "이미지 업로드가 끝날 때까지 기다린 뒤 PR 만들기를 다시 시도하세요."
   },
   "agentPicker": {
+    "doubaoSshModels": {
+      "action": "Doubao 모델 보기…",
+      "title": "이 SSH 호스트의 Doubao 모델",
+      "failed": "Doubao 모델 목록을 가져올 수 없습니다. SSH 연결과 이 호스트의 Doubao CLI를 확인한 후 다시 시도하세요.",
+      "empty": "Doubao CLI가 반환한 모델이 없습니다."
+    },
     "refreshModels": "모델 새로고침",
     "catalogUnsupportedLaunch": "이 호스트에서는 {{agent}} 모델을 사용할 수 없습니다. 현재 선택은 그대로 적용됩니다.",
     "catalogLoadFailed": "{{agent}} 모델을 불러올 수 없습니다.",
@@ -26693,6 +26708,9 @@
     "argumentsHint": "CLI 실행에만 적용됩니다.",
     "launchChat": "채팅 시작",
     "launchTerminal": "터미널 시작",
+    "resumeById": "ID로 세션 재개",
+    "doubaoSessionId": "Doubao 종료 시 표시되는 세션 ID",
+    "resumeTerminal": "재개",
     "setByArguments": "인수로 설정됨",
     "searchModels": "모델 검색",
     "noModels": "검색과 일치하는 모델이 없습니다.",

@@ -31,7 +31,7 @@ export function agentPickerModelCatalogReads(
       signal: AbortSignal,
       relist = false
     ) =>
-      cliDiscoveryRuntime && agentPickerListsCliModels(entry)
+      cliDiscoveryRuntime && agentPickerListsCliModels(entry, cliDiscoveryRuntime.connectionId)
         ? readAgentPickerCliModelCatalog(entry.agent, cliDiscoveryRuntime)
         : !target
           ? undefined
@@ -60,7 +60,9 @@ export function agentPickerModelCatalogReads(
               ),
     refreshOnInvalidation: (entry: Pick<AgentPickerEntry, 'agent'>) =>
       !!target &&
-      !(cliDiscoveryRuntime && agentPickerListsCliModels(entry)) &&
+      !(
+        cliDiscoveryRuntime && agentPickerListsCliModels(entry, cliDiscoveryRuntime.connectionId)
+      ) &&
       entry.agent !== 'antigravity',
     subscribeInvalidation: target
       ? (listener: () => void) => subscribeModelMenuInvalidation(target, listener)

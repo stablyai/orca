@@ -334,7 +334,7 @@
 4 src/shared/rpc-contract/projects/repo-params.ts
 2 src/shared/rpc-contract/session-tabs/session-tabs-schemas-params.ts
 1 src/shared/rpc-contract/session-tabs/session-terminal-scrollback-params.ts
-70 src/shared/rpc-contract/source-control/git-params.ts
+68 src/shared/rpc-contract/source-control/git-params.ts
 2 src/shared/rpc-contract/structured-agent-session/agent-session-attachment-params.ts
 2 src/shared/rpc-contract/structured-agent-session/structured-agent-session-create-tab-params.ts
 37 src/shared/rpc-contract/structured-agent-session/structured-agent-session-params.ts

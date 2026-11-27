@@ -83,6 +83,7 @@ export function AgentLaunchSettingsCatalog({
   mutate,
   detectionTarget,
   hostName,
+  doubaoSignIn,
   renderPermissions,
   refreshSettings,
   autoSupported = true,
@@ -95,6 +96,7 @@ export function AgentLaunchSettingsCatalog({
   mutate: (mutation: AgentLaunchSettingsMutation) => Promise<void>
   detectionTarget: AgentDetectionTarget
   hostName: string | null
+  doubaoSignIn: React.ReactNode
   renderPermissions: AgentPermissionsRenderer
   refreshSettings?: () => void
   autoSupported?: boolean
@@ -231,6 +233,7 @@ export function AgentLaunchSettingsCatalog({
     agent: (typeof catalog)[number],
     isDetected: boolean
   ): AgentCatalogRowProps => ({
+    cliSignIn: isDetected && agent.id === 'doubao' ? doubaoSignIn : undefined,
     cliUpdate: isDetected ? (
       <AgentCliUpdateButton detectionTarget={detectionTarget} agent={agent.id} />
     ) : undefined,

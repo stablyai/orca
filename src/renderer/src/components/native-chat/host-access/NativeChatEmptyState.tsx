@@ -140,7 +140,7 @@ function emptyStateCopy(
         )
       }
     case 'empty': {
-      const agentName = agent ? formatAgentTypeLabel(agent) : 'the agent'
+      const agentName = agent ? formatAgentTypeLabel(agent, t) : 'the agent'
       return {
         title: t(
           'components.native-chat.state.empty.title',

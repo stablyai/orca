@@ -53,6 +53,8 @@ export function getAgentResumeArgv(
       return providerSession.key === 'session_id' ? ['mimo', '--session', id] : null
     case 'droid':
       return providerSession.key === 'session_id' ? ['droid', '--resume', id] : null
+    case 'doubao':
+      return providerSession.key === 'session_id' ? ['doubao', '--resume', id] : null
     case 'grok':
       return providerSession.key === 'session_id' ? ['grok', '--resume', id] : null
     case 'devin':

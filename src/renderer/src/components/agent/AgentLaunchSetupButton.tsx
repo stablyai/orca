@@ -2,6 +2,8 @@ import { useState, type ReactElement } from 'react'
 import { AgentLaunchSetupSubmenu } from './AgentLaunchSetupSubmenu'
 import { useTranslate } from '@/i18n/use-translate'
 import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
+import { DoubaoSessionResume } from './DoubaoSessionResume'
+import { useDropdownMenuClose } from '@/components/ui/dropdown-menu'
 import type {
   AgentPickerDraft,
   AgentPickerEntry,
@@ -27,6 +29,7 @@ export function AgentLaunchSetupButton({
   renderAnchor,
   disabled,
   terminalBlocked,
+  allowSessionResume,
   open: controlledOpen,
   onOpenChange,
   returnFocus,
@@ -41,12 +44,14 @@ export function AgentLaunchSetupButton({
   renderAnchor: (trigger: ReactElement) => ReactElement
   disabled?: boolean
   terminalBlocked?: boolean
+  allowSessionResume?: boolean
   open?: boolean
   onOpenChange?: (open: boolean) => void
   returnFocus?: () => void
   onUse: (draft: AgentPickerDraft) => boolean | void | Promise<boolean>
 }) {
   const t = useTranslate()
+  const closeMenu = useDropdownMenuClose()
   const [localOpen, setOpen] = useState(false)
   const open = controlledOpen ?? localOpen
   const setup = useAgentPickerSetup({
@@ -92,6 +97,17 @@ export function AgentLaunchSetupButton({
               changeOpen(false)
             }
             return accepted
+          }}
+        />
+      ) : null}
+      {setup.ready && allowSessionResume && entry.agent === 'doubao' && entry.worktreeId ? (
+        <DoubaoSessionResume
+          worktreeId={entry.worktreeId}
+          executionHostId={entry.rows[0]?.executionHostId}
+          disabled={disabled || terminalBlocked}
+          onResumed={() => {
+            changeOpen(false)
+            closeMenu()
           }}
         />
       ) : null}

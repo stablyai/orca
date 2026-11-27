@@ -251,6 +251,16 @@ Lists the agent CLIs Orca detects on the host that can start: agents turned off 
 
 ## Agents by ID
 
+To reopen a Doubao terminal, use the session ID from the resume command Doubao prints when you exit.
+In the original workspace, open the new-tab menu, configure Doubao, and choose **Resume a session by ID**.
+You can also run the following command inside that workspace. For a paired server, pass its workspace selector explicitly.
+
+```bash
+orca agent resume --agent doubao --session-id 12345678901234567 --worktree current --json
+```
+
+Headless Doubao runs return the same provider ID in the `session_id` field of `doubao -p … --json`.
+
 ```bash
 orca agent list --json
 orca agent show orca_session_id:3540ecf3-47c3-4876-b825-81bf5d6b3595 --json

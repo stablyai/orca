@@ -1,4 +1,6 @@
 import type { CommandHandler } from '../dispatch/dispatch'
+import type { RuntimeEnsureAgentSessionResult } from '../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
+import { AGENT_SESSION_DOUBAO_RESUME_RUNTIME_CAPABILITY } from '../../shared/agent-session/lifecycle/resume/agent-session-resume-runtime-capabilities'
 import {
   callAgentLaunch,
   formatAgentLaunch,
@@ -15,6 +17,38 @@ import {
 } from '../workspace-selection/workspace-selector'
 
 export const AGENT_LAUNCH_HANDLERS: Record<string, CommandHandler> = {
+  'agent resume': async ({ flags, client, cwd, json }) => {
+    const agent = parseCliAgent(getRequiredStringFlag(flags, 'agent'))
+    if (agent !== 'doubao') {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'This command currently supports --agent doubao.'
+      )
+    }
+    const id = getRequiredStringFlag(flags, 'session-id')
+    const worktree = await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)
+    if (
+      !(await getAgentLaunchCapabilities(client))?.includes(
+        AGENT_SESSION_DOUBAO_RESUME_RUNTIME_CAPABILITY
+      )
+    ) {
+      throw new RuntimeClientError(
+        'incompatible_runtime',
+        'Update Orca on the execution host to resume a Doubao session.'
+      )
+    }
+    const result = await client.call<RuntimeEnsureAgentSessionResult>(
+      'terminal.ensureAgentSession',
+      {
+        kind: 'explicit',
+        agent,
+        providerSession: { key: 'session_id', id },
+        worktree,
+        presentation: flags.get('focus') === true ? 'focused' : 'background'
+      }
+    )
+    printResult(result, json, ({ terminal, disposition }) => `${terminal.handle} (${disposition})`)
+  },
   'agent launch': async ({ flags, client, cwd, json, rawArgs }) => {
     const launch = readCliAgentLaunch(flags, parseCliAgent(getRequiredStringFlag(flags, 'agent')), {
       createsWorktree: false

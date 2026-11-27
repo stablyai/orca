@@ -756,7 +756,15 @@
       "undetectedCommandHint": "Si la CLI {{agent}} est installée hors de PATH, saisissez le chemin complet de son exécutable sur cet hôte.",
       "agentActions": "Actions de {{agent}}",
       "defaultAutoBadge": "Par défaut · Auto",
-      "newAgentsTitle": "Nouveaux agents"
+      "newAgentsTitle": "Nouveaux agents",
+      "doubaoSignIn": {
+        "check": "Vérifier la connexion",
+        "checking": "Vérification de la connexion…",
+        "verified": "Compte connecté sur cet hôte",
+        "signedOut": "Connectez-vous sur cet hôte",
+        "unverified": "Impossible de vérifier la connexion sur cet hôte",
+        "copy": "Copier la commande de connexion"
+      }
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "lien symbolique",
@@ -1416,6 +1424,7 @@
           "060d152fb5": "Trae",
           "d443a47995": "Prime Agent",
           "mimo_code_label": "MiMo Code",
+          "doubao_label": "Doubao",
           "muse_label": "Muse",
           "opencode2_label": "OpenCode 2",
           "codebuddy_label": "CodeBuddy",
@@ -26094,6 +26103,12 @@
     "waitForImageUploads": "Attendez la fin de l'envoi des images, puis relancez Créer la PR."
   },
   "agentPicker": {
+    "doubaoSshModels": {
+      "action": "Afficher les modèles Doubao…",
+      "title": "Modèles Doubao sur cet hôte SSH",
+      "failed": "Impossible de lister les modèles Doubao. Vérifiez la connexion SSH et la CLI Doubao sur cet hôte, puis réessayez.",
+      "empty": "La CLI Doubao n’a renvoyé aucun modèle."
+    },
     "refreshModels": "Actualiser les modèles",
     "catalogUnsupportedLaunch": "Les modèles de {{agent}} sont indisponibles sur cet hôte. Vos choix actuels s'appliquent toujours.",
     "catalogLoadFailed": "Impossible de charger les modèles de {{agent}}.",
@@ -26110,6 +26125,9 @@
     "argumentsHint": "S’applique uniquement aux lancements CLI.",
     "launchChat": "Lancer le chat",
     "launchTerminal": "Lancer le terminal",
+    "resumeById": "Reprendre une session par ID",
+    "doubaoSessionId": "ID de session affiché à la fermeture de Doubao",
+    "resumeTerminal": "Reprendre",
     "setByArguments": "Défini par vos arguments",
     "searchModels": "Rechercher des modèles",
     "noModels": "Aucun modèle ne correspond à votre recherche.",

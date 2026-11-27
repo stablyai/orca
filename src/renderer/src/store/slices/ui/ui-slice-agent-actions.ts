@@ -153,7 +153,7 @@ export function createUiAgentActions(
       )
 
       const agentType = runningAgentSendTargetAgentType(target)
-      const label = formatAgentTypeLabel(agentType)
+      const label = formatAgentTypeLabel(agentType, translate)
       const [, { activeAgentNotesSendFailureMessage }, { sendMessageToAgent }] = await Promise.all([
         import('@/lib/agent-session/messaging/terminal/active-agent-note-send'),
         import('@/lib/agent-session/messaging/terminal/active-agent-note-send-result'),

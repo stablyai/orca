@@ -19,10 +19,6 @@ import {
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { selectWorkspaceByHostTarget } from '@/store/workspaces/selection/workspace-host-target'
-import {
-  selectWorktreesByRepo,
-  selectFolderWorkspaces
-} from '@/store/workspaces/catalog/workspace-record-fields'
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { readHostAgentLaunchDefaults } from '../../runtime/agent-launch-settings/agent-launch-settings-transport'
 import type { NewTabAgentMenuModel } from './launch-menu/new-tab-agent-menu-model'
@@ -39,7 +35,7 @@ import {
   readAgentPickerLaunchSupport
 } from './agent-launch-picker-host-reads'
 import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
-import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
+import { TUI_AGENT_DISPLAY_NAMES } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import {
   currentAgentPickerAcquisition,
   observeAgentPickerAcquisition
@@ -109,18 +105,10 @@ export function useAgentLaunchPickerInventorySource(
   const selector = workspaceId ? `id:${workspaceId}` : repo ? `path:${repo.path}` : undefined
   const state = store.getState()
   const hostId = parseExecutionHostId(executionHostId)?.id
-  const worktrees = selectWorktreesByRepo(state)
-  const folders = selectFolderWorkspaces(state)
-  const selectedWorkspace = useMemo(
-    () =>
-      workspaceId &&
-      hostId &&
-      selectWorkspaceByHostTarget(
-        { worktreesByRepo: worktrees ?? {}, folderWorkspaces: folders ?? [] },
-        hostWorktreeTarget({ id: workspaceId, hostId })
-      ),
-    [workspaceId, hostId, worktrees, folders]
-  )
+  const selectedWorkspace =
+    workspaceId &&
+    hostId &&
+    selectWorkspaceByHostTarget(state, hostWorktreeTarget({ id: workspaceId, hostId }))
   const concreteWorkspace = !!selectedWorkspace
   const hostCapabilities =
     target?.kind === 'local'
@@ -158,18 +146,20 @@ export function useAgentLaunchPickerInventorySource(
     ]
   )
   // Without a concrete workspace, CLI discovery can only ask this machine, so other hosts keep the seed.
-  // SSH discovery has no route yet, so SSH workspaces keep it too.
-  const discoveryWorktreeId = draftTarget.worktreeId ?? null
-  const ownerRuntime =
-    discoveryWorktreeId || target?.kind === 'local'
-      ? resolveWorktreeModelDiscoveryRuntime(store.getState(), discoveryWorktreeId)
-      : null
   const cliDiscoveryRuntime: RuntimeGitContext | null =
-    !ownerRuntime || ownerRuntime.connectionId
-      ? null
-      : discoveryWorktreeId
-        ? ownerRuntime
-        : { ...ownerRuntime, worktreePath: repo?.path ?? '' }
+    selectedWorkspace && hostId && workspaceId
+      ? resolveWorktreeModelDiscoveryRuntime(state, workspaceId, {
+          hostId,
+          path: selectedWorkspace.path
+        })
+      : target?.kind === 'local'
+        ? { target, prefs: state.settings, worktreeId: null, worktreePath: repo?.path ?? '' }
+        : null
+  const cliConnectionId = cliDiscoveryRuntime?.connectionId
+  const cliEnvironmentId =
+    cliDiscoveryRuntime?.target.kind === 'environment'
+      ? cliDiscoveryRuntime.target.environmentId
+      : null
   const reads = agentPickerModelCatalogReads({ target, worktree: selector, cliDiscoveryRuntime })
   const observesHostCatalog =
     model.state === 'settled' && model.rows.some(reads.refreshOnInvalidation)
@@ -185,6 +175,8 @@ export function useAgentLaunchPickerInventorySource(
           worktreeId,
           selector,
           executionHostId,
+          cliConnectionId,
+          cliEnvironmentId,
           model.state === 'settled' ? model.rows : [],
           model.state === 'settled' ? model.detection.detectedIds : [],
           model.state === 'settled' ? model.defaultTuiAgent : undefined,
@@ -203,6 +195,8 @@ export function useAgentLaunchPickerInventorySource(
       worktreeId,
       selector,
       executionHostId,
+      cliConnectionId,
+      cliEnvironmentId,
       model,
       settings,
       registeredAgents,
@@ -216,12 +210,13 @@ export function useAgentLaunchPickerInventorySource(
           model.rows,
           model.detection.detectedIds ?? [],
           (agent) => agentPickerChoiceSeeds(agent, defaults),
-          getAgentLabel,
+          (agent) => TUI_AGENT_DISPLAY_NAMES[agent],
           model.defaultTuiAgent
         ).map((entry) => ({
           ...entry,
           coherentCatalog,
-          ...((!target && !(cliDiscoveryRuntime && agentPickerListsCliModels(entry))) ||
+          ...((!target &&
+            !(cliDiscoveryRuntime && agentPickerListsCliModels(entry, cliConnectionId))) ||
           !entry.surfaces.length ||
           (registeredAgents &&
             !registeredAgents.some(({ agent }) => agent === entry.agent) &&

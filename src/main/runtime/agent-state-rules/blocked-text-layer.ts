@@ -1,5 +1,8 @@
 import { escapeRegex } from '../../../shared/text/regex-escaping'
-import { findStartupDialogBlockedSignals } from '../terminal/wait/startup-dialog-blocked-signals'
+import {
+  DOUBAO_SIGN_IN_FOOTER,
+  findStartupDialogBlockedSignals
+} from '../terminal/wait/startup-dialog-blocked-signals'
 import { startOfLastNonBlankLines } from '../terminal/wait/terminal-wait-tail-window'
 import { compiledFromActiveAgentStateRules } from './active-agent-state-rules'
 import {
@@ -18,7 +21,11 @@ const BUILT_IN_SENTINEL_RE =
 export const terminalWaitBlockedSentinelRe = compiledFromActiveAgentStateRules(
   () =>
     new RegExp(
-      [BUILT_IN_SENTINEL_RE.source, ...blockedAnchorLiterals().map(escapeRegex)].join('|'),
+      [
+        BUILT_IN_SENTINEL_RE.source,
+        escapeRegex(DOUBAO_SIGN_IN_FOOTER),
+        ...blockedAnchorLiterals().map(escapeRegex)
+      ].join('|'),
       'i'
     )
 )

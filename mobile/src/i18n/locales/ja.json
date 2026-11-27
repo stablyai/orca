@@ -5318,6 +5318,11 @@
       }
     },
     "lib": {
+      "agent": {
+        "catalog": {
+          "doubao_label": "Doubao"
+        }
+      },
       "rateLimits": {
         "errors": {
           "sessionCookieNotConfigured": "セッション Cookie が設定されていません",

@@ -4,16 +4,17 @@ import { formatAgentTypeLabel } from '../../../src/shared/agent-status/presentat
 import { withoutNativeChatVisualDirectiveLines } from '../../../src/shared/native-chat/visuals/native-chat-visual-directive'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/worktree/catalog/runtime-worktree-contracts'
 import type { HomeAgentEntry } from '../worktree/catalog/home-worktree-info'
+import { translate, type Translate } from '../i18n/mobile-i18n'
 import type { AgentStatusGroup } from './agent-list-rows'
 
 /** The row's name: what the conversation is called, else its task, else what it was asked. */
-export function agentListTitle(agent: RuntimeWorktreeAgentRow): string {
+export function agentListTitle(agent: RuntimeWorktreeAgentRow, t: Translate = translate): string {
   return (
     agent.conversationName?.trim() ||
     agent.displayName?.trim() ||
     agent.taskTitle?.trim() ||
     getAgentRowPrimaryText({ prompt: agent.prompt }) ||
-    formatAgentTypeLabel(agent.agentType)
+    formatAgentTypeLabel(agent.agentType, t)
   )
 }
 
@@ -55,15 +56,20 @@ export function agentListPreview(
 }
 
 /** Search covers what the row shows plus the prompt; `query` is already lower-cased. */
-export function agentListEntryMatches(entry: HomeAgentEntry, query: string): boolean {
+export function agentListEntryMatches(
+  entry: HomeAgentEntry,
+  query: string,
+  t: Translate = translate
+): boolean {
   const { agent } = entry
   return [
-    agentListTitle(agent),
+    agentListTitle(agent, t),
     agent.activity?.listed === true ? agent.activity.title : null,
     entry.workspaceName,
     entry.branch,
     entry.repo,
-    formatAgentTypeLabel(agent.agentType),
+    formatAgentTypeLabel(agent.agentType, t),
+    agent.agentType,
     agent.prompt,
     agent.lastAssistantMessage
   ].some((field) => field?.toLowerCase().includes(query))

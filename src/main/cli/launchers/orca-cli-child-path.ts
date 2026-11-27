@@ -15,6 +15,31 @@ export type OrcaCliChildPathOptions = {
   platform?: NodeJS.Platform
 }
 
+function developmentLauncher(userDataPath: string, platform: NodeJS.Platform): string {
+  return join(
+    userDataPath,
+    'cli',
+    'bin',
+    platform === 'win32' ? `${DEV_COMMAND_NAME}.cmd` : DEV_COMMAND_NAME
+  )
+}
+
+/** Doubao's Windows shell tools can rebuild PATH and discard the profile's CLI directory. */
+export function getWindowsWorkerCliLauncher(): string | null {
+  if (process.platform !== 'win32' || !hasAppEnvironment()) {
+    return null
+  }
+  const app = getAppEnvironment()
+  return (
+    app.getCliLauncherPath?.() ??
+    (!app.isPackaged()
+      ? developmentLauncher(app.getPath('userData'), process.platform)
+      : process.resourcesPath
+        ? getBundledLauncherPath(process.platform, process.resourcesPath)
+        : null)
+  )
+}
+
 /** Return the launcher path so children can bypass login shells that reorder PATH; null if unavailable. */
 export function prependOrcaCliDirToChildPath(
   env: Record<string, string>,
@@ -40,7 +65,8 @@ export function prependOrcaCliDirToChildPath(
   }
   // Development children must reach their build rather than a globally installed release.
   if (!opts.isPackaged) {
-    const devCliBin = join(opts.userDataPath, 'cli', 'bin')
+    const launcher = developmentLauncher(opts.userDataPath, platform)
+    const devCliBin = dirname(launcher)
     if (platform !== 'win32') {
       env.ORCA_CLI_BIN_DIR = devCliBin
     }
@@ -49,7 +75,7 @@ export function prependOrcaCliDirToChildPath(
     env[resolvePathEnvKey(env, platform)] = inheritedPath
       ? `${devCliBin}${pathDelimiter}${inheritedPath}`
       : devCliBin
-    return join(devCliBin, platform === 'win32' ? `${DEV_COMMAND_NAME}.cmd` : DEV_COMMAND_NAME)
+    return launcher
   } else if (platform === 'linux') {
     // Managed children need bare `orca` to reach the CLI instead of GNOME's screen reader.
     const shimDir = ensureLinuxTerminalOrcaCliShimDir({ userDataPath: opts.userDataPath })

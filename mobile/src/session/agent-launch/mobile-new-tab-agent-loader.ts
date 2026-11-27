@@ -1,3 +1,4 @@
+import type { Translate } from '../../i18n/mobile-i18n'
 import { getRepoIdFromWorktreeId } from '../../../../src/shared/worktree/id'
 import '../../../../src/shared/remote-runtime/protocol/protocol-version'
 import {
@@ -101,12 +102,14 @@ export async function loadMobileDetectedAgents(
 
 export function newTabAgentOptionsFrom(
   settings: unknown,
-  detectedAgents: unknown[]
+  detectedAgents: unknown[],
+  t?: Translate
 ): MobileNewTabAgentOption[] {
   return buildMobileNewTabAgentOptions(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
     settings as MobileNewTabAgentSettings | undefined,
-    detectedAgents
+    detectedAgents,
+    t
   )
 }
 

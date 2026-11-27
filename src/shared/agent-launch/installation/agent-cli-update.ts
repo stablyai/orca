@@ -1,13 +1,14 @@
 // The host answers agentCliUpdate.check and agentCliUpdate.run.
 export const AGENT_CLI_UPDATE_RUNTIME_CAPABILITY = 'agent-cli-update.v1' as const
 
-/** Every agent whose own CLI a native chat runs; Antigravity runs Orca's fixed-version copy. */
+/** Agents whose user-installed CLI Orca can check for updates. */
 export const AGENT_CLI_UPDATE_AGENTS = [
   'claude',
   'codex',
   'grok',
   'opencode',
   'opencode2',
+  'doubao',
   'omp',
   'copilot',
   'kimi',

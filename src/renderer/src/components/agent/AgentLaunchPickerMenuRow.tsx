@@ -147,6 +147,7 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
       draftId={draftId}
       preset={preset}
       entry={entry}
+      allowSessionResume={mode !== 'select'}
       initial={source}
       seed={initial ?? source}
       terminalBlocked={terminalBlocked}

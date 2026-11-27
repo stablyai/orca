@@ -11,8 +11,12 @@ import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git
 import { discoverRuntimeCommitMessageModels } from '@/runtime/source-control/git/runtime-git-generation-client'
 
 /** Agents with no structured chat have no host model catalog, so they list models through their CLI. */
-export function agentPickerListsCliModels(entry: Pick<AgentPickerEntry, 'agent'>): boolean {
+export function agentPickerListsCliModels(
+  entry: Pick<AgentPickerEntry, 'agent'>,
+  connectionId?: string
+): boolean {
   return (
+    (!connectionId || entry.agent === 'doubao') &&
     !isNativeChatAgent(entry.agent) &&
     getAgentSessionOptionCatalog(entry.agent)?.listModels !== undefined
   )

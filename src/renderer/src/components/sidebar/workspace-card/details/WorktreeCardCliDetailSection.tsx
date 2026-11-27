@@ -16,7 +16,7 @@ export function WorktreeCardCliDetailSection({
 }): React.JSX.Element {
   const t = useTranslate()
   const agentLabel = provenance.startupAgent
-    ? formatAgentTypeLabel(provenance.startupAgent)
+    ? formatAgentTypeLabel(provenance.startupAgent, t)
     : undefined
 
   return (

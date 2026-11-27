@@ -15,6 +15,7 @@ export type DraftPasteMarkerSignal =
   | 'dsh-composer-prompt'
   | 'claude-composer-prompt'
   | 'zcode-composer-prompt'
+  | 'doubao-composer-ready'
   | 'antigravity-composer-prompt'
   | 'copilot-composer-prompt'
 

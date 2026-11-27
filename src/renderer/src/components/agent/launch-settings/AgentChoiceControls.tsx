@@ -130,6 +130,7 @@ export function AgentChoiceFields({
     // CLI carrier mappings remain available to Args badges without advertising a mode control.
     if (
       (!model && row.option.category === 'mode') ||
+      (agent === 'doubao' && !live && row.option.id === 'effort') ||
       (optionIds && !optionIds.includes(row.option.id))
     ) {
       return []

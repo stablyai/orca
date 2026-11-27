@@ -1,3 +1,4 @@
+import { DOUBAO_SESSION_OPTION_CATALOG } from './catalog-providers/agent-session-option-catalog-doubao'
 import { OPENCODE_LAUNCH_OPTION_CATALOG } from './catalog-providers/agent-session-option-catalog-opencode'
 import { CODEBUDDY_SESSION_OPTION_CATALOG } from './catalog-providers/agent-session-option-catalog-codebuddy'
 import type { AgentType } from '../../agent-status/contracts/agent-status-types'
@@ -25,6 +26,7 @@ const CATALOGS: AgentSessionOptionCatalogMap = {
   codebuddy: CODEBUDDY_SESSION_OPTION_CATALOG,
   codex: CODEX_SESSION_OPTION_CATALOG,
   cursor: CURSOR_SESSION_OPTION_CATALOG,
+  doubao: DOUBAO_SESSION_OPTION_CATALOG,
   grok: GROK_SESSION_OPTION_CATALOG,
   muse: MUSE_SESSION_OPTION_CATALOG,
   omp: OMP_SESSION_OPTION_CATALOG

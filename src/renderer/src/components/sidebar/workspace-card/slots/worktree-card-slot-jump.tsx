@@ -59,7 +59,7 @@ function tabTitle(worktreeId: string, tabId: string): string | null {
 
 function targetText(target: SlotTarget): string {
   if (target.entry) {
-    return getAgentRowPrimaryText(target.entry) || formatAgentTypeLabel(target.agentType)
+    return getAgentRowPrimaryText(target.entry) || formatAgentTypeLabel(target.agentType, translate)
   }
   if (target.tabId !== undefined) {
     return (

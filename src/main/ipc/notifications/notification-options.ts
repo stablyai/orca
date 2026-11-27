@@ -81,7 +81,7 @@ function buildAgentTaskCompleteNotificationOptions(
     return null
   }
 
-  const agentLabel = formatNotificationAgentLabel(args.agentType)
+  const agentLabel = formatNotificationAgentLabel(args.agentType, translate)
   const worktreeContext = formatNotificationWorktreeContext(args, translate)
   const statusText = formatAgentNotificationStatusText(args, translate)
 
@@ -155,7 +155,7 @@ function buildAgentTaskCompleteRichBody(
   args: NotificationDispatchRequest,
   translate: NotificationTranslator
 ): string | null {
-  const failure = agentFailureSentence(args)
+  const failure = agentFailureSentence(args, translate)
   if (failure) {
     return failure
   }
@@ -199,13 +199,16 @@ function buildAgentTaskCompleteRichBody(
 }
 
 // A failed turn's reason, in the chat's own words ("Codex hit its weekly limit. It resets at 6:39 PM.").
-function agentFailureSentence(args: NotificationDispatchRequest): string | null {
+function agentFailureSentence(
+  args: NotificationDispatchRequest,
+  translate?: NotificationTranslator
+): string | null {
   // Whole, or not at all: a newer host's fact whose detail this build can't read keeps the old body.
   const fact = readWholeAgentSessionFailureFact(args.agentFailure)
   if (!fact || args.agentState !== 'done' || args.agentTurnOutcome !== 'failure') {
     return null
   }
-  const agentName = args.agentType ? formatAgentTypeLabel(args.agentType) : undefined
+  const agentName = args.agentType ? formatAgentTypeLabel(args.agentType, translate) : undefined
   const { text } = agentSessionFailureWords(fact, {
     surface: 'row',
     ...(agentName ? { agentName } : {}),
@@ -240,9 +243,13 @@ function buildAgentTaskCompleteFallbackBody(
         translate('notifications.taskComplete.body', 'A coding agent finished working.'))
 }
 
-function formatNotificationAgentLabel(agentType: string | null | undefined): string {
+function formatNotificationAgentLabel(
+  agentType: string | null | undefined,
+  translate: NotificationTranslator
+): string {
   return formatAgentTypeLabel(
-    normalizeNotificationText(agentType, NOTIFICATION_AGENT_LABEL_MAX_LENGTH)
+    normalizeNotificationText(agentType, NOTIFICATION_AGENT_LABEL_MAX_LENGTH),
+    translate
   )
 }
 

@@ -7,7 +7,7 @@ import type {
 } from '../../../../../shared/keybindings/types'
 import {
   ALL_TUI_AGENTS,
-  TUI_AGENT_DISPLAY_NAMES
+  tuiAgentDisplayName
 } from '../../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword, uniqueKeywords } from '../search/settings-search-keywords'
@@ -186,7 +186,7 @@ const TITLE_COPY_BY_ID = new Map<string, () => string>([
     agentTabActionId(agent),
     () =>
       translate('keybindings.title.newAgentTab', 'New {{agent}} tab', {
-        agent: TUI_AGENT_DISPLAY_NAMES[agent]
+        agent: tuiAgentDisplayName(agent, translate)
       })
   ])
 ])

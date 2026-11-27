@@ -4,6 +4,7 @@ import type {
   EnvironmentDoctorCheckStatus
 } from '../../shared/workspace-setup/environment-doctor/environment-doctor-types'
 import { stripCredentialsFromMessage } from '../../shared/git/remotes/git-remote-error'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 
 export type EnvironmentDoctorCommandResult = {
   code: number | null
@@ -15,12 +16,14 @@ export type EnvironmentDoctorCommandResult = {
 export type EnvironmentDoctorRunOptions = {
   cwd: string
   timeoutMs: number
+  env?: Record<string, string>
   /** Disable Git credential UI so a probe fails fast instead of waiting on a prompt. */
   guardGitPrompts?: boolean
 }
 
 export type EnvironmentDoctorDeps = {
   platform: NodeJS.Platform
+  agentSettings?: Partial<Pick<GlobalSettings, 'agentCmdOverrides' | 'agentDefaultEnv'>>
   /** Settle PATH once before any probe, so every check sees the same tools. */
   prepare: () => Promise<void>
   run: (
@@ -52,7 +55,7 @@ export const PROBE_TIMEOUT_MS = 10_000
 const OUTPUT_TAIL_CHARS = 1_500
 
 export async function runSafely(
-  deps: EnvironmentDoctorDeps,
+  deps: Pick<EnvironmentDoctorDeps, 'run'>,
   program: string,
   args: readonly string[],
   options: EnvironmentDoctorRunOptions

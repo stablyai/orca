@@ -112,6 +112,7 @@ const PROJECT_SKILL_FOLDERS: readonly (readonly [AgentType, string, SkillProvide
   ['copilot', '.github', ['agent-skills']],
   ['qoder', '.qoder', ['agent-skills']],
   ['opencode', '.opencode', ['agent-skills']],
+  ['doubao', '.doubao', ['agent-skills']],
   ['prime-agent', '.prime/agent', ['agent-skills']]
 ]
 
@@ -136,6 +137,7 @@ export function buildSkillDiscoverySources(
   const hermesSkillsRoot = args.pathApi
     ? pathApi.join(home, '.hermes', 'skills')
     : (resolveEnvironmentHermesSkillsRoot() ?? resolveDefaultHermesSkillsRoot({ homeDir: home }))
+  const doubaoSkillsRoot = pathApi.join(home, 'Doubao', 'skills')
   const roots: SkillScanRoot[] = [
     // Why: Codex reads `.agents/skills` today; this legacy home still holds older installs.
     source(
@@ -175,6 +177,7 @@ export function buildSkillDiscoverySources(
       ['agent-skills'],
       'opencode'
     ),
+    source('home-doubao', 'Doubao home', doubaoSkillsRoot, 'home', ['agent-skills'], 'doubao'),
     source(
       'home-pi',
       'Pi home',

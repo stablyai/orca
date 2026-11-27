@@ -16,6 +16,7 @@ import {
   AgentLaunchSettingsCatalog,
   type AgentPermissionsRenderer
 } from './AgentLaunchSettingsCatalog'
+import { DoubaoSignInCheck } from './DoubaoSignInCheck'
 import { AgentLaunchSettingsLoading } from './AgentLaunchSettingsLoading'
 import { HostAgentLaunchSettings } from './HostAgentLaunchSettings'
 import { SettingsHostScopeUnavailableNotice } from '../../host-scope/SettingsHostScopePicker'
@@ -178,6 +179,12 @@ function LocalAgentLaunchSettings({
       settings={projectAgentLaunchSettings(settings, window.api.platform.get().platform)}
       mutate={mutate}
       detectionTarget={LOCAL_DETECTION_TARGET}
+      doubaoSignIn={
+        <DoubaoSignInCheck
+          command={settings.agentCmdOverrides?.doubao}
+          environment={settings.agentDefaultEnv?.doubao}
+        />
+      }
       hostName={null}
       renderPermissions={renderPermissions}
       nativeChatPermissionsSupported

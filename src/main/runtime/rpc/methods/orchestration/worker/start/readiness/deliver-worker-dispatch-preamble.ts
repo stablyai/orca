@@ -11,6 +11,7 @@ import {
   resolveDispatchAssigneeParty
 } from '../../../../../../orchestration/addressing/orchestration-party'
 import { buildDispatchPreamble } from '../../../../../../orchestration/workers/launch/worker-dispatch-preamble'
+import { getWindowsWorkerCliLauncher } from '../../../../../../../cli/launchers/orca-cli-child-path'
 import { sendAgentTurn } from '../../../../../../orchestration/turn-delivery/send-agent-turn'
 import { createWorkerBriefWriteGuard } from '../../../../../../terminal/wait/launched-agent-write-guard'
 import { sendStructuredWorkerPreamble } from '../../../structured-workers/orchestration-structured-worker-session'
@@ -51,9 +52,9 @@ export async function deliverWorkerDispatchPreamble(args: {
 }> {
   const { runtime, structuredSession, terminalHandle } = args
   // A reused structured worker is a chat too, though its handle is not an Orca session ID.
-  const chat = structuredSession
-    ? null
-    : chatAssigneeOf(resolveDispatchAssigneeParty(terminalHandle, args.db))
+  const assignee = structuredSession ? null : resolveDispatchAssigneeParty(terminalHandle, args.db)
+  const chat = assignee && chatAssigneeOf(assignee)
+  const cliTarget = runtime.getTerminalOrchestrationCliTarget(terminalHandle)
   const preamble = buildDispatchPreamble({
     // Only depth gates nesting; resolve structured callers' workspace so they can dispatch like PTY workers.
     canDispatchSubWorkers: args.dispatchDepth < runtime.getNestedWorkerMaxDepth(),
@@ -70,7 +71,15 @@ export async function deliverWorkerDispatchPreamble(args: {
           ? formatOrcaSessionAddress(chat)
           : terminalHandle,
     devMode: args.devMode,
-    ...runtime.getTerminalOrchestrationCliTarget(terminalHandle),
+    ...cliTarget,
+    cliLauncher:
+      cliTarget.runsOnNativeWindows &&
+      assignee &&
+      !chat &&
+      (args.launchedAgent ?? runtime.orchestrationSenderNames.liveAgentOf(assignee)) === 'doubao' &&
+      runtime.getOrchestrationDispatchAuthority(terminalHandle)?.hostScope.kind === 'local'
+        ? getWindowsWorkerCliLauncher()
+        : undefined,
     unreadMail: args.db.getLatestUnreadMessageSequence(`dispatch:${args.dispatchId}`) !== undefined
   })
   if (chat) {

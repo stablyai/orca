@@ -41,7 +41,7 @@ export function AgentCardLastMessages({
           )}
         >
           <span className="font-medium text-foreground/45">
-            {formatAgentTypeLabel(card.agentType)}
+            {formatAgentTypeLabel(card.agentType, t)}
           </span>{' '}
           {card.lastAgentMessage}
         </div>
