@@ -56,7 +56,10 @@ export function BlockedStartupDraftCard(): JSX.Element {
               <p className="text-sm text-muted-foreground">
                 {message}
                 {moreCount > 0 &&
-                  ` ${t('terminal.startupPromptMore', '({{count}} more)', { count: moreCount })}`}
+                  ` ${t('terminal.startupPromptMore', '({{count}} more)', {
+                    count: moreCount,
+                    defaultValue_one: '({{count}} more)'
+                  })}`}
               </p>
             )}
             <p className="line-clamp-4 font-mono text-xs wrap-anywhere whitespace-pre-wrap">
