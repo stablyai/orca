@@ -89,7 +89,7 @@ export function CommentComposerLoading({ className }: { className?: string }): R
         size="icon-sm"
         disabled
         tabIndex={-1}
-        className="absolute right-3 bottom-3 shadow-sm"
+        className="absolute right-3 bottom-3"
       >
         <Send className="size-4" />
       </Button>

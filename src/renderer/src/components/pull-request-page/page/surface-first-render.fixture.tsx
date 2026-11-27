@@ -26,16 +26,13 @@ function holdGitHubReads(): void {
   // Why: fixtures share one page; clear details left by an earlier fixture so each one opens uncached.
   workItemDetailsCache.clear()
   const gh = window.api.gh
-  Reflect.set(
-    window.api,
-    'gh',
-    new Proxy(gh, {
-      get: (target, key) =>
-        typeof key === 'string' && !/^on[A-Z]/.test(key)
-          ? () => new Promise(() => {})
-          : Reflect.get(target, key)
-    })
+  const held = Object.fromEntries(
+    Object.entries(gh).map(([name, value]) => [
+      name,
+      typeof value === 'function' && !/^on[A-Z]/.test(name) ? () => new Promise(() => {}) : value
+    ])
   )
+  Reflect.set(window.api, 'gh', held)
 }
 
 /** Freezes the first committed DOM (before any passive effect runs) so the first frame can be captured. */
@@ -53,7 +50,6 @@ function FirstCommit({ children }: { children: React.ReactNode }): React.JSX.Ele
   return html === null ? (
     <div ref={ref}>{children}</div>
   ) : (
-    // oxlint-disable-next-line react/no-danger -- SAFETY: fixture-only replay of markup this component just rendered.
     <div dangerouslySetInnerHTML={{ __html: html }} />
   )
 }
