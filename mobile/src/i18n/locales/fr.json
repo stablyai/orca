@@ -1192,8 +1192,6 @@
       "tooLargeMessage": "Ce diff est trop volumineux pour l'aperçu sur mobile."
     },
     "diffReviewDrawers": {
-      "addNote": "Ajouter une note",
-      "cancelNote": "Annuler la note",
       "clearSentNotes": "Effacer les notes envoyées",
       "copyNotes": "Copier les notes",
       "deleteNote": "Supprimer la note",
@@ -1202,12 +1200,10 @@
       "discardTitle": "Abandonner les modifications",
       "editNote": "Modifier la note",
       "fileNote": "Note sur le fichier",
-      "lineNumber": "Ligne {{lineNumber}}",
       "loadingSessions": "Chargement des sessions d'agent…",
       "newAgentSession": "Nouvelle session d'agent",
       "openInSession": "Ouvrir dans une session",
       "reviewNote": "Note de revue",
-      "saveLineNote": "Enregistrer la note sur la ligne {{lineNumber}}",
       "sendNotes": "Envoyer les notes",
       "sendNotesLabel": "Envoyer les notes à l'agent",
       "viewedFiles_many": "{{count}} fichiers consultés",
@@ -1223,10 +1219,7 @@
       "discardChanges": "Abandonner les modifications",
       "rangeLine": "Ligne {{line}}",
       "rangeLines": "Lignes {{startLine}}–{{line}}",
-      "sendToAgent": "Envoyer à {{agent}}",
-      "sendToAnAgent": "Envoyer à un agent",
       "rangePlaceholder": "Que faut-il changer ici ?",
-      "commentOnGitHub": "Commenter sur GitHub",
       "sendUnsentNotes": "Envoyer les notes non envoyées",
       "statusUnreadable": "Impossible de lire l'état de cet hôte. Nouvelle tentative…",
       "terminal": "Terminal",
@@ -1261,7 +1254,6 @@
       "title": "Modifications"
     },
     "diffReviewLine": {
-      "addNoteOnLine": "Ajouter une note à la ligne {{number}}",
       "addedLine": "Ligne ajoutée",
       "addedLineNumber": "Ligne {{number}} ajoutée",
       "contextLine": "Ligne de contexte",
@@ -2409,7 +2401,6 @@
       "daysAgo_other": "il y a {{count}} j",
       "deleteConfirmMessage": "Cette action supprime définitivement le commentaire sur GitHub.",
       "editPlaceholder": "Modifier le commentaire…",
-      "replyToComment": "Répondre au commentaire",
       "hoursAgo_many": "il y a {{count}} h",
       "hoursAgo_one": "il y a {{count}} h",
       "hoursAgo_other": "il y a {{count}} h",
@@ -2421,40 +2412,23 @@
       "monthsAgo_one": "il y a {{count}} mois",
       "monthsAgo_other": "il y a {{count}} mois",
       "reply": "Répondre",
-      "editComment": "Modifier le commentaire",
-      "deleteComment": "Supprimer le commentaire",
-      "unresolveThread": "Marquer le fil comme non résolu",
-      "resolveThread": "Résoudre le fil",
       "resolve": "Résoudre",
-      "replyPlaceholder": "Écrire une réponse…",
       "unresolve": "Marquer comme non résolu",
       "yearsAgo_many": "il y a {{count}} ans",
       "yearsAgo_one": "il y a {{count}} an",
-      "yearsAgo_other": "il y a {{count}} ans",
-      "resolved": "résolu",
-      "openOnGitHub": "Ouvrir le commentaire sur GitHub"
+      "yearsAgo_other": "il y a {{count}} ans"
     },
     "commentsSection": {
-      "all": "Tous",
-      "humans": "Humains",
-      "bots": "Bots",
-      "noBotComments": "Aucun commentaire de bot.",
-      "noHumanComments": "Aucun commentaire humain.",
       "comment": "Commenter",
       "resolvedThreadSingle": "Fil de {{author}} résolu",
       "resolvedThreadCount": "Fil de {{author}} résolu ({{count}})",
-      "resolvedCommentSingle": "Commentaire de {{author}} résolu",
-      "resolvedCommentCount": "Commentaire de {{author}} résolu ({{count}})",
       "commentsLoadFailedRetry": "Impossible de charger les commentaires.",
       "description": "Description",
       "descriptionLoadFailed": "Impossible de charger la description. Appuyez sur Actualiser pour réessayer.",
       "noComments": "Aucun commentaire pour le moment.",
       "noDescription": "Aucune description fournie.",
       "showMore": "Afficher {{count}} de plus",
-      "addCommentPlaceholder": "Ajouter un commentaire…",
-      "title": "Commentaires",
-      "commentsLoadFailed": "Impossible de charger les commentaires. Appuyez sur Actualiser pour réessayer.",
-      "showMoreOf": "Afficher {{count}} de plus sur {{remaining}}"
+      "title": "Commentaires"
     },
     "linkPrForm": {
       "linkButton": "Lier la pull request",
@@ -2565,14 +2539,6 @@
       "stateMerged": "Fusionnée",
       "stateOpen": "Ouverte",
       "unavailable": "Checks indisponibles"
-    },
-    "prCommentAudienceLabels": {
-      "all": "Tous",
-      "bots": "Bots",
-      "humans": "Humains",
-      "noBotComments": "Aucun commentaire de bot.",
-      "noComments": "Aucun commentaire pour le moment.",
-      "noHumanComments": "Aucun commentaire humain."
     },
     "tab": {
       "updated": "mis à jour {{time}}",
@@ -5783,7 +5749,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Jumeler un ordinateur",
       "pairRequired": "Pour ouvrir ce lien, jumelez ce téléphone à un ordinateur, puis rouvrez le lien.",

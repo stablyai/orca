@@ -1147,8 +1147,6 @@
       "tooLargeMessage": "Dieser Diff ist zu groß für die mobile Vorschau."
     },
     "diffReviewDrawers": {
-      "addNote": "Notiz hinzufügen",
-      "cancelNote": "Notizeingabe abbrechen",
       "clearSentNotes": "Gesendete Notizen löschen",
       "copyNotes": "Notizen kopieren",
       "deleteNote": "Notiz löschen",
@@ -1157,12 +1155,10 @@
       "discardTitle": "Änderungen verwerfen?",
       "editNote": "Notiz bearbeiten",
       "fileNote": "Dateinotiz",
-      "lineNumber": "Zeile {{lineNumber}}",
       "loadingSessions": "Agentensitzungen werden geladen…",
       "newAgentSession": "Neue Agentensitzung",
       "openInSession": "In Sitzung öffnen",
       "reviewNote": "Review-Notiz",
-      "saveLineNote": "Notiz zu Zeile {{lineNumber}} speichern",
       "sendNotes": "Notizen senden",
       "sendNotesLabel": "Notizen an den Agenten senden",
       "viewedFiles_one": "{{count}} Datei angesehen",
@@ -1176,10 +1172,7 @@
       "discardChanges": "Änderungen verwerfen",
       "rangeLine": "Zeile {{line}}",
       "rangeLines": "Zeilen {{startLine}}–{{line}}",
-      "sendToAgent": "An {{agent}} senden",
-      "sendToAnAgent": "An Agenten senden",
       "rangePlaceholder": "Was soll hier geändert werden?",
-      "commentOnGitHub": "Auf GitHub kommentieren",
       "sendUnsentNotes": "Ungesendete Notizen senden",
       "statusUnreadable": "Der Status dieses Hosts konnte nicht gelesen werden. Erneuter Versuch…",
       "terminal": "Terminal",
@@ -1212,7 +1205,6 @@
       "title": "Änderungen"
     },
     "diffReviewLine": {
-      "addNoteOnLine": "Notiz zu Zeile {{number}} hinzufügen",
       "addedLine": "Hinzugefügte Zeile",
       "addedLineNumber": "Hinzugefügte Zeile {{number}}",
       "contextLine": "Kontextzeile",
@@ -2347,7 +2339,6 @@
       "daysAgo_other": "vor {{count}} Tagen",
       "deleteConfirmMessage": "Dadurch wird der Kommentar auf GitHub dauerhaft gelöscht.",
       "editPlaceholder": "Kommentar bearbeiten…",
-      "replyToComment": "Auf Kommentar antworten",
       "hoursAgo_one": "vor {{count}} Std.",
       "hoursAgo_other": "vor {{count}} Std.",
       "justNow": "gerade eben",
@@ -2356,39 +2347,22 @@
       "monthsAgo_one": "vor {{count}} Monat",
       "monthsAgo_other": "vor {{count}} Monaten",
       "reply": "Antworten",
-      "editComment": "Kommentar bearbeiten",
-      "deleteComment": "Kommentar löschen",
-      "unresolveThread": "Thread als ungelöst markieren",
-      "resolveThread": "Thread als erledigt markieren",
       "resolve": "Erledigen",
-      "replyPlaceholder": "Antwort schreiben…",
       "unresolve": "Als ungelöst markieren",
       "yearsAgo_one": "vor {{count}} Jahr",
-      "yearsAgo_other": "vor {{count}} Jahren",
-      "resolved": "erledigt",
-      "openOnGitHub": "Kommentar auf GitHub öffnen"
+      "yearsAgo_other": "vor {{count}} Jahren"
     },
     "commentsSection": {
-      "all": "Alle",
-      "humans": "Menschen",
-      "bots": "Bots",
-      "noBotComments": "Keine Kommentare von Bots.",
-      "noHumanComments": "Keine Kommentare von Menschen.",
       "comment": "Kommentieren",
       "resolvedThreadSingle": "Erledigter Thread von {{author}}",
       "resolvedThreadCount": "Erledigter Thread von {{author}} ({{count}})",
-      "resolvedCommentSingle": "Erledigter Kommentar von {{author}}",
-      "resolvedCommentCount": "Erledigter Kommentar von {{author}} ({{count}})",
       "commentsLoadFailedRetry": "Kommentare konnten nicht geladen werden.",
       "description": "Beschreibung",
       "descriptionLoadFailed": "Beschreibung konnte nicht geladen werden. Zum erneuten Laden auf „Aktualisieren“ tippen.",
       "noComments": "Noch keine Kommentare.",
       "noDescription": "Keine Beschreibung angegeben.",
       "showMore": "{{count}} weitere anzeigen",
-      "addCommentPlaceholder": "Kommentar hinzufügen…",
-      "title": "Kommentare",
-      "commentsLoadFailed": "Kommentare konnten nicht geladen werden. Zum erneuten Laden auf „Aktualisieren“ tippen.",
-      "showMoreOf": "{{count}} von {{remaining}} weiteren anzeigen"
+      "title": "Kommentare"
     },
     "linkPrForm": {
       "linkButton": "Pull Request verknüpfen",
@@ -2493,14 +2467,6 @@
       "stateMerged": "Gemergt",
       "stateOpen": "Offen",
       "unavailable": "Checks nicht verfügbar"
-    },
-    "prCommentAudienceLabels": {
-      "all": "Alle",
-      "bots": "Bots",
-      "humans": "Menschen",
-      "noBotComments": "Keine Kommentare von Bots.",
-      "noComments": "Noch keine Kommentare.",
-      "noHumanComments": "Keine Kommentare von Menschen."
     },
     "tab": {
       "updated": "aktualisiert {{time}}",
@@ -5636,7 +5602,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Computer koppeln",
       "pairRequired": "Kopple dieses Telefon mit einem Computer, um diesen Link zu öffnen, und öffne den Link dann erneut.",

@@ -1404,8 +1404,6 @@
       "tooLargeMessage": "此差異過大，無法在手機上預覽。"
     },
     "diffReviewDrawers": {
-      "addNote": "新增備註",
-      "cancelNote": "取消編輯備註",
       "clearSentNotes": "清除已傳送的備註",
       "copyNotes": "複製備註",
       "deleteNote": "刪除備註",
@@ -1414,12 +1412,10 @@
       "discardTitle": "放棄檔案變更",
       "editNote": "編輯備註",
       "fileNote": "檔案備註",
-      "lineNumber": "第 {{lineNumber}} 行",
       "loadingSessions": "正在載入代理程式工作階段…",
       "newAgentSession": "新增代理程式工作階段",
       "openInSession": "在工作階段中開啟",
       "reviewNote": "審查備註",
-      "saveLineNote": "儲存第 {{lineNumber}} 行的備註",
       "sendNotes": "傳送備註",
       "sendNotesLabel": "將備註傳送給代理程式",
       "viewedFiles_one": "已檢視 {{count}} 個檔案",
@@ -1433,10 +1429,7 @@
       "discardChanges": "放棄變更",
       "rangeLine": "第 {{line}} 行",
       "rangeLines": "第 {{startLine}}–{{line}} 行",
-      "sendToAgent": "傳送給 {{agent}}",
-      "sendToAnAgent": "傳送給代理程式",
       "rangePlaceholder": "這裡應該如何修改？",
-      "commentOnGitHub": "在 GitHub 上留言",
       "sendUnsentNotes": "傳送未傳送的備註",
       "statusUnreadable": "無法讀取此主機的狀態。正在重試…",
       "terminal": "終端機",
@@ -1469,7 +1462,6 @@
       "title": "變更"
     },
     "diffReviewLine": {
-      "addNoteOnLine": "在第 {{number}} 行新增備註",
       "addedLine": "新增行",
       "addedLineNumber": "新增的第 {{number}} 行",
       "contextLine": "上下文行",
@@ -2637,7 +2629,6 @@
       "daysAgo_other": "{{count}} 天前",
       "deleteConfirmMessage": "這會永久刪除 GitHub 上的留言。",
       "editPlaceholder": "編輯留言…",
-      "replyToComment": "回覆留言",
       "hoursAgo_one": "{{count}} 小時前",
       "hoursAgo_other": "{{count}} 小時前",
       "justNow": "剛剛",
@@ -2646,39 +2637,22 @@
       "monthsAgo_one": "{{count}} 個月前",
       "monthsAgo_other": "{{count}} 個月前",
       "reply": "回覆",
-      "editComment": "編輯留言",
-      "deleteComment": "刪除留言",
-      "unresolveThread": "將討論串標為未解決",
-      "resolveThread": "將討論串標為已解決",
       "resolve": "解決",
-      "replyPlaceholder": "撰寫回覆…",
       "unresolve": "標示為未解決",
       "yearsAgo_one": "{{count}} 年前",
-      "yearsAgo_other": "{{count}} 年前",
-      "resolved": "已解決",
-      "openOnGitHub": "在 GitHub 上開啟留言"
+      "yearsAgo_other": "{{count}} 年前"
     },
     "commentsSection": {
-      "all": "全部",
-      "humans": "人類",
-      "bots": "機器人",
-      "noBotComments": "沒有機器人留言。",
-      "noHumanComments": "沒有人類留言。",
       "comment": "留言",
       "resolvedThreadSingle": "{{author}} 的討論串（已解決）",
       "resolvedThreadCount": "{{author}} 的討論串（已解決 · {{count}} 則）",
-      "resolvedCommentSingle": "{{author}} 的留言（已解決）",
-      "resolvedCommentCount": "{{author}} 的留言（已解決 · {{count}} 則）",
       "commentsLoadFailedRetry": "無法載入留言。",
       "description": "描述",
       "descriptionLoadFailed": "無法載入描述。請點選「重新整理」再試一次。",
       "noComments": "還沒有留言。",
       "noDescription": "沒有提供描述。",
       "showMore": "再顯示 {{count}} 則",
-      "addCommentPlaceholder": "新增留言…",
-      "title": "留言",
-      "commentsLoadFailed": "無法載入留言。請點選「重新整理」再試一次。",
-      "showMoreOf": "再顯示 {{count}} 則（尚有 {{remaining}} 則）"
+      "title": "留言"
     },
     "linkPrForm": {
       "linkButton": "連結 PR",
@@ -2783,14 +2757,6 @@
       "stateMerged": "已合併",
       "stateOpen": "開放",
       "unavailable": "無法取得檢查結果"
-    },
-    "prCommentAudienceLabels": {
-      "all": "全部",
-      "bots": "機器人",
-      "humans": "人類",
-      "noBotComments": "沒有機器人留言。",
-      "noComments": "還沒有留言。",
-      "noHumanComments": "沒有人類留言。"
     },
     "tab": {
       "updated": "更新於 {{time}}",

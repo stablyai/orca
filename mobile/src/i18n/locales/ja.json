@@ -1142,8 +1142,6 @@
       "tooLargeMessage": "この差分は大きすぎるため、モバイルではプレビューできません。"
     },
     "diffReviewDrawers": {
-      "addNote": "メモを追加",
-      "cancelNote": "メモの入力をキャンセル",
       "clearSentNotes": "送信済みのメモをクリア",
       "copyNotes": "メモをコピー",
       "deleteNote": "メモの削除",
@@ -1152,12 +1150,10 @@
       "discardTitle": "ファイルの変更を破棄",
       "editNote": "メモを編集",
       "fileNote": "ファイルのメモ",
-      "lineNumber": "{{lineNumber}} 行目",
       "loadingSessions": "Agent セッションを読み込み中…",
       "newAgentSession": "新規 Agent セッション",
       "openInSession": "セッションで開く",
       "reviewNote": "レビューメモ",
-      "saveLineNote": "{{lineNumber}} 行目のメモを保存",
       "sendNotes": "メモを送信",
       "sendNotesLabel": "Agent にメモを送信",
       "viewedFiles_one": "閲覧済みのファイル {{count}} 件",
@@ -1171,10 +1167,7 @@
       "discardChanges": "変更を破棄",
       "rangeLine": "{{line}} 行目",
       "rangeLines": "{{startLine}}–{{line}} 行目",
-      "sendToAgent": "{{agent}} に送信",
-      "sendToAnAgent": "Agent に送信",
       "rangePlaceholder": "ここで何を変更しますか？",
-      "commentOnGitHub": "GitHub でコメント",
       "sendUnsentNotes": "未送信のメモを送信",
       "statusUnreadable": "このホストの状態を読み取れませんでした。再試行中…",
       "terminal": "ターミナル",
@@ -1207,7 +1200,6 @@
       "title": "変更点"
     },
     "diffReviewLine": {
-      "addNoteOnLine": "{{number}} 行目にメモを追加",
       "addedLine": "追加された行",
       "addedLineNumber": "追加された行（{{number}} 行目）",
       "contextLine": "変更のない行",
@@ -2342,7 +2334,6 @@
       "daysAgo_other": "{{count}} 日前",
       "deleteConfirmMessage": "GitHub 上のコメントを完全に削除します。",
       "editPlaceholder": "コメントを編集…",
-      "replyToComment": "コメントに返信",
       "hoursAgo_one": "{{count}} 時間前",
       "hoursAgo_other": "{{count}} 時間前",
       "justNow": "たった今",
@@ -2351,39 +2342,22 @@
       "monthsAgo_one": "{{count}} か月前",
       "monthsAgo_other": "{{count}} か月前",
       "reply": "返事",
-      "editComment": "コメントを編集",
-      "deleteComment": "コメントを削除",
-      "unresolveThread": "スレッドを未解決に戻す",
-      "resolveThread": "スレッドを解決",
       "resolve": "解決",
-      "replyPlaceholder": "返信を入力…",
       "unresolve": "未解決に戻す",
       "yearsAgo_one": "{{count}} 年前",
-      "yearsAgo_other": "{{count}} 年前",
-      "resolved": "解決済み",
-      "openOnGitHub": "GitHub でコメントを開く"
+      "yearsAgo_other": "{{count}} 年前"
     },
     "commentsSection": {
-      "all": "全て",
-      "humans": "人間",
-      "bots": "ボット",
-      "noBotComments": "ボットのコメントはありません。",
-      "noHumanComments": "ユーザーによるコメントはありません。",
       "comment": "コメント",
       "resolvedThreadSingle": "{{author}} の解決済みスレッド",
       "resolvedThreadCount": "{{author}} の解決済みスレッド（{{count}}）",
-      "resolvedCommentSingle": "{{author}} の解決済みコメント",
-      "resolvedCommentCount": "{{author}} の解決済みコメント（{{count}}）",
       "commentsLoadFailedRetry": "コメントを読み込めませんでした。",
       "description": "説明",
       "descriptionLoadFailed": "説明を読み込めませんでした。「更新」をタップして再試行してください。",
       "noComments": "コメントはまだありません。",
       "noDescription": "説明はありません。",
       "showMore": "さらに {{count}} 件を表示",
-      "addCommentPlaceholder": "コメントを追加…",
-      "title": "コメント",
-      "commentsLoadFailed": "コメントを読み込めませんでした。「更新」をタップして再試行してください。",
-      "showMoreOf": "残り {{remaining}} 件中 {{count}} 件をさらに表示"
+      "title": "コメント"
     },
     "linkPrForm": {
       "linkButton": "PR をリンク",
@@ -2488,14 +2462,6 @@
       "stateMerged": "マージ済み",
       "stateOpen": "オープン",
       "unavailable": "チェックは利用できません"
-    },
-    "prCommentAudienceLabels": {
-      "all": "全て",
-      "bots": "ボット",
-      "humans": "人間",
-      "noBotComments": "ボットのコメントはありません。",
-      "noComments": "コメントはまだありません。",
-      "noHumanComments": "ユーザーによるコメントはありません。"
     },
     "tab": {
       "updated": "更新: {{time}}",
@@ -5631,7 +5597,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "コンピュータをペアリング",
       "pairRequired": "このリンクを開くには、このスマートフォンをコンピュータとペアリングしてから、もう一度リンクを開いてください。",
