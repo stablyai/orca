@@ -331,7 +331,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   },
   'auto.components.mobile.MobileHero.cd4e5e816f': {
     ko: '주머니 속의 워크스페이스.',
-    zh: '您的工作区就在您的口袋里',
+    zh: '你的工作区就在你的口袋里',
     ja: 'ワークスペースをポケットに。'
   },
   'auto.components.GitHubItemDialog.dbe5e2448e': {
