@@ -1,3 +1,4 @@
+import { useRichMarkdownWordCount } from '../../word-count/use-editor-word-count'
 import { useMemo } from 'react'
 import { useEditor, type Editor } from '@tiptap/react'
 import { createRichMarkdownExtensions } from '../schema/rich-markdown-extensions'
@@ -29,6 +30,7 @@ export function useRichMarkdownEditorInstance(params: EditorConfigParams): Edito
     // Empty dependencies update Tiptap options without recreating the editor, preserving selection/history instead of reparsing content.
     []
   )
+  useRichMarkdownWordCount(editor, params.fileId)
   params.editorRef.current = editor ?? null
   return editor
 }
