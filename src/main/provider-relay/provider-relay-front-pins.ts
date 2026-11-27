@@ -117,11 +117,7 @@ export async function refuseMovedProviderRelayFront(
   daemonInstance: string | undefined,
   undo?: () => Promise<unknown>
 ): Promise<void> {
-  if (
-    pinned === null ||
-    daemonInstance === undefined ||
-    daemonInstance === pinned.daemonInstance
-  ) {
+  if (pinned === null || daemonInstance === undefined || daemonInstance === pinned.daemonInstance) {
     return
   }
   await undo?.().catch(() => {})

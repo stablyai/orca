@@ -254,7 +254,11 @@ export async function launchRelayedProviderProcess(
   }
   const client = await connected(await installed.current().catch(() => null))
   // An agent given one daemon start's tool front never runs under another start.
-  await refuseMovedProviderRelayFront(relay.chatKey, front, client?.getDaemonIdentity()?.launchNonce)
+  await refuseMovedProviderRelayFront(
+    relay.chatKey,
+    front,
+    client?.getDaemonIdentity()?.launchNonce
+  )
   const spec = client ? providerRelaySpawnSpec(launch, client, installed.appVersion, relay) : null
   // Without kept state a reattach would have nothing to restore, so such a launch goes as today.
   const keeps = !relay.keep || client?.getDaemonIdentity()?.providerRelayKeep === true

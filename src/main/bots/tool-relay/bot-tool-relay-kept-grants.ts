@@ -154,7 +154,10 @@ export class KeptRelayGrants {
    */
   async revoke(owner: string): Promise<void> {
     try {
-      const clients = (await providerRelayRoute()?.all().catch(() => [])) ?? []
+      const clients =
+        (await providerRelayRoute()
+          ?.all()
+          .catch(() => [])) ?? []
       await Promise.all(
         clients
           .filter((client) => client.getDaemonIdentity()?.toolRelayFront)

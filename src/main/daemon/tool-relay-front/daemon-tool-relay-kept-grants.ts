@@ -42,10 +42,17 @@ function readCaller(value: unknown): ToolRelayFrontCaller | null {
     return null
   }
   const entries = Object.entries(env)
-  if (entries.length > MAX_CALLER_VALUES || !entries.every(([, entry]) => text(entry))) {
+  if (entries.length > MAX_CALLER_VALUES) {
     return null
   }
-  return { owner: caller.owner, token: caller.token, caller: Object.fromEntries(entries) }
+  const values: Record<string, string> = {}
+  for (const [name, entry] of entries) {
+    if (!text(entry)) {
+      return null
+    }
+    values[name] = entry
+  }
+  return { owner: caller.owner, token: caller.token, caller: values }
 }
 
 /** Null when the spawn sent nothing (or anything malformed, which keeps nothing). */
@@ -88,7 +95,12 @@ export class DaemonToolRelayKeptGrants {
       if (grants.length === 0 && !caller) {
         this.relays.delete(relayId)
       } else {
-        this.relays.set(relayId, { relayId, chatKey: kept.chatKey, grants, ...(caller ? { caller } : {}) })
+        this.relays.set(relayId, {
+          relayId,
+          chatKey: kept.chatKey,
+          grants,
+          ...(caller ? { caller } : {})
+        })
       }
     }
   }

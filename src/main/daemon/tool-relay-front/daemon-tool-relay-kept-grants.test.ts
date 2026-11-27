@@ -24,10 +24,12 @@ describe("a daemon start's kept tool grants", () => {
     const kept = new DaemonToolRelayKeptGrants()
     expect(kept.keep('r-1', 'chat-1', undefined)).toBe(false)
     expect(kept.keep('r-1', 'chat-1', { grants: [{ ...scout, token: 7 }] })).toBe(false)
-    expect(kept.keep('r-1', 'chat-1', { grants: Array.from({ length: 9 }, () => scout) })).toBe(false)
-    expect(kept.keep('r-1', 'chat-1', { grants: [], caller: { ...caller, caller: { a: 1 } } })).toBe(
+    expect(kept.keep('r-1', 'chat-1', { grants: Array.from({ length: 9 }, () => scout) })).toBe(
       false
     )
+    expect(
+      kept.keep('r-1', 'chat-1', { grants: [], caller: { ...caller, caller: { a: 1 } } })
+    ).toBe(false)
     expect(kept.list()).toEqual([])
   })
 })
