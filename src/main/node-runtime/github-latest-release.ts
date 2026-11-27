@@ -1,21 +1,24 @@
 // Why GitHub: a release carries the build, its checksum list and sizes in one lookup.
 
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { getMainHttpClient } from '../network/http-client'
 
 const SHA256 = /^[a-f0-9]{64}$/
 
-const releaseSchema = z.object({
-  tag_name: z.string(),
-  assets: z.array(
-    z.object({
-      name: z.string(),
-      size: z.number().int().positive(),
-      browser_download_url: z.string().url(),
-      digest: z.string().nullish()
-    })
-  )
-})
+const releaseSchema = lazyZodSchema(() =>
+  z.object({
+    tag_name: z.string(),
+    assets: z.array(
+      z.object({
+        name: z.string(),
+        size: z.number().int().positive(),
+        browser_download_url: z.string().url(),
+        digest: z.string().nullish()
+      })
+    )
+  })
+)
 
 export type GithubReleaseAsset = { version: string; url: string; sha256: string; bytes: number }
 

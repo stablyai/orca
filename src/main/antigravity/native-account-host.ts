@@ -2,51 +2,18 @@ import { join } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import type { AntigravityAccountTarget } from '../../shared/agent-accounts/antigravity/antigravity-account-types'
 import { createEncryptedAntigravityAccountStore } from './native-account-store'
-import type { AntigravityNativeCredential } from './native-credential-codec'
 import { createAntigravityHostCredentialBackend } from './native-credential-backend'
 import { createAntigravityWslCredentialBackend } from './native-wsl-credentials'
 import { resolveWslDefaultDistro } from '../wsl/discovery/wsl-default-distro'
 import {
   AntigravityAccountService,
-  type AntigravityCredentialBackend
+  type AntigravityCredentialBackend,
+  type AntigravityLaunchRestore
 } from './native-account-service'
-import { isSameAntigravityLogin } from './native-account-usage-reading'
-import type { RateLimitRuntimeTarget } from '../../shared/agent-usage/rate-limits/rate-limit-types'
-import { ANTIGRAVITY_USAGE_HOST_TARGET } from '../rate-limits/providers/antigravity/antigravity-account-usage'
+import { antigravitySignInHoldsNativeLogin } from './antigravity-chat-sign-in'
 
 let service: AntigravityAccountService | null = null
 const wslServices = new Map<string, AntigravityAccountService>()
-let credentialChangeListener: () => void = () => {}
-
-export function setAntigravityNativeCredentialChangeListener(listener: () => void): void {
-  credentialChangeListener = listener
-}
-
-// The first read is a baseline: what agy held before Orca looked is unknown.
-// agy's own token refreshes keep the refresh token and must not discard the usage they produce;
-// a new refresh token is a fresh sign-in, even to the same account, and must clear a sign-in hold.
-function reportingCredentialChanges(
-  backend: AntigravityCredentialBackend
-): AntigravityCredentialBackend {
-  let lastSeen: AntigravityNativeCredential | null | undefined
-  return {
-    ...backend,
-    async read() {
-      const current = await backend.read()
-      if (
-        current &&
-        lastSeen !== undefined &&
-        (lastSeen === null ||
-          lastSeen.refreshToken !== current.refreshToken ||
-          !isSameAntigravityLogin(lastSeen, current))
-      ) {
-        credentialChangeListener()
-      }
-      lastSeen = current
-      return current
-    }
-  }
-}
 
 export function getAntigravityAccountVaultPath(wslDistro?: string): string {
   const root = join(getAppEnvironment().getPath('userData'), 'antigravity-accounts')
@@ -59,15 +26,14 @@ export function getAntigravityAccountVaultPath(wslDistro?: string): string {
 function createService(
   backend: AntigravityCredentialBackend,
   vaultPath: string,
-  target: RateLimitRuntimeTarget = ANTIGRAVITY_USAGE_HOST_TARGET
+  launchRestore?: AntigravityLaunchRestore
 ) {
-  const reporting = reportingCredentialChanges(backend)
   return new AntigravityAccountService(
-    createEncryptedAntigravityAccountStore(vaultPath, reporting.parse),
-    reporting,
+    createEncryptedAntigravityAccountStore(vaultPath, backend.parse),
+    backend,
     undefined,
     undefined,
-    target
+    launchRestore
   )
 }
 
@@ -92,8 +58,7 @@ export async function getAntigravityAccountService(
     if (!wslService) {
       wslService = createService(
         createAntigravityWslCredentialBackend(distro),
-        getAntigravityAccountVaultPath(distro),
-        { runtime: 'wsl', wslDistro: distro }
+        getAntigravityAccountVaultPath(distro)
       )
       wslServices.set(key, wslService)
     }
@@ -104,7 +69,11 @@ export async function getAntigravityAccountService(
   }
   service ??= createService(
     createAntigravityHostCredentialBackend(getAppEnvironment().getPath('home')),
-    getAntigravityAccountVaultPath()
+    getAntigravityAccountVaultPath(),
+    // Windows launches aren't gated (native-account-launch.ts), so nothing restores there.
+    process.platform === 'win32'
+      ? undefined
+      : { signInHoldsLogin: antigravitySignInHoldsNativeLogin }
   )
   return service
 }

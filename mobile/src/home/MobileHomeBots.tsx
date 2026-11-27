@@ -1,11 +1,11 @@
 import { memo, useMemo } from 'react'
 import { View } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { HomeBotRow } from './bots/home-bot-rows'
 import { MobileHomeBotRows } from './bots/MobileHomeBotRow'
-import { homeListStyles } from './home-list-styles'
+import { homeListStylesSheet } from './home-list-styles'
 import { MobileHomeSectionHeading } from './MobileHomeSectionHeading'
+import { useThemedStyles } from '../theme/themed-styles'
 
 // As many as Active shows; the Bots tab has the rest.
 const BOT_ROWS_SHOWN = 3
@@ -17,7 +17,7 @@ export const MobileHomeBots = memo(function MobileHomeBots(props: {
   onSeeAll: () => void
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const homeListStyles = useThemedStyles(homeListStylesSheet)
   const shown = useMemo(() => props.rows.slice(0, BOT_ROWS_SHOWN), [props.rows])
   // Only rows that would read the same name their computer; the Bots tab groups by computer.
   const named = useMemo(

@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
+import { botRequestActsFor } from '../runtime/rpc/methods/orchestration/messaging/bot-request-record'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
@@ -123,5 +125,39 @@ describe('where a bot turn’s work started', () => {
         isBotRequest: (id) => id === 'msg_a' || id === 'msg_c'
       }).originPlace
     ).toBe(undefined)
+  })
+
+  it("takes a place only from a handoff: a question's answer and status mail go back by mail", () => {
+    const purposes = ['question', 'status', 'handoff', 'other-handoff', 'private-handoff']
+    const records = Object.fromEntries(
+      purposes.map((name) => [
+        `msg_${name}`,
+        {
+          record: JSON.stringify({
+            purpose: name.endsWith('handoff') ? 'handoff' : name,
+            askers: [{ kind: 'owner' }],
+            ...(name === 'private-handoff'
+              ? {}
+              : { originPlace: name === 'other-handoff' ? OTHER : THREAD })
+          })
+        }
+      ])
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: botRequestActsFor reads only getBotRequest.
+    const db = { getBotRequest: (id: string) => records[id] } as unknown as OrchestrationDb
+    const placeOf = (...ids: string[]) =>
+      readBotActingTurn([requestMail(ids)], {
+        ...lookups({}),
+        isBotRequest: (id) => id in records,
+        botRequestActsFor: (id) => botRequestActsFor(db, id)
+      }).originPlace
+    expect(placeOf('msg_handoff')).toEqual(THREAD)
+    expect(placeOf('msg_question')).toBe(undefined)
+    expect(placeOf('msg_status')).toBe(undefined)
+    // Status mail is no job, so it never hides a handoff's place; a question beside one is a second job.
+    expect(placeOf('msg_status', 'msg_handoff')).toEqual(THREAD)
+    expect(placeOf('msg_handoff', 'msg_question')).toBe(undefined)
+    expect(placeOf('msg_handoff', 'msg_private-handoff')).toBe(undefined)
+    expect(placeOf('msg_handoff', 'msg_other-handoff')).toBe(undefined)
   })
 })

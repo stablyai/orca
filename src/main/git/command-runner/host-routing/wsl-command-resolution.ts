@@ -1,6 +1,6 @@
 import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
 import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
-import { getDefaultWslDistro } from '../../../wsl/discovery/distro-catalog'
+import { getDefaultWslDistro, listWslDistrosAsync } from '../../../wsl/discovery/distro-catalog'
 import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
 import type { WslUncPathInfo as WslPathInfo } from '../../../../shared/file-access/wsl-paths'
 import {
@@ -76,12 +76,9 @@ export function defaultWslCliDistro(): string | null {
   return defaultWslDistroOverride ?? getDefaultWslDistro()
 }
 
-export function resolveDefaultWslCli(
-  command: 'gh' | 'glab',
-  args: string[]
-): ResolvedCommand | null {
-  const distro = defaultWslCliDistro()
-  return distro ? resolveCommand(command, args, undefined, distro) : null
+/** `defaultWslCliDistro` without a synchronous wsl.exe list on the main thread. */
+export async function defaultWslCliDistroAsync(): Promise<string | null> {
+  return defaultWslDistroOverride ?? (await listWslDistrosAsync())[0] ?? null
 }
 
 /** Use shell cd for WSL cwd: wsl.exe --cd can fail with ERROR_PATH_NOT_FOUND under Node spawning. */

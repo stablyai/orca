@@ -123,6 +123,8 @@ export function buildSkillDiscoverySources(
     includeCwd?: boolean
     pathApi?: SkillDiscoveryPathApi
     providerRootOverrides?: SkillProviderRootOverrides
+    /** A bot home's linked-project skills folder, which every chat of that bot loads. */
+    linkedSkillsFolder?: string
   } = {}
 ): SkillScanRoot[] {
   const pathApi = args.pathApi ?? { basename, join }
@@ -165,14 +167,6 @@ export function buildSkillDiscoverySources(
     // folded into one scan, so it keeps the relocated root alone.
     ...providerHomeSources(home, pathApi, providerRootOverrides, !args.pathApi),
     // Why: discovery-only agent folders; installs for these agents go to the canonical root.
-    source(
-      'home-gemini',
-      'Gemini CLI home',
-      pathApi.join(home, '.gemini', 'skills'),
-      'home',
-      ['agent-skills'],
-      'gemini'
-    ),
     source(
       'home-opencode',
       'OpenCode home',
@@ -240,6 +234,15 @@ export function buildSkillDiscoverySources(
       ['agent-skills'],
       'cursor'
     ),
+    // Why: agy reads `~/.gemini/skills` too (chat homes link it), so skills there stay manageable.
+    source(
+      'home-gemini',
+      'Antigravity home',
+      pathApi.join(home, '.gemini', 'skills'),
+      'home',
+      ['agent-skills'],
+      'antigravity'
+    ),
     // Why: Antigravity also reads its CLI's skill folder beside the `config/skills` install root.
     source(
       'home-antigravity-cli',
@@ -288,6 +291,35 @@ export function buildSkillDiscoverySources(
       )
     )
   }
+  if (args.linkedSkillsFolder) {
+    roots.push(...linkedSkillsFolderSources(args.linkedSkillsFolder, pathApi))
+  }
 
   return roots
+}
+
+// Same links in both: Claude loads .claude/skills as an added directory, every other agent skills/.
+function linkedSkillsFolderSources(
+  folder: string,
+  pathApi: SkillDiscoveryPathApi
+): SkillScanRoot[] {
+  const id = stablePathId(folder)
+  return [
+    source(
+      `linked-claude-${id}`,
+      'Linked projects',
+      pathApi.join(folder, '.claude', 'skills'),
+      'repo',
+      ['claude'],
+      'claude'
+    ),
+    source(
+      `linked-agents-${id}`,
+      'Linked projects',
+      pathApi.join(folder, 'skills'),
+      'repo',
+      ['codex', 'agent-skills'],
+      null
+    )
+  ]
 }

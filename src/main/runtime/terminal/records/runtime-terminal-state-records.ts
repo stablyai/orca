@@ -94,6 +94,10 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   spawnHostTerminalUsage?: HostTerminalUsage
   /** The ORCA_PANE_KEY the execution host reports this PTY's env exported; absent when unreported. */
   spawnPaneKey?: string | null
+  /** The line count its released transcript reached, where a slept agent's cursors continue from. */
+  releasedLinesTotal?: number
+  /** The stopped process whose handle (and line cursors) this one took over, counted once. */
+  linesContinuedFrom?: string
   launchConfig: SleepingAgentLaunchConfig | null
   launchToken: string | null
   launchIncarnationId: PtyIncarnationId | null

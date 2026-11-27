@@ -5,8 +5,7 @@ import {
 } from '../../../../src/shared/bots/bot-share-errors'
 import type { BotShareFlag } from '../../../../src/shared/bots/bot-package'
 import type { BotShareFlagSpot } from '../../../../src/shared/bots/bot-share-flag-spots'
-import { translate } from '../../i18n/mobile-i18n'
-import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
+import { translate, type Translate } from '../../i18n/mobile-i18n'
 import { botShareErrorCode } from './bot-share-operations'
 
 function copyFor(code: BotShareErrorCode): string {
@@ -74,60 +73,60 @@ export function botShareErrorMessage(cause: unknown): string {
     : translate('bots.errors.generic', 'Something went wrong. Try again.')
 }
 
-export function botShareFlagLabel(kind: BotShareFlag['kind']): string {
+export function botShareFlagLabel(kind: BotShareFlag['kind'], t: Translate): string {
   switch (kind) {
     case 'secret':
-      return translate('bots.share.flag.secret', 'Secret')
+      return t('bots.share.flag.secret', 'Secret')
     case 'pipe-to-shell':
-      return translate('bots.share.flag.pipeToShell', 'Runs a downloaded script')
+      return t('bots.share.flag.pipeToShell', 'Runs a downloaded script')
     case 'sudo':
-      return translate('bots.share.flag.sudo', 'Runs as administrator')
+      return t('bots.share.flag.sudo', 'Runs as administrator')
     case 'sends-file':
-      return translate('bots.share.flag.sendsFile', 'Sends a file')
+      return t('bots.share.flag.sendsFile', 'Sends a file')
     case 'hidden-unicode':
-      return translate('bots.share.flag.hiddenUnicode', 'Hidden characters')
+      return t('bots.share.flag.hiddenUnicode', 'Hidden characters')
     case 'runnable':
-      return translate('bots.share.flag.runnable', 'Runnable file')
+      return t('bots.share.flag.runnable', 'Runnable file')
   }
 }
 
 /** The safety check's one-line value: a secret first, then warnings, else nothing. */
-export function botShareCheckSummary(spots: readonly BotShareFlagSpot[]): string {
+export function botShareCheckSummary(spots: readonly BotShareFlagSpot[], t: Translate): string {
   const secrets = spots.filter((spot) => spot.flag.kind === 'secret').length
   if (secrets > 0) {
     return secrets === 1
-      ? translate('bots.share.secretFound', '1 secret found')
-      : translate('bots.share.secretsFound', '{{count}} secrets found', { count: secrets })
+      ? t('bots.share.secretFound', '1 secret found')
+      : t('bots.share.secretsFound', '{{count}} secrets found', { count: secrets })
   }
   if (spots.length > 0) {
     return spots.length === 1
-      ? translate('bots.share.oneWarning', '1 warning')
-      : translate('bots.share.warnings', '{{count}} warnings', { count: spots.length })
+      ? t('bots.share.oneWarning', '1 warning')
+      : t('bots.share.warnings', '{{count}} warnings', { count: spots.length })
   }
-  return translate('bots.share.nothingFound', 'Nothing found')
+  return t('bots.share.nothingFound', 'Nothing found')
 }
 
 /** "release-process, line 6": where a flag is, for its row. */
-export function botShareFlagWhere(spot: BotShareFlagSpot): string {
+export function botShareFlagWhere(spot: BotShareFlagSpot, t: Translate): string {
   return spot.flag.line === null
     ? spot.where
-    : translate('bots.share.whereLine', '{{where}}, line {{line}}', {
+    : t('bots.share.whereLine', '{{where}}, line {{line}}', {
         where: spot.where,
         line: spot.flag.line
       })
 }
 
-export function botShareLines(count: number): string {
+export function botShareLines(count: number, t: Translate): string {
   return count === 1
-    ? translate('bots.share.oneLine', '1 line')
-    : translate('bots.share.lines', '{{count}} lines', { count })
+    ? t('bots.share.oneLine', '1 line')
+    : t('bots.share.lines', '{{count}} lines', { count })
 }
 
 /** "Nov 9", or with `time` "Nov 9, 3:12 PM": when a link was made or last changed. */
-export function botShareDate(iso: string | null, time = false): string {
+export function botShareDate(iso: string | null, intlLocale: string, time = false): string {
   const date = iso ? new Date(iso) : null
   return date && !Number.isNaN(date.getTime())
-    ? new Intl.DateTimeFormat(getUiIntlLocale(), {
+    ? new Intl.DateTimeFormat(intlLocale, {
         month: 'short',
         day: 'numeric',
         ...(time ? { hour: 'numeric', minute: '2-digit' } : {})

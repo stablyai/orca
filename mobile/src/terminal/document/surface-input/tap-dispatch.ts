@@ -140,6 +140,8 @@ function onDocumentTouchStart(scope: TerminalDocumentScope, e: TouchEvent) {
     cancelSelect(scope)
     scope.touchDispatch.mode = 'surface'
     scope.touchDispatch.touchId = t.identifier
+    // A touch that ended a selection stays the terminal's, never a sidebar swipe.
+    scope.touchGesture.keepTouchId = t.identifier
     return
   }
 

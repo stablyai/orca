@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { BotAppsChips, type BotAppsView } from './BotAppsChips'
-import type { BotAppCategory } from './bot-app-catalog'
+import { botAppCategoryName, type BotAppCategory } from './bot-app-catalog'
 
 afterEach(() => {
   cleanup()
@@ -58,7 +58,14 @@ function layChips(rowWidth: () => number): () => void {
 
 function Filters({ categories }: { categories: BotAppCategory[] }): React.JSX.Element {
   const [view, setView] = useState<BotAppsView>('all')
-  return <BotAppsChips view={view} onView={setView} categories={categories} />
+  return (
+    <BotAppsChips
+      view={view}
+      onView={setView}
+      categories={categories}
+      categoryName={botAppCategoryName}
+    />
+  )
 }
 
 const visibleLabels = (): (string | null)[] =>

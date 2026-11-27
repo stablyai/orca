@@ -27,6 +27,14 @@ import {
 import { MOBILE_WEB_PAGE_ROUTES } from './mobile-web-page-routes.mjs'
 import { reactNativeSvgWebPlugin } from './react-native-svg-web-plugin.mjs'
 import { packageBuildPlugin } from './one-package-build-plugin.mjs'
+import {
+  reactCompilerShim,
+  mobileReactCompilerPlugin
+} from './mobile-web-react-compiler-plugin.mjs'
+import {
+  MOBILE_WEB_APP_NATIVE_PARITY_STYLE,
+  MOBILE_WEB_APP_ROOT_RESET
+} from './mobile-web-app-page-styles.mjs'
 import { PAGE_GLOBALS_BANNER, bannerOnlyWhereScriptsRunFirst } from './page-globals-banner.mjs'
 import {
   ROUTE_ENTRY_NAMESPACE,
@@ -35,11 +43,6 @@ import {
   lazyModulesToAnchor,
   sharedModulesToMerge
 } from './mobile-web-app-chunk-grouping.mjs'
-import {
-  deferredOutputs,
-  localeCatalogOutputs,
-  pageScriptCount
-} from './mobile-web-app-asset-kinds.mjs'
 
 const projectDir = fileURLToPath(new URL('../../../..', import.meta.url))
 const mobileDir = join(projectDir, 'mobile')
@@ -109,6 +112,7 @@ export const MOBILE_WEB_APP_SHIMS = [
     name: 'one-package-build',
     appliesTo: (options) => options.plugins?.includes(packageBuildPlugin) === true
   },
+  reactCompilerShim,
   {
     // esbuild has no require.context, so the route tree is generated and injected.
     name: 'route-manifest',
@@ -116,22 +120,6 @@ export const MOBILE_WEB_APP_SHIMS = [
       options.plugins?.some((plugin) => plugin.name === ROUTE_MANIFEST_PLUGIN_NAME) === true
   }
 ]
-
-// Match Expo root reset/id: definite html/body/root heights prevent silent zero-height lists with accessible but untappable rows.
-// Inline under existing unsafe-inline style CSP to avoid a collapsed first frame; RN-Web owns body margin reset.
-export const MOBILE_WEB_APP_ROOT_RESET =
-  '<style id="expo-reset">html,body{height:100%}body{overflow:hidden}' +
-  '#root{display:flex;height:100%;flex:1}</style>'
-
-// Use zero-specificity native parity: remove text-field focus rings only; keyboard buttons keep browser rings.
-// Disable body text selection/callout to prevent WebKit/Android long-press interference, including portaled modals; fields opt back in.
-// Stop the WebView rubber-banding the whole page (headers included) when an inner list hits its end; inner scrollers keep their bounce.
-export const MOBILE_WEB_APP_NATIVE_PARITY_STYLE =
-  '<style id="orca-native-parity">:where(input:focus,textarea:focus){outline:none}' +
-  ':where(html){overscroll-behavior:none}' +
-  ':where(body){-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}' +
-  ':where(input,textarea,[contenteditable]){-webkit-user-select:text;user-select:text;' +
-  '-webkit-touch-callout:default}</style>'
 
 const PAGE_ASYNC_STORAGE_MODULE = join(
   mobileDir,
@@ -326,7 +314,8 @@ export function mobileWebAppBuildOptions(
       lucideBarrelPlugin,
       reactNativeSvgWebPlugin,
       hairlineDevicePixelPlugin,
-      packageBuildPlugin
+      packageBuildPlugin,
+      mobileReactCompilerPlugin
     ],
     resolveExtensions: [
       '.web.tsx',
@@ -471,6 +460,8 @@ export async function mobileWebAppModuleClosure(entryModules, { absWorkingDir } 
   }
 }
 
+// One lazily imported chunk per UI language; the page fetches only the active one after init.
+const LOCALE_CATALOG_INPUT = /(^|\/)src\/i18n\/locales\/[^/]+\.json$/
 const localeCatalogDir = join(mobileDir, 'src', 'i18n', 'locales')
 
 // The same catalogs as JSON for the host to serve one at a time, to shells that skip the chunks;
@@ -496,6 +487,25 @@ export async function readLocaleCatalogs(directory = localeCatalogDir) {
       }
     })
   )
+}
+
+function localeCatalogOutputs(metafile) {
+  return new Set(
+    Object.entries(metafile.outputs)
+      .filter(([, output]) => {
+        const inputs = Object.keys(output.inputs ?? {})
+        return inputs.length > 0 && inputs.every((input) => LOCALE_CATALOG_INPUT.test(input))
+      })
+      .map(([output]) => basename(output))
+  )
+}
+
+// The entry and its chunks, without locale catalogs: what the chunk fence and its sweep table count.
+export function pageScriptCount(metafile) {
+  const catalogs = localeCatalogOutputs(metafile)
+  return Object.keys(metafile.outputs).filter(
+    (output) => isScriptOutput(output) && !catalogs.has(basename(output))
+  ).length
 }
 
 // esbuild keeps a whole namespace used as a value: `import { z }` or `z.core` ships ~200 KB of zod locale tables.
@@ -557,13 +567,11 @@ export async function bundleMobileWebApp({ appDir = defaultAppDir } = {}) {
   const images = others.filter(({ emittedName }) => !isScriptOutput(emittedName)).sort(byName)
   const closure = entryStaticClosure(result.metafile, entryOutputPath)
   const catalogOutputs = localeCatalogOutputs(result.metafile)
-  const deferred = deferredOutputs(result.metafile)
   return {
     script: entry.bytes,
     chunks,
     images,
     catalogChunks: chunks.filter(({ emittedName }) => catalogOutputs.has(emittedName)),
-    deferredChunks: chunks.filter(({ emittedName }) => deferred.has(emittedName)),
     // Count final renamed bytes; metafile sizes predate longer hashes but still identify static imports.
     entryStaticBytes: [...closure].reduce(
       (total, path) => total + (renamed.get(basename(path))?.bytes.byteLength ?? 0),
@@ -609,17 +617,7 @@ export async function buildMobileWebAppBundle({
   const [
     desktopVersion,
     protocolWindow,
-    {
-      script,
-      chunks,
-      images,
-      catalogChunks,
-      deferredChunks,
-      entryStaticBytes,
-      chunkCount,
-      routeChunks,
-      routeKeys
-    },
+    { script, chunks, images, catalogChunks, entryStaticBytes, chunkCount, routeChunks, routeKeys },
     catalogs,
     scrollbarStyle
   ] = await Promise.all([
@@ -635,14 +633,12 @@ export async function buildMobileWebAppBundle({
   // Names already hash final bytes, so hashedAsset must reproduce them.
   const scriptAsset = hashedAsset(script, 'js')
   const catalogChunkSet = new Set(catalogChunks)
-  const deferredChunkSet = new Set(deferredChunks)
   const written = [
     scriptAsset,
     ...[...chunks, ...images].map((output) => ({
       ...hashedAsset(output.bytes, extname(output.name).slice(1)),
-      // Newer shells skip these in the download; older shells download them as before.
-      ...(catalogChunkSet.has(output) ? { kind: 'catalog' } : {}),
-      ...(deferredChunkSet.has(output) ? { deferred: true } : {})
+      // Shells that read catalogs from the host skip these; older shells download them as before.
+      ...(catalogChunkSet.has(output) ? { kind: 'catalog' } : {})
     }))
   ]
 
@@ -683,8 +679,7 @@ export async function buildMobileWebAppBundle({
     // Everything the routes import that is not a script, which is the rest of the asset budget.
     imageCount: images.length,
     catalogChunkCount: catalogChunks.length,
-    catalogBytes: catalogChunks.reduce((total, { bytes }) => total + bytes.byteLength, 0),
-    deferredBytes: deferredChunks.reduce((total, { bytes }) => total + bytes.byteLength, 0)
+    catalogBytes: catalogChunks.reduce((total, { bytes }) => total + bytes.byteLength, 0)
   }
 }
 

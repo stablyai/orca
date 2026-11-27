@@ -1,3 +1,4 @@
+import type { Translate } from '../../i18n/mobile-i18n'
 import { getMobilePrimaryActionHint } from './mobile-source-control-actions'
 import { getMobilePrimaryActionLabel } from './mobile-source-control-primary-action-label'
 import { getMobileForcePushBlockedReason } from './mobile-source-control-review-copy'
@@ -122,22 +123,23 @@ export function buildMobileSourceControlDecisionInputs(
 }
 
 export function buildMobileSourceControlPrimaryAction(
-  args: MobileSourceControlPrimaryActionArgs
+  args: MobileSourceControlPrimaryActionArgs,
+  t: Translate
 ): MobileSourceControlPrimaryAction {
   const decision = resolveSourceControlCommitAreaPrimaryActionDecision(
     buildMobileSourceControlDecisionInputs(args)
   )
   const ioBusy = args.busyAction !== null
   const forcePushBlockedReason = decision.requiresForceWithLease
-    ? getMobileForcePushBlockedReason(args.review)
+    ? getMobileForcePushBlockedReason(args.review, t)
     : undefined
   const disabled = decision.disabled || ioBusy || forcePushBlockedReason !== undefined
 
   return {
     kind: decision.kind,
-    label: getMobilePrimaryActionLabel(decision, args.stagedCount),
-    accessibilityLabel: getMobilePrimaryActionLabel(decision, args.stagedCount),
-    accessibilityHint: forcePushBlockedReason ?? getMobilePrimaryActionHint(decision),
+    label: getMobilePrimaryActionLabel(decision, args.stagedCount, t),
+    accessibilityLabel: getMobilePrimaryActionLabel(decision, args.stagedCount, t),
+    accessibilityHint: forcePushBlockedReason ?? getMobilePrimaryActionHint(decision, t),
     disabled,
     loading: isLoadingDecision(decision, args.busyAction),
     requiresForceWithLease: decision.requiresForceWithLease,
@@ -159,7 +161,8 @@ export type MobileBranchRemoteAction = {
 
 // The Commits list's Push: the branch's remote step from the same decision, with local changes set aside.
 export function buildMobileBranchRemoteAction(
-  args: MobileSourceControlPrimaryActionArgs
+  args: MobileSourceControlPrimaryActionArgs,
+  t: Translate
 ): MobileBranchRemoteAction | null {
   const decision = resolveSourceControlCommitAreaPrimaryActionDecision({
     ...buildMobileSourceControlDecisionInputs(args),
@@ -174,9 +177,9 @@ export function buildMobileBranchRemoteAction(
   const ioBusy = args.busyAction !== null
   const forcePushBlocked =
     decision.requiresForceWithLease === true &&
-    getMobileForcePushBlockedReason(args.review) !== undefined
+    getMobileForcePushBlockedReason(args.review, t) !== undefined
   return {
-    label: getMobilePrimaryActionLabel(decision, 0),
+    label: getMobilePrimaryActionLabel(decision, 0, t),
     disabled: decision.disabled || ioBusy || forcePushBlocked,
     loading: isLoadingDecision(decision, args.busyAction),
     run: () => runMobilePrimaryAction(decision, args.handlers)

@@ -1,9 +1,9 @@
 import { Bell, ChevronDown, ChevronRight } from 'lucide-react-native'
 import { Pressable, Text, View } from 'react-native'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { colors, pressedStyle, spacing } from '../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { pressedStyle, spacing } from '../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../theme/themed-styles'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import type { AgentListStatus as AgentDotState } from '../../../../../src/shared/agent-status/presentation/agent-list-status'
 import { AgentStateDot } from '../../../agents/presentation/AgentStateDot'
 import { AGENT_ROW_INDENT_PER_DEPTH } from './WorktreeAgentRow'
@@ -31,7 +31,8 @@ export function WorktreeAgentChildToggle({
   onPressIn
 }: ChildToggleProps) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const label = expanded
     ? count === 1
       ? t('components.worktreeAgentList.hideChildAgents_one', 'Hide {{count}} child agent', {
@@ -103,7 +104,8 @@ export function WorktreeAgentIdleGroupRow({
   onToggle
 }: IdleGroupProps) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <Pressable
       style={({ pressed }) => [
@@ -155,7 +157,7 @@ export function WorktreeAgentIdleGroupRow({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   toggle: {
     minWidth: 44,
     minHeight: 44,

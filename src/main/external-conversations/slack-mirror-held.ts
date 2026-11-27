@@ -1,6 +1,7 @@
 // A turn's reply held until the owner's posts of that turn are in the Slack thread (or dismissed),
 // kept on the chat's link so a restart still posts it.
 import * as z from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import {
   CONNECTOR_TURN_ORIGINS,
   ConnectorFailure
@@ -16,20 +17,24 @@ import type { ConversationEvent } from './external-conversation-events'
 
 export type ConversationTurnEnd = Extract<ConversationEvent, { kind: 'turn-ended' }>
 
-const HeldTurnEnd = z.object({
-  kind: z.literal('turn-ended'),
-  conversation: z.object({ source: z.enum(CONNECTOR_SOURCES), externalId: z.string() }),
-  worktreeId: z.string(),
-  paneKey: z.string(),
-  turnId: z.number().nullable(),
-  stopReason: z.enum(AGENT_TURN_OUTCOMES).nullable(),
-  at: z.number(),
-  lastAssistantMessage: z.string().optional(),
-  origin: z.enum(CONNECTOR_TURN_ORIGINS).optional(),
-  failure: ConnectorFailure.optional(),
-  links: z.array(ConnectorWorkLink).optional(),
-  mirror: z.literal(true).optional()
-})
+const HeldTurnEnd = lazyZodSchema(() =>
+  z.object({
+    kind: z.literal('turn-ended'),
+    conversation: z.object({ source: z.enum(CONNECTOR_SOURCES), externalId: z.string() }),
+    worktreeId: z.string(),
+    paneKey: z.string(),
+    turnId: z.number().nullable(),
+    stopReason: z.enum(AGENT_TURN_OUTCOMES).nullable(),
+    at: z.number(),
+    lastAssistantMessage: z.string().optional(),
+    origin: z.enum(CONNECTOR_TURN_ORIGINS).optional(),
+    failure: ConnectorFailure.optional(),
+    links: z.array(ConnectorWorkLink).optional(),
+    mirror: z.literal(true).optional(),
+    // Whom the turn acts for, decided when it ended: kept across the hold, never decided again.
+    turnFor: z.enum(['owner', 'someone_else', 'none']).optional()
+  })
+)
 
 /** The owner's posts a reply still waits for: those posting or failed. */
 export function postsWaiting(

@@ -3,10 +3,13 @@ import { useMemo, useCallback } from 'react'
 import { resolveTaskPageJiraIssues } from '@/components/task-page/jira/listing/task-page-jira-cache-selectors'
 import {
   getSingleJiraProjectScope,
-  getTaskPageJiraStatusOrderScopeKey,
-  getTaskPageJiraStatusOrderRuntimeScopeKey
+  getTaskPageJiraStatusOrderScopeKey
 } from '@/components/task-page/jira/listing/task-page-jira-status-order'
-import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
+import {
+  ipcOrRuntimeTargetForHostId,
+  runtimeTargetEnvironmentId
+} from '@/runtime/rpc/targets/runtime-client-target'
+import { useEnvironmentRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import {
   buildJiraIssueWorkspaceAttachmentIndex,
   collectLinkedJiraIssueRefs,
@@ -86,10 +89,16 @@ export function useTaskPageJiraListProjection(model: TaskPageLinearBoardModel) {
     () => getSingleJiraProjectScope(displayedJiraIssues),
     [displayedJiraIssues]
   )
-  const statusOrderRuntimeScopeKey = getTaskPageJiraStatusOrderRuntimeScopeKey(
-    jiraTaskSourceScopeKey,
-    ipcOrRuntimeTargetForHostId(jiraTaskSourceContext?.hostId ?? accountBackedTaskSourceHostId)
+  const statusOrderOwner = ipcOrRuntimeTargetForHostId(
+    jiraTaskSourceContext?.hostId ?? accountBackedTaskSourceHostId
   )
+  const statusOrderOwnerContextKey = useEnvironmentRuntimeContextKey(
+    statusOrderOwner ? runtimeTargetEnvironmentId(statusOrderOwner) : null
+  )
+  const statusOrderRuntimeScopeKey = JSON.stringify([
+    jiraTaskSourceScopeKey,
+    statusOrderOwner ? statusOrderOwnerContextKey : null
+  ])
   const displayedJiraStatusOrderScopeKey = displayedJiraProjectScope
     ? getTaskPageJiraStatusOrderScopeKey(statusOrderRuntimeScopeKey, displayedJiraProjectScope)
     : null

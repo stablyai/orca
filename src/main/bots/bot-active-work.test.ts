@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { makeTestBotItem } from '../../shared/bots/bot-item.test-fixture'
 import type { BotItemLinkView } from '../../shared/bots/bot-items'
 import { botActiveWorkSection, botIdleItemsNote } from './bot-active-work'
+import { botNeedsYouInChatNote } from './bot-unanswered-question-note'
 
 const worker = (state: 'working' | 'unknown' | 'completed'): BotItemLinkView => ({
   kind: 'dispatch',
@@ -57,5 +58,40 @@ describe('an In progress item nothing runs for', () => {
     const idle7 = [{ number: 7, key: 'e10' }]
     expect(botIdleItemsNote(memo, 'chat', idle7)?.text).toContain('Item 7')
     expect(botIdleItemsNote(memo, 'chat', idle7)?.text).toContain('Item 7')
+  })
+})
+
+describe('an owner chat whose own items are in Needs you', () => {
+  const asking = (number: number, chatId: string, lastEventId = 'e10') =>
+    makeTestBotItem(number, {
+      status: 'needs_you',
+      chat: { id: chatId, kind: 'home', title: null },
+      lastEventId,
+      question: {
+        eventId: lastEventId,
+        text: 'Context',
+        gist: 'Context',
+        decisions: [{ question: 'Ship on Friday?', replies: [] }]
+      }
+    })
+
+  it('is told its own asks, once until they change, so an answer in chat can clear them', () => {
+    const memo = new Map<string, string>()
+    const say = (items: ReturnType<typeof asking>[]) => {
+      const note = botNeedsYouInChatNote(
+        memo,
+        'chat-home',
+        botActiveWorkSection(items, []).needsYou!
+      )
+      note?.given()
+      return note?.text ?? null
+    }
+    const text = say([asking(4, 'chat-home'), asking(5, 'chat-side')])
+    expect(text).toContain('#4 "Item 4" asks: "Ship on Friday?"')
+    expect(text).toContain('--status in-progress --comment "You said in chat:')
+    expect(text).not.toContain('#5')
+    expect(say([asking(4, 'chat-home'), asking(5, 'chat-side')])).toBeNull()
+    expect(say([asking(4, 'chat-home', 'e11')])).toContain('#4')
+    expect(say([asking(5, 'chat-side')])).toBeNull()
   })
 })

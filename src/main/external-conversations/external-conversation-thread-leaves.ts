@@ -9,6 +9,8 @@ export type TurnLeave = {
   /** The end is over. `after`: once the cloud took the end just emitted ('end'), or one an owner's
    *  failed post holds ('held'); without it, at once (an end that reaches the thread another way). */
   settle: (after?: 'end' | 'held') => void
+  /** A leave line is owed at this end: no hidden retry may answer after it. */
+  owed?: boolean
 }
 
 type Lines = Pick<LeaveLines, 'owed' | 'post' | 'ending' | 'afterTurnEnd'>
@@ -26,6 +28,7 @@ export function turnLeave(
     left.lines.ending(link, left.turnId)
   }
   return {
+    owed: left !== null,
     settle: (after) => {
       if (!left || !live()) {
         return

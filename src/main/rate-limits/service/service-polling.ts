@@ -73,12 +73,10 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
     const byProvider: Record<ActiveRateLimitProvider, ProviderRateLimits | null> = {
       claude: this.state.claude,
       codex: this.state.codex,
-      gemini: this.state.gemini,
       'opencode-go': this.state.opencodeGo,
       kimi: this.state.kimi,
       minimax: this.state.minimax,
       grok: this.state.grok,
-      antigravity: this.state.antigravity,
       cursor: this.state.cursor,
       zcode: this.state.zcode,
       muse: this.state.muse

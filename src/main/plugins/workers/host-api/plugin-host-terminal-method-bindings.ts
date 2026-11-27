@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { PLUGIN_HOST_API } from '../../../../shared/plugins/workers/plugin-host-api'
 import { PLUGIN_WORKSPACE_TERMINAL_LIMIT } from '../../../../shared/plugins/workers/plugin-host-api-workspace-context'
 import { PLUGIN_HOST_ID_MAX_LENGTH } from '../../../../shared/plugins/workers/plugin-host-api-workspace-methods'
@@ -17,18 +18,22 @@ import {
 const api = PLUGIN_HOST_API
 
 // The parts of each runtime answer a host method reads; anything else is dropped.
-const terminalListAnswer = z.object({
-  terminals: z.array(
-    z.object({
-      handle: z.string(),
-      title: z.string().nullable(),
-      paneTitle: z.string().optional()
-    })
-  ),
-  totalCount: z.number().optional(),
-  truncated: z.boolean().optional()
-})
-const terminalFocusAnswer = z.object({ focus: z.object({ navigated: z.boolean().optional() }) })
+const terminalListAnswer = lazyZodSchema(() =>
+  z.object({
+    terminals: z.array(
+      z.object({
+        handle: z.string(),
+        title: z.string().nullable(),
+        paneTitle: z.string().optional()
+      })
+    ),
+    totalCount: z.number().optional(),
+    truncated: z.boolean().optional()
+  })
+)
+const terminalFocusAnswer = lazyZodSchema(() =>
+  z.object({ focus: z.object({ navigated: z.boolean().optional() }) })
+)
 
 export const TERMINAL_CLOSE_REFUSAL =
   'terminal.close closes only terminals of the focused workspace or ones this plugin opened'

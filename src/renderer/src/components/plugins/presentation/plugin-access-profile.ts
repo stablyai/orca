@@ -55,6 +55,8 @@ export type PluginTrust = {
   sidebarPanel: boolean
   /** Its only declarative contributions are VM recipes. */
   recipesOnly: boolean
+  /** Its only declarative contributions are MCP servers for your agents. */
+  serversOnly: boolean
 }
 
 /** Contribution points a plugin is known to use; null when nothing verified says yet. */
@@ -107,16 +109,18 @@ export function pluginTrust({
         (point) => PLUGIN_CONTRIBUTION_POINT_POLICY[point].execution === 'declarative'
       )
     : null
+  const only = (kind: PluginContributionPoint): boolean =>
+    declarativePoints !== null &&
+    declarativePoints.length > 0 &&
+    declarativePoints.every((point) => point === kind)
   return {
     worker,
     declarative,
     panel,
     editor: points?.has('customEditors') === true,
     sidebarPanel: points?.has('panels') === true,
-    recipesOnly:
-      declarativePoints !== null &&
-      declarativePoints.length > 0 &&
-      declarativePoints.every((point) => point === 'vmRecipes')
+    recipesOnly: only('vmRecipes'),
+    serversOnly: only('mcpServers')
   }
 }
 
@@ -126,7 +130,8 @@ const NOTHING_RUNS: PluginTrust = {
   panel: false,
   editor: false,
   sidebarPanel: false,
-  recipesOnly: false
+  recipesOnly: false,
+  serversOnly: false
 }
 
 /** An installed plugin's trust, from its manifest once read, else what its list entry shows. */

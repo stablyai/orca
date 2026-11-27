@@ -1,6 +1,10 @@
 import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
-import { resolveDefaultBaseRefViaExec } from '../../../../shared/git/refs/git-default-base-ref'
+import {
+  readDefaultBaseRefViaExec,
+  resolveDefaultBaseRefViaExec,
+  type GitExec
+} from '../../../../shared/git/refs/git-default-base-ref'
 
 export type LocalGitExecOptions = {
   wslDistro?: string
@@ -30,15 +34,22 @@ export function gitExecOptions(
   }
 }
 
+function defaultBaseRefProbeExec(options: LocalDefaultBaseRefGitOptions): GitExec {
+  return (argv) =>
+    gitExecFileAsync(argv, { ...options, timeout: DEFAULT_BASE_REF_PROBE_TIMEOUT_MS })
+}
+
+/** Rejects when Git fails or times out, so callers can tell that apart from no default base. */
+export function readDefaultBaseRefWithLocalGit(
+  options: LocalDefaultBaseRefGitOptions
+): Promise<string | null> {
+  return readDefaultBaseRefViaExec(defaultBaseRefProbeExec(options))
+}
+
 export function resolveDefaultBaseRefWithLocalGit(
   options: LocalDefaultBaseRefGitOptions
 ): Promise<string | null> {
-  return resolveDefaultBaseRefViaExec((argv) =>
-    gitExecFileAsync(argv, {
-      ...options,
-      timeout: DEFAULT_BASE_REF_PROBE_TIMEOUT_MS
-    })
-  )
+  return resolveDefaultBaseRefViaExec(defaultBaseRefProbeExec(options))
 }
 
 export function getDefaultBaseRefAsync(

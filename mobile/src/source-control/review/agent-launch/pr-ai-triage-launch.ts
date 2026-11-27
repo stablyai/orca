@@ -55,7 +55,7 @@ export async function launchAgentWithPrompt(args: {
       ? readMobileRegisteredAgents(args.client)
       : null
     const context = await contextRequest
-    resolved = resolveMobileSourceControlLaunchAgent(context, args.actionId, {
+    resolved = resolveMobileSourceControlLaunchAgent(context, args.actionId, translate, {
       hostCapabilities,
       registeredAgents: await registeredAgents
     })

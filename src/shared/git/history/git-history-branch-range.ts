@@ -34,9 +34,7 @@ export async function resolveBranchRange(
   git: GitHistoryExecutor,
   cwd: string,
   headOid: string,
-  baseRef: GitHistoryItemRef,
-  /** Count unpushed commits without listing them, for pages that show no per-row pushed state. */
-  countOnly = false
+  baseRef: GitHistoryItemRef
 ): Promise<{ range: GitHistoryBranchRange; unpushedIds: ReadonlySet<string> | null } | undefined> {
   const baseOid = baseRef.revision
   if (!baseOid) {
@@ -58,17 +56,6 @@ export async function resolveBranchRange(
         range: { baseRef, ahead, behind, unpushed: ahead },
         unpushedIds: null
       }
-    }
-    if (countOnly) {
-      const { stdout: unpushedCount } = await git(
-        ['rev-list', '--count', headOid, `^${upstreamOid}`, `^${baseOid}`],
-        cwd
-      )
-      const unpushed = Number(unpushedCount.trim())
-      if (!Number.isInteger(unpushed)) {
-        return undefined
-      }
-      return { range: { baseRef, ahead, behind, unpushed }, unpushedIds: null }
     }
     // Bounded by the branch's own commits, since the base is excluded too.
     const unpushedOut = await git(['rev-list', headOid, `^${upstreamOid}`, `^${baseOid}`], cwd)

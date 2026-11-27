@@ -1,11 +1,14 @@
 import { ipcMain } from 'electron'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { panelSessionTokenSchema } from '../../../shared/plugins/frames/plugin-frame-bridge'
 import type { PluginService } from '../../plugins/plugin-service'
 import { addFanoutListener } from '../../runtime/events/event-listener-fanout'
 import { rendererPanelOwner } from './plugin-frame-entry-ipc'
 
-const panelPushArgsSchema = z.object({ sessionToken: panelSessionTokenSchema }).strict()
+const panelPushArgsSchema = lazyZodSchema(() =>
+  z.object({ sessionToken: panelSessionTokenSchema }).strict()
+)
 
 /** main → renderer: one open panel's worker posts, events and data changes. */
 export const PLUGIN_PANEL_PUSH_CHANNEL = 'plugins:panelPush'

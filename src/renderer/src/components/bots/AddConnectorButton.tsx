@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useAppStore } from '@/store'
-import { AddConnectorDialog } from './AddConnectorDialog'
+import { LazyAddConnectorDialog } from './lazy-bot-dialogs'
 import { useConnectorSetup } from './ConnectorSetupDialogs'
 import { takeConnectorSetup, useConnectorSetupWaiting } from './connector-setup-handoff'
 import type { Bot } from '../../../../shared/bot-types'
@@ -29,15 +29,17 @@ export function AddConnectorButton({
   return (
     <>
       {trigger(() => setOpen(true))}
-      <AddConnectorDialog
-        bot={bot}
-        open={open}
-        onOpenChange={setOpen}
-        onAdd={(connector) => {
-          setOpen(false)
-          setup.start(connector)
-        }}
-      />
+      {open ? (
+        <LazyAddConnectorDialog
+          bot={bot}
+          open={open}
+          onOpenChange={setOpen}
+          onAdd={(connector) => {
+            setOpen(false)
+            setup.start(connector)
+          }}
+        />
+      ) : null}
       {setup.dialogs}
     </>
   )

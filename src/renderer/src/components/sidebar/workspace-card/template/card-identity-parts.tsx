@@ -1,5 +1,4 @@
 import React from 'react'
-import { DetachedHeadBadge } from '@/components/source-control/DetachedHeadBadge'
 import { useWslHostDistro, WslHostMark } from '@/components/wsl-host-mark/WslHostMark'
 import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import CacheTimer from '../activity/CacheTimer'
@@ -7,14 +6,15 @@ import { TruncatedSidebarLabel } from '../../../ui/truncated-sidebar-label'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 import {
   WorktreeCardDeleteQuickAction,
+  WorktreeCardDetachedHeadBadge,
   WorktreeCardPrimaryBadge,
   WorktreeCardPrimaryStar,
-  WorktreeCardRenameErrorButton,
   WorktreeCardRepoChip,
   WorktreeCardRuntimeHostMark,
   WorktreeCardSparseBadge
 } from '../identity/worktree-card-header-items'
 import { WorktreeCardNotificationsMutedBadge } from '../identity/WorktreeCardNotificationsMutedBadge'
+import { AutoNameFailedIndicator } from '../identity/AutoNameFailedIndicator'
 import {
   WorktreeCardConflictBadge,
   WorktreeCardFolderPath
@@ -122,12 +122,15 @@ export const CARD_IDENTITY_PARTS = {
       hostLabel={card.runtimeHostLabel}
     />
   )),
-  RenameError: part([], (_props, _children, card) => (
-    <WorktreeCardRenameErrorButton
-      onPointerDown={card.stopQuickActionPointerPropagation}
-      onOpen={card.handleOpenRenameErrorDialog}
-    />
-  )),
+  RenameError: part([], (_props, _children, card) =>
+    card.autoNameFailure ? (
+      <AutoNameFailedIndicator
+        card={card}
+        failure={card.autoNameFailure}
+        onPointerDown={card.stopQuickActionPointerPropagation}
+      />
+    ) : null
+  ),
   PrimaryBadge: part(['hasHoverDetails'], (props, _children, card) => (
     <WorktreeCardPrimaryBadge card={card} hasHoverDetails={props.hasHoverDetails === true} />
   )),
@@ -167,13 +170,12 @@ export const CARD_IDENTITY_PARTS = {
   FolderPath: part([], (_props, _children, { worktree }) => (
     <WorktreeCardFolderPath path={worktree.path} />
   )),
-  DetachedHead: part([], (_props, _children, { detachedHeadDisplay }) =>
-    detachedHeadDisplay ? (
-      <DetachedHeadBadge
-        display={detachedHeadDisplay}
-        label="sidebar"
-        side="right"
-        className="h-[16px]"
+  DetachedHead: part(['hasHoverDetails'], (props, _children, card) =>
+    card.detachedHeadDisplay ? (
+      <WorktreeCardDetachedHeadBadge
+        card={card}
+        hasHoverDetails={props.hasHoverDetails === true}
+        display={card.detachedHeadDisplay}
       />
     ) : null
   ),

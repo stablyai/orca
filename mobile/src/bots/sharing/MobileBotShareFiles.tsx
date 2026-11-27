@@ -8,16 +8,17 @@ import { LoadingSpinner } from '../../components/feedback/LoadingSpinner'
 import { ListRow } from '../../components/list/ListGroup'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { SettingsNote } from '../../settings/settings-screen-frame'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { botShareErrorMessage, botShareFlagLabel, botShareFlagWhere } from './bot-share-copy'
 import { botShareView, type PhoneSharePartFile } from './bot-share-operations'
 
 /** A flag's line under an item: red for a secret, amber otherwise. */
 export function FlagLine(props: { secret: boolean; children: string }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const color = props.secret ? colors.statusRed : colors.statusAmber
   const Icon = props.secret ? ShieldAlert : TriangleAlert
   return (
@@ -32,14 +33,15 @@ export function FlagLine(props: { secret: boolean; children: string }) {
 
 /** One flag of the safety check: what it is and where, opening its text when a page shows it. */
 export function FlagRow(props: { spot: BotShareFlagSpot; onOpen: (() => void) | null }) {
-  useMobileColorScheme()
+  const t = useMobileTranslation()
+  const colors = useMobileColors()
   const secret = props.spot.flag.kind === 'secret'
   const Icon = secret ? ShieldAlert : TriangleAlert
   return (
     <ListRow
       leading={<Icon size={18} color={secret ? colors.statusRed : colors.statusAmber} />}
-      title={botShareFlagLabel(props.spot.flag.kind)}
-      subtitle={botShareFlagWhere(props.spot)}
+      title={botShareFlagLabel(props.spot.flag.kind, t)}
+      subtitle={botShareFlagWhere(props.spot, t)}
       navigates={props.onOpen !== null}
       onPress={props.onOpen ?? undefined}
     />
@@ -54,6 +56,8 @@ export function SharePartFiles(props: {
   part: string
   showNames: boolean
 }) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const { client, botId, candidateId, part } = props
   const [files, setFiles] = useState<PhoneSharePartFile[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -102,7 +106,7 @@ export function ShareFileList(props: {
   showNames: boolean
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View style={styles.files}>
       {props.files.map((file) => {
@@ -138,7 +142,7 @@ export function ShareFileList(props: {
             )}
             {kinds.map((kind) => (
               <FlagLine key={kind} secret={kind === 'secret'}>
-                {botShareFlagLabel(kind)}
+                {botShareFlagLabel(kind, t)}
               </FlagLine>
             ))}
           </View>
@@ -148,7 +152,7 @@ export function ShareFileList(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   flagLine: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: 2 },
   flagText: { fontSize: 13, flexShrink: 1 },
   loading: { paddingVertical: spacing.lg, alignItems: 'center' },

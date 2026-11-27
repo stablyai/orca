@@ -48,16 +48,19 @@ const toHex = (channels: number[]): string =>
 
 // Soft tint: a translucent wash of the color with letters in a deeper (light theme) or brighter
 // (dark theme) shade of the same hue, so the mark keeps one hue instead of white/black text.
-const SOFT_FILL_ALPHA = 0.14
-const SOFT_TEXT_SHIFT = 0.45
+const SOFT_FILL_ALPHA = 0.2
+const SOFT_TEXT_SHIFT = 0.6
 
 export type SoftMarkColors = { background: string; foreground: string }
 
-// Why: a very dark color (or a very light one in light theme) shifted only the base amount still blends into the
-// surface, so the shift keeps growing until the letters clear readable-text contrast against it.
-const MIN_SOFT_TEXT_CONTRAST = 4.5
-// The surfaces marks sit on: sidebar/popover in dark theme, sidebar in light theme.
-const SOFT_SURFACE = { dark: [23, 23, 23], light: [250, 250, 250] }
+// Why: small monogram letters (~9px in an 18px badge) need high contrast against the actual composited wash.
+const MIN_SOFT_TEXT_CONTRAST = 6
+// Worst-case card surfaces marks sit on: --worktree-sidebar-accent (#353535 dark, #eaeaea light).
+const SOFT_SURFACE = { dark: [53, 53, 53], light: [234, 234, 234] }
+
+function compositeOver(fg: number[], bg: number[], alpha: number): number[] {
+  return fg.map((value, index) => Math.round(value * alpha + bg[index] * (1 - alpha)))
+}
 
 function channelsLuminance(channels: number[]): number {
   const [r, g, b] = channels.map((value) => {
@@ -77,16 +80,20 @@ export function softMarkColors(color: unknown, scheme: 'light' | 'dark'): SoftMa
   const target = scheme === 'dark' ? 255 : 0
   const shiftBy = (amount: number): number[] =>
     channels.map((value) => Math.round(value + (target - value) * amount))
+  // Near-black washes vanish on dark surfaces (and near-white on light); lift only those washes.
+  const baseLuminance = channelsLuminance(channels)
+  const washBlendsIntoSurface =
+    (scheme === 'dark' && baseLuminance < 0.06) || (scheme === 'light' && baseLuminance > 0.85)
+  const wash = washBlendsIntoSurface ? shiftBy(SOFT_TEXT_SHIFT) : channels
+  const compositedBackground = compositeOver(wash, SOFT_SURFACE[scheme], SOFT_FILL_ALPHA)
   let shift = SOFT_TEXT_SHIFT
   while (
     shift < 1 &&
-    contrastRatio(shiftBy(shift), SOFT_SURFACE[scheme]) < MIN_SOFT_TEXT_CONTRAST
+    contrastRatio(shiftBy(shift), compositedBackground) < MIN_SOFT_TEXT_CONTRAST
   ) {
     shift = Math.min(1, shift + 0.05)
   }
   const foreground = shiftBy(shift)
-  // A boosted shade also carries the wash, or a near-black fill would vanish on the dark surface.
-  const wash = shift > SOFT_TEXT_SHIFT ? foreground : channels
   return {
     background: `rgba(${wash.join(', ')}, ${SOFT_FILL_ALPHA})`,
     foreground: toHex(foreground)

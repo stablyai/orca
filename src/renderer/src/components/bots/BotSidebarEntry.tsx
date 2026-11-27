@@ -59,13 +59,17 @@ export function BotSidebarEntry({
   home,
   isActive,
   onOpen,
-  drag
+  drag,
+  beginRename = false,
+  onBeginRenameConsumed
 }: {
   bot: Bot
   home: FolderWorkspace
   isActive: boolean
   onOpen: () => void
   drag?: BotSidebarEntryDrag
+  beginRename?: boolean
+  onBeginRenameConsumed?: () => void
 }): React.JSX.Element {
   // A disconnected server's row keeps its place in a drag but can't start one: nothing can save it.
   const offline = useBotHostOffline(bot.hostId)
@@ -140,6 +144,8 @@ export function BotSidebarEntry({
         isActive={isActive}
         onOpen={onOpen}
         dragHandle={drag !== undefined && !offline}
+        beginRename={beginRename}
+        onBeginRenameConsumed={onBeginRenameConsumed}
         // A down host's bot is its row alone, so it has nothing to fold.
         fold={
           offline
@@ -169,6 +175,7 @@ export function BotSidebarEntry({
           <BotSidebarList
             bot={bot}
             workspaces={workspaces}
+            allWorkspaces={ordered}
             lineageChildrenByParentIdentity={lineageChildrenByParentIdentity}
             activeLine={activeLine}
             onFoldBot={() => toggleCollapsedGroup(groupKey)}
@@ -185,6 +192,7 @@ export function BotSidebarEntry({
 function BotSidebarList({
   bot,
   workspaces,
+  allWorkspaces,
   lineageChildrenByParentIdentity,
   activeLine,
   onFoldBot,
@@ -192,6 +200,8 @@ function BotSidebarList({
 }: {
   bot: Bot
   workspaces: Worktree[]
+  /** Every worker line, sleeping ones too, for what the fold of old chats must see. */
+  allWorkspaces: readonly Worktree[]
   lineageChildrenByParentIdentity: ReadonlyMap<string, Worktree[]>
   activeLine: Worktree | undefined
   onFoldBot: () => void
@@ -205,8 +215,14 @@ function BotSidebarList({
       setBotSidebarChildren(entryKey, { chats: chatTree.chats.length > 0 })
     }
   }, [entryKey, chatTree.state, chatTree.chats.length])
-  const { showAllWorkspaces, toggleWorkspaces, chatSteps, setChatSteps } =
-    useBotSidebarPaging(entryKey)
+  const {
+    showAllWorkspaces,
+    toggleWorkspaces,
+    chatSteps,
+    setChatSteps,
+    showOlderChats,
+    toggleOlderChats
+  } = useBotSidebarPaging(entryKey)
   // Once the host answers (or can't), the rows a reveal waits for are as listed as they will get.
   useBotsRevealSettle(entryKey, chatTree.state !== 'loading')
   if (chatTree.state === 'loading') {
@@ -218,10 +234,13 @@ function BotSidebarList({
         bot={bot}
         tree={chatTree}
         workspaces={workspaces}
+        allWorkspaces={allWorkspaces}
         lineageChildrenByParentIdentity={lineageChildrenByParentIdentity}
         activeLine={activeLine}
         steps={chatSteps}
         onStep={setChatSteps}
+        showOlder={showOlderChats}
+        onToggleOlder={toggleOlderChats}
         onOpen={onOpen}
       />
     )

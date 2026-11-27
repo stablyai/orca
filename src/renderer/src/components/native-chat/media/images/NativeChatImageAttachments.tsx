@@ -238,7 +238,7 @@ function galleryAttachment(
 export function NativeChatImageAttachments({
   blocks,
   runtimeContext,
-  enablePreview = runtimeContext !== undefined,
+  enablePreview: enablePreviewProp,
   className
 }: {
   blocks: NativeChatBlock[]
@@ -247,6 +247,7 @@ export function NativeChatImageAttachments({
   enablePreview?: boolean
   className?: string
 }): React.JSX.Element | null {
+  const enablePreview = enablePreviewProp ?? runtimeContext !== undefined
   const t = useTranslate()
   const [viewing, setViewing] = useState<number | null>(null)
   const images = blocks.filter((block) => block.type === 'image-ref')

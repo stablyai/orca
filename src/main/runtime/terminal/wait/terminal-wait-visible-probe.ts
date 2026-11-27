@@ -108,11 +108,27 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
       : buildPtyTerminalWaitResult(handle, 'tui-idle', pty)
   }
 
+  /** Whether the setup Orca typed into this terminal is still running: its completion token is known
+   *  (none after a restart) and has not printed. Read-only, so a later completion wait still sees it. */
+  isSetupTerminalRunning(handle: string): boolean {
+    const ptyId = this.getTerminalPtyIdForHandle(handle)
+    const completionToken = ptyId ? this.setupCompletionTokenByPtyId.get(ptyId) : undefined
+    if (!ptyId || !completionToken) {
+      return false
+    }
+    let completed = false
+    createSetupCompletionScanner(completionToken, () => {
+      completed = true
+    }).scan(this.recentPtyOutputById.get(ptyId)?.read() ?? '')
+    return !completed
+  }
+
   async waitForSetupTerminalCompletion(
     handle: string,
     signal?: AbortSignal
   ): Promise<{ exitCode: number | null }> {
-    const ptyId = this.getLivePtyForHandle(handle)?.pty.ptyId
+    // Why: once the window adopts the setup pane, the handle names its leaf, not a pty: record.
+    const ptyId = this.getTerminalPtyIdForHandle(handle)
     if (!ptyId) {
       throw new Error('terminal_handle_stale')
     }
@@ -162,9 +178,11 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
         scanner.scan(replay)
       }
       if (!settled) {
+        // Why outlivesRenderer: a window closing or reloading (an app quit) must not read as Setup ending.
         void this.waitForTerminal(handle, {
           condition: 'exit',
-          signal: exitAbort.signal
+          signal: exitAbort.signal,
+          outlivesRenderer: true
         })
           .then((wait) => {
             if (wait.satisfied && wait.condition === 'exit' && wait.status === 'exited') {

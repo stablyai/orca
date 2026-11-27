@@ -42,7 +42,7 @@ const cellText = (value: string) => value.replace(/\|/g, '\\|').replace(/\r?\n/g
 
 /** Rows under column letters, each row led by its number. */
 export function sheetTable(values: string[][], origin: { row: number; column: number }): string {
-  const width = Math.max(1, ...values.map((row) => row.length))
+  const width = values.reduce((max, row) => Math.max(max, row.length), 1)
   const letters = Array.from({ length: width }, (_, index) => columnLetters(origin.column + index))
   return [
     `row | ${letters.join(' | ')}`,

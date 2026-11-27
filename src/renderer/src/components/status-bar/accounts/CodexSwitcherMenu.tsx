@@ -19,6 +19,7 @@ import { AccountSwitchRowItem } from './AccountSwitchRowItem'
 import { useCodexSwitcherController } from './use-codex-switcher-controller'
 import type { OwnerUsageRateLimits } from '../usage/use-owner-usage-rate-limits'
 import { isCodexUsageSignInRequired } from '../../../../../shared/agent-accounts/codex/codex-auth-errors'
+import { hostSystemDefaultUsageId } from '../../../../../shared/agent-accounts/host-system-default-usage'
 import { getCodexStatusRuntimeKey } from './status-bar-runtime-targets'
 import { scopeCodexAuthFailure } from './status-bar-codex-accounts'
 import type { AccountOwner } from '@/runtime/provider-accounts/ownership/wsl-host-account-owner'
@@ -105,8 +106,9 @@ function CodexSwitcherForOwner({
   const activeSignInRequired = signInRequired && displayedCodex === codex
   const canSignInLocally = !hasActiveRuntimeEnvironment && authFailureMatchesActive
   const rows = (selectedGroup?.targets ?? []).map((target) => {
-    const inactiveUsage = target.id
-      ? inactiveCodexAccounts.find((a) => a.accountId === target.id)
+    const usageId = target.id ?? hostSystemDefaultUsageId('codex', target.runtimeTarget)
+    const inactiveUsage = usageId
+      ? inactiveCodexAccounts.find((a) => a.accountId === usageId)
       : null
     const limits = inactiveUsage?.rateLimits
     // Why: sign-in spawns a local `codex login`, so a remote-owned account can't be re-authed from this desktop.

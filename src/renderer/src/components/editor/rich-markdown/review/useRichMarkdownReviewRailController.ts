@@ -1,5 +1,5 @@
 import { richMarkdownViewport } from '../viewport/rich-markdown-viewport'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { MutableRefObject } from 'react'
 import type { Editor } from '@tiptap/react'
 import {
@@ -45,7 +45,9 @@ export function useRichMarkdownReviewRailController({
   const notePositionsFrameRef = useRef<number | null>(null)
   const reviewRailVisible = markdownComments.length > 0 && reviewRailOpen
 
-  notePositionsRef.current = notePositions
+  useLayoutEffect(() => {
+    notePositionsRef.current = notePositions
+  })
 
   const clearAttentionTimers = useCallback((): void => {
     clearWindowTimer(attentionReviewCommentTimeoutRef)

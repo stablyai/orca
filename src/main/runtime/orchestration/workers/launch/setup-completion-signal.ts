@@ -4,9 +4,10 @@ import {
   type SetupRunnerCommandPlatform,
   type SetupRunnerShell
 } from '../../../../../shared/agent-launch/startup/setup-runner-command'
+import { setupCompletionMarkerPrefix } from '../../../../../shared/agent-launch/startup/setup-completion-marker'
 
-const SETUP_COMPLETION_PREFIX = '__ORCA_SETUP_COMPLETE__:'
-const SETUP_COMPLETION_CARRY_LENGTH = SETUP_COMPLETION_PREFIX.length + 96
+// Room for the prefix, a token and the status.
+const SETUP_COMPLETION_CARRY_LENGTH = setupCompletionMarkerPrefix('').length + 96
 const WINDOWS_SETUP_RUNNER_ENV = 'ORCA_SETUP_RUNNER_PATH'
 
 export function buildObservedSetupCommand(
@@ -24,7 +25,7 @@ export function buildObservedSetupCommand(
       '$succeeded = $?',
       '$status = $LASTEXITCODE',
       'if ($null -eq $status) { $status = if ($succeeded) { 0 } else { 1 } }',
-      `Write-Output ('${completionPrefix(completionToken)}' + $status)`,
+      `Write-Output ('${setupCompletionMarkerPrefix(completionToken)}' + $status)`,
       'exit $status'
     ].join('; ')
     return {
@@ -40,7 +41,7 @@ export function buildObservedSetupCommand(
   const script = [
     resolution.command,
     'status=$?',
-    `printf '\\n${completionPrefix(completionToken)}%s\\n' "$status"`,
+    `printf '\\n${setupCompletionMarkerPrefix(completionToken)}%s\\n' "$status"`,
     'exit "$status"'
   ].join('; ')
   return { command: `bash -lc ${quotePosixShell(script)}` }
@@ -52,7 +53,7 @@ export function createSetupCompletionScanner(
 ): {
   scan: (data: string) => void
 } {
-  const expectedPrefix = completionPrefix(completionToken)
+  const expectedPrefix = setupCompletionMarkerPrefix(completionToken)
   let carry = ''
   let completed = false
   return {
@@ -74,8 +75,4 @@ export function createSetupCompletionScanner(
       carry = combined.slice(-SETUP_COMPLETION_CARRY_LENGTH)
     }
   }
-}
-
-function completionPrefix(completionToken: string): string {
-  return `${SETUP_COMPLETION_PREFIX}${completionToken}:`
 }
