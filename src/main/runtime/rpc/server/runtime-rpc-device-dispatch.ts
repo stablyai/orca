@@ -9,7 +9,7 @@ import type {
 } from '../../../../shared/remote-runtime/relay/mobile-relay-credential-contract'
 import type { DeviceScope } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RpcCallerScope } from '../callers/rpc-caller-scope'
-import type { RpcRequest } from '../core'
+import type { RpcRequest, RpcResponse } from '../core'
 import type { RpcDispatchStreamingOptions } from '../dispatch/dispatcher-stream-options'
 import type { AuthenticatedMobileSocket } from '../mobile/mobile-socket-wiring'
 import type { RpcBinarySender } from '../transports/rpc-binary-sender'
@@ -36,6 +36,7 @@ import { exchangeSocketPairingTicket } from './runtime-rpc-pairing-ticket-exchan
 import { limitRuntimeRpcReplySize } from './runtime-rpc-reply-size-limit'
 import { RuntimeRpcStagedReplies } from './runtime-rpc-staged-replies'
 import type { OpenedBinaryChannel } from './runtime-binary-channels'
+import { isEndResult } from '../../../../shared/remote-runtime/control/remote-runtime-shared-control-protocol'
 import {
   isBinaryChannelNumber,
   RUNTIME_BINARY_CHANNELS_CAPABILITY
@@ -157,7 +158,7 @@ export class RuntimeRpcDeviceDispatch extends RuntimeRpcMobileDevices {
     )
     const replyForRequest =
       request.method === 'status.get'
-        ? (response: string): void => boundedReply(injectDeviceScope(response, device.scope))
+        ? (response: string): boolean => boundedReply(injectDeviceScope(response, device.scope))
         : boundedReply
 
     const socketConnectionId = ws ? this.mobileSocketWiring?.getConnectionId(ws) : undefined
@@ -172,6 +173,15 @@ export class RuntimeRpcDeviceDispatch extends RuntimeRpcMobileDevices {
       this.releaseLongPoll(longPoll, device.deviceId)
       reply(JSON.stringify(this.buildError(request.id, 'bad_request', channel.error)))
       return
+    }
+    // A stream on a channel lives until a reply ends it (an answer, an error or `end`; the client
+    // ends it there too), the client closes the channel, or the socket closes. A subscribe handler
+    // returns once it registers, so its return is not the stream's end.
+    const sendReply = (response: RpcResponse): void => {
+      const whole = replyForRequest(JSON.stringify(response))
+      if (!whole || !response.ok || !response.streaming || isEndResult(response.result)) {
+        channel?.release()
+      }
     }
     // A stream on a binary channel is its own connection, as if it had a socket of its own.
     const connectionId = channel?.connectionId ?? socketConnectionId
@@ -204,7 +214,7 @@ export class RuntimeRpcDeviceDispatch extends RuntimeRpcMobileDevices {
           }
         : undefined
     try {
-      await this.dispatcher.dispatchStreaming(request, replyForRequest, {
+      await this.dispatcher.dispatchStreamingObjects(request, sendReply, {
         // Validated credentials preserve federation ownership without trusting request fields.
         authenticatedCallerFingerprint: principal.callerFingerprint,
         connectionId,
@@ -228,8 +238,6 @@ export class RuntimeRpcDeviceDispatch extends RuntimeRpcMobileDevices {
           this.registerBinaryMessageHandler(connectionId, handler)
       })
     } finally {
-      // The stream is over (ended, failed or refused): its channel goes with it.
-      channel?.release()
       abortRegistration?.dispose()
       this.releaseLongPoll(longPoll, device.deviceId)
     }
