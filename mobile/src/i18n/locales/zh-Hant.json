@@ -1150,7 +1150,7 @@
         "finishOnPage": "請在開啟的頁面完成",
         "needsAuth": "需要登入",
         "needsAuthAfterSend": "需要登入。傳送訊息後即可在此登入。",
-        "off": "關閉",
+        "disabled": "已停用",
         "pending": "正在連線…",
         "tools_other": "{{count}} 個工具",
         "waitingForSignIn": "正在等待登入…",

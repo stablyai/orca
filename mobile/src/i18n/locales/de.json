@@ -1154,7 +1154,7 @@
         "finishOnPage": "Auf der geöffneten Seite abschließen",
         "needsAuth": "Anmeldung nötig",
         "needsAuthAfterSend": "Anmeldung nötig. Zum Anmelden hier eine Nachricht senden.",
-        "off": "Aus",
+        "disabled": "Deaktiviert",
         "pending": "Verbindung wird hergestellt…",
         "tools_one": "{{count}} Werkzeug",
         "tools_other": "{{count}} Werkzeuge",
