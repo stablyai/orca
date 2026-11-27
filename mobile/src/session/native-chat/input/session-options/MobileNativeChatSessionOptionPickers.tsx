@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AccessibilityInfo, Keyboard, Platform, View } from 'react-native'
 import { Clock } from 'lucide-react-native'
 import { BottomDrawer } from '../../../../components/bottom-drawer/BottomDrawer'
@@ -8,6 +8,10 @@ import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { translate, type Translate } from '../../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { useMoreModelsShown } from './use-more-models-shown'
+import {
+  MobileNativeChatModelSearchList,
+  modelListNeedsSearch
+} from './MobileNativeChatModelSearchList'
 import {
   isReadOnlySessionOptionValue,
   sessionOptionDispatchUnconfirmed,
@@ -115,6 +119,22 @@ export function MobileNativeChatSessionOptionPickers({
     ? snapshot.find((descriptor) => descriptor.id === presentation?.page)
     : undefined
   const permissionView = activeDescriptor !== undefined && activeDescriptor === permission
+  // Decided on arriving at a page and kept through the close, so a listing landing mid-visit never swaps the sheet's layout.
+  const page = presentation?.page ?? null
+  const [searchLayout, setSearchLayout] = useState<{ page: string | null; search: boolean }>({
+    page: null,
+    search: false
+  })
+  if (page !== null && page !== searchLayout.page && (homeView || activeDescriptor !== undefined)) {
+    setSearchLayout({
+      page,
+      search:
+        activeDescriptor !== undefined && activeDescriptor === model && modelListNeedsSearch(model)
+    })
+  }
+  const searchSheet = searchLayout.search
+  const modelSearchView =
+    searchSheet && activeDescriptor !== undefined && activeDescriptor === model
   // Permission mode and structured picks apply to the next send, so only the rest lock mid-turn.
   const locksMidTurn = (descriptor: SessionOptionDescriptor | undefined): boolean =>
     descriptor !== undefined &&
@@ -226,14 +246,18 @@ export function MobileNativeChatSessionOptionPickers({
         visible={homeView || activeDescriptor !== undefined}
         // Each page opens at its top, not at the last page's scroll.
         scrollResetKey={presentation?.page ?? null}
+        // A searchable list holds its own scroll and keeps a fixed height, so the keyboard and filtering never resize it.
+        fillAvailable={searchSheet}
+        contentScrollable={!searchSheet}
         onClose={closePicker}
         onAfterClose={() => {
           moreModels.reset()
+          setSearchLayout({ page: null, search: false })
           onDrawerAfterClose?.()
         }}
       >
         {homeView || activeDescriptor ? (
-          <View style={styles.sheet}>
+          <View style={[styles.sheet, searchSheet && styles.sheetFill]}>
             <View style={styles.header}>
               <SheetHeader
                 title={
@@ -257,19 +281,28 @@ export function MobileNativeChatSessionOptionPickers({
             <View style={styles.pageTop} />
             {activeDescriptor ? (
               <>
-                <ListGroup separatorInset={permissionView ? LIST_LEADING_INSET : undefined}>
-                  {descriptorRowElements(
-                    {
-                      descriptor: activeDescriptor,
-                      disabled: locked(activeDescriptor),
-                      onSetOption: (value) => applyOption(activeDescriptor, value),
-                      onInvokeAction: () => invokeAction(activeDescriptor),
-                      ...(activeDescriptor === model ? { moreChoices: moreModels } : {}),
-                      ...(permissionView ? { choiceLeading: permissionChoiceLeading } : {})
-                    },
-                    t
-                  )}
-                </ListGroup>
+                {modelSearchView ? (
+                  <MobileNativeChatModelSearchList
+                    model={activeDescriptor}
+                    disabled={locked(activeDescriptor)}
+                    moreChoices={moreModels}
+                    onSetOption={(value) => applyOption(activeDescriptor, value)}
+                  />
+                ) : (
+                  <ListGroup separatorInset={permissionView ? LIST_LEADING_INSET : undefined}>
+                    {descriptorRowElements(
+                      {
+                        descriptor: activeDescriptor,
+                        disabled: locked(activeDescriptor),
+                        onSetOption: (value) => applyOption(activeDescriptor, value),
+                        onInvokeAction: () => invokeAction(activeDescriptor),
+                        ...(activeDescriptor === model ? { moreChoices: moreModels } : {}),
+                        ...(permissionView ? { choiceLeading: permissionChoiceLeading } : {})
+                      },
+                      t
+                    )}
+                  </ListGroup>
+                )}
                 {showWorkingNotice ? <LockCaption /> : null}
                 {sessionOptionDispatchUnconfirmed(activeDescriptor) ? (
                   <SessionOptionCaption>
