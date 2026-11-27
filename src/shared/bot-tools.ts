@@ -4,6 +4,7 @@ import * as z from 'zod'
 import type { BotToolSignInStatus } from './bot-tool-sign-in'
 import type { BotAgent } from './bot-types'
 import { englishTranslate, type CopyTranslate } from './i18n/english-translate'
+import { lazyZodSchema } from './schema/lazy-zod-schema'
 
 export const BOT_TOOL_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/
 const BotToolName = z.string().regex(BOT_TOOL_NAME_PATTERN)
@@ -45,61 +46,69 @@ export const BotToolUrl = z
       return false
     }
   }, 'Use an HTTP or HTTPS URL without embedded credentials')
-const Executable = Text.pipe(z.string().min(1).max(1024)).refine(
-  (value) => value.trim() === value && !/[\r\n]/.test(value),
-  'Enter one executable path'
+const Executable = lazyZodSchema(() =>
+  Text.pipe(z.string().min(1).max(1024)).refine(
+    (value) => value.trim() === value && !/[\r\n]/.test(value),
+    'Enter one executable path'
+  )
 )
-export const BotToolServerSchema = z.union([
-  z.object({
-    name: BotToolName,
-    url: BotToolUrl,
-    transport: z.literal('http').optional(),
-    headers: z
-      .record(
-        z.string().regex(BOT_TOOL_HEADER_NAME_PATTERN),
-        Text.refine((value) => !/[\r\n]/.test(value))
-      )
-      .optional(),
-    /** Its headers, kept by the host outside the bot's folder; the agent reaches it through Orca's relay. */
-    credential: z
-      .string()
-      .regex(/^[A-Za-z0-9_-]{8,64}$/)
-      .optional()
-  }),
-  z.object({
-    name: BotToolName,
-    command: Executable,
-    args: z.array(Text).max(64),
-    env: z.record(z.string().regex(BOT_TOOL_ENV_NAME_PATTERN), Text).optional()
-  })
-])
+export const BotToolServerSchema = lazyZodSchema(() =>
+  z.union([
+    z.object({
+      name: BotToolName,
+      url: BotToolUrl,
+      transport: z.literal('http').optional(),
+      headers: z
+        .record(
+          z.string().regex(BOT_TOOL_HEADER_NAME_PATTERN),
+          Text.refine((value) => !/[\r\n]/.test(value))
+        )
+        .optional(),
+      /** Its headers, kept by the host outside the bot's folder; the agent reaches it through Orca's relay. */
+      credential: z
+        .string()
+        .regex(/^[A-Za-z0-9_-]{8,64}$/)
+        .optional()
+    }),
+    z.object({
+      name: BotToolName,
+      command: Executable,
+      args: z.array(Text).max(64),
+      env: z.record(z.string().regex(BOT_TOOL_ENV_NAME_PATTERN), Text).optional()
+    })
+  ])
+)
 export type BotToolServer = z.infer<typeof BotToolServerSchema>
 
-const SecretRow = z
-  .strictObject({
-    key: z.string().min(1).max(256),
-    value: Text.optional(),
-    keep: z.literal(true).optional()
-  })
-  .refine(
-    (row) => (row.keep === true) !== (row.value !== undefined),
-    'Enter a value or keep a saved value'
-  )
+const SecretRow = lazyZodSchema(() =>
+  z
+    .strictObject({
+      key: z.string().min(1).max(256),
+      value: Text.optional(),
+      keep: z.literal(true).optional()
+    })
+    .refine(
+      (row) => (row.keep === true) !== (row.value !== undefined),
+      'Enter a value or keep a saved value'
+    )
+)
 const Secrets = z.array(SecretRow).max(64)
-export const BotToolInputSchema = z.union([
-  z.strictObject({
-    name: BotToolName,
-    url: BotToolUrl,
-    transport: z.literal('http'),
-    headers: Secrets
-  }),
-  z.strictObject({
-    name: BotToolName,
-    command: Executable,
-    args: z.array(Text).max(64),
-    env: Secrets
-  })
-])
+export const BotToolInputSchema = lazyZodSchema(() =>
+  z.union([
+    z.strictObject({
+      name: BotToolName,
+      url: BotToolUrl,
+      transport: z.literal('http'),
+      headers: Secrets
+    }),
+    z.strictObject({
+      name: BotToolName,
+      command: Executable,
+      args: z.array(Text).max(64),
+      env: Secrets
+    })
+  ])
+)
 export type BotToolInput = z.infer<typeof BotToolInputSchema>
 /** Why the editor can't save `input`, in the reader's words (English for main and the CLI). */
 export function botToolInputError(
