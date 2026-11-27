@@ -78,6 +78,7 @@ export async function sweepExpiredOwnedDirectories(
         }
       }
       if (entriesVisited >= entryLimit) {
+        complete = false
         break
       }
     }
