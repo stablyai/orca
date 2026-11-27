@@ -101,6 +101,7 @@ export function PrThreadRow({
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HostInstance>(null)
   const root = getPRCommentGroupRoot(group)
+  const diffHunk = root.originalDiffHunk ?? root.diffHunk
   const replies = group.kind === 'thread' ? group.replies : []
   const lastReply = replies.at(-1)
   const bot = isBotPRComment(root, botAuthorOverrides)
@@ -181,8 +182,15 @@ export function PrThreadRow({
             onPress={filePath && onOpenFile ? () => onOpenFile(filePath) : openThread}
           />
         ) : null}
-        {root.diffHunk && root.line ? (
-          <PrThreadCode lines={threadDiffLines(root.diffHunk, root.line).slice(-1)} />
+        {diffHunk && root.line ? (
+          <PrThreadCode
+            lines={threadDiffLines(
+              diffHunk,
+              root.line,
+              undefined,
+              root.originalDiffHunk ? 'LEFT' : 'RIGHT'
+            ).slice(-1)}
+          />
         ) : null}
         {editing && actions ? (
           <PRCommentComposer

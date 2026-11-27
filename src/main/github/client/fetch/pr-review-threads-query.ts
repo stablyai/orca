@@ -5,7 +5,7 @@ const COMMENT_FIELDS = `
   reactionGroups { content viewerHasReacted reactors { totalCount } }
 `
 const THREAD_FIELDS = `
-  id isResolved line startLine originalLine originalStartLine diffSide
+  id isResolved line startLine originalLine originalStartLine diffSide startDiffSide
   rootHunk: comments(first: 1) { nodes { diffHunk } }
   comments(first: 100) { ${PAGE_INFO} nodes { ${COMMENT_FIELDS} path } }
 `
@@ -33,7 +33,7 @@ export const REVIEW_THREADS_QUERY = reviewConversationQuery()
 export const REVIEW_THREAD_REPLIES_QUERY = `
 query($threadId: ID!, $cursor: String!) {
   node(id: $threadId) { ... on PullRequestReviewThread {
-    id isResolved line startLine originalLine originalStartLine diffSide
+    id isResolved line startLine originalLine originalStartLine diffSide startDiffSide
     comments(first: 100, after: $cursor) { ${PAGE_INFO} nodes { ${COMMENT_FIELDS} path } }
   } }
 }`
