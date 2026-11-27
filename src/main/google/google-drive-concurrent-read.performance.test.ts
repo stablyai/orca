@@ -6,7 +6,7 @@ const { readDrive } = await import('./google-drive-read')
 
 afterEach(() => vi.useRealTimers())
 
-// Incident: concurrent drive reads download the same unchanged file more than once.
+// Incident: PR #50594 — concurrent reads downloaded the same unchanged Drive file more than once.
 
 it('shares concurrent reads of one version and retries a failed download', async () => {
   vi.useFakeTimers({ toFake: ['Date'] })
