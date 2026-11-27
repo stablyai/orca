@@ -13,6 +13,8 @@ export type OrchestrationWorkerServer = {
   peerFingerprint: string
   homePeerFingerprint?: string
   pairingRevision?: number
+  /** The host of an agent shared with this computer, reached over its share as a paired server. */
+  sharedHost?: true
 }
 
 /** Callers that already proved the contract, or that pin the pairing generation they resolved against. */
@@ -32,7 +34,7 @@ export type OrchestrationEnvironmentSendOptions = {
 
 export type OrchestrationEnvironmentTransport = {
   resolve(selector: string): OrchestrationWorkerServer | Promise<OrchestrationWorkerServer>
-  /** Every server paired to this host, by id and name. */
+  /** Every server paired to this host, and every shared agent's host, by id and name. */
   list?(): Promise<readonly { environmentId: string; name: string }[]>
   /** False once the server is removed from this host, so its relays stop instead of retrying forever. */
   hasEnvironment?(environmentId: string): boolean | Promise<boolean>

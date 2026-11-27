@@ -20,13 +20,19 @@ export type SharedHost = {
 }
 
 let hosts: ((environmentId: string) => SharedHost | null) | null = null
+let listHosts: () => readonly string[] = () => []
 // The runtime each host last answered from, kept as a paired server's store keeps it: tab streams are
 // fenced on it, and a host that restarted answers from a new one.
 const answeredRuntimeIds = new Map<string, string>()
 
-/** Set once by the desktop's shared-agents owner; null elsewhere, and in tests that end. */
-export function setSharedHosts(lookup: ((environmentId: string) => SharedHost | null) | null) {
+/** Set once by the desktop's shared-agents owner, with the kept shares' environment ids; null
+ *  elsewhere, and in tests that end. */
+export function setSharedHosts(
+  lookup: ((environmentId: string) => SharedHost | null) | null,
+  environmentIds: () => readonly string[] = () => []
+) {
   hosts = lookup
+  listHosts = lookup ? environmentIds : () => []
   answeredRuntimeIds.clear()
 }
 
@@ -72,6 +78,17 @@ export function sharedHostEnvironment(environmentId: string): KnownRuntimeEnviro
     ],
     preferredEndpointId: endpointId
   }
+}
+
+/** Every shared host this computer can reach now (its share has an offer), as paired servers list. */
+export function listSharedHostEnvironments(): KnownRuntimeEnvironment[] {
+  return listHosts().flatMap((environmentId) => sharedHostEnvironment(environmentId) ?? [])
+}
+
+/** The one shared host with this name, for `--on <name>`; null when none or several have it. */
+export function sharedHostEnvironmentNamed(name: string): KnownRuntimeEnvironment | null {
+  const named = listSharedHostEnvironments().filter((environment) => environment.name === name)
+  return named.length === 1 ? named[0] : null
 }
 
 /** How the paired path signs in to an endpoint naming a shared host: by its share's device key, which

@@ -191,6 +191,9 @@ export type ActingMail = {
   sender: OrchestrationCallerIdentity
   /** Whom a paired computer's sending turn acts for, beside this sender's own. */
   carriedAskers?: readonly BotRequestAsker[]
+  /** Sent by a teammate's Orca over the share of the bot it reaches: it is their ask, never the
+   *  owner's, and lands in their Home. */
+  teammate?: { accountId: string }
 }
 
 /** Who the sender acts for; null for a bot's own worker mailing its own chat, which is ordinary mail. */
@@ -198,10 +201,22 @@ export async function readActingSender(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
   callerSessionId: string | undefined,
-  { sender, carriedAskers }: ActingMail,
+  { sender, carriedAskers, teammate }: ActingMail,
   /** Null for a bot on another computer: its mail is never a bot's own chat here. */
   receiving: ReceivingBot | null
 ): Promise<ActingSender | null> {
+  if (teammate && receiving) {
+    // Their computer's owner is the teammate, so the owner it carries is them, never this one.
+    const asker = botShareAskerOf(receiving.bot, teammate.accountId)
+    const carried = carriedAskers?.map((entry) => (entry.kind === 'owner' ? asker : entry))
+    const turn = { ...OWNER_TURN, askers: [asker], askedBy: [asker] }
+    return {
+      sessionId: null,
+      bot: null,
+      turn: withCarriedAskers(turn, carried),
+      conversation: null
+    }
+  }
   const read = await readOwnActingSender(runtime, db, callerSessionId, sender, receiving)
   return read && { ...read, turn: withCarriedAskers(read.turn, carriedAskers) }
 }

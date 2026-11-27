@@ -153,7 +153,7 @@ export class SharedBotHosts {
   }
 
   /** The kept shares, but for those the cloud's last answer no longer lists. */
-  private listed(): SharedBotHostEntry[] {
+  listed(): SharedBotHostEntry[] {
     return this.store.list().filter((entry) => this.shares?.has(entry.shareId) ?? true)
   }
 
