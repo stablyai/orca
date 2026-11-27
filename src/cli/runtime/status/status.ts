@@ -25,34 +25,53 @@ export async function getCliStatus(
   const metadata = tryReadMetadata(userDataPath, { throwOnAccessDenied: true })
   const transport = metadata ? findTransport(metadata, 'unix', 'named-pipe') : null
   if (!transport || !metadata?.authToken) {
-    const restart = await readActiveRuntimeRestart(userDataPath)
-    return buildCliStatusResponse({
-      app: {
-        running: false,
-        pid: null,
-        ...(restart
-          ? {
-              restarting: {
-                reason: restart.reason,
-                since: new Date(restart.writtenAt).toISOString()
-              }
-            }
-          : {})
-      },
-      runtime: {
-        // Existing metadata proves the runtime started at least once.
-        state: metadata ? 'stale_bootstrap' : 'not_running',
-        reachable: false,
-        runtimeId: null
-      },
-      graph: {
-        state: 'not_running'
-      }
-    })
+    return await offlineStatus(userDataPath, metadata ? 'stale_bootstrap' : 'not_running')
   }
-
-  const response = await sendRequest<RuntimeStatus>(metadata, 'status.get', undefined, 1000)
+  let response: RuntimeRpcResponse<RuntimeStatus>
+  try {
+    response = await sendRequest<RuntimeStatus>(metadata, 'status.get', undefined, 1000)
+  } catch (error) {
+    // A relaunch can leave its metadata behind; agents still need app.restarting from status.
+    if (
+      error instanceof RuntimeClientError &&
+      error.code === 'runtime_unavailable' &&
+      (await readActiveRuntimeRestart(userDataPath))
+    ) {
+      return await offlineStatus(userDataPath, 'stale_bootstrap')
+    }
+    throw error
+  }
   return projectConnectedStatus(metadata, response)
+}
+
+async function offlineStatus(
+  userDataPath: string,
+  state: 'stale_bootstrap' | 'not_running'
+): Promise<RuntimeRpcSuccess<CliStatusResult>> {
+  const restart = await readActiveRuntimeRestart(userDataPath)
+  return buildCliStatusResponse({
+    app: {
+      running: false,
+      pid: null,
+      ...(restart
+        ? {
+            restarting: {
+              reason: restart.reason,
+              since: new Date(restart.writtenAt).toISOString()
+            }
+          }
+        : {})
+    },
+    runtime: {
+      // Existing metadata proves the runtime started at least once.
+      state,
+      reachable: false,
+      runtimeId: null
+    },
+    graph: {
+      state: 'not_running'
+    }
+  })
 }
 
 export type OfflineRuntimeAdmission = {
