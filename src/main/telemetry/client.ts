@@ -55,6 +55,26 @@ let shuttingDown = false
 let storeRef: Store | null = null
 
 let testTransportEnabled = false
+let enabledListeners: Set<() => void> | undefined
+
+export function onTelemetryEnabled(listener: () => void): () => void {
+  const listeners = (enabledListeners ??= new Set())
+  listeners.add(listener)
+  return () => listeners.delete(listener)
+}
+
+function notifyTelemetryEnabled(): void {
+  if (!enabledListeners?.size || !isTelemetryEnabled()) {
+    return
+  }
+  for (const listen of enabledListeners) {
+    try {
+      listen()
+    } catch {
+      // An optional telemetry producer cannot fail a consent change.
+    }
+  }
+}
 
 type CaptureProperties = Readonly<Record<string, unknown>>
 
@@ -275,6 +295,9 @@ export async function setOptIn(via: OptInVia, optedIn: boolean): Promise<void> {
     // Settings opt-in also starts an observable session that needs an adoption denominator.
     trackAppOpenedOnce()
     track('telemetry_opted_in', { via })
+    if (resolveConsent(settings).effective !== 'enabled') {
+      notifyTelemetryEnabled()
+    }
   } else {
     if (!client || isConsentEnvOverridden()) {
       return
@@ -306,6 +329,9 @@ export async function persistBannerAcknowledgeWithoutEmitting(): Promise<void> {
   }
   // Banner resolution is first app_opened eligibility; re-enable SDK before capture.
   trackAppOpenedOnce()
+  if (resolveConsent(settings).effective !== 'enabled') {
+    notifyTelemetryEnabled()
+  }
 }
 
 export function trackAppOpenedOnce(): void {

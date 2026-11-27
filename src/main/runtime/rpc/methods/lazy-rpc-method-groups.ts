@@ -1,10 +1,20 @@
 import { ORCAD_TERMINAL_CENSUS_METHOD } from '../../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
+import {
+  LEGACY_JOURNAL_RETIREMENT_ACK_METHOD,
+  LEGACY_JOURNAL_RETIREMENT_CLAIM_METHOD
+} from '../../../../shared/remote-runtime/protocol/legacy-journal-retirement-forwarding'
 import { AUTO_NAME_RPC_METHODS } from '../../../../shared/worktree/branch-auto-rename-attempt'
 import { prefixRpcMethodGroup, type LazyRpcMethodGroup } from '../lazy-rpc-method-group'
 import { LAZY_INTEGRATION_RPC_METHOD_GROUPS } from './lazy-integration-rpc-method-groups'
 
 export const DEFAULT_LAZY_RPC_METHOD_GROUPS: readonly LazyRpcMethodGroup[] = [
   ...LAZY_INTEGRATION_RPC_METHOD_GROUPS,
+  prefixRpcMethodGroup(
+    [],
+    async () =>
+      (await import('./client-events/legacy-journal-retirement')).LEGACY_JOURNAL_RETIREMENT_METHODS,
+    { exactNames: [LEGACY_JOURNAL_RETIREMENT_CLAIM_METHOD, LEGACY_JOURNAL_RETIREMENT_ACK_METHOD] }
+  ),
   prefixRpcMethodGroup(['ssh.'], async () => (await import('./ssh/ssh')).SSH_METHODS),
   prefixRpcMethodGroup(['plugins.'], async () => {
     const [

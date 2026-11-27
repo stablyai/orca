@@ -67,6 +67,7 @@ import { NOTIFICATION_METHODS } from './notifications/notifications'
 import { FILE_METHODS } from './files/files'
 import { GIT_METHODS } from './source-control/git/git'
 import { CLIPBOARD_METHODS } from './clipboard/clipboard'
+import { LEGACY_JOURNAL_RETIREMENT_METHODS } from './client-events/legacy-journal-retirement'
 import { ORCAD_TERMINAL_CENSUS_METHODS } from './orcad/orcad-terminal-census'
 import { SESSION_TERMINAL_SCROLLBACK_METHODS } from './terminal/session-terminal-scrollback'
 import { WORKTREE_AUTO_NAME_METHODS } from './workspaces/worktree-auto-name-methods'
@@ -154,6 +155,7 @@ const SERVICE_RPC_METHODS = [
   ...FILE_METHODS,
   ...GIT_METHODS,
   ...CLIPBOARD_METHODS,
+  ...LEGACY_JOURNAL_RETIREMENT_METHODS,
   ...TERMINAL_ORPHAN_METHODS
 ] as const
 

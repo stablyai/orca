@@ -16,3 +16,21 @@ export const ClientEventsUnsubscribeParams = lazyZodSchema(() =>
       .pipe(z.string().min(1, 'Missing subscriptionId'))
   })
 )
+
+const LegacyJournalRetirementClaimAddress = lazyZodSchema(() =>
+  z.strictObject({
+    subscriptionId: z.string().min(1).max(256),
+    token: z.uuid()
+  })
+)
+
+export const LegacyJournalRetirementClaimParams = lazyZodSchema(() =>
+  LegacyJournalRetirementClaimAddress.extend({ release: z.literal(true).optional() })
+)
+
+export const LegacyJournalRetirementAckParams = lazyZodSchema(() =>
+  z.discriminatedUnion('accepted', [
+    LegacyJournalRetirementClaimAddress.extend({ accepted: z.literal(false) }),
+    LegacyJournalRetirementClaimAddress.extend({ accepted: z.literal(true), deliveryId: z.uuid() })
+  ])
+)

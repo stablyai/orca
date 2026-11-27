@@ -33,6 +33,8 @@ export type SharedControlSubscriptionCallbacks<TResult> = {
   onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
   onError: (error: RemoteRuntimeClientError) => void
   onClose?: () => void
+  /** Also runs for local disposal, when the consumer expects no close notification. */
+  onDispose?: () => void
 }
 
 export type SharedControlLogicalSubscription<TResult = unknown> = {

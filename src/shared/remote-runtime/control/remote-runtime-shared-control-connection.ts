@@ -20,7 +20,6 @@ import { ensureSharedControlReady } from './remote-runtime-shared-control-ready-
 import { handleRuntimeControlFrame } from './remote-runtime-shared-control-connection-frame'
 import * as sharedControlActions from './remote-runtime-shared-control-connection-actions'
 import type * as SharedControlTypes from './remote-runtime-shared-control-types'
-import { closeSharedControlConnectionSubscription } from '../requests/remote-runtime-shared-control-subscription-close'
 type PendingRequest = SharedControlTypes.SharedControlPendingRequest<unknown>
 type LogicalSubscription = SharedControlTypes.SharedControlLogicalSubscription<unknown>
 
@@ -50,7 +49,6 @@ export class RemoteRuntimeSharedControlConnection {
     retiredRequestIds: this.retiredRequestIds,
     ensureReady: (timeoutMs, signal) => this.ensureReadyWithTimeout(timeoutMs, signal),
     sendEncrypted: (payload) => this.sendEncrypted(payload),
-    closeSubscription: (id) => this.closeSubscription(id),
     captureSendGuard: () => this.socketGeneration.captureReady(() => this.isReady()),
     wire: () => ({ state: this.state, ws: this.ws, handshake: this.handshake })
   })
@@ -78,6 +76,13 @@ export class RemoteRuntimeSharedControlConnection {
   }
   request<TResult>(...args: Parameters<SharedControlRequests['request']>) {
     return this.requests.request<TResult>(...args)
+  }
+
+  captureReadySocket(subscriptionIsCurrent: () => boolean) {
+    return this.requests.captureReadySocket(
+      this.socketGeneration.captureIsReady(() => this.isReady()),
+      subscriptionIsCurrent
+    )
   }
   subscribe<TResult>(
     method: string,
@@ -235,13 +240,7 @@ export class RemoteRuntimeSharedControlConnection {
   }
 
   private closeSubscription(requestId: string): void {
-    closeSharedControlConnectionSubscription({
-      subscriptions: this.subscriptions,
-      retiredRequestIds: this.retiredRequestIds,
-      requestId,
-      deviceToken: this.connection.credential.deviceToken,
-      send: (payload) => this.sendEncrypted(payload)
-    })
+    this.requests.closeSubscription(requestId)
   }
 
   private readonly sendEncrypted = (payload: unknown): boolean =>

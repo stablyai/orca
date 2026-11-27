@@ -1,4 +1,5 @@
 import { recordRemoteStructuredChatTelemetry } from '../../../telemetry/structured-chat-dispatch'
+import { LEGACY_JOURNAL_RETIREMENT_AVAILABLE } from '../../../../shared/remote-runtime/protocol/legacy-journal-retirement-forwarding'
 import { decodeSessionTabsDeltaEvents } from './runtime-environment-session-tabs-delta-decoding'
 
 export function decodeRuntimeEnvironmentSubscriptionEvents(
@@ -14,6 +15,14 @@ export function decodeRuntimeEnvironmentSubscriptionEvents(
       payload.response.ok
     ) {
       const event = payload.response.result
+      if (
+        typeof event === 'object' &&
+        event !== null &&
+        'type' in event &&
+        event.type === LEGACY_JOURNAL_RETIREMENT_AVAILABLE
+      ) {
+        return
+      }
       if (
         typeof event === 'object' &&
         event !== null &&

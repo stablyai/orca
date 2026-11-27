@@ -16,6 +16,7 @@ import {
   SESSION_TABS_TAB_DELTA_RUNTIME_CAPABILITY
 } from './session-tabs-runtime-capabilities'
 import { WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY } from './worktree-runtime-capabilities'
+import { LEGACY_JOURNAL_RETIREMENT_FORWARDING_CAPABILITY } from './legacy-journal-retirement-forwarding'
 import { AI_VAULT_CHAT_ROWS_CLIENT_CAPABILITY } from '../../ai-vault/contracts/ai-vault-runtime-capabilities'
 import { ORCHESTRATION_PERSON_APPROVALS_CLIENT_CAPABILITY } from '../../orchestration/orchestration-runtime-capabilities'
 import {
@@ -30,6 +31,7 @@ export const ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
   GIT_REVERT_CONFLICT_CLIENT_CAPABILITY,
   STRUCTURED_CHAT_START_TELEMETRY_CLIENT_CAPABILITY,
   STRUCTURED_CHAT_PROMPT_TELEMETRY_CLIENT_CAPABILITY,
+  LEGACY_JOURNAL_RETIREMENT_FORWARDING_CAPABILITY,
   ...NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
   TERMINAL_IMAGE_VIEWER_CAPABILITY,
   // The renderer remounts a pane whose terminal the host replaced (watchHostRebindAfterExit).

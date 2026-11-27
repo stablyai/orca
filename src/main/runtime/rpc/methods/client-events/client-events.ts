@@ -3,7 +3,7 @@ import {
   listRegisteredSshTargets
 } from '../../../../ssh/targets/ssh-target-registry'
 import { getPublicSshState } from '../../../hosts/platform-probe/public-ssh-state'
-import { defineMethod, defineStreamingMethod } from '../../core'
+import { defineMethod, defineStreamingMethod, type RpcContext } from '../../core'
 import {
   ClientEventsSubscribeParams,
   ClientEventsUnsubscribeParams
@@ -18,8 +18,45 @@ import {
 } from '../../../../../shared/agent-session/requests/structured-chat-dispatch-telemetry'
 import { subscribeStructuredChatTelemetry } from '../../../../telemetry/structured-chat-dispatch'
 import { structuredCallerFor } from '../structured-sessions/creation/structured-agent-session-gate'
+import {
+  LEGACY_JOURNAL_RETIREMENT_AVAILABLE,
+  LEGACY_JOURNAL_RETIREMENT_FORWARDING_CAPABILITY
+} from '../../../../../shared/remote-runtime/protocol/legacy-journal-retirement-forwarding'
+import { legacyJournalRetirementForwarding } from '../../../../native-chat/agent-session-journal/journal-legacy-retirement-forwarding'
 
 let clientEventSubscriptionSeq = 0
+
+export function legacyJournalRetirementSubscriber(ctx: RpcContext, subscriptionId: string) {
+  if (
+    ctx.signal?.aborted ||
+    !ctx.connectionId ||
+    ctx.clientKind !== 'runtime' ||
+    ctx.caller?.kind !== 'paired-device' ||
+    ctx.caller.agent ||
+    !ctx.clientCapabilities?.includes(LEGACY_JOURNAL_RETIREMENT_FORWARDING_CAPABILITY)
+  ) {
+    return undefined
+  }
+  return { connectionId: ctx.connectionId, deviceId: ctx.caller.deviceId, subscriptionId }
+}
+
+function subscribeLegacyJournalRetirement(
+  ctx: RpcContext,
+  subscriptionId: string,
+  emit: (event: unknown) => void
+) {
+  const subscriber = legacyJournalRetirementSubscriber(ctx, subscriptionId)
+  const forwarding = subscriber && legacyJournalRetirementForwarding(ctx.runtime)
+  if (!subscriber || !forwarding) {
+    return undefined
+  }
+  return {
+    unsubscribe: forwarding.subscribe(subscriber, () =>
+      emit({ type: LEGACY_JOURNAL_RETIREMENT_AVAILABLE })
+    ),
+    available: forwarding.available
+  }
+}
 
 export const CLIENT_EVENT_METHODS = [
   defineStreamingMethod({
@@ -78,6 +115,7 @@ export const CLIENT_EVENT_METHODS = [
 
         const seq = ++clientEventSubscriptionSeq
         const subscriptionId = `runtime-client-events-${connectionId ?? 'inproc'}-${seq}`
+        const retirement = subscribeLegacyJournalRetirement(ctx, subscriptionId, emit)
         runtime.registerSubscriptionCleanup(
           subscriptionId,
           () => {
@@ -85,6 +123,7 @@ export const CLIENT_EVENT_METHODS = [
             unregisterHostVolunteer?.()
             unregisterCardRenderer?.()
             unsubscribeTelemetry?.()
+            retirement?.unsubscribe()
             emit({ type: 'end' })
             resolve()
           },
@@ -108,6 +147,9 @@ export const CLIENT_EVENT_METHODS = [
         emit({
           type: 'ready',
           subscriptionId,
+          ...(retirement && {
+            legacyJournalRetirementAvailable: retirement.available
+          }),
           snapshot: {
             sshStates,
             nativeChatQueueFollowUps: settings.nativeChatQueueFollowUps,

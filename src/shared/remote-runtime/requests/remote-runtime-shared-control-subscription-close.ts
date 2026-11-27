@@ -35,6 +35,7 @@ export function sendRetiredSharedControlCleanupRequest(args: {
   deviceToken: string
   method: string
   params: unknown
+  idlePassive?: boolean
   send: (payload: unknown) => boolean
 }): void {
   const requestId = sendSharedControlCleanupRequest(args)

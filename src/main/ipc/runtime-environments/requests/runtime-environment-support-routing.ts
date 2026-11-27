@@ -31,11 +31,9 @@ import {
   sendRemoteRuntimeRequestAbortable,
   sendRemoteRuntimeSharedControlRequestAbortable
 } from './runtime-environment-abortable-requests'
-import {
-  getRemoteRuntimeSharedControlDiagnostics,
-  subscribeRemoteRuntimeSharedControlRequest
-} from '../connections/runtime-environment-request-connections'
+import { getRemoteRuntimeSharedControlDiagnostics } from '../connections/runtime-environment-request-connections'
 import { sendSupportRoutedCallOnRuntime } from './runtime-environment-runtime-pinned-send'
+import { subscribeRuntimeEnvironmentWithRetirementEvents } from '../subscriptions/runtime-environment-retirement-events'
 
 type SupportRoute = {
   environment: KnownRuntimeEnvironment
@@ -176,7 +174,8 @@ export async function subscribeSupportRoutedRuntimeEnvironment(args: {
     signal: args.signal,
     supported: (route) => {
       supportOutcome = route.outcome
-      return subscribeRemoteRuntimeSharedControlRequest(
+      return subscribeRuntimeEnvironmentWithRetirementEvents(
+        args.isCurrent,
         args.environment.id,
         route.connection,
         args.method,

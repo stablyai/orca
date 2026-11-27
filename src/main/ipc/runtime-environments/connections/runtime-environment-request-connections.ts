@@ -15,7 +15,8 @@ import { RemoteRuntimeSharedControlConnection } from '../../../../shared/remote-
 import { probeAllRemoteRuntimeSocketsNow } from '../../../../shared/remote-runtime/remote-runtime-socket-liveness'
 import type {
   RemoteRuntimeSharedConnectionDiagnostics,
-  RemoteRuntimeSharedSubscription
+  RemoteRuntimeSharedSubscription,
+  SharedControlSubscriptionCallbacks
 } from '../../../../shared/remote-runtime/control/remote-runtime-shared-control-types'
 import { isRuntimeEnvironmentManuallyDisconnected } from '../connectivity/runtime-environment-manual-disconnect'
 import { publishRuntimeEnvironmentDiagnostics } from '../status/runtime-environment-diagnostics-broadcast'
@@ -187,12 +188,7 @@ export function subscribeRemoteRuntimeSharedControlRequest<TResult>(
   method: string,
   params: unknown,
   timeoutMs: number,
-  callbacks: {
-    onResponse: (response: RuntimeRpcResponse<TResult>) => void
-    onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
-    onError: (error: { code: string; message: string }) => void
-    onClose?: () => void
-  },
+  callbacks: SharedControlSubscriptionCallbacks<TResult>,
   signal?: AbortSignal
 ): Promise<RemoteRuntimeSharedSubscription> {
   return getSharedControlConnection(environmentId, pairedConnection).subscribe(
@@ -209,6 +205,16 @@ export function closeRemoteRuntimeSharedControlConnection(environmentId: string)
   sharedControlConnections.delete(environmentId)
   clearSharedControlAnswerSource(environmentId)
   cached?.connection.close()
+}
+
+export function getReadyRemoteRuntimeSharedControlConnection(
+  environmentId: string,
+  pairedConnection: PairedRuntimeConnection
+) {
+  const cached = sharedControlConnections.get(environmentId)
+  return cached?.pairingKey === getPairingKey(pairedConnection) && cached.connection.isReady()
+    ? cached.connection
+    : undefined
 }
 
 /** This desktop signed in, out or switched: every paired host it holds open hears the new account. */
