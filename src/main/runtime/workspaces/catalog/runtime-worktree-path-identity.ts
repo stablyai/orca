@@ -73,7 +73,7 @@ function terminalSessionKeyedMaps(session: WorkspaceSessionState): TerminalSessi
   ]
 }
 
-// Why cached: mobile snapshots ask once per terminal tab, and rescanning every workspace key blocked main at fleet scale. Writes replace these maps, never edit them in place.
+// Cached: mobile snapshots ask per tab; writers replace these maps, never mutate them.
 function getTerminalSessionIdentityIndex(
   session: WorkspaceSessionState
 ): Map<string, string | null> {
