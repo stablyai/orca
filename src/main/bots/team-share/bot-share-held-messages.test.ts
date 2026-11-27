@@ -62,7 +62,6 @@ beforeEach(async () => {
   aliceDevice = await store.add({
     botId: 'bot-1',
     accountId: 'acct-alice',
-    name: 'Alice',
     scope: 'runtime',
     devicePublicKeyB64: b64(aliceKeys.publicKey)
   })
@@ -219,7 +218,6 @@ describe('a held message on the host', () => {
     await store.add({
       botId: 'bot-1',
       accountId: 'acct-bob',
-      name: 'Bob',
       scope: 'runtime',
       devicePublicKeyB64: b64(bob.publicKey)
     })

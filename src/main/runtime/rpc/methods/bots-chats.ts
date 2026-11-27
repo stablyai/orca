@@ -3,7 +3,7 @@ import { SHARE_BY_BOT } from '../../../../shared/bots/bot-share-rpc-methods'
 // last ask and send it `--chat <id>`.
 import type { Bot } from '../../../../shared/bot-types'
 import type { BotChatRow } from '../../../../shared/bots/bot-chat-row'
-import { botHomeRoots, type BotHomeOf } from '../../../../shared/bots/bot-home-of'
+import { botHomeName, botHomeRoots, type BotHomeOf } from '../../../../shared/bots/bot-home-of'
 import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type { BotRosterEntry } from '../../../../shared/bot-roster'
 import { botOfHomeWorkspace } from '../../../../shared/bots/bot-homes'
@@ -223,6 +223,8 @@ export function listBotChatsWith(
       return [
         {
           ...row,
+          // A teammate's Home by their share row's name as it is now, never the record's.
+          ...(row.homeOf && row.homeOf !== 'owner' ? { title: botHomeName(bot, row.homeOf) } : {}),
           self: row.id === self,
           closed: refusal !== null,
           ...(refusal ? { reason: refusal.unreachable ?? 'unverifiable' } : {})

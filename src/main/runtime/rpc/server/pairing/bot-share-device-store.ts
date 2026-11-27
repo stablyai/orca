@@ -17,7 +17,9 @@ import { isMissingFileError, quarantineCorruptRegistry } from './device-registry
 import { validRelayBinding } from './device-registry-row-validation'
 import { BOT_SHARE_DEVICES_FILENAME } from './mobile-pairing-files'
 
-export type BotShareGrant = { botId: string; accountId: string; name: string }
+// The teammate's name is never kept here: it is their share row's (botSharePersonName). Rows older
+// builds wrote still carry a `name`, read as nothing.
+export type BotShareGrant = { botId: string; accountId: string }
 
 /** Whether the share a row stands on is still on the bot's list; a row without one signs in as nothing. */
 export type BotShareGranted = (grant: Pick<BotShareGrant, 'botId' | 'accountId'>) => boolean
@@ -47,7 +49,6 @@ const BotShareDeviceRow = z.looseObject({
   deviceId: NonEmpty,
   botId: NonEmpty,
   accountId: NonEmpty,
-  name: z.string(),
   scope: z.enum(['runtime', 'mobile']),
   devicePublicKeyB64: z.string().refine(isDevicePublicKeyB64),
   pairedAt: z.number().finite(),

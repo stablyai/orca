@@ -52,14 +52,9 @@ function ownerView(
     if (isPlaceholder(chat) && chat.runningTotal === 0) {
       return []
     }
+    // Titled from the share row as it is now, never from the chat's record.
     const name = viewer.personName(of.accountId)
-    return [
-      {
-        ...wireChat(chat),
-        homeOf: name,
-        ...(isPlaceholder(chat) ? { title: `${name}’s Home` } : {})
-      }
-    ]
+    return [{ ...wireChat(chat), homeOf: name, title: `${name}’s Home` }]
   })
   const shown = new Set(chats.map((chat) => chat.chatId))
   return {

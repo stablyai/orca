@@ -1,6 +1,7 @@
 // Who acts from an Items panel, the owner or a teammate on a shared agent with the same powers, and
 // their own seen mark: one place for every bots.items.owner.* method.
 import { botItemEventId } from '../../../../shared/bots/bot-items'
+import { botSharePersonName } from '../../../../shared/bots/bot-home-of'
 import type { Bot } from '../../../../shared/bot-types'
 import { BotItemError } from '../../../bots/bot-item-error'
 import { BOT_ITEM_OWNER_VIEWER } from '../../../bots/bot-item-author'
@@ -19,7 +20,17 @@ export function ownerActor(context: RpcContext): BotItemOwnerActor {
   return {
     kind: 'owner',
     ...(context.pairedDeviceId ? { device: context.pairedDeviceId } : {}),
-    ...(share ? { person: { accountId: share.accountId, name: share.name } } : {})
+    ...(share
+      ? {
+          person: {
+            accountId: share.accountId,
+            name: botSharePersonName(
+              context.runtime.bots.list().find((bot) => bot.id === share.botId) ?? {},
+              share.accountId
+            )
+          }
+        }
+      : {})
   }
 }
 

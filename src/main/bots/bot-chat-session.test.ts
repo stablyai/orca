@@ -3,9 +3,15 @@ import type { Bot } from '../../shared/bot-types'
 import {
   botHome,
   botHomeOfSession,
+  botHomeTitleOf,
+  botSharePersonName,
   withBotHome,
   type BotHomeOf
 } from '../../shared/bots/bot-home-of'
+import { buildBotChatTree } from '../../shared/bots/bot-chat-tree-model'
+import { botChatTreeForViewer } from './bot-chat-tree-viewer'
+import { resolveBotShareInvite } from './bot-team-share-deliveries'
+import { botShareAsker } from './team-share/bot-share-chats'
 import { isBotHomeTab } from '../../shared/bots/bot-home-tab'
 import { botShareListedBots } from './team-share/bot-share-access'
 import type { BotAccountShare } from '../../shared/bots/bot-team-shares'
@@ -109,6 +115,16 @@ describe('a Home Chat for each person', () => {
       created,
       showTab,
       bot: () => bot,
+      // BotController.update, as share deliveries write through it.
+      bots: {
+        list: () => [bot],
+        update: async (
+          _id: string,
+          edit: (saved: Bot) => Partial<Pick<Bot, 'shares'>>
+        ): Promise<void> => {
+          bot = { ...bot, ...edit(bot) }
+        }
+      },
       remove: (accountId: string) => {
         bot = {
           ...bot,
@@ -130,9 +146,69 @@ describe('a Home Chat for each person', () => {
     expect(created).toEqual([{ sessionId: next, of: ALICE }])
     // A teammate's Home is a side-chat tab on the owner's computer: nothing reopens it.
     expect(showTab).not.toHaveBeenCalled()
-    // The new Home bears her Home's name; the one it replaced gives it up.
-    expect(rig!.store.getConversation(next)?.conversationName).toBe('Alice’s Home')
+    // The new Home is named Home; the one it replaced (named as older builds did) gives its name up.
+    expect(rig!.store.getConversation(next)?.conversationName).toBe('Home')
     expect(rig!.store.getConversation(ALICE_HOME)?.conversationName).not.toBe('Alice’s Home')
+  })
+
+  it('titles a teammate’s Home by the name that reaches their share after it was made', async () => {
+    const { chats, bot, bots } = await setup()
+    // Accepted before their name reached the host: the share has only their email.
+    await bots.update('bot-1', (saved) => ({
+      shares: saved.shares?.map((entry) =>
+        entry.kind === 'account' && entry.accountId === ALICE.accountId
+          ? { ...entry, name: undefined }
+          : entry
+      )
+    }))
+    const home = await chats.reset('bot-1', ALICE)
+    // As the cloud sends it once the teammate's Orca reads its shares.
+    const named: Parameters<typeof resolveBotShareInvite>[1] = {
+      kind: 'share_resolved',
+      deliveryId: 'share-named:1',
+      expiresAt: Number.MAX_SAFE_INTEGER,
+      conversation: { source: 'orca', externalId: 'share-Alice' },
+      shareId: 'share-Alice',
+      botId: 'bot-1',
+      email: 'alice@example.com',
+      accountId: ALICE.accountId,
+      name: 'Alice Lee'
+    }
+    expect(await resolveBotShareInvite(bots, named)).toBe(true)
+    // No record keeps a copy of who it is for.
+    expect(rig!.store.getConversation(home)?.conversationName).toBe('Home')
+    // The tab title, the owner's chats list and the asker a new chat records all read it now.
+    expect(botHomeTitleOf(bot(), home)).toEqual({ kind: 'teammate', name: 'Alice Lee' })
+    const tree = buildBotChatTree({
+      chats: [
+        {
+          chatId: home,
+          title: rig!.store.getConversation(home)?.conversationName ?? '',
+          origin: 'side',
+          live: 'idle',
+          lastActiveAt: 1,
+          unread: false,
+          closed: false,
+          whoseHome: ALICE
+        }
+      ],
+      placed: [],
+      workers: new Map(),
+      extras: [],
+      homeWorkspaceIds: []
+    })
+    const ownerTree = botChatTreeForViewer(
+      tree,
+      { kind: 'owner', personName: (accountId) => botSharePersonName(bot(), accountId) },
+      { page: false }
+    )
+    expect(ownerTree.chats.find((entry) => entry.chatId === home)).toMatchObject({
+      homeOf: 'Alice Lee',
+      title: 'Alice Lee’s Home'
+    })
+    expect(
+      botShareAsker(bot(), { kind: 'bot-share', botId: 'bot-1', accountId: ALICE.accountId })
+    ).toMatchObject({ name: 'Alice Lee' })
   })
 
   it('opens a teammate’s Home as it is, with no tab shown, and the owner’s with its tab', async () => {

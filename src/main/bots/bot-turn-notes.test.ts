@@ -33,7 +33,20 @@ beforeEach(() => {
   // As a teammate's New chat records it (startBotShareSession).
   db.recordBotConversationActsFor(TEAMMATE_CHAT, {
     actsFor: [
-      botShareAsker({ kind: 'bot-share', botId: BOT, accountId: 'acct-2', name: 'kim@example.com' })
+      botShareAsker(
+        {
+          shares: [
+            {
+              kind: 'account',
+              shareId: 'share-2',
+              accountId: 'acct-2',
+              email: 'kim@example.com',
+              addedAt: 1
+            }
+          ]
+        },
+        { kind: 'bot-share', botId: BOT, accountId: 'acct-2' }
+      )
     ]
   })
   items = BotItemsStore.open(':memory:')

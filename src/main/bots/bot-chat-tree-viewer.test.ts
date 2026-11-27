@@ -57,8 +57,7 @@ const viewerAlice = {
   owns: botShareChatFilter(sources, {
     kind: 'bot-share',
     botId: 'bot-1',
-    accountId: ALICE,
-    name: 'Alice'
+    accountId: ALICE
   })
 }
 const owner = { kind: 'owner' as const, personName: () => 'Alice' }

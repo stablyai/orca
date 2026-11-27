@@ -59,8 +59,7 @@ const OTHER = { id: 'bot-other', folderWorkspaceId: 'home-other' }
 const SCOPE: BotShareCallerScope = {
   kind: 'bot-share',
   botId: SHARED.id,
-  accountId: 'acct-alice',
-  name: 'Alice'
+  accountId: 'acct-alice'
 }
 const alice: BotRequestAsker = {
   kind: 'person',
@@ -123,7 +122,23 @@ beforeEach(() => {
     makeTestBot({
       ...bot,
       slack: { appId: 'A-SECRET', teamId: 'T-SECRET', ownerUserId: 'U-OWNER' },
-      chatSessionId: ids.ownersChat
+      chatSessionId: ids.ownersChat,
+      // Alice's share row: the name a teammate's actions are recorded by.
+      ...(bot.id === SHARED.id
+        ? {
+            shares: [
+              {
+                kind: 'account' as const,
+                shareId: 'share-alice',
+                accountId: SCOPE.accountId,
+                name: 'Alice',
+                email: 'alice@example.com',
+                addedAt: 1,
+                acceptedAt: 2
+              }
+            ]
+          }
+        : {})
     })
   vi.spyOn(runtime, 'restoreStructuredAgentSessionTabs').mockResolvedValue(undefined)
   vi.spyOn(runtime.bots, 'list').mockReturnValue([linkedBot(SHARED), linkedBot(OTHER)])

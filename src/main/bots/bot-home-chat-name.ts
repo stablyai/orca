@@ -39,9 +39,10 @@ export function botHomeRootOf(host: Pick<BotHomeHost, 'deps'>): (sessionId: stri
   return (id) => (isOrcaSessionId(id) ? resolve(id) : id)
 }
 
-/** A new Home Chat takes its person's Home name. The Home it replaced keeps no tab, even when its
- *  stop won but its tab bookkeeping lost a race, so no restore reopens it; and it gives up the exact
- *  name it was given, so it is named from its content. */
+/** A new Home Chat is named Home, whoever's it is: a teammate's is titled by their share row's name
+ *  wherever it shows (botHomeTitleOf), so no record holds a copy of it. The Home it replaced keeps no
+ *  tab, even when its stop won but its tab bookkeeping lost a race, so no restore reopens it; and it
+ *  gives up the exact name it was given, so it is named from its content. */
 export async function nameNewHome(
   host: BotHomeHost,
   bot: Bot,
@@ -49,13 +50,13 @@ export async function nameNewHome(
   sessionId: string,
   replaced: string | null | undefined
 ): Promise<void> {
-  const name = botHomeName(bot, of)
-  await host.setUserConversationName(sessionId, name, 'rename')
+  await host.setUserConversationName(sessionId, BOT_HOME_NAME, 'rename')
   if (replaced && host.isSessionTabVisible(replaced)) {
     await host.setSessionTabVisibility(replaced, false)
   }
   if (replaced && of !== 'owner') {
-    await releaseName(host, replaced, name)
+    // Older builds named a teammate's Home "<name>’s Home".
+    await releaseName(host, replaced, botHomeName(bot, of))
   }
   await releaseReplacedHomes(host, bot)
 }

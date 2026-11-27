@@ -89,7 +89,6 @@ describe('share accept on the host', () => {
     expect(mintOffer).toHaveBeenCalledWith({
       botId: 'bot-1',
       accountId: 'acct-alice',
-      name: 'Alice',
       devicePublicKey: key(device.publicKey)
     })
     const [botId, shareId, body] = putOffer.mock.calls[0]!

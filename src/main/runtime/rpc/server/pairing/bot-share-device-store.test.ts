@@ -19,7 +19,6 @@ describe('the share device file', () => {
     await store.add({
       botId: 'bot-1',
       accountId: 'acct-carol',
-      name: 'Carol',
       scope: 'runtime',
       devicePublicKeyB64: key()
     })
