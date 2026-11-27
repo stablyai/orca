@@ -139,6 +139,11 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
     }
     const { anchor, isRelocated } = resolveAnchor()
     applyAnchor(anchor.row, anchor.column, cells, isRelocated)
+    // xterm resets the preedit to the buffer cursor on every render; follow renders only while composing.
+    // A hidden cursor without a caret may be a repaint gap, so follow until the caret is painted.
+    if (isRelocated || !terminal.modes.showCursor) {
+      renderSubscription ??= terminal.onRender(reapplyAfterRender)
+    }
     // xterm repositions in setTimeout(0); correct after its timer, coalescing bursts.
     if (!isRelocated) {
       if (deferredApply !== null) {
@@ -147,8 +152,6 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
       }
       return
     }
-    // xterm resets the preedit to the buffer cursor on every render; follow renders only while composing.
-    renderSubscription ??= terminal.onRender(reapplyAfterRender)
     // Re-queue after xterm's latest timer while keeping only one correction pending.
     if (deferredApply !== null) {
       window.clearTimeout(deferredApply)
