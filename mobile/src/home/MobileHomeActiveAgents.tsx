@@ -34,7 +34,7 @@ export const MobileHomeActiveAgents = memo(function MobileHomeActiveAgents(props
       />
       <MobileAgentListRows
         rows={props.rows.slice(0, ACTIVE_ROWS_SHOWN)}
-        footer="workspace"
+        footer="project-workspace"
         nameDesktop={props.hosts.length > 1}
         hosts={props.hosts}
         now={props.now}

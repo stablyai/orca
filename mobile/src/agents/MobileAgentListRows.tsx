@@ -29,7 +29,7 @@ import {
 import { areStructurallyEqual } from '../worktree/catalog/structural-equality'
 import type { AgentListSection } from './agent-list-model'
 import { agentStatusGroup, type AgentListRow } from './agent-list-rows'
-import { agentListPreview } from './agent-list-row-text'
+import { agentListPreview, agentListProjectName } from './agent-list-row-text'
 
 // The Home rollup glyph is the list's size; this maps a per-agent state onto its palette.
 const GLYPH_STATUS: Record<AgentDotState, AgentSpinnerStatus> = {
@@ -172,6 +172,7 @@ const MobileAgentListRow = memo(function MobileAgentListRow(props: {
   const stateWord = needsYou ? agentStateLabel(row.dotState, t) : ''
   const spokenState = row.dotState === 'monitoring' ? agentStateLabel(row.dotState, t) : stateWord
   const place = [
+    props.footer === 'project-workspace' ? agentListProjectName(row.entry) : null,
     props.footer === 'agent' ? formatAgentTypeLabel(agent.agentType) : row.entry.workspaceName,
     props.nameDesktop ? desktop : null
   ]
@@ -306,7 +307,7 @@ const MobileAgentListRow = memo(function MobileAgentListRow(props: {
               </Text>
             ) : null}
             <View style={styles.footer}>
-              {row.entry.bot && props.footer === 'workspace' ? (
+              {row.entry.bot && props.footer !== 'agent' ? (
                 <MobileBotAvatar avatar={mobileBotAvatarSource(row.entry.bot)} size={13} />
               ) : agent.agentType ? (
                 <MobileAgentIcon agentId={agent.agentType} size={13} />

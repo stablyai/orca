@@ -51,7 +51,7 @@ export type AgentListSection = Readonly<{
   /** A desktop whose rows are last seen, and when they were read. */
   lastSeen?: Readonly<{ offline: boolean; at?: number }>
   /** What each row's footer names; the section header names the rest. */
-  footer: 'workspace' | 'agent'
+  footer: 'project-workspace' | 'workspace' | 'agent'
   nameDesktop: boolean
 }>
 
@@ -157,7 +157,7 @@ export function buildAgentList(
           ...section(
             { key: host.hostId, hostId: host.hostId, rows },
             'desktop',
-            'workspace',
+            'project-workspace',
             false
           ),
           ...(host.live ? {} : { lastSeen: { offline: host.offline, at: host.seenAt } })
@@ -173,7 +173,7 @@ export function buildAgentList(
       section(
         { key: kind, rows: live.filter((row) => agentStatusGroup(row.dotState) === kind) },
         kind,
-        'workspace',
+        'project-workspace',
         nameDesktop,
         byStatusThenRecent
       )
@@ -186,7 +186,7 @@ export function buildAgentList(
         sections[sections.length - 1] = { ...last, idleRows: folded }
       } else {
         sections.push({
-          ...section({ key: 'idle', rows: [] }, 'idle', 'workspace', nameDesktop),
+          ...section({ key: 'idle', rows: [] }, 'idle', 'project-workspace', nameDesktop),
           idleRows: folded
         })
       }
@@ -199,7 +199,7 @@ export function buildAgentList(
           ...section(
             { key: host.hostId, hostId: host.hostId, rows },
             'desktop',
-            'workspace',
+            'project-workspace',
             false
           ),
           lastSeen: { offline: host.offline, at: host.seenAt }
@@ -232,7 +232,7 @@ export function buildAgentList(
     .sort(byUrgencyThenRecent)
     .map((draft) =>
       kind === 'agent'
-        ? section(draft, kind, 'workspace', nameDesktop)
+        ? section(draft, kind, 'project-workspace', nameDesktop)
         : section(draft, kind, kind === 'workspace' ? 'agent' : 'workspace', false)
     )
   return { sections, anyLive }
