@@ -48,7 +48,7 @@ export const HOST_WINDOW_CONDITIONS: Record<
   activatesOnlyForCaller: (params) =>
     (params.activate !== true && params.runHooks !== true) || params.navigation === 'caller',
   // A host tab is on the host's window whether or not it is focused. A teammate's caller reveal opens
-  // the chat in their own tabs and writes none of the host's (structured-agent-session-reveal);
+  // the chat in their own tabs and writes none of the host's (publishStructuredAgentSessionTab);
   // without it the reveal publishes to every screen, the host's included.
   writesNoHostTab: (params) => params.navigation === 'caller',
   clientPlacement: (params) => params.placement?.kind === 'client',

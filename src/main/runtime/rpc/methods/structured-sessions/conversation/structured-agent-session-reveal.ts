@@ -1,6 +1,4 @@
 import { assertBotLinkOpenAuthority } from '../../../../../bots/bot-link-open-authority'
-import { opensHostTab } from '../../../../../../shared/bots/bot-acts-for'
-import { botShareAsker, botShareScopeOf } from '../../../../../bots/team-share/bot-share-chats'
 import { holdAgentSessionPublicationFence } from '../../../../agent-session/agent-session-publication-fence'
 import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { StructuredWorkspaceUnavailable } from '../../../../session-tabs/chat/structured-workspace-authority'
@@ -126,24 +124,6 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
             throw new StructuredWorkspaceUnavailable('obsolete')
           }
         }
-        // A teammate's reveal opens the chat in their own tabs alone: the host's list is the owner's.
-        const teammate = botShareScopeOf(ctx)
-        if (
-          caller?.kind === 'paired-device' &&
-          !opensHostTab(teammate ? [botShareAsker(teammate)] : undefined)
-        ) {
-          if (
-            !(await ctx.runtime.openPersonSessionTabForClient(
-              revealed.workspaceId,
-              revealed.sessionId,
-              caller.deviceId
-            ))
-          ) {
-            throw new Error('Could not publish the chat to its caller.')
-          }
-          check()
-          return revealedChat(ctx, params.sessionId, revealed)
-        }
         await ctx.runtime.publishStructuredAgentSessionTab({
           workspaceAuthority: {
             writerFence: publicationFence?.fence,
@@ -187,7 +167,13 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
           throw new Error('Could not publish the chat to its caller.')
         }
         check()
-        return revealedChat(ctx, params.sessionId, revealed)
+        // A bot thread is no longer new once opened anywhere.
+        for (const id of new Set([params.sessionId, revealed.sessionId])) {
+          ctx.runtime.markBotThreadSeen(id)
+        }
+        // Return named fields only; private journal-open reasons stay on the host.
+        const { sessionId, workspaceId, agent, readable } = revealed
+        return { ok: true as const, sessionId, workspaceId, agent, readable }
       } catch (error) {
         if (!effects && !(error instanceof StructuredWorkspaceUnavailable)) {
           throw error
@@ -221,17 +207,3 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
     }
   })
 ]
-
-function revealedChat(
-  ctx: { runtime: { markBotThreadSeen(sessionId: string): void } },
-  requestedSessionId: string,
-  revealed: StructuredAgentSessionReveal
-) {
-  // A bot thread is no longer new once opened anywhere.
-  for (const id of new Set([requestedSessionId, revealed.sessionId])) {
-    ctx.runtime.markBotThreadSeen(id)
-  }
-  // Return named fields only; private journal-open reasons stay on the host.
-  const { sessionId, workspaceId, agent, readable } = revealed
-  return { ok: true as const, sessionId, workspaceId, agent, readable }
-}

@@ -2,10 +2,7 @@
 // one place that scopes every list and stream to `agentWorkspaceSet`, the agent's home and its workers'
 // worktrees. It narrows what the host lists, never what it lets them do there; the owner gets null.
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import {
-  folderWorkspaceKey,
-  type WorkspaceKey
-} from '../../../shared/workspace/identity/workspace-scope'
+import type { WorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import {
   agentHasWorkspace,
   type AgentWorkspaceSet
@@ -15,13 +12,10 @@ import type { RpcContext } from '../../runtime/rpc/core'
 import { botShareOwnsSession } from './bot-share-chats'
 import { chatWorkspaceOf } from './teammate-client-events'
 import {
-  NO_WORKSPACES,
   openTracker,
   readTeammateWorkspaceSet,
   workspaceTeammateOf
 } from './agent-workspace-tracker'
-
-type ViewRuntime = Parameters<typeof botShareOwnsSession>[0]
 
 // `getWorktreePs`'s own default page.
 const DEFAULT_PS_LIMIT = 200
@@ -44,16 +38,12 @@ export async function teammateWorkspaceLists(
     return null
   }
   const set = await readTeammateWorkspaceSet(context.runtime, scope)
-  return teammateWorkspaceListsOf(context.runtime, scope, set)
+  return teammateWorkspaceListsOf(set)
 }
 
 export type TeammateWorkspaceLists = ReturnType<typeof teammateWorkspaceListsOf>
 
-function teammateWorkspaceListsOf(
-  runtime: ViewRuntime,
-  scope: BotShareCallerScope,
-  set: AgentWorkspaceSet
-) {
+function teammateWorkspaceListsOf(set: AgentWorkspaceSet) {
   const has = (id: string | null | undefined) => agentHasWorkspace(set, id)
   return {
     set,
@@ -77,8 +67,7 @@ function teammateWorkspaceListsOf(
         totalCount: worktrees.length,
         truncated: worktrees.length > limit
       }
-    },
-    sessionTabs: teammateSessionTabs(runtime, scope, set.homeKey)
+    }
   }
 }
 
@@ -125,22 +114,6 @@ export function teammateSessionTabs(
   }
 }
 
-/** The home's per-person tab filter for one request, sync: the home is the bot's own folder. */
-export function teammateSessionTabsOf(
-  context: Pick<RpcContext, 'callerScope' | 'runtime'>
-): ((snapshot: RuntimeMobileSessionTabsResult) => RuntimeMobileSessionTabsResult) | null {
-  const scope = workspaceTeammateOf(context)
-  if (!scope) {
-    return null
-  }
-  const bot = context.runtime.bots.list().find((entry) => entry.id === scope.botId)
-  return teammateSessionTabs(
-    context.runtime,
-    scope,
-    bot ? folderWorkspaceKey(bot.folderWorkspaceId) : NO_WORKSPACES.homeKey
-  )
-}
-
 /** A tab stream's scope for a workspace teammate, once the set is read: the home's own tabs, its
  *  census kept to the agent's, and its tab changes registered to run in order after any re-read
  *  they wait on, for the agent's worktrees and those `shown` already holds (so a removal arrives).
@@ -155,7 +128,6 @@ export async function openTeammateTabStream(
   }
   const onTabsChanged = context.runtime.onMobileSessionTabsChanged.bind(context.runtime)
   return {
-    person: teammateSessionTabs(context.runtime, tracker.scope, tracker.current().homeKey),
     census: <I extends { snapshots: readonly { worktree: string }[] }>(inventory: I): I => ({
       ...inventory,
       snapshots: inventory.snapshots.filter((snapshot) => tracker.has(snapshot.worktree))

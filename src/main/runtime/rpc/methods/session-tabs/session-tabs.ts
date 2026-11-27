@@ -27,7 +27,6 @@ import {
   SESSION_TABS_UNSUBSCRIBE_METHOD,
   SESSION_TABS_UNSUBSCRIBE_ALL_METHOD
 } from './session-tabs-unsubscribe'
-import { teammateSessionTabsOf } from '../../../../bots/team-share/teammate-workspace-view'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 
 export const SESSION_TAB_METHODS = [
@@ -85,7 +84,6 @@ export const SESSION_TAB_METHODS = [
         capabilitySource,
         signal
       } = context
-      const person = teammateSessionTabsOf(context)
       const observation = Symbol('session-tabs-stream')
       let subscriptionId: string | null = null
       let released = false
@@ -145,7 +143,7 @@ export const SESSION_TAB_METHODS = [
       ) =>
         projectSessionTabUnreadForClient(
           runtime,
-          projectSessionTabsForClient(snapshot, clientKind, capabilities, runtime, person),
+          projectSessionTabsForClient(snapshot, clientKind, capabilities, runtime),
           clientKind
         )
       let sentUnreadMarks = ''

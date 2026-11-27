@@ -1,7 +1,7 @@
 import { withSpan } from '../../../../observability/tracer'
 import '../../../../../shared/remote-runtime/protocol/protocol-version'
 import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
-import { defineMethod, type RpcContext } from '../../core'
+import { defineMethod } from '../../core'
 import {
   CloseLifecycleTab,
   CloseTab
@@ -36,10 +36,6 @@ export const SESSION_TAB_CLOSE_METHODS = [
           context.clientKind,
           context.clientCapabilities
         )
-      }
-      const own = await closePersonTab(params, context)
-      if (own) {
-        return own
       }
       const requiresIntent =
         context.clientKind === undefined ||
@@ -162,13 +158,3 @@ export const SESSION_TAB_CLOSE_METHODS = [
     }
   })
 ]
-
-/** A teammate's own tab closes from their own tabs, never the host's list. */
-function closePersonTab(
-  params: { worktree: string; tabId: string },
-  context: Pick<RpcContext, 'runtime' | 'pairedDeviceId'>
-) {
-  return context.pairedDeviceId
-    ? context.runtime.closePersonSessionTab(params.worktree, params.tabId, context.pairedDeviceId)
-    : null
-}

@@ -124,10 +124,14 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
           senderScope ??= this.agentProjections.senders.buildForFramePass()
           return { ...result, agentSenderAssociations: senderScope(snapshot.worktree) }
         })
+        // A teammate's own tabs stand in the agent's home with no host tab there.
+        const epoch = this.getAuthoritativeSessionTabsInventoryEpoch()
         return {
-          snapshots: frames.map((frame) =>
-            this.projectMobileSessionTabsForClient(frame, clientNavigationId)
-          ),
+          snapshots: this.clientSessionTabSelections.personTabs
+            .withOwnWorkspaces(frames, clientNavigationId, (worktreeId) =>
+              this.emptyMobileSessionTabsResult(worktreeId, epoch, includeAgentSenders)
+            )
+            .map((frame) => this.projectMobileSessionTabsForClient(frame, clientNavigationId)),
           changeSequence: this.mobileSessionTabsChangeSequence
         }
       } finally {

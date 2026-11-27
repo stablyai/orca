@@ -1,4 +1,5 @@
 import type { MobileSessionTabActivationOptions } from './mobile-session-tab-activation-options'
+import { findAddressedSessionTab } from '../../session-tabs/layout/addressed-session-tab'
 import type { RuntimeWorkspaceSelectors as WorkspaceSelectors } from '../../workspaces/workspace-selectors'
 import type { OrcaRuntimeWithApplyMobileSessionTabNavigation as MobileSessionNavigation } from './apply-mobile-session-tab-navigation'
 import type { OrcaRuntimeWithAgentSessionResumeOwnership as AgentSessionResume } from './agent-session-resume-ownership'
@@ -150,12 +151,12 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
             candidate.parentTabId === tabId &&
             candidate.leafId === leafId
         ))
-      : (directTab ??
-        snapshot?.tabs.find(
-          (candidate) => candidate.type === 'terminal' && candidate.parentTabId === tabId
-        ) ??
-        snapshot?.tabs.find(
-          (candidate) => candidate.type === 'browser' && candidate.browserWorkspaceId === tabId
+      : (findAddressedSessionTab(snapshot?.tabs, tabId) ??
+        // A teammate's own tab is the caller's alone, never in the host's list.
+        this.clientSessionTabSelections.personTabs.ownTab(
+          opts.clientNavigationId,
+          worktreeId,
+          tabId
         ))
     if (!tab) {
       throw new Error('tab_not_found')

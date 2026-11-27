@@ -113,6 +113,9 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
     input: StructuredSessionTabPublicationInput
   ): Promise<void> {
     input.workspaceAuthority?.check()
+    if (await this.publishTeammateSessionTab(input)) {
+      return
+    }
     const { tabId, current, eligible } = await admitStructuredSessionTabPublication(input, () =>
       input.workspaceAuthority
         ? this.prepareStructuredAgentSessionStartupRestoration()

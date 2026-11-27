@@ -1,4 +1,5 @@
 import { OrcaRuntimeWithCloseMobileRowInMainLayout } from './close-mobile-row-in-main-layout'
+import { findAddressedSessionTab } from '../../session-tabs/layout/addressed-session-tab'
 import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import {
   adjudicateAbsentMobileSessionTabClose,
@@ -79,13 +80,7 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
       : null
     const tab = options.expectedPtyCloseAuthority
       ? ptyCloseAuthority?.surface.tab
-      : (snapshot?.tabs.find((candidate) => candidate.id === tabId) ??
-        snapshot?.tabs.find(
-          (candidate) => candidate.type === 'terminal' && candidate.parentTabId === tabId
-        ) ??
-        snapshot?.tabs.find(
-          (candidate) => candidate.type === 'browser' && candidate.browserWorkspaceId === tabId
-        ))
+      : findAddressedSessionTab(snapshot?.tabs, tabId)
     const lifecycleClose = resolveMobileSessionLifecycleCloseContext({
       host: this.getMobileSessionLifecycleCloseHost(),
       worktreeId,
@@ -95,6 +90,10 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
       snapshot,
       observedPtyIds
     })
+    // A teammate's own tab closes from their own tabs alone.
+    if (!tab && this.closePersonSessionTab(worktreeId, tabId, options.clientNavigationId)) {
+      return committedMobileSessionTabClose(this.clientSessionTabSelections, worktreeId, [])
+    }
     if (!snapshot || !tab) {
       return adjudicateAbsentMobileSessionTabClose({
         host: this.getMobileSessionLifecycleCloseHost(),

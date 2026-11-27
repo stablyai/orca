@@ -1,5 +1,6 @@
 // TEMPORARY (delete after the next release): an older build wrote the chat a teammate opened on a
-// shared agent into the host's own tab list. Each such tab moves to that teammate's own tabs.
+// shared agent into the host's own tab list. Each such tab moves to that teammate's own tabs; the
+// workspaces moved are returned so their devices are told.
 import { opensHostTab } from '../../../shared/bots/bot-acts-for'
 import type { Bot } from '../../../shared/bot-types'
 import { isReopenedChatTabId } from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
@@ -24,11 +25,12 @@ export async function moveTeammateHostTabs(
   runtime: BotConversationActsForSources & StructuredSessionSurfaceRuntime,
   bots: readonly Pick<Bot, 'id' | 'folderWorkspaceId'>[],
   people: Pick<ClientSessionPersonTabs, 'add'>
-): Promise<void> {
+): Promise<string[]> {
   const host = getStructuredAgentSessionHost()
   if (!host || host.deps.store.readOnly) {
-    return
+    return []
   }
+  const moved = new Set<string>()
   const rootOf = createChatOrcaSessionIdResolver()
   const botOfHome = new Map<string, (typeof bots)[number]>(
     bots.map((bot) => [folderWorkspaceKey(bot.folderWorkspaceId), bot])
@@ -53,5 +55,7 @@ export async function moveTeammateHostTabs(
     // The chat keeps working with no host tab, as a teammate's chat always has.
     const surface = captureStructuredSessionSurface(host, sessionId, runtime)
     await retireCapturedStructuredSessionSurface(host, sessionId, surface, runtime, true)
+    moved.add(location.workspaceId)
   }
+  return [...moved]
 }

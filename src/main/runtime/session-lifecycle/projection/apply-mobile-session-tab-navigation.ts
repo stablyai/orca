@@ -1,8 +1,8 @@
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { OrcaRuntimeWithPersonSessionTabWrites } from './person-session-tab-writes'
 import { selectMobileSessionTab } from '../../session-tabs/layout/mobile-session-tab-selection'
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as MobileSessionPublication } from '../../session-tabs/publication/session-tabs-change-publication'
 import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as MobileSessionPreservation } from '../../session-tabs/restoration/mobile-session-publication-preservation'
-import { OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh } from './perform-mobile-session-pty-records-refresh'
 import type { BrowserSessionTabSelectionOptions } from '../../browser/tabs/browser-tab-create-publication'
 import type { ServerPagePopupPresentation } from '../../../browser/guest-lifecycle/popups/browser-popup-ownership'
 import type {
@@ -22,11 +22,7 @@ import {
   cloneTerminalLayoutSnapshot
 } from '../../terminal/surface/mobile-session-layout-projection'
 
-export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh {
-  protected abstract createMobileSessionTabsDelivery(): ReturnType<
-    MobileSessionPublication['createMobileSessionTabsDelivery']
-  >
-
+export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends OrcaRuntimeWithPersonSessionTabWrites {
   protected abstract emitMobileSessionTabsSnapshotToClient(
     ...args: Parameters<MobileSessionPublication['emitMobileSessionTabsSnapshotToClient']>
   ): ReturnType<MobileSessionPublication['emitMobileSessionTabsSnapshotToClient']>
@@ -138,9 +134,12 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
     const snapshot = await this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
       includeAgentSenders: false
     })
-    const tab = snapshot.tabs.find(
-      (candidate) => candidate.type === 'agent-session' && candidate.sessionId === sessionId
-    )
+    // The caller's own tabs too: a teammate's chat in the agent's home is theirs alone.
+    const tab = this.clientSessionTabSelections.personTabs
+      .shown(snapshot, clientNavigationId)
+      .tabs.find(
+        (candidate) => candidate.type === 'agent-session' && candidate.sessionId === sessionId
+      )
     if (!tab) {
       return false
     }

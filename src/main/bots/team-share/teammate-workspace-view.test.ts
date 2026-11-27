@@ -24,6 +24,7 @@ import type { RpcContext, RpcMethod } from '../../runtime/rpc/core'
 import type { PublishedWorkspaceLayout } from '../../../shared/workspace-layout/published-layout/workspace-layout-published'
 import type { WorkspaceLayoutStreamEvent } from '../../../shared/workspace-layout/published-layout/workspace-layout-stream-frames'
 import { admitTeammateCall } from './teammate-call-admission'
+import type { ClientSessionTabSelectionStore } from '../../runtime/client/navigation/client-session-tab-selection'
 
 // The owner's host: a shared bot whose home parents one worker worktree, and the owner's own repo,
 // worktree and folder beside it.
@@ -108,6 +109,11 @@ beforeEach(() => {
   }))
   vi.spyOn(runtime, 'getOrchestrationDb').mockReturnValue(db)
   vi.spyOn(runtime.bots, 'list').mockReturnValue([SHARED])
+  // The RPC server's share devices: Alice's desktop is the one share device.
+  runtime.botShareDevices = fake({
+    teammateOfDevice: (deviceId: string) =>
+      deviceId === 'share-device' ? { botId: SHARED.id, accountId: 'acct-alice' } : null
+  })
   vi.spyOn(runtime, 'listVisibleRepos').mockReturnValue(fake(store.getRepos()))
   vi.spyOn(runtime, 'listVisibleFolderWorkspaces').mockReturnValue(
     fake(store.getFolderWorkspaces())
@@ -130,11 +136,18 @@ beforeEach(() => {
   )
   vi.spyOn(runtime, 'restoreStructuredAgentSessionTabs').mockResolvedValue(undefined)
   vi.spyOn(runtime, 'supportsAuthoritativeSessionTabsInventory').mockReturnValue(false)
-  vi.spyOn(runtime, 'listAllMobileSessionTabs').mockResolvedValue([
-    tabs(HOME, [ALICES_CHAT, OWNERS_CHAT]),
-    tabs(WORKER, [OWNERS_WORKSPACE_CHAT]),
-    tabs(OWNERS, [])
-  ])
+  // The host's tabs, as the runtime projects them for each caller's device.
+  vi.spyOn(runtime, 'listAllMobileSessionTabs').mockImplementation(async (clientNavigationId) =>
+    [
+      tabs(HOME, [ALICES_CHAT, OWNERS_CHAT]),
+      tabs(WORKER, [OWNERS_WORKSPACE_CHAT]),
+      tabs(OWNERS, [])
+    ].map((snapshot) =>
+      fake<{ clientSessionTabSelections: ClientSessionTabSelectionStore }>(
+        runtime
+      ).clientSessionTabSelections.project(snapshot, clientNavigationId)
+    )
+  )
   // Chat records: Alice's and the owner's chats live in the bot's home.
   db.recordBotConversationActsFor(ALICES_CHAT, { actsFor: [alice] })
   db.recordBotConversationActsFor(OWNERS_CHAT, { actsFor: [...OWNER_ACTS_FOR] })
@@ -188,7 +201,8 @@ function tabs(worktree: string, sessionIds: string[]): RuntimeMobileSessionTabsR
 function options(scope: RpcCallerScope): RpcDispatchStreamingOptions {
   return {
     callerScope: scope,
-    pairedDeviceId: 'share-device',
+    // A teammate calls from their share device; the owner from a computer of their own.
+    pairedDeviceId: scope.kind === 'bot-share' ? 'share-device' : 'owner-device',
     clientKind: 'runtime',
     clientCapabilities: remoteRuntimeClientCapabilities(ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES)
   }

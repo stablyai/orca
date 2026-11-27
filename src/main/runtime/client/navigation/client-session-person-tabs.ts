@@ -6,9 +6,18 @@ import { getHeadlessMobileSessionGroupId } from '../../terminal/surface/mobile-s
 import type { StoredClientSessionTabSelection } from './client-session-tab-closed-selection'
 import { emptyClientSessionTabSelection } from './client-session-tab-selection-projection'
 
-/** Which person a paired device calls for, and what a chat in their set shows; null for the owner. */
+/** The teammate a paired device calls for; null for the owner's devices. */
+export type ClientSessionPerson = {
+  /** Their tab set's key: the share, by bot and account (`teammateTabSetKey`). */
+  key: string
+  /** The shared agent's home, the one workspace whose tabs are each person's own. */
+  home: string
+  /** The host's home tabs this person is listed: their own chats'. */
+  hostTabs(snapshot: RuntimeMobileSessionTabsResult): RuntimeMobileSessionTabsResult
+}
+
 export type ClientSessionPeople = {
-  personOf(clientNavigationId: string): string | null
+  personOf(clientNavigationId: string): ClientSessionPerson | null
   /** The chat's tab while it is still in that workspace, else null. */
   tabOf(
     worktreeId: string,
@@ -84,41 +93,75 @@ export class ClientSessionPersonTabs {
     return people
   }
 
-  private sessionIdsOf(clientNavigationId: string, worktreeId: string) {
+  /** The person a device calls for, when this workspace is their agent's home. */
+  private homePerson(clientNavigationId: string, worktreeId: string) {
     const person = this.people?.personOf(clientNavigationId)
-    return person ? this.statesByClient.get(person)?.get(worktreeId)?.personTabs : undefined
+    return person?.home === worktreeId ? person : null
   }
 
-  /** The caller's person's own chats added to the host's tabs; the snapshot alone for the owner's. */
+  private stateOf(person: string, worktreeId: string) {
+    return this.statesByClient.get(person)?.get(worktreeId)
+  }
+
+  /** What a device is shown of a workspace: the host's tabs as listed to it, then its person's own,
+   *  versioned past every change to either. The owner's devices see the host's tabs as they are. */
   shown(
     snapshot: RuntimeMobileSessionTabsResult,
     clientNavigationId: string
   ): RuntimeMobileSessionTabsResult {
-    const sessionIds = this.sessionIdsOf(clientNavigationId, snapshot.worktree)
-    return sessionIds?.length && this.people
-      ? withPersonSessionTabs(snapshot, sessionIds, this.people)
-      : snapshot
+    const person = this.homePerson(clientNavigationId, snapshot.worktree)
+    if (!person || !this.people) {
+      return snapshot
+    }
+    const state = this.stateOf(person.key, snapshot.worktree)
+    const shown = withPersonSessionTabs(
+      person.hostTabs(snapshot),
+      state?.personTabs ?? [],
+      this.people
+    )
+    return { ...shown, snapshotVersion: shown.snapshotVersion + (state?.revision ?? 0) }
   }
 
-  /** The caller's person's own tab by its id in this workspace; null when it is not one of theirs. */
-  tabOf(
-    clientNavigationId: string,
+  /** The caller's person's own tab by its id, if it is one of theirs. */
+  ownTab(
+    clientNavigationId: string | undefined,
     worktreeId: string,
     tabId: string
-  ): { id: string; sessionId: string } | null {
-    const sessionId = this.sessionIdsOf(clientNavigationId, worktreeId)?.find(
-      (id) => personSessionTabId(id) === tabId
-    )
-    return sessionId && this.people?.tabOf(worktreeId, sessionId) ? { id: tabId, sessionId } : null
+  ): RuntimeMobileSessionAgentTab | undefined {
+    const person = clientNavigationId ? this.homePerson(clientNavigationId, worktreeId) : null
+    const sessionId = person
+      ? this.stateOf(person.key, worktreeId)?.personTabs?.find(
+          (id) => personSessionTabId(id) === tabId
+        )
+      : undefined
+    const tab = sessionId ? this.people?.tabOf(worktreeId, sessionId) : null
+    return sessionId && tab
+      ? { type: 'agent-session', id: tabId, sessionId, isActive: false, ...tab }
+      : undefined
   }
 
-  /** Adds a chat to the caller's person's own tabs; false when the caller is the owner's. */
+  /** The host's snapshots, and an `empty` one for the agent's home when the host lists none there
+   *  and the device's person has tabs of their own in it. */
+  withOwnWorkspaces<S extends { worktree: string }>(
+    snapshots: S[],
+    clientNavigationId: string | undefined,
+    empty: (worktreeId: string) => S
+  ): S[] {
+    const person = clientNavigationId ? this.people?.personOf(clientNavigationId) : null
+    const own = person ? this.stateOf(person.key, person.home)?.personTabs : undefined
+    return person && own?.length && !snapshots.some((s) => s.worktree === person.home)
+      ? [...snapshots, empty(person.home)]
+      : snapshots
+  }
+
+  /** Adds a chat to the caller's person's own tabs; false when the tab is not theirs to hold (the
+   *  owner's devices, or any workspace but the agent's home), so it goes in the host's list. */
   open(clientNavigationId: string, worktreeId: string, sessionId: string): boolean {
-    const person = this.people?.personOf(clientNavigationId)
+    const person = this.homePerson(clientNavigationId, worktreeId)
     if (person) {
-      this.add(person, worktreeId, sessionId)
+      this.add(person.key, worktreeId, sessionId)
     }
-    return person !== null && person !== undefined
+    return person !== null
   }
 
   /** Adds a chat to a person's own tabs by their person key. */
@@ -126,20 +169,33 @@ export class ClientSessionPersonTabs {
     this.put(person, worktreeId, (tabs) => (tabs.includes(sessionId) ? tabs : [...tabs, sessionId]))
   }
 
-  /** Drops a chat tab from the caller's person's own tabs; false when it was not one of them. */
+  /** Drops a chat tab from the caller's person's own tabs, and from each of their devices' picks;
+   *  false when it was not one of them. */
   close(clientNavigationId: string, worktreeId: string, tabId: string): boolean {
-    const person = this.people?.personOf(clientNavigationId)
-    const tabs = this.sessionIdsOf(clientNavigationId, worktreeId)
+    const person = this.homePerson(clientNavigationId, worktreeId)
+    const tabs = person ? this.stateOf(person.key, worktreeId)?.personTabs : undefined
     if (!person || !tabs?.some((id) => personSessionTabId(id) === tabId)) {
       return false
     }
-    this.put(person, worktreeId, (current) =>
+    this.put(person.key, worktreeId, (current) =>
       current.filter((id) => personSessionTabId(id) !== tabId)
     )
+    for (const [clientNavigationId, statesByWorktree] of this.statesByClient) {
+      const device = statesByWorktree.get(worktreeId)
+      if (
+        device?.selection.activeTabId === tabId &&
+        this.people?.personOf(clientNavigationId)?.key === person.key
+      ) {
+        statesByWorktree.set(worktreeId, {
+          ...device,
+          selection: { ...device.selection, activeTabId: null }
+        })
+      }
+    }
     return true
   }
 
-  /** Moves the person's tab set and bumps each of their devices' frames, so every one redraws. */
+  /** Moves the person's tab set; its revision versions every device's frame of the workspace. */
   private put(
     person: string,
     worktreeId: string,
@@ -158,15 +214,10 @@ export class ClientSessionPersonTabs {
     }
     states.set(worktreeId, {
       ...state,
+      revision: state.revision + 1,
       shouldPersist: true,
       personTabs: next(state.personTabs ?? [])
     })
-    for (const [clientNavigationId, statesByWorktree] of this.statesByClient) {
-      const device = statesByWorktree.get(worktreeId)
-      if (device && this.people?.personOf(clientNavigationId) === person) {
-        statesByWorktree.set(worktreeId, { ...device, revision: device.revision + 1 })
-      }
-    }
     this.persist()
   }
 }
