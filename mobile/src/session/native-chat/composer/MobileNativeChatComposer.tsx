@@ -16,6 +16,7 @@ import { MobileNativeChatComposerSuggestions } from './menus/MobileNativeChatCom
 import { MobileNativeChatComposerField } from './field/MobileNativeChatComposerField'
 import { MobileNativeChatComposerModeRow } from './field/MobileNativeChatComposerModeRow'
 import { MobileNativeChatComposerAttachments } from './attachments/MobileNativeChatComposerAttachments'
+import { useMobileNativeChatTerminalFiles } from './attachments/mobile-native-chat-terminal-files-context'
 import type { PendingNativeChatFile } from './attachments/mobile-native-chat-file-attachment'
 import { MobileNativeChatComposerAttachButton } from './attachments/MobileNativeChatComposerAttachButton'
 import { useMobileNativeChatPickerPresentation } from '../input/session-options/use-mobile-native-chat-picker-presentation'
@@ -115,7 +116,9 @@ export function MobileNativeChatComposer({
     sessionOptions?.controller.optionPickerRequest
   )
   const picker = pickerState[0]
-  const files = structured?.files ?? NO_FILES
+  const terminalFiles = useMobileNativeChatTerminalFiles()
+  const fileSource = structured ?? (editSession ? null : terminalFiles)
+  const files = fileSource?.files ?? NO_FILES
   const onWebPaste = mobileNativeChatComposerPasteHandler({
     disabled: disabled || offline || editSession?.locked === true,
     onPasteImages,
@@ -288,7 +291,7 @@ export function MobileNativeChatComposer({
               images={attachments}
               files={files}
               onRemoveImage={editSession?.locked ? undefined : onRemoveAttachment}
-              onRemoveFile={editSession?.locked ? undefined : structured?.onRemoveFile}
+              onRemoveFile={editSession?.locked ? undefined : fileSource?.onRemoveFile}
             />
             <Animated.View style={[collapse.field, collapse.fade]}>
               <MobileNativeChatComposerField
@@ -343,12 +346,10 @@ export function MobileNativeChatComposer({
                 {...{ micActive, micStarting, micProcessing, cancelRef }}
               >
                 <MobileNativeChatComposerAttachButton
-                  onAttachImage={onAttachImage}
-                  onAttachFiles={structured?.onAttachFiles}
+                  {...{ onAttachImage, isAttaching, menu }}
+                  onAttachFiles={fileSource?.onAttachFiles}
                   structured={structured !== null}
-                  isAttaching={isAttaching}
                   disabled={disabled || offline}
-                  menu={menu}
                   plan={modes.plan}
                   onGoal={modes.onGoal}
                 />

@@ -3,6 +3,7 @@ import { useHostProtocolGates } from '../components/host-connection/host-protoco
 import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import type { StructuredAgentSessionForkSource } from '../../../src/shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import { MobileNativeChatForkedFromContext } from './native-chat/transcript/notices/mobile-native-chat-notice-context'
+import { MobileNativeChatTerminalFilesContext } from './native-chat/composer/attachments/mobile-native-chat-terminal-files-context'
 import { forkMobileStructuredChat } from './mobile-structured-chat-fork'
 import {
   MobileNativeChatForkContext,
@@ -11,7 +12,7 @@ import {
 import { resolveMobileNativeChatSessionId } from './native-chat/conversation/mobile-native-chat-eligibility'
 import type { MobileSessionController } from './use-mobile-session-controller'
 
-/** The chat's "Fork from this response" and the chat a "Forked from" divider opens. */
+/** The chat's "Fork from this response", the chat a "Forked from" divider opens, and a terminal chat's stored files. */
 export function MobileNativeChatForkProvider({
   controller,
   children
@@ -58,7 +59,9 @@ export function MobileNativeChatForkProvider({
   return (
     <MobileNativeChatForkContext.Provider value={fork}>
       <MobileNativeChatForkedFromContext.Provider value={openSource}>
-        {children}
+        <MobileNativeChatTerminalFilesContext.Provider value={controller.nativeChatFileAttachments}>
+          {children}
+        </MobileNativeChatTerminalFilesContext.Provider>
       </MobileNativeChatForkedFromContext.Provider>
     </MobileNativeChatForkContext.Provider>
   )

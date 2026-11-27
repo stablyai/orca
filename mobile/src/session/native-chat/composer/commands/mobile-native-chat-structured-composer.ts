@@ -4,6 +4,14 @@ import type { MobileStructuredThreadGoal } from '../../input/tasks/use-mobile-st
 import type { MobileStructuredMcpPanel } from '../../mcp/use-mobile-structured-mcp-panel'
 import type { MobileStructuredAccountUsage } from '../../usage/use-mobile-structured-account-usage'
 
+/** Stored-file chips and the Files entry of a terminal-backed chat, which has no structured composer. */
+export type MobileNativeChatTerminalFileAttachments = {
+  files: readonly PendingNativeChatFile[]
+  /** Absent when the host cannot store phone files: the + then opens photos directly. */
+  onAttachFiles?: () => void
+  onRemoveFile: (id: string) => void
+}
+
 export type MobileNativeChatStructuredComposer = {
   catalog: MobileComposerStructuredCatalog
   onSlashMenuOpen: () => void

@@ -9,7 +9,10 @@ import {
   readUriAsBase64,
   type MobileImageFileFactory
 } from './mobile-image-source-picker'
-import { base64DecodedByteLength } from '../../../../src/shared/agent-session/agent-session-attachments'
+import {
+  agentSessionAttachmentAppends,
+  base64DecodedByteLength
+} from '../../../../src/shared/agent-session/agent-session-attachments'
 
 const UNKNOWN_FILE_MIME = 'application/octet-stream'
 
@@ -35,14 +38,18 @@ export async function* pickMobileFiles(
     const name = asset.name.trim() || 'attachment'
     const base64 = await readUriAsBase64(asset.uri, asset.size, createFile, (byteLength) => {
       if (!Number.isFinite(byteLength) || byteLength > MOBILE_PICKED_FILE_MAX_BYTES) {
-        throw new MobileFileTooLargeError(name)
+        throw new MobileFileTooLargeError(name, MOBILE_PICKED_FILE_MAX_BYTES, 'limit')
       }
     })
     yield {
       name,
       mime: asset.mimeType ?? UNKNOWN_FILE_MIME,
       byteLength: base64DecodedByteLength(base64),
-      base64
+      chunks: async function* () {
+        for (const append of agentSessionAttachmentAppends(base64)) {
+          yield append.contentBase64
+        }
+      }
     }
   }
 }

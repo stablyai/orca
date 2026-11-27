@@ -17,6 +17,7 @@ import { getOwnedTempStagingRoot } from '../../filesystem/owned-temp-staging-roo
 import {
   classifyFailure,
   copyCheckedDragTempSource,
+  DRAG_TEMP_COPY_MEMORY_BUDGET_BYTES,
   DropCopyError,
   errorCode,
   isSameSnapshot,
@@ -57,9 +58,10 @@ export class DragTempCopyBatch {
   readonly directories = new Set<string>()
   readonly opened = new Set<CheckedDragTempSource>()
   remainingMemory: number
-  /** Local-chat file cap and initial batch memory budget; -1 disables both. */
+  /** Local-chat file cap; -1 disables it and the batch memory budget. */
   constructor(readonly openMaxBytes = -1) {
-    this.remainingMemory = openMaxBytes
+    this.remainingMemory =
+      openMaxBytes < 0 ? -1 : Math.min(openMaxBytes, DRAG_TEMP_COPY_MEMORY_BUDGET_BYTES)
   }
 }
 

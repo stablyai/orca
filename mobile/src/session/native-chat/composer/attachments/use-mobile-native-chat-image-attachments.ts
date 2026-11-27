@@ -33,7 +33,10 @@ import {
   releaseMobileNativeChatTerminalWrite
 } from '../delivery/mobile-native-chat-terminal-write-lock'
 import { useMobileNativeChatImageUpload } from './use-mobile-native-chat-image-upload'
-import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
+import {
+  nativeChatSendFiles,
+  type PendingNativeChatFile
+} from './mobile-native-chat-file-attachment'
 import type { StructuredMobileSendAttachment } from '../delivery/use-mobile-structured-send-with-outcome'
 
 type CurrentRef<T> = { readonly current: T }
@@ -173,12 +176,13 @@ export function useMobileNativeChatImageAttachments({
         const pendingImages = queued ? queued.images : attachments
         const sentImageIds = pendingImages.map((attachment) => attachment.id)
         // Hold Send until all selected files finish uploading.
-        const sentFiles = structuredNativeChat
-          ? (queued?.files ?? files).filter(
-              (file): file is PendingNativeChatFile & { path: string } => file.path !== null
-            )
-          : []
+        const sendFiles = nativeChatSendFiles(queued?.files ?? files, text, structuredNativeChat)
+        if (!sendFiles) {
+          return false
+        }
+        const { sentFiles, text: terminalText } = sendFiles
         const storedFiles = sentFiles.map(({ id, path }) => ({ kind: 'file' as const, id, path }))
+        const sentFileIds = sentFiles.map((file) => file.id)
         const hasAttachments = scope !== null && pendingImages.length + storedFiles.length > 0
         const destination =
           scope && hasAttachments && !queued ? mobileNativeChatDraftDestination(scope) : null
@@ -191,6 +195,9 @@ export function useMobileNativeChatImageAttachments({
                 returnMobileNativeChatDraftAttachments(destination, pendingImages, sentFiles)
             }
           : intent
+        // The @path references are wire-only: the draft, its restore and its in-flight save keep the typed text.
+        const wireIntent =
+          terminalText === text ? sendIntent : { ...sendIntent, wireText: terminalText }
         if (structuredNativeChat && hasAttachments) {
           if (!client || !enabled || connState !== 'connected') {
             onSendError('Message not sent (disconnected)')
@@ -208,10 +215,7 @@ export function useMobileNativeChatImageAttachments({
           )
           if (outcome !== 'rejected' && destination?.active) {
             removeMobileNativeChatDraftImages(destination, sentImageIds)
-            onFilesSent?.(
-              storedFiles.map((file) => file.id),
-              destination
-            )
+            onFilesSent?.(sentFileIds, destination)
           }
           return outcome !== 'rejected'
         }
@@ -236,9 +240,12 @@ export function useMobileNativeChatImageAttachments({
               return false
             }
           }
-          const outcome = await (intent
-            ? baseSend(text, undefined, deadline, undefined, sentAt, intent)
+          const outcome = await (wireIntent
+            ? baseSend(text, undefined, deadline, undefined, sentAt, wireIntent)
             : baseSend(text, undefined, deadline, undefined, sentAt))
+          if (outcome !== 'rejected' && destination?.active) {
+            onFilesSent?.(sentFileIds, destination)
+          }
           return outcome !== 'rejected'
         }
         const handle = activeHandleRef.current
@@ -255,7 +262,7 @@ export function useMobileNativeChatImageAttachments({
             agent,
             deviceToken: deviceTokenRef.current,
             imagePaths: pendingImages.map((attachment) => attachment.path),
-            followedByText: text.trim().length > 0,
+            followedByText: terminalText.trim().length > 0,
             deadline,
             onWriteStarted: () => {
               inputWriteStarted = true
@@ -286,7 +293,7 @@ export function useMobileNativeChatImageAttachments({
             textDeadline,
             undefined,
             sentAt,
-            sendIntent
+            wireIntent
           )
           if (outcome !== 'accepted') {
             // Rejected or unknown text/Enter may orphan an already-pasted path; both outcomes require healing.
@@ -295,6 +302,7 @@ export function useMobileNativeChatImageAttachments({
           if (outcome !== 'rejected' && destination?.active) {
             // Drop only chips in this send, including unknown delivery to avoid duplicate retries; preserve newly attached chips.
             removeMobileNativeChatDraftImages(destination, sentImageIds)
+            onFilesSent?.(sentFileIds, destination)
           }
           return outcome !== 'rejected'
         } catch {

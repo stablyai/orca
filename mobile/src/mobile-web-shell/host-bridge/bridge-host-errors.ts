@@ -47,6 +47,7 @@ export const BRIDGE_NATIVE_REFUSAL_CODES = [
   'native_media_handle_cap',
   // Keep oversized picks distinct from unreadable items so the page can offer the appropriate recovery.
   'native_media_too_large',
+  'native_media_copy_too_large',
   // Retain permission denial for future sources; current expo-image-picker 55.0.24 library/Files pickers require no permission.
   'native_media_permission_denied',
   'native_verb_not_a_stream',
