@@ -45,6 +45,7 @@ export const BROWSER_SERVER_DOWNLOAD_COPY_IPC_CHANNELS = [
 
 export const MEMORY_IPC_CHANNELS = [
   'memory:getSnapshot',
+  'memory:getAppMemoryTotal',
   'memory:readPerfNoticeSignals',
   'memory:countHiddenBrowserPages',
   'memory:resourceWindowVisible'

@@ -24,6 +24,14 @@ export function formatMemory(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
 }
 
+/** One decimal for GB, whole MB, so the status bar value keeps a steady width. */
+export function formatMemoryCompact(bytes: number): string {
+  if (bytes < 1024 * 1024 * 1024) {
+    return `${Math.round(bytes / (1024 * 1024))} MB`
+  }
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
+}
+
 export function formatCpu(percent: number): string {
   return `${percent.toFixed(1)}%`
 }

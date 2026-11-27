@@ -19,7 +19,8 @@ export function renderResourceUsageStatusTrigger(
     commitToneClass,
     triggerSessionCount,
     orphanCount,
-    resourceManagerTooltipLines
+    resourceManagerTooltipLines,
+    appMemoryLabel
   }: {
     daemonUnreachable: boolean
     resourceManagerAriaLabel: string
@@ -28,6 +29,7 @@ export function renderResourceUsageStatusTrigger(
     triggerSessionCount: number | null
     orphanCount: number
     resourceManagerTooltipLines: { id: string; text: string; emphasized: boolean }[]
+    appMemoryLabel: string | null
   },
   t: Translate = translate
 ): React.JSX.Element {
@@ -56,8 +58,10 @@ export function renderResourceUsageStatusTrigger(
                 aria-hidden="true"
               />
             ) : null}
-            {/* Why no memory total: it read as Orca's own usage; the tooltip names each owner. */}
             <MemoryStick className={cn('size-3', commitToneClass ?? 'text-muted-foreground')} />
+            {appMemoryLabel !== null && (
+              <span className="text-[11px] tabular-nums text-foreground">{appMemoryLabel}</span>
+            )}
             <Terminal className="size-3 text-muted-foreground" />
             <span className="text-[11px] tabular-nums text-muted-foreground">
               {triggerSessionCount}

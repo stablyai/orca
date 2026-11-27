@@ -3,6 +3,7 @@ import type { IpcHandleRegistrar } from './lazy-ipc-handle-group'
 import type { MemorySnapshot } from '../../shared/diagnostics/process-stats-types'
 import type { Store } from '../persistence/loading-store/store'
 import { collectMemorySnapshot } from '../memory/collector'
+import { readAppMemoryTotal } from '../memory/app-memory-total'
 import { countHiddenBrowserPages, readPerfNoticeSignals } from '../perf-notices/perf-notice-signals'
 
 import {
@@ -19,6 +20,7 @@ export function registerMemoryHandlers(store: Store, ipc: IpcHandleRegistrar = i
       return collectMemorySnapshot(store)
     }
   )
+  ipc.handle('memory:getAppMemoryTotal', () => readAppMemoryTotal())
   ipc.handle('memory:readPerfNoticeSignals', () => readPerfNoticeSignals(store))
   ipc.handle('memory:countHiddenBrowserPages', (_event, hiddenForMs: unknown) =>
     countHiddenBrowserPages(typeof hiddenForMs === 'number' ? hiddenForMs : 0)
