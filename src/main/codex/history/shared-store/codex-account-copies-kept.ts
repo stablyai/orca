@@ -17,14 +17,47 @@ export type KeptCopiesRecord = {
   progress?: CompareProgress
   /** Copies whose comparison passed with both files at `key`, not yet moved (open, busy). */
   verified?: KeptCopies
-  /** The last retried copy (and trashed copy) a launch offered: the next launch starts after it. */
-  retryAfter?: string
-  trashRetryAfter?: string
+}
+
+/** Where each phase's next launch starts, so a launch cut short can't hold back the rest. */
+const CURSOR_FILE = '.orca-history-copies-cursor.json'
+const CURSOR_FIELDS = ['walkAfter', 'retryAfter', 'trashWalkAfter', 'trashRetryAfter'] as const
+export type CopiesCursor = Partial<Record<(typeof CURSOR_FIELDS)[number], string>>
+
+export function readCursor(accountHome: string): CopiesCursor {
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(join(accountHome, CURSOR_FILE), 'utf8'))
+    const fields: Record<string, unknown> =
+      parsed && typeof parsed === 'object' ? { ...parsed } : {}
+    return Object.fromEntries(
+      CURSOR_FIELDS.flatMap((field) =>
+        typeof fields[field] === 'string' ? [[field, fields[field]]] : []
+      )
+    )
+  } catch {
+    return {}
+  }
+}
+
+/** Its own small file, so moving a cursor never rewrites the kept-copies record. */
+export function writeCursor(accountHome: string, cursor: CopiesCursor): void {
+  const text = `${JSON.stringify(cursor)}\n`
+  writeIfChanged(join(accountHome, CURSOR_FILE), text, text === '{}\n')
+}
+
+/** `items` in name order, starting just after `after` and wrapping. */
+export function inTurnOrder<T>(items: T[], nameOf: (item: T) => string, after?: string): T[] {
+  const sorted = items
+    .map((item) => ({ item, name: nameOf(item) }))
+    .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+  const found = after === undefined ? -1 : sorted.findIndex((entry) => entry.name > after)
+  const start = Math.max(0, found)
+  return [...sorted.slice(start), ...sorted.slice(0, start)].map((entry) => entry.item)
 }
 
 /**
- * Up to `slots` of `items`, in name order, starting just after `after` and wrapping, so a lasting
- * keep at the front can't hold back the rest; `next` is where the following launch starts.
+ * Up to `slots` of `items` in turn after `after`, so a lasting keep at the front can't hold back
+ * the rest; `next` is where the following launch starts.
  */
 export function takeInTurn<T>(
   items: T[],
@@ -32,19 +65,15 @@ export function takeInTurn<T>(
   after: string | undefined,
   slots: number
 ): { taken: T[]; next: string | undefined } {
-  const sorted = items
-    .map((item) => ({ item, name: nameOf(item) }))
-    .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
-  if (slots >= sorted.length) {
-    return { taken: sorted.map((entry) => entry.item), next: undefined }
-  }
   if (slots <= 0) {
     return { taken: [], next: after }
   }
-  const found = after === undefined ? -1 : sorted.findIndex((entry) => entry.name > after)
-  const start = Math.max(0, found)
-  const turn = [...sorted.slice(start), ...sorted.slice(0, start)].slice(0, slots)
-  return { taken: turn.map((entry) => entry.item), next: turn.at(-1)?.name }
+  if (slots >= items.length) {
+    return { taken: items, next: undefined }
+  }
+  const turn = inTurnOrder(items, nameOf, after).slice(0, slots)
+  const last = turn.at(-1)
+  return { taken: turn, next: last === undefined ? undefined : nameOf(last) }
 }
 
 export type CompareProgress = Record<string, { key: string; matched: number }>
@@ -89,15 +118,7 @@ export function readKeptCopies(accountHome: string): KeptCopiesRecord {
           differs: readKeys(differs),
           settled,
           progress: readProgress('progress' in parsed ? parsed.progress : null),
-          verified: readKeys('verified' in parsed ? parsed.verified : null),
-          retryAfter:
-            'retryAfter' in parsed && typeof parsed.retryAfter === 'string'
-              ? parsed.retryAfter
-              : undefined,
-          trashRetryAfter:
-            'trashRetryAfter' in parsed && typeof parsed.trashRetryAfter === 'string'
-              ? parsed.trashRetryAfter
-              : undefined
+          verified: readKeys('verified' in parsed ? parsed.verified : null)
         }
       }
     }
@@ -110,27 +131,24 @@ export function readKeptCopies(accountHome: string): KeptCopiesRecord {
 // Only ever skips work: a stale entry keeps a copy, never deletes one.
 export function writeKeptCopies(
   accountHome: string,
-  { differs, settled, progress = {}, verified = {}, retryAfter, trashRetryAfter }: KeptCopiesRecord
+  { differs, settled, progress = {}, verified = {} }: KeptCopiesRecord
 ): void {
-  const target = join(accountHome, KEPT_COPIES_FILE)
-  const staged = `${target}.${process.pid}.tmp`
-  const text = `${JSON.stringify({
-    version: 1,
-    differs,
-    settled,
-    progress,
-    verified,
-    retryAfter,
-    trashRetryAfter
-  })}\n`
+  const text = `${JSON.stringify({ version: 1, differs, settled, progress, verified })}\n`
+  writeIfChanged(join(accountHome, KEPT_COPIES_FILE), text, false)
+}
+
+// A launch that learned nothing new leaves the file alone; `empty` text means no file at all.
+function writeIfChanged(target: string, text: string, empty: boolean): void {
+  let current: string | null = null
   try {
-    // A launch that learned nothing new leaves the file alone.
-    if (readFileSync(target, 'utf8') === text) {
-      return
-    }
+    current = readFileSync(target, 'utf8')
   } catch {
-    // Missing: written below.
+    // Missing.
   }
+  if (current === text || (empty && current === null)) {
+    return
+  }
+  const staged = `${target}.${process.pid}.tmp`
   try {
     writeFileSync(staged, text)
     renameSync(staged, target)

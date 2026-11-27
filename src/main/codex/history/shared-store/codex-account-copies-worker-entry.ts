@@ -1,6 +1,6 @@
 import { parentPort } from 'node:worker_threads'
 import { installWorkerSendLedger } from '../../../worker-threads/worker-send-ledger'
-import { runCodexAccountCopiesRequest } from './codex-account-copies'
+import { runCodexAccountCopiesRequest } from './codex-account-copies-requests'
 import type {
   CodexAccountCopiesRequest,
   CodexAccountCopiesResponse

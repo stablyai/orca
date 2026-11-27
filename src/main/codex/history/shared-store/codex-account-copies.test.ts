@@ -16,7 +16,8 @@ import { basename, dirname, join } from 'node:path'
 import { zstdCompressSync } from 'node:zlib'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanUpCodexAccountCopies } from './codex-account-copies-cleanup'
-import { runCodexAccountCopiesRequest, verifyCodexAccountCopies } from './codex-account-copies'
+import { verifyCodexAccountCopies } from './codex-account-copies'
+import { runCodexAccountCopiesRequest } from './codex-account-copies-requests'
 import { TRASH_GRACE_MS } from './codex-account-copies-trash-entries'
 import { recheckTrashedCopies } from './codex-account-copies-trash-recheck'
 import type { CodexHistoryMoveOutcome } from '../../../telemetry/codex-history-move-telemetry'
@@ -526,6 +527,7 @@ describe('copies a launch could not clear', () => {
       // The first 8 launches compare fresh copies; after that every one is a remembered retry.
       const offered = new Set<string>()
       const all = new Map<string, Awaited<ReturnType<typeof verify>>['verified'][number]>()
+      const records: string[] = []
       for (let launch = 0; launch < 16; launch += 1) {
         for (const copy of (await verify()).verified) {
           all.set(copy.copy, copy)
@@ -533,9 +535,12 @@ describe('copies a launch could not clear', () => {
             offered.add(copy.copy)
           }
         }
+        records.push(readFileSync(join(home, '.orca-history-copies-kept.json'), 'utf8'))
       }
       expect(all.size).toBe(count)
       expect(offered.size).toBe(count)
+      // Only the small cursor moves between retry launches; the kept-copies record isn't rewritten.
+      expect(new Set(records.slice(8)).size).toBe(1)
 
       const locks = join(root, 'locks')
       mkdirSync(locks)
@@ -564,4 +569,39 @@ describe('copies a launch could not clear', () => {
     // 80,000 real files and 32 launches over them: tens of seconds on CI disks.
     300_000
   )
+})
+
+describe('a launch cut short by its deadline', () => {
+  it('reaches every copy over a few launches instead of starting over each time', async () => {
+    const count = 2_000
+    const day = '2026/11/20'
+    mkdirSync(join(store, 'sessions', day), { recursive: true })
+    mkdirSync(join(home, 'sessions.orca-profile-merge', day), { recursive: true })
+    for (let i = 0; i < count; i += 1) {
+      const name = `rollout-2026-11-20T10-00-00-0199a1b2-c3d4-7e5f-8a9b-${i.toString(16).padStart(12, '0')}.jsonl`
+      writeFileSync(join(store, 'sessions', day, name), LINE_1)
+      writeFileSync(join(home, 'sessions.orca-profile-merge', day, name), LINE_1)
+    }
+    // A clock that ticks once per read of it: each launch's deadline admits a few hundred copies.
+    let tick = 0
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => (tick += 1))
+    try {
+      const offered = new Set<string>()
+      for (let launch = 0; launch < 20; launch += 1) {
+        const result = await verifyCodexAccountCopies({
+          accountHome: home,
+          storeHome: store,
+          budget: { maxBytes: 4 * 1024 ** 3, deadline: tick + 600 },
+          version: `test-${launch}`,
+          managedAccountsRoot: join(root, 'codex-accounts')
+        })
+        for (const copy of result.verified) {
+          offered.add(copy.copy)
+        }
+      }
+      expect(offered.size).toBe(count)
+    } finally {
+      clock.mockRestore()
+    }
+  })
 })

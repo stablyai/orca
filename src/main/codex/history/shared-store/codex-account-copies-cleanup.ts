@@ -176,8 +176,9 @@ export async function cleanUpCodexAccountCopies(args: {
         continue
       }
       const deleted = await args.worker.call({ op: 'delete-trashed', accountHome, copies: closed })
-      // Before the stop check: files a stopped batch deleted still leave disk usage.
-      if (deleted.ok && deleted.op === 'delete-trashed' && deleted.tally.deleted > 0) {
+      // Before the stop check, and also when the answer is lost (a stop cut the batch short):
+      // files it may have deleted still leave disk usage.
+      if (!deleted.ok || (deleted.op === 'delete-trashed' && deleted.tally.deleted > 0)) {
         args.onDeleted?.()
       }
       if (args.shouldStop()) {

@@ -1,9 +1,10 @@
-import { type BigIntStats, linkSync, lstatSync, mkdirSync, rmdirSync, unlinkSync } from 'node:fs'
+import { type BigIntStats, rmdirSync, unlinkSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { rolloutTwinPath } from '../rollouts/codex-rollout-compressed-twin'
 import { originalHoldsCopy } from './codex-account-copy-content'
+import { restore } from './codex-account-copies-trash-restore'
 import { emptyTally, type CopiesTally } from './codex-account-copies-tally'
-import { readKeptCopies, takeInTurn, writeKeptCopies } from './codex-account-copies-kept'
+import { inTurnOrder, readCursor, takeInTurn, writeCursor } from './codex-account-copies-kept'
 import {
   fileKey,
   hasNoLinkBelowHome,
@@ -17,7 +18,6 @@ import {
   busyOnWindows,
   listFiles,
   readList,
-  RESTORE_ROOT,
   safeToRemove,
   trashFolder,
   TRASH_GRACE_MS,
@@ -29,50 +29,6 @@ import {
 
 // What one launch's open checks and deletes can get through; the rest waits for a later launch.
 const MAX_READY_PER_HOME = 5_000
-
-/** Makes each missing folder of `parts` under the home, one level at a time; false on a link. */
-function makeFolders(accountHome: string, parts: string[]): boolean {
-  let current = accountHome
-  for (const part of parts) {
-    current = join(current, part)
-    if (!lstatOrNull(current)) {
-      mkdirSync(current)
-    }
-    const stats = lstatSync(current)
-    if (!stats.isDirectory() || stats.isSymbolicLink()) {
-      return false
-    }
-  }
-  return true
-}
-
-/**
- * Puts a copy back where it was, never over another file (a hard link fails on one that exists);
- * false when that place is taken or isn't safely inside the home.
- */
-function restore(accountHome: string, path: string, entry: TrashEntry): boolean {
-  const parts = entry.from.split('/')
-  if (!RESTORE_ROOT.test(parts[0]) || parts.some((part) => part === '' || part === '..')) {
-    return false
-  }
-  const target = join(accountHome, ...parts)
-  const there = lstatOrNull(target)
-  const here = lstatOrNull(path)
-  // A restore cut short after its link: both names hold the same file.
-  if (there && here && there.dev === here.dev && there.ino === here.ino) {
-    unlinkSync(path)
-    return true
-  }
-  if (there || !makeFolders(accountHome, parts.slice(0, -1))) {
-    return false
-  }
-  if (!hasNoLinkBelowHome(accountHome, dirname(target)) || !isInsideHome(accountHome, target)) {
-    return false
-  }
-  linkSync(path, target)
-  unlinkSync(path)
-  return true
-}
 
 /**
  * Rechecks, with no lock held, each copy that has waited out its grace period: one whose
@@ -93,9 +49,15 @@ export function recheckTrashedCopies(args: {
     return { ready, tally, bytesRead: 0 }
   }
   const now = args.now ?? Date.now()
-  const lists = listFiles(trash)
-    .filter((list) => now - list.movedAt >= TRASH_GRACE_MS)
-    .sort((a, b) => a.movedAt - b.movedAt)
+  const cursor = readCursor(args.accountHome)
+  // Due lists in turn after the one the last launch stopped at: a deadline can't hold back the rest.
+  const lists = inTurnOrder(
+    listFiles(trash).filter((list) => now - list.movedAt >= TRASH_GRACE_MS),
+    (list) => list.name,
+    cursor.trashWalkAfter
+  )
+  let lastList: string | undefined
+  let cutShort = false
   let bytesRead = 0
   const budget = {
     left: () => args.maxBytes - bytesRead,
@@ -107,9 +69,11 @@ export function recheckTrashedCopies(args: {
   const retries: VerifiedCopy[] = []
   for (const list of lists) {
     if (Date.now() > args.deadline) {
+      cutShort = true
       tally.deferred += 1
       continue
     }
+    lastList = list.name
     const entries = readList(trash, list.name)
     if (!entries) {
       tally.error += 1
@@ -167,18 +131,19 @@ export function recheckTrashedCopies(args: {
       writeList(trash, list.name, next)
     }
   }
-  const record = readKeptCopies(args.accountHome)
   const turn = takeInTurn(
     retries,
     (copy) => basename(copy.copy),
-    record.trashRetryAfter,
+    cursor.trashRetryAfter,
     MAX_READY_PER_HOME - ready.length
   )
   ready.push(...turn.taken)
   tally.deferred += retries.length - turn.taken.length
-  if (turn.next !== record.trashRetryAfter) {
-    writeKeptCopies(args.accountHome, { ...record, trashRetryAfter: turn.next })
-  }
+  writeCursor(args.accountHome, {
+    ...cursor,
+    trashWalkAfter: cutShort ? (lastList ?? cursor.trashWalkAfter) : undefined,
+    trashRetryAfter: turn.next
+  })
   return { ready, tally, bytesRead }
 }
 

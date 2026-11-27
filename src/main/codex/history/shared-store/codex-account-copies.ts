@@ -1,24 +1,19 @@
 import type { BigIntStats } from 'node:fs'
 import { basename, dirname, relative } from 'node:path'
 import { COMPRESSED_ROLLOUT_SUFFIX } from '../rollouts/codex-rollout-compressed-twin'
-import {
-  findOriginal,
-  listCopyRoots,
-  removeEmptiedCopyFolders,
-  rolloutFiles,
-  sharedSince
-} from './codex-account-copy-roots'
+import { findOriginal, listCopyRoots, rolloutFiles, sharedSince } from './codex-account-copy-roots'
 import { originalHoldsCopy } from './codex-account-copy-content'
 import {
+  inTurnOrder,
+  readCursor,
   readKeptCopies,
   takeInTurn,
+  writeCursor,
   writeKeptCopies,
   type CompareProgress,
   type KeptCopies
 } from './codex-account-copies-kept'
 import { emptyTally, type CopiesTally } from './codex-account-copies-tally'
-import { moveCheckedCopiesToTrash } from './codex-account-copies-trash'
-import { deleteTrashedCopies, recheckTrashedCopies } from './codex-account-copies-trash-recheck'
 import {
   fileKey,
   isInsideHome,
@@ -27,14 +22,12 @@ import {
   type VerifiedCopy
 } from './codex-account-copy-checks'
 import { assertOwnedHostCodexManagedHomePath } from '../../../codex-accounts/managed-homes/host-codex-managed-home-ownership'
-import type {
-  CodexAccountCopiesRequest,
-  CodexAccountCopiesResponse
-} from './codex-account-copies-worker-protocol'
 
 // Sync file calls on purpose: this runs on its own worker thread (see the worker entry).
 
-const ACL_KEEP = 'acl:'
+export const ACL_KEEP = 'acl:'
+export const homeName = (accountHome: string, path: string): string =>
+  relative(accountHome, path).split(/[\\/]/).join('/')
 // What one launch's move phase can get through; the rest is verified again next launch.
 const MAX_VERIFIED_PER_HOME = 5_000
 
@@ -52,7 +45,7 @@ type Candidate = {
 }
 
 // Throws unless this is Orca's own account home (its marker names its account).
-function assertOwnedHome(args: {
+export function assertOwnedHome(args: {
   accountHome: string
   storeHome: string
   managedAccountsRoot: string
@@ -132,90 +125,103 @@ export async function verifyCodexAccountCopies(args: {
       tally.differs += 1
     }
   }
-  scan: for (const root of listCopyRoots(args.accountHome, args.storeHome)) {
-    for (const copy of rolloutFiles(root.root)) {
-      const name = relative(args.accountHome, copy).split(/[\\/]/).join('/')
-      if (Date.now() > args.budget.deadline || verified.length >= MAX_VERIFIED_PER_HOME) {
-        // The rest waits for a later launch, unvisited: its cost stays within the deadline.
-        outOfTime = true
-        tally.deferred += 1
-        break scan
+  const cursor = readCursor(args.accountHome)
+  // Each launch starts after the copy the last one stopped at, so a walk the deadline cuts short
+  // still reaches every copy over a few launches.
+  const walk = inTurnOrder(
+    listCopyRoots(args.accountHome, args.storeHome).flatMap((root) =>
+      [...rolloutFiles(root.root)].map((copy) => ({
+        root,
+        copy,
+        name: homeName(args.accountHome, copy)
+      }))
+    ),
+    (item) => item.name,
+    cursor.walkAfter
+  )
+  let lastVisited: string | undefined
+  for (const { root, copy, name } of walk) {
+    if (Date.now() > args.budget.deadline || verified.length >= MAX_VERIFIED_PER_HOME) {
+      // The rest waits for a later launch, unvisited: its cost stays within the deadline.
+      outOfTime = true
+      tally.deferred += 1
+      break
+    }
+    visited.add(name)
+    lastVisited = name
+    try {
+      const copyStats = lstatOrNull(copy)
+      if (!copyStats?.isFile()) {
+        continue
       }
-      visited.add(name)
-      try {
-        const copyStats = lstatOrNull(copy)
-        if (!copyStats?.isFile()) {
-          continue
-        }
-        if (!isInsideHome(args.accountHome, copy)) {
-          tally.error += 1
-          continue
-        }
-        const original = findOriginal(root, copy)
-        if (original === 'error') {
-          tally.error += 1
-          continue
-        }
-        if (!original) {
-          tally.missing_original += 1
-          continue
-        }
-        // Another name for the copy's bytes could be a live writer's.
-        if (copyStats.nlink > 1n || original.stats.ino === copyStats.ino) {
-          tally.linked += 1
-          continue
-        }
-        // Another user could write it, and no open check sees their processes: kept unread.
-        if (!onlyOwnerWrites(copyStats)) {
-          tally.open += 1
-          continue
-        }
-        const key = `${fileKey(copyStats)}|${original.path}|${fileKey(original.stats)}`
-        const sameForm =
-          copy.endsWith(COMPRESSED_ROLLOUT_SUFFIX) ===
-          original.path.endsWith(COMPRESSED_ROLLOUT_SUFFIX)
-        // One form compressed and the other not: kept. Decoding can't prove a `.zst` complete
-        // (a cut-off frame or checksum still decodes), so content is only compared as stored.
-        if (!sameForm) {
-          tally.compressed += 1
-          continue
-        }
-        // Kept last launch for an ACL: not read or offered again until either file changes, so
-        // lasting keeps never fill a launch's candidates ahead of the copies behind them.
-        if (kept[name] === `${ACL_KEEP}${key}`) {
-          nextKept[name] = kept[name]
-          tally.open += 1
-          continue
-        }
-        if (kept[name] === key || copyStats.size > original.stats.size) {
-          nextKept[name] = key
-          tally.differs += 1
-          continue
-        }
-        if (remembered[name] === key) {
-          // The move rechecks both keys under the lock, and the trash compares again in full.
-          nextVerified[name] = key
-          retry.push({
-            copy,
-            original: original.path,
-            copyKey: fileKey(copyStats),
-            originalKey: fileKey(original.stats)
-          })
-          continue
-        }
-        const from = progress[name]?.key === key ? progress[name].matched : 0
-        const candidate = { name, key, copy, copyStats, original, from }
-        // The most the comparison reads of both files.
-        const size = (Number(copyStats.size) - from) * 2 + 1
-        if (bytesRead + size > args.budget.maxBytes) {
-          oversized.push(candidate)
-          continue
-        }
-        bytesRead += size
-        compare(candidate, Infinity)
-      } catch {
+      if (!isInsideHome(args.accountHome, copy)) {
         tally.error += 1
+        continue
       }
+      const original = findOriginal(root, copy)
+      if (original === 'error') {
+        tally.error += 1
+        continue
+      }
+      if (!original) {
+        tally.missing_original += 1
+        continue
+      }
+      // Another name for the copy's bytes could be a live writer's.
+      if (copyStats.nlink > 1n || original.stats.ino === copyStats.ino) {
+        tally.linked += 1
+        continue
+      }
+      // Another user could write it, and no open check sees their processes: kept unread.
+      if (!onlyOwnerWrites(copyStats)) {
+        tally.open += 1
+        continue
+      }
+      const key = `${fileKey(copyStats)}|${original.path}|${fileKey(original.stats)}`
+      const sameForm =
+        copy.endsWith(COMPRESSED_ROLLOUT_SUFFIX) ===
+        original.path.endsWith(COMPRESSED_ROLLOUT_SUFFIX)
+      // One form compressed and the other not: kept. Decoding can't prove a `.zst` complete
+      // (a cut-off frame or checksum still decodes), so content is only compared as stored.
+      if (!sameForm) {
+        tally.compressed += 1
+        continue
+      }
+      // Kept last launch for an ACL: not read or offered again until either file changes, so
+      // lasting keeps never fill a launch's candidates ahead of the copies behind them.
+      if (kept[name] === `${ACL_KEEP}${key}`) {
+        nextKept[name] = kept[name]
+        tally.open += 1
+        continue
+      }
+      if (kept[name] === key || copyStats.size > original.stats.size) {
+        nextKept[name] = key
+        tally.differs += 1
+        continue
+      }
+      if (remembered[name] === key) {
+        // The move rechecks both keys under the lock, and the trash compares again in full.
+        nextVerified[name] = key
+        retry.push({
+          copy,
+          original: original.path,
+          copyKey: fileKey(copyStats),
+          originalKey: fileKey(original.stats)
+        })
+        continue
+      }
+      const from = progress[name]?.key === key ? progress[name].matched : 0
+      const candidate = { name, key, copy, copyStats, original, from }
+      // The most the comparison reads of both files.
+      const size = (Number(copyStats.size) - from) * 2 + 1
+      if (bytesRead + size > args.budget.maxBytes) {
+        oversized.push(candidate)
+        continue
+      }
+      bytesRead += size
+      compare(candidate, Infinity)
+    } catch {
+      tally.error += 1
     }
   }
   for (const candidate of oversized) {
@@ -237,8 +243,8 @@ export async function verifyCodexAccountCopies(args: {
   }
   const turn = takeInTurn(
     retry,
-    (copy) => relative(args.accountHome, copy.copy).split(/[\\/]/).join('/'),
-    record.retryAfter,
+    (copy) => homeName(args.accountHome, copy.copy),
+    cursor.retryAfter,
     MAX_VERIFIED_PER_HOME - verified.length
   )
   verified.push(...turn.taken)
@@ -276,49 +282,12 @@ export async function verifyCodexAccountCopies(args: {
     differs: nextKept,
     settled: settled ? stamp : null,
     progress: nextProgress,
-    verified: nextVerified,
-    retryAfter: turn.next,
-    trashRetryAfter: record.trashRetryAfter
+    verified: nextVerified
+  })
+  writeCursor(args.accountHome, {
+    ...cursor,
+    walkAfter: outOfTime ? (lastVisited ?? cursor.walkAfter) : undefined,
+    retryAfter: turn.next
   })
   return { verified, tally, bytesRead }
-}
-
-/** Notes copies kept for an ACL, keyed to both files as compared, so later launches skip them. */
-function rememberAclKeeps(accountHome: string, copies: VerifiedCopy[]): void {
-  const record = readKeptCopies(accountHome)
-  for (const copy of copies) {
-    const name = relative(accountHome, copy.copy).split(/[\\/]/).join('/')
-    record.differs[name] = `${ACL_KEEP}${copy.copyKey}|${copy.original}|${copy.originalKey}`
-  }
-  writeKeptCopies(accountHome, { ...record, settled: null })
-}
-
-export async function runCodexAccountCopiesRequest(
-  request: CodexAccountCopiesRequest
-): Promise<CodexAccountCopiesResponse> {
-  switch (request.op) {
-    case 'verify':
-      return { ok: true, op: 'verify', ...(await verifyCodexAccountCopies(request)) }
-    case 'trash':
-      return {
-        ok: true,
-        op: 'trash',
-        tally: moveCheckedCopiesToTrash(request.accountHome, request.copies, request.lockFolders)
-      }
-    case 'recheck-trash':
-      assertOwnedHome(request)
-      return { ok: true, op: 'recheck-trash', ...recheckTrashedCopies(request) }
-    case 'delete-trashed':
-      return {
-        ok: true,
-        op: 'delete-trashed',
-        tally: deleteTrashedCopies(request.accountHome, request.copies)
-      }
-    case 'remember-acl':
-      rememberAclKeeps(request.accountHome, request.copies)
-      return { ok: true, op: 'remember-acl' }
-    case 'prune':
-      removeEmptiedCopyFolders(request.accountHome, request.storeHome)
-      return { ok: true, op: 'prune' }
-  }
 }
