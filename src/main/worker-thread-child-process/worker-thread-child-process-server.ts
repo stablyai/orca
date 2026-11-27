@@ -54,8 +54,9 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
     selection: NativeExecutableSelection | undefined
   ): void => {
     let child: ChildProcessWithoutNullStreams
+    const { withdrawWhenSet: _withdrawFlag, ...processSpec } = spec
     try {
-      child = spawnProcess({ ...spec, stdio: ['pipe', 'pipe', 'pipe'] }, selection)
+      child = spawnProcess({ ...processSpec, stdio: ['pipe', 'pipe', 'pipe'] }, selection)
     } catch (error) {
       port.postMessage({ type: 'spawn-error', id, error: toErrorPayload(error) })
       return
@@ -134,6 +135,16 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
   // Launches whose PATH lookup settled, in that order; a withdrawn one is skipped when reached.
   const startable: QueuedLaunch[] = []
   let launching = false
+  const withdrawQueued = (entry: QueuedLaunch, signal: NodeJS.Signals): void => {
+    const { id } = entry.request
+    queued.delete(id)
+    // A group that was never created has ended, which an owned-group stop waits to hear.
+    if (entry.request.spec.terminationBarrier) {
+      port.postMessage({ type: 'group-terminated', id })
+    }
+    port.postMessage({ type: 'exit', id, code: null, signal })
+    port.postMessage({ type: 'close', id, code: null, signal })
+  }
   const launchNext = (): void => {
     let entry = startable.shift()
     while (entry && queued.get(entry.request.id) !== entry) {
@@ -141,6 +152,13 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
     }
     if (!entry) {
       launching = false
+      return
+    }
+    const withdrawFlag = entry.request.spec.withdrawWhenSet
+    // Read at dispatch: a cancel posted once the flag was set may still be behind this turn.
+    if (withdrawFlag && Atomics.load(withdrawFlag, 0) !== 0) {
+      withdrawQueued(entry, 'SIGTERM')
+      setImmediate(launchNext)
       return
     }
     queued.delete(entry.request.id)
@@ -194,14 +212,7 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
         request.type === 'kill' ||
         request.type === 'stop-owned-group')
     ) {
-      queued.delete(request.id)
-      const signal = (request.type === 'kill' && request.signal) || 'SIGTERM'
-      // A group that was never created has ended, which an owned-group stop waits to hear.
-      if (waiting.request.spec.terminationBarrier) {
-        port.postMessage({ type: 'group-terminated', id: request.id })
-      }
-      port.postMessage({ type: 'exit', id: request.id, code: null, signal })
-      port.postMessage({ type: 'close', id: request.id, code: null, signal })
+      withdrawQueued(waiting, (request.type === 'kill' && request.signal) || 'SIGTERM')
       return
     }
     if (waiting) {

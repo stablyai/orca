@@ -1,9 +1,13 @@
 import { spawnProcess } from '@orca/process-host'
-import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
+import type { TaskkillRoot } from '../../git/command-runner/process-capture/spawned-command-tree-kill'
 import type { ChildProcess } from 'node:child_process'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
 import { admitProcessTreeKill } from '@orca/process-host/process-tree-kill-gate'
 import { childProcessHasExited } from '@orca/process-host/process-tree-termination'
+import {
+  runWindowsTaskkillTree,
+  WINDOWS_PROCESS_TREE_KILL_TIMEOUT_MS
+} from '../../pty/process-retirement/windows-process-tree-kill'
 
 /** Spawn seam for tests; production always goes through the hardened spawnProcess wrapper. */
 export type CodexAppServerSpawn = (
@@ -16,11 +20,15 @@ export const spawnCodexAppServerProcess: CodexAppServerSpawn = (program, args, o
   spawnProcess({ program, args, ...options } as ProcessSpec)
 
 export function killCodexAppServerProcessTree(
-  child: Pick<ChildProcess, 'pid' | 'kill' | 'exitCode' | 'signalCode'>,
+  child: Pick<ChildProcess, 'pid' | 'kill'> & TaskkillRoot,
   options: { platform?: NodeJS.Platform; spawnImpl?: CodexAppServerSpawn } = {}
 ): void {
   const platform = options.platform ?? process.platform
   const spawnImpl = options.spawnImpl ?? spawnCodexAppServerProcess
+  // An exited root's pid can name another process (on Windows while pipes still delay close).
+  if ((child.exitCode ?? null) !== null || (child.signalCode ?? null) !== null) {
+    return
+  }
   if (platform === 'win32' && child.pid) {
     if (
       childProcessHasExited(child) ||
@@ -33,34 +41,15 @@ export function killCodexAppServerProcessTree(
       child.kill('SIGKILL')
       return
     }
-    try {
-      // npm launchers wrap Codex; killing only the wrapper leaves the app-server alive.
-      const killer = spawnImpl(
-        windowsSystem32Binary('taskkill.exe'),
-        ['/pid', String(child.pid), '/t', '/f'],
-        {
-          stdio: 'ignore',
-          windowsHide: true
-        }
-      )
-      let fellBack = false
-      const killDirectChild = (): void => {
-        if (!fellBack) {
-          fellBack = true
+    // npm launchers wrap Codex; killing only the wrapper leaves the app-server alive.
+    void runWindowsTaskkillTree(child.pid, WINDOWS_PROCESS_TREE_KILL_TIMEOUT_MS, child).then(
+      (treeTerminated) => {
+        if (!treeTerminated) {
           child.kill('SIGKILL')
         }
       }
-      killer.on('error', killDirectChild)
-      killer.on('exit', (code) => {
-        if (code !== 0) {
-          killDirectChild()
-        }
-      })
-      killer.unref()
-      return
-    } catch {
-      // Fall through to the direct-child best effort when taskkill cannot start.
-    }
+    )
+    return
   }
   if (child.pid) {
     try {

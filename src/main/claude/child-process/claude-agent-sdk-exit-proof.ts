@@ -23,7 +23,10 @@ const TREE_VERDICT_TRUST: Record<DescendantTreeVerdict, number> = {
   exited: 2
 }
 
-type ReapableChild = Pick<ProviderChild, 'pid' | 'kill' | 'leaderExited'>
+type ReapableChild = Pick<
+  ProviderChild,
+  'pid' | 'kill' | 'leaderExited' | 'exitCode' | 'signalCode' | 'once' | 'off'
+>
 
 // A missing or exited root may have reparented descendants; its walk cannot prove an empty tree.
 function admissibleTree(
@@ -206,7 +209,7 @@ export function createClaudeChildTreeReaper(
     }
     const terminateTree =
       deps.terminateWindowsTree ??
-      ((pid: number) => terminateWindowsProcessTree(pid, { site: deps.site }))
+      ((pid: number) => terminateWindowsProcessTree(pid, { site: deps.site, root: child }))
     const terminated = await terminateTree(rootPid).catch(() => false)
     killDelivered ||= terminated
     try {

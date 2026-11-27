@@ -5,6 +5,8 @@ export type WorkerThreadChildSpec = {
   cwd?: string
   env?: Record<string, string | undefined>
   terminationBarrier?: true
+  /** Over a SharedArrayBuffer: once [0] is set, the launch is withdrawn when dequeued, whatever messages are in flight. */
+  withdrawWhenSet?: Int32Array
 }
 
 export type WorkerThreadProviderOwnerSpec = {

@@ -21,7 +21,7 @@ export async function killSourceControlAgentProcess(
   }
   if (process.platform === 'win32' && !childProcessHasExited(child)) {
     // Tree-walk refusal must not release the home lock having killed nothing; root handle kill cannot hit a recycled PID.
-    await terminateWindowsProcessTree(pid, { site: SOURCE_CONTROL_KILL_SITE })
+    await terminateWindowsProcessTree(pid, { site: SOURCE_CONTROL_KILL_SITE, root: child })
   }
   try {
     child.kill('SIGKILL')

@@ -1,6 +1,9 @@
 import { spawn, type ChildProcess } from 'node:child_process'
-import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
-import { childProcessHasExited } from '@orca/process-host/process-tree-termination'
+import type { TaskkillRoot } from '../../git/command-runner/process-capture/spawned-command-tree-kill'
+import {
+  childProcessHasExited,
+  processGroupExists
+} from '@orca/process-host/process-tree-termination'
 import type { ClientChannel } from 'ssh2'
 import type { AutomationPrecheck } from '../../../shared/automations/automation-definition'
 import type { AutomationPrecheckResult } from '../../../shared/automations/history/automation-run'
@@ -8,6 +11,10 @@ import { MAX_AUTOMATION_PRECHECK_OUTPUT_CHARS } from '../../../shared/automation
 import { getSshConnectionManager } from '../../ssh/targets/ssh-target-registry'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { admitSelfInitiatedTreeKill } from '../../pty/process-retirement/own-chromium-tree-kill-guard'
+import {
+  runWindowsTaskkillTree,
+  WINDOWS_PROCESS_TREE_KILL_TIMEOUT_MS
+} from '../../pty/process-retirement/windows-process-tree-kill'
 import { errorMessage } from '../../../shared/errors/error-message'
 
 type AutomationPrecheckExecutionTarget =
@@ -79,7 +86,7 @@ export function failedPrecheckResult(
 }
 
 export function killLocalPrecheckProcessTree(
-  child: ChildProcess
+  child: Pick<ChildProcess, 'pid' | 'kill'> & TaskkillRoot
 ): ReturnType<typeof setTimeout> | null {
   const pid = child.pid
   if (!pid) {
@@ -100,21 +107,14 @@ export function killLocalPrecheckProcessTree(
       child.kill()
       return null
     }
-    try {
-      // Shell prechecks can leave descendants running after the root exits.
-      const killer = spawn(
-        windowsSystem32Binary('taskkill.exe'),
-        ['/pid', String(pid), '/t', '/f'],
-        {
-          stdio: 'ignore',
-          windowsHide: true
+    // Shell prechecks can leave descendants running after the root exits.
+    void runWindowsTaskkillTree(pid, WINDOWS_PROCESS_TREE_KILL_TIMEOUT_MS, child).then(
+      (treeEnded) => {
+        if (!treeEnded) {
+          child.kill()
         }
-      )
-      killer.on('error', () => child.kill())
-      killer.unref()
-    } catch {
-      child.kill()
-    }
+      }
+    )
     return null
   }
 
@@ -166,7 +166,8 @@ function runLocalPrecheck(
         clearTimeout(timeout)
         timeout = null
       }
-      if (forceKillTimer) {
+      // A group member that ignored SIGTERM outlives the root's exit; its SIGKILL stays due until the group is gone.
+      if (forceKillTimer && !(child.pid && processGroupExists(child.pid))) {
         clearTimeout(forceKillTimer)
         forceKillTimer = null
       }
@@ -178,6 +179,17 @@ function runLocalPrecheck(
     timeout = setTimeout(() => {
       timedOut = true
       forceKillTimer = killLocalPrecheckProcessTree(child)
+      // Descendants a tree kill missed can hold the pipes, so close may never come; the root's exit ends it.
+      const settleOnExit = (): void => {
+        child.stdout?.destroy()
+        child.stderr?.destroy()
+        settle(null, `Precheck timed out after ${precheck.timeoutSeconds}s.`)
+      }
+      if (childProcessHasExited(child)) {
+        settleOnExit()
+      } else {
+        child.once('exit', settleOnExit)
+      }
     }, timeoutMs)
 
     child.stdout?.setEncoding('utf8')

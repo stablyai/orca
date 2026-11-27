@@ -1,39 +1,18 @@
-import { spawn, type ChildProcess } from 'node:child_process'
-import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
+import type { ChildProcess } from 'node:child_process'
 import { endAbandonedWorkerGroup } from './abandoned-worker-group-termination'
 import { admitSelfInitiatedTreeKill } from '../../../pty/process-retirement/own-chromium-tree-kill-guard'
 import {
   canSpawnOnWorkerThread,
   isAbandonedWorkerChildError,
-  spawnProcessOnWorkerThread,
   WorkerThreadChildProcess
 } from '../../../worker-thread-child-process/worker-thread-child-process'
+import { batchTaskkill, runTaskkill } from './windows-taskkill-launch'
 
-const WINDOWS_TREE_KILL_WAIT_MS = 2_000
+export { runWindowsTaskkill, type TaskkillRoot } from './windows-taskkill-launch'
+
 const WORKER_PID_WAIT_MS = 5_000
 // One tree kill per worker child: a second could walk a reused PID after the first ended the tree. True once taskkill proved the tree ended.
 const workerTreeKills = new WeakMap<WorkerThreadChildProcess, Promise<boolean>>()
-// Tree kills a dying worker leaves in one turn share one taskkill per host, so main pays at most one launch.
-const taskkillBatches = new Map<boolean, { pids: Set<number>; ended: Promise<boolean> }>()
-
-function batchTaskkill(pids: readonly number[], onWorker: boolean): Promise<boolean> {
-  let batch = taskkillBatches.get(onWorker)
-  if (!batch) {
-    const collected = new Set<number>()
-    const ended = new Promise<boolean>((resolve) => {
-      queueMicrotask(() => {
-        taskkillBatches.delete(onWorker)
-        void runTaskkill([...collected], onWorker).then(resolve)
-      })
-    })
-    batch = { pids: collected, ended }
-    taskkillBatches.set(onWorker, batch)
-  }
-  for (const pid of pids) {
-    batch.pids.add(pid)
-  }
-  return batch.ended
-}
 
 /** A dead worker can no longer stop its children; end a still-running Windows tree whose PID it reported. True when the tree ended or its root already had. */
 export function killAbandonedWorkerChildTree(
@@ -171,77 +150,6 @@ function startTreeKill(
       child.kill()
     }
     return ended
-  })
-}
-
-/** True when taskkill reported every tree ended within its wait. */
-function runTaskkill(pids: number[], onWorker = canSpawnOnWorkerThread()): Promise<boolean> {
-  return new Promise((resolve) => {
-    const taskkill = windowsSystem32Binary('taskkill.exe')
-    const args = [...pids.flatMap((pid) => ['/pid', String(pid)]), '/t', '/f']
-    let killer: ChildProcess | WorkerThreadChildProcess
-    try {
-      if (onWorker) {
-        // Process creation blocks its thread on Windows; keep cleanup off main like the Git it ends.
-        killer = spawnProcessOnWorkerThread({ program: taskkill, args })
-        killer.stdin.end()
-        killer.discardOutput()
-      } else {
-        const native = spawn(taskkill, args, { stdio: 'ignore', windowsHide: true })
-        if (!native || typeof native.unref !== 'function') {
-          resolve(false)
-          return
-        }
-        native.unref()
-        killer = native
-      }
-    } catch {
-      resolve(false)
-      return
-    }
-    let settled = false
-    let timer: NodeJS.Timeout | null = null
-    const finish = (ended: boolean): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      if (timer) {
-        clearTimeout(timer)
-      }
-      killer.removeAllListeners()
-      resolve(ended)
-    }
-    killer.once('error', (error) => {
-      // Only a taskkill the worker never created restarts here; one that ran may have freed the PID for reuse.
-      if (onWorker && isAbandonedWorkerChildError(error) && !killer.pid && !settled) {
-        settled = true
-        if (timer) {
-          clearTimeout(timer)
-        }
-        killer.removeAllListeners()
-        resolve(batchTaskkill(pids, false))
-        return
-      }
-      finish(false)
-    })
-    killer.once('close', (code) => finish(code === 0))
-    const waitFor = (ms: number): void => {
-      if (timer) {
-        clearTimeout(timer)
-      }
-      timer = setTimeout(() => {
-        killer.kill()
-        finish(false)
-      }, ms)
-    }
-    if (onWorker) {
-      // As with a native launch, the wait starts once taskkill exists. A queued taskkill is never given up
-      // for a root-only kill: the live worker reaches it, and a dead one reruns it from main.
-      killer.once('spawn', () => waitFor(WINDOWS_TREE_KILL_WAIT_MS))
-    } else {
-      waitFor(WINDOWS_TREE_KILL_WAIT_MS)
-    }
   })
 }
 
