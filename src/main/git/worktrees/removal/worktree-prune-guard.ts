@@ -1,5 +1,5 @@
 // Windows and WSL Git cannot resolve each other’s worktree links; lock foreign entries during prune to preserve their metadata.
-import { readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join } from 'node:path'
 import {
   isDrvfsLinuxPath,
@@ -90,11 +90,11 @@ export async function readWorktreeLinks(
 ): Promise<{ entry: string; link: string }[]> {
   const entries = (
     await readdir(adminRoot).catch((error: unknown) => {
-      // Only a readable parent makes a missing folder a repo without linked worktrees.
+      // Only a listable common directory makes a missing folder a repo without linked worktrees.
       if (getErrorCode(error) !== 'ENOENT') {
         throw error
       }
-      return stat(dirname(adminRoot)).then(() => [])
+      return readdir(dirname(adminRoot)).then(() => [])
     })
   ).map((name) => join(adminRoot, name))
   const links = await Promise.all(

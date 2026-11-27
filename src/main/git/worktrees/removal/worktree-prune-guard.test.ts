@@ -1,9 +1,9 @@
 // Real Git verifies the prune guard: it keeps a record the other Git wrote, and runs no prune
 // whose records it could not read or lock.
 import { execFile } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { chmodSync, existsSync, readdirSync } from 'node:fs'
 import type * as FsPromises from 'node:fs/promises'
-import { mkdir, mkdtemp, readdir, realpath, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -23,8 +23,9 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof FsPromises>()
   const fails = (syscall: string, path: unknown): boolean =>
     fault.syscall === syscall && String(path).endsWith(fault.path)
+  // Fails only the records folder's own listing, so a missing-folder check still reads its parent.
   const readdir = (...args: Parameters<typeof actual.readdir>) =>
-    fails('readdir', args[0])
+    fails('readdir', args[0]) && String(args[0]).replaceAll('\\', '/').endsWith('/worktrees')
       ? Promise.reject(Object.assign(new Error('share unavailable'), { code: fault.code }))
       : actual.readdir(...args)
   const writeFile = (...args: Parameters<typeof actual.writeFile>) =>
@@ -63,7 +64,7 @@ beforeEach(async () => {
   await removeTree(worktreePath)
   // Stale, and linked the way the other Git spells a path: this Git would prune it.
   adminRoot = join(repoPath, '.git', 'worktrees')
-  adminEntry = join(adminRoot, (await readdir(adminRoot))[0])
+  adminEntry = join(adminRoot, readdirSync(adminRoot)[0])
   await writeFile(join(adminEntry, 'gitdir'), '/prune-guard-gone/feature/.git\n')
 })
 
@@ -117,4 +118,21 @@ describe('worktree prune guard', () => {
       code: 'ENOENT'
     })
   })
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'refuses a missing records folder under a parent it cannot list',
+    async () => {
+      const gitDir = join(repoPath, '.git')
+      await removeTree(adminRoot)
+      // 0o111: the child readdir reads ENOENT, so the missing-folder check must hit the parent's EACCES.
+      chmodSync(gitDir, 0o111)
+      try {
+        await expect(readWorktreeLinks(join(gitDir, 'worktrees'))).rejects.toMatchObject({
+          code: 'EACCES'
+        })
+      } finally {
+        chmodSync(gitDir, 0o755)
+      }
+    }
+  )
 })
