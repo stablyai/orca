@@ -152,7 +152,7 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
 
   liveTurnId = (id: string) => this.liveOwnerOrNull(id)?.liveTurnId?.(id)
 
-  keptLaunchOutgrown = (id: string) => this.liveOwnerOrNull(id)?.keptLaunchOutgrown?.(id) === true
+  keptLaunchOutgrown = (id: string) => this.liveOwnerOrNull(id)?.keptLaunchOutgrown?.(id)
 
   steeringMode = (id: string) => this.liveOwnerOrNull(id)?.steeringMode?.(id)
 
