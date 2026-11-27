@@ -256,7 +256,7 @@ async function hasUnreplacedRuntime(
     return !isDefinitiveAbsence(error)
   }
   // Failed repair backups become stale only once a whole replacement is published.
-  const previous = readRelease(damaged)
+  const previous = readReleaseReceipt(damaged)
   return (
     typeof previous !== 'object' ||
     !keep.includes(previous.version) ||
@@ -265,6 +265,29 @@ async function hasUnreplacedRuntime(
 }
 
 function readRelease(folder: string, version?: string): ReleaseRead {
+  const receipt = readReleaseReceipt(folder, version)
+  if (typeof receipt !== 'object') {
+    return receipt
+  }
+  try {
+    const whole = receipt.members.every((member) => {
+      const file = lstatSync(join(folder, ...member.path.split('/')))
+      return (
+        file.isFile() &&
+        file.size === member.bytes &&
+        (process.platform === 'win32' || (file.mode & 0o111) !== 0)
+      )
+    })
+    return whole ? { releaseId: receipt.releaseId, version: receipt.version } : 'broken'
+  } catch (error) {
+    return isDefinitiveAbsence(error) ? 'broken' : 'unreadable'
+  }
+}
+
+function readReleaseReceipt(
+  folder: string,
+  version?: string
+): z.infer<typeof runtimeReleaseReceiptSchema> | 'broken' | 'unreadable' {
   try {
     const receiptPath = join(folder, RUNTIME_RELEASE_RECEIPT)
     const stat = lstatSync(receiptPath)
@@ -274,24 +297,16 @@ function readRelease(folder: string, version?: string): ReleaseRead {
     const receipt = runtimeReleaseReceiptSchema.safeParse(
       parseJson(readFileSync(receiptPath, 'utf8'))
     )
-    const whole =
+    const valid =
       receipt.success &&
       (version === undefined || receipt.data.version === version) &&
       receipt.data.platform === process.platform &&
       receipt.data.arch === process.arch &&
       receipt.data.members.every((member) => {
         const segments = member.path.split('/')
-        if (segments.some((segment) => !segment || segment === '.' || segment === '..')) {
-          return false
-        }
-        const file = lstatSync(join(folder, ...segments))
-        return (
-          file.isFile() &&
-          file.size === member.bytes &&
-          (process.platform === 'win32' || (file.mode & 0o111) !== 0)
-        )
+        return !segments.some((segment) => !segment || segment === '.' || segment === '..')
       })
-    return whole ? { releaseId: receipt.data.releaseId, version: receipt.data.version } : 'broken'
+    return valid ? receipt.data : 'broken'
   } catch (error) {
     return isDefinitiveAbsence(error) ? 'broken' : 'unreadable'
   }

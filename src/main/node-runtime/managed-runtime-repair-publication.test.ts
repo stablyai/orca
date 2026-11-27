@@ -7,6 +7,7 @@ import { expect, it, vi } from 'vitest'
 import { installRuntimeRelease } from './managed-runtime-release-install'
 import {
   reclaimRuntimeReleases,
+  RUNTIME_RELEASE_RECEIPT,
   writeRuntimeReleaseReceipt,
   type ManagedRuntimePin
 } from './managed-runtime-release'
@@ -41,9 +42,13 @@ const pinFor = (contents: string): ManagedRuntimePin => {
   }
 }
 
-it.each([false, true])(
-  'keeps the previous release after failed publication (occupied: %s)',
-  async (occupied) => {
+it.each([
+  { occupied: false, missingMember: false },
+  { occupied: true, missingMember: false },
+  { occupied: true, missingMember: true }
+])(
+  'keeps the previous release after failed publication (occupied: $occupied, missing member: $missingMember)',
+  async ({ occupied, missingMember }) => {
     const root = await mkdtemp(join(tmpdir(), 'orca-repair-publication-'))
     const folder = join(root, '1.2.3')
     try {
@@ -51,6 +56,9 @@ it.each([false, true])(
       await writeFile(join(folder, 'server'), 'previous release')
       await chmod(join(folder, 'server'), 0o755)
       await writeRuntimeReleaseReceipt(folder, pinFor('previous release'))
+      if (missingMember) {
+        await rm(join(folder, 'server'))
+      }
       failure.target = folder
       failure.occupy = occupied
       const install = () =>
@@ -72,12 +80,29 @@ it.each([false, true])(
         expect(await readFile(join(folder, 'winner'), 'utf8')).toBe('concurrent release')
         const staging = (await readdir(root)).find((name) => name.startsWith('.download-'))!
         expect(await reclaimRuntimeReleases(root, ['1.2.3'])).toEqual([staging])
-        expect(await readFile(join(root, staging, 'damaged', 'server'), 'utf8')).toBe(
-          'previous release'
-        )
+        if (!missingMember) {
+          expect(await readFile(join(root, staging, 'damaged', 'server'), 'utf8')).toBe(
+            'previous release'
+          )
+        }
         await writeFile(join(folder, 'server'), 'replacement release')
         await chmod(join(folder, 'server'), 0o755)
+        if (missingMember) {
+          await writeRuntimeReleaseReceipt(folder, {
+            ...pinFor('replacement release'),
+            version: 'another-version'
+          })
+          expect(await reclaimRuntimeReleases(root, ['1.2.3'])).toEqual([staging])
+          await rm(join(folder, RUNTIME_RELEASE_RECEIPT))
+        }
         await writeRuntimeReleaseReceipt(folder, pinFor('replacement release'))
+        if (missingMember) {
+          const receipt = join(root, staging, 'damaged', RUNTIME_RELEASE_RECEIPT)
+          const original = await readFile(receipt, 'utf8')
+          await writeFile(receipt, '{}')
+          expect(await reclaimRuntimeReleases(root, ['1.2.3'])).toEqual([staging])
+          await writeFile(receipt, original)
+        }
         expect(await reclaimRuntimeReleases(root, ['1.2.3'])).toEqual([])
         expect(await readdir(root)).toEqual(['1.2.3'])
       } else {
