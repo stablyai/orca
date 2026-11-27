@@ -231,14 +231,13 @@ export async function launchRelayedAcpAgent(
   const versionSkipped = takeAcpKeptVersionSkip(input.acquire.identity.sessionId)
   // A bot's tool grants live only in this app, so a kept bot would lose its tools; a tool-free run's
   // folder goes with its launch, so it ends with this app.
+  if (!acpSpecRelays(spec) || launch.appBoundGrants || launch.toolFree) {
+    return null
+  }
   const refuse = async (refused: unknown): Promise<never> => {
     // Nothing of this launch ran, so its files go.
     await launch.release?.().catch(() => undefined)
     throw new AgentSessionPreSpawnError(refused)
-  }
-  if (!acpSpecRelays(spec) || launch.appBoundGrants || launch.toolFree) {
-    // A launch that skipped its version check for a kept agent must not spawn afresh.
-    return versionSkipped ? refuse(new Error('agent_kept_running_gone')) : null
   }
   // Answers to this app's own requests pass a reattach's hold; everything else waits for the chat.
   let floor = Number.POSITIVE_INFINITY
