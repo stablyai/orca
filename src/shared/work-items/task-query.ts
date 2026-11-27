@@ -284,7 +284,13 @@ export function withQualifier(
  * Re-quote whitespace-bearing tokens to preserve phrase/label semantics. */
 export function stripRepoQualifiers(rawQuery: string): string {
   const kept: string[] = []
-  for (const token of tokenizeSearchQuery(rawQuery.trim())) {
+  for (const { value: token, raw } of tokenizeSearchQueryWithRaw(rawQuery.trim())) {
+    // Why: parseTaskQuery reads quoted tokens as free text, so "is:closed" and "repo:x/y" must stay quoted.
+    // Double quotes because GitHub search ignores single-quoted phrases.
+    if (raw.startsWith('"') || raw.startsWith("'")) {
+      kept.push(`"${token}"`)
+      continue
+    }
     if (/^repo:[^\s]+$/i.test(token)) {
       continue
     }
