@@ -1,5 +1,4 @@
 import {
-  hangObservationUnresponsiveMs,
   isHangTierObservation,
   mergeHangTierFields,
   parseHangTierFields,
@@ -17,7 +16,7 @@ import {
   parseNativeHangCapture
 } from './hang-capture-codec'
 import { parseHangWorkerSends } from './hang-worker-sends'
-export { MACHINE_FIELDS, SNAPSHOT_FIELDS } from './hang-observation-schema'
+export { MACHINE_FIELDS, SNAPSHOT_FIELDS, latestHangMarker } from './hang-observation-schema'
 export type {
   HangSnapshot,
   HangMachineSnapshot,
@@ -249,9 +248,6 @@ export function retainHangObservation(
           }
         : old.native,
       powerEvents: [...receipts.values()].slice(-4),
-      ...((old.appVersion ?? record.appVersion)
-        ? { appVersion: old.appVersion ?? record.appVersion }
-        : {}),
       ...mergeHangTierFields(old, record),
       watchdogGap:
         old.watchdogGap && old.watchdogGap.durationMs > (record.watchdogGap?.durationMs ?? -1)
@@ -294,19 +290,4 @@ export function mergeHangObservations(
     result = retainHangObservation(result, record, { reserve: record.id === liveId })
   }
   return result
-}
-export function latestHangMarker(
-  collection: HangObservationCollection
-): HangDetectionMarker | null {
-  // Short stalls are breadcrumbs only; the hang marker (and its telemetry) keeps meaning >= timeout.
-  const record = collection.observations.findLast(isHangTierObservation)
-  return record
-    ? {
-        detectedAt: record.detectedAt,
-        parentPid: record.parentPid,
-        unresponsiveMs: hangObservationUnresponsiveMs(record),
-        selfRecovered: record.selfRecovered,
-        ...(record.appVersion ? { appVersion: record.appVersion } : {})
-      }
-    : null
 }

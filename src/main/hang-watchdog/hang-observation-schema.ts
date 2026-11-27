@@ -108,4 +108,19 @@ export type HangDetectionMarker = {
   selfRecovered: boolean
   appVersion?: string
 }
+export function latestHangMarker(
+  collection: HangObservationCollection
+): HangDetectionMarker | null {
+  // Short stalls are breadcrumbs only; the hang marker (and its telemetry) keeps meaning >= timeout.
+  const record = collection.observations.findLast(isHangTierObservation)
+  return record
+    ? {
+        detectedAt: record.detectedAt,
+        parentPid: record.parentPid,
+        unresponsiveMs: hangObservationUnresponsiveMs(record),
+        selfRecovered: record.selfRecovered,
+        ...(record.appVersion ? { appVersion: record.appVersion } : {})
+      }
+    : null
+}
 import type { MainJsCapture, NativeHangCapture } from './hang-stacks'
