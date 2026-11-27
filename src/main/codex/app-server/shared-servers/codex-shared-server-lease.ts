@@ -48,6 +48,10 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
   holding: boolean
   /** Frames were dropped while its threads waited for it: it catches up from history instead. */
   recoveryCut = false
+  /** The chat read whether it reattached; a cut learned after that needs a reopen. */
+  private relaySeen = false
+  /** The server's unknown-loss count this chat was told of. */
+  lossEpoch = 0
   /** Quit handed its part to the daemon (durable already): it dispatches nothing more. */
   handedOff = false
   readonly unregister: () => void
@@ -82,7 +86,16 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
 
   /** What the chat sees of the daemon running its server; absent when its run ends with this app. */
   get relay(): CodexAppServerConnection['relay'] {
+    this.relaySeen = true
     return codexSharedLeaseRelayView(this, this.restored !== null && !this.recoveryCut)
+  }
+
+  /** Output it never saw was let go: it catches up from history, reopening if it already chose. */
+  missed(): void {
+    this.recoveryCut = true
+    if (this.relaySeen) {
+      this.shed()
+    }
   }
 
   /** A restored chat's open failed: its threads and the frames it hasn't seen go back to wait. */
@@ -220,7 +233,9 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
   /** Too far behind: drops its queue and ends it alone; it reopens its thread on its next send. */
   shed(): void {
     if (this.holding && this.restored) {
-      // Still reading its kept state: its frames go back to wait (bounded there, with a cut).
+      // Still reading its kept state: what it holds is let go, and it catches up from history.
+      this.recoveryCut = true
+      this.queue.drop()
       this.handBack()
       return
     }

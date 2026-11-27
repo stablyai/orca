@@ -15,6 +15,11 @@ function chatLease() {
     open: true,
     reading: true,
     recoveryCut: false,
+    restored: null,
+    lossEpoch: 0,
+    missed: () => {
+      lease.recoveryCut = true
+    },
     deliver: (frame: CodexSharedServerFrame) => delivered.push(frame)
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the router reads only these members.

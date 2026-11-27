@@ -111,14 +111,17 @@ export class CodexSharedServerRouter {
     }
     // Its early frames were dropped to bound memory: the chat reopens it from Codex's history
     // rather than run on with events missing.
-    // A restored chat hears of unknown loss once: cut, it catches up from history after that.
-    const lost = this.unrouted.takeLost(threadId, lease.restored !== null && !lease.recoveryCut)
+    const lost = this.unrouted.takeLost(threadId)
     if (lost) {
       lease.liveThreads.add(threadId)
     }
-    // A restored chat's helper too: what it lost was its kept run's, so it catches up from history.
-    if (lost && (opened || lease.restored !== null)) {
-      lease.recoveryCut = true
+    // A restored chat hears of each unknown loss once; what it lost was its kept run's.
+    const epoch = this.unrouted.keptLossEpoch
+    const keptLost = lease.restored !== null && epoch > lease.lossEpoch
+    lease.lossEpoch = epoch
+    if (lease.restored !== null && (lost || keptLost)) {
+      lease.missed()
+    } else if (lost && opened) {
       lease.shed()
     }
   }
@@ -134,7 +137,9 @@ export class CodexSharedServerRouter {
       lease.liveThreads.add(threadId)
       this.retired.delete(threadId)
     }
-    lease.recoveryCut ||= recovered.cut
+    if (recovered.cut) {
+      lease.missed()
+    }
     for (const frame of recovered.frames) {
       if (frame.kind === 'notification') {
         this.discover(frame.method, frame.params)
