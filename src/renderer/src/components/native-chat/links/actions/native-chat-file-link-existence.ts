@@ -68,9 +68,9 @@ export function createNativeChatFileLinkExistence(
       ) {
         throw new Error('The workspace host changed or could not be determined')
       }
-      // Why: pathExists stats this computer when a paired host's path is outside the workspace (#50825).
+      // Why: an unprompted chat link must not treat a same-path file on this computer as the host's (#50825).
       if (isHostPathOutsideWorkspace(target)) {
-        return hostFileLinkTargetExists(target, outsideWorkspaceExists, null)
+        return hostFileLinkTargetExists(target, outsideWorkspaceExists, null, true)
       }
       return pathExists(target.fileContext, target.absolutePath, target.isRemoteRuntimePath)
     }

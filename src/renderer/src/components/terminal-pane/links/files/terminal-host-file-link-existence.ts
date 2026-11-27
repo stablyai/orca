@@ -21,7 +21,8 @@ export function isHostPathOutsideWorkspace(target: FileLinkTarget): boolean {
 export async function hostFileLinkTargetExists(
   target: FileLinkTarget,
   cache: TerminalPathExistsCache,
-  terminalHandle: string | null | undefined
+  terminalHandle: string | null | undefined,
+  hostFileOnly = false
 ): Promise<boolean> {
   // Why: an unprompted stat of a network share can send the user's credentials to its server.
   if (/^[\\/]{2}/.test(target.absolutePath)) {
@@ -36,7 +37,8 @@ export async function hostFileLinkTargetExists(
   try {
     const resolved = await resolveHostWorkspaceFile(target.fileContext, target.absolutePath, {
       existenceOnly: true,
-      terminalHandle
+      terminalHandle,
+      ...(hostFileOnly ? { hostFileOnly: true } : {})
     })
     // Why: a folder link opens only by switching to the workspace it names.
     exists = target.hostWorkspaceRootOnly ? isHostWorkspaceRoot(resolved) : resolved !== null
