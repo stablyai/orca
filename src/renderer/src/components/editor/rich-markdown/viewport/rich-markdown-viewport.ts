@@ -48,6 +48,24 @@ export function scrollRichMarkdownElementIntoView(
   })
 }
 
+/** Scroll only this editor's container; native scrollIntoView also moves floating-panel ancestors. */
+export function scrollRichMarkdownElementToContainerTop(
+  element: HTMLElement,
+  container: HTMLElement,
+  offset = 12
+): void {
+  const top = Math.max(
+    0,
+    element.getBoundingClientRect().top -
+      container.getBoundingClientRect().top +
+      container.scrollTop -
+      offset
+  )
+  richMarkdownViewport(container).scroll(() => {
+    container.scrollTo({ top })
+  })
+}
+
 export function handleRichMarkdownViewportReveal(view: EditorView, reason?: string): boolean {
   return reason === 'focus' && views.get(view)?.current() === true
 }
