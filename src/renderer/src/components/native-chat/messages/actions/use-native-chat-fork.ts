@@ -152,7 +152,7 @@ export function useNativeChatFork(input: {
           setPendingItemId(null)
         })
     },
-    [setPendingItemId]
+    [pendingRef, setPendingItemId]
   )
   // The floor and inventory read no reply text, so they hold while a reply streams.
   const structure = rowsBesideStreamedText(input.items)
@@ -196,7 +196,7 @@ export function useNativeChatFork(input: {
     }
     request(throughItemId)
     return 'started'
-  }, [request])
+  }, [pendingRef, request])
   const supportKind = support.kind
   const fork = support.kind === 'known' ? support.fork : undefined
   const inheritedOriginal = support.kind === 'known' && support.inheritedOriginal === true

@@ -194,7 +194,7 @@ export function useStructuredAgentSessionQueuedMessages(args: {
         setInFlight((current) => new Map([...current].filter(([key]) => !keys.includes(key))))
       })
     },
-    [setInFlight]
+    [setInFlight, shownInFlight]
   )
 
   const steer = useCallback(
