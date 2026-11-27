@@ -24952,6 +24952,8 @@
   },
   "terminal": {
     "startupPromptNotDelivered": "Die Startnachricht wurde nicht zugestellt.",
+    "startupPromptMore_one": "({{count}} weiterer Entwurf)",
+    "startupPromptMore_other": "({{count}} weitere Entwürfe)",
     "recentImages": {
       "pasted": "Eingefügtes Bild",
       "open": "Vorschau öffnen",

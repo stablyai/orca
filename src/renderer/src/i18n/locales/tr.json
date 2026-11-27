@@ -25369,6 +25369,8 @@
   },
   "terminal": {
     "startupPromptNotDelivered": "Başlangıç istemi iletilmedi.",
+    "startupPromptMore_one": "({{count}} tane daha)",
+    "startupPromptMore_other": "({{count}} tane daha)",
     "sessionSaveFailure": {
       "title": "Terminal oturumu kaydedilemedi",
       "capacity": "Bu terminali kaydeden cihaz, depolama alanının dolduğunu veya depolama kotasının aşıldığını bildirdi. O cihazda alan boşaltıp tekrar deneyin.",

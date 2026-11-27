@@ -25702,6 +25702,9 @@
   },
   "terminal": {
     "startupPromptNotDelivered": "O prompt de inicialização não foi entregue.",
+    "startupPromptMore_one": "({{count}} a mais)",
+    "startupPromptMore_other": "({{count}} a mais)",
+    "startupPromptMore_many": "({{count}} a mais)",
     "recentImages": {
       "pasted": "Imagem colada",
       "open": "Abrir prévia",

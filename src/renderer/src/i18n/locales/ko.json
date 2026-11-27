@@ -25231,6 +25231,7 @@
   },
   "terminal": {
     "startupPromptNotDelivered": "시작 프롬프트가 전달되지 않았습니다.",
+    "startupPromptMore_other": "({{count}}개 더)",
     "recentImages": {
       "pasted": "붙여넣은 이미지",
       "open": "미리보기 열기",

@@ -1,13 +1,17 @@
+import { XIcon } from 'lucide-react'
+import { createElement } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { AgentProgramBlockReason } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 
 const STARTUP_PROMPT_PREVIEW_CHARACTERS = 160
 const STARTUP_PROMPT_PREVIEW_LINES = 4
-const MAX_STICKY_STARTUP_NOTICES = 3
-const blockedStartupPrompts = new Map<string, string>()
-const stickyStartupNotices = new Map<string, () => void>()
-let nextBlockedStartupToastId = 0
+const STARTUP_PROMPT_PREVIEW_URL_CHARACTERS = 64
+const BLOCKED_STARTUP_DRAFTS_TOAST_ID = 'blocked-startup-drafts'
+const MAX_BLOCKED_STARTUP_DRAFTS = 3
+const blockedStartupDrafts: { reason: AgentProgramBlockReason; prompt: string }[] = []
+let copyingDraft = false
+let dismissingDraftNotice = false
 
 type StartupDraft = { worktreeId: string; prompt: string } | { creationId: string; prompt: string }
 
@@ -15,34 +19,49 @@ export function notifyBlockedAgentStartup(
   reason: AgentProgramBlockReason,
   request: string | StartupDraft | undefined
 ): void {
+  if (typeof request === 'object') {
+    blockedStartupDrafts.unshift({ reason, prompt: request.prompt })
+    // Keep only the three latest drafts. Each replaces the preview as it arrives.
+    if (blockedStartupDrafts.length > MAX_BLOCKED_STARTUP_DRAFTS) {
+      blockedStartupDrafts.pop()
+    }
+    showBlockedStartupDraftNotice()
+    return
+  }
+
   if (reason === 'unbuildable') {
     void import('../failure/agent-launch-failure')
       .then(({ notifyAgentLaunchFailure }) => notifyAgentLaunchFailure('hermes'))
       .catch((error: unknown) =>
         console.warn('[terminal] could not show the startup notice', error)
       )
-    if (typeof request === 'object') {
-      showBlockedStartupDraft(request)
-    }
     return
   }
-  const title =
-    reason === 'unavailable'
-      ? translate('terminal.agentStartup.unavailable', 'The agent could not be found on this host.')
-      : translate(
-          'terminal.agentStartup.unknown',
-          'The host could not verify the agent installation.'
-        )
-  if (typeof request !== 'object') {
-    toast.message(title, request ? copyDroppedTextAction(request) : undefined)
-    return
-  }
+  toast.message(blockedStartupTitle(reason), request ? copyDroppedTextAction(request) : undefined)
+}
 
-  showBlockedStartupDraft(request, title)
+function blockedStartupTitle(reason: AgentProgramBlockReason): string {
+  switch (reason) {
+    case 'unbuildable':
+      return translate(
+        'components.agentSessionContinuation.launchFailed',
+        'Could not start a new {{agent}} session.',
+        { agent: translate('auto.lib.agent.catalog.8a9ba743cc', 'Hermes') }
+      )
+    case 'unavailable':
+      return translate(
+        'terminal.agentStartup.unavailable',
+        'The agent could not be found on this host.'
+      )
+    case 'unknown':
+      return translate(
+        'terminal.agentStartup.unknown',
+        'The host could not verify the agent installation.'
+      )
+  }
 }
 
 function previewExcerpt(text: string, maxCharacters: number, maxLines: number): string {
-  // Build an independent string so Sonner's history can't retain the full draft via a substring.
   const lines = text.slice(0, (maxCharacters + 1) * 2).split(/\r\n?|\n/, maxLines + 1)
   const characters = Array.from(lines.slice(0, maxLines).join('\n'))
   return characters.length > maxCharacters || lines.length > maxLines
@@ -64,92 +83,145 @@ function startupPromptPreview(prompt: string): string {
     return preview
   }
 
-  const lastLineBreak = Math.max(text.lastIndexOf('\n'), text.lastIndexOf('\r'))
-  if (lastLineBreak < 0) {
-    return preview
-  }
-  const lastLine = text.slice(lastLineBreak + 1).trim()
-  const url = lastLine.match(/(?:^|\s)(https?:\/\/\S+)$/i)?.[1]
-  if (!url) {
+  const trailingUrl = /(?:^|\s)(https?:\/\/\S+)$/i.exec(text)
+  if (!trailingUrl?.[1]) {
     return preview
   }
 
-  const footer = previewExcerpt(lastLine, STARTUP_PROMPT_PREVIEW_CHARACTERS, 1)
-  const remaining = STARTUP_PROMPT_PREVIEW_CHARACTERS - Array.from(footer).length - 1
-  if (remaining < 1) {
-    return previewExcerpt(url, STARTUP_PROMPT_PREVIEW_CHARACTERS, 1)
+  const body = text.slice(0, trailingUrl.index).trimEnd()
+  const footer = shortenPreviewUrl(trailingUrl[1])
+  if (!body) {
+    return footer
   }
-  const body = text.slice(0, lastLineBreak).trimEnd()
+  const remaining = STARTUP_PROMPT_PREVIEW_CHARACTERS - Array.from(footer).length - 1
   return `${previewExcerpt(body, remaining, STARTUP_PROMPT_PREVIEW_LINES - 1)}\n${footer}`
 }
 
-function showBlockedStartupDraft(request: StartupDraft, title?: string): void {
-  const id =
-    'creationId' in request
-      ? `blocked-agent-startup:create:${request.creationId}`
-      : `blocked-agent-startup:launch:${++nextBlockedStartupToastId}`
+function shortenPreviewUrl(url: string): string {
+  const limit = STARTUP_PROMPT_PREVIEW_URL_CHARACTERS
+  const start = Array.from(url.slice(0, limit * 2))
+  if (url.length <= limit * 2 && start.length <= limit) {
+    return url
+  }
+  const headLength = Math.floor(limit / 2)
+  const tailLength = limit - headLength - 1
+  const end = Array.from(url.slice(-tailLength * 2))
+  return `${start.slice(0, headLength).join('')}…${end.slice(-tailLength).join('')}`
+}
+
+function BlockedStartupDraftDescription(): ReturnType<typeof createElement> {
+  const draft = blockedStartupDrafts[0]
+  const moreCount = blockedStartupDrafts.length - 1
   const notDelivered = translate(
     'terminal.startupPromptNotDelivered',
     "The startup prompt wasn't delivered."
   )
-  const preview = startupPromptPreview(request.prompt)
-  const description = title ? `${notDelivered}\n${preview}` : preview
-  blockedStartupPrompts.set(id, request.prompt)
-  let copying = false
-  const clearPrompt = (): void => {
-    blockedStartupPrompts.delete(id)
-    stickyStartupNotices.delete(id)
-  }
-  const copyPrompt = async (): Promise<void> => {
-    const text = blockedStartupPrompts.get(id)
-    if (copying || text === undefined) {
-      return
-    }
-    copying = true
-    if (!stickyStartupNotices.has(id)) {
-      show()
-    }
-    try {
-      await window.api.ui.writeClipboardText(text)
-    } catch {
-      copying = false
-      if (blockedStartupPrompts.has(id)) {
-        show()
-      }
-      return
-    }
-    clearPrompt()
-    toast.dismiss(id)
-  }
-  const show = (): void => {
-    toast.message(title ?? notDelivered, {
-      id,
-      description,
-      classNames: { description: 'whitespace-pre-line break-words' },
-      duration: copying || stickyStartupNotices.has(id) ? Infinity : undefined,
-      onDismiss: clearPrompt,
-      onAutoClose: clearPrompt,
-      action: {
-        label: translate('menu.copy', 'Copy'),
-        onClick: (event) => {
-          // Keep the same toast mounted until we know whether Copy succeeded.
-          event.preventDefault()
-          void copyPrompt()
+  const more =
+    moreCount > 0
+      ? translate('terminal.startupPromptMore', '({{count}} more)', { count: moreCount })
+      : null
+  return createElement(
+    'div',
+    { ref: finishBlockedStartupDraftDismissal },
+    createElement(
+      'button',
+      {
+        type: 'button',
+        'aria-label': translate('auto.components.ui.dialog.f26c4baeda', 'Close'),
+        'data-close-button': true,
+        onClick: () => {
+          if (draft && blockedStartupDrafts[0] === draft) {
+            blockedStartupDrafts.shift()
+            refreshBlockedStartupDraftNotice()
+          }
+        }
+      },
+      createElement(XIcon, { className: 'size-3', 'aria-hidden': true })
+    ),
+    createElement('div', null, notDelivered, more && ` ${more}`),
+    createElement(
+      'div',
+      { className: 'line-clamp-4 whitespace-pre-wrap wrap-anywhere' },
+      draft ? startupPromptPreview(draft.prompt) : null
+    )
+  )
+}
+
+function BlockedStartupDraftCopyButton(): ReturnType<typeof createElement> {
+  const draft = blockedStartupDrafts[0]
+  return createElement(
+    'button',
+    {
+      type: 'button',
+      'data-button': true,
+      'data-action': true,
+      onClick: () => {
+        if (draft && blockedStartupDrafts[0] === draft) {
+          void copyStartupDraft(draft)
         }
       }
-    })
-  }
+    },
+    translate('menu.copy', 'Copy')
+  )
+}
 
-  if (stickyStartupNotices.size === MAX_STICKY_STARTUP_NOTICES) {
-    const oldest = stickyStartupNotices.entries().next()
-    if (!oldest.done) {
-      const [oldestId, showOldest] = oldest.value
-      stickyStartupNotices.delete(oldestId)
-      showOldest()
+function showBlockedStartupDraftNotice(): void {
+  if (blockedStartupDrafts.length === 0 || dismissingDraftNotice) {
+    return
+  }
+  // Sonner's message API replaces the history record for this id.
+  toast.message(
+    () => {
+      const draft = blockedStartupDrafts[0]
+      return draft ? blockedStartupTitle(draft.reason) : null
+    },
+    {
+      id: BLOCKED_STARTUP_DRAFTS_TOAST_ID,
+      description: createElement(BlockedStartupDraftDescription),
+      duration: Infinity,
+      closeButton: false,
+      dismissible: false,
+      action: createElement(BlockedStartupDraftCopyButton)
+    }
+  )
+}
+
+function refreshBlockedStartupDraftNotice(): void {
+  if (blockedStartupDrafts.length > 0) {
+    showBlockedStartupDraftNotice()
+  } else {
+    dismissingDraftNotice = true
+    toast.dismiss(BLOCKED_STARTUP_DRAFTS_TOAST_ID)
+  }
+}
+
+function finishBlockedStartupDraftDismissal(element: HTMLDivElement | null): void {
+  if (element === null && dismissingDraftNotice) {
+    // Sonner removes the old card after its exit animation, even if its id was updated.
+    dismissingDraftNotice = false
+    if (blockedStartupDrafts.length > 0) {
+      queueMicrotask(showBlockedStartupDraftNotice)
     }
   }
-  stickyStartupNotices.set(id, show)
-  show()
+}
+
+async function copyStartupDraft(draft: (typeof blockedStartupDrafts)[number]): Promise<void> {
+  if (copyingDraft) {
+    return
+  }
+  copyingDraft = true
+  try {
+    await window.api.ui.writeClipboardText(draft.prompt)
+  } catch {
+    return
+  } finally {
+    copyingDraft = false
+  }
+  const index = blockedStartupDrafts.indexOf(draft)
+  if (index !== -1) {
+    blockedStartupDrafts.splice(index, 1)
+    refreshBlockedStartupDraftNotice()
+  }
 }
 
 export function copyDroppedTextAction(text: string): {

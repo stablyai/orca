@@ -24826,6 +24826,7 @@
   },
   "terminal": {
     "startupPromptNotDelivered": "起動時のプロンプトは送信されませんでした。",
+    "startupPromptMore_other": "（ほか{{count}}件）",
     "recentImages": {
       "pasted": "貼り付けた画像",
       "open": "プレビューを開く",

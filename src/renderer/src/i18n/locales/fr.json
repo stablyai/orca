@@ -25579,6 +25579,9 @@
   },
   "terminal": {
     "startupPromptNotDelivered": "Le message de démarrage n’a pas été transmis.",
+    "startupPromptMore_one": "({{count}} de plus)",
+    "startupPromptMore_other": "({{count}} de plus)",
+    "startupPromptMore_many": "({{count}} de plus)",
     "recentImages": {
       "pasted": "Image collée",
       "open": "Ouvrir l'aperçu",

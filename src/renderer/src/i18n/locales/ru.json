@@ -26176,6 +26176,10 @@
   },
   "terminal": {
     "startupPromptNotDelivered": "Стартовый запрос не был доставлен.",
+    "startupPromptMore_one": "(ещё {{count}})",
+    "startupPromptMore_few": "(ещё {{count}})",
+    "startupPromptMore_many": "(ещё {{count}})",
+    "startupPromptMore_other": "(ещё {{count}})",
     "recentImages": {
       "pasted": "Вставленное изображение",
       "open": "Открыть предпросмотр",
