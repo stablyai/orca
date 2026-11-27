@@ -23,6 +23,7 @@ import { extractString } from '../../../../shared/text/trimmed-string'
 import { timeObjectValue, timestampMs } from '../../parsing/session-record-time'
 import { normalizeTitleText } from '../../parsing/session-scanner-text-normalization'
 import { tokenTotal } from '../../parsing/session-scanner-token-values'
+import { noteTranscriptSourceFailure } from '../../parsing/session-scanner-jsonl-reader'
 
 /** Scope discovery reads cwd without opening message files. */
 export function openCodeSessionCwd(record: Record<string, unknown>): string | null {
@@ -62,6 +63,7 @@ async function readOpenCodeJsonDirectory(
   } catch (error) {
     throwIfAiVaultScanCancelled(signal)
     if (!isMissingTranscriptPathError(error)) {
+      noteTranscriptSourceFailure(error)
       throw error
     }
     return []
@@ -84,7 +86,14 @@ export async function readOpenCodeJsonRecord(
   path: string,
   signal?: AbortSignal
 ): Promise<Record<string, unknown> | null> {
-  const content = await waitForAiVaultScan(wslGatedReadFile(path, 'utf-8', 'scan', signal), signal)
+  let content: string
+  try {
+    content = await waitForAiVaultScan(wslGatedReadFile(path, 'utf-8', 'scan', signal), signal)
+  } catch (error) {
+    throwIfAiVaultScanCancelled(signal)
+    noteTranscriptSourceFailure(error)
+    throw error
+  }
   try {
     const parsed: unknown = JSON.parse(content)
     return asRecord(parsed)

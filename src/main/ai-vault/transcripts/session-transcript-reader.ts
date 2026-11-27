@@ -8,6 +8,7 @@ import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault
 import { parseAgentSessionFile } from '../parsing/session-scanner-agent-parser'
 import {
   consumeCompleteJsonlLines,
+  isTranscriptSourceFailure,
   noteTranscriptSourceFailure
 } from '../parsing/session-scanner-jsonl-reader'
 import { isZstdTranscriptPath } from '../../native-chat/transcript-streaming/transcript-zstd-decompression'
@@ -226,6 +227,7 @@ export async function readWholeTranscript(
       session: null,
       byteOffset: 0,
       incomplete: true,
+      sourceUnavailable: file.dependencySignature !== undefined && isTranscriptSourceFailure(error),
       cancelled:
         args.signal?.aborted === true || (error instanceof Error && error.name === 'AbortError')
     })

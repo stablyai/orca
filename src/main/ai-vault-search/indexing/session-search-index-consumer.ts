@@ -160,8 +160,13 @@ class SessionSearchReadConsumer implements TranscriptReadConsumer {
   }
 
   finish(outcome: TranscriptReadOutcome): void {
-    if (outcome.cancelled || this.write.cancelled?.() || this.write.failed?.()) {
-      // Cancellation must not count toward the failure limit for a healthy file.
+    if (
+      outcome.cancelled ||
+      outcome.sourceUnavailable ||
+      this.write.cancelled?.() ||
+      this.write.failed?.()
+    ) {
+      // Cancellation and dependency I/O refusals must not permanently hold out a source revision.
       this.write.discard()
       return
     }

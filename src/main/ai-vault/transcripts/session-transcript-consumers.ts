@@ -60,6 +60,8 @@ export type TranscriptReadOutcome = {
   incomplete: boolean
   /** Cancellation leaves the file pending without recording a failure. */
   cancelled?: boolean
+  /** Dependency availability can recover without changing the recorded source revision. */
+  sourceUnavailable?: boolean
   /** SHA-256 of bytes [0, byteOffset); absent when the read could not hash its whole prefix. */
   prefixHash?: string
 }

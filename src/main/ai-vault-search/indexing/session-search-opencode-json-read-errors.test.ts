@@ -2,6 +2,11 @@ import { mkdir, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { dirname, join, sep } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { resetSessionParseCacheForTests } from '../../ai-vault/parse-cache/session-parse-cache-store'
+import {
+  flushSessionParseCachePersist,
+  initSessionParseCachePersistence,
+  resetSessionParseCachePersistenceForTests
+} from '../../ai-vault/parse-cache/session-parse-cache-persistence'
 import { withFullFirstUserPromptCapture } from '../../ai-vault/prompts/session-scanner-first-user-prompt-capture'
 import { scanAiVaultSessions } from '../../ai-vault/session-scanner'
 import { resetTranscriptConsumersForTests } from '../../ai-vault/transcripts/session-transcript-consumers'
@@ -29,7 +34,12 @@ async function put(path: string, value: unknown): Promise<void> {
 
 beforeEach(async () => {
   resetSessionParseCacheForTests()
+  resetSessionParseCachePersistenceForTests()
   harness = await openSessionSearchIndexerHarness('ss-opencode-read-errors')
+  initSessionParseCachePersistence({
+    filePath: join(harness.root, 'parse-cache.json'),
+    appVersion: 'test'
+  })
   storage = harness.roots.opencodeStorageDir!
   messages = join(storage, 'message', 'ses_retry')
   part = join(storage, 'part', 'msg_user', 'prt_01.json')
@@ -53,6 +63,7 @@ afterEach(async () => {
   vi.restoreAllMocks()
   resetTranscriptConsumersForTests()
   resetSessionParseCacheForTests()
+  resetSessionParseCachePersistenceForTests()
   store.close()
   await harness.cleanup()
 })
@@ -100,11 +111,28 @@ it('retries History and search after part I/O errors without a source-stat chang
   registerSessionSearchIndexConsumer(store)
   blocked = true
   code = 'EACCES'
-  await pass()
-  expect(matches('Recovered')).toEqual([])
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await pass()
+    expect(matches('Recovered')).toEqual([])
+  }
+  await flushSessionParseCachePersist()
+  resetTranscriptConsumersForTests()
+  store.close()
+  resetSessionParseCacheForTests()
+  resetSessionParseCachePersistenceForTests()
+  initSessionParseCachePersistence({
+    filePath: join(harness.root, 'parse-cache.json'),
+    appVersion: 'test'
+  })
+  store = new SessionSearchStore(harness.databasePath)
+  registerSessionSearchIndexConsumer(store)
   blocked = false
+  // Search must recover on its own after reopening, before History can refresh its coverage.
   await pass()
   expect.soft(matches('Recovered')).toEqual(['ses_retry'])
+  // Malformed parts do not prevent caching the complete readable transcript.
+  blocked = true
+  expect.soft((await history()).sessions[0]?.previewMessages[0]?.text).toBe('Recovered prompt')
 
   const after = await stat(part)
   expect([after.size, after.mtimeMs, after.ctimeMs]).toEqual([
