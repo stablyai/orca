@@ -766,6 +766,7 @@
         "task": "タスク"
       },
       "unnamedRecipient": "Agent",
+      "recipientName": "{{name}}",
       "event": {
         "followedUp": "フォローアップ送信済み",
         "update": "更新",
@@ -839,6 +840,267 @@
     "selectionQuote": {
       "action": "引用",
       "hint": "選択したテキストを引用としてメッセージに追加します"
+    },
+    "botCards": {
+      "request": {
+        "pairedComputer": "ペアリング済みのコンピュータ",
+        "notConnected": "接続されていませんでした",
+        "declined": "拒否しました",
+        "waitingOn": "{{computer}} での承認を待っています"
+      },
+      "offer": {
+        "openBot": "{{name}} を開く",
+        "notNow": "後で",
+        "heading": "新規ボット"
+      },
+      "toolAdded": {
+        "added": "追加しました"
+      },
+      "memory": {
+        "openMemory": "メモリーを開く"
+      },
+      "google": {
+        "ended": "この Google のセットアップは終了しました。",
+        "receipt": {
+          "change": "変更",
+          "dismissed": "✓ 閉じました",
+          "imported": "✓ チームのファイルを追加しました",
+          "chose": "✓ {{what}} を選択しました",
+          "signedInAs": "✓ {{email}} としてサインインしました",
+          "signedIn": "✓ サインインしました",
+          "done": "✓ 完了",
+          "takeOver": "✓ ここからは {{bot}} が引き継ぎます",
+          "stopped": "セットアップを停止しました"
+        },
+        "heading": "Google に接続",
+        "path": {
+          "title": "どのようにセットアップしますか？",
+          "why": "自分の Google アプリを作成するため、サインイン情報はあなたのコンピュータに残ります。",
+          "doIt": "代わりにやってもらう",
+          "guideHere": "ここで案内してもらう",
+          "guideBrowser": "ブラウザで案内してもらう",
+          "doItNote": "{{bot}} が操作します",
+          "guideHereNote": "Orca であなたが操作します",
+          "guideBrowserNote": "ブラウザであなたが操作します"
+        },
+        "notNow": "後で",
+        "progress": {
+          "heading": "Google をセットアップ中",
+          "done": "完了",
+          "waiting": "あなたの操作待ち",
+          "working": "作業中",
+          "stopped": "停止",
+          "doneCount": "{{count}} ステップ完了",
+          "more": "+ ほか {{count}} ステップ"
+        },
+        "account": {
+          "title": "どの Google アカウントを使用しますか？",
+          "personal": "個人アカウント",
+          "work": "仕事用アカウント",
+          "note": "Google Cloud のページはすべて、選択したアカウントで開きます。"
+        },
+        "services": {
+          "title": "どの Google サービスを使用しますか？",
+          "note": "どれを選んでも、名前で人を検索できます。あとから追加することもできます。"
+        },
+        "continue": "続行",
+        "connect": {
+          "titleAccount": "サインインして {{email}} を接続",
+          "title": "サインインして接続",
+          "onComputer": "コンピュータの Orca で Google にサインインしてください。",
+          "signIn": "Google にサインイン"
+        },
+        "movedDown": "この続きは下にあります。",
+        "connected": {
+          "heading": "Google に接続済み",
+          "canUse": "{{bot}} は {{services}} を使用できます。"
+        },
+        "copied": "コピーしました。Google 管理者に送信してください。",
+        "action": {
+          "onComputer": "「{{action}}」はコンピュータの Orca で行ってください。",
+          "makeNewKey": "新規キーを作成",
+          "importKey": "キーファイルをインポート",
+          "allow": "{{services}} を許可",
+          "signInAgain": "もう一度サインイン",
+          "continueWithout": "それらなしで続行",
+          "keep": "{{email}} のままにする",
+          "signInAs": "{{email}} としてサインイン",
+          "turnOn": "オンにする",
+          "copyForAdmin": "管理者向けにコピー",
+          "checkAgain": "再確認",
+          "continue": "続行",
+          "startOver": "最初からやり直す"
+        },
+        "otherAccount": "アカウントを切り替え",
+        "letMe": "これは自分でやる",
+        "step": {
+          "headingCount": "あなたの番 · {{n}} / {{total}}",
+          "watching": "ページを監視中",
+          "onComputer": "コンピュータの Google Cloud で行ってください。",
+          "account": "Google にサインイン",
+          "project": "プロジェクトを作成",
+          "apis": "{{services}} を有効にする",
+          "branding": "Google のサインイン画面を設定",
+          "links": "アプリのリンクを追加",
+          "publish": "アプリを公開",
+          "client": "アプリのキーを作成",
+          "connect": "接続して確認"
+        },
+        "done": "完了",
+        "takeOver": "ここから任せる",
+        "choice": {
+          "gmail": "Gmail",
+          "calendar": "カレンダー",
+          "files": "ドライブ、ドキュメント、スプレッドシート",
+          "gmailDescription": "メールの検索と閲覧、下書きの作成、指示したときの送信",
+          "calendarDescription": "予定の表示、作成、移動",
+          "filesDescription": "ファイルの検索、閲覧、編集"
+        },
+        "notes": {
+          "project": {
+            "account": "右上のアカウントが使用したいアカウントであることを確認してください。",
+            "create": "<b>作成</b>をクリックしてください。名前は何でもかまいません。"
+          },
+          "apis": {
+            "project": "上部のプロジェクトが、作成したばかりのプロジェクトであることを確認してください。",
+            "enable": "<b>次へ</b>、<b>有効にする</b>の順にクリックしてください。"
+          },
+          "branding": {
+            "start": "<b>スタートガイド</b>をクリックしてください。",
+            "name": "アプリ名に <b>Orca</b>、サポートメールにあなたのメールアドレスを指定してください。",
+            "external": "対象: <b>外部</b>。",
+            "internal": "対象: <b>内部</b>。",
+            "either": "対象: Gmail アカウントなら<b>外部</b>、仕事用アカウントなら<b>内部</b>。",
+            "contact": "連絡先メールアドレスにあなたのメールアドレスを指定してください。",
+            "agree": "<b>Google API サービス: ユーザーデータに関するポリシーに同意します</b>にチェックを入れ、<b>作成</b>をクリックしてください。"
+          },
+          "links": {
+            "domain": "<b>アプリのドメイン</b>に、ホームページとプライバシーポリシーのリンクを貼り付けてください。",
+            "authorized": "<b>承認済みドメイン</b>にドメインを追加してください。",
+            "save": "<b>保存</b>をクリックしてください。"
+          },
+          "publish": {
+            "publish": "<b>アプリを公開</b>、<b>確認</b>の順にクリックしてください。",
+            "why": "アプリを公開すると、7 日を過ぎてもサインインが維持されます。"
+          },
+          "client": {
+            "type": "アプリケーションの種類で<b>デスクトップアプリ</b>を選択し、<b>作成</b>をクリックしてください。",
+            "agent": "<b>このクライアントを AI 搭載 Agent に使用する</b>が表示されたら、チェックを入れてください。",
+            "download": "<b>JSON をダウンロード</b>をクリックしてください。キーは Orca が保存します。"
+          }
+        },
+        "blocker": {
+          "stoppedWhy": "セットアップを停止しました: {{reason}}",
+          "stopped": "セットアップを停止しました。",
+          "paused": "セットアップは「{{step}}」で一時停止しました。ここまでの内容は保存されています。",
+          "yourTurn": "あなたの番です: {{step}}。",
+          "noKey": "Orca には先にアプリのキーが必要です。",
+          "keyGone": "このアプリのキーは使用できなくなりました: Google Cloud で削除されています。",
+          "keyOtherProject": "保存されたキーは {{project}} ではなく、プロジェクト {{keyProject}} のものです。",
+          "otherAccount": "{{signedIn}} としてサインインしましたが、このセットアップは {{wanted}} 用です。",
+          "signedOut": "{{email}} のサインインが終了しました。",
+          "needsPermission": "あと少しです: {{services}} を許可してください。Google はサービスごとにチェックボックスを表示するので、すべてにチェックを入れてください。",
+          "apiOff": "Google Cloud で {{services}} がオフになっています。",
+          "adminBlocked": "会社の Google 管理者が {{services}} をブロックしています。",
+          "checkFailed": "Orca は {{services}} を確認できませんでした。"
+        },
+        "ownerStep": "3 ステップ中 {{step}} ステップ目",
+        "adminRequest": "管理コンソール（セキュリティ › API の制御 › サードパーティ製アプリのアクセスを管理）で、この Google アプリを「信頼できる」に設定してください: {{clientId}}"
+      },
+      "importDone": {
+        "heading": "インポート完了",
+        "title": "{{name}} を {{app}} からインポートしました",
+        "open": "開く",
+        "stayed": "{{app}} に残したもの: {{things}}。{{app}} では何も変更されていません。",
+        "unchanged": "{{app}} では何も変更されていません。",
+        "paused": "二重に実行されないよう、オートメーションは一時停止しています。{{app}} で古いボットをオフにしてから、オートメーションをオンにしてください。",
+        "soulOnComputer": "ソウルとメモリーはコンピュータの Orca で開いてください。"
+      },
+      "importPlan": {
+        "comes": "インポートする項目",
+        "changed": "変更してインポートする項目",
+        "already": "すでにある項目",
+        "stays": "{{app}} に残る項目",
+        "fromAgain": "{{app}} から（再度）",
+        "from": "{{app}} から",
+        "selected": "{{total}} 件中 {{chosen}} 件を選択 · キーとログイン情報はコピーされません",
+        "importOne": "1 件をインポート",
+        "importMany": "{{count}} 件をインポート",
+        "askedOne": "1 件のインポートを依頼しました",
+        "askedMany": "{{count}} 件のインポートを依頼しました"
+      },
+      "composio": {
+        "heading": "Composio",
+        "step": "{{total}} ステップ中 {{index}} ステップ目",
+        "setUpTitle": "{{app}} には Composio での 1 回限りのセットアップが必要です",
+        "setUpDeveloperApp": "{{app}} の開発者サイトで開発者アプリを作成してください。手順は Composio の {{app}} ページに記載されています。",
+        "setUpAuthConfig": "Composio で Auth Configs を開き、{{app}} 用の設定を追加して、開発者アプリのキーを貼り付けてください。",
+        "setUpCheckAgain": "ここに戻って「再確認」を選択してください。",
+        "setUpNotYet": "Composio にはまだ {{app}} の Auth Config がありません。",
+        "openAuthConfigs": "Auth Configs を開く",
+        "appGuide": "{{app}} のページ",
+        "checkAgain": "再確認",
+        "connectTitle": "{{app}} を接続",
+        "connecting": "ブラウザでのサインインの完了を待っています",
+        "connectKeyNote": "Composio を開いて {{app}} の API キーを入力します。キーは Orca ではなく Composio が保管します。",
+        "connectNote": "Composio から {{app}} のサインインをブラウザで開きます。このサインイン情報は Orca ではなく Composio が保管します。",
+        "signInOnComposio": "Composio のページで {{app}} にサインインしてください。",
+        "openAgain": "もう一度開く",
+        "cancel": "キャンセル",
+        "keyFirst": "先に Composio のキーを追加してください。",
+        "connect": "{{app}} を接続",
+        "byHandCopy": "{{bot}} のアドレスをコピーしてください。",
+        "byHandPaste": "Composio でプロジェクトの設定を開き、Webhooks を開いて貼り付けてください。",
+        "byHandOpen": "Composio を開く",
+        "byHandDone": "完了",
+        "byHandDoneNote": "その後、Orca が {{trigger}} をオンにし、Composio の署名シークレットを保存します。",
+        "eventsTitle": "{{trigger}} のときに Composio から {{bot}} を呼び出す",
+        "eventsReplaceNote": "Composio プロジェクトはすでに別のアドレスにイベントを送信しています。この設定を行うと、イベントは代わりにここへ送信され、そのアドレスには届かなくなります。",
+        "eventsOneAddressNote": "Orca はあなたのサインインに対して {{trigger}} をオンにします。Composio プロジェクトのイベントは 1 つのアドレスで Orca に届き、それぞれ対象のボットに送られます。",
+        "eventsDone": "✓ 設定しました",
+        "eventsChosenByHand": "Composio で設定",
+        "eventsReplace": "置き換えて設定",
+        "eventsSetUp": "設定する",
+        "eventsByHand": "手動で設定",
+        "keyAdded": "✓ キーを追加しました",
+        "declined": "閉じました",
+        "keyRejectedTitle": "Composio のキーを置き換え",
+        "keyTitle": "Composio のキーを追加",
+        "keyRejectedNote": "Composio は保存されたキーを受け付けなくなりました。Composio の Settings › API Keys で新規キーを作成してください。",
+        "keyLabel": "Composio API キー",
+        "keyPlaceholder": "キーを貼り付け",
+        "keyPurposeOnHost": "Composio のプロジェクトキーを使うと、{{host}} 上のボットが Composio で接続したアプリを使用できます。キーは {{host}} に保存され、ボットからは見えません。",
+        "keyPurpose": "Composio のプロジェクトキーを使うと、ボットが Composio で接続したアプリを使用できます。キーはあなたのコンピュータに保存され、ボットからは見えません。",
+        "checking": "確認中…",
+        "replaceKey": "キーを置き換える",
+        "addKey": "キーを追加",
+        "getKey": "キーを取得",
+        "dismiss": "閉じる",
+        "goneHeading": "設定が必要",
+        "ready": "準備完了",
+        "goneTitle": "{{bot}} は現在 {{app}} を使用できません",
+        "readyTitle": "{{bot}} が {{app}} を使用できるようになりました",
+        "goneDetail": "ボットのツールからもう一度設定してください。",
+        "readyAs": "{{label}} として接続しました。アプリのサインイン情報は Composio が保管しています。",
+        "custody": "アプリのサインイン情報は Composio が保管しています。",
+        "browseOnComputer": "その他のアプリは、コンピュータの Orca でボットのツールから探してください。",
+        "browse": "その他のアプリを見る"
+      },
+      "webhookSetup": {
+        "heading": "Webhook を設定",
+        "on": "オン",
+        "hint": "サービスの送信先をこの URL に設定してください",
+        "gettingUrl": "URL を取得中…",
+        "keyAndSecret": "キーと署名シークレット",
+        "headerKey": "ヘッダーキー",
+        "copy": "コピー",
+        "signingSecret": "署名シークレット",
+        "noSecret": "なし",
+        "sampleCall": "サンプル呼び出し",
+        "sampleNote": "実際の実行が始まります",
+        "send": "送信",
+        "copiedReceipt": "✓ URL をコピーしました"
+      }
     },
     "eventRow": {
       "running": "実行中",
@@ -1430,7 +1692,24 @@
       },
       "composer": {
         "planMode": "プラン",
-        "exitPlanMode": "プランモードを終了"
+        "exitPlanMode": "プランモードを終了",
+        "botChats": "チャット",
+        "backToBots": "ボットに戻る",
+        "loadingBotChats": "{{name}} のチャットを読み込み中…",
+        "noOtherChats": "ほかのチャットはありません",
+        "noMatchingChats": "一致するチャットがありません",
+        "retryChats": "再試行",
+        "permissionAsk": "承認を求める",
+        "permissionAcceptEdits": "編集を許可",
+        "permissionAuto": "代わりに承認",
+        "permissionFullAccess": "フルアクセス",
+        "permissionAskDescription": "設定で許可されていない編集やコマンドの前に確認します",
+        "permissionAskSharedDescription": "まだ許可されていない編集やコマンドの前に確認します",
+        "permissionAcceptEditsAntigravityDescription": "ファイルの編集を承認し、それ以外は確認します",
+        "permissionAcceptEditsDescription": "ファイルの編集とファイル操作コマンドを承認し、それ以外は確認します",
+        "permissionAutoDescription": "承認リクエストを代わりに審査します",
+        "permissionFullAccessCodexDescription": "確認しません。任意のファイルを編集し、ネットワークを使用できます",
+        "permissionFullAccessDescription": "編集やコマンドの前に確認しません"
       },
       "goal": {
         "sentAsGoal": "ゴールとして送信されました"
@@ -1445,8 +1724,15 @@
         "open": "{{source}} で開く",
         "noAccess": "アクセス不可",
         "earlierMessages_one": "スレッド内の以前のメッセージ {{count}} 件",
-        "earlierMessages_other": "スレッド内の以前のメッセージ {{count}} 件"
+        "earlierMessages_other": "スレッド内の以前のメッセージ {{count}} 件",
+        "via": "{{bot}} 経由の {{name}}"
       },
+      "slackMirror": {
+        "retry": "再試行",
+        "switch": "このチャットを Slack に投稿",
+        "delete": "Slack から削除"
+      },
+      "dismissDeliveryNotice": "閉じる",
       "typedBy": {
         "anotherComputer": "別のコンピュータ",
         "fromVia": "送信者: {{name}}（{{computer}} 経由）",
@@ -1914,6 +2200,14 @@
     "activeAgents": {
       "heading": "アクティブ",
       "seeAll": "すべての Agent を表示"
+    },
+    "bots": {
+      "waits": {
+        "questions_other": "{{count}} 件の質問",
+        "access_other": "{{count}} 件のアクセスリクエスト",
+        "workers_other": "{{count}} 件のワーカー",
+        "items_other": "{{count}} 件のアイテム"
+      }
     }
   },
   "hooks": {
@@ -1967,6 +2261,7 @@
       "tasks": "タスク",
       "moreActions": "その他の操作",
       "automations": "自動化",
+      "sharedLinks": "共有リンク",
       "mcpServers": "MCP サーバー"
     },
     "deleteConfirm": {
@@ -2800,6 +3095,7 @@
       "terminalTitle": "ターミナル",
       "terminalLayout": "ターミナルのレイアウト",
       "sourceControl": "ソース管理",
+      "itemsNeedYou": "アイテム、確認が必要 {{count}} 件",
       "quickCommands": "クイックコマンド",
       "items": "アイテム",
       "textSize": "テキストサイズ"
@@ -3556,8 +3852,36 @@
       "downloadSize": "約 {{size}} MB",
       "phoneChecking": "確認中…"
     },
+    "bots": {
+      "slackStatus": {
+        "notInstalled": "未インストール",
+        "unknown": "確認できません",
+        "updateNeeded": "更新が必要",
+        "waiting": "インストール待ち"
+      },
+      "addConnector": "コネクターを追加",
+      "connectors": "コネクター",
+      "retry": "再試行",
+      "memoryHistory": {
+        "today": "今日",
+        "yesterday": "昨日",
+        "undoAction": "元に戻す",
+        "nothingToUndo": "元に戻せるものはありません: それらの行はその後変更されています。",
+        "empty": "まだ変更はありません。"
+      },
+      "githubStatus": {
+        "notInstalled": "Orca 未インストール",
+        "unlinked": "未リンク"
+      },
+      "linearStatus": {
+        "unlinked": "未リンク",
+        "notInstalled": "Orca 未インストール"
+      }
+    },
     "sharedLinks": {
-      "bots": "Bots"
+      "title": "共有リンク",
+      "bots": "Bots",
+      "description": "公開したリンクです。"
     }
   },
   "sourceControl": {
@@ -4881,9 +5205,50 @@
       },
       "wslDistroStopped": "WSL ディストリビューション {{distro}} が停止しているため、このスケジュール実行では起動しませんでした。ディストリビューションを起動するか、「今すぐ実行」を使ってください。起動中は以降の実行が行われます。",
       "botsOff": "設定でボットがオフになっているため、Orca はこの実行をスキップしました。",
+      "botsOffByTeam": "チームによってボットがオフになっているため、Orca はこの実行をスキップしました。",
       "botMissing": "このオートメーションを実行するボットはもう存在しません。",
       "botFolderMissing": "ボットのフォルダーは利用できなくなりました。",
       "botPaused": "{{bot}} は一時停止中のため、Orca はこの実行をスキップしました。"
+    },
+    "botTarget": {
+      "fieldLabel": "ボットまたはプロジェクト",
+      "option": "ボット · {{name}}",
+      "deletedBot": "削除されたボット",
+      "prompt": "何をさせますか？",
+      "promptMissing": "実行する内容を入力してください。",
+      "when": "タイミング",
+      "noSchedule": "イベント発生時のみ",
+      "never": "実行しない",
+      "onEvents": "何かが起きたとき…",
+      "runsIn": "実行場所",
+      "runsInNew": "毎回新規の会話",
+      "chat": "{{name}} のチャット",
+      "runsInUntitledChat": "無題のチャット",
+      "agent": "Agent",
+      "agentSameAsBot": "{{name}} と同じ",
+      "agentInChat": "このチャットの Agent",
+      "resultsTo": "結果の送信先",
+      "resultsToThread": "イベントのスレッド",
+      "resultsToChannel": "チャンネル",
+      "resultsToLinear": "Linear Issue",
+      "resultsToNone": "送信しない",
+      "channelPlaceholder": "#チャンネルまたは Slack のリンク",
+      "channelLabel": "チャンネル",
+      "linearIssuePlaceholder": "Issue キー（例: ENG-123）または Linear のリンク",
+      "linearIssueLabel": "Linear Issue",
+      "channelMissing": "結果を送信するチャンネルを入力してください。",
+      "linearIssueInvalid": "結果を送信する Linear Issue を ENG-123 のように入力してください。",
+      "letBotReact": "{{name}} に反応させる",
+      "letBotReactHelp": "結果ごとにターンが始まり、{{name}} がそれに対応できます。",
+      "time": "時刻",
+      "minute": "分",
+      "runs": "実行"
+    },
+    "botEvents": {
+      "label": "イベント",
+      "editInChat": "チャットで編集",
+      "editDraft": "オートメーション「{{name}}」を変更してください: ",
+      "addDraft": "オートメーション「{{name}}」が次の場合にも実行されるよう変更してください: "
     },
     "eventsWontFire": "スケジュールでのみ実行されます：{{connectors}} コネクタが必要です",
     "wontFire": "実行されません：{{connectors}} コネクタが必要です"
@@ -5276,9 +5641,32 @@
       "newThreadTab": "新規スレッド",
       "newThreadHint": "新しく始まります",
       "newThread": "{{name}} の新規スレッド",
+      "peerReadItems": "{{bot}} が項目の更新を読みました",
+      "remoteReplied": "{{computer}} 上で返信済み",
+      "remoteNotice": "{{computer}} 上で回答なし",
+      "remoteNotSent": "{{computer}} に未送信",
+      "remoteUnknown": "配信状況不明",
+      "remoteStopped": "ここでは停止済み",
+      "remoteSending": "{{computer}} 上で質問中…",
+      "remoteAsked": "{{computer}} 上で質問済み",
+      "remoteMayAnswer": "{{computer}} 上でまだ回答する可能性があります。",
+      "remoteShortened": "短縮されています。回答の全文は {{computer}} にあります。",
+      "needsLocalBot": "このグループには、このコンピュータ上のボットが少なくとも 1 つ必要です。",
+      "remoteOnComputer": "他のコンピュータのボットは、{{host}} の Orca で追加または削除してください。",
       "handoffsPaused": "引き継ぎを {{count}} 回行ったため一時停止しました。続けるには返信してください。",
       "stopCouldNotBeConfirmed": "停止を確認できませんでした。",
-      "notStarted": "未開始"
+      "notStarted": "未開始",
+      "workingCount_other": "{{count}} 個が作業中",
+      "workingCount": "{{count}} 個が作業中",
+      "memberCount_other": "{{count}} 個のボット",
+      "memberCount": "{{count}} 個のボット",
+      "moreCount_other": "他 {{count}} 個",
+      "moreCount": "他 {{count}} 個",
+      "andNames": "{{names}} と {{last}}",
+      "membersHere_other": "{{names}} が参加しています。",
+      "membersHere": "{{names}} が参加しています。",
+      "starting": "開始中…",
+      "peerReadReplyFrom": "{{reader}} が {{peer}} からの返信を読みました"
     },
     "templates": {
       "title": "ボットテンプレート",
@@ -5345,6 +5733,96 @@
     "needs": {
       "chat": "{{name}} とのチャット",
       "access": "{{person}} がアクセスをリクエストしました"
+    },
+    "access": {
+      "titleOne": "{{person}} に {{name}} へのアクセスを許可しますか？",
+      "titleMany": "{{count}} 人に {{name}} へのアクセスを許可しますか？",
+      "place": "{{connector}}（{{workspace}}）",
+      "confirmWarning": "アクセスを許可した人は {{computer}} 上であなたとして操作します。",
+      "confirmComputer": "コマンドを実行し、ファイルを変更する",
+      "confirmNoApprovals": "事前に確認せずに操作します",
+      "confirmMaySkipApprovals": "事前に確認せずに操作する場合があります",
+      "confirmApproveOne": "{{person}} がボットからのリクエストを承認できます",
+      "confirmApproveMany": "アクセスを許可した人がボットからのリクエストを承認できます",
+      "confirmGoogle": "あなたの Google アカウントを使う",
+      "confirmGitHub": "あなたとして GitHub でコメントやプッシュをする",
+      "confirmLinear": "あなたとして Linear の Issue を更新する",
+      "descriptionOne": "{{person}} は {{place}} から {{name}} に質問でき、それを通じて {{computer}} 上であなたとして作業できるようになります。コマンドを実行し、ファイルを開いて変更し、あなたの接続済みアカウントを使い、ボットからのリクエストを承認できます。",
+      "account": "相手の {{connector}} アカウント: {{identity}}",
+      "yourAccess": "リクエストには相手自身ではなく、あなたのアクセス権が使われます。{{name}} が{{there}}でできることは、何でも依頼できます。",
+      "removeAnyTime": "「質問できる人」からいつでも削除できます。",
+      "thisComputer": "このコンピュータ",
+      "here": "ここ",
+      "thisServer": "このサーバー",
+      "executionComputer": "この Agent が実行されるコンピュータ",
+      "there": "そこ",
+      "confirm": "アクセスを許可",
+      "heading": "アクセスのリクエスト",
+      "decline": "拒否",
+      "review": "確認…",
+      "full": "{{person}} を追加する前に、誰かを削除してください。",
+      "decideFailed": "回答を保存できませんでした。もう一度お試しください。",
+      "whoCanAsk": "{{name}} に質問できる人",
+      "summaryOnlyYou": "{{name}} に質問できるのはあなただけです。",
+      "summaryOne": "あなたと {{person}} が {{name}} に質問できます。",
+      "summarySome": "あなた、{{people}}、{{last}} が {{name}} に質問できます。",
+      "summaryMany": "あなたと他の {{count}} 人が {{name}} に質問できます。",
+      "controlNone": "追加した人は誰でも {{name}} を使い、{{computer}} 上であなたとして作業できます。コマンドを実行し、ファイルを開いて変更し、あなたの接続済みアカウントを使えます。",
+      "controlOne": "{{person}} は {{name}} を使い、{{computer}} 上であなたとして作業できます。コマンドを実行し、ファイルを開いて変更し、あなたの接続済みアカウントを使えます。",
+      "controlMany": "アクセスを許可した人は {{name}} を使い、{{computer}} 上であなたとして作業できます。コマンドを実行し、ファイルを開いて変更し、あなたの接続済みアカウントを使えます。",
+      "reachHeading": "{{name}} がアクセスできるもの",
+      "reachComputer": "{{computer}} 上のあなたのファイル、コマンド、アカウント",
+      "reachComputerDetail": "あなたとして、下の権限で許可される範囲で。",
+      "reachPermission": "新規会話は「{{mode}}」で始まります",
+      "reachPermissionUnknown": "新規会話はチャットの権限設定に従って始まります",
+      "permissionFellBack": "{{agent}} には「{{mode}}」モードがないため、{{name}} は「承認を求める」を使います。",
+      "codexAsk": "Codex のサンドボックス: リクエストが承認されるまで読み取り専用です。",
+      "codexOwnSandbox": "Codex は設定済みのサンドボックスを使います。",
+      "codexNoSandbox": "Codex のサンドボックスはありません。",
+      "whoeverAskedApproves": "ボットが確認を求めた場合は、依頼した人が承認できます。",
+      "reachLinear": "あなたとして Linear の Issue にコメント、更新、作成をする",
+      "reachSlack": "Slack で {{name}} として投稿する",
+      "reachGitHub": "あなたとして GitHub でコメント、レビュー、プッシュをする",
+      "reachGoogleEmail": "あなたのメールを読み、送信する",
+      "reachGoogleCalendar": "あなたのカレンダーを使う",
+      "reachGoogleDrive": "あなたのドライブのファイルを使う",
+      "reachGoogleDocs": "あなたのドキュメントを読み、編集する",
+      "reachGoogleSheets": "あなたのスプレッドシートを読み、編集する",
+      "reachGoogleUnknown": "あなたの Google アカウント（サインイン時に許可した範囲）",
+      "trust": "自分のキーボードを任せられるほど信頼できる人だけを追加してください。",
+      "adviceHeading": "共有する前に",
+      "fixOnlyMe": "{{name}} を自分専用にする",
+      "fixOnlyMeDetail": "ここで追加した人を削除します。",
+      "fixOnlyMeAction": "自分のみにする",
+      "fixGoogle": "{{name}} の Google をオフにする",
+      "fixGoogleDetail": "あなたを含む全員に対して、次回の Google リクエストから適用されます。",
+      "fixGoogleAction": "オフにする",
+      "fixGoogleDone": "{{name}} の Google はオフになりました。",
+      "fixAsk": "新規会話を「承認を求める」で開始する",
+      "fixAskDetail": "{{name}} はより多くの作業の前に確認を求めます。依頼した人は引き続き承認できます。すでに開いている会話は現在の権限のままです。",
+      "fixAskDetailCodex": "以降、Codex はリクエストが承認されるまで読み取り専用で動作します。依頼した人は引き続き承認できます。すでに開いている会話は現在の権限のままです。",
+      "fixAskAction": "切り替え",
+      "fixOnlyMeConfirm": "{{name}} を自分専用にしますか？",
+      "fixOnlyMeConfirmDetail": "{{people}} は {{name}} に質問できなくなります。再度アクセスを許可する場合は、事前にあなたの確認が必要です。",
+      "fixAskConfirm": "新規会話を「承認を求める」で開始しますか？",
+      "fixOnlyMeFailed": "{{names}} を削除できませんでした。もう一度お試しください。",
+      "fixAskDone": "新規会話は「承認を求める」で開始します。",
+      "undo": "元に戻す",
+      "separateBot": "チーム用に別のボットを作ると、独自の権限、Google のオン/オフ、ツールを持てます。ただし、引き続き {{computer}} 上であなたとして動作します。",
+      "newBot": "新規ボット…",
+      "whatTheyCanDo": "{{person}} ができること",
+      "reject": "拒否",
+      "controlBrief": "アクセスを許可した人はここであなたとして操作できます。",
+      "controlBriefIfAdded": "追加した人は誰でもここであなたとして操作できます。",
+      "controlBriefOnHost": "アクセスを許可した人は {{computer}} 上であなたとして操作できます。",
+      "controlBriefIfAddedOnHost": "追加した人は誰でも {{computer}} 上であなたとして操作できます。",
+      "yourComputer": "お使いのコンピュータ"
+    },
+    "accessDecide": {
+      "expired": "このリクエストはすでに回答済みか、期限切れです。",
+      "grantedNotAdded": "アクセスは許可されましたが、{{person}} はまだ一覧に表示されていません。Orca が追加します。",
+      "signedOut": "リクエストに回答するには、お使いのコンピュータで Orca にサインインしてください。",
+      "whatTheyCanDoMany": "アクセスを許可した人ができること"
     },
     "waits": {
       "cancel": "キャンセル",
@@ -5812,6 +6290,13 @@
       "groupRemoteUnreachable": "{{host}} に接続できませんでした。{{detail}}",
       "groupRemoteUnreachableRetry": "{{host}} に接続できませんでした。{{detail}} もう一度投稿すると再試行します。"
     },
+    "pairedServers": {
+      "heading": "ペアリング済みサーバー",
+      "remove": "削除",
+      "removeServer": "{{server}} を削除",
+      "unnamed": "ペアリング済みサーバー",
+      "footer": "これらのサーバーの Agent はあなたの承認なしで質問できます。"
+    },
     "automations": {
       "paused": "一時停止中",
       "newDraft": "次の内容のオートメーションを設定してください： "
@@ -5879,7 +6364,155 @@
       }
     },
     "share": {
-      "signInOtherSite": "コンピューターから別のサイトのサインインリンクが送られてきたため、開きませんでした。"
+      "receive": {
+        "fromLink": "リンクから",
+        "pasteDescription": "共有されたリンクを貼り付けてください。",
+        "ask": "承認を求める",
+        "askDetail": "リンクから作成したボットでは既定で選択",
+        "full": "フルアクセス",
+        "fullDetail": "確認なしでコマンドを実行します",
+        "chatsDetail": "チャットの権限設定に従って開始します",
+        "origin": "{{who}} のリンクから",
+        "originAnonymous": "共有リンクから",
+        "back": "戻る",
+        "continue": "続行",
+        "linkPlaceholder": "https://app.orca.dev/bots/share/…",
+        "link": "リンク",
+        "paste": "貼り付け",
+        "have": "このボットはすでにあります",
+        "haveDetail": "{{name}} · {{date}} に作成",
+        "open": "開く",
+        "stopped": "このリンクは使えなくなりました",
+        "stoppedDetail": "共有した人に新規リンクを依頼してください。",
+        "sharedBot": "共有されたボット"
+      },
+      "binaryFile": "テキストではないため表示されません。",
+      "linkCopied": "リンクをコピーしました",
+      "copyFailed": "リンクをコピーできませんでした",
+      "previewChanged": "プレビューが変更されました。公開する前に確認してください。",
+      "movedHere": "このリンクは別の場所で更新されました。",
+      "shareBot": "ボットを共有…",
+      "countOf": "{{all}} 件中 {{picked}} 件",
+      "removeSecret": "公開するにはシークレットを削除してください",
+      "title": "ボットを共有",
+      "noPurpose": "用途は未設定",
+      "linkStatusUnavailable": "共有リンクを確認できませんでした",
+      "updatedJustNow": "たった今更新",
+      "publishedJustNow": "たった今公開",
+      "description": "リンクを知っている人は誰でもコピーを作成できます。",
+      "updatedAt": "{{date}} に更新",
+      "upToDate": "最新",
+      "changedSince": "その後ボットに変更あり",
+      "copy": "コピー",
+      "copyLink": "リンクをコピー",
+      "secretFoundTitle": "シークレットが見つかりました",
+      "secretWhere": "{{flag}}: {{where}} の {{line}} 行目",
+      "view": "表示",
+      "nextUpdate": "次回の更新",
+      "sameLink": "同じリンクに反映されます。作成済みのコピーはそのままです。",
+      "none": "なし",
+      "soul": "ソウル",
+      "skills": "スキル",
+      "automations": "オートメーション",
+      "tools": "ツール",
+      "includeMemory": "メモリーを含める",
+      "notIncluded": "含まれないもの",
+      "setupNote": "設定メモ",
+      "add": "追加",
+      "safetyCheck": "安全性チェック",
+      "done": "完了",
+      "waitingSignIn": "ブラウザでのサインインを待っています",
+      "signInFor": "{{host}} で Orca にサインインします。",
+      "cancelSignIn": "サインインをキャンセル",
+      "signIn": "共有するには Orca にサインインしてください。",
+      "signInToPublish": "サインインして公開",
+      "reload": "再読み込み",
+      "updateLink": "リンクを更新",
+      "publishLink": "リンクを公開",
+      "previewFile": "{{name}} をプレビュー",
+      "outsideSkillWith": "{{project}} の外部から · {{description}}",
+      "outsideSkill": "{{project}} の外部から",
+      "duplicateSkill": "同名のスキルが {{folder}} にあります · 共有されません",
+      "all": "すべて",
+      "memoryLimit": "最大 {{count}} 個のファイル",
+      "flagOnLine": "{{flag}}: {{line}} 行目",
+      "memory": "メモリー",
+      "review": {
+        "notIncluded": "含まれません",
+        "reviewAgain": "再確認",
+        "accounts": "接続するアカウント",
+        "leftOut": "除外されたもの",
+        "none": "なし",
+        "byline": "{{who}} · {{date}} · 未確認",
+        "someone": "誰か",
+        "oneNote": "メモ 1 件",
+        "notes": "メモ {{count}} 件",
+        "updated": "{{who}} がこのボットを更新しました。もう一度確認してください。",
+        "theSharer": "共有者",
+        "createBot": "ボットを作成…",
+        "contact": "{{host}} への接続を許可",
+        "files": "{{count}} 個のファイル",
+        "flagLine": "{{flag}}: {{line}} 行目",
+        "off": "オフ",
+        "suggested": "提案 · {{when}}",
+        "memoryIndex": "メモリーのインデックス（共有メモを含む）",
+        "flagIn": "{{flag}}: {{where}}"
+      },
+      "lines": "{{count}} 行",
+      "backToSharing": "共有に戻る",
+      "backToLinks": "共有リンクに戻る",
+      "manageLinks": "リンクを管理",
+      "notShared": "共有されていません",
+      "loadingLinks": "共有リンクを読み込み中…",
+      "isShared": "{{name}} は共有されています",
+      "stopSharing": "共有を停止",
+      "stopTitle": "{{name}} の共有を停止しますか？",
+      "stopDescription": "リンクは使えなくなります。",
+      "stopping": "停止中…",
+      "stopped": "{{name}} の共有を停止しました",
+      "moreActions": "{{name}} のその他の操作",
+      "noLinks": "ボットのリンクはありません。ボットの設定から共有してください。",
+      "error": {
+        "blocked": "共有される内容にシークレットが見つかりました。削除してから、もう一度お試しください。",
+        "noteSecret": "設定メモにシークレットが含まれているようです。削除してから、もう一度お試しください。",
+        "expired": "この共有プレビューは期限切れです。「ボットを共有」をもう一度開いてください。",
+        "prepareAgain": "その間に別のウィンドウからこのボットが共有されました。「ボットを共有」をもう一度開いてください。",
+        "stopped": "このリンクは停止されました。公開すると新規リンクが作成されます。",
+        "moved": "このリンクは別の場所で更新されました。確認するには「ボットを共有」をもう一度開いてください。",
+        "unavailable": "Orca Cloud はまだボットの共有に対応していません。",
+        "avatarRefused": "Orca Cloud がボットの画像を受け付けませんでした。別の画像を選んでから、もう一度お試しください。",
+        "tooLarge": "このボットは大きすぎて共有できません。メモリーやスキルの一部を除外してから、もう一度お試しください。"
+      },
+      "reconnect": "共有するには、もう一度 Orca にサインインしてください。",
+      "flag": {
+        "secret": "シークレット",
+        "pipeToShell": "ダウンロードしたスクリプトを実行",
+        "sudo": "管理者として実行",
+        "sendsFile": "ファイルを送信",
+        "hiddenUnicode": "隠し文字",
+        "runnable": "実行可能ファイル"
+      },
+      "secretFound": "シークレット 1 件を検出",
+      "secretsFound": "シークレット {{count}} 件を検出",
+      "oneWarning": "警告 1 件",
+      "warnings": "警告 {{count}} 件",
+      "nothingFound": "検出なし",
+      "whereLine": "{{where}} の {{line}} 行目",
+      "oneLine": "1 行",
+      "webhookNotShared": "Webhook · 共有されません",
+      "commandNotShared": "コマンド · 共有されません",
+      "fileLinkNotShared": "シンボリックリンクまたはハードリンクを含む · 共有されません",
+      "tooLargeNotShared": "大きすぎます · 共有されません",
+      "unreadableNotShared": "読み取れません · 共有されません",
+      "overLimitNotShared": "スキルの上限を超えています · 共有されません",
+      "linkNoLongerAvailable": "この共有リンクは利用できなくなりました。",
+      "signInOtherSite": "コンピューターから別のサイトのサインインリンクが送られてきたため、開きませんでした。",
+      "original": {
+        "sharedBy": "{{who}} が共有",
+        "viewOriginal": "オリジナルを表示",
+        "originalGone": "利用できなくなりました"
+      },
+      "sameLinkShort": "作成済みのコピーはそのままです。"
     },
     "settingsPage": {
       "off": "オフ",
@@ -5887,6 +6520,25 @@
       "today": "今日",
       "yesterday": "昨日",
       "lastTidied": "最後の整理 {{when}}"
+    },
+    "whoCanAsk": {
+      "cap": "ここでは最大 {{count}} 人までです。",
+      "addPeople": "ユーザーを追加",
+      "addFailed": "{{names}} を追加できませんでした。",
+      "fullBot": "誰も追加されませんでした: {{names}} を追加すると、ボットに追加できる上限の {{count}} 人を超えます。",
+      "fullWorkspace": "誰も追加されませんでした: {{names}} を追加すると、このワークスペースの上限の {{count}} 人を超えます。",
+      "retry": "再試行",
+      "searching": "検索中…",
+      "cancel": "キャンセル",
+      "selectedHeading": "選択中",
+      "incomplete": "全員は表示されていません。名前で検索して探してください。",
+      "searchIn": "{{workspace}} のユーザーを検索",
+      "peopleIn": "{{workspace}} のユーザー",
+      "noOneNamed": "{{workspace}} に「{{query}}」という名前の人はいません",
+      "needsSlack": "ワークスペースからユーザーを選ぶには、先に {{name}} を Slack に追加してください。",
+      "noMatchDetail": "{{workspace}} の Slack のメンバー、ゲスト、他の組織のユーザーを追加できます。それ以外の人には、あなたに依頼するための非公開のメモが届きます。",
+      "add": "追加",
+      "allAdded": "すでに質問できます"
     },
     "usageLimit": {
       "continuesAt": "{{time}} に再開",
@@ -5906,6 +6558,17 @@
   "sidebar": {
     "cardSlot": {
       "working": "作業中"
+    }
+  },
+  "chats": {
+    "delete": {
+      "title": "このチャットを削除しますか？",
+      "descriptionHost": "{{host}} から完全に削除されます。この操作は元に戻せません。",
+      "action": "削除",
+      "failed": "チャットを削除できませんでした",
+      "groupRoom": "グループルームのチャットは削除できません",
+      "home": "管理対象の Agent の Home Chat は削除できません",
+      "workerOwed": "オーケストレーションがまだこのチャットを待っています"
     }
   },
   "mcpServers": {
@@ -5991,6 +6654,7 @@
     "agentFilesMessage": "Orca は MCP サーバーを各 Agent の設定ファイルで管理します。自分で追加した項目はそのまま残ります。",
     "allow": "許可",
     "removeTitle": "{{name}} を削除しますか？",
+    "removeMessageSavedData": "これを使用しているセッションは、すぐにアクセスできなくなる場合があります。保存済みのヘッダー、環境変数、サインイン情報が削除されることがあります。その場合、アクセスを回復するには、それらを入力し直すか、もう一度サインインする必要があります。",
     "remove": "削除",
     "moveTitle": "{{name}} を Orca に移動しますか？",
     "moveMessage": "Orca は {{agents}} の設定からこれを削除し、バックアップを保存します。",
