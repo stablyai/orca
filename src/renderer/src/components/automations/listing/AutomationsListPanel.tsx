@@ -45,7 +45,10 @@ import {
   AutomationHostLoadSummary
 } from '../hosts/AutomationHostFilterNotice'
 import { AutomationListEmptyView } from './AutomationListEmptyView'
-import { resolveAutomationListEmptyState } from './automation-list-empty-state'
+import {
+  offersAutomationTemplates,
+  resolveAutomationListEmptyState
+} from './automation-list-empty-state'
 import type { AutomationListSearchCounts } from './use-automation-list-search'
 import type { AutomationHostCatalogView } from '../hosts/use-automation-host-catalog'
 import type { AutomationHostRecoveryAction } from '../hosts/automation-host-status-descriptors'
@@ -58,7 +61,6 @@ import { AutomationListToolbar } from './AutomationListToolbar'
 import { AutomationListGroupSection } from './AutomationListGroupSection'
 import { useAutomationListGroups } from './use-automation-list-groups'
 
-const TEMPLATE_EMPTY_STATES: ReadonlySet<string> = new Set(['host-empty', 'all-hosts-empty'])
 const EMPTY_AUTOMATION_RUNS: ReadonlyMap<string, AutomationRun> = new Map()
 export type AutomationsListPanelProps = {
   tabs: React.ReactNode
@@ -392,7 +394,7 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
             />
           )}
 
-          {!hasListItems && TEMPLATE_EMPTY_STATES.has(emptyState.kind) ? (
+          {offersAutomationTemplates(emptyState, hasListItems) ? (
             <AutomationTemplateEmptyState onOpenCreate={openCreateDialog} />
           ) : null}
         </RailPageScroll>

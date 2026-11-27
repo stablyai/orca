@@ -16451,6 +16451,7 @@
           "all": "Todas",
           "clear": "Limpar filtros",
           "agent": "Agente",
+          "bot": "Bot",
           "lastRun": "Última execução"
         },
         "createDestination": {

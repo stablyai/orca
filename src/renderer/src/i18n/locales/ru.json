@@ -20272,6 +20272,7 @@
           "all": "Все",
           "clear": "Сбросить фильтры",
           "agent": "Агент",
+          "bot": "Бот",
           "lastRun": "Последний запуск"
         },
         "AutomationListSortHeader": {

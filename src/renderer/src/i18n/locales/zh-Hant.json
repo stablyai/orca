@@ -19180,6 +19180,7 @@
           "all": "全部",
           "clear": "清除篩選",
           "agent": "代理程式",
+          "bot": "機器人",
           "lastRun": "最後一次執行"
         },
         "AutomationListSortHeader": {

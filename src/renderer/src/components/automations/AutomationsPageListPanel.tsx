@@ -121,10 +121,7 @@ export function AutomationsPageListPanel({
           onListSearchQueryChange={setListSearchQuery}
           listFilter={listFilter}
           onListFilterChange={onListFilterChange}
-          searchCounts={{
-            ...searchCounts,
-            hostRowCount: list.visibleRows.length + list.externalAutomationEntries.length
-          }}
+          searchCounts={searchCounts}
           hostCatalog={hostCatalog}
           externalManagersUncheckedNotice={list.externalManagersUncheckedNotice}
           onSelectHost={hostCatalog.selectHost}

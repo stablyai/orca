@@ -19660,6 +19660,7 @@
           "all": "Tümü",
           "clear": "Filtreleri temizle",
           "agent": "Ajan",
+          "bot": "Bot",
           "lastRun": "Son çalıştırma"
         },
         "AutomationListSortHeader": {
