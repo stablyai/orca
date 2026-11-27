@@ -44,6 +44,8 @@ function ConstrainedPane({ width, height }: { width: number; height: number }) {
           }}
           onAnswer={() => {}}
           onCancel={() => {}}
+          // The card takes focus as it opens, so the digits and arrows below reach it.
+          shouldFocus
         />
       </NativeChatDock>
     </div>
