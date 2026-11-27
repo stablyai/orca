@@ -48,16 +48,6 @@ export function createClaudeKeptLinePump(input: {
     })
   }
 
-  /** Every pause until none is held: one can be put in place before the drain resumes from the last. */
-  const waitPause = async (): Promise<boolean> => {
-    for (let held = input.paused(); held; held = input.paused()) {
-      if (!(await waitHold(held))) {
-        return false
-      }
-    }
-    return true
-  }
-
   /** Ends delivery: the lines not handed on stay untaken (never acked), and none are kept. */
   const end = (): void => {
     stopped = true
@@ -68,7 +58,16 @@ export function createClaudeKeptLinePump(input: {
   const pump = (): Promise<void> => {
     draining = draining.then(async () => {
       while (!stopped && head < lines.length) {
-        if (!(await waitPause()) || stopped) {
+        // Every pause until none is held, checked with no await before the delivery below: a new
+        // one can be put in place after the last lifted.
+        let gaveUp = false
+        for (let held = input.paused(); held && !stopped; held = input.paused()) {
+          if (!(await waitHold(held))) {
+            gaveUp = true
+            break
+          }
+        }
+        if (gaveUp || stopped) {
           end()
           break
         }
