@@ -1,4 +1,4 @@
-import { rm, writeFile } from 'node:fs/promises'
+import { rename, rm, writeFile } from 'node:fs/promises'
 import {
   getRuntimeRestartMarkerPath,
   type RuntimeRestartMarker,
@@ -11,11 +11,14 @@ export async function writeRuntimeRestartMarker(
   reason: RuntimeRestartReason
 ): Promise<void> {
   const marker: RuntimeRestartMarker = { reason, writtenAt: Date.now(), pid: process.pid }
+  const markerPath = getRuntimeRestartMarkerPath(userDataPath)
+  const tempPath = `${markerPath}.${process.pid}.tmp`
   try {
-    await writeFile(getRuntimeRestartMarkerPath(userDataPath), JSON.stringify(marker), {
-      mode: 0o600
-    })
+    // Rename so a CLI reading mid-write never sees a torn marker and skips the wait.
+    await writeFile(tempPath, JSON.stringify(marker), { mode: 0o600 })
+    await rename(tempPath, markerPath)
   } catch (error) {
+    await rm(tempPath, { force: true }).catch(() => {})
     console.warn('[runtime] Could not write the restart marker:', error)
   }
 }

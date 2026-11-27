@@ -19,10 +19,11 @@ describe('runtime restart marker', () => {
   })
 
   it('is seen while fresh, and an expired or cleared marker never costs a wait', async () => {
-    await writeRuntimeRestartMarker(dir, 'update')
+    // A Windows update skips the wait by design, so the wait case uses a relaunch.
+    await writeRuntimeRestartMarker(dir, 'relaunch')
     const { writtenAt } = JSON.parse(await readFile(getRuntimeRestartMarkerPath(dir), 'utf8'))
 
-    expect((await readActiveRuntimeRestart(dir, writtenAt + 1_000))?.reason).toBe('update')
+    expect((await readActiveRuntimeRestart(dir, writtenAt + 1_000))?.reason).toBe('relaunch')
     expect(await readActiveRuntimeRestart(dir, writtenAt + 90_000)).toBeNull()
 
     const sleeps: number[] = []
