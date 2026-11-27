@@ -79,7 +79,7 @@ export class MobileRelaySessionEstablisher {
   ): Promise<
     | { outcome: 'established' }
     | { outcome: 'aborted' }
-    | { outcome: 'failed'; error: Error | null; evidence?: Error }
+    | { outcome: 'failed'; error: Error | null; evidence?: Error; unconfirmed: boolean }
   > {
     let lastError: Error | null = null
     let refusal: Error | undefined
@@ -94,12 +94,14 @@ export class MobileRelaySessionEstablisher {
         ]
       : credentials
     this.resolvedThisAttempt = false
+    let lastDialedPending = false
     for (const credential of ordered) {
       // After a director 401 the rest only redial the cell that sent us there, which can know only the newer
       // pending install; redialing current or grace would just repeat its wrong-assignment answer.
       if (directorRefused && credential.token !== pendingToken) {
         continue
       }
+      lastDialedPending = credential.token === pendingToken
       // The director admits one resolve per host per window, so after any lookup the rest only dial the cell.
       const result = await this.dial(credential, !this.resolvedThisAttempt)
       if (result.ok) {
@@ -111,8 +113,11 @@ export class MobileRelaySessionEstablisher {
       lastError = result.error
       this.args.onDialFailure(result.error)
       if (isExplicitCredentialRejection(result.error)) {
-        // Why: a rejected version stays invalid; retry only the later credentials.
-        this.args.controller.recordRejectedCredential(credential.version)
+        // Why: a rejected version stays invalid; retry only the later credentials. Pending is the exception: its
+        // install may commit after this refusal, so it stays dialable and only a confirmed version is retired.
+        if (credential.token !== pendingToken) {
+          this.args.controller.recordRejectedCredential(credential.version)
+        }
         refusal ??= result.error
         continue
       }
@@ -128,7 +133,8 @@ export class MobileRelaySessionEstablisher {
       outcome: 'failed',
       error: lastError,
       // A verdict-less last failure (say, a director 503 for pending) must not reopen the refused verdict.
-      evidence: relayHostReachabilityForFailure(lastError) === 'connecting' ? refusal : undefined
+      evidence: relayHostReachabilityForFailure(lastError) === 'connecting' ? refusal : undefined,
+      unconfirmed: lastDialedPending
     }
   }
 

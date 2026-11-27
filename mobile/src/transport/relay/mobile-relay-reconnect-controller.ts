@@ -25,7 +25,9 @@ export type RelayReconnectDependencies = {
 
 type RecoveryGate = 'external-signal' | 'fresh-credential'
 // evidence: an earlier refusal in the attempt, when the final error names no verdict, keeps that verdict standing.
-type DialOutcome = { evidence?: Error | null }
+// unconfirmed: the last refusal was of the pending install, which the relay may not have stored yet, so it is
+// transient and retried at the normal backoff rather than gated as a permanent rejection.
+type DialOutcome = { evidence?: Error | null; unconfirmed?: boolean }
 type RetainableRelaySession = Pick<MobileRelayRpcSession, 'getFailure' | 'notifyForeground'>
 
 export class RelayReconnectController {
@@ -241,7 +243,7 @@ export class RelayReconnectController {
       this.evidence.record(dial.evidence ?? error)
     }
     const hostOffline = isRelayHostOffline(error)
-    const credentialRejected = isExplicitCredentialRejection(error)
+    const credentialRejected = isExplicitCredentialRejection(error) && dial.unconfirmed !== true
     if (
       this.recoveryGate === 'fresh-credential' ||
       (this.recoveryGate === 'external-signal' && !credentialRejected)

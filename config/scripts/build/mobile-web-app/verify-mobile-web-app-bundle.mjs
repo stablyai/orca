@@ -49,8 +49,8 @@ export const MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES = 1024 * 1024
 // Eager: main's own fence. 11 MiB since reverting #48282 put the diagram engine back in it, at 11,479,156
 // bytes (2026-11-24); +1,364 bytes for the first-paint workspace list fast paths (#49617, #49626);
 // +226 bytes for main's growth since (#49574, #49654, #49663, #49666); +269 bytes so steady Relay
-// verdicts stop re-notifying Home (#49338); +13 bytes for main's growth since (measured on #49338's CI).
-export const MOBILE_WEB_APP_BUNDLE_MAX_EAGER_BYTES = 11 * 1024 * 1024 + 1872
+// verdicts stop re-notifying Home (#49338); +67 bytes for main's growth since (measured on #49338's CI).
+export const MOBILE_WEB_APP_BUNDLE_MAX_EAGER_BYTES = 11 * 1024 * 1024 + 1926
 export const MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_BYTES = 1024 * 1024
 export const MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_FILE_BYTES = 128 * 1024
 
