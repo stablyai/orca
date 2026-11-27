@@ -15,6 +15,7 @@ import {
   CodexAppServerUnsupportedError
 } from './codex-app-server-session'
 import { createCodexAppServerRecordDispatcher } from './codex-app-server-record-dispatch'
+import { createCodexAgentMessageDeltaBatch } from './codex-agent-message-delta-batch'
 import { createProviderRecordReader } from '../../provider-process/provider-record-reader'
 import { withProviderRequestTimeout } from '../../provider-process/provider-request-timeout'
 import { withLostProviderOutcome } from '../../provider-process/provider-process-exit-status'
@@ -127,16 +128,23 @@ async function connectCodexAppServer(
     void managed.close()
   })
 
+  const onReaderFatal = (error: Error): void => {
+    handleUnexpectedEnd(error, true)
+    void managed.close()
+  }
+  const deltas = createCodexAgentMessageDeltaBatch(dispatcher.dispatch, onReaderFatal)
   const recordReader = createProviderRecordReader({
     stdout: child.stdout,
     onRecord: (parsed, line) => {
       if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        deltas.flush()
         handlers.onUnhandledFrame?.('frame:invalid-json', line)
         return
       }
-      dispatcher.dispatch(parsed as Record<string, unknown>)
+      deltas.dispatch(parsed as Record<string, unknown>)
     },
     onRejected: (rejected) => {
+      deltas.flush()
       if (rejected.kind === 'invalid-json') {
         handlers.onUnhandledFrame?.('frame:invalid-json', rejected.line)
       } else {
@@ -144,8 +152,12 @@ async function connectCodexAppServer(
       }
     },
     onFatal: (error) => {
-      handleUnexpectedEnd(error, true)
-      void managed.close()
+      try {
+        deltas.flush()
+      } catch {
+        // The reader is failing already; its own error is the one reported.
+      }
+      onReaderFatal(error)
     }
   })
 
