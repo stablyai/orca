@@ -112,17 +112,30 @@ const HOST_SERVERS = ['linear', 'sentry', 'postgres', 'context7'].map((name, ind
   detail: `https://mcp.${name}.dev/mcp`,
   transport: 'http',
   remote: false,
-  agentsOff: [],
+  agentsOff: [] as string[],
   workspaces: { later: true, on: [], off: [] },
   sharedProcess: false
 }))
 
-function stubRuntime(hostMcpServers?: boolean): void {
+/** The host's list off for `agentsOff` on every server at or past `from`: some or all off for an agent. */
+function offFrom(from: number, agentsOff: string[]): typeof HOST_SERVERS {
+  return HOST_SERVERS.map((server, index) => (index >= from ? { ...server, agentsOff } : server))
+}
+
+/** `servers: null` answers mcpServers.list with an error, as a host that can't read its list does. */
+function stubRuntime(
+  hostMcpServers?: boolean,
+  servers: typeof HOST_SERVERS | null = HOST_SERVERS
+): void {
   const answers: Record<string, (params: Record<string, unknown>) => unknown> = {
-    'mcpServers.list': () => ({
-      servers: HOST_SERVERS,
-      agentFiles: { grok: false, cursor: false, droid: false }
-    }),
+    ...(servers === null
+      ? {}
+      : {
+          'mcpServers.list': () => ({
+            servers,
+            agentFiles: { grok: false, cursor: false, droid: false }
+          })
+        }),
     'bots.tools.list': () => ({
       ...(hostMcpServers === undefined ? {} : { hostMcpServers }),
       agent: 'claude',
@@ -178,6 +191,53 @@ export const hostMcpServersOn = defineFixture({
   width: 720,
   store: { repos: REPOS },
   setup: () => stubRuntime(true),
+  render: () => <Page bot={linked} skills={false} />
+})
+
+/** A host with no MCP servers at all. */
+export const hostMcpServersEmpty = defineFixture({
+  width: 720,
+  store: { repos: REPOS },
+  setup: () => stubRuntime(true, []),
+  render: () => <Page bot={linked} skills={false} />
+})
+
+/** Servers on the host, every one off for this bot's agent: not "none on this host". */
+export const hostMcpServersAllOff = defineFixture({
+  width: 720,
+  store: { repos: REPOS },
+  setup: () => stubRuntime(true, offFrom(0, ['claude'])),
+  render: () => <Page bot={linked} skills={false} />
+})
+
+/** One server on the host, off for this bot's agent. */
+export const hostMcpServersOneOff = defineFixture({
+  width: 720,
+  store: { repos: REPOS },
+  setup: () => stubRuntime(true, offFrom(0, ['claude']).slice(0, 1)),
+  render: () => <Page bot={linked} skills={false} />
+})
+
+/** Two of four off for this bot's agent; a server off only for another agent still counts as on. */
+export const hostMcpServersSomeOff = defineFixture({
+  width: 720,
+  store: { repos: REPOS },
+  setup: () =>
+    stubRuntime(
+      true,
+      HOST_SERVERS.map((server, index) => ({
+        ...server,
+        agentsOff: [[], ['codex'], ['claude'], ['claude', 'codex']][index]!
+      }))
+    ),
+  render: () => <Page bot={linked} skills={false} />
+})
+
+/** The host's list couldn't be read: say so, never "none". */
+export const hostMcpServersLoadFailed = defineFixture({
+  width: 720,
+  store: { repos: REPOS },
+  setup: () => stubRuntime(true, null),
   render: () => <Page bot={linked} skills={false} />
 })
 

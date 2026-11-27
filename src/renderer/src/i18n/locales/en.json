@@ -1711,6 +1711,11 @@
           "commandWarningOnHost": "The command runs in this bot’s home folder on {{host}}. Adding or saving can start it during the native check. Only add software you trust."
         },
         "hostMcpNone": "None on this host yet",
+        "hostMcpAllOff_one": "{{count}} on this host, off for {{agent}}",
+        "hostMcpAllOff_other": "{{count}} on this host, all off for {{agent}}",
+        "hostMcpSomeOff_one": "· {{count}} off for {{agent}}",
+        "hostMcpSomeOff_other": "· {{count}} off for {{agent}}",
+        "hostMcpLoadFailed": "Couldn’t load this host’s servers",
         "hostMcp": "Your MCP servers",
         "hostMcpAndMore": "Your MCP servers, {{rest}}"
       },
