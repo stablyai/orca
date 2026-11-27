@@ -2,6 +2,7 @@ import type { ExecutionHostId } from '../execution-host/execution-host'
 import type { WorktreeCatalogVersion } from './catalog/catalog-version'
 import type { AutomationExecutionTargetType } from '../automations/automation-definition'
 import type { TaskSourceContext } from '../work-items/task-source-context'
+import type { TaskProvider } from '../work-items/task-providers'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import type { DiffComment, MobileDiffReviewState } from '../file-review/diff-comment-types'
 import type { EphemeralVmCheckoutMode } from '../workspace-setup/orca-yaml-hook-types'
@@ -37,7 +38,7 @@ export type WorkspaceAttachment = {
 }
 
 export type WorkspaceLinkedItem = {
-  provider: 'github' | 'gitlab' | 'linear' | 'jira' | 'gitea'
+  provider: TaskProvider
   type: 'issue' | 'pr' | 'mr'
   number: number
   title: string

@@ -2,6 +2,7 @@ import { AutomationCanonicalLaunchSetup } from '../rpc-contract/automations/auto
 import { automationCanonicalDefinition } from '../automations/launch/automation-launch-setup'
 import { assertAutomationExtraAgentArgs } from '../automations/launch/automation-extra-agent-args-record'
 import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
+import { isTaskProvider } from '../work-items/task-providers'
 import type { Automation } from '../automations/automation-definition'
 import type { AutomationRun } from '../automations/history/automation-run'
 import { getAutomationRunRepoId } from '../automations/history/automation-run-identity'
@@ -281,7 +282,7 @@ function parseContext(value: unknown, kind: 'workspace-run' | 'task-source'): vo
     )
     requiredString(record.repoId, 'orcad_migration_dormant_automation_context_repo_invalid')
     requiredString(record.path, 'orcad_migration_dormant_automation_context_path_invalid')
-  } else if (!['github', 'gitlab', 'linear', 'jira'].includes(String(record.provider))) {
+  } else if (!isTaskProvider(record.provider)) {
     throw new Error('orcad_migration_dormant_automation_context_provider_invalid')
   }
 }
