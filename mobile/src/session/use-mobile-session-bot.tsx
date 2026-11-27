@@ -108,7 +108,10 @@ export function useMobileSessionBot(
         (routeBot.activity?.workers ?? []).map((row) => row.dot),
         routeBot.bot.paused
       )
-    return { status, line: botStatusLine(status, routeBot.bot.paused, t) }
+    // The Allow/Deny card above the composer is the one approval surface; the header keeps its connection line.
+    return status === 'permission' && !routeBot.bot.paused
+      ? null
+      : { status, line: botStatusLine(status, routeBot.bot.paused, t) }
   }, [routeBot, visibleTabs, now, t])
 
   // The agents the host can start a side chat on, read as + opens; only the bot's own until then.
@@ -146,7 +149,7 @@ export function useMobileSessionBot(
       // A refused chat says why in chat's words; other host errors are codes, not sentences for the owner.
       const refusal = readAgentSessionErrorRefusal(error)
       if (refusal) {
-        showToast(mobileBotRefusalText(refusal), 2400)
+        showToast(mobileBotRefusalText(refusal, t), 2400)
       } else {
         showToast(t('bots.chatStartFailed', 'Couldn’t start the chat'), 1800)
       }

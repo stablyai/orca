@@ -6,10 +6,12 @@ import type { Repo } from '../../../../../shared/repository/repo-types'
 import { githubRepoIdentityKey } from '../../../../../shared/github/repositories/repository-identity-key'
 import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
 import { rememberRepoSlug, repoSlugCacheKey } from '@/lib/workspace/catalog/repo-slug-cache'
-import { useRef, useState } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { NativeChatLinkClickContext } from '@/components/native-chat/links/actions/native-chat-link-click-context'
 import { BotItemLinkChips } from './BotItemLinkChips'
+import { useBotItemFileContext } from './BotItemLinks'
 import { typeIntoBotItemComment } from './bot-item-comment-typing'
+import { NativeChatLinkPeekProvider } from '@/components/native-chat/links/previews/native-chat-link-peek-context'
 
 export const now = Date.now()
 export const hour = 3_600_000
@@ -174,11 +176,26 @@ export function signedIn(answer: 'item' | 'fail' | 'failOnce' = 'item'): () => v
   }
 }
 
+/** Link peeks as the item pane provides them. */
+function PanePeeks({ children }: { children: ReactNode }): React.JSX.Element {
+  const fileContext = useBotItemFileContext(fixtureCos)
+  return (
+    <NativeChatLinkPeekProvider
+      fileLinkContext={fileContext?.fileLinkContext ?? null}
+      hostId={fixtureCos.hostId}
+    >
+      {children}
+    </NativeChatLinkPeekProvider>
+  )
+}
+
 // Room below for the card, which opens under the chip as tooltips do.
-export const header = (links: BotItemLinkView[] = LINKS.slice(0, 1)) => (
+export const header = (links: BotItemLinkView[] = LINKS) => (
   <div className="flex flex-col gap-1.5 px-3 pb-44 pt-6">
     <div className="text-sm font-semibold text-foreground">#1385 Share dialog follow-up</div>
-    <BotItemLinkChips bot={fixtureCos} links={links} chat="Home Chat" />
+    <PanePeeks>
+      <BotItemLinkChips bot={fixtureCos} links={links} chat="Home Chat" />
+    </PanePeeks>
   </div>
 )
 

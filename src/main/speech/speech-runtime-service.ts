@@ -17,13 +17,47 @@ export type SpeechServiceFactories = {
 }
 
 let factories: SpeechServiceFactories | null = null
+let factoriesLoader: (() => Promise<SpeechServiceFactories>) | null = null
+let factoriesPromise: Promise<void> | null = null
 let modelManager: ModelManager | null = null
 let sttService: SttService | null = null
 
 export function setSpeechServiceFactories(next: SpeechServiceFactories | null): void {
   factories = next
+  factoriesLoader = null
+  factoriesPromise = null
   modelManager = null
   sttService = null
+}
+
+export function setSpeechServiceFactoriesLoader(
+  loader: (() => Promise<SpeechServiceFactories>) | null
+): void {
+  factories = null
+  factoriesLoader = loader
+  factoriesPromise = null
+  modelManager = null
+  sttService = null
+}
+
+export function ensureSpeechServiceFactories(): Promise<void> {
+  if (factories || !factoriesLoader) {
+    return Promise.resolve()
+  }
+  if (!factoriesPromise) {
+    const loader = factoriesLoader
+    factoriesPromise = loader()
+      .then((loaded) => {
+        if (factoriesLoader === loader && !factories) {
+          factories = loaded
+        }
+      })
+      .catch((error: unknown) => {
+        factoriesPromise = null
+        throw error
+      })
+  }
+  return factoriesPromise
 }
 
 function requireFactories(): SpeechServiceFactories {

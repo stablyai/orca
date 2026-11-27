@@ -25,6 +25,7 @@ import {
   readAgentAttentionNotificationSound
 } from '@/attention/agent-attention-notification-delivery'
 import { useAppStore } from '@/store'
+import { noteWorktreeAgentActivity } from '@/store/slices/worktrees/session/worktree-agent-activity'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { readBots } from '@/lib/bot-catalog'
 import { readBotGroups } from '@/lib/bot-group-catalog-snapshot'
@@ -109,6 +110,11 @@ function dispatchStructuredAttention(
     createStructuredAttentionSurface(state)
   )
   if (!decision.admitted) {
+    // A worker's finish raises no unread and a chat has no PTY, so stamp Recent here (#50660).
+    // A remote or environment-owned worker is left to its owning host, as the PTY path skips remote mirrors.
+    if (decision.cause === 'coordinator-only-news' && subscriptionTarget?.kind === 'local') {
+      noteWorktreeAgentActivity(state, tab.worktreeId)
+    }
     return
   }
   const row = state.agentStatusByPaneKey.get(paneKey)

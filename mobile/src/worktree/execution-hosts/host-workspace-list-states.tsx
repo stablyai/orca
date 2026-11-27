@@ -1,9 +1,8 @@
 import { Text, View } from 'react-native'
-import { CircleAlert, FolderTree, WifiOff } from 'lucide-react-native'
+import { CircleAlert, FolderTree, KeyRound, WifiOff } from 'lucide-react-native'
 import { MobileNoMatchState, MobileStateView } from '../../components/feedback/MobileStateView'
-import { colors, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import {
   isConnectionOutage,
   verdictDisplayLabel
@@ -24,13 +23,42 @@ export function HostWorkspaceListStates(
     onShowPausedBots?: () => void
     onClearSearch: () => void
     onReconnect: (() => void) | null
-    /** Offered only when nothing is filtered out, so it reads as "this host has no projects yet". */
-    onAddProject?: () => void
+    onRetryPairing: (() => void) | null
+    /** Starts a workspace, or Add a project when the host can. Absent while one can't start here. */
+    onNewWorkspace: (() => void) | null
+    /** The empty action reads as Add a project instead of New workspace. */
+    addsProject?: boolean
+    onClearFilters: () => void
+    onRetryLoad: () => void
+    onRepair: () => void
   }
 ) {
   const t = useMobileTranslation()
   const { bottomInset } = props
   const state = selectHostWorkspaceListState(props)
+  if (state === 'auth-failed') {
+    return (
+      <MobileStateView
+        icon={KeyRound}
+        title={t('worktree.hostWorkspaceListStates.pairingRefused', 'Pairing was refused')}
+        message={t(
+          'worktree.hostWorkspaceListStates.pairAgain',
+          'Pair again from Orca on your computer.'
+        )}
+        action={{
+          label: t('components.authFailedBannerActions.repair', 'Re-pair'),
+          onPress: props.onRepair
+        }}
+        // A refusal can be a passing one (#5200): Retry is worth one tap before pairing again.
+        secondaryAction={
+          props.onRetryPairing
+            ? { label: t('common.retry', 'Retry'), onPress: props.onRetryPairing }
+            : null
+        }
+        bottomInset={bottomInset}
+      />
+    )
+  }
   if (state === 'loading') {
     return (
       <MobileStateView
@@ -45,7 +73,7 @@ export function HostWorkspaceListStates(
     return (
       <MobileStateView
         icon={WifiOff}
-        title={verdictDisplayLabel(connectionVerdict)}
+        title={verdictDisplayLabel(connectionVerdict, t)}
         message={
           (isConnectionOutage(connectionVerdict) ? connectionVerdict.detail : undefined) ??
           t(
@@ -66,15 +94,9 @@ export function HostWorkspaceListStates(
     return (
       <MobileStateView
         icon={CircleAlert}
-        title={t(
-          'worktree.hostWorkspaceListStates.loadFailed',
-          'Could not load workspaces from this host'
-        )}
-        message={t(
-          'worktree.hostWorkspaceListStates.retryingAutomatically',
-          'Retrying automatically.'
-        )}
+        title={t('worktree.hostWorkspaceListStates.loadFailed', 'Couldn’t load workspaces')}
         details={props.catalogError}
+        action={{ label: t('common.retry', 'Retry'), onPress: props.onRetryLoad }}
         bottomInset={bottomInset}
       />
     )
@@ -104,12 +126,19 @@ export function HostWorkspaceListStates(
             : t('worktree.hostWorkspaceListStates.empty', 'No workspaces')
         }
         action={
-          props.activeFilterCount === 0 && props.onAddProject
+          props.activeFilterCount > 0
             ? {
-                label: t('worktree.hostWorkspaceListStates.addProject', 'Add a project'),
-                onPress: props.onAddProject
+                label: t('worktree.hostWorkspaceListStates.clearFilters', 'Clear filters'),
+                onPress: props.onClearFilters
               }
-            : null
+            : props.onNewWorkspace
+              ? {
+                  label: props.addsProject
+                    ? t('worktree.hostWorkspaceListStates.addProject', 'Add a project')
+                    : t('hostScreen.hostBottomBar.newWorkspace', 'New workspace'),
+                  onPress: props.onNewWorkspace
+                }
+              : null
         }
         bottomInset={bottomInset}
       />
@@ -121,7 +150,7 @@ export function HostWorkspaceListStates(
 /** A list this page cannot build; shown above the rows it already holds, so it never blanks. */
 export function HostWorkspaceListReopen({ aboveRows }: { aboveRows: boolean }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View style={aboveRows ? styles.aboveRows : styles.centered}>
       <Text style={styles.emptyText}>
@@ -137,7 +166,7 @@ export function HostWorkspaceListReopen({ aboveRows }: { aboveRows: boolean }) {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   centered: {
     flex: 1,
     alignItems: 'center',

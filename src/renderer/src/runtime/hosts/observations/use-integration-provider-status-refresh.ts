@@ -1,7 +1,11 @@
 import { useEffect } from 'react'
 import { getLocalPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { localPreflightContextKey } from '@/runtime/hosts/preflight/local-preflight-context-key'
-import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
+import {
+  getProviderRuntimeContextKey,
+  useProviderRuntimeSessionGeneration
+} from '@/runtime/hosts/observations/provider-runtime-context'
+import { recomputeOn } from '@/lib/recompute-on'
 import { useAppStore } from '@/store/index'
 
 export function useIntegrationProviderStatusRefresh(): void {
@@ -18,7 +22,10 @@ export function useIntegrationProviderStatusRefresh(): void {
   const expectedPreflightContextKey = useAppStore((s) =>
     localPreflightContextKey(getLocalPreflightContext(s))
   )
-  const providerRuntimeContextKey = getProviderRuntimeContextKey(settings)
+  const providerRuntimeSessionGeneration = useProviderRuntimeSessionGeneration()
+  const providerRuntimeContextKey = recomputeOn([providerRuntimeSessionGeneration], () =>
+    getProviderRuntimeContextKey(settings)
+  )
   const preflightStatusCurrent = preflightStatusContextKey === expectedPreflightContextKey
   const linearStatusCurrent = linearStatusContextKey === providerRuntimeContextKey
   const jiraStatusCurrent = jiraStatusContextKey === providerRuntimeContextKey

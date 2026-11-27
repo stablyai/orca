@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
+import { radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { MONO_SIZE, scaledType } from '../messages/mobile-native-chat-message-styles'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 
@@ -11,7 +11,10 @@ export function toolType(fontScale: number) {
   }
 }
 
-export const toolStyles = themedStyleSheet(() => ({
+/** One tool line's height: a 20 pt line with 6 pt above and below. */
+export const TOOL_ROW_HEIGHT = 32
+
+export const toolStylesSheet = themedStyleSheet((colors) => ({
   run: {
     marginTop: spacing.xs
   },
@@ -21,11 +24,12 @@ export const toolStyles = themedStyleSheet(() => ({
     gap: spacing.sm,
     marginTop: spacing.xs
   },
+  // 32 pt like the reasoning toggle and live line: dense, with the whole width as the target.
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingVertical: 3
+    minHeight: TOOL_ROW_HEIGHT
   },
   headerSentence: {
     flexShrink: 1,
@@ -54,7 +58,7 @@ export const toolStyles = themedStyleSheet(() => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    minHeight: 26
+    minHeight: TOOL_ROW_HEIGHT
   },
   iconSlot: {
     alignItems: 'center',
@@ -98,7 +102,7 @@ export const toolStyles = themedStyleSheet(() => ({
     borderRadius: radii.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel,
+    backgroundColor: colors.chatPanel,
     padding: spacing.sm
   },
   // Bound long output to a scroll box so it cannot fill the transcript.
@@ -172,11 +176,11 @@ export const toolStyles = themedStyleSheet(() => ({
   diffMeta: {
     color: colors.textMuted
   },
+  // An edit's line keeps the run's 32 pt rhythm.
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    marginVertical: 2
+    gap: spacing.sm
   },
   cardToggle: {
     flex: 1,

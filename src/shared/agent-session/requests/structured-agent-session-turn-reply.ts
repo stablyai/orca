@@ -6,7 +6,8 @@ import { journalItemHasSideEffects } from './tool-call-side-effects'
 /** What a turn's end tells the request it answered, in one pass over its rows. prose: its newest root
  *  prose. botProse: a bot's answer, its newest root prose after the root agent's last tool call (text
  *  before a call was commentary; a child's calls run beside the answer). toolsRan: work inside the
- *  turn, a child's included, may have changed something (journalItemHasSideEffects). */
+ *  turn, a child's included, may have changed something (journalItemHasSideEffects); readers use it
+ *  only for a turn with no answer, so once both answers are found it may stay false. */
 export function structuredAgentSessionTurnReply(
   items: readonly AgentJournalRenderItem[],
   turnItemId: string
@@ -32,8 +33,8 @@ export function structuredAgentSessionTurnReply(
         botProse ??= said
       }
     }
-    // Every answer is known: nothing earlier changes it.
-    if (prose && botProse !== null && toolsRan) {
+    // Every answer is known: nothing earlier changes it, and an answered turn's toolsRan is unread.
+    if (prose && botProse !== null && (toolsRan || botProse)) {
       break
     }
   }

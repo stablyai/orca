@@ -1,4 +1,4 @@
-import { translate } from '../../i18n/mobile-i18n'
+import type { Translate } from '../../i18n/mobile-i18n'
 import {
   ArrowDown,
   ArrowDownUp,
@@ -106,9 +106,13 @@ export function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-export function formatBranchLabel(branch: string | undefined, head: string | undefined): string {
+export function formatBranchLabel(
+  branch: string | undefined,
+  head: string | undefined,
+  t: Translate
+): string {
   if (branch?.startsWith('refs/heads/')) {
     return branch.slice('refs/heads/'.length)
   }
-  return branch || head?.slice(0, 7) || translate('sourceControl.screenState.noBranch', 'No branch')
+  return branch || head?.slice(0, 7) || t('sourceControl.screenState.noBranch', 'No branch')
 }

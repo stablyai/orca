@@ -7,7 +7,7 @@ const {
   realpathSync,
   rmSync
 } = require('node:fs')
-const { dirname, join, resolve } = require('node:path')
+const { basename, dirname, join, resolve } = require('node:path')
 const { builtinModules, createRequire } = require('node:module')
 const {
   PE_MACHINE,
@@ -110,6 +110,29 @@ function isPackagedExternalSpecifier(specifier) {
   )
 }
 
+function findPackageRootJsonPath(packageName, startDir) {
+  let dir = startDir
+  let firstFound = null
+  // Why: nested markers (hono's dist/cjs {"type":"commonjs"}, or an exports './*' wildcard
+  // mapping <pkg>/package.json onto one) must not shadow the root; only a matching name
+  // proves it. Never climb out of the package's node_modules.
+  while (dir !== dirname(dir) && basename(dir) !== 'node_modules') {
+    const packageJsonPath = join(dir, 'package.json')
+    if (existsSync(packageJsonPath)) {
+      try {
+        if (JSON.parse(readFileSync(packageJsonPath, 'utf8')).name === packageName) {
+          return packageJsonPath
+        }
+      } catch {
+        // An unreadable package.json cannot prove the root; keep climbing.
+      }
+      firstFound ??= packageJsonPath
+    }
+    dir = dirname(dir)
+  }
+  return firstFound
+}
+
 function resolvePackageJsonPath(packageName, fromDir = projectDir) {
   const nested = join(fromDir, 'node_modules', packageName, 'package.json')
   if (existsSync(nested)) {
@@ -122,25 +145,23 @@ function resolvePackageJsonPath(packageName, fromDir = projectDir) {
       return direct
     }
   }
+  let startDir
   try {
-    return requireFromProject.resolve(`${packageName}/package.json`, { paths: [fromDir] })
+    startDir = dirname(
+      requireFromProject.resolve(`${packageName}/package.json`, { paths: [fromDir] })
+    )
   } catch {
-    let entryPath
     try {
-      entryPath = requireFromProject.resolve(packageName, { paths: [fromDir] })
+      startDir = dirname(requireFromProject.resolve(packageName, { paths: [fromDir] }))
     } catch {
       throw new Error(`Could not resolve package ${packageName} from ${fromDir}`)
     }
-    let dir = dirname(entryPath)
-    while (dir !== dirname(dir)) {
-      const packageJsonPath = join(dir, 'package.json')
-      if (existsSync(packageJsonPath)) {
-        return packageJsonPath
-      }
-      dir = dirname(dir)
-    }
+  }
+  const packageJsonPath = findPackageRootJsonPath(packageName, startDir)
+  if (!packageJsonPath) {
     throw new Error(`Could not find package.json for ${packageName}`)
   }
+  return packageJsonPath
 }
 
 function readPackage(packageName, fromDir = projectDir) {

@@ -15,9 +15,9 @@ import { ListGroup } from '../components/list/ListGroup'
 import { DragReorderList } from '../components/reorder/DragReorderList'
 import { setDragReorderScrollEnabled } from '../components/reorder/drag-reorder-scroll-lock'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, spacing, typography } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { botUpdate } from './bot-sheet-operations'
 import { groupReorder } from './bot-group-operations'
@@ -110,7 +110,8 @@ function Content({
   listing: ListedHostBots
   onClose: () => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   // The order a drop made, over the live listing until the host's catches up: rows made or deleted
   // meanwhile join or leave it.
@@ -218,7 +219,7 @@ function Content({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   root: { flex: 1 },
   content: { paddingHorizontal: spacing.md, paddingBottom: spacing.xl },
   row: {

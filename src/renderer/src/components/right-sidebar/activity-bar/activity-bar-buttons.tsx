@@ -20,7 +20,11 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
 import { keepPaneFocusPressProps } from '@/lib/overlay-interaction/focus-keeping-press'
-import { activityItemAriaLabel, activityItemTooltip } from './activity-bar-item-names'
+import {
+  activityItemAriaLabel,
+  activityItemStatus,
+  activityItemTooltip
+} from './activity-bar-item-names'
 
 export type ActivityBarItem = {
   id: ActiveRightSidebarTab
@@ -100,8 +104,12 @@ export function TopActivityOverflowMenu({
   const triggerRef = useRef<HTMLButtonElement>(null)
   const focusBeforeOpenRef = useRef<Element | null>(null)
   const holdsActiveTab = items.some((item) => item.id === activeTab)
+  // A steady green "all checks passed" is not a flag; failing or running checks are.
   const hiddenChecksStatus =
-    checksStatus && checksStatus !== 'neutral' && items.some((item) => item.id === 'checks')
+    checksStatus &&
+    checksStatus !== 'neutral' &&
+    checksStatus !== 'success' &&
+    items.some((item) => item.id === 'checks')
       ? checksStatus
       : null
   const hiddenItemStatus = items.some((item) => item.statusIndicator === 'failure')
@@ -145,7 +153,7 @@ export function TopActivityOverflowMenu({
             <div
               className={cn(
                 'absolute top-[8px] right-[4px] size-[7px] rounded-full ring-1 ring-sidebar',
-                STATUS_DOT_COLOR[hiddenItemStatus] ?? 'bg-muted-foreground'
+                STATUS_DOT_COLOR[hiddenItemStatus]
               )}
             />
           )}
@@ -174,6 +182,7 @@ export function TopActivityOverflowMenu({
         {items.map((item) => {
           const Icon = item.icon
           const active = item.id === activeTab
+          const status = activityItemStatus(item, checksStatus)
           return (
             <ContextMenu key={item.id}>
               <ContextMenuTrigger asChild>
@@ -188,13 +197,13 @@ export function TopActivityOverflowMenu({
                   data-activity-plugin-key={item.pluginKey}
                   className={cn(active && 'bg-accent text-accent-foreground')}
                   aria-current={active ? 'page' : undefined}
-                  aria-label={activityItemAriaLabel(item, item.statusIndicator, t)}
+                  aria-label={activityItemAriaLabel(item, status, t)}
                 >
                   <Icon size={14} />
                   <span>{item.title}</span>
-                  {item.statusIndicator === 'failure' ? (
+                  {status && status !== 'neutral' ? (
                     <span
-                      className={cn('ml-auto size-2 rounded-full', STATUS_DOT_COLOR.failure)}
+                      className={cn('ml-auto size-2 rounded-full', STATUS_DOT_COLOR[status])}
                       aria-hidden="true"
                     />
                   ) : null}
@@ -315,7 +324,7 @@ export function ActivityBarButton({
               : isTop
                 ? 'top-[8px] right-[5px]'
                 : 'top-[7px] right-[7px]',
-            STATUS_DOT_COLOR[effectiveStatus] ?? 'bg-muted-foreground'
+            STATUS_DOT_COLOR[effectiveStatus]
           )}
         />
       )}

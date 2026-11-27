@@ -8,9 +8,9 @@ import {
 } from '../../components/feedback/MobileStateView'
 import { NavBar } from '../../components/nav-bar/NavBar'
 import { NavBarButton } from '../../components/nav-bar/NavBarButton'
-import { colors, spacing, typography, pressedStyle } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing, typography, pressedStyle } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColorScheme, useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { ConnectionState } from '../../transport/connection/connection-state'
@@ -77,6 +77,8 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
   onBack,
   onOpenCommit
 }: MobileGitHistoryListProps) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const colorScheme = useMobileColorScheme()
   const t = useMobileTranslation()
   const forceReconnect = useForceReconnect()
@@ -96,7 +98,7 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
   const items = useMemo(
     () =>
       loaded
-        ? buildMobileCommitsListItems(buildMobileCommitsView(loaded.pages, loaded.nowMs))
+        ? buildMobileCommitsListItems(buildMobileCommitsView(loaded.pages, loaded.nowMs, t), t)
         : null,
     [loaded, t]
   )
@@ -251,9 +253,8 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
           />
         )
       }
-      return renderCommitRow(item, openCommit)
+      return renderCommitRow(item, openCommit, colorScheme)
     },
-    // colorScheme: rows read themed styles at render.
     [
       baseRef,
       busy,
@@ -360,7 +361,7 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
   )
 })
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   screen: { flex: 1 },
   actionError: {
     color: colors.statusRed,

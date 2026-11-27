@@ -4,13 +4,12 @@ import { Shuffle } from 'lucide-react-native'
 import type { BotAgent } from '../../../src/shared/bot-types'
 import { ActionSheetModal } from '../components/sheets/ActionSheetModal'
 import { HostKindIcon } from '../components/icons/HostKindIcon'
-import { COMPOSER_LINE_HEIGHT } from '../components/composer-input/composer-input-styles'
-import { LIST_ROW_PADDING, ListRow } from '../components/list/ListGroup'
+import { ListRow } from '../components/list/ListGroup'
 import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, radii, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { radii, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { MobileBotAvatarSource } from './host-bot-row-facts'
 import { botAgentLabel } from './mobile-bot-sheet-copy'
@@ -24,7 +23,8 @@ import {
 
 /** New bot's picture, with Another picture's shuffle on its corner. */
 export function NewBotPicture(props: { avatar: MobileBotAvatarSource; onShuffle: () => void }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   return (
     <View>
@@ -115,7 +115,7 @@ export function NewBotAgentRow(props: {
   loading: boolean
   onPick: () => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { agent } = props
   return (
@@ -208,7 +208,7 @@ export function NewBotAgentSheet(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   shuffle: {
     position: 'absolute',
     right: -spacing.sm,
@@ -219,23 +219,4 @@ const styles = themedStyleSheet(() => ({
     backgroundColor: colors.sheetGroup
   },
   pressed: { opacity: 0.7 }
-}))
-
-const ROW_HEIGHT = 48
-// The phone's own text fields drawn as rows of a group: no edge, fill or ring, the text on the row inset.
-const unframed = {
-  borderWidth: 0,
-  borderRadius: 0,
-  backgroundColor: 'transparent',
-  outlineWidth: 0
-} as const
-
-export const groupFieldStyles = themedStyleSheet(() => ({
-  line: { ...unframed, minHeight: ROW_HEIGHT, paddingHorizontal: LIST_ROW_PADDING },
-  // The message text pads itself 6 across and 2 down; its first line sits where a one-line row's does.
-  lines: {
-    ...unframed,
-    paddingHorizontal: LIST_ROW_PADDING - 6,
-    paddingVertical: (ROW_HEIGHT - COMPOSER_LINE_HEIGHT) / 2 - spacing.xxs
-  }
 }))

@@ -8,11 +8,11 @@ import { slackTeamState } from '../../../../src/shared/connector-bot-slack-contr
 import { ListRow } from '../../components/list/ListGroup'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { SettingsSection } from '../../settings/settings-screen-frame'
-import { colors } from '../../theme/mobile-theme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { PhoneBot } from '../host-bots-operations'
 import { MobileConnectorLogo } from '../MobileConnectorSourceIcon'
 import { readSlack } from './use-phone-bot-slack'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 /** Each workspace's name as one of the host's bots there reads it (one read per bot, again once the
  *  phone is back online); its id until known. */
@@ -66,6 +66,7 @@ export function SlackPickStep(props: {
   onPick: (teamId: string) => void
   onAnother: () => void
 }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const names = useSlackTeamNames(props.client, props.hostBots, props.teamIds, props.online)
   return (
@@ -102,6 +103,7 @@ export function SlackProblemStep(props: {
   online: boolean
   onNewLink: () => void
 }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const names = useSlackTeamNames(props.client, props.hostBots, [props.teamId], props.online)
   const other = props.kind === 'other-user'

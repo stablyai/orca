@@ -2,10 +2,8 @@ import { useState } from 'react'
 import { Platform, Pressable, Text, View, type TextStyle } from 'react-native'
 import { MobileEdgeFade } from '../../../../components/list/MobileEdgeFade'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { colors, radii, spacing, typography, pressedStyle } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
-
+import { radii, spacing, typography, pressedStyle } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 const MAX_HEIGHT = 96 - spacing.sm * 2
 
 export function MobileNativeChatOptionThumbnail({
@@ -31,7 +29,7 @@ function MeasuredPreviewThumbnail({
   preview: string
   onPress: () => void
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const [width, setWidth] = useState(0)
   const [bounds, setBounds] = useState<{ width: number; height: number } | null>(null)
@@ -71,7 +69,7 @@ function MeasuredPreviewThumbnail({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   thumbnail: {
     minHeight: 44,
     padding: spacing.sm,

@@ -18,7 +18,6 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { colors } from '../../theme/mobile-theme'
 import { useRouteCapability } from '../../worktree/execution-hosts/use-route-capability'
 import { BOTS_GOOGLE_PHONE_SIGN_IN_RUNTIME_CAPABILITY } from '../../../../src/shared/bot-runtime-capabilities'
 import type { PhoneBot } from '../host-bots-operations'
@@ -34,6 +33,7 @@ import {
   useGoogleAccountCalls,
   type PhoneGoogle
 } from './phone-google-accounts'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 /** What a new account asks for: what this one has, as the desktop's Add another Google account. */
 function accountChoices(account: GoogleAccount) {
@@ -61,6 +61,7 @@ export function MobileBotGooglePage(props: {
   /** Google's sign-in; `account`: the account page to come back to. */
   onSignIn: (ask: GoogleSignInAsk, account?: string) => void
 }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { bot, google, hostName } = props
   // An older host signs Google in only itself, so its pages say so instead.
@@ -180,6 +181,9 @@ export function MobileBotGooglePage(props: {
     : t('bots.google.headline.endedOnHost', 'Google access ended. Sign in again on {{host}}.', {
         host: hostName
       })
+  // Google's own reason, when it gave one, follows Orca's sentence.
+  const endedText = (account: GoogleAccount) =>
+    account.googleError ? `${ended}\n${account.googleError}` : ended
   // An ended sign-in's one fix, in the slot its services had.
   const reconnectGroup = (account: GoogleAccount, back: string | undefined) =>
     signsIn ? (
@@ -209,7 +213,7 @@ export function MobileBotGooglePage(props: {
         {props.banner}
         {opened.status === 'reconnect' ? (
           <>
-            <SettingsNote>{ended}</SettingsNote>
+            <SettingsNote>{endedText(opened)}</SettingsNote>
             {reconnectGroup(opened, opened.email)}
           </>
         ) : opened === shown ? null : (
@@ -259,7 +263,7 @@ export function MobileBotGooglePage(props: {
       ? t('bots.google.headline.noDefault', 'Choose a default account')
       : null
     : shown.status === 'reconnect'
-      ? ended
+      ? endedText(shown)
       : shownProblems === 0
         ? t('bots.google.headline.connected', 'Google is connected')
         : shownProblems === 1

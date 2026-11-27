@@ -1,4 +1,5 @@
 import type { OrchestrationDb } from '../../db/orchestration-db'
+import { hasOutboundCoordinatorReport } from '../../db/messages/dispatch-outbound-coordinator-report'
 import { readCoordinatorMailCount } from '../../db/messages/dispatch-read-mail'
 import { runLifecycleWriteTransaction } from '../../db/lifecycle-write-transaction-runner'
 import { confirmUnknownWorkerStart, observeWorkerWorking } from './worker-working-observation'
@@ -239,12 +240,7 @@ function reconcileWorkerReport(
   deps: WorkerTurnStopReportDeps
 ): boolean {
   const dispatchId = workerTurnStopDispatchId(target)
-  const keep = () => {
-    if (row.changed) {
-      writeWorkerPresence(db, dispatchId, row)
-    }
-    return false
-  }
+  const keep = () => (row.changed && writeWorkerPresence(db, dispatchId, row), false)
   const decided = (mailCount: number | undefined): WorkerPresenceRow => ({
     ...row,
     report: null,
@@ -263,20 +259,28 @@ function reconcileWorkerReport(
     writeWorkerPresence(db, dispatchId, decided(undefined))
     return false
   }
-  // Left undecided: the same rest seen again is decided again. Going away, or a failed request the
-  // chat showed, is never deliberate; a rest of a worker its coordinator is stopping is no news.
-  if (
-    !isWorkerGone(rest.reason) &&
-    (db.isWorkerStopRequested(dispatchId) || isDeliberateRest(db, target, rest, deps))
-  ) {
+  if (!isWorkerGone(rest.reason) && db.isWorkerStopRequested(dispatchId)) {
     return keep()
   }
-  // An idle finish answers the coordinator's mail the worker took, so it is news once per mail taken: a later
-  // idle turn (a worker on its own schedule, or one the user is talking to) repeats what the coordinator was told.
   const finishedMail =
     rest.reason === 'finished'
       ? (rest.mailTaken ?? readCoordinatorMailCount(db, dispatchId))
       : undefined
+  if (!isWorkerGone(rest.reason) && isDeliberateRest(db, target, rest, deps)) {
+    const transientlyHeld =
+      deps.isWaitingForMail(`dispatch:${dispatchId}`) ||
+      db.awaitsAnswerToLatestQuestion(dispatchId) ||
+      (target.kind === 'local' && db.hasOpenHelperDispatch(dispatchId))
+    if (
+      rest.reason === 'finished' &&
+      !transientlyHeld &&
+      hasOutboundCoordinatorReport(db, target, rest)
+    ) {
+      writeWorkerPresence(db, dispatchId, decided(finishedMail))
+      return false
+    }
+    return keep()
+  }
   if (
     (finishedMail !== undefined &&
       row.reportedMailCount !== null &&

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { SearchSubprocessLineAccumulator } from '../../../../shared/process-streams/search-subprocess-lines'
 import { killSourceControlAgentProcess } from '../../../text-generation/execution/source-control-agent-termination'
 import { spawnSupervisedAgent } from '../../../text-generation/execution/source-control-supervised-agent-spawn'
@@ -10,27 +11,29 @@ import {
 import { OpenCodeTextTaskError, runOwnedOpenCodeTextTask } from '../opencode-owned-text-task'
 import { guestLoginShellLaunch } from './opencode-wsl-guest-launch'
 
-const request = z.object({
-  nonce: z.string().regex(/^[0-9a-f]{32}$/),
-  binary: z.string().min(1),
-  prefixArgs: z.array(z.string()),
-  prompt: z.string(),
-  runArgs: z.array(z.string()),
-  /** Inline command assignments; applied after the inner login rc, as the CLI route did. */
-  commandEnv: z.record(z.string(), z.string()).optional(),
-  legacyVariantFlag: z.boolean().optional(),
-  operation: z
-    .enum([
-      'commit-message',
-      'pull-request-fields',
-      'branch-name',
-      'jira-issue-summary',
-      'conversation-name',
-      'dictation-cleanup'
-    ])
-    .optional(),
-  timeoutMs: z.number().int().positive()
-})
+const request = lazyZodSchema(() =>
+  z.object({
+    nonce: z.string().regex(/^[0-9a-f]{32}$/),
+    binary: z.string().min(1),
+    prefixArgs: z.array(z.string()),
+    prompt: z.string(),
+    runArgs: z.array(z.string()),
+    /** Inline command assignments; applied after the inner login rc, as the CLI route did. */
+    commandEnv: z.record(z.string(), z.string()).optional(),
+    legacyVariantFlag: z.boolean().optional(),
+    operation: z
+      .enum([
+        'commit-message',
+        'pull-request-fields',
+        'branch-name',
+        'jira-issue-summary',
+        'conversation-name',
+        'dictation-cleanup'
+      ])
+      .optional(),
+    timeoutMs: z.number().int().positive()
+  })
+)
 
 // The launcher unset NODE_OPTIONS for this Node; OpenCode's own login shell sets it up again.
 const env: NodeJS.ProcessEnv = { ...process.env }

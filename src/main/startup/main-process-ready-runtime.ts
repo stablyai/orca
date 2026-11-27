@@ -5,8 +5,14 @@ import { browserManager } from '../browser/guest-lifecycle/manager/browser-manag
 import { browserSessionRegistry } from '../browser/sessions/profiles/browser-session-registry'
 import { configureBrowserClientPageAutomationRuntime } from '../browser/client-pages/execution/browser-client-page-automation-runtime'
 import { openOffscreenBrowserPageLink } from '../runtime/browser/commands/offscreen-browser-page-link'
-import { startPreGoneCrashSampling } from '../crash-reporting/process-exits/process-gone-diagnostics'
-import { setMainMemorySpikeCounts } from '../memory/main-memory-spike-capture'
+import {
+  readLiveProcessMetricDetails,
+  startPreGoneCrashSampling
+} from '../crash-reporting/process-exits/process-gone-diagnostics'
+import {
+  setMainMemorySpikeCounts,
+  setMainMemorySpikeProcessMetrics
+} from '../memory/main-memory-spike-capture'
 import { registeredPtyCount } from '../memory/pty-registry'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { refuseRealtimeSchedulingUnderZeroRtTime } from './linux-runtime/linux-realtime-scheduling-guard'
@@ -17,7 +23,6 @@ import { mainProcessState as state } from './main-process-state'
 import { isNativeUpdateInstallUnderWay } from '../updater/updater-service'
 import { initializeMainProcessObservers, startUsageBackend } from './main-process-observers'
 import { runAfterFirstWindowShown } from './main-window/first-window-deferral'
-import { startSpeechModelWarmup } from '../speech/speech-model-warmup'
 import { startClaudeCodeThemeSync } from '../claude/theme-sync/claude-code-theme-sync-schedule'
 import {
   composeDesktopCore,
@@ -43,12 +48,14 @@ function startProcessCrashObservers(): void {
     bots: state.store?.getBots().length ?? 0,
     terminals: registeredPtyCount()
   }))
+  setMainMemorySpikeProcessMetrics(readLiveProcessMetricDetails)
   // Sample live processes: gone-time metrics omit dead children and already-released memory.
   startPreGoneCrashSampling()
   app.on('child-process-gone', (_event, details) => {
     recordProcessGoneCrash('child', details.type, details.reason, details.exitCode ?? null, {
       name: details.name,
       serviceName: details.serviceName,
+      systemErrorCode: details.systemErrorCode,
       type: details.type
     })
     if (
@@ -66,9 +73,33 @@ function startProcessCrashObservers(): void {
 }
 
 function startThemeAndSpeech(store: Store, fallbackMs: number): void {
-  // Load the dictation model after first paint; coming back to Orca re-warms one the idle timer unloaded.
+  // Load the dictation model after first paint only when voice dictation is enabled.
   runAfterFirstWindowShown(() => {
-    app.on('browser-window-focus', startSpeechModelWarmup(store))
+    let warmupStarted = false
+    const startWarmupOnce = (): void => {
+      if (warmupStarted) {
+        return
+      }
+      const voice = store.getSettings().voice
+      if (!voice?.enabled || !voice.sttModel) {
+        return
+      }
+      warmupStarted = true
+      void import('../speech/speech-model-warmup')
+        .then(({ startSpeechModelWarmup }) => {
+          app.on('browser-window-focus', startSpeechModelWarmup(store))
+        })
+        .catch((error: unknown) => {
+          warmupStarted = false
+          console.warn('[speech] Could not load speech model warmup:', error)
+        })
+    }
+    store.onSettingsChanged((updates) => {
+      if ('voice' in updates) {
+        startWarmupOnce()
+      }
+    })
+    startWarmupOnce()
   }, fallbackMs)
   runAfterFirstWindowShown(() => {
     startClaudeCodeThemeSync({

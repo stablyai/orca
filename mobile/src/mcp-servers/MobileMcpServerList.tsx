@@ -8,11 +8,11 @@ import { mcpMoveRemovesFrom } from '../../../src/shared/mcp-servers/mcp-servers'
 import { LIST_LEADING_INSET, ListRow } from '../components/list/ListGroup'
 import { MobileStateButton } from '../components/feedback/MobileStateView'
 import { PullDownMenu } from '../components/nav-bar/PullDownMenu'
-import { getUiIntlLocale } from '../i18n/ui-intl-locale'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { intlLocaleFor } from '../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../i18n/use-mobile-translation'
 import { SettingsSection } from '../settings/settings-screen-frame'
-import { colors, pressedStyle } from '../theme/mobile-theme'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { pressedStyle } from '../theme/mobile-theme'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import type { PhoneDiscoveredMcpServer, PhoneMcpServer } from './mcp-server-operations'
 import { McpServerMark, McpStatusDot } from './mcp-server-row-parts'
 import {
@@ -38,7 +38,7 @@ export function MobileMcpServerList(props: {
   onCopy: (entry: PhoneDiscoveredMcpServer) => void
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
   const yours = props.servers.filter((server) => !server.plugin)
   const fromPlugins = props.servers.filter((server) => server.plugin)
   const row = (server: PhoneMcpServer) => (
@@ -106,13 +106,15 @@ function McpServerRow(props: {
   onOpen: () => void
   onSignIn: () => void
 }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const { server, problem } = props
   const needsSignIn = server.signIn !== undefined && server.signIn.state !== 'signed-in'
   const failed = !needsSignIn && problem?.kind === 'failed'
   const where = isAllMcpWorkspaces(server.workspaces)
     ? null
-    : mcpWorkspacesValue(server.workspaces, props.workspaceNames, t)
+    : mcpWorkspacesValue(server.workspaces, props.workspaceNames, t, intlLocale)
   const line =
     server.plugin?.name ?? [mcpServerAddress(server, false), where].filter(Boolean).join(' · ')
   return (
@@ -160,7 +162,9 @@ function DiscoveredRow(props: {
   onMove: () => void
   onCopy: () => void
 }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const anchor = useRef<HostInstance>(null)
   const [open, setOpen] = useState(false)
   const { entry } = props
@@ -168,7 +172,7 @@ function DiscoveredRow(props: {
   const only =
     entry.projectNames.length > 0
       ? t('mcpServers.projectsOnly', '{{projects}} only', {
-          projects: new Intl.ListFormat(getUiIntlLocale(), { type: 'unit', style: 'short' }).format(
+          projects: new Intl.ListFormat(intlLocale, { type: 'unit', style: 'short' }).format(
             entry.projectNames
           )
         })

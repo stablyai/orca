@@ -1,6 +1,5 @@
 import { useAutomationSetupConsent } from './use-automation-setup-consent'
 import { OrcaHookTrustDrawer } from '../components/hook-trust/OrcaHookTrustDrawer'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useAutomationRuns, type AutomationRunScope } from './use-automation-runs'
 import { useState, type ReactNode } from 'react'
 import { useAutomationCreateAttempt } from './use-automation-create-attempt'
@@ -16,11 +15,18 @@ import {
 } from './AutomationControls'
 import { AutomationList } from './AutomationList'
 import { AutomationDetail, AutomationRunNowBar, automationDetailBar } from './AutomationDetail'
-import { AutomationEditor } from './AutomationEditor'
+import type { AutomationEditorSection } from './AutomationEditor'
+import { AutomationEditorSheet, type AutomationEditorRequest } from './AutomationEditorSheet'
 import { leaveThrough, type AutomationLeaveSlot } from './AutomationEditorNavigation'
-import { AutomationRecentRuns, AutomationRunsView } from './AutomationRunList'
-import { AutomationPageBotEditor } from './AutomationPageBotEditor'
-import { AutomationRunDetails } from './AutomationRunDetails'
+import {
+  AutomationRecentRuns,
+  AutomationRunsBar,
+  AutomationRunsView,
+  useAutomationRunFilters
+} from './AutomationRunList'
+import { useTransientToast } from '../components/feedback/TransientToast'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { AutomationRunDetails, automationRunBar } from './AutomationRunDetails'
 import type { MobileAutomationRow, MobileAutomationRun } from './automation-reply-schema'
 import {
   automationDeleteWrite,
@@ -31,16 +37,23 @@ import {
 import { automationUpdateParams, type AutomationDraft } from './automation-draft'
 import type { AutomationTargets } from './automation-target-inventory'
 import { useAutomationCatalog, useStartOnAutomation } from './use-automation-catalog'
-import { automationEditorDraftKey, dropAutomationEditorDraft } from './automation-editor-draft-row'
-import { automationStyles as styles } from './automation-styles'
+import { dropAutomationEditorDraft } from './automation-editor-draft-row'
+import { automationStylesSheet as stylesSheet } from './automation-styles'
 import { useAutomationProjectNames } from './use-automation-project-names'
+import { intlLocaleFor } from '../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../i18n/use-mobile-translation'
+import { useThemedStyles } from '../theme/themed-styles'
 
 type AutomationView =
   | { kind: 'list' }
   | { kind: 'detail'; row: MobileAutomationRow }
-  | { kind: 'editor'; row?: MobileAutomationRow; initialDraft?: AutomationDraft }
-  | { kind: 'run'; run: MobileAutomationRun; scope: AutomationRunScope }
+  // Back returns to where it opened: the automation, or the Runs list.
+  | { kind: 'run'; run: MobileAutomationRun; scope: AutomationRunScope; back: AutomationView }
 const ACTION_OPTIONS = { failWhenDisconnected: true }
+const ownedBy = (row: MobileAutomationRow) => ({
+  id: row.automation.id,
+  expectedOwner: toAutomationOwnerPrecondition(row.item.selector)
+})
 
 export function AutomationManager(props: {
   client: RpcClient | null
@@ -55,22 +68,43 @@ export function AutomationManager(props: {
   /** Filled while the editor is open, so tab and host switches ask before dropping its edits. */
   leaveGuard?: AutomationLeaveSlot
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const t = useMobileTranslation()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const catalog = useAutomationCatalog(props.hostId, props.client, props.executionHost)
-  const startView: AutomationView = props.startInEditor ? { kind: 'editor' } : { kind: 'list' }
-  const [view, setView] = useState<AutomationView>(startView)
+  const [view, setView] = useState<AutomationView>({ kind: 'list' })
+  // Kept while the sheet slides away, so it leaves with what it showed.
+  const [editor, setEditor] = useState<AutomationEditorRequest | null>(
+    props.startInEditor ? { key: 0 } : null
+  )
+  const [editorOpen, setEditorOpen] = useState(props.startInEditor === true)
+  // A saved edit closes the sheet onto the automation it saved.
+  function closeOn(saved: MobileAutomationRow) {
+    setEditorOpen(false)
+    setView({ kind: 'detail', row: saved })
+  }
+  function openEditor(request: Omit<AutomationEditorRequest, 'key'>) {
+    // The sheet shows the page's last failure, so an older one shouldn't greet it.
+    catalog.setError(null)
+    setEditor((current) => ({ ...request, key: (current?.key ?? 0) + 1 }))
+    setEditorOpen(true)
+  }
   const [tab, setTab] = useState<'automations' | 'runs'>('automations')
-  const [filter, setFilter] = useState<AutomationRunScope>(null)
-  const [outcome, setOutcome] = useState('all')
+  const runFilters = useAutomationRunFilters(catalog.rows)
+  const toast = useTransientToast()
+  const insets = useSafeAreaInsets()
   useStartOnAutomation(catalog, props.startOnAutomation, (row) => setView({ kind: 'detail', row }))
   const createAttempt = useAutomationCreateAttempt(
     catalog.rows,
-    view.kind === 'editor' && !view.row,
+    editorOpen && editor !== null && !editor.row,
     (saved, initialDraft) => {
       catalog.setError(null)
-      setView(
-        initialDraft ? { kind: 'editor', row: saved, initialDraft } : { kind: 'detail', row: saved }
-      )
+      setView({ kind: 'detail', row: saved })
+      if (initialDraft) {
+        openEditor({ row: saved, initialDraft })
+      } else {
+        setEditorOpen(false)
+      }
     },
     catalog.isCurrentSnapshot,
     () => dropAutomationEditorDraft(props.executionHost)
@@ -94,7 +128,7 @@ export function AutomationManager(props: {
             automationId: row.automation.id,
             expectedOwner: toAutomationOwnerPrecondition(row.item.selector)
           }
-        : filter
+        : runFilters.scope
   const history = useAutomationRuns(
     props.client,
     historyScope,
@@ -103,24 +137,13 @@ export function AutomationManager(props: {
     view.kind === 'run' ? view.run : undefined,
     view.kind === 'detail' || view.kind === 'run' || (view.kind === 'list' && tab === 'runs')
   )
-  function selectFilter(id: string) {
-    const selected = catalog.rows.find((entry) => entry.automation.id === id)
-    if (!id) {
-      setFilter(null)
-    } else if (selected) {
-      setFilter({
-        automationId: id,
-        expectedOwner: toAutomationOwnerPrecondition(selected.item.selector)
-      })
-    }
-  }
   function showList(next: 'automations' | 'runs') {
     setTab(next)
     setView({ kind: 'list' })
   }
   const allAutomations = () => showList('automations')
   function allRuns(automationId = '') {
-    selectFilter(automationId)
+    runFilters.selectAutomation(automationId)
     showList('runs')
   }
   function toggle(selected: MobileAutomationRow, enabled: boolean) {
@@ -129,11 +152,7 @@ export function AutomationManager(props: {
         automationUpdateWrite.interpret(
           await automationUpdateWrite.request(
             client,
-            {
-              id: selected.automation.id,
-              updates: { enabled },
-              expectedOwner: toAutomationOwnerPrecondition(selected.item.selector)
-            },
+            { ...ownedBy(selected), updates: { enabled } },
             ACTION_OPTIONS
           )
         ),
@@ -149,20 +168,17 @@ export function AutomationManager(props: {
       }
     )
   }
-  function edit(selected: MobileAutomationRow) {
+  function edit(selected: MobileAutomationRow, section?: AutomationEditorSection) {
     void catalog.perform(
       async (client) =>
         automationShowRead.interpret(
-          await automationShowRead.request(
-            client,
-            {
-              id: selected.automation.id,
-              expectedOwner: toAutomationOwnerPrecondition(selected.item.selector)
-            },
-            ACTION_OPTIONS
-          )
+          await automationShowRead.request(client, ownedBy(selected), ACTION_OPTIONS)
         ),
-      ({ automation }) => setView({ kind: 'editor', row: { ...selected, automation } })
+      ({ automation }) =>
+        openEditor({
+          row: { ...selected, automation },
+          ...(automation.bot ? {} : { section })
+        })
     )
   }
   async function runNow(selected: MobileAutomationRow): Promise<boolean> {
@@ -170,25 +186,18 @@ export function AutomationManager(props: {
     await catalog.perform(
       async (client) =>
         automationRunWrite.interpret(
-          await automationRunWrite.request(
-            client,
-            {
-              id: selected.automation.id,
-              expectedOwner: toAutomationOwnerPrecondition(selected.item.selector)
-            },
-            ACTION_OPTIONS
-          )
+          await automationRunWrite.request(client, ownedBy(selected), ACTION_OPTIONS)
         ),
       ({ run }) => {
         accepted = true
-        setTab('runs')
         setView({
           kind: 'run',
           run,
           scope: {
             automationId: selected.automation.id,
             expectedOwner: toAutomationOwnerPrecondition(selected.item.selector)
-          }
+          },
+          back: { kind: 'detail', row: selected }
         })
       }
     )
@@ -198,14 +207,7 @@ export function AutomationManager(props: {
     void catalog.perform(
       async (client) =>
         automationDeleteWrite.interpret(
-          await automationDeleteWrite.request(
-            client,
-            {
-              id: selected.automation.id,
-              expectedOwner: toAutomationOwnerPrecondition(selected.item.selector)
-            },
-            ACTION_OPTIONS
-          )
+          await automationDeleteWrite.request(client, ownedBy(selected), ACTION_OPTIONS)
         ),
       () => {
         catalog.setRows((previous) =>
@@ -216,7 +218,7 @@ export function AutomationManager(props: {
     )
   }
   function save(draft: AutomationDraft, original: AutomationDraft, targets: AutomationTargets) {
-    const editing = view.kind === 'editor' ? view.row : undefined
+    const editing = editor?.row
     void catalog.perform(
       async (client, current) => {
         if (editing) {
@@ -254,7 +256,7 @@ export function AutomationManager(props: {
         const id = saved.automation.id
         dropAutomationEditorDraft(props.executionHost, id)
         catalog.setRows((rows) => [...rows.filter((row) => row.automation.id !== id), saved])
-        setView({ kind: 'detail', row: saved })
+        closeOn(saved)
       }
     )
   }
@@ -267,134 +269,137 @@ export function AutomationManager(props: {
   )
   const create = () => {
     createAttempt.reset()
-    setView({ kind: 'editor' })
+    openEditor({})
   }
   const bar: AutomationHeaderBar = row
-    ? automationDetailBar(row, allAutomations, {
-        disabled,
-        onEdit: () => edit(row),
-        onRuns: () => allRuns(row.automation.id),
-        onDelete: () => remove(row)
-      })
-    : view.kind === 'list'
-      ? {
-          trailing: <AutomationNewButton disabled={disabled || !catalog.loaded} onPress={create} />
-        }
-      : {}
-  // Settings-style views lay out as grouped lists; the editor and a run keep their form spacing.
-  const grouped = view.kind === 'list' || view.kind === 'detail'
+    ? automationDetailBar(
+        row,
+        allAutomations,
+        {
+          disabled,
+          onEdit: () => edit(row),
+          onRuns: () => allRuns(row.automation.id),
+          onDelete: () => remove(row)
+        },
+        t,
+        intlLocale
+      )
+    : view.kind === 'run'
+      ? automationRunBar(history.selected ?? view.run, () => setView(view.back), toast.showToast, t)
+      : view.kind === 'list'
+        ? {
+            trailing: (
+              <AutomationNewButton disabled={disabled || !catalog.loaded} onPress={create} />
+            )
+          }
+        : {}
+  const runsTab = view.kind === 'list' && tab === 'runs'
   const loadFailed = !catalog.loaded && catalog.error !== null && view.kind === 'list'
+  const notes = (
+    <AutomationCatalogNotes
+      connected={catalog.connected}
+      error={catalog.error}
+      failedLoad={loadFailed}
+      onRetry={disabled ? null : () => void catalog.refresh(true)}
+    />
+  )
   return (
     <>
       {props.renderHeader ? props.renderHeader(tabs, bar) : tabs}
-      <ScrollView
-        style={styles.screen}
-        contentContainerStyle={grouped ? styles.grouped : styles.content}
-        keyboardShouldPersistTaps="handled"
-      >
-        <AutomationCatalogNotes
+      {view.kind === 'run' ? (
+        <AutomationRunDetails
+          run={view.run}
+          client={props.client}
+          hostId={props.hostId}
+          executionHost={props.executionHost}
           connected={catalog.connected}
-          error={catalog.error}
-          failedLoad={loadFailed}
-          onRetry={disabled ? null : () => void catalog.refresh(true)}
+          history={history}
+          notes={notes}
+          toast={toast.message}
+          onBack={() => setView(view.back)}
         />
-        {view.kind === 'editor' && view.row?.automation.bot ? (
-          <AutomationPageBotEditor
-            row={view.row}
-            client={props.client}
-            hostId={props.hostId}
-            executionHost={props.executionHost}
-            connected={catalog.connected}
-            leaveGuard={props.leaveGuard}
-            onBack={(back) => setView({ kind: 'detail', row: back })}
-            onSaved={(saved) => {
-              catalog.setRows((rows) =>
-                rows.map((entry) => (entry.automation.id === saved.automation.id ? saved : entry))
-              )
-              void catalog.refresh()
-              setView({ kind: 'detail', row: saved })
-            }}
-          />
-        ) : view.kind === 'editor' && props.client && catalog.loaded ? (
-          <AutomationEditor
-            key={view.row?.automation.id ?? 'create'}
-            client={props.client}
-            current={view.row?.automation}
-            initialDraft={view.initialDraft}
-            draftKey={automationEditorDraftKey(props.executionHost, view.row?.automation.id)}
-            onDraftChange={createAttempt.observeDraft}
-            leaveGuard={props.leaveGuard}
-            capabilities={catalog.capabilities}
-            busy={catalog.busy}
-            connected={catalog.connected}
-            onCancel={() =>
-              view.row ? setView({ kind: 'detail', row: view.row }) : allAutomations()
-            }
-            onSave={save}
-          />
-        ) : null}
-        {row ? (
-          <>
-            <AutomationDetail
-              row={row}
-              onBack={allAutomations}
-              client={props.client}
+      ) : (
+        <ScrollView
+          style={styles.screen}
+          contentContainerStyle={[
+            styles.grouped,
+            // The bar's height counts the bottom inset the screen already pads.
+            runsTab && { paddingBottom: Math.max(runFilters.barHeight - insets.bottom, 0) }
+          ]}
+          keyboardShouldPersistTaps="handled"
+        >
+          {notes}
+          {row ? (
+            <>
+              <AutomationDetail
+                row={row}
+                onBack={allAutomations}
+                client={props.client}
+                disabled={disabled}
+                projectName={projectName(row.automation)}
+                onToggle={(enabled) => toggle(row, enabled)}
+                onEdit={(section) => edit(row, section)}
+              />
+              <AutomationRecentRuns
+                history={history}
+                connected={catalog.connected}
+                onSelect={(run) => setView({ kind: 'run', run, scope: historyScope, back: view })}
+              />
+            </>
+          ) : null}
+          {view.kind === 'list' && tab === 'automations' && !loadFailed ? (
+            <AutomationList
+              rows={catalog.rows}
+              loaded={catalog.loaded}
               disabled={disabled}
-              projectName={projectName(row.automation)}
-              onToggle={(enabled) => toggle(row, enabled)}
+              projectName={projectName}
+              onCreate={create}
+              onOpen={(selected) => setView({ kind: 'detail', row: selected })}
+              onToggle={toggle}
             />
-            <AutomationRecentRuns
+          ) : null}
+          {view.kind === 'list' && tab === 'runs' && !loadFailed ? (
+            <AutomationRunsView
+              query={runFilters.query}
+              outcome={runFilters.outcome}
               history={history}
               connected={catalog.connected}
-              onSelect={(run) => {
-                setTab('runs')
-                setView({ kind: 'run', run, scope: historyScope })
-              }}
+              onSelect={(run) => setView({ kind: 'run', run, scope: historyScope, back: view })}
             />
-          </>
-        ) : null}
-        {view.kind === 'run' ? (
-          <AutomationRunDetails
-            run={view.run}
-            client={props.client}
-            hostId={props.hostId}
-            executionHost={props.executionHost}
-            connected={catalog.connected}
-            history={history}
-            onBack={() => showList('runs')}
-          />
-        ) : null}
-        {view.kind === 'list' && tab === 'automations' && !loadFailed ? (
-          <AutomationList
-            rows={catalog.rows}
-            loaded={catalog.loaded}
-            disabled={disabled}
-            projectName={projectName}
-            onCreate={create}
-            onOpen={(selected) => setView({ kind: 'detail', row: selected })}
-            onToggle={toggle}
-          />
-        ) : null}
-        {view.kind === 'list' && tab === 'runs' && !loadFailed ? (
-          <AutomationRunsView
-            rows={catalog.rows}
-            automationId={filter?.automationId ?? ''}
-            onAutomation={selectFilter}
-            outcome={outcome}
-            onOutcome={setOutcome}
-            history={history}
-            connected={catalog.connected}
-            onSelect={(run) => setView({ kind: 'run', run, scope: historyScope })}
-          />
-        ) : null}
-      </ScrollView>
+          ) : null}
+        </ScrollView>
+      )}
+      {runsTab && !loadFailed ? (
+        <AutomationRunsBar filters={runFilters} rows={catalog.rows} />
+      ) : null}
       {row ? (
         <AutomationRunNowBar
           disabled={disabled || row.item.selector.kind === 'orphan'}
           onRun={() => runNow(row)}
         />
       ) : null}
-      <OrcaHookTrustDrawer {...setupConsent.drawer} />
+      <AutomationEditorSheet
+        request={editor}
+        open={editorOpen}
+        client={props.client}
+        hostId={props.hostId}
+        executionHost={props.executionHost}
+        catalog={catalog}
+        leaveGuard={props.leaveGuard}
+        onDraftChange={createAttempt.observeDraft}
+        onClose={() => setEditorOpen(false)}
+        onAfterClose={(key) => setEditor((current) => (current?.key === key ? null : current))}
+        onSave={save}
+        onBotSaved={(saved) => {
+          catalog.setRows((rows) =>
+            rows.map((entry) => (entry.automation.id === saved.automation.id ? saved : entry))
+          )
+          void catalog.refresh()
+          closeOn(saved)
+        }}
+      >
+        <OrcaHookTrustDrawer {...setupConsent.drawer} />
+      </AutomationEditorSheet>
     </>
   )
 }

@@ -94,8 +94,8 @@ export function StatusBarUsageFormatSetting({
     [
       '{buckets}',
       t(
-        'auto.components.settings.StatusBarUsageFormatSetting.placeholder.usagePools',
-        'named usage pools, e.g. Antigravity models'
+        'auto.components.settings.StatusBarUsageFormatSetting.placeholder.namedUsagePools',
+        'named usage pools, e.g. Cursor plan pools'
       )
     ],
     [

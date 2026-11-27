@@ -1,74 +1,26 @@
+import { Suspense } from 'react'
+import { useLatchedOpen } from '@/app-shell/root-surfaces/use-latched-open'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { useAppStore } from '@/store/index'
 import { useRunningTerminalCloseConfirmStore } from '@/store/slices/tabs/closing/running-terminal-close-confirm'
-import CloseTerminalDialog from './CloseTerminalDialog'
-import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
-import { resolveWorktreeDisplayName } from '@/lib/workspace/display/worktree-default-display-name'
-import { runSleepWorktree } from '@/components/sidebar/workspace-actions/sleep/sleep-worktree-flow'
-import { revalidateTerminalCloseSleep } from '@/components/terminal/tab-lifecycle/terminal-close-sleep'
-import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
 
-async function sleepInstead(worktreeId: string, terminalTabId: string): Promise<void> {
-  if (!(await revalidateTerminalCloseSleep(worktreeId, terminalTabId))) {
-    toast.error(
-      translate(
-        'auto.components.sidebar.sleep.worktree.flow.8bc3fc0671',
-        'Failed to sleep workspace'
-      )
-    )
-    return
-  }
-  await runSleepWorktree(worktreeId)
-}
+const RunningTerminalCloseDialogSurface = lazy(() => import('./RunningTerminalCloseDialogSurface'))
 
 /** Store-driven running-process confirmation lets tab/group/floating closes share the pane keyboard guard outside React context. */
-export default function RunningTerminalCloseDialog(): React.JSX.Element {
-  const request = useRunningTerminalCloseConfirmStore((state) => state.runningTerminalCloseConfirm)
-  const confirmClose = useRunningTerminalCloseConfirmStore(
-    (state) => state.confirmRunningTerminalClose
+export default function RunningTerminalCloseDialog(): React.JSX.Element | null {
+  const hasRequest = useRunningTerminalCloseConfirmStore(
+    (state) => state.runningTerminalCloseConfirm !== null
   )
-  const confirmAllCloses = useRunningTerminalCloseConfirmStore(
-    (state) => state.confirmAllRunningTerminalCloses
-  )
-  const dismissClose = useRunningTerminalCloseConfirmStore(
-    (state) => state.dismissRunningTerminalClose
-  )
-  const updateSettings = useAppStore((state) => state.updateSettings)
-  // Process probes can overlap the synchronous pinned queue; wait instead of stacking modal focus traps.
-  const pinnedRequest = useAppStore((state) => state.pinnedTabCloseConfirm)
-  const worktreeId = request?.worktreeId
-  const workspaceName = useAppStore((state) => {
-    const worktree = worktreeId ? findWorktreeById(state, worktreeId) : null
-    return worktree ? resolveWorktreeDisplayName(worktree) : undefined
-  })
+  const hasPinnedRequest = useAppStore((state) => state.pinnedTabCloseConfirm !== null)
+  const hasOpened = useLatchedOpen(hasRequest && !hasPinnedRequest)
+
+  if (!hasOpened) {
+    return null
+  }
 
   return (
-    <CloseTerminalDialog
-      open={request !== null && pinnedRequest === null}
-      copyKind={request?.copyKind ?? 'command'}
-      // Pass the queued subject so checkbox reset runs even while the dialog stays open.
-      {...(request ? { subjectKey: request.terminalTabId } : {})}
-      workspaceName={workspaceName}
-      // Why cancel first: the tab must stay listed, or sleep drops the agent's resume record.
-      {...(request?.canSleepInstead && worktreeId
-        ? {
-            onSleepInstead: () => {
-              if (dismissClose()) {
-                void sleepInstead(worktreeId, request.terminalTabId)
-              }
-            }
-          }
-        : {})}
-      onCancel={dismissClose}
-      onConfirm={(dontAskAgain) => {
-        if (dontAskAgain) {
-          void updateSettings({ skipCloseTerminalWithRunningProcessConfirm: true })
-          // Why: the user just opted out of this prompt; a queued one must not still appear.
-          confirmAllCloses()
-          return
-        }
-        confirmClose()
-      }}
-    />
+    <Suspense fallback={null}>
+      <RunningTerminalCloseDialogSurface />
+    </Suspense>
   )
 }

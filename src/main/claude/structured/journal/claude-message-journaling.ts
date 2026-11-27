@@ -131,7 +131,7 @@ export function journalClaudeMessage(
   }
   const usageLimit = ctx.usageLimits.assistant(message, ctx.turn)
   const body =
-    ctx.assistantFailures.assistant(message) ??
+    ctx.assistantFailures.assistant(message, ctx.turn.id) ??
     usageLimit ??
     ctx.threadGoal.report(message, claudeMessageIdentity(envelope), observedAt) ??
     messageBody ??

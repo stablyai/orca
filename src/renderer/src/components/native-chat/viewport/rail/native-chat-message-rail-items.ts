@@ -40,21 +40,49 @@ export type NativeChatRailTurnRows = {
   turnKeys: readonly (string | undefined)[]
 }
 
-/** Resolve replies only on preview to avoid rebuilding ticks on every stream frame; loaded turn tails outrank host previews. */
-export function nativeChatRailReplyPreview(
+/** The previewed turn's rows, found on the rows as last saved: ids and turns don't move as text
+ *  streams, so only the preview's text needs the newest rows. */
+export type NativeChatRailPreviewTurn = {
+  turnKey: string | undefined
+  /** Every row of the turn, in order; another scope's note can sit between them. */
+  rows: readonly number[]
+  hostReply: string
+}
+
+export function nativeChatRailPreviewTurn(
   { messages, turnKeys }: NativeChatRailTurnRows,
   items: readonly NativeChatRailItem[],
   id: string
-): string {
+): NativeChatRailPreviewTurn {
   const row = messages.findIndex((message) => message.id === id)
   const item = items.find((candidate) => candidate.id === id)
-  // Unloaded prompts default to their own turn; steers use the host’s opener key.
   const turnKey = row === -1 ? (item?.turnKey ?? id) : turnKeys[row]
+  const rows: number[] = []
+  if (turnKey !== undefined) {
+    turnKeys.forEach((key, index) => {
+      if (key === turnKey) {
+        rows.push(index)
+      }
+    })
+  }
+  return { turnKey, rows, hostReply: item?.reply ?? '' }
+}
+
+/** The turn's reply from the newest rows, read only within the turn. */
+export function nativeChatRailTurnReply(
+  rows: NativeChatRailTurnRows,
+  turn: NativeChatRailPreviewTurn
+): string {
+  const { turnKey } = turn
   const loaded =
-    turnKey === undefined
+    turnKey === undefined || turn.rows.length === 0
       ? undefined
-      : nativeChatTurnReplyPreviews(messages, turnKeys, turnKey).get(turnKey)
-  return loaded ?? item?.reply ?? ''
+      : nativeChatTurnReplyPreviews(
+          turn.rows.map((index) => rows.messages[index]!),
+          turn.rows.map(() => turnKey),
+          turnKey
+        ).get(turnKey)
+  return loaded ?? turn.hostReply
 }
 
 export function buildNativeChatRailItems(

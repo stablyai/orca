@@ -3,9 +3,9 @@ import { Pressable, Text, View } from 'react-native'
 import { CircleAlert } from 'lucide-react-native'
 import { MobileConnectorSourceIcon } from '../../../bots/MobileConnectorSourceIcon'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { colors, spacing, typography } from '../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { spacing, typography } from '../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../theme/themed-styles'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import { slackMirrorPostLine } from '../../../../../src/shared/connectors/slack-mirror-post-line'
 import { useMobileSlackMirrorContext } from './use-mobile-slack-mirror'
 import { useMobileSlackMirrorCopy } from './mobile-slack-mirror-copy'
@@ -16,7 +16,8 @@ export function MobileSlackMirrorPostLine({
 }: {
   messageId: string
 }): React.JSX.Element | null {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const say = useMobileSlackMirrorCopy()
   const mirror = useMobileSlackMirrorContext()
@@ -52,7 +53,7 @@ export function MobileSlackMirrorPostLine({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   meta: { fontSize: typography.metaSize, color: colors.textMuted },
   line: {
     flexDirection: 'row',

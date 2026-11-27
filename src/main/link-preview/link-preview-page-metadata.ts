@@ -18,14 +18,27 @@ export type LinkPreviewPageMetadata = {
   iconHref: string
 }
 
-/** Decodes with the header charset, else `<meta charset>` or http-equiv, else UTF-8. */
+/** Decodes with the BOM's encoding, else the header charset, else `<meta charset>` or http-equiv, else UTF-8. */
 export function decodeHtmlBody(body: Buffer, contentType: string): string {
-  const label = charsetOf(contentType) ?? sniffMetaCharset(body)
+  const label = bomCharset(body) ?? charsetOf(contentType) ?? sniffMetaCharset(body)
   try {
     return new TextDecoder(label ?? 'utf-8').decode(body)
   } catch {
     return new TextDecoder('utf-8').decode(body)
   }
+}
+
+function bomCharset(body: Buffer): string | null {
+  if (body[0] === 0xef && body[1] === 0xbb && body[2] === 0xbf) {
+    return 'utf-8'
+  }
+  if (body[0] === 0xff && body[1] === 0xfe) {
+    return 'utf-16le'
+  }
+  if (body[0] === 0xfe && body[1] === 0xff) {
+    return 'utf-16be'
+  }
+  return null
 }
 
 function charsetOf(contentType: string): string | null {

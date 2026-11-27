@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react'
 import { ActivityIndicator, Pressable, Text } from 'react-native'
-import { colors, feedback, pressedStyle } from '../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { feedback, pressedStyle } from '../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../theme/themed-styles'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 
 // A quiet text action under a comment, e.g. Reply, Resolve or Ask Claude to fix.
 export function PrTextLink({
@@ -20,7 +20,8 @@ export function PrTextLink({
   accent?: boolean
   icon?: ReactNode
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <Pressable
       onPress={onPress}
@@ -41,7 +42,7 @@ export function PrTextLink({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   link: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   linkText: { color: colors.textSecondary, fontSize: 14, fontWeight: '600' },
   linkAccent: { color: colors.accentBlue },

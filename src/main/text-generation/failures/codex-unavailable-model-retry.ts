@@ -7,8 +7,6 @@ import {
   type CommitMessageAgentSpec
 } from '../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import { stripAnsiControlSequences } from '../../../shared/source-control/ai/generation/commit-message-agent-output'
-import type { CommandTemplateBackslash } from '../../../shared/source-control/ai/generation/commit-message-prompt'
-import { removeSourceControlAiArgumentFlag } from '../../../shared/source-control/ai/recipes/source-control-ai-argument-flags'
 import { findOptionOccurrence } from '../../../shared/cli/command-option-occurrence'
 import type { CommitMessagePlan } from '../../../shared/source-control/ai/generation/commit-message-plan'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/source-control/ai/source-control-ai-operation-resolution'
@@ -18,10 +16,7 @@ import type { AgentGenerationFailureOutput } from './agent-failure-output'
 const UNAVAILABLE_MODEL_PHRASE =
   /\b(?:does not exist|not found|not supported|unknown model|invalid model|not a valid model)\b/i
 
-type RetryParams = Pick<
-  ResolvedSourceControlAiGenerationParams,
-  'model' | 'thinkingLevel' | 'usesOrcaDefaultModel' | 'agentArgs' | 'agentCommandOverride'
-> & { backslash?: CommandTemplateBackslash }
+type RetryParams = Pick<ResolvedSourceControlAiGenerationParams, 'thinkingLevel'>
 
 function isModelUnavailableFailure(
   model: string,
@@ -47,45 +42,75 @@ function isModelUnavailableFailure(
   return namesModel.test(message) && UNAVAILABLE_MODEL_PHRASE.test(message)
 }
 
-function userArgsPassModel(params: RetryParams, spec: CommitMessageAgentSpec): boolean {
-  return [params.agentArgs, params.agentCommandOverride].some((args) => {
-    if (!args) {
-      return false
+type SentModel = { model: string; spans: { index: number; consumed: number }[] }
+
+/** The model a Codex plan sends (`--model`/`-m` beats `-c model=`, the last of each wins) and every span passing one. */
+function sentCodexModel(tokens: readonly string[], spec: CommitMessageAgentSpec): SentModel | null {
+  const valueOptions = [...spec.modelFlag, ...spec.effortFlag].flatMap((flag) => flag.aliases)
+  const spans: SentModel['spans'] = []
+  let model: string | undefined
+  for (const flag of spec.modelFlag) {
+    let flagModel: string | undefined
+    let found = findOptionOccurrence(tokens, flag.aliases, true, valueOptions)
+    while (found) {
+      const value = found.value ?? ''
+      const configured = flag.configKey ? /^\s*([\w.-]+)\s*=(.*)$/.exec(value) : null
+      if (!flag.configKey || configured?.[1] === flag.configKey) {
+        spans.push({ index: found.index, consumed: found.consumed })
+        flagModel = (configured ? configured[2] : value).trim().replace(/^(["'])(.*)\1$/, '$2')
+      }
+      found = findOptionOccurrence(
+        tokens,
+        flag.aliases,
+        true,
+        valueOptions,
+        found.index + found.consumed
+      )
     }
-    const stripped = removeSourceControlAiArgumentFlag(args, spec, 'model', params.backslash)
-    return stripped.unrecognized || stripped.agentArgs !== args
-  })
+    model ??= flagModel
+  }
+  return model ? { model, spans } : null
 }
 
-/** Orca's built-in Codex default can be missing from a custom provider; rerun once on Codex's configured model. */
+export type CodexUnavailableModelRetry<T extends GenerationArgument> = {
+  plan: CommitMessagePlan<T>
+  /** The model Codex refused; the retry runs Codex's own default for the signed-in account. */
+  refusedModel: string
+}
+
+/** Codex refused the model it was sent (a stale pick, a retired default, another account's model): rerun once on Codex's own default. */
 export function codexUnavailableModelRetryPlan<T extends GenerationArgument>(
   plan: CommitMessagePlan<T>,
   params: RetryParams,
   failure: AgentGenerationFailureOutput | undefined
-): CommitMessagePlan<T> | null {
+): CodexUnavailableModelRetry<T> | null {
   const spec = getCommitMessageAgentSpec('codex')
-  // A model the user picked, in settings or in recipe/override args, should fail visibly.
-  if (
-    !spec ||
-    !params.usesOrcaDefaultModel ||
-    !isModelUnavailableFailure(params.model, failure) ||
-    userArgsPassModel(params, spec)
-  ) {
-    return null
-  }
   const tokens = generationOptionTokens(plan.args)
-  const model = findOptionOccurrence(tokens, ['--model'], true)
-  if (!model || model.value !== params.model) {
+  const sent = spec ? sentCodexModel(tokens, spec) : null
+  if (!sent || !isModelUnavailableFailure(sent.model, failure)) {
     return null
   }
-  // Codex's buildArgs puts Orca's effort right after its --model; recipe or override effort is kept.
-  const modelEnd = model.index + model.consumed
+  // Generated args precede recipe args, so Orca's effort is the plan's first effort override.
+  const firstEffort = tokens.findIndex(
+    (token, index) => token === '-c' && tokens[index + 1]?.startsWith('model_reasoning_effort=')
+  )
   const orcaEffort =
     params.thinkingLevel !== undefined &&
-    tokens[modelEnd] === '-c' &&
-    tokens[modelEnd + 1] === `model_reasoning_effort=${params.thinkingLevel}`
+    tokens[firstEffort + 1] === `model_reasoning_effort=${params.thinkingLevel}`
+      ? firstEffort
+      : -1
+  const removed = new Set<number>()
+  for (const span of sent.spans) {
+    for (let offset = 0; offset < span.consumed; offset += 1) {
+      removed.add(span.index + offset)
+    }
+    // Orca's effort follows its own --model and may not fit Codex's default; recipe effort is kept.
+    if (orcaEffort >= 0 && span.index + span.consumed === orcaEffort) {
+      removed.add(orcaEffort).add(orcaEffort + 1)
+    }
+  }
   return {
-    ...plan,
-    args: [...plan.args.slice(0, model.index), ...plan.args.slice(modelEnd + (orcaEffort ? 2 : 0))]
+    plan: { ...plan, args: plan.args.filter((_argument, index) => !removed.has(index)) },
+    refusedModel: sent.model
   }
 }

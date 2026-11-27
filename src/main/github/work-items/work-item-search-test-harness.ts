@@ -30,7 +30,7 @@ vi.mock('../../git/command-runner/host-routing/wsl-command-resolution', () => ({
     wsl: distro ? { distro } : null,
     wslMode: null
   }),
-  resolveDefaultWslCli: () => null
+  defaultWslCliDistroAsync: async () => null
 }))
 
 vi.mock('../../git/command-runner/git-exec-file', async (importOriginal) => ({
