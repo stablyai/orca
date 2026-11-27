@@ -12,7 +12,6 @@ import { CLIENT_UI_METHODS } from './client-state/client-ui'
 import { CLIENT_EVENT_METHODS } from './client-events/client-events'
 import { HOST_CAPABILITY_METHODS } from './host-management/host-capabilities'
 import { RUNTIME_CLIENT_CAPABILITY_METHODS } from './client-events/runtime-client-capabilities'
-import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-sessions/structured-agent-session'
 import { AGENT_HOOK_METHODS } from './agent-hooks/agent-hooks'
 import {
   LAYOUT_APPLY_METHODS,
@@ -31,8 +30,7 @@ export const EAGER_CORE_RPC_METHODS = [
   ...AGENT_HOOK_METHODS,
   ...REPO_METHODS,
   ...WORKTREE_METHODS,
-  ...AGENT_ACTIVITY_METHODS,
-  ...STRUCTURED_AGENT_SESSION_METHODS
+  ...AGENT_ACTIVITY_METHODS
 ] as const
 
 export const EAGER_SERVICE_RPC_METHODS = [
