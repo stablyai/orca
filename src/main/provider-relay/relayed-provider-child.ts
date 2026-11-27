@@ -346,13 +346,18 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
     // The chat hears of the exit only after its reader took the last output (a paused reader
     // would otherwise end the turn before its last lines), and then a turn later still.
     const taken = this.output.allTaken(EXIT_AFTER_OUTPUT_WAIT_MS)
-    // The final output is acked so the daemon can drop the ended relay.
+    // The final output is acked so the daemon can drop the ended relay. What the floor still keeps
+    // (an item left open) is handed back, so the chat's next open reattaches it instead of being
+    // refused by a relay that reads as attached with no reader.
     void taken
       .then(() => this.output.settle())
       .finally(() => {
         this.output.stop()
         this.unbind?.()
         this.unbind = null
+        if (!this.output.ackedThrough()) {
+          void this.options.channel.detach(this.relayId, this.options.policy()).catch(() => {})
+        }
       })
     void taken.then(() =>
       setImmediate(() => {
