@@ -27,6 +27,7 @@ import type { StructuredAgentSessionHostRuntimeState } from './structured-agent-
 import type { JournalMailAttempt } from '../../agent-session-journal/journal-mail-observation'
 import { compareAgentJournalItems } from '../../../../shared/agent-session/journal/agent-session-journal-position'
 import { quitKeepsStructuredAgent } from '../termination/structured-agent-session-quit-keeps-agent'
+import { agentSessionRecordShownName } from '../../../runtime/agent-session/records/agent-session-record-shown-name'
 import type { RemoteServerUpdateStoppedChat } from '../../../../shared/remote-runtime/host-catalog/remote-server-update'
 
 type ReadContext = {
@@ -232,7 +233,7 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
             sessionId,
             agent: record?.provider ?? null,
             worktreeId: record?.location.workspaceId ?? null,
-            title: record?.conversationName ?? null
+            title: record ? agentSessionRecordShownName(deps.store, record) : null
           }
         ]
       })

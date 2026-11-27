@@ -38,6 +38,6 @@ export const UPDATER_METHODS = [
     name: 'updater.restartImpact',
     permission: 'workspace',
     params: null,
-    handler: (_params, { runtime }) => readUpdateRestartImpact(runtime)
+    handler: () => readUpdateRestartImpact()
   })
 ]
