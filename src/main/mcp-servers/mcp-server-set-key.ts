@@ -6,22 +6,28 @@ export type McpServerIdentity = {
   url?: string
   command?: string
   args?: readonly string[]
+  env?: unknown
+  headers?: unknown
 }
 
 /**
- * A short key of the MCP servers an agent launched with, to tell later whether a kept agent still
- * has the set a launch would give it. Order-free. A server reached by url counts only by its name
- * and kind (its url can carry this run's relay credential); a stdio one by its command and args.
+ * A short digest of the MCP servers an agent launched with, to tell later whether a kept agent
+ * still has the set a launch would give it: any change to a server (its url, command, arguments,
+ * environment or headers) changes it, and order doesn't. A relayed server's url carries this run's
+ * credential, so it differs every run; such a launch replaces a kept agent anyway.
  */
 export function mcpServerSetKey(servers: readonly McpServerIdentity[]): string {
-  const reached = servers
+  const each = servers
     .map((server) =>
-      JSON.stringify(
-        server.url !== undefined
-          ? [server.name, 'url']
-          : [server.name, server.command ?? null, server.args ?? []]
-      )
+      JSON.stringify([
+        server.name,
+        server.url ?? null,
+        server.command ?? null,
+        server.args ?? [],
+        server.env ?? null,
+        server.headers ?? null
+      ])
     )
     .sort()
-  return createHash('sha256').update(JSON.stringify(reached)).digest('hex').slice(0, 16)
+  return createHash('sha256').update(JSON.stringify(each)).digest('hex').slice(0, 16)
 }
