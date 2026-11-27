@@ -36,6 +36,8 @@ export const pendingAcpResolution = {
 
 export type AcpAdvertisedEfforts = {
   efforts: AgentSessionOptionChoice[]
+  /** The dialect has no menu for this model; an empty `efforts` here is not evidence of none. */
+  effortsKnown?: false
   defaultEffort?: string
   declaredDefaultEffort?: string | null
 }

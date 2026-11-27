@@ -54,7 +54,9 @@ const ORCHESTRATOR_LISTING = [
   'gemini-4-neon-low\tGemini 4 Neon (Low)',
   'gemini-pro-orchestrator-neon\tOrchestrator (Neon)',
   'gemini-pro-orchestrator\tOrchestrator (Carbon)',
-  'gemini-pro-orchestrator-argon\tOrchestrator (Argon)'
+  'gemini-pro-orchestrator-argon\tOrchestrator (Argon)',
+  // A model with no family variants and no Orchestrator id: this dialect has no menu for it.
+  'gpt-oss-120b-medium\tGPT-OSS 120B (Medium)'
 ].join('\n')
 
 function orchestratorOptions() {
@@ -90,4 +92,13 @@ it('offers a thinking level on the unsuffixed Orchestrator models', () => {
   expect(listed.find((model) => model.id === 'gemini-pro-orchestrator-neon')?.effortsKnown).toBe(
     undefined
   )
+})
+
+it('leaves a model it says nothing about unknown, not known-empty', () => {
+  // Menus read the dialect directly for a model the listing carries, so this is what they see.
+  // Reporting a known empty menu would erase efforts learned for the same model elsewhere.
+  expect(ANTIGRAVITY_ACP_DIALECT.modelEfforts?.({ modelId: 'gpt-oss-120b', name: 'x' })).toEqual({
+    efforts: [],
+    effortsKnown: false
+  })
 })

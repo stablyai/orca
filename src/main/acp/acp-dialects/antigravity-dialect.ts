@@ -206,8 +206,10 @@ function unsuffixedEfforts(model: ModelInfo) {
     : undefined
 }
 
+// An empty menu for a model this dialect says nothing about would read as "knows it has none",
+// erasing efforts learned for another model of the same agent.
 function modelEfforts(model: ModelInfo) {
-  return unsuffixedEfforts(model) ?? { efforts: [] }
+  return unsuffixedEfforts(model) ?? { efforts: [], effortsKnown: false as const }
 }
 
 function familyEfforts(family: string, models: readonly ModelInfo[]) {
