@@ -182,5 +182,92 @@ export const DEFAULT_LAZY_RPC_METHOD_GROUPS: readonly LazyRpcMethodGroup[] = [
         'orchestration.workerDockSubscribe'
       ]
     }
+  ),
+  prefixRpcMethodGroup(
+    ['browser.', 'desktopBrowserBridge.'],
+    async () => {
+      const [
+        { BROWSER_CORE_METHODS },
+        { BROWSER_IDENTITY_METHODS },
+        { BROWSER_SCREENCAST_METHODS },
+        { BROWSER_GRAB_METHODS },
+        { BROWSER_EXTRA_METHODS },
+        { BROWSER_CLIENT_HOST_METHODS },
+        { DESKTOP_BROWSER_BRIDGE_RPC_METHODS },
+        { BROWSER_CLIENT_FILE_CHANNEL_METHODS },
+        { BROWSER_NETWORK_TUNNEL_METHODS }
+      ] = await Promise.all([
+        import('./browser/browser-core'),
+        import('./browser/browser-identity-rpc'),
+        import('./browser/browser-screencast'),
+        import('./browser/browser-grab'),
+        import('./browser/browser-extras'),
+        import('./browser/browser-client-host'),
+        import('./browser/desktop-browser-bridge'),
+        import('./browser/browser-client-file-channel'),
+        import('./browser/browser-network-tunnel')
+      ])
+      return [
+        ...BROWSER_CORE_METHODS,
+        ...BROWSER_IDENTITY_METHODS,
+        ...BROWSER_SCREENCAST_METHODS,
+        ...BROWSER_GRAB_METHODS,
+        ...BROWSER_EXTRA_METHODS,
+        ...BROWSER_CLIENT_HOST_METHODS,
+        ...DESKTOP_BROWSER_BRIDGE_RPC_METHODS,
+        ...BROWSER_CLIENT_FILE_CHANNEL_METHODS,
+        ...BROWSER_NETWORK_TUNNEL_METHODS
+      ]
+    },
+    {
+      exactNames: ['network.browserTunnel'],
+      streamingNames: [
+        'browser.screencast',
+        'browser.downloadCopyStream',
+        'browser.grab.watch',
+        'browser.clientHost.attach',
+        'desktopBrowserBridge.attach',
+        'network.browserTunnel'
+      ]
+    }
+  ),
+  prefixRpcMethodGroup(
+    ['accounts.'],
+    async () => {
+      const [{ ACCOUNT_METHODS }, { ANTIGRAVITY_ACCOUNT_METHODS }, { USAGE_CREDENTIAL_METHODS }] =
+        await Promise.all([
+          import('./accounts/accounts'),
+          import('./accounts/antigravity-accounts'),
+          import('./accounts/usage-credentials')
+        ])
+      return [...ACCOUNT_METHODS, ...ANTIGRAVITY_ACCOUNT_METHODS, ...USAGE_CREDENTIAL_METHODS]
+    },
+    { streamingNames: ['accounts.subscribe', 'accounts.antigravityChatSignInSubscribe'] }
+  ),
+  prefixRpcMethodGroup(
+    ['orcaAccount.'],
+    async () => (await import('./orca-account')).ORCA_ACCOUNT_METHODS,
+    { streamingNames: ['orcaAccount.subscribe'] }
+  ),
+  prefixRpcMethodGroup(
+    ['github.'],
+    async () => (await import('./source-control/github/github')).GITHUB_METHODS
+  ),
+  prefixRpcMethodGroup(
+    ['stats.'],
+    async () => (await import('./host-management/stats')).STATS_METHODS
+  ),
+  prefixRpcMethodGroup(
+    ['usage.'],
+    async () => (await import('./host-management/usage-analytics')).USAGE_ANALYTICS_METHODS
+  ),
+  prefixRpcMethodGroup(
+    ['pairedServerAsks.'],
+    async () =>
+      (await import('./paired-server-asks/paired-server-asks-methods')).PAIRED_SERVER_ASKS_METHODS
+  ),
+  prefixRpcMethodGroup(
+    ['reference.'],
+    async () => (await import('./reference/reference')).REFERENCE_METHODS
   )
 ]
