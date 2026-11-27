@@ -93,8 +93,6 @@ function shareDevices(): BotShareDevices {
 /** `home`: which folder is the agent's Home; the rig's own workspace by default, else a second one
  *  (so the rig's workspace is one of the agent's workers' workspaces). */
 async function rig(options: { home?: 'rig' | 'other'; opened?: AuthorityRig } = {}) {
-  // Agents' runtime homes (chat create, bots.session.start) go under the test's own data folder.
-  vi.stubEnv('ORCA_USER_DATA_PATH', root)
   const opened =
     options.opened ??
     (await openAuthorityRuntime(await authorityProfile([], { records: [B, C, O] })))
@@ -178,6 +176,8 @@ async function rig(options: { home?: 'rig' | 'other'; opened?: AuthorityRig } = 
     return frames
   }
   const create = async (deviceId: string, where = worktree) => {
+    // The agent's runtime home is made under the app's data folder: the test's own.
+    vi.stubEnv('ORCA_USER_DATA_PATH', root)
     const sessionId = randomUUID()
     await call(deviceId, 'agentSession.create', {
       envelope: {
@@ -419,6 +419,8 @@ it('lists a teammate’s chats in the owner’s chat list under their name; the 
   const r = await rig()
   // Their New chat acts for them, so it lists under their name once it holds a turn; an empty chat
   // lists for no one (the seeded C stands in for one that has talked).
+  // The new chat's agent home is made under the app's data folder: the test's own.
+  vi.stubEnv('ORCA_USER_DATA_PATH', root)
   const started = z
     .object({ sessionId: z.string() })
     .parse(await r.call('mate-desk', 'bots.session.start', { botId: TEAMMATE.botId }))
