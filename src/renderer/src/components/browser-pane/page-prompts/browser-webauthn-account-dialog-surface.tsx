@@ -1,5 +1,5 @@
 import { KeyRound } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -41,14 +41,12 @@ export function BrowserWebAuthnAccountDialogSurface({
 }): React.JSX.Element {
   const t = useTranslate()
   const firstAccountRef = useRef<HTMLButtonElement | null>(null)
-  const lastRequestRef = useRef(activeRequest)
-  const displayedRequest = activeRequest ?? lastRequestRef.current
-
-  useEffect(() => {
-    if (activeRequest) {
-      lastRequestRef.current = activeRequest
-    }
-  }, [activeRequest])
+  // Keep the last request on screen while the dialog animates closed.
+  const [lastRequest, setLastRequest] = useState(activeRequest)
+  if (activeRequest && activeRequest !== lastRequest) {
+    setLastRequest(activeRequest)
+  }
+  const displayedRequest = activeRequest ?? lastRequest
 
   useEffect(() => {
     if (!activeRequest) {

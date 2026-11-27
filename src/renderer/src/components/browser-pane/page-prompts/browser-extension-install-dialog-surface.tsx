@@ -1,5 +1,5 @@
 import { Puzzle } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import { useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -88,15 +88,12 @@ export function BrowserExtensionInstallDialogSurface({
 }): React.JSX.Element {
   const t = useTranslate()
   const confirmRef = useRef<HTMLButtonElement | null>(null)
-  const lastRequestRef = useRef(activeRequest)
-  // Why: keep the last request on screen while the dialog animates closed.
-  const displayed = activeRequest ?? lastRequestRef.current
-
-  useEffect(() => {
-    if (activeRequest) {
-      lastRequestRef.current = activeRequest
-    }
-  }, [activeRequest])
+  // Keep the last request on screen while the dialog animates closed.
+  const [lastRequest, setLastRequest] = useState(activeRequest)
+  if (activeRequest && activeRequest !== lastRequest) {
+    setLastRequest(activeRequest)
+  }
+  const displayed = activeRequest ?? lastRequest
 
   const isInstall = displayed?.kind !== 'uninstall'
   const isPermissionRequest = displayed?.kind === 'permissions'
