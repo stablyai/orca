@@ -54,15 +54,17 @@ export const BROWSER_EXTENSIONS_WEB_STORE_SOURCES = ['banner', 'toolbar_menu', '
 export type BrowserExtensionsWebStoreSource = (typeof BROWSER_EXTENSIONS_WEB_STORE_SOURCES)[number]
 
 export const browserExtensionsEventSchemas = {
-  browser_extensions_banner_assigned: z
-    .object({ banner: browserExtensionsBannerSchema, had_extensions: z.boolean() })
-    .strict(),
-  browser_extensions_banner_action: z
-    .object({ action: z.enum(['open_web_store', 'got_it', 'close']) })
-    .strict(),
-  browser_extensions_web_store_opened: z
-    .object({ source: z.enum(BROWSER_EXTENSIONS_WEB_STORE_SOURCES) })
-    .strict(),
-  browser_extension_installed: z.object({ source: z.enum(['web_store', 'unpacked']) }).strict(),
-  browser_extension_used: z.object({}).strict()
+  browser_extensions_banner_assigned: lazyZodSchema(() =>
+    z.object({ banner: browserExtensionsBannerSchema, had_extensions: z.boolean() }).strict()
+  ),
+  browser_extensions_banner_action: lazyZodSchema(() =>
+    z.object({ action: z.enum(['open_web_store', 'got_it', 'close']) }).strict()
+  ),
+  browser_extensions_web_store_opened: lazyZodSchema(() =>
+    z.object({ source: z.enum(BROWSER_EXTENSIONS_WEB_STORE_SOURCES) }).strict()
+  ),
+  browser_extension_installed: lazyZodSchema(() =>
+    z.object({ source: z.enum(['web_store', 'unpacked']) }).strict()
+  ),
+  browser_extension_used: lazyZodSchema(() => z.object({}).strict())
 }

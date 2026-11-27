@@ -5,6 +5,8 @@ export type AgentSessionDeathEvidence = {
   /** Fence of the owner (or reservation) this death is about; a fence names exactly one. Absent on
    *  evidence older builds wrote, which then speaks for no turn. */
   ownerFence?: number
+  /** The provider exited unexpectedly and no failure held incoming mail at release. */
+  resumeByMail?: true
   /** Last liveness proof by the transport holder; absent for surface release, failed start or older evidence. */
   lastProvenAliveAt?: number
   /** Quit/update/crash when the provider died with its runtime; absent for independent/unknown death. Keep open strings and read with isAgentSessionOrcaStopCause. */

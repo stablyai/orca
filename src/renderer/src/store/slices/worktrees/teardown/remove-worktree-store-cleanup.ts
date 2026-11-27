@@ -65,6 +65,10 @@ export function applyRemoveWorktreeSuccessState(
       workspaceLineageByChildKey: omitRecordKeys(s.workspaceLineageByChildKey, [
         worktreeWorkspaceKey(worktreeId)
       ]),
+      contestedPrimaryHostBySessionKey: omitRecordKeys(s.contestedPrimaryHostBySessionKey, [
+        worktreeId,
+        worktreeWorkspaceKey(worktreeId)
+      ]),
       runtimePaneTitlesByTabId: omitByTabId(s.runtimePaneTitlesByTabId),
       automaticAgentResumeClaimsByTabId: omitByTabId(s.automaticAgentResumeClaimsByTabId),
       nativeChatLaunchPromptByTabId: omitByTabId(s.nativeChatLaunchPromptByTabId),

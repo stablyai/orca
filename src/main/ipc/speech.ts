@@ -2,9 +2,11 @@ import {
   ipcMain,
   BrowserWindow,
   systemPreferences,
+  type IpcMainEvent,
   type IpcMainInvokeEvent,
   type MessagePortMain
 } from 'electron'
+import type { IpcHandleRegistrar } from './lazy-ipc-handle-group'
 import { abortWhenRendererGone } from './renderer-requests/renderer-lifetime-abort'
 import { dictationTermsFor } from '../../shared/speech/dictation/dictation-dictionary'
 import { dictationTextSettingsFor } from '../../shared/speech/dictation/dictation-cleanup'
@@ -38,9 +40,11 @@ const MAX_CLEANUP_TEXT_LENGTH = 100_000
 
 export function registerSpeechHandlers(
   store: Store,
-  agentEnvResolvers?: CommitMessageAgentEnvironmentResolvers
-): void {
-  ipcMain.handle(
+  agentEnvResolvers?: CommitMessageAgentEnvironmentResolvers,
+  ipc: IpcHandleRegistrar = ipcMain,
+  options?: { attachAudioPortListener?: boolean }
+): (event: IpcMainEvent, sessionId: string) => void {
+  ipc.handle(
     'speech:cleanUpDictation',
     (
       _event,
@@ -66,57 +70,41 @@ export function registerSpeechHandlers(
     }
   )
 
-  ipcMain.handle('speech:cancelDictationCleanup', (_event, requestId: unknown) => {
+  ipc.handle('speech:cancelDictationCleanup', (_event, requestId: unknown) => {
     if (typeof requestId === 'string') {
       cancelDictationCleanup(requestId)
     }
   })
 
-  ipcMain.handle('speech:getCatalog', () => {
-    return SPEECH_MODEL_CATALOG
-  })
-
-  ipcMain.handle('speech:getModelStates', async () => {
-    return getSpeechModelManager(store).getModelStates()
-  })
-
-  ipcMain.handle('speech:getOpenAiApiKeyStatus', async () => {
-    return {
-      configured: await hasOpenAiSpeechApiKey(),
-      protection: await getOpenAiSpeechApiKeyProtection()
-    }
-  })
-
-  ipcMain.handle('speech:saveOpenAiApiKey', async (_event, apiKey: string) => {
+  ipc.handle('speech:getCatalog', () => SPEECH_MODEL_CATALOG)
+  ipc.handle('speech:getModelStates', () => getSpeechModelManager(store).getModelStates())
+  ipc.handle('speech:getOpenAiApiKeyStatus', async () => ({
+    configured: await hasOpenAiSpeechApiKey(),
+    protection: await getOpenAiSpeechApiKeyProtection()
+  }))
+  ipc.handle('speech:saveOpenAiApiKey', async (_event, apiKey: string) => {
     await saveVerifiedOpenAiSpeechApiKey(apiKey)
     return { configured: true, protection: await getOpenAiSpeechApiKeyProtection() }
   })
-
-  ipcMain.handle('speech:clearOpenAiApiKey', async () => {
+  ipc.handle('speech:clearOpenAiApiKey', async () => {
     await clearOpenAiSpeechApiKey()
     return { configured: false, protection: null }
   })
-
-  ipcMain.handle('speech:getOpenAiCompatibleProvider', async () => {
+  ipc.handle('speech:getOpenAiCompatibleProvider', async () => {
     try {
       return await summarizeOpenAiCompatibleSpeechProvider()
     } catch {
       return null
     }
   })
-
-  ipcMain.handle(
+  ipc.handle(
     'speech:saveOpenAiCompatibleProvider',
-    async (_event, input: OpenAiCompatibleSpeechProvider) => {
-      await saveVerifiedOpenAiCompatibleSpeechProvider(input)
-    }
+    (_event, input: OpenAiCompatibleSpeechProvider) =>
+      saveVerifiedOpenAiCompatibleSpeechProvider(input)
   )
+  ipc.handle('speech:clearOpenAiCompatibleProvider', () => clearOpenAiCompatibleSpeechProvider())
 
-  ipcMain.handle('speech:clearOpenAiCompatibleProvider', async () => {
-    await clearOpenAiCompatibleSpeechProvider()
-  })
-
-  ipcMain.handle('speech:downloadModel', async (event, modelId: string) => {
+  ipc.handle('speech:downloadModel', async (event, modelId: string) => {
     const manager = getSpeechModelManager(store)
     const window = BrowserWindow.fromWebContents(event.sender)
     if (!window) {
@@ -145,11 +133,11 @@ export function registerSpeechHandlers(
     }
   })
 
-  ipcMain.handle('speech:cancelDownload', async (_event, modelId: string) => {
+  ipc.handle('speech:cancelDownload', async (_event, modelId: string) => {
     getSpeechModelManager(store).cancelDownload(modelId)
   })
 
-  ipcMain.handle('speech:deleteModel', async (_event, modelId: string) => {
+  ipc.handle('speech:deleteModel', async (_event, modelId: string) => {
     await deleteLocalSpeechModel({
       store,
       modelManager: getSpeechModelManager(store),
@@ -167,14 +155,17 @@ export function registerSpeechHandlers(
 
   // The preload posts a session's audio port just before its start, on the same ordered pipe.
   const pendingAudioPorts = new Map<string, MessagePortMain>()
-  ipcMain.on('speech:audioPort', (event, sessionId: string) => {
+  const handleAudioPort = (event: IpcMainEvent, sessionId: string): void => {
     const port = event.ports[0]
     if (port) {
       pendingAudioPorts.set(getDesktopOwner(event.sender.id, sessionId), port)
     }
-  })
+  }
+  if (options?.attachAudioPortListener !== false) {
+    ipcMain.on('speech:audioPort', handleAudioPort)
+  }
 
-  ipcMain.handle(
+  ipc.handle(
     'speech:startDictation',
     async (event, modelId: string, context?: DictationContext, sessionId = 'desktop') => {
       const senderId = event.sender.id
@@ -298,7 +289,7 @@ export function registerSpeechHandlers(
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'speech:feedAudio',
     async (_event, buffer: Uint8Array, sampleRate: number, sessionId = 'desktop') => {
       // Preload sends bytes because contextBridge/IPC can zero Float32Array data.
@@ -321,6 +312,7 @@ export function registerSpeechHandlers(
         listener.cleanup()
       }
     }
-  ipcMain.handle('speech:stopDictation', handleStop(false))
-  ipcMain.handle('speech:cancelDictation', handleStop(true))
+  ipc.handle('speech:stopDictation', handleStop(false))
+  ipc.handle('speech:cancelDictation', handleStop(true))
+  return handleAudioPort
 }

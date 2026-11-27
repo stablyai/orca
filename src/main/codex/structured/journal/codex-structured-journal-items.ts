@@ -45,7 +45,8 @@ export class CodexJournalItems {
   readonly ordinals = new CodexTurnOrdinals()
   readonly activeItems = new Map<string, CodexActiveJournalItem>()
   readonly streams
-  private readonly identities = new Map<string, AgentJournalItemIdentity>()
+  /** Each item's row, by `codexStructuredItemKey`. */
+  readonly identities = new Map<string, AgentJournalItemIdentity>()
   private readonly details = new Map<string, string>()
 
   constructor(
@@ -208,13 +209,18 @@ export class CodexJournalItems {
       : (this.deps.sink.publish(options), CODEX_JOURNAL_ADMITTED)
   }
 
+  /** A kept agent's running command: later output streams onto its row with its saved fields. */
+  seedRunning(threadId: string, turnId: string, item: CodexThreadItem): AgentJournalItemIdentity {
+    return this.track(threadId, turnId, item, this.identityFor(threadId, turnId, item))
+  }
+
   private track(
     threadId: string,
     turnId: string | null,
     item: CodexThreadItem,
     identity: AgentJournalItemIdentity,
     startedAt?: number
-  ): void {
+  ): AgentJournalItemIdentity {
     const retainedItem = codexCommandOutlivesTurn(item)
       ? (boundStreamItem(item) as CodexThreadItem)
       : item
@@ -227,6 +233,7 @@ export class CodexJournalItems {
       ...(startedAt === undefined ? {} : { startedAt }),
       ...(this.helperName ? { helperName: this.helperName } : {})
     })
+    return identity
   }
 
   private identityFor(

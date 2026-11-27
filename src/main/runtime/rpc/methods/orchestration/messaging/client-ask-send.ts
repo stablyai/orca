@@ -28,20 +28,21 @@ import { recordReceiptBeforeNudge } from './mutation-replay-nudge'
 import type { SendParams } from './send-params'
 import type { SendRecipientWarning } from './recipient-routing'
 import { peerMailLocalCaller } from './peer-mail-local-caller'
+import { peerMailSendingAskers } from './peer-mail-sending-askers'
 import { clientAskCard } from './client-ask-card'
 
 const NOTHING_SENT = { effectsApplied: false } as const
 
 /** `send --on-client`: an agent here messages an agent on a paired computer, which pulls the mail
  *  while it is connected and decides there whether its agent takes it. Its replies come back here. */
-export function sendClientAsk(args: {
+export async function sendClientAsk(args: {
   params: z.infer<typeof SendParams> & { onClient: string }
   runtime: OrcaRuntimeService
   orchestrationCaller: OrchestrationEntryCaller | undefined
   attestedCaller: OrchestrationCompatibilityCallerAuthority | undefined
   orchestrationMutation: { callerFingerprint: string; requestId: string } | undefined
   recordMutationReceipt: ((receipt: unknown) => void) | undefined
-}): unknown {
+}): Promise<unknown> {
   const { params, runtime } = args
   const to = params.to
   if (params.on !== undefined) {
@@ -74,6 +75,7 @@ export function sendClientAsk(args: {
     )
   }
   const caller = peerMailLocalCaller({ ...args, from: params.from })
+  const askers = await peerMailSendingAskers(runtime, args.orchestrationCaller, caller, { to })
   const cardFor = (computer: { installationId: string; computer: string }) =>
     clientAskCard({
       asker: caller.address,
@@ -112,6 +114,7 @@ export function sendClientAsk(args: {
     ...(params.priority ? { priority: params.priority } : {}),
     ...(params.threadId ? { threadId: params.threadId } : {}),
     sender: peerMailSender(runtime, caller.address),
+    ...(askers ? { askers } : {}),
     rootSession: clientAskRootSession(db, caller.address)
   }
   if (type.data === 'question') {

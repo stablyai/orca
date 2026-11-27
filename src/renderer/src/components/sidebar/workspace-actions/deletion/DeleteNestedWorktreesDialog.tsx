@@ -23,6 +23,7 @@ import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import type { GitWorktreeInfo } from '../../../../../../shared/worktree/types'
 import type { WorktreeRemovalTarget } from '../../../../../../shared/worktree/removal/removal'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 export function DeleteNestedWorktreesDialog({
   target,
@@ -99,50 +100,58 @@ export function DeleteNestedWorktreesDialog({
       return row ? [row] : []
     })
     state.markWorktreesDeleting(nestedRows)
-    try {
-      const result = await state.removeWorktree(target, true, {
-        approvedNestedWorktrees: plan,
-        confirmedDiscards
-      })
-      if (!result.ok) {
-        setPlan(null)
-        toast.error(
-          t(
-            'auto.components.sidebar.delete.worktree.flow.ae57cbf6e4',
-            'Failed to delete workspace'
-          ),
-          {
-            description: result.error
+    await runWithFinally(
+      async () => {
+        try {
+          const result = await state.removeWorktree(target, true, {
+            approvedNestedWorktrees: plan,
+            confirmedDiscards
+          })
+          if (!result.ok) {
+            setPlan(null)
+            toast.error(
+              t(
+                'auto.components.sidebar.delete.worktree.flow.ae57cbf6e4',
+                'Failed to delete workspace'
+              ),
+              {
+                description: result.error
+              }
+            )
+            return
           }
-        )
-        return
-      }
-      dismissToast()
-      onDeleted?.()
-    } catch (failure) {
-      setPlan(null)
-      toast.error(
-        t('auto.components.sidebar.delete.worktree.flow.ae57cbf6e4', 'Failed to delete workspace'),
-        {
-          description: failure instanceof Error ? failure.message : String(failure)
+          dismissToast()
+          onDeleted?.()
+        } catch (failure) {
+          setPlan(null)
+          toast.error(
+            t(
+              'auto.components.sidebar.delete.worktree.flow.ae57cbf6e4',
+              'Failed to delete workspace'
+            ),
+            {
+              description: failure instanceof Error ? failure.message : String(failure)
+            }
+          )
         }
-      )
-    } finally {
-      try {
-        await useAppStore.getState().fetchAllWorktrees()
-      } catch (failure) {
-        toast.error(
-          t('worktree.nestedRemoval.refreshFailed', 'Could not refresh the workspace list'),
-          {
-            description: failure instanceof Error ? failure.message : String(failure)
-          }
-        )
+      },
+      async () => {
+        try {
+          await useAppStore.getState().fetchAllWorktrees()
+        } catch (failure) {
+          toast.error(
+            t('worktree.nestedRemoval.refreshFailed', 'Could not refresh the workspace list'),
+            {
+              description: failure instanceof Error ? failure.message : String(failure)
+            }
+          )
+        }
+        for (const row of nestedRows) {
+          useAppStore.getState().clearWorktreeDeleteState(row.id, row.hostId)
+        }
+        setDeleting(false)
       }
-      for (const row of nestedRows) {
-        useAppStore.getState().clearWorktreeDeleteState(row.id, row.hostId)
-      }
-      setDeleting(false)
-    }
+    )
   }
 
   return (

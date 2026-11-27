@@ -53,7 +53,7 @@ export function sendGuestCdpCommand(
   if (method.startsWith('Input.')) {
     // Why: every Input sent here is an agent's or a remote viewer's, never this desktop user's, so
     // the guest's own handlers must not read it as a reason to move splits, history or shortcuts.
-    return withAgentInputInjection(guest, send)
+    return withAgentInputInjection(guest, send, { keyboard: method === 'Input.dispatchKeyEvent' })
   }
   return readRemoteCliAdmittedPage(guest.id, send)
 }

@@ -118,6 +118,7 @@ export function BrowserPageChromeHeader({
         onDismissDownload={nav.dismissBrowserDownload}
       />
       <BrowserPageChromeBanners
+        showGrabBanner={false}
         resourceNotice={resourceNotice}
         setResourceNotice={setResourceNotice}
         onReloadPage={() => reload.reloadWebviewOrRecoverGuest(false)}
