@@ -2214,7 +2214,9 @@
       "truncatedList": "{{worktreeLabel}} - İlk 5000 dosya gösteriliyor",
       "loading": "Dosyalar yükleniyor…",
       "searching": "Aranıyor…",
-      "searchPlaceholder": "Dosyalarda ara"
+      "searchPlaceholder": "Dosyalarda ara",
+      "more": "Daha Fazla",
+      "newEntry": "Yeni"
     },
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} mobilde kullanılamıyor",
@@ -2229,7 +2231,24 @@
     },
     "fileExplorerRowActions": {
       "copyName": "Adı Kopyala",
-      "copyRelativePath": "Göreli Yolu Kopyala"
+      "copyRelativePath": "Göreli Yolu Kopyala",
+      "newFile": "Yeni Dosya",
+      "newFolder": "Yeni Klasör",
+      "rename": "Yeniden Adlandır",
+      "duplicate": "Çoğalt",
+      "create": "Oluştur",
+      "fileName": "Dosya adı",
+      "folderName": "Klasör adı",
+      "deleteTitle": "{{name}} silinsin mi?",
+      "deleteFileDetail": "Bu, dosyayı kalıcı olarak siler. Bu işlem geri alınamaz.",
+      "deleteFolderDetail": "Bu, klasörü ve içindekileri kalıcı olarak siler. Bu işlem geri alınamaz.",
+      "duplicateFailed": "{{name}} çoğaltılamadı. {{reason}}",
+      "duplicateUnconfirmed": "Kopya tamamlanmamış olabilir. Kontrol edip tekrar deneyin.",
+      "deleteFailed": "{{name}} silinemedi. {{reason}}",
+      "deleteUnconfirmed": "Hâlâ orada. Klasörü kontrol edip tekrar deneyin.",
+      "renameFailed": "{{name}} yeniden adlandırılamadı. {{reason}}",
+      "newFileFailed": "Dosya oluşturulamadı. {{reason}}",
+      "newFolderFailed": "Klasör oluşturulamadı. {{reason}}"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Yüklenen Markdown kaynağını kopyala",

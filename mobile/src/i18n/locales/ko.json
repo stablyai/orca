@@ -2043,7 +2043,9 @@
       "loading": "파일 로드 중…",
       "loadFailed": "파일을 불러올 수 없습니다.",
       "title": "파일",
-      "truncatedList": "{{worktreeLabel}} - 처음 5000개 표시"
+      "truncatedList": "{{worktreeLabel}} - 처음 5000개 표시",
+      "more": "더 보기",
+      "newEntry": "새로 만들기"
     },
     "fileExplorerRow": {
       "fileUnavailable": "모바일에서 {{name}} 사용 불가",
@@ -2058,7 +2060,24 @@
     },
     "fileExplorerRowActions": {
       "copyName": "이름 복사",
-      "copyRelativePath": "상대 경로 복사"
+      "copyRelativePath": "상대 경로 복사",
+      "newFile": "새 파일",
+      "newFolder": "새 폴더",
+      "rename": "이름 변경",
+      "duplicate": "복제",
+      "create": "만들기",
+      "fileName": "파일 이름",
+      "folderName": "폴더 이름",
+      "deleteTitle": "{{name}}을(를) 삭제할까요?",
+      "deleteFileDetail": "파일이 영구적으로 삭제됩니다. 되돌릴 수 없습니다.",
+      "deleteFolderDetail": "폴더와 그 안의 내용이 영구적으로 삭제됩니다. 되돌릴 수 없습니다.",
+      "duplicateFailed": "{{name}}을(를) 복제하지 못했습니다. {{reason}}",
+      "duplicateUnconfirmed": "복사본이 완전하지 않을 수 있습니다. 확인하고 다시 시도하세요.",
+      "deleteFailed": "{{name}}을(를) 삭제하지 못했습니다. {{reason}}",
+      "deleteUnconfirmed": "아직 남아 있습니다. 폴더를 확인하고 다시 시도하세요.",
+      "renameFailed": "{{name}}의 이름을 변경하지 못했습니다. {{reason}}",
+      "newFileFailed": "파일을 만들지 못했습니다. {{reason}}",
+      "newFolderFailed": "폴더를 만들지 못했습니다. {{reason}}"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "불러온 Markdown 소스 복사",

@@ -2229,7 +2229,9 @@
       "loadFailed": "Не удалось загрузить файлы",
       "title": "Файлы",
       "truncatedList": "{{worktreeLabel}} — показаны первые 5000",
-      "loading": "Загрузка файлов…"
+      "loading": "Загрузка файлов…",
+      "more": "Ещё",
+      "newEntry": "Создать"
     },
     "fileExplorerRow": {
       "fileUnavailable": "Файл {{name}} недоступен на мобильном устройстве",
@@ -2244,7 +2246,24 @@
     },
     "fileExplorerRowActions": {
       "copyName": "Копировать имя",
-      "copyRelativePath": "Копировать относительный путь"
+      "copyRelativePath": "Копировать относительный путь",
+      "newFile": "Новый файл",
+      "newFolder": "Новая папка",
+      "rename": "Переименовать",
+      "duplicate": "Дублировать",
+      "create": "Создать",
+      "fileName": "Имя файла",
+      "folderName": "Имя папки",
+      "deleteTitle": "Удалить {{name}}?",
+      "deleteFileDetail": "Файл будет удалён безвозвратно. Это действие нельзя отменить.",
+      "deleteFolderDetail": "Папка и её содержимое будут удалены безвозвратно. Это действие нельзя отменить.",
+      "duplicateFailed": "Не удалось дублировать {{name}}. {{reason}}",
+      "duplicateUnconfirmed": "Копия может быть неполной. Проверьте её и повторите попытку.",
+      "deleteFailed": "Не удалось удалить {{name}}. {{reason}}",
+      "deleteUnconfirmed": "Он всё ещё на месте. Проверьте папку и повторите попытку.",
+      "renameFailed": "Не удалось переименовать {{name}}. {{reason}}",
+      "newFileFailed": "Не удалось создать файл. {{reason}}",
+      "newFolderFailed": "Не удалось создать папку. {{reason}}"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Скопировать загруженный исходный код Markdown",

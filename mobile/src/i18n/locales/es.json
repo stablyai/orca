@@ -2107,7 +2107,9 @@
       "loading": "Cargando archivos…",
       "loadFailed": "No se pudieron cargar los archivos",
       "title": "Archivos",
-      "truncatedList": "{{worktreeLabel}} - Mostrando los primeros 5000"
+      "truncatedList": "{{worktreeLabel}} - Mostrando los primeros 5000",
+      "more": "Más",
+      "newEntry": "Nuevo"
     },
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} no disponible en el móvil",
@@ -2122,7 +2124,24 @@
     },
     "fileExplorerRowActions": {
       "copyName": "Copiar nombre",
-      "copyRelativePath": "Copiar ruta relativa"
+      "copyRelativePath": "Copiar ruta relativa",
+      "newFile": "Nuevo archivo",
+      "newFolder": "Nueva carpeta",
+      "rename": "Cambiar nombre",
+      "duplicate": "Duplicar",
+      "create": "Crear",
+      "fileName": "Nombre del archivo",
+      "folderName": "Nombre de la carpeta",
+      "deleteTitle": "¿Eliminar {{name}}?",
+      "deleteFileDetail": "Esto elimina el archivo de forma permanente. No se puede deshacer.",
+      "deleteFolderDetail": "Esto elimina la carpeta y su contenido de forma permanente. No se puede deshacer.",
+      "duplicateFailed": "No se pudo duplicar {{name}}. {{reason}}",
+      "duplicateUnconfirmed": "Es posible que la copia no esté completa. Revísala y vuelve a intentarlo.",
+      "deleteFailed": "No se pudo eliminar {{name}}. {{reason}}",
+      "deleteUnconfirmed": "Sigue ahí. Revisa la carpeta y vuelve a intentarlo.",
+      "renameFailed": "No se pudo cambiar el nombre de {{name}}. {{reason}}",
+      "newFileFailed": "No se pudo crear el archivo. {{reason}}",
+      "newFolderFailed": "No se pudo crear la carpeta. {{reason}}"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Copiar código fuente Markdown cargado",

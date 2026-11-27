@@ -2044,7 +2044,9 @@
       "loading": "正在載入檔案…",
       "loadFailed": "無法載入檔案",
       "title": "檔案",
-      "truncatedList": "{{worktreeLabel}} - 僅顯示前 5000 筆"
+      "truncatedList": "{{worktreeLabel}} - 僅顯示前 5000 筆",
+      "more": "更多",
+      "newEntry": "新增"
     },
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} 無法在行動版使用",
@@ -2059,7 +2061,24 @@
     },
     "fileExplorerRowActions": {
       "copyName": "複製名稱",
-      "copyRelativePath": "複製相對路徑"
+      "copyRelativePath": "複製相對路徑",
+      "newFile": "新增檔案",
+      "newFolder": "新增資料夾",
+      "rename": "重新命名",
+      "duplicate": "製作副本",
+      "create": "建立",
+      "fileName": "檔案名稱",
+      "folderName": "資料夾名稱",
+      "deleteTitle": "要刪除 {{name}} 嗎？",
+      "deleteFileDetail": "這會永久刪除此檔案，且無法復原。",
+      "deleteFolderDetail": "這會永久刪除此資料夾及其內容，且無法復原。",
+      "duplicateFailed": "無法為 {{name}} 製作副本。{{reason}}",
+      "duplicateUnconfirmed": "副本可能不完整。請檢查後再試一次。",
+      "deleteFailed": "無法刪除 {{name}}。{{reason}}",
+      "deleteUnconfirmed": "它仍在原處。請檢查資料夾後再試一次。",
+      "renameFailed": "無法重新命名 {{name}}。{{reason}}",
+      "newFileFailed": "無法建立檔案。{{reason}}",
+      "newFolderFailed": "無法建立資料夾。{{reason}}"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "複製已載入的 Markdown 原始碼",
