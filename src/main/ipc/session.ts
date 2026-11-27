@@ -33,6 +33,15 @@ import type {
   WorkspaceSessionState
 } from '../../shared/workspace-session/workspace-session-state-types'
 import { isWorkspaceSessionRecord } from '../../shared/workspace-session/workspace-session-host-records'
+
+/** IPC forwards structured-cloned records; reject Date/Map/Set/typed arrays but keep plain `{}`. */
+function isPlainSessionPayload(value: unknown): value is WorkspaceSessionState {
+  if (!isWorkspaceSessionRecord(value)) {
+    return false
+  }
+  const prototype: unknown = Object.getPrototypeOf(value)
+  return prototype === Object.prototype || prototype === null
+}
 import {
   applyWorkspaceSessionEntriesPatch,
   storedDifferently,
@@ -97,7 +106,7 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
       }
       // A renderer settling a close can send no snapshot; a whole-field replace must never pass
       // nullish data to the save helpers, which call Object.keys on it (#18838).
-      if (!isWorkspaceSessionRecord(args)) {
+      if (!isPlainSessionPayload(args)) {
         console.warn('[session] ignored nullish session:set payload')
         return { status: 'skipped' }
       }
@@ -132,7 +141,7 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
     }
     const stored = store.getWorkspaceSession(hostId)
     const patch = toPatch(stored)
-    if (!isWorkspaceSessionRecord(patch)) {
+    if (!isPlainSessionPayload(patch)) {
       console.warn('[session] ignored nullish session patch payload')
       return { status: 'skipped' }
     }
@@ -176,7 +185,7 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
       hostId?: string | null,
       relays?: unknown
     ): WorkspaceSessionEntriesPatchResult => {
-      if (!isWorkspaceSessionRecord(args)) {
+      if (!isPlainSessionPayload(args)) {
         console.warn('[session] ignored nullish session:patch-entries payload')
         return { status: 'skipped' }
       }
