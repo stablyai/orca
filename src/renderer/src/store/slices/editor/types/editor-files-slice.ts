@@ -150,6 +150,12 @@ export type EditorFilesSlice = {
       placementWorkspaceId?: string
     }
   ) => void
+  /**
+   * Adds a tab the close already skipped to the reopen history, once the host reports the file was
+   * kept. Used when an untouched note turns out to have content and survives its cleanup.
+   */
+  /** The fields a reopen entry needs; the close path passes the tab's pre-close file record. */
+  rememberClosedEditorTabForReopen: (file: OpenFile) => void
   closeAllFiles: () => void
   /** Most recently closed editor tabs per worktree (for Cmd/Ctrl+Shift+T). */
   recentlyClosedEditorTabsByWorktree: Record<string, ClosedEditorTabSnapshot[]>

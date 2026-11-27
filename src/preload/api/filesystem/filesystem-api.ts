@@ -25,6 +25,7 @@ import type { LocalFileAccess } from '../../../shared/file-access/local-file-acc
 import type { RemoteFilePreviewAddress } from '../../../shared/file-preview/remote-file-preview-address'
 import type { FileBytesWritePrecondition } from '../../../shared/file-write/file-bytes-write'
 import type {
+  FileDeleteIfUnchangedResult,
   FileWriteDiskPrecondition,
   FileWriteResult
 } from '../../../shared/file-write/file-write-disk-precondition'
@@ -185,6 +186,14 @@ export type FilesystemApi = {
         permanent?: boolean
       } & SshMutationExpectation
     ) => Promise<void>
+    /** Deletes only a file whose bytes still match `diskPrecondition`, checked and unlinked in one step. */
+    deletePathIfUnchanged: (
+      args: {
+        targetPath: string
+        connectionId?: string
+        diskPrecondition: FileWriteDiskPrecondition
+      } & SshMutationExpectation
+    ) => Promise<FileDeleteIfUnchangedResult>
     stat: (args: {
       filePath: string
       connectionId?: string

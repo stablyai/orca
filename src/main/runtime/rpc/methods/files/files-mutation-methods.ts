@@ -1,10 +1,23 @@
 import { defineMethod } from '../../core'
+import { assertRuntimeFileMutationExpectation } from '../../../files/file-mutation-expectation'
+import {
+  requireLocalRuntimeFileRoute,
+  resolveFileExplorerPath
+} from '../../../files/file-target'
+import { deleteLocalFileIfUnchanged } from '../../../../filesystem/local-file-io/local-file-delete-if-unchanged'
+import type {
+  FileDeleteIfUnchangedResult,
+  FileWriteDiskPrecondition
+} from '../../../../../shared/file-write/file-write-disk-precondition'
+import type { ResolvedRuntimeFileTarget } from '../../../files/file-target'
 import { FILE_REPLACE_WITH_UPLOAD_METHOD } from '../../../../../shared/file-write/file-bytes-write'
+import { FILE_DELETE_IF_UNCHANGED_METHOD } from '../../../../../shared/file-write/file-write-disk-precondition'
 import {
   FileCommitUpload,
   FileReplaceWithUpload,
   FileCopy,
   FileDelete,
+  FileDeleteIfUnchanged,
   FileMutationOpen,
   FileRename,
   FileWrite,
@@ -37,8 +50,7 @@ function sshMutationArguments(
   ]
 }
 
-export const FILE_MUTATION_METHODS = [
-  defineMethod({
+export const FILE_MUTATION_METHODS = [  defineMethod({
     name: 'files.formatText',
     permission: 'workspace',
     params: FileFormatText,
@@ -195,5 +207,36 @@ export const FILE_MUTATION_METHODS = [
         params.recursive,
         ...sshMutationArguments(params)
       )
+  }),
+  defineMethod({
+    name: FILE_DELETE_IF_UNCHANGED_METHOD,
+    permission: 'workspace',
+    params: FileDeleteIfUnchanged,
+    handler: async (params, { runtime }) =>
+      deleteFileExplorerPathIfUnchanged(runtime, params)
   })
 ]
+
+/** The guarded delete for a worktree the runtime owns; the desktop's own IPC handler guards the same way. */
+async function deleteFileExplorerPathIfUnchanged(
+  runtime: { resolveRuntimeFileTarget(selector: string): Promise<ResolvedRuntimeFileTarget> },
+  params: {
+    worktree: string
+    relativePath: string
+    diskPrecondition: FileWriteDiskPrecondition
+    expectedExecutionHostId?: string
+    expectedSshTargetId?: string
+    expectedSshConnectionGeneration?: number
+  }
+): Promise<FileDeleteIfUnchangedResult> {
+  const target = await resolveFileExplorerPath(runtime, params.worktree, params.relativePath)
+  assertRuntimeFileMutationExpectation(
+    target.executionHostId,
+    params.expectedExecutionHostId,
+    params.expectedSshTargetId,
+    params.expectedSshConnectionGeneration
+  )
+  // A paired host's files are not this process's to open; its transport is what can hold the file.
+  requireLocalRuntimeFileRoute(target)
+  return deleteLocalFileIfUnchanged(target.path, params.diskPrecondition)
+}

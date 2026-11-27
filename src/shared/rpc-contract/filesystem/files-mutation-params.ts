@@ -133,3 +133,10 @@ export const FileDelete = lazyZodSchema(() =>
     recursive: z.boolean().optional()
   })
 )
+
+// Why its own method: an older host answers method_not_found instead of deleting past the check.
+export const FileDeleteIfUnchanged = lazyZodSchema(() =>
+  FileDelete.extend({
+    diskPrecondition: FileWriteDiskPreconditionParam
+  })
+)

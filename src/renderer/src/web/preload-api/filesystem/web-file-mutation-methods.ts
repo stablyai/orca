@@ -15,10 +15,13 @@ import type { RuntimeFileReadChunkResult } from '../../../../../shared/file-cont
 import {
   compareDiskWritePrecondition,
   diskConflictFromReadFailure,
+  FILE_DELETE_IF_UNCHANGED_METHOD,
+  FILE_DELETE_IF_UNCHANGED_RUNTIME_CAPABILITY,
   FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY,
   FILE_WRITE_IF_UNCHANGED_METHOD,
   hostEnforcesPrecondition,
   FILE_WRITE_UNCHANGED,
+  parseFileDeleteIfUnchangedResult,
   parseFileWriteResult,
   type FileWriteDiskComparison,
   type FileWriteDiskPrecondition,
@@ -30,7 +33,7 @@ const SSH_OWNER_CHANGED_MESSAGE =
 
 type WebFileMutationMethod = Pick<
   NonNullable<PreloadApi['fs']>,
-  'writeFile' | 'createFile' | 'createDir' | 'rename' | 'copy' | 'deletePath'
+  'writeFile' | 'createFile' | 'createDir' | 'rename' | 'copy' | 'deletePath' | 'deletePathIfUnchanged'
 >
 
 type ResolvedWebRuntimeFile = {
@@ -274,6 +277,28 @@ export function createWebFileMutationMethods(
         relativePath: file.relativePath,
         recursive
       })
+    },
+    deletePathIfUnchanged: async ({ targetPath, diskPrecondition }) => {
+      const session = dependencies.captureSession()
+      const file = await session.resolveFilePath(targetPath)
+      const result = parseFileDeleteIfUnchangedResult(
+        await callMutation(
+          session,
+          FILE_DELETE_IF_UNCHANGED_METHOD,
+          file,
+          { relativePath: file.relativePath, diskPrecondition },
+          // Why no client-side fallback: a separate read then delete reopens the window this guard closes.
+          async (capabilities) =>
+            capabilities.includes(FILE_DELETE_IF_UNCHANGED_RUNTIME_CAPABILITY)
+              ? {
+                  method: FILE_DELETE_IF_UNCHANGED_METHOD,
+                  params: { relativePath: file.relativePath, diskPrecondition }
+                }
+              : { ok: false, diskConflict: 'changed' },
+          true
+        )
+      )
+      return result
     }
   }
 }
