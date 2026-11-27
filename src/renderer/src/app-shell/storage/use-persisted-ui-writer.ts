@@ -23,6 +23,10 @@ type PersistedUIWriteController = {
   dispose: () => void
 }
 
+function hasWebPersistedUIWriter(ui: Window['api']['ui']): ui is WebUiApi {
+  return 'setPersistedUIWithAck' in ui && typeof ui.setPersistedUIWithAck === 'function'
+}
+
 function createPersistedUIWriteController(): PersistedUIWriteController {
   let disposed = false
   let trailingTimer: number | null = null
@@ -95,7 +99,11 @@ function createPersistedUIWriteController(): PersistedUIWriteController {
     try {
       const updates = persistedUIWriteFieldsToWireUpdate(changed)
       if (baseline && marks) {
-        request = (window.api.ui as WebUiApi).setPersistedUIWithAck(updates, marks, baseline)
+        const { ui } = window.api
+        if (!hasWebPersistedUIWriter(ui)) {
+          throw new TypeError('Web UI persistence is unavailable')
+        }
+        request = ui.setPersistedUIWithAck(updates, marks, baseline)
         // The local write settled synchronously, independently of the host acknowledgement.
         useAppStore.setState({ persistedUIWriteBaseline: { ...baseline, ...marks } })
       } else {

@@ -7,21 +7,11 @@ import {
   normalizeManualRepoOrder
 } from '../../../../../shared/repository/manual-repo-order'
 import { normalizeWorkspaceCleanupBrowseState } from '../../../../../shared/workspace-cleanup/workspace-cleanup-browse-state'
-import {
-  normalizeExecutionHostScope,
-  normalizeExecutionHostOrder,
-  normalizeVisibleExecutionHostIds
-} from '../../../../../shared/execution-host/execution-host'
 import { hydrateFeatureInteractions } from './ui-slice-feature-interactions-hydration'
 import { normalizeContextualTourIds } from '../../../../../shared/feature-education/contextual-tours/contextual-tours'
 import { normalizeFeatureTipIds } from '../../../../../shared/feature-education/feature-tips'
-import { DEFAULT_HIDE_SLEEPING_WORKSPACES } from '../../../../../shared/workspace-view/sleeping-workspace-visibility'
 import { normalizeAgentActivityDisplayMode } from '../../../../../shared/agent-status/presentation/agent-activity-display-mode'
 import { normalizeWorktreeCardProperties } from '../../../../../shared/worktree/row-display/card-properties'
-import {
-  normalizeActivityGroupBy,
-  normalizeThreadReadFilter
-} from '../../../../../shared/agent-status/presentation/agents-view-thread-filters'
 import {
   clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity,
@@ -30,7 +20,6 @@ import {
 import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../../shared/pets/pet-types'
 import { clampMarkdownTocPanelWidth } from '../../../../../shared/editor/markdown/markdown-toc-panel-width'
 import { clampCombinedDiffFileTreeWidth } from '../../../../../shared/source-control/diff/combined-diff-file-tree-width'
-import { parsePersistedAutomationHostFilter } from '../../../../../shared/automations/ownership/automation-host-filter'
 import { normalizeUsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../../../../../shared/status-bar/status-bar-usage-mode'
 import { normalizeBrowserPageZoomLevel } from '../../../../../shared/browser/site-settings/browser-page-zoom'
@@ -55,14 +44,9 @@ import {
 import {
   hydrateTrustedOrcaHooks,
   hydrateUnexpectedSignoutDismissal,
-  normalizeHydratedVisibleWorkspaceHostIds,
-  preserveStringArrayIdentity,
   sanitizeHydratedActiveView,
-  sanitizePersistedRepoIds,
-  sanitizePerWorktreePreferences,
   sanitizeWorkspaceCleanupDismissals,
   sanitizePersistedSidebarWidth,
-  sanitizeActivityBarArrangement,
   keepUnchangedHydratedFields,
   hydratedFieldsAreState,
   clampPetSize
@@ -75,6 +59,8 @@ import {
 import { hydrateWslMovedSection } from './ui-slice-wsl-moved-section-actions'
 import { hydrateBrowserPaneLayout } from './browser-pane-layout-hydration'
 import { hydrateStatusBarItems } from './ui-slice-hydration-status-bar-items'
+import { sanitizeActivityBarArrangement } from './ui-slice-hydration-activity-bar'
+import { hydrateWorkspaceFilters } from './ui-slice-hydration-workspace-filters'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import {
   isWebChatReadMarkCopyPending,
@@ -102,8 +88,6 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
             ? listedRepoIds
             : withWslMovedRepoIds(listedRepoIds, s.wslMovedProjects)
         const validRepoHostIdentities = new Set(s.repos.map(getRepoHostIdentity))
-        const persistedFilterRepoIds = sanitizePersistedRepoIds(ui.filterRepoIds)
-        const persistedAgentsFilterRepoIds = sanitizePersistedRepoIds(ui.agentsFilterRepoIds)
         // Why: pre-rename builds used sidekick* keys; read as fallback only so new pet* writes win after upgrade.
         const customPets = Array.isArray(ui.customPets)
           ? ui.customPets
@@ -146,50 +130,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           projectOrderBy: ui.projectOrderBy,
           // Why: Active-only was retired; force the old flag off so an old profile can't invisibly narrow the workspace list.
           showActiveOnly: false,
-          // Why: ignore older positive-form keys so old profiles start from the new default (sleeping workspaces visible).
-          showSleepingWorkspaces: !(ui.hideSleepingWorkspaces ?? DEFAULT_HIDE_SLEEPING_WORKSPACES),
-          workspaceHostScope: normalizeExecutionHostScope(ui.workspaceHostScope),
-          visibleWorkspaceHostIds: normalizeHydratedVisibleWorkspaceHostIds(ui),
-          workspaceHostOrder: normalizeExecutionHostOrder(ui.workspaceHostOrder),
-          // Why: a malformed or legacy filter value must degrade to All hosts, never throw during hydration.
-          automationHostFilter: parsePersistedAutomationHostFilter(ui.automationHostFilter),
-          manualRepoOrder,
-          // Why: apply the desktop-owned overlay immediately since UI state can arrive after a catalog or from another client.
-          repos: orderedRepos,
-          hideDefaultBranchWorkspace: ui.hideDefaultBranchWorkspace ?? false,
-          hideAutomationGeneratedWorkspaces: ui.hideAutomationGeneratedWorkspaces === true,
-          hideCliCreatedWorkspaces: ui.hideCliCreatedWorkspaces === true,
-          hideDetachedHeadWorkspaces: ui.hideDetachedHeadWorkspaces === true,
-          hideWorkspacesFromOtherDevices: ui.hideWorkspacesFromOtherDevices === true,
-          // Why !== false: profiles written before #8873 have no key, and they are
-          // precisely the ones showing the bug, so absence must mean "exempt".
-          alwaysShowDefaultBranchWorkspace: ui.alwaysShowDefaultBranchWorkspace !== false,
-          ...sanitizePerWorktreePreferences(ui),
-          gitGraphFiltersByWorktree: ui.gitGraphFiltersByWorktree ?? {},
-          // Why: startup hydrates UI before repo catalogs, so defer repo-filter validation to the all-host refresh.
-          filterRepoIds:
-            validRepoIds.size === 0
-              ? persistedFilterRepoIds
-              : persistedFilterRepoIds.filter((repoId) => validRepoIds.has(repoId)),
-          agentsVisibleHostIds: preserveStringArrayIdentity(
-            s.agentsVisibleHostIds,
-            normalizeVisibleExecutionHostIds(ui.agentsVisibleHostIds)
-          ),
-          agentsFilterRepoIds: preserveStringArrayIdentity(
-            s.agentsFilterRepoIds,
-            validRepoIds.size === 0
-              ? persistedAgentsFilterRepoIds
-              : persistedAgentsFilterRepoIds.filter((repoId) => validRepoIds.has(repoId))
-          ),
-          agentsHideWorkspacesFromOtherDevices: ui.agentsHideWorkspacesFromOtherDevices === true,
-          agentsHideAutomationGeneratedWorkspaces:
-            ui.agentsHideAutomationGeneratedWorkspaces === true,
-          agentsHideCliCreatedWorkspaces: ui.agentsHideCliCreatedWorkspaces === true,
-          agentsShowChildAgents: ui.agentsShowChildAgents === true,
-          agentsCompactMode: ui.agentsCompactMode !== false,
-          agentsShowSearch: ui.agentsShowSearch !== false,
-          agentsReadFilter: normalizeThreadReadFilter(ui.agentsReadFilter),
-          agentsGroupBy: normalizeActivityGroupBy(ui.agentsGroupBy),
+          ...hydrateWorkspaceFilters(ui, s, validRepoIds, manualRepoOrder, orderedRepos),
           collapsedGroups: new Set(ui.collapsedGroups ?? []),
           uiZoomLevel: ui.uiZoomLevel ?? 0,
           editorFontZoomLevel: ui.editorFontZoomLevel ?? 0,
@@ -287,8 +228,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
               ? normalizeWorkspaceCleanupBrowseState(ui.workspaceCleanup?.browse)
               : s.workspaceCleanupBrowse,
           // Why: restore only on startup; on 'sync' broadcasts it would clobber the window's current per-window view.
-          activeView:
-            source === 'sync' ? s.activeView : sanitizeHydratedActiveView(ui.activeView),
+          activeView: source === 'sync' ? s.activeView : sanitizeHydratedActiveView(ui.activeView),
           persistedUIReady: true
         }
         keepUnchangedHydratedFields(s, hydrated as Partial<UISlice>)

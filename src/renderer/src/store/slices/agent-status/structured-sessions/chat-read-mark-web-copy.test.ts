@@ -49,7 +49,11 @@ function load(initial: Partial<PersistedUIState>) {
       json = value
     })
   }
-  vi.stubGlobal('window', { __ORCA_WEB_CLIENT__: true, localStorage })
+  vi.stubGlobal('window', {
+    __ORCA_WEB_CLIENT__: true,
+    api: { ui: { set: vi.fn().mockResolvedValue(undefined) } },
+    localStorage
+  })
   const stored = (): Partial<PersistedUIState> => JSON.parse(json)
   const reload = () => {
     const fresh = createUIStore()
@@ -231,7 +235,9 @@ it('keeps an on-screen chat protected by the matching hash and lapses it on swit
 })
 
 it('explicitly marking a chat read removes its matching old manual-unread keys before the copy', () => {
-  const marks = load({ manuallyUnreadTurnsByPaneKey: { [OLD]: 70, [REPLACED]: 60, [UNRELATED]: 80 } })
+  const marks = load({
+    manuallyUnreadTurnsByPaneKey: { [OLD]: 70, [REPLACED]: 60, [UNRELATED]: 80 }
+  })
   marks.store.setState({ agentStatusByPaneKey: new AcceptedAgentStatuses() })
   marks.store.getState().acknowledgeAgents([CHAT], undefined, 'explicit')
   expect(marks.store.getState().manuallyUnreadTurnsByPaneKey).toEqual({ [UNRELATED]: 80 })
@@ -314,13 +320,23 @@ it('shares the tab walk on a fresh array and releases the receipt and fallback a
   expect(marks.stored().manuallyUnreadTurnsByPaneKey).toEqual({ [OLD]: 70, [CHAT]: 70 })
   const state = marks.store.getState()
   expect(isWebChatReadMarkCopyPending()).toBe(false)
-  const forbidden = new Proxy({} as never, {
+  const forbidRead = {
     get: () => {
       throw new Error('Read receipt after completion')
     }
-  })
-  expect(receiveWebChatReadMarkFrame(state, forbidden)).toBeUndefined()
-  expect(receiveWebChatReadMarkCensus(state, 'paired', 'runtime', forbidden)).toBeUndefined()
+  }
+  const frame: Parameters<typeof receiveWebChatReadMarkFrame>[1] = {
+    environmentId: 'paired',
+    worktreeId: 'w1',
+    runtimeId: 'runtime',
+    trackingRecord: undefined,
+    affirmsChats: true,
+    tabs: []
+  }
+  expect(receiveWebChatReadMarkFrame(state, new Proxy(frame, forbidRead))).toBeUndefined()
+  expect(
+    receiveWebChatReadMarkCensus(state, 'paired', 'runtime', new Proxy([], forbidRead))
+  ).toBeUndefined()
   expect(
     readWebChatMark(
       { ...state, manuallyUnreadTurnsByPaneKey: { [OLD]: 70 } },

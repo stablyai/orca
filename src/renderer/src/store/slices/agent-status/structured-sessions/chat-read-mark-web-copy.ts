@@ -1,13 +1,7 @@
 import {
   chatPaneKey,
-  chatPaneKeySessionId,
-  structuredAgentSessionTabId
+  chatPaneKeySessionId
 } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
-import { isAgentSessionSlotTabId } from '../../../../../../shared/agent-session/view/agent-session-slot-tab-id'
-import {
-  isReopenedChatTabId,
-  isStructuredAgentSessionHostTabId
-} from '../../../../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 import type { RuntimeMobileSessionSnapshotTab } from '../../../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import {
   CHAT_READ_MARK_FIELDS,
@@ -21,6 +15,7 @@ import {
   type PersistedUIWriteBaseline
 } from '../../ui/persisted-ui-write-baseline'
 import type { AppState } from '../../../types'
+import { indexLegacyKeys, paneKeyLeaf } from './chat-read-mark-legacy-index'
 
 type LegacyIndex = Record<ChatReadMarkField, Map<string, string[]>>
 type ScanChatSessions = (visit: (sessionId: string) => void) => void
@@ -53,35 +48,6 @@ let migration: Migration | undefined
 
 export function isWebChatReadMarkCopyPending(): boolean {
   return migration !== undefined
-}
-
-const paneKeyLeaf = (key: string): string => key.slice(key.lastIndexOf(':') + 1)
-const structuredTabPrefix = structuredAgentSessionTabId('')
-
-function indexLegacyKeys(record: Record<string, number>): Map<string, string[]> {
-  const index = new Map<string, string[]>()
-  for (const key of Object.keys(record)) {
-    const separator = key.lastIndexOf(':')
-    const tabId = key.slice(0, separator)
-    if (
-      separator < 0 ||
-      (!tabId.startsWith(structuredTabPrefix) &&
-        !isReopenedChatTabId(tabId) &&
-        !isAgentSessionSlotTabId(tabId) &&
-        !isStructuredAgentSessionHostTabId(tabId)) ||
-      chatPaneKeySessionId(key) !== null
-    ) {
-      continue
-    }
-    const leaf = key.slice(separator + 1)
-    const aliases = index.get(leaf)
-    if (aliases) {
-      aliases.push(key)
-    } else {
-      index.set(leaf, [key])
-    }
-  }
-  return index
 }
 
 export function legacyWebChatReadMarkKeys(
@@ -134,10 +100,12 @@ function hasLegacyKeys(copy: Migration): boolean {
   return CHAT_READ_MARK_FIELDS.some((field) => copy.legacyIndex[field].size > 0)
 }
 
-export function startWebChatReadMarkCopy(hydrated: PersistedUIWriteBaseline): CopyPatch | undefined {
+export function startWebChatReadMarkCopy(
+  hydrated: PersistedUIWriteBaseline
+): CopyPatch | undefined {
   migration = undefined
   if (hydrated.chatReadMarksCopiedHere) {
-    return
+    return undefined
   }
   const copy: Migration = {
     legacyIndex: {
@@ -148,9 +116,7 @@ export function startWebChatReadMarkCopy(hydrated: PersistedUIWriteBaseline): Co
     receipts: new WeakMap()
   }
   migration = copy
-  if (!hasLegacyKeys(copy)) {
-    return complete(copy, hydrated, hydrated)
-  }
+  return hasLegacyKeys(copy) ? undefined : complete(copy, hydrated, hydrated)
 }
 
 function collectCandidates(
@@ -194,7 +160,7 @@ function collectCandidates(
 function completeFromTabs(copy: Migration, state: CopyState): CopyPatch | undefined {
   const { persistedUIWriteBaseline: baseline } = state
   if (!baseline) {
-    return
+    return undefined
   }
   return complete(copy, state, baseline, function* () {
     yield* copy.candidates.values()
@@ -222,7 +188,7 @@ export function receiveWebChatReadMarkFrame(
   }
 ): CopyPatch | undefined {
   if (state.chatReadMarksCopiedHere || !migration) {
-    return
+    return undefined
   }
   const copy = migration
   const { environmentId, worktreeId, runtimeId, trackingRecord, affirmsChats, tabs } = frame
@@ -250,19 +216,20 @@ export function receiveWebChatReadMarkFrame(
     })
   }
   if (!affectsCoverage) {
-    return
+    return undefined
   }
   if (!affirmsChats) {
     census.uncovered.add(worktreeId)
-    return
+    return undefined
   }
   if (!wasUncovered) {
-    return
+    return undefined
   }
   census.uncovered.delete(worktreeId)
   if (census.uncovered.size === 0 && !copy.writeFailed) {
     return completeFromTabs(copy, state)
   }
+  return undefined
 }
 
 export function receiveWebChatReadMarkCensus(
@@ -272,7 +239,7 @@ export function receiveWebChatReadMarkCensus(
   workspaces: Iterable<readonly [worktreeId: string, trackingRecord: object | undefined]>
 ): CopyPatch | undefined {
   if (state.chatReadMarksCopiedHere || !migration) {
-    return
+    return undefined
   }
   const copy = migration
   delete copy.writeFailed
@@ -293,6 +260,7 @@ export function receiveWebChatReadMarkCensus(
   if (listed.size > 0 && uncovered.size === 0) {
     return completeFromTabs(copy, state)
   }
+  return undefined
 }
 
 export function receiveWebChatReadMarkCandidates(
@@ -314,14 +282,14 @@ export function retireWebChatReadMarkWorkspace(
 ): CopyPatch | undefined {
   const copy = migration
   if (!copy) {
-    return
+    return undefined
   }
   if (trackingRecord) {
     copy.receipts.delete(trackingRecord)
   }
   const census = copy.census
   if (census?.environmentId !== environmentId || !census.listed.delete(worktreeId)) {
-    return
+    return undefined
   }
   if (
     census.uncovered.delete(worktreeId) &&
@@ -333,6 +301,7 @@ export function retireWebChatReadMarkWorkspace(
   ) {
     return completeFromTabs(copy, readState())
   }
+  return undefined
 }
 
 export function forgetWebChatReadMarkCensus(environmentId: string): void {

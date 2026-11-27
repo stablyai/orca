@@ -3,6 +3,7 @@ import { savePastedTextAsWebAgentSessionAttachment } from '../agents/web-pasted-
 import { createWebExplorerRootSync } from '../workspaces/web-explorer-root-sync'
 import { createWebJiraFilterStateApi } from '../jira/web-jira-filter-state-api'
 import { WEB_PENDING_LINK_API } from './web-pending-link-api'
+import { createWebUiNativeWindowApi } from './web-ui-native-window'
 import type { PreloadApi } from '../../../../../preload/api-types'
 import { assertClipboardTextWithinLimitWithYield } from '../../../../../shared/clipboard/clipboard-text'
 import type { ReadClipboardTextOptions } from '../../../../../shared/clipboard/clipboard-text'
@@ -301,26 +302,6 @@ export function createWebUiApi(): WebUiApi {
     notifySleepingMailAvailability: () => {},
     requestSleepingMailSnapshot: () => {},
     onTerminalZoom: () => noopUnsubscribe,
-    // Why: a paired web client has no OS sleep signal; occlusion-driven visibilitychange already covers wake recovery.
-    onSystemResumed: () => noopUnsubscribe,
-    syncTrafficLights: () => {},
-    setMarkdownEditorFocused: () => {},
-    setRichMarkdownContextMenuTarget: () => {},
-    markPlainTextContextMenuTarget: () => {},
-    setTerminalInputFocused: () => {},
-    setFloatingFocus: () => {},
-    setShortcutRecorderFocused: () => {},
-    onRichMarkdownContextCommand: () => noopUnsubscribe,
-    onFullscreenChanged: () => noopUnsubscribe,
-    minimize: () => {},
-    maximize: () => {},
-    onMaximizeChanged: () => noopUnsubscribe,
-    onWindowActiveChanged: () => noopUnsubscribe,
-    requestClose: () => {},
-    popupMenu: () => {},
-    onWindowCloseRequested: () => noopUnsubscribe,
-    confirmWindowClose: () => {},
-    cancelWindowClose: () => {},
-    notifyWindowRevealed: () => {}
+    ...createWebUiNativeWindowApi()
   }
 }

@@ -4,7 +4,6 @@ import type { AppState } from '../../types'
 import type { PersistedTrustedOrcaHooks } from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
 import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
 import type {
-  ActivityBarPosition,
   TaskViewPresetId,
   TopLevelView,
   VisibleWorkspaceHostIds
@@ -106,11 +105,6 @@ export function sanitizePersistedSidebarWidth(
   return Math.min(maxWidth, Math.max(MIN_SIDEBAR_WIDTH, width))
 }
 
-// Any other value would hide the activity bar entirely, since the layout renders only Top or Side.
-export function sanitizeActivityBarPosition(position: unknown): ActivityBarPosition {
-  return position === 'side' ? 'side' : 'top'
-}
-
 // Agent rows hydrate at any age (structured chats, and terminal panes still placed), so pane-keyed
 // read state is never age-pruned; the newest entries bound growth instead.
 const PANE_KEY_TIMESTAMP_MAX_ENTRIES = 500
@@ -180,12 +174,11 @@ export function sanitizePaneKeyTimestampRecord(
     .flatMap(({ keys }) =>
       keys
         .filter(([key]) => current === undefined || !Object.hasOwn(current, key))
-        .toSorted(
-          ([leftKey, leftAt], [rightKey, rightAt]) =>
-            Number(chatPaneKeySessionId(rightKey) !== null) -
-              Number(chatPaneKeySessionId(leftKey) !== null) ||
-            rightAt - leftAt
-        )
+        .toSorted(([leftKey, leftAt], [rightKey, rightAt]) => {
+          const rightIsConversationKey = Number(chatPaneKeySessionId(rightKey) !== null)
+          const leftIsConversationKey = Number(chatPaneKeySessionId(leftKey) !== null)
+          return rightIsConversationKey - leftIsConversationKey || rightAt - leftAt
+        })
     )
     .slice(0, available)
   return Object.fromEntries([...retained, ...remaining])
@@ -317,37 +310,5 @@ export function sanitizePerWorktreePreferences(
     showDotfilesByWorktree: sanitizeShowDotfilesByWorktree(ui.showDotfilesByWorktree),
     // Same persisted shape as the dotfile map: a per-worktree boolean opt-in record.
     notificationsMutedByWorktree: sanitizeShowDotfilesByWorktree(ui.notificationsMutedByWorktree)
-  }
-}
-
-export function sanitizeActivityBarArrangement(
-  ui: {
-    activityBarOrder?: unknown
-    activityBarBotOrder?: unknown
-    activityBarHidden?: unknown
-    activityBarPosition?: unknown
-  },
-  current: {
-    activityBarOrder: string[]
-    activityBarBotOrder: string[]
-    activityBarHidden: string[]
-  }
-): {
-  activityBarOrder: string[]
-  activityBarBotOrder: string[]
-  activityBarHidden: string[]
-  activityBarPosition: ActivityBarPosition
-} {
-  const strings = (value: unknown): string[] =>
-    Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : []
-  return {
-    activityBarPosition: sanitizeActivityBarPosition(ui.activityBarPosition),
-    activityBarOrder:
-      preserveStringArrayIdentity(current.activityBarOrder, strings(ui.activityBarOrder)) ?? [],
-    activityBarBotOrder:
-      preserveStringArrayIdentity(current.activityBarBotOrder, strings(ui.activityBarBotOrder)) ??
-      [],
-    activityBarHidden:
-      preserveStringArrayIdentity(current.activityBarHidden, strings(ui.activityBarHidden)) ?? []
   }
 }
