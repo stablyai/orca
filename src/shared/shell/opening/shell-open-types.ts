@@ -1,6 +1,11 @@
 import type { ExecutionHostId } from '../../execution-host/execution-host'
 import type { BuiltInEditorId } from '../../editor/launch/open-in-applications'
 
+export type ShellOpenUrlOptions = {
+  /** Open the URL in the system browser without bringing the browser to the foreground. */
+  background?: boolean
+}
+
 export type ShellOpenExternalEditorRequest = {
   path: string
   /** Id of a persisted Open In application; main launches its saved command. */

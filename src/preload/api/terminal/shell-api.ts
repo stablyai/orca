@@ -5,7 +5,8 @@ import type {
   ShellOpenExternalEditorRequest,
   ShellOpenExternalEditorResult,
   ShellOpenFileResult,
-  ShellOpenLocalPathResult
+  ShellOpenLocalPathResult,
+  ShellOpenUrlOptions
 } from '../../../shared/shell/opening/shell-open-types'
 import type { RuntimeFileOpenPosition } from '../../../shared/file-access/runtime-editor-file-open'
 import type {
@@ -23,7 +24,7 @@ export type ShellApi = {
   openInExternalEditor: (
     request: ShellOpenExternalEditorRequest
   ) => Promise<ShellOpenExternalEditorResult>
-  openUrl: (url: string) => Promise<void>
+  openUrl: (url: string, options?: ShellOpenUrlOptions) => Promise<void>
   /** Desktop only: opens a forward's local URL, choosing 127.0.0.1 when another app holds [::1]. */
   openForwardedUrl?: (request: ForwardedUrlOpenRequest) => Promise<ForwardedUrlOpenResult>
   openFilePath: (

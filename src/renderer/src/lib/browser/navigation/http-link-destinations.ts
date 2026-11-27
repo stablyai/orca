@@ -20,6 +20,8 @@ export type OpenHttpLinkOptions = {
   allowClientBrowserFallback?: boolean
   /** Unconditional: always use the system browser regardless of settings. */
   forceSystemBrowser?: boolean
+  /** Open the system browser without activating it (used for middle-click gestures). */
+  backgroundSystemBrowser?: boolean
   /** Unconditional for local sources: open inside Orca regardless of settings. */
   forceInApp?: boolean
   /** The Shift escape-hatch modifier was held; resolveModifierRouting decides what it means. */
@@ -171,6 +173,8 @@ export type RoutedHttpLinkOptions = {
   sourceOwner?: HttpLinkSourceOwner
   modifierHeld?: boolean
   forceDestination?: HttpLinkDestination
+  /** Open the system browser without bringing it to the foreground. */
+  backgroundSystemBrowser?: boolean
   requestOpenLinksInAppPreference?: HttpLinkRoutingPreferenceRequester
 }
 
@@ -195,6 +199,7 @@ export function openRoutedHttpLink(url: string, deps: RoutedHttpLinkOptions): vo
       worktreeId: deps.worktreeId,
       forceInApp: deps.forceDestination === 'orca',
       forceSystemBrowser: deps.forceDestination === 'system',
+      ...(deps.backgroundSystemBrowser ? { backgroundSystemBrowser: true } : {}),
       sourceOwner,
       ...(deps.onBrowserOpenComplete ? { onBrowserOpenComplete: deps.onBrowserOpenComplete } : {})
     })

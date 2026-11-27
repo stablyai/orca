@@ -7,7 +7,8 @@ import type {
   ShellOpenExternalEditorRequest,
   ShellOpenExternalEditorResult,
   ShellOpenFileResult,
-  ShellOpenLocalPathResult
+  ShellOpenLocalPathResult,
+  ShellOpenUrlOptions
 } from '../../../shared/shell/opening/shell-open-types'
 import type { RuntimeFileOpenPosition } from '../../../shared/file-access/runtime-editor-file-open'
 import { MAX_REPO_ICON_UPLOAD_BYTES } from '../../../shared/repository/appearance/repo-icon'
@@ -174,7 +175,7 @@ export function registerShellHandlers(
 
   registerForwardedUrlOpenHandler()
 
-  ipcMain.handle('shell:openUrl', (_event, rawUrl: string) => {
+  ipcMain.handle('shell:openUrl', (_event, rawUrl: string, options?: ShellOpenUrlOptions) => {
     let parsed: URL
     try {
       parsed = new URL(rawUrl)
@@ -186,6 +187,9 @@ export function registerShellHandlers(
       return
     }
 
+    if (options && typeof options === 'object' && options.background === true) {
+      return shell.openExternal(parsed.toString(), { activate: false })
+    }
     return shell.openExternal(parsed.toString())
   })
 
