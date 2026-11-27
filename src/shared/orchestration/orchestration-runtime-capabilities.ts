@@ -71,6 +71,8 @@ export const ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY =
 /** A paired Orca's chat-lineage start (`chatLineage`) starts here as a chat, and so do the workers it starts. */
 export const ORCHESTRATION_CHAT_LINEAGE_RUNTIME_CAPABILITY =
   'orchestration.chat-lineage.v1' as const
+/** A paired start can carry bot commit-credit guidance without changing its local worker surface. */
+export const ORCHESTRATION_BOT_LINEAGE_RUNTIME_CAPABILITY = 'orchestration.bot-lineage.v1' as const
 /** A legacy federation attachment accepts a trusted bot-worker lineage stamp from its Run home. */
 export const ORCHESTRATION_FEDERATION_CHAT_LINEAGE_RUNTIME_CAPABILITY =
   'orchestration.federation-chat-lineage.v1' as const
@@ -106,5 +108,6 @@ export const ORCHESTRATION_RUNTIME_CAPABILITIES = [
   ORCHESTRATION_PEER_MAIL_FILES_RUNTIME_CAPABILITY,
   ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY,
   ORCHESTRATION_CHAT_LINEAGE_RUNTIME_CAPABILITY,
+  ORCHESTRATION_BOT_LINEAGE_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_CHAT_LINEAGE_RUNTIME_CAPABILITY
 ] as const

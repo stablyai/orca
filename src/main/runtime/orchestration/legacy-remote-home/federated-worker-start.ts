@@ -132,6 +132,7 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
     taskRunId: runId,
     retryOf: params.retryOf,
     chatLineage,
+    botLineage,
     startOptions: {
       on: server.environmentId,
       serverName: server.name,

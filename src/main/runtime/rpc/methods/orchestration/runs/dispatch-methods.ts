@@ -44,7 +44,10 @@ function dispatchPreservesHumanCommitCredit(
   from: string | undefined,
   caller: Parameters<typeof startsInChatLineage>[3]
 ): boolean {
-  return dispatchStartsChatWorkers(runtime, db, from, caller) || db.creatorHasBotLineage(creator)
+  return (
+    dispatchStartsChatWorkers(runtime, db, from, caller) ||
+    db.creatorHasBotLineage(creator, (sessionId) => botOfSession(runtime.bots, sessionId) !== null)
+  )
 }
 
 export const ORCHESTRATION_DISPATCH_METHODS = [

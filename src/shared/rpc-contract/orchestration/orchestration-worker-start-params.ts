@@ -49,7 +49,9 @@ export const WorkerStartParams = lazyZodSchema(() =>
       crossStoreParent: CrossStoreParentRefSchema.optional(),
       /** Only from the paired Orca coordinating this Run: the start is in a chat lineage there, so it and
        *  the workers it starts start as chats here too. */
-      chatLineage: z.literal(true).optional()
+      chatLineage: z.literal(true).optional(),
+      /** Only from a paired Orca: carries bot commit-credit guidance without changing this host's worker mode. */
+      botLineage: z.literal(true).optional()
     })
     .superRefine((params, ctx) => {
       if (!params.task && !params.spec) {

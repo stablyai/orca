@@ -4,9 +4,11 @@ import { createHash, randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import type { WorkerStartParams } from '../../../../../shared/rpc-contract/orchestration/orchestration-worker-start-params'
 import {
+  ORCHESTRATION_BOT_LINEAGE_RUNTIME_CAPABILITY,
   ORCHESTRATION_CHAT_LINEAGE_RUNTIME_CAPABILITY,
   ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY
 } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
+import { federatedWorkerChatLineage } from '../../legacy-remote-home/federated-worker-chat-lineage'
 import { startsInChatLineage } from '../../../rpc/methods/orchestration/worker/start/worker-chat-lineage'
 import { ORCHESTRATION_CONTRACT_PREFLIGHT_TIMEOUT_MS } from '../../../../../shared/orchestration/orchestration-timing-budgets'
 import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
@@ -92,6 +94,20 @@ export async function forwardedChatLineage(
     : {}
 }
 
+/** Bot commit guidance crosses a paired start only when both peers support its separate stamp. */
+export async function forwardedBotLineage(
+  runtime: OrcaRuntimeService,
+  db: ReturnType<OrcaRuntimeService['getOrchestrationDb']>,
+  params: StartParams,
+  caller: StartContext['orchestrationCaller'],
+  server: OrchestrationWorkerServer
+): Promise<{ botLineage?: true }> {
+  return federatedWorkerChatLineage(runtime, db, params, caller) &&
+    (await serverSupports(runtime, server, ORCHESTRATION_BOT_LINEAGE_RUNTIME_CAPABILITY))
+    ? { botLineage: true }
+    : {}
+}
+
 /** The caller's options a server's start takes; this Orca's own fields, and a lineage claim the
  *  caller made itself, stay here. */
 export function serverStartOptions(params: StartParams) {
@@ -103,6 +119,7 @@ export function serverStartOptions(params: StartParams) {
     deps: _deps,
     parent: _parent,
     chatLineage: _chatLineage,
+    botLineage: _botLineage,
     ...options
   } = params
   return options
@@ -148,7 +165,10 @@ export async function startRemoteOwnedWorker(
     params.worktree === 'new-child'
       ? await resolveCrossMachineChildParent(runtime, params.from, ctx.orchestrationCaller)
       : undefined
-  const lineage = await forwardedChatLineage(runtime, db, params, ctx.orchestrationCaller, server)
+  const [chatLineage, botLineage] = await Promise.all([
+    forwardedChatLineage(runtime, db, params, ctx.orchestrationCaller, server),
+    forwardedBotLineage(runtime, db, params, ctx.orchestrationCaller, server)
+  ])
   const { run } = bindRun()
   // An older CLI sends no request ID; the start still runs, but a retry cannot find it.
   const forward = remoteForwardKey(runtime, ctx, params.from, callerRequestId ?? randomUUID())!
@@ -203,7 +223,8 @@ export async function startRemoteOwnedWorker(
           : { spec: task.spec, ...(task.task_title ? { taskTitle: task.task_title } : {}) }),
         adoptTaskId: task.id,
         ...(crossStoreParent ? { crossStoreParent } : {}),
-        ...lineage
+        ...chatLineage,
+        ...botLineage
       },
       timeoutMs: budgets.attachDeadlineMs,
       requestId: forward.key,

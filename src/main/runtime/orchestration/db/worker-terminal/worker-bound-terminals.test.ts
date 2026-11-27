@@ -170,6 +170,29 @@ describe('terminals bound to a worker', () => {
     expect(workerStartedByBot(db, retry.dispatchId, isBotChat)).toBe(true)
   })
 
+  it('keeps bot commit-credit lineage when a helper receives a follow-up', () => {
+    const worker = startWorker(botChat)
+    const helper = startWorker(personChat, 'succeeded', worker.dispatchId)
+    const followUp = startWorker(personChat)
+    db.db
+      .prepare('UPDATE dispatch_contexts SET follow_up_of_dispatch_id = ? WHERE id = ?')
+      .run(helper.dispatchId, followUp.dispatchId)
+
+    expect(workerStartedByBot(db, followUp.dispatchId, isBotChat)).toBe(true)
+  })
+
+  it('keeps walking other ancestors when one recorded ancestor is missing', () => {
+    const worker = startWorker(botChat)
+    const helper = startWorker(personChat)
+    db.db
+      .prepare(
+        'UPDATE dispatch_contexts SET creator_dispatch_id = ?, retry_of_dispatch_id = ? WHERE id = ?'
+      )
+      .run(worker.dispatchId, 'ctx_missing', helper.dispatchId)
+
+    expect(workerStartedByBot(db, helper.dispatchId, isBotChat)).toBe(true)
+  })
+
   it("a chat worker a bot's home chat started, and the chat workers under it, close with their terminals", async () => {
     const worker = startWorker(botChat, 'succeeded', undefined, true)
     const helper = startWorker(personChat, 'succeeded', worker.dispatchId, true)

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { isInBotHome } from '../../../../../../bots/bot-home-membership'
+import { botOfSession } from '../../../../../../bots/bot-session-tabs'
 import {
   sessionCallerOf,
   type OrchestrationEntryCaller
@@ -34,6 +35,23 @@ export function startsInChatLineage(
     return true
   }
   return db.creatorStartsChatWorkers(resolveDispatchCreator(runtime, params.from, caller))
+}
+
+/** Bot guidance has the same ancestry as chat workers, but a paired stamp never chooses this host's surface. */
+export function startsInBotLineage(
+  runtime: Parameters<typeof startsInChatLineage>[0],
+  db: OrchestrationDb,
+  params: { from?: string; retryOf?: string; botLineage?: true },
+  caller: OrchestrationEntryCaller | undefined
+): boolean {
+  return (
+    startsInChatLineage(runtime, db, params, caller) ||
+    (params.botLineage === true && caller?.kind === 'peer') ||
+    db.creatorHasBotLineage(
+      resolveDispatchCreator(runtime, params.from, caller),
+      (sessionId) => botOfSession(runtime.bots, sessionId) !== null
+    )
+  )
 }
 
 /** The start's mode: the host's settings, unless the caller's lineage starts its workers as chats. */

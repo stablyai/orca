@@ -1,4 +1,5 @@
 import { createDispatchCreatorEvaluation } from './dispatch-creator-evaluation'
+import { dispatchHasBotLineage } from './bot-dispatch-lineage'
 import { requireOrchestrationAdmission } from '../addressing/orchestration-admission'
 
 import type { OrchestrationDb } from './orchestration-db'
@@ -118,11 +119,18 @@ export function creatorStartsChatWorkers(this: OrchestrationDb, creator: Dispatc
 }
 
 /** Remote bot lineage carries task guidance, but does not override this host's worker-surface setting. */
-export function creatorHasBotLineage(this: OrchestrationDb, creator: DispatchCreator): boolean {
-  return (
-    creator.kind !== 'system' &&
-    requireOrchestrationAdmission(liveDispatchCreatorEvaluation(this, creator).hasBotLineage())
+export function creatorHasBotLineage(
+  this: OrchestrationDb,
+  creator: DispatchCreator,
+  isBotChat: (sessionId: string) => boolean = () => false
+): boolean {
+  if (creator.kind === 'system') {
+    return false
+  }
+  const dispatchId = requireOrchestrationAdmission(
+    liveDispatchCreatorEvaluation(this, creator).creatorId()
   )
+  return dispatchId ? dispatchHasBotLineage(this, dispatchId, isBotChat) : false
 }
 
 export function resolveCreatorDepth(this: OrchestrationDb, creator: DispatchCreator): number {

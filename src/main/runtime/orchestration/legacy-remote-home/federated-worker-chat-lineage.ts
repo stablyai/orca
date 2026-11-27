@@ -1,7 +1,6 @@
 import { ORCHESTRATION_FEDERATION_CHAT_LINEAGE_RUNTIME_CAPABILITY } from '../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { RpcContext } from '../../rpc/core'
-import { resolveDispatchCreator } from '../../rpc/methods/orchestration/runs/dispatch-creator'
-import { startsInChatLineage } from '../../rpc/methods/orchestration/worker/start/worker-chat-lineage'
+import { startsInBotLineage } from '../../rpc/methods/orchestration/worker/start/worker-chat-lineage'
 import type { OrchestrationDb } from '../db/orchestration-db'
 
 type AuthenticatedRuntimeTransport = Pick<
@@ -26,10 +25,7 @@ export function federatedWorkerChatLineage(
   params: Parameters<typeof startsInChatLineage>[2],
   caller: Parameters<typeof startsInChatLineage>[3]
 ): boolean {
-  return (
-    startsInChatLineage(runtime, db, params, caller) ||
-    db.creatorHasBotLineage(resolveDispatchCreator(runtime, params.from, caller))
-  )
+  return startsInBotLineage(runtime, db, params, caller)
 }
 
 /** Only the paired runtime transport, not a local mutation receipt, may stamp remote bot lineage. */

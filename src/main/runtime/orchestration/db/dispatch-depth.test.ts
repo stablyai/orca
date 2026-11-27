@@ -94,4 +94,53 @@ describe('creator lineage', () => {
 
     expect(dispatch.chat_lineage).toBe(1)
   })
+
+  it('keeps attached bot guidance through an unstamped local helper without changing its surface', () => {
+    db.createRemoteDispatchAttachment({
+      dispatchId: 'ctx_remote',
+      runId: 'run_remote',
+      taskId: 'task_remote',
+      homePeerFingerprint: 'peer',
+      protocolVersion: 1,
+      runtimeEpoch: 'epoch',
+      chatLineage: true,
+      mutationReceipt: {
+        callerFingerprint: 'peer',
+        requestId: 'attach',
+        method: 'orchestration.federationAttachStart',
+        payloadHash: 'hash'
+      }
+    })
+    db.prepareRemoteAttachmentAuthority({
+      dispatchId: 'ctx_remote',
+      paneKey: 'pane:remote',
+      processIncarnation: 'remote:1',
+      worktreeId: 'worktree',
+      terminalHandle: 'term_remote',
+      setupState: 'not_applicable',
+      effects: []
+    })
+    const task = db.createTask({ runId: 'run_local', spec: 'work' })
+    const helper = db.createDispatchContext({
+      taskId: task.id,
+      assigneeHandle: 'term_helper',
+      creator: {
+        kind: 'terminal',
+        handle: 'term_remote',
+        paneKey: 'pane:remote',
+        processIncarnation: 'remote:1'
+      },
+      maxDepth: Number.MAX_SAFE_INTEGER
+    })
+    db.db.prepare("UPDATE dispatch_contexts SET status = 'dispatched' WHERE id = ?").run(helper.id)
+
+    const creator = {
+      kind: 'terminal',
+      handle: 'term_helper',
+      paneKey: helper.assignee_pane_key ?? undefined
+    } as const
+    expect(helper.chat_lineage).toBeNull()
+    expect(db.creatorStartsChatWorkers(creator)).toBe(false)
+    expect(db.creatorHasBotLineage(creator)).toBe(true)
+  })
 })

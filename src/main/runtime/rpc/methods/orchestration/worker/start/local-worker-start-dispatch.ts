@@ -21,7 +21,8 @@ export function createLocalWorkerStartDispatch(
     orchestrationMutation,
     helperCreator,
     followUp,
-    chatLineage
+    chatLineage,
+    botLineage
   }: Parameters<typeof startLocalWorker>[0],
   {
     params,
@@ -98,6 +99,7 @@ export function createLocalWorkerStartDispatch(
     takesMailOf: followUp?.takesMailOf,
     ...(params.origin ? { originRef: params.origin } : {}),
     ...(params.forQuestion ? { forMessageId: params.forQuestion } : {}),
-    ...(chatLineage ? { chatLineage } : {})
+    ...(chatLineage ? { chatLineage } : {}),
+    ...(botLineage ? { botLineage } : {})
   })
 }

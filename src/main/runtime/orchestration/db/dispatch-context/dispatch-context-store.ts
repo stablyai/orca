@@ -38,6 +38,7 @@ export function createDispatchContext(
     hostScope?: string | null
     creator: DispatchCreator
     chatLineage?: boolean
+    botLineage?: boolean
     maxDepth: number
   }
 ): DispatchContextRow {
@@ -79,6 +80,7 @@ export function createDispatchContext(
       creatorDispatchId: requireOrchestrationAdmission(creator.creatorId()),
       ...recordedCreatorIdentity(params.creator),
       chatLineage: params.chatLineage ?? requireOrchestrationAdmission(creator.startsChatWorkers()),
+      botLineage: params.botLineage,
       priorFailures,
       depth,
       taskId,

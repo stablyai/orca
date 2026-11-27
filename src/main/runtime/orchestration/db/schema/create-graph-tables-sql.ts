@@ -224,7 +224,8 @@ CREATE TABLE IF NOT EXISTS dispatch_contexts (
   -- The settled Dispatch whose worker this one continues (a follow-up sent to it).
   follow_up_of_dispatch_id TEXT,
   -- Set when the worker reported with coordinator mail unread; cleared once that mail continues it.
-  follow_up_mail_at TEXT
+  follow_up_mail_at TEXT,
+  bot_lineage INTEGER
 );
 
 CREATE INDEX IF NOT EXISTS idx_dispatch_task ON dispatch_contexts(task_id);

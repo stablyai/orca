@@ -329,6 +329,8 @@ export type DispatchContextRow = {
   for_message_id: string | null
   /** 1 when this worker, and every worker it starts, starts as a chat wherever one can run. */
   chat_lineage: 1 | null
+  /** 1 when this worker carries bot commit-credit guidance without selecting a worker surface. */
+  bot_lineage: 1 | null
 }
 
 export type DecisionGateRow = {

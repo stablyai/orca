@@ -1,5 +1,6 @@
 import type { OrcaRuntimeService } from '../../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
+import { dispatchHasBotLineage } from '../../../../../orchestration/db/bot-dispatch-lineage'
 import { botOfSession } from '../../../../../../bots/bot-session-tabs'
 
 /** Whether a started worker stays open after it reports when the caller asked nothing. A worker in its
@@ -41,36 +42,7 @@ export function workerStartedByBot(
   dispatchId: string,
   isBotChat: (sessionId: string) => boolean
 ): boolean {
-  const seen = new Set<string>()
-  const pending = [dispatchId]
-  while (pending.length > 0 && seen.size < 100) {
-    const id = pending.pop()
-    if (!id || seen.has(id)) {
-      continue
-    }
-    seen.add(id)
-    const context = db.getDispatchContextById(id)
-    if (!context) {
-      return db.getRemoteDispatchAttachment(id)?.chat_lineage === 1
-    }
-    // A paired host receives this trusted stamp from a bot home; it has no local bot record to consult.
-    if (context.chat_lineage === 1) {
-      return true
-    }
-    const session =
-      context.creator_orca_session_id ??
-      (context.creator_dispatch_id ? null : db.getRun(context.run_id)?.coordinator_orca_session_id)
-    if (session && isBotChat(session)) {
-      return true
-    }
-    if (context.creator_dispatch_id) {
-      pending.push(context.creator_dispatch_id)
-    }
-    if (context.retry_of_dispatch_id) {
-      pending.push(context.retry_of_dispatch_id)
-    }
-  }
-  return false
+  return dispatchHasBotLineage(db, dispatchId, isBotChat)
 }
 
 export const startedForBot = workerStartedByBot
