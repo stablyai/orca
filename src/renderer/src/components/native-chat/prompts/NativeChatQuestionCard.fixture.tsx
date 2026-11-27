@@ -13,6 +13,7 @@ import type {
 } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { NativeChatLinkClickContext } from '../links/actions/native-chat-link-click-context'
+import { NativeChatDock } from '../pane/dock/NativeChatDock'
 
 function QuestionControls({
   invertedAccent = false,
@@ -82,14 +83,76 @@ export const multiline = defineFixture({
   )
 })
 
+const LONG_QUESTION =
+  'tools/ci/check-openapi-breaking-changes.sh:27 — a reviewer (‼️ Must do): the sign-off files api/breaking-changes/{customer-facing,mobile}.md are passed whole to oasdiff --err-ignore, so a line signed off months ago keeps allowing the same break on that endpoint today. Should I narrow the ignore file to the exact rule ids this change needs, or keep the whole-file sign-off and add a comment explaining why? — end of question.'
+
 export const longQuestion = defineFixture({
   width: 560,
   render: () => (
     <QuestionControls
-      question="tools/ci/check-openapi-breaking-changes.sh:27 — a reviewer (‼️ Must do): the sign-off files api/breaking-changes/{customer-facing,mobile}.md are passed whole to oasdiff --err-ignore, so a line signed off months ago keeps allowing the same break on that endpoint today. Should I narrow the ignore file to the exact rule ids this change needs, or keep the whole-file sign-off and add a comment explaining why?"
+      question={LONG_QUESTION}
       description="Narrow the ignore file.&#10;Keeps the old sign-off from suppressing new rules."
     />
   )
+})
+
+// The card in the dock, in panes short enough that the dock runs out of room: a tall question,
+// four described options and free input. The dock takes the pane's remaining height, as it does in
+// the app, so the fit sees the room the pane really has.
+function ConstrainedPane({ width, height }: { width: number; height: number }) {
+  return (
+    <div
+      data-native-chat-root="true"
+      className="native-chat-appearance flex flex-col bg-chat-pane"
+      style={{ ...nativeChatAppearanceStyle({}), width, height }}
+    >
+      <div className="flex min-h-[calc(var(--spacing)*20)] flex-1 flex-col justify-end overflow-hidden p-4 text-sm text-muted-foreground [[data-native-chat-dock-fit~=transcript]_&]:min-h-0">
+        Here is the draft for the OpenAPI change.
+      </div>
+      <NativeChatDock>
+        <NativeChatQuestionCard
+          prompt={{
+            questions: [
+              {
+                question: LONG_QUESTION,
+                multiSelect: false,
+                options: [
+                  {
+                    label: 'Narrow the ignore file',
+                    description: 'Scope the sign-off to the exact rule ids this change needs.'
+                  },
+                  {
+                    label: 'Keep the whole-file sign-off',
+                    description: 'Add a comment on why the old sign-off stays.'
+                  },
+                  {
+                    label: 'Ask the reviewer first',
+                    description: 'Post a thread before changing the ignore file.'
+                  },
+                  {
+                    label: 'Something else',
+                    description: 'Type a different approach below.'
+                  }
+                ]
+              }
+            ]
+          }}
+          onAnswer={() => {}}
+          onCancel={() => {}}
+        />
+      </NativeChatDock>
+    </div>
+  )
+}
+
+export const constrainedDock = defineFixture({
+  width: 380,
+  render: () => <ConstrainedPane width={380} height={312} />
+})
+
+export const tinyDock = defineFixture({
+  width: 220,
+  render: () => <ConstrainedPane width={220} height={200} />
 })
 
 function PendingAsyncQuestion() {
