@@ -190,7 +190,11 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
         asks && ctx.pairedDeviceId
           ? clientAskPullStarted(
               ctx.runtime,
-              { deviceId: ctx.pairedDeviceId, fingerprint: peerFingerprint },
+              {
+                deviceId: ctx.pairedDeviceId,
+                fingerprint: peerFingerprint,
+                sharedBotId: workspaceTeammateOf(ctx)?.botId
+              },
               asks
             )
           : null

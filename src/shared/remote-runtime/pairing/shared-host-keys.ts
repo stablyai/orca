@@ -19,21 +19,27 @@ export type SharedHost = {
   relay: RuntimeRelayCredentialStore
 }
 
-let hosts: ((environmentId: string) => SharedHost | null) | null = null
-let listHosts: () => readonly string[] = () => []
+/** The desktop's kept shares: each one's host, their environment ids, and when they are loaded. */
+export type SharedHostRegistry = {
+  host: (environmentId: string) => SharedHost | null
+  environmentIds: () => readonly string[]
+  ready: () => Promise<void>
+}
+
+let hosts: SharedHostRegistry | null = null
 // The runtime each host last answered from, kept as a paired server's store keeps it: tab streams are
 // fenced on it, and a host that restarted answers from a new one.
 const answeredRuntimeIds = new Map<string, string>()
 
-/** Set once by the desktop's shared-agents owner, with the kept shares' environment ids; null
- *  elsewhere, and in tests that end. */
-export function setSharedHosts(
-  lookup: ((environmentId: string) => SharedHost | null) | null,
-  environmentIds: () => readonly string[] = () => []
-) {
-  hosts = lookup
-  listHosts = lookup ? environmentIds : () => []
+/** Set once by the desktop's shared-agents owner; null elsewhere, and in tests that end. */
+export function setSharedHosts(registry: SharedHostRegistry | null) {
+  hosts = registry
   answeredRuntimeIds.clear()
+}
+
+/** Once the kept shares are loaded, so a share not read yet is never taken for one that ended. */
+export async function sharedHostsReady(): Promise<void> {
+  await hosts?.ready().catch(() => undefined)
 }
 
 /** Records the runtime a shared host answered from; false for any other host. */
@@ -48,7 +54,7 @@ export function noteSharedHostRuntime(environmentId: string, runtimeId: string |
 }
 
 export function sharedHostKey(environmentId: string): SharedHost | null {
-  return hosts?.(environmentId) ?? null
+  return hosts?.host(environmentId) ?? null
 }
 
 /** A shared host as a paired server: resolved by its id like one, never written to the store. */
@@ -82,7 +88,9 @@ export function sharedHostEnvironment(environmentId: string): KnownRuntimeEnviro
 
 /** Every shared host this computer can reach now (its share has an offer), as paired servers list. */
 export function listSharedHostEnvironments(): KnownRuntimeEnvironment[] {
-  return listHosts().flatMap((environmentId) => sharedHostEnvironment(environmentId) ?? [])
+  return (hosts?.environmentIds() ?? []).flatMap(
+    (environmentId) => sharedHostEnvironment(environmentId) ?? []
+  )
 }
 
 /** The one shared host with this name, for `--on <name>`; null when none or several have it. */

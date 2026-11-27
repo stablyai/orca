@@ -12,7 +12,8 @@ import { pairedRuntimeConnectionIdentity } from '../../../../shared/remote-runti
 import {
   listSharedHostEnvironments,
   sharedHostEnvironmentNamed,
-  sharedHostKey
+  sharedHostKey,
+  sharedHostsReady
 } from '../../../../shared/remote-runtime/pairing/shared-host-keys'
 
 /** Dials this host's paired servers for cross-server orchestration, and the hosts of agents shared
@@ -20,24 +21,28 @@ import {
 export function createOrchestrationEnvironmentTransport(): OrchestrationEnvironmentTransport {
   // Read per call: the desktop settles userData casing only after app.setName.
   const registryRoot = (): string => getAppEnvironment().getPath('userData')
-  const servers = async () => [
-    ...(await listEnvironments(registryRoot())),
-    ...listSharedHostEnvironments()
-  ]
+  // Every read waits for the kept shares to load, so a restart never reads a share as removed.
+  const servers = async () => {
+    await sharedHostsReady()
+    return [...(await listEnvironments(registryRoot())), ...listSharedHostEnvironments()]
+  }
   return {
     resolve: async (selector) => {
+      await sharedHostsReady()
       // A shared host by id first, then a paired server by id or name, then a shared host by name.
       const environment = await resolveEnvironment(registryRoot(), selector).catch(
         (error: unknown) => sharedHostEnvironmentNamed(selector) ?? Promise.reject(error)
       )
       const connection = getPreferredPairedRuntimeConnection(environment)
+      const share = sharedHostKey(environment.id) !== null
       return {
         environmentId: environment.id,
         name: environment.name,
-        ...(sharedHostKey(environment.id) ? { sharedHost: true as const } : {}),
+        ...(share ? { sharedHost: true as const } : {}),
         ...pairedOrchestrationPeers(
           connection.hostPublicKeyB64,
-          pairedRuntimeConnectionIdentity(connection)
+          pairedRuntimeConnectionIdentity(connection),
+          { share }
         ),
         pairingRevision: environment.pairingRevision ?? environment.createdAt
       }

@@ -57,9 +57,18 @@ export function fingerprintOrchestrationPeer(publicKeyB64: string): string {
 
 /** How a home names a paired runtime and itself; the runtime derives the same pair from its own
  *  pairing key and from the home's credential when it authenticates the home's socket. */
-export function pairedOrchestrationPeers(hostPublicKeyB64: string, deviceToken: string) {
+export function pairedOrchestrationPeers(
+  hostPublicKeyB64: string,
+  deviceToken: string,
+  { share = false }: { share?: boolean } = {}
+) {
+  const host = fingerprintOrchestrationPeer(hostPublicKeyB64)
+  const homePeerFingerprint = fingerprintAuthenticatedPairingCredential(deviceToken)
   return {
-    peerFingerprint: fingerprintOrchestrationPeer(hostPublicKeyB64),
-    homePeerFingerprint: fingerprintAuthenticatedPairingCredential(deviceToken)
+    // A share is a pairing of its own: two agents shared from one computer are two servers here.
+    peerFingerprint: share
+      ? createHash('sha256').update(`${host}\0${homePeerFingerprint}`).digest('base64url')
+      : host,
+    homePeerFingerprint
   }
 }

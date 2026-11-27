@@ -85,7 +85,8 @@ export async function callRemoteOwnedServer(
     const generation = environmentStoreWriteCount()
     const peers = pairedOrchestrationPeers(
       connection.hostPublicKeyB64,
-      pairedRuntimeConnectionIdentity(connection)
+      pairedRuntimeConnectionIdentity(connection),
+      { share: now.sharedHost === true }
     )
     return () => {
       if (generation !== environmentStoreWriteCount()) {

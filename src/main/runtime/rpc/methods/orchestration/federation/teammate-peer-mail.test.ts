@@ -24,6 +24,10 @@ import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrchestrationSessionCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import { listeningClients } from '../../../../orchestration/federation/client-asks/client-ask-listeners'
 import {
+  allowServer,
+  isServerAllowed
+} from '../../../../orchestration/db/federation/paired-server-asks-store'
+import {
   botShareCallerScopeOf,
   botSharePrincipalOf
 } from '../../../server/pairing/device-principal'
@@ -100,39 +104,56 @@ const DANA_TYPED = {
   typedBy: { by: 'host' }
 }
 
-const shareDevice = {
-  deviceId: 'share-device-dana',
-  botId: 'ranger',
-  accountId: DANA,
-  scope: 'runtime' as const,
-  devicePublicKeyB64: 'dana-key',
-  pairedAt: 1
-}
-// The share as Dana's Orca keeps it: the host's Relay reach and key, and her device there.
-const sharedHost: SharedHost = {
-  name: 'Ranger',
-  offer: {
-    relay: {
-      v: 1,
-      directorUrl: 'https://relay.test',
-      cellUrl: 'https://cell.relay.test',
-      assignmentEpoch: 1,
-      relayHostId: 'relay-host-owner',
-      inviteToken: 'invite',
-      inviteExpiresAt: 1,
-      e2eeFraming: 2
+const BUILDER_ENVIRONMENT = 'env-shared-builder'
+// The same computer shares two agents with Dana: two shares, one host key.
+const HOST_KEY = Buffer.alloc(32, 7).toString('base64')
+
+function share(botId: string, deviceId: string, name: string) {
+  const device = {
+    deviceId,
+    botId,
+    accountId: DANA,
+    scope: 'runtime' as const,
+    devicePublicKeyB64: `${deviceId}-key`,
+    pairedAt: 1
+  }
+  // The share as Dana's Orca keeps it: the host's Relay reach and key, and her device there.
+  const host: SharedHost = {
+    name,
+    offer: {
+      relay: {
+        v: 1,
+        directorUrl: 'https://relay.test',
+        cellUrl: 'https://cell.relay.test',
+        assignmentEpoch: 1,
+        relayHostId: 'relay-host-owner',
+        inviteToken: 'invite',
+        inviteExpiresAt: 1,
+        e2eeFraming: 2
+      },
+      hostPublicKeyB64: HOST_KEY,
+      deviceId
     },
-    hostPublicKeyB64: Buffer.alloc(32, 7).toString('base64'),
-    deviceId: shareDevice.deviceId
-  },
-  credential: {
-    kind: 'device-key',
-    deviceId: shareDevice.deviceId,
-    sign: async () => new Uint8Array(64)
-  },
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the transport never dials here; calls go to the host's dispatcher.
-  relay: {} as SharedHost['relay']
+    credential: { kind: 'device-key', deviceId, sign: async () => new Uint8Array(64) },
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the transport never dials here; calls go to the host's dispatcher.
+    relay: {} as SharedHost['relay']
+  }
+  return { device, host }
 }
+
+const SHARES: Record<string, ReturnType<typeof share>> = {
+  [SHARED_ENVIRONMENT]: share('ranger', 'share-device-dana', 'Ranger'),
+  [BUILDER_ENVIRONMENT]: share('builder', 'share-device-dana-2', 'Builder')
+}
+
+const shareOf = (accountId: string, shareId: string) => ({
+  kind: 'account' as const,
+  accountId,
+  name: 'Dana',
+  email: 'dana@example.com',
+  shareId,
+  addedAt: 1
+})
 
 type Side = { db: OrchestrationDb; runtime: OrcaRuntimeService }
 
@@ -157,6 +178,10 @@ describe("a teammate's bots and the agent shared with them", () => {
   let dana: Side
   // What the owner's Orca says it can do; an older build lacks the teammate capability.
   let ownerCapabilities: (capabilities: string[]) => string[]
+  // Dana's kept shares: which are kept, and whether they are loaded yet (a restart reads them late).
+  let kept: string[]
+  let loaded: boolean
+  let sharesLoaded: Promise<void>
 
   function openSide(
     name: string,
@@ -178,9 +203,11 @@ describe("a teammate's bots and the agent shared with them", () => {
 
   /** Every call from Dana's Orca, as the owner's computer admits its share's device. */
   async function callOwner(
+    selector: string,
     method: string,
     rawParams: unknown
   ): Promise<RuntimeRpcResponse<unknown>> {
+    const shareDevice = SHARES[selector]!.device
     const params = { ...z.record(z.string(), z.unknown()).parse(rawParams ?? {}) }
     if (method === 'orchestration.peerMailPull') {
       // Short waits, so a test sees the loop's next pull.
@@ -234,10 +261,15 @@ describe("a teammate's bots and the agent shared with them", () => {
       exit: () => {},
       getAppMetrics: () => []
     })
-    setSharedHosts(
-      (environmentId) => (environmentId === SHARED_ENVIRONMENT ? sharedHost : null),
-      () => [SHARED_ENVIRONMENT]
-    )
+    kept = [SHARED_ENVIRONMENT]
+    sharesLoaded = Promise.resolve()
+    loaded = true
+    setSharedHosts({
+      host: (environmentId) =>
+        loaded && kept.includes(environmentId) ? SHARES[environmentId]!.host : null,
+      environmentIds: () => (loaded ? kept : []),
+      ready: () => sharesLoaded
+    })
     withChat.mockReset()
     // Each person's Home of Ranger: the owner's and Dana's.
     withChat.mockImplementation((botId, of, work) =>
@@ -248,23 +280,15 @@ describe("a teammate's bots and the agent shared with them", () => {
       makeTestBot({
         id: 'ranger',
         name: 'Ranger',
-        shares: [
-          {
-            kind: 'account',
-            accountId: DANA,
-            name: 'Dana',
-            email: 'dana@example.com',
-            shareId: 'share-1',
-            addedAt: 1
-          }
-        ]
+        shares: [shareOf(DANA, 'share-1')]
       }),
+      makeTestBot({ id: 'builder', name: 'Builder', shares: [shareOf(DANA, 'share-2')] }),
       makeTestBot({ id: 'vault', name: 'Vault' })
     ])
     dana = openSide("Dana's Mac", "Dana's Mac", [makeTestBot({ id: 'docs', name: 'Docs' })], {
       orchestrationEnvironmentTransport: {
         ...createOrchestrationEnvironmentTransport(),
-        call: (_selector, method, params) => callOwner(method, params)
+        call: (selector, method, params) => callOwner(selector, method, params)
       }
     })
   })
@@ -298,6 +322,30 @@ describe("a teammate's bots and the agent shared with them", () => {
 
   const requestOn = (side: Side, messageId: string) =>
     JSON.parse(side.db.getBotRequest(messageId)!.record)
+
+  const call = async (name: string, params: Record<string, unknown>) => {
+    const response = await new RpcDispatcher({
+      runtime: dana.runtime,
+      methods: PAIRED_SERVER_ASKS_METHODS
+    }).dispatch(
+      { id: `${name}_dana`, authToken: 'local', method: name, params },
+      { caller: { kind: 'desktop' } }
+    )
+    if (!response.ok) {
+      throw new Error(response.error.message)
+    }
+    return response.result
+  }
+  const Cards = z.object({ cards: z.array(z.object({ messageId: z.string() })) })
+  const cards = async () => Cards.parse(await call('pairedServerAsks.list', {})).cards
+  /** An agent on the owner's computer asks Docs on Dana's computer. */
+  const ask = async (subject: string, from = RANGER_ASKS) =>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the send handler's receipt carries its message id.
+    (await send.handler(
+      { from, onClient: 'install_dana', to: 'bot:docs', subject, type: 'question' },
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a test double carrying only the fields the code under test reads.
+      { runtime: owner.runtime, orchestrationCaller: sessionCaller(from) } as RpcContext
+    )) as { message: { id: string } }
 
   it("lists the shared agent's computer as a place mail can go, by its name", async () => {
     expect(await dana.runtime.listOrchestrationWorkerServers()).toEqual([
@@ -353,29 +401,6 @@ describe("a teammate's bots and the agent shared with them", () => {
   })
 
   it("asks the teammate's bot through its first-time card, then Always lets the next in", async () => {
-    const call = async (name: string, params: Record<string, unknown>) => {
-      const response = await new RpcDispatcher({
-        runtime: dana.runtime,
-        methods: PAIRED_SERVER_ASKS_METHODS
-      }).dispatch(
-        { id: `${name}_dana`, authToken: 'local', method: name, params },
-        { caller: { kind: 'desktop' } }
-      )
-      if (!response.ok) {
-        throw new Error(response.error.message)
-      }
-      return response.result
-    }
-    const Cards = z.object({ cards: z.array(z.object({ messageId: z.string() })) })
-    const cards = async () => Cards.parse(await call('pairedServerAsks.list', {})).cards
-    const ask = async (subject: string) =>
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the send handler's receipt carries its message id.
-      (await send.handler(
-        { from: RANGER_ASKS, onClient: 'install_dana', to: 'bot:docs', subject, type: 'question' },
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a test double carrying only the fields the code under test reads.
-        { runtime: owner.runtime, orchestrationCaller: sessionCaller(RANGER_ASKS) } as RpcContext
-      )) as { message: { id: string } }
-
     // Dana @-mentions Docs in Ranger's chat on her computer; her Orca then pulls from the share.
     await call('pairedServerAsks.introduce', {
       environmentId: SHARED_ENVIRONMENT,
@@ -418,5 +443,60 @@ describe("a teammate's bots and the agent shared with them", () => {
     })
     expect(owner.db.getUnreadMessages(DANA_HOME_OF_RANGER)).toEqual([])
     expect(withChat).not.toHaveBeenCalled()
+  })
+
+  it('waits for the kept shares to load after a restart, never reading a share as removed', async () => {
+    const server = await dana.runtime.resolveOrchestrationWorkerServer(SHARED_ENVIRONMENT)
+    allowServer(dana.db, {
+      serverKey: server.peerFingerprint,
+      environmentId: SHARED_ENVIRONMENT,
+      botId: 'docs'
+    })
+    // Restarted: the kept shares are still being read when the pull loops start.
+    loaded = false
+    let finishLoading = () => {}
+    sharesLoaded = new Promise((resolve) => (finishLoading = resolve))
+    const resolving = vi.spyOn(dana.runtime, 'resolveOrchestrationWorkerServer')
+    dana.runtime.ensureOrchestrationFederationRelay()
+    await vi.waitFor(() => expect(resolving).toHaveBeenCalled())
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    loaded = true
+    finishLoading()
+
+    await vi.waitFor(() => expect(listeningClients(owner.runtime, 'install_dana')).toHaveLength(1))
+    expect(isServerAllowed(dana.db, server.peerFingerprint, 'docs')).toBe(true)
+  })
+
+  it('keeps two agents shared from one computer apart, and each asks over its own share', async () => {
+    kept = [SHARED_ENVIRONMENT, BUILDER_ENVIRONMENT]
+    await call('pairedServerAsks.introduce', {
+      environmentId: SHARED_ENVIRONMENT,
+      rootSession: RANGER_ASKS,
+      botId: 'docs'
+    })
+    await call('pairedServerAsks.allow', { environmentId: BUILDER_ENVIRONMENT, botId: 'docs' })
+    dana.runtime.ensureOrchestrationFederationRelay()
+    await vi.waitFor(() => expect(listeningClients(owner.runtime, 'install_dana')).toHaveLength(2))
+
+    const sent = await ask('Review this PR?')
+    await vi.waitFor(async () => expect(await cards()).toHaveLength(1))
+    await call('pairedServerAsks.decide', { messageId: sent.message.id, decision: 'once' })
+    await vi.waitFor(() => expect(dana.db.getUnreadMessages(DOCS_HOME)).toHaveLength(1))
+    // Neither share's pulls ended the other's.
+    expect(listeningClients(owner.runtime, 'install_dana')).toHaveLength(2)
+  })
+
+  it("never takes asks from an older shared computer, which can't take a teammate's mail", async () => {
+    ownerCapabilities = (capabilities) =>
+      capabilities.filter((name) => name !== ORCHESTRATION_TEAMMATE_PEER_MAIL_RUNTIME_CAPABILITY)
+
+    await expect(
+      call('pairedServerAsks.introduce', {
+        environmentId: SHARED_ENVIRONMENT,
+        rootSession: RANGER_ASKS,
+        botId: 'docs'
+      })
+    ).rejects.toThrow()
+    expect(listeningClients(owner.runtime, 'install_dana')).toEqual([])
   })
 })

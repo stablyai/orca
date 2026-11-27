@@ -161,7 +161,11 @@ it(
       held: [],
       phones: []
     })
-    setSharedHosts((environmentId) => hosts.sharedHost(environmentId))
+    setSharedHosts({
+      host: (environmentId) => hosts.sharedHost(environmentId),
+      environmentIds: () => [ENVIRONMENT_ID],
+      ready: () => hosts.ready()
+    })
     setSharedHostsOwner(hosts)
     cleanups.push(() => setSharedHostsOwner(null))
     cleanups.push(() => closeRemoteRuntimeRequestConnection(ENVIRONMENT_ID))

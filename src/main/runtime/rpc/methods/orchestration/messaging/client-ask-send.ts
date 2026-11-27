@@ -30,6 +30,8 @@ import type { SendRecipientWarning } from './recipient-routing'
 import { peerMailLocalCaller } from './peer-mail-local-caller'
 import { peerMailSendingAskers } from './peer-mail-sending-askers'
 import { clientAskCard } from './client-ask-card'
+import { botOfSession } from '../../../../../bots/bot-session-tabs'
+import { parseOrcaSessionAddress } from '../../../../../../shared/agent-session/identity/orca-session-address'
 
 const NOTHING_SENT = { effectsApplied: false } as const
 
@@ -86,7 +88,15 @@ export async function sendClientAsk(args: {
     })
   let client: ReturnType<typeof requireListeningClient>
   try {
-    client = requireListeningClient(runtime, params.onClient, 'Nothing was sent.')
+    const asking = parseOrcaSessionAddress(
+      clientAskRootSession(runtime.getOrchestrationDb(), caller.address)
+    )
+    client = requireListeningClient(
+      runtime,
+      params.onClient,
+      'Nothing was sent.',
+      (asking && botOfSession(runtime.bots, asking)?.id) ?? null
+    )
   } catch (error) {
     // Offline: the asking chat's card says it wasn't sent, naming the computer if it pulled here before.
     cardFor({

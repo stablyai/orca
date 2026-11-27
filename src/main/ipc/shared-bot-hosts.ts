@@ -79,11 +79,13 @@ export function registerSharedBotHostsHandlers(args: {
   ipcMain.handle('sharedBotHosts:decline', (_event, raw: unknown) =>
     hosts.decline(ShareArgs.parse(raw).shareId)
   )
-  setSharedHosts(
-    (environmentId) => hosts.sharedHost(environmentId),
-    // Those whose host has made its offer, as `sharedHost` answers them.
-    () => hosts.listed().flatMap((entry) => (entry.offer ? [entry.environmentId] : []))
-  )
+  setSharedHosts({
+    host: (environmentId) => hosts.sharedHost(environmentId),
+    // Those whose host has made its offer, as `host` answers them.
+    environmentIds: () =>
+      hosts.listed().flatMap((entry) => (entry.offer ? [entry.environmentId] : [])),
+    ready: () => hosts.ready()
+  })
   setSharedHostsOwner(hosts)
   // Started after it, so no refresh rewrites a share while its old home is removed.
   hosts.start(
