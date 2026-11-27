@@ -38,26 +38,41 @@ function labelledFileName(line: string): string {
   return /^(?:\/|[A-Za-z]:[\\/])/.test(line) ? lastPathSegment(line) : line
 }
 
-// One label per file: a Windows long path (32,767 chars) percent-encoded as a file URL, plus line break slack.
-const MAX_LABEL_CHARS_PER_FILE = 3 * 32_768 + 1_024
+// One label line: a Windows long path (32,767 UTF-16 units) as a file URL, where one unit can encode to 9 chars.
+const MAX_LABEL_LINE_CHARS = 9 * 32_768
 
-/** True once `text` has more than `max` lines (split on \r\n, \r or \n), scanning no further. */
-function hasMoreLinesThan(text: string, max: number): boolean {
+const OUTER_WHITESPACE = /\s/
+
+/** `text`'s bounds without outer whitespace, or null once it has more lines than `files` or an over-long line. */
+function labelTextBounds(text: string, files: number): { start: number; end: number } | null {
+  let start = 0
+  while (start < text.length && OUTER_WHITESPACE.test(text[start])) {
+    start += 1
+  }
+  let end = text.length
+  while (end > start && OUTER_WHITESPACE.test(text[end - 1])) {
+    end -= 1
+  }
   let lines = 1
-  for (let i = 0; i < text.length; i += 1) {
+  let lineStart = start
+  for (let i = start; i < end; i += 1) {
     const code = text.charCodeAt(i)
     if (code !== 10 && code !== 13) {
+      if (i - lineStart >= MAX_LABEL_LINE_CHARS) {
+        return null
+      }
       continue
     }
     if (code === 13 && text.charCodeAt(i + 1) === 10) {
       i += 1
     }
     lines += 1
-    if (lines > max) {
-      return true
+    if (lines > files) {
+      return null
     }
+    lineStart = i + 1
   }
-  return false
+  return { start, end }
 }
 
 /** Treat one filename/path/file URL per copied file as attachment labels, not prompt text. */
@@ -65,16 +80,14 @@ export function textOnlyLabelsCopiedFiles(text: string, files: readonly string[]
   if (files.length === 0) {
     return false
   }
-  // Runs on main for every file paste: reject prompt text that can't be labels before any scan, split or sort.
-  if (text.length > files.length * MAX_LABEL_CHARS_PER_FILE) {
-    return false
-  }
-  const trimmed = text.trim()
-  if (hasMoreLinesThan(trimmed, files.length)) {
+  // Runs on main for every file paste: reject prompt text that can't be labels before any split or sort.
+  const bounds = labelTextBounds(text, files.length)
+  if (!bounds) {
     return false
   }
   const names = files.map(lastPathSegment).sort()
-  const labels = trimmed
+  const labels = text
+    .slice(bounds.start, bounds.end)
     .split(/\r\n|\r|\n/)
     .map((line) => labelledFileName(line.trim()))
     .sort()
