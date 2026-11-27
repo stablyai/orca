@@ -29,6 +29,7 @@ import type { AgentMessageSender } from '../../../../../../shared/agent-session/
 import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { useBotForWorkspace } from '@/components/bots/bot-workspace'
 import type { Bot } from '../../../../../../shared/bot-types'
+import { usePluginMessageSender } from './native-chat-plugin-message-sender'
 
 export function unnamedSenderLabel(t: Translate = translate): string {
   return t('components.native-chat.agentMessage.unnamedSender', 'an agent')
@@ -190,7 +191,7 @@ export function useAgentMessageSenderBot(
   )
 }
 
-/** Live chat names follow the sender's chat on the receiving chat's host; CLI names stay as recorded. */
+/** Live chat names follow the sender's chat on the receiving chat's host; CLI names stay as recorded; a plugin is named from the installed plugin. */
 export function useAgentMessageSenderLabel(
   sender: AgentMessageSender,
   chatWorktreeId: string | null,
@@ -201,6 +202,7 @@ export function useAgentMessageSenderLabel(
   const chat = useAgentMessageSenderChat(sender, chatWorktreeId, target, dispatchId)
   const bot = useBotForWorkspace(chat.worktreeId)
   const conversationName = useStructuredConversationName(chat.host, chat.sessionId)
+  const plugin = usePluginMessageSender(sender.party.address)
   return agentMessageSenderLabel({
     localChat: Boolean(chat.sessionId),
     // A paired server's bot is not in this computer's catalog; its host's saved name says so.
@@ -209,6 +211,6 @@ export function useAgentMessageSenderLabel(
     conversationName,
     snapshotName: sender.name,
     tabLabel: chat.tab?.label,
-    fallback: unnamedSenderLabel(t)
+    fallback: plugin?.name ?? unnamedSenderLabel(t)
   })
 }
