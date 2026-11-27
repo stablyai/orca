@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../workspace/identity/floating-workspace-id'
 import { parseRoutableExecutionHostId } from '../../execution-host/execution-host'
 import { OptionalExecutionHostId } from '../workspaces/worktree-params'
@@ -7,47 +8,68 @@ import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 import type { WorkspaceLaunchKind } from '../../agent-launch/contracts/workspace-launch-kind'
 import type { ProjectExecutionRuntimeResolution } from '../../execution-host/project-execution-runtime'
 
-export const PreflightCheck = z.object({
-  force: z.boolean().optional()
-})
+export const PreflightCheck = lazyZodSchema(() =>
+  z.object({
+    force: z.boolean().optional()
+  })
+)
 
-export const PreflightDetectRemoteAgents = z.object({
-  connectionId: z.string().min(1)
-})
+export const PreflightDetectRemoteAgents = lazyZodSchema(() =>
+  z.object({
+    connectionId: z.string().min(1)
+  })
+)
 
-export const PreflightDetectRemoteWindowsTerminalCapabilities = z.object({
-  connectionId: z.string().min(1)
-})
+export const PreflightDetectRemoteWindowsTerminalCapabilities = lazyZodSchema(() =>
+  z.object({
+    connectionId: z.string().min(1)
+  })
+)
 
 /** Why optional: a client that predates it sends nothing and keeps the host-default probe. */
-export const PreflightAgentDetection = z
-  .object({
-    worktreeId: z.string().min(1).optional(),
-    repoId: z.string().min(1).optional(),
-    worktreeHostId: OptionalExecutionHostId
-  })
-  .superRefine((params, ctx) => {
-    if (
-      params.worktreeHostId !== undefined &&
-      (!parseRoutableExecutionHostId(params.worktreeHostId) ||
-        !params.worktreeId ||
-        params.worktreeId === FLOATING_TERMINAL_WORKTREE_ID)
-    ) {
-      ctx.addIssue({ code: 'custom', message: 'A routable host requires an existing workspace.' })
-    }
-  })
+export const PreflightAgentDetection = lazyZodSchema(() =>
+  z
+    .object({
+      worktreeId: z.string().min(1).optional(),
+      repoId: z.string().min(1).optional(),
+      worktreeHostId: OptionalExecutionHostId,
+      // Host-scoped lists (MCP agents) probe the configured Windows Agent runtime, as desktop
+      // does with nothing focused; without it, no identity keeps meaning the native host.
+      configuredWindowsRuntime: z.literal(true).optional()
+    })
+    .superRefine((params, ctx) => {
+      if (params.configuredWindowsRuntime && (params.worktreeId || params.repoId)) {
+        ctx.addIssue({ code: 'custom', message: 'A workspace already names its runtime.' })
+      }
+      if (
+        params.worktreeHostId !== undefined &&
+        (!parseRoutableExecutionHostId(params.worktreeHostId) ||
+          !params.worktreeId ||
+          params.worktreeId === FLOATING_TERMINAL_WORKTREE_ID)
+      ) {
+        ctx.addIssue({ code: 'custom', message: 'A routable host requires an existing workspace.' })
+      }
+    })
+)
 
 export const PreflightAgentRefresh = PreflightAgentDetection.safeExtend({
   userInitiated: z.boolean().optional()
 })
 
-export const PreflightProjectAgentDetection = PreflightAgentDetection.safeExtend({
-  project: RepoSelector.extend({ repo: RepoSelector.shape.repo.pipe(z.string().max(4096)) })
-    .strict()
-    .optional()
-}).refine(
-  (value) => !value.project || (!value.worktreeId && !value.repoId && !value.worktreeHostId),
-  'Choose project, repository or worktree'
+export const PreflightProjectAgentDetection = lazyZodSchema(() =>
+  PreflightAgentDetection.safeExtend({
+    project: RepoSelector.extend({ repo: RepoSelector.shape.repo.pipe(z.string().max(4096)) })
+      .strict()
+      .optional()
+  }).refine(
+    (value) =>
+      !value.project ||
+      (!value.worktreeId &&
+        !value.repoId &&
+        !value.worktreeHostId &&
+        !value.configuredWindowsRuntime),
+    'Choose project, repository or worktree'
+  )
 )
 
 /** Facts resolved by the same project owner that creates the workspace. */

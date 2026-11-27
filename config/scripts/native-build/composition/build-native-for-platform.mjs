@@ -47,6 +47,7 @@ const exitCodes = await Promise.all(
     'build:keyboard-layout-macos',
     'build:notification-status-macos',
     'build:process-footprint-macos',
+    'build:socket-owner-macos',
     'build:screen-geometry-macos'
   ].map((scriptName) => runPnpmScript(scriptName))
 )

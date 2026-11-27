@@ -113,9 +113,3 @@ export async function requestLocalAiVaultScan<T extends { work: AiVaultScanWork 
     throw error
   }
 }
-
-export function resetLocalAiVaultScanProgressForTests(): void {
-  latest.clear()
-  currentScans.clear()
-  listeners.clear()
-}

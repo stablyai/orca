@@ -3,7 +3,7 @@ import type { Translate } from '@/i18n/use-translate'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translateSearchKeyword } from '../../search/settings-search-keywords'
 import type { SettingsSearchEntry } from '../../search/settings-search'
-import { formatPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
+import { formatPrimaryShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 
 export function chatTerminalControlledHint(t: Translate = translate): string {
   return t('settings.appearance.chat.terminalControlledHint', 'Set by terminal interface.')
@@ -94,7 +94,8 @@ const getChatAppearanceCatalog = createLocalizedCatalog(
         description: translate(
           'settings.appearance.chat.resetDescription',
           'Restore the defaults above.'
-        )
+        ),
+        keywords: translateSearchKeyword('settings.appearance.chat.resetKeyword', 'reset')
       }
     }) satisfies Record<string, SettingsSearchEntry>
 )

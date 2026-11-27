@@ -25,7 +25,7 @@ import {
   saveTerminalAutoRestoreFitMs,
   setTerminalAutoRestoreFitMsForHost
 } from '../src/terminal/viewport/terminal-auto-restore-fit-state'
-import { setTerminalSettingsScrollEnabled } from '../src/terminal/preferences/terminal-settings-scroll-lock'
+import { setDragReorderScrollEnabled } from '../src/components/reorder/drag-reorder-scroll-lock'
 import { useTerminalFontSettings } from '../src/terminal/preferences/use-terminal-font-settings'
 import {
   TerminalFontPicker,
@@ -220,7 +220,7 @@ export default function TerminalSettingsScreen() {
   // Toggle imperatively: rerendering during drag rebuilds row gestures and can cancel it.
   const setScrollEnabled = useCallback(
     (enabled: boolean) => {
-      setTerminalSettingsScrollEnabled(scrollRef, enabled)
+      setDragReorderScrollEnabled(scrollRef, enabled)
     },
     [scrollRef]
   )
@@ -259,7 +259,7 @@ export default function TerminalSettingsScreen() {
             />
 
             <SettingsSection
-              title={t('app.terminalSettings.leaveAppHeading', 'WHEN YOU LEAVE THE APP')}
+              title={t('app.terminalSettings.leaveAppHeading', 'When you leave the app')}
               separatorInset={LIST_LEADING_INSET}
               footer={t(
                 'app.terminalSettings.leaveAppDescription',
@@ -303,7 +303,7 @@ export default function TerminalSettingsScreen() {
           </Animated.ScrollView>
           {wide ? (
             <View style={styles.widePreview}>
-              <SectionHeader first title={t('app.terminalSettings.previewHeading', 'PREVIEW')} />
+              <SectionHeader first title={t('app.terminalSettings.previewHeading', 'Preview')} />
               {preview}
             </View>
           ) : null}

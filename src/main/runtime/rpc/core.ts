@@ -1,7 +1,9 @@
+import type { DeclareOrcaAccountParams } from '../../../shared/remote-runtime/pairing/paired-desktop-account-contract'
 import type { RuntimeClientCapabilities } from './callers/runtime-client-capabilities'
 import type { ZodError, ZodType } from 'zod'
 import type { TerminalStreamFrame } from '../../../shared/terminal/stream/terminal-stream-protocol'
 import type { OrcaRuntimeService } from '../orca-runtime'
+import type { RelayPhoneReader } from '../mobile-desktop-relay/mobile-relay-host-rows-announcer'
 import type { OrchestrationCompatibilityCallerAuthority } from '../orchestration/terminal-authority/orchestration-compatibility-authority'
 import type { StructuredAgentCliSourceEvidence } from '../../native-chat/conversation-adoption/structured-agent-cli-source'
 import type {
@@ -24,6 +26,7 @@ import type { OrchestrationEntryCaller } from '../orchestration/addressing/orche
 import type { RpcCallerIdentity } from './callers/rpc-caller-identity'
 import type { OrcadPeerDesktopsResult } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-peer-desktops-contract'
 import type { RpcBinarySender } from './transports/rpc-binary-sender'
+import type { RpcCallerScope } from './callers/rpc-caller-scope'
 import type { RpcMethodPermission } from './callers/rpc-method-permission'
 import type { OrcadFeatureRequirement } from './startup/orcad-readiness'
 import {
@@ -47,6 +50,15 @@ import type {
 export type DeviceSelfRpcContext = {
   registerDeviceKey(params: RegisterDeviceKeyParams): RegisterDeviceKeyResult
   exchangePairingTicket(params: ExchangePairingTicketParams): ExchangePairingTicketResult
+  /** A paired desktop's claimed Orca account; ignored for any other device. */
+  declareOrcaAccount(
+    account: DeclareOrcaAccountParams['account'],
+    clientInstanceId?: DeclareOrcaAccountParams['clientInstanceId']
+  ): void
+  /** What this connection declared, so desktops sharing one paired row each name their own. */
+  orcaAccount(): DeclareOrcaAccountParams['account']
+  /** The desktop installation this connection declared, if any. */
+  clientInstanceId(): string | undefined
 }
 
 export type PairingRpcContext = {
@@ -56,7 +68,12 @@ export type PairingRpcContext = {
 
 // Mints new pairing credentials, so only the host owner's local transport provides it.
 export type PairingOffersRpcContext = {
-  create(params: PairingCreateOfferParams): Promise<PairingCreateOfferResult>
+  create(
+    params: PairingCreateOfferParams,
+    createdByDeviceId?: string,
+    /** The desktop installation whose terminal asked: the phone that pairs is named by it. */
+    createdByClientInstanceId?: string
+  ): Promise<PairingCreateOfferResult>
 }
 
 export type RpcEnvelopeMeta = {
@@ -132,6 +149,8 @@ export type RpcContext = {
   plugin?: { key: string; name: string; assertActive?: () => void }
   // Only phones receive truncated payloads; undefined in-process callers remain unclipped.
   clientKind?: 'mobile' | 'runtime'
+  /** What the transport proved this caller may do; absent means this host's owner. */
+  callerScope?: RpcCallerScope
   // Session-tab streams re-project with .current; other readers use the request-time clientCapabilities.
   capabilitySource?: RuntimeClientCapabilities
   // Trust socket-negotiated capabilities, never destructive request assertions.
@@ -165,12 +184,17 @@ export type RpcContext = {
   // Pin authenticated federation identity without exposing its token to handlers or storage.
   authenticatedCallerFingerprint?: string
   pairing?: PairingRpcContext
+  // Authenticated phones only: this host's current direct endpoints, so a moved address can be followed.
+  pairingDirectEndpoints?: () => Promise<string[]>
   pairingOffers?: PairingOffersRpcContext
   deviceSelf?: DeviceSelfRpcContext
   // Available only on a desktop relay for its configured servers.
   mobileRelayHosts?: {
-    list(): MobileRelayHostsListResult | Promise<MobileRelayHostsListResult>
-    worktrees(hostId: string): Promise<MobileRelayHostWorktreesResult>
+    list(
+      reader?: RelayPhoneReader
+    ): MobileRelayHostsListResult | Promise<MobileRelayHostsListResult>
+    worktrees(hostId: string, reader?: RelayPhoneReader): Promise<MobileRelayHostWorktreesResult>
+    releaseRowHolds?(connectionId: string): void
   }
   // Authenticated runtime devices see which other desktops share this server.
   peerDesktops?: {

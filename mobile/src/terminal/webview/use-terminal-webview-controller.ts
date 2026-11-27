@@ -17,6 +17,10 @@ import { useTerminalWebViewReadyPromises } from './terminal-webview-ready-promis
 import { createTerminalDocumentWrites } from '../output-flow/terminal-output-ack'
 import { isTerminalGestureInput } from '../pointer-input/terminal-gesture-input'
 import { DEFAULT_TERMINAL_FONT_STYLE } from '../preferences/terminal-font-style'
+import {
+  terminalChromeColors,
+  useTerminalDocumentSettingsSync
+} from './use-terminal-document-settings-sync'
 
 // Share readiness, queues, coalescing and imperative handles across hosts; only document command/notify transport differs.
 
@@ -34,25 +38,18 @@ export function useTerminalWebViewController(
 ) {
   const {
     terminalTheme,
+    hostSettings,
     interactionActive = true,
     textScale = 1,
     fontStyle = DEFAULT_TERMINAL_FONT_STYLE,
     onWebReady,
     onEngineError,
-    onSelectionMode,
-    onSelectionCopy,
-    onSelectionEvicted,
-    onClipboardWrite,
-    onModesChanged,
-    onKeyboardAvoidanceMetrics,
-    onHaptic,
     onTerminalInput,
     onTerminalQueryReply,
     onTerminalInteraction,
     onTerminalTap,
     onFileTap,
     onOpenUrl,
-    onTextScaleChange,
     onCellBoxChange
   } = props
   const { coalesce, pingsOnForegroundRecovery, post } = transport
@@ -60,7 +57,6 @@ export function useTerminalWebViewController(
   const pendingMessages = useMemo(() => createTerminalWebViewPendingMessages(), [])
   const messageIdRef = useRef(0)
   const pendingPingIdRef = useRef<number | null>(null)
-  const terminalThemeKey = useMemo(() => JSON.stringify(terminalTheme ?? null), [terminalTheme])
   // Await init’s ready after its render chain so follow-up fit uses its measured cell box.
   const promises = useTerminalWebViewReadyPromises()
   const cellBoxRef = useRef<TerminalCellBox | null>(null)
@@ -102,11 +98,7 @@ export function useTerminalWebViewController(
     [coalesce, postMessage]
   )
 
-  useEffect(() => {
-    return () => {
-      writeCoalescer.clear()
-    }
-  }, [writeCoalescer])
+  useEffect(() => () => writeCoalescer.clear(), [writeCoalescer])
 
   const confirmWebReady = useCallback(
     (notifyParent: boolean) => {
@@ -120,6 +112,7 @@ export function useTerminalWebViewController(
       // Reload drops commands; readiness must restore the selected theme even if its React value did not change.
       sendToDocument({ type: 'set-interaction-active', active: interactionActive })
       sendToDocument({ type: 'set-theme', terminalTheme })
+      sendToDocument({ type: 'set-chrome', chrome: terminalChromeColors() })
       flushPendingMessages()
     },
     [
@@ -168,21 +161,15 @@ export function useTerminalWebViewController(
           onCellBoxChange?.()
         }
       } else {
+        // The pane passes fresh callbacks each render, so `props` costs no extra identity churn.
         dispatchTerminalWebViewNotification(msg, {
+          ...props,
           reportEngineError,
-          onSelectionMode,
-          onSelectionCopy,
-          onSelectionEvicted,
-          onClipboardWrite,
-          onModesChanged,
-          onKeyboardAvoidanceMetrics,
-          onHaptic,
           onTerminalInput: interactionActive ? onTerminalInput : undefined,
           onTerminalInteraction: interactionActive ? onTerminalInteraction : undefined,
           onTerminalTap: interactionActive ? onTerminalTap : undefined,
           onFileTap: interactionActive ? onFileTap : undefined,
-          onOpenUrl: interactionActive ? onOpenUrl : undefined,
-          onTextScaleChange
+          onOpenUrl: interactionActive ? onOpenUrl : undefined
         })
       }
     },
@@ -191,20 +178,13 @@ export function useTerminalWebViewController(
       interactionActive,
       promises,
       reportEngineError,
-      onSelectionMode,
-      onSelectionCopy,
-      onSelectionEvicted,
-      onClipboardWrite,
-      onModesChanged,
-      onKeyboardAvoidanceMetrics,
-      onHaptic,
+      props,
       onTerminalInput,
       onTerminalQueryReply,
       onTerminalInteraction,
       onTerminalTap,
       onFileTap,
       onOpenUrl,
-      onTextScaleChange,
       onCellBoxChange,
       writeCoalescer
     ]
@@ -220,9 +200,7 @@ export function useTerminalWebViewController(
     armWebReadyWatchdog()
   }, [armWebReadyWatchdog, pendingMessages, writeCoalescer])
 
-  useEffect(() => {
-    postMessage({ type: 'set-theme', terminalTheme })
-  }, [postMessage, terminalThemeKey, terminalTheme])
+  const hostSettingsRef = useTerminalDocumentSettingsSync(postMessage, terminalTheme, hostSettings)
 
   // The document ignores a repeat of what it already shows, so one effect can resend both.
   useEffect(() => {
@@ -269,6 +247,7 @@ export function useTerminalWebViewController(
           oscLinks,
           kittyKeyboardFlags: parseTerminalKittyKeyboardFlags(kittyFlags),
           terminalTheme,
+          ...hostSettingsRef.current,
           fontScale: textScale,
           fontStyle,
           preserveScroll,
@@ -289,6 +268,7 @@ export function useTerminalWebViewController(
         postMessage({ type: 'clear' })
       },
       fitDimensions,
+      measuredCellBox: () => cellBoxRef.current,
       scrollToBottom() {
         writeCoalescer.flushNow()
         postMessage({ type: 'scroll-to-bottom' })
@@ -312,6 +292,7 @@ export function useTerminalWebViewController(
       promises,
       sendToDocument,
       terminalTheme,
+      hostSettingsRef,
       textScale,
       fontStyle,
       writeCoalescer

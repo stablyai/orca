@@ -1,3 +1,4 @@
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import {
   providerDiagnostic,
   withProviderDiagnostic
@@ -14,15 +15,21 @@ import {
   type NewSessionRequest
 } from '../generated/acp-protocol.generated'
 
-const newSessionSchema = NewSessionResponseSchema.extend({
-  models: SessionModelStateSchema.optional()
-})
-const loadSessionSchema = LoadSessionResponseSchema.extend({
-  models: SessionModelStateSchema.optional()
-})
-const resumeSessionSchema = ResumeSessionResponseSchema.extend({
-  models: SessionModelStateSchema.optional()
-})
+const newSessionSchema = lazyZodSchema(() =>
+  NewSessionResponseSchema.extend({
+    models: SessionModelStateSchema.optional()
+  })
+)
+const loadSessionSchema = lazyZodSchema(() =>
+  LoadSessionResponseSchema.extend({
+    models: SessionModelStateSchema.optional()
+  })
+)
+const resumeSessionSchema = lazyZodSchema(() =>
+  ResumeSessionResponseSchema.extend({
+    models: SessionModelStateSchema.optional()
+  })
+)
 
 export type AcpSessionStarted =
   | { kind: 'new'; sessionId: string; response: z.infer<typeof newSessionSchema> }

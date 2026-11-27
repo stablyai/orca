@@ -25,6 +25,7 @@ import { initializeMainProcessReady } from './startup/main-process-ready'
 import { installMainProcessQuitHandlers } from './startup/quit/main-process-quit'
 import { installNotchStatus } from './startup/notch-status-wiring'
 import { shouldActivateDesktopForSecondInstance } from './startup/profile-startup/single-instance-lock'
+import type { DeepLink } from './startup/deep-link-state'
 import { resolveOsOpenedDocuments } from './startup/open-routing/os-opened-documents'
 import {
   formatProfileStateStartupFailure,
@@ -44,8 +45,6 @@ import { prepareEarlyMainUiLanguage, translateMain } from './i18n/main-i18n'
 import { ProfileStateRecoveryRequiredError } from './persistence/profile-state/recovery/profile-state-recovery-required'
 import { getProfileUserDataPath } from './orca-profiles/profile-storage-paths'
 import { leaseAppImageGenerationForCurrentProcess } from './cli/appimage/appimage-generation-lease'
-import { deleteLegacyWslHostWakeList } from './wsl/host-lifecycle/wsl-host-early-wake'
-import { readWslInstallation } from './wsl/discovery/wsl-installation'
 import { configureWslHostsGateFromDisk } from './wsl/host-lifecycle/wsl-host-gate-startup'
 import { configureRemoteRuntimeE2EEV2HostLatch } from '../shared/remote-runtime/e2ee/node/remote-runtime-e2ee-v2-host-latch'
 import { ignoreInheritedWslHostsGateState } from '../shared/remote-runtime/wsl-hosts/wsl-host-internal-gate'
@@ -61,12 +60,15 @@ import {
 } from '../shared/app-lifecycle/launch/background-open-argv'
 import { setBackgroundWindowOpener } from './window/activation/background-window-open'
 import { installFatalSignalListenerGuard } from './crash-reporting/fatal-signal-listener-guard'
+import { installStdioWriteErrorSink } from './startup/process-failure/main-process-error-guards'
 import { installWorkerThreadDiagnostics } from './worker-threads/worker-thread-diagnostics'
 
 // Before anything spawns, so no daemon, PTY or agent inherits it outside e2e.
 dropE2eSpawnLogOutsideE2e()
 // A fatal OOM must crash with a report, never spin on its own trap.
 installFatalSignalListenerGuard()
+// A dead terminal or full log volume must not turn a console line into a modal crash dialog.
+installStdioWriteErrorSink()
 installWorkerThreadDiagnostics()
 
 async function openMainWindow(options: MainWindowOpenOptions = {}): Promise<BrowserWindow> {
@@ -84,10 +86,21 @@ const requestDesktopHandoff = createDesktopHandoff({
   drainArguments: () => desktopHandoffArguments(state)
 })
 
+function publishDeepLink(link: DeepLink): void {
+  const window = state.mainWindow
+  if (!window || window.isDestroyed()) {
+    return
+  }
+  if (link.kind === 'skill-share') {
+    window.webContents.send('ui:openSkillShare', link.shareId)
+  } else {
+    // Only a doorbell: the renderer pulls the link, so it is delivered exactly once.
+    window.webContents.send('ui:botLinkPending')
+  }
+}
+
 function requestDesktopActivation(argv: readonly string[] = []): void {
-  state.skillShareDeepLinks.capture(argv, (shareId) => {
-    state.mainWindow?.webContents.send('ui:openSkillShare', shareId)
-  })
+  state.deepLinks.capture(argv, publishDeepLink)
   state.pluginInstallLinks.capture(argv, (link) => {
     state.mainWindow?.webContents.send('ui:openPluginInstallLink', link)
   })
@@ -162,12 +175,16 @@ if (preflightReady) {
   configureRemoteRuntimeE2EEV2HostLatch(app.getPath('userData'))
   // A launch restore is passive (E9): it never boots a WSL host's distro, so drop the old wake list.
   if (process.platform === 'win32') {
-    deleteLegacyWslHostWakeList(app.getPath('userData'))
+    void import('./wsl/host-lifecycle/wsl-host-early-wake').then(
+      ({ deleteLegacyWslHostWakeList }) => deleteLegacyWslHostWakeList(app.getPath('userData'))
+    )
     // Sync WSL readers wait on this verdict instead of spawning wsl.exe; answer it early.
-    void readWslInstallation()
+    void import('./wsl/discovery/wsl-installation').then(({ readWslInstallation }) =>
+      readWslInstallation()
+    )
   }
   app.on('open-url', (event, url) => {
-    if (!isRoutedOrcaDeepLink(url)) {
+    if (!state.deepLinks.accepts(url) && !isRoutedOrcaDeepLink(url)) {
       return
     }
     event.preventDefault()
@@ -188,7 +205,7 @@ if (preflightReady) {
     platform: process.platform,
     desktopLaunch: !state.isServeMode && !isBackgroundLaunch() && !isOrcadSidecarLaunch()
   })
-  state.skillShareDeepLinks.capture(process.argv)
+  state.deepLinks.capture(process.argv)
   state.pluginInstallLinks.capture(process.argv)
   // The first renderer pulls on mount; nothing listens this early.
   state.osOpenedDocuments.capture(process.argv)

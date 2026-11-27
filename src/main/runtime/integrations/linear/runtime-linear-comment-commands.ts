@@ -21,7 +21,7 @@ import type {
 } from '../../../../shared/linear/agent-access'
 import type * as LinearAgentResults from '../../../../shared/linear/agent-result-types'
 import { RuntimeLinearCreateCommands } from './runtime-linear-create-commands'
-import { getConnectedWorkspaces } from '../../../linear/issues/context/issue-context-resolution'
+import { requireConnectedWorkspaces } from '../../../linear/issues/context/linear-connected-workspaces'
 import { resolveWorkspaceSelector } from '../../../linear/issues/context/workspace-selector-resolution'
 
 export class RuntimeLinearCommentCommands extends RuntimeLinearCreateCommands {
@@ -241,10 +241,7 @@ export class RuntimeLinearCommentCommands extends RuntimeLinearCreateCommands {
     if (!isLinearUuid(params.commentId)) {
       throw this.linearCommentNotFound(params.commentId)
     }
-    const workspaces = getConnectedWorkspaces()
-    if (workspaces.length === 0) {
-      throw linearError('linear_not_connected', 'Linear is not connected.')
-    }
+    const workspaces = await requireConnectedWorkspaces()
     const selected = resolveWorkspaceSelector(params, workspaces)
     const missing = this.linearCommentNotFound(params.commentId)
     try {

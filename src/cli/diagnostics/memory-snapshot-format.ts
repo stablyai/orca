@@ -22,6 +22,9 @@ export function formatMemorySnapshot(snapshot: MemorySnapshot): string {
       `renderer ${formatByteCount(snapshot.app.renderer.memory)},`,
       `other ${formatByteCount(snapshot.app.other.memory)})`
     ].join(' '),
+    ...(snapshot.agentProcesses
+      ? [`agentProcesses: ${formatByteCount(snapshot.agentProcesses.memory)}`]
+      : []),
     `worktrees: ${snapshot.worktrees.length}`
   ]
 

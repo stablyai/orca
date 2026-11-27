@@ -20,7 +20,16 @@ function avatarTone(login: string): string {
 }
 
 // Initials on a tint of a colour picked by login, so the same person reads the same in every thread.
-export function PrCommentAvatar({ login, size = 28 }: { login: string; size?: number }) {
+export function PrCommentAvatar({
+  login,
+  label,
+  size = 28
+}: {
+  login: string
+  /** The letters drawn, when not the login's first two: a name's initials. */
+  label?: string
+  size?: number
+}) {
   useMobileColorScheme()
   const name = login.replace(/\[bot\]$/i, '')
   const tone = avatarTone(name)
@@ -31,7 +40,7 @@ export function PrCommentAvatar({ login, size = 28 }: { login: string; size?: nu
       importantForAccessibility="no-hide-descendants"
     >
       <Text style={[styles.initials, { color: tone, fontSize: Math.round(size * 0.36) }]}>
-        {name.slice(0, 2).toUpperCase()}
+        {label ?? name.slice(0, 2).toUpperCase()}
       </Text>
     </View>
   )

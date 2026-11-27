@@ -53,6 +53,7 @@ export type UISliceContextual = {
     | 'worktree-visibility'
     | 'setup-guide'
     | 'feature-wall'
+    | 'bot-templates'
     | 'feature-tips'
     | 'new-workspace-composer'
     | 'confirm-orca-yaml-hooks'
@@ -60,6 +61,7 @@ export type UISliceContextual = {
     | 'agent-session-history'
     | 'chat-account-usage'
     | 'node-dist-mirror'
+    | 'agent-cli-update-failed'
   modalData: Record<string, unknown>
   openModal: (modal: UISliceContextual['activeModal'], data?: Record<string, unknown>) => void
   closeModal: () => void
@@ -69,6 +71,8 @@ export type UISliceContextual = {
   chatUiLaunchTipVariant: ChatUiLaunchTipVariant | null
   setChatUiLaunchTipVariant: (variant: ChatUiLaunchTipVariant) => void
   featureInteractions: FeatureInteractionState
+  /** Whether the profile had opened the workspace board before this launch; null until persisted UI loads. */
+  workspaceBoardUsedBeforeLaunch: boolean | null
   recordFeatureInteraction: (id: FeatureInteractionId) => Promise<void>
   contextualToursSeenIds: ContextualTourId[]
   contextualToursAutoEligible: boolean | null

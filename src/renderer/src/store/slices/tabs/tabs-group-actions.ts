@@ -184,8 +184,11 @@ export function createTabsGroupActions(
       const group = (state.groupsByWorktree[worktreeId] ?? []).find(
         (candidate) => candidate.id === groupId
       )
-      const realIds = new Set((state.unifiedTabsByWorktree[worktreeId] ?? []).map((tab) => tab.id))
-      if (!group || group.tabOrder.some((id) => realIds.has(id))) {
+      // Why: ownership is tab.groupId (what the strip draws); tabOrder can hold ghost, sibling-owned or missing ids.
+      const ownsTab = (state.unifiedTabsByWorktree[worktreeId] ?? []).some(
+        (tab) => tab.groupId === groupId
+      )
+      if (!group || ownsTab) {
         return false
       }
       set((current) => {

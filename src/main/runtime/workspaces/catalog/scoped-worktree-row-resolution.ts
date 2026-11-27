@@ -9,6 +9,8 @@ import {
 } from '../../../../shared/execution-host/execution-host'
 import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import type { Repo } from '../../../../shared/repository/repo-types'
+import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
+import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import {
   getConnectedWorktreeLineageIds,
   projectResolvedWorktreeLineage
@@ -24,11 +26,45 @@ import {
   type RepoWorktreeRowsScan
 } from './repo-worktree-row-resolution'
 
+type OwnerRead = {
+  scan: RepoWorktreeRowsScan | null
+  metaById: Record<string, WorktreeMeta>
+  stamped: Map<string, WorktreeMeta>
+}
+
+/** Owner repos already scanned and stamped by one batch of id lookups, so each repo's rows are read
+ *  once per batch instead of once per id. Lives only as long as its batch. */
+export type ScopedWorktreeReads = Map<string, Promise<OwnerRead>>
+
+export function createScopedWorktreeReads(): ScopedWorktreeReads {
+  return new Map()
+}
+
+async function readOwner(
+  deps: RepoWorktreeRowDeps,
+  repo: Repo,
+  ownerCount: number
+): Promise<OwnerRead> {
+  const { store } = deps
+  const scan = isFolderRepo(repo)
+    ? null
+    : await scanRepoWorktreeRows(
+        deps,
+        repo,
+        resolveLocalProjectRuntimesForRepos(store, [repo]),
+        ownerCount
+      )
+  // Stamp the whole scan as a full join would; only the projection below is narrowed.
+  const metaById = store.getAllWorktreeMeta() ?? {}
+  return { scan, metaById, stamped: stampRepoWorktreeRows(deps, repo, scan, metaById, ownerCount) }
+}
+
 /** Resolve one id through its host owner and lineage repos; ambiguous ownership returns null for fleet fallback. */
 export async function resolveScopedWorktreeIdRow(
   deps: RepoWorktreeRowDeps,
   worktreeId: string,
-  requiredHostId?: ExecutionHostId
+  requiredHostId?: ExecutionHostId,
+  reads?: ScopedWorktreeReads
 ): Promise<RepoWorktreeRow | null> {
   const { store } = deps
   const parsed = splitWorktreeIdForFilesystem(worktreeId)
@@ -49,34 +85,28 @@ export async function resolveScopedWorktreeIdRow(
   }
   const repo = owners[0]
   const ownerCount = repoOwners.rowsFor(repo.id).length
-  const ownerScan = isFolderRepo(repo)
-    ? null
-    : await scanRepoWorktreeRows(
-        deps,
-        repo,
-        resolveLocalProjectRuntimesForRepos(store, [repo]),
-        ownerCount
-      )
-  // Stamp the whole scan as a full join would; only the projection below is narrowed.
-  const metaById = store.getAllWorktreeMeta() ?? {}
-  const ownerStamped = stampRepoWorktreeRows(deps, repo, ownerScan, metaById, ownerCount)
+  const readKey = `${getRepoExecutionHostId(repo)}\0${repo.id}`
+  let ownerRead = reads?.get(readKey)
+  if (!ownerRead) {
+    ownerRead = readOwner(deps, repo, ownerCount)
+    reads?.set(readKey, ownerRead)
+  }
+  const { scan: ownerScan, metaById, stamped: ownerStamped } = await ownerRead
   // Accept one normalized equivalent id; multiple path matches remain ambiguous (#16243).
   const comparisonKey = worktreeIdentityKey(worktreeId)
   const equivalentIds = new Set(
-    (ownerScan?.worktrees ?? [])
-      .map((git) => composeWorktreeId(repo.id, git.path))
-      .filter((id) => worktreeIdentityKey(id) === comparisonKey)
+    ownerScan ? (scanRowIndex(repo, ownerScan.worktrees).byIdentity.get(comparisonKey) ?? []) : []
   )
-  const projectOwner = (keep: (id: string) => boolean): RepoWorktreeRow[] =>
+  const projectOwner = (ids: ReadonlySet<string>): RepoWorktreeRow[] =>
     projectRepoWorktreeRows(
       deps,
       repo,
-      scanRowsWhere(repo, ownerScan, keep),
+      scanRowsWithIds(repo, ownerScan, ids),
       metaById,
       ownerCount,
       ownerStamped
     )
-  const candidates = projectOwner((id) => equivalentIds.has(id))
+  const candidates = projectOwner(equivalentIds)
   const exact = candidates.find((worktree) => worktree.id === worktreeId)
   const equivalent = candidates.filter(
     (worktree) => worktreeIdentityKey(worktree.id) === comparisonKey
@@ -87,16 +117,20 @@ export async function resolveScopedWorktreeIdRow(
   }
   const lineageById = store.getAllWorktreeLineage?.() ?? {}
   const relatedIds = getConnectedWorktreeLineageIds([target.id], lineageById)
+  // Each repo reads only its own lineage ids, so a component spanning many repos isn't read once per repo.
+  const relatedIdsByRepo = new Map<string, Set<string>>()
+  for (const id of relatedIds) {
+    const repoId = splitWorktreeIdForFilesystem(id)?.repoId
+    if (repoId !== undefined) {
+      relatedIdsByRepo.set(repoId, (relatedIdsByRepo.get(repoId) ?? new Set()).add(id))
+    }
+  }
   // Lineage links only rows in the target's connected component, so other rows cannot change it.
   const ownerRows =
     ownerScan && relatedIds.size > 1
-      ? projectOwner((id) => relatedIds.has(id) || equivalentIds.has(id))
+      ? projectOwner(new Set([...(relatedIdsByRepo.get(repo.id) ?? []), ...equivalentIds]))
       : candidates
-  const relatedRepoIds = new Set(
-    [...relatedIds]
-      .map((id) => splitWorktreeIdForFilesystem(id)?.repoId)
-      .filter((id) => id !== undefined)
-  )
+  const relatedRepoIds = new Set(relatedIdsByRepo.keys())
   relatedRepoIds.delete(repo.id)
   const hostId = getRepoExecutionHostId(repo)
   const registered = store.getRepos()
@@ -115,7 +149,11 @@ export async function resolveScopedWorktreeIdRow(
         ? null
         : await scanRepoWorktreeRows(deps, relatedRepo, projectRuntimeByRepoId, count)
       const stamped = stampRepoWorktreeRows(deps, relatedRepo, scan, metaById, count)
-      const kept = scanRowsWhere(relatedRepo, scan, (id) => relatedIds.has(id))
+      const kept = scanRowsWithIds(
+        relatedRepo,
+        scan,
+        relatedIdsByRepo.get(relatedRepo.id) ?? new Set()
+      )
       return projectRepoWorktreeRows(deps, relatedRepo, kept, metaById, count, stamped)
     })
   )
@@ -123,16 +161,56 @@ export async function resolveScopedWorktreeIdRow(
   return projected[ownerRows.findIndex((row) => row.id === target.id)] ?? null
 }
 
-/** The scan limited to the Git checkouts `keep` admits; a folder repo has no scan to narrow. */
-function scanRowsWhere(
+type ScanRowIndex = {
+  /** Scan positions by composed worktree id. */
+  byId: Map<string, number[]>
+  /** Composed worktree ids by identity key, in scan order. */
+  byIdentity: Map<string, string[]>
+}
+
+// Observed scans are never mutated, so each is keyed once and later lookups read only their own rows.
+const scanRowIndexes = new WeakMap<readonly GitWorktreeInfo[], Map<string, ScanRowIndex>>()
+
+function scanRowIndex(repo: Repo, worktrees: readonly GitWorktreeInfo[]): ScanRowIndex {
+  let byRepo = scanRowIndexes.get(worktrees)
+  if (!byRepo) {
+    byRepo = new Map()
+    scanRowIndexes.set(worktrees, byRepo)
+  }
+  let index = byRepo.get(repo.id)
+  if (!index) {
+    index = { byId: new Map(), byIdentity: new Map() }
+    for (const [position, git] of worktrees.entries()) {
+      const id = composeWorktreeId(repo.id, git.path)
+      const positions = index.byId.get(id)
+      if (positions) {
+        positions.push(position)
+        continue
+      }
+      index.byId.set(id, [position])
+      const key = worktreeIdentityKey(id)
+      const spellings = index.byIdentity.get(key)
+      if (spellings) {
+        spellings.push(id)
+      } else {
+        index.byIdentity.set(key, [id])
+      }
+    }
+    byRepo.set(repo.id, index)
+  }
+  return index
+}
+
+/** The scan limited to the Git checkouts with these ids, in scan order; a folder repo has no scan to narrow. */
+function scanRowsWithIds(
   repo: Repo,
   scan: RepoWorktreeRowsScan | null,
-  keep: (worktreeId: string) => boolean
+  ids: ReadonlySet<string>
 ): RepoWorktreeRowsScan | null {
-  return (
-    scan && {
-      ...scan,
-      worktrees: scan.worktrees.filter((git) => keep(composeWorktreeId(repo.id, git.path)))
-    }
-  )
+  if (!scan) {
+    return null
+  }
+  const { byId } = scanRowIndex(repo, scan.worktrees)
+  const positions = [...ids].flatMap((id) => byId.get(id) ?? []).sort((a, b) => a - b)
+  return { ...scan, worktrees: positions.map((position) => scan.worktrees[position]) }
 }

@@ -31,6 +31,7 @@ export function MobileNativeChatComposerSendSlot({
   steerHead,
   pickerOpen,
   canSend,
+  sending,
   sendDisabled,
   attaching,
   stop,
@@ -47,6 +48,7 @@ export function MobileNativeChatComposerSendSlot({
   steerHead: MobileNativeChatSteerHead | undefined
   pickerOpen: boolean
   canSend: boolean
+  sending: boolean
   sendDisabled: boolean
   /** An attachment or dictation still on its way. */
   attaching: boolean
@@ -82,6 +84,7 @@ export function MobileNativeChatComposerSendSlot({
     canStop: stop !== null,
     sendBlocked: sendDisabled,
     canSend,
+    sending,
     editing: attaching,
     draft: value,
     attachmentCount
@@ -105,7 +108,12 @@ export function MobileNativeChatComposerSendSlot({
         // Only this phone's own request holds Stop: a repeat is how a stuck stop escalates.
         <MobileNativeChatStopButton onStop={stop.onStop} held={stop.held} />
       ) : (
-        <MobileNativeChatSendButton canSend={canSend} sendFollowUp={followUp} onSend={onSend} />
+        <MobileNativeChatSendButton
+          canSend={canSend}
+          sending={sending}
+          sendFollowUp={followUp}
+          onSend={onSend}
+        />
       )}
     </MobileNativeChatControlSwap>
   )

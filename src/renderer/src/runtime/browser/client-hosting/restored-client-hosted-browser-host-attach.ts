@@ -1,4 +1,5 @@
 import type { RemoteBrowserPageHandle } from '../../../store/slices/browser/browser-slice-contract'
+import type { BrowserClientHostPlacementPreference } from '../../../../../shared/browser/client-hosting/browser-client-host-placement'
 
 type RestoredBrowserHandleSource = {
   // Optional: reachability can be observed before the browser slice has any handles to offer.
@@ -8,14 +9,20 @@ type RestoredBrowserHandleSource = {
 // Coalesce only in-flight attempts; early unreachable hydration must retry. Adoption spends restored markers to end retries.
 const preparingEnvironmentIds = new Set<string>()
 // Restart must bypass preparation aimed at the dead runtime; coalescing loses the only authority-change signal until timeout.
-const environmentIdsAwaitingRepreparation = new Set<string>()
+const environmentIdsAwaitingRepreparation = new Map<string, BrowserClientHostPlacementPreference>()
 
 /** Start lazy desktop browser hosting for restored client-hosted environments so runtime attach can recover retained pages. Repeated reachability calls are idempotent; skip environments after adoption spends their markers. */
 export async function ensureBrowserClientHostsForRestoredPages(
   state: RestoredBrowserHandleSource
 ): Promise<void> {
   for (const environmentId of restoredClientHostEnvironmentIds(state)) {
-    await prepareBrowserClientHost(environmentId)
+    // Pages this desktop hosted stay here whatever Settings › Browser says for new pages.
+    await prepareBrowserClientHost(
+      environmentId,
+      hasOwnClientHostedPage(state, environmentId) ? 'client' : 'auto',
+      // A busy 'auto' attempt must not swallow this desktop's own pages.
+      true
+    )
   }
 }
 
@@ -28,16 +35,25 @@ export async function ensureBrowserClientHostOnRuntimeContact(
     return
   }
   // Why re-prepare: an in-flight preparation began before this contact, so it may have failed.
-  await prepareBrowserClientHost(environmentId, true)
+  await prepareBrowserClientHost(
+    environmentId,
+    hasOwnClientHostedPage(state, environmentId) ? 'client' : 'auto',
+    true
+  )
 }
 
 async function prepareBrowserClientHost(
   environmentId: string,
+  preference: BrowserClientHostPlacementPreference,
   repreparesWhenBusy = false
 ): Promise<void> {
   if (preparingEnvironmentIds.has(environmentId)) {
     if (repreparesWhenBusy) {
-      environmentIdsAwaitingRepreparation.add(environmentId)
+      const awaiting = environmentIdsAwaitingRepreparation.get(environmentId)
+      environmentIdsAwaitingRepreparation.set(
+        environmentId,
+        awaiting === 'client' ? awaiting : preference
+      )
     }
     return
   }
@@ -46,7 +62,7 @@ async function prepareBrowserClientHost(
     // Registry reuses live leases and reserves no page state; this only claims hosting duty.
     const placement = await window.api.runtimeEnvironments.prepareBrowserClientHostPlacement({
       selector: environmentId,
-      preference: 'auto'
+      preference
     })
     if (placement.kind !== 'client') {
       // Unanswered probes no longer throw; log failed relaunch recovery explicitly.
@@ -67,8 +83,10 @@ async function prepareBrowserClientHost(
   } finally {
     preparingEnvironmentIds.delete(environmentId)
   }
-  if (environmentIdsAwaitingRepreparation.delete(environmentId)) {
-    await prepareBrowserClientHost(environmentId)
+  const awaitingPreference = environmentIdsAwaitingRepreparation.get(environmentId)
+  if (awaitingPreference) {
+    environmentIdsAwaitingRepreparation.delete(environmentId)
+    await prepareBrowserClientHost(environmentId, awaitingPreference)
   }
 }
 
@@ -85,6 +103,18 @@ function hasLiveClientHostedPage(
   )
 }
 
+/** Pages this desktop itself placed here; a server's snapshot alone can't override the setting. */
+function hasOwnClientHostedPage(
+  state: RestoredBrowserHandleSource,
+  environmentId: string
+): boolean {
+  return Object.values(state.remoteBrowserPageHandlesByPageId ?? {}).some(
+    (handle) =>
+      handle.environmentId === environmentId &&
+      (handle.stagedClientHosted === true || handle.placedHere === true)
+  )
+}
+
 function restoredClientHostEnvironmentIds(state: RestoredBrowserHandleSource): string[] {
   const environmentIds = new Set<string>()
   for (const handle of Object.values(state.remoteBrowserPageHandlesByPageId ?? {})) {
@@ -93,9 +123,4 @@ function restoredClientHostEnvironmentIds(state: RestoredBrowserHandleSource): s
     }
   }
   return [...environmentIds]
-}
-
-export function resetRestoredBrowserClientHostAttachForTests(): void {
-  preparingEnvironmentIds.clear()
-  environmentIdsAwaitingRepreparation.clear()
 }

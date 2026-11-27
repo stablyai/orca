@@ -4,7 +4,9 @@ import {
   hostClockField,
   replacePage,
   mergeItems,
-  liveItemsWithinWindow
+  mergeLiveItems,
+  liveItemsWithinWindow,
+  hasOlderAfterMerge
 } from '../structured-agent-session-history-state'
 import {
   currentRequestsAfterEvent,
@@ -21,6 +23,7 @@ import type {
   AgentSessionSlashCommand,
   AgentSessionHistoryPage,
   AgentSessionLatestTurn,
+  AgentSessionPromptSuggestion,
   AgentSessionSubscribeEvent,
   AgentSessionTurnActivity
 } from '../../agent-session-wire'
@@ -42,7 +45,7 @@ import {
 } from '../structured-agent-session-item-retention'
 import { readAgentJournalTurn } from '../../lifecycle/records/agent-session-turn-record'
 import { agentSessionHasOlderTranscript } from '../../conversation-context/agent-session-context-clear'
-import { queuePublicationField } from '../../requests/structured-agent-session-queue-publication-field'
+import { queuePublicationRetainingMail } from './retain-queued-mail-blocks'
 import {
   actionablePromptIdsAfterStructuredAgentSessionBatch,
   hostWorkingAfterStructuredAgentSessionBatch,
@@ -87,6 +90,8 @@ export type StructuredAgentSessionState = AgentSessionCurrentRequestsState & {
   nextQueuedMessageId?: string | null
   commands?: AgentSessionSlashCommand[] | null
   activity?: AgentSessionTurnActivity | null
+  /** Off the journal, so history pages and snapshots keep it; only a batch sets it. */
+  promptSuggestion?: AgentSessionPromptSuggestion | null
   /** Absent until a frame from a host that stamps `hostNow` has been applied. */
   hostClock?: StructuredAgentHostClock
   /** Retain received roster entries by agent ID beyond the item window; absent until a page arrives. */
@@ -155,28 +160,19 @@ export function reduceStructuredAgentSession(
   }
   if (action.type === 'loading') {
     // Keep the last transcript visible while a reconnect rehydrates the stream.
-    return {
-      ...state,
-      status: 'loading',
-      error: undefined,
-      readRefusal: undefined
-    }
+    return { ...state, status: 'loading', error: undefined, readRefusal: undefined }
   }
   if (action.type === 'error') {
-    return {
-      ...state,
-      status: 'error',
-      error: action.message,
-      readRefusal: action.refusal
-    }
+    return { ...state, status: 'error', error: action.message, readRefusal: action.refusal }
   }
   if (action.type === 'history-page') {
     return {
       ...replacePage(action.page, action.page.fence ?? null, state.backgroundTasks, state.activity),
       ...currentRequestsState(state),
+      promptSuggestion: state.promptSuggestion,
       commands: state.commands,
       // Live subscription state stays authoritative over a possibly stale history answer.
-      ...queuePublicationField(state, action.page),
+      ...queuePublicationRetainingMail(state.queuedMessages, state, action.page),
       ...hostClockField(action.page.hostNow, receivedAt, state.hostClock)
     }
   }
@@ -218,8 +214,9 @@ export function reduceStructuredAgentSession(
       ...requests,
       status: 'ready',
       commands: event.commands,
+      promptSuggestion: state.promptSuggestion,
       // A snapshot omits the list when unchanged since the last frame sent to this subscriber.
-      ...queuePublicationField(event, event.page, state),
+      ...queuePublicationRetainingMail(state.queuedMessages, event, event.page, state),
       ...hostClockField(event.hostNow, receivedAt, state.hostClock)
     }
   }
@@ -237,6 +234,8 @@ export function reduceStructuredAgentSession(
         ? undefined
         : state.backgroundTasks
   const activity = event.activity !== undefined ? event.activity : state.activity
+  const promptSuggestion =
+    event.promptSuggestion !== undefined ? event.promptSuggestion : state.promptSuggestion
   const liveItems = liveItemsWithinWindow(state, event.batch.items)
   // Fold every roster revision even outside the window; trimmed rows retain their sequence.
   const subagentRoster = foldStructuredAgentSubagentRoster(
@@ -262,6 +261,7 @@ export function reduceStructuredAgentSession(
     restatesStructuredAgentSessionHostWork(event, state) &&
     activity?.turnId === state.activity?.turnId &&
     activity?.text === state.activity?.text &&
+    promptSuggestion?.id === state.promptSuggestion?.id &&
     state.status === 'ready' &&
     state.error === undefined &&
     requests.currentRequests === state.currentRequests &&
@@ -270,11 +270,10 @@ export function reduceStructuredAgentSession(
   ) {
     return state
   }
-  const merged = journalUnchanged
-    ? state.items
-    : mergeItems(state.items, liveItems, event.batch.removedItemIds)
-  // Retained items already fit the limits, which only grow, so an unchanged journal skips the scan.
-  const items = journalUnchanged
+  const { items: merged, rescan } = journalUnchanged
+    ? { items: state.items, rescan: false }
+    : mergeLiveItems(state.items, liveItems, event.batch.removedItemIds)
+  const items = !rescan
     ? merged
     : trimRetainedItems(
         merged,
@@ -296,8 +295,7 @@ export function reduceStructuredAgentSession(
     fence: event.fence ?? state.fence,
     items,
     subagentRoster,
-    // A trim leaves older items behind the cursor, so paging must stay offered.
-    hasOlder: agentSessionHasOlderTranscript(items, items.length < merged.length || state.hasOlder),
+    hasOlder: hasOlderAfterMerge(state.items, items, items.length < merged.length, state.hasOlder),
     submissions:
       event.batch.submissions.length === 0 && event.batch.removedItemIds.length === 0
         ? state.submissions
@@ -312,9 +310,10 @@ export function reduceStructuredAgentSession(
       event
     ),
     working: hostWorkingAfterStructuredAgentSessionBatch(state.working, event),
-    ...queuePublicationField(event, state),
+    ...queuePublicationRetainingMail(state.queuedMessages, event, state),
     backgroundTasks,
     ...(activity !== undefined ? { activity } : {}),
+    ...(promptSuggestion !== undefined ? { promptSuggestion } : {}),
     ...(lostTurnRow ? { unloadedTurnRevisions: (state.unloadedTurnRevisions ?? 0) + 1 } : {}),
     ...hostClockField(event.hostNow, receivedAt, state.hostClock)
   }

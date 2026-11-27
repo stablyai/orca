@@ -1,4 +1,3 @@
-import type { BrowserWindow } from 'electron'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import { OrcaRuntimeWithGetAgentSessionExecutionNamespace } from './get-agent-session-execution-namespace'
 import {
@@ -34,7 +33,7 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
     agentTeamsEnv?: Record<string, string>
   ): Record<string, string>
 
-  abstract getAuthoritativeWindow(missingWindowMessage?: string): BrowserWindow
+  abstract getAuthoritativeWindowId(missingWindowMessage?: string): number
 
   abstract waitForTerminalHandle(tabId: string, timeoutMs?: number): Promise<string>
 
@@ -204,6 +203,8 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
           accountEnv: request.accountEnv,
           terminalImageViewerSupported: caller.terminalImageViewerSupported,
           terminalKittyKeyboardProtocol: request.terminalKittyKeyboardProtocol,
+          terminalColorQueryReplies: request.terminalColorQueryReplies,
+          terminalViewAttributes: request.terminalViewAttributes,
           cwd: startupCwd,
           ...(request.trustWorktreeId ? { trustWorktreeId: request.trustWorktreeId } : {}),
           presentation: request.presentation ?? 'background',

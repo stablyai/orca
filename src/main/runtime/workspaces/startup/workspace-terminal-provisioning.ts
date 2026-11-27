@@ -40,7 +40,7 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
   protected shouldProvisionWorktreeInBackground(navigation?: RuntimeNavigationTarget): boolean {
     return (
       navigationTargetsHost(navigation ?? 'host') &&
-      (!this.notifier || this.graphStatus !== 'ready' || !this.getAvailableAuthoritativeWindow())
+      (!this.notifier || this.graphStatus !== 'ready' || !this.hasAuthoritativeWindow())
     )
   }
 
@@ -59,7 +59,7 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
         const { worktreeId, tabId } = this.getProvisionedTerminalTab(handle)
         // renameTerminal stamps a persistent pane title that would mask all later agent titles/status.
         this.notifier?.renameTerminal(tabId, title, { recordInteraction: false })
-        if (!this.getAvailableAuthoritativeWindow()) {
+        if (!this.hasAuthoritativeWindow()) {
           this.persistHeadlessTerminalTitle(worktreeId, tabId, title)
           this.applyHeadlessSessionTabPropsToSnapshot(worktreeId, tabId, {
             title,
@@ -72,7 +72,7 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
         await this.setMobileSessionTabProps(`id:${worktreeId}`, { tabId, color })
       },
       getSetupTerminalTitle: () => this.getSetupTerminalTitle(),
-      getPtyId: (handle) => this.getLivePtyForHandle(handle)?.pty.ptyId,
+      getPtyId: (handle) => this.getTerminalPtyIdForHandle(handle) ?? undefined,
       recordSetupCompletionToken: (ptyId, token) =>
         this.setupCompletionTokenByPtyId.set(ptyId, token)
     }
@@ -103,7 +103,7 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
           })
         )
         // The window draws the title from main's frame; a headless phone still reads its snapshot (L238).
-        if (ok && !this.getAvailableAuthoritativeWindow()) {
+        if (ok && !this.hasAuthoritativeWindow()) {
           this.applyHeadlessSessionTabPropsToSnapshot(worktreeId, tabId, {
             title,
             customTitle: title.trim() || null
@@ -120,7 +120,7 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
             color
           })
         )
-        if (ok && !this.getAvailableAuthoritativeWindow()) {
+        if (ok && !this.hasAuthoritativeWindow()) {
           this.applyHeadlessSessionTabPropsToSnapshot(worktreeId, tabId, { color })
         }
       },
@@ -133,7 +133,7 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
         })
         return applied(reply) && reply.ok ? (reply.result.createdTabs ?? []) : null
       },
-      getPtyId: (handle) => this.getLivePtyForHandle(handle)?.pty.ptyId,
+      getPtyId: (handle) => this.getTerminalPtyIdForHandle(handle) ?? undefined,
       recordSetupCompletionToken: (ptyId, token) =>
         this.setupCompletionTokenByPtyId.set(ptyId, token)
     }

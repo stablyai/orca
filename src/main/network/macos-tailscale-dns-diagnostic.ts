@@ -103,7 +103,3 @@ export function withMacTailscaleDnsHint(message: string, detail?: string | null)
   }
   return appendMagicDnsHint(message, readMacTailscaleDnsDiagnostic())
 }
-
-export function __resetMacTailscaleDnsDiagnosticCacheForTests(): void {
-  cache = null
-}

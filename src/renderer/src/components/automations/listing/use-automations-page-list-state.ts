@@ -12,6 +12,12 @@ import {
 } from '../hosts/automation-captured-owner'
 import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
 import { getWorktreePathBasenameFromId } from '../../../../../shared/worktree/id'
+import {
+  canonicalExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  toRuntimeExecutionHostId,
+  toSshExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import { buildExternalAutomationListEntries } from '../external/external-automation-list-entries'
 import { externalAutomationScopeEntries } from '../external/external-automation-scope-gating'
 import { externalAutomationUncheckedNotice } from '../external/external-automation-unchecked-hosts'
@@ -165,11 +171,21 @@ export function useAutomationsPageListState({
             capturedAutomationOwnerKey(
               capturedAutomationOwner(capturedAutomationOwners, selectedAutomationRuns.rowKey)
             ))
-      return resolveAutomationRunTarget(
+      const target = resolveAutomationRunTarget(
         fresh ? state : { ...state, worktreesByRepo: {}, folderWorkspaces: [] },
         run,
         fresh ? selectedAutomationRuns.authority : null
       )
+      const catalogAuthority = target.catalogAuthority
+      const workspaceCatalogHostId =
+        catalogAuthority &&
+        (catalogAuthority.kind === 'runtime'
+          ? toRuntimeExecutionHostId(catalogAuthority.environmentId)
+          : (canonicalExecutionHostId(run.runContext?.hostId) ??
+            (acquiredOwner?.selector.kind === 'ssh'
+              ? toSshExecutionHostId(acquiredOwner.selector.targetId)
+              : LOCAL_EXECUTION_HOST_ID)))
+      return { ...target, workspaceCatalogHostId }
     },
     [capturedAutomationOwners, hostCatalog.entries, selectedAutomationRuns]
   )

@@ -1,6 +1,6 @@
 import type { WebContents } from 'electron'
 import {
-  crossSiteFrameTargets,
+  isCrossSiteFrameTarget,
   forgetFrameSession,
   frameSessionFor,
   readRecord,
@@ -138,12 +138,7 @@ export async function resolveFocusedFrameRoute(
     if (!probe.frameId) {
       return routeFor(at, probe.focusedElement)
     }
-    let crossSite = await crossSiteFrameTargets(webContents, send, { refresh: false })
-    if (!crossSite.has(probe.frameId)) {
-      // Navigation can add a cross-site frame after the target list was cached.
-      crossSite = await crossSiteFrameTargets(webContents, send, { refresh: true })
-    }
-    if (crossSite.has(probe.frameId)) {
+    if (await isCrossSiteFrameTarget(webContents, send, probe.frameId)) {
       const sessionId = await frameSessionFor(webContents, send, probe.frameId)
       if (!sessionId) {
         return { kind: 'unknown' }

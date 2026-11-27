@@ -31,3 +31,11 @@ export function waitForPeerMail(
     signal?.addEventListener('abort', done, { once: true })
   })
 }
+
+/** Runs `listener` on every queued change on this database until the returned stop is called. */
+export function onPeerMailQueued(db: Database.Database, listener: () => void): () => void {
+  const set = waiters.get(db) ?? new Set<() => void>()
+  waiters.set(db, set)
+  set.add(listener)
+  return () => set.delete(listener)
+}

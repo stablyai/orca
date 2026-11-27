@@ -14,6 +14,7 @@ export type RepoSummary = {
   executionHostId?: ExecutionHostId | null
   issueSourcePreference?: IssueSourcePreference
   upstream?: { owner: string; repo: string; host?: string } | null
+  hiddenAt?: number
 }
 
 export type IssueSourcePreference = 'upstream' | 'origin' | 'auto'
@@ -27,6 +28,7 @@ export type GitHubWorkItem = {
   url: string
   labels: string[]
   updatedAt: string
+  createdAt?: string
   author: string | null
   branchName?: string
   baseRefName?: string
@@ -44,6 +46,9 @@ export type GitHubWorkItem = {
   checksSummary?: ProviderCheckSummary
   mergeable?: GitHubPRMergeableState
   mergeStateStatus?: string | null
+  autoMergeEnabled?: boolean
+  autoMergeAllowed?: boolean | null
+  mergeQueueRequired?: boolean | null
 }
 
 export type GitHubAssignableUser = {

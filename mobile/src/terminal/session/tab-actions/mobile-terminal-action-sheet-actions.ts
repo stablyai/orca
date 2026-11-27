@@ -1,4 +1,4 @@
-import { Eraser, Monitor, Smartphone } from 'lucide-react-native'
+import { Eraser, Monitor, Pencil, Smartphone, X } from 'lucide-react-native'
 import type { ActionSheetAction } from '../../../components/sheets/ActionSheetModal'
 import { translate } from '../../../i18n/mobile-i18n'
 import type { MobileNativeChatTab } from '../../../session/native-chat/conversation/mobile-native-chat-eligibility'
@@ -46,8 +46,8 @@ export function getMobileTerminalActionSheetActions<
     {
       id: 'toggleDisplayMode',
       label: phoneMode
-        ? translate('session.terminalActionSheetActions.switchToDesktop', 'Switch to Desktop')
-        : translate('session.terminalActionSheetActions.switchToPhone', 'Switch to Phone'),
+        ? translate('session.terminalActionSheetActions.switchToDesktop', 'Switch to desktop')
+        : translate('session.terminalActionSheetActions.switchToPhone', 'Switch to phone'),
       icon: phoneMode ? Monitor : Smartphone,
       onPress: () => {
         args.onDismiss()
@@ -57,6 +57,7 @@ export function getMobileTerminalActionSheetActions<
     {
       id: 'rename',
       label: translate('session.terminalActionSheetActions.rename', 'Rename'),
+      icon: Pencil,
       closeBeforePress: true,
       onPress: () => {
         args.onRename(target)
@@ -64,7 +65,7 @@ export function getMobileTerminalActionSheetActions<
     },
     {
       id: 'clearTerminal',
-      label: translate('session.terminalActionSheetActions.clearTerminal', 'Clear Terminal'),
+      label: translate('session.terminalActionSheetActions.clearTerminal', 'Clear terminal'),
       icon: Eraser,
       onPress: () => {
         args.onDismiss()
@@ -74,7 +75,8 @@ export function getMobileTerminalActionSheetActions<
     ...(args.workerActions ?? []),
     {
       id: 'close',
-      label: translate('common.close', 'Close'),
+      label: translate('session.tabMenu.closeTab', 'Close tab'),
+      icon: X,
       destructive: true,
       onPress: () => {
         args.onDismiss()

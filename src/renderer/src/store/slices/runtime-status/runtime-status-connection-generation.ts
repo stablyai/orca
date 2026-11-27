@@ -4,13 +4,6 @@ export function getRuntimeEnvironmentConnectionGeneration(environmentId: string)
   return connectionGenerationByEnvironment.get(environmentId) ?? 0
 }
 
-export function setRuntimeEnvironmentConnectionGenerationForTests(
-  environmentId: string,
-  generation: number
-): void {
-  connectionGenerationByEnvironment.set(environmentId, generation)
-}
-
 export function advanceRuntimeEnvironmentConnectionGeneration(environmentId: string): number {
   const next = getRuntimeEnvironmentConnectionGeneration(environmentId) + 1
   connectionGenerationByEnvironment.set(environmentId, next)

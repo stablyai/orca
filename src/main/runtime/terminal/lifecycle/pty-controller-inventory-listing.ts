@@ -95,7 +95,7 @@ export abstract class OrcaRuntimeWithPtyControllerInventoryListing extends OrcaR
       return null
     }
     const stale = !isCurrent()
-    if (!stale) {
+    if (!stale && inventoryOptions?.supersedesPendingListings !== false) {
       if (connectionId === undefined) {
         this.ptyControllerAggregateInventoryGeneration = generation
       } else {

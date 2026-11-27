@@ -224,7 +224,8 @@ export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntime
     this.terminalIdentity.clearLeafBindings()
     this.clearPtyIncarnationHandles()
     // Keep pre-allocated CLI handles for reconnect adoption.
-    this.terminalWaiters.rejectAll('terminal_handle_stale')
+    this.terminalWaiters.rejectRendererBound('terminal_handle_stale')
+    this.onSleptLeafGraphSynced()
     this.releaseUnseededPhoneFrames()
     this.republishSessionTitleAuthorityChanges(titleAuthority, this.republishBrowserSessionTabs())
     this.releaseAgentSenderHistoryIfUnobserved()

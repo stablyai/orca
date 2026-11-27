@@ -70,16 +70,11 @@ export class DurablePushStore {
             now + PUSH_LIMITS.notificationTtlSeconds * 1000
           )
       if (expiresAt <= now) return 'error'
-      if (!existing) {
-        const [count] = await tx.query(
-          'SELECT COUNT(*) AS total FROM push_events WHERE host_fingerprint = ? AND kind = ? AND created_at > ?',
-          [host, kind, now - PUSH_LIMITS.eventQuotaWindowMs]
-        )
-        if (Number(count?.total ?? 0) >= PUSH_LIMITS.hostEventsPerWindow) return 'rate_limited'
-        await tx.query(
-          'INSERT INTO push_events(event_id, host_fingerprint, kind, fingerprint, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)',
-          [eventId, host, kind, fingerprint, now, expiresAt]
-        )
+      if (
+        !existing &&
+        !(await chargeHostEvent(tx, { eventId, host, kind, fingerprint, now, expiresAt }))
+      ) {
+        return 'rate_limited'
       }
       const [recipient] = await tx.query(
         'SELECT event_id FROM push_event_recipients WHERE event_id = ? AND registration_id = ?',
@@ -107,6 +102,22 @@ export class DurablePushStore {
         [eventId, registrationId, now]
       )
       return 'queued'
+    })
+  }
+
+  /** Charges a badge update to the host's event quota; badge pushes bypass the queue. */
+  async admitBadge(host: string): Promise<boolean> {
+    const now = this.now()
+    return this.database.transaction(async (tx) => {
+      await tx.lockQuotaScope(`push-events:${host}`)
+      return chargeHostEvent(tx, {
+        eventId: randomUUID(),
+        host,
+        kind: 'badge',
+        fingerprint: '',
+        now,
+        expiresAt: now
+      })
     })
   }
 
@@ -264,4 +275,30 @@ export class DurablePushStore {
     }
     return { deleted: total, saturated: true }
   }
+}
+
+/** Records a host event unless the host has used its quota for that kind; the caller holds the quota lock. */
+async function chargeHostEvent(
+  tx: PushDatabase,
+  event: {
+    eventId: string
+    host: string
+    kind: string
+    fingerprint: string
+    now: number
+    expiresAt: number
+  }
+): Promise<boolean> {
+  const [count] = await tx.query(
+    'SELECT COUNT(*) AS total FROM push_events WHERE host_fingerprint = ? AND kind = ? AND created_at > ?',
+    [event.host, event.kind, event.now - PUSH_LIMITS.eventQuotaWindowMs]
+  )
+  if (Number(count?.total ?? 0) >= PUSH_LIMITS.hostEventsPerWindow) {
+    return false
+  }
+  await tx.query(
+    'INSERT INTO push_events(event_id, host_fingerprint, kind, fingerprint, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)',
+    [event.eventId, event.host, event.kind, event.fingerprint, event.now, event.expiresAt]
+  )
+  return true
 }

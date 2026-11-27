@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import type { Store } from '../../../persistence/loading-store/store'
 import { createSettings } from '../runtime-home-settings-test-fixtures'
 import {
   createCodexAccountRecord,
@@ -31,6 +32,12 @@ vi.mock(import('node:os'), async (importOriginal) => {
     homedir: () => testState.fakeHomeDir
   }
 })
+
+// CodexRuntimeHomeService takes the Store class; the harness double implements only what it reads.
+function asStore(store: ReturnType<typeof createStore>): Store {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime-home service reads only getSettings and updateSettings, which the double implements; Store is a class, so a structural double cannot satisfy it without the cast.
+  return store as unknown as Store
+}
 
 describe('CodexRuntimeHomeService', () => {
   beforeEach(() => {
@@ -82,7 +89,7 @@ describe('CodexRuntimeHomeService', () => {
     )
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const { CodexRuntimeHomeService } = await import('../../runtime-home-service')
-    new CodexRuntimeHomeService(store as never)
+    new CodexRuntimeHomeService(asStore(store))
 
     expect(readFileSync(join(homeX2, 'auth.json'), 'utf-8')).toBe(authX)
   })
@@ -111,7 +118,7 @@ describe('CodexRuntimeHomeService', () => {
     const store = createStore(settings)
 
     const { CodexRuntimeHomeService } = await import('../../runtime-home-service')
-    const service = new CodexRuntimeHomeService(store as never)
+    const service = new CodexRuntimeHomeService(asStore(store))
 
     settings.activeCodexManagedAccountId = null
     service.syncForCurrentSelection()
@@ -143,7 +150,7 @@ describe('CodexRuntimeHomeService', () => {
     const store = createStore(settings)
 
     const { CodexRuntimeHomeService } = await import('../../runtime-home-service')
-    const service = new CodexRuntimeHomeService(store as never)
+    const service = new CodexRuntimeHomeService(asStore(store))
     settings.activeCodexManagedAccountId = 'account-1'
     service.syncForCurrentSelection()
 
@@ -172,7 +179,7 @@ describe('CodexRuntimeHomeService', () => {
     const store = createStore(settings)
 
     const { CodexRuntimeHomeService } = await import('../../runtime-home-service')
-    new CodexRuntimeHomeService(store as never)
+    new CodexRuntimeHomeService(asStore(store))
 
     expect(store.updateSettings).toHaveBeenCalledWith(
       expect.objectContaining({ activeCodexManagedAccountId: null })
@@ -207,7 +214,7 @@ describe('CodexRuntimeHomeService', () => {
     )
 
     const { CodexRuntimeHomeService } = await import('../../runtime-home-service')
-    new CodexRuntimeHomeService(store as never)
+    new CodexRuntimeHomeService(asStore(store))
 
     expect(readFileSync(managedAuthPath, 'utf-8')).toBe(refreshedAuth)
     expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe(refreshedAuth)
@@ -238,7 +245,7 @@ describe('CodexRuntimeHomeService', () => {
     const store = createStore(settings)
 
     const { CodexRuntimeHomeService } = await import('../../runtime-home-service')
-    const service = new CodexRuntimeHomeService(store as never)
+    const service = new CodexRuntimeHomeService(asStore(store))
 
     settings.activeCodexManagedAccountId = 'account-1'
     service.syncForCurrentSelection()
@@ -278,7 +285,7 @@ describe('CodexRuntimeHomeService', () => {
     const store = createStore(settings)
 
     const { CodexRuntimeHomeService } = await import('../../runtime-home-service')
-    const service = new CodexRuntimeHomeService(store as never)
+    const service = new CodexRuntimeHomeService(asStore(store))
 
     rmSync(runtimeAuthPath, { force: true })
     settings.activeCodexManagedAccountId = null
@@ -314,7 +321,7 @@ describe('CodexRuntimeHomeService', () => {
     const store = createStore(settings)
 
     const { CodexRuntimeHomeService } = await import('../../runtime-home-service')
-    const service = new CodexRuntimeHomeService(store as never)
+    const service = new CodexRuntimeHomeService(asStore(store))
 
     settings.activeCodexManagedAccountId = null
     service.syncForCurrentSelection()

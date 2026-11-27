@@ -20,6 +20,7 @@ import type { RuntimeWorkspaceFileTargets } from '../../workspaces/workspace-fil
 import type { OrcaRuntimeWithTransitionGraphReloadToTerminalState } from '../../session-graph/session-graph-authority'
 import type { RuntimeWorkspaceCatalog } from '../../workspaces/catalog/workspace-catalog'
 import type { RuntimeWorkspaceSelectors } from '../../workspaces/workspace-selectors'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { NotificationAttentionAcknowledgement } from '../../../../shared/notifications/notification-settings-types'
 
@@ -61,6 +62,12 @@ export abstract class StructuredSessionWorkspaceScope extends OrcaRuntimeWithStr
     return { worktree, reads }
   }
 
+  /** This host's native-chat sessions of one workspace, matched on host, distro, id and kind. */
+  async listWorkspaceStructuredSessions(worktreeId: string) {
+    const location = await this.resolveStructuredAgentSessionLocation(`id:${worktreeId}`)
+    return (await this.openAgentSessionRecordStore()).listWorkspaceSessions(location)
+  }
+
   protected async resolveStructuredAgentSessionLocation(worktreeSelector: string) {
     const target = await this.resolveRuntimeFileTarget(worktreeSelector)
     return this.structuredAgentSessionLocationForTarget(target)
@@ -73,16 +80,44 @@ export abstract class StructuredSessionWorkspaceScope extends OrcaRuntimeWithStr
     if (routing.kind === 'ambiguous') {
       throw new Error('worktree_execution_host_unresolved')
     }
-    const repo = routing.kind === 'resolved' ? routing.repo : null
     const folderScope = parseWorkspaceKey(target.worktree.id)
     // The floating workspace is a plain directory with no repo git options, which is exactly what
     // `folder` denotes here — it describes how Orca manages the place, not whether git is in it.
     const folderWorkspace =
       folderScope?.type === 'folder' || isFloatingWorkspaceId(target.worktree.id)
+    return this.structuredAgentSessionLocationOf({
+      repo: routing.kind === 'resolved' ? routing.repo : null,
+      executionHostId: target.executionHostId,
+      workspaceId: target.worktree.id,
+      workspacePath: target.worktree.path,
+      folderWorkspace
+    })
+  }
+
+  /** Where a workspace created in this repo will run its chats, before that workspace exists:
+   *  the repo's host, distro and kind are all the location reads. */
+  protected structuredAgentSessionLocationForRepo(repo: Repo) {
+    return this.structuredAgentSessionLocationOf({
+      repo,
+      executionHostId: getRepoExecutionHostId(repo),
+      workspaceId: '',
+      workspacePath: repo.path,
+      folderWorkspace: false
+    })
+  }
+
+  private structuredAgentSessionLocationOf(place: {
+    repo: Repo | null
+    executionHostId: AgentSessionExecutionLocation['executionHostId']
+    workspaceId: string
+    workspacePath: string
+    folderWorkspace: boolean
+  }): AgentSessionExecutionLocation {
+    const { repo, folderWorkspace } = place
     // WSL routing describes *this* machine; no remote or runtime host may inherit
     // it. Both branches key on executionHostId: the target no longer carries a
     // connectionId, which used to spell remote, unresolved and local alike.
-    const isLocalHost = target.executionHostId === LOCAL_EXECUTION_HOST_ID
+    const isLocalHost = place.executionHostId === LOCAL_EXECUTION_HOST_ID
     const configuredWslDistro =
       repo && isLocalHost
         ? (getLocalProjectWorktreeGitOptions(this.requireStore(), repo).wslDistro ?? null)
@@ -92,12 +127,12 @@ export abstract class StructuredSessionWorkspaceScope extends OrcaRuntimeWithStr
     const wslDistro =
       configuredWslDistro ??
       (folderWorkspace && isLocalHost
-        ? (parseWslUncPath(target.worktree.path)?.distro ?? null)
+        ? (parseWslUncPath(place.workspacePath)?.distro ?? null)
         : null)
     return {
-      executionHostId: target.executionHostId,
+      executionHostId: place.executionHostId,
       wslDistro,
-      workspaceId: target.worktree.id,
+      workspaceId: place.workspaceId,
       workspaceKind: folderWorkspace ? ('folder' as const) : ('git-worktree' as const)
     }
   }

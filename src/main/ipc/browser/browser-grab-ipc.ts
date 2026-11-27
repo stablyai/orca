@@ -1,3 +1,12 @@
+import { supersededGrabMode } from './browser-grab-mode-admission'
+import {
+  setBrowserGrabMode,
+  cancelBrowserGrabMode,
+  captureCleanBrowserPage,
+  isCurrentBrowserGrabRequest,
+  disposeGrabModeStateForPage,
+  resetGrabModeState as resetSharedGrabModeState
+} from '../../browser/element-grab/browser-grab-mode-sequencer'
 import { ipcMain } from 'electron'
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
 import { onDocPreviewGrantRevoked } from '../../browser/document-preview/doc-preview-grant-registry'
@@ -9,53 +18,35 @@ import type {
   BrowserAwaitGrabSelectionArgs,
   BrowserGrabResult,
   BrowserCancelGrabArgs,
+  BrowserSetGrabLabelAvoidAreaArgs,
+  BrowserGrabPickedElementPresentArgs,
   BrowserCaptureSelectionScreenshotArgs,
   BrowserCaptureSelectionScreenshotResult,
   BrowserExtractHoverArgs,
   BrowserExtractHoverResult
 } from '../../../shared/browser/element-grab/browser-grab-types'
+import {
+  GRAB_BUDGET,
+  parseGrabLabelAvoidArea
+} from '../../../shared/browser/element-grab/browser-grab-types'
+import type {
+  BrowserCaptureCleanPageArgs,
+  BrowserCleanPageCapture
+} from '../../../shared/browser/element-grab/browser-grab-clean-capture'
 
-const grabModeIntentByPageId = new Map<string, { generation: number; enabled: boolean }>()
-const grabModeOperationByPageId = new Map<string, Promise<void>>()
 const GRAB_REGISTRATION_WAIT_MS = 1_000
-
-function queueGrabModeOperation(
-  browserPageId: string,
-  operation: () => Promise<BrowserSetGrabModeResult>
-): Promise<BrowserSetGrabModeResult> {
-  const previous = grabModeOperationByPageId.get(browserPageId) ?? Promise.resolve()
-  const result = previous.then(operation)
-  const completion = result.then(
-    () => {},
-    () => {}
-  )
-  grabModeOperationByPageId.set(browserPageId, completion)
-  return result.finally(() => {
-    if (grabModeOperationByPageId.get(browserPageId) === completion) {
-      grabModeOperationByPageId.delete(browserPageId)
-    }
-  })
-}
-
+export { disposeGrabModeStateForPage }
 export function resetGrabModeState(): void {
-  grabModeIntentByPageId.clear()
-  // Retired registrations must not leave chains blocking new operations.
-  grabModeOperationByPageId.clear()
+  disposePreviewGrantSubscription?.()
+  disposePreviewGrantSubscription = null
+  resetSharedGrabModeState()
 }
 
-export function disposeGrabModeStateForPage(browserPageId: string): void {
-  grabModeIntentByPageId.delete(browserPageId)
-  // Reused page IDs must not queue behind destroyed guests.
-  grabModeOperationByPageId.delete(browserPageId)
-}
-
-// Previews withdraw through grant revocation, not unregisterGuest; dispose their retained intent then.
 let disposePreviewGrantSubscription: (() => void) | null = null
 
 function subscribeToPreviewGrantRevocation(): void {
   disposePreviewGrantSubscription?.()
   disposePreviewGrantSubscription = onDocPreviewGrantRevoked((grant) => {
-    // Settle pending grabs before disposing the guest's intent.
     browserManager.cancelGrabOp(grant.browserPageId, 'evicted')
     disposeGrabModeStateForPage(grant.browserPageId)
   })
@@ -66,8 +57,11 @@ export function registerBrowserGrabHandlers(): void {
   ipcMain.removeHandler('browser:setGrabMode')
   ipcMain.removeHandler('browser:awaitGrabSelection')
   ipcMain.removeHandler('browser:cancelGrab')
+  ipcMain.removeHandler('browser:setGrabLabelAvoidArea')
+  ipcMain.removeHandler('browser:grabPickedElementPresent')
   ipcMain.removeHandler('browser:captureSelectionScreenshot')
   ipcMain.removeHandler('browser:extractHoverPayload')
+  ipcMain.removeHandler('browser:captureCleanPage')
 
   ipcMain.handle(
     'browser:setGrabMode',
@@ -75,44 +69,57 @@ export function registerBrowserGrabHandlers(): void {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return { ok: false, reason: 'not-authorized' }
       }
-      const intent = {
-        generation: (grabModeIntentByPageId.get(args.browserPageId)?.generation ?? 0) + 1,
-        enabled: args.enabled
+      if (
+        typeof args?.browserPageId !== 'string' ||
+        args.browserPageId.length > 256 ||
+        typeof args.enabled !== 'boolean' ||
+        (args.paletteKeys !== undefined && typeof args.paletteKeys !== 'boolean') ||
+        (args.requestId !== undefined &&
+          (typeof args.requestId !== 'string' || args.requestId.length > 200))
+      ) {
+        return supersededGrabMode()
       }
-      grabModeIntentByPageId.set(args.browserPageId, intent)
-      const isCurrentIntent = (): boolean =>
-        grabModeIntentByPageId.get(args.browserPageId) === intent
-      let guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
-      if (!guest && args.enabled) {
-        // Fast file pages can expose tools before guest registration reaches main.
-        await waitForNextTabRegistration(args.browserPageId, GRAB_REGISTRATION_WAIT_MS).catch(
-          () => {}
-        )
-        if (!isCurrentIntent()) {
-          return { ok: true }
+      return setBrowserGrabMode(
+        args.browserPageId,
+        args.enabled,
+        () => browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id),
+        (signal) =>
+          waitForNextTabRegistration(args.browserPageId, GRAB_REGISTRATION_WAIT_MS, signal),
+        {
+          requestId: args.requestId,
+          paletteKeys: args.paletteKeys,
+          owner: `renderer:${event.sender.id}`,
+          destination: event.sender,
+          onPolicyRetired: () => {
+            if (!event.sender.isDestroyed()) {
+              event.sender.send('browser:grabPolicyRetired', {
+                browserPageId: args.browserPageId,
+                requestId: args.requestId
+              })
+            }
+          }
         }
-        guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
+      )
+    }
+  )
+
+  ipcMain.handle(
+    'browser:captureCleanPage',
+    async (event, args: BrowserCaptureCleanPageArgs): Promise<BrowserCleanPageCapture | null> => {
+      if (
+        !isTrustedBrowserRenderer(event.sender) ||
+        typeof args?.browserPageId !== 'string' ||
+        args.browserPageId.length > 256 ||
+        typeof args.requestId !== 'string' ||
+        args.requestId.length > 200
+      ) {
+        return null
       }
-      if (!guest) {
-        if (!args.enabled) {
-          return { ok: true }
-        }
-        return { ok: false, reason: 'not-ready' }
-      }
-      return queueGrabModeOperation(args.browserPageId, async () => {
-        if (!isCurrentIntent()) {
-          return { ok: true }
-        }
-        guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
-        if (!guest) {
-          return args.enabled ? { ok: false, reason: 'not-ready' } : { ok: true }
-        }
-        const success = await browserManager.setGrabMode(args.browserPageId, args.enabled, guest)
-        if (!isCurrentIntent()) {
-          return { ok: true }
-        }
-        return success ? { ok: true } : { ok: false, reason: 'injection-failed' }
-      })
+      return captureCleanBrowserPage(
+        args.browserPageId,
+        () => browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id),
+        { requestId: args.requestId, owner: `renderer:${event.sender.id}` }
+      )
     }
   )
 
@@ -126,8 +133,54 @@ export function registerBrowserGrabHandlers(): void {
       if (!guest) {
         return { opId: args.opId, kind: 'error', reason: 'Guest not ready' }
       }
-      // awaitGrabSelection cancels previous grabs; an extra active-op guard would race rearming.
+      if (
+        !isCurrentBrowserGrabRequest(
+          args.browserPageId,
+          guest,
+          args.requestId,
+          `renderer:${event.sender.id}`
+        )
+      ) {
+        return { opId: args.opId, kind: 'cancelled', reason: 'navigation' }
+      }
       return browserManager.awaitGrabSelection(args.browserPageId, args.opId, guest)
+    }
+  )
+
+  ipcMain.handle(
+    'browser:setGrabLabelAvoidArea',
+    async (event, args: BrowserSetGrabLabelAvoidAreaArgs): Promise<boolean> => {
+      if (!isTrustedBrowserRenderer(event.sender) || typeof args?.browserPageId !== 'string') {
+        return false
+      }
+      const area = parseGrabLabelAvoidArea(args.area)
+      if (area === undefined) {
+        return false
+      }
+      return browserManager.setGrabLabelAvoidArea(args.browserPageId, area, event.sender.id)
+    }
+  )
+
+  ipcMain.handle(
+    'browser:grabPickedElementPresent',
+    async (event, args: BrowserGrabPickedElementPresentArgs): Promise<boolean | null> => {
+      if (
+        !isTrustedBrowserRenderer(event.sender) ||
+        typeof args?.browserPageId !== 'string' ||
+        typeof args.selectionId !== 'string' ||
+        args.selectionId.length === 0 ||
+        args.selectionId.length > GRAB_BUDGET.selectorMaxLength
+      ) {
+        return false
+      }
+      const guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
+      return guest
+        ? browserManager.isGrabPickedElementPresent(
+            args.selectionId,
+            guest,
+            args.interactive === true
+          )
+        : null
     }
   )
 
@@ -135,13 +188,12 @@ export function registerBrowserGrabHandlers(): void {
     if (!isTrustedBrowserRenderer(event.sender)) {
       return false
     }
-    // Resolve through sender ownership, as the other grab channels do.
-    const guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
-    if (!guest) {
-      return false
-    }
-    browserManager.cancelGrabOp(args.browserPageId, 'user')
-    return true
+    return cancelBrowserGrabMode(
+      args.browserPageId,
+      () => browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id),
+      args.requestId,
+      `renderer:${event.sender.id}`
+    )
   })
 
   ipcMain.handle(
@@ -153,6 +205,10 @@ export function registerBrowserGrabHandlers(): void {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return { ok: false, reason: 'Not authorized' }
       }
+      // Only the picked element is captured; a rectangle alone could name any region of the page.
+      if (typeof args.selectionId !== 'string' || args.selectionId.length === 0) {
+        return { ok: false, reason: 'No picked element' }
+      }
       const guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
       if (!guest) {
         return { ok: false, reason: 'Guest not ready' }
@@ -160,6 +216,7 @@ export function registerBrowserGrabHandlers(): void {
       const screenshot = await browserManager.captureSelectionScreenshot(
         args.browserPageId,
         args.rect,
+        args.selectionId,
         guest
       )
       if (!screenshot) {

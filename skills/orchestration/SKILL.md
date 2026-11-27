@@ -2,17 +2,19 @@
 name: orchestration
 description: >-
   Run work in separate Orca worker agents and get their results back. Use when
-  the user asks for Orca workers or supervision (monitor, task DAGs, ask/reply,
-  decision gates), or when the work needs something your own subagents cannot
-  give: a different agent (such as Codex from Claude) or its own Orca workspace.
-  "Have Codex (or Claude) review this and report back" means an Orca worker of
-  that agent, even when you have your own model subagents.
+  the user invokes /orchestration, asks for Orca workers or supervision
+  (monitor, task DAGs, ask/reply, decision gates), or asks to split,
+  parallelize or fan out code changes across agents, worktrees or branches;
+  use Orca workers for those. Also use when the work needs a different agent
+  (such as Codex from Claude) or its own Orca workspace: "Have Codex (or
+  Claude) review this and report back" means an Orca worker of that agent.
   Also use when you are a dispatched worker (a prompt with Task and Dispatch
-  IDs: ask, worker_done). Otherwise prefer your own subagents,
-  including for long or parallel work. Use `orca-cli` to hand work off with
-  nothing expected back ("hand off", "handover", "give this to another agent",
-  "another worktree"), and for terminal control, shell commands, worktree
-  management, and reading or waiting on terminals.
+  IDs: ask, worker_done). Unless the user asks for Orca workers or a named
+  agent, searches, reads and research in your workspace stay with your own
+  subagents, even in parallel. Use `orca-cli` to hand work off
+  with nothing expected back ("hand off", "handover", "give this to another
+  agent", "another worktree"), and for terminal control, shell commands,
+  worktree management, and reading or waiting on terminals.
 ---
 
 # Orca Orchestration
@@ -25,8 +27,9 @@ Never substitute a non-Orca subagent tool when the user asked for Orca orchestra
 
 Choose the executable once and reuse it for every later command:
 
-- If the `ORCA_CLI_COMMAND` environment variable is set, use its value. Orca exports this
-  for managed WSL sessions.
+- If the `ORCA_CLI_COMMAND` environment variable is set, use its value. Orca exports it
+  in sessions it starts when it knows their executable, such as WSL terminals and agent
+  chats.
 - Otherwise, in a dev checkout whose session exposes `ORCA_DEV_REPO_ROOT`, use `orca-dev`.
 - Otherwise, on Linux outside an Orca-managed terminal, use `orca-ide`. Never run bare
   `orca` there — outside Orca's terminals it normally resolves to the
@@ -38,7 +41,11 @@ running anything; do not create a shell variable or run `ORCA` literally. This w
 same way in POSIX shells, PowerShell, and cmd.exe.
 
 If the selected executable cannot run, report its exact error and stop. Do not fall through
-to another executable, which could silently target a different Orca build.
+to another executable, which could silently target a different Orca build. Exception: on
+Windows, when `ORCA_CLI_COMMAND` or `ORCA_TERMINAL_HANDLE` is set (Orca supplied the
+executable), a sandboxed shell that reports it as not recognized or access denied before
+Orca itself runs cannot read Orca's install. Re-run that command, and later Orca commands,
+with escalated permissions before giving up.
 
 ## Load the version-matched guide before running Orca commands
 

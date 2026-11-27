@@ -274,7 +274,8 @@ export function createProjectHostSetupActions(
                     destination: args.destination,
                     folderName: args.folderName
                   },
-                  { timeoutMs: 10 * 60_000 }
+                  // Cloning is the user's act: it may wake an idle-stopped WSL host (#46567).
+                  { timeoutMs: 10 * 60_000, wake: true }
                 )
               ).repo
         return await get().setupProjectExistingFolder({

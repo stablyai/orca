@@ -1,6 +1,7 @@
 import { readAgentMenuTerminalPending } from './agent-menu-launch-facts'
 import { terminalPendingReason } from './new-tab-agent-menu-model'
 import { useAppStore } from '@/store/index'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { SubscribedAgentLaunchPickerMenu } from '@/components/agent/AgentLaunchPickerMenu'
 import {
@@ -19,8 +20,8 @@ import {
   newAgentPromptOutcome
 } from '@/lib/agent-session/launch/prompt/new-agent-prompt-outcome'
 import { activeAgentNotesSendFailureMessage } from '@/lib/agent-session/messaging/terminal/active-agent-note-send-result'
-import { AgentSettingsMenuItem } from '@/components/agent/AgentSettingsMenuItem'
 import { TabAgentSurfaceChoiceRow } from './TabAgentSurfaceChoiceRow'
+import { OpenAgentSettingsMenuItem } from './OpenAgentSettingsMenuItem'
 import {
   DropdownMenuItem,
   DropdownMenuSeparator,
@@ -28,7 +29,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
-import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useOptionalShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { useAgentMenuShortcutLabels } from './agent-menu-shortcut-labels'
 import type { AgentPickerInventorySource } from '../agent-picker-inventory-source'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
@@ -40,8 +41,14 @@ import { cn } from '@/lib/class-names'
 import type { NewTabAgentMenuRow } from '../../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 import { useNewTabAgentMenuRows } from './use-new-tab-agent-menu-rows'
 import type { NewTabAgentMenuModel } from './new-tab-agent-menu-model'
-import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
-import { chatUnavailableLabel, rowTitle, rowLabel, rowId } from './agent-menu-row-presentation'
+import { useAgentDetectionTargetForWorktree } from '@/lib/agent-session/launch/inventory/useAgentDetectionTarget'
+import {
+  chatUnavailableLabel,
+  rowStatusLabel,
+  rowTitle,
+  rowLabel,
+  rowId
+} from './agent-menu-row-presentation'
 
 export type QuickLaunchAgentMenuItemsProps = {
   worktreeId: string
@@ -91,7 +98,9 @@ export function useTabAgentMenuLaunch({
         disabled ||
         row.kind === 'chat-unavailable' ||
         (row.kind !== 'chat' &&
-          readAgentMenuTerminalPending(useAppStore.getState(), { worktreeId }))
+          readAgentMenuTerminalPending(useAppStore.getState(), readRuntimeStatuses(), {
+            worktreeId
+          }))
       ) {
         return false
       }
@@ -206,10 +215,6 @@ export function ProjectedAgentMenuItems({
   const desktopDefaultAgent = useAppStateValue((s) => s.settings?.defaultTuiAgent)
   const newAgentShortcut = useOptionalShortcutLabel('tab.newAgent')
   const shortcutLabels = useAgentMenuShortcutLabels(pickerInventory ? model : undefined)
-  const openAgentSettings = useCallback(() => {
-    useAppStore.getState().openSettingsTarget({ pane: 'agents', repoId: null })
-    useAppStore.getState().openSettingsPage()
-  }, [])
   if (model.state === 'loading') {
     // Why: rows fill in once when every answer is known, instead of reshuffling under the pointer.
     return (
@@ -229,7 +234,7 @@ export function ProjectedAgentMenuItems({
             </span>
           </DropdownMenuItem>
         ))}
-        <AgentSettingsMenuItem onSelect={openAgentSettings} />
+        <OpenAgentSettingsMenuItem />
       </>
     )
   }
@@ -296,6 +301,8 @@ export function ProjectedAgentMenuItems({
                 <span className="min-w-0 shrink truncate text-xs text-muted-foreground">
                   {pendingReason}
                 </span>
+              ) : rowStatusLabel(row, t) ? (
+                <span className="text-xs text-muted-foreground">{rowStatusLabel(row, t)}</span>
               ) : null}
               {showsDefaultAgentShortcut ? (
                 <DropdownMenuShortcut>{newAgentShortcut}</DropdownMenuShortcut>
@@ -336,7 +343,7 @@ export function ProjectedAgentMenuItems({
           )
         })
       )}
-      <AgentSettingsMenuItem onSelect={openAgentSettings} />
+      <OpenAgentSettingsMenuItem />
     </>
   )
 }

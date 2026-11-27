@@ -20,15 +20,18 @@ export type ProviderGroupGuardDeps = {
   signalGroup?: (pgid: number, signal: NodeJS.Signals | 0) => void
 }
 
+/** `absent`: the reader saw no row. `changed`: a reread saw another process or parent. */
+export type ProviderProcessIdentityRead = ProviderProcessRow | 'absent' | 'changed' | 'unverifiable'
+
 /** Second-resolution identities are admissible only after a matching reread beyond their start second. */
-export async function proveProviderProcessIdentity(
+export async function readProviderProcessIdentity(
   pid: number,
   readRow = readPosixProcessRow
-): Promise<ProviderProcessRow | null> {
+): Promise<ProviderProcessIdentityRead> {
   const capturedAt = Date.now()
   const first = await readRow(pid)
   if (!first || first === 'unverifiable') {
-    return null
+    return first ?? 'absent'
   }
   if (first.startResolution !== 'second' || hasUnambiguousStartTime(first.startedAt, capturedAt)) {
     return first
@@ -36,13 +39,21 @@ export async function proveProviderProcessIdentity(
   await delay(1_050 - (Date.now() % 1_000))
   const rereadAt = Date.now()
   const second = await readRow(pid, first.startResolution)
-  return second &&
-    second !== 'unverifiable' &&
-    sameProviderProcess(first, second) &&
-    second.ppid === first.ppid &&
-    hasUnambiguousStartTime(second.startedAt, rereadAt)
-    ? second
-    : null
+  if (!second || second === 'unverifiable') {
+    return second ?? 'absent'
+  }
+  if (!sameProviderProcess(first, second) || second.ppid !== first.ppid) {
+    return 'changed'
+  }
+  return hasUnambiguousStartTime(second.startedAt, rereadAt) ? second : 'unverifiable'
+}
+
+export async function proveProviderProcessIdentity(
+  pid: number,
+  readRow = readPosixProcessRow
+): Promise<ProviderProcessRow | null> {
+  const identity = await readProviderProcessIdentity(pid, readRow)
+  return typeof identity === 'object' ? identity : null
 }
 
 export function sameProviderProcess(
@@ -106,49 +117,6 @@ export async function sweepOrphanedProviderGroup(
     return 'killed'
   }
   return 'refused'
-}
-
-/** Only retire the separate watcher after the provider group is gone, preserving descendant grace. */
-export async function retireProviderWatcher(
-  identity: ProviderGroupIdentity,
-  deps: ProviderGroupGuardDeps = {}
-): Promise<ProviderGroupSweepVerdict> {
-  const signal = deps.signalGroup ?? ((pgid, value) => process.kill(-pgid, value))
-  try {
-    signal(identity.pgid, 0)
-    return 'refused'
-  } catch (error) {
-    if (!isNoProcess(error)) {
-      return 'refused'
-    }
-  }
-  if (identity.watcher.pgid !== identity.watcher.pid || deps.signal?.aborted) {
-    return 'refused'
-  }
-  try {
-    signal(identity.watcher.pgid, 0)
-  } catch (error) {
-    return isNoProcess(error) ? 'absent' : 'refused'
-  }
-  const actual = await (deps.readProcessRow ?? readPosixProcessRow)(
-    identity.watcher.pid,
-    identity.watcher.startResolution
-  )
-  if (deps.signal?.aborted || actual === 'unverifiable') {
-    return 'refused'
-  }
-  if (!actual) {
-    return 'absent'
-  }
-  if (!sameProviderProcess(identity.watcher, actual)) {
-    return 'refused'
-  }
-  try {
-    signal(identity.watcher.pgid, 'SIGKILL')
-    return 'killed'
-  } catch (error) {
-    return isNoProcess(error) ? 'absent' : 'refused'
-  }
 }
 
 export function providerOwnershipAbsent(identity: ProviderGroupIdentity): boolean {

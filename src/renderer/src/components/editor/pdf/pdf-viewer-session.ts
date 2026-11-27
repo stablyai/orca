@@ -22,6 +22,10 @@ import {
 
 const PAGE_WIDTH_REFIT_SETTLE_MS = 150
 
+// Push buttons stay live: they are links, and a reset only changes this view's copy.
+const FORM_FIELD_SELECTOR =
+  '.textWidgetAnnotation, .choiceWidgetAnnotation, .checkBox, .radioButton'
+
 const USER_SCROLL_INPUT_EVENTS = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const
 
 function watchUserScrollInput(container: HTMLElement, onInput: () => void): () => void {
@@ -40,6 +44,7 @@ export function createPdfViewerSession({
   viewerDiv,
   doc,
   scrollCacheKey,
+  formsEditable,
   getScalePreference,
   scaleBounds,
   onScaleChanging,
@@ -49,6 +54,7 @@ export function createPdfViewerSession({
   viewerDiv: HTMLDivElement
   doc: pdfjsLib.PDFDocumentProxy
   scrollCacheKey: string | null
+  formsEditable: boolean
   getScalePreference: () => PdfScalePreference
   scaleBounds: { min: number; max: number }
   onScaleChanging: (scale: number) => void
@@ -207,6 +213,18 @@ export function createPdfViewerSession({
   // Why: border-box ignores the scrollbar a refit can toggle, which would refit again in a loop.
   fitWidthObserver.observe(container, { box: 'border-box' })
 
+  // Why inert, not AnnotationMode.ENABLE: that mode prints a password field's value as plain text.
+  const handleAnnotationLayerRendered = (evt: {
+    source: { annotationLayer?: { div?: HTMLElement | null } | null }
+  }): void => {
+    for (const field of evt.source.annotationLayer?.div?.querySelectorAll(FORM_FIELD_SELECTOR) ??
+      []) {
+      field.setAttribute('inert', '')
+    }
+  }
+  if (!formsEditable) {
+    eventBus.on('annotationlayerrendered', handleAnnotationLayerRendered)
+  }
   eventBus.on('pagesinit', handlePagesInit)
   eventBus.on('pagesloaded', handlePagesLoaded)
   eventBus.on('updateviewarea', handleUpdateViewArea)
@@ -226,6 +244,7 @@ export function createPdfViewerSession({
       clearTimeout(refitTimer)
     }
     recorder?.dispose()
+    eventBus.off('annotationlayerrendered', handleAnnotationLayerRendered)
     eventBus.off('pagesinit', handlePagesInit)
     eventBus.off('pagesloaded', handlePagesLoaded)
     eventBus.off('updateviewarea', handleUpdateViewArea)

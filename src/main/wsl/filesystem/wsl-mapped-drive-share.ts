@@ -4,7 +4,14 @@
  */
 import { realpath } from 'node:fs'
 import { win32 } from 'node:path'
+import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
 import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
+import {
+  isWslMappedDriveLastKnownInWsl,
+  rememberWslMappedDriveFailure,
+  rememberWslMappedDriveRead,
+  wslMappedDriveLastKnownShare
+} from './wsl-mapped-drive-last-known'
 
 const RESOLVE_TIMEOUT_MS = 2_000
 const CACHE_TTL_MS = 60_000
@@ -24,7 +31,9 @@ type CacheEntry = { settledAt: number | null; lookup: Promise<string | null> }
 const cache = new Map<string, CacheEntry>()
 
 const defaultDeps: WslMappedDriveShareDeps = {
-  platform: process.platform,
+  get platform() {
+    return process.platform
+  },
   // The native call asks Windows for the final path; the JS one keeps the drive letter.
   realpathRoot: (root) =>
     new Promise((resolve, reject) =>
@@ -56,10 +65,11 @@ function startDriveLookup(key: string, deps: WslMappedDriveShareDeps): CacheEntr
   entry.lookup = deps.realpathRoot(`${key}:\\`).then(
     (real) => {
       entry.settledAt = deps.now()
-      return parseWslUncPath(real) ? real.replace(/[\\/]+$/, '') : null
+      return rememberWslMappedDriveRead(key, real, deps.now())
     },
     () => {
-      // A failed lookup is asked again by the next add.
+      // Maps nowhere for now (no such drive, a disconnected share); the next add asks again.
+      rememberWslMappedDriveFailure(key, deps.now())
       if (cache.get(key) === entry) {
         cache.delete(key)
       }
@@ -97,6 +107,112 @@ export async function resolveWslMappedDrivePath(
   return tail === '' || tail === '.' ? share : `${share}\\${tail}`
 }
 
-export function clearWslMappedDriveShareCacheForTests(): void {
-  cache.clear()
+/** What a drive letter maps to right now; `unverifiable` when Windows didn't answer in time. */
+export type WslMappedDriveRead = { share: string | null } | 'unverifiable'
+
+type FreshLookup = { serial: number; settled: Promise<WslMappedDriveRead> }
+// Serials order fresh lookups, so a request can tell one started after it from an older one.
+let freshSerial = 0
+const freshLookups = new Map<string, FreshLookup>()
+
+function startFreshLookup(key: string, deps: WslMappedDriveShareDeps): FreshLookup {
+  const entry: FreshLookup = {
+    serial: ++freshSerial,
+    settled: deps.realpathRoot(`${key}:\\`).then(
+      (real) => ({ share: rememberWslMappedDriveRead(key, real, deps.now()) }),
+      // No such drive, or not one Windows can resolve: nowhere, unless last known in WSL.
+      (): WslMappedDriveRead =>
+        rememberWslMappedDriveFailure(key, deps.now()) ? 'unverifiable' : { share: null }
+    )
+  }
+  freshLookups.set(key, entry)
+  void entry.settled.finally(() => {
+    if (freshLookups.get(key) === entry) {
+      freshLookups.delete(key)
+    }
+  })
+  return entry
+}
+
+/** Joins a lookup started after `after`; waits out an older one rather than stack another. */
+async function freshAnswer(
+  key: string,
+  deps: WslMappedDriveShareDeps,
+  after: number
+): Promise<WslMappedDriveRead> {
+  for (;;) {
+    const current = freshLookups.get(key)
+    if (!current) {
+      return startFreshLookup(key, deps).settled
+    }
+    if (current.serial > after) {
+      return current.settled
+    }
+    await current.settled
+  }
+}
+
+/**
+ * Asks Windows again, bypassing the cache, for a decision that rewrites saved state: a drive
+ * remapped within the cache's minute must not move a project into another distro or folder.
+ * Concurrent reads of a letter share one lookup, so a hung share pins one fs thread.
+ */
+export async function readWslMappedDriveShareNow(
+  letter: string,
+  deps: WslMappedDriveShareDeps = defaultDeps,
+  timeoutMs: number = deps.timeoutMs
+): Promise<WslMappedDriveRead> {
+  if (deps.platform !== 'win32' || !/^[A-Za-z]$/.test(letter)) {
+    return { share: null }
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<'unverifiable'>((resolve) => {
+    timer = setTimeout(() => resolve('unverifiable'), timeoutMs)
+  })
+  const answer = freshAnswer(letter.toUpperCase(), deps, freshSerial)
+  return Promise.race([answer, timeout]).finally(() => clearTimeout(timer))
+}
+
+/**
+ * The letter's last answer, classifying an unknown or stale letter with one bounded, cached
+ * lookup. When that doesn't settle (or fails) and the letter was last known in WSL, that answer
+ * of any age, so the caller's fresh read decides; null when nothing is known.
+ */
+export async function classifyWslMappedDrive(
+  letter: string,
+  deps: WslMappedDriveShareDeps = defaultDeps
+): Promise<{ share: string | null } | null> {
+  if (deps.platform !== 'win32' || !/^[A-Za-z]$/.test(letter)) {
+    return { share: null }
+  }
+  // A minute, as the cache: a remap after that is classified again.
+  const known = wslMappedDriveLastKnownShare(letter, CACHE_TTL_MS, deps.now())
+  if (known) {
+    return known
+  }
+  await resolveDriveShare(letter, deps)
+  const settled = wslMappedDriveLastKnownShare(letter, CACHE_TTL_MS, deps.now())
+  if (settled) {
+    return settled
+  }
+  return isWslMappedDriveLastKnownInWsl(letter, deps.now())
+    ? wslMappedDriveLastKnownShare(letter, Number.POSITIVE_INFINITY, deps.now())
+    : null
+}
+
+/**
+ * The drive still maps into `distro`, to the share the window showed when it was given one.
+ * A drive may map a folder inside the distro; the share is that folder's UNC path.
+ */
+export function wslMappedDriveMatches(
+  share: string | null,
+  distro: string,
+  expectedShare: string | undefined
+): share is string {
+  return (
+    share !== null &&
+    parseWslUncPath(share)?.distro.toLowerCase() === distro.toLowerCase() &&
+    (expectedShare === undefined ||
+      normalizeRuntimePathForComparison(share) === normalizeRuntimePathForComparison(expectedShare))
+  )
 }

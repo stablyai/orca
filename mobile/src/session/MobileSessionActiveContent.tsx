@@ -1,11 +1,15 @@
+import { MobileSessionBotIdentity } from './native-chat/MobileSessionBotIdentity'
+import { MobileBotCardHostProvider } from './native-chat/transcript/bot-cards/MobileBotCardHostProvider'
+import { nativeChatTerminalRunner } from './native-chat/native-chat-terminal-runner'
 import { useCallback, useMemo, useState } from 'react'
 import { computeActiveTerminalKeyboardLift } from '../terminal/keyboard/terminal-keyboard-avoidance-lift'
 import {
   terminalPaneDirection,
   terminalPaneKeyboardLayout
 } from '../terminal/session/pane-layout/mobile-terminal-pane-layout'
-import { View, Text, Pressable, ActivityIndicator } from 'react-native'
-import { MobileBrowserPane } from '../browser/MobileBrowserPane'
+import { useWindowDimensions, View } from 'react-native'
+import { CircleAlert } from 'lucide-react-native'
+import { MobileBrowserTabBody } from '../browser/MobileBrowserTabBody'
 import { TerminalPaneView } from '../terminal/session/pane-layout/TerminalPaneView'
 import { MountedTerminalPanes } from '../terminal/session/pane-layout/mounted-terminal-lru'
 import { MobileNativeChatOverlay } from './native-chat/MobileNativeChatOverlay'
@@ -15,7 +19,6 @@ import { MobileNativeChatForkProvider } from './MobileNativeChatForkProvider'
 import { useMobileAgentMessageNavigation } from './use-mobile-agent-message-navigation'
 import { MobileNativeChatDictationPreviewContext } from './native-chat/composer/dictation/mobile-native-chat-dictation-preview-context'
 import { resolveMobileNativeChatSessionId } from './native-chat/conversation/mobile-native-chat-eligibility'
-import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-session-styles'
@@ -30,6 +33,7 @@ import { useHostProfile } from '../host-catalog/use-host-profile'
 import { useHostDisplay } from '../host-descriptors/use-host-display'
 import { FileReader } from '../files/session-documents/MobileSessionFileReader'
 import { MobileSessionContentState } from './MobileSessionContentState'
+import { MobileStateView } from '../components/feedback/MobileStateView'
 import { MarkdownReader } from '../files/session-documents/MobileSessionMarkdownReader'
 import { markdownTabDraftKey } from '../drafts/document-edit-draft-rows'
 import { workspaceDraftRowKey } from '../drafts/durable-draft-rows'
@@ -44,7 +48,12 @@ export function MobileSessionActiveContent({
   const t = useMobileTranslation()
   const executionHost = useWorkspaceExecutionHost()
   const [paneFrame, setPaneFrame] = useState({ width: 0, height: 0 })
-  const paneDirection = terminalPaneDirection(paneFrame, controller.terminalSplitLayout)
+  const windowWidth = useWindowDimensions().width
+  const paneDirection = terminalPaneDirection(
+    paneFrame,
+    controller.terminalSplitLayout,
+    windowWidth
+  )
   const {
     hostId,
     worktreeId,
@@ -60,8 +69,6 @@ export function MobileSessionActiveContent({
     diffComments,
     diffCommentBusy,
     createError,
-    setCreateError,
-    setShowCreateTabDrawer,
     dictationMode,
     dictationEnabled,
     toastMessage,
@@ -85,7 +92,6 @@ export function MobileSessionActiveContent({
     sendingDiffCommentIds,
     updateMarkdownLocalContent,
     copyMarkdownText,
-    copyMarkdownPath,
     discardMarkdownLocalContent,
     saveMarkdownTab,
     setTerminalWebViewRef,
@@ -113,8 +119,7 @@ export function MobileSessionActiveContent({
     isPendingTerminalRecoveryParked,
     retryPendingTerminalRecovery,
     showLoadingState,
-    showEmptyState,
-    createTabBusy
+    showEmptyState
   } = controller
   const { keyboardLift, activeTerminalKeyboardLift, toastAnimatedStyle } =
     useMobileSessionContentKeyboardLift(controller)
@@ -156,14 +161,11 @@ export function MobileSessionActiveContent({
         hostName={hostTitle}
         lastTabs={controller.visibleTabs.length > 0 ? { hostId, worktreeId } : null}
         loading={showLoadingState}
-        creating={createTabBusy}
+        creating={controller.createTabBusy}
         createError={createError}
         onReconnect={forceReconnectHost ? () => void forceReconnectHost(hostId) : null}
         onRetryTabs={() => void retryPendingTerminalRecovery()}
-        onCreateTab={() => {
-          setCreateError('')
-          setShowCreateTabDrawer(true)
-        }}
+        onNewTab={controller.handleOpenNewTab}
       />
     ) : activeMarkdownTab ? (
       <View style={styles.markdownFrame}>
@@ -178,7 +180,6 @@ export function MobileSessionActiveContent({
           onChange={(content) => updateMarkdownLocalContent(activeMarkdownTab.id, content)}
           onSave={() => void saveMarkdownTab(activeMarkdownTab)}
           onCopy={(text) => void copyMarkdownText(text)}
-          onCopyPath={() => void copyMarkdownPath(activeMarkdownTab)}
           onDiscard={() => discardMarkdownLocalContent(activeMarkdownTab)}
           loadImageSource={(path) =>
             loadMarkdownPreviewImage(client, worktreeId, activeMarkdownTab.relativePath, path)
@@ -224,12 +225,13 @@ export function MobileSessionActiveContent({
     ) : activeBrowserTab ? (
       <View style={styles.browserFrame}>
         {/* Why: pane owns imperative frame refs; don't render a stale frame while the old stream effect cleans up. */}
-        <MobileBrowserPane
+        <MobileBrowserTabBody
           key={activeBrowserTab.browserPageId ?? activeBrowserTab.id}
           client={client}
           worktreeId={worktreeId}
           tab={activeBrowserTab}
           screencastSupported={browserScreencastSupported}
+          hostSupport={controller.browserHostSupport}
           keyboardLift={keyboardLift}
           bottomInset={controller.insets.bottom}
           onToast={showToast}
@@ -237,36 +239,27 @@ export function MobileSessionActiveContent({
         {toast}
       </View>
     ) : activePendingTerminalTab ? (
-      <View style={styles.emptyState}>
-        {!isPendingTerminalRecoveryParked && (
-          <ActivityIndicator size="small" color={colors.textSecondary} />
-        )}
-        <Text style={styles.emptyText}>
-          {isPendingTerminalRecoveryParked
-            ? t(
-                'session.activeContent.terminalTakingLonger',
-                'Terminal is taking longer than expected'
-              )
-            : activePendingTerminalTab.title ||
-              t('session.activeContent.loadingTerminal', 'Loading terminal')}
-        </Text>
-        {isPendingTerminalRecoveryParked && (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t(
-              'session.activeContent.retryLoadingTerminal',
-              'Retry loading terminal'
-            )}
-            style={({ pressed }) => [
-              styles.createButton,
-              pressed && styles.newTerminalButtonPressed
-            ]}
-            onPress={() => void retryPendingTerminalRecovery()}
-          >
-            <Text style={styles.createButtonText}>{t('common.retry', 'Retry')}</Text>
-          </Pressable>
-        )}
-      </View>
+      isPendingTerminalRecoveryParked ? (
+        <MobileStateView
+          icon={CircleAlert}
+          title={t(
+            'session.activeContent.terminalTakingLonger',
+            'Terminal is taking longer than expected'
+          )}
+          action={{
+            label: t('common.retry', 'Retry'),
+            onPress: () => void retryPendingTerminalRecovery()
+          }}
+        />
+      ) : (
+        <MobileStateView
+          loading
+          title={
+            activePendingTerminalTab.title ||
+            t('session.activeContent.loadingTerminal', 'Loading terminal')
+          }
+        />
+      )
     ) : (
       <View style={styles.terminalFrame}>
         <MountedTerminalPanes terminals={terminals} visibleHandles={visibleTerminalHandles}>
@@ -306,6 +299,7 @@ export function MobileSessionActiveContent({
                     : activeTerminalKeyboardLift
               }
               terminalTheme={terminal.terminalTheme}
+              hostSettings={controller.terminalHostSettings}
               textScale={terminalTextScale}
               fontStyle={terminalFontStyle}
               onTextScaleChange={commitPinchedTextScale}
@@ -338,44 +332,44 @@ export function MobileSessionActiveContent({
             open={openSender}
           >
             <MobileNativeChatForkProvider controller={controller}>
-              <MobileNativeChatOverlay
-                controller={nativeChatController}
-                imageSource={nativeChatImageSource}
-                worktreePath={controller.worktreePath}
-                connState={controller.connState}
-                activeSessionTabId={controller.activeSessionTab?.id}
-                onOpenFile={handleNativeChatFileTap}
-                images={nativeChatImages}
-                structuredComposer={nativeChatStructuredComposer}
-                onMicPress={dictationEnabled ? handleDictationToggle : undefined}
-                micActive={dictation.isStarting || dictation.isRecording}
-                micStarting={dictation.isStarting}
-                micProcessing={dictation.isProcessing}
-                dictationMode={dictationMode}
-                onMicPressIn={handleDictationPressIn}
-                onMicPressOut={handleDictationPressOut}
-                inputLockReason={nativeChatOverlayInputLockReason}
-                sendErrorMessage={nativeChatSendError.message}
-                onClearSendError={nativeChatSendError.clear}
-                sendSurfaceId={controller.nativeChatScopeKey ?? ''}
-                sessionId={resolveMobileNativeChatSessionId(controller.activeSessionTab)}
-                getSendCompletionGeneration={controller.getSendCompletionGeneration}
-                keyboardInset={keyboardLift}
-                // A workspace routed to another server stops with that server, whose name the phone lacks.
-                hostName={executionHost === undefined && hostProfile ? hostTitle : null}
-                onOpenUrlInOrca={openUrlInOrca}
-                linkOpenMode={controller.linkOpenMode}
-                hostOutage={nativeChatHostOutage}
-                onRunInTerminal={(command) =>
-                  void controller.handleCreateTerminal(undefined, {
-                    startupCommand: command,
-                    startupCommandDelivery: 'shell-ready',
-                    terminalView: true
-                  })
-                }
-                // Accounts open on the paired host, so a chat another server runs offers none.
-                onOpenAccounts={executionHost === undefined ? openNativeChatAccounts : undefined}
-              />
+              <MobileBotCardHostProvider {...{ client, hostId, executionHost, hostTitle }}>
+                <MobileSessionBotIdentity controller={controller}>
+                  <MobileNativeChatOverlay
+                    controller={nativeChatController}
+                    imageSource={nativeChatImageSource}
+                    worktreePath={controller.worktreePath}
+                    connState={controller.connState}
+                    activeSessionTabId={controller.activeSessionTab?.id}
+                    onOpenFile={handleNativeChatFileTap}
+                    images={nativeChatImages}
+                    structuredComposer={nativeChatStructuredComposer}
+                    onMicPress={dictationEnabled ? handleDictationToggle : undefined}
+                    micActive={dictation.isStarting || dictation.isRecording}
+                    micStarting={dictation.isStarting}
+                    micProcessing={dictation.isProcessing}
+                    dictationMode={dictationMode}
+                    onMicPressIn={handleDictationPressIn}
+                    onMicPressOut={handleDictationPressOut}
+                    inputLockReason={nativeChatOverlayInputLockReason}
+                    sendErrorMessage={nativeChatSendError.message}
+                    onClearSendError={nativeChatSendError.clear}
+                    sendSurfaceId={controller.nativeChatScopeKey ?? ''}
+                    sessionId={resolveMobileNativeChatSessionId(controller.activeSessionTab)}
+                    getSendCompletionGeneration={controller.getSendCompletionGeneration}
+                    keyboardInset={keyboardLift}
+                    // A workspace routed to another server stops with that server, whose name the phone lacks.
+                    hostName={executionHost === undefined && hostProfile ? hostTitle : null}
+                    onOpenUrlInOrca={openUrlInOrca}
+                    linkOpenMode={controller.linkOpenMode}
+                    hostOutage={nativeChatHostOutage}
+                    onRunInTerminal={nativeChatTerminalRunner(controller)}
+                    // Accounts open on the paired host, so a chat another server runs offers none.
+                    onOpenAccounts={
+                      executionHost === undefined ? openNativeChatAccounts : undefined
+                    }
+                  />
+                </MobileSessionBotIdentity>
+              </MobileBotCardHostProvider>
             </MobileNativeChatForkProvider>
           </MobileAgentMessageProvider>
         </MobileNativeChatDictationPreviewContext.Provider>

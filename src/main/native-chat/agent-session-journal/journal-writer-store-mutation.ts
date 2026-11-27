@@ -1,4 +1,4 @@
-import { journalForkStageHeld } from './journal-fork-stage-state'
+import { journalForkAttachmentHeld, journalForkStageHeld } from './journal-fork-stage-state'
 import { journalChatBusy } from './journal-forgotten-chats'
 import { clearSuccessor } from '../../runtime/agent-session/records/agent-session-sender-identity-revision'
 import { pruneJournalWriterOperations } from './journal-writer-operation-expiry'
@@ -23,7 +23,7 @@ import type { AgentSessionStoreState } from '../../runtime/agent-session/records
 import { isReadableAgentSessionStoreOperation } from '../../runtime/agent-session/records/agent-session-store-row-rules'
 import { JournalSqlScope } from './journal-sql-scope'
 import { JournalSqlStatusContext } from './journal-sql-status-context'
-import { readJournalSqlUsageLimitContinueIdentity } from './journal-sql-status-cuts'
+import { readJournalSqlUsageLimitStopWithdrawal } from './journal-sql-status-cuts'
 import {
   attributeAgentSessionRuntimeRecord,
   type AgentSessionRuntimeFacts
@@ -108,6 +108,14 @@ export function resolveJournalWriterStoreMutation(
       loadRecord(successor)
     }
   }
+  if (mutation.kind === 'command' && mutation.command.kind === 'forget-chat') {
+    for (const sessionId of mutation.command.sessionIds) {
+      const successor = clearSuccessor(state.records.get(sessionId))
+      if (successor !== null && !mutation.command.sessionIds.includes(successor)) {
+        loadRecord(successor)
+      }
+    }
+  }
   if (identity.pruneAt !== undefined) {
     touched.operations.remove.push(...pruneJournalWriterOperations(db, identity.pruneAt))
   }
@@ -156,7 +164,7 @@ export function resolveJournalWriterStoreMutation(
       : undefined
   const continueCut =
     head && (action || mutation.kind === 'rewind-complete')
-      ? readJournalSqlUsageLimitContinueIdentity(
+      ? readJournalSqlUsageLimitStopWithdrawal(
           new JournalSqlStatusContext(
             new JournalSqlScope(
               db,
@@ -176,8 +184,14 @@ export function resolveJournalWriterStoreMutation(
       .get(mutation.sessionId)
   const forgetRefused =
     mutation.kind === 'command' &&
-    mutation.command.kind === 'forget-idle' &&
-    journalChatBusy(db, mutation.command.sessionId, mutation.command.idleBefore)
+    ((mutation.command.kind === 'forget-idle' &&
+      journalChatBusy(db, mutation.command.sessionId, mutation.command.idleBefore)) ||
+      (mutation.command.kind === 'forget-chat' &&
+        // Only a fork reading it holds a stopped chat; its queued text goes with it.
+        mutation.command.sessionIds.some(
+          (sessionId) =>
+            journalForkStageHeld(db, sessionId) || journalForkAttachmentHeld(db, sessionId)
+        )))
   let value = sleepingWithPendingInput
     ? null
     : forgetRefused

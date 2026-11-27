@@ -1,25 +1,33 @@
 /** Terminal census for lifecycle planning; null is unverifiable, never zero. Lost contact cannot prove process death
  * (docs/reference/ssh-execution-boundary.md). */
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
-const CountSchema = z.number().int().nonnegative().nullable()
+const CountSchema = lazyZodSchema(() => z.number().int().nonnegative().nullable())
 
-export const OrcadTerminalCensusSchema = z.object({
-  /** Sessions the live daemon owns right now. */
-  liveSessions: CountSchema,
-  /** Of those, how many started at or after the active version's activation. */
-  startedSinceActivation: CountSchema,
-  /** Protocol of the daemon that owns those sessions; null unless exactly one generation owns them. */
-  daemonProtocolVersion: z.number().int().positive().nullable(),
-  /** Protocol of every daemon generation owning those sessions; absent on older hosts. */
-  daemonProtocolVersions: z.array(z.number().int().positive()).optional(),
-  /** In-process fallback sessions end with orcad, unlike daemon sessions; absent on older hosts. */
-  inProcessSessions: CountSchema.optional(),
-  /** Admission-fence expiry, epoch ms; 0 means reopened. Absence never proves older servers fenced admission. */
-  admissionClosedUntil: z.number().finite().nonnegative().optional()
-})
+export const OrcadTerminalCensusSchema = lazyZodSchema(() =>
+  z.object({
+    /** Sessions the live daemon owns right now. */
+    liveSessions: CountSchema,
+    /** Of those, how many started at or after the active version's activation. */
+    startedSinceActivation: CountSchema,
+    /** Protocol of the daemon that owns those sessions; null unless exactly one generation owns them. */
+    daemonProtocolVersion: z.number().int().positive().nullable(),
+    /** Protocol of every daemon generation owning those sessions; absent on older hosts. */
+    daemonProtocolVersions: z.array(z.number().int().positive()).optional(),
+    /** In-process fallback sessions end with orcad, unlike daemon sessions; absent on older hosts. */
+    inProcessSessions: CountSchema.optional(),
+    /** Native chats with a live provider, which a stop ends; absent on older hosts, so unknown. */
+    chatSessions: CountSchema.optional(),
+    /** Admission-fence expiry, epoch ms; 0 means reopened. Absence never proves older servers fenced admission. */
+    admissionClosedUntil: z.number().finite().nonnegative().optional()
+  })
+)
 
-export type OrcadTerminalCensus = z.infer<typeof OrcadTerminalCensusSchema>
+export type OrcadTerminalCensus = z.infer<typeof OrcadTerminalCensusSchema> & {
+  /** Client-side stamp, never on the wire: the desktop's census client parsed a server reply. */
+  answered?: true
+}
 
 /** A daemon that could not answer: unknown, never zero. */
 export const UNVERIFIABLE_ORCAD_TERMINAL_CENSUS: Readonly<OrcadTerminalCensus> = Object.freeze({
@@ -27,6 +35,11 @@ export const UNVERIFIABLE_ORCAD_TERMINAL_CENSUS: Readonly<OrcadTerminalCensus> =
   startedSinceActivation: null,
   daemonProtocolVersion: null
 })
+
+/** Whether a server answered this census; anything else, however it was built, reads as unanswered. */
+export function isAnsweredOrcadTerminalCensus(census: OrcadTerminalCensus): boolean {
+  return census.answered === true
+}
 
 /** The longest a census may close terminal admission; the stop that follows takes seconds. */
 export const ORCAD_TERMINAL_ADMISSION_MAX_FENCE_MS = 5 * 60_000
@@ -40,11 +53,18 @@ export const ORCAD_UPDATE_ADMISSION_STOP_BY_MS = ORCAD_UPDATE_ADMISSION_FENCE_MS
 /** RPC a managed orcad answers with its census; clients call it only when advertised. */
 export const ORCAD_TERMINAL_CENSUS_METHOD = 'orcad.terminalCensus'
 
-export const OrcadTerminalCensusParamsSchema = z.object({
-  /** The active version's activation time, epoch ms; sessions created at or after it count. */
-  activatedAt: z.number().finite().nonnegative(),
-  /** Before restart, release unused finished automation terminals; older servers ignore this optional request. */
-  releaseFinishedAutomationTerminals: z.literal(true).optional(),
-  /** Fence new terminals before the final census/stop; 0 reopens. Older servers ignore this optional request. */
-  closeAdmissionForMs: z.number().int().min(0).max(ORCAD_TERMINAL_ADMISSION_MAX_FENCE_MS).optional()
-})
+export const OrcadTerminalCensusParamsSchema = lazyZodSchema(() =>
+  z.object({
+    /** The active version's activation time, epoch ms; sessions created at or after it count. */
+    activatedAt: z.number().finite().nonnegative(),
+    /** Before restart, release unused finished automation terminals; older servers ignore this optional request. */
+    releaseFinishedAutomationTerminals: z.literal(true).optional(),
+    /** Fence new terminals before the final census/stop; 0 reopens. Older servers ignore this optional request. */
+    closeAdmissionForMs: z
+      .number()
+      .int()
+      .min(0)
+      .max(ORCAD_TERMINAL_ADMISSION_MAX_FENCE_MS)
+      .optional()
+  })
+)

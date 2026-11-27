@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useAppStore } from '@/store'
-import { revealHostTerminalPane } from '@/hooks/ipc-events/terminal-pane-reveal-ipc-bridge'
+import { revealHostTerminalPane } from '@/hooks/ipc-events/terminal/terminal-pane-reveal-ipc-bridge'
 
 /**
  * Routes the app window to a pane the user clicked in the notch panel.

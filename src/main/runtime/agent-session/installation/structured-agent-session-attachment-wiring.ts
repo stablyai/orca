@@ -25,6 +25,7 @@ export function installAgentSessionAttachments(deps: {
   stateDirectory: string
   store: Pick<AgentSessionRecordStore, 'getRecord' | 'isSessionUnreadable'>
   journalDatabase: JournalSqlDatabase
+  retainedUploadIds?: (root: string) => Promise<ReadonlySet<string>>
   logger: StructuredAgentSessionLogger
 }): void {
   stopAgentSessionAttachments()
@@ -41,11 +42,22 @@ export function installAgentSessionAttachments(deps: {
   const attachments = new AgentSessionAttachmentStore(root, {
     hasSession: (sessionId) => deps.store.getRecord(sessionId) !== null
   })
-  setAgentSessionAttachmentStore(attachments)
+  setAgentSessionAttachmentStore(attachments, async (sessionId, body) => {
+    if (deps.journalDatabase.readOnly || deps.journalDatabase.isClosed) {
+      throw new Error('Chat attachments cannot be claimed on this host now')
+    }
+    await deps.journalDatabase.effects([
+      { kind: 'claim', claim: { sessionId, body, required: true, now: Date.now() } }
+    ])
+  })
+  const retainedUploadIds = deps.retainedUploadIds
   sweeper = startAgentSessionAttachmentSweeps(
     attachments,
     {
-      ...structuredAgentSessionAttachmentSweepFacts(deps.journalDatabase),
+      ...structuredAgentSessionAttachmentSweepFacts(
+        deps.journalDatabase,
+        retainedUploadIds ? () => retainedUploadIds(root) : undefined
+      ),
       onUploadRemoved: publishAgentSessionUploadRemoval
     },
     {

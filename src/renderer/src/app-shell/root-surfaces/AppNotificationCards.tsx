@@ -1,9 +1,11 @@
 import { Suspense, type JSX } from 'react'
 import type { TopLevelView } from '../../../../shared/ui-chrome/ui-chrome-types'
+import { AgentCliUpdateCard } from '../../components/agent-cli-update/AgentCliUpdateCard'
 import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
-import { CodexSharedSettingsNoticeCard } from '../../components/CodexSharedSettingsNoticeCard'
-import { NotificationCardStack } from '../../components/NotificationCardStack'
-import { StarNagCard } from '../../components/StarNagCard'
+import { CodexSharedSettingsNoticeCard } from '../../components/terminal-pane/provider-notices/codex-settings/CodexSharedSettingsNoticeCard'
+import { NotificationCardStack } from '../../components/notifications/NotificationCardStack'
+import { StarNagCard } from '../../components/star-nag/StarNagCard'
+import { WorkspaceCleanupRunCard } from '../../components/workspace-cleanup/removal/run/WorkspaceCleanupRunCard'
 import { OverlayBoundary } from './app-root-surface-boundaries'
 
 const ChatUiHereCornerCard = lazy(() =>
@@ -12,13 +14,18 @@ const ChatUiHereCornerCard = lazy(() =>
   }))
 )
 const UpdateCard = lazy(() =>
-  import('../../components/UpdateCard').then((module) => ({ default: module.UpdateCard }))
+  import('../../components/maintenance/update-card/UpdateCard').then((module) => ({
+    default: module.UpdateCard
+  }))
 )
 const UnexpectedSignoutCard = lazy(() =>
-  import('../../components/UnexpectedSignoutCard').then((module) => ({
+  import('../../components/unexpected-signout/UnexpectedSignoutCard').then((module) => ({
     default: module.UnexpectedSignoutCard
   }))
 )
+
+// Temporarily disabled while fixing a bug where the card can stay stuck open.
+const AGENT_CLI_UPDATE_CARD_ENABLED = false
 
 /** The bottom-right notification stack and every card that shares it. */
 export function AppNotificationCards({
@@ -41,6 +48,11 @@ export function AppNotificationCards({
           </OverlayBoundary>
         </Suspense>
       ) : null}
+      {AGENT_CLI_UPDATE_CARD_ENABLED ? (
+        <OverlayBoundary boundaryId="overlay.agent-cli-update-card" resetKey={activeView}>
+          <AgentCliUpdateCard />
+        </OverlayBoundary>
+      ) : null}
       {shouldMountUpdateCard ? (
         <Suspense fallback={null}>
           <OverlayBoundary boundaryId="overlay.update-card" resetKey={activeView}>
@@ -53,6 +65,9 @@ export function AppNotificationCards({
           <UnexpectedSignoutCard />
         </OverlayBoundary>
       </Suspense>
+      <OverlayBoundary boundaryId="overlay.workspace-cleanup-run" resetKey={activeView}>
+        <WorkspaceCleanupRunCard />
+      </OverlayBoundary>
       <OverlayBoundary boundaryId="overlay.star-nag" resetKey={activeView}>
         <StarNagCard />
       </OverlayBoundary>

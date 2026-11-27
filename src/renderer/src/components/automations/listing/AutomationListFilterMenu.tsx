@@ -1,6 +1,6 @@
 import React from 'react'
-import { ListFilter, X } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { RailPageFilterButton } from '@/components/rail-page/RailPageToolbar'
+import { X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -217,20 +217,7 @@ export function AutomationListFilterMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-8 shrink-0 gap-1.5 border border-border bg-background px-2.5 text-xs shadow-none hover:bg-muted/50 focus-visible:border-ring/70 focus-visible:ring-0"
-        >
-          <ListFilter className="size-3.5" />
-          {t('auto.components.automations.AutomationListFilterMenu.filters', 'Filters')}
-          {activeCount > 0 ? (
-            <span className="rounded-full bg-foreground px-1.5 text-[10px] font-semibold leading-4 text-background">
-              {activeCount}
-            </span>
-          ) : null}
-        </Button>
+        <RailPageFilterButton activeCount={activeCount} />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-48">
         {hostEntries ? (

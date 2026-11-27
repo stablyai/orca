@@ -2,7 +2,8 @@ import { readBridgeExternalLinkUrl } from '../../mobile-web-shell/bridge/protoco
 
 // Use shell linking because RN Web window.open reports success even though both native WebViews refuse new windows.
 // Publish outside React for plain-function callers; missing publication/invalid URLs log refusal without throwing from tap handlers.
-type ExternalLinkOpener = (url: string) => boolean
+// Resolves whether an app took the link where the shell can say so, else whether the shell took the URL.
+type ExternalLinkOpener = (url: string) => boolean | Promise<boolean>
 
 let post: ExternalLinkOpener = () => false
 
@@ -15,13 +16,16 @@ export function canOpenExternalLink(url: string): boolean {
   return readBridgeExternalLinkUrl(url) !== null
 }
 
-export function openExternalLink(url: string): void {
+/** False when the shell refused the URL or, on shells that report it, no app on the phone took it. */
+export async function openExternalLink(url: string): Promise<boolean> {
   // Validate before posting: the shell drops refused frames without a reply, which would otherwise look like successful navigation.
   if (readBridgeExternalLinkUrl(url) === null) {
     console.warn('[page] refused to open a URL outside the allowed schemes', { url })
-    return
+    return false
   }
-  if (!post(url)) {
-    console.warn('[page] the shell did not take a URL to open', { url })
+  const opened = await Promise.resolve(post(url)).catch(() => false)
+  if (!opened) {
+    console.warn('[page] the shell did not open a URL', { url })
   }
+  return opened
 }

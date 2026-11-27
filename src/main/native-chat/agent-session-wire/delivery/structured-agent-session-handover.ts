@@ -26,6 +26,7 @@ import {
 } from '../operations/structured-agent-session-command-turn'
 import type { StoppedHistoryDelivery } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-stopped-history'
 import { withStoppedHistory } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-stopped-history'
+import { structuredAgentSessionRideAlong } from '../structured-agent-session-ride-along'
 import {
   markStructuredAgentSessionInputUnadmitted,
   beginStructuredAgentSessionHandover,
@@ -68,6 +69,9 @@ export async function beginSubmissionHandover(
   // Join only current turns; persist stopped-history carry before writing to the provider.
   const turnScope = await readContextStructuredAgentSessionTurnScope(ctx)
   let carried: StoppedHistoryDelivery | null = null
+  const rideAlong = structuredAgentSessionRideAlong(ctx, submission, body)
+  const outgoing = (): AgentJournalMessageItem =>
+    rideAlong.outgoing(carried ? withStoppedHistory(body, carried.messages) : body)
   let ownsChild = stillCurrent
   let closing: UnsentSendHold['cause'] | undefined
   let unwritten = false
@@ -92,6 +96,7 @@ export async function beginSubmissionHandover(
       turnScope,
       body
     })
+    await rideAlong.claim(ctx.fence, turnScope)
   } catch (error) {
     attempt?.end()
     release?.()
@@ -106,10 +111,19 @@ export async function beginSubmissionHandover(
       turnScope: AGENT_JOURNAL_THREAD_SCOPE,
       body
     })
-    return carried ? withStoppedHistory(body, carried.messages) : body
+    await rideAlong.claim(fence, AGENT_JOURNAL_THREAD_SCOPE)
+    return outgoing()
   }
   // Preserve handover time so turn-open cannot re-anchor elapsed work.
-  const requestedAt = await structuredAgentSessionHandoverOrigin(ctx.journal, submission)
+  let requestedAt: number
+  try {
+    requestedAt = await structuredAgentSessionHandoverOrigin(ctx.journal, submission)
+  } catch (error) {
+    attempt?.end()
+    release?.()
+    released()
+    throw error
+  }
   return {
     run: async (commit) => {
       try {
@@ -130,7 +144,7 @@ export async function beginSubmissionHandover(
                   ? await dispatchSafely(
                       ctx,
                       clientMessageId,
-                      carried ? withStoppedHistory(body, carried.messages) : body,
+                      outgoing(),
                       requestedAt,
                       submission.options,
                       queued,
@@ -210,6 +224,7 @@ export async function beginSubmissionHandover(
               message: submission.options,
               executed: outcome.ranOptions
             })
+            await rideAlong.taken(ctx.fence)
           }
         })
       } finally {

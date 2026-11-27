@@ -7,7 +7,10 @@ import type { RuntimeClient } from '../runtime/client'
 import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { getDefaultUserDataPath } from '../runtime/profile/metadata'
 import { ensureCliAppEnvironment } from '../runtime/profile/cli-app-environment'
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
+import {
+  getAgentHookConfigPaths,
+  type AgentHookInstallStatus
+} from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../shared/orca-profiles/orca-profiles'
 import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import type { ProfileStateOfflineLocation } from '../../main/persistence/profile-state/offline-access/profile-state-offline-settings'
@@ -129,16 +132,6 @@ async function updateRunningRuntime(client: RuntimeClient, enabled: boolean): Pr
   return true
 }
 
-/** The running app owns the live setting and removes its hooks; otherwise the profile on disk. */
-export async function persistAgentStatusHooksEnabled(
-  client: RuntimeClient,
-  enabled: boolean
-): Promise<void> {
-  if (!(await updateRunningRuntime(client, enabled))) {
-    await updateEnabledOnDisk(enabled)
-  }
-}
-
 /** Null when no runtime answers; a running app owns the live setting. */
 async function readRunningRuntimeHooksEnabled(client: RuntimeClient): Promise<boolean | null> {
   if (!(await client.getOfflineRuntimeAdmission()).reachable) {
@@ -166,7 +159,8 @@ function formatAgentHookCommandResult(result: AgentHookCommandResult): string {
   const statusSummary = result.statuses
     .map((status) => {
       const showDetail = status.detail && (status.state === 'partial' || status.state === 'error')
-      const path = status.configPath ? ` (${status.configPath})` : ''
+      const paths = getAgentHookConfigPaths(status)
+      const path = paths.length > 0 ? ` (${paths.join(', ')})` : ''
       return `${status.agent}: ${status.state}${path}${showDetail ? ` - ${status.detail}` : ''}`
     })
     .join('\n')

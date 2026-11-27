@@ -1,78 +1,94 @@
-import type { Dispatch, SetStateAction } from 'react'
-import { cn } from '@/lib/class-names'
-import { CircleCheck, Copy, Crosshair, Send, Trash2 } from 'lucide-react'
+import { CircleCheck, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { useTranslate } from '@/i18n/use-translate'
-import {
-  BrowserAnnotationSendMenuContent,
-  browserAnnotationCopyTooltip
-} from '../../annotate/delivery/BrowserAnnotationSendMenuContent'
-import { browserAnnotationLimitMessage } from '../../annotate/delivery/browser-annotation-limit-message'
-import {
-  isBrowserAnnotationPageFull,
-  type BrowserGrabPayload,
-  type GrabIntent
-} from '../../../../../../shared/browser/element-grab/browser-grab-types'
-import type { GrabModeHook } from '../../annotate/grab/useGrabMode'
-import { preventAgentSendTargetOutsideDismiss } from '../../annotate/delivery/prevent-agent-send-target-outside-dismiss'
+import { uiNumberFormat } from '@/i18n/ui-intl-formatters'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import { BrowserGuestGrabBanner } from '../../annotate/browser-guest-grab-banner'
+import type { useBrowserGuestAnnotateTools } from '../../annotate/use-browser-guest-annotate-tools'
+import type { BrowserResourceNotice } from '../../navigate/use-browser-page-resource-notices'
+
+const COUNT_FORMAT: Intl.NumberFormatOptions = {}
+
+export function CookiesImportedBanner({
+  count,
+  onReloadPage,
+  onDismiss
+}: {
+  count: number
+  onReloadPage: () => void
+  onDismiss: () => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
+  const countLabel = uiNumberFormat(COUNT_FORMAT, intlLocale).format(count)
+  const message = t(
+    'browser.cookieImport.notice.importedCount',
+    'Imported {{countLabel}} cookies',
+    {
+      count,
+      countLabel,
+      defaultValue_one: 'Imported {{countLabel}} cookie'
+    }
+  )
+  return (
+    // Why pl-3/pr-2: the check centers on the toolbar's back button, the × on its close button.
+    <div className="flex min-h-9 items-center gap-2 border-b border-border/60 bg-background pl-3 pr-2 text-[13px] text-foreground">
+      <CircleCheck className="size-4 shrink-0 text-status-success" aria-hidden />
+      <span className="min-w-0 flex-1 truncate" title={message}>
+        {message}
+      </span>
+      <Button
+        size="xs-notice"
+        className="shrink-0"
+        onClick={() => {
+          onReloadPage()
+          onDismiss()
+        }}
+      >
+        {t('browser.cookieImport.notice.reload', 'Reload')}
+      </Button>
+      <Button
+        size="icon-xs"
+        variant="muted-field-icon"
+        className="shrink-0"
+        onClick={onDismiss}
+        aria-label={t('auto.components.browser.pane.BrowserPane.2fdca7df09', 'Dismiss')}
+      >
+        <X className="size-3.5" />
+      </Button>
+    </div>
+  )
+}
 
 export function BrowserPageChromeBanners({
   resourceNotice,
   setResourceNotice,
-  grab,
-  grabIntent,
-  pendingAnnotationPayload,
-  browserAnnotationsLength,
-  annotationBannerSendOpen,
-  handleAnnotationBannerSendOpenChange,
+  onReloadPage,
+  tools,
   worktreeId,
-  activeGroupId,
-  browserAnnotationsPrompt,
-  includePageDetails,
-  handleIncludePageDetailsChange,
-  handleBrowserAnnotationsSentToAgent,
-  handleBrowserAnnotationsHandedOff,
-  handleCopyBrowserAnnotations,
-  browserAnnotationsCopied,
-  handleClearBrowserAnnotations,
-  setPendingAnnotationPayload
+  showGrabBanner = true
 }: {
-  resourceNotice: string | null
-  setResourceNotice: Dispatch<SetStateAction<string | null>>
-  grab: GrabModeHook
-  grabIntent: GrabIntent
-  pendingAnnotationPayload: BrowserGrabPayload | null
-  browserAnnotationsLength: number
-  annotationBannerSendOpen: boolean
-  handleAnnotationBannerSendOpenChange: (open: boolean) => void
+  resourceNotice: BrowserResourceNotice | null
+  setResourceNotice: (notice: string | null) => void
+  onReloadPage: () => void
+  tools: Pick<
+    ReturnType<typeof useBrowserGuestAnnotateTools>,
+    'grab' | 'grabAnnotations' | 'annotationSend'
+  >
   worktreeId: string
-  activeGroupId: string | undefined
-  browserAnnotationsPrompt: string
-  includePageDetails: boolean
-  handleIncludePageDetailsChange: (include: boolean) => void
-  handleBrowserAnnotationsSentToAgent: () => void
-  handleBrowserAnnotationsHandedOff: (delivered: Promise<unknown>) => void
-  handleCopyBrowserAnnotations: () => void
-  browserAnnotationsCopied: boolean
-  handleClearBrowserAnnotations: () => void
-  setPendingAnnotationPayload: Dispatch<SetStateAction<BrowserGrabPayload | null>>
-}): React.JSX.Element | null {
+  showGrabBanner?: boolean
+}): React.JSX.Element {
   const t = useTranslate()
-  if (!resourceNotice && grab.state === 'idle') {
-    return null
-  }
-
   return (
     <>
-      {resourceNotice ? (
+      {resourceNotice?.kind === 'cookies-imported' ? (
+        <CookiesImportedBanner
+          count={resourceNotice.count}
+          onReloadPage={onReloadPage}
+          onDismiss={() => setResourceNotice(null)}
+        />
+      ) : resourceNotice ? (
         <div className="flex items-center justify-between gap-2 border-b border-border/60 bg-background px-3 py-1.5 text-xs text-muted-foreground">
-          <span>{resourceNotice}</span>
+          <span>{resourceNotice.text}</span>
           <button
             type="button"
             onClick={() => setResourceNotice(null)}
@@ -83,159 +99,7 @@ export function BrowserPageChromeBanners({
           </button>
         </div>
       ) : null}
-      {grab.state !== 'idle' ? (
-        <div
-          className={cn(
-            'flex items-center gap-2 border-b border-border/60 px-3 py-1.5 text-xs text-foreground/90',
-            grab.state === 'error' ? 'bg-destructive/10' : 'bg-accent'
-          )}
-        >
-          <Crosshair
-            className={cn(
-              'size-3 shrink-0',
-              grab.state === 'error' ? 'text-destructive' : 'text-muted-foreground'
-            )}
-          />
-          <span className="min-w-0 flex-1 truncate">
-            {grab.state === 'error'
-              ? t(
-                  'auto.components.browser.pane.BrowserPane.4328a0a062',
-                  'Grab failed: {{value0}}',
-                  { value0: grab.error ?? 'Unknown error' }
-                )
-              : grabIntent === 'annotate'
-                ? pendingAnnotationPayload
-                  ? t(
-                      'auto.components.browser.pane.BrowserPane.b733a91bd9',
-                      'Add feedback for the selected element.'
-                    )
-                  : isBrowserAnnotationPageFull(browserAnnotationsLength)
-                    ? browserAnnotationLimitMessage(t)
-                    : browserAnnotationsLength === 1
-                      ? t(
-                          'auto.components.browser.pane.BrowserPane.074f0ed10b',
-                          '{{value0}} annotation ready. Select another element or copy all feedback.',
-                          { value0: browserAnnotationsLength }
-                        )
-                      : browserAnnotationsLength > 0
-                        ? t(
-                            'auto.components.browser.pane.BrowserPane.a2164a6e5a',
-                            '{{value0}} annotations ready. Select another element or copy all feedback.',
-                            { value0: browserAnnotationsLength }
-                          )
-                        : t(
-                            'auto.components.browser.pane.BrowserPane.777b5bc4ec',
-                            'Click an element to add feedback for the agent.'
-                          )
-                : grab.state === 'confirming'
-                  ? t(
-                      'auto.components.browser.pane.BrowserPane.e852e20cea',
-                      'Copied — press S to screenshot, or select another element'
-                    )
-                  : t(
-                      'auto.components.browser.pane.BrowserPane.168350ae6a',
-                      'Click or hover an element, then press C to copy or S to screenshot.'
-                    )}
-          </span>
-          {grabIntent === 'annotate' && browserAnnotationsLength > 0 ? (
-            <>
-              <DropdownMenu
-                modal={false}
-                open={annotationBannerSendOpen}
-                onOpenChange={handleAnnotationBannerSendOpenChange}
-              >
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        size="xs"
-                        variant="outline"
-                        className="h-6 gap-1.5"
-                        disabled={!browserAnnotationsPrompt}
-                      >
-                        <Send className="size-3" />
-                        {t('auto.components.browser.pane.BrowserPane.ac39b9366b', 'Send')}
-                      </Button>
-                    </DropdownMenuTrigger>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" sideOffset={6}>
-                    {t(
-                      'auto.components.browser.pane.BrowserPane.95af781091',
-                      'Send feedback to an agent'
-                    )}
-                  </TooltipContent>
-                </Tooltip>
-                <DropdownMenuContent
-                  align="end"
-                  className="min-w-[180px]"
-                  onInteractOutside={preventAgentSendTargetOutsideDismiss}
-                  onPointerDownOutside={preventAgentSendTargetOutsideDismiss}
-                >
-                  <BrowserAnnotationSendMenuContent
-                    worktreeId={worktreeId}
-                    groupId={activeGroupId ?? worktreeId}
-                    prompt={browserAnnotationsPrompt}
-                    includePageDetails={includePageDetails}
-                    onIncludePageDetailsChange={handleIncludePageDetailsChange}
-                    onPromptDelivered={handleBrowserAnnotationsSentToAgent}
-                    onPromptHandedOff={handleBrowserAnnotationsHandedOff}
-                  />
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    size="xs"
-                    variant="outline"
-                    className="h-6 gap-1.5"
-                    onClick={handleCopyBrowserAnnotations}
-                  >
-                    {browserAnnotationsCopied ? (
-                      <CircleCheck className="size-3" />
-                    ) : (
-                      <Copy className="size-3" />
-                    )}
-                    {browserAnnotationsCopied
-                      ? t('auto.components.browser.pane.BrowserPane.6f4ab3592b', 'Copied')
-                      : t('auto.components.browser.pane.BrowserPane.499b31b84e', 'Copy All')}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>
-                  {browserAnnotationCopyTooltip(includePageDetails, t)}
-                </TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    size="icon-xs"
-                    variant="ghost"
-                    className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                    onClick={handleClearBrowserAnnotations}
-                    aria-label={t(
-                      'auto.components.browser.pane.BrowserPane.734e4343ec',
-                      'Clear browser annotations'
-                    )}
-                  >
-                    <Trash2 className="size-3" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>
-                  {t('auto.components.browser.pane.BrowserPane.11c5084aa2', 'Clear annotations')}
-                </TooltipContent>
-              </Tooltip>
-            </>
-          ) : null}
-          <button
-            className="ml-auto shrink-0 rounded px-2 py-0.5 text-muted-foreground transition-colors hover:text-foreground"
-            onClick={() => {
-              setPendingAnnotationPayload(null)
-              grab.cancel()
-            }}
-          >
-            {t('auto.components.browser.pane.BrowserPane.fa6ea61de3', 'Cancel')}
-          </button>
-        </div>
-      ) : null}
+      {showGrabBanner ? <BrowserGuestGrabBanner tools={tools} worktreeId={worktreeId} /> : null}
     </>
   )
 }

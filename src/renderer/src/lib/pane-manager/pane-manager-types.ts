@@ -13,7 +13,7 @@ import type { TerminalPanePlacement } from '../../../../shared/workspace-layout/
 import type { ScrollState } from './terminal-scroll/pane-scroll-snapshot'
 import type { TerminalWebglAutoDecision } from './terminal-rendering/terminal-webgl-auto-policy'
 
-export type PaneActivationOptions = { focus?: boolean }
+export type PaneActivationOptions = { focus?: boolean; interaction?: 'user' | 'hover' }
 
 /** One-shot spawn/adoption hints belong to creation, separate from persistent ManagedPane state. */
 export type PaneSpawnHints = {
@@ -62,7 +62,16 @@ export type PaneDropTaker = (
 export type PaneManagerOptions = {
   onPaneCreated?: (pane: ManagedPane, spawnHints?: PaneSpawnHints) => void | Promise<void>
   onPaneClosed?: (paneId: number, closedPane?: ClosedPaneInfo) => void
-  onActivePaneChange?: (pane: ManagedPane) => void
+  onActivePaneChange?: (
+    pane: ManagedPane,
+    interaction?: PaneActivationOptions['interaction']
+  ) => void
+  onPaneActivation?: (
+    leafId: TerminalLeafId,
+    interaction: PaneActivationOptions['interaction'],
+    changed: boolean
+  ) => void
+  withHoverFocus?: (focus: () => void) => void
   onLayoutChanged?: () => void
   // Temporarily bypass Electron webview pointers during pane drags or webviews steal the stream.
   onPaneDragActiveChange?: (active: boolean) => void
@@ -170,7 +179,7 @@ export type ManagedPaneInternal = {
   panePointerDownHandler?: ((event: PointerEvent) => void) | null
   paneMouseEnterHandler?: ((event: MouseEvent) => void) | null
   paneDragCleanup?: (() => void) | null
-  compositionHandler: (() => void) | null
+  imeCandidateAnchorCleanup: (() => void) | null
   focusClassSyncCleanup?: (() => void) | null
   domBlockFillCleanup?: (() => void) | null
   terminalScrollIntentDisposable?: IDisposable | null

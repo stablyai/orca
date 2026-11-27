@@ -1,6 +1,7 @@
 import { textFieldClaimsActionKey } from '@/lib/keyboard/text-field-shortcut-policy'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
+import { listHiddenByRailPage } from '@/components/app-rail/app-rail-navigation'
 import { activateWorktreeFromSidebar } from '@/lib/workspace/activation/sidebar-worktree-activation'
 import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
 import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
@@ -13,7 +14,7 @@ import type { LastActiveCycleWorkspace, SidebarWorkspacePreview } from './worktr
 import { resolveCycledWorkspaceRow } from './worktree-keyboard-cycle'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { focusActiveWorkspaceSurfaceFromSidebar } from './focus-workspace-surface'
+import { focusActiveWorkspaceSurfaceFromSidebar, focusProjects } from './focus-workspace-surface'
 import type { WorktreeContextMenuDeleteIntent } from '../../workspace-actions/context-menu/worktree-context-menu-delete-intent'
 import { useSidebarWorkspaceDeleteKeyboard } from './use-sidebar-workspace-delete-keyboard'
 import { textInputOwnsComposition } from '../../../../../../shared/keybindings/text-input-shortcut-policy'
@@ -191,7 +192,8 @@ export function useWorktreeListKeyboardNavigation(args: {
       scrollRef.current?.removeAttribute('data-keyboard-navigation')
     }
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || e.isComposing || activeModal !== 'none') {
+      // Why the rail check: a rail page hides the list (still mounted); its shortcuts must not act on hidden rows.
+      if (e.defaultPrevented || e.isComposing || activeModal !== 'none' || listHiddenByRailPage()) {
         return
       }
 
@@ -201,9 +203,7 @@ export function useWorktreeListKeyboardNavigation(args: {
         !textFieldClaimsActionKey(e, 'sidebar.focusWorktreeList') &&
         !hasVisibleOverlay()
       ) {
-        scrollRef.current?.focus()
-        // A terminal that finishes mounting after this shortcut must not take the keys back.
-        scrollRef.current?.setAttribute('data-keyboard-navigation', '')
+        focusProjects(() => scrollRef.current)
         e.preventDefault()
         return
       }

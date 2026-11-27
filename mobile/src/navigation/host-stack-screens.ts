@@ -21,6 +21,12 @@ export const HOST_STACK_SCREENS = [
     }
   },
   {
+    name: '[hostId]/mcp',
+    get title() {
+      return translate('navigation.hostStackScreens.mcpServers', 'MCP servers')
+    }
+  },
+  {
     name: '[hostId]/tasks',
     get title() {
       return translate('navigation.hostStackScreens.tasks', 'Tasks')
@@ -47,7 +53,7 @@ export const HOST_STACK_SCREENS = [
   {
     name: '[hostId]/agent-history/[worktreeId]',
     get title() {
-      return translate('navigation.hostStackScreens.agentSessionHistory', 'Agent Session History')
+      return translate('navigation.hostStackScreens.agentSessionHistory', 'Agent history')
     }
   },
   {

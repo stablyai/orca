@@ -220,6 +220,14 @@ export const KEYBINDING_DEFINITION_CORE_3: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings(['Mod+F'])
   },
   {
+    id: 'page.search',
+    title: 'Search this page',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'search', 'find', 'filter', 'tasks', 'skills', 'automations'],
+    defaultBindings: platformBindings(['Mod+F'])
+  },
+  {
     id: 'terminal.copySelection',
     title: 'Copy terminal selection',
     group: 'Terminal Panes',

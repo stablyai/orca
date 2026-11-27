@@ -108,6 +108,10 @@ export class BrowserClientPageRendererBridgeRegistry {
     return bridge
   }
 
+  hasCurrentRenderer(): boolean {
+    return this.current !== null && this.isCurrent(this.current)
+  }
+
   selectRenderer = (): BrowserClientPageRenderer => {
     const state = this.current
     const bridge = state?.bridge

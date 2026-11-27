@@ -1,4 +1,7 @@
-import type { AgentSessionContextUsage } from '../../../shared/agent-session/conversation-context/agent-session-context-usage'
+import type {
+  AgentSessionContextUsage,
+  AgentSessionContextUsed
+} from '../../../shared/agent-session/conversation-context/agent-session-context-usage'
 import type {
   ProviderTimelineEvent,
   ProviderTimelineJoin
@@ -49,15 +52,19 @@ export class AcpContextTimeline {
 export function acpWindowUsage(update: UsageUpdate, at: number): AgentSessionContextUsage {
   return {
     window: { tokens: update.size, capturedAt: at },
-    used: {
-      kind: 'estimate',
-      capturedAt: at,
-      usage: {
-        inputTokens: update.used,
-        cacheReadInputTokens: 0,
-        cacheCreationInputTokens: 0,
-        outputTokens: 0
-      }
+    used: acpUsedEstimate(update.used, at)
+  }
+}
+
+export function acpUsedEstimate(tokens: number, at: number): AgentSessionContextUsed {
+  return {
+    kind: 'estimate',
+    capturedAt: at,
+    usage: {
+      inputTokens: tokens,
+      cacheReadInputTokens: 0,
+      cacheCreationInputTokens: 0,
+      outputTokens: 0
     }
   }
 }

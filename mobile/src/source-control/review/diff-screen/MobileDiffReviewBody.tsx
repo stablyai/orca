@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { View } from 'react-native'
 import { FileText, ListChecks } from 'lucide-react-native'
 import type { DiffComment } from '../../../../../src/shared/file-review/diff-comment-types'
 import {
@@ -8,6 +10,8 @@ import {
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { MobileDiffReviewLines, type LineRange } from './MobileDiffReviewLines'
+import { MobilePanZoomImage } from '../../../files/media/presentation/MobilePanZoomImage'
+import { filePreviewStyles } from '../../../files/preview/mobile-file-preview-styles'
 import type {
   ReviewDiffState,
   ReviewScreenState
@@ -17,7 +21,7 @@ import type {
   MobileDiffReviewQueueItem
 } from '../diff-state/mobile-diff-review-queue'
 import type { MobileDiffReviewThread } from '../diff-actions/mobile-diff-review-github'
-import type { PRCommentCardActions } from '../pull-request/comments/PRCommentCard'
+import type { PrThreadActions } from '../pull-request/comments/PrThreadRow'
 
 type Props = {
   commentsByLine: ReadonlyMap<number, DiffComment[]>
@@ -27,9 +31,10 @@ type Props = {
   screenState: ReviewScreenState
   staleCommentIds: ReadonlySet<string>
   threadsByLine: ReadonlyMap<number, readonly MobileDiffReviewThread[]>
-  threadActions: PRCommentCardActions | undefined
+  threadActions: PrThreadActions | undefined
   selectedRange: LineRange | null
-  onPickLines: (range: LineRange) => void
+  onSelectLines: (range: LineRange | null) => void
+  onOpenThread: (threadId: string, focusReply: boolean) => void
   /** Scroll to this line once, then report it done. */
   scrollToLine: number | null
   onScrolledToLine: () => void
@@ -52,7 +57,8 @@ export function MobileDiffReviewBody({
   threadsByLine,
   threadActions,
   selectedRange,
-  onPickLines,
+  onSelectLines,
+  onOpenThread,
   scrollToLine,
   onScrolledToLine,
   onEditNote,
@@ -119,6 +125,15 @@ export function MobileDiffReviewBody({
       <MobileLoadErrorState error={diffState.message} onRetry={onRetry} />
     )
   }
+  if (diffState.kind === 'image') {
+    return (
+      <DiffImage
+        key={diffState.dataUri}
+        diffState={diffState}
+        title={currentItem?.filePath ?? ''}
+      />
+    )
+  }
   if (diffState.kind !== 'ready') {
     return <DiffUnavailableState diffState={diffState} />
   }
@@ -134,9 +149,35 @@ export function MobileDiffReviewBody({
       selectedRange={selectedRange}
       scrollToLine={scrollToLine}
       onScrolledToLine={onScrolledToLine}
-      {...(currentItem?.scope === 'commit' ? {} : { onPickLines })}
+      {...(currentItem?.scope === 'commit' ? {} : { onSelectLines })}
+      onOpenThread={onOpenThread}
       onEditNote={onEditNote}
     />
+  )
+}
+
+/** Same view as the file tab: the image after the change, or the deleted one. */
+function DiffImage({
+  diffState,
+  title
+}: {
+  diffState: Extract<ReviewDiffState, { kind: 'image' }>
+  title: string
+}) {
+  const t = useMobileTranslation()
+  // An image the WebView can't decode stays hidden, so fall back to the binary notice.
+  const [failed, setFailed] = useState(false)
+  if (failed) {
+    return <DiffUnavailableState diffState={{ kind: 'binary', itemKey: diffState.itemKey }} />
+  }
+  return (
+    <View style={filePreviewStyles.imageContainer}>
+      <MobilePanZoomImage
+        uri={diffState.dataUri}
+        onError={() => setFailed(true)}
+        label={t('files.filePreviewBody.imageLabel', '{{title}} image', { title })}
+      />
+    </View>
   )
 }
 

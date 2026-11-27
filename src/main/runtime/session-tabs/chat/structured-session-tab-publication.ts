@@ -29,6 +29,7 @@ export type StructuredSessionTabPublicationInput = {
   navigation?: 'caller'
   capture?: (surface: StructuredSessionSurface) => void
   workspaceAuthority?: {
+    writerFence?: Int32Array
     check(): void
     current(): boolean
     committed(): void
@@ -61,6 +62,7 @@ export async function admitStructuredSessionTabPublication(
       throw new Error('Chat tab inventory is unavailable')
     }
     await host.setSessionTabVisibility(input.sessionId, true, newReopenedChatTabId(), {
+      writerFence: input.workspaceAuthority?.writerFence,
       check: () => input.workspaceAuthority?.check(),
       capture: (winner) => {
         if (winner) {
@@ -133,7 +135,10 @@ export type StructuredSessionRawPublicationInput = Pick<
 > & { eligible?: () => boolean; savedOrder?: MainSessionTabRows }
 
 export function projectStructuredSessionTab(
-  runtime: Pick<OrcaRuntimeService, 'mobileSessionTabsByWorktree' | 'storeMobileSessionSnapshot'>,
+  runtime: Pick<
+    OrcaRuntimeService,
+    'mobileSessionTabsByWorktree' | 'storeMobileSessionSnapshot' | 'reopenClosedMobileSessionTab'
+  >,
   input: StructuredSessionRawPublicationInput,
   emit: (snapshot: RuntimeMobileSessionTabsSnapshot) => void
 ): void {
@@ -244,6 +249,8 @@ export function projectStructuredSessionTab(
   if (input.eligible?.() === false) {
     throw new Error('Chat tab publication was superseded')
   }
+  // A reopened chat returns under its old id; clients that missed its close would otherwise keep hiding it.
+  runtime.reopenClosedMobileSessionTab(input.workspaceId, id)
   const selected = input.savedOrder
     ? withMainTabOrder(snapshot, input.savedOrder, input.activate ? tab : undefined)
     : input.activate

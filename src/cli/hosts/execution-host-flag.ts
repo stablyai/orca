@@ -73,6 +73,10 @@ export async function resolveHostFlagEnvironmentId(
   if (host?.kind !== 'runtime' && host?.kind !== 'alias') {
     return null
   }
+  // An explicit server selection scopes bare aliases to that server's local/SSH hosts.
+  if (host.kind === 'alias' && (selection.environmentSelector || selection.pairingCode)) {
+    return null
+  }
   const [{ resolveEnvironment }, { getDefaultUserDataPath }, { listEnvironments }] =
     await Promise.all([
       import('../runtime/pairing/environments.js'),
@@ -86,10 +90,6 @@ export async function resolveHostFlagEnvironmentId(
   }))
   const wanted = host.kind === 'runtime' ? host.environmentId : host.alias
   const flagSpelling = host.kind === 'runtime' ? `--host ${host.id}` : `--host ${host.alias}`
-  // An explicit server selection scopes bare aliases to that server's local/SSH hosts.
-  if (host.kind === 'alias' && (selection.environmentSelector || selection.pairingCode)) {
-    return null
-  }
   // Accept environment names but canonicalize them to IDs for stored-host comparisons.
   const environment = findEnvironmentByName(environments, wanted)
   if (!environment) {
@@ -208,6 +208,14 @@ export function hostFilterMatchesHostId(
   return filter.kind === 'runtime' && candidate === LOCAL_EXECUTION_HOST_ID
 }
 
+async function readEnvironmentSummaries(): Promise<EnvironmentSummary[]> {
+  const [{ getDefaultUserDataPath }, { listEnvironments }] = await Promise.all([
+    import('../runtime/profile/metadata.js'),
+    import('../../shared/remote-runtime/host-store/runtime-environment-store.js')
+  ])
+  return (await listEnvironments(getDefaultUserDataPath())).map(({ id, name }) => ({ id, name }))
+}
+
 // Validate SSH IDs against the connected runtime, not this machine's pairing store.
 export async function resolveHostFlagTarget(
   flags: Map<string, string | boolean>,
@@ -217,15 +225,6 @@ export async function resolveHostFlagTarget(
   if (host?.kind !== 'ssh' && host?.kind !== 'alias') {
     return host
   }
-  const [, { getDefaultUserDataPath }, { listEnvironments }] = await Promise.all([
-    import('../runtime/pairing/environments.js'),
-    import('../runtime/profile/metadata.js'),
-    import('../../shared/remote-runtime/host-store/runtime-environment-store.js')
-  ])
-  const environments = (await listEnvironments(getDefaultUserDataPath())).map((candidate) => ({
-    id: candidate.id,
-    name: candidate.name
-  }))
   if (host.kind === 'alias' && isLocalHostListName(host.alias)) {
     return resolveLocalHostListName(host.alias, client)
   }
@@ -235,7 +234,7 @@ export async function resolveHostFlagTarget(
   const targetId = await resolveSshHostTargetId(
     client,
     wanted,
-    environments,
+    readEnvironmentSummaries,
     flagSpelling,
     host.kind === 'alias'
   )
@@ -295,15 +294,7 @@ export async function resolveEnvironmentSelectorForStore(
   selector: string,
   listSshTargetsForSuggestion: () => Promise<SshTargetSummary[]>
 ): Promise<string> {
-  const [, { getDefaultUserDataPath }, { listEnvironments }] = await Promise.all([
-    import('../runtime/pairing/environments.js'),
-    import('../runtime/profile/metadata.js'),
-    import('../../shared/remote-runtime/host-store/runtime-environment-store.js')
-  ])
-  const environments = (await listEnvironments(getDefaultUserDataPath())).map((candidate) => ({
-    id: candidate.id,
-    name: candidate.name
-  }))
+  const environments = await readEnvironmentSummaries()
   const found = findEnvironmentByName(environments, selector)
   if (found) {
     return found.id === selector || found.name === selector ? selector : found.id

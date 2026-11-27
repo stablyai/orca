@@ -3,10 +3,9 @@ import { OrchestrationDb } from '../orchestration-db'
 import {
   deleteExpiredOrchestrationRows,
   EXPIRED_ROW_SWEEPS,
-  deleteRetiredRun,
-  listRetiredRunCandidates,
-  type RunPartyLiveness
+  listRetiredRunCandidates
 } from './settled-run-retention'
+import { deleteRetiredRun, retireSettledRun, type RunPartyLiveness } from './settled-run-retirement'
 import '../contract-constants'
 import '../messages/mailbox-routing-page'
 import '../dispatch-row-writer'
@@ -14,10 +13,14 @@ import '../attempt-outcome-projection'
 
 const LONG_AGO = '2000-01-01 00:00:00'
 const PANE_LEAF = '11111111-1111-4111-8111-111111111111'
-const nobodyIsLive: RunPartyLiveness = { isLiveHandle: () => false, isLivePane: () => false }
+const nobodyIsLive: RunPartyLiveness = {
+  isLiveHandle: () => false,
+  isLivePane: () => false,
+  waitedMailboxes: () => []
+}
 const liveHandle = (live: string): RunPartyLiveness => ({
-  isLiveHandle: (handle) => handle === live,
-  isLivePane: () => false
+  ...nobodyIsLive,
+  isLiveHandle: (handle) => handle === live
 })
 
 describe('settled Run retention', () => {
@@ -100,6 +103,12 @@ describe('settled Run retention', () => {
          VALUES (?, ?, ?, ?, 'released', 'released')`
       )
       .run(`resource_${objective}`, dispatchId, dispatchId, `term_worker_${objective}`)
+    db.db
+      .prepare(
+        `INSERT INTO worker_presence (dispatch_id, presence, generation, report)
+         VALUES (?, 'resting', 1, '{"from":"worker","reason":"finished"}')`
+      )
+      .run(dispatchId)
     return { run, task, dispatchId }
   }
 
@@ -133,7 +142,7 @@ describe('settled Run retention', () => {
     settle(settled.run.id)
     ageEveryTimestamp()
 
-    expect(listRetiredRunCandidates(db!, '', 10).retired).toEqual([settled.run.id])
+    expect(listRetiredRunCandidates(db!, '', 10).candidates).toContain(settled.run.id)
     expect(deleteRetiredRun(db!, live.run.id, nobodyIsLive)).toBe(false)
     expect(deleteRetiredRun(db!, settled.run.id, nobodyIsLive)).toBe(true)
 
@@ -148,7 +157,8 @@ describe('settled Run retention', () => {
       'federated_dispatches WHERE dispatch_id = ?',
       'worker_terminal_resources WHERE owner_dispatch_id = ?',
       'remote_questions WHERE dispatch_id = ?',
-      'federation_relay_items WHERE dispatch_id = ?'
+      'federation_relay_items WHERE dispatch_id = ?',
+      'worker_presence WHERE dispatch_id = ?'
     ]) {
       expect(count(table, settled.dispatchId)).toBe(0)
     }
@@ -158,6 +168,170 @@ describe('settled Run retention', () => {
     expect(db!.getTask(live.task.id)).toBeDefined()
     expect(db!.getWorkerDispatch(live.dispatchId)).toBeDefined()
     expect(count('worker_terminal_resources WHERE owner_dispatch_id = ?', live.dispatchId)).toBe(1)
+    expect(count('worker_presence WHERE dispatch_id = ?', live.dispatchId)).toBe(1)
+  })
+
+  it('deletes a large settled Run a bounded page at a time, its Run row last', () => {
+    const { run } = createRunWithWorker('large')
+    for (let n = 0; n < 1_000; n++) {
+      db!.insertMessage({
+        runId: run.id,
+        from: 'term_large',
+        to: `run:${run.id}`,
+        subject: `m${n}`
+      })
+    }
+    for (let n = 0; n < 300; n++) {
+      db!.createTask({ spec: `task ${n}`, runId: run.id })
+    }
+    const insertDelivery = db!.db.prepare(
+      `INSERT INTO deliveries (id, run_id, consumer_generation, message_ids, status)
+       VALUES (?, ?, 1, '[]', 'acknowledged')`
+    )
+    for (let n = 0; n < 300; n++) {
+      insertDelivery.run(`delivery_${n}`, run.id)
+    }
+    settle(run.id)
+    ageEveryTimestamp()
+
+    // A quit midway leaves the Run, with fewer settled rows, for the next pass to finish.
+    const interrupted = retireSettledRun(db!, run.id, nobodyIsLive)
+    for (let step = 0; step < 12; step++) {
+      expect(interrupted.next().done).toBe(false)
+    }
+    expect(db!.getRun(run.id)).toBeDefined()
+
+    const steps = retireSettledRun(db!, run.id, nobodyIsLive)
+    for (;;) {
+      const step = steps.next()
+      if (step.done) {
+        expect(step.value).toBe(true)
+        break
+      }
+      expect(db!.getRun(run.id)).toBeDefined()
+    }
+    expect(db!.getRun(run.id)).toBeUndefined()
+    expect(count('messages WHERE run_id = ?', run.id)).toBe(0)
+    expect(count('tasks WHERE run_id = ?', run.id)).toBe(0)
+    expect(count('deliveries WHERE run_id = ?', run.id)).toBe(0)
+    expect(count('removed_orchestration_work')).toBe(0)
+  })
+
+  it('stops retiring a Run whose coordinator pane comes back between pages', () => {
+    const { run } = createRunWithWorker('reattached')
+    for (let n = 0; n < 200; n++) {
+      db!.insertMessage({ runId: run.id, from: 'worker', to: `run:${run.id}`, subject: `m${n}` })
+    }
+    settle(run.id)
+    ageEveryTimestamp()
+    let paneLive = false
+    const steps = retireSettledRun(db!, run.id, {
+      ...nobodyIsLive,
+      isLivePane: (paneKey) => paneLive && paneKey === `tab_reattached:${PANE_LEAF}`
+    })
+    let step = steps.next()
+    while (!step.done && count('messages WHERE run_id = ?', run.id) === 201) {
+      step = steps.next()
+    }
+    paneLive = true
+    while (!step.done) {
+      step = steps.next()
+    }
+
+    expect(step.value).toBe(false)
+    expect(db!.getRun(run.id)).toBeDefined()
+    expect(count('messages WHERE run_id = ?', run.id)).toBeGreaterThan(0)
+  })
+
+  it('keeps a Run and its new gate when a gate opens between pages', () => {
+    const { run, task } = createRunWithWorker('gated')
+    for (let n = 0; n < 200; n++) {
+      db!.insertMessage({ runId: run.id, from: 'worker', to: `run:${run.id}`, subject: `m${n}` })
+    }
+    settle(run.id)
+    ageEveryTimestamp()
+    const steps = retireSettledRun(db!, run.id, nobodyIsLive)
+    let step = steps.next()
+    while (!step.done && count("worker_terminal_resources WHERE id = 'resource_gated'") === 1) {
+      step = steps.next()
+    }
+    db!.createGate({ taskId: task.id, question: 'Ship it?' })
+    while (!step.done) {
+      step = steps.next()
+    }
+
+    expect(step.value).toBe(false)
+    expect(db!.getRun(run.id)).toBeDefined()
+    expect(count("decision_gates WHERE run_id = ? AND status = 'pending'", run.id)).toBe(1)
+  })
+
+  it('keeps a Run whose Task is reopened between pages', () => {
+    const { run, task } = createRunWithWorker('reopened')
+    settle(run.id)
+    ageEveryTimestamp()
+    const steps = retireSettledRun(db!, run.id, nobodyIsLive)
+    let step = steps.next()
+    while (!step.done && count("worker_terminal_resources WHERE id = 'resource_reopened'") === 1) {
+      step = steps.next()
+    }
+    db!.db.prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(task.id)
+    while (!step.done) {
+      step = steps.next()
+    }
+
+    expect(step.value).toBe(false)
+    expect(count("tasks WHERE id = ? AND status = 'ready'", task.id)).toBe(1)
+  })
+
+  it.each(['run', 'dispatch'] as const)(
+    'keeps a Run whose %s mailbox gets a reader between pages',
+    (mailbox) => {
+      const { run, dispatchId } = createRunWithWorker(`waited_${mailbox}`)
+      for (let n = 0; n < 200; n++) {
+        db!.insertMessage({ runId: run.id, from: 'worker', to: `run:${run.id}`, subject: `m${n}` })
+      }
+      settle(run.id)
+      ageEveryTimestamp()
+      const handle = mailbox === 'run' ? `run:${run.id}` : `dispatch:${dispatchId}`
+      let waiting = false
+      const steps = retireSettledRun(db!, run.id, {
+        ...nobodyIsLive,
+        waitedMailboxes: () => (waiting ? [handle] : [])
+      })
+      let step = steps.next()
+      // The worker's report, its question and the 200 above.
+      while (!step.done && count('messages WHERE run_id = ?', run.id) === 202) {
+        step = steps.next()
+      }
+      waiting = true
+      while (!step.done) {
+        step = steps.next()
+      }
+
+      expect(step.value).toBe(false)
+      expect(count('messages WHERE run_id = ?', run.id)).toBeGreaterThan(0)
+    }
+  )
+
+  it('keeps a Run whose settled Task result is corrected between pages', () => {
+    const { run, task } = createRunWithWorker('corrected')
+    settle(run.id)
+    ageEveryTimestamp()
+    const steps = retireSettledRun(db!, run.id, nobodyIsLive)
+    let step = steps.next()
+    while (!step.done && count("worker_terminal_resources WHERE id = 'resource_corrected'") === 1) {
+      step = steps.next()
+    }
+    db!.updateTaskStatus(task.id, 'completed', 'corrected result')
+    while (!step.done) {
+      step = steps.next()
+    }
+
+    expect(step.value).toBe(false)
+    expect(db!.getTask(task.id)?.result).toBe('corrected result')
+    expect(count('dispatch_contexts WHERE run_id = ?', run.id)).toBe(1)
+    // The worker's report and its question.
+    expect(count('messages WHERE run_id = ?', run.id)).toBe(2)
   })
 
   it('keeps a settled Run while its coordinator, a reader of its unread mail or its worker terminal is live', () => {
@@ -170,7 +344,7 @@ describe('settled Run retention', () => {
     expect(deleteRetiredRun(db!, run.id, liveHandle(`run:${run.id}`))).toBe(false)
     expect(
       deleteRetiredRun(db!, run.id, {
-        isLiveHandle: () => false,
+        ...nobodyIsLive,
         isLivePane: (paneKey) => paneKey === `tab_bound:${PANE_LEAF}`
       })
     ).toBe(false)
@@ -184,7 +358,7 @@ describe('settled Run retention', () => {
     const { run } = createRunWithWorker('recent')
     settle(run.id)
 
-    expect(listRetiredRunCandidates(db!, '', 10).retired).toEqual([])
+    expect(listRetiredRunCandidates(db!, '', 10).candidates).toEqual([])
     expect(deleteRetiredRun(db!, run.id, nobodyIsLive)).toBe(false)
     expect(db!.getRun(run.id)).toBeDefined()
   })

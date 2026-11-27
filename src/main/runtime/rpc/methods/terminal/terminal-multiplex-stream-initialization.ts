@@ -48,6 +48,7 @@ export async function initializeMultiplexStream(
     supportsEndpointLossNotice:
       request.capabilities?.writeUnavailable === 1 && request.capabilities.endpointLossNotice === 1,
     inputSessionId: request.capabilities?.inputAck === 1 ? (request.inputSessionId ?? null) : null,
+    unsequencedInputTail: Promise.resolve(),
     outputPaused: false,
     supportsOutputCadence,
     supportsDesktopViewportClaims: request.capabilities?.desktopViewportClaims === 1,
@@ -127,7 +128,7 @@ export async function initializeMultiplexStream(
     () => stream.outputPaused,
     isMobile ? request.client?.id : undefined,
     stream.supportsOutputPause && request.capabilities?.paneVisibility === 1,
-    state.viewerDeviceId
+    state.viewer
   )
   // Report daemon death now, before the next refused keystroke.
   const unsubscribeEndpointLoss = stream.supportsEndpointLossNotice

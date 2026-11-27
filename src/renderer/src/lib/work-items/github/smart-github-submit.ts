@@ -192,14 +192,6 @@ export function lookupSmartGitHubSubmitItem({
   return stampedPromise
 }
 
-export function clearSmartGitHubSubmitLookupCacheForTests(): void {
-  smartGitHubSubmitLookupCache.clear()
-}
-
-export function getSmartGitHubSubmitLookupCacheSizeForTests(): number {
-  return smartGitHubSubmitLookupCache.size
-}
-
 export function getSmartGitHubSubmitResolution(
   item: Pick<GitHubWorkItem, 'number' | 'title' | 'type' | 'url'>
 ): SmartGitHubSubmitResolution {

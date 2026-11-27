@@ -4,6 +4,7 @@ import { parseExecutionHostId } from '../../../../src/shared/execution-host/exec
 import {
   MOBILE_RELAY_HOST_WORKTREES_METHOD,
   MOBILE_RELAY_HOSTS_LIST_METHOD,
+  MOBILE_RELAY_HOSTS_UNWATCH_ROWS_METHOD,
   type MobileRelayHost,
   type MobileRelayHostRelay
 } from '../../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
@@ -37,7 +38,8 @@ const relayHostSchema = z.looseObject({
   relay: z.enum(RELAY).catch('unavailable'),
   stoppedOnDesktop: z.literal(true).optional().catch(undefined),
   unavailableOnDesktop: z.literal(true).optional().catch(undefined),
-  installationId: z.string().optional().catch(undefined)
+  installationId: z.string().optional().catch(undefined),
+  rowChanges: z.literal(true).optional().catch(undefined)
 }) satisfies z.ZodType<MobileRelayHost>
 
 export const relayHostsListRead = bindDeferredRpcOperation(
@@ -80,5 +82,16 @@ export const relayHostWorktreeSnapshotRead = bindDeferredRpcOperation(
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('relay-host-worktree-snapshot', worktreeCatalogSchema)
+  })
+)
+
+// Fire-and-forget: older desktops ignore or reject unknown method, and release is best-effort.
+export const relayHostsUnwatchRows = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'mobileRelay.unwatch-rows-or-skip',
+    method: MOBILE_RELAY_HOSTS_UNWATCH_ROWS_METHOD,
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('relay-hosts-unwatch-rows', z.unknown())
   })
 )

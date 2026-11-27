@@ -16,6 +16,7 @@ import {
   resolveHostFlagEnvironmentId
 } from './hosts/execution-host-flag'
 import { fetchSshTargetSummaries, listSshTargets } from './hosts/host-selector-alternatives'
+import { describeRemoteServerSelection } from './hosts/remote-server-selection'
 import { reportCliError } from './output/cli-error'
 import { RuntimeClientError } from './runtime/connection/types'
 import { cliErrorExitCode } from './output/cli-exit-code'
@@ -24,6 +25,7 @@ import type { RuntimeClient } from './runtime/client'
 import { COMMAND_SPECS } from './specs'
 import { resolveOrchestrationCliExecutable } from './orchestration/recovery/orchestration-recovery-command'
 import { refuseConflictingSessionCallerFlags } from './orchestration/identity/session-caller-flags'
+import { adoptSessionToolCaller, tradeSessionToolToken } from './runtime/session-tool-caller'
 import { ignoresRemoteSelection } from './dispatch/remote-selection-scope'
 import {
   isLocalEnvironmentSelector,
@@ -114,6 +116,13 @@ export async function main(
     validateCommandAndFlags(COMMAND_SPECS, parsed)
     configureExecutable?.(parsed.commandPath)
     const commandSpec = findCommandSpec(COMMAND_SPECS, parsed.commandPath)
+    // A local client only: the token names a session on this host.
+    await adoptSessionToolCaller(process.env, async (token) =>
+      tradeSessionToolToken(
+        new (await loadRuntimeClientClass())(undefined, undefined, null, null),
+        token
+      )
+    )
     refuseConflictingSessionCallerFlags(commandSpec, parsed.flags)
     await refuseLocalManagementSelector(parsed.commandPath, parsed.flags)
     const RuntimeClientClass = await loadRuntimeClientClass()
@@ -211,6 +220,7 @@ export async function main(
           parsed.flags.has('pairing-code') ||
           (typeof hostFlag === 'string' && hostFlag.startsWith('runtime:')) ||
           Boolean(process.env.ORCA_ENVIRONMENT?.trim() || process.env.ORCA_PAIRING_CODE?.trim())),
+      remoteServer: describeRemoteServerSelection(parsed.flags),
       conciseOrchestration: parsed.commandPath[0] === 'orchestration' && !parsed.flags.has('full')
     })
     process.exitCode = cliErrorExitCode(error, parsed.commandPath)

@@ -39,6 +39,7 @@ import { resolveStartupShell } from '../../../../shared/agent-launch/startup/tui
 import { resolveWslSessionContext } from '../../../daemon/pty-subprocess/wsl-session-context'
 import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { resolveWslHostAgentLaunchInputs } from './wsl-host-agent-terminal-launch'
+import { OrchestrationError } from '../../orchestration/orchestration-error'
 
 /** No launch command could be built for a requested `startupAgent`. */
 export class AgentLaunchUnbuildableError extends Error {}
@@ -111,7 +112,10 @@ export async function resolveAgentTerminalCreateOptions(
       throw new Error('runtime_unavailable')
     }
     if (!isTuiAgentEnabled(opts.startupAgent, store.getSettings().disabledTuiAgents)) {
-      throw new Error(`Agent ${opts.startupAgent} is disabled. Choose an enabled agent.`)
+      throw new OrchestrationError(
+        'agent_unconfigured',
+        `Agent ${opts.startupAgent} is disabled. Choose an enabled agent.`
+      )
     }
   }
   if (!launchAgent || !store) {
@@ -293,14 +297,14 @@ export async function prepareHostAgentTerminalLaunch(
   resolvedLaunch: TerminalCreateOptions,
   accounts: Pick<RuntimeAccountController, 'prepareHostAgentLaunch' | 'hostLaunchEnvFor'>
 ): Promise<TerminalCreateOptions> {
-  const launch = applyRemoteViewerLaunchEnv(resolvedLaunch, opts.terminalImageViewerSupported)
   // An SSH workspace's shell runs on that machine, where this distro's account paths mean nothing.
   if (workspace.connectionId) {
-    return launch
+    return applyRemoteViewerLaunchEnv(resolvedLaunch, opts.terminalImageViewerSupported)
   }
-  if (launch.launchAgent) {
-    await accounts.prepareHostAgentLaunch(launch.launchAgent)
+  if (resolvedLaunch.launchAgent) {
+    await accounts.prepareHostAgentLaunch(resolvedLaunch.launchAgent)
   }
-  const hostLaunchEnv = accounts.hostLaunchEnvFor(launch.launchAgent)
-  return withHostAccountLaunchEnv(opts, launch, hostLaunchEnv)
+  const hostLaunchEnv = accounts.hostLaunchEnvFor(resolvedLaunch.launchAgent)
+  const launch = withHostAccountLaunchEnv(opts, resolvedLaunch, hostLaunchEnv)
+  return applyRemoteViewerLaunchEnv(launch, opts.terminalImageViewerSupported)
 }

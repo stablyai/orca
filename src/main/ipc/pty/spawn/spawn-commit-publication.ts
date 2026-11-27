@@ -1,3 +1,7 @@
+import {
+  isResumableTuiAgent,
+  normalizeAgentProviderSession
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import { clearMigrationUnsupportedPtysForPaneKey } from '../../../agent-hooks/observations/migration-unsupported-pty-state'
 import { registerPty } from '../../../memory/pty-registry'
@@ -7,6 +11,7 @@ import {
   recordCodexPaneAccountForSpawn
 } from '../host-env/codex-home'
 import { closeStartupQueryAuthorityForPty } from '../provider/registry'
+import { recordTerminalMcpPaneForSpawn } from '../../../mcp-servers/terminal/terminal-mcp-panes'
 import { commitAttachedPtySize } from '../delivery/attached-pty-size'
 import { ptySizes } from '../delivery/visibility-state'
 import { rememberPaneKeyForPty } from '../pane/key-state'
@@ -50,6 +55,11 @@ export function publishCommittedPtySpawn(input: PtySpawnCommitInput): PtySpawnOu
     target: state.codexSelectionTarget,
     settings: deps.getSettings?.()
   })
+  recordTerminalMcpPaneForSpawn({
+    ptyId: result.id,
+    isReattach: result.isReattach === true,
+    pane: state.terminalMcp
+  })
   if (input.hiddenDelivery === 'renderer-scoped' && input.initiallyHidden) {
     markRendererScopedHiddenAtCommit(state)
   }
@@ -88,7 +98,14 @@ export function publishCommittedPtySpawn(input: PtySpawnCommitInput): PtySpawnOu
     !result.isReattach &&
     result.agentSessionEnsure?.disposition !== 'adopted'
   ) {
-    agentHookServer.retireSleepingPaneOnSpawn(rememberedPaneKey)
+    const providerSession =
+      !input.resumeArgvDropped && normalizeAgentProviderSession(args.resumeProviderSession)
+    agentHookServer.retireSleepingPaneOnSpawn(
+      rememberedPaneKey,
+      providerSession && isResumableTuiAgent(args.launchAgent)
+        ? { agentType: args.launchAgent, providerSession }
+        : undefined
+    )
   }
   if (input.paneKeyAliases) {
     registerSpawnPaneKeyAliases(result, input.paneKey, input.paneKeyAliases)

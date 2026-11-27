@@ -36,7 +36,9 @@ export const CLAUDE_CLI_CONVERSATIONS: StructuredAgentCliConversations = {
   sessionHistory: CLAUDE_SESSION_HISTORY
 }
 
-function parseClaudeResumeArgs(args: readonly string[]): StructuredAgentResumeInvocation | null {
+export function parseClaudeResumeArgs(
+  args: readonly string[]
+): StructuredAgentResumeInvocation | null {
   // Flags and session IDs compare without case, including -C.
   const folded = args.map((token) => token.toLowerCase())
   // --continue/-c take no ID; a following token is a prompt.

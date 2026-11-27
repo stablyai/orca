@@ -97,23 +97,36 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
     return runtime.getStatus()
   })
 
+  // Registry build walks every method; do it once, not per IPC call.
+  const dispatcher = new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS })
+
   ipcMain.handle(
     'runtime:call',
     async (
       event,
-      args: { method: string; params?: unknown }
+      args: {
+        method: string
+        params?: unknown
+        orchestration?: { contractVersion: number; requestId: string }
+      }
     ): Promise<RuntimeRpcResponse<unknown>> => {
       if (event.senderFrame !== event.sender.mainFrame) {
         throw new Error('Runtime RPC call must originate from the current main frame')
       }
-      return new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS }).dispatch(
+      return dispatcher.dispatch(
         {
           id: 'desktop-ipc',
           authToken: 'desktop-ipc',
           // The renderer ships with this main process, so it always speaks the current contract.
           orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
           method: args.method,
-          params: args.params
+          params: args.params,
+          ...(args.orchestration
+            ? {
+                orchestrationContractVersion: args.orchestration.contractVersion,
+                orchestrationRequestId: args.orchestration.requestId
+              }
+            : {})
         },
         {
           clientId: 'desktop-renderer',
@@ -143,7 +156,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       senderSubscriptions.set(args.subscriptionId, controller)
       const channel = `runtime:subscription:${args.subscriptionId}`
       // Streaming outlives dispatch setup; unsubscribe or sender retirement owns cancellation.
-      void new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS }).dispatchStreamingObjects(
+      void dispatcher.dispatchStreamingObjects(
         {
           id: args.subscriptionId,
           authToken: 'desktop-ipc',

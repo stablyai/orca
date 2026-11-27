@@ -57,6 +57,13 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
   ): boolean | undefined =>
     this.liveOwnerOrNull(sessionId)?.permissionModeRequiresAcquisition?.(sessionId, mode)
 
+  applyPermissionMode: NonNullable<Adapter['applyPermissionMode']> = async (input) => {
+    await this.liveOwnerOrNull(input.sessionId)?.applyPermissionMode?.(input)
+  }
+
+  runningPermissionMode: NonNullable<Adapter['runningPermissionMode']> = (sessionId) =>
+    this.liveOwnerOrNull(sessionId)?.runningPermissionMode?.(sessionId)
+
   settlePermissionTransition: NonNullable<Adapter['settlePermissionTransition']> = (input) =>
     this.liveOwnerOrNull(input.sessionId)?.settlePermissionTransition?.(input) ??
     Promise.resolve(true)
@@ -96,6 +103,13 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
     }
   }
 
+  // Every adapter, so a session still starting hears it; only one that holds the session acts.
+  promptSuggestionInterestChanged = (sessionId: string, wanted: boolean): void => {
+    for (const adapter of this.adapters()) {
+      adapter.promptSuggestionInterestChanged?.(sessionId, wanted)
+    }
+  }
+
   renameProviderSession: NonNullable<Adapter['renameProviderSession']> = (input) =>
     this.capabilityOwner(
       input.record.sessionId,
@@ -116,13 +130,9 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
 
   cancelTurn: Adapter['cancelTurn'] = (input) => this.owner(input.sessionId).cancelTurn(input)
 
-  changeThreadGoal: NonNullable<Adapter['changeThreadGoal']> = (input) => {
-    const change = this.owner(input.sessionId).changeThreadGoal
-    if (!change) {
-      return Promise.resolve({ ok: false, rejected: 'Goals are unavailable for this provider.' })
-    }
-    return change(input)
-  }
+  changeThreadGoal: NonNullable<Adapter['changeThreadGoal']> = (input) =>
+    this.owner(input.sessionId).changeThreadGoal?.(input) ??
+    Promise.resolve({ ok: false, rejected: 'Goals are unavailable for this provider.' })
 
   stopBackgroundTasks: NonNullable<Adapter['stopBackgroundTasks']> = (input) => {
     const stop = this.owner(input.sessionId).stopBackgroundTasks
@@ -137,8 +147,12 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
 
   confirmIdle = (id: string) => this.liveOwnerOrNull(id)?.confirmIdle?.(id)
 
-  liveTurnId = (sessionId: string): string | null | undefined =>
-    this.liveOwnerOrNull(sessionId)?.liveTurnId?.(sessionId)
+  relayOpenWork = (id: string, rootTurnRunning: boolean) =>
+    this.liveOwnerOrNull(id)?.relayOpenWork?.(id, rootTurnRunning) ?? null
+
+  liveTurnId = (id: string) => this.liveOwnerOrNull(id)?.liveTurnId?.(id)
+
+  steeringMode = (id: string) => this.liveOwnerOrNull(id)?.steeringMode?.(id)
 
   requiresModelTransitionRestart: NonNullable<Adapter['requiresModelTransitionRestart']> = (
     input
@@ -160,6 +174,9 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
     this.adapters()
       .map((adapter) => adapter.startupEnding?.(sessionId, acquisitionGeneration))
       .find((ending) => ending !== undefined)
+
+  endedBeforeAcquire = (sessionId: string, generation: string): boolean =>
+    this.adapters().some((each) => each.endedBeforeAcquire?.(sessionId, generation))
 
   retireStartup = (sessionId: string, acquisitionGeneration: string): void =>
     this.adapters().forEach((adapter) => adapter.retireStartup?.(sessionId, acquisitionGeneration))
@@ -201,6 +218,8 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
 
   canSetOptionWhileIdle: Adapter['canSetOptionWhileIdle'] = (input) =>
     this.liveOwnerOrNull(input.sessionId)?.canSetOptionWhileIdle?.(input) === true
+  noteModelPick: Adapter['noteModelPick'] = (input) =>
+    this.liveOwnerOrNull(input.sessionId)?.noteModelPick?.(input)
   captureMessageSteeringInputs: Adapter['captureMessageSteeringInputs'] = (input) =>
     this.liveOwnerOrNull(input.sessionId)?.captureMessageSteeringInputs?.(input) ?? {
       kind: 'codex-unavailable'

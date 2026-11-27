@@ -14,8 +14,10 @@ import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
 import {
   abortMerge,
   abortRebase,
-  detectConflictOperation
+  detectConflictOperation,
+  readRebaseAutoStash
 } from '../../git/source-control/mutations/git-conflict-operation'
+import { continueRebase } from '../../git/source-control/mutations/rebase-continue'
 import {
   bulkDiscardChanges,
   discardChanges
@@ -121,6 +123,9 @@ export function createLocalGitProvider(options: LocalGitProviderOptions = {}): L
     detectConflictOperation: (worktreePath) => detectConflictOperation(worktreePath, base),
     abortMerge: (worktreePath) => abortMerge(worktreePath, interactive),
     abortRebase: (worktreePath) => abortRebase(worktreePath, interactive),
+    continueRebase: (worktreePath, action, request) =>
+      continueRebase(worktreePath, action, { ...interactive, ...request }),
+    readRebaseAutoStash: (worktreePath) => readRebaseAutoStash(worktreePath, base),
     checkoutBranch: (worktreePath, branch, creation, detached) =>
       checkoutBranch(
         worktreePath,

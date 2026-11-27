@@ -2,8 +2,10 @@ import type { MessageType } from '../../../../orchestration/db/orchestration-rec
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { CheckMailReconciliation } from './check-mail-reconciliation'
+import type { OrchestrationSessionCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import type { CheckParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
 import type { z } from 'zod'
+import type { RemintedWorkerReporter } from '../../../../orchestration/workers/reports/reminted-worker-reporter'
 
 type CheckParamsInput = z.infer<typeof CheckParams>
 type ActiveDispatch = NonNullable<ReturnType<OrchestrationDb['getActiveDispatchForIdentity']>>
@@ -21,8 +23,15 @@ export type WorkerMailboxCheckInput = {
   signal: AbortSignal | undefined
   reconciliation: CheckMailReconciliation
   revalidateCaller?: () => void
+  reader: OrchestrationSessionCaller | undefined
   activeDispatch: ActiveDispatch | undefined
   remoteAttachment: RemoteAttachment | undefined
+  /** The caller's process, re-read at each fence; a restart-reissued handle supplies its recovered one. */
+  processIncarnation: () => string | null
+  /** A restart-reissued caller recovered to this local Dispatch: still its exact recorded process. */
+  recoveredLocalProcessCurrent?: () => boolean
+  /** The Dispatch and terminal a restart-reissued caller was recovered as at entry. */
+  recovered?: RemintedWorkerReporter | null
   wakeTypes?: MessageType[]
   revalidateConsumer?: () => void
   deferDelivery?: () => boolean

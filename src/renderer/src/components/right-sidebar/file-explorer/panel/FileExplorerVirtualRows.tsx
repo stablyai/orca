@@ -5,10 +5,11 @@ import { cn } from '@/lib/class-names'
 import type { GitFileStatus } from '../../../../../../shared/git/status/git-status-types'
 import { FileExplorerRow } from './FileExplorerRow'
 import { InlineInputRow, type InlineInput } from '../mutations/file-explorer-inline-input-row'
+import { STATUS_COLORS } from '../../../../lib/source-control/paths/git-path-decoration'
 import {
-  shouldShowIgnoredDecoration,
-  STATUS_COLORS
-} from '../../../../lib/source-control/paths/git-path-decoration'
+  getPathDecoration,
+  shouldShowIgnoredDecoration
+} from '../../../../../../shared/git/status/git-path-decoration'
 import type { DirCache, FileExplorerOperationOwner, TreeNode } from '../tree/file-explorer-types'
 import type { FileExplorerRowProjection } from '../tree/file-explorer-row-projection'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
@@ -38,7 +39,6 @@ type FileExplorerVirtualRowsProps = {
   /** Cached ownership for selected paths hidden by collapse or filtering. */
   dirCache?: Record<string, DirCache>
   runtimeDownloadContext?: RuntimeFileOperationArgs | null
-  supportsFolderDownload?: boolean
   canOpenInOrcaBrowser?: (filePath: string) => boolean
   onClick: (node: TreeNode, event: React.MouseEvent<HTMLButtonElement>) => void
   onDoubleClick: (node: TreeNode) => void
@@ -126,7 +126,6 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
     sourceWorkspaceId,
     dirCache,
     runtimeDownloadContext,
-    supportsFolderDownload = false,
     canOpenInOrcaBrowser = () => false,
     onClick,
     onDoubleClick,
@@ -199,8 +198,8 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
         // Paths are already normalized at construction; avoid two redundant regexes per row render.
         const normalizedRelativePath = n.relativePath
         const nodeStatus = n.isDirectory
-          ? (folderStatusByRelativePath.get(normalizedRelativePath) ?? null)
-          : (statusByRelativePath.get(normalizedRelativePath) ?? null)
+          ? getPathDecoration(folderStatusByRelativePath, normalizedRelativePath)
+          : getPathDecoration(statusByRelativePath, normalizedRelativePath)
         const isIgnored = shouldShowIgnoredDecoration(
           nodeStatus,
           ignoredByRelativePath,
@@ -239,7 +238,6 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
               sourceWorkspaceId={sourceWorkspaceId}
               resolveDragSourceOwner={resolveSourceOwner}
               runtimeDownloadContext={runtimeDownloadContext}
-              supportsFolderDownload={supportsFolderDownload}
               canOpenInOrcaBrowser={canOpenInOrcaBrowser(n.path)}
               canCollapseFolderSubtree={canCollapseFolderSubtree}
               targetDir={n.isDirectory ? n.path : dirname(n.path)}

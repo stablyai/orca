@@ -18,7 +18,6 @@ const CODEX_ACCOUNT_HOOKS: OrcaUninstallPath = {
 const AGENTS: [string, string[]][] = [
   ['claude', ['~/.claude/settings.json']],
   ['codex', []],
-  ['gemini', ['~/.gemini/settings.json']],
   ['antigravity', ['~/.gemini/config/hooks.json']],
   ['cursor', ['~/.cursor/hooks.json']],
   ['copilot', ['~/.copilot/hooks/orca.json']],
@@ -46,8 +45,7 @@ function makeHost(kind: HostKind, state: OrcaUninstallEntryState): OrcaUninstall
     label: connected ? 'openclaw' : 'gpu-box',
     connected,
     state,
-    detail: connected || state === 'removed' ? null : 'Not connected.',
-    manualCommand: connected ? null : 'orca uninstall'
+    detail: connected || state === 'removed' ? null : 'Not connected.'
   }
 }
 

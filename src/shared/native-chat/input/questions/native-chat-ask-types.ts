@@ -1,4 +1,10 @@
-export type AskOption = { label: string; description?: string; preview?: string }
+export type AskOption = {
+  label: string
+  description?: string
+  preview?: string
+  /** The asker's own pick, marked Recommended. */
+  recommended?: true
+}
 export type AskQuestion = {
   question: string
   header?: string
@@ -6,6 +12,8 @@ export type AskQuestion = {
   options: AskOption[]
   /** Claude renders its preview selector: digits only move focus, Enter commits, free text is a note. */
   hasPreviews?: true
+  /** The answers cannot be sent while this question is unanswered. */
+  required?: true
 }
 export type AskPrompt = {
   questions: AskQuestion[]

@@ -1,3 +1,4 @@
+import { AGENT_SESSION_FAILURE_COPY } from '../../../../../src/shared/agent-session/failures/agent-session-failure-copy'
 import type {
   AgentSessionFailureCopyId,
   AgentSessionFailureCopyValues
@@ -223,6 +224,12 @@ export const START_FAILURE_COPY = {
       "{{agent}}'s Command in Settings → Agents must be a program path or name Orca can find, with no arguments or variables. Change it or reset it.",
       values
     ),
+  agentCommandFailed: (values) =>
+    translate(
+      'session.failure.agentCommandFailed',
+      "{{agent}}'s Command in Settings → Agents didn't start {{agent}}: {{detail}}. Change it or reset it.",
+      values
+    ),
   runtimeNotInstalled: (values) =>
     translate(
       'session.failure.runtimeNotInstalled',
@@ -233,6 +240,18 @@ export const START_FAILURE_COPY = {
     translate(
       'session.failure.fullAccessAsRoot',
       "{{agent}} won't use Full access while it runs as root. Choose another permission for {{agent}} in Settings → Agents for the computer running this chat, then start a new chat.",
+      values
+    ),
+  botToolsNeedStatusHooks: (values) =>
+    translate(
+      'session.failure.botToolsNeedStatusHooks',
+      AGENT_SESSION_FAILURE_COPY.botToolsNeedStatusHooks,
+      values
+    ),
+  botToolsGatewayOutdated: (values) =>
+    translate(
+      'session.failure.botToolsGatewayOutdated',
+      AGENT_SESSION_FAILURE_COPY.botToolsGatewayOutdated,
       values
     ),
   launchPreparationFailed: (values) =>

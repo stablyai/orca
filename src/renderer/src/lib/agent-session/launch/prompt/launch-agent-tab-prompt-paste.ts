@@ -32,6 +32,7 @@ export function pasteAgentLaunchPromptOnceReady(args: {
     submit,
     forcePaste: true,
     onTimeout: timeoutNotice.onTimeout,
+    onAgentExited: () => timeoutNotice.onAgentExited(args.content),
     ...(args.launchPty ? { launchPty: args.launchPty } : {}),
     ...(onPromptDeliveryUnconfirmed ? { onUnconfirmedDelivery: onPromptDeliveryUnconfirmed } : {})
   }).then((delivered) => {

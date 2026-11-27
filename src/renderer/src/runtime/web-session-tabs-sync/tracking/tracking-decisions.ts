@@ -22,7 +22,7 @@ import {
 import { clearWebSessionTabsTrackingForWorktree } from './tracking-lifecycle'
 import { queueAcceptedWebSessionTerminalSnapshot } from '../terminal-handles/web-session-terminal-handle-events'
 import { shouldAutoCreateInitialTerminal } from '@/lib/workspace/activation/initial-surface/initial-terminal'
-import { hostSnapshotAffirmsWorktreeContents } from '../hydration/host-session-snapshot-authority'
+import { hostSnapshotAffirmsWorktreeContents } from '../../../../../shared/remote-runtime/session-graph/host-session-snapshot-authority'
 
 /** A frame's fate, paired with whether that fate is host evidence for the worktree. */
 export type WebSessionTabsSnapshotDecision = {
@@ -76,6 +76,15 @@ export function decideWebSessionTabsSnapshot(
     return WEB_SESSION_TABS_FRAME_UNMIRRORED
   }
   const current = latestSessionTabsSnapshotByWorktree.get(key)
+  const sameVersion =
+    current?.publicationEpoch === snapshot.publicationEpoch &&
+    current.snapshotVersion === snapshot.snapshotVersion
+  const follows = snapshot.navigationIntent === 'follow'
+  if (sameVersion && follows && current.followApplied) {
+    return WEB_SESSION_TABS_FRAME_OUTRANKED
+  }
+  // Ordinary publication can project a new selection before its one-shot follow arrives.
+  const unconsumedFollow = sameVersion && follows && !current.followApplied
   const currentSharesPublicationLineage = Boolean(
     current &&
     sameSessionTabsPublicationLineage(current.publicationEpoch, snapshot.publicationEpoch)
@@ -107,7 +116,8 @@ export function decideWebSessionTabsSnapshot(
     comparePublicationVersions &&
     sameSessionTabsPublicationLineage(current.publicationEpoch, snapshot.publicationEpoch) &&
     snapshot.snapshotVersion <= current.snapshotVersion &&
-    !isExactCurrentReplay
+    !isExactCurrentReplay &&
+    !unconsumedFollow
   ) {
     return WEB_SESSION_TABS_FRAME_OUTRANKED
   }
@@ -119,7 +129,8 @@ export function decideWebSessionTabsSnapshot(
   }
   latestSessionTabsSnapshotByWorktree.set(key, {
     publicationEpoch: snapshot.publicationEpoch,
-    snapshotVersion: snapshot.snapshotVersion
+    snapshotVersion: snapshot.snapshotVersion,
+    ...(follows || (sameVersion && current.followApplied) ? { followApplied: true as const } : {})
   })
   trackWebSessionTabsWorktree(environmentId, snapshot.worktree)
   recordAcceptedWebSessionTabsEnvironment(environmentId, snapshot)
@@ -144,6 +155,7 @@ export function shouldBootstrapInitialWebRuntimeTerminal(args: {
     (args.event.type === 'snapshot' || (args.event.type === 'updated' && args.firstHostAnswer)) &&
     // Synthesized unpublished means ask later; seeding can duplicate panes a restarting host will republish.
     hostSnapshotAffirmsWorktreeContents(args.event) &&
+    !args.event.initialSurfaceLaunch &&
     args.event.tabs.length === 0 &&
     // Use local seeder semantics remotely too: missing means never initialized, explicit empty means user-closed-last-terminal (STA-6173).
     shouldAutoCreateInitialTerminal(args.localTerminalCount, args.hasPersistedTerminalState) &&

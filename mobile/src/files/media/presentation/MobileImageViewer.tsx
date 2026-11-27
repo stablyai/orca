@@ -8,7 +8,7 @@ import {
   type StyleProp,
   type ViewStyle
 } from 'react-native'
-import { X } from 'lucide-react-native'
+import { ChevronLeft, ChevronRight, X } from 'lucide-react-native'
 import { useWindowSafeAreaInsets } from '../../../layout/side-safe-area'
 import { colors, feedback, radii, spacing } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
@@ -18,6 +18,7 @@ import type { PanZoomSize } from '../../../../../src/shared/document-preview/pan
 import { MobilePanZoomImage } from './MobilePanZoomImage'
 import { REDUCED_MOTION_FADE_MS, SHEET_CURVE } from '../../../components/motion/sheet-motion-values'
 import { useReducedMotionEnabled } from '../../../platform/accessibility/use-reduced-motion'
+import { useBackClaim } from '../../../navigation/use-back-claim'
 
 const VIEWER_EASING = Easing.bezier(...SHEET_CURVE)
 const VIEWER_OPEN_MS = 250
@@ -38,6 +39,8 @@ export function MobileImageViewer({
   size,
   upscale,
   actions: Actions,
+  onPrevious,
+  onNext,
   onClose
 }: {
   uri: string
@@ -48,18 +51,45 @@ export function MobileImageViewer({
   upscale?: boolean
   /** A button beside Close; passed in so diagrams don't pull the share sheet into their bundle. */
   actions?: ComponentType<ImageViewerActionsProps>
+  /** In a set of images: steps back or on. Null at that end; both omitted for a lone image. */
+  onPrevious?: (() => void) | null
+  onNext?: (() => void) | null
   onClose: () => void
 }): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const insets = useWindowSafeAreaInsets()
   const { style, stageStyle, close } = useViewerPresence(onClose)
+  // In the web shell, system Back reaches the shell's claim stack, not this Modal: without a claim it closes the sheet underneath.
+  useBackClaim(() => {
+    close()
+    return true
+  })
   return (
     <Modal visible transparent animationType="none" onRequestClose={close}>
       <Animated.View style={[styles.backdrop, style]}>
         <Animated.View style={[styles.stage, stageStyle]}>
-          <MobilePanZoomImage uri={uri} label={label} size={size} upscale={upscale} />
+          <MobilePanZoomImage key={uri} uri={uri} label={label} size={size} upscale={upscale} />
         </Animated.View>
+        {onPrevious !== undefined || onNext !== undefined ? (
+          <>
+            <StepButton
+              icon={ChevronLeft}
+              label={t('chat.nativeChatImageViewer.previousImage', 'Previous image')}
+              onPress={onPrevious ?? null}
+              style={{ top: insets.top + spacing.sm, left: insets.left + spacing.lg }}
+            />
+            <StepButton
+              icon={ChevronRight}
+              label={t('chat.nativeChatImageViewer.nextImage', 'Next image')}
+              onPress={onNext ?? null}
+              style={{
+                top: insets.top + spacing.sm,
+                left: insets.left + spacing.lg + BUTTON_SIZE + spacing.sm
+              }}
+            />
+          </>
+        ) : null}
         <Pressable
           style={({ pressed }) => [
             styles.close,
@@ -87,6 +117,36 @@ export function MobileImageViewer({
         ) : null}
       </Animated.View>
     </Modal>
+  )
+}
+
+function StepButton({
+  icon: Icon,
+  label,
+  onPress,
+  style
+}: {
+  icon: typeof ChevronLeft
+  label: string
+  onPress: (() => void) | null
+  style: ViewStyle
+}): React.JSX.Element {
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.close,
+        style,
+        !onPress && { opacity: feedback.disabledOpacity },
+        pressed && { opacity: feedback.pressedOpacity }
+      ]}
+      onPress={onPress ?? undefined}
+      disabled={!onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: !onPress }}
+    >
+      <Icon size={22} color={colors.textPrimary} strokeWidth={2} />
+    </Pressable>
   )
 }
 

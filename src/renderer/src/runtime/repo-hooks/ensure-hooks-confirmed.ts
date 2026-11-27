@@ -41,10 +41,6 @@ function enqueueTrustPrompt<T>(task: () => Promise<T>): Promise<T> {
   return next
 }
 
-export function __resetTrustPromptChainForTests(): void {
-  trustPromptChain = Promise.resolve()
-}
-
 async function confirmIssueCommandReadResult(
   state: AppState,
   repoId: string,

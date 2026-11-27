@@ -10,7 +10,7 @@ import {
   readAgentSessionErrorRefusal,
   type AgentSessionWriteRefusal
 } from '../../../../../shared/agent-session/failures/agent-session-write-failure'
-import { wslHostsAvailable } from '@/components/sidebar/use-wsl-hosts-enabled'
+import { wslHostsAvailable } from '@/runtime/hosts/wsl/use-wsl-hosts-enabled'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import {
@@ -67,10 +67,15 @@ export function structuredChatUnavailableText(reason?: string): string {
             'components.native-chat.explicitChatWindows',
             "This agent's chat isn't available on Windows yet. Open it in a terminal instead."
           )
-        : translate(
-            'components.native-chat.explicitChatUnavailable',
-            'This workspace cannot run the chat. Check the agent installation or open it in a terminal.'
-          )
+        : reason === 'workspace-access'
+          ? translate(
+              'components.native-chat.explicitChatWorkspaceAccess',
+              "Orca doesn't have permission to open this workspace folder. Check the folder's permissions and try again."
+            )
+          : translate(
+              'components.native-chat.explicitChatUnavailable',
+              'This workspace cannot run the chat. Check the agent installation or open it in a terminal.'
+            )
 }
 
 /** A toast's words for a declined chat, with the WSL host path for this workspace when it has one. */

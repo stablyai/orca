@@ -2,7 +2,7 @@ import { useId } from 'react'
 import { MessageSquarePlus, Puzzle, RotateCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { useTranslate } from '@/i18n/use-translate'
 import { LanguagePackRow, type LanguageRowModel } from './LanguagePackRow'
 

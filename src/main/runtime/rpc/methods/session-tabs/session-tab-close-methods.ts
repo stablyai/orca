@@ -25,7 +25,8 @@ export const SESSION_TAB_CLOSE_METHODS = [
         const visible = projectSessionTabsForClient(
           raw,
           context.clientKind,
-          context.clientCapabilities
+          context.clientCapabilities,
+          context.runtime
         )
         assertProjectedSessionTabVisible(visible, params.tabId)
         assertAgentSessionTabDestructiveMutationSupported(
@@ -105,7 +106,8 @@ export const SESSION_TAB_CLOSE_METHODS = [
         const visible = projectSessionTabsForClient(
           raw,
           context.clientKind,
-          context.clientCapabilities
+          context.clientCapabilities,
+          context.runtime
         )
         assertProjectedSessionTabVisible(visible, params.tabId)
         assertAgentSessionTabDestructiveMutationSupported(

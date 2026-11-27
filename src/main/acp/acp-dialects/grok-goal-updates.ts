@@ -1,19 +1,22 @@
 // Grok 1.0.77 reports its /goal state as `goal_updated` session notifications (recorded traffic).
 
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { AgentJournalThreadGoalStatus } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AcpThreadGoalReport } from './acp-dialect'
 
-const tokenCount = z.number().int().nonnegative()
-const goalUpdatedSchema = z.looseObject({
-  sessionUpdate: z.literal('goal_updated'),
-  goal_id: z.string(),
-  objective: z.string(),
-  status: z.string(),
-  token_budget: tokenCount.nullish(),
-  tokens_used: tokenCount.optional(),
-  elapsed_ms: tokenCount.optional()
-})
+const tokenCount = lazyZodSchema(() => z.number().int().nonnegative())
+const goalUpdatedSchema = lazyZodSchema(() =>
+  z.looseObject({
+    sessionUpdate: z.literal('goal_updated'),
+    goal_id: z.string(),
+    objective: z.string(),
+    status: z.string(),
+    token_budget: tokenCount.nullish(),
+    tokens_used: tokenCount.optional(),
+    elapsed_ms: tokenCount.optional()
+  })
+)
 
 // Grok splits pauses by cause; every one resumes with `/goal resume`.
 const STATUS: Readonly<Record<string, AgentJournalThreadGoalStatus>> = {

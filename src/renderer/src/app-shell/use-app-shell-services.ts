@@ -1,7 +1,7 @@
 import { useAppStore } from '../store'
 import { useClosedEditorTabCleanup } from '../components/editor/model-lifetime/retention/useClosedEditorTabCleanup'
 import { useIpcEvents } from '../hooks/useIpcEvents'
-import { useReadOnScreenAttention } from '../hooks/useReadOnScreenAttention'
+import { useReadOnScreenAttention } from '../attention/useReadOnScreenAttention'
 import { useAppMenuPaste } from '../hooks/clipboard/menu/useAppMenuPaste'
 import { useAppMenuSelectionActions } from '../hooks/app-commands/useAppMenuSelectionActions'
 import { useLargeTextControlPaste } from '../hooks/text-input/paste/useLargeTextControlPaste'
@@ -9,7 +9,7 @@ import {
   resolvePrimarySelectionMiddleClickPaste,
   usePrimarySelectionPaste
 } from '../hooks/clipboard/primary-selection/usePrimarySelectionPaste'
-import { useRadixBodyPointerEventsRecovery } from '../hooks/useRadixBodyPointerEventsRecovery'
+import { useRadixBodyPointerEventsRecovery } from './useRadixBodyPointerEventsRecovery'
 import { useOsc52ClipboardDefaultOnNotice } from '../components/terminal-pane/clipboard/osc52-clipboard-default-on-notice'
 import { useWindowsTerminalFontWeightNotice } from '../components/terminal-pane/appearance/windows-terminal-font-weight-notice'
 import { useLocalStructuredSessionTabsSync } from '../runtime/local-structured-session-tabs-sync/use-local-structured-session-tabs-sync'
@@ -22,10 +22,12 @@ import { useBrowserIdentityMigrationNotice } from '../components/settings/browse
 import { useBrowserClientHostedDownloadNotices } from '../components/browser-pane/navigate/browser-client-hosted-download-notices'
 import { useCodexTerminalServerIsolationNotice } from '../components/terminal-pane/provider-notices/codex-server-isolation/codex-terminal-server-isolation-notice'
 import { useClaudeThemeSyncOffer } from '../components/terminal-pane/provider-notices/claude-theme-sync/claude-theme-sync-offer'
+import { usePerfNotices } from '../components/perf-notices/use-perf-notices'
 import { useVisibleHostedReviewRefresh } from '../store/slices/hosted-review/refresh/use-visible-hosted-review-refresh'
 import { useProfileStateSaveDelayNotice } from './storage/use-profile-state-save-delay-notice'
 import { useNotchRevealBridge } from '../components/notch/useNotchRevealBridge'
-import { useRemoteUnsavedEditorReport } from '../runtime/workspace-cleanup/remote-unsaved-editor-report'
+import { useBotHomeTabPlacement } from '../components/bots/bot-home-tab-placement'
+import { useUnsavedEditorHostReport } from '../runtime/workspace-cleanup/unsaved-editor-host-report'
 
 /** Keep subscriptions above surfaces that unmount or never appear on Landing. */
 export function useAppShellServices(): void {
@@ -38,13 +40,14 @@ export function useAppShellServices(): void {
   useClosedEditorTabCleanup()
   useRadixBodyPointerEventsRecovery()
   useLocalStructuredSessionTabsSync()
+  useBotHomeTabPlacement()
   useHostStructuredAgentsSync()
   useLegacyChatRenameMigration()
   useHostModelCatalogSnapshotsSync()
   useIpcEvents()
   useProfileStateSaveDelayNotice()
   useRemoteRuntimeRecoveryTriggers()
-  useRemoteUnsavedEditorReport()
+  useUnsavedEditorHostReport()
   useVisibleHostedReviewRefresh({ enabled: workspaceSessionReady })
   useTerminalViewerColorPublication()
   useNotchRevealBridge()
@@ -59,4 +62,5 @@ export function useAppShellServices(): void {
   useBrowserClientHostedDownloadNotices()
   useCodexTerminalServerIsolationNotice()
   useClaudeThemeSyncOffer()
+  usePerfNotices()
 }

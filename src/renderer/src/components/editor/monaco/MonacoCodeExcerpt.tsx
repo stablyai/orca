@@ -4,9 +4,9 @@ import {
   EDITOR_TYPOGRAPHY_SURFACE_CLASS,
   editorTypographyTextStyle
 } from '@/lib/editor/appearance/editor-typography'
-import { useEditorTypography } from '@/hooks/use-editor-typography'
+import { useEditorTypography } from '@/lib/editor/appearance/use-editor-typography'
 import { cn } from '@/lib/class-names'
-import { useMonacoTheme } from '@/hooks/use-monaco-theme'
+import { useMonacoTheme } from '@/lib/editor/appearance/use-monaco-theme'
 
 let pythonLanguageRegistrationPromise: Promise<void> | null = null
 

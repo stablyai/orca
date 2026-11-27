@@ -80,6 +80,7 @@ export async function openCodexThread(
     model?: string
     threadConfig?: Record<string, unknown>
     commandEnv?: Record<string, string>
+    developerInstructions?: string
   },
   /** null: no deadline; the start that opens the thread bounds it (`signal`). */
   timeoutMs: number | null | undefined,
@@ -96,7 +97,16 @@ export async function openCodexThread(
     throwIfSignalAborted(signal)
     return connection.request(
       'thread/start',
-      { ...threadSettings, ...(launch.model ? { model: launch.model } : {}) },
+      {
+        ...threadSettings,
+        // Codex shows a server's form in Full Access only on a user thread.
+        threadSource: 'user',
+        ...(launch.model ? { model: launch.model } : {}),
+        // A resumed thread keeps the instructions it started with; Codex ignores new ones.
+        ...(launch.developerInstructions
+          ? { developerInstructions: launch.developerInstructions }
+          : {})
+      },
       { timeoutMs }
     )
   }
@@ -224,20 +234,12 @@ export function reportedCodexPermissionMode(reply: Record<string, unknown>): str
   if (approval === 'never' && reviewer === 'user' && full) {
     return 'full-access'
   }
-  if (sandboxType === 'readOnly' || sandboxType === 'read-only') {
+  if (readOnly) {
     return 'read-only'
   }
-  if (
-    (sandboxType === 'dangerFullAccess' || sandboxType === 'danger-full-access') &&
-    approval === 'never'
-  ) {
+  if (full && approval === 'never') {
     return 'full-access'
   }
-  if (
-    (sandboxType === 'workspaceWrite' || sandboxType === 'workspace-write') &&
-    approval === 'on-request'
-  ) {
-    return reviewer === 'auto_review' ? 'auto' : reviewer === 'user' ? 'ask' : null
-  }
+  // Orca's Ask is read-only, so a writable workspace is never named Ask: it edits without asking.
   return null
 }

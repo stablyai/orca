@@ -53,6 +53,7 @@ export function getWorkspaceCleanupTimeoutFailure(
     worktreeId: candidate.worktreeId,
     executionHostId: getWorkspaceCleanupCandidateHostId(candidate),
     displayName: candidate.displayName,
+    provisional: true,
     message: translate(
       'auto.components.workspace.cleanup.backgroundRemoval.timedOut',
       'Removing {{value0}} is taking longer than expected. It will keep running in the background.',

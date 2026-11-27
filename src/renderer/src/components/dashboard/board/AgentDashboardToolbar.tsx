@@ -1,4 +1,5 @@
 import { ChevronDown, Filter, Search, X } from 'lucide-react'
+import { useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -32,7 +33,7 @@ import {
 } from './agent-dashboard-filter-options'
 import { AgentDashboardFilterChips } from './AgentDashboardFilterChips'
 import { FilterOptionCount } from './FilterOptionCount'
-import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
 
 type AgentDashboardToolbarProps = {
   cards: DashboardCard[]
@@ -60,9 +61,15 @@ export function AgentDashboardToolbar({
 }: AgentDashboardToolbarProps): React.JSX.Element {
   const t = useTranslate()
   const isMac = navigator.userAgent.includes('Mac')
-  const projects = projectOptions(cards, filterOptions?.projects)
-  const statuses = workspaceStatusOptions(cards, filterOptions?.workspaceStatuses)
-  const reviewCounts = reviewCountsByState(cards)
+  const projects = useMemo(
+    () => projectOptions(cards, filterOptions?.projects),
+    [cards, filterOptions?.projects]
+  )
+  const statuses = useMemo(
+    () => workspaceStatusOptions(cards, filterOptions?.workspaceStatuses, t),
+    [cards, filterOptions?.workspaceStatuses, t]
+  )
+  const reviewCounts = useMemo(() => reviewCountsByState(cards), [cards])
   const activeCount = activeDashboardFilterCount(filters)
   const toggleProject = (id: string): void =>
     onFiltersChange({ ...filters, projects: toggleDashboardFilter(filters.projects, id) })

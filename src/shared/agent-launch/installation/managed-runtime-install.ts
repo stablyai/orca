@@ -20,8 +20,14 @@ export type ManagedRuntimeOperation = {
   error?: string
 }
 
+/** `cli`: Orca's copy of the agent's own CLI, which signs itself in. `server`: an ACP server that
+ *  Orca signs in. */
+export type ManagedRuntimeProgram = 'cli' | 'server'
+
 export type ManagedRuntimeInstallState = {
   agent: string
+  /** Which program this describes; absent from older hosts, which describe a `server`. */
+  program?: ManagedRuntimeProgram
   /** Rises with every change the host publishes, across operations. */
   revision: number
   /** The host has a pinned release; otherwise no Install is offered. */
@@ -32,6 +38,8 @@ export type ManagedRuntimeInstallState = {
   installedVersion: string | null
   /** False with an installed version: an update is available. */
   installedCurrent: boolean
+  /** Orca keeps its copy on the latest release by itself, so clients never prompt to update it. */
+  updatesAutomatically?: true
   /** The pinned release's folder is there but not whole; Install repairs it. */
   damaged?: boolean
   /** Orca's copy is there to remove, whole or damaged; absent from a host without Remove. */

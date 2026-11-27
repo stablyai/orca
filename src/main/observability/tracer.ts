@@ -2,7 +2,12 @@
 
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { randomBytes } from 'node:crypto'
-import { redactSpan, type RedactableSpan, type SpanEvent, type SpanExit } from './redactor'
+import {
+  redactSpan,
+  type RedactableSpan,
+  type SpanEvent,
+  type SpanExit
+} from '../../shared/observability/redactor'
 
 export type TracerSink = {
   push(record: unknown): void
@@ -204,11 +209,6 @@ export function startSpan(
 function formatError(err: Error): string {
   const head = `${err.name}: ${err.message}`
   return err.stack ? `${head}\n${err.stack}` : head
-}
-
-export function _resetTracerForTests(): void {
-  activeSink = null
-  // Context tests should create their own withSpan scope.
 }
 
 /** Worker spans are already redacted before crossing the internal transport. */

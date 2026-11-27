@@ -16,10 +16,22 @@ import { getRenderRowKey } from '../listing/render-row'
 import type { LineageRowProjection } from '../listing/lineage-row-projection'
 import type { RenderRow } from '../listing/render-row'
 import { getWorktreeSidebarRevealTopInset } from '../navigation/worktree-sidebar-reveal'
-import type { ProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
+import type { ProgrammaticScrollMarks } from '@/lib/list-interaction/virtualized-scrolling/programmatic-scroll-marks'
 import { createSidebarSmoothReveal } from './sidebar-smooth-reveal'
 
 export type WorktreeListVirtualizer = ReturnType<typeof useWorktreeListVirtualizer>
+
+// Read the render window inside the TanStack adapter. The instance itself mutates in place.
+export function useSidebarRowsVirtualizer<TItemElement extends Element>(
+  options: Parameters<typeof useVirtualizer<HTMLDivElement, TItemElement>>[0]
+) {
+  const virtualizer = useVirtualizer(options)
+  return {
+    virtualizer,
+    totalSize: virtualizer.getTotalSize(),
+    virtualRows: virtualizer.getVirtualItems()
+  }
+}
 
 // Guard virtual row identity so recycled DOM nodes cannot overwrite another slot’s measured height.
 export function useWorktreeListVirtualizer(args: {
@@ -116,7 +128,7 @@ export function useWorktreeListVirtualizer(args: {
     () => createSidebarSmoothReveal({ marks: args.programmaticScrollMarks, onRetired }),
     [args.programmaticScrollMarks, onRetired]
   )
-  const virtualizer = useVirtualizer({
+  const { virtualizer } = useSidebarRowsVirtualizer<HTMLDivElement>({
     count: renderRows.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: (index) => {

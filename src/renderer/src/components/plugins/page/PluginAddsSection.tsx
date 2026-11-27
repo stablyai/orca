@@ -11,6 +11,7 @@ import {
   PanelBottom,
   PanelRight,
   PenTool,
+  Plug,
   Server,
   SquareTerminal,
   Type
@@ -27,7 +28,7 @@ import { usePluginLanguagePackStore } from '@/store/plugins/localization/plugin-
 import type { ActivePluginCommand } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { usePluginIconThemes } from '@/store/plugins/appearance/plugin-icon-themes'
 import { usePluginSyntaxes } from '@/store/plugins/syntax/plugin-syntax-packs'
-import { ShortcutKeyCombo } from '../../ShortcutKeyCombo'
+import { ShortcutKeyCombo } from '../../ui/ShortcutKeyCombo'
 import { Button } from '../../ui/button'
 import { revealPluginIconTheme } from '../state/plugin-try-action'
 import { DetailRow, DetailSection } from './PluginDetailSections'
@@ -95,6 +96,7 @@ const CONTRIBUTION_ICON: Record<PluginContributionKind, React.ReactNode> = {
   panels: <PanelRight />,
   customEditors: <PenTool />,
   vmRecipes: <Server />,
+  mcpServers: <Plug />,
   newFiles: <FilePlus />,
   statusBarItems: <PanelBottom />
 }
@@ -247,6 +249,7 @@ function useContributionRowActions(
       case 'fonts':
       case 'customEditors':
       case 'vmRecipes':
+      case 'mcpServers':
       case 'statusBarItems':
         // Themes have "Use now" above; fonts are picked in Settings; the rest has nothing to try here.
         return null
@@ -282,7 +285,13 @@ export function PluginAddsSection({
   const source = plugin
     ? installedSource
     : summary
-      ? summaryContributionSource(summary, themePreview)
+      ? {
+          ...summaryContributionSource(summary, themePreview),
+          // The fetched manifest's servers are what install binds, so they show what will run.
+          ...(preview
+            ? { mcpServers: manifestContributionSource(preview.manifest).mcpServers }
+            : {})
+        }
       : preview
         ? manifestContributionSource(preview.manifest)
         : EMPTY_CONTRIBUTION_SOURCE

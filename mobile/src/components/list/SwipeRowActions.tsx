@@ -18,6 +18,8 @@ import { SHEET_CURVE } from '../motion/sheet-motion-values'
 // The width an action uncovers; a swipe past half of it settles open.
 const ACTION_WIDTH = 84
 const SWIPE_SETTLE_MS = 250
+// Points per second past which a drag counts as a flick.
+const FLICK_VELOCITY = 500
 const DRAG_CLICK_WINDOW_MS = 400
 
 export type SwipeRowAction = {
@@ -30,9 +32,9 @@ export type SwipeRowAction = {
 }
 
 /**
- * A row that slides to uncover an action: `leading` behind a right swipe, `trailing` behind a left
- * one. Tapping the uncovered action runs it. Rows without either action render as they are;
- * gaining or losing both remounts the row.
+ * A row that slides to uncover an action: `leading` behind a right swipe, `trailing` (one, or a few
+ * side by side) behind a left one. Tapping the uncovered action runs it. Rows without either action
+ * render as they are; gaining or losing both remounts the row.
  */
 export function SwipeRowActions({
   leading,
@@ -41,10 +43,16 @@ export function SwipeRowActions({
   children
 }: {
   leading?: SwipeRowAction
-  trailing?: SwipeRowAction
+  trailing?: SwipeRowAction | readonly SwipeRowAction[]
   enabled?: boolean
-  /** Gets a wrapper for the row's press: a tap on a swiped row closes it instead. */
-  children: (guardPress: (onPress: () => void) => () => void) => ReactNode
+  /**
+   * Gets a wrapper for the row's press (a tap on a swiped row closes it instead), and one for a
+   * control on the row that should still act on an open row but not on a drag's release.
+   */
+  children: (
+    guardPress: (onPress: () => void) => () => void,
+    guardDragRelease: (onPress: () => void) => () => void
+  ) => ReactNode
 }) {
   useMobileColorScheme()
   const reducedMotion = useDrawerReducedMotion()
@@ -52,8 +60,9 @@ export function SwipeRowActions({
   const start = useSharedValue(0)
   // When the last drag ended: on the web, releasing a mouse drag also clicks the row.
   const dragEndedAt = useSharedValue(0)
+  const trailingActions = trailing === undefined ? [] : [trailing].flat()
   const maxRight = leading ? ACTION_WIDTH : 0
-  const maxLeft = trailing ? -ACTION_WIDTH : 0
+  const maxLeft = -ACTION_WIDTH * trailingActions.length
   // Built per render: a module-level easing would run before a test's Reanimated mock can serve it.
   const settle = (to: number) => {
     'worklet'
@@ -75,20 +84,34 @@ export function SwipeRowActions({
     .onUpdate((event) => {
       offset.value = Math.min(maxRight, Math.max(maxLeft, start.value + event.translationX))
     })
-    .onEnd(() => {
+    .onEnd((event) => {
       // oxlint-disable-next-line react/purity -- runs when the drag ends, never during render.
       dragEndedAt.value = Date.now()
-      offset.value = settle(
-        offset.value > ACTION_WIDTH / 2 ? maxRight : offset.value < -ACTION_WIDTH / 2 ? maxLeft : 0
-      )
+      // A flick moves one step its way however short it was: a shut row opens, an open one shuts.
+      let rest = 0
+      if (event.velocityX > FLICK_VELOCITY) {
+        rest = start.value < 0 ? 0 : maxRight
+      } else if (event.velocityX < -FLICK_VELOCITY) {
+        rest = start.value > 0 ? 0 : maxLeft
+      } else if (offset.value > ACTION_WIDTH / 2) {
+        rest = maxRight
+      } else if (offset.value < -ACTION_WIDTH / 2) {
+        rest = maxLeft
+      }
+      offset.value = settle(rest)
     })
   // Web has no worklet plugin; mapper hooks need this explicit dependency list.
   const rowStyle = useAnimatedStyle(() => ({ transform: [{ translateX: offset.value }] }), [offset])
   // Hidden at rest, so the action can't show through a rounded group's antialiased corners.
   const actionsStyle = useAnimatedStyle(() => ({ opacity: offset.value === 0 ? 0 : 1 }), [offset])
+  // The click a drag release produces belongs to the drag, not to the row.
+  const guardDragRelease = (onPress: () => void) => () => {
+    if (Date.now() - dragEndedAt.value >= DRAG_CLICK_WINDOW_MS) {
+      onPress()
+    }
+  }
   // A tap on an open row closes it rather than pressing the row.
   const guardPress = (onPress: () => void) => () => {
-    // The click a drag release produces belongs to the drag, not to the row.
     if (Date.now() - dragEndedAt.value < DRAG_CLICK_WINDOW_MS) {
       return
     }
@@ -98,16 +121,21 @@ export function SwipeRowActions({
     }
     onPress()
   }
-  if (!leading && !trailing) {
-    return children((onPress) => onPress)
+  if (!leading && trailingActions.length === 0) {
+    return children(
+      (onPress) => onPress,
+      (onPress) => onPress
+    )
   }
-  const renderAction = (action: SwipeRowAction, side: 'leading' | 'trailing') => {
+  // `fromRight` counts trailing actions in from the row's right edge.
+  const renderAction = (action: SwipeRowAction, fromRight: number | null) => {
     const Icon = action.icon
     return (
       <Pressable
+        key={action.label}
         style={({ pressed }) => [
           styles.action,
-          side === 'leading' ? styles.leading : styles.trailing,
+          fromRight === null ? styles.leading : { right: fromRight * ACTION_WIDTH },
           { backgroundColor: action.background },
           pressed && styles.actionPressed
         ]}
@@ -127,12 +155,14 @@ export function SwipeRowActions({
   return (
     <View>
       <Animated.View pointerEvents="box-none" style={[styles.actions, actionsStyle]}>
-        {leading ? renderAction(leading, 'leading') : null}
-        {trailing ? renderAction(trailing, 'trailing') : null}
+        {leading ? renderAction(leading, null) : null}
+        {trailingActions.map((action, index) =>
+          renderAction(action, trailingActions.length - 1 - index)
+        )}
       </Animated.View>
       {/* pan-y keeps the page scrolling vertically over the row on the web. */}
       <GestureDetector gesture={pan} touchAction="pan-y">
-        <Animated.View style={rowStyle}>{children(guardPress)}</Animated.View>
+        <Animated.View style={rowStyle}>{children(guardPress, guardDragRelease)}</Animated.View>
       </GestureDetector>
     </View>
   )
@@ -150,7 +180,6 @@ const styles = themedStyleSheet(() => ({
   },
   actions: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
   leading: { left: 0 },
-  trailing: { right: 0 },
   actionPressed: { opacity: feedback.pressedOpacity },
   actionText: { fontSize: typography.metaSize, fontWeight: '600' }
 }))

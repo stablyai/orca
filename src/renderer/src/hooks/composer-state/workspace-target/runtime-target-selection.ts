@@ -7,21 +7,20 @@ import { parseExecutionHostId, getRepoExecutionHostId } from '../../../../../sha
 import { getSelectedRepoSshGate } from '@/lib/workspace/creation/new-workspace-ssh-gate'
 import { selectRepoSshGateInput } from '@/lib/workspace/catalog/repo-ssh-connection'
 import { useFolderWorkspaceComposerPathStatus } from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-path-status'
-import { useDetectedAgents } from '@/hooks/useDetectedAgents'
+import { useDetectedAgents } from '@/lib/agent-session/launch/inventory/useDetectedAgents'
 import { resolveWorkspaceCreationTarget } from '@/lib/workspace/creation/project-host-workspace-target'
 import { isGitRepoKind } from '../../../../../shared/repository/repo-kind'
 import { CLIENT_PLATFORM } from '@/lib/workspace/creation/new-workspace'
 import { getLocalRepoProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
-import {
-  resolveExecutionHostAgentStartupShell,
-  resolveRepoExecutionHostPlatform
-} from '@/runtime/hosts/platform/execution-host-facts'
+// oxfmt-ignore
+import { resolveExecutionHostAgentStartupShell, resolveRepoExecutionHostPlatform } from '@/runtime/hosts/platform/execution-host-facts'
+import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '@/store/index'
 import { repoIsRemote } from '../../../../../shared/agent-launch/startup/agent-launch-remote'
 import { buildProjectHostSetupOptions } from '@/lib/workspace/creation/project-host-setup-options'
 import { buildNewWorkspaceCreateTargetOptions } from '@/lib/workspace/creation/new-workspace-project-options'
 import { getRuntimeEnvironmentIdForRepo } from '@/lib/workspace/ownership/repo-runtime-owner'
-import { useEphemeralVmRecipeOptions } from '@/hooks/useEphemeralVmRecipeOptions'
+import { useEphemeralVmRecipeOptions } from '@/hooks/composer-state/workspace-target/useEphemeralVmRecipeOptions'
 import { selectProjectFirstReason } from './runtime-target-selection-copy'
 import type { ComposerRuntimeTargetSelectionInput } from '../composer-target-input-contracts'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
@@ -156,14 +155,15 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
     : null
 
   const sshStateByEnvironment = useAppStore((s) => s.sshStateByEnvironment)
-  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const runtimeStatusByEnvironmentId = useRuntimeStatusByEnvironmentId()
   // Quote for the repo execution host’s OS, not the client’s (#22204).
   const selectedRepoAgentLaunchFact = useMemo((): ExecutionHostPlatformFact => {
     if (!selectedRepo) {
       return { kind: 'withheld', reason: selectProjectFirstReason(), recovery: 'refreshProjects' }
     }
     return resolveRepoExecutionHostPlatform(
-      { sshConnectionStates, sshStateByEnvironment, runtimeStatusByEnvironmentId },
+      { sshConnectionStates, sshStateByEnvironment },
+      runtimeStatusByEnvironmentId,
       selectedRepo,
       () =>
         getLocalRepoProjectExecutionRuntimeContext(
@@ -275,7 +275,8 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
   // Why the shared gate: a paired server's own SSH target is read from that server (#25887).
   const selectedRepoSshGateInput = selectedRepo
     ? selectRepoSshGateInput(
-        { sshConnectionStates, sshStateByEnvironment, runtimeStatusByEnvironmentId },
+        { sshConnectionStates, sshStateByEnvironment },
+        runtimeStatusByEnvironmentId,
         selectedRepo
       )
     : null

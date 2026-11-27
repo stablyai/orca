@@ -4,6 +4,8 @@ import { prWatchStorage } from '../../../github/pr-watch/pr-watch-storage'
 // other unhanded sends are rejected (journal-unsent-send-hold.ts / queued-message-pause.ts).
 // Settlement needs no lease and starts no provider child.
 
+import { keptRunningProviderRelayPid } from '../../../provider-relay/app-provider-relays'
+import { structuredAgentSessionKeptAtOpen } from './structured-agent-session-kept-at-open'
 import type { JournalSqlDatabase } from '../../agent-session-journal/database/journal-sql-database'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import { openAgentSessionJournal } from '../../agent-session-journal/journal-store-factory'
@@ -97,10 +99,17 @@ export async function openStructuredAgentSessionConversationJournal(
   })
   const identity = journalIdentityFor(record, params)
   const { store } = deps
+  // An agent the terminal host kept running is not gone: its turn, sends and queue go on once it
+  // reattaches, so nothing of the last run is recovered or settled here.
+  const kept = !options.acquisition && (await structuredAgentSessionKeptAtOpen(record))
+  // A reattach's own open comes after the launch listing it reattaches from, so no wait here.
+  const keptWriter =
+    kept || (options.acquisition && keptRunningProviderRelayPid(sessionId) !== null)
   const journal = await openAgentSessionJournal({
     identity,
     database: deps.journalDatabase,
-    recover: { fence },
+    ...(kept ? {} : { recover: { fence } }),
+    ...(keptWriter ? { keptWriter: true as const } : {}),
     onRecoveryFailure: ({ step, failure }) => {
       const messages = {
         'pending-unknown': 'marking pending sends unknown on open failed',
@@ -123,7 +132,7 @@ export async function openStructuredAgentSessionConversationJournal(
       : {})
   })
   // No local child writes unopened journals; settle the gone generation before readers/new children.
-  if (!options.acquisition) {
+  if (!options.acquisition && !kept) {
     await settleGoneGeneration(deps, record, journal)
   }
   try {
@@ -152,6 +161,18 @@ export async function resettleOpenStructuredAgentSessionConversation(
 ): Promise<void> {
   const record = deps.store.getConversation(sessionId)
   if (session && record?.ownerObservation.deathEvidence) {
+    await settleGoneGeneration(deps, record, session.journal)
+  }
+}
+
+/** A kept agent ended before it could be reattached; its turn settles as any gone one does. */
+export async function settleGoneStructuredAgentSessionGeneration(
+  deps: StructuredAgentSessionConversationOpenDeps,
+  sessionId: string,
+  session: StructuredAgentSessionHostSession
+): Promise<void> {
+  const record = deps.store.getConversation(sessionId)
+  if (record) {
     await settleGoneGeneration(deps, record, session.journal)
   }
 }

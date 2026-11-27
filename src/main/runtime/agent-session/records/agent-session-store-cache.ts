@@ -1,7 +1,7 @@
 import { decodePersistedAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/records/agent-session-record-stored-form'
 import { isDeepStrictEqual } from 'node:util'
 import { sessionCrewChanges } from '../../orchestration/crew/crew-changes'
-import { AgentSessionTabTable } from './agent-session-tab-table'
+import { agentSessionTabTableFromStored } from './agent-session-tab-table'
 import type { AgentSessionStoreRowWrites } from '../../../native-chat/agent-session-journal/journal-writer-store-row-changes'
 import type { AgentSessionStoreState } from './agent-session-store-state'
 import { agentSessionStoreRowChanges } from '../../../native-chat/agent-session-journal/journal-writer-store-row-changes'
@@ -40,9 +40,15 @@ export function applyAgentSessionStoreCacheRows(
     draft.retiredClaimKeys = writes.retiredClaimKeys
   }
   if (writes.sessionTabs !== null) {
+    const prior = draft.sessionTabs
     draft.sessionTabs = writes.sessionTabs.recorded
-      ? new AgentSessionTabTable(
-          writes.sessionTabs.tabs.map(({ tabId, sessionId }) => [tabId, sessionId])
+      ? agentSessionTabTableFromStored(
+          writes.sessionTabs.tabs.map(({ tabId, sessionId }) => [tabId, sessionId]),
+          {
+            ids: writes.sessionTabs.background ?? prior?.backgroundSessionIds() ?? [],
+            backfilled:
+              writes.sessionTabs.backgroundBackfilled || (prior?.backgroundBackfilled ?? false)
+          }
         )
       : null
   }
@@ -140,6 +146,10 @@ export function notifyAgentSessionStoreCacheChanges(
   after: AgentSessionStoreState,
   writes: AgentSessionStoreRowWrites
 ): void {
+  // Nobody to tell: build no scope.
+  if (!sessionCrewChanges.hasListeners()) {
+    return
+  }
   const topologyChanged =
     writes.sessionTabs !== null ||
     writes.records.remove.length > 0 ||
@@ -167,7 +177,23 @@ export function notifyAgentSessionStoreCacheChanges(
     })
     .map(([id]) => id)
   if (topologyChanged) {
-    sessionCrewChanges.notify(new Set(['records']))
+    const affected = new Set([...writes.records.remove, ...writes.records.upsert.map(([id]) => id)])
+    if (writes.sessionTabs) {
+      for (const id of [
+        ...(before.sessionTabs?.sessionIds() ?? []),
+        ...(after.sessionTabs?.sessionIds() ?? [])
+      ]) {
+        if (before.sessionTabs?.tabIdFor(id) !== after.sessionTabs?.tabIdFor(id)) {
+          affected.add(id)
+        }
+      }
+    }
+    sessionCrewChanges.notify(
+      Object.assign(new Set(['records'] as const), {
+        recordIds: [...affected],
+        trafficAddresses: new Set([...affected].map((id) => `orca_session_id:${id}`))
+      })
+    )
   } else if (renamed.length) {
     sessionCrewChanges.notify(Object.assign(new Set(['names'] as const), { recordIds: renamed }))
   }

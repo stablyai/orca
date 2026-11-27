@@ -18,7 +18,7 @@ export type AgentModelCatalogRecord = Pick<
 
 export type AgentModelCatalogWorkspaceDeps = {
   store: AgentModelCatalogStore
-  /** Project-scoped catalogs require a folder and cannot be prewarmed. */
+  /** Project-scoped catalogs list per folder and are never prewarmed. */
   listsInChatFolder?: ReadonlySet<string>
   recordWorkspacePath?: (record: AgentModelCatalogRecord) => Promise<string | null>
   /** Account-home config is already covered by discovery; only workspace layers can override it. */
@@ -29,7 +29,7 @@ export type AgentModelCatalogWorkspaceDeps = {
   }) => Promise<boolean>
 }
 
-/** Claude and Codex pickers show the account's default everywhere, as the references do; the CLI
+/** Claude and Codex pickers show the account's default everywhere; the CLI
  *  still applies a project's own settings at launch and the chat then reports what it ran. */
 export function agentModelCatalogDefaultFollowsAccount(agent: string): boolean {
   return independentAgentModelCatalog(agent)

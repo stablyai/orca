@@ -19,6 +19,9 @@ export function HostWorkspaceListStates(
     search: string
     activeFilterCount: number
     bottomInset: number
+    /** A search's paused bots the Bot options hide, when nothing else matched. */
+    pausedBotMatches?: number
+    onShowPausedBots?: () => void
     onClearSearch: () => void
     onReconnect: (() => void) | null
   }
@@ -75,12 +78,21 @@ export function HostWorkspaceListStates(
     )
   }
   if (state === 'empty') {
+    const paused = props.pausedBotMatches ?? 0
     return props.search ? (
-      <MobileNoMatchState
-        message={t('worktree.hostWorkspaceListStates.noMatches', 'No matching workspaces')}
-        onClear={props.onClearSearch}
-        bottomInset={bottomInset}
-      />
+      paused > 0 && props.onShowPausedBots ? (
+        <MobileNoMatchState
+          message={t('bots.search.pausedMatches', '{{count}} paused matches', {
+            count: paused,
+            defaultValue_one: '{{count}} paused match'
+          })}
+          onClear={props.onShowPausedBots}
+          clearLabel={t('bots.search.showPausedAction', 'Show paused')}
+          bottomInset={bottomInset}
+        />
+      ) : (
+        <MobileNoMatchState onClear={props.onClearSearch} bottomInset={bottomInset} />
+      )
     ) : (
       <MobileStateView
         icon={FolderTree}

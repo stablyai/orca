@@ -4,7 +4,12 @@ import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
 
 export const PUSH_REQUEST_DEADLINE_MS = 15_000
 
-export type PushGatewayFailure = { ok: false; reason: 'unreachable' | 'rejected' }
+export type PushGatewayFailure = {
+  ok: false
+  reason: 'unreachable' | 'rejected'
+  /** Set when sign-in was refused because this host's clock is this far ahead (negative: behind). */
+  clockSkewMs?: number
+}
 export type PushGatewayResult<T> = ({ ok: true } & T) | PushGatewayFailure
 export type PushGatewayResponse = { ok: true; response: Response } | PushGatewayFailure
 

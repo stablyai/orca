@@ -1,5 +1,10 @@
+import {
+  noteRevisedInPlace,
+  positionsRevisedFrom
+} from '../../../../../../shared/agent-session/view/revised-in-place-lists'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import {
+  joinsAutomationRunFold,
   sameNativeChatRowPlacement,
   type NativeChatSubagentRow
 } from '../../../../../../shared/native-chat/transcript/native-chat-transcript-projection'
@@ -45,7 +50,8 @@ export function reuseUnits(
     return null
   }
   const changed: [NativeChatMessage, NativeChatMessage][] = []
-  for (let index = 0; index < before.length; index += 1) {
+  // A revision in place names its rows; anything else is compared row by row.
+  for (const index of positionsRevisedFrom(messages, before) ?? before.keys()) {
     const prior = before[index]!
     const message = messages[index]!
     if (prior === message) {
@@ -56,6 +62,9 @@ export function reuseUnits(
       !sameNativeChatRowPlacement(prior, message) ||
       subagentItemBlock(prior) !== null ||
       subagentItemBlock(message) !== null ||
+      // A run row can fold or mark an earlier row, so only a full pass may place it.
+      joinsAutomationRunFold(prior) ||
+      joinsAutomationRunFold(message) ||
       // A conversation user row opens the turns subagent rows are grouped by.
       (subagents && message.role === 'user') ||
       state.kinds.get(prior) !== nativeChatToolFoldKind(message)
@@ -84,6 +93,7 @@ export function reuseUnits(
       !message.journalPosition ||
       nativeChatDisplaySortRank(message) !== 0 ||
       subagentItemBlock(message) !== null ||
+      joinsAutomationRunFold(message) ||
       // A raw id shaped like a detached result's renames every later orphan.
       isOrphanRowId(message.id) ||
       state.ids.has(message.id) ||
@@ -103,6 +113,8 @@ export function reuseUnits(
     return scopes[index]!
   }
   let conversation = state.projection.conversation
+  // Positions of the conversation replaced in place, until an append moves its rows.
+  let revisedAt: number[] | null = []
   const copiedRows = new Map<string, NativeChatSubagentRow[]>()
   const agentRowsFor = (agentId: string): NativeChatSubagentRow[] => {
     let rows = copiedRows.get(agentId)
@@ -166,6 +178,9 @@ export function reuseUnits(
       conversation =
         conversation === state.projection.conversation ? conversation.slice() : conversation
       conversation.splice(start, rebuilt.rows.length, ...rebuilt.rows)
+      rebuilt.rows.forEach(
+        (row, offset) => row !== unit.rows[offset] && revisedAt?.push(start + offset)
+      )
     } else {
       const rows = agentRowsFor(scope.agentId)
       for (const [offset, row] of rebuilt.rows.entries()) {
@@ -210,6 +225,7 @@ export function reuseUnits(
     const rows = units.flatMap((unit) => unit.rows)
     if (scope.agentId === null) {
       conversation = [...conversation.slice(0, start), ...rows]
+      revisedAt = null
       return true
     }
     const agentRows = agentRowsFor(scope.agentId)
@@ -264,6 +280,9 @@ export function reuseUnits(
     if (!appendTo(index, rows)) {
       return null
     }
+  }
+  if (revisedAt) {
+    noteRevisedInPlace(conversation, state.projection.conversation, revisedAt)
   }
   const projection =
     conversation === state.projection.conversation && copiedRows.size === 0

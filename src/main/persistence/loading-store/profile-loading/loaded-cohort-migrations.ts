@@ -16,13 +16,7 @@ export class LoadedCohortMigrationOperations {
 
   /** Freezes each rollout's new-or-existing cohort on first load, before a save makes a fresh install look existing. */
   migrateCohortSeeds(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
-    // Secondary profiles start with only the install's telemetry consent, before their first load.
-    const telemetryOnly =
-      Object.keys(state).length === 1 &&
-      isRecord(state.settings) &&
-      Object.keys(state.settings).length === 1 &&
-      isRecord(state.settings.telemetry)
-    const existingProfile = fileExistedOnLoad && !telemetryOnly
+    const existingProfile = fileExistedOnLoad && !isTelemetryOnlyProfile(state)
     for (const key of [
       'tabSwitchKeybindingSeed',
       'searchKeybindingSeed',
@@ -118,6 +112,37 @@ export class LoadedCohortMigrationOperations {
     return { ...state, settings: { ...state.settings, nativeChatResumeWorkOnRestart: false } }
   }
 
+  /** New cards are the default for new profiles; profiles saved before without a choice keep Classic. */
+  seedWorktreeCardStyle(state: PersistedState, savedProfile: unknown): PersistedState {
+    if (!isRecord(savedProfile) || isTelemetryOnlyProfile(savedProfile)) {
+      // Why: a new profile starts on the new cards, so there is nothing to try or announce.
+      this.runtime.loadNeedsSave = true
+      return {
+        ...state,
+        ui: { ...state.ui, worktreeCardsIntroNoticeSeen: true, worktreeCardsUpdateNoticeSeen: true }
+      }
+    }
+    const saved = isRecord(savedProfile.settings) ? savedProfile.settings : undefined
+    if (typeof saved?.experimentalNewWorktreeCardStyle === 'boolean') {
+      return state
+    }
+    this.runtime.loadNeedsSave = true
+    return { ...state, settings: { ...state.settings, experimentalNewWorktreeCardStyle: false } }
+  }
+
+  /** App rail defaults on for new profiles; profiles saved before without a choice keep it off. */
+  keepAppRailOffForExistingProfiles(state: PersistedState, savedProfile: unknown): PersistedState {
+    if (!isRecord(savedProfile) || isTelemetryOnlyProfile(savedProfile)) {
+      return state
+    }
+    const saved = isRecord(savedProfile.settings) ? savedProfile.settings : undefined
+    if (typeof saved?.experimentalAppRail === 'boolean') {
+      return state
+    }
+    this.runtime.loadNeedsSave = true
+    return { ...state, settings: { ...state.settings, experimentalAppRail: false } }
+  }
+
   migrateTelemetry(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
     return this.seedMilestoneInstallCohort(
       this.migrateTelemetryIdentity(state, fileExistedOnLoad),
@@ -191,6 +216,18 @@ export class LoadedCohortMigrationOperations {
       }
     }
   }
+}
+
+/** Secondary profiles start with only the install's telemetry consent, before their first load. */
+function isTelemetryOnlyProfile(profile: unknown): boolean {
+  const settings = isRecord(profile) ? profile.settings : undefined
+  return (
+    isRecord(profile) &&
+    Object.keys(profile).length === 1 &&
+    isRecord(settings) &&
+    Object.keys(settings).length === 1 &&
+    isRecord(settings.telemetry)
+  )
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

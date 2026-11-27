@@ -9,6 +9,9 @@ import {
 } from './journal-domain-submission-consume'
 import type { JournalSqlScope } from './journal-sql-scope'
 import type { JournalSqlQueueFacts } from './journal-sql-queued-messages'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
+
+const MAX_OWED_MAIL_STEERS = 32
 
 /** Send, automatic claim and publication derive the same barriers from current SQL rows. */
 export function journalDomainInputEligibility(
@@ -17,23 +20,24 @@ export function journalDomainInputEligibility(
   context = new JournalSqlStatusContext(scope),
   work = readJournalSqlCurrentWork(context, authority)
 ) {
-  const blocked = journalDomainInputRecordBlocked(scope, context)
+  const record = journalDomainInputRecord(scope, context)
   const prompts = [...context.select({ kind: 'pending-prompts' })].flatMap(({ item }) => {
     const displayed = work.isCurrentItem(item.itemId) ? context.displayed(item.itemId) : null
     return displayed ? [displayed] : []
   })
   return {
-    blocked,
+    blocked: journalDomainInputRecordBlocked(record),
+    record,
     context,
     work,
     prompts,
     pending: context.firstQueuedInput(),
-    handover: [...context.enteredSubmissions()].some((send) => work.owesSend(send)),
+    handover: [...context.enteredSubmissions()].filter((send) => work.owesSend(send)),
     activeTurnId: work.activeTurn()?.turnId
   }
 }
 
-function journalDomainInputRecordBlocked(scope: JournalSqlScope, context: JournalSqlStatusContext) {
+function journalDomainInputRecord(scope: JournalSqlScope, context: JournalSqlStatusContext) {
   const row =
     context.inputHead ??
     scope.db
@@ -43,9 +47,12 @@ function journalDomainInputRecordBlocked(scope: JournalSqlScope, context: Journa
   if (row?.record_json != null && !isReadableAgentSessionStoreRecord(scope.sessionId, saved)) {
     throw new Error('input admission requires a readable session record')
   }
-  const record = isReadableAgentSessionStoreRecord(scope.sessionId, saved)
+  return isReadableAgentSessionStoreRecord(scope.sessionId, saved)
     ? decodePersistedAgentSessionRecord(saved).record
     : null
+}
+
+function journalDomainInputRecordBlocked(record: ReturnType<typeof journalDomainInputRecord>) {
   return (
     !record || record.rewind?.phase === 'prepared' || record.rewind?.phase === 'provider-succeeded'
   )
@@ -56,14 +63,26 @@ export function journalDomainResolvedInputEligibility(
   context: JournalSqlStatusContext,
   work: JournalObserverResult['work']
 ) {
+  const record = journalDomainInputRecord(context.scope, context)
   return {
-    blocked: journalDomainInputRecordBlocked(context.scope, context),
+    blocked: journalDomainInputRecordBlocked(record),
+    record,
     context,
     prompts: work.actionablePrompts,
     pending: context.firstQueuedInput(),
-    handover: work.owedEnteredSubmissions.length > 0,
+    handover: work.owedEnteredSubmissions,
     activeTurnId: work.activeTurn?.turnId
   }
+}
+
+/** Claude and Codex take every waiting message in at their next step, so other agents' messages
+ *  the agent has not taken in yet never hold the next mail card, up to a bound below the smallest
+ *  provider's limit on sends awaiting their echo. */
+function owedSendsAreFromAgents(owed: readonly AgentJournalSubmission[]): boolean {
+  return (
+    owed.length < MAX_OWED_MAIL_STEERS &&
+    owed.every((send) => send.source?.kind === 'agent' && send.queuedMessageId !== undefined)
+  )
 }
 
 export function selectJournalEligibleQueueCard(
@@ -72,18 +91,19 @@ export function selectJournalEligibleQueueCard(
   now: number,
   facts: JournalSqlQueueFacts,
   allowSteer: boolean,
-  resolved?: Omit<ReturnType<typeof journalDomainInputEligibility>, 'work'>
+  resolved?: Omit<ReturnType<typeof journalDomainInputEligibility>, 'work'>,
+  childAcceptsInput = true,
+  mailJoinsTurn = true
 ): JournalDomainQueuePick & { steer: boolean; command: boolean } {
   const state = resolved ?? journalDomainInputEligibility(scope, authority)
   const none = { kind: 'selected' as const, card: null, steer: false, command: false }
   const steer = state.activeTurnId !== undefined
-  if (
-    state.blocked ||
-    state.prompts.length > 0 ||
-    state.pending ||
-    state.handover ||
-    (steer && !allowSteer)
-  ) {
+  if (state.blocked || state.prompts.length > 0 || state.pending || (steer && !allowSteer)) {
+    return none
+  }
+  const mailOnly = state.handover.length > 0
+  // Earlier mail used to stop selection here; a child that cannot take input yet still does.
+  if (mailOnly && !(steer && childAcceptsInput && owedSendsAreFromAgents(state.handover))) {
     return none
   }
   return {
@@ -95,7 +115,9 @@ export function selectJournalEligibleQueueCard(
         now,
         steer,
         automatic: true,
-        mail: facts.mail
+        mail: facts.mail,
+        mailOnly,
+        mailJoinsTurn
       },
       state.context.inputHead
     ),

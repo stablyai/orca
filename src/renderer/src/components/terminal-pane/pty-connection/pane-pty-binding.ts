@@ -1,18 +1,16 @@
 import type { IDisposable } from '@xterm/xterm'
 import type { resolveTerminalPaneOwnerContext } from '../host-state/terminal-pane-owner-context'
 import type { HasPty } from './lifecycle/terminal-dead-session-reconcile'
-import { useAppStore } from '@/store'
 import { consumeRestartReplacement } from './spawn/restart-replacement-on-show'
 import { shouldReconcileMissingSession } from './lifecycle/terminal-dead-session-reconcile'
 import { cancelPendingSafeFitContinuations } from '@/lib/pane-manager/terminal-fit/pane-fit-continuation-registry'
 import { PANE_PTY_RESIZE_HOLD_FLUSH_EVENT } from '@/lib/pane-manager/pane-layout/pane-pty-resize-hold'
 import { discardTerminalOutput } from '@/lib/pane-manager/terminal-output/pane-terminal-output-queue-registry'
 import '@/lib/agent-session/resume/sleeping-agent-pane-ownership'
-import { getProviderSessionClaimKey } from '../../../../../shared/agent-session/lifecycle/resume/sleeping-record-legacy-pane-key'
 import { releaseRendererPtyVisibilityClaim } from '../pty-transport/delivery/pty-renderer-delivery-claims'
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
-import { noteArmsHibernatedPaneWake } from './lifecycle/hibernated-pane-wake'
+import { wakeHibernatedPaneIfArmed } from './lifecycle/hibernated-pane-wake'
 import { syncRemoteOutputCadence } from './output/remote-output-cadence'
 
 export type PanePtyBinding = IDisposable & {
@@ -21,7 +19,10 @@ export type PanePtyBinding = IDisposable & {
   noteVisibilityResume: () => void
   reassertPtySizeAfterWindowWake: () => void
   /** Mobile wake resumes hidden panes without reveal’s size/process reads; return the provider-session claim for started or latched wakes to prevent generic duplicate resume. */
-  wakeHibernatedAgentIfArmed: (claimedProviderSessions?: Set<string>) => string | null
+  wakeHibernatedAgentIfArmed: (
+    claimedProviderSessions?: Set<string>,
+    paneKey?: string
+  ) => string | null
   /** Focus changes resample active-leaf identity because a live agent with stale shell state may emit no correcting command boundary. */
   sampleForegroundAgentOnFocus: () => void
   /** Pane focus or tab activity changed; remote panes retune the host's output cadence. */
@@ -113,42 +114,8 @@ export function createPanePtyBinding(session: ConnectPanePtySession): PanePtyBin
       session.claimPendingVisibleRemoteViewport()
       session.ptySizeReassertion.request({ fit: false })
     },
-    // Why: mobile wake reaches this pane while it's hidden on the desktop, so consume only the armed hibernation wake — no size/foreground reads.
-    wakeHibernatedAgentIfArmed(claimedProviderSessions) {
-      if (session.hibernatedWakeInFlightClaimKey) {
-        if (claimedProviderSessions?.has(session.hibernatedWakeInFlightClaimKey)) {
-          return null
-        }
-        claimedProviderSessions?.add(session.hibernatedWakeInFlightClaimKey)
-        return session.hibernatedWakeInFlightClaimKey
-      }
-      const consumedClaimKey = session.consumeHibernatedAgentWake(claimedProviderSessions)
-      if (consumedClaimKey) {
-        return consumedClaimKey
-      }
-      // Latch mid-kill mobile wakes only for the exact suppressed PTY, never unrelated stale/manual records.
-      const state = useAppStore.getState()
-      const recordEntry = session.getSleepingRecordForPane(state)
-      const currentPtyId = session.transport.getPtyId()
-      if (
-        recordEntry &&
-        noteArmsHibernatedPaneWake(recordEntry.record) &&
-        currentPtyId !== null &&
-        state.suppressedPtyExitIds[currentPtyId] === true &&
-        !session.disposed &&
-        session.hibernatedWakeTarget === null &&
-        session.deps.paneTransportsRef.current.get(session.pane.id) === session.transport &&
-        session.transport.getPtyId() === currentPtyId
-      ) {
-        const claimKey = getProviderSessionClaimKey(recordEntry.record)
-        if (claimedProviderSessions?.has(claimKey)) {
-          return null
-        }
-        claimedProviderSessions?.add(claimKey)
-        session.pendingHibernatedWakeTarget = { ptyId: currentPtyId, record: recordEntry.record }
-        return claimKey
-      }
-      return null
+    wakeHibernatedAgentIfArmed(claimedProviderSessions, paneKey) {
+      return wakeHibernatedPaneIfArmed(session, claimedProviderSessions, paneKey)
     },
     sampleForegroundAgentOnFocus() {
       session.requestKnownWindowsShiftEnterReconfirmation()
@@ -183,9 +150,9 @@ export function createPanePtyBinding(session: ConnectPanePtySession): PanePtyBin
       session.startupTiming?.finish('disposed')
       const unsentReplacedPtyId: string | null = session.claimPendingReplacedPtyId()
       if (unsentReplacedPtyId) {
-        // Why: no spawn will carry this stop now, and the pane no longer references the PTY.
+        // Why: no spawn will carry this stop now; a plain kill would let main retire the restarting pane's tab.
         void Promise.resolve()
-          .then(() => window.api.pty.kill(unsentReplacedPtyId))
+          .then(() => window.api.pty.kill(unsentReplacedPtyId, { replaced: true }))
           .catch((err: unknown) => console.warn('[terminal] failed to stop a replaced PTY:', err))
       }
       // Successors may reuse numeric pane slots before disposal; leave their errors untouched.

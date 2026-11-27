@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import { SharedLinksSettingsPane } from '../bots/SharedLinksSettingsPane'
 import { SessionHistorySettingsPane } from '../session-history/SessionHistorySettingsPane'
 import { ArtifactsSettingsPane } from '../artifacts/ArtifactsSettingsPane'
 import { AutomationsSettingsPane } from '../automations/AutomationsSettingsPane'
@@ -6,12 +7,14 @@ import { GeneralPane } from '../general/GeneralPane'
 import { IntegrationsPane } from '../integrations/IntegrationsPane'
 import { MobileSettingsPane } from '../mobile/MobileSettingsPane'
 import { OrcaAccountSettingsPane } from '../accounts/orca/OrcaAccountSettingsPane'
+import { ServerOrcaAccountPane } from '../accounts/orca/ServerOrcaAccountPane'
+import { SettingsHostScopeUnavailableNotice } from '../host-scope/SettingsHostScopePicker'
 import { SettingsSetupGuidePane } from '../setup-guide/SettingsSetupGuidePane'
 import { ShareSkillsSettingsPane } from '../skills/sharing/ShareSkillsSettingsPane'
 import { SettingsSection } from '../section-layout/SettingsSection'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { SettingsRenderContext } from './settings-render-context'
+import { getSettingsHostServerName, type SettingsRenderContext } from './settings-render-context'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { WorkspaceCleanupSettingsPane } from '../workspace-cleanup/WorkspaceCleanupSettingsPane'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
@@ -21,21 +24,36 @@ export function renderOrcaAccountSettingsSection(
   t: Translate = translate
 ): React.JSX.Element | null {
   const { model, navigation, view } = context
+  const serverName = getSettingsHostServerName(model, t)
   return model.showDesktopOnlySettings ? (
     <SettingsSection
       id="orca-account"
       title={t('auto.components.settings.orcaAccount.title', 'Orca Account')}
-      description={t(
-        'auto.components.settings.orcaAccount.description',
-        'Share work instantly and reach your desktop from Orca Mobile wherever you are.'
-      )}
+      description={
+        serverName === null
+          ? t(
+              'auto.components.settings.orcaAccount.description',
+              'Share work instantly and reach your desktop from Orca Mobile wherever you are.'
+            )
+          : t(
+              'components.settings.orcaAccount.server.sectionDescription',
+              'The Orca account {{host}} runs as, for its bots’ Slack, GitHub, Linear and webhooks.',
+              { host: serverName }
+            )
+      }
       searchEntries={navigation.getSectionSearchEntries('orca-account')}
     >
-      {view.isSectionMounted('orca-account') ? (
+      {!view.isSectionMounted('orca-account') ? null : !model.settingsHostScope.available ? (
+        <SettingsHostScopeUnavailableNotice />
+      ) : (
         <SettingsGroup bodyClassName="py-4">
-          <OrcaAccountSettingsPane />
+          {model.settingsHostScope.target.kind === 'environment' ? (
+            <ServerOrcaAccountPane environmentId={model.settingsHostScope.target.environmentId} />
+          ) : (
+            <OrcaAccountSettingsPane />
+          )}
         </SettingsGroup>
-      ) : null}
+      )}
     </SettingsSection>
   ) : null
 }
@@ -95,6 +113,7 @@ export function renderGeneralSettingsSection(
           settings={model.settings}
           updateSettings={model.updateSettings}
           updateSettingsOrThrow={model.updateSettingsOrThrow}
+          hostScope={model.settingsHostScope}
           fontSuggestions={model.terminalFontSuggestions}
           onRequestFontSuggestions={interactions.requestFontSuggestions}
           wslSupportedPlatform={terminal.localWslSupportedPlatform}
@@ -210,6 +229,26 @@ export function renderShareSkillsSettingsSection(
       searchEntries={navigation.getSectionSearchEntries('share-skills')}
     >
       {view.isSectionMounted('share-skills') ? <ShareSkillsSettingsPane /> : null}
+    </SettingsSection>
+  )
+}
+
+export function renderSharedLinksSettingsSection(
+  context: SettingsRenderContext,
+  t: Translate = translate
+): React.JSX.Element | null {
+  const { navigation, view } = context
+  if (!navigation.navSections.some((section) => section.id === 'shared-links')) {
+    return null
+  }
+  return (
+    <SettingsSection
+      id="shared-links"
+      title={t('settings.sharedLinks.title', 'Shared links')}
+      description={t('settings.sharedLinks.description', "Links you've published.")}
+      searchEntries={navigation.getSectionSearchEntries('shared-links')}
+    >
+      {view.isSectionMounted('shared-links') ? <SharedLinksSettingsPane /> : null}
     </SettingsSection>
   )
 }

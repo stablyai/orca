@@ -3,7 +3,7 @@ import { ScrollView, Text, View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ChevronLeft } from 'lucide-react-native'
 import { NavBar } from '../components/nav-bar/NavBar'
-import { NavBarButton } from '../components/nav-bar/NavBarButton'
+import { NavBarButton, NavBarButtonOnSheetContext } from '../components/nav-bar/NavBarButton'
 import { ListGroup, LIST_ROW_PADDING, SectionHeader } from '../components/list/ListGroup'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, spacing } from '../theme/mobile-theme'
@@ -15,23 +15,31 @@ type SettingsNavBarProps = {
   onBack: () => void
   /** At most two NavBarButtons. */
   trailing?: ReactNode
+  /** Replaces the title, e.g. a title button that picks a computer. */
+  center?: ReactNode
 }
 
 /** A settings screen's top bar: Back, the centred title, and up to two buttons. */
-export function SettingsNavBar({ title, onBack, trailing }: SettingsNavBarProps) {
+export function SettingsNavBar({ title, onBack, trailing, center }: SettingsNavBarProps) {
   const t = useMobileTranslation()
+  useMobileColorScheme()
+  // The bar takes the grouped page's grey, so its buttons need the fill that reads on a grey sheet.
   return (
-    <NavBar
-      leading={
-        <NavBarButton
-          icon={ChevronLeft}
-          accessibilityLabel={t('common.back', 'Back')}
-          onPress={onBack}
-        />
-      }
-      title={title}
-      trailing={trailing}
-    />
+    <NavBarButtonOnSheetContext.Provider value>
+      <NavBar
+        style={settingsScreenStyles.bar}
+        leading={
+          <NavBarButton
+            icon={ChevronLeft}
+            accessibilityLabel={t('common.back', 'Back')}
+            onPress={onBack}
+          />
+        }
+        title={title}
+        center={center}
+        trailing={trailing}
+      />
+    </NavBarButtonOnSheetContext.Provider>
   )
 }
 
@@ -129,7 +137,8 @@ export function SettingsEmptyRow({ children }: { children: ReactNode }) {
 }
 
 export const settingsScreenStyles = themedStyleSheet(() => ({
-  container: { flex: 1, backgroundColor: colors.bgBase },
+  container: { flex: 1, backgroundColor: colors.groupedPage },
+  bar: { backgroundColor: colors.groupedPage },
   scrollContent: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
   fill: { flexGrow: 1 },
   untitledGap: { marginTop: spacing.lg },

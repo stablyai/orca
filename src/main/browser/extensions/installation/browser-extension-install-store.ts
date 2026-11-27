@@ -4,24 +4,27 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { isChromeExtensionId } from '../../../../shared/browser/extensions/browser-extension-url'
 import type { InstalledBrowserExtension } from '../../../../shared/browser/extensions/browser-extension-types'
 
 const INSTALLED_FILE_NAME = 'installed.json'
 const REMOVALS_FILE_NAME = 'uninstalled.json'
 
-const installedExtensionSchema = z.object({
-  id: z.string().refine(isChromeExtensionId),
-  name: z.string(),
-  version: z.string(),
-  path: z.string(),
-  source: z.enum(['webstore', 'unpacked']),
-  iconPath: z.string().nullable(),
-  permissions: z.array(z.string()),
-  hostPermissions: z.array(z.string()),
-  optionsPage: z.string().nullable(),
-  installTime: z.number().int().nonnegative().optional()
-})
+const installedExtensionSchema = lazyZodSchema(() =>
+  z.object({
+    id: z.string().refine(isChromeExtensionId),
+    name: z.string(),
+    version: z.string(),
+    path: z.string(),
+    source: z.enum(['webstore', 'unpacked']),
+    iconPath: z.string().nullable(),
+    permissions: z.array(z.string()),
+    hostPermissions: z.array(z.string()),
+    optionsPage: z.string().nullable(),
+    installTime: z.number().int().nonnegative().optional()
+  })
+)
 
 /**
  * The installed list, shared by every local browser profile. Store installs live under
@@ -62,6 +65,14 @@ export class BrowserExtensionInstallStore {
 
   /** Monotonic uninstall markers survive reinstall and are shared by every Orca profile. */
   removalGenerations(): ReadonlyMap<string, number> {
+    return new Map(this.loadRemovals())
+  }
+
+  removalGeneration(extensionId: string): number {
+    return this.loadRemovals().get(extensionId) ?? 0
+  }
+
+  private loadRemovals(): Map<string, number> {
     if (!this.removals) {
       const entries = new Map<string, number>()
       try {
@@ -81,7 +92,7 @@ export class BrowserExtensionInstallStore {
       }
       this.removals = entries
     }
-    return new Map(this.removals)
+    return this.removals
   }
 
   save(extension: InstalledBrowserExtension, updated = false): InstalledBrowserExtension {

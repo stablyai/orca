@@ -1,6 +1,6 @@
-import { Activity } from 'lucide-react-native'
+import { Activity, MessageCircleQuestion } from 'lucide-react-native'
 import { Animated, View, type ViewStyle } from 'react-native'
-import type { AgentDotState } from '../../worktree/agent-lineage/agent-row-display'
+import { agentStateLabel, type AgentDotState } from '../../worktree/agent-lineage/agent-row-display'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { colors, radii } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
@@ -8,24 +8,36 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import { useWorkingRingRotation } from '../../components/motion/use-working-motion'
 
-// Match desktop per-agent vocabulary: working yellow spinner, done emerald, attention red, interrupted muted, unconfirmed amber, idle neutral.
-// Separate from AgentSpinner’s five-state worktree rollup.
+export const AGENT_FAILURE_COLOR = '#ef4444'
+
 const dotColors = (): Record<
-  Exclude<AgentDotState, 'working' | 'monitoring' | 'unverifiable'>,
+  Exclude<
+    AgentDotState,
+    'working' | 'monitoring' | 'blocked' | 'waiting' | 'permission' | 'unverifiable'
+  >,
   string
 > => ({
   done: '#10b981',
-  blocked: '#ef4444',
-  waiting: '#ef4444',
-  permission: '#ef4444',
   interrupted: colors.textMuted,
-  failed: '#ef4444',
+  failed: AGENT_FAILURE_COLOR,
   unconfirmed: colors.statusAmber,
   idle: 'rgba(115,115,115,0.4)'
 })
 export const AGENT_WORKING_COLOR = '#eab308'
 /** The dot's box, so rows can line text up past it. */
 export const AGENT_STATE_DOT_SIZE = 10
+
+export function AgentQuestionIcon({ size }: { size: number }) {
+  useMobileColorScheme()
+  return (
+    <MessageCircleQuestion
+      size={size}
+      color={colors.agentQuestion}
+      accessible={false}
+      aria-hidden
+    />
+  )
+}
 
 /** Spins only while mounted, so idle rows hold no loop; Reduce Motion closes the gap, as desktop does. */
 export function WorkingRing({ color, style }: { color: string; style: ViewStyle }) {
@@ -35,16 +47,34 @@ export function WorkingRing({ color, style }: { color: string; style: ViewStyle 
   return (
     <Animated.View
       ref={ring.ref}
-      style={[style, { borderColor: color }, still ? { borderTopColor: color } : ring.style]}
+      // One object, sides after the shorthand: react-native-web lets a later borderColor repaint the gap.
+      style={[
+        style,
+        { borderColor: color, borderTopColor: still ? color : 'transparent' },
+        still ? undefined : ring.style
+      ]}
     />
   )
 }
 
 /** `unverifiable` is a child row's lost contact: desktop's dashed amber ring, a missing-evidence
  *  mark rather than a state claim. */
-export function AgentStateDot({ state }: { state: AgentDotState | 'unverifiable' }) {
+export function AgentStateDot({
+  state,
+  decorative = false
+}: {
+  state: AgentDotState
+  decorative?: boolean
+}) {
   const t = useMobileTranslation()
   useMobileColorScheme()
+  const hidden = decorative
+    ? {
+        'aria-hidden': true,
+        accessibilityElementsHidden: true,
+        importantForAccessibility: 'no-hide-descendants' as const
+      }
+    : undefined
 
   if (state === 'working') {
     return (
@@ -57,8 +87,14 @@ export function AgentStateDot({ state }: { state: AgentDotState | 'unverifiable'
   if (state === 'monitoring') {
     return (
       <View
+        {...hidden}
+        accessible={!decorative}
         style={styles.wrapper}
-        accessibilityLabel={t('components.agentStateDot.monitoring', 'Monitoring background tasks')}
+        accessibilityLabel={
+          decorative
+            ? undefined
+            : t('components.agentStateDot.monitoring', 'Monitoring background tasks')
+        }
       >
         <Activity size={10} color={AGENT_WORKING_COLOR} />
       </View>
@@ -68,10 +104,26 @@ export function AgentStateDot({ state }: { state: AgentDotState | 'unverifiable'
   if (state === 'unverifiable') {
     return (
       <View
+        {...hidden}
         style={styles.wrapper}
-        accessibilityLabel={t('components.agentStateDot.unverifiable', 'No recent update')}
+        accessibilityLabel={
+          decorative ? undefined : t('components.agentStateDot.unverifiable', 'No recent update')
+        }
       >
         <View style={styles.dashedRing} />
+      </View>
+    )
+  }
+
+  if (state === 'blocked' || state === 'waiting' || state === 'permission') {
+    return (
+      <View
+        {...hidden}
+        accessible={!decorative}
+        style={styles.wrapper}
+        accessibilityLabel={decorative ? undefined : agentStateLabel(state)}
+      >
+        <AgentQuestionIcon size={AGENT_STATE_DOT_SIZE} />
       </View>
     )
   }
@@ -103,7 +155,6 @@ const styles = themedStyleSheet(() => ({
     width: 6,
     height: 6,
     borderRadius: radii.pill,
-    borderWidth: 1.5,
-    borderTopColor: 'transparent'
+    borderWidth: 1.5
   }
 }))

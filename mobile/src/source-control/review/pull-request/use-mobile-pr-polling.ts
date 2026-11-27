@@ -22,6 +22,7 @@ import {
   type PrQueryScope
 } from './mobile-pr-queries'
 import { prSidebarResourceKey, type PrSidebarState } from './mobile-pr-sidebar-state'
+import { usePrCommentPolling } from './comments/pr-comment-polling'
 
 /** What is on screen: nothing to keep fresh, the PR and its checks, or its comments too. */
 export type PrTabLive = false | 'checks' | 'details'
@@ -31,6 +32,7 @@ type Input = {
   state: PrSidebarState
   live: PrTabLive
   connected: boolean
+  hasPendingCommentWrites?: () => boolean
 }
 
 type Cadence = {
@@ -48,6 +50,7 @@ const FIRST_BACKOFF_MS = 60_000
 const REVALIDATION_RETRY_FLOOR_MS = 10_000
 const NO_HOST = { hostId: '', client: null }
 const NO_TARGET = { exec: 'local' as const }
+const noPendingWrites = () => false
 
 function freshCadence(resource: string | null): Cadence {
   return {
@@ -111,7 +114,13 @@ export function pollDelayMs(
 // changes and up to 15 min on failures, stopping once a merged PR's checks settle. It runs only while
 // the PR is on screen, its route is focused, the host is connected and the app is in the foreground
 // (TanStack's focus manager pauses intervals in the background). Elsewhere details follow the PR's updatedAt.
-export function useMobilePrPolling({ queries, state, live, connected }: Input): {
+export function useMobilePrPolling({
+  queries,
+  state,
+  live,
+  connected,
+  hasPendingCommentWrites = noPendingWrites
+}: Input): {
   /** Polling is running for an open PR, so the screen can say "Live" instead of offering Refresh. */
   polling: boolean
 } {
@@ -158,12 +167,18 @@ export function useMobilePrPolling({ queries, state, live, connected }: Input): 
     enabled: running && queries?.checksInput != null,
     refetchInterval
   })
-  // Thread resolution and comment edits leave the PR's updatedAt alone, so open Comments polls its details too.
-  const pollDetails = running && live === 'details' && queries?.detailsInput != null
+  const showComments = running && live === 'details' && queries?.detailsInput != null
   useHostQuery(prDetailsQuery, host, target, queries?.detailsInput ?? NO_PR, {
-    enabled: pollDetails,
-    refetchInterval: pollDetails ? refetchInterval : false
+    enabled: showComments
   })
+  // Thread resolution and comment edits can leave the PR's updatedAt alone.
+  usePrCommentPolling(
+    host,
+    target,
+    queries?.detailsInput ?? NO_PR,
+    showComments ? refetchInterval : false,
+    hasPendingCommentWrites
+  )
   const next = stepCadence(current, {
     data: checksRead.data,
     dataAt: checksRead.dataUpdatedAt,

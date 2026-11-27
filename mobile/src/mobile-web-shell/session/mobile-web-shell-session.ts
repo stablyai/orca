@@ -11,6 +11,7 @@ import type {
 import { onDownloadFailed } from '../update-recovery/mobile-web-shell-download-failure'
 import {
   onActivated,
+  onResumeEvent,
   onDocumentGates,
   onUpdateFailed,
   onUpdateManifest,
@@ -37,8 +38,8 @@ import {
 import { step } from './mobile-web-shell-session-step'
 import { reducePageDocumentLifecycle } from '../page-document/page-document-lifecycle'
 import {
+  reduceRetryPressed,
   reduceShellFailed,
-  retryDeletesCache,
   type RefetchAfterDelete
 } from '../update-recovery/shell-failure-recovery'
 
@@ -71,6 +72,8 @@ export function createMobileWebShellSession(
     requestedBuildId: null,
     requestedCompat: null,
     verdicted: false,
+    manifestFirst: false,
+    pageFaultBuildId: null,
     flow: 0
   }
 }
@@ -108,34 +111,34 @@ function onCacheRead(
   if (gates === null) {
     return step(session, { cached: generation })
   }
+  // Only this read honors Try again's ask-first; a later flow opens cache as usual.
+  const patch = { cached: generation, manifestFirst: false }
   const verdict = gateVerdict(gates)
   if (verdict.kind === 'open') {
     // A reachable host judges cache before it shows; bytes outside its window or routes let the manifest decide, as without cache.
     if (
       generation !== null &&
+      !session.manifestFirst &&
       shellRunsGeneration(generation.compat) &&
       cachedGenerationWall(verdict, gates, generation.compat) === null
     ) {
-      const opened = openByOwnRoutes(session, generation, {
-        unclaimed: CHECKING,
-        patch: { cached: generation }
-      })
+      const opened = openByOwnRoutes(session, generation, { unclaimed: CHECKING, patch })
       if (opened.session.state.kind === 'activating') {
         return opened
       }
     }
-    return step(session, { cached: generation, state: CHECKING }, [{ kind: 'read-manifest' }])
+    return step(session, { ...patch, state: CHECKING }, [{ kind: 'read-manifest' }])
   }
   if (generation === null || !shellRunsGeneration(generation.compat)) {
     // Nothing to show yet: offline says so unless the dial is still retrying; dialling and pending wait for the host.
     const settledOffline = verdict.kind === 'offline' && gates.retrying !== true
-    return step(session, { cached: generation, ...(settledOffline ? { state: OFFLINE } : {}) })
+    return step(session, { ...patch, ...(settledOffline ? { state: OFFLINE } : {}) })
   }
   // Render before the verdict: the bridge holds every desktop-bound frame until this connection's status opens it.
   // An absent route offline means offline, not evidence the unreachable desktop is outdated.
   return openByOwnRoutes(session, generation, {
     unclaimed: verdict.kind === 'offline' ? OFFLINE : CHECKING,
-    patch: { cached: generation }
+    patch
   })
 }
 
@@ -165,11 +168,12 @@ function onManifestRead(
   }
   if (!rendersRoute(view.pageRoutes, session.routePathname)) {
     // Keep route facts so a later layout flip can restart a newly servable screen.
-    const refusal = session.appNamesRoute
-      ? pageRouteRefusalVerdict(manifest.routes, session.routePathname, session.wide)
-      : null
+    // An unlisted catch-all route may be a stale link, but one the host lists and this shell cannot grant means this app is behind.
+    const refusal = pageRouteRefusalVerdict(manifest.routes, session.routePathname, session.wide)
     const state =
-      refusal === null ? ROUTE_UNAVAILABLE : ({ kind: 'wall', verdict: refusal } as const)
+      refusal !== null && (session.appNamesRoute || refusal.reason === 'page-route-grant-missing')
+        ? ({ kind: 'wall', verdict: refusal } as const)
+        : ROUTE_UNAVAILABLE
     return step(session, { ...view, state })
   }
   // Build ids digest assets, so matching ids can open cached bytes unchanged.
@@ -293,31 +297,10 @@ export function reduceMobileWebShellSession(
       return step(session, pageDocumentStatePatch(session, event))
     case 'layout-changed':
       return onLayoutChanged(session, event.wide)
-    case 'retry-pressed': {
-      // Only explicit retry resets recovery latches; reconnect must not grant another remount.
-      const reset = {
-        retriedOnce: false,
-        remountedOnce: false,
-        reclaimedOnce: false,
-        pageRemountedOnce: false
-      }
-      const fresh: MobileWebShellSessionEffect[] = retryDeletesCache(session.state)
-        ? [{ kind: 'delete-cache' }]
-        : []
-      return session.gates === null
-        ? step(
-            session,
-            {
-              ...reset,
-              updateNotice: null,
-              requestedBuildId: null,
-              requestedCompat: null,
-              state: CHECKING,
-              flow: session.flow + 1
-            },
-            fresh
-          )
-        : startFlow(session, session.gates, { ...reset, cached: null }, fresh)
-    }
+    case 'app-resumed':
+    case 'update-swap':
+      return onResumeEvent(session, event.type, startFlow)
+    case 'retry-pressed':
+      return reduceRetryPressed(session, startFlow)
   }
 }

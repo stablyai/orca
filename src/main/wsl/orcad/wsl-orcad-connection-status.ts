@@ -1,7 +1,9 @@
 import type { OrcadTerminalCensus } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
 import type {
-  WslHostConnectIntent,
-  WslHostDeferredUpdate
+  WslHostAddStage,
+  WslHostUpdateIntent,
+  WslHostDeferredUpdate,
+  WslHostPastUncountedTerminals
 } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import type { WslHostCopyParams } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-failure-copy'
 import type { WslLivenessUnverifiableReason } from './wsl-orcad-liveness-verdict'
@@ -13,6 +15,9 @@ export type WslOrcadConnectionStatus =
       state: 'connecting'
       /** Another install holds this server version's install lock. */
       installLockWait?: InstallLockWait
+      /** The step a connect publishing "Connecting" is on (no prior status, no bridge yet); main
+       *  forwards it as add progress only for a distro that is not a host yet. */
+      addStage?: WslHostAddStage
     }
   | { state: 'ready'; census: OrcadTerminalCensus | null }
   | {
@@ -48,13 +53,41 @@ export type WslOrcadConnectionStatus =
     }
   | { state: 'closed' }
 
-export function wslConnectingStatus(wait: InstallLockWait | null): WslOrcadConnectionStatus {
-  return wait ? { state: 'connecting', installLockWait: wait } : { state: 'connecting' }
+export function wslConnectingStatus(
+  wait: InstallLockWait | null,
+  addStage?: WslHostAddStage
+): WslOrcadConnectionStatus {
+  return {
+    state: 'connecting',
+    ...(wait ? { installLockWait: wait } : {}),
+    ...(addStage ? { addStage } : {})
+  }
+}
+
+/** An Add's lock waits and steps, each published with the other's latest; a null wait (lock taken) clears it. */
+export function wslAddProgressReporter(publish: (status: WslOrcadConnectionStatus) => void): {
+  onInstallLockWait: (wait: InstallLockWait | null) => void
+  onStage: (stage: WslHostAddStage) => void
+} {
+  let wait: InstallLockWait | null = null
+  let stage: WslHostAddStage | undefined
+  return {
+    onInstallLockWait: (next) => {
+      wait = next
+      publish(wslConnectingStatus(wait, stage))
+    },
+    onStage: (next) => {
+      stage = next
+      publish(wslConnectingStatus(wait, stage))
+    }
+  }
 }
 
 /** What a user-initiated connect asks of the host's update. */
 export type WslOrcadConnectIntent = {
-  intent?: WslHostConnectIntent
+  intent?: WslHostUpdateIntent
+  /** Update anyway over an uncounted census, pinned to the build the user confirmed. */
+  pastUncountedTerminals?: WslHostPastUncountedTerminals
   /** E9: only reconnect a distro confirmed running; a runtime call must never boot one. */
   noBoot?: boolean
   /** How a no-boot connect confirms the distro runs (set by the connector). */

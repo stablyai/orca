@@ -15,7 +15,7 @@ import {
 } from '@/components/standalone-terminal/rendering/preview-terminal-options'
 import { openStandaloneTerminal } from '@/components/standalone-terminal/open-standalone-terminal'
 import { removePlainSshPanel } from '@/ssh/plain-ssh-terminal-panels'
-import { usePluginFontReady } from '@/store/plugins/appearance/plugin-fonts'
+import { usePluginFontLoadKey } from '@/store/plugins/appearance/plugin-fonts'
 import type { ITheme, Terminal } from '@xterm/xterm'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type {
@@ -91,7 +91,7 @@ export function PlainSshTerminalView({
   const terminalRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
   const settings = useAppStore((s) => s.settings)
-  const terminalFontReady = usePluginFontReady(settings?.terminalFontFamily)
+  const terminalFontLoadKey = usePluginFontLoadKey(settings?.terminalFontFamily)
   const systemPrefersDark = useSystemPrefersDark()
   const macOptionAsAlt = useEffectiveMacOptionAsAlt(settings?.terminalMacOptionAsAlt)
   // Why refs: keys and appearance read live values; a remount would hang up the SSH session.
@@ -304,7 +304,7 @@ export function PlainSshTerminalView({
     if (!hidden && container && container.offsetWidth > 0 && container.offsetHeight > 0) {
       fitRef.current?.fit()
     }
-  }, [settings, terminalFontReady, systemPrefersDark, macOptionAsAlt, hidden])
+  }, [settings, terminalFontLoadKey, systemPrefersDark, macOptionAsAlt, hidden])
 
   useEffect(() => {
     if (!hidden) {

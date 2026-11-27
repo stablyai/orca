@@ -59,6 +59,18 @@ export function buildStreamUnsubscribe(
       ? { method: 'agentSession.unsubscribe', params: { sessionId, subscriptionId: requestId } }
       : null
   }
+  if (
+    method === 'orchestration.workerApprovalsSubscribe' ||
+    method === 'orchestration.workerDockSubscribe'
+  ) {
+    // The host names each stream by the request that opened it; this release ends either kind.
+    return requestId
+      ? {
+          method: 'orchestration.workerApprovalsUnsubscribe',
+          params: { subscriptionId: requestId }
+        }
+      : null
+  }
   if (method === 'nativeChat.subscribe') {
     const subscriptionId = (params as { subscriptionId?: unknown }).subscriptionId
     if (typeof subscriptionId === 'string') {

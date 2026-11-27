@@ -17,6 +17,8 @@ export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   'agentSession.queuedMessageEditHold',
   'agentSession.queuedMessagesResume',
   'agentSession.close',
+  // Delete chat in an agent's Chats; phones gate on agent-session.delete.phone.v1.
+  'agentSession.delete',
   'agentSession.respondToApproval',
   'agentSession.respondToQuestion',
   'agentSession.setOption',
@@ -29,10 +31,14 @@ export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   'agentSession.commands',
   // The `/mcp` sheet; phones offer it where the host advertises agent-session.mcp.v1.
   'agentSession.mcp',
+  // `/usage` in a Codex chat; phones offer it where the host advertises agent-session.account-usage.phone.v1.
+  'agentSession.accountUsage',
   'agentSession.history',
   'agentSession.currentRequests',
   'agentSession.subscribe',
   'agentSession.unsubscribe',
+  // Whether the phone's chat is on screen; gated on agent-session.live-text-viewer.v1.
+  'agentSession.liveTextShown',
   // Every session's status on one stream: the phone's chat reads the host's "Stopping…" from it.
   'agentSession.subscribeStatus',
   // One visual from the chat's own scratch folder, for the transcript's `::orca-visual` lines.
@@ -43,6 +49,12 @@ export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   'agentSession.sendRecorded',
   // "Rewind to here"; phones offer it only where AGENT_SESSION_PHONE_REWIND_RUNTIME_CAPABILITY says so.
   'agentSession.rewind',
+  // History's interrupted-chats banner and its Resume all; phones gate on agent-session.restart-resume.phone.v1.
+  'agentSession.restartResumable',
+  'agentSession.restartContinue',
+  // A paired window waits on the host's own launch continuation before offering the rest.
+  'agentSession.restartLaunchSettled',
+  'agentSession.restartResumableDismiss',
   // "Don't continue" on a usage-limit row the host will continue at its reset.
   'agentSession.cancelUsageLimitContinue',
   // Skip on a Codex async question card; phones offer it where the host advertises it.

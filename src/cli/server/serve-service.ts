@@ -263,7 +263,7 @@ export const SERVE_SERVICE_HANDLERS: Record<string, CommandHandler> = {
       pairingAddress: optionalString(flags.get('pairing-address')),
       allowPublic: flags.get('allow-public') === true,
       refusePublic: flags.get('refuse-public') === true,
-      dryRun: flags.get('dry-run') === true
+      dryRun: flags.has('dry-run')
     }
     reenterPackagedElectron()
     const result = await installServeService(options)

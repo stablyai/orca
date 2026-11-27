@@ -132,6 +132,33 @@ export function stripSentImagePromptMarkers(text: string, imageCount: number): s
   )
 }
 
+/** This send's markers numbered after `offset` earlier images, for a message carrying several sends' images. */
+export function offsetSentImagePromptMarkers(
+  text: string,
+  imageCount: number,
+  offset: number
+): string {
+  return offset === 0
+    ? text
+    : replaceSentImagePromptMarkers(text, (number, marker) =>
+        number >= 1 && number <= imageCount ? `[Image #${number + offset}]` : marker
+      )
+}
+
+/** Keep references correct when delivered images omit an expired upload. */
+export function remapSentImagePromptMarkers(
+  text: string,
+  positions: readonly (number | null)[]
+): string {
+  return replaceSentImagePromptMarkers(text, (number, marker) => {
+    const position = positions[number - 1]
+    if (position === undefined) {
+      return marker
+    }
+    return position === null ? '[Orca: image expired]' : `[Image #${position}]`
+  })
+}
+
 // Keyed by block array so downstream row-content caches keep hitting across renders.
 const withoutSentMarkers = new WeakMap<readonly NativeChatBlock[], NativeChatBlock[]>()
 

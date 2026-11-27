@@ -1,15 +1,26 @@
 import { themedStyleSheet } from '../theme/themed-styles'
 import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input/text-input-font-size'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { LIST_ROW_PADDING } from '../components/list/ListGroup'
+import { colors, feedback, radii, spacing, typography } from '../theme/mobile-theme'
 
 export const automationStyles = themedStyleSheet(() => ({
   screen: { flex: 1, backgroundColor: colors.bgBase },
   // Inset like Source Control's switch under its bar.
   tabs: { marginHorizontal: spacing.md, marginTop: spacing.sm, backgroundColor: colors.bgPanel },
   content: { padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xl },
-  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  grow: { flex: 1, minWidth: 0 },
+  // Settings-style pages: sections carry their own spacing, as SettingsScreen's do.
+  grouped: {
+    flexGrow: 1,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xl
+  },
+  bottomBar: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
+    backgroundColor: colors.bgBase
+  },
   stack: { gap: spacing.sm },
   card: {
     borderWidth: 1,
@@ -24,13 +35,15 @@ export const automationStyles = themedStyleSheet(() => ({
   text: { color: colors.textPrimary, fontSize: typography.bodySize, lineHeight: 21 },
   meta: { color: colors.textSecondary, fontSize: typography.metaSize, lineHeight: 18 },
   error: { color: colors.statusRed, fontSize: typography.bodySize, lineHeight: 21 },
-  field: { gap: spacing.sm },
+  // Text starts where row titles do: the row inset less the field's 1 pt edge.
   input: {
-    padding: spacing.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: LIST_ROW_PADDING - 1,
     fontSize: TEXT_INPUT_FONT_SIZE,
     minHeight: 44
   },
   multiline: { minHeight: 120, textAlignVertical: 'top' },
+  placeField: { marginTop: spacing.sm },
   button: {
     minHeight: 44,
     justifyContent: 'center',
@@ -44,7 +57,7 @@ export const automationStyles = themedStyleSheet(() => ({
   buttonText: { color: colors.textPrimary, fontSize: typography.bodySize, fontWeight: '600' },
   primaryText: { color: colors.bgBase },
   destructiveText: { color: colors.statusRed },
-  disabled: { opacity: 0.45 },
+  disabled: { opacity: feedback.disabledOpacity },
   output: {
     color: colors.textPrimary,
     backgroundColor: colors.editorSurface,
@@ -53,7 +66,5 @@ export const automationStyles = themedStyleSheet(() => ({
     fontFamily: typography.monoFamily,
     fontSize: typography.metaSize,
     lineHeight: 19
-  },
-  empty: { paddingVertical: spacing.xl, gap: spacing.md, alignItems: 'center' },
-  separator: { height: 1, backgroundColor: colors.borderSubtle }
+  }
 }))

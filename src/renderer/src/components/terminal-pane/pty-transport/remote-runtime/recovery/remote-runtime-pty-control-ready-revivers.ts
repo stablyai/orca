@@ -1,35 +1,50 @@
 // VPN/Tailscale routes can recover without online events; a ready control socket proves reachability and revives latched panes like Reconnect.
-const controlReadyRevivers = new Map<string, Set<() => boolean>>()
+export type RemoteRuntimePtyReviver = {
+  /** The server answered: clear any sign-in wait and replay. */
+  onControlReady: () => boolean
+  /** The user asked to try now: replay, but leave a pane waiting for SSH sign-in to its own prompt. */
+  onManualRetry: () => boolean
+}
+
+const controlReadyRevivers = new Map<string, Set<RemoteRuntimePtyReviver>>()
 
 export function registerRemoteRuntimePtyControlReadyReviver(
   environmentId: string,
-  revive: () => boolean
+  reviver: RemoteRuntimePtyReviver
 ): () => void {
   let revivers = controlReadyRevivers.get(environmentId)
   if (!revivers) {
     revivers = new Set()
     controlReadyRevivers.set(environmentId, revivers)
   }
-  revivers.add(revive)
+  revivers.add(reviver)
   return () => {
     const current = controlReadyRevivers.get(environmentId)
-    current?.delete(revive)
+    current?.delete(reviver)
     if (current?.size === 0) {
       controlReadyRevivers.delete(environmentId)
     }
   }
 }
 
-export function getControlReadyReviverCountForTests(environmentId: string): number {
-  return controlReadyRevivers.get(environmentId)?.size ?? 0
-}
-
-export function reviveRemoteRuntimePtyRecoveriesForEnvironment(environmentId: string): number {
+function reviveEach(
+  environmentId: string,
+  revive: (reviver: RemoteRuntimePtyReviver) => boolean
+): number {
   let revived = 0
-  for (const revive of Array.from(controlReadyRevivers.get(environmentId) ?? [])) {
-    if (revive()) {
+  for (const reviver of Array.from(controlReadyRevivers.get(environmentId) ?? [])) {
+    if (revive(reviver)) {
       revived += 1
     }
   }
   return revived
+}
+
+export function reviveRemoteRuntimePtyRecoveriesForEnvironment(environmentId: string): number {
+  return reviveEach(environmentId, (reviver) => reviver.onControlReady())
+}
+
+/** A Reconnect click for one server: advances its panes' backoffs and replays latched panes. */
+export function retryRemoteRuntimePtyRecoveriesForEnvironment(environmentId: string): number {
+  return reviveEach(environmentId, (reviver) => reviver.onManualRetry())
 }

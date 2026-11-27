@@ -1,15 +1,20 @@
 import { Fragment } from 'react'
 import { MessageSquarePlus, SquareSplitVertical } from 'lucide-react'
-import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
-import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
+import { useAppStore } from '@/store'
+import { useShortcutKeyComboDetails } from '@/lib/keyboard/useShortcutLabel'
 import { agentForksConversations } from '../../../../../../shared/agent-launch/startup/agent-resume-argv'
 import type { NativeChatTabSession } from '../../../tab-bar/session-actions/tab-session-history-switch'
-import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
+import { useDocumentDarkTheme } from '@/hooks/theme/use-document-dark-theme'
 import { useStructuredChatPaneActions } from './use-structured-chat-pane-actions'
 import { NativeChatResumeInCliButton } from './NativeChatResumeInCliButton'
+import { useBotForWorkspace } from '../../../bots/bot-workspace'
+import { BotHomeBanner } from '../../../bots/home-chat/BotHomeBanner'
+import { isHostedBotChatTab } from '../../../../../../shared/bots/bot-home-tab'
+import { useBotHomeRuleApplies } from '@/lib/bot-host-status'
 import { NativeChatSettingsButton } from '../../appearance/NativeChatSettingsButton'
 import type { NativeChatStructuredViewProps } from '../../native-chat-view-types'
 import type { NativeChatHandOff } from './use-native-chat-hand-off'
@@ -39,14 +44,32 @@ export function NativeChatPaneHeader({
 }): React.JSX.Element {
   const t = useTranslate()
   const actions = useStructuredChatPaneActions(tabId, worktreeId, groupId)
+  const tabHostId = useAppStore(
+    (state) =>
+      state.unifiedTabsByWorktree[worktreeId]?.find((entry) => entry.id === tabId)?.executionHostId
+  )
+  const bot = useBotForWorkspace(worktreeId, tabHostId)
+  // A bot's chats stay native chats.
+  const onBotPage = bot !== null
+  const homeRule = useBotHomeRuleApplies(bot)
+  const hostedChat = useAppStore((state) => {
+    const tab = state.unifiedTabsByWorktree[worktreeId]?.find((entry) => entry.id === tabId)
+    return Boolean(
+      state.workspaceSessionReady &&
+      tab &&
+      tab.entityId === nativeChat.sessionId &&
+      isHostedBotChatTab(tab, bot)
+    )
+  })
   const documentDark = useDocumentDarkTheme()
   const light = colorScheme ? colorScheme === 'light' : !documentDark
   const split = t('components.native-chat.splitRight', 'Split Right')
   const splitShortcutCombos = useShortcutKeyComboDetails('terminal.splitRight')
   const handOffLabel = t(
     'components.agentSessionContinuation.handOffToAnotherAgent',
-    'Hand Off to Another Agent'
+    'Hand off to agent'
   )
+  const homeBot = hostedChat && homeRule && bot?.chatSessionId === nativeChat.sessionId ? bot : null
   return (
     <div
       className="pane-title-bar z-20"
@@ -55,6 +78,7 @@ export function NativeChatPaneHeader({
       data-pane-title-surface={light ? 'light' : 'dark'}
       style={HEADER_STYLE}
     >
+      {homeBot ? <BotHomeBanner bot={homeBot} /> : null}
       <div className="pane-title-actions ml-auto flex shrink-0 items-center gap-0">
         {handOff && focused ? (
           <Tooltip>
@@ -78,7 +102,7 @@ export function NativeChatPaneHeader({
             </TooltipContent>
           </Tooltip>
         ) : null}
-        {nativeChat.agent && agentForksConversations(nativeChat.agent) ? (
+        {!onBotPage && nativeChat.agent && agentForksConversations(nativeChat.agent) ? (
           <NativeChatResumeInCliButton
             tabId={tabId}
             worktreeId={worktreeId}

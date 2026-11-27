@@ -18,12 +18,12 @@ import {
 } from '../ownership/agent-session-operation-admission'
 import { isAgentSessionClaimKeyVerifiable } from '../ownership/agent-session-claim-key-retention'
 import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
-import {
-  agentSessionScopeKey,
-  type AgentSessionExecutionLocation,
-  type AgentSessionRecord
+import type {
+  AgentSessionExecutionLocation,
+  AgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { readAgentSessionWorkspaceAttention } from './agent-session-workspace-attention'
+import type { AgentSessionConversationKeys } from './agent-session-conversation-key-index'
 import type { AgentSessionOptionsReplacement } from '../../../../shared/agent-session/options/protocol/agent-session-options-replacement'
 import type { AgentSessionProcessIdentityCommit } from '../ownership/agent-session-lease-transitions'
 import type {
@@ -36,7 +36,8 @@ import {
   type AgentSessionRestartProbeArgs
 } from '../ownership/agent-session-restart-reconciliation'
 import type { AgentSessionRecordCommand } from './agent-session-record-command'
-import type { AgentSessionIdleForget } from './agent-session-record-forget'
+import type { DeletedChat } from '../../../native-chat/chat-deletion/deleted-chats'
+import { AgentSessionRecordForgets } from './agent-session-record-forgets'
 import type {
   AgentSessionReserveRequest,
   AgentSessionReserveResult
@@ -45,39 +46,55 @@ import {
   getAgentSessionConversation,
   selectWritableAgentSessionRecord,
   listAgentSessionConversations,
+  listAgentSessionWorkspaceSessions,
   requireWritableAgentSessionRecord,
   heldAgentSessionIds,
   type AgentSessionStoreState
 } from './agent-session-store-state'
-import { AgentSessionRecordTabs } from './agent-session-tab-table'
 import type { JournalSqlDatabase } from '../../../native-chat/agent-session-journal/database/journal-sql-database'
 import type { JournalOperationReceipt } from '../../../native-chat/agent-session-journal/writing/journal-row-writer'
 import { agentSessionOperationOutcomeReceipt } from './agent-session-operation-receipt'
+import type { JournalFirstSubmittedPrompt } from '../../../native-chat/agent-session-journal/journal-domain-first-submitted-prompt'
 import { AgentSessionStoreTransactions } from './agent-session-store-transactions'
 import { createAgentSessionFoundingStore } from './agent-session-founding-store'
 import type {
   AgentSessionUserNameWrite,
   CompareAndSetConversationName
 } from './agent-session-record-conversation-name'
+import { JournalSqlConnectorReplies } from '../../../native-chat/agent-session-journal/connector-replies/journal-sql-connector-replies'
 
 /** Single-writer records/operation ledger in the host chat-journal database. */
 
 export const AGENT_SESSION_LEASE_TTL_MS = 30_000,
   AGENT_SESSION_LEASE_RENEW_INTERVAL_MS = 10_000
 
-export class AgentSessionRecordStore extends AgentSessionRecordTabs {
+export class AgentSessionRecordStore extends AgentSessionRecordForgets {
   readonly conversationReceipts: ReturnType<typeof createAgentSessionConversationReceipts>
   private clearedFrom: { lineage: object; predecessors: Map<string, string[]> } | undefined
 
   private constructor(
     transactions: AgentSessionStoreTransactions,
     readonly hostId: string,
-    private readonly journalDatabase: JournalSqlDatabase
+    journalDatabase: JournalSqlDatabase,
+    deletedChats: readonly DeletedChat[]
   ) {
-    super(transactions)
-    this.founding = createAgentSessionFoundingStore(transactions)
+    super(transactions, journalDatabase, deletedChats)
+    const founding = createAgentSessionFoundingStore(transactions)
+    this.founding = {
+      ...founding,
+      prepare: (request) => {
+        this.refuseDeletedSession(request.sessionId)
+        return founding.prepare(request)
+      }
+    }
     this.conversationReceipts = createAgentSessionConversationReceipts(transactions)
   }
+
+  /** Open chats with no tab (see `isSessionInBackground`): bot and worker chats. */
+  listBackgroundSessionIds = (): string[] =>
+    this.transactions.state.sessionTabs
+      ?.backgroundSessionIds()
+      .filter(this.isSessionInBackground) ?? []
 
   /** Structural readability does not depend on which agents this host can launch.
    *  `records` must come from this database's own load. */
@@ -86,6 +103,7 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
     records: AgentSessionStoreState
     hostId: string
     legacySessionTabIds: readonly string[]
+    deletedChats?: readonly DeletedChat[]
   }): AgentSessionRecordStore {
     const transactions = new AgentSessionStoreTransactions(
       args.journalDatabase,
@@ -93,7 +111,12 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
       args.hostId,
       args.legacySessionTabIds
     )
-    return new AgentSessionRecordStore(transactions, args.hostId, args.journalDatabase)
+    return new AgentSessionRecordStore(
+      transactions,
+      args.hostId,
+      args.journalDatabase,
+      args.deletedChats ?? []
+    )
   }
 
   private get state(): AgentSessionStoreState {
@@ -114,8 +137,14 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
   getConversation = (sessionId: string) => getAgentSessionConversation(this.state, sessionId)
   listConversations = () => listAgentSessionConversations(this.state)
   workspaceAttentionReads = (location: AgentSessionExecutionLocation) =>
-    readAgentSessionWorkspaceAttention(this.journalDatabase, this.listConversations(), location)
+    readAgentSessionWorkspaceAttention(this.journalDatabase, this.inScope(location), location)
+  private inScope = (location: AgentSessionExecutionLocation) =>
+    this.transactions.keyIndexes.inScope(this.state, location)
+  /** The chats answering to `key` under `keys`, in listing order, without walking the history. */
+  conversationsKeyedBy = (keys: AgentSessionConversationKeys, key: string) =>
+    this.transactions.keyIndexes.conversations(this.state, keys, key)
   senderIdentityRevision = (): number => this.transactions.senderIdentityRevision
+  connectorReplies = () => new JournalSqlConnectorReplies(this.journalDatabase)
   /** Sessions a committed /clear continued into this one, derived from every held conversation
    *  (unreadable leases still count) and rebuilt only when lineage changes. */
   listClearedFrom = (sessionId: string): string[] => {
@@ -136,13 +165,17 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
     return [...(this.clearedFrom.predecessors.get(sessionId) ?? [])]
   }
   lineageRevision = (): object => this.transactions.lineageRevision()
-  providerAliasOwner = (nativeId: string) => this.transactions.providerAliasOwner(nativeId)
+  providerAliasOwner = (nativeId: string): string | null =>
+    this.transactions.keyIndexes.providerAliasOwner(this.state, nativeId)
   selectWritableRecord = (sessionId: string) =>
     selectWritableAgentSessionRecord(this.state, sessionId)
   requireWritableRecord = (sessionId: string) =>
     requireWritableAgentSessionRecord(this.state, sessionId)
 
   listRecords = (): AgentSessionRecord[] => [...this.state.records.values()]
+
+  /** Records whose lease may be held: what renewal and restart reconciliation visit. */
+  listLeaseHolders = (): AgentSessionRecord[] => this.transactions.leaseHolders.list(this.state)
 
   /** Replaced runtimes captured at load; absent for sessions this runtime created. */
   replacedRuntime = (sessionId: string) => this.transactions.replacedRuntimes.get(sessionId)
@@ -153,10 +186,24 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
   /** Includes unreadable rows; workspace cleanup can delete the last chat. */
   holdsRecords = (): boolean => this.state.records.size > 0 || this.state.unreadableRecords.size > 0
 
-  listByScope(location: AgentSessionExecutionLocation): AgentSessionRecord[] {
-    const scope = agentSessionScopeKey(location)
-    return this.listRecords().filter((record) => agentSessionScopeKey(record.location) === scope)
+  /** One reader-pool point read: the earliest user message submitted at/after `sinceMs`. */
+  async firstSubmittedUserPrompt(
+    sessionId: string,
+    sinceMs: number
+  ): Promise<JournalFirstSubmittedPrompt> {
+    const result = await this.journalDatabase.readers.point({
+      sessionId,
+      operation: { kind: 'first-submitted-prompt', sinceMs }
+    })
+    if (result.kind !== 'first-submitted-prompt') {
+      throw new Error(`journal reader answered ${result.kind} for first-submitted-prompt`)
+    }
+    return result.first
   }
+
+  /** Readable chats of exactly this workspace, and whether one this build cannot validate is also there. */
+  listWorkspaceSessions = (location: AgentSessionExecutionLocation) =>
+    listAgentSessionWorkspaceSessions(this.state, this.inScope(location), location)
 
   updateRecord = <C extends AgentSessionRecordCommand>(
     sessionId: string,
@@ -192,11 +239,12 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
   isClaimKeyVerifiable = (keyId: string, now: number): boolean =>
     isAgentSessionClaimKeyVerifiable(this.state, keyId, now)
 
-  reserveOwner = (
+  reserveOwner = async (
     request: AgentSessionReserveRequest,
     check?: () => void
-  ): Promise<AgentSessionReserveResult> =>
-    this.commitStoreCommand(
+  ): Promise<AgentSessionReserveResult> => {
+    this.refuseDeletedSession(request.sessionId)
+    return this.commitStoreCommand(
       {
         kind: 'reserve',
         request: {
@@ -209,6 +257,7 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
       },
       check
     )
+  }
 
   readonly founding: ReturnType<typeof createAgentSessionFoundingStore>
 
@@ -325,23 +374,4 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
 
   replaceSessionOptions = (args: AgentSessionOptionsReplacement): Promise<AgentSessionRecord> =>
     this.updateRecord(args.sessionId, { kind: 'options', args })
-
-  /** Deletes a chat at rest for good, with its tab, when `stillWanted` agrees after any conversion
-   *  of it. Its journal rows follow in background pages on the next maintenance tick, so a batch
-   *  of deletions shares one pass. The caller holds the chat's conversation lane, so nothing opens
-   *  it meanwhile. */
-  forgetIdleChat = (
-    forget: AgentSessionIdleForget,
-    stillWanted: () => Promise<boolean>
-  ): Promise<boolean> =>
-    this.journalDatabase.forgetChat(
-      forget.sessionId,
-      async () =>
-        (await stillWanted()) &&
-        this.commitStoreCommand({
-          kind: 'forget-idle',
-          ...forget,
-          legacyTabIds: this.transactions.legacySessionTabIds
-        })
-    )
 }

@@ -31,13 +31,13 @@ import type { ExecutionHostId } from '../../../../../shared/execution-host/execu
 import {
   formatOptionalPrimaryShortcutLabel,
   formatPrimaryShortcutLabel
-} from '@/hooks/useShortcutLabel'
+} from '@/lib/keyboard/useShortcutLabel'
 import type { KeybindingOverrides } from '../../../../../shared/keybindings/types'
 import { useTranslate } from '@/i18n/use-translate'
 import { AgentSessionContinuationMenuItem } from '../../agent-session-continuation/AgentSessionContinuationMenuItem'
 import { AgentSessionContextCopyMenuItem } from '../clipboard/AgentSessionContextCopyMenuItem'
 import { ClearPaneTitleMenuItem } from '../titles/ClearPaneTitleMenuItem'
-import type { TerminalQuickCommandMenuHost } from '@/hooks/use-terminal-quick-command-hosts'
+import type { TerminalQuickCommandMenuHost } from '@/lib/terminal/quick-commands/use-terminal-quick-command-hosts'
 import { TerminalQuickCommandsSubmenu } from '../quick-commands/TerminalQuickCommandsSubmenu'
 import { AddToChatSubmenu } from '../../native-chat/selection-quotes/AddToChatMenu'
 import type { TerminalPaneAgentIdCopy } from './terminal-pane-context-menu-types'
@@ -262,12 +262,9 @@ function TerminalContextMenuItems({
           {isNativeChatView
             ? t(
                 'components.tab.bar.SortableTabContextMenu.switchToTerminalView',
-                'Continue with Terminal Agent'
+                'Continue in terminal'
               )
-            : t(
-                'components.tab.bar.SortableTabContextMenu.switchToChatView',
-                'Continue in Chat UI'
-              )}
+            : t('components.tab.bar.SortableTabContextMenu.switchToChatView', 'Continue in chat')}
           {shortcuts.nativeChat ? (
             <DropdownMenuShortcut>{shortcuts.nativeChat}</DropdownMenuShortcut>
           ) : null}

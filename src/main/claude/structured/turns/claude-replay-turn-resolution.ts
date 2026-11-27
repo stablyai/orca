@@ -4,6 +4,7 @@ import {
 } from './claude-command-lifecycle'
 import { claudeSessionStateEndsTurn } from './claude-session-state-turn-over'
 import { forgetRetiredWaiter } from '../dispatch/claude-structured-dispatch-waiters'
+import { settleCancelledClaudeDispatchWaiters } from '../dispatch/claude-structured-dispatch'
 import {
   claudeHasReplayContent,
   readClaudeMessageEnvelope
@@ -15,6 +16,7 @@ import type {
 } from '../claude-structured-session-state'
 import { readClaudeFrameString } from '../startup/claude-structured-init-proof'
 import { claudeDispatchContentKey } from '../dispatch/claude-structured-dispatch-content'
+import type { AgentJournalAnsweredTurnIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 
 /** Settle provider-proven delivery independently of replay-row acceptance reconciliation. */
 export type ClaudeLateDispatchSettlement = (input: ClaudeLateDispatchOutcome) => void
@@ -64,7 +66,7 @@ export function resolveClaudeReplayTurn(
     }
     const live = session.dispatchWaiters.find((candidate) => candidate.sentUuid === member)
     if (live) {
-      settleWaiter(session, live, member, onSettledLate)
+      settleWaiter(session, live, member, onSettledLate, joinedTurn(session))
       continue
     }
     const late = session.retiredDispatchWaiters.find((candidate) => candidate.sentUuid === member)
@@ -78,11 +80,16 @@ export function resolveClaudeReplayTurn(
       (candidate) => candidate.sentUuid === userMessageUuid
     )
     if (exact) {
-      const foldReceipt = isUserReplay && claudeReplayIsFoldReceipt(session, exact, uuid)
-      settleWaiter(session, exact, uuid, onSettledLate)
-      return isUserReplay && !foldReceipt
-        ? { requestedAt: exact.requestedAt, clientMessageId: exact.clientMessageId }
-        : null
+      // A Stop before Claude checked the prompt ends it unechoed; Claude lists it as dropped, never run.
+      if (
+        isCompletedCommand &&
+        message.terminal_reason === 'aborted_streaming' &&
+        !exact.acceptsResult
+      ) {
+        settleCancelledClaudeDispatchWaiters(session, [exact.sentUuid], onSettledLate)
+        return null
+      }
+      return settleLiveDispatch(session, exact, uuid, isUserReplay, onSettledLate)
     }
     const retired = session.retiredDispatchWaiters.find(
       (candidate) => candidate.sentUuid === userMessageUuid
@@ -101,11 +108,7 @@ export function resolveClaudeReplayTurn(
 
   const exact = session.dispatchWaiters.find((candidate) => candidate.sentUuid === uuid)
   if (exact) {
-    const foldReceipt = isUserReplay && claudeReplayIsFoldReceipt(session, exact, uuid)
-    settleWaiter(session, exact, uuid, onSettledLate)
-    return isUserReplay && !foldReceipt
-      ? { requestedAt: exact.requestedAt, clientMessageId: exact.clientMessageId }
-      : null
+    return settleLiveDispatch(session, exact, uuid, isUserReplay, onSettledLate)
   }
   const retired = session.retiredDispatchWaiters.find((candidate) => candidate.sentUuid === uuid)
   if (retired) {
@@ -123,8 +126,7 @@ export function resolveClaudeReplayTurn(
       )
       if (compatible.length === 1) {
         const [candidate] = compatible
-        settleWaiter(session, candidate!, uuid, onSettledLate)
-        return { requestedAt: candidate!.requestedAt, clientMessageId: candidate!.clientMessageId }
+        return settleLiveDispatch(session, candidate!, uuid, true, onSettledLate)
       }
     } else if (!session.replayContentFallbackBlocked && session.dispatchWaiters.length === 0) {
       const lateCompatible = session.retiredDispatchWaiters.filter(
@@ -161,17 +163,24 @@ export function resolveClaudeReplayTurn(
   return null
 }
 
-/** Adopted UUIDs after root cycle work prove folded delivery; a new root init resets this evidence, except for a steer whose interrupt held the turn open. */
-function claudeReplayIsFoldReceipt(
+/** Safely matched echoes inherit cycle ownership independently of their delivery UUID. */
+function settleLiveDispatch(
   session: ClaudeSession,
   waiter: ClaudeDispatchWaiter,
-  replayUuid: string
-): boolean {
-  return (
-    replayUuid === waiter.sentUuid &&
-    (session.translator?.openTurnInLiveProviderCycle === true ||
-      (waiter.steers === true && session.translator?.currentTurnId != null))
-  )
+  uuid: string,
+  isUserReplay: boolean,
+  onSettledLate?: ClaudeLateDispatchSettlement
+): ClaudeReplayTurnOrigin | null {
+  const joinsTurn =
+    session.translator?.turnCycle.ownsLiveProviderCycle === true ||
+    (waiter.steers === true && session.translator?.currentTurnId != null)
+  if (isUserReplay && joinsTurn) {
+    session.translator?.turnCycle.confirmProviderCycle()
+  }
+  settleWaiter(session, waiter, uuid, onSettledLate, joinsTurn ? joinedTurn(session) : undefined)
+  return isUserReplay && !joinsTurn
+    ? { requestedAt: waiter.requestedAt, clientMessageId: waiter.clientMessageId }
+    : null
 }
 
 function claudeResultUserMessageUuids(message: Record<string, unknown>): string[] {
@@ -181,11 +190,18 @@ function claudeResultUserMessageUuids(message: Record<string, unknown>): string[
     : []
 }
 
+/** The running turn a send joined: the provider's current turn, which another send opened. */
+function joinedTurn(session: ClaudeSession): AgentJournalAnsweredTurnIdentity | undefined {
+  const turn = session.translator?.turnCycle.identity
+  return turn ? { turn, via: 'steer' } : undefined
+}
+
 function settleWaiter(
   session: ClaudeSession,
   waiter: ClaudeDispatchWaiter,
   uuid: string,
-  onSettledLate?: ClaudeLateDispatchSettlement
+  onSettledLate?: ClaudeLateDispatchSettlement,
+  answeredInTurn?: AgentJournalAnsweredTurnIdentity
 ): void {
   const index = session.dispatchWaiters.indexOf(waiter)
   if (index !== -1) {
@@ -197,7 +213,8 @@ function settleWaiter(
   if (waiter.clientMessageId) {
     onSettledLate?.({
       clientMessageId: waiter.clientMessageId,
-      providerIdentity: { provider: 'claude', sessionId: session.providerSessionId, uuid }
+      providerIdentity: { provider: 'claude', sessionId: session.providerSessionId, uuid },
+      ...(answeredInTurn ? { answeredInTurn } : {})
     })
   }
 }

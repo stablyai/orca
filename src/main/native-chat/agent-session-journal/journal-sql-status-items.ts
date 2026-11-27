@@ -28,6 +28,7 @@ export function* sqlJournalStatusItems(
   let single = false
   let unordered = false
   let limit = PAGE
+  let indexedBy = ''
   switch (selection.kind) {
     case 'clear':
       predicates.push('context_clear=1')
@@ -84,6 +85,12 @@ export function* sqlJournalStatusItems(
       predicates.push(
         "root=1 AND message_role='assistant' AND command_entry=0 AND assistant_prose=1"
       )
+      if (selection.turnItemId !== undefined) {
+        predicates.push('turn_item_id=?')
+        params.push(selection.turnItemId)
+        // Without stats SQLite walks the prose index and filters every row by turn.
+        indexedBy = 'INDEXED BY journal_items_stop_turn'
+      }
       break
     case 'async-question-candidates':
       // Newest first from the partial index; the shared rule decides which ones are questions.
@@ -110,6 +117,9 @@ export function* sqlJournalStatusItems(
       )
       predicates.push('(sequence,sequence_index,ordinal)>(?,?,?)')
       params.push(selection.after.sequence, selection.after.sequenceIndex, selection.after.ordinal)
+      if (selection.running) {
+        indexedBy = 'INDEXED BY journal_items_unsettled'
+      }
       single = true
       break
   }
@@ -126,7 +136,7 @@ export function* sqlJournalStatusItems(
       : ''
     const rows = scope.db
       .prepare(`SELECT item_id,sequence,sequence_index,ordinal
-      FROM journal_items ${selection.kind === 'tools' && selection.running ? 'INDEXED BY journal_items_unsettled' : ''}
+      FROM journal_items ${indexedBy}
       WHERE ${predicates.join(' AND ')}${cursor}
       ${unordered ? '' : `ORDER BY ${order}`} LIMIT ?`)
       .all(...params, ...(after ?? []), single ? 1 : limit)

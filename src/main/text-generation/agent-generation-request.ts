@@ -3,7 +3,10 @@ import {
   type GenerationArgument
 } from '../../shared/source-control/ai/generation/generation-argument'
 import { conversationNameTaskPrompt } from '../../shared/source-control/ai/generation/conversation-name-generation'
-import { textGenerationFailureCodeFields } from '../../shared/text-generation/text-generation-failure-copy'
+import {
+  textGenerationFailure,
+  textGenerationFailureCodeFields
+} from '../../shared/text-generation/text-generation-failure-copy'
 import { runClaudeGenerationAttempts } from '../../shared/text-generation/launch/claude-background-run-isolation'
 import { stripPrefilledReasoningPreamble } from '../../shared/source-control/ai/generation/commit-message-agent-output'
 import type { CommandTemplateBackslash } from '../../shared/source-control/ai/generation/commit-message-prompt'
@@ -15,6 +18,7 @@ import {
 import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control/ai/source-control-ai-operation-resolution'
 import { openCodeVariantRetryPlan } from '../../shared/text-generation/launch/opencode-generation-command'
 import { copilotUnavailableModelRetryPlan } from './failures/copilot-unavailable-model-retry'
+import { codexUnavailableModelRetryPlan } from './failures/codex-unavailable-model-retry'
 import { runLocalPlanForAgent } from './execution/source-control-local-generation'
 import { runOpenCodeTextTask } from '../opencode/text-tasks/opencode-text-task'
 import { cleanAgentAnswer, emptyResultFailure } from './failures/source-control-agent-failure'
@@ -130,12 +134,31 @@ export async function runGenerationRequest(input: {
       result = await execute(retry)
     }
   }
+  if (!result.success && input.params.agentId === 'codex') {
+    const retry = codexUnavailableModelRetryPlan(plan, params, result.failureOutput)
+    if (retry) {
+      const rerun = await execute(retry.plan)
+      result =
+        rerun.success || rerun.canceled
+          ? rerun
+          : {
+              ...rerun,
+              ...textGenerationFailure('planModelUnavailable', {
+                model: retry.refusedModel,
+                label: 'Codex'
+              }),
+              // What Codex's own default then hit, for the details view.
+              errorDetail: rerun.error
+            }
+    }
+  }
   // Custom raw models can omit the opening think tag; built-in replies may mention it literally. PR JSON strips only after parsing fails.
   if (
     !result.success ||
     !isCustomAgentId(input.params.agentId) ||
     input.operation === 'pull-request-fields' ||
-    input.operation === 'jira-issue-summary'
+    input.operation === 'jira-issue-summary' ||
+    input.operation === 'bot-suggestions'
   ) {
     return result
   }

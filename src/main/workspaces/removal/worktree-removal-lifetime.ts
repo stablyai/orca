@@ -77,7 +77,3 @@ class WorktreeRemovalLifetime {
 }
 
 export let worktreeRemovalLifetime = new WorktreeRemovalLifetime()
-
-export function _resetWorktreeRemovalLifetimeForTests(): void {
-  worktreeRemovalLifetime = new WorktreeRemovalLifetime()
-}

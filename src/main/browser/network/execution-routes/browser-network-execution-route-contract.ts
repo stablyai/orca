@@ -4,6 +4,8 @@ import type { BrowserNetworkTunnelSocket } from '../tunnels/browser-network-tunn
 
 export type BrowserNetworkExecutionRoute = {
   key: string
+  /** The host refuses to forward beyond its own loopback and no relay could run there. */
+  forwardingBlocked?: boolean
   connect: (target: BrowserNetworkTunnelOpen) => BrowserNetworkTunnelSocket
   whenInvalidated?: Promise<void>
   isValid: () => boolean

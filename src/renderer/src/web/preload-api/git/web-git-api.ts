@@ -3,6 +3,7 @@ import { createGitHistoryApi } from './web-git-history-api'
 import type { PreloadApi } from '../../../../../preload/api-types'
 import { callAbortableRuntimeEnvironment } from '../../../runtime/rpc/calls/abortable-runtime-environment-call'
 import { toRuntimeWorktreeSelector } from '../../../runtime/rpc/targets/runtime-worktree-selector'
+import { createWebGitRebaseApi } from './web-git-rebase-api'
 import { translate } from '@/i18n/i18n'
 import { callRuntimeResult } from '../../runtime/client/web-runtime-calls'
 import { createWebGitAtRiskLocalFilesApi } from './web-git-at-risk-local-files-api'
@@ -115,12 +116,7 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         worktree: toRuntimeWorktreeSelector(worktree.id)
       })
     },
-    abortRebase: async ({ worktreePath }) => {
-      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      await callRuntimeResult('git.abortRebase', {
-        worktree: toRuntimeWorktreeSelector(worktree.id)
-      })
-    },
+    ...createWebGitRebaseApi(),
     diff: async ({ worktreePath, filePath, staged, compareAgainstHead, oldPath }) => {
       const file = await resolveRuntimeFilePath(filePath, worktreePath)
       return callRuntimeResult('git.diff', {
@@ -171,11 +167,12 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         60_000
       )
     },
-    push: async ({ worktreePath, publish, pushTarget }) => {
+    push: async ({ worktreePath, publish, forceWithLease, pushTarget }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       await callRuntimeResult('git.push', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         publish,
+        forceWithLease,
         pushTarget
       })
     },
@@ -195,7 +192,7 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     },
     rebaseFromBase: async ({ worktreePath, baseRef }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      await callRuntimeResult('git.rebaseFromBase', {
+      return callRuntimeResult('git.rebaseFromBase', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         baseRef
       })

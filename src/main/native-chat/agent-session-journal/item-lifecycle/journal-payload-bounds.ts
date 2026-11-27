@@ -20,6 +20,12 @@ export const JOURNAL_RUNNING_PREVIEW_LIMITS: JournalPayloadLimits = {
 // Unmodeled provider traffic keeps bounded disclosure, not canonical conversation content.
 export const PROVIDER_FRAME_PAYLOAD_LIMITS: JournalPayloadLimits = { inlineHeadBytes: 16 * 1024 }
 
+// Approve once replays a denial's whole review. A row holds its frame at most 3x over (text plus escaped
+// frame), so 512 KiB keeps it inside the desktop history per-row budget (~1.9 MiB).
+export const CODEX_AUTO_REVIEW_DENIAL_FRAME_LIMITS: JournalPayloadLimits = {
+  inlineHeadBytes: 512 * 1024
+}
+
 // Provider errors are untrusted bulk attached to every submission listing (#20654).
 export const JOURNAL_DISPATCH_REASON_LIMITS: JournalPayloadLimits = { inlineHeadBytes: 16 * 1024 }
 

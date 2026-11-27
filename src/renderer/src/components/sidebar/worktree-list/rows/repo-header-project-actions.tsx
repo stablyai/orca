@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import React from 'react'
-import { useRepoSshGate } from '@/hooks/use-repo-ssh-gate'
+import { useRepoSshGate } from '@/lib/workspace/catalog/use-repo-ssh-gate'
 import {
   CircleX,
   Ellipsis,

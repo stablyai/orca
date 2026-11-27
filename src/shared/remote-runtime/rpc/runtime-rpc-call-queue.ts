@@ -64,10 +64,15 @@ export function isTimedPRRead(method: string, params: unknown): boolean {
   )
 }
 
-// Slow worktree removal/model listing waits get a separate lane so foreground refresh/send slots remain free;
-// background slots belong to status.
+// Slow worktree removal, model listing, usage and session-history scans get a separate lane so foreground
+// refresh/send slots remain free; background slots belong to status.
 function isLongWaitRuntimeMethod(method: string): boolean {
-  return method === 'worktree.rm' || method === 'agentSession.modelCatalog'
+  return (
+    method === 'worktree.rm' ||
+    method === 'agentSession.modelCatalog' ||
+    method === 'usage.call' ||
+    method === 'aiVault.listSessions'
+  )
 }
 
 // Byte-range reads (media, paged files, downloads) are bulk: a playing video must not hold terminal or workspace slots.
@@ -75,8 +80,14 @@ function isBulkReadRuntimeMethod(method: string): boolean {
   return (
     method === 'files.readChunk' ||
     method === 'files.readDocPreviewChunk' ||
-    method === 'files.readTerminalArtifactChunk'
+    method === 'files.readTerminalArtifactChunk' ||
+    method === 'agentSessionAttachment.readTextChunk'
   )
+}
+
+// A streamed page's frame acks pace its frames: slow calls must not hold them and starve the stream.
+function isStreamControlRuntimeMethod(method: string): boolean {
+  return method === 'browser.screencast.ack'
 }
 
 export class RuntimeRpcCallQueuePool {
@@ -109,11 +120,13 @@ export class RuntimeRpcCallQueuePool {
     const timedKey = `${selector}\u0000timed-pr`
     const queueKey = isLongWaitRuntimeMethod(method)
       ? `${selector}\u0000long-wait`
-      : bulkRead
-        ? `${selector}\u0000bulk-read`
-        : timedPR
-          ? timedKey
-          : selector
+      : isStreamControlRuntimeMethod(method)
+        ? `${selector}\u0000stream-control`
+        : bulkRead
+          ? `${selector}\u0000bulk-read`
+          : timedPR
+            ? timedKey
+            : selector
     if (this.queuedCallCount >= this.maxQueuedTotal) {
       return Promise.reject(new RuntimeRpcCallQueueOverloadError('global'))
     }

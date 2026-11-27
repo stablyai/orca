@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import {
   isJournalOpenUnionFallback,
   isJournalTag
@@ -10,12 +11,10 @@ import type { AgentJournalUnknownKind } from '../../../../shared/agent-session/j
 // chat instead. Only key and union-tag sets are closed; string vocabularies keep the wire's
 // fallbacks, and `z.unknown()` stays an opaque value carried whole.
 
-/** The strict form of a declared schema: objects refuse undeclared keys, open unions refuse
- * unknown tags. Checks are kept; a schema kind storage cannot close fails at load. */
-export function strictStorage(schema: z.core.$ZodType): z.ZodType {
+function buildStrictStorage(schema: z.core.$ZodType): z.ZodType {
   if (schema instanceof z.ZodObject) {
     const shape = Object.fromEntries(
-      Object.entries(schema.shape).map(([key, value]) => [key, strictStorage(value)])
+      Object.entries(schema.shape).map(([key, value]) => [key, buildStrictStorage(value)])
     )
     return schema.clone({ ...schema.def, shape, catchall: z.never() })
   }
@@ -24,28 +23,28 @@ export function strictStorage(schema: z.core.$ZodType): z.ZodType {
     const [known] = options
     // An open union is its known arms and a fallback that kept the tags storage refuses.
     return known && options.length === 1 && schema.options.length === 2
-      ? strictStorage(known)
-      : schema.clone({ ...schema.def, options: options.map(strictStorage) })
+      ? buildStrictStorage(known)
+      : schema.clone({ ...schema.def, options: options.map(buildStrictStorage) })
   }
   if (schema instanceof z.ZodOptional) {
-    return strictStorage(schema.unwrap()).optional()
+    return buildStrictStorage(schema.unwrap()).optional()
   }
   if (schema instanceof z.ZodNullable) {
-    return strictStorage(schema.unwrap()).nullable()
+    return buildStrictStorage(schema.unwrap()).nullable()
   }
   if (schema instanceof z.ZodArray) {
-    return schema.clone({ ...schema.def, element: strictStorage(schema.element) })
+    return schema.clone({ ...schema.def, element: buildStrictStorage(schema.element) })
   }
   if (schema instanceof z.ZodTuple) {
     const { items, rest } = schema.def
     return schema.clone({
       ...schema.def,
-      items: items.map(strictStorage),
-      rest: rest && strictStorage(rest)
+      items: items.map(buildStrictStorage),
+      rest: rest && buildStrictStorage(rest)
     })
   }
   if (schema instanceof z.ZodRecord) {
-    return schema.clone({ ...schema.def, valueType: strictStorage(schema.def.valueType) })
+    return schema.clone({ ...schema.def, valueType: buildStrictStorage(schema.def.valueType) })
   }
   if (
     schema instanceof z.ZodString ||
@@ -59,6 +58,13 @@ export function strictStorage(schema: z.core.$ZodType): z.ZodType {
     return schema
   }
   throw new Error(`saved journal storage cannot close a ${schema._zod.def.type} schema`)
+}
+
+/** The strict form of a declared schema: objects refuse undeclared keys, open unions refuse
+ * unknown tags. Checks are kept; built lazily on first use so importing journal modules does not
+ * eagerly clone and materialize the entire storage schema graph. */
+export function strictStorage(schema: z.core.$ZodType): z.ZodType {
+  return lazyZodSchema(() => buildStrictStorage(schema))
 }
 
 /** `newer` when the value holds a key or union tag this build does not declare; `damage` when it
@@ -107,9 +113,8 @@ type Arm<T, S> = S extends object
 type Keys<A> = A extends unknown ? keyof A : never
 type ArmKeys<T, A> = [A] extends [never]
   ? 'a value no storage arm declares'
-  :
-      | Exclude<keyof T, Keys<A>>
-      | { [K in keyof T & Keys<A>]: UndeclaredStorageKeys<T[K], At<A, K>> }[keyof T & Keys<A>]
+  : | Exclude<keyof T, Keys<A>>
+    | { [K in keyof T & Keys<A>]: UndeclaredStorageKeys<T[K], At<A, K>> }[keyof T & Keys<A>]
 
 /** Keys of a persisted type, at any depth and in any union member, that its storage schema's
  * output `S` leaves undeclared; `never` when it declares them all. An unknown-kind value never

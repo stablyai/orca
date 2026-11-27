@@ -23,7 +23,8 @@ const MAX_REPLY_BYTES = REMOTE_RPC_MAX_CONTENT_BYTES - 64 * 1024
 /** Runs copy or cut inside the streamed page and returns the text, leaving the host clipboard alone. */
 export function buildRemoteClipboardCommandExpression(
   command: RemoteBrowserClipboardCommand,
-  chord: RemoteBrowserClipboardChord,
+  /** Null for a menu command, which sends the page no shortcut keys. */
+  chord: RemoteBrowserClipboardChord | null,
   cutId: string
 ): string {
   return `(() => {
@@ -46,7 +47,8 @@ export function buildRemoteClipboardCommandExpression(
     const view = doc.defaultView;
     const selection = doc.getSelection();
     const command = ${JSON.stringify(command)};
-    const keyInit = { ...${JSON.stringify(chord)}, bubbles: true, cancelable: true, composed: true };
+    const chord = ${JSON.stringify(chord)};
+    const keyInit = chord && { ...chord, bubbles: true, cancelable: true, composed: true };
     const field = target instanceof view.HTMLInputElement || target instanceof view.HTMLTextAreaElement ? target : null;
     const hasFieldSelection = field && typeof field.selectionStart === 'number';
     const readSelection = () => hasFieldSelection
@@ -54,7 +56,7 @@ export function buildRemoteClipboardCommandExpression(
       : String(selection ?? '');
     const run = () => {
       // Like native input, a page that handles the keydown (e.g. Ctrl+C in a web terminal) cancels the copy.
-      if (!target.dispatchEvent(new view.KeyboardEvent('keydown', keyInit))) {
+      if (keyInit && !target.dispatchEvent(new view.KeyboardEvent('keydown', keyInit))) {
         return {};
       }
       const clipboardData = new view.DataTransfer();
@@ -104,7 +106,9 @@ export function buildRemoteClipboardCommandExpression(
     };
     delete window[${PENDING_CUT_KEY}];
     const result = run();
-    target.dispatchEvent(new view.KeyboardEvent('keyup', keyInit));
+    if (keyInit) {
+      target.dispatchEvent(new view.KeyboardEvent('keyup', keyInit));
+    }
     const serialized = JSON.stringify(result);
     // Each code unit encodes to at most 6 bytes, so only near-limit replies need measuring.
     const mayBeTooLarge = (serialized.length + location.href.length) * 6 > ${MAX_REPLY_BYTES};
@@ -150,4 +154,21 @@ export function readRemoteClipboardCommandResult(
   } catch {
     return empty
   }
+}
+
+/** Runs an edit command in the focused document, reaching into same-origin frames like a native edit does. */
+export function buildRemoteExecCommandExpression(command: 'undo' | 'redo' | 'selectAll'): string {
+  return `(() => {
+    let doc = document;
+    while (doc.activeElement && doc.activeElement.contentDocument) {
+      doc = doc.activeElement.contentDocument;
+    }
+    const field = doc.activeElement;
+    // Why: a programmatically focused field may not hold the frame selection that execCommand selects in.
+    if (${JSON.stringify(command)} === 'selectAll' && field && typeof field.select === 'function') {
+      field.select();
+      return;
+    }
+    doc.execCommand(${JSON.stringify(command)});
+  })()`
 }

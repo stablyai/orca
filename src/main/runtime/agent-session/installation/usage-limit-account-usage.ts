@@ -60,6 +60,8 @@ type AccountSettings = Partial<
     | 'nativeChatInheritShellEnvironment'
     | 'nativeChatShellEnvironmentVariables'
     | 'agentDefaultEnv'
+    | 'httpProxyUrl'
+    | 'httpProxyBypassRules'
   >
 >
 
@@ -137,7 +139,11 @@ export function usageLimitAccountSources(deps: UsageLimitAccountSourceDeps): {
       const scope = JSON.stringify([home, 'subscription'])
       if (!reading) {
         // No reading has said where it was taken yet (a headless start polls nothing on its own).
-        return { scope, bootstrap: () => service.requestUsageReading(provider) }
+        return {
+          scope,
+          bootstrap: (notWithinMs) =>
+            service.requestUsageReading(provider, notWithinMs === undefined ? {} : { notWithinMs })
+        }
       }
       if ((await canonicalHome(reading.home)) !== home) {
         return { scope }

@@ -1,4 +1,4 @@
-import type { RuntimeTerminalListResult } from '../../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { RuntimeTerminalListResultWithoutPreview } from '../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { hostScopeCensusIsComplete } from '../../../../../shared/execution-host/runtime-listing-host-scope'
 
@@ -13,7 +13,7 @@ type RuntimeCall = (args: {
   expectedEnvironmentPairingRevision?: number
 }) => Promise<RuntimeRpcResponse<unknown>>
 
-type ValidTerminalListResult = RuntimeTerminalListResult & {
+type ValidTerminalListResult = RuntimeTerminalListResultWithoutPreview & {
   totalCount: number
 }
 
@@ -55,7 +55,8 @@ async function probeHost(
       limit: 1,
       // Require daemon liveness: stale PTY records can falsely look empty. terminal_liveness_unavailable becomes unverifiable.
       requireFreshPtyLiveness: true,
-      includeVisualLayouts: false
+      includeVisualLayouts: false,
+      includePreview: false
     },
     timeoutMs: 15_000,
     expectedEnvironmentPairingRevision
@@ -94,8 +95,4 @@ export function probeHostLiveTerminals(
     })
   inFlightProbeByEnvironment.set(key, probe)
   return probe
-}
-
-export function clearHostLiveTerminalProbesForTests(): void {
-  inFlightProbeByEnvironment.clear()
 }

@@ -4,6 +4,7 @@ import {
 } from '../../plugins/catalog/plugin-update-approval'
 import { ipcMain } from 'electron'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { PLUGIN_COMMIT_PATTERN } from '../../../shared/plugins/installation/plugin-install-lockfile'
 import { isQualifiedPluginKey } from '../../../shared/plugins/frames/plugin-tab-key'
 import { pluginMarketplaceGitSourceSchema } from '../../../shared/plugins/catalog/plugin-marketplace'
@@ -11,7 +12,11 @@ import type { PluginMarketplaceInstaller } from '../../plugins/catalog/plugin-ma
 import type { PluginMarketplaceService } from '../../plugins/catalog/plugin-marketplace-service'
 import { PLUGIN_MARKETPLACE_SOURCE_ID_PATTERN } from '../../plugins/catalog/plugin-marketplace-store'
 import type { PluginService } from '../../plugins/plugin-service'
-import type { PluginAutoUpdater } from '../../plugins/catalog/plugin-auto-updater'
+import {
+  PLUGIN_AUTO_UPDATE_INTERVAL_MS,
+  type PluginAutoUpdater
+} from '../../plugins/catalog/plugin-auto-updater'
+import { createStaleMarketplaceRefresh } from '../../plugins/catalog/plugin-marketplace-stale-refresh'
 import type { PluginInstallStatsService } from '../../plugins/catalog/plugin-install-stats-service'
 import type { PluginUpdateReviewNotices } from '../../plugins/catalog/plugin-update-review-notices'
 import type {
@@ -34,26 +39,40 @@ export type PluginMarketplaceHandlerServices = {
 /** The consent write path (applyPluginConsent), bound to the store by the caller. */
 export type PluginApproveConsent = (pluginKey: string, reviewedFingerprint: string) => Promise<void>
 
-const sourceIdSchema = z.string().regex(PLUGIN_MARKETPLACE_SOURCE_ID_PATTERN)
-const removeMarketplaceSchema = z.strictObject({ sourceId: sourceIdSchema })
-const refreshMarketplaceSchema = z.strictObject({ sourceId: sourceIdSchema.optional() })
-const marketplacePluginSchema = z.strictObject({
-  marketplaceSourceId: sourceIdSchema,
-  pluginKey: z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key')
-})
-const installMarketplacePluginSchema = marketplacePluginSchema.extend({
-  marketplaceCommit: z.string().regex(PLUGIN_COMMIT_PATTERN),
-  resolvedCommit: z.string().regex(PLUGIN_COMMIT_PATTERN),
-  /** Ask main to approve in the same step if the installed plugin is content only. */
-  enableIfData: z.literal(true).optional(),
-  /** The preview's consentFingerprint: one-click approves only these exact bytes. */
-  expectedFingerprint: z.string().min(1).max(256).optional(),
-  /** The page was opened from an `orca://plugins/...` link; only labels install telemetry. */
-  fromInstallLink: z.literal(true).optional()
-})
-const installedPluginSchema = z.strictObject({
-  pluginKey: z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key')
-})
+const sourceIdSchema = lazyZodSchema(() => z.string().regex(PLUGIN_MARKETPLACE_SOURCE_ID_PATTERN))
+const removeMarketplaceSchema = lazyZodSchema(() => z.strictObject({ sourceId: sourceIdSchema }))
+/** The catalog browser waits (bounded) for fresh listings; other readers take the cached ones. */
+const listMarketplaceSchema = lazyZodSchema(() =>
+  z.strictObject({ waitForRefresh: z.literal(true).optional() }).default({})
+)
+const refreshMarketplaceSchema = lazyZodSchema(() =>
+  z.strictObject({ sourceId: sourceIdSchema.optional() })
+)
+const marketplacePluginSchema = lazyZodSchema(() =>
+  z.strictObject({
+    marketplaceSourceId: sourceIdSchema,
+    pluginKey: z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key')
+  })
+)
+const installMarketplacePluginSchema = lazyZodSchema(() =>
+  marketplacePluginSchema.extend({
+    marketplaceCommit: z.string().regex(PLUGIN_COMMIT_PATTERN),
+    resolvedCommit: z.string().regex(PLUGIN_COMMIT_PATTERN),
+    /** Ask main to approve in the same step if the installed plugin is content only. */
+    enableIfData: z.literal(true).optional(),
+    /** The preview's consentFingerprint: one-click approves only these exact bytes. */
+    expectedFingerprint: z.string().min(1).max(256).optional(),
+    /** The page was opened from an `orca://plugins/...` link; only labels install telemetry. */
+    fromInstallLink: z.literal(true).optional()
+  })
+)
+const installedPluginSchema = lazyZodSchema(() =>
+  z.strictObject({
+    pluginKey: z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key')
+  })
+)
+
+const STALE_CATALOG_LIST_WAIT_MS = 8_000
 
 export function registerPluginMarketplaceHandlers(
   pluginService: PluginService,
@@ -78,15 +97,35 @@ export function registerPluginMarketplaceHandlers(
       })
     }
   )
+  const refreshStaleCatalogs = createStaleMarketplaceRefresh(services.marketplace)
   // Startup defers the official seed; a marketplace view must not wait for that timer.
-  const ensureOfficialSeed = (): void => {
-    if (getSettings().pluginSystemEnabled === true) {
-      void services.marketplace.seedOfficialSource().catch(() => undefined)
-      void services.marketplace.seedCommunitySource().catch(() => undefined)
+  const ensureOfficialSeed = async (waitForRefresh: boolean): Promise<void> => {
+    if (getSettings().pluginSystemEnabled !== true) {
+      return
     }
+    void services.marketplace.seedOfficialSource().catch(() => undefined)
+    void services.marketplace.seedCommunitySource().catch(() => undefined)
+    // Why: browsing a catalog is what keeps it current when nothing is installed from one.
+    const refresh = refreshStaleCatalogs(PLUGIN_AUTO_UPDATE_INTERVAL_MS).catch(() => undefined)
+    // Why: theme and language reads must not wait on a refresh of some other stale source.
+    if (
+      !waitForRefresh &&
+      (await services.marketplace.listSources()).every(({ marketplace }) => marketplace)
+    ) {
+      return
+    }
+    // Why bounded: a source with nothing cached shows its fresh listing when the fetch is quick.
+    let timer: ReturnType<typeof setTimeout> | undefined
+    await Promise.race([
+      refresh,
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, STALE_CATALOG_LIST_WAIT_MS)
+      })
+    ])
+    clearTimeout(timer)
   }
-  ipcMain.handle('plugins:listMarketplaces', () => {
-    ensureOfficialSeed()
+  ipcMain.handle('plugins:listMarketplaces', async (_event, args: unknown) => {
+    await ensureOfficialSeed(listMarketplaceSchema.parse(args).waitForRefresh === true)
     return services.marketplace.listSources()
   })
   ipcMain.handle('plugins:addMarketplace', async (_event, args: unknown) => {
@@ -104,8 +143,8 @@ export function registerPluginMarketplaceHandlers(
       ? [await services.marketplace.refreshSource(sourceId)]
       : services.marketplace.refreshAll()
   })
-  ipcMain.handle('plugins:listMarketplacePlugins', () => {
-    ensureOfficialSeed()
+  ipcMain.handle('plugins:listMarketplacePlugins', async (_event, args: unknown) => {
+    await ensureOfficialSeed(listMarketplaceSchema.parse(args).waitForRefresh === true)
     return services.marketplace.listPlugins()
   })
   ipcMain.handle('plugins:previewMarketplacePlugin', async (_event, args: unknown) => {

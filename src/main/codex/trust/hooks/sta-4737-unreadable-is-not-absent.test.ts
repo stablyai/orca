@@ -37,20 +37,23 @@ const denials = vi.hoisted(() => {
   return state
 })
 
+type ForwardedFsCall = (...args: unknown[]) => unknown
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: forwards the caller's own arguments unchanged to the real node:fs function.
+const callReal = (fn: unknown, args: unknown[]): unknown => (fn as ForwardedFsCall)(...args)
+
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
-  const guard = (fn: unknown, syscall: string): unknown => {
-    const original = fn as (...args: unknown[]) => unknown
+  const guard = (original: (...args: never[]) => unknown, syscall: string): unknown => {
     const wrapped = (...args: unknown[]): unknown => {
+      const target = args[0]
       if (
-        denials.has(args[0]) ||
-        ((syscall === 'read' || syscall === 'copy') &&
-          typeof args[0] === 'string' &&
-          denials.readOnlyPaths.has(args[0]))
+        typeof target === 'string' &&
+        (denials.has(target) ||
+          ((syscall === 'read' || syscall === 'copy') && denials.readOnlyPaths.has(target)))
       ) {
-        denials.fail(args[0] as string, syscall)
+        denials.fail(target, syscall)
       }
-      return original(...args)
+      return callReal(original, args)
     }
     return Object.assign(wrapped, original)
   }
@@ -63,7 +66,7 @@ vi.mock('node:fs', async (importOriginal) => {
     openSync: guard(actual.openSync, 'open'),
     existsSync: Object.assign(
       (...args: unknown[]): boolean =>
-        denials.has(args[0]) ? false : actual.existsSync(args[0] as string),
+        denials.has(args[0]) ? false : callReal(actual.existsSync, args) === true,
       actual.existsSync
     )
   }
@@ -92,6 +95,7 @@ const { syncCodexGlobalInstructionsIntoManagedHome } =
   await import('../../configuration/homes/codex-home-paths')
 const { markCopiedResource } =
   await import('../../configuration/homes/codex-managed-home-resource-copy-marker')
+const { snapshotCodexRuntimeHookTrustProvenance } = await import('./hook-trust-promotion')
 
 let fakeHomeDir: string
 let userDataDir: string
@@ -211,6 +215,20 @@ describe('STA-4737 promotion must not rebuild a system config it could not read'
 
     expect(realFs.readFileSync(systemConfigPath(), 'utf-8')).toBe(before)
   })
+})
+
+it('preserves the original hook trust provenance when its snapshot cannot be read', () => {
+  const provenancePath = join(runtimeHome(), '.orca-hook-trust-provenance.json')
+  const recorded = JSON.stringify({
+    version: 1,
+    entries: { 'orca-hooks:stop:0:0': { trustedHash: 'sha256:orca', enabled: true } }
+  })
+  realFs.writeFileSync(runtimeConfigPath(), 'model = "m"\n', 'utf-8')
+  realFs.writeFileSync(provenancePath, recorded, 'utf-8')
+  denials.deny(provenancePath)
+
+  expect(snapshotCodexRuntimeHookTrustProvenance(runtimeHome())).toBe(false)
+  expect(realFs.readFileSync(provenancePath, 'utf-8')).toBe(recorded)
 })
 
 describe('STA-4737 the resource sync must not delete a mirror whose source it could not read', () => {

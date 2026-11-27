@@ -70,6 +70,7 @@ function removeGlobalListeners(): void {
     return
   }
   globalListenersInstalled = false
+  visibilityProvenStale = false
   document.removeEventListener('keydown', onUserInteractionWithDocument, { capture: true })
   document.removeEventListener('pointerdown', onUserInteractionWithDocument, { capture: true })
   window.removeEventListener('focus', onUserInteractionWithDocument)
@@ -88,10 +89,4 @@ export function registerStaleDocumentVisibilityRecovery(
       removeGlobalListeners()
     }
   }
-}
-
-export function resetStaleDocumentVisibilityForTesting(): void {
-  visibilityProvenStale = false
-  recoveryListeners.clear()
-  removeGlobalListeners()
 }

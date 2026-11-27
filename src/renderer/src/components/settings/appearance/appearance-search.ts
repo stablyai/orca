@@ -1,6 +1,6 @@
 import type { SettingsSearchEntry } from '../search/settings-search'
 import { getTerminalAppearanceSearchEntries } from '../terminal/terminal-search'
-import { getSidebarEntries } from './appearance-sidebar-search'
+import { getSidebarEntries, getWorkspaceCardLayoutEntry } from './appearance-sidebar-search'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
@@ -234,6 +234,24 @@ export const getTitlebarEntries = createLocalizedCatalog((): SettingsSearchEntry
   }
 ])
 
+export function getTilingWindowModeEntry(t: Translate = translate): SettingsSearchEntry {
+  return {
+    title: t('settings.appearance.tilingWindowMode.title', 'Tiling window manager mode'),
+    description: t(
+      'settings.appearance.tilingWindowMode.description',
+      'Hide the minimize and maximize buttons and bring workspace tabs to the top edge. Move and resize the window with your window manager.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.bed343b03e',
+        'titlebar',
+        { aliases: ['Linux', 'Hyprland', 'Sway', 'i3'] },
+        t
+      )
+    ]
+  }
+}
+
 /** Search entries for every Status Bar control, including the per-provider toggles. */
 export const getStatusBarEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   getUsagePercentageDisplayEntry(),
@@ -266,6 +284,8 @@ type AppearancePaneSearchOptions = {
   showSystemTray?: boolean
   showMenuBarIcon?: boolean
   showNotchStatus?: boolean
+  showTilingWindowMode?: boolean
+  showWorkspaceCardLayout?: boolean
 }
 
 export function getAppearancePaneSearchEntries(
@@ -281,9 +301,11 @@ export function getAppearancePaneSearchEntries(
     ...getTerminalAppearanceSearchEntries(options),
     ...getLayoutEntries(),
     ...getTitlebarEntries(),
+    ...(options.showTilingWindowMode ? [getTilingWindowModeEntry()] : []),
     ...getReduceVisualEffectsEntries(),
     ...getStatusBarEntries(),
     ...getSidebarEntries(),
+    ...(options.showWorkspaceCardLayout ? [getWorkspaceCardLayoutEntry()] : []),
     ...getAppIconEntries(),
     ...getSystemPresenceEntries(options)
   ]

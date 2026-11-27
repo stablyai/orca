@@ -15,7 +15,7 @@ import {
   shouldShowHostScopeControls
 } from '../../worktree-list/controls/sidebar-host-options'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
-import { translateExecutionHostDetail } from '../../execution-host-label'
+import { translateExecutionHostDetail } from '../../../../runtime/hosts/display/execution-host-label'
 
 import { describeRuntimeCompatBlock } from '@/runtime/hosts/display/runtime-host-copy'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -178,7 +178,7 @@ export function AddRepoHostSelector({
                         <span className="mt-0.5 text-[11px] text-muted-foreground">
                           {t(
                             'auto.components.sidebar.AddRepoHostSelector.addSshHostDetail',
-                            'Use an existing machine over SSH.'
+                            'Connect to a machine over SSH.'
                           )}
                         </span>
                       </button>
@@ -202,7 +202,7 @@ export function AddRepoHostSelector({
                         <span className="mt-0.5 text-[11px] text-muted-foreground">
                           {t(
                             'auto.components.sidebar.AddRepoHostSelector.addRemoteServerDetail',
-                            'Pair with Orca running on another computer.'
+                            'Orca on another computer, no SSH needed.'
                           )}
                         </span>
                       </button>

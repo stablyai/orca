@@ -179,18 +179,12 @@ export function SkillManagedInstallRow({
             </Button>
             {editedWarning ? (
               <Button variant="ghost" size="sm" disabled={busy} onClick={() => onRemove(true)}>
-                {t(
-                  'auto.components.skills.managedInstall.discardEditsRemove',
-                  'Discard my edits and remove'
-                )}
+                {t('auto.components.skills.managedInstall.discardEditsRemove', 'Discard & remove')}
               </Button>
             ) : null}
             {editedWarning ? (
               <Button variant="ghost" size="sm" disabled={busy} onClick={() => onInstall(true)}>
-                {t(
-                  'auto.components.skills.managedInstall.discardEdits',
-                  'Discard my edits and reinstall'
-                )}
+                {t('auto.components.skills.managedInstall.discardEdits', 'Discard & reinstall')}
               </Button>
             ) : null}
           </div>
