@@ -285,6 +285,7 @@ export function ChecksTab({
     canFixBrokenChecks,
     failedChecksLength: failedChecks.length,
     listLength: list.length,
+    holdRerunSlot: loading && list.length === 0,
     onRefresh: () => {
       void handleRefresh()
     },

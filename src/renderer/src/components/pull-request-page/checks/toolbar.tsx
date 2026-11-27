@@ -24,6 +24,7 @@ export function buildChecksToolbar(
     canFixBrokenChecks,
     failedChecksCount,
     listLength,
+    holdRerunSlot = false,
     onRefresh,
     onFix,
     onRerun
@@ -36,6 +37,8 @@ export function buildChecksToolbar(
     canFixBrokenChecks: boolean
     failedChecksCount: number
     listLength: number
+    /** Cold read: keep the (disabled) Rerun button in place so the refresh button doesn't move. */
+    holdRerunSlot?: boolean
     onRefresh: () => void
     onFix: () => void
     onRerun: (failedOnly: boolean) => void
@@ -99,7 +102,7 @@ export function buildChecksToolbar(
       </Tooltip>
     ) : null
   const rerunAction =
-    listLength > 0 || rerunning ? (
+    listLength > 0 || rerunning || holdRerunSlot ? (
       <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
           <Button
@@ -202,7 +205,7 @@ export function ChecksCompactHeader({
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {refreshAction}
-          {listLength > 0 && (
+          {(listLength > 0 || summaryLoading) && (
             <div className="[&_button]:h-7 [&_button]:px-2 [&_button]:text-[11px]">
               {rerunAction}
             </div>

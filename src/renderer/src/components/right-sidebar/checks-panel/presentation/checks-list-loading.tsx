@@ -29,7 +29,7 @@ export function CheckRowsLoading({
           className={cn(
             'flex items-center gap-2',
             rowClassName,
-            divided && index > 0 && 'border-t border-border/40'
+            divided && index > 0 && 'box-content border-t border-border/40'
           )}
         >
           <span className={cn(shade, 'size-3')} />

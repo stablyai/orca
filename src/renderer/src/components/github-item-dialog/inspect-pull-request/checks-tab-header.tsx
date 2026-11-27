@@ -22,6 +22,7 @@ export function ChecksTabActions({
   canFixBrokenChecks,
   failedChecksLength,
   listLength,
+  holdRerunSlot = false,
   onRefresh,
   onRerun,
   onFix,
@@ -35,6 +36,8 @@ export function ChecksTabActions({
   canFixBrokenChecks: boolean
   failedChecksLength: number
   listLength: number
+  /** Cold read: keep the (disabled) Rerun button in place so the refresh button doesn't move. */
+  holdRerunSlot?: boolean
   onRefresh: () => void
   onRerun: (failedOnly: boolean) => void
   onFix: () => void
@@ -98,7 +101,7 @@ export function ChecksTabActions({
       </Tooltip>
     ) : null
   const rerunAction =
-    listLength > 0 || rerunning ? (
+    listLength > 0 || rerunning || holdRerunSlot ? (
       <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
           <Button
@@ -201,7 +204,7 @@ export function ChecksTabCompactHeader({
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {refreshAction}
-          {listLength > 0 && (
+          {(listLength > 0 || summaryLoading) && (
             <div className="[&_button]:h-7 [&_button]:px-2 [&_button]:text-[11px]">
               {rerunAction}
             </div>
