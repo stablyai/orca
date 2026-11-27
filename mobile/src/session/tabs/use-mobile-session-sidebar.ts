@@ -171,7 +171,6 @@ export function useMobileSessionSidebar(wideLayout: boolean) {
     /** A drag the page recognised itself (a swipe across the chat), driven through the same phases. */
     pageDrag: docked ? null : { begin: dragBegin, follow: dragFollow, end: dragEnd },
     /** A tap on the card that isn't the end of a drag. */
-    // oxlint-disable-next-line react/purity -- runs on a tap, never during render.
     tapIsDragEnd: () => Date.now() - dragEndedAtRef.current < DRAG_CLICK_WINDOW_MS
   }
 }
