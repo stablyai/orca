@@ -1,33 +1,18 @@
-import { codexSharedFrameParams, type CodexSharedServerFrame } from './codex-shared-server-frames'
+import type { CodexSharedServerFrame } from './codex-shared-server-frames'
+import {
+  CodexRecoverySeqFloor,
+  type CodexRecoveryHeld as Held
+} from './codex-shared-recovery-seq-floor'
+import {
+  RecoveryGroup,
+  recoveryFrameBytes,
+  type CodexRecoveredChat
+} from './codex-shared-recovery-group'
 
 /** Thread identities (id and parent link, about 200 bytes each) one server holds for recovery. */
 export const CODEX_SHARED_RECOVERY_MAX_IDENTITIES = 4_096
-
-/** A chat whose run a reattached server still carries: its own thread, and its commands' tag. */
-export type CodexRecoveredChat = { sessionId: string; threadId: string; workload: string }
-
-type Held = { frame: CodexSharedServerFrame; bytes: number }
-
-/** One chat's threads (or, unowned, one unresolved root's) and their frames in arrival order. */
-class RecoveryGroup {
-  /** Thread → its parent, in discovery order; the root's parent is null. */
-  readonly threads = new Map<string, string | null>()
-  frames: Held[] = []
-  bytes = 0
-  /** Frames were dropped (or descendants collapsed): the chat that claims it gets the cut. */
-  cut = false
-  /** Its descendants were let go at the identity cap; later ones are no longer tracked. */
-  collapsed = false
-  /** When its unresolved root was last read; one read per 10 s. */
-  readAt = 0
-
-  constructor(
-    readonly root: string,
-    public chat: CodexRecoveredChat | null
-  ) {
-    this.threads.set(root, null)
-  }
-}
+/** Dropped past the byte bound beyond what's needed, so a stream never drops one frame per frame. */
+const MIN_DROP_HEADROOM_BYTES = 256 * 1024
 
 /** What a chat takes over, or what an unwanted group lets go. */
 export type CodexRecoveredGroup = {
@@ -37,9 +22,6 @@ export type CodexRecoveredGroup = {
   frames: CodexSharedServerFrame[]
   cut: boolean
 }
-
-const frameBytes = (frame: CodexSharedServerFrame): number =>
-  Buffer.byteLength(JSON.stringify(codexSharedFrameParams(frame) ?? null), 'utf8')
 
 /**
  * What a reattached shared server holds for chats that haven't claimed their threads yet: each
@@ -52,8 +34,9 @@ export class CodexSharedServerRecovery {
   private readonly groupOf = new Map<string, RecoveryGroup>()
   private readonly bySession = new Map<string, RecoveryGroup>()
   private heldBytes = 0
-  /** Groups holding frames, so the floor and the byte bound never visit the empty ones. */
-  private readonly withFrames = new Set<RecoveryGroup>()
+  private readonly seqs = new CodexRecoverySeqFloor()
+  /** Groups with frames that may be dropped, so the byte bound visits only those. */
+  private readonly droppable = new Set<RecoveryGroup>()
   /** Groups with no chat yet, so a retry never visits the expected ones. */
   private readonly unresolved = new Set<RecoveryGroup>()
   /** An unknown thread's frames were let go at the cap: every chat that claims gets a cut. */
@@ -171,25 +154,22 @@ export class CodexSharedServerRecovery {
     if (!group) {
       return false
     }
-    const bytes = frameBytes(frame)
-    this.withFrames.add(group)
-    group.frames.push({ frame, bytes })
-    group.bytes += bytes
-    this.heldBytes += bytes
+    const held: Held = { frame, bytes: recoveryFrameBytes(frame), gone: false }
+    group.frames.push(held)
+    group.bytes += held.bytes
+    this.heldBytes += held.bytes
+    this.seqs.add(held)
+    if (frame.kind !== 'request') {
+      group.droppable += held.bytes
+      this.droppable.add(group)
+    }
     this.boundBytes()
     return true
   }
 
   /** The first held frame's seq, for the relay's ack floor. */
   floor(): number | null {
-    let floor: number | null = null
-    for (const group of this.withFrames) {
-      const seq = group.frames.find((held) => typeof held.frame.seq === 'number')?.frame.seq
-      if (typeof seq === 'number' && (floor === null || seq < floor)) {
-        floor = seq
-      }
-    }
-    return floor
+    return this.seqs.floor()
   }
 
   /** The whole group holding this thread, for the chat now claiming it (or its owner's chat). */
@@ -220,6 +200,8 @@ export class CodexSharedServerRecovery {
     for (const group of this.groups.values()) {
       this.drop(this.remove(group))
     }
+    this.seqs.clear()
+    this.cutEverything = false
   }
 
   /** Refuses the requests of a group nobody will claim. */
@@ -234,25 +216,23 @@ export class CodexSharedServerRecovery {
   private add(group: RecoveryGroup): void {
     this.groups.set(group.root, group)
     this.groupOf.set(group.root, group)
-    group.cut ||= this.cutEverything
     if (group.chat === null) {
       this.unresolved.add(group)
     }
   }
 
+  /** Every group, held now or later, is cut when it is taken. */
   private cutAll(): void {
-    if (!this.cutEverything) {
-      this.cutEverything = true
-      for (const group of this.groups.values()) {
-        group.cut = true
-      }
-    }
+    this.cutEverything = true
   }
 
   private remove(group: RecoveryGroup): CodexRecoveredGroup {
     this.groups.delete(group.root)
-    this.withFrames.delete(group)
+    this.droppable.delete(group)
     this.unresolved.delete(group)
+    for (const held of group.frames) {
+      this.seqs.gone(held)
+    }
     for (const threadId of group.threads.keys()) {
       this.groupOf.delete(threadId)
     }
@@ -264,16 +244,16 @@ export class CodexSharedServerRecovery {
       chat: group.chat,
       threads: [...group.threads],
       frames: group.frames.map((held) => held.frame),
-      cut: group.cut
+      cut: group.cut || this.cutEverything
     }
   }
 
   private merge(from: RecoveryGroup, into: RecoveryGroup, parent: string): void {
     this.groups.delete(from.root)
-    this.withFrames.delete(from)
+    this.droppable.delete(from)
     this.unresolved.delete(from)
-    if (from.frames.length > 0) {
-      this.withFrames.add(into)
+    if (from.droppable > 0) {
+      this.droppable.add(into)
     }
     for (const [threadId, link] of from.threads) {
       into.threads.set(threadId, threadId === from.root ? parent : link)
@@ -283,20 +263,21 @@ export class CodexSharedServerRecovery {
     const seqOf = (held: Held) => held.frame.seq ?? Number.POSITIVE_INFINITY
     into.frames = [...into.frames, ...from.frames].sort((a, b) => seqOf(a) - seqOf(b))
     into.bytes += from.bytes
+    into.droppable += from.droppable
     into.cut ||= from.cut
   }
 
-  /** Past the bytes the server has left, the largest group's oldest frames go (requests stay),
-   *  down to an eighth of the room below it so a steady stream doesn't drop one frame at a time. */
+  /** Past the bytes the server has left, the group with the most droppable bytes loses its oldest
+   *  frames (requests stay), down to some headroom so a steady stream doesn't drop frame by frame. */
   private boundBytes(): void {
     const room = Math.max(0, this.room())
     let over = this.heldBytes - room
     if (over <= 0) {
       return
     }
-    over += room / 8
+    over += Math.max(room / 8, MIN_DROP_HEADROOM_BYTES)
     while (over > 0) {
-      const largest = this.largest((group) => group.bytes, this.withFrames)
+      const largest = this.largest((group) => group.droppable, this.droppable)
       if (!largest) {
         return
       }
@@ -305,18 +286,24 @@ export class CodexSharedServerRecovery {
       for (const held of largest.frames) {
         if (freed < over && held.frame.kind !== 'request') {
           freed += held.bytes
+          this.seqs.gone(held)
         } else {
           kept.push(held)
         }
       }
-      if (freed === 0) {
-        return
-      }
       largest.frames = kept
-      largest.bytes -= freed
-      this.heldBytes -= freed
+      this.shrink(largest, freed, freed)
       largest.cut = true
       over -= freed
+    }
+  }
+
+  private shrink(group: RecoveryGroup, bytes: number, droppable: number): void {
+    group.bytes -= bytes
+    group.droppable -= droppable
+    this.heldBytes -= bytes
+    if (group.droppable <= 0) {
+      this.droppable.delete(group)
     }
   }
 
@@ -334,19 +321,24 @@ export class CodexSharedServerRecovery {
         this.groupOf.delete(threadId)
       }
       const kept: Held[] = []
+      let bytes = 0
+      let droppable = 0
       for (const held of largest.frames) {
-        const owner = threadOf(held.frame)
+        const owner = held.frame.threadId ?? null
         if (owner !== null && descendants.has(owner)) {
-          largest.bytes -= held.bytes
-          this.heldBytes -= held.bytes
+          bytes += held.bytes
+          this.seqs.gone(held)
           if (held.frame.kind === 'request') {
             this.refuse(held.frame)
+          } else {
+            droppable += held.bytes
           }
         } else {
           kept.push(held)
         }
       }
       largest.frames = kept
+      this.shrink(largest, bytes, droppable)
       largest.cut = true
       largest.collapsed = true
     }
@@ -367,9 +359,4 @@ export class CodexSharedServerRecovery {
     }
     return best
   }
-}
-
-/** The thread a held frame was routed by (recorded when it was held). */
-function threadOf(frame: CodexSharedServerFrame): string | null {
-  return frame.threadId ?? null
 }

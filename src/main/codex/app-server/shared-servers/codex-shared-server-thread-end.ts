@@ -18,7 +18,7 @@ const END_TIMEOUT_MS = 5_000
  */
 export async function endCodexSharedThreads(input: {
   connection: CodexAppServerConnection
-  /** The server's shared, limited reads. */
+  /** The server's shared, limited requests: every one this cleanup sends goes through them. */
   reads: Pick<CodexAppServerConnection, 'request'>
   threads: readonly string[]
   /** The chat's tag; null for threads no chat's record names (only Codex's own list is stopped). */
@@ -49,7 +49,7 @@ export async function endCodexSharedThreads(input: {
   })
   const sweep = input.workload === null ? async () => true : input.sweep
   await stopCodexSharedChatWorkload({
-    rpc: connection,
+    rpc: input.reads,
     threads,
     leaseId: input.workload ?? '',
     serverPid: input.serverPid,
@@ -57,5 +57,5 @@ export async function endCodexSharedThreads(input: {
     ...(connection.watcherPid !== undefined ? { watcherPid: connection.watcherPid } : {}),
     timeoutMs: END_TIMEOUT_MS
   }).catch(() => false)
-  await unsubscribeCodexThreads(connection, threads, END_TIMEOUT_MS).catch(() => false)
+  await unsubscribeCodexThreads(input.reads, threads, END_TIMEOUT_MS).catch(() => false)
 }

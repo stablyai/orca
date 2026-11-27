@@ -19,6 +19,7 @@ import { withdrawClientAsksOf } from '../../runtime/orchestration/federation/cli
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/agent-session/identity/orca-session-address-prefix'
 import { retireChatRuns } from '../../runtime/orchestration/db/runs/retired-coordinator-runs'
 import { dropListedProviderRelay } from '../../provider-relay/app-provider-relays'
+import { stopSharedProviderRelayRuns } from '../../provider-relay/provider-relay-shared-agents'
 
 type ChatHost = NonNullable<ReturnType<typeof getStructuredAgentSessionHost>>
 
@@ -104,13 +105,19 @@ async function stopChat(
   host: ChatHost,
   records: readonly AgentSessionRecord[]
 ): Promise<boolean> {
-  for (const { sessionId } of records) {
+  for (const record of records) {
+    const { sessionId } = record
     if (host.hasSession(sessionId) || host.isSessionTabVisible(sessionId)) {
       const closed = await closeStructuredAgentSessionChild(sessionId, { runtime })
       if (!closed.stopped) {
         console.warn('[chat-delete] could not stop the chat', closed.reason)
         return false
       }
+    }
+    // Its part of a shared server kept from an earlier run ends too; unreachable, the delete waits.
+    if (!(await stopSharedProviderRelayRuns(record))) {
+      console.warn('[chat-delete] could not stop its kept shared run')
+      return false
     }
   }
   return true
@@ -162,7 +169,7 @@ export async function deleteOrcaChat(
     // It never reads for its Runs again: their open worker asks are told now.
     retireChatRuns(runtime, record.sessionId)
     // An agent the terminal host still keeps for it (or its kept output) goes with it.
-    dropListedProviderRelay(record.sessionId, false, record)
+    dropListedProviderRelay(record.sessionId)
   }
   if (bot) {
     for (const record of chat.records) {

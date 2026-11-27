@@ -8,10 +8,11 @@ import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecy
 import { CodexSharedServer } from './codex-shared-server'
 import type { CodexSharedServerLease } from './codex-shared-server-lease'
 import type { CodexSharedServerProcessSweep } from './codex-shared-server-chat-workload'
-import type { CodexRecoveredChat } from './codex-shared-server-recovery'
+import type { CodexRecoveredChat } from './codex-shared-recovery-group'
 import {
-  codexDeletedPooledRun,
+  codexDeletedPooledRelay,
   codexExpectedChats,
+  codexRecordPooledRun,
   codexPooledRunGate,
   codexSharedRelayServerKey,
   type CodexPooledRun,
@@ -48,14 +49,10 @@ export class CodexKeptServers {
     }
   }
 
-  /** A chat no longer wants its part: each server attached here lets it go, and a deleted chat's
-   *  run on one not attached yet is attached to end it. */
-  dropped(chatKey: string, relay: KeptProviderRelay | null, deleted?: AgentSessionRecord): void {
+  /** A chat no longer wants its part: each server attached here lets it go. */
+  dropped(chatKey: string, relay: KeptProviderRelay | null): void {
     for (const server of relay ? [this.byRelay.get(relay.info.relayId)] : this.byRelay.values()) {
       void server?.keep.releaseExpected(chatKey)
-    }
-    if (deleted) {
-      void this.endDeletedRun(deleted)
     }
   }
 
@@ -85,20 +82,42 @@ export class CodexKeptServers {
     return chat ? { server, chat } : null
   }
 
-  /** A deleted chat's run on a kept server nothing here attached yet: attach it to end that run. */
-  private async endDeletedRun(record: AgentSessionRecord): Promise<void> {
-    const kept = await codexDeletedPooledRun(record)
-    if (kept && !this.byRelay.has(kept.run.relayId)) {
-      const spec = { key: '', launch: { command: '', args: [] }, chatEnv: {} }
-      this.reattachServer(spec, kept.relay, kept.run, [kept.chat]).draining = true
+  /**
+   * Before a chat is deleted: its part of the kept server its last run is on ends under its tag,
+   * once that server is attached (by this ask, or one already under way). False when that run may
+   * still be kept but can't be reached, so the delete waits rather than leave it running.
+   */
+  async stopDeleted(record: AgentSessionRecord): Promise<boolean> {
+    const run = codexRecordPooledRun(record)
+    if (!run) {
+      return true
     }
+    let server = this.byRelay.get(run.relayId)
+    if (!server || server.exited) {
+      const relay = await codexDeletedPooledRelay(record)
+      if (typeof relay === 'string') {
+        return relay === 'gone'
+      }
+      server = this.byRelay.get(run.relayId)
+      if (!server || server.exited) {
+        const spec = { key: '', launch: { command: '', args: [] }, chatEnv: {} }
+        server = this.reattachServer(spec, relay, run)
+        server.draining = true
+      }
+    }
+    try {
+      await server.ready
+    } catch {
+      return false
+    }
+    await server.keep.releaseExpected(record.sessionId)
+    return true
   }
 
   private reattachServer(
     spec: CodexSharedServer['spec'],
     relay: KeptProviderRelay,
-    run: CodexPooledRun,
-    ended?: CodexRecoveredChat[]
+    run: CodexPooledRun
   ): CodexSharedServer {
     const key = codexSharedRelayServerKey(relay.info.chatKey) ?? spec.key
     const server = this.host.track(
@@ -110,8 +129,7 @@ export class CodexKeptServers {
         {
           chatKey: relay.info.chatKey,
           attach: relay,
-          expected: codexExpectedChats(run.relayId),
-          ...(ended ? { ended } : {})
+          expected: codexExpectedChats(run.relayId)
         }
       )
     )

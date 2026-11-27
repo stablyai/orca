@@ -21,7 +21,7 @@ import {
   providerRelayRunsPlacedOn
 } from '../../../provider-relay/provider-relay-placed-records'
 import { forgetListedProviderRelayChat } from '../../../provider-relay/provider-relay-launch-inventory'
-import type { CodexRecoveredChat } from './codex-shared-server-recovery'
+import type { CodexRecoveredChat } from './codex-shared-recovery-group'
 
 /** A chat's last run on a shared server: which relay and daemon start, and its commands' tag. */
 export type CodexPooledRun = { relayId: string; daemon: AgentSessionRunDaemon; workload: string }
@@ -46,32 +46,26 @@ function codexThreadOf(record: AgentSessionRecord): string | null {
     : null
 }
 
-/**
- * A deleted chat's pooled run, when its daemon start still keeps it: its relay, now listed for this
- * one ask, and its part to end. Null when the run is gone or can't be reached.
- */
-export async function codexDeletedPooledRun(record: AgentSessionRecord): Promise<{
-  relay: KeptProviderRelay
-  run: CodexPooledRun
-  chat: CodexRecoveredChat
-} | null> {
+/** The pooled run a chat's record names (before deletion forgets it), with its daemon's say. */
+export function codexRecordPooledRun(record: AgentSessionRecord): CodexPooledRun | null {
   const placed = providerRelayPlacedRun(record)
-  const threadId = codexThreadOf(record)
   const workload = placed?.placement.workload
-  if (!placed || !threadId || !workload) {
-    return null
-  }
+  return placed && workload && codexThreadOf(record)
+    ? { relayId: placed.placement.relayId, daemon: placed.placement.daemon, workload }
+    : null
+}
+
+/**
+ * A deleted chat's pooled run as its daemon start answers it, asked fresh: kept (its relay, now
+ * listed for this one ask), gone, or unknown (it may run and can't be reached).
+ */
+export async function codexDeletedPooledRelay(
+  record: AgentSessionRecord
+): Promise<KeptProviderRelay | 'gone' | 'unknown'> {
   const verdict = await providerRelayRunLiveness(record, { fresh: true }).catch(() => 'unknown')
   const relay = keptProviderRelay(record.sessionId)
   forgetListedProviderRelayChat(record.sessionId)
-  const { relayId, daemon } = placed.placement
-  return verdict === 'kept' && relay
-    ? {
-        relay,
-        run: { relayId, daemon, workload },
-        chat: { sessionId: record.sessionId, threadId, workload }
-      }
-    : null
+  return verdict === 'gone' ? 'gone' : verdict === 'kept' && relay ? relay : 'unknown'
 }
 
 /** The chats a kept server still carries: each record whose current run names its relay. Every

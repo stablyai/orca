@@ -5,23 +5,27 @@ import {
   type ProviderRelayWorkMarkers
 } from '../../../provider-relay/app-provider-relays'
 import type { ProviderRelayAckFloor } from '../../../provider-relay/relayed-provider-output'
-import type { SharedProviderRelayDropped } from '../../../provider-relay/provider-relay-shared-agents'
+import type { SharedProviderRelayAgent } from '../../../provider-relay/provider-relay-shared-agents'
 import { createCodexRelayAckFloor } from '../codex-relay-ack-floor'
 import { CODEX_RELAY_WORK_MARKERS, type CodexAppServerRelayAs } from '../codex-app-server-relay'
 
 /** Recorded with each shared server's relay; this build reattaches it and its chats' threads. */
 export const CODEX_SHARED_RELAY_AGENT = 'codex-shared'
 
-/** Who hears that a deleted chat no longer wants its part of a kept shared server. */
-let chatDropped: SharedProviderRelayDropped | null = null
+/** Who hears a chat that no longer wants its part of a kept shared server, and ends a deleted
+ *  chat's part. */
+let chats: SharedProviderRelayAgent | null = null
 
-export function onCodexSharedRelayChatDropped(listener: typeof chatDropped): void {
-  chatDropped = listener
+export function onCodexSharedRelayChats(listener: SharedProviderRelayAgent): void {
+  chats = listener
 }
 
 registerReattachableProviderRelayAgent(CODEX_SHARED_RELAY_AGENT, {
   provider: 'codex',
-  shared: { dropped: (chatKey, relay, deleted) => chatDropped?.(chatKey, relay, deleted) }
+  shared: {
+    dropped: (chatKey, relay) => chats?.dropped(chatKey, relay),
+    stop: async (record) => (await chats?.stop?.(record)) ?? true
+  }
 })
 
 /** The relay's own key: the server's launch key, and a part unique to this server. */

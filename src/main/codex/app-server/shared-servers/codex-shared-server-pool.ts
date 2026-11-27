@@ -24,8 +24,8 @@ import {
   forgetListedProviderRelayChat,
   noteProviderRelayReattachedFromLastRun
 } from '../../../provider-relay/provider-relay-launch-inventory'
-import { codexSharedRelayChatKey, onCodexSharedRelayChatDropped } from './codex-shared-server-relay'
-import { codexPooledRunOf } from './codex-shared-server-kept-runs'
+import { codexSharedRelayChatKey, onCodexSharedRelayChats } from './codex-shared-server-relay'
+import { codexPooledRunOf, codexRecordPooledRun } from './codex-shared-server-kept-runs'
 import { CodexKeptServers } from './codex-shared-server-kept-servers'
 
 /** A server with no chats waits this long for the next one before it stops. */
@@ -56,7 +56,7 @@ export class CodexSharedServerPool {
     (server) => this.onServerFreed(server)
   )
   /** Relayed servers by relay, and the kept ones a chat's run is on. */
-  private readonly kept = new CodexKeptServers({
+  readonly kept = new CodexKeptServers({
     track: (server) => this.track(server),
     freed: (server) => this.onServerFreed(server),
     sweep: () => this.sweep
@@ -74,9 +74,6 @@ export class CodexSharedServerPool {
         server.keep.settleQuit()
       }
     })
-    onCodexSharedRelayChatDropped((chatKey, relay, deleted) =>
-      this.kept.dropped(chatKey, relay, this.relaying ? deleted : undefined)
-    )
   }
 
   /** The daemon runs servers where it can (never on Windows, nor for an injected test spawn). */
@@ -260,3 +257,10 @@ export function sharedCodexServerPool(): CodexSharedServerPool {
   pool ??= new CodexSharedServerPool()
   return pool
 }
+
+onCodexSharedRelayChats({
+  dropped: (chatKey, relay) => pool?.kept.dropped(chatKey, relay),
+  // A deleted chat's run may be kept from an earlier run before any chat here built the pool.
+  stop: async (record) =>
+    codexRecordPooledRun(record) ? sharedCodexServerPool().kept.stopDeleted(record) : true
+})

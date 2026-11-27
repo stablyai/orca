@@ -58,8 +58,10 @@ export class CodexSharedServerRouter {
     /** The daemon seq of the frame being read now, on a relayed server. */
     private readonly seq: () => number | null = () => null
   ) {
-    this.unrouted = new CodexSharedServerUnrouted(refuse, () =>
-      [...leases()].some((lease) => lease.pendingOpens.size > 0)
+    this.unrouted = new CodexSharedServerUnrouted(
+      refuse,
+      () => [...leases()].some((lease) => lease.pendingOpens.size > 0),
+      () => recovery?.discoveryPartial === true
     )
   }
 
@@ -113,7 +115,9 @@ export class CodexSharedServerRouter {
     if (lost) {
       lease.liveThreads.add(threadId)
     }
-    if (lost && opened) {
+    // A restored chat's helper too: what it lost was its kept run's, so it catches up from history.
+    if (lost && (opened || lease.restored !== null)) {
+      lease.recoveryCut = true
       lease.shed()
     }
   }

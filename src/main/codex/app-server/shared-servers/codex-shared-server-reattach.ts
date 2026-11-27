@@ -7,9 +7,9 @@ import {
 import { readRecord } from '../codex-item-field-readers'
 import {
   CODEX_SHARED_RECOVERY_MAX_IDENTITIES,
-  type CodexRecoveredChat,
   type CodexSharedServerRecovery
 } from './codex-shared-server-recovery'
+import type { CodexRecoveredChat } from './codex-shared-recovery-group'
 
 /** Metadata reads one reattach keeps in flight on the shared server. */
 export const CODEX_SHARED_REATTACH_READS = 4

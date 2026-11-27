@@ -6,7 +6,7 @@ import type {
 import type { CodexSharedServerFrame } from './codex-shared-server-frames'
 import type { CodexSharedServerRouter } from './codex-shared-server-router'
 import type { CodexSharedServerLease } from './codex-shared-server-lease'
-import type { CodexRecoveredChat } from './codex-shared-server-recovery'
+import type { CodexRecoveredChat } from './codex-shared-recovery-group'
 import { registerPooledProviderRelayChat } from '../../../provider-relay/app-provider-relays'
 
 /** A release's outcome: whether the chat's turns are proven over (else it stays on the server for

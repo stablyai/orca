@@ -2,7 +2,7 @@ import type { spawnCodexAppServerConnection } from '../codex-app-server-connecti
 import { initializeCodexAppServerConnection } from '../codex-app-server-handshake'
 import type { KeptProviderRelay } from '../../../provider-relay/app-provider-relays'
 import type { CodexSharedServer } from './codex-shared-server'
-import type { CodexRecoveredChat } from './codex-shared-server-recovery'
+import type { CodexRecoveredChat } from './codex-shared-recovery-group'
 import { recoverCodexSharedServerThreads } from './codex-shared-server-reattach'
 
 const INITIALIZE_TIMEOUT_MS = 15_000
@@ -12,8 +12,6 @@ export type CodexSharedServerRelayed = {
   chatKey: string
   attach?: KeptProviderRelay
   expected?: readonly CodexRecoveredChat[]
-  /** Deleted chats whose part it still runs: ended under their own tag once it is attached. */
-  ended?: readonly CodexRecoveredChat[]
 }
 
 /**
@@ -26,7 +24,7 @@ export async function startCodexSharedServer(
   connect: typeof spawnCodexAppServerConnection,
   relayed: CodexSharedServerRelayed | undefined
 ): Promise<void> {
-  const { expected, ended = [] } = relayed ?? {}
+  const expected = relayed?.expected
   const connection = await connect(server.spec.launch, {
     onNotification: (method, params) => {
       server.turns.observe(method, params)
@@ -66,13 +64,6 @@ export async function startCodexSharedServer(
       expected
     })
     connection.relay.releaseOutput()
-    const deleted = new Set(ended.map((chat) => chat.threadId))
-    void server.keep.endThreads(
-      unwanted.filter((threadId) => !deleted.has(threadId)),
-      null
-    )
-    for (const chat of ended) {
-      void server.keep.endThreads([chat.threadId], chat.workload)
-    }
+    void server.keep.endThreads(unwanted, null)
   }
 }

@@ -22,7 +22,9 @@ export class CodexSharedServerUnrouted {
 
   constructor(
     private readonly drop: (frame: CodexSharedServerFrame) => void,
-    private readonly opensPending: () => boolean
+    private readonly opensPending: () => boolean,
+    /** Expiry may drop a kept chat's frames (a reattach that couldn't list every thread). */
+    private readonly expiryLoses: () => boolean = () => false
   ) {}
 
   hold(threadId: string, frame: CodexSharedServerFrame): void {
@@ -82,8 +84,8 @@ export class CodexSharedServerUnrouted {
     return this.lost.delete(threadId) || this.lostUnknown
   }
 
-  /** `lost`: dropped by the cap, maybe while an open waits for these frames. Expiry runs only with
-   *  no open pending, so nobody is waiting for what it drops. */
+  /** `lost`: dropped by the cap, maybe while an open waits for these frames, or expired where a
+   *  kept chat may own them. Otherwise expiry runs with no open pending: nobody waits for them. */
   private discard(threadId: string, lost = false): void {
     for (const frame of this.take(threadId)) {
       this.drop(frame)
@@ -121,7 +123,7 @@ export class CodexSharedServerUnrouted {
     const cutoff = Date.now() - UNROUTED_TTL_MS
     for (const [threadId, bucket] of this.buckets) {
       if (bucket.since <= cutoff) {
-        this.discard(threadId)
+        this.discard(threadId, this.expiryLoses())
       }
     }
     if (this.buckets.size > 0) {

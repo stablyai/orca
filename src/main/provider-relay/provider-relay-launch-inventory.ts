@@ -18,7 +18,7 @@ export {
 import {
   providerRelayAgentShared,
   registerSharedProviderRelayAgent,
-  type SharedProviderRelayDropped
+  type SharedProviderRelayAgent
 } from './provider-relay-shared-agents'
 
 const LIST_TIMEOUT_MS = 3_000
@@ -60,8 +60,8 @@ export function registerReattachableProviderRelayAgent(
   options: {
     opensEnded?: boolean
     provider?: string
-    /** One agent serves many chats; `dropped` hears a chat (deleted) that no longer wants its part. */
-    shared?: { dropped: SharedProviderRelayDropped }
+    /** One agent serves many chats; it hears a chat (deleted) that no longer wants its part. */
+    shared?: SharedProviderRelayAgent
   } = {}
 ): void {
   reattachableAgents.add(agent)
@@ -72,7 +72,7 @@ export function registerReattachableProviderRelayAgent(
     opensEndedAgents.add(agent)
   }
   if (options.shared) {
-    registerSharedProviderRelayAgent(agent, options.shared.dropped)
+    registerSharedProviderRelayAgent(agent, options.shared)
   }
 }
 
