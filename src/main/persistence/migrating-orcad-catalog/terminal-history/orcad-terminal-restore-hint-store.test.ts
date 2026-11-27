@@ -44,6 +44,10 @@ describe('orcad terminal restore hint store', () => {
     new OrcadTerminalRestoreHintStore(root).install(migration('a'), [hint(paneA)], 1000)
     const store = new OrcadTerminalRestoreHintStore(root)
     failNextRead.code = 'EIO'
+    expect(store.peek(paneA, worktreeId, 2000)).toBeNull()
+    failNextRead.code = 'EIO'
+    expect(() => store.consume(paneA, 2000)).not.toThrow()
+    failNextRead.code = 'EIO'
     expect(() => store.install(migration('b'), [hint(paneB)], 2000)).toThrow(
       expect.objectContaining({ code: 'EIO' })
     )

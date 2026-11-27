@@ -113,7 +113,11 @@ export class OrcadTerminalRestoreHintStore {
 
   /** Read without consuming. */
   peek(paneKey: string, worktreeId: string, now: number): string | null {
-    const hint = this.load().hints.find((entry) => entry.paneKey === paneKey)
+    const current = this.tryLoad()
+    if (!current) {
+      return null
+    }
+    const hint = current.hints.find((entry) => entry.paneKey === paneKey)
     if (!hint || hint.worktreeId !== worktreeId) {
       return null
     }
@@ -122,19 +126,35 @@ export class OrcadTerminalRestoreHintStore {
 
   /** Durably consume regardless of the hint's worktree. */
   consume(paneKey: string, now: number): void {
-    this.dropWhere((hint) => hint.paneKey === paneKey, now)
+    const current = this.tryLoad()
+    if (!current) {
+      return
+    }
+    this.dropMatching(current, (hint) => hint.paneKey === paneKey, now)
   }
 
   dropForWorktrees(matchesWorktreeId: (worktreeId: string) => boolean, now: number): void {
-    this.dropWhere((hint) => matchesWorktreeId(hint.worktreeId), now)
+    this.dropMatching(this.load(), (hint) => matchesWorktreeId(hint.worktreeId), now)
   }
 
-  private dropWhere(matches: (hint: InstalledTerminalRestoreHint) => boolean, now: number): void {
-    const current = this.load()
+  private dropMatching(
+    current: TerminalRestoreHintStoreDocument,
+    matches: (hint: InstalledTerminalRestoreHint) => boolean,
+    now: number
+  ): void {
     if (!current.hints.some(matches)) {
       return
     }
     this.write({ ...current, hints: current.hints.filter((hint) => !matches(hint)) }, now)
+  }
+
+  private tryLoad(): TerminalRestoreHintStoreDocument | null {
+    try {
+      return this.load()
+    } catch (error) {
+      console.warn('[orcad-migration] terminal restore hint store transiently unreadable:', error)
+      return null
+    }
   }
 
   private write(next: TerminalRestoreHintStoreDocument, now: number): void {
