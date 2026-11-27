@@ -24,23 +24,23 @@ export function buildPosixClaudeDecisionPreludeLines(): string[] {
   ]
 }
 
-/** On macOS also sets `orca_hook_tool_event` for tool-scoped payloads, which have the only `"tool_name":` key,
- *  for the process capture. Matches bytes: the patterns are ASCII, and UTF-8 matching decodes the whole payload
- *  for every pattern. */
+/** Also sets `orca_hook_tool_event` for the process capture. Every tool payload, PreToolUse and PermissionRequest
+ *  included, has the only `"tool_name":` key, so any other event costs one failed search. Matches bytes: the
+ *  patterns are ASCII, and UTF-8 matching decodes the whole payload for every pattern. */
 export function buildPosixClaudeDecisionModeLines(): string[] {
   return [
     'orca_hook_tool_event= orca_hook_lc=${LC_ALL+1} orca_hook_lc_all=${LC_ALL-}',
-    // Elsewhere a literal that fails on its first byte, so other hosts never search for a key they don't use.
-    // dash sets no OSTYPE; /proc, which macOS lacks, tells Linux apart without a subprocess.
-    `orca_hook_tool_glob='*"tool_name":*'; case "\${OSTYPE-}" in darwin*) ;; '') [ ! -r /proc/self/stat ] || orca_hook_tool_glob=_ ;; *) orca_hook_tool_glob=_ ;; esac`,
     'LC_ALL=C',
     'case "$payload" in',
-    `  *'"hook_event_name":"PreToolUse"'*|*'"hook_event_name": "PreToolUse"'*) orca_hook_decides=${CLAUDE_PRE_TOOL_USE_DECISION}; max_time=${CLAUDE_PRE_TOOL_USE_ANSWER_WAIT_SECONDS}; orca_hook_tool_event=1 ;;`,
+    // Only a key is followed by a colon; a quoted value never is.
+    `  *'"tool_name":'*) orca_hook_tool_event=1`,
+    '    case "$payload" in',
+    `      *'"hook_event_name":"PreToolUse"'*|*'"hook_event_name": "PreToolUse"'*) orca_hook_decides=${CLAUDE_PRE_TOOL_USE_DECISION}; max_time=${CLAUDE_PRE_TOOL_USE_ANSWER_WAIT_SECONDS} ;;`,
     // Why 126 s: Orca answers within its 122 s hold; the managed entry's 130 s timeout outlasts both.
     // An async entry's output is ignored, so it answers `{}` first like any other event.
-    `  *'"hook_event_name":"PermissionRequest"'*|*'"hook_event_name": "PermissionRequest"'*) orca_hook_tool_event=1; if [ -n "\${ORCA_HOOK_ASYNC:-}" ]; then printf '{}\\n'; orca_hook_printed=1; else orca_hook_decides=${CLAUDE_PERMISSION_REQUEST_DECISION}; max_time=126; fi ;;`,
-    // Only a key is followed by a colon; a quoted value never is.
-    `  $orca_hook_tool_glob) printf '{}\\n'; orca_hook_printed=1; orca_hook_tool_event=1 ;;`,
+    `      *'"hook_event_name":"PermissionRequest"'*|*'"hook_event_name": "PermissionRequest"'*) if [ -n "\${ORCA_HOOK_ASYNC:-}" ]; then printf '{}\\n'; orca_hook_printed=1; else orca_hook_decides=${CLAUDE_PERMISSION_REQUEST_DECISION}; max_time=126; fi ;;`,
+    "      *) printf '{}\\n'; orca_hook_printed=1 ;;",
+    '    esac ;;',
     "  *) printf '{}\\n'; orca_hook_printed=1 ;;",
     'esac',
     'if [ -n "$orca_hook_lc" ]; then LC_ALL=$orca_hook_lc_all; else unset LC_ALL; fi'
@@ -50,6 +50,13 @@ export function buildPosixClaudeDecisionModeLines(): string[] {
 /** Captures the post's reply; a failed curl's partial body is dropped, spooled and answered `{}`. */
 export function wrapPosixClaudeDecisionPost(postLines: readonly string[]): string[] {
   return [
+    // An event that asked for no decision discards the reply, so it skips the capture subshell.
+    'if [ -z "$orca_hook_decides" ]; then',
+    ...postLines.map((line, index) =>
+      index === postLines.length - 1 ? `${line} >/dev/null 2>&1 || spool_hook_event` : line
+    ),
+    '  exit 0',
+    'fi',
     ...postLines.map((line, index) =>
       index === 0
         ? `orca_hook_reply=$(${line}`
