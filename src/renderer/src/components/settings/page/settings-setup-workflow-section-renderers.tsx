@@ -14,7 +14,7 @@ import { ShareSkillsSettingsPane } from '../skills/sharing/ShareSkillsSettingsPa
 import { SettingsSection } from '../section-layout/SettingsSection'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { SettingsRenderContext } from './settings-render-context'
+import { getSettingsHostServerName, type SettingsRenderContext } from './settings-render-context'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { WorkspaceCleanupSettingsPane } from '../workspace-cleanup/WorkspaceCleanupSettingsPane'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
@@ -24,12 +24,7 @@ export function renderOrcaAccountSettingsSection(
   t: Translate = translate
 ): React.JSX.Element | null {
   const { model, navigation, view } = context
-  const { target } = model.settingsHostScope
-  const serverName =
-    target.kind === 'environment'
-      ? (model.runtimeEnvironments.find((entry) => entry.id === target.environmentId)?.name ??
-        t('components.settings.notifications.server.fallbackHost', 'this server'))
-      : null
+  const serverName = getSettingsHostServerName(model, t)
   return model.showDesktopOnlySettings ? (
     <SettingsSection
       id="orca-account"
@@ -52,8 +47,8 @@ export function renderOrcaAccountSettingsSection(
         <SettingsHostScopeUnavailableNotice />
       ) : (
         <SettingsGroup bodyClassName="py-4">
-          {target.kind === 'environment' ? (
-            <ServerOrcaAccountPane environmentId={target.environmentId} />
+          {model.settingsHostScope.target.kind === 'environment' ? (
+            <ServerOrcaAccountPane environmentId={model.settingsHostScope.target.environmentId} />
           ) : (
             <OrcaAccountSettingsPane />
           )}

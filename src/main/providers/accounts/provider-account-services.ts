@@ -15,15 +15,13 @@ import { readMiniMaxSessionCookie } from '../../minimax/minimax-cookie-store'
 import { readMiniMaxApiKey } from '../../minimax/minimax-api-key-store'
 import { readZcodePlanApiKey } from '../../zcode/zcode-plan-api-key-store'
 import { readOpenCodeGoApiKey } from '../../opencode/accounts/opencode-go-api-key-store'
-import {
-  getAntigravityAccountService,
-  setAntigravityNativeCredentialChangeListener
-} from '../../antigravity/native-account-host'
 import { createAccountRuntimeTargetSettingsSync } from '../../rate-limits/service/account-runtime-target-sync'
 import { resolveInactiveCodexAccounts } from '../../rate-limits/inactive-codex-accounts'
 import { normalizeClaudeRuntimeSelection } from '../../claude-accounts/selection/runtime-selection'
 import { HOST_SYSTEM_DEFAULT_USAGE_IDS } from '../../../shared/agent-accounts/host-system-default-usage'
 import type { ClaudeStatusLineRateLimits } from '../../../shared/agent-usage/rate-limits/claude-statusline-rate-limits'
+import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { releaseIdleChatsOnOtherAccount } from '../../native-chat/agent-session-wire/host/structured-agent-session-account-switch'
 
 export type ProviderAccountServices = {
   rateLimits: RateLimitService
@@ -52,6 +50,10 @@ export function createProviderAccountServices(
   )
   const claudeRuntimeAuth = new ClaudeRuntimeAuthService(store)
   const claudeAccounts = new ClaudeAccountService(store, rateLimits, claudeRuntimeAuth)
+  // Chats' agents (a bot's too) keep the account they launched with: idle ones restart on the new one.
+  claudeAccounts.onSelectionApplied((committed) => {
+    void releaseIdleChatsOnOtherAccount(getStructuredAgentSessionHost(), 'claude', committed)
+  })
   // Background quota polls must not boot stopped distros; user-driven resets may prepare them.
   rateLimits.setCodexHomePathResolver((target) =>
     resolveCodexRateLimitHomeUnlessStopped(codexRuntimeHome, target)
@@ -61,7 +63,6 @@ export function createProviderAccountServices(
   rateLimits.setKimiHomeResolver(() =>
     resolveKimiHome(resolveLocalAccountUsageTarget(store.getSettings()))
   )
-  rateLimits.setAntigravityFetchTarget(resolveLocalAccountUsageTarget(store.getSettings()))
   rateLimits.setClaudeFetchTarget(getInitialClaudeRateLimitTarget(store.getSettings()))
   const syncAccountRuntimeTargets = createAccountRuntimeTargetSettingsSync(
     rateLimits,
@@ -150,21 +151,8 @@ export function createProviderAccountServices(
     apiKey: (await readZcodePlanApiKey()) ?? ''
   }))
   rateLimits.setClaudeOAuthUsageEnabledResolver(() => store.getSettings().claudeOAuthUsageEnabled)
-  // Reuse the meter switch so hidden Antigravity usage does not spawn agy.
-  rateLimits.setAntigravityUsageEnabledResolver(() =>
-    store.getUI().statusBarItems.includes('antigravity')
-  )
   // Hidden Muse meters must not spawn the Muse CLI.
   rateLimits.setMuseUsageEnabledResolver(() => store.getUI().statusBarItems.includes('muse'))
-  setAntigravityNativeCredentialChangeListener(() =>
-    rateLimits.invalidateAntigravityCredentialState()
-  )
-  // agy has one shared login: attribute readings to saved accounts instead of switching to read others.
-  rateLimits.setAntigravityAccountUsageRecorder({
-    begin: async (target) => (await getAntigravityAccountService(target)).beginUsageRead(),
-    finish: async (target, login, limits) =>
-      (await getAntigravityAccountService(target)).finishUsageRead(login, limits)
-  })
   rateLimits.setNetworkProxySettingsResolver(() => store.getSettings())
   rateLimits.setInactiveClaudeAccountsResolver(() => {
     const settings = store.getSettings()

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import {
   isValidAgentSessionQuestionAnswers,
   legacyAgentSessionQuestionAnswers
@@ -12,24 +13,28 @@ import {
   type AcpRequestSettlement
 } from './acp-dialect'
 
-const questionRequestSchema = z.object({
-  sessionId: z.string(),
-  toolCallId: z.string(),
-  questions: z
-    .array(
-      z.object({
-        question: z.string(),
-        multiSelect: z.boolean().nullish(),
-        options: z.array(z.object({ label: z.string(), description: z.string().optional() }))
-      })
-    )
-    .min(1)
-})
-const planRequestSchema = z.object({
-  sessionId: z.string(),
-  toolCallId: z.string(),
-  planContent: z.string().nullish()
-})
+const questionRequestSchema = lazyZodSchema(() =>
+  z.object({
+    sessionId: z.string(),
+    toolCallId: z.string(),
+    questions: z
+      .array(
+        z.object({
+          question: z.string(),
+          multiSelect: z.boolean().nullish(),
+          options: z.array(z.object({ label: z.string(), description: z.string().optional() }))
+        })
+      )
+      .min(1)
+  })
+)
+const planRequestSchema = lazyZodSchema(() =>
+  z.object({
+    sessionId: z.string(),
+    toolCallId: z.string(),
+    planContent: z.string().nullish()
+  })
+)
 
 function questionRequest(params: unknown): AcpRequestPresentation {
   const parsed = questionRequestSchema.safeParse(params)
@@ -108,8 +113,12 @@ function questionRequest(params: unknown): AcpRequestPresentation {
   }
 }
 
-const mcpElicitSchema = z.looseObject({ serverName: z.string(), message: z.string() })
-const formReplySchema = z.object({ action: z.string(), content: z.unknown().optional() })
+const mcpElicitSchema = lazyZodSchema(() =>
+  z.looseObject({ serverName: z.string(), message: z.string() })
+)
+const formReplySchema = lazyZodSchema(() =>
+  z.object({ action: z.string(), content: z.unknown().optional() })
+)
 
 /** An MCP server's `elicitation/create` that Grok forwards: a URL to open, or a form to fill. */
 function mcpElicitRequest(params: unknown): AcpRequestPresentation {

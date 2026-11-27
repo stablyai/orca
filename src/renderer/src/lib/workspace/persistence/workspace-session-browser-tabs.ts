@@ -1,3 +1,4 @@
+import { redactBrowserMetadata } from '../../../../../shared/browser/browser-metadata-redaction'
 import type {
   BrowserPage,
   BrowserWorkspace
@@ -34,7 +35,7 @@ export function buildPersistedBrowserTabsByWorktree(
   return Object.fromEntries(
     Object.entries(browserTabsByWorktree).map(([worktreeId, tabs]) => [
       worktreeId,
-      tabs.map((tab) => ({ ...tab, loading: false }))
+      tabs.map((tab) => ({ ...redactBrowserMetadata(tab), loading: false }))
     ])
   )
 }
@@ -52,7 +53,7 @@ export function buildPersistedBrowserPagesByWorkspace(
         void _stalePlacedHere
         const annotations = browserAnnotationsByPageId[page.id]
         return {
-          ...page,
+          ...redactBrowserMetadata(page),
           loading: false,
           ...persistedRemoteBrowserPageIdentity(remoteBrowserPageHandlesByPageId[page.id]),
           ...(annotations?.length ? { annotations } : {})

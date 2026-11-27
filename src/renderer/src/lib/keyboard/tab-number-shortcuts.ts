@@ -6,6 +6,7 @@ import { dedupeTabOrder } from '../../../../shared/workspace-layout/tab-groups/t
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import { activateWebRuntimeSessionTab } from '@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-lifecycle'
 import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
+import { cancelPendingBotThreadOpen } from '@/lib/agent-session/open/bot-thread-open-lifecycle'
 import { displayedTabOrder } from '@/components/bots/bot-home-tab-order'
 import type { HomeBotLookup } from '@/components/tab-bar/model/pinned-home-tab'
 
@@ -63,22 +64,26 @@ export function activateTabNumberShortcut(index: number): boolean {
     return false
   }
 
+  cancelPendingBotThreadOpen()
   const worktreeId = target.worktreeId
   const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(store, worktreeId)
   store.focusGroup(worktreeId, target.groupId)
   store.activateTab(target.id)
 
   if (target.contentType === 'terminal') {
+    // Why: a tab-wide focus or host activation picks the first split pane.
+    const activeLeafId = store.terminalLayoutsByTabId[target.entityId]?.activeLeafId ?? null
     if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
       void activateWebRuntimeSessionTab({
         worktreeId,
         tabId: target.entityId,
-        environmentId: runtimeEnvironmentId
+        environmentId: runtimeEnvironmentId,
+        leafId: activeLeafId
       })
     }
     store.setActiveTab(target.entityId)
     store.setActiveTabType('terminal', worktreeId)
-    focusTerminalTabSurface(target.entityId)
+    focusTerminalTabSurface(target.entityId, activeLeafId)
     return true
   }
 

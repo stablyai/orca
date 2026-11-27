@@ -68,8 +68,8 @@ export function useBotConnectorInventory(
   const hostId = bot?.hostId ?? ownBotHost().hostId
   const linear = useBotLinear(hostId, shown)
   const github = useBotGitHub(hostId, shown)
-  // No bot shown reads nothing, so the host it would read is only a placeholder.
-  const google = useGoogleHost(bot ? botTarget(bot) : ownBotHost().target, shown)
+  // No bot shown (or one without Google) reads nothing, so the host it would read is only a placeholder.
+  const google = useGoogleHost(bot ? botTarget(bot) : ownBotHost().target, bot?.google === true)
   const composio = useComposioBot(bot)
   const { view: tools } = useBotTools(bot, appsCheck)
   // Changes with the UI language, so the translated titles follow a switch.

@@ -7,7 +7,7 @@ import {
   type MarkdownReviewNote
 } from '@/lib/editor/markdown/review-notes/markdown-review-notes'
 import type { MarkdownDocument } from '../../../../../../shared/file-listing/file-document'
-import { createMarkdownDocumentIndex } from '../../markdown/documents/markdown-doc-links'
+import { getMarkdownDocumentIndex } from '../../markdown/documents/markdown-doc-links'
 import { exceedsMarkdownRichModeSizeLimit } from '../../markdown/render-mode/markdown-rich-size-limit'
 import { previewHasAnnotationBlockKey } from '../review/markdown-preview-annotation-shortcut'
 import { selectMarkdownTableOfContents } from '../../markdown/navigation/markdown-toc-visibility-gate'
@@ -63,7 +63,7 @@ export function useMarkdownPreviewFoundation({
     [renderedContent, showTableOfContents]
   )
   const markdownDocumentIndex = useMemo(
-    () => createMarkdownDocumentIndex(markdownDocuments),
+    () => getMarkdownDocumentIndex(markdownDocuments),
     [markdownDocuments]
   )
   const toggleableSourceFileId: string | null = sourceFileId ?? null

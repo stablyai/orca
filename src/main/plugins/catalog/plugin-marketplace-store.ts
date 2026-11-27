@@ -3,6 +3,7 @@ import { createReadStream } from 'node:fs'
 import { mkdir, rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { PLUGIN_COMMIT_PATTERN } from '../../../shared/plugins/installation/plugin-install-lockfile'
 import {
   pluginMarketplaceGitSourceSchema,
@@ -16,16 +17,20 @@ import { writePluginFileAtomically } from '../installation/plugin-atomic-file-wr
 export const PLUGIN_MARKETPLACE_SOURCE_LIMIT = 64
 export const PLUGIN_MARKETPLACE_SOURCE_ID_PATTERN = /^[0-9a-f]{32}$/
 
-const sourceIdSchema = z.string().regex(PLUGIN_MARKETPLACE_SOURCE_ID_PATTERN)
-const registeredSourceSchema = z.strictObject({
-  id: sourceIdSchema,
-  source: pluginMarketplaceGitSourceSchema,
-  addedAt: z.number().finite().nonnegative()
-})
-const sourceFileSchema = z.strictObject({
-  schemaVersion: z.literal(1),
-  sources: z.array(registeredSourceSchema).max(PLUGIN_MARKETPLACE_SOURCE_LIMIT)
-})
+const sourceIdSchema = lazyZodSchema(() => z.string().regex(PLUGIN_MARKETPLACE_SOURCE_ID_PATTERN))
+const registeredSourceSchema = lazyZodSchema(() =>
+  z.strictObject({
+    id: sourceIdSchema,
+    source: pluginMarketplaceGitSourceSchema,
+    addedAt: z.number().finite().nonnegative()
+  })
+)
+const sourceFileSchema = lazyZodSchema(() =>
+  z.strictObject({
+    schemaVersion: z.literal(1),
+    sources: z.array(registeredSourceSchema).max(PLUGIN_MARKETPLACE_SOURCE_LIMIT)
+  })
+)
 const snapshotFields = {
   sourceId: sourceIdSchema,
   source: pluginMarketplaceGitSourceSchema,
@@ -34,16 +39,20 @@ const snapshotFields = {
 }
 // Why two cache keys: builds that predate release records parse `<id>.json` strictly, so a
 // downgrade must find only v1-shaped data there and refetch rather than fail.
-const legacySnapshotSchema = z.strictObject({
-  schemaVersion: z.literal(1),
-  ...snapshotFields,
-  marketplace: pluginMarketplaceSchema
-})
-const cachedSnapshotSchema = z.strictObject({
-  schemaVersion: z.literal(2),
-  ...snapshotFields,
-  marketplace: pluginMarketplaceListingSchema
-})
+const legacySnapshotSchema = lazyZodSchema(() =>
+  z.strictObject({
+    schemaVersion: z.literal(1),
+    ...snapshotFields,
+    marketplace: pluginMarketplaceSchema
+  })
+)
+const cachedSnapshotSchema = lazyZodSchema(() =>
+  z.strictObject({
+    schemaVersion: z.literal(2),
+    ...snapshotFields,
+    marketplace: pluginMarketplaceListingSchema
+  })
+)
 
 export type PluginMarketplaceRegisteredSource = z.infer<typeof registeredSourceSchema>
 export type PluginMarketplaceCachedSnapshot =
@@ -51,10 +60,12 @@ export type PluginMarketplaceCachedSnapshot =
   | z.infer<typeof legacySnapshotSchema>
 
 // Why a separate file: sources.json is parsed strictly by older builds, so it can't gain fields.
-const seededDefaultsSchema = z.object({
-  schemaVersion: z.literal(1),
-  seeded: z.array(z.string().max(64)).max(16)
-})
+const seededDefaultsSchema = lazyZodSchema(() =>
+  z.object({
+    schemaVersion: z.literal(1),
+    seeded: z.array(z.string().max(64)).max(16)
+  })
+)
 export type PluginMarketplaceDefaultSource = 'community'
 
 const SOURCE_FILE_MAX_BYTES = 2 * 1024 * 1024

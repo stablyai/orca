@@ -10,6 +10,7 @@ import type { AgentJournalTurnOutcome } from '../../../../shared/agent-status/li
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { agentJournalTurnBody as codexTurnLifecycleBody } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { CODEX_USER_MESSAGE_ORDINAL } from './codex-turn-ordinals'
+import type { CodexDispatchEchoes } from '../turns/codex-structured-dispatch-echo'
 import { resolveAgentJournalTurnRowWrite } from '../../../native-chat/agent-session-timeline/agent-journal-turn-row-revision'
 import type {
   StructuredAgentSessionEventSink,
@@ -55,6 +56,29 @@ export function codexTurnLifecycleIdentity(
     sessionId,
     recordId: `turn-lifecycle:${turnId}`
   }
+}
+
+/** How the provider took a send, read at its echo: a turn start Codex steered into a turn already
+ *  running, or one another send opened, joined that turn. Read before the send settles. */
+export function codexEchoVia(
+  echoes: Pick<CodexDispatchEchoes, 'sentVia' | 'echoedVia'>,
+  clientMessageId: string,
+  providerIdentity: AgentJournalItemIdentity
+): AgentJournalTurnJoin | null {
+  return providerIdentity.provider === 'codex'
+    ? echoes.echoedVia(clientMessageId, providerIdentity.threadId, providerIdentity.turnId)
+    : echoes.sentVia(clientMessageId)
+}
+
+/** The settled send a provider echo names, with how it was taken (`codexEchoVia`). */
+export function codexEchoedSend(
+  sessionId: string,
+  clientMessageId: string,
+  providerIdentity: AgentJournalItemIdentity,
+  echoes: Pick<CodexDispatchEchoes, 'sentVia' | 'echoedVia'>
+) {
+  const via = codexEchoVia(echoes, clientMessageId, providerIdentity)
+  return { sessionId, clientMessageId, ...codexAcceptedSend(sessionId, providerIdentity, via) }
 }
 
 /** A send written into a running turn joined the turn its echo names, which another send opened. */
@@ -123,6 +147,8 @@ export function publishCodexTurnLifecycle(input: {
   requestedAt?: number
   completedAt?: number
   durationMs?: number
+  /** A kept agent's replay: a start never reopens a turn the journal already holds ended. */
+  neverReopen?: true
 }): StructuredAgentSessionSinkAdmission {
   if (input.primaryThreadId !== input.threadId) {
     return ADMITTED
@@ -150,7 +176,14 @@ export function publishCodexTurnLifecycle(input: {
   if (input.sink.tryReviseResolvedItem) {
     admission = input.sink.tryReviseResolvedItem(
       codexTurnRowReservedBytes(identity, body),
-      { kind: 'turn-row', target: { identity }, write: { lifecycle: body } },
+      {
+        kind: 'turn-row',
+        target: { identity },
+        write: {
+          lifecycle: body,
+          ...(input.neverReopen && input.state === 'running' ? { onlyWhileRunning: true } : {})
+        }
+      },
       appendOptions
     )
   } else if (input.sink.tryAppendItem) {

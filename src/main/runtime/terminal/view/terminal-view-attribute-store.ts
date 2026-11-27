@@ -100,8 +100,8 @@ export type PairedLauncherSpawnArgs = {
   launcherViewAttributes?: TerminalViewAttributes
 }
 
-/** Admit terminal.create's theme (older clients report it only there). Pin it only where this host's window outranks
- *  it host-wide (#34340); elsewhere the host-wide theme already is the creator's and follows its later pushes. */
+/** Admit a create RPC's theme without pushing host-wide appearance to existing emulators.
+ *  Seed headless paired colours once for older clients; pin whenever the host-wide theme differs. */
 export function admitPairedCreateColors(
   value: unknown,
   attributesValue?: unknown
@@ -114,11 +114,16 @@ export function admitPairedCreateColors(
   // A palette for another theme would contradict these colours; an older creator sends none.
   const attributes =
     candidate && sameColors(terminalViewColorQueryReplyColors(candidate), colors) ? candidate : null
-  setPairedViewerColors(colors)
-  if (attributes) {
-    setPairedViewAttributes(attributes)
+  if (!currentAttributes && !pairedViewerColors) {
+    setPairedViewerColors(colors)
   }
-  if (!currentAttributes) {
+  const hostMatchesCreate =
+    !currentAttributes &&
+    pairedViewerColors !== null &&
+    sameColors(pairedViewerColors, colors) &&
+    (!attributes ||
+      (pairedAttributes !== null && terminalViewAttributesEqual(pairedAttributes, attributes)))
+  if (hostMatchesCreate) {
     return {}
   }
   return {
