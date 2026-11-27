@@ -81,11 +81,12 @@ async function getPullRequestStatuses(
   repoIdOrName: string,
   pr: RawAzureDevOpsPullRequest
 ): Promise<{ statuses: RawAzureDevOpsStatus[]; complete: boolean }> {
-  const read = async (path: string) => {
+  const read = async (path: string, searchParams?: Record<string, string>) => {
     let hasMore = false
     const raw = await requestAzureDevOpsJson<
       RawAzureDevOpsStatus[] | { value?: RawAzureDevOpsStatus[] }
     >(repo, path, {
+      searchParams,
       onResponse: (response) => {
         hasMore = Boolean(response.headers.get('x-ms-continuationtoken'))
       }
@@ -106,7 +107,10 @@ async function getPullRequestStatuses(
   if (!commitId) {
     return { statuses: pr.statuses ?? [], complete: false }
   }
-  const commitStatuses = await read(`${root}/commits/${encodePathSegment(commitId)}/statuses`)
+  const commitStatuses = await read(`${root}/commits/${encodePathSegment(commitId)}/statuses`, {
+    // Commit status history includes superseded attempts for the same check context.
+    latestOnly: 'true'
+  })
   return {
     statuses: commitStatuses.statuses,
     complete: prStatuses.complete && commitStatuses.complete
