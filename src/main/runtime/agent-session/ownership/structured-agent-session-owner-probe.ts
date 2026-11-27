@@ -7,6 +7,31 @@ import {
 } from './agent-session-process-identity-probe'
 import { findAgentSessionSpawnTokenProcesses } from './agent-session-spawn-token-process-scan'
 import { readEchoedAgentSessionSpawnToken } from './agent-session-spawn-token-readback'
+import { providerRelayRunLiveness } from '../../../provider-relay/app-provider-relays'
+
+/**
+ * An owner whose run may still be going under the terminal host is this app's to reattach, not an
+ * orphan to stop: it reads as unprovable, which recovery releases without signalling it. Only the
+ * run's placement and its own daemon start decide.
+ */
+async function keptRunningProbe(
+  record: AgentSessionRecord
+): Promise<AgentSessionOwnerProbe | null> {
+  if (!record.lease.ownerProcess) {
+    return null
+  }
+  const verdict = await providerRelayRunLiveness(record)
+  if (verdict === 'gone') {
+    return null
+  }
+  return {
+    outcome: 'indeterminate',
+    reason:
+      verdict === 'kept'
+        ? 'owner kept running under the terminal host'
+        : "the terminal host holding this run can't say yet whether it still runs"
+  }
+}
 
 /** Probe previous owners with PID-reuse-safe evidence; unresolved ownership remains indeterminate. */
 export function createStructuredAgentSessionOwnerProbe(
@@ -15,6 +40,10 @@ export function createStructuredAgentSessionOwnerProbe(
   findSpawnTokenProcesses = findAgentSessionSpawnTokenProcesses
 ): (record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe> {
   return async (record) => {
+    const kept = await keptRunningProbe(record)
+    if (kept) {
+      return kept
+    }
     const owner = record.lease.ownerProcess
     if (!owner) {
       const spawnToken = record.lease.reservedSpawnToken
@@ -62,9 +91,14 @@ export function createStructuredAgentSessionOwnerProbes(
       record: AgentSessionRecord
       owner: NonNullable<AgentSessionRecord['lease']['ownerProcess']>
     }[] = []
-    for (const record of records) {
+    // Each relayed run asks its own daemon start; the rest answer at once.
+    const keptProbes = await Promise.all(records.map(keptRunningProbe))
+    for (const [index, record] of records.entries()) {
       const owner = record.lease.ownerProcess
-      if (owner?.hostId === hostId) {
+      const kept = keptProbes[index]
+      if (kept) {
+        results.set(record.sessionId, kept)
+      } else if (owner?.hostId === hostId) {
         localOwners.push({ record, owner })
       } else {
         results.set(record.sessionId, await probeOne(record))

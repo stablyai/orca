@@ -1,9 +1,13 @@
-import { useCallback, useLayoutEffect, useMemo, useState } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type React from 'react'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 import type { PinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
+import {
+  isActiveSidebarWorkspace,
+  type ActiveSidebarWorkspace
+} from '../../../../../../shared/sidebar-list/selection/active-workspace'
 import { getRenderedWorkspaceRowsInSidebarOrder } from './worktree-sidebar-row-preference'
 import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
@@ -21,8 +25,11 @@ const getSidebarContainer = (): Element | null =>
 export function useSidebarWorktreeSelection(args: {
   sectionRows: HostSectionRow[]
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
+  /** The workspace the cards draw as active; null worktreeId when none is (e.g. Tasks/Activity). */
+  active: ActiveSidebarWorkspace
 }) {
-  const { sectionRows, pinnedDisplayPolicy } = args
+  const { sectionRows, pinnedDisplayPolicy, active } = args
+  const { worktreeId: activeWorktreeId, hostId: activeHostId } = active
   // Built rows include grouping/pinning reorder; use their order for selection and Cmd+1–9 parity.
   const renderedRows = useMemo(
     () => getRenderedWorkspaceRowsInSidebarOrder(sectionRows, pinnedDisplayPolicy),
@@ -87,6 +94,19 @@ export function useSidebarWorktreeSelection(args: {
     },
     [repoByWorktree, updateSelection]
   )
+  const { selectedItems, setAllSelected } = selection
+  const previousActiveRef = useRef(active)
+  // Why: a plain click selects the open card; once a shortcut or palette opens another, drop that selection or the old card keeps its multi-select ring.
+  useLayoutEffect(() => {
+    const previous = previousActiveRef.current
+    if (previous.worktreeId === activeWorktreeId && previous.hostId === activeHostId) {
+      return
+    }
+    previousActiveRef.current = { worktreeId: activeWorktreeId, hostId: activeHostId }
+    if (selectedItems.length === 1 && isActiveSidebarWorkspace(selectedItems[0], previous)) {
+      setAllSelected(false)
+    }
+  }, [activeWorktreeId, activeHostId, selectedItems, setAllSelected])
   const { selectForContextMenu: selectItemForContextMenu } = selection
   // Why keep the event arg: kanban and list cards share the onContextMenuSelect prop shape.
   const selectForContextMenu = useCallback(

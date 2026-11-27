@@ -20,13 +20,22 @@ import {
   DEFAULT_MARKUP_COLOR,
   DEFAULT_MARKUP_FONT_SIZE,
   DEFAULT_MARKUP_WIDTH,
+  setShapes,
+  type MarkupShape,
   type MarkupTool
 } from './markup-drawing-model'
 
 type Size = { width: number; height: number; dpr: number }
 
 // Own document, tool, pending text and paint state; committed shapes support erasure without re-editing.
-export function useMarkupEditor(busy: boolean, onCancel: () => void) {
+export function useMarkupEditor(
+  busy: boolean,
+  onCancel: () => void,
+  /** Strokes of a reopened drawing (Undo after a discard). */
+  initialShapes?: readonly MarkupShape[],
+  /** The page this drawing belongs to, for Esc ownership. */
+  ownerPageId?: string
+) {
   const rootRef = useRef<HTMLDivElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const textInputRef = useRef<HTMLInputElement | null>(null)
@@ -38,7 +47,10 @@ export function useMarkupEditor(busy: boolean, onCancel: () => void) {
 
   const [size, setSize] = useState<Size>({ width: 0, height: 0, dpr: 1 })
   const [{ doc, gesture }, setState] = useState<MarkupEditorState>(() => ({
-    doc: createMarkupDocument(),
+    // As one undoable step, so Undo and Clear work on a reopened drawing.
+    doc: initialShapes?.length
+      ? setShapes(createMarkupDocument(), [...initialShapes])
+      : createMarkupDocument(),
     gesture: null
   }))
   const drawing = gesture?.kind === 'draw' ? gesture.shape : null
@@ -128,7 +140,7 @@ export function useMarkupEditor(busy: boolean, onCancel: () => void) {
     return ctx ? textInkBox(ctx, shape) : null
   }, [])
 
-  useMarkupKeyboardShortcuts({ pendingText, setPendingText, undo, redo, onCancel })
+  useMarkupKeyboardShortcuts({ pendingText, setPendingText, undo, redo, onCancel, ownerPageId })
 
   const pointerHandlers = useMarkupPointerHandlers({
     busy,

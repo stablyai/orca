@@ -6,11 +6,18 @@ export type BrowserPasswordCsvRow = {
   name: string
 }
 
-export type BrowserPasswordCsvParseError = 'too-large' | 'too-many-rows' | 'missing-columns'
+export type BrowserPasswordCsvParseError =
+  | 'too-large'
+  | 'too-many-rows'
+  | 'missing-columns'
+  | 'malformed-csv'
 
 export type BrowserPasswordCsvParseResult = {
   rows: BrowserPasswordCsvRow[]
-  /** Rows over a field-length limit. URL and password validity is judged by the store on import. */
+  /**
+   * Rows over a field-length limit or with text after a closing quote.
+   * URL and password validity is judged by the store on import.
+   */
   invalid: number
   error?: BrowserPasswordCsvParseError
 }
@@ -33,12 +40,18 @@ const HEADER_ALIASES: Record<CsvColumn, readonly string[]> = {
 
 const COLUMNS: readonly CsvColumn[] = ['url', 'username', 'password', 'note', 'name']
 
-/** RFC 4180 records: quoted fields, doubled quotes, embedded newlines, CRLF or LF. */
-function parseCsvRecords(text: string): string[][] {
-  const records: string[][] = []
+/**
+ * RFC 4180 records: quoted fields, doubled quotes, embedded newlines, CRLF or LF.
+ * A null record had text after a closing quote on one line; only that record is unreadable.
+ * Returns null for an unclosed quote or a multi-line quoted field followed by text: either means
+ * a stray quote may have swallowed later rows.
+ */
+function parseCsvRecords(text: string): (string[] | null)[] | null {
+  const records: (string[] | null)[] = []
   let record: string[] = []
   let field = ''
   let quoted = false
+  let unreadable = false
   let i = 0
   while (i < text.length) {
     const char = text[i]
@@ -49,7 +62,22 @@ function parseCsvRecords(text: string): string[][] {
           i += 2
           continue
         }
+        // Padding after a closing quote is dropped; any other text means a stray quote.
+        let next = i + 1
+        while (text[next] === ' ' || text[next] === '\t') {
+          next += 1
+        }
         quoted = false
+        if (next < text.length && !',\r\n'.includes(text[next])) {
+          if (field.includes('\n') || field.includes('\r')) {
+            return null
+          }
+          unreadable = true
+          i += 1
+          continue
+        }
+        i = next
+        continue
       } else {
         field += char
       }
@@ -63,9 +91,10 @@ function parseCsvRecords(text: string): string[][] {
       field = ''
     } else if (char === '\n' || char === '\r') {
       record.push(field)
-      records.push(record)
+      records.push(unreadable ? null : record)
       record = []
       field = ''
+      unreadable = false
       if (char === '\r' && text[i + 1] === '\n') {
         i += 1
       }
@@ -74,12 +103,15 @@ function parseCsvRecords(text: string): string[][] {
     }
     i += 1
   }
+  if (quoted) {
+    return null
+  }
   if (field.length > 0 || record.length > 0) {
     record.push(field)
-    records.push(record)
+    records.push(unreadable ? null : record)
   }
   // A blank line parses as one empty field; it is not a row.
-  return records.filter((r) => r.length > 1 || r[0] !== '')
+  return records.filter((r) => r === null || r.length > 1 || r[0] !== '')
 }
 
 function resolveColumnIndexes(header: string[]): Partial<Record<CsvColumn, number>> {
@@ -112,6 +144,9 @@ export function parseBrowserPasswordCsv(text: string): BrowserPasswordCsvParseRe
     return { rows: [], invalid: 0, error: 'too-large' }
   }
   const records = parseCsvRecords(text.startsWith('﻿') ? text.slice(1) : text)
+  if (!records) {
+    return { rows: [], invalid: 0, error: 'malformed-csv' }
+  }
   const [header, ...dataRecords] = records
   const indexes = resolveColumnIndexes(header ?? [])
   if (
@@ -131,6 +166,10 @@ export function parseBrowserPasswordCsv(text: string): BrowserPasswordCsvParseRe
   const rows: BrowserPasswordCsvRow[] = []
   let invalid = 0
   for (const record of dataRecords) {
+    if (!record) {
+      invalid += 1
+      continue
+    }
     const row: BrowserPasswordCsvRow = {
       url: cell(record, 'url').trim(),
       username: cell(record, 'username'),

@@ -1,3 +1,4 @@
+import { redactBrowserMetadata } from '../../../../../shared/browser/browser-metadata-redaction'
 import {
   browserInitializationPresentation,
   browserInitializationReceiptCurrent,
@@ -248,7 +249,7 @@ export function buildMirroredBrowserTabs(
           reconciliation?.handle.placement
         )
     )
-    const nextPage: BrowserPage = {
+    const nextPage: BrowserPage = redactBrowserMetadata({
       id: pageId,
       workspaceId,
       worktreeId: snapshot.worktree,
@@ -266,7 +267,7 @@ export function buildMirroredBrowserTabs(
       createdAt,
       browserRuntimeEnvironmentId: environmentId,
       viewportPresetId: existing?.page.viewportPresetId ?? null
-    }
+    })
     // Reuse requires workspaceId equality or removed-workspace cleanup misses the retained page list.
     const page = existing && browserPageEqual(existing.page, nextPage) ? existing.page : nextPage
     const existingPageIds = existing?.workspace.pageIds

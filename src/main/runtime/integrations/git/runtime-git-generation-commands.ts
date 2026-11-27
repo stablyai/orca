@@ -4,6 +4,7 @@ import {
 } from '../../../../shared/text-generation/text-generation-failure-copy'
 import type { CommitMessageDraftContext } from '../../../../shared/source-control/ai/generation/commit-message-generation'
 import { getCommitMessageModelDiscoveryHostKey } from '../../../../shared/source-control/ai/generation/commit-message-host-key'
+import { isRetiredTextAgent } from '../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import type { HostedReviewProvider } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { withLinkedIssueDraftContext } from '../../../../shared/source-control/ai/recipes/source-control-ai-action-variables'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
@@ -45,6 +46,14 @@ import {
   type RuntimeCommitMessageSettingsOverride
 } from './runtime-git-generation-context'
 
+// Older clients resolve a saved Antigravity choice themselves; it picks as if unset here.
+function runnableResolvedParams(
+  settingsOverride: RuntimeCommitMessageSettingsOverride | undefined
+) {
+  const params = settingsOverride?.sourceControlAiResolvedParams
+  return params && !isRetiredTextAgent(params.agentId) ? params : undefined
+}
+
 export class RuntimeGitGenerationCommands {
   constructor(private readonly host: RuntimeGitCommandHost) {}
 
@@ -57,11 +66,9 @@ export class RuntimeGitGenerationCommands {
     const discoveryHostKey =
       settingsOverride?.commitMessageDiscoveryHostKey ??
       getCommitMessageModelDiscoveryHostKey(route.kind === 'ssh' ? route.connectionId : null)
-    const resolvedSettings = settingsOverride?.sourceControlAiResolvedParams
-      ? {
-          ok: true as const,
-          params: settingsOverride.sourceControlAiResolvedParams
-        }
+    const resolvedParams = runnableResolvedParams(settingsOverride)
+    const resolvedSettings = resolvedParams
+      ? { ok: true as const, params: resolvedParams }
       : resolveCommitMessageSettings(
           getRuntimeGitGenerationSettings(
             this.host.getRuntimeSettings(),
@@ -153,11 +160,9 @@ export class RuntimeGitGenerationCommands {
     const discoveryHostKey =
       settingsOverride?.commitMessageDiscoveryHostKey ??
       getCommitMessageModelDiscoveryHostKey(route.kind === 'ssh' ? route.connectionId : null)
-    const resolvedSettings = settingsOverride?.sourceControlAiResolvedParams
-      ? {
-          ok: true as const,
-          params: settingsOverride.sourceControlAiResolvedParams
-        }
+    const resolvedParams = runnableResolvedParams(settingsOverride)
+    const resolvedSettings = resolvedParams
+      ? { ok: true as const, params: resolvedParams }
       : resolveCommitMessageSettings(
           getRuntimeGitGenerationSettings(
             this.host.getRuntimeSettings(),

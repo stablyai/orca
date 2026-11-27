@@ -15,7 +15,8 @@ export type StructuredAgentSessionRequestFailure = {
   capturePendingOutput?: () => (() => boolean) | undefined
   death?: NonNullable<StructuredAgentSessionHostSession['lastEndedChild']> &
     AgentSessionFailureWordsContext
-  read: () => Promise<AgentJournalSnapshot | null>
+  /** Undefined when the exit fact already supplies the report. Null when the request is stale. */
+  read: () => Promise<AgentJournalSnapshot | null | undefined>
 }
 
 /** A provider that died on its own while no request of it was running or failed. */
@@ -39,6 +40,7 @@ type Source = {
   counted: Set<string>
   ended: StructuredAgentSessionHostSession['lastEndedChild']
   death?: Death
+  recoveredExitRequest?: { fence: number; key: string }
 }
 
 /** The writer supplies outcome edges; the host attaches live authority and deduplicates delivery. */
@@ -118,15 +120,20 @@ export class StructuredAgentSessionRequestFailures {
       return
     }
     const stopSettle = session.journal.stopMarks.fact()
+    const exit =
+      ended.observedAt === undefined
+        ? undefined
+        : { fence: ended.fence, observedAt: ended.observedAt }
     const running = session.journal
-      .readInOrder((reads) => reads.runningRequest(stopSettle))
+      .readInOrder((reads) => reads.runningRequest(stopSettle, exit))
       .then((request) => {
-        if (this.current(sessionId, source) && request?.turnState === 'running') {
+        if (request && this.current(sessionId, source)) {
           this.forward(
             sessionId,
             source,
             { ...request, outcome: 'interruption', linked: undefined },
-            ended
+            ended,
+            request.mark === 'interruption'
           )
         }
       })
@@ -150,8 +157,11 @@ export class StructuredAgentSessionRequestFailures {
     if (!death || death.ended !== ended) {
       return
     }
-    source.death = undefined
     await death.running
+    if (source.death !== death) {
+      return
+    }
+    source.death = undefined
     if (!death.reported && this.current(sessionId, source)) {
       this.deps.onIdleDeath?.({
         sessionId,
@@ -174,7 +184,8 @@ export class StructuredAgentSessionRequestFailures {
     sessionId: string,
     source: Source,
     candidate: JournalRequestOutcome,
-    ended: Source['ended']
+    ended: Source['ended'],
+    recoveredExit = false
   ): void {
     let request = candidate
     const unexpected = (value: JournalRequestOutcome) =>
@@ -189,10 +200,16 @@ export class StructuredAgentSessionRequestFailures {
       return
     }
     const key = `${request.kind}:${request.id}`
-    if (source.counted.has(key)) {
+    const recovered = source.recoveredExitRequest
+    if (source.counted.has(key) || (recovered?.fence === request.fence && recovered.key === key)) {
       return
     }
-    source.counted.add(key)
+    if (recoveredExit) {
+      // Only the latest proven exit can match a late interruption from the writer.
+      source.recoveredExitRequest = { fence: request.fence, key }
+    } else {
+      source.counted.add(key)
+    }
     if (source.death && request.fence === source.death.ended.fence) {
       source.death.reported = true
     }
@@ -202,7 +219,10 @@ export class StructuredAgentSessionRequestFailures {
     const generation = child?.fence === request.fence ? child.generation : undefined
     const clientMessageId = request.clientMessageId
     const death = outcome === 'interruption' && ended ? { ...ended } : undefined
-    const words = death ? this.deps.wordsContext?.(sessionId) : undefined
+    let words:
+      | AgentSessionFailureWordsContext
+      | Promise<AgentSessionFailureWordsContext>
+      | undefined
     this.deps.onFailure({
       sessionId,
       agent: journal.identity.agent,
@@ -224,8 +244,15 @@ export class StructuredAgentSessionRequestFailures {
           if (!this.current(sessionId, source)) {
             return null
           }
-          if (death && words) {
-            Object.assign(death, await words)
+          if (death?.duringStartup) {
+            words ??= this.deps.wordsContext?.(sessionId)
+            if (words) {
+              Object.assign(death, await words)
+            }
+          }
+          if (recoveredExit) {
+            // The adapter supplied this exit's reason with its fence and time.
+            return this.current(sessionId, source) ? undefined : null
           }
           const snapshot = await reads.requestFailure(request.kind, request.id)
           return this.current(sessionId, source) ? snapshot : null

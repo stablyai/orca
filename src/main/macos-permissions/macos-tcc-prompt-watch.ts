@@ -69,23 +69,29 @@ export type TccPromptWatchOptions = {
   restartDelayMs?: number
 }
 
-// log stream ignores parent death; stdin EOF makes the wrapper terminate it.
-// Preserve stdin on fd 3 because sh backgrounds async lists with /dev/null; arm the trap before forking.
+// log stream ignores parent death; stdin EOF makes the single wrapper shell terminate it.
+// Redirect the wrapper's stdout to /dev/null after handing the pipe to log stream so log exit triggers stdout EOF in main.
 // Disable inherited errexit/nounset so EOF and early signals still reach cleanup.
 const LOG_STREAM_WRAPPER_SCRIPT = `set +eu
-exec 3<&0
+exec 4>&1 >/dev/null
 log_pid=
 term=
 trap 'term=1; [ -n "$log_pid" ] && kill "$log_pid" 2>/dev/null' TERM INT HUP
-/usr/bin/log stream --predicate "$1" --info --style compact </dev/null 3<&- &
+/usr/bin/log stream --predicate "$1" --info --style compact </dev/null >&4 4>&- &
 log_pid=$!
-[ -n "$term" ] && kill "$log_pid" 2>/dev/null
-{ read -r _ <&3; kill "$log_pid" 2>/dev/null; } &
-reader_pid=$!
+exec 4>&-
+if [ -n "$term" ]; then
+  kill "$log_pid" 2>/dev/null
+else
+  read -r _
+  kill "$log_pid" 2>/dev/null
+fi
+# A kill landing in log's fork-to-exec window is dropped; re-kill after the window closes.
+# log_pid is unreaped (wait comes after), so it cannot be recycled.
+sleep 0.2
+kill "$log_pid" 2>/dev/null
 wait "$log_pid"
-status=$?
-kill "$reader_pid" 2>/dev/null
-exit "$status"`
+exit "$?"`
 
 function spawnDefaultLogStream(): LogStreamChild {
   // Filter within logd to avoid streaming routine TCC traffic into main.
@@ -121,6 +127,8 @@ export class MacosTccPromptWatch {
     child.on('exit', () => this.handleUnexpectedTermination(child))
     this.reader = createInterface({ input: child.stdout })
     this.reader.on('line', (line) => this.handleLine(line))
+    // Single-shell wrapper closes its own stdout after spawning log stream, so stdout EOF signals log exit.
+    this.reader.on('close', () => this.handleUnexpectedTermination(child))
   }
 
   private handleUnexpectedTermination(child: LogStreamChild): void {
@@ -156,11 +164,12 @@ export class MacosTccPromptWatch {
       clearTimeout(this.restartTimer)
       this.restartTimer = null
     }
+    const child = this.child
+    this.child = null
     this.reader?.close()
     this.reader = null
     // Closing stdout does not stop log stream; terminate it explicitly.
-    this.child?.kill('SIGTERM')
-    this.child?.stdin.destroy()
-    this.child = null
+    child?.kill('SIGTERM')
+    child?.stdin.destroy()
   }
 }
