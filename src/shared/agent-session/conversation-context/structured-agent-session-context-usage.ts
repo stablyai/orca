@@ -5,7 +5,8 @@ import {
   type AgentSessionContextUsage,
   type AgentSessionContextUsageCategory,
   type AgentSessionContextUsed,
-  type AgentSessionContextWindow
+  type AgentSessionContextWindow,
+  type AgentSessionTokenUsage
 } from './agent-session-context-usage'
 import type { AgentJournalRenderItem } from '../journal/agent-session-journal-types'
 import type { AgentSessionOptionsResult } from '../options/protocol/agent-session-options-result'
@@ -16,6 +17,7 @@ import {
 } from './agent-session-context-clear'
 
 export type StructuredAgentContextUsage = {
+  tokenUsage?: { scope: 'session' | 'response'; counts: AgentSessionTokenUsage }
   usedTokens: number
   windowTokens: number
   /** Rounded and unclamped, so an over-limit session reads above 100. */
@@ -96,6 +98,9 @@ function summarizeStructuredAgentContextFacts({
   if (fact?.kind === 'report') {
     return {
       usedTokens: fact.usedTokens,
+      ...(fact.totalUsage
+        ? { tokenUsage: { scope: 'session' as const, counts: fact.totalUsage } }
+        : {}),
       windowTokens: fact.windowTokens,
       percentage: fact.percentage,
       estimated: false,
@@ -113,6 +118,7 @@ function summarizeStructuredAgentContextFacts({
   const usedTokens = contextTokensFromUsage(fact.usage)
   return {
     usedTokens,
+    tokenUsage: { scope: 'response', counts: fact.usage },
     windowTokens: window.tokens,
     percentage: Math.round((usedTokens / window.tokens) * 100),
     estimated: true,

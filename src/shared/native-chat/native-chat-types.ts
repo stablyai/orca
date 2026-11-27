@@ -13,7 +13,10 @@ import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskRunState
 } from '../agent-session/background-tasks/agent-session-background-task-wire'
-import type { AgentSessionTokenUsage } from '../agent-session/conversation-context/agent-session-context-usage'
+import type {
+  AgentSessionTokenUsage,
+  AgentSessionContextUsage
+} from '../agent-session/conversation-context/agent-session-context-usage'
 import type { AgentSessionOrcaStop } from '../agent-session/lifecycle/stopping/agent-session-orca-stop'
 import type { AgentSessionFailureFact } from '../agent-session/failures/agent-session-failure'
 import type {
@@ -260,6 +263,7 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   provider?: string
   /** On assistant responses whose accounting reflects the prompt the model read. */
   usage?: AgentSessionTokenUsage
+  usageContext?: AgentSessionContextUsage
   /** Explicit turn key overrides differing ids for turn deduplication. */
   turnId?: string
   /** Provider conversation-tree predecessor id; older hosts omit it. */

@@ -13,16 +13,18 @@ const WindowTokens = z.number().finite().positive()
 const CapturedAt = z.number().finite()
 const ModelId = z.string().min(1).max(MAX_CONTEXT_MODEL_ID_CHARS)
 
-const TokenUsage = z.object({
+export const AgentSessionTokenUsageSchema = z.object({
   inputTokens: TokenCount,
   cacheCreationInputTokens: TokenCount,
   cacheReadInputTokens: TokenCount,
   outputTokens: TokenCount
 })
+const TokenUsage = AgentSessionTokenUsageSchema
 
 const Used = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('report'),
+    totalUsage: TokenUsage.optional(),
     model: ModelId,
     usedTokens: TokenCount,
     windowTokens: WindowTokens,

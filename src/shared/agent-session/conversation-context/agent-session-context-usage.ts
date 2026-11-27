@@ -29,6 +29,8 @@ export type AgentSessionContextUsageCategory = {
 
 /** The provider's own `/context` answer. */
 export type AgentSessionContextReport = {
+  /** Cumulative provider accounting for this thread, including cached input. */
+  totalUsage?: AgentSessionTokenUsage
   /** Model the report was measured for. */
   model: string
   usedTokens: number

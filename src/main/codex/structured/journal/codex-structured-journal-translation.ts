@@ -251,6 +251,16 @@ function createCodexTranslation(
         event.method === CODEX_TOKEN_USAGE_METHOD &&
         event.threadId === (deps.primaryThreadId?.() ?? null)
       ) {
+        const usageAdmission = items.tokenUsage.record(
+          deps.sink,
+          event.threadId,
+          readCodexTurnId(event.params) ?? activeTurns.current(event.threadId),
+          event.params,
+          deps.now?.() ?? Date.now()
+        )
+        if (!usageAdmission.accepted) {
+          return usageAdmission
+        }
         recordCodexContextUsage({
           sink: deps.sink,
           activeTurns,

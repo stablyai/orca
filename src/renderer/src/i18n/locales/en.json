@@ -22204,6 +22204,14 @@
         "unresolved": "Couldn't resolve {{value0}} in this workspace",
         "folderUnavailable": "This computer can't open the folder {{value0}}"
       },
+      "tokenUsage": {
+        "title": "Tokens",
+        "session": "Session tokens",
+        "response": "Last response tokens",
+        "used": "Used",
+        "input": "In",
+        "output": "Out"
+      },
       "contextUsage": {
         "label": "Context {{used}} of {{window}} tokens, {{percent}}% used",
         "title": "Context",

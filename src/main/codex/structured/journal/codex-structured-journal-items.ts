@@ -1,4 +1,5 @@
 import { CodexTurnOrdinals } from './codex-turn-ordinals'
+import { CodexMessageTokenUsage } from './codex-message-token-usage'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalRowAttribution } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { requiresTerminalSettlement } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-terminal-settlement'
@@ -42,6 +43,7 @@ import type { CodexRowAttribution } from '../background-work/codex-subagent-link
 import { codexFileChangeApprovalDetail } from '../prompts/codex-file-change-approval-detail'
 
 export class CodexJournalItems {
+  readonly tokenUsage = new CodexMessageTokenUsage()
   readonly ordinals = new CodexTurnOrdinals()
   readonly activeItems = new Map<string, CodexActiveJournalItem>()
   readonly streams
@@ -158,6 +160,7 @@ export class CodexJournalItems {
       return { handled: true, admission }
     }
     if (event.method === 'item/completed') {
+      this.tokenUsage.remember(event, turnId, identity, translated.body, source)
       this.streams.forget(event.threadId, item.id)
       this.activeItems.delete(itemKey)
     } else {
@@ -171,6 +174,7 @@ export class CodexJournalItems {
   }
 
   dispose(): void {
+    this.tokenUsage.clear()
     this.streams.dispose()
     this.identities.clear()
     this.details.clear()

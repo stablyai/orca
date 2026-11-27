@@ -1,5 +1,5 @@
-import type { AgentJournalBotMessageFields } from './agent-journal-bot-message-fields'
-import type { AgentJournalTypedBy } from './agent-journal-typed-by'
+import type { AgentJournalMessageItem } from './agent-session-message-item'
+export type { AgentJournalMessageItem } from './agent-session-message-item'
 import type { AgentSessionForkedFromMark } from '../conversation-naming/agent-session-fork-name'
 import type {
   AgentJournalApprovalMatchedAskRule,
@@ -17,8 +17,6 @@ import type { AgentSessionQuestionAnswer } from '../requests/prompts/agent-sessi
 import type { AgentJournalTurnOutcome } from '../../agent-status/lifecycle/agent-turn-outcome'
 import type { NativeChatToolMetadata } from '../../native-chat/tools/native-chat-tool-identity'
 import type { AgentSessionContextUsage } from '../conversation-context/agent-session-context-usage'
-import type { NativeChatBlock, NativeChatRole } from '../../native-chat/native-chat-types'
-import type { AgentMessageSource } from './agent-session-message-source'
 import type { AgentSessionExecutionOptions } from '../options/protocol/agent-session-execution-options'
 import type { AgentJournalOrcaCardItem } from '../../agent-journal-orca-card-items'
 export type {
@@ -67,31 +65,6 @@ export const AGENT_JOURNAL_MESSAGE_STATES = ['running', 'completed'] as const
 export type AgentJournalMessageState = (typeof AGENT_JOURNAL_MESSAGE_STATES)[number]
 
 export type AgentJournalSkillRef = { name: string; path: string }
-
-export type AgentJournalMessageItem = {
-  kind: 'message'
-  role: NativeChatRole
-  blocks: NativeChatBlock[]
-  /** Absent ⇒ an ordinary turn input. `goal` ⇒ the text was set as the thread
-   *  goal's objective, and the provider pursues it without a turn of its own. */
-  sentAs?: AgentJournalMessageSendMode
-  /** Present on a conversation command the user sent, such as `/compact`. The text is what the
-   *  user typed; this names the command and its instructions so no reader parses it. Open like
-   *  `sentAs`. */
-  command?: { name: string; instructions?: string }
-  /** The skills the user picked from the menu for this message, by the file the agent selects
-   *  each by. The text still carries each `$name`; agents that select by name ignore this. */
-  skills?: AgentJournalSkillRef[]
-  /** Present on a message another agent sent through Orca; absent, the person's. Host-written,
-   *  outside every fingerprint, never sent to the provider. */
-  from?: AgentMessageSource
-  /** Where a sent message was typed, from its transport; host-written like `from`. */
-  typedBy?: AgentJournalTypedBy
-  /** Reasoning rows only: absence means unknown, never live. observedAt marks the start. */
-  state?: AgentJournalMessageState
-  /** Host-observed message/turn/stream end; absent for history or crash recovery without a live end, so no duration is claimed. */
-  completedAt?: number
-} & AgentJournalBotMessageFields
 
 export type AgentJournalToolCallState = 'running' | 'completed' | 'failed'
 

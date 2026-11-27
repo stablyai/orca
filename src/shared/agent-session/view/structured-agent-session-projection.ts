@@ -110,6 +110,10 @@ export function projectStructuredItemToNativeChat(
         // A send mode this build cannot name renders as an ordinary message.
         ...(sentAs !== undefined && isAgentJournalMessageSendMode(sentAs) ? { sentAs } : {}),
         ...lifecycle,
+        ...(item.body.kind === 'message' && item.body.usage ? { usage: item.body.usage } : {}),
+        ...(item.body.kind === 'message' && item.body.usageContext
+          ? { usageContext: item.body.usageContext }
+          : {}),
         ...(command ? { command } : {}),
         ...nativeChatMessageSenderFields(item.body, projected.role),
         ...(projected.drawnMarkdown !== undefined

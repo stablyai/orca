@@ -50,6 +50,12 @@ const MAX_CONTEXT_PART_BYTES: Record<keyof AgentSessionContextUsage, number> = (
     window: { tokens: number, capturedAt: number },
     used: {
       kind: 'report',
+      totalUsage: {
+        inputTokens: number,
+        cacheCreationInputTokens: number,
+        cacheReadInputTokens: number,
+        outputTokens: number
+      },
       model: text(MAX_CONTEXT_MODEL_ID_CHARS),
       usedTokens: number,
       windowTokens: number,

@@ -46,6 +46,12 @@ import {
 
 type TimelineItemResolution =
   | {
+      kind: 'message-usage'
+      identity: AgentJournalItemIdentity
+      usage: NonNullable<AgentJournalMessageItem['usage']>
+      usageContext?: AgentJournalMessageItem['usageContext']
+    }
+  | {
       kind: 'text-snapshot'
       identity: AgentJournalItemIdentity
       body: AgentJournalMessageItem
@@ -146,6 +152,21 @@ function resolveTimelineItem(
   reservedBytes: number
 ): JournalTimelineItemResult {
   switch (resolution.kind) {
+    case 'message-usage': {
+      const held = view.item(agentJournalItemKey(resolution.identity))
+      if (held?.body.kind !== 'message' || held.body.role !== 'assistant') {
+        return nothing
+      }
+      return resolved({
+        identity: resolution.identity,
+        body: {
+          ...held.body,
+          usage: resolution.usage,
+          ...(resolution.usageContext ? { usageContext: resolution.usageContext } : {})
+        },
+        ...(held.turnScope ? { turnScope: held.turnScope } : {})
+      })
+    }
     case 'literal':
       return resolved({ identity: resolution.identity, body: resolution.body })
     case 'acp-loss-warning': {

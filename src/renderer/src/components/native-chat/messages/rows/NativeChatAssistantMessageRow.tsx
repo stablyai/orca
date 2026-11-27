@@ -18,6 +18,7 @@ import {
   NativeChatPlainCodeBlock
 } from '../../markdown/code/NativeChatCodeBlock'
 import { NativeChatAgentControls } from '../actions/NativeChatAgentControls'
+import { NativeChatMessageTokenUsage } from '../../usage/NativeChatMessageTokenUsage'
 import { NativeChatImageAttachments } from '../../media/images/NativeChatImageAttachments'
 import { NativeChatForkAction } from '../actions/NativeChatForkAction'
 import type { useNativeChatWorkRun } from '../../tools/runs/use-native-chat-work-run'
@@ -146,6 +147,9 @@ export function NativeChatAssistantMessageRow({
             actionsHang && '-mb-1'
           )}
         />
+      ) : null}
+      {!isSystem && !streaming && (shownWords || hasImages) ? (
+        <NativeChatMessageTokenUsage message={message} />
       ) : null}
     </div>
   )
