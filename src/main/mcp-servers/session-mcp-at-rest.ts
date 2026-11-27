@@ -12,7 +12,7 @@ import { acpLaunchSpecFor } from '../acp/launch/acp-launch-registry'
 import { botOwnTools } from '../bots/bot-tools-file'
 import { claudeConfigDirEnvPatch } from '../claude/structured/launch/claude-config-dir-pin'
 import { agentOwnMcpConfig } from './agent-own-mcp-server-names'
-import type { AgentMcpConfigServer } from './agent-configs/agent-mcp-config-read'
+import type { AgentMcpConfigName } from './agent-configs/agent-mcp-config-read'
 import { isMcpAgentBlocked } from './mcp-agent-problems'
 import { mcpHostListFolder } from './mcp-host-list-folder'
 import { mcpServersForLaunch } from './mcp-host-list-launch'
@@ -23,7 +23,7 @@ export type KnownMcpLaunch = {
   agent: string
   workspaceId: string
   /** Where its next launch runs; null when unknown, so no folder's files are read. */
-  cwd: string | null
+  cwd: () => Promise<string | null>
   /** The account folder its next turn launches on. */
   accountHome: string | null
   /** Its agent is running, or starting. */
@@ -31,6 +31,8 @@ export type KnownMcpLaunch = {
   /** The agent answers `/mcp` itself. */
   manages: boolean
 }
+
+type RowStatus = 'not-started' | 'unreported'
 
 /**
  * The agent's answer with the rows Orca knows. An agent at rest answers `not-running` (Claude) or
@@ -44,18 +46,19 @@ export async function withKnownSessionMcpServers(
   try {
     if (answer.status === 'ok') {
       // An agent at rest lists its own config, never Orca's servers its launch would add.
-      return launch.running
-        ? answer
-        : { ...answer, servers: [...answer.servers, ...(await orcaRows(launch, answer.servers))] }
-    }
-    if (answer.status === 'not-running' || (answer.status === 'unsupported' && !launch.manages)) {
-      const resting = answer.status === 'not-running' || !launch.running
-      const servers = await knownRows(launch, resting ? 'not-started' : 'unreported')
-      if (resting) {
-        return servers.length > 0 ? { status: 'not-running', servers } : answer
+      if (launch.running) {
+        return answer
       }
-      return { status: 'ok', servers }
+      const taken = new Set(answer.servers.map(({ name }) => name))
+      return { ...answer, servers: [...answer.servers, ...(await orcaRows(launch, taken))] }
     }
+    const listsNothing = answer.status === 'unsupported' && !launch.manages
+    if (answer.status !== 'not-running' && !listsNothing) {
+      return answer
+    }
+    const resting = answer.status === 'not-running' || !launch.running
+    const servers = await knownRows(launch, resting ? 'not-started' : 'unreported')
+    return { status: resting ? 'not-running' : 'ok', servers }
   } catch (error) {
     console.warn('[mcp-servers] the chat’s servers could not be read', error)
   }
@@ -64,28 +67,30 @@ export async function withKnownSessionMcpServers(
 
 async function knownRows(
   launch: KnownMcpLaunch,
-  status: 'not-started' | 'unreported'
+  status: RowStatus
 ): Promise<AgentSessionMcpServer[]> {
   const env =
     launch.agent === 'claude' && launch.accountHome
       ? { ...process.env, ...claudeConfigDirEnvPatch(launch.accountHome) }
       : process.env
-  const own = await agentOwnMcpConfig(launch.agent, env, launch.cwd)
-  const taken = own.names.map((name) => ({ name }))
-  return [
-    ...(await orcaRows(launch, taken, status)),
-    ...own.servers.map((entry) => ownRow(launch.agent, entry, status))
-  ]
+  const config = await agentOwnMcpConfig(launch.agent, env, await launch.cwd())
+  const orca = await orcaRows(launch, new Set(config.names), new Set(config.bridged), status)
+  return [...orca, ...config.own.map((entry) => ownRow(launch.agent, entry, status))]
 }
 
-/** The host list's servers the launch gets, less those `taken` by the agent's own, as delivery skips them. */
+/**
+ * The host list's servers the chat gets: those `taken` by the agent's own names are skipped, as
+ * delivery skips them, and those `bridged` reach it through Orca's entries in its own files. A
+ * running agent has what its launch delivered.
+ */
 async function orcaRows(
   launch: KnownMcpLaunch,
-  taken: readonly { name: string }[],
-  status: 'not-started' | 'unreported' = 'not-started'
+  taken: ReadonlySet<string>,
+  bridged: ReadonlySet<string> = new Set(),
+  status: RowStatus = 'not-started'
 ): Promise<AgentSessionMcpServer[]> {
-  // A running agent got what its launch decided; one that ignores a session's servers got none.
   const delivered = launch.running ? sessionHostMcpDelivered(launch.sessionId) : undefined
+  // Its settings refuse them, or it ignores a session's servers.
   if (
     delivered === 'ignored' ||
     isMcpAgentBlocked(launch.agent) ||
@@ -96,28 +101,33 @@ async function orcaRows(
   const folder = mcpHostListFolder()
   const key = mcpServerWorkspaceKeyOf(launch.workspaceId)
   const { servers } = await mcpServersForLaunch(launch.agent, { key }, folder)
-  const skip = new Set(taken.map(({ name }) => name))
-  const kept = servers.filter((server) =>
-    delivered ? delivered.has(server.name) : !skip.has(server.name)
+  const signIns = new Map(
+    botOwnTools(
+      servers.filter(({ name }) => !taken.has(name) || bridged.has(name)),
+      folder
+    ).map(({ name, signIn }) => [name, signIn])
   )
-  return botOwnTools(kept, folder).map(({ name, signIn }) =>
-    row(name, ORCA_MCP_SOURCE, signIn && signIn.state !== 'signed-in' ? 'needs-auth' : status)
-  )
+  // A running agent keeps what it launched with until it restarts, whatever the list says now.
+  const names = delivered ? [...new Set([...delivered, ...bridged])] : [...signIns.keys()]
+  return names.map((name) => {
+    const signIn = signIns.get(name)
+    return row(
+      name,
+      ORCA_MCP_SOURCE,
+      signIn && signIn.state !== 'signed-in' ? 'needs-auth' : status
+    )
+  })
 }
 
 function ownRow(
   agent: string,
-  { configName, disabled, source }: AgentMcpConfigServer,
-  status: 'not-started' | 'unreported'
+  { name, scope, projectPath, disabled }: AgentMcpConfigName,
+  status: RowStatus
 ): AgentSessionMcpServer {
   // Claude keeps a folder's own servers in its user file: its `/mcp` calls them local.
-  const scope =
-    source.scope === 'project'
-      ? 'project'
-      : agent === 'claude' && source.projectPath
-        ? 'local'
-        : 'user'
-  return row(configName, scope, disabled ? 'disabled' : status)
+  const source =
+    scope === 'project' ? 'project' : agent === 'claude' && projectPath ? 'local' : 'user'
+  return row(name, source, disabled ? 'disabled' : status)
 }
 
 const row = (

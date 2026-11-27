@@ -6,7 +6,7 @@ import { resolve } from 'node:path'
 import { getAppEnvironment, hasAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import {
   readAgentMcpServerNames,
-  type AgentMcpConfigServer
+  type AgentMcpConfigName
 } from './agent-configs/agent-mcp-config-read'
 import { isOrcaOwnedAgentMcpServer } from '../../shared/mcp/agent-mcp-config-entry'
 import { mcpHostServerNameOfEntry } from './agent-files/mcp-agent-file-entry'
@@ -23,11 +23,14 @@ export type AgentOwnMcpConfig = {
   names: string[]
   /** Host-list servers Orca's own bridge entries in its files already serve. */
   bridged: string[]
-  /** The entries Orca can read that aren't its own bridges. */
-  servers: AgentMcpConfigServer[]
+  /** The agent's own servers here, Orca's bridges left out, as its `/mcp` would list them. */
+  own: AgentMcpConfigName[]
 }
 
-const NO_CONFIG: AgentOwnMcpConfig = { names: [], bridged: [], servers: [] }
+const NO_CONFIG: AgentOwnMcpConfig = { names: [], bridged: [], own: [] }
+
+const entryKey = (name: string, scope: string, projectPath: string | undefined): string =>
+  JSON.stringify([scope, projectPath ?? null, name])
 
 export async function agentOwnMcpServerNames(
   agent: string,
@@ -55,11 +58,11 @@ export async function agentOwnMcpConfig(
   // merge a same-named server into it. The agent loads Orca's own bridge entries too: one this Orca
   // keeps for a server (Grok's, Cursor's and Droid's files) already serves it, so the session isn't
   // given it a second time.
-  const { names, servers } = await readAgentMcpServerNames(
-    configAgent,
-    context,
-    cwd === null ? {} : { projectPath: cwd }
-  )
+  // Claude's user file holds a block per folder it ever opened; only this one's is read.
+  const { names, servers } = await readAgentMcpServerNames(configAgent, context, {
+    ...(cwd === null ? {} : { projectPath: cwd }),
+    skipProject: (projectPath) => !inFolder({ projectPath })
+  })
   const userDataPath = hasAppEnvironment() ? getAppEnvironment().getPath('userData') : null
   const here = servers.filter(({ source }) => inFolder(source))
   const bridged = here.flatMap(({ configName, server }) => {
@@ -69,9 +72,23 @@ export async function agentOwnMcpConfig(
         : null
     return hostName && hostName !== configName ? [hostName] : []
   })
+  const parsed = new Map(
+    here.map((entry) => [
+      entryKey(entry.configName, entry.source.scope, entry.source.projectPath),
+      entry
+    ])
+  )
+  const own = new Map<string, AgentMcpConfigName>()
+  for (const entry of names.filter(inFolder)) {
+    const key = entryKey(entry.name, entry.scope, entry.projectPath)
+    const server = parsed.get(key)
+    if (!server || !isOrcaOwnedAgentMcpServer(server.server)) {
+      own.set(key, { ...entry, disabled: entry.disabled || server?.source.disabled === true })
+    }
+  }
   return {
     names: [...new Set(names.filter(inFolder).map(({ name }) => name))],
     bridged,
-    servers: here.filter(({ server }) => !isOrcaOwnedAgentMcpServer(server))
+    own: [...own.values()]
   }
 }

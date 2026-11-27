@@ -31,6 +31,16 @@ export type AgentMcpConfigSource = AgentMcpConfigLocation & {
 
 export type AgentMcpConfigServer = AgentMcpConfigEntry & { source: AgentMcpConfigSource }
 
+/** A name an agent's file holds, whether or not Orca can read its entry. */
+export type AgentMcpConfigName = {
+  name: string
+  scope: AgentMcpConfigLocation['scope']
+  /** Claude's per-folder servers in its user file. */
+  projectPath?: string
+  /** Switched off by a file-wide list (an entry's own flag shows on its server). */
+  disabled: boolean
+}
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
@@ -186,9 +196,9 @@ export async function readAgentMcpServers(
 export async function readAgentMcpServerNames(
   agent: McpConfigAgent,
   context: AgentMcpConfigContext,
-  options: { projectPath?: string } = {}
+  options: { projectPath?: string; skipProject?: (projectPath: string) => boolean } = {}
 ): Promise<{
-  names: { name: string; projectPath?: string }[]
+  names: AgentMcpConfigName[]
   servers: AgentMcpConfigServer[]
 }> {
   const locations = await agentMcpConfigLocations(agent, context, options.projectPath)
@@ -202,12 +212,14 @@ export async function readAgentMcpServerNames(
         }
         return { names: [], servers: [] }
       }
-      const blocks = agentMcpServerBlocks(location, parsed, () => false)
+      const blocks = agentMcpServerBlocks(location, parsed, options.skipProject ?? (() => false))
       return {
         names: blocks.flatMap((block) =>
           Object.keys(record(valueAtKeyPath(parsed, block.path)) ?? {}).map((name) => ({
             name,
-            ...(block.projectPath ? { projectPath: block.projectPath } : {})
+            scope: location.scope,
+            ...(block.projectPath ? { projectPath: block.projectPath } : {}),
+            disabled: block.disabledNames?.has(name) ?? false
           }))
         ),
         servers: serversInBlocks(location, parsed, blocks, true)

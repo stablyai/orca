@@ -10,7 +10,8 @@ import type { AgentSessionMcpPanelState } from '../../../../../src/shared/agent-
 import {
   agentSessionMcpRowFailure,
   agentSessionMcpServerDisplayName,
-  groupAgentSessionMcpServers
+  groupAgentSessionMcpServers,
+  ORCA_MCP_SOURCE
 } from '../../../../../src/shared/agent-session/view/agent-session-mcp-server-presentation'
 import { MobilePendingButton } from '../../../components/controls/MobilePendingButton'
 import { MobileSwitch } from '../../../components/controls/MobileSwitch'
@@ -155,6 +156,7 @@ function McpTrayBody(props: MobileNativeChatMcpPanelProps & { t: Translate }) {
 function McpServerList(props: MobileNativeChatMcpPanelProps & { t: Translate }) {
   const { servers, t } = props
   const groups = groupAgentSessionMcpServers(servers)
+  const withOrca = groups.some((group) => group.source === ORCA_MCP_SOURCE)
   return (
     <ScrollView
       style={[styles.list, { maxHeight: props.listMaxHeight }]}
@@ -164,8 +166,8 @@ function McpServerList(props: MobileNativeChatMcpPanelProps & { t: Translate }) 
     >
       {groups.map((group) => (
         <View key={group.source ?? ''}>
-          {/* Servers the agent reports no source for are its own; beside other groups, say whose. */}
-          {group.source === null && groups.length === 1 ? null : (
+          {/* Servers the agent reports no source for are its own; under Orca's, say whose. */}
+          {group.source === null && !withOrca ? null : (
             <Text style={[trayStripStyles.groupLabel, styles.groupLabel]}>
               {group.source === null ? props.agentLabel : mobileMcpSourceLabel(group.source, t)}
             </Text>

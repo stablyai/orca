@@ -47,15 +47,14 @@ export const STRUCTURED_AGENT_SESSION_MCP_METHODS = [
       if (!knows) {
         return answer
       }
-      const cwd =
-        agentSessionPinnedLaunchDirectory(saved) ??
-        (await host.deps.resolveWorkspacePath?.(saved.location.workspaceId).catch(() => null)) ??
-        null
       return withKnownSessionMcpServers(answer, {
         sessionId,
         agent: saved.provider,
         workspaceId: saved.location.workspaceId,
-        cwd,
+        cwd: async () =>
+          agentSessionPinnedLaunchDirectory(saved) ??
+          (await host.deps.resolveWorkspacePath?.(saved.location.workspaceId).catch(() => null)) ??
+          null,
         accountHome: agentSessionAccountHomePath(record.accountHome),
         running,
         manages: manage !== undefined

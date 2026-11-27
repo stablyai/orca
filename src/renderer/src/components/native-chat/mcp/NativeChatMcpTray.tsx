@@ -249,13 +249,9 @@ function McpTrayList({
       )}
     >
       {groups.map((group) => {
-        // Servers the agent reports no source for are its own; beside other groups, say whose.
+        // Servers the agent reports no source for are its own; under Orca's, say whose.
         const label =
-          group.source !== null
-            ? mcpSourceLabel(group.source, t)
-            : groups.length > 1
-              ? agentLabel
-              : undefined
+          group.source !== null ? mcpSourceLabel(group.source, t) : tall ? agentLabel : undefined
         return (
           <div key={group.source ?? ''}>
             {label ? (
