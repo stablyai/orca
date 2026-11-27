@@ -7,16 +7,19 @@ import type {
 
 type ReadOrchestration = () => AgentStatusOrchestrationContext | undefined
 
-/** A dispatched worker's finished turn is news for the agent it reports to; only a stop that needs the person (a prompt) reaches them. A context with no parent (a coordinator's self-dispatch) is the person's own agent. */
+/** A context with no parent (a coordinator's self-dispatch) is the person's own agent. */
+export function reportsToCoordinator(
+  orchestration: AgentStatusOrchestrationContext | undefined
+): boolean {
+  return Boolean(orchestration?.parentPaneKey || orchestration?.parentTerminalHandle)
+}
+
+/** A dispatched worker's finished turn is news for the agent it reports to; only a stop that needs the person (a prompt) reaches them. */
 export function isCoordinatorOnlyNews(
   agentState: AgentStatusState | undefined,
   readOrchestration: ReadOrchestration
 ): boolean {
-  if (agentState !== 'done') {
-    return false
-  }
-  const orchestration = readOrchestration()
-  return Boolean(orchestration?.parentPaneKey || orchestration?.parentTerminalHandle)
+  return agentState === 'done' && reportsToCoordinator(readOrchestration())
 }
 
 /** The same rule for a chat edge: a failed turn that leaves a prompt waiting still needs the person. */

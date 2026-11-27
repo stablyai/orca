@@ -34,6 +34,8 @@ export type AgentSessionPromptAttention = {
   promptId: string
   /** Execution host's clock at journal commit. */
   raisedAt: number
+  /** Every prompt pending at this commit is a question, none an approval. Older hosts omit it. */
+  asksOnlyQuestions?: true
 }
 
 /** Live edges only, no snapshots/replay: drop missed completions/prompts and baseline on reconnect so no durable queue can strand. */

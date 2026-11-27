@@ -41,7 +41,16 @@ import {
 import { isBotAttentionSilenced } from '../../../../../../shared/bot-notifications'
 import { isWorktreeNotificationDeliveryMuted } from '@/attention/worktree-notification-mute'
 import { canonicalOrchestrationForRow } from '@/runtime/agent-orchestration/visible-agent-orchestration'
-import { isCoordinatorOnlyChatNews } from '../../../../../../shared/orchestration/workers/dispatched-worker-attention'
+import {
+  isCoordinatorOnlyChatNews,
+  reportsToCoordinator
+} from '../../../../../../shared/orchestration/workers/dispatched-worker-attention'
+import {
+  botSpawnedChatNews,
+  isBotSpawnedAgent,
+  isBotSpawnedAgentNewsMuted
+} from '../../../../../../shared/bots/bot-spawned-agent-mute'
+import { readBotWorkspacePlace } from '@/attention/bot-spawned-agent'
 import { getNotificationWorkspaceLabels } from '@/attention/notification-workspace-labels'
 import { createStructuredAttentionSurface } from './structured-attention-surface'
 import type { StructuredTab } from '../status/structured-agent-session-tabs'
@@ -94,6 +103,7 @@ function dispatchStructuredAttention(
   const attentionKey = agentSessionAttentionKey(edge)
   const state = useAppStore.getState()
   const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+  const readOrchestration = () => canonicalOrchestrationForRow(state, paneKey)
   const decision = resolveAgentAttention(
     {
       // Address the renderer tab’s workspace; host scope ids may name different remote workspaces.
@@ -103,9 +113,18 @@ function dispatchStructuredAttention(
       settlesTurn: true,
       // Host journal edges prove fresh activity even without a rendered transcript; still require current tab ownership.
       hasFreshActivityEvidence: true,
-      coordinatorOnlyNews: isCoordinatorOnlyChatNews(edge, news.agentState, () =>
-        canonicalOrchestrationForRow(state, paneKey)
-      )
+      coordinatorOnlyNews:
+        isCoordinatorOnlyChatNews(edge, news.agentState, readOrchestration) ||
+        // A bot group member is a bot itself, whatever room it talks in.
+        (botHome === null &&
+          isBotSpawnedAgentNewsMuted(
+            state.settings?.notifications,
+            botSpawnedChatNews(edge, news.agentState),
+            () =>
+              isBotSpawnedAgent(readBotWorkspacePlace(state, tab.worktreeId), () =>
+                reportsToCoordinator(readOrchestration())
+              )
+          ))
     },
     createStructuredAttentionSurface(state)
   )

@@ -2,7 +2,15 @@ import { useEffect, useRef, useState } from 'react'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { Button } from '../../ui/button'
-import { BellRing, Bot, EyeOff, MessageCircleQuestion, Siren } from 'lucide-react'
+import {
+  BellOff,
+  BellRing,
+  Bot,
+  EyeOff,
+  MessageCircleQuestion,
+  ShieldAlert,
+  Siren
+} from 'lucide-react'
 import { useAppStore } from '@/store/index'
 import {
   MacNotificationPermissionCard,
@@ -216,6 +224,40 @@ export function NotificationsPane({
           onToggle={() =>
             void updateNotificationSettings({
               notifyHiddenWorkspaces: !notificationSettings.notifyHiddenWorkspaces
+            })
+          }
+        />
+
+        <NotificationSettingToggle
+          icon={<BellOff className="size-4" />}
+          label={t('settings.notifications.botSpawnedAgents.label', 'Mute agents started by bots')}
+          description={t(
+            'settings.notifications.botSpawnedAgents.description',
+            "Agents a bot starts report to that bot, so they show no unread dot and send no notifications to this computer when they finish or ask a question. The bot's own chats still notify you."
+          )}
+          checked={notificationSettings.muteBotSpawnedAgents}
+          onToggle={() =>
+            void updateNotificationSettings({
+              muteBotSpawnedAgents: !notificationSettings.muteBotSpawnedAgents
+            })
+          }
+        />
+
+        <NotificationSettingToggle
+          icon={<ShieldAlert className="size-4" />}
+          label={t(
+            'settings.notifications.botSpawnedPermissionPrompts.label',
+            'Also mute their permission prompts'
+          )}
+          description={t(
+            'settings.notifications.botSpawnedPermissionPrompts.description',
+            'A muted agent waiting on a permission stays stuck until its bot or you notice.'
+          )}
+          checked={notificationSettings.muteBotSpawnedPermissionPrompts}
+          disabled={!notificationSettings.muteBotSpawnedAgents}
+          onToggle={() =>
+            void updateNotificationSettings({
+              muteBotSpawnedPermissionPrompts: !notificationSettings.muteBotSpawnedPermissionPrompts
             })
           }
         />

@@ -2055,6 +2055,18 @@
       "finishFailed": "Orca could not do that."
     },
     "notifications": {
+      "botSpawnedAgents": {
+        "label": "Mute agents started by bots",
+        "description": "Agents a bot starts report to that bot, so they show no unread dot and send no notifications to this computer when they finish or ask a question. The bot's own chats still notify you.",
+        "search": {
+          "bot": "bot",
+          "worker": "worker"
+        }
+      },
+      "botSpawnedPermissionPrompts": {
+        "label": "Also mute their permission prompts",
+        "description": "A muted agent waiting on a permission stays stuck until its bot or you notice."
+      },
       "perfNotices": {
         "disk": {
           "label": "Disk almost full",

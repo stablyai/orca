@@ -39,6 +39,10 @@ export type NotificationSettings = {
   mutedNotificationSourceIds: NotificationSourceId[]
   /** Off silences every notification from a workspace the sidebar's Filters switches hide. Local only. */
   notifyHiddenWorkspaces: boolean
+  /** Agents a bot started report to that bot: no unread, banner, sound or push, except permission prompts. */
+  muteBotSpawnedAgents: boolean
+  /** With `muteBotSpawnedAgents`, their permission prompts go quiet too. */
+  muteBotSpawnedPermissionPrompts: boolean
 }
 
 /** The switches a host applies to its own phone pushes; sounds and per-source mutes stay with each client. */

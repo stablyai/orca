@@ -127,6 +127,38 @@ export const getNotificationsPaneSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
+      'settings.notifications.botSpawnedAgents.label',
+      'Mute agents started by bots'
+    ),
+    description: translate(
+      'settings.notifications.botSpawnedAgents.description',
+      "Agents a bot starts report to that bot, so they show no unread dot and send no notifications to this computer when they finish or ask a question. The bot's own chats still notify you."
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.notifications.botSpawnedAgents.search.bot', 'bot'),
+      ...translateSearchKeyword('settings.notifications.botSpawnedAgents.search.worker', 'worker'),
+      ...translateSearchKeyword('auto.components.settings.notifications.search.mute', 'mute')
+    ]
+  },
+  {
+    title: translate(
+      'settings.notifications.botSpawnedPermissionPrompts.label',
+      'Also mute their permission prompts'
+    ),
+    description: translate(
+      'settings.notifications.botSpawnedPermissionPrompts.description',
+      'A muted agent waiting on a permission stays stuck until its bot or you notice.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.notifications.botSpawnedAgents.search.bot', 'bot'),
+      ...translateSearchKeyword(
+        'auto.components.settings.notifications.search.b8bf5471d1',
+        'permission'
+      )
+    ]
+  },
+  {
+    title: translate(
       'auto.components.settings.notifications.search.8eeee85a4f',
       'Suppress while focused'
     ),
