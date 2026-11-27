@@ -4,10 +4,17 @@
 // for it (`tool-relay` hello), and the two are spliced.
 import { randomUUID } from 'node:crypto'
 import { createServer, type Server, type Socket } from 'node:net'
+import { DaemonToolRelayKeptGrants } from './daemon-tool-relay-kept-grants'
 
 export const TOOL_RELAY_FRONT_HOLD_MS = 30_000
 export const TOOL_RELAY_FRONT_MAX_HELD = 64
 export const TOOL_RELAY_FRONT_MAX_PIPES = 256
+/**
+ * The front's share of the daemon's file descriptors, beside its terminals: two per pipe, one per
+ * held connection and the listener. Its caps must fit (a test checks); sizing it from the daemon's
+ * own descriptor limit is a follow-up.
+ */
+export const TOOL_RELAY_FRONT_FD_BUDGET = 640
 /** How long an answered connection may stay open for its peer to read the answer. */
 const ANSWER_LINGER_MS = 5_000
 
@@ -49,12 +56,20 @@ export class DaemonToolRelayFront {
   private readonly pipes = new Set<Pipe>()
   /** Control connections whose close already ends their serving. */
   private readonly watchedControls = new WeakSet<Socket>()
+  /** The grants of the agents this start keeps, for their relays' life. */
+  readonly kept = new DaemonToolRelayKeptGrants()
 
   constructor(
     /** The daemon start holding this front. */
     readonly daemonInstance: string,
-    private readonly holdMs = TOOL_RELAY_FRONT_HOLD_MS
+    private readonly holdMs = TOOL_RELAY_FRONT_HOLD_MS,
+    private readonly fdBudget = TOOL_RELAY_FRONT_FD_BUDGET
   ) {}
+
+  /** Descriptors the front holds now: the listener, one per held connection, two per pipe. */
+  get descriptorCount(): number {
+    return (this.server ? 1 : 0) + this.held.size + 2 * this.pipes.size
+  }
 
   /** This start's front port, listening from the first ask until the daemon exits. */
   open(): Promise<number> {
@@ -131,7 +146,8 @@ export class DaemonToolRelayFront {
     this.held.delete(frontConnectionId)
     clearTimeout(held.timer)
     const front = held.socket
-    if (this.pipes.size >= TOOL_RELAY_FRONT_MAX_PIPES) {
+    // The held socket is already counted; its pipe adds the app's.
+    if (this.pipes.size >= TOOL_RELAY_FRONT_MAX_PIPES || this.descriptorCount + 1 > this.fdBudget) {
       app.destroy()
       answerAndClose(front)
       return false
@@ -163,6 +179,7 @@ export class DaemonToolRelayFront {
   dispose(): void {
     this.disposed = true
     this.serving = null
+    this.kept.clear()
     for (const held of this.held.values()) {
       clearTimeout(held.timer)
       held.socket.destroy()
@@ -178,7 +195,12 @@ export class DaemonToolRelayFront {
 
   private accept(socket: Socket): void {
     socket.on('error', () => socket.destroy())
-    if (this.held.size >= TOOL_RELAY_FRONT_MAX_HELD || this.disposed) {
+    // The accepted socket is already open; past the budget it's answered and closed at once.
+    if (
+      this.held.size >= TOOL_RELAY_FRONT_MAX_HELD ||
+      this.descriptorCount + 1 > this.fdBudget ||
+      this.disposed
+    ) {
       answerAndClose(socket)
       return
     }

@@ -14,9 +14,6 @@ export type SecretStore = {
   /** Seals off the caller's thread where the host can; absent stores seal through encryptString. */
   encryptStringAsync?(plainText: string): Promise<Buffer>
   decryptString(cipher: Buffer): string
-  /** Opens off the caller's thread where the host can; on Linux it also works after a keyring
-   *  that was locked at startup is unlocked, which the synchronous call never sees. */
-  decryptStringAsync?(cipher: Buffer): Promise<string>
   /** Report weak/no protection separately from capability: marking weak backends unavailable would skip decryption
    * and hide existing credentials. Null means protected; a message describes the gap. */
   describeProtectionGap(): string | null

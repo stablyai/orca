@@ -3,7 +3,6 @@ import type { BotController } from './bot-controller'
 import type { BotLookAroundStore } from './bot-look-around-store'
 import { botOfSession } from './bot-session-tabs'
 import { botToolRelay, type BotToolRelay } from './tool-relay/bot-tool-relay'
-import { CREDENTIALS_LOCKED } from './tool-relay/bot-tool-relay-sign-in-answer'
 
 export type BotCallerRuntime = {
   bots: Pick<BotController, 'enabled' | 'list'>
@@ -32,14 +31,6 @@ export function botOfCaller(
 
 /** A token that names no bot now: its bot was deleted, or Orca restarted since its run started. */
 export const BOT_TOKEN_ENDED = 'This bot run’s Orca token has ended. Start a new chat with the bot.'
-
-/**
- * Why a token names no bot now: ended, or, while a kept token the keychain hasn't opened may be it,
- * locked (that run keeps going once the keychain opens).
- */
-export function botTokenEnded(relay: Pick<BotToolRelay, 'kept'> = botToolRelay): string {
-  return relay.kept.anyLocked() ? CREDENTIALS_LOCKED : BOT_TOKEN_ENDED
-}
 
 export type BotTokenCaller = { kind: 'owner' } | { kind: 'bot'; bot: Bot } | { kind: 'ended' }
 

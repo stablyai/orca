@@ -43,7 +43,8 @@ export function answerProviderRelayRequest(
           request.payload?.chatKey,
           payload.policy,
           payload.agent,
-          payload.keep
+          payload.keep,
+          payload.toolGrants
         )
         .then((spawned) => ('relayId' in spawned ? { ...spawned, ...instance } : spawned))
     case 'relayAttach':

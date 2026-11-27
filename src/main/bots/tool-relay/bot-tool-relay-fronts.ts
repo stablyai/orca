@@ -6,6 +6,7 @@ import type { Socket } from 'node:net'
 import type { DaemonClient } from '../../daemon/transport/client/daemon-client'
 import {
   TOOL_RELAY_FRONT_EVENT,
+  type ToolRelayFrontKeptRelay,
   type ToolRelayFrontOpenResult,
   type ToolRelayFrontServeResult
 } from '../../daemon/protocol/daemon-tool-relay-front-protocol'
@@ -43,8 +44,12 @@ export class ToolRelayFronts {
   /** Cancels connection setup still running when this closes. */
   private readonly closing = new AbortController()
 
-  /** `accept` takes a front's connection, with the port of the front it came through. */
-  constructor(private readonly accept: (socket: Socket, port: number | null) => void) {}
+  constructor(
+    /** Takes a front's connection, with the port of the front it came through. */
+    private readonly accept: (socket: Socket, port: number | null) => void,
+    /** The grants a daemon start holds for the agents it keeps, from each serve's reply. */
+    private readonly adopt: (client: DaemonClient, kept: readonly ToolRelayFrontKeptRelay[]) => void
+  ) {}
 
   /**
    * The front of the daemon start `chatKey`'s agent runs on: the one its kept agent runs under, or
@@ -164,7 +169,11 @@ export class ToolRelayFronts {
         undefined,
         FRONT_REQUEST_TIMEOUT_MS
       )
-      .then(({ port }) => this.noteServed(client, Number.isSafeInteger(port) ? port : null))
+      .then(({ port, kept }) => {
+        this.noteServed(client, Number.isSafeInteger(port) ? port : null)
+        // Before any held connection is answered, so a kept agent's token is already known.
+        this.adopt(client, Array.isArray(kept) ? kept : [])
+      })
     watched.served = served
     served.then(
       () => {

@@ -5,7 +5,7 @@ import type { McpServerConnection } from '../../shared/mcp-servers/mcp-servers'
 import { mcpServerWorkspaceKeyOf } from '../../shared/mcp-servers/mcp-servers'
 import type { BotController } from '../bots/bot-controller'
 import type { BotLookAroundStore } from '../bots/bot-look-around-store'
-import { botOfCaller, botOfToken, botTokenEnded } from '../bots/bot-of-caller'
+import { botOfCaller, botOfToken } from '../bots/bot-of-caller'
 import { botOfHomeWorkspace } from '../../shared/bots/bot-homes'
 import {
   botToolRelay,
@@ -59,7 +59,7 @@ function callerWorkspace(
   }
   const byToken = botOfToken(runtime, caller.botToken, undefined)
   if (byToken.kind === 'ended') {
-    throw notForCaller(botTokenEnded())
+    throw notForCaller('This bot run’s Orca token has ended.')
   }
   // An agent that starts its MCP servers with a bare environment drops the token and session id;
   // its working folder still names the bot's home.

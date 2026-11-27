@@ -50,7 +50,7 @@ export class BotToolRelay {
   private port = 0
   private listening: Promise<number> | null = null
   private stopListeningForEnds: (() => void) | null = null
-  /** Tokens, kept at rest where they may outlive the app, and the fronts kept agents reach. */
+  /** Tokens, and the daemon-held fronts that agents outliving the app reach the relay by. */
   readonly kept = new KeptRelayGrants(() => this.listen().then(() => this.server))
   /** Which upstream session identity an MCP session was made under, so a changed one starts over. */
   private readonly sessions = new BoundedMap<string, string>({ maxEntries: 1_000 })
@@ -78,13 +78,13 @@ export class BotToolRelay {
     return this.kept.grant(owner, folders, origin, options.keepFor)
   }
 
-  /** The bot a token was granted to; null once revoked, or for one Orca never kept. */
+  /** The bot a token was granted to; null once revoked, or for one no kept agent carries. */
   botOf(token: string): string | null {
     const owner = this.kept.of(token)?.owner ?? null
     return owner === MCP_HOST_LIST_RELAY_OWNER ? null : owner
   }
 
-  /** A deleted bot's token stops working (its kept entries go durably first); its calls are cut. */
+  /** A deleted bot's token stops working (daemons drop its kept grants first); its calls are cut. */
   async revoke(botId: string): Promise<void> {
     await this.kept
       .revoke(botId)
@@ -164,10 +164,7 @@ export class BotToolRelay {
       if (!['POST', 'GET', 'DELETE'].includes(method)) {
         throw new RelayRefusal(405, 'Method not allowed.')
       }
-      const grant = await this.kept.bearer(req, res)
-      if (grant === 'answered') {
-        return
-      }
+      const grant = await this.kept.bearer(req)
       if (!grant) {
         throw new RelayRefusal(401, 'This tool needs the bot’s Orca token.')
       }

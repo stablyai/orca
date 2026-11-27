@@ -101,9 +101,9 @@ export async function acquireAcpStructuredSession(input: {
   const connect = await acpLaunchConnect(deps, launch, closedBeforeSpawn)
   const { command, args, cwd } = launch
   const processLaunch = { command, args, cwd, ...acpProcessEnvironment(launch) }
-  const shared = await acpSharedToolLaunch(launch, { sessionId, runFence: acquire.fence })
+  const shared = acpSharedToolLaunch(launch, { sessionId })
   const relayed = await shared.relay((kept) => launchRelayedAcpAgent(input, kept, processLaunch))
-  const sharedTools = await shared.take(relayed?.reattached === true)
+  const sharedTools = shared.take(relayed?.reattached === true)
   const launchPermission = await keptAcpLaunchPermission(spec, relayed, launch, run)
   // Cancellation owns no connection yet: the relayed agent goes as a tracked one would.
   if (relayed && input.abandoned()) {

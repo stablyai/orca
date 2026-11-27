@@ -239,15 +239,8 @@ export function bindTerminalRuntimeStartupServices(
       appVersion: app.getVersion(),
       idleStopMs: () => nativeChatIdleStopMs(state.store?.getSettings())
     })
-    // Bots' tool grants kept across a restart, for agents that outlive the app on the daemon. Each
-    // Orca profile keeps its own, since only its own bots decide which stay.
-    const profileDirectory = state.activeOrcaProfile?.profileDirectory
-    if (profileDirectory) {
-      configureKeptToolGrants({
-        directory: profileDirectory,
-        bots: () => state.store?.getBots() ?? null
-      })
-    }
+    // Bots' tool grants kept by the daemon for agents that outlive the app; deleted bots' are dropped.
+    configureKeptToolGrants({ bots: () => state.store?.getBots() ?? null })
   }
   state.firstWindowStartupServicesReady = services.then((value) => value.firstWindowReady)
   state.localPtyStartupReady = services.then((value) => value.localPtyReady)

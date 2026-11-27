@@ -4,6 +4,7 @@ import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 import { providerRelayChannel, type ProviderRelayChannel } from './provider-relay-channel'
 import { readFile } from 'node:fs/promises'
 import { spawnTokenFromEnvironBlock } from '../runtime/agent-session/ownership/agent-session-spawn-token-readback'
+import { serveKeptToolGrants } from '../bots/tool-relay/kept-tool-grants'
 import {
   forgetProviderRelayRunVerdict,
   providerRelayRunAskUnfenced,
@@ -267,7 +268,12 @@ async function listOne(client: DaemonClient): Promise<boolean> {
   if (!identity?.providerRelay) {
     return identity !== null
   }
-  return (await listProviderRelayInstance(client, identity.launchNonce)) !== null
+  const listing = await listProviderRelayInstance(client, identity.launchNonce)
+  // An agent this start keeps carries a tool grant: its front is served from now on.
+  if ([...(listing?.values() ?? [])].some((info) => info.toolGrants)) {
+    serveKeptToolGrants()
+  }
+  return listing !== null
 }
 
 /**

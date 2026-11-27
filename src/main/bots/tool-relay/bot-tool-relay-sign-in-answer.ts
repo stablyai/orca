@@ -2,7 +2,6 @@
 // sign-in a call can use, or its key or token server isn't there. Never a 401: either agent would
 // then start its own sign-in against the relay.
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { readBody } from './bot-tool-relay-requests'
 
 /** The JSON-RPC error code MCP clients read as "this server needs authorization". */
 const SIGN_IN_NEEDED_CODE = -32001
@@ -89,31 +88,4 @@ export function answerUnavailable(
     req.method === 'POST' ? errorsFor(parsed(body), UNAVAILABLE_CODE, UNAVAILABLE) : null
   res.writeHead(502, { 'content-type': 'application/json' })
   res.end(JSON.stringify(errors ?? { error: UNAVAILABLE }))
-}
-
-/**
- * A kept bot token the keychain won't open. On Linux the keyring a run of Orca started locked stays
- * unreadable to it after an unlock (its key is chosen at startup), so only a restart of Orca helps.
- */
-export const CREDENTIALS_LOCKED =
-  process.platform === 'linux'
-    ? "Orca can't unlock this bot's credentials (the keyring is locked). Ask the user to unlock the keyring and restart Orca. Your session is still running."
-    : "Orca can't unlock this bot's credentials yet (the keychain is locked). Your session is still running; try again shortly."
-/** Only a body this small is read for its ids; anything else is answered without one. */
-const LOCKED_ID_READ_MAX_BYTES = 64 * 1024
-
-/**
- * A kept agent's call while the keychain won't open its bot's token: a 503 that says to try again,
- * under the request's id when the body is small enough to read cheaply.
- */
-export async function answerCredentialsLocked(
-  req: IncomingMessage,
-  res: ServerResponse
-): Promise<void> {
-  const length = Number(req.headers['content-length'])
-  const small = req.method === 'POST' && length > 0 && length <= LOCKED_ID_READ_MAX_BYTES
-  const body = small ? await readBody(req).catch(() => undefined) : undefined
-  const errors = body ? errorsFor(parsed(body), UNAVAILABLE_CODE, CREDENTIALS_LOCKED) : null
-  res.writeHead(503, { 'content-type': 'application/json', 'retry-after': '5' })
-  res.end(JSON.stringify(errors ?? errorFor(null, UNAVAILABLE_CODE, CREDENTIALS_LOCKED)))
 }

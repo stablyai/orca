@@ -1,54 +1,50 @@
-// A chat whose tools run in a process other chats share gets a token in place of its identity. A token
-// lives in this run's memory, and a kept chat's is also sealed at rest (shared-tool-caller-store), so
-// an agent that outlives the app keeps its caller identity; any other token names no one after it.
+// A chat whose tools run in a process other chats share gets a token in place of its identity. Tokens
+// live only in memory: this run's, and, for a chat whose agent its daemon start keeps, that start's,
+// which hands it back to a restarted app. Any other token from a closed chat or an earlier run names
+// no one.
 import { createHash, randomBytes } from 'node:crypto'
 import { BOT_TOOLS_TOKEN_ENV } from '../../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import {
   sharedToolProcessSessionEnv,
   type PublishSharedToolProcessSessionEnv
 } from './shared-tool-process-session-env'
-import { sharedToolCallerStore, type KeptSharedToolCaller } from './shared-tool-caller-store'
+import type { ToolRelayFrontCaller } from '../../../daemon/protocol/daemon-tool-relay-front-protocol'
+import { stageProviderRelayFrontCaller } from '../../../provider-relay/provider-relay-front-pins'
 
 const callers = new Map<string, Readonly<Record<string, string>>>()
 
+/** Each kept chat's caller, the one its daemon start holds for its agent's tools. */
+const keptCallers = new Map<string, ToolRelayFrontCaller>()
+
 const hashToken = (token: string): string => createHash('sha256').update(token).digest('hex')
 
-// A kept caller retired (its chat ended or was deleted, its bot revoked) names no one from now on.
-sharedToolCallerStore.onRetired = (token) => callers.delete(hashToken(token))
+/** A kept agent's caller, as its daemon start handed it back to this run. */
+export function restoreKeptSharedToolCaller(chatKey: string, kept: ToolRelayFrontCaller): void {
+  keptCallers.set(chatKey, kept)
+  callers.set(hashToken(kept.token), kept.caller)
+}
 
-/** Kept chats' callers from an earlier run of Orca, whose runs are still current. */
-export function restoreKeptSharedToolCallers(kept: readonly KeptSharedToolCaller[]): void {
-  for (const caller of kept) {
-    callers.set(hashToken(caller.token), caller.caller)
+/** The owner's grant was revoked: its kept chats' callers name no one from now on. */
+export function forgetKeptSharedToolCallers(owner: string): void {
+  for (const [chatKey, kept] of keptCallers) {
+    if (kept.owner === owner) {
+      keptCallers.delete(chatKey)
+      callers.delete(hashToken(kept.token))
+    }
   }
 }
 
 /** The caller identity a token was issued for; null for a token this run never issued or ended. */
-export async function sharedToolProcessCaller(
-  token: string
-): Promise<Readonly<Record<string, string>> | null> {
-  const key = hashToken(token)
-  const known = callers.get(key)
-  if (known) {
-    return known
-  }
-  // A kept caller the keychain refused at startup may open now (at most once per 10 s).
-  restoreKeptSharedToolCallers(await sharedToolCallerStore.unlock())
-  return callers.get(key) ?? null
+export function sharedToolProcessCaller(token: string): Readonly<Record<string, string>> | null {
+  return callers.get(hashToken(token)) ?? null
 }
 
 /** One launched child's token, from spawn until its process exits (`end`). */
 export class SharedToolProcessSession {
   private withdraw: Promise<(() => Promise<void>) | null> | null = null
   private ended = false
-  /** The kept entry this session's run uses, once `keepAs` wrote it. */
-  private kept: KeptSharedToolCaller | null = null
-  /** At its end, whether its agent runs on (handed to its daemon at quit), so the entry stays. */
-  private outlivesApp: () => boolean = () => false
-  /** The chat this session's run settled, so its end retires what it carried too. */
-  private settledFor: string | null = null
-  /** Retires the chat's earlier kept entries, once this run is placed. */
-  private retireEarlier: (() => void) | null = null
+  /** The chat whose daemon start keeps this token with its agent. */
+  private keptFor: string | null = null
 
   private constructor(
     private readonly token: string,
@@ -83,76 +79,60 @@ export class SharedToolProcessSession {
   }
 
   /**
-   * The chat's caller from an earlier run of Orca, for its agent kept running since: the same token
-   * its tools already hold. Null when none was kept for the chat's current run.
+   * The chat's kept caller, for its agent its daemon start kept running: the same token its tools
+   * already hold. Null when none is kept for the chat.
    */
-  static async reattached(
+  static reattached(
     spec: { sharedToolProcess?: { publishSessionEnv: PublishSharedToolProcessSessionEnv } },
     sealed: Readonly<Record<string, string>>,
-    sessionId: string,
-    runFence: number,
-    outlivesApp: () => boolean,
+    chatKey: string,
     agentVersion?: string
-  ): Promise<SharedToolProcessSession | null> {
-    const restored = spec.sharedToolProcess ? await sharedToolCallerStore.restored(sessionId) : null
-    if (!spec.sharedToolProcess || !restored) {
+  ): SharedToolProcessSession | null {
+    const kept = keptCallers.get(chatKey)
+    if (!spec.sharedToolProcess || !kept) {
       return null
     }
-    const { tools } = sharedToolProcessSessionEnv(sealed, restored.token)
-    const key = hashToken(restored.token)
-    callers.set(key, restored.caller)
+    const { tools } = sharedToolProcessSessionEnv(sealed, kept.token)
+    const key = hashToken(kept.token)
+    callers.set(key, kept.caller)
     const session = new SharedToolProcessSession(
-      restored.token,
+      kept.token,
       key,
       sealed,
       tools,
       spec.sharedToolProcess.publishSessionEnv,
       agentVersion
     )
-    session.kept = { ...restored, runFence }
-    session.outlivesApp = outlivesApp
+    session.keptFor = chatKey
     return session
   }
 
-  /** Seals this token at rest for a run the agent may outlive; false keeps it memory-only. */
-  async keepAs(
-    run: { sessionId: string; runFence: number; owner: string },
-    outlivesApp: () => boolean
-  ): Promise<boolean> {
+  /**
+   * Hands this token to the daemon start the chat's launch is pinned to, with the agent's spawn, so
+   * a restarted app gets it back; false (it lives in this run only) when the launch has no front.
+   */
+  keepWith(chatKey: string, owner: string): boolean {
     const caller = callers.get(this.key)
-    if (!caller || this.ended) {
+    const kept = caller ? { owner, token: this.token, caller: { ...caller } } : null
+    if (this.ended || !kept || !stageProviderRelayFrontCaller(chatKey, kept)) {
       return false
     }
-    const kept: KeptSharedToolCaller = { ...run, caller, token: this.token }
-    if (!(await sharedToolCallerStore.keep(kept).catch(() => false))) {
-      return false
-    }
-    this.kept = kept
-    this.outlivesApp = outlivesApp
+    keptCallers.set(chatKey, kept)
+    this.keptFor = chatKey
     return true
   }
 
-  /**
-   * This session is the chat's run's caller now, durably (with `carryLockedTo`, an entry the
-   * keychain hasn't opened yet moves to that run instead). The chat's other entries retire once its
-   * run is placed, when its tools get their identity (`publishFor`).
-   */
-  async settle(sessionId: string, carryLockedTo?: number): Promise<void> {
-    const stays = await sharedToolCallerStore
-      .adopt(sessionId, this.kept, carryLockedTo)
-      .catch(() => this.kept?.runFence)
-    this.settledFor = sessionId
-    this.retireEarlier = () => {
-      void sharedToolCallerStore.retireExcept(sessionId, stays).catch(() => {})
-    }
+  /** Another session took this launch's place (a reattach reuses its kept one): its token goes. */
+  discard(): void {
+    this.ended = true
+    callers.delete(this.key)
+    this.forgetKept()
   }
 
   /** `opened` once its session's tools have their identity. A chat that fails to publish keeps no
    *  identity and refuses; a bot's session doesn't start, since without its token it would pass as
    *  the owner, past the bot's own limits. */
   async publishFor<T extends { link?: { handle: { nativeId: string } } }>(opened: T): Promise<T> {
-    this.retireEarlier?.()
-    this.retireEarlier = null
     await this.publish(opened.link?.handle.nativeId)
     return opened
   }
@@ -178,32 +158,20 @@ export class SharedToolProcessSession {
     await (mustReach ? published : this.withdraw)
   }
 
-  /** Another session took this launch's place (a reattach reuses its kept one): its token goes. */
-  discard(): void {
-    this.ended = true
-    callers.delete(this.key)
-  }
-
-  /** Its launch failed before any agent took the token: it goes, and so does its own kept entry. */
-  abandon(): void {
-    this.discard()
-    if (this.kept) {
-      void sharedToolCallerStore.drop(this.kept).catch(() => {})
-    }
-  }
-
   end(): void {
     if (this.ended) {
       return
     }
     this.ended = true
     callers.delete(this.key)
-    // An agent handed to its daemon at quit keeps running with this token; anything else retires it.
-    const chat = this.kept?.sessionId ?? this.settledFor
-    if (chat !== null && !this.outlivesApp()) {
-      void sharedToolCallerStore.settle(chat, null).catch(() => {})
-    }
+    this.forgetKept()
     void this.withdrawPublished()
+  }
+
+  private forgetKept(): void {
+    if (this.keptFor !== null && keptCallers.get(this.keptFor)?.token === this.token) {
+      keptCallers.delete(this.keptFor)
+    }
   }
 
   private async withdrawPublished(): Promise<void> {

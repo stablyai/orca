@@ -15,10 +15,6 @@ export class ElectronSecretStore implements SecretStore {
     return guardedSafeStorage.decryptString(cipher)
   }
 
-  decryptStringAsync(cipher: Buffer): Promise<string> {
-    return guardedSafeStorage.decryptStringAsync(cipher)
-  }
-
   describeProtectionGap(): string | null {
     return assessSecretProtection().gap
   }

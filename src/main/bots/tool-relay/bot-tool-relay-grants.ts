@@ -1,18 +1,9 @@
-// Who may use Orca's relay, and where each tool sits on it. A bot's token reaches its
+// Who may use Orca's relay in this run, and where each tool sits on it. A bot's token reaches its
 // home's tools under /bot-tools; the host's token, shared by every non-bot session, reaches the host
 // MCP list's under /mcp-servers, and its command servers Orca runs once under /mcp-processes. A bot
 // that takes the host list reaches all of them with its own token.
 import { createHash, randomBytes } from 'node:crypto'
 import { resolve } from 'node:path'
-import { jsonObject } from '../../../shared/json-stream/json-value-property'
-import {
-  relaySealingProtected,
-  relayUnlockThrottle,
-  sealRelaySecret,
-  type RelayUnlockThrottle,
-  unsealRelaySecret
-} from './relay-sealed-file'
-import type { RelaySealedEntries } from './relay-sealed-entries'
 
 /** The folders a token reaches: its bot's home, and the host's MCP server list when it may use it. */
 export type RelayFolders = { bot?: string; host?: string }
@@ -59,93 +50,18 @@ export function relayToolPath(path: string): RelayToolPath | null {
   return { scope: match[1] === 'mcp-servers' ? 'host' : 'bot', credentialId: match[2]! }
 }
 
-/** A kept grant as its file holds it (one file per owner); only the token is sealed (by the OS keychain). */
-export type StoredRelayGrant = { owner: string; folders: RelayFolders; sealedToken: string }
-
-export function isStoredRelayGrant(value: unknown): value is StoredRelayGrant {
-  const entry = jsonObject(value)
-  const folders = jsonObject(entry?.folders)
-  return (
-    entry !== null &&
-    folders !== null &&
-    typeof entry.owner === 'string' &&
-    entry.owner.length > 0 &&
-    typeof entry.sealedToken === 'string' &&
-    (folders.bot === undefined || typeof folders.bot === 'string') &&
-    (folders.host === undefined || typeof folders.host === 'string')
-  )
-}
-
-/** A kept owner's token; `entry` is null until it is sealed, `durable` once it is in the file. */
-type KeptToken = { token: string; entry: StoredRelayGrant | null; durable: Promise<boolean> }
-
 const resolvedFolders = (folders: RelayFolders): RelayFolders => ({
   ...(folders.bot ? { bot: resolve(folders.bot) } : {}),
   ...(folders.host ? { host: resolve(folders.host) } : {})
 })
 
 /**
- * One token per owner; only a hash of it is the grant's key. A kept owner's token is sealed in the
- * grants file, so agents still running from an earlier run of Orca keep using it.
+ * One token per owner for this run of Orca; only a hash of it is kept as the grant's key. Agents a
+ * daemon kept from an earlier run carry that run's token, which the daemon hands back (`adopt`).
  */
 export class RelayGrants {
   private readonly grants = new Map<string, RelayGrant>()
-  /** The token each owner's launches get now. */
   private readonly tokens = new Map<string, string>()
-  /** Owners whose token is in the file (or being written to it), with the token it holds. */
-  private readonly kept = new Map<string, KeptToken>()
-  /** Entries in the file the keychain hasn't opened yet; kept as written. */
-  private readonly locked = new Map<string, StoredRelayGrant>()
-  private loading: Promise<void> | null = null
-  private file: RelaySealedEntries<StoredRelayGrant> | null = null
-  private current: ((owner: string) => RelayFolders | null) | undefined
-
-  constructor(private readonly throttle: RelayUnlockThrottle = relayUnlockThrottle) {}
-
-  /**
-   * Where kept grants live; without one every grant ends with this run, as before. `current` is
-   * each owner's reach from the current config, null for a deleted bot; absent keeps the file's.
-   */
-  configure(
-    file: RelaySealedEntries<StoredRelayGrant>,
-    current?: (owner: string) => RelayFolders | null
-  ): void {
-    this.file = file
-    this.current = current
-  }
-
-  get configured(): boolean {
-    return this.file !== null
-  }
-
-  /** Opens the file's tokens once, before any call is served or the file is written. */
-  load(): Promise<void> {
-    this.loading ??= this.loadOnce()
-    return this.loading
-  }
-
-  private async loadOnce(): Promise<void> {
-    const { file, current } = this
-    if (!file) {
-      return
-    }
-    const drops: Promise<void>[] = []
-    for (const stored of await file.read()) {
-      const folders = current ? current(stored.owner) : stored.folders
-      if (!folders) {
-        // A deleted bot's entry goes.
-        drops.push(file.delete(stored))
-        continue
-      }
-      const entry = { ...stored, folders: resolvedFolders(folders) }
-      if (!(await this.open(entry))) {
-        this.locked.set(entry.owner, entry)
-      }
-    }
-    await Promise.all(drops).catch((error: unknown) =>
-      console.warn('[bot-tool-relay] could not drop a deleted bot from the grants', error)
-    )
-  }
 
   /** The owner's token, now reaching only `folders`, as the owner's latest launch named them. */
   grant(owner: string, folders: RelayFolders): string {
@@ -159,127 +75,32 @@ export class RelayGrants {
   }
 
   /**
-   * Whether the owner's current token outlives this run: sealed by the OS keychain and durably in
-   * the file before this resolves. False keeps it memory-only (its launch is app-bound, as before).
+   * A kept agent's token from an earlier run of Orca, reaching `folders` as the current config names
+   * them. It becomes the owner's current one when the owner has none yet, so new launches share it.
    */
-  async keep(owner: string): Promise<boolean> {
-    await this.load()
-    const token = this.tokens.get(owner)
-    const grant = token ? this.grants.get(hashToken(token)) : undefined
-    if (!this.file || !token || !grant || this.locked.has(owner)) {
-      return false
+  adopt(owner: string, token: string, folders: RelayFolders): void {
+    this.grants.set(hashToken(token), { owner, folders: resolvedFolders(folders) })
+    if (!this.tokens.has(owner)) {
+      this.tokens.set(owner, token)
     }
-    const current = this.kept.get(owner)
-    if (current?.token === token) {
-      // Already in the file (or a racing launch's write): no new seal, so no keychain check.
-      return current.durable
-    }
-    if (!relaySealingProtected()) {
-      return false
-    }
-    const record: KeptToken = { token, entry: null, durable: Promise.resolve(false) }
-    this.kept.set(owner, record)
-    record.durable = this.makeDurable(owner, record, grant.folders)
-    return record.durable
-  }
-
-  private async makeDurable(
-    owner: string,
-    record: KeptToken,
-    folders: RelayFolders
-  ): Promise<boolean> {
-    try {
-      const sealedToken = await sealRelaySecret(record.token)
-      // Revoked or replaced while sealing: a deleted bot's token never reaches the file.
-      if (this.kept.get(owner) !== record) {
-        return false
-      }
-      record.entry = { owner, folders, sealedToken }
-      await this.file?.put(record.entry)
-      return this.kept.get(owner) === record
-    } catch (error) {
-      if (this.kept.get(owner) === record) {
-        this.kept.delete(owner)
-      }
-      console.warn('[bot-tool-relay] could not keep a grant', error)
-      return false
-    }
-  }
-
-  get anyLocked(): boolean {
-    return this.locked.size > 0
-  }
-
-  /** The owner has a grant in the file (opened or not). */
-  holds(owner: string): boolean {
-    return this.kept.has(owner) || this.locked.has(owner)
   }
 
   of(token: string): RelayGrant | undefined {
     return this.grants.get(hashToken(token))
   }
 
-  /**
-   * An unknown token while some kept token is still locked: one retry per `RELAY_UNLOCK_RETRY_MS`
-   * across all callers. `locked` while any stays locked, so its agents hear to try again.
-   */
-  async unlock(token: string): Promise<RelayGrant | 'locked' | undefined> {
-    if (this.locked.size === 0) {
-      return undefined
+  /** Every token of the owner stops working, kept agents' included. */
+  revoke(owner: string): void {
+    for (const [hash, grant] of this.grants) {
+      if (grant.owner === owner) {
+        this.grants.delete(hash)
+      }
     }
-    if (!this.throttle.due()) {
-      return 'locked'
-    }
-    for (const entry of this.locked.values()) {
-      await this.open(entry, true)
-    }
-    return this.of(token) ?? (this.locked.size > 0 ? 'locked' : undefined)
+    this.tokens.delete(owner)
   }
 
-  /** The owner's token stops working: its file entry goes durably first, then every token of it. */
-  async revoke(owner: string): Promise<void> {
-    await this.load().catch(() => {})
-    const inFile = this.kept.delete(owner) || this.locked.delete(owner)
-    try {
-      if (inFile) {
-        await this.file?.deleteKey(owner)
-      }
-    } finally {
-      // A failed write still ends the token now; the next start drops a deleted bot's entry.
-      for (const [hash, grant] of this.grants) {
-        if (grant.owner === owner) {
-          this.grants.delete(hash)
-        }
-      }
-      this.tokens.delete(owner)
-    }
-  }
-
-  /** Forgets this run's memory; the file stays for the next run. */
   clear(): void {
     this.grants.clear()
     this.tokens.clear()
-  }
-
-  /**
-   * Opens a stored token: it becomes the owner's current one, as the file holds it. Async, since on
-   * Linux only the async keychain path recovers once a keyring locked at startup is unlocked.
-   */
-  private async open(entry: StoredRelayGrant, retry = false): Promise<boolean> {
-    let token: string
-    try {
-      token = await unsealRelaySecret(entry.sealedToken)
-    } catch {
-      return false
-    }
-    // A retried entry revoked while the keychain answered stays gone: its token never comes back.
-    if (retry ? this.locked.get(entry.owner) !== entry : this.kept.has(entry.owner)) {
-      return false
-    }
-    this.locked.delete(entry.owner)
-    this.grants.set(hashToken(token), { owner: entry.owner, folders: entry.folders })
-    this.tokens.set(entry.owner, token)
-    this.kept.set(entry.owner, { entry, token, durable: Promise.resolve(true) })
-    return true
   }
 }

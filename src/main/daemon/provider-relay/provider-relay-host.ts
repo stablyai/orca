@@ -92,7 +92,9 @@ export class ProviderRelayHost {
     chatKey: unknown,
     policy?: unknown,
     agent?: unknown,
-    keep?: unknown
+    keep?: unknown,
+    /** The agent's tool grants, held in memory for its relay's life (only with a front). */
+    toolGrants?: unknown
   ): Promise<ProviderRelaySpawnResult> {
     if (!this.supported || this.disposed || !this.options.acceptsWork()) {
       return { refused: 'unavailable' }
@@ -109,6 +111,8 @@ export class ProviderRelayHost {
       return { refused: 'unavailable' }
     }
     const relayId = `r-${process.pid}-${randomUUID()}`
+    // Held before the agent starts, so its first tool call already has its grant.
+    this.toolRelayFront?.kept.keep(relayId, chatKey, toolGrants)
     const managed = spawn(
       { command: spec.command, args: spec.args, cwd: spec.cwd, env: spec.env },
       {
@@ -135,6 +139,9 @@ export class ProviderRelayHost {
       spoolPath: join(directory, `${relayId}.ndjson`),
       log: this.options.log,
       onSettled: () => {
+        if (!relay.live) {
+          this.toolRelayFront?.kept.forget(relayId)
+        }
         this.removeIfFinished(relay)
         this.expireWhenAbandoned(relay)
         this.cap.forget(relay)
@@ -246,7 +253,12 @@ export class ProviderRelayHost {
   }
 
   list(): ProviderRelayListResult {
-    return { relays: [...this.relays.values()].map((relay) => relay.info()) }
+    const kept = this.toolRelayFront?.kept
+    return {
+      relays: [...this.relays.values()].map((relay) =>
+        kept?.holds(relay.relayId) ? { ...relay.info(), toolGrants: true } : relay.info()
+      )
+    }
   }
 
   /** Every caller waits for the same cleanup, so a second shutdown path can't overtake the first. */
@@ -293,6 +305,7 @@ export class ProviderRelayHost {
 
   private remove(relay: ProviderRelay): void {
     this.retention.clear(relay)
+    this.toolRelayFront?.kept.forget(relay.relayId)
     if (this.registered(relay)) {
       this.relays.delete(relay.relayId)
       void relay.dispose()

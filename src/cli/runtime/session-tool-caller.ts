@@ -89,15 +89,6 @@ export async function adoptSessionToolCaller(
     )
   })
   const caller = isRecord(answer) && isRecord(answer.env) ? answer.env : null
-  if (!caller && isRecord(answer) && answer.locked === true) {
-    throw new RuntimeClientError(
-      'session_tool_caller_locked',
-      // On Linux a keyring Orca started locked stays unreadable to it until Orca restarts.
-      process.platform === 'linux'
-        ? "Orca can't unlock this bot's credentials (the keyring is locked). Ask the user to unlock the keyring and restart Orca. Your session is still running."
-        : "Orca can't unlock this bot's credentials yet (the keychain is locked). Your session is still running; try again shortly."
-    )
-  }
   if (!caller) {
     throw new RuntimeClientError(
       'session_tool_caller_ended',

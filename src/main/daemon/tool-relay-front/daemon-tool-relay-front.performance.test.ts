@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 // Guards #51086's front bounds: held connections, live pipes, announcements, and their release.
 import {
   DaemonToolRelayFront,
+  TOOL_RELAY_FRONT_HOLD_MS,
   TOOL_RELAY_FRONT_MAX_HELD,
   TOOL_RELAY_FRONT_MAX_PIPES
 } from './daemon-tool-relay-front'
@@ -48,6 +49,32 @@ async function appSocket(): Promise<Socket> {
 }
 
 describe.skipIf(process.platform === 'win32')('tool relay front bounds', () => {
+  it('never holds more descriptors than its budget, however many connections arrive', async () => {
+    const budget = 9
+    front = new DaemonToolRelayFront('start-1', TOOL_RELAY_FRONT_HOLD_MS, budget)
+    const port = await front.open()
+    const announced: string[] = []
+    front.serve('app', new Socket(), (id) => announced.push(id))
+    const calls = Array.from({ length: 4 }, () => agent(port))
+    await vi.waitFor(() => expect(front!.heldCount).toBe(4))
+    // Two pipes take four descriptors; with the listener and two held that is the budget.
+    for (const id of announced.splice(0, 2)) {
+      expect(front.splice(id, await appSocket(), 'app')).toBe(true)
+    }
+    expect(front.descriptorCount).toBe(budget - 2)
+    const over = Array.from({ length: 4 }, () => agent(port))
+    await vi.waitFor(() => expect(front!.descriptorCount).toBe(budget))
+    // Every connection past the budget is answered 503 at once.
+    const answered: string[] = []
+    for (const call of over) {
+      void call.answer.then((text) => answered.push(text))
+    }
+    await vi.waitFor(() => expect(answered).toHaveLength(2))
+    expect(answered.every((text) => text.includes('503 Service Unavailable'))).toBe(true)
+    expect(front.descriptorCount).toBe(budget)
+    expect(calls).toHaveLength(4)
+  })
+
   it('holds at most 64 connections, answers the rest 503 at once, and frees each on splice and close', async () => {
     front = new DaemonToolRelayFront('start-1')
     const port = await front.open()

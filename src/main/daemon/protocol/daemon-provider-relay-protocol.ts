@@ -1,4 +1,5 @@
 // Frozen relay RPC set: newer apps must be able to drive a daemon of this version unchanged.
+import type { ToolRelayFrontKept } from './daemon-tool-relay-front-protocol'
 export const PROVIDER_RELAY_PROTOCOL_VERSION = 63
 
 /** An agent launch the daemon owns; env is complete because the daemon's own env is not the app's. */
@@ -30,6 +31,8 @@ export type ProviderRelayRequest =
         policy?: ProviderRelayDetachPolicy
         /** Only sent to a daemon advertising `providerRelayKeep`; older ones ignore it. */
         keep?: ProviderRelayKeepSpec
+        /** Only sent to a daemon advertising `toolRelayFront`: held in its memory for this relay. */
+        toolGrants?: ToolRelayFrontKept
       }
     }
   | {
@@ -260,6 +263,8 @@ export type ProviderRelayInfo = {
   nextSeq: number
   ackedSeq: number
   pendingCount: number
+  /** Its agent's tool grants are held by this start's front (a newer daemon only). */
+  toolGrants?: true
 }
 
 /** `daemonInstance`: as in `ProviderRelaySpawnResult`, the instance this listing speaks for. */
