@@ -2,7 +2,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { idleLiveChatCount, liveChatCount } from './fleet-gate-chat-memory.mjs'
-import { copyProfile, readDaemonPids } from './fleet-gate-copies.mjs'
+import { copyProfile } from './fleet-gate-copies.mjs'
 import {
   createChatBurst,
   pointClaudeAtStub,
@@ -82,6 +82,17 @@ export const linuxProc = {
       }
       throw error
     }
+  },
+  /** Whether the gate's own user runs it (so a read error on it matters), or null once it is gone. */
+  ours: (pid) => {
+    try {
+      return fs.statSync(`/proc/${String(pid)}`).uid === process.getuid()
+    } catch (error) {
+      if (GONE.has(error?.code)) {
+        return null
+      }
+      throw error
+    }
   }
 }
 
@@ -89,11 +100,13 @@ export class CensusUnsure extends Error {}
 
 /**
  * Orca's own processes Electron doesn't list: Node children (the terminal daemon that hosts chat relays, the
- * plugin host, the session scanner) running the Electron binary, and each chat's native provider processes
- * (the supervisor, and the watcher it forks under the agent). The walk goes through every descendant of main
- * and the copy's daemon but counts only those two kinds, so agents, shells and git are left out.
- * It remembers every process it has counted: one still running but no longer found, or any read error on a
- * live descendant, makes the census unsure (CensusUnsure) instead of quietly leaving its memory out.
+ * plugin host, the session scanner) running this copy's Electron binary, and each chat's native provider
+ * processes (supervisor and watcher) running `orca-provider-exec` from this copy's app folder. Ownership is by
+ * executable, not by parent, so a process whose parent exited or whose parent pid was reused mid-scan still
+ * counts; agents, shells and git run other binaries and are left out. A second copy of the same build would be
+ * counted too, which can only read high. Read errors on the gate user's own processes, or a process counted
+ * earlier that is still running but not found, make the census unsure (CensusUnsure); other users' processes
+ * are skipped.
  */
 export class LinuxOrcaCensus {
   constructor(proc = linuxProc) {
@@ -106,51 +119,47 @@ export class LinuxOrcaCensus {
     return stat !== null && stat.state !== 'Z' ? stat : null
   }
 
-  discover(mainPid, daemonPids, listed) {
+  /** Runs one /proc read; an error on a process the gate's user owns makes the census unsure. */
+  read(pid, what) {
+    try {
+      return { value: this.proc[what](pid) }
+    } catch (error) {
+      if (this.proc.ours(pid) === false) {
+        return { value: null }
+      }
+      throw new CensusUnsure(
+        `${what} of ${String(pid)} unreadable: ${String(error?.code ?? error)}`
+      )
+    }
+  }
+
+  discover(mainPid, listed, appPath) {
     const electronExe = this.live(mainPid) ? this.proc.exe(mainPid) : null
     if (!electronExe) {
       throw new CensusUnsure(`main ${String(mainPid)} is not readable`)
     }
-    const children = new Map()
-    const stats = new Map()
+    const providerPrefix = `${appPath}/`
+    const found = new Map()
     for (const pid of this.proc.pids()) {
-      const stat = this.proc.stat(pid)
-      if (stat === null) {
+      if (pid === mainPid || listed.has(pid)) {
         continue
       }
-      stats.set(pid, stat)
-      const siblings = children.get(stat.ppid)
-      if (siblings) {
-        siblings.push(pid)
-      } else {
-        children.set(stat.ppid, [pid])
+      const stat = this.read(pid, 'stat').value
+      if (stat === null || stat.state === 'Z') {
+        continue
       }
-    }
-    const found = new Map(daemonPids.map((pid) => [pid, 'Node']))
-    const seen = new Set([mainPid, ...daemonPids])
-    const queue = [mainPid, ...daemonPids]
-    for (let next = 0; next < queue.length; next += 1) {
-      for (const child of children.get(queue[next]) ?? []) {
-        if (seen.has(child)) {
-          continue
-        }
-        seen.add(child)
-        queue.push(child)
-        if (stats.get(child)?.state === 'Z') {
-          continue
-        }
-        const path = this.proc.exe(child)
-        const kind =
-          path === null
-            ? null
-            : path === electronExe
-              ? 'Node'
-              : path.split('/').pop().startsWith('orca-provider-exec')
-                ? 'ProviderExec'
-                : null
-        if (kind) {
-          found.set(child, kind)
-        }
+      const path = this.read(pid, 'exe').value
+      const kind =
+        path === null
+          ? null
+          : path === electronExe
+            ? 'Node'
+            : path.startsWith(providerPrefix) &&
+                path.split('/').pop().startsWith('orca-provider-exec')
+              ? 'ProviderExec'
+              : null
+      if (kind) {
+        found.set(pid, { type: kind, start: stat.start })
       }
     }
     for (const [pid, start] of this.known) {
@@ -162,20 +171,35 @@ export class LinuxOrcaCensus {
       }
       this.known.delete(pid)
     }
-    for (const pid of found.keys()) {
-      const stat = stats.get(pid) ?? this.live(pid)
-      if (stat) {
-        this.known.set(pid, stat.start)
-      }
+    for (const [pid, { start }] of found) {
+      this.known.set(pid, start)
     }
-    return [...found].filter(([pid]) => !listed.has(pid)).map(([pid, type]) => ({ pid, type }))
+    return [...found].map(([pid, { type }]) => ({ pid, type }))
   }
+}
+
+/**
+ * The lowest of a checkpoint's samples, counting only samples whose process set matches the sample before or
+ * after: a process that started or exited inside one scan can't make that scan the low one.
+ */
+export function stableLowest(samples) {
+  let lowest = null
+  samples.forEach((sample, index) => {
+    const steady = [samples[index - 1], samples[index + 1]].some(
+      (neighbour) => neighbour?.processSet === sample.processSet
+    )
+    if (steady && (lowest === null || sample.totalMb < lowest.totalMb)) {
+      lowest = sample
+    }
+  })
+  return lowest
 }
 
 /**
  * Every Orca process (main, renderers, GPU, utility, and on Linux its Node children and provider supervisors) after a GC and a
  * memory-pressure signal, as the lowest total of 12 samples over a minute, with that sample's split by type.
- * A sample with an unreadable process or an unsure census is dropped rather than counted low.
+ * A sample with an unreadable process or an unsure census is dropped rather than counted low, and only samples whose
+ * process set matches a neighbour's can be the lowest.
  */
 async function sampleAppMb(electronApp, page, userDataDir, census) {
   const cdp = await page.context().newCDPSession(page)
@@ -186,13 +210,14 @@ async function sampleAppMb(electronApp, page, userDataDir, census) {
     await cdp.detach().catch(() => {})
   }
   await sleep(RELEASE_WAIT_MS)
-  let lowest = null
+  const samples = []
   let dropped = 0
   const unsure = []
   const deadline = Date.now() + SAMPLE_WINDOW_MS
   while (Date.now() < deadline) {
-    const { mainPid, metrics } = await electronApp.evaluate(({ app }) => ({
+    const { mainPid, appPath, metrics } = await electronApp.evaluate(({ app }) => ({
       mainPid: process.pid,
+      appPath: app.getAppPath(),
       metrics: app.getAppMetrics().map((metric) => ({
         pid: metric.pid,
         type: metric.type,
@@ -204,9 +229,9 @@ async function sampleAppMb(electronApp, page, userDataDir, census) {
     if (census) {
       const listed = new Set(processes.map(({ pid }) => pid))
       try {
-        processes.push(...census.discover(mainPid, readDaemonPids(userDataDir), listed))
+        processes.push(...census.discover(mainPid, listed, appPath))
       } catch (error) {
-        if (!(error instanceof CensusUnsure) && !(error?.code && !GONE.has(error.code))) {
+        if (!(error instanceof CensusUnsure)) {
           throw error
         }
         unsure.push(String(error.message))
@@ -227,30 +252,42 @@ async function sampleAppMb(electronApp, page, userDataDir, census) {
     }
     if (unreadable) {
       dropped += 1
-    } else if (lowest === null || total < lowest.totalMb) {
-      lowest = {
+    } else {
+      samples.push({
         totalMb: Math.round(total),
         processes: processes.length,
+        processSet: processes
+          .map(({ pid }) => pid)
+          .sort((x, y) => x - y)
+          .join(','),
         mainPid,
         byType: Object.fromEntries(
           Object.entries(byType).map(([type, mb]) => [type, Math.round(mb)])
         )
-      }
+      })
     }
     await sleep(SAMPLE_EVERY_MS)
   }
-  return lowest === null
-    ? null
-    : {
-        ...lowest,
-        droppedSamples: dropped,
-        ...(unsure.length ? { unsure: unsure.slice(0, 3) } : {})
-      }
+  const lowest = stableLowest(samples)
+  if (lowest === null) {
+    return null
+  }
+  const { processSet: _set, ...reading } = lowest
+  return {
+    ...reading,
+    droppedSamples: dropped,
+    unsteadySamples: samples.filter(
+      (sample, index) =>
+        samples[index - 1]?.processSet !== sample.processSet &&
+        samples[index + 1]?.processSet !== sample.processSet
+    ).length,
+    ...(unsure.length ? { unsure: unsure.slice(0, 3) } : {})
+  }
 }
 
 /**
- * Shows the chat's workspace and its tab, as a click in the sidebar and tab strip does. True only once that chat's
- * composer is laid out on screen: store state alone would still read shown after the workbench crashed into its
+ * Shows the chat's workspace and its tab, as a click in the sidebar and tab strip does. True only once at least
+ * 1 px of that chat's composer is visible on screen (a 0x0 or fully clipped pane doesn't count): store state alone would still read shown after the workbench crashed into its
  * error fallback, which unmounts every chat and frees what they hold.
  */
 export async function showChat(page, { sessionId, worktreeId }, waitMs = SHOW_WAIT_MS) {
@@ -287,15 +324,43 @@ export async function showChat(page, { sessionId, worktreeId }, waitMs = SHOW_WA
   }
   const deadline = Date.now() + waitMs
   for (;;) {
-    const mounted = await page.evaluate(
-      (session) =>
-        [...document.querySelectorAll('[data-native-chat-composer-scope]')].some(
-          (element) =>
-            element.getAttribute('data-native-chat-composer-scope')?.endsWith(session) &&
-            element.getClientRects().length > 0
-        ),
-      sessionId
-    )
+    const mounted = await page.evaluate((session) => {
+      // At least 1 px of the composer left after clipping by the viewport and every clipping ancestor.
+      const visibleArea = (element) => {
+        const own = getComputedStyle(element)
+        if (own.display === 'none' || own.visibility === 'hidden') {
+          return false
+        }
+        const rect = element.getBoundingClientRect()
+        let box = {
+          left: Math.max(rect.left, 0),
+          top: Math.max(rect.top, 0),
+          right: Math.min(rect.right, window.innerWidth),
+          bottom: Math.min(rect.bottom, window.innerHeight)
+        }
+        for (let ancestor = element.parentElement; ancestor; ancestor = ancestor.parentElement) {
+          const style = getComputedStyle(ancestor)
+          if (style.display === 'none') {
+            return false
+          }
+          if (style.overflowX !== 'visible' || style.overflowY !== 'visible') {
+            const clip = ancestor.getBoundingClientRect()
+            box = {
+              left: Math.max(box.left, clip.left),
+              top: Math.max(box.top, clip.top),
+              right: Math.min(box.right, clip.right),
+              bottom: Math.min(box.bottom, clip.bottom)
+            }
+          }
+        }
+        return box.right - box.left >= 1 && box.bottom - box.top >= 1
+      }
+      return [...document.querySelectorAll('[data-native-chat-composer-scope]')].some(
+        (element) =>
+          element.getAttribute('data-native-chat-composer-scope')?.endsWith(session) &&
+          visibleArea(element)
+      )
+    }, sessionId)
     if (mounted || Date.now() >= deadline) {
       return mounted
     }
