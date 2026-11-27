@@ -17,6 +17,8 @@ export type SystemTrayOptions = {
   devInstanceLabel: string | null
   /** Restore + show + focus the main window (recreating it if needed). */
   onOpen: () => void
+  /** On macOS a primary click restores a window hidden by its close button. */
+  shouldRestoreOnClick?: () => boolean
   /** Restore the main window and open its Settings surface. */
   onOpenSettings: () => void
   /** Run the existing user-initiated update check. */
@@ -196,6 +198,10 @@ function safeMenuAction(action: () => void): () => void {
   }
 }
 
+export function hasSystemTray(): boolean {
+  return tray !== null && !tray.isDestroyed()
+}
+
 /** Create at most one Windows/macOS tray; Linux has none. */
 export function createSystemTray(opts: SystemTrayOptions): Tray | null {
   if (process.platform !== 'win32' && process.platform !== 'darwin') {
@@ -226,18 +232,46 @@ export function createSystemTray(opts: SystemTrayOptions): Tray | null {
   applyTrayImage()
 
   trayOptions = opts
-  tray.setContextMenu(buildTrayMenu(opts))
+  updateTrayContextMenu(tray, opts)
   if (process.platform === 'win32') {
     tray.setToolTip(baseTooltip())
-    // Windows left-click restores the app; macOS uses its attached menu.
     tray.on(
       'click',
       safeMenuAction(() => opts.onOpen())
     )
   } else {
+    const macTray = tray
+    const openMenu = safeMenuAction(() => {
+      if (trayOptions?.shouldRestoreOnClick && !macTray.isDestroyed()) {
+        macTray.popUpContextMenu(buildTrayMenu(trayOptions))
+      }
+    })
+    macTray.on(
+      'click',
+      safeMenuAction(() => {
+        const shouldRestore = trayOptions?.shouldRestoreOnClick
+        // Electron also emits click while AppKit is about to open an attached menu.
+        if (!shouldRestore) {
+          return
+        }
+        if (shouldRestore()) {
+          deferAppKitSceneMutation(opts.onOpen)
+        } else {
+          openMenu()
+        }
+      })
+    )
+    macTray.on('right-click', openMenu)
     watchMacAppearance()
   }
   return tray
+}
+
+function updateTrayContextMenu(icon: Tray, opts: SystemTrayOptions): void {
+  // Detach the native menu so a primary click can restore the window without opening a menu.
+  icon.setContextMenu(
+    process.platform === 'darwin' && opts.shouldRestoreOnClick ? null : buildTrayMenu(opts)
+  )
 }
 
 function buildTrayMenu(opts: SystemTrayOptions): Menu {
@@ -287,7 +321,7 @@ export function rebuildSystemTrayMenu(): void {
     if (!tray || tray.isDestroyed() || !trayOptions) {
       return
     }
-    tray.setContextMenu(buildTrayMenu(trayOptions))
+    updateTrayContextMenu(tray, trayOptions)
     applyTrayImage()
   })
 }
@@ -301,7 +335,12 @@ export function setMacMenuBarIconVisible(visible: boolean, opts: SystemTrayOptio
     destroySystemTray()
     return null
   }
-  return createSystemTray(opts)
+  const icon = createSystemTray(opts)
+  if (icon && Boolean(trayOptions?.shouldRestoreOnClick) !== Boolean(opts.shouldRestoreOnClick)) {
+    trayOptions = opts
+    updateTrayContextMenu(icon, opts)
+  }
+  return icon
 }
 
 /** Bell/completion attention survives pre-creation calls; notification/visibility flow clears it on reveal. Safe without a tray. */

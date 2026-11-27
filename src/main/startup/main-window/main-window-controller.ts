@@ -21,7 +21,8 @@ import {
   notifyMainWindowHidden
 } from '../../window/visibility/main-window-visibility'
 import { setTrayAttention } from '../../tray/system-tray'
-import { createSystemTrayDeferred, showRendererRecoveryPrompt } from './main-window-actions'
+import { quitFromUserCommand, showRendererRecoveryPrompt } from './main-window-actions'
+import { createSystemTrayDeferred } from './main-window-system-tray'
 import { attachMainWindowCoreServices } from './main-window-core-services'
 import {
   clearMainWindowAgentStatusListeners,
@@ -103,6 +104,7 @@ export async function openMainWindow(options: MainWindowOpenOptions = {}): Promi
   }
   const window = createMainWindow(state.nativeSettings, {
     getIsQuitting: () => state.isQuitting,
+    quitOnWindowClose: state.isServeMode ? undefined : quitFromUserCommand,
     onQuitAborted: () => {
       state.isQuitting = false
       clearExpectedRendererReload()

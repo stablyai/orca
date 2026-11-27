@@ -9,6 +9,10 @@ import type { MainWindowStateLifecycle } from './main-window-state-lifecycle'
 import { syncTrafficLightPosition } from './main-window-visual-lifecycle'
 import { consumeUserQuitWindowClose } from './user-quit-window-close'
 import {
+  confirmCloseAfterMenuBarRestore,
+  installMacWindowCloseBehavior
+} from './macos-main-window-close'
+import {
   getWindowCloseInFlight,
   settleRendererPreparationBeforeClose,
   setWindowCloseInFlight
@@ -134,8 +138,24 @@ export function installMainWindowCloseLifecycle(args: {
     return true
   }
 
+  const macClose =
+    process.platform === 'darwin'
+      ? installMacWindowCloseBehavior(mainWindow, {
+          getBehavior: () => nativeSettings?.getSettings().macWindowCloseBehavior,
+          isQuitting: () => opts?.getIsQuitting?.() === true,
+          isRendererGone: () => focus.isRendererProcessGone() || mainWindow.webContents.isCrashed(),
+          quit: opts?.quitOnWindowClose
+        })
+      : undefined
+
   mainWindow.on('close', (e) => {
     const userQuitClose = consumeUserQuitWindowClose(mainWindow)
+    const isQuitting = opts?.getIsQuitting?.() ?? false
+    if (!windowCloseConfirmed && !isQuitting && !userQuitClose && macClose?.handleClose()) {
+      e.preventDefault()
+      return
+    }
+    macClose?.cancelPendingHide()
     // Alt+F4/programmatic closes need the same tray guard as the custom X.
     if (!windowCloseConfirmed && !userQuitClose && hideToTrayIfEnabled()) {
       e.preventDefault()
@@ -158,19 +178,20 @@ export function installMainWindowCloseLifecycle(args: {
       return
     }
     e.preventDefault()
-    const isQuitting = opts?.getIsQuitting?.() ?? false
-    sendCloseRequestAfterPreparation(() => {
-      const requestId = trackCloseRequest(isQuitting || userQuitClose)
-      // User Quit on serve closes windows without quitting the host; still bound frozen-renderer acknowledgement.
-      if (isQuitting || userQuitClose) {
-        armQuitRendererAckTimer(requestId)
-      }
-      // The always-mounted App subscription can confirm even before a workspace exists (#5144).
-      mainWindow.webContents.send('window:close-requested', {
-        isQuitting,
-        requestId
+    const requestConfirmation = (): void =>
+      sendCloseRequestAfterPreparation(() => {
+        const requestId = trackCloseRequest(isQuitting || userQuitClose)
+        // User Quit on serve closes windows without quitting the host; still bound frozen-renderer acknowledgement.
+        if (isQuitting || userQuitClose) {
+          armQuitRendererAckTimer(requestId)
+        }
+        // The always-mounted App subscription can confirm even before a workspace exists (#5144).
+        mainWindow.webContents.send('window:close-requested', {
+          isQuitting,
+          requestId
+        })
       })
-    })
+    confirmCloseAfterMenuBarRestore(mainWindow, requestConfirmation)
   })
   // A renderer that dies before confirming cannot answer; finish the close a gone renderer may bypass anyway.
   mainWindow.webContents.on('render-process-gone', () => {

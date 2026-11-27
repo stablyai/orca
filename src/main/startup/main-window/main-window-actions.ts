@@ -5,7 +5,6 @@ import {
   type BrowserWindow,
   type MessageBoxOptions,
   type MessageBoxReturnValue,
-  type Tray,
   type WebContents
 } from 'electron'
 import { isNativeBrowserPopupWindow } from '../../browser/guest-lifecycle/popups/presentation/native-browser-popup-windows'
@@ -15,11 +14,6 @@ import type { createWebContentsTimedFlag } from './web-contents-timed-flag'
 import { recordCrashBreadcrumb } from '../../crash-reporting/breadcrumbs/crash-breadcrumb-store'
 import { recordDurableCrashBreadcrumb } from '../../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { checkForUpdatesFromMenu, isQuittingForUpdate } from '../../updater/updater-service'
-import {
-  createSystemTray,
-  setMacMenuBarIconVisible,
-  type SystemTrayOptions
-} from '../../tray/system-tray'
 import { ensureAutoUpdaterConfigured } from '../../updater/lifecycle/main-window-updater'
 import {
   focusExistingMainWindow,
@@ -73,6 +67,9 @@ export function focusExistingWindow(request: DesktopActivationRequest = {}): voi
 }
 
 export function showMainWindowFromTray(): void {
+  if (state.isQuitting) {
+    return
+  }
   if (state.mainWindow && !state.mainWindow.isDestroyed()) {
     safelyRevealWindow(state.mainWindow)
     return
@@ -217,63 +214,10 @@ export function runUserInitiatedUpdateCheck(options?: UpdateCheckOptions): void 
   checkForUpdatesFromMenu(options)
 }
 
-export function getSystemTrayOptions(): SystemTrayOptions | null {
-  const store = state.store
-  if (!store) {
-    return null
-  }
-  return {
-    appIcon: store.getSettings().appIcon,
-    isDevInstance: state.devInstanceIdentity?.isDev ?? false,
-    devInstanceLabel: state.devInstanceIdentity?.devLabel ?? null,
-    onOpen: showMainWindowFromTray,
-    onOpenSettings: openSettingsFromSystemMenu,
-    onCheckForUpdates: () => {
-      showMainWindowFromTray()
-      runUserInitiatedUpdateCheck()
-    },
-    onQuit: quitFromSystemTray,
-    ...(state.isServeMode
-      ? {}
-      : { onQuitAndStopAllSessions: quitAndStopAllSessionsFromUserCommand })
-  }
-}
-
 export function getAppMenuQuitHandlers(): AppMenuQuitHandlers {
   return state.isServeMode
     ? { onQuit: quitFromUserCommand }
     : { onQuitAndStopAllSessions: quitAndStopAllSessionsFromUserCommand }
-}
-
-export function syncMacMenuBarIcon(showMenuBarIcon: boolean): Tray | null {
-  if (process.platform !== 'darwin' || state.isServeMode) {
-    return null
-  }
-  const options = getSystemTrayOptions()
-  return options ? setMacMenuBarIconVisible(showMenuBarIcon, options) : null
-}
-
-export function createSystemTrayDeferred(
-  window: BrowserWindow,
-  onCreated?: () => void
-): () => void {
-  let trayCreated = false
-  return () => {
-    if (trayCreated || window.isDestroyed() || state.isQuitting || !state.store) {
-      return
-    }
-    trayCreated = true
-    if (process.platform === 'darwin') {
-      if (syncMacMenuBarIcon(state.store.getSettings().showMenuBarIcon !== false)) {
-        onCreated?.()
-      }
-      return
-    }
-    const options = getSystemTrayOptions()
-    if (options && createSystemTray(options)) {
-      onCreated?.()
-    }
-  }
 }
 
 function resolveMenuTargetRenderer(targetWindow?: BrowserWindow | null): WebContents | undefined {
