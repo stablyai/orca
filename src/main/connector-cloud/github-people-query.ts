@@ -1,6 +1,7 @@
 // Who can ask › Add on GitHub: the one GraphQL call that reads the people of the connected
 // repositories and organizations, and how its answer is read source by source.
 import * as z from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import {
   GITHUB_ID_PATTERN,
   GITHUB_LOGIN_PATTERN,
@@ -71,26 +72,35 @@ export function rosterQuery(target: GitHubPeopleTarget): {
   return { document: `${head} { ${fields.join(' ')} }`, vars }
 }
 
-const RawPerson = z.object({
-  databaseId: z.number().int(),
-  login: z.string().regex(GITHUB_LOGIN_PATTERN),
-  name: z.string().nullable().optional()
-})
-const People = z.object({ totalCount: z.number().int(), nodes: z.array(z.unknown()) })
-const RepositorySource = z.object({ assignableUsers: People })
-const OrganizationSource = z.object({ membersWithRole: People })
-const PersonalSource = z.object({
-  repositories: z.object({ totalCount: z.number().int(), nodes: z.array(z.unknown()) })
-})
+// Built on first use, as the host's other schemas are: most app runs never read the list.
+const RawPerson = lazyZodSchema(() =>
+  z.object({
+    databaseId: z.number().int(),
+    login: z.string().regex(GITHUB_LOGIN_PATTERN),
+    name: z.string().nullable().optional()
+  })
+)
+const People = lazyZodSchema(() =>
+  z.object({ totalCount: z.number().int(), nodes: z.array(z.unknown()) })
+)
+const RepositorySource = lazyZodSchema(() => z.object({ assignableUsers: People }))
+const OrganizationSource = lazyZodSchema(() => z.object({ membersWithRole: People }))
+const PersonalSource = lazyZodSchema(() =>
+  z.object({
+    repositories: z.object({ totalCount: z.number().int(), nodes: z.array(z.unknown()) })
+  })
+)
 // Data and errors are read apart: a malformed `errors` must not lose readable sources.
-const Data = z.object({ data: z.record(z.string(), z.unknown()) })
-const NoErrors = z.object({ errors: z.array(z.never()).optional() })
-const Viewer = z.object({ login: z.string().regex(GITHUB_LOGIN_PATTERN) })
+const Data = lazyZodSchema(() => z.object({ data: z.record(z.string(), z.unknown()) }))
+const NoErrors = lazyZodSchema(() => z.object({ errors: z.array(z.never()).optional() }))
+const Viewer = lazyZodSchema(() => z.object({ login: z.string().regex(GITHUB_LOGIN_PATTERN) }))
 // An owner's declared kind, read apart from its connection: a malformed connection keeps its kind.
-const OwnerKind = z.object({ __typename: z.enum(['Organization', 'User']) })
-const PathedErrors = z.object({
-  errors: z.array(z.object({ path: z.array(z.union([z.string(), z.number()])).optional() }))
-})
+const OwnerKind = lazyZodSchema(() => z.object({ __typename: z.enum(['Organization', 'User']) }))
+const PathedErrors = lazyZodSchema(() =>
+  z.object({
+    errors: z.array(z.object({ path: z.array(z.union([z.string(), z.number()])).optional() }))
+  })
+)
 
 /** Which kind a GraphQL error's path points into, by an alias this query emitted: a repository
  *  (`rN`, through its `assignableUsers`) or an account of the kind it declared (`aN`: an
