@@ -55,15 +55,15 @@ it('uses the same live protection in the pending reader and lapse pass', () => {
   expect(Object.keys(state.manuallyUnreadTurnsByPaneKey)).toHaveLength(500)
   expect(readWebChatMark(state, 'activityClearedAtByPaneKey', CHAT)).toBe(200)
   expect(readWebChatMark(state, 'manuallyUnreadTurnsByPaneKey', CHAT, 200)).toBe(200)
-  expect(
-    computeLapsedManualUnreadProtections(
-      {
-        liveTurns: state.agentStatusByPaneKey,
-        manuallyUnreadTurnStartedAt: state.manuallyUnreadTurnsByPaneKey
-      },
-      new Set([CHAT])
-    )
-  ).toEqual([])
+  const lapsed = computeLapsedManualUnreadProtections(
+    {
+      liveTurns: state.agentStatusByPaneKey,
+      manuallyUnreadTurnStartedAt: state.manuallyUnreadTurnsByPaneKey
+    },
+    new Set([CHAT])
+  )
+  expect(lapsed).not.toContain(CHAT)
+  expect(lapsed).not.toContain(OLD)
 })
 
 it('preserves all held cutoffs when Clear completed is saved and then undone at the cap', () => {

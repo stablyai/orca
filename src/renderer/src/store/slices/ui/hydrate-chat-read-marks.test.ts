@@ -11,10 +11,12 @@ it('caps desktop acknowledgements at hydration when a saved alias has no matchin
       acknowledgements[`terminal-${index}:pane`] = index
     }
     const store = createUIStore()
-    store.getState().hydratePersistedUI(
-      makePersistedUI({ acknowledgedAgentsByPaneKey: acknowledgements }),
-      'startup'
-    )
+    store
+      .getState()
+      .hydratePersistedUI(
+        makePersistedUI({ acknowledgedAgentsByPaneKey: acknowledgements }),
+        'startup'
+      )
 
     const hydrated = store.getState().acknowledgedAgentsByPaneKey
     expect(Object.keys(hydrated)).toHaveLength(500)
