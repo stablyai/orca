@@ -569,6 +569,10 @@ describe('worker-start --retry-of launch preference rehydration', () => {
       agent: 'opencode',
       model: 'anthropic/claude-sonnet-4-5'
     })
+    const third = await startFailedAttempt({
+      agent: 'opencode',
+      model: 'anthropic/claude-sonnet-4-5'
+    })
 
     vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockResolvedValue({
       environmentId: 'env_attach_peer',
@@ -580,6 +584,7 @@ describe('worker-start --retry-of launch preference rehydration', () => {
       'capability_unsupported',
       'OpenCode cannot apply a model choice on this execution host. Use a fresh local terminal in an existing workspace, or omit --model.'
     )
+    let fallbackState: 'ready' | 'outcome_unknown' = 'ready'
     vi.spyOn(runtime, 'callOrchestrationWorkerServer').mockImplementation(
       async (_envId, method, payload) => {
         if (method === 'status.get') {
@@ -598,6 +603,9 @@ describe('worker-start --retry-of launch preference rehydration', () => {
         }
         const dispatchId =
           record && 'dispatchId' in record ? String(record.dispatchId) : 'ctx_unknown'
+        if (fallbackState === 'outcome_unknown') {
+          return { dispatchId, state: 'outcome_unknown', lastError: 'attach timed out' }
+        }
         return {
           dispatchId,
           state: 'ready',
@@ -628,6 +636,7 @@ describe('worker-start --retry-of launch preference rehydration', () => {
       }
     )
     expect(explicitAttachRetry).toMatchObject({ state: 'failed' })
+    expect(explicitAttachRetry).not.toHaveProperty('warning')
 
     const federatedRetry = await callStart(
       {
@@ -653,6 +662,31 @@ describe('worker-start --retry-of launch preference rehydration', () => {
         requested: { agent: 'opencode', model: null, effort: null },
         effective: { agent: 'opencode', model: null, effort: null }
       },
+      warning:
+        'not carrying over model anthropic/claude-sonnet-4-5 from the retried worker: OpenCode cannot apply a model choice on this execution host. Use a fresh local terminal in an existing workspace, or omit --model.'
+    })
+
+    fallbackState = 'outcome_unknown'
+    const unknownFallbackRetry = await callStart(
+      {
+        task: third.taskId,
+        from: 'term_coord',
+        retryOf: third.dispatchId,
+        on: 'attach-peer',
+        worktree: 'id:remote-worktree'
+      },
+      {
+        runtime,
+        orchestrationMutation: {
+          callerFingerprint: 'caller_coord',
+          requestId: 'req_inherited_attach_unknown',
+          method: 'orchestration.workerStart',
+          payloadHash: 'hash_inherited_attach_unknown'
+        }
+      }
+    )
+    expect(unknownFallbackRetry).toMatchObject({
+      state: 'outcome_unknown',
       warning:
         'not carrying over model anthropic/claude-sonnet-4-5 from the retried worker: OpenCode cannot apply a model choice on this execution host. Use a fresh local terminal in an existing workspace, or omit --model.'
     })

@@ -118,6 +118,10 @@ export async function callRemoteStartWithRetryLaunchFallback<T>(args: {
   effort?: string
   requestedLaunch?: OrchestrationWorkerLaunchReceipt
   warning?: string
+  onFallback?: (dropped: {
+    warning: string
+    requestedLaunch: OrchestrationWorkerLaunchReceipt
+  }) => void
   send: (overrides: { model: string | undefined; effort: string | undefined }) => Promise<T>
 }): Promise<{
   result: T
@@ -137,9 +141,11 @@ export async function callRemoteStartWithRetryLaunchFallback<T>(args: {
       throw error
     }
     const droppedWarning = formatDroppedRetryLaunchWarning(args, error.message)
+    const nextLaunch = createPendingWorkerLaunchReceipt({ agent: fallbackReceipt.requested.agent })
+    args.onFallback?.({ warning: droppedWarning, requestedLaunch: nextLaunch })
     return {
       result: await args.send({ model: undefined, effort: undefined }),
-      requestedLaunch: createPendingWorkerLaunchReceipt({ agent: fallbackReceipt.requested.agent }),
+      requestedLaunch: nextLaunch,
       warning: droppedWarning,
       droppedWarning
     }

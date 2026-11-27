@@ -169,12 +169,19 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
   }
 
   db.recordWorkerStage({ dispatchId: started.dispatch.id, stage: 'remote_attach_requested' })
+  const notifyArrival = (h: string, t: string) => runtime.notifyMessageArrived(h, t)
+  const childWarning = childParent && 'warning' in childParent ? childParent.warning : undefined
+  let warning = joinWorkerStartWarnings(launchPlan.warning, childWarning)
   let readyResult: unknown
   let launch = requestedLaunch
   try {
     const called = await callRemoteStartWithRetryLaunchFallback({
       ...launchPlan,
       inherited: params.inheritedLaunchPreferences,
+      onFallback: (dropped) => {
+        launch = dropped.requestedLaunch
+        warning = joinWorkerStartWarnings(dropped.warning, childWarning)
+      },
       send: ({ model, effort }) =>
         runtime.callOrchestrationWorkerServer(
           server.environmentId,
@@ -210,7 +217,6 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
           { contractVerified: true, ...pairingFence }
         )
     })
-    launch = called.requestedLaunch
     const remote = parseRemoteFederatedWorkerStartReceipt(called.result)
     if (remote.dispatchId !== started.dispatch.id) {
       throw new OrchestrationError(
@@ -230,10 +236,6 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
       runtime.ensureOrchestrationFederationRelay(runId)
       const reportsTurnStops = status.capabilities?.includes(
         ORCHESTRATION_WORKER_TURN_STOP_REPORTS_RUNTIME_CAPABILITY
-      )
-      const warning = joinWorkerStartWarnings(
-        called.warning,
-        childParent && 'warning' in childParent ? childParent.warning : undefined
       )
       readyResult = withWorkerStartNext(
         {
@@ -267,37 +269,35 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
         remote.lastError ?? 'The worker server reported an unknown start outcome.'
       )
       recordStarted(false)
-      return federatedUnknownReceipt(worker, taskForRemote.id, server.name, launch)
+      return federatedUnknownReceipt(worker, taskForRemote.id, server.name, launch, warning)
     } else {
       const worker = db.failWorkerStart(
         started.dispatch.id,
         remote.failedStage ?? 'remote_attach',
         remote.lastError ?? `The worker server returned ${remote.state}.`
       )
-      reportFailedWorkerStart(db, worker, (handle, type) =>
-        runtime.notifyMessageArrived(handle, type)
-      )
+      reportFailedWorkerStart(db, worker, notifyArrival)
       return federatedFailedReceipt(worker, { runId, taskId: taskForRemote.id }, server, {
         setup: remote.setup,
         launch,
         effects: remote.effects,
-        residualResources: remote.residualResources
+        residualResources: remote.residualResources,
+        warning
       })
     }
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error)
     if (error instanceof OrchestrationError && isKnownRemoteStartFailure(error.code)) {
       const worker = db.failWorkerStart(started.dispatch.id, 'remote_attach', reason)
-      reportFailedWorkerStart(db, worker, (handle, type) =>
-        runtime.notifyMessageArrived(handle, type)
-      )
+      reportFailedWorkerStart(db, worker, notifyArrival)
       return federatedFailedReceipt(worker, { runId, taskId: taskForRemote.id }, server, {
-        launch: requestedLaunch
+        launch,
+        warning
       })
     }
     const worker = db.markWorkerStartUnknown(started.dispatch.id, 'remote_attach', reason)
     recordStarted(false)
-    return federatedUnknownReceipt(worker, taskForRemote.id, server.name, requestedLaunch)
+    return federatedUnknownReceipt(worker, taskForRemote.id, server.name, launch, warning)
   }
   recordStarted(true)
   return readyResult

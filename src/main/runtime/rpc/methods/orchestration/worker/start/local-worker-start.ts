@@ -164,7 +164,8 @@ export async function startLocalWorker(args: {
       error,
       setup: placed?.setupReceipt ?? EXISTING_WORKTREE_SETUP,
       launch: placed?.launch ?? launch.receipt,
-      mode
+      mode,
+      warning: joinWorkerStartWarnings(retryLaunchWarning, placed?.warning)
     })
   const recordOutcome = (outcome: unknown): void => {
     closeFailedSetupOnceRetryReady(runtime, db, params.retryOf, outcome)
