@@ -21,6 +21,8 @@ function useReasonText(reason: SidebarRevealNoneReason | null): string | null {
       return t('sidebar.revealCurrent.archived', 'Archived workspaces aren’t listed in the sidebar')
     case 'bots-off':
       return t('sidebar.revealCurrent.botsOff', 'Bots are turned off, so this bot isn’t listed')
+    case 'bot-filtered':
+      return t('sidebar.revealCurrent.botFiltered', 'This bot is hidden by the tag filter')
     case 'bot-hidden':
       return t('sidebar.revealCurrent.botHidden', 'This bot is paused and hidden by Bot options')
   }

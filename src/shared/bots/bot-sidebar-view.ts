@@ -18,6 +18,7 @@ export type BotSidebarSortBy = (typeof BOT_SIDEBAR_SORT_CHOICES)[number]['id']
 export type BotSidebarView = {
   sortBy: BotSidebarSortBy
   hidePausedBots: boolean
+  tagFilter?: string[]
   /** A bot's worker lines with nothing running drop off, as the projects' Hide sleeping. */
   hideSleepingWorkers: boolean
 }
@@ -25,6 +26,7 @@ export type BotSidebarView = {
 export const DEFAULT_BOT_SIDEBAR_VIEW: BotSidebarView = {
   sortBy: 'manual',
   hidePausedBots: false,
+  tagFilter: [],
   hideSleepingWorkers: false
 }
 
@@ -36,6 +38,15 @@ export function normalizeBotSidebarView(value: unknown): BotSidebarView {
   return {
     sortBy: sortBy ?? DEFAULT_BOT_SIDEBAR_VIEW.sortBy,
     hidePausedBots: saved.hidePausedBots === true,
+    tagFilter: Array.isArray(saved.tagFilter)
+      ? [
+          ...new Set(
+            saved.tagFilter.flatMap((tag: unknown) =>
+              typeof tag === 'string' && tag ? [tag.toLowerCase()] : []
+            )
+          )
+        ]
+      : [],
     hideSleepingWorkers: saved.hideSleepingWorkers === true
   }
 }
@@ -45,8 +56,52 @@ export function countActiveBotSidebarFilters(view: BotSidebarView): number {
   return Number(view.hidePausedBots) + Number(view.hideSleepingWorkers)
 }
 
+type TaggedBot = { tags?: readonly string[] }
+
+export const NO_BOT_SIDEBAR_TAGS: ReadonlySet<string> = new Set()
+export const botSidebarNameCollator = new Intl.Collator(undefined, { sensitivity: 'base' })
+
+export function botSidebarTags(bots: readonly TaggedBot[]): ReadonlyMap<string, string> {
+  const tags = new Map<string, string>()
+  for (const bot of bots) {
+    for (const tag of bot.tags ?? []) {
+      const key = tag.toLowerCase()
+      if (!tags.has(key)) {
+        tags.set(key, tag)
+      }
+    }
+  }
+  return tags
+}
+
+export function activeBotSidebarTags(
+  selection: readonly string[] | undefined,
+  botsOrTags: readonly TaggedBot[] | ReadonlyMap<string, string>
+): ReadonlySet<string> {
+  if (!selection?.length) {
+    return NO_BOT_SIDEBAR_TAGS
+  }
+  const available = 'has' in botsOrTags ? botsOrTags : botSidebarTags(botsOrTags)
+  return new Set(selection.filter((key) => available.has(key)))
+}
+
+export type BotSidebarHiddenReason = 'bot-hidden' | 'bot-filtered'
+
+export function botSidebarHiddenReason(
+  bot: TaggedBot & { paused: boolean },
+  hidePausedBots: boolean,
+  activeTags: ReadonlySet<string>
+): BotSidebarHiddenReason | null {
+  if (hidePausedBots && bot.paused) {
+    return 'bot-hidden'
+  }
+  return activeTags.size > 0 && !bot.tags?.some((tag) => activeTags.has(tag.toLowerCase()))
+    ? 'bot-filtered'
+    : null
+}
+
 type ArrangedEntry =
-  | { kind: 'bot'; bot: { name: string; paused: boolean; createdAt?: unknown } }
+  | { kind: 'bot'; bot: TaggedBot & { name: string; paused: boolean; createdAt?: unknown } }
   | { kind: 'group'; group: { name: string; createdAt?: unknown } }
 
 export type BotSidebarEntryActivity = {
@@ -66,23 +121,26 @@ export function botSidebarEntryRecency(entry: ArrangedEntry, activityAt: number)
 export function arrangeBotSidebarEntries<E extends ArrangedEntry>(
   entries: readonly E[],
   view: BotSidebarView,
-  activityOf: (entry: E) => BotSidebarEntryActivity
+  activityOf: (entry: E) => BotSidebarEntryActivity,
+  activeTags: ReadonlySet<string> = NO_BOT_SIDEBAR_TAGS
 ): E[] {
-  // Groups are rooms the owner made on purpose; only bots pause.
-  const shown = view.hidePausedBots
-    ? entries.filter((entry) => entry.kind !== 'bot' || !entry.bot.paused)
-    : [...entries]
+  // Groups are rooms the owner made on purpose; only bots are filtered.
+  const shown = entries.filter(
+    (entry) =>
+      entry.kind === 'group' ||
+      botSidebarHiddenReason(entry.bot, view.hidePausedBots, activeTags) === null
+  )
   if (view.sortBy === 'manual') {
     return shown
   }
   const name = (entry: E): string => (entry.kind === 'bot' ? entry.bot.name : entry.group.name)
   if (view.sortBy === 'name') {
-    const collator = new Intl.Collator(undefined, { sensitivity: 'base' })
     return shown
       .map((entry, index) => ({ entry, index }))
       .sort(
         (left, right) =>
-          collator.compare(name(left.entry), name(right.entry)) || left.index - right.index
+          botSidebarNameCollator.compare(name(left.entry), name(right.entry)) ||
+          left.index - right.index
       )
       .map(({ entry }) => entry)
   }

@@ -30,9 +30,9 @@ export function requestOpenedChatFocus(tabId: string | null): void {
 /** The bot as its host lists it now, by host and id; null once it's gone. */
 export function readListedBot(
   bot: Pick<Bot, 'hostId' | 'id'>
-): { kind: 'bot'; paused: boolean } | null {
+): ({ kind: 'bot' } & Pick<Bot, 'paused' | 'tags'>) | null {
   const live = readHostBots(bot.hostId).find((candidate) => candidate.id === bot.id)
-  return live ? { kind: 'bot', paused: live.paused } : null
+  return live ? { kind: 'bot', paused: live.paused, tags: live.tags } : null
 }
 
 /** The group as its host lists it now; null once it's gone. */

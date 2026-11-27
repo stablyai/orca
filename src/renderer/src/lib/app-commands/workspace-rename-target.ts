@@ -12,7 +12,9 @@ export function workspaceRenameUnsupportedReason(target: SidebarRevealTarget): s
   }
   if (
     target.section === 'none' &&
-    (target.reason === 'bots-off' || target.reason === 'bot-hidden')
+    (target.reason === 'bots-off' ||
+      target.reason === 'bot-hidden' ||
+      target.reason === 'bot-filtered')
   ) {
     return translate(
       'sidebar.revealCurrent.renameUnlisted',

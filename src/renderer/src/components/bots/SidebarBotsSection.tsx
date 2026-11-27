@@ -20,6 +20,11 @@ import {
   getActiveSidebarWorkspaceId
 } from '../../../../shared/workspace/identity/workspace-scope'
 import { botGroupMemberBots } from '../../../../shared/bots/bot-sidebar-entries'
+import {
+  activeBotSidebarTags,
+  botSidebarTags,
+  botSidebarHiddenReason
+} from '../../../../shared/bots/bot-sidebar-view'
 import { getHostKeyedBotSidebarEntries } from './bot-sidebar-entry-keys'
 import { readBotHostState } from '@/lib/bot-catalog-snapshot'
 import { BotSidebarDragFrame, BotSidebarEntry, type BotSidebarEntryDrag } from './BotSidebarEntry'
@@ -28,6 +33,7 @@ import { useBotGroupDelete } from './use-bot-group-delete'
 import { findBotGroupRoom, type BotGroup } from '../../../../shared/bots/bot-group'
 import { BotSidebarNewMenu } from './BotSidebarNewMenu'
 import { BotSidebarOptionsMenu } from './BotSidebarOptionsMenu'
+import { BotSidebarTagFilter } from './BotSidebarTagFilter'
 import { useBotSidebarArrangement } from './use-bot-sidebar-arrangement'
 import { botErrorMessage } from './bot-presentation'
 
@@ -86,14 +92,32 @@ export function SidebarBotsSection({
     () => getHostKeyedBotSidebarEntries(bots, groups, folderWorkspaces),
     [bots, groups, folderWorkspaces]
   )
-  const entries = useBotSidebarArrangement(savedEntries)
+  const tagFilter = useAppStore((s) => s.botSidebarView.tagFilter)
+  const availableTags = useMemo(() => botSidebarTags(bots), [bots])
+  const activeTags = useMemo(
+    () => activeBotSidebarTags(tagFilter, availableTags),
+    [tagFilter, availableTags]
+  )
+  const entries = useBotSidebarArrangement(savedEntries, activeTags)
+  const searchableEntries = useMemo(
+    () =>
+      activeTags.size > 0
+        ? savedEntries.filter(
+            (entry) =>
+              entry.kind === 'group' ||
+              botSidebarHiddenReason(entry.bot, false, activeTags) === null
+          )
+        : savedEntries,
+    [savedEntries, activeTags]
+  )
   const listRef = useRef<HTMLDivElement>(null)
   // Search shows the list in place and nothing drags while it is open. Its toggle lives only in the
   // unfolded header, so a search always starts unfolded.
   const search = useBotSidebarSearch({ listRef, savedEntries, onOpenBot })
   const searchOpen = search.open
   // Only the saved order can be dragged, as for workspaces.
-  const draggable = useAppStore((s) => s.botSidebarView.sortBy === 'manual') && !searchOpen
+  const draggable =
+    useAppStore((s) => s.botSidebarView.sortBy === 'manual') && !searchOpen && activeTags.size === 0
   const rows = useMemo(
     () => entries.flatMap((entry) => (entry.kind === 'bot' ? [entry] : [])),
     [entries]
@@ -233,6 +257,7 @@ export function SidebarBotsSection({
                   onToggle={search.toggleOpen}
                 />
               ) : null}
+              <BotSidebarTagFilter availableTags={availableTags} activeTags={activeTags} />
               {hasEntries ? <BotSidebarOptionsMenu /> : null}
               <BotSidebarNewMenu
                 open={newMenuOpen}
@@ -251,7 +276,7 @@ export function SidebarBotsSection({
         regionRef={search.regionRef}
         panel={{
           entries,
-          allEntries: savedEntries,
+          allEntries: searchableEntries,
           bots,
           onSelect: search.select,
           onSupersede: search.supersede,
@@ -272,7 +297,9 @@ export function SidebarBotsSection({
             {savedEntries.length > 0 && entries.length === 0 ? (
               collapsed ? null : (
                 <div className="px-4 text-xs text-muted-foreground">
-                  {t('bots.options.allHidden', 'All bots are paused and hidden.')}
+                  {activeTags.size > 0
+                    ? t('bots.tagFilter.empty', 'No bots match the current filters.')
+                    : t('bots.options.allHidden', 'All bots are paused and hidden.')}
                 </div>
               )
             ) : entries.length === 0 ? (

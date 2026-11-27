@@ -119,6 +119,7 @@
       "fullPageView": "This page has no row in the sidebar",
       "archived": "Archived workspaces aren’t listed in the sidebar",
       "botsOff": "Bots are turned off, so this bot isn’t listed",
+      "botFiltered": "This bot is hidden by the tag filter",
       "botHidden": "This bot is paused and hidden by Bot options",
       "renameBotPage": "A bot’s or group’s page isn’t a worktree. To rename it, use Rename in its row’s menu.",
       "renameUnlisted": "This workspace isn’t listed in the sidebar right now, so it can’t be renamed there."
@@ -29969,6 +29970,12 @@
       "hideSleepingWorkers": "Hide sleeping workers",
       "hideSleepingWorkersAria": "Hide a bot's worker workspaces that have nothing running",
       "allHidden": "All bots are paused and hidden."
+    },
+    "tagFilter": {
+      "active": "Filter by tag ({{total}} selected)",
+      "clear": "Clear tag filter",
+      "empty": "No bots match the current filters.",
+      "label": "Filter by tag"
     },
     "share": {
       "shareBot": "Share bot…",

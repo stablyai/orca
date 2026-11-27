@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react'
-import { SlidersHorizontal } from 'lucide-react'
+import { SlidersHorizontal, type LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -23,6 +23,7 @@ export function SidebarOptionsPopover({
   ariaLabel,
   tooltip,
   activeFilterCount,
+  icon: Icon = SlidersHorizontal,
   preserveWorkspaceBoardOpen = false,
   onMenuOpenChange,
   hint,
@@ -31,6 +32,7 @@ export function SidebarOptionsPopover({
   ariaLabel: string
   tooltip: string
   activeFilterCount: number
+  icon?: LucideIcon
   preserveWorkspaceBoardOpen?: boolean
   onMenuOpenChange?: (open: boolean) => void
   hint?: SidebarOptionsHint
@@ -73,7 +75,7 @@ export function SidebarOptionsPopover({
                   aria-label={ariaLabel}
                   data-workspace-board-preserve-open={preserveOpen}
                 >
-                  <SlidersHorizontal className="size-3.5" strokeWidth={2.25} />
+                  <Icon className="size-3.5" strokeWidth={2.25} />
                   <OptionsFilterCountBadge count={activeFilterCount} />
                 </Button>
               </PopoverAnchor>
