@@ -1,6 +1,6 @@
 import { BotChat } from '../../../../shared/rpc-contract/bots-params'
 import { botFirstKickoff } from '../../../../shared/bots/bot-import'
-import { releaseReplacedHomes, syncTeammateHomeNames } from '../../../bots/bot-home-chat-name'
+import { releaseReplacedHomes } from '../../../bots/bot-home-chat-name'
 import { retryBotKickoff } from '../../../bots/bot-kickoff-retry'
 import { requireStructuredHost, runtimeBotChats } from '../../../bots/bot-chat-session'
 import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
@@ -44,10 +44,7 @@ export const BOT_KICKOFF_METHODS = [
       const sessionId = await chats.withChat(params.botId, of, async (id) => {
         const opened = current()
         if (opened) {
-          const host = await requireStructuredHost(runtime)
-          await releaseReplacedHomes(host, opened)
-          // A teammate's Home an older build named, or named before this host was open.
-          await syncTeammateHomeNames(host, opened)
+          await releaseReplacedHomes(await requireStructuredHost(runtime), opened)
         }
         return id
       })

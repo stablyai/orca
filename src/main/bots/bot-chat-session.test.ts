@@ -166,103 +166,119 @@ describe('a Home Chat for each person', () => {
     expect(rig!.store.getConversation(ALICE_HOME)?.conversationName).not.toBe('Alice’s Home')
   })
 
-  it('renames a teammate’s Home for every reader once their name reaches the host', async () => {
-    // An older build named Alice's Home by her email, before her name reached the host.
-    const { bot, bots, host } = await setup('alice@example.com’s Home')
-    await bots.update('bot-1', (saved) => ({
-      shares: saved.shares?.map((entry) =>
-        entry.kind === 'account' && entry.accountId === ALICE.accountId
-          ? { ...entry, name: undefined }
-          : entry
-      )
-    }))
-    setStructuredAgentSessionHost(host)
-    const syncDevices = vi.fn(async () => {})
-    // As the connector's share_resolved handler runs it.
-    const before = bot()
-    const named: Parameters<typeof resolveBotShareInvite>[1] = {
-      kind: 'share_resolved',
-      deliveryId: 'share-named:1',
-      expiresAt: Number.MAX_SAFE_INTEGER,
-      conversation: { source: 'orca', externalId: 'share-Alice' },
-      shareId: 'share-Alice',
-      botId: 'bot-1',
-      email: 'alice@example.com',
-      accountId: ALICE.accountId,
-      name: 'Alice Lee'
-    }
-    expect(await resolveBotShareInvite(bots, named)).toBe(true)
-    await syncSharePersonNames(
-      { bots: { list: () => [bot()] }, botShareDevices: { syncBotShareDeviceNames: syncDevices } },
-      'bot-1',
-      before
-    )
-    expect(syncDevices).toHaveBeenCalledOnce()
-    // Bot Items' chat title: the record's name.
-    expect(readAgentSessionRecordStore()?.getRecord(ALICE_HOME)?.conversationName).toBe(
-      'Alice Lee’s Home'
-    )
-    // The host's naming feed, which the tab switcher, Cmd+K, the board and usage-limit stops read.
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the naming snapshot reads only these two.
-    const feed = structuredAgentSessionNamingSnapshot({
-      getConversation: (id: string) => rig!.store.getConversation(id),
-      listConversations: () => rig!.store.listConversations()
-    } as never)
-    expect(feed).toMatchObject({
-      conversationNames: expect.arrayContaining([
-        expect.objectContaining({ sessionId: ALICE_HOME, conversationName: 'Alice Lee’s Home' })
-      ])
-    })
-    expect(
-      botShareAsker(bot(), { kind: 'bot-share', botId: 'bot-1', accountId: ALICE.accountId })
-    ).toMatchObject({ name: 'Alice Lee' })
-    const directory = mkdtempSync(join(tmpdir(), 'teammate-home-names-'))
-    const db = new OrchestrationDb(join(directory, 'orchestration.db'))
-    try {
-      // The owner's chat host as bots.chats.own and bots.chats.search read it.
-      const treeHost: BotChatTreeHost = {
-        bots: () => [bot()],
-        sessionRecords: async () => conversationRecordReader(rig!.store),
-        db: () => db,
-        backgroundRuns: { botOfLook: () => null, botOfTidyUp: () => null },
-        externalConversations: () => [],
-        chatTabs: async () => [],
-        statusRows: () => [],
-        automations: () => [],
-        automationRuns: () => new Map(),
-        recordedWorkers: async () => [],
-        dispatchWorkers: async () => []
+  // Named by her email before her name reached the host (as an older build did too), or by the name
+  // she had before she changed it.
+  it.each([
+    { saved: 'alice@example.com’s Home', had: undefined },
+    { saved: 'Alice’s Home', had: 'Alice' }
+  ])(
+    'renames "$saved" for every reader once a new name reaches the host, chat host not open yet',
+    async ({ saved, had }) => {
+      const { bot, bots, host } = await setup(saved)
+      await bots.update('bot-1', (stored) => ({
+        shares: stored.shares?.map((entry) =>
+          entry.kind === 'account' && entry.accountId === ALICE.accountId
+            ? { ...entry, name: had }
+            : entry
+        )
+      }))
+      // The chat host installs lazily: nothing has opened it when the delivery lands.
+      setStructuredAgentSessionHost(null)
+      const ensureStructuredAgentSessionHost = vi.fn(async () => {
+        setStructuredAgentSessionHost(host)
+      })
+      const syncDevices = vi.fn(async () => {})
+      // As the connector's share_resolved handler runs it.
+      const before = bot()
+      const named: Parameters<typeof resolveBotShareInvite>[1] = {
+        kind: 'share_resolved',
+        deliveryId: 'share-named:1',
+        expiresAt: Number.MAX_SAFE_INTEGER,
+        conversation: { source: 'orca', externalId: 'share-Alice' },
+        shareId: 'share-Alice',
+        botId: 'bot-1',
+        email: 'alice@example.com',
+        accountId: ALICE.accountId,
+        name: 'Alice Lee'
       }
-      const line = await readBotOwnChatPanes(treeHost)
-      expect(line['bot-1']?.map((chat) => chat.title)).toContain('Alice Lee’s Home')
-      const found = await searchBotChats(
+      expect(await resolveBotShareInvite(bots, named)).toBe(true)
+      await syncSharePersonNames(
         {
-          ...treeHost,
-          treeParts: (botId) => readBotChatTreeParts(treeHost, { botId }),
-          contentMatches: async () => []
+          bots: { list: () => [bot()] },
+          botShareDevices: { syncBotShareDeviceNames: syncDevices },
+          ensureStructuredAgentSessionHost
         },
-        { botId: 'bot-1', query: 'Alice Lee' }
+        'bot-1',
+        before
       )
-      expect(found.chats).toEqual([
-        expect.objectContaining({
-          chatId: ALICE_HOME,
-          title: 'Alice Lee’s Home',
-          homeOf: 'Alice Lee'
-        })
-      ])
-    } finally {
-      db.close()
-      rmSync(directory, { recursive: true, force: true })
+      expect(syncDevices).toHaveBeenCalledOnce()
+      expect(ensureStructuredAgentSessionHost).toHaveBeenCalledOnce()
+      // Bot Items' chat title: the record's name.
+      expect(readAgentSessionRecordStore()?.getRecord(ALICE_HOME)?.conversationName).toBe(
+        'Alice Lee’s Home'
+      )
+      // The host's naming feed, which the tab switcher, Cmd+K, the board and usage-limit stops read.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the naming snapshot reads only these two.
+      const feed = structuredAgentSessionNamingSnapshot({
+        getConversation: (id: string) => rig!.store.getConversation(id),
+        listConversations: () => rig!.store.listConversations()
+      } as never)
+      expect(feed).toMatchObject({
+        conversationNames: expect.arrayContaining([
+          expect.objectContaining({ sessionId: ALICE_HOME, conversationName: 'Alice Lee’s Home' })
+        ])
+      })
+      expect(
+        botShareAsker(bot(), { kind: 'bot-share', botId: 'bot-1', accountId: ALICE.accountId })
+      ).toMatchObject({ name: 'Alice Lee' })
+      const directory = mkdtempSync(join(tmpdir(), 'teammate-home-names-'))
+      const db = new OrchestrationDb(join(directory, 'orchestration.db'))
+      try {
+        // The owner's chat host as bots.chats.own and bots.chats.search read it.
+        const treeHost: BotChatTreeHost = {
+          bots: () => [bot()],
+          sessionRecords: async () => conversationRecordReader(rig!.store),
+          db: () => db,
+          backgroundRuns: { botOfLook: () => null, botOfTidyUp: () => null },
+          externalConversations: () => [],
+          chatTabs: async () => [],
+          statusRows: () => [],
+          automations: () => [],
+          automationRuns: () => new Map(),
+          recordedWorkers: async () => [],
+          dispatchWorkers: async () => []
+        }
+        const line = await readBotOwnChatPanes(treeHost)
+        expect(line['bot-1']?.map((chat) => chat.title)).toContain('Alice Lee’s Home')
+        const found = await searchBotChats(
+          {
+            ...treeHost,
+            treeParts: (botId) => readBotChatTreeParts(treeHost, { botId }),
+            contentMatches: async () => []
+          },
+          { botId: 'bot-1', query: 'Alice Lee' }
+        )
+        expect(found.chats).toEqual([
+          expect.objectContaining({
+            chatId: ALICE_HOME,
+            title: 'Alice Lee’s Home',
+            homeOf: 'Alice Lee'
+          })
+        ])
+      } finally {
+        db.close()
+        rmSync(directory, { recursive: true, force: true })
+      }
+      // A name the owner gave it stays theirs.
+      await host.setUserConversationName(ALICE_HOME, 'Pairing with Alice', 'rename')
+      await syncSharePersonNames(
+        { bots: { list: () => [bot()] }, botShareDevices: null, ensureStructuredAgentSessionHost },
+        'bot-1',
+        before
+      )
+      expect(rig!.store.getConversation(ALICE_HOME)?.conversationName).toBe('Pairing with Alice')
     }
-    // A name the owner gave it stays theirs.
-    await host.setUserConversationName(ALICE_HOME, 'Pairing with Alice', 'rename')
-    await syncSharePersonNames(
-      { bots: { list: () => [bot()] }, botShareDevices: null },
-      'bot-1',
-      before
-    )
-    expect(rig!.store.getConversation(ALICE_HOME)?.conversationName).toBe('Pairing with Alice')
-  })
+  )
 
   it('a replaced Home gives up the name an older build saved by email', async () => {
     const { chats, bots } = await setup('alice@example.com’s Home')

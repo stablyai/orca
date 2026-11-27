@@ -8,6 +8,7 @@ import {
   legacyTeammateHomeNames,
   type BotHomeOf
 } from '../../shared/bots/bot-home-of'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { isOrcaSessionId } from '../../shared/agent-session/identity/orca-session-address'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
@@ -96,6 +97,20 @@ export async function syncTeammateHomeNames(
         .setUserConversationName(home.sessionId, name, 'rename')
         .catch((error: unknown) => console.warn('[bots] renaming a teammate’s Home failed:', error))
     }
+  }
+}
+
+const syncedHosts = new WeakSet<object>()
+
+/** Once per installed chat host: every bot's teammate Homes, by the name their share has now. */
+export async function syncInstalledTeammateHomeNames(bots: () => readonly Bot[]): Promise<void> {
+  const host = getStructuredAgentSessionHost()
+  if (!host || host.deps.store.readOnly || syncedHosts.has(host)) {
+    return
+  }
+  syncedHosts.add(host)
+  for (const bot of bots()) {
+    await syncTeammateHomeNames(host, bot)
   }
 }
 
