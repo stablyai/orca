@@ -1104,7 +1104,7 @@
         "finishOnPage": "Completa el proceso en la página que se abrió",
         "needsAuth": "Sesión requerida",
         "needsAuthAfterSend": "Sesión requerida. Envía un mensaje para iniciar sesión aquí.",
-        "off": "Desactivado",
+        "disabled": "Desactivado",
         "pending": "Conectando…",
         "tools_many": "{{count}} herramientas",
         "tools_one": "{{count}} herramienta",

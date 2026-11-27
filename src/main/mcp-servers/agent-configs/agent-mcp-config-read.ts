@@ -5,6 +5,7 @@ import { parse as parseJsonc, type ParseError } from 'jsonc-parser'
 import { parse as parseToml } from 'smol-toml'
 import {
   agentMcpConfigEntry,
+  agentMcpConfigEntryDisabled,
   agentMcpServerMergeKey,
   isOrcaOwnedAgentMcpServer,
   type AgentMcpConfigEntry
@@ -30,6 +31,16 @@ export type AgentMcpConfigSource = AgentMcpConfigLocation & {
 }
 
 export type AgentMcpConfigServer = AgentMcpConfigEntry & { source: AgentMcpConfigSource }
+
+/** A name an agent's file holds, whether or not Orca can read its entry. */
+export type AgentMcpConfigName = {
+  name: string
+  scope: AgentMcpConfigLocation['scope']
+  /** Claude's per-folder servers in its user file. */
+  projectPath?: string
+  /** Switched off by a file-wide list (an entry's own flag shows on its server). */
+  disabled: boolean
+}
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -186,10 +197,12 @@ export async function readAgentMcpServers(
 export async function readAgentMcpServerNames(
   agent: McpConfigAgent,
   context: AgentMcpConfigContext,
-  options: { projectPath?: string } = {}
+  options: { projectPath?: string; skipProject?: (projectPath: string) => boolean } = {}
 ): Promise<{
-  names: { name: string; projectPath?: string }[]
+  names: AgentMcpConfigName[]
   servers: AgentMcpConfigServer[]
+  /** Names a read folder's block switches off whatever file defines them (Claude's `/mcp disable`). */
+  folderDisabled: ReadonlySet<string>
 }> {
   const locations = await agentMcpConfigLocations(agent, context, options.projectPath)
   const read = await Promise.all(
@@ -200,23 +213,32 @@ export async function readAgentMcpServerNames(
         if (text !== null) {
           warnUnparsed(location)
         }
-        return { names: [], servers: [] }
+        return { names: [], servers: [], folderDisabled: [] }
       }
-      const blocks = agentMcpServerBlocks(location, parsed, () => false)
+      const blocks = agentMcpServerBlocks(location, parsed, options.skipProject ?? (() => false))
       return {
         names: blocks.flatMap((block) =>
-          Object.keys(record(valueAtKeyPath(parsed, block.path)) ?? {}).map((name) => ({
+          Object.entries(record(valueAtKeyPath(parsed, block.path)) ?? {}).map(([name, raw]) => ({
             name,
-            ...(block.projectPath ? { projectPath: block.projectPath } : {})
+            scope: location.scope,
+            ...(block.projectPath ? { projectPath: block.projectPath } : {}),
+            // Parsed config is plain data, so its own flags are read in place.
+            disabled:
+              (block.disabledNames?.has(name) ?? false) ||
+              (isRecord(raw) && agentMcpConfigEntryDisabled(raw, block.dialect))
           }))
         ),
-        servers: serversInBlocks(location, parsed, blocks, true)
+        servers: serversInBlocks(location, parsed, blocks, true),
+        folderDisabled: blocks.flatMap((block) =>
+          block.projectPath ? [...(block.disabledNames ?? [])] : []
+        )
       }
     })
   )
   return {
     names: read.flatMap((location) => location.names),
-    servers: read.flatMap((location) => location.servers)
+    servers: read.flatMap((location) => location.servers),
+    folderDisabled: new Set(read.flatMap((location) => location.folderDisabled))
   }
 }
 
