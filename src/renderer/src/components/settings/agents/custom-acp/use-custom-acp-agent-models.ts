@@ -56,10 +56,12 @@ export function useCustomAcpAgentModels(agent: CustomAcpAgentId | undefined): Cu
     setState('listing')
     setProblem(undefined)
     const read = async (): Promise<AgentSessionModelCatalogResult> => {
+      // The relist starts asynchronously, so a read that doesn't wait answers with the catalog it
+      // replaces; waiting returns once the new listing differs from it.
       let catalog = await callStructuredAgentSession<AgentSessionModelCatalogResult>(
         LOCAL,
         'agentSession.modelCatalog',
-        { agent, relist: true }
+        { agent, relist: true, waitForListing: true }
       )
       for (let wait = 0; wait < MAX_WAITS && catalog.listingInProgress; wait += 1) {
         catalog = await callStructuredAgentSession<AgentSessionModelCatalogResult>(
