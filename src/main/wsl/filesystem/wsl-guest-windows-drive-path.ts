@@ -121,6 +121,13 @@ export function guestNativePathEnv(
   pathEnv: string | null | undefined,
   mounts: readonly string[] = readGuestWindowsDriveMounts()
 ): string | null | undefined {
+  return guestNativePathForMounts(pathEnv, mounts)
+}
+
+function guestNativePathForMounts(
+  pathEnv: string | null | undefined,
+  mounts: readonly string[]
+): string | null | undefined {
   if (mounts.length === 0) {
     return pathEnv
   }
@@ -133,10 +140,21 @@ export function guestNativeSpawnEnv(
   env: NodeJS.ProcessEnv,
   mounts: readonly string[] = readGuestWindowsDriveMounts()
 ): NodeJS.ProcessEnv {
+  return guestNativeSpawnEnvForMounts(env, mounts)
+}
+
+export async function guestNativeSpawnEnvAsync(env: NodeJS.ProcessEnv): Promise<NodeJS.ProcessEnv> {
+  return guestNativeSpawnEnvForMounts(env, await readGuestWindowsDriveMountsAsync())
+}
+
+function guestNativeSpawnEnvForMounts(
+  env: NodeJS.ProcessEnv,
+  mounts: readonly string[]
+): NodeJS.ProcessEnv {
   if (mounts.length === 0) {
     return env
   }
-  const pathEnv = guestNativePathEnv(env.PATH ?? null, mounts)
+  const pathEnv = guestNativePathForMounts(env.PATH ?? null, mounts)
   return pathEnv === null || pathEnv === undefined ? env : { ...env, PATH: pathEnv }
 }
 

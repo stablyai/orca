@@ -51,3 +51,13 @@ export function retireInventorySlot(slot: InventorySlot): void {
     }
   }
 }
+
+export function retireInventorySlotIfStale(
+  slot: InventorySlot,
+  generation: number | undefined
+): boolean {
+  if (!slot.retired && slot.wslGeneration !== undefined && slot.wslGeneration !== generation) {
+    retireInventorySlot(slot)
+  }
+  return slot.retired === true
+}

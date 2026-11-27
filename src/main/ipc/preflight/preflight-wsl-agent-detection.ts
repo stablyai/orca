@@ -83,7 +83,8 @@ async function probeWslAgentPath(distro: string, candidate: string): Promise<str
 
 export async function probeWslCommandsOnPath(
   wslTarget: WslPreflightTarget,
-  commands: readonly string[]
+  commands: readonly string[],
+  signal?: AbortSignal
 ): Promise<{
   found: Set<string>
   matches: Map<string, AgentPathMatch>
@@ -121,7 +122,8 @@ export async function probeWslCommandsOnPath(
     distro: wslTarget.distro,
     loginPath: 'preferred',
     script,
-    shell: 'sh'
+    shell: 'sh',
+    signal
   })
   return result
     ? {
@@ -133,7 +135,10 @@ export async function probeWslCommandsOnPath(
 
 async function runWslAgentProbe(spec: WslSpec) {
   try {
-    const result = await runWslProcess({ ...spec, timeoutMs: WSL_AGENT_DETECTION_TIMEOUT_MS })
+    const result = await waitForPromiseWithSignal(
+      runWslProcess({ ...spec, timeoutMs: WSL_AGENT_DETECTION_TIMEOUT_MS }),
+      spec.signal
+    )
     return result.timedOut || result.code !== 0 || result.outputTruncated ? null : result
   } catch {
     return null

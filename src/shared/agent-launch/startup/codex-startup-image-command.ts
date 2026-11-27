@@ -1,8 +1,8 @@
 import {
-  CODEX_KITTY_WINDOW_ID,
-  ORCA_IMAGE_PROTOCOL_ENV,
-  ORCA_IMAGE_PROTOCOL_VALUE
-} from '../../terminal/images/terminal-image-protocol'
+  POSIX_CODEX_IMAGE_HINT,
+  POWERSHELL_CLEAR_CODEX_IMAGE_HINT,
+  POWERSHELL_CODEX_IMAGE_HINT
+} from './codex-scoped-image-command'
 import {
   CODEX_REMOTE_VIEWER_SSH_CONNECTION,
   REMOTE_VIEWER_CLIPBOARD_ENV
@@ -46,11 +46,7 @@ const posixScript = (images: boolean, probe: boolean, setupGate: boolean): strin
         ]
       : []),
     `if [ "$i" != 0 ]; then for k in ${CODEX_COMMAND_IDENTITY_ENV_KEYS.join(' ')}; do eval "v=\\\${$k:-}"; case "$v" in ''|*"'"*) ;; *) set -- -c "${identitySetArg('$k', '$v')}" "$@" ;; esac; done; [ "\${SSH_CONNECTION:-}" != '${CODEX_REMOTE_VIEWER_SSH_CONNECTION}' ] || set -- -c "${CLEAR_SSH_MARKER_ARG}" "$@"; fi`,
-    ...(images
-      ? [
-          `if [ "$${ORCA_IMAGE_PROTOCOL_ENV}" = ${ORCA_IMAGE_PROTOCOL_VALUE} ] && [ -z "\${KITTY_WINDOW_ID+x}" ]; then export KITTY_WINDOW_ID=${CODEX_KITTY_WINDOW_ID}; fi`
-        ]
-      : []),
+    ...(images ? [POSIX_CODEX_IMAGE_HINT] : []),
     setupGate ? setupPosixAgentExec('"$p"') : 'exec "$p" "$@"'
   ].join('; ')
 
@@ -60,9 +56,7 @@ const posixPrefix = (images: boolean, probe: boolean, setupGate: boolean): strin
 function powerShellPrefix(images: boolean, probe: boolean): string {
   const remote = `$orcaRemoteClipboard = $env:${REMOTE_VIEWER_CLIPBOARD_ENV} -eq '1' -and -not (Test-Path Env:SSH_CONNECTION) -and -not (Test-Path Env:SSH_TTY); `
   const ids = `if ($env:ORCA_CODEX_ISOLATE -ne '0' -and -not (@($args) -cmatch '${CODEX_SHARED_SERVER_ARG_PATTERN}')) { foreach ($k in ${CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => `'${key}'`).join(',')}) { $v = [Environment]::GetEnvironmentVariable($k); if ($v -and -not $v.Contains("'")) { $orcaCodexIdentity += '-c', "${identitySetArg('$k', '$v')}" } }; if ($orcaRemoteClipboard -or $env:SSH_CONNECTION -ceq '${CODEX_REMOTE_VIEWER_SSH_CONNECTION}') { $orcaCodexIdentity += '-c', "${CLEAR_SSH_MARKER_ARG}" } }; `
-  const kitty = images
-    ? `$orcaKitty = $env:${ORCA_IMAGE_PROTOCOL_ENV} -ceq '${ORCA_IMAGE_PROTOCOL_VALUE}' -and -not (Test-Path Env:KITTY_WINDOW_ID); if ($orcaKitty) { $env:KITTY_WINDOW_ID = '${CODEX_KITTY_WINDOW_ID}' }; `
-    : ''
+  const kitty = images ? POWERSHELL_CODEX_IMAGE_HINT : ''
   const daemon = probe
     ? `try { if ($env:ORCA_CODEX_ISOLATE -ne '0' -and -not (@($args) -cmatch '${CODEX_NO_DAEMON_SKIP_ARG_PATTERN}') -and (& $orcaProgram --help 2>$null | Select-String -Quiet -SimpleMatch '--no-daemon')) { $orcaCodexIdentity += '--no-daemon' } } catch { }; `
     : ''
@@ -74,7 +68,7 @@ function powerShellPrefix(images: boolean, probe: boolean): string {
 }
 
 const powerShellSuffix = (images: boolean): string =>
-  ` } finally { if ($orcaRemoteClipboard) { Remove-Item Env:SSH_CONNECTION }${images ? '; if ($orcaKitty) { Remove-Item Env:KITTY_WINDOW_ID }' : ''} }`
+  ` } finally { if ($orcaRemoteClipboard) { Remove-Item Env:SSH_CONNECTION }${images ? `; ${POWERSHELL_CLEAR_CODEX_IMAGE_HINT}` : ''} }`
 
 const BOTH = [true, false]
 const NO_DAEMON_SKIP_ARGS: ReadonlySet<string> = /* @__PURE__ */ new Set(CODEX_NO_DAEMON_SKIP_ARGS)

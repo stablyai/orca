@@ -16,7 +16,11 @@ import {
   type InventoryRead,
   type InventoryReadOptions
 } from './agent-command-inventory-scan-read'
-import { createInventoryScan, finishInventoryScan } from './agent-command-inventory-scan-state'
+import {
+  createInventoryScan,
+  finishInventoryScan,
+  retireInventorySlotIfStale
+} from './agent-command-inventory-scan-state'
 import {
   notifyScanChange,
   partialLocalAgentCommandInventory,
@@ -46,6 +50,7 @@ type PendingInventory = {
 export type InventorySlot = InventoryPublications & {
   stockCommands: readonly string[]
   distro?: string
+  wslGeneration?: number
   shellPath?: string
   retired?: true
   pending?: PendingInventory
@@ -81,9 +86,14 @@ async function scanInventory(
   if (slot.distro) {
     if (mode === 'refresh') {
       invalidateWslGuestEnvironment(slot.distro)
+      slot.wslGeneration = getWslGuestEnvironmentGeneration(slot.distro)
     }
     scan.generation = inventoryGeneration(slot)
-    const probe = await probeWslCommandsOnPath({ distro: slot.distro }, [...commands])
+    const probe = await probeWslCommandsOnPath(
+      { distro: slot.distro },
+      [...commands],
+      scan.controller.signal
+    )
     if (!probe) {
       return null
     }
@@ -122,7 +132,7 @@ function addScanRequest(
 }
 
 async function runInventoryScans(slot: InventorySlot, pending: PendingInventory): Promise<void> {
-  while (slot.pending === pending) {
+  while (slot.pending === pending && !retireInventorySlotIfStale(slot, inventoryGeneration(slot))) {
     const scan = pending.active
     scan.started = true
     const timer = slot.distro
@@ -146,11 +156,8 @@ async function runInventoryScans(slot: InventorySlot, pending: PendingInventory)
         }, INVENTORY_WAIT_MS)
     const result = await scanInventory(slot, scan).catch(() => null)
     clearTimeout(timer)
-    if (slot.pending !== pending) {
+    if (slot.pending !== pending || retireInventorySlotIfStale(slot, inventoryGeneration(slot))) {
       return
-    }
-    if (scan.generation !== inventoryGeneration(slot)) {
-      continue
     }
     let publication: InventoryPublication | null = scan.partial ?? null
     if (scan.controller.signal.aborted) {
@@ -203,10 +210,10 @@ export function readInventory(
     waitForCompletion = false
   }: InventoryReadOptions = {}
 ): InventoryRead {
-  if (slot.retired) {
+  const generation = inventoryGeneration(slot)
+  if (retireInventorySlotIfStale(slot, generation)) {
     return readInventoryPublication(undefined)
   }
-  const generation = inventoryGeneration(slot)
   const published = currentInventoryPublication(slot, slot.distro ? 'complete' : 'latest')
   const current = published?.inventory
   const hasMatch =

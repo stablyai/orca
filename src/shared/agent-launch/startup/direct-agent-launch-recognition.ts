@@ -1,6 +1,7 @@
 import { COMMAND_TOKEN_SCAN_MAX_CHARS } from '../../shell/command-resolution/command-token-scanner'
 import { readLaunchPosition } from './launch-position'
 import { unwrapPowerShellNativeLaunch } from './powershell-native-launch'
+import { unwrapCodexScopedImageCommand } from './codex-scoped-image-command'
 
 export const CODEX_EXECUTABLE = /^codex(\.(exe|cmd|bat|ps1))?$/i
 
@@ -28,5 +29,5 @@ export function unwrapDirectAgentLaunchCommand(command: string): string {
       }
     }
   }
-  return unwrapPowerShellNativeLaunch(command)
+  return unwrapPowerShellNativeLaunch(unwrapCodexScopedImageCommand(command))
 }

@@ -280,7 +280,7 @@ export async function detectAgentCommandInventoryOnHost(
     options.signal,
     options.waitForCompletion ? INVENTORY_COMPLETION_WAIT_MS : INVENTORY_WAIT_MS
   )
-  if (!publication || (!wslTarget && slot !== getLocalInventory())) {
+  if (!publication || slot?.retired || (!wslTarget && slot !== getLocalInventory())) {
     throw new Error(`Could not complete ${wslTarget ? 'WSL' : 'local'} agent inventory`)
   }
   const { inventory } = publication

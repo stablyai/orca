@@ -18,10 +18,7 @@ import {
 } from '../../shared/shell/command-resolution/inventory-fs-probes'
 import { readInstallDirectoriesViaWorker } from '../ipc/command-path/command-path-directory-worker-client'
 import { buildLocalPreflightEnvAsync } from '../ipc/preflight/preflight-local-env'
-import {
-  guestNativeSpawnEnv,
-  readGuestWindowsDriveMountsAsync
-} from '../wsl/filesystem/wsl-guest-windows-drive-path'
+import { guestNativeSpawnEnvAsync } from '../wsl/filesystem/wsl-guest-windows-drive-path'
 import { waitForPromiseWithSignal } from '../../shared/concurrency/abort-signal-reason'
 import {
   mergeInventory,
@@ -134,10 +131,7 @@ export async function scanLocalAgentCommandInventory(
   const fallbackMisses = captureFailed ? new Set<string>() : undefined
   const env =
     (captured?.status === 'captured'
-      ? guestNativeSpawnEnv(
-          captured.env,
-          await waitForPromiseWithSignal(readGuestWindowsDriveMountsAsync(), signal)
-        )
+      ? await waitForPromiseWithSignal(guestNativeSpawnEnvAsync(captured.env), signal)
       : undefined) ??
     (await waitForPromiseWithSignal(buildLocalPreflightEnvAsync(), signal)) ??
     (readLoginPath

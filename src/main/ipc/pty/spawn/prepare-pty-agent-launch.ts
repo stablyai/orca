@@ -1,3 +1,4 @@
+import { isAbsolute } from 'node:path'
 import {
   addClaudeTeammateModeAuto,
   addClaudeTeammateModeInProcess
@@ -18,6 +19,7 @@ import {
   readCodexDirectLaunch,
   withCodexDirectLaunchCommand
 } from '../../../../shared/agent-launch/startup/codex-startup-image-command'
+import { withCodexScopedImageCommand } from '../../../../shared/agent-launch/startup/codex-scoped-image-command'
 import { withClaudeDirectLaunchCommand } from '../../../../shared/agent-launch/startup/claude-direct-launch-command'
 import {
   buildSetupAgentRecheck,
@@ -183,9 +185,9 @@ export async function preparePtyAgentLaunch(
     !connectionId &&
     !args.nativeChatSignIn &&
     prepared !== undefined &&
-    launchConfig?.commandProvenance === 'generated'
+    (authored || launchConfig?.commandProvenance === 'generated')
   ) {
-    prepared = await prepareDirectLaunch(prepared, shell, input, env, local, images)
+    prepared = await prepareDirectLaunch(prepared, shell, input, env, local, images, authored)
   }
   promoteAgentTeamsShimPath(env, input.requestedAgentTeamsPath)
   // Setup gates carry the wrapper in the environment, where it is counted once.
@@ -249,16 +251,18 @@ async function prepareDirectLaunch(
   input: PtySpawnLaunchOptionsInput,
   env: NodeJS.ProcessEnv,
   local: boolean,
-  images: boolean
+  images: boolean,
+  authored: boolean
 ): Promise<string> {
   const invocation = readCodexDirectLaunch(command, shell)
   if (!invocation) {
-    return withClaudeDirectLaunchCommand(command, shell)
+    return authored ? command : withClaudeDirectLaunchCommand(command, shell)
   }
   const supported = await planCodexNoDaemonLaunch(
     {
       command,
-      executesOnThisHost: local,
+      executesOnThisHost:
+        local && (!authored || shell === 'cmd' || isAbsolute(invocation.launch.executable)),
       env,
       envToDelete: input.envToDelete,
       cwd: input.cwd
@@ -266,9 +270,15 @@ async function prepareDirectLaunch(
     shell,
     invocation
   )
-  const { end } = invocation.launch
+  const { launch } = invocation
+  const prepared = supported
+    ? `${command.slice(0, launch.end)} --no-daemon${command.slice(launch.end)}`
+    : command
+  if (authored) {
+    return images ? withCodexScopedImageCommand(prepared, shell, launch) : prepared
+  }
   return withCodexDirectLaunchCommand(
-    supported ? `${command.slice(0, end)} --no-daemon${command.slice(end)}` : command,
+    prepared,
     shell,
     { images, probeInShell: !local },
     supported && invocation.args

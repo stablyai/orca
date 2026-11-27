@@ -4,7 +4,11 @@ import {
 } from '../ipc/preflight/preflight-wsl-agent-detection'
 import { hasAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
+import { getCachedWslDistros } from '../wsl/discovery/distro-catalog'
 import { resolveWslDefaultDistro } from '../wsl/discovery/wsl-default-distro'
+import { onWslDiscoveryChanged } from '../wsl/discovery/wsl-discovery-change'
+import { onRunningWslDistrosStopped } from '../wsl/discovery/wsl-running-distro-cache'
+import { getWslGuestEnvironmentGeneration } from '../wsl/execution/wsl-guest-environment'
 import {
   KNOWN_TUI_AGENT_DETECTION_COMMANDS,
   getTuiAgentDetectionProbeCommands
@@ -42,7 +46,37 @@ let local: InventorySlot | undefined
 let profile: string | undefined
 let readDefaultShell: (() => string | undefined) | undefined
 const alternateShells = new Map<string, InventorySlot>()
-const wsl = new Map<string, InventorySlot>()
+const WSL_INVENTORY_LIMIT = 8
+const wsl = new Map<string, InventorySlot & { registered: boolean }>()
+
+function retireWslInventory(key: string): void {
+  const slot = wsl.get(key)
+  if (slot) {
+    wsl.delete(key)
+    retireInventorySlot(slot)
+  }
+}
+
+onRunningWslDistrosStopped((stopped) => {
+  for (const distro of stopped) {
+    retireWslInventory(distro.toLowerCase())
+  }
+})
+
+onWslDiscoveryChanged(() => {
+  const listed = getCachedWslDistros()
+  if (!listed || wsl.size === 0) {
+    return
+  }
+  const registered = new Set(listed.map((distro) => distro.toLowerCase()))
+  for (const [key, slot] of wsl) {
+    if (registered.has(key)) {
+      slot.registered = true
+    } else if (slot.registered) {
+      retireWslInventory(key)
+    }
+  }
+})
 
 export function configureLocalInventoryShell(readShell: () => string | undefined): void {
   readDefaultShell = readShell
@@ -95,7 +129,26 @@ export async function wslInventory(
     return undefined
   }
   const key = distro.toLowerCase()
-  const slot = wsl.get(key) ?? { distro, stockCommands: wslStockCommands }
+  const generation = getWslGuestEnvironmentGeneration(distro)
+  const existing = wsl.get(key)
+  if (existing && !existing.retired && existing.wslGeneration === generation) {
+    wsl.delete(key)
+    wsl.set(key, existing)
+    return existing
+  }
+  retireWslInventory(key)
+  if (wsl.size >= WSL_INVENTORY_LIMIT) {
+    const oldest = wsl.keys().next().value
+    if (oldest !== undefined) {
+      retireWslInventory(oldest)
+    }
+  }
+  const slot = {
+    distro,
+    stockCommands: wslStockCommands,
+    wslGeneration: generation,
+    registered: getCachedWslDistros()?.some((name) => name.toLowerCase() === key) ?? false
+  }
   wsl.set(key, slot)
   return slot
 }
@@ -172,6 +225,9 @@ export async function selectWslTerminalAgentProgram(
         options.verifyWslHit && match?.first
           ? await recheckWslAgentPath(slot.distro, match.first, signal)
           : match?.user
+      if (slot.retired) {
+        return { program, result: { kind: 'unknown' } }
+      }
       if (!match?.first || !canonicalPath || signal.aborted) {
         if (!options.verifyWslHit || retry || signal.aborted) {
           return { program, result: { kind: 'unknown' } }
