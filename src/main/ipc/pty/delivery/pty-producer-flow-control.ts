@@ -4,6 +4,7 @@ export const PRODUCER_FLOW_HIGH_WATERMARK_CHARS = 256 * 1024
 export const PRODUCER_FLOW_LOW_WATERMARK_CHARS = 32 * 1024
 // Reassert sustained backpressure after the daemon's lost-resume failsafe auto-resumes reads.
 export const PRODUCER_PAUSE_REASSERT_INTERVAL_MS = 5_000
+const LONG_PAUSE_LOG_MS = 2_000
 
 export type ProducerFlowControlTransport = {
   pauseProducer: (id: string) => void
@@ -16,6 +17,8 @@ export class PtyProducerFlowController {
   private lowWatermarkChars: number
   private reassertIntervalMs: number
   private pausedAtByPty = new Map<string, number>()
+  // Reasserts refresh pausedAtByPty; this keeps the first pause for the long-pause log.
+  private pauseStartedAtByPty = new Map<string, number>()
 
   constructor(
     transport: ProducerFlowControlTransport,
@@ -36,12 +39,14 @@ export class PtyProducerFlowController {
     if (pausedAt === undefined) {
       if (pendingChars > this.highWatermarkChars) {
         this.pausedAtByPty.set(id, Date.now())
+        this.pauseStartedAtByPty.set(id, Date.now())
         this.safePause(id)
       }
       return
     }
     if (pendingChars < this.lowWatermarkChars) {
       this.pausedAtByPty.delete(id)
+      this.logLongPause(id, pendingChars)
       this.safeResume(id)
       return
     }
@@ -57,6 +62,7 @@ export class PtyProducerFlowController {
   /** Teardown discards pending accounting; release any pause even without a normal drain. */
   release(id: string): void {
     if (this.pausedAtByPty.delete(id)) {
+      this.pauseStartedAtByPty.delete(id)
       this.safeResume(id)
     }
   }
@@ -70,6 +76,17 @@ export class PtyProducerFlowController {
 
   isPaused(id: string): boolean {
     return this.pausedAtByPty.has(id)
+  }
+
+  private logLongPause(id: string, pendingChars: number): void {
+    const startedAt = this.pauseStartedAtByPty.get(id)
+    this.pauseStartedAtByPty.delete(id)
+    const pausedMs = startedAt === undefined ? 0 : Date.now() - startedAt
+    if (pausedMs >= LONG_PAUSE_LOG_MS) {
+      console.warn(
+        `[pty] terminal output paused ${pausedMs}ms waiting on renderer: pty=${id} pendingChars=${pendingChars}`
+      )
+    }
   }
 
   // Flow-control failures must not interrupt delivery or exit handling.

@@ -5,12 +5,15 @@ export const PRODUCER_PAUSE_FAILSAFE_MS = 5_000
 
 // Bound half-open consumer stalls; shed backlog before resuming the live producer.
 export const STREAM_BACKPRESSURE_STALL_WATCHDOG_MS = 60_000
+// Typed input behind a stalled stream must echo soon; shed backlog early rather than hold keystrokes.
+export const STREAM_STALL_WITH_INPUT_WATCHDOG_MS = 2_000
 
 export class SessionProducerPause {
   private paused = false
   private streamBackpressured = false
   private failsafeTimer: ReturnType<typeof setTimeout> | null = null
   private streamStallTimer: ReturnType<typeof setTimeout> | null = null
+  private streamStallDeadline = 0
   private onStreamStall: (() => void) | null = null
 
   constructor(private readonly subprocess: Pick<SubprocessHandle, 'pause' | 'resume'>) {}
@@ -93,17 +96,29 @@ export class SessionProducerPause {
     }
   }
 
-  private armStreamStallWatchdog(): void {
+  /** User input while stream-paused shortens the stall watchdog; it never lengthens it. */
+  noteUserInput(): void {
+    if (
+      this.streamStallTimer &&
+      this.streamStallDeadline - Date.now() > STREAM_STALL_WITH_INPUT_WATCHDOG_MS
+    ) {
+      clearTimeout(this.streamStallTimer)
+      this.armStreamStallWatchdog(STREAM_STALL_WITH_INPUT_WATCHDOG_MS)
+    }
+  }
+
+  private armStreamStallWatchdog(delayMs = STREAM_BACKPRESSURE_STALL_WATCHDOG_MS): void {
     const onStreamStall = this.onStreamStall
     if (!onStreamStall) {
       return
     }
+    this.streamStallDeadline = Date.now() + delayMs
     this.streamStallTimer = setTimeout(() => {
       this.streamStallTimer = null
       // Shed backlog before resuming; losing the consumer does not imply child exit.
       onStreamStall()
       this.setStreamBackpressured(false)
-    }, STREAM_BACKPRESSURE_STALL_WATCHDOG_MS)
+    }, delayMs)
   }
 
   private clearStreamStallWatchdog(): void {

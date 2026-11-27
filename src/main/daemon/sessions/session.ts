@@ -133,6 +133,7 @@ export class Session extends SessionProcessInspection {
     if (this.isAlive && !this._disposed && !this.startupIngress.answerLiveQueryReply(data)) {
       this.focusReport.observeInput(data, this.recoveryBarrier.focusReportingArming)
       this.shellReady.observeTypedInput(data)
+      this.producerPause.noteUserInput()
       this.writeInput(data)
     }
   }

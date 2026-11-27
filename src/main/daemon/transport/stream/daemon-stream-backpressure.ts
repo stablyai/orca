@@ -1,10 +1,14 @@
 import type { Socket } from 'node:net'
 import { STREAM_ENTRY_OVERHEAD_BYTES } from './daemon-stream-entry-accounting'
 
+// Each session pauses on its own backlog so a flooding sibling cannot queue ahead of an interactive one.
+// Worst case held per session is SESSION_HIGH_WATER_BYTES plus one PTY read.
+const SESSION_HIGH_WATER_BYTES = 256 * 1024
+const SESSION_LOW_WATER_BYTES = 128 * 1024
+// Last resort when many sessions flood at once: halve every session's watermarks until the total drains.
 const HIGH_WATER_BYTES = 4 * 1024 * 1024
 const LOW_WATER_BYTES = 1024 * 1024
-const SESSION_HIGH_WATER_BYTES = 64 * 1024
-const SESSION_LOW_WATER_BYTES = 32 * 1024
+const LONG_PAUSE_LOG_MS = 2_000
 
 type ClientBacklog = {
   queuedChars: Map<string, number>
@@ -15,7 +19,9 @@ type ClientBacklog = {
 /** Counts held strings and socket writes together, including small writes that bypass the hold. */
 export class DaemonStreamBackpressure {
   private readonly clients = new Map<string, ClientBacklog>()
-  private readonly pausedSessions = new Set<string>()
+  private readonly pausedAtBySession = new Map<string, number>()
+  private lastBytesBySession: ReadonlyMap<string, number> = new Map()
+  private lastTotalBytes = 0
   // Keep-tail dropping bounds stalled consumers; pausing again would freeze the shell behind them.
   private readonly stallReleasedSessions = new Set<string>()
   private pressured = false
@@ -107,19 +113,27 @@ export class DaemonStreamBackpressure {
       this.pressured = false
     }
 
-    for (const sessionId of this.pausedSessions) {
-      if (!this.pressured || (bytesBySession.get(sessionId) ?? 0) <= SESSION_LOW_WATER_BYTES) {
-        this.pausedSessions.delete(sessionId)
-        this.setPaused(sessionId, false)
+    this.lastBytesBySession = bytesBySession
+    this.lastTotalBytes = total
+    const pauseAt = this.pressured ? SESSION_LOW_WATER_BYTES : SESSION_HIGH_WATER_BYTES
+    const resumeAt = this.pressured ? SESSION_LOW_WATER_BYTES / 2 : SESSION_LOW_WATER_BYTES
+    for (const sessionId of this.pausedAtBySession.keys()) {
+      if ((bytesBySession.get(sessionId) ?? 0) <= resumeAt) {
+        this.resume(sessionId, 'drained')
       }
     }
-    if (this.pressured) {
-      for (const [sessionId, bytes] of bytesBySession) {
-        if (bytes >= SESSION_HIGH_WATER_BYTES && !this.stallReleasedSessions.has(sessionId)) {
-          this.pausedSessions.add(sessionId)
-          // Detach/termination may have released the session's pause since the last update.
-          this.setPaused(sessionId, true, () => this.releaseStalledSession(sessionId))
+    for (const [sessionId, bytes] of bytesBySession) {
+      const paused = this.pausedAtBySession.has(sessionId)
+      if (
+        (paused || bytes >= pauseAt) &&
+        bytes > resumeAt &&
+        !this.stallReleasedSessions.has(sessionId)
+      ) {
+        if (!paused) {
+          this.pausedAtBySession.set(sessionId, Date.now())
         }
+        // Detach/termination may have released the session's pause since the last update.
+        this.setPaused(sessionId, true, () => this.releaseStalledSession(sessionId))
       }
     }
     for (const sessionId of this.stallReleasedSessions) {
@@ -134,8 +148,8 @@ export class DaemonStreamBackpressure {
   releaseStalledSession(sessionId: string): void {
     this.stallReleasedSessions.add(sessionId)
     this.onDroppabilityChanged(sessionId)
-    if (this.pausedSessions.delete(sessionId)) {
-      this.setPaused(sessionId, false)
+    if (this.pausedAtBySession.has(sessionId)) {
+      this.resume(sessionId, 'stall watchdog')
     }
     this.refresh()
   }
@@ -152,6 +166,18 @@ export class DaemonStreamBackpressure {
       this.clients.delete(clientId)
     }
     this.refresh()
+  }
+
+  private resume(sessionId: string, reason: 'drained' | 'stall watchdog'): void {
+    const pausedAt = this.pausedAtBySession.get(sessionId)
+    this.pausedAtBySession.delete(sessionId)
+    this.setPaused(sessionId, false)
+    const pausedMs = pausedAt === undefined ? 0 : Date.now() - pausedAt
+    if (reason !== 'drained' || pausedMs >= LONG_PAUSE_LOG_MS) {
+      console.warn(
+        `[daemon] terminal output paused ${pausedMs}ms, resumed by ${reason}: session=${sessionId} sessionBacklogBytes=${this.lastBytesBySession.get(sessionId) ?? 0} totalBacklogBytes=${this.lastTotalBytes}`
+      )
+    }
   }
 
   private getOrCreateClient(clientId: string): ClientBacklog {
