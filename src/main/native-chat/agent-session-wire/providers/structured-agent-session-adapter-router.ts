@@ -152,6 +152,8 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
 
   liveTurnId = (id: string) => this.liveOwnerOrNull(id)?.liveTurnId?.(id)
 
+  keptLaunchOutgrown = (id: string) => this.liveOwnerOrNull(id)?.keptLaunchOutgrown?.(id) === true
+
   steeringMode = (id: string) => this.liveOwnerOrNull(id)?.steeringMode?.(id)
 
   requiresModelTransitionRestart: NonNullable<Adapter['requiresModelTransitionRestart']> = (

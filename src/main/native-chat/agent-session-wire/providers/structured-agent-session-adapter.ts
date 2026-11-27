@@ -277,6 +277,9 @@ export type StructuredAgentSessionAdapter = AdapterControls & {
   confirmIdle?(sessionId: string): Promise<AgentSessionIdleConfirmation> | undefined
   /** Open work, keyed as the provider's relay work markers key it, for a detached idle stop. */
   relayOpenWork?(sessionId: string, rootTurnRunning: boolean): Record<string, string[][]> | null
+  /** The kept agent the chat reattached lacks the tools its launch has; true only once ending it
+   *  loses no replayed output. The next new turn then starts a child that has them. */
+  keptLaunchOutgrown?(sessionId: string): boolean
   /** The root turn the live child is running, null when idle; absent when the agent cannot say. */
   liveTurnId?(sessionId: string): string | null | undefined
   /** Narrow declared steering to the live acquisition's negotiated support. */

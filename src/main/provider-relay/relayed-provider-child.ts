@@ -102,10 +102,8 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
           new RelayedProviderContinuation(options.continuation, options.relayId, through, through)
         )
     })
-    this.ready = new Promise((resolve, reject) => {
-      this.resolveReady = resolve
-      this.rejectReady = reject
-    })
+    const ready = Promise.withResolvers<void>()
+    ;({ promise: this.ready, resolve: this.resolveReady, reject: this.rejectReady } = ready)
     // A failed attach is reported through `exit`; `ready` only says the launch settled.
     this.ready.catch(() => {})
     this.stdin = new Writable({
@@ -227,6 +225,11 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
     await this.writing
     await (handingOff ? this.output.flush(waitMs) : this.output.settle())
   }
+
+  /** The attach's replay is in the journal and acked, so ending the agent loses none of it (false
+   *  before any attach). */
+  replayAcked = (): boolean =>
+    this.output.ackedThrough(this.attachResult?.replayThroughSeq ?? Infinity)
 
   /** After a hand-back: output held for a chat that never opened goes (the daemon keeps it). */
   dropHeldOutput(): void {

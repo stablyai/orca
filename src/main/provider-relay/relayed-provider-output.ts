@@ -200,6 +200,10 @@ export class RelayedProviderOutput {
     this.continuation = continuation
   }
 
+  /** Everything through `seq` was released, acked and given up by the daemon. */
+  ackedThrough = (seq: number): boolean =>
+    this.held === null && this.keptFrom === null && this.ackedSeq >= seq
+
   /** Output waits for the chat to be ready (`release()`). */
   get holding(): boolean {
     return this.held !== null
