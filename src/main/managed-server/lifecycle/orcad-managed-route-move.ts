@@ -6,6 +6,7 @@ import { runTargetLifecycle } from '../../ipc/ssh/ssh-target-lifecycle-queue'
 import { ensureOrcadManagedTunnel } from './orcad-managed-tunnel'
 import { requireManagedOrcadInfrastructure } from './orcad-managed-runtime-context'
 
+/** Makes `target` the only SSH route of a saved server that just moved to it and returns the server once its tunnel is rebuilt. Routes it left are released, held from automatic redeploys and hung up. */
 export async function finishManagedOrcadRouteMove(
   userDataPath: string,
   args: {

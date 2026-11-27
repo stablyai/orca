@@ -24,7 +24,7 @@ import { findCollidingEnvironmentName } from '../host-catalog/runtime-environmen
 import { findEnvironmentWithHostKey } from '../host-catalog/runtime-environment-host-key-match'
 import { assertRuntimeEnvironmentNotReconciling } from '../host-catalog/runtime-environment-reconciliation-record'
 
-/** Registers a server Orca deployed over SSH, paired through its own loopback tunnel. */
+/** Registers a server Orca deployed over SSH and returns it. With `moveSavedServer`, a saved SSH-managed server with the same host key moves to this route instead and is returned with its own id, name and pairing. */
 export function addManagedOrcadEnvironment(
   userDataPath: string,
   args: {
