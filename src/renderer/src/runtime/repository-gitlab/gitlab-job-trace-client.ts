@@ -30,7 +30,7 @@ export async function loadGitLabJobLogDetails(args: {
       repoPath: args.repoPath,
       repoId: args.repoId,
       jobId,
-      projectRef: args.projectRef ?? null,
+      projectRef: args.check.gitlabProjectRef ?? args.projectRef ?? null,
       logExcerpt: true
     })
   )

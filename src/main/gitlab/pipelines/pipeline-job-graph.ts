@@ -45,10 +45,15 @@ type GitLabRawBridge = {
   } | null
 }
 
-function mapPipelineJob(raw: GitLabRawJob, pipelineId: number): GitLabPipelineJob {
+function mapPipelineJob(
+  raw: GitLabRawJob,
+  pipelineId: number,
+  projectRef: ProjectRef
+): GitLabPipelineJob {
   return {
     id: raw.id ?? 0,
     pipelineId,
+    projectRef,
     name: raw.name ?? '',
     stage: raw.stage ?? '',
     status: raw.status ?? '',
@@ -93,7 +98,7 @@ async function fetchPipelineJobList(
     localGitOptions,
     signal
   )
-  return jobs.map((job) => mapPipelineJob(job, pipelineId))
+  return jobs.map((job) => mapPipelineJob(job, pipelineId, projectRef))
 }
 
 async function fetchPipelineBridges(

@@ -245,6 +245,8 @@ export type GitLabTodo = {
 export type GitLabPipelineJob = {
   id: number
   pipelineId?: number
+  /** A downstream job may belong to a different project than the MR. */
+  projectRef?: GitLabProjectRef
   name: string
   /** GitLab stage name, e.g. 'build' / 'test' / 'deploy'. */
   stage: string
