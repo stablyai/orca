@@ -10,8 +10,8 @@ const HIGH_WATER_BYTES = 4 * 1024 * 1024
 const LOW_WATER_BYTES = 1024 * 1024
 const PRESSURED_SESSION_HIGH_WATER_BYTES = 64 * 1024
 const PRESSURED_SESSION_LOW_WATER_BYTES = 32 * 1024
-// A stall watchdog sheds backlog only when its client's socket made no progress this recently.
-const DELIVERY_PROGRESS_WINDOW_MS = 2_000
+// The 60 s watchdog sheds backlog only when its client completed no socket write this recently.
+const DELIVERY_PROGRESS_WINDOW_MS = 10_000
 const LONG_PAUSE_LOG_MS = 2_000
 const LONG_PAUSE_LOG_INTERVAL_MS = 10_000
 
@@ -159,14 +159,18 @@ export class DaemonStreamBackpressure {
   }
 
   private onStall(sessionId: string, reason: StallReason): void {
-    if (this.deliveryProgressed(sessionId)) {
-      // Slow but draining: resume without shedding; the next refresh re-pauses with a fresh watchdog.
+    // Typed input never sheds output; a slow but draining consumer keeps lossless delivery.
+    if (reason === 'input' || this.deliveryProgressed(sessionId)) {
+      // Resume so the program can read input; the next refresh re-pauses with a fresh watchdog.
       if (this.pausedAtBySession.has(sessionId)) {
-        this.resume(sessionId, `${reason} watchdog, still draining`)
+        this.resume(
+          sessionId,
+          reason === 'input' ? 'typed input' : 'timeout watchdog, still draining'
+        )
       }
       return
     }
-    this.releaseStalledSession(sessionId, reason)
+    this.releaseStalledSession(sessionId)
   }
 
   private deliveryProgressed(sessionId: string): boolean {
@@ -183,11 +187,11 @@ export class DaemonStreamBackpressure {
   }
 
   /** Release a stalled producer into keep-tail dropping; lost contact does not prove child exit. */
-  private releaseStalledSession(sessionId: string, reason: StallReason): void {
+  private releaseStalledSession(sessionId: string): void {
     this.stallReleasedSessions.add(sessionId)
     this.onDroppabilityChanged(sessionId)
     if (this.pausedAtBySession.has(sessionId)) {
-      this.resume(sessionId, `${reason} watchdog, consumer stalled`)
+      this.resume(sessionId, 'timeout watchdog, consumer stalled')
     }
     this.refresh()
   }

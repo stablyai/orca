@@ -12,7 +12,7 @@ export const PRODUCER_PAUSE_FAILSAFE_MS = 5_000
 
 // Bound half-open consumer stalls; shed backlog before resuming the live producer.
 export const STREAM_BACKPRESSURE_STALL_WATCHDOG_MS = 60_000
-// Typed input behind a stalled stream must echo soon; the stall owner sheds only if delivery made no progress.
+// Typed input behind a paused stream must reach the program soon; the input watchdog only resumes, never sheds.
 export const STREAM_STALL_WITH_INPUT_WATCHDOG_MS = 2_000
 
 export class SessionProducerPause {
