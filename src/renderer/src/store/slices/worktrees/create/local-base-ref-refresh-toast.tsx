@@ -1,11 +1,10 @@
-import { useId, useRef, useState } from 'react'
-import { ChevronRight, Info, TriangleAlertIcon, X } from 'lucide-react'
+import { Info } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { useToastHeightChange } from '@/components/ui/toast-height-change'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { getKeepLocalMainUpToDateTitle } from '@/components/settings/source-control/keep-local-main-up-to-date-setting'
 import { translate } from '@/i18n/i18n'
+import { LocalBaseRefNotUpdatedCard } from './local-base-ref-not-updated-card'
 import { resolveWorktreeDisplayName } from '@/lib/workspace/display/worktree-default-display-name'
 import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
@@ -128,94 +127,6 @@ function shallowHistoryDescription(
   )
 }
 
-// Why: the raw Git guidance (incl. the owner worktree path) stays behind the title so the card reads in one line.
-function LocalBaseRefNotUpdatedCard({
-  title,
-  reason,
-  detail,
-  disableLabel,
-  disableTooltip,
-  closeLabel,
-  onDisable,
-  onClose,
-  onResize
-}: {
-  title: string
-  reason: string
-  detail: string
-  disableLabel: string
-  disableTooltip: string
-  closeLabel: string
-  onDisable: () => void
-  onClose: () => void
-  onResize: () => void
-}): React.JSX.Element {
-  const [open, setOpen] = useState(false)
-  const detailId = useId()
-  const cardRef = useRef<HTMLDivElement>(null)
-  useToastHeightChange(cardRef, onResize)
-  return (
-    <div
-      ref={cardRef}
-      data-toast-card
-      className="flex w-[var(--width)] flex-col gap-1 rounded-[var(--radius)] border border-[var(--notice-border)] bg-[var(--notice-surface)] p-3 text-[13px] leading-5 text-popover-foreground shadow-notice"
-    >
-      <div className="flex items-center gap-2">
-        <TriangleAlertIcon className="size-4 shrink-0" aria-hidden="true" />
-        <button
-          type="button"
-          className="flex min-w-0 flex-1 items-center gap-1 rounded-sm text-left font-medium outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-          onClick={() => setOpen((value) => !value)}
-          aria-expanded={open}
-          aria-controls={detailId}
-        >
-          <span className="truncate" title={title}>
-            {title}
-          </span>
-          <ChevronRight
-            aria-hidden="true"
-            className={`size-3 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none ${open ? 'rotate-90' : ''}`}
-          />
-        </button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          className="size-5"
-          data-close-button
-          aria-label={closeLabel}
-          onClick={onClose}
-        >
-          <X />
-        </Button>
-      </div>
-      <div className="flex items-center gap-2 pl-6">
-        <p className="min-w-0 flex-1 truncate text-popover-foreground/80" title={reason}>
-          {reason}
-        </p>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button type="button" variant="secondary" size="xs-notice" onClick={onDisable}>
-              {disableLabel}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top" sideOffset={4}>
-            {disableTooltip}
-          </TooltipContent>
-        </Tooltip>
-      </div>
-      {open ? (
-        <p
-          id={detailId}
-          className="mt-1 select-text whitespace-pre-wrap rounded-md bg-muted px-2 py-1.5 font-mono text-xs leading-relaxed text-muted-foreground [overflow-wrap:anywhere]"
-        >
-          {detail}
-        </p>
-      ) : null}
-    </div>
-  )
-}
-
 function stopRefreshingLocalBaseRef(
   id: string,
   localBranch: string,
@@ -305,6 +216,26 @@ function runUnshallowInNewTerminalTab(
   )
 }
 
+const shownLocalBaseRefToasts = new Map<string, { variant: string; id: string }>()
+let localBaseRefToastGeneration = 0
+
+/** Reuses the shown toast for the same variant; otherwise retires it and returns a never-used id. */
+function localBaseRefToastId(key: string, variant: 'shallow' | 'refresh'): string {
+  const shown = shownLocalBaseRefToasts.get(key)
+  const stillShown = shown !== undefined && toast.getToasts().some((entry) => entry.id === shown.id)
+  if (shown && stillShown && shown.variant === variant) {
+    return shown.id
+  }
+  if (shown && stillShown) {
+    toast.dismiss(shown.id)
+  }
+  // Why a fresh id: sonner merges updates into an existing toast and applies dismissals a frame
+  // later, so reusing an id could keep the other variant's content or be closed by a queued dismiss.
+  const id = `${key}:${++localBaseRefToastGeneration}`
+  shownLocalBaseRefToasts.set(key, { variant, id })
+  return id
+}
+
 export function showLocalBaseRefRefreshToast(
   result: LocalBaseRefRefreshResult | undefined,
   createdWorktree: Pick<Worktree, 'id' | 'repoId' | 'displayName' | 'branch' | 'path'> | undefined,
@@ -316,15 +247,11 @@ export function showLocalBaseRefRefreshToast(
   }
 
   const worktreeName = createdWorktree ? resolveWorktreeDisplayName(createdWorktree).trim() : ''
-  // Why: one id per repo and branch because creates toward one target share a run, so its result is one fact, not one per create.
-  const baseId = `local-base-ref-refresh-failed:${createdWorktree?.repoId ?? 'unknown'}:${result.localBranch}`
-  // Why one id per variant: sonner merges an update into the existing toast, so a custom card's jsx would outlive a switch to the info toast.
-  const id = `${baseId}:${result.shallowHistory ? 'shallow' : 'refresh'}`
-  const otherVariantId = `${baseId}:${result.shallowHistory ? 'refresh' : 'shallow'}`
-  // Why only when shown: sonner applies a dismiss a frame later, so dismissing an absent id would close it if it appears first.
-  if (toast.getToasts().some((entry) => entry.id === otherVariantId)) {
-    toast.dismiss(otherVariantId)
-  }
+  // Why: one toast per repo and branch because creates toward one target share a run, so its result is one fact, not one per create.
+  const id = localBaseRefToastId(
+    `local-base-ref-refresh-failed:${createdWorktree?.repoId ?? 'unknown'}:${result.localBranch}`,
+    result.shallowHistory ? 'shallow' : 'refresh'
+  )
   const runnableCommand = result.shallowHistory ? runnableUnshallowCommand(result) : undefined
 
   const actions = (
@@ -402,7 +329,14 @@ export function showLocalBaseRefRefreshToast(
             onResize={onResize}
           />
         ),
-        { id, duration: Infinity, closeButton: false, dismissible: true }
+        // Why a width on the toast: sonner sizes only styled toasts on wide screens; its narrow-screen width still wins.
+        {
+          id,
+          className: 'w-[var(--width)]',
+          duration: Infinity,
+          closeButton: false,
+          dismissible: true
+        }
       )
       return
     }

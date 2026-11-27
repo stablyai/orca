@@ -780,8 +780,10 @@ body[data-modal-overlay-open] [data-toasts-raised] [data-sonner-toaster] {
 }
 
 /* Why: sonner fades a folded toast's content only for styled toasts; a custom card is its own surface, so fade its rows. */
-[data-sonner-toaster] [data-toast-card] > * {
-  transition: opacity 400ms;
+@media (prefers-reduced-motion: no-preference) {
+  [data-sonner-toaster] [data-toast-card] > * {
+    transition: opacity 400ms;
+  }
 }
 
 [data-sonner-toaster]
