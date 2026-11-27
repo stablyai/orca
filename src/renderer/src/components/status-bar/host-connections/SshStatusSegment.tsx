@@ -55,7 +55,7 @@ export function SshStatusSegment(): React.JSX.Element | null {
   const runtimeStatusByEnvironmentId = useRuntimeStatusByEnvironmentId()
   const readRuntimeHostStatusSnapshots = useAppStore((s) => s.readRuntimeHostStatusSnapshots)
   const hydrateRuntimeEnvironmentStatuses = useAppStore((s) => s.hydrateRuntimeEnvironmentStatuses)
-  const setActiveView = useAppStore((s) => s.setActiveView)
+  const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -178,7 +178,7 @@ export function SshStatusSegment(): React.JSX.Element | null {
   const openHostSettings = (pane: 'servers' | 'ssh'): void => {
     recordFeatureInteraction('ssh')
     openSettingsTarget({ pane, repoId: null })
-    setActiveView('settings')
+    openSettingsPage()
   }
   const openRecovery = (host: {
     id: string
