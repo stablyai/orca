@@ -4,6 +4,7 @@ import {
   normalizeBotSidebarFolderState,
   moveBotSidebarFolder,
   removeBotSidebarFolder,
+  withBotSidebarFolderPlacement,
   type BotSidebarFolder
 } from '../../../../shared/bots/bot-sidebar-folders'
 import {
@@ -49,6 +50,40 @@ it('preserves folders and bot placements when reading, collapsing and editing a 
   expect(
     buildBotSidebarFolderRows({ ...tree, isExpanded: (id) => id !== '0' }).map((row) => row.id)
   ).toEqual(['bot-folder-row:0', 'local/room'])
+})
+
+it('persists an explicit root separately from a grouped bot’s default placement', () => {
+  const bot = 'local/qa'
+  const group = 'local/android'
+  const folder = { id: 'personal', name: 'Personal', parentId: null }
+  const saved = normalizeBotSidebarFolderState(
+    JSON.parse(
+      JSON.stringify({
+        folders: [folder],
+        placements: withBotSidebarFolderPlacement({ [bot]: folder.id }, bot, null)
+      })
+    )
+  )
+  const tree = {
+    entries: [
+      { id: group, kind: 'group' },
+      { id: bot, kind: 'bot' }
+    ] as const,
+    folders: saved.folders,
+    groupsByMember: new Map([[bot, [group]]]),
+    isExpanded: () => true
+  }
+  expect(saved.placements).toEqual({ [bot]: null })
+  const atRoot = buildBotSidebarFolderRows({ ...tree, folderPlacements: saved.placements })
+  expect(atRoot.find((row) => row.id === bot)).toMatchObject({ kind: 'entry', parentId: null })
+  expect(atRoot).toContainEqual(expect.objectContaining({ kind: 'member', entry: tree.entries[1] }))
+  const automatic = withBotSidebarFolderPlacement(saved.placements, bot, undefined)
+  const inGroup = buildBotSidebarFolderRows({ ...tree, folderPlacements: automatic })
+  expect(automatic).toEqual({})
+  expect(inGroup.find((row) => row.id === bot)).toMatchObject({ kind: 'entry', parentId: group })
+  expect(removeBotSidebarFolder([folder], { [bot]: folder.id }, folder.id).placements).toEqual({
+    [bot]: null
+  })
 })
 
 it('keeps nested rooms and direct memberships distinct through save, fold and promotion', () => {

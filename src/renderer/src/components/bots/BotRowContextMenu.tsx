@@ -98,7 +98,7 @@ export function BotRowMenuItems({
       {onMoveToFolder ? (
         <ContextMenuItem onSelect={onMoveToFolder}>
           <FolderInput className="size-3.5" />
-          {t('bots.folders.moveBot', 'Move to folder…')}
+          {t('bots.folders.moveBot', 'Move bot…')}
         </ContextMenuItem>
       ) : null}
       <ContextMenuSeparator />

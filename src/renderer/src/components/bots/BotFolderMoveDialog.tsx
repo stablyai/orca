@@ -1,5 +1,5 @@
 import React, { useId, useState } from 'react'
-import { Folder, House, Users } from 'lucide-react'
+import { Folder, House, RotateCcw, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -15,20 +15,25 @@ import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import type { BotSidebarFolder } from '../../../../shared/bots/bot-sidebar-folders'
 
-export type BotFolderDestination = {
-  /** null is the section's root. */
-  id: string | null
+type DestinationId = string | null | undefined
+
+export type BotFolderDestination<Id extends DestinationId = string | null> = {
+  /** null is the section's root, undefined is the default placement. */
+  id: Id
   name: string
   depth: number
   kind?: 'group'
 }
 
-function destinationValue(id: string | null): string {
+function destinationValue(id: DestinationId): string {
+  if (id === undefined) {
+    return 'default'
+  }
   return id === null ? 'root' : `destination:${id}`
 }
 
 /** Picks a folder for a bot or folder; the caller leaves invalid destinations out. */
-export function BotFolderMoveDialog({
+export function BotFolderMoveDialog<Id extends DestinationId>({
   open,
   title,
   description,
@@ -40,11 +45,11 @@ export function BotFolderMoveDialog({
   open: boolean
   title: string
   description: string
-  destinations: readonly BotFolderDestination[]
-  /** The current parent, disabled because moving there changes nothing. */
-  value: string | null
+  destinations: readonly BotFolderDestination<Id>[]
+  /** The current placement, disabled because moving there changes nothing. */
+  value: Id
   onOpenChange: (open: boolean) => void
-  onMove: (folderId: string | null) => void
+  onMove: (id: Id) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const idPrefix = useId()
@@ -63,8 +68,12 @@ export function BotFolderMoveDialog({
               const itemValue = destinationValue(destination.id)
               const itemId = `${idPrefix}-${itemValue}`
               const disabled = itemValue === current
-              const Icon =
-                destination.id === null ? House : destination.kind === 'group' ? Users : Folder
+              let Icon = destination.kind === 'group' ? Users : Folder
+              if (destination.id === null) {
+                Icon = House
+              } else if (destination.id === undefined) {
+                Icon = RotateCcw
+              }
               return (
                 <div
                   key={itemValue}

@@ -31,7 +31,7 @@ export function BotSidebarTreeEntry({
   activeWorkspaceId,
   pendingRenameKey,
   onRenameConsumed,
-  hasFolders
+  canMoveBot
 }: {
   row: TreeRow
   drag?: BotSidebarEntryDrag
@@ -48,7 +48,7 @@ export function BotSidebarTreeEntry({
   activeWorkspaceId: string | null
   pendingRenameKey: string | null
   onRenameConsumed: (id: string) => void
-  hasFolders: boolean
+  canMoveBot: boolean
 }): React.JSX.Element | null {
   if (row.kind === 'folder') {
     return (
@@ -122,7 +122,7 @@ export function BotSidebarTreeEntry({
         beginRename={pendingRenameKey === entry.id}
         onBeginRenameConsumed={() => onRenameConsumed(entry.id)}
         onMoveToFolder={
-          hasFolders
+          canMoveBot
             ? () => onFolderAction({ type: 'moveBot', entryKey: entry.id, name: entry.bot.name })
             : undefined
         }

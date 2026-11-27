@@ -1,8 +1,10 @@
 import type {
   BotSidebarFolder,
+  BotSidebarFolderPlacements,
   BotSidebarFolders
 } from '../../../../shared/bots/bot-sidebar-folders'
 import {
+  getBotSidebarFolderPlacement,
   groupBotSidebarFolders,
   indexBotSidebarFolders
 } from '../../../../shared/bots/bot-sidebar-folders'
@@ -69,7 +71,7 @@ export function buildBotSidebarFolderRows<Entry extends TreeEntry>({
 }: {
   entries: readonly Entry[]
   folders: BotSidebarFolders
-  folderPlacements: Readonly<Record<string, string>>
+  folderPlacements: BotSidebarFolderPlacements
   groupParents?: Readonly<Record<string, string>>
   groupsByMember?: ReadonlyMap<string, readonly string[]>
   isExpanded: (folderId: string) => boolean
@@ -94,11 +96,12 @@ export function buildBotSidebarFolderRows<Entry extends TreeEntry>({
       add(groupIds.has(parent) ? parent : null, { kind: 'entry', entry })
       continue
     }
-    const folderId = folderPlacements[entry.id]
+    const placement = getBotSidebarFolderPlacement(folderPlacements[entry.id], foldersById)
     const memberOf = (groupsByMember.get(entry.id) ?? []).filter((id) => groupIds.has(id))
-    const parentId = foldersById.has(folderId)
-      ? botSidebarFolderRowId(folderId)
-      : (memberOf[0] ?? null)
+    let parentId: string | null = memberOf[0] ?? null
+    if (placement !== undefined) {
+      parentId = placement === null ? null : botSidebarFolderRowId(placement)
+    }
     add(parentId, { kind: 'entry', entry })
     for (const groupId of memberOf) {
       if (groupId !== parentId) {

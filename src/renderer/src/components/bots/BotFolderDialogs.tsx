@@ -7,6 +7,7 @@ import {
   addBotSidebarFolder,
   canMoveBotSidebarFolder,
   getBotSidebarFolderGroupKey,
+  getBotSidebarFolderPlacement,
   indexBotSidebarFolders,
   listBotSidebarFolders,
   moveBotSidebarFolder,
@@ -17,7 +18,7 @@ import {
 import { BotFolderNameDialog } from './BotFolderNameDialog'
 import { BotFolderMoveDialog, botFolderDestinations } from './BotFolderMoveDialog'
 import { BotFolderRemoveDialog } from './BotFolderRemoveDialog'
-import { unfoldBotSidebarFolder } from './unfold-bot-sidebar-folders'
+import { unfoldBotSidebarEntry, unfoldBotSidebarFolder } from './unfold-bot-sidebar-folders'
 
 export type BotFolderDialogState =
   | { type: 'create'; parentId: string | null }
@@ -45,20 +46,29 @@ export function BotFolderDialogs({
     }
   }
   if (state.type === 'moveBot') {
-    const folderId = view.placements[state.entryKey]
     return (
       <BotFolderMoveDialog
         open
         title={t('bots.folders.moveBotTitle', 'Move bot')}
-        description={t('bots.folders.moveBotDescription', 'Choose a folder for {{name}}.', {
-          name: state.name
-        })}
-        destinations={botFolderDestinations(listBotSidebarFolders(view.folders), rootName)}
-        value={foldersById.has(folderId) ? folderId : null}
+        description={t(
+          'bots.folders.moveBotDescription',
+          'Choose where {{name}} appears in the sidebar.',
+          {
+            name: state.name
+          }
+        )}
+        destinations={[
+          { id: undefined, name: t('bots.folders.defaultLocation', 'Default location'), depth: 0 },
+          ...botFolderDestinations(listBotSidebarFolders(view.folders), rootName)
+        ]}
+        value={getBotSidebarFolderPlacement(view.placements[state.entryKey], foldersById)}
         onOpenChange={closeOnDismiss}
         onMove={(destination) => {
           const current = readView()
-          if (destination === null || current.folders.some(({ id }) => id === destination)) {
+          if (
+            typeof destination !== 'string' ||
+            current.folders.some(({ id }) => id === destination)
+          ) {
             setView({
               ...current,
               placements: withBotSidebarFolderPlacement(
@@ -67,9 +77,7 @@ export function BotFolderDialogs({
                 destination
               )
             })
-            if (destination !== null) {
-              unfoldBotSidebarFolder(destination)
-            }
+            unfoldBotSidebarEntry(state.entryKey)
           }
           onClose()
         }}

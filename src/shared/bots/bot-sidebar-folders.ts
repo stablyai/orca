@@ -13,8 +13,8 @@ export type BotSidebarFolder = {
 
 export type BotSidebarFolders = readonly BotSidebarFolder[]
 
-/** Host-qualified `botSidebarEntryKey` to the folder holding that bot, kept while its host is away. */
-export type BotSidebarFolderPlacements = Readonly<Record<string, string>>
+/** Host-qualified bot keys to a folder ID or explicit root (null). Omitted keys follow membership. */
+export type BotSidebarFolderPlacements = Readonly<Partial<Record<string, string | null>>>
 
 export type BotSidebarFolderState = {
   folders: BotSidebarFolders
@@ -104,17 +104,16 @@ function normalizeBotSidebarFolders(value: unknown): BotSidebarFolder[] {
 }
 
 /** Saved placements, keeping even folders that are not in this profile's folder list. */
-function normalizeBotSidebarFolderPlacements(value: unknown): Record<string, string> {
+function normalizeBotSidebarFolderPlacements(value: unknown): BotSidebarFolderPlacements {
   if (!isRecord(value)) {
     return {}
   }
-  const placements: Record<string, string> = {}
+  const placements: Record<string, string | null> = {}
   for (const [entryKey, folderId] of Object.entries(value)) {
     if (
       entryKey !== '' &&
       entryKey !== '__proto__' &&
-      typeof folderId === 'string' &&
-      folderId !== ''
+      (folderId === null || (typeof folderId === 'string' && folderId !== ''))
     ) {
       placements[entryKey] = folderId
     }
@@ -126,6 +125,13 @@ export function indexBotSidebarFolders(
   folders: BotSidebarFolders
 ): ReadonlyMap<string, BotSidebarFolder> {
   return new Map(folders.map((folder) => [folder.id, folder]))
+}
+
+export function getBotSidebarFolderPlacement(
+  placement: string | null | undefined,
+  foldersById: ReadonlyMap<string, BotSidebarFolder>
+): string | null | undefined {
+  return typeof placement === 'string' && !foldersById.has(placement) ? undefined : placement
 }
 
 /** Nearest parent first, for unfolding a path to a row. */
@@ -268,13 +274,13 @@ export function addBotSidebarFolder(
 export function withBotSidebarFolderPlacement(
   placements: BotSidebarFolderPlacements,
   entryKey: string,
-  folderId: string | null
-): Record<string, string> {
+  folderId: string | null | undefined
+): BotSidebarFolderPlacements {
   const next = { ...placements }
   if (entryKey === '__proto__') {
     return next
   }
-  if (folderId === null) {
+  if (folderId === undefined) {
     delete next[entryKey]
   } else {
     next[entryKey] = folderId
@@ -290,7 +296,7 @@ export function removeBotSidebarFolder(
   folders: BotSidebarFolders,
   placements: BotSidebarFolderPlacements,
   folderId: string
-): { folders: BotSidebarFolder[]; placements: Record<string, string> } {
+): { folders: BotSidebarFolder[]; placements: BotSidebarFolderPlacements } {
   const target = folders.find((folder) => folder.id === folderId)
   if (!target) {
     return { folders: [...folders], placements: { ...placements } }
@@ -299,15 +305,10 @@ export function removeBotSidebarFolder(
   const nextFolders = folders
     .filter((folder) => folder.id !== folderId)
     .map((folder) => (folder.parentId === folderId ? { ...folder, parentId } : folder))
-  const nextPlacements: Record<string, string> = {}
+  const nextPlacements: Record<string, string | null> = {}
   for (const [entryKey, heldBy] of Object.entries(placements)) {
-    if (entryKey === '__proto__') {
-      continue
-    }
-    if (heldBy !== folderId) {
-      nextPlacements[entryKey] = heldBy
-    } else if (parentId !== null) {
-      nextPlacements[entryKey] = parentId
+    if (entryKey !== '__proto__' && heldBy !== undefined) {
+      nextPlacements[entryKey] = heldBy === folderId ? parentId : heldBy
     }
   }
   return { folders: nextFolders, placements: nextPlacements }

@@ -92,6 +92,7 @@ export function useBotSidebarFolderRows<Entry extends SortableEntry>(
     botIdsByBucket,
     dragItemById,
     memberKeysByGroup,
+    groupsByMember,
     hasFolders: folders.length > 0
   }
 }

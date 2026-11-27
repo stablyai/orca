@@ -95,7 +95,7 @@ export function SidebarBotsSection({
     [bots, groups, folderWorkspaces]
   )
   const entries = useBotSidebarArrangement(savedEntries)
-  const { treeRows, botIdsByBucket, dragItemById, memberKeysByGroup, hasFolders } =
+  const { treeRows, botIdsByBucket, dragItemById, memberKeysByGroup, groupsByMember, hasFolders } =
     useBotSidebarFolderRows(entries, groups)
   const membersByGroup = useMemo(() => {
     const byKey = new Map(bots.map((bot) => [botSidebarEntryKey(bot), bot]))
@@ -321,7 +321,7 @@ export function SidebarBotsSection({
                         onRenameConsumed={(id) =>
                           setPendingRenameKey((current) => (current === id ? null : current))
                         }
-                        hasFolders={hasFolders}
+                        canMoveBot={hasFolders || groupsByMember.has(row.id)}
                       />
                     )
                   }}

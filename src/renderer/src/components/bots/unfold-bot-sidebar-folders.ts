@@ -8,6 +8,7 @@ import { getBotHomes } from '../../../../shared/bots/bot-homes'
 import {
   getBotSidebarFolderGroupKey,
   getBotSidebarFolderPathIds,
+  getBotSidebarFolderPlacement,
   indexBotSidebarFolders
 } from '../../../../shared/bots/bot-sidebar-folders'
 import {
@@ -53,8 +54,12 @@ export function unfoldBotSidebarEntry(
 ): void {
   const state = useAppStore.getState()
   const { folders, placements, groupParents } = state.botSidebarFolders
-  if (indexBotSidebarFolders(folders).has(placements[entryKey])) {
-    const folderKeys = getBotSidebarFolderPathIds(folders, placements[entryKey]).map(
+  const placement = getBotSidebarFolderPlacement(
+    placements[entryKey],
+    indexBotSidebarFolders(folders)
+  )
+  if (placement !== undefined) {
+    const folderKeys = getBotSidebarFolderPathIds(folders, placement).map(
       getBotSidebarFolderGroupKey
     )
     unfoldKeys([...additionalKeys, ...folderKeys])
