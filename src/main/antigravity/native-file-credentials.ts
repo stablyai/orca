@@ -29,20 +29,11 @@ function lacksAntigravitySessionBus(env: NodeJS.ProcessEnv): boolean {
 /** `isAntigravityFileStorageHost` and `isAntigravityContainerOrWslHost` together, read without
  *  blocking: where agy keeps its login in its token file on Linux. */
 export async function antigravityUsesFileStoreAsync(env: NodeJS.ProcessEnv): Promise<boolean> {
-  if (forcesAntigravityFileStore(env)) {
+  if (await isAntigravityFileStorageHostAsync(env)) {
     return true
   }
   if (process.platform !== 'linux') {
     return false
-  }
-  if (
-    sessionBusAddressMissing(env) &&
-    (await stat(sessionBusSocket()).then(
-      (bus) => !bus.isSocket(),
-      () => true
-    ))
-  ) {
-    return true
   }
   if (
     await stat(DOCKER_MARKER).then(
@@ -62,6 +53,21 @@ export async function antigravityUsesFileStoreAsync(env: NodeJS.ProcessEnv): Pro
 export function forcesAntigravityFileStore(env: NodeJS.ProcessEnv): boolean {
   return ['SSH_TTY', 'SSH_CLIENT', 'SSH_CONNECTION', 'WSL_DISTRO_NAME', 'WSL_INTEROP'].some(
     (name) => Boolean(env[name])
+  )
+}
+
+/** `isAntigravityFileStorageHost` without blocking. */
+export async function isAntigravityFileStorageHostAsync(env: NodeJS.ProcessEnv): Promise<boolean> {
+  if (forcesAntigravityFileStore(env)) {
+    return true
+  }
+  return (
+    process.platform === 'linux' &&
+    sessionBusAddressMissing(env) &&
+    stat(sessionBusSocket()).then(
+      (bus) => !bus.isSocket(),
+      () => true
+    )
   )
 }
 
