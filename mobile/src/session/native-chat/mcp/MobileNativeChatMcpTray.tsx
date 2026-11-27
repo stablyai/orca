@@ -95,8 +95,8 @@ function McpTrayContent({ panel }: { panel: MobileStructuredMcpPanel }) {
     panel.orca ? uncheckedOrcaMcpServerIds(state.servers) : ''
   )
   const servers = useMemo(
-    () => withOrcaMcpProblems(state.servers, problems),
-    [state.servers, problems]
+    () => withOrcaMcpProblems(state.servers, problems, panel.orca?.agent ?? ''),
+    [panel.orca?.agent, state.servers, problems]
   )
   const [signingIn, setSigningIn] = useState<McpSignInTarget | null>(null)
   // Only the sign-in sheet names the host.
@@ -133,7 +133,7 @@ function McpTrayContent({ panel }: { panel: MobileStructuredMcpPanel }) {
         client={panel.orca?.client ?? null}
         server={signingIn}
         hostName={hostName}
-        online
+        online={panel.orca?.online ?? false}
         onClose={() => setSigningIn(null)}
         onSignedIn={() => {
           setSigningIn(null)

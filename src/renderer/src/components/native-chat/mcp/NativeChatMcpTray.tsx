@@ -92,8 +92,8 @@ export function NativeChatMcpTray({
     managed ? uncheckedOrcaMcpServerIds(panel.servers) : ''
   )
   const servers = useMemo(
-    () => withOrcaMcpProblems(panel.servers, problems),
-    [panel.servers, problems]
+    () => withOrcaMcpProblems(panel.servers, problems, agent),
+    [agent, panel.servers, problems]
   )
   const hostName = useSettingsHostLabel(target)
   const [signingIn, setSigningIn] = useState<McpSignInServer | null>(null)

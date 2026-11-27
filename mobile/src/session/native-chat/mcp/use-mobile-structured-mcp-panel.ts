@@ -30,7 +30,7 @@ export type MobileStructuredMcpPanel = {
   agentLabel: string
   /** The host's list of MCP servers, which Orca checks and signs in to itself before the agent
    *  starts; null on a host without one. */
-  orca: { client: RpcClient; agent: string; hostId: string } | null
+  orca: { client: RpcClient; agent: string; hostId: string; online: boolean } | null
 }
 
 type McpCommands = Pick<StructuredAgentSessionComposerOptions, 'openMcpPanel'>
@@ -39,7 +39,7 @@ type McpCommands = Pick<StructuredAgentSessionComposerOptions, 'openMcpPanel'>
 export function useMobileStructuredMcpPanel<TCommands extends object>(
   session: Pick<
     MobileStructuredAgentSessionArgs,
-    'client' | 'sessionId' | 'agent' | 'hostSupport' | 'enabled' | 'hostId'
+    'client' | 'sessionId' | 'agent' | 'hostSupport' | 'enabled' | 'hostId' | 'connected'
   >,
   sessionKey: string,
   commands: TCommands
@@ -113,9 +113,10 @@ export function useMobileStructuredMcpPanel<TCommands extends object>(
   const refreshKey = `${opens}:${phase}`
   const canManage = hostListsServers && !!hostId
   const agentLabel = agent ? (tuiAgentDisplayName(agent) ?? agent) : ''
+  const online = session.connected
   const orca = useMemo(
-    () => (canManage && client && agent ? { client, agent, hostId: hostId ?? '' } : null),
-    [agent, canManage, client, hostId]
+    () => (canManage && client && agent ? { client, agent, hostId: hostId ?? '', online } : null),
+    [agent, canManage, client, hostId, online]
   )
   const mcpPanel = useMemo(
     () =>

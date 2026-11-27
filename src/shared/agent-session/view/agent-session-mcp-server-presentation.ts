@@ -79,10 +79,12 @@ export function newMcpProblemsRequestId(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
 }
 
-/** Orca's check of its host list (`mcpServers.problems`, by server id) on an at-rest chat's rows. */
+/** Orca's check of its host list (`mcpServers.problems`, by server id) on an at-rest chat's rows.
+ *  The check signs in as Claude Code or Codex, so only their chats take its sign-in verdict. */
 export function withOrcaMcpProblems(
   servers: readonly AgentSessionMcpServer[],
-  problems: Readonly<Record<string, { kind: 'sign-in' | 'failed' | 'unconfirmed' }>>
+  problems: Readonly<Record<string, { kind: 'sign-in' | 'failed' | 'unconfirmed' }>>,
+  agent: string
 ): readonly AgentSessionMcpServer[] {
   if (Object.keys(problems).length === 0) {
     return servers
@@ -90,9 +92,8 @@ export function withOrcaMcpProblems(
   return servers.map((server) => {
     const problem = server.orca && server.status === 'not-started' && problems[server.orca.id]
     // Orca's own sign-in state is the truth for a server it signs in to, as in its settings.
-    return !problem ||
-      problem.kind === 'unconfirmed' ||
-      (problem.kind === 'sign-in' && server.orca?.signsIn)
+    const notTheirs = server.orca?.signsIn || (agent !== 'claude' && agent !== 'codex')
+    return !problem || problem.kind === 'unconfirmed' || (problem.kind === 'sign-in' && notTheirs)
       ? server
       : { ...server, status: problem.kind === 'sign-in' ? 'needs-auth' : 'failed' }
   })
