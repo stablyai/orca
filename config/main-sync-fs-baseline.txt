@@ -290,6 +290,7 @@
 1 src/main/ipc/ssh/ssh-connect-flow.ts
 2 src/main/ipc/worktree-remote.ts
 2 src/main/ipc/wsl-guest-windows-drive-path.ts
+6 src/main/itsaplan/instance-credential-store.ts
 7 src/main/jcode/hook-service.ts
 8 src/main/jira/site-credential-store.ts
 7 src/main/keybindings/keybinding-file-parser.ts
