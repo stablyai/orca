@@ -24,6 +24,23 @@ export function beginTabStripPointerGesture(): () => void {
   }
 }
 
+export function holdTabStripPointerGestureUntilRelease(
+  targetWindow: Window,
+  pointerId: number
+): void {
+  const releaseGesture = beginTabStripPointerGesture()
+  const finish = (releasedEvent: PointerEvent): void => {
+    if (releasedEvent.pointerId !== pointerId) {
+      return
+    }
+    targetWindow.removeEventListener('pointerup', finish)
+    targetWindow.removeEventListener('pointercancel', finish)
+    releaseGesture()
+  }
+  targetWindow.addEventListener('pointerup', finish)
+  targetWindow.addEventListener('pointercancel', finish)
+}
+
 export function isTabStripPointerGestureActive(): boolean {
   return activeTabStripPointerGestureCount > 0
 }

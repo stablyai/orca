@@ -32,6 +32,7 @@ import { useWindowBackdropActive } from '@/app-shell/appearance/window-backdrop'
 import { EditorRevealFlash } from './editor-reveal/EditorRevealFlash'
 import { SplitPaneLanding } from './landing/SplitPaneLanding'
 import { isSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
+import { holdTabStripPointerGestureUntilRelease } from '../tab-bar/strip/tab-strip-pointer-gesture'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
 const EMPTY_GROUPS: readonly TabGroup[] = []
@@ -39,7 +40,6 @@ const EMPTY_CLIENT_HOSTED_ROWS: readonly ClientHostedBrowserRow[] = []
 type SplitFocusStyle = CSSProperties &
   Record<'--tab-active-foreground' | '--tab-active-indicator', string>
 
-/** The panel draws attached strips; external hosts provide their single strip in shell chrome. */
 export type TabGroupPanelTabStrip = 'attached' | 'external'
 
 export default function TabGroupPanel({
@@ -65,7 +65,6 @@ export default function TabGroupPanel({
   isFocused: boolean
   hasSplitGroups: boolean
   tabStrip?: TabGroupPanelTabStrip
-  /** Off for scratch workspaces (the floating panel) whose markdown is not a review surface. */
   markdownAnnotationsEnabled?: boolean
   touchesRightEdge: boolean
   touchesLeftEdge: boolean
@@ -81,7 +80,6 @@ export default function TabGroupPanel({
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
   const reserveRightTitlebarSpace = reserveClosedExplorerToggleSpace && !rightSidebarOpen
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
-  // A bot's page chrome sits in the top-right strip, the one that spacing flag marks, so splits show it once.
   const bot = useBotForWorkspace(reserveClosedExplorerToggleSpace ? worktreeId : null)
   const quickCommandsSlotRef = useRef<HTMLDivElement>(null)
   const {
@@ -96,7 +94,6 @@ export default function TabGroupPanel({
   const showsSplitLanding = useAppStore((state) =>
     isSplitLandingGroup(state, worktreeId, model.group ?? undefined)
   )
-  // Why: one strip owns the worktree's client-hosted rows, or every split repeats them.
   const ownsClientHostedRows = useAppStore(
     (state) =>
       resolveClientHostedBrowserRowStripGroupId(
@@ -134,9 +131,7 @@ export default function TabGroupPanel({
   )
   const attachEditorFileDropOwner = useEditorGroupFileDropOwner({ worktreeId, groupId })
   const backdropActive = useWindowBackdropActive()
-  // Why: per-group anchor-name lets the worktree-level overlay position panes via CSS anchor positioning, so moving a tab between groups re-targets the anchor instead of remounting xterm (loses alt-screen TUI state) or reloading `<webview>`.
   const bodyAnchorName = tabGroupBodyAnchorName(groupId)
-  // Why: memoize so a fresh style object each render doesn't break downstream memoization keyed on referential equality.
   const bodyAnchorStyle = useMemo(
     () => ({ anchorName: bodyAnchorName }) as React.CSSProperties,
     [bodyAnchorName]
@@ -168,11 +163,9 @@ export default function TabGroupPanel({
           commands.closeItem(item.id)
           return
         }
-        // Why: agent quick-launch can briefly desync unified/runtime tab ids before the host snapshot lands, so still route close through the shared helper.
         closeTerminalTab(terminalId, { reason: 'user' })
       }}
       onCloseOthers={(visibleId) => {
-        // Why: TabBar emits entityId for terminals/browsers but unifiedTabId for editors; match both so the menu works on every tab kind.
         const item = resolveGroupTabFromVisibleId(model.groupTabs, visibleId)
         if (item) {
           commands.closeOthers(item.id)
@@ -249,7 +242,6 @@ export default function TabGroupPanel({
     />
   )
 
-  // Why: actions hide before the tab bar's floor is reached; min-w-0 + clipping is only a backstop so reserved spacers stay clear.
   const actionChromeClassName = cn(
     'flex min-w-0 items-center gap-0.5 overflow-hidden pl-1.5 pr-0.5 transition-opacity duration-150',
     !isFocused && 'opacity-50 hover:opacity-100 focus-within:opacity-100'
@@ -262,37 +254,38 @@ export default function TabGroupPanel({
           '--tab-active-indicator': 'var(--muted-foreground)'
         }
       : undefined
+  const holdTabStripPointerGesture = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) {
+      return
+    }
+    const targetWindow = event.currentTarget.ownerDocument.defaultView
+    if (!targetWindow) {
+      return
+    }
+    holdTabStripPointerGestureUntilRelease(targetWindow, event.pointerId)
+  }, [])
   return (
     <div
-      // Why: store focus (last focused group), not DOM focus, so clicking the sidebar or a dialog keeps the active tab's underline.
       data-unfocused-split-group={hasSplitGroups && !isFocused ? '' : undefined}
       data-split-group={hasSplitGroups ? '' : undefined}
-      // Dim unfocused splits only when siblings exist; seams stay neutral and the host owns the bottom edge.
       className={`group/tab-group relative flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${
         hasSplitGroups
-          ? // Why: skip border-l/border-r on edge-touching groups; the split-layout wrapper and right sidebar already paint borders at those seams (double line otherwise).
-            ` ${
-              touchesLeftEdge || suppressLeftBorder ? '' : 'border-l'
-            } ${touchesRightEdge || suppressRightBorder ? '' : 'border-r'} border-border`
+          ? ` ${touchesLeftEdge || suppressLeftBorder ? '' : 'border-l'} ${touchesRightEdge || suppressRightBorder ? '' : 'border-r'} border-border`
           : ''
       }`}
-      // Why not over a window backdrop (material or theme image): group opacity would let it bleed through opaque chrome.
       style={splitFocusStyle}
       onPointerDown={commands.focusGroup}
-      // Why: keyboard/AT focus can enter a split group without a pointer event, so sync group focus to DOM focus for global shortcuts.
       onFocusCapture={commands.focusGroup}
     >
-      {/* Each visible split needs its own strip; the shared titlebar cannot represent them all. */}
-      {/* Omit external strips entirely because hidden duplicates would still register competing drag sortables. */}
       {tabStrip !== 'attached' ? null : (
         <div
           className="h-(--workspace-tab-row-height) shrink-0 border-b border-border bg-tab-bar"
           data-tab-group-strip-id={groupId}
           data-terminal-focus-release-surface="true"
           data-worktree-id={worktreeId}
+          onPointerDownCapture={holdTabStripPointerGesture}
         >
           <div className="flex h-full items-stretch pr-1">
-            {/* Why: Electron drag hit-test respects no-drag only on DOM descendants, not z-index siblings, so this no-drag spacer keeps the collapsed left-sidebar's floating toggle clickable. */}
             {reserveCollapsedSidebarHeaderSpace && !sidebarOpen ? (
               <div
                 className="shrink-0"
@@ -304,11 +297,8 @@ export default function TabGroupPanel({
                 }
               />
             ) : null}
-            {/* Why: the tab-strip container excludes the reserved spacers, so width rules see only the room tabs and actions share. */}
             <div className="@container/tab-strip group/tab-strip-row flex min-w-0 flex-1 items-stretch">
               <div className="min-w-10 flex-1 h-full">{tabBar}</div>
-              {/* Why: overflowing tabs eat all strip whitespace; keep a window-drag handle while the right sidebar header is closed. It goes first in narrow strips: 203 = 40 gap + 163 for the tab floor and every control, so controls never clip behind it.
-                  A pinned bot Home beside other tabs adds a second 40px floor, so that moves up to 243. */}
               {reserveRightTitlebarSpace ? (
                 <div className="workspace-tab-drag-handle w-10 min-w-0 @max-[203px]/tab-strip:hidden group-has-[[data-pinned-home-with-strip]]/tab-strip-row:@max-[243px]/tab-strip:hidden" />
               ) : null}
@@ -316,10 +306,6 @@ export default function TabGroupPanel({
                 className={actionChromeClassName}
                 style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
               >
-                {/* Why: drop an action whole (and from Tab order) once it can't fit beside the tab floor and "+", never leave a clipped focus target.
-                    163 = 40 tab + 36 "+" + 8 padding + 47 widest collapsed quick-command trigger + 2 gap + 28 pane actions + 2 sub-pixel slack; 114 = 40 + 36 + 8 + 28 + 2.
-                    A pinned bot Home beside other tabs adds a second 40px floor, so each threshold moves up 40 (203 and 154).
-                    Narrow strips park it invisible at the pane's top-right edge instead of display:none, so the shortcut menu still has an anchor rect. */}
                 <div
                   ref={quickCommandsSlotRef}
                   className="contents @max-[163px]/tab-strip:invisible @max-[163px]/tab-strip:absolute @max-[163px]/tab-strip:end-0 @max-[163px]/tab-strip:top-0 @max-[163px]/tab-strip:block group-has-[[data-pinned-home-with-strip]]/tab-strip-row:@max-[203px]/tab-strip:invisible group-has-[[data-pinned-home-with-strip]]/tab-strip-row:@max-[203px]/tab-strip:absolute group-has-[[data-pinned-home-with-strip]]/tab-strip-row:@max-[203px]/tab-strip:end-0 group-has-[[data-pinned-home-with-strip]]/tab-strip-row:@max-[203px]/tab-strip:top-0 group-has-[[data-pinned-home-with-strip]]/tab-strip-row:@max-[203px]/tab-strip:block"
@@ -343,7 +329,6 @@ export default function TabGroupPanel({
                 ) : null}
               </div>
             </div>
-            {/* Why: Electron drag hit-test respects no-drag only on DOM descendants, not z-index siblings, so this no-drag spacer keeps the floating right-sidebar toggle + window controls clickable. */}
             {reserveRightTitlebarSpace ? (
               <div
                 className="shrink-0"
@@ -363,7 +348,6 @@ export default function TabGroupPanel({
       <div
         ref={setBodyRef}
         data-tab-group-body-id={groupId}
-        // Why: the pane overlays paint terminals and chats above this body; only they show the backdrop.
         data-translucent-tab-body={
           activeTab?.contentType === 'terminal' ||
           (activeTab && isStructuredTab(activeTab) && backdropActive)
@@ -374,19 +358,15 @@ export default function TabGroupPanel({
         className="relative flex-1 min-h-0 overflow-hidden"
         style={bodyAnchorStyle}
       >
-        {/* Why: empty anchor so the agent-sessions tour reads as a terminal-area tip, not toolbar chrome. */}
         {isFocused ? (
           <div
             className="pointer-events-none absolute inset-x-0 top-1/4 h-px"
             data-contextual-tour-target="workspace-agent-terminal-tip"
-            // Picks the chat or terminal split step of the agent-sessions tour.
             data-active-content-type={activeTab?.contentType}
           />
         ) : null}
         {activeTab && toVisibleTabType(activeTab.contentType) === 'editor' && (
-          // Why: a capture-phase owner, so Monaco never sees the drop and the file opens as a tab here.
           <div ref={attachEditorFileDropOwner} className="absolute inset-0 flex min-h-0 min-w-0">
-            {/* Why: split groups render editor content in a plain relative pane body, not the legacy Terminal.tsx flex column. */}
             <Suspense
               fallback={
                 <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
@@ -414,8 +394,6 @@ export default function TabGroupPanel({
             onClosePane={hasSplitGroups ? commands.closeGroup : undefined}
           />
         ) : null}
-
-        {/* Why: terminal/browser/simulator/structured-chat panes render at the worktree level; tab activation only changes overlay visibility and never remounts a live surface. */}
       </div>
     </div>
   )
