@@ -30,11 +30,13 @@ export const WorkItemByOwnerRepo = RepoSelector.extend({
   preview: z.boolean().optional()
 })
 
-export const WorkItemDetails = WorkItem.extend({
-  ownerRepo: SlugRepo.optional(),
-  canonical: z.boolean().optional(),
-  expectedGhAccount: OptionalGhAccountExpectation
-})
+export const WorkItemDetails = lazyZodSchema(() =>
+  WorkItem.extend({
+    ownerRepo: SlugRepo.optional(),
+    canonical: z.boolean().optional(),
+    expectedGhAccount: OptionalGhAccountExpectation
+  })
+)
 
 export const WorkItemsCount = RepoSelector.extend({
   query: OptionalString

@@ -10,6 +10,7 @@ import { formatRelativeTime } from '@/components/github/work-item-state-presenta
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { MentionOption } from '../page-types'
 import { MentionTextarea } from '../mentions/textarea'
+import { DescriptionBodyLoading } from './conversation-loading'
 
 export function ConversationDescription({
   imageUploadAddress,
@@ -117,13 +118,14 @@ export function ConversationDescription({
               </TooltipContent>
             </Tooltip>
           )
+        ) : canEditBody && loading && !detailsLoaded ? (
+          // Why: holds the edit button's slot so the header does not reflow when the details land.
+          <span aria-hidden="true" className="ml-auto size-7 shrink-0" />
         ) : null}
       </div>
       <div className="px-4 py-4 text-[14px] leading-relaxed text-foreground">
         {loading && !detailsLoaded ? (
-          <div className="flex items-center justify-center py-5">
-            <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
-          </div>
+          <DescriptionBodyLoading />
         ) : bodyEditing ? (
           <MentionTextarea
             imageUpload={{
@@ -151,6 +153,14 @@ export function ConversationDescription({
             wrapperClassName="flex min-h-64 w-full items-stretch"
             className="scrollbar-sleek block min-h-64 w-full resize-y rounded-md border border-input bg-background px-3 py-2 font-mono text-[13px] leading-5 placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           />
+        ) : !detailsLoaded ? (
+          // Why: no read is running or owed (e.g. no repo route), so nothing confirms the description is empty.
+          <span className="text-muted-foreground">
+            {t(
+              'auto.components.sidebar.worktreeCardPrDisplay.prDetailsUnavailable',
+              'PR details unavailable'
+            )}
+          </span>
         ) : body.trim() ? (
           <CommentMarkdown
             content={body}

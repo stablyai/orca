@@ -64,11 +64,9 @@ export const OrcadManagedStopVerdictSchema = lazyZodSchema(() => z.enum(STOP_VER
 export const OrcadDaemonRetirementVerdictSchema = lazyZodSchema(() => z.enum(RETIREMENT_VERDICTS))
 
 // Read by clients older than the slot that printed them: unknown fields and arms degrade.
-const stopReplyRequestFields = OrcadManagedStopRequestSchema.shape
-
 export const OrcadManagedStopCompletionSchema = lazyZodSchema(() =>
   z.object({
-    ...stopReplyRequestFields,
+    ...OrcadManagedStopRequestSchema.shape,
     kind: z.literal('orcad_managed_stop_completion'),
     verdict: openEnum(STOP_VERDICTS, 'unverifiable'),
     receiptPersisted: z.boolean(),
@@ -123,7 +121,7 @@ export const OrcadManagedStopDecisionSchema = lazyZodSchema(() =>
 /** `dispatched` means orcad already acted on the request; the caller must await its exit. */
 export const OrcadManagedStopCancellationSchema = lazyZodSchema(() =>
   z.object({
-    ...stopReplyRequestFields,
+    ...OrcadManagedStopRequestSchema.shape,
     kind: z.literal('orcad_managed_stop_cancellation'),
     // Unknown degrades to `dispatched`: the caller then awaits exit rather than assume a cancel.
     outcome: openEnum(['canceled', 'dispatched'], 'dispatched')

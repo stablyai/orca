@@ -10,6 +10,8 @@ import {
   shouldInspectOuterWrapperForegroundProcess
 } from '../../../../shared/agent-status/process/foreground-wrapper-agent'
 import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
+import { readPaneConsoleProcessIds } from './console-attached-processes'
+import { candidateMatchesContextPath, normalizeContextPaths } from './context-path-match'
 import {
   queryWindowsPaneProcessInventory,
   type WindowsProcessCandidate,
@@ -22,8 +24,10 @@ export type AgentForegroundResolutionOptions = {
   fresh?: boolean
   /** Force confirmation scans even when node-pty reports a recognized name. */
   forceProcessScan?: boolean
-  /** Lazily proves which global descendants still belong to this ConPTY. */
-  readWindowsConsoleAttachedProcessIds?: () => Promise<ReadonlySet<number> | null>
+  /** Lazily proves which global descendants still belong to this ConPTY, attached through `memberPid`. */
+  readWindowsConsoleAttachedProcessIds?: (memberPid: number) => Promise<ReadonlySet<number> | null>
+  /** When the pane was spawned; without it an exited root's orphans cannot be tied to the pane. */
+  paneSpawnedAtMs?: number
   /** A contradictory full-table command line proves cached anchor PID reuse. */
   anchorProcessId?: number
   /** The cached agent name the anchor pid is supposed to prove. */
@@ -37,7 +41,7 @@ export type WindowsAgentForegroundResolution = {
   processId?: number
   /** The anchor's creation time, so a later check can tell it from a process that reused its pid. */
   processCreationTimeMs?: number
-  /** True when the scan proves `anchorProcessId` now belongs to a non-agent. */
+  /** True when the scan proves `anchorProcessId` no longer holds the cached agent: a non-agent reused it, or it left an exited root's console. */
   anchorPidForeign?: boolean
 }
 
@@ -60,10 +64,7 @@ export async function resolveWindowsAgentForegroundProcessWithAvailability(
   fallbackProcess: string,
   options: AgentForegroundResolutionOptions
 ): Promise<WindowsAgentForegroundResolution> {
-  const inventory = await queryWindowsPaneProcessInventory(shellPid, {
-    ...(options.fresh === true ? { fresh: true } : {}),
-    ...(options.anchorProcessId !== undefined ? { anchorPid: options.anchorProcessId } : {})
-  })
+  const inventory = await queryWindowsPaneProcessInventory(shellPid, options)
   if (!inventory) {
     return { available: false, processName: null }
   }
@@ -75,9 +76,10 @@ export async function resolveWindowsAgentForegroundProcessWithAvailability(
     options.contextPaths
   )
   let filteredCandidates = candidates
-  if (hasRecognizedCandidate && options.readWindowsConsoleAttachedProcessIds) {
+  const readConsole = options.readWindowsConsoleAttachedProcessIds
+  if (hasRecognizedCandidate && readConsole) {
     // Job membership retains detached descendants; only console attachment can exclude their byte authority.
-    const consoleProcessIds = await options.readWindowsConsoleAttachedProcessIds()
+    const consoleProcessIds = await readPaneConsoleProcessIds(shellPid, inventory, readConsole)
     if (!consoleProcessIds) {
       return { available: false, processName: null }
     }
@@ -99,6 +101,27 @@ export async function resolveWindowsAgentForegroundProcessWithAvailability(
     fallbackProcess,
     options.contextPaths
   )
+  if (inventory.rootExited && (identity.processName === null || !readConsole)) {
+    // Orphans prove an agent, never a shell; a gone anchor or a console read without one proves the agent exited.
+    const anchorGone =
+      options.anchorProcessId !== undefined && (anchorRow === null || anchorPidForeign)
+    const agentExited =
+      readConsole !== undefined &&
+      (anchorGone ||
+        (hasRecognizedCandidate &&
+          !windowsCandidatesContainRecognizedAgent(
+            filteredCandidates,
+            fallbackProcess,
+            options.contextPaths
+          )))
+    return agentExited
+      ? {
+          available: true,
+          processName: null,
+          ...(options.anchorProcessId !== undefined ? { anchorPidForeign: true } : {})
+        }
+      : { available: false, processName: null }
+  }
   const processCreationTimeMs =
     identity.processId === undefined
       ? undefined
@@ -254,58 +277,6 @@ function windowsCandidateIsAncestor(
       return true
     }
     current = candidatesByPid.get(current.ppid)
-  }
-  return false
-}
-
-function normalizeContextPaths(contextPaths: readonly string[] | undefined): string[] {
-  const normalized = new Set<string>()
-  for (const contextPath of contextPaths ?? []) {
-    const candidate = normalizePathForCommandMatch(contextPath)
-    if (isSafeContextPath(candidate)) {
-      normalized.add(candidate)
-    }
-  }
-  return [...normalized].sort((a, b) => b.length - a.length)
-}
-
-function isSafeContextPath(contextPath: string): boolean {
-  return contextPath.length >= 4 && (/^[a-z]:\//.test(contextPath) || contextPath.startsWith('//'))
-}
-
-function candidateMatchesContextPath(
-  candidate: WindowsProcessRow,
-  normalizedContextPaths: readonly string[]
-): boolean {
-  if (normalizedContextPaths.length === 0) {
-    return false
-  }
-  const haystack = normalizePathForCommandMatch(candidate.command)
-  return normalizedContextPaths.some((contextPath) =>
-    commandLineContainsPath(haystack, contextPath)
-  )
-}
-
-function normalizePathForCommandMatch(value: string): string {
-  return value
-    .trim()
-    .replace(/^["']|["']$/g, '')
-    .replace(/\\/g, '/')
-    .replace(/\/+$/g, '')
-    .toLowerCase()
-}
-
-function commandLineContainsPath(haystack: string, contextPath: string): boolean {
-  let index = haystack.indexOf(contextPath)
-  while (index !== -1) {
-    const before = index > 0 ? haystack[index - 1] : ''
-    const after = haystack[index + contextPath.length] ?? ''
-    const beforeOk = !before || /[\s"'(=]/.test(before)
-    const afterOk = !after || after === '/' || /[\s"'),;]/.test(after)
-    if (beforeOk && afterOk) {
-      return true
-    }
-    index = haystack.indexOf(contextPath, index + 1)
   }
   return false
 }

@@ -13,7 +13,6 @@ import type {
 } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { NativeChatLinkClickContext } from '../links/actions/native-chat-link-click-context'
-import { NativeChatDock } from '../pane/dock/NativeChatDock'
 
 function QuestionControls({
   invertedAccent = false,
@@ -83,76 +82,93 @@ export const multiline = defineFixture({
   )
 })
 
-const LONG_QUESTION =
-  'tools/ci/check-openapi-breaking-changes.sh:27 — a reviewer (‼️ Must do): the sign-off files api/breaking-changes/{customer-facing,mobile}.md are passed whole to oasdiff --err-ignore, so a line signed off months ago keeps allowing the same break on that endpoint today. Should I narrow the ignore file to the exact rule ids this change needs, or keep the whole-file sign-off and add a comment explaining why? — end of question.'
-
-export const longQuestion = defineFixture({
+export const multiStep = defineFixture({
   width: 560,
   render: () => (
-    <QuestionControls
-      question={LONG_QUESTION}
-      description="Narrow the ignore file.&#10;Keeps the old sign-off from suppressing new rules."
-    />
-  )
-})
-
-// The card in the dock, in panes short enough that the dock runs out of room: a tall question,
-// four described options and free input. The dock takes the pane's remaining height, as it does in
-// the app, so the fit sees the room the pane really has.
-function ConstrainedPane({ width, height }: { width: number; height: number }) {
-  return (
     <div
-      data-native-chat-root="true"
-      className="native-chat-appearance flex flex-col bg-chat-pane"
-      style={{ ...nativeChatAppearanceStyle({}), width, height }}
+      className="native-chat-appearance bg-chat-canvas p-4"
+      style={nativeChatAppearanceStyle({})}
     >
-      <div className="flex min-h-[calc(var(--spacing)*20)] flex-1 flex-col justify-end overflow-hidden p-4 text-sm text-muted-foreground [[data-native-chat-dock-fit~=transcript]_&]:min-h-0">
-        Here is the draft for the OpenAPI change.
-      </div>
-      <NativeChatDock>
-        <NativeChatQuestionCard
-          prompt={{
-            questions: [
-              {
-                question: LONG_QUESTION,
-                multiSelect: false,
-                options: [
-                  {
-                    label: 'Narrow the ignore file',
-                    description: 'Scope the sign-off to the exact rule ids this change needs.'
-                  },
-                  {
-                    label: 'Keep the whole-file sign-off',
-                    description: 'Add a comment on why the old sign-off stays.'
-                  },
-                  {
-                    label: 'Ask the reviewer first',
-                    description: 'Post a thread before changing the ignore file.'
-                  },
-                  {
-                    label: 'Something else',
-                    description: 'Type a different approach below.'
-                  }
-                ]
-              }
-            ]
-          }}
-          onAnswer={() => {}}
-          onCancel={() => {}}
-        />
-      </NativeChatDock>
+      <NativeChatQuestionCard
+        prompt={{
+          questions: [
+            {
+              question: 'Where should this run?',
+              header: 'Location',
+              multiSelect: false,
+              options: [{ label: 'Local' }, { label: 'Remote' }]
+            },
+            {
+              question: 'Which connection should it use?',
+              header: 'Connection',
+              multiSelect: false,
+              options: [{ label: 'Current host' }, { label: 'Another host' }]
+            }
+          ]
+        }}
+        onAnswer={() => {}}
+        onCancel={() => {}}
+      />
     </div>
   )
-}
-
-export const constrainedDock = defineFixture({
-  width: 380,
-  render: () => <ConstrainedPane width={380} height={312} />
 })
 
-export const tinyDock = defineFixture({
+export const narrowMultiStep = defineFixture({
+  width: 360,
+  render: () => (
+    <div
+      className="native-chat-appearance bg-chat-canvas p-4"
+      style={nativeChatAppearanceStyle({})}
+    >
+      <NativeChatQuestionCard
+        prompt={{
+          questions: [
+            {
+              question: 'Which connection should the new workspace use before it starts?',
+              multiSelect: false,
+              options: [{ label: 'Current host' }, { label: 'Another host' }]
+            },
+            {
+              question: 'Which connection should it use next?',
+              multiSelect: false,
+              options: [{ label: 'Current host' }, { label: 'Another host' }]
+            }
+          ]
+        }}
+        onAnswer={() => {}}
+        onCancel={() => {}}
+      />
+    </div>
+  )
+})
+
+export const veryNarrowMultiStep = defineFixture({
   width: 220,
-  render: () => <ConstrainedPane width={220} height={200} />
+  render: () => (
+    <div
+      className="native-chat-appearance bg-chat-canvas p-2"
+      style={nativeChatAppearanceStyle({})}
+    >
+      <NativeChatQuestionCard
+        prompt={{
+          questions: [
+            {
+              question: 'Which connection should the new workspace use before it starts?',
+              multiSelect: false,
+              options: [{ label: 'Current host' }, { label: 'Another host' }]
+            },
+            {
+              question: 'Which connection should it use next?',
+              multiSelect: false,
+              options: [{ label: 'Current host' }, { label: 'Another host' }]
+            }
+          ]
+        }}
+        onAnswer={() => {}}
+        onCancel={() => {}}
+      />
+    </div>
+  )
 })
 
 function PendingAsyncQuestion() {

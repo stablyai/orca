@@ -170,7 +170,6 @@
         "sshToggleDescription": "사용 가능한 SSH 및 원격 Orca 호스트가 있으면 표시합니다.",
         "resourceUsageToggleDescription": "리소스 관리자를 표시합니다. 클릭하면 CPU, 메모리, 세션, 데몬 제어, 워크스페이스 디스크 스캔을 볼 수 있습니다.",
         "portsToggleDescription": "라이브 워크스페이스 포트를 표시합니다. 워크스페이스 범위 포트 및 외부 수신기를 보려면 클릭하세요.",
-        "antigravityToggleDescription": "활성 워크스페이스에 대한 Antigravity 구독 사용량을 표시합니다.",
         "grokToggleDescription": "Grok CLI로 로그인한 경우 Grok 구독 크레딧 사용량을 표시합니다.",
         "cursorToggleDescription": "cursor-agent 또는 Cursor IDE로 로그인한 경우 Cursor 플랜 사용량을 표시합니다.",
         "zcodeToggleDescription": "ZCode Coding Plan 할당량 사용량을 표시합니다.",
@@ -1529,14 +1528,16 @@
         },
         "worktrees": {
           "e50495aae6": "브랜치 강제 삭제",
-          "14bc053a47": "로컬 {{value0}}이(가) 새로 고쳐지지 않았습니다.",
-          "localBaseRefRefreshFailedForWorktree": "\"{{value1}}\"의 로컬 {{value0}}이(가) 새로 고쳐지지 않았습니다.",
-          "903b51c2ed": "{{value0}}에서 워크스페이스를 만들었지만 Orca가 로컬 {{value1}}을(를) fast-forward할 수 없습니다. {{value2}}",
-          "localBaseRefRefreshFailedDescriptionNamed": "워크스페이스 \"{{value0}}\"을(를) {{value1}}에서 만들었지만 Orca가 로컬 {{value2}}을(를) fast-forward할 수 없습니다. {{value3}}",
           "localBaseRefRefreshFailedDetailDirtyNamed": "{{value0}} 워크트리(로컬 {{value1}}이(가) 체크아웃된 위치)에 커밋되지 않은 변경이 있습니다. 커밋, stash 또는 삭제한 다음 로컬 {{value1}}을(를) 수동으로 업데이트하세요.",
           "localBaseRefRefreshFailedDetailDirty": "로컬 {{value0}}이(가) 체크아웃된 워크트리에 커밋되지 않은 변경이 있습니다. 커밋, stash 또는 삭제한 다음 로컬 {{value0}}을(를) 수동으로 업데이트하세요.",
           "localBaseRefRefreshFailedDetailNotFastForward": "로컬 {{value0}}이(가) 없거나 원격 기준 브랜치에서 깨끗하게 fast-forward할 수 없습니다. 수동으로 업데이트하기 전에 로컬 전용 커밋이 있는지 확인하세요.",
           "localBaseRefRefreshFailedDetailError": "로컬 {{value0}}을(를) 업데이트하는 중 Git이 오류를 반환했습니다. 잠긴 refs나 비정상적인 워크트리 상태가 있는지 확인한 다음 로컬 {{value0}}을(를) 수동으로 업데이트하세요.",
+          "localBaseRefNotUpdated": "{{value0}}이(가) 업데이트되지 않음",
+          "localBaseRefNotUpdatedDirty": "{{value0}}에 커밋되지 않은 변경 사항이 있습니다.",
+          "localBaseRefNotUpdatedNotFastForward": "{{value0}}에 로컬 전용 커밋이 있습니다.",
+          "localBaseRefNotUpdatedError": "Git 오류입니다.",
+          "localBaseRefHideDetails": "세부정보 숨기기",
+          "localBaseRefShowDetails": "세부정보",
           "0216895fb5": "브랜치를 삭제하지 못했습니다.",
           "5366d13eec": "워크스페이스가 삭제되었고 브랜치는 유지되었습니다",
           "2e17f825d4": "워크트리가 삭제되었고 브랜치는 유지되었습니다",
@@ -3048,9 +3049,9 @@
         "connectHost": "연결",
         "addHost": "호스트 추가",
         "addSshHost": "SSH 호스트 추가",
-        "addSshHostHint": "SSH로 기존 컴퓨터 사용",
+        "addSshHostHint": "SSH로 연결",
         "addRemoteOrcaServer": "원격 Orca 서버 추가",
-        "addRemoteOrcaServerHint": "다른 Orca 런타임 페어링",
+        "addRemoteOrcaServerHint": "다른 컴퓨터의 Orca",
         "hostConnectionFailed": "연결 실패",
         "defaultBranchUpdateFailed": "프로젝트 기본 브랜치를 업데이트할 수 없습니다. 다시 시도해 보세요.",
         "setLocation": "프로젝트 위치 설정",
@@ -4600,6 +4601,11 @@
             "waitingTitle": "{{server}} 응답 대기 중",
             "waitingBody": "서버가 이 터미널을 다시 제공하거나 연결이 바뀌면 Orca가 다시 연결합니다. 지금 시도하려면 다시 연결을 누르세요.",
             "downFor": "연결 끊김 {{duration}}",
+            "cantReachTitle": "{{server}}에 연결할 수 없음",
+            "detailsButton": "세부 정보",
+            "tailscaleHintTitle": "Tailscale 경로 확인",
+            "reconnectNowButton": "지금 다시 연결",
+            "copyPingCommand": "명령 복사",
             "tailscaleHint": "Tailscale 경로 확인:",
             "fallbackServerName": "서버",
             "connectionLostTitle": "{{server}}에 다시 연결하는 중",
@@ -5065,7 +5071,6 @@
             "c0e972d726": "취소",
             "3bbf140864": "MiniMax 사용량",
             "remoteServerLabel": "원격 서버",
-            "antigravityUsage": "Antigravity 사용량",
             "grokUsageMenu": "Grok 사용량",
             "floatingTerminalNewActivity": "{{label}}, 새 활동",
             "4fba7dc1e7": "잔액 {{value0}}",
@@ -5517,16 +5522,9 @@
             "mainWorktree": "메인 워크트리",
             "detached": "분리됨"
           },
-          "antigravity": {
-            "unknownAccount": "Google 계정",
-            "accounts": "저장된 Antigravity 계정",
-            "readAgo": "{{time}}에 조회",
-            "notRead": "사용량을 알 수 없음: 아직 조회하지 않음"
-          },
           "AccountSwitchList": {
             "used": "사용량",
             "left": "남음",
-            "reset": "초기화",
             "accounts": "계정"
           },
           "InlineUsageBars": {
@@ -7431,8 +7429,8 @@
           "addSshHost": "SSH 호스트 추가",
           "addRemoteServer": "원격 서버 추가",
           "addRemoteHost": "원격 호스트 추가",
-          "addSshHostDetail": "SSH를 통해 기존 머신을 사용합니다.",
-          "addRemoteServerDetail": "다른 컴퓨터에서 실행 중인 Orca와 페어링합니다.",
+          "addSshHostDetail": "SSH로 머신에 연결합니다.",
+          "addRemoteServerDetail": "SSH 없이 다른 컴퓨터의 Orca에 연결합니다.",
           "addRemoteHostDetail": "SSH 호스트 또는 Orca 서버",
           "addWslHost": "WSL 배포판 추가",
           "addWslHostDetail": "WSL 2 배포판 안에서 Orca 서버를 실행합니다. 실험적.",
@@ -7556,7 +7554,7 @@
           "serverSaveFailed": "원격 서버를 추가하지 못했습니다.",
           "serverTitle": "원격 서버 추가",
           "sshTitle": "SSH 호스트 추가",
-          "serverDescription": "다른 컴퓨터에서 실행 중인 Orca와 페어링합니다.",
+          "serverDescription": "같은 네트워크에 있는 다른 컴퓨터의 Orca와 페어링합니다.",
           "serverRunsAsYou": "이 기기는 이 서버에서 사용자 권한으로 명령을 실행할 수 있게 됩니다.",
           "sshDescription": "SSH를 통해 로그인할 수 있는 영구 머신을 추가합니다.",
           "serverSshTitle": "{{server}}에 SSH 호스트 추가",
@@ -10295,7 +10293,6 @@
             "d77537b580": "opencode-go",
             "a9d56852eb": "opencode",
             "7f72de7cbe": "상태 표시줄에 OpenCode Go 토큰 및 비용 사용량을 표시합니다.",
-            "51b0ccd6a2": "Google",
             "97957e374e": "OpenAI",
             "8dfd676c28": "codex",
             "e9e4412545": "상태 표시줄에 Codex 토큰 및 비용 사용량을 표시합니다.",
@@ -10338,8 +10335,6 @@
               "pr": "PR",
               "duplicate": "복제"
             },
-            "antigravityUsageDescription": "상태 표시줄에 Antigravity 구독 사용량을 표시합니다.",
-            "antigravityKeyword": "antigravity",
             "e7d1b0f3a5": "Grok CLI OAuth에서 Grok 주간 크레딧 사용량을 표시합니다.",
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
@@ -10393,8 +10388,7 @@
             "c29089716e": "Kimi 사용량",
             "96e32c1118": "MiniMax 사용량",
             "e8d2710689": "Muse 사용량",
-            "aff6e6afdf": "IDE 글꼴",
-            "ba1f9d39a6": "Antigravity 사용량"
+            "aff6e6afdf": "IDE 글꼴"
           }
         },
         "auto": {
@@ -14185,8 +14179,7 @@
             "windows": "구간 비율",
             "reset": "초기화까지 남은 시간, 예: 3h 15m",
             "resetAt": "초기화 시각, 예: 20:50",
-            "optional": "안의 자리표시자가 비어 있으면 생략됨",
-            "usagePools": "이름이 있는 사용량 풀, 예: Antigravity 모델"
+            "optional": "안의 자리표시자가 비어 있으면 생략됨"
           }
         },
         "RepositoryRemoveProjectSection": {
@@ -14281,7 +14274,8 @@
             "741ff8a0d2": "{{value0}} 푸시 및 생성"
           },
           "FileExplorer": {
-            "79b1537dd3": "파일을 찾아보려면 워크스페이스를 선택하세요."
+            "79b1537dd3": "파일을 찾아보려면 워크스페이스를 선택하세요.",
+            "2f4483d6c4": "이 필터와 일치하는 파일이 없습니다"
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "새 폴더",
@@ -14324,6 +14318,7 @@
             "31b4c3195d": "추가 탐색기 작업",
             "d95e30fe28": "탐색기 새로 고침",
             "6026b16950": "모두 축소",
+            "c1f3f3ec70": "파일 내용 검색",
             "openInApp": "{{app}}에서 열기"
           },
           "FileExplorerTreeStatus": {
@@ -14436,6 +14431,17 @@
             "localPortInUse": "포트 {{port}}은(는) 이미 사용 중입니다. 다른 로컬 포트를 선택하세요.",
             "localPortRequiresPrivileges": "포트 {{port}}에는 관리자 권한이 필요합니다. 로컬 포트 ≥ 1024를 사용하세요."
           },
+          "Search": {
+            "1abfb25a66": "파일에서 검색하려면 입력하세요.",
+            "d56d140747": "검색하려면 Enter를 누르세요.",
+            "98c8435e36": "검색할 워크스페이스를 선택하세요",
+            "dcc294f28d": "(결과가 잘림)",
+            "resultsInFiles": "{{files}}에서 {{results}}",
+            "resultCount_one": "결과 {{count}}개",
+            "resultCount_other": "결과 {{count}}개",
+            "fileCount_one": "파일 {{count}}개",
+            "fileCount_other": "파일 {{count}}개"
+          },
           "SearchFilters": {
             "01e4671ccf": "제외할 파일(예: *.min.js, dist/**)",
             "0a6412a895": "제외할 파일",
@@ -14445,9 +14451,11 @@
           "SearchHeader": {
             "6234a5ef85": "정규식 사용",
             "4567e6e0b6": "전체 단어 일치",
-            "464ae3974f": "대소문자 일치"
+            "464ae3974f": "대소문자 일치",
+            "693cbeadd0": "검색"
           },
           "SearchQueryRow": {
+            "queryLabel": "파일 검색",
             "clearLabel": "검색 지우기"
           },
           "SearchResultItems": {
@@ -14478,7 +14486,6 @@
             "476b77745b": "기준 참조 변경",
             "ed34038d0d": "브랜치 비교 새로 고침",
             "493f963029": "기준 참조 변경",
-            "11b5dd8e41": "비교 대상",
             "a9bf7c171a": "커밋 실패",
             "011f9713fc": "커밋이 차단되었습니다.",
             "cc199ccc5f": "더 많은 커밋 및 원격 작업",
@@ -14622,8 +14629,6 @@
             "c8e4a1f902": "필터: {{value0}}",
             "b3c8f1a902": "파일 이름으로 필터링",
             "d4f8c2a901": "필터 지우고 닫기",
-            "e8a1c4b203": "vs",
-            "4b4a7de138": "브라우저에서 검토 페이지 열기",
             "createPrIntentCommitBlockedSummary": "커밋이 차단됨: {{value0}} 이슈를 수정한 후 PR 만들기를 다시 시도하세요.",
             "pushRecovery": {
               "4b37ae99b0": "기본 AI 에이전트를 시작하여 이 푸시 실패 수정",
@@ -14643,7 +14648,6 @@
             "97e7124eac": "소스 제어를 새로 고칠 수 없습니다. 다시 시도하세요.",
             "b8c2e1a904": "{{value0}} → {{value1}}",
             "a4e93c21d7": "현재 브랜치: {{value0}}",
-            "c7d4e2f801": "기준 참조 변경: {{value0}}",
             "createPrIntentGenerateDetailsFailed": "검토 세부 정보를 생성할 수 없습니다. PR 생성을 다시 시도하세요.",
             "entryStageFailed": "'{{value0}}'을(를) 스테이징하지 못했습니다.",
             "entryUnstageFailed": "'{{value0}}'을(를) 스테이지 해제하지 못했습니다.",
@@ -14691,9 +14695,6 @@
             "keepFile": "파일 유지",
             "keepDeletion": "삭제 유지",
             "refreshAll": "모두 새로 고침",
-            "baseUpToDate": "최신 상태",
-            "rebaseOperationInProgress": "현재 Git 작업이 끝날 때까지 기다리세요",
-            "rebaseButton": "리베이스",
             "rebaseConflictCount_one": "충돌 {{count}}개",
             "rebaseConflictCount_other": "충돌 {{count}}개",
             "rebasePaused": "리베이스 일시 중지됨",
@@ -14723,9 +14724,7 @@
             "scopeUncommitted": "커밋되지 않음",
             "scopeAllChanges": "모든 변경 사항",
             "scopeNone": "없음",
-            "scopeOpenDiff": "차이 열기",
             "scopeShowAll": "모든 변경 사항 표시",
-            "scopeLoadingBranchChanges": "브랜치 변경 사항 로드 중…",
             "scopeBranchCommits": "이 브랜치의 커밋",
             "scopeRecentCommits": "최근 커밋",
             "scopeCompareTo": "{{ref}}과(와) 비교",
@@ -14742,7 +14741,8 @@
             "scopeOlderHistory": "Git Graph에서 이전 기록 보기",
             "scopeNoUncommitted": "커밋되지 않은 변경 사항이 없습니다.",
             "scopeCommitFiles": "파일",
-            "gitGraphButton": "그래프"
+            "gitGraphButton": "그래프",
+            "compareLoadingAgainst": "{{base}}와(과) 비교 중"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "선택한 에이전트를 시작할 수 없습니다.",
@@ -15604,6 +15604,16 @@
             "description": "\"{{value0}}\"이(가) 삭제됩니다. 삭제하면 {{value1}}의 자체 명령줄에서도 더 이상 재개할 수 없습니다.",
             "remoteDescription": "\"{{value0}}\"이(가) {{value2}}에서 삭제됩니다. 삭제하면 {{value1}}의 자체 명령줄에서도 더 이상 재개할 수 없습니다.",
             "confirm": "삭제"
+          },
+          "FileExplorerNameFilter": {
+            "26fb73c6e3": "파일 찾기",
+            "4d5a6b2a49": "파일 필터 지우기",
+            "7a9fb1e6aa": "내용"
+          },
+          "FileExplorerViewSwitch": {
+            "c4e9a2b713": "이름",
+            "b3c8f1a902": "이름으로 파일 필터링",
+            "f8a2c4d1e0": "탐색기 검색 모드"
           },
           "GitHistoryCommitFiles": {
             "b2c3d4e5f6": "이 커밋에는 파일 변경 사항이 없습니다"
@@ -18202,8 +18212,6 @@
             "fa6ea61de3": "취소",
             "c2ef0359b9": "내용 복사",
             "f2d0c22d67": "주석 {{value0}} 삭제",
-            "11c5084aa2": "주석 지우기",
-            "734e4343ec": "브라우저 주석 지우기",
             "95af781091": "에이전트에게 피드백 보내기",
             "ac39b9366b": "보내기",
             "366bf5d62c": "새 탭",
@@ -18236,21 +18244,14 @@
             "143204e423": "변경",
             "d51ef37351": "복사",
             "6f4ab3592b": "복사됨",
-            "499b31b84e": "모두 복사",
             "168350ae6a": "요소를 클릭하거나 마우스로 가리킨 다음 C를 눌러 복사하거나 S를 눌러 스크린샷을 찍습니다.",
-            "e852e20cea": "복사됨 - S를 눌러 스크린샷을 찍거나 다른 요소를 선택하세요.",
             "777b5bc4ec": "에이전트에게 보낼 피드백을 추가하려면 요소를 클릭하세요.",
             "b733a91bd9": "선택한 요소에 대한 피드백을 추가합니다.",
             "4328a0a062": "가져오기 실패: {{value0}}",
             "759f32af29": "다운로드 중",
             "4300f38145": "{{value0}}{{value1}}에서 다운로드 중",
-            "cc4a071d3a": "페이지 요소에 주석 달기({{value0}})",
             "572046436a": "원격 브라우저",
             "b313a7275b": "원격 브라우저 열기",
-            "ea6af700da": "{{value0}}개 주석",
-            "c13693fe27": "{{value0}}개 주석",
-            "074f0ed10b": "{{value0}}개 주석이 준비되었습니다. 다른 요소를 선택하거나 모든 피드백을 복사하세요.",
-            "a2164a6e5a": "{{value0}}개 주석이 준비되었습니다. 다른 요소를 선택하거나 모든 피드백을 복사하세요.",
             "9f6f2e8c19": "다운로드한 파일 경로를 사용할 수 없습니다.",
             "0c79b7634d": "다운로드한 파일을 열 수 없습니다. 파일이 이동되었거나 삭제되었을 수 있습니다.",
             "397d9dc923": "다운로드한 파일을 표시할 수 없습니다. 파일이 이동되었거나 삭제되었을 수 있습니다.",
@@ -18281,7 +18282,9 @@
             "devToolsDockRight": "오른쪽에 도킹",
             "devToolsDockBottom": "아래쪽에 도킹",
             "devToolsUndock": "별도 창에서 열기",
-            "devToolsClose": "DevTools 닫기"
+            "devToolsClose": "DevTools 닫기",
+            "11c5084aa2": "주석 지우기",
+            "734e4343ec": "브라우저 주석 지우기"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "취소",
@@ -18367,8 +18370,6 @@
                     "c16f932cb3": "저장",
                     "024467ceac": "취소",
                     "449d2c2629": "주석 의도",
-                    "38d320108c": "주석 접기",
-                    "9f209891a7": "주석 펼치기",
                     "includePageDetails": "페이지 세부 정보 포함",
                     "copyFeedback": "피드백 복사",
                     "copyFeedbackWithPageDetails": "페이지 세부 정보와 함께 피드백 복사"
@@ -20826,7 +20827,6 @@
         "expand": "펼치기"
       },
       "question": {
-        "step": "{{value0}} 단계",
         "otherPlaceholder": "답변을 입력하세요",
         "cancel": "취소",
         "send": "제출",
@@ -20838,12 +20838,11 @@
         "recommended": "추천",
         "stepOf": "{{value0}}/{{value1}}",
         "answered": "답변함",
-        "title": "질문",
         "previous": "이전 질문",
         "nextQuestion": "다음 질문",
         "back": "뒤로",
         "skipAndSubmit": "건너뛰고 제출",
-        "stepLabel": "{{value0}}, {{value1}}/{{value2}}: {{value3}}"
+        "questionStepLabel": "{{value0}}, {{value1}}/{{value2}}"
       },
       "approval": {
         "needsNewerOrca": "이 요청에는 최신 버전의 Orca가 필요합니다.",
@@ -21128,6 +21127,7 @@
       "htmlView": "HTML 보기",
       "htmlViewCode": "코드",
       "htmlViewPreview": "미리보기",
+      "htmlViewPreviewWaiting": "이 코드 블록이 완성되면 미리보기를 사용할 수 있습니다.",
       "context": {
         "unavailable": "컨텍스트 사용량을 아직 알 수 없습니다. 에이전트가 다음에 응답하면 확인할 수 있습니다.",
         "summary": "컨텍스트: {{used}}/{{window}} 토큰 ({{percent}}%), 마지막 응답 기준 추정치입니다.",
@@ -21994,21 +21994,14 @@
         "notNow": "나중에",
         "retry": "다시 시도",
         "dismiss": "닫기",
-        "openWorker": "워커 열기",
         "remoteOwner": "이 워커가 실행 중인 컴퓨터에서 중지하거나 지우세요",
-        "workspaceRemoved": "이 워커의 워크스페이스가 삭제되었습니다",
-        "restore": "목록에 다시 표시",
         "alreadyStopped": "이미 중지됨",
         "cantStop": "지금은 중지할 수 없음",
         "clearAllLabel_one": "실패한 워커 지우기",
         "clearAllLabel_other": "실패한 워커 {{count}}개 모두 지우기",
         "loadingWorker": "워커 로드 중…",
         "resultUnavailable": "워커 결과를 확인할 수 없음",
-        "showDetails": "세부 정보 표시",
-        "hideDetails": "세부 정보 숨기기",
-        "close": "닫기",
         "workersRegion": "워커",
-        "doneResult": "완료 · 결과 열기",
         "clearName": "{{name}} 지우기",
         "stopUnavailable": "{{name}} · {{title}} 중지할 수 없음 · {{reason}}",
         "stopName": "{{name}} · {{title}} 중지",
@@ -22032,8 +22025,6 @@
         "task": "작업",
         "workerCount_one": "워커 {{count}}개",
         "workerCount_other": "워커 {{count}}개",
-        "stopped": "중지됨",
-        "finished": "완료",
         "failedCount": "{{count}}개 실패",
         "needsYouCount": "확인 필요 {{count}}개",
         "newQuestions_one": "사용자 응답을 기다리는 새 워커 질문 {{count}}개",
@@ -23900,10 +23891,6 @@
         "pageChanged": "가져오는 동안 이 페이지가 닫혔거나 프로필이 변경되었습니다. 다시 시도하세요."
       },
       "notice": {
-        "importedMore_one": "{{domains}} 외 {{more}}개 도메인의 쿠키 {{count}}개를 가져왔습니다. 적용하려면 페이지를 새로 고치세요.",
-        "importedMore_other": "{{domains}} 외 {{more}}개 도메인의 쿠키 {{count}}개를 가져왔습니다. 사용하려면 페이지를 새로고침하세요.",
-        "imported_one": "{{domains}}의 쿠키 {{count}}개를 가져왔습니다. 적용하려면 페이지를 새로 고치세요.",
-        "imported_other": "{{domains}}의 쿠키 {{count}}개를 가져왔습니다. 사용하려면 페이지를 새로고침하세요.",
         "failed": "쿠키를 가져오지 못했습니다: {{reason}}"
       },
       "routedPage": {
@@ -24663,9 +24650,6 @@
         "planModelWithoutThinking": "\"{{model}}\" 모델은 사고 강도 설정을 지원하지 않습니다.",
         "planThinkingLevelInvalid": "{{model}}에서는 사고 강도 \"{{level}}\" 설정을 사용할 수 없습니다.",
         "openCodeInvalidEvents": "OpenCode가 잘못된 JSON 이벤트를 반환했습니다.",
-        "antigravityInvalidEvents": "Antigravity가 잘못된 JSON 이벤트를 반환했습니다.",
-        "antigravityInvalidResult": "Antigravity가 잘못된 결과를 반환했습니다.",
-        "antigravityNoFinalResult": "Antigravity가 최종 결과를 반환하지 않았습니다.",
         "kimiUnreadableOutput": "Kimi가 Orca에서 읽을 수 없는 출력을 반환했습니다. 다시 시도하세요.",
         "kimiSessionOccupied": "다른 클라이언트에서 활성 상태인 세션이므로 Kimi가 이 세션을 사용할 수 없습니다. 해당 클라이언트에서 세션을 중지하거나 클라이언트를 종료한 후 다시 시도하세요.",
         "kimiInterrupted": "Kimi가 텍스트 생성을 마치기 전에 중단되었습니다. 다시 시도하세요.",
@@ -24980,10 +24964,13 @@
       "label": "탐색기 루트",
       "full": "저장소 루트",
       "back": "{{path}}(으)로 돌아가기",
+      "searchScope": "검색 범위: 작업 공간 파일",
       "retry": "다시 시도",
       "sparseStatus": "스파스 체크아웃",
       "scopeDetails": "스파스 체크아웃 범위 안내",
       "scopeExplanation": "폴더 선택은 표시 범위만 바꾸며 체크아웃된 파일은 바꾸지 않습니다. 저장소 루트에는 루트와 상위 폴더에 체크아웃된 파일도 표시됩니다.",
+      "searchExplanation": "이름 검색은 현재 보고 있는 폴더를 필터링합니다. 내용 검색은 전체 워크스페이스를 검색합니다. 스파스 체크아웃에서 제외된 파일은 검색하지 않습니다.",
+      "findInFolder": "{{path}}에서 찾기",
       "folderLoadError": "이 폴더를 불러오지 못했습니다:",
       "emptyFolder": "이 폴더에 파일이 없습니다"
     },
@@ -25063,9 +25050,6 @@
       "retry": "다시 시도",
       "changed": "agy 자체 계정이 변경되었습니다. agy를 시작하기 전에 저장된 계정을 다시 선택하세요.",
       "refresh": "계정 새로고침",
-      "usage": "사용량 새로 고침",
-      "usageWithReading": "사용량 새로 고침 ({{reading}})",
-      "usageReading": "세션: {{session}} · 주간: {{weekly}}",
       "saved": "저장된 Google 계정",
       "remove": "제거",
       "searchDescription": "실행 호스트에서 기본 agy Google 계정을 저장하고 선택합니다.",
@@ -25086,8 +25070,6 @@
       "settingsIncomplete": "Antigravity 계정 유형을 선택하고 Google Cloud 프로젝트와 위치를 입력하세요.",
       "settingsLoadFailed": "Orca에서 Antigravity 로그인 설정을 불러오지 못했습니다. 다시 시도하세요.",
       "settingsSaveFailed": "Orca에서 Antigravity 로그인 설정을 저장하지 못했습니다. 다시 시도하세요.",
-      "lastReading": "{{reading}} · {{time}}에 조회",
-      "noReading": "사용량을 알 수 없음: 아직 조회하지 않음",
       "fd47b5a5dd": "Antigravity 계정",
       "personalOption": "개인 Google AI 요금제",
       "enterpriseOption": "조직 라이선스",
@@ -25118,7 +25100,6 @@
       "currentNotSaved": "현재 agy 로그인 · 저장되지 않음",
       "noEmailNotSaved": "agy가 이메일을 알려주지 않음 · 저장되지 않음",
       "saveShort": "저장",
-      "readAt": "{{time}}에 조회",
       "active": "활성",
       "runtime": "런타임",
       "chatTitle": "Antigravity 채팅",
@@ -25397,7 +25378,8 @@
     "filters": {
       "toggle": "검색 세부 정보 전환",
       "active": "{{count}}개 활성"
-    }
+    },
+    "noResults": "결과가 없습니다. 다른 검색을 시도하거나 필터를 조정하세요."
   },
   "csv": {
     "detectingDelimiter": "분리자 감지 중…",
@@ -28258,6 +28240,7 @@
     "usageLimit": {
       "continuesAt": "{{time}}에 계속",
       "continuesShort": "{{time}}에 계속",
+      "rowLine": "사용 한도 · {{time}}",
       "continuesTip": "{{time}}에 자동으로 계속",
       "hitLimit": "한도 도달 · {{time}}에 초기화",
       "hitShort": "한도 도달",

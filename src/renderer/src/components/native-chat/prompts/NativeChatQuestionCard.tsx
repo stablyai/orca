@@ -296,13 +296,20 @@ export function NativeChatQuestionCard({
           )}
         >
           <NativeChatQuestionCardHeader
-            steps={prompt.questions.map((question, i) => ({
-              header:
-                question.header ||
-                t('components.native-chat.question.step', 'Step {{value0}}', { value0: i + 1 }),
+            steps={prompt.questions.map((_, i) => ({
               answered: answeredAt(i)
             }))}
             index={index}
+            question={
+              look?.renderQuestion ? (
+                look.renderQuestion(q.question)
+              ) : (
+                <NativeChatQuestionText
+                  content={q.question}
+                  className="break-words [overflow-wrap:anywhere] [&_p]:my-0 [&_p+p]:mt-2"
+                />
+              )
+            }
             disabled={isSubmitting}
             cancelDisabled={isCancelling}
             onGoTo={goTo}
@@ -312,38 +319,10 @@ export function NativeChatQuestionCard({
           {look?.header}
           <div
             data-native-chat-dock-unsqueezed
-            // Short of room (fit level card), the question, options and typed answer scroll as one body,
-            // still tall enough for the question's first line and option 1, and faded while more lies below.
-            className="native-chat-question-card-body scrollbar-sleek flex min-h-0 shrink flex-col [[data-native-chat-dock-fit~=card]_&]:min-h-[calc(var(--spacing)*26)] [[data-native-chat-dock-fit~=card]_&]:overflow-y-auto"
+            // Short of room (fit level card), options and typed answers scroll as one body, still tall
+            // enough for option 1 while the question keeps its own two-line floor in the pinned band.
+            className="native-chat-question-card-body scrollbar-sleek flex min-h-0 shrink flex-col [[data-native-chat-dock-fit~=card]_&]:min-h-[calc(var(--spacing)*14)] [[data-native-chat-dock-fit~=card]_&]:overflow-y-auto"
           >
-            <div
-              // The question is shown in full: an answer needs the whole question, so capping its
-              // height hid the reason it was being asked. It never gives up height either, so the
-              // flex pass cannot squeeze it into a cut-off box while the options still have room.
-              // The options and the answer field, each with their own cap, take the squeeze in a
-              // short pane; this keeps a two-line floor there.
-              data-native-chat-dock-floor-lines={2}
-              className={cn(
-                // The card's heading, one step above its body text and scaling with it; it fades while more lies below.
-                'native-chat-question-card-question min-h-[1lh] shrink-0 overflow-y-auto px-3.5 text-[length:calc(var(--text-sm)*15/13)] leading-snug font-semibold text-foreground scrollbar-sleek',
-                'pt-3',
-                '[[data-native-chat-dock-fit~=card]_&]:shrink-0'
-              )}
-            >
-              <div data-native-chat-dock-content>
-                {look?.renderQuestion ? (
-                  <div data-testid="native-chat-question-card-title">
-                    {look.renderQuestion(q.question)}
-                  </div>
-                ) : (
-                  <NativeChatQuestionText
-                    data-testid="native-chat-question-card-title"
-                    content={q.question}
-                    className="break-words [&_p]:my-0 [&_p+p]:mt-2"
-                  />
-                )}
-              </div>
-            </div>
             {q.options.length > 0 ? (
               // Padded so each tile's outside focus outline clears the scroll clip.
               <div
