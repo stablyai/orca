@@ -8,6 +8,7 @@ import type { FilesystemHandlerContext } from '../filesystem-handler-context'
 import {
   cleanupLocalTransferPath,
   decodeDownloadedFileContent,
+  DownloadDestinationCollisionError,
   DOWNLOAD_SESSION_TTL_MS,
   inspectDownloadDestination,
   promoteDownloadedFile,
@@ -68,16 +69,15 @@ export function registerFilesystemDownloadHandlers(context: FilesystemHandlerCon
       const destinationPath = dialogResult.filePath
       const { existed } = await inspectDownloadDestination(destinationPath)
       const tempPath = createSiblingTransferPath(destinationPath, 'download')
-      let promoted = false
       try {
         await writeFile(tempPath, decodeDownloadedFileContent(content, encoding))
         await promoteDownloadedFile(tempPath, destinationPath, existed)
-        promoted = true
         return { canceled: false, destinationPath }
-      } finally {
-        if (!promoted) {
+      } catch (error) {
+        if (!(error instanceof DownloadDestinationCollisionError)) {
           await cleanupLocalTransferPath(tempPath)
         }
+        throw error
       }
     }
   )
@@ -183,19 +183,18 @@ export function registerFilesystemDownloadHandlers(context: FilesystemHandlerCon
       if (!session) {
         throw new Error('Download session not found')
       }
-      let promoted = false
       try {
         await promoteDownloadedFile(
           session.tempPath,
           session.destinationPath,
           session.destinationExisted
         )
-        promoted = true
         return { canceled: false, destinationPath: session.destinationPath }
-      } finally {
-        if (!promoted) {
+      } catch (error) {
+        if (!(error instanceof DownloadDestinationCollisionError)) {
           await cleanupLocalTransferPath(session.tempPath)
         }
+        throw error
       }
     }
   )
