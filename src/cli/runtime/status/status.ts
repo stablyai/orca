@@ -9,6 +9,7 @@ import {
 } from '../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 import { tryReadMetadata } from '../profile/metadata'
 import { readActiveRuntimeRestart } from '../connection/runtime-restart-wait'
+import { runtimeRestartingData } from '../connection/runtime-restarting-error'
 import { sendRequest } from '../connection/transport'
 import { resolveDesktopWindowStatus } from '../../../shared/remote-runtime/session-graph/cli-app-status-projection'
 import { RuntimeClientError, RuntimeRpcFailureError } from '../connection/types'
@@ -53,14 +54,7 @@ async function offlineStatus(
     app: {
       running: false,
       pid: null,
-      ...(restart
-        ? {
-            restarting: {
-              reason: restart.reason,
-              since: new Date(restart.writtenAt).toISOString()
-            }
-          }
-        : {})
+      ...(restart ? { restarting: runtimeRestartingData(restart, Date.now()) } : {})
     },
     runtime: {
       // Existing metadata proves the runtime started at least once.

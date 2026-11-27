@@ -5,6 +5,9 @@ export const RUNTIME_RESTART_MARKER_FILE = 'orca-runtime-restarting.json'
 // A relaunch or install serves again well inside this; past it, a crashed restart must not look busy.
 export const RUNTIME_RESTART_MARKER_TTL_MS = 90_000
 
+// A normal restart is back by now: the 20 s forced-quit watchdog plus a launch. Past it, Orca may be down.
+export const RUNTIME_RESTART_OVERDUE_MS = 45_000
+
 export type RuntimeRestartReason = 'update' | 'relaunch'
 
 export type RuntimeRestartMarker = {
@@ -55,4 +58,9 @@ export function parseFreshRuntimeRestartMarker(
     return null
   }
   return { reason, writtenAt, pid }
+}
+
+/** True once a restart has taken longer than a normal one, so the app may never come back. */
+export function isRuntimeRestartOverdue(marker: RuntimeRestartMarker, now: number): boolean {
+  return now - marker.writtenAt >= RUNTIME_RESTART_OVERDUE_MS
 }

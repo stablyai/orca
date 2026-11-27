@@ -1,13 +1,13 @@
 import { readFile } from 'node:fs/promises'
 import {
   getRuntimeRestartMarkerPath,
+  isRuntimeRestartOverdue,
   parseFreshRuntimeRestartMarker,
+  RUNTIME_RESTART_OVERDUE_MS,
   type RuntimeRestartMarker
 } from '../../../shared/remote-runtime/bootstrap/runtime-restart-marker'
 import { isProcessRunning } from './runtime-pid-liveness'
 
-// Past the forced-exit watchdog (20 s), a live quitting pid means the install was abandoned.
-const ABANDONED_QUIT_AFTER_MS = 45_000
 export const RUNTIME_RESTART_WAIT_BUDGET_MS = 30_000
 const RUNTIME_RESTART_POLL_MS = 1_000
 // A restarted runtime publishes metadata about half a second before its graph serves; back off from there.
@@ -35,7 +35,8 @@ export async function readActiveRuntimeRestart(
   if (!marker) {
     return null
   }
-  if (now - marker.writtenAt >= ABANDONED_QUIT_AFTER_MS && isProcessRunning(marker.pid)) {
+  // Past the forced-exit watchdog, a live quitting pid means the install was abandoned.
+  if (isRuntimeRestartOverdue(marker, now) && isProcessRunning(marker.pid)) {
     return null
   }
   return marker
@@ -100,11 +101,16 @@ export class RuntimeRestartWait {
       return false
     }
     this.restart = restart
+    // An overdue restart may never come back, so it costs no wait.
+    if (isRuntimeRestartOverdue(restart, now)) {
+      return false
+    }
     // The Windows installer waits on, then kills, processes running from the install folder, as this CLI does.
     if (restart.reason === 'update' && process.platform === 'win32') {
       return false
     }
-    this.deadline ??= now + this.budgetMs
+    // Stop waiting when the restart turns overdue, rather than report a long-past restart as in progress.
+    this.deadline ??= Math.min(now + this.budgetMs, restart.writtenAt + RUNTIME_RESTART_OVERDUE_MS)
     const remaining = this.deadline - now
     if (remaining <= 0) {
       // A later call on a reused client gets its own budget.

@@ -116,7 +116,7 @@ export type CliStatusResult = {
     pid: number | null
     desktopWindowStatus?: RuntimeDesktopWindowStatus
     /** Set while the app is down for an update or relaunch it announced; retry shortly. */
-    restarting?: { reason: 'update' | 'relaunch'; since: string }
+    restarting?: { reason: 'update' | 'relaunch'; since: string; overdue?: true }
   }
   runtime: {
     state: CliRuntimeState
