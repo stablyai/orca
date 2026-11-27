@@ -67,6 +67,11 @@ export class SpoolMemory {
     return through - this.released()
   }
 
+  /** Records after `seq`, or null when the file holds some of them (through `fileThrough`). */
+  after(seq: number, fileThrough: number): HeldRecord[] | null {
+    return fileThrough > seq ? null : this.records.slice(this.head).filter((r) => r.seq > seq)
+  }
+
   /** Empties memory and returns what it held, in seq order. */
   takeAll(): HeldRecord[] {
     const held = this.records.slice(this.head)

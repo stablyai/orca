@@ -53,6 +53,7 @@ export class DaemonRequestRouter {
       case 'relayAttach':
       case 'relayWrite':
       case 'relayAck':
+      case 'relayAcks':
       case 'relayClose':
       case 'relayList':
       case 'relayDetach':

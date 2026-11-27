@@ -9,14 +9,32 @@ export type ProviderRelaySpawnSpec = {
   env: Record<string, string>
   /** The app's native provider owner; the daemon cannot resolve app resources itself. */
   ownerExecutable: string
-  /** The launching app's bundle; a daemon from another bundle refuses so stale code never starts chats. */
+  /**
+   * The launching app's bundle. A daemon kept from an older bundle for its live sessions starts
+   * relays for a newer app too, as it does terminals (the relay protocol matched at hello); the
+   * agent runs through the app's own `ownerExecutable`. Older daemons refuse another bundle.
+   */
   appVersion?: string
   entryPath?: string
 }
 
 export type ProviderRelayRequest =
-  | { id: string; type: 'relaySpawn'; payload: { spec: ProviderRelaySpawnSpec; chatKey: string } }
-  | { id: string; type: 'relayAttach'; payload: { relayId: string; fromSeq: number } }
+  | {
+      id: string
+      type: 'relaySpawn'
+      payload: {
+        spec: ProviderRelaySpawnSpec
+        chatKey: string
+        /** Which agent integration runs here; a build that can't reattach it ends it at launch. */
+        agent?: string
+        policy?: ProviderRelayDetachPolicy
+      }
+    }
+  | {
+      id: string
+      type: 'relayAttach'
+      payload: { relayId: string; fromSeq: number; policy?: ProviderRelayDetachPolicy }
+    }
   /**
    * Must be a request, never a notification: a full agent input refuses it, and only a reply can say
    * so. Data over `RELAY_WRITE_CHUNK_CHARS` (a large image prompt) is sent as consecutive writes of
@@ -28,16 +46,51 @@ export type ProviderRelayRequest =
    * The client received through `seq`. `keepFrom` (optional) is the first line it still needs after
    * a restart, such as the start of an open streamed item: memory is freed through `seq`, lines from
    * `keepFrom` on are kept in the spool file, and a later attach replays from there. A kept span
-   * longer than the file cap is released through `seq` rather than stalling the agent.
+   * longer than the file cap is released through `seq` rather than stalling the agent. `cut` says
+   * this ack gives up a kept span still open (through `seq`, or before `keepFrom` when it keeps
+   * from a later line), so a later attach reports `truncatedThrough`. `held` marks the kept lines as
+   * a replay the client holds unsaved: past the memory cap they go to the file. The reply's
+   * `ackedThrough` is how far the daemon released, which passes `keepFrom` after a file-cap release.
+   * `truncatedThrough` is how far the spool let kept lines go on its own (at its memory or file cap,
+   * on an ack or an append), so the client records each such release as a cut. Older daemons omit it.
+   * `cutKeys` (with `cut`, opaque to the daemon) name the items the cut split; each cut ack replaces
+   * them, and a later attach reports them next to `truncatedThrough`. Older daemons ignore them.
    */
-  | { id: string; type: 'relayAck'; payload: { relayId: string; seq: number; keepFrom?: number } }
+  | { id: string; type: 'relayAck'; payload: ProviderRelayAckPayload }
+  /** Several relays' acks in one request; `results` answers each in order, `{ error }` for a refused one. */
+  | { id: string; type: 'relayAcks'; payload: { acks: ProviderRelayAckPayload[] } }
   | { id: string; type: 'relayClose'; payload: { relayId: string; grace?: 'brief' } }
   | { id: string; type: 'relayList' }
-  | { id: string; type: 'relayDetach'; payload: { relayId: string } }
+  | {
+      id: string
+      type: 'relayDetach'
+      payload: { relayId: string; policy?: ProviderRelayDetachPolicy }
+    }
 
 export const PROVIDER_RELAY_REQUEST_TYPES: ReadonlySet<string> = new Set<
   ProviderRelayRequest['type']
->(['relaySpawn', 'relayAttach', 'relayWrite', 'relayAck', 'relayClose', 'relayList', 'relayDetach'])
+>([
+  'relaySpawn',
+  'relayAttach',
+  'relayWrite',
+  'relayAck',
+  'relayAcks',
+  'relayClose',
+  'relayList',
+  'relayDetach'
+])
+
+export type ProviderRelayAckPayload = {
+  relayId: string
+  seq: number
+  keepFrom?: number
+  cut?: true
+  held?: true
+  cutKeys?: string[]
+}
+
+/** More acks than this in one `relayAcks` is refused whole. */
+export const RELAY_ACKS_MAX = 1024
 
 /**
  * `daemonInstance` is this daemon start's hello `launchNonce`, so a client records which instance
@@ -47,6 +100,49 @@ export type ProviderRelaySpawnResult =
   | { relayId: string; pid: number; daemonInstance?: string }
   | { spawnError: { code: string; message: string } }
   | { refused: 'stale-bundle' | 'unavailable' }
+
+/**
+ * How the daemon may end a detached agent nobody is using: the app's own native-chat idle stop,
+ * applied only while no app is attached. Daemons before it ignore the field and keep the agent.
+ */
+export type ProviderRelayDetachPolicy = {
+  /** Quiet time before the agent is stopped; null never stops it. */
+  idleStopMs: number | null
+  /** Agent lines that open, close or restate the work the open app's idle stop counts. */
+  markers: ProviderRelayWorkMarker[]
+  /** Client request methods that are work until the agent answers them (an ACP `session/prompt`). */
+  workRequests?: string[]
+  /**
+   * Transport-only agent lines (a keep-alive), by top-level `method` (else `type`): the daemon
+   * neither forwards nor spools them. Only a short line is checked.
+   */
+  quiet?: string[]
+  /**
+   * Agent request methods that ask to start an item: until such a request (naming `params.itemId`,
+   * with no `approvalId`) is answered, that item hasn't started, so it isn't running work.
+   */
+  startApprovals?: string[]
+  /**
+   * Work open when a detach was sent, as task keys per marker group. Only a detach carries it, and
+   * only a detach that carries it can idle-stop: a stream that just dropped keeps the agent running.
+   */
+  open?: Record<string, string[][]>
+}
+
+/**
+ * One kind of agent line. It applies when its `name` is the line's top-level `method` (else `type`)
+ * and every `when` holds. `start` and `end` key one task by the values at `key` (each part takes the
+ * first of its paths that holds a string); an `end` with fewer parts ends every task under it. A
+ * `roster` replaces its group with the tasks in the array at `list`, each keyed by `key` inside it.
+ */
+export type ProviderRelayWorkMarker = {
+  group: string
+  name: string
+  effect: 'start' | 'end' | 'roster'
+  when?: { path: string[]; is: string; not?: true }[]
+  key: string[][][]
+  list?: string[]
+}
 
 /** Why the daemon ended an agent itself; output stopped, so the chat says so instead of hanging. */
 export type ProviderRelayFailure =
@@ -60,6 +156,12 @@ export type ProviderRelayExit = {
   code: number | null
   signal: string | null
   error?: ProviderRelayFailure
+  /** The daemon stopped the agent by the user's idle stop: its chat ended, nothing to replay into. */
+  idleStopped?: true
+  /** Stopped after a day detached with output no app took (or its work unknown); its spool is kept. */
+  capStopped?: true
+  /** The agent's last stderr, so the chat can say why it ended (absent from older daemons). */
+  stderrTail?: string
 }
 
 /** One stdout line; `pending` entries are agent requests still unanswered, kept apart from the spool. */
@@ -76,16 +178,27 @@ export type ProviderRelayAttachResult = {
   stderrTail: string
   exit: ProviderRelayExit | null
   /**
-   * Set only when kept lines (`keepFrom`) after the client's cursor were dropped at the spool file
-   * cap before this attach: its replay starts after this seq, inside the item the client asked to
-   * keep. Older clients ignore it.
+   * Work the daemon counted open while no app was attached, per marker group. The new app's own
+   * view starts empty, so it keeps these until it sees them end, and hands them back at its detach.
+   */
+  openWork?: Record<string, string[][]>
+  /** Tasks the daemon saw end while detached, which the app may still show running: restate them. */
+  endedWork?: Record<string, string[][]>
+  /**
+   * Set once kept lines were given up (at the spool's cap, or by a cut ack), wherever the cursor
+   * is: an item split there may still be open, so its later lines arrive without their start.
+   * Older clients ignore it.
    */
   truncatedThrough?: number
+  /** The items the client said its last cut split, when that cut is the one `truncatedThrough` names. */
+  cutKeys?: string[]
 }
 
 export type ProviderRelayInfo = {
   relayId: string
   chatKey: string
+  /** Null for a relay spawned without one (an older app). */
+  agent: string | null
   pid: number | null
   spawnedAtMs: number
   attached: boolean
@@ -136,3 +249,9 @@ export type ProviderRelayExitEvent = {
  * control socket's 16 MiB line limit, so a large write in such chunks always arrives.
  */
 export const RELAY_WRITE_CHUNK_CHARS = 2 * 1024 * 1024
+
+/** A cut names at most this many items, each key at most this long; a larger list is refused. */
+export const RELAY_CUT_KEYS_MAX = 32
+export const RELAY_CUT_KEY_MAX_CHARS = 256
+/** A cut key saying the cut split more items than it names: a reattach moves every item it meets. */
+export const RELAY_CUT_KEYS_OVERFLOW = '*'
