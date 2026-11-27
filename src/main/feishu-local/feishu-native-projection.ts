@@ -77,8 +77,18 @@ export class FeishuNativeProjection {
       user.body.role === 'user' &&
       user.body.connectorDelivery
     const report = !stamped && reportOriginal && this.reportWorkers()
+    const resumed =
+      !stamped && user && user.body.kind === 'message'
+        ? user.body.connectorClaim?.origin.filter(
+            (stamp) =>
+              stamp.account === account &&
+              stamp.conversation.source === 'feishu-local' &&
+              stamp.conversation.externalId === external
+          )
+        : undefined
     const delivery =
       stamped ||
+      resumed?.[0] ||
       (report
         ? {
             account,
@@ -105,7 +115,10 @@ export class FeishuNativeProjection {
     if (report) {
       native.report = true
     }
-    const continuations: string[] = []
+    if (resumed?.length) {
+      native.resumed = true
+    }
+    const continuations: string[] = (resumed?.slice(1) ?? []).map((stamp) => stamp.deliveryId)
     const ordered = [...this.items.values()].sort(
       (a, b) => a.sequence - b.sequence || (a.sequenceIndex ?? 0) - (b.sequenceIndex ?? 0)
     )

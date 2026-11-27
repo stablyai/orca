@@ -90,9 +90,13 @@ export async function deliverFeishuMessages(
       row = await inbox.next(b.account)
       continue
     }
-    await inbox.updateResponse(b.account, key.externalId, row.mid, route?.chat ?? b.chat, {
-      kind: 'begin'
-    })
+    const begin = () =>
+      inbox.updateResponse(b.account, key.externalId, row!.mid, route?.chat ?? b.chat!, {
+        kind: 'begin'
+      })
+    if (!row.resume) {
+      await begin()
+    }
     const message = {
       transportSignal: signal,
       text: prompt,
@@ -138,6 +142,12 @@ export async function deliverFeishuMessages(
     if (signal.aborted) {
       return
     }
+    if (row.resume && initial.outcome === 'refused' && initial.reason === 'not_failed') {
+      await inbox.closePrompts(b.account, key.externalId, null, '此轮已继续或完成', 'resume')
+      await inbox.admitted(b.account, row.mid)
+      row = await inbox.next(b.account)
+      continue
+    }
     if (initial.outcome === 'refused' && initial.reason === 'delivery_backlog_full') {
       retry()
       break
@@ -152,6 +162,9 @@ export async function deliverFeishuMessages(
       changed()
     }
     if (initial.outcome === 'accepted') {
+      if (row.resume) {
+        await begin()
+      }
       await inbox.updateResponse(b.account, key.externalId, row.mid, route?.chat ?? b.chat, {
         kind: 'status',
         text: '正在处理'

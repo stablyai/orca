@@ -158,6 +158,7 @@ export class FeishuResponseStore {
       response.continuation &&
       ((change.kind === 'native' &&
         !change.value.report &&
+        !change.value.resumed &&
         !change.value.deliveries?.includes(response.continuation)) ||
         (change.kind === 'final' &&
           original !== response.continuation &&
@@ -187,6 +188,7 @@ export class FeishuResponseStore {
           (change.value.startedAt < response.native.startedAt ||
             (response.final !== undefined &&
               !change.value.report &&
+              !change.value.resumed &&
               change.value.turnItemId !== response.native.turnItemId))
         ) {
           return id
@@ -196,7 +198,7 @@ export class FeishuResponseStore {
         if (previous?.completedAt !== undefined && change.value.completedAt === undefined) {
           return id
         }
-        if (change.value.report && !previous) {
+        if ((change.value.report || change.value.resumed) && !previous) {
           if (response.native) {
             response.history = [...(response.history ?? []), response.native].slice(-10)
           }
@@ -230,7 +232,10 @@ export class FeishuResponseStore {
             ).values()
           ].slice(-20)
         }
-        if (change.value.report && change.value.completedAt !== undefined) {
+        if (
+          (change.value.report || change.value.resumed) &&
+          change.value.completedAt !== undefined
+        ) {
           response.final = response.native.messages.at(-1)?.text ?? ''
           response.phase = 'done'
         }

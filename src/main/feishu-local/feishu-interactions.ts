@@ -79,9 +79,7 @@ export class FeishuInteractions {
         if (entry.workersRunning !== undefined) {
           await this.record({ ...entry, kind: 'workers', running: entry.workersRunning })
         }
-        if (entry.working) {
-          this.native.track(entry.conversation.externalId)
-        }
+        this.native.track(entry.conversation.externalId)
         await this.record(
           {
             ...entry,

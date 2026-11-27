@@ -89,6 +89,9 @@ export class FeishuNativeFeed {
         ) {
           return
         }
+        if (value.native.resumed) {
+          await this.store.closePrompts(this.b.account, external, null, '已恢复处理', 'resume')
+        }
         for (const original of value.continuations) {
           await this.store.updateResponse(this.b.account, external, original, route.chat, {
             kind: 'handoff',

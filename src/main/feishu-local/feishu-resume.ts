@@ -21,9 +21,11 @@ export async function offerFeishuResume(
   if (!(await chatAwaitsResume(chat ?? null, linked.link.sessionId, linked))) {
     return
   }
+  const cut = chat && (await chat.conversation(linked.link.sessionId)).journal
+  const identity = turn ?? (await cut?.reads.orcaStopCut())?.turnItemId ?? route.original
   await store.putCard(
     b.account,
-    `resume:${external}:${turn ?? 'restart'}`,
+    `resume:${external}:${identity}`,
     external,
     route.original,
     route.chat,
