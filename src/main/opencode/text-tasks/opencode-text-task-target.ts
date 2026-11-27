@@ -1,18 +1,23 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { acknowledgesOpenCodeV1Policy } from './opencode-text-task-policy'
 import type { OpenCodeTextTaskInput } from './opencode-text-task-input'
 import type { createOpenCodeTextTaskHttp } from './opencode-text-task-http'
 
-const session = z.looseObject({
-  id: z.string().min(1),
-  parentID: z.string().nullable().optional(),
-  directory: z.string().optional(),
-  location: z.looseObject({ directory: z.string() }).optional()
-})
-const page = z.object({
-  data: z.array(session),
-  cursor: z.object({ next: z.string().optional() })
-})
+const session = lazyZodSchema(() =>
+  z.looseObject({
+    id: z.string().min(1),
+    parentID: z.string().nullable().optional(),
+    directory: z.string().optional(),
+    location: z.looseObject({ directory: z.string() }).optional()
+  })
+)
+const page = lazyZodSchema(() =>
+  z.object({
+    data: z.array(session),
+    cursor: z.object({ next: z.string().optional() })
+  })
+)
 
 type Http = ReturnType<typeof createOpenCodeTextTaskHttp>
 

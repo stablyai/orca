@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeFs from 'node:fs'
 import type * as NodePath from 'node:path'
+import type * as AsarTransparentFs from '../../../filesystem/asar-transparent-fs'
 import type { Store } from '../../../persistence/loading-store/store'
 
 // Use Windows paths on every host to prove UNC credential-leak rejection happens before filesystem access.
@@ -9,27 +10,32 @@ vi.mock('node:path', async () => {
   return { ...actual.win32, default: actual.win32 }
 })
 
-const { fsCalls } = vi.hoisted(() => {
+const { fsCalls, recordFsCall } = vi.hoisted(() => {
   const calls: string[] = []
-  return { fsCalls: calls }
+  const record = (name: string) => async (target: unknown) => {
+    calls.push(`${name} ${String(target)}`)
+    if (name !== 'realpath') {
+      return { isFile: () => true, isDirectory: () => false, isSymbolicLink: () => false }
+    }
+    // A local image resolving to a network share.
+    if (String(target).endsWith('share-link.png')) {
+      return '\\\\nas\\pics\\shot.png'
+    }
+    // A project-local name resolving to a device.
+    return String(target).endsWith('dev-link.png') ? 'C:\\repo\\CON.png' : target
+  }
+  return { fsCalls: calls, recordFsCall: record }
 })
 
-vi.mock('node:fs/promises', () => {
-  const record = (name: string) =>
-    vi.fn(async (target: unknown) => {
-      fsCalls.push(`${name} ${String(target)}`)
-      if (name !== 'realpath') {
-        return { isFile: () => true, isDirectory: () => false }
-      }
-      // A project-local name resolving to a device.
-      if (String(target).endsWith('share-link.png')) {
-        // A local image resolving to a network share.
-        return '\\\\nas\\pics\\shot.png'
-      }
-      return String(target).endsWith('dev-link.png') ? 'C:\\repo\\CON.png' : target
-    })
-  return { realpath: record('realpath'), stat: record('stat'), open: record('open') }
-})
+vi.mock('node:fs/promises', () => ({
+  stat: vi.fn(recordFsCall('stat')),
+  open: vi.fn(recordFsCall('open'))
+}))
+vi.mock('../../../filesystem/asar-transparent-fs', async (importOriginal) => ({
+  ...(await importOriginal<typeof AsarTransparentFs>()),
+  realpathWithoutArchiveLock: vi.fn(recordFsCall('realpath')),
+  lstatWithoutArchiveLock: vi.fn(recordFsCall('lstat'))
+}))
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
   return {

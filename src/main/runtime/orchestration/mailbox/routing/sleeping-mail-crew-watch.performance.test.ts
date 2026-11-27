@@ -17,13 +17,10 @@ it.each([100, 1_000])(
       (next) => {
         listener = next
       },
-      {
-        retryFailed: () => {
-          retries += 1
-        },
-        trackedMailboxes: () => []
-      },
-      () => {}
+      (host) => {
+        expect(host).toMatch(/^ssh:ssh-target-/)
+        retries += 1
+      }
     )
     for (let index = 0; index < count; index++) {
       const host = `ssh-target-${index}`

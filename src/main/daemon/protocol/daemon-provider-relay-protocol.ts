@@ -1,0 +1,138 @@
+// Frozen relay RPC set: newer apps must be able to drive a daemon of this version unchanged.
+export const PROVIDER_RELAY_PROTOCOL_VERSION = 63
+
+/** An agent launch the daemon owns; env is complete because the daemon's own env is not the app's. */
+export type ProviderRelaySpawnSpec = {
+  command: string
+  args: string[]
+  cwd: string
+  env: Record<string, string>
+  /** The app's native provider owner; the daemon cannot resolve app resources itself. */
+  ownerExecutable: string
+  /** The launching app's bundle; a daemon from another bundle refuses so stale code never starts chats. */
+  appVersion?: string
+  entryPath?: string
+}
+
+export type ProviderRelayRequest =
+  | { id: string; type: 'relaySpawn'; payload: { spec: ProviderRelaySpawnSpec; chatKey: string } }
+  | { id: string; type: 'relayAttach'; payload: { relayId: string; fromSeq: number } }
+  /**
+   * Must be a request, never a notification: a full agent input refuses it, and only a reply can say
+   * so. Data over `RELAY_WRITE_CHUNK_CHARS` (a large image prompt) is sent as consecutive writes of
+   * at most that many chars; the agent's stdin is a byte stream, so a line may span writes, and a
+   * surrogate pair split between two writes is joined before it is encoded.
+   */
+  | { id: string; type: 'relayWrite'; payload: { relayId: string; data: string } }
+  /**
+   * The client received through `seq`. `keepFrom` (optional) is the first line it still needs after
+   * a restart, such as the start of an open streamed item: memory is freed through `seq`, lines from
+   * `keepFrom` on are kept in the spool file, and a later attach replays from there. A kept span
+   * longer than the file cap is released through `seq` rather than stalling the agent.
+   */
+  | { id: string; type: 'relayAck'; payload: { relayId: string; seq: number; keepFrom?: number } }
+  | { id: string; type: 'relayClose'; payload: { relayId: string; grace?: 'brief' } }
+  | { id: string; type: 'relayList' }
+  | { id: string; type: 'relayDetach'; payload: { relayId: string } }
+
+export const PROVIDER_RELAY_REQUEST_TYPES: ReadonlySet<string> = new Set<
+  ProviderRelayRequest['type']
+>(['relaySpawn', 'relayAttach', 'relayWrite', 'relayAck', 'relayClose', 'relayList', 'relayDetach'])
+
+/**
+ * `daemonInstance` is this daemon start's hello `launchNonce`, so a client records which instance
+ * holds the agent without racing a reconnect's new hello. Older daemons omit it.
+ */
+export type ProviderRelaySpawnResult =
+  | { relayId: string; pid: number; daemonInstance?: string }
+  | { spawnError: { code: string; message: string } }
+  | { refused: 'stale-bundle' | 'unavailable' }
+
+/** Why the daemon ended an agent itself; output stopped, so the chat says so instead of hanging. */
+export type ProviderRelayFailure =
+  | 'line-too-large'
+  | 'line-unreadable'
+  | 'line-undeliverable'
+  | 'spool-unreadable'
+
+/** `error` names why the daemon ended the agent itself, so the chat can say so instead of hanging. */
+export type ProviderRelayExit = {
+  code: number | null
+  signal: string | null
+  error?: ProviderRelayFailure
+}
+
+/** One stdout line; `pending` entries are agent requests still unanswered, kept apart from the spool. */
+export type ProviderRelayRecord = { seq: number; line: string }
+
+export type ProviderRelayAttachResult = {
+  /** Spool records after `fromSeq` arrive as `relayData` events up to and including this seq. */
+  replayThroughSeq: number
+  /** Seqs of unanswered agent requests; their lines arrive first as `relayPending` events. */
+  pending: number[]
+  maxClientRequestId: number | null
+  /** The agent's answer to the client's first `initialize` arrived before this reply as `relayInitialize` events (seq 0). */
+  initializeResultSent: boolean
+  stderrTail: string
+  exit: ProviderRelayExit | null
+  /**
+   * Set only when kept lines (`keepFrom`) after the client's cursor were dropped at the spool file
+   * cap before this attach: its replay starts after this seq, inside the item the client asked to
+   * keep. Older clients ignore it.
+   */
+  truncatedThrough?: number
+}
+
+export type ProviderRelayInfo = {
+  relayId: string
+  chatKey: string
+  pid: number | null
+  spawnedAtMs: number
+  attached: boolean
+  exit: ProviderRelayExit | null
+  nextSeq: number
+  ackedSeq: number
+  pendingCount: number
+}
+
+/** `daemonInstance`: as in `ProviderRelaySpawnResult`, the instance this listing speaks for. */
+export type ProviderRelayListResult = { relays: ProviderRelayInfo[]; daemonInstance?: string }
+
+/** A line longer than one frame piece arrives as consecutive pieces of one seq; `more` marks all but the last. */
+export type ProviderRelayDataEvent = {
+  type: 'event'
+  /**
+   * `relayInitialize` and `relayPending` are sent on attach; `relayData` is the spool, in seq order.
+   * On a binary-framed stream each piece is a DATA frame carrying the raw line bytes, and the frame
+   * reader restores `payload.line`; an NDJSON stream gets the JSON event.
+   */
+  event: 'relayData' | 'relayPending' | 'relayInitialize'
+  sessionId: string
+  payload: { seq: number; line: string; more?: true }
+}
+
+/**
+ * Acks may be batched (about once a second is plenty). The daemon sends this once each time unacked
+ * output reaches half its memory cap (half the spool file cap while the last ack set `keepFrom`), and
+ * again when an ack through `seq` still leaves it there; the client should then ack everything it has
+ * received.
+ */
+export type ProviderRelayAckWantedEvent = {
+  type: 'event'
+  event: 'relayAckWanted'
+  sessionId: string
+  payload: { seq: number }
+}
+
+export type ProviderRelayExitEvent = {
+  type: 'event'
+  event: 'relayExit'
+  sessionId: string
+  payload: ProviderRelayExit
+}
+
+/**
+ * The largest `data` one `relayWrite` should carry. Even fully `\u`-escaped it stays under the
+ * control socket's 16 MiB line limit, so a large write in such chunks always arrives.
+ */
+export const RELAY_WRITE_CHUNK_CHARS = 2 * 1024 * 1024

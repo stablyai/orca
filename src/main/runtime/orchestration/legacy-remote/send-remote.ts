@@ -33,6 +33,8 @@ export async function sendRemoteMessage(args: {
   remoteAttachment: RemoteAttachment
   processIncarnation?: string | null
   signal?: AbortSignal
+  /** A reply's answered message, which its Run home records. */
+  replyTo?: string
 }) {
   const { params, runtime, db, from, senderPaneKey, remoteAttachment } = args
   rejectFederatedExplicitTarget(params, remoteAttachment.home_run_id)
@@ -97,6 +99,7 @@ export async function sendRemoteMessage(args: {
       type,
       priority: params.priority ?? 'normal',
       threadId: params.threadId ?? null,
+      ...(args.replyTo ? { replyTo: args.replyTo } : {}),
       payload: relayPayload
     }),
     ...(!supportsLifecycleSettlement && outcome ? { settleRemoteOutcome: outcome } : {})

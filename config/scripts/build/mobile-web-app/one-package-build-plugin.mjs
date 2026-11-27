@@ -35,6 +35,14 @@ const PACKAGE_BUILD_REDIRECTS = [
     to: fileURLToPath(new URL('../../../../mobile/web-entry/expo-router-page.ts', import.meta.url))
   },
   {
+    // expo-router always registers its /_sitemap developer index; only its not-found screen links there.
+    from: './views/Sitemap',
+    to: fileURLToPath(
+      new URL('../../../../mobile/web-entry/expo-router-sitemap.ts', import.meta.url)
+    ),
+    importer: /[\\/]expo-router[\\/]build[\\/][^\\/]+\.js$/
+  },
+  {
     // These subpaths resolve to the CommonJS build, which keeps all of sha2 (sha512 too); the esm one shakes.
     from: '@noble/hashes/sha256',
     to: '@noble/hashes/esm/sha256.js'

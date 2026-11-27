@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { PLUGIN_PANEL_ICONS } from '../contributions/plugin-panel-contribution'
 import { PLUGIN_DECLARATIVE_LIMITS as LIMITS } from './plugin-declarative-limits'
 import {
@@ -36,126 +37,154 @@ export const PLUGIN_DECLARATIVE_ICONS = PLUGIN_PANEL_ICONS
 export type PluginDeclarativeIconName = (typeof PLUGIN_DECLARATIVE_ICONS)[number]
 export const PLUGIN_DECLARATIVE_ICON_SET: ReadonlySet<string> = new Set(PLUGIN_DECLARATIVE_ICONS)
 
-const stackProps = z.object({ gap, align }).strict()
-const rowProps = z
-  .object({
-    gap,
-    align,
-    justify: z.enum(['start', 'center', 'end', 'between']).optional(),
-    wrap: flag
-  })
-  .strict()
-const textProps = z
-  .object({
-    tone,
-    muted: flag,
-    size,
-    weight: z.enum(['regular', 'medium', 'semibold']).optional(),
-    truncate: flag
-  })
-  .strict()
-const headingProps = z
-  .object({ level: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional() })
-  .strict()
-const buttonProps = z
-  .object({
-    variant,
-    tone,
-    size,
-    icon: icon.optional(),
-    tooltip: label.optional(),
-    disabled: flag,
-    onPress: callback
-  })
-  .strict()
-const iconButtonProps = z
-  .object({
-    icon,
-    label: requiredLabel,
-    tooltip: label.optional(),
-    variant,
-    tone,
-    size,
-    disabled: flag,
-    onPress: callback
-  })
-  .strict()
-const badgeProps = z.object({ tone }).strict()
-const cardProps = z.object({ title: label.optional(), description: label.optional() }).strict()
-const listProps = z.object({ label: label.optional() }).strict()
-const listItemProps = z
-  .object({
-    title: label.optional(),
-    description: label.optional(),
-    icon: icon.optional(),
-    current: flag,
-    disabled: flag,
-    onPress: callback
-  })
-  .strict()
-const inputProps = z
-  .object({
-    label: requiredLabel,
-    labelHidden: flag,
-    value: text.optional(),
-    defaultValue: text.optional(),
-    placeholder: label.optional(),
-    type: z.enum(['text', 'search', 'password']).optional(),
-    maxLength: z.number().int().positive().max(LIMITS.maxTextLength).optional(),
-    invalid: flag,
-    disabled: flag,
-    onChange: callback,
-    onSubmit: callback,
-    ...editAck
-  })
-  .strict()
-const switchProps = z
-  .object({
-    label: requiredLabel,
-    checked: flag,
-    defaultChecked: flag,
-    disabled: flag,
-    onChange: callback,
-    ...editAck
-  })
-  .strict()
-const selectProps = z
-  .object({
-    label: requiredLabel,
-    labelHidden: flag,
-    value: label.optional(),
-    defaultValue: label.optional(),
-    placeholder: label.optional(),
-    options: z
-      .array(z.object({ value: requiredLabel, label: requiredLabel, disabled: flag }).strict())
-      .max(LIMITS.maxSelectOptions),
-    disabled: flag,
-    onChange: callback,
-    ...editAck
-  })
-  .strict()
-const separatorProps = z
-  .object({ orientation: z.enum(['horizontal', 'vertical']).optional() })
-  .strict()
-const progressProps = z
-  .object({ label: requiredLabel, labelHidden: flag, value: z.number().min(0).max(100).optional() })
-  .strict()
-const spinnerProps = z.object({ label: requiredLabel, labelHidden: flag }).strict()
-const emptyStateProps = z
-  .object({ title: requiredLabel, description: label.optional(), icon: icon.optional() })
-  .strict()
-const linkProps = z
-  .object({
-    // Why no `javascript:`/`file:`: the host opens it in the OS browser, never in Orca.
-    href: z
-      .string()
-      .max(2048)
-      .regex(/^(https?:\/\/|mailto:)/i)
-      .optional(),
-    onPress: callback
-  })
-  .strict()
-const codeProps = z.object({ block: flag }).strict()
+const stackProps = lazyZodSchema(() => z.object({ gap, align }).strict())
+const rowProps = lazyZodSchema(() =>
+  z
+    .object({
+      gap,
+      align,
+      justify: z.enum(['start', 'center', 'end', 'between']).optional(),
+      wrap: flag
+    })
+    .strict()
+)
+const textProps = lazyZodSchema(() =>
+  z
+    .object({
+      tone,
+      muted: flag,
+      size,
+      weight: z.enum(['regular', 'medium', 'semibold']).optional(),
+      truncate: flag
+    })
+    .strict()
+)
+const headingProps = lazyZodSchema(() =>
+  z.object({ level: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional() }).strict()
+)
+const buttonProps = lazyZodSchema(() =>
+  z
+    .object({
+      variant,
+      tone,
+      size,
+      icon: icon.optional(),
+      tooltip: label.optional(),
+      disabled: flag,
+      onPress: callback
+    })
+    .strict()
+)
+const iconButtonProps = lazyZodSchema(() =>
+  z
+    .object({
+      icon,
+      label: requiredLabel,
+      tooltip: label.optional(),
+      variant,
+      tone,
+      size,
+      disabled: flag,
+      onPress: callback
+    })
+    .strict()
+)
+const badgeProps = lazyZodSchema(() => z.object({ tone }).strict())
+const cardProps = lazyZodSchema(() =>
+  z.object({ title: label.optional(), description: label.optional() }).strict()
+)
+const listProps = lazyZodSchema(() => z.object({ label: label.optional() }).strict())
+const listItemProps = lazyZodSchema(() =>
+  z
+    .object({
+      title: label.optional(),
+      description: label.optional(),
+      icon: icon.optional(),
+      current: flag,
+      disabled: flag,
+      onPress: callback
+    })
+    .strict()
+)
+const inputProps = lazyZodSchema(() =>
+  z
+    .object({
+      label: requiredLabel,
+      labelHidden: flag,
+      value: text.optional(),
+      defaultValue: text.optional(),
+      placeholder: label.optional(),
+      type: z.enum(['text', 'search', 'password']).optional(),
+      maxLength: z.number().int().positive().max(LIMITS.maxTextLength).optional(),
+      invalid: flag,
+      disabled: flag,
+      onChange: callback,
+      onSubmit: callback,
+      ...editAck
+    })
+    .strict()
+)
+const switchProps = lazyZodSchema(() =>
+  z
+    .object({
+      label: requiredLabel,
+      checked: flag,
+      defaultChecked: flag,
+      disabled: flag,
+      onChange: callback,
+      ...editAck
+    })
+    .strict()
+)
+const selectProps = lazyZodSchema(() =>
+  z
+    .object({
+      label: requiredLabel,
+      labelHidden: flag,
+      value: label.optional(),
+      defaultValue: label.optional(),
+      placeholder: label.optional(),
+      options: z
+        .array(z.object({ value: requiredLabel, label: requiredLabel, disabled: flag }).strict())
+        .max(LIMITS.maxSelectOptions),
+      disabled: flag,
+      onChange: callback,
+      ...editAck
+    })
+    .strict()
+)
+const separatorProps = lazyZodSchema(() =>
+  z.object({ orientation: z.enum(['horizontal', 'vertical']).optional() }).strict()
+)
+const progressProps = lazyZodSchema(() =>
+  z
+    .object({
+      label: requiredLabel,
+      labelHidden: flag,
+      value: z.number().min(0).max(100).optional()
+    })
+    .strict()
+)
+const spinnerProps = lazyZodSchema(() =>
+  z.object({ label: requiredLabel, labelHidden: flag }).strict()
+)
+const emptyStateProps = lazyZodSchema(() =>
+  z.object({ title: requiredLabel, description: label.optional(), icon: icon.optional() }).strict()
+)
+const linkProps = lazyZodSchema(() =>
+  z
+    .object({
+      // Why no `javascript:`/`file:`: the host opens it in the OS browser, never in Orca.
+      href: z
+        .string()
+        .max(2048)
+        .regex(/^(https?:\/\/|mailto:)/i)
+        .optional(),
+      onPress: callback
+    })
+    .strict()
+)
+const codeProps = lazyZodSchema(() => z.object({ block: flag }).strict())
 
 export const PLUGIN_DECLARATIVE_CATALOG = {
   Stack: component(stackProps, 'any'),

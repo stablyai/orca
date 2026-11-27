@@ -23,6 +23,7 @@ import {
 } from './bot-attachment-images'
 import { BotItemError } from './bot-item-error'
 import { botItemCommentAttachmentBody } from './bot-item-comment-attachment-body'
+import type { AdmittedCommentClaim } from './bot-item-comment-admitted-claims'
 
 const COMMENT_IMAGE_LABELS = {
   tooMany: 'commentImagesTooMany',
@@ -40,7 +41,12 @@ export type BotItemCommentAttachmentDeps = {
   chat: () => Promise<{ sessionId: string; title: string | null } | null>
 }
 
-export type BotItemCommentAttached = { text: string; images: BotItemCommentImage[] }
+export type BotItemCommentAttached = {
+  text: string
+  images: BotItemCommentImage[]
+  /** The uploads claimed for the item's chat, when the comment names any. */
+  claimed?: AdmittedCommentClaim
+}
 
 /** The comment's text and images, named and sized on this host, once each upload it names is claimed
  *  for the item's chat; a text-only comment naming no upload touches nothing. `files`: files on this
@@ -85,7 +91,8 @@ export async function admitBotItemCommentAttachments(
       ? `${commentText.trimEnd()}\n\n${references}`
       : references
   const body = botItemCommentAttachmentBody(text, images)
-  if (agentSessionAttachmentReferences(store.rootDir, body).size === 0) {
+  const uploadIds = agentSessionAttachmentReferences(store.rootDir, body)
+  if (uploadIds.size === 0) {
     return { text, images }
   }
   const chat = await deps.chat()
@@ -93,7 +100,7 @@ export async function admitBotItemCommentAttachments(
     throw refused(botFailure('commentChatDeleted'))
   }
   await claimBotItemCommentAttachments(deps.claim, chat.sessionId, body)
-  return { text, images }
+  return { text, images, claimed: { sessionId: chat.sessionId, uploadIds } }
 }
 
 async function claimBotItemCommentAttachments(
