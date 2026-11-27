@@ -1,4 +1,4 @@
-import type { Translate } from '@/i18n/use-translate'
+import { getTranslationScopeKey, type Translate } from '@/i18n/use-translate'
 import {
   GITHUB_LOGIN_PATTERN,
   type BotGitHubRoster,
@@ -94,8 +94,8 @@ export function gitHubWhoCanAskSession(
   // picker keeps its rows on screen meanwhile), rather than going out at ROSTER_WAIT_MS.
   let patient = false
   // The last answer composed, with what it was composed from: the query, the list state, the
-  // lookup's answer, the picker's record of checks and what its wording took from the clock (the
-  // list's day, a reused list's age) as of then. One settlement can reach the same query twice (a
+  // lookup's answer, the picker's record of checks, what its wording took from the clock (the
+  // list's day, a reused list's age) and the language it is in, as of then. One settlement can reach the same query twice (a
   // search waiting on it, and the listener asking again); a search with nothing newer than that
   // gets the same answer rather than composing it again.
   let composed: {
@@ -104,6 +104,7 @@ export function gitHubWhoCanAskSession(
     exact: Exact | 'pending' | null
     evidence: number
     clock: string
+    language: string
     answer: ReturnType<typeof gitHubWhoCanAskAnswer>
   } | null = null
 
@@ -178,12 +179,15 @@ export function gitHubWhoCanAskSession(
       const evidence = ledger.version()
       const at = Date.now()
       const clock = listClock(now, at)
+      // Its words are in the language of the moment it was composed.
+      const language = getTranslationScopeKey()
       if (
         composed?.query === query &&
         composed.roster === now &&
         composed.exact === exactAnswer &&
         composed.evidence === evidence &&
-        composed.clock === clock
+        composed.clock === clock &&
+        composed.language === language
       ) {
         return composed.answer
       }
@@ -201,7 +205,7 @@ export function gitHubWhoCanAskSession(
         },
         t
       )
-      composed = { query, roster: now, exact: exactAnswer, evidence, clock, answer }
+      composed = { query, roster: now, exact: exactAnswer, evidence, clock, language, answer }
       return answer
     },
     // Only what failed is asked again: a list request the host never answered (one new request,

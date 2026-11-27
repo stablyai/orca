@@ -40,10 +40,10 @@ export function currentRows<T extends { id: string; name: string }>(
   })
 }
 
-/** Picks a username check still out could re-identify: its login is one they have been known by
- *  (as ticked, as now shown, or as any check saw them), or it matches one of those or their real
- *  name, as ticked or as a list later gave it (it may find their id under a new login). Others can
- *  be added meanwhile. */
+/** Picks a username check still out could re-identify: one asked after the newest check that
+ *  named them (any, if none has), whose login is one they have been known by (as ticked, as now
+ *  shown, or as any check saw them) or matches one of those or their real name, as ticked or as a
+ *  list later gave it (it may find their id under a new login). Others can be added meanwhile. */
 export function heldPicks(
   picks: readonly BotMember[],
   ticked: readonly BotMember[],
@@ -55,6 +55,10 @@ export function heldPicks(
     return []
   }
   return picks.filter((member) => {
+    const open = ledger.pendingFor(member.id)
+    if (open.length === 0) {
+      return false
+    }
     const known = [
       member.name || member.id,
       ticked.find((entry) => entry.id === member.id)?.name ?? '',
@@ -62,7 +66,7 @@ export function heldPicks(
       ledger.realName(member.id) ?? '',
       ...ledger.aliases(member.id)
     ].map((name) => name.toLowerCase())
-    return pending.some((login) => known.some((name) => name !== '' && name.includes(login)))
+    return open.some((login) => known.some((name) => name !== '' && name.includes(login)))
   })
 }
 
@@ -107,13 +111,14 @@ export const sameProposal = (next: readonly BotMember[], asked: readonly BotMemb
     (member, index) => member.id === asked[index]?.id && member.name === asked[index]?.name
   )
 
-/** Waits until no check the picker had already asked could still change one of `people` (only
- *  checks already out; each settles on its own bounds). */
+/** Waits until no check the picker had already asked could still change one of `people()`, read
+ *  again after each settles, so who stops counting meanwhile stops holding the wait (only checks
+ *  already out; each settles on its own bounds). */
 export async function settledFor(
-  people: readonly BotMember[],
+  people: () => readonly BotMember[],
   proposal?: WhoCanAskProposal
 ): Promise<void> {
-  while (proposal?.held(people)) {
+  while (proposal?.held(people())) {
     await proposal.settled()
   }
 }

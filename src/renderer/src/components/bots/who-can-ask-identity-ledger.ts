@@ -84,6 +84,20 @@ export class WhoCanAskIdentityLedger {
     return [...new Set(this.pendingChecks.values())]
   }
 
+  /** Logins whose check is still out and could still change who `id` is (lowercase): for an id a
+   *  check has named, only checks asked after that one (an older one, hit or miss, can't override
+   *  it); for an id no check has named, every check out. */
+  pendingFor(id: string): string[] {
+    const named = this.byId.get(id)?.seq ?? 0
+    const logins = new Set<string>()
+    for (const [seq, login] of this.pendingChecks) {
+      if (seq > named) {
+        logins.add(login)
+      }
+    }
+    return [...logins]
+  }
+
   /** Every login a check has seen `id` hold (lowercase). */
   aliases(id: string): string[] {
     const logins: string[] = []

@@ -15,6 +15,8 @@ import { BotWhoCanAskPicker } from '../BotWhoCanAskPicker'
 import { WhoCanAskIdentityLedger } from '../who-can-ask-identity-ledger'
 import { ROSTER_WAIT_MS, gitHubWhoCanAskSession } from './github-who-can-ask-session'
 import type * as Found from './github-who-can-ask-found'
+import type * as I18n from '@/i18n/i18n'
+import type * as UseTranslate from '@/i18n/use-translate'
 
 // Every completed composition, by query; `after` runs once, right after the next one completes.
 type Composer = { queries: string[]; after: ((query: string) => void) | null }
@@ -34,10 +36,41 @@ vi.mock('./github-who-can-ask-found', async (importOriginal) => {
   }
 })
 
+// The language the session's words are drawn in: its scope key, a marker its translator adds, and
+// who listens for a change (the real module's subscription, stood in for).
+type Language = { key: string; prefix: string; listeners: Set<() => void> }
+const language: Language = vi.hoisted((): Language => ({
+  key: 'en',
+  prefix: '',
+  listeners: new Set()
+}))
+vi.mock('@/i18n/use-translate', async (importOriginal) => ({
+  ...(await importOriginal<typeof UseTranslate>()),
+  getTranslationScopeKey: () => language.key
+}))
+vi.mock('@/i18n/i18n', async (importOriginal) => ({
+  ...(await importOriginal<typeof I18n>()),
+  subscribeTranslationScope: (listener: () => void) => {
+    language.listeners.add(listener)
+    return () => {
+      language.listeners.delete(listener)
+    }
+  }
+}))
+/** Switches the language the way the app does: the scope changes, then its listeners hear. */
+const switchLanguage = (key: string, prefix: string): void => {
+  language.key = key
+  language.prefix = prefix
+  for (const listener of language.listeners) {
+    listener()
+  }
+}
+
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test bot with the fields the picker reads.
 const bot = { id: 'bot-1', hostId: 'local', name: 'Atlas', members: [] } as unknown as Bot
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: echoes the English default like i18next does with no catalog.
 const t = ((_key: string, fallback: string, values?: Record<string, unknown>) =>
+  language.prefix +
   fallback.replace(/\{\{(\w+)\}\}/g, (_m, name: string) => String(values?.[name] ?? ''))) as never
 
 type Users = BotSlackResult<ConnectorGitHubUsersResponse>
@@ -126,10 +159,12 @@ function picker(people?: () => Promise<People>) {
         await vi.advanceTimersByTimeAsync(0)
       })
     },
-    /** Resolves the oldest lookup of `query` without waiting. */
-    answerNow: (query: string, value: Users) => {
-      const index = lookups.findIndex((lookup) => lookup.query === query)
-      lookups.splice(index, 1)[0]?.resolve(value)
+    /** The oldest lookup of `query` still out, left out. */
+    request: (query: string) => lookups.find((lookup) => lookup.query === query),
+    /** Answers that very lookup, without waiting. */
+    answerThis: (lookup: (typeof lookups)[number], value: Users) => {
+      lookups.splice(lookups.indexOf(lookup), 1)
+      lookup.resolve(value)
     },
     retry: async () => {
       await act(async () => {
@@ -147,6 +182,9 @@ function picker(people?: () => Promise<People>) {
 
 beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true })
+  language.key = 'en'
+  language.prefix = ''
+  language.listeners.clear()
   composer.queries = []
   composer.after = null
 })
@@ -246,15 +284,25 @@ describe('what still composes again', () => {
     const view = picker(async () => team)
     view.change('brennan')
     await view.wait(300)
-    // A new context: a new session; the first session's check is still out.
+    // The first session's own check, taken before anything else could ask the same.
+    const original = view.request('brennan')
+    if (!original) {
+      throw new Error('the first session never asked its check')
+    }
+    expect(view.users).toHaveBeenCalledOnce()
+    // A new context: a new session, which asks its own; the first session's check is still out.
     view.retire()
     await view.wait(300)
+    expect(view.users).toHaveBeenCalledTimes(2)
     view.change('Brennan B')
     // Right after the next composition, before it paints, the old check finds id 2 renamed.
-    composer.after = () => view.answerNow('brennan', found('2', 'brennan'))
+    composer.after = () => view.answerThis(original, found('2', 'brennan'))
     const from = composer.queries.length
     await view.wait(300)
     expect(composedFor('Brennan B', from)).toBe(2)
+    // The new session's own check is still out: the one answered was the retired session's.
+    expect(view.request('brennan')).toBeDefined()
+    expect(view.request('brennan')).not.toBe(original)
     // The newer evidence painted last: the list's row under its new login.
     expect(screen.queryByText('brennanb2025')).toBeNull()
     expect(screen.getByText('brennan')).toBeTruthy()
@@ -410,5 +458,45 @@ describe('what the clock changes in a later answer', () => {
     await view.wait(300)
     expect(composedFor('sam')).toBe(from)
     expect(note()).toBe(shows(`Repo list from ${timeOf(readAt)}.`))
+  })
+})
+
+describe('a language change', () => {
+  it('draws the open answer again in the new language, asking nothing new', async () => {
+    const view = picker(async () => team)
+    await view.wait(300)
+    view.change('brennan')
+    await view.wait(300)
+    expect(screen.getByText(/^Repo list from /)).toBeTruthy()
+    const from = composer.queries.length
+    await act(async () => {
+      switchLanguage('tr', 'TR ')
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(screen.getByText(/^TR Repo list from /)).toBeTruthy()
+    expect(screen.queryByText(/^Repo list from /)).toBeNull()
+    // The same rows and query, drawn once more from what the session holds.
+    expect(screen.getByText('brennanb2025')).toBeTruthy()
+    expect(composedFor('brennan', from)).toBe(1)
+    expect(view.people).toHaveBeenCalledOnce()
+    expect(view.users).toHaveBeenCalledOnce()
+  })
+
+  it('a session asked again after the change answers in the new language', async () => {
+    const ledger = new WhoCanAskIdentityLedger()
+    const people = vi.fn(async () => team)
+    const users = vi.fn(async () => found('9', 'brennan'))
+    const session = gitHubWhoCanAskSession(
+      { people, users },
+      { scope, ownerLogin: 'o', producer: 'local', t },
+      ledger
+    )
+    const english = await session.search('')
+    expect(await session.search('')).toBe(english)
+    switchLanguage('tr', 'TR ')
+    const turkish = await session.search('')
+    expect(turkish).not.toBe(english)
+    expect(turkish.ok && turkish.value.note?.startsWith('TR ')).toBe(true)
+    expect(people).toHaveBeenCalledOnce()
   })
 })

@@ -7,6 +7,7 @@ import type {
 } from './BotWhoCanAskList'
 import type { BotSlackResult } from '../../../../shared/connector-bot-slack-contract'
 import type { WhoCanAskIdentityLedger } from './who-can-ask-identity-ledger'
+import { subscribeTranslationScope } from '@/i18n/i18n'
 
 const SEARCH_DEBOUNCE_MS = 250
 
@@ -125,6 +126,9 @@ export function useWhoCanAskSearch(
     // A check settling anywhere this open (an earlier session's included) can change who this
     // query's rows are: rank them again from what the session already holds, asking nothing new.
     const stopLedger = ledger.onSettle(again)
+    // A session that answers from what it holds draws its words in the language of the moment:
+    // when that changes, the same answer is drawn again in place, asking nothing new.
+    const stopLanguage = active.onUpdate ? subscribeTranslationScope(again) : () => {}
     const timer = setTimeout(() => {
       issued = true
       ask(active, query, { generation, order, setSearch }, gen)
@@ -134,6 +138,7 @@ export function useWhoCanAskSearch(
       clearTimeout(timer)
       stopWatching()
       stopLedger()
+      stopLanguage()
     }
   }, [active, query, ledger])
 

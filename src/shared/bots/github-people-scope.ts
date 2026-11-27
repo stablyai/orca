@@ -7,6 +7,9 @@
 export const GITHUB_PEOPLE_MAX_REPOSITORIES = 10
 /** Whole-account installs (an organization's members, or a person's own repositories). */
 export const GITHUB_PEOPLE_MAX_OWNERS = 3
+/** The longest "owner/name" and account login GitHub allows; the RPC refuses anything longer. */
+export const GITHUB_REPOSITORY_NAME_MAX = 140
+export const GITHUB_LOGIN_MAX = 39
 
 export type GitHubPeopleScope = {
   /** "owner/name", deduplicated and sorted, at most GITHUB_PEOPLE_MAX_REPOSITORIES. */
@@ -34,14 +37,31 @@ function canonical(values: string[], max: number): { kept: string[]; more: boole
 export function gitHubPeopleScope(installations: readonly Installation[]): GitHubPeopleScope {
   const repositories: string[] = []
   const owners: string[] = []
+  // A name longer than GitHub allows can't be real; sending it would fail the whole request, so it
+  // is left out (before the caps, so it never displaces one that fits) and the scope is partial.
+  let unreadable = false
   for (const install of installations) {
     if (install.repositories === null) {
-      owners.push(install.accountLogin)
+      if (install.accountLogin.length > GITHUB_LOGIN_MAX) {
+        unreadable = true
+      } else {
+        owners.push(install.accountLogin)
+      }
     } else {
-      repositories.push(...install.repositories.map((repo) => repo.fullName))
+      for (const repo of install.repositories) {
+        if (repo.fullName.length > GITHUB_REPOSITORY_NAME_MAX) {
+          unreadable = true
+        } else {
+          repositories.push(repo.fullName)
+        }
+      }
     }
   }
   const repos = canonical(repositories, GITHUB_PEOPLE_MAX_REPOSITORIES)
   const accounts = canonical(owners, GITHUB_PEOPLE_MAX_OWNERS)
-  return { repositories: repos.kept, owners: accounts.kept, more: repos.more || accounts.more }
+  return {
+    repositories: repos.kept,
+    owners: accounts.kept,
+    more: repos.more || accounts.more || unreadable
+  }
 }

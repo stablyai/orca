@@ -466,3 +466,86 @@ describe('a failed save’s Try again acts once, on its first press', () => {
     ])
   })
 })
+
+describe('who a write is for, as the list stands', () => {
+  it('a pick listed by someone else while the confirmation is open holds nothing back', async () => {
+    const roster = deferred<People>()
+    const lee = deferred<Users>()
+    calls().people.mockReturnValue(roster.promise)
+    calls().users.mockImplementation(({ query }) =>
+      query === 'jordan'
+        ? Promise.resolve(usersOf([{ id: '50', name: 'jordan' }]))
+        : query === 'maya-c'
+          ? Promise.resolve(usersOf([{ id: '41', name: 'maya-c' }]))
+          : query === 'lee'
+            ? lee.promise
+            : Promise.resolve(usersOf([]))
+    )
+    const view = mountWhoCanAsk()
+    await typeQuery('jordan', 300 + ROSTER_WAIT_MS)
+    pickRow('jordanRepos still loading')
+    await typeQuery('maya-c', 300 + ROSTER_WAIT_MS)
+    pickRow('maya-cRepos still loading')
+    await typeQuery('lee')
+    const first = heldAnswer()
+    await clickAdd()
+    // While it is open, the list lands (this "lee" check is now about Jordan Lee), and the host
+    // lists jordan: someone else added them.
+    await land(roster, {
+      ok: true,
+      value: rosterOf([{ id: '50', login: 'jordan', name: 'Jordan Lee' }])
+    })
+    act(() => view.rerender({ ...bot, members: [{ id: '50', name: 'jordan', source: 'github' }] }))
+    await land(first, true)
+    // No wait on a check about someone no longer added: asked again for who is left, and written.
+    expect(asked()).toEqual([
+      [
+        { id: '50', name: 'jordan' },
+        { id: '41', name: 'maya-c' }
+      ],
+      [{ id: '41', name: 'maya-c' }]
+    ])
+    expect(stamped()).toEqual([[{ id: '41', name: 'maya-c', source: 'github' }]])
+  })
+
+  it('a failed add’s Try again writes again, though that failed write still lists them here', async () => {
+    host.update.mockRejectedValueOnce(new Error('network'))
+    calls().users.mockImplementation(({ query }) =>
+      Promise.resolve(query === 'jordan' ? usersOf([{ id: '50', name: 'jordan' }]) : usersOf([]))
+    )
+    const view = mountWhoCanAsk()
+    await typeQuery('jordan', 300 + ROSTER_WAIT_MS)
+    pickRow('jordanRepos still loading')
+    await clickAdd()
+    expect(screen.getByRole('alert').textContent).toContain('Couldn’t add jordan.')
+    // The re-read after the failure failed too: the optimistic member is still on the list here.
+    act(() => view.rerender({ ...bot, members: [{ id: '50', name: 'jordan', source: 'github' }] }))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(stamped()).toEqual([
+      [{ id: '50', name: 'jordan', source: 'github' }],
+      [{ id: '50', name: 'jordan', source: 'github' }]
+    ])
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('a failed add’s Try again still leaves out someone who became an owner meanwhile', async () => {
+    host.update.mockRejectedValueOnce(new Error('network'))
+    calls().users.mockImplementation(({ query }) =>
+      Promise.resolve(query === 'jordan' ? usersOf([{ id: '50', name: 'jordan' }]) : usersOf([]))
+    )
+    mountWhoCanAsk()
+    await typeQuery('jordan', 300 + ROSTER_WAIT_MS)
+    pickRow('jordanRepos still loading')
+    await clickAdd()
+    // jordan is linked as an owner now.
+    act(() => host.publish(gitHubView([{ userId: '50', login: 'jordan' }])))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(host.update).toHaveBeenCalledOnce()
+  })
+})

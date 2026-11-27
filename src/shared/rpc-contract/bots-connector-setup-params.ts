@@ -9,8 +9,10 @@ import {
 import { GITHUB_ID_PATTERN, GITHUB_LOGIN_PATTERN } from '../connector-bot-github-contract'
 import { CONNECTOR_CONNECT_SOURCES } from '../connectors/connector-cloud-contract'
 import {
+  GITHUB_LOGIN_MAX,
   GITHUB_PEOPLE_MAX_OWNERS,
-  GITHUB_PEOPLE_MAX_REPOSITORIES
+  GITHUB_PEOPLE_MAX_REPOSITORIES,
+  GITHUB_REPOSITORY_NAME_MAX
 } from '../bots/github-people-scope'
 
 const Id = lazyZodSchema(() => z.string().min(1).max(256))
@@ -63,10 +65,12 @@ export const BotGitHubUnlink = lazyZodSchema(() => z.object({ userId: GitHubUser
 export const BotGitHubPeople = lazyZodSchema(() =>
   z.object({
     /** The first linked GitHub login, recorded with the read it starts. */
-    owner: z.string().max(39).nullable(),
+    owner: z.string().max(GITHUB_LOGIN_MAX).nullable(),
     scope: z.object({
-      repositories: z.array(z.string().max(140)).max(GITHUB_PEOPLE_MAX_REPOSITORIES),
-      owners: z.array(z.string().max(39)).max(GITHUB_PEOPLE_MAX_OWNERS),
+      repositories: z
+        .array(z.string().max(GITHUB_REPOSITORY_NAME_MAX))
+        .max(GITHUB_PEOPLE_MAX_REPOSITORIES),
+      owners: z.array(z.string().max(GITHUB_LOGIN_MAX)).max(GITHUB_PEOPLE_MAX_OWNERS),
       more: z.boolean()
     })
   })

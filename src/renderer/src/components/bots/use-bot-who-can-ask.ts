@@ -21,7 +21,6 @@ import {
 } from '../../../../shared/bot-types'
 import type { BotUpdateParams } from '../../../../shared/rpc-contract/bots-params'
 import { BOT_ACCESS_COPY } from '../../../../shared/bots/bot-access-copy'
-import { readBotMembersFull } from '../../../../shared/bots/bot-member-capacity'
 import {
   accessRequestIdentity,
   accessRequestPerson,
@@ -29,6 +28,7 @@ import {
   grantAccessRequest
 } from '../../../../shared/bots/bot-access-request'
 import { useConfirmBotAccess } from './bot-access-confirm'
+import { botMembersFullMessage } from './bot-members-full-message'
 import { botErrorMessage } from './bot-presentation'
 import type { BotWhoCanAskService } from './BotWhoCanAskList'
 import { useOrcaCloudSignedOut } from './orca-cloud-signed-out'
@@ -98,26 +98,6 @@ export function useBotWhoCanAsk(bot: Bot, service: BotWhoCanAskService) {
   const requests = useWhoCanAskRequests(bot, service)
   const requestsWaitOnSignIn = useOrcaCloudSignedOut(bot.hostId) && takes !== undefined
 
-  // An add past a limit saves nobody; say who and which limit.
-  const fullMessage = (error: unknown): string | null => {
-    const full = readBotMembersFull(error)
-    if (!full) {
-      return null
-    }
-    const values = { names: full.names.join(', '), count: full.limit }
-    return full.scope === 'bot'
-      ? t(
-          'bots.whoCanAsk.fullBot',
-          'Nobody was added: {{names}} would go past the {{count}} people a bot can have.',
-          values
-        )
-      : t(
-          'bots.whoCanAsk.fullWorkspace',
-          'Nobody was added: {{names}} would go past the {{count}} people this workspace can have.',
-          values
-        )
-  }
-
   // Who Keep only me took off, so Undo can ask to give them access again.
   const [keptOnlyMe, setKeptOnlyMe] = useState<BotMember[] | null>(null)
 
@@ -140,7 +120,7 @@ export function useBotWhoCanAsk(bot: Bot, service: BotWhoCanAskService) {
         (error: unknown) =>
           setSave({
             kind: 'failed',
-            message: fullMessage(error) ?? failed,
+            message: botMembersFullMessage(error, t) ?? failed,
             retry: retry ?? attempt
           })
       )
@@ -154,12 +134,13 @@ export function useBotWhoCanAsk(bot: Bot, service: BotWhoCanAskService) {
     latest.current = { bot, service }
   })
   // Who among `people` may still be added: not since listed, nor since linked as the owner.
-  const stillEligible = (people: BotMember[]): BotMember[] => {
+  // `unconfirmed`: those a failed add listed only here; the host never said it has them.
+  const stillEligible = (people: BotMember[], unconfirmed?: ReadonlySet<string>): BotMember[] => {
     const now = latest.current
     const listedNow = new Set(now.service.listed(now.bot.members).map((member) => member.id))
     return people.filter(
       (member) =>
-        !listedNow.has(member.id) &&
+        (unconfirmed?.has(member.id) === true || !listedNow.has(member.id)) &&
         member.id !== now.service.ownerId &&
         !(now.service.otherOwnerIds?.includes(member.id) ?? false)
     )
@@ -183,13 +164,17 @@ export function useBotWhoCanAsk(bot: Bot, service: BotWhoCanAskService) {
 
   // Who among `people` to add as of this moment: renamed or dropped as those checks say, and only
   // those still eligible. Synchronous, so its answer and what the caller does with it are one step.
-  const qualifyNow = (people: readonly BotMember[], proposal?: WhoCanAskProposal): BotMember[] =>
-    stillEligible(proposal ? proposal.current(people) : [...people])
+  const qualifyNow = (
+    people: readonly BotMember[],
+    proposal?: WhoCanAskProposal,
+    unconfirmed?: ReadonlySet<string>
+  ): BotMember[] => stillEligible(proposal ? proposal.current(people) : [...people], unconfirmed)
+  // Waits only on checks that could change someone still eligible as of each moment.
   const qualify = async (
     people: readonly BotMember[],
     proposal?: WhoCanAskProposal
   ): Promise<BotMember[]> => {
-    await settledFor(people, proposal)
+    await settledFor(() => stillEligible([...people]), proposal)
     return qualifyNow(people, proposal)
   }
 
@@ -197,13 +182,18 @@ export function useBotWhoCanAsk(bot: Bot, service: BotWhoCanAskService) {
   // stopped being eligible, or a check renamed or displaced someone): never on an earlier answer.
   // The last check and the hand-off to the writer are one synchronous step. Cancelled, or with
   // nobody left, nothing is written and the attempt ends.
-  const deliver = async (approved: BotMember[], proposal?: WhoCanAskProposal): Promise<void> => {
+  const deliver = async (
+    approved: BotMember[],
+    proposal?: WhoCanAskProposal,
+    unconfirmed?: ReadonlySet<string>
+  ): Promise<void> => {
     for (;;) {
-      await settledFor(approved, proposal)
-      if (proposal?.held(approved)) {
+      const eligible = (): BotMember[] => stillEligible(approved, unconfirmed)
+      await settledFor(eligible, proposal)
+      if (proposal?.held(eligible())) {
         continue
       }
-      const now = qualifyNow(approved, proposal)
+      const now = qualifyNow(approved, proposal, unconfirmed)
       if (sameProposal(now, approved)) {
         break
       }
@@ -223,10 +213,13 @@ export function useBotWhoCanAsk(bot: Bot, service: BotWhoCanAskService) {
       }
       claimed = true
       setSave({ kind: 'saving' })
-      void deliver(approved, proposal)
+      // The failed write may still show them as listed here: they are written again unless
+      // they stop being eligible some other way (the host skips anyone it already has).
+      void deliver(approved, proposal, new Set(approved.map((member) => member.id)))
     }
+    const basis = current.members.filter((member) => !unconfirmed?.has(member.id))
     saveMembers(
-      { addMembers: newBotMembers(current.members, approved, list) },
+      { addMembers: newBotMembers(basis, approved, list) },
       t('bots.whoCanAsk.addFailed', 'Couldn’t add {{names}}.', {
         names: approved.map((member) => member.name || member.id).join(', ')
       }),
