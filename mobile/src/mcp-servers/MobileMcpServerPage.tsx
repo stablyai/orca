@@ -10,7 +10,8 @@ import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { PullDownMenu } from '../components/nav-bar/PullDownMenu'
 import { SheetPrimaryButton } from '../components/sheets/SheetPrimaryButton'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { intlLocaleFor } from '../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../i18n/use-mobile-translation'
 import { SettingsNote, SettingsSection } from '../settings/settings-screen-frame'
 import { pressedStyle } from '../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
@@ -41,6 +42,7 @@ export function MobileMcpServerPage(props: {
   onSignIn: () => void
 }) {
   const t = useMobileTranslation()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const styles = useThemedStyles(stylesSheet)
   const { server, actions, list } = props
   const title = mcpServerTitle(server)
@@ -75,7 +77,7 @@ export function MobileMcpServerPage(props: {
     <ListRow
       key="workspaces"
       title={t('mcpServers.workspaces', 'Workspaces')}
-      value={mcpWorkspacesValue(server.workspaces, props.workspaceNames, t)}
+      value={mcpWorkspacesValue(server.workspaces, props.workspaceNames, t, intlLocale)}
       navigates
       disabled={locked}
       onPress={props.onWorkspaces}

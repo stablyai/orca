@@ -16,7 +16,6 @@ import { useHostDisplay } from '../../host-descriptors/use-host-display'
 import { SwitchRow } from '../../host-screen/workspace-options/workspace-option-rows'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { spacing } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 
 type FilterProps = {
   hosts: readonly HostProfile[]
@@ -97,7 +96,6 @@ function AgentsFilterSheet({
   onHostFilterChange,
   onViewChange
 }: FilterProps & { visible: boolean; onClose: () => void }) {
-  useMobileColorScheme()
   const t = useMobileTranslation()
   const groupByLabels: Record<AgentListGroupBy, string> = {
     status: t('agents.groupBy.status', 'Status'),

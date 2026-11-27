@@ -108,12 +108,13 @@ function McpServerRow(props: {
 }) {
   const colors = useMobileColors()
   const t = useMobileTranslation()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const { server, problem } = props
   const needsSignIn = server.signIn !== undefined && server.signIn.state !== 'signed-in'
   const failed = !needsSignIn && problem?.kind === 'failed'
   const where = isAllMcpWorkspaces(server.workspaces)
     ? null
-    : mcpWorkspacesValue(server.workspaces, props.workspaceNames, t)
+    : mcpWorkspacesValue(server.workspaces, props.workspaceNames, t, intlLocale)
   const line =
     server.plugin?.name ?? [mcpServerAddress(server, false), where].filter(Boolean).join(' · ')
   return (

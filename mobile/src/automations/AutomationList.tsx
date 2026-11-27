@@ -98,7 +98,7 @@ export function automationRowSubtitle(
 ): { subtitle: string; orphan: boolean } {
   const { automation, item } = row
   return item.selector.kind === 'orphan'
-    ? { subtitle: automationOrphanIssueText(item.selector.issue), orphan: true }
+    ? { subtitle: automationOrphanIssueText(item.selector.issue, t), orphan: true }
     : {
         subtitle: [automationScheduleText(automation, t, intlLocale), project]
           .filter(Boolean)

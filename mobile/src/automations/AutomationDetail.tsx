@@ -139,7 +139,7 @@ export function AutomationDetail(props: {
   return (
     <>
       {item.selector.kind === 'orphan' ? (
-        <SettingsNote error>{automationOrphanIssueText(item.selector.issue)}</SettingsNote>
+        <SettingsNote error>{automationOrphanIssueText(item.selector.issue, t)}</SettingsNote>
       ) : null}
       <SettingsSection first>
         <ListRow
