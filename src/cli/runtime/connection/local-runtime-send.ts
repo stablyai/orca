@@ -8,7 +8,10 @@ import { readMetadata } from '../profile/metadata'
 import { isRequestUnsent } from './client-error-recovery'
 import { runtimeAccessDeniedError } from './runtime-access-denied'
 import { isConnectFailureCode, type RuntimeRestartWait } from './runtime-restart-wait'
-import { runtimeRestartingError } from './runtime-restarting-error'
+import {
+  runtimeRestartedSincePreflightError,
+  runtimeRestartingError
+} from './runtime-restarting-error'
 import type { RuntimeSourceFence } from './runtime-source-fence'
 import { sendRequest } from './transport'
 import { RuntimeClientError } from './types'
@@ -22,6 +25,8 @@ export type LocalRuntimeRequest = {
   timeoutMs: number
   envelope: RuntimeOrchestrationEnvelope
   requestSelection?: RuntimeRequestSelection | undefined
+  /** Refuse, unsent, to send to any other runtime than this one. */
+  pinnedRuntimeId?: string | null | undefined
   /** Attaches mutation recovery to a failure that may have reached the runtime. */
   recover: (error: unknown, runtimeId: string | null) => unknown
 }
@@ -46,6 +51,10 @@ export async function sendLocalRuntimeRequest<TResult>(
         continue
       }
       throw restartingOr(error)
+    }
+    // A replacement runtime may lack the capability this request was shaped for.
+    if (request.pinnedRuntimeId && metadata.runtimeId !== request.pinnedRuntimeId) {
+      throw runtimeRestartedSincePreflightError()
     }
     let expectedRuntimeSource
     try {

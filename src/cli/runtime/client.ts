@@ -182,6 +182,7 @@ export class RuntimeClient {
       timeoutMs: effectiveTimeoutMs,
       envelope,
       requestSelection: options?.requestSelection,
+      pinnedRuntimeId: options?.preflightRuntimeId ?? options?.terminalPromptPreflight?.runtimeId,
       recover
     })
     if (response.ok === false) {
