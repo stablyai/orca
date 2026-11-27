@@ -289,7 +289,11 @@ async function materializeOnce(): Promise<RelocatedDaemonHost | null> {
   const staging = join(versionRoot, daemonHostStagingName(process.pid, nonce))
   try {
     await mkdir(versionRoot, { recursive: true })
-    await executeManifest(buildDaemonHostManifest(sources), staging)
+    await executeManifest(
+      buildDaemonHostManifest(sources),
+      staging,
+      new Map(inventory.files.map((file) => [file.path, file.sha256]))
+    )
     await writeDaemonHostBuildMarker(staging, version, inventory)
     // Publish a new immutable build; a same-version daemon may still load files from an older mirror.
     await rename(staging, dest)

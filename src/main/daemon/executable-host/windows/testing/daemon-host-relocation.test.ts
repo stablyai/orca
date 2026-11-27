@@ -33,7 +33,9 @@ function installHostApp(): void {
     getAppMetrics: () => []
   })
 }
+import { createHash } from 'node:crypto'
 import { buildInstallFixture } from './daemon-host-relocation.test-fixture'
+import { executeManifest } from '../daemon-host-manifest'
 import { collectPinnedDaemonVersions } from '../daemon-host-pinned-versions'
 import {
   getDaemonHostRootDir,
@@ -146,6 +148,30 @@ describe('materializeRelocatedDaemonHost', () => {
     const hostRoot = getDaemonHostRootDir()
     const remaining = existsSync(hostRoot) ? readdirSync(hostRoot) : []
     expect(remaining).toEqual([])
+  })
+})
+
+describe('executeManifest', () => {
+  it('rejects a copy whose code no longer matches the fingerprint', async () => {
+    const entry = join(
+      installDir,
+      'resources',
+      'app.asar.unpacked',
+      'out',
+      'main',
+      'daemon-entry.js'
+    )
+    const op = { sourcePath: entry, destRel: 'entry.js', kind: 'file' as const }
+    const staging = join(tempDir, 'staging')
+    const fingerprinted = createHash('sha256').update('entry').digest('hex')
+
+    await executeManifest([op], staging, new Map([['entry.js', fingerprinted]]))
+    expect(readFileSync(join(staging, 'entry.js'), 'utf8')).toBe('entry')
+
+    writeFileSync(entry, 'changed after fingerprinting')
+    await expect(
+      executeManifest([op], join(tempDir, 'staging-2'), new Map([['entry.js', fingerprinted]]))
+    ).rejects.toThrow('code changed while copying')
   })
 })
 

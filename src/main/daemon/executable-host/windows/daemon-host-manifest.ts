@@ -1,5 +1,7 @@
 import { existsSync } from 'node:fs'
-import { cp, mkdir } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { copyFile, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises'
+import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 import { dirname, join, win32 as winPath } from 'node:path'
 
 /** Preserve signed bytes and basename; path-based NSIS sweeps spare the copy, but taskkill /IM can still kill it. */
@@ -186,30 +188,79 @@ export function buildDaemonHostManifest(sources: DaemonHostSources): CopyOp[] {
   return ops
 }
 
-/** Copy through libuv so the 1.7k-file, ~275 MiB runtime never blocks Electron main. */
-export async function executeManifest(ops: CopyOp[], stagingRoot: string): Promise<void> {
+// Parallel copies hide per-file Defender scan latency without flooding the libuv threadpool.
+const COPY_CONCURRENCY = 16
+
+type FileCopy = { sourcePath: string; destRel: string }
+
+// Follow links (stat, not lstat) so the mirror survives removal of the install directory.
+async function listFileCopies(
+  sourcePath: string,
+  destRel: string,
+  filter: CopyOp['filter']
+): Promise<FileCopy[]> {
+  if (filter && !filter(sourcePath)) {
+    return []
+  }
+  if (!(await stat(sourcePath)).isDirectory()) {
+    return [{ sourcePath, destRel }]
+  }
+  const names = await readdir(sourcePath)
+  const nested = await mapWithConcurrency(names, COPY_CONCURRENCY, (name) =>
+    listFileCopies(join(sourcePath, name), `${destRel}/${name}`, filter)
+  )
+  return nested.flat()
+}
+
+// Verify the bytes written; rereading a just-written file waits on Defender's scan of it.
+async function copyVerifiedFile(sourcePath: string, dest: string, sha256: string): Promise<void> {
+  const bytes = await readFile(sourcePath)
+  if (createHash('sha256').update(bytes).digest('hex') !== sha256) {
+    throw new Error('daemon-host relocation: code changed while copying')
+  }
+  await writeFile(dest, bytes)
+}
+
+/**
+ * Copy through libuv so the ~1.8k-file, ~275 MiB runtime never blocks Electron main.
+ * Files named in expectedHashes (posix destRel -> sha256) must match those hashes.
+ */
+export async function executeManifest(
+  ops: CopyOp[],
+  stagingRoot: string,
+  expectedHashes: ReadonlyMap<string, string> = new Map()
+): Promise<void> {
   const present = ops.filter((op) => existsSync(op.sourcePath))
   const missing = ops.find((op) => !op.optional && !present.includes(op))
   if (missing) {
     throw new Error(`daemon-host relocation: missing required input ${missing.sourcePath}`)
   }
-  // Settle every copy before failing so staging cleanup cannot race a copy still writing into it.
-  const results = await Promise.allSettled(
-    present.map(async (op) => {
-      const dest = destPath(stagingRoot, op.destRel)
-      await mkdir(dirname(dest), { recursive: true })
-      const { filter } = op
-      // Dereference links so the mirror survives removal of the install directory.
-      await cp(op.sourcePath, dest, {
-        recursive: op.kind === 'dir',
-        dereference: true,
-        force: true,
-        ...(filter ? { filter: (src: string) => filter(src) } : {})
-      })
-    })
+  const listed = await mapWithConcurrency(present, COPY_CONCURRENCY, (op) =>
+    listFileCopies(op.sourcePath, op.destRel, op.filter)
   )
-  const failure = results.find((result) => result.status === 'rejected')
-  if (failure) {
-    throw failure.reason
+  const copies = listed.flat()
+  const listedRels = new Set(copies.map((copy) => copy.destRel))
+  const unlisted = [...expectedHashes.keys()].find((destRel) => !listedRels.has(destRel))
+  if (unlisted) {
+    throw new Error(`daemon-host relocation: ${unlisted} is outside the copy manifest`)
+  }
+  for (const dir of new Set(copies.map((copy) => dirname(destPath(stagingRoot, copy.destRel))))) {
+    await mkdir(dir, { recursive: true })
+  }
+  // Settle every copy before failing so staging cleanup cannot race a copy still writing into it.
+  const results = await mapWithConcurrency(copies, COPY_CONCURRENCY, (copy) => {
+    const dest = destPath(stagingRoot, copy.destRel)
+    const sha256 = expectedHashes.get(copy.destRel)
+    const done = sha256
+      ? copyVerifiedFile(copy.sourcePath, dest, sha256)
+      : copyFile(copy.sourcePath, dest)
+    return done.then(
+      () => null,
+      (error: unknown) => error
+    )
+  })
+  const failure = results.find((error) => error !== null)
+  if (failure !== undefined) {
+    throw failure
   }
 }

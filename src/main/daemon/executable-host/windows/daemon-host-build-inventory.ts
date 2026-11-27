@@ -289,14 +289,12 @@ export function daemonHostBuildRuntimeMatches(
   )
 }
 
+/** Callers must have verified the copied code against inventory (executeManifest's expectedHashes). */
 export async function writeDaemonHostBuildMarker(
   root: string,
   version: string,
   inventory: DaemonHostBuildInventory
 ): Promise<void> {
-  if (!(await daemonHostBuildInventoryMatchesAsync(root, inventory))) {
-    throw new Error('daemon-host relocation: code changed while copying')
-  }
   const marker: DaemonHostBuildMarker = {
     ...inventory,
     version,
