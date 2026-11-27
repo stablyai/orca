@@ -1,5 +1,5 @@
 import { useContext, useMemo, useState } from 'react'
-import { ScrollView, Text, View } from 'react-native'
+import { ScrollView, Text, View, type ViewStyle } from 'react-native'
 import { MobileFooterRowsScrollerContext } from './transcript/agent-messages/use-mobile-footer-row-on-screen'
 import { createMobileNativeChatTailViewport } from './transcript/viewport/mobile-native-chat-tail-viewport'
 import {
@@ -42,9 +42,9 @@ import {
 } from '../../components/list/ListGroup'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { triggerError } from '../../platform/haptics/haptics'
-import { colors, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { useRouteCapability } from '../../worktree/execution-hosts/use-route-capability'
 import { useMobileStructuredSessionHostExecutionPhase } from './agent-session/use-mobile-structured-session-host-execution'
 import { MobileNativeChatBotIdentityContext } from './mobile-native-chat-bot-identity'
@@ -81,6 +81,7 @@ export function useMobileBotFirstScreen(
 }
 
 function StepMark({ state }: { state: BotSetupStepState }): React.JSX.Element {
+  const colors = useMobileColors()
   switch (state) {
     case 'running':
       return <LoadingSpinner size={17} color={colors.textMuted} />
@@ -94,6 +95,7 @@ function StepMark({ state }: { state: BotSetupStepState }): React.JSX.Element {
 }
 
 function LookMark({ state }: { state: FirstLookRow['state'] }): React.JSX.Element {
+  const colors = useMobileColors()
   switch (state) {
     case 'done':
       return <Check size={15} color={colors.textMuted} strokeWidth={2.2} />
@@ -108,13 +110,17 @@ function LookMark({ state }: { state: FirstLookRow['state'] }): React.JSX.Elemen
  *  and what it finds as it first looks around. */
 export function MobileBotFirstScreen({
   firstScreen,
-  after
+  after,
+  pad = null
 }: {
   firstScreen: NativeChatFirstScreen
   /** Drawn below the setup, such as other agents' waiting mail. */
   after?: React.ReactNode
+  /** Keeps the first screen clear of the Duo column, same inset as the transcript. */
+  pad?: ViewStyle | null
 }): React.JSX.Element | null {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const identity = useContext(MobileNativeChatBotIdentityContext)
   const bot = useHostBotById(identity?.botId ?? '')
@@ -133,7 +139,11 @@ export function MobileBotFirstScreen({
   const [asking, setAsking] = useState(false)
   const [retryError, setRetryError] = useState<string | null>(null)
   if (!identity?.botId || !bot) {
-    return <SetupMail after={after} />
+    return (
+      <View style={[styles.frame, pad]}>
+        <SetupMail after={after} />
+      </View>
+    )
   }
   const { botId } = identity
   const agent = botAgentLabel(bot.agent)
@@ -186,7 +196,7 @@ export function MobileBotFirstScreen({
   }
   const reading = rows.some((row) => row.state === 'running')
   return (
-    <>
+    <View style={[styles.frame, pad]}>
       <ScrollView style={styles.root} contentContainerStyle={styles.content}>
         <View style={styles.who}>
           <MobileBotAvatar avatar={identity.avatar} size={80} />
@@ -282,7 +292,7 @@ export function MobileBotFirstScreen({
         ) : null}
       </ScrollView>
       <SetupMail after={after} />
-    </>
+    </View>
   )
 }
 
@@ -294,6 +304,7 @@ function SetupMail({ after }: { after: React.ReactNode }): React.JSX.Element | n
 
 /** Mounts with its scroller, so a scroller that empties and comes back starts its place afresh. */
 function SetupMailScroller({ after }: { after: React.ReactNode }): React.JSX.Element {
+  const styles = useThemedStyles(stylesSheet)
   const [viewport] = useState(() => createMobileNativeChatTailViewport(true))
   // Its own open-state store: rows scrolled away drop their card and keep it.
   const disclosures = useMobileNativeChatDisclosures('bot-setup-mail')
@@ -316,7 +327,8 @@ function SetupMailScroller({ after }: { after: React.ReactNode }): React.JSX.Ele
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
+  frame: { flex: 1, position: 'relative' },
   root: { flex: 1 },
   mail: { flexGrow: 0, maxHeight: '50%' },
   actions: { flexDirection: 'row', gap: spacing.sm },

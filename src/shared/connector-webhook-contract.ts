@@ -127,7 +127,7 @@ export const WebhookNotice = lazyZodSchema(() =>
   })
 )
 
-const RunId = z.string().min(1).max(200)
+const RunId = lazyZodSchema(() => z.string().min(1).max(200))
 
 // The answers to POST /v1/connector/webhook-calls/:callId/start; one grant per call, bound to its run.
 export const WebhookCallStartAnswer = lazyZodSchema(() =>

@@ -44,7 +44,6 @@ type UseMobileTerminalPasteOptions = {
   readonly canSend: boolean
   readonly client: RpcClient | null
   readonly clientRef: RefObject<RpcClient | null>
-  readonly connState: ConnectionState
   readonly connStateRef: RefObject<ConnectionState>
   readonly deviceTokenRef: RefObject<string | null>
   readonly flushPendingLiveInputBeforeExternalSend: (handle: string) => Promise<boolean>
@@ -65,7 +64,6 @@ export function useMobileTerminalPaste({
   canSend,
   client,
   clientRef,
-  connState,
   connStateRef,
   deviceTokenRef,
   flushPendingLiveInputBeforeExternalSend,
@@ -232,7 +230,6 @@ export function useMobileTerminalPaste({
     client,
     clientRef,
     clipboard,
-    connState,
     connStateRef,
     deviceTokenRef,
     flushPendingLiveInputBeforeExternalSend,

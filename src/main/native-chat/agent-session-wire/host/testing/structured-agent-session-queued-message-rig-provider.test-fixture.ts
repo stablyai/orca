@@ -33,8 +33,9 @@ export type QueuedRigProviderOptions = {
   /** The model its child reports running; otherwise the agent's own `default`. */
   reportsModel?: string
   reportsEffort?: string
-  /** The first acquisition hands back a kept agent that had already ended (`KEPT_ENDED`). */
-  endedBeforeAcquire?: true
+  /** The first acquisition hands back a kept agent that had already ended (`KEPT_ENDED`);
+   *  `during-startup`: its open fails as its connection closes. */
+  endedBeforeAcquire?: true | 'during-startup'
 }
 
 export const KEPT_ENDED_GENERATION = 'kept-ended'
@@ -76,12 +77,15 @@ export function createQueuedRigProvider(
     ...(options.reportsEffort ? { effort: options.reportsEffort } : {})
   })
   const scripted: StructuredAgentSessionAdapter = {
-    open: () =>
-      options.starting
-        ? new Promise((resolve) => {
-            proveOpen = () => resolve({ reportedOptions: reported() })
-          })
-        : Promise.resolve({ reportedOptions: reported() }),
+    open: (input) =>
+      options.endedBeforeAcquire === 'during-startup' &&
+      input.acquisitionGeneration === KEPT_ENDED_GENERATION
+        ? Promise.reject(new Error('kept agent connection closed'))
+        : options.starting
+          ? new Promise((resolve) => {
+              proveOpen = () => resolve({ reportedOptions: reported() })
+            })
+          : Promise.resolve({ reportedOptions: reported() }),
     acquire: async ({ identity, fence, spawnToken, events: sink }) => {
       starts()
       const hold = startHold

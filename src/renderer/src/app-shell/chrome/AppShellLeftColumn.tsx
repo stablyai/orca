@@ -78,6 +78,8 @@ export function AppShellLeftColumn({
       // Remove the collapsed header from flex layout so panes reclaim the left edge.
       <div
         key="left-column"
+        // Rail pages' ⌘F treats focus left here (rail, list, left titlebar) as page focus.
+        data-app-left-column=""
         className={
           railOn
             ? 'relative flex min-h-0 shrink-0 flex-row'

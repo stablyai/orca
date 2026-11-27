@@ -9,9 +9,9 @@ import {
 } from 'lucide-react-native'
 import type { SmartNameSelection } from '../mobile-composer-source-types'
 import type { MobileComposerSource } from '../use-mobile-composer-source'
-import { colors, spacing, pressedStyle } from '../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { spacing, pressedStyle } from '../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../theme/themed-styles'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { TaskProviderLogo } from '../../../components/icons/TaskProviderLogo'
 import { TextField } from '../../../components/composer-input/TextField'
@@ -34,7 +34,7 @@ type Props = {
 }
 
 function SelectionIcon({ kind }: { kind: SmartNameSelection['kind'] }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   if (kind === 'github-pr') {
     return <GitPullRequest size={18} color={colors.textSecondary} />
   }
@@ -60,7 +60,8 @@ export function SmartWorkspaceSourceField({
   onBeforeOpen,
   onOpenDrawer
 }: Props) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const selection = composer.smartNameSelection
 
@@ -145,7 +146,7 @@ export function SmartWorkspaceSourceField({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   enabled: {
     opacity: 1
   },

@@ -17,12 +17,13 @@ export const NO_FILE_PATHS: string[] = []
 export const NO_ATTACHMENTS: PendingNativeChatImage[] = []
 export const NO_FILES: PendingNativeChatFile[] = []
 
-export function mobileNativeChatComposerPlaceholder(
+export function composerPlaceholder(
   goalPlaceholder: string | null | undefined,
   placeholder: string | null | undefined,
-  hasMentionBots: boolean,
+  mentionBots: { bots: readonly unknown[] } | null | undefined,
   t: Translate
 ): string {
+  const hasMentionBots = mentionBots != null && mentionBots.bots.length > 0
   return (
     goalPlaceholder ??
     placeholder ??

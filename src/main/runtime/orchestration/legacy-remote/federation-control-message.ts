@@ -1,5 +1,5 @@
 import { MESSAGE_TYPES, type MessagePriority, type MessageType } from '../db/orchestration-records'
-import { BOT_ITEM_MAIL_SENDER } from '../../../../shared/bots/bot-item-note-runs'
+import { BOT_ITEM_MAIL_SENDER } from '../../../../shared/bots/bot-item-mail-sender'
 import { callerMailProvenance } from '../db/messages/message-orca-provenance'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import { OrchestrationError } from '../orchestration-error'

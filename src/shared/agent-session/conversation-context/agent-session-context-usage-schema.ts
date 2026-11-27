@@ -9,10 +9,10 @@ import {
 } from './agent-session-context-usage'
 import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
-const TokenCount = z.number().finite().nonnegative()
-const WindowTokens = z.number().finite().positive()
-const CapturedAt = z.number().finite()
-const ModelId = z.string().min(1).max(MAX_CONTEXT_MODEL_ID_CHARS)
+const TokenCount = lazyZodSchema(() => z.number().finite().nonnegative())
+const WindowTokens = lazyZodSchema(() => z.number().finite().positive())
+const CapturedAt = lazyZodSchema(() => z.number().finite())
+const ModelId = lazyZodSchema(() => z.string().min(1).max(MAX_CONTEXT_MODEL_ID_CHARS))
 
 const TokenUsage = lazyZodSchema(() =>
   z.object({

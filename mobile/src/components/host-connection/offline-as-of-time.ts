@@ -1,5 +1,6 @@
-import { translate } from '../../i18n/mobile-i18n'
-import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
+import type { SupportedUiLocale } from '../../../../src/shared/i18n/ui-locale'
+import type { Translate } from '../../i18n/mobile-i18n'
+import { intlLocaleFor } from '../../i18n/ui-intl-locale'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -10,8 +11,13 @@ function startOfDay(at: number): number {
 }
 
 /** When offline data was read, as an "as of" line names it: a time today, then the day, then the date. */
-export function formatOfflineAsOfTime(at: number, now: number = Date.now()): string {
-  const locale = getUiIntlLocale()
+export function formatOfflineAsOfTime(
+  at: number,
+  t: Translate,
+  uiLocale: SupportedUiLocale,
+  now: number = Date.now()
+): string {
+  const locale = intlLocaleFor(uiLocale)
   // Rounded so a daylight-saving day still counts as one.
   const daysAgo = Math.round((startOfDay(now) - startOfDay(at)) / DAY_MS)
   const time = new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(at)
@@ -19,7 +25,7 @@ export function formatOfflineAsOfTime(at: number, now: number = Date.now()): str
     return time
   }
   if (daysAgo === 1) {
-    return translate('components.offlineAsOfTime.yesterday', 'yesterday, {{time}}', { time })
+    return t('components.offlineAsOfTime.yesterday', 'yesterday, {{time}}', { time })
   }
   if (daysAgo < 7) {
     return new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(at)

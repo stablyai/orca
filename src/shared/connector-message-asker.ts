@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { lazyZodSchema } from './schema/lazy-zod-schema'
 import {
   CONNECTOR_ASKER_PLACE_KINDS,
   ConnectorAskerVia,
@@ -77,65 +78,73 @@ export function isConnectorAvatarUrl(value: string): boolean {
 }
 
 const MAX_URL_LENGTH = 2048
-const optionalUrl = z.string().min(1).max(MAX_URL_LENGTH).optional().catch(undefined)
+const optionalUrl = lazyZodSchema(() =>
+  z.string().min(1).max(MAX_URL_LENGTH).optional().catch(undefined)
+)
 
 /** A connector person's picture, kept only from a host the avatar cache serves; anything else is
  *  dropped, not an error. */
-export const optionalConnectorAvatarUrl = optionalUrl
-  .refine((url) => url === undefined || isConnectorAvatarUrl(url))
-  .catch(undefined)
+export const optionalConnectorAvatarUrl = lazyZodSchema(() =>
+  optionalUrl.refine((url) => url === undefined || isConnectorAvatarUrl(url)).catch(undefined)
+)
 // The cloud carries at most the newest 20 held lines, each capped well under this.
 const MAX_NO_ACCESS_LINES = 20
-const noAccessLine = z
-  .object({
-    name: z.string().min(1).max(200).optional().catch(undefined),
-    text: z.string().min(1).max(8000)
-  })
-  .transform(({ name, text }): ConnectorNoAccessLine => ({
-    ...(name ? { name } : {}),
-    text
-  }))
+const noAccessLine = lazyZodSchema(() =>
+  z
+    .object({
+      name: z.string().min(1).max(200).optional().catch(undefined),
+      text: z.string().min(1).max(8000)
+    })
+    .transform(({ name, text }): ConnectorNoAccessLine => ({
+      ...(name ? { name } : {}),
+      text
+    }))
+)
 
 // Mirrors ConnectorAsker; a link or avatar this build can't trust drops that field, not the tag.
-const askerSchema = z
-  .object({
-    source: z.enum(CONNECTOR_SOURCES),
-    userId: z.string().min(1).max(128),
-    name: z.string().min(1).max(200).optional().catch(undefined),
-    role: z.enum(['owner', 'member']),
-    place: z.object({
-      kind: z.enum(CONNECTOR_ASKER_PLACE_KINDS),
-      id: z.string().min(1).max(256)
-    }),
-    url: optionalUrl,
-    avatarUrl: optionalUrl,
-    messageRef: z.string().min(1).max(2048).optional().catch(undefined),
-    via: ConnectorAskerVia,
-    app: z.literal(true).optional().catch(undefined),
-    // Unreadable lines are left out one by one; the tag never depends on them.
-    noAccess: z
-      .array(z.unknown())
-      .optional()
-      .catch(undefined)
-      .transform((lines) =>
-        (lines ?? [])
-          .slice(-MAX_NO_ACCESS_LINES)
-          .flatMap((line) => noAccessLine.safeParse(line).data ?? [])
-      )
-  })
-  .transform(({ url, avatarUrl, name, noAccess, messageRef, ...asker }): ConnectorMessageAsker => {
-    return {
-      ...asker,
-      // Another Slack app is never the owner, whatever role came with it.
-      ...(asker.app ? { role: 'member' as const } : {}),
-      ...(name ? { name } : {}),
-      ...(noAccess.length > 0 ? { noAccess } : {}),
-      ...(url && isConnectorAskerLink(asker.source, url) ? { url } : {}),
-      ...(avatarUrl && isConnectorAvatarUrl(avatarUrl) ? { avatarUrl } : {}),
-      // Only a ref in the asker's own source, so it can't point a reaction anywhere else.
-      ...(messageRef?.startsWith(`${asker.source}:`) ? { messageRef } : {})
-    }
-  })
+const askerSchema = lazyZodSchema(() =>
+  z
+    .object({
+      source: z.enum(CONNECTOR_SOURCES),
+      userId: z.string().min(1).max(128),
+      name: z.string().min(1).max(200).optional().catch(undefined),
+      role: z.enum(['owner', 'member']),
+      place: z.object({
+        kind: z.enum(CONNECTOR_ASKER_PLACE_KINDS),
+        id: z.string().min(1).max(256)
+      }),
+      url: optionalUrl,
+      avatarUrl: optionalUrl,
+      messageRef: z.string().min(1).max(2048).optional().catch(undefined),
+      via: ConnectorAskerVia,
+      app: z.literal(true).optional().catch(undefined),
+      // Unreadable lines are left out one by one; the tag never depends on them.
+      noAccess: z
+        .array(z.unknown())
+        .optional()
+        .catch(undefined)
+        .transform((lines) =>
+          (lines ?? [])
+            .slice(-MAX_NO_ACCESS_LINES)
+            .flatMap((line) => noAccessLine.safeParse(line).data ?? [])
+        )
+    })
+    .transform(
+      ({ url, avatarUrl, name, noAccess, messageRef, ...asker }): ConnectorMessageAsker => {
+        return {
+          ...asker,
+          // Another Slack app is never the owner, whatever role came with it.
+          ...(asker.app ? { role: 'member' as const } : {}),
+          ...(name ? { name } : {}),
+          ...(noAccess.length > 0 ? { noAccess } : {}),
+          ...(url && isConnectorAskerLink(asker.source, url) ? { url } : {}),
+          ...(avatarUrl && isConnectorAvatarUrl(avatarUrl) ? { avatarUrl } : {}),
+          // Only a ref in the asker's own source, so it can't point a reaction anywhere else.
+          ...(messageRef?.startsWith(`${asker.source}:`) ? { messageRef } : {})
+        }
+      }
+    )
+)
 
 /** The one reader of a stored or published `asker`: undefined when absent or unreadable, so a
  *  message from a newer host renders as it would without one. */

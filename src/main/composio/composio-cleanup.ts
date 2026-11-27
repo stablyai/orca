@@ -7,14 +7,17 @@ import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { composioUserOfBot } from '../../shared/composio/composio-apps'
 import type { ComposioApi } from './composio-api'
 import { composioKeyEnvelopeFile } from './composio-key-store'
 
 /** The bot, and its project named by its key's fingerprint; null when no key was known. */
-const Entry = z.object({ botId: z.string().min(1), project: z.string().nullable() })
+const Entry = lazyZodSchema(() =>
+  z.object({ botId: z.string().min(1), project: z.string().nullable() })
+)
 type Entry = z.infer<typeof Entry>
-const PendingFile = z.object({ bots: z.array(Entry) })
+const PendingFile = lazyZodSchema(() => z.object({ bots: z.array(Entry) }))
 
 /** Next to the key, on the host that runs the bots. */
 export const composioCleanupFile = (): string =>

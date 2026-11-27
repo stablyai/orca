@@ -1,7 +1,7 @@
 import { Text } from 'react-native'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import { getProviderDisplayName } from '../../../src/shared/agent-usage/display/usage-provider-windows'
 import { hasMobileAgentIcon, MobileAgentIcon } from '../components/icons/MobileAgentIcon'
-import { colors } from '../theme/mobile-theme'
 
 /** The CLI that spends a provider's quota, whose icon stands for the provider in a tab. */
 const USAGE_PROVIDER_LOGO_AGENT: Record<string, string> = {
@@ -39,6 +39,8 @@ export function UsageProviderGlyph({
   provider: string
   size: number
 }): React.JSX.Element {
+  const colors = useMobileColors()
+
   const agent = usageProviderLogoAgent(provider)
   if (agent) {
     return <MobileAgentIcon agentId={agent} size={size} />

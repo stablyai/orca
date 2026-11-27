@@ -151,18 +151,19 @@ export class SharedMcpProcesses {
   ): Promise<boolean> {
     const key = `${folder}\0${serverId}`
     const server = (await this.deps.servers(folder)).get(serverId)
-    let process = this.running.get(key)
     if (!server) {
-      process?.stop()
+      this.running.get(key)?.stop()
       throw new RelayRefusal(404, 'This server isn’t shared on this computer any more.')
     }
+    const { isInitializeRequest, SharedMcpProcess, SharedMcpStartFailed } =
+      await loadSharedMcpRuntimeModules()
+    // Read after the last await before start(), so concurrent first initializes share one child.
+    let process = this.running.get(key)
     const fingerprint = fingerprintOf(server)
     if (process && process.fingerprint !== fingerprint) {
       process.stop()
       process = undefined
     }
-    const { isInitializeRequest, SharedMcpProcess, SharedMcpStartFailed } =
-      await loadSharedMcpRuntimeModules()
     if (!process) {
       // A session from a child that stopped, or ran an older command: its agent starts over.
       if (req.headers['mcp-session-id'] !== undefined) {

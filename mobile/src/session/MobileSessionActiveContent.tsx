@@ -2,31 +2,27 @@ import { MobileSessionBotIdentity } from './native-chat/MobileSessionBotIdentity
 import { MobileBotCardHostProvider } from './native-chat/transcript/bot-cards/MobileBotCardHostProvider'
 import { nativeChatTerminalRunner } from './native-chat/native-chat-terminal-runner'
 import { useCallback, useMemo, useState } from 'react'
-import { computeActiveTerminalKeyboardLift } from '../terminal/keyboard/terminal-keyboard-avoidance-lift'
-import {
-  terminalPaneDirection,
-  terminalPaneKeyboardLayout
-} from '../terminal/session/pane-layout/mobile-terminal-pane-layout'
-import { View, StyleSheet } from 'react-native'
+import { terminalPaneDirection } from '../terminal/session/pane-layout/mobile-terminal-pane-layout'
+import { SessionTerminalPane } from './session-terminal-pane'
+import { useWindowDimensions, View, StyleSheet } from 'react-native'
+import { CircleAlert } from 'lucide-react-native'
 import {
   sideStripMargin,
   sideStripOffset,
   useSessionSideStripInset
 } from './session-side-strip-inset'
-import { MobileSessionPendingTerminalState } from './MobileSessionPendingTerminalState'
 import { MobileBrowserTabBody } from '../browser/MobileBrowserTabBody'
-import { TerminalPaneView } from '../terminal/session/pane-layout/TerminalPaneView'
 import { MountedTerminalPanes } from '../terminal/session/pane-layout/mounted-terminal-lru'
 import { MobileNativeChatOverlay } from './native-chat/MobileNativeChatOverlay'
-import { mobileSessionNativeChatHostOutage } from './native-chat/status/mobile-native-chat-host-outage'
+import { useMobileSessionNativeChatHostOutage } from './native-chat/status/mobile-native-chat-host-outage'
 import { MobileAgentMessageProvider } from './native-chat/transcript/agent-messages/MobileAgentMessageProvider'
 import { MobileNativeChatForkProvider } from './MobileNativeChatForkProvider'
 import { useMobileAgentMessageNavigation } from './use-mobile-agent-message-navigation'
 import { MobileNativeChatDictationPreviewContext } from './native-chat/composer/dictation/mobile-native-chat-dictation-preview-context'
 import { resolveMobileNativeChatSessionId } from './native-chat/conversation/mobile-native-chat-eligibility'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useThemedStyles } from '../theme/themed-styles'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { styles } from './mobile-session-styles'
+import { stylesSheet } from './mobile-session-styles'
 import { renderAnimatedToast } from '../components/feedback/TransientToast'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useMobileSessionContentKeyboardLift } from '../terminal/session/input-controls/use-mobile-session-keyboard-lift'
@@ -38,6 +34,7 @@ import { useHostProfile } from '../host-catalog/use-host-profile'
 import { useHostDisplay } from '../host-descriptors/use-host-display'
 import { FileReader } from '../files/session-documents/MobileSessionFileReader'
 import { MobileSessionContentState } from './MobileSessionContentState'
+import { MobileStateView } from '../components/feedback/MobileStateView'
 import { MarkdownReader } from '../files/session-documents/MobileSessionMarkdownReader'
 import { markdownTabDraftKey } from '../drafts/document-edit-draft-rows'
 import { workspaceDraftRowKey } from '../drafts/durable-draft-rows'
@@ -48,36 +45,33 @@ export function MobileSessionActiveContent({
 }: {
   controller: MobileSessionController
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const executionHost = useWorkspaceExecutionHost()
   const [paneFrame, setPaneFrame] = useState({ width: 0, height: 0 })
   const { main: stripInset } = useSessionSideStripInset(
     controller.canDockPanel && controller.activePanel !== null
   )
-  const paneDirection = terminalPaneDirection(paneFrame, controller.terminalSplitLayout)
+  const windowWidth = useWindowDimensions().width
+  const paneDirection = terminalPaneDirection(
+    paneFrame,
+    controller.terminalSplitLayout,
+    windowWidth
+  )
   const {
     hostId,
     worktreeId,
     client,
     terminals,
-    terminalTextScale,
-    commitPinchedTextScale,
-    terminalFontStyle,
     activeHandle,
     terminalSplitActive,
     visibleTerminalHandles,
-    notifyTerminalPaneFrame,
     diffComments,
     diffCommentBusy,
     createError,
-    setCreateError,
-    setShowCreateTabDrawer,
     dictationMode,
     dictationEnabled,
     toastMessage,
-    handleTerminalInteraction,
-    handleTerminalTap,
     browserScreencastSupported,
     showToast,
     nativeChatSendError,
@@ -96,25 +90,10 @@ export function MobileSessionActiveContent({
     sendingDiffCommentIds,
     updateMarkdownLocalContent,
     copyMarkdownText,
-    copyMarkdownPath,
     discardMarkdownLocalContent,
     saveMarkdownTab,
-    setTerminalWebViewRef,
-    releaseTerminalDocument,
-    handleTerminalWebReady,
     notifyTerminalFrame,
-    notifyTerminalCellBoxChange,
-    handleFileTap,
     handleNativeChatFileTap,
-    handleTerminalInput,
-    handleTerminalQueryReply,
-    handleSelectionMode,
-    handleSelectionCopy,
-    handleSelectionEvicted,
-    handleClipboardWrite,
-    handleModesChanged,
-    handleKeyboardAvoidanceMetrics,
-    handleHaptic,
     nativeChatImages,
     nativeChatStructuredComposer,
     activeMarkdownTab,
@@ -132,7 +111,7 @@ export function MobileSessionActiveContent({
   const terminalLinks = useMobileTerminalLinkOpen(controller, openUrlInOrca)
   const hostProfile = useHostProfile(hostId)
   const hostTitle = useHostDisplay(hostProfile).title
-  const nativeChatHostOutage = mobileSessionNativeChatHostOutage(controller, hostTitle, t)
+  const nativeChatHostOutage = useMobileSessionNativeChatHostOutage(controller, hostTitle, t)
   const nativeChatImageSource = useMemo(
     () => (client ? { client, worktreeId } : undefined),
     [client, worktreeId]
@@ -179,10 +158,7 @@ export function MobileSessionActiveContent({
         createError={createError}
         onReconnect={forceReconnectHost ? () => void forceReconnectHost(hostId) : null}
         onRetryTabs={() => void retryPendingTerminalRecovery()}
-        onCreateTab={() => {
-          setCreateError('')
-          setShowCreateTabDrawer(true)
-        }}
+        onNewTab={controller.handleOpenNewTab}
       />
     ) : activeMarkdownTab ? (
       <View style={styles.markdownFrame}>
@@ -197,7 +173,6 @@ export function MobileSessionActiveContent({
           onChange={(content) => updateMarkdownLocalContent(activeMarkdownTab.id, content)}
           onSave={() => void saveMarkdownTab(activeMarkdownTab)}
           onCopy={(text) => void copyMarkdownText(text)}
-          onCopyPath={() => void copyMarkdownPath(activeMarkdownTab)}
           onDiscard={() => discardMarkdownLocalContent(activeMarkdownTab)}
           loadImageSource={(path) =>
             loadMarkdownPreviewImage(client, worktreeId, activeMarkdownTab.relativePath, path)
@@ -257,71 +232,43 @@ export function MobileSessionActiveContent({
         {toast}
       </View>
     ) : activePendingTerminalTab ? (
-      <MobileSessionPendingTerminalState
-        title={activePendingTerminalTab.title}
-        parked={isPendingTerminalRecoveryParked}
-        onRetry={() => void retryPendingTerminalRecovery()}
-      />
+      isPendingTerminalRecoveryParked ? (
+        <MobileStateView
+          icon={CircleAlert}
+          title={t(
+            'session.activeContent.terminalTakingLonger',
+            'Terminal is taking longer than expected'
+          )}
+          action={{
+            label: t('common.retry', 'Retry'),
+            onPress: () => void retryPendingTerminalRecovery()
+          }}
+        />
+      ) : (
+        <MobileStateView
+          loading
+          title={
+            activePendingTerminalTab.title ||
+            t('session.activeContent.loadingTerminal', 'Loading terminal')
+          }
+        />
+      )
     ) : (
       <View style={styles.terminalFrame}>
         <View style={[StyleSheet.absoluteFill, sideStripOffset(stripInset)]}>
           <MountedTerminalPanes terminals={terminals} visibleHandles={visibleTerminalHandles}>
             {(terminal) => (
-              <TerminalPaneView
+              <SessionTerminalPane
                 key={terminal.handle}
-                handle={terminal.handle}
-                active={terminal.handle === activeHandle}
-                visible={visibleTerminalHandles.includes(terminal.handle)}
-                splitIndex={
-                  terminalSplitActive && visibleTerminalHandles.includes(terminal.handle)
-                    ? visibleTerminalHandles.indexOf(terminal.handle)
-                    : undefined
-                }
-                splitDirection={paneDirection}
-                splitFrame={paneFrame}
-                keyboardInset={keyboardLift}
-                title={terminal.title}
-                onFrame={notifyTerminalPaneFrame}
-                keyboardLift={
-                  terminal.handle !== activeHandle &&
-                  !(terminalSplitActive && visibleTerminalHandles.includes(terminal.handle))
-                    ? 0
-                    : terminalSplitActive
-                      ? computeActiveTerminalKeyboardLift({
-                          keyboardLift: terminalPaneKeyboardLayout(
-                            paneFrame,
-                            paneDirection,
-                            visibleTerminalHandles.indexOf(terminal.handle),
-                            keyboardLift
-                          ).occlusion,
-                          metrics: controller.terminalKeyboardMetrics.get(terminal.handle),
-                          terminalFrameHeight:
-                            controller.getTerminalPaneViewport(terminal.handle).terminalFrameRef
-                              .current?.height ?? 0
-                        })
-                      : activeTerminalKeyboardLift
-                }
-                terminalTheme={terminal.terminalTheme}
-                hostSettings={controller.terminalHostSettings}
-                textScale={terminalTextScale}
-                fontStyle={terminalFontStyle}
-                onTextScaleChange={commitPinchedTextScale}
-                onRef={setTerminalWebViewRef}
-                onDocumentReleased={releaseTerminalDocument}
-                onWebReady={handleTerminalWebReady}
-                onCellBoxChange={notifyTerminalCellBoxChange}
-                onSelectionMode={handleSelectionMode}
-                onSelectionCopy={handleSelectionCopy}
-                onSelectionEvicted={handleSelectionEvicted}
-                onClipboardWrite={handleClipboardWrite}
-                onModesChanged={handleModesChanged}
-                onKeyboardAvoidanceMetrics={handleKeyboardAvoidanceMetrics}
-                onHaptic={handleHaptic}
-                onTerminalInput={handleTerminalInput}
-                onTerminalQueryReply={handleTerminalQueryReply}
-                onTerminalInteraction={handleTerminalInteraction}
-                onTerminalTap={handleTerminalTap}
-                onFileTap={handleFileTap}
+                terminal={terminal}
+                controller={controller}
+                activeHandle={activeHandle}
+                terminalSplitActive={terminalSplitActive}
+                visibleTerminalHandles={visibleTerminalHandles}
+                paneFrame={paneFrame}
+                paneDirection={paneDirection}
+                keyboardLift={keyboardLift}
+                activeTerminalKeyboardLift={activeTerminalKeyboardLift}
                 onOpenUrl={terminalLinks.handleTerminalOpenUrl}
               />
             )}
@@ -381,7 +328,6 @@ export function MobileSessionActiveContent({
         {toast}
       </View>
     )
-
   return (
     <View
       // Why: one frame under every branch; react-native-web observes onLayout only on a View that mounts with it.

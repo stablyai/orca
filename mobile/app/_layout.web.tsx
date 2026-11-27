@@ -6,9 +6,7 @@ import { ZERO_SAFE_AREA_INSETS } from '../src/mobile-web-shell/bridge/page-geome
 import { DetailCardHostProvider } from '../src/components/detail-cards/detail-card-host'
 import { SideSafeArea } from '../src/layout/side-safe-area'
 import { usePageBridgeClient } from '../src/transport/connection/client-context.web'
-import { colors } from '../src/theme/mobile-theme'
-import { themedStyleSheet } from '../src/theme/themed-styles'
-import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../src/theme/themed-styles'
 import { isOverlayPageRoute } from '../src/new-workspace/overlay-page-route'
 import { usePageGeometry } from '../src/layout/reserved-regions.web'
 import { useDuoRailFreeBand } from '../src/session/duo-rail-free-band'
@@ -18,7 +16,7 @@ const SESSION_ROUTE = /^\/h\/[^/]+\/session\//
 
 // Provide shell insets below ExpoRoot (WebView CSS env insets are zero); pad only sides to avoid DefaultNavigator’s duplicate all-edge SafeAreaView.
 export default function PageRootLayout() {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const client = usePageBridgeClient()
   const insets = useSyncExternalStore(
     client.onSafeAreaInsetsUpdate,
@@ -57,7 +55,7 @@ export default function PageRootLayout() {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   root: {
     flex: 1,
     backgroundColor: colors.bgBase
