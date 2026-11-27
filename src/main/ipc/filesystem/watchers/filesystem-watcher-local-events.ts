@@ -97,12 +97,15 @@ async function tryStatIsDirectory(
   }
 }
 
-function emitOverflowPayload(root: WatchedRoot): void {
-  const { rootPath } = root
-  const payload: FsChangedPayload = {
-    worktreePath: rootPath,
-    events: [{ kind: 'overflow', absolutePath: rootPath }]
+function overflowPayload(root: WatchedRoot): FsChangedPayload {
+  return {
+    worktreePath: root.rootPath,
+    events: [{ kind: 'overflow', absolutePath: root.rootPath }]
   }
+}
+
+function emitOverflowPayload(root: WatchedRoot): void {
+  const payload = overflowPayload(root)
   for (const [, wc] of root.listeners) {
     if (!wc.isDestroyed()) {
       wc.send('fs:changed', payload)
@@ -128,6 +131,7 @@ async function flushBatch(root: WatchedRoot): Promise<void> {
   const rawEvents = root.batch.events.splice(0)
   root.batch.overflowed = false
   root.batch.lastFlushAt = Date.now()
+  root.batch.flushing = { events: rawEvents, overflowed }
 
   try {
     if ((rawEvents.length === 0 && !overflowed) || root.listeners.size === 0) {
@@ -178,6 +182,7 @@ async function flushBatch(root: WatchedRoot): Promise<void> {
       }
     }
   } finally {
+    root.batch.flushing = null
     root.batch.flushInFlight = false
     if (root.batch.flushQueued) {
       root.batch.flushQueued = false
@@ -191,6 +196,25 @@ async function flushBatch(root: WatchedRoot): Promise<void> {
         void flushBatch(root)
       }
     }
+  }
+}
+
+/** What a listener leaving now would never receive: the queued batch and any flush still statting, without directory stats. */
+export function undeliveredBatchPayload(root: WatchedRoot): FsChangedPayload | undefined {
+  const { cancelled, events, overflowed, flushing } = root.batch
+  if (cancelled || (events.length === 0 && !overflowed && !flushing)) {
+    return undefined
+  }
+  const raw = flushing ? [...flushing.events, ...events] : events
+  if (overflowed || flushing?.overflowed || raw.length > MAX_BATCHED_WATCHER_EVENTS) {
+    return overflowPayload(root)
+  }
+  if (raw.length === 0) {
+    return undefined
+  }
+  return {
+    worktreePath: root.rootPath,
+    events: coalesceEvents(raw).map(({ type, path }) => ({ kind: type, absolutePath: path }))
   }
 }
 
