@@ -72,6 +72,7 @@ export function suspendPaneRendering(
   for (const pane of suspended) {
     pane.webglAttachmentDeferred = true
     pane.terminal.blur()
+    pane.ligaturesAddon?.clearCache?.()
     // Live WebGL needs blink suspension; DOM blink stops on blur without rewriting xterm's stylesheet.
     if (pane.webglAddon) {
       suspendTerminalCursorBlink(pane.terminal)
