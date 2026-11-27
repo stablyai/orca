@@ -54,7 +54,8 @@ describe('a run chat coordinating a Run', () => {
       link,
       taskId: 'task_0123456789ab',
       requestKey: 'start-key',
-      create: { spec: 'work' }
+      create: { spec: 'work' },
+      creator: { kind: 'system' }
     })
     expect(coordinatesLiveRun(db, CHAT)).toBe(true)
     closeRemoteRunLink(db, link.conversation_id, 'the pairing was made again')
