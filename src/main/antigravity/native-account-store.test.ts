@@ -294,6 +294,11 @@ describe('protected Antigravity account snapshots', () => {
     await h.service.selectAccount(selected)
     // An agy still running on b refreshes its token and writes b's login back.
     h.setNative(refreshedWithoutIdToken(3, 'refresh-2'))
+    // Orca's own sign-in may be about to put an unsaved login there: never restore over it.
+    h.setSignInHeld(true)
+    await expect(h.service.prepareForLaunch()).rejects.toThrow('sign-in is in progress')
+    expect(h.getNative()).toBe(refreshedWithoutIdToken(3, 'refresh-2'))
+    h.setSignInHeld(false)
     await h.service.prepareForLaunch()
     expect(h.getNative()).toBe(credential('a'))
     expect(h.getVault()).toMatchObject({

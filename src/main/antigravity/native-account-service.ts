@@ -37,6 +37,11 @@ function matches(
   return account.credentials === current.contents
 }
 
+export type AntigravityLaunchRestore = {
+  /** True while Orca's own agy sign-in may have put a login it hasn't saved yet in the slot. */
+  signInHoldsLogin: () => boolean
+}
+
 export class AntigravityAccountService {
   private mutation: Promise<unknown> = Promise.resolve()
   private readonly rewrittenLogins = new AntigravityRewrittenLoginIdentity(
@@ -47,8 +52,15 @@ export class AntigravityAccountService {
     private readonly store: AntigravityAccountStore,
     private readonly backend: AntigravityCredentialBackend,
     private readonly now: () => number = Date.now,
-    private readonly lookupIdentity = fetchGoogleIdentity
+    private readonly lookupIdentity = fetchGoogleIdentity,
+    // Only the host's service restores at launch; absent, launches still refuse a moved login.
+    private readonly launchRestore?: AntigravityLaunchRestore
   ) {}
+
+  /** Resolves once every account operation queued before it has finished. */
+  settled(): Promise<void> {
+    return this.serialize(async () => {})
+  }
 
   listAccounts(): Promise<AntigravityAccountState> {
     return this.serialize(async () => this.state(await this.reconcile()))
@@ -143,10 +155,13 @@ export class AntigravityAccountService {
       // Exactly one saved account holding it (reconcile just saved it) restores the selection, as
       // best effort as selecting: the native store has no compare-and-swap.
       const holders = current ? vault.accounts.filter((entry) => this.matches(entry, current)) : []
-      if (!selected || holders.length !== 1) {
+      if (!selected || holders.length !== 1 || !this.launchRestore) {
         throw new Error(
           'The native Antigravity account changed. Select the account again in Accounts before launching agy.'
         )
+      }
+      if (this.launchRestore.signInHoldsLogin()) {
+        throw new Error('Antigravity sign-in is in progress. Finish it, then launch agy again.')
       }
       await this.switchNative(selected, current)
       // No vault write: both logins are already saved, and another Orca process selecting meanwhile wins.
@@ -234,6 +249,7 @@ export class AntigravityAccountService {
       }),
       activeAccountId: active?.id ?? null,
       selectedAccountId: vault.selectedAccountId,
+      ...(this.launchRestore ? { restoresSelectionAtLaunch: true as const } : {}),
       currentAccount: current
         ? {
             email: current.identity ? current.identity.email : (active?.email ?? null),
