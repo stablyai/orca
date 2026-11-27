@@ -140,6 +140,14 @@ export function personHomeName(person: string): string {
   return `${person}’s ${BOT_HOME_NAME}`
 }
 
+/** The owner's name to a teammate: their Orca account's, else this (a signed-out host). */
+export const BOT_OWNER_FALLBACK_NAME = 'Owner'
+
+/** The owner's Home as a teammate reads it. */
+export function ownerHomeName(ownerName: string | null | undefined): string {
+  return personHomeName(ownerName ?? BOT_OWNER_FALLBACK_NAME)
+}
+
 /** "Home" for the owner's; "<Name>’s Home" for a teammate's. */
 export function botHomeName(bot: Pick<Bot, 'shares'>, of: BotHomeOf): string {
   return of === 'owner' ? BOT_HOME_NAME : personHomeName(botSharePersonName(bot, of.accountId))

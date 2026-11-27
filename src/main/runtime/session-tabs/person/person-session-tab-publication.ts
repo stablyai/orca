@@ -20,7 +20,9 @@ import {
   type TabTeammate,
   type TeammateTabListKey
 } from '../../../bots/team-share/teammate-rules'
-import type { BotHomeOf } from '../../../../shared/bots/bot-home-of'
+import { BOT_HOME_NAME, ownerHomeName, type BotHomeOf } from '../../../../shared/bots/bot-home-of'
+import { hostOwnerName } from '../../../bots/team-share/bot-share-scoped-view'
+import { botHomeSessionId } from '../chat/bot-home-snapshot'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   sessionTabListName,
@@ -143,15 +145,23 @@ export abstract class OrcaRuntimeWithPersonSessionTabs extends OrcaRuntimeWithRu
     return includeAgentSenders ? this.withMobileSessionTabSenders(result) : result
   }
 
-  /** Chat tabs titled and the list's person's Home pinned: the host's list (the owner's Home), or a
-   *  teammate's own (theirs; no saved tabs). */
+  /** Chat tabs titled for the list's person, and their Home pinned: the host's list (the owner's), or
+   *  a teammate's own (theirs; no saved tabs). */
   protected titledSessionTabsResult(
     snapshot: RuntimeMobileSessionTabsSnapshot,
     savedTabs: SavedTabs = () => undefined,
     of: BotHomeOf = 'owner'
   ): RuntimeMobileSessionTabsResult {
     const namer = structuredConversationTabNamer(snapshot.worktree, savedTabs)
-    const titled = titleStructuredConversationTabs(snapshot, namer, structuredConversationForked)
+    // On a teammate's list the owner's Home goes by the owner's name, unless renamed.
+    const ownersHome = of === 'owner' ? null : botHomeSessionId(this.store, snapshot.worktree)
+    const named = (sessionId: string): string | null => {
+      const name = namer(sessionId)
+      return sessionId === ownersHome && name === BOT_HOME_NAME
+        ? ownerHomeName(hostOwnerName())
+        : name
+    }
+    const titled = titleStructuredConversationTabs(snapshot, named, structuredConversationForked)
     return projectTabsWithBotHomePins(this.store, titled, this.getMobileSessionProjectionHost(), of)
   }
 

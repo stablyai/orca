@@ -151,8 +151,11 @@ function readItem(body: AgentJournalItemBody, lookups: BotActingTurnLookups): It
   if (body.origin === 'connector' && !body.memorySource) {
     return { kind: 'asker', asker: { kind: 'unknown' }, ...(wokenAt ? { wokenAt } : {}) }
   }
-  // A teammate typing in any chat of the agent (the owner's included) asks as themself.
-  const typist = body.memorySource ? null : botMessageTypist(lookups.bot ?? null, body.typedBy)
+  // A teammate typing in any chat of a shared agent (the owner's included) asks as themself.
+  const typist =
+    body.memorySource || !lookups.bot?.shares?.length
+      ? null
+      : botMessageTypist(lookups.bot, body.typedBy)
   if (typist && typist !== 'owner') {
     return { kind: 'asker', asker: typist }
   }

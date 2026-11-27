@@ -1225,7 +1225,7 @@
     ],
     "conditional": {
       "activatesOnlyForCaller": ["worktree.create"],
-      "callerNavigation": ["agentSession.reveal"],
+      "callerNavigation": ["agentSession.reveal", "worktree.activate"],
       "clientPlacement": ["browser.tabCreate"],
       "ownClientPage": [
         "browser.addWordToDictionary",
@@ -1708,7 +1708,6 @@
       "workspacePorts.killHost",
       "workspacePorts.scan",
       "workspacePorts.scanHost",
-      "worktree.activate",
       "worktree.adoptProvisionedRoot",
       "worktree.archive",
       "worktree.autoName.availability",

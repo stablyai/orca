@@ -403,3 +403,48 @@ describe('a turn the owner typed in Orca', () => {
     expect(chat([run, { origin: 'host' }])).toEqual({ owner: true, line: null })
   })
 })
+
+// A shared agent: anyone it is shared with opens and types in any of its chats.
+describe('a shared agent’s chat, by who typed the turn’s message', () => {
+  const KIM_ACCOUNT = 'acct-kim'
+  const bot = {
+    shares: [
+      {
+        kind: 'account' as const,
+        shareId: 'share-kim',
+        accountId: KIM_ACCOUNT,
+        name: 'Kim',
+        email: 'kim@example.com',
+        addedAt: 1,
+        acceptedAt: 1
+      }
+    ]
+  }
+  const typedBy = (accountId: string, own: boolean) => ({
+    ...message,
+    typedBy: { by: 'device', deviceId: `${accountId}-desk`, accountId, account: 'x', own }
+  })
+  function ownerChatTyped(opener: unknown) {
+    seq = 0
+    const items = [
+      journalRow('u0', typed),
+      journalRow('t0', { kind: 'turn', turnId: 'p0', state: 'completed', userItemId: 'u0' }),
+      journalRow('u1', opener),
+      journalRow('t1', { kind: 'turn', turnId: 'p1', state: 'running', userItemId: 'u1' })
+    ]
+    return readBotActingTurn(items, { ...lookups, conversationActsFor: OWNER_ACTS_FOR, bot }, [
+      journalSubmission({ clientMessageId: 'c1', providerItemId: 'u1', ...OWNER_SEND })
+    ])
+  }
+
+  it('asks as the teammate who typed it, in the owner’s chat too', () => {
+    const turn = ownerChatTyped(typedBy(KIM_ACCOUNT, false))
+    expect(turnActsForOwner(turn)).toBe(false)
+    expect(turn.askedBy).toEqual([expect.objectContaining({ userId: KIM_ACCOUNT, name: 'Kim' })])
+  })
+
+  it('asks as the owner from their own phone or computer, and as no teammate it is not shared with', () => {
+    expect(turnActsForOwner(ownerChatTyped(typedBy('acct-owner', true)))).toBe(true)
+    expect(turnActsForOwner(ownerChatTyped(typedBy('acct-stranger', false)))).toBe(false)
+  })
+})

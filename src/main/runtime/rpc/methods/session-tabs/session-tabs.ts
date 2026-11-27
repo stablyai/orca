@@ -4,7 +4,7 @@ import { getExplicitWorktreeIdSelector } from '../../../workspaces/catalog/runti
 import { worktreeIdentityKey, worktreeIdsEqual } from '../../../../../shared/worktree/id'
 import { defineMethod, defineStreamingMethod } from '../../core'
 import { SessionTabListRead } from '../../../../../shared/rpc-contract/session-tabs/session-tabs-schemas-params'
-import { ownsHostReadMarks } from '../../../../bots/team-share/teammate-rules'
+import { unreadVerdictClient } from '../../../../bots/team-share/teammate-rules'
 import { SESSION_TAB_CLOSE_METHODS } from './session-tab-close-methods'
 import {
   listSessionTabsInventory,
@@ -56,7 +56,7 @@ export const SESSION_TAB_METHODS = [
       const result = projectSessionTabUnreadForClient(
         runtime,
         projectSessionTabsForClient(raw, clientKind, clientCapabilities, runtime),
-        ownsHostReadMarks(callerScope) ? clientKind : undefined
+        unreadVerdictClient(callerScope, clientKind, params.person !== undefined)
       )
       if (!params.person) {
         runtime.observeClientHostedPageSnapshots?.([result], pairedDeviceId)
@@ -99,8 +99,7 @@ export const SESSION_TAB_METHODS = [
       // over them, no phone-session hold and no page observation; watching writes nothing.
       const watching = params.person
       const navigationId = watching ? undefined : pairedDeviceId
-      // Read marks are the owner's (teammate-rules.ts, rule 6).
-      const unreadClient = ownsHostReadMarks(callerScope) ? clientKind : undefined
+      const unreadClient = unreadVerdictClient(callerScope, clientKind, watching !== undefined)
       const observation = Symbol('session-tabs-stream')
       let subscriptionId: string | null = null
       let released = false

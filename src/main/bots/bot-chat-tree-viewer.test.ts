@@ -9,7 +9,7 @@ import {
   type BotChatTreeDispatch
 } from '../../shared/bots/bot-chat-tree-model'
 import type { BotHomeOf } from '../../shared/bots/bot-home-of'
-import { botChatTreeForViewer } from './bot-chat-tree-viewer'
+import { botChatTreeForViewer, OWNER_UNMADE_HOME_ID } from './bot-chat-tree-viewer'
 import {
   botSidebarListedChats,
   withViewerChatTabs
@@ -209,5 +209,60 @@ describe('a teammate’s chats on their own sidebar', () => {
     // The owner's own agent: its Home lists with its tab closed, a side chat with no tab does not.
     const ownerChats = owner.chats.map((entry) => ({ ...entry, tab: false }))
     expect(botSidebarListedChats(ownerChats).map((e) => e.chatId)).toEqual(['owner-home'])
+  })
+})
+
+describe.each([true, false])('the owner’s Home not made yet (Alice’s made: %s)', (made) => {
+  function unmadeOwnerHome(ownerWork: boolean) {
+    const chats = [
+      ...(made
+        ? [chat('alice-home', { title: 'Alice’s Home', whoseHome: { accountId: ALICE } })]
+        : []),
+      chat('alice-side', { closed: true })
+    ]
+    const host = buildBotChatTree({
+      chats,
+      placed: placeBotChatDispatches(
+        chats,
+        [dispatch('d-alice', 'alice-side', 'wt-alice')],
+        homeOfChat
+      ),
+      workers: new Map(),
+      extras: ownerWork
+        ? [
+            {
+              worker: {
+                key: 'handed',
+                title: 'handed',
+                state: 'running',
+                startedAt: 1,
+                worktreeId: 'wt-handed'
+              },
+              settled: false,
+              at: 1
+            }
+          ]
+        : []
+    })
+    return botChatTreeForViewer(host, viewerAlice, { page: false })
+  }
+
+  it('is never a teammate’s Home row, and lists by the owner’s name only while work runs under it', () => {
+    for (const ownerWork of [false, true]) {
+      const alice = unmadeOwnerHome(ownerWork)
+      const ids = alice.chats.map((entry) => entry.chatId)
+      expect(new Set(ids).size).toBe(ids.length)
+      expect(homes(alice).map((entry) => [entry.chatId, entry.running.map((w) => w.key)])).toEqual([
+        [made ? 'alice-home' : NO_HOME_CHAT_ID, ['worker:d-alice']]
+      ])
+      const owners = alice.chats.find((entry) => entry.chatId === OWNER_UNMADE_HOME_ID)
+      if (!ownerWork) {
+        expect(owners).toBeUndefined()
+        expect(alice.workspaceChats['wt-handed']).toBeUndefined()
+        continue
+      }
+      expect(owners).toMatchObject({ origin: 'side', homeOf: 'Jin', title: 'Jin’s Home' })
+      expect(alice.workspaceChats['wt-handed']).toBe(OWNER_UNMADE_HOME_ID)
+    }
   })
 })

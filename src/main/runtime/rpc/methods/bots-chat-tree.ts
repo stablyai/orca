@@ -10,10 +10,12 @@ import { runtimeBotChatSearchHost, searchBotChats } from '../../../bots/bot-chat
 import { defineMethod } from '../core'
 import { botShareScopeOf, withBotChatPeople } from '../../../bots/team-share/bot-share-chats'
 import { botShareScopedView, hostOwnerName } from '../../../bots/team-share/bot-share-scoped-view'
-import { botChatTreeForViewer, type BotChatTreeViewer } from '../../../bots/bot-chat-tree-viewer'
+import {
+  botChatTreeForViewer,
+  hostChatId,
+  type BotChatTreeViewer
+} from '../../../bots/bot-chat-tree-viewer'
 import type { RpcContext } from '../core'
-import { NO_HOME_CHAT_ID } from '../../../../shared/bots/bot-chat-tree-model'
-import { botHomePlaceholderId } from '../../../../shared/bots/bot-home-of'
 
 /** Who reads an agent's chats: the owner, or a teammate, who reaches every chat as the owner does
  *  (teammate-rules.ts, rule 1); only Homes and read marks read differently. */
@@ -34,15 +36,13 @@ export const BOT_CHAT_TREE_METHODS = [
     params: BotChatTreeRead,
     handler: async (params, context) => {
       const { runtime } = context
-      const share = botShareScopeOf(context)
-      // A teammate's Home row not made yet goes by the owner's empty id on their side.
-      const read =
-        share && params.chatId === NO_HOME_CHAT_ID
-          ? { ...params, chatId: botHomePlaceholderId(share.accountId) }
-          : params
-      const tree = await readSharedBotChatTree(runtime, read)
       const bot = runtime.bots.list().find((entry) => entry.id === params.botId)
       const viewer = { ...chatTreeViewerOf(context), bot: bot ?? {} }
+      const read =
+        params.chatId === undefined
+          ? params
+          : { ...params, chatId: hostChatId(params.chatId, viewer.person) }
+      const tree = await readSharedBotChatTree(runtime, read)
       const view = botChatTreeForViewer(tree, viewer, { page: params.chatId !== undefined })
       return withBotChatPeople(runtime, bot, view)
     }

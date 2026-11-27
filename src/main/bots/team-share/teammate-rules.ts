@@ -239,3 +239,13 @@ export function viewedTabListOf(
 export function ownsHostReadMarks(scope: RpcCallerScope | undefined): boolean {
   return scope?.kind !== 'bot-share'
 }
+
+/** The client the host's unread verdicts go to: an owner's device reading its own list; a watched
+ *  list goes as it is. */
+export function unreadVerdictClient<K>(
+  scope: RpcCallerScope | undefined,
+  clientKind: K,
+  watching: boolean
+): K | undefined {
+  return !watching && ownsHostReadMarks(scope) ? clientKind : undefined
+}

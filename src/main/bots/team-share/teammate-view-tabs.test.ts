@@ -3,6 +3,8 @@
 // Through the real dispatcher, runtime, chat host and record store.
 import { afterEach, expect, it, vi } from 'vitest'
 import { z } from 'zod'
+import { BOT_HOME_NAME, ownerHomeName } from '../../../shared/bots/bot-home-of'
+import { HOME_CHAT_TITLE } from '../../../shared/bots/bot-chat-tree-model'
 import { physicalReload } from '../../runtime/agent-session/lifecycle/structured-agent-session-tab-authority.test-support'
 import { chatTabCommandsSettled } from '../../runtime/terminal/layout/session-layout-apply.test-fixture'
 import {
@@ -72,6 +74,30 @@ it('closes a tab only in the list a viewer watches', async () => {
     return tabs
   }
   const mates = await mateOwn()
+  // A closed tab's chat keeps running: nothing stops a session.
+  const stops = vi.spyOn(r.host, 'close')
+  const ownersStream = await r.subscribe('owner-desk')
+  const othersStream = await r.subscribe('other-desk')
+  const heard = () => [ownersStream.length, othersStream.length]
+  const quiet = heard()
+
+  // A close without a reason is refused in the watched list as it is, and no one's list is resent.
+  for (const [tabId, person] of [
+    [`agent-session:${C}`, { accountId: OTHER.accountId }],
+    [(await r.list('owner-desk')).tabs[0]!.id, 'owner' as const]
+  ] as const) {
+    expect(
+      await r.call('mate-desk', 'session.tabs.close', {
+        worktree: `id:${r.workspace}`,
+        tabId,
+        person
+      })
+    ).toEqual({ closed: true, refused: true, refusalReason: 'missing-intent' })
+  }
+  await chatTabCommandsSettled()
+  expect(heard()).toEqual(quiet)
+  expect(sessions(await r.list('other-desk'))).toEqual([C])
+  expect(await r.ownerView()).toBe(owner)
 
   // Mate closes Other's tab from Other's list.
   await r.call('mate-desk', 'session.tabs.close', {
@@ -99,6 +125,7 @@ it('closes a tab only in the list a viewer watches', async () => {
   expect(await r.hostChats()).toEqual([])
   expect(sessions(await r.list('owner-desk'))).toEqual([])
   expect(await mateOwn()).toEqual(mates)
+  expect(stops).not.toHaveBeenCalled()
 })
 
 it('keeps the owner’s tab when a teammate’s first call after a start opens the owner’s chat', async () => {
@@ -181,4 +208,43 @@ it('pins each person’s own Home in their list, never another person’s Home',
   // Watched, each list pins its own person's Home.
   expect(pinned(await r.list('mate-desk', undefined, 'owner'))).toEqual([O])
   expect(pinned(await r.list('owner-desk', undefined, MATE))).toEqual([C])
+
+  // The owner's Home is "Home" on the owner's list, and by the owner's name on anyone else's.
+  await r.host.deps.store.setUserConversationName(O, BOT_HOME_NAME, 'rename')
+  const titleOfO = (tabs: Tabs) =>
+    z.object({ title: z.string() }).parse(tabs.tabs.find((tab) => tab.sessionId === O)).title
+  expect(titleOfO(await r.list('owner-desk'))).toBe(BOT_HOME_NAME)
+  expect(titleOfO(await r.list('mate-desk', undefined, 'owner'))).toBe(BOT_HOME_NAME)
+  expect(titleOfO(await r.list('mate-desk'))).toBe(ownerHomeName(null))
+  expect(titleOfO(await r.list('owner-desk', undefined, MATE))).toBe(ownerHomeName(null))
+})
+
+it('finds every chat for a teammate’s search, with Homes named as their tree names them', async () => {
+  const r = await rig()
+  const bot = r.runtime.bots.list()[0]!
+  r.profile.saveBot({
+    ...bot,
+    chatSessionId: O,
+    shares: bot.shares?.map((share) =>
+      share.kind === 'account' && share.accountId === TEAMMATE.accountId
+        ? { ...share, homeSessionId: C }
+        : share
+    )
+  })
+  const Found = z.object({
+    chats: z.array(z.looseObject({ chatId: z.string(), title: z.string() }))
+  })
+  const search = async (deviceId: string) =>
+    Object.fromEntries(
+      Found.parse(
+        await r.call(deviceId, 'bots.chats.search', { botId: TEAMMATE.botId, query: 'Home' })
+      ).chats.map((chat) => [chat.chatId, chat.title])
+    )
+  // Each reader's own Home is their Home Chat, the owner's by the owner's name to a teammate; one
+  // reader's search, read within the same tree read, never answers another's.
+  expect(await search('mate-desk')).toMatchObject({
+    [C]: HOME_CHAT_TITLE,
+    [O]: ownerHomeName(null)
+  })
+  expect(await search('owner-desk')).toMatchObject({ [O]: HOME_CHAT_TITLE })
 })

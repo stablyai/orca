@@ -90,14 +90,16 @@ export function typedOnAnotherDevice(item: Pick<AgentJournalRenderItem, 'body'>)
   )
 }
 
-/** Who typed a message in a shared agent's chat, as the host stamped it: the owner at the host's own
- *  window, or a teammate the agent is shared with (their share device's account); null for anyone else
- *  and for messages from before stamps. The one reading of a message's typist for whom it asks as. */
+/** Who typed a message in a shared agent's chat, as the host stamped it: the owner (at the host's own
+ *  window, or on a paired device of their own account), or a teammate the agent is shared with (their
+ *  share device's account); null for anyone else and for messages from before stamps. The one reading
+ *  of a message's typist for whom it asks as. */
 export function botMessageTypist(
   bot: Pick<Bot, 'shares'> | null,
   typedBy: AgentJournalTypedBy | undefined
 ): 'owner' | BotRequestPerson | null {
-  if (typedBy?.by === 'host') {
+  // A share device never reads as the owner's own (`pairedDeviceTypist`).
+  if (typedBy?.by === 'host' || (typedBy?.by === 'device' && typedBy.own === true)) {
     return 'owner'
   }
   const accountId = typedBy?.by === 'device' && typedBy.own !== true ? typedBy.accountId : undefined

@@ -166,9 +166,18 @@ it('names the typist of a message that is not whom the chat is for', async () =>
   expect(inOwners).toContain('this message is from "kim@example.com"')
   expect(inOwners).toContain('not your owner')
 
-  const ownerInKims = await turnText(TEAMMATE_CHAT, { by: 'host' })
-  expect(ownerInKims).toContain('this message is from your owner, in "kim@example.com"\'s chat')
-  expect(ownerInKims).not.toContain('Messages here are from')
+  // The owner at the host's window, or on a phone or computer of their own account.
+  const ownPhone = {
+    by: 'device' as const,
+    deviceId: 'owner-phone',
+    accountId: 'acct-owner',
+    own: true
+  }
+  for (const owner of [{ by: 'host' as const }, ownPhone]) {
+    const ownerInKims = await turnText(TEAMMATE_CHAT, owner)
+    expect(ownerInKims).toContain('this message is from your owner, in "kim@example.com"\'s chat')
+    expect(ownerInKims).not.toContain('Messages here are from')
+  }
 
   // Kim in her own chat, and an unstamped message: the chat's own line, as before.
   expect(await turnText(TEAMMATE_CHAT, kim)).toContain('Messages here are from "kim@example.com"')

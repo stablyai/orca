@@ -1,18 +1,27 @@
 import { OrcaRuntimeWithMcpStaleTerminals } from '../projection/mcp-stale-terminal-restart'
 import { isTeammateTabList, type TabPerson } from '../../../bots/team-share/teammate-rules'
-import type { RuntimeMobileSessionTabCloseResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type {
+  RuntimeMobileSessionTabCloseResult,
+  RuntimeMobileSessionTabsResult
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+
+/** The list a close names, resolved once (`sessionTabCloseTarget`): a watched list's person's, or the
+ *  caller's own on their device. */
+export type SessionTabCloseTarget = {
+  person: TabPerson
+  clientNavigationId?: string
+  /** Another person's list, which the closer watches: nothing of the closer's moves. */
+  watched: boolean
+  list: () => Promise<RuntimeMobileSessionTabsResult>
+}
 
 export abstract class OrcaRuntimeWithRefuseUnattributedMobileSessionTabClose extends OrcaRuntimeWithMcpStaleTerminals {
   async refuseUnattributedMobileSessionTabClose(
-    worktreeSelector: string,
     tabId: string,
-    caller: { person: TabPerson; clientNavigationId?: string }
+    caller: SessionTabCloseTarget
   ): Promise<RuntimeMobileSessionTabCloseResult> {
     const { clientNavigationId } = caller
-    // The caller's own list: a teammate's in their Home, the host's anywhere else.
-    const snapshot = await this.listMobileSessionTabs(worktreeSelector, clientNavigationId, {
-      includeAgentSenders: false
-    })
+    const snapshot = await caller.list()
     const tabExists = snapshot.tabs.some(
       (candidate) =>
         candidate.id === tabId ||
@@ -21,6 +30,15 @@ export abstract class OrcaRuntimeWithRefuseUnattributedMobileSessionTabClose ext
     )
     if (!tabExists) {
       throw new Error('tab_not_found')
+    }
+    const refused = {
+      closed: true as const,
+      refused: true as const,
+      refusalReason: 'missing-intent' as const
+    }
+    // A watched list is refused as it is: its person's devices and the host never hear of it.
+    if (caller.watched) {
+      return refused
     }
     // Legacy clients may hide their mirror first; republish it without authorizing an unattributed destructive close.
     const list = this.homeTabListOf(caller.person, snapshot.worktree)
@@ -37,11 +55,6 @@ export abstract class OrcaRuntimeWithRefuseUnattributedMobileSessionTabClose ext
     } else {
       this.republishMobileSessionTabsSnapshot(snapshot.worktree)
     }
-    return {
-      closed: true,
-      refused: true,
-      refusalReason: 'missing-intent',
-      snapshotRepublished: true
-    }
+    return { ...refused, snapshotRepublished: true as const }
   }
 }

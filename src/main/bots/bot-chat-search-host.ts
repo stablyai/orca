@@ -2,7 +2,7 @@
 // read; conversation text comes from the host's session search index when the owner turned it on.
 import type { BotChatTreeChat, BotChatTreeWorker } from '../../shared/bots/bot-chat-tree'
 import { orderBotChats } from '../../shared/bots/bot-chat-tree'
-import { botChatTreeForViewer, type BotChatTreeViewer } from './bot-chat-tree-viewer'
+import { botChatTreeForViewer, viewerChatId, type BotChatTreeViewer } from './bot-chat-tree-viewer'
 import {
   botChatTreeDispatchWorker,
   type BotChatTreePlaced
@@ -99,7 +99,7 @@ function searchIndexOf(parts: BotChatTreeParts, viewer: BotChatTreeViewer): BotC
   const workers = [
     ...placed.map((entry) => ({
       key: `worker:${entry.dispatch.id}`,
-      chatId: entry.chatId,
+      chatId: viewerChatId(entry.chatId, viewer.person),
       title: entry.dispatch.title ?? shown.get(`worker:${entry.dispatch.id}`)?.title ?? ''
     })),
     ...chats.flatMap((chat) =>
