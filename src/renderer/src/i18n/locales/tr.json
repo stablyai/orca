@@ -21914,7 +21914,6 @@
         "expand": "Genişlet"
       },
       "question": {
-        "step": "Adım {{value0}}",
         "otherPlaceholder": "Yanıtınızı yazın",
         "cancel": "İptal",
         "send": "Gönder",
@@ -21926,12 +21925,11 @@
         "recommended": "Önerilen",
         "stepOf": "{{value0}} / {{value1}}",
         "answered": "Yanıtlandı",
-        "title": "Soru",
         "previous": "Önceki soru",
         "nextQuestion": "Sonraki soru",
         "back": "Geri",
         "skipAndSubmit": "Atla ve gönder",
-        "stepLabel": "{{value0}}, {{value1}} / {{value2}}: {{value3}}"
+        "questionStepLabel": "{{value0}}, {{value1}} / {{value2}}"
       },
       "ask": {
         "awaiting": "Kullanıcı girdisi bekleniyor:",
