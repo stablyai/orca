@@ -47,6 +47,12 @@ export function mobileSessionOptionSummaryValue(
 
 type DeferredPermissionSummary = { saved: string; compact: string; timing: string; full: string }
 
+export function mobileSelectedPermissionChoice(descriptor: SessionOptionDescriptor | undefined) {
+  return descriptor?.kind.type === 'select'
+    ? descriptor.kind.choices.find((choice) => choice.value === descriptor.kind.currentValue)
+    : undefined
+}
+
 /** A permission pick saved for the next message while another launch mode runs, in every length mobile shows. */
 export function mobileDeferredPermissionSummary(
   descriptor: SessionOptionDescriptor,

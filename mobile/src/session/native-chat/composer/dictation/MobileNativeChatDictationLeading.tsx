@@ -16,12 +16,14 @@ export function MobileNativeChatDictationLeading({
   micStarting = false,
   micProcessing = false,
   cancelRef,
+  unwrapped = false,
   children
 }: {
   micActive: boolean
   micStarting?: boolean
   micProcessing?: boolean
   cancelRef: RefObject<HostInstance | null>
+  unwrapped?: boolean
   children: ReactNode
 }): React.JSX.Element {
   const styles = useThemedStyles(mobileNativeChatComposerStylesSheet)
@@ -35,7 +37,7 @@ export function MobileNativeChatDictationLeading({
     )
   }
   if (!live || (!micActive && !micProcessing)) {
-    return <View style={styles.leadingControls}>{children}</View>
+    return unwrapped ? <>{children}</> : <View style={styles.leadingControls}>{children}</View>
   }
   return (
     <View style={[styles.leadingControls, styles.dictationLeading]}>

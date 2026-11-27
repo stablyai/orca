@@ -26,6 +26,7 @@ import {
 import { mobileNativeChatSessionOptionSay } from './native-chat-session-option-copy'
 import {
   mobileDeferredPermissionSummary,
+  mobileSelectedPermissionChoice,
   mobileSessionOptionSummaryValue
 } from './mobile-native-chat-session-option-labels'
 import {
@@ -66,6 +67,7 @@ export type MobileNativeChatSessionOptionPickersProps = {
 }
 
 type PresentationProps = {
+  agent: string | null
   /** The sheet's title: the agent's name. */
   title?: string
   context?: MobileNativeChatContext
@@ -75,16 +77,11 @@ type PresentationProps = {
   onDrawerAfterClose?: () => void
 }
 
-function selectedChoice(descriptor: SessionOptionDescriptor | undefined) {
-  return descriptor?.kind.type === 'select'
-    ? descriptor.kind.choices.find((choice) => choice.value === descriptor.kind.currentValue)
-    : undefined
-}
-
 export function MobileNativeChatSessionOptionPickers({
   controller,
   isWorking,
   sendInFlight = false,
+  agent,
   title,
   context,
   presentation,
@@ -171,13 +168,15 @@ export function MobileNativeChatSessionOptionPickers({
   const locked = (descriptor: SessionOptionDescriptor): boolean =>
     busy || (isWorking && locksMidTurn(descriptor))
   const reason = nativeChatSessionOptionDisabledReason(activeDescriptor?.disabledReason, say)
-  const permissionChoice = selectedChoice(permission)
+  const permissionChoice = mobileSelectedPermissionChoice(permission)
   const permissionColor = permissionChoiceColor(colors, permissionChoice?.value)
   const permissionIcon =
     !model && permissionChoice ? permissionModeIcon(permissionChoice.value) : undefined
-  const primary = model
+  const modelLabel = model
     ? nativeChatModelPillLabel(model, say)
     : mobileSessionOptionSummaryValue((permission ?? options[0])!, t)
+  const primary =
+    model && agent === 'hermes' ? modelLabel.replace(/^(.+?) · (.+)$/u, '$2 · $1') : modelLabel
   const permissionDeferred = permission
     ? mobileDeferredPermissionSummary(permission, t)?.full
     : null

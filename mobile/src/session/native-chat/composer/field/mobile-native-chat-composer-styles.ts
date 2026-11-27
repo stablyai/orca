@@ -37,7 +37,18 @@ export const mobileNativeChatComposerStylesSheet = themedStyleSheet((_colors, sc
     zIndex: 1
   },
   pillActionRow: { marginTop: 0 },
-  leadingExtras: { flex: 1, minWidth: 0 },
+  wrappedActionRow: { flexWrap: 'wrap' },
+  actionRowTrailing: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginStart: 'auto'
+  },
+  modelSlot: { flexShrink: 1, minWidth: 0 },
+  fullWidthModelSlot: { width: '100%', flexShrink: 0 },
+  emptyModelSlot: { display: 'none' },
+  leadingExtras: { flexShrink: 1, minWidth: 0 },
+  pickerExtras: { flexShrink: 0 },
   leadingExtrasRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',

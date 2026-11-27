@@ -14,7 +14,7 @@ import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { MobileNativeChatComposerSuggestions } from './menus/MobileNativeChatComposerMenu'
 import { MobileNativeChatComposerField } from './field/MobileNativeChatComposerField'
-import { MobileNativeChatComposerModeRow } from './field/MobileNativeChatComposerModeRow'
+import { MobileNativeChatComposerActionRow } from './field/MobileNativeChatComposerActionRow'
 import { MobileNativeChatComposerAttachments } from './attachments/MobileNativeChatComposerAttachments'
 import type { PendingNativeChatFile } from './attachments/mobile-native-chat-file-attachment'
 import { MobileNativeChatComposerAttachButton } from './attachments/MobileNativeChatComposerAttachButton'
@@ -25,7 +25,6 @@ import { useMobileNativeChatComposerMenu } from './menus/use-mobile-native-chat-
 import { useMobileNativeChatMentionBots } from './menus/use-mobile-native-chat-mention-bots'
 import { shownDictationPreview } from './menus/mobile-native-chat-bot-mention-display'
 import { mobileNativeChatComposerStylesSheet as stylesSheet } from './field/mobile-native-chat-composer-styles'
-import { composerInputStylesSheet as inputStylesSheet } from '../../../components/composer-input/composer-input-styles'
 import { MobileNativeChatComposerSendSlot } from './delivery/MobileNativeChatComposerSendSlot'
 import { useMobileNativeChatComposerSend } from './delivery/use-mobile-native-chat-composer-send'
 import { MobileNativeChatEditActions } from './field/MobileNativeChatEditActions'
@@ -36,10 +35,7 @@ import {
 import { mobileNativeChatComposerModes } from './commands/mobile-native-chat-composer-modes'
 import type { MobileNativeChatSendIntent } from './delivery/mobile-native-chat-send'
 import { MobileNativeChatComposerMic } from './dictation/MobileNativeChatComposerMic'
-import {
-  MobileNativeChatDictationLeading,
-  useMobileNativeChatDictationFailed
-} from './dictation/MobileNativeChatDictationLeading'
+import { useMobileNativeChatDictationFailed } from './dictation/MobileNativeChatDictationLeading'
 import { useMobileNativeChatComposerCollapse } from './field/use-mobile-native-chat-composer-collapse'
 import { useMobileNativeChatComposerGoalMode } from './commands/use-mobile-native-chat-composer-goal-mode'
 import { useMobileNativeChatOrcaCommands } from './commands/use-mobile-native-chat-orca-commands'
@@ -101,7 +97,6 @@ export function MobileNativeChatComposer({
   sendFollowUp = null,
   steerHead
 }: Props): React.JSX.Element {
-  const inputStyles = useThemedStyles(inputStylesSheet)
   const styles = useThemedStyles(stylesSheet)
   const colors = useMobileColors()
   const t = useMobileTranslation()
@@ -335,38 +330,35 @@ export function MobileNativeChatComposer({
                 textAlignVertical="top"
               />
             </Animated.View>
-            <View
-              style={[inputStyles.actionRow, collapsed && styles.pillActionRow]}
-              testID="native-chat-composer-actions"
-            >
-              <MobileNativeChatDictationLeading
-                {...{ micActive, micStarting, micProcessing, cancelRef }}
-              >
-                <MobileNativeChatComposerAttachButton
-                  onAttachImage={onAttachImage}
-                  onAttachFiles={structured?.onAttachFiles}
-                  structured={structured !== null}
-                  isAttaching={isAttaching}
-                  disabled={disabled || offline}
-                  menu={menu}
-                  plan={modes.plan}
-                  onGoal={modes.onGoal}
-                />
-                {collapsed ? null : (
-                  <MobileNativeChatComposerModeRow
-                    fade={collapse.fade}
-                    roomReplies={roomReplies}
-                    sessionOptions={sessionOptions}
-                    title={tuiAgentDisplayName(agent ?? '') ?? undefined}
-                    context={modes.context}
-                    sendInFlight={sending || isAttaching}
-                    picker={pickerState}
-                    focused={focused}
-                    fieldRef={fieldRef}
-                    goalChip={goal.chip}
+            <MobileNativeChatComposerActionRow
+              {...{ micActive, micStarting, micProcessing, cancelRef, collapsed }}
+              hasAttachment={structured !== null || onAttachImage !== undefined}
+              modeRow={{
+                attachment: (
+                  <MobileNativeChatComposerAttachButton
+                    onAttachImage={onAttachImage}
+                    onAttachFiles={structured?.onAttachFiles}
+                    structured={structured !== null}
+                    isAttaching={isAttaching}
+                    disabled={disabled || offline}
+                    menu={menu}
+                    plan={modes.plan}
+                    onGoal={modes.onGoal}
                   />
-                )}
-              </MobileNativeChatDictationLeading>
+                ),
+                agent,
+                fade: collapse.fade,
+                roomReplies,
+                sessionOptions,
+                title: tuiAgentDisplayName(agent ?? '') ?? undefined,
+                context: modes.context,
+                sendInFlight: sending || isAttaching,
+                picker: pickerState,
+                focused,
+                fieldRef,
+                goalChip: goal.chip
+              }}
+            >
               {editSession ? mic : null}
               {editSession ? (
                 <MobileNativeChatEditActions
@@ -400,7 +392,7 @@ export function MobileNativeChatComposer({
                   onWidth={collapse.onSlotWidth}
                 />
               )}
-            </View>
+            </MobileNativeChatComposerActionRow>
           </View>
         </Animated.View>
         {editSession ? null : <MobileSlackMirrorItem />}
