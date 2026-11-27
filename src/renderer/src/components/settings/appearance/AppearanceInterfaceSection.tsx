@@ -33,6 +33,7 @@ import {
 } from './themes/AppearanceThemeControl'
 import { useIconThemePickerLabels } from './use-appearance-picker-labels'
 import { AppearanceLanguageSetting } from './AppearanceLanguageSetting'
+import { AppearanceTimeFormatSetting } from './AppearanceTimeFormatSetting'
 
 type AppearanceInterfaceSectionProps = {
   settings: GlobalSettings
@@ -246,6 +247,12 @@ export function AppearanceInterfaceSection({
           forceVisible={forceVisiblePrimary}
         />
       ) : null}
+
+      <AppearanceTimeFormatSetting
+        timeFormat={settings.timeFormat}
+        forceVisible={forceVisiblePrimary}
+        onChange={(timeFormat) => updateSettings({ timeFormat })}
+      />
 
       <SearchableSetting
         title={t('auto.components.settings.AppearancePane.173edfb768', 'UI zoom')}

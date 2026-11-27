@@ -12,6 +12,7 @@ import { useAppStore } from '../../../store/index'
 import { selectDrawsNewWorktreeCards } from '@/store/appearance/worktree-card-style'
 import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from './appearance-usage-percentage-search'
 import { getAppIconEntries } from './appearance-app-icon-search'
+import { getTimeFormatEntries } from './appearance-time-format-search'
 import {
   getCodeEditorThemeEntries,
   getLanguageEntries,
@@ -112,6 +113,7 @@ export function AppearancePane({
     ...getZoomEntries(),
     ...getTypographyEntries(),
     ...(SHOW_UI_LANGUAGE_SETTING ? getLanguageEntries() : []),
+    ...getTimeFormatEntries(),
     ...getTitlebarEntries(),
     ...getReduceVisualEffectsEntries(),
     ...getSystemTrayEntries({ showSystemTray: isDesktopWindows }),

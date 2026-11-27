@@ -9,8 +9,10 @@ import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import {
   buildUsageFormatValues,
+  formatUsageResetClock,
   renderUsageFormatTemplate
 } from '../../status-bar/usage/usage-format-template'
+import { localeHourCycle } from '../../../../../shared/i18n/time-format-preference'
 import { getStatusBarUsageFormatEntry } from './appearance-status-bar-usage-format-search'
 import { SettingsRow } from '../form-controls/SettingsFormControls'
 
@@ -86,10 +88,21 @@ export function StatusBarUsageFormatSetting({
     ],
     [
       '{5h.resetAt}',
-      t(
-        'auto.components.settings.StatusBarUsageFormatSetting.placeholder.resetAt',
-        'reset clock time, e.g. 20:50'
-      )
+      localeHourCycle(locale) === 'h12'
+        ? t(
+            'auto.components.settings.StatusBarUsageFormatSetting.placeholder.resetAtClock',
+            'reset clock time, e.g. {{time}}',
+            {
+              time: formatUsageResetClock(Date.UTC(2026, 0, 1, 20, 50), {
+                locale,
+                timeZone: 'UTC'
+              })
+            }
+          )
+        : t(
+            'auto.components.settings.StatusBarUsageFormatSetting.placeholder.resetAt',
+            'reset clock time, e.g. 20:50'
+          )
     ],
     [
       '{buckets}',

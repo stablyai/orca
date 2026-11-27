@@ -9,6 +9,7 @@ import { normalizeOpenInApplications } from '../../../../shared/editor/launch/op
 
 import { normalizeTerminalShortcutPolicy } from '../../../../shared/keybindings/effective'
 import { normalizeAppIconId } from '../../../../shared/app-lifecycle/identity/app-icon'
+import { normalizeTimeFormatPreference } from '../../../../shared/i18n/time-format-preference'
 import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-themes/terminal-custom-themes'
 import { normalizePluginOwnedSettings } from '../../../../shared/plugins/capabilities/plugin-owned-settings'
 import {
@@ -98,6 +99,7 @@ export function normalizeLoadedGlobalSettings(
       defaults.settings
     ),
     defaultTuiAgent: normalizeDefaultTuiAgent(parsed.settings?.defaultTuiAgent),
+    timeFormat: normalizeTimeFormatPreference(parsed.settings?.timeFormat),
     agentDefaultSurface: normalizeAgentDefaultSurface(parsed.settings?.agentDefaultSurface),
     nativeChatAppearance: normalizeNativeChatAppearanceSettings(
       parsed.settings?.nativeChatAppearance

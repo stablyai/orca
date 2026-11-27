@@ -9,6 +9,7 @@ import {
 } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import { getProviderDisplayName } from '../../../../../shared/agent-usage/display/usage-provider-windows'
 import { formatPlanLabel } from './usage-roster-formatting'
+import { localeHourCycle } from '../../../../../shared/i18n/time-format-preference'
 
 export type UsageFormatValues = Record<string, string>
 
@@ -61,12 +62,16 @@ function percent(window: RateLimitWindow, display: UsagePercentageDisplay): stri
   return `${getDisplayedUsagePercentage(window.usedPercent, display)}%`
 }
 
-/** Reset time as a 24h clock string in the viewer's zone. */
-function resetClock(resetsAt: number, options: UsageFormatValueOptions): string {
+/** Reset time in the viewer's zone: 24h by default, or the clock a Time format `hc` extension pins. */
+export function formatUsageResetClock(
+  resetsAt: number,
+  options: Pick<UsageFormatValueOptions, 'locale' | 'timeZone'>
+): string {
+  const twelveHour = localeHourCycle(options.locale) === 'h12'
   return new Intl.DateTimeFormat(options.locale, {
-    hour: '2-digit',
+    hour: twelveHour ? 'numeric' : '2-digit',
     minute: '2-digit',
-    hourCycle: 'h23',
+    hourCycle: twelveHour ? 'h12' : 'h23',
     timeZone: options.timeZone
   }).format(resetsAt)
 }
@@ -86,7 +91,8 @@ export function buildUsageFormatValues(
     values[key] = window ? percent(window, options.display) : ''
     values[`${key}.reset`] =
       window?.resetsAt != null ? formatResetDuration(window.resetsAt - options.now) : ''
-    values[`${key}.resetAt`] = window?.resetsAt != null ? resetClock(window.resetsAt, options) : ''
+    values[`${key}.resetAt`] =
+      window?.resetsAt != null ? formatUsageResetClock(window.resetsAt, options) : ''
   }
   values.buckets = (p.buckets ?? [])
     .map((bucket) => `${bucket.name} ${percent(bucket, options.display)}`)

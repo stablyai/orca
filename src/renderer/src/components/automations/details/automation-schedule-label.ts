@@ -3,7 +3,7 @@ import {
   formatAutomationScheduleTime,
   type AutomationScheduleDescriptor
 } from '../../../../../shared/automations/scheduling/automation-schedules'
-import { translate } from '@/i18n/i18n'
+import { getRendererHourCycle, translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { getUiWeekdayNames } from '@/i18n/weekday-names'
 
@@ -29,7 +29,11 @@ export function formatUiAutomationScheduleDescriptor(
       { minute: String(descriptor.minute).padStart(2, '0') }
     )
   }
-  const time = formatAutomationScheduleTime(descriptor.hour, descriptor.minute)
+  const time = formatAutomationScheduleTime(
+    descriptor.hour,
+    descriptor.minute,
+    getRendererHourCycle()
+  )
   if (descriptor.kind === 'daily') {
     return t(
       'auto.components.automations.automation.schedule.label.280ccd2701',
