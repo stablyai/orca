@@ -154,22 +154,20 @@ export function NativeChatResumeToast({
   const titleId = useId()
   const listId = useId()
   const busy = view.phase === 'resuming'
-  const listRef = useRef<HTMLUListElement>(null)
+  const scrollerRef = useRef<HTMLDivElement>(null)
   const [moreBelow, setMoreBelow] = useState(false)
-  const rowCount = view.rows.length
   useEffect(() => {
-    const list = listRef.current
-    if (!expanded || !list) {
+    const scroller = scrollerRef.current
+    const list = scroller?.firstElementChild
+    if (!expanded || !scroller || !list) {
       return
     }
-    // Rows grow once a late bot name lands, which the capped list's own box doesn't show.
-    const observer = new ResizeObserver(() => setMoreBelow(hasMoreBelow(list)))
+    // The list grows past the capped scroller as rows change or late bot names land.
+    const observer = new ResizeObserver(() => setMoreBelow(hasMoreBelow(scroller)))
+    observer.observe(scroller)
     observer.observe(list)
-    for (const row of list.children) {
-      observer.observe(row)
-    }
     return () => observer.disconnect()
-  }, [expanded, rowCount])
+  }, [expanded])
   const offering = view.phase === 'offer'
   const showResume = offering && view.resumable.length > 0
   const showDismissAll = onDismissAll !== undefined && offering
@@ -238,29 +236,33 @@ export function NativeChatResumeToast({
         {/* Rows mount only once opened, so an unopened toast fetches no bot avatars. */}
         {expanded && (
           <div className="relative">
-            <ul
-              ref={listRef}
-              aria-label={t('auto.components.NativeChatResumeToast.listLabel', 'Agents')}
-              className="scrollbar-sleek max-h-64 overflow-y-auto p-1"
+            <div
+              ref={scrollerRef}
+              className="scrollbar-sleek max-h-64 overflow-y-auto"
               onScroll={(event) => setMoreBelow(hasMoreBelow(event.currentTarget))}
             >
-              {view.rows.map((row) => (
-                <NativeChatResumeToastRow
-                  key={row.candidate.sessionId}
-                  row={row}
-                  name={nameFor(
-                    row.candidate.sessionId,
-                    firstLine(row.candidate.latestPrompt) ||
-                      t('auto.components.NativeChatResumeToast.untitled', 'Untitled agent')
-                  )}
-                  bot={botFor?.(row.candidate)}
-                  age={formatShortTimeAgo(row.candidate.recordedAt, listedAt)}
-                  busy={busy}
-                  remote={machineName !== undefined}
-                  onAction={onRowAction}
-                />
-              ))}
-            </ul>
+              <ul
+                aria-label={t('auto.components.NativeChatResumeToast.listLabel', 'Agents')}
+                className="p-1"
+              >
+                {view.rows.map((row) => (
+                  <NativeChatResumeToastRow
+                    key={row.candidate.sessionId}
+                    row={row}
+                    name={nameFor(
+                      row.candidate.sessionId,
+                      firstLine(row.candidate.latestPrompt) ||
+                        t('auto.components.NativeChatResumeToast.untitled', 'Untitled agent')
+                    )}
+                    bot={botFor?.(row.candidate)}
+                    age={formatShortTimeAgo(row.candidate.recordedAt, listedAt)}
+                    busy={busy}
+                    remote={machineName !== undefined}
+                    onAction={onRowAction}
+                  />
+                ))}
+              </ul>
+            </div>
             {/* The cap hides rows; a fade says the list goes on until it is scrolled to the end. */}
             {moreBelow && (
               <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-popover to-transparent" />
@@ -313,6 +315,6 @@ function firstLine(text: string): string {
   return text.trim().split('\n', 1)[0]?.trim() ?? ''
 }
 
-function hasMoreBelow(list: HTMLElement): boolean {
-  return list.scrollTop + list.clientHeight < list.scrollHeight - 2
+function hasMoreBelow(scroller: HTMLElement): boolean {
+  return scroller.scrollTop + scroller.clientHeight < scroller.scrollHeight - 2
 }
