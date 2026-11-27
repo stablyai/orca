@@ -61,10 +61,11 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor & {
   /** Streams whose open message a forced ack released: every ack is a cut until it ends, so a
    *  reattach moves the tail it replays to a continuation row instead of a fresh one. */
   const releasedOpen = new Set<string>()
-  /** Ends a scope as of `before`: what it opened earlier goes, what opened since stays. */
-  const closeScope = (scope: string, before: number): void => {
+  /** Ends a scope at line `at`: what it opened through then goes (an ending line opens nothing, and a
+   *  lift can move an older start onto it), what opened since stays. */
+  const closeScope = (scope: string, at: number): void => {
     for (const map of [open, starts]) {
-      if ((map.get(scope) ?? before) < before) {
+      if ((map.get(scope) ?? Number.POSITIVE_INFINITY) <= at) {
         map.delete(scope)
       }
     }
@@ -72,7 +73,7 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor & {
       releasedOpen.delete(scope)
     }
     for (const id of toolsByScope.get(scope) ?? []) {
-      if ((tools.get(id)?.seq ?? before) < before) {
+      if ((tools.get(id)?.seq ?? Number.POSITIVE_INFINITY) <= at) {
         dropTool(id)
       }
     }
