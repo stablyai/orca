@@ -250,8 +250,7 @@ export async function openGenerate(
 export const READY: AvatarGenerationCapability = {
   agents: [
     { agent: 'codex', status: 'ready' },
-    { agent: 'grok', status: 'ready' },
-    { agent: 'antigravity', status: 'ready' }
+    { agent: 'grok', status: 'ready' }
   ]
 }
 

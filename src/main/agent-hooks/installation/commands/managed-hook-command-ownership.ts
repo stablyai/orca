@@ -1,5 +1,5 @@
 import { WINDOWS_NATIVE_HOOK_EXECUTABLE_NAME } from './windows-native-hook-executable'
-import { isOrcaPosixCondition } from './posix-condition-clauses'
+import { isOrcaPosixCondition, unquoteSinglePosixToken } from './posix-condition-clauses'
 import { HOOK_PARENT_CAPTURE } from '../scripts/hook-process-capture'
 import {
   POSIX_HOOK_STDIN_BACKGROUND_DRAIN_COMMAND,
@@ -13,10 +13,16 @@ const DIRECT_POSIX_SHELL_PREFIX = /^(?:\/bin\/sh|sh|bash)[ \t]+/
 const SIMPLE_ENV_ASSIGNMENT =
   /^[A-Za-z_][A-Za-z0-9_]*=(?:'[^']*'(?:\\''[^']*')*|"[^"\r\n`$]*"|[^\s;&|<>\r\n`"'$]+)[ \t]+/
 const POWERSHELL_ENCODED_COMMAND =
-  /^(?:"(?:[^"\r\n]*[\\/])?(?:powershell|pwsh)(?:\.exe)?"|'(?:[^'\r\n]*[\\/])?(?:powershell|pwsh)(?:\.exe)?'|(?:[^\s;&|<>\r\n"']*[\\/])?(?:powershell|pwsh)(?:\.exe)?)(?:\s+-[A-Za-z]+(?:\s+[A-Za-z]+)?)*\s+-EncodedCommand\s+([A-Za-z0-9+/=]+)$/i
+  /^(?:if\s+defined\s+ORCA_PANE_KEY\s+)?(?:"(?:[^"\r\n]*[\\/])?(?:powershell|pwsh)(?:\.exe)?"|'(?:[^'\r\n]*[\\/])?(?:powershell|pwsh)(?:\.exe)?'|(?:[^\s;&|<>\r\n"']*[\\/])?(?:powershell|pwsh)(?:\.exe)?)(?:\s+-[A-Za-z]+(?:\s+[A-Za-z]+)?)*\s+-EncodedCommand\s+([A-Za-z0-9+/=]+)$/i
 const POWERSHELL_PROGRESS_PREFIX = /^\$ProgressPreference\s*=\s*'SilentlyContinue';\s*/i
 const POWERSHELL_POLICY_PREFIX =
   /^(?:try\s*\{\s*Set-ExecutionPolicy\s+-Scope\s+Process\s+-ExecutionPolicy\s+Bypass\s+-Force\s+-ErrorAction\s+SilentlyContinue\s*\}\s*catch\s*\{\s*\};\s*|\$env:PSExecutionPolicyPreference\s*=\s*'Bypass';\s*)/i
+const POWERSHELL_UTF8_PREFIX =
+  /^\[Console\]::InputEncoding\s*=\s*New-Object\s+System\.Text\.UTF8Encoding;\s*\$OutputEncoding\s*=\s*\[Console\]::InputEncoding;\s*/i
+const WINDOWS_CMD_CODEX_LAUNCHER =
+  /^(?:[^\s;&|<>\r\n"']*[\\/])?cmd(?:\.exe)?\s+--%\s+\/d\s+\/v:off\s+\/c\s+@"([^"\r\n]+)"$/i
+const WINDOWS_CMD_DIRECT_LAUNCHER =
+  /^(?:[^\s;&|<>\r\n"']*[\\/])?cmd(?:\.exe)?\s+\/d\s+\/c\s+([^\s;&|<>\r\n"']+)(?:\s+([A-Za-z0-9_.-]+))?$/i
 const POWERSHELL_ENV_ASSIGNMENT = /^\$env:[A-Za-z_][A-Za-z0-9_]*\s*=\s*'(?:[^']|'')*';\s*/i
 const POWERSHELL_TEST_PATH_BRANCH =
   /^if\s*\(\s*Test-Path\s+-LiteralPath\s+'((?:[^']|'')+)'\s+-PathType\s+Leaf\s*\)\s*\{\s*&\s*'((?:[^']|'')+)';\s*exit\s+\$LASTEXITCODE\s*\}(.*)$/i
@@ -34,29 +40,6 @@ export const NATIVE_EXE_SUFFIX = new RegExp(
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-function unquoteSinglePosixToken(token: string): string | null {
-  const trimmed = token.trim()
-  if (trimmed.length >= 2 && trimmed.startsWith("'") && trimmed.endsWith("'")) {
-    const inner = trimmed.slice(1, -1)
-    const pieces = inner.split("'\\''")
-    if (pieces.some((piece) => piece.includes("'"))) {
-      return null
-    }
-    return pieces.join("'")
-  }
-  if (trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"')) {
-    const inner = trimmed.slice(1, -1)
-    if (/["`\r\n]|\$\(/.test(inner)) {
-      return null
-    }
-    return inner
-  }
-  if (SHELL_METACHAR_PATTERN.test(trimmed) || /\s/.test(trimmed)) {
-    return null
-  }
-  return trimmed
 }
 
 function isManagedScriptPathValue(pathValue: string, scriptNames: ReadonlySet<string>): boolean {
@@ -152,7 +135,10 @@ function isManagedPowerShellEncodedCommand(
   } catch {
     return false
   }
-  let rest = decoded.replace(POWERSHELL_PROGRESS_PREFIX, '').replace(POWERSHELL_POLICY_PREFIX, '')
+  let rest = decoded
+    .replace(POWERSHELL_PROGRESS_PREFIX, '')
+    .replace(POWERSHELL_POLICY_PREFIX, '')
+    .replace(POWERSHELL_UTF8_PREFIX, '')
   while (POWERSHELL_ENV_ASSIGNMENT.test(rest)) {
     rest = rest.replace(POWERSHELL_ENV_ASSIGNMENT, '')
   }
@@ -293,6 +279,16 @@ function isManagedPosixWrapperCommand(command: string, scriptNames: ReadonlySet<
   return isManagedPosixIfWrapper(rest, scriptNames)
 }
 
+function isManagedWindowsCmdCommand(command: string, scriptNames: ReadonlySet<string>): boolean {
+  const trimmed = command.trim()
+  const codexMatch = trimmed.match(WINDOWS_CMD_CODEX_LAUNCHER)
+  if (codexMatch) {
+    return isManagedScriptPathValue(codexMatch[1], scriptNames)
+  }
+  const directMatch = trimmed.match(WINDOWS_CMD_DIRECT_LAUNCHER)
+  return directMatch !== null && isManagedScriptPathValue(directMatch[1], scriptNames)
+}
+
 /** True only when Orca owns the entire command string, never for composite user commands. */
 export function isOwnedManagedHookCommand(
   command: string,
@@ -302,6 +298,7 @@ export function isOwnedManagedHookCommand(
   return (
     isManagedDirectShellCommand(command, scriptNames) ||
     isManagedNativeExecutableCommand(command, agentName) ||
+    isManagedWindowsCmdCommand(command, scriptNames) ||
     isManagedPowerShellEncodedCommand(command, scriptNames) ||
     isManagedPosixWrapperCommand(command, scriptNames)
   )

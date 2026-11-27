@@ -199,27 +199,3 @@ export function parseCursorModels(stdout: string): CommitMessageModel[] {
   }
   return uniqueModels(models)
 }
-
-export function parseAntigravityModels(stdout: string): CommitMessageModel[] {
-  const models: CommitMessageModel[] = []
-  for (const rawLine of iterateModelOutputLines(stdout)) {
-    const line = rawLine.trim()
-    const separator = line.indexOf('\t')
-    const id = (separator === -1 ? line : line.slice(0, separator)).trim()
-    const label = separator === -1 ? id : line.slice(separator + 1).trim()
-    // Older agy versions list display names; current versions emit id<TAB>label.
-    if (
-      !id ||
-      !label ||
-      (separator === -1 && !/^.+ \((?:low|medium|high|thinking)\)$/i.test(id)) ||
-      (separator !== -1 && (/\s/.test(id) || /^(?:id|model)$/i.test(id)))
-    ) {
-      continue
-    }
-    models.push({
-      id,
-      label
-    })
-  }
-  return uniqueModels(models)
-}
