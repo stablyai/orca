@@ -179,3 +179,39 @@ it("keeps a user resume's results when the host's launch action follows it", asy
   expect(run?.continued?.map((entry) => entry.outcome)).toEqual(['continued', 'continued'])
   store.dispose()
 })
+
+it('follows a waiting launch action even when another action takes the turn first', async () => {
+  const store = await occurrence()
+  const first = store.dismissNativeChatRestartOffer(['b'])
+  const launch = store.continueNativeChatRestartOffer(['a'], 'launch', [chat('a')])
+  let second: Promise<void> = Promise.resolve()
+  const handoff = first.then(() => {
+    second = store.dismissNativeChatRestartOffer(['c'])
+  })
+  dismissReply()
+  await handoff
+  expect(dismissed).toEqual([['b'], ['c']])
+  expect(sent).toEqual([])
+  dismissReply()
+  await second
+  await vi.waitFor(() => expect(sent).toEqual([['a']]))
+  reply({
+    attempted: ['a'],
+    continued: [{ sessionId: 'a', outcome: 'continued' }],
+    skipped: new Set()
+  })
+  await launch
+  expect(store.getNativeChatRestartRun()?.continued).toEqual([
+    { sessionId: 'a', outcome: 'continued' }
+  ])
+  store.dispose()
+})
+
+it('lets a waiting launch action return when the occurrence is disposed', async () => {
+  const store = await occurrence()
+  void store.dismissNativeChatRestartOffer(['b'])
+  const launch = store.continueNativeChatRestartOffer(['a'], 'launch', [chat('a')])
+  store.dispose()
+  await launch
+  expect(sent).toEqual([])
+})

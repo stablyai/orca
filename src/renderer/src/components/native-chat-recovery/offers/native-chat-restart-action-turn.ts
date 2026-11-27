@@ -24,6 +24,10 @@ export function createRestartActionTurn() {
         settled += 1
       }
     },
+    /** Wakes waiters without settling, so a disposed occurrence lets them return. */
+    wake(): void {
+      finish()
+    },
     async waitIdle(gone: () => boolean): Promise<void> {
       while (!gone() && begun !== settled) {
         await done

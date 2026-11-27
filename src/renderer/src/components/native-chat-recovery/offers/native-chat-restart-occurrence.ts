@@ -192,7 +192,9 @@ export function createNativeChatRestartOccurrence(
   ): Promise<void> {
     const hostTook = took !== undefined
     // The host's own launch action already started its chats: it waits its turn, never drops.
-    if (hostTook) {
+    // Re-checked after each wait: another action may take the turn first. From here to begin()
+    // nothing awaits, so the launch acquires the turn the moment it sees it free.
+    while (hostTook && current() && !turn.idle()) {
       await turn.waitIdle(() => !current())
     }
     // Checked before any further await, so an activation while one is in flight sends nothing.
@@ -322,6 +324,7 @@ export function createNativeChatRestartOccurrence(
   })
   function dispose(): void {
     live = false
+    turn.wake()
     discovery.dispose()
     releaseRunStatus?.()
     offeredChatWatch.release()
