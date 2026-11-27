@@ -1,5 +1,5 @@
 import { useId, useRef, useState } from 'react'
-import { ChevronRight, Info } from 'lucide-react'
+import { ChevronRight, Info, TriangleAlertIcon, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useToastHeightChange } from '@/components/ui/toast-height-change'
@@ -128,56 +128,89 @@ function shallowHistoryDescription(
   )
 }
 
-// Why: the raw Git guidance (incl. the owner worktree path) stays behind a click so the toast reads in one line.
-function RefreshFailureDetails({
+// Why: the raw Git guidance (incl. the owner worktree path) stays behind the title so the card reads in one line.
+function LocalBaseRefNotUpdatedCard({
+  title,
   reason,
   detail,
-  showLabel,
-  hideLabel,
-  actions,
+  disableLabel,
+  disableTooltip,
+  closeLabel,
+  onDisable,
+  onClose,
   onResize
 }: {
+  title: string
   reason: string
   detail: string
-  showLabel: string
-  hideLabel: string
-  actions: React.ReactNode
+  disableLabel: string
+  disableTooltip: string
+  closeLabel: string
+  onDisable: () => void
+  onClose: () => void
   onResize: () => void
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const detailId = useId()
-  const bodyRef = useRef<HTMLDivElement>(null)
-  useToastHeightChange(bodyRef, onResize)
+  const cardRef = useRef<HTMLDivElement>(null)
+  useToastHeightChange(cardRef, onResize)
   return (
-    <div ref={bodyRef} className="flex w-full min-w-0 flex-col gap-2">
-      <p className="truncate text-sm leading-5 text-popover-foreground/80" title={reason}>
-        {reason}
-      </p>
-      {open ? (
-        <p
-          id={detailId}
-          className="select-text whitespace-pre-wrap rounded-md bg-muted px-2 py-1.5 font-mono text-xs leading-relaxed text-muted-foreground [overflow-wrap:anywhere]"
-        >
-          {detail}
-        </p>
-      ) : null}
+    <div
+      ref={cardRef}
+      className="flex w-[var(--width)] flex-col gap-1 rounded-[var(--radius)] border border-[var(--notice-border)] bg-[var(--notice-surface)] p-3 text-[13px] leading-5 text-popover-foreground shadow-notice"
+    >
       <div className="flex items-center gap-2">
-        <Button
+        <TriangleAlertIcon className="size-4 shrink-0" aria-hidden="true" />
+        <button
           type="button"
-          variant="disclosure"
-          size="xs"
-          className="-ml-1.5 mr-auto"
+          className="flex min-w-0 flex-1 items-center gap-1 rounded-sm text-left font-medium outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
           onClick={() => setOpen((value) => !value)}
           aria-expanded={open}
           aria-controls={detailId}
         >
+          <span className="truncate" title={title}>
+            {title}
+          </span>
           <ChevronRight
-            className={`size-3.5 transition-transform motion-reduce:transition-none ${open ? 'rotate-90' : ''}`}
+            aria-hidden="true"
+            className={`size-3 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none ${open ? 'rotate-90' : ''}`}
           />
-          {open ? hideLabel : showLabel}
+        </button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          className="size-5"
+          data-close-button
+          aria-label={closeLabel}
+          onClick={onClose}
+        >
+          <X />
         </Button>
-        {actions}
       </div>
+      <div className="flex items-center gap-2 pl-6">
+        <p className="min-w-0 flex-1 truncate text-popover-foreground/80" title={reason}>
+          {reason}
+        </p>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button type="button" variant="secondary" size="xs-notice" onClick={onDisable}>
+              {disableLabel}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={4}>
+            {disableTooltip}
+          </TooltipContent>
+        </Tooltip>
+      </div>
+      {open ? (
+        <p
+          id={detailId}
+          className="mt-1 select-text whitespace-pre-wrap rounded-md bg-muted px-2 py-1.5 font-mono text-xs leading-relaxed text-muted-foreground [overflow-wrap:anywhere]"
+        >
+          {detail}
+        </p>
+      ) : null}
     </div>
   )
 }
@@ -337,28 +370,42 @@ export function showLocalBaseRefRefreshToast(
   }
   // Why an arrow: a hoisted function declaration would lose the `result` narrowing.
   const show = (): void => {
-    // Why a custom body: sonner's native action slot pinches beside a multi-line description.
-    // Infinity so create-time failures aren't buried; the opt-out lives here since the setting is opt-in.
+    if (!result.shallowHistory) {
+      // Why custom: the close and Disable share the card's right edge, which sonner's floating close can't.
+      // Infinity so create-time failures aren't buried; the opt-out lives here since the setting is opt-in.
+      toast.custom(
+        () => (
+          <LocalBaseRefNotUpdatedCard
+            title={refreshFailureTitle(result)}
+            reason={refreshFailureReason(result)}
+            detail={localBaseRefRefreshFailureDetail(result)}
+            disableLabel={translate(
+              'auto.store.slices.worktrees.localBaseRefRefreshDisable',
+              'Disable'
+            )}
+            disableTooltip={translate(
+              'auto.store.slices.worktrees.localBaseRefRefreshDisableTooltip',
+              'Stop checking {{value0}}',
+              { value0: result.localBranch }
+            )}
+            closeLabel={translate('auto.store.slices.worktrees.localBaseRefClose', 'Close')}
+            onDisable={() => stopRefreshingLocalBaseRef(id, result.localBranch, updateSettings)}
+            onClose={() => toast.dismiss(id)}
+            onResize={onResize}
+          />
+        ),
+        { id, duration: Infinity, closeButton: false, dismissible: true }
+      )
+      return
+    }
     // Why info, not warning: the workspace was created fine; only the optional local-branch refresh was skipped.
     toast.info(refreshFailureTitle(result), {
       id,
-      description: result.shallowHistory ? (
+      description: (
         <div className="flex w-full flex-col gap-3">
           {shallowHistoryDescription(result, worktreeName)}
           <div className="flex items-center justify-end gap-2">{actions}</div>
         </div>
-      ) : (
-        <RefreshFailureDetails
-          reason={refreshFailureReason(result)}
-          detail={localBaseRefRefreshFailureDetail(result)}
-          showLabel={translate('auto.store.slices.worktrees.localBaseRefShowDetails', 'Details')}
-          hideLabel={translate(
-            'auto.store.slices.worktrees.localBaseRefHideDetails',
-            'Hide details'
-          )}
-          actions={actions}
-          onResize={onResize}
-        />
       ),
       duration: Infinity,
       dismissible: true
