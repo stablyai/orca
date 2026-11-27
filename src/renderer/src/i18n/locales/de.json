@@ -407,6 +407,8 @@
       "runsOnServerTitle": "Dieser Tab läuft auf deinem Server",
       "runsOnServerBody": "Öffne ihn dort, um weiterzumachen.",
       "details": "Details",
+      "noBrowserTitle": "Dieser Tab kann hier nicht geöffnet werden",
+      "noBrowserBody": "Dieser Server hat keinen Browser.",
       "download": {
         "started": "{{filename}} wird heruntergeladen…",
         "completed": "{{filename}} heruntergeladen",

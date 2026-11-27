@@ -52,8 +52,15 @@ export function ClientHostedBrowserUnavailableNotice({
       <div className="relative flex max-w-sm flex-col items-center">
         <Globe className="size-5 text-muted-foreground" />
         <div className="mt-3 text-balance text-[15px] font-semibold leading-5 text-foreground">
-          {t('browser.clientHosted.runsOnServerTitle', 'This tab runs on your server')}
+          {runtimeCanHostPage
+            ? t('browser.clientHosted.runsOnServerTitle', 'This tab runs on your server')
+            : t('browser.clientHosted.noBrowserTitle', 'Can’t open this tab here')}
         </div>
+        {!runtimeCanHostPage ? (
+          <div className="mt-1 text-[13px] leading-5 text-muted-foreground">
+            {t('browser.clientHosted.noBrowserBody', 'This server has no browser.')}
+          </div>
+        ) : null}
         {runtimeCanHostPage ? (
           <>
             <div className="mt-1 text-[13px] leading-5 text-muted-foreground">

@@ -463,6 +463,8 @@
       "runsOnServerTitle": "Эта вкладка работает на вашем сервере",
       "runsOnServerBody": "Откройте её там, чтобы продолжить.",
       "details": "Подробнее",
+      "noBrowserTitle": "Эту вкладку нельзя открыть здесь",
+      "noBrowserBody": "На этом сервере нет браузера.",
       "download": {
         "started": "Загрузка {{filename}}…",
         "completed": "Загружено: {{filename}}",

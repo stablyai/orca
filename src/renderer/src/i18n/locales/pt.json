@@ -1357,6 +1357,8 @@
       "runsOnServerTitle": "Esta aba é executada no seu servidor",
       "runsOnServerBody": "Abra-a lá para continuar.",
       "details": "Detalhes",
+      "noBrowserTitle": "Não é possível abrir esta aba aqui",
+      "noBrowserBody": "Este servidor não tem navegador.",
       "download": {
         "started": "Baixando {{filename}}…",
         "completed": "{{filename}} baixado",

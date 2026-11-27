@@ -23697,6 +23697,8 @@
       "runsOnServerTitle": "이 탭은 서버에서 실행됩니다",
       "runsOnServerBody": "계속하려면 서버에서 여세요.",
       "details": "세부 정보",
+      "noBrowserTitle": "여기에서 이 탭을 열 수 없습니다",
+      "noBrowserBody": "이 서버에는 브라우저가 없습니다.",
       "download": {
         "started": "{{filename}} 다운로드 중…",
         "completed": "{{filename}}을(를) 다운로드했습니다.",

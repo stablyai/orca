@@ -125,6 +125,8 @@
       "runsOnServerTitle": "Cet onglet s’exécute sur votre serveur",
       "runsOnServerBody": "Ouvrez-le là-bas pour continuer.",
       "details": "Détails",
+      "noBrowserTitle": "Impossible d’ouvrir cet onglet ici",
+      "noBrowserBody": "Ce serveur n’a pas de navigateur.",
       "download": {
         "started": "Téléchargement de {{filename}}…",
         "completed": "Téléchargé {{filename}}",

@@ -23332,6 +23332,8 @@
       "runsOnServerTitle": "このタブはサーバー上で動作しています",
       "runsOnServerBody": "続けるにはサーバーで開いてください。",
       "details": "詳細",
+      "noBrowserTitle": "このタブはここでは開けません",
+      "noBrowserBody": "このサーバーにはブラウザーがありません。",
       "download": {
         "started": "{{filename}}をダウンロード中…",
         "completed": "{{filename}}をダウンロードしました",

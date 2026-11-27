@@ -24044,6 +24044,8 @@
       "runsOnServerTitle": "Esta pestaña se ejecuta en tu servidor",
       "runsOnServerBody": "Ábrela allí para continuar.",
       "details": "Detalles",
+      "noBrowserTitle": "No se puede abrir esta pestaña aquí",
+      "noBrowserBody": "Este servidor no tiene navegador.",
       "download": {
         "started": "Descargando {{filename}}…",
         "completed": "{{filename}} descargado",

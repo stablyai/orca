@@ -23705,6 +23705,8 @@
       "runsOnServerTitle": "此标签页在你的服务器上运行",
       "runsOnServerBody": "请在那里打开以继续。",
       "details": "详细信息",
+      "noBrowserTitle": "无法在此打开此标签页",
+      "noBrowserBody": "此服务器没有浏览器。",
       "download": {
         "started": "正在下载 {{filename}}…",
         "completed": "已下载 {{filename}}",

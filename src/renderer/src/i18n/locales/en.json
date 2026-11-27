@@ -411,6 +411,8 @@
       "runsOnServerTitle": "This tab runs on your server",
       "runsOnServerBody": "Open it there to keep going.",
       "details": "Details",
+      "noBrowserTitle": "Can’t open this tab here",
+      "noBrowserBody": "This server has no browser.",
       "download": {
         "started": "Downloading {{filename}}…",
         "completed": "Downloaded {{filename}}",

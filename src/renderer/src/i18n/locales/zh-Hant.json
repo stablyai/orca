@@ -382,6 +382,8 @@
       "runsOnServerTitle": "此分頁在你的伺服器上執行",
       "runsOnServerBody": "請在那裡開啟以繼續。",
       "details": "詳細資料",
+      "noBrowserTitle": "無法在此開啟此分頁",
+      "noBrowserBody": "此伺服器沒有瀏覽器。",
       "download": {
         "started": "正在下載 {{filename}}…",
         "completed": "已下載 {{filename}}",

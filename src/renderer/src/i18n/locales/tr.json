@@ -411,6 +411,8 @@
       "runsOnServerTitle": "Bu sekme sunucunuzda çalışıyor",
       "runsOnServerBody": "Devam etmek için orada açın.",
       "details": "Ayrıntılar",
+      "noBrowserTitle": "Bu sekme burada açılamıyor",
+      "noBrowserBody": "Bu sunucuda tarayıcı yok.",
       "download": {
         "started": "{{filename}} indiriliyor…",
         "completed": "{{filename}} indirildi",
