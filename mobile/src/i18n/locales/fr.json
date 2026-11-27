@@ -2603,7 +2603,6 @@
       "failedAfter": "Échec après {{duration}}",
       "failed": "Échec",
       "checkActions": "Plus d'actions pour {{name}}",
-      "rerun": "Relancer",
       "copyErrorFailed": "Impossible de copier l'erreur.",
       "durationSeconds": "{{seconds}} s",
       "durationMinutes": "{{minutes}} min {{seconds}} s",

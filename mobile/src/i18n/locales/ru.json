@@ -3083,7 +3083,6 @@
       "failedAfter": "Сбой через {{duration}}",
       "failed": "Сбой",
       "checkActions": "Другие действия: {{name}}",
-      "rerun": "Перезапустить",
       "copyErrorFailed": "Не удалось скопировать ошибку.",
       "durationSeconds": "{{seconds}} с",
       "durationMinutes": "{{minutes}} мин {{seconds}} с",
