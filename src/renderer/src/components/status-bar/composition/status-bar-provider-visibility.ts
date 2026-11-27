@@ -27,6 +27,7 @@ type UsageProviderSnapshots = {
   cursor: ProviderRateLimits | null | undefined
   zcode?: ProviderRateLimits | null
   muse?: ProviderRateLimits | null
+  mistralVibe?: ProviderRateLimits | null
 }
 
 type UsageProviderId = ProviderRateLimits['provider']
@@ -145,7 +146,8 @@ export function isUsageEmptyState(
     isProviderSnapshotPending(providers.grok) ||
     isProviderSnapshotPending(providers.cursor) ||
     (providers.zcode !== undefined && isProviderSnapshotPending(providers.zcode)) ||
-    (providers.muse !== undefined && isProviderSnapshotPending(providers.muse))
+    (providers.muse !== undefined && isProviderSnapshotPending(providers.muse)) ||
+    (providers.mistralVibe !== undefined && isProviderSnapshotPending(providers.mistralVibe))
   ) {
     return false
   }
@@ -159,6 +161,7 @@ export function isUsageEmptyState(
     !isProviderConfigured(providers.grok) &&
     !isProviderConfigured(providers.cursor) &&
     !isProviderConfigured(providers.zcode) &&
-    !isProviderConfigured(providers.muse)
+    !isProviderConfigured(providers.muse) &&
+    !isProviderConfigured(providers.mistralVibe)
   )
 }

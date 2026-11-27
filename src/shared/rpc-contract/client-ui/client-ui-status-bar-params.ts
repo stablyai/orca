@@ -12,6 +12,7 @@ export const StatusBarItem = lazyZodSchema(() =>
     'cursor',
     'zcode',
     'muse',
+    'mistral-vibe',
     'ssh',
     'resource-usage',
     'ports',

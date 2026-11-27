@@ -79,7 +79,8 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
       grok: this.state.grok,
       cursor: this.state.cursor,
       zcode: this.state.zcode,
-      muse: this.state.muse
+      muse: this.state.muse,
+      'mistral-vibe': this.state.mistralVibe
     }
     // A hidden Muse meter keeps an idle snapshot, which must not force a full refresh on every focus.
     const museEnabled = this.museUsageEnabledResolver?.() ?? true

@@ -56,12 +56,14 @@ function isUsageAuthError(message: string | null): boolean {
 
 function getDelegatedCliRefreshProvider(
   p: UsageStatusCopySource
-): Extract<ProviderRateLimits['provider'], 'grok' | 'kimi'> | null {
+): Extract<ProviderRateLimits['provider'], 'grok' | 'kimi' | 'mistral-vibe'> | null {
   if (p.usageMetadata?.failureKind !== 'delegated-refresh-required') {
     return null
   }
   // Only these providers require a CLI-run credential rotation; Claude reports the same kind in-app.
-  return p.provider === 'grok' || p.provider === 'kimi' ? p.provider : null
+  return p.provider === 'grok' || p.provider === 'kimi' || p.provider === 'mistral-vibe'
+    ? p.provider
+    : null
 }
 
 export { isClaudeUsageWaitingForClaude, isCodexUsageWaitingForCodex }
@@ -83,6 +85,9 @@ export function getProviderUsageStatusLabel(
   }
   if (delegatedCliProvider === 'kimi') {
     return t('auto.components.status.bar.tooltip.f90b3d7a16', 'Run Kimi to refresh')
+  }
+  if (delegatedCliProvider === 'mistral-vibe') {
+    return t('auto.components.status.bar.tooltip.mistralVibe.refresh.label', 'Run Vibe to refresh')
   }
   if (isCodexUsageWaitingForCodex(p)) {
     return t('auto.components.status.bar.tooltip.codex.waiting.label', 'Updates when Codex runs')
@@ -171,6 +176,12 @@ export function getProviderUsageErrorMessage(
     return t(
       'auto.components.status.bar.tooltip.a37e8c15d4',
       'Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage.'
+    )
+  }
+  if (delegatedCliProvider === 'mistral-vibe') {
+    return t(
+      'auto.components.status.bar.tooltip.mistralVibe.refresh.message',
+      'Run vibe in a terminal on the computer running Orca and wait for it to start, then retry usage.'
     )
   }
   if (isCodexUsageWaitingForCodex(p)) {

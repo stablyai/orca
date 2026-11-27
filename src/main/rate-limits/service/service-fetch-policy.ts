@@ -93,7 +93,7 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     provider: ActiveRateLimitProvider,
     limits: ProviderRateLimits | null
   ): boolean {
-    return provider === 'claude' && this.isRetryAfterActive(limits)
+    return (provider === 'claude' || provider === 'mistral-vibe') && this.isRetryAfterActive(limits)
   }
 
   protected resolveClaudeFetchApply(

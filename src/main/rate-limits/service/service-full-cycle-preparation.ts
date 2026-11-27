@@ -2,6 +2,8 @@ import { fetchActiveClaudeRateLimits } from '../providers/claude/claude-active-u
 import { fetchCodexRateLimits } from '../providers/codex/codex-fetcher'
 import { fetchGrokRateLimits } from '../providers/grok/grok-fetcher'
 import { readGrokAuthSession } from '../providers/grok/grok-auth'
+import { fetchMistralVibeRateLimits } from '../providers/mistral-vibe/mistral-vibe-usage-fetcher'
+import { settleSiblingProviderFetch } from './service-sibling-provider-result'
 import { fetchCursorRateLimits } from '../providers/cursor/cursor-fetcher'
 import { readCursorAuthSession } from '../providers/cursor/cursor-auth'
 import { fetchZcodeRateLimits } from '../providers/zcode/zcode-usage-fetcher'
@@ -80,6 +82,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const codexStateBeforeFetch =
       previousState.codex?.status === 'fetching' ? null : previousState.codex
     // Probe auth during fetch, not hot renderer/mobile getState calls.
+    const mistralVibeHeld =
+      !options?.force && this.shouldSkipAutomatedFetch('mistral-vibe', previousState.mistralVibe)
     const grokAuthReadResult = readGrokAuthSession()
     this.grokAuthConfigured = grokAuthReadResult.status === 'ok'
     // Config changes discard old-account usage; hash credentials because only identity changes matter.
@@ -132,6 +136,10 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         ? this.withFetchingStatus(null, 'minimax')
         : this.withFetchingStatus(previousState.minimax, 'minimax'),
       grok: this.withFetchingStatus(previousState.grok, 'grok'),
+      // A held provider keeps its reading; a fetching status would never settle.
+      mistralVibe: mistralVibeHeld
+        ? previousState.mistralVibe
+        : this.withFetchingStatus(previousState.mistralVibe, 'mistral-vibe'),
       cursor: this.withFetchingStatus(previousState.cursor, 'cursor'),
       zcode: zcodeConfigChanged
         ? this.withFetchingStatus(null, 'zcode')
@@ -164,6 +172,10 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       (value) => ({ status: 'fulfilled', value }) as const,
       (reason) => ({ status: 'rejected', reason }) as const
     )
+    // Null while Mistral's Retry-After holds: another provider's cycle must not extend the hold.
+    const mistralVibeResultPromise = mistralVibeHeld
+      ? null
+      : settleSiblingProviderFetch(fetchMistralVibeRateLimits({ signal }))
     // Live display does not waive automated Retry-After gates.
     const claudeFetchGated =
       !this.isClaudeOAuthUsageEnabled() ||
@@ -255,6 +267,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       claudeFetchGated,
       results: [claudeResult, codexResult, opencodeGoResult, kimiResult, miniMaxResult],
       grokResultPromise,
+      mistralVibeResultPromise,
       cursorResultPromise,
       zcodeResultPromise
     }
