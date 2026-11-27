@@ -74,7 +74,7 @@ async function validateCurrentBranchCanCreateReview(
     const eligibility = await getHostedReviewCreationEligibility({
       repoPath,
       branch: requestedHead || currentBranch,
-      base: submittedBase,
+      base: input.base,
       hasUncommittedChanges: dirty,
       hasUpstream: upstreamStatus.hasUpstream,
       ahead: upstreamStatus.ahead,

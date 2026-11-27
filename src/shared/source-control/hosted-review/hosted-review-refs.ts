@@ -1,15 +1,15 @@
 import type { BaseRefSearchResult } from '../../repository/repo-types'
 
 export function normalizeHostedReviewHeadRef(ref: string): string {
-  return ref
-    .trim()
-    .replace(/^refs\/heads\//, '')
-    .replace(/^refs\/remotes\/[^/]+\//, '')
+  return ref.trim().replace(/^(?:refs\/heads\/|refs\/remotes\/[^/]+\/)/, '')
 }
 
 export function normalizeHostedReviewBaseRef(ref: string): string {
   const normalized = normalizeHostedReviewHeadRef(ref)
-  return normalized.replace(/^(origin|upstream)\//, '')
+  // An explicit namespace already identified the branch; its own prefix is literal.
+  return ref.trim().startsWith('refs/')
+    ? normalized
+    : normalized.replace(/^(origin|upstream)\//, '')
 }
 
 /** Exclude only a remote's direct symbolic HEAD, preserving branches like feature/HEAD. */
