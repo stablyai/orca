@@ -99,22 +99,9 @@ export function MobileNativeChatMcpPanel(props: MobileNativeChatMcpPanelProps): 
 }
 
 function McpTrayBody(props: MobileNativeChatMcpPanelProps & { t: Translate }) {
-  const trayStripStyles = useThemedStyles(trayStripStylesSheet)
-  const styles = useThemedStyles(stylesSheet)
   const { result, servers, t } = props
   if (result === null) {
     return null
-  }
-  if (result.status === 'not-running') {
-    // An agent at rest lists what its next start gets, as its host reads it.
-    return (
-      <>
-        <Notice
-          text={t('chat.mcp.notRunning', 'MCP servers connect when you send your next message.')}
-        />
-        {servers.length > 0 ? <McpServerList {...props} /> : null}
-      </>
-    )
   }
   if (result.status === 'unsupported') {
     return (
@@ -136,25 +123,29 @@ function McpTrayBody(props: MobileNativeChatMcpPanelProps & { t: Translate }) {
       />
     )
   }
-  if (servers.length === 0) {
+  if (result.status === 'ok' && servers.length === 0) {
     return <Notice text={t('chat.mcp.empty', 'No MCP servers are set up for this chat.')} />
   }
-  if (servers.some((server) => server.status === 'unreported')) {
-    return (
-      <>
-        <Notice
-          text={t('chat.mcp.unreported', "{{agent}} doesn't report connection status.", {
+  // An agent at rest lists what its next start gets; one that reports no status says so.
+  const notice =
+    result.status === 'not-running'
+      ? t('chat.mcp.notRunning', 'MCP servers connect when you send your next message.')
+      : servers.some((server) => server.status === 'unreported')
+        ? t('chat.mcp.unreported', "{{agent}} doesn't report connection status.", {
             agent: props.agentLabel
-          })}
-        />
-        <McpServerList {...props} />
-      </>
-    )
-  }
-  return <McpServerList {...props} />
+          })
+        : null
+  return (
+    <>
+      {notice ? <Notice text={notice} /> : null}
+      {servers.length > 0 ? <McpServerList {...props} /> : null}
+    </>
+  )
 }
 
 function McpServerList(props: MobileNativeChatMcpPanelProps & { t: Translate }) {
+  const trayStripStyles = useThemedStyles(trayStripStylesSheet)
+  const styles = useThemedStyles(stylesSheet)
   const { servers, t } = props
   const groups = groupAgentSessionMcpServers(servers)
   const withOrca = groups.some((group) => group.source === ORCA_MCP_SOURCE)
