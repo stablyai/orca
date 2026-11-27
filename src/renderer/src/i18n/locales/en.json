@@ -8076,7 +8076,8 @@
           "projectGroupSubmenu": "Project Group",
           "muteNotifications": "Mute Notifications",
           "unmuteNotifications": "Unmute Notifications",
-          "copyAutoNameError": "Auto-Name Error"
+          "copyAutoNameError": "Auto-Name Error",
+          "deleteKeepChildren": "Delete, Keep Children…"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",

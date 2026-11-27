@@ -6,7 +6,7 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 
 export type WorktreeContextMenuDeleteIntent =
-  | { kind: 'worktree'; worktree: WorktreeDeleteIdentity }
+  | { kind: 'worktree'; worktree: WorktreeDeleteIdentity; preserveChildren?: true }
   | { kind: 'batch'; worktrees: readonly WorktreeDeleteIdentity[] }
   | { kind: 'folder'; folderWorkspaceId: string; executionHostId?: ExecutionHostId }
 
@@ -15,6 +15,7 @@ export function createWorktreeContextMenuDeleteIntent(args: {
   batchDeleteWorktrees: readonly Pick<Worktree, 'id' | 'instanceId' | 'hostId'>[]
   isMultiContext: boolean
   folderWorkspaceId?: string
+  preserveChildren?: boolean
 }): WorktreeContextMenuDeleteIntent {
   if (args.isMultiContext && args.batchDeleteWorktrees.length === 1) {
     const { id, instanceId, hostId } = args.batchDeleteWorktrees[0]
@@ -38,7 +39,11 @@ export function createWorktreeContextMenuDeleteIntent(args: {
     }
   }
   const { id, instanceId, hostId } = args.worktree
-  return { kind: 'worktree', worktree: { id, instanceId, hostId } }
+  return {
+    kind: 'worktree',
+    worktree: { id, instanceId, hostId },
+    ...(args.preserveChildren === true ? { preserveChildren: true as const } : {})
+  }
 }
 
 export function runWorktreeContextMenuDeleteIntent(intent: WorktreeContextMenuDeleteIntent): void {
@@ -49,7 +54,8 @@ export function runWorktreeContextMenuDeleteIntent(intent: WorktreeContextMenuDe
   if (intent.kind === 'worktree') {
     runWorktreeDelete(intent.worktree.id, {
       expectedInstanceId: intent.worktree.instanceId,
-      ...(intent.worktree.hostId ? { expectedHostId: intent.worktree.hostId } : {})
+      ...(intent.worktree.hostId ? { expectedHostId: intent.worktree.hostId } : {}),
+      ...(intent.preserveChildren ? { preserveChildren: true } : {})
     })
     return
   }

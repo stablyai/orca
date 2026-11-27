@@ -21,6 +21,19 @@ export function canPreserveWorkspaceDeleteChildren(
   )
 }
 
+/** Whether the delete dialog can offer keeping children; the context menu uses the same check. */
+export function canKeepWorkspaceDeleteChildren(
+  parent: Worktree | null | undefined,
+  descendants: readonly Worktree[],
+  isFolderWorkspace: boolean
+): boolean {
+  return (
+    !!parent &&
+    descendants.length > 0 &&
+    canPreserveWorkspaceDeleteChildren(parent, descendants, isFolderWorkspace)
+  )
+}
+
 export async function detachWorktreeDeleteChildren(
   children: readonly Worktree[],
   updateWorktreeLineage: AppState['updateWorktreeLineage'],

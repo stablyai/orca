@@ -174,7 +174,6 @@ export function useWorktreeContextMenuModel({
     lineageById: worktreeLineageById,
     activity: sleepActivity
   })
-  const lineageDescendantCount = lineageMenuActions.descendants.length
   const subtreeSleepableWorktrees = lineageMenuActions.sleepableTargets
   const deletingContext = useMemo(
     () =>
@@ -388,7 +387,7 @@ export function useWorktreeContextMenuModel({
     hasParentLink,
     isDeleting,
     isMultiContext,
-    lineageDescendantCount,
+    lineageDescendants: lineageMenuActions.descendants,
     menuOpen,
     menuPoint,
     onContextMenuSelect,
@@ -398,6 +397,7 @@ export function useWorktreeContextMenuModel({
     ptyIdsByTabId,
     removesProject,
     repo,
+    repoMap,
     scopeRef,
     setContextWorktrees,
     setDeveloperMenuRevealed,

@@ -12,6 +12,7 @@ import {
   getWorkspaceDeleteLineageRecord
 } from './workspace-delete-lineage'
 import {
+  canKeepWorkspaceDeleteChildren,
   canPreserveWorkspaceDeleteChildren,
   captureWorkspaceDeleteRowLookup,
   detachWorktreeDeleteChildren,
@@ -31,6 +32,7 @@ export function useDetachWorktreeDeleteChildren({
   parent,
   lineage,
   isFolderWorkspace,
+  initialPreserveChildren = false,
   confirmedIdentities,
   resolveConfirmedTargets
 }: {
@@ -38,6 +40,7 @@ export function useDetachWorktreeDeleteChildren({
   parent: Worktree | null | undefined
   lineage: ReturnType<typeof getWorkspaceDeleteLineage>
   isFolderWorkspace: boolean
+  initialPreserveChildren?: boolean
   confirmedIdentities: readonly WorktreeDeleteIdentity[]
   resolveConfirmedTargets: (
     identities: readonly WorktreeDeleteIdentity[],
@@ -46,16 +49,19 @@ export function useDetachWorktreeDeleteChildren({
   ) => Worktree[] | null
 }) {
   const t = useTranslate()
-  const [preserveChildren, setPreserve] = useState(false)
+  // Null until the user toggles, so each open starts from the opener's choice.
+  const [preserveToggle, setPreserve] = useState<boolean | null>(null)
   const [isDetachingChildren, setIsDetachingChildren] = useState(false)
   const [detachError, setDetachError] = useState<string | null>(null)
-  const canPreserveChildren =
-    !!parent &&
-    lineage.descendants.length > 0 &&
-    canPreserveWorkspaceDeleteChildren(parent, lineage.descendants, isFolderWorkspace)
+  const canPreserveChildren = canKeepWorkspaceDeleteChildren(
+    parent,
+    lineage.descendants,
+    isFolderWorkspace
+  )
+  const preserveChildren = isOpen && (preserveToggle ?? initialPreserveChildren)
 
-  if (!isOpen && (preserveChildren || detachError)) {
-    setPreserve(false)
+  if (!isOpen && (preserveToggle !== null || detachError)) {
+    setPreserve(null)
     setDetachError(null)
   }
 

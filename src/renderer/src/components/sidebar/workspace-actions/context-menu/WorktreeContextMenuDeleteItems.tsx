@@ -4,6 +4,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useOptionalShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
+import { canKeepWorkspaceDeleteChildren } from '../deletion/detach-worktree-delete-children'
+import { isFolderWorkspaceDelete } from '../deletion/delete-worktree-dialog-copy'
 
 export function WorktreeContextMenuDeleteItems({ model }: { model: WorktreeContextMenuModel }) {
   const t = useTranslate()
@@ -14,11 +16,14 @@ export function WorktreeContextMenuDeleteItems({ model }: { model: WorktreeConte
     deleteLabel,
     folderWorkspaceId,
     handleDelete,
+    handleDeleteKeepChildren,
     isMultiContext,
-    lineageDescendantCount,
+    lineageDescendants,
     removesProject,
+    repoMap,
     worktree
   } = model
+  const lineageDescendantCount = lineageDescendants.length
   const projectMissing = !isMultiContext && worktree.isMainWorktree && !removesProject
   const label = contextDeletePending
     ? t('auto.components.sidebar.WorktreeContextMenu.b42391d8bf', 'Deleting…')
@@ -34,6 +39,17 @@ export function WorktreeContextMenuDeleteItems({ model }: { model: WorktreeConte
                 'Delete with Descendants…'
               )
             : t('auto.components.sidebar.WorktreeContextMenu.f4475537d8', 'Delete')
+  // Only beside "Delete with Descendants…", and only when the dialog would enable keeping children.
+  const canDeleteKeepingChildren =
+    !isMultiContext &&
+    !folderWorkspaceId &&
+    !removesProject &&
+    !worktree.isMainWorktree &&
+    canKeepWorkspaceDeleteChildren(
+      worktree,
+      lineageDescendants,
+      isFolderWorkspaceDelete(repoMap, worktree)
+    )
   return (
     <>
       {/* Git cannot remove primary checkouts; keep disabled Delete beside the enabled Remove Project action. */}
@@ -84,6 +100,19 @@ export function WorktreeContextMenuDeleteItems({ model }: { model: WorktreeConte
           <DropdownMenuShortcut>{deleteShortcut}</DropdownMenuShortcut>
         ) : null}
       </DropdownMenuItem>
+      {canDeleteKeepingChildren ? (
+        <DropdownMenuItem
+          variant="destructive"
+          onSelect={handleDeleteKeepChildren}
+          disabled={contextDeletePending}
+        >
+          <Trash2 className="size-3.5" />
+          {t(
+            'auto.components.sidebar.WorktreeContextMenu.deleteKeepChildren',
+            'Delete, Keep Children…'
+          )}
+        </DropdownMenuItem>
+      ) : null}
     </>
   )
 }
