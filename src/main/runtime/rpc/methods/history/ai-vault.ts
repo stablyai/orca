@@ -131,8 +131,8 @@ export const AI_VAULT_METHODS = [
       const projected = projectStructuredAiVaultSessions(
         result,
         (agent) => clientOpensStructuredChatFromHistory({ clientKind, clientCapabilities }, agent),
-        clientKind === undefined ||
-          clientCapabilities?.includes(AI_VAULT_CHAT_ROWS_CLIENT_CAPABILITY) === true
+        // Others keep a row per conversation: old Show more counts rows; plugin resume guards match by id.
+        clientCapabilities?.includes(AI_VAULT_CHAT_ROWS_CLIENT_CAPABILITY) === true
       )
       return conditionalAiVaultListResult(
         params.executionHostId
