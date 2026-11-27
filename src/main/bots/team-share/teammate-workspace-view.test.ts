@@ -322,6 +322,29 @@ describe('a workspace teammate on a shared agent', () => {
     expect(await clientEvents(OWNER, events)).toHaveLength(9)
   })
 
+  it('keeps a teammate’s Needs you count their own after the owner’s items change', async () => {
+    // The host counts the owner's own items with no account, and the teammate's with theirs.
+    vi.spyOn(runtime.botItems, 'needsYouCounts').mockImplementation(async (at, accountId) => ({
+      counts: { [SHARED.id]: accountId === 'acct-alice' ? 0 : 3, 'bot-other': 5 },
+      at
+    }))
+    const ownersCounts = { counts: { [SHARED.id]: 3, 'bot-other': 5 }, at: 1 }
+    const notice: RuntimeClientEvent = {
+      type: 'botsChanged',
+      botIds: [SHARED.id, 'bot-other'],
+      kinds: ['items'],
+      needsYou: ownersCounts
+    }
+    const [toTeammate] = await clientEvents(TEAMMATE, [notice])
+    expect(toTeammate).toMatchObject({ type: 'botsChanged', botIds: [SHARED.id] })
+    expect(toTeammate).not.toHaveProperty('needsYou')
+    expect(await call(TEAMMATE, 'bots.list', {})).toMatchObject({
+      result: { needsYou: { [SHARED.id]: 0 } }
+    })
+    const [toOwner] = await clientEvents(OWNER, [notice])
+    expect(toOwner).toMatchObject({ needsYou: ownersCounts })
+  })
+
   it('tells a teammate when the agent’s last worker leaves a repo, without the owner’s rows', async () => {
     const removed = await clientEvents(TEAMMATE, [], () => {
       scanned = [OWNERS, OWNERS_IN_AGENT_REPO]

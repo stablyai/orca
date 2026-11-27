@@ -14,7 +14,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
-import { botPickedOther, type BotChatPersonPick } from '../../../../../shared/bots/bot-chat-people'
+import {
+  botItemsPersonPick,
+  botPickedOther,
+  sameBotPersonPick,
+  type BotChatPersonPick
+} from '../../../../../shared/bots/bot-chat-people'
 import { BotAvatar } from '../BotAvatar'
 import {
   BotPersonPickItems,
@@ -70,7 +75,10 @@ export function BotItemsFilterButton({
   const label = t('bots.items.filter.label', 'Filter items')
   const person = people ? botPersonPickName(people.pick, people.entries) : null
   const named = group?.named ?? person
-  const on = group ? group.named !== null : isBotItemFilterOn(filter) || person !== null
+  const on = group
+    ? group.named !== null
+    : isBotItemFilterOn(filter) ||
+      (people !== null && !sameBotPersonPick(people.pick, botItemsPersonPick(people.entries, null)))
   // Checked bots lead, in the order they had as the menu opened, so rows don't jump under the pointer.
   const [botOrder, setBotOrder] = useState<readonly string[]>([])
   const orderBots = (): void =>

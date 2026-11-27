@@ -98,8 +98,9 @@ export function teammateClientEvent(
   return decision === 'pass' ? event : decision === 'drop' ? null : decision(event, sets)
 }
 
-/** A bots notice for the shared bot alone: other bots' ids, kinds, items and counts never reach a
- *  teammate. A kind `kindBots` names for other bots only is not about this one. */
+/** A bots notice for the shared bot alone: other bots' ids, kinds and items never reach a teammate.
+ *  A kind `kindBots` names for other bots only is not about this one. Its Needs you counts are the
+ *  owner's, so they are dropped and the teammate re-reads their own from bots.list. */
 function botsChangedFor(
   event: Extract<RuntimeClientEvent, { type: 'botsChanged' }>,
   botId: string
@@ -112,16 +113,12 @@ function botsChangedFor(
   if (kinds?.length === 0) {
     return null
   }
-  const count = event.needsYou?.counts[botId]
   const items = event.itemUids?.[botId]
-  const { kindBots: _others, ...rest } = event
+  const { kindBots: _others, needsYou: _owners, ...rest } = event
   return {
     ...rest,
     botIds: [botId],
     ...(kinds ? { kinds } : {}),
-    ...(event.needsYou
-      ? { needsYou: { ...event.needsYou, counts: count === undefined ? {} : { [botId]: count } } }
-      : {}),
     ...(event.itemUids ? { itemUids: items ? { [botId]: items } : {} } : {})
   }
 }
