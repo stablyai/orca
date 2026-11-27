@@ -1,6 +1,9 @@
 // Each person on a shared agent's host has their own tab list in its Home; every other workspace has
 // one list, shared. Through the real dispatcher, runtime, chat host and record store.
 import { randomUUID } from 'node:crypto'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import {
@@ -52,13 +55,25 @@ const sessions = (tabs: Tabs) => tabs.tabs.flatMap((tab) => tab.sessionId ?? [])
 
 // The open profile: a restart closes the one before it.
 let profile: AuthorityRig['profile'] | null = null
+let userData: string | null = null
 afterEach(async () => {
   // Every write lands before the shared teardown removes the profile's folder (#50219's CI flake).
   await chatTabCommandsSettled()
   await profile?.flushPendingOrThrowAsync()
   profile = null
   vi.unstubAllEnvs()
+  // A started chat's agent home may still be written after the test; it is outside the profile's folder.
+  if (userData) {
+    rmSync(userData, { recursive: true, force: true, maxRetries: 5 })
+    userData = null
+  }
 })
+
+/** The app's data folder, where a started chat's agent home is made: the test's own. */
+function stubUserData(): void {
+  userData ??= mkdtempSync(join(tmpdir(), 'orca-teammate-user-data-'))
+  vi.stubEnv('ORCA_USER_DATA_PATH', userData)
+}
 
 const share = (accountId: string, name: string) => ({
   kind: 'account' as const,
@@ -176,7 +191,7 @@ async function rig(options: { home?: 'rig' | 'other'; opened?: AuthorityRig } = 
   }
   const create = async (deviceId: string, where = worktree) => {
     // The agent's runtime home is made under the app's data folder: the test's own.
-    vi.stubEnv('ORCA_USER_DATA_PATH', root)
+    stubUserData()
     const sessionId = randomUUID()
     await call(deviceId, 'agentSession.create', {
       envelope: {
@@ -436,7 +451,7 @@ it('lists a teammate’s chats in the owner’s chat list under their name; the 
   // Their New chat acts for them, so it lists under their name once it holds a turn; an empty chat
   // lists for no one (the seeded C stands in for one that has talked).
   // The new chat's agent home is made under the app's data folder: the test's own.
-  vi.stubEnv('ORCA_USER_DATA_PATH', root)
+  stubUserData()
   const started = z
     .object({ sessionId: z.string() })
     .parse(await r.call('mate-desk', 'bots.session.start', { botId: TEAMMATE.botId }))
@@ -623,7 +638,7 @@ it('publishes an owner’s turn after a teammate’s call to the owner’s list 
     )
     return ensure()
   })
-  vi.stubEnv('ORCA_USER_DATA_PATH', root)
+  stubUserData()
   await r.call('mate-desk', 'bots.session.start', { botId: TEAMMATE.botId })
   await later
   await chatTabCommandsSettled()
@@ -647,7 +662,7 @@ it('restores the owner’s Home on a cold start a teammate’s first call begins
 it('leaves the owner’s list as it was when a teammate starts a new Home Chat', async () => {
   const r = await rig()
   const Opened = z.object({ sessionId: z.string() })
-  vi.stubEnv('ORCA_USER_DATA_PATH', root)
+  stubUserData()
   const home = Opened.parse(
     await r.call('mate-desk', 'bots.chat.open', { botId: TEAMMATE.botId })
   ).sessionId
