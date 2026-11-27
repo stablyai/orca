@@ -19,6 +19,9 @@ export class CodexSharedServerUnrouted {
   /** A marker was evicted while an open was pending, so until opens settle any claim may have lost
    *  frames. */
   private lostUnknown = false
+  /** A marker was evicted where a kept chat may own the thread: every restored chat's claim may
+   *  have lost frames, for as long as this server lives. */
+  private keptLostUnknown = false
 
   constructor(
     private readonly drop: (frame: CodexSharedServerFrame) => void,
@@ -74,14 +77,16 @@ export class CodexSharedServerUnrouted {
     }
     this.deferred = false
     this.lostUnknown = false
+    this.keptLostUnknown = false
     this.lost.clear()
     this.buckets.clear()
     this.count = 0
   }
 
-  /** Whether frames held for this thread were dropped before anyone claimed it. */
-  takeLost(threadId: string): boolean {
-    return this.lost.delete(threadId) || this.lostUnknown
+  /** Whether frames held for this thread were dropped before anyone claimed it; `kept`: the claim
+   *  is a restored chat's. */
+  takeLost(threadId: string, kept = false): boolean {
+    return this.lost.delete(threadId) || this.lostUnknown || (kept && this.keptLostUnknown)
   }
 
   /** `lost`: dropped by the cap, maybe while an open waits for these frames, or expired where a
@@ -99,6 +104,7 @@ export class CodexSharedServerUnrouted {
       if (!oldest.done) {
         this.lost.delete(oldest.value)
         this.lostUnknown ||= this.opensPending()
+        this.keptLostUnknown ||= this.expiryLoses()
       }
     }
   }

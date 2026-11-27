@@ -218,11 +218,15 @@ export class CodexSharedServerKeep implements CodexSharedLeaseRelay, CodexShared
 
   /** The chat no longer wants its part (deleted, or its record names another run): its held
    *  threads go, with their commands stopped under its tag and Codex told to let them go. */
-  async releaseExpected(sessionId: string): Promise<void> {
+  /** True once its turns were interrupted (or it held none here). `retry`: a stop that fails
+   *  leaves the chat expected, so the next ask (a delete's retry) stops it again. */
+  async releaseExpected(sessionId: string, retry = false): Promise<boolean> {
     const released = this.server.recovery.release(sessionId)
-    if (released) {
-      await this.letGo(released)
+    const ended = released ? await this.letGo(released) : true
+    if (!ended && retry && released?.chat && !this.server.exited) {
+      this.server.recovery.expect(released.chat)
     }
+    return ended
   }
 
   /** Unresolved roots due a read: an owner found moves them, a top-level root lets them go. */
@@ -260,29 +264,31 @@ export class CodexSharedServerKeep implements CodexSharedLeaseRelay, CodexShared
   }
 
   /** Threads no chat will take back: their turns and commands end, and Codex lets them go. */
-  async endThreads(threads: readonly string[], workload: string | null): Promise<void> {
+  async endThreads(threads: readonly string[], workload: string | null): Promise<boolean> {
     const connection = this.server.physicalConnection
-    if (connection) {
-      await endCodexSharedThreads({
-        connection,
-        reads: this.limited(connection),
-        threads,
-        workload,
-        serverPid: this.server.pid,
-        ...(this.server.sweep ? { sweep: this.server.sweep } : {})
-      }).catch(() => {})
+    if (!connection) {
+      return threads.length === 0
     }
+    return endCodexSharedThreads({
+      connection,
+      reads: this.limited(connection),
+      threads,
+      workload,
+      serverPid: this.server.pid,
+      ...(this.server.sweep ? { sweep: this.server.sweep } : {})
+    }).catch(() => false)
   }
 
-  private async letGo(released: CodexRecoveredGroup | null): Promise<void> {
+  private async letGo(released: CodexRecoveredGroup | null): Promise<boolean> {
     if (!released) {
-      return
+      return true
     }
     this.server.recovery.drop(released)
-    await this.endThreads(
+    const ended = await this.endThreads(
       released.threads.map(([threadId]) => threadId),
       released.chat?.workload ?? null
     )
     this.server.ended()
+    return ended
   }
 }

@@ -5,6 +5,7 @@ import {
   type KeptProviderRelay
 } from '../../../provider-relay/app-provider-relays'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 import { CodexSharedServer } from './codex-shared-server'
 import type { CodexSharedServerLease } from './codex-shared-server-lease'
 import type { CodexSharedServerProcessSweep } from './codex-shared-server-chat-workload'
@@ -19,6 +20,9 @@ import {
   type CodexPooledServerPlacement
 } from './codex-shared-server-kept-runs'
 
+/** How long a delete waits for a kept server's attach before refusing (a later delete asks again). */
+const DELETE_ATTACH_TIMEOUT_MS = 60_000
+
 /** What the kept side needs from the pool that owns every server. */
 type PoolHost = {
   track: (server: CodexSharedServer) => CodexSharedServer
@@ -30,6 +34,8 @@ type PoolHost = {
 export class CodexKeptServers {
   private readonly byRelay = new Map<string, CodexSharedServer>()
   private readonly placements = new WeakMap<CodexSharedServer, CodexPooledServerPlacement>()
+  /** Deletes stopping a chat's kept run; a second delete or a reopen waits for the first. */
+  private readonly stopping = new Map<string, Promise<boolean>>()
 
   constructor(private readonly host: PoolHost) {}
 
@@ -62,6 +68,7 @@ export class CodexKeptServers {
     run: CodexPooledRun,
     spec: CodexSharedServer['spec']
   ): Promise<{ server: CodexSharedServer; chat: CodexRecoveredChat } | null> {
+    await this.stopping.get(sessionId)
     let server = this.byRelay.get(run.relayId)
     if (!server || server.exited) {
       const relay = await codexPooledRunGate(sessionId)
@@ -87,7 +94,17 @@ export class CodexKeptServers {
    * once that server is attached (by this ask, or one already under way). False when that run may
    * still be kept but can't be reached, so the delete waits rather than leave it running.
    */
-  async stopDeleted(record: AgentSessionRecord): Promise<boolean> {
+  stopDeleted(record: AgentSessionRecord): Promise<boolean> {
+    const { sessionId } = record
+    let stop = this.stopping.get(sessionId)
+    if (!stop) {
+      stop = this.stopRun(record).finally(() => this.stopping.delete(sessionId))
+      this.stopping.set(sessionId, stop)
+    }
+    return stop
+  }
+
+  private async stopRun(record: AgentSessionRecord): Promise<boolean> {
     const run = codexRecordPooledRun(record)
     if (!run) {
       return true
@@ -105,13 +122,14 @@ export class CodexKeptServers {
         server.draining = true
       }
     }
-    try {
-      await server.ready
-    } catch {
+    const ready = server.ready.then(
+      () => true,
+      () => false
+    )
+    if (!(await withTimeout(ready, DELETE_ATTACH_TIMEOUT_MS, false))) {
       return false
     }
-    await server.keep.releaseExpected(record.sessionId)
-    return true
+    return server.keep.releaseExpected(record.sessionId, true)
   }
 
   private reattachServer(

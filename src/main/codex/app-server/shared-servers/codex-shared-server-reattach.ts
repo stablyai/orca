@@ -19,13 +19,16 @@ const MAX_ANCESTOR_ROUNDS = 8
 type Connection = Pick<CodexAppServerConnection, 'request'>
 
 const LISTING_ATTEMPTS = 3
+/** Pages one listing reads at most; a server that keeps answering with more is listed partly. */
+const LISTING_MAX_PAGES = 64
 
 /** Every loaded thread, page by page up to what the server may hold, each page retried. A listing
  *  that still fails is partial: it only leaves threads undiscovered, it never settles a chat. */
 async function listLoaded(connection: Connection): Promise<{ ids: string[]; complete: boolean }> {
   const ids: string[] = []
   let cursor: string | null = null
-  for (let failures = 0; failures < LISTING_ATTEMPTS;) {
+  const cursors = new Set<string>()
+  for (let failures = 0, pages = 0; failures < LISTING_ATTEMPTS && pages < LISTING_MAX_PAGES;) {
     try {
       const page = readRecord(
         await connection.request(
@@ -37,13 +40,16 @@ async function listLoaded(connection: Connection): Promise<{ ids: string[]; comp
       ids.push(
         ...(Array.isArray(page.data) ? page.data.filter((id) => typeof id === 'string') : [])
       )
+      pages += 1
       cursor = typeof page.nextCursor === 'string' ? page.nextCursor : null
       if (cursor === null) {
         return { ids, complete: true }
       }
-      if (ids.length >= CODEX_SHARED_RECOVERY_MAX_IDENTITIES) {
+      // A cursor seen before would list the same pages again.
+      if (ids.length >= CODEX_SHARED_RECOVERY_MAX_IDENTITIES || cursors.has(cursor)) {
         break
       }
+      cursors.add(cursor)
     } catch {
       failures += 1
     }

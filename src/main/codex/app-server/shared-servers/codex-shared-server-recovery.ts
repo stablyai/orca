@@ -147,7 +147,7 @@ export class CodexSharedServerRecovery {
         this.holdUnowned(threadId)
       } else {
         // Past the cap an unknown thread gets today's unrouted handling; any chat may own it.
-        this.cutAll()
+        this.cutEverything = true
       }
     }
     const group = this.groupOf.get(threadId)
@@ -221,11 +221,6 @@ export class CodexSharedServerRecovery {
     }
   }
 
-  /** Every group, held now or later, is cut when it is taken. */
-  private cutAll(): void {
-    this.cutEverything = true
-  }
-
   private remove(group: RecoveryGroup): CodexRecoveredGroup {
     this.groups.delete(group.root)
     this.droppable.delete(group)
@@ -276,26 +271,34 @@ export class CodexSharedServerRecovery {
       return
     }
     over += Math.max(room / 8, MIN_DROP_HEADROOM_BYTES)
-    while (over > 0) {
-      const largest = this.largest((group) => group.droppable, this.droppable)
-      if (!largest) {
+    // The largest goes first; past it, groups in order, each visited once per overflow.
+    const largest = this.largest((group) => group.droppable, this.droppable)
+    over -= largest ? this.dropOldest(largest, over) : 0
+    for (const group of this.droppable) {
+      if (over <= 0) {
         return
       }
-      let freed = 0
-      const kept: Held[] = []
-      for (const held of largest.frames) {
-        if (freed < over && held.frame.kind !== 'request') {
-          freed += held.bytes
-          this.seqs.gone(held)
-        } else {
-          kept.push(held)
-        }
-      }
-      largest.frames = kept
-      this.shrink(largest, freed, freed)
-      largest.cut = true
-      over -= freed
+      over -= this.dropOldest(group, over)
     }
+  }
+
+  private dropOldest(group: RecoveryGroup, over: number): number {
+    let freed = 0
+    const kept: Held[] = []
+    for (const held of group.frames) {
+      if (freed < over && held.frame.kind !== 'request') {
+        freed += held.bytes
+        this.seqs.gone(held)
+      } else {
+        kept.push(held)
+      }
+    }
+    if (freed > 0) {
+      group.frames = kept
+      this.shrink(group, freed, freed)
+      group.cut = true
+    }
+    return freed
   }
 
   private shrink(group: RecoveryGroup, bytes: number, droppable: number): void {

@@ -111,7 +111,7 @@ export class CodexSharedServerRouter {
     }
     // Its early frames were dropped to bound memory: the chat reopens it from Codex's history
     // rather than run on with events missing.
-    const lost = this.unrouted.takeLost(threadId)
+    const lost = this.unrouted.takeLost(threadId, lease.restored !== null)
     if (lost) {
       lease.liveThreads.add(threadId)
     }

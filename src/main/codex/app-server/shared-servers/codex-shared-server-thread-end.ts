@@ -12,7 +12,8 @@ import { CODEX_SHARED_REATTACH_READS } from './codex-shared-server-reattach'
 const END_TIMEOUT_MS = 5_000
 
 /**
- * Ends what threads no chat will take back still run on a kept server: each one's latest turn is
+ * Ends what threads no chat will take back still run on a kept server (true once every one's turn
+ * was read and, if running, interrupted): each one's latest turn is
  * interrupted (it may have started before this app attached, so it is read, not remembered), its
  * commands are stopped (by its chat's tag when one is known), and Codex lets the threads go.
  */
@@ -25,28 +26,32 @@ export async function endCodexSharedThreads(input: {
   workload: string | null
   serverPid: number | undefined
   sweep?: CodexSharedServerProcessSweep
-}): Promise<void> {
+}): Promise<boolean> {
   const { connection, threads } = input
   if (threads.length === 0 || connection.closed) {
-    return
+    return threads.length === 0
   }
-  await mapSettledWithConcurrency(threads, CODEX_SHARED_REATTACH_READS, async (threadId) => {
-    const page = readRecord(
-      await input.reads.request(
-        'thread/turns/list',
-        { threadId, sortDirection: 'desc', limit: 1 },
-        { timeoutMs: END_TIMEOUT_MS }
+  const interrupts = await mapSettledWithConcurrency(
+    threads,
+    CODEX_SHARED_REATTACH_READS,
+    async (threadId) => {
+      const page = readRecord(
+        await input.reads.request(
+          'thread/turns/list',
+          { threadId, sortDirection: 'desc', limit: 1 },
+          { timeoutMs: END_TIMEOUT_MS }
+        )
       )
-    )
-    const turn = readRecord(Array.isArray(page.data) ? page.data[0] : null)
-    if (typeof turn.id === 'string' && readCodexTurnStatus(turn) === 'inProgress') {
-      await input.reads.request(
-        'turn/interrupt',
-        { threadId, turnId: turn.id },
-        { timeoutMs: END_TIMEOUT_MS }
-      )
+      const turn = readRecord(Array.isArray(page.data) ? page.data[0] : null)
+      if (typeof turn.id === 'string' && readCodexTurnStatus(turn) === 'inProgress') {
+        await input.reads.request(
+          'turn/interrupt',
+          { threadId, turnId: turn.id },
+          { timeoutMs: END_TIMEOUT_MS }
+        )
+      }
     }
-  })
+  )
   const sweep = input.workload === null ? async () => true : input.sweep
   await stopCodexSharedChatWorkload({
     rpc: input.reads,
@@ -58,4 +63,6 @@ export async function endCodexSharedThreads(input: {
     timeoutMs: END_TIMEOUT_MS
   }).catch(() => false)
   await unsubscribeCodexThreads(input.reads, threads, END_TIMEOUT_MS).catch(() => false)
+  // Stopped as a close counts it: each turn was read and, if running, interrupted.
+  return interrupts.every((read) => read.status === 'fulfilled')
 }
