@@ -14,6 +14,7 @@ export function hydrateBotSidebarState(
   UISlice,
   | 'hideBotCreatedWorkspaces'
   | 'botSidebarView'
+  | 'hiddenBotSidebarKeys'
   | 'botChatFolds'
   | 'sidebarBotsHeight'
   | 'sidebarProjectsFirst'
@@ -21,6 +22,9 @@ export function hydrateBotSidebarState(
   return {
     hideBotCreatedWorkspaces: ui.hideBotCreatedWorkspaces !== false,
     botSidebarView: normalizeBotSidebarView(ui.botSidebarView),
+    hiddenBotSidebarKeys: Array.isArray(ui.hiddenBotSidebarKeys)
+      ? ui.hiddenBotSidebarKeys.filter((key) => typeof key === 'string')
+      : [],
     botChatFolds: normalizeBotChatFolds(ui.botChatFolds),
     sidebarBotsHeight: normalizeSidebarBotsHeight(ui.sidebarBotsHeight),
     sidebarProjectsFirst: ui.sidebarProjectsFirst === true

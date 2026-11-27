@@ -1,5 +1,5 @@
 import React from 'react'
-import { Moon, Pause } from 'lucide-react'
+import { Eye, Moon, Pause } from 'lucide-react'
 import { DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { FilterToggleRow } from '@/components/sidebar/worktree-list/controls/FilterToggleRow'
 import { OptionChoiceSubmenu } from '@/components/sidebar/worktree-list/controls/OptionChoiceSubmenu'
@@ -32,6 +32,8 @@ export function BotSidebarOptionsMenu(): React.JSX.Element {
   const t = useTranslate()
   const view = useAppStore((s) => s.botSidebarView)
   const setView = useAppStore((s) => s.setBotSidebarView)
+  const showHiddenBots = useAppStore((s) => s.showHiddenBots)
+  const setShowHiddenBots = useAppStore((s) => s.setShowHiddenBots)
   const activeFilterCount = countActiveBotSidebarFilters(view)
   const title = t('bots.options.title', 'Bot options')
   const choices = BOT_SIDEBAR_SORT_CHOICES.map(({ id }) => ({
@@ -70,6 +72,12 @@ export function BotSidebarOptionsMenu(): React.JSX.Element {
         label={t('bots.options.hidePaused', 'Hide paused bots')}
         checked={view.hidePausedBots}
         onChange={(hidePausedBots) => setView({ hidePausedBots })}
+      />
+      <FilterToggleRow
+        icon={<Eye className="size-3.5" />}
+        label={t('bots.options.showHidden', 'Show hidden bots')}
+        checked={showHiddenBots}
+        onChange={setShowHiddenBots}
       />
       <FilterToggleRow
         icon={<Moon className="size-3.5" />}

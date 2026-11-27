@@ -28,6 +28,8 @@ export type UseProjectGroupHeaderDragArgs = RootProjectHeaderDrag & {
     readonly string[]
   >
   projectGroupById: ReadonlyMap<string, ProjectGroupHeaderDragItem>
+  /** Preserve filtered rows' slots when committing a reorder of the visible rows. */
+  fullSidebarOrder?: readonly string[]
   onCommitProjectGroupTabOrder: (groupId: string, tabOrder: number) => void
   getScrollContainer: () => HTMLElement | null
   /** Drag a floating copy of the row, as workspace rows do, rather than lifting it in place. */

@@ -110,17 +110,21 @@ export function setBotSidebarSearchHasQuery(hasQuery: boolean): void {
  * Whether Cmd+K may reveal this entry: the sidebar shows an unfolded Bots section, the entry is listed under
  * the current view options, and the sidebar's own search isn't showing results. When false, nothing changes.
  */
-export function canRevealBotSidebarEntry(entry: {
-  kind: 'bot' | 'group'
-  paused: boolean
-}): boolean {
+export function canRevealBotSidebarEntry(
+  sidebarKey: string,
+  entry: { kind: 'bot' | 'group'; paused: boolean }
+): boolean {
   const state = useAppStore.getState()
+  const hidden =
+    entry.kind === 'bot' &&
+    ((entry.paused && state.botSidebarView.hidePausedBots) ||
+      (!state.showHiddenBots && state.hiddenBotSidebarKeys.includes(sidebarKey)))
   return (
     state.sidebarOpen &&
     !state.collapsedGroups.has(BOTS_GROUP_KEY) &&
     (state.sidebarBody ?? 'workspaces') !== 'agents' &&
     readBotsEnabled() &&
-    !(entry.kind === 'bot' && entry.paused && state.botSidebarView.hidePausedBots) &&
+    !hidden &&
     !sidebarSearchHasQuery
   )
 }
@@ -174,7 +178,7 @@ export function revealBotSidebarRowAfterOpen({
     generation === currentBotPaletteGeneration() && performance.now() < deadline
   const eligible = (): boolean => {
     const entry = readEntry()
-    return entry !== null && canRevealBotSidebarEntry(entry)
+    return entry !== null && canRevealBotSidebarEntry(sidebarKey, entry)
   }
   const wait = (): void => {
     if (!live()) {

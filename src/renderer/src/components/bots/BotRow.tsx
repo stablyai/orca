@@ -1,6 +1,6 @@
 import React, { useEffect, useId } from 'react'
 import { openBotSettings } from './bot-settings-open'
-import { ChevronDown, Copy, Pause, Play, Server, Settings, Trash2 } from 'lucide-react'
+import { ChevronDown, Copy, Eye, EyeOff, Pause, Play, Server, Settings, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu'
 import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
@@ -9,6 +9,7 @@ import { openBotHome, updateBot } from '@/lib/bot-catalog'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useBotUpNextUnseen } from '@/lib/bot-up-next-unseen'
 import { cn } from '@/lib/class-names'
+import { useAppStore } from '@/store'
 import { getWorktreeStatusLabel } from '@/lib/workspace/activity/worktree-status'
 import type { Bot } from '../../../../shared/bot-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
@@ -65,6 +66,8 @@ export function BotRow({
   const hostPill = hostLabel ? <BotRowHostIcon label={hostLabel} /> : null
   // The Bots search matches purposes from what each listed row shows; it never reads SOUL.md.
   const purposeKey = botSidebarEntryKey(bot)
+  const hidden = useAppStore((s) => s.hiddenBotSidebarKeys.includes(purposeKey))
+  const setBotSidebarHidden = useAppStore((s) => s.setBotSidebarHidden)
   useEffect(() => {
     setBotPurpose(purposeKey, description)
   }, [purposeKey, description])
@@ -158,6 +161,10 @@ export function BotRow({
           >
             {bot.paused ? <Play className="size-3.5" /> : <Pause className="size-3.5" />}
             {bot.paused ? t('bots.row.resume', 'Resume bot') : t('bots.row.pause', 'Pause bot')}
+          </ContextMenuItem>
+          <ContextMenuItem onSelect={() => setBotSidebarHidden(purposeKey, !hidden)}>
+            {hidden ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
+            {hidden ? t('bots.row.unhide', 'Unhide bot') : t('bots.row.hide', 'Hide from sidebar')}
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem onSelect={() => window.api.ui.writeClipboardText(home.folderPath)}>

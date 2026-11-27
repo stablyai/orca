@@ -4,6 +4,8 @@ import { useAppStore } from '@/store'
 import { selectSidebarChildrenByParentIdentity } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { useWorktreeActivityStatuses } from '@/components/sidebar/workspace-card/activity/use-worktree-activity-statuses'
 import { useBotWorkerWorkspaceStatuses } from './use-bot-worker-statuses'
+import type { ProjectGroupHeaderDragItem } from '@/components/sidebar/worktree-list/drag/project-group-header-drop'
+import { readBotHostState } from '@/lib/bot-catalog-snapshot'
 import { useOrderHeldWhileEngaged } from '@/components/sidebar/worktree-list/listing/use-order-hold'
 import { getFolderWorkspaceChildWorktrees } from '../../../../shared/folder-workspace-child-worktrees'
 import { getFolderWorkspaceHostIdentity } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
@@ -52,12 +54,26 @@ export function useBotHomeWorkers(homes: readonly FolderWorkspace[]): {
 type Entry = BotSidebarEntry<Bot, BotGroup, FolderWorkspace>
 
 /** The Bots section's entries as Bot options list them, held still while the pointer is on the list. */
-export function useBotSidebarArrangement(entries: readonly Entry[]): Entry[] {
+export function useBotSidebarArrangement(savedEntries: readonly Entry[]): {
+  entries: Entry[]
+  eligibleEntries: readonly Entry[]
+  fullSidebarOrder: readonly string[] | undefined
+  dragItemById: ReadonlyMap<string, ProjectGroupHeaderDragItem>
+} {
   const view = useAppStore((s) => s.botSidebarView)
-  const homes = useMemo(() => entries.map((entry) => entry.home), [entries])
+  const showHiddenBots = useAppStore((s) => s.showHiddenBots)
+  const hiddenBotSidebarKeys = useAppStore((s) => s.hiddenBotSidebarKeys)
+  const eligibleEntries = useMemo(() => {
+    if (showHiddenBots || hiddenBotSidebarKeys.length === 0) {
+      return savedEntries
+    }
+    const hiddenKeys = new Set(hiddenBotSidebarKeys)
+    return savedEntries.filter((entry) => entry.kind !== 'bot' || !hiddenKeys.has(entry.id))
+  }, [savedEntries, showHiddenBots, hiddenBotSidebarKeys])
+  const homes = useMemo(() => eligibleEntries.map((entry) => entry.home), [eligibleEntries])
   const homeWorkers = useBotHomeWorkers(homes)
   const ranked = arrangeBotSidebarEntries(
-    entries.map((entry, index) => ({ ...entry, index })),
+    eligibleEntries.map((entry, index) => ({ ...entry, index })),
     view,
     ({ index, ...entry }) => {
       const { own, workers, workerStatuses } = homeWorkers[index]!
@@ -72,8 +88,34 @@ export function useBotSidebarArrangement(entries: readonly Entry[]): Entry[] {
     }
   ).map(({ id }) => id)
   const shownIds = useOrderHeldWhileEngaged(ranked, view.sortBy, 'bots')
-  return useMemo(() => {
-    const byId = new Map(entries.map((entry) => [entry.id, entry]))
+  const entries = useMemo(() => {
+    const byId = new Map(eligibleEntries.map((entry) => [entry.id, entry]))
     return shownIds.flatMap((id) => byId.get(id) ?? [])
-  }, [entries, shownIds])
+  }, [eligibleEntries, shownIds])
+  const hasHiddenBots = eligibleEntries.length !== savedEntries.length
+  const fullSidebarOrder = useMemo(
+    () => (hasHiddenBots ? savedEntries.map(({ id }) => id) : undefined),
+    [hasHiddenBots, savedEntries]
+  )
+  const dragItemById = useMemo(
+    () =>
+      new Map<string, ProjectGroupHeaderDragItem>(
+        // An entry never placed takes no order, so the first drop writes one for every entry.
+        savedEntries.map((entry) => {
+          const owner = entry.kind === 'bot' ? entry.bot : entry.group
+          return [
+            entry.id,
+            {
+              parentGroupId: null,
+              tabOrder: owner.sidebarOrder ?? -1,
+              canSaveOrder: hasHiddenBots
+                ? () => readBotHostState(owner.hostId) === 'live'
+                : undefined
+            }
+          ]
+        })
+      ),
+    [hasHiddenBots, savedEntries]
+  )
+  return { entries, eligibleEntries, fullSidebarOrder, dragItemById }
 }

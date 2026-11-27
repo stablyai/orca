@@ -30,6 +30,7 @@ import { useHeaderDragBodyCursor } from './header-drag-body-cursor'
 export function useProjectGroupHeaderDrag({
   sidebarProjectGroupHeaderIdsByBucket,
   projectGroupById,
+  fullSidebarOrder,
   onCommitProjectGroupTabOrder,
   rootProjectHeaderKeys,
   onCommitRootProjectOrder,
@@ -46,10 +47,10 @@ export function useProjectGroupHeaderDrag({
   projectGroupByIdRef.current = projectGroupById
   const onCommitProjectGroupTabOrderRef = useRef(onCommitProjectGroupTabOrder)
   onCommitProjectGroupTabOrderRef.current = onCommitProjectGroupTabOrder
-  const rootDragRef = useRef({ rootProjectHeaderKeys, onCommitRootProjectOrder })
+  const rootDragRef = useRef({ rootProjectHeaderKeys, onCommitRootProjectOrder, fullSidebarOrder })
   useLayoutEffect(() => {
-    rootDragRef.current = { rootProjectHeaderKeys, onCommitRootProjectOrder }
-  }, [rootProjectHeaderKeys, onCommitRootProjectOrder])
+    rootDragRef.current = { rootProjectHeaderKeys, onCommitRootProjectOrder, fullSidebarOrder }
+  }, [rootProjectHeaderKeys, onCommitRootProjectOrder, fullSidebarOrder])
   const getContainerRef = useRef(getScrollContainer)
   getContainerRef.current = getScrollContainer
   const autoscrollLastFrameTimeRef = useRef<number | null>(null)
@@ -157,6 +158,7 @@ export function useProjectGroupHeaderDrag({
         sidebarDropIndex,
         onCommitRootProjectOrder: rootDragRef.current.onCommitRootProjectOrder,
         projectGroupById: projectGroupByIdRef.current,
+        fullSidebarOrder: rootDragRef.current.fullSidebarOrder,
         onCommitProjectGroupTabOrder: onCommitProjectGroupTabOrderRef.current
       })
     },

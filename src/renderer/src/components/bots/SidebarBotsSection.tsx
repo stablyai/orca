@@ -14,10 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useFloatingProjectGroupHeaderDrag } from '@/components/sidebar/worktree-list/drag/use-floating-project-group-header-drag'
-import {
-  ROOT_PROJECT_GROUP_HEADER_BUCKET,
-  type ProjectGroupHeaderDragItem
-} from '@/components/sidebar/worktree-list/drag/project-group-header-drop'
+import { ROOT_PROJECT_GROUP_HEADER_BUCKET } from '@/components/sidebar/worktree-list/drag/project-group-header-drop'
 import { WorktreeSidebarDropIndicator } from '@/components/sidebar/worktree-list/drag/WorktreeSidebarDropIndicator'
 import { SidebarSectionHeader } from '@/components/sidebar/SidebarSectionHeader'
 import { selectActiveBotGroupRoomId } from '@/lib/bot-group-catalog'
@@ -101,7 +98,8 @@ export function SidebarBotsSection({
     () => getHostKeyedBotSidebarEntries(bots, groups, folderWorkspaces),
     [bots, groups, folderWorkspaces]
   )
-  const entries = useBotSidebarArrangement(savedEntries)
+  const { entries, eligibleEntries, fullSidebarOrder, dragItemById } =
+    useBotSidebarArrangement(savedEntries)
   const listRef = useRef<HTMLDivElement>(null)
   // Search shows the list in place and nothing drags while it is open. Its toggle lives only in the
   // unfolded header, so a search always starts unfolded.
@@ -129,23 +127,9 @@ export function SidebarBotsSection({
     () => new Map([[ROOT_PROJECT_GROUP_HEADER_BUCKET, entries.map(({ id }) => id)]]),
     [entries]
   )
-  const dragItemById = useMemo(
-    () =>
-      new Map<string, ProjectGroupHeaderDragItem>(
-        // An entry never placed takes no order, so the first drop writes one for every entry.
-        entries.map((entry) => [
-          entry.id,
-          {
-            parentGroupId: null,
-            tabOrder: (entry.kind === 'bot' ? entry.bot : entry.group).sidebarOrder ?? -1
-          }
-        ])
-      ),
-    [entries]
-  )
   const commitOrder = useCallback(
     (id: string, sidebarOrder: number) => {
-      const entry = entries.find((candidate) => candidate.id === id)
+      const entry = savedEntries.find((candidate) => candidate.id === id)
       // A disconnected server's rows keep their place; a first drop doesn't write to them.
       if (
         !entry ||
@@ -162,11 +146,12 @@ export function SidebarBotsSection({
           : updateBot(entry.bot, { sidebarOrder })
       saved.catch((error: unknown) => toast.error(botErrorMessage(error)))
     },
-    [entries]
+    [savedEntries]
   )
   const drag = useFloatingProjectGroupHeaderDrag({
     sidebarProjectGroupHeaderIdsByBucket: botIdsByBucket,
     projectGroupById: dragItemById,
+    fullSidebarOrder,
     onCommitProjectGroupTabOrder: commitOrder,
     getScrollContainer: () => listRef.current
   })
@@ -314,7 +299,7 @@ export function SidebarBotsSection({
         regionRef={search.regionRef}
         panel={{
           entries,
-          allEntries: savedEntries,
+          allEntries: eligibleEntries,
           bots,
           onSelect: search.select,
           onSupersede: search.supersede,
@@ -335,7 +320,9 @@ export function SidebarBotsSection({
             {savedEntries.length > 0 && entries.length === 0 ? (
               collapsed ? null : (
                 <div className="px-4 text-xs text-muted-foreground">
-                  {t('bots.options.allHidden', 'All bots are paused and hidden.')}
+                  {!fullSidebarOrder
+                    ? t('bots.options.allHidden', 'All bots are paused and hidden.')
+                    : t('bots.options.noVisibleBots', 'Use Bot options to show hidden bots.')}
                 </div>
               )
             ) : entries.length === 0 ? (

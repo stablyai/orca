@@ -65,6 +65,10 @@ export type UISlicePreferences = {
   setHideBotCreatedWorkspaces: (v: boolean) => void
   botSidebarView: BotSidebarView
   setBotSidebarView: (patch: Partial<BotSidebarView>) => void
+  hiddenBotSidebarKeys: readonly string[]
+  setBotSidebarHidden: (key: string, hidden: boolean) => void
+  showHiddenBots: boolean
+  setShowHiddenBots: (showHiddenBots: boolean) => void
   botChatFolds: Record<string, BotChatFold>
   /** A chat's manual fold, shared by Activity and the sidebar; undefined while it folds by default. */
   botChatFold: (hostId: string, botId: string, chatId: string) => BotChatFold | undefined

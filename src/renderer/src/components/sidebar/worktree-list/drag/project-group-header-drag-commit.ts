@@ -10,6 +10,7 @@ export function commitProjectGroupHeaderDragDrop(
     session: ProjectGroupHeaderDragSession
     sidebarDropIndex: number
     projectGroupById: ReadonlyMap<string, ProjectGroupHeaderDragItem>
+    fullSidebarOrder?: readonly string[]
     onCommitProjectGroupTabOrder: (groupId: string, tabOrder: number) => void
   }
 ): void {
@@ -25,7 +26,8 @@ export function commitProjectGroupHeaderDragDrop(
     sidebarProjectGroupHeaderIds: args.session.sidebarProjectGroupHeaderIds,
     draggedGroupId: args.session.groupId,
     sidebarDropIndex: args.sidebarDropIndex,
-    projectGroupById: args.projectGroupById
+    projectGroupById: args.projectGroupById,
+    fullSidebarOrder: args.fullSidebarOrder
   })
   for (const update of updates) {
     args.onCommitProjectGroupTabOrder(update.groupId, update.tabOrder)

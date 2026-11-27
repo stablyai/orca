@@ -21,7 +21,9 @@ export type ProjectGroupHeaderDragRect = {
 export type ProjectGroupHeaderDropPreview = WorktreeSidebarHeaderDropPreview
 
 /** What the drag reads of a header: its bucket and its order. The Bots section's rows reuse it. */
-export type ProjectGroupHeaderDragItem = Pick<ProjectGroup, 'parentGroupId' | 'tabOrder'>
+export type ProjectGroupHeaderDragItem = Pick<ProjectGroup, 'parentGroupId' | 'tabOrder'> & {
+  canSaveOrder?: () => boolean
+}
 
 export type ProjectGroupTabOrderUpdate = {
   groupId: string
@@ -92,6 +94,7 @@ export function getProjectGroupTabOrderUpdatesForSidebarDrop(args: {
   draggedGroupId: string
   sidebarDropIndex: number
   projectGroupById: ReadonlyMap<string, ProjectGroupHeaderDragItem>
+  fullSidebarOrder?: readonly string[]
 }): ProjectGroupTabOrderUpdate[] {
   const sourceIndex = args.sidebarProjectGroupHeaderIds.indexOf(args.draggedGroupId)
   if (sourceIndex === -1) {
@@ -113,14 +116,25 @@ export function getProjectGroupTabOrderUpdatesForSidebarDrop(args: {
   const orderedIds = siblingIds.slice()
   orderedIds.splice(siblingDropIndex, 0, args.draggedGroupId)
 
+  const visibleIds = new Set(orderedIds)
+  let nextVisibleIndex = 0
+  const fullOrder = args.fullSidebarOrder?.map((id) =>
+    visibleIds.has(id) ? (orderedIds[nextVisibleIndex++] ?? id) : id
+  )
+  if (fullOrder && nextVisibleIndex !== orderedIds.length) {
+    return []
+  }
   const updates: ProjectGroupTabOrderUpdate[] = []
-  for (const [index, groupId] of orderedIds.entries()) {
+  for (const [index, groupId] of (fullOrder ?? orderedIds).entries()) {
     const group = args.projectGroupById.get(groupId)
     if (!group) {
       continue
     }
     // Equal legacy ranks require updating the full order to represent an interior insertion.
     if (group.tabOrder !== index) {
+      if (group.canSaveOrder?.() === false) {
+        return []
+      }
       updates.push({ groupId, tabOrder: index })
     }
   }

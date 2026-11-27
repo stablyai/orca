@@ -17,6 +17,18 @@ export function createUiBotPreferenceActions(set: UISliceSet, get: UISliceGet): 
       set({ botSidebarView })
       window.api.ui.set({ botSidebarView }).catch(console.error)
     },
+    hiddenBotSidebarKeys: [],
+    setBotSidebarHidden: (key, hidden) => {
+      const keys = get().hiddenBotSidebarKeys
+      if (keys.includes(key) === hidden) {
+        return
+      }
+      const hiddenBotSidebarKeys = hidden ? [...keys, key] : keys.filter((entry) => entry !== key)
+      set({ hiddenBotSidebarKeys })
+      window.api.ui.set({ hiddenBotSidebarKeys }).catch(console.error)
+    },
+    showHiddenBots: false,
+    setShowHiddenBots: (showHiddenBots) => set({ showHiddenBots }),
     botChatFolds: {},
     botChatFold: (hostId, botId, chatId) =>
       get().botChatFolds[botChatFoldKey(hostId, botId, chatId)],
