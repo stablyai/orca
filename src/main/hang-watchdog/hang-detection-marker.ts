@@ -113,7 +113,11 @@ export function consumeHangDetectionMarker(markerPath: string): StoredHangMarker
 }
 
 /** Coalesces watchdog writes: one in flight, the newest marker wins, nothing blocks the caller. */
-export function createHangMarkerWriter(markerPath: string): {
+export function createHangMarkerWriter(
+  markerPath: string,
+  // Injected so only the worker entry, which may block at shutdown, holds the sync writer.
+  writeSync: (path: string, marker: StoredHangMarker) => void
+): {
   write: (marker: StoredHangMarker) => void
   /** Shutdown only: main answered, so a sync write is safe and lands before exit. */
   writeNow: (marker: StoredHangMarker) => void
@@ -145,7 +149,7 @@ export function createHangMarkerWriter(markerPath: string): {
       // An in-flight async rename may land after this; queueing the same state makes the chain end on it.
       latest = writing ? marker : null
       try {
-        writeHangDetectionMarker(markerPath, marker)
+        writeSync(markerPath, marker)
       } catch {
         // Optional diagnostics must not fail shutdown.
       }

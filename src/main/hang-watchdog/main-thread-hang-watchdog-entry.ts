@@ -1,7 +1,7 @@
 import { isHangWatchdogWorkerData } from './hang-watchdog-worker-protocol'
 import { isMainThread, parentPort, workerData } from 'node:worker_threads'
 import { createHangWatchdogDetectionLoop } from './hang-watchdog-detection-loop'
-import { createHangMarkerWriter, readAvailableHangDetectionMarker } from './hang-detection-marker'
+import * as hangMarker from './hang-detection-marker'
 import {
   asHangObservations,
   emptyHangObservations,
@@ -42,7 +42,7 @@ export function runWatchdog(
   if (!port) {
     return
   }
-  const initial = readAvailableHangDetectionMarker(config.markerPath)
+  const initial = hangMarker.readAvailableHangDetectionMarker(config.markerPath)
   let observations = asHangObservations(initial) ?? emptyHangObservations()
   let existingUnavailable = initial === undefined
   let sequence = 0
@@ -53,12 +53,14 @@ export function runWatchdog(
   let recentPower: HangPowerReceipt[] = []
   let sleepPeriod: SleepPeriod | null = null
   let receiptWindow: { id: string; until: number; remaining: number } | null = null
-  const writer = config.markerPath ? createHangMarkerWriter(config.markerPath) : null
+  const writer = config.markerPath
+    ? hangMarker.createHangMarkerWriter(config.markerPath, hangMarker.writeHangDetectionMarker)
+    : null
   // Neither the read nor the queued async write throws, so a failure cannot stop the observer.
   const save = (): void => {
     const existing =
       existingUnavailable && config.markerPath
-        ? readAvailableHangDetectionMarker(config.markerPath)
+        ? hangMarker.readAvailableHangDetectionMarker(config.markerPath)
         : null
     if (!writer || existing === undefined) {
       return
