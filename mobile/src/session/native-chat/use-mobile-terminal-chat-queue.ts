@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { randomV4Uuid } from '../../platform/random-v4-uuid'
 import {
@@ -25,6 +26,7 @@ export function useMobileTerminalChatQueue(args: {
   appendText: (text: string) => boolean
   onSendError?: (message: string) => void
 }) {
+  const t = useMobileTranslation()
   const { client, appendText } = args
   const terminal = args.activeHandleRef.current
   const enabled =
@@ -138,7 +140,7 @@ export function useMobileTerminalChatQueue(args: {
     [request, args.onSendError]
   )
   const controls = useMemo<MobileStructuredQueuedMessageControls>(() => {
-    const cards = mobileQueuedMessageCards(snapshot?.queuedMessages, [], {
+    const cards = mobileQueuedMessageCards(snapshot?.queuedMessages, [], t, {
       agentWorking: snapshot?.activity.state === 'working'
     }).map((card) => ({ ...card, waitsForAgent: true as const }))
     return {
