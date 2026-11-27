@@ -4,8 +4,9 @@ import type { AgentSessionMcpServer } from '../../../../../src/shared/agent-sess
 import type { BotToolProblem } from '../../../../../src/shared/bot-tools'
 import { createAgentSessionMcpPanelHook } from '../../../../../src/shared/agent-session/view/use-agent-session-mcp-panel'
 import {
-  hasUncheckedOrcaMcpServers,
+  newMcpProblemsRequestId,
   ORCA_MCP_SOURCE,
+  uncheckedOrcaMcpServerIds,
   withOrcaMcpProblems
 } from '../../../../../src/shared/agent-session/view/agent-session-mcp-server-presentation'
 import {
@@ -47,22 +48,28 @@ export function MobileNativeChatMcpTray({
 }
 
 /**
- * While `checks` (an at-rest chat lists Orca servers), the host list's problems by server id, from
- * the same check its MCP servers page runs; one run per tray opening, ended when the tray closes.
+ * The problems of an at-rest chat's Orca servers (`ids`, a comma-joined key; none when empty) by
+ * server id, from the check its MCP servers page runs over just those; one run per tray opening,
+ * ended when the tray closes or the agent starts.
  */
 function useOrcaMcpProblems(
   orca: MobileStructuredMcpPanel['orca'],
-  checks: boolean
+  ids: string
 ): Readonly<Record<string, BotToolProblem>> {
   const [problems, setProblems] = useState(NO_PROBLEMS)
   const client = orca?.client
   const agent = orca?.agent
   useEffect(() => {
-    if (!client || !checks) {
+    if (!client || !ids) {
       return undefined
     }
     let live = true
-    const params = agent === 'claude' || agent === 'codex' ? { agent } : {}
+    const requestId = newMcpProblemsRequestId()
+    const params = {
+      ...(agent === 'claude' || agent === 'codex' ? { agent } : {}),
+      ids: ids.split(','),
+      requestId
+    }
     void mcpServerProblemsRead
       .request(client, params, { timeoutMs: PROBLEMS_TIMEOUT_MS })
       .then((reply) => {
@@ -74,9 +81,9 @@ function useOrcaMcpProblems(
       .catch(() => {})
     return () => {
       live = false
-      void mcpServerProblemsCancel.request(client, {}).catch(() => {})
+      void mcpServerProblemsCancel.request(client, { requestId }).catch(() => {})
     }
-  }, [agent, checks, client])
+  }, [agent, client, ids])
   return problems
 }
 
@@ -85,14 +92,15 @@ function McpTrayContent({ panel }: { panel: MobileStructuredMcpPanel }) {
   // Before the agent starts, Orca checks its own servers and signs in to them itself.
   const problems = useOrcaMcpProblems(
     panel.orca,
-    panel.orca !== null && hasUncheckedOrcaMcpServers(state.servers)
+    panel.orca ? uncheckedOrcaMcpServerIds(state.servers) : ''
   )
   const servers = useMemo(
     () => withOrcaMcpProblems(state.servers, problems),
     [state.servers, problems]
   )
-  const hostName = useMcpHostName(panel.orca?.hostId ?? '')
   const [signingIn, setSigningIn] = useState<McpSignInTarget | null>(null)
+  // Only the sign-in sheet names the host.
+  const hostName = useMcpHostName(signingIn ? (panel.orca?.hostId ?? '') : '')
   const readAgain = state.retry
   const signInWithOrca = useCallback((server: AgentSessionMcpServer) => {
     if (server.orca?.url) {

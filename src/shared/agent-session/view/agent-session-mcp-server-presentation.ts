@@ -65,9 +65,18 @@ export function agentSessionMcpRowFailure(
     : { kind: 'message', message: failure.message }
 }
 
-/** An at-rest chat lists Orca servers its client can check before the agent starts. */
-export function hasUncheckedOrcaMcpServers(servers: readonly AgentSessionMcpServer[]): boolean {
-  return servers.some((server) => server.orca !== undefined && server.status === 'not-started')
+/** The ids of an at-rest chat's Orca servers its client can check before the agent starts, as
+ *  one key (empty when there are none). */
+export function uncheckedOrcaMcpServerIds(servers: readonly AgentSessionMcpServer[]): string {
+  return servers
+    .flatMap((server) => (server.orca && server.status === 'not-started' ? [server.orca.id] : []))
+    .sort()
+    .join(',')
+}
+
+/** Names one problems check, so cancelling it leaves the window's other checks running. */
+export function newMcpProblemsRequestId(): string {
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
 }
 
 /** Orca's check of its host list (`mcpServers.problems`, by server id) on an at-rest chat's rows. */
@@ -80,13 +89,11 @@ export function withOrcaMcpProblems(
   }
   return servers.map((server) => {
     const problem = server.orca && server.status === 'not-started' && problems[server.orca.id]
-    return !problem || problem.kind === 'unconfirmed'
+    // Orca's own sign-in state is the truth for a server it signs in to, as in its settings.
+    return !problem ||
+      problem.kind === 'unconfirmed' ||
+      (problem.kind === 'sign-in' && server.orca?.signsIn)
       ? server
       : { ...server, status: problem.kind === 'sign-in' ? 'needs-auth' : 'failed' }
   })
-}
-
-/** A URL's host, for "Can’t reach …". */
-export function agentSessionMcpUrlHost(url: string): string {
-  return URL.canParse(url) ? new URL(url).host : url
 }

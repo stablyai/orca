@@ -4,9 +4,9 @@ import type {
 } from '../../../../../shared/agent-session/options/protocol/agent-session-mcp'
 import {
   agentSessionMcpServerDisplayName,
-  agentSessionMcpUrlHost,
   ORCA_MCP_SOURCE
 } from '../../../../../shared/agent-session/view/agent-session-mcp-server-presentation'
+import { urlHost } from '@/components/settings/mcp-servers/mcp-server-words'
 import type { Translate } from '@/i18n/use-translate'
 
 export function mcpSourceLabel(source: string, t: Translate): string {
@@ -60,7 +60,7 @@ export function mcpServerStatusLine(
       if (server.orca && !server.error) {
         return server.orca.url !== null
           ? t('settings.mcpServers.status.unreachable', 'Can’t reach {{host}}', {
-              host: agentSessionMcpUrlHost(server.orca.url)
+              host: urlHost(server.orca.url)
             })
           : hostName
             ? t('settings.mcpServers.status.commandFailed', 'Command not found on {{host}}', {

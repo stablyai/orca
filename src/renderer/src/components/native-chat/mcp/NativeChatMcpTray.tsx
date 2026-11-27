@@ -19,7 +19,7 @@ import {
 } from '../../../../../shared/agent-session/view/use-agent-session-mcp-panel'
 import {
   groupAgentSessionMcpServers,
-  hasUncheckedOrcaMcpServers,
+  uncheckedOrcaMcpServerIds,
   ORCA_MCP_SOURCE,
   withOrcaMcpProblems
 } from '../../../../../shared/agent-session/view/agent-session-mcp-server-presentation'
@@ -89,7 +89,7 @@ export function NativeChatMcpTray({
   const problems = useOrcaMcpProblems(
     target,
     agent,
-    managed && hasUncheckedOrcaMcpServers(panel.servers)
+    managed ? uncheckedOrcaMcpServerIds(panel.servers) : ''
   )
   const servers = useMemo(
     () => withOrcaMcpProblems(panel.servers, problems),

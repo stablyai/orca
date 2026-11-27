@@ -20,6 +20,8 @@ export async function claudeBotToolProblems(
   signal?: AbortSignal
 ): Promise<Map<string, BotToolProblem>> {
   const servers = tools.servers
+  // A check let go of while its launch was prepared starts no CLI.
+  signal?.throwIfAborted()
   const connection = await openClaudeStreamJsonConnection({
     pathToClaudeCodeExecutable: cli.command,
     prefixArgs: cli.prefixArgs,

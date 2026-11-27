@@ -82,8 +82,14 @@ export function useMobileStructuredMcpPanel<TCommands extends object>(
   const close = useCallback(() => setOpenFor(null), [])
   const router = useRouter()
   const { hostId } = session
-  // Only a host whose MCP servers are on has a page for them.
-  const hostListsServers = session.hostSupport?.mcpServers === true
+  // Only a host whose MCP servers are on has a page for them; an open tray keeps that through a
+  // reconnect, so a sign-in under way keeps its client.
+  const listsReported = session.hostSupport ? session.hostSupport.mcpServers === true : undefined
+  const [listsKnown, setListsKnown] = useState(false)
+  if (listsReported !== undefined && listsKnown !== listsReported) {
+    setListsKnown(listsReported)
+  }
+  const hostListsServers = listsReported ?? (trayOpen && listsKnown)
   const manage = useCallback(() => {
     setOpenFor(null)
     router.push(`/h/${encodeURIComponent(hostId ?? '')}/mcp`)
