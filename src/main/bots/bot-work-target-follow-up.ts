@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { parseOrcaSessionAddress } from '../../shared/agent-session/identity/orca-session-address'
 import {
   sanitizeWorkTargetLabel,
@@ -48,10 +49,12 @@ function parseIdentitySelectorInstanceId(selector: unknown): string | undefined 
   }
 }
 
-const RecordedWorkerStartOptionsSchema = z.object({
-  resolvedWorktreeInstanceId: z.string().min(1).nullable().optional(),
-  worktree: z.string().nullable().optional()
-})
+const RecordedWorkerStartOptionsSchema = lazyZodSchema(() =>
+  z.object({
+    resolvedWorktreeInstanceId: z.string().min(1).nullable().optional(),
+    worktree: z.string().nullable().optional()
+  })
+)
 
 /** Extract the checkout occupant instance ID recorded when a local worker started, if any. */
 export function extractWorkerRecordedWorktreeInstanceId(

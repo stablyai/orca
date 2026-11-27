@@ -532,7 +532,7 @@ describe('runtime launch boundaries, real worktree creation, host twins, and pai
         },
         { runtime, orchestrationCaller: botCaller }
       )
-    ).rejects.toThrow('selector_not_found')
+    ).rejects.toThrow(/No workspace matches --worktree identity:wt2:local:inst-twin-local/)
     expect(createTerminalCalls.length).toBe(launchesBeforeTwinFail)
     expect(db.listRuns().runs.length).toBe(runsBeforeTwinFail)
 
@@ -556,7 +556,7 @@ describe('runtime launch boundaries, real worktree creation, host twins, and pai
         },
         { runtime, orchestrationCaller: botCaller }
       )
-    ).rejects.toThrow(/selector_not_found|changed after validation/)
+    ).rejects.toThrow(/No workspace matches --worktree|changed after validation/)
     expect(createTerminalCalls.length).toBe(launchesBeforeTwinFail)
 
     // 4) Twin repo disappears on local while SSH twin with same repoId survives -> fails with ZERO createManagedWorktree!

@@ -389,7 +389,7 @@ describe('unread targeted mail verification across mailbox readdress & hand-back
       dbFile,
       tag: 'legacy-reopen'
     })
-    expect(fx.db.db.pragma('user_version', { simple: true })).toBe(51)
+    expect(fx.db.db.pragma('user_version', { simple: true })).toBe(52)
     const routed = fx.db.routeUnreadDispatchMailboxToRunMailbox(oldWorker.dispatchId, oldRun.id)
     expect(routed.routedCount).toBe(1)
     expect(

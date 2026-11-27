@@ -2,6 +2,7 @@ import type { ResolvedBotWorkTargetPlacement } from '../../../../../shared/agent
 import { isOrchestrationMutation } from '../../../../../shared/orchestration/orchestration-rpc-contract'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { OrchestrationMethodAccessDeclaration } from '../../../rpc/methods/orchestration/access/orchestration-method-access'
+import { nameRefusingComputer } from '../../../rpc/methods/orchestration/worker/start/launch/worker-agent-host-preflight'
 import type { RemoteRunLinkRow } from '../../db/remote-owned/remote-run-links'
 import { inServerTerms } from './remote-owned-answers'
 import { callRemoteOwnedServer } from './remote-owned-calls'
@@ -66,10 +67,10 @@ export async function forwardToRemoteOwnedLink(
     options?.onAnswer?.(answer)
     return inServerTerms(answer, { server, forward: options?.forward, link })
   } catch (error) {
-    throw inServerTerms(explainRemoteServerFailure(error, { server, method, params, dispatchId }), {
-      server,
-      forward: options?.forward,
-      link
-    })
+    const explained = explainRemoteServerFailure(error, { server, method, params, dispatchId })
+    throw nameRefusingComputer(
+      inServerTerms(explained, { server, forward: options?.forward, link }),
+      server
+    )
   }
 }

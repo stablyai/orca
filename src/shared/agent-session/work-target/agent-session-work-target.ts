@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
@@ -55,57 +56,63 @@ export type PairedServerWorkTargetIdentity = {
   peerFingerprint?: string
 }
 
-const SafeWorkTargetId = z
-  .string()
-  .min(1)
-  .max(MAX_WORK_TARGET_ID_LENGTH)
-  .refine((value) => !hasControlChar(value), 'Work target ID contains control characters')
+const safeWorkTargetId = () =>
+  z
+    .string()
+    .min(1)
+    .max(MAX_WORK_TARGET_ID_LENGTH)
+    .refine((value) => !hasControlChar(value), 'Work target ID contains control characters')
 
-const WorkTargetLabel = z.string().min(1).max(MAX_WORK_TARGET_LABEL_LENGTH)
+const workTargetLabel = () => z.string().min(1).max(MAX_WORK_TARGET_LABEL_LENGTH)
+
+const journalWorkTargetObject = () =>
+  z.object({
+    kind: z.enum(['project', 'workspace']),
+    hostId: z.string().min(1),
+    projectId: z.string().min(1).optional(),
+    repoId: z.string().min(1).optional(),
+    repoKind: z.enum(['git', 'folder']).optional(),
+    workspaceId: z.string().min(1).optional(),
+    workspaceInstanceId: z.string().min(1).optional(),
+    workspaceKind: z.enum(['git-worktree', 'folder']).optional(),
+    displayName: z.string().min(1),
+    projectName: z.string().min(1).optional(),
+    hostLabel: z.string().min(1).optional(),
+    pairingRevision: z.number().finite().nonnegative().optional(),
+    peerFingerprint: z.string().min(1).optional()
+  })
 
 /** Strict wire schema accepted on `agentSession.send`. */
-export const SendWorkTarget = z
-  .object({
-    kind: z.enum(['project', 'workspace']),
-    hostId: SafeWorkTargetId.refine(
-      (value) => parseExecutionHostId(value) !== null,
-      'Invalid execution host ID'
-    ),
-    projectId: SafeWorkTargetId.optional(),
-    repoId: SafeWorkTargetId.optional(),
-    repoKind: z.enum(['git', 'folder']).optional(),
-    workspaceId: SafeWorkTargetId.optional(),
-    workspaceInstanceId: SafeWorkTargetId.optional(),
-    workspaceKind: z.enum(['git-worktree', 'folder']).optional(),
-    displayName: WorkTargetLabel,
-    projectName: WorkTargetLabel.optional(),
-    hostLabel: WorkTargetLabel.optional()
-  })
-  .strict()
-  .refine(
-    (value) =>
-      value.kind === 'project'
-        ? Boolean(value.repoId || value.projectId)
-        : Boolean(value.workspaceId),
-    'Project targets require repoId or projectId; workspace targets require workspaceId'
-  )
+export const SendWorkTarget = lazyZodSchema(() =>
+  z
+    .object({
+      kind: z.enum(['project', 'workspace']),
+      hostId: safeWorkTargetId().refine(
+        (value) => parseExecutionHostId(value) !== null,
+        'Invalid execution host ID'
+      ),
+      projectId: safeWorkTargetId().optional(),
+      repoId: safeWorkTargetId().optional(),
+      repoKind: z.enum(['git', 'folder']).optional(),
+      workspaceId: safeWorkTargetId().optional(),
+      workspaceInstanceId: safeWorkTargetId().optional(),
+      workspaceKind: z.enum(['git-worktree', 'folder']).optional(),
+      displayName: workTargetLabel(),
+      projectName: workTargetLabel().optional(),
+      hostLabel: workTargetLabel().optional()
+    })
+    .strict()
+    .refine(
+      (value) =>
+        value.kind === 'project'
+          ? Boolean(value.repoId || value.projectId)
+          : Boolean(value.workspaceId),
+      'Project targets require repoId or projectId; workspace targets require workspaceId'
+    )
+)
 
 /** Open replay schema so rows written by newer builds remain readable. */
-export const JournalWorkTargetSchema = z.object({
-  kind: z.enum(['project', 'workspace']),
-  hostId: z.string().min(1),
-  projectId: z.string().min(1).optional(),
-  repoId: z.string().min(1).optional(),
-  repoKind: z.enum(['git', 'folder']).optional(),
-  workspaceId: z.string().min(1).optional(),
-  workspaceInstanceId: z.string().min(1).optional(),
-  workspaceKind: z.enum(['git-worktree', 'folder']).optional(),
-  displayName: z.string().min(1),
-  projectName: z.string().min(1).optional(),
-  hostLabel: z.string().min(1).optional(),
-  pairingRevision: z.number().finite().nonnegative().optional(),
-  peerFingerprint: z.string().min(1).optional()
-})
+export const JournalWorkTargetSchema = lazyZodSchema(journalWorkTargetObject)
 
 /** Strip host-authored pairing pins so wire/client inputs can never supply authority. */
 export function stripWorkTargetHostPin(
@@ -184,28 +191,30 @@ export type ResolvedBotWorkTargetPlacement = {
   canonicalTarget: AgentJournalWorkTarget
 }
 
-const ExecutionHostIdSchema = SafeWorkTargetId.refine(
-  (value): value is ExecutionHostId => parseExecutionHostId(value) !== null,
-  'Invalid execution host ID'
-)
-
 /** Strict schema for persisted SQLite provenance and authenticated peer-forwarded work targets. */
-export const ResolvedBotWorkTargetPlacementSchema = z
-  .object({
-    mode: z.enum(['new-top-level', 'existing']),
-    repoSelector: SafeWorkTargetId.optional(),
-    worktreeSelector: SafeWorkTargetId.optional(),
-    targetHostId: ExecutionHostIdSchema.optional(),
-    expectedWorkspaceInstanceId: SafeWorkTargetId.optional(),
-    onEnvironmentId: SafeWorkTargetId.optional(),
-    onExpectedPairingRevision: z.number().finite().nonnegative().optional(),
-    onExpectedPeerFingerprint: SafeWorkTargetId.optional(),
-    canonicalTarget: JournalWorkTargetSchema.refine(
-      (value) => parseExecutionHostId(value.hostId) !== null,
-      'Invalid canonical target execution host ID'
-    )
-  })
-  .strict()
+export const ResolvedBotWorkTargetPlacementSchema = lazyZodSchema(() =>
+  z
+    .object({
+      mode: z.enum(['new-top-level', 'existing']),
+      repoSelector: safeWorkTargetId().optional(),
+      worktreeSelector: safeWorkTargetId().optional(),
+      targetHostId: safeWorkTargetId()
+        .refine(
+          (value): value is ExecutionHostId => parseExecutionHostId(value) !== null,
+          'Invalid execution host ID'
+        )
+        .optional(),
+      expectedWorkspaceInstanceId: safeWorkTargetId().optional(),
+      onEnvironmentId: safeWorkTargetId().optional(),
+      onExpectedPairingRevision: z.number().finite().nonnegative().optional(),
+      onExpectedPeerFingerprint: safeWorkTargetId().optional(),
+      canonicalTarget: journalWorkTargetObject().refine(
+        (value) => parseExecutionHostId(value.hostId) !== null,
+        'Invalid canonical target execution host ID'
+      )
+    })
+    .strict()
+)
 
 /** Normalize a paired-server placement into the paired server's own local host scope. */
 export function toPeerLocalWorkTargetPlacement(
