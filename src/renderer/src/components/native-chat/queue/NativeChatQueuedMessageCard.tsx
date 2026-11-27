@@ -190,17 +190,16 @@ export function NativeChatQueuedMessageCard({
   }
   const editable = card.hold !== 'sending' && !card.notEditable && onEdit !== undefined
   const toolCount = card.hold === 'sending' ? 0 : editable ? 2 : 1
-  const toolWidth =
-    toolCount === 1
-      ? 'max(24px, calc(var(--spacing) * 6))'
-      : 'calc(max(24px, calc(var(--spacing) * 6)) + max(24px, calc(var(--spacing) * 6)) + 1px)'
   const toolStyle:
     | (React.CSSProperties & { '--queued-tools-mask': string; '--queued-tools-width': string })
     | undefined =
     toolCount > 0
       ? {
           '--queued-tools-mask': queuedRowToolsMask(toolCount),
-          '--queued-tools-width': toolWidth
+          '--queued-tools-width':
+            toolCount === 1
+              ? 'max(24px, calc(var(--spacing) * 6))'
+              : 'calc(max(24px, calc(var(--spacing) * 6)) + max(24px, calc(var(--spacing) * 6)) + 1px)'
         }
       : undefined
   return (
