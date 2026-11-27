@@ -246,7 +246,9 @@ export class RelayReconnectController {
       this.recoveryGate === 'fresh-credential' ||
       (this.recoveryGate === 'external-signal' && !credentialRejected)
     ) {
-      // Keep slow gated reprobes running only while active; foreground restores cadence.
+      // A director Retry-After still floors the next gated reprobe; then keep slow reprobes running only while active.
+      const retryAfterMs = relayDirectorRetryAfterMs(error)
+      this.nextAttemptAt = Math.max(this.nextAttemptAt, this.dependencies.now() + retryAfterMs)
       this.holdGate(scheduleRetry)
       return
     }

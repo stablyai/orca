@@ -271,4 +271,44 @@ describe('Relay credential recovery', () => {
       supervisor.stop()
     }
   })
+
+  // A gated pending reprobe whose director lookup is paced must not ask the director again before Retry-After.
+  it('honors a director Retry-After on a gated pending reprobe', async () => {
+    vi.useFakeTimers()
+    const refused: MobileRelayCredentialBundle = {
+      ...bundle,
+      pending: { token: 'C'.repeat(43), hash: 'D'.repeat(43), reqId: 'rotate-lost' }
+    }
+    // The first attempt is refused at relay-hello; later pending dials land on a cell that sends them to the director.
+    const openRelay = vi
+      .fn(() => new FakeRelaySession('disconnected', new RelayOuterError(4409)))
+      .mockReturnValueOnce(new FakeRelaySession('disconnected', new RelayOuterError(4401, true)))
+      .mockReturnValueOnce(new FakeRelaySession('disconnected', new RelayOuterError(4401, true)))
+    const resolveRelay = vi.fn(async () => {
+      throw new RelayDirectorHttpError(503, 120_000)
+    })
+    const supervisor = new MobileEndpointSupervisor(
+      new FakeLogicalClient('disconnected', 'relay'),
+      host.id,
+      relay,
+      dependencies({
+        openRelay,
+        resolveRelay,
+        readBundle: vi.fn(async () => refused),
+        directUnavailable: true
+      })
+    )
+    try {
+      await supervisor.start()
+      // Step to the first gated reprobe (45-75 s), which gets the 503.
+      for (let second = 0; second < 80 && resolveRelay.mock.calls.length === 0; second += 1) {
+        await vi.advanceTimersByTimeAsync(1_000)
+      }
+      expect(resolveRelay).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(118_000)
+      expect(resolveRelay).toHaveBeenCalledTimes(1)
+    } finally {
+      supervisor.stop()
+    }
+  })
 })

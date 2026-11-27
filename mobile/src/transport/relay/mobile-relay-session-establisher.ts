@@ -65,9 +65,8 @@ export class MobileRelaySessionEstablisher {
   }
 
   async adoptRelay(relay: MobileRelayEndpoint): Promise<void> {
-    // A stopped supervisor’s successor owns routing after removal/re-pairing; a late lookup after a direct win
-    // is stale and must not overwrite the route.
-    if (this.args.isStopped() || directWon(this.args.logical)) {
+    // A stopped supervisor’s successor owns routing after removal/re-pairing.
+    if (this.args.isStopped()) {
       return
     }
     await this.args.setRelayRouting(this.args.hostId, relay)
@@ -155,7 +154,9 @@ export class MobileRelaySessionEstablisher {
       relay: () => this.relay,
       dial: () => this.establish(credential),
       resolveRelay: (input) => this.resolveRelay(input),
-      persistResolvedRelay: (resolved) => this.adoptRelay(resolved)
+      // A director answer landing after a direct win is stale; direct rotation's route still goes through adoptRelay.
+      persistResolvedRelay: (resolved) =>
+        directWon(this.args.logical) ? Promise.resolve() : this.adoptRelay(resolved)
     })
   }
 
