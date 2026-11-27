@@ -6,9 +6,9 @@ import {
   createCheckRunDetailsRequestId,
   getCheckRunDetailsTabLabel,
   isSameGitHubRepository,
-  isSameGitLabProjectRef,
   type CheckRunDetailsTabPatch
 } from '@/components/editor/check-details/actions/check-run-details-tab'
+import { isSameGitLabProjectRef } from '../../../../../../shared/gitlab/gitlab-project-ref'
 import type { OpenCheckRunDetailsState } from '../../../../../../shared/editor/views/editor-tab-view-types'
 import { loadGitLabJobLogDetails } from '@/runtime/repository-gitlab/gitlab-job-trace-client'
 import { forgeOwnerHostIdForWorkspace } from '@/runtime/source-control/forge/forge-credential-target'

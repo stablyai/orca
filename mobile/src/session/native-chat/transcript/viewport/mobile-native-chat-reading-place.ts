@@ -141,15 +141,6 @@ function nearestRow(
   return undefined
 }
 
-/** How far the drawn row `key` starts below the view's top; undefined when it is not drawn. */
-export function mobileNativeChatRowOffset(
-  scroller: MobileNativeChatScrollNode,
-  key: string
-): number | undefined {
-  const row = drawnRows(scroller).find((node) => rowIdOf(node) === key)
-  return row && row.getBoundingClientRect().top - scroller.getBoundingClientRect().top
-}
-
 // The nearest row wholly more than `distance` above the view; it ends at or above that line.
 export function mobileNativeChatRowAbove(
   scroller: MobileNativeChatScrollNode,

@@ -2,6 +2,7 @@
 // thread or message as text, paged by character offset across its bodies. Mail is someone else's
 // words; the CLI shows it fenced as content.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import type {
   GmailAttachment,
   GmailMessageView,
@@ -32,7 +33,9 @@ import { htmlToText } from './google-html-text'
 export const GMAIL = 'https://gmail.googleapis.com/gmail/v1/users/me'
 // Gmail's per-user concurrency limit answers 429 well before 50 parallel reads.
 export const GMAIL_CALLS_AT_ONCE = 10
-const AttachmentSchema = z.object({ data: z.string(), size: z.number().optional() })
+const AttachmentSchema = lazyZodSchema(() =>
+  z.object({ data: z.string(), size: z.number().optional() })
+)
 
 /** `work` over `items`, at most `limit` at a time, in order. */
 export async function inBatches<T, R>(
@@ -203,8 +206,8 @@ export async function downloadGmailAttachment(
     parseGoogleJson(MessageSchema)
   )
   const part = attachmentsOf(message).find((entry) => entry.ref === ref.trim())
-  const attachmentId = findPart(message.payload, partId)?.body?.attachmentId
-  if (!part || !attachmentId) {
+  const body = findPart(message.payload, partId)?.body
+  if (!part || !body) {
     throw new GoogleToolError('That message has no such attachment.')
   }
   if ((part.size ?? 0) > TOOL_DOWNLOAD_MAX_BYTES) {
@@ -212,10 +215,14 @@ export async function downloadGmailAttachment(
       `${part.name} is larger than ${formatMegabytes(TOOL_DOWNLOAD_MAX_BYTES)}, more than Orca hands an agent at once; open it in Gmail.`
     )
   }
-  const body = await api.get(
-    'gmail',
-    `${GMAIL}/messages/${messageId}/attachments/${attachmentId}`,
-    parseGoogleJson(AttachmentSchema)
-  )
-  return { ...part, data: Buffer.from(body.data, 'base64url').toString('base64') }
+  const data = body.attachmentId
+    ? (
+        await api.get(
+          'gmail',
+          `${GMAIL}/messages/${messageId}/attachments/${body.attachmentId}`,
+          parseGoogleJson(AttachmentSchema)
+        )
+      ).data
+    : (body.data ?? '')
+  return { ...part, data: Buffer.from(data, 'base64url').toString('base64') }
 }

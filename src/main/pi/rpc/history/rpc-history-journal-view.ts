@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import {
   agentJournalSubmissionKey,
   parseAgentJournalItemKey
@@ -14,11 +15,13 @@ import type { StructuredAgentSessionHistoryJournal } from '../../../native-chat/
 /** Pi entries through entry are accounted for through this journal epoch/sequence; encoded in the Pi resume cursor. */
 export type PiHistoryClaim = { entry: string; epoch: string; sequence: number }
 
-const claimSchema = z.object({
-  entry: z.string().min(1),
-  epoch: z.string().min(1),
-  sequence: z.number().int().nonnegative()
-})
+const claimSchema = lazyZodSchema(() =>
+  z.object({
+    entry: z.string().min(1),
+    epoch: z.string().min(1),
+    sequence: z.number().int().nonnegative()
+  })
+)
 
 export function encodePiHistoryClaim(claim: PiHistoryClaim): string {
   return JSON.stringify(claim)

@@ -116,8 +116,8 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   const owesWork = async (sessionId: string, id: string): Promise<boolean> =>
     sessions.has(sessionId) &&
     (await structuredAgentSessionChildOwesWork(retainedWork(sessionId, id)))
-  const toolsRefreshDue = launchToolsRefreshDue(launchTools, owesWork, (id) =>
-    deps.adapter.keptLaunchOutgrown?.(id)
+  const toolsRefreshDue = launchToolsRefreshDue(launchTools, owesWork, (id, outdated) =>
+    deps.adapter.keptLaunchOutgrown?.(id, outdated)
   )
   const retireOutgrownChild = createStructuredAgentSessionOutgrownRetirement({
     deps,

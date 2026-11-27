@@ -1,5 +1,6 @@
 import os from 'node:os'
 import { app, ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import { readFeedbackImagesDelivered, validateFeedbackImages } from './feedback-image-attachments'
 import type {
   FeedbackRequestFailure,
@@ -210,9 +211,11 @@ export async function submitFeedback(
   }
 }
 
-export function registerFeedbackHandlers(): void {
-  ipcMain.removeHandler('feedback:submit')
-  ipcMain.handle('feedback:submit', (_event, args: FeedbackSubmitArgs) => {
+export function registerFeedbackHandlers(ipc: IpcHandleRegistrar = ipcMain): void {
+  if (ipc === ipcMain) {
+    ipcMain.removeHandler('feedback:submit')
+  }
+  ipc.handle('feedback:submit', (_event, args: FeedbackSubmitArgs) => {
     // Validate before typed-array normalization can expand hostile renderer input.
     if (args.images !== undefined) {
       const imageError = validateFeedbackImages(args.images)

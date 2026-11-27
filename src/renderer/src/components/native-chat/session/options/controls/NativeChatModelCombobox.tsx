@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Check } from 'lucide-react'
 import {
   Command,
@@ -15,6 +15,11 @@ import type {
   SessionOptionSelectChoice
 } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
 import { nativeChatSessionChoiceLabel } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-labels'
+import {
+  nativeChatModelSearchIndex,
+  nativeChatModelSearchMatcher,
+  nativeChatModelSearchText
+} from '../../../../../../../shared/native-chat/input/session-options/native-chat-model-search'
 import { sayNativeChatSessionOptionTranslated as say } from './native-chat-session-option-labels-text'
 import { NativeChatSessionOptionChoiceBody } from './NativeChatSessionOptionChoiceBody'
 import { NativeChatSessionOptionWriteGroup } from './NativeChatSessionOptionWriteGroup'
@@ -36,13 +41,6 @@ type NativeChatModelComboboxProps = {
   cliUpdate?: SessionOptionsCliUpdate
 }
 
-// Why not cmdk's scorer: it matches scattered letters and reorders the host's list.
-function modelChoiceFilter(value: string, search: string, keywords?: string[]): number {
-  const haystack = [value, ...(keywords ?? [])].join(' ').toLowerCase()
-  const terms = search.toLowerCase().split(/\s+/).filter(Boolean)
-  return terms.every((term) => haystack.includes(term)) ? 1 : 0
-}
-
 export function NativeChatModelCombobox({
   choices,
   currentValue,
@@ -59,7 +57,22 @@ export function NativeChatModelCombobox({
   const [legacyExpanded, toggleLegacy] = useLegacyModelsExpanded(
     choices.some((choice) => choice.value === currentValue && choice.legacy)
   )
-  const searching = Boolean(query.trim())
+  const matcher = useMemo(() => nativeChatModelSearchMatcher(query), [query])
+  // A query of only "/" or "-" filters nothing, so it browses rather than revealing search-only rows.
+  const searching = matcher !== null
+  // Built on a list's first search and reused after; cmdk asks for every row on every keystroke.
+  const searchTexts = searching
+    ? nativeChatModelSearchIndex(choices, (choice) => nativeChatSessionChoiceLabel(choice, say))
+    : null
+  // Why not cmdk's scorer: it matches scattered letters and reorders the host's list.
+  const modelChoiceFilter = (value: string, search: string, keywords?: string[]): number => {
+    const matches = search === query ? matcher : nativeChatModelSearchMatcher(search)
+    if (!matches) {
+      return 1
+    }
+    const text = searchTexts?.get(value) ?? nativeChatModelSearchText([value, ...(keywords ?? [])])
+    return matches(text) ? 1 : 0
+  }
   // Membership ignores the selection, so picking a model never moves rows in the open list.
   const folded = (choice: SessionOptionSelectChoice) => !searching && Boolean(choice.legacy)
   // The current value stays listed even while a pending pick still carries its hidden flag.

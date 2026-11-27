@@ -6566,7 +6566,6 @@
           "c13b82793c": "Installationen verwalten",
           "aee7b99cc6": "Über Link installieren",
           "filterProvider": "Nach Agenten filtern",
-          "filterSource": "Nach Quelle filtern",
           "allSources": "Alle",
           "clearFilters": "Filter zurücksetzen",
           "closeSkills": "Skills schließen",
@@ -19402,7 +19401,6 @@
           "failed": "Fehlgeschlagen",
           "succeeded": "Erfolgreich",
           "neverRan": "Nie ausgeführt",
-          "filters": "Filter",
           "all": "Alle",
           "clear": "Filter zurücksetzen",
           "agent": "Agent",
@@ -21930,6 +21928,7 @@
       "explicitChatWslMoveToHost": "Chat ist in einem unter Windows geöffneten WSL-Ordner nicht verfügbar. Das Projekt auf einem WSL-Host ausführen, um dort zu chatten, oder den Agenten in einem Terminal öffnen.",
       "explicitChatWslRunAsHost": "{{distro}} als Host ausführen",
       "explicitChatSsh": "Chat ist über SSH nicht verfügbar. Den Agenten stattdessen in einem Terminal öffnen.",
+      "explicitChatWorkspaceAccess": "Orca hat keine Berechtigung, diesen Arbeitsbereichsordner zu öffnen. Die Berechtigungen des Ordners prüfen und es erneut versuchen.",
       "explicitChatUnavailable": "In diesem Arbeitsbereich kann der Chat nicht ausgeführt werden. Die Agenten-Installation prüfen oder den Agenten in einem Terminal öffnen.",
       "structuredSessionHostDeclined": "{{value0}} in einem Terminal geöffnet",
       "structuredSessionTerminalNotVisible": "Orca hat {{value0}} in einem Terminal geöffnet, konnte es hier nach dem Start aber nicht anzeigen. Der Chat-Entwurf wurde beibehalten.",
@@ -25236,7 +25235,9 @@
       "chatOtherWindow": "Die Anmeldung läuft bereits in einem anderen Fenster.",
       "chatPageDidntOpen": "Seite nicht geöffnet?",
       "chatPasteCode": "Code einfügen",
-      "chatPasteCodeLabel": "Der Code, den Google nach der Anmeldung anzeigt, oder die Adresse dieser Seite"
+      "chatPasteCodeLabel": "Der Code, den Google nach der Anmeldung anzeigt, oder die Adresse dieser Seite",
+      "launchesUse": "Neue agy-Starts verwenden dieses Konto",
+      "loginNow": "Aktuelle agy-Anmeldung"
     },
     "claude": {
       "added": "Konto hinzugefügt. Das Konto auswählen, um es beim nächsten Start von Claude zu verwenden.",

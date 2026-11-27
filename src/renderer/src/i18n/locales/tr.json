@@ -6833,7 +6833,6 @@
           "c13b82793c": "Yüklemeleri yönet",
           "aee7b99cc6": "Bağlantıdan yükle",
           "filterProvider": "Ajana göre filtrele",
-          "filterSource": "Kaynağa göre filtrele",
           "allSources": "Tümü",
           "clearFilters": "Filtreleri temizle",
           "closeSkills": "Becerileri kapat",
@@ -19669,7 +19668,6 @@
           "failed": "Başarısız",
           "succeeded": "Başarılı",
           "neverRan": "Hiç çalıştırılmadı",
-          "filters": "Filtreler",
           "all": "Tümü",
           "clear": "Filtreleri temizle",
           "agent": "Ajan",
@@ -22194,6 +22192,7 @@
       "thoughtForDuration": "{{duration}} boyunca düşündü",
       "explicitChatWsl": "Sohbet WSL'de kullanılamıyor. Ajanı bir terminalde açın.",
       "explicitChatSsh": "Sohbet SSH üzerinden kullanılamıyor. Ajanı bir terminalde açın.",
+      "explicitChatWorkspaceAccess": "Orca'nın bu çalışma alanı klasörünü açma izni yok. Klasörün izinlerini kontrol edip yeniden deneyin.",
       "explicitChatUnavailable": "Bu çalışma alanı sohbeti çalıştıramıyor. Ajan kurulumunu kontrol edin veya ajanı bir terminalde açın.",
       "structuredSessionHostDeclined": "{{value0}} bir terminalde açıldı",
       "structuredSessionTerminalNotVisible": "Orca, {{value0}} öğesini terminalde açtı ancak başlatma tamamlandığında burada gösteremedi. Sohbet taslağınız korundu.",
@@ -25571,7 +25570,9 @@
       "chatOtherWindow": "Başka bir pencerede oturum açma işlemi sürüyor.",
       "chatPageDidntOpen": "Sayfa açılmadı mı?",
       "chatPasteCode": "Kodu yapıştır",
-      "chatPasteCodeLabel": "Oturum açtıktan sonra Google'ın gösterdiği kod veya o sayfanın adresi"
+      "chatPasteCodeLabel": "Oturum açtıktan sonra Google'ın gösterdiği kod veya o sayfanın adresi",
+      "launchesUse": "Yeni agy başlatmaları bu hesabı kullanır",
+      "loginNow": "agy'nin şu anki oturumu"
     },
     "claude": {
       "added": "Hesap eklendi. Başlatacağınız bir sonraki Claude'da kullanmak için bu hesabı seçin.",
@@ -28170,7 +28171,7 @@
       "reports": "Raporlar",
       "takesOver": "Devralır",
       "agentsKeepRunning": "Ajanları çalışmaya devam eder.",
-      "uploadDropOrPaste": "Bir görseli <upload>yükleyin</upload>, sürükleyip bırakın veya yapıştırın",
+      "uploadOrPaste": "<upload>Yükleyin</upload> veya yapıştırın",
       "purposeLabel": "Kimlik",
       "purposePlaceholder": "Botun kimliği ve görevi",
       "uploadPasteOrDrop": "veya kendi görselinizi yükleyin, yapıştırın ya da sürükleyip bırakın",

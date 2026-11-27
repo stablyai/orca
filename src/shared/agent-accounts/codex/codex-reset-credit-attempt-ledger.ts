@@ -10,14 +10,16 @@ const CodexResetCreditTargetSchema = lazyZodSchema(() =>
   ])
 )
 
-const CodexResetCreditExpectedScopeSchema = z
-  .object({
-    target: CodexResetCreditTargetSchema,
-    accountId: z.string().min(1).max(512),
-    accountRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-    offerRevision: z.string().startsWith('v1:').max(4_096)
-  })
-  .strict()
+const CodexResetCreditExpectedScopeSchema = lazyZodSchema(() =>
+  z
+    .object({
+      target: CodexResetCreditTargetSchema,
+      accountId: z.string().min(1).max(512),
+      accountRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+      offerRevision: z.string().startsWith('v1:').max(4_096)
+    })
+    .strict()
+)
 
 const DurableCodexResetCreditAttemptSchema = lazyZodSchema(() =>
   z.discriminatedUnion('state', [
@@ -39,58 +41,60 @@ const DurableCodexResetCreditAttemptSchema = lazyZodSchema(() =>
   ])
 )
 
-const CodexResetCreditAttemptLedgerSchema = z
-  .object({
-    version: z.literal(1),
-    attempts: z.array(DurableCodexResetCreditAttemptSchema).max(10_000)
-  })
-  .strict()
-  .superRefine((ledger, context) => {
-    const keys = new Set<string>()
-    const offers = new Set<string>()
-    const pendingAccountScopes = new Set<string>()
-    for (const [index, attempt] of ledger.attempts.entries()) {
-      const offerScope = JSON.stringify([
-        attempt.expectedScope.target.runtime,
-        attempt.expectedScope.target.wslDistro,
-        attempt.expectedScope.accountId,
-        attempt.expectedScope.accountRevision,
-        attempt.expectedScope.offerRevision
-      ])
-      const accountScope = JSON.stringify([
-        attempt.expectedScope.target.runtime,
-        attempt.expectedScope.target.wslDistro,
-        attempt.expectedScope.accountId,
-        attempt.expectedScope.accountRevision
-      ])
-      if (keys.has(attempt.idempotencyKey)) {
-        context.addIssue({
-          code: 'custom',
-          message: 'Duplicate idempotency key',
-          path: ['attempts', index, 'idempotencyKey']
-        })
+const CodexResetCreditAttemptLedgerSchema = lazyZodSchema(() =>
+  z
+    .object({
+      version: z.literal(1),
+      attempts: z.array(DurableCodexResetCreditAttemptSchema).max(10_000)
+    })
+    .strict()
+    .superRefine((ledger, context) => {
+      const keys = new Set<string>()
+      const offers = new Set<string>()
+      const pendingAccountScopes = new Set<string>()
+      for (const [index, attempt] of ledger.attempts.entries()) {
+        const offerScope = JSON.stringify([
+          attempt.expectedScope.target.runtime,
+          attempt.expectedScope.target.wslDistro,
+          attempt.expectedScope.accountId,
+          attempt.expectedScope.accountRevision,
+          attempt.expectedScope.offerRevision
+        ])
+        const accountScope = JSON.stringify([
+          attempt.expectedScope.target.runtime,
+          attempt.expectedScope.target.wslDistro,
+          attempt.expectedScope.accountId,
+          attempt.expectedScope.accountRevision
+        ])
+        if (keys.has(attempt.idempotencyKey)) {
+          context.addIssue({
+            code: 'custom',
+            message: 'Duplicate idempotency key',
+            path: ['attempts', index, 'idempotencyKey']
+          })
+        }
+        if (offers.has(offerScope)) {
+          context.addIssue({
+            code: 'custom',
+            message: 'Duplicate claimed offer',
+            path: ['attempts', index, 'expectedScope']
+          })
+        }
+        if (attempt.state === 'providerPending' && pendingAccountScopes.has(accountScope)) {
+          context.addIssue({
+            code: 'custom',
+            message: 'Duplicate pending account scope',
+            path: ['attempts', index, 'expectedScope']
+          })
+        }
+        keys.add(attempt.idempotencyKey)
+        offers.add(offerScope)
+        if (attempt.state === 'providerPending') {
+          pendingAccountScopes.add(accountScope)
+        }
       }
-      if (offers.has(offerScope)) {
-        context.addIssue({
-          code: 'custom',
-          message: 'Duplicate claimed offer',
-          path: ['attempts', index, 'expectedScope']
-        })
-      }
-      if (attempt.state === 'providerPending' && pendingAccountScopes.has(accountScope)) {
-        context.addIssue({
-          code: 'custom',
-          message: 'Duplicate pending account scope',
-          path: ['attempts', index, 'expectedScope']
-        })
-      }
-      keys.add(attempt.idempotencyKey)
-      offers.add(offerScope)
-      if (attempt.state === 'providerPending') {
-        pendingAccountScopes.add(accountScope)
-      }
-    }
-  })
+    })
+)
 
 export type DurableCodexResetCreditAttempt =
   | {

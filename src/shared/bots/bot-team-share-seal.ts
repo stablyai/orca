@@ -1,5 +1,6 @@
 import { sha256 } from '@noble/hashes/sha256'
 import * as z from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 import type { PairedE2EEPrimitives } from '../remote-runtime/e2ee/paired-e2ee-primitives'
 import {
   encodeDeviceProofMessage,
@@ -18,38 +19,44 @@ import {
 
 const Id = Identifier('Invalid id', 128)
 // Canonical padded base64 of 32 bytes (the contract's CANONICAL_KEY_B64).
-const Curve25519Key = z.string().regex(/^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=$/)
+const Curve25519Key = lazyZodSchema(() =>
+  z.string().regex(/^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=$/)
+)
 
 // The host's answer to a share_accept: how the device reaches the bot over the relay, the host key it
 // pins there, and its share device id. The device checks the invite's expiry when it connects and
 // accepts again once it has passed.
-export const BotTeamShareOffer = z.object({
-  v: z.literal(1),
-  relay: z.object({ ...PAIRING_RELAY_OFFER_FIELDS, inviteExpiresAt: z.number().int() }),
-  hostPublicKeyB64: Curve25519Key,
-  deviceId: Id,
-  botId: Id
-})
+export const BotTeamShareOffer = lazyZodSchema(() =>
+  z.object({
+    v: z.literal(1),
+    relay: z.object({ ...PAIRING_RELAY_OFFER_FIELDS, inviteExpiresAt: z.number().int() }),
+    hostPublicKeyB64: Curve25519Key,
+    deviceId: Id,
+    botId: Id
+  })
+)
 export type BotTeamShareOffer = z.infer<typeof BotTeamShareOffer>
 
 // A teammate's message to a shared bot whose host is away, held until the host is back. Signed inside
 // by the teammate's device key, so the cloud can't forge one.
 
-export const BotTeamShareHeldMessage = z.object({
-  v: z.literal(1),
-  shareId: Id,
-  botId: Id,
-  // A chat of theirs, or a new one, keyed so a retry can't start two.
-  chat: z.union([z.object({ sessionId: SessionId }), z.object({ newChatId: Id })]),
-  clientMessageId: Id,
-  text: z.string(),
-  attachments: z
-    .array(z.object({ name: z.string().min(1).max(1024), contentBase64: z.string() }))
-    .max(AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT),
-  sentAt: z.number().int().nonnegative(),
-  // The signing device's Ed25519 key; the host trusts it only as a share device row of its own.
-  devicePublicKey: z.string()
-})
+export const BotTeamShareHeldMessage = lazyZodSchema(() =>
+  z.object({
+    v: z.literal(1),
+    shareId: Id,
+    botId: Id,
+    // A chat of theirs, or a new one, keyed so a retry can't start two.
+    chat: z.union([z.object({ sessionId: SessionId }), z.object({ newChatId: Id })]),
+    clientMessageId: Id,
+    text: z.string(),
+    attachments: z
+      .array(z.object({ name: z.string().min(1).max(1024), contentBase64: z.string() }))
+      .max(AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT),
+    sentAt: z.number().int().nonnegative(),
+    // The signing device's Ed25519 key; the host trusts it only as a share device row of its own.
+    devicePublicKey: z.string()
+  })
+)
 export type BotTeamShareHeldMessage = z.infer<typeof BotTeamShareHeldMessage>
 
 type SealPrimitives = Pick<

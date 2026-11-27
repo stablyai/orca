@@ -2,6 +2,7 @@
 // The setting lives on the bot; absent means on with the defaults, so existing bots get it too.
 import type { BotFailure } from './bot-failure-copy'
 import * as z from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 import { containsSecretLike } from '../crash-reporting/crash-report-redaction'
 import type { BotAgent } from '../bot-types'
 import { startOfLocalDay } from '../automations/scheduling/automation-cron-occurrence'
@@ -39,16 +40,18 @@ export const LOOK_AROUND_EVERY_LABELS: Record<LookAroundEvery, string> = {
 
 export const LOOK_AROUND_FOCUS_MAX_LENGTH = 500
 
-export const BotLookAroundSchema = z.object({
-  on: z.boolean(),
-  // A preset a newer client saved reads as the default rather than voiding the bot.
-  every: z.enum(LOOK_AROUND_EVERY_CHOICES).catch('every-4h'),
-  weekdaysOnly: z.boolean(),
-  /** What to look for, in the owner's words; empty means anything waiting on them. */
-  focus: z.string().max(LOOK_AROUND_FOCUS_MAX_LENGTH),
-  /** When it was last turned on; a slot before it is never caught up. Absent: on all along. */
-  since: z.number().optional()
-})
+export const BotLookAroundSchema = lazyZodSchema(() =>
+  z.object({
+    on: z.boolean(),
+    // A preset a newer client saved reads as the default rather than voiding the bot.
+    every: z.enum(LOOK_AROUND_EVERY_CHOICES).catch('every-4h'),
+    weekdaysOnly: z.boolean(),
+    /** What to look for, in the owner's words; empty means anything waiting on them. */
+    focus: z.string().max(LOOK_AROUND_FOCUS_MAX_LENGTH),
+    /** When it was last turned on; a slot before it is never caught up. Absent: on all along. */
+    since: z.number().optional()
+  })
+)
 
 export type BotLookAround = z.infer<typeof BotLookAroundSchema>
 

@@ -1,7 +1,7 @@
 // Which group request a mail to a member continues, decided once for delivery and admission.
 import type { BotGroupMember, BotGroupTurn } from '../../shared/bots/bot-group'
 import { BotGroupPeerScopeSchema, type BotGroupPeerScope } from '../../shared/bots/bot-group-schema'
-import { BOT_ITEM_MAIL_SENDER } from '../../shared/bots/bot-item-note-runs'
+import { BOT_ITEM_MAIL_SENDER } from '../../shared/bots/bot-item-mail-sender'
 import type { MessageRow } from '../runtime/orchestration/db/orchestration-records'
 import { readMessageSenderDispatch } from '../runtime/orchestration/db/messages/message-sender-dispatch'
 import type { BotGroupRuntime } from './bot-group-runtime'

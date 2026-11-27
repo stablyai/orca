@@ -6,7 +6,7 @@ export const styles = themedStyleSheet(() => ({
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     borderRadius: radii.surface,
-    backgroundColor: colors.bgPanel
+    backgroundColor: colors.chatPanel
   },
   meta: { color: colors.textMuted, fontSize: typography.metaSize, flexShrink: 1 },
   senders: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },

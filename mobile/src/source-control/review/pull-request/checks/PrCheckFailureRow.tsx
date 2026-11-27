@@ -5,7 +5,6 @@ import {
   CircleX,
   ExternalLink,
   MoreHorizontal,
-  RotateCw,
   Sparkles,
   SquareTerminal
 } from 'lucide-react-native'
@@ -35,9 +34,7 @@ export function PrCheckFailureRow({
   fixLabel,
   onFix,
   fixBusy,
-  fixAvailable,
-  onRerun,
-  rerunBusy
+  fixAvailable
 }: {
   check: PRCheckDetail
   entry: DetailEntry | undefined
@@ -48,8 +45,6 @@ export function PrCheckFailureRow({
   onFix: () => void
   fixBusy: boolean
   fixAvailable: boolean
-  onRerun: () => void
-  rerunBusy: boolean
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -207,12 +202,6 @@ export function PrCheckFailureRow({
                 onPress={onFix}
                 busy={fixBusy}
                 disabled={!fixAvailable}
-              />
-              <PrMiniButton
-                icon={RotateCw}
-                label={t('pullRequest.screens.rerun', 'Rerun')}
-                onPress={onRerun}
-                busy={rerunBusy}
               />
             </View>
           ) : null}

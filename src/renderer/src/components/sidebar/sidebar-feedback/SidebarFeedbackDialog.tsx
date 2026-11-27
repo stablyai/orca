@@ -25,6 +25,7 @@ import { SidebarFeedbackImageAttachments } from './SidebarFeedbackImageAttachmen
 import { useSidebarFeedbackEnvironmentPrefill } from './use-sidebar-feedback-environment-prefill'
 import { useSidebarFeedbackImages } from './use-sidebar-feedback-images'
 import { openHelpLink } from '../chrome/help-link-open'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 const GITHUB_ISSUES_URL = 'https://github.com/stablyai/orca/issues/'
 const DISCORD_URL = 'https://discord.gg/fzjDKHxv8Q'
@@ -146,66 +147,7 @@ export function SidebarFeedbackDialog({
     }
 
     setIsSubmitting(true)
-    try {
-      const identity = getSubmitIdentity(viewer, submitAnonymously)
-      // Main-process IPC avoids packaged file-renderer CORS restrictions during submission.
-      const result = await window.api.feedback.submit({
-        feedback: trimmed,
-        submitAnonymously,
-        githubLogin: identity.githubLogin,
-        githubEmail: identity.githubEmail,
-        images: images.map((image) => ({
-          contentType: image.contentType,
-          data: image.data
-        }))
-      })
-
-      if (!result.ok) {
-        throw new Error(`Feedback request failed: ${result.error}`)
-      }
-
-      // Clear delivered text even after unmount, but preserve newer drafts; strip regenerated environment footers before comparing.
-      if (
-        stripClientEnvironmentFooter(useAppStore.getState().feedbackDraft.feedback).trim() ===
-        userText
-      ) {
-        clearFeedbackDraft()
-      }
-
-      if (mountedRef.current) {
-        // The dialog closes after delivery; report lost screenshots without implying they remain recoverable here.
-        if (result.imagesFailure) {
-          toast.warning(
-            // Only 413 proves the size limit; other attachment refusals need different explanations.
-            result.imagesFailure.status === FEEDBACK_PAYLOAD_TOO_LARGE_STATUS
-              ? t(
-                  'auto.components.sidebar.SidebarFeedbackDialog.imagesRejected',
-                  'Feedback sent. Your screenshots were too large to upload and were not included.'
-                )
-              : t(
-                  'auto.components.sidebar.SidebarFeedbackDialog.imagesNotIncluded',
-                  'Feedback sent. Your screenshots could not be uploaded and were not included.'
-                )
-          )
-        } else if (result.imagesDelivered === false) {
-          toast.warning(
-            t(
-              'auto.components.sidebar.SidebarFeedbackDialog.imagesNotDelivered',
-              'Feedback sent, but image delivery could not be confirmed.'
-            )
-          )
-        } else {
-          toast.success(
-            t(
-              'auto.components.sidebar.SidebarFeedbackDialog.7a46c228b8',
-              'Thanks for the feedback.'
-            )
-          )
-        }
-        clearImages()
-        onOpenChange(false)
-      }
-    } catch (err) {
+    const reportSubmitError = (err: unknown): void => {
       if (mountedRef.current) {
         toast.error(
           t(
@@ -215,11 +157,73 @@ export function SidebarFeedbackDialog({
         )
       }
       console.error('Failed to submit feedback:', err)
-    } finally {
-      if (mountedRef.current) {
-        setIsSubmitting(false)
-      }
     }
+    await runWithFinally(
+      async () => {
+        try {
+          const identity = getSubmitIdentity(viewer, submitAnonymously)
+          // Main-process IPC avoids packaged file-renderer CORS restrictions during submission.
+          const result = await window.api.feedback.submit({
+            feedback: trimmed,
+            submitAnonymously,
+            githubLogin: identity.githubLogin,
+            githubEmail: identity.githubEmail,
+            images: images.map((image) => ({ contentType: image.contentType, data: image.data }))
+          })
+          if (!result.ok) {
+            reportSubmitError(new Error(`Feedback request failed: ${result.error}`))
+            return
+          }
+          // Clear delivered text even after unmount, but preserve newer drafts; strip regenerated environment footers before comparing.
+          if (
+            stripClientEnvironmentFooter(useAppStore.getState().feedbackDraft.feedback).trim() ===
+            userText
+          ) {
+            clearFeedbackDraft()
+          }
+          if (mountedRef.current) {
+            // The dialog closes after delivery; report lost screenshots without implying they remain recoverable here.
+            if (result.imagesFailure) {
+              toast.warning(
+                // Only 413 proves the size limit; other attachment refusals need different explanations.
+                result.imagesFailure.status === FEEDBACK_PAYLOAD_TOO_LARGE_STATUS
+                  ? t(
+                      'auto.components.sidebar.SidebarFeedbackDialog.imagesRejected',
+                      'Feedback sent. Your screenshots were too large to upload and were not included.'
+                    )
+                  : t(
+                      'auto.components.sidebar.SidebarFeedbackDialog.imagesNotIncluded',
+                      'Feedback sent. Your screenshots could not be uploaded and were not included.'
+                    )
+              )
+            } else if (result.imagesDelivered === false) {
+              toast.warning(
+                t(
+                  'auto.components.sidebar.SidebarFeedbackDialog.imagesNotDelivered',
+                  'Feedback sent, but image delivery could not be confirmed.'
+                )
+              )
+            } else {
+              toast.success(
+                t(
+                  'auto.components.sidebar.SidebarFeedbackDialog.7a46c228b8',
+                  'Thanks for the feedback.'
+                )
+              )
+            }
+            clearImages()
+            onOpenChange(false)
+          }
+        } catch (err) {
+          reportSubmitError(err)
+        }
+      },
+      () => {
+        if (mountedRef.current) {
+          setIsSubmitting(false)
+        }
+      }
+    )
   }
 
   return (

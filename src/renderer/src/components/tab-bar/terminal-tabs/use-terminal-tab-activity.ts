@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useAppStore } from '../../../store/index'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
+import { getPaneForegroundAgentsByTabId } from '@/components/sidebar/workspace-card/activity/worktree-card-status-inputs'
 import {
   getTerminalTabActivityFlags,
   resolveTerminalTabActivityStatus,
@@ -16,6 +17,18 @@ type TerminalTabActivity = {
 }
 
 type ActivityStatusInput = Parameters<typeof resolveTerminalTabActivityStatus>[0]
+type TabForegroundEntries = ReturnType<ReturnType<typeof getPaneForegroundAgentsByTabId>['get']>
+
+// Why: the foreground map gets a new identity on any pane's write; compare only this tab's entries.
+function sameTabForegroundEntries(a: TabForegroundEntries, b: TabForegroundEntries): boolean {
+  if (a === b) {
+    return true
+  }
+  if (!a || !b || a.length !== b.length) {
+    return false
+  }
+  return a.every(([paneKey, entry], index) => paneKey === b[index][0] && entry === b[index][1])
+}
 
 /** One tab's status selector; store writes that leave this tab's inputs untouched reuse the last answer. */
 function createActivityStatusSelector(): (input: ActivityStatusInput) => TerminalTabActivityStatus {
@@ -27,7 +40,7 @@ function createActivityStatusSelector(): (input: ActivityStatusInput) => Termina
     paneTitles: Record<number, string> | undefined
     ptyIds: string[] | undefined
     layoutRoot: NonNullable<ActivityStatusInput['terminalLayout']>['root'] | undefined
-    foreground: ActivityStatusInput['paneForegroundAgentByPaneKey']
+    foreground: TabForegroundEntries
     status: TerminalTabActivityStatus
   } | null = null
   return (input) => {
@@ -36,6 +49,9 @@ function createActivityStatusSelector(): (input: ActivityStatusInput) => Termina
       input.agentStatusByPaneKey,
       input.agentStatusEpoch
     ).get(id)
+    const foreground = input.paneForegroundAgentByPaneKey
+      ? getPaneForegroundAgentsByTabId(input.paneForegroundAgentByPaneKey).get(id)
+      : undefined
     if (
       last &&
       last.tabId === id &&
@@ -45,11 +61,14 @@ function createActivityStatusSelector(): (input: ActivityStatusInput) => Termina
       last.paneTitles === input.runtimePaneTitlesByTabId?.[id] &&
       last.ptyIds === input.ptyIdsByTabId?.[id] &&
       last.layoutRoot === input.terminalLayout?.root &&
-      last.foreground === input.paneForegroundAgentByPaneKey
+      sameTabForegroundEntries(last.foreground, foreground)
     ) {
       return last.status
     }
-    const status = resolveTerminalTabActivityStatus(input)
+    const status = resolveTerminalTabActivityStatus({
+      ...input,
+      paneForegroundAgentByPaneKey: foreground ? Object.fromEntries(foreground) : undefined
+    })
     last = {
       tabId: id,
       title: input.tab.title,
@@ -58,7 +77,7 @@ function createActivityStatusSelector(): (input: ActivityStatusInput) => Termina
       paneTitles: input.runtimePaneTitlesByTabId?.[id],
       ptyIds: input.ptyIdsByTabId?.[id],
       layoutRoot: input.terminalLayout?.root,
-      foreground: input.paneForegroundAgentByPaneKey,
+      foreground,
       status
     }
     return status

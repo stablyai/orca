@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import type { RuntimeBrowserCommandHost } from '../../../runtime/browser/commands/browser-command-contracts'
 import { BrowserError } from '../../../browser/browser-error'
 import { normalizeBrowserNavigationUrl } from '../../../../shared/browser/navigation/browser-url'
@@ -8,7 +9,7 @@ import {
   externalChromiumTabInfo,
   type ExternalChromiumPageRecord
 } from './external-chromium-tab-projection'
-const AgentBrowserCreatedTab = z.object({ tabId: z.string().min(1) })
+const AgentBrowserCreatedTab = lazyZodSchema(() => z.object({ tabId: z.string().min(1) }))
 
 export class ExternalChromiumTabRegistry {
   private readonly pagesByPublicId = new Map<string, ExternalChromiumPageRecord>()

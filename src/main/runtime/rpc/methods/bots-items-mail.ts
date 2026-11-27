@@ -3,10 +3,8 @@
 // note; same-bot sibling-chat changes only show the passive chat note without waking the bot.
 import type { Bot } from '../../../../shared/bot-types'
 import { botItemEventId, type BotItemActor } from '../../../../shared/bots/bot-items'
-import {
-  BOT_ITEM_MAIL_ID_PREFIX,
-  BOT_ITEM_MAIL_SENDER
-} from '../../../../shared/bots/bot-item-note-runs'
+import { BOT_ITEM_MAIL_ID_PREFIX } from '../../../../shared/bots/bot-item-note-runs'
+import { BOT_ITEM_MAIL_SENDER } from '../../../../shared/bots/bot-item-mail-sender'
 import { botMailSession, botMailSessionStillCurrent } from '../../../bots/bot-mail-chat'
 import { ownerCommentAttachmentBody } from '../../../bots/bot-item-comment-attachment-body'
 import { takeAdmittedCommentClaim } from '../../../bots/bot-item-comment-admitted-claims'

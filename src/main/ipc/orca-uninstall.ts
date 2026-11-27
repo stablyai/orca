@@ -1,6 +1,7 @@
 import { once } from 'node:events'
 import { homedir } from 'node:os'
 import { app, ipcMain, shell } from 'electron'
+import type { IpcHandleRegistrar } from './lazy-ipc-handle-group'
 import { spawnDetachedWithoutInheritance } from '@orca/process-host/isolated-detached-spawn'
 import {
   ORCA_UNINSTALL_STEPS,
@@ -72,16 +73,19 @@ async function openWindowsUninstaller(appPath: string | null): Promise<void> {
   await once(child, 'spawn')
 }
 
-export function registerOrcaUninstallHandlers(store: Store): void {
+export function registerOrcaUninstallHandlers(
+  store: Store,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
   // Steps update the plan the renderer last read, so retries keep earlier results.
   let current: OrcaUninstallPlan | null = null
 
-  ipcMain.handle('orcaUninstall:getPlan', async (): Promise<OrcaUninstallPlan> => {
+  ipc.handle('orcaUninstall:getPlan', async (): Promise<OrcaUninstallPlan> => {
     current = await buildOrcaUninstallPlan(await createHost(store))
     return current
   })
 
-  ipcMain.handle(
+  ipc.handle(
     'orcaUninstall:runStep',
     async (_event, args: OrcaUninstallRunStepArgs): Promise<OrcaUninstallPlan> => {
       if (!ORCA_UNINSTALL_STEPS.includes(args?.step)) {
@@ -101,7 +105,7 @@ export function registerOrcaUninstallHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'orcaUninstall:finish',
     async (_event, action: OrcaUninstallFinishAction): Promise<void> => {
       const appPath = current?.appPath ?? (await createHost(store)).identity.appPath

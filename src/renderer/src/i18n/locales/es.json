@@ -5976,7 +5976,6 @@
           "c13b82793c": "Gestionar instalaciones",
           "aee7b99cc6": "Instalar desde un enlace",
           "filterProvider": "Filtrar por agente",
-          "filterSource": "Filtrar por origen",
           "allSources": "Todo",
           "clearFilters": "Borrar filtros",
           "closeSkills": "Cerrar skills",
@@ -19005,7 +19004,6 @@
           "failed": "Fallida",
           "succeeded": "Correcta",
           "neverRan": "Nunca se ejecutó",
-          "filters": "Filtros",
           "clear": "Limpiar filtros",
           "removeFilter": "Eliminar filtro de {{value0}}"
         },
@@ -21530,6 +21528,7 @@
       "explicitChatWslMoveToHost": "El chat no está disponible en una carpeta WSL abierta desde Windows. Ejecuta el proyecto en un host WSL para chatear allí, o abre el agente en una terminal.",
       "explicitChatWslRunAsHost": "Ejecutar {{distro}} como host",
       "structuredSessionTerminalNotVisible": "Orca abrió {{value0}} en una terminal, pero no pudo mostrarlo aquí cuando finalizó el lanzamiento. Se mantuvo el borrador de tu chat.",
+      "explicitChatWorkspaceAccess": "Orca no tiene permiso para abrir esta carpeta del espacio de trabajo. Verifique los permisos de la carpeta e inténtelo de nuevo.",
       "explicitChatUnavailable": "Este espacio de trabajo no puede ejecutar el chat. Verifique la instalación del agente o ábralo en una terminal.",
       "goalControl": {
         "settingsRejected": "Codex no pudo aplicar el modelo y el esfuerzo seleccionados. No se envió este cambio de objetivo. Revisa la selección e inténtalo de nuevo.",
@@ -24724,7 +24723,9 @@
       "chatOtherWindow": "El inicio de sesión está en curso en otra ventana.",
       "chatPageDidntOpen": "¿No se abrió la página?",
       "chatPasteCode": "Pega el código",
-      "chatPasteCodeLabel": "El código que muestra Google después de iniciar sesión, o la dirección de esa página"
+      "chatPasteCodeLabel": "El código que muestra Google después de iniciar sesión, o la dirección de esa página",
+      "launchesUse": "Los nuevos inicios de agy usan esta cuenta",
+      "loginNow": "Sesión actual de agy"
     },
     "claude": {
       "added": "Cuenta agregada. Selecciónala para usarla en el próximo Claude que inicies.",

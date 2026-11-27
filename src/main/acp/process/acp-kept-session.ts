@@ -31,6 +31,7 @@ export class AcpKeptSession {
   private readonly kept: AcpKeptAgent
   private readonly child: RelayedProviderChild
   private startTaken = false
+  private replayWaitSpent = false
 
   constructor(
     private readonly relayed: AcpRelayedProcess,
@@ -114,6 +115,10 @@ export class AcpKeptSession {
   /** Acks everything the chat was handed once its reader took it, as a hand-off does, within a
    *  bound: a stalled stdin write or reader leaves the replay unacked rather than holding a send. */
   async replaySettled(): Promise<void> {
+    // One that ran out of time once doesn't hold later sends again; acks still land on their own.
+    if (this.replayWaitSpent) {
+      return
+    }
     // The replay reaches the reader in slices: ack each part handed on until the attach's whole
     // replay is acked, or the bound runs out.
     const until = Date.now() + REPLAY_SETTLE_WAIT_MS
@@ -124,10 +129,11 @@ export class AcpKeptSession {
         left,
         undefined
       )
-      if (!this.child.replayAcked()) {
+      if (!this.child.replayAcked() && Date.now() < until) {
         await new Promise((resolve) => setTimeout(resolve, REPLAY_SETTLE_RETRY_MS))
       }
     }
+    this.replayWaitSpent = !this.child.replayAcked()
   }
 
   /** See `StructuredAgentSessionAdapter.keptLaunchOutgrown`: false until the replay is acked. */

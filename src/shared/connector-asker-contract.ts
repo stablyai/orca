@@ -14,17 +14,18 @@ export const CONNECTOR_ASKER_PLACE_KINDS = [
 ] as const
 export type ConnectorAskerPlaceKind = (typeof CONNECTOR_ASKER_PLACE_KINDS)[number]
 
-const PersonFields = {
+const createPersonFields = () => ({
   userId: z.string().min(1).max(128),
   name: z.string().min(1).max(200).optional()
-}
+})
 
 /** What a bot reads before the request, each part under its own label. `bot` (a bot's post in the
  *  thread) and `more` (more was posted than fits) come only to a machine that lists threadCatchUp. */
-export const ConnectorContextItem = lazyZodSchema(() =>
-  z.discriminatedUnion('kind', [
-    z.object({ kind: z.literal('earlier'), ...PersonFields, text: z.string() }),
-    z.object({ kind: z.literal('no_access'), ...PersonFields, text: z.string() }),
+export const ConnectorContextItem = lazyZodSchema(() => {
+  const personFields = createPersonFields()
+  return z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('earlier'), ...personFields, text: z.string() }),
+    z.object({ kind: z.literal('no_access'), ...personFields, text: z.string() }),
     z.object({ kind: z.literal('issue'), text: z.string() }),
     z.object({ kind: z.literal('unreadable') }),
     z.object({
@@ -34,7 +35,7 @@ export const ConnectorContextItem = lazyZodSchema(() =>
     }),
     z.object({ kind: z.literal('more') })
   ])
-)
+})
 export type ConnectorContextItem = z.infer<typeof ConnectorContextItem>
 
 // Mirrors cloud/packages/connector-contract's CONNECTOR_LIMITS for asker.earlierOwn.
@@ -84,14 +85,16 @@ export type ConnectorEarlierOwn = z.infer<typeof ConnectorEarlierOwn>
  *  `place.id`: a Slack channel id, a GitHub `owner/repo#number`, a Linear issue key. */
 // The Orca bot that wrote a message on its person's behalf (its words, not theirs); dropped alone
 // when unreadable. Its kind ('bot') is left unread: it has no other.
-export const ConnectorAskerVia = z
-  .object({ userId: z.string().min(1).max(128), name: z.string().min(1).max(200) })
-  .optional()
-  .catch(undefined)
+export const ConnectorAskerVia = lazyZodSchema(() =>
+  z
+    .object({ userId: z.string().min(1).max(128), name: z.string().min(1).max(200) })
+    .optional()
+    .catch(undefined)
+)
 
 export const ConnectorAsker = lazyZodSchema(() =>
   z.object({
-    ...PersonFields,
+    ...createPersonFields(),
     role: z.enum(['owner', 'member']),
     place: z.object({ kind: z.enum(CONNECTOR_ASKER_PLACE_KINDS), id: z.string().min(1).max(256) }),
     text: z.string().min(1),

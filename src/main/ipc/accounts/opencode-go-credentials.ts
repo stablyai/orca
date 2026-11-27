@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import {
   clearOpenCodeGoApiKey,
   hasOpenCodeGoApiKey,
@@ -28,10 +29,11 @@ function refreshAfterOpenCodeGoCredentialChange(
 }
 
 export function registerOpenCodeGoCredentialsHandlers(
-  rateLimits: CredentialRateLimits | null
+  rateLimits: CredentialRateLimits | null,
+  ipc: IpcHandleRegistrar = ipcMain
 ): void {
-  ipcMain.handle('opencodeGoCredentials:getStatus', () => getOpenCodeGoCredentialsStatus())
-  ipcMain.handle('opencodeGoCredentials:saveApiKey', async (_event, key: unknown) => {
+  ipc.handle('opencodeGoCredentials:getStatus', () => getOpenCodeGoCredentialsStatus())
+  ipc.handle('opencodeGoCredentials:saveApiKey', async (_event, key: unknown) => {
     if (typeof key !== 'string') {
       throw new Error('OpenCode Go API key must be a string')
     }
@@ -39,7 +41,7 @@ export function registerOpenCodeGoCredentialsHandlers(
     refreshAfterOpenCodeGoCredentialChange(rateLimits, false)
     return getOpenCodeGoCredentialsStatus()
   })
-  ipcMain.handle('opencodeGoCredentials:clearApiKey', async () => {
+  ipc.handle('opencodeGoCredentials:clearApiKey', async () => {
     await clearOpenCodeGoApiKey()
     refreshAfterOpenCodeGoCredentialChange(rateLimits, true)
     return getOpenCodeGoCredentialsStatus()

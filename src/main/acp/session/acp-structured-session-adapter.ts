@@ -25,7 +25,6 @@ import {
 import { readAcpLiveOptions } from '../options/acp-live-options'
 import {
   acpPermissionWritesSettled,
-  acpKeptModeTakesLive,
   acpRunningPermission,
   applyAcpLivePermissionMode
 } from '../options/acp-live-permission-mode'
@@ -214,7 +213,7 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
   > = (sessionId, mode) => {
     const session = this.children.sessions.get(sessionId)
     return childState.isAcpReadySession(session)
-      ? !acpKeptModeTakesLive(session, mode) && acpRunningPermission(session) !== mode
+      ? acpRunningPermission(session) !== mode
       : undefined
   }
 
@@ -294,7 +293,8 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
   }
 
   relayOpenWork = (id: string) => acpChildRelayOpenWork(this.children.sessions.get(id))
-  keptLaunchOutgrown = (id: string) => acpChildKeptLaunchOutgrown(this.children.sessions.get(id))
+  keptLaunchOutgrown = (id: string, toolsOutdated: boolean) =>
+    acpChildKeptLaunchOutgrown(this.children.sessions.get(id), toolsOutdated)
 
   endedBeforeAcquire = (sessionId: string, generation: string): boolean =>
     this.children.endedBeforeAcquire.get(sessionId) === generation

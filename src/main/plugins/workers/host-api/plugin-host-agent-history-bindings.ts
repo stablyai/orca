@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { PLUGIN_HOST_API } from '../../../../shared/plugins/workers/plugin-host-api'
 import {
   PLUGIN_AGENT_SESSION_LIST_DEFAULT,
@@ -31,9 +32,11 @@ import {
 } from './plugin-agent-history'
 import type { PluginAgentStatusRow } from './plugin-workspace-projection'
 
-const worktreeShowAnswer = z.object({
-  worktree: z.object({ id: z.string(), identity: z.object({ key: z.string() }).optional() })
-})
+const worktreeShowAnswer = lazyZodSchema(() =>
+  z.object({
+    worktree: z.object({ id: z.string(), identity: z.object({ key: z.string() }).optional() })
+  })
+)
 
 /** One line, at most the public bound: a title can be the start of a multi-line first message. */
 function sessionTitle(title: string): string {

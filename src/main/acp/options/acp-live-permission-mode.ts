@@ -36,7 +36,7 @@ export function acpRunningPermission(
   return isAgentChatPermissionMode(reported) ? reported : null
 }
 
-/** A kept agent switches to `mode` live, as written at reattach or before a send, never by a restart. */
+/** A kept agent the transition can switch to `mode` live (a write before the send), not by a restart. */
 export function acpKeptModeTakesLive(
   session: LivePermissionSession,
   mode: AgentChatPermissionChoice

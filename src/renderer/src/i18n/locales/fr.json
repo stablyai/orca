@@ -6294,7 +6294,6 @@
           "c13b82793c": "Gérer les installations",
           "aee7b99cc6": "Installer depuis un lien",
           "filterProvider": "Filtrer par agent",
-          "filterSource": "Filtrer par source",
           "allSources": "Tous",
           "clearFilters": "Réinitialiser les filtres",
           "closeSkills": "Fermer les skills",
@@ -19295,7 +19294,6 @@
           "failed": "Échec",
           "succeeded": "Réussie",
           "neverRan": "Jamais exécutée",
-          "filters": "Filtres",
           "all": "Tous",
           "clear": "Réinitialiser les filtres",
           "agent": "Agent",
@@ -21844,6 +21842,7 @@
       "explicitChatWslMoveToHost": "Le chat n’est pas disponible dans un dossier WSL ouvert depuis Windows. Exécutez le projet sur un hôte WSL pour y discuter, ou ouvrez l’agent dans un terminal.",
       "explicitChatWslRunAsHost": "Exécuter {{distro}} comme hôte",
       "structuredSessionTerminalNotVisible": "Orca a ouvert {{value0}} dans un terminal, mais n'a pas pu l'afficher ici une fois le lancement terminé. Votre brouillon de chat a été conservé.",
+      "explicitChatWorkspaceAccess": "Orca n’a pas l’autorisation d’ouvrir ce dossier de l’espace de travail. Vérifiez les autorisations du dossier, puis réessayez.",
       "explicitChatUnavailable": "Cet espace de travail ne peut pas exécuter le chat. Vérifiez l'installation de l'agent ou ouvrez-le dans un terminal.",
       "goalControl": {
         "settingsRejected": "Codex n’a pas pu appliquer le modèle et l’effort sélectionnés. Ce changement d’objectif n’a pas été envoyé. Vérifiez la sélection et réessayez.",
@@ -25460,7 +25459,9 @@
       "chatOtherWindow": "Une connexion est en cours dans une autre fenêtre.",
       "chatPageDidntOpen": "La page ne s'est pas ouverte ?",
       "chatPasteCode": "Collez le code",
-      "chatPasteCodeLabel": "Le code que Google affiche après la connexion, ou l'adresse de cette page"
+      "chatPasteCodeLabel": "Le code que Google affiche après la connexion, ou l'adresse de cette page",
+      "launchesUse": "Les nouveaux lancements d'agy utilisent ce compte",
+      "loginNow": "Connexion agy actuelle"
     },
     "claude": {
       "added": "Compte ajouté. Sélectionnez-le pour l'utiliser pour le prochain Claude que vous démarrez.",

@@ -15699,7 +15699,6 @@
           "c13b82793c": "Gerenciar instalações",
           "aee7b99cc6": "Instalar de link",
           "filterProvider": "Filtrar por agente",
-          "filterSource": "Filtrar por origem",
           "allSources": "Todas",
           "clearFilters": "Limpar filtros",
           "closeSkills": "Fechar skills",
@@ -16449,7 +16448,6 @@
           "failed": "Falhou",
           "succeeded": "Bem-sucedida",
           "neverRan": "Nunca executada",
-          "filters": "Filtros",
           "all": "Todas",
           "clear": "Limpar filtros",
           "agent": "Agente",
@@ -23308,6 +23306,7 @@
       "thoughtForDuration": "Pensou por {{duration}}",
       "explicitChatWsl": "O chat não está disponível no WSL. Abra o agente em um terminal.",
       "explicitChatSsh": "O chat não está disponível via SSH. Abra o agente em um terminal.",
+      "explicitChatWorkspaceAccess": "O Orca não tem permissão para abrir esta pasta do espaço de trabalho. Verifique as permissões da pasta e tente novamente.",
       "explicitChatUnavailable": "Este espaço de trabalho não pode executar o chat. Confira a instalação do agente ou abra o agente em um terminal.",
       "structuredSessionHostDeclined": "{{value0}} aberto em um terminal",
       "structuredSessionTerminalNotVisible": "O Orca abriu o {{value0}} em um terminal, mas não conseguiu exibi-lo aqui ao concluir a inicialização. Seu rascunho do chat foi mantido.",
@@ -25992,7 +25991,9 @@
       "chatOtherWindow": "O login está em andamento em outra janela.",
       "chatPageDidntOpen": "A página não abriu?",
       "chatPasteCode": "Cole o código",
-      "chatPasteCodeLabel": "O código que o Google mostra depois que você entra, ou o endereço dessa página"
+      "chatPasteCodeLabel": "O código que o Google mostra depois que você entra, ou o endereço dessa página",
+      "launchesUse": "Novas execuções do agy usam esta conta",
+      "loginNow": "Login atual do agy"
     },
     "claude": {
       "added": "Conta adicionada. Selecione-a para usar no próximo Claude que iniciar.",
@@ -28946,7 +28947,7 @@
       "reports": "Relata",
       "takesOver": "Assume",
       "agentsKeepRunning": "Os agentes deles continuam em execução.",
-      "uploadDropOrPaste": "<upload>Enviar</upload>, arraste ou cole uma imagem",
+      "uploadOrPaste": "<upload>Enviar</upload> ou colar",
       "purposeLabel": "Identidade",
       "purposePlaceholder": "Quem é e o que faz",
       "uploadPasteOrDrop": "ou envie, cole ou arraste a sua",

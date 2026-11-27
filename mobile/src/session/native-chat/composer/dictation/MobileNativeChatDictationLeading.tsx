@@ -15,15 +15,12 @@ export function MobileNativeChatDictationLeading({
   micStarting = false,
   micProcessing = false,
   cancelRef,
-  trailing,
   children
 }: {
   micActive: boolean
   micStarting?: boolean
   micProcessing?: boolean
   cancelRef: RefObject<HostInstance | null>
-  // The context ring after the leading controls; it steps aside with them.
-  trailing: ReactNode
   children: ReactNode
 }): React.JSX.Element {
   const live = useContext(MobileDictationLiveContext)
@@ -36,12 +33,7 @@ export function MobileNativeChatDictationLeading({
     )
   }
   if (!live || (!micActive && !micProcessing)) {
-    return (
-      <>
-        <View style={styles.leadingControls}>{children}</View>
-        {trailing}
-      </>
-    )
+    return <View style={styles.leadingControls}>{children}</View>
   }
   return (
     <View style={[styles.leadingControls, styles.dictationLeading]}>

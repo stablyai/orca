@@ -34,7 +34,6 @@
   "agentHistory": {
     "panel": {
       "all": "Toutes",
-      "emptyScope": "Aucune session d'agent passée dans ce périmètre.",
       "hideDetails": "Masquer les détails",
       "showDetails": "Afficher les détails",
       "loading": "Chargement des sessions d'agent…",
@@ -66,15 +65,11 @@
       "untitledSession": "Session sans titre"
     },
     "sessionHistoryList": {
-      "currentWorktree": "worktree actuel",
       "messages_many": "{{count}} messages",
       "messages_one": "{{count}} message",
       "messages_other": "{{count}} messages",
       "resumeSession": "Reprendre la session d'agent",
-      "continueInCli": "Continuer en CLI",
-      "hidePreview": "Masque les messages récents.",
-      "showPreview": "Affiche les messages récents.",
-      "you": "Vous"
+      "continueInCli": "Continuer en CLI"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "Impossible de joindre l'hôte",
@@ -140,63 +135,36 @@
     },
     "pairConfirm": {
       "backToHome": "Retour à l'accueil",
-      "connectTimedOut": "Impossible de se connecter en {{seconds}} s — consultez le journal ci-dessous pour identifier le blocage.",
       "connecting": "Connexion…",
-      "description": "Vous avez ouvert un lien d'appairage depuis votre ordinateur. Confirmez pour l'ajouter à vos hôtes.",
       "pairButton": "Appairer",
-      "pairingFailed": "Échec de l'appairage : {{error}}",
-      "pairingLog": "Journal d'appairage",
-      "title": "Appairer cet ordinateur ?"
+      "pairingFailed": "Échec de l'appairage : {{error}}"
     },
     "pairScan": {
-      "cameraDisabledDescription": "Activez l'accès à la caméra dans les paramètres, ou collez le code d'appairage.",
-      "cameraDisabledTitle": "Accès à la caméra désactivé",
-      "cameraPermissionDescription": "Scannez le QR code affiché dans Orca sur votre ordinateur, ou collez le code d'appairage.",
-      "connectTimedOut": "Impossible de se connecter en {{seconds}} s — consultez le journal ci-dessous pour identifier le blocage.",
       "connecting": "Connexion…",
       "invalidPairingCode": "Code d'appairage invalide — copiez-le depuis votre ordinateur et collez-le à nouveau.",
       "invalidQrCode": "QR code Orca invalide",
-      "downloadQrCode": "C’est le code de téléchargement. Scannez le code d’association à l’étape 2 sur votre ordinateur.",
-      "openDesktopStep": "Ouvrez Orca sur votre ordinateur",
-      "openMobileSettingsStep": "Allez dans Paramètres → Mobile",
       "openSettings": "Ouvrir les paramètres",
       "pairingFailed": "Échec de l'appairage : {{error}}",
-      "pairingLog": "Journal d'appairage",
       "pasteCodeMessage": "Copiez le code affiché sous le QR code sur votre ordinateur.",
       "pasteCodePlaceholder": "orca://pair?code=... ou collez le code",
       "pasteCodeTitle": "Coller le code d'appairage",
-      "pasteInstead": "Coller plutôt le code",
-      "pastePairingCode": "Coller le code d'appairage",
-      "scanCodeStep": "Scannez le QR code",
-      "title": "Appairer un ordinateur",
-      "tryAgain": "Réessayer",
-      "codeNoLongerValid": "Ce code d'appairage a expiré, a déjà été utilisé ou a été remplacé. Affichez un nouveau code sur votre ordinateur et scannez à nouveau.",
       "runtimeAccessLink": "Ce lien est destiné à une autre app Orca. Scannez le code dans Paramètres → Mobile sur votre ordinateur, ou exécutez orca pair --mobile sur votre serveur."
     },
     "terminalSettings": {
-      "keepPhoneSize": "Conserver à la taille téléphone (par défaut)",
-      "leaveAppDescription": "Lorsque vous utilisez un terminal sur votre téléphone, Orca le réduit pour l'adapter à votre écran. Lorsque vous fermez l'application ou la mettez en arrière-plan, ce paramètre détermine s'il conserve la taille du téléphone (pour éviter que les outils CLI interactifs ne réorganisent leur affichage) ou reprend sa taille sur l'ordinateur. Vous pouvez à tout moment utiliser « Restaurer » dans la bannière sur l'ordinateur pour le redimensionner manuellement.",
-      "leaveAppHeading": "LORSQUE VOUS QUITTEZ L'APPLICATION",
-      "noPairedDesktops": "Aucun ordinateur appairé pour le moment. Appairez-en un pour régler le comportement du terminal.",
+      "leaveAppHeading": "Lorsque vous quittez l'application",
       "restoreAfterMinutes_many": "Après {{count}} minutes",
       "restoreAfterMinutes_one": "Après {{count}} minute",
       "restoreAfterMinutes_other": "Après {{count}} minutes",
       "restoreAfterSeconds_many": "Après {{count}} s",
       "restoreAfterSeconds_one": "Après {{count}} s",
       "restoreAfterSeconds_other": "Après {{count}} s",
-      "restoreHost": "Restaurer {{name}}",
       "previewColumns_many": "{{count}} colonnes",
       "previewColumns_one": "{{count}} colonne",
       "previewColumns_other": "{{count}} colonnes",
       "previewLabel": "Aperçu du terminal",
-      "previewHeading": "APERÇU",
-      "fontHeading": "POLICE",
-      "fontDescription": "Pincez dans un terminal pour modifier la taille ; elle est enregistrée ici. Ne modifie que cet appareil, pas le terminal de l'ordinateur.",
       "font": "Police",
       "size": "Taille",
       "sizePoints": "{{size}} pt",
-      "smaller": "Plus petit",
-      "larger": "Plus grand",
       "lineSpacing": "Interligne",
       "lineSpacingTight": "Serré",
       "lineSpacingNormal": "Normal",
@@ -256,22 +224,15 @@
     },
     "paneView": {
       "forward": "Suivant",
-      "keyboardPlaceholder": "Saisir du texte sur la page…",
       "reload": "Recharger",
-      "sendText": "Envoyer le texte au navigateur",
       "dialogTitleWithOrigin": "{{origin}} indique",
       "dialogTitleNoOrigin": "Cette page indique",
-      "dialogAnswer": "Réponse",
       "stop": "Arrêter",
       "reconnect": "Reconnecter"
     },
-    "pointerModifiers": {
-      "clickModifier": "Modificateur de clic {{key}}"
-    },
     "useBrowserCommands": {
       "deliveryUnconfirmed": "Envoi non confirmé — vérifiez la page avant de réessayer",
-      "dialogAnswerFailed": "Cette réponse n'est pas parvenue à la page.",
-      "sent": "Envoyé"
+      "dialogAnswerFailed": "Cette réponse n'est pas parvenue à la page."
     },
     "stream": {
       "updateApp": "Mettez à jour l'app Orca pour diffuser ici les onglets du navigateur.",
@@ -280,10 +241,6 @@
       "pageUnavailable": "La page du navigateur n'est pas encore disponible.",
       "timedOut": "Délai de diffusion du navigateur dépassé.",
       "stopped": "Diffusion arrêtée"
-    },
-    "viewModeSwitch": {
-      "mobileView": "Afficher la version mobile du site",
-      "webView": "Afficher la version pour ordinateur du site"
     },
     "loadFailure": {
       "retry": "Réessayer",
@@ -362,7 +319,6 @@
       "addToMessage": "Ajouter au message",
       "attachImage": "Joindre une image",
       "cancelEditing": "Annuler la modification",
-      "placeholder": "Posez votre question, @ pour référencer des fichiers, / pour les commandes",
       "saveEditedMessage": "Enregistrer le message modifié",
       "sendMessage": "Envoyer le message",
       "sendQueue": "Mettre en file d’attente",
@@ -372,10 +328,7 @@
       "sendSteerHint": "S’ajoute à ce que l’agent fait en ce moment"
     },
     "contextUsage": {
-      "label": "Contexte : {{used}} tokens sur {{window}}, {{percent}} % utilisés",
-      "title": "Contexte",
-      "estimated": "Estimation basée sur la dernière réponse.",
-      "deferredNote": "Chargé à la demande. Non compté dans le total utilisé."
+      "title": "Contexte"
     },
     "composerAttachments": {
       "attachedImage": "Image jointe",
@@ -387,7 +340,6 @@
       "uploadingFile": "Envoi de {{name}}"
     },
     "composerPlaceholder": {
-      "prompt": "Posez votre question, @ pour référencer des fichiers, / pour les commandes",
       "waitingForTerminal": "En attente du terminal…"
     },
     "diffCard": {
@@ -403,9 +355,7 @@
     },
     "message": {
       "copyMessage": "Copier le message",
-      "forkFromResponse": "Créer une branche à partir de cette réponse",
-      "scrollMessageToTop": "Revenir au début du message",
-      "forkFromResponseHint": "Une nouvelle conversation avec toute cette réponse, jusqu’à la fin de son tour"
+      "forkFromResponse": "Créer une branche à partir de cette réponse"
     },
     "messageActionsSheet": {
       "clipboardRejected": "Le presse-papiers a refusé le texte.",
@@ -437,10 +387,8 @@
     },
     "nativeChatToolLine": {
       "added": "A ajouté",
-      "copyCommand": "Copier la commande",
       "deleted": "A supprimé",
       "durationHours": "{{hours}} h {{minutes}} min {{seconds}} s",
-      "durationMilliseconds": "{{milliseconds}} ms",
       "durationMinutes": "{{minutes}} min {{seconds}} s",
       "durationSeconds": "{{seconds}} s",
       "edited": "A modifié",
@@ -621,8 +569,6 @@
       "xhighShort": "Extra"
     },
     "sessionOptionPickers": {
-      "agentWorking": "L'agent travaille",
-      "backToModels": "Retour aux modèles",
       "dispatchUnconfirmed": "Envoyé à l'agent — non confirmé",
       "modelFullAccessLabel": "Modèle, {{value}}, accès complet",
       "modelLabel": "Modèle, {{value}}",
@@ -630,7 +576,6 @@
       "applying": "Application en cours…",
       "onAttach": "S'applique quand le chat se connecte",
       "heldPickRefused": "{{picked}} n'est pas disponible dans ce chat. {{kept}} est conservé.",
-      "optionsSection": "Options",
       "permissionsLabel": "Autorisations, {{value}}",
       "settingsLocked": "Les paramètres du modèle seront déverrouillés à la fin de ce tour.",
       "workingAnnouncement": "L'agent travaille. Les paramètres du modèle seront déverrouillés à la fin de ce tour."
@@ -640,9 +585,6 @@
       "notReportedMarker": "Non communiqué",
       "moreModels": "Plus de modèles",
       "fewerModels": "Moins de modèles"
-    },
-    "sessionOptionSegments": {
-      "dispatchUnconfirmed": "Envoyé à l'agent — non confirmé"
     },
     "stopButton": {
       "stopAgent": "Arrêter l'agent",
@@ -1089,12 +1031,8 @@
       "monitoring": "Surveillance des tâches en arrière-plan",
       "unverifiable": "Aucune mise à jour récente"
     },
-    "authFailedBanner": {
-      "message": "Échec de l'authentification — essayez d'abord de vous reconnecter ; si l'échec persiste, recommencez l'appairage depuis votre ordinateur."
-    },
     "authFailedBannerActions": {
-      "repair": "Appairer à nouveau",
-      "webNote": "Reconnectez cet hôte ou supprimez-le depuis l'application Orca."
+      "repair": "Appairer à nouveau"
     },
     "codexResetCredit": {
       "alreadyAppliedTitle": "Réinitialisation déjà appliquée",
@@ -1132,25 +1070,13 @@
     },
     "customKeyModal": {
       "add": "Ajouter",
-      "addShortcut": "Ajouter un raccourci",
-      "command": "Commande",
       "commandPlaceholder": "Ex. : pnpm build",
       "editing": "Édition",
       "function": "Fonction",
       "key": "Touche",
-      "label": "Libellé",
-      "labelPlaceholder": "Ex. : Compilation",
-      "manageShortcuts": "Gérer les raccourcis",
-      "manageShortcutsHint": "Afficher, masquer ou réordonner les touches de raccourci",
-      "modifiers": "Modificateurs",
-      "moreKeys": "PLUS DE TOUCHES",
       "navigation": "Navigation",
-      "pickKey": "Choisir une touche",
       "pressEnter": "Appuyer sur Entrée",
-      "shortcutCombo": "Combinaison de touches",
-      "shortcutComboHint": "Créer des combinaisons avec Ctrl, Alt et Shift",
-      "textMacro": "Macro de texte",
-      "textMacroHint": "Envoyer une commande texte personnalisée"
+      "labelPlaceholder": "Ex. : Compilation"
     },
     "dictationSetupSheet": {
       "description": "Téléchargez ou choisissez un modèle et activez la dictée sur l'ordinateur appairé, le tout depuis cet écran.",
@@ -1192,8 +1118,6 @@
       "tooLargeMessage": "Ce diff est trop volumineux pour l'aperçu sur mobile."
     },
     "diffReviewDrawers": {
-      "addNote": "Ajouter une note",
-      "cancelNote": "Annuler la note",
       "clearSentNotes": "Effacer les notes envoyées",
       "copyNotes": "Copier les notes",
       "deleteNote": "Supprimer la note",
@@ -1202,12 +1126,10 @@
       "discardTitle": "Abandonner les modifications",
       "editNote": "Modifier la note",
       "fileNote": "Note sur le fichier",
-      "lineNumber": "Ligne {{lineNumber}}",
       "loadingSessions": "Chargement des sessions d'agent…",
       "newAgentSession": "Nouvelle session d'agent",
       "openInSession": "Ouvrir dans une session",
       "reviewNote": "Note de revue",
-      "saveLineNote": "Enregistrer la note sur la ligne {{lineNumber}}",
       "sendNotes": "Envoyer les notes",
       "sendNotesLabel": "Envoyer les notes à l'agent",
       "viewedFiles_many": "{{count}} fichiers consultés",
@@ -1223,10 +1145,7 @@
       "discardChanges": "Abandonner les modifications",
       "rangeLine": "Ligne {{line}}",
       "rangeLines": "Lignes {{startLine}}–{{line}}",
-      "sendToAgent": "Envoyer à {{agent}}",
-      "sendToAnAgent": "Envoyer à un agent",
       "rangePlaceholder": "Que faut-il changer ici ?",
-      "commentOnGitHub": "Commenter sur GitHub",
       "sendUnsentNotes": "Envoyer les notes non envoyées",
       "statusUnreadable": "Impossible de lire l'état de cet hôte. Nouvelle tentative…",
       "terminal": "Terminal",
@@ -1261,7 +1180,6 @@
       "title": "Modifications"
     },
     "diffReviewLine": {
-      "addNoteOnLine": "Ajouter une note à la ligne {{number}}",
       "addedLine": "Ligne ajoutée",
       "addedLineNumber": "Ligne {{number}} ajoutée",
       "contextLine": "Ligne de contexte",
@@ -1284,13 +1202,9 @@
       "openHost": "Ouvrir {{title}}",
       "pairingInvalid": "Appairage invalide",
       "pairingTemporarilyUnavailable": "Appairage temporairement indisponible",
-      "repairHint": "Touchez pour appairer à nouveau votre ordinateur.",
-      "sameNetworkOnlyHint": "Se connecte uniquement sur le même Wi-Fi ou via Tailscale. Pour vous connecter de partout, connectez-vous sur votre ordinateur et appairez de nouveau",
       "unlockHint": "Déverrouillez votre téléphone, puis touchez pour réessayer.",
-      "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} en activité"
-    },
-    "hostDiagnosticsLink": {
-      "viewDiagnostics": "Voir les diagnostics réseau"
+      "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} en activité",
+      "tapToPairAgain": "Touchez pour appairer à nouveau votre ordinateur."
     },
     "hostProtocolGate": {
       "checkingCompatibility": "Vérification de la compatibilité de l'hôte"
@@ -1349,11 +1263,9 @@
       "agent": "Agent",
       "connectTarget": "Se connecter à la cible",
       "options": "Options",
-      "createWorkspace": "Créer un espace de travail",
       "startFrom": "À partir de",
       "loadingProjects": "Chargement des projets…",
       "connectTargetFirst": "Connectez-vous d'abord à la cible",
-      "createWorktree": "Créer un worktree",
       "noProjectsFound": "Aucun projet trouvé",
       "note": "Note",
       "notePlaceholder": "Écrire une note",
@@ -1405,14 +1317,10 @@
       "linkUrl": "URL du lien"
     },
     "richMarkdownToolbar": {
-      "body": "Corps de texte",
       "bold": "Gras",
       "bulletList": "Liste à puces",
       "checklist": "Liste de tâches",
       "codeBlock": "Bloc de code",
-      "heading1": "H1",
-      "heading2": "H2",
-      "heading3": "H3",
       "image": "Image",
       "inlineCode": "Code en ligne",
       "italic": "Italique",
@@ -1485,19 +1393,10 @@
       "failed": "Échec"
     },
     "terminalShortcutSettings": {
-      "addDescription": "Créer une combinaison de touches ou une macro de texte",
-      "addShortcut": "Ajouter un raccourci personnalisé…",
-      "customShortcuts": "RACCOURCIS PERSONNALISÉS",
-      "empty": "Aucun raccourci personnalisé défini pour le moment.",
       "removeShortcut": "Supprimer {{label}}",
-      "resetDefaults": "Rétablir les valeurs par défaut",
-      "resetDescription": "Afficher toutes les touches de raccourci intégrées dans l'ordre initial",
-      "moreKeys": "PLUS DE TOUCHES",
-      "moreKeysDescription": "Ces touches se trouvent sous ⋯ dans la rangée de touches du terminal. Activez ou désactivez les touches pour les afficher ou les masquer, puis maintenez la poignée pour les réordonner. Les touches déjà présentes dans la rangée, comme Échap ou les flèches, ne figurent pas sous ⋯.",
-      "directionPad": "PAVÉ DIRECTIONNEL",
+      "moreKeys": "Plus de touches",
       "showDirectionPad": "Afficher le pavé directionnel",
-      "showDirectionPadDescription": "Épingler le pavé de flèches dans la barre latérale. Sinon, la barre affiche les touches fléchées.",
-      "showShortcut": "Afficher le raccourci {{label}}"
+      "showDirectionPadDescription": "Épingler le pavé de flèches dans la barre latérale. Sinon, la barre affiche les touches fléchées."
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "Utiliser une réinitialisation des limites de débit ?",
@@ -1516,13 +1415,10 @@
     "voiceModelList": {
       "deleteModel": "Supprimer {{label}}",
       "downloadModel": "Télécharger {{label}}",
-      "inUse": "Utilisé",
       "modelExtracting": "{{size}} · extraction…",
       "modelProgress": "{{size}} · {{progress}} %",
       "modelSize": "{{size}} Mo",
-      "recommended": "Recommandé",
-      "use": "Utiliser",
-      "useModel": "Utiliser {{label}}"
+      "recommended": "Recommandé"
     },
     "workspaceDetailPlaceholder": {
       "description": "Choisissez un espace de travail dans la barre latérale pour ouvrir son terminal ici.",
@@ -1585,9 +1481,9 @@
     },
     "native-chat": {
       "turnDiff": {
-        "changedFiles_many": "{{count}} fichiers modifiés",
-        "changedFiles_one": "{{count}} fichier modifié",
-        "changedFiles_other": "{{count}} fichiers modifiés",
+        "changed_many": "{{count}} fichiers modifiés",
+        "changed_one": "{{count}} fichier modifié",
+        "changed_other": "{{count}} fichiers modifiés",
         "partial": "Diff partiel",
         "showMoreFiles": "Afficher {{count}} de plus"
       },
@@ -1725,23 +1621,13 @@
   },
   "diagnostics": {
     "connectionDiagnosticsView": {
-      "authFailed": "échec de l'authentification",
-      "connected": "connecté",
-      "connecting": "connexion en cours",
       "copyReport": "Copier le rapport",
-      "diagnosisHeading": "Cause probable",
-      "disconnected": "déconnecté",
-      "handshaking": "négociation en cours",
       "noEvents": "Aucun événement de connexion pour le moment. Les événements s'affichent lorsque l'application tente de se connecter à cet hôte.",
       "noHosts": "Aucun hôte appairé.",
-      "privacyHint": "Envoie un rapport expurgé de taille limitée contenant le nom de l'hôte, le point de terminaison, les versions, l'état de la connexion et les événements — jamais le contenu des terminaux ni les identifiants de connexion.",
-      "reconnecting": "reconnexion en cours",
       "retrySending": "Réessayer l'envoi",
-      "sendDiagnostics": "Envoyer les diagnostics",
       "sending": "Envoi…",
       "sent": "Diagnostics envoyés",
-      "stateWithAttempt": "{{state}} · tentative {{attempts}}",
-      "title": "Diagnostics réseau"
+      "stateWithAttempt": "{{state}} · tentative {{attempts}}"
     },
     "mobileWebBundleProbeRow": {
       "assets": "Ressources",
@@ -1762,14 +1648,11 @@
     "troubleshootCommonIssues": {
       "allowNotifications": "Vérifiez que les paramètres système autorisent les notifications Orca et que le mode Concentration ou Ne pas déranger est désactivé.",
       "checkTailnet": "Vérifiez que l'ordinateur n'est pas en veille et apparaît connecté à votre tailnet.",
-      "desktopTitle": "Application de bureau arrêtée",
       "disableVpn": "Désactivez ce VPN ou activez le routage fractionné / « Autoriser le LAN ».",
-      "firewallTitle": "Pare-feu bloquant le port {{port}}",
       "linuxFirewall": "Linux: sudo ufw allow {{port}}",
       "keepTailscaleOn": "Les adresses d'hôte comme 100.x.x.x ou *.ts.net passent par Tailscale — laissez-le ACTIVÉ.",
       "macosFirewall": "macOS : Réglages Système → Réseau → Pare-feu — autorisez Orca.",
       "notificationNetwork": "Essayez les données mobiles ou un autre réseau Wi-Fi. Si les alertes arrivent après ce changement, votre réseau retarde peut-être leur réception.",
-      "notificationsTitle": "Notifications push",
       "openDesktop": "Orca doit être ouvert sur votre ordinateur pour accepter les connexions.",
       "pairAfterUpdate": "Après une mise à jour, vous devrez peut-être refaire l'appairage via un QR code.",
       "reconnectWifi": "Essayez de reconnecter les deux appareils au WiFi.",
@@ -1780,22 +1663,14 @@
       "retryHost": "Revenez à la liste des hôtes et touchez votre hôte pour réessayer.",
       "sameNetwork": "Les deux appareils doivent être sur le même LAN (sauf s'ils sont connectés via Tailscale).",
       "sameSubnet": "Ethernet et le WiFi doivent utiliser le même sous-réseau.",
-      "tailscaleTitle": "Hôte Tailscale inaccessible",
-      "timeoutTitle": "Délai de connexion dépassé",
       "updateTailscale": "Mettez à jour l'application Tailscale — les versions récentes corrigent des bugs de reconnexion.",
       "vpnRouting": "Les VPN autres que Tailscale peuvent acheminer le trafic local via un serveur distant.",
-      "vpnTitle": "Interférences d'autres VPN",
       "wifiSignal": "Vérifiez la puissance du signal WiFi sur votre téléphone.",
-      "wifiTitle": "Réseaux WiFi différents",
       "windowsFirewall": "Windows : Pare-feu Windows Defender → Autoriser une application — autorisez Orca sur les réseaux privés."
     },
     "troubleshootView": {
       "commonIssues": "Problèmes courants",
-      "runAgain": "Relancer",
-      "runDiagnostics": "Lancer les diagnostics",
-      "running": "En cours…",
-      "title": "Dépannage",
-      "viewNetworkDiagnostics": "Voir les diagnostics réseau"
+      "title": "Dépannage"
     },
     "useTroubleshootDiagnostics": {
       "connected": "Connecté",
@@ -1938,9 +1813,6 @@
       "backToSession": "Retour à la session",
       "closeFiles": "Fermer les fichiers",
       "emptyState": "Aucun fichier trouvé",
-      "filterPlaceholder": "Filtrer les fichiers",
-      "noMatchesHint": "Seuls les dossiers que vous avez ouverts sont parcourus.",
-      "clearFilter": "Effacer le filtre",
       "loading": "Chargement des fichiers…",
       "loadFailed": "Impossible de charger les fichiers",
       "title": "Fichiers",
@@ -1954,13 +1826,8 @@
       "openFolder": "Ouvrir le dossier {{name}}",
       "previewFile": "Afficher l'aperçu du fichier {{name}}",
       "retryLoading": "Réessayer de charger {{path}}",
-      "searchAll": "Tout rechercher",
-      "searchAllIn": "Rechercher dans tout {{folder}}",
       "ignored": "Ignoré par .gitignore",
-      "searched": "{{loaded}} sur {{total}} parcourus dans {{folder}}.",
-      "searching": "Recherche dans {{folder}}… {{loaded}} sur {{total}}",
-      "showMore": "Afficher {{rows}} de plus",
-      "unavailable": "Indisponible sur mobile"
+      "showMore": "Afficher {{rows}} de plus"
     },
     "fileExplorerRowActions": {
       "copyName": "Copier le nom",
@@ -2056,47 +1923,32 @@
       "lastStatus": "Dernière : {{status}}",
       "newAutomation": "Nouvelle automatisation",
       "noAutomations": "Aucune automatisation pour l'instant",
-      "pairDesktop": "Appairez un ordinateur pour afficher et exécuter des automatisations.",
       "paused": "En pause",
       "scheduled": "Planifiées",
       "showFor": "Afficher les automatisations de",
       "toggleFailed": "Impossible de mettre à jour {{name}}",
-      "updateDesktop": "Mettez à jour Orca sur {{desktop}} pour utiliser les automatisations."
-    },
-    "emptyState": {
-      "connectedDescription": "Votre ordinateur apparaîtra ici. Tout est chiffré de bout en bout.",
-      "connectedTitle": "Vous êtes connecté",
-      "description": "Appairez votre téléphone à Orca sur votre ordinateur pour suivre vos agents, accéder à n'importe quel terminal et piloter votre travail depuis votre téléphone.",
-      "pairDesktopButton": "Appairer un ordinateur",
-      "scanCodeBelowDescription": "Touchez « Appairer un ordinateur » ci-dessous, puis pointez votre caméra vers le QR code affiché à l'écran.",
-      "openDesktopDescription": "Allez dans Paramètres → Mobile et générez un QR code d'appairage.",
-      "openDesktopTitle": "Ouvrir Orca sur l'ordinateur",
-      "scanCodeTitle": "Scanner le code",
-      "title": "Connectez votre ordinateur"
+      "updateDesktop": "Mettez à jour Orca sur {{desktop}} pour utiliser les automatisations.",
+      "pairComputer": "Appairez un ordinateur pour afficher et exécuter des automatisations."
     },
     "listFooter": {
-      "hostPickerTitle": "Ouvrir les tâches sur"
+      "openTasksOn": "Ouvrir les tâches sur"
     },
     "listHeader": {
-      "desktopsHeading": "Ordinateurs"
+      "computersHeading": "Ordinateurs"
     },
     "screen": {
       "pairingCheckFailed": "Impossible de vérifier l'appairage",
-      "removeHostFailed": "Impossible de supprimer l'hôte",
-      "removeHostMessage": "Supprimer « {{name}} » ? Vous pourrez l'appairer à nouveau plus tard.",
-      "removeHostTitle": "Supprimer l'hôte",
-      "tryAgain": "Veuillez réessayer."
+      "tryAgain": "Veuillez réessayer.",
+      "removeComputerFailed": "Impossible de supprimer l'hôte",
+      "removeComputerTitle": "Supprimer l'hôte",
+      "removeComputerMessage": "Supprimer « {{name}} » ? Vous pourrez l'appairer à nouveau plus tard.",
+      "sameNetworkOnly": "Se connecte uniquement sur le même Wi-Fi ou via Tailscale. Pour vous connecter de partout, connectez-vous sur votre ordinateur et appairez de nouveau"
     },
     "bottomBar": {
-      "connectFirst": "Connectez un ordinateur pour démarrer un nouveau travail.",
       "newWorkspace": "Nouvel espace de travail"
     },
-    "desktops": {
-      "pairDesktop": "Appairer un ordinateur"
-    },
     "sections": {
-      "tasks": "Tâches",
-      "tasksSubtitle": "Parcourez vos issues et vos revues"
+      "tasks": "Tâches"
     },
     "stats": {
       "agentTime": "Temps agent",
@@ -2109,23 +1961,23 @@
     },
     "tabs": {
       "automations": "Automatisations",
-      "chooseDesktop": "{{desktop}}, choisir un autre ordinateur",
       "feed": "Activité",
       "usage": "Utilisation",
       "agents": "Agents",
-      "bots": "Bots"
+      "bots": "Bots",
+      "chooseComputer": "{{desktop}}, choisir un autre ordinateur"
     },
     "usage": {
       "active": "Actif",
-      "addAccounts": "Ajoutez des comptes dans Paramètres → Comptes sur l'ordinateur.",
       "connectDesktop": "Connectez {{desktop}} pour voir l'utilisation des comptes d'agent.",
       "emptyTitle": "Aucune utilisation pour l'instant",
-      "openAccountsHint": "Ouvre les comptes de cet ordinateur",
-      "pairDesktop": "Appairez un ordinateur pour voir l'utilisation des comptes d'agent.",
       "refresh": "Actualiser l'utilisation",
       "showUsageFor": "Afficher l'utilisation de",
       "updatedAgo": "Mis à jour il y a {{time}}",
-      "updatedJustNow": "Mis à jour à l'instant"
+      "updatedJustNow": "Mis à jour à l'instant",
+      "pairComputer": "Appairez un ordinateur pour voir l'utilisation des comptes d'agent.",
+      "addAccountsOnComputer": "Ajoutez des comptes dans Paramètres → Comptes sur l'ordinateur.",
+      "openComputerAccountsHint": "Ouvre les comptes de cet ordinateur"
     },
     "activeAgents": {
       "heading": "Actifs",
@@ -2156,31 +2008,27 @@
       "updateStepsServer": "Mettez à jour Orca sur le serveur, puis redémarrez-le.",
       "orcaVersion": "Version d'Orca",
       "goBack": "Précédent",
-      "hostNamePlaceholder": "Nom de l'hôte",
-      "hostRemoved": "Cet hôte a été supprimé de ce téléphone.",
-      "loadFailed": "Impossible de charger l'hôte.",
-      "missingHost": "Hôte manquant.",
       "name": "Nom",
-      "saveFailed": "Impossible d'enregistrer l'hôte.",
-      "saveHost": "Enregistrer l'hôte",
-      "title": "Modifier l'hôte",
-      "removeHost": "Retirer l'hôte"
+      "editComputer": "Modifier l'hôte",
+      "computerRemoved": "Cet hôte a été supprimé de ce téléphone.",
+      "couldNotLoad": "Impossible de charger l'hôte.",
+      "couldNotSave": "Impossible d'enregistrer l'hôte.",
+      "save": "Enregistrer"
     }
   },
   "hostScreen": {
     "hostListActionSheetActions": {
       "connect": "Se connecter",
       "disconnect": "Déconnecter",
-      "editHost": "Modifier l'hôte",
       "networkDiagnostics": "Diagnostic réseau",
-      "reconnect": "Reconnecter"
+      "reconnect": "Reconnecter",
+      "editComputer": "Modifier l'hôte"
     },
     "hostPendingCreationRow": {
       "creatingWorkspace": "Création de l'espace de travail…"
     },
     "hostScreenHeader": {
       "accounts": "Comptes",
-      "backToHosts": "Retour aux hôtes",
       "floatingWorkspace": "Espace de travail flottant",
       "hideSidebar": "Masquer la barre latérale",
       "reconnect": "Reconnecter",
@@ -2210,7 +2058,6 @@
       "deleteDestroysEnvironment": "Cela détruit aussi l’environnement « {{environment}} » qu’Orca a créé pour lui, avec les modifications non validées et les terminaux en cours qui s’y trouvent.",
       "deleteKeepsEnvironment": "L’environnement « {{environment}} » qu’Orca a créé pour lui continue de tourner : sa recette n’a pas d’étape de destruction.",
       "pin": "Épingler",
-      "primaryWorktreeDeleteHint": "Worktree principal — impossible à supprimer. Retirez plutôt le projet.",
       "removeHost": "Supprimer l'hôte",
       "removeHostMessage": "Supprimer « {{name}} » ? Vous pourrez l'appairer à nouveau plus tard.",
       "deleteFailed": "Impossible de supprimer « {{name}} »",
@@ -2220,8 +2067,7 @@
       "markRead": "Marquer comme lu",
       "markUnread": "Marquer comme non lu",
       "muteNotifications": "Désactiver les notifications",
-      "unmuteNotifications": "Réactiver les notifications",
-      "moveToStatus": "Déplacer vers le statut"
+      "unmuteNotifications": "Réactiver les notifications"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "Vérifications : en échec",
@@ -2283,27 +2129,19 @@
       "exceptDefaultBranch": "Sauf la branche par défaut",
       "filters": "Filtres",
       "groupBy": "Grouper par",
-      "hideAutomationCreated": "Masquer ceux créés par l'automatisation",
-      "hideCliCreated": "Masquer ceux créés par le CLI",
       "hideDefaultBranch": "Masquer la branche par défaut",
-      "hideDetachedHead": "Masquer les HEAD détachés",
-      "hideOtherClientWorkspaces": "Masquer les espaces de travail d'autres clients",
       "hideSleeping": "Masquer les espaces en veille",
-      "hosts": "Hôtes",
       "localLinux": "Linux local",
       "localMac": "Mac local",
       "localWindows": "Windows local",
       "projectOrder": "Ordre des projets",
       "projects": "Projets",
-      "savingToDesktop": "Enregistrement sur l'hôte",
       "show": "Afficher",
       "showProperties": "Afficher les propriétés",
       "sortBy": "Trier par",
-      "syncedAcrossDevices": "Synchronisées sur vos appareils",
       "done": "Terminé",
       "reset": "Réinitialiser",
       "thisComputer": "Cet ordinateur",
-      "waitingForDesktop": "Toujours en attente de l'hôte",
       "workspaceOptions": "Options des espaces de travail"
     },
     "hostBottomBar": {
@@ -2329,7 +2167,6 @@
       "accounts": "Comptes",
       "agentSessionHistory": "Historique des sessions d'agent",
       "changes": "Modifications",
-      "editHost": "Modifier l'hôte",
       "host": "Hôte",
       "pullRequest": "Pull Request",
       "sourceControl": "Contrôle de code source",
@@ -2337,12 +2174,13 @@
       "terminal": "Terminal",
       "workspace": "Espace de travail",
       "automations": "Automatisations",
-      "mcpServers": "Serveurs MCP"
+      "mcpServers": "Serveurs MCP",
+      "editComputer": "Modifier l'hôte"
     }
   },
   "newWorkspace": {
     "hostPicker": {
-      "title": "Créer un espace de travail sur"
+      "newWorkspaceOn": "Créer un espace de travail sur"
     },
     "loadingDrawer": {
       "downloadProgress": "Téléchargement… {{progress}}",
@@ -2361,14 +2199,8 @@
       "silentName": "Notifications silencieuses Orca"
     },
     "notificationDeliverySection": {
-      "footer": "Les types d'alertes suivent les paramètres de notification de chaque ordinateur appairé. Les notifications sont suspendues après 7 jours sans utilisation de cette application ; ouvrez-la et reconnectez-vous pour les réactiver.",
       "onlyWhenAgentNeedsInput": "Uniquement quand un agent a besoin de moi",
-      "onlyWhenAgentNeedsInputHint": "Demandes d'autorisation et questions. Ignore les agents qui ont terminé.",
-      "onlyWhenAway": "Uniquement si vous n'êtes pas à l'ordinateur",
-      "onlyWhenAwayHint": "Après 3 minutes sans activité au clavier ou à la souris, ou si l'ordinateur est verrouillé.",
-      "sound": "Son des notifications",
-      "suppressWhileFocused": "Suspendre pendant la consultation",
-      "suppressWhileFocusedHint": "Ignorer les alertes de l'espace de travail ouvert sur ce téléphone."
+      "sound": "Son des notifications"
     }
   },
   "onboarding": {
@@ -2380,16 +2212,11 @@
       "waitingOnYou": "En attente de votre intervention."
     },
     "onboardingPage": {
-      "enableAgentNotifications": "Activer les notifications des agents",
       "enableNotifications": "Activer les notifications",
       "keepTerminal": "Conserver le terminal",
       "notNow": "Pas maintenant",
-      "notificationsDescription": "Recevez une notification sur ce téléphone lorsqu'un agent a terminé ou est en attente, même si vous n'utilisez pas l'application.",
-      "notificationsDisclosure": "Envoyées via le service de notifications push d'Orca après 3 minutes d'inactivité de votre ordinateur. Modifiez ce réglage à tout moment dans les paramètres.",
       "notificationsTitle": "Soyez averti quand un agent a besoin de vous",
-      "openInChatUi": "Ouvrir les sessions dans l'interface de chat",
       "openInTerminal": "Ouvrir les sessions dans le terminal",
-      "sessionViewDescription": "Choisissez si les sessions d'agent compatibles s'ouvrent dans le terminal ou l'interface de chat sur cet appareil. Appuyez longuement sur l'onglet d'une session pour changer de vue, ou modifiez le choix par défaut à tout moment dans Paramètres → Chat UI.",
       "sessionViewTitle": "Comment ouvrir les sessions ?",
       "skipNotifications": "Ignorer les notifications pour le moment",
       "useChatUi": "Utiliser le chat"
@@ -2409,7 +2236,6 @@
       "daysAgo_other": "il y a {{count}} j",
       "deleteConfirmMessage": "Cette action supprime définitivement le commentaire sur GitHub.",
       "editPlaceholder": "Modifier le commentaire…",
-      "replyToComment": "Répondre au commentaire",
       "hoursAgo_many": "il y a {{count}} h",
       "hoursAgo_one": "il y a {{count}} h",
       "hoursAgo_other": "il y a {{count}} h",
@@ -2421,40 +2247,23 @@
       "monthsAgo_one": "il y a {{count}} mois",
       "monthsAgo_other": "il y a {{count}} mois",
       "reply": "Répondre",
-      "editComment": "Modifier le commentaire",
-      "deleteComment": "Supprimer le commentaire",
-      "unresolveThread": "Marquer le fil comme non résolu",
-      "resolveThread": "Résoudre le fil",
       "resolve": "Résoudre",
-      "replyPlaceholder": "Écrire une réponse…",
       "unresolve": "Marquer comme non résolu",
       "yearsAgo_many": "il y a {{count}} ans",
       "yearsAgo_one": "il y a {{count}} an",
-      "yearsAgo_other": "il y a {{count}} ans",
-      "resolved": "résolu",
-      "openOnGitHub": "Ouvrir le commentaire sur GitHub"
+      "yearsAgo_other": "il y a {{count}} ans"
     },
     "commentsSection": {
-      "all": "Tous",
-      "humans": "Humains",
-      "bots": "Bots",
-      "noBotComments": "Aucun commentaire de bot.",
-      "noHumanComments": "Aucun commentaire humain.",
       "comment": "Commenter",
       "resolvedThreadSingle": "Fil de {{author}} résolu",
       "resolvedThreadCount": "Fil de {{author}} résolu ({{count}})",
-      "resolvedCommentSingle": "Commentaire de {{author}} résolu",
-      "resolvedCommentCount": "Commentaire de {{author}} résolu ({{count}})",
       "commentsLoadFailedRetry": "Impossible de charger les commentaires.",
       "description": "Description",
       "descriptionLoadFailed": "Impossible de charger la description. Appuyez sur Actualiser pour réessayer.",
       "noComments": "Aucun commentaire pour le moment.",
       "noDescription": "Aucune description fournie.",
       "showMore": "Afficher {{count}} de plus",
-      "addCommentPlaceholder": "Ajouter un commentaire…",
-      "title": "Commentaires",
-      "commentsLoadFailed": "Impossible de charger les commentaires. Appuyez sur Actualiser pour réessayer.",
-      "showMoreOf": "Afficher {{count}} de plus sur {{remaining}}"
+      "title": "Commentaires"
     },
     "linkPrForm": {
       "linkButton": "Lier la pull request",
@@ -2566,14 +2375,6 @@
       "stateOpen": "Ouverte",
       "unavailable": "Checks indisponibles"
     },
-    "prCommentAudienceLabels": {
-      "all": "Tous",
-      "bots": "Bots",
-      "humans": "Humains",
-      "noBotComments": "Aucun commentaire de bot.",
-      "noComments": "Aucun commentaire pour le moment.",
-      "noHumanComments": "Aucun commentaire humain."
-    },
     "tab": {
       "updated": "mis à jour {{time}}",
       "moreActions": "Autres actions sur la pull request",
@@ -2626,8 +2427,8 @@
       "titleLabel": "Titre",
       "descriptionLabel": "Description",
       "writeWithAi": "Rédiger avec l'IA",
-      "descriptionPlaceholder": "Facultatif",
-      "draft": "Créer en brouillon"
+      "draft": "Créer en brouillon",
+      "create": "Créer"
     },
     "screens": {
       "hideLog": "Masquer le journal",
@@ -2637,7 +2438,6 @@
       "failedAfter": "Échec après {{duration}}",
       "failed": "Échec",
       "checkActions": "Plus d'actions pour {{name}}",
-      "rerun": "Relancer",
       "copyErrorFailed": "Impossible de copier l'erreur.",
       "durationSeconds": "{{seconds}} s",
       "durationMinutes": "{{minutes}} min {{seconds}} s",
@@ -2781,20 +2581,12 @@
       "messageModeLabel": "Mode message : écrivez, puis envoyez. Passer en mode touches",
       "moreKeys": "Plus de touches et d’actions",
       "showKeyboard": "Afficher le clavier",
-      "dismissKeyboardHint": "Masque le clavier virtuel et garde la session de terminal en cours ouverte.",
-      "switchToDesktopMode": "Passer en mode bureau",
-      "switchToPhoneMode": "Basculer en mode téléphone",
-      "pasteFromClipboard": "Coller depuis le presse-papiers",
-      "paste": "Coller",
-      "addCustomShortcut": "Ajouter un raccourci personnalisé"
+      "pasteFromClipboard": "Coller depuis le presse-papiers"
     },
     "activeContent": {
-      "createTab": "Créer un onglet",
       "creatingTab": "Création…",
       "fileTitle": "Fichier",
       "loadingTerminal": "Chargement du terminal",
-      "noTabs": "Aucun onglet dans cette session",
-      "retryLoadingTerminal": "Réessayer de charger le terminal",
       "terminalTakingLonger": "Le chargement du terminal prend plus de temps que prévu"
     },
     "agentChildRow": {
@@ -2895,25 +2687,14 @@
       "workflow": "Flux de travail en arrière-plan"
     },
     "browserTabActionSheet": {
-      "forward": "Suivant",
-      "reload": "Recharger",
       "hardReload": "Forcer le rechargement",
       "title": "Navigateur"
     },
     "bulkCloseSheetActions": {
       "closeOtherTabs": "Fermer les autres onglets"
     },
-    "bulkTabClose": {
-      "confirm": "Fermer les onglets",
-      "description": "Les onglets sélectionnés seront fermés. Les onglets épinglés resteront ouverts.",
-      "titleEditors": "Fermer tous les onglets de l’éditeur ?",
-      "titleLeft": "Fermer les onglets à gauche ?",
-      "titleOthers": "Fermer les autres onglets ?",
-      "titleRight": "Fermer les onglets à droite ?"
-    },
     "commandDock": {
       "liveInputHint": "Le texte saisi est envoyé directement au terminal actif.",
-      "tapToShowKeyboard": "Touchez pour afficher le clavier",
       "liveInputLabel": "Saisie en direct dans le terminal"
     },
     "contentRow": {
@@ -3123,17 +2904,13 @@
       "requestFailed": "Échec de la requête : {{method}}"
     },
     "header": {
-      "workspaceDetailsHint": "Affiche le nom complet de l'espace de travail et son emplacement",
       "backToWorktrees": "Retour aux worktrees",
       "moreActions": "Autres actions de la session",
-      "openSourceControl": "Ouvrir le contrôle de code source",
       "reconnectToDesktop": "Se reconnecter à l'ordinateur",
       "showSidebar": "Afficher la barre latérale",
       "terminalTitle": "Terminal",
       "terminalLayout": "Disposition du terminal",
-      "fileExplorer": "Explorateur de fichiers",
       "sourceControl": "Contrôle de code source",
-      "newTab": "Nouvel onglet",
       "quickCommands": "Commandes rapides",
       "items": "Éléments",
       "textSize": "Taille du texte"
@@ -3141,25 +2918,18 @@
     "headerMoreActionsSheet": {
       "agentHistory": "Historique des agents",
       "agentHistoryHint": "Parcourir et reprendre des sessions d'agent",
-      "checks": "Vérifications",
-      "checksHint": "Ouvrir les vérifications de la pull request"
+      "checks": "Vérifications"
     },
     "markdownReader": {
       "changedOnDesktop": "Modifié sur l'ordinateur",
       "copyLoaded": "Copier le contenu chargé",
-      "copyLoadedSource": "Copier la source Markdown chargée",
-      "copyPath": "Copier le chemin",
       "loading": "Chargement du document…",
-      "copyPathLabel": "Copier le chemin du fichier Markdown",
-      "copySource": "Copier la source Markdown",
       "discard": "Abandonner",
       "previewTruncated": "Aperçu tronqué.",
       "readOnly": "Lecture seule"
     },
     "nativeChatAttachActions": {
-      "availableSkills": "Disponibles : {{count}}",
       "commands": "Commandes",
-      "fileTypes": "PDF, texte, code…",
       "files": "Fichiers",
       "photos": "Photos",
       "skills": "Skills",
@@ -3184,11 +2954,8 @@
     },
     "nativeChatRenderData": {
       "defaultAgentLabel": "l'agent",
-      "emptySubtitle": "Demandez à {{agent}} d'examiner le code, d'expliquer la sortie ou d'effectuer une modification.",
       "emptyTitle": "Démarrez un chat avec {{agent}}",
-      "errorSubtitle": "La transcription n'a pas pu être lue. Rebasculez sur le terminal pour continuer à travailler.",
       "errorTitle": "Impossible de charger la conversation",
-      "notFoundSubtitle": "Envoyez un message pour en démarrer une, ou ouvrez la vue du terminal pour voir ce que fait {{agent}}.",
       "notFoundTitle": "Conversation introuvable pour le moment"
     },
     "nativeChatToggleAction": {
@@ -3238,7 +3005,6 @@
     },
     "quickCommandEditorForm": {
       "action": "Action",
-      "addQuickCommand": "Ajouter une commande rapide",
       "advanced": "Avancé",
       "agent": "Agent",
       "agentPrompt": "Prompt d'agent",
@@ -3257,7 +3023,6 @@
       "promptSizeCharacters": "{{used}} / {{max}} caractères",
       "promptSizeKilobytes": "{{used}} Ko / {{max}} Ko",
       "promptTooLong": "Trop long pour être enregistré.",
-      "scope": "Portée",
       "terminalCommand": "Commande de terminal"
     },
     "quickCommandLaunch": {
@@ -3286,9 +3051,9 @@
       "chooseAgentTitle": "Choisir un agent",
       "deleteConfirmMessage": "Cette commande rapide sera retirée de votre liste enregistrée.",
       "editTitle": "Modifier la commande rapide",
-      "editorDescription": "Enregistrez des commandes de terminal ou des prompts d'agent pour y accéder rapidement.",
       "title": "Commandes rapides",
-      "untitled": "Sans titre"
+      "untitled": "Sans titre",
+      "add": "Ajouter"
     },
     "routeHelpers": {
       "connected": "Connecté",
@@ -3303,24 +3068,18 @@
     },
     "sheets": {
       "browser": "Navigateur",
-      "browserStreamingUnavailable": "Cet hôte ne peut pas diffuser les onglets du navigateur",
       "chat": "Chat",
       "cli": "CLI",
       "cliOnly": "CLI uniquement",
-      "copyAllAndLeave": "Tout copier et quitter",
-      "copyDraftsFailed": "Impossible de copier les brouillons",
       "copyNotes": "Copier les notes",
       "copyNotesFailed": "Impossible de copier les notes",
       "copyPath": "Copier le chemin",
       "discard": "Abandonner",
-      "discardAndLeave": "Abandonner et quitter",
       "discardChanges": "Abandonner les modifications",
       "discardMessage": "Remplacer le brouillon du téléphone par la dernière version du fichier sur l'ordinateur ?",
-      "draftsHint": "Copiez ou abandonnez les brouillons du téléphone avant de quitter.",
       "file": "Fichier",
       "markdown": "Markdown",
       "markdownNote": "Note Markdown",
-      "newBrowser": "Nouveau navigateur",
       "newTab": "Nouvel onglet",
       "notesCopied": "Notes copiées",
       "notesHint": "Choisissez une session d'agent pour les notes actuelles.",
@@ -3338,8 +3097,6 @@
       "shellGitBash": "Git Bash",
       "shellWsl": "WSL",
       "terminalName": "Nom du terminal",
-      "unsavedMarkdown": "Modifications Markdown non enregistrées",
-      "urlPrompt": "Saisissez une URL ou laissez le champ vide pour un nouvel onglet.",
       "allowAutoClose": "Autoriser la fermeture automatique",
       "agents": "Agents",
       "renameTerminalFailed": "Impossible de renommer le terminal. {{reason}}"
@@ -3357,7 +3114,6 @@
     },
     "tabStrip": {
       "checkingCapabilities": "Vérification des fonctionnalités de l'ordinateur — réessayez dans un instant",
-      "newTab": "Nouvel onglet",
       "quickCommandsUpdateRequired": "Mettez à jour Orca sur l'ordinateur pour utiliser les commandes rapides"
     },
     "terminalActionSheetActions": {
@@ -3366,20 +3122,12 @@
       "switchToDesktop": "Passer en mode ordinateur",
       "switchToPhone": "Passer en mode téléphone"
     },
-    "terminalInputActions": {
-      "attachFileHint": "Appuyez longuement pour joindre un fichier à la place.",
-      "attachPhoto": "Joindre une photo",
-      "sendingImage": "Envoi de l'image"
-    },
     "terminalLiveInputStatus": {
       "listening": "Écoute en cours",
-      "liveInput": "Saisie en direct",
       "preparingMic": "Préparation du microphone",
       "processing": "Traitement en cours",
       "releaseMicHint": "Relâchez le micro pour arrêter",
-      "startingMic": "Démarrage du micro",
-      "uploadingImage": "Envoi de l'image à l'hôte",
-      "uploadingImageTitle": "Envoi de l'image"
+      "startingMic": "Démarrage du micro"
     },
     "terminalRecords": {
       "defaultTitle": "Terminal"
@@ -3616,21 +3364,14 @@
       "waitMoment": "Patientez un instant."
     },
     "workerAutoClose": {
-      "running": "Agent d’orchestration temporaire · Se ferme 2 minutes après la fin",
-      "finished": "Agent d’orchestration temporaire terminé · Se ferme dans {{countdown}}",
       "keepOpen": "Garder ouvert"
     },
     "terminalLayoutSheet": {
       "title": "Disposition du terminal",
       "oneTerminal": "Un terminal",
-      "selected": "Sélectionné",
       "auto": "Automatique",
-      "autoHint": "Diviser selon l’espace disponible",
       "sideBySide": "Côte à côte",
-      "sideBySideHint": "Deux colonnes, même lorsque la barre latérale est ouverte",
-      "stacked": "Empilés",
-      "stackedHint": "Deux rangées quelle que soit l’orientation",
-      "selectedHint": "Sélectionné · {{hint}}"
+      "stacked": "Empilés"
     },
     "terminalSplitLayout": {
       "saveFailedTitle": "Impossible d’enregistrer la disposition",
@@ -3639,23 +3380,19 @@
     "terminalMoreKeys": {
       "sendKey": "Envoyer {{label}}",
       "paste": "Coller",
-      "sending": "Envoi…",
       "photo": "Photo",
       "file": "Fichier",
       "desktopWidth": "Largeur bureau",
       "phoneWidth": "Largeur téléphone",
       "keys": "Touches",
-      "combos": "Combinaisons",
       "yourKeys": "Vos touches",
       "deleteKeyHint": "Appuyez longuement pour supprimer cette touche",
-      "addCustomKey": "Ajouter une touche personnalisée",
-      "addKey": "Ajouter une touche"
+      "addCustomKey": "Ajouter une touche personnalisée"
     },
     "terminalPaneView": {
       "focusedPane": "{{title}}, actif",
       "terminal": "Terminal",
-      "tapToFocusPane": "{{title}}, touchez pour activer",
-      "inputPane": "{{title}} · Saisie"
+      "tapToFocusPane": "{{title}}, touchez pour activer"
     },
     "structuredOpen": {
       "goneGeneric": "Le chat de l'agent n'est plus sur cet hôte, il ne peut donc pas être rouvert ici.",
@@ -3748,10 +3485,7 @@
     "tabBar": {
       "oneTab": "1 onglet",
       "tabCount": "Onglets : {{count}}",
-      "anotherNeedsYou": "un autre onglet nécessite votre attention",
       "actionsHint": "Affiche les actions de cet onglet",
-      "next": "Onglet suivant",
-      "previous": "Onglet précédent",
       "hint": "Affiche tous les onglets"
     },
     "textSizeSheet": {
@@ -3777,7 +3511,6 @@
       "checkUpdates": "Rechercher des mises à jour",
       "checkUpdatesStatus": "Rechercher des mises à jour, {{status}}",
       "checking": "Vérification…",
-      "installedVersion": "Version {{version}}",
       "lastCheckedDays_many": "Dernière vérification il y a {{count}} j",
       "lastCheckedDays_one": "Dernière vérification il y a {{count}} j",
       "lastCheckedDays_other": "Dernière vérification il y a {{count}} j",
@@ -3790,13 +3523,11 @@
       "lastCheckedMinutes_other": "Dernière vérification il y a {{count}} min",
       "neverChecked": "Jamais",
       "upToDate": "À jour",
-      "update": "Mettre à jour",
       "updateToVersion": "Mettre à jour vers Orca {{version}}"
     },
     "appearance": {
       "language": {
-        "description": "L'option Système utilise la langue de cet appareil. Les demandes d'autorisation utilisent toujours la langue de l'appareil.",
-        "heading": "LANGUE",
+        "heading": "Langue",
         "systemWithCurrent": "Système ({{language}})"
       },
       "usage": {
@@ -3808,7 +3539,7 @@
       "theme": {
         "dark": "Sombre",
         "description": "L'option Système utilise le thème clair ou sombre de cet appareil.",
-        "heading": "THÈME",
+        "heading": "Thème",
         "light": "Clair",
         "system": "Système"
       },
@@ -3816,15 +3547,10 @@
     },
     "browserSettingsScreen": {
       "askEachTime": "Demander à chaque fois",
-      "askEachTimeDescription": "Choisissez à chaque fois le navigateur Orca, celui du téléphone ou la copie du lien.",
       "desktopBrowser": "Navigateur Orca sur l'ordinateur",
-      "desktopBrowserDescription": "Ouvrir dans le navigateur diffusé depuis votre ordinateur appairé.",
-      "terminalAndChatLinksDescription": "Choisissez où ouvrir les liens web que vous touchez dans la sortie du terminal et dans le chat.",
-      "linksHeading": "LIENS",
       "loadFailed": "Impossible de charger les préférences du navigateur. Réessayez.",
       "openLinks": "Ouvrir les liens",
       "phoneBrowser": "Navigateur du téléphone",
-      "phoneBrowserDescription": "Ouvrir dans Safari, Chrome ou un autre navigateur sur ce téléphone.",
       "saveFailed": "Impossible d'enregistrer les préférences du navigateur. Réessayez.",
       "title": "Navigateur"
     },
@@ -3832,7 +3558,6 @@
       "about": "À propos",
       "appearance": "Apparence",
       "browser": "Navigateur",
-      "chatUi": "Chat UI",
       "notifications": "Notifications",
       "terminal": "Terminal",
       "troubleshooting": "Dépannage",
@@ -3841,14 +3566,6 @@
     "menuScreen": {
       "privacyPolicy": "Politique de confidentialité",
       "support": "Assistance"
-    },
-    "nativeChatSettingsScreen": {
-      "defaultViewDescription": "Choisissez comment ouvrir sur cet appareil les sessions des agents compatibles (Claude, Codex et les autres agents prenant en charge le chat). Le mode « Terminal » affiche la CLI brute ; Chat UI affiche une interface de chat similaire à celle de l'application pour ordinateur. Vous pouvez toujours changer l'affichage de chaque session via son menu accessible par un appui long.",
-      "defaultViewHeading": "VUE PAR DÉFAUT",
-      "off": "Désactivé",
-      "on": "Activé",
-      "openInChatUi": "Ouvrir les sessions dans l'interface de chat",
-      "title": "Chat UI"
     },
     "nativeChatText": {
       "heading": "TEXTE",
@@ -3928,22 +3645,14 @@
     "voiceSettingsScreen": {
       "connectDesktop": "Connectez-vous à un ordinateur pour gérer les paramètres vocaux.",
       "deleteFailed": "Échec de la suppression",
-      "dictationDescription": "Dictez du texte dans n'importe quel volet actif de votre ordinateur.",
-      "dictationHeading": "DICTÉE",
-      "dictationMode": "Mode de dictée",
-      "dictationModeDescription": "Bascule : appuyez une fois pour démarrer, puis à nouveau pour arrêter. Maintien : dictez tant que vous maintenez l'appui.",
-      "dictationModeWithAutoDescription": "Auto : appuyez pour démarrer et arrêter ; sur votre ordinateur, maintenir le raccourci enregistre jusqu’à ce que vous relâchiez. Maintien : dictez tant que vous maintenez l’appui. Bascule : appuyez une fois pour démarrer, puis à nouveau pour arrêter.",
       "autoMode": "Auto",
       "downloadFailed": "Échec du téléchargement",
-      "enableDictation": "Activer la dictée vocale",
       "holdMode": "Maintien",
       "loadFailed": "Impossible de charger les paramètres de voix",
       "loadFailedMessage": "Impossible de charger les paramètres vocaux.",
       "noneSelected": "Aucun modèle sélectionné",
       "selectModelFailed": "Impossible de sélectionner le modèle",
-      "speechModel": "Modèle vocal",
       "loading": "Chargement des paramètres de voix…",
-      "speechModelHeading": "MODÈLE VOCAL",
       "title": "Voix",
       "toggleMode": "Bascule",
       "updateFailed": "Impossible de mettre à jour"
@@ -3952,8 +3661,7 @@
       "permissionOwnAll": "Paramètres propres aux agents"
     },
     "voiceTranscribeOn": {
-      "heading": "TRANSCRIRE SUR",
-      "description": "Ce que ce téléphone entend reste sur ce téléphone. Automatique utilise votre ordinateur quand ce téléphone ne peut pas transcrire.",
+      "heading": "Transcrire sur",
       "automatic": "Automatique",
       "phone": "Ce téléphone",
       "computer": "Ordinateur",
@@ -4047,12 +3755,7 @@
     },
     "commitFailurePanel": {
       "fix": "Corriger",
-      "fixWithAi": "Corriger l'échec du commit avec l'IA",
       "hideDetails": "Masquer les détails",
-      "hideFailureDetails": "Masquer les détails de l'échec du commit",
-      "showDetails": "Afficher les détails",
-      "showFailureDetails": "Afficher les détails de l'échec du commit",
-      "summary": "Échec du commit.",
       "title": "Échec du commit"
     },
     "commitMessageAi": {
@@ -4072,10 +3775,7 @@
       "cancelGeneration": "Annuler la génération du message de commit",
       "commitMessageDisabled": "Message de commit désactivé. Aucun fichier indexé.",
       "commitMessagePlaceholder": "Message de commit",
-      "emptyMessage": "Le worktree est propre.",
-      "emptyTitle": "Aucune modification locale",
       "generateMessage": "Générer le message de commit avec l'IA",
-      "reconnecting": "Reconnexion à l'ordinateur…",
       "regenerateHint": "Effacez le message pour le régénérer."
     },
     "createPrAction": {
@@ -4229,7 +3929,6 @@
       "updateDesktop": "Mettez à jour Orca sur cet hôte pour utiliser le contrôle de code source sur mobile."
     },
     "modals": {
-      "currentBranch": "actuelle",
       "discardButton": "Abandonner",
       "discardConfirmMessage": "Abandonner les modifications de « {{path}} » ? Cette action est irréversible.",
       "discardTitle": "Abandonner la modification",
@@ -4533,14 +4232,6 @@
       "behind": "{{count}} en retard",
       "upToDate": "À jour",
       "switchBranch": "Changer de branche (actuelle : {{branch}})",
-      "mergeInProgress": "Merge en cours",
-      "rebaseInProgress": "Rebase en cours",
-      "cherryPickInProgress": "Cherry-pick en cours",
-      "filesNeedDecision_many": "{{count}} fichiers nécessitent une décision avant de pouvoir terminer.",
-      "filesNeedDecision_one": "{{count}} fichier nécessite une décision avant de pouvoir terminer.",
-      "filesNeedDecision_other": "{{count}} fichiers nécessitent une décision avant de pouvoir terminer.",
-      "conflictsResolved": "Tous les conflits sont résolus. Terminez depuis la barre ci-dessous.",
-      "continueOnComputer": "Tous les conflits sont résolus. Continuez sur votre ordinateur pour terminer.",
       "commits_many": "{{count}} commits",
       "commits_one": "{{count}} commit",
       "commits_other": "{{count}} commits",
@@ -4565,33 +4256,18 @@
     },
     "pagination": {
       "pageUnreachable": "La page {{page}} dépasse la limite des résultats de recherche GitHub.",
-      "loadPageFailed": "La page {{page}} n’a pas pu être chargée depuis GitHub.",
-      "noMoreResults": "Aucun autre résultat sur la page {{page}}."
+      "loadPageFailed": "La page {{page}} n’a pas pu être chargée depuis GitHub."
     },
     "filterSheet": {
-      "sortBy": "Trier par",
       "issueSource": "Source des issues",
-      "issueSourceRow": "Upstream ou origin",
       "view": "Affichage",
-      "projectView": "Vue de projet",
-      "projectItems_many": "{{count}} éléments",
-      "projectItems_one": "{{count}} élément",
-      "projectItems_other": "{{count}} éléments",
-      "chooseView": "Choisir",
       "showOnRows": "Afficher sur les lignes",
-      "projectFields": "Champs du projet",
       "workspace": "Espace de travail",
-      "linearWorkspace": "Espace de travail Linear",
       "layout": "Disposition",
       "groupBy": "Grouper par",
       "orderBy": "Ordonner par",
-      "displayProperties": "Propriétés affichées",
       "title": "Filtre et affichage",
-      "done": "Terminé",
-      "jqlReplacesPreset": "Votre recherche JQL remplace le préréglage « Afficher ». Effacez la recherche pour en choisir un à nouveau."
-    },
-    "jiraViewControls": {
-      "jqlSearch": "Recherche JQL"
+      "done": "Terminé"
     },
     "itemComments": {
       "noComments": "Aucun commentaire pour l'instant",
@@ -4629,24 +4305,11 @@
     "filterPickers": {
       "allTeams": "Toutes les équipes",
       "changeStatus": "Changer le statut",
-      "fieldHidden": "Masqué sur les cartes",
-      "fieldShown": "Affiché sur les cartes",
-      "fieldsSubtitle": "Choisissez les champs du projet à afficher sur les cartes des éléments.",
-      "fieldsTitle": "Champs du projet",
-      "gitlabFilter": "Filtre GitLab",
-      "gitlabView": "Vue GitLab",
-      "jiraFilter": "Filtre Jira",
-      "jiraSite": "Site Jira",
       "statesFailed": "Impossible de charger les statuts. Rouvrez pour réessayer.",
-      "linearFilter": "Filtre Linear",
       "linearIssue": "Ticket Linear",
-      "linearWorkspace": "Espace de travail Linear",
       "loadingStates": "Chargement des statuts…",
-      "noFields": "Cette vue n'a aucun champ supplémentaire à afficher.",
       "noStates": "Aucun statut disponible",
       "switchWorkspaceFailed": "Impossible de changer d'espace de travail",
-      "teamsSubtitle": "Choisissez les équipes à afficher dans Tâches.",
-      "teamsTitle": "Équipes Linear",
       "teams_many": "{{count}} équipes",
       "teams_one": "{{count}} équipe",
       "teams_other": "{{count}} équipes"
@@ -4700,41 +4363,19 @@
       "copyLink": "Copier le lien",
       "startWorkspace": "Démarrer l'espace de travail",
       "moreActions": "Plus d'actions",
-      "copyGitHubLink": "Copier le lien GitHub",
-      "copyLinearLink": "Copier le lien Linear",
-      "creating": "Création…",
       "mergeConflicts": "GitHub signale des conflits de fusion.",
       "mergeMergeRequest": "Fusionner la merge request",
       "mergePullRequest": "Fusionner la pull request"
     },
     "itemDetailContent": {
-      "addSubIssue": "Ajouter un sous-ticket",
       "checks": "Vérifications",
       "description": "Description",
       "discussion": "Discussion",
-      "noChecks": "Aucune vérification trouvée.",
-      "noComments": "Aucun commentaire.",
-      "details": "Détails",
-      "type": "Type",
-      "status": "Statut",
-      "assignee": "Assigné",
       "project": "Projet",
       "priority": "Priorité",
       "assignees": "Assignés",
       "loading": "Chargement des détails…",
-      "noPipelineRuns": "Aucune exécution de pipeline pour cette MR.",
-      "noSubIssues": "Aucun sous-ticket.",
-      "none": "Aucun",
-      "pipeline": "Pipeline",
-      "pipelineJobs_many": "{{count}} jobs",
-      "pipelineJobs_one": "{{count}} job",
-      "pipelineJobs_other": "{{count}} jobs",
-      "rerunAll": "Tout relancer",
-      "subIssueTitle": "Titre du sous-ticket",
       "subIssues": "Sous-tickets"
-    },
-    "itemDetailDrawer": {
-      "refreshDetails": "Actualiser les détails"
     },
     "itemFieldEditors": {
       "addLabels": "Étiquettes à ajouter, séparées par des virgules",
@@ -4787,9 +4428,6 @@
     },
     "linearList": {
       "changeStatusFrom": "Changer le statut actuel : {{status}}"
-    },
-    "listDisplayPickers": {
-      "displayPropertiesTitle": "Propriétés affichées"
     },
     "listSurface": {
       "connectLinearButton": "Connecter Linear",
@@ -4844,7 +4482,6 @@
       "projectMergeRequests": "MR du projet",
       "projectMergeRequestsDescription": "Merge requests et issues par dépôt",
       "projects": "Projets",
-      "pullRequests": "PRs",
       "repository": "Dépôt",
       "repositorySortDescription": "Par dépôt, puis par activité la plus récente",
       "reviewRequestsDescription": "Demandes de revue qui vous sont assignées",
@@ -4966,42 +4603,8 @@
       "reviewers": "Reviewers",
       "viewFile": "Afficher"
     },
-    "providerControls": {
-      "myTodos": "Mes tâches à faire",
-      "reposLabel": "Dépôts : {{repos}}",
-      "filterCount": "Filtre · {{count}}",
-      "filter": "Filtre",
-      "filterLabel": "Filtre et affichage",
-      "projectMergeRequests": "MR du projet"
-    },
-    "providerItemList": {
-      "intoBranch": "vers {{base}}",
-      "kindAndStatus": "{{kind}}, {{status}}",
-      "nextPage": "Page suivante",
-      "page": "Page {{page}}",
-      "pageOfTotal": "Page {{page}} sur {{total}}",
-      "previousPage": "Page précédente",
-      "selectPage": "Sélectionner une page, page {{page}}",
-      "selectPageOfTotal": "Sélectionner une page, page {{page}} sur {{total}}"
-    },
     "providerPickers": {
-      "allRepositories": "Tous les dépôts",
-      "githubView": "Vue GitHub",
-      "issueSources": "Sources des tickets GitHub",
-      "issueSourcesDescription": "Pour chaque dépôt, choisissez upstream ou origin pour rechercher et créer des tickets.",
-      "issues": "Tickets",
-      "noIssueSources": "Aucune autre source de tickets disponible.",
-      "origin": "Origine",
-      "pageHint": "Accédez à une page de résultats chargée ou disponible.",
-      "pageLoaded": "Chargée",
-      "pageNotLoaded": "Charge des résultats plus anciens",
-      "pageNumber": "Page {{page}}",
-      "pages": "Pages GitHub",
-      "pullRequests": "Pull requests",
-      "queryingSource": "Recherche dans {{source}}",
-      "repoDescription": "Choisissez les dépôts à interroger.",
-      "repos": "Dépôts",
-      "upstream": "Upstream"
+      "allRepositories": "Tous les dépôts"
     },
     "providerViewProjection": {
       "all": "Tous",
@@ -5010,7 +4613,6 @@
       "allWorkspaces": "Tous les espaces de travail",
       "chooseProject": "Choisir le projet",
       "default": "Par défaut",
-      "defaultSubtitle": "{{subtitle}} · Par défaut",
       "issues": "Tickets",
       "openState": "Ouvert",
       "projects": "Projets",
@@ -5027,15 +4629,7 @@
     "screenChrome": {
       "newGitHubIssue": "Nouveau ticket GitHub",
       "newLinearIssue": "Nouveau ticket Linear",
-      "refreshGitHub": "Actualiser le travail GitHub",
-      "refreshGitLab": "Actualiser les éléments de travail GitLab",
-      "refreshJira": "Actualiser les tickets Jira",
-      "refreshLinear": "Actualiser Linear",
       "title": "Tâches"
-    },
-    "searchControl": {
-      "projectPlaceholder": "Rechercher dans la vue du projet…",
-      "providerPlaceholder": "Rechercher des tâches {{provider}}…"
     },
     "smartSourceModes": {
       "allStates": "Toutes",
@@ -5062,27 +4656,21 @@
     },
     "tasksCreateDrawers": {
       "connect": "Se connecter",
-      "connectLinearWorkspace": "Connecter un espace de travail Linear",
-      "createIssue": "Créer un ticket",
       "createWorkspaceIn": "Créer un espace de travail dans",
       "description": "Description",
-      "descriptionPlaceholder": "Ajouter du contexte",
-      "fileIn": "Créer dans {{slug}}",
-      "issueSource": "Source des issues",
       "keySecurityHint": "Votre clé est chiffrée via le trousseau du système d'exploitation de l'hôte et stockée localement.",
-      "linearConnectSubtitle": "Collez une clé d'API personnelle pour parcourir les tickets de cet espace de travail.",
       "linearSettingsLink": "Ouvrir les paramètres Linear",
       "linearTeam": "Équipe Linear",
-      "linearTeamSubtitle": "Créez un ticket dans l'équipe Linear sélectionnée.",
-      "newIssueTitle": "Nouveau ticket {{providerLabel}}",
       "origin": "Origine",
       "personalApiKey": "Clé d'API personnelle",
       "repository": "Dépôt",
-      "repositorySubtitle": "Créez un ticket dans le dépôt sélectionné.",
       "team": "Équipe",
       "title": "Titre",
-      "titlePlaceholder": "Titre de la tâche",
-      "upstream": "Upstream"
+      "upstream": "Upstream",
+      "newIssue": "Nouveau ticket",
+      "create": "Créer",
+      "fileInRow": "Classer dans",
+      "connectLinear": "Connecter Linear"
     },
     "workspaceAgentSelection": {
       "blankTerminal": "Terminal vierge"
@@ -5092,8 +4680,6 @@
       "advanced": "Avancé",
       "agent": "Agent",
       "connectFirst": "Connectez d'abord le dépôt",
-      "connectRepository": "Connecter le dépôt",
-      "optionalLabel": "Facultatif",
       "defaultBranch": "Branche par défaut",
       "detectingAgents": "Détection des agents…",
       "remoteRepository": "Dépôt distant",
@@ -5101,8 +4687,9 @@
       "repositoryNotFound": "Dépôt introuvable.",
       "selectRepository": "Sélectionner un dépôt",
       "startFrom": "À partir de",
-      "title": "Créer un espace de travail",
-      "workspaceName": "Nom de l'espace de travail"
+      "createWorkspace": "Créer un espace de travail",
+      "nameSection": "Nom de l'espace de travail",
+      "connectRepositoryAction": "Connecter le dépôt"
     },
     "workspaceCreateProjection": {
       "nameAlreadyExists": "Un préréglage nommé « {{name}} » existe déjà.",
@@ -5142,7 +4729,6 @@
       "directories_other": "{{count}} répertoires",
       "editSparsePreset": "Modifier le préréglage de checkout partiel",
       "nameLabel": "Nom",
-      "namePlaceholder": "Interface de rendu",
       "newSparsePreset": "Nouveau préréglage de checkout partiel",
       "runSetupAndCreate": "Exécuter le setup et créer",
       "setupSubtitle": "Choisissez si vous souhaitez exécuter le setup de {{name}} avant de créer cet espace de travail.",
@@ -5183,7 +4769,6 @@
     },
     "webviewEngineErrorState": {
       "code": "code {{code}}",
-      "reload": "Recharger",
       "rendererCrashed": "le moteur de rendu a planté",
       "status": "statut {{statusCode}}",
       "title": "Échec du chargement du terminal"
@@ -5269,8 +4854,7 @@
       "noFilterMatches": "Aucun espace de travail ne correspond aux filtres",
       "reopen": "Rouvrir pour mettre à jour",
       "reopenDetail": "Cet hôte fournit une liste d'espaces de travail dans un format que cette page ne reconnaît pas encore.",
-      "loading": "Chargement des espaces de travail…",
-      "retryingAutomatically": "Nouvelle tentative automatique."
+      "loading": "Chargement des espaces de travail…"
     },
     "workspaceListSections": {
       "all": "Tous",
@@ -5295,7 +4879,6 @@
   },
   "automations": {
     "mobile": {
-      "extraAgentArguments": "Arguments supplémentaires de l'agent",
       "allAutomations": "Toutes les automatisations",
       "schedule": "Planification",
       "project": "Projet",
@@ -5307,8 +4890,6 @@
       "cancel": "Annuler",
       "name": "Nom",
       "back": "Retour",
-      "continue": "Continuer",
-      "createAutomation": "Créer une automatisation",
       "automations": "Automatisations",
       "runs": "Exécutions",
       "refresh": "Actualiser",
@@ -5331,41 +4912,18 @@
       "host": "Hôte",
       "pending": "En attente",
       "starting": "Démarrage",
-      "baseBranchOptional": "Branche de base (facultatif)",
-      "workspaceSetupScript": "Script de configuration de l’espace de travail",
-      "useProjectSettings": "Utiliser les paramètres du projet",
-      "runSetupScript": "Exécuter le script de configuration",
-      "skipSetupScript": "Ignorer le script de configuration",
       "reuseAgentSession": "Réutiliser la session de l’agent",
-      "precheckCommandOptional": "Commande de vérification préalable (facultatif)",
-      "precheckTimeoutSeconds": "Délai de vérification préalable (secondes)",
-      "missedRunGraceMinutes": "Délai de grâce des exécutions manquées (minutes)",
-      "choose": "Choisir…",
       "runOnSchedule": "Exécuter {{name}} selon le calendrier",
       "noNextScheduledRun": "Aucune prochaine exécution planifiée",
       "agent": "Agent",
-      "newWorkspacePerRun": "Nouvel espace de travail à chaque exécution",
       "instructions": "Instructions",
       "runNow": "Exécuter maintenant",
-      "savedAgent": "{{agent}} (enregistré)",
       "chooseAProjectSetUpOnThisHost": "Choisissez un projet configuré sur cet hôte.",
       "newAutomation": "Nouvelle automatisation",
-      "editorStep": "{{step}} sur 3 · {{section}}",
-      "retryProjectLoading": "Réessayer le chargement des projets",
-      "loadingProjects": "Chargement des projets…",
-      "projectAndHostSetup": "Configuration du projet et de l’hôte",
       "savedTarget": "Cible enregistrée",
-      "useAnExistingWorkspace": "Utiliser un espace de travail existant",
-      "existingWorkspace": "Espace de travail existant",
       "savedWorkspace": "Espace de travail enregistré",
       "loadMoreWorkspaces": "Charger plus d’espaces de travail",
-      "thisHostSWorkspaceInventoryIsIncompleteRefreshOrLoadMoreWorkspaces": "L’inventaire des espaces de travail de cet hôte est incomplet. Actualisez ou chargez-en davantage.",
-      "agentDetecting": "Agent · détection…",
       "installAndEnableAnAgentOnThisHostThenRetry": "Installez et activez un agent sur cet hôte, puis réessayez.",
-      "hideAdvancedOptions": "Masquer les options avancées",
-      "advancedOptions": "Options avancées",
-      "chooseAnAgent": "Choisir un agent",
-      "saveChanges": "Enregistrer les modifications",
       "loadingAutomations": "Chargement des automatisations…",
       "letYourAgentsWorkOnASchedule": "Faites travailler vos agents selon un calendrier",
       "createAnAutomationToRunATaskOnThisHost": "Créez une automatisation pour exécuter une tâche sur cet hôte.",
@@ -5397,12 +4955,7 @@
       "loadMoreRuns": "Charger plus d’exécutions",
       "customCronOrRRULE": "Cron ou RRULE personnalisé",
       "cadence": "Fréquence",
-      "cronOrRRULE": "Cron ou RRULE",
-      "minuteFromHHMM": "Minute (de HH:MM)",
-      "timeHHMM24Hour": "Heure (HH:MM, 24 heures)",
-      "useATimeSuchAs0900": "Utilisez une heure comme 09:00.",
       "timeZone": "Fuseau horaire",
-      "runsOnTheSelectedHostKeepThatHostAvailableAtTheScheduledTime": "S’exécute sur l’hôte sélectionné. Gardez cet hôte disponible à l’heure prévue.",
       "pairedHost": "Hôte associé",
       "chooseHost": "Automatisations sur {{host}}, choisir un autre hôte",
       "selectedServerUnavailable": "Serveur sélectionné (indisponible)",
@@ -5431,15 +4984,12 @@
       "unknownResult": "Résultat inconnu",
       "notReported": "Non communiqué",
       "searchOptions": "Rechercher des options",
-      "task": "Tâche",
-      "review": "Vérifier",
       "discardChangesTitle": "Abandonner les modifications ?",
       "discardChangesMessage": "Les modifications non enregistrées de cette automatisation seront perdues.",
       "discard": "Abandonner",
       "keepEditing": "Continuer la modification",
       "on": "Activée",
       "repeats": "Répétition",
-      "newOnePerRun": "Nouveau à chaque exécution",
       "moreActions": "Plus d'actions",
       "noRunsYet": "Aucune exécution pour l'instant",
       "nextRunToday": "Prochaine exécution aujourd'hui à {{time}}",
@@ -5515,7 +5065,6 @@
         }
       },
       "TaskPage": {
-        "99c2755218": "Recherchez des issues ou saisissez du JQL, ex. project = ABC",
         "jiraTextMatchesNotice": "Résultats textuels affichés. Jira n'a pas pu exécuter cette recherche en JQL."
       },
       "editor": {
@@ -5730,11 +5279,8 @@
       "workers_other": "{{count}} workers",
       "noMatches": "Aucun agent ne correspond à « {{query}} »",
       "emptyTitle": "Aucun agent en cours d'exécution",
-      "pairDesktop": "Appairez un ordinateur pour voir ses agents ici.",
       "emptyBody": "Démarrez un agent dans n'importe quel espace de travail : il apparaîtra ici.",
       "unread": "Non lu",
-      "noDesktopTitle": "Aucun ordinateur connecté",
-      "noDesktopBody": "Les agents apparaîtront ici dès qu'un ordinateur sera connecté.",
       "hideWorkers": "Masquer {{workers}}",
       "showWorkers": "Afficher {{workers}}"
     },
@@ -5753,31 +5299,17 @@
       "status": "Statut",
       "workspace": "Espace de travail",
       "project": "Projet",
-      "agent": "Agent",
-      "desktop": "Ordinateur"
+      "agent": "Agent"
     },
     "options": {
       "groupBy": "Grouper par",
       "showWorkers": "Afficher les workers",
-      "open": "Options de la liste des agents",
       "unreadOnly": "Non lus uniquement",
       "markAllRead": "Tout marquer comme lu",
       "clearFinished": "Retirer les agents terminés"
     },
     "search": {
-      "toggle": "Rechercher des agents",
       "placeholder": "Rechercher des agents"
-    },
-    "desktops": {
-      "pickerTitle": "Afficher les agents sur",
-      "agents_many": "{{count}} agents",
-      "agents_one": "{{count}} agent",
-      "agents_other": "{{count}} agents",
-      "all": "Tous les ordinateurs",
-      "offline": "Hors ligne",
-      "needsYou_many": "{{count}} ont besoin de vous",
-      "needsYou_one": "{{count}} a besoin de vous",
-      "needsYou_other": "{{count}} ont besoin de vous"
     },
     "sections": {
       "needsYou": "Nécessitent votre attention",
@@ -5801,7 +5333,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Jumeler un ordinateur",
       "pairRequired": "Pour ouvrir ce lien, jumelez ce téléphone à un ordinateur, puis rouvrez le lien.",
@@ -5968,6 +5499,11 @@
         "skipped": "Ignorées",
         "heldImagesLimit": "Vos réponses partent en un seul commentaire, qui accepte au plus {{max}} photos. Retirez-en quelques-unes et réessayez.",
         "heldSkillsLimit": "Vos réponses partent en un seul commentaire, qui accepte au plus {{max}} skills. Retirez-en quelques-uns et réessayez."
+      },
+      "wait": {
+        "offlineSave": "{{host}} est hors ligne. Votre texte est conservé ; Enregistrer fonctionnera de nouveau à son retour.",
+        "placeholder": "En attente de",
+        "count": "{{count}} éléments"
       }
     },
     "needs": {
@@ -6290,7 +5826,6 @@
       "valueSaved": "Enregistré"
     },
     "handToBot": {
-      "menu": "Transmettre à un bot…",
       "title": "Transmettre {{name}} à un bot",
       "noAgents": "Aucun agent ne s’exécute.",
       "oneAgent": "Son agent continue de s’exécuter et travaille pour le bot.",

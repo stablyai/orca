@@ -6,6 +6,7 @@ import type { StructuredAgentSessionAdapter } from '../../native-chat/agent-sess
 import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 import type { AcpStructuredSession } from '../session/acp-structured-session-contract'
 import {
+  acpKeptModeTakesLive,
   acpRunningPermission,
   applyAcpLivePermissionMode
 } from '../options/acp-live-permission-mode'
@@ -92,7 +93,7 @@ export async function settleAcpPermissionTransition(
     return true
   }
   // A kept agent runs the mode it had when the last app let go: it takes the chat's mode live where it can.
-  if (session.connection.kept && !session.connection.kept.agentExited) {
+  if (acpKeptModeTakesLive(session, input.mode)) {
     await applyAcpLivePermissionMode(session, input.mode, { timeoutMs: graceMs }).catch(() => {})
     input.signal?.throwIfAborted()
     if (acpRunningPermission(session) === input.mode) {

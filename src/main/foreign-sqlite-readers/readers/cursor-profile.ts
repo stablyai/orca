@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import SyncDatabase from '../../sqlite/sync-database'
 import {
   cursorProfileReadFailure,
@@ -12,7 +13,9 @@ const MEMBERSHIP_KEY = 'cursorAuth/stripeMembershipType'
 const SUBSCRIPTION_KEY = 'cursorAuth/stripeSubscriptionStatus'
 const OPEN_TIMEOUT_MS = 250
 
-const rowsSchema = z.array(z.object({ key: z.unknown(), value: z.unknown() }).partial())
+const rowsSchema = lazyZodSchema(() =>
+  z.array(z.object({ key: z.unknown(), value: z.unknown() }).partial())
+)
 
 function valueAsString(value: unknown): string | null {
   if (typeof value === 'string' && value.length > 0) {

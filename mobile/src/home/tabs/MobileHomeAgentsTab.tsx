@@ -1,27 +1,21 @@
+import { CheckCheck, Ellipsis, SquareTerminal, Trash2, WifiOff } from 'lucide-react-native'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
-  CheckCheck,
-  ChevronRight,
-  Search,
-  SlidersHorizontal,
-  SquareTerminal,
-  Trash2,
-  WifiOff
-} from 'lucide-react-native'
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { ActivityIndicator, ScrollView, Text, View, type HostInstance } from 'react-native'
+  ActivityIndicator,
+  RefreshControl,
+  ScrollView,
+  View,
+  type HostInstance
+} from 'react-native'
 import {
-  AGENT_LIST_GROUP_BY_CHOICES,
   agentListRowsIn,
   buildAgentList,
   DEFAULT_AGENT_LIST_VIEW,
-  type AgentListGroupBy,
   type AgentListSection
 } from '../../agents/agent-list-model'
-import { summarizeAgentListHosts } from '../../agents/agent-list-rows'
 import { loadAgentListView, saveAgentListView } from '../../agents/agent-list-preferences'
 import { MobileAgentListRows, type AgentListRowHandlers } from '../../agents/MobileAgentListRows'
 import type { ActionSheetAction } from '../../components/sheets/ActionSheetModal'
-import { MobileSearchField } from '../../components/controls/MobileSearchField'
 import { PullDownMenu } from '../../components/nav-bar/PullDownMenu'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useResponsiveLayout } from '../../layout/responsive-layout'
@@ -35,15 +29,20 @@ import { formatTimeAgo } from '../../worktree/agent-lineage/agent-row-display'
 import { homeListStyles } from '../home-list-styles'
 import { MobileHomeSectionHeading } from '../MobileHomeSectionHeading'
 import type { MobileHomeData } from '../use-mobile-home-data'
-import { AgentsDesktopFilter } from './MobileHomeAgentsDesktopFilter'
+import { MobileHomeAgentsBottomBar } from './MobileHomeAgentsBottomBar'
 import { MobileHomeTabEmpty } from './MobileHomeTabEmpty'
 import { MobileHomeTabHeader, MobileHomeTabHeaderButton } from './MobileHomeTabHeader'
 
-/** Every agent on every paired desktop, grouped the way the user picked. */
+/** Every agent on every paired computer, grouped the way the user picked. */
 export function MobileHomeAgentsTab(props: {
   data: MobileHomeData
-  bottomInset: number
   handlers: AgentListRowHandlers
+  /** The tab is showing; a hidden tab keeps its list but drops its bar. */
+  active: boolean
+  /** What the bar and keyboard cover, for Home's toasts. */
+  onBarHeightChange: (height: number) => void
+  /** Absent while no computer is connected to start one on. */
+  onNewWorkspace?: () => void
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
@@ -58,12 +57,21 @@ export function MobileHomeAgentsTab(props: {
   const { refresh } = stored
   useEffect(() => refresh(), [refresh])
   const view = stored.value
-  const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [pickedHost, setPickedHost] = useState<string | null>(null)
-  const [menu, setMenu] = useState<'closed' | 'options' | 'group-by'>('closed')
-  const optionsRef = useRef<HostInstance>(null)
-  // An unpaired desktop's filter falls back to every desktop.
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [barHeight, setBarHeight] = useState(0)
+  const [refreshing, setRefreshing] = useState(false)
+  const moreRef = useRef<HostInstance>(null)
+  const { onBarHeightChange } = props
+  const onBarHeight = useCallback(
+    (height: number) => {
+      setBarHeight(height)
+      onBarHeightChange(height)
+    },
+    [onBarHeightChange]
+  )
+  // An unpaired computer's filter falls back to every computer.
   const hostFilter = hosts.some((host) => host.id === pickedHost) ? pickedHost : null
   const { now } = data.agentList
   const list = useMemo(
@@ -80,76 +88,36 @@ export function MobileHomeAgentsTab(props: {
     const rows = agentListRowsIn([section]).filter((row) => row.clearable)
     return rows.length > 0 ? () => props.handlers.onClear(rows) : undefined
   }
-  const hostSummaries = useMemo(() => summarizeAgentListHosts(data.agentList), [data.agentList])
+  const pullToRefresh = () => {
+    setRefreshing(true)
+    void data.refreshAgents().finally(() => setRefreshing(false))
+  }
   const setView = (next: typeof view) => {
     stored.setValue(next)
     stored.persist(next)
   }
 
-  const groupByLabels: Record<AgentListGroupBy, string> = {
-    status: t('agents.groupBy.status', 'Status'),
-    workspace: t('agents.groupBy.workspace', 'Workspace'),
-    project: t('agents.groupBy.project', 'Project'),
-    agent: t('agents.groupBy.agent', 'Agent'),
-    desktop: t('agents.groupBy.desktop', 'Desktop')
-  }
-  const menuGroups: ActionSheetAction[][] =
-    menu === 'group-by'
-      ? [
-          AGENT_LIST_GROUP_BY_CHOICES.map((groupBy) => ({
-            id: groupBy,
-            label: groupByLabels[groupBy],
-            checked: view.groupBy === groupBy,
-            onPress: () => setView({ ...view, groupBy })
-          }))
-        ]
-      : [
-          [
-            {
-              id: 'group-by',
-              label: t('agents.options.groupBy', 'Group by'),
-              skipAutoClose: true,
-              renderIcon: () => (
-                <View style={styles.menuValue}>
-                  <Text style={styles.menuValueText}>{groupByLabels[view.groupBy]}</Text>
-                  <ChevronRight size={16} color={colors.textMuted} />
-                </View>
-              ),
-              onPress: () => setMenu('group-by')
-            },
-            {
-              id: 'unread-only',
-              label: t('agents.options.unreadOnly', 'Unread only'),
-              checked: view.unreadOnly,
-              onPress: () => setView({ ...view, unreadOnly: !view.unreadOnly })
-            },
-            {
-              id: 'show-workers',
-              label: t('agents.options.showWorkers', 'Show worker agents'),
-              checked: view.showWorkers,
-              onPress: () => setView({ ...view, showWorkers: !view.showWorkers })
-            }
-          ],
-          [
-            {
-              id: 'mark-all-read',
-              label: t('agents.options.markAllRead', 'Mark all read'),
-              icon: CheckCheck,
-              disabled: unreadRows.length === 0,
-              onPress: () => props.handlers.onSetRead(unreadRows, true)
-            },
-            {
-              id: 'clear-finished',
-              label: t('agents.options.clearFinished', 'Clear finished'),
-              icon: Trash2,
-              disabled: clearableRows.length === 0,
-              onPress: clearFinished
-            }
-          ]
-        ]
+  const menuGroups: ActionSheetAction[][] = [
+    [
+      {
+        id: 'mark-all-read',
+        label: t('agents.options.markAllRead', 'Mark all read'),
+        icon: CheckCheck,
+        disabled: unreadRows.length === 0,
+        onPress: () => props.handlers.onSetRead(unreadRows, true)
+      },
+      {
+        id: 'clear-finished',
+        label: t('agents.options.clearFinished', 'Clear finished'),
+        icon: Trash2,
+        disabled: clearableRows.length === 0,
+        onPress: clearFinished
+      }
+    ]
+  ]
 
   const filteredHosts = hosts.filter((host) => hostFilter === null || host.id === hostFilter)
-  // A desktop still dialing, or connected with its first list read pending, may yet have agents.
+  // A computer still dialing, or connected with its first list read pending, may yet have agents.
   const awaitingDesktop = filteredHosts.some((host) =>
     data.hostStates[host.id] === 'connected'
       ? !data.worktreeInfo[host.id]?.catalogUnavailable
@@ -168,11 +136,11 @@ export function MobileHomeAgentsTab(props: {
       return (
         <AgentsEmpty
           title={t('agents.list.emptyTitle', 'No agents running')}
-          message={t('agents.list.pairDesktop', 'Pair a desktop to see its agents here.')}
+          message={t('agents.list.pairComputer', 'Pair a computer to see its agents here.')}
         />
       )
     }
-    // "No agents running" is only true of a desktop that answered.
+    // "No agents running" is only true of a computer that answered.
     if (!list.anyLive) {
       return awaitingDesktop ? (
         <View style={styles.connecting}>
@@ -180,8 +148,8 @@ export function MobileHomeAgentsTab(props: {
         </View>
       ) : (
         <AgentsEmpty
-          title={t('agents.list.noDesktopTitle', 'No desktop connected')}
-          message={t('agents.list.noDesktopBody', 'Agents show up here once a desktop connects.')}
+          title={t('agents.list.noComputerTitle', 'No computer connected')}
+          message={t('agents.list.noComputerBody', 'Agents show up here once a computer connects.')}
         />
       )
     }
@@ -228,62 +196,52 @@ export function MobileHomeAgentsTab(props: {
       <MobileHomeTabHeader
         title={t('home.tabs.agents', 'Agents')}
         trailing={
-          <>
-            <MobileHomeTabHeaderButton
-              icon={Search}
-              accessibilityLabel={t('agents.search.toggle', 'Search agents')}
-              active={searchOpen}
-              onPress={() => {
-                setSearchOpen((open) => !open)
-                setQuery('')
-              }}
-            />
-            <MobileHomeTabHeaderButton
-              ref={optionsRef}
-              icon={SlidersHorizontal}
-              accessibilityLabel={t('agents.options.open', 'Agent list options')}
-              active={menu !== 'closed'}
-              onPress={() => setMenu('options')}
-            />
-          </>
+          <MobileHomeTabHeaderButton
+            ref={moreRef}
+            icon={Ellipsis}
+            accessibilityLabel={t('agents.options.more', 'More')}
+            active={menuOpen}
+            onPress={() => setMenuOpen(true)}
+          />
         }
       />
-      {searchOpen ? (
-        <MobileSearchField
-          value={query}
-          onChangeText={setQuery}
-          placeholder={t('agents.search.placeholder', 'Search agents')}
-          onClear={() => setQuery('')}
-          autoFocus
-          style={styles.search}
-        />
-      ) : null}
-      {hosts.length > 1 ? (
-        <View style={styles.filters}>
-          <AgentsDesktopFilter
-            hosts={hosts}
-            selected={hostFilter}
-            summaries={hostSummaries}
-            onSelect={setPickedHost}
-          />
-        </View>
-      ) : null}
       <ScrollView
         contentContainerStyle={[
           styles.content,
-          { paddingBottom: props.bottomInset },
+          { paddingBottom: barHeight + spacing.sm },
           isWideLayout && { maxWidth: contentMaxWidth, width: '100%', alignSelf: 'center' }
         ]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={pullToRefresh}
+            tintColor={colors.textSecondary}
+            colors={[colors.textSecondary]}
+          />
+        }
       >
         {body}
       </ScrollView>
+      {props.active ? (
+        <MobileHomeAgentsBottomBar
+          query={query}
+          onQueryChange={setQuery}
+          onCoveredHeightChange={onBarHeight}
+          onNewWorkspace={props.onNewWorkspace}
+          hosts={hosts}
+          hostFilter={hostFilter}
+          view={view}
+          onHostFilterChange={setPickedHost}
+          onViewChange={setView}
+        />
+      ) : null}
       <PullDownMenu
-        visible={menu !== 'closed'}
-        anchorRef={optionsRef}
+        visible={menuOpen}
+        anchorRef={moreRef}
         groups={menuGroups}
-        onClose={() => setMenu('closed')}
+        onClose={() => setMenuOpen(false)}
       />
     </>
   )
@@ -349,9 +307,5 @@ function AgentsEmpty(props: { title: string; message?: string }) {
 
 const styles = themedStyleSheet(() => ({
   content: { paddingHorizontal: spacing.lg },
-  search: { marginHorizontal: spacing.lg, marginBottom: spacing.sm },
-  filters: { paddingHorizontal: spacing.lg },
-  menuValue: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  connecting: { alignItems: 'center', paddingVertical: spacing.xl, marginTop: 32 },
-  menuValueText: { fontSize: 15, color: colors.textMuted }
+  connecting: { alignItems: 'center', paddingVertical: spacing.xl, marginTop: 32 }
 }))

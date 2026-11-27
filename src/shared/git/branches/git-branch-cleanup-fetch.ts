@@ -42,7 +42,7 @@ export function sourceRefsForTarget(
     }
     const capture = matchRefPattern(destination, target)
     if (capture !== null) {
-      const resolved = source.replace('*', capture)
+      const resolved = source.replace('*', () => capture)
       if (!resolved.includes('*')) {
         sources.add(resolved)
       }
