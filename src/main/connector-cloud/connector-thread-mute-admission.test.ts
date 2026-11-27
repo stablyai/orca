@@ -410,6 +410,19 @@ describe('a muted bot thread', () => {
     expect(await deliver(quiet)).toEqual({ outcome: 'accepted', inTurn: true })
     expect(starts).toEqual([])
     expect(automationsTaken).toEqual([])
+
+    await closeTestStores()
+    orchestration.close()
+    orchestration = new OrchestrationDb(join(testState.dir, 'orchestration.db'))
+    const receipts = new DeliveryReceipts(() => orchestration)
+    const reopened = connector(createStore(), receipts)
+    expect(await reopened.deliver(quiet)).toEqual({ outcome: 'accepted', inTurn: true })
+    expect(await receipts.recorded(FIRST, quiet.deliveryId)).toEqual({
+      outcome: 'accepted',
+      inTurn: true
+    })
+    expect(reopened.starts).toEqual([])
+    expect(reopened.automationsTaken).toEqual([])
   })
 
   it('admits no unmentioned reply, and one turn for a mention that unmutes it on disk', async () => {
