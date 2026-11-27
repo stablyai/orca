@@ -36,15 +36,11 @@ export function preservePreviousHangDetection(userDataPath: string): void {
     const currentPath = hangDetectionMarkerPath(userDataPath)
     const finalPath = finalHangMarkerPath(currentPath)
     const pendingPath = previousMarkerPath(userDataPath)
-    const current = mergeFinalHangMarker(
-      asHangObservations(readAvailableHangDetectionMarker(currentPath)),
-      readAvailableHangDetectionMarker(finalPath)
+    const [currentMarker, finalMarker, pending] = [currentPath, finalPath, pendingPath].map(
+      (path) => readAvailableHangDetectionMarker(path)
     )
-    if (!current) {
-      return
-    }
-    const pending = readAvailableHangDetectionMarker(pendingPath)
-    if (pending === undefined) {
+    const current = mergeFinalHangMarker(asHangObservations(currentMarker), finalMarker)
+    if (!current || pending === undefined) {
       return
     }
     const merged = mergeHangObservations(
