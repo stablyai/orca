@@ -31,7 +31,7 @@ import { documentResourceAccess } from '@/lib/files/access/local-file-access'
 import { MarkdownGitHubCallout } from '@/components/comment-markdown/markdown-github-callout'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import { readGitHubCalloutKind } from '../../../../../../shared/github/markdown/github-callouts'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 function hasMermaidCodeClass(value: unknown): boolean {
   return typeof value === 'string' && /language-mermaid/.test(value)
@@ -186,6 +186,7 @@ export function useMarkdownPreviewComponents({
     openMarkdownPreview,
     setMarkdownViewMode
   } = foundation
+  const t = useTranslate()
   const { scrollToAnchor } = viewport
   const expandMermaidDiagram = useMermaidDiagramExpand()
   // Why: saving a review note rewrites the worktree rows. Links read them at click time so that
@@ -217,14 +218,11 @@ export function useMarkdownPreviewComponents({
           const resolvedDocument = resolution.status === 'resolved' ? resolution.document : null
           const title =
             resolution.status === 'ambiguous'
-              ? translate(
+              ? t(
                   'auto.components.editor.MarkdownPreview.docLinkAmbiguous',
                   'Document link is ambiguous'
                 )
-              : translate(
-                  'auto.components.editor.MarkdownPreview.docLinkNotFound',
-                  'Document not found'
-                )
+              : t('auto.components.editor.MarkdownPreview.docLinkNotFound', 'Document not found')
 
           const handleDocLinkClick = (event: React.MouseEvent<HTMLAnchorElement>): void => {
             event.preventDefault()
@@ -348,6 +346,7 @@ export function useMarkdownPreviewComponents({
     sourceOwner,
     resolvedSourceRuntimeEnvironmentId,
     sourceRoutingWorktreeId,
+    t,
     worktreeRoot
   ])
 }
