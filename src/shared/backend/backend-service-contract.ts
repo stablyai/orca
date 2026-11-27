@@ -35,7 +35,7 @@ export type BackendConnectionListener = (
 ) => void
 
 export const UsageProviderSchema = lazyZodSchema(() =>
-  z.enum(['claudeUsage', 'codexUsage', 'openCodeUsage', 'museUsage'])
+  z.enum(['claudeUsage', 'codexUsage', 'openCodeUsage', 'museUsage', 'antigravityUsage'])
 )
 export type UsageProviderKey = z.infer<typeof UsageProviderSchema>
 export const UsageActionSchema = lazyZodSchema(() =>

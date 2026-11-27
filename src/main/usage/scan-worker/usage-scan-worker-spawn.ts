@@ -1,5 +1,4 @@
 import { existsSync } from 'node:fs'
-import type { Worker } from 'node:worker_threads'
 import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
 import {
   currentWorkerEntryLayout,
@@ -9,6 +8,10 @@ import type { ClaudeUsageDailyAggregate, ClaudeUsageSession } from '../../claude
 import type { CodexUsageDailyAggregate, CodexUsageSession } from '../../codex-usage/types'
 import type { OpenCodeUsageDailyAggregate, OpenCodeUsageSession } from '../../opencode-usage/types'
 import type { MuseUsageDailyAggregate, MuseUsageSession } from '../../muse-usage/types'
+import type {
+  AntigravityUsageDailyAggregate,
+  AntigravityUsageSession
+} from '../../antigravity-usage/types'
 import type { UsageScanWorktreeRef } from '../provider-lifecycle/usage-provider-contract'
 import type {
   UsageCacheSplitRequest,
@@ -16,6 +19,7 @@ import type {
   UsageSourceCacheRef
 } from '../cache/usage-source-cache-file'
 import {
+  scanAntigravityUsageOnWorker,
   scanClaudeUsageOnWorker,
   scanCodexUsageOnWorker,
   scanMuseUsageOnWorker,
@@ -27,22 +31,22 @@ import {
 
 export const USAGE_SCAN_WORKER_ENTRY_FILENAME = 'usage-scan-worker-entry.js'
 
-function defaultWorkerFactory(): Worker {
-  const workerPath = resolveWorkerThreadEntryPath(
-    currentWorkerEntryLayout(__dirname),
-    USAGE_SCAN_WORKER_ENTRY_FILENAME
-  )
-  // Reject missing entries synchronously; never await a worker that cannot become ready.
-  if (!existsSync(workerPath)) {
-    throw new Error(`Usage scan worker entry not found: ${workerPath}`)
-  }
-  return spawnWorkerThread(workerPath, { name: 'orca-usage-scan' })
-}
-
 let sharedClient: UsageScanWorkerClient | null = null
 
 function getSharedClient(): UsageScanWorkerClient {
-  sharedClient ??= new UsageScanWorkerClient({ workerFactory: defaultWorkerFactory })
+  sharedClient ??= new UsageScanWorkerClient({
+    workerFactory: () => {
+      const workerPath = resolveWorkerThreadEntryPath(
+        currentWorkerEntryLayout(__dirname),
+        USAGE_SCAN_WORKER_ENTRY_FILENAME
+      )
+      // Reject missing entries synchronously; never await a worker that cannot become ready.
+      if (!existsSync(workerPath)) {
+        throw new Error(`Usage scan worker entry not found: ${workerPath}`)
+      }
+      return spawnWorkerThread(workerPath, { name: 'orca-usage-scan' })
+    }
+  })
   return sharedClient
 }
 
@@ -90,6 +94,24 @@ export function scanMuseUsageFilesViaWorker(
   dailyAggregates: MuseUsageDailyAggregate[]
 }> {
   return scanMuseUsageOnWorker((body) => getSharedClient().scan(body), worktrees, sourceCache)
+}
+
+export function scanAntigravityUsageFilesViaWorker(
+  worktrees: UsageScanWorktreeRef[],
+  sourceCache: UsageSourceCacheRef,
+  brainDirs?: string[]
+): Promise<{
+  sessions: AntigravityUsageSession[]
+  dailyAggregates: AntigravityUsageDailyAggregate[]
+}> {
+  return scanAntigravityUsageOnWorker(
+    (body) =>
+      getSharedClient().scan(
+        body.providerId === 'antigravity' && brainDirs ? { ...body, brainDirs } : body
+      ),
+    worktrees,
+    sourceCache
+  )
 }
 
 /** Split source records on the worker; return only report JSON and whether migration occurred. */

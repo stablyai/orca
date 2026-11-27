@@ -4,6 +4,7 @@ import { ClaudeUsageStore } from '../claude-usage/store'
 import { CodexUsageStore } from '../codex-usage/store'
 import { OpenCodeUsageStore } from '../opencode-usage/store'
 import { MuseUsageStore } from '../muse-usage/store'
+import { AntigravityUsageStore } from '../antigravity-usage/store'
 import type { UsageStoreHost } from '../usage/usage-store-host'
 import { stopUsageScanWorker } from '../usage/scan-worker/usage-scan-worker-spawn'
 import type { UsageProviderKey } from '../../shared/backend/backend-service-contract'
@@ -74,7 +75,7 @@ function registerUsageQueries<Scope extends string, Range extends string, Kind e
   )
   handlers.set(`${prefix}:getBreakdown`, (raw) => {
     const args = rangeSchema.extend({ kind: z.string().max(128) }).parse(raw)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: These are the provider API arguments shared by all four registered query stores.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: These are the provider API arguments shared by all registered query stores.
     return store.getBreakdown(args.scope as Scope, args.range as Range, args.kind as Kind)
   })
 }
@@ -84,7 +85,8 @@ export function createUsageService(host: UsageStoreHost) {
     claudeUsage: new ClaudeUsageStore(host),
     codexUsage: new CodexUsageStore(host),
     openCodeUsage: new OpenCodeUsageStore(host),
-    museUsage: new MuseUsageStore(host)
+    museUsage: new MuseUsageStore(host),
+    antigravityUsage: new AntigravityUsageStore(host)
   }
   const all = Object.values(stores)
   const handlers = new Map<string, Handler>()
@@ -92,6 +94,7 @@ export function createUsageService(host: UsageStoreHost) {
   registerUsageQueries(handlers, 'codexUsage', stores.codexUsage)
   registerUsageQueries(handlers, 'openCodeUsage', stores.openCodeUsage)
   registerUsageQueries(handlers, 'museUsage', stores.museUsage)
+  registerUsageQueries(handlers, 'antigravityUsage', stores.antigravityUsage)
   let accepting = true
   const active = new Set<Promise<unknown>>()
   const stop = async (): Promise<void> => {

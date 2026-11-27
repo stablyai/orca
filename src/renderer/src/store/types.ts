@@ -16,6 +16,7 @@ import type { StatsSlice } from './slices/process-stats/stats'
 import type { MemorySlice } from './slices/process-stats/memory'
 import type { WorkspaceSpaceSlice } from './slices/workspace-cleanup/workspace-space'
 import type {
+  AntigravityUsageSlice,
   ClaudeUsageSlice,
   CodexUsageSlice,
   MuseUsageSlice,
@@ -75,6 +76,7 @@ export type AppState = RepoSlice &
   CodexUsageSlice &
   OpenCodeUsageSlice &
   MuseUsageSlice &
+  AntigravityUsageSlice &
   BrowserSlice &
   RateLimitSlice &
   SshSlice &

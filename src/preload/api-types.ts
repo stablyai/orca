@@ -11,6 +11,7 @@ import type { HooksApi } from './api/agent-hooks/agent-hook-api'
 import type { SkillsApi } from './api/skills/agent-skill-api'
 import type { AgentAwakeApi, AgentStatusApi } from './api/agent-status/agent-status-api'
 import type {
+  AntigravityUsageApi,
   ClaudeUsageApi,
   CodexUsageApi,
   MuseUsageApi,
@@ -169,6 +170,7 @@ export type PreloadApi = {
   codexUsage: CodexUsageApi
   openCodeUsage: OpenCodeUsageApi
   museUsage: MuseUsageApi
+  antigravityUsage: AntigravityUsageApi
   aiVault: AiVaultApi
   nativeChat: NativeChatApi
   fs: FilesystemApi['fs']

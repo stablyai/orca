@@ -5,6 +5,7 @@ import type {
   UsageOverviewModel
 } from './usage-overview-types'
 import {
+  createAntigravityProvider,
   createClaudeProvider,
   createCodexProvider,
   createMuseProvider,
@@ -18,7 +19,8 @@ export function buildUsageOverview(input: UsageOverviewInput, t?: Translate): Us
     createClaudeProvider(input.claude, t),
     createCodexProvider(input.codex, t),
     createOpenCodeProvider(input.opencode, t),
-    createMuseProvider(input.muse, t)
+    createMuseProvider(input.muse, t),
+    createAntigravityProvider(input.antigravity, t)
   ]
   const daily = buildDailyOverview(input)
   const bestDay =

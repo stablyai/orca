@@ -18,8 +18,13 @@ import type {
   MuseUsageScanState,
   MuseUsageSummary
 } from '../../../../shared/agent-usage/analytics/muse-usage-types'
+import type {
+  AntigravityUsageDailyPoint,
+  AntigravityUsageScanState,
+  AntigravityUsageSummary
+} from '../../../../shared/agent-usage/analytics/antigravity-usage-types'
 
-export type UsageProviderId = 'claude' | 'codex' | 'opencode' | 'muse'
+export type UsageProviderId = 'claude' | 'codex' | 'opencode' | 'muse' | 'antigravity'
 
 export type UsageProviderOverview = {
   id: UsageProviderId
@@ -52,6 +57,7 @@ export type UsageOverviewDailyPoint = {
   codexTokens: number
   openCodeTokens: number
   museTokens: number
+  antigravityTokens: number
   intensity: 0 | 1 | 2 | 3 | 4
 }
 
@@ -97,5 +103,10 @@ export type UsageOverviewInput = {
     scanState: MuseUsageScanState | null
     summary: MuseUsageSummary | null
     daily: MuseUsageDailyPoint[]
+  }
+  antigravity: {
+    scanState: AntigravityUsageScanState | null
+    summary: AntigravityUsageSummary | null
+    daily: AntigravityUsageDailyPoint[]
   }
 }

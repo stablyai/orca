@@ -3,6 +3,7 @@ import { usageApiForHost } from './usage-host'
 import { createUsagePatch } from './usage-provider-slice-state'
 import type { AppState } from '../../types'
 import type {
+  AntigravityUsageTypes,
   ClaudeUsageTypes,
   CodexUsageTypes,
   OpenCodeUsageTypes,
@@ -10,6 +11,7 @@ import type {
 } from './usage-provider-slice-contract'
 
 export type {
+  AntigravityUsageSlice,
   ClaudeUsageSlice,
   CodexUsageSlice,
   OpenCodeUsageSlice,
@@ -60,11 +62,24 @@ export const createMuseUsageSlice = createUsageProviderSlice<'muse', 'Muse', Mus
   hasCachedData: (state) => state.hasAnyMuseData
 })
 
+export const createAntigravityUsageSlice = createUsageProviderSlice<
+  'antigravity',
+  'Antigravity',
+  AntigravityUsageTypes
+>({
+  prefix: 'antigravity',
+  name: 'Antigravity',
+  initialScope: 'orca',
+  initialRange: '30d',
+  getApi: (host) => usageApiForHost(host, 'antigravityUsage'),
+  hasCachedData: (state) => state.hasAnyAntigravityData
+})
+
 /** A host switch clears every provider's numbers, keeping the chosen scope and range. */
 export function clearUsageProviderData(): Partial<AppState> {
   return Object.assign(
     {},
-    ...(['claude', 'codex', 'openCode', 'muse'] as const).map((prefix) =>
+    ...(['claude', 'codex', 'openCode', 'muse', 'antigravity'] as const).map((prefix) =>
       createUsagePatch(prefix, {
         failure: null,
         scanState: null,

@@ -1,6 +1,7 @@
 import type { CodexUsageSummary } from '../../../../shared/agent-usage/analytics/codex-usage-types'
 import type { OpenCodeUsageSummary } from '../../../../shared/agent-usage/analytics/opencode-usage-types'
 import type { MuseUsageSummary } from '../../../../shared/agent-usage/analytics/muse-usage-types'
+import type { AntigravityUsageSummary } from '../../../../shared/agent-usage/analytics/antigravity-usage-types'
 import { countActiveDays, getClaudeDailyTotal } from './usage-overview-daily-series'
 import type { UsageOverviewInput, UsageProviderOverview } from './usage-overview-types'
 import { translate } from '@/i18n/i18n'
@@ -14,6 +15,13 @@ function getCodexNewInputTokens(summary: CodexUsageSummary | null): number {
 }
 
 function getMuseNewInputTokens(summary: MuseUsageSummary | null): number {
+  if (!summary) {
+    return 0
+  }
+  return Math.max(summary.inputTokens - summary.cachedInputTokens, 0)
+}
+
+function getAntigravityNewInputTokens(summary: AntigravityUsageSummary | null): number {
   if (!summary) {
     return 0
   }
@@ -153,6 +161,39 @@ export function createMuseProvider(
     cacheTokens: summary?.cachedInputTokens ?? 0,
     reasoningTokens: summary?.reasoningOutputTokens ?? 0,
     // Muse logs carry no price.
+    estimatedCostUsd: null,
+    hasPartialCost: false,
+    topModel: summary?.topModel ?? null,
+    topProject: summary?.topProject ?? null,
+    activeDays: countActiveDays(dailyActiveDays)
+  }
+}
+
+export function createAntigravityProvider(
+  input: UsageOverviewInput['antigravity'],
+  t: Translate = translate
+): UsageProviderOverview {
+  const summary = input.summary
+  const dailyActiveDays = input.daily
+    .filter((entry) => entry.totalTokens > 0)
+    .map((entry) => entry.day)
+  return {
+    id: 'antigravity',
+    label: t('auto.lib.agent.catalog.691dd11789', 'Antigravity'),
+    enabled: input.scanState?.enabled ?? false,
+    isScanning: input.scanState?.isScanning ?? false,
+    hasData: summary?.hasAnyAntigravityData ?? input.scanState?.hasAnyAntigravityData ?? false,
+    lastScanCompletedAt: input.scanState?.lastScanCompletedAt ?? null,
+    lastScanError: input.scanState?.lastScanError ?? null,
+    sessions: summary?.sessions ?? 0,
+    activityLabel: 'events',
+    activityCount: summary?.events ?? 0,
+    totalTokens: summary?.totalTokens ?? 0,
+    newInputTokens: getAntigravityNewInputTokens(summary),
+    outputTokens: summary?.outputTokens ?? 0,
+    cacheTokens: summary?.cachedInputTokens ?? 0,
+    reasoningTokens: summary?.reasoningOutputTokens ?? 0,
+    // Antigravity transcripts carry no price.
     estimatedCostUsd: null,
     hasPartialCost: false,
     topModel: summary?.topModel ?? null,
