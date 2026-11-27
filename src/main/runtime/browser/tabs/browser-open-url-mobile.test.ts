@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   activeMobileViewerClientIdsForPane,
+  openUrlForMobileOrClient,
   selectTargetMobileNavigationIds
 } from './mobile-terminal-browser-open'
 
@@ -56,5 +57,52 @@ describe('mobile terminal open-url targeting', () => {
     expect(
       selectTargetMobileNavigationIds(['phone-1', 'phone-2'], ['opaque-device-token'])
     ).toEqual([])
+  })
+
+  it('aborts and cleans up a late-created server tab when onlyWhenMobileViewing hits its deadline', async () => {
+    let resolveCreate!: (value: { browserPageId: string }) => void
+    const followBrowserTabOnMobile = vi.fn(async () => true)
+    const closeServerTab = vi.fn(async () => {})
+    const result = await openUrlForMobileOrClient({
+      host: {
+        getAgentBrowserBridge: () => null,
+        resolveBrowserWorkspace: async () => ({ id: 'wt-1' }),
+        resolveBrowserNetworkExecutionHost: () => {
+          throw new Error('unexpected')
+        },
+        hasMobileTerminalViewer: () => true,
+        followBrowserTabOnMobile,
+        getBrowserHostLeaseRegistry: () => {
+          throw new Error('unexpected')
+        },
+        getBrowserHostRequestRegistry: () => {
+          throw new Error('unexpected')
+        },
+        getPairedDeviceName: () => null,
+        getRuntimeBrowserPageRegistry: () => {
+          throw new Error('unexpected')
+        },
+        notifyHeadlessBrowserSessionTabsChanged: () => {}
+      },
+      params: {
+        url: 'https://auth.example.com/login',
+        worktree: 'id:wt-1',
+        paneKey: 'tab-1:leaf-1',
+        onlyWhenMobileViewing: true
+      },
+      createServerTab: () =>
+        new Promise((resolve) => {
+          resolveCreate = resolve
+        }),
+      closeServerTab,
+      mobileOpenDeadlineMs: 10
+    })
+    expect(result).toEqual({ browserPageId: null })
+    expect(followBrowserTabOnMobile).not.toHaveBeenCalled()
+
+    resolveCreate({ browserPageId: 'page-late' })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(closeServerTab).toHaveBeenCalledWith('page-late', 'id:wt-1')
   })
 })

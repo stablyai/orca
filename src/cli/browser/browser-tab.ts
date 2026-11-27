@@ -30,8 +30,8 @@ export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
     const url = getRequiredStringFlag(flags, 'url')
     const paneKey = process.env.ORCA_PANE_KEY || process.env[ORCA_SCRUB_SAFE_PANE_ENV] || undefined
     const onlyWhenMobileViewing = flags.has('if-mobile-viewing')
-    // Keep the macOS `open` shim snappy so CLIs fall back to /usr/bin/open quickly if the runtime stalls.
-    const mobileShimTimeoutMs = 4_000
+    // Exceeds the host's 3.5s mobile-open deadline so the host cancels and cleans up before /usr/bin/open fallback runs.
+    const mobileShimTimeoutMs = 5_000
     if (onlyWhenMobileViewing) {
       // Older runtimes drop onlyWhenMobileViewing and would hijack desktop open; fall through cleanly.
       const status = await client.call<RuntimeStatus>('status.get', undefined, {
