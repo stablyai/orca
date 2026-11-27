@@ -15,7 +15,7 @@ import { registerLazyLinearHandlers } from '../linear/lazy-linear-handlers'
 import { registerLazyJiraHandlers } from '../jira/lazy-jira-handlers'
 import { registerLazyCrashReportingHandlers } from '../crash-reporting/lazy-crash-reporting-handlers'
 import { registerStatsHandlers } from '../stats'
-import { registerRateLimitHandlers } from '../rate-limits'
+import { registerLazyRateLimitHandlers } from '../lazy-rate-limits-handlers'
 import { registerRuntimeHandlers } from '../runtime'
 import { registerRuntimeHostHandlers } from './runtime-host-handler-registration'
 import { registerLazyEphemeralVmHandlers } from '../ephemeral-vm/lazy-ephemeral-vm-handlers'
@@ -114,7 +114,7 @@ export async function registerCoreHandlers(
       runtime.moveRunningClaudePanes(change, held)
     )
     registerLazyAccountAndDiagnosticIpcHandlers(rateLimits)
-    registerRateLimitHandlers(rateLimits, codexAccounts, () => store.getSettings())
+    registerLazyRateLimitHandlers(rateLimits, codexAccounts, () => store.getSettings())
     registerGitHubHandlers(store, stats, runtime)
     registerLazyGitLabHandlers(store)
     registerLazySecondaryIpcHandlers(store, stats, runtime)
