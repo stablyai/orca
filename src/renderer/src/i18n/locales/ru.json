@@ -24931,7 +24931,6 @@
           "dialog": {
             "createToken": "Создать",
             "environmentManagedLine": "Задано переменными окружения ORCA_BITBUCKET_*. Удалите их, чтобы сохранить здесь.",
-            "savedLocallyOnly": "Сохраняется только на этом компьютере.",
             "accessTokenNeeds": "Нужен доступ на чтение пул-реквестов.",
             "atlassianEmail": "Электронная почта Atlassian",
             "requiredScopes": "Необходимые области доступа",

@@ -51,6 +51,7 @@ export function BitbucketCredentialsDialog({
 }: BitbucketCredentialsDialogProps): React.JSX.Element {
   const t = useTranslate()
   const settings = useAppStore((s) => s.settings)
+  const connectCredential = useAppStore((s) => s.connectBitbucket)
   const mountedRef = useMountedRef()
   const emailId = useId()
   const apiTokenId = useId()
@@ -124,7 +125,7 @@ export function BitbucketCredentialsDialog({
     setConnectState('connecting')
     setConnectError(null)
     try {
-      const result = await window.api.bitbucket.connect({
+      const result = await connectCredential({
         authMode,
         accessToken: isTokenMode ? accessToken.trim() : null,
         email: isTokenMode ? null : email.trim(),
@@ -204,8 +205,8 @@ export function BitbucketCredentialsDialog({
           ) : remoteRuntime ? (
             <DialogDescription>
               {t(
-                'components.settings.bitbucket.credentials.dialog.savedLocallyOnly',
-                'Saved on this computer only.'
+                'components.settings.bitbucket.credentials.dialog.savedOnRemoteRuntime',
+                'Credentials are sent to the selected remote runtime and stored there.'
               )}
             </DialogDescription>
           ) : null}

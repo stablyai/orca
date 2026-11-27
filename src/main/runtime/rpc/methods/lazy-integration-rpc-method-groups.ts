@@ -58,6 +58,10 @@ export const LAZY_INTEGRATION_RPC_METHOD_GROUPS: readonly LazyRpcMethodGroup[] =
     { streamingNames: ['jira.attachmentImage', 'jira.getIssueStream', 'jira.issueCommentsStream'] }
   ),
   prefixRpcMethodGroup(
+    ['bitbucket.'],
+    async () => (await import('./integrations/bitbucket/bitbucket')).BITBUCKET_METHODS
+  ),
+  prefixRpcMethodGroup(
     ['computer.'],
     async () => (await import('./computer/computer')).COMPUTER_METHODS
   ),

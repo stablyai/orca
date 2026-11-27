@@ -7,9 +7,11 @@ import type { RuntimeEmulatorCommands } from '../emulator/runtime-emulator-comma
 import type { RuntimeBrowserScreencastController } from '../browser/screencast/runtime-browser-screencast-controller'
 import { createRuntimeBrowserCommands } from '../browser/installation/runtime-browser-commands-factory'
 import type { RuntimeJiraCommands } from '../integrations/jira/runtime-jira-commands'
+import type { RuntimeBitbucketCommands } from '../integrations/bitbucket/runtime-bitbucket-commands'
 import type { RpcBinarySender } from '../rpc/transports/rpc-binary-sender'
 import {
   bindLazyAsyncMethods,
+  BITBUCKET_COMMAND_NAMES,
   EMULATOR_COMMAND_NAMES,
   JIRA_ASYNC_COMMAND_NAMES
 } from './lazy-edge-command-bindings'
@@ -31,6 +33,7 @@ type BrowserSurface = Omit<PublicMethods<RuntimeBrowserCommands>, 'browserScreen
 
 export type RuntimeEdgeCommandSurface = BrowserSurface &
   PublicMethods<RuntimeJiraCommands> &
+  PublicMethods<RuntimeBitbucketCommands> &
   PublicMethods<RuntimeEmulatorCommands>
 
 type ScreencastDependencies = ConstructorParameters<typeof RuntimeBrowserScreencastController>[0]
@@ -163,6 +166,7 @@ export class RuntimeEdgeCommandController {
   private jiraInstance: RuntimeJiraCommands | null = null
   private jiraPromise: Promise<RuntimeJiraCommands> | null = null
   private readonly jiraHost: ConstructorParameters<typeof RuntimeJiraCommands>[0]
+  private bitbucketPromise: Promise<RuntimeBitbucketCommands> | null = null
   private emulatorInstance: RuntimeEmulatorCommands | null = null
   private emulatorPromise: Promise<RuntimeEmulatorCommands> | null = null
   private readonly emulatorHost: EmulatorHost
@@ -193,6 +197,7 @@ export class RuntimeEdgeCommandController {
         this.jiraInstance
           ? this.jiraInstance.jiraCancelGenerateIssueSummary(cancelArgs, owner)
           : { ok: true },
+      ...bindLazyAsyncMethods(() => this.loadBitbucket(), BITBUCKET_COMMAND_NAMES),
       ...bindBrowserMethods(this.browser, BROWSER_COMMAND_NAMES),
       ...bindLazyAsyncMethods(() => this.loadEmulator(), EMULATOR_COMMAND_NAMES),
       browserScreencast: async (params, options) =>
@@ -216,6 +221,18 @@ export class RuntimeEdgeCommandController {
         })
     }
     return this.jiraPromise
+  }
+
+  private loadBitbucket(): Promise<RuntimeBitbucketCommands> {
+    if (!this.bitbucketPromise) {
+      this.bitbucketPromise = import('../integrations/bitbucket/runtime-bitbucket-commands')
+        .then(({ RuntimeBitbucketCommands }) => new RuntimeBitbucketCommands())
+        .catch((error: unknown) => {
+          this.bitbucketPromise = null
+          throw error
+        })
+    }
+    return this.bitbucketPromise
   }
 
   private loadEmulator(): Promise<RuntimeEmulatorCommands> {
