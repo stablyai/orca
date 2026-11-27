@@ -13,6 +13,7 @@ export function getWorktreeRemovalOptionsKey(
     | 'force'
     | 'allowUnverifiedPtyStop'
     | 'skipArchive'
+    | 'approvedArchiveHash'
     | 'allowFailedArchiveHook'
     | 'approvedNestedWorktrees'
     | 'expectedCheckout'
@@ -29,7 +30,7 @@ export function getWorktreeRemovalOptionsKey(
     args.approvedNestedWorktrees || args.expectedCheckout
       ? `:${JSON.stringify([args.approvedNestedWorktrees, args.expectedCheckout])}`
       : ''
-  return `${forceKey}:${archiveKey}:${ptyKey}:${archiveFailureKey}${checkoutKey}`
+  return `${forceKey}:${archiveKey}:${ptyKey}:${archiveFailureKey}${checkoutKey}:${args.approvedArchiveHash ?? ''}`
 }
 
 export function getWorktreeRemovalInFlightKey(

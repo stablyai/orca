@@ -12,7 +12,8 @@ import { gateWorktreeRemovalOnArchiveHook } from '../../../workspaces/removal/wo
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { LocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { removeWorktree } from '../../../git/worktrees/removal/worktree-removal'
-import { runHook, getEffectiveHooks } from '../../../workspace-hooks/hooks'
+import { runHook } from '../../../workspace-hooks/hooks'
+import { loadWorktreeArchiveHooksForRemoval } from '../../../workspace-hooks/worktree-archive-source'
 import { removeWorktreeLinkedPaths } from '../../../ipc/worktrees/linked-paths/worktree-symlinks'
 import { getWorktreeSharedLinkPaths } from '../../../git/worktrees/content-paths/worktree-shared-directories'
 import { prepareRegisteredLocalWorktreeRemoval } from '../../../ipc/worktrees/removal/registered-local-worktree-preflight'
@@ -87,7 +88,9 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
 }): Promise<RemoveWorktreeResult & { warning?: string }> {
   const { repo, registeredWorktree, localOptions } = args
   const canonicalPath = registeredWorktree.path
-  const hooks = getEffectiveHooks(repo)
+  const hooks = (await nativeWindowsMarkerMissing(canonicalPath, localOptions))
+    ? null
+    : await loadWorktreeArchiveHooksForRemoval(repo, canonicalPath, undefined, localOptions)
   let warning: string | undefined
   // Archive refusal precedes refresh, preflights, PTY stop and Git deletion; failure must leave them untouched (#19334).
   let archiveHookOverride: ArchiveHookOverride | undefined
@@ -102,7 +105,7 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
       repo,
       undefined,
       args.hasLocalOptions ? localOptions : undefined,
-      { identity: { worktreeId: args.target.id } }
+      { identity: { worktreeId: args.target.id }, hooks: hooks ?? undefined }
     )
     archiveHookOverride = gateWorktreeRemovalOnArchiveHook({
       worktreePath: canonicalPath,

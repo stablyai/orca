@@ -128,6 +128,7 @@ export type WorktreeApi = {
     // Only explicit Force Delete waives PTY-stop proof; force merely skips dirty-file prompts.
     allowUnverifiedPtyStop?: boolean
     skipArchive?: boolean
+    approvedArchiveHash?: string
     // Waives a failed hook, unlike skipArchive; force does not imply this approval.
     allowFailedArchiveHook?: boolean
     snapshotPruneBatchId?: string

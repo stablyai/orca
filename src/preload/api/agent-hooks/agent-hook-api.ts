@@ -10,11 +10,13 @@ export type HooksApi = {
     hostId?: ExecutionHostId
     background?: boolean
     createSource?: SetupHooksCreateSource
+    archiveWorktreeId?: string
   }) => Promise<{
     status?: 'ok' | 'error'
     hasHooks: boolean
     hooks: OrcaHooks | null
     mayNeedUpdate: boolean
+    archiveApprovalHash?: string
     /** A background check refused because the repo's WSL distro is stopped or didn't answer. */
     unavailable?: 'wsl-distro-stopped' | 'wsl-distro-unverifiable'
   }>

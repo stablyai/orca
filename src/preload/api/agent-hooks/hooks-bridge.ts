@@ -9,6 +9,7 @@ export const hooksApi = {
     hostId?: ExecutionHostId
     background?: boolean
     createSource?: SetupHooksCreateSource
+    archiveWorktreeId?: string
   }) => ipcRenderer.invoke('hooks:check', args),
 
   inspectSetupScriptImports: (args: { repoId: string; hostId?: ExecutionHostId }) =>

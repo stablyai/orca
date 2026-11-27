@@ -6,6 +6,7 @@ import {
 } from '../../../shared/execution-host/execution-host'
 import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import { inspectWorkspaceHooks } from '../../workspace-hooks/workspace-hook-inspection'
+import { inspectWorktreeArchiveHooks } from '../../workspace-hooks/worktree-archive-inspection'
 import { resolveRepoForExecutionHost } from '../worktrees/repo-host-ownership'
 import type { WorktreeIpcContext } from '../worktrees/worktree-ipc-context'
 import type { SetupHooksCreateSource } from '../../../shared/worktree/setup-hooks-create-source'
@@ -24,6 +25,7 @@ export function registerWorktreeHookCheckHandler(context: WorktreeIpcContext): v
         hostId?: ExecutionHostId
         background?: boolean
         createSource?: SetupHooksCreateSource
+        archiveWorktreeId?: string
       }
     ) => {
       const repo = resolveRepoForExecutionHost(store, args.repoId, args.hostId)
@@ -49,6 +51,14 @@ export function registerWorktreeHookCheckHandler(context: WorktreeIpcContext): v
           hooks: null,
           mayNeedUpdate: false
         }
+      }
+
+      if (args.archiveWorktreeId && !args.background && !isFolderRepo(repo)) {
+        return inspectWorktreeArchiveHooks(
+          repo,
+          args.archiveWorktreeId,
+          getWorktreeCreatePrefetchGitOptions(store, repo)
+        )
       }
 
       if (args.createSource && !args.background) {

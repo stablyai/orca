@@ -22,7 +22,8 @@ import { findRegisteredDeletableWorktree } from '../../../workspaces/removal/wor
 import { assertNestedWorktreeRemovalApproval } from '../../../workspaces/removal/nested-worktree-removal-plan'
 import { removeStaleLocalWorktreeRegistration } from '../../../workspaces/removal/local-worktree-removal-recovery'
 import { resolveWorktreeRemovalHomeForHost } from '../../../workspaces/removal/worktree-removal-execution-host-route'
-import { getEffectiveHooks, runHook } from '../../../workspace-hooks/hooks'
+import { runHook } from '../../../workspace-hooks/hooks'
+import { loadWorktreeArchiveHooksForRemoval } from '../../../workspace-hooks/worktree-archive-source'
 import type { ArchiveHookOverride } from '../../../../shared/worktree/removal/archive-hook-removal-gate'
 import { gateWorktreeRemovalOnArchiveHook } from '../../../workspaces/removal/worktree-archive-hook-gate'
 import { withWorktreeRemoveStageSpan } from '../../../observability/instrumentation'
@@ -159,7 +160,14 @@ export async function executeWorktreeRemoval(
     return removalResult ?? {}
   }
 
-  const hooks = getEffectiveHooks(repo)
+  const hooks = (await nativeWindowsMarkerMissing(canonicalWorktreePath, localWorktreeGitOptions))
+    ? null
+    : await loadWorktreeArchiveHooksForRemoval(
+        repo,
+        canonicalWorktreePath,
+        args.approvedArchiveHash,
+        localWorktreeGitOptions
+      )
 
   const archiveScript = hooks?.scripts.archive
 
@@ -177,7 +185,7 @@ export async function executeWorktreeRemoval(
         repo,
         undefined,
         localWorktreeGitOptions,
-        { identity: { worktreeId: args.worktreeId } }
+        { identity: { worktreeId: args.worktreeId }, hooks: hooks ?? undefined }
       )
       archiveHookOverride = gateWorktreeRemovalOnArchiveHook({
         worktreePath: canonicalWorktreePath,

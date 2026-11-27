@@ -21,6 +21,7 @@ export async function dispatchWorktreeRemoval(args: {
   hostId: ExecutionHostId | undefined
   force: boolean | undefined
   skipArchive: boolean
+  approvedArchiveHash?: string
   get: WorktreeSliceGet
   target: RuntimeClientTarget
   options: RemoveWorktreeOptions | undefined
@@ -72,6 +73,7 @@ async function requestWorktreeRemoval(
       allowUnverifiedPtyStop: options?.allowUnverifiedPtyStop === true,
       allowFailedArchiveHook: options?.allowFailedArchiveHook === true,
       skipArchive,
+      approvedArchiveHash: args.approvedArchiveHash,
       ...snapshotPruneBatch
     })
   }

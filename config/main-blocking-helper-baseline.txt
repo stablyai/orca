@@ -678,7 +678,7 @@
 3 src/main/ipc/worktrees/listing/detected-worktree-scan-cache.ts
 11 src/main/ipc/worktrees/listing/folder-repo-git-upgrade.ts
 1 src/main/ipc/worktrees/listing/ssh-worktree-fallback.ts
-2 src/main/ipc/worktrees/removal/execute-worktree-removal.ts
+1 src/main/ipc/worktrees/removal/execute-worktree-removal.ts
 1 src/main/ipc/worktrees/removal/register-worktree-removal-handlers.ts
 1 src/main/ipc/worktrees/removal/registered-worktree-root-match.ts
 1 src/main/ipc/worktrees/removal/registered-worktree-root-probes.ts
@@ -1281,7 +1281,7 @@
 4 src/main/runtime/workspaces/creation/runtime-local-worktree-setup.ts
 2 src/main/runtime/workspaces/creation/workspace-creation.ts
 1 src/main/runtime/workspaces/lineage/runtime-worktree-lineage-controller.ts
-4 src/main/runtime/workspaces/removal/runtime-registered-local-worktree-removal.ts
+3 src/main/runtime/workspaces/removal/runtime-registered-local-worktree-removal.ts
 2 src/main/runtime/workspaces/removal/workspace-registration-removal.ts
 2 src/main/runtime/workspaces/removal/workspace-removal.ts
 1 src/main/runtime/workspaces/workspace-removal-target.ts

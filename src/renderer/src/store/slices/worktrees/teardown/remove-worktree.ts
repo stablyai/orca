@@ -1,6 +1,6 @@
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
-import { ensureHooksConfirmed } from '@/runtime/repo-hooks/ensure-hooks-confirmed'
+import { ensureWorktreeArchiveApproved } from '@/runtime/repo-hooks/ensure-hooks-confirmed'
 import { runtimeTargetForOwnerEnvironment } from '../../../../runtime/rpc/targets/runtime-client-target'
 import { forgetHugeRepoWarningDismissalsForWorktrees } from '@/lib/source-control/warnings/source-control-huge-repo-warning-dismissals'
 import { forgetWorktreeSleepIntent } from '@/lib/workspace/sleep/worktree-sleep-intent'
@@ -91,15 +91,16 @@ export function createRemoveWorktree(
 
     try {
       // forget-local touches no remote/archive hooks; read current trust so concurrent same-repo deletes share one approval.
-      const skipArchive = policy.forgetLocalOnly
-        ? true
-        : (await ensureHooksConfirmed(
+      const localArchiveApproval = policy.forgetLocalOnly
+        ? undefined
+        : await ensureWorktreeArchiveApproved(
             get,
             getRepoIdFromWorktreeId(worktreeId),
-            'archive',
+            worktreeId,
             hostId,
             removalRoute?.runtimeEnvironmentId
-          )) === 'skip'
+          )
+      const skipArchive = policy.forgetLocalOnly || localArchiveApproval?.decision === 'skip'
 
       const worktreeBeforeRemoval = findWorktreeOnConfirmedHost(
         get,
@@ -126,6 +127,7 @@ export function createRemoveWorktree(
           hostId,
           force: policy.force,
           skipArchive,
+          approvedArchiveHash: localArchiveApproval?.approvedArchiveHash,
           get,
           target,
           options: policy.options,
