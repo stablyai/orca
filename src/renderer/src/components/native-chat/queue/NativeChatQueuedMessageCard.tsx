@@ -195,8 +195,15 @@ export function NativeChatQueuedMessageCard({
   const editable = actionable && !card.notEditable && onEdit !== undefined
   // Edit and Delete wait for hover or keyboard focus; Steer stays on every row.
   const toolCount = actionable ? (editable ? 2 : 1) : 0
-  const maskStyle: (React.CSSProperties & { '--queued-tools-mask': string }) | undefined =
-    toolCount > 0 ? { '--queued-tools-mask': queuedRowToolsMask(toolCount) } : undefined
+  const toolStyle:
+    | (React.CSSProperties & { '--queued-tools-mask': string; '--queued-tools-width': string })
+    | undefined =
+    toolCount > 0
+      ? {
+          '--queued-tools-mask': queuedRowToolsMask(toolCount),
+          '--queued-tools-width': `${toolCount * 25}px`
+        }
+      : undefined
   return (
     <li
       ref={drag?.rowRef}
@@ -241,13 +248,16 @@ export function NativeChatQueuedMessageCard({
           className={cn(
             'min-w-0 flex-1',
             // The line fades out under the revealed tools; shown while acting, so a pressed tool never vanishes.
-            !expanded &&
-              toolCount > 0 &&
-              (busy
-                ? '[mask-image:var(--queued-tools-mask)]'
-                : 'group-hover/queued:[mask-image:var(--queued-tools-mask)] group-has-[:focus-visible]/queued:[mask-image:var(--queued-tools-mask)] [@media(hover:none)]:group-focus-within/queued:[mask-image:var(--queued-tools-mask)]')
+            toolCount > 0 &&
+              (expanded
+                ? busy
+                  ? '[padding-right:var(--queued-tools-width)]'
+                  : 'group-hover/queued:[padding-right:var(--queued-tools-width)] group-has-[:focus-visible]/queued:[padding-right:var(--queued-tools-width)] [@media(hover:none)]:group-focus-within/queued:[padding-right:var(--queued-tools-width)]'
+                : busy
+                  ? '[mask-image:var(--queued-tools-mask)]'
+                  : 'group-hover/queued:[mask-image:var(--queued-tools-mask)] group-has-[:focus-visible]/queued:[mask-image:var(--queued-tools-mask)] [@media(hover:none)]:group-focus-within/queued:[mask-image:var(--queued-tools-mask)]')
           )}
-          style={maskStyle}
+          style={toolStyle}
         >
           {sender}
           {expanded ? (
