@@ -11,6 +11,7 @@ import { readOpenCodeNativeChatTranscriptFull } from '../../transcript-history/o
 import { prepareHermesImport } from './journal-hermes-import'
 import { prepareAntigravityImport } from './journal-antigravity-import'
 import { prepareDroidImport } from './journal-droid-import'
+import { prepareKimiImport } from './journal-kimi-import'
 import { replacementItems } from './journal-replacement-items'
 import { decodeJsonlReplacementItems } from './journal-jsonl-import'
 import {
@@ -98,6 +99,9 @@ export async function prepareLegacyTranscriptImport(input: {
       limits,
       MAX_LEGACY_IMPORT_RETAINED_BYTES
     )
+  }
+  if (input.agent === 'kimi') {
+    return prepareKimiImport(input.sessionId, options, limits, MAX_LEGACY_IMPORT_RETAINED_BYTES)
   }
   if (input.agent === 'droid') {
     return prepareDroidImport(input.sessionId, options, limits, MAX_LEGACY_IMPORT_RETAINED_BYTES)

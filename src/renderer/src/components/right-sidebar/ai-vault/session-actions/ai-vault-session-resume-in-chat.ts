@@ -35,6 +35,8 @@ export function aiVaultSessionResumeInChatWorkspaceMatters(
     agent === 'grok' ||
     // Hermes moves a session into whatever folder loads it.
     agent === 'hermes' ||
+    // Kimi's own resume refuses a session saved in another folder.
+    agent === 'kimi' ||
     agent === 'omp' ||
     agent === 'opencode' ||
     agent === 'opencode2' ||
