@@ -48,7 +48,8 @@ export function ClientHostedBrowserUnavailableNotice({
   }, [onOtherDesktop, runtimeEnvironmentId])
   return (
     <div className="absolute inset-0 flex items-center justify-center px-4 text-center">
-      <div className="flex max-w-sm flex-col items-center">
+      {/* Relative so the Details box hangs below without re-centering the block under the pointer. */}
+      <div className="relative flex max-w-sm flex-col items-center">
         <Globe className="size-5 text-muted-foreground" />
         <div className="mt-3 text-balance text-[15px] font-semibold leading-5 text-foreground">
           {t('browser.clientHosted.runsOnServerTitle', 'This tab runs on your server')}
@@ -69,7 +70,7 @@ export function ClientHostedBrowserUnavailableNotice({
             />
             <button
               type="button"
-              className="mt-2 min-h-6 rounded-sm px-2 text-xs leading-5 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="mt-2 min-h-6 cursor-pointer rounded-sm px-2 text-xs leading-5 text-muted-foreground hover:text-foreground aria-expanded:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-expanded={detailsOpen}
               aria-controls={detailsId}
               onClick={() => setDetailsOpen((open) => !open)}
@@ -79,7 +80,7 @@ export function ClientHostedBrowserUnavailableNotice({
             <div
               id={detailsId}
               hidden={!detailsOpen}
-              className="mt-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-balance text-xs leading-5 text-muted-foreground"
+              className="absolute inset-x-0 top-full mt-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-balance text-xs leading-5 text-muted-foreground"
             >
               {reopenOnServerCaveat(t)}
             </div>
