@@ -16,6 +16,10 @@ import {
   resolveKittyUnidentifiedSpacePress
 } from './keyboard/terminal-kitty-unidentified-space'
 import { installTerminalImeNativeTextForwarder } from './ime/terminal-ime-native-text-forwarder'
+import {
+  installTerminalSoftKeyboardInputRepair,
+  isAndroidClient
+} from './ime/terminal-soft-keyboard-commit-forwarder'
 import { installTerminalIosHangulPreedit } from './ime/terminal-ios-hangul-preedit'
 import { createTerminalIosHangulPreeditRenderer } from './ime/terminal-ios-hangul-preedit-overlay'
 import { isCurrentPlatformIosWeb } from '@/app-shell/platform/ios-web-platform'
@@ -96,6 +100,24 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
         })
       : { claimKeyEvent: () => false, dispose: () => undefined }
   imeNativeTextForwarderDisposablesRef.current.set(pane.id, imeNativeTextForwarder)
+  // Desktop IMEs commit through input too, but an Android soft keyboard's keyCode 229 keydown is
+  // left to xterm by the policies above, and xterm drops the commit that follows it (#50460).
+  const softKeyboardRepair = isAndroidClient()
+    ? installTerminalSoftKeyboardInputRepair({
+        terminalElement: pane.terminal.element,
+        isComposing: () => imeCompositionTracker.isActive(),
+        sendInput: (data) => pane.terminal.input(data),
+        getKittyKeyboardFlags
+      })
+    : null
+  if (softKeyboardRepair) {
+    imeNativeTextForwarderDisposablesRef.current.set(pane.id, {
+      dispose: () => {
+        imeNativeTextForwarder.dispose()
+        softKeyboardRepair.dispose()
+      }
+    })
+  }
 
   const kittyOrphanKeyupGuard = createTerminalKittyOrphanKeyupGuard()
 
