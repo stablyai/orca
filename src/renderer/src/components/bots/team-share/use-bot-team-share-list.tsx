@@ -18,8 +18,8 @@ import {
 import {
   TeamShareConnectorPeople,
   useTeamShareConnectors,
-  type TeamShareFoundByConnector,
-  type TeamShareListedByConnector
+  teamShareConnectorMembers,
+  type TeamShareFoundByConnector
 } from './BotTeamShareConnectorPeople'
 import { addBotTeamShare, removeBotTeamShare, resendBotTeamShare } from './bot-team-share-rpc'
 import {
@@ -58,7 +58,6 @@ export function useBotTeamShareList(bot: Bot): BotTeamShareList {
   const t = useTranslate()
   const [query, setQuery] = useState('')
   const [found, setFound] = useState<TeamShareFoundByConnector>({})
-  const [connectorListed, setConnectorListed] = useState<TeamShareListedByConnector>({})
   const [staged, setStaged] = useState<StagedPerson[]>([])
   const [adds] = useState<TeamShareConnectorAdds>(() => new Map())
   // While Share saves, its confirmations sit on top; the picks stay until it settles.
@@ -122,7 +121,9 @@ export function useBotTeamShareList(bot: Bot): BotTeamShareList {
   return {
     owner,
     people,
-    othersListed: people.length > 0 || Object.values(connectorListed).some((count) => count > 0),
+    othersListed:
+      people.length > 0 ||
+      connectors.some((entry) => teamShareConnectorMembers(bot, entry).length > 0),
     query,
     onQueryChange: setQuery,
     suggestions,
@@ -153,7 +154,6 @@ export function useBotTeamShareList(bot: Bot): BotTeamShareList {
         entry={entry}
         query={query}
         report={setFound}
-        reportListed={setConnectorListed}
         adds={adds}
       />
     ))

@@ -310,8 +310,12 @@ export function withSlackMembersTagged<T extends Pick<Bot, 'members' | 'slack' |
 /** The Slack people allowed to ask the bot in one of its Slack workspaces. */
 export function slackMembersOf(
   bot: Pick<Bot, 'slack' | 'slackApps'> & { members: readonly BotMember[] },
-  teamId: string
+  /** None: every Slack member, as when its app was removed. */
+  teamId?: string
 ): BotMember[] {
+  if (teamId === undefined) {
+    return botMembersFrom(bot.members, 'slack')
+  }
   const first = botSlackApps(bot)[0]?.teamId
   return botMembersFrom(bot.members, 'slack').filter((member) =>
     member.workspaceId === undefined ? teamId === first : member.workspaceId === teamId
@@ -371,8 +375,12 @@ export function withGitHubMembersTagged<T extends Pick<Bot, 'members' | 'github'
 /** The GitHub people allowed to ask the bot in one installation; one saved with none (not yet tagged), in every one. */
 export function gitHubMembersOf(
   members: readonly BotMember[],
-  installationId: string
+  /** None: every GitHub member, GitHub as a whole. */
+  installationId?: string
 ): BotMember[] {
+  if (installationId === undefined) {
+    return botMembersFrom(members, 'github')
+  }
   return botMembersFrom(members, 'github').filter(
     (member) => member.workspaceId === undefined || member.workspaceId === installationId
   )

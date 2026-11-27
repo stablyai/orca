@@ -5,7 +5,6 @@ import { slackTeamState, useBotSlack } from '@/lib/bot-slack-state'
 import { botSlackCalls } from '@/lib/bot-connector-host-calls'
 import {
   BOT_MAX_MEMBERS,
-  botMembersFrom,
   slackMembersOf,
   type Bot,
   type BotMember
@@ -32,9 +31,7 @@ export function useSlackWhoCanAsk(bot: Bot, rowTeamId?: string): BotWhoCanAskSer
   return useMemo(
     (): BotWhoCanAskService => ({
       listed: (members: readonly BotMember[]) =>
-        rowTeamId === undefined
-          ? botMembersFrom(members, 'slack')
-          : slackMembersOf({ members, slack: first, slackApps }, rowTeamId),
+        slackMembersOf({ members, slack: first, slackApps }, rowTeamId),
       stamp:
         rowTeamId === undefined ? { source: 'slack' } : { source: 'slack', workspaceId: rowTeamId },
       max: BOT_MAX_MEMBERS,

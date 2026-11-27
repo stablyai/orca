@@ -59,15 +59,19 @@ function agent(fields: Partial<Bot>): Bot {
   return { id: 'ivy', name: 'Ivy', hostId: 'local', avatar: null, members: [], ...fields } as Bot
 }
 
+function dialog(bot: Bot): React.JSX.Element {
+  return (
+    <ConfirmationDialogProvider>
+      <TooltipProvider>
+        <BotTeamShareDialogHost bot={bot} onClose={() => {}} />
+      </TooltipProvider>
+    </ConfirmationDialogProvider>
+  )
+}
+
 async function heading(bot: Bot): Promise<boolean> {
   await act(async () => {
-    render(
-      <ConfirmationDialogProvider>
-        <TooltipProvider>
-          <BotTeamShareDialogHost bot={bot} onClose={() => {}} />
-        </TooltipProvider>
-      </ConfirmationDialogProvider>
-    )
+    render(dialog(bot))
   })
   return screen.queryByText('People with access') !== null
 }
@@ -104,5 +108,18 @@ describe('the Share dialog’s People with access heading', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a Slack member as Who can ask stores it.
     expect(await heading(agent({ members: [member] as unknown as BotMember[] }))).toBe(true)
     expect(screen.getByText('Sam')).toBeTruthy()
+  })
+
+  it("shows once a connector's members arrive after the dialog opened", async () => {
+    state.slack = true
+    let view!: ReturnType<typeof render>
+    await act(async () => {
+      view = render(dialog(agent({})))
+    })
+    expect(screen.queryByText('People with access')).toBeNull()
+    const member = { id: 'U1', name: 'Sam', source: 'slack', workspaceId: 'T1' }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a Slack member as Who can ask stores it.
+    view.rerender(dialog(agent({ members: [member] as unknown as BotMember[] })))
+    expect(screen.getByText('People with access')).toBeTruthy()
   })
 })

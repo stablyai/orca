@@ -84,7 +84,6 @@ function show(query: string): void {
           entry={entry as never}
           query={query}
           report={report}
-          reportListed={() => {}}
           adds={adds}
         />
       </ul>
