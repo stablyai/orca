@@ -34,6 +34,8 @@ export default function ProjectGroupHeader({
     group.key === EMPTY_PROJECT_GROUP_KEY
       ? t('projectBoard.noField', 'No {{field}}', { field: groupFieldName })
       : group.label || t('auto.components.github.project.ProjectGroupHeader.244c9e7d06', 'All')
+  // Only the table truncates the label; everything else in the band keeps its size.
+  const fixedPartClass = bandWidth == null ? 'shrink-0' : undefined
   return (
     <button
       type="button"
@@ -42,25 +44,37 @@ export default function ProjectGroupHeader({
         'flex items-center border-b border-border/50 bg-muted/40 px-3 py-1.5 text-left text-xs',
         'hover:bg-muted/60',
         // Keep the band painted to the pane’s edge when the timeline is narrower.
-        // Why: in the table a long label must not widen its group past the header and other groups.
+        // Why: in the table, contain-inline-size keeps a long label from widening the shared table width.
         bandWidth == null ? 'w-full contain-inline-size' : 'min-w-full'
       )}
       style={bandWidth == null ? undefined : { width: bandWidth }}
     >
-      <span className={cn('flex min-w-0 items-center gap-2', bandWidth != null && 'sticky left-3')}>
+      <span
+        className={cn('flex items-center gap-2', bandWidth == null ? 'min-w-0' : 'sticky left-3')}
+      >
         {expanded ? (
-          <ChevronDown className="size-3.5 shrink-0" />
+          <ChevronDown className={cn('size-3.5', fixedPartClass)} />
         ) : (
-          <ChevronRight className="size-3.5 shrink-0" />
+          <ChevronRight className={cn('size-3.5', fixedPartClass)} />
         )}
-        <span className="truncate font-medium" title={label}>
+        <span
+          className={cn('font-medium', bandWidth == null && 'truncate')}
+          title={bandWidth == null ? label : undefined}
+        >
           {label}
         </span>
-        <span className="shrink-0 rounded-full border border-border/50 bg-background px-1.5 text-[10px] text-muted-foreground">
+        <span
+          className={cn(
+            'rounded-full border border-border/50 bg-background px-1.5 text-[10px] text-muted-foreground',
+            fixedPartClass
+          )}
+        >
           {group.rows.length}
         </span>
         {dateRange ? (
-          <span className="shrink-0 text-[10px] text-muted-foreground">{dateRange}</span>
+          <span className={cn('text-[10px] text-muted-foreground', fixedPartClass)}>
+            {dateRange}
+          </span>
         ) : null}
         {isCurrent ? (
           <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-1.5 text-[10px] text-emerald-700 dark:text-emerald-300">
