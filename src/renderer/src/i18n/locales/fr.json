@@ -29250,8 +29250,6 @@
         "heldSkillsLimit": "Vos réponses partent en un seul commentaire, qui accepte au plus {{max}} skills. Envoyez d’abord les réponses gardées jusqu’ici, ou retirez-en quelques-uns.",
         "send": "Envoyer",
         "sending": "Envoi…",
-        "sendSome": "Envoyer {{count}}/{{total}}",
-        "sendSomeLabel": "Envoyer {{count}} réponses sur {{total}}",
         "changeAnswer": "{{question}} : {{answer}}. Modifier la réponse"
       },
       "readMoreClosedFailed": "Impossible de lire plus d’éléments fermés",
