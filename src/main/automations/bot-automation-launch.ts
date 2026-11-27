@@ -23,6 +23,7 @@ import { captureAutomationRunMessage } from './automation-run-message-capture'
 import type { BotRunFields } from '../bots/bot-chat-session'
 import type { AgentJournalAutomationRunNotStartedItem } from '../../shared/agent-journal-orca-card-items'
 import { BotSessionRefusedError } from '../bots/bot-session-refused-error'
+import { automationResultsSentence } from '../../shared/automations/automation-results-place'
 
 /** Where a bot run's prompt goes; each resolves to the structured session and message that took it. */
 export type BotAutomationSessions = {
@@ -108,9 +109,14 @@ type ThreadRoute =
 async function threadRoute(
   threads: BotRunThreads | undefined,
   run: Pick<AutomationRun, 'event' | 'trigger'>,
-  runsIn: 'new' | 'chat'
+  runsIn: 'new' | 'chat',
+  origin?: ConversationKey
 ): Promise<ThreadRoute> {
   const { event } = run
+  // Made answering a thread, and not run by hand: its result goes to that thread.
+  if (origin && run.trigger !== 'manual' && !event?.conversation) {
+    return { kind: 'post', conversation: origin }
+  }
   if (run.trigger !== 'event' || !event?.conversation) {
     return { kind: 'take' }
   }
@@ -151,6 +157,23 @@ function threadResults(
   return event?.conversation && threads?.adopt(event.conversation, chat, title) ? 'thread' : 'none'
 }
 
+/** The wake note's last line: where the run's final message goes. Run by hand, a thread's run is in
+ *  no thread, so its result stays in its conversation. */
+export function automationResultsLine(
+  automation: Pick<Automation, 'bot'>,
+  run: Pick<AutomationRun, 'trigger'>
+): string | null {
+  const target = automation.bot
+  if (!target) {
+    return null
+  }
+  const manualThread = target.resultsTo === 'thread' && run.trigger === 'manual'
+  const sentence = automationResultsSentence(
+    manualThread ? { ...target, resultsTo: 'none', originThread: undefined } : target
+  )
+  return `[Orca: ${sentence}]`
+}
+
 /** An event run meant for its thread that got none: no thread on the event, or an older cloud. */
 export function missedItsThread(
   automation: Pick<Automation, 'bot'>,
@@ -169,7 +192,7 @@ export function createBotAutomationDispatcher(
   return async ({ automation, run, target }) => {
     const turns = await results.watch()
     const asker = run.event ? automationEventAsker(run.event, target.bot.members) : null
-    const text =
+    const prompt =
       automation.once?.by !== undefined && run.trigger === 'scheduled'
         ? automationDeadlinePrompt(
             automation.prompt,
@@ -177,6 +200,8 @@ export function createBotAutomationDispatcher(
             Boolean(automation.on?.length)
           )
         : automationRunPrompt(automation.prompt, run.event, asker)
+    const resultsLine = automationResultsLine(automation, run)
+    const text = resultsLine ? [prompt, '', resultsLine].join('\n') : prompt
     const automationRun = captureAutomationRunMessage(automation, run, text, asker)
     const fields: BotRunFields = {
       memorySource: automationRunMemoryLabel(automation.name, run.event),
@@ -187,8 +212,16 @@ export function createBotAutomationDispatcher(
     const { runsIn } = target
     const chosenChat = automation.bot?.chat?.sessionId
     const saved = automation.bot?.resultsTo ?? 'chat'
+    const origin = automation.bot?.originThread
     const route: ThreadRoute =
-      saved === 'thread' ? await threadRoute(threads, run, runsIn) : { kind: 'take' }
+      saved === 'thread'
+        ? await threadRoute(
+            threads,
+            run,
+            runsIn,
+            origin && { source: origin.source, externalId: origin.externalId }
+          )
+        : { kind: 'take' }
     // A new conversation that never opened has no chat to show why: the bot's Chat does.
     const destination: BotRunChat =
       route.kind === 'owner'
@@ -284,7 +317,7 @@ export function createBotAutomationDispatcher(
         )
         .finally(() => {
           // Only a conversation the run started is its own to release.
-          if (route.kind === 'take' && runsIn === 'new') {
+          if (route.kind !== 'owner' && runsIn === 'new') {
             void sessions.release(send.sessionId)
           }
         })

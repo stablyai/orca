@@ -25,6 +25,7 @@ import { CONNECTOR_LEAVE_THREAD_METHOD } from '../connector-leave-thread'
 import { splitSlackHtmlReply } from '../../../../../shared/connectors/slack-html-reply'
 import type { ConnectorCloudFeature } from '../../../../../shared/connector-cloud-features'
 import { botOfSession } from '../../../../bots/bot-session-tabs'
+import { notInAThread } from '../../../../bots/bot-run-reply-place'
 
 export function requireSeam(
   runtime: Pick<OrcaRuntimeService, 'getExternalConversationSeam'>
@@ -47,7 +48,14 @@ export const CONNECTOR_METHODS = [
       const paneKey = 'paneKey' in params ? params.paneKey : chatPaneKey(params.sessionId)
       const target = requireSeam(context.runtime).replyTarget(paneKey)
       if (!target) {
-        throw new Error('not_a_cloud_conversation')
+        // A run's own conversation is in no thread: say where its final message goes instead.
+        throw notInAThread(
+          {
+            listAutomationRuns: () => context.runtime.listAutomationRuns(),
+            showAutomation: (id) => context.runtime.showAutomation(id)
+          },
+          'sessionId' in params ? params.sessionId : undefined
+        )
       }
       // A bot posts only into the conversation its chat is bound to, as that bot.
       const botRefusal = botReplyRefusal(

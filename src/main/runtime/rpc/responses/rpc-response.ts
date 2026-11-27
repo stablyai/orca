@@ -113,6 +113,8 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'dispatch_inactive',
   // Names the send that reaches the sender instead.
   'bot_reply_not_yours',
+  // A run's conversation in no thread names where its final message goes; a plain one keeps the bare code.
+  'not_a_cloud_conversation',
   // Its start failed before an agent ran, so there is no output to read.
   'worker_never_started',
   'worker_identity_changed',

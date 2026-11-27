@@ -1,4 +1,5 @@
 import type { BotAgentSetup } from './bots/bot-agent-setup'
+import type { ConnectorSource } from './connectors/external-conversation-link'
 
 /** 'new': a new conversation in the bot's folder each run; 'chat': continue the bot's Chat, or the
  *  chat the target names. */
@@ -22,6 +23,10 @@ export function botResultsPlace(resultsTo: Extract<AutomationBotResultsTo, objec
   return resultsTo.label ?? ('channel' in resultsTo ? resultsTo.channel : resultsTo.linearIssue)
 }
 
+/** The thread a bot's turn was answering when it made the automation, as its chat's link names it.
+ *  Set by the host only; place is how people name where it is ("#orca"). */
+export type AutomationOriginThread = { source: ConnectorSource; externalId: string; place?: string }
+
 /** The bot an automation runs as: its folder, agent and preamble replace the project target. */
 export type AutomationBotTarget = {
   botId: string
@@ -38,4 +43,7 @@ export type AutomationBotTarget = {
   /** Its own agent and launch for runs in a new conversation; absent, the bot's. Kept when the bot
    *  switches agents, since a launch belongs to its agent. Older hosts drop it. */
   agentSetup?: BotAgentSetup
+  /** Made by a turn its thread owns: its results answer under that thread unless they go to another
+   *  place by name. Host-set and kept across edits; older hosts drop it. */
+  originThread?: AutomationOriginThread
 }

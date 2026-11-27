@@ -70,7 +70,10 @@ export async function patchBotAutomationUpdate(
       ? botAutomationAgent(patch.bot, bot)
       : botAutomationSetup(current.bot, bot).agent
   assertNoBotOwnedSettings(updates, agent)
-  patch.bot &&= await withCheckedBotChat(patch.bot, bot, lookups.botChat, current.bot)
+  patch.bot &&= withOriginThread(
+    await withCheckedBotChat(patch.bot, bot, lookups.botChat, current.bot),
+    current.bot
+  )
   if (bot) {
     assertBotHearsEventTriggers(lookups.webhooks.hearing(bot), updates.on)
     patch.agentId = agent
@@ -84,4 +87,12 @@ export async function patchBotAutomationUpdate(
     patch,
     await withPatchPlaceRefs(lookups.placeRefs(), current.bot.botId, patch, current)
   )
+}
+
+/** Clients can't send the thread an automation was made in, so an edit keeps the saved one. */
+export function withOriginThread<Target extends AutomationBotTarget | undefined>(
+  next: Target,
+  saved: Pick<AutomationBotTarget, 'originThread'>
+): Target {
+  return next && saved.originThread ? { ...next, originThread: saved.originThread } : next
 }

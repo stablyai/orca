@@ -42,3 +42,41 @@ describe('a run answered together with another message', () => {
     expect(saved).toBe(true)
   })
 })
+
+describe('a result posted away from the thread its automation was made in', () => {
+  it('starts with a line naming the automation and that thread', async () => {
+    const posts: unknown[] = []
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial fixture; the code under test reads only these fields
+    const deps = {
+      cloudSignedOut: () => false,
+      turnForOf: async () => 'owner',
+      postAsBot: (_bot: unknown, body: unknown) => {
+        posts.push(body)
+        return Promise.resolve({ ok: true, value: undefined })
+      }
+    } as unknown as BotRunDeliveryDependencies
+    const bot = {
+      botId: 'b1',
+      runsIn: 'chat',
+      resultsTo: { channel: 'C9' },
+      originThread: { source: 'slack', externalId: 'T1:C1:1.2', place: '#design' }
+    } as const
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial fixture; the code under test reads only these fields
+    await deliverBotRunResult(deps, {
+      automation: { id: 'a1', name: 'Weekly recap', dtstart: 1, bot },
+      run: { id: 'r1', trigger: 'scheduled' },
+      bot: { id: 'b1', name: 'Ranger' },
+      target: { runsIn: 'chat', resultsTo: bot.resultsTo },
+      sessionId: 'run-chat',
+      ended: { outcome: 'success', message: 'All green.' }
+    } as unknown as BotRunResult)
+    expect(posts).toEqual([
+      {
+        postId: 'r1',
+        channelId: 'C9',
+        turnFor: 'owner',
+        text: '_From the automation “Weekly recap”, set up in the Slack thread in #design._\n\nAll green.'
+      }
+    ])
+  })
+})

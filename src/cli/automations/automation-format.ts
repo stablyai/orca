@@ -17,6 +17,7 @@ import { BOT_CHAT_ID_PREFIX } from '../../shared/bots/bot-chat-row'
 import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { printResult } from '../output/command-result-output'
 import { formatLocalTime } from '../output/local-time'
+import { formatAutomationResultsTo } from '../../shared/automations/automation-results-place'
 
 export type AutomationListPayload = {
   automations: Automation[]
@@ -172,7 +173,10 @@ export function formatAutomationShow(result: AutomationShowPayload): string {
     ...(automation.extraAgentArgs ? [`extraAgentArgs: ${automation.extraAgentArgs}`] : []),
     `enabled: ${automation.enabled}`,
     ...(automation.bot
-      ? [formatRunsInChat(automation) ?? `runs in: ${automation.bot.runsIn}`]
+      ? [
+          formatRunsInChat(automation) ?? `runs in: ${automation.bot.runsIn}`,
+          formatAutomationResultsTo(automation.bot)
+        ]
       : []),
     ...(automation.once ? [`once: ${formatOnce(automation)}`] : []),
     ...(hasAutomationSchedule(automation)

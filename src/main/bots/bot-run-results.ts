@@ -42,6 +42,7 @@ import { ANSWERED_TOGETHER_NOTICE } from '../../shared/automations/history/autom
 import * as resultNote from './bot-run-result-note'
 import { writeStructuredAgentSessionOrcaNote } from '../native-chat/agent-session-wire/structured-agent-session-orca-note'
 import { resultPlaceValue } from '../automations/bot-automation-place-refs'
+import { withProvenance } from './bot-run-result-provenance'
 import { watchBotTurnEnds, type BotRunUnavailable, type BotTurnEnd } from './bot-run-turn-watch'
 import { orcaSignInServer } from './orca-sign-in-server'
 import {
@@ -221,7 +222,10 @@ export async function deliverBotRunResult(
       return { ...completed, error: COPY.chatFailed }
     }
   }
-  const text = capAnswer(message, CONNECTOR_CLIENT_LIMITS.maxLastAssistantMessageBytes)
+  const text = capAnswer(
+    withProvenance(message, automation),
+    CONNECTOR_CLIENT_LIMITS.maxLastAssistantMessageBytes
+  )
   const postId = result.run.id
   // The ref where the host saved one; the id or key where it saved only that.
   const place = resultPlaceValue(resultsTo)

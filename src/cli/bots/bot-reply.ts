@@ -45,7 +45,7 @@ const REPLY_UNAVAILABLE_CODES = new Set(['connector_not_connected', 'connectors_
 // Each says what was true and what to do instead; a Home chat or automation run is the common case.
 const REPLY_REFUSALS: Readonly<Record<string, string>> = {
   not_a_cloud_conversation:
-    "Nothing was posted: this chat isn't attached to a Slack, GitHub, Linear or Discord thread on this host. A reply works only in a conversation someone started by messaging the bot there, or an event's run that answers in its thread. Your Home chat has none, and an automation run has one only when its results go to the event's thread (--results-to thread); put it in your final message, which goes wherever this chat's results go.",
+    "Nothing was posted: this chat isn't attached to a Slack, GitHub, Linear or Discord thread on this host. A reply works only in a conversation someone started by messaging the bot there, a run of an automation made while answering a thread, or an event's run that answers in its thread. Your Home chat has none; put it in your final message, which goes wherever this chat's results go (a run's wake note says where).",
   bot_chat_reply:
     'Nothing was posted: this is your Chat, which has no one conversation to post into. Your final message is posted when you finish.',
   not_this_bots_conversation:
@@ -75,7 +75,12 @@ function refusalOf(error: unknown): never {
   if (error instanceof RuntimeClientError && REPLY_UNAVAILABLE_CODES.has(error.code)) {
     throw new RuntimeClientError('not_a_cloud_conversation', CONNECTOR_REPLY_UNAVAILABLE)
   }
-  const refusal = error instanceof RuntimeClientError && REPLY_REFUSALS[error.code]
+  // A host that knows where this run's results go says so in its own words.
+  const named =
+    error instanceof RuntimeClientError &&
+    error.code === 'not_a_cloud_conversation' &&
+    error.message !== error.code
+  const refusal = error instanceof RuntimeClientError && !named && REPLY_REFUSALS[error.code]
   if (refusal) {
     throw new RuntimeClientError(error.code, refusal)
   }

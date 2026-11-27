@@ -16,6 +16,7 @@ import { deleteAutomationRecordingCancelledWait } from '../../../../bots/bot-wai
 import { LOOK_AROUND_REFUSAL } from '../../../../bots/bot-look-around-policy'
 import { automationForClient, readsGoogleRules } from '../../google-rules-for-client'
 import { targetInCallerChat } from './runs-in-caller-chat'
+import { answerInOriginThread, creatorThreadOf } from './answer-in-origin-thread'
 import type { Automation } from '../../../../../shared/automations/automation-definition'
 import { onceClaimed } from '../../../../../shared/automation-once'
 
@@ -111,10 +112,21 @@ export const AUTOMATION_METHODS = [
     handler: async ({ callerSessionId, runsInDefault, waitInCallerChat, ...params }, context) => {
       refuseFromLookAround(callerSessionId, context)
       const caller = chatOfCaller(callerSessionId, context)
-      const bot =
-        params.bot && (runsInDefault || (waitInCallerChat && params.once))
+      const runsInDefaulted = Boolean(runsInDefault || (waitInCallerChat && params.once))
+      const inCaller =
+        params.bot && runsInDefaulted
           ? await targetInCallerChat(context.runtime, caller, params.bot, Boolean(params.once))
           : params.bot
+      // Events answer in their own threads; anything else a thread's turn made answers in that one.
+      const creator =
+        inCaller && !params.on?.length
+          ? await creatorThreadOf(context.runtime, caller, inCaller.botId)
+          : null
+      const threaded =
+        inCaller && creator
+          ? answerInOriginThread(inCaller, creator, { runsInAsked: !runsInDefaulted })
+          : null
+      const bot = threaded?.target ?? inCaller
       const { plugin } = context
       const input = { ...params, bot }
       const automation = plugin
@@ -127,7 +139,11 @@ export const AUTOMATION_METHODS = [
           )
         : await context.runtime.createAutomation(input)
       recordAutomationSavedCard(caller, 'created', automation)
-      return { automation: automationForClient(automation, context) }
+      return {
+        automation: automationForClient(automation, context),
+        // Older clients ignore it; the CLI prints it under the saved automation.
+        ...(threaded?.note ? { notes: [threaded.note] } : {})
+      }
     }
   }),
   defineMethod({
