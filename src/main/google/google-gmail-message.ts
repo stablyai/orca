@@ -108,32 +108,37 @@ function normalizeMimeHeader(value: string): string {
     })
 }
 
-function mixedBodyParts(children: Part[][], textOf: (part: Part) => string): Part[] {
-  const plainCounts = new Map<string, number>()
+function mixedBodyParts(
+  children: { mimeType?: string; leaves: Part[] }[],
+  textOf: (part: Part) => string
+): Part[] {
+  // Explicit multipart children are independent sections, even if selection leaves one part.
+  if (!children.some((child) => child.mimeType === 'text/html')) {
+    return children.flatMap((child) => child.leaves)
+  }
+  const pairedPlain = new Set<number>()
   const equivalentText = (part: Part) => textOf(part).replace(/\s+/g, ' ').trim()
-  for (const child of children) {
-    if (child.length === 1 && child[0].mimeType === 'text/plain') {
-      const text = equivalentText(child[0])
-      plainCounts.set(text, (plainCounts.get(text) ?? 0) + 1)
-    }
-  }
-  if (plainCounts.size === 0) {
-    return children.flat()
-  }
   return children
-    .filter((child) => {
-      if (child.length !== 1 || child[0].mimeType !== 'text/html') {
+    .filter((child, index) => {
+      if (child.mimeType !== 'text/html') {
         return true
       }
-      const text = equivalentText(child[0])
-      const remaining = plainCounts.get(text) ?? 0
-      if (remaining === 0) {
-        return true
+      const text = equivalentText(child.leaves[0])
+      // Do not pair across another visible section: its position is meaningful in mixed mail.
+      for (const neighbor of [index - 1, index + 1]) {
+        const plain = children[neighbor]
+        if (
+          plain?.mimeType === 'text/plain' &&
+          !pairedPlain.has(neighbor) &&
+          equivalentText(plain.leaves[0]) === text
+        ) {
+          pairedPlain.add(neighbor)
+          return false
+        }
       }
-      plainCounts.set(text, remaining - 1)
-      return false
+      return true
     })
-    .flat()
+    .flatMap((child) => child.leaves)
 }
 
 /** Keep mixed sections in order; prefer plain text within each alternative. */
@@ -151,8 +156,8 @@ export function bodyText(part: Part | undefined): string {
   }
   const select = (node: Part, relatedRoot = false): Part[] => {
     if (
-      node.filename ||
-      (!relatedRoot &&
+      !relatedRoot &&
+      (node.filename ||
         node.headers?.some(
           (entry) =>
             entry.name.toLowerCase() === 'content-disposition' &&
@@ -187,16 +192,19 @@ export function bodyText(part: Part | undefined): string {
       return root ? select(root, true) : []
     }
     const children = (node.parts ?? [])
-      .map((child) => select(child))
-      .filter((child) => child.length > 0)
+      .map((child) => ({ mimeType: child.mimeType, leaves: select(child) }))
+      .filter((child) => child.leaves.length > 0)
     if (node.mimeType === 'multipart/alternative') {
       return (
-        children.findLast((child) => child.some((leaf) => leaf.mimeType === 'text/plain')) ??
-        children.at(-1) ??
+        children.findLast((child) => child.leaves.some((leaf) => leaf.mimeType === 'text/plain'))
+          ?.leaves ??
+        children.at(-1)?.leaves ??
         []
       )
     }
-    return node.mimeType === 'multipart/mixed' ? mixedBodyParts(children, textOf) : children.flat()
+    return node.mimeType === 'multipart/mixed'
+      ? mixedBodyParts(children, textOf)
+      : children.flatMap((child) => child.leaves)
   }
   return (part ? select(part) : []).map(textOf).join('\n').trim()
 }

@@ -110,7 +110,7 @@ it('does not let related CID resources replace the preferred plain body', () => 
       parts: [
         {
           ...root,
-          filename: '',
+          filename: 'body.html',
           headers: [{ name: 'Content-Disposition', value: 'attachment' }]
         },
         resource
@@ -124,6 +124,7 @@ it('pairs equivalent mixed plain and HTML siblings without removing independent 
     mimeType: 'multipart/mixed',
     parts: [
       textPart('text/html', '<p>Daily&nbsp;status</p>'),
+      { ...textPart('text/plain', 'Attached note'), filename: 'note.txt' },
       textPart('text/plain', 'Daily\tstatus'),
       textPart('text/plain', 'Repeated plain section'),
       textPart('text/html', '<p>Repeated plain section</p>'),
@@ -149,4 +150,34 @@ it('pairs equivalent mixed plain and HTML siblings without removing independent 
   expect(bodyText(message)).toBe(
     'Daily\tstatus\nRepeated plain section\nRepeated plain section\nIndependent HTML section\nIndependent HTML section\nNested section\nNested section'
   )
+})
+
+it('keeps equivalent text in independently grouped mixed sections', () => {
+  expect(
+    bodyText({
+      mimeType: 'multipart/mixed',
+      parts: [
+        {
+          mimeType: 'multipart/alternative',
+          parts: [textPart('text/plain', 'Notice'), textPart('text/html', '<p>Notice</p>')]
+        },
+        { mimeType: 'multipart/alternative', parts: [textPart('text/html', '<p>Notice</p>')] },
+        { mimeType: 'multipart/mixed', parts: [textPart('text/plain', 'Notice')] },
+        { mimeType: 'multipart/mixed', parts: [textPart('text/html', '<p>Notice</p>')] }
+      ]
+    })
+  ).toBe('Notice\nNotice\nNotice\nNotice')
+})
+
+it('keeps the order of equal direct sections separated by another visible body', () => {
+  expect(
+    bodyText({
+      mimeType: 'multipart/mixed',
+      parts: [
+        textPart('text/html', '<p>Notice</p>'),
+        textPart('text/plain', 'Intervening section'),
+        textPart('text/plain', 'Notice')
+      ]
+    })
+  ).toBe('Notice\nIntervening section\nNotice')
 })
