@@ -10,13 +10,7 @@ import {
 } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { RuntimeRpcResponse } from '../../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { PeerMailSender } from '../../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
-import { agentSessionConversationView } from '../../../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
-import {
-  agentSessionLeaseFixture,
-  agentSessionRecordFixture
-} from '../../../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
-import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
-import { makeTestBot } from '../../../../../bots/bot.test-fixture'
+import { botChat, DANA_ASKER, DANA_OPENER, runningTurnReads } from './sending-bot-turn.test-fixture'
 import { turnActsForOwner } from '../../../../../bots/bot-request-asker'
 import type { StructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
@@ -213,34 +207,12 @@ describe('agent mail between paired Orca servers', () => {
     return side.db.getUnreadMessages(handle)
   }
 
-  function botChat(name: string, sessionId: string) {
-    const bot = makeTestBot({ name, agent: 'claude', chatSessionId: sessionId })
-    const saved = agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId }))
-    const record = agentSessionConversationView({
-      ...saved,
-      location: { ...saved.location, workspaceId: folderWorkspaceKey(bot.folderWorkspaceId) }
-    })
-    return { bot, record }
-  }
-
   /** `sending`: a bot on A whose chat's running turn opened with this message. */
   function receivingBotHome(held = false, sending?: { opener: unknown }): string[] {
     const sessionId = CHAT_ON_B.slice('orca_session_id:'.length)
     const { bot, record } = botChat('Docs', sessionId)
     const senderId = CHAT_ON_A.slice('orca_session_id:'.length)
     const sender = botChat('Scout', senderId)
-    const items = sending
-      ? [
-          { itemId: 'u1', revision: 1, sequence: 1, observedAt: 1, body: sending.opener },
-          {
-            itemId: 't1',
-            revision: 1,
-            sequence: 2,
-            observedAt: 2,
-            body: { kind: 'turn', turnId: 'p1', state: 'running', userItemId: 'u1' }
-          }
-        ]
-      : []
     const notes: string[] = []
     const host = {
       deps: {
@@ -250,10 +222,7 @@ describe('agent mail between paired Orca servers', () => {
           listConversations: () => [record]
         }
       },
-      journalReads: async () => ({
-        promptItem: async () => items[0] ?? null,
-        operationWindow: async () => ({ complete: true, snapshot: { items, submissions: [] } })
-      }),
+      journalReads: runningTurnReads(sending?.opener),
       conversation: async () => ({
         journal: { queuedMessages: { failureHolds: async () => held } }
       }),
@@ -366,31 +335,9 @@ describe('agent mail between paired Orca servers', () => {
   it.each(['bot:Docs', CHAT_ON_B])(
     "holds a teammate's turn on A to the teammate on B, never to the owner alone (to %s)",
     async (to) => {
-      const record = await botAsksAcross(
-        {
-          kind: 'message',
-          role: 'user',
-          blocks: [{ type: 'text', text: 'ask Docs to review' }],
-          origin: 'connector',
-          asker: {
-            source: 'slack',
-            userId: 'U_DANA',
-            name: 'Dana',
-            role: 'member',
-            place: { kind: 'public_channel', id: 'C1' }
-          }
-        },
-        to
-      )
-      const dana = {
-        kind: 'person',
-        source: 'slack',
-        userId: 'U_DANA',
-        name: 'Dana',
-        role: 'member'
-      }
-      expect(record.askers).toMatchObject([{ kind: 'owner' }, dana])
-      expect(record.askedBy).toMatchObject([{ kind: 'owner' }, dana])
+      const record = await botAsksAcross(DANA_OPENER, to)
+      expect(record.askers).toEqual([{ kind: 'owner' }, DANA_ASKER])
+      expect(record.askedBy).toEqual([{ kind: 'owner' }, DANA_ASKER])
       expect(turnActsForOwner({ askers: record.askers })).toBe(false)
     }
   )
@@ -406,7 +353,7 @@ describe('agent mail between paired Orca servers', () => {
     expect(turnActsForOwner({ askers: record.askers })).toBe(true)
   })
 
-  it('reads an asker it does not know as someone it cannot name, and ignores fields it does not know', async () => {
+  it('drops an asker it cannot read, keeps the ones it can, and ignores fields it does not know', async () => {
     receivingBotHome()
     const { conversation_id } = a.db.openHomePeerMailConversation({
       environmentId: 'env_b',
@@ -421,14 +368,14 @@ describe('agent mail between paired Orca servers', () => {
       senderLabel: `${CHAT_ON_A} on Laptop`,
       subject: 'Review the sidebar',
       type: 'question',
-      askers: [{ kind: 'owner' }, { kind: 'team', id: 'T9' }],
+      askers: [{ kind: 'team', id: 'T9' }, DANA_ASKER],
       // A field from a newer Orca, as an older one reads `askers`.
       fromLaterOrca: { depth: 2 }
     })
     expect(result).toMatchObject({ ok: true })
     const [message] = mailFor(b, CHAT_ON_B)
     const record = JSON.parse(b.db.getBotRequest(message!.id)!.record)
-    expect(record.askers).toEqual([{ kind: 'owner' }, { kind: 'unknown' }])
+    expect(record.askers).toEqual([{ kind: 'owner' }, DANA_ASKER])
     expect(turnActsForOwner({ askers: record.askers })).toBe(false)
   })
 

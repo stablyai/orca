@@ -21,11 +21,8 @@ const CarriedAsker = lazyZodSchema(() =>
   ])
 )
 
-/** The askers the sender carried, each one this Orca can't read as someone it can't name. */
+/** The askers the sender carried that this Orca can read; one it can't (a newer Orca's) is
+ *  dropped, so the request reads as it did before askers were carried. */
 export function readPeerMailAskers(carried: readonly unknown[]): BotRequestAsker[] {
-  return distinctAskers(
-    carried.map(
-      (asker): BotRequestAsker => CarriedAsker.safeParse(asker).data ?? { kind: 'unknown' }
-    )
-  )
+  return distinctAskers(carried.flatMap((asker) => CarriedAsker.safeParse(asker).data ?? []))
 }
