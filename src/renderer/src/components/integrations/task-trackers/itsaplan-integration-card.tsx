@@ -19,14 +19,17 @@ export function ItsaplanIntegrationCard(): React.JSX.Element {
   const refreshItsaplanStatus = useAppStore((s) => s.refreshItsaplanStatus)
   const disconnectItsaplan = useAppStore((s) => s.disconnectItsaplan)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [refreshError, setRefreshError] = useState<string | null>(null)
   const subordinateRowClass = useIntegrationSubordinateRowClass('flex items-center gap-3')
 
-  const checking = itsaplanStatus === null
+  const checking = itsaplanStatus === null && refreshError === null
   const connected = itsaplanStatus?.connected === true
 
   useEffect(() => {
     if (itsaplanStatus === null) {
-      refreshItsaplanStatus().catch(() => {})
+      refreshItsaplanStatus().catch((caught: unknown) => {
+        setRefreshError(caught instanceof Error ? caught.message : String(caught))
+      })
     }
   }, [itsaplanStatus, refreshItsaplanStatus])
 
@@ -71,6 +74,11 @@ export function ItsaplanIntegrationCard(): React.JSX.Element {
             "Your It's a Plan API key"
           )}
         />
+        {refreshError ? (
+          <p role="alert" className="text-xs text-destructive">
+            {refreshError}
+          </p>
+        ) : null}
         {itsaplanStatus?.credentialError ? (
           <p role="alert" className="text-xs text-destructive">
             {itsaplanStatus.credentialError}

@@ -212,6 +212,9 @@ export function ItsaplanConnectDialog({
                 value={appUrl}
                 onChange={(event) => {
                   setAppUrl(event.target.value)
+                  // A new App URL invalidates the previous detection and any manual API URL.
+                  setApiUrl('')
+                  setApiUrlEdited(false)
                   clearErrorOnEdit()
                 }}
                 onBlur={() => void handleAppUrlBlur()}
