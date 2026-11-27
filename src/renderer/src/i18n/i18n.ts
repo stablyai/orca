@@ -7,6 +7,7 @@ import esCatalogUrl from './locales/es.json?url'
 import frCatalogUrl from './locales/fr.json?url'
 import jaCatalogUrl from './locales/ja.json?url'
 import koCatalogUrl from './locales/ko.json?url'
+import plCatalogUrl from './locales/pl.json?url'
 import ptCatalogUrl from './locales/pt.json?url'
 import ruCatalogUrl from './locales/ru.json?url'
 import trCatalogUrl from './locales/tr.json?url'
@@ -31,6 +32,7 @@ const NON_DEFAULT_LOCALE_URLS: Record<Exclude<SupportedUiLocale, 'en'>, string> 
   fr: frCatalogUrl,
   ja: jaCatalogUrl,
   ko: koCatalogUrl,
+  pl: plCatalogUrl,
   pt: ptCatalogUrl,
   ru: ruCatalogUrl,
   tr: trCatalogUrl,
