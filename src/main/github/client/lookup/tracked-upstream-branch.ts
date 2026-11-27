@@ -128,7 +128,9 @@ async function getTrackedUpstreamSnapshot(
     const result = await probe
     if (result.cacheable && trackedUpstreamSnapshotGenerations.get(cacheKey) === generation) {
       trackedUpstreamSnapshotCache.set(cacheKey, {
-        ...(result.gitConfigSignature ? { gitConfigSignature: result.gitConfigSignature } : {}),
+        ...(result.gitConfigSignature
+          ? { gitConfigSignature: result.gitConfigSignature, gitConfigSignatureRepoPath: repoPath }
+          : {}),
         upstreamsByBranchName: getCacheableTrackedUpstreamSnapshot(result.upstreamsByBranchName),
         ...(result.reviewSources ? { reviewSources: result.reviewSources } : {}),
         ...(result.reviewSourceResolver

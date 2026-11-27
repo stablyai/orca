@@ -20,6 +20,8 @@ export const TRACKED_UPSTREAM_SNAPSHOT_CACHE_MAX_ENTRIES = 64
 export type TrackedUpstreamSnapshotCacheEntry = {
   expiresAt: number
   gitConfigSignature?: string
+  /** Signatures embed per-worktree config paths; they only compare equal against the worktree that recorded them. */
+  gitConfigSignatureRepoPath?: string
   upstreamsByBranchName: Map<string, TrackedUpstreamBranch | null>
   reviewSources?: Map<string, GitReviewBranchSource | Error>
   reviewSourceResolver?: GitReviewBranchSourceResolver
@@ -119,7 +121,7 @@ export async function doesTrackedUpstreamCacheConfigSignatureMatch(
     return true
   }
   const currentSignature = await readLocalGitConfigSignature({
-    repoPath,
+    repoPath: cached.gitConfigSignatureRepoPath ?? repoPath,
     connectionId: connectionId ?? null,
     ...localGitOptions
   })
