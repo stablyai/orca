@@ -50,3 +50,14 @@ export function hostSessionLinkRouteData(
     ? { hostId, worktreeId: link.worktreeId, ...(link.paneKey ? { paneKey: link.paneKey } : {}) }
     : null
 }
+
+// Links resolve asynchronously, so only the newest link may navigate; an older one finishing late must not win.
+export function createLatestLinkGate(): { claim: () => () => boolean } {
+  let latest = 0
+  return {
+    claim() {
+      const id = ++latest
+      return () => id === latest
+    }
+  }
+}

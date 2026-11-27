@@ -9,6 +9,7 @@ import { loadHostCatalog } from '../host-catalog/host-store'
 import { getNotificationNavigationTarget } from '../notifications/navigation/notification-routing'
 import { useOpenNotificationRoute } from '../notifications/navigation/use-open-notification-route'
 import {
+  createLatestLinkGate,
   hostSessionLinkRouteData,
   parseHostSessionLink,
   type HostSessionLink
@@ -19,10 +20,13 @@ export function usePairingLinks(): void {
   const openNotificationRoute = useOpenNotificationRoute()
   useEffect(() => {
     let disposed = false
+    const linkGate = createLatestLinkGate()
     function handleUrl(url: string) {
       if (disposed) {
         return
       }
+      // Any newer link, of any kind, supersedes a session link that is still resolving.
+      const isLatestLink = linkGate.claim()
       const code = extractPairingCodeFromUrl(url)
       if (code) {
         // Replace the camera's unmatched pair route so Back cannot reveal the router error.
@@ -39,13 +43,13 @@ export function usePairingLinks(): void {
       const sessionLink = parseHostSessionLink(url)
       if (sessionLink) {
         router.dismissTo('/')
-        void openHostSessionLink(sessionLink)
+        void openHostSessionLink(sessionLink, isLatestLink)
       }
     }
 
-    async function openHostSessionLink(link: HostSessionLink) {
+    async function openHostSessionLink(link: HostSessionLink, isLatestLink: () => boolean) {
       const hosts = await loadHostCatalog().catch(() => null)
-      if (disposed || !hosts) {
+      if (disposed || !isLatestLink() || !hosts) {
         return
       }
       const target = getNotificationNavigationTarget(hostSessionLinkRouteData(link, hosts), {

@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { deriveHostFingerprint } from '../notifications/payload-identity/push-host-fingerprint'
-import { hostSessionLinkRouteData, parseHostSessionLink } from './host-session-link'
+import {
+  createLatestLinkGate,
+  hostSessionLinkRouteData,
+  parseHostSessionLink
+} from './host-session-link'
 
 const HOST_KEY = btoa(String.fromCharCode(...Array.from({ length: 32 }, (_, index) => index)))
 const OTHER_KEY = btoa(
@@ -38,5 +42,13 @@ describe('host session link', () => {
     ]) {
       expect(parseHostSessionLink(url)).toBeNull()
     }
+  })
+
+  it('lets only the newest link navigate when links arrive back to back', () => {
+    const gate = createLatestLinkGate()
+    const first = gate.claim()
+    const second = gate.claim()
+    expect(first()).toBe(false)
+    expect(second()).toBe(true)
   })
 })
