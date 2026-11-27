@@ -33,7 +33,6 @@
 1 src/main/bots/tool-oauth/bot-tool-oauth.ts
 1 src/main/browser/agent-browser/commands/agent-browser-bridge-capture-commands.ts
 1 src/main/browser/agent-browser/commands/agent-browser-bridge-mouse-commands.ts
-8 src/main/browser/extensions/api/context-menus.ts
 2 src/main/browser/extensions/api/tabs-capture.ts
 1 src/main/browser/extensions/api/tabs-page-methods.ts
 2 src/main/claude-accounts/sign-in/claude-account-folder.ts
@@ -80,7 +79,6 @@
 14 src/main/native-chat/agent-session-journal/journal-storage-bot-schema.ts
 29 src/main/native-chat/agent-session-journal/outcomes/journal-outcome-format-1.ts
 2 src/main/native-chat/agent-session-journal/outcomes/journal-state-schema.ts
-6 src/main/native-chat/agent-session-journal/writing/command-receipt-schema.ts
 1 src/main/notifications/execution-host-push-coverage.ts
 1 src/main/opencode/model-launch/opencode-launch-model-config.ts
 1 src/main/opencode/model-launch/opencode-model-catalog-listing.ts
@@ -140,7 +138,6 @@
 1 src/main/text-generation/policies/source-control-kimi-policy.ts
 1 src/main/updater/releases/updater-emergency-policy.ts
 1 src/main/usage/reporting/token-usage/agent-token-usage-reporter.ts
-7 src/main/webhooks/webhook-host-ledger.ts
 1 src/main/wsl/filesystem/wsl-mapped-drive-answers-file.ts
 1 src/main/wsl/host-lifecycle/wsl-host-automation-enable.ts
 1 src/main/wsl/host-lifecycle/wsl-host-kept-for-peers.ts
@@ -174,12 +171,10 @@
 1 src/shared/bots/bot-cancelled-waits.ts
 2 src/shared/bots/bot-chat-tree-schema.ts
 1 src/shared/bots/bot-connector-offer.ts
-8 src/shared/bots/bot-first-look.ts
 3 src/shared/bots/bot-import-cards.ts
 2 src/shared/bots/bot-import.ts
 3 src/shared/bots/bot-item-ask.ts
 1 src/shared/bots/bot-item-held-answers.ts
-7 src/shared/bots/bot-item-schema.ts
 2 src/shared/bots/bot-launch.ts
 2 src/shared/bots/bot-link-open-target.ts
 1 src/shared/bots/bot-look-around.ts
@@ -226,7 +221,6 @@
 2 src/shared/mcp-servers/mcp-servers.ts
 5 src/shared/mobile-web-bundle/bundle-rpc-contract.ts
 2 src/shared/mobile-web-bundle/locale-catalog-contract.ts
-8 src/shared/mobile-web-bundle/manifest-contract.ts
 2 src/shared/orcad-migration/orcad-migration-terminal-restore-hints.ts
 4 src/shared/orchestration/orchestration-removed-work.ts
 4 src/shared/orchestration/remote-owned-wire.ts
@@ -256,7 +250,6 @@
 1 src/shared/plugins/declarative/plugin-declarative-prop-schemas.ts
 2 src/shared/plugins/declarative/plugin-declarative-relative-time.ts
 2 src/shared/plugins/events/plugin-events.ts
-6 src/shared/plugins/events/plugin-hook-payloads.ts
 2 src/shared/plugins/frames/plugin-frame-bridge.ts
 3 src/shared/plugins/images/plugin-image-fields.ts
 1 src/shared/plugins/images/plugin-manifest-catalog-images.ts
@@ -282,18 +275,15 @@
 1 src/shared/remote-runtime/orcad-lifecycle/orcad-unexpected-exit.ts
 2 src/shared/remote-runtime/pairing/delegated-mobile-device-contract.ts
 1 src/shared/remote-runtime/pairing/device-key-registration-contract.ts
-7 src/shared/remote-runtime/pairing/mobile-relay-pairing-offer.ts
 1 src/shared/remote-runtime/pairing/paired-desktop-account-contract.ts
 1 src/shared/remote-runtime/pairing/ticket-exchange-contract.ts
 1 src/shared/remote-runtime/relay/mobile-relay-hosts-contract.ts
 2 src/shared/rpc-contract/accounts/accounts-params.ts
 2 src/shared/rpc-contract/artifacts/artifacts-params.ts
-7 src/shared/rpc-contract/automation-bot-params.ts
 1 src/shared/rpc-contract/bots-tools-params.ts
 2 src/shared/rpc-contract/browser/browser-extras-params.ts
 1 src/shared/rpc-contract/browser/browser-observation-params.ts
 2 src/shared/rpc-contract/client-ui/client-settings-params.ts
-7 src/shared/rpc-contract/client-ui/client-ui-workspace-filter-fields-params.ts
 4 src/shared/rpc-contract/connectors/connector-params.ts
 2 src/shared/rpc-contract/filesystem/files-params.ts
 1 src/shared/rpc-contract/filesystem/files-staged-save-params.ts

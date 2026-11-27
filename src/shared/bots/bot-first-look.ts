@@ -1,6 +1,7 @@
 // What a new bot's first turn found, as its first screen lists it: one row per area it read with
 // tools it already has, built from its own tool calls and their output, never from its words.
 import * as z from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 import type { NativeChatMessage, NativeChatToolResultBlock } from '../native-chat/native-chat-types'
 import { pairToolBlocks } from '../native-chat/tools/native-chat-tool-pairs'
 import { nativeChatFullCommand } from '../native-chat/tools/native-chat-tool-input-text'
@@ -69,36 +70,39 @@ function parsed(output: string): unknown {
   }
 }
 
-const RepoList = z.object({
-  repos: z.array(z.object({ displayName: z.string() }))
-})
+const RepoList = lazyZodSchema(() =>
+  z.object({ repos: z.array(z.object({ displayName: z.string() })) })
+)
 // `orca … --json` prints an RPC envelope, its payload under `result`.
-const Repos = z.union([z.object({ result: RepoList }).transform((value) => value.result), RepoList])
-const IssueList = z.object({
-  issues: z.array(z.unknown()),
-  truncated: z.boolean().optional()
-})
-const Issues = z.union([
-  z.object({ result: IssueList }).transform((value) => value.result),
-  IssueList
-])
-const PsList = z.object({
-  worktrees: z.array(
-    z.object({
-      botHome: z.literal(true).optional(),
-      agents: z.array(z.object({ address: z.string().optional() }))
-    })
-  )
-})
-const Workspaces = z.union([
-  z.object({ result: PsList }).transform((value) => value.result),
-  PsList
-])
-const ServerList = z.array(z.object({ name: z.string() }))
-const McpServers = z.union([
-  ServerList,
-  z.object({ servers: ServerList }).transform((value) => value.servers)
-])
+const Repos = lazyZodSchema(() =>
+  z.union([z.object({ result: RepoList }).transform((value) => value.result), RepoList])
+)
+const IssueList = lazyZodSchema(() =>
+  z.object({
+    issues: z.array(z.unknown()),
+    truncated: z.boolean().optional()
+  })
+)
+const Issues = lazyZodSchema(() =>
+  z.union([z.object({ result: IssueList }).transform((value) => value.result), IssueList])
+)
+const PsList = lazyZodSchema(() =>
+  z.object({
+    worktrees: z.array(
+      z.object({
+        botHome: z.literal(true).optional(),
+        agents: z.array(z.object({ address: z.string().optional() }))
+      })
+    )
+  })
+)
+const Workspaces = lazyZodSchema(() =>
+  z.union([z.object({ result: PsList }).transform((value) => value.result), PsList])
+)
+const ServerList = lazyZodSchema(() => z.array(z.object({ name: z.string() })))
+const McpServers = lazyZodSchema(() =>
+  z.union([ServerList, z.object({ servers: ServerList }).transform((value) => value.servers)])
+)
 const PR_LIST_COMMAND = /\bgh\s+(search\s+prs|pr\s+list)\b/
 // What `structured-agent-session-projection` appends to a head it cut.
 const CUT_OUTPUT = /\n… \(\d+ bytes\)$/
