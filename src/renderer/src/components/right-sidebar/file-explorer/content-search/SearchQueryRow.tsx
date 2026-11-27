@@ -104,7 +104,15 @@ export function SearchQueryRow({
               ? 'visible'
               : 'invisible group-hover/search:visible group-focus-within/search:visible'
           )}
-          onMouseDown={(event) => event.preventDefault()}
+          onMouseDown={(event) => {
+            // Why: the options keep the query input's focus, but the disclosure takes it, since
+            // closing the filters unmounts a focused include/exclude input and drops focus.
+            const disclosure =
+              event.target instanceof Element ? event.target.closest('[aria-expanded]') : null
+            if (!disclosure || !event.currentTarget.contains(disclosure)) {
+              event.preventDefault()
+            }
+          }}
         >
           {query ? (
             // Why: in a near-minimum sidebar the query needs the room; Escape still clears.
