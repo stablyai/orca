@@ -139,7 +139,6 @@ export function useAutomationsPageController() {
   useAutomationsPageBotFilterRequest({
     local,
     navigation,
-    hostFilterIsAll: list.hostCatalog.resolution.effective.kind === 'all',
     selectHost
   })
 

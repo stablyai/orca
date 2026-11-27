@@ -9,12 +9,10 @@ import type { AutomationsPageNavigation } from './automations-page-navigation'
 export function useAutomationsPageBotFilterRequest({
   local,
   navigation,
-  hostFilterIsAll,
   selectHost
 }: {
   local: Pick<AutomationsPageLocalState, 'setListFilter' | 'setListSearchQuery'>
   navigation: Pick<AutomationsPageNavigation, 'showList'>
-  hostFilterIsAll: boolean
   selectHost: (filter: AutomationHostFilter) => void
 }): void {
   const request = useAppStore((s) => s.automationsPageBotFilterRequest)
@@ -29,8 +27,9 @@ export function useAutomationsPageBotFilterRequest({
     setListFilter(botListFilter(request))
     setListSearchQuery('')
     showList()
-    if (!hostFilterIsAll) {
+    // The stored choice, not the effective one: a host dropped from the catalog may come back.
+    if (useAppStore.getState().automationHostFilter.kind !== 'all') {
       selectHost({ kind: 'all' })
     }
-  }, [request, setListFilter, setListSearchQuery, showList, hostFilterIsAll, selectHost])
+  }, [request, setListFilter, setListSearchQuery, showList, selectHost])
 }

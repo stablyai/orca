@@ -88,7 +88,6 @@ function AutomationsListHarness({ pageRows }: { pageRows: typeof PAGE_ROWS }): R
   useAutomationsPageBotFilterRequest({
     local: { setListFilter, setListSearchQuery },
     navigation: { showList: () => {} },
-    hostFilterIsAll: true,
     selectHost: () => {}
   })
   const rows = filterAutomationListRows(pageRows, listFilter)
