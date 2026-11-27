@@ -78,10 +78,15 @@ async function pickFileItems(verbs: NativeVerbs): Promise<readonly BridgeMediaIt
   try {
     return large ? await verbs.pickLargeFile() : await verbs.pickMedia('files', true)
   } catch (error) {
-    if (error instanceof NativeVerbError && error.reason === 'native_media_too_large') {
-      throw large
-        ? new MobileFileTooLargeError(null, AGENT_SESSION_ATTACHMENT_MAX_BYTES, 'limit')
-        : new MobileFileTooLargeError(null, MOBILE_PICKED_FILE_MAX_BYTES, 'update-app')
+    if (error instanceof NativeVerbError) {
+      if (error.reason === 'native_media_copy_too_large') {
+        throw new MobileFileTooLargeError(null, MOBILE_PICKED_FILE_MAX_BYTES, 'limit')
+      }
+      if (error.reason === 'native_media_too_large') {
+        throw large
+          ? new MobileFileTooLargeError(null, AGENT_SESSION_ATTACHMENT_MAX_BYTES, 'limit')
+          : new MobileFileTooLargeError(null, MOBILE_PICKED_FILE_MAX_BYTES, 'update-app')
+      }
     }
     throw error
   }

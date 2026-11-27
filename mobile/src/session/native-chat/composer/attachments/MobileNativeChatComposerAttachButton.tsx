@@ -18,7 +18,6 @@ import { BottomDrawer } from '../../../../components/bottom-drawer/BottomDrawer'
 import { SheetHeader } from '../../../../components/nav-bar/SheetHeader'
 import { LIST_LEADING_INSET, ListGroup, ListRow } from '../../../../components/list/ListGroup'
 import { MobileSwitch } from '../../../../components/controls/MobileSwitch'
-import { useMobileNativeChatTerminalFiles } from './mobile-native-chat-terminal-files-context'
 import {
   COMPOSER_CONTROL_HIT_SLOP,
   composerInputStylesSheet as inputStylesSheet
@@ -40,7 +39,7 @@ type AddSheet = {
 /** Show the add-to-message sheet when there are several ways to attach content. */
 export function MobileNativeChatComposerAttachButton({
   onAttachImage,
-  onAttachFiles: onAttachStructuredFiles,
+  onAttachFiles,
   structured,
   isAttaching,
   disabled,
@@ -63,8 +62,6 @@ export function MobileNativeChatComposerAttachButton({
   const colors = useMobileColors()
   const t = useMobileTranslation()
   const [attachOpen, setAttachOpen] = useState(false)
-  const terminalFiles = useMobileNativeChatTerminalFiles()
-  const onAttachFiles = structured ? onAttachStructuredFiles : terminalFiles?.onAttachFiles
   const sheet = structured ? menu : undefined
   const showsMenu = sheet !== undefined || onAttachFiles !== undefined
   const open = showsMenu ? () => setAttachOpen(true) : onAttachImage

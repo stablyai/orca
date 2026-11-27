@@ -117,7 +117,7 @@ export function MobileNativeChatComposer({
   )
   const picker = pickerState[0]
   const terminalFiles = useMobileNativeChatTerminalFiles()
-  const fileSource = structured ?? terminalFiles
+  const fileSource = structured ?? (editSession ? null : terminalFiles)
   const files = fileSource?.files ?? NO_FILES
   const onWebPaste = mobileNativeChatComposerPasteHandler({
     disabled: disabled || offline || editSession?.locked === true,
@@ -347,7 +347,7 @@ export function MobileNativeChatComposer({
               >
                 <MobileNativeChatComposerAttachButton
                   {...{ onAttachImage, isAttaching, menu }}
-                  onAttachFiles={structured?.onAttachFiles}
+                  onAttachFiles={fileSource?.onAttachFiles}
                   structured={structured !== null}
                   disabled={disabled || offline}
                   plan={modes.plan}

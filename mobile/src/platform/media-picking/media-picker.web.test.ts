@@ -10,6 +10,8 @@ import {
 } from '../../mobile-web-shell/bridge/native-capabilities/bridge-media-verbs'
 import { BridgeNativeVerbRefusedError } from '../../mobile-web-shell/host-bridge/bridge-host-errors'
 import { MobileFileTooLargeError, type MediaPicker } from './media-picker-contract'
+import { createNativeMediaVerbServer } from './native-media'
+import { MediaHandleRegistry } from '../../mobile-web-shell/native-capabilities/media-handle-registry'
 import {
   createMediaTestShell,
   stagedTestBytes,
@@ -46,7 +48,10 @@ import type { NativeVerbs } from '../../mobile-web-shell/bridge/native-capabilit
 import { NativeVerbError } from '../../mobile-web-shell/bridge/native-capabilities/use-native-verbs'
 import { useMediaPicker } from './media-picker.web'
 
-function mountPicker(shell: MediaTestShell, options: { large: boolean }): MediaPicker {
+function mountPicker(
+  shell: Pick<MediaTestShell, 'serveNativeVerb'>,
+  options: { large: boolean }
+): MediaPicker {
   const call = async <T>(
     verb: Parameters<MediaTestShell['serveNativeVerb']>[0],
     params: unknown,
@@ -125,14 +130,12 @@ describe('pickFiles', () => {
     const shell = createMediaTestShell({ staged: { files: [pdf(0)] } })
     const picker = mountPicker(shell, { large: true })
 
-    for await (const file of picker.pickFiles()) {
-      const seen: string[] = []
-      for await (const chunk of file.chunks()) {
-        seen.push(chunk)
-      }
-      expect(seen).toEqual([])
-    }
+    const files = await Array.fromAsync(picker.pickFiles(), async (file) => ({
+      byteLength: file.byteLength,
+      chunks: await Array.fromAsync(file.chunks())
+    }))
 
+    expect(files).toEqual([{ byteLength: 0, chunks: [] }])
     expect(shell.released).toEqual(['media-1'])
   })
 
@@ -221,6 +224,33 @@ describe('pickFiles', () => {
       }
     })().catch((caught: unknown) => caught)
 
-    expect(error).toMatchObject({ reason: 'limit' })
+    expect(error).toMatchObject({ reason: 'limit', message: 'That file is over 200 MB' })
+  })
+
+  it('reports the copy limit for an unowned document below the large-file ceiling', async () => {
+    const unexpectedRead = () => {
+      throw new Error('The oversized document must not be read')
+    }
+    const discard = () => {}
+    const serveNativeVerb = createNativeMediaVerbServer({
+      registry: new MediaHandleRegistry({ now: () => 0, discard }),
+      launchLibrary: async () => ({ canceled: true }),
+      launchFiles: async () => ({
+        canceled: false,
+        assets: [{ uri: 'content://test/report.pdf' }]
+      }),
+      readClipboardImage: async () => null,
+      stageBase64: unexpectedRead,
+      openFile: () => ({ size: 40 * 1024 * 1024, open: unexpectedRead }),
+      ownsStagedUri: (uri) => uri.startsWith('file:'),
+      copyIntoCache: unexpectedRead,
+      discard
+    })
+    const picker = mountPicker({ serveNativeVerb }, { large: true })
+
+    await expect(Array.fromAsync(picker.pickFiles())).rejects.toMatchObject({
+      reason: 'limit',
+      message: 'That file is over 18 MB'
+    })
   })
 })

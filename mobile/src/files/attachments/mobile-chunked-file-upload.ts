@@ -50,19 +50,24 @@ export async function uploadFileInChunks<TStored>(args: {
   abort: (uploadId: string) => Promise<void>
 }): Promise<TStored> {
   const { file, signal } = args
-  if (signal?.aborted) {
-    throw uploadAborted()
+  const checkAborted = (): void => {
+    if (signal?.aborted) {
+      throw uploadAborted()
+    }
   }
-  const uploadId = await args.start()
+  let startedUpload: string | undefined
   try {
+    checkAborted()
+    const uploadId = await args.start()
+    startedUpload = uploadId
+    checkAborted()
     let sent = 0
     const append = async (contentBase64: string): Promise<void> => {
-      if (signal?.aborted) {
-        throw uploadAborted()
-      }
+      checkAborted()
       await args.append(uploadId, sent, contentBase64)
       sent += base64DecodedByteLength(contentBase64)
       args.onProgress?.(sent)
+      checkAborted()
     }
     let appended = false
     for await (const contentBase64 of file.chunks()) {
@@ -73,12 +78,12 @@ export async function uploadFileInChunks<TStored>(args: {
       // Even an empty file needs one empty append before commit.
       await append('')
     }
-    if (signal?.aborted) {
-      throw uploadAborted()
-    }
+    checkAborted()
     return await args.commit(uploadId)
   } catch (error) {
-    await args.abort(uploadId).catch(() => {})
-    throw error
+    if (startedUpload !== undefined) {
+      await args.abort(startedUpload).catch(() => {})
+    }
+    throw signal?.aborted ? uploadAborted() : error
   }
 }

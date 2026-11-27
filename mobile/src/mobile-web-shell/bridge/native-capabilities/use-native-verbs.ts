@@ -108,6 +108,7 @@ export const NATIVE_VERB_REASONS = [
   'native_media_range',
   'native_media_handle_cap',
   'native_media_too_large',
+  'native_media_copy_too_large',
   'native_media_permission_denied',
   'native_verb_not_a_stream',
   'native_audio_not_capturing',

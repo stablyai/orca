@@ -124,6 +124,58 @@ describe('uploadMobileAgentSessionAttachment', () => {
       'agentSessionAttachment.uploadAppend',
       'agentSessionAttachment.uploadCommit'
     ])
+    expect(host.calls[1]?.params).toEqual({
+      uploadId: 'upload-1',
+      offset: 0,
+      contentBase64: ''
+    })
+  })
+
+  it('does not read the next chunk after cancellation', async () => {
+    const host = storingHost()
+    const controller = new AbortController()
+    let readNext = false
+    const file = {
+      ...fileOf(['abc']),
+      chunks: async function* () {
+        yield 'YWJj'
+        readNext = true
+        yield 'ZA=='
+      }
+    }
+
+    await expect(
+      uploadMobileAgentSessionAttachment(host.client, {
+        sessionId: 'session-1',
+        file,
+        signal: controller.signal,
+        onProgress: () => controller.abort()
+      })
+    ).rejects.toMatchObject({ name: 'AbortError' })
+    expect(readNext).toBe(false)
+  })
+
+  it('reports a cancelled append as cancellation when the host refuses the chunk', async () => {
+    const controller = new AbortController()
+    const host = fakeHost((method) => {
+      if (method === 'agentSessionAttachment.uploadStart') {
+        return ok({ uploadId: 'upload-1' })
+      }
+      if (method === 'agentSessionAttachment.uploadAppend') {
+        controller.abort()
+        return fail('connection lost')
+      }
+      return ok({ aborted: true })
+    })
+
+    await expect(
+      uploadMobileAgentSessionAttachment(host.client, {
+        sessionId: 'session-1',
+        file: fileOf(['abc']),
+        signal: controller.signal
+      })
+    ).rejects.toMatchObject({ name: 'AbortError' })
+    expect(host.calls.at(-1)?.method).toBe('agentSessionAttachment.uploadAbort')
   })
 
   it('aborts the upload when the signal fires and never commits', async () => {

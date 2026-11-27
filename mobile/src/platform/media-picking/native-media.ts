@@ -110,7 +110,13 @@ export function createNativeMediaVerbServer(
       throw new Error(`a picked item could not be weighed before reading it: ${asset.uri}`)
     }
     // The copy holds the whole file in memory, so even a large pick copies no more than the staged ceiling.
-    refuseOverCeiling(weighed, Math.min(ceiling, MEDIA_STAGED_MAX_BYTES))
+    refuseOverCeiling(weighed, ceiling)
+    if (weighed > MEDIA_STAGED_MAX_BYTES) {
+      throw new BridgeNativeVerbRefusedError(
+        'native_media_copy_too_large',
+        'the document provider did not supply a local copy within the staging limit'
+      )
+    }
     const copy = deps.copyIntoCache(asset.uri)
     // Reject an unowned copy before recording ownership; neither it nor the provider’s original is ours to unlink.
     if (!deps.ownsStagedUri(copy)) {
