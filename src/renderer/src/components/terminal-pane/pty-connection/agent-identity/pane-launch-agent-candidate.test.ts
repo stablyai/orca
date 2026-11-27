@@ -43,4 +43,28 @@ it('does not answer OSC color queries for an Antigravity pane', () => {
       pane
     )
   ).toBe(true)
+  expect(
+    paneShouldAnswerOscColorQueries(stateFor('codex'), {
+      ...pane,
+      startup: { command: 'agy' }
+    })
+  ).toBe(false)
+  expect(
+    paneShouldAnswerOscColorQueries(stateFor('antigravity'), {
+      ...pane,
+      startup: { command: 'codex' }
+    })
+  ).toBe(true)
+  expect(
+    paneShouldAnswerOscColorQueries(stateFor('codex'), {
+      ...pane,
+      startup: { initialAgentStatus: { agent: 'antigravity' } }
+    })
+  ).toBe(false)
+  expect(
+    paneShouldAnswerOscColorQueries(stateFor('antigravity'), {
+      ...pane,
+      startup: { initialAgentStatus: { agent: 'codex' } }
+    })
+  ).toBe(true)
 })

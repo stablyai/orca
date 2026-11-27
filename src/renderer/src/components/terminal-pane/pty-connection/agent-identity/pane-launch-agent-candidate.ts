@@ -47,7 +47,15 @@ function skipsOscColorQueryReplies(agent: string | null | undefined): boolean {
   return agent === 'jcode' || agent === 'antigravity'
 }
 
-// This pane's startup or registered agent receives the reply; the tab can name another split (#51192).
+function recognizedStartupAgent(command: string | undefined): TuiAgent | null {
+  if (!command || command.length > COMMAND_TOKEN_SCAN_MAX_CHARS) {
+    return null
+  }
+  const agent = recognizeAgentLaunchCommand(command)?.agent
+  return isTuiAgent(agent) ? agent : null
+}
+
+// This pane's own launch evidence receives the reply; the tab can name another split (#51192).
 function paneOscColorQueryAgent(
   state: PaneLaunchAgentStoreSlice,
   pane: PaneLaunchAgentPaneSlice
@@ -55,11 +63,15 @@ function paneOscColorQueryAgent(
   if (isTuiAgent(pane.startup?.launchAgent)) {
     return pane.startup.launchAgent
   }
+  const initialAgent = pane.startup?.initialAgentStatus?.agent
+  if (isTuiAgent(initialAgent)) {
+    return initialAgent
+  }
   const registered = state.agentLaunchConfigByPaneKey[pane.paneKey]?.identity?.agentType
   if (isTuiAgent(registered)) {
     return registered
   }
-  return resolvePaneLaunchTuiAgent(state, pane)
+  return recognizedStartupAgent(pane.startup?.command) ?? resolvePaneLaunchTuiAgent(state, pane)
 }
 
 // jcode and agy paint an early OSC 10/11 reply as composer text (#12112, #51192).
