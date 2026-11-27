@@ -47,7 +47,7 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
   listEnabled = true
 }: {
   rail: NativeChatMessageRailState
-  /** The rail's node; scrolling lights it through a data attribute (see useNativeChatRailWake). */
+  /** The rail's container node. */
   railRef: React.RefObject<HTMLDivElement | null>
   scrollRef: React.RefObject<HTMLDivElement | null>
   onSelect: (item: NativeChatRailItem) => void
@@ -233,21 +233,13 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
               onReaderScroll?.(event.deltaY * scale)
               element.scrollTop += event.deltaY * scale
             }}
-            // Dimmed at rest; hover, keyboard focus or scrolling light it, and it fades back once idle.
-            className={cn(
-              'absolute top-1/2 right-2.5 z-10 flex w-6 -translate-y-1/2 flex-col',
-              'opacity-40 transition-opacity delay-700 duration-500 ease-out motion-reduce:transition-none',
-              'hover:opacity-100 hover:delay-0 hover:duration-150',
-              // The preview card is portaled, so the pointer on it leaves the rail's :hover.
-              'data-[state=open]:opacity-100 data-[state=open]:delay-0 data-[state=open]:duration-150',
-              'has-focus-visible:opacity-100 has-focus-visible:delay-0 has-focus-visible:duration-150',
-              'data-awake:opacity-100 data-awake:delay-0 data-awake:duration-150',
-              'data-list-open:opacity-100 data-list-open:delay-0 data-list-open:duration-150'
-            )}
+            // Subtle at rest; hover, keyboard focus, or an open preview/list expands and brightens ticks.
+            className="group/rail absolute top-1/2 right-2.5 z-10 flex w-6 -translate-y-1/2 flex-col"
           >
             {ticks.map((item) => {
               // Preview ownership overrides scroll-position highlighting.
               const lit = item.id === (previewedId ?? rail.activeId)
+              const pending = item.id === pendingId
               const tabStop = item.id === tabId
               const opensList = canOpenList && tabStop
               return (
@@ -269,7 +261,7 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
                   aria-controls={opensList && list.open ? panelId : undefined}
                   aria-keyshortcuts={opensList ? 'Alt+ArrowDown' : undefined}
                   aria-current={item.id === rail.activeId ? 'true' : undefined}
-                  aria-busy={item.id === pendingId ? true : undefined}
+                  aria-busy={pending ? true : undefined}
                   onPointerEnter={(event) => {
                     if (event.pointerType !== 'touch') {
                       show(item, event.currentTarget)
@@ -283,16 +275,23 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
                     }
                   }}
                   onClick={() => onSelect(item)}
-                  // Padding, not a gap, so the pointer never falls between two ticks.
-                  className="flex w-full shrink-0 cursor-pointer items-center justify-center rounded-sm py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  // Padding, not a gap, so the pointer never falls between two ticks; 4.5px + 2px tick keeps the 11px hit height.
+                  className="flex w-full shrink-0 cursor-pointer items-center justify-center rounded-sm py-[4.5px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <span
                     aria-hidden
                     className={cn(
-                      'h-[3px] rounded-full transition-[width,background-color] duration-150 motion-reduce:transition-none',
-                      lit ? 'w-5 bg-foreground' : 'w-3 bg-foreground/50',
-                      item.id === pendingId &&
-                        'animate-pulse motion-reduce:animate-none motion-reduce:opacity-60'
+                      'h-[2px] rounded-full transition-[width,background-color] duration-150 ease-out motion-reduce:transition-none',
+                      lit
+                        ? cn(
+                            'w-2.5 group-hover/rail:w-5 group-hover/rail:bg-foreground group-has-focus-visible/rail:w-5 group-has-focus-visible/rail:bg-foreground group-data-[state=open]/rail:w-5 group-data-[state=open]/rail:bg-foreground group-data-list-open/rail:w-5 group-data-list-open/rail:bg-foreground',
+                            pending ? 'bg-foreground/50' : 'bg-foreground/30'
+                          )
+                        : cn(
+                            'w-2 group-hover/rail:w-3 group-hover/rail:bg-foreground/50 group-has-focus-visible/rail:w-3 group-has-focus-visible/rail:bg-foreground/50 group-data-[state=open]/rail:w-3 group-data-[state=open]/rail:bg-foreground/50 group-data-list-open/rail:w-3 group-data-list-open/rail:bg-foreground/50',
+                            pending ? 'bg-foreground/50' : 'bg-foreground/18'
+                          ),
+                      pending && 'animate-pulse motion-reduce:animate-none motion-reduce:opacity-60'
                     )}
                   />
                 </button>
