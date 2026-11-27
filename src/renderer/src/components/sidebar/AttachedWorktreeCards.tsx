@@ -16,6 +16,28 @@ import { botWorkerLineRowKey } from '../../../../shared/sidebar-list/sidebar-rev
 import { botLineLanes, lanesNeedingYouFirst } from '../../../../shared/bots/bot-line-lanes'
 import { useWorktreeActivityStatuses } from './workspace-card/activity/use-worktree-activity-statuses'
 
+function BotLineageRail(): React.JSX.Element {
+  return (
+    <span
+      aria-hidden="true"
+      data-worktree-lineage-guides=""
+      data-worktree-lineage-guide="rail"
+      className="pointer-events-none absolute -left-1.5 top-0 bottom-0 w-px"
+    />
+  )
+}
+
+function BotLineageBranch(): React.JSX.Element {
+  return (
+    <span
+      aria-hidden="true"
+      data-worktree-lineage-guides=""
+      data-worktree-lineage-guide="rail"
+      className="pointer-events-none absolute -left-1.5 top-3 h-px w-4"
+    />
+  )
+}
+
 /** Worktree cards attached to a folder workspace, each with its own child worktrees folded beneath it;
  *  a bot's line lists all of its descendants at one level, those waiting on the owner first. */
 export function AttachedWorktreeCards({
@@ -122,16 +144,21 @@ export function AttachedWorktreeCards({
         lineageCollapsed={collapsed}
         lineageChildren={
           !collapsed && children.length > 0
-            ? children.map((child) => (
-                <div
-                  key={child.id}
-                  onClick={stopNestedWorktreeCardBubble}
-                  onDoubleClick={stopNestedWorktreeCardBubble}
-                  onDragStart={stopNestedWorktreeCardBubble}
-                >
-                  {renderCard(child, nextAncestorIdentities, rootLanes !== undefined)}
-                </div>
-              ))
+            ? [
+                ...(compactLine ? [<BotLineageRail key="lineage-rail" />] : []),
+                ...children.map((child) => (
+                  <div
+                    key={child.id}
+                    className={compactLine ? 'relative' : undefined}
+                    onClick={stopNestedWorktreeCardBubble}
+                    onDoubleClick={stopNestedWorktreeCardBubble}
+                    onDragStart={stopNestedWorktreeCardBubble}
+                  >
+                    {compactLine ? <BotLineageBranch /> : null}
+                    {renderCard(child, nextAncestorIdentities, rootLanes !== undefined)}
+                  </div>
+                ))
+              ]
             : undefined
         }
         lineageChildrenStyle={
