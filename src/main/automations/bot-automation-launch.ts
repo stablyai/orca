@@ -285,8 +285,15 @@ export function createBotAutomationDispatcher(
       )
       throw error
     }
-    // The chat answers the thread itself, so the thread is told first which automation this is.
-    if (originKey && inOriginChat && !originGone && automation.bot?.chat?.toConversation) {
+    // The chat answers the thread itself, so a wait tells the thread first which automation this is;
+    // a recurring one would repeat it every run once the thread knows.
+    if (
+      automation.once &&
+      originKey &&
+      inOriginChat &&
+      !originGone &&
+      automation.bot?.chat?.toConversation
+    ) {
       results.announce?.(originKey, `run-start:${run.id}`, originThreadStartLine(automation), send)
     }
     // A run in the owning chat waits behind its running turn, so its result is posted through the

@@ -126,8 +126,14 @@ const IN_ORIGIN_CHAT = {
 } as const
 
 describe('a run in the chat that answers its thread', () => {
-  it('tells the thread first which automation it is', async () => {
-    const { sessions, announced, run } = dispatch({ bot: IN_ORIGIN_CHAT })
+  it('says nothing extra on each run of a recurring one', async () => {
+    const { announced, run } = dispatch({ bot: IN_ORIGIN_CHAT })
+    await run()
+    expect(announced).toEqual([])
+  })
+
+  it('tells the thread first which automation a wait is', async () => {
+    const { sessions, announced, run } = dispatch({ bot: IN_ORIGIN_CHAT, once: { by: 2 } })
     await run()
     expect(sessions.sendToBotChat).toHaveBeenCalled()
     expect(announced).toEqual([
