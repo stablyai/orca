@@ -24647,6 +24647,11 @@
     }
   },
   "runtimeRpc": {
+    "linearCreateOrigin": {
+      "question": "Issue creation is on hold. Please confirm the project for the original request and the PM responsible for it.",
+      "unknownOrigin": "{{question}} The request origin could not be identified.",
+      "unconfirmedDelivery": "{{question}} Delivery of this question to the requester is unconfirmed."
+    },
     "startupFailure": {
       "unknownCause": "No additional error details were available.",
       "continueButton": "Continue without CLI",

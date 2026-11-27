@@ -7,6 +7,12 @@ const botId = '00000000-0000-4000-8000-000000000003'
 const otherProject = '00000000-0000-4000-8000-000000000004'
 
 describe('Linear issue create origin', () => {
+  it('identifies a missing origin in the headless host language', async () => {
+    await expect(checkLinearCreateOrigin(null, workspaceId, projectId)).rejects.toThrow(
+      'The request origin could not be identified.'
+    )
+  })
+
   it('keeps a queued write bound to its original project and turn', async () => {
     const questions: string[] = []
     let current = true

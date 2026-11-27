@@ -1,5 +1,7 @@
 import { isLinearUuid } from '../../../../shared/linear/uuid'
+import { englishTranslate } from '../../../../shared/i18n/english-translate'
 import { linearError } from '../../../linear/issues/context/linear-access-errors'
+import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
 
 type Project = { workspaceId: string; projectId: string }
 type Receipt = { botId: string; project: Project }
@@ -53,10 +55,20 @@ export async function checkLinearCreateOrigin(
 }
 
 async function refuseCreate(authority: LinearCreateAuthority | null | undefined): Promise<never> {
-  const question =
-    '起票を保留しました。元の依頼が対象とする案件と、引き受けるPMを確認してください。'
+  const t = getRuntimeDesktopSurface().translateNotification ?? englishTranslate
+  const question = t(
+    'runtimeRpc.linearCreateOrigin.question',
+    'Issue creation is on hold. Please confirm the project for the original request and the PM responsible for it.'
+  )
   if (!authority?.requestId.trim() || !authority.replyTo.trim()) {
-    throw linearError('linear_permission_denied', `${question} 依頼元を未特定です。`)
+    throw linearError(
+      'linear_permission_denied',
+      t(
+        'runtimeRpc.linearCreateOrigin.unknownOrigin',
+        '{{question}} The request origin could not be identified.',
+        { question }
+      )
+    )
   }
   try {
     const sent = await authority.askOriginOnce(question)
@@ -68,7 +80,14 @@ async function refuseCreate(authority: LinearCreateAuthority | null | undefined)
       throw new Error('Origin delivery unconfirmed')
     }
   } catch {
-    throw linearError('linear_permission_denied', `${question} 依頼元への確認は配送未確認です。`)
+    throw linearError(
+      'linear_permission_denied',
+      t(
+        'runtimeRpc.linearCreateOrigin.unconfirmedDelivery',
+        '{{question}} Delivery of this question to the requester is unconfirmed.',
+        { question }
+      )
+    )
   }
   throw linearError('linear_permission_denied', question)
 }
