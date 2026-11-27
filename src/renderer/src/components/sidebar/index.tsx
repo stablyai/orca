@@ -29,6 +29,7 @@ import { useWorkspaceBoardPanel } from './workspace-board/surface/useWorkspaceBo
 import { useWorkspaceRevealBodyRedirect } from './worktree-list/navigation/use-workspace-reveal-body-redirect'
 import { resolveLeftSidebarStyleVariables } from '@/app-shell/appearance/left-sidebar-appearance'
 import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
+import { SidebarModalDialogs } from './SidebarModalDialogs'
 import { LocalGitToolchainScanBanner } from '../repo/toolchain/LocalGitToolchainScanBanner'
 import { SeveredTerminalDaemonBanner } from '../maintenance/terminal-daemon/SeveredTerminalDaemonBanner'
 import { StalledTerminalDaemonBanner } from '../maintenance/terminal-daemon/StalledTerminalDaemonBanner'
@@ -56,25 +57,6 @@ const SidebarBotsSection = lazyWithRetry(() =>
   }))
 )
 
-const WorktreeMetaDialog = lazyWithRetry(
-  () => import('./workspace-card/metadata/WorktreeMetaDialog')
-)
-const RemoveFolderDialog = lazyWithRetry(
-  () => import('./workspace-actions/deletion/RemoveFolderDialog')
-)
-const SleepTwinWorkspaceDialog = lazyWithRetry(
-  () => import('./workspace-actions/sleep/SleepTwinWorkspaceDialog')
-)
-const WorktreeVisibilityDialog = lazyWithRetry(
-  () => import('./workspace-visibility/dialog/WorktreeVisibilityDialog')
-)
-const OrcaYamlTrustDialog = lazyWithRetry(
-  () => import('./workspace-creation/hook-trust/OrcaYamlTrustDialog')
-)
-const OpenOnHostDialog = lazyWithRetry(() => import('../open-on-host/OpenOnHostDialog'))
-const ForgetSshWorkspaceDialog = lazyWithRetry(
-  () => import('./workspace-actions/deletion/ForgetSshWorkspaceDialog')
-)
 const AgentDashboardSidebarHost = lazyWithRetry(
   () => import('../dashboard/sidebar/AgentDashboardSidebarHost')
 )
@@ -161,7 +143,6 @@ function Sidebar({
     [agentsCollapsedGroupKeys]
   )
   const fetchAllWorktrees = useAppStore((s) => s.fetchAllWorktrees)
-  const activeModal = useAppStore((s) => s.activeModal)
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
   const leftSidebarStyle = useMemo(() => resolveLeftSidebarStyleVariables(settings), [settings])
   const { dropOwnerRef, dropHandlers, affordance } = useSidebarProjectDrop()
@@ -393,16 +374,8 @@ function Sidebar({
         )}
       </div>
 
-      {/* Render dialogs outside the sidebar to avoid clipping; mount each flow only while its modal is active. */}
-      <React.Suspense fallback={null}>
-        {activeModal === 'edit-meta' ? <WorktreeMetaDialog /> : null}
-        {activeModal === 'confirm-remove-folder' ? <RemoveFolderDialog /> : null}
-        {activeModal === 'confirm-sleep-twin' ? <SleepTwinWorkspaceDialog /> : null}
-        {activeModal === 'worktree-visibility' ? <WorktreeVisibilityDialog /> : null}
-        {activeModal === 'confirm-orca-yaml-hooks' ? <OrcaYamlTrustDialog /> : null}
-        {activeModal === 'forget-ssh-workspace' ? <ForgetSshWorkspaceDialog /> : null}
-        {activeModal === 'open-on-host' ? <OpenOnHostDialog /> : null}
-      </React.Suspense>
+      {/* Render dialogs outside the sidebar to avoid clipping. */}
+      <SidebarModalDialogs />
       {sidebarOpen ? (
         <WorkspaceKanbanDrawer
           leftSidebarStyle={leftSidebarStyle}
