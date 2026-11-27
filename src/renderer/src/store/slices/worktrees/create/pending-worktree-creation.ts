@@ -17,11 +17,11 @@ export function createBeginPendingWorktreeCreation(
   set: WorktreeSliceSet,
   _get: WorktreeSliceGet
 ): WorktreeSlice['beginPendingWorktreeCreation'] {
-  return (entry) => {
+  return (entry, activate = true) => {
     const logged = { ...entry, phaseLog: [{ phase: entry.phase, at: entry.startedAt }] }
     set((s) => ({
       pendingWorktreeCreations: { ...s.pendingWorktreeCreations, [entry.creationId]: logged },
-      activePendingCreationId: entry.creationId
+      ...(activate ? { activePendingCreationId: entry.creationId } : {})
     }))
   }
 }

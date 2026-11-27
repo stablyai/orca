@@ -7,6 +7,7 @@ import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-reco
 import { refreshBotHost } from '@/lib/bot-catalog'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { patchDetectedWorktreeHeadIdentities } from '@/store/slices/worktrees/listing/detected-worktree-head-identity'
+import { settleWorktreeCreationSetupGate } from '@/lib/workspace/creation/worktree-creation-setup-draft'
 
 export function registerProjectCatalogIpcBridge(
   unsubs: (() => void)[],
@@ -101,6 +102,10 @@ export function registerProjectCatalogIpcBridge(
   unsubs.push(
     window.api.worktrees.onCreateProgress?.((data) => {
       if (!data.creationId) {
+        return
+      }
+      if (data.phase === 'startup-gate-settled') {
+        settleWorktreeCreationSetupGate(data.creationId, data.blocked)
         return
       }
       // Why: every event without a live meter (a phase change, or null when git finished) clears it.

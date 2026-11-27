@@ -33,13 +33,18 @@ export abstract class OrcaRuntimeWithCreateTerminalSetupGate extends OrcaRuntime
       result.agentResumeRefused
     ) {
       record(opts.command)
-      return gatedStartup ? { started: Promise.resolve(false), blocked: true } : undefined
+      return gatedStartup
+        ? {
+            outcome: Promise.resolve(result.agentProgramBlocked ? 'blocked' : 'failed'),
+            blocked: true
+          }
+        : undefined
     }
     const signal = this.getPtyLifecycleSignal(pty.ptyId)
     const gate = waitForWorktreeSetupGate(this.getWorktreeStartupReadinessHost(), pty.ptyId, signal)
     void gate
-      .then((started) => {
-        if (started && !signal.aborted) {
+      .then((outcome) => {
+        if (outcome === 'started' && !signal.aborted) {
           record(gatedStartup)
           if (opts.telemetry) {
             recordAgentStartTelemetry(opts.telemetry)
@@ -47,6 +52,6 @@ export abstract class OrcaRuntimeWithCreateTerminalSetupGate extends OrcaRuntime
         }
       })
       .catch(console.warn)
-    return { started: gate }
+    return { outcome: gate }
   }
 }

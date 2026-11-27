@@ -11,6 +11,7 @@ import {
 } from './worktree-create-payload'
 import { withoutRefusedInferredParent } from './worktree-create-cross-store-parent'
 import type { CreateAttemptOutcome } from './worktree-create-parent-pick'
+import { createLocalWorktreeObservingSetupGate } from '@/lib/workspace/creation/worktree-creation-setup-draft'
 
 /** One create on its host; a refused inferred parent retries unnested, a missing one drops the parent. */
 export async function runCreateAttempt(
@@ -36,9 +37,9 @@ export async function runCreateAttempt(
             ...provisionedRoot
           })
       : target.kind === 'local'
-        ? // Why local can still reject on the parent: paired web clients route this API to their host.
-          await window.api.worktrees.create(
-            buildLocalWorktreeCreateArgs(request, { ...attempt, parentWorkspace })
+        ? await createLocalWorktreeObservingSetupGate(
+            buildLocalWorktreeCreateArgs(request, { ...attempt, parentWorkspace }),
+            Boolean(request.options?.creationAgentLaunch?.draft)
           )
         : await createWorktreeOnRuntimeHost(
             target.environmentId,

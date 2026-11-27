@@ -288,7 +288,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     options?: StartupFollowupPromptOptions
   ): Promise<boolean> {
     const host = this.getWorktreeStartupReadinessHost()
-    const gate = options?.terminalCreation?.[SETUP_AGENT_GATE]?.started
+    const gate = options?.terminalCreation?.[SETUP_AGENT_GATE]?.outcome
     if (options?.awaitSetupGate || gate) {
       const ptyId = host.getPtyId(handle)
       if (!ptyId) {
@@ -296,10 +296,10 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
       }
       const lifecycle = this.getPtyLifecycleSignal(ptyId)
       const signal = options?.signal ? AbortSignal.any([lifecycle, options.signal]) : lifecycle
-      const started = gate
-        ? await waitForPromiseWithSignal(gate, signal).catch(() => false)
+      const outcome = gate
+        ? await waitForPromiseWithSignal(gate, signal).catch(() => undefined)
         : await waitForWorktreeSetupGate(host, ptyId, signal)
-      if (!started || signal.aborted) {
+      if (outcome !== 'started' || signal.aborted) {
         return false
       }
       return deliverStartupFollowupPrompt(this, host, handle, followup, { ...options, signal })

@@ -3,10 +3,11 @@ import type { ExecutionHostId } from '../../execution-host/execution-host'
 import type { StartupCwdFallback } from '../../shell/launch/startup-cwd-fallback'
 
 export const SETUP_AGENT_GATE = Symbol('setup agent gate')
+export type SetupAgentGateOutcome = 'started' | 'failed' | 'blocked'
 
 export type RuntimeTerminalCreate = TerminalLaunchResult & {
   /** An unobserved gate outcome resolves to undefined. */
-  [SETUP_AGENT_GATE]?: { started: Promise<boolean | undefined>; blocked?: true }
+  [SETUP_AGENT_GATE]?: { outcome: Promise<SetupAgentGateOutcome | undefined>; blocked?: true }
   coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }
   handle: string
   /** Host-owned PTY incarnation used to fence remote identity observations. */

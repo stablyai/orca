@@ -65,6 +65,7 @@ export type HostAgentLaunch = {
 export type CreatedWorktreeResult = CreateWorktreeResult & {
   hostPlannedStartup?: true
   hostOwnsCreateSettings?: true
+  setupGateBlocked?: Promise<boolean>
 }
 
 /** Pack create inputs once for both transports; retry-specific fields live in WorktreeCreateAttempt. */

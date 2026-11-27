@@ -154,6 +154,10 @@ import {
 } from '../../../shared/agent-launch/startup/setup-runner-command'
 import { createSequencedSetupAgentCommands } from '../../../shared/agent-launch/startup/setup-agent-sequencing'
 import {
+  SETUP_AGENT_GATE,
+  type SetupAgentGateOutcome
+} from '../../../shared/terminal/runtime/runtime-terminal-create-contract'
+import {
   createWorktreeCreateTimingRecorder,
   localWorktreeCreateExecutionHost,
   type WorktreeCreateTimingRecorder
@@ -211,6 +215,7 @@ function worktreePushTargetMaterializeKey(repoPath: string, remoteName: string):
 
 type StagedStartupResult = {
   startupTerminal?: CreateWorktreeResult['startupTerminal']
+  startupGateOutcome?: Promise<SetupAgentGateOutcome | undefined>
   activationSetup?: CreateWorktreeResult['setup']
   didSpawnSetup: boolean
   warning?: string
@@ -421,6 +426,7 @@ async function spawnLocalStartupAndSetupTerminals(args: {
   let warning: string | undefined
   let startupTerminalHandle: string | null = null
   let startupTerminal: CreateWorktreeResult['startupTerminal']
+  let startupGateOutcome: StagedStartupResult['startupGateOutcome']
 
   let sequencedStartup = startup
   let wrappedSetupCommandStr: string | undefined
@@ -464,6 +470,7 @@ async function spawnLocalStartupAndSetupTerminals(args: {
       worktree
     )
     startupTerminalHandle = terminal.handle
+    startupGateOutcome = terminal[SETUP_AGENT_GATE]?.outcome
     startupTerminal = {
       spawned: true,
       surface: terminal.surface
@@ -525,6 +532,7 @@ async function spawnLocalStartupAndSetupTerminals(args: {
         }
       : {}),
     ...(startupTerminal ? { startupTerminal } : {}),
+    ...(startupGateOutcome ? { startupGateOutcome } : {}),
     didSpawnSetup,
     ...(warning ? { warning } : {})
   }
@@ -985,7 +993,10 @@ export function emitCreateWorktreeProgress(
   mainWindow: BrowserWindow,
   phase: 'fetching' | 'creating',
   creationId?: string,
-  detail?: Pick<CreateWorktreeProgressEvent, 'checkout' | 'worktreeId'>
+  detail?: Pick<
+    Extract<CreateWorktreeProgressEvent, { phase: 'fetching' | 'creating' }>,
+    'checkout' | 'worktreeId'
+  >
 ): void {
   if (!mainWindow.isDestroyed()) {
     const event: CreateWorktreeProgressEvent = { creationId, phase, ...detail }
@@ -1885,6 +1896,23 @@ async function performLocalWorktreeCreate(
       automationCreate: Boolean(args.automationProvenance)
     })
   )
+  const { startupGateOutcome, startupTerminal } = stagedStartup
+  if (creationId && args.reportSetupGateOutcome === true && startupGateOutcome && startupTerminal) {
+    startupTerminal.reportsSetupGateOutcome = true
+    // The existing gate observes the wrapper even when its pane never mounts in the window.
+    void startupGateOutcome
+      .then((outcome) => {
+        if (!mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
+          const event: CreateWorktreeProgressEvent = {
+            creationId,
+            phase: 'startup-gate-settled',
+            blocked: outcome === 'blocked'
+          }
+          mainWindow.webContents.send('createWorktree:progress', event)
+        }
+      })
+      .catch(console.warn)
+  }
 
   // Automation terminals are host-provisioned, so return none for renderer launch.
   const provisionedByHost = Boolean(args.automationProvenance)
