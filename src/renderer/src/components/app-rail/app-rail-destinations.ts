@@ -39,9 +39,18 @@ const DESTINATION_SETTING: Record<
   mobile: 'showMobileButton'
 }
 
-/** Show or hide a rail page. Like Settings' switch, hiding the current page leaves it open; only the button goes. */
-export function setRailDestinationShown(id: AppRailDestinationId, shown: boolean): void {
-  void useAppStore.getState().updateSettings({ [DESTINATION_SETTING[id]]: shown })
+/**
+ * Show or hide a rail page. Like Settings' switch, hiding the current page leaves it open; only the button goes.
+ * Acknowledge the persisted settings before the store publishes them so the rail can carry the checklist into a swap.
+ */
+export function setRailDestinationShown(
+  id: AppRailDestinationId,
+  shown: boolean,
+  onWillPublish: (settings: NonNullable<AppState['settings']>) => void
+): Promise<void> {
+  return useAppStore
+    .getState()
+    .updateSettingsOrThrow({ [DESTINATION_SETTING[id]]: shown }, { onWillPublish })
 }
 
 const DESTINATION_OPEN: Record<AppRailDestinationId, (state: AppState) => void> = {
@@ -57,7 +66,7 @@ function isRailDestinationId(value: string): value is AppRailDestinationId {
 }
 
 /** Shown destinations in rail order, joined into one string so the subscription compares a primitive. */
-export const selectShownRailDestinationsKey = (s: AppState): string =>
+export const selectShownRailDestinationsKey = (s: Pick<AppState, 'settings'>): string =>
   APP_RAIL_DESTINATION_IDS.filter((id) => DESTINATION_VISIBLE[id](s.settings)).join(',')
 
 export function shownRailDestinationsFromKey(key: string): AppRailDestinationId[] {

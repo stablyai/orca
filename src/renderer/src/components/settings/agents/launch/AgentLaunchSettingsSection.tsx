@@ -115,8 +115,10 @@ function LocalAgentLaunchSettings({
         const updates = compute(latest, window.api.platform.get().platform)
         let acknowledged = latest
         if (Object.keys(updates).length) {
-          await useAppStore.getState().updateSettingsOrThrow(updates, (settings) => {
-            acknowledged = settings
+          await useAppStore.getState().updateSettingsOrThrow(updates, {
+            onAcknowledged: (settings) => {
+              acknowledged = settings
+            }
           })
         }
         return acknowledged

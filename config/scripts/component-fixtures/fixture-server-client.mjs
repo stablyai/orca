@@ -81,37 +81,125 @@ function readLogTail() {
   }
 }
 
-/** Returns the running fixture server, starting a detached one if needed. */
-export async function ensureFixtureServer({ onStart } = {}) {
+function checkPreservedServer(state, health, stamp) {
+  if (health && health.pid === state?.pid) {
+    if (health.codeStamp !== stamp) {
+      throw new Error(
+        `Incompatible fixture server is already running at ${state.url} (PID ${state.pid})`
+      )
+    }
+    return
+  }
+  if (!Number.isSafeInteger(state?.pid) || state.pid <= 0) {
+    return
+  }
+  try {
+    process.kill(state.pid, 0)
+  } catch (error) {
+    if (error.code === 'ESRCH') {
+      return
+    }
+  }
+  throw new Error(`Cannot verify the live fixture server at ${state.url} (PID ${state.pid})`)
+}
+
+/** With preserveExisting, a caller may close only the server it started. */
+export async function ensureFixtureServer({ onStart, preserveExisting = false } = {}) {
+  const stamp = fixtureServerCodeStamp()
   const existing = readServerState()
   const health = await readServerHealth(existing)
+  if (preserveExisting) {
+    checkPreservedServer(existing, health, stamp)
+  }
   if (health && health.pid === existing?.pid) {
-    if (health.codeStamp === fixtureServerCodeStamp()) {
+    if (health.codeStamp === stamp) {
       return { url: existing.url, started: false }
     }
     await callFixtureServer(existing.url, 'stop', {}).catch(() => {})
     await delay(300)
   }
   await mkdir(fixtureCacheDir, { recursive: true })
-  let exited = false
-  if (tryAcquireStartLock()) {
-    onStart?.()
-    startServerProcess().once('exit', () => {
-      exited = true
-    })
-  }
-  const deadline = Date.now() + STARTUP_TIMEOUT_MS
-  while (Date.now() < deadline) {
-    const state = readServerState()
-    if (state && state.pid !== existing?.pid && (await probeServer(state))) {
-      return { url: state.url, started: true }
+  let child
+  let exited
+  let ownedUrl
+  let startupError
+  let done = false
+  const close = async () => {
+    if (!child || done) {
+      return
     }
-    if (exited) {
-      throw new Error(`Fixture server exited during startup:\n${readLogTail()}`)
+    child.ref()
+    if (ownedUrl && (await probeServer({ url: ownedUrl, pid: child.pid }))) {
+      await callFixtureServer(ownedUrl, 'stop', {}).catch(() => child.kill())
+    } else {
+      child.kill()
     }
-    await delay(150)
+    await exited
   }
-  throw new Error(`Fixture server did not start in time. Log tail:\n${readLogTail()}`)
+  try {
+    if (tryAcquireStartLock()) {
+      try {
+        // Another client may have published the server and released the lock since our first probe.
+        const candidate = readServerState()
+        if (candidate?.pid !== existing?.pid) {
+          const live = await readServerHealth(candidate)
+          if (preserveExisting) {
+            checkPreservedServer(candidate, live, stamp)
+          }
+          if (live && live.pid === candidate.pid) {
+            return { url: candidate.url, started: false }
+          }
+        }
+        onStart?.()
+        child = startServerProcess()
+        exited = new Promise((resolve) => {
+          child.once('close', () => {
+            done = true
+            resolve()
+          })
+          child.once('error', (error) => {
+            startupError = error
+          })
+        })
+      } finally {
+        if (!child) {
+          unlinkSync(serverLockPath)
+        }
+      }
+    }
+    const deadline = Date.now() + STARTUP_TIMEOUT_MS
+    while (Date.now() < deadline) {
+      if (done || startupError) {
+        throw new Error(`Fixture server exited during startup:\n${readLogTail()}`, {
+          cause: startupError
+        })
+      }
+      const state = readServerState()
+      if (state && state.pid !== existing?.pid) {
+        const live = await readServerHealth(state)
+        if (live?.pid === state.pid) {
+          if (live.codeStamp !== stamp && preserveExisting) {
+            throw new Error(
+              `Incompatible fixture server is already running at ${state.url} (PID ${live.pid})`
+            )
+          }
+          const started = state.pid === child?.pid
+          if (started) {
+            ownedUrl = state.url
+          }
+          return { url: state.url, started, close: started ? close : undefined }
+        }
+      }
+      await delay(150)
+    }
+    throw new Error(`Fixture server did not start in time. Log tail:\n${readLogTail()}`)
+  } catch (error) {
+    await close()
+    if (startupError) {
+      unlinkSync(serverLockPath)
+    }
+    throw error
+  }
 }
 
 export async function callFixtureServer(url, endpoint, body) {

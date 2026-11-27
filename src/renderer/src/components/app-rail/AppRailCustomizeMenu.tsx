@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Check, Ellipsis } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
@@ -59,7 +59,8 @@ export type AppRailCustomizeRow = {
   label: string
   icon: React.ReactNode
   shown: boolean
-  onToggle: () => void
+  /** `byPointer`: toggled with the mouse (or pen/touch) rather than the keyboard. */
+  onToggle: (byPointer: boolean) => void
 }
 
 export function useAppRailCustomizeLabel(): string {
@@ -67,22 +68,44 @@ export function useAppRailCustomizeLabel(): string {
   return t('appRail.customize', 'Customize')
 }
 
-/** One checkbox row per rail page; toggling keeps the menu open so several can change in one visit. */
+/**
+ * One checkbox row per rail page; toggling keeps the menu open so several can change in one visit. `focusRow` is the
+ * row a toggle left focused before "…" and More swapped; the checklist reopened in the new form starts on it.
+ */
 export function AppRailCustomizeRows({
-  rows
+  rows,
+  focusRow = null
 }: {
   rows: readonly AppRailCustomizeRow[]
+  focusRow?: string | null
 }): React.JSX.Element {
+  // The attached row already holds focus when the menu's opening focus scope runs.
+  const focusCarriedRow = useCallback((node: HTMLDivElement | null) => {
+    node?.focus({ preventScroll: true })
+  }, [])
+  // Whether the toggle came from the pointer: Radix selects on the click that follows a pointerdown or a Space/Enter.
+  const byPointerRef = useRef(false)
   return (
     <>
       {rows.map((row) => (
         <DropdownMenuItem
           key={row.id}
+          ref={row.id === focusRow ? focusCarriedRow : undefined}
           role="menuitemcheckbox"
           aria-checked={row.shown}
+          onPointerDown={() => {
+            byPointerRef.current = true
+          }}
+          // A press that started elsewhere (on "…") and is released on a row selects it on pointerup alone.
+          onPointerUp={() => {
+            byPointerRef.current = true
+          }}
+          onKeyDown={() => {
+            byPointerRef.current = false
+          }}
           onSelect={(event) => {
             event.preventDefault()
-            row.onToggle()
+            row.onToggle(byPointerRef.current)
           }}
         >
           {row.icon}
@@ -97,20 +120,57 @@ export function AppRailCustomizeRows({
   )
 }
 
+/**
+ * A checklist toggle that swaps "…" and More remounts the "…" slot as the other form. The rail hands the new form the
+ * row that was toggled (`reopenOn`, read at mount only) so it opens its checklist on that row, and hears when the
+ * checklist closes (`onChecklistClose`) so a later swap doesn't reopen it.
+ */
+export type AppRailChecklistCarry = {
+  reopenOn: string | null
+  /** The toggle was a pointer click, so the pointer rests where the old checklist was. */
+  reopenedUnderPointer: boolean
+  /** Stable. Called once the new form has taken the row, and when its checklist closes. */
+  release: () => void
+}
+
+/** The new form takes the carried row once, at mount; releasing it keeps any later mount from reopening on it. */
+export function useTakeChecklistCarry(checklist: AppRailChecklistCarry): string | null {
+  const [taken] = useState(checklist.reopenOn)
+  const { release } = checklist
+  useEffect(() => {
+    if (taken !== null) {
+      release()
+    }
+  }, [taken, release])
+  return taken
+}
+
 /** The rail's "…": which pages the rail shows, in rail order. Becomes More's Customize submenu when the rail folds. */
 export function AppRailCustomizeMenu({
   rows,
-  tabStop
+  tabStop,
+  checklist
 }: {
   rows: readonly AppRailCustomizeRow[]
   tabStop: boolean
+  checklist: AppRailChecklistCarry
 }): React.JSX.Element {
   const label = useAppRailCustomizeLabel()
   const triggerRef = useRef<HTMLButtonElement>(null)
-  const [open, setOpen] = useState(false)
+  const reopenOn = useTakeChecklistCarry(checklist)
+  const [open, setOpen] = useState(reopenOn !== null)
+  // Only the opening this form mounted with starts on the carried row; later openings start as usual.
+  const [focusRow, setFocusRow] = useState(reopenOn)
   const heldInPlace = useMenuHeldInPlace(open, triggerRef, rows)
+  const handleOpenChange = (next: boolean): void => {
+    setOpen(next)
+    if (!next) {
+      setFocusRow(null)
+      checklist.release()
+    }
+  }
   return (
-    <DropdownMenu modal={false} open={open} onOpenChange={setOpen}>
+    <DropdownMenu modal={false} open={open} onOpenChange={handleOpenChange}>
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
@@ -137,10 +197,11 @@ export function AppRailCustomizeMenu({
         side="right"
         align="start"
         sideOffset={8}
+        animateOnOpen={focusRow === null}
         {...heldInPlace}
         onCloseAutoFocus={() => refocusTriggerIfFocusLost(triggerRef.current)}
       >
-        <AppRailCustomizeRows rows={rows} />
+        <AppRailCustomizeRows rows={rows} focusRow={focusRow} />
       </DropdownMenuContent>
     </DropdownMenu>
   )

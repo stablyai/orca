@@ -21,7 +21,11 @@ import {
   type AppRailItemId
 } from './AppRailButton'
 import { AppRailMoreMenu, useAppRailSlotCapacity } from './AppRailMoreMenu'
-import { AppRailCustomizeMenu, type AppRailCustomizeRow } from './AppRailCustomizeMenu'
+import {
+  AppRailCustomizeMenu,
+  type AppRailChecklistCarry,
+  type AppRailCustomizeRow
+} from './AppRailCustomizeMenu'
 import { AppRailAccountMenu } from './AppRailAccountMenu'
 import { partitionAppRail } from './app-rail-overflow'
 import { railItemOwningFocus } from './app-rail-focus-ownership'
@@ -73,9 +77,24 @@ export function AppRail({
     toolbarRef.current = node
     setToolbar(node)
   }, [])
+  // Carry only an acknowledged toggle that swaps the slot at the same size.
+  const [checklistCarry, setChecklistCarry] = useState<{
+    id: AppRailDestinationId
+    byPointer: boolean
+    shownKey: string
+    capacity: number
+    more: boolean
+  } | null>(null)
+  const pendingChecklistWrite = useRef<typeof checklistCarry>(null)
+  const checklistWriteInFlight = useRef(false)
+  const releaseChecklistCarry = useCallback(() => {
+    pendingChecklistWrite.current = null
+    setChecklistCarry(null)
+  }, [])
   // Focus ownership sampled at the moment a fold/unfold is about to commit; only that transition may recover it.
   const transitionOwnerRef = useRef<AppRailItemId | null>(null)
   const capacity = useAppRailSlotCapacity(toolbar, () => {
+    releaseChecklistCarry()
     transitionOwnerRef.current = toolbarRef.current ? railItemOwningFocus(toolbarRef.current) : null
   })
   // Customize can change the shown set with its menu open; sample focus before that commits, as for a fold.
@@ -87,6 +106,7 @@ export function AppRail({
           toolbarRef.current &&
           selectShownRailDestinationsKey(state) !== selectShownRailDestinationsKey(prev)
         ) {
+          pendingChecklistWrite.current = null
           // A second change before the commit must not drop the owner the first one sampled.
           transitionOwnerRef.current =
             railItemOwningFocus(toolbarRef.current) ?? transitionOwnerRef.current
@@ -228,8 +248,53 @@ export function AppRail({
     label: destinationLabel(id),
     icon: destinationIcon(id, 14, undefined, 'size-3.5'),
     shown: shownDestinationSet.has(id),
-    onToggle: () => setRailDestinationShown(id, !shownDestinationSet.has(id))
+    onToggle: (byPointer) => {
+      // Keep a second activation from replacing the row whose write is about to swap the menu.
+      if (checklistWriteInFlight.current) {
+        return
+      }
+      checklistWriteInFlight.current = true
+      const shown = !shownDestinationSet.has(id)
+      const nextShown = APP_RAIL_DESTINATION_IDS.filter((other) =>
+        other === id ? shown : shownDestinationSet.has(other)
+      )
+      const nextMore = partitionAppRail(nextShown.length, capacity).more
+      const carry =
+        nextMore === partition.more
+          ? null
+          : { id, byPointer, shownKey: nextShown.join(','), capacity, more: nextMore }
+      pendingChecklistWrite.current = carry
+      void setRailDestinationShown(id, shown, (settings) => {
+        // Arm the carry before this write notifies the store subscribers.
+        if (carry && pendingChecklistWrite.current === carry) {
+          pendingChecklistWrite.current = null
+          if (selectShownRailDestinationsKey({ settings }) === carry.shownKey) {
+            setChecklistCarry(carry)
+          }
+        }
+      })
+        .catch((error: unknown) => {
+          console.error('Failed to update settings:', error)
+        })
+        .finally(() => {
+          if (pendingChecklistWrite.current === carry) {
+            pendingChecklistWrite.current = null
+          }
+          checklistWriteInFlight.current = false
+        })
+    }
   }))
+  // Only the swap this toggle causes: its write has landed, at the same size, and the slot took the other form.
+  const carryApplies =
+    checklistCarry !== null &&
+    checklistCarry.shownKey === shownDestinationsKey &&
+    checklistCarry.capacity === capacity &&
+    checklistCarry.more === partition.more
+  const checklist: AppRailChecklistCarry = {
+    reopenOn: carryApplies ? checklistCarry.id : null,
+    reopenedUnderPointer: carryApplies && checklistCarry.byPointer,
+    release: releaseChecklistCarry
+  }
   const openSettings = (): void => useAppStore.getState().openSettingsPage()
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
@@ -321,6 +386,7 @@ export function AppRail({
             <AppRailMoreMenu
               tabStop={tabStopItem === 'more'}
               customizeRows={customizeRows}
+              checklist={checklist}
               destinations={foldedDestinations.map((id) => ({
                 id,
                 label: destinationLabel(id),
@@ -332,7 +398,11 @@ export function AppRail({
               }))}
             />
           ) : (
-            <AppRailCustomizeMenu rows={customizeRows} tabStop={tabStopItem === 'customize'} />
+            <AppRailCustomizeMenu
+              rows={customizeRows}
+              tabStop={tabStopItem === 'customize'}
+              checklist={checklist}
+            />
           )}
         </div>
         <div className="flex flex-col items-center gap-2.5">

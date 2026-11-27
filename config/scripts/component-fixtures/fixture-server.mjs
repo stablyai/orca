@@ -165,16 +165,26 @@ async function main() {
   const browserPromise = launchHeadlessBrowser()
   browserPromise.catch(() => {})
   const session = { runner: null, lastActivity: Date.now(), stop: () => {} }
-  const vite = await createViteServer({
-    configFile: 'config/vite.fixtures.config.ts',
-    clearScreen: false,
-    logLevel: 'warn',
-    // Why no HMR: the runner reloads its page on change, so pushed updates would only race it.
-    server: { port, strictPort: true, host: '127.0.0.1', open: false, hmr: false },
-    plugins: [createFixtureApiPlugin(session)]
-  })
-  await vite.listen()
-  await browserPromise
+  let vite
+  try {
+    vite = await createViteServer({
+      configFile: 'config/vite.fixtures.config.ts',
+      clearScreen: false,
+      logLevel: 'warn',
+      // Why no HMR: the runner reloads its page on change, so pushed updates would only race it.
+      server: { port, strictPort: true, host: '127.0.0.1', open: false, hmr: false },
+      plugins: [createFixtureApiPlugin(session)]
+    })
+    await vite.listen()
+    await browserPromise
+  } catch (error) {
+    try {
+      await (await browserPromise.catch(() => null))?.close()
+    } finally {
+      await vite?.close()
+    }
+    throw error
+  }
 
   let stopping = false
   const stop = async () => {

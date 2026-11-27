@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useRef, useState } from 'react'
+import React, { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { Ellipsis, SlidersHorizontal } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -19,6 +19,8 @@ import {
   refocusTriggerIfFocusLost,
   useAppRailCustomizeLabel,
   useMenuHeldInPlace,
+  useTakeChecklistCarry,
+  type AppRailChecklistCarry,
   type AppRailCustomizeRow
 } from './AppRailCustomizeMenu'
 
@@ -29,7 +31,8 @@ import {
 export function AppRailMoreMenu({
   tabStop,
   destinations,
-  customizeRows
+  customizeRows,
+  checklist
 }: {
   tabStop: boolean
   /** Folded destinations, in rail order: plain rows that open their page. */
@@ -43,6 +46,7 @@ export function AppRailMoreMenu({
     onSelect: () => void
   }[]
   customizeRows: readonly AppRailCustomizeRow[]
+  checklist: AppRailChecklistCarry
 }): React.JSX.Element {
   const t = useTranslate()
   // Why: Radix refocuses the trigger in a timeout after closing, which would land after (or before, on a cold page
@@ -52,12 +56,52 @@ export function AppRailMoreMenu({
   const triggerRef = useRef<HTMLButtonElement>(null)
   const customizeLabel = useAppRailCustomizeLabel()
   const customizeTriggerRef = useRef<HTMLDivElement>(null)
+  // A swap from "…" mounts More already open on its Customize checklist, on the row that was toggled.
+  const reopenOn = useTakeChecklistCarry(checklist)
+  const [underPointer] = useState(checklist.reopenedUnderPointer)
+  const [opening, setOpening] = useState<'carry' | 'manual' | null>(
+    reopenOn === null ? null : 'carry'
+  )
   const [customizeOpen, setCustomizeOpen] = useState(false)
+  const [focusRow, setFocusRow] = useState(reopenOn)
+  // Why the checklist opens once its trigger attaches, not at mount: Radix closes a submenu from its mount effect's
+  // cleanup, which StrictMode runs once on mount, so a submenu mounted open would close straight away in development.
+  const reopenOnAttachRef = useRef(reopenOn !== null)
+  const attachCustomizeTrigger = useCallback((node: HTMLDivElement | null) => {
+    customizeTriggerRef.current = node
+    if (node && reopenOnAttachRef.current) {
+      reopenOnAttachRef.current = false
+      setCustomizeOpen(true)
+    }
+  }, [])
+  // Why: the reopened checklist is a submenu, so a pointer that just clicked a row now rests over More's own rows.
+  // Radix closes a submenu as soon as the pointer moves over or off a sibling row, so until the pointer reaches the
+  // checklist those rows ignore it; hovering them would otherwise close the checklist on the way to it. A keyboard
+  // toggle leaves the pointer wherever it was, so More's rows keep their usual hover then.
+  const holdChecklistRef = useRef(reopenOn !== null && underPointer)
+  const holdChecklist = (event: React.PointerEvent): void => {
+    if (holdChecklistRef.current) {
+      event.preventDefault()
+    }
+  }
+  const handleCustomizeOpenChange = (next: boolean): void => {
+    setCustomizeOpen(next)
+    // Radix also reports a close for a submenu that is already closed (its parent closing, or unmounting).
+    if (!next && customizeOpen) {
+      holdChecklistRef.current = false
+      setFocusRow(null)
+      checklist.release()
+    }
+  }
   // Toggling a page on while folded adds a row above Customize; keep its submenu put.
   const customizeHeldInPlace = useMenuHeldInPlace(customizeOpen, customizeTriggerRef, customizeRows)
   const current = destinations.find((destination) => destination.current)?.label
   return (
-    <DropdownMenu modal={false}>
+    <DropdownMenu
+      modal={false}
+      open={opening !== null}
+      onOpenChange={(open) => setOpening(open ? 'manual' : null)}
+    >
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
@@ -85,6 +129,7 @@ export function AppRailMoreMenu({
         side="right"
         align="start"
         sideOffset={8}
+        animateOnOpen={opening !== 'carry'}
         className="w-52"
         onCloseAutoFocus={(event) => {
           if (yieldCloseFocusRef.current) {
@@ -102,6 +147,8 @@ export function AppRailMoreMenu({
               yieldCloseFocusRef.current = destination.ownsFocusOnOpen === true
               destination.onSelect()
             }}
+            onPointerMove={holdChecklist}
+            onPointerLeave={holdChecklist}
             aria-current={destination.current ? 'page' : undefined}
           >
             {destination.icon}
@@ -109,13 +156,24 @@ export function AppRailMoreMenu({
           </DropdownMenuItem>
         ))}
         {destinations.length > 0 ? <DropdownMenuSeparator /> : null}
-        <DropdownMenuSub open={customizeOpen} onOpenChange={setCustomizeOpen}>
-          <DropdownMenuSubTrigger ref={customizeTriggerRef}>
+        <DropdownMenuSub open={customizeOpen} onOpenChange={handleCustomizeOpenChange}>
+          <DropdownMenuSubTrigger
+            ref={attachCustomizeTrigger}
+            onPointerMove={holdChecklist}
+            onPointerLeave={holdChecklist}
+          >
             <SlidersHorizontal className="size-3.5" aria-hidden />
             {customizeLabel}
           </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent scrollable {...customizeHeldInPlace}>
-            <AppRailCustomizeRows rows={customizeRows} />
+          <DropdownMenuSubContent
+            scrollable
+            animateOnOpen={focusRow === null}
+            {...customizeHeldInPlace}
+            onPointerMove={() => {
+              holdChecklistRef.current = false
+            }}
+          >
+            <AppRailCustomizeRows rows={customizeRows} focusRow={focusRow} />
           </DropdownMenuSubContent>
         </DropdownMenuSub>
       </DropdownMenuContent>
