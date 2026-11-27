@@ -386,8 +386,7 @@ export function TaskPageGitHubListChrome({
                   onClick={handleResetGithubTaskSearch}
                   className={cn(
                     'absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground',
-                    taskSearchInput === defaultQuery &&
-                      'right-11 group-focus-within/rail-search:right-2 @max-[40rem]/rail-page:right-2'
+                    taskSearchInput === defaultQuery && 'right-11 @max-[40rem]/rail-page:right-2'
                   )}
                 >
                   <X className="size-4" />
