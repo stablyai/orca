@@ -168,6 +168,7 @@ export function registerFilesystemDownloadHandlers(context: FilesystemHandlerCon
         throw new Error('Download session not found')
       }
       await session.handle.writeFile(Buffer.from(contentBase64, 'base64'))
+      session.cleanupTimer.refresh()
       return { ok: true }
     }
   )
