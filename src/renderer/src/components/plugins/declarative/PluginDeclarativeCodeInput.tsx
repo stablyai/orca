@@ -68,7 +68,12 @@ export function PluginDeclarativeCodeInput({
   const [active, setActive] = useState(0)
 
   const editable = !readOnly && !props.disabled
-  // A menu opened on other text (the guest replaced it since) would replace the wrong range.
+  // A menu opened on other text (the guest replaced it since) would replace the wrong range. Drop
+  // it for good: hiding it alone would bring it back if the guest restored the same text. Typing
+  // keeps its menu, since openAt records the text the edit produced.
+  if (menu && menu.text !== value) {
+    setMenu(null)
+  }
   const liveMenu = menu && editable && menu.text === value ? menu : null
   const items = liveMenu ? matchCompletions(props.completions ?? [], liveMenu.filter) : []
   const open = items.length > 0

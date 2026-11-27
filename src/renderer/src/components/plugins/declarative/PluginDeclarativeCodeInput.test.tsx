@@ -234,3 +234,24 @@ it('drops suggestions opened on text the guest has since replaced', () => {
   fireEvent.keyDown(textarea, { key: 'Tab' })
   expect(textarea.value).toBe('{}')
 })
+
+it('does not bring back suggestions when the guest restores the text they opened on', () => {
+  const props: Props = {
+    ...base,
+    completions: [{ label: 'name' }],
+    value: 'na',
+    onSubmit: { $callback: 'submit' }
+  }
+  const emit = vi.fn()
+  const { rerender } = render(<PluginDeclarativeCodeInput props={props} emit={emit} />)
+  const textarea = rendered()
+  suggest(textarea, 2)
+  expect(screen.getByRole('option').textContent).toBe('name')
+  rerender(<PluginDeclarativeCodeInput props={{ ...props, value: '{}' }} emit={emit} />)
+  rerender(<PluginDeclarativeCodeInput props={{ ...props }} emit={emit} />)
+  textarea.setSelectionRange(2, 2)
+  expect(screen.queryByRole('option')).toBeNull()
+  fireEvent.keyDown(textarea, { key: 'Enter' })
+  expect(textarea.value).toBe('na')
+  expect(emit).toHaveBeenCalledWith('submit', ['na'])
+})

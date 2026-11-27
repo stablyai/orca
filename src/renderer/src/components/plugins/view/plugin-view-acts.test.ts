@@ -4,8 +4,12 @@ import type { PluginDeclarativeActTarget } from '../declarative/plugin-declarati
 import { runPluginPanelActs } from './plugin-view-acts'
 
 /** One mounted text control whose `change` records each value it receives, as `onChange` would. */
-function panel(type: 'CodeInput' | 'Input' | 'Textarea', initial: string) {
-  const props = { label: 'Field' }
+function panel(
+  type: 'CodeInput' | 'Input' | 'Textarea',
+  initial: string,
+  extra: Record<string, unknown> = {}
+) {
+  const props = { label: 'Field', ...extra }
   const tree: PluginDeclarativeNode = {
     type: 'Stack',
     props: {},
@@ -63,5 +67,18 @@ describe('runPluginPanelActs type', () => {
       await runPluginPanelActs([{ type: { label: 'Field' }, text: 'a\r\nb' }], deps)
       expect(changes.at(-1)).toBe('a\r\nb')
     }
+  })
+
+  it('drops keystrokes that would pass a CodeInput maxLength', async () => {
+    const { deps, changes } = panel('CodeInput', '', { maxLength: 1 })
+    const results = await runPluginPanelActs([{ type: { label: 'Field' }, text: 'ab' }], deps)
+    expect(results).toEqual([{ ok: true }])
+    expect(changes).toEqual(['a'])
+  })
+
+  it('keeps a surrogate pair whole at the maxLength cut', async () => {
+    const { deps, changes } = panel('CodeInput', 'a', { maxLength: 2 })
+    await runPluginPanelActs([{ type: { label: 'Field' }, text: '\u{1F600}b' }], deps)
+    expect(changes).toEqual(['ab'])
   })
 })

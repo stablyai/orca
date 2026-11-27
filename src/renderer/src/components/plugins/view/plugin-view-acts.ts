@@ -121,7 +121,14 @@ async function runFormAct(act: PluginShotAct, context: PluginPanelActContext): P
     if (act.replace || (text === '' && value !== base)) {
       change(target, value, 'type')
     }
+    // A rendered text field drops a keystroke that would pass `maxLength`, as its textarea does;
+    // iterating by code point keeps a surrogate pair whole.
+    const maxLength =
+      typeof element.props.maxLength === 'number' ? element.props.maxLength : Infinity
     for (const character of text) {
+      if (value.length + character.length > maxLength) {
+        continue
+      }
       value += character
       change(target, value, 'type')
     }
