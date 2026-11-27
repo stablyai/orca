@@ -1,6 +1,7 @@
 // A bot picture's corner badge, drawn the same in both card styles: worktree cards size theirs per style.
 import type React from 'react'
-import { Gauge, Moon } from 'lucide-react'
+import { Moon } from 'lucide-react'
+import { GaugeMaxIcon } from '@/components/icons/GaugeMaxIcon'
 import { StateIndicatorTooltip } from '@/components/agent/status/StateIndicatorTooltip'
 import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
 import { selectIsSleepingWorktree } from '@/components/sidebar/workspace-actions/sleep/use-worktree-sleep-state'
@@ -16,7 +17,7 @@ const QUIET_STATUSES = new Set<WorktreeStatus | null>(['active', 'done', 'inacti
 export type BotAvatarBadgeState = {
   status: WorktreeStatus | null
   sleeping: boolean
-  /** Stopped on a usage limit while quiet: the usage-limit gauge, with this as its tooltip. */
+  /** Stopped on a usage limit while quiet: a solid amber gauge badge, with this as its tooltip. */
   stopTip?: string | null
 }
 
@@ -45,10 +46,16 @@ export function botAvatarBadgeCutout({
   if (!hasAvatarStatusBadge({ status, sleeping, stopTip })) {
     return undefined
   }
-  const radius =
-    stopTip || ICON_STATUSES.has(status) || (sleeping && QUIET_STATUSES.has(status)) ? 8 : 6
+  // The usage-limit badge is a 16px disc; status icons are 12px and dots 8px.
+  const radius = stopTip
+    ? 10
+    : ICON_STATUSES.has(status) || (sleeping && QUIET_STATUSES.has(status))
+      ? 8
+      : 6
   return {
-    maskImage: `radial-gradient(circle at calc(100% - 3px) calc(100% - 3px), transparent ${radius}px, #000 ${radius + 0.5}px)`
+    maskImage: `radial-gradient(circle at calc(100% - 3px) calc(100% - 3px), transparent ${radius}px, #000 ${radius + 0.5}px)`,
+    // A stopped bot's picture fades so the badge and its amber line carry the row.
+    ...(stopTip ? { opacity: 0.4 } : {})
   }
 }
 
@@ -66,9 +73,9 @@ export function BotAvatarStatusBadge({
           <span
             role="img"
             aria-label={stopTip}
-            className="flex size-3 shrink-0 items-center justify-center"
+            className="flex size-4 shrink-0 items-center justify-center rounded-full bg-status-warning text-black"
           >
-            <Gauge className="size-3 text-status-warning" aria-hidden />
+            <GaugeMaxIcon className="size-[11px]" strokeWidth={2.5} />
           </span>
         </StateIndicatorTooltip>
       </span>

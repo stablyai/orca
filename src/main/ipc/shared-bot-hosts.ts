@@ -18,12 +18,15 @@ import {
   removeOldSharedBotHomes,
   type SharedBotHomeCleanupDeps
 } from '../bots/shared-with-me/shared-bot-home-cleanup'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 
-const ShareArgs = z.object({ shareId: BotShareIdSchema })
-const SendAgainArgs = z.object({
-  environmentId: z.string().min(1),
-  clientMessageId: z.string().min(1)
-})
+const ShareArgs = lazyZodSchema(() => z.object({ shareId: BotShareIdSchema }))
+const SendAgainArgs = lazyZodSchema(() =>
+  z.object({
+    environmentId: z.string().min(1),
+    clientMessageId: z.string().min(1)
+  })
+)
 
 export function registerSharedBotHostsHandlers(args: {
   userDataPath: string

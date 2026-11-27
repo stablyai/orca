@@ -31,8 +31,7 @@ import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
 import { isAgentRpcCaller, rpcCallerOperationKey } from '../callers/rpc-caller-identity'
 import { googleCallerAccount } from '../google-caller-api'
 import { botGoogleAccess } from '../../../../shared/google/google-bot-accounts'
-import { runtimeBotChats } from '../../../bots/bot-chat-session'
-import { botOfSession } from '../../../bots/bot-session-tabs'
+import { tellBotCardAnswer } from './bots-offer-answer'
 
 function google(): GoogleConnect {
   const installed = getGoogleConnect()
@@ -274,18 +273,7 @@ export const GOOGLE_METHODS = [
       }
       // Read now, not at the click: the sign-in can take minutes.
       const line = googleConnectedLine(account, await connect.defaultAccount())
-      if (sessionId) {
-        // The host may have restarted during the sign-in; an absent one would read every chat as no bot's.
-        await ctx.runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
-      }
-      if (sessionId && botOfSession(ctx.runtime.bots, sessionId)?.id !== botId) {
-        throw new InvalidArgumentError("That chat isn't one of this bot's.")
-      }
-      const chats = runtimeBotChats(ctx.runtime)
-      const { outcome } = sessionId
-        ? await chats.sendToSession(botId, sessionId, line, undefined, 'card-answer')
-        : await chats.sendToChat(botId, 'owner', line, 'card-answer')
-      return { sent: outcome.kind !== 'refused' }
+      return tellBotCardAnswer(ctx.runtime, botId, sessionId, line)
     }
   })
 ] as const

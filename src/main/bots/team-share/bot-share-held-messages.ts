@@ -28,6 +28,7 @@ import type {
   BotShareDevice,
   BotShareDeviceStore
 } from '../../runtime/rpc/server/pairing/bot-share-device-store'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 
 type ShareSend = Extract<ConnectorDelivery, { kind: 'share_send' }>
 
@@ -43,14 +44,16 @@ export type BotShareHeldMessageDeps = {
 }
 
 // The replies this reads, as the handlers answer them.
-const SessionReply = z.object({ sessionId: z.string().min(1) })
-const ItemReply = z.object({ item: z.unknown() })
-const UploadReply = z.object({ uploadId: z.string().min(1) })
-const CommitReply = z.object({ path: z.string().min(1) })
-const SendReply = z.union([
-  z.object({ ok: z.literal(true) }),
-  z.object({ ok: z.literal(false), refusal: z.object({ code: z.string() }) })
-])
+const SessionReply = lazyZodSchema(() => z.object({ sessionId: z.string().min(1) }))
+const ItemReply = lazyZodSchema(() => z.object({ item: z.unknown() }))
+const UploadReply = lazyZodSchema(() => z.object({ uploadId: z.string().min(1) }))
+const CommitReply = lazyZodSchema(() => z.object({ path: z.string().min(1) }))
+const SendReply = lazyZodSchema(() =>
+  z.union([
+    z.object({ ok: z.literal(true) }),
+    z.object({ ok: z.literal(false), refusal: z.object({ code: z.string() }) })
+  ])
+)
 
 type DeviceCall = <T>(method: string, params: unknown, reply: z.ZodType<T>) => Promise<T>
 

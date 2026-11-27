@@ -1,6 +1,6 @@
 // Whom a bot conversation with no acts-for record acts for, read from its first message.
 import type { BotRequestAsker } from '../../../../../../shared/bots/bot-acts-for'
-import { firstMessageActsFor } from '../../../../../bots/bot-request-asker'
+import { firstMessageActsFor } from '../../../../../bots/first-message-acts-for'
 import type { JournalSqlReads } from '../../../../../native-chat/agent-session-journal/journal-sql-reads'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { botRequestRecord } from './bot-request-record'

@@ -1,13 +1,16 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 
-const responseSchema = z.looseObject({
-  type: z.literal('response'),
-  id: z.string().optional(),
-  command: z.string(),
-  success: z.boolean(),
-  data: z.unknown().optional(),
-  error: z.string().optional()
-})
+const responseSchema = lazyZodSchema(() =>
+  z.looseObject({
+    type: z.literal('response'),
+    id: z.string().optional(),
+    command: z.string(),
+    success: z.boolean(),
+    data: z.unknown().optional(),
+    error: z.string().optional()
+  })
+)
 
 export class JsonlRpcResponseError extends Error {
   constructor(

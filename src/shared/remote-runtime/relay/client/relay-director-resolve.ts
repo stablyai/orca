@@ -1,6 +1,7 @@
 import * as z from 'zod'
 import { parseRetryAfterHeaderMs } from '../../../network/retry-after-header'
 import type { MobileRelayEndpoint } from '../mobile-relay-credential-contract'
+import { lazyZodSchema } from '../../../schema/lazy-zod-schema'
 
 const MAX_RESPONSE_BYTES = 16 * 1024
 // Cap director pacing so one header cannot park recovery indefinitely.
@@ -50,14 +51,16 @@ export function relayDirectorRetryAfterMs(error: Error | null): number {
   return error instanceof RelayDirectorHttpError ? (error.retryAfterMs ?? 0) : 0
 }
 
-const ResolveResponseSchema = z
-  .object({
-    v: z.literal(1),
-    cellUrl: z.string().refine(isCanonicalHttpsOrigin),
-    assignmentEpoch: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-    leaseExpiresAt: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
-  })
-  .strict()
+const ResolveResponseSchema = lazyZodSchema(() =>
+  z
+    .object({
+      v: z.literal(1),
+      cellUrl: z.string().refine(isCanonicalHttpsOrigin),
+      assignmentEpoch: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+      leaseExpiresAt: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
+    })
+    .strict()
+)
 
 export async function resolveRelayEndpoint(args: {
   relay: MobileRelayEndpoint

@@ -3,10 +3,6 @@
 import { parseRuntimeClientCapabilities } from '../callers/runtime-client-capabilities'
 import { randomUUID } from 'node:crypto'
 import type { WebSocket } from 'ws'
-import type {
-  PairingGetEndpointsParams,
-  PairingProvisionRelayParams
-} from '../../../../shared/remote-runtime/relay/mobile-relay-credential-contract'
 import type { DeviceScope } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RpcCallerScope } from '../callers/rpc-caller-scope'
 import type { RpcRequest, RpcResponse } from '../core'
@@ -33,6 +29,8 @@ import { injectDeviceScope } from './runtime-rpc-device-scope-stamp'
 import { classifyRuntimeLongPoll } from './runtime-rpc-long-poll'
 import { RuntimeRpcMobileDevices } from './runtime-rpc-mobile-devices'
 import { exchangeSocketPairingTicket } from './runtime-rpc-pairing-ticket-exchange'
+import { createPairingDirectEndpointsReader } from './pairing/network/pairing-direct-endpoints'
+import { socketPairingRpcContext } from './runtime-rpc-socket-pairing-context'
 import { limitRuntimeRpcReplySize } from './runtime-rpc-reply-size-limit'
 import { RuntimeRpcStagedReplies } from './runtime-rpc-staged-replies'
 import type { OpenedBinaryChannel } from './runtime-binary-channels'
@@ -49,10 +47,14 @@ type PairedDeviceContext = Pick<
   | 'mobileRelayHosts'
   | 'peerDesktops'
   | 'delegatedMobileDevices'
+  | 'pairingDirectEndpoints'
 >
 
 export class RuntimeRpcDeviceDispatch extends RuntimeRpcMobileDevices {
   protected readonly stagedReplies = new RuntimeRpcStagedReplies(() => this.runtime.getRuntimeId())
+  private readonly readPairingDirectEndpoints = createPairingDirectEndpointsReader(
+    () => this.transports.find((transport) => transport.kind === 'websocket')?.endpoint ?? null
+  )
 
   /** What only a full pairing gets: its own credential and account, its phones, its peers. */
   protected pairedDeviceContext(
@@ -76,6 +78,10 @@ export class RuntimeRpcDeviceDispatch extends RuntimeRpcMobileDevices {
                 exchangeSocketPairingTicket(this.deviceRegistry!, authenticatedSocket, params),
               ...this.desktopAccountSelf(device, authenticatedSocket.connectionId)
             }
+          : undefined,
+      pairingDirectEndpoints:
+        authenticatedSocket && device.scope === 'mobile'
+          ? this.readPairingDirectEndpoints
           : undefined,
       mobileRelayHosts: this.mobileRelayHostCatalog ?? undefined,
       // Only an authenticated desktop socket can say which installation it is.
@@ -189,30 +195,6 @@ export class RuntimeRpcDeviceDispatch extends RuntimeRpcMobileDevices {
       channel && abortRegistration
         ? AbortSignal.any([abortRegistration.signal, channel.signal])
         : (channel?.signal ?? abortRegistration?.signal)
-    const pairingProvider = this.mobileRelayPairingProvider
-    const pairingContext =
-      pairingProvider && authenticatedSocket
-        ? {
-            getEndpoints: (params: PairingGetEndpointsParams) =>
-              pairingProvider.getEndpoints(
-                {
-                  deviceId: authenticatedSocket.device.deviceId,
-                  connectionId: authenticatedSocket.connectionId,
-                  transport: authenticatedSocket.transport
-                },
-                params
-              ),
-            provisionRelay: (params: PairingProvisionRelayParams) =>
-              pairingProvider.provisionRelay(
-                {
-                  deviceId: authenticatedSocket.device.deviceId,
-                  connectionId: authenticatedSocket.connectionId,
-                  transport: authenticatedSocket.transport
-                },
-                params
-              )
-          }
-        : undefined
     try {
       await this.dispatcher.dispatchStreamingObjects(request, sendReply, {
         // Validated credentials preserve federation ownership without trusting request fields.
@@ -228,7 +210,7 @@ export class RuntimeRpcDeviceDispatch extends RuntimeRpcMobileDevices {
         clientCapabilities:
           channel?.capabilities.current ?? authenticatedSocket?.clientCapabilities,
         capabilitySource: channel?.capabilities ?? authenticatedSocket?.capabilitySource,
-        pairing: pairingContext,
+        pairing: socketPairingRpcContext(this.mobileRelayPairingProvider, authenticatedSocket),
         ...paired,
         signal,
         sendBinary: channel?.sendBinary ?? sendBinary,

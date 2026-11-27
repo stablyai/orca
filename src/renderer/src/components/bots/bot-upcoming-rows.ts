@@ -1,5 +1,5 @@
 // Upcoming in a bot's Activity list: its routines, automations and waits as one list in a fixed order.
-import type { Bot } from '../../../../shared/bot-types'
+import { tidyUpSupported, type Bot } from '../../../../shared/bot-types'
 import type { BotActivity } from '../../../../shared/bots/bot-activity-model'
 import type { BotAutomationRow } from '../../../../shared/bots/bot-automation-rows'
 import { botLookAround, lookAroundSupported } from '../../../../shared/bots/bot-look-around'
@@ -22,9 +22,11 @@ export function botUpcomingRows(
   activity: Pick<BotActivity, 'automations' | 'waits'>
 ): BotUpcomingRow[] {
   const rows: BotUpcomingRow[] = []
-  // Tidy memory and Look around run only for agents Orca can hold to reads.
-  if (lookAroundSupported(bot.agent)) {
+  if (tidyUpSupported(bot.agent)) {
     rows.push({ kind: 'tidy-up', key: 'tidy-up', on: botTidyUp(bot).on })
+  }
+  // Look around runs only for agents Orca can hold to reads.
+  if (lookAroundSupported(bot.agent)) {
     rows.push({ kind: 'look-around', key: 'look-around', on: botLookAround(bot).on })
   }
   for (const row of [...activity.automations].sort(byCreation)) {

@@ -4,18 +4,24 @@ import {
   parseExecutionHostId
 } from '../../../../shared/execution-host/execution-host'
 import type {
+  BranchAutoRenameDismissResult,
   BranchAutoRenameRetryAvailability,
   BranchAutoRenameRetryResult
 } from '../../../../shared/worktree/branch-auto-rename-attempt'
 import {
+  firstWorkDismissDeps,
   firstWorkRenameDeps,
   firstWorkRetryDeps
 } from '../../../agent-hooks/first-work/first-work-rename-runtime'
+import { dismissFirstWorkRename } from '../../../agent-hooks/first-work/first-work-rename-dismiss'
 import {
   getFirstWorkRetryAvailability,
   retryFirstWorkRename
 } from '../../../agent-hooks/first-work/first-work-rename-retry'
-import { installFirstWorkAttemptNotifier } from '../../../agent-hooks/first-work/first-work-rename-attempts'
+import {
+  installFirstWorkAttemptNotifier,
+  waitForFirstWorkAttempt
+} from '../../../agent-hooks/first-work/first-work-rename-attempts'
 import { sendToTrustedUIRenderer } from '../../ui'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 
@@ -62,6 +68,27 @@ export function registerBranchAutoRenameRetryHandlers(context: WorktreeIpcContex
             outcome: { kind: 'ineligible', reason: 'unavailable' },
             finishedAt: Date.now()
           })
+    }
+  )
+  ipcMain.handle(
+    'worktrees:waitBranchAutoRenameAttempt',
+    async (
+      _event,
+      args: RetryArgs & { attemptId?: number }
+    ): Promise<BranchAutoRenameRetryResult | null> => {
+      const worktreeId = localWorktreeId(args)
+      return worktreeId && typeof args.attemptId === 'number'
+        ? ((await waitForFirstWorkAttempt(worktreeId, args.attemptId)) ?? null)
+        : null
+    }
+  )
+  ipcMain.handle(
+    'worktrees:dismissBranchAutoRename',
+    (_event, args: RetryArgs): BranchAutoRenameDismissResult => {
+      const worktreeId = localWorktreeId(args)
+      return worktreeId
+        ? dismissFirstWorkRename(worktreeId, firstWorkDismissDeps(store, runtime))
+        : { dismissed: false }
     }
   )
 }

@@ -3,6 +3,7 @@
 import { z } from 'zod'
 import { subscribeRemoteRuntimeTransport } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-transport'
 import { defineStreamingMethod } from '../core'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 
 export const FRAME_BYTES = 16 * 1024
 // Like a terminal stream's ack window: the host sends at most this far ahead of the client's acks.
@@ -16,7 +17,7 @@ export const burst = defineStreamingMethod({
   name: 'test.burst',
   permission: 'workspace',
   share: 'not-shared',
-  params: z.object({ tag: z.number().int() }),
+  params: lazyZodSchema(() => z.object({ tag: z.number().int() })),
   handler: ({ tag }, { sendBinary, registerBinaryMessageHandler, signal }, emit) =>
     new Promise<void>((resolve) => {
       let inFlight = 0

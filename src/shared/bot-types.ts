@@ -54,33 +54,13 @@ export const BotAgentReadSchema = z
   .enum([...BOT_AGENTS, ...BOT_RETIRED_AGENTS])
   .transform((agent): BotAgent => (isBotRetiredAgent(agent) ? BOT_AGENT_SUCCESSORS[agent] : agent))
 
-/** Agents the previous release's bot schema reads; it drops bots on any other agent when it loads. */
-const BOT_AGENTS_OLDER_BUILDS_READ: ReadonlySet<string> = new Set([
-  'claude',
-  'codex',
-  'grok',
-  'opencode',
-  'omp',
-  'pi',
-  'antigravity'
-])
-
-/** Bots saved where an older build, after a rollback, cannot drop them: it ignores keys it does not know. */
-export function splitBotsByOlderBuildSupport(bots: readonly Bot[]): {
-  readable: Bot[]
-  newer: Bot[]
-} {
-  const readable: Bot[] = []
-  const newer: Bot[] = []
-  for (const bot of bots) {
-    const side = BOT_AGENTS_OLDER_BUILDS_READ.has(bot.agent) ? readable : newer
-    side.push(bot)
-  }
-  return { readable, newer }
-}
-
 export function isBotAgent(agent: string): agent is BotAgent {
   return BOT_AGENTS.some((entry) => entry === agent)
+}
+
+/** Memory upkeep runs tool-free, so every bot agent runs it; Look around is `lookAroundSupported`. */
+export function tidyUpSupported(agent: string): boolean {
+  return isBotAgent(agent)
 }
 
 export const BOT_NAME_MAX_LENGTH = 64

@@ -46,11 +46,12 @@ Keep Orca running on a machine you control—an old laptop, Mac mini, home serve
 
 **Good fit when:**
 
+- The other machine is a computer you already use with the Orca desktop app, such as a Windows PC or a Mac mini. It needs no SSH server and no extra user account.
 - You want agents to keep running after your laptop sleeps
 - Mobile should reconnect to the same sessions
 - Automation or a backend should start sessions on a stable host
 
-**Easiest setup:** install Orca and Tailscale on both computers. On the server, open **Settings → Remote Orca Servers → Advertise this app as a server → New Link**, choose its Tailscale address, and generate an access link. On the client, choose **Add Server** and paste that link.
+**Easiest setup:** install Orca and Tailscale on both computers. On the server, open **Settings → Remote Orca Servers → Share this computer**, choose **Another device** and its Tailscale address, and click **Create link**. On the client, choose **Add server** and paste that access link.
 
 For a headless Linux server or service-managed VM, use `orca serve` as the alternative. On Linux the CLI is named `orca-ide`, so the first launch is:
 
@@ -68,6 +69,7 @@ Full detail: [Remote Orca Servers](/docs/remote-servers).
 | Disconnect    | Agents keep running on the host; laptop reattaches | Full session state lives on the server                         |
 | Multi-client  | One laptop drives the host                         | Laptop, web, mobile, and automation can share the same runtime |
 | Typical setup | Import SSH config, pick **Run on**                 | Share the server app or run `orca serve`, then pair with a URL |
+| Other machine | An SSH server and a login Orca can use             | Orca running there; no SSH server or extra user                |
 
 ## 4. Cloud VMs (per-workspace environments)
 
@@ -113,8 +115,8 @@ Recipes only show up for workspace create once the `environmentRecipes` entry is
 ## How to choose
 
 - **Stay local** if the laptop is fast enough and agents are short-lived.
-- **SSH** if you already have a VPS or dev box and want agents there without installing a second Orca runtime.
-- **Remote Orca Server** if you want one always-on Orca runtime for mobile, browser, and automation.
+- **SSH** if the machine already runs an SSH server, such as a Linux VPS or dev box. Orca sets itself up there over SSH, so you don't install the Orca app on it.
+- **Remote Orca Server** if the other machine is a computer you already use with Orca, or if you want one always-on Orca runtime for mobile, browser, and automation. Share it from its Orca app and paste the link on this computer; no SSH server or extra user account is needed.
 - **Cloud VM / per-workspace environments** if each task should get a fresh, recipe-defined sandbox that dies with the worktree.
 
 You can mix modes in one install: local worktrees for quick edits, SSH for a GPU box, and a recipe for CI-like isolation.

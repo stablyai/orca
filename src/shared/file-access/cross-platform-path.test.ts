@@ -4,7 +4,8 @@ import {
   isWslUncPathForCallerLinuxPath,
   isWslUncPathForLinuxMountedPath,
   normalizeRuntimePathForComparison,
-  relativePathInsideRoot
+  relativePathInsideRoot,
+  resolveRuntimePath
 } from './cross-platform-path'
 
 describe('isWslUncPathForCallerLinuxPath', () => {
@@ -125,5 +126,16 @@ describe('cross-platform path containment', () => {
         '\\\\wsl.localhost\\ubuntu\\home\\Alice\\repo\\line\nbreak'
       )
     ).toBe('line\nbreak')
+  })
+})
+
+describe('resolveRuntimePath', () => {
+  it('keeps the base drive or UNC share for a backslash-rooted target', () => {
+    expect(resolveRuntimePath('C:\\repo', '\\logs\\run.txt')).toBe('C:/logs/run.txt')
+    expect(resolveRuntimePath('\\\\server\\share\\repo', '\\logs\\..\\run.txt')).toBe(
+      '//server/share/run.txt'
+    )
+    // Control: forward-slash-rooted targets keep their existing host-absolute meaning.
+    expect(resolveRuntimePath('C:\\repo', '/home/alice/file.txt')).toBe('/home/alice/file.txt')
   })
 })

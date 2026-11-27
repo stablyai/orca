@@ -764,6 +764,7 @@ describe('the share guard', () => {
         'agentSession.currentRequests',
         'agentSession.history',
         'agentSession.item',
+        'agentSession.liveTextShown',
         'agentSession.modelCatalog',
         'agentSession.options',
         'agentSession.queuedMessageDelete',

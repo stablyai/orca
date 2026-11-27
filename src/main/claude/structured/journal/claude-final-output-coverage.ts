@@ -13,11 +13,12 @@ export function createClaudeFinalOutputCoverage(target: StructuredAgentSessionEv
   const append: NonNullable<StructuredAgentSessionEventSink['tryAppendItem']> = (
     identity,
     body,
-    options
+    options,
+    onCommitted
   ) => {
-    const result = target.tryAppendItem?.(identity, body, options)
+    const result = target.tryAppendItem?.(identity, body, options, onCommitted)
     if (result === undefined) {
-      target.appendItem(identity, body, options)
+      target.appendItem(identity, body, options, onCommitted)
     }
     const admission = result ?? { accepted: true }
     return options.lifecycle ? record(admission) : admission
@@ -26,11 +27,11 @@ export function createClaudeFinalOutputCoverage(target: StructuredAgentSessionEv
   const reviseAndPublish = target.tryReviseResolvedItemAndPublish
   const sink: StructuredAgentSessionEventSink = {
     ...target,
-    appendItem: (identity, body, options) => {
+    appendItem: (identity, body, options, onCommitted) => {
       if (options.lifecycle) {
-        append(identity, body, options)
+        append(identity, body, options, onCommitted)
       } else {
-        target.appendItem(identity, body, options)
+        target.appendItem(identity, body, options, onCommitted)
       }
     },
     tryAppendItem: append,

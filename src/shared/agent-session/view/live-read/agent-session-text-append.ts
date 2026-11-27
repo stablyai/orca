@@ -24,6 +24,49 @@ export type AgentSessionTextAppendItem = AgentJournalRenderItem & {
   textAppend: { from: number; text: string }
 }
 
+/** New rows whose reply text is known to extend a previous row's, with that row's text. */
+const knownGrowth = new WeakMap<AgentJournalRenderItem, string>()
+
+function replyText(item: AgentJournalRenderItem): string | null {
+  const { body } = item
+  return body.kind === 'message' && body.blocks.length === 1 && body.blocks[0]?.type === 'text'
+    ? body.blocks[0].text
+    : null
+}
+
+/** Compares a new row with the one it follows once, where it is built, so every reader's check
+ *  that it extends what that reader holds is a reference compare instead of a scan of the reply. */
+export function noteReplyTextGrowth(
+  item: AgentJournalRenderItem,
+  previous: AgentJournalRenderItem | undefined
+): void {
+  const base = previous ? replyText(previous) : null
+  const text = replyText(item)
+  if (base !== null && text !== null && text.length > base.length && text.startsWith(base)) {
+    knownGrowth.set(item, base)
+  }
+}
+
+/** Records growth a source already guarantees (an append-only stream read twice), without
+ *  scanning the reply: `item` carries `text`, which extends `previous`'s text `base`. */
+export function noteKnownReplyTextGrowth(
+  item: AgentJournalRenderItem,
+  text: string,
+  previous: AgentJournalRenderItem,
+  base: string
+): void {
+  if (replyText(item) === text && replyText(previous) === base && text.length > base.length) {
+    knownGrowth.set(item, base)
+  } else {
+    noteReplyTextGrowth(item, previous)
+  }
+}
+
+/** Whether `item`'s `text` starts with `base`. */
+export function textExtends(item: AgentJournalRenderItem, text: string, base: string): boolean {
+  return knownGrowth.get(item) === base || text.startsWith(base)
+}
+
 // Bases are only unfinished replies and running tool calls, so a few cover every stream a turn grows at once.
 // Text-only readers already shipped evict past 8, so a host must never hold more for them.
 const MAX_REPLY_APPEND_BASES = 8
@@ -53,6 +96,15 @@ function isFinished(item: AgentJournalRenderItem): boolean {
   return body.kind === 'tool-call'
     ? body.state !== 'running'
     : body.kind === 'message' && body.completedAt !== undefined
+}
+
+/** A turn row that ended: its replies no longer grow. */
+export function endsAgentSessionTurn(item: AgentJournalRenderItem): boolean {
+  return item.body.kind === 'turn' && item.body.state !== 'running'
+}
+
+function runsTurn(item: AgentJournalRenderItem): boolean {
+  return item.body.kind === 'turn' && item.body.state === 'running'
 }
 
 function isTextAppendItem(item: AgentJournalRenderItem): item is AgentSessionTextAppendItem {
@@ -86,28 +138,41 @@ function withText(item: AgentJournalRenderItem, text: string): AgentJournalRende
 function textAppendStream(
   rules: TextAppendRules,
   mapItem: (base: string | undefined, item: AgentJournalRenderItem) => AgentJournalRenderItem | null
-): (event: AgentSessionSubscribeEvent) => AgentSessionSubscribeEvent | null {
-  const bases = new Map<string, string>()
+): ((event: AgentSessionSubscribeEvent) => AgentSessionSubscribeEvent | null) & {
+  /** Null once its turn ended and the base was let go of: no live row awaits it. */
+  holds: (itemId: string) => boolean | null
+  /** Lets go of every base, or only those of rows the given turns own. */
+  release: (turnItemIds?: ReadonlySet<string>) => void
+} {
+  // A released base keeps its place (null), so the sender evicts exactly as its readers do.
+  const bases = new Map<string, string | null>()
+  const turnOf = new Map<string, string>()
   let epoch: string | null = null
   const note = (item: AgentJournalRenderItem): void => {
     bases.delete(item.itemId)
+    turnOf.delete(item.itemId)
     const text = growingText(item, rules)
     if (text === null || isFinished(item)) {
       return
     }
     bases.set(item.itemId, text)
+    if (item.turnScope?.kind === 'turn') {
+      turnOf.set(item.itemId, item.turnScope.turnItemId)
+    }
     const limit = rules.toolOutputAppend === 1 ? MAX_TEXT_APPEND_BASES : MAX_REPLY_APPEND_BASES
     const oldest = bases.size > limit ? bases.keys().next().value : undefined
     if (oldest !== undefined) {
       bases.delete(oldest)
+      turnOf.delete(oldest)
     }
   }
-  return (event) => {
+  const stream = (event: AgentSessionSubscribeEvent): AgentSessionSubscribeEvent | null => {
     if (event.type === 'end') {
       return event
     }
     if (event.type === 'snapshot' || event.type === 'reset') {
       bases.clear()
+      turnOf.clear()
       epoch = event.page.epoch
       event.page.items.forEach(note)
       return event
@@ -115,15 +180,17 @@ function textAppendStream(
     // A new journal epoch renumbers rows, so nothing from the old one is a base.
     if (event.batch.cursor.epoch !== epoch) {
       bases.clear()
+      turnOf.clear()
       epoch = event.batch.cursor.epoch
     }
     for (const itemId of event.batch.removedItemIds) {
       bases.delete(itemId)
+      turnOf.delete(itemId)
     }
     let changed = false
     const items: AgentJournalRenderItem[] = []
     for (const item of event.batch.items) {
-      const mapped = mapItem(bases.get(item.itemId), item)
+      const mapped = mapItem(bases.get(item.itemId) ?? undefined, item)
       if (mapped === null) {
         return null
       }
@@ -133,6 +200,21 @@ function textAppendStream(
     }
     return changed ? { ...event, batch: { ...event.batch, items } } : event
   }
+  return Object.assign(stream, {
+    holds: (itemId: string) => {
+      const base = bases.get(itemId)
+      return base === null ? null : base !== undefined
+    },
+    release: (turnItemIds?: ReadonlySet<string>) => {
+      for (const itemId of bases.keys()) {
+        const turn = turnOf.get(itemId)
+        if (!turnItemIds || (turn !== undefined && turnItemIds.has(turn))) {
+          bases.set(itemId, null)
+          turnOf.delete(itemId)
+        }
+      }
+    }
+  })
 }
 
 /** Host side, wrapping a stream's emit after every other projection: text that extends what this
@@ -140,10 +222,12 @@ function textAppendStream(
 export function sendingTextAppends<R>(
   emit: (event: AgentSessionSubscribeEvent) => R,
   rules: TextAppendRules
-): (event: AgentSessionSubscribeEvent) => R {
+): ((event: AgentSessionSubscribeEvent) => R) & {
+  holdsBase: (itemId: string) => boolean | null
+} {
   const send = textAppendStream(rules, (base, item) => {
     const text = growingText(item, rules)
-    if (base === undefined || text === null || !text.startsWith(base)) {
+    if (base === undefined || text === null || !textExtends(item, text, base)) {
       return item
     }
     return {
@@ -151,7 +235,30 @@ export function sendingTextAppends<R>(
       textAppend: { from: base.length, text: text.slice(base.length) }
     } satisfies AgentSessionTextAppendItem
   })
-  return (event) => emit(send(event) ?? event)
+  return Object.assign(
+    (event: AgentSessionSubscribeEvent) => {
+      const sent = emit(send(event) ?? event)
+      // A finished turn's replies no longer grow, and a final reply carries no completion mark, so
+      // the sender lets go of that turn's bases then; a later revision of an old turn (a context
+      // report) leaves a newer reply's alone. Only the sender may: a row without a base goes whole,
+      // which any reader takes, while a reader missing a base its sender holds could not.
+      // A replacement page with no turn running, on it or off it, holds only finished replies.
+      if (event.type === 'batch') {
+        const ended = event.batch.items.filter(endsAgentSessionTurn).map((item) => item.itemId)
+        if (ended.length > 0) {
+          send.release(new Set(ended))
+        }
+      } else if (
+        (event.type === 'snapshot' || event.type === 'reset') &&
+        event.page.latestTurn?.turn.state !== 'running' &&
+        !event.page.items.some(runsTurn)
+      ) {
+        send.release()
+      }
+      return sent
+    },
+    { holdsBase: send.holds }
+  )
 }
 
 /** Client side: whole items back from appends; null when an append does not start where this

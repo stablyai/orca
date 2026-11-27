@@ -203,10 +203,10 @@ export class ConversationEvents {
       }
     }
     this.listeners.add(listener)
-    // Chats closed or unlinked while nothing watched leave no turn dates behind.
-    this.chats.dates.retain(new Set([...allLinks(this.deps.store)].map(({ link }) => link.paneKey)))
     // Subscribe before reading the snapshot to avoid losing intervening changes.
     const snapshot = this.snapshot()
+    // Chats closed or unlinked while nothing watched leave no turn dates behind.
+    this.chats.dates.retain(new Set(snapshot.conversations.map(({ paneKey }) => paneKey)))
     this.answered.saw(snapshot)
     listener(snapshot)
     this.chats.workers.watched(snapshot.conversations)

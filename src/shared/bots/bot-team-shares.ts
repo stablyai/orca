@@ -1,6 +1,7 @@
 // The Orca accounts and invited emails a bot is shared with (Bot.shares). The host owns the list and
 // publishes it in its hello; Orca Cloud mirrors it, resolves invites and relays teammates' accepts.
 import * as z from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 
 /** One bot's hello lists at most this many, as the connector contract's maxBotShares caps them. */
 export const BOT_MAX_SHARES = 50
@@ -12,63 +13,75 @@ export function normalizeShareEmail(email: string): string {
 }
 
 // URL-safe, as the contract's ShareIdSchema: the id goes in cloud paths.
-export const BotShareIdSchema = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/)
-export const BotShareEmailSchema = z
-  .email()
-  .max(MAX_SHARE_EMAIL_LENGTH)
-  .refine((email) => email === normalizeShareEmail(email))
+export const BotShareIdSchema = lazyZodSchema(() => z.string().regex(/^[A-Za-z0-9_-]{1,128}$/))
+export const BotShareEmailSchema = lazyZodSchema(() =>
+  z
+    .email()
+    .max(MAX_SHARE_EMAIL_LENGTH)
+    .refine((email) => email === normalizeShareEmail(email))
+)
 
 // shareId is minted on Add and kept when the invite resolves, so the cloud's row and a teammate's
 // accept name the same share throughout.
-export const BotShareSchema = z.discriminatedUnion('kind', [
-  z.object({
-    kind: z.literal('account'),
-    shareId: BotShareIdSchema,
-    accountId: z.string().min(1).max(128),
-    name: z.string().min(1).optional(),
-    email: BotShareEmailSchema,
-    addedAt: z.number(),
-    /** When the teammate accepted it (a device of theirs asked to reach the bot); absent until then. */
-    acceptedAt: z.number().optional(),
-    /** When the teammate declined it: it stays listed for the owner, as declined, never offered again. */
-    declinedAt: z.number().optional(),
-    /** The teammate's Home Chat with the agent; absent until they first open it. Older hosts drop it. */
-    homeSessionId: z.string().min(1).optional()
-  }),
-  z.object({
-    kind: z.literal('invite'),
-    shareId: BotShareIdSchema,
-    email: BotShareEmailSchema,
-    addedAt: z.number(),
-    /** When its invite email last went out; absent while none has (its hourly limit, signed out). */
-    emailedAt: z.number().optional()
-  })
-])
+export const BotShareSchema = lazyZodSchema(() =>
+  z.discriminatedUnion('kind', [
+    z.object({
+      kind: z.literal('account'),
+      shareId: BotShareIdSchema,
+      accountId: z.string().min(1).max(128),
+      name: z.string().min(1).optional(),
+      email: BotShareEmailSchema,
+      addedAt: z.number(),
+      /** When the teammate accepted it (a device of theirs asked to reach the bot); absent until then. */
+      acceptedAt: z.number().optional(),
+      /** When the teammate declined it: it stays listed for the owner, as declined, never offered again. */
+      declinedAt: z.number().optional(),
+      /** The teammate's Home Chat with the agent; absent until they first open it. Older hosts drop it. */
+      homeSessionId: z.string().min(1).optional()
+    }),
+    z.object({
+      kind: z.literal('invite'),
+      shareId: BotShareIdSchema,
+      email: BotShareEmailSchema,
+      addedAt: z.number(),
+      /** When its invite email last went out; absent while none has (its hourly limit, signed out). */
+      emailedAt: z.number().optional()
+    })
+  ])
+)
 export type BotShare = z.infer<typeof BotShareSchema>
 
 /** A bot's fields for its people beyond the owner. Older hosts drop both. */
 export const BotSharePeopleFields = {
   /** Each teammate's own `itemsSeen`, by Orca account. */
-  itemsSeenBy: z.record(z.string(), z.number().int().nonnegative()).optional().catch(undefined),
+  itemsSeenBy: lazyZodSchema(() =>
+    z.record(z.string(), z.number().int().nonnegative()).optional().catch(undefined)
+  ),
   /** On a teammate's copy only: who is looking, the owner's name (null signed out) and the usable
    *  teammates, as its host names them for the Items filter. Absent on the owner's own. */
-  shareViewer: z
-    .object({
-      accountId: z.string(),
-      ownerName: z.string().nullable(),
-      teammates: z.array(z.object({ accountId: z.string(), name: z.string() }))
-    })
-    .optional()
-    .catch(undefined)
+  shareViewer: lazyZodSchema(() =>
+    z
+      .object({
+        accountId: z.string(),
+        ownerName: z.string().nullable(),
+        teammates: z.array(z.object({ accountId: z.string(), name: z.string() }))
+      })
+      .optional()
+      .catch(undefined)
+  )
 }
 export type BotAccountShare = Extract<BotShare, { kind: 'account' }>
 
 /** Read entry by entry, so one a newer Orca wrote (or a bad one) is dropped, never the whole list. */
-export const BotSharesSchema = z
-  .array(z.unknown())
-  .transform((entries) =>
-    entries.flatMap((entry) => BotShareSchema.safeParse(entry).data ?? []).slice(0, BOT_MAX_SHARES)
-  )
+export const BotSharesSchema = lazyZodSchema(() =>
+  z
+    .array(z.unknown())
+    .transform((entries) =>
+      entries
+        .flatMap((entry) => BotShareSchema.safeParse(entry).data ?? [])
+        .slice(0, BOT_MAX_SHARES)
+    )
+)
 
 export const BOT_SHARES_FULL = `An agent can be shared with up to ${BOT_MAX_SHARES} people.`
 

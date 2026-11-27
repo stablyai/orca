@@ -19,16 +19,20 @@ function normalizeCompletionText(value: string): string {
   return value.trim().replaceAll('\\', '/').toLowerCase()
 }
 
-type CompletionEntry = {
-  document: MarkdownDocument
-  name: string
-  relativePath: string
-  composedName: string
-  composedRelativePath: string
+export type MarkdownDocCompletionMatch = {
+  readonly document: MarkdownDocument
+  readonly filterText: string
 }
 
-// Why: completion filtering runs per keystroke over up to 20k documents, so the normalized keys and
-// sort order are built once per listing instead of on every keystroke.
+type CompletionEntry = MarkdownDocCompletionMatch & {
+  name: string
+  relativePath: string
+  composedName: string | null
+  composedRelativePath: string | null
+}
+
+// Why: completion filtering runs per keystroke over up to 20k documents, so the normalized keys,
+// Monaco filterText, and sort order are built once per listing instead of on every keystroke.
 const completionEntriesByDocuments = new WeakMap<readonly MarkdownDocument[], CompletionEntry[]>()
 
 function getCompletionEntries(documents: readonly MarkdownDocument[]): CompletionEntry[] {
@@ -38,18 +42,52 @@ function getCompletionEntries(documents: readonly MarkdownDocument[]): Completio
       .map((document) => {
         const name = normalizeCompletionText(document.name)
         const relativePath = normalizeCompletionText(document.relativePath)
+        const composedName = composeQuickOpenText(name)
+        const composedRelativePath = composeQuickOpenText(relativePath)
+        const composedDisplayName = composeQuickOpenText(document.name)
         return {
           document,
           name,
           relativePath,
-          composedName: composeQuickOpenText(name),
-          composedRelativePath: composeQuickOpenText(relativePath)
+          composedName: composedName === name ? null : composedName,
+          composedRelativePath: composedRelativePath === relativePath ? null : composedRelativePath,
+          // Why: Monaco filters the typed text as is against filterText, cut at 128 characters.
+          // The stored name goes first so every match the label alone had stays; the composed
+          // name after it lets text typed composed (NFC) match a name stored decomposed (NFD).
+          filterText:
+            composedDisplayName === document.name
+              ? document.name
+              : `${document.name} ${composedDisplayName}`
         }
       })
       .sort((a, b) => a.document.relativePath.localeCompare(b.document.relativePath))
     completionEntriesByDocuments.set(documents, entries)
   }
   return entries
+}
+
+function matchesCompletionEntry(
+  entry: CompletionEntry,
+  normalizedPartial: string,
+  composedPartial: string,
+  hasComposedPartial: boolean
+): boolean {
+  if (
+    entry.name.startsWith(normalizedPartial) ||
+    entry.relativePath.startsWith(normalizedPartial)
+  ) {
+    return true
+  }
+  if (hasComposedPartial) {
+    return (
+      (entry.composedName ?? entry.name).startsWith(composedPartial) ||
+      (entry.composedRelativePath ?? entry.relativePath).startsWith(composedPartial)
+    )
+  }
+  return (
+    (entry.composedName !== null && entry.composedName.startsWith(composedPartial)) ||
+    (entry.composedRelativePath !== null && entry.composedRelativePath.startsWith(composedPartial))
+  )
 }
 
 export function getMarkdownDocCompletionContext(
@@ -75,28 +113,36 @@ export function getMarkdownDocCompletionContext(
   return { partial }
 }
 
-export function getMarkdownDocCompletionDocuments(
-  documents: MarkdownDocument[],
+export function getMarkdownDocCompletionMatches(
+  documents: readonly MarkdownDocument[],
   partial: string
-): MarkdownDocument[] {
+): readonly MarkdownDocCompletionMatch[] {
   if (isMarkdownDocCompletionQueryTooLarge(partial)) {
     return []
   }
 
+  const entries = getCompletionEntries(documents)
   const normalizedPartial = normalizeCompletionText(partial)
+  if (normalizedPartial.length === 0) {
+    return entries
+  }
+
   // Why: macOS lists names as stored, often decomposed (NFD), while typed text is usually composed
   // (NFC). Compare as stored first so every earlier match stays, then compare both sides composed.
   const composedPartial = composeQuickOpenText(normalizedPartial)
-  const matches: MarkdownDocument[] = []
-  for (const entry of getCompletionEntries(documents)) {
-    if (
-      entry.name.startsWith(normalizedPartial) ||
-      entry.relativePath.startsWith(normalizedPartial) ||
-      entry.composedName.startsWith(composedPartial) ||
-      entry.composedRelativePath.startsWith(composedPartial)
-    ) {
-      matches.push(entry.document)
+  const hasComposedPartial = composedPartial !== normalizedPartial
+  const matches: CompletionEntry[] = []
+  for (const entry of entries) {
+    if (matchesCompletionEntry(entry, normalizedPartial, composedPartial, hasComposedPartial)) {
+      matches.push(entry)
     }
   }
   return matches
+}
+
+export function getMarkdownDocCompletionDocuments(
+  documents: readonly MarkdownDocument[],
+  partial: string
+): MarkdownDocument[] {
+  return getMarkdownDocCompletionMatches(documents, partial).map((entry) => entry.document)
 }

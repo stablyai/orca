@@ -23,11 +23,22 @@ export function nativeChatSubagentSwitcherItems(
   const parentOf = new Map(
     ids.map((id) => [id, nativeChatSubagentChain(id, subagentRows).at(-2) ?? null])
   )
+  // Each spawner's children in roster order, so placing every subagent visits each once.
+  const childrenOf = new Map<string | null, string[]>()
+  for (const id of ids) {
+    const parent = parentOf.get(id) ?? null
+    const siblings = childrenOf.get(parent)
+    if (siblings) {
+      siblings.push(id)
+    } else {
+      childrenOf.set(parent, [id])
+    }
+  }
   const items: NativeChatSubagentSwitcherItem[] = []
   const placed = new Set<string>()
   const place = (parent: string | null, depth: number): void => {
-    for (const id of ids) {
-      if (!placed.has(id) && parentOf.get(id) === parent) {
+    for (const id of childrenOf.get(parent) ?? []) {
+      if (!placed.has(id)) {
         placed.add(id)
         items.push({ id, label: labels.get(id)!, depth })
         place(id, depth + 1)

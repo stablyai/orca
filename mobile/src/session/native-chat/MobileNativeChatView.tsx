@@ -93,6 +93,7 @@ export function MobileNativeChatView({
   onLoadEarlier,
   onSend,
   sendSurfaceId,
+  sessionId = null,
   getSendCompletionGeneration,
   getComposerEditGeneration,
   pending,
@@ -188,8 +189,8 @@ export function MobileNativeChatView({
     [offlineQueue.send, onClearSendError, jumpToTail]
   )
 
-  // A bot card's answer goes to the agent as if typed.
-  const sendFromCard = useCallback((text: string) => handleSend(text), [handleSend])
+  // A bot card's answer: a card answer on hosts that take one, else typed.
+  const sendFromCard = useMemo(() => ({ typed: handleSend, sessionId }), [handleSend, sessionId])
   const drawReplyCard = useCallback(
     (card: NativeChatDirectiveBotCard) =>
       mobileNativeChatOtherBotCard(card, {

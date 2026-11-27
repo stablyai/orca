@@ -8,6 +8,7 @@ import { shareDevicePath, UNKNOWN_SHARE_REFUSAL } from '../../../shared/connecto
 import { writeSecureFileAsync } from '../../../shared/secure-storage/secure-file-async-write'
 import type { ConnectorCloud } from '../../connector-cloud/connector-cloud'
 import type { ConnectorResult } from '../../connector-cloud/connector-cloud-request'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 
 export type BotSharePhoneCredential = { botId: string; shareId: string; deviceId: string }
 
@@ -44,11 +45,13 @@ const OUTBOX_FILENAME = 'bot-share-phone-credential-outbox.json'
 // While a removal waits, it is tried again this often (and whenever another is queued).
 const RETRY_MS = 5 * 60 * 1000
 
-const Item = z.object({
-  botId: z.string().min(1),
-  shareId: z.string().min(1),
-  deviceId: z.string().min(1)
-})
+const Item = lazyZodSchema(() =>
+  z.object({
+    botId: z.string().min(1),
+    shareId: z.string().min(1),
+    deviceId: z.string().min(1)
+  })
+)
 
 export class BotSharePhoneCredentialOutbox {
   private readonly path: string

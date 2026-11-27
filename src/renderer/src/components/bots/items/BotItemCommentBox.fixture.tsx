@@ -10,6 +10,7 @@ import { botRefKey } from '@/lib/bot-hosts'
 import { updateNativeChatComposerDraft } from '../../native-chat/drafts/native-chat-composer-draft-store'
 import { BotItemCommentBox } from './BotItemCommentBox'
 import { BotItemCommentCard } from './BotItemCommentCard'
+import type { BotItemWaitingQuestion } from './BotItemReplyingTo'
 
 const item = makeTestBotItem(7, { title: 'Fix the share dialog' })
 
@@ -112,7 +113,7 @@ function commentBox(
   }
 }
 
-/** Empty: four lines of room above the + / mic / send row. */
+/** Empty: one row, + / text / mic / send. */
 export const empty = defineFixture({ width: 380, ...commentBox(item, '') })
 
 const LONG_ANSWER = [
@@ -232,4 +233,47 @@ export const slashPicker = defineFixture({
   setup: mentionPicker.setup,
   render: withRoomAbove,
   interact: typeInBox('/')
+})
+
+const ASK: BotItemWaitingQuestion = {
+  id: 'ask:0',
+  eventId: 'ask',
+  line: 'After reviewing the explainer, may I merge #48120 once CI is green?',
+  replies: true,
+  asker: 'CoS'
+}
+
+/** The box in a 380px item pane, under 520px: the text has its own row above + / mic / send. */
+function inPane(question: BotItemWaitingQuestion | null): () => React.JSX.Element {
+  return () => (
+    <div className="@container/item-pane flex flex-col" style={{ width: 380 }}>
+      <BotItemCommentBox
+        bot={fixtureCos}
+        item={item}
+        attachTo={{
+          worktreeId: folderWorkspaceKey(fixtureCos.folderWorkspaceId),
+          runtimeEnvironmentId: null
+        }}
+        onSend={() => null}
+        question={question}
+      />
+    </div>
+  )
+}
+
+/** Empty, stacked in a narrow pane. */
+export const emptyStacked = defineFixture({
+  width: 412,
+  store: pastedImage.store,
+  setup: () => commentBox(item, '').setup?.(),
+  render: inPane(null)
+})
+
+/** Replying with an image attached: the chip, the thumbnails and the text share one left edge. */
+export const askWithImage = defineFixture({
+  width: 412,
+  store: pastedImage.store,
+  setup: pastedImage.setup,
+  interact: pasteImage,
+  render: inPane(ASK)
 })

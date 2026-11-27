@@ -70,6 +70,7 @@ export const TEAMMATE_CLIENT_EVENT_DECISIONS: { [T in RuntimeClientEvent['type']
   activateWorktree: 'drop',
   sshStateChanged: 'drop',
   relayHostsChanged: 'drop',
+  relayHostRowsChanged: 'drop',
   settingsChanged: 'drop',
   workspaceViewChanged: 'drop',
   automationsChanged: 'drop',
