@@ -94,7 +94,7 @@ const FACE_CLASS_NAME =
 
 // The gap sits inside the face so the ring adds only 1.5px per side: neighbors 4px apart stay 1px clear.
 const ATTENTION_RING_CLASS_NAME =
-  'ring-0 after:pointer-events-none after:absolute after:inset-0 after:rounded-full after:shadow-[inset_0_0_0_1px_var(--gap),0_0_0_1.5px_var(--color-status-warning)]'
+  'ring-0 after:pointer-events-none after:absolute after:inset-0 after:rounded-full after:shadow-[inset_0_0_0_1px_var(--gap),0_0_0_1.5px_var(--color-status-warning-text)]'
 
 export function BotCollapsedPreview({
   facts,
