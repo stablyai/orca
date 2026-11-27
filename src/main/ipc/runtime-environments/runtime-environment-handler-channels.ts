@@ -9,6 +9,7 @@ export const RUNTIME_ENVIRONMENT_HANDLER_CHANNELS = [
   'runtimeEnvironments:disconnect',
   'runtimeEnvironments:connect',
   'runtimeEnvironments:prepareBrowserClientHostPlacement',
+  'runtimeEnvironments:browserClientHostViewer',
   'runtimeEnvironments:listPortForwards',
   'runtimeEnvironments:addPortForward',
   'runtimeEnvironments:updatePortForward',

@@ -185,7 +185,9 @@
       "clientHostedTooltip": "Parcourir {{value0}}",
       "streamedTooltip": "Navigation sur {{value0}}",
       "clientHostedDetail": "La page s'affiche sur cet appareil. Le trafic réseau et le DNS passent par l'hôte distant.",
-      "streamedDetail": "La page s'exécute sur l'hôte distant et est diffusée sur cet appareil."
+      "streamedDetail": "La page s'exécute sur l'hôte distant et est diffusée sur cet appareil.",
+      "teammateTooltip": "Localhost via {{value0}}",
+      "teammateDetail": "La page s'affiche sur cet appareil. Les pages localhost passent par l'hôte partagé ; les autres sites se chargent depuis votre réseau."
     },
     "remote": {
       "findUnavailable": "Rechercher dans la page n'est pas disponible pendant la diffusion de cette page à partir de l'hôte distant.",
@@ -23115,6 +23117,11 @@
           "body": "Appuyez sur {sidebar.projects.toggleCollapse}, cliquez sur ce bouton, ou faites {{modifier}}-clic sur l'en-tête d'un projet.",
           "bodyWithoutShortcut": "Cliquez sur ce bouton, ou faites {{modifier}}-clic sur l'en-tête d'un projet.",
           "action": "Compris"
+        }
+      },
+      "clientHostedBrowser": {
+        "intro": {
+          "teammateBody": "Les onglets du navigateur distant s'affichent désormais sur cet appareil. Les pages localhost passent par l'hôte partagé ; les autres sites se chargent depuis votre réseau."
         }
       }
     },

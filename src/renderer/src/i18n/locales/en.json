@@ -471,7 +471,9 @@
       "clientHostedTooltip": "Browsing through {{value0}}",
       "streamedTooltip": "Browsing on {{value0}}",
       "clientHostedDetail": "The page renders on this device. Network traffic and DNS go through the remote host.",
-      "streamedDetail": "The page runs on the remote host and streams to this device."
+      "streamedDetail": "The page runs on the remote host and streams to this device.",
+      "teammateTooltip": "Browsing localhost through {{value0}}",
+      "teammateDetail": "The page renders on this device. Localhost pages go through the shared host; other sites load from your network."
     },
     "remote": {
       "findUnavailable": "Find in page is not available while this page streams from the remote host.",
@@ -24390,6 +24392,11 @@
           "body": "Press {sidebar.projects.toggleCollapse}, click this button, or {{modifier}}-click any project header.",
           "bodyWithoutShortcut": "Click this button, or {{modifier}}-click any project header.",
           "action": "Got it"
+        }
+      },
+      "clientHostedBrowser": {
+        "intro": {
+          "teammateBody": "Remote browser tabs now render on this device. Localhost pages go through the shared host; other sites load from your network."
         }
       }
     },

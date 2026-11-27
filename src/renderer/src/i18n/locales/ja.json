@@ -23057,6 +23057,11 @@
           "bodyWithoutShortcut": "このボタンをクリックするか、任意のプロジェクトヘッダーを {{modifier}} キーを押しながらクリックします。",
           "action": "了解"
         }
+      },
+      "clientHostedBrowser": {
+        "intro": {
+          "teammateBody": "リモートブラウザのタブがこのデバイス上でレンダリングされるようになりました。localhost のページは共有ホストを経由し、その他のサイトはお使いのネットワークから読み込まれます。"
+        }
       }
     },
     "dictation": {
@@ -23394,7 +23399,9 @@
       "clientHostedTooltip": "{{value0}} を参照する",
       "streamedTooltip": "{{value0}} で閲覧しています",
       "clientHostedDetail": "ページはこのデバイスでレンダリングされます。ネットワークトラフィックと DNS はリモートホストを経由します。",
-      "streamedDetail": "ページはリモートホスト上で実行され、このデバイスにストリーミングされます。"
+      "streamedDetail": "ページはリモートホスト上で実行され、このデバイスにストリーミングされます。",
+      "teammateTooltip": "localhost は {{value0}} 経由",
+      "teammateDetail": "ページはこのデバイスでレンダリングされます。localhost のページは共有ホストを経由し、その他のサイトはお使いのネットワークから読み込まれます。"
     },
     "remote": {
       "findUnavailable": "このページがリモートホストからストリーミングされている間は、ページ内検索は利用できません。",

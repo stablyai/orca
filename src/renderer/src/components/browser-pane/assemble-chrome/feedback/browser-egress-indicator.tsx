@@ -18,6 +18,11 @@ import { getHostSettingOverride } from '../../../../../../shared/execution-host/
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { resolveSshWorkspaceBrowserRouteEligibility } from '@/lib/browser/workspace/ssh-workspace-browser-route-eligibility'
 import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
+import {
+  useClientHostViewer,
+  type ClientHostViewerAnswer
+} from '@/runtime/browser/client-hosting/use-client-host-viewer'
+import type { Translate } from '@/i18n/use-translate'
 
 function runtimeHostLabel(
   settings: GlobalSettings | null,
@@ -160,6 +165,54 @@ export function SshEgressIndicator({
   )
 }
 
+/** A teammate's page sends only loopback through the shared host (browserRouteProxyBypassRules); null while unknown. */
+export function remoteRuntimeEgressCopy(
+  t: Translate,
+  args: {
+    presentation: 'client-hosted' | 'streamed'
+    viewer: ClientHostViewerAnswer
+    hostLabel: string
+  }
+): { description: string; detail: string } | null {
+  const value = { value0: args.hostLabel }
+  if (args.presentation === 'streamed') {
+    return {
+      description: t('browser.remoteEgress.streamedTooltip', 'Browsing on {{value0}}', value),
+      detail: t(
+        'browser.remoteEgress.streamedDetail',
+        'The page runs on the remote host and streams to this device.'
+      )
+    }
+  }
+  if (args.viewer === 'unknown') {
+    return null
+  }
+  if (args.viewer === 'teammate') {
+    return {
+      description: t(
+        'browser.remoteEgress.teammateTooltip',
+        'Browsing localhost through {{value0}}',
+        value
+      ),
+      detail: t(
+        'browser.remoteEgress.teammateDetail',
+        'The page renders on this device. Localhost pages go through the shared host; other sites load from your network.'
+      )
+    }
+  }
+  return {
+    description: t(
+      'browser.remoteEgress.clientHostedTooltip',
+      'Browsing through {{value0}}',
+      value
+    ),
+    detail: t(
+      'browser.remoteEgress.clientHostedDetail',
+      'The page renders on this device. Network traffic and DNS go through the remote host.'
+    )
+  }
+}
+
 /** Remote-runtime browser pages: client-hosted (renders here) or streamed from the host. */
 export function RemoteRuntimeEgressIndicator({
   runtimeEnvironmentId,
@@ -176,30 +229,18 @@ export function RemoteRuntimeEgressIndicator({
   )
   const hostLabel = runtimeHostLabel(settings, runtimeEnvironmentId, environmentName)
   const clientHosted = presentation === 'client-hosted'
+  const viewer = useClientHostViewer(runtimeEnvironmentId, clientHosted)
+  const copy = remoteRuntimeEgressCopy(t, { presentation, viewer, hostLabel })
+  if (!copy) {
+    // Where traffic goes depends on whose host this is; claim nothing until that is known.
+    return <Server className="size-3.5 shrink-0 text-muted-foreground" />
+  }
   return (
     <EgressIndicatorButton
       icon={<Server className="size-3.5" />}
       egress="remote"
-      description={
-        clientHosted
-          ? t('browser.remoteEgress.clientHostedTooltip', 'Browsing through {{value0}}', {
-              value0: hostLabel
-            })
-          : t('browser.remoteEgress.streamedTooltip', 'Browsing on {{value0}}', {
-              value0: hostLabel
-            })
-      }
-      detail={
-        clientHosted
-          ? t(
-              'browser.remoteEgress.clientHostedDetail',
-              'The page renders on this device. Network traffic and DNS go through the remote host.'
-            )
-          : t(
-              'browser.remoteEgress.streamedDetail',
-              'The page runs on the remote host and streams to this device.'
-            )
-      }
+      description={copy.description}
+      detail={copy.detail}
       settingsSectionId={BROWSER_CLIENT_HOSTED_REMOTE_SETTINGS_TARGET_ID}
     />
   )
