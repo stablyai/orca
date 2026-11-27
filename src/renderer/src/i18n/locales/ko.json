@@ -25360,7 +25360,9 @@
     "failed": "검색에 실패했습니다. 다시 시도하세요.",
     "filters": {
       "toggle": "검색 세부 정보 전환",
-      "active": "{{count}}개 활성"
+      "active": "{{count}}개 활성",
+      "includeSummary": "포함: {{patterns}}",
+      "excludeSummary": "제외: {{patterns}}"
     },
     "noResults": "결과가 없습니다. 다른 검색을 시도하거나 필터를 조정하세요."
   },

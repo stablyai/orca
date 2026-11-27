@@ -25370,7 +25370,9 @@
     "failed": "搜索失败，再试一次",
     "filters": {
       "toggle": "切换搜索详情",
-      "active": "{{count}} 个已启用"
+      "active": "{{count}} 个已启用",
+      "includeSummary": "包含：{{patterns}}",
+      "excludeSummary": "排除：{{patterns}}"
     },
     "noResults": "没有结果。请尝试其他搜索或调整筛选条件"
   },

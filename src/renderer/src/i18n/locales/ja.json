@@ -24959,7 +24959,9 @@
     "failed": "検索失敗。もう一度お試しください",
     "filters": {
       "toggle": "検索の詳細を切り替える",
-      "active": "{{count}} 件が有効"
+      "active": "{{count}} 件が有効",
+      "includeSummary": "含める: {{patterns}}",
+      "excludeSummary": "除外: {{patterns}}"
     },
     "noResults": "結果がありません。別の検索を試すか、フィルターを調整してください。"
   },

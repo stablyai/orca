@@ -25368,7 +25368,9 @@
     "failed": "Suche fehlgeschlagen. Erneut versuchen.",
     "filters": {
       "toggle": "Suchdetails ein-/ausblenden",
-      "active": "{{count}} aktiv"
+      "active": "{{count}} aktiv",
+      "includeSummary": "Einschließen: {{patterns}}",
+      "excludeSummary": "Ausschließen: {{patterns}}"
     },
     "noResults": "Keine Ergebnisse. Eine andere Suche versuchen oder die Filter anpassen."
   },

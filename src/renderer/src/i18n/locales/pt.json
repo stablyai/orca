@@ -26126,7 +26126,9 @@
     "failed": "A busca falhou. Tente novamente.",
     "filters": {
       "toggle": "Alternar detalhes da busca",
-      "active": "Filtros ativos: {{count}}"
+      "active": "Filtros ativos: {{count}}",
+      "includeSummary": "Incluir: {{patterns}}",
+      "excludeSummary": "Excluir: {{patterns}}"
     },
     "noResults": "Nenhum resultado. Tente outra busca ou ajuste os filtros."
   },
