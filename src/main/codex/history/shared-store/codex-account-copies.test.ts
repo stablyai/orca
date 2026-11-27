@@ -109,7 +109,7 @@ function run(
   })
 }
 
-const trashDir = (): string => join(home, '.orca-copies-trash')
+const trashDir = (): string => join(home, '.orca-copies-trash.orca-profile-merge')
 
 function trashed(): string[] {
   if (!existsSync(trashDir())) {

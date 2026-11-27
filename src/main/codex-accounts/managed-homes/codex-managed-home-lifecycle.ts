@@ -17,7 +17,6 @@ import { writeFileAtomically } from '../../filesystem/atomic-file-publication'
 import { MERGE_PENDING_SUFFIX, removeDirectoryLink } from '../../filesystem/merged-directory-link'
 import {
   CODEX_DATABASE_FILE,
-  COPIES_TRASH_DIR,
   HISTORY_CLEANUP_MANIFEST,
   PRE_SHARE_DATABASES_DIR,
   SET_ASIDE_ROLLOUTS_DIR
@@ -38,8 +37,6 @@ const KEPT_HISTORY = [
   'sessions',
   'archived_sessions',
   SET_ASIDE_ROLLOUTS_DIR,
-  // Copies wait out their grace period here before a recheck deletes them.
-  COPIES_TRASH_DIR,
   HISTORY_CLEANUP_MANIFEST,
   PRE_SHARE_DATABASES_DIR
 ]
