@@ -47,6 +47,9 @@ async function createLinuxAppImageUpdater(appImagePath: string | undefined) {
   return updater
 }
 
+// Load the updater graph during collection, outside per-test timeouts; cases only re-evaluate it.
+await import('./updater-setup')
+
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'orca-remote-update-support-'))
   const resourcesPath = join(root, 'resources')
