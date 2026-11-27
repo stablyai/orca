@@ -45,12 +45,15 @@ import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrom
 
 export function BotGroupMembersDialog({
   group,
+  subgroup,
   onClose
 }: {
   group?: BotGroup
+  subgroup?: { parentName: string; onCreated: (group: BotGroup) => void }
   onClose: () => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const parentGroupName = subgroup?.parentName
   const listedBots = useBots()
   // A room on this computer can also hold bots on paired computers; a paired server's room holds
   // only that server's bots. A paired web window's bots all live on its one server.
@@ -159,6 +162,9 @@ export function BotGroupMembersDialog({
         group ? 'bots.groups.update' : 'bots.groups.create',
         group ? { groupId: group.id, revision: group.revision, ...roster } : roster
       )
+      if (!group) {
+        subgroup?.onCreated(saved)
+      }
       await refreshBotGroups()
       onClose()
       if (!group) {
@@ -204,17 +210,23 @@ export function BotGroupMembersDialog({
             ? 'sm:max-w-md'
             : 'w-[calc(100%-2rem)] max-w-md grid-rows-[auto_auto_auto_minmax(3.5rem,1fr)] sm:max-w-md'
         }
-        {...(!group && { 'aria-describedby': undefined })}
+        {...(!group && !parentGroupName && { 'aria-describedby': undefined })}
       >
         <DialogHeader className={group ? undefined : 'shrink-0 text-left'}>
           <DialogTitle size={group ? 'default' : 'compact'} className={group ? undefined : 'mr-6'}>
             {group
               ? t('bots.groups.manageMembers', 'Manage members')
-              : t('bots.groups.newGroup', 'New group')}
+              : parentGroupName
+                ? t('bots.groups.newSubgroupTitle', 'New subgroup')
+                : t('bots.groups.newGroup', 'New group')}
           </DialogTitle>
-          {group ? (
+          {group || parentGroupName ? (
             <DialogDescription>
-              {t('bots.groups.dialogDescription', 'Bots in a group share one room.')}
+              {parentGroupName
+                ? t('bots.groups.newSubgroupDescription', 'Create a subgroup under {{name}}.', {
+                    name: parentGroupName
+                  })
+                : t('bots.groups.dialogDescription', 'Bots in a group share one room.')}
             </DialogDescription>
           ) : null}
         </DialogHeader>

@@ -1,5 +1,5 @@
 import React, { useId, useState } from 'react'
-import { Folder, House } from 'lucide-react'
+import { Folder, House, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -20,10 +20,11 @@ export type BotFolderDestination = {
   id: string | null
   name: string
   depth: number
+  kind?: 'group'
 }
 
 function destinationValue(id: string | null): string {
-  return id === null ? 'root' : `folder:${id}`
+  return id === null ? 'root' : `destination:${id}`
 }
 
 /** Picks a folder for a bot or folder; the caller leaves invalid destinations out. */
@@ -62,6 +63,8 @@ export function BotFolderMoveDialog({
               const itemValue = destinationValue(destination.id)
               const itemId = `${idPrefix}-${itemValue}`
               const disabled = itemValue === current
+              const Icon =
+                destination.id === null ? House : destination.kind === 'group' ? Users : Folder
               return (
                 <div
                   key={itemValue}
@@ -81,11 +84,7 @@ export function BotFolderMoveDialog({
                     variant="dialog"
                     className={cn('min-w-0 flex-1', disabled ? 'cursor-default' : 'cursor-pointer')}
                   >
-                    {destination.id === null ? (
-                      <House className="size-3.5 shrink-0 text-muted-foreground" />
-                    ) : (
-                      <Folder className="size-3.5 shrink-0 text-muted-foreground" />
-                    )}
+                    <Icon className="size-3.5 shrink-0 text-muted-foreground" />
                     <span
                       className="truncate"
                       style={{ paddingInlineStart: `min(${destination.depth * 10}px, 40%)` }}

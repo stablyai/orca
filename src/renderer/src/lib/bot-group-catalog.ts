@@ -1,3 +1,5 @@
+import { removeBotSidebarGroup } from '../../../shared/bots/bot-sidebar-group-parents'
+import { botSidebarEntryKey } from '@/components/bots/bot-sidebar-entry-keys'
 import type { BotGroup } from '../../../shared/bots/bot-group'
 import { botGroupRoomLabel } from './bot-group-room-label'
 import { refreshBotHostGroups } from './bot-group-list'
@@ -129,6 +131,12 @@ export function selectActiveBotGroupRoomId(state: AppState): string | null {
 export async function deleteBotGroup(group: BotGroup): Promise<void> {
   await callBotRpc(group, 'bots.groups.delete', { groupId: group.id })
   const state = useAppStore.getState()
+  const { botSidebarFolders } = state
+  const key = botSidebarEntryKey(group)
+  const groupParents = removeBotSidebarGroup(botSidebarFolders.groupParents, key)
+  if (groupParents !== botSidebarFolders.groupParents) {
+    state.setBotSidebarFolders({ ...botSidebarFolders, groupParents })
+  }
   for (const roomId of [group.id, ...(group.threads ?? []).map((thread) => thread.id)]) {
     const room = roomTab(state, group, roomId)
     if (room) {

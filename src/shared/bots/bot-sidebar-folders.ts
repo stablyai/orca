@@ -1,3 +1,8 @@
+import {
+  normalizeBotSidebarGroupParents,
+  type BotSidebarGroupParents
+} from './bot-sidebar-group-parents'
+
 /** A named folder in the Bots sidebar: a saved, arbitrary-depth parent/child tree. */
 export type BotSidebarFolder = {
   id: string
@@ -14,11 +19,13 @@ export type BotSidebarFolderPlacements = Readonly<Record<string, string>>
 export type BotSidebarFolderState = {
   folders: BotSidebarFolders
   placements: BotSidebarFolderPlacements
+  groupParents: BotSidebarGroupParents
 }
 
 export const EMPTY_BOT_SIDEBAR_FOLDER_STATE: BotSidebarFolderState = {
   folders: [],
-  placements: {}
+  placements: {},
+  groupParents: {}
 }
 
 export function normalizeBotSidebarFolderState(value: unknown): BotSidebarFolderState {
@@ -27,7 +34,8 @@ export function normalizeBotSidebarFolderState(value: unknown): BotSidebarFolder
   }
   return {
     folders: normalizeBotSidebarFolders(value.folders),
-    placements: normalizeBotSidebarFolderPlacements(value.placements)
+    placements: normalizeBotSidebarFolderPlacements(value.placements),
+    groupParents: normalizeBotSidebarGroupParents(value.groupParents)
   }
 }
 

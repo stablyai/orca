@@ -23,85 +23,131 @@ export type BotSidebarEntryRow<Entry extends TreeEntry> = {
   id: string
   entry: Entry
   depth: number
-  /** The folder that holds it, null at the root; groups always list at the root. */
-  folderId: string | null
-  /** Its position among the same folder's entries, for that folder's reorder. */
+  parentId: string | null
   bucketIndex: number
+  expanded?: boolean
 }
 
 export type BotSidebarTreeRow<Entry extends TreeEntry> =
   | BotSidebarFolderRow
   | BotSidebarEntryRow<Entry>
+  | { kind: 'member'; id: string; entry: Entry; depth: number }
 
-const FOLDER_ROW_ID_PREFIX = 'bot-folder-row:'
+type Child<Entry extends TreeEntry> =
+  | { kind: 'folder'; folder: BotSidebarFolder }
+  | { kind: 'entry'; entry: Entry }
+  | { kind: 'member'; entry: Entry }
 
 export function botSidebarFolderRowId(folderId: string): string {
-  return `${FOLDER_ROW_ID_PREFIX}${folderId}`
+  return `bot-folder-row:${folderId}`
 }
 
-/**
- * The visible tree as a flat row list: each folder's subfolders, then its bots, depth first.
- * Placements to folders that no longer exist fall back to the root rather than hiding a bot.
- */
+export function getBotSidebarMemberships(
+  memberKeysByGroup: ReadonlyMap<string, readonly string[]>
+): Map<string, string[]> {
+  const groupsByMember = new Map<string, string[]>()
+  // A bot's full card has a stable home under multiple memberships; the other rooms link to it.
+  for (const groupId of [...memberKeysByGroup.keys()].sort()) {
+    for (const memberId of new Set(memberKeysByGroup.get(groupId))) {
+      const parents = groupsByMember.get(memberId) ?? []
+      parents.push(groupId)
+      groupsByMember.set(memberId, parents)
+    }
+  }
+  return groupsByMember
+}
+
+/** Projects both navigation folders and group rooms into the virtual sidebar. */
 export function buildBotSidebarFolderRows<Entry extends TreeEntry>({
   entries,
   folders,
   folderPlacements,
-  isExpanded
+  groupParents = {},
+  groupsByMember = new Map(),
+  isExpanded,
+  isGroupExpanded = () => true
 }: {
-  /** The section's arranged rows, before folder grouping. */
   entries: readonly Entry[]
   folders: BotSidebarFolders
   folderPlacements: Readonly<Record<string, string>>
+  groupParents?: Readonly<Record<string, string>>
+  groupsByMember?: ReadonlyMap<string, readonly string[]>
   isExpanded: (folderId: string) => boolean
+  isGroupExpanded?: (groupId: string) => boolean
 }): BotSidebarTreeRow<Entry>[] {
-  const byId = indexBotSidebarFolders(folders)
-  const childFolders = groupBotSidebarFolders(folders)
-  const entriesByFolder = new Map<string | null, Entry[]>()
-  for (const entry of entries) {
-    const placed = entry.kind === 'bot' ? folderPlacements[entry.id] : undefined
-    const folderId = placed !== undefined && byId.has(placed) ? placed : null
-    const siblings = entriesByFolder.get(folderId) ?? []
-    siblings.push(entry)
-    entriesByFolder.set(folderId, siblings)
+  const foldersById = indexBotSidebarFolders(folders)
+  const groupIds = new Set(entries.filter((entry) => entry.kind === 'group').map(({ id }) => id))
+  const children = new Map<string | null, Child<Entry>[]>()
+  const add = (parentId: string | null, child: Child<Entry>): void => {
+    const list = children.get(parentId) ?? []
+    list.push(child)
+    children.set(parentId, list)
   }
+  for (const [parentId, nested] of groupBotSidebarFolders(folders)) {
+    for (const folder of nested) {
+      add(parentId === null ? null : botSidebarFolderRowId(parentId), { kind: 'folder', folder })
+    }
+  }
+  for (const entry of entries) {
+    if (entry.kind === 'group') {
+      const parent = groupParents[entry.id]
+      add(groupIds.has(parent) ? parent : null, { kind: 'entry', entry })
+      continue
+    }
+    const folderId = folderPlacements[entry.id]
+    const memberOf = (groupsByMember.get(entry.id) ?? []).filter((id) => groupIds.has(id))
+    const parentId = foldersById.has(folderId)
+      ? botSidebarFolderRowId(folderId)
+      : (memberOf[0] ?? null)
+    add(parentId, { kind: 'entry', entry })
+    for (const groupId of memberOf) {
+      if (groupId !== parentId) {
+        add(groupId, { kind: 'member', entry })
+      }
+    }
+  }
+
   const rows: BotSidebarTreeRow<Entry>[] = []
-  const levels: { parentId: string | null; depth: number; nextChild: number }[] = [
-    { parentId: null, depth: 0, nextChild: 0 }
-  ]
+  const levels: { parentId: string | null; depth: number; next: number; bucketIndex: number }[] = []
+  const enter = (parentId: string | null, depth: number): void => {
+    levels.push({ parentId, depth, next: 0, bucketIndex: 0 })
+  }
+  enter(null, 0)
   for (let level = levels.at(-1); level; level = levels.at(-1)) {
     const { parentId, depth } = level
-    const folder = childFolders.get(parentId)?.[level.nextChild]
-    if (folder) {
-      level.nextChild += 1
-      const expanded = isExpanded(folder.id)
-      rows.push({
-        kind: 'folder',
-        id: botSidebarFolderRowId(folder.id),
-        folder,
-        depth,
-        expanded,
-        hasChildren:
-          (childFolders.get(folder.id)?.length ?? 0) > 0 ||
-          (entriesByFolder.get(folder.id)?.length ?? 0) > 0
-      })
+    const child = children.get(parentId)?.[level.next++]
+    if (!child) {
+      levels.pop()
+      continue
+    }
+    if (child.kind === 'folder') {
+      const id = botSidebarFolderRowId(child.folder.id)
+      const expanded = isExpanded(child.folder.id)
+      rows.push({ ...child, id, depth, expanded, hasChildren: children.has(id) })
       if (expanded) {
-        levels.push({ parentId: folder.id, depth: depth + 1, nextChild: 0 })
+        enter(id, depth + 1)
       }
       continue
     }
-    levels.pop()
-    const entriesHere = entriesByFolder.get(parentId) ?? []
-    entriesHere.forEach((entry, bucketIndex) => {
-      rows.push({
-        kind: 'entry',
-        id: entry.id,
-        entry,
-        depth,
-        folderId: parentId,
-        bucketIndex
-      })
+    const { entry } = child
+    if (child.kind === 'member') {
+      rows.push({ ...child, id: JSON.stringify([parentId, entry.id]), depth })
+      continue
+    }
+    const expanded =
+      entry.kind === 'group' && children.has(entry.id) ? isGroupExpanded(entry.id) : undefined
+    rows.push({
+      kind: 'entry',
+      id: entry.id,
+      entry,
+      parentId,
+      depth,
+      bucketIndex: level.bucketIndex++,
+      expanded
     })
+    if (expanded) {
+      enter(entry.id, depth + 1)
+    }
   }
   return rows
 }

@@ -180,7 +180,10 @@ export function BotFolderDialogs({
       onOpenChange={closeOnDismiss}
       onConfirm={() => {
         const current = readView()
-        setView(removeBotSidebarFolder(current.folders, current.placements, target.id))
+        setView({
+          ...current,
+          ...removeBotSidebarFolder(current.folders, current.placements, target.id)
+        })
         const { collapsedGroups, setCollapsedGroups } = useAppStore.getState()
         const foldKey = getBotSidebarFolderGroupKey(target.id)
         if (collapsedGroups.has(foldKey)) {

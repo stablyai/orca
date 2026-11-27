@@ -6,7 +6,13 @@ import {
   removeBotSidebarFolder,
   type BotSidebarFolder
 } from '../../../../shared/bots/bot-sidebar-folders'
-import { buildBotSidebarFolderRows } from './bot-sidebar-folder-rows'
+import {
+  getBotSidebarGroupPath,
+  moveBotSidebarGroup,
+  removeBotSidebarGroup,
+  type BotSidebarGroupParents
+} from '../../../../shared/bots/bot-sidebar-group-parents'
+import { buildBotSidebarFolderRows, getBotSidebarMemberships } from './bot-sidebar-folder-rows'
 
 it('preserves folders and bot placements when reading, collapsing and editing a deep saved tree', () => {
   const folders = Array.from({ length: 12_000 }, (_, i): BotSidebarFolder => ({
@@ -43,4 +49,67 @@ it('preserves folders and bot placements when reading, collapsing and editing a 
   expect(
     buildBotSidebarFolderRows({ ...tree, isExpanded: (id) => id !== '0' }).map((row) => row.id)
   ).toEqual(['bot-folder-row:0', 'local/room'])
+})
+
+it('keeps nested rooms and direct memberships distinct through save, fold and promotion', () => {
+  const parent = 'local/product'
+  const middle = 'local/mobile'
+  const child = 'local/android'
+  const coordinator = 'local/lead'
+  const builder = 'local/build'
+  const shared = 'runtime:office/qa'
+  const entries = [
+    { id: parent, kind: 'group' },
+    { id: middle, kind: 'group' },
+    { id: child, kind: 'group' },
+    { id: coordinator, kind: 'bot' },
+    { id: builder, kind: 'bot' },
+    { id: shared, kind: 'bot' }
+  ] as const
+  const saved = normalizeBotSidebarFolderState(
+    JSON.parse(
+      JSON.stringify({
+        groupParents: { [child]: middle, [middle]: parent }
+      })
+    )
+  )
+  expect(getBotSidebarGroupPath(saved.groupParents, child)).toEqual([child, middle, parent])
+  expect(moveBotSidebarGroup(saved.groupParents, parent, child)).toBe(saved.groupParents)
+  const groupsByMember = getBotSidebarMemberships(
+    new Map([
+      [parent, [coordinator, shared]],
+      [child, [builder, shared]]
+    ])
+  )
+  const tree = {
+    entries,
+    folders: [],
+    folderPlacements: {},
+    groupsByMember,
+    isExpanded: () => true
+  }
+  const take = (parents: BotSidebarGroupParents, folded?: string) => {
+    return buildBotSidebarFolderRows({
+      ...tree,
+      groupParents: parents,
+      isGroupExpanded: (id) => id !== folded
+    }).flatMap((row) => (row.kind === 'folder' ? [] : [[row.kind, row.entry.id, row.depth]]))
+  }
+  expect(take(saved.groupParents)).toEqual([
+    ['entry', parent, 0],
+    ['entry', middle, 1],
+    ['entry', child, 2],
+    ['entry', builder, 3],
+    ['entry', shared, 3],
+    ['entry', coordinator, 1],
+    ['member', shared, 1]
+  ])
+  expect(take(saved.groupParents, middle)).toEqual([
+    ['entry', parent, 0],
+    ['entry', middle, 1],
+    ['entry', coordinator, 1],
+    ['member', shared, 1]
+  ])
+  const promoted = removeBotSidebarGroup(saved.groupParents, middle)
+  expect(getBotSidebarGroupPath(promoted, child)).toEqual([child, parent])
 })
