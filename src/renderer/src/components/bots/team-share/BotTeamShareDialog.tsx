@@ -1,6 +1,6 @@
 // Share an agent with people: a shortcut to the same people list Settings › Sharing draws. The caller
 // owns the people, the picks and the search (useBotTeamShareList); this draws them.
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useRef } from 'react'
 import { Laptop } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
@@ -17,6 +17,7 @@ export function BotTeamShareDialog({
   onClose,
   children,
   sharing = false,
+  othersListed,
   ...list
 }: Omit<BotTeamShareList, 'connectorRows' | 'sharing'> & {
   bot: Bot
@@ -29,8 +30,6 @@ export function BotTeamShareDialog({
 }): React.JSX.Element {
   const t = useTranslate()
   const inputRef = useRef<HTMLInputElement>(null)
-  const [rows, setRows] = useState<HTMLDivElement | null>(null)
-  const hasRow = useContainsRow(rows)
   return (
     <Dialog open onOpenChange={(next) => !next && onClose()}>
       <DialogContent
@@ -54,11 +53,8 @@ export function BotTeamShareDialog({
         <div className="flex items-center gap-2 px-6 pt-4">
           <TeamShareAddField {...list} inputRef={inputRef} focusedOnOpen />
         </div>
-        <div
-          ref={setRows}
-          className="scrollbar-sleek min-h-0 max-h-[340px] overflow-y-auto pt-1 pb-2"
-        >
-          {hasRow ? (
+        <div className="scrollbar-sleek min-h-0 max-h-[340px] overflow-y-auto pt-1 pb-2">
+          {othersListed ? (
             <h3 className="px-6 pt-4 pb-1 text-xs font-medium text-muted-foreground">
               {t('bots.teamShare.peopleWithAccess', 'People with access')}
             </h3>
@@ -92,20 +88,4 @@ export function BotTeamShareDialog({
       </DialogContent>
     </Dialog>
   )
-}
-
-/** Whether a row renders inside `container`: connector rows load their people on their own clock. */
-function useContainsRow(container: HTMLElement | null): boolean {
-  const [hasRow, setHasRow] = useState(false)
-  useLayoutEffect(() => {
-    if (!container) {
-      return
-    }
-    const read = (): void => setHasRow(container.querySelector('li') !== null)
-    read()
-    const observer = new MutationObserver(read)
-    observer.observe(container, { childList: true, subtree: true })
-    return () => observer.disconnect()
-  }, [container])
-  return hasRow
 }

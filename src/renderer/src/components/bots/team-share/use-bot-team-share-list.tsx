@@ -18,7 +18,8 @@ import {
 import {
   TeamShareConnectorPeople,
   useTeamShareConnectors,
-  type TeamShareFoundByConnector
+  type TeamShareFoundByConnector,
+  type TeamShareListedByConnector
 } from './BotTeamShareConnectorPeople'
 import { addBotTeamShare, removeBotTeamShare, resendBotTeamShare } from './bot-team-share-rpc'
 import {
@@ -49,12 +50,15 @@ export type BotTeamShareList = {
   onShareAgain: (person: Extract<TeamSharePerson, { kind: 'account' }>) => void
   /** Slack- and GitHub-only people from Who can ask, drawn after `people`; they also feed the search. */
   connectorRows: React.ReactNode
+  /** Someone besides the owner has access or an invite: an account, an invite or a connector member. */
+  othersListed: boolean
 }
 
 export function useBotTeamShareList(bot: Bot): BotTeamShareList {
   const t = useTranslate()
   const [query, setQuery] = useState('')
   const [found, setFound] = useState<TeamShareFoundByConnector>({})
+  const [connectorListed, setConnectorListed] = useState<TeamShareListedByConnector>({})
   const [staged, setStaged] = useState<StagedPerson[]>([])
   const [adds] = useState<TeamShareConnectorAdds>(() => new Map())
   // While Share saves, its confirmations sit on top; the picks stay until it settles.
@@ -114,9 +118,11 @@ export function useBotTeamShareList(bot: Bot): BotTeamShareList {
     setStaged((current) => current.filter((entry) => !saved.has(entry.suggestion.key)))
     setSharing(false)
   }
+  const people = teamSharePeople(bot.shares)
   return {
     owner,
-    people: teamSharePeople(bot.shares),
+    people,
+    othersListed: people.length > 0 || Object.values(connectorListed).some((count) => count > 0),
     query,
     onQueryChange: setQuery,
     suggestions,
@@ -147,6 +153,7 @@ export function useBotTeamShareList(bot: Bot): BotTeamShareList {
         entry={entry}
         query={query}
         report={setFound}
+        reportListed={setConnectorListed}
         adds={adds}
       />
     ))
