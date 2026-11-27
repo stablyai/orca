@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import type { AgentSessionContextUsed } from '../../../shared/agent-session/conversation-context/agent-session-context-usage'
 import { GENERIC_ACP_DIALECT } from '../acp-dialects/acp-dialect'
 import { OMP_ACP_DIALECT } from '../acp-dialects/omp-dialect'
 import { AcpTimelineTranslator } from './acp-timeline-translator'
@@ -27,9 +28,16 @@ function compact(lane: AcpTimelineTranslator, frames: unknown[]) {
   lane.openPrompt('compact-1', 4, 'compact:1')
   const events = frames.flatMap((frame) => lane.notification('session/update', frame, 5))
   events.push(...lane.promptResult('compact-1', { stopReason: 'end_turn' }, 6))
-  return events.flatMap((event) =>
-    event.type === 'context.usage' ? [event.usage.used] : event.type === 'turn.end' ? ['end'] : []
-  )
+  // flatMap cannot unify `used` with the `'end'` marker under the timeline event union.
+  const markers: (AgentSessionContextUsed | 'end' | undefined)[] = []
+  for (const event of events) {
+    if (event.type === 'context.usage') {
+      markers.push(event.usage.used)
+    } else if (event.type === 'turn.end') {
+      markers.push('end')
+    }
+  }
+  return markers
 }
 
 const ompLane = () => new AcpTimelineTranslator({ sessionId: SESSION, dialect: OMP_ACP_DIALECT })
