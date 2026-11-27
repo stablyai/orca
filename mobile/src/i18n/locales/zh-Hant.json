@@ -6758,6 +6758,8 @@
       "title": "從其他應用程式匯入",
       "newBot": "新機器人",
       "nameAnother": "為新機器人命名",
+      "update": "更新 {{bot}}",
+      "updateDraft": "把 {{name}} 在 {{app}} 中的新內容都遷移過來。",
       "keysStay": "金鑰和登入資訊不會帶過來",
       "chooseFolderTitle": "選擇資料夾",
       "loadingFolders": "正在載入資料夾…",
@@ -6770,7 +6772,112 @@
       "chooseFolderRow": "選擇資料夾…",
       "nudgeOne": "我們在 {{app}} 中找到一個機器人。",
       "nudgeMany": "我們在 {{app}} 中找到 {{count}} 個機器人。",
-      "noFolders": "沒有資料夾"
+      "noFolders": "沒有資料夾",
+      "more": "更多操作",
+      "makeNew": "改為建立新的機器人"
+    },
+    "host": {
+      "errors": {
+        "signedOut": "要連線 {{service}}，請先讓 {{host}} 登入 Orca Cloud。",
+        "accountChanged": "{{host}} 的 Orca 登入已變更。請重新開始。",
+        "notRouted": "{{service}} 的頁面必須在 Orca 中 {{host}} 的瀏覽器裡開啟。請重新連線 {{host}}，然後重新開始。"
+      }
+    },
+    "slack": {
+      "errors": {
+        "notAToken": "這不是設定重新整理權杖。設定重新整理權杖以 xoxe- 開頭。",
+        "grantExpired": "Slack 不再接受此工作區的權杖。請產生新權杖並貼上。",
+        "rateLimited": "嘗試次數過多。請等待一分鐘，然後重試。",
+        "slackUnavailable": "Slack 未回應。請重試。",
+        "slackRefused": "Slack 拒絕設定該應用程式。",
+        "unknownBot": "Orca Cloud 尚未識別此機器人。請過一分鐘後重試。",
+        "wrongWorkspace": "此機器人的 Slack 應用程式位於另一個工作區。請先將其從 Slack 中移除。",
+        "notInstalled": "請先將此機器人新增到 Slack。",
+        "unreachable": "無法連線到 Orca Cloud。請檢查網路連線，然後重試。"
+      },
+      "setup": {
+        "checking": "正在檢查 Slack…",
+        "isIn": "{{name}} 已加入 Slack",
+        "retry": "重試",
+        "connectAnother": "連線其他 Slack 工作區",
+        "connect": "連線 Slack",
+        "cancel": "取消",
+        "reconnectShort": "重新連線",
+        "createShort": "建立",
+        "settingUp": "正在設定你的 Slack 應用程式…",
+        "readyTitle": "你的 Slack 應用程式已就緒",
+        "readyDetail": "在 Slack 中核准即可完成。如果你的工作區需要管理員核准新應用程式，{{name}} 會在管理員核准後加入。",
+        "approve": "在 Slack 中核准",
+        "waiting": "正在等待 Slack…",
+        "newLink": "取得新連結",
+        "uncertain": "Slack 可能已建立一個名為 {{name}} 的應用程式，但 Orca 無法使用它。如果該應用程式存在，請在 Slack 應用程式設定中將其刪除，然後重新設定。",
+        "uncertainChecked": "我已檢查 Slack：沒有這個應用程式，或我已將其刪除",
+        "again": "重新設定",
+        "tryIt": "在任意頻道或私訊中試試",
+        "openInSlack": "在 Slack 中傳送訊息給它",
+        "preview": {
+          "askPlain": "@{{name}} 總結一下這個討論串"
+        },
+        "pick": "選擇一個 Slack 工作區。",
+        "another": "連線其他工作區"
+      },
+      "connection": {
+        "installedBy": "由 {{installer}} 安裝",
+        "waiting": "正在等待在 Slack 中完成安裝。",
+        "none": "尚未加入 Slack。",
+        "unfinished": "Slack 設定未完成。",
+        "removeFromTitle": "要將 {{name}} 從 {{place}} 中移除嗎？",
+        "removeNote": "移除後，它將不再接收來自 Slack 的新工作。這不會刪除 Slack 中的應用程式。",
+        "removeConfirm": "移除",
+        "add": "新增到 Slack",
+        "finish": "完成設定",
+        "update": "在 Slack 中更新",
+        "appSettings": "Slack 應用程式設定",
+        "updatePermissions": "更新 Slack 權限…"
+      },
+      "mentionLinePlain": "在頻道或私訊中提及 @{{name}}。",
+      "replies": "回覆",
+      "postAs": {
+        "title": "發布身分",
+        "changeOn": "在 {{host}} 上更改",
+        "orcaUser": "Orca 使用者",
+        "viaOrca": "{{name}}（透過 Orca）",
+        "sample": "那之後就發布吧",
+        "linePlain": "你從 Orca 回覆 Slack 討論串時，會以 {{name}} 的身分發布。",
+        "approve": "在 Slack 中核准",
+        "waitingOn": "切換為 {{name}} 需要 {{installer}} 在 Slack 中核准。",
+        "waiting": "切換為 {{name}} 需要在 Slack 中獲得核准。"
+      },
+      "token": {
+        "open": "取得設定權杖",
+        "step1": "在 Slack 應用程式設定中找到「Your App Configuration Tokens」，然後選擇「Generate Token」。",
+        "step2": "選擇機器人要加入的工作區。",
+        "step3": "複製 Refresh Token，並貼到下方。",
+        "label": "設定重新整理權杖",
+        "paste": "貼上",
+        "accessPasted": "這是 Access Token。請複製它旁邊的 Refresh Token。",
+        "kept": "Orca Cloud 會加密儲存此權杖，之後在此工作區新增機器人只需點選一下。",
+        "step2Title": "選擇工作區",
+        "step3Title": "貼上 Refresh Token"
+      },
+      "problem": {
+        "otherUser": "連線是由另一個 Slack 帳戶核准的。",
+        "otherUserNext": "有人用另一個 Slack 帳戶核准了連線，因此 {{bot}} 無法以你的身分操作。請取得新連結，再用你自己的 Slack 帳戶登入並核准連線。",
+        "expired": "Slack 登入沒有完成。",
+        "expiredNext": "Slack 連結在有人核准連線前就過期了。",
+        "code": "代碼",
+        "computer": "電腦",
+        "workspace": "工作區"
+      },
+      "reconnect": {
+        "whyNeeded": "Orca 沒有此工作區可用的 Slack 權杖。",
+        "continue": "繼續",
+        "stopped": "Slack 已不再接受 {{host}} 使用的權杖。"
+      }
+    },
+    "cloudSignIn": {
+      "paused": "未登入期間已暫停",
+      "needsSignIn": "需要登入"
     },
     "saveFailed": "無法儲存",
     "chats": {
@@ -6944,12 +7051,94 @@
         "miro": "白板、便利貼和框架",
         "reddit": "貼文、留言和子版"
       },
+      "added": "已新增",
+      "filter": "篩選",
+      "filterActive": "篩選，{{filter}}",
+      "all": "所有應用程式",
       "webhooks": {
         "line": "來自任何工具或指令碼的事件"
       },
+      "category": {
+        "coding": "程式開發",
+        "chat": "聊天",
+        "docs": "文件與專案",
+        "mail": "郵件與會議",
+        "monitoring": "監控",
+        "sales": "銷售與支援",
+        "design": "設計"
+      },
+      "search": "搜尋應用程式",
+      "onBot": "{{bot}} 的應用程式",
+      "noMatch": "沒有與「{{query}}」符合的應用程式。",
+      "connectors": "連接器",
       "composio": {
+        "connectTitle": "連線 Composio",
+        "once": "只需連線一次，即可用於你的所有機器人",
+        "browseAll": "瀏覽 Composio 應用程式",
         "keyOnHost": "儲存在 {{host}}；機器人永遠看不到。"
-      }
+      },
+      "close": "關閉",
+      "couldNotSignIn": "無法登入 {{app}}",
+      "signingIn": "正在登入",
+      "openPageAgain": "再次開啟頁面",
+      "closeKeepsSigningIn": "關閉此頁面後，登入仍會在瀏覽器中繼續。",
+      "appsCaption": "應用程式",
+      "addByUrl": "透過 URL 新增"
+    },
+    "connectors": {
+      "back": "返回連接器",
+      "addOrg": "新增組織",
+      "addWorkspace": "新增工作區",
+      "addAnotherWorkspace": "新增其他工作區",
+      "backShort": "返回",
+      "addGitHubAccess": "新增存放庫或組織",
+      "addBack": "重新新增",
+      "addBackNamed": "重新新增 {{name}}"
+    },
+    "connector": {
+      "titleSeparator": " · ",
+      "actions": "{{name}} 操作",
+      "removeFrom": "從 {{place}} 移除…"
+    },
+    "composio": {
+      "viaComposio": "透過 Composio",
+      "group": "透過 Composio 使用更多應用程式",
+      "showMore": "顯示更多",
+      "loading": "正在讀取 Composio 應用程式…",
+      "key": {
+        "label": "Composio API 金鑰",
+        "placeholder": "貼上你的金鑰",
+        "getKey": "取得金鑰"
+      },
+      "signInEnded": "登入被拒絕、失敗或逾時。",
+      "signInOnComposio": "請在 Composio 頁面上登入 {{app}}。",
+      "tryAgain": "重試",
+      "disconnectTitle": "要中斷與 {{app}} 的連線嗎？",
+      "disconnectNote": "{{bot}} 將無法再使用 {{app}}。你可以隨時重新連線。",
+      "disconnect": "中斷連線",
+      "signInAgainAs": "需要你重新登入 · {{label}}",
+      "signInAgain": "需要你重新登入",
+      "connectedAs": "已以 {{label}} 身分連線",
+      "connected": "已連線",
+      "people": "人員",
+      "peopleNote": "任何可以向 {{bot}} 提問的人都能使用",
+      "signInLabel": "登入資訊",
+      "signInHeld": "由 Composio 保管",
+      "signInAgainMenu": "重新登入",
+      "disconnectNamed": "中斷與 {{app}} 的連線",
+      "added": "{{bot}} 現在可以使用 {{app}} 了",
+      "signedOut": "已登出 · {{via}}",
+      "unreadShort": "無法載入 Composio 應用程式。",
+      "reading": "正在讀取 Composio…",
+      "keyRejected": "金鑰未被接受",
+      "fixKey": "修正金鑰",
+      "signInsUnreadShort": "無法讀取登入資訊",
+      "checkAgain": "重新檢查",
+      "toolName": "Composio 應用程式"
+    },
+    "setup": {
+      "for": "用於 {{name}}",
+      "copyHowToAsk": "複製 {{text}}"
     },
     "share": {
       "receive": {
