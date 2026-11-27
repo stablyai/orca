@@ -15,10 +15,12 @@ import type { RuntimeBrowserCommandHost } from '../commands/browser-command-cont
 import type { RuntimeBrowserCommandTargets } from '../commands/browser-command-targets'
 import {
   createBrowserClientPage,
-  createBrowserPageOnPairedHost,
-  openBrowserUrlOnClient
+  createBrowserPageOnPairedHost
 } from '../client-pages/browser-client-page-opening'
-import { opensOnPairedDesktop } from '../client-pages/server-agent-tab-placement'
+import {
+  openBrowserUrlOnClient,
+  opensOnPairedDesktop
+} from '../client-pages/server-agent-tab-placement'
 
 type BrowserTabCreateRequest = {
   url?: string
@@ -233,6 +235,23 @@ export class RuntimeBrowserTabCreation {
     },
     options?: { signal?: AbortSignal }
   ): Promise<{ browserPageId: string }> {
-    return openBrowserUrlOnClient(this.host, params, options?.signal)
+    // Phone-only servers have no desktop for BROWSER opens such as login links (#48645).
+    const serverPage =
+      this.host.getAvailableAuthoritativeWindowId() === null &&
+      this.host.getOffscreenBrowserBackend()
+        ? () =>
+            this.browserTabCreate(
+              {
+                url: params.url,
+                worktree: params.worktree,
+                // A CLI has no screen, so every screen on the workspace shows it, as `tab create --focus` does.
+                activate: true,
+                navigation: 'all',
+                placement: { kind: 'server' }
+              },
+              { signal: options?.signal }
+            )
+        : undefined
+    return openBrowserUrlOnClient(this.host, params, options?.signal, serverPage)
   }
 }
