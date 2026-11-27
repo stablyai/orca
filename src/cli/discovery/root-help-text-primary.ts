@@ -41,6 +41,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  artifacts                 Publish, list, update, and manage shared Orca artifacts',
   '',
   'Hosts:',
+  '  host add                  Register an SSH host this Orca runtime can target',
   '  host list                 List targetable machines and how to name each one',
   '  host rm                   Remove a saved SSH target',
   '',

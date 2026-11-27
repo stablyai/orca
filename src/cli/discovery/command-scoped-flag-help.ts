@@ -13,6 +13,16 @@ const SKILLS_FORCE_FLAG_HELP =
   '--force                Replace skipped copies where possible, moving each to ~/.agents/.orca-skill-backups first.'
 
 const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
+  'host add': {
+    host: '--host <host>           SSH hostname or IP to register (not the --host ssh:<id> target selector)',
+    name: '--name <label>          Display name; defaults to user@host',
+    port: '--port <n>              SSH port (default 22)',
+    user: '--user <u>              SSH username; may be empty, like the app’s add dialog',
+    key: '--key <path>            Private key file path, stored as a reference from this machine’s view; never read or copied',
+    jump: '--jump <proxyjump>      Jump host (ProxyJump) to reach the target through',
+    'allow-remote-cli-control':
+      '--allow-remote-cli-control   Let that host’s orca CLI control this Orca beyond its own terminals (default off)'
+  },
   'bot item add': {
     title: BOT_ITEM_TITLE_HELP,
     for: '--for bot:<name>       Make the item for another bot'

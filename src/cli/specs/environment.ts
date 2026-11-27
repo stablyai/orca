@@ -4,6 +4,37 @@ import { LOCAL_COMMAND_FLAGS } from '../arguments/args'
 
 export const ENVIRONMENT_COMMAND_SPECS: CommandSpec[] = [
   {
+    path: ['host', 'add'],
+    summary: 'Register an SSH host this Orca runtime can target',
+    usage:
+      'orca host add --host <host> [--name <label>] [--port <n>] [--user <u>] [--key <path>] [--jump <proxyjump>] [--allow-remote-cli-control] [--json]',
+    allowedFlags: [
+      ...LOCAL_COMMAND_FLAGS,
+      'host',
+      'name',
+      'port',
+      'user',
+      'key',
+      'jump',
+      'allow-remote-cli-control'
+    ],
+    booleanFlags: ['allow-remote-cli-control'],
+    notes: [
+      'Registers the host in this machine’s own Orca runtime — the same store the app’s Settings › Hosts pane reads.',
+      '--key stores the private key file path as a reference, exactly as typed, from this machine’s point of view; the key material is never read or copied.',
+      '--name defaults to user@host, and port defaults to 22.',
+      'A duplicate is refused on the connection endpoint (host, port and username), not the display name: a blank --user matches any existing user on that host and port. `orca host list` shows what is registered.',
+      'Adding a host whose id was removed earlier re-points that host’s orphaned workspaces onto the new id and says so.',
+      'Use the registered id afterwards: `orca host rm --host ssh:<target-id>` removes it, and `orca host list` prints that flag.',
+      '--environment and --pairing-code are rejected rather than ignored: registration writes this machine’s store, so a routed answer would register on the wrong machine.'
+    ],
+    examples: [
+      'orca host add --host build.internal',
+      'orca host add --host box.example.org --port 2222 --user dev --key ~/.ssh/id_ed25519 --name build-host-1',
+      'orca host add --host box.internal --allow-remote-cli-control --json'
+    ]
+  },
+  {
     path: ['host', 'name'],
     summary: 'Show or set the name this Orca runtime reports to connected clients',
     usage: 'orca host name [--name <name>] [--json]',

@@ -13,7 +13,8 @@ import { normalizeTypedName } from '../../shared/text/typed-name-normalization'
 import { getDefaultUserDataPath } from '../runtime/profile/metadata'
 import { RuntimeClientError } from '../runtime/connection/types'
 import type { RuntimeClient } from '../runtime/client'
-import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import { HOST_ADD_HANDLERS } from './host-add'
+import { localSuccess } from './local-success-envelope'
 
 import { rejectRemoteSelectionFlags } from '../dispatch/remote-selection-flag-rejection'
 import { redactRuntimeEnvironment } from '../../shared/remote-runtime/host-catalog/runtime-environments'
@@ -30,6 +31,7 @@ import { refuseReservedEnvironmentName } from './local-environment-selector'
 import { listEnvironments } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 
 export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
+  ...HOST_ADD_HANDLERS,
   'host name': async ({ client, flags, json }) => {
     const requestedName = flags.get('name')
     if (requestedName !== undefined && typeof requestedName !== 'string') {
@@ -223,15 +225,4 @@ function getRequiredStringFlag(flags: Map<string, string | boolean>, name: strin
     throw new RuntimeClientError('invalid_argument', `Missing required --${name}`)
   }
   return value
-}
-
-function localSuccess<TResult>(result: TResult): RuntimeRpcSuccess<TResult> {
-  return {
-    id: 'local',
-    ok: true,
-    result,
-    _meta: {
-      runtimeId: 'local'
-    }
-  }
 }

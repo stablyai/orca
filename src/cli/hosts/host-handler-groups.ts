@@ -6,6 +6,7 @@ export const HOST_HANDLER_GROUPS: readonly HandlerGroup[] = [
   {
     name: 'environment',
     keys: [
+      'host add',
       'host name',
       'host list',
       'host rm',
