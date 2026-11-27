@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { makeTestBot } from '../../../../bots/bot.test-fixture'
 import { OrchestrationDb } from '../../db/orchestration-db'
+import { recordWakeSignal } from '../../../../power/wake-signal-clock'
 import { allowServer } from '../../db/federation/paired-server-asks-store'
 import { pairedServerPullParams } from '../paired-server-asks/paired-server-asks-loop'
 import type { PairedServerAsks } from '../paired-server-asks/paired-server-asks-pull'
@@ -227,5 +228,30 @@ describe("the computers a server's bot list names", () => {
     const owner = serverOwner()
     clientAskPullStarted(owner, { deviceId: 'device_a', fingerprint: 'fp_a' }, clientAsks!)
     expect(connectedClientRosters(owner)[0]?.moreBots).toBe(true)
+  })
+})
+
+describe('a system resume', () => {
+  // No resume before this: what the tests above saw.
+  afterEach(() => recordWakeSignal('resume', Date.now(), Number.NEGATIVE_INFINITY))
+
+  it('stops a computer seen before it counting as live, so a sleep never keeps a silent one listed', () => {
+    const owner = serverOwner()
+    const pull = (deviceId: string, installationId: string, name: string, at: number) =>
+      clientAskPullStarted(
+        owner,
+        { deviceId, fingerprint: `fp_${deviceId}` },
+        { session: `s_${deviceId}`, installationId, name },
+        at
+      )
+    // B crashed named as A's id; the system slept, and the clock skipped the sleep.
+    pull('device_b', 'install_b', 'install_a', 1_000)
+    recordWakeSignal('resume', Date.now(), 2_000)
+    pull('device_a', 'install_a', 'Mac A', 2_500)
+
+    expect(connectedClientRosters(owner, 3_000).map((client) => client.onClient)).toEqual([
+      'install_a'
+    ])
+    expect(requireListeningClient(owner, 'install_a', '', 3_000).deviceId).toBe('device_a')
   })
 })

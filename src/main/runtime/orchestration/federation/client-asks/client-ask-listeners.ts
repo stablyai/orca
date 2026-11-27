@@ -9,6 +9,7 @@ import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { OrchestrationError } from '../../orchestration-error'
 import type { BotRosterClient } from '../../../../../shared/bot-roster'
 import { toSafeDisplayLine } from '../../../../../shared/text/display-text-safety'
+import { monotonicMsOfWakeSignal } from '../../../../power/wake-signal-clock'
 import type { PeerMailClientAsksPull } from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 
 export type ClientAskListener = {
@@ -41,8 +42,12 @@ export function monotonicNow(): number {
   return performance.now()
 }
 
+// performance.now() stops while the system sleeps on Linux, so a computer seen before the last resume
+// counts as live only once it pulls again; one still connected pulls again at once.
 const isLive = (listener: ClientAskListener, now: number): boolean =>
-  now - listener.seenAt >= 0 && now - listener.seenAt <= CLIENT_ROSTER_LIVE_MS
+  now - listener.seenAt >= 0 &&
+  now - listener.seenAt <= CLIENT_ROSTER_LIVE_MS &&
+  listener.seenAt >= (monotonicMsOfWakeSignal('resume') ?? Number.NEGATIVE_INFINITY)
 
 /** The runtime whose server the computers listen on; a test's runtimes keep separate listeners. */
 export type ClientAskListenerOwner = Pick<OrcaRuntimeService, 'getOrchestrationDb'>
