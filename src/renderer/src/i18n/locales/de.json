@@ -15373,11 +15373,7 @@
             "keepFile": "Datei behalten",
             "keepDeletion": "Löschung beibehalten",
             "refreshAll": "Alle aktualisieren",
-            "rebaseConflictCount_one": "{{count}} Konflikt",
-            "rebaseConflictCount_other": "{{count}} Konflikte",
-            "rebasePaused": "Rebase angehalten",
             "rebaseResolveConflictsFirst": "Löse zuerst die Konflikte",
-            "rebaseAbort": "Abbrechen",
             "rebaseContinue": "Fortsetzen",
             "continueRebasePausedAgain": "Rebase beim nächsten Konflikt angehalten",
             "continueRebaseFailed": "Rebase konnte nicht fortgesetzt werden",
@@ -15388,7 +15384,6 @@
             "rebaseStopMovedOn": "Der Rebase ist bereits weitergegangen. Prüfe das Panel und versuche es erneut.",
             "rebaseEmptyStep": "In diesem Schritt gibt es nichts zu committen. Brich den Rebase ab oder schließe ihn im Terminal ab.",
             "rebaseStepUnreadableShort": "Prüfung fehlgeschlagen",
-            "rebaseCheckAgain": "Erneut prüfen",
             "rebaseRetryInspect": "Erneut versuchen",
             "rebaseRetryInspectLabel": "Rebase-Schritt erneut prüfen",
             "rebaseStoppedFinishInTerminal": "Git hat diesen Schritt angehalten. Schließe ihn im Terminal ab oder brich ab.",
@@ -15420,7 +15415,11 @@
             "scopeNoUncommitted": "Keine nicht committeten Änderungen.",
             "scopeCommitFiles": "Dateien",
             "gitGraphButton": "Graph",
-            "compareLoadingAgainst": "Vergleich mit {{base}}"
+            "compareLoadingAgainst": "Vergleich mit {{base}}",
+            "operationResolve": "Lösen",
+            "operationResolveLabel": "Konflikte mit KI lösen",
+            "operationMoreActions": "Weitere Aktionen",
+            "operationAbortConfirm": "Zum Abbrechen erneut auswählen"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Der ausgewählte Agent konnte nicht gestartet werden.",
@@ -16029,15 +16028,7 @@
               "conflict": {
                 "status": {
                   "cards": {
-                    "5302a1ddba": "Merge-Konflikte",
-                    "7f3af87549": "Rebase-Konflikte",
-                    "6a8e9ad490": "Cherry-pick-Konflikte",
-                    "bdf8772106": "Konflikte",
-                    "edc2d82a2b": "Merge läuft",
-                    "5c3707aa44": "Rebase läuft",
-                    "ffe53a1da6": "Cherry-pick läuft",
-                    "35eb76d323": "Vorgang läuft",
-                    "completeMerge": "Merge abschließen"
+                    "bdf8772106": "Konflikte"
                   }
                 }
               },
@@ -28222,13 +28213,10 @@
     "loadFailed": "Git-Verlauf konnte nicht geladen werden",
     "updateHost": "Aktualisiere Orca auf {{host}}, um den Git-Graphen zu öffnen",
     "title": "Git-Graph",
-    "revertConflicts": "Konflikte beim Rückgängigmachen",
-    "revertInProgress": "Rückgängigmachen läuft",
     "abortOperationTitle": "{{operation}} abbrechen?",
     "abortOperationDescription": "Dies bricht den laufenden Vorgang ab und kann dabei vorgenommene Konfliktlösungen verwerfen.",
     "abortOperation": "{{operation}} abbrechen",
     "recoveryFailed": "Der Vorgang konnte nicht abgeschlossen werden. Aktualisiere die Quellcodeverwaltung und versuche es erneut.",
-    "continueOperation": "{{operation}} fortsetzen",
     "reverting": "Wird rückgängig gemacht",
     "updateActionsHost": "Aktualisiere Orca auf {{host}}, um Commit-Aktionen auszuführen",
     "thisHost": "diesem Host",

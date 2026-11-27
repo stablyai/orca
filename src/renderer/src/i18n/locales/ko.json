@@ -14688,11 +14688,7 @@
             "keepFile": "파일 유지",
             "keepDeletion": "삭제 유지",
             "refreshAll": "모두 새로고침",
-            "rebaseConflictCount_one": "충돌 {{count}}개",
-            "rebaseConflictCount_other": "충돌 {{count}}개",
-            "rebasePaused": "리베이스 일시 중지됨",
             "rebaseResolveConflictsFirst": "먼저 충돌을 해결하세요",
-            "rebaseAbort": "중단",
             "rebaseContinue": "계속",
             "continueRebasePausedAgain": "다음 충돌에서 리베이스가 일시 중지됨",
             "continueRebaseFailed": "리베이스 계속 실패",
@@ -14703,7 +14699,6 @@
             "rebaseStopMovedOn": "리베이스가 이미 다음 단계로 진행되었습니다. 패널을 확인하고 다시 시도하세요.",
             "rebaseEmptyStep": "이 단계에는 커밋할 내용이 없습니다. 리베이스를 중단하거나 터미널에서 마무리하세요.",
             "rebaseStepUnreadableShort": "확인 실패",
-            "rebaseCheckAgain": "다시 확인",
             "rebaseRetryInspect": "다시 시도",
             "rebaseRetryInspectLabel": "리베이스 단계 다시 확인",
             "rebaseStoppedFinishInTerminal": "Git이 이 단계에서 일시 중지했습니다. 터미널에서 마무리하거나 중단하세요.",
@@ -14735,7 +14730,11 @@
             "scopeNoUncommitted": "커밋되지 않은 변경 사항이 없습니다.",
             "scopeCommitFiles": "파일",
             "gitGraphButton": "그래프",
-            "compareLoadingAgainst": "{{base}}와(과) 비교 중"
+            "compareLoadingAgainst": "{{base}}와(과) 비교 중",
+            "operationResolve": "해결",
+            "operationResolveLabel": "AI로 충돌 해결",
+            "operationMoreActions": "추가 작업",
+            "operationAbortConfirm": "다시 선택하면 중단됩니다"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "선택한 에이전트를 시작할 수 없습니다.",
@@ -15344,15 +15343,7 @@
               "conflict": {
                 "status": {
                   "cards": {
-                    "5302a1ddba": "병합 충돌",
-                    "7f3af87549": "리베이스 충돌",
-                    "6a8e9ad490": "체리픽 충돌",
-                    "bdf8772106": "충돌",
-                    "edc2d82a2b": "병합 진행 중",
-                    "5c3707aa44": "리베이스 진행 중",
-                    "ffe53a1da6": "체리픽 진행 중",
-                    "35eb76d323": "작업 진행 중",
-                    "completeMerge": "병합 완료"
+                    "bdf8772106": "충돌"
                   }
                 }
               },
@@ -27343,13 +27334,10 @@
     "loadFailed": "Git 기록을 불러오지 못했습니다",
     "updateHost": "Git 그래프를 열려면 {{host}}의 Orca를 업데이트하세요",
     "title": "Git 그래프",
-    "revertConflicts": "되돌리기 충돌",
-    "revertInProgress": "되돌리기 진행 중",
     "abortOperationTitle": "{{operation}} 작업을 중단할까요?",
     "abortOperationDescription": "진행 중인 작업을 취소합니다. 이 작업 중에 해결한 충돌 내용이 삭제될 수 있습니다.",
     "abortOperation": "{{operation}} 중단",
     "recoveryFailed": "작업을 완료하지 못했습니다. 소스 제어를 새로고침한 후 다시 시도하세요.",
-    "continueOperation": "{{operation}} 계속",
     "reverting": "되돌리는 중",
     "updateActionsHost": "커밋 작업을 하려면 {{host}}의 Orca를 업데이트하세요",
     "thisHost": "이 호스트",
