@@ -6,7 +6,6 @@ import { waitForNextTabRegistration } from './browser-tab-registration-wait'
 import {
   captureCleanBrowserPage,
   disposeGrabModeStateForPage,
-  isCurrentGrabArm,
   setBrowserGrabMode
 } from '../../browser/element-grab/browser-grab-mode-sequencer'
 import { isBrowserCaptureCleanPageArgs } from '../../../shared/browser/element-grab/browser-grab-types'
@@ -79,10 +78,17 @@ export function registerBrowserGrabHandlers(): void {
       const resolveGuest = (): Electron.WebContents | null =>
         browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
       const guest = resolveGuest()
-      if (!guest) {
+      // Only the guest and settled document the request began on: a replaced guest or a load already under way
+      // (even to the same URL) would hand Draw a page the user never asked to draw on.
+      if (!guest || guest.id !== args.guestId || guest.isLoadingMainFrame()) {
         return null
       }
-      const { capture, retire } = captureCleanBrowserPage(args.browserPageId, guest, resolveGuest)
+      const { capture, retire } = captureCleanBrowserPage(
+        args.browserPageId,
+        guest,
+        resolveGuest,
+        args.deadlineMs
+      )
       cleanCapturesByAttemptId.set(args.attemptId, { senderId: event.sender.id, retire })
       try {
         return await capture
@@ -110,10 +116,6 @@ export function registerBrowserGrabHandlers(): void {
       const guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
       if (!guest) {
         return { opId: args.opId, kind: 'error', reason: 'Guest not ready' }
-      }
-      // A stale arm (a newer enable, Draw's capture or a disable came since) gets no pick and sends no off.
-      if (!isCurrentGrabArm(args.browserPageId, args.armToken)) {
-        return { opId: args.opId, kind: 'cancelled', reason: 'user' }
       }
       // awaitGrabSelection cancels previous grabs; an extra active-op guard would race rearming.
       return browserManager.awaitGrabSelection(args.browserPageId, args.opId, guest)

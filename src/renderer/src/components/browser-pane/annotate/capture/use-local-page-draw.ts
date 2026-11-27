@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, type RefObject } from 'react'
 import type { GrabModeState } from '../grab/useGrabMode'
 import type { BrowserGuestAnnotationViewportBridge } from '../use-browser-guest-annotate-tools'
 import type { MarkupModeController } from './useMarkupMode'
+import { readCleanCaptureGuestId } from './use-browser-page-markup-capture'
 
 /**
  * Draw on a local page, which may start while Grab or Annotate is on: main clears the picker before capturing.
@@ -26,11 +27,12 @@ export function useLocalPageDraw({
 }): { startMarkup: () => Promise<void>; viewportBridge: BrowserGuestAnnotationViewportBridge } {
   const { start, abandonCapture } = markup
   const startMarkup = useCallback(() => {
-    if (grabState !== 'idle') {
+    // A Draw that can't capture (no settled guest) reports so without first dropping the user's pick.
+    if (grabState !== 'idle' && readCleanCaptureGuestId(webviewRef.current) !== null) {
       stopPicker()
     }
     return start()
-  }, [grabState, start, stopPicker])
+  }, [grabState, start, stopPicker, webviewRef])
 
   useEffect(() => {
     if (!isActive) {

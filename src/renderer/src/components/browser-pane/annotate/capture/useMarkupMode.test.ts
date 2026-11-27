@@ -27,15 +27,21 @@ vi.mock('./markup-base-image', () => ({
 vi.mock('sonner', () => ({ toast: { error: () => (page.errors += 1) } }))
 
 /** A connected webview stand-in whose guest id the test can swap, as a recovered or reattached guest would. */
-function fakeWebview(): { webview: Electron.WebviewTag; guestId: { current: number } } {
+function fakeWebview(): {
+  webview: Electron.WebviewTag
+  guestId: { current: number }
+  loading: { current: boolean }
+} {
   const guestId = { current: 1 }
+  const loading = { current: false }
   const element = Object.assign(document.createElement('div'), {
     getWebContentsId: () => guestId.current,
+    isLoadingMainFrame: () => loading.current,
     getBoundingClientRect: () => ({ width: 10, height: 10 })
   })
   document.body.append(element)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the Draw path reads only events, isConnected, size and the guest id.
-  return { webview: element as unknown as Electron.WebviewTag, guestId }
+  return { webview: element as unknown as Electron.WebviewTag, guestId, loading }
 }
 
 const finishCapture = (ok: boolean): Promise<void> =>
@@ -74,9 +80,17 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 
 it('Draw stops an armed picker first; a reload, hidden pane or closed tab retires its capture silently', async () => {
-  const { webview } = fakeWebview()
+  const { webview, loading } = fakeWebview()
   const draw = renderLocalDraw(webview)
   draw.rerender({ grabState: 'armed', isActive: true })
+  // A page mid-load can't prove which document Draw would get, so the pick is kept and nothing is captured.
+  loading.current = true
+  draw.start()
+  expect(draw.stops).toEqual([])
+  expect(page.captures).toHaveLength(0)
+  expect(page.errors).toBe(1)
+  page.errors = 0
+  loading.current = false
   draw.start()
   expect(draw.stops).toEqual(['stop'])
   act(() => draw.result.current.draw.viewportBridge.invalidateDocument())
@@ -123,7 +137,7 @@ it('a lost or replaced guest drops a held capture and its error, but keeps a dra
   expect(draw.result.current.markup.state).toBe('drawing')
 })
 
-it('a pick awaits with its own arm token; a stale reply sends no second off and a superseded one starts no pick', async () => {
+it('a stale enable reply sends no second off, and a superseded one starts no pick', async () => {
   const replies: ((result: BrowserSetGrabModeResult) => void)[] = []
   const sent: string[] = []
   const transport = {
@@ -137,8 +151,8 @@ it('a pick awaits with its own arm token; a stale reply sends no second off and 
       sent.push('cancel')
       return true
     },
-    awaitGrabSelection: ({ armToken }: { armToken?: string }) => {
-      sent.push(`await:${armToken}`)
+    awaitGrabSelection: () => {
+      sent.push('await')
       return new Promise(() => {})
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: arming and cancelling use only these three calls.
@@ -148,11 +162,9 @@ it('a pick awaits with its own arm token; a stale reply sends no second off and 
 
   act(() => result.current.toggle())
   act(() => result.current.cancel())
-  await act(async () => replies.shift()!({ ok: true, armToken: 'arm-1' }))
+  await act(async () => replies.shift()!({ ok: true }))
   act(() => result.current.toggle())
   await act(async () => replies.shift()!({ ok: true, superseded: true }))
   expect(result.current.state).toBe('idle')
-  act(() => result.current.toggle())
-  await act(async () => replies.shift()!({ ok: true, armToken: 'arm-3' }))
-  expect(sent).toEqual(['on', 'off', 'on', 'on', 'await:arm-3'])
+  expect(sent).toEqual(['on', 'off', 'on'])
 })

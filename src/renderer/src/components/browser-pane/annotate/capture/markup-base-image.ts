@@ -1,4 +1,3 @@
-import { withTimeout } from '../../../../../../shared/concurrency/promise-timeout-fallback'
 import { createNonSecureContextUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 
 // Capture in the renderer from local webviews or streamed images so local and remote panes share markup delivery.
@@ -14,7 +13,7 @@ export type MarkupCaptureSource =
   | { kind: 'webview'; webview: Electron.WebviewTag }
   | { kind: 'image'; element: HTMLImageElement }
   /** Main removes the page's picker and captures it repainted without it, serialized with every viewer's arm. */
-  | { kind: 'clean-page'; browserPageId: string }
+  | { kind: 'clean-page'; browserPageId: string; guestId: number }
 
 // A page still loading delays the teardown; past this Draw reports a failed capture instead of hanging.
 const CLEAN_PAGE_CAPTURE_DEADLINE_MS = 10_000
@@ -28,7 +27,7 @@ export async function captureMarkupBaseImage(
     return captureFromWebview(source.webview)
   }
   if (source.kind === 'clean-page') {
-    return captureCleanPage(source.browserPageId, signal)
+    return captureCleanPage(source, signal)
   }
   return captureFromImage(source.element)
 }
@@ -45,32 +44,46 @@ async function captureFromWebview(webview: Electron.WebviewTag): Promise<MarkupB
 }
 
 async function captureCleanPage(
-  browserPageId: string,
+  { browserPageId, guestId }: { browserPageId: string; guestId: number },
   signal: AbortSignal | undefined
 ): Promise<MarkupBaseImage> {
+  // One absolute deadline from Draw's start covers main's queue, the reply, the decode and the flatten.
+  const deadlineMs = Date.now() + CLEAN_PAGE_CAPTURE_DEADLINE_MS
   const attemptId = createNonSecureContextUuid()
-  let retired = false
-  const retire = (): void => {
-    if (!retired) {
-      retired = true
+  let stopWatching = (): void => {}
+  // Rejects the moment Draw gives up or the deadline passes, so no later step publishes for an ended attempt.
+  const ended = new Promise<never>((_, reject) => {
+    const end = (): void => {
       void window.api.browser.retireCleanCapture({ attemptId })
+      reject(new Error('markup: the clean page capture ended'))
     }
-  }
-  signal?.addEventListener('abort', retire, { once: true })
-  const capture = await withTimeout(
-    window.api.browser.captureCleanPage({ browserPageId, attemptId }),
-    CLEAN_PAGE_CAPTURE_DEADLINE_MS,
-    null
-  ).finally(() => signal?.removeEventListener('abort', retire))
-  if (!capture) {
-    retire()
-    throw new Error('markup: the page could not be captured without the picker')
-  }
-  const image = await loadImage(capture.dataUrl)
-  return {
-    dataUrl: flattenToOpaquePng(image, capture.width, capture.height),
-    width: capture.width,
-    height: capture.height
+    const timer = setTimeout(end, CLEAN_PAGE_CAPTURE_DEADLINE_MS)
+    signal?.addEventListener('abort', end, { once: true })
+    stopWatching = () => {
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', end)
+    }
+  })
+  ended.catch(() => {})
+  try {
+    const capture = await Promise.race([
+      window.api.browser.captureCleanPage({ browserPageId, attemptId, guestId, deadlineMs }),
+      ended
+    ])
+    if (!capture) {
+      throw new Error('markup: the page could not be captured without the picker')
+    }
+    const image = await Promise.race([loadImage(capture.dataUrl), ended])
+    if (signal?.aborted || Date.now() >= deadlineMs) {
+      throw new Error('markup: the clean page capture ended')
+    }
+    return {
+      dataUrl: flattenToOpaquePng(image, capture.width, capture.height),
+      width: capture.width,
+      height: capture.height
+    }
+  } finally {
+    stopWatching()
   }
 }
 

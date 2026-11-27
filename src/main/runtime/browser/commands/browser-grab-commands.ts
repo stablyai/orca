@@ -1,9 +1,6 @@
 import { BrowserError } from '../../../browser/browser-error'
 import { browserManager } from '../../../browser/guest-lifecycle/manager/browser-manager'
-import {
-  isCurrentGrabArm,
-  setBrowserGrabMode
-} from '../../../browser/element-grab/browser-grab-mode-sequencer'
+import { setBrowserGrabMode } from '../../../browser/element-grab/browser-grab-mode-sequencer'
 import { watchBrowserGuestDocument } from '../../../browser/element-grab/watch-browser-guest-document'
 import type { BrowserGuestDocumentEvent } from '../../../../shared/browser/annotations/browser-guest-document-event'
 import type {
@@ -62,17 +59,13 @@ export class RuntimeBrowserGrab {
   }
 
   async browserGrabAwait(
-    params: BrowserCommandTargetParams & { opId: string; armToken?: string },
+    params: BrowserCommandTargetParams & { opId: string },
     signal?: AbortSignal
   ): Promise<BrowserGrabResult> {
     const { browserPageId, resolveGuest } = await this.resolveGrabGuest(params)
     const guest = resolveGuest()
     if (!guest) {
       return { opId: params.opId, kind: 'error', reason: 'Guest not ready' }
-    }
-    // Older viewers send no token; a viewer that does gets no pick for an arm a newer request voided.
-    if (params.armToken !== undefined && !isCurrentGrabArm(browserPageId, params.armToken)) {
-      return { opId: params.opId, kind: 'cancelled', reason: 'user' }
     }
     // A viewer that disconnects or gives up must not leave the page armed until the grab times out.
     const abandon = (): void => {

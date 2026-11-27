@@ -45,17 +45,21 @@ function fakeGuest(loading = false) {
   const scripts: (Held & { script: string })[] = []
   const frames: Held[] = []
   const readbacks: Held[] = []
+  const state = { loading, onEncode: () => {} }
   const emitter = Object.assign(new EventEmitter(), {
     id: 7,
     isDestroyed: () => false,
-    isLoadingMainFrame: () => loading,
+    isLoadingMainFrame: () => state.loading,
     executeJavaScript: (script: string) =>
       new Promise((settle, fail) => scripts.push({ script, settle, fail })),
     executeJavaScriptInIsolatedWorld: () => held(frames),
     capturePage: () =>
       held(readbacks).then(() => ({
         isEmpty: () => false,
-        toDataURL: () => CAPTURE.dataUrl,
+        toDataURL: () => {
+          state.onEncode()
+          return CAPTURE.dataUrl
+        },
         getSize: () => ({ width: 2, height: 1 })
       }))
   })
@@ -69,7 +73,7 @@ function fakeGuest(loading = false) {
   }
   const listeners = (): number =>
     WATCHED.reduce((sum, name) => sum + emitter.listenerCount(name), 0)
-  return { guest, emitter, scripts, frames, readbacks, run, listeners }
+  return { guest, emitter, scripts, frames, readbacks, state, run, listeners }
 }
 type FakeGuest = ReturnType<typeof fakeGuest>
 
@@ -101,8 +105,11 @@ async function passStages(page: FakeGuest, readback = true): Promise<void> {
   }
 }
 
-const capture = (page: FakeGuest, resolve: () => Electron.WebContents | null = () => page.guest) =>
-  captureCleanBrowserPage('page-1', page.guest, resolve)
+const capture = (
+  page: FakeGuest,
+  resolve: () => Electron.WebContents | null = () => page.guest,
+  deadlineMs = Date.now() + 10_000
+) => captureCleanBrowserPage('page-1', page.guest, resolve, deadlineMs)
 const ipc = (channel: string, senderId: number, args: unknown): Promise<unknown> =>
   Promise.resolve(handlers.get(channel)!({ sender: { id: senderId } }, args))
 
@@ -176,12 +183,28 @@ it('clean capture holds each stage in turn, needs an affirmative frame barrier, 
   page.frames.shift()!.fail(new Error('frame gone'))
   await expect(rejected).resolves.toBeNull()
 
+  // A stalled probe is never stacked: retries fail fast until it settles, then the next one captures.
   const late = capture(page).capture
   await flush()
   page.run(TEARDOWN)
   await vi.advanceTimersByTimeAsync(600)
   await expect(late).resolves.toBeNull()
-  expect(page.readbacks).toHaveLength(0)
+  const retry = capture(page).capture
+  await flush()
+  page.run(TEARDOWN)
+  await expect(retry).resolves.toBeNull()
+  expect(page.frames).toHaveLength(1)
+  page.frames.shift()!.settle(true)
+  await flush()
+  const recovered = capture(page).capture
+  await passStages(page)
+  await expect(recovered).resolves.toEqual(CAPTURE)
+
+  // Encoding a large page can outlast the deadline; the image is then never returned.
+  const encoded = capture(page, () => page.guest, Date.now() + 1_000).capture
+  page.state.onEncode = () => vi.setSystemTime(Date.now() + 2_000)
+  await passStages(page)
+  await expect(encoded).resolves.toBeNull()
   expect(page.listeners()).toBe(0)
 })
 
@@ -200,19 +223,24 @@ it('a retired attempt skips stages not yet started but holds the queue until its
   page.run(ARM)
   await arm
 
-  // Queued behind a held predecessor: one retired by its viewer, one by the host lifetime; neither runs a stage.
-  const predecessor = capture(page)
+  // Queued behind a held head: followers retired by their viewer or deadline leave at once, holding nothing.
+  const head = capture(page)
   await flush()
+  const headOnly = page.listeners()
   const byViewer = capture(page)
-  const byLifetime = capture(page)
+  const byDeadline = capture(page, () => page.guest, Date.now() + 1_000)
   byViewer.retire()
-  await vi.advanceTimersByTimeAsync(10_000)
-  await passStages(page)
-  await expect(predecessor.capture).resolves.toBeNull()
   await expect(byViewer.capture).resolves.toBeNull()
-  await expect(byLifetime.capture).resolves.toBeNull()
-  expect(page.scripts).toHaveLength(0)
+  await vi.advanceTimersByTimeAsync(1_000)
+  await expect(byDeadline.capture).resolves.toBeNull()
+  expect(page.listeners()).toBe(headOnly)
+  const retry = capture(page)
+  await passStages(page)
+  await expect(head.capture).resolves.toEqual(CAPTURE)
+  await passStages(page)
+  await expect(retry.capture).resolves.toEqual(CAPTURE)
   expect(pagesWithPendingGrabWaits()).toEqual([])
+  expect(page.listeners()).toBe(0)
 })
 
 it('a queued capture refuses a same-URL reload or a disposed page, and never touches a successor guest', async () => {
@@ -255,41 +283,37 @@ it('a throwing paint hold or release leaks no document listeners', async () => {
   expect(page.listeners()).toBe(0)
 })
 
-it('IPC: a denied sender changes nothing, and an await for a voided arm is refused without ending the newer pick', async () => {
+it('IPC: only the authorized guest the request began on, settled, gets a capture; nothing else changes the page', async () => {
   const page = fakeGuest()
   vi.spyOn(browserManager, 'getAuthorizedGuest').mockImplementation((_id, senderId) =>
     senderId === 1 ? page.guest : null
   )
   const on = ipc('browser:setGrabMode', 1, { browserPageId: 'page-1', enabled: true })
   await flush()
-  const attempt = { browserPageId: 'page-1', attemptId: 'a-1' }
-  await expect(ipc('browser:captureCleanPage', 2, attempt)).resolves.toBeNull()
-  await expect(
-    ipc('browser:setGrabMode', 2, { browserPageId: 'page-1', enabled: false })
-  ).resolves.toEqual({ ok: true })
-  await expect(ipc('browser:captureCleanPage', 1, { browserPageId: 'page-1' })).resolves.toBeNull()
+  const attempt = (overrides: object = {}) => ({
+    browserPageId: 'page-1',
+    attemptId: 'a-1',
+    guestId: 7,
+    deadlineMs: Date.now() + 10_000,
+    ...overrides
+  })
+  page.state.loading = true
+  for (const [senderId, args] of [
+    [2, attempt()],
+    [1, attempt({ guestId: 8 })],
+    [1, attempt({ guestId: undefined })],
+    [1, { browserPageId: 'page-1', attemptId: 'a-1' }],
+    // A load that started before Draw, even to the same URL, is not the document Draw was asked for.
+    [1, attempt()]
+  ] as const) {
+    await expect(ipc('browser:captureCleanPage', senderId, args)).resolves.toBeNull()
+  }
+  page.state.loading = false
   page.run(ARM)
-  const { armToken: staleToken } = (await on) as { armToken: string }
-  expect(staleToken).toBeDefined()
+  await expect(on).resolves.toEqual({ ok: true })
+  expect(page.scripts).toHaveLength(0)
 
-  // That enable's token outlives a Draw and a newer pick; its late await gets nothing and sends no off.
-  const draw = ipc('browser:captureCleanPage', 1, attempt)
+  const draw = ipc('browser:captureCleanPage', 1, attempt())
   await passStages(page)
   await expect(draw).resolves.toEqual(CAPTURE)
-  const newer = ipc('browser:setGrabMode', 1, { browserPageId: 'page-1', enabled: true })
-  await flush()
-  page.run(ARM)
-  const { armToken } = (await newer) as { armToken: string }
-  void ipc('browser:awaitGrabSelection', 1, { browserPageId: 'page-1', opId: 'new', armToken })
-  await flush()
-  const pending = page.scripts.length
-  await expect(
-    ipc('browser:awaitGrabSelection', 1, {
-      browserPageId: 'page-1',
-      opId: 'old',
-      armToken: staleToken
-    })
-  ).resolves.toEqual({ opId: 'old', kind: 'cancelled', reason: 'user' })
-  expect(browserManager.hasActiveGrabOp('page-1')).toBe(true)
-  expect(page.scripts).toHaveLength(pending)
 })

@@ -3,15 +3,16 @@ import type { BrowserCleanPageCapture } from '../../../shared/browser/element-gr
 
 const GRAB_PAINT_WORLD_ID = 1_209
 const GUEST_PAINT_DEADLINE_MS = 500
+// A stalled guest keeps at most one frame probe pending; while it is, the guest can't prove a fresh paint.
+const pendingFrameProbes = new WeakSet<Electron.WebContents>()
 const TWO_FRAMES_SCRIPT =
   'new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(true))))'
 
-/** Flags the end of the document a capture was admitted for: navigation (same-URL reloads too), a crash, or teardown. */
-export function watchGuestDocument(guest: Electron.WebContents): {
-  retired: () => boolean
-  stop: () => void
-} {
-  let retired = guest.isDestroyed()
+/** Reports the end of the document a capture was admitted for: navigation (same-URL reloads too), a crash, or teardown. */
+export function watchGuestDocument(
+  guest: Electron.WebContents,
+  onRetired: () => void
+): { stop: () => void } {
   const onNavigation = (
     _event: unknown,
     _url: unknown,
@@ -19,17 +20,14 @@ export function watchGuestDocument(guest: Electron.WebContents): {
     isMainFrame: boolean
   ): void => {
     if (isMainFrame && !isInPlace) {
-      retired = true
+      onRetired()
     }
   }
-  const onGone = (): void => {
-    retired = true
-  }
+  const onGone = (): void => onRetired()
   guest.on('did-start-navigation', onNavigation)
   guest.on('render-process-gone', onGone)
   guest.on('destroyed', onGone)
   return {
-    retired: () => retired,
     stop: () => {
       guest.off('did-start-navigation', onNavigation)
       guest.off('render-process-gone', onGone)
@@ -62,11 +60,14 @@ export async function captureCleanGuestPage({
     if (!(await teardown()) || !isLive()) {
       return null
     }
-    const painted = await withTimeout(
-      guest.executeJavaScriptInIsolatedWorld(GRAB_PAINT_WORLD_ID, [{ code: TWO_FRAMES_SCRIPT }]),
-      GUEST_PAINT_DEADLINE_MS,
-      false
-    )
+    if (pendingFrameProbes.has(guest)) {
+      return null
+    }
+    pendingFrameProbes.add(guest)
+    const probe = guest
+      .executeJavaScriptInIsolatedWorld(GRAB_PAINT_WORLD_ID, [{ code: TWO_FRAMES_SCRIPT }])
+      .finally(() => pendingFrameProbes.delete(guest))
+    const painted = await withTimeout(probe, GUEST_PAINT_DEADLINE_MS, false)
     if (painted !== true || !isLive()) {
       return null
     }
@@ -74,7 +75,9 @@ export async function captureCleanGuestPage({
     if (image.isEmpty() || !isLive()) {
       return null
     }
-    return { dataUrl: image.toDataURL(), ...image.getSize() }
+    const dataUrl = image.toDataURL()
+    // Encoding a large page takes time; the attempt may have expired or been retired meanwhile.
+    return isLive() ? { dataUrl, ...image.getSize() } : null
   } finally {
     releasePaint()
   }
