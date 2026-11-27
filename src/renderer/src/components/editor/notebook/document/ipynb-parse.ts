@@ -52,6 +52,15 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+export function isSupportedIpynbCell(
+  value: unknown
+): value is Record<string, unknown> & { cell_type: IpynbCellKind } {
+  return (
+    isRecord(value) &&
+    (value.cell_type === 'markdown' || value.cell_type === 'raw' || value.cell_type === 'code')
+  )
+}
+
 export function concatIpynbMultilineString(value: unknown): string {
   if (Array.isArray(value)) {
     let result = ''
@@ -136,16 +145,10 @@ export function parseIpynbOutput(rawOutput: unknown): IpynbOutput | null {
 }
 
 function parseCell(rawCell: unknown, fallbackLanguage: string): IpynbCell | null {
-  if (!isRecord(rawCell)) {
+  if (!isSupportedIpynbCell(rawCell)) {
     return null
   }
-  const kind =
-    rawCell.cell_type === 'markdown' || rawCell.cell_type === 'raw' || rawCell.cell_type === 'code'
-      ? rawCell.cell_type
-      : null
-  if (kind === null) {
-    return null
-  }
+  const kind = rawCell.cell_type
 
   const outputs = Array.isArray(rawCell.outputs)
     ? rawCell.outputs
