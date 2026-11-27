@@ -63,4 +63,35 @@ describe('WSL move orchestrator sidecar', () => {
       orchestrator.dispose()
     }
   })
+
+  it('re-checks the sidecar at each save, and saves again once it is readable', async () => {
+    writeWslMoveOrchestratorRecords(
+      userDataPath,
+      new Map([[wslMoveJournalKey('Ubuntu-A'), declined('Ubuntu-A')]])
+    )
+    const orchestrator = new WslMoveOrchestrator({
+      ...fakePorts(),
+      load: () => readWslMoveOrchestratorRecords(userDataPath),
+      save: (records) => writeWslMoveOrchestratorRecords(userDataPath, records)
+    })
+    const path = wslMoveOrchestratorStorePath(userDataPath)
+    try {
+      // Damaged after the load above read it whole.
+      const unreadable = '{"version":1,"distros":'
+      writeFileSync(path, unreadable)
+      await orchestrator.userAction('Ubuntu-A', 'not-now')
+      expect(readFileSync(path, 'utf8')).toBe(unreadable)
+    } finally {
+      orchestrator.dispose()
+    }
+
+    writeFileSync(path, JSON.stringify({ version: 1, distros: {} }))
+    writeWslMoveOrchestratorRecords(
+      userDataPath,
+      new Map([[wslMoveJournalKey('Ubuntu-B'), declined('Ubuntu-B')]])
+    )
+    expect(
+      [...readWslMoveOrchestratorRecords(userDataPath).values()].map((record) => record.distro)
+    ).toEqual(['Ubuntu-B'])
+  })
 })

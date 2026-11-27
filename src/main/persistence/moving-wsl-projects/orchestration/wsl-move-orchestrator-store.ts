@@ -95,46 +95,22 @@ export function wslMoveOrchestratorStorePath(userDataPath: string): string {
   return join(userDataPath, FILE_NAME)
 }
 
-/** Paths whose last read failed: writing their in-memory map would drop records it never saw. */
-const unreadableStorePaths = new Set<string>()
-
 /** Every readable record, keyed by the distro's journal key; a bad record is dropped alone. */
 export function readWslMoveOrchestratorRecords(
   userDataPath: string
 ): Map<string, WslMoveOrchestratorRecord> {
-  const storePath = wslMoveOrchestratorStorePath(userDataPath)
   const records = new Map<string, WslMoveOrchestratorRecord>()
-  let text: string
   try {
-    text = readFileSync(storePath, 'utf8')
-  } catch (error) {
-    // A missing file is genuinely empty; any other failure proves nothing about the records.
-    if (errnoCodeOrUnknown(error) === 'ENOENT') {
-      unreadableStorePaths.delete(storePath)
-    } else {
-      unreadableStorePaths.add(storePath)
+    const distros = parseSidecar(readFileSync(wslMoveOrchestratorStorePath(userDataPath), 'utf8'))
+    for (const value of Object.values(distros)) {
+      const record = recordSchema.safeParse(value)
+      if (record.success) {
+        records.set(wslMoveJournalKey(record.data.distro), record.data)
+      }
     }
-    return records
-  }
-  let raw: unknown
-  try {
-    raw = JSON.parse(text)
   } catch {
-    unreadableStorePaths.add(storePath)
-    return records
+    // Missing or unreadable reads as none; a save checks the file again before replacing it.
   }
-  const file = fileSchema.safeParse(raw)
-  if (!file.success) {
-    unreadableStorePaths.add(storePath)
-    return records
-  }
-  for (const value of Object.values(file.data.distros)) {
-    const record = recordSchema.safeParse(value)
-    if (record.success) {
-      records.set(wslMoveJournalKey(record.data.distro), record.data)
-    }
-  }
-  unreadableStorePaths.delete(storePath)
   return records
 }
 
@@ -142,12 +118,27 @@ export function writeWslMoveOrchestratorRecords(
   userDataPath: string,
   records: ReadonlyMap<string, WslMoveOrchestratorRecord>
 ): void {
-  // A failed initial read cannot prove the other distros gone; rewriting would delete their records.
-  if (unreadableStorePaths.has(wslMoveOrchestratorStorePath(userDataPath))) {
-    throw new Error(`Refusing to overwrite unreadable ${FILE_NAME}`)
+  const storePath = wslMoveOrchestratorStorePath(userDataPath)
+  // Checked per save, not remembered from the load: the file may have changed since, either way.
+  try {
+    parseSidecar(readFileSync(storePath, 'utf8'))
+  } catch (error) {
+    // A missing sidecar holds no records; any other failure may hide other distros'.
+    if (errnoCodeOrUnknown(error) !== 'ENOENT') {
+      throw new Error(`Refusing to overwrite unreadable ${FILE_NAME}`, { cause: error })
+    }
   }
-  writeDurableSecureJsonFile(wslMoveOrchestratorStorePath(userDataPath), {
+  writeDurableSecureJsonFile(storePath, {
     version: 1,
     distros: Object.fromEntries(records)
   })
+}
+
+/** The sidecar's `distros`; throws unless the text is this version's file. */
+function parseSidecar(text: string): Record<string, unknown> {
+  const file = fileSchema.safeParse(JSON.parse(text))
+  if (!file.success) {
+    throw new Error(`Unrecognized ${FILE_NAME}`)
+  }
+  return file.data.distros
 }

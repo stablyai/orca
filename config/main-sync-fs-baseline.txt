@@ -357,7 +357,7 @@
 7 src/main/persistence/migrating-orcad-catalog/terminal-history/orcad-terminal-history-installer.ts
 1 src/main/persistence/migrating-orcad-catalog/terminal-history/orcad-terminal-restore-hint-store.ts
 1 src/main/persistence/moving-wsl-projects/desktop-state/wsl-move-orchestration-history-rewrite.ts
-1 src/main/persistence/moving-wsl-projects/orchestration/wsl-move-orchestrator-store.ts
+2 src/main/persistence/moving-wsl-projects/orchestration/wsl-move-orchestrator-store.ts # re-read of the small sidecar before each save, so one that turned unreadable after the load is never overwritten (#49992)
 6 src/main/persistence/moving-wsl-projects/terminal-state/wsl-move-slept-scrollback.ts
 2 src/main/persistence/moving-wsl-projects/terminal-state/wsl-move-slept-spool-sweep.ts
 5 src/main/persistence/preferences/active-view-preference.ts
