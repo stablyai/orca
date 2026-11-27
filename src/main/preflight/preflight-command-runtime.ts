@@ -7,7 +7,7 @@ import {
   type PreflightRuntimeContext
 } from '../ipc/preflight/preflight-runtime-target'
 import type { WslPreflightTarget } from '../ipc/preflight/preflight-wsl-agent-detection'
-import { resolveDefaultWslCliFallback } from '../git/command-runner/hosted-cli/default-wsl-cli-fallback'
+import { admittedDefaultWslCliDistro } from '../git/command-runner/hosted-cli/default-wsl-cli-fallback'
 import {
   WslDistroStoppedError,
   WslDistroUnverifiableError
@@ -44,7 +44,7 @@ export async function detectCommandRuntime(
 /** Same rule as glabExecFileAsync: a cwd-less call whose host glab is missing runs in the default distro. */
 export async function detectDefaultWslGlab(): Promise<CommandRuntime> {
   try {
-    const distro = (await resolveDefaultWslCliFallback('glab', ['--version']))?.wsl?.distro
+    const distro = await admittedDefaultWslCliDistro()
     if (!distro) {
       return { installed: false }
     }

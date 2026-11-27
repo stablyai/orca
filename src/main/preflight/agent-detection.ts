@@ -221,6 +221,20 @@ export async function runPreflightCheck(
   const runId = ++preflightRunCounter
   const epochAtStart = preflightCacheEpoch
   latestPreflightRun.set(cacheKey, runId)
+  if (force && !wslTarget && process.platform === 'win32') {
+    // Both native keys read the same host PATH, so a forced re-check must not leave the other stale.
+    const sibling =
+      cacheKey === LOCAL_PREFLIGHT_CACHE_KEY
+        ? WINDOWS_HOST_DEFAULT_CACHE_KEY
+        : LOCAL_PREFLIGHT_CACHE_KEY
+    if (sibling === LOCAL_PREFLIGHT_CACHE_KEY) {
+      cached = null
+    } else {
+      cachedByRuntime.delete(sibling)
+    }
+    preflightInFlight.delete(sibling)
+    latestPreflightRun.set(sibling, runId)
+  }
 
   const run = executePreflightCheck(force, context, wslTarget, windowsHostDefault)
   preflightInFlight.set(cacheKey, run)

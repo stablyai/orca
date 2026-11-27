@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { _resetPreflightCache, runPreflightCheck } from './agent-detection'
 import { blockedWslDistroForExec } from '../wsl/discovery/wsl-background-exec-gate'
+import { findRunnableLocalCommand } from '../ipc/preflight/preflight-command-exec'
 import { deferUntilWslDistroRunning } from '../wsl/discovery/wsl-background-distro-gate'
 
 // Native Windows has git and gh but no glab; only the default distro "Ubuntu" has glab.
@@ -17,13 +18,8 @@ vi.mock('../ipc/preflight/preflight-command-exec', () => ({
 }))
 vi.mock('../git/command-runner/host-routing/wsl-command-resolution', () => ({
   defaultWslCliDistro: () => 'Ubuntu',
-  resolveDefaultWslCli: (command: string, args: string[]) => ({
-    binary: 'wsl.exe',
-    args: [command, ...args],
-    cwd: undefined,
-    wsl: { distro: 'Ubuntu', linuxPath: '' },
-    wslMode: 'non-login-shell'
-  })
+  defaultWslCliDistroAsync: async () => 'Ubuntu',
+  resolveCommand: vi.fn()
 }))
 vi.mock('../wsl/discovery/wsl-background-exec-gate', () => ({
   blockedWslDistroForExec: vi.fn(async () => null),
@@ -77,5 +73,23 @@ it('reports glab from the default distro when no workspace names a runtime, as c
   const [distro, , onRunning] = vi.mocked(deferUntilWslDistroRunning).mock.calls[0]!
   expect(distro).toBe('Ubuntu')
   onRunning()
+  await expect(runPreflightCheck()).resolves.toMatchObject({ glab: { installed: true } })
+  // A forced native re-check (glab just installed on Windows) also refreshes the host-default answer.
+  _resetPreflightCache()
+  vi.mocked(blockedWslDistroForExec).mockResolvedValue({ distro: 'Ubuntu', state: 'stopped' })
+  await expect(runPreflightCheck()).resolves.toMatchObject({ glab: { installed: false } })
+  vi.mocked(findRunnableLocalCommand).mockResolvedValue({ status: 'available', binary: 'glab' })
+  await runPreflightCheck(true, {
+    projectRuntime: {
+      status: 'resolved',
+      runtime: {
+        kind: 'windows-host',
+        hostPlatform: 'win32',
+        projectId: 'p',
+        reason: 'project-override',
+        cacheKey: 'p'
+      }
+    }
+  })
   await expect(runPreflightCheck()).resolves.toMatchObject({ glab: { installed: true } })
 })
