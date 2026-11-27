@@ -4,7 +4,6 @@ import { canCreateWslHostService } from '../wsl/wsl-host-service-availability'
 import { registerNonWindowsWslIpcStubs } from '../wsl/non-windows-wsl-ipc-stubs'
 import { installProjectRuntimeGitRouter } from '../../workspaces/execution-host/project-runtime-git-router'
 import { registerCliHandlers } from '../cli'
-import { registerOrcaUninstallHandlers } from '../orca-uninstall'
 import { registerPreflightHandlers } from '../preflight/preflight'
 import type { Store } from '../../persistence/loading-store/store'
 import { resolveDesktopAuthorizedPath } from '../filesystem/access/local-file-access-resolution'
@@ -18,10 +17,7 @@ import { registerGitLabHandlers } from '../source-control/gitlab'
 import { registerHostedReviewHandlers } from '../source-control/hosted-review'
 import { registerLazyLinearHandlers } from '../linear/lazy-linear-handlers'
 import { registerLazyJiraHandlers } from '../jira/lazy-jira-handlers'
-import { registerBitbucketHandlers } from '../source-control/bitbucket'
-import { registerFeedbackHandlers } from '../feedback/feedback'
 import { registerCrashReportingHandlers } from '../crash-reporting/crash-reporting'
-import { registerExportHandlers } from '../export'
 import { registerStatsHandlers } from '../stats'
 import { registerMemoryHandlers } from '../memory'
 import { registerRateLimitHandlers } from '../rate-limits'
@@ -32,7 +28,6 @@ import { registerAiVaultHandlers } from '../ai-vault/ai-vault'
 import { registerAiVaultSearchHandlers } from '../ai-vault/ai-vault-search'
 import { registerNativeChatHandlers } from '../native-chat'
 import { registerNotificationHandlers } from '../notifications/notifications'
-import { registerNotebookHandlers } from '../notebook'
 import { registerOnboardingHandlers } from '../onboarding'
 import { registerDashboardPopoutHandlers } from '../dashboard/dashboard-popout'
 import { registerWorkspaceSpaceWindowHandlers } from '../workspace-space/workspace-space-window'
@@ -49,13 +44,11 @@ import { registerSkillsHandlers } from '../skills/skills'
 import { registerSkillDeleteIpcHandlers } from '../skill-delete/handlers'
 import { registerWorkspaceSpaceHandlers } from '../workspace-space/workspace-space'
 import { registerWorkspacePortHandlers } from '../ports/workspace-ports'
-import { registerLinkPreviewHandlers } from '../link-preview'
 import { registerLocalhostWorktreeLabelHandlers } from '../ports/localhost-worktree-labels'
 import { registerAutomationHandlers } from '../automations'
 import { registerKeybindingHandlers } from '../keybindings'
 import { registerTelemetryHandlers } from '../telemetry'
 import { registerShellHandlers } from '../shell/shell'
-import { registerPetHandlers } from '../pets/pet'
 import { registerPluginHandlers } from '../plugins/plugins'
 import { registerUIHandlers, setTrustedUIRendererWebContentsId } from '../ui'
 import { registerLazyEmulatorHandlers } from '../emulator/lazy-emulator-handlers'
@@ -104,6 +97,7 @@ import {
   closeNotificationDismissalsBeforeRelaunch,
   type CoreHandlerLifecycleOptions
 } from './core-handler-lifecycle'
+import { registerLazyRareIpcHandlers } from './lazy-rare-ipc-handlers'
 
 let registration: Promise<void> | null = null
 
@@ -142,7 +136,7 @@ export async function registerCoreHandlers(
       onBeforeRelaunchExit: () => closeNotificationDismissalsBeforeRelaunch(runtime)
     })
     registerCliHandlers()
-    registerOrcaUninstallHandlers(store)
+    registerLazyRareIpcHandlers(store)
     registerPreflightHandlers(store)
     registerCodexAccountHandlers(codexAccounts, () => store.getSettings())
     registerAgentHookHandlers(runtime, { getPtyIdForPaneKey })
@@ -161,16 +155,12 @@ export async function registerCoreHandlers(
     registerHostedReviewHandlers(store, stats)
     registerLazyLinearHandlers()
     registerLazyJiraHandlers(store, commitMessageAgentEnv)
-    registerBitbucketHandlers()
-    registerFeedbackHandlers()
     if (crashReports) {
       registerCrashReportingHandlers(crashReports)
     }
-    registerExportHandlers()
     registerStatsHandlers(stats)
     registerMemoryHandlers(store)
     registerNotificationHandlers(store, runtime)
-    registerNotebookHandlers(store)
     registerOnboardingHandlers(store)
     registerDashboardPopoutHandlers(store, keybindings)
     registerWorkspaceSpaceWindowHandlers(store)
@@ -204,13 +194,11 @@ export async function registerCoreHandlers(
     registerBrowserHandlers(store)
     registerBrowserServerDownloadCopyHandlers()
     registerShellHandlers(store)
-    registerPetHandlers()
     registerSessionHandlers(store, runtime)
     registerUIHandlers(store, { isDashboardPopoutRenderer })
     registerLazyEmulatorHandlers((id) => runtime.getEmulatorBridge()?.getIosVideoStreamUrl(id))
     registerWorkspaceSpaceHandlers(store)
     registerWorkspacePortHandlers(store)
-    registerLinkPreviewHandlers()
     registerLocalhostWorktreeLabelHandlers(store)
     registerFilesystemHandlers(store, commitMessageAgentEnv)
     registerFilesystemWatcherHandlers()
