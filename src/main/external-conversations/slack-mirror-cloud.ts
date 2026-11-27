@@ -2,6 +2,7 @@
 import { readFile } from 'node:fs/promises'
 import { basename } from 'node:path'
 import * as z from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { nativeChatTextAttachmentParts } from '../../shared/native-chat/attachments/native-chat-text-attachment-references'
 import {
@@ -29,7 +30,7 @@ export function mirroringCloud(cloud: SlackMirrorCloud | null): SlackMirrorCloud
 }
 
 // Every mirror route but the post itself answers 204 with no body.
-const NoContent = z.undefined()
+const NoContent = lazyZodSchema(() => z.undefined())
 // Bot and chat picks in Orca's own markup, `[Bot: Atlas](bot:id)`, read in Slack as their names.
 const ORCA_MENTION = /\[([^\]\n]{1,200})\]\((?:bot|bot-chat):[^)\s]{1,400}\)/g
 

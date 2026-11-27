@@ -4,7 +4,6 @@ import {
 } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { prepareCodexAdoption } from '../../../native-chat/conversation-adoption/codex-adoption-preparation'
 import { isAiVaultTitleAgent } from '../../../../shared/ai-vault/contracts/ai-vault-session-title'
-import { generatedSessionTitle } from '../../../ai-vault/parsing/session-scanner-accumulator'
 import { resolveLocalAiVaultSessionTitles } from '../../../ai-vault/session-titles/session-title-resolver'
 import type { StructuredAgentSessionResumeSource } from '../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import type { StructuredAgentCliSourceEvidence } from '../../../native-chat/conversation-adoption/structured-agent-cli-source'
@@ -177,11 +176,7 @@ async function resolveAdoptedConversationName(input: {
     ],
     AbortSignal.timeout(ADOPTED_CONVERSATION_NAME_TIMEOUT_MS)
   ).catch(() => ({ titles: [] }))
-  const title = titles[0]?.title
-  // History's "<Agent> <id prefix>" fallback names nothing.
-  return title && title !== generatedSessionTitle(input.agent, input.providerSessionId)
-    ? title
-    : undefined
+  return titles[0]?.title || undefined
 }
 
 /** Only adopt seeds the handle chain; ensure already passes providerHandle without adopting. */

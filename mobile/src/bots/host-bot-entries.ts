@@ -2,7 +2,7 @@ import {
   botPreviewFacts,
   botStatusNeedsAttention
 } from '../../../src/shared/bots/bot-collapsed-preview'
-import { translate } from '../i18n/mobile-i18n'
+import type { Translate } from '../i18n/mobile-i18n'
 import { accessRequestPerson } from '../../../src/shared/bots/bot-access-request'
 import { getBotSidebarEntries } from '../../../src/shared/bots/bot-sidebar-entries'
 import type { BotSidebarEntryActivity } from '../../../src/shared/bots/bot-sidebar-view'
@@ -63,6 +63,7 @@ export type HostBotSectionInputs = {
   /** This phone's chat folds and worker paging steps, by `botChatFoldKey`. */
   chatFolds: Readonly<Record<string, BotChatFold>>
   chatSteps: Readonly<Record<string, number>>
+  t: Translate
 }
 
 /** One bot or group of one host, drawn, before the one list arranges them. */
@@ -245,7 +246,7 @@ export function drawHostBotEntries(
     const nameMatches = !query || matchBotSearchText(bot.name, inputs.search) !== null
     const saved = nameMatches ? undefined : purposes?.get(bot.id)
     // A template's purpose is saved in English and reads in the UI language, as on the desktop.
-    const purpose = saved ? botTemplateText(saved, translate) : null
+    const purpose = saved ? botTemplateText(saved, inputs.t) : null
     const purposeRanges = purpose ? matchBotSearchText(purpose, inputs.search) : null
     // The row cuts its own end, so the start is cut only for a match past what one line shows,
     // and then without the ellipsis.
@@ -272,7 +273,7 @@ export function drawHostBotEntries(
         itemsNeedingYou: needsYou + access.length
       },
       ...(access[0] ? { askedForAccess: accessRequestPerson(access[0]) } : {}),
-      statusLine: botStatusLine(dot, bot.paused, translate),
+      statusLine: botStatusLine(dot, bot.paused, inputs.t),
       ...(purposeMatch ? { searchPurpose: purposeMatch } : {}),
       paused: bot.paused,
       ...(host ? { host } : {})

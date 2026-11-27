@@ -1,8 +1,7 @@
 import type { ReactNode } from 'react'
 import Svg, { Path } from 'react-native-svg'
 import type { ConnectorSource } from '../../../src/shared/connectors/external-conversation-link'
-import { colors } from '../theme/mobile-theme'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 
 // Slack's mark in its four colours; joined, its one-colour mark.
 const SLACK_PARTS: readonly (readonly [fill: string, d: string])[] = [
@@ -55,7 +54,7 @@ export function MobileConnectorSourceIcon({
   mask?: string
   children?: ReactNode
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   const side = SOURCE_ICON_VIEW_BOX[source]
   return (
     <Svg width={size} height={size} viewBox={`0 0 ${side} ${side}`} fill={colors.textSecondary}>
@@ -67,7 +66,7 @@ export function MobileConnectorSourceIcon({
 
 // Google's "G", as the desktop's GoogleIcon; Google is a connector, not a suggestion source.
 export function MobileGoogleMark({ size = 14 }: { size?: number }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill={colors.textSecondary}>
       <Path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z" />
@@ -104,7 +103,7 @@ export function MobileConnectorLogo({
   source: ConnectorSource | 'google'
   size?: number
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   if (source === 'slack' || source === 'google') {
     const side = source === 'google' ? 48 : 24
     return (

@@ -16,8 +16,8 @@ import type { BotItemSentAnswers } from '../../../../src/shared/bots/use-bot-ite
 import { MobileNativeChatMarkdown } from '../../session/native-chat/transcript/message-content/MobileNativeChatMarkdown'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { INLINE_TEXT_SELECTION } from '../../platform/text-selection/inline-text-selection'
-import { colors, pressedStyle, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
+import { pressedStyle, spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 
 const NO_ANSWERS: readonly (BotItemEvent | null)[] = []
 
@@ -50,6 +50,7 @@ export function MobileBotItemQuestionLines({
   /** The docked answer card asks its open lines now: they aren't repeated here. */
   asking?: boolean
 }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const several = shape.decisions.length > 1
   const posted = sent?.askId === askId ? sent.answers : null
@@ -106,7 +107,7 @@ export function MobileBotItemQuestionLines({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   spaced: { marginTop: spacing.sm },
   one: { gap: spacing.sm },
   several: { gap: spacing.xs },

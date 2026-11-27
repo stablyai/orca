@@ -3,7 +3,7 @@ import type { ReactElement } from 'react'
 import type { ActiveRightSidebarTab } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import { DndContext } from '@dnd-kit/core'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import type { ActivityBarItem } from './activity-bar-buttons'
 import { RightSidebarTopActivityBar } from './right-sidebar-top-activity-bar'
@@ -71,6 +71,10 @@ function openMenuOn(name: string): void {
   fireEvent.keyDown(button, { key: 'F10', shiftKey: true })
 }
 
+beforeAll(async () => {
+  await import('./activity-bar-position-menu')
+})
+
 beforeEach(() => {
   useAppStore.setState({
     activityBarOrder: [],
@@ -90,10 +94,10 @@ afterEach(() => {
   })
 })
 
-it('keeps bot-page and workspace move orders apart in both directions', () => {
+it('keeps bot-page and workspace move orders apart in both directions', async () => {
   const { rerender } = render(bar({ isBotPage: true }))
   openMenuOn('Checks')
-  fireEvent.click(screen.getByRole('menuitem', { name: 'Move left' }))
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Move left' }))
   const state = useAppStore.getState()
   expect(state.activityBarBotOrder).toEqual(['checks', 'explorer', 'plugin:test/panel'])
   expect(state.activityBarOrder).toEqual([])
@@ -106,7 +110,7 @@ it('keeps bot-page and workspace move orders apart in both directions', () => {
   expect(after.activityBarBotOrder).toEqual(['checks', 'explorer', 'plugin:test/panel'])
 })
 
-it('Reset clears the workspace and bot-page orders and hidden plugins together', () => {
+it('Reset clears the workspace and bot-page orders and hidden plugins together', async () => {
   useAppStore.setState({
     activityBarOrder: ['explorer', 'plugin:test/panel', 'checks'],
     activityBarBotOrder: ['checks', 'explorer', 'plugin:test/panel'],
@@ -114,7 +118,7 @@ it('Reset clears the workspace and bot-page orders and hidden plugins together',
   })
   render(bar({ isBotPage: false, visibleItems: [explorer, checks] }))
   openMenuOn('Explorer')
-  const reset = screen.getByRole('menuitem', { name: 'Reset tab order' })
+  const reset = await screen.findByRole('menuitem', { name: 'Reset tab order' })
   expect(isDisabled(reset)).toBe(false)
   fireEvent.click(reset)
   const state = useAppStore.getState()
@@ -123,20 +127,20 @@ it('Reset clears the workspace and bot-page orders and hidden plugins together',
   expect(state.activityBarHidden).toEqual([])
 })
 
-it('disables Reset when nothing is customized', () => {
+it('disables Reset when nothing is customized', async () => {
   render(bar({ isBotPage: false }))
   openMenuOn('Explorer')
-  expect(isDisabled(screen.getByRole('menuitem', { name: 'Reset tab order' }))).toBe(true)
+  expect(isDisabled(await screen.findByRole('menuitem', { name: 'Reset tab order' }))).toBe(true)
 })
 
-it('disables Move left on the first strip tab and Move right on the last', () => {
+it('disables Move left on the first strip tab and Move right on the last', async () => {
   render(bar({ isBotPage: false }))
   openMenuOn('Explorer')
-  expect(isDisabled(screen.getByRole('menuitem', { name: 'Move left' }))).toBe(true)
+  expect(isDisabled(await screen.findByRole('menuitem', { name: 'Move left' }))).toBe(true)
   expect(isDisabled(screen.getByRole('menuitem', { name: 'Move right' }))).toBe(false)
 })
 
-it('moves only among strip tabs when a tab is in More', () => {
+it('moves only among strip tabs when a tab is in More', async () => {
   // `checks` is under More, so Move right from `plugin` (the last strip tab) is disabled.
   render(
     bar({
@@ -147,7 +151,7 @@ it('moves only among strip tabs when a tab is in More', () => {
     })
   )
   openMenuOn('Plugin')
-  expect(isDisabled(screen.getByRole('menuitem', { name: 'Move right' }))).toBe(true)
+  expect(isDisabled(await screen.findByRole('menuitem', { name: 'Move right' }))).toBe(true)
 })
 
 it('shows an active More trigger while a hidden active plugin tab sits under it', () => {
@@ -194,7 +198,7 @@ function builtIn(id: ActiveRightSidebarTab, title: string): ActivityBarItem {
   return { id, title, icon: () => null, shortcut: '' }
 }
 
-it('moves a strip tab without re-inserting tabs under More when nothing is saved', () => {
+it('moves a strip tab without re-inserting tabs under More when nothing is saved', async () => {
   // Strip shows Explorer and Checks; Source Control, Ports, Vault and the plugin sit under More.
   const a = builtIn('explorer', 'Explorer')
   const b = builtIn('checks', 'Checks')
@@ -210,7 +214,7 @@ it('moves a strip tab without re-inserting tabs under More when nothing is saved
     })
   )
   openMenuOn('Checks')
-  fireEvent.click(screen.getByRole('menuitem', { name: 'Move left' }))
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Move left' }))
   expect(useAppStore.getState().activityBarOrder).toEqual([
     'checks',
     'explorer',
@@ -221,7 +225,7 @@ it('moves a strip tab without re-inserting tabs under More when nothing is saved
   ])
 })
 
-it('moves an active tab pinned into the strip without pushing a strip tab under More', () => {
+it('moves an active tab pinned into the strip without pushing a strip tab under More', async () => {
   // Explorer, Checks and Workspaces are shown; Source Control, Ports and Agents sit under More.
   const a = builtIn('explorer', 'Explorer')
   const b = builtIn('checks', 'Checks')
@@ -239,7 +243,7 @@ it('moves an active tab pinned into the strip without pushing a strip tab under 
     })
   )
   openMenuOn('Worktrees')
-  fireEvent.click(screen.getByRole('menuitem', { name: 'Move left' }))
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Move left' }))
   expect(useAppStore.getState().activityBarOrder).toEqual([
     'explorer',
     'workspaces',
@@ -270,7 +274,7 @@ it('offers no Move items for a tab under More in the top layout', async () => {
   expect(screen.queryByRole('menuitem', { name: 'Move right' })).toBeNull()
 })
 
-it('moves a strip tab past a pinned active tab without pushing the pinned tab under More', () => {
+it('moves a strip tab past a pinned active tab without pushing the pinned tab under More', async () => {
   const a = builtIn('explorer', 'Explorer')
   const b = builtIn('checks', 'Checks')
   const c = builtIn('source-control', 'Source Control')
@@ -287,7 +291,7 @@ it('moves a strip tab past a pinned active tab without pushing the pinned tab un
     })
   )
   openMenuOn('Checks')
-  fireEvent.click(screen.getByRole('menuitem', { name: 'Move right' }))
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Move right' }))
   expect(useAppStore.getState().activityBarOrder).toEqual([
     'explorer',
     'workspaces',

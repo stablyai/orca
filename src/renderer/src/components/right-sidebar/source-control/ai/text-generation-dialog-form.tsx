@@ -38,6 +38,7 @@ import {
 } from './text-generation-params'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 export type SourceControlTextGenerationSaveTarget = {
   target: SourceControlAiWriteTarget
@@ -127,9 +128,9 @@ export function SourceControlTextGenerationDialogForm({
   const [saveTargetKey, setSaveTargetKey] = useState(defaultSaveTargetKey)
   const commandTemplateId = `source-control-${actionId}-command-template`
   const selectedSaveTarget =
-    saveTargets.find((saveTarget) => {
-      return sourceControlTextGenerationSaveTargetKey(saveTarget.target) === saveTargetKey
-    }) ?? saveTargets[0]
+    saveTargets.find(
+      (item) => sourceControlTextGenerationSaveTargetKey(item.target) === saveTargetKey
+    ) ?? saveTargets[0]
 
   const buildParams = (settings: SourceControlRenderSettings | null) =>
     buildCommitMessageGenerationParams({
@@ -196,28 +197,30 @@ export function SourceControlTextGenerationDialogForm({
         }
         return false
       }
-      const targetKey = sourceControlTextGenerationSaveTargetKey(saveTarget.target)
-      setSavingTargetKey(targetKey)
-      try {
-        await onSaveDefaults(saveTarget.target, params)
-        if (options.showToast) {
-          toast.success(saveTarget.successMessage)
-        }
-        return true
-      } catch (error) {
-        console.error('Failed to save Source Control AI defaults', error)
-        if (options.showErrors) {
-          setGenerationError(
-            translate(
-              'sourceControl.actionSaveFailed',
-              'Could not save this action. Try saving it again in Settings.'
-            )
-          )
-        }
-        return false
-      } finally {
-        setSavingTargetKey(null)
-      }
+      setSavingTargetKey(sourceControlTextGenerationSaveTargetKey(saveTarget.target))
+      return runWithFinally(
+        async () => {
+          try {
+            await onSaveDefaults(saveTarget.target, params)
+            if (options.showToast) {
+              toast.success(saveTarget.successMessage)
+            }
+            return true
+          } catch (error) {
+            console.error('Failed to save Source Control AI defaults', error)
+            if (options.showErrors) {
+              setGenerationError(
+                translate(
+                  'sourceControl.actionSaveFailed',
+                  'Could not save this action. Try saving it again in Settings.'
+                )
+              )
+            }
+            return false
+          }
+        },
+        () => setSavingTargetKey(null)
+      )
     },
     [onSaveDefaults, params, paramsPlanResult, saving]
   )

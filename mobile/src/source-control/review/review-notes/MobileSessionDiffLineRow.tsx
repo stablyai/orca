@@ -2,13 +2,14 @@ import { View, Text, Pressable } from 'react-native'
 import { MessageSquare, Plus, X } from 'lucide-react-native'
 import { MobileSyntaxSegments } from '../../../components/code-presentation/MobileSyntaxSegments'
 import { MessageBox } from '../../../components/composer-input/MessageBox'
-import { composerInputStyles } from '../../../components/composer-input/composer-input-styles'
-import { colors, pressedStyle } from '../../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { composerInputStylesSheet } from '../../../components/composer-input/composer-input-styles'
+import { pressedStyle } from '../../../theme/mobile-theme'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { styles } from '../../../session/mobile-session-styles'
+import { stylesSheet } from '../../../session/mobile-session-styles'
 import type { DiffComment } from '../../../../../src/shared/file-review/diff-comment-types'
 import type { RenderableDiffLine } from './mobile-review-comment-state'
+import { useThemedStyles } from '../../../theme/themed-styles'
 
 export function DiffLineRow({
   line,
@@ -37,7 +38,9 @@ export function DiffLineRow({
   onSubmitComment: (lineNumber: number) => void
   onDeleteComment: (commentId: string) => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const composerInputStyles = useThemedStyles(composerInputStylesSheet)
   const t = useMobileTranslation()
   const commentLine = line.newLineNumber
   const isCommenting = commentLine !== undefined && activeCommentLine === commentLine

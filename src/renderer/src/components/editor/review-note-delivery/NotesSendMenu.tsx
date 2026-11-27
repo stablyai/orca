@@ -1,8 +1,10 @@
 import { useAppStore } from '@/store/index'
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import type { DiffCommentOwner } from '@/store/slices/diff-comments/diff-comment-owner'
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { Send, Sparkles } from 'lucide-react'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
+import { useLatchedOpen } from '@/app-shell/root-surfaces/use-latched-open'
 import type { AgentSendPopoverTargetMode } from '@/store/slices/ui/ui-slice-contract-core'
 import {
   DropdownMenu,
@@ -15,7 +17,12 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
-import { ReviewNotesSendMenuContent } from './ReviewNotesSendMenuContent'
+
+const ReviewNotesSendMenuContent = lazy(() =>
+  import('./ReviewNotesSendMenuContent').then((module) => ({
+    default: module.ReviewNotesSendMenuContent
+  }))
+)
 import type { DiffCommentDeliverySnapshot } from '@/store/slices/diff-comments/create-diff-comments-slice'
 import {
   diffCommentSendKey,
@@ -96,6 +103,7 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
 }: NotesSendMenuProps<TNote>): React.JSX.Element {
   const t = useTranslate()
   const [sendMenuOpen, setSendMenuOpen] = useState(false)
+  const sendMenuMounted = useLatchedOpen(sendMenuOpen)
   const targetModeId = useMemo(() => buildNotesSendTargetModeId(modeIdParts), [modeIdParts])
   const ownsTargetMode = useAppStateValue((s) => s.agentSendPopoverTargetMode?.id === targetModeId)
   const inFlightVersion = useNotesInFlightVersion()
@@ -258,57 +266,63 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
           </TooltipContent>
         ) : null}
       </Tooltip>
-      <DropdownMenuContent
-        align={align}
-        className="min-w-[220px]"
-        onInteractOutside={preventAgentSendTargetOutsideDismiss}
-        onPointerDownOutside={preventAgentSendTargetOutsideDismiss}
-      >
-        {scopes.length > 1 ? (
-          <>
-            <DropdownMenuLabel>
-              {t('auto.components.editor.NotesSendMenu.44dc5e60a6', 'Send notes')}
-            </DropdownMenuLabel>
-            {sendableScopes.map((scope) => (
-              <DropdownMenuSub key={scope.id}>
-                <DropdownMenuSubTrigger
-                  disabled={scope.notes.length === 0}
-                  className="[&>svg:last-child]:ml-0"
-                  onPointerEnter={() => openTargetMode(scope)}
-                  onFocus={() => openTargetMode(scope)}
-                >
-                  <NoteScopeMenuRow label={scope.label} count={scope.notes.length} />
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent className="min-w-[180px]">
-                  <ReviewNotesSendMenuContent
-                    worktreeId={worktreeId}
-                    groupId={groupId}
-                    prompt={scope.prompt}
-                    promptDelivery="submit-after-ready"
-                    launchSource="notes_send"
-                    onPromptDelivered={() => markDelivered(scope.notes)}
-                    onPromptHandedOff={holdInFlight(scope.notes)}
-                  />
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-            ))}
-          </>
-        ) : (
-          <ReviewNotesSendMenuContent
-            worktreeId={worktreeId}
-            groupId={groupId}
-            prompt={defaultScope?.prompt ?? ''}
-            promptDelivery="submit-after-ready"
-            launchSource="notes_send"
-            onPromptDelivered={() => {
-              if (defaultScope) {
-                markDelivered(defaultScope.notes)
-              }
-            }}
-            onPromptHandedOff={holdInFlight(defaultScope?.notes ?? [])}
-          />
-        )}
-      </DropdownMenuContent>
+      {sendMenuMounted ? (
+        <DropdownMenuContent
+          align={align}
+          className="min-w-[220px]"
+          onInteractOutside={preventAgentSendTargetOutsideDismiss}
+          onPointerDownOutside={preventAgentSendTargetOutsideDismiss}
+        >
+          {scopes.length > 1 ? (
+            <>
+              <DropdownMenuLabel>
+                {t('auto.components.editor.NotesSendMenu.44dc5e60a6', 'Send notes')}
+              </DropdownMenuLabel>
+              {sendableScopes.map((scope) => (
+                <DropdownMenuSub key={scope.id}>
+                  <DropdownMenuSubTrigger
+                    disabled={scope.notes.length === 0}
+                    className="[&>svg:last-child]:ml-0"
+                    onPointerEnter={() => openTargetMode(scope)}
+                    onFocus={() => openTargetMode(scope)}
+                  >
+                    <NoteScopeMenuRow label={scope.label} count={scope.notes.length} />
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="min-w-[180px]">
+                    <Suspense fallback={null}>
+                      <ReviewNotesSendMenuContent
+                        worktreeId={worktreeId}
+                        groupId={groupId}
+                        prompt={scope.prompt}
+                        promptDelivery="submit-after-ready"
+                        launchSource="notes_send"
+                        onPromptDelivered={() => markDelivered(scope.notes)}
+                        onPromptHandedOff={holdInFlight(scope.notes)}
+                      />
+                    </Suspense>
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              ))}
+            </>
+          ) : (
+            <Suspense fallback={null}>
+              <ReviewNotesSendMenuContent
+                worktreeId={worktreeId}
+                groupId={groupId}
+                prompt={defaultScope?.prompt ?? ''}
+                promptDelivery="submit-after-ready"
+                launchSource="notes_send"
+                onPromptDelivered={() => {
+                  if (defaultScope) {
+                    markDelivered(defaultScope.notes)
+                  }
+                }}
+                onPromptHandedOff={holdInFlight(defaultScope?.notes ?? [])}
+              />
+            </Suspense>
+          )}
+        </DropdownMenuContent>
+      ) : null}
     </DropdownMenu>
   )
 }

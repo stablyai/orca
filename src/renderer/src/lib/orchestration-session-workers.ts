@@ -79,7 +79,8 @@ function sameWorker(a: OrchestrationSessionWorker, b: OrchestrationSessionWorker
     a.chatSessionId === b.chatSessionId &&
     a.startedAt === b.startedAt &&
     a.settledAt === b.settledAt &&
-    a.summary === b.summary
+    a.summary === b.summary &&
+    a.progressNote === b.progressNote
   )
 }
 

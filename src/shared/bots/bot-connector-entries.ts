@@ -13,7 +13,7 @@ import { COMPOSIO_SESSION_MCP_URL, type ComposioConnection } from '../composio/c
 import { composioAppName } from '../composio/composio-curated-apps'
 import type { ConnectorGitHubInstallation } from '../connector-bot-github-contract'
 import { BOT_MCP_APPS, type BotMcpApp } from './bot-mcp-apps'
-import { botToolSubtitle, botToolTitle } from './bot-tool-labels'
+import { botToolSubtitle, botToolTitle, isBotUrlTool } from './bot-tool-labels'
 import {
   botConnectorTitles,
   type BotConnectorTitle,
@@ -106,7 +106,15 @@ type ConnectorBot = Pick<
 
 /** URL servers other than Composio's own, which is drawn as its apps. */
 export function isBotAppTool(tool: AppTool): boolean {
-  return (tool.remote || tool.signIn !== undefined) && !COMPOSIO_SESSION_MCP_URL.test(tool.detail)
+  return isBotUrlTool(tool) && !COMPOSIO_SESSION_MCP_URL.test(tool.detail)
+}
+
+/** Saved values go through Orca's relay, so neither Orca nor its agent's CLI signs in. */
+export function botToolAppSignsIn({
+  tool,
+  app
+}: Pick<BotToolApp<AppTool>, 'tool' | 'app'>): boolean {
+  return app?.signIn !== 'none' && (tool.signIn !== undefined || tool.remote)
 }
 
 /** Command tools stay in Tools; the Composio tool is drawn as its own app rows. */

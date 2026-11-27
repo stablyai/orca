@@ -1,12 +1,8 @@
 import type { RootContent } from 'mdast'
 import type { ReactNode } from 'react'
-import { getMobileUiRevision } from '../../../i18n/mobile-i18n'
-import { getMobileColorScheme } from '../../../theme/mobile-theme'
 import type { MarkdownBlockContext, ParagraphText } from './mobile-markdown-blocks'
 
 type DrawnBlock = {
-  /** Blocks read themed styles and copy straight from the scheme and language. */
-  look: string
   ctx: MarkdownBlockContext
   text: ParagraphText
   element: ReactNode
@@ -44,6 +40,9 @@ function sameContext(a: MarkdownBlockContext, b: MarkdownBlockContext): boolean 
     a.lineSpacing === b.lineSpacing &&
     a.fontFamily === b.fontFamily &&
     a.tone === b.tone &&
+    a.styles === b.styles &&
+    a.colors === b.colors &&
+    a.t === b.t &&
     a.onOpenFile === b.onOpenFile &&
     a.onOpenLink === b.onOpenLink &&
     a.filePathsLinkedInTree === b.filePathsLinkedInTree &&
@@ -76,16 +75,14 @@ export function drawnBlock(
     return render()
   }
   const drawn = drawnBlocks.get(node)
-  const look = `${getMobileColorScheme()}:${getMobileUiRevision()}`
   if (
-    drawn?.look === look &&
-    drawn.text.selectable === text.selectable &&
+    drawn?.text.selectable === text.selectable &&
     sameStyle(drawn.text.style, text.style) &&
     sameContext(drawn.ctx, ctx)
   ) {
     return drawn.element
   }
   const element = render()
-  drawnBlocks.set(node, { look, ctx, text, element })
+  drawnBlocks.set(node, { ctx, text, element })
   return element
 }

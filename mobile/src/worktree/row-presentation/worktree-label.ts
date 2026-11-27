@@ -1,7 +1,11 @@
-import { translate } from '../../i18n/mobile-i18n'
+import type { Translate } from '../../i18n/mobile-i18n'
 
 // Deep links may provide only a repo::path id; derive a readable label from it.
-export function getWorktreeLabel(name: string | undefined, worktreeId: string): string {
+export function getWorktreeLabel(
+  name: string | undefined,
+  worktreeId: string,
+  t: Translate
+): string {
   if (name?.trim()) {
     return name.trim()
   }
@@ -11,6 +15,6 @@ export function getWorktreeLabel(name: string | undefined, worktreeId: string): 
   const normalized = pathPart.replace(/\\/g, '/').replace(/\/+$/, '')
   return (
     normalized.slice(normalized.lastIndexOf('/') + 1) ||
-    translate('session.worktreeLabel.fallback', 'Worktree')
+    t('session.worktreeLabel.fallback', 'Worktree')
   )
 }

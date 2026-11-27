@@ -19,7 +19,10 @@ import type { JournalTimelineItemResolution } from '../../agent-session-journal/
 import type { JournalStepOutcome } from '../../agent-session-journal/writing/journal-writer-step'
 import { StructuredAgentSessionSinkQueue } from './structured-agent-session-event-sink-queue'
 import { structuredAgentSessionEphemeralPublications } from './structured-agent-session-ephemeral-publications'
-import type { StructuredAgentSessionSnapshotSource } from './structured-agent-session-sink-snapshots'
+import type {
+  StructuredAgentSessionLiveTextSource,
+  StructuredAgentSessionSnapshotSource
+} from './structured-agent-session-sink-snapshots'
 import type { ClaudeJournalSnapshot } from '../../../claude/subagents/claude-subagent-journaled-identities'
 import {
   createStructuredAgentSessionItemAppend,
@@ -86,10 +89,7 @@ export type StructuredAgentSessionItemCommitted = (
 
 export type StructuredAgentSessionEventSink = StructuredAgentSessionTransitionSink & {
   /** Reads the existing stream owner; no text is copied into the sink. */
-  bindLiveText?(source: {
-    read(epoch: string, readers?: LiveTextReaders): readonly AgentJournalRenderItem[]
-    flush(): void
-  }): () => void
+  bindLiveText?(source: StructuredAgentSessionLiveTextSource): () => void
   publishLiveText?(): StructuredAgentSessionSinkAdmission
   observeExit?: exits.StructuredAgentSessionExitObservation['record']
   /** Adapters report only their acquisition's own spontaneous root exit, never a requested close. */
@@ -194,9 +194,12 @@ export type DeferredStructuredAgentSessionEventSink = {
   unbind(): void
   followSnapshots(source: StructuredAgentSessionSnapshotSource): Promise<void>
   liveText(readers?: LiveTextReaders): readonly AgentJournalRenderItem[]
+  hasLiveText(): boolean
   seal(): void
   close(): void
   drained(): Promise<StructuredAgentSessionSinkBarrier>
+  /** The writes already admitted have landed; nothing new is flushed for it. */
+  landed(): Promise<StructuredAgentSessionSinkBarrier>
   lifecycleBarrier(): Promise<StructuredAgentSessionSinkBarrier>
   state(): StructuredAgentSessionSinkState
 }
@@ -241,11 +244,7 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
     })
     deps.onFailed?.(error)
   }
-  const queue = new StructuredAgentSessionSinkQueue({
-    ...deps,
-    watermarks,
-    onFailed: failed
-  })
+  const queue = new StructuredAgentSessionSinkQueue({ ...deps, watermarks, onFailed: failed })
   const resolvedAppend = createStructuredAgentSessionResolvedAppend(queue)
 
   const appendLifecycleBatch = (
@@ -330,12 +329,14 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
     unbind: () => queue.unbind(),
     followSnapshots: (source) => queue.snapshots.follow(source),
     liveText: queue.liveText,
+    hasLiveText: queue.hasLiveText,
     seal: () => queue.seal(),
     close: () => {
       queue.flushLiveText()
       queue.close()
     },
     drained: queue.barrier,
+    landed: queue.landed,
     lifecycleBarrier: queue.barrier,
     state: queue.state
   }

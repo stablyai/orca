@@ -118,19 +118,26 @@ export function useMobileNativeChatOfflineQueue(args: {
       if (!scope || !(offline || waiting || drainingRef.current)) {
         return send(text, intent)
       }
-      // The composer's chips go with the message, as a sent one takes them.
-      const { images, files } = readMobileNativeChatDraftInputs(scope)
+      // A send that carries its own inputs leaves the composer alone; else the composer's chips go with it.
+      const own = intent?.queued
+      const { images, files } = own ?? readMobileNativeChatDraftInputs(scope)
       queueMobileNativeChatOfflineSend(scope, {
         text,
         ...(intent?.alternate ? { alternate: true } : {}),
         ...(intent?.goal ? { goal: true } : {}),
-        images,
-        files,
-        skills: readMobileNativeChatPickedSkills(scope),
-        skillOrigin: readMobileNativeChatSkillOrigin(scope)
+        images: [...images],
+        files: [...files],
+        skills: own ? [...own.skills] : readMobileNativeChatPickedSkills(scope),
+        skillOrigin: own ? own.skillOrigin : readMobileNativeChatSkillOrigin(scope)
       })
-      updateMobileNativeChatDraftInputs(scope, (current) => ({ ...current, images: [], files: [] }))
-      setMobileNativeChatDraftText(scope, (current) => (current === text ? '' : current))
+      if (!own) {
+        updateMobileNativeChatDraftInputs(scope, (current) => ({
+          ...current,
+          images: [],
+          files: []
+        }))
+        setMobileNativeChatDraftText(scope, (current) => (current === text ? '' : current))
+      }
       return true
     },
     [offline, scope, send]

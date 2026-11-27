@@ -10,10 +10,9 @@ import {
   type TextInputProps,
   type ViewStyle
 } from 'react-native'
-import { colors } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { composerInputStyles as styles } from './composer-input-styles'
-import { useInputFocus } from './use-input-focus'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
+import { composerInputStylesSheet as stylesSheet } from './composer-input-styles'
+import { useThemedStyles } from '../../theme/themed-styles'
 
 type TextFieldProps = Omit<TextInputProps, 'style' | 'placeholderTextColor' | 'selectionColor'> & {
   inputRef?: Ref<TextInputInstance>
@@ -21,13 +20,13 @@ type TextFieldProps = Omit<TextInputProps, 'style' | 'placeholderTextColor' | 's
   leading?: ReactNode
   /** A control after the text, e.g. a clear chip. */
   trailing?: ReactNode
-  /** A caption that stays above the text, e.g. what the field types into. */
+  /** A label before the text, where a ListRow's title sits, for a field among other rows. */
   label?: string
   monospace?: boolean
   style?: StyleProp<ViewStyle>
 }
 
-// One line of text on the chat composer's surface.
+// One line of text as a row of a grouped list; on its own it is a group of one.
 export function TextField({
   inputRef,
   leading,
@@ -36,12 +35,10 @@ export function TextField({
   monospace = false,
   style,
   editable = true,
-  onFocus,
-  onBlur,
   ...inputProps
 }: TextFieldProps): React.JSX.Element {
-  useMobileColorScheme()
-  const focus = useInputFocus({ onFocus, onBlur })
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const ownInputRef = useRef<TextInputInstance>(null)
   const bindInputRef = useCallback(
     (node: TextInputInstance | null) => {
@@ -56,21 +53,14 @@ export function TextField({
     },
     [inputRef]
   )
-  const input = (
-    <TextInput
-      ref={bindInputRef}
-      editable={editable}
-      placeholderTextColor={colors.textMuted}
-      selectionColor={colors.accentBlue}
-      style={[styles.fieldText, monospace && styles.mono]}
-      {...inputProps}
-      onFocus={focus.onFocus}
-      onBlur={focus.onBlur}
-    />
-  )
   return (
     <View
-      style={[styles.field, focus.focused && styles.focused, !editable && styles.disabled, style]}
+      style={[
+        styles.field,
+        label ? styles.labelledField : null,
+        !editable && styles.disabled,
+        style
+      ]}
     >
       {editable ? (
         <Pressable
@@ -83,17 +73,21 @@ export function TextField({
       ) : null}
       {leading != null ? <View pointerEvents="none">{leading}</View> : null}
       {label ? (
-        <View style={styles.labelledText} pointerEvents="box-none">
-          <View pointerEvents="none">
-            <Text style={styles.fieldLabel} numberOfLines={1}>
-              {label}
-            </Text>
-          </View>
-          {input}
+        <View pointerEvents="none">
+          <Text style={styles.fieldLabel} numberOfLines={1}>
+            {label}
+          </Text>
         </View>
-      ) : (
-        input
-      )}
+      ) : null}
+      <TextInput
+        ref={bindInputRef}
+        editable={editable}
+        placeholderTextColor={colors.textMuted}
+        selectionColor={colors.accentBlue}
+        style={[styles.fieldText, monospace && styles.mono]}
+        accessibilityLabel={label}
+        {...inputProps}
+      />
       {trailing}
     </View>
   )

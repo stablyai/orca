@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import {
   CONNECTOR_SOURCES,
   type ConnectorSource
@@ -10,17 +11,19 @@ import { refused, type ConversationKey, type Delivery } from './external-convers
 
 export type DeliveryReceiptDb = OrchestrationDb
 
-const RecordedDelivery = z.discriminatedUnion('outcome', [
-  z.object({
-    outcome: z.literal('accepted'),
-    inTurn: z.literal(true).optional(),
-    muted: z.literal(true).optional()
-  }),
-  z.object({
-    outcome: z.literal('unknown'),
-    reason: z.enum(['writer_failed', 'replayed_after_restart'])
-  })
-])
+const RecordedDelivery = lazyZodSchema(() =>
+  z.discriminatedUnion('outcome', [
+    z.object({
+      outcome: z.literal('accepted'),
+      inTurn: z.literal(true).optional(),
+      muted: z.literal(true).optional()
+    }),
+    z.object({
+      outcome: z.literal('unknown'),
+      reason: z.enum(['writer_failed', 'replayed_after_restart'])
+    })
+  ])
+)
 
 const LOST: Delivery = { outcome: 'unknown', reason: 'replayed_after_restart' }
 

@@ -2,9 +2,8 @@ import { useEffect, useState } from 'react'
 import { View, Text, Pressable, ActivityIndicator } from 'react-native'
 import { Package } from 'lucide-react-native'
 import { loadHosts } from '../host-catalog/host-store'
-import { colors } from '../theme/mobile-theme'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { troubleshootScreenStyles as styles } from './troubleshoot-screen-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
+import { troubleshootScreenStylesSheet } from './troubleshoot-screen-styles'
 import {
   useMobileWebBundleProbe,
   type MobileWebBundleProbeState
@@ -13,6 +12,7 @@ import type { HostProfile } from '../host-catalog/host-profile'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { ListGroup, ListRow } from '../components/list/ListGroup'
+import { useThemedStyles } from '../theme/themed-styles'
 
 function buttonLabel(
   state: MobileWebBundleProbeState,
@@ -28,7 +28,7 @@ function buttonLabel(
 }
 
 function ProbeLine({ label, detail, failed }: { label: string; detail: string; failed?: boolean }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(troubleshootScreenStylesSheet)
   return failed === true ? (
     <ListRow
       title={label}
@@ -40,7 +40,7 @@ function ProbeLine({ label, detail, failed }: { label: string; detail: string; f
 }
 
 function ProbeResult({ state, hostName }: { state: MobileWebBundleProbeState; hostName: string }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(troubleshootScreenStylesSheet)
   const t = useMobileTranslation()
   if (state.status === 'idle' || state.status === 'running') {
     return null
@@ -93,7 +93,8 @@ function ProbeResult({ state, hostName }: { state: MobileWebBundleProbeState; ho
 // Dev-only end-to-end bundle fetch; troubleshoot.tsx gates this behind __DEV__. It neither caches nor renders the bundle.
 // Troubleshoot has no selected host, so probe the first paired host and name it explicitly.
 export function MobileWebBundleProbeRow() {
-  useMobileColorScheme()
+  const styles = useThemedStyles(troubleshootScreenStylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const [hosts, setHosts] = useState<readonly HostProfile[]>([])
   useEffect(() => {

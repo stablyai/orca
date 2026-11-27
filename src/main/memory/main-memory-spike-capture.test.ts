@@ -48,5 +48,9 @@ it('catches a footprint spike that lasts about a minute on the host-memory tick'
   }
   await new Promise((resolve) => setImmediate(resolve))
   expect(records.map((record) => record.name)).toEqual(['memory.main-spike'])
-  expect(records[0].attributes).toMatchObject({ baselineFootprintMB: 693 })
+  expect(records[0].attributes).toMatchObject({
+    baselineFootprintMB: 693,
+    baseline_v8UsedHeapMB: expect.any(Number),
+    baseline_v8Space_old_space_usedMB: expect.any(Number)
+  })
 })

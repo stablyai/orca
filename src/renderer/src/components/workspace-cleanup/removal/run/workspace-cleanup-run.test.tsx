@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { WorkspaceCleanupRemoveResult } from '@/store/slices/workspace-cleanup/workspace-cleanup-removal'
 import { makeFacetCandidate as makeCandidate } from '../../query/workspace-cleanup-facet.test.fixture'
@@ -40,6 +40,10 @@ const HALF_CEILING = WORKSPACE_CLEANUP_PROVISIONAL_CEILING_MS / 2
 const store = () => useWorkspaceCleanupRunStore.getState()
 const run = (): WorkspaceCleanupRun => store().run!
 const statuses = () => run().rows.map((row) => row.status)
+
+beforeAll(async () => {
+  await import('./WorkspaceCleanupRunCardContent')
+})
 
 beforeEach(() => {
   vi.useFakeTimers()
@@ -272,21 +276,25 @@ describe('WorkspaceCleanupRunCard', () => {
     expect(container.firstChild).toBeNull()
   })
 
-  it('has Show but no dismiss while running, and its status line does not tick', () => {
+  it('has Show but no dismiss while running, and its status line does not tick', async () => {
     const reporter = createWorkspaceCleanupRunReporter(store().startRun(candidates))
-    render(<WorkspaceCleanupRunCard />)
+    await act(async () => {
+      render(<WorkspaceCleanupRunCard />)
+    })
     expect(screen.getAllByRole('button')).toHaveLength(1)
     const before = screen.getByRole('status').textContent
     act(() => reporter.onRowRemoved(candidates[0]))
     expect(screen.getByRole('status').textContent).toBe(before)
   })
 
-  it('stays when finished until dismissed; Show reopens the dialog on the run', () => {
+  it('stays when finished until dismissed; Show reopens the dialog on the run', async () => {
     const reporter = createWorkspaceCleanupRunReporter(store().startRun(candidates))
     act(() => {
       reporter.onResult(result([0, 1], [failure(2)]))
     })
-    render(<WorkspaceCleanupRunCard />)
+    await act(async () => {
+      render(<WorkspaceCleanupRunCard />)
+    })
     fireEvent.click(screen.getAllByRole('button')[1])
     expect(useAppStore.getState().activeModal).toBe('workspace-cleanup')
     expect(useAppStore.getState().modalData.workspaceCleanupView).toBe('run')

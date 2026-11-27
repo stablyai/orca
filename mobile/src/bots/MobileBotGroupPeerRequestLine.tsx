@@ -11,9 +11,9 @@ import {
   MobileNativeChatEventName,
   MobileNativeChatEventRow
 } from '../session/native-chat/transcript/messages/MobileNativeChatEventRow'
-import { styles as messageStyles } from '../session/native-chat/transcript/messages/mobile-native-chat-message-styles'
-import { colors } from '../theme/mobile-theme'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { stylesSheet } from '../session/native-chat/transcript/messages/mobile-native-chat-message-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
+import { useThemedStyles } from '../theme/themed-styles'
 
 // No default: a new peer-line kind must fail the typecheck instead of rendering the wrong text.
 function peerLineText(t: Translate, line: BotGroupPeerLine): string {
@@ -59,7 +59,8 @@ function marked(line: BotGroupPeerLine): BotGroupPeerLine {
 
 /** A bot-to-bot hand-off, as one quiet line over the turn it starts: who asked or told whom, or whose reply the asker read. */
 export function MobileBotGroupPeerRequestLine({ message }: { message: BotGroupMessage }) {
-  useMobileColorScheme()
+  const messageStyles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const line = botGroupPeerLine(message)
   const parts = peerLineText(t, marked(line)).split(MARK)

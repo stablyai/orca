@@ -42,7 +42,7 @@ export function useRightSidebarTabRouting({
   const lastRightSidebarRouteRequestIdRef = useRef(seenRouteRequestId ?? rightSidebarRouteRequestId)
 
   // Preserve stored routes when hidden; folder effective-tab memory keeps parent overviews, while authoritative installed-panel keys discard uninstalled plugin routes.
-  const normalizedActiveTab = normalizeRightSidebarRoute(rightSidebarTab, {
+  const normalizedActiveTab = normalizeRightSidebarRoute(rightSidebarTab, undefined, {
     installedPluginTabKeys:
       pluginSystemEnabled && pluginFetchStatus === 'ready' ? installedPluginTabKeys : undefined
   }).rightSidebarTab

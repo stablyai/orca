@@ -8,7 +8,11 @@ import { cn } from '@/lib/class-names'
 import { toggleVariants } from '@/components/ui/toggle'
 
 type ToggleGroupVariantProps = Omit<VariantProps<typeof toggleVariants>, 'variant'> & {
-  variant?: VariantProps<typeof toggleVariants>['variant'] | 'segmented-card' | 'segmented-pill'
+  variant?:
+    | VariantProps<typeof toggleVariants>['variant']
+    | 'segmented-card'
+    | 'segmented-pill'
+    | 'underline'
 }
 
 const ToggleGroupContext = React.createContext<
@@ -51,6 +55,8 @@ function ToggleGroup({
         'group/toggle-group flex w-fit items-center gap-[--spacing(var(--gap))] rounded-md data-[spacing=default]:data-[variant=outline]:shadow-xs',
         variant === 'segmented-card' && 'grid w-full grid-cols-2 rounded-md bg-muted p-0.5',
         variant === 'segmented-pill' && 'shrink-0 bg-foreground/7 p-0.5',
+        // A rail page's view row: flush tabs sharing the toolbar's bottom hairline.
+        variant === 'underline' && 'h-full shrink-0 items-stretch gap-4.5 rounded-none',
         className
       )}
       {...props}
@@ -79,7 +85,9 @@ function ToggleGroupItem({
       className={cn(
         toggleVariants({
           variant:
-            selectedVariant === 'segmented-card' || selectedVariant === 'segmented-pill'
+            selectedVariant === 'segmented-card' ||
+            selectedVariant === 'segmented-pill' ||
+            selectedVariant === 'underline'
               ? 'default'
               : selectedVariant,
           size: context.size || size
@@ -93,6 +101,7 @@ function ToggleGroupItem({
         // Compact pill for a block header: 20px segments, the same foreground-derived thumb.
         selectedVariant === 'segmented-pill' &&
           'h-5 rounded-sm border-0 bg-transparent px-2 text-xs font-normal text-muted-foreground shadow-none hover:bg-transparent hover:text-foreground data-[state=on]:bg-card data-[state=on]:text-card-foreground data-[state=on]:inset-ring-1 data-[state=on]:inset-ring-foreground/12',
+        selectedVariant === 'underline' && RAIL_UNDERLINE_ITEM_CLASS,
         className
       )}
       {...props}
@@ -102,4 +111,11 @@ function ToggleGroupItem({
   )
 }
 
-export { ToggleGroup, ToggleGroupItem }
+/**
+ * One underline view item: full band height, 2px bar on the band's bottom hairline when on. Exported so a page's
+ * navigation row (buttons with aria-current) looks identical to a view row.
+ */
+const RAIL_UNDERLINE_ITEM_CLASS =
+  "relative h-full gap-1.5 rounded-none border-0 bg-transparent px-0 text-xs font-medium text-muted-foreground shadow-none hover:bg-transparent hover:text-foreground focus-visible:ring-inset data-[state=on]:bg-transparent data-[state=on]:text-foreground after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:rounded-t-sm after:bg-transparent after:content-[''] data-[state=on]:after:bg-foreground aria-[current=page]:text-foreground aria-[current=page]:after:bg-foreground"
+
+export { ToggleGroup, ToggleGroupItem, RAIL_UNDERLINE_ITEM_CLASS }

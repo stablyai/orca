@@ -11,8 +11,9 @@ import {
 } from '../../../mobile-web-shell/bridge/native-capabilities/bridge-image-verbs'
 import { useImageActions } from '../../../platform/image-actions/image-actions'
 import { ImageActionRefusedError } from '../../../platform/image-actions/image-actions-contract'
-import { colors, feedback } from '../../../theme/mobile-theme'
+import { feedback } from '../../../theme/mobile-theme'
 import type { ImageViewerActionsProps } from '../../../files/media/presentation/MobileImageViewer'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 
 type OperationCopy = {
   icon: LucideIcon
@@ -61,6 +62,7 @@ export function MobileImageViewerActions({
   buttonStyle,
   toastInset
 }: ImageViewerActionsProps): React.JSX.Element | null {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const actionsFor = useImageActions()
   const act = useMemo(() => actionsFor?.(uri) ?? null, [actionsFor, uri])

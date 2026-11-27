@@ -10,7 +10,7 @@ import {
 } from './codex-reset-credit-consume-operations'
 import { CodexResetCreditExpectedScopeSchema } from './codex-reset-credit-reply-schema'
 import { randomV4Uuid } from '../../platform/random-v4-uuid'
-import { translate } from '../../i18n/mobile-i18n'
+import { translate, type Translate } from '../../i18n/mobile-i18n'
 import {
   decodeAccountsSnapshot,
   type AccountsSnapshot,
@@ -53,23 +53,21 @@ export type CodexResetCreditSummary = {
 
 const RESET_RPC_TIMEOUT_MS = 90_000
 
-function resetCreditExpiryLabel(ms: number, count: number): string {
+function resetCreditExpiryLabel(ms: number, count: number, t: Translate): string {
   if (ms <= 0) {
     return count === 1
-      ? translate('components.codexResetCredit.expiryNowSingle', 'Expires now')
-      : translate('components.codexResetCredit.expiryNowMultiple', 'Next expires now')
+      ? t('components.codexResetCredit.expiryNowSingle', 'Expires now')
+      : t('components.codexResetCredit.expiryNowMultiple', 'Next expires now')
   }
   const totalMinutes = Math.floor(ms / 60_000)
   if (totalMinutes < 60) {
     return count === 1
-      ? translate('components.codexResetCredit.expiryMinutesSingle', 'Expires in {{minutes}}m', {
+      ? t('components.codexResetCredit.expiryMinutesSingle', 'Expires in {{minutes}}m', {
           minutes: totalMinutes
         })
-      : translate(
-          'components.codexResetCredit.expiryMinutesMultiple',
-          'Next expires in {{minutes}}m',
-          { minutes: totalMinutes }
-        )
+      : t('components.codexResetCredit.expiryMinutesMultiple', 'Next expires in {{minutes}}m', {
+          minutes: totalMinutes
+        })
   }
   const totalHours = Math.floor(totalMinutes / 60)
   const minutes = totalMinutes % 60
@@ -77,53 +75,46 @@ function resetCreditExpiryLabel(ms: number, count: number): string {
     const options = { hours: totalHours, minutes }
     if (minutes > 0) {
       return count === 1
-        ? translate(
+        ? t(
             'components.codexResetCredit.expiryHoursMinutesSingle',
             'Expires in {{hours}}h {{minutes}}m',
             options
           )
-        : translate(
+        : t(
             'components.codexResetCredit.expiryHoursMinutesMultiple',
             'Next expires in {{hours}}h {{minutes}}m',
             options
           )
     }
     return count === 1
-      ? translate('components.codexResetCredit.expiryHoursSingle', 'Expires in {{hours}}h', options)
-      : translate(
-          'components.codexResetCredit.expiryHoursMultiple',
-          'Next expires in {{hours}}h',
-          options
-        )
+      ? t('components.codexResetCredit.expiryHoursSingle', 'Expires in {{hours}}h', options)
+      : t('components.codexResetCredit.expiryHoursMultiple', 'Next expires in {{hours}}h', options)
   }
   const days = Math.floor(totalHours / 24)
   const hours = totalHours % 24
   const options = { days, hours }
   if (hours > 0) {
     return count === 1
-      ? translate(
+      ? t(
           'components.codexResetCredit.expiryDaysHoursSingle',
           'Expires in {{days}}d {{hours}}h',
           options
         )
-      : translate(
+      : t(
           'components.codexResetCredit.expiryDaysHoursMultiple',
           'Next expires in {{days}}d {{hours}}h',
           options
         )
   }
   return count === 1
-    ? translate('components.codexResetCredit.expiryDaysSingle', 'Expires in {{days}}d', options)
-    : translate(
-        'components.codexResetCredit.expiryDaysMultiple',
-        'Next expires in {{days}}d',
-        options
-      )
+    ? t('components.codexResetCredit.expiryDaysSingle', 'Expires in {{days}}d', options)
+    : t('components.codexResetCredit.expiryDaysMultiple', 'Next expires in {{days}}d', options)
 }
 
 export function getCodexResetCreditSummary(
   limits: ProviderRateLimits | null,
-  now: number
+  now: number,
+  t: Translate
 ): CodexResetCreditSummary | null {
   const credits = limits?.rateLimitResetCredits
   const count = credits?.availableCount ?? 0
@@ -133,16 +124,16 @@ export function getCodexResetCreditSummary(
   const expiry = credits?.nextExpiresAt
   const expiryLabel =
     typeof expiry === 'number' && Number.isFinite(expiry)
-      ? resetCreditExpiryLabel(expiry - now, count)
+      ? resetCreditExpiryLabel(expiry - now, count, t)
       : null
   return {
     availableCount: count,
     availabilityLabel:
       count === 1
-        ? translate('components.codexResetCredit.available_one', '{{count}} reset available', {
+        ? t('components.codexResetCredit.available_one', '{{count}} reset available', {
             count
           })
-        : translate('components.codexResetCredit.available_other', '{{count}} resets available', {
+        : t('components.codexResetCredit.available_other', '{{count}} resets available', {
             count
           }),
     expiryLabel

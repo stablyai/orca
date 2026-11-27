@@ -13,7 +13,6 @@ import {
   BASIC_THINKING_LEVELS,
   CLAUDE_THINKING_LEVELS,
   OPENAI_THINKING_LEVELS,
-  parseAntigravityModels,
   parseClaudeModels,
   parseCursorModels,
   parseLineModels,
@@ -153,7 +152,6 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
     BASIC_THINKING_LEVELS,
     OPENAI_THINKING_LEVELS,
     parseCursorModels,
-    parseAntigravityModels,
     parseLineModels
   })
 }
@@ -181,16 +179,24 @@ export function getCommitMessageAgentSpec(agentId: TuiAgent): CommitMessageAgent
   return COMMIT_MESSAGE_AGENT_SPECS[agentId]
 }
 
+// Orca no longer runs these headless; a saved or default choice of one picks as if unset.
+const RETIRED_TEXT_AGENT_IDS: ReadonlySet<unknown> = new Set(['antigravity'])
+
+export function isRetiredTextAgent(agentId: unknown): boolean {
+  return RETIRED_TEXT_AGENT_IDS.has(agentId)
+}
+
 export function resolveCommitMessageAgentChoice(
   configuredAgentId: CommitMessageAgentChoice | null | undefined,
   defaultTuiAgent: DefaultTuiAgentPreference,
   disabledTuiAgents?: Iterable<unknown> | null
 ): CommitMessageAgentChoice | null {
-  if (configuredAgentId) {
+  if (configuredAgentId && !isRetiredTextAgent(configuredAgentId)) {
     return configuredAgentId
   }
   if (
     defaultTuiAgent &&
+    !isRetiredTextAgent(defaultTuiAgent) &&
     defaultTuiAgent !== 'blank' &&
     isTuiAgentEnabled(defaultTuiAgent, disabledTuiAgents)
   ) {

@@ -2,11 +2,12 @@ import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import type { SayAutomationRun } from '../../../../../src/shared/automations/automation-run-row-words'
 import { typography } from '../../../theme/mobile-theme'
-import { styles as markdownStyles } from '../../../components/markdown/mobile-markdown-styles'
+import { stylesSheet as markdownStylesSheet } from '../../../components/markdown/mobile-markdown-styles'
 import { MobileNativeChatMarkdown } from './message-content/MobileNativeChatMarkdown'
 import { useMobileNativeChatDisclosure } from './viewport/mobile-native-chat-disclosure-store'
 import { scaledType } from './messages/mobile-native-chat-message-styles'
-import { styles } from './mobile-automation-run-row-styles'
+import { stylesSheet } from './mobile-automation-run-row-styles'
+import { useThemedStyles } from '../../../theme/themed-styles'
 
 const FOLDED_LINES = 4
 
@@ -22,6 +23,8 @@ export function MobileAutomationRunInstructions({
   fontScale: number
   say: SayAutomationRun
 }): React.JSX.Element {
+  const styles = useThemedStyles(stylesSheet)
+  const markdownStyles = useThemedStyles(markdownStylesSheet)
   const [whole, setWhole] = useMobileNativeChatDisclosure(
     `automation-run-instructions:${messageId}`,
     false

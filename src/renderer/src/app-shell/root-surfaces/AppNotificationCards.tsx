@@ -1,12 +1,17 @@
 import { Suspense, type JSX } from 'react'
 import type { TopLevelView } from '../../../../shared/ui-chrome/ui-chrome-types'
-import { AgentCliUpdateCard } from '../../components/agent-cli-update/AgentCliUpdateCard'
 import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { CodexSharedSettingsNoticeCard } from '../../components/terminal-pane/provider-notices/codex-settings/CodexSharedSettingsNoticeCard'
 import { NotificationCardStack } from '../../components/notifications/NotificationCardStack'
 import { StarNagCard } from '../../components/star-nag/StarNagCard'
 import { WorkspaceCleanupRunCard } from '../../components/workspace-cleanup/removal/run/WorkspaceCleanupRunCard'
 import { OverlayBoundary } from './app-root-surface-boundaries'
+
+const AgentCliUpdateCard = lazy(() =>
+  import('../../components/agent-cli-update/AgentCliUpdateCard').then((module) => ({
+    default: module.AgentCliUpdateCard
+  }))
+)
 
 const ChatUiHereCornerCard = lazy(() =>
   import('../../components/feature-tips/ChatUiHereCornerCard').then((module) => ({
@@ -49,9 +54,11 @@ export function AppNotificationCards({
         </Suspense>
       ) : null}
       {AGENT_CLI_UPDATE_CARD_ENABLED ? (
-        <OverlayBoundary boundaryId="overlay.agent-cli-update-card" resetKey={activeView}>
-          <AgentCliUpdateCard />
-        </OverlayBoundary>
+        <Suspense fallback={null}>
+          <OverlayBoundary boundaryId="overlay.agent-cli-update-card" resetKey={activeView}>
+            <AgentCliUpdateCard />
+          </OverlayBoundary>
+        </Suspense>
       ) : null}
       {shouldMountUpdateCard ? (
         <Suspense fallback={null}>

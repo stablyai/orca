@@ -1,9 +1,11 @@
-// Show the notice only for unresolved pre-telemetry consent; new users receive install-time disclosure. No events transmit until existing users resolve it (telemetry-plan.md §First-launch experience).
-// Hide optimistically while saved settings round-trip to prevent notice flashes; rebase on main’s saved consent after rejection.
-
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
+import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
 import { useAppStore } from '../../../store/index'
-import { FirstLaunchBanner } from './FirstLaunchBanner'
+
+const LazyFirstLaunchBanner = lazyWithRetry(
+  () => import('./FirstLaunchBanner').then((module) => ({ default: module.FirstLaunchBanner })),
+  { reloadKey: 'telemetry-first-launch-banner' }
+)
 
 export function TelemetryFirstLaunchSurface(): React.JSX.Element | null {
   const settings = useAppStore((s) => s.settings)
@@ -28,9 +30,11 @@ export function TelemetryFirstLaunchSurface(): React.JSX.Element | null {
   }
 
   return (
-    <FirstLaunchBanner
-      fetchSettings={fetchSettings}
-      onResolve={() => setDismissedThisSession(true)}
-    />
+    <Suspense fallback={null}>
+      <LazyFirstLaunchBanner
+        fetchSettings={fetchSettings}
+        onResolve={() => setDismissedThisSession(true)}
+      />
+    </Suspense>
   )
 }

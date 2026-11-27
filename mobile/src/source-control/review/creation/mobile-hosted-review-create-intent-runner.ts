@@ -1,4 +1,5 @@
 import type { MobileGitStatusHostPayload as MobileGitStatusResult } from '../../git/git-status-reply-schema'
+import { translate } from '../../../i18n/mobile-i18n'
 import { getMobilePrCreateBlockMessage, getMobilePrCreateSuccessWarning } from './mobile-pr-create'
 import {
   createMobileHostedReview as createMobilePr,
@@ -61,7 +62,7 @@ export async function runMobileHostedReviewCreateIntent(
     return prepared
   }
 
-  const blockedMessage = getMobilePrCreateBlockMessage(prepared.prefill)
+  const blockedMessage = getMobilePrCreateBlockMessage(prepared.prefill, translate)
   if (blockedMessage) {
     return {
       ok: false,

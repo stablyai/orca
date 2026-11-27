@@ -1,135 +1,117 @@
-import { Fragment, useCallback, type ReactNode } from 'react'
-import { DetailCardFocusBoundary } from '../components/detail-cards/detail-card-host'
-import {
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-  type HostInstance,
-  type StyleProp,
-  type TextStyle
-} from 'react-native'
-import type { SessionTitleCard } from './tabs/use-session-title-card'
+import type { ReactNode } from 'react'
+import { Pressable, Text, View } from 'react-native'
+import { TailClippedText } from '../components/list/TailClippedText'
 import { StatusDot } from '../components/feedback/StatusDot'
 import type { ConnectionState } from '../transport/connection/connection-state'
 import type { ConnectionVerdict } from '../transport/connection/connection-health'
-import { styles } from './mobile-session-styles'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { pressedStyle } from '../theme/mobile-theme'
-import { useKeyboardPersistingTaps } from '../platform/keyboard/keyboard-persisting-taps'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { MobileForkMarkedName } from './fork/MobileForkMarkedName'
+import { isPathTitle } from './tabs/mobile-session-tab-rows'
 
-/** The session's title and status line. A tap opens a card with the full name, where it lives
- *  and its host, as desktop's tab card does, because a sideways phone cuts the title short. */
+/** The top bar's title: the open tab with its mark, and the workspace (or what's wrong with the connection) under it. */
 export function MobileSessionTitleBlock({
   title,
+  forked = false,
   leading,
-  connState,
-  verdict,
-  details,
-  meta,
-  centered = false,
+  subtitle,
+  status,
+  accessibilityLabel,
+  onPress,
   showConnectionRetry,
   onRetry
 }: {
   title: string
-  /** Before the title, as a bot's avatar is. */
+  /** The title names a forked chat, drawn after the fork mark. */
+  forked?: boolean
+  /** Before the title: the tab's mark, or a bot's avatar. */
   leading?: ReactNode
-  connState: ConnectionState
-  /** Colours the dot by the verdict's severity; omitted while a short drop is calmed. */
-  verdict?: ConnectionVerdict
-  details: SessionTitleCard
-  meta: string
-  /** Sits in NavBar's centre slot rather than beside the tabs. */
-  centered?: boolean
+  subtitle: string
+  /** The connection's dot, shown only while something is wrong with it. */
+  status: { state: ConnectionState; verdict?: ConnectionVerdict } | null
+  accessibilityLabel: string
+  /** Opens the open tab's actions; absent with no tab open. */
+  onPress?: () => void
   showConnectionRetry: boolean
   onRetry: () => void
 }): React.JSX.Element {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
-  const titleText = (extra?: StyleProp<TextStyle>) => (
-    <Text
-      ref={details.titleRef}
-      onLayout={details.onAnchorLayout}
-      onPress={Platform.OS === 'web' ? details.toggle : undefined}
-      style={[styles.sessionTitle, centered && centeredStyles.title, extra]}
-      numberOfLines={1}
-    >
-      {title}
-    </Text>
-  )
-  // Why: opening the card must keep a focused field's keyboard. 'always' because the whole block
-  // is one button; 'handled' would let its own text through.
-  const titleKeepsKeyboard = useKeyboardPersistingTaps('always')
-  const { openerRef } = details
-  const attachOpener = useCallback(
-    (view: HostInstance | null) => {
-      openerRef.current = view
-      titleKeepsKeyboard(view)
-    },
-    [openerRef, titleKeepsKeyboard]
-  )
-  return (
+  const subtitleRow = (
     <>
-      <DetailCardFocusBoundary refs={details.boundaryRefs} index={0} active={details.active} />
-      <Fragment key="title">
-        <Pressable
-          style={({ pressed }) => [
-            centered
-              ? centeredStyles.block
-              : [
-                  styles.sessionTitleBlock,
-                  details.besideTabs && styles.sessionTitleBlockBesideTabs
-                ],
-            pressed && pressedStyle
-          ]}
-          ref={attachOpener}
-          onLayout={details.onAnchorLayout}
-          onPress={details.toggle}
-          aria-expanded={details.requestedOpen}
-          accessibilityRole="button"
-          accessibilityHint={t(
-            'session.header.workspaceDetailsHint',
-            'Shows the full workspace name and where it is'
-          )}
-        >
-          {leading ? (
-            <View style={styles.sessionBotTitleRow}>
-              {leading}
-              {titleText(styles.sessionBotTitle)}
+      {status ? <StatusDot state={status.state} verdict={status.verdict} /> : null}
+      <Text style={styles.subtitle} numberOfLines={1}>
+        {subtitle}
+      </Text>
+    </>
+  )
+  // Reconnect is a sibling of the title action: screen readers drop a control nested in another.
+  return (
+    <View style={styles.block}>
+      <Pressable
+        style={({ pressed }) => [
+          styles.titleAction,
+          !showConnectionRetry && styles.titleActionFull,
+          pressed && onPress && pressedStyle
+        ]}
+        onPress={onPress}
+        disabled={!onPress}
+        accessibilityRole={onPress ? 'button' : 'header'}
+        accessibilityLabel={accessibilityLabel}
+        accessibilityHint={
+          onPress ? t('session.tabBar.actionsHint', 'Shows actions for this tab') : undefined
+        }
+      >
+        <View style={styles.titleRow}>
+          {leading ? <View style={styles.leading}>{leading}</View> : null}
+          {forked ? (
+            <Text style={styles.title} numberOfLines={1}>
+              <MobileForkMarkedName name={title} />
+            </Text>
+          ) : isPathTitle(title) ? (
+            <View style={styles.pathTitle}>
+              <TailClippedText style={styles.title}>{title}</TailClippedText>
             </View>
           ) : (
-            titleText()
-          )}
-          <Pressable
-            style={({ pressed }) => [styles.sessionMetaRow, pressed && pressedStyle]}
-            disabled={!showConnectionRetry}
-            onPress={onRetry}
-            accessibilityRole={showConnectionRetry ? 'button' : undefined}
-            accessibilityLabel={
-              showConnectionRetry
-                ? t('session.header.reconnectToDesktop', 'Reconnect to desktop')
-                : undefined
-            }
-          >
-            <StatusDot state={connState} verdict={verdict} />
-            <Text style={styles.sessionMetaText} numberOfLines={1}>
-              {meta}
+            <Text style={styles.title} numberOfLines={1}>
+              {title}
             </Text>
-          </Pressable>
+          )}
+        </View>
+        {showConnectionRetry ? null : <View style={styles.subtitleRow}>{subtitleRow}</View>}
+      </Pressable>
+      {showConnectionRetry ? (
+        <Pressable
+          style={({ pressed }) => [styles.subtitleRow, pressed && pressedStyle]}
+          onPress={onRetry}
+          accessibilityRole="button"
+          accessibilityLabel={t('session.header.reconnectToDesktop', 'Reconnect to desktop')}
+        >
+          {subtitleRow}
         </Pressable>
-      </Fragment>
-      <DetailCardFocusBoundary refs={details.boundaryRefs} index={1} active={details.active} />
-    </>
+      ) : null}
+    </View>
   )
 }
 
-const centeredStyles = StyleSheet.create({
-  block: {
-    maxWidth: '100%',
-    alignItems: 'center'
+// NavBar's title and subtitle, so the session bar reads like every other screen's.
+const stylesSheet = themedStyleSheet((colors) => ({
+  block: { maxWidth: '100%', minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  titleAction: { maxWidth: '100%', alignItems: 'center' },
+  // Without a reconnect row the title action keeps the whole 44 pt bar.
+  titleActionFull: { minHeight: 44, justifyContent: 'center' },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: '100%' },
+  // Keeps web SVGs from shrinking before the title ellipsizes.
+  leading: { flexShrink: 0 },
+  title: { flexShrink: 1, minWidth: 0, color: colors.textPrimary, fontSize: 16, fontWeight: '600' },
+  pathTitle: { flexShrink: 1, minWidth: 0 },
+  subtitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    minWidth: 0,
+    maxWidth: '100%'
   },
-  // NavBar's title size, so the session bar reads like every other screen's.
-  title: {
-    fontSize: 16
-  }
-})
+  subtitle: { flexShrink: 1, color: colors.textSecondary, fontSize: 12 }
+}))

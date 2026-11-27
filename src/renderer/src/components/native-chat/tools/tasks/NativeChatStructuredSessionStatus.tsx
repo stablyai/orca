@@ -4,15 +4,13 @@ import { useNativeChatPinnedWorkerApprovals } from '../../worker-approvals/nativ
 import { useWorkerDockFeed } from './dock/worker-dock-feed'
 import type { WorkerDockRowView } from './dock/WorkerDockRow'
 import type { WorkerDockSnapshot } from '../../../../../../shared/orchestration/dock/worker-dock'
-import { openOrchestrationCrewAgent } from '@/lib/agent-session/open/open-agent-message-sender'
+import { openWorkerDockRow } from './dock/worker-dock-open'
 import { useWorkerDockOwnerActions } from './dock/use-worker-dock-owner-actions'
 import { WorkerDockFeedLossesContext, workerDockStopBlock } from './dock/worker-dock-stop-check'
 import {
   useWorkerDockFailureFocusHandoff,
   WorkerDockFailureStrip
 } from './dock/WorkerDockFailureStrip'
-import { WorkerDockResultDialogSlot } from './dock/WorkerDockResultDialogSlot'
-import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import { useRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/use-runtime-environment-capability'
 import {
@@ -165,18 +163,7 @@ export function NativeChatStructuredSessionStatus(props: {
     opener: HTMLElement
   } | null>(null)
   const workerOpen = useCallback(
-    (row: WorkerDockRowView) =>
-      void openOrchestrationCrewAgent(
-        {
-          partyKey: row.id,
-          role: 'worker',
-          label: row.name,
-          agentKind: 'unknown',
-          status: row.state,
-          openTarget: { kind: 'dispatch', address: `dispatch:${row.dispatchId}` }
-        },
-        target
-      ),
+    (row: WorkerDockRowView) => openWorkerDockRow(row, target),
     [target]
   )
   // Read live when a Stop or its Retry is sent, never from rows a held press kept on screen.
@@ -191,14 +178,8 @@ export function NativeChatStructuredSessionStatus(props: {
   // A focused Retry or Dismiss leaves with the failure line; focus then moves to the next line or
   // the dock's toggle instead of the page.
   const failureFocus = useWorkerDockFailureFocusHandoff()
-  const owner = useWorkerDockOwnerActions(
-    target,
-    feed.party,
-    controlledWorkerIdentities,
-    workerOpen,
-    stopBlock
-  )
-  const { dialog, failure } = owner
+  const owner = useWorkerDockOwnerActions(target, feed.party, controlledWorkerIdentities, stopBlock)
+  const { failure } = owner
   // An attempt that ends with no failure line (it succeeded, or was dismissed) hands focus to no
   // line: a later, unrelated failure must not take it.
   const attemptOpen = Boolean(failure) || owner.pending.size > 0
@@ -239,7 +220,7 @@ export function NativeChatStructuredSessionStatus(props: {
         sessionId={props.sessionId}
         workerRows={controlledWorkerRows}
         workerIdentities={controlledWorkerIdentities}
-        onOpenWorker={owner.open}
+        onOpenWorker={workerOpen}
         onWorkerAction={owner.action}
         onClearAll={owner.clearAll}
         loadWindow={feed.loadWindow}
@@ -275,7 +256,7 @@ export function NativeChatStructuredSessionStatus(props: {
           />
         </Suspense>
       ) : null}
-      {failure && !dialog ? (
+      {failure ? (
         <WorkerDockFailureStrip
           key={`${failure.message}\0${failure.retry ? 'retry' : 'final'}`}
           failure={failure}
@@ -283,14 +264,6 @@ export function NativeChatStructuredSessionStatus(props: {
           focusHandoff={failureFocus}
         />
       ) : null}
-      <WorkerDockResultDialogSlot
-        dialog={dialog}
-        hostId={getRuntimeTargetHostId(target)}
-        ownerActionsAvailable={ownerActionsAvailable}
-        onClose={owner.close}
-        onOpen={workerOpen}
-        onRestore={owner.restore}
-      />
     </WorkerDockFeedLossesContext.Provider>
   )
 }

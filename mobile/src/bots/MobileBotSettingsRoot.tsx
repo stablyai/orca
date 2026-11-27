@@ -24,7 +24,7 @@ import type { ConnectorPage } from './connectors/connector-pages'
 import type { MobileBotAvatarSource } from './host-bot-row-facts'
 import { botAgentLabel } from './mobile-bot-sheet-copy'
 import { MobileBotAvatar } from './MobileBotAvatar'
-import { themedStyleSheet } from '../theme/themed-styles'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 
 /** The pages the list opens. */
 export type SettingsRootPage =
@@ -123,6 +123,7 @@ export function MobileBotSettingsRoot(props: {
   /** The features' rows, each in its group. */
   rows: SettingsSlotRow[]
 }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const { bot } = props
   const agent = botAgentLabel(bot.agent)
@@ -253,6 +254,6 @@ export function MobileBotSettingsRoot(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   offline: { opacity: 0.6 }
 }))
