@@ -112,6 +112,14 @@ function compactionReply(text: string): AcpCompactionReply | undefined {
     : { outcome: 'failed', detail: reply }
 }
 
+// `/compact` (builtin-lifecycle.ts) replies "Compaction complete. Tokens: <before> -> <after> (saved <n>)."
+const COMPACTED_TOKENS = /^Compaction complete\. Tokens: \d+ -> (\d+) /
+
+function compactedContextTokens(reply: string): number | undefined {
+  const tokens = COMPACTED_TOKENS.exec(reply.trim())?.[1]
+  return tokens === undefined ? undefined : Number(tokens)
+}
+
 // `/model` (builtin-modes.ts) says "Model set to p/id." only after the model and any :level apply.
 const MODEL_SET = /^Model set to (\S+)\.$/
 
@@ -149,6 +157,7 @@ export const OMP_ACP_DIALECT: AcpDialect = {
   clientCapabilities: { elicitation: { form: {} } },
   normalizeToolUpdate,
   compactionReply,
+  compactedContextTokens,
   modelCommand: {
     // #setModelById (acp-agent.ts) takes listed provider/id values only.
     refusedByOption: (error) => errorDetails(error)?.startsWith('Unknown ACP model: ') === true,
