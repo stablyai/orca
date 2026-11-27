@@ -3,8 +3,7 @@ import { Platform, Text, View } from 'react-native'
 import { WebView, type WebViewMessageEvent } from 'react-native-webview'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { radii, spacing } from '../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../../../theme/themed-styles'
 import { DEFAULT_TERMINAL_THEME } from '../../terminal-webview-html/theme'
 import type { TerminalFontStyle } from '../terminal-font-style'
 import { terminalFontPreviewHtml, terminalFontPreviewLook } from './terminal-font-preview-html'
@@ -19,7 +18,7 @@ type Props = {
 
 // RN Text cannot draw bundled woff2 fonts, so the preview is a small WebView with the real font.
 export function TerminalFontPreview({ textScale, fontStyle, columnsWidth, height }: Props) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const webViewRef = useRef<WebView>(null)
   const look = terminalFontPreviewLook(textScale, fontStyle, Platform.OS === 'ios')
@@ -87,7 +86,7 @@ export function TerminalFontPreview({ textScale, fontStyle, columnsWidth, height
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   frame: {
     borderRadius: radii.surface,
     overflow: 'hidden',

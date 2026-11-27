@@ -37,6 +37,7 @@ type DaemonClientConnectionOptions = {
     spawnerExecPath: string | null
     providerSpawn?: true
     providerRelay?: true
+    providerRelayKeep?: true
     providerRelayAcks?: true
   }
   log: DaemonFileLog
@@ -175,6 +176,7 @@ export class DaemonClientConnections {
               daemonIdentity: {
                 ...(identity.providerSpawn ? { providerSpawn: true } : {}),
                 ...(identity.providerRelay ? { providerRelay: true } : {}),
+                ...(identity.providerRelayKeep ? { providerRelayKeep: true } : {}),
                 ...(identity.providerRelayAcks ? { providerRelayAcks: true } : {}),
                 pid: process.pid,
                 startedAtMs: identity.startedAtMs,

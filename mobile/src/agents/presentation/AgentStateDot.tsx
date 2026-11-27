@@ -2,15 +2,17 @@ import { Activity, MessageCircleQuestion } from 'lucide-react-native'
 import { Animated, View, type ViewStyle } from 'react-native'
 import { agentStateLabel, type AgentDotState } from '../../worktree/agent-lineage/agent-row-display'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { colors, radii } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { radii, type MobilePalette } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import { useWorkingRingRotation } from '../../components/motion/use-working-motion'
 
 export const AGENT_FAILURE_COLOR = '#ef4444'
 
-const dotColors = (): Record<
+const dotColors = (
+  colors: MobilePalette
+): Record<
   Exclude<
     AgentDotState,
     'working' | 'monitoring' | 'blocked' | 'waiting' | 'permission' | 'unverifiable'
@@ -28,7 +30,7 @@ export const AGENT_WORKING_COLOR = '#eab308'
 export const AGENT_STATE_DOT_SIZE = 10
 
 export function AgentQuestionIcon({ size }: { size: number }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   return (
     <MessageCircleQuestion
       size={size}
@@ -67,7 +69,8 @@ export function AgentStateDot({
   decorative?: boolean
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const hidden = decorative
     ? {
         'aria-hidden': true,
@@ -121,7 +124,7 @@ export function AgentStateDot({
         {...hidden}
         accessible={!decorative}
         style={styles.wrapper}
-        accessibilityLabel={decorative ? undefined : agentStateLabel(state)}
+        accessibilityLabel={decorative ? undefined : agentStateLabel(state, t)}
       >
         <AgentQuestionIcon size={AGENT_STATE_DOT_SIZE} />
       </View>
@@ -130,12 +133,12 @@ export function AgentStateDot({
 
   return (
     <View style={styles.wrapper}>
-      <View style={[styles.dot, { backgroundColor: dotColors()[state] }]} />
+      <View style={[styles.dot, { backgroundColor: dotColors(colors)[state] }]} />
     </View>
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   wrapper: {
     width: AGENT_STATE_DOT_SIZE,
     height: AGENT_STATE_DOT_SIZE,

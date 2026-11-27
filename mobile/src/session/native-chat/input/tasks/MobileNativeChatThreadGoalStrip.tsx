@@ -14,10 +14,10 @@ import { useNow } from '../../../../hooks/use-now'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { MobilePendingButton } from '../../../../components/controls/MobilePendingButton'
 import { useMobilePendingControl } from '../../../../components/controls/use-mobile-pending-control'
-import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
-import { queuedMessageStyles } from '../queued-messages/mobile-native-chat-queued-message-styles'
+import { radii, spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
+import { queuedMessageStylesSheet } from '../queued-messages/mobile-native-chat-queued-message-styles'
 import type { MobileStructuredThreadGoal } from './use-mobile-structured-thread-goal'
 
 type Translate = ReturnType<typeof useMobileTranslation>
@@ -43,7 +43,9 @@ export function MobileNativeChatThreadGoalStrip({
 }: {
   threadGoal: MobileStructuredThreadGoal
 }): React.JSX.Element | null {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const queuedMessageStyles = useThemedStyles(queuedMessageStylesSheet)
   const t = useMobileTranslation()
   const [expanded, setExpanded] = useState(false)
   const { pending, run } = useMobilePendingControl<'status' | 'clear'>()
@@ -182,7 +184,7 @@ const LINE_HEIGHT = 17
 const LINE_MIN_HEIGHT = 34
 const CHEVRON_SIZE = 32
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   line: {
     minHeight: LINE_MIN_HEIGHT,
     flexDirection: 'row',

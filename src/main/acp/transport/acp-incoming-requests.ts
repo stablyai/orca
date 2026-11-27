@@ -1,9 +1,12 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { AcpRpcError } from './acp-errors'
 import type { AcpJsonRpcMessage } from './acp-rpc-envelope'
 import type { AcpPeerHandlers } from './acp-json-rpc-peer'
 
-const cancelRequestSchema = z.looseObject({ requestId: z.union([z.string(), z.number()]) })
+const cancelRequestSchema = lazyZodSchema(() =>
+  z.looseObject({ requestId: z.union([z.string(), z.number()]) })
+)
 
 type OpenRequest = {
   controller: AbortController

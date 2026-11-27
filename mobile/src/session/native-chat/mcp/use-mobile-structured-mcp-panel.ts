@@ -4,6 +4,7 @@ import type {
   AgentSessionMcpOperation,
   AgentSessionMcpResult
 } from '../../../../../src/shared/agent-session/options/protocol/agent-session-mcp'
+import { tuiAgentDisplayName } from '../../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { AGENT_SESSION_MCP_RUNTIME_CAPABILITY } from '../../../../../src/shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import type { StructuredAgentSessionComposerOptions } from '../../../../../src/shared/agent-session/view/structured-agent-session-composer'
 import type { AgentSessionMcpRequest } from '../../../../../src/shared/agent-session/view/use-agent-session-mcp-panel'
@@ -24,6 +25,8 @@ export type MobileStructuredMcpPanel = {
   refreshKey: string
   /** Opens the host's MCP servers page; null on a host without one. */
   manage: (() => void) | null
+  /** The chat's agent, as the tray names it. */
+  agentLabel: string
 }
 
 type McpCommands = Pick<StructuredAgentSessionComposerOptions, 'openMcpPanel'>
@@ -99,10 +102,13 @@ export function useMobileStructuredMcpPanel<TCommands extends object>(
   )
   const refreshKey = `${opens}:${phase}`
   const canManage = hostListsServers && !!hostId
+  const agentLabel = agent ? (tuiAgentDisplayName(agent) ?? agent) : ''
   const mcpPanel = useMemo(
     () =>
-      offered ? { open, close, request, refreshKey, manage: canManage ? manage : null } : null,
-    [canManage, close, manage, offered, open, refreshKey, request]
+      offered
+        ? { open, close, request, refreshKey, manage: canManage ? manage : null, agentLabel }
+        : null,
+    [agentLabel, canManage, close, manage, offered, open, refreshKey, request]
   )
   const mcpCommands = useMemo(
     () => ({ ...commands, openMcpPanel: offered ? show : undefined }),

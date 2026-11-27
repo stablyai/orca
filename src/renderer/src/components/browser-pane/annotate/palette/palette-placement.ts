@@ -32,9 +32,12 @@ export function samePaletteLayout(a: PaletteLayout, b: PaletteLayout): boolean {
 
 /** Gap kept between the palette and every edge of the page. */
 export const PALETTE_EDGE_INSET_PX = 8
+/** Gap under the palette at its lowest (its default spot), so it floats clear of the page's bottom edge. */
+export const PALETTE_BOTTOM_INSET_PX = 20
 const KEY_STEP = 0.05
 const KEY_STEP_LARGE = 0.25
-const HINT_GAP_PX = 8
+const PALETTE_HINT_GAP_PX = 8
+const PALETTE_TOOLTIP_OFFSET_PX = 6
 /** A one-line hint's height, until the rendered hint is measured. */
 export const PALETTE_HINT_LINE_PX = 24
 /** Releasing this close to the horizontal centre (as a fraction of travel) snaps back to centre. */
@@ -119,9 +122,9 @@ export function paletteHintPlacement(
 ): CSSProperties {
   const { left, top, paletteHeight, paletteWidth, boundsWidth } = layout
   const vertical =
-    layout.boundsHeight - top - paletteHeight < hintHeight + HINT_GAP_PX * 2
-      ? { bottom: `calc(100% - ${top - HINT_GAP_PX}px)` }
-      : { top: top + paletteHeight + HINT_GAP_PX }
+    layout.boundsHeight - top - paletteHeight < hintHeight + PALETTE_HINT_GAP_PX * 2
+      ? { bottom: `calc(100% - ${top - PALETTE_HINT_GAP_PX}px)` }
+      : { top: top + paletteHeight + PALETTE_HINT_GAP_PX }
   if (layout.x === 0.5) {
     const centre = left + paletteWidth / 2
     const half = Math.max(0, Math.min(centre, boundsWidth - centre) - PALETTE_EDGE_INSET_PX)
@@ -139,6 +142,17 @@ export function paletteHintPlacement(
     return { ...vertical, right, maxWidth: `calc(100% - ${right + PALETTE_EDGE_INSET_PX}px)` }
   }
   return { ...vertical, left, maxWidth: `calc(100% - ${left + PALETTE_EDGE_INSET_PX}px)` }
+}
+
+/** Tooltip distance from the palette: past the hint when it sits on their side, so they never cover it. */
+export function paletteTooltipOffset(
+  showHint: boolean,
+  hintPlacement: CSSProperties,
+  hintHeight: number,
+  side: 'top' | 'bottom'
+): number {
+  const hintOnSide = showHint && 'bottom' in hintPlacement === (side === 'top')
+  return PALETTE_TOOLTIP_OFFSET_PX + (hintOnSide ? hintHeight + PALETTE_HINT_GAP_PX : 0)
 }
 
 /**

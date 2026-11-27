@@ -28,6 +28,7 @@ import {
   dismissSourceControlEntryFailureToast,
   showSourceControlEntryFailureToast
 } from './source-control-entry-failure-toast'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 export function useSourceControlEntryMutations({
   activeRepoTarget,
@@ -139,12 +140,15 @@ export function useSourceControlEntryMutations({
         }
         // Hold autosave so an open tab cannot recreate the file the host removes.
         const releaseAutoSave = await requestEditorSaveQuiesce(editorTarget)
-        try {
-          await resolveRuntimeGitConflict(context, filePath, resolution)
-          notifyEditorExternalFileChange(editorTarget)
-        } finally {
-          releaseAutoSave()
-        }
+        await runWithFinally(
+          async () => {
+            await resolveRuntimeGitConflict(context, filePath, resolution)
+            notifyEditorExternalFileChange(editorTarget)
+          },
+          () => {
+            releaseAutoSave()
+          }
+        )
       }
       resolvingConflictKeysRef.current.add(resolvingKey)
       return runEntryMutation('stage', entry.path, resolve).finally(() => {
@@ -170,27 +174,30 @@ export function useSourceControlEntryMutations({
         runtimeEnvironmentId
       })
       // Release in finally so every workspace holds autosave until Git finishes.
-      try {
-        const connectionId = sourceControlConnectionId(scope, activeWorktreeId)
-        await discardRuntimeGitPath(
-          {
-            // Route discard through workspace ownership rather than focused runtime.
-            target: requireGitOwnerTarget(activeRepoTarget),
+      await runWithFinally(
+        async () => {
+          const connectionId = sourceControlConnectionId(scope, activeWorktreeId)
+          await discardRuntimeGitPath(
+            {
+              // Route discard through workspace ownership rather than focused runtime.
+              target: requireGitOwnerTarget(activeRepoTarget),
+              worktreeId: activeWorktreeId,
+              worktreePath,
+              connectionId
+            },
+            filePath
+          )
+          notifyEditorExternalFileChange({
             worktreeId: activeWorktreeId,
             worktreePath,
-            connectionId
-          },
-          filePath
-        )
-        notifyEditorExternalFileChange({
-          worktreeId: activeWorktreeId,
-          worktreePath,
-          relativePath: filePath,
-          runtimeEnvironmentId
-        })
-      } finally {
-        releaseAutoSave()
-      }
+            relativePath: filePath,
+            runtimeEnvironmentId
+          })
+        },
+        () => {
+          releaseAutoSave()
+        }
+      )
     },
     [activeRepoTarget, activeWorktreeId, scope, worktreePath]
   )
@@ -224,31 +231,34 @@ export function useSourceControlEntryMutations({
         }
         throw failed.reason
       }
-      try {
-        const connectionId = sourceControlConnectionId(scope, activeWorktreeId)
-        await bulkDiscardRuntimeGitPaths(
-          {
-            // Route discard through workspace ownership rather than focused runtime.
-            target: requireGitOwnerTarget(activeRepoTarget),
-            worktreeId: activeWorktreeId,
-            worktreePath,
-            connectionId
-          },
-          filePaths
-        )
-        for (const relativePath of filePaths) {
-          notifyEditorExternalFileChange({
-            worktreeId: activeWorktreeId,
-            worktreePath,
-            relativePath,
-            runtimeEnvironmentId
-          })
+      await runWithFinally(
+        async () => {
+          const connectionId = sourceControlConnectionId(scope, activeWorktreeId)
+          await bulkDiscardRuntimeGitPaths(
+            {
+              // Route discard through workspace ownership rather than focused runtime.
+              target: requireGitOwnerTarget(activeRepoTarget),
+              worktreeId: activeWorktreeId,
+              worktreePath,
+              connectionId
+            },
+            filePaths
+          )
+          for (const relativePath of filePaths) {
+            notifyEditorExternalFileChange({
+              worktreeId: activeWorktreeId,
+              worktreePath,
+              relativePath,
+              runtimeEnvironmentId
+            })
+          }
+        },
+        () => {
+          for (const release of releases) {
+            release()
+          }
         }
-      } finally {
-        for (const release of releases) {
-          release()
-        }
-      }
+      )
     },
     [activeRepoTarget, activeWorktreeId, scope, worktreePath]
   )

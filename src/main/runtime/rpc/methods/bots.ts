@@ -19,6 +19,7 @@ import { googleSetupRuns } from '../../../google/google-setup-runs'
 import { readSharedBotActivity } from '../../../bots/bot-activity-host'
 import { runtimeBotChats, startBotSession, botOnAgent } from '../../../bots/bot-chat-session'
 import { readPairedBotRosters, withPairedBotRosters } from '../../../bots/paired-bot-rosters'
+import { connectedClientRosters } from '../../orchestration/federation/client-asks/client-ask-listeners'
 import { botOfSession } from '../../../bots/bot-session-tabs'
 import { openEmptyBotChat, runtimeBotChatTreeHost } from '../../../bots/bot-chat-tree-host'
 import { forgetDeletedBotTools } from './bots-tools'
@@ -173,7 +174,11 @@ export const BOT_METHODS = [
           return entry.id === caller?.id ? { ...entry, self: true as const } : entry
         })
       )
-      return paired ? withPairedBotRosters(own, await paired) : { bots: own }
+      const listed = paired ? withPairedBotRosters(own, await paired) : { bots: own }
+      // Computers paired to this one, connected now, and the bots each lets this Orca's agents ask:
+      // only for this host's own callers, so a paired computer reading it never lists itself.
+      const clients = paired ? connectedClientRosters(runtime) : []
+      return clients.length > 0 ? { ...listed, clients } : listed
     }
   }),
   BOT_CREATE_METHOD,

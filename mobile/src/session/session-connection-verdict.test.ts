@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { translate } from '../i18n/mobile-i18n'
 import { verdictDisplayLabel } from '../transport/connection/connection-health'
 import {
   sessionConnectionVerdict,
@@ -26,7 +27,10 @@ function tailscaleSession(
 }
 
 function label(overrides: Partial<SessionConnectionVerdictInputs> = {}): string {
-  return verdictDisplayLabel(sessionConnectionVerdict(tailscaleSession(overrides)))
+  return verdictDisplayLabel(
+    sessionConnectionVerdict(tailscaleSession(overrides), translate),
+    translate
+  )
 }
 
 describe('sessionConnectionVerdict', () => {
@@ -36,10 +40,11 @@ describe('sessionConnectionVerdict', () => {
 
   it('names the offline host instead of blaming Tailscale', () => {
     const verdict = sessionConnectionVerdict(
-      tailscaleSession({ relayHostReachability: 'host-offline' })
+      tailscaleSession({ relayHostReachability: 'host-offline' }),
+      translate
     )
     expect(verdict.kind).toBe('unreachable')
-    expect(verdictDisplayLabel(verdict)).toBe('Work laptop is offline')
+    expect(verdictDisplayLabel(verdict, translate)).toBe('Work laptop is offline')
   })
 
   it('says Relay refused access when the relay refused the credential', () => {
@@ -50,16 +55,17 @@ describe('sessionConnectionVerdict', () => {
 
   it("says it can't reach Relay when the cell was unreachable", () => {
     const verdict = sessionConnectionVerdict(
-      tailscaleSession({ relayHostReachability: 'unreachable' })
+      tailscaleSession({ relayHostReachability: 'unreachable' }),
+      translate
     )
     expect(verdict.kind).toBe('warning')
-    expect(verdictDisplayLabel(verdict)).toBe("Can't reach Relay")
+    expect(verdictDisplayLabel(verdict, translate)).toBe("Can't reach Relay")
   })
 
   it('says Connecting via Relay while Relay is being dialed', () => {
-    const verdict = sessionConnectionVerdict(tailscaleSession({ pendingPath: 'relay' }))
+    const verdict = sessionConnectionVerdict(tailscaleSession({ pendingPath: 'relay' }), translate)
     expect(verdict).toMatchObject({ kind: 'normal', dialing: true })
-    expect(verdictDisplayLabel(verdict)).toBe('Connecting via Relay…')
+    expect(verdictDisplayLabel(verdict, translate)).toBe('Connecting via Relay…')
   })
 
   it('never mentions Tailscale for any relay verdict', () => {

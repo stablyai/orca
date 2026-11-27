@@ -87,6 +87,6 @@ describe('BrowserAnnotateToolPalette', () => {
 
     fireEvent.keyDown(screen.getByRole('button', { name: 'Draw' }), { key: 'ArrowRight' })
 
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Annotate' }))
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Grab' }))
   })
 })

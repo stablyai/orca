@@ -1,36 +1,38 @@
 import { useCallback, useMemo, useState } from 'react'
 import { View, Text, Pressable } from 'react-native'
-import { ChevronLeft } from 'lucide-react-native'
-import { colors, pressedStyle } from '../../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { BottomDrawer } from '../../../components/bottom-drawer/BottomDrawer'
 import { TextField } from '../../../components/composer-input/TextField'
+import { FieldTextInput } from '../../../components/composer-input/FieldTextInput'
+import { MobileSegmentedControl } from '../../../components/controls/MobileSegmentedControl'
+import { MobileSwitch } from '../../../components/controls/MobileSwitch'
+import { ListGroup, ListRow, SectionHeader } from '../../../components/list/ListGroup'
+import { SheetHeader } from '../../../components/nav-bar/SheetHeader'
 import {
   buildTerminalShortcutKey,
   normalizeShortcutKeyInput,
   type TerminalShortcutModifier,
   type TerminalShortcutSpecialKey
 } from '../../key-input/terminal-accessory-keys'
-import { TERMINAL_SHORTCUT_SPECIAL_KEY_DEFINITIONS as TERMINAL_SHORTCUT_SPECIAL_KEYS } from '../../key-input/terminal-key-definitions'
-import { customKeyModalStyles as styles } from './CustomKeyModal.styles'
+import {
+  TERMINAL_SHORTCUT_SPECIAL_KEY_DEFINITIONS as TERMINAL_SHORTCUT_SPECIAL_KEYS,
+  terminalSpecialKeyAccessibilityLabel
+} from '../../key-input/terminal-key-definitions'
+import { customKeyModalStylesSheet } from './CustomKeyModal.styles'
 import { updateStoredCustomKeys, type CustomKey } from '../../key-input/terminal-custom-keys'
 import type { Translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { MobileSwitch } from '../../../components/controls/MobileSwitch'
-import { ListGroup, ListRow } from '../../../components/list/ListGroup'
-import { FieldTextInput } from '../../../components/composer-input/FieldTextInput'
-import { SmartRailRow } from '../../../components/list/SmartRailRow'
+import { useThemedStyles } from '../../../theme/themed-styles'
 
-type Step = 'choose-type' | 'shortcut-combo' | 'special-keys' | 'text-macro'
+type Kind = 'combo' | 'text'
 
-// Alt/Option emits terminal-readable ESC prefix; Cmd is absent because macOS swallows it before shell. Render Alt as ⌥.
-const SHORTCUT_MODIFIERS: { id: TerminalShortcutModifier; label: string; glyph?: string }[] = [
+// Alt/Option sends the ESC prefix a terminal reads; Cmd is absent because macOS takes it before the shell.
+const SHORTCUT_MODIFIERS: { id: TerminalShortcutModifier; label: string }[] = [
   { id: 'ctrl', label: 'Ctrl' },
-  { id: 'alt', label: 'Alt', glyph: '⌥' },
+  { id: 'alt', label: 'Alt' },
   { id: 'shift', label: 'Shift' }
 ]
 
-// Group keys into three fixed grids; ragged wrapping clipped F7–F12.
+// Fixed grids per group; ragged wrapping clipped F7–F12.
 function specialKeyGroups(t: Translate) {
   return [
     {
@@ -58,19 +60,22 @@ const SPECIAL_KEY_BY_ID: Record<string, TerminalShortcutSpecialKey> = Object.fro
   TERMINAL_SHORTCUT_SPECIAL_KEYS.map((key) => [key.id, key])
 )
 
+function keyLabel(key: string): string {
+  return SPECIAL_KEY_BY_ID[key]?.label ?? key.toUpperCase()
+}
+
 type Props = {
   visible: boolean
   onClose: () => void
   onKeysChanged: (keys: CustomKey[]) => void
-  onManageShortcuts?: () => void
-  smartRail?: { enabled: boolean; onChange: (enabled: boolean) => void }
 }
 
-export function CustomKeyModal(props: Props) {
-  const { visible, onClose, onKeysChanged, onManageShortcuts, smartRail } = props
-  useMobileColorScheme()
+// Add a key to the terminal's row: a key combo built from switches, or text to type.
+export function CustomKeyModal({ visible, onClose, onKeysChanged }: Props) {
+  const styles = useThemedStyles(customKeyModalStylesSheet)
   const t = useMobileTranslation()
-  const [step, setStep] = useState<Step>('choose-type')
+  const [kind, setKind] = useState<Kind>('combo')
+  const [pickingKey, setPickingKey] = useState(false)
   const [shortcutKey, setShortcutKey] = useState('c')
   const [shortcutModifiers, setShortcutModifiers] = useState<TerminalShortcutModifier[]>(['ctrl'])
   const [macroLabel, setMacroLabel] = useState('')
@@ -78,11 +83,12 @@ export function CustomKeyModal(props: Props) {
   const [macroEnter, setMacroEnter] = useState(true)
   const [previousVisible, setPreviousVisible] = useState(visible)
 
-  // Reset draft before opening commit to avoid old-key flash; retain close state through slide-out.
+  // Reset the draft as it opens, not as it closes, so the slide-out keeps what it showed.
   if (visible !== previousVisible) {
     setPreviousVisible(visible)
     if (visible) {
-      setStep('choose-type')
+      setKind('combo')
+      setPickingKey(false)
       setShortcutKey('c')
       setShortcutModifiers(['ctrl'])
       setMacroLabel('')
@@ -95,12 +101,10 @@ export function CustomKeyModal(props: Props) {
     async (key: Omit<CustomKey, 'id'>) => {
       const newKey: CustomKey = { ...key, id: `custom-${Date.now()}` }
       let updated: CustomKey[]
-      // Catch both void addKey callers: page storage can refuse size/unseeded-key writes (ruling 33.6), and uncaught rejection would fault/drop generation.
-      // Other allowlisted writers in this closure already catch saves.
+      // Page storage can refuse a write (size, unseeded key); keep the sheet open rather than claim it saved.
       try {
         updated = await updateStoredCustomKeys((keys) => [...keys, newKey])
       } catch (error) {
-        // Keep failed-save drawer open without announcing success; otherwise accessory row would lack persisted key.
         console.warn('[custom-keys] the store would not take this key', error)
         return
       }
@@ -110,236 +114,70 @@ export function CustomKeyModal(props: Props) {
     [onClose, onKeysChanged]
   )
 
-  const shortcutPreview = useMemo(
+  const shortcut = useMemo(
     () => buildTerminalShortcutKey({ key: shortcutKey, modifiers: shortcutModifiers }),
     [shortcutKey, shortcutModifiers]
   )
+  const macroName = macroLabel.trim() || macroText.trim().slice(0, 12)
+  const canAdd = kind === 'combo' ? shortcut !== null : macroText.trim().length > 0
 
-  const previewKeyLabel = useMemo(() => {
-    const special = SPECIAL_KEY_BY_ID[shortcutKey]
-    if (special) {
-      return special.label
+  const add = () => {
+    if (kind === 'combo') {
+      if (shortcut) {
+        void addKey({ label: shortcut.label, bytes: shortcut.bytes, enter: false })
+      }
+      return
     }
-    return shortcutKey.length === 1 ? shortcutKey.toUpperCase() : shortcutKey
-  }, [shortcutKey])
+    if (macroName && macroText) {
+      void addKey({
+        label: macroName,
+        bytes: macroEnter ? `${macroText}\r` : macroText,
+        enter: false
+      })
+    }
+  }
 
-  const orderedActiveModifiers = useMemo(
-    () => SHORTCUT_MODIFIERS.filter((m) => shortcutModifiers.includes(m.id)),
-    [shortcutModifiers]
-  )
-
-  const toggleShortcutModifier = useCallback((modifier: TerminalShortcutModifier) => {
+  const toggleModifier = (modifier: TerminalShortcutModifier, on: boolean) =>
     setShortcutModifiers((current) =>
-      current.includes(modifier)
-        ? current.filter((item) => item !== modifier)
-        : [...current, modifier]
+      on ? [...current, modifier] : current.filter((item) => item !== modifier)
     )
-  }, [])
 
-  const handleShortcutKeyInput = useCallback((value: string) => {
-    if (value === '') {
-      // Allow empty field for backspace; Save still requires valid key.
-      setShortcutKey('')
-      return
-    }
-    const next = normalizeShortcutKeyInput(value)
-    if (next) {
-      setShortcutKey(next)
-    }
-  }, [])
-
-  const handleSpecialKeyPick = useCallback((id: string) => {
-    setShortcutKey(id)
-    setStep('shortcut-combo')
-  }, [])
-
-  const handleShortcutSave = useCallback(() => {
-    const built = buildTerminalShortcutKey({ key: shortcutKey, modifiers: shortcutModifiers })
-    if (!built) {
-      return
-    }
-    void addKey({ label: built.label, bytes: built.bytes, enter: false })
-  }, [addKey, shortcutKey, shortcutModifiers])
-
-  const handleMacroSave = useCallback(() => {
-    const label = macroLabel.trim() || macroText.trim().slice(0, 12)
-    const text = macroText
-    if (!label || !text) {
-      return
-    }
-    const bytes = macroEnter ? `${text}\r` : text
-    void addKey({ label, bytes, enter: false })
-  }, [addKey, macroLabel, macroText, macroEnter])
-
-  const showBack = step !== 'choose-type'
-  const onBack = useCallback(() => {
-    if (step === 'special-keys') {
-      setStep('shortcut-combo')
-    } else {
-      setStep('choose-type')
-    }
-  }, [step])
+  const pickKey = (key: string) => {
+    setShortcutKey(key)
+    setPickingKey(false)
+  }
 
   return (
     <BottomDrawer visible={visible} onClose={onClose}>
-      <View style={styles.header}>
-        {showBack ? (
-          <Pressable
-            style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
-            onPress={onBack}
-            accessibilityRole="button"
-            accessibilityLabel={t('common.back', 'Back')}
-          >
-            <ChevronLeft size={18} color={colors.textSecondary} />
-          </Pressable>
-        ) : (
-          <View style={styles.backSpacer} />
-        )}
-        <Text style={styles.title}>
-          {step === 'choose-type' && t('components.customKeyModal.addShortcut', 'Add Shortcut')}
-          {step === 'shortcut-combo' &&
-            t('components.customKeyModal.shortcutCombo', 'Shortcut Combo')}
-          {step === 'special-keys' && t('components.customKeyModal.pickKey', 'Pick a key')}
-          {step === 'text-macro' && t('components.customKeyModal.textMacro', 'Text Macro')}
-        </Text>
-        <View style={styles.backSpacer} />
-      </View>
-
-      {step === 'choose-type' && (
-        <ListGroup>
-          <ListRow
-            key="shortcut-combo"
-            title={t('components.customKeyModal.shortcutCombo', 'Shortcut Combo')}
-            subtitle={t(
-              'components.customKeyModal.shortcutComboHint',
-              'Build Ctrl, Alt, and Shift key chords'
-            )}
-            navigates
-            onPress={() => setStep('shortcut-combo')}
+      {pickingKey ? (
+        <>
+          <SheetHeader
+            title={t('components.customKeyModal.key', 'Key')}
+            onBack={{ label: t('common.back', 'Back'), onPress: () => setPickingKey(false) }}
           />
-          <ListRow
-            key="text-macro"
-            title={t('components.customKeyModal.textMacro', 'Text Macro')}
-            subtitle={t('components.customKeyModal.textMacroHint', 'Send custom text command')}
-            navigates
-            onPress={() => setStep('text-macro')}
+          <SectionHeader
+            title={t('components.customKeyModal.letterOrSymbol', 'Letter, number or symbol')}
+            first
           />
-          {onManageShortcuts ? (
-            <ListRow
-              key="manage-shortcuts"
-              title={t('components.customKeyModal.manageShortcuts', 'Manage Shortcuts')}
-              subtitle={t(
-                'components.customKeyModal.manageShortcutsHint',
-                'Show, hide, or reorder shortcut keys'
-              )}
-              navigates
-              onPress={onManageShortcuts}
-            />
-          ) : null}
-        </ListGroup>
-      )}
-      {step === 'choose-type' && smartRail ? (
-        <ListGroup style={styles.smartRailGroup}>
-          <SmartRailRow {...smartRail} />
-        </ListGroup>
-      ) : null}
-
-      {step === 'shortcut-combo' && (
-        <View style={styles.shortcutForm}>
-          <View style={styles.preview}>
-            {orderedActiveModifiers.map((modifier, index) => (
-              <View key={modifier.id} style={styles.previewKeycapRow}>
-                {index > 0 ? <Text style={styles.previewPlus}>+</Text> : null}
-                <View style={[styles.keycap, styles.keycapModifier]}>
-                  <Text style={styles.keycapModifierText}>{modifier.label}</Text>
-                </View>
-              </View>
-            ))}
-            {orderedActiveModifiers.length > 0 ? <Text style={styles.previewPlus}>+</Text> : null}
-            <View style={[styles.keycap, !shortcutPreview && styles.keycapWarn]}>
-              <Text style={[styles.keycapText, !shortcutPreview && styles.keycapTextWarn]}>
-                {previewKeyLabel}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>
-              {t('components.customKeyModal.modifiers', 'Modifiers')}
-            </Text>
-            <View style={styles.mods}>
-              {SHORTCUT_MODIFIERS.map((modifier) => {
-                const selected = shortcutModifiers.includes(modifier.id)
-                return (
-                  <Pressable
-                    key={modifier.id}
-                    style={({ pressed }) => [
-                      styles.chip,
-                      selected && styles.chipSelected,
-                      pressed && !selected && styles.chipPressed
-                    ]}
-                    onPress={() => toggleShortcutModifier(modifier.id)}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                  >
-                    <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
-                      {modifier.label}
-                    </Text>
-                    {modifier.glyph ? (
-                      <Text style={[styles.chipGlyph, selected && styles.chipGlyphSelected]}>
-                        {modifier.glyph}
-                      </Text>
-                    ) : null}
-                  </Pressable>
-                )
-              })}
-            </View>
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>{t('components.customKeyModal.key', 'Key')}</Text>
-            <FieldTextInput
-              style={styles.keyInput}
-              value={shortcutKey.length === 1 ? shortcutKey.toUpperCase() : ''}
-              onChangeText={handleShortcutKeyInput}
-              placeholder={SPECIAL_KEY_BY_ID[shortcutKey]?.label ?? 'C'}
-              autoCapitalize="characters"
-              autoCorrect={false}
-              maxLength={1}
-            />
-            <Pressable
-              style={({ pressed }) => [styles.moreLink, pressed && styles.moreLinkPressed]}
-              onPress={() => setStep('special-keys')}
-            >
-              <Text style={styles.moreLinkText}>
-                {t('components.customKeyModal.moreKeys', 'More keys')}
-              </Text>
-            </Pressable>
-          </View>
-
-          <Pressable
-            style={({ pressed }) => [
-              styles.saveButton,
-              !shortcutPreview && styles.saveButtonDisabled,
-              pressed && pressedStyle
-            ]}
-            disabled={!shortcutPreview}
-            onPress={handleShortcutSave}
-          >
-            <Text
-              style={[styles.saveButtonText, !shortcutPreview && styles.saveButtonTextDisabled]}
-            >
-              {t('components.customKeyModal.add', 'Add')}
-            </Text>
-          </Pressable>
-        </View>
-      )}
-
-      {step === 'special-keys' && (
-        <View style={styles.specialKeysForm}>
+          <FieldTextInput
+            style={styles.keyInput}
+            // Empty, with the current key as its placeholder, so any typed character picks a new one.
+            value=""
+            onChangeText={(value) => {
+              const next = normalizeShortcutKeyInput(value)
+              if (next) {
+                pickKey(next)
+              }
+            }}
+            placeholder={shortcutKey.length === 1 ? keyLabel(shortcutKey) : 'C'}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            autoFocus
+            maxLength={1}
+          />
           {specialKeyGroups(t).map((group) => (
-            <View key={group.id} style={styles.specialGroup}>
-              <Text style={styles.specialGroupTitle}>{group.title}</Text>
+            <View key={group.id}>
+              <SectionHeader title={group.title} />
               <View style={styles.keyGrid}>
                 {group.ids.map((id) => {
                   const key = SPECIAL_KEY_BY_ID[id]
@@ -347,17 +185,20 @@ export function CustomKeyModal(props: Props) {
                     return null
                   }
                   const selected = shortcutKey === id
-                  const flexBasis = `${100 / group.columns}%` as const
                   return (
-                    <View key={id} style={[styles.keyCellWrap, { flexBasis }]}>
+                    <View
+                      key={id}
+                      style={[styles.keyCellWrap, { flexBasis: `${100 / group.columns}%` }]}
+                    >
                       <Pressable
                         style={({ pressed }) => [
                           styles.keyCell,
                           selected && styles.keyCellSelected,
                           pressed && !selected && styles.keyCellPressed
                         ]}
-                        onPress={() => handleSpecialKeyPick(id)}
-                        accessibilityLabel={key.accessibilityLabel}
+                        onPress={() => pickKey(id)}
+                        accessibilityRole="button"
+                        accessibilityLabel={terminalSpecialKeyAccessibilityLabel(id, t)}
                         accessibilityState={{ selected }}
                       >
                         <Text style={[styles.keyCellText, selected && styles.keyCellTextSelected]}>
@@ -370,58 +211,97 @@ export function CustomKeyModal(props: Props) {
               </View>
             </View>
           ))}
-        </View>
-      )}
-
-      {step === 'text-macro' && (
-        <View style={styles.group}>
-          <View style={styles.macroForm}>
-            <Text style={styles.fieldLabel}>{t('components.customKeyModal.label', 'Label')}</Text>
-            <TextField
-              value={macroLabel}
-              onChangeText={setMacroLabel}
-              placeholder={t('components.customKeyModal.labelPlaceholder', 'e.g. Build')}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            <Text style={styles.fieldLabel}>
-              {t('components.customKeyModal.command', 'Command')}
-            </Text>
-            <TextField
-              monospace
-              value={macroText}
-              onChangeText={setMacroText}
-              placeholder={t('components.customKeyModal.commandPlaceholder', 'e.g. pnpm build')}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            <View style={styles.switchRow}>
-              <Text style={styles.switchLabel}>
-                {t('components.customKeyModal.pressEnter', 'Press Enter')}
-              </Text>
-              <MobileSwitch
-                accessibilityLabel={t('components.customKeyModal.pressEnter', 'Press Enter')}
-                value={macroEnter}
-                onValueChange={setMacroEnter}
-              />
-            </View>
-            <Pressable
-              style={({ pressed }) => [
-                styles.saveButton,
-                !macroText.trim() && styles.saveButtonDisabled,
-                pressed && pressedStyle
+          <View style={styles.bottomSpace} />
+        </>
+      ) : (
+        <>
+          <SheetHeader
+            title={t('components.customKeyModal.title', 'Add a key')}
+            // What the new key will read, kept as a line even when empty so switching kinds doesn't move the title.
+            subtitle={kind === 'combo' ? (shortcut?.label ?? '') : macroName}
+            leading={{ label: t('common.cancel', 'Cancel'), onPress: onClose }}
+            trailing={{
+              label: t('components.customKeyModal.add', 'Add'),
+              onPress: add,
+              disabled: !canAdd
+            }}
+          />
+          <MobileSegmentedControl
+            segments={[
+              { value: 'combo', label: t('components.customKeyModal.keyCombo', 'Key combo') },
+              { value: 'text', label: t('components.customKeyModal.text', 'Text') }
+            ]}
+            selected={kind}
+            onSelect={setKind}
+            fill
+            onSheet
+            style={styles.kinds}
+          />
+          {kind === 'combo' ? (
+            <ListGroup>
+              {[
+                ...SHORTCUT_MODIFIERS.map((modifier) => (
+                  <ListRow
+                    key={modifier.id}
+                    title={modifier.label}
+                    accessory={
+                      <MobileSwitch
+                        accessibilityLabel={modifier.label}
+                        value={shortcutModifiers.includes(modifier.id)}
+                        onValueChange={(on) => toggleModifier(modifier.id, on)}
+                      />
+                    }
+                  />
+                )),
+                <ListRow
+                  key="key"
+                  title={t('components.customKeyModal.key', 'Key')}
+                  value={shortcutKey ? keyLabel(shortcutKey) : undefined}
+                  navigates
+                  onPress={() => setPickingKey(true)}
+                />
               ]}
-              disabled={!macroText.trim()}
-              onPress={handleMacroSave}
-            >
-              <Text
-                style={[styles.saveButtonText, !macroText.trim() && styles.saveButtonTextDisabled]}
-              >
-                {t('components.customKeyModal.addShortcut', 'Add Shortcut')}
-              </Text>
-            </Pressable>
-          </View>
-        </View>
+            </ListGroup>
+          ) : (
+            <>
+              <SectionHeader title={t('components.customKeyModal.text', 'Text')} first />
+              <TextField
+                monospace
+                value={macroText}
+                onChangeText={setMacroText}
+                placeholder={t('components.customKeyModal.commandPlaceholder', 'e.g. pnpm build')}
+                accessibilityLabel={t('components.customKeyModal.text', 'Text')}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <SectionHeader title={t('components.customKeyModal.name', 'Name on the key')} />
+              <TextField
+                value={macroLabel}
+                onChangeText={setMacroLabel}
+                placeholder={
+                  macroText.trim().slice(0, 12) ||
+                  t('components.customKeyModal.labelPlaceholder', 'e.g. Build')
+                }
+                accessibilityLabel={t('components.customKeyModal.name', 'Name on the key')}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <ListGroup style={styles.enterGroup}>
+                <ListRow
+                  title={t('components.customKeyModal.pressEnter', 'Press Enter')}
+                  accessory={
+                    <MobileSwitch
+                      accessibilityLabel={t('components.customKeyModal.pressEnter', 'Press Enter')}
+                      value={macroEnter}
+                      onValueChange={setMacroEnter}
+                    />
+                  }
+                />
+              </ListGroup>
+            </>
+          )}
+          <View style={styles.bottomSpace} />
+        </>
       )}
     </BottomDrawer>
   )

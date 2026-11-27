@@ -3,6 +3,7 @@ import type { KeybindingActionId, KeybindingFileSnapshot } from '../../shared/ke
 import type { KeybindingService } from '../keybindings/keybinding-service'
 import { refreshGrabShortcutPolicies } from '../browser/guest-lifecycle/input/shortcuts/browser-guest-grab-shortcuts'
 import { rebuildAppMenu } from '../menu/register-app-menu'
+import type { IpcHandleRegistrar } from './lazy-ipc-handle-group'
 
 function broadcastKeybindingsChanged(snapshot: KeybindingFileSnapshot): void {
   for (const window of BrowserWindow.getAllWindows()) {
@@ -16,18 +17,19 @@ function broadcastKeybindingsChanged(snapshot: KeybindingFileSnapshot): void {
 
 export function registerKeybindingHandlers(
   service: KeybindingService,
-  onChanged?: () => void
+  onChanged?: () => void,
+  ipc: IpcHandleRegistrar = ipcMain
 ): void {
-  ipcMain.handle('keybindings:get', () => service.getSnapshot())
+  ipc.handle('keybindings:get', () => service.getSnapshot())
 
-  ipcMain.handle('keybindings:ensureFile', () => {
+  ipc.handle('keybindings:ensureFile', () => {
     const snapshot = service.ensureFile()
     broadcastKeybindingsChanged(snapshot)
     onChanged?.()
     return snapshot
   })
 
-  ipcMain.handle(
+  ipc.handle(
     'keybindings:setAction',
     (_event, args: { actionId: KeybindingActionId; bindings: string[] | null }) => {
       const snapshot = service.setActionBindings(args.actionId, args.bindings)
@@ -37,14 +39,14 @@ export function registerKeybindingHandlers(
     }
   )
 
-  ipcMain.handle('keybindings:reload', () => {
+  ipc.handle('keybindings:reload', () => {
     const snapshot = service.reload()
     broadcastKeybindingsChanged(snapshot)
     onChanged?.()
     return snapshot
   })
 
-  ipcMain.handle('keybindings:openFile', async () => {
+  ipc.handle('keybindings:openFile', async () => {
     const snapshot = service.ensureFile()
     const error = await shell.openPath(snapshot.path)
     if (error) {
@@ -53,7 +55,7 @@ export function registerKeybindingHandlers(
     return snapshot
   })
 
-  ipcMain.handle('keybindings:revealFile', () => {
+  ipc.handle('keybindings:revealFile', () => {
     const snapshot = service.ensureFile()
     shell.showItemInFolder(snapshot.path)
     return snapshot
