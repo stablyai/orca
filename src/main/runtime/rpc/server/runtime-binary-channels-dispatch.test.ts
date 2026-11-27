@@ -1,5 +1,5 @@
-// Binary channels end to end through a real host: admission, release when a stream ends, and two
-// binary streams on one authenticated socket.
+// Binary channels end to end through a real host: admission, release when a stream ends, a
+// subscribe that outlives its handler, and two binary streams on one authenticated socket.
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -54,6 +54,30 @@ const brief = defineStreamingMethod({
     emit({ type: 'end' })
   }
 })
+// Registers and returns at once, as agentSession.subscribe does; its rows come later.
+const liveStreams = new Map<string, (row: unknown) => void>()
+const streamReleases: string[] = []
+const subscribe = defineStreamingMethod({
+  name: 'test.subscribe',
+  permission: 'workspace',
+  share: 'not-shared',
+  params: null,
+  handler: async (_params, { runtime, connectionId, signal }, emit) => {
+    const id = connectionId!
+    liveStreams.set(id, emit)
+    let released = false
+    const release = (): void => {
+      if (!released) {
+        released = true
+        liveStreams.delete(id)
+        streamReleases.push(id)
+      }
+    }
+    signal?.addEventListener('abort', release)
+    runtime.registerSubscriptionCleanup(`test-subscribe-${id}`, release, id)
+    emit({ type: 'ready' })
+  }
+})
 
 const cleanups: (() => Promise<void> | void)[] = []
 afterEach(async () => {
@@ -69,7 +93,7 @@ async function connect(clientCapabilities: string[]) {
     userDataPath,
     enableWebSocket: true,
     wsPort: 0,
-    methods: [...STATUS_METHODS, echo, brief]
+    methods: [...STATUS_METHODS, echo, brief, subscribe]
   })
   await server.start()
   cleanups.push(async () => {
@@ -150,7 +174,8 @@ async function connect(clientCapabilities: string[]) {
       }
       return found
     })
-  return { request, sendBinary, reply, texts, binaries }
+  const closeSocket = (): void => socket.ws.close()
+  return { request, sendBinary, reply, texts, binaries, closeSocket }
 }
 
 const data = (channel: number, payload: Uint8Array): Uint8Array =>
@@ -193,6 +218,38 @@ describe('binary channels through the host', () => {
     // A refused request releases the channel it named, too.
     expect((await client.reply(client.request('no.such.method', 1))).ok).toBe(false)
     expect((await client.reply(client.request('test.echo', 1))).ok).toBe(true)
+  })
+
+  it('keeps a subscribe on a channel alive after its handler returns, until the stream ends', async () => {
+    streamReleases.length = 0
+    const client = await connect([RUNTIME_BINARY_CHANNELS_CAPABILITY])
+    const ids = [1, 2, 3].map((channel) => client.request('test.subscribe', channel))
+    for (const id of ids) {
+      expect((await client.reply(id)).result).toEqual({ type: 'ready' })
+    }
+    const live = [...liveStreams.keys()].filter((id) => /#[123]$/.test(id)).sort()
+    expect(live).toHaveLength(3)
+    const [first, second, third] = live
+    const rows = (id: string) => client.texts.filter((text) => text.id === id).map((t) => t.result)
+
+    // Rows reach the client after the handler has long returned.
+    liveStreams.get(first)!({ type: 'batch', n: 1 })
+    await vi.waitFor(() => expect(rows(ids[0])).toContainEqual({ type: 'batch', n: 1 }))
+    expect(streamReleases).toEqual([])
+
+    // Each ends exactly once: by its own `end`, the client closing its channel, or the link dropping.
+    liveStreams.get(first)!({ type: 'end' })
+    await vi.waitFor(() => expect(streamReleases).toEqual([first]))
+    client.sendBinary(
+      encodeBinaryChannelFrame({
+        opcode: BinaryChannelOpcode.Close,
+        channel: 2,
+        payload: new Uint8Array()
+      })
+    )
+    await vi.waitFor(() => expect(streamReleases).toEqual([first, second]))
+    client.closeSocket()
+    await vi.waitFor(() => expect(streamReleases).toEqual([first, second, third]))
   })
 
   it('refuses a channel to a client that did not advertise them, or a bad channel number', async () => {

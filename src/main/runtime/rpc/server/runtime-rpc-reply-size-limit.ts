@@ -8,24 +8,25 @@ function formatMebibytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-/** Return a per-request oversize error before encrypted-channel 1013 would close the socket and every sibling RPC. */
+/** Return a per-request oversize error before encrypted-channel 1013 would close the socket and every
+ *  sibling RPC. The sender returns false when an error went out in the reply's place. */
 export function limitRuntimeRpcReplySize(
   requestId: string,
   reply: (response: string) => void,
   buildError: (id: string, code: string, message: string) => RpcResponse,
   /** Keeps an oversize reply for a client that reads it in parts; returns the reply naming it. */
   stageReply?: (response: string, bytes: number) => RpcResponse | null
-): (response: string) => void {
+): (response: string) => boolean {
   return (response) => {
     if (isMobileE2EETextPayloadWithinLimit(response)) {
       reply(response)
-      return
+      return true
     }
     const bytes = Buffer.byteLength(response, 'utf8')
     const staged = stageReply?.(response, bytes)
     if (staged) {
       reply(JSON.stringify(staged))
-      return
+      return false
     }
     reply(
       JSON.stringify(
@@ -36,5 +37,6 @@ export function limitRuntimeRpcReplySize(
         )
       )
     )
+    return false
   }
 }
