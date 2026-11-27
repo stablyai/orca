@@ -107,7 +107,8 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     identityFlagRoles: { terminal: 'caller' },
     notes: [
       'On Windows PowerShell, quote comma-separated type filters, e.g. --types "worker_done,escalation".',
-      '--types is the wake condition for --wait; a returned Delivery is always the whole FIFO batch, so it is never filtered by type. Without --wait it has no effect on consuming checks. Only --peek and --all filter their rows.',
+      '--types is the wake condition for --wait; a returned Delivery is always the whole FIFO batch, so it is never filtered by type. Without --wait it has no effect on consuming checks. Only --peek and --all filter their rows. A reply is stored as status with thread_id set, so include status in --types when waiting for an answer.',
+      'An unacknowledged Delivery is replayed first regardless of age; drain an inherited backlog with --ack <delivery_id> before waiting for newer mail.',
       '--format renders the returned rows as local text only; it never writes to another terminal.',
       "A consuming check marks the batch it returns as handled, so the next check returns newer mail; no --ack is needed. Several --wait calls may wait on one inbox; waiting reserves nothing, listeners woken by the same arrival get the same Delivery, and --ack of a handled Delivery is a no-op. Consuming checks belong to the agent itself. A script that only watches the inbox must use --peek (including --peek --wait) and must never --ack, or it takes mail the agent never sees. If a check response was lost, rerun it with the --retry-request it printed to get the same batch. To find mail after losing context, run orca orchestration inbox --terminal <mailbox> --limit <n> --full and name the mailbox: run:<run_id> for a coordinator's bound Run, or dispatch:<dispatch_id> for a worker, including mail it read before it bound a helper Run."
     ]

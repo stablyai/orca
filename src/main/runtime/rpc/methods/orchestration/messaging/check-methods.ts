@@ -15,6 +15,7 @@ import {
   withReportItems
 } from './mailbox-message-receipt'
 import { withRunCheckNext } from '../receipt-next'
+import { resolveCheckTerminalHandle } from './resolve-check-handle'
 import {
   ORCHESTRATION_UNBOUND_RUN_ID,
   orchestrationSkillRecoveryData
@@ -56,7 +57,14 @@ export const ORCHESTRATION_CHECK_METHODS = [
       }
     ) => {
       const db = runtime.getOrchestrationDb()
-      const handle = params.terminal ?? 'unknown'
+      const consumingCheck = params.peek !== true && params.all !== true && params.unread !== false
+      // Peek/all/history intentionally answer empty for a deleted handle, but a consuming check must
+      // resolve prefixes and refuse an unknown handle instead of waiting on a mailbox nobody reads.
+      const handle = params.terminal
+        ? consumingCheck
+          ? await resolveCheckTerminalHandle(runtime, params.terminal)
+          : params.terminal
+        : 'unknown'
       const typeFilter = parseMessageTypes(params.types)
 
       // A restart can reissue a surviving worker PTY's handle; the woken worker still checks with its env
@@ -75,7 +83,6 @@ export const ORCHESTRATION_CHECK_METHODS = [
       })
       const paneKey = caller.paneKey ?? undefined
       const boundRun = hasRunBindingKey(caller) ? db.getCurrentRunForCoordinator(caller) : undefined
-      const consumingCheck = params.peek !== true && params.all !== true && params.unread !== false
       const reader = sessionCallerOf(orchestrationCaller)
       // Mail this check takes may still wait as a card in a chat's queue; that card must not run too.
       // The item line is read for this answer only; the check's recorded receipt never holds it.

@@ -6,7 +6,6 @@ import { formatMessageBanner } from '../../../../orchestration/mailbox/formattin
 import type { CheckMailReconciliation } from './check-mail-reconciliation'
 import type { OrchestrationSessionCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import { withReplyFollowUps, exposeMessages } from './mailbox-message-receipt'
-import { staleDelivery } from '../../../../orchestration/db/messages/role-mailbox-delivery'
 import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../../../../shared/orchestration/orchestration-rpc-contract'
 import type { CheckParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
 import type { z } from 'zod'
@@ -28,9 +27,13 @@ export async function checkDirectMailbox(args: {
   runId?: string
 }): Promise<unknown> {
   const { params, runtime, db, handle, typeFilter, signal } = args
-  // Direct mail has no Delivery, so any --ack names one outside this mailbox.
+  // Direct mail has no Delivery: say so instead of reporting a stale delivery that never existed.
   if (params.ack) {
-    throw staleDelivery(db, params.ack)
+    throw new OrchestrationError(
+      'invalid_ack',
+      'Direct terminal mail has no Delivery and is marked read on check; --ack is not needed or available. Omit --ack.',
+      { effectsApplied: false }
+    )
   }
   // Honor legacy unread:false callers for compatibility (design doc §5).
   const showAll = params.all === true || (params.unread === false && params.peek !== true)

@@ -102,6 +102,8 @@ Never:
   message) means run that command. Answer a `question` with
   `ORCA orchestration reply --id <message_id> --body "<answer>"` when the answer
   follows from the task or the user's instructions; otherwise ask the user first.
+  A `reply` is stored as `status` with `thread_id` set, so a `check --wait --types`
+  waiting for an answer must include `status` in its filter (or omit `--types`).
 - An `escalation` with `stopReason` means the worker stopped without
   `worker_done`: for `lost`, inspect `worker-show` first — the original agent
   may still be running, and `unverifiable` liveness does not authorize sending
@@ -113,6 +115,9 @@ Never:
   evidence, open blockers.
 - Lost track? `ORCA orchestration inbox --terminal run:<run_id> --limit 50`
   shows mail `check` already handled.
+- `check` replays an unacknowledged Delivery until it is acknowledged, whatever
+  its age. Drain an inherited backlog with `check --ack <delivery_id> --wait`
+  before waiting for newer mail.
 
 Finished workers close on their own unless `worker-list` gives one a `next`; follow
 it. Kept-open workers, including new-workspace ones, stay open for the user.
