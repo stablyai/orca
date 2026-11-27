@@ -4338,40 +4338,19 @@
       "copyLink": "Link kopieren",
       "startWorkspace": "Arbeitsbereich starten",
       "moreActions": "Weitere Aktionen",
-      "copyGitHubLink": "GitHub-Link kopieren",
-      "copyLinearLink": "Linear-Link kopieren",
-      "creating": "Wird erstellt…",
       "mergeConflicts": "GitHub meldet Merge-Konflikte.",
       "mergeMergeRequest": "Merge Request mergen",
       "mergePullRequest": "Pull Request mergen"
     },
     "itemDetailContent": {
-      "addSubIssue": "Unter-Issue hinzufügen",
       "checks": "Checks",
       "description": "Beschreibung",
       "discussion": "Diskussion",
-      "noChecks": "Keine Checks gefunden.",
-      "noComments": "Keine Kommentare.",
-      "details": "Details",
-      "type": "Typ",
-      "status": "Status",
-      "assignee": "Zuständige Person",
       "project": "Projekt",
       "priority": "Priorität",
       "assignees": "Zuständige Personen",
       "loading": "Details werden geladen…",
-      "noPipelineRuns": "Keine Pipeline-Ausführungen für diesen MR.",
-      "noSubIssues": "Keine untergeordneten Issues.",
-      "none": "Keine",
-      "pipeline": "Pipeline",
-      "pipelineJobs_one": "{{count}} Job",
-      "pipelineJobs_other": "{{count}} Jobs",
-      "rerunAll": "Alle erneut ausführen",
-      "subIssueTitle": "Titel des Unter-Issues",
       "subIssues": "Untergeordnete Issues"
-    },
-    "itemDetailDrawer": {
-      "refreshDetails": "Details aktualisieren"
     },
     "itemFieldEditors": {
       "addLabels": "Labels hinzufügen, kommagetrennt",
@@ -4678,8 +4657,6 @@
       "advanced": "Erweitert",
       "agent": "Agent",
       "connectFirst": "Zuerst Repository verbinden",
-      "connectRepository": "Repository verbinden",
-      "optionalLabel": "Optional",
       "defaultBranch": "Standard-Branch",
       "detectingAgents": "Agenten werden erkannt…",
       "remoteRepository": "Entferntes Repository",
@@ -4687,8 +4664,9 @@
       "repositoryNotFound": "Repository nicht gefunden.",
       "selectRepository": "Repository auswählen",
       "startFrom": "Ausgangspunkt",
-      "title": "Arbeitsbereich erstellen",
-      "workspaceName": "Arbeitsbereichsname"
+      "createWorkspace": "Arbeitsbereich erstellen",
+      "nameSection": "Arbeitsbereichsname",
+      "connectRepositoryAction": "Repository verbinden"
     },
     "workspaceCreateProjection": {
       "nameAlreadyExists": "„{{name}}“ ist bereits vorhanden.",
