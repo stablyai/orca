@@ -136,8 +136,10 @@ async function getBuildStatus(
     { searchParams: { pagelen: '100' } }
   )
   const statuses = data?.values ?? []
+  const status = deriveBitbucketBuildStatus(statuses)
   return {
-    status: deriveBitbucketBuildStatus(statuses),
+    // Unread pages may contain failing checks, so a successful prefix is not a green build.
+    status: data?.next && status === 'success' ? 'neutral' : status,
     ...(data && Array.isArray(data.values) && !data.next
       ? { checksSummary: summarizeBitbucketBuildStatuses(statuses) }
       : {})
