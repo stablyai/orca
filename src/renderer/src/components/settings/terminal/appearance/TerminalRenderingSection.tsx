@@ -9,6 +9,7 @@ import { TerminalContrastSetting } from './TerminalContrastSetting'
 import { useTranslate } from '@/i18n/use-translate'
 import { resolveTerminalInlineImagesEnabled } from '../../../../../../shared/terminal/images/terminal-inline-images-settings'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
+import { resolveTerminalImePreeditInGrid } from '@/lib/pane-manager/terminal-input/terminal-ime-grid-preedit'
 
 type TerminalRenderingSectionProps = {
   settings: GlobalSettings
@@ -145,6 +146,50 @@ export function TerminalRenderingSection({
           onChange={() =>
             updateSettings({
               terminalDroppedImagesPreview: settings.terminalDroppedImagesPreview === false
+            })
+          }
+        />
+      </SearchableSetting>
+
+      <SearchableSetting
+        title={t(
+          'components.settings.TerminalRendering.imePreeditInGrid',
+          'Draw IME Composition in Terminal Cells'
+        )}
+        description={t(
+          'components.settings.TerminalRendering.imePreeditInGridDescription',
+          'Render text being composed with an input method (Korean, Japanese, Chinese) as terminal cells at the cursor. Turn off to use the floating overlay instead.'
+        )}
+        keywords={[
+          'terminal',
+          'ime',
+          'input method',
+          'composition',
+          'preedit',
+          'korean',
+          'hangul',
+          'japanese',
+          'chinese',
+          'cjk',
+          'overlay'
+        ]}
+        className="py-2"
+      >
+        <SettingsSwitchRow
+          label={t(
+            'components.settings.TerminalRendering.imePreeditInGrid',
+            'Draw IME Composition in Terminal Cells'
+          )}
+          description={t(
+            'components.settings.TerminalRendering.imePreeditInGridDescription',
+            'Render text being composed with an input method (Korean, Japanese, Chinese) as terminal cells at the cursor. Turn off to use the floating overlay instead.'
+          )}
+          checked={resolveTerminalImePreeditInGrid(settings.terminalImePreeditInGrid)}
+          onChange={() =>
+            updateSettings({
+              terminalImePreeditInGrid: !resolveTerminalImePreeditInGrid(
+                settings.terminalImePreeditInGrid
+              )
             })
           }
         />

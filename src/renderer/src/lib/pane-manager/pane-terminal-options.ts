@@ -1,6 +1,7 @@
 import type { ITerminalInitOnlyOptions, ITerminalOptions } from '@xterm/xterm'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../../shared/terminal/replay/terminal-scrollback-policy'
 import { LIGHT_BG_MIN_CONTRAST } from '../../../../shared/terminal-themes/terminal-contrast-correction'
+import { DEFAULT_TERMINAL_IME_PREEDIT_IN_GRID } from './terminal-input/terminal-ime-grid-preedit'
 
 type TerminalCursorStyle = NonNullable<ITerminalOptions['cursorStyle']>
 type TerminalCursorInactiveStyle = NonNullable<ITerminalOptions['cursorInactiveStyle']>
@@ -62,6 +63,8 @@ export function buildDefaultTerminalOptions(): ITerminalOptions & ITerminalInitO
     macOptionIsMeta: false,
     macOptionClickForcesSelection: true,
     drawBoldTextInBrightColors: true,
+    // Why: the renderer draws the preedit as cells, so it cannot cover or misalign the row under it.
+    imePreeditInGrid: DEFAULT_TERMINAL_IME_PREEDIT_IN_GRID,
     scrollbar: {
       // Accept the slim scrollbar’s ~one-column gutter cost and enable overview ruler. The old v1.4.51 table corruption was the ZWJ width bug, now fixed by terminal-unicode-provider; composeActiveTerminalTheme hides the ruler border.
       width: 7

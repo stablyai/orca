@@ -38,6 +38,7 @@ import type { TerminalPaneManagerOptionsContext } from './terminal-pane-mount-co
 import { resolveTerminalInlineImagesEnabled } from '../../../../../shared/terminal/images/terminal-inline-images-settings'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import { layoutOwnerPaneGestures } from '../layout/ownership/terminal-pane-layout-owner-gestures'
+import { resolveTerminalImePreeditInGrid } from '@/lib/pane-manager/terminal-input/terminal-ime-grid-preedit'
 
 export function createTerminalPaneManagerOptions(
   context: TerminalPaneManagerOptionsContext
@@ -181,7 +182,8 @@ export function createTerminalPaneManagerOptions(
         ),
         macOptionIsMeta: context.deps.effectiveMacOptionAsAltRef.current === 'true',
         lineHeight: normalizeTerminalLineHeight(currentSettings?.terminalLineHeight),
-        wordSeparator: currentSettings?.terminalWordSeparator
+        wordSeparator: currentSettings?.terminalWordSeparator,
+        imePreeditInGrid: resolveTerminalImePreeditInGrid(currentSettings?.terminalImePreeditInGrid)
       }
     },
     terminalTuiScrollSensitivity: () =>
