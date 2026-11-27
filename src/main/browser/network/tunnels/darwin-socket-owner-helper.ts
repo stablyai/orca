@@ -20,11 +20,17 @@ type Lookup = {
   signal?: AbortSignal
   resolve: (own: boolean) => void
   reject: (error: Error) => void
+  /** Links in the helper's queue; a cancel unlinks its own lookup without searching or leaving it behind. */
+  queued: boolean
+  previous: Lookup | null
+  next: Lookup | null
 }
 type RunningHelper = {
   child: ChildProcessWithoutNullStreams
   /** Written one at a time, so a lookup whose connection closed while queued is never scanned. */
-  queued: Lookup[]
+  first: Lookup | null
+  last: Lookup | null
+  waiting: number
   inFlight: Lookup | null
   buffered: string
   /** Armed while a lookup is in flight; no answer by then means the helper is stuck. */
@@ -82,7 +88,7 @@ export function isOwnDarwinConnection(
     return Promise.reject(new Error('connection has no IP address'))
   }
   const helper = running ?? start()
-  if (helper.queued.length + (helper.inFlight ? 1 : 0) >= MAX_PENDING_LOOKUPS) {
+  if (helper.waiting + (helper.inFlight ? 1 : 0) >= MAX_PENDING_LOOKUPS) {
     return Promise.reject(new Error('too many connections are waiting for an owner check'))
   }
   return new Promise((resolve, reject) => {
@@ -90,30 +96,63 @@ export function isOwnDarwinConnection(
       request: `${client.host} ${client.port} ${listener.host} ${listener.port}\n`,
       signal,
       resolve,
-      reject
+      reject,
+      queued: false,
+      previous: null,
+      next: null
     }
-    helper.queued.push(lookup)
+    enqueue(helper, lookup)
     signal?.addEventListener('abort', () => dropQueued(helper, lookup), { once: true })
     sendNext(helper)
   })
 }
 
-function dropQueued(helper: RunningHelper, lookup: Lookup): void {
-  const index = helper.queued.indexOf(lookup)
-  if (index !== -1) {
-    helper.queued.splice(index, 1)
-    lookup.reject(new Error('the connection closed before its owner check'))
+function enqueue(helper: RunningHelper, lookup: Lookup): void {
+  lookup.queued = true
+  lookup.previous = helper.last
+  if (helper.last) {
+    helper.last.next = lookup
+  } else {
+    helper.first = lookup
   }
+  helper.last = lookup
+  helper.waiting++
+}
+
+function unlink(helper: RunningHelper, lookup: Lookup): void {
+  if (lookup.previous) {
+    lookup.previous.next = lookup.next
+  } else {
+    helper.first = lookup.next
+  }
+  if (lookup.next) {
+    lookup.next.previous = lookup.previous
+  } else {
+    helper.last = lookup.previous
+  }
+  lookup.queued = false
+  lookup.previous = null
+  lookup.next = null
+  helper.waiting--
+}
+
+function dropQueued(helper: RunningHelper, lookup: Lookup): void {
+  if (!lookup.queued || running !== helper) {
+    return
+  }
+  unlink(helper, lookup)
+  lookup.reject(new Error('the connection closed before its owner check'))
 }
 
 function sendNext(helper: RunningHelper): void {
   if (helper.inFlight || running !== helper) {
     return
   }
-  const next = helper.queued.shift()
+  const next = helper.first
   if (!next) {
     return
   }
+  unlink(helper, next)
   helper.inFlight = next
   helper.stall = setTimeout(
     () => fail(helper, 'the macOS socket owner helper stopped answering'),
@@ -124,7 +163,15 @@ function sendNext(helper: RunningHelper): void {
 
 function start(): RunningHelper {
   const child = spawnProcess({ program: helperPath(), args: [] })
-  const helper: RunningHelper = { child, queued: [], inFlight: null, buffered: '', stall: null }
+  const helper: RunningHelper = {
+    child,
+    first: null,
+    last: null,
+    waiting: 0,
+    inFlight: null,
+    buffered: '',
+    stall: null
+  }
   running = helper
   broken = null
   child.stdout.setEncoding('utf8')
@@ -177,7 +224,12 @@ function stop(helper: RunningHelper | null, reason: string): void {
   if (helper.stall) {
     clearTimeout(helper.stall)
   }
-  const lookups = helper.queued.splice(0)
+  const lookups: Lookup[] = []
+  while (helper.first) {
+    const lookup = helper.first
+    unlink(helper, lookup)
+    lookups.push(lookup)
+  }
   if (helper.inFlight) {
     lookups.push(helper.inFlight)
     helper.inFlight = null

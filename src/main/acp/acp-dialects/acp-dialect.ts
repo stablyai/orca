@@ -239,6 +239,8 @@ export type AcpDialect = {
   hookBlock?(meta: unknown): AcpHookBlock | undefined
   failedTurnText?(stopReason: string): string
   compactionReply?(text: string): AcpCompactionReply | undefined
+  /** Context tokens left after a compaction, as its reply states them. */
+  compactedContextTokens?(reply: string): number | undefined
   /** The agent's own compaction report, read as the standard `compaction_update`. */
   compactionUpdate?(update: SessionUpdate): CompactionUpdate | undefined
   /** The agent's own command for /compact. */

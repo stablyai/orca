@@ -36,7 +36,7 @@ After `npx skills add`, agents see a short stub that says:
 
 1. Resolve the CLI executable for this session (`ORCA_CLI_COMMAND`, `orca-dev`, Linux `orca-ide`, else `orca`).
 2. Load the full guide: `orca skills get <topic>` (or `--full` for the long guide).
-3. Prefer `--json` and do not invent flags from memory.
+3. Run `skills get` without `--json` (it packs the guide into one escaped line); prefer `--json` for other commands, and do not invent flags from memory.
 
 ```bash
 orca skills list
@@ -44,12 +44,11 @@ orca skills get orca-cli
 orca skills get orchestration --references
 orca skills get orchestration --reference recovery-and-cleanup
 orca skills get orchestration --full
-orca skills get orca-linear --json
 ```
 
 A guide's action gates name conditional references. `--reference <name>` prints one of them alone, so an agent pays for the kernel plus that document instead of the whole package; `--references` lists the names. The name may be bare (`recovery-and-cleanup`) or spelled as the guide writes it (`references/recovery-and-cleanup.md`). `--full` still prints the kernel plus every reference.
 
-Add `--json` when an agent needs deterministic output for automation. `skills show` is an alias for `skills get`.
+Add `--json` when a script needs the guide as structured data; agents read the plain Markdown. `skills show` is an alias for `skills get`.
 
 ## Keep skills up to date
 

@@ -1,5 +1,9 @@
 import type { MobileRelayHost } from '../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
-import { homeAgentEntries, type HostWorktreeInfo } from '../worktree/catalog/home-worktree-info'
+import {
+  homeAgentEntries,
+  type HomeAgentEntry,
+  type HostWorktreeInfo
+} from '../worktree/catalog/home-worktree-info'
 import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
 
 /** A desktop's relayed servers as Home read them, with its own identity so a server paired directly lists once. */
@@ -48,23 +52,77 @@ export function pickRelayedServers(
   return picks
 }
 
+type ProjectedServerAgents = {
+  hostId: MobileRelayHost['hostId']
+  label: string
+  entries: readonly HomeAgentEntry[]
+}
+
+const projectedServerAgents = new WeakMap<readonly Worktree[], ProjectedServerAgents>()
+
+function relayedServerAgentEntries(
+  serverRows: readonly Worktree[],
+  server: Pick<MobileRelayHost, 'hostId' | 'label'>
+): readonly HomeAgentEntry[] {
+  const cached = projectedServerAgents.get(serverRows)
+  if (cached && cached.hostId === server.hostId && cached.label === server.label) {
+    return cached.entries
+  }
+  const activeRows = serverRows.filter((row) => row.isArchived !== true)
+  let entries: readonly HomeAgentEntry[] = []
+  if (activeRows.length > 0) {
+    const executionHost = { id: server.hostId, label: server.label }
+    entries = homeAgentEntries(activeRows).map((entry) => ({ ...entry, executionHost }))
+  }
+  projectedServerAgents.set(serverRows, {
+    hostId: server.hostId,
+    label: server.label,
+    entries
+  })
+  return entries
+}
+
 /** Adds each picked server's agents to its desktop's live ones, labelled with the server. */
 export function withRelayedServerAgents(
   worktreeInfo: Readonly<Record<string, HostWorktreeInfo>>,
   picks: readonly HomeRelayedServerPick[],
   rows: readonly (readonly Worktree[] | undefined)[]
 ): Readonly<Record<string, HostWorktreeInfo>> {
-  let merged: Record<string, HostWorktreeInfo> | null = null
-  picks.forEach(({ desktopHostId, server }, at) => {
-    const info = merged?.[desktopHostId] ?? worktreeInfo[desktopHostId]
-    const serverRows = rows[at]?.filter((row) => row.isArchived !== true)
-    if (!info?.agents || !serverRows?.length) {
-      return
+  let appendedByDesktop: Map<string, HomeAgentEntry[]> | null = null
+  for (let at = 0; at < picks.length; at += 1) {
+    const pick = picks[at]
+    if (!pick) {
+      continue
     }
-    const executionHost = { id: server.hostId, label: server.label }
-    const relayed = homeAgentEntries(serverRows).map((entry) => ({ ...entry, executionHost }))
-    merged ??= { ...worktreeInfo }
-    merged[desktopHostId] = { ...info, agents: [...info.agents, ...relayed] }
-  })
-  return merged ?? worktreeInfo
+    const { desktopHostId, server } = pick
+    const info = worktreeInfo[desktopHostId]
+    const serverRows = rows[at]
+    if (!info?.agents || !serverRows?.length) {
+      continue
+    }
+    const relayed = relayedServerAgentEntries(serverRows, server)
+    if (relayed.length === 0) {
+      continue
+    }
+    appendedByDesktop ??= new Map()
+    let desktopAgents = appendedByDesktop.get(desktopHostId)
+    if (!desktopAgents) {
+      desktopAgents = [...info.agents]
+      appendedByDesktop.set(desktopHostId, desktopAgents)
+    }
+    for (const entry of relayed) {
+      desktopAgents.push(entry)
+    }
+  }
+  if (!appendedByDesktop) {
+    return worktreeInfo
+  }
+  const merged: Record<string, HostWorktreeInfo> = { ...worktreeInfo }
+  for (const [desktopHostId, agents] of appendedByDesktop) {
+    const info = worktreeInfo[desktopHostId]
+    if (info) {
+      merged[desktopHostId] = { ...info, agents }
+    }
+  }
+  return merged
 }

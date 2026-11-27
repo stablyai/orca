@@ -2,6 +2,8 @@
 // content still too long is cut with a marker that says so, never silently. Orca's own paging lines
 // go after the capped content, so they always survive.
 
+import { sliceAtCodeUnitLimit } from './text/surrogate-safe-text-slice'
+
 export const TOOL_LIST_PAGE_SIZE = 20
 export const TOOL_OUTPUT_MAX_CHARS = 20_000
 /** A text page leaves room under the cap for Orca's lines and fences around it. */
@@ -17,24 +19,27 @@ export function pageOfText(
   size = TOOL_TEXT_PAGE_CHARS
 ): { text: string; total: number; nextOffset?: number } {
   const start = Math.min(Math.max(0, offset), text.length)
-  const end = Math.min(text.length, start + size)
+  const page = sliceAtCodeUnitLimit(text.slice(start), size)
+  const end = start + page.length
   return {
-    text: text.slice(start, end),
+    text: page,
     total: text.length,
     ...(end < text.length ? { nextOffset: end } : {})
   }
 }
 
 /** Orca's line saying content was cut, and how to see less at once. */
-export function truncationNote(length: number, hint: string, max = TOOL_OUTPUT_MAX_CHARS): string {
-  return `[Orca: truncated at ${max} of ${length} characters. ${hint}]`
+export function truncationNote(length: number, hint: string, kept: number): string {
+  return `[Orca: truncated at ${kept} of ${length} characters. ${hint}]`
 }
 
 /** Content cut at the limit with a marker naming how to see less at once; add paging lines after. */
 export function capToolOutput(text: string, hint: string, max = TOOL_OUTPUT_MAX_CHARS): string {
-  return text.length <= max
-    ? text
-    : `${text.slice(0, max)}\n${truncationNote(text.length, hint, max)}`
+  if (text.length <= max) {
+    return text
+  }
+  const clipped = sliceAtCodeUnitLimit(text, max)
+  return `${clipped}\n${truncationNote(text.length, hint, clipped.length)}`
 }
 
 export function formatMegabytes(bytes: number): string {

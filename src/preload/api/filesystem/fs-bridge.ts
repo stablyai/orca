@@ -1,3 +1,4 @@
+import type { WatchWorktreeResult } from '../../../shared/file-watch/watch-worktree-result'
 import type { PathExistenceResult } from '../../../shared/file-access/path-existence-batch'
 import { ipcRenderer, webUtils } from 'electron'
 import type {
@@ -264,8 +265,10 @@ export const fsApi = {
     args: AgentSessionAttachmentUploadTarget & { paths: string[] }
   ): Promise<AgentSessionAttachmentPathUploadResult> =>
     ipcRenderer.invoke('fs:uploadPathsToAgentSessionAttachments', args),
-  watchWorktree: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
-    ipcRenderer.invoke('fs:watchWorktree', args),
+  watchWorktree: (args: {
+    worktreePath: string
+    connectionId?: string
+  }): Promise<WatchWorktreeResult | undefined> => ipcRenderer.invoke('fs:watchWorktree', args),
   unwatchWorktree: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
     ipcRenderer.invoke('fs:unwatchWorktree', args),
   onFsChanged: (callback: (payload: FsChangedPayload) => void): (() => void) => {

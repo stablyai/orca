@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildLineageRowProjection, type LineageRail } from './lineage-row-projection'
-import type { RenderRow } from './render-row'
-import { makeWorktree } from '../../worktree-card-slot-fixture-seeds'
+import { lineageItemRow as item } from './lineage-row-projection.test-fixture'
 
 function railXs(rail: LineageRail | null | undefined): number[] {
   const xs: number[] = []
@@ -9,20 +8,6 @@ function railXs(rail: LineageRail | null | undefined): number[] {
     xs.push(node.x)
   }
   return xs
-}
-
-function item(id: string, depth: number): RenderRow {
-  return {
-    type: 'item',
-    rowKey: id,
-    sectionKey: 'all',
-    worktree: makeWorktree({ id, name: id, agents: [] }, 0),
-    repo: undefined,
-    depth,
-    groupDepth: 0,
-    isLastLineageChild: false,
-    lineageChildCount: 0
-  }
 }
 
 describe('lineage row guides', () => {

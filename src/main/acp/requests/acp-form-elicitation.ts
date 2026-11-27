@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import {
   isAgentSessionQuestionAnswered,
   isValidAgentSessionQuestionAnswers,
@@ -15,32 +16,41 @@ const OTHER_SUFFIXES = ['__other', '_custom', '_other'] as const
 const OTHER_CHOICE = 'other'
 const NOT_SHOWN_ANSWER = `Not shown to the user: Orca shows at most ${MAX_JOURNAL_GROUPED_PROMPT_QUESTIONS} questions at once. Ask again.`
 
-const choiceSchema = z.looseObject({
-  const: z.string(),
-  title: z.string().optional(),
-  description: z.string().optional()
-})
-const propertySchema = z.looseObject({
-  type: z.enum(['string', 'boolean', 'array']),
-  title: z.string().optional(),
-  description: z.string().optional(),
-  format: z.string().optional(),
-  default: z.unknown().optional(),
-  minLength: z.number().optional(),
-  enum: z.array(z.string()).optional(),
-  oneOf: z.array(choiceSchema).optional(),
-  items: z
-    .looseObject({ enum: z.array(z.string()).optional(), anyOf: z.array(choiceSchema).optional() })
-    .optional()
-})
-const formSchema = z.object({
-  mode: z.literal('form'),
-  message: z.string(),
-  requestedSchema: z.looseObject({
-    properties: z.record(z.string(), propertySchema),
-    required: z.array(z.string()).optional()
+const choiceSchema = lazyZodSchema(() =>
+  z.looseObject({
+    const: z.string(),
+    title: z.string().optional(),
+    description: z.string().optional()
   })
-})
+)
+const propertySchema = lazyZodSchema(() =>
+  z.looseObject({
+    type: z.enum(['string', 'boolean', 'array']),
+    title: z.string().optional(),
+    description: z.string().optional(),
+    format: z.string().optional(),
+    default: z.unknown().optional(),
+    minLength: z.number().optional(),
+    enum: z.array(z.string()).optional(),
+    oneOf: z.array(choiceSchema).optional(),
+    items: z
+      .looseObject({
+        enum: z.array(z.string()).optional(),
+        anyOf: z.array(choiceSchema).optional()
+      })
+      .optional()
+  })
+)
+const formSchema = lazyZodSchema(() =>
+  z.object({
+    mode: z.literal('form'),
+    message: z.string(),
+    requestedSchema: z.looseObject({
+      properties: z.record(z.string(), propertySchema),
+      required: z.array(z.string()).optional()
+    })
+  })
+)
 
 type Choice = { value: string; label: string; description?: string }
 type Property = z.infer<typeof propertySchema>

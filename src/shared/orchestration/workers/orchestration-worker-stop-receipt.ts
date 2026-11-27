@@ -1,15 +1,18 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
 /** One helper under a stopped worker, and what its stop did. */
-export const HelperStopOutcome = z.object({
-  dispatchId: z.string(),
-  creatorDispatchId: z.string(),
-  outcome: z.enum(['stopped', 'already_finished', 'kept_open', 'starting', 'unconfirmed']),
-  /** Set on a helper left running because the user kept this ancestor open. */
-  keptOpenBy: z.string().optional(),
-  state: z.string().optional(),
-  lastError: z.string().nullable().optional()
-})
+export const HelperStopOutcome = lazyZodSchema(() =>
+  z.object({
+    dispatchId: z.string(),
+    creatorDispatchId: z.string(),
+    outcome: z.enum(['stopped', 'already_finished', 'kept_open', 'starting', 'unconfirmed']),
+    /** Set on a helper left running because the user kept this ancestor open. */
+    keptOpenBy: z.string().optional(),
+    state: z.string().optional(),
+    lastError: z.string().nullable().optional()
+  })
+)
 export type HelperStopOutcome = z.infer<typeof HelperStopOutcome>
 
 /** A helper whose stop is done: it stopped, had already finished, or the user kept it open. */
