@@ -9,7 +9,8 @@ import {
 } from '../../../../ssh/targets/ssh-target-registry'
 import { isManagedOrcadSshTarget } from '../../../../ssh/targets/ssh-target-runtime-ownership'
 import { browseSshDirectory } from '../../../../ssh/filesystem/ssh-remote-directory-browse'
-import { defineMethod } from '../../core'
+import { defineMethod, InvalidArgumentError } from '../../core'
+import { isDuplicateSshTargetAlias } from '../../../../../shared/remote-runtime/ssh/ssh-target-duplicate'
 import {
   getPublicSshError,
   getPublicSshState
@@ -148,6 +149,19 @@ export const SSH_METHODS = [
     permission: 'workspace',
     params: SshTargetAdd,
     handler: (params) => {
+      const { target } = params
+      // Why: the add dialog refuses an alias that is already taken, but that rule lived only
+      // in the renderer — a CLI or any other RPC caller could register the same alias again.
+      if (
+        isDuplicateSshTargetAlias({
+          existingTargets: listRegisteredSshTargets(),
+          configHost: target.configHost ?? target.host,
+          label: target.label,
+          host: target.host
+        })
+      ) {
+        throw new InvalidArgumentError('That SSH host is already in Orca.')
+      }
       const result = getRegisteredSshTargetMutations().add({
         ...withExplicitRemoteCliControl(params.target),
         source: 'manual'

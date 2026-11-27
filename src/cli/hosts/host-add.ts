@@ -89,11 +89,10 @@ async function sameEndpointWarning(
         'ssh.listEditableTargets'
       )
     ).result.targets
-  } catch (error) {
-    if (error instanceof RuntimeRpcFailureError && error.code === 'method_not_found') {
-      return undefined
-    }
-    throw error
+  } catch {
+    // Why: registration already succeeded; a failed informational lookup must not turn the
+    // completed mutation into a CLI failure.
+    return undefined
   }
   const twin = targets.find(
     (target) =>

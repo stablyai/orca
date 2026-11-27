@@ -18,7 +18,7 @@ import {
   type SshTargetCreateInput
 } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 
-import { isDuplicateSshTargetAlias } from './ssh-target-duplicate'
+import { isDuplicateSshTargetAlias } from '../../../../../../shared/remote-runtime/ssh/ssh-target-duplicate'
 
 type SshApi = {
   listTargets: () => Promise<SshTarget[]>

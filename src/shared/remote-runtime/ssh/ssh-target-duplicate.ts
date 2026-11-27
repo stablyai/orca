@@ -1,5 +1,5 @@
-import { normalizeSshConfigAlias } from '../../../../../../shared/remote-runtime/ssh/ssh-config-alias'
-import type { SshTarget } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
+import { normalizeSshConfigAlias } from './ssh-config-alias'
+import type { SshTarget } from './ssh-types'
 
 export function isDuplicateSshTargetAlias({
   existingTargets,
