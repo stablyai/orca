@@ -617,7 +617,8 @@
 1 src/main/ipc/notifications/notification-authorization-status.ts
 2 src/main/ipc/notifications/notifications.ts
 5 src/main/ipc/orca-uninstall.ts
-4 src/main/ipc/plugins/plugins.ts
+3 src/main/ipc/plugins/plugin-management-ipc.ts # moved from plugins.ts for lazy IPC loading
+2 src/main/ipc/plugins/plugins.ts # lazy loader references registerPluginManagementHandlers
 3 src/main/ipc/preflight/preflight-command-exec.ts
 1 src/main/ipc/preflight/preflight-local-env.ts
 1 src/main/ipc/preflight/preflight-wsl-agent-detection.ts
