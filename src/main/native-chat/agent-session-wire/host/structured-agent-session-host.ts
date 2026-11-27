@@ -147,6 +147,7 @@ export class StructuredAgentSessionHost {
     serialize: this.serialize,
     seal: (id) => this.runtimeState.sealEventSink(id),
     readCommands: this.clientDelivery.readCommandsSettled,
+    trackRefresh: (operation: Promise<void>) => this.tasks.trackAttach(operation),
     conversation: (sessionId) => this.lifetime.conversation(sessionId)
   }))
   sessionAgent = this.reads.sessionAgent

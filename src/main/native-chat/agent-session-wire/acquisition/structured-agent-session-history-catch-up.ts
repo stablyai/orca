@@ -153,6 +153,7 @@ export async function runHistoryCatchUp<View extends HistoryCatchUpJournalView>(
   assertCurrent?: () => void
   timeoutMs: number
   logger?: StructuredAgentSessionLogger
+  onSkipped?: (reason: string) => void
   readView: (history: StructuredAgentSessionHistoryJournal, signal: AbortSignal) => Promise<View>
   prepare: (context: HistoryCatchUpContext<View>) => Promise<HistoryCatchUpPlan | null>
 }): Promise<HistoryCatchUpOutcome> {
@@ -174,13 +175,17 @@ export async function runHistoryCatchUp<View extends HistoryCatchUpJournalView>(
     }
     input.assertCurrent?.()
   }
-  const warn = (reason: string, error?: unknown) =>
+  const warn = (reason: string, error?: unknown) => {
+    input.onSkipped?.(
+      error instanceof Error && error.message === 'too-large' ? 'too-large' : reason
+    )
     input.logger?.warn(`${input.agentName} chat did not catch up on turns made outside it`, {
       scope: input.scope,
       sessionId: input.sessionId,
       reason,
       ...(error === undefined ? {} : { error })
     })
+  }
   const { sink } = input
   try {
     check()
@@ -191,6 +196,7 @@ export async function runHistoryCatchUp<View extends HistoryCatchUpJournalView>(
     check()
     const history = sink.journalHistory?.()
     if (!history || !written.ok || !sink.tryAppendTransition) {
+      input.onSkipped?.('unavailable')
       return 'skipped'
     }
     let planned: Promise<View> | undefined

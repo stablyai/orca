@@ -34,6 +34,7 @@ export async function catchUpCodexThread(input: {
   assertCurrent?: () => void
   timeoutMs?: number
   logger?: StructuredAgentSessionLogger
+  onSkipped?: (reason: string) => void
   onReceipt?: (
     clientMessageId: string,
     providerIdentity: AgentJournalItemIdentity
@@ -50,6 +51,7 @@ export async function catchUpCodexThread(input: {
     ...(input.assertCurrent ? { assertCurrent: input.assertCurrent } : {}),
     timeoutMs: input.timeoutMs ?? DEFAULT_CODEX_REQUEST_TIMEOUT_MS,
     ...(input.logger ? { logger: input.logger } : {}),
+    ...(input.onSkipped ? { onSkipped: input.onSkipped } : {}),
     readView: (history, signal) => readCodexHistoryJournalView(history, input.threadId, signal),
     prepare: async ({ view: readView, history, signal, deadline, check, yieldTurn }) => {
       const view = await readView()

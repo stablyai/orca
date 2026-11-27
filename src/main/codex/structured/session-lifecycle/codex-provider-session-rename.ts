@@ -1,3 +1,4 @@
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import {
@@ -8,7 +9,7 @@ import { stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { agentSessionPinnedLaunchDirectory } from '../../../runtime/agent-session/records/agent-session-record-launch-directory'
-import { resolveHiddenProbeCwd } from '../../../lib/hidden-probe-cwd'
+import { resolveHiddenProbeCwdAsync } from '../../../lib/hidden-probe-cwd'
 import { isNativeLocalLocation as supportsCodexStructuredLocation } from '../../../../shared/execution-host/execution-host'
 import { agentDrivesSession } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-provider-support'
 import { CODEX_STRUCTURED_AGENT } from '../launch/codex-structured-agent-definition'
@@ -47,7 +48,7 @@ export async function codexProviderProbeCwd(
       throw error
     }
   }
-  return resolveHiddenProbeCwd()
+  return resolveHiddenProbeCwdAsync()
 }
 
 const RENAME_TIMEOUT_MS = 15_000
@@ -129,13 +130,18 @@ export async function runCodexProviderAppServer<T>(
 ): Promise<T> {
   const { codexHome = requireLegacyAgentSessionAccountHome(record.accountHome).path, ...session } =
     options
-  const cwd = await codexProviderProbeCwd(record, invocation)
+  const cwd = await waitForPromiseWithSignal(
+    codexProviderProbeCwd(record, invocation),
+    options.signal
+  )
   const { command, prefixArgs, environment } = await resolveCodexStructuredInvocation({
     ...invocation,
     ...(options.signal ? { signal: options.signal } : {}),
     resolveWorkingDirectory: () => cwd
   })
-  const args = codexStructuredLaunchArgs(await invocation.resolveLaunchArgs())
+  const args = codexStructuredLaunchArgs(
+    await waitForPromiseWithSignal(Promise.resolve(invocation.resolveLaunchArgs()), options.signal)
+  )
   const env = Object.fromEntries(
     Object.entries(environment ?? {}).filter(
       (entry): entry is [string, string] => entry[1] !== undefined

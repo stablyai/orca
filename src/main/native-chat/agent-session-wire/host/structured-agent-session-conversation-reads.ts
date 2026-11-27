@@ -4,6 +4,7 @@ import {
   createStructuredAgentSessionCatalogReads,
   structuredAgentSessionCatalogScopeOwned
 } from '../options/structured-agent-session-catalog-reads'
+import { refreshStructuredAgentSessionHistory } from './structured-agent-session-history-refresh'
 import { revealStructuredAgentSession } from './structured-agent-session-reveal'
 import { hostStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-host-current-work'
 import type { StructuredAgentSessionClientDelivery } from '../publication/subscribers/structured-agent-session-client-delivery'
@@ -35,11 +36,13 @@ type ReadContext = {
   readCommands: StructuredAgentSessionClientDelivery['readCommandsSettled']
   conversation: (id: string) => Promise<StructuredAgentSessionHostSession>
   publishStatus: (id: string) => void
-  runtimeState: Pick<StructuredAgentSessionHostRuntimeState, 'startFlights'>
+  trackRefresh: (operation: Promise<void>) => Promise<void>
+  runtimeState: Pick<StructuredAgentSessionHostRuntimeState, 'startFlights' | 'acquireAborts'>
 }
 
 /** Readers share the conversation owner; inventory never founds a journal or prepares a provider. */
 export function createStructuredAgentSessionConversationReads(context: () => ReadContext) {
+  const refreshes = new Map<string, Promise<void>>()
   const setUserConversationName: SetUserConversationName = (...args) =>
     context().deps.conversationNaming?.setUserName(...args) ?? Promise.resolve(null)
   const readModelCatalog = createStructuredAgentSessionCatalogReads(() => ({
@@ -189,9 +192,27 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
     supportsCreate: (location: AgentSessionExecutionLocation, agent: string) =>
       providerSupport.adapterSupportsCreate(context().deps.adapter, location, agent),
     knownAgentIds: () => providerSupport.knownAgentIds(context().deps),
-    revealSession: (id: string) => {
-      const { deps, conversation } = context()
-      return revealStructuredAgentSession(deps, id, conversation)
+    revealSession: async (id: string) => {
+      const { deps, conversation, sessions, runtimeState, trackRefresh, publishStatus } = context()
+      const result = await revealStructuredAgentSession(deps, id, conversation)
+      if (result.readable && !refreshes.has(id)) {
+        const session = sessions.get(id)
+        const wait = runtimeState.acquireAborts.begin(id)
+        const operation = refreshStructuredAgentSessionHistory(
+          deps,
+          id,
+          session,
+          () => sessions.get(id) === session && !runtimeState.startFlights.has(id),
+          wait.signal,
+          () => publishStatus(id)
+        ).finally(() => {
+          wait.end()
+          refreshes.delete(id)
+        })
+        refreshes.set(id, operation)
+        trackRefresh(operation)
+      }
+      return result
     },
     sessionAgent: (id: string) => context().deps.store.getConversation(id)?.provider ?? null,
     /** After an out-of-turn options write, so an open tab re-reads the chat's options. */

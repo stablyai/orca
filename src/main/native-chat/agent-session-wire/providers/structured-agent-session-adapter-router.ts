@@ -110,6 +110,11 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
     }
   }
 
+  refreshHistory: NonNullable<Adapter['refreshHistory']> = (input) =>
+    this.capabilityOwner(input.record.sessionId, input.record.provider)?.adapter.refreshHistory?.(
+      input
+    ) ?? Promise.resolve()
+
   renameProviderSession: NonNullable<Adapter['renameProviderSession']> = (input) =>
     this.capabilityOwner(
       input.record.sessionId,
