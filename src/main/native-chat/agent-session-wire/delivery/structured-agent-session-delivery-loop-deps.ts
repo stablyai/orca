@@ -90,17 +90,21 @@ export function launchToolsRefreshDue(
     | undefined,
   owesWork: (sessionId: string, continuingId: string) => Promise<boolean>,
   /** See `StructuredAgentSessionAdapter.keptLaunchOutgrown`. */
-  keptLaunchOutgrown?: (sessionId: string) => boolean | undefined | Promise<boolean | undefined>
+  keptLaunchOutgrown?: (
+    sessionId: string,
+    toolsOutdated: boolean
+  ) => boolean | undefined | Promise<boolean | undefined>
 ): ((sessionId: string, continuingId: string) => Promise<boolean>) | undefined {
   if (!launchTools && !keptLaunchOutgrown) {
     return undefined
   }
   return async (sessionId, continuingId) => {
-    const kept = await keptLaunchOutgrown?.(sessionId)
+    const outdated = launchTools?.outdated(sessionId) === true
+    const kept = await keptLaunchOutgrown?.(sessionId, outdated)
     const outgrown = kept === true
     return (
       kept !== false &&
-      (outgrown || launchTools?.outdated(sessionId) === true) &&
+      (outgrown || outdated) &&
       !(await owesWork(sessionId, continuingId)) &&
       (outgrown || (await launchTools?.changed(sessionId)) === true)
     )
