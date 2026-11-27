@@ -65,6 +65,8 @@ export type ProviderRelayLaunch = {
   passWhileHeld?: (line: string) => boolean
   /** Session state the daemon keeps for the next attach; only a daemon that can keep it relays. */
   keep?: RelayProtocol.ProviderRelayKeepSpec
+  /** `reattach`: only the chat's kept agent; none starts under the daemon (the caller spawns). */
+  only?: 'reattach'
 }
 
 export type RelayedProviderProcess = {
@@ -259,7 +261,7 @@ export async function launchRelayedProviderProcess(
     throw new KeptProviderRelayEndedError(relay.chatKey)
   }
   const kept = await reattachListed(relay)
-  if (kept) {
+  if (kept || relay.only === 'reattach') {
     return kept
   }
   const client = await connected(await installed.current().catch(() => null))
