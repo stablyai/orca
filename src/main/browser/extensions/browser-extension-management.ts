@@ -39,7 +39,10 @@ import {
 import { notifyBrowserExtensionListChanged } from './installation/browser-extension-list-changes'
 import { reviewHeldBrowserExtensionUpdate } from './web-store/browser-extension-webstore-updater'
 import { withBrowserExtensionLock } from './installation/browser-extension-mutation-lock'
-import { isBrowserExtensionSupportEnabled } from './browser-extension-support'
+import {
+  BROWSER_EXTENSION_SUPPORT_DISABLED_ERROR,
+  isBrowserExtensionSupportEnabled
+} from './browser-extension-support'
 import {
   withExtensionEnabled,
   withoutExtension
@@ -48,13 +51,23 @@ import { forgetPinnedBrowserExtension } from './actions/browser-extension-toolba
 import { getBrowserExtensionProfileStateStore } from './profile-storage/browser-extension-profile-state-store'
 import { getBrowserExtensionSyncStorageStore } from './profile-storage/browser-extension-sync-storage-store'
 import { getBrowserExtensionDnrStore } from './declarative-net-request/session/browser-extension-dnr-store'
+import { dropBrowserExtensionIdleState } from './profile-sessions/browser-extension-idle-kept-state'
 import { notifyChromeWebStoreUninstalled } from './web-store/browser-extension-webstore-events'
+import {
+  browserExtensionSourceProfileId,
+  loadBrowserExtensionWhereProfileRuns,
+  unloadBrowserExtensionFromRouteProfilesOf
+} from './profile-sessions/browser-extension-route-profiles'
 
 /** Settings actions. Each returns a result instead of throwing so the renderer can show the reason. */
 
 async function settle(action: () => Promise<void>): Promise<BrowserExtensionActionResult> {
   if (!isBrowserExtensionSupportEnabled()) {
-    return { ok: false, error: 'Turn on browser extensions in Settings › Browser › Extensions' }
+    return {
+      ok: false,
+      error: BROWSER_EXTENSION_SUPPORT_DISABLED_ERROR,
+      failure: { reason: 'support-disabled' }
+    }
   }
   try {
     await action()
@@ -94,16 +107,19 @@ export async function listBrowserExtensionsForProfile(
 }
 
 export function setBrowserExtensionEnabled(
-  browserProfileId: string,
+  callerProfileId: string,
   extensionId: string,
   enabled: boolean
 ): Promise<BrowserExtensionActionResult> {
+  // chrome.management on an SSH or This-device page changes its local profile's list.
+  const browserProfileId = browserExtensionSourceProfileId(callerProfileId)
   return settle(async () => {
     if (!browserSessionRegistry.getProfile(browserProfileId)) {
       throw new Error('Browser profile not found')
     }
     if (!enabled) {
       unloadBrowserExtensionFromProfile(browserProfileId, extensionId)
+      unloadBrowserExtensionFromRouteProfilesOf(browserProfileId, extensionId)
       browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
         withExtensionEnabled(byProfile, browserProfileId, extensionId, false)
       )
@@ -119,6 +135,8 @@ export function setBrowserExtensionEnabled(
       browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
         withExtensionEnabled(byProfile, browserProfileId, extensionId, true)
       )
+      // Why after saving: a Disable meanwhile cancels these loads and its save must win.
+      await loadBrowserExtensionWhereProfileRuns(browserProfileId, installed)
     })
   })
 }
@@ -155,6 +173,7 @@ export function removeBrowserExtension(extensionId: string): Promise<BrowserExte
       ])
       forgetBrowserExtensionLoadFailures({ extensionId })
       forgetHeldBrowserExtensionUpdate(extensionId)
+      dropBrowserExtensionIdleState({ extensionId })
       const removed = await getBrowserExtensionInstallStore().remove(extensionId)
       if (removed) {
         forgetPreparedBrowserExtensionDirectory(removed.path)
@@ -253,10 +272,11 @@ export function addUnpackedBrowserExtension(
         }
         throw error
       }
-      store.save({ ...record, version: loaded.version })
+      const saved = store.save({ ...record, version: loaded.version })
       browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
         withExtensionEnabled(byProfile, browserProfileId, loaded.id, true)
       )
+      await loadBrowserExtensionWhereProfileRuns(browserProfileId, saved)
       if (!existing) {
         recordBrowserExtensionInstalled('unpacked')
       }

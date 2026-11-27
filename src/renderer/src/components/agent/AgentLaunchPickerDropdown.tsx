@@ -1,12 +1,13 @@
-import { useState, type Ref } from 'react'
+import { useRef, useState, type Ref } from 'react'
+import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
 import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
 import { AgentLaunchSurfaceButtons } from './AgentLaunchSetupFooter'
 import { AgentPickerAgentTabs, AgentPickerBlankTerminalPane } from './AgentPickerAgentRail'
-import type { AgentPickerChoice } from './agent-picker-search-rows'
+import { AgentPickerChoiceRows, type AgentPickerChoice } from './agent-picker-search-rows'
 import { useAgentPickerSetup } from './agent-launch-picker-drafts'
 import { useRetiredAgentPickerDrafts } from './AgentLaunchPickerMenu'
-import { chatUnavailableLabel } from './launch-menu/agent-menu-row-presentation'
+import { chatUnavailableLabel, entrySetupLabel } from './launch-menu/agent-menu-row-presentation'
 import {
   acceptAgentPickerArguments,
   applyAgentPickerEdit
@@ -29,7 +30,9 @@ export type AgentLaunchPickerDropdownPick = (
   draft?: AgentPickerDraft,
   entry?: AgentPickerEntry,
   /** Set when the user named where the agent opens. */
-  surface?: AgentPickerSurface
+  surface?: AgentPickerSurface,
+  /** The user chose the draft's permission in this pane, even one it already showed. */
+  permissionPicked?: boolean
 ) => void
 
 type AgentLaunchPickerDropdownProps = {
@@ -40,6 +43,7 @@ type AgentLaunchPickerDropdownProps = {
   draftForEntry?: (entry: AgentPickerEntry) => AgentPickerDraft
   draftScope: AgentPickerDraftOwner
   disabled?: boolean
+  selectAgentOnTab?: boolean
   initialQuery?: string
   searchInputRef?: Ref<HTMLInputElement>
   defaultAgent?: Agent | 'blank' | null
@@ -48,7 +52,7 @@ type AgentLaunchPickerDropdownProps = {
   onPaneChange: (agent: Agent) => void
   onPick: AgentLaunchPickerDropdownPick
   onClose: () => void
-  /** Rows under the card that are not agents. */
+  /** Rows under the card that are not agents; `leading` ones go over the agent tabs instead. */
   choices?: readonly AgentPickerChoice[]
   /** A tile ahead of the agent tabs, also listed by search; current when the form holds no agent. */
   blankTerminal?: AgentPickerChoice
@@ -56,7 +60,11 @@ type AgentLaunchPickerDropdownProps = {
 
 /** A form's agent dropdown: agent tabs over the shared setup card, then where the agent opens. */
 export function AgentLaunchPickerDropdown(props: AgentLaunchPickerDropdownProps) {
+  const t = useTranslate()
   const { entries, agent, draftScope, onPaneChange, blankTerminal } = props
+  const leadingChoices = props.choices?.filter((choice) => choice.leading)
+  const underChoices = props.choices?.filter((choice) => !choice.leading)
+  const leadingRows = useRef<HTMLDivElement>(null)
   useRetiredAgentPickerDrafts(entries, draftScope, 'select')
   const [paneAgent, setPaneAgent] = useState(agent)
   // A typed-in query opens on an agent's search instead.
@@ -76,11 +84,26 @@ export function AgentLaunchPickerDropdown(props: AgentLaunchPickerDropdownProps)
     onPaneChange(next)
   }
   if (!pane) {
-    return null
+    if (!props.selectAgentOnTab) {
+      return null
+    }
+    return props.choices?.length ? (
+      props.choices.map((choice) => (
+        <DropdownMenuItem key={choice.id} onSelect={choice.onSelect}>
+          {choice.icon}
+          {choice.label}
+        </DropdownMenuItem>
+      ))
+    ) : (
+      <DropdownMenuItem disabled>
+        {t('auto.components.tab.bar.QuickLaunchButton.e518f544b1', 'No agents detected')}
+      </DropdownMenuItem>
+    )
   }
   return (
     <div
-      className="flex min-h-0 flex-col"
+      // Why: search and two model rows stay whole in a short window; the menu scrolls instead.
+      className="scrollbar-sleek flex min-h-0 flex-col overflow-y-auto [&_[cmdk-list]]:min-h-18 [&_[cmdk-root]]:min-h-28"
       data-agent-launch-picker="true"
       onKeyDownCapture={(event) => {
         // Shift+Tab from the search goes back to the agent tabs.
@@ -98,8 +121,32 @@ export function AgentLaunchPickerDropdown(props: AgentLaunchPickerDropdownProps)
         }
       }}
     >
+      {leadingChoices?.length ? (
+        <AgentPickerChoiceRows
+          ref={leadingRows}
+          top
+          choices={leadingChoices}
+          disabled={props.disabled}
+          onLeaveDown={() =>
+            leadingRows.current?.parentElement
+              ?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')
+              ?.focus()
+          }
+        />
+      ) : null}
       <AgentPickerAgentTabs
         entries={entries}
+        onLeaveUp={
+          leadingChoices?.length
+            ? () =>
+                [
+                  ...(leadingRows.current?.querySelectorAll<HTMLElement>('[role^="menuitem"]') ??
+                    [])
+                ]
+                  .at(-1)
+                  ?.focus()
+            : undefined
+        }
         pane={terminalPane ? null : pane.agent}
         blankTerminal={blankTerminal}
         defaultAgent={props.defaultAgent}
@@ -107,6 +154,9 @@ export function AgentLaunchPickerDropdown(props: AgentLaunchPickerDropdownProps)
         onSelect={(next) => {
           setTerminalPane(false)
           showPane(next)
+          if (props.selectAgentOnTab && next !== agent) {
+            props.onPick(next)
+          }
         }}
       />
       {terminalPane && blankTerminal ? (
@@ -120,6 +170,8 @@ export function AgentLaunchPickerDropdown(props: AgentLaunchPickerDropdownProps)
         <AgentLaunchPickerPane
           key={pane.agent}
           {...props}
+          choices={underChoices}
+          leadingChoices={leadingChoices}
           initialQuery={switched ? '' : props.initialQuery}
           entry={pane}
           onShowAgent={showPane}
@@ -137,14 +189,17 @@ function AgentLaunchPickerPane({
   draftForEntry,
   draftScope,
   disabled,
+  selectAgentOnTab,
   initialQuery,
   searchInputRef,
   choices,
+  leadingChoices,
   blankTerminal,
   onPick,
   onClose,
   onShowAgent
 }: AgentLaunchPickerDropdownProps & {
+  leadingChoices?: readonly AgentPickerChoice[]
   entry: AgentPickerEntry
   /** Shows another agent's pane, for a search pick that keeps the dropdown open. */
   onShowAgent: (agent: Agent) => void
@@ -162,6 +217,8 @@ function AgentLaunchPickerPane({
     open: true
   })
   const current = agent === entry.agent
+  // Why: a form that keeps a permission apart from the agent must tell a chosen one from one only shown.
+  const permissionPicked = useRef(false)
   /** Takes the pane's setup into the form; `surface` when the user named where it opens. */
   const commit = (close: boolean, surface?: AgentPickerSurface) => {
     const draft = setup.getDraft()
@@ -173,7 +230,7 @@ function AgentLaunchPickerPane({
     if (!setup.accept(picked, !close)) {
       return
     }
-    onPick(entry.agent, picked, entry, surface)
+    onPick(entry.agent, picked, entry, surface, permissionPicked.current)
     if (close) {
       onClose()
     }
@@ -250,9 +307,16 @@ function AgentLaunchPickerPane({
         onPick: pickSearchResult,
         onPickAgent: pickAgent,
         choices,
-        searchChoices: blankTerminal ? [blankTerminal] : undefined
+        searchChoices: [...(leadingChoices ?? []), ...(blankTerminal ? [blankTerminal] : [])]
       }}
       onDraftChange={(draft, edit) => {
+        // Same as chats clears the permission through a choice edit, so a changed one counts too.
+        if (
+          edit === 'permission' ||
+          setup.getDraft()?.choices.permissionMode !== draft.choices.permissionMode
+        ) {
+          permissionPicked.current = true
+        }
         setup.change(draft)
         // Effort, speed and a kept permission apply at once to the agent in use; another agent's wait.
         if (current && (edit === 'choice' || edit === 'speed' || edit === 'permission')) {
@@ -262,7 +326,7 @@ function AgentLaunchPickerPane({
       onPickModel={pickModel}
       onUse={(draft) => commit(true, draft.surface)}
     >
-      {entry.textGeneration ? null : (
+      {selectAgentOnTab || entry.textGeneration ? null : (
         <AgentLaunchOpenAs
           entry={entry}
           disabled={disabled}
@@ -289,12 +353,15 @@ function AgentLaunchOpenAs({
     return null
   }
   const unavailable = entry.rows.find((row) => row.kind === 'chat-unavailable')
+  // Why this place refuses a chat the agent has; a disabled button can't show it on hover.
+  const chatRefused =
+    !entry.surfaces.includes('chat') && unavailable?.kind === 'chat-unavailable'
+      ? chatUnavailableLabel(unavailable.reason, t)
+      : undefined
   const reasons: Partial<Record<AgentPickerSurface, string>> = {
     chat: entry.surfaces.includes('chat')
       ? undefined
-      : unavailable?.kind === 'chat-unavailable'
-        ? chatUnavailableLabel(unavailable.reason, t)
-        : t('agentPicker.noChat', 'No chat for {{agent}}', { agent: entry.label }),
+      : (chatRefused ?? t('agentPicker.noChat', 'No chat for {{agent}}', { agent: entry.label })),
     terminal: entry.surfaces.includes('terminal')
       ? undefined
       : t('agentPicker.noTerminal', 'No terminal for {{agent}}', { agent: entry.label })
@@ -302,16 +369,22 @@ function AgentLaunchOpenAs({
   // A surface the agent lacks stays as a disabled button that says why.
   const missing = (['chat', 'terminal'] as const).filter((surface) => !order.includes(surface))
   return (
-    <div className="flex items-center border-t border-border px-2 py-2">
-      <AgentLaunchSurfaceButtons
-        entry={entry}
-        surfaces={[...missing, ...order]}
-        verb="open"
-        disabled={disabled}
-        unavailable={reasons}
-        primary={entry.defaultSurface}
-        onSelect={onChoose}
-      />
+    <div className="flex flex-col gap-1.5 border-t border-border px-2 py-2">
+      <div className="flex items-center">
+        <AgentLaunchSurfaceButtons
+          entry={entry}
+          surfaces={[...missing, ...order]}
+          verb="open"
+          disabled={disabled}
+          unavailable={reasons}
+          primary={entry.defaultSurface}
+          onSelect={onChoose}
+        />
+        {entrySetupLabel(entry, t) ? (
+          <span className="ml-auto text-xs text-muted-foreground">{entrySetupLabel(entry, t)}</span>
+        ) : null}
+      </div>
+      {chatRefused ? <p className="text-xs text-muted-foreground">{chatRefused}</p> : null}
     </div>
   )
 }

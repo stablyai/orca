@@ -18,10 +18,17 @@ import {
 } from '../../native-chat/conversation-files/native-chat-visuals-delivery'
 import { acpListingDependsOnRelease, acpModelListingForRelease } from './acp-model-discovery-policy'
 import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
-import { createAcpAgentConnection } from '../process/acp-agent-connection'
+import {
+  createAcpAgentConnection,
+  type AcpAgentConnectionOptions
+} from '../process/acp-agent-connection'
+import { acpClientInfo } from '../launch/acp-client-info'
 import { acpRunFolder } from '../launch/acp-private-temp'
+import { enterAcpListingAccount } from './acp-listing-account'
+import { acpListingSessionDiscard } from './acp-listing-session-discard'
 import { supportsAcpStructuredLocation } from '../session/acp-structured-location-support'
 import { checkAcpLaunchVersion } from '../launch/acp-launch-version'
+import { acpChatHomeNow } from '../launch/acp-launch-home-before-first-turn'
 import {
   resolveAcpLaunchInvocation,
   type AcpLaunchInvocationDeps
@@ -36,7 +43,10 @@ import {
 export type AcpAtRestCommandDeps = AcpLaunchInvocationDeps & {
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
   probeVersion?: AgentCliVersionReader
-  connect?: (launch: ProviderProcessLaunch) => AcpDiscoveryConnection
+  connect?: (
+    launch: ProviderProcessLaunch,
+    options: AcpAgentConnectionOptions
+  ) => AcpDiscoveryConnection
   resolveVisualsSkill?: typeof resolveNativeChatVisualsSkillLocation
   logger?: StructuredAgentSessionLogger
   isWindowsProcessStartTimeAvailable?: () => boolean
@@ -67,12 +77,11 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
         ),
       scan: (record, cwd, isCurrent, _generation, contextSignal, _admitted, demand) => {
         const signal = AbortSignal.any([lifetime.signal, contextSignal])
-        let answer: (value: AtRestCommandScan) => void = () => {}
-        let fail: (reason: unknown) => void = () => {}
-        const result = new Promise<AtRestCommandScan>((resolve, reject) => {
-          answer = resolve
-          fail = reject
-        })
+        const {
+          promise: result,
+          resolve: answer,
+          reject: fail
+        } = Promise.withResolvers<AtRestCommandScan>()
         const check = () => {
           signal.throwIfAborted()
           if (!isCurrent()) {
@@ -110,16 +119,28 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
           }
           let folder: Awaited<ReturnType<typeof acpRunFolder>> | undefined
           let owned: AcpDiscoveryConnection | undefined
+          let gate: Awaited<ReturnType<typeof enterAcpListingAccount>> | undefined
+          // Sessions an agent without ACP delete keeps; removed once its process has exited.
+          const started: string[] = []
+          let discardSessions: ReturnType<typeof acpListingSessionDiscard> = null
+          const removeScratch = async (): Promise<void> => {
+            await discardSessions?.(started.splice(0))
+            await folder?.remove()
+          }
           try {
             check()
+            // A chat before its first message starts on the sign-in method picked since.
+            const accountHome = await awaitAcpDiscovery(acpChatHomeNow(spec, record, deps), signal)
             const invocation = await awaitAcpDiscovery(
-              resolveAcpLaunchInvocation(spec, record.accountHome, {
+              resolveAcpLaunchInvocation(spec, accountHome, {
                 ...deps,
                 resolveWorkingDirectory: () => cwd
               }),
               signal
             )
             check()
+            // The account picks the spec: agy on a home Orca owns needs that home's own args.
+            const launchSpec = invocation.spec
             const launch = {
               ...invocation,
               cwd,
@@ -135,22 +156,22 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
             }
             // A version reader owns work too; retain admission until it drains after cancellation.
             const version = await checkAcpLaunchVersion(
-              spec,
+              launchSpec,
               launch,
-              acpListingDependsOnRelease(spec.modelDiscovery),
+              acpListingDependsOnRelease(launchSpec.modelDiscovery),
               deps.probeVersion
             )
             check()
             if (version.status === 'tooOld') {
               throw new Error('ACP command discovery unavailable')
             }
-            const listing = acpModelListingForRelease(spec.modelDiscovery, version.version)
+            const listing = acpModelListingForRelease(launchSpec.modelDiscovery, version.version)
             // Releases that list without a session (OpenCode 1.x) report commands only in chats.
             if (listing?.kind !== 'session') {
               answer({ commands: undefined, fromAgent: false })
               return
             }
-            const location = spec.skillRoots
+            const location = launchSpec.skillRoots
               ? await awaitAcpDiscovery(
                   (deps.resolveVisualsSkill ?? resolveNativeChatVisualsSkillLocation)(),
                   signal
@@ -158,9 +179,9 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
               : null
             check()
             const skill =
-              location && spec.skillRoots
+              location && launchSpec.skillRoots
                 ? await awaitAcpDiscovery(
-                    spec.skillRoots({
+                    launchSpec.skillRoots({
                       roots: [location],
                       version: version.version,
                       env: launch.env
@@ -169,6 +190,18 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
                   )
                 : null
             check()
+            // Like a model listing: no scan while the sign-in method changes, and the files a
+            // start writes for the method saved now.
+            const auth = invocation.antigravityChatAuth
+            gate = await enterAcpListingAccount(launchSpec, launch.env, auth, signal, check)
+            const gated = gate.signal
+            discardSessions = acpListingSessionDiscard(
+              spec.agent,
+              listing,
+              accountHome,
+              cwd,
+              launch
+            )
             let folderArgs: string[] = []
             if (listing.sessionFolderArgs) {
               folder = await acpRunFolder(
@@ -178,29 +211,36 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
               folderArgs = listing.sessionFolderArgs(folder.path)
               check()
             }
-            const connection = (deps.connect ?? createAcpAgentConnection)({
-              ...launch,
-              env: { ...launch.env, ...skill?.env },
-              args: [
-                ...invocation.prefixArgs,
-                ...spec.args({ fullAccess: false, pluginDirs: skill?.pluginDirs ?? [] }),
-                ...folderArgs
-              ]
-            })
+            const connection = gate.retain(
+              (deps.connect ?? createAcpAgentConnection)(
+                {
+                  ...launch,
+                  env: { ...launch.env, ...skill?.env },
+                  args: [
+                    ...invocation.prefixArgs,
+                    ...launchSpec.args({ fullAccess: false, pluginDirs: skill?.pluginDirs ?? [] }),
+                    ...(skill?.args ?? []),
+                    ...folderArgs
+                  ]
+                },
+                { clientInfo: acpClientInfo(launchSpec) }
+              )
+            )
             owned = connection
             unclosed.add(connection)
-            const discovery = runAcpSessionDiscovery(connection, signal, (checkSession) =>
+            const discovery = runAcpSessionDiscovery(connection, gated, (checkSession) =>
               readAcpSessionCommands({
                 connection,
-                dialect: spec.dialect,
+                dialect: launchSpec.dialect,
                 onInitialize: (initialized) => observeAcpForkSupport(spec.agent, initialized),
                 cwd,
-                signal,
+                signal: gated,
                 check: () => {
                   checkSession()
                   check()
                 },
-                disposableStorage: folder !== undefined,
+                disposableStorage: folder !== undefined || discardSessions !== null,
+                onSession: (sessionId) => started.push(sessionId),
                 logger: deps.logger
               })
             )
@@ -222,7 +262,7 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
                 if (connection.rootVerdict !== 'exited' || !unclosed.delete(connection)) {
                   return
                 }
-                const cleanup = Promise.resolve(folder?.remove()).finally(() => {
+                const cleanup = removeScratch().finally(() => {
                   retainedRelease()
                   completions.delete(cleanup)
                 })
@@ -231,12 +271,13 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
               return
             }
             unclosed.delete(connection)
-            await folder?.remove()
+            await removeScratch()
             folder = undefined
           } finally {
             if (!owned) {
               await folder?.remove()
             }
+            gate?.leave()
             release()
           }
         }

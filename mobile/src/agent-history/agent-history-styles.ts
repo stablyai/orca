@@ -4,10 +4,10 @@ import {
   LIST_LEADING_SLOT,
   LIST_ROW_PADDING
 } from '../components/list/ListGroup'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 
-export const styles = themedStyleSheet(() => ({
+export const stylesSheet = themedStyleSheet((colors) => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase
@@ -25,25 +25,28 @@ export const styles = themedStyleSheet(() => ({
     marginLeft: LIST_LEADING_INSET,
     backgroundColor: colors.borderSubtle
   },
+  // ListRow's two-line anatomy: 60 pt, a 24 pt leading slot, 15 pt title, one 13 pt line.
   row: {
+    minHeight: 60,
     flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.md,
     paddingHorizontal: LIST_ROW_PADDING,
-    paddingVertical: spacing.md
+    paddingVertical: spacing.sm
   },
+  // A translucent wash: bgRaised is the page's own colour in light mode.
   rowPressed: {
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.translucentFill
   },
   leading: {
     width: LIST_LEADING_SLOT,
-    height: 18,
     alignItems: 'center',
     justifyContent: 'center'
   },
   main: {
     flex: 1,
     minWidth: 0,
-    gap: 3
+    gap: 2
   },
   titleRow: {
     flexDirection: 'row',
@@ -55,79 +58,18 @@ export const styles = themedStyleSheet(() => ({
     minWidth: 0,
     color: colors.textPrimary,
     fontSize: 15,
-    lineHeight: 18,
-    fontWeight: '600'
+    fontWeight: '500'
   },
   timeAgo: {
     color: colors.textMuted,
-    fontSize: typography.metaSize,
+    fontSize: 13,
     fontVariant: ['tabular-nums']
   },
-  lastMessage: {
+  detail: {
     color: colors.textSecondary,
-    fontSize: 13,
-    lineHeight: 16
+    fontSize: 13
   },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: 1
-  },
-  metaText: {
-    flexShrink: 1,
-    minWidth: 0,
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    lineHeight: 16,
-    fontVariant: ['tabular-nums']
-  },
-  currentBadge: {
-    flexShrink: 1,
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.pill,
-    paddingHorizontal: 6,
-    paddingVertical: 1
-  },
-  currentBadgeText: {
-    color: colors.accentBlue,
-    fontSize: 11,
-    fontWeight: '600'
-  },
-  // A round play button beside the text, so it never crowds the lines.
-  resumeButton: {
-    alignSelf: 'center',
-    width: 34,
-    height: 34,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.pill,
-    backgroundColor: colors.bgRaised
-  },
-  resumeButtonPressed: {
-    opacity: 0.7
-  },
-  resumeButtonDisabled: {
-    opacity: 0.45
-  },
-  preview: {
-    marginTop: spacing.md,
-    paddingTop: spacing.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderSubtle,
-    gap: spacing.sm
-  },
-  previewTurn: {
-    gap: 2
-  },
-  previewRole: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
-  },
-  previewText: {
-    color: colors.textSecondary,
-    fontSize: 13,
-    lineHeight: 17
+  here: {
+    fontWeight: '500'
   }
 }))

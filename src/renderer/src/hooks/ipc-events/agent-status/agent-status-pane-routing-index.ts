@@ -24,13 +24,13 @@ type AgentStatusWorktreeConnectionResolution = {
   repoConnectionResolved: boolean
 }
 
-type IndexedAgentStatusTab = {
-  title: string | undefined
-  owningWorktreeId: string
+type IndexedAgentStatusTabs = {
+  tabById: Map<string, AppState['tabsByWorktree'][string][number]>
+  ownerByTabId: Map<string, string>
 }
 
 export type AgentStatusPaneRoutingIndex = {
-  tabsById: Map<string, IndexedAgentStatusTab>
+  tabs: IndexedAgentStatusTabs
   unifiedTabsByWorktree: AppState['unifiedTabsByWorktree']
   unifiedLabelsByWorktreeId: Map<string, Map<string, string | undefined>>
   layoutsByTabId: AppState['terminalLayoutsByTabId']
@@ -58,7 +58,7 @@ export function resetAgentStatusPaneRoutingIndexCounters(): void {
 
 // Immutable layout roots keep cached leaf membership valid without rewalking each commit.
 const leafIdsByRoot = new WeakMap<TerminalPaneLayoutNode, Set<string>>()
-const tabsByIdCache = new WeakMap<AppState['tabsByWorktree'], Map<string, IndexedAgentStatusTab>>()
+const tabsByIdCache = new WeakMap<AppState['tabsByWorktree'], IndexedAgentStatusTabs>()
 const unifiedLabelIndexCache = new WeakMap<object, Map<string, Map<string, string | undefined>>>()
 const routingIndexCache = new WeakMap<
   AppState['tabsByWorktree'],
@@ -82,28 +82,36 @@ function createUnifiedTerminalLabelIndex(
   return labelsByTabId
 }
 
-function getIndexedTabs(
-  tabsByWorktree: AppState['tabsByWorktree']
-): Map<string, IndexedAgentStatusTab> {
+function getIndexedTabs(tabsByWorktree: AppState['tabsByWorktree']): IndexedAgentStatusTabs {
   const cached = tabsByIdCache.get(tabsByWorktree)
   if (cached) {
     return cached
   }
   agentStatusPaneRoutingIndexCounters.tabIndexBuilds += 1
-  const tabsById = new Map<string, IndexedAgentStatusTab>()
-  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
+  const tabById = new Map<string, AppState['tabsByWorktree'][string][number]>()
+  const ownerByTabId = new Map<string, string>()
+  for (const worktreeId in tabsByWorktree) {
+    if (!Object.hasOwn(tabsByWorktree, worktreeId)) {
+      continue
+    }
+    const tabs = tabsByWorktree[worktreeId]
+    if (!tabs) {
+      continue
+    }
     for (const tab of tabs) {
       agentStatusPaneRoutingIndexCounters.tabVisits += 1
       // Read the id once: retained selectors assert one read per row, and it is a getter on some snapshots.
       const tabId = tab.id
       // First wins: the standalone resolver stops at the first worktree owning this tab id.
-      if (!tabsById.has(tabId)) {
-        tabsById.set(tabId, { title: tab.title, owningWorktreeId: worktreeId })
+      if (!tabById.has(tabId)) {
+        tabById.set(tabId, tab)
+        ownerByTabId.set(tabId, worktreeId)
       }
     }
   }
-  tabsByIdCache.set(tabsByWorktree, tabsById)
-  return tabsById
+  const indexed: IndexedAgentStatusTabs = { tabById, ownerByTabId }
+  tabsByIdCache.set(tabsByWorktree, indexed)
+  return indexed
 }
 
 function getUnifiedLabelIndex(
@@ -150,7 +158,7 @@ export function createAgentStatusPaneRoutingIndex(store: AppState): AgentStatusP
   }
   agentStatusPaneRoutingIndexCounters.indexBuilds += 1
   const index: AgentStatusPaneRoutingIndex = {
-    tabsById: getIndexedTabs(store.tabsByWorktree),
+    tabs: getIndexedTabs(store.tabsByWorktree),
     unifiedTabsByWorktree: store.unifiedTabsByWorktree,
     unifiedLabelsByWorktreeId: getUnifiedLabelIndex(store.unifiedTabsByWorktree),
     layoutsByTabId: store.terminalLayoutsByTabId,
@@ -200,8 +208,9 @@ export function resolvePaneKeyFromRoutingIndex(
     }
   }
   const { tabId, leafId } = parsed
-  const tab = index.tabsById.get(tabId)
-  if (!tab) {
+  const tab = index.tabs.tabById.get(tabId)
+  const owningWorktreeId = index.tabs.ownerByTabId.get(tabId)
+  if (!tab || owningWorktreeId === undefined) {
     return {
       exists: false,
       title: undefined,
@@ -213,7 +222,7 @@ export function resolvePaneKeyFromRoutingIndex(
       tabTitle: undefined
     }
   }
-  const connection = resolveWorktreeConnectionFromRoutingIndex(index, tab.owningWorktreeId)
+  const connection = resolveWorktreeConnectionFromRoutingIndex(index, owningWorktreeId)
   const layout = index.layoutsByTabId?.[tabId]
   if (layout?.root) {
     let leafIds = index.leafIdsByRoot.get(layout.root)
@@ -229,7 +238,7 @@ export function resolvePaneKeyFromRoutingIndex(
         identityTitle: undefined,
         repoConnectionId: connection.repoConnectionId,
         repoConnectionResolved: connection.repoConnectionResolved,
-        owningWorktreeId: tab.owningWorktreeId,
+        owningWorktreeId,
         titleUsesTabTitle: false,
         tabTitle: undefined
       }
@@ -240,11 +249,10 @@ export function resolvePaneKeyFromRoutingIndex(
   return {
     exists: true,
     title: paneTitle ?? tab.title,
-    identityTitle:
-      paneTitle ?? resolveUnifiedLabel(index, tab.owningWorktreeId, tabId) ?? tab.title,
+    identityTitle: paneTitle ?? resolveUnifiedLabel(index, owningWorktreeId, tabId) ?? tab.title,
     repoConnectionId: connection.repoConnectionId,
     repoConnectionResolved: connection.repoConnectionResolved,
-    owningWorktreeId: tab.owningWorktreeId,
+    owningWorktreeId,
     titleUsesTabTitle: paneTitle === undefined,
     tabTitle: tab.title
   }

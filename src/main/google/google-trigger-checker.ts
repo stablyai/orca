@@ -6,14 +6,17 @@ import type { AutomationRunEvent } from '../../shared/automation-event-triggers'
 import type { Automation } from '../../shared/automations/automation-definition'
 import type { Bot } from '../../shared/bot-types'
 import { GoogleToolError, type GoogleApi } from './google-api-client'
+import type { GoogleDefaultAccount } from './google-credential-store'
 import { calendarChangedSince, upcomingEvents, type UpcomingEvent } from './google-calendar-changes'
 import { gmailChangesSince, gmailHistoryNow, gmailLabelIds } from './google-gmail-changes'
 import {
+  accountlessRulesPausedBy,
   calendarDueAt,
   calendarRunEvent,
   gmailRuleMatches,
   gmailRunEvent,
   googleRuleTargets,
+  googleTargetStillAllowed,
   isCalendarTarget,
   isGmailTarget,
   type GoogleRuleTarget
@@ -32,10 +35,12 @@ type Timer = ReturnType<typeof setTimeout>
 
 export type GoogleTriggerCheckerDeps = {
   automations(): readonly Pick<Automation, 'id' | 'enabled' | 'bot' | 'on'>[]
-  bots(): readonly Pick<Bot, 'id' | 'google'>[]
+  bots(): readonly Pick<Bot, 'id' | 'google' | 'googleAccounts'>[]
   /** Accounts signed in here that Google still accepts. */
-  accounts(): string[]
-  api(account: string): GoogleApi
+  accounts(): string[] | Promise<string[]>
+  /** Where a rule without an account listens. */
+  defaultAccount(): Promise<GoogleDefaultAccount>
+  api(account: string): GoogleApi | Promise<GoogleApi>
   runForEvent(automationId: string, event: AutomationRunEvent): Promise<unknown>
   readState(): GoogleTriggerState
   writeState(state: GoogleTriggerState): void
@@ -51,8 +56,10 @@ export class GoogleTriggerChecker {
   private readonly backoff = new Map<string, { until: number; failures: number }>()
   private readonly schedules = new Map<string, { builtAt: number; events: UpcomingEvent[] }>()
   private readonly seedFailedAt = new Map<string, number>()
-  private readonly timers = new Map<string, Timer>()
+  /** Each pending Calendar timer, with the rule and account it was set for. */
+  private readonly timers = new Map<string, { timer: Timer; target: string }>()
   private readonly fired = new Set<string>()
+  private warnedUnreadableDefault = false
 
   constructor(private readonly deps: GoogleTriggerCheckerDeps) {}
 
@@ -71,22 +78,32 @@ export class GoogleTriggerChecker {
 
   stop(): void {
     this.stopped = true
-    for (const timer of this.timers.values()) {
+    for (const { timer } of this.timers.values()) {
       ;(this.deps.clearTimer ?? clearTimeout)(timer)
     }
     this.timers.clear()
   }
 
   private async check(): Promise<void> {
+    const automations = this.deps.automations()
+    const fallback = await this.deps.defaultAccount()
+    // Once per stretch, not every tick: rules without an account wait for a readable default.
+    const paused = accountlessRulesPausedBy(fallback, automations, this.deps.bots())
+    if (paused && !this.warnedUnreadableDefault) {
+      console.warn(`[google] rules without an account are paused: ${paused}`)
+    }
+    this.warnedUnreadableDefault = paused !== null
     const targets = googleRuleTargets(
-      this.deps.automations(),
+      automations,
       this.deps.bots(),
-      this.deps.accounts()
+      await this.deps.accounts(),
+      fallback
     )
     const state = this.deps.readState()
     const before = JSON.stringify(state)
     const now = this.deps.now()
     this.trackListeners(state, targets, now)
+    this.dropStaleTimers(targets)
     const accounts = new Set(targets.map((target) => target.account))
     // A checker runs only while a rule listens; with none, the next one starts from now.
     for (const account of Object.keys(state.accounts)) {
@@ -109,6 +126,17 @@ export class GoogleTriggerChecker {
     }
     if (JSON.stringify(state) !== before) {
       this.deps.writeState(state)
+    }
+  }
+
+  // A rule that moved to another account (its own, or the default changed) stops its old timers.
+  private dropStaleTimers(targets: GoogleRuleTarget[]): void {
+    const current = new Set(targets.map(timerTarget))
+    for (const [id, entry] of this.timers) {
+      if (!current.has(entry.target)) {
+        ;(this.deps.clearTimer ?? clearTimeout)(entry.timer)
+        this.timers.delete(id)
+      }
     }
   }
 
@@ -160,7 +188,7 @@ export class GoogleTriggerChecker {
     now: number
   ): Promise<void> {
     const saved = (state.accounts[account] ??= {})
-    const api = this.deps.api(account)
+    const api = await this.deps.api(account)
     if (!saved.historyId) {
       saved.historyId = await gmailHistoryNow(api)
       return
@@ -181,7 +209,7 @@ export class GoogleTriggerChecker {
       for (const target of targets) {
         const since = state.listeners[listenerKey(target.botId, account)] ?? now
         if (mail.at >= since && gmailRuleMatches(target.rule, mail, labels)) {
-          started = (await this.fire(target.automationId, gmailRunEvent(target, mail))) && started
+          started = (await this.fire(target, gmailRunEvent(target, mail))) && started
         }
       }
     }
@@ -208,7 +236,7 @@ export class GoogleTriggerChecker {
       delete state.accounts[account]?.calendars
       return
     }
-    const api = this.deps.api(account)
+    const api = await this.deps.api(account)
     const calendars = ((state.accounts[account] ??= {}).calendars ??= {})
     for (const calendarId of ids) {
       const events = await this.schedule(
@@ -268,25 +296,26 @@ export class GoogleTriggerChecker {
     const dueAt = calendarDueAt(target.rule, event)
     const runEvent = calendarRunEvent(target, event)
     if (dueAt <= now) {
-      await this.fire(target.automationId, runEvent)
+      await this.fire(target, runEvent)
       return
     }
-    const id = `${target.automationId} ${runEvent.key}`
+    // Per rule, so moving one rule never cancels a sibling's timer for the same meeting.
+    const id = `${target.automationId} ${target.rule.id} ${runEvent.key}`
     if (this.stopped || dueAt - now > this.deps.tickMs || this.timers.has(id)) {
       return
     }
     const timer = (this.deps.setTimer ?? setTimeout)(() => {
       this.timers.delete(id)
-      void this.fire(target.automationId, runEvent)
+      void this.fire(target, runEvent)
     }, dueAt - now)
     timer.unref?.()
-    this.timers.set(id, timer)
+    this.timers.set(id, { timer, target: timerTarget(target) })
   }
 
   /** False when the run path failed, so the caller keeps its cursor and the next check retries. */
-  private async fire(automationId: string, event: AutomationRunEvent): Promise<boolean> {
-    const id = `${automationId} ${event.key}`
-    if (this.fired.has(id)) {
+  private async fire(target: GoogleRuleTarget, event: AutomationRunEvent): Promise<boolean> {
+    const id = `${target.automationId} ${event.key}`
+    if (this.fired.has(id) || !googleTargetStillAllowed(this.deps.bots(), target)) {
       return true
     }
     this.fired.add(id)
@@ -294,7 +323,7 @@ export class GoogleTriggerChecker {
       this.fired.delete(this.fired.values().next().value ?? '')
     }
     try {
-      await this.deps.runForEvent(automationId, event)
+      await this.deps.runForEvent(target.automationId, event)
       return true
     } catch (error) {
       // The run path drops repeats by key, so the next check can safely try again.
@@ -304,3 +333,6 @@ export class GoogleTriggerChecker {
     }
   }
 }
+
+// Per rule: one automation's rules can listen on different accounts.
+const timerTarget = (t: GoogleRuleTarget): string => `${t.automationId} ${t.rule.id} ${t.account}`

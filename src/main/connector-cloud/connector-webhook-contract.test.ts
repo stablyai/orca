@@ -13,30 +13,6 @@ import { fakeMachine, fakeSeam } from './fake-connector-seam.test-fixture'
 const HOOK = 'wh_7Kx2pQ9mZbV4tL1r'
 const CALL = 'call_0123456789abcdefABCD'
 
-describe('webhook notices', () => {
-  const notice = {
-    deliveryId: 'webhook-notice:1',
-    seq: 1,
-    expiresAt: 1_800_000_060_000,
-    conversation: { source: 'webhook', externalId: 'webhook-notice:1' },
-    kind: 'webhook_notice',
-    hookId: HOOK,
-    botId: 'bot-1',
-    condition: 'refusal_burst',
-    count: 10,
-    at: 1_800_000_000_000
-  }
-
-  it.each([
-    [notice, true],
-    [{ ...notice, condition: 'cap_reached' }, true],
-    [{ ...notice, condition: 'new_condition' }, false],
-    [{ ...notice, count: -1 }, false]
-  ])('reads notice fields conservatively', (raw, readable) => {
-    expect(ConnectorDelivery.safeParse(raw).success).toBe(readable)
-  })
-})
-
 // The cloud's webhook-messages.test.ts reads the same corpus, so both readers refuse alike.
 const Corpus = z.object({
   base: z.object({ event: z.record(z.string(), z.unknown()) }).catchall(z.unknown()),
@@ -138,17 +114,6 @@ describe('webhook deliveries on this machine', () => {
     expect(await handled.done).toEqual({ outcome: 'accepted' })
     expect(handled.ran).toMatchObject([{ kind: 'webhook_notice', count: 12 }])
     expect(await dispatch(notice, false).done).toEqual({ outcome: 'unsupported' })
-  })
-
-  it("reads an older cloud's trigger delivery as before", async () => {
-    const { ran, done } = dispatch({
-      ...call,
-      conversation: { source: 'slack', externalId: 'trigger:abc' },
-      triggerId: 't1',
-      event: { key: 'T:C:1', actorId: 'U0MEMBER', occurredAt: 1 }
-    })
-    expect(await done).toEqual({ outcome: 'accepted' })
-    expect(ran).toHaveLength(1)
   })
 
   it.each([

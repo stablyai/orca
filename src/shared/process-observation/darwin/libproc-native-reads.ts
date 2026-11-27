@@ -158,12 +158,3 @@ export async function readFreshNativeTable(
     return settled.value
   }
 }
-
-export function resetNativeReadsForTests(): void {
-  sharedReads.clear()
-  slotWaiters.clear()
-  outstandingReads = 0
-  poolStalled = false
-  consecutiveRejections = 0
-  unhealthyUntil = Number.NEGATIVE_INFINITY
-}

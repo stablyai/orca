@@ -44,8 +44,6 @@ import { prepareEarlyMainUiLanguage, translateMain } from './i18n/main-i18n'
 import { ProfileStateRecoveryRequiredError } from './persistence/profile-state/recovery/profile-state-recovery-required'
 import { getProfileUserDataPath } from './orca-profiles/profile-storage-paths'
 import { leaseAppImageGenerationForCurrentProcess } from './cli/appimage/appimage-generation-lease'
-import { deleteLegacyWslHostWakeList } from './wsl/host-lifecycle/wsl-host-early-wake'
-import { readWslInstallation } from './wsl/discovery/wsl-installation'
 import { configureWslHostsGateFromDisk } from './wsl/host-lifecycle/wsl-host-gate-startup'
 import { configureRemoteRuntimeE2EEV2HostLatch } from '../shared/remote-runtime/e2ee/node/remote-runtime-e2ee-v2-host-latch'
 import { ignoreInheritedWslHostsGateState } from '../shared/remote-runtime/wsl-hosts/wsl-host-internal-gate'
@@ -61,12 +59,15 @@ import {
 } from '../shared/app-lifecycle/launch/background-open-argv'
 import { setBackgroundWindowOpener } from './window/activation/background-window-open'
 import { installFatalSignalListenerGuard } from './crash-reporting/fatal-signal-listener-guard'
+import { installStdioWriteErrorSink } from './startup/process-failure/main-process-error-guards'
 import { installWorkerThreadDiagnostics } from './worker-threads/worker-thread-diagnostics'
 
 // Before anything spawns, so no daemon, PTY or agent inherits it outside e2e.
 dropE2eSpawnLogOutsideE2e()
 // A fatal OOM must crash with a report, never spin on its own trap.
 installFatalSignalListenerGuard()
+// A dead terminal or full log volume must not turn a console line into a modal crash dialog.
+installStdioWriteErrorSink()
 installWorkerThreadDiagnostics()
 
 async function openMainWindow(options: MainWindowOpenOptions = {}): Promise<BrowserWindow> {
@@ -173,9 +174,13 @@ if (preflightReady) {
   configureRemoteRuntimeE2EEV2HostLatch(app.getPath('userData'))
   // A launch restore is passive (E9): it never boots a WSL host's distro, so drop the old wake list.
   if (process.platform === 'win32') {
-    deleteLegacyWslHostWakeList(app.getPath('userData'))
+    void import('./wsl/host-lifecycle/wsl-host-early-wake').then(
+      ({ deleteLegacyWslHostWakeList }) => deleteLegacyWslHostWakeList(app.getPath('userData'))
+    )
     // Sync WSL readers wait on this verdict instead of spawning wsl.exe; answer it early.
-    void readWslInstallation()
+    void import('./wsl/discovery/wsl-installation').then(({ readWslInstallation }) =>
+      readWslInstallation()
+    )
   }
   app.on('open-url', (event, url) => {
     if (!state.deepLinks.accepts(url) && !isRoutedOrcaDeepLink(url)) {

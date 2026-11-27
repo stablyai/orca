@@ -15,7 +15,7 @@ import {
   type WorkerApprovalPayload
 } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 
-export type TerminalWorkerApprovalHoldsDeps = Pick<WorkerTurnStopReportDeps, 'notify'> & {
+export type TerminalWorkerApprovalHoldsDeps = WorkerTurnStopReportDeps & {
   /** This pane's worker and its active local Dispatch, as the turn-stop report resolves it. */
   resolveWorker: (
     paneKey: string
@@ -38,6 +38,8 @@ export type TerminalWorkerApprovalHoldsDeps = Pick<WorkerTurnStopReportDeps, 'no
 export type TerminalWorkerApprovalHold = {
   approvalId: string
   paneKey: string
+  /** The helper agent that asked, absent for the lead; Claude shows no dialog for it while held. */
+  helper?: string
   toolUseId: string
   transcriptPath: string
   handle: string
@@ -110,6 +112,7 @@ export function holdPayload(
     summary: hold.summary,
     allowedActions: ['allow', 'deny'],
     ...(holdIsPersonOnly(hold) ? { personOnly: true } : {}),
+    ...(hold.helper !== undefined ? { fromHelper: true } : {}),
     ...(hold.expiresAt ? { expiresAt: hold.expiresAt } : {})
   }
   return outcome ? closedApproval(open, outcome) : open
@@ -125,7 +128,10 @@ export async function claudeTookAnswer(
 ): Promise<{ taken: boolean; record: ClaudeToolRecord | null }> {
   const left = await firstWithin(deps.setTimer, () => {
     const lines = deps.readScreen(hold.paneKey)
-    return hold.ranSeen || (lines && !showsClaudeDialog(lines)) ? true : null
+    // Nothing of a helper's is on screen: its hook took the answer once the write went through.
+    return hold.helper !== undefined || hold.ranSeen || (lines && !showsClaudeDialog(lines))
+      ? true
+      : null
   })
   if (!left) {
     return { taken: false, record: null }

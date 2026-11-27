@@ -1,5 +1,6 @@
 // The machine's webhook routes in Orca Cloud, as calls; the paths and answers are the shared mirror's.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import {
   WEBHOOK_OPERATIONS,
   WEBHOOK_ROUTES
@@ -14,7 +15,10 @@ import {
   WebhookSecretSet,
   WebhookView
 } from '../../shared/connector-webhook-routes'
-import { automationWebhookTrigger } from '../../shared/automation-event-triggers'
+import {
+  automationWebhookTrigger,
+  webhookIsOnlyStart
+} from '../../shared/automation-event-triggers'
 import type { Automation } from '../../shared/automations/automation-definition'
 import type { WebhookSummary } from '../../shared/rpc-contract/webhooks-params'
 import type { ConnectorCloud } from '../connector-cloud/connector-cloud'
@@ -32,7 +36,7 @@ type WebhookRequestBody<K extends WebhookOperationWithBody> = Omit<
   'v'
 >
 
-export const CloudWebhookList = z.object({ hooks: z.array(WebhookView) })
+export const CloudWebhookList = lazyZodSchema(() => z.object({ hooks: z.array(WebhookView) }))
 
 type Cloud = Pick<ConnectorCloud, 'call' | 'withConnection'>
 
@@ -95,7 +99,7 @@ export type WebhookCloudCalls = ReturnType<typeof webhookCloudCalls>
 /** What the card and row show, from the cloud's hook and the automation that lists it here. */
 export function webhookSummary(
   hook: WebhookView,
-  automation: Pick<Automation, 'name' | 'bot' | 'on'>
+  automation: Pick<Automation, 'name' | 'bot' | 'on' | 'dtstart'>
 ): WebhookSummary {
   const {
     id: _id,
@@ -116,9 +120,23 @@ export function webhookSummary(
     keyGeneration: hook.keyGeneration,
     previousKeyExpiresAt: hook.previousKeyExpiresAt,
     automationName: automation.name,
+    deletesAutomation: webhookIsOnlyStart(automation),
     filters,
     resultsTo: automation.bot?.resultsTo ?? 'chat',
     // This is the hook's host; a viewer elsewhere says offline or needs an update itself.
     host: 'online'
   }
+}
+
+/** The read's value; a failed read throws one of WEBHOOK_ERROR_CODES. */
+export function webhookReadValue<T>(result: ConnectorResult<T> | null): T {
+  if (!result) {
+    throw new Error('webhooks_unavailable')
+  }
+  if (!result.ok) {
+    throw new Error(
+      result.status === 404 && result.error !== null ? 'webhook_not_found' : 'webhooks_unavailable'
+    )
+  }
+  return result.value
 }

@@ -8,6 +8,7 @@ import { printResult } from '../output/command-result-output'
 import { formatActionResult, formatSaved, type ActionResult } from './slack-action-format'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { actionArgs, readMessageText, type SlackVerb } from './slack-action-args'
+import { slackReadRefusal } from './slack-read-refusal'
 
 // The host retries an unavailable cloud itself, waiting out Retry-After.
 const ACT_TIMEOUT_MS = 180_000
@@ -61,7 +62,7 @@ function refOf(
 
 type ActResponse =
   | { ok: true; result: ActionResult }
-  | { ok: false; refusal: string; message: string }
+  | { ok: false; refusal: string; message: string; reason?: string; scope?: string }
 
 function sessionOf(): string {
   const sessionId = readInjectedAgentSessionId()
@@ -72,7 +73,7 @@ function sessionOf(): string {
 }
 
 /** One connector.act call; a refusal, the host's or the cloud's, is thrown in words a bot acts on. */
-async function callAct(
+export async function callAct(
   client: HandlerContext['client'],
   params: { sessionId: string; verb: string; ref?: string; args: ConnectorActionArgs }
 ) {
@@ -85,7 +86,14 @@ async function callAct(
         : error
     })
   if (!answer.result.ok) {
-    throw new RuntimeClientError(answer.result.refusal, answer.result.message)
+    const { refusal, message, reason, scope } = answer.result
+    const slackRead =
+      params.verb === 'read' && params.ref !== undefined && !OTHER_SOURCE.test(params.ref.trim())
+    if (!slackRead) {
+      throw new RuntimeClientError(refusal, message)
+    }
+    const explained = slackReadRefusal(message, reason, scope)
+    throw new RuntimeClientError(refusal, explained.message, explained.data)
   }
   return { ...answer, result: answer.result.result }
 }
@@ -160,5 +168,9 @@ export const SLACK_HANDLERS: Record<string, CommandHandler> = {
   'slack react': act('react', 'ref'),
   'slack edit': act('edit', 'ref'),
   'slack delete': act('delete', 'ref'),
+  'slack pin': act('pin', 'ref'),
+  'slack canvas': act('canvas', 'ref'),
+  'slack list': act('list', 'ref'),
+  'slack scheduled': act('scheduled', 'ref'),
   'slack attach': attach
 }

@@ -53,6 +53,10 @@ export type RemoveWorktreeOptions = GitWorktreeExecOptions & {
   knownRemovedWorktree?: Pick<GitWorktreeInfo, 'branch' | 'head' | 'locked' | 'lockReason'> | null
   /** Stops only `git worktree remove`; a killed branch cleanup could strand a ref lock. */
   checkoutDeleteSignal?: AbortSignal
+  /** Runs inside the acquired deletion slot, immediately before the checkout is deleted. */
+  beforeCheckoutDelete?: () => Promise<void>
+  expectedMarker?: string
+  forbidAnyMarker?: boolean
 }
 
 // Bound stalled checkouts; this default also sets the floor for ORCA_WORKTREE_ADD_TIMEOUT_MS.

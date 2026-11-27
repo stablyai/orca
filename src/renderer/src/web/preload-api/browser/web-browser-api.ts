@@ -21,6 +21,7 @@ export function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> 
     onGuestIdleDiscardDue: () => () => {},
     reserveGuestDiscard: () => false,
     acknowledgeGuestRemoval: async () => false,
+    wakeClientPage: async () => false,
     registerGuest: () => Promise.resolve(false),
     isGuestRegistered: () => Promise.resolve(false),
     repairGuestRegistration: () => Promise.resolve(false),
@@ -49,6 +50,9 @@ export function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> 
     onPaneFocus: () => noopUnsubscribe,
     onOpenLinkInOrcaTab: () => noopUnsubscribe,
     cancelDownload: () => Promise.resolve(false),
+    copyServerDownload: () =>
+      Promise.reject(new Error('Saving a server download is unavailable in paired web clients.')),
+    cancelServerDownloadCopy: () => Promise.resolve(false),
     setGrabMode: () =>
       Promise.resolve({
         ok: false,
@@ -66,6 +70,8 @@ export function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> 
         )
       }),
     cancelGrab: () => Promise.resolve(false),
+    setGrabLabelAvoidArea: () => Promise.resolve(false),
+    grabPickedElementPresent: () => Promise.resolve(null),
     captureSelectionScreenshot: () =>
       Promise.resolve({
         ok: false,
@@ -82,7 +88,9 @@ export function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> 
           'Hover extraction is unavailable in the web client.'
         )
       }),
+    captureCleanPage: () => Promise.resolve(null),
     onGrabModeToggle: () => noopUnsubscribe,
+    onGrabPolicyRetired: () => noopUnsubscribe,
     onGrabActionShortcut: () => noopUnsubscribe,
     onGuestEscape: () => noopUnsubscribe,
     sessionListProfiles: () => Promise.resolve([]),
@@ -118,7 +126,9 @@ export function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> 
       }),
     sessionGoogleCookieClearTarget: () => Promise.resolve(null),
     sessionClearGoogleCookies: () => Promise.resolve('unverified' as const),
-    sessionClearDefaultCookies: () => Promise.resolve(false),
+    sessionClearCookies: () => Promise.resolve(false),
+    sessionClearCookiesForClientHost: () => Promise.resolve(null),
+    sessionClearCookiesForSshHost: () => Promise.resolve(false),
     sitePermissionsList: () => Promise.resolve([]),
     sitePermissionsSet: () => Promise.resolve([]),
     notifyActiveTabChanged: () => Promise.resolve(false),

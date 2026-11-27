@@ -29,13 +29,11 @@ export function botItemNote(
 }
 
 /** Draws a note in `sessionId`'s chat, when this host runs it. */
-export function appendBotItemNote(
+export async function appendBotItemNote(
   sessionId: string,
   note: AgentJournalBotItemNoteItem | null
-): void {
-  if (note) {
-    appendOrcaChatCard(sessionId, note, 'showing an item change in its chat')
-  }
+): Promise<boolean> {
+  return note ? appendOrcaChatCard(sessionId, note, 'showing an item change in its chat') : true
 }
 
 /** The events one write made on one item: those up to `lastId` sharing its time and author. */
@@ -56,15 +54,17 @@ export function eventsOfOneWrite(
   )
 }
 
-/** Shows one bot write in the chat that made it; `links` names its new links. */
+/** Shows one bot write in the chat that made it, and returns its events; `links` names its new links. */
 export async function noteBotItemWrite(
   store: Pick<BotItemsRemote, 'events'>,
   sessionId: string,
   item: BotItemRecord,
   eventId: number,
   links: readonly BotItemLinkView[] | undefined
-): Promise<void> {
+): Promise<BotItemEventRecord[]> {
   const recent = await store.events(item.uid, Math.max(0, eventId - 8), 16)
-  const changes = eventsOfOneWrite(recent, eventId).map((event) => ({ event, item, links }))
-  appendBotItemNote(sessionId, botItemNote(`w${eventId}`, 'bot', changes))
+  const write = eventsOfOneWrite(recent, eventId)
+  const changes = write.map((event) => ({ event, item, links }))
+  await appendBotItemNote(sessionId, botItemNote(`w${eventId}`, 'bot', changes))
+  return write
 }

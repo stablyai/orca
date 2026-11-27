@@ -11,6 +11,7 @@ import type { Bot } from '../bot-types'
 import { botAccessCopy, type BotAccessCopyId } from './bot-access-copy'
 import type { GoogleAccountView } from '../google/google-connect-types'
 import type { GoogleService } from '../google/google-scopes'
+import { finalSentenceStop, joinSentences } from '../text/sentence-joining'
 
 /** The permission new bot conversations start in; null when this side can't know it (the agent's own
  *  settings, or an app default the phone can't read). */
@@ -132,8 +133,8 @@ export const GOOGLE_REACH_COPY: Record<GoogleReachArea | 'unknown', BotAccessCop
   unknown: 'reachGoogleUnknown'
 }
 
-/** One reach line in English, for a side without translation (the phone). `mode` words a permission
- *  mode as that side shows it. */
+/** One reach line for a side that words it itself (the phone). `mode` words a permission mode as that
+ *  side shows it; `copy` translates the table, English when absent. */
 export function botReachLineText(
   line: BotReachLine,
   context: {
@@ -141,37 +142,42 @@ export function botReachLineText(
     agentLabel: string
     place: { computer: string }
     mode: (mode: AgentChatPermissionMode) => { label: string; description: string }
+    copy?: (id: BotAccessCopyId, values?: Record<string, string | number>) => string
   }
 ): { title: string; detail?: string } {
   const { name } = context
+  const copy = context.copy ?? botAccessCopy
   switch (line.kind) {
     case 'computer':
       return {
-        title: botAccessCopy('reachComputer', context.place),
-        detail: botAccessCopy('reachComputerDetail')
+        title: copy('reachComputer', context.place),
+        detail: copy('reachComputerDetail')
       }
     case 'permission': {
       const { mode, fellBackFrom } = line.permission
       const notes = line.notes.map((id) =>
-        botAccessCopy(id, {
+        copy(id, {
           name,
           agent: context.agentLabel,
           mode: fellBackFrom ? context.mode(fellBackFrom).label : ''
         })
       )
       if (!mode) {
-        return { title: botAccessCopy('reachPermissionUnknown'), detail: notes.join(' ') }
+        return { title: copy('reachPermissionUnknown'), detail: joinSentences(notes) }
       }
       const words = context.mode(mode)
       return {
-        title: botAccessCopy('reachPermission', { mode: words.label }),
-        detail: [`${words.description}.`, ...notes].join(' ')
+        title: copy('reachPermission', { mode: words.label }),
+        detail: joinSentences([
+          `${words.description}${finalSentenceStop(words.description)}`,
+          ...notes
+        ])
       }
     }
     case 'connector':
-      return { title: botAccessCopy(CONNECTOR_REACH_COPY[line.connector], { name }) }
+      return { title: copy(CONNECTOR_REACH_COPY[line.connector], { name }) }
     case 'google':
-      return { title: botAccessCopy(GOOGLE_REACH_COPY[line.area ?? 'unknown']) }
+      return { title: copy(GOOGLE_REACH_COPY[line.area ?? 'unknown']) }
   }
 }
 
@@ -179,6 +185,46 @@ export const CONNECTOR_REACH_COPY: Record<BotAccessConnector, BotAccessCopyId> =
   linear: 'reachLinear',
   slack: 'reachSlack',
   github: 'reachGitHub'
+}
+
+/** One line of the desktop's access confirm: shorter than a reach line, with no detail under it. */
+export type BotAccessConfirmRow =
+  | { kind: 'computer' }
+  /** Full access: nothing waits for an approval. */
+  | { kind: 'no-approvals' }
+  /** A starting mode this side can't read: it may never ask. */
+  | { kind: 'may-skip-approvals' }
+  /** Ask or Auto: whoever asked answers its prompts. */
+  | { kind: 'approves' }
+  /** Google is on: one row for every area it reaches. */
+  | { kind: 'google' }
+  | { kind: 'connector'; connector: BotAccessConnector }
+
+/** The access confirm's tone and rows, at most four. `high` (red) when the setup reaches far: Full
+ *  access, a starting mode this side can't read (it may never ask), or Google; else `medium` (amber). */
+export function botAccessConfirm(input: {
+  permission: BotStartingPermission
+  connector: BotAccessConnector
+  google: boolean
+}): { tone: 'high' | 'medium'; rows: BotAccessConfirmRow[] } {
+  const { mode } = input.permission
+  const tone = mode === 'full-access' || mode === null || input.google ? 'high' : 'medium'
+  return {
+    tone,
+    rows: [
+      { kind: 'computer' },
+      {
+        kind:
+          mode === 'full-access'
+            ? 'no-approvals'
+            : mode === null
+              ? 'may-skip-approvals'
+              : 'approves'
+      },
+      ...(input.google ? [{ kind: 'google' as const }] : []),
+      { kind: 'connector', connector: input.connector }
+    ]
+  }
 }
 
 export type BotAccessFix = 'only-me' | 'google-off' | 'ask-for-approval'

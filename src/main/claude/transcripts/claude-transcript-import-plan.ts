@@ -14,10 +14,10 @@ import { journalLifecycleItemMutation } from '../../native-chat/agent-session-jo
 import {
   continuedOutsideNotice,
   continuedOutsideRecordId,
-  createHistoryCatchUpBatch,
   HISTORY_CATCH_UP_MAX_OPERATIONS,
   type HistoryCatchUpPlan
 } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up'
+import { createHistoryCatchUpBatches } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up-batches'
 import { LEGACY_IMPORT_BLOCK_LIMITS } from '../../native-chat/agent-session-journal/history-import/journal-legacy-import'
 import { legacyItemBody } from '../../native-chat/agent-session-journal/history-import/journal-replacement-items'
 import type {
@@ -38,8 +38,8 @@ import {
 import { createClaudeJournalTranslator } from '../structured/journal/claude-structured-journal-translation'
 import type { ClaudeTranscriptItemReader } from './claude-transcript-item-reader'
 import { idleClaudeJournalTurn } from '../structured/turns/claude-session-state-turn-over'
-import { claudeMessageWithoutSyntheticText } from '../structured/journal/claude-internal-message-content'
 import { claudeTranscriptPrompt } from './claude-transcript-prompt'
+import { claudeTranscriptRowFrame } from './claude-local-command-reply'
 
 export function createClaudeTranscriptImportPlan(input: {
   sessionId: string
@@ -137,11 +137,7 @@ export function createClaudeTranscriptImportPlan(input: {
     restore: async (row: Record<string, unknown>) => {
       try {
         input.check()
-        const frame = claudeMessageWithoutSyntheticText({
-          ...row,
-          session_id: row.sessionId,
-          parent_tool_use_id: null
-        })
+        const frame = claudeTranscriptRowFrame(row)
         if (!frame) {
           return
         }
@@ -243,14 +239,27 @@ export function createClaudeTranscriptImportPlan(input: {
         await flushAppends()
       }
     },
-    finish: async (): Promise<HistoryCatchUpPlan | null> => {
+    finish: async (): Promise<HistoryCatchUpPlan[] | null> => {
       input.check()
       idle()
       translator.flush()
       await flushAppends()
       // A row that renders nothing adds no divider either.
       const rows = [...mutations.values()]
-      const batch = createHistoryCatchUpBatch()
+      const revised = new Set(
+        rows.flatMap((row) => {
+          const key = agentJournalItemKey(row.identity)
+          return row.kind === 'item' && saved(key) ? [key] : []
+        })
+      )
+      // Every commit checks the items the rows depend on that none of them rewrites.
+      const batch = createHistoryCatchUpBatches((first) => {
+        for (const [key, item] of dependencies) {
+          if (!revised.has(key)) {
+            first.expectItem(key, { canonicalItemId: item.itemId, revision: item.revision })
+          }
+        }
+      })
       const firstCreated = rows.find(
         (row) =>
           row.kind === 'item' &&
@@ -271,27 +280,20 @@ export function createClaudeTranscriptImportPlan(input: {
           )
         )
       }
-      const revised = new Set<string>()
       for (const row of rows) {
-        const key = agentJournalItemKey(row.identity)
-        const existing = saved(key)
+        const existing = saved(agentJournalItemKey(row.identity))
         if (existing && row.kind === 'item') {
           batch.revise(row, { canonicalItemId: existing.itemId, revision: existing.revision })
-          revised.add(key)
         } else {
           batch.push(row)
         }
+        await batch.pause()
       }
-      for (const [key, item] of dependencies) {
-        if (!revised.has(key)) {
-          batch.expectItem(key, { canonicalItemId: item.itemId, revision: item.revision })
-        }
-      }
-      return batch.finish('claude-history-import', [
+      input.check()
+      return await batch.finish('claude-history-import', [
         input.epoch,
         input.providerSessionId,
-        uuids,
-        rows
+        uuids
       ])
     },
     dispose: () => translator.dispose()

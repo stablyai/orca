@@ -55,6 +55,7 @@ export const appApi = {
       () => ipcRenderer.invoke('app:restart'),
       awaitBeforeUnloadCheckpoint
     ),
+  quit: (): Promise<void> => ipcRenderer.invoke('app:quit'),
   reload: (): Promise<void> => invokeRendererRequestedReload(),
   stageBeforeUnloadSync: (args: Parameters<PreloadApi['app']['stageBeforeUnloadSync']>[0]) => {
     const result: { ok?: unknown; error?: unknown } | null | undefined = ipcRenderer.sendSync(
@@ -100,8 +101,6 @@ export const appApi = {
     ipcRenderer.on(KEYBOARD_LAYOUT_CHANGED_CHANNEL, listener)
     return () => ipcRenderer.removeListener(KEYBOARD_LAYOUT_CHANGED_CHANNEL, listener)
   },
-  setUnreadDockBadgeCount: (count: number): Promise<void> =>
-    ipcRenderer.invoke('app:setUnreadDockBadgeCount', count),
   getFloatingTerminalCwd: (args?: FloatingTerminalCwdRequest): Promise<string> =>
     ipcRenderer.invoke('app:getFloatingTerminalCwd', args),
   getFloatingMarkdownDirectory: (): Promise<string> =>

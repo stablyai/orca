@@ -5,7 +5,11 @@ import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
-import { reopenBrowserPageOnServer } from './browser-reopen-on-server'
+import { moveBrowserPageAcrossDevices } from '../device-move/browser-page-device-move'
+import {
+  browserPageMoveFailureText,
+  browserPageMoveOutcomeText
+} from '../device-move/browser-page-device-move-copy'
 
 /** Deferred so a fast local round-trip never flashes a spinner. */
 const REOPEN_PENDING_FEEDBACK_DELAY_MS = 200
@@ -22,12 +26,15 @@ export function reopenOnServerCaveat(t: Translate = translate): string {
   )
 }
 
+/** Moves the page that can't load here to the server, closing this tab (unless pinned) once the new one opens. */
 export function ReopenBrowserPageOnServerButton({
+  browserPageId,
   environmentId,
   worktreeId,
   reopenUrl,
   className
 }: {
+  browserPageId: string
   environmentId: string
   worktreeId: string
   reopenUrl: string | null | undefined
@@ -54,26 +61,29 @@ export function ReopenBrowserPageOnServerButton({
       pendingTimerRef.current = null
       setShowPending(true)
     }, REOPEN_PENDING_FEEDBACK_DELAY_MS)
-    void reopenBrowserPageOnServer({ environmentId, worktreeId, reopenUrl })
-      .then((created) => {
-        if (!created) {
-          toast.error(
-            translate(
-              'browser.reopenOnServer.failed',
-              "Couldn't open this page on the remote host. Check the connection and try again."
-            )
-          )
+    void moveBrowserPageAcrossDevices({
+      browserPageId,
+      environmentId,
+      worktreeId,
+      destination: 'server',
+      url: reopenUrl
+    })
+      .then((outcome) => {
+        const text = browserPageMoveOutcomeText(outcome, 'server')
+        if (text) {
+          toast.error(text)
         }
       })
       .catch((error: unknown) => {
-        toast.error(error instanceof Error ? error.message : String(error))
+        console.warn('[browser-device-move] reopen on server failed:', error)
+        toast.error(browserPageMoveFailureText('server'))
       })
       .finally(() => {
         clearPendingTimer()
         setShowPending(false)
         setPending(false)
       })
-  }, [clearPendingTimer, environmentId, reopenUrl, worktreeId])
+  }, [browserPageId, clearPendingTimer, environmentId, reopenUrl, worktreeId])
 
   return (
     <Button
@@ -100,7 +110,8 @@ export function ReopenBrowserPageOnServerButton({
           )}
           aria-hidden={!showPending}
         >
-          <Loader2 className="size-3.5 animate-spin" />
+          {/* Spin only while shown: the hidden copy just reserves width. */}
+          <Loader2 className={cn('size-3.5', showPending && 'animate-spin')} />
           {t('browser.reopenOnServer.pending', 'Reopening…')}
         </span>
       </span>

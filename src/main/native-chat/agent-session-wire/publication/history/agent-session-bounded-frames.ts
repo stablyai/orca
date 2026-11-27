@@ -27,16 +27,20 @@ export function subscriberHistoryReader(subscriber: {
   readForkMarker?: () => ForkMarker | undefined
   readHistorySnapshot?: HistoryReader['snapshot']
   readQueueSourceIds?: HistoryReader['queueSourceIds']
+  stopped?: AbortSignal
 }): HistoryReader {
   const reader = subscriber.boundedFrames ? BOUNDED_FRAME_READER : CLIENT_HISTORY_READER
   return withForkMarker(
-    subscriber.readHistorySnapshot
-      ? {
-          ...reader,
-          snapshot: subscriber.readHistorySnapshot,
-          queueSourceIds: subscriber.readQueueSourceIds
-        }
-      : reader,
+    {
+      ...reader,
+      ...(subscriber.readHistorySnapshot
+        ? {
+            snapshot: subscriber.readHistorySnapshot,
+            queueSourceIds: subscriber.readQueueSourceIds
+          }
+        : {}),
+      ...(subscriber.stopped ? { signal: subscriber.stopped } : {})
+    },
     subscriber.readForkMarker
   )
 }
@@ -140,6 +144,15 @@ type BoundedSideLists = {
   backgroundTasks: AgentSessionBackgroundTaskState | null | undefined
 }
 
+/** Batches whose rows were each sized as they were formed and sum within the budget. */
+const fittingBatches = new WeakSet<object>()
+
+/** Marks a batch built from rows already sized to fit together, so it is not measured again. */
+export function markBoundedBatchFits<T extends object>(batch: T): T {
+  fittingBatches.add(batch)
+  return batch
+}
+
 /** Send history first, then side lists; reuse empty history batches for the first list. */
 export function boundedFrames(
   event: AgentSessionSubscribeEvent,
@@ -149,7 +162,11 @@ export function boundedFrames(
   if (event.type === 'end') {
     return [event]
   }
-  if (event.type === 'batch' && jsonBytes(event.batch) > BOUNDED_FRAME_CONTENT_BUDGET_BYTES) {
+  if (
+    event.type === 'batch' &&
+    !fittingBatches.has(event.batch) &&
+    jsonBytes(event.batch) > BOUNDED_FRAME_CONTENT_BUDGET_BYTES
+  ) {
     const split = <T>(values: T[], first: boolean): T[] => {
       const middle = Math.ceil(values.length / 2)
       return first ? values.slice(0, middle) : values.slice(middle)

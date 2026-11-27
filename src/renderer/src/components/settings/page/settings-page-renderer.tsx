@@ -13,6 +13,7 @@ import {
   renderAgentsSettingsSection,
   renderDesktopCapabilitySettingsSections,
   renderLinearSettingsSection,
+  renderMcpServersSettingsSection,
   renderOrchestrationSettingsSection
 } from './settings-capability-section-renderers'
 import {
@@ -117,13 +118,19 @@ export function renderSettingsPage(
                   ?.title) ?? t('settings.breadcrumb.settings', 'Settings')
           }
           subPageTitle={
-            model.activeSectionId === 'general' &&
-            !model.settingsSearchQuery.trim() &&
-            model.generalSubPage
-              ? getGeneralSubPageTitle(model.generalSubPage, t)
-              : undefined
+            model.settingsSearchQuery.trim()
+              ? undefined
+              : model.activeSectionId === 'general' && model.generalSubPage
+                ? getGeneralSubPageTitle(model.generalSubPage, t)
+                : model.activeSectionId === 'mcp-servers' && model.mcpServerSubPage
+                  ? model.mcpServerSubPage.title
+                  : undefined
           }
-          onGeneral={() => void actions.scrollToSection('general')}
+          onParent={() =>
+            model.activeSectionId === 'mcp-servers'
+              ? model.setMcpServerSubPage(null)
+              : void actions.scrollToSection('general')
+          }
           onClose={interactions.closeSettingsPageWithPromptGuard}
           hostPicker={
             !model.isWebClient &&
@@ -169,6 +176,7 @@ export function renderSettingsPage(
               <SettingsContentScrollElementProvider value={interactions.contentScrollElement}>
                 <ActiveSettingsSectionProvider value={model.activeSectionId}>
                   {renderAgentsSettingsSection(context, t)}
+                  {renderMcpServersSettingsSection(context, t)}
                   {renderAccountsSettingsSection(context, t)}
                   {renderOrchestrationSettingsSection(context, t)}
                   {renderLinearSettingsSection(context, t)}

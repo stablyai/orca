@@ -11,12 +11,16 @@ export type SecretSealing =
 export type SecretStore = {
   isEncryptionAvailable(): boolean
   encryptString(plainText: string): Buffer
+  /** Seals off the caller's thread where the host can; absent stores seal through encryptString. */
+  encryptStringAsync?(plainText: string): Promise<Buffer>
   decryptString(cipher: Buffer): string
   /** Report weak/no protection separately from capability: marking weak backends unavailable would skip decryption
    * and hide existing credentials. Null means protected; a message describes the gap. */
   describeProtectionGap(): string | null
   /** Absent on stores that cannot tell; callers treat that as unsealed. */
   describeSealing?(): SecretSealing
+  /** True when the OS keychain is a test mock that seals with a fixed password. */
+  mockKeychain?(): boolean
 }
 
 /** Keep the installed store through vi.resetModules; a module-local slot would disappear from re-imported graphs. */

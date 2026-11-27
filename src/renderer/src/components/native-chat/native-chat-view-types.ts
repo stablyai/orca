@@ -19,7 +19,6 @@ export type NativeChatBridgeViewProps = {
   /** Whether this pane owns the tab's launch draft; false for split siblings. */
   ownsTabWideLaunchDraft: boolean
   onSwitchToTerminal?: () => void
-  readTerminalScreen?: () => string | null
   /** The user's text on the agent's input line: '' when it is empty, null when unreadable. */
   readTerminalDraft?: () => string | null
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
@@ -50,7 +49,6 @@ export type NativeChatResolvedViewProps = {
   terminalTabId: string
   ownsTabWideLaunchDraft: boolean
   onSwitchToTerminal?: () => void
-  readTerminalScreen?: () => string | null
   /** The user's text on the agent's input line: '' when it is empty, null when unreadable. */
   readTerminalDraft?: () => string | null
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>

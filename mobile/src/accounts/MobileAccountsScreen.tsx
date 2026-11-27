@@ -13,10 +13,10 @@ import {
 } from '../components/host-connection/HostOfflineBanner'
 import { useRefreshHint } from '../query/refresh-hint'
 import { MobileAccountsLoadState } from './MobileAccountsLoadState'
-import { colors, spacing } from '../theme/mobile-theme'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { spacing } from '../theme/mobile-theme'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { styles } from './mobile-accounts-screen-styles'
+import { stylesSheet } from './mobile-accounts-screen-styles'
 import { useNow } from '../hooks/use-now'
 import { ClaudeIcon, OpenAIIcon } from '../components/icons/AgentIcons'
 import './usage/UsageBar'
@@ -24,6 +24,7 @@ import {
   type ProviderKey,
   getActiveProviderRateLimits,
   getInactiveProviderUsage,
+  getSystemDefaultProviderUsage,
   getOtherUsageProviders,
   hasActiveProviderUsage
 } from './usage/usage-selectors'
@@ -51,12 +52,14 @@ import {
   getCodexAccountDisplayDetail,
   getCodexAccountDisplayLabel
 } from '../../../src/shared/agent-accounts/codex-account-display-label'
+import { useThemedStyles } from '../theme/themed-styles'
 
 type AccountsNotice = { title: string; message: string }
 
 // Use page ConfirmModal because RN Web Alert.alert is a no-op; Back must hand off to shell’s native stack.
 export function MobileAccountsScreen() {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const router = useRouteHandoff()
   const insets = useSafeAreaInsets()
@@ -91,7 +94,7 @@ export function MobileAccountsScreen() {
     client,
     connState,
     lastConnectedAt: connectionInputs.lastConnectedAt,
-    outage: isConnectionOutage(classifyConnection({ state: connState, ...connectionInputs })),
+    outage: isConnectionOutage(classifyConnection({ state: connState, ...connectionInputs }, t)),
     forceReconnect: hostId && forceReconnect ? () => void forceReconnect(hostId) : null,
     hasData: showsAccounts,
     asOf: accounts.readAt
@@ -193,7 +196,9 @@ export function MobileAccountsScreen() {
         ? getActiveCodexAccountIdForRateLimitTarget(snapshot)
         : state.activeAccountId
     const activeUsage = getActiveProviderRateLimits(snapshot, provider)
-    const resetCredit = provider === 'codex' ? getCodexResetCreditSummary(activeUsage, now) : null
+    const systemDefaultUsage = getSystemDefaultProviderUsage(snapshot, provider, activeAccountId)
+    const resetCredit =
+      provider === 'codex' ? getCodexResetCreditSummary(activeUsage, now, t) : null
     const Icon = provider === 'claude' ? ClaudeIcon : OpenAIIcon
     // Stored rows may name a selection or Codex target the desktop has since changed.
     const switchBlocked = busyAccountId !== null || resettingCodex || !live
@@ -212,9 +217,13 @@ export function MobileAccountsScreen() {
             title={t('accounts.screen.default', 'System default')}
             subtitle={t('accounts.screen.agentLogin', "Use the agent's own login")}
             detail={
-              // Show system-default login usage for users without managed accounts.
-              activeAccountId === null && hasActiveProviderUsage(activeUsage) ? (
-                <ProviderUsageWindows limits={activeUsage} now={now} showEmptyWindows />
+              hasActiveProviderUsage(systemDefaultUsage.limits) ? (
+                <ProviderUsageWindows
+                  limits={systemDefaultUsage.limits}
+                  now={now}
+                  isFetching={systemDefaultUsage.isFetching}
+                  showEmptyWindows
+                />
               ) : undefined
             }
             accessory={busyAccountId === `${provider}:default` ? spinner : undefined}
@@ -354,14 +363,12 @@ export function MobileAccountsScreen() {
         ) : (
           <>
             {offlineBanner ? (
-              <View style={styles.offlineBanner}>
-                <HostOfflineBanner
-                  hostName={hostName}
-                  offline={offlineBanner.offline}
-                  asOf={offlineBanner.asOf}
-                  onRetry={offlineBanner.retry}
-                />
-              </View>
+              <HostOfflineBanner
+                hostName={hostName}
+                offline={offlineBanner.offline}
+                asOf={offlineBanner.asOf}
+                onRetry={offlineBanner.retry}
+              />
             ) : null}
             {renderProviderSection('claude')}
             {renderProviderSection('codex')}

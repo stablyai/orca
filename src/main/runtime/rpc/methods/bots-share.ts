@@ -10,21 +10,20 @@ import {
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
 
-export const BOT_SHARE_OWNER_ONLY =
-  'Only your owner shares a bot, in Orca: Settings, the bot, Share bot….'
+export const BOT_SHARE_UNKNOWN_CALLER = 'Share a bot from Orca or its `orca` CLI.'
 
-/** Publishing puts the owner's bot on the web under their account, so every share call comes from
- *  the owner in Orca (a window or a paired device); any other caller, named or not, is refused. */
-export function assertOwner(context: RpcContext): void {
+/** Anyone who can reach the bot through Orca (a window, a paired device, or an agent's `orca` CLI,
+ *  here or over a pairing) can already read and paste its files, so all of them may share; only a
+ *  client with no proven identity is refused. */
+export function assertTrustedCaller(context: RpcContext): void {
   context.runtime.bots.assertEnabled()
-  const kind = context.caller?.kind
-  if (kind !== 'desktop' && kind !== 'paired-device') {
-    throw new InvalidArgumentError(BOT_SHARE_OWNER_ONLY)
+  if (!context.caller) {
+    throw new InvalidArgumentError(BOT_SHARE_UNKNOWN_CALLER)
   }
 }
 
 function authorizedBot(context: RpcContext, botId: string): Bot {
-  assertOwner(context)
+  assertTrustedCaller(context)
   return botOf(context.runtime, botId)
 }
 
@@ -41,10 +40,17 @@ export const BOT_SHARE_METHODS = [
     name: 'bots.share.prepare',
     permission: 'workspace',
     params: BotSharePrepare,
-    handler: async ({ botId, setupNote, last, ...selection }, context) =>
-      context.runtime
-        .botShares()
-        .prepare(authorizedBot(context, botId), selection, { setupNote, last })
+    handler: async (
+      { botId, setupNote, last, localOnly, skillsSession, reuseSkills, ...selection },
+      context
+    ) =>
+      context.runtime.botShares().prepare(authorizedBot(context, botId), selection, {
+        setupNote,
+        last,
+        localOnly,
+        session: skillsSession,
+        reuseSkills
+      })
   }),
   defineMethod({
     name: 'bots.share.publish',
@@ -73,7 +79,7 @@ export const BOT_SHARE_METHODS = [
     permission: 'workspace',
     params: BotShareStop,
     handler: async ({ shareId, botId }, context) => {
-      assertOwner(context)
+      assertTrustedCaller(context)
       return context.runtime.botShares().stop(shareId, botId)
     }
   }),
@@ -83,7 +89,7 @@ export const BOT_SHARE_METHODS = [
     params: BotShareStatusParams,
     // Every live bot link the owner has; botShareStatusOf reads one bot's from it.
     handler: async ({ botId }, context) => {
-      assertOwner(context)
+      assertTrustedCaller(context)
       return context.runtime.botShares().list(context.runtime.bots.list(), botId)
     }
   })

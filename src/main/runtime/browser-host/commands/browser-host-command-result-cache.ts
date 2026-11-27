@@ -1,4 +1,5 @@
 import { browserCommandCacheBytes } from '../../../browser/client-hosts/commands/browser-command-cache-bytes'
+import { retainBrowserCommandEvent } from '../../../browser/client-hosts/commands/browser-command-retention'
 import type {
   resolveBrowserHostCommandCacheLimits,
   BrowserHostCommandPageState,
@@ -19,6 +20,7 @@ export class BrowserHostCommandResultCache {
   ) {}
 
   remember(page: BrowserHostCommandPageState, record: BrowserHostCommandRecord): void {
+    record.event = retainBrowserCommandEvent(record.event).event
     const bytes = browserCommandCacheBytes(record.event, record.settled)
     if (bytes === null || bytes > this.limits.maxBytes || bytes > this.limits.maxBytesPerPage) {
       this.evict(page, record.event.commandSequence, record)

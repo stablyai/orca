@@ -36,17 +36,6 @@ export function sweepRestoredCodexPanesForStaleAccounts(state: {
   }
 }
 
-export function resetCodexStalePaneSweepForTests(): void {
-  if (flushTimer !== null) {
-    clearTimeout(flushTimer)
-    flushTimer = null
-  }
-  flushTimerDueAt = null
-  dueAtByPtyId.clear()
-  attemptsByPtyId.clear()
-  notifiedPtyIds.clear()
-}
-
 function queue(ptyId: string, delayMs: number): void {
   const dueAt = Date.now() + delayMs
   const existing = dueAtByPtyId.get(ptyId)

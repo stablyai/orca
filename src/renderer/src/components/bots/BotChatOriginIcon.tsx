@@ -1,5 +1,6 @@
 // A bot chat's row glyphs, the same in the Activity panel and the sidebar; never the bot's picture.
 import { CalendarClock, House, MessageSquare } from 'lucide-react'
+import { GaugeMaxIcon } from '@/components/icons/GaugeMaxIcon'
 import { AgentWorkingSpinner } from '@/components/agent/status/AgentWorkingSpinner'
 import { StateIndicatorTooltip } from '@/components/agent/status/StateIndicatorTooltip'
 import { useTranslate } from '@/i18n/use-translate'
@@ -7,6 +8,8 @@ import { cn } from '@/lib/class-names'
 import type { BotChatOrigin, BotChatTreeChat } from '../../../../shared/bots/bot-chat-tree'
 import { GitHubIcon } from '../icons/GitHubIcon'
 import { LinearIcon } from '../icons/LinearIcon'
+import { usageLimitStopTip } from './BotUsageLimitMark'
+import type { BotUsageLimitStop } from './use-bot-usage-limit-stops'
 import { SlackIcon } from '../icons/SlackIcon'
 
 const ORIGIN_ICONS = {
@@ -68,15 +71,21 @@ export function BotChatStatusSlot({
   chat,
   className,
   iconClassName = 'size-3',
+  stop = null,
   onClick
 }: {
   chat: Pick<BotChatTreeChat, 'origin' | 'live'>
   className?: string
   iconClassName?: string
+  /** Stopped on its usage limit while quiet: the corner shows the stopped mark. */
+  stop?: BotUsageLimitStop | null
   onClick?: (event: React.MouseEvent) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const kind = useChatKindLabel(chat.origin)
-  const state = useBotChatStateLabel(chat.live)
+  const liveState = useBotChatStateLabel(chat.live)
+  const stopped = liveState === null && stop !== null
+  const state = stopped ? usageLimitStopTip(t, stop) : liveState
   const Icon = ORIGIN_ICONS[chat.origin]
   return (
     <StateIndicatorTooltip label={state ? `${kind} · ${state}` : kind}>
@@ -92,7 +101,9 @@ export function BotChatStatusSlot({
           </span>
           {state ? (
             <span className="absolute -right-[3px] -bottom-[3px] flex size-[7px]">
-              {chat.live === 'replying' ? (
+              {stopped ? (
+                <GaugeMaxIcon className="size-[8px] text-status-warning" strokeWidth={3} />
+              ) : chat.live === 'replying' ? (
                 <AgentWorkingSpinner className="size-[7px]" />
               ) : (
                 <span className="block size-[7px] rounded-full bg-agent-question" />

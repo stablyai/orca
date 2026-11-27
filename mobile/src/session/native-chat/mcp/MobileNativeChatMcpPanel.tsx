@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
-import { X } from 'lucide-react-native'
+import { ChevronRight, X } from 'lucide-react-native'
 import type {
   AgentSessionMcpOperation,
   AgentSessionMcpServer,
@@ -12,20 +12,23 @@ import {
   agentSessionMcpServerDisplayName,
   groupAgentSessionMcpServers
 } from '../../../../../src/shared/agent-session/view/agent-session-mcp-server-presentation'
+import { MobilePendingButton } from '../../../components/controls/MobilePendingButton'
 import { MobileSwitch } from '../../../components/controls/MobileSwitch'
 import { TextField } from '../../../components/composer-input/TextField'
 import type { Translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { colors, spacing } from '../../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
-import { queuedMessageStyles } from '../input/queued-messages/mobile-native-chat-queued-message-styles'
-import { trayStripStyles } from '../input/tasks/mobile-native-chat-tray-strip-styles'
+import { spacing } from '../../../theme/mobile-theme'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
+import { queuedMessageStylesSheet } from '../input/queued-messages/mobile-native-chat-queued-message-styles'
+import { trayStripStylesSheet } from '../input/tasks/mobile-native-chat-tray-strip-styles'
 import {
   mobileMcpServerStatusLine,
   mobileMcpSourceLabel,
   mobileMcpTraySummary
 } from './mobile-native-chat-mcp-server-copy'
-import { mcpPanelStyles as styles } from './mobile-native-chat-mcp-panel-styles'
+import { mcpPanelStylesSheet as stylesSheet } from './mobile-native-chat-mcp-panel-styles'
+import { composerInputStylesSheet } from '../../../components/composer-input/composer-input-styles'
+import { useThemedStyles } from '../../../theme/themed-styles'
 
 type McpAction = Exclude<AgentSessionMcpOperation, { action: 'status' }>
 
@@ -35,13 +38,17 @@ export type MobileNativeChatMcpPanelProps = AgentSessionMcpPanelState & {
   dismissSignIn: () => void
   openUrl: (url: string) => void
   onClose: () => void
+  /** Opens the host's MCP servers page; null on a host without one. */
+  onManage?: (() => void) | null
   /** The server list's cap, so the tray and composer stay on screen above the keyboard. */
   listMaxHeight: number
 }
 
 /** The `/mcp` tray on the composer's top edge: a summary line over the chat's MCP servers. */
 export function MobileNativeChatMcpPanel(props: MobileNativeChatMcpPanelProps): React.JSX.Element {
-  useMobileColorScheme()
+  const queuedMessageStyles = useThemedStyles(queuedMessageStylesSheet)
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const listed = props.result?.status === 'ok' && props.servers.length > 0
   const summary = listed ? mobileMcpTraySummary(props.servers, props.signIn, t) : []
@@ -74,11 +81,23 @@ export function MobileNativeChatMcpPanel(props: MobileNativeChatMcpPanelProps): 
         </Pressable>
       </View>
       <McpTrayBody {...props} t={t} />
+      {props.onManage ? (
+        <Pressable
+          accessibilityRole="link"
+          style={({ pressed }) => [styles.footer, pressed && styles.pressed]}
+          onPress={props.onManage}
+        >
+          <Text style={styles.footerText}>{t('chat.mcp.manage', 'Manage MCP servers')}</Text>
+          <ChevronRight size={15} color={colors.textMuted} strokeWidth={2.2} />
+        </Pressable>
+      ) : null}
     </View>
   )
 }
 
 function McpTrayBody(props: MobileNativeChatMcpPanelProps & { t: Translate }) {
+  const trayStripStyles = useThemedStyles(trayStripStylesSheet)
+  const styles = useThemedStyles(stylesSheet)
   const { result, servers, t } = props
   if (result === null) {
     return null
@@ -137,6 +156,7 @@ function McpTrayBody(props: MobileNativeChatMcpPanelProps & { t: Translate }) {
 }
 
 function Notice({ text, action }: { text: string; action?: React.ReactNode }) {
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View style={styles.notice} accessibilityLiveRegion="polite">
       <Text style={styles.noticeText}>{text}</Text>
@@ -155,6 +175,7 @@ function McpServerRow({
   openUrl,
   t
 }: MobileNativeChatMcpPanelProps & { server: AgentSessionMcpServer; t: Translate }) {
+  const styles = useThemedStyles(stylesSheet)
   const mine = pending !== null && pending.server === server.name ? pending : null
   const signingIn = signIn?.server === server.name ? signIn : null
   const busy = pending !== null
@@ -257,6 +278,7 @@ function McpServerRow({
 }
 
 function StatusMark({ status }: { status: AgentSessionMcpServer['status'] }) {
+  const styles = useThemedStyles(stylesSheet)
   switch (status) {
     case 'connected':
       return <View style={[styles.dot, styles.dotConnected]} />
@@ -265,6 +287,7 @@ function StatusMark({ status }: { status: AgentSessionMcpServer['status'] }) {
     case 'failed':
       return <View style={[styles.dot, styles.dotFailed]} />
     case 'disabled':
+    case 'not-started':
       return <View style={[styles.dot, styles.dotDisabled]} />
     case 'pending':
       return <View style={styles.dotPending} />
@@ -285,6 +308,8 @@ function McpPasteBox({
   run: (operation: McpAction) => void
   t: Translate
 }) {
+  const styles = useThemedStyles(stylesSheet)
+  const composerInputStyles = useThemedStyles(composerInputStylesSheet)
   const [address, setAddress] = useState('')
   const callbackUrl = address.trim()
   const finish = (): void => {
@@ -302,7 +327,7 @@ function McpPasteBox({
       </Text>
       <View style={styles.pasteRow}>
         <TextField
-          style={styles.pasteField}
+          style={[composerInputStyles.filledField, styles.pasteField]}
           value={address}
           onChangeText={setAddress}
           placeholder={t('chat.mcp.pastePlaceholder', 'Paste address')}
@@ -341,40 +366,28 @@ function McpButton({
   disabled?: boolean
   onPress: () => void
 }) {
-  const foreground = tone === 'primary' ? colors.bgBase : colors.textPrimary
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ disabled: disabled || busy, busy }}
-      disabled={disabled || busy}
+    <MobilePendingButton
+      label={label}
+      pending={busy}
+      disabled={disabled}
       onPress={onPress}
       hitSlop={tall ? undefined : 6}
-      style={({ pressed }) => [
+      style={[
         styles.button,
         tall && styles.buttonTall,
         tone === 'primary' && styles.buttonPrimary,
         tone === 'secondary' && styles.buttonSecondary,
-        tone === 'plain' && styles.buttonPlain,
-        pressed && styles.buttonPressed,
-        disabled && !busy && styles.buttonDisabled
+        tone === 'plain' && styles.buttonPlain
       ]}
-    >
-      {/* The label keeps the button's width while it spins. */}
-      <Text
-        style={[
-          styles.buttonLabel,
-          tone === 'primary' && styles.buttonLabelPrimary,
-          tone === 'plain' && styles.buttonLabelPlain,
-          busy && styles.buttonLabelHidden
-        ]}
-        numberOfLines={1}
-      >
-        {label}
-      </Text>
-      {busy ? (
-        <ActivityIndicator size="small" color={foreground} style={styles.buttonSpinner} />
-      ) : null}
-    </Pressable>
+      labelStyle={[
+        styles.buttonLabel,
+        tone === 'primary' && styles.buttonLabelPrimary,
+        tone === 'plain' && styles.buttonLabelPlain
+      ]}
+      spinnerColor={tone === 'primary' ? colors.bgBase : colors.textPrimary}
+    />
   )
 }

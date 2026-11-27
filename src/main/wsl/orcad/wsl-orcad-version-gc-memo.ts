@@ -27,7 +27,3 @@ export async function pruneWslOrcadVersionsUntilClean(
     cleanHosts.add(key)
   }
 }
-
-export function resetWslOrcadVersionGcMemoForTests(): void {
-  cleanHosts.clear()
-}

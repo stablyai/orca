@@ -2,7 +2,8 @@
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { OrchestrationSessionWorkerState } from '../../shared/orchestration-session-workers'
 import type { BotWorkPullRequest } from '../../shared/bots/bot-work-pull-request'
-import type { BotWorkAddress, BotWorkHost, BotWorkRow, BotWorkStore } from './bot-work-store'
+import type { BotWorkRemote } from './bot-work-ops'
+import type { BotWorkAddress, BotWorkHost, BotWorkRow } from './bot-work-store'
 
 /** A row's worker as orchestration reads it now, at the newest Dispatch of its lineage. */
 export type BotWorkWorker = {
@@ -13,6 +14,7 @@ export type BotWorkWorker = {
   state: OrchestrationSessionWorkerState
   /** Its Dispatch is open but its agent waits, on its coordinator or an answer. */
   idle?: boolean
+  progressNote?: string | null
   /** Its durable record says it was stopped or abandoned. */
   stopped: boolean
   /** Its start failed before any agent ran, as a lost or unknown start can turn out. */
@@ -44,12 +46,15 @@ export type BotTurnAddress = {
 }
 
 export type BotWorkRecordDeps = {
-  store: () => BotWorkStore
-  /** Null when orchestration has no such Task or Dispatch; throws when it can't be read. */
-  worker: (dispatchId: string) => Promise<BotWorkWorker | null>
-  /** 'gone' only with proof; null when it can't be told (an offline host, a remote server). */
-  workspace: (worker: BotWorkWorker) => Promise<BotWorkWorkspace | 'gone' | null>
-  /** What the conversation is called, from the message that started it. */
+  /** This profile's store, answered by the bots DB worker. */
+  store: () => BotWorkRemote
+  /** Each Dispatch's worker, read in one batch; null when orchestration has no such Task or
+   *  Dispatch, left out when that one can't be read. Throws when orchestration can't be read. */
+  workers: (dispatchIds: readonly string[]) => Promise<ReadonlyMap<string, BotWorkWorker | null>>
+  /** A workspace reader for one batch of rows, sharing its repo reads. Each read is 'gone' only with
+   *  proof; null when it can't be told (an offline host, a remote server). */
+  workspaces: () => (worker: BotWorkWorker) => Promise<BotWorkWorkspace | 'gone' | null>
+  /** What the conversation is called, from the message that started it; a chat, by its name. */
   conversationTitle: (address: BotWorkAddress) => string | null
   /** The conversation the message a bot session's turn was handed names; null for the owner's
    *  own words. */

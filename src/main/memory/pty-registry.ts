@@ -7,6 +7,8 @@ export type PtyRegistration = {
   paneKey: string | null
   // Capture at spawn to avoid IPC lookups; unavailable PIDs retain zero-attribution rows.
   pid: number | null
+  /** From startup restore, before any pane mounted; only this machine's Resource Manager reads it. */
+  restoredPaneKey?: string
 }
 
 const registry = new Map<string, PtyRegistration>()
@@ -27,10 +29,19 @@ export function unregisterPty(ptyId: string): void {
   }
 }
 
+/** The shell PID a PTY published at spawn or adoption; null when its host published none. */
+export function getRegisteredPtyPid(ptyId: string): number | null {
+  return registry.get(ptyId)?.pid ?? null
+}
+
 export function hasRegisteredPtyWithPid(): boolean {
   return registeredWithPid > 0
 }
 
 export function listRegisteredPtys(): PtyRegistration[] {
   return [...registry.values()]
+}
+
+export function registeredPtyCount(): number {
+  return registry.size
 }

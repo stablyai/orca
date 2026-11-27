@@ -7,6 +7,7 @@ import { ClaudeAccountRegistration } from './sign-in/claude-account-registration
 import {
   ClaudeAccountSelection,
   type ClaudeAccountRuntime,
+  type ClaudeAccountSettings,
   type ClaudeAccountStore,
   type ClaudeAccountUsage
 } from './selection/claude-account-selection'
@@ -16,10 +17,27 @@ import { runClaudePastedCodeLogin } from './sign-in/claude-pasted-code-login'
 import type { HostAccountSignInChannel } from '../../shared/agent-accounts/host-account-sign-in-types'
 import type { ClaudeRuntimeAuthService } from './runtime-auth-service'
 import type { ClaudeAccountSelectionTarget } from './selection/runtime-selection'
+import type { NetworkProxySettings } from '../../shared/network/network-proxy'
+import type { ClaudeSelectionOutcome } from './selection/claude-account-selection-sync'
+
+// Sign-in only reads the proxy, so selection and registration never see network fields.
+type ClaudeAccountServiceStore = Omit<ClaudeAccountStore, 'getSettings'> & {
+  getSettings: () => ClaudeAccountSettings & NetworkProxySettings
+}
 
 export class ClaudeAccountService {
   private mutationQueue: Promise<unknown> = Promise.resolve()
   private readonly renameListeners = new Set<() => void>()
+  private readonly selectionListeners = new Set<(committed: () => boolean) => void>()
+  /** Bumped whenever the saved selection settles: taken effect, or failed and restored. */
+  private selectionRevision = 0
+  /** A select or remove is running, so the saved selection may not have taken effect yet. */
+  private selectionPending = false
+  /** A check found the selection pending and stood down; whatever settles it rechecks. */
+  private selectionRecheckOwed = false
+  /** A failed change could not restore the earlier selection either: no check may act on what is
+   *  saved until a later change settles. */
+  private selectionRouteUnknown = false
   private cancelPendingClaudeLogin: (() => boolean) | null = null
   private pendingSignInLink: Promise<string | null> | null = null
   private openWslSignInLink: ((signInLink: string) => void) | null = null
@@ -27,18 +45,33 @@ export class ClaudeAccountService {
   private readonly registration: ClaudeAccountRegistration
 
   constructor(
-    private readonly store: ClaudeAccountStore,
+    private readonly store: ClaudeAccountServiceStore,
     rateLimits: ClaudeAccountUsage,
     private readonly runtimeAuth: ClaudeAccountRuntime &
       Pick<ClaudeRuntimeAuthService, 'getRuntimeConfigDir'>,
     private readonly runLoginCommand = runClaudeCommandProcess
   ) {
-    this.selection = new ClaudeAccountSelection(store, rateLimits, runtimeAuth)
+    this.selection = new ClaudeAccountSelection(store, rateLimits, runtimeAuth, (outcome) =>
+      this.selectionSettled(outcome)
+    )
     this.registration = new ClaudeAccountRegistration({
       store,
       rateLimits,
       runtimeAuth,
       selection: this.selection
+    })
+  }
+
+  private readonly runProxiedLoginCommand: typeof runClaudeCommandProcess = (
+    args,
+    config,
+    timeoutMs,
+    options
+  ) => {
+    const { httpProxyUrl, httpProxyBypassRules } = this.store.getSettings()
+    return this.runLoginCommand(args, config, timeoutMs, {
+      ...options,
+      networkProxySettings: { httpProxyUrl, httpProxyBypassRules }
     })
   }
 
@@ -68,7 +101,7 @@ export class ClaudeAccountService {
     this.supersedePendingLogin()
     return this.serializeMutation(() =>
       this.registration.signIn(accountId ? { accountId } : { runtime: 'host' }, (folder) =>
-        runClaudePastedCodeLogin(folder, this.runLoginCommand, channel, (cancel) => {
+        runClaudePastedCodeLogin(folder, this.runProxiedLoginCommand, channel, (cancel) => {
           this.cancelPendingClaudeLogin = cancel
         })
       )
@@ -105,7 +138,7 @@ export class ClaudeAccountService {
 
   removeAccount(accountId: string): Promise<ClaudeRateLimitAccountsState> {
     this.supersedePendingLogin()
-    return this.serializeMutation(() => this.selection.remove(accountId))
+    return this.serializeMutation(() => this.trackSelection(() => this.selection.remove(accountId)))
   }
 
   // Outside the mutation queue: a pending sign-in can hold it for minutes, and this
@@ -132,7 +165,7 @@ export class ClaudeAccountService {
 
   selectAccount(accountId: string | null): Promise<ClaudeRateLimitAccountsState> {
     this.supersedePendingLogin()
-    return this.serializeMutation(() => this.selection.select(accountId))
+    return this.serializeMutation(() => this.trackSelection(() => this.selection.select(accountId)))
   }
 
   selectAccountForTarget(
@@ -140,7 +173,67 @@ export class ClaudeAccountService {
     target?: ClaudeAccountSelectionTarget
   ): Promise<ClaudeRateLimitAccountsState> {
     this.supersedePendingLogin()
-    return this.serializeMutation(() => this.selection.select(accountId, target))
+    return this.serializeMutation(() =>
+      this.trackSelection(() => this.selection.select(accountId, target))
+    )
+  }
+
+  /** Called once a select, or a remove of the selected account, reaches new launches, whichever
+   *  client made it, and again when a select fails and the earlier selection is restored. The account
+   *  may be the same again. `committed` is false while another select or remove runs (whose end then
+   *  tells listeners again) and once a later selection takes effect. */
+  onSelectionApplied(listener: (committed: () => boolean) => void): () => void {
+    this.selectionListeners.add(listener)
+    return () => {
+      this.selectionListeners.delete(listener)
+    }
+  }
+
+  private async trackSelection<T>(change: () => Promise<T>): Promise<T> {
+    this.selectionPending = true
+    try {
+      return await change()
+    } finally {
+      // It failed before saving anything (a restore settles itself): nothing moved.
+      if (this.selectionPending && !this.selectionRouteUnknown) {
+        this.selectionSettled('unchanged')
+      }
+    }
+  }
+
+  /** `moved`: the saved selection changed for new launches (or a failed change restored it). */
+  private selectionSettled(outcome: ClaudeSelectionOutcome): void {
+    if (outcome === 'unknown') {
+      // Stays pending: every check stands down until a later change settles and tells them again.
+      this.selectionRouteUnknown = true
+      this.selectionRevision += 1
+      this.selectionRecheckOwed = true
+      return
+    }
+    this.selectionPending = false
+    this.selectionRouteUnknown = false
+    if (outcome === 'moved') {
+      this.selectionRevision += 1
+    } else if (!this.selectionRecheckOwed) {
+      // Nothing changed and no check stood down: earlier notifications stay committed.
+      return
+    }
+    this.selectionRecheckOwed = false
+    const revision = this.selectionRevision
+    const committed = () => {
+      if (this.selectionPending) {
+        this.selectionRecheckOwed = true
+        return false
+      }
+      return this.selectionRevision === revision
+    }
+    for (const listener of this.selectionListeners) {
+      try {
+        listener(committed)
+      } catch (error) {
+        console.warn('[claude-accounts] A selection listener failed:', error)
+      }
+    }
   }
 
   getRuntimeConfigDir(target?: ClaudeAccountSelectionTarget): string {
@@ -161,7 +254,7 @@ export class ClaudeAccountService {
           runClaudeLoginSession(
             folder,
             {
-              runCommand: this.runLoginCommand,
+              runCommand: this.runProxiedLoginCommand,
               setCancel: (cancel) => {
                 this.cancelPendingClaudeLogin = cancel
               },

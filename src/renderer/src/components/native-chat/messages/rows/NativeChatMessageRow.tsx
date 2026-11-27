@@ -1,4 +1,5 @@
 import { memo, useRef } from 'react'
+import type { AgentSessionAccountKind } from '../../../../../../shared/agent-session/failures/agent-session-availability'
 import type { NativeChatRewindSurface } from '../actions/use-native-chat-rewind-host'
 import type { NativeChatForkRowAction } from '../actions/use-native-chat-fork'
 import { NativeChatUserMessageRow } from './NativeChatUserMessageRow'
@@ -18,16 +19,27 @@ import { NativeChatWaitEndedRow, NativeChatWaitRow } from '../../automation-run/
 import { NativeChatAutomationSavedRow } from '../../automation-run/NativeChatAutomationSavedRow'
 import { NativeChatBotItemNoteRow } from '../../bot-items/NativeChatBotItemNoteRow'
 import { NativeChatAutomationRunRow } from '../../automation-run/NativeChatAutomationRunRow'
+import { mergedRunFailures } from '../../../../../../shared/native-chat/transcript/events/native-chat-event-plan'
 import { NativeChatNoticeRow } from '../notices/NativeChatNoticeRow'
+import { NativeChatSubagentEndingRow } from '../../subagents/NativeChatSubagentEndingRow'
+import { isNativeChatSubagentEndingPresentation } from '../../subagents/native-chat-subagent-ending'
 import { NativeChatBotCreatedRow, NativeChatTookOverRow } from '../../NativeChatBotCreatedRow'
 import { nativeChatNoticeBlock } from '../../../../../../shared/native-chat/transcript/notices/native-chat-notice'
 import { nativeChatMessageRowBlocks } from './native-chat-message-row-words'
 import { ProviderFrameRow } from '../diagnostics/NativeChatProviderDetails'
 import type { NativeChatDiffReveal } from '../../../../../../shared/native-chat/tools/native-chat-turn-diffs'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
-import { useNativeChatWorkRun } from '../../tools/runs/use-native-chat-work-run'
+import {
+  NativeChatWorkRunStreamedContext,
+  useNativeChatWorkRun,
+  useNativeChatWorkRunStreamed
+} from '../../tools/runs/use-native-chat-work-run'
 import { useNativeChatRowNavigation } from '../actions/use-native-chat-row-navigation'
 import { useTranslate } from '@/i18n/use-translate'
+import {
+  NativeChatGalleryMessageContext,
+  nativeChatGalleryMessageId
+} from '../../media/images/gallery/native-chat-image-gallery-context'
 
 /** Unconfirmed sending status or a failed-delivery notice with an optional dismissal. */
 export type NativeChatDeliveryNotice =
@@ -39,12 +51,15 @@ export type NativeChatDeliveryNotice =
       onSend?: never
       detail?: never
       failureKind?: never
+      signIn?: never
     }
   | {
       sending?: never
       text: string
       detail?: string
       failureKind?: string
+      /** A not-signed-in rejection, for the line's Sign in. */
+      signIn?: { agentName: string; account?: AgentSessionAccountKind }
       onDismiss?: () => void
       onEdit?: () => void
       onSend?: () => void
@@ -64,6 +79,8 @@ export type MessageRowProps = {
   continuesTurn?: boolean
   /** Its turn opens with an automation's row, which already stands for a quiet reply. */
   inAutomationTurn?: boolean
+  /** Its turn changed an item, posted or otherwise did something others see. */
+  inActingTurn?: boolean
   /** In a turn: whether this row holds the response's actions (its last words, else its last images). */
   endsResponse?: boolean
   latestResponse?: boolean
@@ -95,9 +112,17 @@ function rowHasContent(content: ReturnType<typeof deriveNativeChatRowContent>): 
 }
 
 /** Memoize settled block identities so stream frames rerender only changed rows. */
-export const MessageRow = memo(function MessageRow(
-  props: MessageRowProps
-): React.JSX.Element | null {
+export const MessageRow = memo(function MessageRow(props: MessageRowProps): React.JSX.Element {
+  return (
+    <NativeChatGalleryMessageContext
+      value={nativeChatGalleryMessageId(props.message, props.activeTurnIsWorking)}
+    >
+      <MessageRowContent {...props} />
+    </NativeChatGalleryMessageContext>
+  )
+}, sameMessageRowProps)
+
+function MessageRowContent(props: MessageRowProps): React.JSX.Element | null {
   const t = useTranslate()
   const {
     message,
@@ -122,6 +147,7 @@ export const MessageRow = memo(function MessageRow(
     revealedDiff: props.revealedDiff,
     activeTurnIsWorking
   })
+  const streamedMembers = useNativeChatWorkRunStreamed(workRun)
 
   const { scrollToTop, returnToView } = useNativeChatRowNavigation(rowRef, onScrollMessageToTop)
 
@@ -138,6 +164,7 @@ export const MessageRow = memo(function MessageRow(
           automation={message.automationSaved.automation}
           once={message.automationSaved.automation.once}
           ended={message.savedWaitEnded}
+          endedOn={message.savedWaitEndedOn}
           timestamp={message.timestamp}
         />
       </div>
@@ -155,6 +182,8 @@ export const MessageRow = memo(function MessageRow(
           text={notStarted.text}
           timestamp={message.timestamp}
           error={notStarted.error}
+          refusal={notStarted.refusal}
+          earlierFailures={mergedRunFailures(message)}
           resend={notStarted.sentAgain ? 'sent' : 'offer'}
           onRefolded={returnToView}
         />
@@ -171,6 +200,7 @@ export const MessageRow = memo(function MessageRow(
           state={message.queued ? 'queued' : 'ran'}
           text={markdown}
           timestamp={message.timestamp}
+          earlierFailures={mergedRunFailures(message)}
           onRefolded={returnToView}
         />
       </div>
@@ -290,12 +320,17 @@ export const MessageRow = memo(function MessageRow(
   if (notice) {
     return (
       <div ref={rowRef}>
-        <NativeChatNoticeRow
-          block={notice}
-          messageId={message.id}
-          timestamp={message.timestamp}
-          agentName={agentName}
-        />
+        {/* A subagent's last word, shown in its sheet. */}
+        {isNativeChatSubagentEndingPresentation(notice.presentation) ? (
+          <NativeChatSubagentEndingRow block={notice} messageId={message.id} />
+        ) : (
+          <NativeChatNoticeRow
+            block={notice}
+            messageId={message.id}
+            timestamp={message.timestamp}
+            agentName={agentName}
+          />
+        )}
       </div>
     )
   }
@@ -337,15 +372,17 @@ export const MessageRow = memo(function MessageRow(
   }
 
   return (
-    <NativeChatAssistantMessageRow
-      props={props}
-      content={content}
-      run={run}
-      rowRef={rowRef}
-      scrollToTop={scrollToTop}
-    />
+    <NativeChatWorkRunStreamedContext.Provider value={streamedMembers}>
+      <NativeChatAssistantMessageRow
+        props={props}
+        content={content}
+        run={run}
+        rowRef={rowRef}
+        scrollToTop={scrollToTop}
+      />
+    </NativeChatWorkRunStreamedContext.Provider>
   )
-}, sameMessageRowProps)
+}
 
 /** A rebuilt transcript hands every run a fresh member list; same messages, same row. */
 function sameMessageRowProps(previous: MessageRowProps, next: MessageRowProps): boolean {

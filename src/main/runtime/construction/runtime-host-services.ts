@@ -1,4 +1,5 @@
 import { RuntimeAgentStatusSources } from './runtime-agent-status-sources'
+import type { ClaudeAccountSelectedHandler } from '../../../shared/agent-accounts/managed-account-types'
 
 import type * as Calls from './runtime-host-service-calls'
 import type { RuntimeConstructionBindings as HostBindings } from './runtime-construction-dependencies'
@@ -25,10 +26,10 @@ import type { AgentStatus } from '../../../shared/agent-status/title/agent-title
 import { RuntimeLegacyWorkerTerminalRecoveryPersistence } from '../orchestration/terminal-authority/runtime-legacy-worker-terminal-recovery-persistence'
 import { RuntimeLegacyWorkerTerminalRecoveryController } from '../orchestration/terminal-authority/runtime-legacy-worker-terminal-recovery-controller'
 import { reconcileRequestedWorkerTerminalReleases } from '../orchestration/terminal-authority/release/worker-terminal-release-reconciliation'
+import { sweepStoppedWorkerTerminals } from '../orchestration/terminal-authority/release/stopped-worker-terminal-release'
 
 import { RuntimeAccountController } from '../agent-session/environment/runtime-account-controller'
-import { RuntimeMobileSpeechCatalog } from '../speech/runtime-mobile-speech-catalog'
-import { RuntimeMobileDictationController } from '../speech/runtime-mobile-dictation-controller'
+import { createLazyMobileSpeechOwners } from '../speech/lazy-mobile-speech-owners'
 import { RuntimeProjectHostSetupController } from '../repositories/runtime-project-host-setup-controller'
 import { RuntimeProjectGroupController } from '../repositories/runtime-project-group-controller'
 import { RuntimeNestedRepoImport } from '../repositories/runtime-nested-repo-import'
@@ -221,13 +222,18 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends RuntimeAgent
     rollback: (candidate) => this.rollbackLegacyWorkerTerminalSurface(candidate),
     reconcileMissing: (candidate) =>
       this.legacyWorkerRecoveryPersistence.reconcileMissing(candidate, this.lostWorkerReport),
+    holdForRestartResume: (candidate) => this.holdLostWorkerForRestartResume(candidate),
+    isResuming: (dispatchId) => this.terminalWorkerRestartResume.isHeld(dispatchId),
     notifyResolution: (candidate, resolution) =>
       this.notifier?.resolveLegacyWorkerTerminalRecovery?.(candidate.paneKey, resolution),
     canRecoverPersistentLocalPtys: () => this.canRecoverPersistentLocalPtysFn(),
     isTerminalProvenAbsent: (candidate) => this.isLeafPtyProvenAbsent(candidate.ptyId),
     hasRequestedReleases: () =>
       (this.getExistingOrchestrationDb()?.listWorkerTerminalReleaseBacklog(1).length ?? 0) > 0,
-    reconcileRequestedReleases: () => reconcileRequestedWorkerTerminalReleases(this),
+    reconcileRequestedReleases: () =>
+      reconcileRequestedWorkerTerminalReleases(this).then(() =>
+        sweepStoppedWorkerTerminals(this, () => this.legacyWorkerRecovery.isStopped())
+      ),
     reconcile: (options) => this.reconcileLegacyWorkerTerminals(options),
     updateRetry: (plan, deferredDispatchIds, options) =>
       this.updateLegacyWorkerTerminalRecoveryRetry(plan, deferredDispatchIds, options)
@@ -244,11 +250,15 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends RuntimeAgent
 
   protected ptyControllerInventoryGenerationByProvider = new Map<string, number>()
 
-  protected readonly accounts = new RuntimeAccountController(() => this.notifier)
+  protected readonly accounts = new RuntimeAccountController((change) =>
+    this.onClaudeAccountSelected(change)
+  )
 
-  protected readonly mobileSpeech = new RuntimeMobileSpeechCatalog(() => this.store)
+  protected abstract onClaudeAccountSelected(
+    ...change: Parameters<ClaudeAccountSelectedHandler>
+  ): ReturnType<ClaudeAccountSelectedHandler>
 
-  protected readonly mobileDictation = new RuntimeMobileDictationController(() => this.store)
+  protected readonly mobileSpeechOwners = createLazyMobileSpeechOwners(() => this.store)
 
   protected readonly projectHostSetups = new RuntimeProjectHostSetupController({
     getStore: () => this.store,

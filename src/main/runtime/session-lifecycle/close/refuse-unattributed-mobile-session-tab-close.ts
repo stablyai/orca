@@ -1,7 +1,7 @@
-import { OrcaRuntimeWithRestartAgentPaneInPlace } from '../projection/restart-agent-pane-in-place'
+import { OrcaRuntimeWithMcpStaleTerminals } from '../projection/mcp-stale-terminal-restart'
 import type { RuntimeMobileSessionTabCloseResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
-export abstract class OrcaRuntimeWithRefuseUnattributedMobileSessionTabClose extends OrcaRuntimeWithRestartAgentPaneInPlace {
+export abstract class OrcaRuntimeWithRefuseUnattributedMobileSessionTabClose extends OrcaRuntimeWithMcpStaleTerminals {
   async refuseUnattributedMobileSessionTabClose(
     worktreeSelector: string,
     tabId: string

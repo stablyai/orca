@@ -22,7 +22,8 @@ import { advancePartialEscapeTail } from '../../../../shared/terminal/protocol/e
 
 export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntimeWithSerializeMainTerminalBuffer {
   protected abstract getOrCreateHeadlessTerminal(ptyId: string): RuntimeHeadlessTerminal
-  protected abstract markPaneLiveTitlesDirty(): void
+  /** `ref` is the terminal whose title changed or the pane key whose start facts did. */
+  protected abstract markPaneLiveTitlesDirty(ref: string): void
   protected abstract settleLostAgentSession(ptyId: string): void
   abstract readLaunchedAgentForeground(
     ptyId: string,
@@ -103,7 +104,7 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
         // Retain normal-buffer scrollback while a TUI is in alt-screen so pre-TUI history remains restorable (#6106).
         // This emulator's retention: a hidden-output reveal repaints the pane from this model.
         const rendered = await controller.serializeBuffer!(ptyId, {
-          scrollbackRows: this.headlessTerminalScrollbackRows
+          scrollbackRows: state.providerOwnsScrollback ? 0 : this.headlessTerminalScrollbackRows
         })
         if (
           this.headlessTerminals.get(ptyId) !== state ||
@@ -171,6 +172,10 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
       pty.lastOscTitle = seededTitle
       pty.lastOscTitleAt = observedAt
       this.setPtyManagementTitleFromObservedTitle(pty, seededTitle, observedAt)
+      // A restored working title's next idle ends that turn, not an agent starting at rest.
+      if (status === 'working') {
+        pty.lastAgentStatusEndedTurn = true
+      }
     }
     for (const leaf of this.getLeavesForPty(ptyId)) {
       // Seed even non-agent titles so worktree.ps can reclassify instead of treating the pane as agentless.
@@ -180,7 +185,7 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
         leaf.lastAgentStatus = status
       }
     }
-    this.markPaneLiveTitlesDirty()
+    this.markPaneLiveTitlesDirty(ptyId)
   }
 
   /** Capture reply ownership synchronously at ingestion; never re-read it when the queued write runs. */

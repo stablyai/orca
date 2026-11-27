@@ -37,11 +37,6 @@ export function forgetReviewProjectIdentity(
   pending.delete(key)
 }
 
-export function resetReviewProjectIdentitiesForTest(): void {
-  identities.clear()
-  pending.clear()
-}
-
 export async function readReviewProjectIdentity(
   repoPath: string,
   project: ProjectRef,

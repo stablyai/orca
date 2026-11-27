@@ -1,5 +1,4 @@
 import { filesystemErrorCode } from './bundled-skill-filesystem-error'
-import { moveAcrossFilesystems } from './bundled-skill-verified-backup'
 
 import { constants, createReadStream } from 'node:fs'
 import { createHash } from 'node:crypto'
@@ -44,8 +43,8 @@ export type BundledSkillFilesystem = {
   /** Creates a private backup directory (0700 on POSIX), tightening existing permissions. */
   ensureDirectory(path: string): Promise<void>
   rename(source: string, target: string): Promise<void>
-  /** Move into backups (copy/verify/remove across filesystems); directories become private. */
-  moveToBackup(source: string, target: string): Promise<void>
+  /** Makes a backed-up directory private on POSIX. */
+  privatizeBackup(path: string): Promise<void>
   remove(path: string): Promise<void>
   createLink(target: string, linkPath: string): Promise<void>
 }
@@ -144,10 +143,9 @@ export const nativeBundledSkillFilesystem: BundledSkillFilesystem = {
     }
   },
   rename: nativeSkillInstallFilesystem.rename,
-  moveToBackup: async (source, target) => {
-    await moveAcrossFilesystems(nativeBundledSkillFilesystem, source, target)
-    if (process.platform !== 'win32' && (await lstat(target)).isDirectory()) {
-      await chmod(target, 0o700)
+  privatizeBackup: async (path) => {
+    if (process.platform !== 'win32' && (await lstat(path)).isDirectory()) {
+      await chmod(path, 0o700)
     }
   },
   remove: nativeSkillInstallFilesystem.remove,

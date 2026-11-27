@@ -30,6 +30,8 @@ import type { AgentSessionAccountHome } from '../../../../shared/agent-session/l
 import { nativeChatShellEnvironmentPolicy } from '../../../../shared/native-chat/settings/native-chat-shell-environment'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
 import { structuredChatUnavailableOnPlatform } from '../../../../shared/agent-session/capabilities/structured-chat-platform-support'
+import type { AgentCliInstallationProblem } from '../../../../shared/agent-launch/catalog/agent-cli-installation-problem'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 
 export type LaunchEnvironmentSettings = Pick<
   GlobalSettings,
@@ -39,14 +41,16 @@ export type LaunchEnvironmentSettings = Pick<
   | 'httpProxyUrl'
   | 'httpProxyBypassRules'
 > &
-  Partial<Pick<GlobalSettings, 'agentCmdOverrides' | 'antigravityChatAuth'>> &
+  Partial<
+    Pick<
+      GlobalSettings,
+      'agentCmdOverrides' | 'antigravityChatAuth' | 'antigravityManagedAgyEnabled'
+    >
+  > &
   AgentLaunchProfileSettings
 
 /** What the check reads from the runtime asking it. */
 type LaunchSettingsRuntime = { requireStore(): { getSettings(): LaunchEnvironmentSettings } }
-type LaunchSupportRuntime = LaunchSettingsRuntime & {
-  resolveRuntimeFileTarget(selector: string): Promise<{ worktree: { path: string } }>
-}
 
 /** Check the installed release with launch env/Command settings in cwd; null means location-only admission. Unrunnable Command settings throw launch refusal. */
 export async function observeStructuredAgentLaunch(
@@ -98,23 +102,36 @@ export async function structuredAgentHostAlternativeReady(
   return program.hostAlternative(env, settings).catch(() => false)
 }
 
-/** Admission's answer in the workspace `cwd` names: only a too-old or unstartable binary keeps the
- *  terminal, or, where Orca installs no release, a host program that cannot serve the chat. */
-export async function structuredAgentSupportsLaunch(
+/** Admission's answer in the workspace `cwd` names: only a too-old or unstartable binary, a workspace
+ *  `cwd` the probe cannot enter, or, where Orca installs no release, a host program that cannot serve
+ *  the chat keeps the terminal. A too-old release names itself, so a refusal can say which version
+ *  chats need; an inaccessible `cwd` is flagged so the refusal blames the folder, not the agent. */
+export async function structuredAgentLaunchAdmission(
   agent: string,
   cwd: () => Promise<string>,
   runtime: LaunchSettingsRuntime
-): Promise<boolean> {
+): Promise<{
+  supported: boolean
+  installation?: AgentCliInstallationProblem
+  workspaceAccessDenied?: true
+}> {
   if (structuredAgentRuntimeMetadata(agent)?.chatProgram?.onlyHostAlternative?.()) {
-    return structuredAgentHostAlternativeReady(agent, runtime)
+    return { supported: await structuredAgentHostAlternativeReady(agent, runtime) }
   }
   try {
     const release = await observeStructuredAgentLaunch(agent, cwd, runtime, true)
-    return release === null || launchableRelease(release)
+    if (release?.status === 'tooOld' && isTuiAgent(agent)) {
+      const { version: installedVersion, minimumVersion } = release
+      return { supported: false, installation: { agent, installedVersion, minimumVersion } }
+    }
+    if (release?.status === 'cwdAccessDenied') {
+      return { supported: false, workspaceAccessDenied: true }
+    }
+    return { supported: release === null || launchableRelease(release) }
   } catch (error) {
     // An unrunnable Command setting is the launch's refusal to state, not a terminal.
     if (isAgentSessionPreSpawnError(error)) {
-      return true
+      return { supported: true }
     }
     throw error
   }
@@ -135,7 +152,7 @@ export async function resolveHostStructuredAgentLaunchEnvironment(
 /** What a chat start of `agent` on this host launches from, for a child that serves no chat. */
 export async function structuredAgentHostLaunchSources(
   agent: StructuredAgentId,
-  runtime: Pick<LaunchSupportRuntime, 'requireStore'> & {
+  runtime: LaunchSettingsRuntime & {
     resolveStructuredAgentAccountHome(agent: StructuredAgentId): Promise<AgentSessionAccountHome>
   },
   signal: AbortSignal
@@ -171,29 +188,27 @@ export async function structuredAgentHostLaunchSources(
 /** Report pre-spawn refusals from registered location/release checks without installing the host; log the refusing check. */
 export async function resolveHostStructuredAgentCreateSupport(input: {
   agent: StructuredAgentId
-  worktreeSelector: string
+  /** The folder a new chat would start in, where its CLI is resolved and its version read. */
+  workspacePath: () => Promise<string>
   location: AgentSessionExecutionLocation
-  runtime: LaunchSupportRuntime
+  runtime: LaunchSettingsRuntime
 }): Promise<StructuredAgentSessionCreateSupport> {
   const { agent, location, runtime } = input
   const supportsLocation =
     structuredAgentRuntimeMetadata(agent)?.supportsLocation(location) ?? false
-  const supportsLaunch =
-    supportsLocation &&
-    (await structuredAgentSupportsLaunch(
-      agent,
-      async () => (await runtime.resolveRuntimeFileTarget(input.worktreeSelector)).worktree.path,
-      runtime
-    ))
+  const launch = supportsLocation
+    ? await structuredAgentLaunchAdmission(agent, input.workspacePath, runtime)
+    : null
   const support = resolveStructuredAgentSessionCreateSupport({
     location,
-    adapterSupportsCreate: supportsLaunch,
-    unavailableOnPlatform: structuredChatUnavailableOnPlatform(agent, process.platform)
+    adapterSupportsCreate: launch?.supported ?? false,
+    unavailableOnPlatform: structuredChatUnavailableOnPlatform(agent, process.platform),
+    workspaceAccessDenied: launch?.workspaceAccessDenied
   })
   warnStructuredAgentSessionCreateUnsupported(
     agent,
     support,
     supportsLocation ? 'installed-agent' : 'location'
   )
-  return support
+  return launch?.installation ? { ...support, installation: launch.installation } : support
 }

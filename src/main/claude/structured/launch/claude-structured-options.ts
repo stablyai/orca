@@ -1,4 +1,5 @@
 import { ClaudeControlRequestError } from '../../sdk-transport/claude-agent-sdk-control-requests'
+import { keptClaudeAgentRelay } from '../../relay/claude-kept-agent-connection'
 import {
   AgentSessionOptionRejectedError,
   ClaudeEffortValidationError
@@ -9,6 +10,7 @@ import {
   readClaudeSettingsFastMode
 } from './claude-structured-session-options'
 import type { ClaudeSession } from '../claude-structured-session-state'
+import type { ClaudeStructuredSessionEvent } from '../lifecycle/claude-structured-session-event'
 import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { decodeStructuredAgentSessionOptionValue } from '../../../../shared/agent-session/options/selection/structured-agent-session-option-codec'
 
@@ -36,8 +38,10 @@ export function claudeModelTransitionRestart(
     const model = input.executionOptions?.model
     const opened = session?.firstRootInit?.permissionMode
     const requested = session?.launchIntent?.permissionMode
+    // A kept agent takes a model pick live (set_model); it is never replaced for one.
     return Boolean(
       session?.fence === input.fence &&
+      !keptClaudeAgentRelay(session.connection) &&
       model !== undefined &&
       model !== session.launchIntent?.model &&
       requested !== undefined &&
@@ -100,6 +104,26 @@ export async function claudeTakesFlagSettings(
     )
   }
   return session.flagSettingsControl !== 'unsupported'
+}
+
+/** A model pick, even of the unchanged saved value, asks Claude to leave its fallback at the next turn. */
+export function noteClaudeModelPick(
+  sessions: ReadonlyMap<string, ClaudeSession>,
+  { sessionId, fence }: { sessionId: string; fence: number },
+  emit: (session: ClaudeSession, event: ClaudeStructuredSessionEvent) => void
+): void {
+  const session = sessions.get(sessionId)
+  if (session?.fence !== fence || !session.modelFallback || session.modelFallback.picked) {
+    return
+  }
+  session.modelFallback = { ...session.modelFallback, picked: true }
+  emit(session, {
+    type: 'options-reported',
+    sessionId,
+    fence,
+    acquisitionGeneration: session.acquisitionGeneration,
+    reportedOptions: { fallbackModel: undefined }
+  })
 }
 
 /** A client's write to a live session. */
@@ -176,6 +200,7 @@ export async function setClaudeStructuredOption(
     }
     if (input.key === 'model') {
       session.translator?.modelWritten(input.value)
+      delete session.modelFallback
     }
   } catch (error) {
     if (error instanceof ClaudeControlRequestError) {

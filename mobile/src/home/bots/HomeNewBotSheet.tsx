@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { MobileNewBotSheet } from '../../bots/MobileNewBotSheet'
 import { botPlaceClient, useOpenBotHome } from '../../bots/use-open-bot-home'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { homeNewBotComputers, type HomeBots } from './home-bot-rows'
 
 /** Home's New bot: the computer's own sheet, with Runs on across every connected computer. Mounted
@@ -32,9 +33,10 @@ function OpenHomeNewBotSheet(props: {
   onClose: () => void
   onAfterClose: () => void
 }) {
-  const openBotHome = useOpenBotHome()
+  const openBotHome = useOpenBotHome({ standalone: true })
+  const t = useMobileTranslation()
   const { bots, clientOf } = props
-  const computers = useMemo(() => homeNewBotComputers(bots), [bots])
+  const computers = useMemo(() => homeNewBotComputers(bots, t), [bots, t])
   const byId = useMemo(
     () => new Map(bots.computers.map((computer) => [computer.key, computer])),
     [bots]
@@ -48,19 +50,26 @@ function OpenHomeNewBotSheet(props: {
     const paired = computer ? clientOf(computer.pairedHostId) : null
     return computer && paired ? botPlaceClient(paired, computer) : null
   }
-  const botNamesOn = (id: string) =>
-    bots.rows.flatMap((row) => (row.kind === 'bot' && row.computerKey === id ? [row.title] : []))
+  const botsOn = (id: string) =>
+    bots.rows.flatMap((row) => (row.kind === 'bot' && row.computerKey === id ? [row.bot] : []))
   const first = computers.find((computer) => computer.refusal === undefined) ?? null
   return (
     <MobileNewBotSheet
       visible={props.visible}
       computerId={first?.id ?? null}
       computers={computers}
-      botNamesOn={botNamesOn}
+      botsOn={botsOn}
       clientFor={clientFor}
       pairedClientFor={pairedClientFor}
       onClose={props.onClose}
       onAfterClose={props.onAfterClose}
+      onOpenBot={(bot, computer, homeDraft) => {
+        props.onClose()
+        const place = byId.get(computer.id)
+        if (place) {
+          openBotHome(place, bot, { homeDraft })
+        }
+      }}
       onCreated={(bot, computer) => {
         props.onClose()
         const place = byId.get(computer.id)

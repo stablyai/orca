@@ -3,6 +3,11 @@ import { posix as pathPosix } from 'node:path'
 import { wslCodexRuntimeHomeForGuestHome } from '../../pty/shell-startup/codex-home-wsl-env'
 import { WSL_SESSION_BRIDGE_TIMEOUT_MS } from '../../codex/history/bridges/wsl-codex-session-bridge-script'
 import { runWslProcess } from '../../wsl/execution/wsl-runner'
+import {
+  describeDrainStepFailure,
+  inspectNeverStarted,
+  inspectPayload
+} from './legacy-wsl-runtime-auth-inspect-outcome'
 import { compareCodexAuthFreshness, codexAuthIsFresher } from '../credentials/codex-auth-identity'
 import {
   APPLY_LEGACY_AUTH_SCRIPT,
@@ -37,6 +42,12 @@ type LegacyWslRuntimeAuthDrainOptions = {
     runtimeAuthContents: string
   ) => LegacyWslRuntimeAuthDestination | null | Promise<LegacyWslRuntimeAuthDestination | null>
 }
+
+/**
+ * wsl.exe failed before the guest ran the inspect, so its crash recovery never started. Recovery is
+ * idempotent and reruns on the next drain; until then a launch may use the destination's older auth.
+ */
+class LegacyWslAuthInspectUnavailableError extends Error {}
 
 const drainQueueByDistro = new Map<string, Promise<void>>()
 const completedDistroKeys = new Set<string>()
@@ -78,7 +89,7 @@ export function startLegacyWslRuntimeAuthDrain(
   // Coalesce callers so polling a pending migration cannot build an unbounded promise chain.
   const inFlight = drainQueueByDistro.get(key)
   if (inFlight) {
-    return startOptions.throwOnFailure ? inFlight : logDrainFailure(inFlight)
+    return startOptions.throwOnFailure ? logInspectUnavailable(inFlight) : logDrainFailure(inFlight)
   }
   const next = drainLegacyWslRuntimeAuth(options).then((status) => {
     if (status === 'complete') {
@@ -92,7 +103,16 @@ export function startLegacyWslRuntimeAuthDrain(
     }
   }
   void next.then(clearQueue, clearQueue)
-  return startOptions.throwOnFailure ? next : logDrainFailure(next)
+  return startOptions.throwOnFailure ? logInspectUnavailable(next) : logDrainFailure(next)
+}
+
+function logInspectUnavailable(task: Promise<void>): Promise<void> {
+  return task.catch((error) => {
+    if (!(error instanceof LegacyWslAuthInspectUnavailableError)) {
+      throw error
+    }
+    console.warn('[codex-wsl-auth-drain] Legacy runtime auth drain deferred:', error.message)
+  })
 }
 
 function logDrainFailure(task: Promise<void>): Promise<void> {
@@ -126,9 +146,15 @@ export async function drainLegacyWslRuntimeAuth(
   if (inspection.code === SOURCE_AUTH_ABSENT_EXIT) {
     return 'pending'
   }
+  if (inspectNeverStarted(inspection)) {
+    throw new LegacyWslAuthInspectUnavailableError(
+      describeDrainStepFailure('inspect', inspection, true)
+    )
+  }
   assertSuccessfulDrainStep('inspect', inspection)
 
-  const inspected = parseLegacyRuntimeInspection(inspection.stdout)
+  const payload = inspectPayload(inspection.stdout)
+  const inspected = payload === null ? null : parseLegacyRuntimeInspection(payload)
   if (!inspected) {
     return 'pending'
   }
@@ -267,15 +293,12 @@ async function finalizeAbsentLegacyAuth(
 
 function assertSuccessfulDrainStep(
   step: string,
-  result: { code: number | null; stderr: string; timedOut: boolean }
+  result: { code: number | null; stdout: string; stderr: string; timedOut: boolean }
 ): void {
   if (result.code === 0 && !result.timedOut) {
     return
   }
-  const detail = result.stderr.trim()
-  throw new Error(
-    `Legacy WSL auth drain ${step} failed (${result.timedOut ? 'timeout' : `exit ${result.code}`})${detail ? `: ${detail}` : ''}`
-  )
+  throw new Error(describeDrainStepFailure(step, result))
 }
 
 function sha256(contents: string): string {

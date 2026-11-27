@@ -1,4 +1,5 @@
 import { GitHubBodyImageUrlsContext } from './comment-markdown-github-image-urls'
+import type { MarkdownFadeHold } from './comment-markdown-word-fade'
 import React from 'react'
 import {
   CommentMarkdownMermaidContext,
@@ -30,6 +31,7 @@ import {
   type FileLinkExists
 } from '../../../../shared/native-chat/file-access/native-chat-file-link-tree'
 import { CommentMarkdownBlockLineContext } from './comment-markdown-code-renderers'
+import { MARKDOWN_CLOSING_FENCE, remarkMarkdownClosingFence } from './comment-markdown-code-fence'
 import { htmlRendersAsText, remarkUnknownHtmlAsText } from './comment-markdown-unknown-html-as-text'
 import { CommentMarkdownWords } from './CommentMarkdownWords'
 import {
@@ -85,12 +87,18 @@ export type CommentMarkdownExtension = {
   components: Components
 }
 
-function extensionRehypePlugins(extension: CommentMarkdownExtension): MarkdownPlugins {
+function extensionRehypePlugins(
+  extension: CommentMarkdownExtension | undefined,
+  trackCodeFences: boolean
+): MarkdownPlugins {
   const attributes: NonNullable<SanitizeSchema['attributes']> = {
     ...commentMarkdownSanitizeSchema.attributes
   }
-  for (const [tagName, names] of Object.entries(extension.sanitizeAttributes)) {
+  for (const [tagName, names] of Object.entries(extension?.sanitizeAttributes ?? {})) {
     attributes[tagName] = [...(attributes[tagName] ?? []), ...names]
+  }
+  if (trackCodeFences) {
+    attributes.code = [...(attributes.code ?? []), MARKDOWN_CLOSING_FENCE]
   }
   return [rehypeRaw, [rehypeSanitize, { ...commentMarkdownSanitizeSchema, attributes }]]
 }
@@ -113,8 +121,11 @@ type CommentMarkdownProps = React.ComponentPropsWithoutRef<'div'> & {
    *  append re-renders only the last block, and close markup its end leaves open.
    *  The block-by-block render stays on once seen. */
   growing?: boolean
-  /** Give each word its own `data-word` element, for a stylesheet to animate as words arrive. */
-  fadeWords?: boolean
+  /** Content offset where arriving words start; words from it on get their own `data-word`
+   *  element, for a stylesheet to fade in. */
+  fadeFrom?: number
+  /** Selected fading words, whose groups keep their word elements while the window moves past. */
+  fadeHold?: MarkdownFadeHold
   extension?: CommentMarkdownExtension
   /** Show raw HTML that sanitize would strip as literal text instead of dropping its tags. */
   unknownHtmlAsText?: boolean
@@ -142,7 +153,8 @@ const CommentMarkdown = React.memo(
       renderMermaid = true,
       keepMermaidSourceWhilePending = false,
       growing = false,
-      fadeWords = false,
+      fadeFrom,
+      fadeHold,
       extension,
       onCopy,
       unknownHtmlAsText = false,
@@ -169,9 +181,13 @@ const CommentMarkdown = React.memo(
       () => ({ ...components, span: CommentMarkdownWords }),
       [components]
     )
+    const trackCodeFences = renderCodeBlock !== undefined && variant === 'document'
     const activeRehypePlugins = React.useMemo<MarkdownPlugins>(
-      () => (extension ? extensionRehypePlugins(extension) : rehypePlugins),
-      [extension]
+      () =>
+        extension || trackCodeFences
+          ? extensionRehypePlugins(extension, trackCodeFences)
+          : rehypePlugins,
+      [extension, trackCodeFences]
     )
     const activeRemarkPlugins = React.useMemo(() => {
       const htmlPlugins = unknownHtmlAsText ? unknownHtmlAsTextRemarkPlugins : remarkPlugins
@@ -182,9 +198,18 @@ const CommentMarkdown = React.memo(
         ? [...basePlugins, remarkNativeChatFileLinks(fileLinkExists)]
         : basePlugins
       const withMath: RemarkPlugins = math ? [...plugins, remarkChatMath] : plugins
-      const withExtension = extension ? [...withMath, ...extension.remarkPlugins] : withMath
+      const withFences = trackCodeFences ? [...withMath, remarkMarkdownClosingFence] : withMath
+      const withExtension = extension ? [...withFences, ...extension.remarkPlugins] : withFences
       return githubRepo ? [...withExtension, remarkGitHubReferences(githubRepo)] : withExtension
-    }, [extension, fileLinkExists, githubRepo, math, singleTildeStrikethrough, unknownHtmlAsText])
+    }, [
+      extension,
+      fileLinkExists,
+      githubRepo,
+      math,
+      trackCodeFences,
+      singleTildeStrikethrough,
+      unknownHtmlAsText
+    ])
     const blocks = useMarkdownBlocks(
       content,
       growing,
@@ -193,11 +218,13 @@ const CommentMarkdown = React.memo(
       extension,
       unknownHtmlAsText ? unknownHtmlRendersAsText : undefined
     )
-    const [hadWordFade, setHadWordFade] = React.useState(fadeWords)
-    if (fadeWords && !hadWordFade) {
+    // Once a reply fades, every block keeps the word renderer (plain where nothing fades), so a
+    // block leaving the window keeps its nodes and a reader's selection in it, math included.
+    const [hadWordFade, setHadWordFade] = React.useState(fadeFrom !== undefined)
+    if (fadeFrom !== undefined && !hadWordFade) {
       setHadWordFade(true)
     }
-    const wrapsWords = fadeWords || hadWordFade
+    const blockComponents = hadWordFade || fadeFrom !== undefined ? fadingComponents : components
 
     return (
       <GitHubBodyImageUrlsContext.Provider value={bodyImageUrls}>
@@ -219,30 +246,52 @@ const CommentMarkdown = React.memo(
               }}
               {...rest}
             >
-              {blocks.map((block, index) => (
-                <CommentMarkdownBlockLineContext.Provider key={block.start} value={block.line}>
-                  <MemoizedMarkdown
-                    block={block.tree ? block : undefined}
-                    remarkPlugins={activeRemarkPlugins}
-                    rehypePlugins={activeRehypePlugins}
-                    math={math}
-                    fadeWords={wrapsWords}
-                    components={wrapsWords ? fadingComponents : components}
-                    urlTransform={
-                      allowFileUriLinks
-                        ? commentMarkdownFileUriUrlTransform
-                        : commentMarkdownUrlTransform
-                    }
-                  >
-                    {growing && index === blocks.length - 1 && !block.literalMath
-                      ? remend(markdownBlockContent(block), {
-                          linkMode: 'text-only',
-                          ...(math ? { katex: false, inlineKatex: false } : {})
-                        })
-                      : markdownBlockContent(block)}
-                  </MemoizedMarkdown>
-                </CommentMarkdownBlockLineContext.Provider>
-              ))}
+              {blocks.map((block, index) => {
+                // Only blocks reaching into the fade window or a held selection fade; earlier ones
+                // stay memoized and plain.
+                const blockEnd = block.start + block.text.length
+                const held =
+                  fadeHold !== undefined && fadeHold.from < blockEnd && fadeHold.to > block.start
+                // A held block the window has passed keeps one value, so its memo holds.
+                const blockFadeFrom =
+                  fadeFrom !== undefined && (fadeFrom < blockEnd || held)
+                    ? Math.min(block.text.length, Math.max(0, fadeFrom - block.start))
+                    : undefined
+                const authored = markdownBlockContent(block)
+                return (
+                  <CommentMarkdownBlockLineContext.Provider key={block.start} value={block.line}>
+                    <MemoizedMarkdown
+                      block={block.tree ? block : undefined}
+                      remarkPlugins={activeRemarkPlugins}
+                      rehypePlugins={activeRehypePlugins}
+                      math={math}
+                      fadeFrom={blockFadeFrom}
+                      fadeSettled={!held && index < blocks.length - 1}
+                      fadeBase={block.start}
+                      authoredCodeFenceSource={trackCodeFences ? block.text : undefined}
+                      {...(held
+                        ? {
+                            fadeHoldFrom: fadeHold.from - block.start,
+                            fadeHoldTo: fadeHold.to - block.start
+                          }
+                        : {})}
+                      components={blockComponents}
+                      urlTransform={
+                        allowFileUriLinks
+                          ? commentMarkdownFileUriUrlTransform
+                          : commentMarkdownUrlTransform
+                      }
+                    >
+                      {growing && index === blocks.length - 1 && !block.literalMath
+                        ? remend(authored, {
+                            linkMode: 'text-only',
+                            ...(math ? { katex: false, inlineKatex: false } : {})
+                          })
+                        : authored}
+                    </MemoizedMarkdown>
+                  </CommentMarkdownBlockLineContext.Provider>
+                )
+              })}
             </div>
           </CommentMarkdownMermaidSourceContext.Provider>
         </CommentMarkdownMermaidContext.Provider>

@@ -2,17 +2,18 @@ import { Plus } from 'lucide-react-native'
 import { Fragment, memo, useCallback } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors } from '../theme/mobile-theme'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { classifyConnection } from '../transport/connection/connection-health'
-import { resolveHomeHostConnectionState } from '../transport/hosts/home-host-auto-connect'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import type { ConnectionState } from '../transport/connection/connection-state'
 import type { HostCatalogEntry } from '../host-catalog/host-profile'
 import type { HostWorktreeInfo } from '../worktree/catalog/home-worktree-info'
-import type { HomeHostConnections } from './home-host-connection-projection'
-import { homeListStyles } from './home-list-styles'
+import {
+  classifyHomeHostConnection,
+  type HomeHostConnections
+} from './home-host-connection-projection'
+import { homeListStylesSheet } from './home-list-styles'
 import { MobileHomeDesktopRow } from './MobileHomeDesktopRow'
 import { MobileHomeSectionHeading } from './MobileHomeSectionHeading'
+import { useThemedStyles } from '../theme/themed-styles'
 
 type MobileHomeHostListProps = {
   autoConnectHostIds: string[]
@@ -30,14 +31,15 @@ type MobileHomeHostListProps = {
   onPairDesktop: () => void
 }
 
-/** Home's Desktops section: one row per paired desktop, then "Pair a desktop". */
+/** Home's Computers section: one row per paired computer, then "Pair a computer". */
 export function MobileHomeHostList(props: MobileHomeHostListProps) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const homeListStyles = useThemedStyles(homeListStylesSheet)
   return (
     <>
       <MobileHomeSectionHeading
-        title={t('home.listHeader.desktopsHeading', 'Desktops')}
+        title={t('home.listHeader.computersHeading', 'Computers')}
         first={props.first}
       />
       <View style={homeListStyles.group}>
@@ -58,7 +60,6 @@ export function MobileHomeHostList(props: MobileHomeHostListProps) {
             <View
               style={[
                 homeListStyles.separator,
-                homeListStyles.tileSeparator,
                 index === props.hosts.length - 1 && homeListStyles.fullSeparator
               ]}
             />
@@ -66,12 +67,18 @@ export function MobileHomeHostList(props: MobileHomeHostListProps) {
         ))}
         <Pressable
           accessibilityRole="button"
-          style={({ pressed }) => [homeListStyles.actionRow, pressed && homeListStyles.rowPressed]}
+          style={({ pressed }) => [
+            homeListStyles.actionRow,
+            homeListStyles.columnActionRow,
+            pressed && homeListStyles.rowPressed
+          ]}
           onPress={props.onPairDesktop}
         >
-          <Plus size={18} color={colors.accentBlue} />
+          <View style={homeListStyles.actionColumn}>
+            <Plus size={18} color={colors.accentBlue} />
+          </View>
           <Text style={homeListStyles.actionLabel}>
-            {t('home.desktops.pairDesktop', 'Pair a desktop')}
+            {t('home.computers.pairComputer', 'Pair a computer')}
           </Text>
         </Pressable>
       </View>
@@ -93,22 +100,9 @@ type MobileHomeHostRowProps = Pick<
 
 const MobileHomeHostRow = memo(function MobileHomeHostRow(props: MobileHomeHostRowProps) {
   const { item, onOpen, onOpenActions } = props
-  const state = resolveHomeHostConnectionState(
-    item.id,
-    props.hostStates[item.id],
-    props.autoConnectHostIds
-  )
+  const t = useMobileTranslation()
+  const { state, verdict } = classifyHomeHostConnection(item, props, t)
   const connection = props.hostConnections[item.id]
-  const verdict = classifyConnection({
-    state,
-    reconnectAttempts: props.hostAttempts[item.id] ?? 0,
-    lastConnectedAt: props.hostLastConnected[item.id] ?? null,
-    endpoint: item.endpoint,
-    pendingPath: connection?.pendingPath ?? null,
-    pairingRejected: connection?.pairingRejected ?? false,
-    relayHostReachability: connection?.relayHostReachability ?? 'connecting',
-    hostName: item.name
-  })
   const open = useCallback(() => onOpen(item), [item, onOpen])
   const openActions = useCallback(() => onOpenActions(item), [item, onOpenActions])
 

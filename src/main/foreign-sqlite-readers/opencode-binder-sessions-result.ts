@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 
 export type BinderSessionRow = {
   id: string
@@ -17,13 +18,15 @@ export function openCodeBinderSessionsFailure(): BinderSessionRow[] {
   return []
 }
 
-const rowsSchema = z.array(
-  z.object({
-    id: z.string(),
-    directory: z.string(),
-    createdAtMs: z.number(),
-    parentId: z.string().nullable()
-  })
+const rowsSchema = lazyZodSchema(() =>
+  z.array(
+    z.object({
+      id: z.string(),
+      directory: z.string(),
+      createdAtMs: z.number(),
+      parentId: z.string().nullable()
+    })
+  )
 )
 
 // Validate structured-clone replies at the worker boundary.

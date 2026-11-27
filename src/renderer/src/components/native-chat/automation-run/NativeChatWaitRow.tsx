@@ -12,7 +12,6 @@ import type { Bot } from '../../../../../shared/bot-types'
 import type { AutomationOnce, WaitEnding } from '../../../../../shared/automation-once'
 import type { BotAutomationFacts } from '../../../../../shared/bots/bot-automation-rows'
 import {
-  automationRowAccessibleName,
   automationRowMark,
   waitRowLabel,
   waitRowState,
@@ -26,12 +25,7 @@ import { useNativeChatDisclosure } from '../messages/disclosure/native-chat-disc
 import { useNativeChatVisualOwner } from '../media/visuals/native-chat-visual-owner'
 import { useAutomationRunWording } from './automation-run-wording'
 import { RUN_LINK_BUTTON } from './automation-run-link-button'
-import {
-  NativeChatAutomationRowBody,
-  NativeChatAutomationRowFrame,
-  ROW_HEADING,
-  ROW_NOTE
-} from './NativeChatAutomationRowFrame'
+import { NativeChatAutomationRowFrame, ROW_HEADING, ROW_NOTE } from './NativeChatAutomationRowFrame'
 
 /** Open automation while the host lists it; Cancel while it still waits, deleting it unrun. */
 function WaitActions({
@@ -56,7 +50,7 @@ function WaitActions({
         <button
           type="button"
           className={RUN_LINK_BUTTON}
-          onClick={() => openBotAutomation(automationId, null)}
+          onClick={() => openBotAutomation(bot.hostId, automationId, null)}
         >
           {label.open}
         </button>
@@ -105,45 +99,34 @@ function WaitRow({
   return (
     <NativeChatAutomationRowFrame
       mark={automationRowMark(automation)}
-      label={label}
+      lead={label}
       name={automation.name}
       status={status}
-      accessibleName={automationRowAccessibleName(
-        {
-          label,
-          name: automation.name,
-          status,
-          time: timestamp === null ? null : wording.formatTime(timestamp)
-        },
-        say
-      )}
       timestamp={timestamp}
       open={open}
       onToggle={() => setOpen(!open)}
     >
-      {(ids) => (
-        <NativeChatAutomationRowBody ids={ids} timestamp={timestamp}>
-          {when ? (
-            <>
-              <h4 className={ROW_HEADING}>{say('waitsFor')}</h4>
-              <div className="text-card-foreground">{when}</div>
-            </>
-          ) : null}
-          {once && state.kind === 'waiting' ? (
-            <>
-              <h4 className={ROW_HEADING}>{say('thenLine')}</h4>
-              <div className={ROW_NOTE}>{waitRowThen(once, wording)}</div>
-            </>
-          ) : null}
-          {bot ? (
-            <WaitActions
-              bot={bot}
-              automationId={automation.id}
-              label={{ open: say('openAutomation'), cancel: say('cancel') }}
-            />
-          ) : null}
-        </NativeChatAutomationRowBody>
-      )}
+      <>
+        {when ? (
+          <>
+            <h4 className={ROW_HEADING}>{say('waitsFor')}</h4>
+            <div className="text-card-foreground">{when}</div>
+          </>
+        ) : null}
+        {once && state.kind === 'waiting' ? (
+          <>
+            <h4 className={ROW_HEADING}>{say('thenLine')}</h4>
+            <div className={ROW_NOTE}>{waitRowThen(automation, once, wording)}</div>
+          </>
+        ) : null}
+        {bot ? (
+          <WaitActions
+            bot={bot}
+            automationId={automation.id}
+            label={{ open: say('openAutomation'), cancel: say('cancel') }}
+          />
+        ) : null}
+      </>
     </NativeChatAutomationRowFrame>
   )
 }
@@ -155,6 +138,7 @@ export function NativeChatWaitRow({
   automation,
   once,
   ended,
+  endedOn,
   timestamp
 }: {
   messageId: string
@@ -162,6 +146,8 @@ export function NativeChatWaitRow({
   once: AutomationOnce
   /** How it ended, when its run or card is in this chat. */
   ended?: WaitEnding
+  /** The rules it had when it ended, which an edit may have changed. */
+  endedOn?: BotAutomationFacts['on']
   timestamp: number | null
 }): React.JSX.Element {
   const owner = useNativeChatVisualOwner()
@@ -178,7 +164,12 @@ export function NativeChatWaitRow({
       once={once}
       state={
         waitRowState(
-          { automationSaved: { automation }, savedWaitEnded: ended, timestamp },
+          {
+            automationSaved: { automation },
+            savedWaitEnded: ended,
+            savedWaitEndedOn: endedOn,
+            timestamp
+          },
           bot?.cancelledWaits,
           now,
           host

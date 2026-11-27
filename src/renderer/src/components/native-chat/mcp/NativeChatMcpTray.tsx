@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { X } from 'lucide-react'
+import { ArrowUpRight, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
@@ -16,7 +16,13 @@ import {
   createAgentSessionMcpPanelHook,
   type AgentSessionMcpPanelState
 } from '../../../../../shared/agent-session/view/use-agent-session-mcp-panel'
-import { groupAgentSessionMcpServers } from '../../../../../shared/agent-session/view/agent-session-mcp-server-presentation'
+import {
+  groupAgentSessionMcpServers,
+  ORCA_MCP_SOURCE
+} from '../../../../../shared/agent-session/view/agent-session-mcp-server-presentation'
+import { MCP_SERVERS_RUNTIME_CAPABILITY } from '../../../../../shared/mcp-servers/mcp-servers'
+import { useStructuredAgentSessionHostCapability } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
+import { openMcpServersSettings } from '@/components/settings/navigation/open-mcp-servers-settings'
 import { NativeChatComposerTabStrip } from '../composer/controls/NativeChatComposerTabStrip'
 import { useStructuredAgentSessionHostExecutionPhase } from '../session/status/structured-agent-session-status-hooks'
 import { mcpSourceLabel, mcpTraySummary } from './native-chat-mcp-server-text'
@@ -60,6 +66,8 @@ export function NativeChatMcpTray({
   const panel = useAgentSessionMcpPanel(call, openSignInPage, `${opens}:${phase}`)
   const readAgain = panel.retry
   const [retrying, setRetrying] = useState(false)
+  // Only a host whose MCP servers are on has a settings page for them.
+  const managed = useStructuredAgentSessionHostCapability(target, MCP_SERVERS_RUNTIME_CAPABILITY)
   const retry = useCallback(() => {
     setRetrying(true)
     void readAgain().finally(() => setRetrying(false))
@@ -74,6 +82,7 @@ export function NativeChatMcpTray({
       dismissSignIn={panel.dismissSignIn}
       openUrl={openSignInPage}
       onClose={onClose}
+      {...(managed ? { manageServers: () => openMcpServersSettings(target) } : {})}
     />
   )
 }
@@ -87,6 +96,8 @@ type McpTrayViewProps = {
   dismissSignIn: () => void
   openUrl: (url: string) => void
   onClose: () => void
+  /** Opens the host's MCP servers settings; absent on a host without them. */
+  manageServers?: () => void
 }
 
 export function NativeChatMcpTrayView(props: McpTrayViewProps): React.JSX.Element {
@@ -141,6 +152,18 @@ export function NativeChatMcpTrayView(props: McpTrayViewProps): React.JSX.Elemen
           </Tooltip>
         </div>
         {listed ? <McpTrayList {...props} /> : null}
+        {props.manageServers ? (
+          <div className="flex h-8 items-center border-t border-border px-3">
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={props.manageServers}
+            >
+              {t('components.native-chat.mcp.manage', 'Manage MCP servers')}
+              <ArrowUpRight className="size-3" aria-hidden />
+            </button>
+          </div>
+        ) : null}
       </section>
     </NativeChatComposerTabStrip>
   )
@@ -156,7 +179,7 @@ function McpTrayStatus({ state }: McpTrayViewProps): React.JSX.Element | null {
     return loading ? (
       <span aria-busy="true">
         {SEPARATOR}
-        <LoadingSpinner className="mr-1 inline size-3 align-[-0.125em]" />
+        <LoadingSpinner className="mr-1 inline-block size-3 align-[-0.125em]" />
         {t('components.native-chat.mcp.loading', 'Loading…')}
       </span>
     ) : null
@@ -203,9 +226,17 @@ function McpTrayList({
 }: McpTrayViewProps): React.JSX.Element {
   const t = useTranslate()
   const pending = state.pending
+  const groups = groupAgentSessionMcpServers(state.servers)
+  // Orca's group sits above the agent's own, so the list grows to keep them in view.
+  const tall = groups.some((group) => group.source === ORCA_MCP_SOURCE)
   return (
-    <div className="scrollbar-sleek max-h-52 overflow-y-auto border-t border-border py-1">
-      {groupAgentSessionMcpServers(state.servers).map((group) => {
+    <div
+      className={cn(
+        'scrollbar-sleek overflow-y-auto border-t border-border py-1',
+        tall ? 'max-h-80' : 'max-h-52'
+      )}
+    >
+      {groups.map((group) => {
         const label = group.source === null ? undefined : mcpSourceLabel(group.source, t)
         return (
           <div key={group.source ?? ''}>

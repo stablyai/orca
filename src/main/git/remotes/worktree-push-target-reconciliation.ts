@@ -2,7 +2,7 @@
 
 // Sweep all fork remotes with cleanup's shared predicates to reclaim leaks from legacy metadata or external worktree removal.
 import { gitExecFileAsync } from '../command-runner/git-exec-file'
-import { listWorktrees } from '../worktrees/catalog/worktree-scan-cache'
+import { listWorktreesSharedStrictAllowingTrueEmpty } from '../worktrees/catalog/worktree-scan-cache'
 import type { GitPushTarget } from '../../../shared/worktree/types'
 import { WORKTREE_ID_SEPARATOR } from '../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { worktreeIdentityKey } from '../../../shared/worktree/id'
@@ -100,10 +100,6 @@ function shouldReconcileNow(repoId: string): boolean {
   return last === undefined || Date.now() - last >= RECONCILE_COOLDOWN_MS
 }
 
-export function _resetPrRemoteReconciliationRateLimitForTests(): void {
-  lastReconciledAtByRepoId.clear()
-}
-
 function logReclaimed(repoPath: string, reclaimed: string[]): void {
   if (reclaimed.length > 0) {
     console.log(
@@ -124,7 +120,7 @@ export async function reconcileOrphanedPrRemotes(
   }
   lastReconciledAtByRepoId.set(repoId, Date.now())
   try {
-    const liveWorktrees = await listWorktrees(repoPath, gitOptions)
+    const liveWorktrees = await listWorktreesSharedStrictAllowingTrueEmpty(repoPath, gitOptions)
     logReclaimed(
       repoPath,
       await reconcileOrphanedPrRemotesWithExec(
@@ -136,6 +132,7 @@ export async function reconcileOrphanedPrRemotes(
       )
     )
   } catch (error) {
+    lastReconciledAtByRepoId.delete(repoId)
     console.warn(`[worktrees] Failed to reconcile orphaned PR remotes for ${repoPath}`, error)
   }
 }

@@ -4,6 +4,8 @@ import { storedConnectorAsker } from '../../../../../../shared/connector-message
 import type { ConnectorAsker } from '../../../../../../shared/connectors/connector-cloud-contract'
 import { projectStructuredItemToNativeChat } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { MessageRow } from './NativeChatMessageRow'
+import { NativeChatDisclosureContext } from '../disclosure/native-chat-disclosure-store'
+import { NativeChatSlackPeopleContext } from '../../native-chat-markdown-mentions'
 
 const ASKER: ConnectorAsker = {
   userId: 'U0SAM',
@@ -17,7 +19,20 @@ const ASKER: ConnectorAsker = {
   context: []
 }
 
-function SlackMessage(): React.JSX.Element {
+const EARLIER: ConnectorAsker = {
+  ...ASKER,
+  text: 'Can you pick this up?',
+  context: [
+    {
+      kind: 'no_access',
+      userId: 'U0ZED',
+      name: 'Zed Ray',
+      text: '<@U0ANN|Ann Park> the fix is in <#C0ORCA|p-orca>, see <https://github.com/stablyai/orca/pull/1|the release PR>'
+    }
+  ]
+}
+
+function SlackMessage({ asker = ASKER }: { asker?: ConnectorAsker }): React.JSX.Element {
   const message = projectStructuredItemToNativeChat({
     itemId: 'slack-message',
     sequence: 1,
@@ -27,8 +42,8 @@ function SlackMessage(): React.JSX.Element {
       kind: 'message',
       role: 'user',
       origin: 'connector',
-      asker: storedConnectorAsker('slack', ASKER),
-      blocks: [{ type: 'text', text: connectorAskerPrompt('slack', ASKER) }]
+      asker: storedConnectorAsker('slack', asker),
+      blocks: [{ type: 'text', text: connectorAskerPrompt('slack', asker) }]
     }
   })
   return (
@@ -41,3 +56,45 @@ function SlackMessage(): React.JSX.Element {
 }
 
 export const slackMarkup = defineFixture({ width: 640, render: () => <SlackMessage /> })
+// Every fold open, so the earlier messages show.
+const OPEN = { read: () => true, write: () => {}, toolRunMeasurements: new Map() }
+export const slackEarlierMessages = defineFixture({
+  width: 640,
+  render: () => (
+    <NativeChatDisclosureContext.Provider value={OPEN}>
+      <SlackMessage asker={EARLIER} />
+    </NativeChatDisclosureContext.Provider>
+  )
+})
+
+function AgentReply(): React.JSX.Element {
+  const message = projectStructuredItemToNativeChat({
+    itemId: 'agent-reply',
+    sequence: 2,
+    revision: 0,
+    observedAt: 0,
+    body: {
+      kind: 'message',
+      role: 'assistant',
+      blocks: [
+        {
+          type: 'text',
+          text:
+            '<@U0SAM> The limit of about 5 is per channel. <!here> ask <@U0ANN|Ann Park> or ' +
+            '<@U0ZED>; the raw form stays in code: `<@U0SAM>`'
+        }
+      ]
+    }
+  })
+  return (
+    <NativeChatSlackPeopleContext value={new Map([['U0SAM', 'Sam Lee']])}>
+      <div className="native-chat-appearance p-4">
+        {message ? (
+          <MessageRow message={message} expandSignal={false} onScrollMessageToTop={() => {}} />
+        ) : null}
+      </div>
+    </NativeChatSlackPeopleContext>
+  )
+}
+
+export const agentReplyMentions = defineFixture({ width: 640, render: () => <AgentReply /> })

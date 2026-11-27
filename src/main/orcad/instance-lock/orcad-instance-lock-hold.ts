@@ -1,4 +1,5 @@
 // Holding the lock means re-proving it on every heartbeat, not only at acquisition.
+import { dirname, relative, isAbsolute } from 'node:path'
 import { statSync, unlinkSync, utimesSync } from 'node:fs'
 import { startOrcadLockHeartbeat } from './orcad-lock-clone-machine'
 import { readBoundedLockFile } from './orcad-instance-lock-reclaim'
@@ -16,6 +17,22 @@ export type OrcadInstanceLock = {
   /** `keepUnexpectedExit` puts back the crashed run's record this lock reclaimed, so the next
    * start still reports that run; for one-shot tools that must not consume the notice. */
   release(options?: { keepUnexpectedExit?: boolean }): void
+}
+
+const ownedProfileLocks = new Map<string, OrcadLockRecord>()
+
+export function ownsOrcadProfileDirectory(directory: string): boolean {
+  for (const [path, record] of ownedProfileLocks) {
+    const child = relative(dirname(path), directory)
+    if (child.startsWith('..') || isAbsolute(child)) {
+      continue
+    }
+    const current = parseOrcadInstanceLockRecord(readBoundedLockFile(path) ?? '')
+    if (current?.nonce === record.nonce && current.pid === process.pid) {
+      return true
+    }
+  }
+  return false
 }
 
 type OrcadLockBeat = 'held' | 'lost' | 'unproven'
@@ -89,6 +106,7 @@ export function holdOrcadInstanceLock(
     onExclusivityLost: () => void
   }
 ): OrcadInstanceLock {
+  ownedProfileLocks.set(lockPath, record)
   let released = false
   const stopHeartbeat = startOrcadLockHeartbeat(() => {
     if (beatOrcadInstanceLock(lockPath, record, publish) === 'lost') {
@@ -105,6 +123,9 @@ export function holdOrcadInstanceLock(
         return
       }
       released = true
+      if (ownedProfileLocks.get(lockPath)?.nonce === record.nonce) {
+        ownedProfileLocks.delete(lockPath)
+      }
       stopHeartbeat()
       // Re-read ownership before unlinking so a successor’s live runtime cannot be unlocked.
       const current = parseOrcadInstanceLockRecord(readBoundedLockFile(lockPath) ?? '')

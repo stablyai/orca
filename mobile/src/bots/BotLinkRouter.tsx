@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router'
 import { PickerModal } from '../components/sheets/PickerModal'
 import { hostPickerOptions } from '../host-catalog/selection/use-connected-host-picker'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { getUiIntlLocale } from '../i18n/ui-intl-locale'
 import { NewWorkspaceLoadingDrawer } from '../new-workspace/NewWorkspaceLoadingDrawer'
 import type { HostProfile } from '../host-catalog/host-profile'
 import { redeemBotAccessRequest } from './bot-access-request-redeem'
@@ -26,7 +27,14 @@ import type { BotLinkTarget } from './bot-link-target'
 import { botPlaceClient, useOpenBotHome } from './use-open-bot-home'
 import type { BotLinkComputerAnswer } from './bot-link-host-reads'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../src/shared/execution-host/execution-host'
-import { clearBotLink, readPendingBotLink, subscribeToPendingBotLink } from './pending-bot-link'
+import {
+  clearBotLink,
+  continueBotLink,
+  isPendingBotLink,
+  readPendingBotLink,
+  type PendingBotLink,
+  subscribeToPendingBotLink
+} from './pending-bot-link'
 import { useBotLinkHostAnswers } from './use-bot-link-host-answers'
 
 type BotLinkOpen = { computer: BotLinkComputerAnswer; bot: BotLinkMatch['bot'] }
@@ -52,7 +60,10 @@ export function BotLinkRouter() {
         })
         return
       }
-      Alert.alert(t('bots.link.updateOrca', 'Update Orca'), botLinkUpdateNeededLine(t, names))
+      Alert.alert(
+        t('bots.link.updateOrca', 'Update Orca'),
+        botLinkUpdateNeededLine(t, names, getUiIntlLocale())
+      )
     },
     [router, t]
   )
@@ -62,17 +73,42 @@ export function BotLinkRouter() {
       clearBotLink(linkId)
     }
   }, [linkId])
+  const continueWith = useCallback(
+    (target: BotLinkTarget) => {
+      if (linkId !== undefined) {
+        continueBotLink(linkId, target)
+      }
+    },
+    [linkId]
+  )
   if (link === null) {
     return null
   }
-  if (link.target.kind === 'session') {
-    return <BotSessionLinkResolver key={link.id} target={link.target} onDone={done} />
+  const { target } = link
+  if (target.kind === 'session') {
+    return (
+      <BotSessionLinkResolver
+        key={link.id}
+        link={link}
+        target={target}
+        onDone={done}
+        onFallBack={() =>
+          continueWith({ kind: 'bot', botId: target.botId, conversation: target.conversation })
+        }
+      />
+    )
   }
   return (
     <BotLinkResolver
       key={link.id}
-      target={link.target}
+      link={link}
+      target={target}
       onOpen={open}
+      onOpenThread={(hostKey) =>
+        target.kind === 'bot' &&
+        target.conversation &&
+        continueWith({ ...target, kind: 'session', conversation: target.conversation, hostKey })
+      }
       onUpdateNeeded={showUpdateNeeded}
       onDone={done}
     />
@@ -80,13 +116,18 @@ export function BotLinkRouter() {
 }
 
 function BotLinkResolver({
+  link,
   target,
   onOpen,
+  onOpenThread,
   onUpdateNeeded,
   onDone
 }: {
+  link: PendingBotLink
   target: Exclude<BotLinkTarget, { kind: 'session' }>
   onOpen: (open: BotLinkOpen) => void
+  /** A thread link goes on to look up its conversation on the chosen computer, keeping the link. */
+  onOpenThread: (hostKey: string) => void
   /** Direct paired hosts too old, and the names of every computer too old. */
   onUpdateNeeded: (hosts: readonly HostProfile[], names: readonly string[]) => void
   onDone: () => void
@@ -111,6 +152,7 @@ function BotLinkResolver({
     [target, answers]
   )
   const resolution = target.kind === 'bot' ? botResolution : redeemed
+  const thread = target.kind === 'bot' && target.conversation !== undefined
   const hostsById = useMemo(() => new Map(hosts.map((host) => [host.id, host])), [hosts])
   // Answers name computers by key; a relayed server by its own name.
   const nameOf = useCallback(
@@ -173,12 +215,21 @@ function BotLinkResolver({
   }, [target, answers, computers, clientFor, onDone, t])
 
   useEffect(() => {
-    if (resolution === null || resolution.kind === 'pick' || settledRef.current) {
+    if (
+      resolution === null ||
+      resolution.kind === 'pick' ||
+      settledRef.current ||
+      !isPendingBotLink(link)
+    ) {
       return
     }
     settledRef.current = true
     switch (resolution.kind) {
       case 'open': {
+        if (thread) {
+          onOpenThread(resolution.match.hostId)
+          return
+        }
         const opening = toOpen(resolution.match)
         if (opening) {
           onOpen(opening)
@@ -198,14 +249,27 @@ function BotLinkResolver({
       case 'unreachable':
         Alert.alert(
           t('bots.link.botNotFound', 'Bot not found'),
-          botLinkUnreachableLine(t, hostNames(resolution.hostIds))
+          botLinkUnreachableLine(t, hostNames(resolution.hostIds), getUiIntlLocale())
         )
         break
       case 'missing':
         Alert.alert(t('bots.link.botNotFound', 'Bot not found'), botLinkMissingLine(t))
     }
     onDone()
-  }, [resolution, computers, hostsById, hostNames, toOpen, onOpen, onUpdateNeeded, onDone, t])
+  }, [
+    resolution,
+    link,
+    thread,
+    computers,
+    hostsById,
+    hostNames,
+    toOpen,
+    onOpen,
+    onOpenThread,
+    onUpdateNeeded,
+    onDone,
+    t
+  ])
 
   if (resolution?.kind !== 'pick') {
     // The same waiting drawer Home's New Workspace shows over Home; backdrop or drag cancels.
@@ -236,6 +300,13 @@ function BotLinkResolver({
       }}
       onClose={() => setPickerOpen(false)}
       onAfterClose={() => {
+        if (!isPendingBotLink(link)) {
+          return
+        }
+        if (thread && pickedRef.current) {
+          onOpenThread(pickedRef.current.hostId)
+          return
+        }
         const opening = pickedRef.current && toOpen(pickedRef.current)
         if (opening) {
           onOpen(opening)

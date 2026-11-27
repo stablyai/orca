@@ -3,9 +3,8 @@ import type {
   AutomationBotTarget,
   AutomationWorkspaceMode
 } from '../../../../shared/automations/automation-definition'
-import { assertBotAgentRunsOnThisHost } from '../../../bots/bot-agent-host-refusal'
 import type { Bot } from '../../../../shared/bot-types'
-import { BotsDisabledError, isBotsEnabled } from '../../../../shared/bots-switch'
+import { assertHostBotsEnabled } from '../../../bots/bot-team-policy'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { hasExtraAgentArgs } from '../../../../shared/agent-launch/startup/automation-extra-agent-args'
@@ -97,9 +96,7 @@ export async function resolveRuntimeAutomationTarget(
 
 export function requireAutomationBot(store: RuntimeStore | null, target: AutomationBotTarget): Bot {
   // Every client creates or retargets an automation to a bot through here.
-  if (!isBotsEnabled(store?.getSettings())) {
-    throw new BotsDisabledError()
-  }
+  assertHostBotsEnabled(store?.getSettings())
   const bot = store?.getBots?.().find((entry) => entry.id === target.botId)
   if (!bot) {
     throw new Error('bot_not_found')
@@ -203,7 +200,6 @@ export function requireCreatableAutomationBot(
   }
   const bot = requireAutomationBot(store, input.bot)
   const agent = botAutomationAgent(input.bot, bot)
-  assertBotAgentRunsOnThisHost(agent)
   assertNoBotOwnedSettings(input, agent)
   assertBotHearsEventTriggers(webhooks.hearing(bot), input.on)
   return bot

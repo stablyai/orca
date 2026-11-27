@@ -57,6 +57,11 @@ const RATCHET_INPUTS = {
     'config/main-blocking-worker-entries.json',
     'config/scripts/static-analysis/process-boundaries/main-blocking-source-paths.mjs'
   ],
+  'check-mobile-react-compiler-hazard-ratchet.mjs': [
+    'mobile/app/',
+    'mobile/src/',
+    'mobile/web-entry/'
+  ],
   'check-react-compiler-compat-ratchet.mjs': ['src/renderer/src/'],
   'check-recurring-timer-ratchet.mjs': [
     'src/main/',
@@ -71,6 +76,17 @@ const RATCHET_INPUTS = {
   'check-tab-map-seam-ratchet.mjs': ['src/renderer/src/'],
   'check-terminal-parking-ownership-ratchet.mjs': ['src/renderer/src/'],
   'check-unproven-pty-retirement-ratchet.mjs': ['src/main/'],
+  'check-whole-hot-map-selector-ratchet.mjs': [
+    'src/renderer/src/',
+    'config/oxlint-plugins/app-store-performance.mjs',
+    'config/oxlint-whole-hot-map-ratchet.json'
+  ],
+  'check-zod-prefer-lazy-ratchet.mjs': [
+    'src/main/',
+    'src/shared/',
+    'config/oxlint-plugins/zod-prefer-lazy-schema.mjs',
+    'config/oxlint-zod-prefer-lazy-ratchet.json'
+  ],
   'check-workspace-record-read-ratchet.mjs': ['src/renderer/src/'],
   'check-worktree-id-composer-ratchet.mjs': ['src/', 'mobile/src/']
 }
@@ -126,9 +142,14 @@ export const VERIFY_CHECKS = [
     ],
     inputs: [
       'src/renderer/src/',
+      'src/shared/bots/',
+      'src/shared/composio/',
+      'config/localization-coverage-allowlist.json',
       LOCALES,
       'config/scripts/localization/source-extraction/audit-localization-coverage',
-      'config/scripts/localization/source-extraction/localization-visible-object-keys'
+      'config/scripts/localization/source-extraction/localization-visible-object-keys',
+      'config/scripts/localization/source-extraction/localization-ast-queries',
+      'config/scripts/localization/source-extraction/localization-coded-copy-rules'
     ]
   },
   {
@@ -149,6 +170,8 @@ export const VERIFY_CHECKS = [
       'src/shared/worktree/',
       'config/scripts/localization/source-extraction/audit-localization-coverage',
       'config/scripts/localization/source-extraction/localization-visible-object-keys',
+      'config/scripts/localization/source-extraction/localization-ast-queries',
+      'config/scripts/localization/source-extraction/localization-coded-copy-rules',
       'config/startup-worktree-localization-allowlist.json'
     ]
   },
@@ -194,14 +217,21 @@ export const VERIFY_CHECKS = [
       'config/mobile-localization-coverage-allowlist.json',
       'config/scripts/audit-localization-coverage',
       'config/scripts/localization/source-extraction/audit-localization-coverage',
-      'config/scripts/localization/source-extraction/localization-visible-object-keys'
+      'config/scripts/localization/source-extraction/localization-visible-object-keys',
+      'config/scripts/localization/source-extraction/localization-ast-queries',
+      'config/scripts/localization/source-extraction/localization-coded-copy-rules'
     ]
   },
   {
-    // CI's own predicate, so local and CI select this check identically.
+    // CI's predicate, narrowed locally to sources with translation evidence.
     name: 'localization extraction',
     args: ['config/scripts/localization/source-extraction/verify-localization-extraction.mjs'],
-    matches: (files) => affectsLocalizationExtraction(files)
+    matches: (files, { readVersions }) => {
+      const evidence = translationEvidence(readVersions)
+      return files.some(
+        (file) => affectsLocalizationExtraction([file]) && evidence.mayChangeExtractedKeys(file)
+      )
+    }
   },
   {
     name: 'reliability gates',
@@ -260,6 +290,59 @@ export const VERIFY_CHECKS = [
     inputs: ['src/renderer/', 'config/oxlint-dead-classes.json']
   }
 ]
+
+const TRANSLATION_USE = /\b(?:t|translate\w*)\(|useTranslation|i18n/
+// Mirrors KEY_LITERAL_RE in verify-localization-extraction.mjs: quoted dotted literals keep keys referenced.
+const KEY_LITERAL = /['"`]([A-Za-z][\w-]*(?:\.[\w-]+)+)['"`]/g
+// A plain exported string may be a namespace that an unchanged consumer passes to useTranslation.
+const EXPORTED_STRING_CONSTANT =
+  /\bexport\s+(?:const|default)\b[^;]*?['"`]|^\s*const\s+\w+\s*(?::[^=\n]+)?=\s*['"`]/m
+const SCRIPT_SOURCE = /\.[cm]?[jt]sx?$/
+
+function flattenCatalogKeys(value, prefix = '', keys = new Set()) {
+  if (typeof value === 'string') {
+    keys.add(prefix.replace(/_(?:zero|one|two|few|many|other)$/, ''))
+  } else if (value && typeof value === 'object') {
+    for (const [key, child] of Object.entries(value)) {
+      flattenCatalogKeys(child, prefix ? `${prefix}.${key}` : key, keys)
+    }
+  }
+  return keys
+}
+
+// Why: extraction re-parses all of src/ (~1-2 min); a source that names no translation API and no
+// catalog key before or after cannot move its result. CI still runs it on every such change.
+function translationEvidence(readVersions) {
+  let catalogKeys
+  const namesCatalogKey = (text) => {
+    if (catalogKeys === undefined) {
+      const english = readVersions(`${LOCALES}locales/en.json`)[0]
+      try {
+        catalogKeys = english === null ? null : flattenCatalogKeys(JSON.parse(english))
+      } catch {
+        catalogKeys = null
+      }
+    }
+    return (
+      catalogKeys === null ||
+      [...text.matchAll(KEY_LITERAL)].some((match) => catalogKeys.has(match[1]))
+    )
+  }
+  return {
+    mayChangeExtractedKeys(file) {
+      if (!file.startsWith('src/') || !SCRIPT_SOURCE.test(file) || !readVersions) {
+        return true
+      }
+      return readVersions(file).some(
+        (text) =>
+          text !== null &&
+          (TRANSLATION_USE.test(text) ||
+            EXPORTED_STRING_CONSTANT.test(text) ||
+            namesCatalogKey(text))
+      )
+    }
+  }
+}
 
 // Projects of run-typecheck-projects-in-parallel.mjs and the source trees whose types reach them.
 const TYPECHECK_INPUTS = [
@@ -338,10 +421,12 @@ const RATCHET_SHARED_MODULES = {
     'check-main-blocking-helper-ratchet.mjs'
   ],
   'config/scripts/static-analysis/ratchets/react-compiler/react-compiler-hazards.mjs': [
+    'check-mobile-react-compiler-hazard-ratchet.mjs',
     'check-react-compiler-compat-ratchet.mjs'
   ],
   'config/react-compiler-uncompiled-files.txt': ['check-react-compiler-compat-ratchet.mjs'],
   'config/scripts/localization/reactive-translate/render-path-translate.mjs': [
+    'check-mobile-react-compiler-hazard-ratchet.mjs',
     'check-render-path-translate-ratchet.mjs'
   ]
 }
@@ -372,12 +457,12 @@ function listRatchetChecks(scriptsDir) {
     }))
 }
 
-function isSelected(check, files) {
+function isSelected(check, files, context) {
   const stem = ownScriptStem(check)
   return (
     (stem !== undefined && files.some((file) => file.startsWith(stem))) ||
     files.some((file) => matchesPrefix(file, check.inputs ?? [])) ||
-    (check.matches?.(files) ?? false)
+    (check.matches?.(files, context) ?? false)
   )
 }
 
@@ -406,7 +491,7 @@ export function splitUnitTestInputs(files, listDirectory = () => []) {
 }
 
 /** Decides which checks a set of changed paths needs; CI's classifier gates the expensive jobs. */
-export function planChangedChecks(files, { scriptsDir, listDirectory }) {
+export function planChangedChecks(files, { scriptsDir, listDirectory, readVersions }) {
   const jobs = classifyPrJobs(files)
   const selectAll = files.some(
     (file) => SELECT_ALL_FILES.has(file) || matchesPrefix(file, SELECT_ALL_PREFIXES)
@@ -419,7 +504,7 @@ export function planChangedChecks(files, { scriptsDir, listDirectory }) {
       ? splitUnitTestInputs(files, listDirectory)
       : { related: [], colocated: [] },
     checks: jobs.static_analysis
-      ? checks.filter((check) => selectAll || isSelected(check, files))
+      ? checks.filter((check) => selectAll || isSelected(check, files, { readVersions }))
       : []
   }
 }

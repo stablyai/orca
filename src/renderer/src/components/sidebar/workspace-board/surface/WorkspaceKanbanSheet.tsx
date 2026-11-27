@@ -5,7 +5,10 @@ import {
   STATUS_BAR_RESERVE_HEIGHT,
   WORKSPACE_TOP_CHROME_HEIGHT
 } from '../../../../app-shell/chrome/workspace-chrome-metrics'
-import { trackSidebarLiveWidth } from '../../chrome/sidebar-live-width'
+import { resolveSidebarDrawerLeftEdge } from '../../chrome/sidebar-drawer-left-edge'
+import { useAppStore } from '@/store/index'
+import { selectAppRailWidth } from '@/components/app-rail/app-rail-layout'
+import { trackWorkspaceBoardBounds, workspaceBoardSheetWidth } from './workspace-board-sheet-bounds'
 
 type WorkspaceKanbanSheetProps = {
   boardRef: React.RefObject<HTMLDivElement | null>
@@ -32,10 +35,12 @@ export default function WorkspaceKanbanSheet({
   sidebarWidth,
   statusBarVisible
 }: WorkspaceKanbanSheetProps): React.JSX.Element {
-  const drawerLeft = sidebarOpen ? sidebarWidth : 0
-  const drawerLeftCss = sidebarOpen
-    ? `var(--workspace-sidebar-live-width, ${sidebarWidth}px)`
-    : '0px'
+  const railWidth = useAppStore(selectAppRailWidth)
+  const { left: drawerLeft, leftCss: drawerLeftCss } = resolveSidebarDrawerLeftEdge({
+    sidebarOpen,
+    sidebarWidth,
+    railWidth
+  })
   const drawerBottom = `${statusBarVisible ? STATUS_BAR_RESERVE_HEIGHT : 0}px`
   const keepOpenForOutsideEvent = (event: {
     preventDefault: () => void
@@ -72,7 +77,7 @@ export default function WorkspaceKanbanSheet({
       <SheetContent
         side="left"
         showCloseButton={false}
-        ref={trackSidebarLiveWidth}
+        ref={trackWorkspaceBoardBounds}
         className="workspace-kanban-sheet-content bg-worktree-sidebar p-0 sm:max-w-none"
         overlayStyle={{
           top: WORKSPACE_TOP_CHROME_HEIGHT,
@@ -80,16 +85,14 @@ export default function WorkspaceKanbanSheet({
           left: drawerLeftCss,
           pointerEvents: 'none'
         }}
-        style={
-          {
-            ...leftSidebarStyle,
-            left: drawerLeftCss,
-            top: WORKSPACE_TOP_CHROME_HEIGHT,
-            bottom: drawerBottom,
-            height: 'auto',
-            width: `min(calc(100vw - ${drawerLeftCss}), 1294px)`
-          } as React.CSSProperties
-        }
+        style={{
+          ...leftSidebarStyle,
+          left: drawerLeftCss,
+          top: WORKSPACE_TOP_CHROME_HEIGHT,
+          bottom: drawerBottom,
+          height: 'auto',
+          width: workspaceBoardSheetWidth(drawerLeftCss)
+        }}
         data-contextual-tour-target="workspace-board-surface"
         data-workspace-board-sheet=""
         data-workspace-board-drag-preview={dragPreview ? 'true' : undefined}

@@ -1,76 +1,54 @@
-import { describe, expect, it, vi } from 'vitest'
-import { ComposioApi, ComposioKeyRejectedError, ComposioLimitError } from './composio-api'
+import { describe, expect, it } from 'vitest'
+import { ComposioApi, ComposioKeyScopeError, ComposioUnavailableError } from './composio-api'
+import { ComposioKeyHealth } from './composio-key-health'
 
-const answering = (status: number, body: unknown) =>
-  new ComposioApi(
-    'ak_test',
-    vi.fn(async () => new Response(JSON.stringify(body), { status }))
-  )
+const forbidden = (slug: string, message: string) => async () =>
+  new Response(JSON.stringify({ error: { slug, message } }), { status: 403 })
 
-// Trimmed from Composio's own answers for each sign-in kind (captured 2026-11-04).
-const TOOLKITS = {
-  notion: {
-    slug: 'notion',
-    name: 'Notion',
-    auth_schemes: null,
-    composio_managed_auth_schemes: ['OAUTH2'],
-    auth_config_details: [{ mode: 'OAUTH2' }, { mode: 'API_KEY' }]
-  },
-  twitter: {
-    slug: 'twitter',
-    name: 'Twitter',
-    composio_managed_auth_schemes: [],
-    auth_config_details: [{ mode: 'OAUTH2' }]
-  },
-  tavily: {
-    slug: 'tavily',
-    name: 'Tavily',
-    composio_managed_auth_schemes: [],
-    auth_config_details: [{ mode: 'API_KEY' }]
-  },
-  hackernews: {
-    slug: 'hackernews',
-    name: 'Hacker News',
-    composio_managed_auth_schemes: [],
-    auth_config_details: [{ mode: 'NO_AUTH' }]
-  }
-}
+const SESSION_WRITE =
+  'This API key does not have the permissions required for POST /api/v3.1/tool_router/session. This route requires "session_management" write access, but the key has read access for "session_management".'
 
-describe('Composio answers', () => {
-  it.each([
-    ['notion', 'composio'],
-    ['twitter', 'own'],
-    ['tavily', 'key'],
-    ['hackernews', 'none']
-  ] as const)('reads how %s signs in', async (slug, signIn) => {
-    const toolkit = { ...TOOLKITS[slug], auth_schemes: undefined }
-    expect((await answering(200, toolkit).app(slug)).signIn).toBe(signIn)
+describe('Composio 403s', () => {
+  it('names the permission a scoped key lacks, without refusing the key', async () => {
+    const api = new ComposioApi('key', forbidden('APIKey_InsufficientPermissions', SESSION_WRITE))
+    const error = await api.createSession('user').catch((caught: unknown) => caught)
+    expect(error).toBeInstanceOf(ComposioKeyScopeError)
+    expect(error).toMatchObject({
+      message:
+        'This Composio key can’t create sessions. It needs Session management: Read and write.',
+      data: {
+        botFailure: {
+          code: 'composioKeyCantCreateSessions',
+          params: { permission: 'Session management: Read and write' }
+        }
+      }
+    })
+    const health = new ComposioKeyHealth(() => {})
+    health.failed(error)
+    expect(health.rejected).toBe(false)
   })
 
-  it('reads sign-in kinds in either case, and from details when the list is empty', async () => {
-    const lower = {
-      slug: 'x',
-      name: 'X',
-      auth_schemes: [],
-      auth_config_details: [{ mode: 'api_key' }]
-    }
-    expect((await answering(200, lower).app('x')).signIn).toBe('key')
-    const none = { slug: 'y', name: 'Y', auth_schemes: ['no_auth'] }
-    expect((await answering(200, none).app('y')).signIn).toBe('none')
+  it('names other access needs, and still offers a key change when Composio names none', async () => {
+    const sessionRead = new ComposioApi(
+      'key',
+      forbidden(
+        'APIKey_InsufficientPermissions',
+        'This route requires "session_management" read access, but the key has write access.'
+      )
+    )
+    await expect(sessionRead.disconnect('ca_1')).rejects.toThrow(
+      'This Composio key is missing a permission. It needs Session management: Read.'
+    )
+    const unnamed = new ComposioApi('key', forbidden('APIKey_InsufficientPermissions', 'Denied.'))
+    await expect(unnamed.app('notion')).rejects.toThrow(
+      'This Composio key is missing a permission Orca needs.'
+    )
   })
 
-  it('refuses the key only on 401; a 403 is one endpoint the key may not use', async () => {
-    await expect(answering(401, {}).app('x')).rejects.toBeInstanceOf(ComposioKeyRejectedError)
-    const forbidden = answering(403, { error: { slug: 'Auth_ProjectAPIKeyNotAllowed' } })
-    await expect(forbidden.app('x')).rejects.not.toBeInstanceOf(ComposioKeyRejectedError)
-  })
-
-  it('tells a burst from the plan’s cap by the answer’s words', async () => {
-    const monthly = answering(429, { error: { message: 'Monthly usage limit reached' } })
-    await expect(monthly.app('x')).rejects.toMatchObject({ retryAt: null })
-    const burst = answering(429, { error: { message: 'Too many requests' } })
-    await expect(burst.app('x')).rejects.toMatchObject({ retryAt: expect.any(Number) })
-    const payment = answering(402, {})
-    await expect(payment.app('x')).rejects.toBeInstanceOf(ComposioLimitError)
+  it('keeps any other 403 as Composio worded it', async () => {
+    const api = new ComposioApi('key', forbidden('Project_Suspended', 'This project is suspended.'))
+    const error = await api.app('notion').catch((caught: unknown) => caught)
+    expect(error).toBeInstanceOf(ComposioUnavailableError)
+    expect(error).toMatchObject({ message: 'Composio: This project is suspended.' })
   })
 })

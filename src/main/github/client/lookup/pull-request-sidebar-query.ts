@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
 import { extractExecError } from '../../../git/command-runner/process-capture/exec-error'
 import { githubHostExecOptions } from '../../repositories/github-repository-host'
@@ -14,10 +15,7 @@ import {
 } from '../check/pr-check-rollup'
 
 const CHECKS_FIELDS = prCheckRollupFields()
-
-const SIDEBAR_QUERY = `query($owner: String!, $repo: String!, $number: Int!, $checksCursor: String, $suitesCursor: String) {
-  repository(owner: $owner, name: $repo) {
-    pullRequest(number: $number) {
+const SIDEBAR_FIELDS = `{
       number title state url updatedAt isDraft mergeable reviewDecision mergeStateStatus
       autoMergeRequest { enabledAt }
       baseRefName headRefName baseRefOid headRefOid isCrossRepository
@@ -26,63 +24,84 @@ const SIDEBAR_QUERY = `query($owner: String!, $repo: String!, $number: Int!, $ch
       ${CHECKS_FIELDS}
       stack { number size baseRefName }
       stackEntry { position }
-    }
+}`
+
+const SIDEBAR_QUERY = `query($owner: String!, $repo: String!, $number: Int!, $checksCursor: String, $suitesCursor: String) {
+  repository(owner: $owner, name: $repo) {
+    pullRequest(number: $number) ${SIDEBAR_FIELDS}
   }
 }`
 
-const errorsSchema = z
-  .array(
-    z.object({
-      type: z.string().optional(),
-      path: z.array(z.union([z.string(), z.number()])).optional()
-    })
-  )
-  .optional()
+const errorsSchema = lazyZodSchema(() =>
+  z
+    .array(
+      z.object({
+        type: z.string().optional(),
+        path: z.array(z.union([z.string(), z.number()])).optional()
+      })
+    )
+    .optional()
+)
 
-const pullRequestSchema = z.object({
-  number: z.number().int().positive(),
-  title: z.string(),
-  state: z.enum(['OPEN', 'CLOSED', 'MERGED']),
-  url: z.string(),
-  updatedAt: z.string(),
-  isDraft: z.boolean(),
-  mergeable: z.enum(['UNKNOWN', 'MERGEABLE', 'CONFLICTING']),
-  reviewDecision: z.enum(['APPROVED', 'CHANGES_REQUESTED', 'REVIEW_REQUIRED']).nullable(),
-  mergeStateStatus: z.string().nullable(),
-  autoMergeRequest: z.object({ enabledAt: z.string() }).nullable(),
-  baseRefName: z.string(),
-  headRefName: z.string(),
-  baseRefOid: z.string().nullable(),
-  headRefOid: z.string().nullable(),
-  isCrossRepository: z.boolean().optional(),
-  headRepositoryOwner: z.object({ login: z.string() }).nullable(),
-  headRepository: z.object({ name: z.string() }).nullable(),
-  commits: z.unknown(),
-  stack: z.unknown().optional(),
-  stackEntry: z.unknown().optional()
-})
-const stackSchema = z.object({
-  number: z.number().int().positive(),
-  size: z.number().int().positive(),
-  baseRefName: z.string().trim().min(1)
-})
-const stackEntrySchema = z.object({ position: z.number().int().positive() })
-const envelopeSchema = z.object({
-  data: z.object({ repository: z.object({ pullRequest: pullRequestSchema }) }),
-  errors: errorsSchema
-})
-const missingEnvelopeSchema = z.object({
-  data: z.object({ repository: z.object({ pullRequest: z.null() }) }),
-  errors: errorsSchema
-})
+const pullRequestSchema = lazyZodSchema(() =>
+  z.object({
+    number: z.number().int().positive(),
+    title: z.string(),
+    state: z.enum(['OPEN', 'CLOSED', 'MERGED']),
+    url: z.string(),
+    updatedAt: z.string(),
+    isDraft: z.boolean(),
+    mergeable: z.enum(['UNKNOWN', 'MERGEABLE', 'CONFLICTING']),
+    reviewDecision: z.enum(['APPROVED', 'CHANGES_REQUESTED', 'REVIEW_REQUIRED']).nullable(),
+    mergeStateStatus: z.string().nullable(),
+    autoMergeRequest: z.object({ enabledAt: z.string() }).nullable(),
+    baseRefName: z.string(),
+    headRefName: z.string(),
+    baseRefOid: z.string().nullable(),
+    headRefOid: z.string().nullable(),
+    isCrossRepository: z.boolean().optional(),
+    headRepositoryOwner: z.object({ login: z.string() }).nullable(),
+    headRepository: z.object({ name: z.string() }).nullable(),
+    commits: z.unknown(),
+    stack: z.unknown().optional(),
+    stackEntry: z.unknown().optional()
+  })
+)
+const stackSchema = lazyZodSchema(() =>
+  z.object({
+    number: z.number().int().positive(),
+    size: z.number().int().positive(),
+    baseRefName: z.string().trim().min(1)
+  })
+)
+const stackEntrySchema = lazyZodSchema(() => z.object({ position: z.number().int().positive() }))
+const envelopeSchema = lazyZodSchema(() =>
+  z.object({
+    data: z.object({ repository: z.object({ pullRequest: pullRequestSchema }) }),
+    errors: errorsSchema
+  })
+)
+const missingEnvelopeSchema = lazyZodSchema(() =>
+  z.object({
+    data: z.object({ repository: z.object({ pullRequest: z.null() }) }),
+    errors: errorsSchema
+  })
+)
+const batchEnvelopeSchema = lazyZodSchema(() =>
+  z.object({
+    data: z.object({ repository: z.record(z.string(), z.unknown()) }),
+    errors: errorsSchema
+  })
+)
+
+export type PullRequestSidebarResponse = { payload: unknown; failure?: { error: unknown } }
 
 async function readQuery(
   repository: GitHubApiRepository,
-  number: number,
   options: GhExecOptions,
   query: string,
-  cursor?: string
-): Promise<{ payload: unknown; failure?: { error: unknown } }> {
+  numberArgs: string[]
+): Promise<PullRequestSidebarResponse> {
   noteRepositoryRateLimitSpend(repository, 'graphql', 1, options)
   const args = [
     'api',
@@ -93,12 +112,8 @@ async function readQuery(
     `owner=${repository.owner}`,
     '-f',
     `repo=${repository.repo}`,
-    '-F',
-    `number=${number}`
+    ...numberArgs
   ]
-  if (cursor) {
-    args.push('-f', `checksCursor=${cursor}`)
-  }
   let stdout: string
   let failure: { error: unknown } | undefined
   try {
@@ -115,6 +130,51 @@ async function readQuery(
   }
 }
 
+export async function readPullRequestSidebarFirstPages(
+  repository: GitHubApiRepository,
+  numbers: readonly number[],
+  options: GhExecOptions
+): Promise<(PullRequestSidebarResponse | undefined)[]> {
+  const aliases = numbers.map((_, index) => `pr${index}`)
+  const variables = numbers.map((_, index) => `$number${index}: Int!`).join(', ')
+  const selections = aliases.map(
+    (alias, index) => `${alias}: pullRequest(number: $number${index}) ${SIDEBAR_FIELDS}`
+  )
+  const response = await readQuery(
+    repository,
+    options,
+    `query($owner: String!, $repo: String!, ${variables}, $checksCursor: String, $suitesCursor: String) {
+      repository(owner: $owner, name: $repo) { ${selections.join('\n')} }
+    }`,
+    numbers.flatMap((number, index) => ['-F', `number${index}=${number}`])
+  )
+  const parsed = batchEnvelopeSchema.safeParse(response.payload)
+  const errors = parsed.success ? (parsed.data.errors ?? []) : []
+  if (
+    !parsed.success ||
+    errors.some(
+      ({ path }) =>
+        path?.[0] !== 'repository' || typeof path[1] !== 'string' || !aliases.includes(path[1])
+    )
+  ) {
+    if (response.failure) {
+      throw response.failure.error
+    }
+    return []
+  }
+  return aliases.map((alias) => ({
+    payload: {
+      data: { repository: { pullRequest: parsed.data.data.repository[alias] } },
+      errors: errors
+        .filter(({ path }) => path?.[1] === alias)
+        .map(({ type, path }) => ({
+          type,
+          path: ['repository', 'pullRequest', ...(path?.slice(2) ?? [])]
+        }))
+    }
+  }))
+}
+
 export async function readPullRequestSidebarQuery(
   repository: GitHubApiRepository,
   number: number,
@@ -124,7 +184,17 @@ export async function readPullRequestSidebarQuery(
   if (repository.host?.toLowerCase() !== 'github.com') {
     return undefined
   }
-  const response = await readQuery(repository, number, options, SIDEBAR_QUERY)
+  const response = await readQuery(repository, options, SIDEBAR_QUERY, ['-F', `number=${number}`])
+  return parsePullRequestSidebarResponse(repository, number, options, response, checkPageLimit)
+}
+
+export async function parsePullRequestSidebarResponse(
+  repository: GitHubApiRepository,
+  number: number,
+  options: GhExecOptions,
+  response: PullRequestSidebarResponse,
+  checkPageLimit?: number
+): Promise<PullRequestLookupData | null | undefined> {
   const missing = missingEnvelopeSchema.safeParse(response.payload)
   if (
     missing.success &&

@@ -1,5 +1,6 @@
+import { botFailureMessage } from './bot-presentation'
 import { translate } from '@/i18n/i18n'
-import { callBotRpc } from '@/lib/bot-hosts'
+import { callBotGroupRpc } from '@/lib/bot-group-rpc'
 import { useTranslate } from '@/i18n/use-translate'
 import { useState } from 'react'
 import { ChevronDown, Check } from 'lucide-react'
@@ -37,7 +38,7 @@ export function BotGroupReplyPicker({
   )
   const choose = async (replyMode: BotGroupReplyMode) => {
     try {
-      const result = await callBotRpc<{ group: BotGroup }>(group, 'bots.groups.update', {
+      const result = await callBotGroupRpc<{ group: BotGroup }>(group, 'bots.groups.update', {
         groupId: group.id,
         revision: group.revision,
         replyMode
@@ -46,7 +47,7 @@ export function BotGroupReplyPicker({
       onChange(result.group)
       setOpen(false)
     } catch (error) {
-      toast.error(String(error))
+      toast.error(botFailureMessage(error) ?? String(error))
     }
   }
   return (

@@ -13,6 +13,7 @@ import {
   SkillUnsupportedStatusPill
 } from '../freshness/SkillFreshnessStatusPill'
 import { BundledSkillInstallStatus } from './BundledSkillInstallStatus'
+import { BundledSkillReplaceHint } from './BundledSkillReplaceHint'
 import type { AgentSkillSetupPanelProps } from './agent-skill-setup-panel-props'
 import { Button } from '../../ui/button'
 import {
@@ -63,7 +64,10 @@ function BundledAgentSkillSetupPanel({
     () => recheckSurfacesAfterAgentSkillInstall(onRecheck, freshnessSkillName),
     [freshnessSkillName, onRecheck]
   )
-  const skillInstall = useBundledSkillInstall({ onFinished: recheckAfterInstall, target })
+  const skillInstall = useBundledSkillInstall({
+    onFinished: recheckAfterInstall,
+    target
+  })
   const { state, ready, install } = skillInstall
   const installing = state.kind === 'installing'
   const activeSkillNames = installed ? (installedSkillNames ?? skillNames) : skillNames
@@ -120,31 +124,36 @@ function BundledAgentSkillSetupPanel({
       !unsupported &&
       (!installed || (showInstallWhenInstalled && installedButton)) &&
       !failed ? (
-        <Button
-          type="button"
-          variant={installVariant}
-          size="sm"
-          onClick={startInstall}
-          disabled={installDisabled || installing || !ready || action.kind === 'loading'}
+        <BundledSkillReplaceHint
+          action={action}
+          replacing={!installing && installedButton === 'replace'}
         >
-          {installing ? (
-            <Loader2 className="size-3.5 animate-spin" />
-          ) : (
-            <Download className="size-3.5" />
-          )}
-          {installing
-            ? t('auto.components.settings.AgentSkillSetupPanel.installing', 'Installing...')
-            : installedButton === 'replace'
-              ? t(
-                  'auto.components.settings.AgentSkillSetupPanel.replaceWithOrcaCopy',
-                  "Replace with Orca's copy"
-                )
-              : action.kind === 'run' && action.changes
-                ? bundledSkillSetupActionLabel(action.changes, t)
-                : installed
-                  ? resolvedInstalledInstallLabel
-                  : resolvedInstallLabel}
-        </Button>
+          <Button
+            type="button"
+            variant={installVariant}
+            size="sm"
+            onClick={startInstall}
+            disabled={installDisabled || installing || !ready || action.kind === 'loading'}
+          >
+            {installing ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Download className="size-3.5" />
+            )}
+            {installing
+              ? t('auto.components.settings.AgentSkillSetupPanel.installing', 'Installing...')
+              : installedButton === 'replace'
+                ? t(
+                    'auto.components.settings.AgentSkillSetupPanel.replaceWithOrcaCopy',
+                    'Replace with Orca’s'
+                  )
+                : action.kind === 'run' && action.changes
+                  ? bundledSkillSetupActionLabel(action.changes, t)
+                  : installed
+                    ? resolvedInstalledInstallLabel
+                    : resolvedInstallLabel}
+          </Button>
+        </BundledSkillReplaceHint>
       ) : null}
       {!installed || showRecheckWhenInstalled ? (
         <Button

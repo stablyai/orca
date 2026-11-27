@@ -4,6 +4,9 @@ import type {
   AutomationRunMessageEvent
 } from '../../../../../shared/automations/automation-run-message'
 import type { BotAutomationFacts } from '../../../../../shared/bots/bot-automation-rows'
+import type { Bot } from '../../../../../shared/bot-types'
+import { stubBots } from '../../../component-fixtures/fixture-bots'
+import { NativeChatVisualOwnerContext } from '../media/visuals/native-chat-visual-owner'
 import { NativeChatFindQueryContext } from '../viewport/find/native-chat-find-query'
 import {
   NativeChatAutomationRunRow,
@@ -142,7 +145,7 @@ function openAll(frame: HTMLElement): void {
   }
 }
 
-const ERROR = 'Run row bot has no chat chat:merge-watch that takes mail.'
+const ERROR = 'No chat named merge-watch takes messages right now.'
 const folded = (
   <div className="space-y-2">
     {row({ run: waitRun })}
@@ -194,6 +197,28 @@ export const couldNotStart = defineFixture({
   ),
   interact: openAll
 })
+/** A run whose agent is too old for chats: the card words the saved refusal, not the host's sentence. */
+export const couldNotStartAgentTooOld = defineFixture({
+  width: 640,
+  render: () =>
+    row({
+      run: scheduledRun,
+      state: 'not-started',
+      error: 'Your Hermes CLI on this computer is 0.20.5. Chats need 0.23.0 or newer.',
+      refusal: {
+        code: 'structured_agent_session_unsupported',
+        details: {
+          reason: 'hostUnsupported',
+          agentInstallation: {
+            agent: 'hermes',
+            installedVersion: '0.20.5',
+            minimumVersion: '0.23.0'
+          }
+        }
+      }
+    }),
+  interact: openAll
+})
 export const find = defineFixture({
   width: 640,
   render: () => (
@@ -201,4 +226,41 @@ export const find = defineFixture({
       {row({ run: waitRun })}
     </NativeChatFindQueryContext.Provider>
   )
+})
+
+const OWNER_AGENT: Bot = {
+  id: 'bot-1',
+  name: 'Atlas',
+  hostId: 'local',
+  folder: 'bot',
+  folderWorkspaceId: 'bot',
+  agent: 'claude',
+  avatar: null,
+  paused: false,
+  notifications: { needsPermission: true, taskComplete: true, couldNotFinish: true },
+  members: [],
+  slack: null,
+  linear: null,
+  github: null,
+  chatSessionId: 'chat-1',
+  createdAt: 1,
+  updatedAt: 1
+}
+const OWNER = { target: { kind: 'local' }, sessionId: 'chat-1', worktreeId: 'folder:bot' } as const
+
+/** A wait's run that couldn't start, in its owner's chat: Send again after the words, shown on focus. */
+export const sendAgain = defineFixture({
+  width: 640,
+  render: () => {
+    stubBots([OWNER_AGENT])
+    return (
+      <NativeChatVisualOwnerContext.Provider value={OWNER}>
+        {row({ run: waitRun, state: 'not-started', error: ERROR, resend: 'offer' })}
+      </NativeChatVisualOwnerContext.Provider>
+    )
+  },
+  interact: async (frame) => {
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    frame.querySelector<HTMLButtonElement>('button[aria-expanded]')?.focus({ focusVisible: true })
+  }
 })

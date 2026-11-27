@@ -14,6 +14,7 @@ import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import { getKnownSidebarWorktreeById } from './folder-reveal'
 import { readSidebarRevealTarget } from '../../sidebar-reveal-target-state'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 function workspacePassesFilters(
   worktree: Worktree,
@@ -150,21 +151,22 @@ export function useSidebarRevealRequests(args: {
           return
         }
         confirmationPending.current = true
-        let confirmed: boolean
-        try {
-          confirmed = await confirm({
-            initialFocus: 'confirm',
-            title: translate('sidebar.revealFiltered.title', 'Reveal hidden workspace?'),
-            description: translate(
-              'sidebar.revealFiltered.description',
-              'The active workspace is hidden in the sidebar. Revealing it will adjust only the filters hiding it.'
-            ),
-            confirmLabel: translate('sidebar.revealFiltered.confirm', 'Adjust filters and reveal'),
-            cancelLabel: translate('sidebar.revealFiltered.cancel', 'Keep filters')
-          })
-        } finally {
-          confirmationPending.current = false
-        }
+        const confirmed = await runWithFinally(
+          () =>
+            confirm({
+              initialFocus: 'confirm',
+              title: translate('sidebar.revealFiltered.title', 'Reveal hidden workspace?'),
+              description: translate(
+                'sidebar.revealFiltered.description',
+                'The active workspace is hidden in the sidebar. Revealing it will adjust only the filters hiding it.'
+              ),
+              confirmLabel: translate('sidebar.revealFiltered.confirm', 'Adjust & reveal'),
+              cancelLabel: translate('sidebar.revealFiltered.cancel', 'Keep filters')
+            }),
+          () => {
+            confirmationPending.current = false
+          }
+        )
         const latest = latestArgs.current
         // A workspace switch while the dialog is open must not clear filters for a stale target.
         if (

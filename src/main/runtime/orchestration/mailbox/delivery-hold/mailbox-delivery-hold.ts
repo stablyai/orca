@@ -7,6 +7,16 @@ import { formatUsageLimitResetClock } from '../../../../../shared/agent-session/
  *  receipt says only what is true at send time. Null means delivery would go ahead. */
 
 export type MailboxDeliveryHold =
+  | {
+      kind: 'asleep'
+      agentName: string
+      openTab: boolean
+      failed?: boolean
+      liveShell?: boolean
+      waking?: boolean
+      resuming?: boolean
+      workspaceName?: string
+    }
   /** A terminal dialog only a person can answer. */
   | { kind: 'prompt' }
   /** Typed text in the worker's terminal that delivery would submit with the mail. */
@@ -101,6 +111,16 @@ export function describeMailboxDeliveryHold(
   receiverCli: OrchestrationCliCommand = 'orca'
 ): string {
   switch (hold.kind) {
+    case 'asleep':
+      if (hold.waking || hold.resuming) {
+        return `Queued. Orca is ${hold.waking ? 'waking' : 'resuming'} ${hold.agentName}; the message will be delivered when it's back.`
+      }
+      if (hold.liveShell) {
+        return `Queued. Re-run ${hold.agentName} in that terminal; the message is waiting.`
+      }
+      return hold.failed
+        ? `Queued. Orca couldn't resume ${hold.agentName} in ${hold.workspaceName ?? 'its workspace'} because the agent didn't reconnect; open its tab to try again. The message is waiting.`
+        : `Queued. Open ${hold.openTab ? 'its tab' : (hold.workspaceName ?? 'its workspace')} to resume ${hold.agentName}; the message is waiting.`
     case 'prompt':
       return `Queued. ${recipient} is at a prompt that needs a person; delivery is held while it stays open.`
     case 'draft':
@@ -162,7 +182,7 @@ function describeFailedTurnHold(recipient: string, limit: UsageLimitHold | undef
   const why = {
     off: 'automatic continue is off in Settings',
     cancelled: 'automatic continue was cancelled for this chat',
-    failed: 'automatic continue gave up after repeated limits'
+    failed: 'automatic continue gave up on this chat'
   }[limit.state]
   return `Queued. ${recipient} stopped at its usage limit and Orca will not continue it on its own (${why}); delivery waits until a person continues the chat.`
 }

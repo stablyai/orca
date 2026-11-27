@@ -11,6 +11,8 @@ export const inflightHostedReviewRequests = new Map<
     force: boolean
     /** A poll's request is refused for a stopped WSL distro, so an explicit Refresh must not join it. */
     wakeWslDistro: boolean
+    /** A timer's flight is refused by an idle-stopped WSL host; a counted read must not join it. */
+    background: boolean
     currentHeadOid: string | null
     generation: number
     startedAt: number
@@ -159,28 +161,20 @@ export function queueHostedReviewRevalidation(
   scheduleHostedReviewRevalidationLane(requestKey, lane)
 }
 
-/** @internal - exposed for leak-regression tests only */
-export function _getHostedReviewRequestGenerationCountForTest(): number {
-  return hostedReviewRequestGenerations.size
-}
-
-/** @internal - exposed for leak-regression tests only */
-export function _clearHostedReviewRequestGenerationsForTest(): void {
-  hostedReviewRequestGenerations.clear()
-  inflightHostedReviewRequests.clear()
-  for (const lane of hostedReviewRevalidationLanes.values()) {
-    clearHostedReviewRevalidationTimer(lane)
-  }
-  hostedReviewRevalidationLanes.clear()
-}
-
 /** A forced request needs a forced flight; an explicit Refresh (wake) needs one that may start the WSL distro (E9). */
 export function canJoinHostedReviewFlight(
-  inflight: { force: boolean; wakeWslDistro: boolean; currentHeadOid?: string | null },
+  inflight: {
+    force: boolean
+    wakeWslDistro: boolean
+    background?: boolean
+    currentHeadOid?: string | null
+  },
   options:
     | {
         force?: boolean
         wakeWslDistro?: boolean
+        background?: boolean
+        admissionTier?: string
         userRefresh?: boolean
         currentHeadOid?: string | null
       }
@@ -194,8 +188,16 @@ export function canJoinHostedReviewFlight(
       options.currentHeadOid !== inflight.currentHeadOid
     ) &&
     (!options?.force || inflight.force) &&
-    (!options?.wakeWslDistro || inflight.wakeWslDistro)
+    (!options?.wakeWslDistro || inflight.wakeWslDistro) &&
+    (!inflight.background || isBackgroundReviewRead(options))
   )
+}
+
+/** Tagged by its caller or by its own admission tier (an unselected row's read). */
+function isBackgroundReviewRead(
+  options: { background?: boolean; admissionTier?: string } | undefined
+): boolean {
+  return options?.background === true || options?.admissionTier === 'background'
 }
 
 /** Records a freshly issued request in the in-flight map and supersedes any queued revalidation for its key. */
@@ -206,7 +208,15 @@ export function registerInflightHostedReviewRequest(
     ...entry
   }: {
     promise: Promise<HostedReviewInfo | null>
-    options: { force?: boolean; wakeWslDistro?: boolean; userRefresh?: boolean } | undefined
+    options:
+      | {
+          force?: boolean
+          wakeWslDistro?: boolean
+          userRefresh?: boolean
+          background?: boolean
+          admissionTier?: string
+        }
+      | undefined
     currentHeadOid: string | null
     generation: number
     startedAt: number
@@ -215,7 +225,8 @@ export function registerInflightHostedReviewRequest(
   inflightHostedReviewRequests.set(requestKey, {
     ...entry,
     force: options?.force === true,
-    wakeWslDistro: options?.wakeWslDistro === true
+    wakeWslDistro: options?.wakeWslDistro === true,
+    background: isBackgroundReviewRead(options)
   })
   supersedeHostedReviewRevalidation(requestKey, {
     promise: entry.promise,

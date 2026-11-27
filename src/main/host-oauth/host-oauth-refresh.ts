@@ -2,6 +2,8 @@
 // refreshed here when due or refused, one refresh per login at a time, and handed back to its owner
 // to save, or to forget when the provider says the grant is gone.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
+import { inlineUntrusted } from '../../shared/quoted-text-fence'
 
 const REFRESH_TIMEOUT_MS = 15_000
 
@@ -39,6 +41,9 @@ export type HostOAuthRefreshOutcome =
   | 'ended'
   | 'superseded'
 
+/** The provider's own words for a refused refresh (Google adds `error_subtype` and `error_description`). */
+export type HostOAuthRefusal = { error: string; subtype?: string; description?: string }
+
 export type HostOAuthRefresherConfig<TLogin> = {
   tokenUrl: string
   refreshAheadMs: number
@@ -46,21 +51,36 @@ export type HostOAuthRefresherConfig<TLogin> = {
   endedErrors?: readonly string[]
   /** A provider that rotates refresh tokens must return one; else the old one is kept. */
   rotates: boolean
-  read: (id: string) => TLogin | null
+  read: (id: string) => TLogin | null | Promise<TLogin | null>
   /** Null when the login has nothing to refresh with. */
   grantOf: (login: TLogin) => HostOAuthGrant | null
   /** Gets the login as saved now, never the one read before the request. */
-  save: (id: string, login: TLogin, refreshed: HostOAuthRefreshed) => void
-  ended: (id: string, login: TLogin, error: string) => void
+  save: (id: string, login: TLogin, refreshed: HostOAuthRefreshed) => void | Promise<void>
+  ended: (id: string, login: TLogin, refusal: HostOAuthRefusal) => void | Promise<void>
 }
 
-const TokenResponse = z.object({
-  access_token: z.string().min(1),
-  refresh_token: z.string().min(1).optional(),
-  expires_in: z.number().positive(),
-  scope: z.string().min(1).optional()
-})
-const ErrorResponse = z.object({ error: z.string().min(1) })
+const TokenResponse = lazyZodSchema(() =>
+  z.object({
+    access_token: z.string().min(1),
+    refresh_token: z.string().min(1).optional(),
+    expires_in: z.number().positive(),
+    scope: z.string().min(1).optional()
+  })
+)
+// The provider's words are kept and shown, so they arrive as one plain, bounded line.
+const ProviderText = lazyZodSchema(() =>
+  z
+    .string()
+    .transform((text) => inlineUntrusted(text.replace(/\p{Cc}/gu, ' '), 200))
+    .pipe(z.string().min(1))
+)
+const ErrorResponse = lazyZodSchema(() =>
+  z.object({
+    error: ProviderText,
+    error_subtype: ProviderText.optional().catch(undefined),
+    error_description: ProviderText.optional().catch(undefined)
+  })
+)
 
 export type HostOAuthRefresher = {
   /** Refreshes when due, or now when the provider refused the token (force). */
@@ -85,7 +105,7 @@ export function createHostOAuthRefresher<TLogin>(
     deps: HostOAuthRefreshDeps,
     force: boolean
   ): Promise<HostOAuthRefreshOutcome> {
-    const login = config.read(id)
+    const login = await config.read(id)
     const grant = login ? config.grantOf(login) : null
     if (!login || !grant) {
       return 'none'
@@ -111,7 +131,7 @@ export function createHostOAuthRefresher<TLogin>(
     }
     const body: unknown = await response.json().catch(() => null)
     // A disconnect or a new sign-in during the request wins: only the grant this refresh used is written.
-    const current = config.read(id)
+    const current = await config.read(id)
     if (!current || config.grantOf(current)?.refreshToken !== grant.refreshToken) {
       return 'superseded'
     }
@@ -122,7 +142,7 @@ export function createHostOAuthRefresher<TLogin>(
       if (!tokens || !refreshToken) {
         return 'offline'
       }
-      config.save(id, current, {
+      await config.save(id, current, {
         accessToken: tokens.access_token,
         refreshToken,
         expiresAt: deps.now() + tokens.expires_in * 1000,
@@ -130,14 +150,18 @@ export function createHostOAuthRefresher<TLogin>(
       })
       return 'refreshed'
     }
-    const error = ErrorResponse.safeParse(body).data?.error
+    const refused = ErrorResponse.safeParse(body).data
     // invalid_grant arrives as a 400; a deleted client (invalid_client) can come as a 401.
     const gone =
-      error !== undefined &&
-      ((response.status === 400 && ended.has(error)) ||
-        (response.status === 401 && (config.endedErrors ?? []).includes(error)))
+      refused !== undefined &&
+      ((response.status === 400 && ended.has(refused.error)) ||
+        (response.status === 401 && (config.endedErrors ?? []).includes(refused.error)))
     if (gone) {
-      config.ended(id, current, error)
+      await config.ended(id, current, {
+        error: refused.error,
+        ...(refused.error_subtype ? { subtype: refused.error_subtype } : {}),
+        ...(refused.error_description ? { description: refused.error_description } : {})
+      })
       return 'ended'
     }
     return 'offline'

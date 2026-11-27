@@ -1,35 +1,31 @@
-import { ipcMain } from 'electron'
+import type { RegisterSshRequest } from '../../ssh/application/ssh-application-requests'
 import {
   enrichSshForwardEntries,
   getWorktreeIdsForConnection
 } from '../../ports/ssh-advertised-url-enrichment'
-import {
-  connectionManager,
-  getCurrentMainWindow,
-  persistedStore,
-  portForwardManager
-} from './ssh-ipc-context'
+import { connectionManager, persistedStore, portForwardManager } from './ssh-ipc-context'
 import { persistPortForwards } from './ssh-port-forward-persistence'
 import { serializePortForwardChange } from './ssh-managed-port-forward-restore'
 import { clearForwardFailure, listUnrestoredPortForwards } from './ssh-port-forward-unrestored'
 import { PortForwardTornDownError } from '../../ssh/port-forwarding/ssh-port-forward'
+import { addForwardOnFreeLocalPort } from '../../ssh/port-forwarding/forward-local-port-choice'
+import { savedForwardLocalPorts } from '../../ports/paired-forwards/paired-port-forward-saved'
+import { loopbackPortForwardDialHost } from '../../../shared/workspace/ports/port-forward-loopback-host'
 import { broadcastPortForwards, enrichDetected } from './ssh-renderer-broadcast'
 
-export function registerSshPortForwardHandlers(
-  handle: typeof ipcMain.handle = ipcMain.handle.bind(ipcMain)
-): void {
+// Covers a fresh OpenSSH login through a jump host; past it the click reports a failure.
+const FORWARD_LISTENER_TIMEOUT_MS = 20_000
+
+export function registerSshPortForwardHandlers(handle: RegisterSshRequest): void {
   handle(
     'ssh:addPortForward',
-    async (
-      _event,
-      args: {
-        targetId: string
-        localPort: number
-        remoteHost: string
-        remotePort: number
-        label?: string
-      }
-    ) =>
+    async (args: {
+      targetId: string
+      localPort: number
+      remoteHost: string
+      remotePort: number
+      label?: string
+    }) =>
       serializePortForwardChange(args.targetId, async () => {
         const conn = connectionManager!.getConnection(args.targetId)
         if (!conn) {
@@ -46,24 +42,68 @@ export function registerSshPortForwardHandlers(
         // A forward the user adds again starts a fresh backoff.
         clearForwardFailure(args.targetId, entry)
         persistPortForwards(args.targetId)
-        broadcastPortForwards(getCurrentMainWindow, args.targetId)
+        broadcastPortForwards(args.targetId)
         return entry
       })
   )
 
+  // The renderer calls this only from a person's click on the host's localhost link or port.
+  handle('ssh:ensurePortForward', (args: { targetId: string; remotePort: number }) => {
+    const targetId = typeof args?.targetId === 'string' ? args.targetId : ''
+    const remotePort = args?.remotePort
+    if (!targetId || !Number.isInteger(remotePort) || remotePort < 1 || remotePort > 65_535) {
+      throw new Error('Invalid port forward request')
+    }
+    return serializePortForwardChange(targetId, async () => {
+      const existing = portForwardManager!
+        .listForwards(targetId)
+        .find(
+          (forward) =>
+            forward.remotePort === remotePort &&
+            loopbackPortForwardDialHost(forward.remoteHost) !== null
+        )
+      if (existing) {
+        return { entry: existing, created: false }
+      }
+      const conn = connectionManager!.getConnection(targetId)
+      if (!conn) {
+        throw new Error(`SSH connection "${targetId}" not found`)
+      }
+      // Saved forwards of every host, SSH or paired, keep their ports: one restoring as this starts would answer its probe.
+      const savedLocalPorts = savedForwardLocalPorts()
+      const entry = await addForwardOnFreeLocalPort({
+        remotePort,
+        add: (localPort) =>
+          portForwardManager!.addForward(targetId, conn, localPort, 'localhost', remotePort),
+        remove: (id) => portForwardManager!.removeForwardAndWait(id),
+        // SSH forwards listen on 127.0.0.1 only.
+        holdsIpv6Loopback: false,
+        // Persisting a new forward on a saved one's port would also drop that saved mapping.
+        reservedLocalPorts: savedLocalPorts,
+        // The caller opens the address next; a slow SSH login must not hand it a port nothing answers yet.
+        listening: {
+          timeoutMs: FORWARD_LISTENER_TIMEOUT_MS,
+          isOpen: (entry) =>
+            portForwardManager!.listForwards(targetId).some((forward) => forward.id === entry.id)
+        }
+      })
+      clearForwardFailure(targetId, entry)
+      persistPortForwards(targetId)
+      broadcastPortForwards(targetId)
+      return { entry, created: true }
+    })
+  })
+
   handle(
     'ssh:updatePortForward',
-    async (
-      _event,
-      args: {
-        id: string
-        targetId: string
-        localPort: number
-        remoteHost: string
-        remotePort: number
-        label?: string
-      }
-    ) =>
+    async (args: {
+      id: string
+      targetId: string
+      localPort: number
+      remoteHost: string
+      remotePort: number
+      label?: string
+    }) =>
       serializePortForwardChange(args.targetId, async () => {
         const conn = connectionManager!.getConnection(args.targetId)
         if (!conn) {
@@ -86,7 +126,7 @@ export function registerSshPortForwardHandlers(
             clearForwardFailure(entry.connectionId, previous)
           }
           persistPortForwards(entry.connectionId, previous)
-          broadcastPortForwards(getCurrentMainWindow, entry.connectionId)
+          broadcastPortForwards(entry.connectionId)
           return entry
         } catch (err) {
           // Disconnect clears runtime forwards; persisting that empty list would erase saved configuration.
@@ -94,13 +134,13 @@ export function registerSshPortForwardHandlers(
             persistPortForwards(args.targetId)
           }
           // Edit or rollback may fail; resync the renderer with actual forwarding state.
-          broadcastPortForwards(getCurrentMainWindow, args.targetId)
+          broadcastPortForwards(args.targetId)
           throw err
         }
       })
   )
 
-  handle('ssh:removePortForward', async (_event, args: { id: string }) => {
+  handle('ssh:removePortForward', async (args: { id: string }) => {
     const targetId = portForwardManager!
       .listForwards()
       .find((forward) => forward.id === args.id)?.connectionId
@@ -119,23 +159,20 @@ export function registerSshPortForwardHandlers(
       if (removed) {
         clearForwardFailure(removed.connectionId, removed)
         persistPortForwards(removed.connectionId, removed)
-        broadcastPortForwards(getCurrentMainWindow, removed.connectionId)
+        broadcastPortForwards(removed.connectionId)
       }
       return removed
     })
   })
 
-  handle('ssh:listUnrestoredPortForwards', (_event, args: { targetId: string }) =>
+  handle('ssh:listUnrestoredPortForwards', (args: { targetId: string }) =>
     listUnrestoredPortForwards(args.targetId)
   )
 
   // A saved forward that never started has no live id, so it is removed by its mapping.
   handle(
     'ssh:removeSavedPortForward',
-    (
-      _event,
-      args: { targetId: string; localPort: number; remoteHost: string; remotePort: number }
-    ) =>
+    (args: { targetId: string; localPort: number; remoteHost: string; remotePort: number }) =>
       serializePortForwardChange(args.targetId, async () => {
         const { targetId, ...mapping } = args
         // A restore queued ahead may have opened it since the row was drawn; close that too.
@@ -152,11 +189,11 @@ export function registerSshPortForwardHandlers(
         }
         persistPortForwards(targetId, mapping)
         clearForwardFailure(targetId, mapping)
-        broadcastPortForwards(getCurrentMainWindow, targetId)
+        broadcastPortForwards(targetId)
       })
   )
 
-  handle('ssh:listPortForwards', (_event, args?: { targetId?: string }) => {
+  handle('ssh:listPortForwards', (args?: { targetId?: string }) => {
     const all = portForwardManager!.listForwards(args?.targetId)
     if (!persistedStore || !args?.targetId) {
       // Cross-target rows cannot be attributed to worktrees in one enrichment call.
@@ -165,7 +202,7 @@ export function registerSshPortForwardHandlers(
     return enrichSshForwardEntries(all, getWorktreeIdsForConnection(persistedStore, args.targetId))
   })
 
-  handle('ssh:listDetectedPorts', (_event, args: { targetId: string }) => {
+  handle('ssh:listDetectedPorts', (args: { targetId: string }) => {
     // Detected ports came from the relay's port scanner; a managed host reports them through its runtime.
     return enrichDetected(args.targetId, [])
   })

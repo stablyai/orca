@@ -148,7 +148,3 @@ export function clearNativeChatTranscriptCache(): void {
   inFlightReads.clear()
   cache.clear()
 }
-
-export function setNativeChatTranscriptCacheMaxBytesForTests(bytes?: number): void {
-  maxCacheBytes = bytes ?? MAX_CACHE_BYTES
-}

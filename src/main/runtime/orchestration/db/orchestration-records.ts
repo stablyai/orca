@@ -1,5 +1,7 @@
 import type { TerminalExitCause } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import type { OrcaSessionId } from '../../../../shared/agent-session/identity/orca-session-address'
+import type { WorkerDispatchState } from './worker-dispatch/worker-dispatch-state'
+
 export const MESSAGE_TYPES = [
   'status',
   'dispatch',
@@ -124,6 +126,8 @@ export type QuestionRow = {
   created_at: string
   answered_at: string | null
   closed_at: string | null
+  /** How it ended with no answer: its asker was told it went unanswered, or no one read it. */
+  told: 'unanswered' | 'dropped' | null
 }
 
 export type MutationState = 'pending' | 'completed'
@@ -139,16 +143,7 @@ export type MutationReceiptRow = {
   updated_at: string
 }
 
-export type WorkerDispatchState =
-  | 'starting'
-  | 'ready'
-  | 'start_unknown'
-  | 'failed'
-  | 'succeeded'
-  | 'stopping'
-  | 'stop_unknown'
-  | 'stopped'
-  | 'abandoned'
+export type { WorkerDispatchState } from './worker-dispatch/worker-dispatch-state'
 
 export type WorkerDispatchRow = {
   dispatch_id: string
@@ -260,6 +255,7 @@ export type MessageRow = {
   delivered_at: string | null
   sender_pane_key: string | null
   answer_sender_snapshot?: string | null
+  reply_to?: string | null
   pointer_enter_pending?: number
   pointer_pty_id?: string | null
   pointer_process_incarnation?: string | null
@@ -320,14 +316,21 @@ export type DispatchContextRow = {
   completed_at: string | null
   created_at: string
   last_heartbeat_at: string | null
+  /** Concise passive progress note set by `orchestration task-update --note`; never mailed. */
+  progress_note: string | null
+  progress_updated_at: string | null
   /** The settled Dispatch whose worker this follow-up continues. */
   follow_up_of_dispatch_id: string | null
   /** When its worker reported with coordinator mail unread, until that mail continues it. */
   follow_up_mail_at: string | null
   /** 'connector' when started in a turn its creator chat's connector conversation woke. */
   creator_turn_source: 'connector' | null
-  /** What its creator started it for, opaque here (bot items: `bot-item:<uid>`); retries inherit it. */
+  /** What its creator started it for, opaque here (bot items: `bot-item:<uid>`), and the question it
+   *  answers (`worker-start --for`); retries inherit both. */
   origin_ref: string | null
+  for_message_id: string | null
+  /** 1 when this worker, and every worker it starts, starts as a chat wherever one can run. */
+  chat_lineage: 1 | null
 }
 
 export type DecisionGateRow = {

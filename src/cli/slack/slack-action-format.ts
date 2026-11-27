@@ -40,11 +40,11 @@ export type ActionResult = {
   }
 }
 const line = (view: RefView) => `${view.ref}  ${view.label}`
-// A person find lists also shows how a post mentions them.
+// A person find lists also shows how a post mentions them and that posting to the ref DMs them.
 const PERSON_REF = /^slack:[^:]+:user:([UW][A-Z0-9]+)$/
 const findLine = (view: RefView) => {
   const id = PERSON_REF.exec(view.ref)?.[1]
-  return id ? `${line(view)} · mention with <@${id}>` : line(view)
+  return id ? `${line(view)} · mention with <@${id}>, post to it to DM them` : line(view)
 }
 
 const authorName = (name: string) => inlineUntrusted(name, 64) || 'someone'
@@ -109,7 +109,20 @@ export function formatActionResult(verb: SlackVerb | 'attach', result: ActionRes
         ...(result.notices ?? [])
       ].join('\n')
     case 'react':
+    case 'pin':
       return result.target ? line(result.target) : 'Done.'
+    case 'canvas':
+    case 'list':
+      return [
+        result.target ? `Made: ${line(result.target)}` : 'Made.',
+        ...(result.url ? [`Link: ${result.url}`] : []),
+        ...(result.note ? [result.note] : [])
+      ].join('\n')
+    case 'scheduled':
+      return [
+        ...(result.target ? [line(result.target)] : []),
+        result.note ?? 'Nothing is scheduled there.'
+      ].join('\n')
     case 'edit':
       return result.target ? `Edited: ${result.target.ref}` : 'Edited.'
     case 'delete':

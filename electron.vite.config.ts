@@ -6,6 +6,7 @@ import type { Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { createInheritedOrcaIdentityFirstGuardPlugin } from './config/build-plugins/inherited-orca-identity-banner'
+import { createMainCjsEntryShimPlugin } from './config/build-plugins/main-cjs-entry-shim'
 import { createMainEntryPostBanner } from './config/build-plugins/main-entry-post-banner'
 import {
   createSandboxedScriptBundlesPlugin,
@@ -217,6 +218,7 @@ export const electronViteConfig: UserConfig = {
         plugins: [
           createPlainNodeEntryGuardPlugin(),
           createInheritedOrcaIdentityFirstGuardPlugin(),
+          createMainCjsEntryShimPlugin(),
           createProcessHostDevRebuildPlugin(),
           createDarkBuildMarkerPlugin(),
           createSandboxedScriptBundlesPlugin(),
@@ -257,6 +259,10 @@ export const electronViteConfig: UserConfig = {
     resolve: {
       alias: {
         ...markdownParserAliases,
+        // Pin the browser-safe UMD entry so an unpatched package.json cannot bundle lib/addon-ligatures.mjs (which imports node:diagnostics_channel).
+        '@xterm/addon-ligatures': resolve(
+          'node_modules/@xterm/addon-ligatures/lib/addon-ligatures.js'
+        ),
         '@renderer': resolve('src/renderer/src'),
         '@': resolve('src/renderer/src')
       }

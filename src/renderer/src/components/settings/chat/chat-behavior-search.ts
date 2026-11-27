@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import { translateSearchKeyword } from '../search/settings-search-keywords'
 import type { Translate } from '@/i18n/use-translate'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import type { SettingsSearchEntry } from '../search/settings-search'
@@ -20,8 +21,8 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
       'When Orca quits or installs an update, chats that were working are automatically resumed when Orca is reopened.'
     ),
     keywords: [
-      translate('components.settings.nativeChat.resumeSearchUpdate', 'update'),
-      translate('components.settings.nativeChat.resumeSearchRelaunch', 'relaunch')
+      ...translateSearchKeyword('components.settings.nativeChat.resumeSearchUpdate', 'update'),
+      ...translateSearchKeyword('components.settings.nativeChat.resumeSearchRelaunch', 'relaunch')
     ]
   },
   autoContinueAfterUsageLimit: {
@@ -35,8 +36,14 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
       'Orca sends "Continue where you left off." when the limit resets. Applies to all chats with a known reset time.'
     ),
     keywords: [
-      translate('components.settings.nativeChat.usageLimitContinueSearchLimit', 'usage limit'),
-      translate('components.settings.nativeChat.usageLimitContinueSearchReset', 'reset')
+      ...translateSearchKeyword(
+        'components.settings.nativeChat.usageLimitContinueSearchLimit',
+        'usage limit'
+      ),
+      ...translateSearchKeyword(
+        'components.settings.nativeChat.usageLimitContinueSearchReset',
+        'reset'
+      )
     ]
   },
   idleStop: {
@@ -47,9 +54,12 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
       "Ends a chat's agent once the chat has been idle this long, to free memory. The chat stays, and your next message starts the agent again. Choose Never for agents that keep working in the background between turns."
     ),
     keywords: [
-      translate('components.settings.nativeChat.idleStopSearchIdle', 'idle'),
-      translate('components.settings.nativeChat.idleStopSearchTimeout', 'timeout'),
-      translate('components.settings.nativeChat.idleStopSearchKeepAlive', 'keep alive')
+      ...translateSearchKeyword('components.settings.nativeChat.idleStopSearchIdle', 'idle'),
+      ...translateSearchKeyword('components.settings.nativeChat.idleStopSearchTimeout', 'timeout'),
+      ...translateSearchKeyword(
+        'components.settings.nativeChat.idleStopSearchKeepAlive',
+        'keep alive'
+      )
     ]
   },
   queueFollowUps: {
@@ -60,8 +70,8 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
       'Messages sent while the agent works wait as cards until the turn ends, instead of going into the running turn. Cmd/Ctrl+Enter does the opposite for one message, and with nothing typed steers the first waiting card into the running turn. Messages with images wait as cards too.'
     ),
     keywords: [
-      translate('components.settings.nativeChat.queueSearchQueue', 'queue'),
-      translate('components.settings.nativeChat.queueSearchSteer', 'steer')
+      ...translateSearchKeyword('components.settings.nativeChat.queueSearchQueue', 'queue'),
+      ...translateSearchKeyword('components.settings.nativeChat.queueSearchSteer', 'steer')
     ]
   },
   scrollToLatestOnSend: {
@@ -75,7 +85,10 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
       'Sending while scrolled up jumps to the latest message and follows the reply. Turn off to keep your place.'
     ),
     keywords: [
-      translate('components.settings.nativeChat.scrollToLatestOnSendSearchPosition', 'position')
+      ...translateSearchKeyword(
+        'components.settings.nativeChat.scrollToLatestOnSendSearchPosition',
+        'position'
+      )
     ]
   },
   markNewMessages: {
@@ -88,7 +101,12 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
       'components.settings.nativeChat.markNewMessagesCopy',
       'Coming back to a chat draws a New line above what arrived while you were away, and scrolls to it if you were reading the latest.'
     ),
-    keywords: [translate('components.settings.nativeChat.markNewMessagesSearchUnread', 'unread')]
+    keywords: [
+      ...translateSearchKeyword(
+        'components.settings.nativeChat.markNewMessagesSearchUnread',
+        'unread'
+      )
+    ]
   },
   linkPreviews: {
     targetSectionId: 'chat-link-previews',
@@ -98,8 +116,14 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
       'Hovering a web link shows a preview card. Orca fetches the page to build it, so the site can see the request.'
     ),
     keywords: [
-      translate('components.settings.nativeChat.linkPreviewsSearchUnfurl', 'unfurl'),
-      translate('components.settings.nativeChat.linkPreviewsSearchHover', 'hover card')
+      ...translateSearchKeyword(
+        'components.settings.nativeChat.linkPreviewsSearchUnfurl',
+        'unfurl'
+      ),
+      ...translateSearchKeyword(
+        'components.settings.nativeChat.linkPreviewsSearchHover',
+        'hover card'
+      )
     ]
   },
   composerSpellcheck: {
@@ -113,8 +137,14 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
       'Underlines misspelled words and applies system text replacements in the message box. Turn off to stop both here without changing them system-wide.'
     ),
     keywords: [
-      translate('components.settings.nativeChat.composerSpellcheckSearchSpelling', 'spellcheck'),
-      translate('components.settings.nativeChat.composerSpellcheckSearchAutocorrect', 'autocorrect')
+      ...translateSearchKeyword(
+        'components.settings.nativeChat.composerSpellcheckSearchSpelling',
+        'spellcheck'
+      ),
+      ...translateSearchKeyword(
+        'components.settings.nativeChat.composerSpellcheckSearchAutocorrect',
+        'autocorrect'
+      )
     ]
   },
   promptSuggestions: {
@@ -122,11 +152,21 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
     title: translate('components.settings.nativeChat.promptSuggestionsTitle', 'Suggested prompts'),
     description: translate(
       'components.settings.nativeChat.promptSuggestionsCopy',
-      'After Claude replies, its guess at your next message shows in the empty message box. Press Tab to use it. Each guess is an extra request that counts toward your Claude usage.'
+      "After Claude or Codex replies, its guess at your next message shows in the empty message box. Press Tab to use it. Each guess is an extra request that counts toward that agent's usage."
     ),
     keywords: [
-      translate('components.settings.nativeChat.promptSuggestionsSearchNext', 'next prompt'),
-      translate('components.settings.nativeChat.promptSuggestionsSearchGhost', 'ghost text')
+      ...translateSearchKeyword(
+        'components.settings.nativeChat.promptSuggestionsSearchNext',
+        'next prompt'
+      ),
+      ...translateSearchKeyword(
+        'components.settings.nativeChat.promptSuggestionsSearchGhost',
+        'ghost text'
+      ),
+      // Russian wording for both the old «промпт» and the glossary «запрос» spellings; users search either.
+      'Предлагаемые промпты',
+      'следующий промпт',
+      'следующий запрос'
     ]
   },
   shellEnvironment: {
@@ -140,9 +180,12 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
       'Codex and Claude chats start with every variable your login shell exports, the same as a terminal. Turn off to choose which ones they get.'
     ),
     keywords: [
-      translate('components.settings.nativeChat.shellEnvSearchVariables', 'environment variables'),
-      translate('components.settings.nativeChat.shellEnvSearchPath', 'PATH'),
-      translate('components.settings.nativeChat.shellEnvSearchProxy', 'proxy')
+      ...translateSearchKeyword(
+        'components.settings.nativeChat.shellEnvSearchVariables',
+        'environment variables'
+      ),
+      ...translateSearchKeyword('components.settings.nativeChat.shellEnvSearchPath', 'PATH'),
+      ...translateSearchKeyword('components.settings.nativeChat.shellEnvSearchProxy', 'proxy')
     ]
   }
 }))

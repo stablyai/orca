@@ -4,12 +4,13 @@ import {
   type BotGroup,
   type BotGroupMember
 } from '../../shared/bots/bot-group'
-import { BotGroupPeerScopeSchema, type BotGroupPeerScope } from '../../shared/bots/bot-group-schema'
+import { startsBotGroupRequest, type BotGroupPeerScope } from '../../shared/bots/bot-group-schema'
 import type { MessageRow } from '../runtime/orchestration/db/orchestration-records'
 import type { StructuredMailboxPointerHost } from '../runtime/orchestration/mailbox/structured-pointer/structured-mailbox-pointer-host-contract'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { requireStructuredHost } from './bot-chat-session'
 import type { BotGroupRuntime } from './bot-group-runtime'
+import { mailRoot, mailTurnRan, ownRequestMail, rootOf } from './bot-group-mail-root'
 
 export type GroupPeerScope = NonNullable<Awaited<ReturnType<typeof groupPeerScope>>>
 
@@ -18,17 +19,6 @@ const activeAt = (group: BotGroup, sessionId: string, rootSequence: number) =>
     (member) =>
       member.sessionId === sessionId && (member.stoppedThroughSequence ?? 0) < rootSequence
   )
-
-/** The group request a message's turns serve: its own, or the human post it continues. */
-const rootOf = (message: {
-  id: string
-  sequence: number
-  rootRequestId?: string
-  rootSequence?: number
-}) => ({
-  rootRequestId: message.rootRequestId ?? message.id,
-  rootSequence: message.rootSequence ?? message.sequence
-})
 
 /** The human request a member's running turn serves, for a peer question it asks another member. */
 export async function groupPeerScope(
@@ -66,11 +56,23 @@ export async function groupPeerScope(
     !original ||
     original.groupId !== group.id ||
     original.threadId !== threadId ||
-    original.author.kind !== 'owner'
+    !startsBotGroupRequest(original)
   ) {
     throw new Error('The original human group request cannot be verified.')
   }
-  return { originalHumanInstruction: original.text, group, source, target, ...root }
+  return {
+    originalHumanInstruction: original.fromItems
+      ? `Not a human instruction: an update to items made outside the room, quoted as data: ${original.text}`
+      : original.fromReports
+        ? `Not a human instruction: a worker's report that arrived after the room's Stop: ${original.text}`
+        : original.text,
+    group,
+    source,
+    target,
+    // The live turn: a mail turn has no send of its own, so its root row names an earlier turn.
+    operationId: (await liveGroupOperation(groups, sessionId)) ?? turn.operationId,
+    ...root
+  }
 }
 
 export function assertGroupPeerScope(groups: BotGroupRuntime, scope: GroupPeerScope): void {
@@ -84,41 +86,6 @@ export function assertGroupPeerScope(groups: BotGroupRuntime, scope: GroupPeerSc
   ) {
     throw new Error('This group request or member is no longer active.')
   }
-}
-
-/** The group request a mail to this member continues: a member's peer request, or a report from
- *  a worker one of this member's turns started. */
-function mailRoot(
-  groups: BotGroupRuntime,
-  member: BotGroupMember,
-  mail: Pick<MessageRow, 'id' | 'thread_id' | 'from_handle'>
-): BotGroupPeerScope | null {
-  const db = groups.runtime.getOrchestrationDb()
-  const request =
-    db.getBotRequest(mail.id) ?? (mail.thread_id ? db.getBotRequest(mail.thread_id) : undefined)
-  if (request) {
-    const parsed: unknown = JSON.parse(request.record)
-    const scope = BotGroupPeerScopeSchema.safeParse(
-      typeof parsed === 'object' && parsed !== null && 'group' in parsed ? parsed.group : null
-    )
-    return scope.success ? scope.data : null
-  }
-  const dispatch = mail.from_handle.startsWith('dispatch:')
-    ? mail.from_handle.slice('dispatch:'.length)
-    : db.getActiveDispatchForIdentity(mail.from_handle)?.id
-  const operationId = dispatch ? groups.store.workerOperation(dispatch) : null
-  const message = operationId ? groups.store.operationMessage(operationId) : null
-  const owned = message?.turns.some(
-    (turn) => turn.operationId === operationId && turn.sessionId === member.sessionId
-  )
-  return message && owned
-    ? {
-        id: message.groupId,
-        ...rootOf(message),
-        sourceSessionId: member.sessionId,
-        targetSessionId: member.sessionId
-      }
-    : null
 }
 
 const rootActive = (group: BotGroup, member: BotGroupMember, root: BotGroupPeerScope) =>
@@ -140,7 +107,7 @@ export function narrowGroupMailBatch<
   const live: { mail: T; root: BotGroupPeerScope }[] = []
   const ended: string[] = []
   for (const mail of messages) {
-    const root = mailRoot(groups, found.member, mail)
+    const root = mailRoot(groups, found.group.id, found.member, mail)
     if (root && rootActive(found.group, found.member, root)) {
       live.push({ mail, root })
     } else if (root) {
@@ -180,7 +147,7 @@ export function reserveGroupMailTurn(
   const mails = notice.messages
     .map(({ messageId }) => db.getMessageById(messageId))
     .filter((mail) => mail !== undefined)
-  const roots = mails.flatMap((mail) => mailRoot(groups, member, mail) ?? [])
+  const roots = mails.flatMap((mail) => mailRoot(groups, group.id, member, mail) ?? [])
   const [first] = roots
   if (
     !first ||
@@ -191,8 +158,27 @@ export function reserveGroupMailTurn(
   ) {
     throw new Error('This mail is outside the active group request; it was not delivered.')
   }
-  const id = `mail:${input.operationId}`
-  if (groups.store.message(id)) {
+  // A replay of this id (a line saved before lines were keyed by mail included) changes nothing.
+  if (
+    groups.store
+      .operationMessage(input.operationId)
+      ?.turns.some((turn) => turn.operationId === input.operationId)
+  ) {
+    return
+  }
+  // One room line per mail and member, whatever id carries it: the lane mints a new id when an
+  // attempt is refused, withdrawn or too old to reuse, and the line follows to the attempt that
+  // runs. Mail that comes back after its turn ran gets the next line of its own.
+  const mailKey = `mail:${member.sessionId}:${notice.messages.map(({ messageId }) => messageId).join(',')}`
+  let id = mailKey
+  let line = groups.store.message(id)
+  for (let index = 2; line && mailTurnRan(line.turns[0]); index += 1) {
+    id = `${mailKey}#${index}`
+    line = groups.store.message(id)
+  }
+  if (line) {
+    groups.store.retarget(id, input.operationId)
+    groups.changed(group.id)
     return
   }
   const bot = groups.runtime.bots.list().find((bot) => bot.id === member.botId)
@@ -205,6 +191,9 @@ export function reserveGroupMailTurn(
       .find(
         (entry) => entry.id === group.members.find((other) => other.sessionId === sessionId)?.botId
       )
+  // Own-request mail's line is its own root, saved now.
+  const ownRequest = ownRequestMail(first, member)
+  const fromItems = ownRequest === 'items'
   // The asker's own mail is the asked member's reply; a worker report has the member at both ends.
   const asker = first.sourceSessionId === member.sessionId
   const requester = asker ? undefined : botOf(first.sourceSessionId)
@@ -217,14 +206,17 @@ export function reserveGroupMailTurn(
     ...(threadId ? { threadId } : {}),
     author: { kind: 'bot', id: bot.id, name: bot.name },
     // Room history for the other members; the room line itself renders from the fields below.
-    text: requester
-      ? `${requester.name} ${told ? 'told' : 'asked'} ${bot.name}`
-      : answeredBy
-        ? `${bot.name} read ${answeredBy.name}'s reply`
-        : `${bot.name} followed up`,
+    text: fromItems
+      ? `${bot.name} read a change to its items: ${mails.map((mail) => mail.subject).join('; ')}`
+      : requester
+        ? `${requester.name} ${told ? 'told' : 'asked'} ${bot.name}`
+        : answeredBy
+          ? `${bot.name} read ${answeredBy.name}'s reply`
+          : `${bot.name} followed up`,
     createdAt: Date.now(),
-    rootRequestId: first.rootRequestId,
-    rootSequence: first.rootSequence,
+    ...(fromItems ? { fromItems: true as const } : {}),
+    ...(ownRequest === 'reports' ? { fromReports: true as const } : {}),
+    ...(ownRequest ? {} : { rootRequestId: first.rootRequestId, rootSequence: first.rootSequence }),
     ...(requester
       ? { requester: { id: requester.id, name: requester.name, ...(told ? { told: true } : {}) } }
       : {}),
@@ -235,17 +227,20 @@ export function reserveGroupMailTurn(
         botId: bot.id,
         botName: bot.name,
         avatar: bot.avatar,
+        ...(bot.avatarColor ? { avatarColor: bot.avatarColor } : {}),
+        ...(bot.avatarOutfit ? { avatarOutfit: bot.avatarOutfit } : {}),
         agent: bot.agent,
         sessionId: member.sessionId,
         mailbox: true
       }
     ]
   })
-  groups.changed()
+  groups.changed(group.id)
 }
 
-/** The group operation a member is running as it starts a worker, read from its live turn. */
-export async function captureGroupWorkerOperation(
+/** The group operation a member is running now (as it starts a worker or answers a peer), read
+ *  from its live turn. */
+export async function liveGroupOperation(
   groups: BotGroupRuntime,
   sessionId: string
 ): Promise<string | null> {

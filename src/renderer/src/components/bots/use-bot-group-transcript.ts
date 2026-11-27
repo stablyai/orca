@@ -1,6 +1,8 @@
 import { useEffect, useReducer } from 'react'
 import { onBotsChanged } from '@/lib/bots-changed-window-event'
-import { callBotRpc, type BotRef } from '@/lib/bot-hosts'
+import type { BotRef } from '@/lib/bot-hosts'
+import { callBotGroupRpc } from '@/lib/bot-group-rpc'
+import { botGroupRoomConcerned } from '../../../../shared/bots/bot-change-scope'
 import {
   reduceBotGroupTranscript,
   type BotGroupTranscript
@@ -11,14 +13,15 @@ function readPage(
   threadId: string | undefined,
   beforeSequence?: number
 ): Promise<BotGroupTranscript> {
-  return callBotRpc(group, 'bots.groups.read', {
+  return callBotGroupRpc(group, 'bots.groups.read', {
     groupId: group.id,
     threadId,
     beforeSequence
   })
 }
 
-/** The room's transcript while visible: re-read on every host bots change, older pages on request.
+/** The room's transcript while visible: re-read on each host groups change that names this room (or
+ *  names none), older pages on request.
  *  A thread's room is read when `threadId` is set. */
 export function useBotGroupTranscript(
   group: BotRef | undefined,
@@ -48,7 +51,15 @@ export function useBotGroupTranscript(
         .catch((error: unknown) => !closed && setError(String(error)))
     }
     read()
-    const stopListening = onBotsChanged(read, hostId, { kinds: ['groups'] })
+    const stopListening = onBotsChanged(
+      (_host, scope) => {
+        if (botGroupRoomConcerned(scope, groupId)) {
+          read()
+        }
+      },
+      hostId,
+      { kinds: ['groups'] }
+    )
     return () => {
       closed = true
       stopListening()

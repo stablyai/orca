@@ -1,0 +1,23 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Local `wrangler dev` and tests only. It has no routes, and workers.dev and preview URLs are
+  // off, so a deploy from this file publishes nothing reachable. Deployed environments (names,
+  // hostnames, limits, deferred updates) live in a private deploy config, not in this repo.
+  "name": "orca-connector-wake-local",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "durable_objects": {
+    "bindings": [{ "name": "CONNECTOR_HOST", "class_name": "ConnectorHost" }]
+  },
+  // Holds only sockets: never writes storage.
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ConnectorHost"] }],
+  // Upgrades and the object health probe per source per colo, before auth. Local: low, so
+  // test/wake-protocol.ts can reach it.
+  "ratelimits": [{ "name": "PREAUTH_LIMITER", "namespace_id": "1001", "simple": { "limit": 100, "period": 60 } }],
+  "vars": {
+    "WAKE_REFUSE_COUNTRIES": "CN"
+  }
+}

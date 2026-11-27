@@ -1,99 +1,71 @@
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import * as path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { getGitRepoRoot, isGitRepo } from './repo-detection'
+import { join } from 'node:path'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import {
+  inspectFolderToGitConversion,
+  proveRepoKindChange
+} from '../../../workspaces/catalog/folder-repo-git-conversion'
+import { inspectGitRepoForRegistrationAsync, isGitRepo } from './repo-detection'
+import { setLocalGitRuntimeRouter } from '../../command-runner/host-routing/local-git-runtime-route'
 
-function git(cwd: string, args: string[]): string {
-  return execFileSync('git', args, { cwd, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] })
-}
+let root: string
 
-describe('isGitRepo', () => {
-  let tmpDir: string
-
-  beforeEach(() => {
-    tmpDir = mkdtempSync(path.join(tmpdir(), 'orca-repo-detect-'))
-  })
-
-  afterEach(() => {
-    rmSync(tmpDir, { recursive: true, force: true })
-  })
-
-  it('rejects a symlink inside a repository that points outside when git cannot be run', () => {
-    const realRepo = path.join(tmpDir, 'symlink-parent-real')
-    const outsideDir = path.join(tmpDir, 'outside-target')
-    const symlinkedOutsideDir = path.join(realRepo, 'links', 'outside')
-    mkdirSync(path.dirname(symlinkedOutsideDir), { recursive: true })
-    mkdirSync(outsideDir)
-    git(realRepo, ['init', '--quiet'])
-    symlinkSync(outsideDir, symlinkedOutsideDir, process.platform === 'win32' ? 'junction' : 'dir')
-
-    withGitUnavailable(() => {
-      expect(isGitRepo(symlinkedOutsideDir)).toBe(false)
-    })
-  })
-
-  it('resolves a symlink from one repository into another to the real target repo', () => {
-    const sourceRepo = path.join(tmpDir, 'symlink-source-real')
-    const targetRepo = path.join(tmpDir, 'symlink-target-real')
-    const targetNestedDir = path.join(targetRepo, 'packages', 'web')
-    const symlinkedTargetDir = path.join(sourceRepo, 'links', 'target')
-    mkdirSync(path.dirname(symlinkedTargetDir), { recursive: true })
-    mkdirSync(targetNestedDir, { recursive: true })
-    git(sourceRepo, ['init', '--quiet'])
-    git(targetRepo, ['init', '--quiet'])
-    symlinkSync(
-      targetNestedDir,
-      symlinkedTargetDir,
-      process.platform === 'win32' ? 'junction' : 'dir'
-    )
-
-    const expectedRoot = git(symlinkedTargetDir, ['rev-parse', '--show-toplevel'])
-      .trim()
-      .replace(/\\/g, '/')
-
-    withGitUnavailable(() => {
-      expect(isGitRepo(symlinkedTargetDir)).toBe(true)
-      expect(getGitRepoRoot(symlinkedTargetDir)).toBe(expectedRoot)
-    })
-  })
-
-  it('rejects a nested folder with an invalid .git marker even inside a valid repo', () => {
-    const realRepo = path.join(tmpDir, 'outer-real')
-    const nestedDir = path.join(realRepo, 'packages', 'web')
-    mkdirSync(nestedDir, { recursive: true })
-    git(realRepo, ['init', '--quiet'])
-    writeFileSync(path.join(nestedDir, '.git'), 'not a gitdir file')
-
-    withGitUnavailable(() => {
-      expect(isGitRepo(nestedDir)).toBe(false)
-    })
-  })
-
-  it('rejects a regular repository admin directory when git itself cannot be run', () => {
-    const realRepo = path.join(tmpDir, 'admin-dir')
-    mkdirSync(realRepo)
-    git(realRepo, ['init', '--quiet'])
-
-    withGitUnavailable(() => {
-      expect(isGitRepo(path.join(realRepo, '.git'))).toBe(false)
-    })
-  })
+beforeEach(() => {
+  root = mkdtempSync(join(tmpdir(), 'orca-dubious-ownership-'))
+  execFileSync('git', ['init', '--quiet'], { cwd: root })
+  // Real Git reports dubious ownership without a second OS user.
+  vi.stubEnv('GIT_TEST_ASSUME_DIFFERENT_OWNER', '1')
+  // A host-level `safe.directory = *` would otherwise trust the repo.
+  vi.stubEnv('GIT_CONFIG_GLOBAL', join(root, 'gitconfig'))
+  vi.stubEnv('GIT_CONFIG_NOSYSTEM', '1')
 })
 
-/** Remove Git from PATH temporarily to exercise metadata fallback after a spawn failure. */
-function withGitUnavailable(fn: () => void): void {
-  const originalPath = process.env.PATH
-  process.env.PATH = ''
-  try {
-    fn()
-  } finally {
-    // Assignment of undefined would corrupt PATH with the literal string.
-    if (originalPath === undefined) {
-      delete process.env.PATH
-    } else {
-      process.env.PATH = originalPath
-    }
+afterEach(() => {
+  setLocalGitRuntimeRouter(null)
+  vi.unstubAllEnvs()
+  rmSync(root, { recursive: true, force: true })
+})
+
+it('reports Git ownership refusals instead of accepting the .git marker', async () => {
+  expect(await inspectGitRepoForRegistrationAsync(root)).toEqual({
+    isRepo: false,
+    ownershipError: expect.stringMatching(
+      /^Git detected dubious ownership in repository at [\s\S]*\n\tgit config --global --add safe\.directory \S/
+    ),
+    rootPath: root,
+    mainRepoPath: null
+  })
+  expect(isGitRepo(root)).toBe(false)
+  const folderProject = {
+    id: 'r1',
+    path: root,
+    displayName: 'r1',
+    badgeColor: '',
+    addedAt: 0,
+    kind: 'folder' as const
   }
-}
+  await expect(proveRepoKindChange(folderProject, 'git')).rejects.toThrow(/safe\.directory/)
+})
+
+it('converts a refused folder once the user trusts it, with the .git marker unchanged', async () => {
+  expect(await inspectFolderToGitConversion(root)).toEqual({
+    conversion: null,
+    ownershipError: expect.stringContaining('safe.directory')
+  })
+  writeFileSync(join(root, 'gitconfig'), '[safe]\n\tdirectory = *\n')
+  expect((await inspectFolderToGitConversion(root)).conversion).not.toBeNull()
+})
+
+it('keeps the .git marker fallback while the WSL-hosts Git router is installed', async () => {
+  // Folder projects and new paths are unrouted, yet their WSL Git may still trust the checkout.
+  setLocalGitRuntimeRouter(() => undefined)
+  expect(await inspectGitRepoForRegistrationAsync(root)).toMatchObject({
+    isRepo: true,
+    ownershipError: undefined
+  })
+  expect(await inspectFolderToGitConversion(root)).toEqual({
+    conversion: { updates: { folderUpgradeGitRootPath: root }, rootSpellingMatches: true }
+  })
+})

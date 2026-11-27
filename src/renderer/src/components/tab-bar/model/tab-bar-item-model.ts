@@ -12,6 +12,7 @@ import type { TerminalTab } from '../../../../../shared/workspace-layout/termina
 import { resolveTerminalTabTitle } from '../../../../../shared/workspace-layout/tab-groups/tab-title-resolution'
 import type { OpenFile } from '../../../store/slices/editor/types/open-file'
 import { normalizeRelativePath } from '../../../../../shared/file-access/cross-platform-path'
+import { getPathDecoration } from '../../../../../shared/git/status/git-path-decoration'
 import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import { tabItemLabel } from './tab-bar-item-label'
 import type { DropIndicator } from '../strip/drop-indicator'
@@ -69,7 +70,7 @@ export function resolveEditorTabGitStatus(
   if (file.relativePath === 'All Changes' || isVirtualEditorFile(file)) {
     return null
   }
-  return statusByRelativePath.get(normalizeRelativePath(file.relativePath)) ?? null
+  return getPathDecoration(statusByRelativePath, normalizeRelativePath(file.relativePath))
 }
 
 /** `conversationName` is the chat's reactive host name; null when unnamed or not a chat tab. */
@@ -301,7 +302,10 @@ export function buildTabStripLayoutKey(
           isExpanded: expandedPaneByTabId[item.id] === true,
           status:
             item.type === 'editor'
-              ? (statusByRelativePath.get(normalizeRelativePath(item.data.relativePath)) ?? null)
+              ? getPathDecoration(
+                  statusByRelativePath,
+                  normalizeRelativePath(item.data.relativePath)
+                )
               : null
         },
         t

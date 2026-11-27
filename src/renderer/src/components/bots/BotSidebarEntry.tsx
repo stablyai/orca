@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo } from 'react'
 import { ChevronDown, GitBranch } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AttachedWorktreeCards } from '@/components/sidebar/AttachedWorktreeCards'
@@ -24,7 +24,7 @@ import { ROOT_PROJECT_GROUP_HEADER_BUCKET } from '@/components/sidebar/worktree-
 import { BotRow } from './BotRow'
 import { BotSidebarChats } from './BotSidebarChats'
 import { botListsUnderRow } from '../../../../shared/bots/bot-sidebar-tree'
-import { useBotChatTree } from './use-bot-chat-tree'
+import { useBotOwnChatTree } from './use-bot-chat-tree'
 import { botSidebarEntryKey } from './bot-sidebar-entry-keys'
 import { useBotHostOffline } from '@/lib/bot-host-views'
 import { useBotWorkspaceOrder } from './use-bot-workspace-order'
@@ -32,14 +32,15 @@ import { selectIsSleepingWorktree } from '@/components/sidebar/workspace-actions
 import { useBotWorkerWorkspaces, useLiveWorkspaceStatuses } from './use-bot-worker-statuses'
 import { observeBotActiveLine } from './bot-auto-unfold-memory'
 import { setBotSidebarChildren } from './bot-sidebar-child-presence'
+import { useBotSidebarPaging } from './bot-sidebar-paging'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { useBotsRevealSettle } from './bots-sidebar-reveal-context'
 
 // The bot row's status lane and gap, so a line's status glyph lands under the bot's avatar.
-export const BOT_WORKSPACE_LINE_INDENT = 18
+export const BOT_WORKSPACE_LINE_INDENT = 19
 // The new card style's wider lane; the line itself is always a Compact card.
-const BOT_WORKSPACE_LINE_INDENT_NEW_CARD_STYLE = 26
+const BOT_WORKSPACE_LINE_INDENT_NEW_CARD_STYLE = 27
 
 /** A bot's row with the workspaces its workers made, one Compact line each under the bot's avatar. */
 /** The Bots section's reorder, which measures each entry, workspaces included, by these attributes. */
@@ -58,13 +59,17 @@ export function BotSidebarEntry({
   home,
   isActive,
   onOpen,
-  drag
+  drag,
+  beginRename = false,
+  onBeginRenameConsumed
 }: {
   bot: Bot
   home: FolderWorkspace
   isActive: boolean
   onOpen: () => void
   drag?: BotSidebarEntryDrag
+  beginRename?: boolean
+  onBeginRenameConsumed?: () => void
 }): React.JSX.Element {
   // A disconnected server's row keeps its place in a drag but can't start one: nothing can save it.
   const offline = useBotHostOffline(bot.hostId)
@@ -139,6 +144,8 @@ export function BotSidebarEntry({
         isActive={isActive}
         onOpen={onOpen}
         dragHandle={drag !== undefined && !offline}
+        beginRename={beginRename}
+        onBeginRenameConsumed={onBeginRenameConsumed}
         // A down host's bot is its row alone, so it has nothing to fold.
         fold={
           offline
@@ -168,6 +175,7 @@ export function BotSidebarEntry({
           <BotSidebarList
             bot={bot}
             workspaces={workspaces}
+            allWorkspaces={ordered}
             lineageChildrenByParentIdentity={lineageChildrenByParentIdentity}
             activeLine={activeLine}
             onFoldBot={() => toggleCollapsedGroup(groupKey)}
@@ -179,11 +187,12 @@ export function BotSidebarEntry({
   )
 }
 
-/** An unfolded bot's chats with their workspaces; with no chats, or on a host without that read, its workspaces flat.
+/** An unfolded bot's chats with their workspaces; with no chats read, its workspaces flat.
  *  Nothing until the first read lands, so the workers never flash unfolded before their folded chats. */
 function BotSidebarList({
   bot,
   workspaces,
+  allWorkspaces,
   lineageChildrenByParentIdentity,
   activeLine,
   onFoldBot,
@@ -191,22 +200,31 @@ function BotSidebarList({
 }: {
   bot: Bot
   workspaces: Worktree[]
+  /** Every worker line, sleeping ones too, for what the fold of old chats must see. */
+  allWorkspaces: readonly Worktree[]
   lineageChildrenByParentIdentity: ReadonlyMap<string, Worktree[]>
   activeLine: Worktree | undefined
   onFoldBot: () => void
   onOpen: () => void
 }): React.JSX.Element | null {
   const t = useTranslate()
-  const chatTree = useBotChatTree(bot)
+  const chatTree = useBotOwnChatTree(bot)
   const entryKey = botSidebarEntryKey(bot)
   useEffect(() => {
     if (chatTree.state === 'ready') {
       setBotSidebarChildren(entryKey, { chats: chatTree.chats.length > 0 })
     }
   }, [entryKey, chatTree.state, chatTree.chats.length])
-  const [showAll, setShowAll] = useState(false)
+  const {
+    showAllWorkspaces,
+    toggleWorkspaces,
+    chatSteps,
+    setChatSteps,
+    showOlderChats,
+    toggleOlderChats
+  } = useBotSidebarPaging(entryKey)
   // Once the host answers (or can't), the rows a reveal waits for are as listed as they will get.
-  useBotsRevealSettle(botSidebarEntryKey(bot), chatTree.state !== 'loading')
+  useBotsRevealSettle(entryKey, chatTree.state !== 'loading')
   if (chatTree.state === 'loading') {
     return null
   }
@@ -216,8 +234,13 @@ function BotSidebarList({
         bot={bot}
         tree={chatTree}
         workspaces={workspaces}
+        allWorkspaces={allWorkspaces}
         lineageChildrenByParentIdentity={lineageChildrenByParentIdentity}
         activeLine={activeLine}
+        steps={chatSteps}
+        onStep={setChatSteps}
+        showOlder={showOlderChats}
+        onToggleOlder={toggleOlderChats}
         onOpen={onOpen}
       />
     )
@@ -225,7 +248,7 @@ function BotSidebarList({
   if (workspaces.length === 0) {
     return null
   }
-  const shown = showAll ? workspaces : capBotWorkspaceLines(workspaces, activeLine)
+  const shown = showAllWorkspaces ? workspaces : capBotWorkspaceLines(workspaces, activeLine)
   const hidden = workspaces.length - shown.length
   return (
     <>
@@ -257,10 +280,10 @@ function BotSidebarList({
           variant="ghost"
           size="xs"
           className="ml-1 self-start"
-          onClick={() => setShowAll(!showAll)}
+          onClick={toggleWorkspaces}
         >
           <span className="text-muted-foreground">
-            {showAll
+            {showAllWorkspaces
               ? t('bots.workspaces.showFewer', 'Show fewer')
               : t('bots.workspaces.showMore', 'Show {{count}} more', {
                   count: hidden

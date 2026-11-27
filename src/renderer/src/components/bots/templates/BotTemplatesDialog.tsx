@@ -4,7 +4,6 @@
 // before its Create.
 import { useEffect, useRef, useState } from 'react'
 import {
-  Bell,
   ChevronLeft,
   CodeXml,
   FileText,
@@ -14,6 +13,7 @@ import {
   Plus,
   Rocket,
   Search,
+  UserRoundCheck,
   Wrench,
   X
 } from 'lucide-react'
@@ -23,6 +23,7 @@ import { Input } from '@/components/ui/input'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
+import { bindHorizontalWheelScroll } from '@/lib/horizontal-wheel-scroll'
 import { useTranslate } from '@/i18n/use-translate'
 import { useBots } from '@/lib/bot-catalog'
 import { useAppStore } from '@/store'
@@ -34,11 +35,8 @@ import {
   type BotTemplate,
   type BotTemplateCategory
 } from '../../../../../shared/bots/bot-templates'
-import {
-  botTemplateGroups,
-  botTemplateMatches,
-  freeBotName
-} from '../../../../../shared/bots/bot-template-view'
+import { botTemplateGroups, botTemplateMatches } from '../../../../../shared/bots/bot-template-view'
+import { botTemplateBotName, botTemplateText } from '../../../../../shared/bots/bot-template-text'
 import { BotTemplateDetail } from './BotTemplateDetail'
 import { BotTemplateRow } from './BotTemplateRow'
 import { botTemplateCategoryLabel } from './bot-template-labels'
@@ -54,7 +52,7 @@ const CATEGORY_ICONS = {
   support: MessagesSquare,
   planning: FileText,
   ops: Wrench,
-  personal: Bell
+  personal: UserRoundCheck
 }
 
 /** Mounted only while `activeModal` is 'bot-templates', so search, scroll and the in-place detail start fresh. */
@@ -91,7 +89,8 @@ function BotTemplatesDialogContent({ onClose }: { onClose: () => void }): React.
   const label = (category: BotTemplateCategory) => botTemplateCategoryLabel(category, t)
   const groups = botTemplateGroups(
     (template) =>
-      (!category || template.category === category) && botTemplateMatches(template, query, label)
+      (!category || template.category === category) &&
+      botTemplateMatches(template, query, label, (english) => botTemplateText(english, t))
   )
   const shown = groups.flatMap((group) => group.templates)
   const selectedId = picked ?? asked ?? lastSelected
@@ -159,7 +158,7 @@ function BotTemplatesDialogContent({ onClose }: { onClose: () => void }): React.
         surface="opaque-panel"
         showCloseButton={false}
         aria-describedby={undefined}
-        className="@container grid h-[min(780px,calc(100vh-2rem))] w-[min(1400px,calc(100vw-2rem))] max-w-none grid-rows-[auto_minmax(0,1fr)] sm:max-w-none"
+        className="@container grid h-[min(780px,calc(100vh-2rem))] w-[min(1080px,calc(100vw-2rem))] max-w-none grid-rows-[auto_minmax(0,1fr)] sm:max-w-none"
         onOpenAutoFocus={(event) => {
           event.preventDefault()
           searchRef.current?.focus()
@@ -230,34 +229,41 @@ function BotTemplatesDialogContent({ onClose }: { onClose: () => void }): React.
                     inset="leadingIcon"
                   />
                 </div>
-                <ToggleGroup
-                  type="single"
-                  orientation="horizontal"
-                  variant="chip"
-                  size="xs"
-                  spacing={1.5}
-                  value={category ?? 'all'}
-                  aria-label={t('bots.templates.filterCategory', 'Filter by category')}
-                  className="mt-2 w-full flex-wrap"
-                  onValueChange={(value) => {
-                    setCategory(BOT_TEMPLATE_CATEGORIES.find((option) => option === value) ?? null)
-                    listRef.current?.scrollTo({ top: 0 })
-                  }}
+                <div
+                  ref={bindHorizontalWheelScroll}
+                  className="-mx-1 mt-1 overflow-x-auto p-1 hover-scrollbar-x"
                 >
-                  <ToggleGroupItem value="all">
-                    <LayoutGrid className="size-3" aria-hidden />
-                    {t('bots.templates.allCategories', 'All')}
-                  </ToggleGroupItem>
-                  {BOT_TEMPLATE_CATEGORIES.map((option) => {
-                    const Icon = CATEGORY_ICONS[option]
-                    return (
-                      <ToggleGroupItem key={option} value={option}>
-                        <Icon className="size-3" aria-hidden />
-                        {label(option)}
-                      </ToggleGroupItem>
-                    )
-                  })}
-                </ToggleGroup>
+                  <ToggleGroup
+                    type="single"
+                    orientation="horizontal"
+                    variant="chip"
+                    size="xs"
+                    spacing={1.5}
+                    value={category ?? 'all'}
+                    aria-label={t('bots.templates.filterCategory', 'Filter by category')}
+                    className="w-max"
+                    onValueChange={(value) => {
+                      setCategory(
+                        BOT_TEMPLATE_CATEGORIES.find((option) => option === value) ?? null
+                      )
+                      listRef.current?.scrollTo({ top: 0 })
+                    }}
+                  >
+                    <ToggleGroupItem value="all">
+                      <LayoutGrid className="size-3" aria-hidden />
+                      {t('bots.templates.allCategories', 'All')}
+                    </ToggleGroupItem>
+                    {BOT_TEMPLATE_CATEGORIES.map((option) => {
+                      const Icon = CATEGORY_ICONS[option]
+                      return (
+                        <ToggleGroupItem key={option} value={option}>
+                          <Icon className="size-3" aria-hidden />
+                          {label(option)}
+                        </ToggleGroupItem>
+                      )
+                    })}
+                  </ToggleGroup>
+                </div>
               </div>
               <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
                 {shown.length === 0 ? (
@@ -275,34 +281,42 @@ function BotTemplatesDialogContent({ onClose }: { onClose: () => void }): React.
                     aria-label={t('bots.templates.title', 'Bot templates')}
                     className="px-6 pb-8"
                   >
-                    {groups.map((group) => (
-                      <section key={group.category} role="group" aria-label={label(group.category)}>
-                        <h2 className="sticky top-0 z-[5] bg-popover py-2 text-xs font-medium text-muted-foreground">
-                          {label(group.category)}
-                        </h2>
-                        {group.templates.map((template) => (
-                          <BotTemplateRow
-                            key={template.id}
-                            template={template}
-                            current={template.id === selected?.id}
-                            rowRef={(element) => {
-                              if (element) {
-                                rows.current.set(template.id, element)
-                              } else {
-                                rows.current.delete(template.id)
-                              }
-                            }}
-                            onSelect={() => {
-                              pick(template)
-                              if (narrow()) {
-                                setInPlace(true)
-                              }
-                            }}
-                            onUse={() => startFrom(template)}
-                          />
-                        ))}
-                      </section>
-                    ))}
+                    {groups.map((group) => {
+                      const Icon = CATEGORY_ICONS[group.category]
+                      return (
+                        <section
+                          key={group.category}
+                          role="group"
+                          aria-label={label(group.category)}
+                        >
+                          <h2 className="sticky top-0 z-[5] flex items-center gap-1.5 bg-popover py-2 text-xs font-medium text-muted-foreground">
+                            <Icon className="size-3 shrink-0" aria-hidden />
+                            {label(group.category)}
+                          </h2>
+                          {group.templates.map((template) => (
+                            <BotTemplateRow
+                              key={template.id}
+                              template={template}
+                              current={template.id === selected?.id}
+                              rowRef={(element) => {
+                                if (element) {
+                                  rows.current.set(template.id, element)
+                                } else {
+                                  rows.current.delete(template.id)
+                                }
+                              }}
+                              onSelect={() => {
+                                pick(template)
+                                if (narrow()) {
+                                  setInPlace(true)
+                                }
+                              }}
+                              onUse={() => startFrom(template)}
+                            />
+                          ))}
+                        </section>
+                      )
+                    })}
                   </div>
                 )}
               </div>
@@ -346,18 +360,11 @@ function BotTemplatesDialogContent({ onClose }: { onClose: () => void }): React.
           proposal={
             creating.template
               ? templateProposal(creating.template, {
-                  name: freeBotName(creating.template.name, botNames)
+                  name: botTemplateBotName(creating.template, botNames, t)
                 })
               : undefined
           }
           initialPurpose={creating.purpose}
-          origin={
-            creating.template
-              ? t('bots.templates.originTemplateNamed', 'From the {{template}} template', {
-                  template: creating.template.name
-                })
-              : undefined
-          }
           returnFocusTo={invoker}
           // New bot has opened the bot's page by now.
           onCreated={onClose}

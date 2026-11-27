@@ -41,6 +41,7 @@ export function useNativeChatMentionChatDrill({
   draft,
   caret,
   mentionOpen,
+  mentionQuery,
   complete
 }: {
   picker: NativeChatBotChatPicker | undefined
@@ -48,6 +49,8 @@ export function useNativeChatMentionChatDrill({
   caret: number
   /** The `@` list shows (its trigger is under the caret). */
   mentionOpen: boolean
+  /** The `@` query before the caret, which may hold spaces while a bot's name matches (`@eng n`). */
+  mentionQuery?: string | null
   /** Replaces `from` to the caret with `token` and a space. */
   complete: (from: number, token: string) => void
 }): NativeChatMentionChatDrill {
@@ -95,7 +98,7 @@ export function useNativeChatMentionChatDrill({
         setDrill({ ...parentAt, botId, backWith: undefined })
         return
       }
-      const query = draft.slice(0, caret).match(/@(\S*)$/)?.[1] ?? ''
+      const query = mentionQuery ?? draft.slice(0, caret).match(/@(\S*)$/)?.[1] ?? ''
       setDrill({
         botId,
         from: caret - query.length - 1,
@@ -103,7 +106,7 @@ export function useNativeChatMentionChatDrill({
         before: draft.slice(0, caret)
       })
     },
-    [caret, draft, parentAt]
+    [caret, draft, mentionQuery, parentAt]
   )
   // The bots come back over the same `@`, whatever was typed to filter the chats.
   const back = useCallback(() => {

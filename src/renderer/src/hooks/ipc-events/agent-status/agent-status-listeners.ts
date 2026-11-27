@@ -6,7 +6,7 @@ import {
 import { useAppStore } from '../../../store/index'
 import {
   forgetRefusedPaneResume,
-  namesRefusedResume
+  namesConversation
 } from '@/lib/agent-session/resume/forget-refused-pane-resume'
 import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-status/pane-authority/agent-pane-authority'
 import { resolvePaneKey } from '../../../lib/agent-status/ownership/agent-status-pane-ownership'
@@ -16,6 +16,7 @@ import type {
   RefusedPaneResume
 } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { PendingAgentStatusEvent } from './agent-status-bridge-types'
+import { noteTerminalWorkerRestartOffers } from '../../../components/native-chat-recovery/offers/native-chat-resume-on-restart-store'
 
 /** An already delivered event for the pane naming a refused conversation would restore it. */
 function dropEventsRestoringRefused(
@@ -31,7 +32,7 @@ function dropEventsRestoringRefused(
     event.receivedAt <= refused.expectedStatus.receivedAt &&
     event.stateStartedAt === refused.expectedStatus.stateStartedAt &&
     resolveAgentPaneAuthorityKey(event.paneKey) === paneKey &&
-    namesRefusedResume(refused, { ...event, agent: event.agentType })
+    namesConversation(refused, { ...event, agent: event.agentType })
   const pending = queues.pendingAgentStatusEvents
   for (let index = pending.length - 1; index >= 0; index -= 1) {
     if (restores(pending[index].data)) {
@@ -180,4 +181,16 @@ export function registerAgentStatusListeners(args: {
   if (unsubscribeLegacyWorkerTerminalRecovery) {
     unsubs.push(unsubscribeLegacyWorkerTerminalRecovery)
   }
+  // A terminal worker a daemon crash or reboot took waits on a person: show it with the cut chats.
+  const unsubscribeRestartOffers = window.api.agentStatus.onRestartOffersChanged?.(
+    noteTerminalWorkerRestartOffers
+  )
+  if (unsubscribeRestartOffers) {
+    unsubs.push(unsubscribeRestartOffers)
+  }
+  // A reload, a later window or a late mount missed the push: ask once what waits now.
+  void window.api.agentStatus
+    .hasRestartOffers?.()
+    .then((offered) => offered && noteTerminalWorkerRestartOffers())
+    .catch(() => undefined)
 }

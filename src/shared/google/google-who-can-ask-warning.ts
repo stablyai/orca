@@ -1,10 +1,17 @@
 // Google acts as the owner for everyone the bot takes requests from, so whoever can ask the bot can
 // have it use the owner's mail, calendar and files. Said when either side of that is switched on.
-import type { Bot } from '../bot-types'
+import { botMemberSource, type Bot } from '../bot-types'
 
 /** The people other than the owner who can ask the bot (its Who can ask), by name, once each. */
 export function botOtherAskers(bot: Pick<Bot, 'members'>): string[] {
   return [...new Set(bot.members.map((member) => member.name || member.id))]
+}
+
+/** One stable key per person who can ask, so two people sharing a name are told apart. */
+export function botAskerKeys(bot: Pick<Bot, 'members'>): string[] {
+  return bot.members.map(
+    (member) => `${botMemberSource(member)}:${member.workspaceId ?? ''}:${member.id}`
+  )
 }
 
 /** Null when nobody but the owner can ask; else the warning to confirm. */

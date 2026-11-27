@@ -44,6 +44,9 @@ import type { AgentSessionRewindRecord } from '../../../shared/agent-session/lif
 import type { JournalRewindCut } from './journal-domain-rewind-cut'
 
 /** The writer chooses the projection epoch; callers identify only their live open handle. */
+/** A fence recovers the last run's obligations; `keptWriter`: its writer still runs, so nothing is settled. */
+export type JournalOpenRecovery = { fence: number } | 'keptWriter'
+
 export type JournalWriterTarget = { sessionId: string; epoch: string; ownerToken: string }
 
 export type JournalWriterCoreOperation =
@@ -78,6 +81,8 @@ export type JournalWriterCommand = {
   facts?: JournalWriterHostFacts
   /** The host's clock at admission, so host-staged receipts agree with the row's time. */
   savedAt?: number
+  /** Scheduling only: the chat has a send in flight, so this write goes ahead of bulk work. */
+  urgent?: true
 }
 
 export type JournalWriterInputOperation =
@@ -102,7 +107,7 @@ export type JournalWriterInputOperation =
         messageId: string
         body: AgentJournalMessageItem
         requireAttachments?: true
-        holdReason?: QueuedMessageHoldReason
+        holdReason?: string
         options?: AgentSessionExecutionOptions
         deliveryMode?: 'queue' | 'steer'
         unattended?: boolean
@@ -142,7 +147,7 @@ export type JournalWriterInputOperation =
       body: AgentJournalMessageItem
       options: JournalItemAppendOptions
     }
-  | { kind: 'open'; recover?: { fence: number } }
+  | { kind: 'open'; recover?: JournalOpenRecovery }
   | JournalWriterContextOperation
   | JournalWriterSettlementOperation
 

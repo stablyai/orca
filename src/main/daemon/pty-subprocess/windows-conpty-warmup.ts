@@ -2,6 +2,7 @@ import os from 'node:os'
 import type * as pty from 'node-pty'
 import { createRequire } from 'node:module'
 import { assignHostProcessToKillOnCloseJob } from '../../windows/windows-pty-job'
+import { spawnWithSystemConptyFallback } from '../../windows/bundled-conpty-fallback'
 
 const WARMUP_KILL_TIMEOUT_MS = 10_000
 const requireFromMain = createRequire(__filename)
@@ -22,15 +23,20 @@ export function warmWindowsConptyOnce(spawnPty: typeof pty.spawn = spawnWarmupPt
     try {
       // Warm-up children must die with the daemon, even before its first real terminal.
       assignHostProcessToKillOnCloseJob()
-      const proc = spawnPty(process.env.COMSPEC || 'cmd.exe', ['/c', 'exit'], {
-        name: 'xterm-256color',
-        cols: 2,
-        rows: 1,
-        cwd: os.homedir(),
-        env: process.env as Record<string, string>,
-        // Warm the bundled ConPTY binaries used by real terminal spawns.
-        useConptyDll: true
-      })
+      const shell = process.env.COMSPEC || 'cmd.exe'
+      // Warm the bundled ConPTY binaries used by real terminal spawns, falling back as they do.
+      const proc = spawnWithSystemConptyFallback(
+        (useConptyDll) =>
+          spawnPty(shell, ['/c', 'exit'], {
+            name: 'xterm-256color',
+            cols: 2,
+            rows: 1,
+            cwd: os.homedir(),
+            env: process.env as Record<string, string>,
+            useConptyDll
+          }),
+        shell
+      )
       const killTimer = setTimeout(() => {
         try {
           proc.kill()

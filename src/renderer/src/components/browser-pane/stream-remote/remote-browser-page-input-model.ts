@@ -144,6 +144,19 @@ export function buildRemoteContextMenuExpression(x: number, y: number): string {
   })()`
 }
 
+/** The JSON a page expression returned through browser.eval, or null when it returned none. */
+export function readRemoteBrowserEvalJson(result: unknown): unknown {
+  const raw = result && typeof result === 'object' && 'result' in result ? result.result : null
+  if (typeof raw !== 'string') {
+    return null
+  }
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
+}
+
 const RemoteContextMenuResult = z.object({
   linkUrl: z.string().nullable().catch(null),
   pageUrl: z.string().catch(''),
@@ -168,17 +181,7 @@ export function readRemoteContextMenuResult(
   BrowserPageContextMenuState,
   'linkUrl' | 'pageUrl' | 'selectionText' | 'editable' | 'image'
 > | null {
-  const raw = result && typeof result === 'object' && 'result' in result ? result.result : null
-  if (typeof raw !== 'string') {
-    return null
-  }
-  let json: unknown
-  try {
-    json = JSON.parse(raw)
-  } catch {
-    return null
-  }
-  const parsed = RemoteContextMenuResult.safeParse(json)
+  const parsed = RemoteContextMenuResult.safeParse(readRemoteBrowserEvalJson(result))
   if (!parsed.success) {
     return null
   }
@@ -194,21 +197,13 @@ export function readRemoteContextMenuResult(
 }
 
 export function readRemoteCssViewportSize(result: unknown): RemoteBrowserViewportSize | null {
-  if (!result || typeof result !== 'object') {
+  const parsed = readRemoteBrowserEvalJson(result)
+  if (!parsed || typeof parsed !== 'object') {
     return null
   }
-  const raw = (result as { result?: unknown }).result
-  if (typeof raw !== 'string') {
-    return null
-  }
-  try {
-    const parsed = JSON.parse(raw) as { width?: unknown; height?: unknown }
-    const width = getPositiveFiniteNumber(parsed.width)
-    const height = getPositiveFiniteNumber(parsed.height)
-    return width && height ? { width, height } : null
-  } catch {
-    return null
-  }
+  const width = getPositiveFiniteNumber('width' in parsed ? parsed.width : null)
+  const height = getPositiveFiniteNumber('height' in parsed ? parsed.height : null)
+  return width && height ? { width, height } : null
 }
 
 // A later screencast subscriber can resize the shared page; trust per-frame dimensions once they diverge from our requested viewport, including during resize.
@@ -222,26 +217,42 @@ export function resolveRemoteBrowserCssViewport(input: {
   const deviceHeight = getPositiveFiniteNumber(input.frameMetadata?.deviceHeight)
   const requestedWidth = getPositiveFiniteNumber(input.requestedViewportSize?.width)
   const requestedHeight = getPositiveFiniteNumber(input.requestedViewportSize?.height)
+  // Sizes in device pixels cover fewer CSS pixels on a zoomed page.
+  const zoom = getPositiveFiniteNumber(input.frameMetadata?.zoomFactor) ?? 1
   const framesMatchRequest =
     (deviceWidth === null || requestedWidth === null || deviceWidth === requestedWidth) &&
     (deviceHeight === null || requestedHeight === null || deviceHeight === requestedHeight)
   if (!framesMatchRequest) {
     return {
-      width: deviceWidth ?? input.naturalSize.width,
-      height: deviceHeight ?? input.naturalSize.height
+      width: (deviceWidth ?? input.naturalSize.width) / zoom,
+      height: (deviceHeight ?? input.naturalSize.height) / zoom
     }
   }
   return {
     width:
       getPositiveFiniteNumber(input.cssViewportSize?.width) ??
-      requestedWidth ??
-      deviceWidth ??
-      input.naturalSize.width,
+      (requestedWidth ?? deviceWidth ?? input.naturalSize.width) / zoom,
     height:
       getPositiveFiniteNumber(input.cssViewportSize?.height) ??
-      requestedHeight ??
-      deviceHeight ??
-      input.naturalSize.height
+      (requestedHeight ?? deviceHeight ?? input.naturalSize.height) / zoom
+  }
+}
+
+/** The drawn frame's screen rect and the page viewport it shows, in CSS pixels. */
+export function readRemoteBrowserFrameGeometry(
+  image: HTMLImageElement,
+  sizes: {
+    cssViewportSize: RemoteBrowserViewportSize | null
+    requestedViewportSize: RemoteBrowserViewportSize | null
+    frameMetadata: BrowserScreencastFrameMetadata | null
+  }
+): { frameRect: DOMRect; cssViewport: RemoteBrowserViewportSize } {
+  return {
+    frameRect: image.getBoundingClientRect(),
+    cssViewport: resolveRemoteBrowserCssViewport({
+      ...sizes,
+      naturalSize: { width: image.naturalWidth, height: image.naturalHeight }
+    })
   }
 }
 
@@ -266,6 +277,26 @@ export function mapRemoteBrowserClientPoint(input: {
   return {
     x: Math.round(Math.min(cssViewport.width, Math.max(0, x))),
     y: Math.round(Math.min(cssViewport.height, Math.max(0, y)))
+  }
+}
+
+/** Where a page-space rect is drawn on screen: the inverse of mapRemoteBrowserClientPoint. */
+export function mapRemoteBrowserPageRect(input: {
+  rect: { x: number; y: number; width: number; height: number }
+  frameRect: Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>
+  cssViewport: RemoteBrowserViewportSize
+}): { left: number; top: number; width: number; height: number } | null {
+  const { rect, frameRect, cssViewport } = input
+  if (cssViewport.width <= 0 || cssViewport.height <= 0) {
+    return null
+  }
+  const scaleX = frameRect.width / cssViewport.width
+  const scaleY = frameRect.height / cssViewport.height
+  return {
+    left: frameRect.left + rect.x * scaleX,
+    top: frameRect.top + rect.y * scaleY,
+    width: rect.width * scaleX,
+    height: rect.height * scaleY
   }
 }
 

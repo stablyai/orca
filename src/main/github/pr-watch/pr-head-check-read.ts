@@ -60,8 +60,8 @@ export function resolvePRCommitSha(
       [
         'api',
         `repos/${repository.owner}/${repository.repo}/commits/${encodeURIComponent(abbreviated)}`,
-        '--jq',
-        '.sha'
+        '-H',
+        'Accept: application/vnd.github.sha'
       ],
       { ...options, ...githubHostExecOptions(repository) }
     )
@@ -80,7 +80,8 @@ export function isCommitInPRHead(
 ): Promise<boolean> {
   return withPRRepository(candidate, pr, async (repository, options) => {
     await assertRateLimitBudget('core', repository, options)
-    const path = `repos/${repository.owner}/${repository.repo}/compare/${encodeURIComponent(sha)}...${encodeURIComponent(headSha)}`
+    // GitHub includes changed files only on page one; status describes the entire comparison.
+    const path = `repos/${repository.owner}/${repository.repo}/compare/${encodeURIComponent(sha)}...${encodeURIComponent(headSha)}?per_page=1&page=2`
     const { stdout } = await ghExecFileAsync(['api', path, '--jq', '.status'], {
       ...options,
       ...githubHostExecOptions(repository)

@@ -1,4 +1,5 @@
 import { record, taskAliasId, taskId } from './claude-background-task-frames'
+import { isClaudeForkedCommandTask } from '../subagents/claude-subagent-task-frames'
 import type { ClaudeBackgroundTaskDescriptor } from './claude-background-task-identity'
 
 export type ClaudeTaskInvocation = {
@@ -7,6 +8,8 @@ export type ClaudeTaskInvocation = {
   /** Only current provider evidence may correct durable producer attribution. */
   reportedParentTaskId?: string
   excluded: boolean
+  /** Its later frames repeat the ambient flags without saying what started it. */
+  forkedCommand?: boolean
   monitor: boolean
   ended?: { status: string; toolUseId?: string }
   /** Only accepted current evidence proves an alias is historical after replacement. */
@@ -25,6 +28,9 @@ export class ClaudeTaskInvocations {
     private readonly saved?: {
       background: (id: string, run?: string) => ClaudeBackgroundTaskDescriptor | undefined
       parent: (id: string, run?: string) => string | undefined
+      isSubagent?: (id: string) => boolean
+      isBackgroundSubagent?: (id: string) => boolean
+      launchOf?: (id: string) => string | undefined
     }
   ) {}
 
@@ -52,7 +58,9 @@ export class ClaudeTaskInvocations {
         invocation.reportedParentTaskId =
           taskAliasId(frame.parent_task_id) ?? invocation.reportedParentTaskId
         invocation.parentTaskId = invocation.reportedParentTaskId ?? invocation.parentTaskId
-        invocation.excluded ||= frame.ambient === true || frame.skip_transcript === true
+        invocation.forkedCommand ||= isClaudeForkedCommandTask(frame)
+        invocation.excluded ||=
+          !invocation.forkedCommand && (frame.ambient === true || frame.skip_transcript === true)
         if (start && acceptsStart) {
           invocation.ended = undefined
         }
@@ -89,6 +97,23 @@ export class ClaudeTaskInvocations {
     return invocation
       ? invocation.parentTaskId
       : (this.saved?.background(id, run)?.linkage.parentAgentId ?? this.saved?.parent(id, run))
+  }
+
+  /** The journal has a background-task row for it, or a subagent row saved as told to outlive
+   *  its turn. Foreground commands and subagents have neither. */
+  savedAsBackground(id: string): boolean {
+    return (
+      this.saved?.background(id) !== undefined || this.saved?.isBackgroundSubagent?.(id) === true
+    )
+  }
+
+  savedAsSubagent(id: string): boolean {
+    return this.saved?.isSubagent?.(id) === true
+  }
+
+  /** The saved tool call that launched a subagent, which its start carried. */
+  savedLaunch(id: string): string | undefined {
+    return this.saved?.launchOf?.(id)
   }
 
   excludeMonitor(id: string, run?: string): void {

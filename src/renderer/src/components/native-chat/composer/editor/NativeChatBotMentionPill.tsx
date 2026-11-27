@@ -2,7 +2,7 @@ import { useContext, useState } from 'react'
 import { NodeViewWrapper, type NodeViewProps } from '@tiptap/react'
 import { Bot, BotOff } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import { botMentionTokens } from '../../../../../../shared/bots/bot-mention-context'
+import { botChatIdLabel, botMentionTokens } from '../../../../../../shared/bots/bot-mention-context'
 import {
   NativeChatBotChatChooserContext,
   NativeChatBotChatPickerContext,
@@ -10,7 +10,6 @@ import {
 } from '../../native-chat-room-context'
 import type { NativeChatMentionChat } from '../../native-chat-mention-chats'
 import { NativeChatPromptPill } from './NativeChatPromptPill'
-import { botChatIdLabel } from '../../native-chat-markdown-mentions'
 import { NativeChatBotChatChooser } from './NativeChatBotChatChooser'
 import { BOT_MENTION_NODE } from './native-chat-prompt-document-text'
 

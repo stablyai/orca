@@ -1,20 +1,18 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Alert, View, Text, Pressable } from 'react-native'
-import { ChevronLeft } from 'lucide-react-native'
-import { colors, radii, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { Alert } from 'react-native'
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
+import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { TerminalQuickCommand } from '../../../../src/shared/terminal/quick-commands/terminal-quick-command-types'
-import { getQuickCommandPreview } from './quick-commands'
 import { terminalQuickCommandMatchesRepo as quickCommandMatchesRepo } from '../../../../src/shared/terminal/quick-commands/terminal-quick-commands'
+import { searchTerminalQuickCommands } from '../../../../src/shared/terminal/quick-commands/terminal-quick-command-search'
 import { useQuickCommands } from './use-quick-commands'
 import { QuickCommandEditorForm } from './QuickCommandEditorForm'
 import { QuickCommandAgentPicker, QuickCommandsList } from './QuickCommandsList'
 import {
   createEmptyQuickCommandDraft,
   draftToQuickCommand,
+  isQuickCommandDraftValid,
   quickCommandToDraft,
   type QuickCommandDraft
 } from './quick-command-draft'
@@ -41,7 +39,6 @@ export function QuickCommandsSheet({
   agentPromptMaxLength,
   onLaunch
 }: Props) {
-  useMobileColorScheme()
   const t = useMobileTranslation()
   const { commands, loading, ready, error, persist } = useQuickCommands({
     client,
@@ -75,26 +72,23 @@ export function QuickCommandsSheet({
     }
   }, [visible, client, repoId])
 
-  // Why: prompt bodies can total megabytes. Lowercase them once per settings
-  // update instead of allocating the same search text on every keystroke.
-  const searchableCommands = useMemo(() => {
-    return commands
-      .filter((command) => quickCommandMatchesRepo(command, repoId))
-      .map((command) => ({
-        command,
-        searchText: `${command.label} ${getQuickCommandPreview(command)}`.toLowerCase()
-      }))
+  const scoped = useMemo(() => {
+    const matching = commands.filter((command) => quickCommandMatchesRepo(command, repoId))
+    return {
+      count: matching.length,
+      repo: matching.filter((command) => command.scope?.type === 'repo'),
+      global: matching.filter((command) => command.scope?.type !== 'repo')
+    }
   }, [commands, repoId])
-
-  const visibleCommands = useMemo(() => {
-    const trimmed = query.trim().toLowerCase()
-    return searchableCommands
-      .filter((entry) => !trimmed || entry.searchText.includes(trimmed))
-      .map((entry) => entry.command)
-  }, [query, searchableCommands])
-
-  const repoCommands = visibleCommands.filter((command) => command.scope?.type === 'repo')
-  const globalCommands = visibleCommands.filter((command) => command.scope?.type !== 'repo')
+  // Desktop's ranked search, run per section like its tab-bar menu.
+  const repoCommands = useMemo(
+    () => searchTerminalQuickCommands(scoped.repo, query),
+    [scoped, query]
+  )
+  const globalCommands = useMemo(
+    () => searchTerminalQuickCommands(scoped.global, query),
+    [scoped, query]
+  )
 
   const openEditor = (command?: TerminalQuickCommand) => {
     draftRevisionRef.current += 1
@@ -177,44 +171,46 @@ export function QuickCommandsSheet({
         ? t('session.quickCommandsSheet.chooseAgentTitle', 'Choose Agent')
         : t('session.quickCommandsSheet.title', 'Quick Commands')
 
+  const backToList = () => {
+    draftRevisionRef.current += 1
+    setView('list')
+    setDraft(null)
+  }
+
   return (
     <BottomDrawer visible={visible} onClose={onClose}>
-      <View style={styles.header}>
-        {view === 'list' ? (
-          <View style={styles.backSpacer} />
-        ) : (
-          <Pressable
-            style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
-            onPress={() => {
+      {/* Validation scans the whole prompt, so a hidden sheet skips it. */}
+      {visible && view === 'editor' && draft ? (
+        <SheetHeader
+          title={title}
+          leading={{ label: t('common.cancel', 'Cancel'), onPress: backToList }}
+          trailing={{
+            label: draft.id ? t('common.save', 'Save') : t('session.quickCommandsSheet.add', 'Add'),
+            onPress: () => void handleSave(),
+            disabled: !isQuickCommandDraftValid(draft, agentPromptMaxLength) || !ready,
+            busy: saving
+          }}
+        />
+      ) : view === 'agent' ? (
+        <SheetHeader
+          title={title}
+          onBack={{
+            label: t('common.back', 'Back'),
+            onPress: () => {
               draftRevisionRef.current += 1
-              setView(view === 'agent' ? 'editor' : 'list')
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={t('common.back', 'Back')}
-          >
-            <ChevronLeft size={18} color={colors.textSecondary} />
-          </Pressable>
-        )}
-        <Text style={styles.title}>{title}</Text>
-        <View style={styles.backSpacer} />
-      </View>
-
-      {view === 'editor' && draft ? (
-        <View style={styles.editorDesc}>
-          <Text style={styles.descText}>
-            {t(
-              'session.quickCommandsSheet.editorDescription',
-              'Save terminal commands or agent prompts for quick access.'
-            )}
-          </Text>
-        </View>
-      ) : null}
+              setView('editor')
+            }
+          }}
+        />
+      ) : (
+        <SheetHeader title={title} />
+      )}
 
       {view === 'list' ? (
         <QuickCommandsList
           repoCommands={repoCommands}
           globalCommands={globalCommands}
-          totalCount={searchableCommands.length}
+          totalCount={scoped.count}
           query={query}
           loading={loading}
           disabled={!ready}
@@ -230,8 +226,6 @@ export function QuickCommandsSheet({
       {view === 'editor' && draft ? (
         <QuickCommandEditorForm
           draft={draft}
-          mode={draft.id ? 'edit' : 'add'}
-          saving={saving || !ready}
           error={error}
           repoId={repoId}
           repoName={repoName}
@@ -244,12 +238,6 @@ export function QuickCommandsSheet({
             draftRevisionRef.current += 1
             setView('agent')
           }}
-          onCancel={() => {
-            draftRevisionRef.current += 1
-            setView('list')
-            setDraft(null)
-          }}
-          onSave={() => void handleSave()}
         />
       ) : null}
 
@@ -266,25 +254,3 @@ export function QuickCommandsSheet({
     </BottomDrawer>
   )
 }
-
-const styles = themedStyleSheet(() => ({
-  header: { flexDirection: 'row', alignItems: 'center', paddingBottom: spacing.sm },
-  backButton: {
-    width: 30,
-    height: 30,
-    borderRadius: radii.control,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  backSpacer: { width: 30 },
-  title: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    textAlign: 'center'
-  },
-  pressed: { backgroundColor: colors.borderSubtle },
-  editorDesc: { paddingHorizontal: spacing.xs, paddingBottom: spacing.sm },
-  descText: { fontSize: 12, color: colors.textMuted }
-}))

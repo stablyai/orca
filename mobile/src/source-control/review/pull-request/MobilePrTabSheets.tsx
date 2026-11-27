@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Text, View } from 'react-native'
 import { GitMerge } from 'lucide-react-native'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type { Translate } from '../../../i18n/mobile-i18n'
 import type { GitHubPRMergeMethod } from '../../../../../src/shared/github/pull-requests/pull-request-types'
@@ -16,15 +15,15 @@ import { PrCreateSheet } from './sheets/PrCreateSheet'
 import { PrReviewersSheet } from './sheets/PrReviewersSheet'
 import { livePrDetails, readyPrData, type MobilePrTab } from './use-mobile-pr-tab'
 import type { PrTabSheetRequest } from './pr-tab-requests'
-import { prSheetStyles as sheetStyles } from './pr-tab-styles'
+import { prSheetStylesSheet } from './pr-tab-styles'
 import { FieldTextInput } from '../../../components/composer-input/FieldTextInput'
 import { draftTextHash, workspaceDraftRowKey } from '../../../drafts/durable-draft-rows'
 import { useDurableDraftField } from '../../../drafts/durable-draft-fields'
 import { useWorkspaceExecutionHost } from '../../../navigation/workspace-execution-host'
+import { useThemedStyles } from '../../../theme/themed-styles'
 
 // Sheets for the PR tab's decisions; one Modal swaps between them so iOS never stacks presentations.
 export function MobilePrTabSheets({ tab }: { tab: MobilePrTab }) {
-  useMobileColorScheme()
   const t = useMobileTranslation()
   return (
     <>
@@ -89,19 +88,21 @@ function mergeMethodCopy(
 
 // Lists only the methods the repo allows, starting on its default; mobile used to merge with the default only.
 function PrMergeSheet({ tab, request }: { tab: MobilePrTab; request: PrTabSheetRequest }) {
-  useMobileColorScheme()
+  const sheetStyles = useThemedStyles(prSheetStylesSheet)
   const t = useMobileTranslation()
   const data = readyPrData(tab)
   const settings = data?.pr.mergeMethodSettings ?? null
   const { defaultMethod, methods } = resolveGitHubPRMergeMethods(settings)
   const [method, setMethod] = useState<GitHubPRMergeMethod>(defaultMethod)
+  // Merge the head the sheet opened on; a push read while it is up must not be merged unseen.
+  const [reviewedHeadSha] = useState(data?.pr.headSha ?? null)
   const [submitted, setSubmitted] = useState(false)
   if (!data) {
     return null
   }
   const pr = data.pr
   const base = pr.baseRefName ?? 'main'
-  const merge = presentPrMerge({ ...pr, state: tab.actions.resolveState(pr.state) }, method)
+  const merge = presentPrMerge({ ...pr, state: tab.actions.resolveState(pr.state) }, method, t)
   const busy = tab.actions.isBusy({ kind: 'merge' })
   const run = async () => {
     // A click from an outgoing presentation sends nothing.
@@ -109,7 +110,7 @@ function PrMergeSheet({ tab, request }: { tab: MobilePrTab; request: PrTabSheetR
       return
     }
     setSubmitted(true)
-    if (await tab.actions.merge(method)) {
+    if (await tab.actions.merge(method, reviewedHeadSha)) {
       tab.closeSheetIf(request)
     }
   }
@@ -165,7 +166,7 @@ function PrEditTextSheet({
   request: PrTabSheetRequest
   field: 'title' | 'body'
 }) {
-  useMobileColorScheme()
+  const sheetStyles = useThemedStyles(prSheetStylesSheet)
   const t = useMobileTranslation()
   const executionHost = useWorkspaceExecutionHost()
   const data = readyPrData(tab)

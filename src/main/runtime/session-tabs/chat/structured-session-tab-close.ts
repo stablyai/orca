@@ -175,8 +175,7 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
       nextTabs,
       new Set([retiredTab.id, retiredTab.browserWorkspaceId])
     )
-    this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
-    this.emitMobileSessionTabsSnapshot(nextSnapshot)
+    this.emitMobileSessionTabsSnapshot(this.storeMobileSessionSnapshot(worktreeId, nextSnapshot))
     return true
   }
 
@@ -223,7 +222,7 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
     }
     this.emitMobileSessionTabsSnapshot(nextSnapshot)
     if (options.caller) {
-      // Keep shared selection; only the originating client selects its newly created tab. Local creates lack a caller.
+      // Keep shared selection; only the asked-for audience selects the new tab. Unfocused creates lack a caller.
       this.applyMobileSessionTabNavigation(
         await this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
           includeAgentSenders: false
@@ -299,7 +298,7 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
         }))
       )
     }
-    const session = this.getAvailableAuthoritativeWindow()
+    const session = this.hasAuthoritativeWindow()
       ? null
       : this.getWorkspaceSessionForWorktree(worktreeId)
     const next =

@@ -1,17 +1,21 @@
 import { describe, expect, it } from 'vitest'
 import { OrchestrationRequestEvidence } from './orchestration-compatibility-envelope'
 
-const SESSION = '4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37'
-const local = { remote: false, mutation: true, requestId: undefined }
+const CHAT = '55555555-5555-4555-8555-555555555555'
 
-describe('OrchestrationRequestEvidence', () => {
-  it.each(['connector.act', 'connector.reply'])(
-    'sends the calling chat’s session with %s, so the host can check it posts only for itself',
-    (method) => {
-      const evidence = new OrchestrationRequestEvidence({ ORCA_AGENT_SESSION_ID: SESSION })
-      expect(evidence.envelopeFor(method, local)).toEqual({
-        orchestrationCompatibilityEvidence: { agentSessionId: SESSION }
-      })
+describe('the session a connector call names', () => {
+  it('is sent with a bot chat’s reply, reaction and action, so the host can verify the chat', () => {
+    const evidence = new OrchestrationRequestEvidence({ ORCA_AGENT_SESSION_ID: CHAT })
+    for (const method of ['connector.act', 'connector.reply', 'connector.react']) {
+      expect(
+        evidence.envelopeFor(method, { remote: false, mutation: true, requestId: undefined })
+          .orchestrationCompatibilityEvidence?.agentSessionId
+      ).toBe(CHAT)
+      // A session id names a chat only on its own host.
+      expect(
+        evidence.envelopeFor(method, { remote: true, mutation: true, requestId: undefined })
+          .orchestrationCompatibilityEvidence
+      ).toBeUndefined()
     }
-  )
+  })
 })

@@ -6,7 +6,6 @@ import {
 import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import { getBrowserExtensionProfileIdForSession } from '../api-runtime/browser-extension-api-host'
 import { BrowserExtensionApiError } from '../api-runtime/browser-extension-namespace-registry'
-import { getActiveBrowserTabId } from '../tabs-and-windows/browser-extension-tab-model'
 import { getBrowserExtensionMainWindow } from '../tabs-and-windows/browser-extension-window-model'
 import { getOpenBrowserExtensionPopup } from './browser-extension-popup-host'
 
@@ -35,12 +34,12 @@ export function resolvePendingPopupRequest(profileId: string, extensionId: strin
 
 /**
  * action.openPopup and the _execute_action command: the renderer knows where the button is, so
- * main asks the toolbar of `tabId`'s page (by default the active one) to open the popup there.
+ * main asks the toolbar of `tabId`'s page to open the popup there.
  */
 export function requestBrowserExtensionPopup(
   sess: Electron.Session,
   extensionId: string,
-  tabId = getActiveBrowserTabId()
+  tabId: number | null
 ): Promise<void> {
   const profileId = getBrowserExtensionProfileIdForSession(sess)
   const tab = liveContents(tabId)

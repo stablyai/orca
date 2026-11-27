@@ -162,14 +162,13 @@ export function isCommandGroup(specs: CommandSpec[], commandPath: string[]): boo
   if (commandPath.length === 0) {
     return false
   }
-  return specs.some(
-    (spec) =>
-      spec.hidden !== true &&
-      specPaths(spec).some(
-        (candidate) =>
-          candidate.length > commandPath.length &&
-          matches(candidate.slice(0, commandPath.length), commandPath)
-      )
+  // Hidden commands count: a group typed by name answers with its help, not "Unknown command".
+  return specs.some((spec) =>
+    specPaths(spec).some(
+      (candidate) =>
+        candidate.length > commandPath.length &&
+        matches(candidate.slice(0, commandPath.length), commandPath)
+    )
   )
 }
 

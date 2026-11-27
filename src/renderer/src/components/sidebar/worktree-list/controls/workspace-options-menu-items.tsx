@@ -1,4 +1,4 @@
-import { Fragment, useMemo, type ComponentType, type JSX } from 'react'
+import { Fragment, type ComponentType, type JSX } from 'react'
 import { useAppStore } from '@/store'
 import {
   DropdownMenuLabel,
@@ -10,9 +10,6 @@ import {
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
 import { OptionChoiceSubmenu } from './OptionChoiceSubmenu'
-import { countActiveWorkspaceFilters } from '../../../../../../shared/workspace-view/workspace-row-filters'
-import { useShallow } from 'zustand/react/shallow'
-import { selectSidebarFilterState, sidebarWorkspaceRowFilters } from './sidebar-filter-actions'
 import SidebarRepositoryFilterSection from './SidebarRepositoryFilterSection'
 import { WorkspaceFilterOptionRow } from './workspace-filter-option-row'
 import {
@@ -36,30 +33,8 @@ import {
 import { useTranslate } from '@/i18n/use-translate'
 import { SidebarGroupByToggle } from './SidebarGroupByToggle'
 import { HideBotCreatedFilterRow } from '@/components/bots/HideBotCreatedFilterRow'
-import { withoutHiddenRepos } from '../../../../../../shared/project/catalog/hidden-projects'
 import { selectDrawsNewWorktreeCards } from '@/store/appearance/worktree-card-style'
 import { trackWorktreeCardStyleChanged } from '../../workspace-card/template/worktree-card-style-telemetry'
-
-export function useWorkspaceOptionsFilterBadge(): {
-  hasAnyFilter: boolean
-  activeFilterCount: number
-} {
-  const filterState = useAppStore(useShallow(selectSidebarFilterState))
-  const repos = useAppStore((s) => s.repos)
-  const activeFilterCount = useMemo(
-    () =>
-      countActiveWorkspaceFilters(
-        sidebarWorkspaceRowFilters(filterState),
-        // A filter id with no listed copy filters nothing, so it does not count.
-        withoutHiddenRepos(repos).map((repo) => repo.id)
-      ),
-    [filterState, repos]
-  )
-  return {
-    hasAnyFilter: activeFilterCount > 0,
-    activeFilterCount
-  }
-}
 
 type OptionItemProps = {
   preserveWorkspaceBoardOpen: boolean
@@ -213,7 +188,7 @@ function SectionHeading({ section }: { section: WorkspaceViewSection }): JSX.Ele
     case 'show':
       return (
         <DropdownMenuLabel>
-          {t('auto.components.sidebar.SidebarWorkspaceOptionsMenu.showSection', 'Show')}
+          {t('auto.components.sidebar.SidebarWorkspaceOptionsMenu.selectionSection', 'Selection')}
         </DropdownMenuLabel>
       )
     case 'group':
@@ -240,7 +215,6 @@ export function WorkspaceOptionsMenuItems({
 }: {
   preserveWorkspaceBoardOpen?: boolean
 }): JSX.Element {
-  const t = useTranslate()
   const repoCount = useAppStore((s) => s.repos.length)
   const groupBy = useAppStore((s) => s.groupBy)
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
@@ -261,12 +235,6 @@ export function WorkspaceOptionsMenuItems({
 
   return (
     <>
-      <DropdownMenuLabel className="pb-0 text-sm text-foreground">
-        {t(
-          'auto.components.sidebar.SidebarWorkspaceOptionsMenu.workspaceOptions',
-          'Workspace options'
-        )}
-      </DropdownMenuLabel>
       {sections.map(({ section, options }, index) => (
         <Fragment key={section}>
           {index > 0 && <DropdownMenuSeparator />}

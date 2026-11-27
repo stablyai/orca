@@ -65,12 +65,18 @@ describe('answerPushHostChallenge', () => {
     ['issuedAt', { issuedAt: ISSUED_AT + 120_000 }]
   ] as const)('refuses a transcript whose %s does not match the challenge', (_name, transcript) => {
     const invalid: string[] = []
+    const skews: number[] = []
     const { challenge, context } = fixture({
       transcript,
-      context: { onInvalid: (reason) => invalid.push(reason) }
+      context: {
+        onInvalid: (reason) => invalid.push(reason),
+        onClockSkew: (skewMs) => skews.push(skewMs)
+      }
     })
     expect(answerPushHostChallenge(challenge, context)).toBeNull()
     expect(invalid.join(',')).toContain('transcript')
+    // A tampered transcript is not evidence about this host's clock.
+    expect(skews).toEqual([])
   })
 
   it('refuses a transcript that swaps in a different gateway ephemeral key', () => {
@@ -80,11 +86,16 @@ describe('answerPushHostChallenge', () => {
     expect(answerPushHostChallenge(challenge, context)).toBeNull()
   })
 
-  it('refuses an expired challenge beyond the skew allowance', () => {
+  it.each([
+    ['ahead', ISSUED_AT + 10_000 + 30_001],
+    ['behind', ISSUED_AT - 30_001]
+  ])('refuses a challenge when this host clock is %s, reporting the skew', (_name, now) => {
+    const skews: number[] = []
     const { challenge, context } = fixture({
-      context: { now: () => ISSUED_AT + 10_000 + 30_001 }
+      context: { now: () => now, onClockSkew: (skewMs) => skews.push(skewMs) }
     })
     expect(answerPushHostChallenge(challenge, context)).toBeNull()
+    expect(skews).toEqual([now - ISSUED_AT])
   })
 
   it('refuses a challenge whose declared expiry disagrees with the transcript', () => {

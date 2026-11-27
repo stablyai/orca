@@ -1,8 +1,10 @@
 import type { Bot } from '../../shared/bot-types'
 import {
   BOT_ROSTER_COMMANDS,
+  type BotRosterClient,
   type BotRosterEntry,
   formatBotRosterEntry,
+  formatPairedClient,
   formatUnreachableBotServer
 } from '../../shared/bot-roster'
 import type { BotConnectors } from '../../shared/bot-event-sources'
@@ -12,6 +14,7 @@ import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { callerChat } from '../automations/automation-caller-chat'
 import { formatBotChats, type BotChatsResult } from './bot-chats-format'
+import { orcaCloudNeedsSignIn } from '../../shared/bots/host-orca-sign-in'
 
 export function formatBot(bot: Bot): string {
   return `${bot.name} (${bot.agent}${bot.paused ? ', paused' : ''})  id: ${bot.id}`
@@ -27,19 +30,30 @@ export function callBots<TResult>(
 }
 
 /** bots.list; webhooks says whether the host's Orca Cloud takes webhooks, absent without one;
- *  connectorStatus 'signed-out' that the host is signed out of Orca. */
+ *  connectorStatus 'signed-out' or 'needs-sign-in' that the host isn't signed in to Orca Cloud. */
 export type BotsListResult = {
   bots: Bot[]
   webhooks?: boolean
   threadReplies: boolean
   githubEvents2?: boolean
   githubWorkflows?: boolean
+  githubCiFinished?: boolean
   connectorStatus?: string
+  /** The host's name when it is a headless Orca server; null with a window; absent from an older host. */
+  signInServer?: string | null
 }
 
 /** The bot, with what its host's Orca Cloud takes. */
 export type HostBot = Bot &
-  Pick<BotConnectors, 'webhooks' | 'cloudSignedOut' | 'githubEvents2' | 'githubWorkflows'> & {
+  Pick<
+    BotConnectors,
+    | 'webhooks'
+    | 'cloudSignedOut'
+    | 'signInServer'
+    | 'githubEvents2'
+    | 'githubWorkflows'
+    | 'githubCiFinished'
+  > & {
     threadReplies: boolean
   }
 
@@ -62,7 +76,9 @@ export async function findBot(
     threadReplies: result.threadReplies,
     githubEvents2: result.githubEvents2 === true,
     githubWorkflows: result.githubWorkflows === true,
-    cloudSignedOut: result.connectorStatus === 'signed-out'
+    githubCiFinished: result.githubCiFinished === true,
+    cloudSignedOut: orcaCloudNeedsSignIn(result.connectorStatus),
+    ...(result.signInServer !== undefined ? { signInServer: result.signInServer } : {})
   }
 }
 
@@ -107,19 +123,30 @@ export const BOT_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, (value) => formatBotChats(value))
   },
   'bot list': async ({ client, json }) => {
-    const result = await client.call<{ bots: BotRosterEntry[]; unreachable?: { name: string }[] }>(
-      'bots.roster',
-      { ...callerChat(), allComputers: true }
-    )
+    const result = await client.call<{
+      bots: BotRosterEntry[]
+      unreachable?: { name: string }[]
+      clients?: BotRosterClient[]
+    }>('bots.roster', { ...callerChat(), allComputers: true })
     printResult(result, json, (value) => {
       const unreachable = (value.unreachable ?? []).map((server) =>
         formatUnreachableBotServer(server.name)
       )
+      // Computers paired to this Orca: a server's agents reach their bots with --on-client.
+      const clients = (value.clients ?? []).map(formatPairedClient)
       return value.bots.length === 0
-        ? ['No bots.', ...unreachable].join('\n\n')
-        : [...value.bots.map(formatBotRosterEntry), ...unreachable, '', BOT_ROSTER_COMMANDS].join(
-            '\n\n'
-          )
+        ? [
+            clients.length > 0 ? 'No bots on this computer.' : 'No bots.',
+            ...unreachable,
+            ...clients
+          ].join('\n\n')
+        : [
+            ...value.bots.map(formatBotRosterEntry),
+            ...unreachable,
+            ...clients,
+            '',
+            BOT_ROSTER_COMMANDS
+          ].join('\n\n')
     })
   }
 }

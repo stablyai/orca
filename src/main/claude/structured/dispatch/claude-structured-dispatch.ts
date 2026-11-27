@@ -16,6 +16,7 @@ import {
   claudeDispatchContentKey,
   claudeDispatchContentRejection,
   claudeDispatchInvokesSlashCommand,
+  claudeDispatchRenamesSession,
   claudeDispatchMessageContent,
   claudeDispatchRejection
 } from './claude-structured-dispatch-content'
@@ -37,6 +38,10 @@ import {
   isAgentSessionOptionRejectedError
 } from '../../../native-chat/agent-session-wire/options/structured-agent-session-option-error'
 import { ClaudeControlRequestError } from '../../sdk-transport/claude-agent-sdk-control-requests'
+import {
+  keptClaudeAgentRelay,
+  noteKeptClaudeAgentReplaced
+} from '../../relay/claude-kept-agent-connection'
 import {
   admitStructuredAgentSessionInput,
   StructuredAgentSessionInputNotAdmitted,
@@ -152,10 +157,11 @@ export async function dispatchClaudeTurn(
           agentJournalSubmissionKey(input.clientMessageId)
         )
       : randomUUID())
+  const renamesSession = claudeDispatchRenamesSession(content)
   const arm = () => {
     session.historyCatchUp?.abort()
     ++session.dispatchSequence
-    return waitForReplay(
+    const replay = waitForReplay(
       session,
       acceptsResult,
       sentUuid,
@@ -163,6 +169,10 @@ export async function dispatchClaudeTurn(
       input.clientMessageId ?? null,
       input.requestedAt ?? null
     )
+    if (renamesSession) {
+      replay.waiter.renamesSession = true
+    }
+    return replay
   }
   const message: Record<string, unknown> = {
     type: 'user',
@@ -205,6 +215,10 @@ export async function dispatchClaudeTurn(
       ) {
         throw error
       }
+      // A choice or message that never reached the kept agent; a CLI control error is reported as is.
+      if (keptClaudeAgentCannotTake(session, error)) {
+        return await replaceKeptClaudeAgent(session, error)
+      }
       if (error instanceof ClaudeEffortValidationError) {
         return {
           state: 'rejected',
@@ -240,6 +254,9 @@ export async function dispatchClaudeTurn(
       forgetWaiter(session, waiter)
       forgetRetiredWaiter(session, waiter)
       waiter.resolve(null)
+      if (keptClaudeAgentRelay(session.connection)) {
+        return await replaceKeptClaudeAgent(session, error)
+      }
       // Proven unwritten frames are rejected; ambiguous writes remain unknown.
       return { state: 'rejected', ...claudeWriteFailureRejection(error) }
     }
@@ -251,4 +268,27 @@ export async function dispatchClaudeTurn(
   }
   // Admit on write: an echo may wait for the current turn; replay settles delivery later.
   return { state: 'admitted' }
+}
+
+/** Never written to the kept agent: it ended, or a write before the message never reached it. */
+function keptClaudeAgentCannotTake(session: ClaudeSession, error: unknown): boolean {
+  return (
+    keptClaudeAgentRelay(session.connection) !== null &&
+    (session.connection.closed ||
+      claudeUserMessageWasProvablyUnwritten(error) ||
+      (error instanceof Error && claudeUserMessageWasProvablyUnwritten(error.cause)))
+  )
+}
+
+/** The agent kept from before the restart can't take it: once it is proven ended, a new one does. */
+async function replaceKeptClaudeAgent(
+  session: ClaudeSession,
+  error: unknown
+): Promise<{ state: 'rejected' } & ReturnType<typeof claudeWriteFailureRejection>> {
+  if (!(await session.connection.close().catch(() => false))) {
+    // Still possibly running: a second agent beside it would split the conversation.
+    return { state: 'rejected', ...claudeWriteFailureRejection(error) }
+  }
+  noteKeptClaudeAgentReplaced(session)
+  throw new StructuredAgentSessionInputNotAdmitted(undefined, 'replaced')
 }

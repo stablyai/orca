@@ -1,3 +1,4 @@
+import type { LiveTextReaders } from '../../journal-ingress/structured-agent-session-event-sink'
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
 import type { StructuredAgentSessionObservedWork } from '../../observations/structured-agent-session-observed-work'
@@ -11,6 +12,7 @@ import type { ForkMarker } from '../history/agent-session-fork-marker'
 import type { HistoryReader } from '../history/agent-session-history-page-bounds'
 import type { AgentJournalCursor } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionSubscribeEvent } from '../../../../../shared/agent-session/agent-session-wire'
+import type { SubscriberHostWork, SubscriberLiveRow } from './agent-session-subscriber-live-text'
 
 export type AgentSessionSubscribeInput = {
   commandsOnRequest?: boolean
@@ -31,6 +33,15 @@ export type AgentSessionSubscribeInput = {
   snapshotCatchUp?: boolean
   /** The reader shows prompt suggestions on screen; only these receive them or keep them generated. */
   showsPromptSuggestions?: boolean
+  /** Whether this stream's append transport holds a row's text; live rows go only where it does.
+   *  Null once the row's turn ended and its base was let go of. */
+  holdsTextBase?: (itemId: string) => boolean | null
+  /** The viewer that opted in to live text (one connection's view of the chat), and whether it
+   *  said it is shown. Without one the stream gets saves only. */
+  liveTextViewer?: string
+  liveTextShown?: boolean
+  /** Hands the stream a setter for when its viewer says it is shown or hidden. */
+  onLiveTextShown?: (set: (shown: boolean) => void) => void
 }
 
 export type AgentSessionSubscriberEmit = (event: AgentSessionSubscribeEvent) => void
@@ -52,13 +63,26 @@ export type Subscriber = {
    *  (`StructuredAgentSessionCurrentWork.viewKey`); a change with no row still owes a frame. */
   workView?: string
   historyView?: string
+  holdsTextBase?: (itemId: string) => boolean | null
+  liveTextViewer?: string
+  liveTextShown?: boolean
+  /** Live rows last sent, by row; a page that replaces the view clears it. */
+  liveSent?: Map<string, SubscriberLiveRow>
+  /** Streaming replies this subscriber was sent shortened; their saves carry them, not live text. */
+  liveShortened?: Set<string>
+  /** Host facts the client holds, which a live row-carrying frame must restate. */
+  hostWork?: SubscriberHostWork
+  /** Aborts when the subscriber is dropped, withdrawing its reads still waiting for a reader. */
+  stopped?: AbortSignal
 } & CurrentRequestsSubscriber &
   SubscriberFieldState
 
 export type AgentSessionSubscribersHooks = SubscriberFieldHooks & {
-  readLiveText?: (sessionId: string) => readonly AgentJournalRenderItem[]
+  readLiveText?: (sessionId: string, readers?: LiveTextReaders) => readonly AgentJournalRenderItem[]
   readForkMarker?: (sessionId: string) => ForkMarker | undefined
   readForkJournal?: (sessionId: string) => AgentSessionJournal | undefined
+  /** The session's current journal, for a send outside a publication. */
+  readSessionJournal?: (sessionId: string) => AgentSessionJournal | undefined
   onJournalPublished?: (sessionId: string, journal: AgentSessionJournal) => void
   readCurrentWork?: (
     sessionId: string,

@@ -1,6 +1,7 @@
 import React from 'react'
 import { FolderOpen } from 'lucide-react'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
+import { RepoMark } from '@/components/repo/RepoMark'
 import { cn } from '@/lib/class-names'
 import type { NewWorkspaceProjectOption } from '@/lib/workspace/creation/new-workspace-project-options'
 import { splitPathHeadForElision } from '@/lib/path-display/path-head-elision'
@@ -12,11 +13,10 @@ export function ProjectOptionMark({
 }: {
   option: NewWorkspaceProjectOption
 }): React.JSX.Element {
-  return option.kind === 'project-group' ? (
-    <FolderOpen className="size-3.5 shrink-0 text-muted-foreground" />
-  ) : (
-    <RepoBadgeMark color={option.badgeColor} />
-  )
+  if (option.kind === 'project-group') {
+    return <FolderOpen className="size-3.5 shrink-0 text-muted-foreground" />
+  }
+  return option.repo ? <RepoMark repo={option.repo} /> : <RepoBadgeMark color={option.badgeColor} />
 }
 
 export function MatchedText({

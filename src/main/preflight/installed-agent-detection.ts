@@ -18,23 +18,30 @@ import { normalizeDisabledTuiAgents } from '../../shared/agent-launch/catalog/tu
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { TuiAgentDetectionRuntime } from '../../shared/agent-launch/catalog/tui-agent-config-types'
 import { extractExecutableToken } from '../../shared/agent-launch/installation/managed-agent-command-token'
+import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
+import { readInstalledManagedAgents } from './managed-agent-detection'
 
 export type InstalledAgentDetectionOptions = {
   /** Agents disabled in Settings → Agents. Background callers skip probing them entirely. */
   disabledTuiAgents?: readonly TuiAgent[]
   /** Settings → Agents command overrides on this host; a resolvable override counts as installed. */
   agentCmdOverrides?: Partial<Record<TuiAgent, string>> | null
+  /** Probe only this agent, for a caller that checks one agent rather than listing them all. */
+  onlyTuiAgent?: TuiAgent
 }
 
 function activeDetectionCommands(
   options?: InstalledAgentDetectionOptions
 ): TuiAgentDetectionCommand[] {
   const disabled = new Set(normalizeDisabledTuiAgents(options?.disabledTuiAgents))
-  if (disabled.size === 0) {
+  const only = options?.onlyTuiAgent
+  if (disabled.size === 0 && !only) {
     return KNOWN_TUI_AGENT_DETECTION_COMMANDS
   }
   // A disabled agent is not a detection result even when another agent probes the same command.
-  return KNOWN_TUI_AGENT_DETECTION_COMMANDS.filter((command) => !disabled.has(command.id))
+  return KNOWN_TUI_AGENT_DETECTION_COMMANDS.filter(
+    (command) => !disabled.has(command.id) && (!only || command.id === only)
+  )
 }
 
 /** Options carrying only configured overrides, so hosts without any keep the plain PATH probe. */
@@ -109,6 +116,15 @@ export async function detectInstalledAgents(
   ]
   const found = await detectAgentCommandsOnHost(probeCommands, { context })
   const detected = resolveDetectedTuiAgentIds(commands, found, runtime)
+  // Orca's own copies live on this host, not in a WSL guest; terminals get their folders on PATH.
+  if (runtime !== 'wsl') {
+    const enabled = new Set(commands.map((command) => command.id))
+    for (const id of await readInstalledManagedAgents()) {
+      if (isTuiAgent(id) && enabled.has(id) && !detected.includes(id)) {
+        detected.push(id)
+      }
+    }
+  }
   for (const [id, probe] of overrides) {
     if (
       !detected.includes(id) &&

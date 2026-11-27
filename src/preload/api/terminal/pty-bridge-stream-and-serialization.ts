@@ -18,6 +18,7 @@ export const ptyStreamAndSerializationApi = {
       scanChildProcesses?: boolean
       steadyState?: boolean
       jobMembershipOnly?: boolean
+      foregroundOnly?: boolean
     }
   ): Promise<TerminalProcessInspection> =>
     ipcRenderer.invoke('pty:inspectProcess', { id, ...options }),
@@ -83,6 +84,12 @@ export const ptyStreamAndSerializationApi = {
       callback(event)
     ipcRenderer.on('pty:modelRestoreNeeded', listener)
     return () => ipcRenderer.removeListener('pty:modelRestoreNeeded', listener)
+  },
+  onHiddenOutputActivity: (callback: (event: { ids: string[] }) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, event: { ids: string[] }) =>
+      callback(event)
+    ipcRenderer.on('pty:hiddenOutputActivity', listener)
+    return () => ipcRenderer.removeListener('pty:hiddenOutputActivity', listener)
   },
   onSideEffect: (callback: (batch: TerminalSideEffectBatch) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, batch: TerminalSideEffectBatch) =>

@@ -4,6 +4,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/executio
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import type { FirstWorkBranchRenameDeps } from './first-work-branch-rename'
 import type { FirstWorkRetryDeps } from './first-work-rename-retry'
+import type { FirstWorkDismissDeps } from './first-work-rename-dismiss'
 import { rememberBranchRenameFailureOutput } from './branch-rename-failure-output'
 import { renameWorktreeFolderOnFirstWork } from './first-work-folder-rename'
 import { moveWorktree } from '../../git/worktrees/movement/worktree-move'
@@ -12,6 +13,7 @@ import type { Store } from '../../persistence/loading-store/store'
 import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { resolveWorktreeMetaOwner } from '../../persistence/host-qualified-worktree-meta'
+import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 const ENABLE_FIRST_WORK_FOLDER_RENAME = false
 
@@ -41,6 +43,12 @@ export function firstWorkRenameDeps(
   const localMeta = (worktreeId: string) =>
     store.getWorktreeMetaForHost?.(worktreeId, LOCAL_EXECUTION_HOST_ID) ??
     store.getWorktreeMeta(worktreeId)
+  const isAutoNameDismissed = (worktreeId: string): boolean => {
+    const scope = parseWorkspaceKey(worktreeId)
+    return scope?.type === 'folder'
+      ? store.getFolderWorkspace!(scope.folderWorkspaceId)?.pendingFirstAgentMessageRename === false
+      : localMeta(worktreeId)?.branchNameIsUserChosen === true
+  }
   return {
     readIncarnation: (worktreeId) => {
       const scope = parseWorkspaceKey(worktreeId)
@@ -137,6 +145,10 @@ export function firstWorkRenameDeps(
           })
       : undefined,
     setRenameError: (worktreeId, error, failureOutput) => {
+      // A dismissed workspace keeps its name; a late attempt must not bring the error back.
+      if (error !== null && isAutoNameDismissed(worktreeId)) {
+        return
+      }
       // Refresh diagnostics before deduping; repeated text can come from a new run.
       rememberBranchRenameFailureOutput(worktreeId, error === null ? null : failureOutput)
       const scope = parseWorkspaceKey(worktreeId)
@@ -171,6 +183,50 @@ export function firstWorkRenameDeps(
         return
       }
       runtime.notifyBranchRenamed(repoIdOrWorktreeId)
+    }
+  }
+}
+
+export function firstWorkDismissDeps(
+  store: Parameters<typeof firstWorkRenameDeps>[0],
+  runtime: Parameters<typeof firstWorkRenameDeps>[1]
+): FirstWorkDismissDeps {
+  // Only this host's row counts: a same-id row from another host must not stand in for it.
+  const localMeta = (worktreeId: string) =>
+    store.getWorktreeMetaForHost
+      ? store.getWorktreeMetaForHost(worktreeId, LOCAL_EXECUTION_HOST_ID)
+      : store.getWorktreeMeta(worktreeId)
+  return {
+    readIncarnation: firstWorkRenameDeps(store, runtime).readIncarnation,
+    keepCurrentName: (worktreeId) => {
+      rememberBranchRenameFailureOutput(worktreeId, null)
+      const scope = parseWorkspaceKey(worktreeId)
+      if (scope?.type === 'folder') {
+        if (!store.getFolderWorkspace!(scope.folderWorkspaceId)) {
+          return false
+        }
+        store.updateFolderWorkspace!(scope.folderWorkspaceId, {
+          pendingFirstAgentMessageRename: false,
+          firstAgentMessageRenameError: null
+        })
+        runtime.notifyFolderWorkspaceChanged()
+        return true
+      }
+      if (!localMeta(worktreeId)) {
+        return false
+      }
+      // This host's own row, as auto-naming reads it; a same-id repo on another host must not hide it.
+      // The same mark an in-app branch switch leaves: first-work naming must not rename this branch.
+      store.setWorktreeMeta(
+        hostWorktreeTarget({ id: worktreeId, hostId: LOCAL_EXECUTION_HOST_ID }),
+        {
+          branchNameIsUserChosen: true,
+          pendingFirstAgentMessageRename: false,
+          firstAgentMessageRenameError: null
+        }
+      )
+      runtime.notifyBranchRenamed(getRepoIdFromWorktreeId(worktreeId))
+      return true
     }
   }
 }

@@ -26,7 +26,8 @@ const ToolMetadata = {
   mcpIdentity: z.object({ server: z.string(), tool: z.string() }).optional(),
   exitCode: z.number().int().optional(),
   durationMs: z.number().nonnegative().optional(),
-  webSearchResults: z.array(z.object({ title: z.string(), url: z.string() })).optional()
+  webSearchResults: z.array(z.object({ title: z.string(), url: z.string() })).optional(),
+  outputImagePaths: z.array(z.string()).optional()
 }
 
 /** Provider IDs are opaque; reject all-whitespace values without rewriting valid IDs. */
@@ -117,7 +118,8 @@ const Question = z.object({
   multiSelect: z.boolean(),
   options: z.array(PromptOption),
   freeTextQuestionId: z.string().optional(),
-  freeTextInput: FreeTextInput.optional()
+  freeTextInput: FreeTextInput.optional(),
+  skippable: z.literal(true).optional()
 })
 
 const Resolution = z.object({
@@ -212,6 +214,7 @@ const KnownItemBody = z.discriminatedUnion('kind', [
     kind: z.literal('approval'),
     title: z.string(),
     displayName: z.string().optional(),
+    toolName: z.string().optional(),
     description: z.string().optional(),
     decisionReason: z.string().optional(),
     blockedPath: z.string().optional(),

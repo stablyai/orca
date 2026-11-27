@@ -23,7 +23,11 @@ type ConnectClient = Pick<ReturnType<typeof botsCloudClient>, 'startConnect' | '
 // The life of the cloud's connect session and of its result code.
 const CONNECT_TIMEOUT_MS = 10 * 60_000
 
-const SOURCE_LABELS: Record<ConnectorConnectSource, string> = { linear: 'Linear', github: 'GitHub' }
+const SOURCE_LABELS: Record<ConnectorConnectSource, string> = {
+  linear: 'Linear',
+  github: 'GitHub',
+  slack: 'Slack'
+}
 
 const EXPIRED: ConnectorConnectError = 'expired'
 
@@ -35,8 +39,13 @@ const FLOW_ERRORS = {
 } as const
 
 type LoginKey = ReturnType<typeof createConnectLoginKey>
+/** GitHub: the trip adds access, for the org or user login named if any. */
+export type ConnectAddAccess = { workspace?: string }
 // Saves the person's own login a trip handed this computer (Linear), with whom it linked.
-export type KeepConnectLogin = (login: ConnectLogin, linked: ConnectorConnectRedeem) => void
+export type KeepConnectLogin = (
+  login: ConnectLogin,
+  linked: ConnectorConnectRedeem
+) => void | Promise<void>
 
 const running = new Map<ConnectorConnectSource, AbortController>()
 // When a trip that ended at "Open Orca" stops accepting its deep link, and the key its login is
@@ -62,11 +71,11 @@ export function cancelConnectorConnectsForAccountChange(): void {
 
 // Opens and keeps the login the redeem carries, which only this computer's key opens; the
 // renderer gets the link without it.
-function keptLogin(
+async function keptLogin(
   redeemed: BotSlackResult<ConnectorConnectRedeem>,
   loginKey: LoginKey | null,
   keepLogin: KeepConnectLogin | undefined
-): BotSlackResult<ConnectorConnectRedeem> {
+): Promise<BotSlackResult<ConnectorConnectRedeem>> {
   if (!redeemed.ok) {
     return redeemed
   }
@@ -74,7 +83,8 @@ function keptLogin(
   const login = sealedLogin && loginKey ? openConnectLogin(loginKey, sealedLogin) : null
   if (login && keepLogin) {
     try {
-      keepLogin(login, linked)
+      // Saved before the redeem reports success: an immediate status read or a quit must find it.
+      await keepLogin(login, linked)
     } catch (error) {
       console.warn('[connector] could not save the Linear login', error)
     }
@@ -98,7 +108,7 @@ export async function redeemConnectorFallback(
   if (redeemed.ok) {
     fallbacks.delete(source)
   }
-  return keptLogin(redeemed, fallback.loginKey, keepLogin)
+  return await keptLogin(redeemed, fallback.loginKey, keepLogin)
 }
 
 function base64Url(buffer: Buffer): string {
@@ -123,6 +133,7 @@ export async function connectConnector(
     openExternal: (url: string) => Promise<void>
     // Also ask for the person's own login, sealed to a key this trip alone holds.
     keepLogin?: KeepConnectLogin
+    addAccess?: ConnectAddAccess
   }
 ): Promise<BotSlackResult<ConnectorConnectRedeem | null>> {
   running.get(source)?.abort()
@@ -137,7 +148,8 @@ export async function connectConnector(
     const started = await client.startConnect(source, {
       loopback,
       switchAccount: options.switchAccount,
-      ...(loginKey ? { loginKey: loginKey.publicKey } : {})
+      ...(loginKey ? { loginKey: loginKey.publicKey } : {}),
+      ...(options.addAccess ? { addAccess: options.addAccess } : {})
     })
     if (!started.ok) {
       throw new Error(started.error)
@@ -176,7 +188,7 @@ export async function connectConnector(
         return start({ port, nonce })
       }
     })
-    return keptLogin(await client.redeemConnect(source, result), loginKey, options.keepLogin)
+    return await keptLogin(await client.redeemConnect(source, result), loginKey, options.keepLogin)
   } catch (error) {
     if (controller.signal.reason === CONNECT_ACCOUNT_CHANGED) {
       return { ok: false, error: CONNECT_ACCOUNT_CHANGED }

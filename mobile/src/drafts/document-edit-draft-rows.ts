@@ -3,7 +3,6 @@ import {
   durableDraftRow,
   fitsDeviceStore,
   pageDraftRowBackend,
-  resetDurableDraftRowsForTests,
   workspaceDraftRowKey,
   type DurableDraftRow,
   type WorkspaceDraftScope
@@ -83,9 +82,4 @@ export function dropDocumentEditDraft(key: string): void {
   if (!slot.offered && slot.row.state() === 'loaded') {
     saveDocumentEditDraft(key, null)
   }
-}
-
-export function resetDocumentEditDraftsForTests(): void {
-  slots.clear()
-  resetDurableDraftRowsForTests()
 }

@@ -1,5 +1,4 @@
 import type { LinearItemActionsModel } from '../providers/linear/use-mobile-tasks-linear-item-actions'
-import { colors } from '../../theme/mobile-theme'
 import { useCallback } from 'react'
 import type { RepoSummary } from '../mobile-tasks-provider-detail-types'
 import type { TaskItem } from '../mobile-tasks-project-workspace-types'
@@ -14,8 +13,10 @@ import {
   linearIssueCreate
 } from '../item-detail/mobile-task-item-state-operations'
 import { taskRepoPreferenceWrite } from './mobile-task-list-operations'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
+  const colors = useMobileColors()
   const {
     client,
     createBody,
@@ -163,7 +164,8 @@ export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
     loadTasks,
     provider,
     taskStateHydrated,
-    tasksSupported
+    tasksSupported,
+    colors
   ])
 
   const setGitHubIssueSourcePreference = useCallback(

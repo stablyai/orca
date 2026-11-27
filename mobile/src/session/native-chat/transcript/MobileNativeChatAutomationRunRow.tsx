@@ -1,51 +1,81 @@
-import { useMemo } from 'react'
+import { useContext, useMemo, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { ArrowUpRight } from 'lucide-react-native'
 import type { AutomationRunMessage } from '../../../../../src/shared/automations/automation-run-message'
 import { automationRunInstructions } from '../../../../../src/shared/automations/automation-run-message'
 import {
   automationRunAccess,
-  automationRunAccessibleName,
   automationRunEventCopyText,
   automationRunEventLink,
   automationRunFacts,
   automationRunLabel,
   automationRunQuoteAuthor,
-  automationRunReason,
   sayAutomationRunEnglish,
+  type AutomationRunResend,
   type AutomationRunRowState,
   type AutomationRunWording
 } from '../../../../../src/shared/automations/automation-run-row-words'
+import {
+  mergedRunFailures,
+  type MergedRunFailure
+} from '../../../../../src/shared/native-chat/transcript/events/native-chat-event-plan'
 import { botAutomationWhenParts } from '../../../../../src/shared/bots/bot-automation-when'
 import { formatAutomationScheduleDescriptor } from '../../../automations/automation-schedule-label'
 import { MobileSourceCopyButton } from '../../../components/code-presentation/MobileSourceCopyButton'
 import { automationRunMark } from '../../../../../src/shared/automations/automation-chat-row'
-import { colors, typography } from '../../../theme/mobile-theme'
+import { typography } from '../../../theme/mobile-theme'
 import { openExternalLink } from '../../../platform/external-links/external-link'
 import { MobileAutomationRunInstructions } from './MobileAutomationRunInstructions'
-import { useMobileNativeChatDisclosure } from './viewport/mobile-native-chat-disclosure-store'
-import { scaledType, styles as chat } from './messages/mobile-native-chat-message-styles'
+import {
+  scaledType,
+  stylesSheet as chatStylesSheet
+} from './messages/mobile-native-chat-message-styles'
 import { mobileNativeChatRowId } from './viewport/mobile-native-chat-reading-place'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
-import { styles } from './mobile-automation-run-row-styles'
+import { stylesSheet } from './mobile-automation-run-row-styles'
+import { MobileNativeChatBotIdentityContext } from '../mobile-native-chat-bot-identity'
+import { useMobileBotCardHost } from './bot-cards/mobile-bot-card-host'
+import { MobileNativeChatNoticePill } from './notices/MobileNativeChatNoticePill'
+import { botRunSendAgain } from '../../../bots/bot-sheet-operations'
+import { mobileBotRefusalText } from '../../../bots/mobile-bot-refusal-text'
+import { useBotPanelOpener } from '../../../bots/bot-item-open'
+import { triggerError } from '../../../platform/haptics/haptics'
+import { intlLocaleFor } from '../../../i18n/ui-intl-locale'
+import type { Translate } from '../../../i18n/mobile-i18n'
+import { useMobileTranslation, useMobileUiLocale } from '../../../i18n/use-mobile-translation'
 import {
   MobileAutomationRowFrame,
-  mobileAutomationRowTime as time
+  mobileAutomationRowTime as time,
+  mobileAutomationWordingTime
 } from './MobileAutomationRowFrame'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
+import { useThemedStyles } from '../../../theme/themed-styles'
 
 /** An automation's row wording, in English: a run's as saved when it ran, or the automation's own. */
 export function useMobileAutomationRowWording(
   automation: Pick<AutomationRunMessage['automation'], 'dtstart' | 'rrule' | 'on'>
 ): AutomationRunWording {
+  const t = useMobileTranslation()
+  const locale = intlLocaleFor(useMobileUiLocale())
   return useMemo(() => {
     const schedule = botAutomationWhenParts(automation).find((part) => part.kind === 'schedule')
     return {
       say: sayAutomationRunEnglish,
-      formatTime: time,
+      formatTime: (at) => mobileAutomationWordingTime(at),
       schedule:
-        schedule?.kind === 'schedule' ? formatAutomationScheduleDescriptor(schedule.schedule) : ''
+        schedule?.kind === 'schedule'
+          ? formatAutomationScheduleDescriptor(schedule.schedule, t, locale)
+          : ''
     }
-  }, [automation])
+  }, [automation, t, locale])
+}
+
+/** The send's error, or why its chat was refused in chat's words; the phone's copy names no computer. */
+function startErrorText(
+  failure: Pick<MergedRunFailure, 'error' | 'refusal'>,
+  t: Translate
+): string {
+  return failure.refusal ? mobileBotRefusalText(failure.refusal, t) : failure.error
 }
 
 /** A transcript message that is an automation's run, or one no chat took, as its row. */
@@ -58,6 +88,8 @@ export function MobileAutomationRunMessage({
   rowKey?: string
   fontScale: number
 }): React.JSX.Element | null {
+  const chat = useThemedStyles(chatStylesSheet)
+  const t = useMobileTranslation()
   const notStarted = message.automationRunNotStarted
   const run = notStarted?.run ?? message.automationRun
   if (!run) {
@@ -74,15 +106,21 @@ export function MobileAutomationRunMessage({
         state={notStarted ? 'not-started' : message.queued ? 'queued' : 'ran'}
         text={text}
         timestamp={message.timestamp}
-        {...(notStarted ? { error: notStarted.error } : {})}
+        {...(notStarted
+          ? {
+              error: startErrorText(notStarted, t),
+              resend: notStarted.sentAgain ? 'sent' : 'offer'
+            }
+          : {})}
+        earlierFailures={mergedRunFailures(message)}
         fontScale={fontScale}
       />
     </View>
   )
 }
 
-/** A bot automation's run, on the mobile agent card: its name, then what fired and why on a second
- *  line (320 pt can't fit all three on one). Opens in place to its instructions and the event. */
+/** An automation's run as a status row: "<trigger> · <name>", or "Couldn't start <name>". Opens in place
+ *  to its error, instructions and the event. */
 export function MobileNativeChatAutomationRunRow({
   messageId,
   run,
@@ -90,6 +128,8 @@ export function MobileNativeChatAutomationRunRow({
   text,
   timestamp,
   error,
+  resend = 'none',
+  earlierFailures,
   fontScale
 }: {
   messageId: string
@@ -98,52 +138,101 @@ export function MobileNativeChatAutomationRunRow({
   text: string
   timestamp: number | null
   error?: string
+  /** Whether Send again is offered here, or already went. */
+  resend?: AutomationRunResend
+  /** Earlier tries of this run that couldn't start, merged into its row, newest first. */
+  earlierFailures?: readonly MergedRunFailure[]
   fontScale: number
 }): React.JSX.Element {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const t = useMobileTranslation()
   const wording = useMobileAutomationRowWording(run.automation)
   const { say } = wording
-  const [open, setOpen] = useMobileNativeChatDisclosure(`automation-run:${messageId}`, false)
-  const label = automationRunLabel(run, say)
-  const reason = automationRunReason(run, state, timestamp, wording)
+  const notStarted = state === 'not-started'
   const instructions = automationRunInstructions(text, run)
   const facts = automationRunFacts(run, timestamp, wording)
   const meta = scaledType(typography.metaSize, fontScale, 4)
+  const body = scaledType(typography.metaSize, fontScale)
   const { event } = run
   const access = event ? automationRunAccess(event, say) : null
   const link = event ? automationRunEventLink(event, say) : null
-  const at = timestamp ? time(timestamp) : null
+  const [sendError, setSendError] = useState<string | null>(null)
+  const panel = useBotPanelOpener(useContext(MobileNativeChatBotIdentityContext)?.botId)
+  // As the desktop: a run that couldn't start opens its automation's editor, while the automation exists.
+  const automationId = run.automation.id
+  const openAutomation =
+    notStarted && panel?.automationIds.has(automationId)
+      ? () => panel.open({ automation: automationId })
+      : null
+  // A wait that couldn't start: its name, then what happened (or why Send again was refused).
+  const subtitle = notStarted
+    ? (() => {
+        const what = [say('couldNotStart'), timestamp ? time(timestamp) : null]
+          .filter(Boolean)
+          .join(' · ')
+        const refused = sendError && resend !== 'sent' ? sendError : null
+        return {
+          label: refused ?? what,
+          node: (
+            <Text
+              // Taps on it open the row's details, like its title.
+              pointerEvents="none"
+              numberOfLines={2}
+              style={[refused ? styles.sendAgainError : styles.meta, body]}
+            >
+              {refused ?? what}
+            </Text>
+          )
+        }
+      })()
+    : undefined
   return (
     <MobileAutomationRowFrame
       testID="automation-run-row"
       mark={automationRunMark(run)}
+      lead={notStarted ? say('couldNotStart') : automationRunLabel(run, say)}
+      leadIsVerb={notStarted}
       name={run.automation.name}
-      meta={[label, reason, at].filter(Boolean).join(' · ')}
-      failed={state === 'not-started'}
-      accessibilityLabel={automationRunAccessibleName(
-        { label, name: run.automation.name, reason, time: at },
-        say
-      )}
-      open={open}
-      onToggle={() => setOpen(!open)}
-      fontScale={fontScale}
+      status={state === 'queued' ? say('queued') : null}
+      failed={notStarted}
+      timestamp={timestamp}
+      disclosureKey={`automation-run:${messageId}`}
       action={
-        instructions ? (
-          <MobileSourceCopyButton
-            text={instructions}
-            accessibilityLabel={say('copyInstructions')}
+        notStarted ? (
+          <MobileAutomationSendAgain
+            run={run}
+            resend={resend}
+            wording={wording}
+            metaStyle={meta}
+            onError={setSendError}
           />
         ) : null
       }
+      subtitle={subtitle}
+      fontScale={fontScale}
     >
       <>
         {error ? (
           <>
             <Text style={[styles.heading, meta]}>{say('startError')}</Text>
-            <Text selectable style={[styles.error, meta]}>
+            <Text selectable style={[styles.error, body]}>
               {error}
             </Text>
           </>
         ) : null}
+        {earlierFailures?.map((failure) => (
+          <View key={failure.id}>
+            <Text style={[styles.heading, meta]}>
+              {[say('couldNotStart'), failure.timestamp ? time(failure.timestamp) : null]
+                .filter(Boolean)
+                .join(' · ')}
+            </Text>
+            <Text selectable style={[styles.error, body]}>
+              {startErrorText(failure, t)}
+            </Text>
+          </View>
+        ))}
         {instructions ? (
           <>
             <Text style={[styles.heading, meta]}>{say('instructions')}</Text>
@@ -153,7 +242,19 @@ export function MobileNativeChatAutomationRunRow({
               fontScale={fontScale}
               say={say}
             />
+            <View style={styles.actions}>
+              <MobileSourceCopyButton
+                text={instructions}
+                accessibilityLabel={say('copyInstructions')}
+              />
+              <Text style={[styles.meta, meta]}>{say('copyInstructions')}</Text>
+            </View>
           </>
+        ) : null}
+        {openAutomation ? (
+          <Pressable accessibilityRole="link" onPress={openAutomation} style={styles.linkRow}>
+            <Text style={[styles.link, meta]}>{say('openAutomation')}</Text>
+          </Pressable>
         ) : null}
         {facts || event?.text ? <Text style={[styles.heading, meta]}>{say('event')}</Text> : null}
         {facts ? <Text style={[styles.meta, meta]}>{facts}</Text> : null}
@@ -192,5 +293,57 @@ export function MobileNativeChatAutomationRunRow({
         ) : null}
       </>
     </MobileAutomationRowFrame>
+  )
+}
+
+/** Sends a wait's run that couldn't start once more, as the desktop's row does; says Sent again after. */
+function MobileAutomationSendAgain({
+  run,
+  resend,
+  wording,
+  metaStyle,
+  onError
+}: {
+  run: AutomationRunMessage
+  resend: AutomationRunResend
+  wording: AutomationRunWording
+  metaStyle: ReturnType<typeof scaledType>
+  /** The host's refusal, or null as a new send starts. */
+  onError: (error: string | null) => void
+}): React.JSX.Element | null {
+  const styles = useThemedStyles(stylesSheet)
+  const { say } = wording
+  const t = useMobileTranslation()
+  const bot = useContext(MobileNativeChatBotIdentityContext)
+  const client = useMobileBotCardHost()?.client ?? null
+  const [sending, setSending] = useState<'idle' | 'busy' | 'sent'>('idle')
+  if (resend === 'none' || run.wait === undefined || !bot?.botId || !bot.sessionId || !client) {
+    return null
+  }
+  if (sending === 'sent' || resend === 'sent') {
+    return <Text style={[styles.meta, metaStyle]}>{say('sentAgain')}</Text>
+  }
+  const { botId, sessionId } = bot
+  return (
+    <MobileNativeChatNoticePill
+      label={say('sendAgain')}
+      disabled={sending === 'busy'}
+      onPress={() => {
+        setSending('busy')
+        onError(null)
+        void botRunSendAgain
+          .request(client, { botId, sessionId, runId: run.runId })
+          .then((reply) => {
+            botRunSendAgain.interpret(reply)
+            setSending('sent')
+          })
+          .catch(() => {
+            triggerError()
+            setSending('idle')
+            // As the desktop: the host's refusals are codes, not sentences for the owner.
+            onError(t('bots.errors.generic', 'Something went wrong. Try again.'))
+          })
+      }}
+    />
   )
 }

@@ -15,6 +15,7 @@ import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome/ui-chrom
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import type { KeyboardLayoutSnapshot } from '../../shared/keybindings/keyboard-layout-snapshot'
 import type { KeyboardLayoutChangeEvent } from '../../shared/keybindings/keyboard-layout-events'
+import type { DesktopRelayWrite } from '../../shared/workspace-session/desktop-relay-write'
 
 export type AppApi = {
   getSystemLanguageDetection?: (
@@ -37,11 +38,15 @@ export type AppApi = {
   relaunch: () => Promise<void>
   /** Uses normal quit handling so daemon terminals survive for reattachment. */
   restart: () => Promise<void>
+  /** Ordinary user quit, like the app menu Quit; close guards may cancel it. */
+  quit: () => Promise<void>
   /** Main classifies teardown before Electron emits process-gone events. */
   reload: () => Promise<void>
   stageBeforeUnloadSync: (args: {
     sessions: { state: WorkspaceSessionState; hostId?: ExecutionHostId }[]
     ui: Partial<PersistedUIState>
+    /** Relay ids that left `sessions`, applied by main to the keys the window owns. */
+    desktopRelays?: DesktopRelayWrite['hosts']
   }) => void
   /** Waits for durable persistence; rejection lets reload/restart abort without losing state. */
   awaitBeforeUnloadCheckpoint: () => Promise<void>
@@ -67,8 +72,6 @@ export type AppApi = {
   getKeyboardLayoutSnapshot: () => Promise<KeyboardLayoutSnapshot | null>
   /** Subscribes to active macOS input-source changes. No-op in the browser fallback. */
   onKeyboardLayoutChanged: (callback: (event: KeyboardLayoutChangeEvent) => void) => () => void
-  /** No-op on Windows/Linux. */
-  setUnreadDockBadgeCount: (count: number) => Promise<void>
   getFloatingTerminalCwd: (args?: FloatingTerminalCwdRequest) => Promise<string>
   /** App-owned directory for auto-created Floating Workspace notes. */
   getFloatingMarkdownDirectory: () => Promise<string>

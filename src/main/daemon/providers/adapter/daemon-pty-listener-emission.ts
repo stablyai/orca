@@ -1,3 +1,4 @@
+import { HOST_LOST_EXIT_CAUSE } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import type { DaemonPtyRouterExitEvent } from '../../protocol/daemon-pty-router-events'
 
 export function emitPtyListeners<T>(listeners: readonly T[], emit: (listener: T) => void): void {
@@ -13,7 +14,8 @@ export function createPtyExitPayload(
     id,
     code,
     ...(incarnationId ? { incarnationId } : {}),
-    ...(cause ? { cause } : {}),
+    // Host loss is no stop request: without this a bare -1 reads as an unconfirmed stop.
+    ...(cause || hostLost ? { cause: cause ?? HOST_LOST_EXIT_CAUSE } : {}),
     ...(replacedByRestart ? { replacedByRestart } : {}),
     ...(hostLost ? { hostLost } : {})
   }

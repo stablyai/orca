@@ -13,12 +13,15 @@ import type {
 } from '../../../../../shared/bots/bot-package'
 import type { BotOwnedShare } from '../../../../../shared/bots/bot-share-status'
 import type { BotSharePicks } from '../../../../../shared/bots/bot-share-picks'
+import type { BotShareOutsidePick } from '../../../../../shared/bots/bot-share-skill-picks'
 import type { BotShareReview } from '../../../../../shared/bots/bot-share-received'
 import type { SkillCloudOperation } from '../../../../../shared/skills/sharing/skill-cloud-contract'
 
 /** What the owner ticked; an absent list shares all of that part, except memory (off unless named). */
 export type BotShareSelection = {
   skills?: string[]
+  /** The owner's ticks on skills linked into a project from outside it. */
+  outsideSkills?: BotShareOutsidePick[]
   tools?: string[]
   schedules?: string[]
   eventSuggestions?: string[]
@@ -46,7 +49,14 @@ async function value<T>(operation: Promise<SkillCloudOperation<T>>): Promise<T> 
 export function prepareBotShare(
   bot: BotRef,
   selection: BotShareSelection,
-  options: { setupNote?: string; last?: boolean } = {}
+  options: {
+    setupNote?: string
+    last?: boolean
+    localOnly?: boolean
+    /** The dialog this build is for, and whether only its picks changed. */
+    skillsSession?: string
+    reuseSkills?: boolean
+  } = {}
 ): Promise<{ candidate: BotShareCandidateSummary; last?: BotSharePicks }> {
   return callBotRpc(bot, 'bots.share.prepare', { botId: bot.id, ...selection, ...options })
 }

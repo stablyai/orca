@@ -11,7 +11,7 @@ import {
   refreshGoogleAccount,
   type GoogleTokenDeps
 } from './google-account-tokens'
-import { listGoogleAccounts, readGoogleAccount } from './google-credential-store'
+import { readGoogleAccount, readGoogleDefaultAccount } from './google-credential-store'
 import { classifyGoogleApiError, readGoogleApiError } from './google-readiness'
 
 const REQUEST_TIMEOUT_MS = 20_000
@@ -28,10 +28,10 @@ export class GoogleToolError extends Error {
   }
 }
 
-/** The account a command acts as: the one named, else the only one connected here. */
-export function resolveGoogleAccount(wanted: string | undefined): string {
+/** The account a command acts as: the one named, else this computer's default. */
+export async function resolveGoogleAccount(wanted: string | undefined): Promise<string> {
   if (wanted) {
-    const record = readGoogleAccount(wanted)
+    const record = await readGoogleAccount(wanted)
     if (!record) {
       throw new GoogleToolError(
         `${wanted} isn't connected on this computer. \`orca google status\` lists the accounts here.`
@@ -39,15 +39,18 @@ export function resolveGoogleAccount(wanted: string | undefined): string {
     }
     return record.email
   }
-  const emails = listGoogleAccounts().map((entry) => entry.email)
-  if (emails.length === 1 && emails[0]) {
-    return emails[0]
+  const fallback = await readGoogleDefaultAccount()
+  if ('unreadable' in fallback) {
+    throw new GoogleToolError(
+      `Couldn't read this computer's default Google account. ${fallback.unreadable} Pick the default in Orca Settings, or name one with --account: ${fallback.accounts.join(', ')}.`
+    )
   }
-  throw new GoogleToolError(
-    emails.length === 0
-      ? 'No Google account is connected on this computer. Ask your owner to connect one in Orca.'
-      : `Several Google accounts are connected; pick one with --account: ${emails.join(', ')}.`
-  )
+  if (!fallback.email) {
+    throw new GoogleToolError(
+      'No Google account is connected on this computer. Ask your owner to connect one in Orca.'
+    )
+  }
+  return fallback.email
 }
 
 /** A body read with a schema: the value, or null when Google answered in another shape. */
@@ -103,12 +106,12 @@ type Request = {
   contentType?: string
 }
 
-export function googleApi(
+export async function googleApi(
   wantedAccount: string | undefined,
   deps: GoogleTokenDeps = defaultGoogleTokenDeps
-): GoogleApi {
-  const email = resolveGoogleAccount(wantedAccount)
-  const projectId = readGoogleAccount(email)?.projectId
+): Promise<GoogleApi> {
+  const email = await resolveGoogleAccount(wantedAccount)
+  const projectId = (await readGoogleAccount(email))?.projectId
 
   /** A token that still works; after a refusal, a renewed one or the account's own reason. */
   async function token(renew: boolean): Promise<string> {
@@ -118,7 +121,7 @@ export function googleApi(
     const record = await refreshGoogleAccount(email, deps, true)
     if (record.status !== 'connected' || !record.accessToken) {
       throw new GoogleToolError(
-        `${record.reason ?? 'Google access ended.'} Ask your owner to reconnect it in Orca.`
+        `${record.reason ?? 'Google access ended.'} Ask your owner to reconnect ${email} in Orca.`
       )
     }
     return record.accessToken

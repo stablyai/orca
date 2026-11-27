@@ -1,8 +1,10 @@
 import React, { useState } from 'react'
-import { UserRound, X } from 'lucide-react'
+import { Bot, UserRound, X } from 'lucide-react'
 import { ConnectorAvatar } from '@/components/ConnectorAvatar'
 import { useTranslate } from '@/i18n/use-translate'
-import { botMemberSource, type BotMember } from '../../../../shared/bot-types'
+import { useBotConnectorPaged } from './bot-connector-page'
+import type { BotMember } from '../../../../shared/bot-types'
+import { botMemberAvatarUrl } from '../../../../shared/bots/bot-member-avatar-url'
 
 // Chips past these show as "+N": four people after You when open, three avatars when closed.
 const CHIP_LIMIT = 4
@@ -27,6 +29,39 @@ export function BotConnectorCaption(props: {
   )
 }
 
+/**
+ * One part of a connector's body: a caption, then its content; on the connector's own page the
+ * content sits in a card. Elsewhere (a folding row, a setup dialog) it reads as before.
+ */
+export function BotConnectorSection(props: {
+  title?: string
+  count?: number
+  action?: React.ReactNode
+  children: React.ReactNode
+}): React.JSX.Element {
+  const paged = useBotConnectorPaged()
+  const caption = props.title ? (
+    <BotConnectorCaption title={props.title} count={props.count} action={props.action} />
+  ) : null
+  if (!paged) {
+    return (
+      <>
+        {caption}
+        {props.children}
+      </>
+    )
+  }
+  return (
+    // A part with nothing to show (e.g. no picker yet) leaves no empty card.
+    <section className="mt-3.5 flex min-w-0 flex-col has-[>div:empty]:hidden">
+      {caption}
+      <div className="min-w-0 rounded-[10px] border border-border bg-card p-3 *:last:mb-0">
+        {props.children}
+      </div>
+    </section>
+  )
+}
+
 /** The owner, as a person icon. */
 export function BotOwnerAvatar(): React.JSX.Element {
   return (
@@ -39,22 +74,23 @@ export function BotOwnerAvatar(): React.JSX.Element {
   )
 }
 
-// GitHub people are saved by numeric user id, which GitHub serves a picture for; Slack's are saved
-// with the URL the cloud sent when they were added, and Linear's people have none.
-function memberAvatarUrl(member: BotMember): string | null {
-  if (botMemberSource(member) === 'github') {
-    return /^\d+$/.test(member.id) ? `https://avatars.githubusercontent.com/u/${member.id}` : null
-  }
-  return member.avatarUrl ?? null
-}
-
-/** A person with access: their picture, else their initials. */
+/** A person with access: their picture, else their initials; an app without one, a bot icon. */
 export function BotMemberAvatar({ member }: { member: BotMember }): React.JSX.Element {
   return (
     <ConnectorAvatar
-      avatarUrl={memberAvatarUrl(member)}
+      avatarUrl={botMemberAvatarUrl(member)}
       name={memberName(member)}
       className="size-full"
+      fallback={
+        member.kind === 'app' ? (
+          <span
+            aria-hidden
+            className="flex size-full items-center justify-center rounded-full bg-muted text-muted-foreground"
+          >
+            <Bot className="size-3" />
+          </span>
+        ) : undefined
+      }
     />
   )
 }
@@ -99,7 +135,8 @@ export function BotPeopleChips({
   owner,
   members,
   onRemove,
-  add
+  add,
+  ownerTag = true
 }: {
   /** You, or the owner's name there when this device is on another account. */
   owner: string
@@ -107,6 +144,8 @@ export function BotPeopleChips({
   onRemove: (member: BotMember) => void
   /** The Add control, last in the row. */
   add?: React.ReactNode
+  /** "· Owner" after the owner's name. */
+  ownerTag?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const [showAll, setShowAll] = useState(false)
@@ -119,9 +158,11 @@ export function BotPeopleChips({
           <BotOwnerAvatar />
         </span>
         <span className="truncate">{owner}</span>
-        <span className="shrink-0 text-muted-foreground">
-          · {t('bots.whoCanAsk.owner', 'Owner')}
-        </span>
+        {ownerTag ? (
+          <span className="shrink-0 text-muted-foreground">
+            · {t('bots.whoCanAsk.owner', 'Owner')}
+          </span>
+        ) : null}
       </li>
       {shown.map((member) => (
         <li key={member.id} className={CHIP_CLASSES}>

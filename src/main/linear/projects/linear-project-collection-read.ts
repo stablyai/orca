@@ -27,14 +27,18 @@ export async function readCollection<T>(
   force = false,
   signal?: AbortSignal
 ): Promise<LinearCollectionResult<T>> {
-  return coalesce(
+  const entries = await getClients(workspaceId, signal)
+  if (entries.length === 0) {
+    return { items: [] }
+  }
+  // Resolve mutable default/all selections before sharing an in-flight request.
+  const scopedKey = JSON.stringify([
     key,
+    entries.map(({ workspace }) => [workspace.id, workspace.credentialRevision ?? 0])
+  ])
+  return coalesce(
+    scopedKey,
     async () => {
-      const entries = getClients(workspaceId, signal)
-      if (entries.length === 0) {
-        return { items: [] }
-      }
-
       const results = await Promise.all(
         entries.map(async (entry) => {
           await acquire(signal)
@@ -51,7 +55,7 @@ export async function readCollection<T>(
             return await load(entry, yieldSlot)
           } catch (error) {
             if (isAuthError(error)) {
-              clearToken(entry.workspace.id)
+              await clearToken(entry.workspace.id)
             } else {
               console.warn('[linear] project/view read failed:', error)
             }

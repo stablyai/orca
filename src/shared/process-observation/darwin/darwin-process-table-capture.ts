@@ -1,8 +1,7 @@
 import { nameDarwinTerminals } from './darwin-terminal-names'
 import {
   claimDarwinTerminalNaming,
-  isDarwinTerminalNamingInFlight,
-  resetDarwinTerminalNamingForTests
+  isDarwinTerminalNamingInFlight
 } from './darwin-terminal-naming-single-flight'
 import { errorMessage } from '../../errors/error-message'
 import { ProcessTableCaptureError, PS_ARGS } from '../tables/process-table-snapshot'
@@ -94,9 +93,4 @@ export async function captureDarwinProcessTable(
   }
   remainingBudget()
   return validated
-}
-
-export function resetDarwinProcessTableCaptureForTests(): void {
-  deviceColumnUnsupported = false
-  resetDarwinTerminalNamingForTests()
 }

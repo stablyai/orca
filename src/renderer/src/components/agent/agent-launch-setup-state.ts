@@ -53,7 +53,7 @@ export function agentLaunchSetupState(
       ? models.find((model) => model.isDefault)?.id
       : undefined)
   // Settled with nothing chosen still lets the user pick; nothing is checked and the agent keeps its own default.
-  const catalog = agentLaunchSetupCatalogState(entry, models, currentModel)
+  const catalog = agentLaunchSetupCatalogState(entry, models, currentModel, draft.surface)
   const options = agentPickerEntryOptions(entry, currentModel, draft.surface)
   return {
     argumentsView,
@@ -82,8 +82,8 @@ export function agentLaunchSetupState(
 const PICKED_MODELS_KEPT = 32
 const pickedModels = new Map<string, AgentPickerModel>()
 const pickedModelListeners = new Set<() => void>()
-const pickedModelKey = (entry: AgentPickerEntry, modelId: string) =>
-  `${entry.agent}\u0000${entry.rows[0]?.executionHostId ?? ''}\u0000${modelId}`
+const pickedModelKey = (agent: string, executionHostId: string | undefined, modelId: string) =>
+  `${agent}\u0000${executionHostId ?? ''}\u0000${modelId}`
 
 export function rememberPickedAgentModel(entry: AgentPickerEntry, draft: AgentPickerDraft): void {
   const modelId = draft.choices.model
@@ -93,7 +93,7 @@ export function rememberPickedAgentModel(entry: AgentPickerEntry, draft: AgentPi
   if (!modelId || !listed || entry.catalog.origin === 'unknown') {
     return
   }
-  const key = pickedModelKey(entry, modelId)
+  const key = pickedModelKey(entry.agent, entry.rows[0]?.executionHostId, modelId)
   const kept = pickedModels.get(key)
   const unchanged = kept !== undefined && JSON.stringify(kept) === JSON.stringify(listed)
   // Kept rows stay the same object while unchanged, so their readers do not re-render.
@@ -116,21 +116,23 @@ function subscribePickedAgentModels(listener: () => void): () => void {
 
 /** The row the user last picked for this agent, host and model; only its own pick re-renders a reader. */
 export function usePickedAgentModel(
-  entry: AgentPickerEntry | undefined,
+  agent: string | undefined,
+  executionHostId: string | undefined,
   modelId: string | undefined
 ): AgentPickerModel | undefined {
-  const key = entry && modelId ? pickedModelKey(entry, modelId) : undefined
+  const key = agent && modelId ? pickedModelKey(agent, executionHostId, modelId) : undefined
   return useSyncExternalStore(subscribePickedAgentModels, () =>
     key ? pickedModels.get(key) : undefined
   )
 }
 
-/** "Claude Opus 5.5 · Med · Fast": the model, level and speed a launch with this draft uses. */
+/** "Opus 5.5 · Med · Fast": the model, level and speed a launch with this draft uses. */
 export function agentLaunchSetupSummary(
   entry: AgentPickerEntry,
   draft: AgentPickerDraft,
   /** The row the user picked this model from, for an entry whose own listing lacks it. */
-  picked?: AgentPickerModel
+  picked?: AgentPickerModel,
+  defaultModelLabel?: string
 ): string[] {
   const modelId = draft.choices.model
   const listed =
@@ -148,9 +150,10 @@ export function agentLaunchSetupSummary(
       : entry,
     draft
   )
-  const model =
-    state.modelInArguments || !state.currentModel
-      ? undefined
+  const model = state.modelInArguments
+    ? undefined
+    : !state.currentModel
+      ? defaultModelLabel
       : state.currentModel === TEXT_ACTION_DEFAULT_MODEL
         ? entry.textGeneration?.defaultLabel
         : (state.models.find((candidate) => candidate.id === state.currentModel)?.label ??

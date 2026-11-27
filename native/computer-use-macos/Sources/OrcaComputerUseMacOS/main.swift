@@ -468,8 +468,16 @@ final class Provider {
             let inSpaces = WindowSpaces.windowsInAnySpace(unlisted) ?? Set(unlisted)
             // Why: kAXWindowsAttribute leaves out windows on other Spaces; skip the lookup when the app stopped answering.
             if status != .cannotComplete {
+                // Why: the app still returns its main and focused window from another Space, which the remote-token
+                // scan misses until something has read that window once.
+                for attribute in [kAXMainWindowAttribute, kAXFocusedWindowAttribute] where !inSpaces.isSubset(of: elements.keys) {
+                    if let window = copyElement(appElement, attribute), let id = windowNumber(window), inSpaces.contains(id) {
+                        elements[id] = window
+                    }
+                }
                 let live = Set(all.map(\.windowId))
-                elements.merge(otherSpaceWindows(pid: app.pid, windowIds: inSpaces, live: live)) { listed, _ in listed }
+                let wanted = inSpaces.subtracting(elements.keys)
+                elements.merge(otherSpaceWindows(pid: app.pid, windowIds: wanted, live: live)) { listed, _ in listed }
             }
             unreadable = inSpaces.subtracting(elements.keys)
         }
@@ -2770,7 +2778,7 @@ private final class TreeRenderer {
         let placeholder = reader.placeholderString(element)
         let rawActions = reader.actions(element)
         let rowSummary = reader.rowTextSummary(element, role: role)
-        let roleDescription = reader.stringAttribute(element, kAXRoleDescriptionAttribute as String)
+        let roleDescription = reader.roleDescription(element, role: role)
         let title = reader.stringAttribute(element, kAXTitleAttribute as String)
         let label = reader.stringAttribute(element, kAXDescriptionAttribute as String)
         let url = reader.stringAttribute(element, kAXURLAttribute as String)
@@ -2870,7 +2878,7 @@ private final class TreeRenderer {
             let role = reader.stringAttribute(child, kAXRoleAttribute as String) ?? "AXUnknown"
             return SnapshotRenderNode(
                 role: role,
-                roleDescription: reader.stringAttribute(child, kAXRoleDescriptionAttribute as String),
+                roleDescription: reader.roleDescription(child, role: role),
                 title: reader.stringAttribute(child, kAXTitleAttribute as String),
                 label: reader.stringAttribute(child, kAXDescriptionAttribute as String),
                 value: reader.valueString(child, role: role),
@@ -2954,6 +2962,7 @@ private final class AXSnapshotReader {
     }
 
     private var elementsByHash: [CFHashCode: [ElementCache]] = [:]
+    private static let standardRoleDescriptions = StandardRoleDescriptions.system()
 
     func stringAttribute(_ element: AXUIElement, _ attribute: String) -> String? {
         guard let value = copyAttribute(element, attribute) else { return nil }
@@ -3042,6 +3051,12 @@ private final class AXSnapshotReader {
             return number.stringValue
         }
         return nil
+    }
+
+    /// A standard description reads in English whatever the app's language; the app's own wording stays as written.
+    func roleDescription(_ element: AXUIElement, role: String) -> String? {
+        guard let description = stringAttribute(element, kAXRoleDescriptionAttribute as String) else { return nil }
+        return Self.standardRoleDescriptions.english(role: role, description: description) ?? description
     }
 
     func placeholderString(_ element: AXUIElement) -> String? {
@@ -3495,6 +3510,7 @@ private struct WindowCapture {
 
     private static func captureImage(windowId: CGWindowID, bounds: CGRect) -> CapturedImage? {
         if ProcessInfo.processInfo.environment["ORCA_COMPUTER_USE_SCK_SCREENSHOTS"] == "1",
+           #available(macOS 14, *),
            let image = captureImageWithScreenCaptureKit(windowId: windowId, bounds: bounds) {
             return CapturedImage(image: image, engine: "screenCaptureKit")
         }
@@ -3504,6 +3520,7 @@ private struct WindowCapture {
         return nil
     }
 
+    @available(macOS 14, *)
     private static func captureImageWithScreenCaptureKit(windowId: CGWindowID, bounds: CGRect) -> CGImage? {
         try? BlockingAsync.run(timeout: 3) {
             let content = try await SCShareableContent.current
@@ -4489,6 +4506,7 @@ private final class PermissionDragAssistantController: NSWindowController {
         let isVisible: Bool
     }
 
+    private static let systemSettingsBundleIdentifier = "com.apple.systempreferences"
     private let fallbackVisibleFrame: NSRect?
     private let onRefreshPermissions: () -> Void
     private let onClose: () -> Void
@@ -4651,7 +4669,7 @@ private final class PermissionDragAssistantController: NSWindowController {
 
     private func systemSettingsIsFrontmost() -> Bool {
         let bundleId = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
-        return bundleId == "com.apple.systempreferences" || bundleId == "com.apple.SystemSettings"
+        return bundleId == Self.systemSettingsBundleIdentifier || bundleId == "com.apple.SystemSettings"
     }
 
     private func positionNearSettingsWindow(_ settingsFrame: NSRect) {
@@ -4688,12 +4706,18 @@ private final class PermissionDragAssistantController: NSWindowController {
         guard let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else {
             return nil
         }
+        let settingsProcessIdentifiers = Set(
+            NSRunningApplication.runningApplications(withBundleIdentifier: Self.systemSettingsBundleIdentifier)
+                .map(\.processIdentifier)
+        )
         var occludingFrames: [NSRect] = []
         for windowInfo in windows {
             guard let frame = cgWindowFrame(windowInfo), isNormalWindow(windowInfo), frame.width > 0, frame.height > 0 else {
                 continue
             }
-            if isSystemSettingsWindow(windowInfo), frame.width > 520, frame.height > 360 {
+            // Why: kCGWindowOwnerName is UI-localized ("系统设置"), so match the Settings process by bundle id.
+            if let pid = windowInfo[kCGWindowOwnerPID as String] as? pid_t, settingsProcessIdentifiers.contains(pid),
+               frame.width > 520, frame.height > 360 {
                 return SettingsWindowState(
                     frame: appKitFrameForCGWindowFrame(frame),
                     isVisible: !isWindowFullyCovered(frame, by: occludingFrames)
@@ -4702,13 +4726,6 @@ private final class PermissionDragAssistantController: NSWindowController {
             occludingFrames.append(frame)
         }
         return nil
-    }
-
-    private func isSystemSettingsWindow(_ windowInfo: [String: Any]) -> Bool {
-        guard let ownerName = windowInfo[kCGWindowOwnerName as String] as? String else {
-            return false
-        }
-        return ownerName == "System Settings" || ownerName == "System Preferences"
     }
 
     private func isNormalWindow(_ windowInfo: [String: Any]) -> Bool {

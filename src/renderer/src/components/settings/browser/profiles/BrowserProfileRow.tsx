@@ -17,10 +17,9 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '../../../ui/dropdown-menu'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
-import { useConfirmationDialog } from '../../../dismiss/confirmation/confirmation-dialog-context'
 import { BrowserCookieImportDisclosure } from './BrowserCookieImportDisclosure'
 import { BrowserCookieImportMachineNotice } from './BrowserCookieImportMachineNotice'
+import type { BrowserSshPageCookieImportRoute } from '@/store/slices/browser/browser-slice-contract'
 import { useAppStore } from '../../../../store/index'
 import '../../../../../../shared/orca-profiles/constants'
 import { BROWSER_FAMILY_LABELS } from '../../../../../../shared/browser/browser-family-labels'
@@ -46,7 +45,8 @@ export type BrowserProfileRowProps = {
   } | null
   isActive: boolean
   onSelect: () => void
-  isDefault?: boolean
+  /** Settings' selected host when it is an SSH host: imports fill that host's jar. */
+  sshRoute?: BrowserSshPageCookieImportRoute | null
 }
 
 export function BrowserProfileRow({
@@ -55,12 +55,11 @@ export function BrowserProfileRow({
   importState,
   isActive,
   onSelect,
-  isDefault
+  sshRoute = null
 }: BrowserProfileRowProps): React.JSX.Element {
   const t = useTranslate()
   const isImporting = importState?.profileId === profile.id && importState.status === 'importing'
   const fetchDetectedBrowsers = useAppStore((s) => s.fetchDetectedBrowsers)
-  const confirm = useConfirmationDialog()
 
   const handleImportFromBrowser = async (
     browserFamily: string,
@@ -117,35 +116,6 @@ export function BrowserProfileRow({
       )
     } else if (result.reason !== 'canceled') {
       toast.error(browserCookieImportFailureText(result))
-    }
-  }
-
-  const clearDefaultCookiesLabel = t(
-    'auto.components.settings.BrowserProfileRow.4054c458e1',
-    'Clear default cookies'
-  )
-
-  const handleClearDefaultCookies = async (): Promise<void> => {
-    const confirmed = await confirm({
-      title: t(
-        'auto.components.settings.BrowserProfileRow.3b662becd5',
-        'Clear cookies in the Default profile?'
-      ),
-      description: t(
-        'auto.components.settings.BrowserProfileRow.f159cf5a3e',
-        'This may sign you out of sites in this profile.'
-      ),
-      confirmLabel: t('browser.googleCookieClear.clear', 'Clear'),
-      confirmVariant: 'destructive'
-    })
-    if (!confirmed) {
-      return
-    }
-    const ok = await useAppStore.getState().clearDefaultSessionCookies()
-    if (ok) {
-      toast.success(
-        t('auto.components.settings.BrowserProfileRow.2d4bea7f35', 'Default cookies cleared.')
-      )
     }
   }
 
@@ -209,7 +179,7 @@ export function BrowserProfileRow({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <BrowserCookieImportMachineNotice />
+            <BrowserCookieImportMachineNotice settingsSshRoute={sshRoute} />
             {detectedBrowsers.map((browser) =>
               browser.profiles.length > 1 ? (
                 <DropdownMenuSub key={browser.family}>
@@ -251,24 +221,8 @@ export function BrowserProfileRow({
             <BrowserCookieImportDisclosure />
           </DropdownMenuContent>
         </DropdownMenu>
-        {isDefault ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-7 text-muted-foreground hover:text-destructive"
-                aria-label={clearDefaultCookiesLabel}
-                onClick={() => void handleClearDefaultCookies()}
-              >
-                <Trash2 className="size-3" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={4}>
-              {clearDefaultCookiesLabel}
-            </TooltipContent>
-          </Tooltip>
-        ) : (
+        {/* An SSH host shows this computer's profiles; removing one there would delete it everywhere. */}
+        {profile.scope === 'default' || sshRoute ? null : (
           <Button
             variant="ghost"
             size="icon"

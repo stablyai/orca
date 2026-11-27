@@ -7,7 +7,6 @@ export const AGENT_NAMES = [
   'codex',
   'copilot',
   'cursor',
-  'gemini',
   'antigravity',
   'opencode',
   'opencode2',

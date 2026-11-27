@@ -2,15 +2,16 @@
 import { Pressable, Text, View } from 'react-native'
 import { ChevronDown } from 'lucide-react-native'
 import { MobileConnectorSourceIcon } from '../../../bots/MobileConnectorSourceIcon'
-import { colors, spacing, typography } from '../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { spacing, typography } from '../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../theme/themed-styles'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import { slackMirrorView } from '../../../../../src/shared/connectors/slack-mirror-state'
 import { useMobileSlackMirrorContext } from './use-mobile-slack-mirror'
 import { useMobileSlackMirrorCopy } from './mobile-slack-mirror-copy'
 
 export function MobileSlackMirrorItem(): React.JSX.Element | null {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const mirror = useMobileSlackMirrorContext()
   const say = useMobileSlackMirrorCopy()
   if (!mirror) {
@@ -36,7 +37,7 @@ export function MobileSlackMirrorItem(): React.JSX.Element | null {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   item: {
     flexDirection: 'row',
     alignItems: 'center',

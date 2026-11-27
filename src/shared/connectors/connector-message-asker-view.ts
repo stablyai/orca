@@ -2,6 +2,7 @@
 // "Sam Lee · Slack" tag over it and the folded lines from people without access that came with it.
 import type { ConnectorMessageAsker, ConnectorNoAccessLine } from '../connector-message-asker'
 import { CONNECTOR_SOURCE_NAMES, type ConnectorSource } from './external-conversation-link'
+import { slackMarkupPlainText } from './slack-message-markup'
 
 type Translate = (key: string, fallback: string, values?: Record<string, unknown>) => string
 
@@ -59,10 +60,14 @@ export function connectorAskerTagView(
   asker: ConnectorMessageAsker,
   t: Translate
 ): ConnectorAskerTagView {
-  const own = asker.role === 'owner'
+  const own = asker.role === 'owner' && !asker.app
+  // Another Slack app on Who can ask reads by its own name, never as a person.
+  const unnamed = asker.app
+    ? t('components.native-chat.connectorAsker.anApp', 'An app')
+    : t('components.native-chat.connectorAsker.someone', 'Someone')
   const person = own
     ? t('components.native-chat.connectorAsker.you', 'You')
-    : (asker.name ?? t('components.native-chat.connectorAsker.someone', 'Someone'))
+    : (asker.name ?? unnamed)
   // Another Orca bot wrote it on their behalf: "Sam Lee via Scout".
   const name = asker.via
     ? t('components.native-chat.connectorAsker.via', '{{name}} via {{bot}}', {
@@ -130,7 +135,7 @@ export function connectorNoAccessView(
         name,
         initials: connectorAskerInitials(name),
         title: `${name} · ${sourceName} · ${noAccessLabel}`,
-        text: line.text
+        text: asker.source === 'slack' ? slackMarkupPlainText(line.text) : line.text
       }
     })
   }

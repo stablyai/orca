@@ -219,6 +219,8 @@ CREATE TABLE IF NOT EXISTS dispatch_contexts (
   completed_at        TEXT,
   created_at          TEXT NOT NULL DEFAULT (datetime('now')),
   last_heartbeat_at   TEXT,
+  progress_note       TEXT,
+  progress_updated_at TEXT,
   -- The settled Dispatch whose worker this one continues (a follow-up sent to it).
   follow_up_of_dispatch_id TEXT,
   -- Set when the worker reported with coordinator mail unread; cleared once that mail continues it.

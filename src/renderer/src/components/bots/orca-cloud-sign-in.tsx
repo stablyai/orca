@@ -40,22 +40,23 @@ function useSignInThen(onSignedIn?: () => unknown): { start: () => void; busy: b
 function SignInButton({
   busy,
   onClick,
-  className,
+  children,
+  disabled,
   ...props
-}: Omit<React.ComponentProps<typeof Button>, 'onClick' | 'type' | 'children'> & {
+}: Omit<React.ComponentProps<typeof Button>, 'onClick' | 'type'> & {
   busy: boolean
   onClick: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   return (
-    <Button {...props} type="button" className={className} disabled={busy} onClick={onClick}>
+    <Button {...props} type="button" disabled={busy || disabled} onClick={onClick}>
       {busy ? (
         <>
           <Loader2 className="animate-spin" />
           {t('auto.components.OrcaSignInProgress.signingIn', 'Signing in…')}
         </>
       ) : (
-        t('bots.cloudSignIn.signIn', 'Sign in')
+        (children ?? t('bots.cloudSignIn.signIn', 'Sign in'))
       )}
     </Button>
   )
@@ -63,16 +64,17 @@ function SignInButton({
 
 /** Sign in, for a dialog that draws its own ask; `onSignedIn` carries on once signed in. */
 export function OrcaCloudSignInButton({
-  onSignedIn
-}: {
+  onSignedIn,
+  ...props
+}: Omit<React.ComponentProps<typeof SignInButton>, 'onClick' | 'busy'> & {
   onSignedIn?: () => unknown
 }): React.JSX.Element {
   const { start, busy } = useSignInThen(onSignedIn)
-  return <SignInButton autoFocus busy={busy} onClick={start} />
+  return <SignInButton {...props} busy={busy} onClick={start} />
 }
 
 /** "<what> connects through Orca Cloud. Sign in to Orca to continue." */
-export function orcaCloudSignInReason(what: 'slack' | 'github' | 'linear' | 'share'): string {
+export function orcaCloudSignInReason(what: 'slack' | 'github' | 'linear'): string {
   switch (what) {
     case 'slack':
       return translate(
@@ -89,11 +91,6 @@ export function orcaCloudSignInReason(what: 'slack' | 'github' | 'linear' | 'sha
         'bots.cloudSignIn.linear',
         'Linear connects through Orca Cloud. Sign in to Orca to continue.'
       )
-    case 'share':
-      return translate(
-        'bots.cloudSignIn.share',
-        'Sharing goes through Orca Cloud. Sign in to Orca to continue.'
-      )
   }
 }
 
@@ -102,20 +99,30 @@ export function OrcaCloudSignInDialogBody({
   title,
   reason,
   onCancel,
-  onSignedIn
+  onSignedIn,
+  corner
 }: {
   title: string
   reason: string
   onCancel: () => void
   /** Carries on with what the dialog was opened for; the dialog stays as it is until it settles. */
   onSignedIn?: () => unknown
+  /** A button on the title's line, e.g. a setup's Minimize while it still follows something. */
+  corner?: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
   const { start, busy } = useSignInThen(onSignedIn)
   return (
     <>
       <DialogHeader>
-        <DialogTitle>{title}</DialogTitle>
+        {corner ? (
+          <div className="flex min-w-0 items-center gap-2">
+            <DialogTitle className="min-w-0 flex-1">{title}</DialogTitle>
+            {corner}
+          </div>
+        ) : (
+          <DialogTitle>{title}</DialogTitle>
+        )}
         <DialogDescription>{reason}</DialogDescription>
       </DialogHeader>
       <OrcaSignInWaitNotice />
@@ -142,6 +149,7 @@ export function OrcaCloudSignInGate({
   onCancel,
   resume,
   frame = unframed,
+  corner,
   children
 }: {
   hostId?: ExecutionHostId
@@ -149,6 +157,8 @@ export function OrcaCloudSignInGate({
   reason: string
   onCancel: () => void
   resume?: () => Promise<unknown>
+  /** The ask's button on the title's line (see OrcaCloudSignInDialogBody). */
+  corner?: React.ReactNode
   /** Wraps the ask, for a dialog whose `children` bring their own content frame. */
   frame?: (body: React.JSX.Element) => React.ReactNode
   children: React.ReactNode
@@ -166,6 +176,7 @@ export function OrcaCloudSignInGate({
           reason={reason}
           onCancel={onCancel}
           onSignedIn={() => whileBusy(setResuming, async () => resume?.())}
+          corner={corner}
         />
       )}
     </>

@@ -3,7 +3,7 @@ import type { IDisposable, editor } from 'monaco-editor'
 import type { MarkdownDocument } from '../../../../../../shared/file-listing/file-document'
 import {
   getMarkdownDocCompletionContext,
-  getMarkdownDocCompletionDocuments
+  getMarkdownDocCompletionMatches
 } from '../../markdown/documents/markdown-doc-completions'
 
 type MonacoApi = Parameters<OnMount>[1]
@@ -38,7 +38,7 @@ export function ensureMarkdownDocCompletionProvider(monaco: MonacoApi): void {
       }
 
       const documents = documentsByModel.get(model)?.documents ?? []
-      const suffix = line.slice(position.column - 1)
+      const hasClosingBrackets = line.startsWith(']]', position.column - 1)
       const range = {
         startLineNumber: position.lineNumber,
         startColumn: position.column - context.partial.length,
@@ -47,12 +47,13 @@ export function ensureMarkdownDocCompletionProvider(monaco: MonacoApi): void {
       }
 
       return {
-        suggestions: getMarkdownDocCompletionDocuments(documents, context.partial).map(
-          (document) => ({
+        suggestions: getMarkdownDocCompletionMatches(documents, context.partial).map(
+          ({ document, filterText }) => ({
             label: document.name,
+            filterText,
             kind: monaco.languages.CompletionItemKind.File,
             detail: document.relativePath,
-            insertText: suffix.startsWith(']]') ? document.name : `${document.name}]]`,
+            insertText: hasClosingBrackets ? document.name : `${document.name}]]`,
             range
           })
         )

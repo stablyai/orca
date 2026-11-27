@@ -1,37 +1,17 @@
 // @vitest-environment happy-dom
-
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, expect, it, vi } from 'vitest'
-import { NativeChatFileLinkExistenceContext } from '../../native-chat/links/actions/native-chat-file-link-existence'
-import { NativeChatLinkClickContext } from '../../native-chat/links/actions/native-chat-link-click-context'
-import type { CommentMarkdownLinkClickHandler } from '@/components/comment-markdown/comment-markdown-element-renderers'
+import { cleanup, render, screen } from '@testing-library/react'
+import { afterEach, expect, it } from 'vitest'
 import { BotItemMarkdown } from './BotItemMarkdown'
 
 afterEach(cleanup)
 
-const exists = {
-  check: (link: { pathText: string }) => link.pathText === '/Users/x/orca-lanes/lead/report.md',
-  peek: () => false
-}
-const existence = {
-  watch: () => ({ subscribe: () => () => {}, getSnapshot: () => exists }),
-  recheck: () => {}
-}
-
-it('links a file path in a comment and opens it through the chat link handler', () => {
-  const opened = vi.fn<CommentMarkdownLinkClickHandler>((event) => event.preventDefault())
-  render(
-    <NativeChatFileLinkExistenceContext value={existence}>
-      <NativeChatLinkClickContext value={opened}>
-        <BotItemMarkdown text="Report is at /Users/x/orca-lanes/lead/report.md now." />
-      </NativeChatLinkClickContext>
-    </NativeChatFileLinkExistenceContext>
-  )
-
-  fireEvent.click(screen.getByRole('link', { name: '/Users/x/orca-lanes/lead/report.md' }))
-
-  expect(opened).toHaveBeenCalledOnce()
-  expect(opened.mock.calls[0][1]).toBe(
-    '#orca-native-chat-file=%2FUsers%2Fx%2Forca-lanes%2Flead%2Freport.md'
-  )
+it('draws item text as chat does: code block header, literal ~ and unknown tags kept', () => {
+  const text =
+    'Takes ~5 min, then ~10. Returns Promise<void>.\n\n```powershell\nGet-Item a\nGet-Item b\n```'
+  const { container } = render(<BotItemMarkdown text={text} />)
+  expect(container.querySelector('[data-code-language="powershell"]')).not.toBeNull()
+  expect(screen.getByRole('button', { name: 'Wrap lines' })).not.toBeNull()
+  expect(screen.getByRole('button', { name: 'Copy code' })).not.toBeNull()
+  expect(container.querySelector('del')).toBeNull()
+  expect(container.textContent).toContain('Takes ~5 min, then ~10. Returns Promise<void>.')
 })

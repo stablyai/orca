@@ -49,12 +49,6 @@ async function statfsSwapVolumeFreeSpace(
 
 let swapVolumeFreeSpaceReader: SwapVolumeFreeSpaceReader = statfsSwapVolumeFreeSpace
 
-export function setSwapVolumeFreeSpaceReaderForTest(
-  reader: SwapVolumeFreeSpaceReader | null
-): void {
-  swapVolumeFreeSpaceReader = reader ?? statfsSwapVolumeFreeSpace
-}
-
 export function readSwapVolumeFreeSpace(
   platform: NodeJS.Platform = process.platform
 ): Promise<SwapVolumeFreeSpace | undefined> {

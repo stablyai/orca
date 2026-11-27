@@ -33,7 +33,7 @@ export type OrcadLiveDaemonCrossing =
 
 /** A counted census of live terminals from a host that predates the protocol set, so it cannot name mixed generations. */
 export function censusNeedsHostDaemonProtocols(census: OrcadTerminalCensus): boolean {
-  // An uncounted census may hide in-process terminals no daemon answer can vouch for.
+  // An uncounted census is not crossed here: only force passes it, once the candidate proves no daemon alive.
   return (
     census.liveSessions !== null &&
     census.liveSessions > 0 &&

@@ -1,7 +1,8 @@
+import { shallow } from 'zustand/shallow'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useSupportedGroupHookSettings } from '../repository/hooks/use-supported-group-hook-settings'
 import type { ProjectGroupSettingsEntry } from '../repository/hooks/use-supported-group-hook-settings'
 import { useMemo } from 'react'
-import { useShallow } from 'zustand/react/shallow'
 import {
   getRuntimeEnvironmentsSearchEntry,
   getWebRuntimeEnvironmentsSearchEntry
@@ -17,6 +18,7 @@ import {
 } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
 import { useAppStore } from '@/store/index'
+import { selectDrawsNewWorktreeCards } from '@/store/appearance/worktree-card-style'
 import { useProjectHostSetupProjection } from '@/store/projects/use-project-host-setup-projection'
 import {
   useChatSettingsOwnPermissions,
@@ -41,6 +43,12 @@ import {
 import { buildWorkflowSettingsSections } from './settings-navigation-workflow-sections'
 import { useWindowsTerminalCapabilityOwnerKey } from '../../../runtime/hosts/capabilities/useWindowsTerminalCapabilityOwnerKey'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { useMcpServersAvailable } from './use-mcp-servers-available'
+import {
+  getOptInOnlyExperimentVisibility,
+  type OptInOnlyExperimentVisibility
+} from '../advanced/experimental-search'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Translate } from '@/i18n/use-translate'
 import type { SettingsNavSection } from '@/components/settings/navigation/settings-navigation-types'
@@ -62,8 +70,12 @@ export function buildSettingsNavigationMetadata(
     typedChatPermissions = false,
     managedBrowserCreationEnabled = !isWebClient,
     mobileEmulatorCreationEnabled = !isWebClient,
+    showWorkspaceCardLayout = true,
     isDev = import.meta.env.DEV,
+    showAgentDashboardExperiment = false,
+    showTerminalAttentionExperiment = false,
     isLinearConnected = false,
+    mcpServersAvailable = false,
     repos,
     bots = [],
     projectGroups,
@@ -79,8 +91,12 @@ export function buildSettingsNavigationMetadata(
     typedChatPermissions?: boolean
     managedBrowserCreationEnabled?: boolean
     mobileEmulatorCreationEnabled?: boolean
+    showWorkspaceCardLayout?: boolean
     isDev?: boolean
+    showAgentDashboardExperiment?: boolean
+    showTerminalAttentionExperiment?: boolean
     isLinearConnected?: boolean
+    mcpServersAvailable?: boolean
     projectGroups?: readonly ProjectGroupSettingsEntry[]
     repos: readonly Repo[]
     bots?: readonly Bot[]
@@ -116,8 +132,14 @@ export function buildSettingsNavigationMetadata(
     typedChatPermissions,
     managedBrowserCreationEnabled,
     mobileEmulatorCreationEnabled,
+    showWorkspaceCardLayout,
     isDev,
+    optInOnlyExperiments: {
+      agentDashboard: showAgentDashboardExperiment,
+      terminalAttention: showTerminalAttentionExperiment
+    },
     isLinearConnected,
+    mcpServersAvailable,
     repos,
     bots,
     projectGroups,
@@ -138,7 +160,15 @@ export function buildSettingsNavigationMetadata(
   ]
 }
 
-export function useSettingsNavigationMetadata(): SettingsNavSection[] {
+const NO_SETTINGS_NAV_SECTIONS: SettingsNavSection[] = []
+
+/** `pickedHost`: Settings' own host picker, which can show MCP servers on a host the default isn't.
+ *  `optInOnlyExperimentRows`: the Settings page's per-visit rows; elsewhere the live settings decide. */
+export function useSettingsNavigationMetadata(
+  pickedHost?: RuntimeClientTarget,
+  enabled = true,
+  optInOnlyExperimentRows?: OptInOnlyExperimentVisibility
+): SettingsNavSection[] {
   const t = useTranslate()
   // The locale subscription must also invalidate the memo or labels retain the previous language.
   const languageRevision = useUiLanguageRevision()
@@ -148,15 +178,16 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
   const bots = useBots(botsEnabled)
   const projectHostSetupProjection = useProjectHostSetupProjection()
   const settings = useAppStore((state) => state.settings)
-  const [managedBrowserCreationEnabled, mobileEmulatorCreationEnabled] = useAppStore(
-    useShallow((state) => {
-      const policy = getClientCreationActionPolicy(state, state.activeWorktreeId)
+  const optInOnlyExperiments = optInOnlyExperimentRows ?? getOptInOnlyExperimentVisibility(settings)
+  const [managedBrowserCreationEnabled, mobileEmulatorCreationEnabled] =
+    useAppStoreWithHostStatuses((state, statuses) => {
+      const policy = getClientCreationActionPolicy(state, state.activeWorktreeId, statuses)
       return [
         policy['managed-browser'].state === 'enabled',
         policy['mobile-emulator'].state === 'enabled'
       ] as const
-    })
-  )
+    }, shallow)
+  const showWorkspaceCardLayout = !useAppStore(selectDrawsNewWorktreeCards)
   const typedChatPermissions = useChatSettingsOwnPermissions()
   const hostQueuesMessages = useStructuredAgentSessionHostQueuesMessages({ kind: 'local' })
   const isMac = isMacUserAgent()
@@ -168,6 +199,10 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
   )
   // Why: navigation is shared with the palette, which has no host picker.
   const runtimeTarget = defaultScopeHost(settings)
+  const mcpServersAvailable = useMcpServersAvailable(
+    isWebClient ? { kind: 'local' } : runtimeTarget,
+    isWebClient ? undefined : pickedHost
+  )
   const capabilityLoadTarget = isWebClient ? { kind: 'local' as const } : runtimeTarget
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     isWindows || isWebClient || runtimeTarget.kind === 'environment',
@@ -193,30 +228,36 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
 
   return useMemo(
     () =>
-      buildSettingsNavigationMetadata(
-        {
-          isMac,
-          isWindows,
-          isLocalWindowsHost,
-          isWindowsTerminalHost,
-          isWebClient,
-          botsEnabled,
-          hostQueuesMessages,
-          typedChatPermissions,
-          managedBrowserCreationEnabled,
-          mobileEmulatorCreationEnabled,
-          isDev: import.meta.env.DEV,
-          isLinearConnected,
-          repos,
-          bots,
-          projectGroups,
-          projectGrouping: {
-            projects: projectHostSetupProjection.projects,
-            projectHostSetups: projectHostSetupProjection.setups
-          }
-        },
-        t
-      ),
+      enabled
+        ? buildSettingsNavigationMetadata(
+            {
+              isMac,
+              isWindows,
+              isLocalWindowsHost,
+              isWindowsTerminalHost,
+              isWebClient,
+              botsEnabled,
+              hostQueuesMessages,
+              typedChatPermissions,
+              managedBrowserCreationEnabled,
+              mobileEmulatorCreationEnabled,
+              showWorkspaceCardLayout,
+              isDev: import.meta.env.DEV,
+              showAgentDashboardExperiment: optInOnlyExperiments.agentDashboard,
+              showTerminalAttentionExperiment: optInOnlyExperiments.terminalAttention,
+              isLinearConnected,
+              mcpServersAvailable,
+              repos,
+              bots,
+              projectGroups,
+              projectGrouping: {
+                projects: projectHostSetupProjection.projects,
+                projectHostSetups: projectHostSetupProjection.setups
+              }
+            },
+            t
+          )
+        : NO_SETTINGS_NAV_SECTIONS,
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() inside buildSettingsNavigationMetadata reads the UI language and catalogs implicitly.
     [
       isMac,
@@ -229,13 +270,18 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
       typedChatPermissions,
       managedBrowserCreationEnabled,
       mobileEmulatorCreationEnabled,
+      showWorkspaceCardLayout,
+      optInOnlyExperiments.agentDashboard,
+      optInOnlyExperiments.terminalAttention,
       isLinearConnected,
+      mcpServersAvailable,
       repos,
       bots,
       projectGroups,
       projectHostSetupProjection,
       languageRevision,
-      t
+      t,
+      enabled
     ]
   )
 }

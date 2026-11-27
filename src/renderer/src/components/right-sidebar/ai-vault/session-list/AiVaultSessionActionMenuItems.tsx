@@ -10,7 +10,7 @@ import {
 } from 'lucide-react'
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { MenuItemBlockedReason } from '@/components/ui/menu-item-blocked-reason'
 import { useTranslate } from '@/i18n/use-translate'
 import { AiVaultSessionSurfaceSwitchMenuItems } from './AiVaultSessionSurfaceSwitchMenuItems'
 import { isAiVaultFolderWorkspaceId } from './ai-vault-session-worktree-affordances'
@@ -77,19 +77,6 @@ export function SessionActionMenuItems({
     onCopyResume
   )
   const deleteLabel = t('auto.components.right.sidebar.AiVaultSessionRow.delete', 'Delete')
-  const deleteItem = (
-    <Item
-      variant="destructive"
-      disabled={Boolean(deleteBlockedReason)}
-      onSelect={deleteBlockedReason ? undefined : onDelete}
-      // Expose Delete’s blocked reason to screen readers as well as tooltip users.
-      aria-label={deleteBlockedReason ? `${deleteLabel}. ${deleteBlockedReason}` : undefined}
-    >
-      <Trash2 className="size-3.5" />
-      {deleteLabel}
-    </Item>
-  )
-
   return (
     <>
       {onJumpToOriginalPane ? (
@@ -142,10 +129,7 @@ export function SessionActionMenuItems({
           {hasItemsAboveHandOff ? <Separator /> : null}
           <Item onSelect={onContinueInNewSession}>
             <MessageSquarePlus className="size-3.5" />
-            {t(
-              'components.agentSessionContinuation.handOffToAnotherAgent',
-              'Hand Off to Another Agent'
-            )}
+            {t('components.agentSessionContinuation.handOffToAnotherAgent', 'Hand off to agent')}
           </Item>
         </>
       ) : null}
@@ -196,23 +180,21 @@ export function SessionActionMenuItems({
       {onDelete ? (
         <>
           <Separator />
-          {deleteBlockedReason ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                {/* Disabled items ignore pointer events; wrap for tooltip hover as WorktreeContextMenu does. */}
-                <div>{deleteItem}</div>
-              </TooltipTrigger>
-              <TooltipContent
-                side={menuKind === 'context' ? 'right' : 'left'}
-                sideOffset={8}
-                className="max-w-72"
+          <MenuItemBlockedReason
+            reason={deleteBlockedReason}
+            label={deleteLabel}
+            side={menuKind === 'context' ? 'right' : 'left'}
+            render={(blocked) => (
+              <Item
+                variant="destructive"
+                {...blocked}
+                onSelect={deleteBlockedReason ? undefined : onDelete}
               >
-                {deleteBlockedReason}
-              </TooltipContent>
-            </Tooltip>
-          ) : (
-            deleteItem
-          )}
+                <Trash2 className="size-3.5" />
+                {deleteLabel}
+              </Item>
+            )}
+          />
         </>
       ) : null}
     </>

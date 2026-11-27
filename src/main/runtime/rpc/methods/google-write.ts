@@ -28,7 +28,7 @@ export const GOOGLE_WRITE_METHODS = [
     permission: 'workspace',
     params: GmailDraftParams,
     handler: async (params, context) => {
-      const api = googleApiForCaller(params, context)
+      const api = await googleApiForCaller(params, context, [params.replyTo, params.forward])
       const body = await attributedGoogleText(params.body, params, context)
       return saveGmailDraft(api, { ...params, ...(body === undefined ? {} : { body }) })
     }
@@ -38,20 +38,21 @@ export const GOOGLE_WRITE_METHODS = [
     permission: 'workspace',
     params: GmailSendParams,
     handler: async (params, context) =>
-      sendGmailDraft(googleApiForCaller(params, context), params.ref)
+      sendGmailDraft(await googleApiForCaller(params, context), params.ref)
   }),
   defineMethod({
     name: 'google.gmail.modify',
     permission: 'workspace',
     params: GmailModifyParams,
-    handler: async (params, context) => modifyGmail(googleApiForCaller(params, context), params)
+    handler: async (params, context) =>
+      modifyGmail(await googleApiForCaller(params, context, params.refs), params)
   }),
   defineMethod({
     name: 'google.calendar.create',
     permission: 'workspace',
     params: CalendarCreateParams,
     handler: async (params, context) => {
-      const api = googleApiForCaller(params, context)
+      const api = await googleApiForCaller(params, context)
       const body = await attributedGoogleText(params.body, params, context)
       return createCalendarEvent(api, {
         ...params,
@@ -65,27 +66,30 @@ export const GOOGLE_WRITE_METHODS = [
     permission: 'workspace',
     params: CalendarUpdateParams,
     handler: async (params, context) =>
-      updateCalendarEvent(googleApiForCaller(params, context), { ...params, now: Date.now() })
+      updateCalendarEvent(await googleApiForCaller(params, context), { ...params, now: Date.now() })
   }),
   defineMethod({
     name: 'google.calendar.delete',
     permission: 'workspace',
     params: CalendarDeleteParams,
     handler: async (params, context) =>
-      deleteCalendarEvent(googleApiForCaller(params, context), { ...params, now: Date.now() })
+      deleteCalendarEvent(await googleApiForCaller(params, context), { ...params, now: Date.now() })
   }),
   defineMethod({
     name: 'google.calendar.respond',
     permission: 'workspace',
     params: CalendarRespondParams,
     handler: async (params, context) =>
-      respondToCalendarEvent(googleApiForCaller(params, context), { ...params, now: Date.now() })
+      respondToCalendarEvent(await googleApiForCaller(params, context), {
+        ...params,
+        now: Date.now()
+      })
   }),
   defineMethod({
     name: 'google.calendar.suggestTime',
     permission: 'workspace',
     params: CalendarSuggestTimeParams,
     handler: async (params, context) =>
-      suggestCalendarTime(googleApiForCaller(params, context), { ...params, now: Date.now() })
+      suggestCalendarTime(await googleApiForCaller(params, context), { ...params, now: Date.now() })
   })
 ] as const

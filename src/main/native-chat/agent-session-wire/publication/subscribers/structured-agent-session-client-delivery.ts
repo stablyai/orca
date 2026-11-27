@@ -1,3 +1,4 @@
+import type { LiveTextReaders } from '../../journal-ingress/structured-agent-session-event-sink'
 import type { HostUsageLimitCut } from '../../recovery/structured-agent-session-usage-limit-chain'
 import { readForkMarker } from '../history/agent-session-fork-marker'
 import { StructuredAgentSessionJournalObservers } from '../../observations/structured-agent-session-journal-observers'
@@ -79,7 +80,7 @@ export class StructuredAgentSessionClientDelivery {
       id: string,
       cut: HostUsageLimitCut | null
     ) => AgentSessionStatusSummary['usageLimitContinue'],
-    readLiveText?: (id: string) => readonly AgentJournalRenderItem[]
+    readLiveText?: (id: string, readers?: LiveTextReaders) => readonly AgentJournalRenderItem[]
   ) {
     this.requestFailures = createStructuredAgentSessionHostRequestFailures(sessions, deps)
     this.savedStatus = new StructuredAgentSessionSavedStatus(deps)
@@ -110,6 +111,7 @@ export class StructuredAgentSessionClientDelivery {
     this.subscribers = new AgentSessionSubscribers({
       ...(readLiveText ? { readLiveText } : {}),
       readForkJournal: (id) => this.sessions.get(id)?.journal,
+      readSessionJournal: (id) => this.sessions.get(id)?.journal,
       readForkMarker: (sessionId) => readForkMarker(this.deps().store, sessionId),
       readCommands: (sessionId, commandsOnRequest) =>
         this.readCommands(sessionId, commandsOnRequest),
@@ -210,13 +212,16 @@ export class StructuredAgentSessionClientDelivery {
 
   /** Publish generation-end evidence even without cleanup rows; wake queue without renewing idle time.
    * restate rebaselines readers after fence movement. */
-  publishGenerationEnded = (sessionId: string, options: { restate?: boolean } = {}): void => {
+  publishGenerationEnded = (
+    sessionId: string,
+    options: { restate?: boolean; settled?: boolean } = {}
+  ): void => {
     const session = this.sessions.get(sessionId)
     if (!session) {
       return
     }
     try {
-      this.requestFailures.generationEnded(sessionId)
+      this.requestFailures.generationEnded(sessionId, { settled: options.settled })
     } catch (error) {
       this.deps().logger.warn('observing a request death failed', {
         scope: 'request-outcomes',

@@ -1,8 +1,10 @@
 import type { JournalKeyedMap, JournalKeyedSet } from '../journal-keyed-storage'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { createJournalReducerState, type JournalReducerState } from '../projection/journal-reducer'
 import { JournalDerivedTurnScope } from '../projection/journal-derived-turn-scope'
+import { getJournalInputOrder } from '../input-order/journal-input-order-registry'
 import {
   outcomeFormat1StoredScalars,
   outcomeFormat1StrictScalars
@@ -60,8 +62,8 @@ export function durableQueuePauseMarks(
 }
 
 const f = outcomeFormat1StoredScalars.shape
-const admittedPauseMarks = z.custom<JournalReducerState['queuePauseMarks']>()
-const admittedHistoryOrigin = z.custom<JournalReducerState['historyOrigin']>()
+const admittedPauseMarks = lazyZodSchema(() => z.custom<JournalReducerState['queuePauseMarks']>())
+const admittedHistoryOrigin = lazyZodSchema(() => z.custom<JournalReducerState['historyOrigin']>())
 
 function applyScalar(state: JournalReducerState, key: string, value: unknown): void {
   switch (key) {
@@ -145,10 +147,12 @@ function collectionTargets(state: JournalReducerState): Map<string, Target> {
         set: (entry) => {
           const value = item.parse(entry)
           items.set(value.itemId, value)
+          getJournalInputOrder(state)?.noteItem(state, value.itemId)
         },
         remove: (key) => {
           if (isString(key)) {
             items.delete(key)
+            getJournalInputOrder(state)?.noteItem(state, key)
           }
         }
       }

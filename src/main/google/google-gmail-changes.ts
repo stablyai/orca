@@ -2,6 +2,8 @@
 // check. When Gmail no longer has that point (history expired, about a week but sometimes hours), the
 // checker starts again from now and fires nothing old.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
+import { mailboxAddress, splitAddresses } from '../../shared/google/email-address-list'
 import { parseGoogleJson, type GoogleApi } from './google-api-client'
 import { header, MessageSchema, sentAt, type Message } from './google-gmail-message'
 import { inBatches } from './google-gmail-read'
@@ -15,31 +17,35 @@ const MESSAGE_READS_AT_ONCE = 10
 // Mail no rule should ever start on: the owner's own, unsent, junk or deleted.
 const IGNORED_LABELS = new Set(['SENT', 'DRAFT', 'SPAM', 'TRASH', 'CHAT'])
 
-const ProfileSchema = z.object({ historyId: z.string() })
-const HistorySchema = z.object({
-  historyId: z.string(),
-  nextPageToken: z.string().optional(),
-  history: z
-    .array(
-      z.object({
-        messagesAdded: z
-          .array(
-            z.object({
-              message: z.object({
-                id: z.string(),
-                threadId: z.string(),
-                labelIds: z.array(z.string()).optional()
+const ProfileSchema = lazyZodSchema(() => z.object({ historyId: z.string() }))
+const HistorySchema = lazyZodSchema(() =>
+  z.object({
+    historyId: z.string(),
+    nextPageToken: z.string().optional(),
+    history: z
+      .array(
+        z.object({
+          messagesAdded: z
+            .array(
+              z.object({
+                message: z.object({
+                  id: z.string(),
+                  threadId: z.string(),
+                  labelIds: z.array(z.string()).optional()
+                })
               })
-            })
-          )
-          .optional()
-      })
-    )
-    .default([])
-})
-const LabelsSchema = z.object({
-  labels: z.array(z.object({ id: z.string(), name: z.string() })).default([])
-})
+            )
+            .optional()
+        })
+      )
+      .default([])
+  })
+)
+const LabelsSchema = lazyZodSchema(() =>
+  z.object({
+    labels: z.array(z.object({ id: z.string(), name: z.string() })).default([])
+  })
+)
 
 export type NewMail = {
   id: string
@@ -139,11 +145,10 @@ function newMailOf(message: Message): NewMail {
   }
 }
 
-/** The addresses in a header, lowercased: "Sam <sam@x.com>, b@y.com" gives both. */
-export function addressesIn(value: string): string[] {
-  return [...value.matchAll(/[^\s<>",;:()]+@[^\s<>",;:()]+/g)].map((match) =>
-    match[0].toLowerCase()
-  )
+/** The one real From address, or none when the header names several or none. */
+export function senderAddress(from: string): string | undefined {
+  const mailboxes = splitAddresses(from)
+  return (mailboxes.length === 1 && mailboxAddress(mailboxes[0])) || undefined
 }
 
 const domainOf = (address: string) => address.slice(address.lastIndexOf('@') + 1)
@@ -151,7 +156,7 @@ const domainOf = (address: string) => address.slice(address.lastIndexOf('@') + 1
 // Gmail stamps its own check on top as `Authentication-Results: mx.google.com; ... dmarc=pass ...
 // header.from=acme.com`. A sender can add look-alikes below it, so only the topmost one counts.
 function senderVerified(message: Message, from: string): boolean {
-  const address = addressesIn(from)[0]
+  const address = senderAddress(from)
   if (!address) {
     return false
   }

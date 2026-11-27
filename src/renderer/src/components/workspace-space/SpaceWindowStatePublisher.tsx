@@ -6,8 +6,27 @@ import {
   spaceWindowStateChanged,
   type SpaceWindowState
 } from './space-window-state'
-import { revealWorkspaceSpaceChange } from '../status-bar/workspace-storage/table/workspace-space-open-change'
-import { refreshLinkedIssueForWorktree } from '../status-bar/workspace-storage/decisions/workspace-space-issue-freshness'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { WorkspaceSpaceChange } from '../../../../shared/workspace-disk-space/workspace-space-change'
+
+async function revealWorkspaceSpaceChangeLazy(
+  worktreeId: string,
+  executionHostId: ExecutionHostId | undefined,
+  change: WorkspaceSpaceChange
+): Promise<void> {
+  const { revealWorkspaceSpaceChange } =
+    await import('../status-bar/workspace-storage/table/workspace-space-open-change')
+  await revealWorkspaceSpaceChange(worktreeId, executionHostId, change)
+}
+
+async function refreshLinkedIssueForWorktreeLazy(
+  worktreeId: string,
+  executionHostId: ExecutionHostId | undefined
+): Promise<void> {
+  const { refreshLinkedIssueForWorktree } =
+    await import('../status-bar/workspace-storage/decisions/workspace-space-issue-freshness')
+  refreshLinkedIssueForWorktree(worktreeId, executionHostId)
+}
 
 export function SpaceWindowStatePublisher(): null {
   useEffect(() => {
@@ -63,7 +82,7 @@ export function SpaceWindowStatePublisher(): null {
     })
     const offReveal = api.onRevealWorktree?.((worktreeId, executionHostId, change) => {
       if (change) {
-        void revealWorkspaceSpaceChange(worktreeId, executionHostId, change)
+        void revealWorkspaceSpaceChangeLazy(worktreeId, executionHostId, change)
         return
       }
       activateAndRevealWorktree(worktreeId, { navigationIntent: 'user-open', executionHostId })
@@ -72,7 +91,7 @@ export function SpaceWindowStatePublisher(): null {
       void useAppStore.getState().fetchAllWorktrees()
     })
     const offIssueRefresh = api.onIssueRefreshRequested?.((worktreeId, executionHostId) => {
-      refreshLinkedIssueForWorktree(worktreeId, executionHostId)
+      void refreshLinkedIssueForWorktreeLazy(worktreeId, executionHostId)
     })
     const offAnalysis = api.onWindowAnalysis?.((analysis) => {
       if (typeof analysis.scannedAt === 'number') {

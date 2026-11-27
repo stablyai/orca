@@ -3,12 +3,12 @@ import { useTranslate } from '@/i18n/use-translate'
 import { openBotAutomation } from '@/components/bots/bot-automation-open'
 import { useBotForWorkspace } from '@/components/bots/bot-workspace'
 import { useBotActivity } from '@/components/bots/use-bot-activity'
+import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import {
   AUTOMATION_RESULT_NOTE_COPY as COPY,
   type AutomationResultNote
 } from '../../../../../shared/bots/bot-automation-result-note'
 import {
-  automationRowAccessibleName,
   automationRowMark,
   type AutomationRowMark
 } from '../../../../../shared/automations/automation-chat-row'
@@ -18,11 +18,7 @@ import { useNativeChatVisualOwner } from '../media/visuals/native-chat-visual-ow
 import { useNativeChatDisclosure } from '../messages/disclosure/native-chat-disclosure-store'
 import { useAutomationRunWording } from './automation-run-wording'
 import { RUN_LINK_BUTTON } from './automation-run-link-button'
-import {
-  NativeChatAutomationRowBody,
-  NativeChatAutomationRowFrame,
-  ROW_NOTE
-} from './NativeChatAutomationRowFrame'
+import { NativeChatAutomationRowFrame, ROW_NOTE } from './NativeChatAutomationRowFrame'
 
 // The note carries no rules; past every schedule, so no schedule is worded.
 const NO_RULES = { dtstart: Number.MAX_SAFE_INTEGER, rrule: '' }
@@ -51,7 +47,8 @@ export function NativeChatAutomationResultRow({
 }): React.JSX.Element {
   const t = useTranslate()
   useTranslation()
-  const { say, formatTime } = useAutomationRunWording(NO_RULES)
+  const owner = useNativeChatVisualOwner()
+  const { say } = useAutomationRunWording(NO_RULES)
   const { open, setOpen } = useNativeChatDisclosure(`automation-result:${note.runId}`, false)
   const finished = note.outcome === 'finished'
   const label = note.trigger === 'schedule' ? say('scheduled') : say('event')
@@ -59,50 +56,50 @@ export function NativeChatAutomationResultRow({
   return (
     <NativeChatAutomationRowFrame
       mark={useResultMark(note)}
-      label={label}
+      lead={label}
       name={note.automationName}
       status={status}
       failed={!finished}
-      accessibleName={automationRowAccessibleName(
-        { label, name: note.automationName, status, time: formatTime(note.at) },
-        say
-      )}
       timestamp={note.at}
       open={open}
       onToggle={() => setOpen(!open)}
     >
-      {(ids) => (
-        <NativeChatAutomationRowBody ids={ids} timestamp={note.at}>
-          <NativeChatMarkdown
-            content={note.result}
-            variant="document"
-            renderCodeBlock={NativeChatCodeBlock}
-            className="text-sm text-card-foreground"
-          />
-          <p className={`${ROW_NOTE} mt-2`}>
-            {note.readWith !== undefined
-              ? t('components.native-chat.automationResult.read', COPY.read, {
+      <>
+        <NativeChatMarkdown
+          content={note.result}
+          variant="document"
+          renderCodeBlock={NativeChatCodeBlock}
+          className="text-sm text-card-foreground"
+        />
+        <p className={`${ROW_NOTE} mt-2`}>
+          {note.readWith !== undefined
+            ? t('components.native-chat.automationResult.read', COPY.read, {
+                name: note.botName
+              })
+            : cleared
+              ? t('components.native-chat.automationResult.cleared', COPY.cleared, {
                   name: note.botName
                 })
-              : cleared
-                ? t('components.native-chat.automationResult.cleared', COPY.cleared, {
-                    name: note.botName
-                  })
-                : t('components.native-chat.automationResult.notRead', COPY.notRead, {
-                    name: note.botName
-                  })}
-          </p>
-          <div className="mt-2">
-            <button
-              type="button"
-              className={RUN_LINK_BUTTON}
-              onClick={() => openBotAutomation(note.automationId, note.runId)}
-            >
-              {t('components.native-chat.automationResult.openRun', COPY.openRun)}
-            </button>
-          </div>
-        </NativeChatAutomationRowBody>
-      )}
+              : t('components.native-chat.automationResult.notRead', COPY.notRead, {
+                  name: note.botName
+                })}
+        </p>
+        <div className="mt-2">
+          <button
+            type="button"
+            className={RUN_LINK_BUTTON}
+            onClick={() =>
+              openBotAutomation(
+                getRuntimeTargetHostId(owner?.target ?? { kind: 'local' }),
+                note.automationId,
+                note.runId
+              )
+            }
+          >
+            {t('components.native-chat.automationResult.openRun', COPY.openRun)}
+          </button>
+        </div>
+      </>
     </NativeChatAutomationRowFrame>
   )
 }

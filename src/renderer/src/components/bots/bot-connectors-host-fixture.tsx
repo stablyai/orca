@@ -11,6 +11,10 @@ import { resetBotToolSignInsForTest } from './bot-tools-client'
 import { retryBotToolCheck } from './bot-tools-revision'
 import type { Bot } from '../../../../shared/bot-types'
 import type { BotOwnTool } from '../../../../shared/bot-tools'
+import type {
+  WebhookCallRow,
+  WebhookSummary
+} from '../../../../shared/rpc-contract/webhooks-params'
 import { mascotAvatar } from '../../../../shared/bot-avatar'
 import { BotConnectorsSection } from '../settings/bots/BotConnectorsSection'
 
@@ -77,6 +81,8 @@ const neverReturns = (): Promise<never> => new Promise(() => {})
 export type StubOptions = {
   linearLinked: boolean
   composio: boolean
+  /** The host's bots, listed and answered on every re-read; the shared five by default. */
+  bots?: readonly Bot[]
   /** The key's state on each read of the status, the last one repeating. */
   keys?: ('ok' | 'rejected')[]
   /** The sign-ins can't be read. */
@@ -96,12 +102,19 @@ export type StubOptions = {
   /** A web or phone window, whose bots run on its paired server: `paste` signs in there by paste;
    *  `finishing` has the pasted address being exchanged; `old-host` runs an Orca that can't. */
   host?: 'paste' | 'finishing' | 'old-host'
+  /** A Google setup run the host still has open for every bot. */
+  googleSetupRunning?: boolean
+  /** gh is signed out on the host the bot runs on. */
+  ghSignedOut?: boolean
+  /** The bot's hooks and the calls each one lists; none by default. */
+  webhooks?: { hooks: WebhookSummary[]; calls: WebhookCallRow[] }
 }
 
 const HOST_PAGE = 'https://mcp.acme-notes.example/authorize?client_id=orca&state=fixture'
 
 export function stub(options: StubOptions): void {
-  publishBots([base, empty, slackOnly, switchedToCodex, twoOfEach])
+  const bots = options.bots ?? [base, empty, slackOnly, switchedToCodex, twoOfEach]
+  publishBots(bots)
   retryBotToolCheck()
   // The page stays warm between fixtures; each starts from no Composio read.
   resetComposioClientForTest()
@@ -180,7 +193,17 @@ export function stub(options: StubOptions): void {
             : []),
           { installationId: '1', accountLogin: 'stablyai', repositories: null }
         ],
-        defaultBotId: null
+        defaultBotId: null,
+        accounts: [
+          {
+            userId: '42',
+            login: 'cos-orca',
+            installations: [...(options.sameService ? ['2'] : []), '1'],
+            defaultBotId: null,
+            linkedAccounts: []
+          }
+        ],
+        ...(options.ghSignedOut ? { gh: 'signed-out' } : {})
       }
     }),
     users: notAnswered,
@@ -200,12 +223,40 @@ export function stub(options: StubOptions): void {
             { service: 'drive', state: 'ready' }
           ],
           connectedAt: 1
+        },
+        {
+          email: 'carol.lee@gmail.com',
+          status: 'connected',
+          services: [
+            { service: 'gmail', state: 'ready' },
+            { service: 'calendar', state: 'ready' },
+            { service: 'drive', state: 'ready' }
+          ],
+          connectedAt: 2
         }
       ],
+      defaultAccount: 'carol@example.com',
       bots: []
     }),
-    'bots.list': () => ({ bots: [base, empty, slackOnly, switchedToCodex, twoOfEach] }),
-    'webhooks.list': () => ({ hooks: [] }),
+    'bots.list': () => ({ bots }),
+    'bots.googleSetup.read': () => ({
+      run: options.googleSetupRunning
+        ? {
+            id: 'run-left-open',
+            botId: base.id,
+            state: 'running',
+            mode: 'guide-here',
+            steps: {},
+            answers: {},
+            startedAt: 1,
+            updatedAt: 1,
+            revision: 1
+          }
+        : null,
+      blocker: null
+    }),
+    'webhooks.list': () => ({ hooks: options.webhooks?.hooks ?? [] }),
+    'webhooks.calls': () => ({ calls: options.webhooks?.calls ?? [] }),
     'bots.tools.list': () => ({
       agent: 'claude',
       own: options.owned
@@ -356,9 +407,14 @@ export async function clickWhenShown(match: (button: HTMLElement) => boolean): P
 }
 export const named = (name: string) => (button: HTMLElement) => button.textContent?.trim() === name
 
-export const Panel = ({ bot }: { bot: Bot }): React.JSX.Element => (
+/** The Connectors tab, at a sidebar `width` when given. */
+export const Panel = ({ bot, width }: { bot: Bot; width?: number }): React.JSX.Element => (
   <ConfirmationDialogProvider>
-    <div className="bg-sidebar px-2 py-3 text-sidebar-foreground">
+    {/* Its own container, as BotConnectorsPanel draws it. */}
+    <div
+      style={{ width }}
+      className="@container/connectors-panel bg-sidebar px-2 py-3 text-sidebar-foreground"
+    >
       <BotConnectorsSection bot={bot} />
     </div>
   </ConfirmationDialogProvider>

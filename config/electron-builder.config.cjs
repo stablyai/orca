@@ -95,6 +95,9 @@ const {
 const {
   buildMacShipItScheduling
 } = require('./scripts/desktop-distribution/macos/macos-shipit-scheduling.cjs')
+const {
+  packageWindowsWerHelper
+} = require('./scripts/desktop-distribution/windows/package-windows-wer-helper.cjs')
 
 const {
   buildMacNativeAddon
@@ -173,7 +176,14 @@ const emojiShortcodeDatasetResource = {
   from: 'node_modules/emojibase-data/en/shortcodes/emojibase.json',
   to: 'node_modules/emojibase-data/en/shortcodes/emojibase.json'
 }
+// The native dependency rebuild runs after beforePack and replaces node-pty/build.
+const journalFileLockBuildDir = 'native/journal-file-lock/.build'
 const commonExtraResources = [
+  {
+    from: `${journalFileLockBuildDir}/\${arch}`,
+    to: 'bin',
+    filter: ['journal-file-lock', 'journal-file-lock.exe']
+  },
   relayExtraResource,
   orcadTemplateExtraResource,
   orcadTemplateNodeModulesExtraResource,
@@ -190,6 +200,8 @@ const commonExtraResources = [
 const debElectronRuntimeDependencies = [
   'libgtk-3-0',
   'libnotify4',
+  'dbus-bin | dbus',
+  'libglib2.0-bin',
   'libnss3',
   'libxss1',
   'libxtst6',
@@ -204,6 +216,7 @@ const debElectronRuntimeDependencies = [
 const rpmElectronRuntimeDependencies = [
   'gtk3',
   'libnotify',
+  '/usr/bin/dbus-send',
   'nss',
   'libXScrnSaver',
   '(libXtst or libXtst6)',
@@ -342,7 +355,7 @@ module.exports = {
     'out/package.json',
     'out/cli/**',
     'out/shared/**',
-    'out/main/worker-threads/worker-thread-{entry-path,spawn}.js',
+    'out/main/worker-threads/{worker-thread-entry-path,worker-thread-spawn,worker-send-ledger}.js',
     'out/main/agent-hooks/**',
     'out/main/antigravity/**',
     'out/main/claude/**',
@@ -352,7 +365,6 @@ module.exports = {
     'out/main/copilot/**',
     'out/main/cursor/**',
     'out/main/droid/**',
-    'out/main/gemini/**',
     'out/main/gitlab/projects/project-ref-parser.js',
     'out/main/grok/**',
     'out/main/hermes/**',
@@ -373,12 +385,14 @@ module.exports = {
     'out/main/startup/network-compatibility/http1-compatibility-marker.js',
     // `orca agent hooks` gives main hook code an app environment in the CLI process.
     'out/main/backend/node-service-environment.js',
+    'out/main/mcp-servers/agent-files/mcp-connect-bridge.js',
     'out/main/daemon-entry.js',
     'out/main/session-scanner-service-entry.js',
     'out/main/wsl-transcript-fs-process-entry.js',
     'out/main/foreign-sqlite-reader-entry.js',
     'out/main/agent-identity-worker-entry.js',
     'out/main/bots-db-worker-entry.js',
+    'out/main/orchestration-reader-entry.js',
     'out/main/session-search-worker-entry.js',
     'out/main/journal-sql-worker-entry.js',
     'out/main/journal-sql-reader-entry.js',
@@ -425,8 +439,21 @@ module.exports = {
     if (context.electronPlatformName !== 'win32') {
       ensureProviderExec(context.electronPlatformName, context.arch)
     }
+    return import('./scripts/native-build/build-journal-file-lock.mjs').then(
+      ({ buildJournalFileLock }) => {
+        const lockName =
+          context.electronPlatformName === 'win32' ? 'journal-file-lock.exe' : 'journal-file-lock'
+        const arch = normalizeElectronArchitecture(context.arch)
+        buildJournalFileLock(join(__dirname, '..', journalFileLockBuildDir, arch, lockName), arch, {
+          glibcFloor: context.electronPlatformName === 'linux' ? 'desktop' : false
+        })
+      }
+    )
   },
   afterPack: async (context) => {
+    if (context.electronPlatformName === 'win32') {
+      packageWindowsWerHelper(context.appOutDir, context.packager.appInfo.productFilename)
+    }
     const resourcesDir =
       context.electronPlatformName === 'darwin'
         ? join(
@@ -539,10 +566,16 @@ module.exports = {
     assertPackagedWebClient(resourcesDir)
     assertPackagedServeSelectionEntry(resourcesDir)
     finalizePackagedRipgrep(resourcesDir)
-    for (const filename of readdirSync(resourcesDir)) {
-      if (!filename.startsWith('agent-browser-')) {
-        continue
-      }
+    const agentBrowserDrivers = readdirSync(resourcesDir).filter((filename) =>
+      filename.startsWith('agent-browser-')
+    )
+    // Each driver now comes from its own optional package, which a host-only install skips.
+    if (agentBrowserDrivers.length === 0) {
+      throw new Error(
+        `No agent-browser driver in ${resourcesDir}; install with --cpu/--os for the target`
+      )
+    }
+    for (const filename of agentBrowserDrivers) {
       // Upstream executable bits vary (notably darwin-x64); restore them so packaged execFile works.
       chmodSync(join(resourcesDir, filename), 0o755)
       // The orcad template hashes this exact file next, so app signing must not rewrite it later.
@@ -562,6 +595,11 @@ module.exports = {
     })
     chmodUnixCliLaunchers(resourcesDir, context.electronPlatformName)
     if (context.electronPlatformName === 'darwin') {
+      await signMacStandaloneHelper(
+        join(resourcesDir, 'bin', 'journal-file-lock'),
+        'journal file lock',
+        context.packager
+      )
       await signMacComputerUseHelper(join(resourcesDir, 'Orca Computer Use.app'), context.packager)
       await signMacStandaloneHelper(
         join(resourcesDir, '..', 'MacOS', 'orca-notification-status'),
@@ -576,6 +614,11 @@ module.exports = {
       await signMacStandaloneHelper(
         join(resourcesDir, '..', 'MacOS', 'orca-process-footprint'),
         'orca-process-footprint',
+        context.packager
+      )
+      await signMacStandaloneHelper(
+        join(resourcesDir, '..', 'MacOS', 'orca-socket-owner'),
+        'orca-socket-owner',
         context.packager
       )
       await signMacStandaloneHelper(
@@ -618,7 +661,7 @@ module.exports = {
         to: 'bin/orca-agent-hook.exe'
       },
       {
-        from: 'node_modules/agent-browser/bin/agent-browser-win32-x64.exe',
+        from: 'node_modules/@agent-browser/cli-win32-x64-msvc/bin/agent-browser.exe',
         to: 'agent-browser-win32-x64.exe'
       },
       {
@@ -684,7 +727,7 @@ module.exports = {
         to: 'bin/orca'
       },
       {
-        from: 'node_modules/agent-browser/bin/agent-browser-darwin-${arch}',
+        from: 'node_modules/@agent-browser/cli-darwin-${arch}/bin/agent-browser',
         to: 'agent-browser-darwin-${arch}'
       },
       {
@@ -706,6 +749,10 @@ module.exports = {
       {
         from: 'native/process-footprint-macos/.build/release/orca-process-footprint',
         to: 'MacOS/orca-process-footprint'
+      },
+      {
+        from: 'native/socket-owner-macos/.build/release/orca-socket-owner',
+        to: 'MacOS/orca-socket-owner'
       },
       // Nested executables belong in Contents/MacOS, where afterPack signs them before the app.
       {
@@ -742,7 +789,11 @@ module.exports = {
       entry: {
         // Why: Electron reports WM_CLASS=orca for the visible Linux window;
         // GNOME docks need an exact match to group it with orca-ide.desktop.
-        StartupWMClass: 'orca'
+        StartupWMClass: 'orca',
+        // Why: without GenericName/Keywords, searches like "coding" or "agent" miss Orca,
+        // and the bare name collides with the GNOME screen reader.
+        GenericName: 'IDE',
+        Keywords: 'IDE;agent;agents;AI;coding;terminal;git;worktree;'
       }
     },
     extraResources: [
@@ -761,7 +812,7 @@ module.exports = {
         to: 'bin/orca-ide'
       },
       {
-        from: 'node_modules/agent-browser/bin/agent-browser-linux-${arch}',
+        from: 'node_modules/@agent-browser/cli-linux-${arch}-gnu/bin/agent-browser',
         to: 'agent-browser-linux-${arch}'
       },
       {
@@ -773,7 +824,7 @@ module.exports = {
     // Keep local artifacts aligned with the release pipeline.
     target: ['AppImage', 'deb', 'rpm'],
     maintainer: 'stablyai',
-    category: 'Utility'
+    category: 'Development;IDE'
   },
   appImage: {
     artifactName: isLinuxArm64Release ? 'orca-linux-arm64.${ext}' : 'orca-linux.${ext}'

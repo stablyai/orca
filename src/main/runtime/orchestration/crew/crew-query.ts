@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { OrchestrationCoordinatorKey } from '../addressing/orchestration-caller-identity'
 import type { OrchestrationDb } from '../db/orchestration-db'
@@ -10,38 +11,41 @@ import {
 } from '../../../../shared/orchestration/approvals/worker-approval-payload'
 import { readApprovalReport } from '../workers/approvals/worker-approval-report'
 
-const nullable = z.string().nullable()
-export const CrewAssignment = z.object({
-  ordinal: z.number(),
-  id: z.string(),
-  run_id: z.string(),
-  task_id: z.string(),
-  assignee_handle: nullable,
-  assignee_pane_key: nullable,
-  assignee_orca_session_id: nullable,
-  creator_handle: nullable,
-  creator_pane_key: nullable,
-  creator_orca_session_id: nullable,
-  creator_dispatch_id: nullable,
-  status: z.string(),
-  completed_at: nullable,
-  spec: z.string(),
-  task_title: nullable,
-  display_name: nullable,
-  task_status: z.string(),
-  coordinator_handle: nullable,
-  coordinator_pane_key: nullable,
-  coordinator_session: nullable,
-  stage: nullable,
-  agent: nullable,
-  host_label: nullable,
-  assignee_process: nullable,
-  resource_incarnation: nullable,
-  resource_host_scope: nullable
-})
+const nullable = lazyZodSchema(() => z.string().nullable())
+export const CrewAssignment = lazyZodSchema(() =>
+  z.object({
+    ordinal: z.number(),
+    id: z.string(),
+    run_id: z.string(),
+    task_id: z.string(),
+    assignee_handle: nullable,
+    assignee_pane_key: nullable,
+    assignee_orca_session_id: nullable,
+    creator_handle: nullable,
+    creator_pane_key: nullable,
+    creator_orca_session_id: nullable,
+    creator_dispatch_id: nullable,
+    status: z.string(),
+    completed_at: nullable,
+    spec: z.string(),
+    task_title: nullable,
+    display_name: nullable,
+    task_status: z.string(),
+    coordinator_handle: nullable,
+    coordinator_pane_key: nullable,
+    coordinator_session: nullable,
+    stage: nullable,
+    agent: nullable,
+    host_label: nullable,
+    assignee_process: nullable,
+    resource_incarnation: nullable,
+    resource_host_scope: nullable
+  })
+)
 export type CrewAssignmentRow = z.infer<typeof CrewAssignment>
 
-const assignmentColumns = `d.rowid AS ordinal, d.id, d.run_id, d.task_id,
+// `+d.rowid`: the sort key must not steer the plan; a bare rowid makes SQLite scan for ORDER BY.
+const assignmentColumns = `+d.rowid AS ordinal, d.id, d.run_id, d.task_id,
   d.assignee_handle, d.assignee_pane_key, d.assignee_orca_session_id,
   d.creator_handle, d.creator_pane_key, d.creator_orca_session_id, d.creator_dispatch_id,
   d.status, d.completed_at, t.spec, t.task_title, t.display_name, t.status AS task_status,
@@ -90,13 +94,15 @@ export function readCrewAssignmentIds(db: OrchestrationDb, ids: string[]): CrewA
   )
 }
 
-const Traffic = z.object({
-  peer: z.string(),
-  direction: z.enum(['to', 'from']),
-  sequence: z.number(),
-  body: z.string(),
-  created_at: z.string()
-})
+const Traffic = lazyZodSchema(() =>
+  z.object({
+    peer: z.string(),
+    direction: z.enum(['to', 'from']),
+    sequence: z.number(),
+    body: z.string(),
+    created_at: z.string()
+  })
+)
 export type CrewTraffic = z.infer<typeof Traffic>
 
 // Only an agent's own words can be a row's latest line: Orca's failure notices (escalations), empty setup
@@ -109,7 +115,8 @@ const ADMITTED_TRAFFIC = `type <> 'heartbeat'
     AND json_type(payload, '$._orcaLifecycleRejection.code') IS 'text'
     AND json_type(payload, '$._orcaLifecycleRejection.reason') IS 'text')`
 
-/** Pair maxima follow enumeration, so a busy mailbox cannot crowd out its quieter peers. */
+/** Each peer's newest message per direction, so a row keeps the peer's last reply even after a newer send.
+ *  Pair maxima follow enumeration, so a busy mailbox cannot crowd out its quieter peers. */
 export function readCrewTraffic(
   db: OrchestrationDb,
   aliases: string[],
@@ -126,9 +133,10 @@ export function readCrewTraffic(
       SELECT from_handle AS peer, 'from' AS direction, sequence
       FROM messages WHERE to_handle IN (SELECT value FROM json_each(?))
         AND julianday(created_at) >= julianday(?) AND ${ADMITTED_TRAFFIC}
-    ), peers AS (SELECT peer, MAX(sequence) AS sequence FROM traffic GROUP BY peer)
+    ), peers AS (SELECT peer, direction, MAX(sequence) AS sequence FROM traffic GROUP BY peer, direction)
     SELECT traffic.peer, traffic.direction, traffic.sequence, winner.body, winner.created_at
-    FROM peers JOIN traffic ON traffic.peer = peers.peer AND traffic.sequence = peers.sequence
+    FROM peers JOIN traffic ON traffic.peer = peers.peer AND traffic.direction = peers.direction
+      AND traffic.sequence = peers.sequence
     JOIN messages winner ON winner.sequence = traffic.sequence
     ORDER BY traffic.sequence DESC
   `)

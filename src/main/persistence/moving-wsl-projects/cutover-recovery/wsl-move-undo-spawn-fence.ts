@@ -57,7 +57,3 @@ export function wslMoveUndoSpawnFencedResponse(
     _meta: { runtimeId: environment.runtimeId ?? null }
   }
 }
-
-export function resetWslMoveUndoSpawnFencesForTests(): void {
-  fences.clear()
-}

@@ -1,4 +1,5 @@
 import type { ComposerModel } from '../composer-model'
+import type { ComposerAgentRows } from '../card-projection/composer-agent-rows-target'
 
 type WorkspaceIdentityStateInput = Pick<
   ComposerModel,
@@ -14,7 +15,7 @@ type WorkspaceIdentityStateInput = Pick<
   | 'selectedRepoConnectionId'
   | 'selectedRepoRuntimeEnvironmentId'
   | 'settings'
->
+> & { agentLaunchWorkspace: ComposerAgentRows['target']['workspace'] | undefined }
 
 import { useState, useMemo, useCallback, type SetStateAction } from 'react'
 import type { CreateWorktreeArgs } from '../../../../../shared/worktree/create-types'
@@ -34,6 +35,8 @@ import {
 } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { useAppStore } from '@/store/index'
+import { useAgentMenuLaunchFacts } from '@/components/agent/launch-menu/agent-menu-launch-facts'
+import { useHostAgentMenuSettings } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 
 /** Older drafts lack naming intent; restore baseBranch as the branch pick it represented when saved. */
 export function resolveDraftBaseBranchNamesWorkspace(args: {
@@ -45,6 +48,7 @@ export function resolveDraftBaseBranchNamesWorkspace(args: {
 
 export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
   const {
+    agentLaunchWorkspace,
     initialBaseBranch,
     initialParentWorktreeId,
     initialLinearBranchName,
@@ -153,10 +157,14 @@ export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
   // Warn when fork PRs disable maintainer edits, before a rejected push surprises the user.
   const [forkPushWarning, setForkPushWarning] = useState<string | null>(null)
 
-  const disabledTuiAgentKey = (settings?.disabledTuiAgents ?? []).join('\u0000')
+  // The agent runs on the picker rows' host, so submit accepts exactly what those rows offer.
+  const hostFacts = useAgentMenuLaunchFacts(agentLaunchWorkspace ?? { kind: 'floating' })
+  const launchSettings = useHostAgentMenuSettings(hostFacts, settings, true, false).settings
+
+  const disabledTuiAgentKey = (launchSettings?.disabledTuiAgents ?? []).join('\u0000')
 
   const disabledTuiAgents = useMemo<TuiAgent[]>(
-    () => settings?.disabledTuiAgents ?? [],
+    () => launchSettings?.disabledTuiAgents ?? [],
     // Why: settings IPC clones arrays, so key on the disabled-agent content, not the array ref.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [disabledTuiAgentKey]

@@ -2,6 +2,8 @@ import { resolveHostCodexSessionSourceHome } from '../../../codex/history/rollou
 import { startSystemCodexSessionBridgeInBackground } from '../../../codex/history/bridges/codex-session-bridge'
 import { isCodexHistorySharedAcrossAccounts } from './codex-history-sharing'
 import {
+  getOrcaManagedCodexHomePath,
+  getSystemCodexHomePath,
   resolveOrcaManagedCodexHomePath,
   syncSystemCodexResourcesIntoManagedHome
 } from '../../../codex/configuration/homes/codex-home-paths'
@@ -44,7 +46,8 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
       const wslTarget = this.resolveWslDefaultTarget(target)
       const homePath = this.getWslCodexHomePathForSelection(wslTarget)
       this.startLegacyWslAuthDrain(wslTarget)
-      this.finishWslLaunchPreparation(wslTarget, homePath)
+      // No caller prepares a WSL launch synchronously; the async path awaits this sync.
+      void this.syncWslConfigAndGlobalInstructionsForLaunch(wslTarget, homePath)
       void this.prepareWslAccountHistory(wslTarget, homePath)
       return homePath
     }
@@ -69,7 +72,10 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
     this.syncForCurrentSelection(target, launchEnv)
     syncSystemCodexResourcesIntoManagedHome()
     if (options?.deferConfigSync) {
-      options.deferConfigSync(() => syncSystemConfigIntoManagedCodexHome())
+      options.deferConfigSync({
+        runtimeHomePath: getOrcaManagedCodexHomePath(),
+        systemHomePath: getSystemCodexHomePath()
+      })
     } else {
       syncSystemConfigIntoManagedCodexHome()
     }
@@ -125,10 +131,11 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
         if (!accountHome || `${accountHome}\0${shared}` === prepared) {
           break
         }
-        await this.prepareAccountHistory(accountHome)
+        await this.prepareAccountHistory(accountHome, { forLaunch: true })
         prepared = `${accountHome}\0${shared}`
       }
       this.prepareAllAccountHistoryInBackground()
+      this.importCodexHistoryInBackground()
       return this.prepareForCodexLaunch(target, launchEnv, options)
     }
     const wslTarget = this.resolveWslDefaultTarget(target)
@@ -147,7 +154,9 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
     await this.startLegacyWslAuthDrain(wslTarget, { throwOnFailure: true })
     // Codex must start on linked history (and the guest's sqlite_home line) in this home.
     await this.prepareWslAccountHistory(wslTarget, homePath)
-    this.finishWslLaunchPreparation(wslTarget, homePath)
+    // WSL moves aren't counted, but an install with only WSL homes still reports how many.
+    this.accountHistoryPasses.reportMoves()
+    await this.syncWslConfigAndGlobalInstructionsForLaunch(wslTarget, homePath)
     return homePath
   }
 

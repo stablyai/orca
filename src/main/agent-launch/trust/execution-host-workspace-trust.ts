@@ -12,6 +12,8 @@ import {
   markKimiWorkspaceTrusted
 } from './agent-trust-presets'
 import { awaitAgentTrustWriteWithinDeadline } from './agent-trust-write-deadline'
+import { getAntigravityTrustLedgerPath } from './antigravity-workspace-trust-ownership'
+import { runExclusivelyForCodexTrustConfig } from '../../codex/trust/toml/codex-trust-config-mutation-queue'
 import {
   type ClaudeTrustConfigTarget,
   grantClaudeWorkspaceTrust
@@ -137,11 +139,15 @@ export async function applyWorkspaceTrustOnThisHost(
         return
       }
     }
-    await awaitAgentTrustWriteWithinDeadline(writePreset(preset, workspacePath, host), {
-      preset,
-      workspacePath,
-      deadlineMs: host.deadlineMs
-    })
+    // Why: removals edit the same Antigravity files on the worker; the deadline bounds the wait
+    // behind them, and a late grant still runs in queue order.
+    const write = (): Promise<void> => writePreset(preset, workspacePath, host)
+    await awaitAgentTrustWriteWithinDeadline(
+      preset === 'antigravity'
+        ? runExclusivelyForCodexTrustConfig(getAntigravityTrustLedgerPath(), write)
+        : write(),
+      { preset, workspacePath, deadlineMs: host.deadlineMs }
+    )
   } catch (error) {
     console.warn(
       `[agent-trust] ${preset} trust for ${workspacePath} failed; the agent will ask`,

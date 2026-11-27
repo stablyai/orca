@@ -1,11 +1,28 @@
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
-import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { AntigravityChatSignInView } from '@/runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status'
-import type { AntigravityChatSignInPrompt } from '@/components/provider-accounts/antigravity-chat-runtime-sign-in-policy'
-import { chatSignInLine } from '@/components/provider-accounts/use-antigravity-chat-sign-in'
-import { openAntigravitySignInSettings } from '@/components/provider-accounts/open-antigravity-sign-in-settings'
+import { useAntigravityChatAuthDetection } from '@/runtime/provider-accounts/sign-in/antigravity-chat-auth-detection'
+import {
+  antigravityChatSignInPrompt,
+  isAntigravityGoogleMethod,
+  type AntigravityChatSignInPrompt
+} from '@/components/provider-accounts/antigravity-chat-runtime-sign-in-policy'
+import {
+  useAntigravityChatSignIn,
+  useAntigravityChatSignInControls
+} from '@/components/provider-accounts/use-antigravity-chat-sign-in'
+import { AntigravityChatSignInFlowPanel } from '@/components/provider-accounts/AntigravityChatSignInFlowPanel'
+import { useNativeChatAntigravityAuth } from '@/components/native-chat/antigravity-auth/native-chat-antigravity-auth'
+import { NativeChatAntigravitySignInButton } from '@/components/native-chat/antigravity-auth/NativeChatAntigravitySignInButton'
+import {
+  antigravityAuthFailureReason,
+  antigravityChatAuthAlternatives
+} from '@/components/native-chat/antigravity-auth/antigravity-chat-auth-choices'
+import {
+  antigravityAuthFailureLead,
+  antigravityFoundLine
+} from '@/components/native-chat/antigravity-auth/antigravity-auth-words'
 import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { NativeChatInstallTile } from './NativeChatInstallTile'
@@ -17,51 +34,108 @@ export type NativeChatSignInStripState = {
   host: RuntimeClientTarget
 }
 
+/** agy's Google sign-in a chat on `host` still needs; null for other hosts, or `host` null. Only
+ *  Google-method chats use agy's login, though a sign-in already running shows for every chat. */
+export function useAntigravityChatSignInStrip(
+  host: RuntimeClientTarget | null,
+  agent: AgentType
+): NativeChatSignInStripState | null {
+  const view = useAntigravityChatSignIn(host)
+  const method = useAntigravityChatAuthDetection(host)?.method
+  const prompt = host ? antigravityChatSignInPrompt(view) : null
+  if (!host || prompt === null) {
+    return null
+  }
+  return prompt === 'signingIn' || isAntigravityGoogleMethod(method)
+    ? { prompt, view, agent, host }
+    : null
+}
+
 export const nativeChatSignInTitle = (agentLabel: string, t: Translate = translate): string =>
   t('components.native-chat.signIn.title', 'Sign in to {{agent}} to start chatting', {
     agent: agentLabel
   })
 
-/** The install strip's sibling once the runtime is ready: sign-in happens in Settings, not here. */
+/** Why sign-in failed, in plain words when another method would get around it. */
+function failedLine(view: AntigravityChatSignInView, t: Translate): string {
+  const text = view.error || view.flow?.error || ''
+  const reason = antigravityAuthFailureReason({ text })
+  // The host's sentence says what to do (a code Google refused, a missing install).
+  return reason === 'noSubscription' || reason === 'ineligible'
+    ? antigravityAuthFailureLead(reason, t)
+    : text || t('accounts.antigravity.chatFailed', 'Sign-in failed. Try again.')
+}
+
+/** The install strip's sibling once agy is installed. One main control per state: Sign in with
+ *  Google (what else Orca found waits in its menu), or, while this client signs in, the box for
+ *  the code Google shows. A refused code returns here with its reason, ready to sign in again. */
 export function NativeChatSignInStrip(props: {
   state: NativeChatSignInStripState
   agentLabel: string
 }): React.JSX.Element {
   const t = useTranslate()
+  const auth = useNativeChatAntigravityAuth()
   const { prompt, view, agent, host } = props.state
+  const signIn = useAntigravityChatSignInControls({ owner: host, disabled: false })
   const failed = prompt === 'failed'
+  const alternatives = antigravityChatAuthAlternatives(auth?.detection ?? null)
+  const title = (
+    <p className="font-semibold text-foreground">{nativeChatSignInTitle(props.agentLabel, t)}</p>
+  )
+  const subLine = failed ? (
+    <p role="alert" className="mt-0.5 text-xs text-destructive">
+      {failedLine(view, t)}
+    </p>
+  ) : prompt === 'signingIn' ? (
+    <p
+      role="status"
+      aria-live="polite"
+      className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground"
+    >
+      <LoadingSpinner className="size-3 shrink-0" />
+      {signIn.line}
+    </p>
+  ) : (
+    <FoundLine alternatives={alternatives} />
+  )
   return (
     <div
       data-native-chat-install="strip"
-      className="flex items-center gap-3 rounded-xl border border-input bg-card px-3.5 py-3 text-sm shadow-xs"
+      className="flex items-start gap-3 rounded-xl border border-input bg-card px-3.5 py-3 text-sm shadow-xs"
     >
-      <NativeChatInstallTile agent={agent} failed={failed} large={false} />
+      <NativeChatInstallTile agent={agent} failed={false} large={false} />
       <div className="min-w-0 flex-1">
-        {prompt === 'signingIn' ? (
-          <p
-            role="status"
-            aria-live="polite"
-            className="flex items-center gap-2 font-semibold text-foreground"
-          >
-            <LoadingSpinner className="size-3.5" />
-            {chatSignInLine(view.flow, view.auth, view.openFailed, t)}
-          </p>
-        ) : failed ? (
-          <p role="alert" className="font-semibold text-destructive">
-            {t('accounts.antigravity.chatFailed', 'Sign-in failed. Try again.')}
-          </p>
+        {signIn.ownFlow ? (
+          <AntigravityChatSignInFlowPanel signIn={signIn} title={title} />
         ) : (
-          <p className="font-semibold text-foreground">
-            {nativeChatSignInTitle(props.agentLabel, t)}
-          </p>
+          <div className="flex min-h-9 items-center gap-3">
+            <div className="min-w-0 flex-1">
+              {title}
+              {subLine}
+            </div>
+            {/* Another window's sign-in shows only its status here. */}
+            {prompt === 'signingIn' ? null : (
+              <NativeChatAntigravitySignInButton
+                auth={auth}
+                alternatives={alternatives}
+                starting={signIn.pending}
+                disabled={signIn.signInDisabled}
+                onSignIn={signIn.start}
+              />
+            )}
+          </div>
         )}
       </div>
-      {/* A browser that didn't open still needs Copy link and Cancel, which live in Settings. */}
-      {prompt === 'signingIn' && !view.openFailed ? null : (
-        <Button size="sm" onClick={() => openAntigravitySignInSettings(host)}>
-          {t('accounts.antigravity.signInEllipsis', 'Sign in…')}
-        </Button>
-      )}
     </div>
   )
+}
+
+function FoundLine({
+  alternatives
+}: {
+  alternatives: ReturnType<typeof antigravityChatAuthAlternatives>
+}): React.JSX.Element | null {
+  const t = useTranslate()
+  const line = antigravityFoundLine(alternatives, t)
+  return line ? <p className="mt-0.5 text-xs text-muted-foreground">{line}</p> : null
 }

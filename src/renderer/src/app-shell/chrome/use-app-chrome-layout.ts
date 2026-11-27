@@ -9,6 +9,11 @@ import { useAppStore } from '../../store/index'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/workspace/identity/floating-workspace-id'
 import { selectActiveTerminalChromeState } from './active-terminal-chrome-selector'
 import {
+  APP_RAIL_WIDTH,
+  selectAppRailVisible,
+  selectRailPageHidesWorkspaceList
+} from '../../components/app-rail/app-rail-layout'
+import {
   hasRequestedBackgroundTerminalWorktreeMount,
   subscribeBackgroundTerminalWorktreeMountRequests
 } from '../../components/terminal/workspace-mounting/background-terminal-worktree-mount'
@@ -18,12 +23,17 @@ export type AppChromeLayout = ReturnType<typeof useAppChromeLayout>
 /** Derive titlebar, tab-strip ownership and surface mount decisions from store state. */
 export function useAppChromeLayout() {
   const activeView = useAppStore((s) => s.activeView)
-  const sidebarOpen = useAppStore((s) => s.sidebarOpen)
+  const savedSidebarOpen = useAppStore((s) => s.sidebarOpen)
+  const sidebarWidth = useAppStore((s) => s.sidebarWidth)
+  // With the rail on, a rail page fills the width: the list collapses for layout only and the saved state is kept.
+  const listHiddenByRailPage = useAppStore(selectRailPageHidesWorkspaceList)
+  const sidebarOpen = savedSidebarOpen && !listHiddenByRailPage
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const rightSidebarExplorerView = useAppStore((s) => s.rightSidebarExplorerView)
   const isFullScreen = useAppStore((s) => s.isFullScreen)
   const settings = useAppStore((s) => s.settings)
+  const appRailVisible = useAppStore(selectAppRailVisible)
   const activePendingCreationId = useAppStore((s) => s.activePendingCreationId)
   // Booleans only: App owns this hook, and raw active ids would re-render the whole app on every workspace switch.
   const { hasActiveWorktree, hasTabBar, activeTabCanExpand, effectiveActiveTabExpanded } =
@@ -112,7 +122,11 @@ export function useAppChromeLayout() {
     activeView,
     activePendingCreationId,
     activeTabCanExpand,
-    collapsedSidebarHeaderWidth,
+    appRailVisible,
+    // Tab strips start right of the rail, so they only reserve the header's overhang past it.
+    collapsedSidebarHeaderWidth: appRailVisible
+      ? Math.max(0, collapsedSidebarHeaderWidth - APP_RAIL_WIDTH)
+      : collapsedSidebarHeaderWidth,
     creationLayoutActive,
     hasActiveWorktree,
     isFullScreen,
@@ -127,7 +141,12 @@ export function useAppChromeLayout() {
     showRightSidebarControls: canShowRightSidebarForView(activeView),
     showTitlebarAppName: settings?.showTitlebarAppName !== false,
     showTitlebarExpandButton: workspaceChromeActive && !hasTabBar && effectiveActiveTabExpanded,
+    // Whether the list shows (the saved state, except collapsed on a rail page).
     sidebarOpen,
+    // The user's saved choice and width; rail pages size the titlebar's left segment from them.
+    savedSidebarOpen,
+    sidebarWidth,
+    listHiddenByRailPage,
     stackedSidebarOpen,
     // Retained workbench panes need a separate visibility condition.
     terminalWorkbenchVisible: workspaceChromeActive,

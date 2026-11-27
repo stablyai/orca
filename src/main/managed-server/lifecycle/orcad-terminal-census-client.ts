@@ -92,7 +92,7 @@ export async function requestOrcadTerminalCensus(
       undefined
     )
     return response.ok
-      ? OrcadTerminalCensusSchema.parse(response.result)
+      ? { ...OrcadTerminalCensusSchema.parse(response.result), answered: true }
       : UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
   } catch {
     return UNVERIFIABLE_ORCAD_TERMINAL_CENSUS

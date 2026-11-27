@@ -117,7 +117,3 @@ export async function checkHelperSignatures(
   ])
   return { live, diskCopy }
 }
-
-export function resetHelperSignatureChecksForTests(): void {
-  appRequirement = null
-}

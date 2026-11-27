@@ -13,7 +13,12 @@ import {
 } from '../../../claude/command-catalog/claude-at-rest-commands'
 import type { ClaudeCommandCatalogProbe } from '../../../claude/command-catalog/claude-command-catalog-probe'
 import { openClaudeStreamJsonConnection } from '../../../claude/claude-stream-json-connection'
-import type { ClaudeCliFlagSupport } from '../../../claude/cli-capabilities/claude-cli-flag-support'
+import {
+  CLAUDE_MCP_CONFIG_FLAG,
+  claudeManagedSettingsRefuse,
+  type ClaudeCliFlagSupport
+} from '../../../claude/cli-capabilities/claude-cli-flag-support'
+import { noteClaudeMcpConfigRefused } from '../../../mcp-servers/mcp-agent-problems'
 import { prewarmClaudeCliFlags } from '../../../claude/cli-capabilities/claude-cli-flag-prewarm'
 
 export type StructuredClaudeRuntimeAdapterDeps = {
@@ -37,6 +42,7 @@ export type StructuredClaudeRuntimeAdapterDeps = {
   readProcessStartTime?: ClaudeStructuredSessionAdapterDeps['readProcessStartTime']
   onLifecycleEvent: (event: StructuredAgentSessionLifecycleEvent) => void
   onDispatchSettledLate?: ClaudeStructuredSessionAdapterDeps['onDispatchSettledLate']
+  onUserRenamed?: ClaudeStructuredSessionAdapterDeps['onUserRenamed']
   onChildWorkEvidence?: ClaudeStructuredSessionAdapterDeps['onChildWorkEvidence']
   logger?: ClaudeStructuredSessionAdapterDeps['logger']
 }
@@ -136,6 +142,7 @@ export function createStructuredClaudeRuntimeAdapter(
       }
     },
     ...(deps.onDispatchSettledLate ? { onDispatchSettledLate: deps.onDispatchSettledLate } : {}),
+    ...(deps.onUserRenamed ? { onUserRenamed: deps.onUserRenamed } : {}),
     ...(deps.onChildWorkEvidence ? { onChildWorkEvidence: deps.onChildWorkEvidence } : {}),
     ...(deps.logger ? { logger: deps.logger } : {}),
     ...openClaudeConnectionOf(deps),
@@ -164,10 +171,14 @@ export function openClaudeConnectionOf(
               {
                 command: launch.pathToClaudeCodeExecutable,
                 prefixArgs: launch.prefixArgs,
-                cwd: launch.cwd
+                cwd: launch.cwd,
+                env: launch.env ?? {}
               },
               args[0]
             )
+            if (claudeManagedSettingsRefuse(args[0], CLAUDE_MCP_CONFIG_FLAG.option)) {
+              noteClaudeMcpConfigRefused(true)
+            }
             handlers.onExit?.(...args)
           }
         },

@@ -1,6 +1,8 @@
 // Pre-handoff gate: runs the checks a change's paths need, in parallel, printing failures in full.
 import { execFileSync, spawnSync } from 'node:child_process'
-import { existsSync, readdirSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { setMaxListeners } from 'node:events'
+import { createRequire } from 'node:module'
 import { availableParallelism } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
@@ -11,6 +13,11 @@ import {
   readPassHash,
   writePassHash
 } from './check-changed-pass-cache.mjs'
+import {
+  importerPattern,
+  isUnitTestFile,
+  selectImportingTests
+} from './check-changed-direct-tests.mjs'
 import { planChangedChecks } from './check-changed-selection.mjs'
 import { resolveOxcCliInvocation } from '../../tool-invocation/oxc-cli-invocation.mjs'
 import { resolvePnpmCliInvocation } from '../../tool-invocation/pnpm-cli-invocation.mjs'
@@ -28,6 +35,7 @@ const ANTI_SLOP_ROOTS = ['src/', 'config/', 'tests/', 'mobile/']
 function parseArgs(argv) {
   const options = {
     force: false,
+    related: false,
     base: null,
     maxWorkers: null,
     stepTimeoutMs: DEFAULT_STEP_TIMEOUT_MINUTES * 60_000
@@ -37,6 +45,8 @@ function parseArgs(argv) {
       continue
     } else if (argument === '--force') {
       options.force = true
+    } else if (argument === '--related') {
+      options.related = true
     } else if (argument.startsWith('--base=')) {
       options.base = argument.slice('--base='.length)
     } else if (/^--max-?workers=\d+$/i.test(argument)) {
@@ -45,7 +55,7 @@ function parseArgs(argv) {
       options.stepTimeoutMs = Number(argument.split('=')[1]) * 60_000
     } else {
       throw new Error(
-        `Unknown option ${argument}. Use --force, --base=<ref>, --maxWorkers=<n>, --timeout=<minutes>.`
+        `Unknown option ${argument}. Use --force, --related, --base=<ref>, --maxWorkers=<n>, --timeout=<minutes>.`
       )
     }
   }
@@ -54,6 +64,16 @@ function parseArgs(argv) {
 
 function git(root, args) {
   return execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim()
+}
+
+function gitShow(root, spec) {
+  const result = spawnSync('git', ['show', spec], {
+    cwd: root,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+    stdio: ['ignore', 'pipe', 'ignore']
+  })
+  return result.status === 0 ? result.stdout : null
 }
 
 function resolveMergeBase(root, requested) {
@@ -95,6 +115,62 @@ function fitsCommandLine(files) {
   return files.reduce((total, file) => total + file.length + 1, 0) <= MAX_PATH_ARGUMENT_CHARS
 }
 
+function chunkForCommandLine(files) {
+  const chunks = [[]]
+  let length = 0
+  for (const file of files) {
+    if (length + file.length + 1 > MAX_PATH_ARGUMENT_CHARS && chunks.at(-1).length > 0) {
+      chunks.push([])
+      length = 0
+    }
+    chunks.at(-1).push(file)
+    length += file.length + 1
+  }
+  return chunks
+}
+
+// Changed tests plus tests that import a changed module; transitive fan-out stays with CI.
+function selectDirectTests(root, related) {
+  const direct = new Set(related.filter(isUnitTestFile))
+  const sources = related.filter((file) => !isUnitTestFile(file))
+  if (sources.length === 0) {
+    return [...direct]
+  }
+  const grep = spawnSync(
+    'git',
+    [
+      'grep',
+      '-l',
+      '-z',
+      '-E',
+      '-e',
+      importerPattern(sources),
+      '--',
+      '*.test.ts',
+      '*.test.tsx',
+      '*.test.mts',
+      '*.test.cts',
+      '*.test.js',
+      '*.test.mjs',
+      '*.test.cjs',
+      '*.test.jsx'
+    ],
+    { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }
+  )
+  // Why: status 1 means no match; anything else is a grep failure, so fall back to the import graph.
+  if (grep.status !== 0 && grep.status !== 1) {
+    return null
+  }
+  const candidates = (grep.stdout ?? '')
+    .split('\0')
+    .filter(Boolean)
+    .map((file) => [file, readFileSync(path.join(root, file), 'utf8')])
+  for (const file of selectImportingTests(sources, candidates)) {
+    direct.add(file)
+  }
+  return [...direct]
+}
+
 // Why before importing @orca/process-host: its dist is what this builds, and a cache hit skips both.
 function buildWorkspacePackages(root, env) {
   const pnpm = resolvePnpmCliInvocation()
@@ -111,7 +187,7 @@ function buildWorkspacePackages(root, env) {
   }
 }
 
-function buildTasks(root, plan, { files, mergeBase, maxWorkers, bun }) {
+function buildTasks(root, plan, { files, mergeBase, maxWorkers, bun, transitive }) {
   const node = process.execPath
   const oxlint = resolveOxcCliInvocation('oxlint', 'oxlint', root)
   const oxfmt = resolveOxcCliInvocation('oxfmt', 'oxfmt', root)
@@ -134,7 +210,10 @@ function buildTasks(root, plan, { files, mergeBase, maxWorkers, bun }) {
   }
   const related = plan.unitTests.related.filter((file) => existsSync(path.join(root, file)))
   const colocated = plan.unitTests.colocated.filter((file) => existsSync(path.join(root, file)))
-  if (related.length > 0 || colocated.length > 0) {
+  const direct = transitive ? null : selectDirectTests(root, related)
+  const explicit = [...new Set([...(direct ?? []), ...colocated])].sort()
+  const useRelated = direct === null && related.length > 0
+  if (useRelated || explicit.length > 0) {
     const vitest = (selection) =>
       step(node, [
         'config/scripts/test-runtime/execution-policy/run-vitest.mjs',
@@ -145,13 +224,13 @@ function buildTasks(root, plan, { files, mergeBase, maxWorkers, bun }) {
         `--maxWorkers=${maxWorkers ?? DEFAULT_VITEST_MAX_WORKERS}`
       ])
     tasks.push({
-      name: 'unit tests',
+      name: useRelated ? 'unit tests (related)' : 'unit tests',
       steps: [
         step(node, [
           'config/scripts/native-build/node-addons/ensure-native-runtime.mjs',
           '--runtime=node'
         ]),
-        ...(related.length > 0
+        ...(useRelated
           ? [
               vitest(
                 fitsCommandLine(related)
@@ -160,7 +239,9 @@ function buildTasks(root, plan, { files, mergeBase, maxWorkers, bun }) {
               )
             ]
           : []),
-        ...(colocated.length > 0 ? [vitest(['run', ...colocated])] : [])
+        ...chunkForCommandLine(explicit)
+          .filter((chunk) => chunk.length > 0)
+          .map((chunk) => vitest(['run', ...chunk]))
       ]
     })
   }
@@ -234,6 +315,21 @@ function buildTasks(root, plan, { files, mergeBase, maxWorkers, bun }) {
   return tasks
 }
 
+function loadAdmittedProcessHost(root, signal) {
+  // The runner also supervises the build of process-host's own dist.
+  const packageRequire = createRequire(path.join(root, 'src/packages/process-host/package.json'))
+  const { require: loadSource } = packageRequire('tsx/cjs/api')
+  const supervisor = loadSource('./src/run-process.ts', packageRequire.resolve('./package.json'))
+  return {
+    runProcessSync: supervisor.runProcessSync,
+    runProcess: (spec, capture) =>
+      supervisor.runProcess(
+        { ...spec, signal, terminationBarrier: 'wait-for-posix-group' },
+        capture
+      )
+  }
+}
+
 async function runTask(task, { root, env, runProcess, stepTimeoutMs }) {
   const startedAt = performance.now()
   let output = ''
@@ -262,12 +358,12 @@ async function runTask(task, { root, env, runProcess, stepTimeoutMs }) {
   return { task, ok: true, output, elapsed: seconds(startedAt) }
 }
 
-async function runPool(tasks, concurrency, run) {
+async function runPool(tasks, concurrency, run, signal) {
   const results = []
   let next = 0
   await Promise.all(
     Array.from({ length: Math.min(concurrency, tasks.length) }, async () => {
-      while (next < tasks.length) {
+      while (!signal?.aborted && next < tasks.length) {
         results.push(await run(tasks[next++]))
       }
     })
@@ -276,8 +372,47 @@ async function runPool(tasks, concurrency, run) {
 }
 
 export async function main(root, argv) {
-  const startedAt = performance.now()
   const options = parseArgs(argv)
+  if (process.platform === 'win32') {
+    return runChangedChecks(root, options)
+  }
+  const setting = spawnSync(
+    'git',
+    ['config', '--local', '--bool', '--get', 'orca.serializeChangedChecks'],
+    {
+      cwd: root,
+      encoding: 'utf8'
+    }
+  )
+  if (setting.status === 1 || setting.stdout?.trim() === 'false') {
+    return runChangedChecks(root, options)
+  }
+  if (setting.status !== 0) {
+    throw new Error(setting.stderr || 'Could not read Orca check settings')
+  }
+  const { acquireChangedCheckSlot } = await import('./check-changed-slot.mjs')
+  const release = await acquireChangedCheckSlot()
+  const controller = new AbortController()
+  setMaxListeners(0, controller.signal)
+  const interrupt = () => controller.abort(130)
+  const terminate = () => controller.abort(143)
+  const hangup = () => controller.abort(129)
+  process.on('SIGINT', interrupt)
+  process.on('SIGTERM', terminate)
+  process.on('SIGHUP', hangup)
+  try {
+    const code = await runChangedChecks(root, options, controller.signal)
+    return controller.signal.aborted ? controller.signal.reason : code
+  } finally {
+    process.off('SIGINT', interrupt)
+    process.off('SIGTERM', terminate)
+    process.off('SIGHUP', hangup)
+    release()
+  }
+}
+
+async function runChangedChecks(root, options, signal) {
+  const startedAt = performance.now()
   const { ref, mergeBase } = resolveMergeBase(root, options.base)
   const files = collectChangedFiles(root, mergeBase)
   if (files.length === 0) {
@@ -285,7 +420,7 @@ export async function main(root, argv) {
     return 0
   }
   const hash = computePassHash(root, mergeBase)
-  if (!options.force && readPassHash(root) === hash) {
+  if (!options.force && !options.related && readPassHash(root) === hash) {
     console.log('Nothing changed since last passing run.')
     return 0
   }
@@ -298,7 +433,14 @@ export async function main(root, argv) {
       } catch {
         return []
       }
-    }
+    },
+    // Working-tree and merge-base text; null where the file is absent on that side.
+    readVersions: (file) => [
+      existsSync(path.join(root, file)) && statSync(path.join(root, file)).isFile()
+        ? readFileSync(path.join(root, file), 'utf8')
+        : null,
+      gitShow(root, `${mergeBase}:${file}`)
+    ]
   })
   const env = {
     ...process.env,
@@ -310,13 +452,33 @@ export async function main(root, argv) {
   if (process.stdout.isTTY) {
     delete env.NO_COLOR
   }
+  const admittedHost = signal ? loadAdmittedProcessHost(root, signal) : null
   if (
     plan.typecheckProjects.length > 0 ||
     plan.unitTests.related.length + plan.unitTests.colocated.length > 0
   ) {
-    buildWorkspacePackages(root, env)
+    if (admittedHost) {
+      const result = await admittedHost.runProcess(
+        {
+          program: process.execPath,
+          args: ['config/scripts/workspace-package-build/build-workspace-packages.mjs'],
+          cwd: root,
+          env,
+          timeoutMs: null
+        },
+        'tail'
+      )
+      if (signal.aborted) {
+        return signal.reason
+      }
+      if (result.code !== 0) {
+        throw new Error(tail(result.stdout + result.stderr) || 'Workspace package build failed.')
+      }
+    } else {
+      buildWorkspacePackages(root, env)
+    }
   }
-  const { runProcess, runProcessSync } = await import('@orca/process-host')
+  const { runProcess, runProcessSync } = admittedHost ?? (await import('@orca/process-host'))
   const { resolvePinnedBunExecutable } =
     await import('../../tool-invocation/pinned-bun-executable.mjs')
   const bun = () => resolvePinnedBunExecutable(root, runProcessSync) ?? 'bun'
@@ -324,7 +486,8 @@ export async function main(root, argv) {
     files,
     mergeBase,
     maxWorkers: options.maxWorkers,
-    bun
+    bun,
+    transitive: options.related
   })
   console.log(
     `check:changed: ${files.length} changed file(s) since ${ref} (${mergeBase.slice(0, 10)}); running ${tasks.length} check(s).`
@@ -339,22 +502,30 @@ export async function main(root, argv) {
     console.log(`… ${seconds(startedAt)} elapsed; running: ${active.join(', ')}`)
   }, HEARTBEAT_MS)
   heartbeat.unref()
-  const results = await runPool(tasks, concurrency, async (task) => {
-    running.set(task.name, performance.now())
-    const result = await runTask(task, {
-      root,
-      env,
-      runProcess,
-      stepTimeoutMs: options.stepTimeoutMs
-    })
-    running.delete(task.name)
-    if (result.ok) {
-      console.log(`✓ ${task.name} (${result.elapsed})`)
-    } else {
-      console.error(`\n✗ ${task.name} (${result.elapsed})\n${tail(result.output)}`)
-    }
-    return result
-  }).finally(() => clearInterval(heartbeat))
+  const results = await runPool(
+    tasks,
+    concurrency,
+    async (task) => {
+      running.set(task.name, performance.now())
+      const result = await runTask(task, {
+        root,
+        env,
+        runProcess,
+        stepTimeoutMs: options.stepTimeoutMs
+      })
+      running.delete(task.name)
+      if (result.ok) {
+        console.log(`✓ ${task.name} (${result.elapsed})`)
+      } else {
+        console.error(`\n✗ ${task.name} (${result.elapsed})\n${tail(result.output)}`)
+      }
+      return result
+    },
+    signal
+  ).finally(() => clearInterval(heartbeat))
+  if (signal?.aborted) {
+    return signal.reason
+  }
   const failed = results.filter((result) => !result.ok)
   if (failed.length > 0) {
     console.error(

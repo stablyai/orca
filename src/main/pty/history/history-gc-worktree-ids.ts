@@ -1,5 +1,6 @@
 import type { Store } from '../../persistence/loading-store/store'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/workspace/identity/floating-workspace-id'
 import { isRepoOnCatalogHost } from '../../../shared/execution-host/execution-host'
 import { getOtherProfileWorktreeIdsForHistoryGc } from '../../orca-profiles/catalog/other-profile-workspace-catalog'
 import {
@@ -39,6 +40,10 @@ export function getKnownWorktreeIdsForHistoryGc(
   }
   for (const id of others.ids) {
     live.add(id)
+  }
+  // The floating terminal has no worktree row; skip it when empty so the prune-nothing guard holds.
+  if (live.size > 0) {
+    live.add(FLOATING_TERMINAL_WORKTREE_ID)
   }
   return {
     liveWorktreeIds: live,

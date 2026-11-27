@@ -88,7 +88,7 @@ export function triggerRunEvent(
   delivery: Pick<TriggerDelivery, 'automationId' | 'triggerId' | 'botId' | 'event'> &
     Partial<Pick<TriggerDelivery, 'conversation' | 'inThread' | 'owner'>>
 ): AutomationRunEvent | null {
-  // The PR's head is only for telling a bot worker's own pull request apart (own-pr-trigger-guard.ts).
+  // The PR's head is not part of the run's event.
   const { actorId, fromOwner, onOwnerMessage, webhook, pr: _head, ...event } = delivery.event
   const automation = automations.find((entry) => entry.id === delivery.automationId)
   const bot = bots.find((entry) => entry.id === delivery.botId)
@@ -140,4 +140,26 @@ export function triggerRunEvent(
         }
       : {})
   }
+}
+
+/** A trigger delivery's run: a hook's call through its ledger, any other event straight to its
+ *  automation. False when no rule here takes it. */
+export async function runTriggerDelivery(
+  deps: {
+    automations: readonly Pick<Automation, 'id' | 'bot' | 'on'>[]
+    bots: readonly Pick<Bot, 'id'>[]
+    webhook: (delivery: TriggerDelivery, event: AutomationRunEvent) => boolean | Promise<boolean>
+    run: (automationId: string, event: AutomationRunEvent) => Promise<unknown>
+  },
+  delivery: TriggerDelivery
+): Promise<boolean> {
+  const event = triggerRunEvent(deps.automations, deps.bots, delivery)
+  if (!event) {
+    return false
+  }
+  // Its ledger, not the run, confirms a call.
+  if (event.source === 'webhook') {
+    return deps.webhook(delivery, event)
+  }
+  return Boolean(await deps.run(delivery.automationId, event))
 }

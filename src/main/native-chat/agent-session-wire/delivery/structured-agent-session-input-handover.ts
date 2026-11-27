@@ -7,6 +7,7 @@ import type { AgentJournalSubmission } from '../../../../shared/agent-session/jo
 import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import { continuingStructuredAgentSessionInput } from './structured-agent-session-handing-over'
 import type { StructuredAgentSessionDeliveryLoopDeps } from './structured-agent-session-delivery-loop-deps'
+import { awaitToolsRefresh } from './structured-agent-session-delivery-loop-deps'
 import type {
   StructuredAgentSessionHostSession,
   StructuredAgentSessionProviderChild
@@ -26,6 +27,10 @@ import { structuredAgentSessionEndedChildFailure } from '../termination/structur
 import { sameProviderChild } from '../host/structured-agent-session-provider-child'
 import { previousExitUnverifiableRefusal } from '../termination/structured-agent-session-child-close'
 
+const neverReachedAgent = () => ({
+  failure: agentSessionFailureFact('restartFailed', { neverReachedAgent: true })
+})
+
 type StartFailure = NonNullable<Awaited<ReturnType<typeof startThatFailedWhileQueued>>>
 
 /** The scheduler's selected input keeps one handover while its exact child binding changes. */
@@ -42,8 +47,9 @@ export async function beginStructuredAgentSessionInputHandover(
   const ownsInput = () => deps.sessions.get(sessionId) === session
   const isBound = () => deps.sessions.get(sessionId) === session && session.child === binding
   const isCurrent = () => isBound() && !binding.close
-  const toolsDue = async () =>
-    (await deps.launchToolsRefreshDue?.(sessionId, next.clientMessageId)) === true
+  const toolsRefresh = async () =>
+    (await deps.launchToolsRefreshDue?.(sessionId, next.clientMessageId)) ?? 'not-due'
+  const toolsDue = async () => (await toolsRefresh()) === 'due'
   const validate = (signal?: AbortSignal) =>
     assertStructuredAgentSessionInputReady({
       deps,
@@ -95,7 +101,8 @@ export async function beginStructuredAgentSessionInputHandover(
           }
           // A new turn after Orca changed the bot's tools starts a child that has them; a send that
           // joins work still owed goes to this child with the tools it has.
-          if (await toolsDue()) {
+          // Pending too: an outgrown kept child gets no input until it can be replaced.
+          if ((await toolsRefresh()) !== 'not-due') {
             return { kind: 'acquire' as const, reason: 'tools' as const }
           }
           const retained = await deps.retainedWork?.(sessionId, next.clientMessageId)
@@ -127,11 +134,16 @@ export async function beginStructuredAgentSessionInputHandover(
             fence,
             startKey
           )
+        // Never reached a child; a kept child lacking the launch's tools gets nothing, so a retry works.
+        const restartFailed = () =>
+          deps.serialize(sessionId, () => failed(neverReachedAgent(), binding.fence))
         try {
           const mode = await waitForPromiseWithSignal(
             deps.serialize(sessionId, async () => {
               await validate(signal)
-              return reason === 'tools' ? null : deps.immediatePermission?.(sessionId)
+              return reason === 'tools' || reason === 'replaced'
+                ? null
+                : deps.immediatePermission?.(sessionId)
             }),
             signal
           )
@@ -154,14 +166,13 @@ export async function beginStructuredAgentSessionInputHandover(
             ))
           ) {
             // oxlint-disable-next-line typescript/return-await -- this already records the failure; the catch must not record a second one
-            return deps.serialize(sessionId, () =>
-              failed(
-                {
-                  failure: agentSessionFailureFact('restartFailed', { neverReachedAgent: true })
-                },
-                binding.fence
-              )
-            )
+            return restartFailed()
+          }
+          // Outside the chat's lane, bounded: the kept child's replay acks on its own meanwhile.
+          const held = reason === 'tools' ? await awaitToolsRefresh(toolsRefresh, signal) : null
+          if (held === 'pending') {
+            // oxlint-disable-next-line typescript/return-await -- this already records the failure; the catch must not record a second one
+            return restartFailed()
           }
           const claim = await waitForPromiseWithSignal(
             deps.serialize(sessionId, async () => {
@@ -178,7 +189,9 @@ export async function beginStructuredAgentSessionInputHandover(
                 (!!latest &&
                   (deps.adapter.permissionModeRequiresAcquisition?.(sessionId, latest) ??
                     latest !== binding.permissionMode))
-              const acquire = reason === 'tools' ? await toolsDue() : permissionAcquire
+              // Past the hold a replay stays acked, so only 'due' (never 'pending') replaces a child.
+              const acquire =
+                reason === 'tools' ? await toolsDue() : reason === 'replaced' || permissionAcquire
               if (!acquire) {
                 return null
               }

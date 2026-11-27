@@ -11,7 +11,10 @@ import type { AgentStartupShell } from '../../../shared/agent-launch/startup/tui
 
 export function orchestrationMutationRecoveryError(
   error: unknown,
-  { unsent = false }: { unsent?: boolean } = {}
+  {
+    unsent = false,
+    flags
+  }: { unsent?: boolean; flags?: ReadonlyMap<string, string | boolean> } = {}
 ): unknown {
   if (!(error instanceof RuntimeClientError) || !isUnknownMutationOutcomeCode(error.code)) {
     return error
@@ -34,23 +37,27 @@ export function orchestrationMutationRecoveryError(
     ? [...originalCommand, '--retry-request', requestId]
     : undefined
   const executable = originalCommand?.[0] ?? resolveOrchestrationCliExecutable()
+  // A command forwarded to a paired server keeps its receipt there; else ask the Orca it chose.
+  const target = recoveryTargetArgs(flags)
+  const receiptTarget = typeof data?.server === 'string' ? [...target, '--on', data.server] : target
   // Without a dispatch id, query by request id to inspect the outcome before retrying a mutation.
-  const queryCommand = dispatchId
-    ? [executable, 'orchestration', 'worker-show', '--dispatch', dispatchId, '--json']
+  const query = dispatchId
+    ? [executable, 'orchestration', 'worker-show', '--dispatch', dispatchId, ...target, '--json']
     : [
         executable,
         'orchestration',
         'request-show',
         '--request',
         requestId,
-        // A command forwarded to a paired server keeps its receipt there.
-        ...(typeof data?.server === 'string' ? ['--on', data.server] : []),
+        ...receiptTarget,
         '--json'
       ]
+  // Without the pairing code it would ask a different Orca, whose answer would mislead.
+  const queryCommand = typeof flags?.get('pairing-code') === 'string' ? undefined : query
   const recovery = {
     orchestrationRequestId: requestId,
     ...(dispatchId ? { dispatchId } : {}),
-    queryCommand,
+    ...(queryCommand ? { queryCommand } : {}),
     ...(retryCommand ? { retryCommand } : {}),
     recoveryBlocked: !retryCommand,
     disposition: inProgress ? 'in_progress' : unsent ? 'not_sent' : 'outcome_unknown',
@@ -73,7 +80,12 @@ export function orchestrationMutationRecoveryError(
         ? [
             `Once Orca responds, run ${retryCommand ? renderCommand(retryCommand) : `the same original command with --retry-request ${requestId}`} from this same terminal. --retry-request keeps the same operation identity, so the rerun cannot apply it twice.`
           ]
-        : [`Run ${renderCommand(queryCommand)} before retrying.`, retryStep]),
+        : [
+            queryCommand
+              ? `Run ${renderCommand(queryCommand)} before retrying.`
+              : `Run ${renderCommand(query)} with the same --pairing-code this command used (it is not repeated here) before retrying.`,
+            retryStep
+          ]),
     ...(readsStdin ? ['Pipe the same input into the retry again; it reads stdin.'] : [])
   ]
   const message = [
@@ -108,6 +120,15 @@ export function orchestrationMutationRecoveryError(
     })
   }
   return new RuntimeClientError(error.code, message.join('\n'), recoveredData)
+}
+
+function recoveryTargetArgs(flags?: ReadonlyMap<string, string | boolean>): string[] {
+  // An outer --on send goes through the caller's Orca, suppressing any ambient pairing.
+  if (flags?.has('on')) {
+    return ['--environment', 'local']
+  }
+  const environment = flags?.get('environment')
+  return typeof environment === 'string' ? ['--environment', environment] : []
 }
 
 function isUnknownMutationOutcomeCode(code: string): boolean {
@@ -224,8 +245,14 @@ function resolveRecoveryShell(
   )
 }
 
+// Characters literal in cmd, batch shims and CommandLineToArgvW.
+const SAFE_WINDOWS_CMD_TOKEN = /^[A-Za-z0-9_.-]+$/
+
 function quoteRecoveryArgument(value: string, shell: AgentStartupShell): string {
   if (shell === 'cmd') {
+    if (SAFE_WINDOWS_CMD_TOKEN.test(value)) {
+      return value
+    }
     // cmd expands %VAR% inside double quotes; its argv encoder must escape percent pairs too.
     return quoteWindowsCmdArgument(value)
   }

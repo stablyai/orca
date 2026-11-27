@@ -1,12 +1,22 @@
 import { existsSync } from 'node:fs'
 import {
+  hashKeyedJsonRow,
   planFullRows,
   planRowPatch,
   parseOrNull,
   receiptNames,
+  type KeyedJsonRow,
+  type KeyedJsonRowCacheOptions,
+  type KeyedJsonRowLoad,
+  type RowWriteOptions,
   type StoredRow
 } from './keyed-json-row-plan'
-export { parseKeyedJsonRows } from './keyed-json-row-plan'
+export {
+  parseKeyedJsonRows,
+  type KeyedJsonRow,
+  type KeyedJsonRowCacheOptions,
+  type KeyedJsonRowLoad
+} from './keyed-json-row-plan'
 import SyncDatabase from '../sync-database'
 import {
   openVersionedCacheDatabase,
@@ -15,36 +25,7 @@ import {
 import { hardenSqliteDatabaseFiles } from '../harden-database-files'
 import { classifyRowCacheFailure } from './row-cache-failure'
 import { readLegacyJsonSource, removeLegacyJsonSource } from './legacy-json-source'
-
-export type KeyedJsonRow = { key: string; json: string }
-
-export type KeyedJsonRowCacheOptions = {
-  schemaVersion: number
-  /** Lock wait per call. Main-thread callers keep it short and retry later instead. */
-  busyTimeoutMs?: number
-  /** False opens and closes the database per call, so no handle outlives it (profile moves). */
-  holdConnection?: boolean
-  /** JSON file older builds wrote; see load(). */
-  legacyPath?: string
-}
-
-/**
- * What a store hydrates at startup.
- * - rows: the stored rows (no older-build file, or one already imported or rejected).
- * - import: an older build's file is newer than the rows; save `value` with `receipt`.
- * - unavailable: the rows or the file cannot be read now. The store must neither hydrate a
- *   replacement nor save over rows it never read; `legacy` is the file's value if it was read.
- */
-export type KeyedJsonRowLoad<T> =
-  | { kind: 'rows'; rows: KeyedJsonRow[] }
-  | { kind: 'import'; value: T; receipt: string; rows: KeyedJsonRow[] }
-  | { kind: 'unavailable'; error: unknown; legacy?: T }
-
-type RowWriteOptions = {
-  importReceipt?: string
-  busyTimeoutMs?: number
-  reinsertKeys?: ReadonlySet<string>
-}
+import { rowCacheWalCheckpoints } from './row-cache-wal-checkpoints'
 
 const RECEIPT_KEY = 'legacy_import_receipt'
 const DEFAULT_BUSY_TIMEOUT_MS = 25
@@ -63,12 +44,17 @@ export class KeyedJsonRowCache {
   private dataVersion: unknown
   private closed = false
   private readonly busyTimeoutMs: number
+  private readonly walCheckpoints: NonNullable<KeyedJsonRowCacheOptions['walCheckpoints']>
+  private walRegistration: number | null = null
+  // Set when checkpoints were handed back: the next operation reopens with SQLite's own.
+  private reopen = false
 
   constructor(
     readonly path: string,
     private readonly options: KeyedJsonRowCacheOptions
   ) {
     this.busyTimeoutMs = options.busyTimeoutMs ?? DEFAULT_BUSY_TIMEOUT_MS
+    this.walCheckpoints = options.walCheckpoints ?? rowCacheWalCheckpoints
   }
 
   /**
@@ -199,12 +185,15 @@ export class KeyedJsonRowCache {
       // Sample under the write lock; publish the planned baseline only after COMMIT.
       const version = db.pragma('data_version', { simple: true })
       db.exec('COMMIT')
+      if (this.walRegistration !== null) {
+        this.walCheckpoints.request(this.walRegistration)
+      }
       if (plan.next) {
         this.stored = plan.next
       } else {
         for (const [key, row] of plan.changes) {
           if (row) {
-            this.stored.set(key, row)
+            this.stored.set(key, { seq: row.seq, hash: row.hash })
           } else {
             this.stored.delete(key)
           }
@@ -239,7 +228,8 @@ export class KeyedJsonRowCache {
         if (version?.value !== String(this.options.schemaVersion)) {
           return { kind: 'rows' as const, rows: [], receipt: undefined }
         }
-        const rows = [...readRows(db).stored].map(([key, { json }]) => ({ key, json }))
+        const rows: KeyedJsonRow[] = []
+        forEachStoredRow(db, (key, _seq, json) => rows.push({ key, json }))
         const receipt = db.prepare('SELECT value FROM meta WHERE key = ?').get(RECEIPT_KEY)?.value
         return { kind: 'rows' as const, rows, receipt }
       } finally {
@@ -252,6 +242,7 @@ export class KeyedJsonRowCache {
       db?.close()
       db = null
       try {
+        this.walCheckpoints.assertRemovable(this.path)
         removeVersionedCacheDatabase(this.path, 'fail-fast')
       } catch (removeError) {
         return { kind: 'unavailable' as const, error: removeError }
@@ -269,7 +260,10 @@ export class KeyedJsonRowCache {
   private readBaseline(db: SyncDatabase): void {
     this.dataVersion = undefined
     const version = db.pragma('data_version', { simple: true })
-    const { stored, maxSeq } = readRows(db)
+    const stored = new Map<string, StoredRow>()
+    const maxSeq = forEachStoredRow(db, (key, seq, json) =>
+      stored.set(key, { seq, hash: hashKeyedJsonRow(json) })
+    )
     this.stored = stored
     this.maxSeq = maxSeq
     this.dataVersion = version
@@ -283,6 +277,7 @@ export class KeyedJsonRowCache {
       if (classifyRowCacheFailure(error) !== 'corrupt') {
         throw error
       }
+      this.walCheckpoints.assertRemovable(this.path)
       this.closeDatabase()
       // Fail fast: a file held open elsewhere (Windows) throws, and the caller retries later.
       removeVersionedCacheDatabase(this.path, 'fail-fast')
@@ -291,20 +286,29 @@ export class KeyedJsonRowCache {
   }
 
   private database(busyTimeoutMs: number): SyncDatabase {
+    if (this.reopen) {
+      // Closing can checkpoint; each cache pays that on its own next operation, not all at once.
+      this.reopen = false
+      this.closeDatabase()
+    }
     if (this.db) {
       return this.db
     }
+    const offMain = this.walCheckpoints.available(this.path)
     const db = openVersionedCacheDatabase(this.path, {
       version: this.options.schemaVersion,
       // The caller's budget covers opening too: schema setup writes, so it can meet the lock.
       busyTimeoutMs,
       removal: 'fail-fast',
+      beforeRemove: () => this.walCheckpoints.assertRemovable(this.path),
       // Rows can hold prompts, PR titles and notification ids; keep them user-only.
       directoryMode: 0o700,
-      sql: SCHEMA_SQL
+      sql: SCHEMA_SQL,
+      walAutocheckpoint: offMain ? 0 : undefined
     })
-    hardenSqliteDatabaseFiles(this.path)
     this.db = db
+    this.walRegistration = this.walCheckpoints.attach(this.path, () => (this.reopen = true))
+    hardenSqliteDatabaseFiles(this.path)
     // A fresh connection cannot vouch for a baseline read through an earlier one.
     this.dataVersion = undefined
     this.stored = new Map()
@@ -313,26 +317,33 @@ export class KeyedJsonRowCache {
   }
 
   private closeDatabase(): void {
+    this.walCheckpoints.detach(this.walRegistration)
+    this.walRegistration = null
     try {
       this.db?.close()
     } catch {
       // Closing a failed handle must not mask the original error.
     }
     this.db = null
+    this.dataVersion = undefined
+    this.stored = new Map()
+    this.maxSeq = 0
   }
 }
 
-function readRows(db: SyncDatabase): { stored: Map<string, StoredRow>; maxSeq: number } {
-  const stored = new Map<string, StoredRow>()
+function forEachStoredRow(
+  db: SyncDatabase,
+  visit: (key: string, seq: number, json: string) => void
+): number {
   let maxSeq = 0
   for (const row of db.prepare('SELECT key, seq, value FROM rows ORDER BY seq').all()) {
     const { key, seq, value } = row
     if (typeof key === 'string' && typeof seq === 'number' && typeof value === 'string') {
-      stored.set(key, { seq, json: value })
+      visit(key, seq, value)
       maxSeq = Math.max(maxSeq, seq)
     }
   }
-  return { stored, maxSeq }
+  return maxSeq
 }
 
 function rollback(db: SyncDatabase): void {
