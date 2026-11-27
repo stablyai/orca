@@ -45,15 +45,28 @@ function serve(profile, windowsSecurityModule) {
     const target = ownedSession
       ? { scope: 'session', session_id: ownedSession }
       : { scope: 'default' }
-    const [catalog, current] = await Promise.all([
+    const [catalog, current] = await Promise.allSettled([
       desktop.call('model.list', {}, signal),
-      desktop.call('model.get', target, signal)
+      desktop.call('model.get', target, signal).then((model) => selectedModel(model, target))
     ])
-    if (!Array.isArray(catalog.models)) {
+    for (const result of [catalog, current]) {
+      if (
+        result.status === 'rejected' &&
+        !(result.reason instanceof DesktopTemporarilyUnavailable)
+      ) {
+        throw result.reason
+      }
+    }
+    if (catalog.status === 'rejected') {
+      throw catalog.reason
+    }
+    if (current.status === 'rejected') {
+      throw current.reason
+    }
+    if (!Array.isArray(catalog.value.models)) {
       throw new DesktopControlError('QwenWork desktop did not return the expected model settings.')
     }
-    const currentValue = selectedModel(current, target)
-    const options = catalog.models
+    const options = catalog.value.models
       .filter(
         (model) =>
           model?.enabled === true &&
@@ -75,7 +88,7 @@ function serve(profile, windowsSecurityModule) {
         name: 'Model',
         category: 'model',
         type: 'select',
-        currentValue,
+        currentValue: current.value,
         options
       }
     ]
@@ -222,6 +235,19 @@ function serve(profile, windowsSecurityModule) {
       return { stopReason: 'end_turn' }
     } catch (error) {
       if (stop.signal.aborted) {
+        if (submitted && !terminal) {
+          const confirmation = AbortSignal.timeout(12000)
+          const target = { task_id: run.taskId }
+          let stopped = await readTask('task.cancel', target, run, confirmation).catch(
+            () => undefined
+          )
+          if (stopped?.terminal !== true) {
+            stopped = await readTask('task.get', target, run, confirmation).catch(() => undefined)
+          }
+          if (stopped?.terminal !== true) {
+            throw new DesktopControlError('Could not confirm that QwenWork stopped this reply.')
+          }
+        }
         return { stopReason: 'cancelled' }
       }
       if (deadline.aborted) {
@@ -229,7 +255,7 @@ function serve(profile, windowsSecurityModule) {
       }
       throw error
     } finally {
-      if (submitted && !terminal) {
+      if (submitted && !terminal && !stop.signal.aborted) {
         await readTask('task.cancel', { task_id: run.taskId }, run).catch(() => {})
       }
       active = undefined
@@ -276,6 +302,7 @@ function serve(profile, windowsSecurityModule) {
         working_directories: [workspace]
       })
       sessionId = readSessionId(data.session_id)
+      pendingModel = undefined
       return { sessionId, configOptions: await readChatConfig(sessionId) }
     }
     if (method === 'session/resume') {
@@ -286,6 +313,7 @@ function serve(profile, windowsSecurityModule) {
         throw new DesktopControlError('The QwenWork desktop session does not match this chat.')
       }
       sessionId = requested
+      pendingModel = undefined
       return { configOptions: await readChatConfig(sessionId) }
     }
     if (method === 'session/set_config_option') {
@@ -307,7 +335,7 @@ function serve(profile, windowsSecurityModule) {
           throw new DesktopControlError('This model is unavailable in QwenWork desktop.')
         }
         const target = { scope: 'session', session_id: ownedSession }
-        pendingModel = model
+        pendingModel ??= model
         let actual = selectedModel(
           await desktop.call('model.set', { ...target, model: params.value }),
           target

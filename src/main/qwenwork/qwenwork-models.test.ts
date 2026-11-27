@@ -66,6 +66,10 @@ it('recovers model selection and streams and stops replies in the same desktop c
           response.writeHead(400, { 'x-qwenwork-instance': instanceId }).end('{}')
           return
         }
+        if (params.model === 'automatic') {
+          response.writeHead(503, { 'x-qwenwork-instance': instanceId }).end()
+          return
+        }
         sessionModel = params.model
         if (loseWriteResponse) {
           loseWriteResponse = false
@@ -192,6 +196,9 @@ it('recovers model selection and streams and stops replies in the same desktop c
     expect(started.response.configOptions).toEqual([])
     await expect(original.setConfigOption('model', 'disabled')).rejects.toThrow(/unavailable/i)
     await expect(original.setConfigOption('model', 'second')).rejects.toThrow(
+      /temporarily unavailable/i
+    )
+    await expect(original.setConfigOption('model', 'automatic')).rejects.toThrow(
       /temporarily unavailable/i
     )
     const send = (text: string) => original.prompt([{ type: 'text', text }])

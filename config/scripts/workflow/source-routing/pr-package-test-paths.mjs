@@ -235,6 +235,7 @@ const WINDOWS_BOUNDARY_PREFIXES = [
   'native/windows-agent-hook/',
   'native/windows-cli-launcher/',
   'native/windows-security/',
+  'resources/qwenwork/',
   ...NATIVE_RUNTIME_PREFIXES,
   'src/packages/process-host/',
   'src/main/browser/network/tunnels/remote-browser-socks-client-owner',
