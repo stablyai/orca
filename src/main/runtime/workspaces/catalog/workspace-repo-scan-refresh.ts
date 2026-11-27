@@ -10,7 +10,10 @@ import {
   WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS
 } from './worktree-scan-admin-budget'
 import { getLocalProjectWorktreeGitOptionsForRuntime } from '../../../workspaces/execution-host/project-runtime-git-options'
-import { readRepoWorktreeAdminFingerprint } from './repo-worktree-admin-fingerprint'
+import {
+  startSharedRepoWorktreeAdminFingerprintProbe,
+  warnWorktreeAdminFingerprintUnknownOnce
+} from './repo-worktree-admin-fingerprint'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
 import { scanLocalRepoWorktreesForResolution } from './repo-worktree-resolution-scan'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
@@ -33,25 +36,6 @@ import {
 } from '../../../ipc/worktrees/listing/worktree-catalog-observation-hygiene'
 import type { Store } from '../../../persistence/loading-store/store'
 import { SUPERSEDED_SCAN_RESCANS } from '../../../ipc/worktrees/listing/overtaken-scan-rerun'
-
-const lastFingerprintUnknownWarnAt = new Map<string, number>()
-
-// Why once per reconcile window: a wedged mount answers "unknown" on every poll.
-function warnFingerprintUnknownOnce(repoId: string, reason: string): void {
-  const now = Date.now()
-  const last = lastFingerprintUnknownWarnAt.get(repoId)
-  if (last !== undefined && now - last < WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS) {
-    return
-  }
-  lastFingerprintUnknownWarnAt.set(repoId, now)
-  console.warn(
-    '[worktree-scan] admin fingerprint unknown; reusing cached rows until the reconcile ceiling',
-    {
-      repoId,
-      reason
-    }
-  )
-}
 
 export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCatalog {
   /** Runtime readers accept the owner's observation for the scan TTL, then its admin-fingerprint verifier. */
@@ -92,7 +76,7 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
             ceilingMs: WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS,
             timeoutMs: WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS,
             probe: () => this.startRepoWorktreeAdminFingerprintProbe(repo),
-            onUnknown: (reason: string) => warnFingerprintUnknownOnce(repo.id, reason)
+            onUnknown: (reason: string) => warnWorktreeAdminFingerprintUnknownOnce(repo.id, reason)
           }
         : undefined
     const store = this.store
@@ -140,15 +124,7 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
   protected startRepoWorktreeAdminFingerprintProbe(
     repo: Repo
   ): Promise<string | null> | 'in-flight' {
-    if (this.worktreeAdminFingerprintProbes.has(repo.id)) {
-      return 'in-flight'
-    }
-    this.worktreeAdminFingerprintProbes.add(repo.id)
-    return readRepoWorktreeAdminFingerprint(repo.path)
-      .catch(() => null)
-      .finally(() => {
-        this.worktreeAdminFingerprintProbes.delete(repo.id)
-      })
+    return startSharedRepoWorktreeAdminFingerprintProbe(repo.id, repo.path)
   }
 
   protected listStoredWorktreesForResolution(repo: Repo): GitWorktreeInfo[] {

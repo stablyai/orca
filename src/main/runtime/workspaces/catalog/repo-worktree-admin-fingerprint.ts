@@ -2,12 +2,55 @@ import { readdir, readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { resolveGitCommonDirectory } from '../../../../shared/git/metadata/git-common-directory'
 import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
+import { WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS } from './worktree-scan-admin-budget'
 
 // NUL can appear in neither a path nor a Git ref, so field boundaries stay unambiguous.
 const FIELD_SEPARATOR = '\u0000'
 const MISSING = '-'
 // Bound per-repo filesystem probes so hundreds of worktrees cannot flood the polling threadpool.
 const LINKED_WORKTREE_PROBE_CONCURRENCY = 8
+
+const inFlightAdminFingerprintProbes = new Set<string>()
+const lastFingerprintUnknownWarnAt = new Map<string, number>()
+
+/** Allow one outstanding filesystem probe per repo across both runtime and desktop catalog readers:
+ * timeouts do not cancel readdir/stat, so repeated probes could exhaust libuv on wedged mounts. */
+export function startSharedRepoWorktreeAdminFingerprintProbe(
+  repoId: string,
+  repoPath: string
+): Promise<string | null> | 'in-flight' {
+  if (inFlightAdminFingerprintProbes.has(repoId)) {
+    return 'in-flight'
+  }
+  inFlightAdminFingerprintProbes.add(repoId)
+  return readRepoWorktreeAdminFingerprint(repoPath)
+    .catch(() => null)
+    .finally(() => {
+      inFlightAdminFingerprintProbes.delete(repoId)
+    })
+}
+
+// Why once per reconcile window: a wedged mount answers "unknown" on every poll.
+export function warnWorktreeAdminFingerprintUnknownOnce(repoId: string, reason: string): void {
+  const now = Date.now()
+  const last = lastFingerprintUnknownWarnAt.get(repoId)
+  if (last !== undefined && now - last < WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS) {
+    return
+  }
+  lastFingerprintUnknownWarnAt.set(repoId, now)
+  console.warn(
+    '[worktree-scan] admin fingerprint unknown; reusing cached rows until the reconcile ceiling',
+    {
+      repoId,
+      reason
+    }
+  )
+}
+
+export function _resetSharedWorktreeAdminFingerprintProbesForTests(): void {
+  inFlightAdminFingerprintProbes.clear()
+  lastFingerprintUnknownWarnAt.clear()
+}
 
 /** Fingerprint local Git admin state without a subprocess; null requires a real scan.
  * Sparse patterns and opaque packed/reftable tips need periodic unconditional rescans beyond coarse file stamps. */
@@ -67,11 +110,23 @@ async function readHeadStamp(commonDir: string, headDir: string): Promise<string
     // Detached HEAD already holds the object id, and an unrecognized HEAD is covered by its own text.
     return head
   }
-  // Per-worktree refs (`refs/bisect`, `refs/worktree`) live beside the checkout; branches are shared.
+  // Per-worktree refs (`refs/bisect`, `refs/worktree`, `refs/rewritten`) live beside a linked checkout;
+  // shared refs (`refs/heads/*`, etc.) live in commonDir, so avoid a guaranteed ENOENT in headDir.
   const tip =
-    (await readTrimmedFile(path.join(headDir, refName))) ??
-    (await readTrimmedFile(path.join(commonDir, refName)))
+    headDir !== commonDir && isPerWorktreeRefName(refName)
+      ? ((await readTrimmedFile(path.join(headDir, refName))) ??
+        (await readTrimmedFile(path.join(commonDir, refName))))
+      : await readTrimmedFile(path.join(commonDir, refName))
   return [head, tip ?? MISSING].join(FIELD_SEPARATOR)
+}
+
+function isPerWorktreeRefName(refName: string): boolean {
+  const normalized = refName.replaceAll('\\', '/')
+  return (
+    normalized.startsWith('refs/bisect/') ||
+    normalized.startsWith('refs/worktree/') ||
+    normalized.startsWith('refs/rewritten/')
+  )
 }
 
 /** Keep a hand-edited HEAD from steering the probe outside the repo's ref store. */
