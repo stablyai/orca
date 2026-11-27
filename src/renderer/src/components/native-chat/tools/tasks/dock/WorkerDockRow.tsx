@@ -7,6 +7,7 @@ import {
 import { memo } from 'react'
 import { cn } from '@/lib/class-names'
 import { WorkerDockRowAction } from './WorkerDockRowAction'
+import { WorkerDockGlyph } from './WorkerDockGlyph'
 import { workerDockGlyph } from './worker-dock-card-order'
 import { useNowSnapshot } from '@/lib/window-activity/use-now'
 import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
@@ -33,17 +34,23 @@ export function workerDockRowTitle(row: WorkerDockRowView): string {
 
 function workerDockBadge(row: WorkerDockRowView | undefined): NativeChatEventBadge | null {
   switch (row && workerDockGlyph(row)) {
+    case 'ask':
+      return 'needs-input'
     case 'running':
       return 'running'
     case 'failed':
       return 'failed'
-    default:
+    case 'queued':
+      return 'queued'
+    case 'done':
+      return 'done'
+    case undefined:
       return null
   }
 }
 
-function workerDockAgentLabel(agent: string | null | undefined): string {
-  return formatAgentTypeLabel(agent as AgentType | null | undefined)
+function workerDockAgentLabel(agent: AgentType | null | undefined): string {
+  return formatAgentTypeLabel(agent)
 }
 
 function Age({ at, visible }: { at: number | null; visible: boolean }) {
@@ -108,7 +115,7 @@ export const WorkerDockRow = memo(function WorkerDockRow({
   const command = row?.kind === 'command'
   const label = [
     mixed && row ? workerDockKindLabel(t, row.kind) : '',
-    row ? workerDockAgentLabel(row.agent) : '',
+    row?.kind === 'worker' ? workerDockAgentLabel(row.agent) : '',
     row ? workerDockSpokenTitle(row.kind, title) : title,
     state,
     progress,
@@ -141,10 +148,11 @@ export const WorkerDockRow = memo(function WorkerDockRow({
         }}
       >
         <span className="flex h-5 shrink-0 items-center">
-          <NativeChatAgentEventIcon
-            agentType={(row?.agent as AgentType | null | undefined) ?? null}
-            badge={workerDockBadge(row)}
-          />
+          {row?.kind === 'worker' ? (
+            <NativeChatAgentEventIcon agentType={row.agent ?? null} badge={workerDockBadge(row)} />
+          ) : (
+            <WorkerDockGlyph glyph={row ? workerDockGlyph(row) : 'queued'} />
+          )}
         </span>
         <span className="flex min-w-0 flex-1 flex-col">
           {/* A command is one mono line; the tooltip carries the whole of it. */}
