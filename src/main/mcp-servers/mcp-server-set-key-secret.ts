@@ -14,9 +14,8 @@ const SECRET_HEX = /^[0-9a-f]{64}$/
 let secret: Promise<Buffer> | null = null
 
 /**
- * This install's key for `mcpServerSetKey`: 32 random bytes kept in userData sealed by Orca's
- * secret store (the OS keychain, or a key kept on this host), so the file itself needs no
- * privacy. Where nothing can seal it, or it can't be read back, the key lives in memory for this
+ * This install's key for `mcpServerSetKey`: 32 random bytes kept in userData sealed by the OS
+ * keychain through Orca's secret store, so the file itself needs no privacy. Where nothing can seal it, or it can't be read back, the key lives in memory for this
  * run alone: a kept agent's next launch then reads as changed and gets a fresh agent, which is
  * safe.
  */
@@ -34,9 +33,9 @@ function sealingStore(): SecretStore | null {
   }
   const store = getSecretStore()
   const kind = store.describeSealing?.().kind
-  return store.isEncryptionAvailable() && (kind === 'os-keychain' || kind === 'host-key')
-    ? store
-    : null
+  // A host key is itself a file whose privacy can't be proven everywhere (macOS ACLs), so only
+  // the OS keychain seals this one.
+  return store.isEncryptionAvailable() && kind === 'os-keychain' ? store : null
 }
 
 /** The kept secret, or null when there is none; throws when it can't be unsealed or is malformed. */
