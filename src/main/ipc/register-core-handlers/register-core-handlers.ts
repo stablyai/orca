@@ -16,7 +16,7 @@ import { registerFilesystemWatcherHandlers } from '../filesystem/watchers/filesy
 import { registerGitHubHandlers } from '../source-control/github'
 import { registerGitLabHandlers } from '../source-control/gitlab'
 import { registerHostedReviewHandlers } from '../source-control/hosted-review'
-import { registerLinearHandlers } from '../linear/register-handlers'
+import { registerLazyLinearHandlers } from '../linear/lazy-linear-handlers'
 import { registerLazyJiraHandlers } from '../jira/lazy-jira-handlers'
 import { registerBitbucketHandlers } from '../source-control/bitbucket'
 import { registerFeedbackHandlers } from '../feedback/feedback'
@@ -162,7 +162,7 @@ export async function registerCoreHandlers(
     registerGitHubHandlers(store, stats, runtime)
     registerGitLabHandlers(store)
     registerHostedReviewHandlers(store, stats)
-    registerLinearHandlers()
+    registerLazyLinearHandlers()
     registerLazyJiraHandlers(store, commitMessageAgentEnv)
     registerBitbucketHandlers()
     registerFeedbackHandlers()
