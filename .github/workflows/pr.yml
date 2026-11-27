@@ -69,6 +69,7 @@ jobs:
             /config/scripts/static-analysis/repository-layout/check-readme-local-links.mjs
             /config/scripts/workflow/source-routing/pr-code-change-scope.mjs
             /config/scripts/workflow/source-routing/pr-xterm-patch-prefixes.mjs
+            /config/scripts/workflow/source-routing/pr-added-package-imports.mjs
             /.oxfmtrc.json
             /config/scripts/workflow/source-routing/pr-package-test-paths.mjs
             /config/scripts/workflow/source-routing/pr-e2e-source-routing.mjs
@@ -124,7 +125,7 @@ jobs:
           if git diff --quiet --no-renames --diff-filter=ACDRTUXB "$DIFF_BASE" HEAD; then
             SCOPE_ARGS=(--daemon-init-test-support)
           fi
-          printf '%s\n' "$CHANGED" | node config/scripts/workflow/source-routing/pr-code-change-scope.mjs "${SCOPE_ARGS[@]}" | tee -a "$GITHUB_OUTPUT"
+          printf '%s\n' "$CHANGED" | node config/scripts/workflow/source-routing/pr-code-change-scope.mjs "${SCOPE_ARGS[@]}" --diff-base "$DIFF_BASE" | tee -a "$GITHUB_OUTPUT"
 
       # Reuse the path-detector checkout instead of queuing another runner.
       - name: Filter changed E2E specs

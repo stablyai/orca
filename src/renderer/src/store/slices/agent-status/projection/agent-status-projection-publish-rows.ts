@@ -44,6 +44,7 @@ export function publishProjectionRows(
           const b = data.worktrees.get(oldOwner)!
           b.keys.delete(rowKey)
           b.revision = ++data.nextRowRevision
+          data.touchedWorktrees.add(oldOwner)
           arrange.add(oldOwner)
           data.notices.add(`row\0${rowKey}`)
           data.notices.add(`list\0${oldOwner}`)
@@ -77,6 +78,7 @@ export function publishProjectionRows(
       ) {
         data.rows.set(row.paneKey, prior?.lineage ? { ...row, lineage: prior.lineage } : row)
         b.revision = ++data.nextRowRevision
+        data.touchedWorktrees.add(next.worktreeId)
         data.notices.add(`row\0${row.paneKey}`)
         data.notices.add(`list\0${next.worktreeId}`)
       }

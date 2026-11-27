@@ -1,16 +1,19 @@
 // The mark on a host-list entry that a plugin added; the plugin's sync owns every marked entry.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import type { McpServer } from '../../shared/mcp-servers/mcp-servers'
 import { McpServersError } from './mcp-servers-error'
 
 /** Which plugin added an entry, under which of its server names; `unsorted` asks the next sync to
  *  learn again whether Orca signs in to it, after a check that couldn't reach the address. */
-const PluginMarkSchema = z.object({
-  key: z.string(),
-  server: z.string(),
-  name: z.string(),
-  unsorted: z.literal(true).optional()
-})
+const PluginMarkSchema = lazyZodSchema(() =>
+  z.object({
+    key: z.string(),
+    server: z.string(),
+    name: z.string(),
+    unsorted: z.literal(true).optional()
+  })
+)
 export type PluginMark = z.infer<typeof PluginMarkSchema>
 
 export const pluginMarkOf = (extras: Record<string, unknown>): PluginMark | null =>

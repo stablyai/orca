@@ -1,6 +1,7 @@
 // A Google Doc's structure as text: headings, lists and tables kept as Markdown, open suggestions
 // marked inline, and the doc's exact text with its positions, so edits name text instead of indexes.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 
 type TextRun = {
   content?: string
@@ -17,86 +18,94 @@ type Element = {
   }
   table?: { tableRows?: { tableCells?: { content?: Element[] }[] }[] }
 }
-const ElementSchema: z.ZodType<Element> = z.lazy(() =>
+const ElementSchema: z.ZodType<Element> = lazyZodSchema(() =>
+  z.lazy(() =>
+    z.object({
+      startIndex: z.number().optional(),
+      endIndex: z.number().optional(),
+      paragraph: z
+        .object({
+          elements: z
+            .array(
+              z.object({
+                startIndex: z.number().optional(),
+                textRun: z
+                  .object({
+                    content: z.string().optional(),
+                    suggestedInsertionIds: z.array(z.string()).optional(),
+                    suggestedDeletionIds: z.array(z.string()).optional()
+                  })
+                  .optional()
+              })
+            )
+            .optional(),
+          paragraphStyle: z.object({ namedStyleType: z.string().optional() }).optional(),
+          bullet: z
+            .object({ listId: z.string().optional(), nestingLevel: z.number().optional() })
+            .optional()
+        })
+        .optional(),
+      table: z
+        .object({
+          tableRows: z
+            .array(
+              z.object({
+                tableCells: z
+                  .array(z.object({ content: z.array(ElementSchema).optional() }))
+                  .optional()
+              })
+            )
+            .optional()
+        })
+        .optional()
+    })
+  )
+)
+const Segment = lazyZodSchema(() => z.object({ content: z.array(ElementSchema).default([]) }))
+const DocumentTabSchema = lazyZodSchema(() =>
   z.object({
-    startIndex: z.number().optional(),
-    endIndex: z.number().optional(),
-    paragraph: z
-      .object({
-        elements: z
-          .array(
-            z.object({
-              startIndex: z.number().optional(),
-              textRun: z
-                .object({
-                  content: z.string().optional(),
-                  suggestedInsertionIds: z.array(z.string()).optional(),
-                  suggestedDeletionIds: z.array(z.string()).optional()
-                })
-                .optional()
+    body: Segment.optional(),
+    headers: z.record(z.string(), Segment).optional(),
+    footers: z.record(z.string(), Segment).optional(),
+    footnotes: z.record(z.string(), Segment).optional(),
+    lists: z
+      .record(
+        z.string(),
+        z.object({
+          listProperties: z
+            .object({
+              nestingLevels: z.array(z.object({ glyphType: z.string().optional() })).optional()
             })
-          )
-          .optional(),
-        paragraphStyle: z.object({ namedStyleType: z.string().optional() }).optional(),
-        bullet: z
-          .object({ listId: z.string().optional(), nestingLevel: z.number().optional() })
-          .optional()
-      })
-      .optional(),
-    table: z
-      .object({
-        tableRows: z
-          .array(
-            z.object({
-              tableCells: z
-                .array(z.object({ content: z.array(ElementSchema).optional() }))
-                .optional()
-            })
-          )
-          .optional()
-      })
+            .optional()
+        })
+      )
       .optional()
   })
 )
-const Segment = z.object({ content: z.array(ElementSchema).default([]) })
-const DocumentTabSchema = z.object({
-  body: Segment.optional(),
-  headers: z.record(z.string(), Segment).optional(),
-  footers: z.record(z.string(), Segment).optional(),
-  footnotes: z.record(z.string(), Segment).optional(),
-  lists: z
-    .record(
-      z.string(),
-      z.object({
-        listProperties: z
-          .object({
-            nestingLevels: z.array(z.object({ glyphType: z.string().optional() })).optional()
-          })
-          .optional()
-      })
-    )
-    .optional()
-})
 type Tab = {
   tabProperties?: { tabId?: string; title?: string }
   documentTab?: z.infer<typeof DocumentTabSchema>
   childTabs?: Tab[]
 }
-const TabSchema: z.ZodType<Tab> = z.lazy(() =>
+const TabSchema: z.ZodType<Tab> = lazyZodSchema(() =>
+  z.lazy(() =>
+    z.object({
+      tabProperties: z
+        .object({ tabId: z.string().optional(), title: z.string().optional() })
+        .optional(),
+      documentTab: DocumentTabSchema.optional(),
+      childTabs: z.array(TabSchema).optional()
+    })
+  )
+)
+export const DocumentSchema = lazyZodSchema(() =>
   z.object({
-    tabProperties: z
-      .object({ tabId: z.string().optional(), title: z.string().optional() })
-      .optional(),
-    documentTab: DocumentTabSchema.optional(),
-    childTabs: z.array(TabSchema).optional()
+    documentId: z.string(),
+    title: z.string().default(''),
+    tabs: z.array(TabSchema).default([]),
+    body: Segment.optional()
   })
 )
-export const DocumentSchema = z.object({
-  documentId: z.string(),
-  title: z.string().default(''),
-  tabs: z.array(TabSchema).default([]),
-  body: Segment.optional()
-})
 export type GoogleDocument = z.infer<typeof DocumentSchema>
 
 /** Every tab, children after their parent, as one list. */

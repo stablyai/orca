@@ -7,12 +7,14 @@ import {
 import { botItemQuestionPairing } from './bot-item-question-answers'
 import type { BotItemEvent } from './bot-items'
 import {
+  botItemAnswer,
   botItemAnswerWords,
   botItemAnswersText,
-  botItemHeldAnswersText,
   botItemNamedAnswers,
-  botItemUnsentAnswers
+  botItemUnsentAnswers,
+  botItemWordsBesideAnswers
 } from './bot-item-answer-lines'
+import { botItemActivity } from './bot-item-activity'
 
 it('keeps each answer on its own line when two questions share a first line', () => {
   const shape: BotItemQuestionShape = {
@@ -24,9 +26,7 @@ it('keeps each answer on its own line when two questions share a first line', ()
   }
   const answers = ['the internal ones', 'none yet']
   expect(botItemNamedAnswers(shape, botItemAnswersText(shape, answers))).toEqual(answers)
-  // Held with the first still open, the second stays on its own line.
   const later = [null, 'none yet']
-  expect(botItemNamedAnswers(shape, botItemHeldAnswersText(shape, later))).toEqual(later)
   // Posted with the first left out, the second keeps its place too; a place after the last answer
   // isn't written, and no answers write nothing.
   expect(botItemAnswersText(shape, later)).toBe('Target? →\nTarget? → none yet')
@@ -57,6 +57,39 @@ it('shows each posted option on its own question when their headings and options
   ])
 })
 
+it('recognizes a saved option whose spaces were collapsed when sent', () => {
+  const shape = botItemQuestionShape({
+    ask: {
+      questions: [
+        { prompt: 'Who checks the route?', options: [] },
+        { prompt: 'When?', options: [{ label: 'At  *sunrise*' }] }
+      ]
+    }
+  })
+  expect(botItemAnswer(shape, 1, { text: 'When? → At *sunrise*' })).toEqual({
+    words: 'At *sunrise*',
+    picked: true
+  })
+})
+
+it('reads each line of a sent answer against its own question once option spaces collapse', () => {
+  const shape = botItemQuestionShape({
+    ask: {
+      questions: [
+        { prompt: 'Who?', options: [{ label: 'The  *lead*' }] },
+        { prompt: 'When?', options: [{ label: 'At  *sunrise*' }] },
+        { prompt: 'Where?', options: [{ label: 'The  *pass*' }] }
+      ]
+    }
+  })
+  const text = botItemAnswersText(shape, ['The  *lead*', 'At  *sunrise*', 'The *lead*'])
+  expect(shape.decisions.map((_, index) => botItemAnswer(shape, index, { text }))).toEqual([
+    { words: 'The *lead*', picked: true },
+    { words: 'At *sunrise*', picked: true },
+    { words: 'The *lead*', picked: false }
+  ])
+})
+
 it('round-trips a typed answer that would otherwise make a longer question heading', () => {
   const shape = botItemQuestionShape({
     ask: {
@@ -64,10 +97,8 @@ it('round-trips a typed answer that would otherwise make a longer question headi
     }
   })
   const answers = ['x? → No', null, null]
-  const held = botItemHeldAnswersText(shape, answers)
   const posted = botItemAnswersText(shape, answers)
-  expect(held).toBe('Keep →   x? → No')
-  expect(posted).toBe(held)
+  expect(posted).toBe('Keep →   x? → No')
   expect(botItemNamedAnswers(shape, posted)).toEqual(answers)
   expect(botItemNamedAnswers(shape, 'Keep → x? → No')).toEqual([null, 'No', null])
 })
@@ -151,8 +182,7 @@ it("keeps a line on the question it names when another's old line reads the same
       ]
     }
   })
-  const held = botItemHeldAnswersText(shape, [null, 'drop it'])
-  expect(botItemNamedAnswers(shape, held)).toEqual([null, 'drop it'])
+  expect(botItemNamedAnswers(shape, 'Keep private helper? → drop it')).toEqual([null, 'drop it'])
   expect(botItemPickedReplies(shape, { text: 'Keep private helper? → No' })).toEqual([
     [],
     [{ label: 'No', recommended: false }]
@@ -167,4 +197,67 @@ it("keeps a line on the question it names when another's old line reads the same
     }
   })
   expect(botItemNamedAnswers(lead, 'Keep → x? → No')).toEqual([null, 'No'])
+})
+
+it("keeps only a comment's own words beside the lines it answered, bare places too", () => {
+  const two: BotItemQuestionShape = {
+    body: '',
+    decisions: [
+      { question: 'Build B?', replies: [] },
+      { question: 'Also later?', replies: [] }
+    ]
+  }
+  const text = `${botItemAnswersText(two, ['Yes', 'After B'])}\nwhat is the later part`
+  expect(botItemWordsBesideAnswers(two, text, [true, true])).toBe('what is the later part')
+  // A line another comment answered first stays with these words.
+  expect(botItemWordsBesideAnswers(two, text, [false, true])).toBe(
+    'Build B? → Yes\nwhat is the later part'
+  )
+  expect(
+    botItemWordsBesideAnswers(two, botItemAnswersText(two, ['Yes', null]), [true, false])
+  ).toBe(null)
+  expect(botItemWordsBesideAnswers(two, 'just words', [false, false])).toBe(null)
+  const shared: BotItemQuestionShape = {
+    body: '',
+    decisions: [
+      { question: '# Target?\nStaging hosts', replies: [] },
+      { question: 'Target?\nProduction hosts', replies: [] }
+    ]
+  }
+  const later = botItemAnswersText(shared, [null, 'Yes'])
+  expect(botItemWordsBesideAnswers(shared, `${later}\nexplain staging`, [false, true])).toBe(
+    'explain staging'
+  )
+  expect(botItemWordsBesideAnswers(shared, later, [false, true])).toBe(null)
+})
+
+it('shows a recorded answer of several questions whole, as older hosts wrote it', () => {
+  const asked: BotItemEvent = {
+    id: 'q',
+    kind: 'commented',
+    actor: { kind: 'bot', botId: 'agent', chatId: 'chat' },
+    data: {
+      text: 'q',
+      ask: {
+        questions: [
+          { prompt: 'Region?', options: [{ label: 'us-east' }] },
+          { prompt: 'Ship?', options: [{ label: 'Yes' }] }
+        ]
+      }
+    },
+    at: 1
+  }
+  const text = 'Region? → eu-west\nShip? → Yes\nthanks'
+  const recorded: BotItemEvent = {
+    id: 'r',
+    kind: 'commented',
+    actor: { kind: 'owner' },
+    data: { text, answers: 'q', decisions: [{ text: 'eu-west' }, { picks: [0] }] },
+    at: 2
+  }
+  const entry = botItemActivity({ links: [], question: null, status: 'working' }, [
+    asked,
+    recorded
+  ]).find((at) => at.key === 'r')
+  expect(entry?.kind === 'comment' && entry.beside).toBeFalsy()
 })

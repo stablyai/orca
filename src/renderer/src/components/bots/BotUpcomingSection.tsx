@@ -1,5 +1,6 @@
 // Automations in a bot's Activity panel: Tidy memory, Look around, automations and waits, failed first,
-// then running, then soonest; paused ones last. Five show, then "All N automations". Folded, the rows
+// then running, then soonest; paused ones last. Five automations show, then "All N automations", which
+// opens the Automations page filtered to this bot. Folded, the rows
 // in trouble stay listed under the header. An automation's Delete confirms here and keeps focus near it.
 import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { ChevronRight, Plus } from 'lucide-react'
@@ -7,8 +8,10 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { openBotHomeTab } from '@/lib/bot-catalog'
+import { openBotAutomations } from './bot-automation-open'
 import { useAppStore } from '@/store'
 import type { Bot } from '../../../../shared/bot-types'
+import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import type { UpNextState } from '../../../../shared/bots/bot-look-around'
 import { AutomationDeleteDialog } from '../automations/authoring/AutomationDeleteDialogs'
 import { persistSkipDeleteAutomationConfirm } from '../automations/authoring/automation-delete-confirm-preference'
@@ -278,7 +281,13 @@ export function BotUpcomingSection({
           <button
             type="button"
             className="flex min-h-7 w-full items-center justify-between gap-2 rounded-sm pr-2 pl-8 text-left text-xs text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            onClick={() => useAppStore.getState().openAutomationsPage()}
+            onClick={() =>
+              openBotAutomations({
+                workspaceId: folderWorkspaceKey(bot.folderWorkspaceId),
+                name: bot.name,
+                hostId: bot.hostId
+              })
+            }
           >
             <span className="min-w-0 truncate">
               {t('bots.automations.all', 'All {{count}} automations', { count: listed })}

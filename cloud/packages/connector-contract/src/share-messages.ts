@@ -41,6 +41,25 @@ export const ShareCredentialHashSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
 
 const Name = z.string().min(1).max(CONNECTOR_LIMITS.maxDisplayTextLength)
 
+// A bot's purpose, as its owner wrote it (ConnectorBotSchema.botPurpose and the /mine entry).
+export const BotPurposeSchema = z.string().min(1).max(CONNECTOR_LIMITS.maxBotPurposeLength)
+
+// What a teammate's invite shows of a shared agent besides its name and purpose (agentCard in the
+// hello and on the /mine entry): its bundled mascot with that tile color and outfit, and the services it
+// answers on besides Orca. Ids, not pictures: an uploaded picture stays on the owner's computer. A card that
+// doesn't parse is dropped, never the hello or list that carries it, so a newer client's values pass.
+const CardId = z.string().min(1).max(CONNECTOR_LIMITS.maxAgentCardIdLength)
+export const AgentCardSchema = z
+  .object({
+    mascot: CardId.optional(),
+    color: CardId.optional(),
+    outfit: CardId.optional(),
+    services: z.array(CardId).max(CONNECTOR_LIMITS.maxAgentCardServices).optional()
+  })
+  .optional()
+  .catch(undefined)
+export type AgentCard = NonNullable<z.infer<typeof AgentCardSchema>>
+
 // One person a bot is shared with, in its hello: an Orca account, or an email not yet resolved to one.
 export const ConnectorBotShareSchema = z.union([
   z.object({ shareId: ShareIdSchema, accountId: OpaqueIdSchema }),
@@ -86,6 +105,14 @@ export const ShareSendFields = {
   sealed: z.string().min(1).max(CONNECTOR_LIMITS.maxHeldMessageChars)
 }
 
+// The teammate declined the share: the host shows its owner so, and lists a new share id (never this
+// one) if the owner shares the bot with them again. Sent once per share. An older host settles it
+// unsupported, and the share stays declined on the cloud all the same.
+export const ShareDeclinedFields = {
+  ...ShareDeliveryFields,
+  accountId: OpaqueIdSchema
+}
+
 // PUT `${bots}/<bot id>/shares/<share id>/offer`: the accept's answer, for the teammate's next
 // `${shares}/mine`. A repeat accept with the same key replaces it.
 export const ConnectorShareOfferRequestSchema = z.object({
@@ -123,9 +150,12 @@ export const ConnectorSharesMineSchema = z.object({
       botName: Name,
       // The owner's hello ownerName, else their verified email, else the host's name: never empty.
       ownerName: Name,
-      avatarUrl: z.string().url().max(2048).optional(),
       hostOnline: z.boolean(),
       state: z.enum(['ready', 'needs-accept']),
+      // The owner's hello botPurpose for the bot; absent when it sends none.
+      botPurpose: BotPurposeSchema.optional(),
+      // The owner's hello agentCard; absent when it sends none.
+      agentCard: AgentCardSchema,
       // The host's E2EE key, which held messages are sealed to: present only once the host's hello
       // carries hostKey, which it sends when it takes share_send. Absent, the teammate's Orca holds
       // nothing and sends only while the host is online.
@@ -144,6 +174,12 @@ export const ConnectorSharesMineSchema = z.object({
 // Answers 202 queued; the offer comes later on `${shares}/mine`.
 export const ConnectorShareAcceptRequestSchema = z.object({ v: z.literal(1), ...DeviceAsk })
 export const ConnectorShareAcceptSchema = z.object({ status: z.literal('queued') })
+
+// POST `${shares}/<share id>/decline` (connector token): the teammate turns the share down. Answers
+// 200 declined, again on a repeat; after it, `${shares}/mine` leaves the share out for this account
+// and an accept of it answers unknown_share. Queues one share_declined for the host.
+export const ConnectorShareDeclineRequestSchema = z.object({ v: z.literal(1) })
+export const ConnectorShareDeclineSchema = z.object({ status: z.literal('declined') })
 
 // POST `${shares}/<share id>/messages`, with the connector token (desktop) or
 // `Bearer <share credential>` (phone): holds one message for the host. duplicate: that
@@ -169,6 +205,8 @@ export type ShareHeldMessage = z.infer<typeof ShareHeldMessageSchema>
 export type ConnectorSharesMine = z.infer<typeof ConnectorSharesMineSchema>
 export type ConnectorShareAcceptRequest = z.infer<typeof ConnectorShareAcceptRequestSchema>
 export type ConnectorShareAccept = z.infer<typeof ConnectorShareAcceptSchema>
+export type ConnectorShareDeclineRequest = z.infer<typeof ConnectorShareDeclineRequestSchema>
+export type ConnectorShareDecline = z.infer<typeof ConnectorShareDeclineSchema>
 export type ConnectorShareHoldRequest = z.infer<typeof ConnectorShareHoldRequestSchema>
 export type ConnectorShareHold = z.infer<typeof ConnectorShareHoldSchema>
 export type ConnectorShareHeld = z.infer<typeof ConnectorShareHeldSchema>

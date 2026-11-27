@@ -1,9 +1,9 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text } from 'react-native'
 import { RotateCcw } from 'lucide-react-native'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { colors, feedback, radii, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { feedback, radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import type { CodexResetCreditSummary } from './codex-reset-credit'
 import { ListRow } from '../../components/list/ListGroup'
 
@@ -21,7 +21,8 @@ export function CodexResetCreditAction({
   onPress: () => void
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <ListRow
       title={summary.availabilityLabel}
@@ -75,7 +76,7 @@ export function CodexResetCreditAction({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   button: {
     minHeight: 44,
     width: 104,

@@ -2,6 +2,7 @@ import { existsSync, globSync, readFileSync, realpathSync, statSync } from 'node
 import { homedir, hostname, userInfo } from 'node:os'
 import { posix, win32 } from 'node:path'
 import { compareCodePoints } from '../../../shared/sidebar-list/sorting/text-order'
+import { splitOpenSshArguments } from './ssh-config-arguments'
 
 type PathApi = typeof posix | typeof win32
 
@@ -110,49 +111,8 @@ function parseIncludeDirective(line: string): string[] | null {
     return null
   }
 
-  const args = splitQuotedArguments(match[2])
+  const args = splitOpenSshArguments(match[2])
   return args.length > 0 ? args : null
-}
-
-function splitQuotedArguments(input: string): string[] {
-  const args: string[] = []
-  let current = ''
-  let inQuotes = false
-
-  for (let i = 0; i < input.length; i += 1) {
-    const char = input[i]
-
-    if (inQuotes && char === '\\' && input[i + 1] === '"') {
-      current += '"'
-      i += 1
-      continue
-    }
-
-    if (char === '"') {
-      inQuotes = !inQuotes
-      continue
-    }
-
-    if (!inQuotes && char === '#') {
-      break
-    }
-
-    if (!inQuotes && /\s/.test(char)) {
-      if (current) {
-        args.push(current)
-        current = ''
-      }
-      continue
-    }
-
-    current += char
-  }
-
-  if (current) {
-    args.push(current)
-  }
-
-  return args
 }
 
 function resolveIncludePaths(pattern: string, context: IncludeExpansionContext): string[] {

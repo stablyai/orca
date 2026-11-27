@@ -64,7 +64,7 @@ export type NativeChatStructuredComposerTransport = {
   /** Present only where the host can read this chat's Codex account usage. */
   accountUsage?: { open: () => void }
   /** Present only where the host manages this agent's MCP servers; `/mcp` opens Orca's MCP tray. */
-  mcpPanel?: NativeChatMcpTrayState
+  mcpPanel?: NativeChatMcpTrayState & { agentLabel: string }
   /** Present only where this chat can fork; `run` answers with a notice when it didn't fork. */
   fork?: { run: () => string | null }
   onError: (message: string | null, detail?: NativeChatComposerErrorDetail) => void

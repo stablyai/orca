@@ -4,7 +4,7 @@ import { encodeBase64Bytes } from '@/lib/base64-bytes'
 import { BOT_AVATAR_SIZE, type BotMascotId } from '../../../../shared/bot-avatar'
 import { DEFAULT_BOT_AVATAR_COLOR } from '../../../../shared/bots/bot-avatar-color'
 import type { BotAvatarOutfit } from '../../../../shared/bots/bot-avatar-outfit'
-import { botMascotSvg } from './bot-mascot-look'
+import { readBotMascotSvg } from './bot-mascot-look'
 import { readBotOutfitArt } from './bot-outfit-art'
 
 const TILE = 128
@@ -35,7 +35,7 @@ export async function drawBotSlackIcon(
   const large = art?.large[id]
   const tile = color && color !== DEFAULT_BOT_AVATAR_COLOR ? color : null
   // Without its large art the outfit is left off, as the in-app picture leaves it off until it arrives.
-  const svg = botMascotSvg(id, tile, large ? layer : undefined)
+  const svg = await readBotMascotSvg(id, tile, large ? layer : undefined)
   if (!svg) {
     return null
   }

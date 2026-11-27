@@ -1,18 +1,18 @@
 import { useEffect, useState } from 'react'
 import { ActivityIndicator, Text, View } from 'react-native'
-import { colors } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import type { MobileFilePreviewRpcSender } from '../preview/mobile-file-preview-operations'
 import { PDF_MIME_TYPE, type MobileFileMedia } from './mobile-file-media'
 import { downloadMobileFileMedia, type MobileMediaSink } from './mobile-file-media-download'
 import { createMobileMediaSink } from './mobile-media-preview-cache'
 import { MobileMediaPlayback } from './MobileMediaPlayback'
 import { MobilePdfPreview } from './MobilePdfPreview'
-import { filePreviewStyles as styles } from '../preview/mobile-file-preview-styles'
+import { filePreviewStylesSheet } from '../preview/mobile-file-preview-styles'
 import { formatPreviewByteLength } from '../preview/mobile-file-preview-response'
 import { MobileLoadErrorState } from '../../components/feedback/MobileStateView'
 import { translate } from '../../i18n/mobile-i18n'
-import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { useMobileTranslation, useMobileUiLocale } from '../../i18n/use-mobile-translation'
+import { useThemedStyles } from '../../theme/themed-styles'
 
 type State = { uri: string } | { error: string } | { bytes: number; total: number }
 type Props = { media: MobileFileMedia; client: MobileFilePreviewRpcSender | null; title: string }
@@ -28,8 +28,10 @@ export function MobileFileMediaPreview(props: Props) {
 }
 
 function MediaDownload({ media, client, title }: Props) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(filePreviewStylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
+  const locale = useMobileUiLocale()
   const { worktreeId, relativePath, mimeType } = media
   const [state, setState] = useState<State>({ bytes: 0, total: 0 })
   const [attempt, setAttempt] = useState(0)
@@ -87,8 +89,8 @@ function MediaDownload({ media, client, title }: Props) {
       <Text style={styles.stateText}>
         {state.total
           ? t('files.fileMediaPreview.downloading', 'Downloading {{bytes}} of {{total}}', {
-              bytes: formatPreviewByteLength(state.bytes),
-              total: formatPreviewByteLength(state.total)
+              bytes: formatPreviewByteLength(state.bytes, t, locale),
+              total: formatPreviewByteLength(state.total, t, locale)
             })
           : t('files.fileMediaPreview.loading', 'Loading media...')}
       </Text>

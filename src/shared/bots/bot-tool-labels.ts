@@ -6,10 +6,14 @@ export function botToolTitle(name: string): string {
   return words ? `${words[0]!.toUpperCase()}${words.slice(1)}` : name
 }
 
+/** A URL server: one with saved values or Orca's own sign-in isn't `remote`, but still has an address. */
+export function isBotUrlTool(tool: Pick<BotOwnTool, 'detail' | 'remote'>): boolean {
+  return tool.remote || /^https?:\/\//i.test(tool.detail)
+}
+
 /** A row's short line: a remote server's host, or the package or program a command runs. */
 export function botToolSubtitle(tool: Pick<BotOwnTool, 'detail' | 'remote'>): string {
-  // A URL tool with saved values or Orca's own sign-in isn't `remote`, but still has an address.
-  if (tool.remote || /^https?:\/\//i.test(tool.detail)) {
+  if (isBotUrlTool(tool)) {
     try {
       return new URL(tool.detail).host
     } catch {

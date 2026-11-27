@@ -13,7 +13,7 @@ import {
 } from '../../../../shared/repository/appearance/repo-badge-color'
 import { RepoIconGlyph } from './repo-icon'
 
-type RepoMarkRepo = Pick<
+export type RepoMarkRepo = Pick<
   Repo,
   'id' | 'badgeColor' | 'repoIcon' | 'addedAt' | 'executionHostId' | 'connectionId' | 'displayName'
 >

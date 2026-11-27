@@ -20,6 +20,7 @@ import { WEBHOOK_NOTICE_CONDITIONS, WebhookHookIdSchema } from './webhook-messag
 import { PrEventSchema } from './pr-event-messages.js'
 import {
   ShareAcceptFields,
+  ShareDeclinedFields,
   ShareResolvedFields,
   ShareSendFields,
   ViaAccountSchema
@@ -264,6 +265,9 @@ export const ConnectorDeliverySchema = z.discriminatedUnion('kind', [
     .refine(isOnItsShare),
   z
     .object({ ...ShareDelivery, kind: z.literal('share_send'), ...ShareSendFields })
+    .refine(isOnItsShare),
+  z
+    .object({ ...ShareDelivery, kind: z.literal('share_declined'), ...ShareDeclinedFields })
     .refine(isOnItsShare)
 ])
 

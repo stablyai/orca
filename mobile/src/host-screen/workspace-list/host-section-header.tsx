@@ -4,13 +4,13 @@ import { ChevronRight, FolderTree, Pin } from 'lucide-react-native'
 import { DisclosureChevron } from '../../components/list/DisclosureChevron'
 import { MobileRepoIcon } from '../../components/icons/MobileRepoIcon'
 import { WORKTREE_ROW_LAYOUT } from '../../worktree/row-presentation/worktree-list-row-layout'
-import { colors } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import type { Section } from '../../worktree/workspace-list/workspace-list-types'
-import { hostScreenStyles as styles } from '../host-screen-styles'
+import { hostScreenStylesSheet } from '../host-screen-styles'
 import type { RepoLook } from '../catalog/host-repo-looks'
 import { HostPendingCreationRow } from './host-pending-creation-row'
 import { projectGroupHeaderIndent } from '../../worktree/project-sections/project-group-indent'
+import { useThemedStyles } from '../../theme/themed-styles'
 
 // Takes the header's own fields, not the section, so a poll that rebuilds sections skips unchanged headers.
 export const HostSectionHeader = memo(function HostSectionHeader(props: {
@@ -27,7 +27,8 @@ export const HostSectionHeader = memo(function HostSectionHeader(props: {
   repoLook: RepoLook | null | undefined
   onToggle: (collapseKey: string) => void
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(hostScreenStylesSheet)
+  const colors = useMobileColors()
   const pendingCreations = props.pendingCreations?.map((creation) => (
     <HostPendingCreationRow key={creation.key} creation={creation} />
   ))

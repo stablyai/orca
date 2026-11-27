@@ -6,6 +6,7 @@ import { mkdir, readFile, readdir, unlink } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import {
   GoogleClientConfigSchema,
   type GoogleClientConfig
@@ -17,34 +18,46 @@ import {
   writeEncryptedCredential
 } from '../credentials/integration-credential-file'
 
-const ServiceReadinessSchema = z.object({
-  service: z.enum(GOOGLE_SERVICES),
-  state: z.enum(['ready', 'needs-permission', 'api-disabled', 'blocked-by-admin', 'error']),
-  detail: z.string().optional(),
-  enableUrl: z.string().optional()
-})
+const ServiceReadinessSchema = lazyZodSchema(() =>
+  z.object({
+    service: z.enum(GOOGLE_SERVICES),
+    state: z.enum(['ready', 'needs-permission', 'api-disabled', 'blocked-by-admin', 'error']),
+    detail: z.string().optional(),
+    enableUrl: z.string().optional()
+  })
+)
 
-export const GoogleAccountRecordSchema = z.object({
-  /** The account's key here (`--account`, and later a trigger rule's account). */
-  email: z.string().min(1),
-  /** Google's stable id for the account, which outlives an address change. */
-  sub: z.string().min(1).optional(),
-  /** The client this grant belongs to: a refresh must use it, whatever client is saved now. */
-  client: z.object({ clientId: z.string().min(1), clientSecret: z.string().min(1) }),
-  projectId: z.string().optional(),
-  /** Null once Google ended the grant; the account stays listed for Reconnect. */
-  refreshToken: z.string().min(1).nullable(),
-  accessToken: z.string().min(1).nullable(),
-  expiresAt: z.number(),
-  grantedScopes: z.array(z.string()),
-  /** What the person picked at Connect; a picked service Google didn't grant shows Needs permission. */
-  choices: z.array(z.enum(GOOGLE_SERVICE_CHOICES)).optional(),
-  status: z.enum(['connected', 'reconnect']),
-  reason: z.string().optional(),
-  services: z.array(ServiceReadinessSchema),
-  checkedAt: z.number().optional(),
-  connectedAt: z.number()
-})
+export const GoogleAccountRecordSchema = lazyZodSchema(() =>
+  z.object({
+    /** The account's key here (`--account`, and later a trigger rule's account). */
+    email: z.string().min(1),
+    /** Google's stable id for the account, which outlives an address change. */
+    sub: z.string().min(1).optional(),
+    /** The client this grant belongs to: a refresh must use it, whatever client is saved now. */
+    client: z.object({ clientId: z.string().min(1), clientSecret: z.string().min(1) }),
+    projectId: z.string().optional(),
+    /** Null once Google ended the grant; the account stays listed for Reconnect. */
+    refreshToken: z.string().min(1).nullable(),
+    accessToken: z.string().min(1).nullable(),
+    expiresAt: z.number(),
+    grantedScopes: z.array(z.string()),
+    /** What the person picked at Connect; a picked service Google didn't grant shows Needs permission. */
+    choices: z.array(z.enum(GOOGLE_SERVICE_CHOICES)).optional(),
+    status: z.enum(['connected', 'reconnect']),
+    reason: z.string().optional(),
+    /** Google's own words when it ended the grant. */
+    googleError: z
+      .object({
+        error: z.string(),
+        subtype: z.string().optional(),
+        description: z.string().optional()
+      })
+      .optional(),
+    services: z.array(ServiceReadinessSchema),
+    checkedAt: z.number().optional(),
+    connectedAt: z.number()
+  })
+)
 
 export type GoogleAccountRecord = z.infer<typeof GoogleAccountRecordSchema>
 
@@ -175,7 +188,7 @@ export async function removeGoogleAccount(email: string): Promise<void> {
   })
 }
 
-const DefaultAccountSchema = z.object({ email: z.string().min(1) })
+const DefaultAccountSchema = lazyZodSchema(() => z.object({ email: z.string().min(1) }))
 
 export type GoogleDefaultAccount =
   | { email: string | null }

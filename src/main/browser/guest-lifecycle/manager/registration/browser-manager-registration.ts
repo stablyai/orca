@@ -4,6 +4,7 @@ import {
   bindBrowserPageMemoryInvalidation
 } from '../../browser-page-memory'
 import { publishBrowserGuestMetadata } from '../../navigation/browser-guest-metadata'
+import { disposeGrabModeStateForPage } from '../../../element-grab/browser-grab-mode-admission'
 import { webContents } from 'electron'
 import { browserDownloadDestinationReservations } from '../../../downloads/browser-download-destination'
 import { isWorkspaceDocPageId } from '../../../document-preview/doc-preview-guest-policy'
@@ -144,7 +145,11 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
       }
     }
     try {
-      this.completeGuestCleanup('grab', () => this.cancelGrabOp(browserTabId, 'evicted'))
+      this.completeGuestCleanup('grab', () => {
+        this.cancelGrabOp(browserTabId, 'evicted')
+        // Streamed pages never pass the renderer's close IPC, so the mode owner retires here too.
+        disposeGrabModeStateForPage(browserTabId)
+      })
       this.completeGuestCleanup('prompts', () => cancelBrowserPagePrompts(browserTabId))
       this.completeGuestCleanup('audio', () => this.notifyAudioStateChanged(browserTabId, false))
       this.completeGuestCleanup('agent activity', () => this.agentActivity.end(browserTabId))

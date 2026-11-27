@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { getBrowserExtensionContextSignal } from './browser-extension-context-lifetime'
 import { getHostSessionState } from './browser-extension-contexts'
 import { runBrowserExtensionNativePage } from './browser-extension-native-page'
@@ -22,11 +23,13 @@ type ScriptState = {
 const states = new WeakMap<Electron.Session, Map<string, ScriptState>>()
 /** Profile → extension → scripts registered with persistAcrossSessions false; kept across idle unloads. */
 const sessionScripts = new Map<string, Map<string, Record<string, unknown>[]>>()
-const scriptSchema = z.object({ id: z.string() }).loose()
-const replySchema = z.discriminatedUnion('ok', [
-  z.object({ ok: z.literal(true), scripts: z.array(scriptSchema), value: z.unknown() }),
-  z.object({ ok: z.literal(false), error: z.string() })
-])
+const scriptSchema = lazyZodSchema(() => z.object({ id: z.string() }).loose())
+const replySchema = lazyZodSchema(() =>
+  z.discriminatedUnion('ok', [
+    z.object({ ok: z.literal(true), scripts: z.array(scriptSchema), value: z.unknown() }),
+    z.object({ ok: z.literal(false), error: z.string() })
+  ])
+)
 
 // Serialized into a native-only extension page; keep all its dependencies inside this function.
 async function runNativeScripts(

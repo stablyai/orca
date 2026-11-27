@@ -1,4 +1,4 @@
-import type { RuntimeTerminalListResult } from '../../../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { RuntimeTerminalListResultWithoutPreview } from '../../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
@@ -9,7 +9,9 @@ function isStringArray(value: unknown): value is string[] {
 }
 
 /** Accept only complete inventory envelopes; an incomplete answer cannot prove a PTY exited. */
-export function isTerminalListResult(value: unknown): value is RuntimeTerminalListResult {
+export function isTerminalListResult(
+  value: unknown
+): value is RuntimeTerminalListResultWithoutPreview {
   if (
     !isRecord(value) ||
     !Array.isArray(value.terminals) ||

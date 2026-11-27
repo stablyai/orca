@@ -1,3 +1,4 @@
+import { runWithFinally } from '@/lib/run-with-finally'
 import {
   useStructuredAgentSessionQueuedReorder,
   type QueuedMessageReorder
@@ -183,12 +184,10 @@ export function useStructuredAgentSessionQueuedMessages(args: {
       }
       keys.forEach((key) => held.set(key, pending))
       setInFlight(new Map(held))
-      try {
-        return await action()
-      } finally {
+      return await runWithFinally(action, () => {
         keys.forEach((key) => held.delete(key))
         setInFlight(new Map(held))
-      }
+      })
     },
     []
   )

@@ -1,13 +1,11 @@
 import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tasks-connection-presentation'
 import { View, ActivityIndicator, Text } from 'react-native'
-import { colors } from '../../theme/mobile-theme'
-import { styles } from '../mobile-tasks-legacy-styles'
 import { renderMobileTasksProjectIssueMetadata } from './mobile-tasks-project-metadata-editors'
 import { renderMobileTasksProjectReviewPanels } from './mobile-tasks-project-review-panels'
 import { renderMobileTasksProjectComments } from './mobile-tasks-project-comments'
 
 export function renderMobileTasksProjectLoadedDetail(model: ConnectionPresentationModel) {
-  const { projectRowDetailError, projectRowDetailLoading } = model
+  const { colors, styles, projectRowDetailError, projectRowDetailLoading } = model
   return projectRowDetailLoading ? (
     <View style={styles.detailLoading}>
       <ActivityIndicator size="small" color={colors.textSecondary} />

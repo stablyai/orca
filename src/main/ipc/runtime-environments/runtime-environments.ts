@@ -22,32 +22,18 @@ import {
   getRuntimeEnvironmentStatusOwner
 } from './connections/runtime-environment-request-connections'
 import { setRefusedPairingHandlers } from './pairing/runtime-environment-pairing-refusal-registry'
-import {
-  handleManagedSharedControlRefusal,
-  recoverRefusedManagedPairing
-} from './pairing/runtime-environment-managed-pairing-refusal'
 import { setManagedOrcadPairingRepairedListener } from '../../managed-server/lifecycle/orcad-managed-pairing-repaired-listener'
 import { forgetManagedOrcadAutomaticFailures } from '../../managed-server/lifecycle/orcad-managed-tunnel'
-import { registerRuntimeEnvironmentRecoveryHandler } from './connectivity/runtime-environment-recovery-handler'
-import { registerRuntimeEnvironmentRepairHandler } from './pairing/runtime-environment-repair-handler'
 import {
   advanceRuntimeEnvironmentTransportGeneration,
   onRuntimeEnvironmentTransportGenerationRetired
 } from './connections/runtime-environment-transport-generation'
 import { resetSharedControlSupport } from './connections/runtime-environment-shared-control-support'
 import { RUNTIME_ENVIRONMENT_HANDLER_CHANNELS } from './runtime-environment-handler-channels'
-import { registerOrcadRuntimeLifecycleHandlers } from './managed-orcad/orcad-runtime-lifecycle-handlers'
-import { registerOrcadRuntimeConversionHandlers } from './managed-orcad/orcad-runtime-conversion-handlers'
-import { registerOrcadDeltaMoveHandlers } from './managed-orcad/orcad-delta-move-handlers'
-import { registerOrcadLeaveBehindHandlers } from './managed-orcad/orcad-leave-behind-handlers'
-import { registerOrcadRuntimeMaintenanceHandlers } from './managed-orcad/orcad-runtime-maintenance-handlers'
-import { clearPublishedManagedServer } from '../ssh/ssh-renderer-broadcast'
-import { clearManagedServerNotes } from './managed-orcad/runtime-environment-managed-tunnel'
+import { registerLazyRuntimeEnvironmentHandlers } from './lazy-runtime-environment-handlers'
 import { reconcileOrphanedRuntimeSessions } from './catalog/runtime-environment-session-reconcile'
 import { readSavedRuntimeEnvironmentIds } from './catalog/runtime-environment-saved-ids'
-import { registerRuntimeSshAccessHandlers } from './connectivity/runtime-ssh-access-handlers'
 import { retirePairedRuntimeBrowserClientHostEnvironment } from '../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
-import { registerRuntimeEnvironmentBrowserClientHostHandler } from './browser-hosting/runtime-environment-browser-client-host-handler'
 import {
   forgetPortForwardsOfRemovedEnvironments,
   registerRuntimeEnvironmentPortForwardHandlers
@@ -181,43 +167,29 @@ export async function registerRuntimeEnvironmentHandlers(
     getUserDataPath,
     invalidateTransport: invalidateRuntimeEnvironmentTransport
   })
-  registerRuntimeEnvironmentBrowserClientHostHandler({
-    getUserDataPath,
-    getSettings: () => store.getSettings()
-  })
   registerRuntimeEnvironmentPortForwardHandlers({ getUserDataPath, store })
-  registerRuntimeEnvironmentRecoveryHandler()
-  registerRuntimeEnvironmentRepairHandler({
-    getUserDataPath,
-    invalidateTransport: invalidateRuntimeEnvironmentTransport
-  })
   registerRuntimeEnvironmentPassiveHandlers(getUserDataPath, (environment, method, response) =>
     recordHostRepoCatalogAnswer(store, environment, method, response)
   )
   setManagedOrcadPairingRepairedListener(invalidateRuntimeEnvironmentTransport)
   setRefusedPairingHandlers({
-    recover: async (environmentId) =>
-      await recoverRefusedManagedPairing(getUserDataPath(), environmentId),
-    sharedControl: async (environmentId) =>
-      await handleManagedSharedControlRefusal(getUserDataPath(), environmentId),
+    recover: async (environmentId) => {
+      const { recoverRefusedManagedPairing } =
+        await import('./pairing/runtime-environment-managed-pairing-refusal')
+      return await recoverRefusedManagedPairing(getUserDataPath(), environmentId)
+    },
+    sharedControl: async (environmentId) => {
+      const { handleManagedSharedControlRefusal } =
+        await import('./pairing/runtime-environment-managed-pairing-refusal')
+      return await handleManagedSharedControlRefusal(getUserDataPath(), environmentId)
+    },
     connectRequested: (environmentId) =>
       forgetManagedOrcadAutomaticFailures(getUserDataPath(), environmentId)
   })
-  registerRuntimeSshAccessHandlers({
+  registerLazyRuntimeEnvironmentHandlers({
+    store,
     getUserDataPath,
     invalidateTransport: invalidateRuntimeEnvironmentTransport
-  })
-  registerOrcadRuntimeLifecycleHandlers({ getUserDataPath })
-  registerOrcadRuntimeConversionHandlers(getUserDataPath)
-  registerOrcadDeltaMoveHandlers(getUserDataPath)
-  registerOrcadLeaveBehindHandlers()
-  registerOrcadRuntimeMaintenanceHandlers({
-    getUserDataPath,
-    getActiveEnvironmentId: () => store.getSettings().activeRuntimeEnvironmentId,
-    invalidateTransport: invalidateRuntimeEnvironmentTransport,
-    clearHostServerStatus: clearPublishedManagedServer,
-    clearHostServerNotes: clearManagedServerNotes,
-    store
   })
   registerRuntimeEnvironmentSubscriptionHandlers({
     createAssociationObserver: (environmentId, identity) =>

@@ -23,13 +23,12 @@ export function TaskPageJiraStatusFilters({
     jiraQuickFiltersReady,
     jiraQuickFiltersPending,
     jiraQuickFiltersLoading,
-    jiraQuickFiltersError,
-    retryJiraQuickFilters,
     jiraStatusCatalog,
     jiraTaskSourceScopeKey,
     selectedJiraSiteId,
     activeJiraPreset,
     jiraCurrentSprint,
+    jiraFavouriteFilter,
     jiraSearchInput,
     setJiraSearchInput,
     setAppliedJiraSearch,
@@ -61,66 +60,63 @@ export function TaskPageJiraStatusFilters({
     jiraQuickFiltersLoading ||
     jiraQuickFiltersPending ||
     jiraSavedFiltersPending
-  if (jiraSearchInput.trim() || model.jiraFavouriteFilter) {
-    return selectedJiraStatuses.length ? (
-      <p className="mt-2 text-xs text-muted-foreground">
-        {t(
-          'jira.statusFilters.manualQuery',
-          'Status filters apply to preset views. Clear the search to use them.'
-        )}
+  if (jiraFavouriteFilter || jiraSearchInput.trim()) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        {jiraFavouriteFilter
+          ? t(
+              'jira.statusFilters.favouriteActive',
+              'Clear the Jira favourite or choose a preset view to use status filters.'
+            )
+          : t(
+              'jira.statusFilters.manualQuery',
+              'Status filters apply to preset views. Clear the search to use them.'
+            )}
       </p>
-    ) : null
+    )
+  }
+  if (statuses.length === 0) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        {t('jira.statusFilters.unavailable', 'No statuses are available for this view yet.')}
+      </p>
+    )
   }
   return (
-    <div className="mt-3 space-y-2">
-      {jiraQuickFiltersError ? (
-        <div role="alert" className="flex items-center gap-2 text-xs text-destructive">
-          <span>{jiraQuickFiltersError}</span>
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <ToggleGroup
+          type="multiple"
+          variant="segmented"
+          size="xs"
+          spacing={1}
+          value={selectedJiraStatuses}
+          disabled={disabled}
+          aria-label={t('jira.statusFilters.label', 'Filter Jira issues by status')}
+          onValueChange={(next) => {
+            void selectJiraStatuses(next).catch(() => {})
+          }}
+          className="flex-wrap"
+        >
+          {statuses.map((status) => (
+            <ToggleGroupItem key={status.name} value={status.name}>
+              {status.name}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+        {selectedJiraStatuses.length ? (
           <Button
             variant="ghost"
             size="xs"
-            disabled={jiraQuickFiltersLoading || jiraQuickFiltersPending}
-            onClick={retryJiraQuickFilters}
-          >
-            {t('jira.savedFilters.retry', 'Retry')}
-          </Button>
-        </div>
-      ) : null}
-      {statuses.length ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <ToggleGroup
-            type="multiple"
-            variant="segmented"
-            size="xs"
-            spacing={1}
-            value={selectedJiraStatuses}
             disabled={disabled}
-            aria-label={t('jira.statusFilters.label', 'Filter Jira issues by status')}
-            onValueChange={(next) => {
-              void selectJiraStatuses(next).catch(() => {})
+            onClick={() => {
+              void selectJiraStatuses([]).catch(() => {})
             }}
-            className="flex-wrap"
           >
-            {statuses.map((status) => (
-              <ToggleGroupItem key={status.name} value={status.name}>
-                {status.name}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
-          {selectedJiraStatuses.length ? (
-            <Button
-              variant="ghost"
-              size="xs"
-              disabled={disabled}
-              onClick={() => {
-                void selectJiraStatuses([]).catch(() => {})
-              }}
-            >
-              {t('jira.statusFilters.clear', 'Clear statuses')}
-            </Button>
-          ) : null}
-        </div>
-      ) : null}
+            {t('jira.statusFilters.clear', 'Clear statuses')}
+          </Button>
+        ) : null}
+      </div>
       {selectedJiraStatuses.length ? (
         <>
           <div className="flex items-center gap-2">

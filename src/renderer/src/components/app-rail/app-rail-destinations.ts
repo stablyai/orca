@@ -23,6 +23,27 @@ const DESTINATION_VISIBLE: Record<
   mobile: shouldShowMobileButton
 }
 
+// The settings Settings' "Show … button" switches write, so Customize persists through the same path.
+const DESTINATION_SETTING: Record<
+  AppRailDestinationId,
+  | 'showTasksButton'
+  | 'showAutomationsButton'
+  | 'showArtifactsButton'
+  | 'showSkillsButton'
+  | 'showMobileButton'
+> = {
+  tasks: 'showTasksButton',
+  automations: 'showAutomationsButton',
+  artifacts: 'showArtifactsButton',
+  skills: 'showSkillsButton',
+  mobile: 'showMobileButton'
+}
+
+/** Show or hide a rail page. Like Settings' switch, hiding the current page leaves it open; only the button goes. */
+export function setRailDestinationShown(id: AppRailDestinationId, shown: boolean): void {
+  void useAppStore.getState().updateSettings({ [DESTINATION_SETTING[id]]: shown })
+}
+
 const DESTINATION_OPEN: Record<AppRailDestinationId, (state: AppState) => void> = {
   tasks: (state) => state.openTaskPage(),
   automations: (state) => state.openAutomationsPage(),

@@ -1,8 +1,8 @@
 import { pbkdf2Sync } from 'node:crypto'
-import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
-import { windowsPowerShellPath } from '@orca/process-host/windows-system-binary'
+import { readChromiumLocalStateDpapiKey } from '../../../windows-dpapi/chromium-local-state-key'
+import { unprotectWindowsDpapiCurrentUser } from '../../../windows-dpapi/current-user-unprotect'
 import { diag } from '../browser-cookie-import-diagnostics'
 import {
   CHROMIUM_BROWSERS,
@@ -131,49 +131,19 @@ export async function getWindowsEncryptionKey(
     return null
   }
 
-  const localStatePath = join(root, 'Local State')
-  if (!existsSync(localStatePath)) {
-    return null
-  }
-
   try {
-    const raw = readFileSync(localStatePath, 'utf-8')
-    const localState = JSON.parse(raw)
-    const encryptedKeyB64 = localState?.os_crypt?.encrypted_key
-    if (typeof encryptedKeyB64 !== 'string') {
+    const localStateKey = await readChromiumLocalStateDpapiKey(join(root, 'Local State'))
+    if (localStateKey.status !== 'ok') {
       return null
     }
 
-    const encryptedKey = Buffer.from(encryptedKeyB64, 'base64')
-    const dpapiPrefix = Buffer.from('DPAPI', 'utf-8')
-    if (!encryptedKey.subarray(0, dpapiPrefix.length).equals(dpapiPrefix)) {
-      return null
-    }
-
-    // Send DPAPI data through stdin to keep it out of the PowerShell script.
-    const dpapiData = encryptedKey.subarray(dpapiPrefix.length).toString('base64')
-    const script = [
-      'try { Add-Type -AssemblyName System.Security.Cryptography.ProtectedData -ErrorAction Stop }',
-      'catch { try { Add-Type -AssemblyName System.Security -ErrorAction Stop } catch {} };',
-      '$in=[Convert]::FromBase64String([Console]::In.ReadLine());',
-      '$out=[System.Security.Cryptography.ProtectedData]::Unprotect($in,$null,',
-      '[System.Security.Cryptography.DataProtectionScope]::CurrentUser);',
-      '[Convert]::ToBase64String($out)'
-    ].join('')
-
-    // Hide the console and use the system PowerShell path; Electron’s PATH may differ.
-    const result = await runProcess({
-      program: windowsPowerShellPath(),
-      args: ['-NoProfile', '-NonInteractive', '-Command', script],
-      timeoutMs: 10_000,
-      input: dpapiData
-    })
-    if (result.code !== 0 || result.timedOut) {
+    const key = await unprotectWindowsDpapiCurrentUser(localStateKey.wrappedKey)
+    if (!key) {
       diag('  Windows DPAPI key extraction failed: PowerShell exited non-zero')
       return null
     }
 
-    return { key: Buffer.from(result.stdout.trim(), 'base64'), mode: 'aes-256-gcm' }
+    return { key, mode: 'aes-256-gcm' }
   } catch (err) {
     diag(`  Windows DPAPI key extraction failed: ${String(err)}`)
     return null

@@ -9,8 +9,39 @@ import {
 } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { RUNTIME_CAPABILITIES } from '../../../../../shared/remote-runtime/protocol/protocol-version'
 
+// The worker's own process is the only fake: fence and settle run on the real database, and each
+// stop that got past the fence counts one kill.
+const kills = vi.hoisted(() => vi.fn<(dispatchId: string) => void>())
+// Holds a stop between its kill and its settle, so a second press arrives while it is in flight.
+const processExit = vi.hoisted(() => ({ wait: (): Promise<void> => Promise.resolve() }))
+vi.mock('./worker/stop/single-worker-stop', () => ({
+  stopSingleWorker: async (
+    runtime: { getOrchestrationDb: () => OrchestrationDb },
+    dispatchId: string
+  ) => {
+    const db = runtime.getOrchestrationDb()
+    const begun = db.beginWorkerStop(dispatchId, 'epoch_1')
+    if (begun.disposition !== 'stopping') {
+      return { dispatchId, state: 'stopped', alreadySettled: true, processAction: 'none' }
+    }
+    kills(dispatchId)
+    await processExit.wait()
+    db.settleWorkerStop(dispatchId)
+    return {
+      dispatchId,
+      state: 'stopped',
+      alreadySettled: false,
+      processAction: 'closed_agent_terminal'
+    }
+  }
+}))
+vi.mock('./worker/release/worker-bound-terminal-close', () => ({
+  closeStoppedWorkerTerminals: async () => {}
+}))
+
 const databases: OrchestrationDb[] = []
 afterEach(() => {
+  processExit.wait = () => Promise.resolve()
   for (const db of databases.splice(0)) {
     db.close()
   }
@@ -166,4 +197,48 @@ it("refuses a paired person's Clear and Stop of a worker that runs on another co
       code: 'remote_owner_actions_unsupported'
     })
   }
+})
+
+it('stops a worker once for a double-clicked and then retried dock Stop', async () => {
+  const db = new OrchestrationDb(':memory:')
+  databases.push(db)
+  const task = db.createTask({ runId: 'run_legacy_local', spec: 'Verify journal writes' })
+  const { dispatch } = db.createStartingWorkerDispatch({
+    creator: { kind: 'system' },
+    maxDepth: 10,
+    taskId: task.id,
+    startOptions: { agent: 'codex' }
+  })
+  db.db
+    .prepare(
+      "UPDATE dispatch_contexts SET creator_orca_session_id = '11111111-1111-4111-8111-111111111111' WHERE id = ?"
+    )
+    .run(dispatch.id)
+  db.db
+    .prepare("UPDATE worker_dispatches SET state = 'ready' WHERE dispatch_id = ?")
+    .run(dispatch.id)
+  const ctx = ownerContext(db, {
+    caller: { kind: 'paired-device', deviceId: 'paired-phone' },
+    clientKind: 'mobile'
+  })
+  const press = (requestId: string) =>
+    ownerAction('orchestration.workerDockStop', ctx, {
+      ...ownerParams,
+      dispatch: dispatch.id,
+      requestId
+    })
+
+  let exit!: () => void
+  processExit.wait = () => new Promise<void>((resolve) => (exit = resolve))
+  const presses = Promise.all([press('click-1'), press('click-2')])
+  await vi.waitFor(() => expect(kills).toHaveBeenCalled())
+  exit()
+  const [first, second] = await presses
+  const retried = await press('click-1')
+
+  expect(kills).toHaveBeenCalledTimes(1)
+  expect(first).toMatchObject({ state: 'stopped', alreadySettled: false })
+  expect(second).toBe(first)
+  expect(retried).toMatchObject({ state: 'stopped', alreadySettled: true })
+  expect(db.getWorkerDispatch(dispatch.id)?.state).toBe('stopped')
 })

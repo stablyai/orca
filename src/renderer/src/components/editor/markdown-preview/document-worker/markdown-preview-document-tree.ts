@@ -105,11 +105,16 @@ export function parseMarkdownPreviewDocument(content: string): {
   assertDocumentBudget(parsed)
   // Raw HTML may span Markdown blocks, so normalize it before dividing the document.
   const containsHtml = hasHtml(parsed)
-  const processor = parser()
+  // Only the remark pass gets the source; rehype-raw would compute positions from it.
+  const transformed = parser.runSync(parsed, content)
+  if (!isMarkdownRoot(transformed)) {
+    throw new Error('Invalid preview document.')
+  }
+  const tree = unified()
     .use(remarkRehype, { allowDangerousHtml: true })
     .use(containsHtml ? [rehypeRaw] : [])
     .use(MARKDOWN_REHYPE_NORMALIZATION_PLUGINS)
-  const tree = processor.runSync(parsed)
+    .runSync(transformed)
   assertDocumentBudget(tree)
   tree.children = tree.children.filter(
     (node) => node.type !== 'text' || node.value.trim().length > 0
@@ -174,6 +179,10 @@ export function renderMarkdownPreviewBlock(
     return { index, tree: structuredClone(sourceTree), oversized: false }
   }
   return { index, tree: expanded, oversized }
+}
+
+function isMarkdownRoot(node: { type: string }): node is MarkdownRoot {
+  return node.type === 'root' && 'children' in node && Array.isArray(node.children)
 }
 
 function isHastRoot(node: { type: string }): node is Root {
