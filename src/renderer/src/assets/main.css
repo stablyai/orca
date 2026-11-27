@@ -4676,3 +4676,132 @@ body:has([data-contextual-tour-target='tab-create-menu'][data-state='open'])
 :root[data-browser-annotate-see-through] [data-annotate-palette-tooltip] {
   display: none;
 }
+
+/* App rail slot: docked takes 40px; hover mode overlays the left edge so nothing beside it resizes. */
+.app-rail-slot {
+  --app-rail-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --app-rail-in: 180ms;
+  --app-rail-out: 144ms;
+  width: 40px;
+  transition: width var(--app-rail-in) var(--app-rail-ease);
+}
+.app-rail-slot:not([data-docked]) {
+  width: 0;
+}
+.app-rail-slot[data-variant='sliver']:not([data-docked]) {
+  width: 3px;
+}
+.app-rail-panel {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  width: 40px;
+  min-height: 0;
+  flex-direction: column;
+  transition-property: transform, opacity, box-shadow, top, bottom, left, border-radius;
+  transition-duration: var(--app-rail-out);
+  transition-timing-function: var(--app-rail-ease);
+}
+.app-rail-slot[data-docked] .app-rail-panel,
+.app-rail-slot[data-open] .app-rail-panel {
+  transition-duration: var(--app-rail-in);
+}
+.app-rail-panel-spacer {
+  height: var(--app-header-height);
+  transition: height var(--app-rail-in) var(--app-rail-ease);
+}
+.app-rail-slot:not([data-docked]) .app-rail-panel {
+  z-index: 40;
+  box-shadow: var(--shadow-floating);
+  transform: translateX(calc(-100% - 12px));
+  pointer-events: none;
+}
+.app-rail-slot:not([data-docked])[data-open] .app-rail-panel {
+  transform: none;
+  pointer-events: auto;
+}
+/* A: full-height flush overlay; its titlebar strip still drags the window. */
+.app-rail-slot[data-variant='dock']:not([data-docked]) .app-rail-panel-spacer {
+  background: var(--worktree-sidebar);
+  -webkit-app-region: drag;
+}
+/* B: a floating card below the traffic lights, clearly temporary. */
+.app-rail-slot[data-variant='float']:not([data-docked]) .app-rail-panel {
+  top: var(--app-rail-top);
+  bottom: 6px;
+  left: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  box-shadow:
+    var(--shadow-floating),
+    0 0 0 1px var(--worktree-sidebar-border);
+  opacity: 0;
+  transform: translateX(-16px) scale(0.98);
+}
+.app-rail-slot[data-variant='float']:not([data-docked])[data-open] .app-rail-panel {
+  opacity: 1;
+  transform: none;
+}
+.app-rail-slot[data-variant='float']:not([data-docked]) [data-app-rail-nav] {
+  border-right-color: transparent;
+}
+/* C: a 3px sliver stays at the edge as a hint; reveal grows it into the rail. */
+.app-rail-slot[data-variant='sliver']:not([data-docked]) .app-rail-panel {
+  top: var(--app-rail-top);
+  box-shadow: none;
+  transform: translateX(calc(-100% + 3px));
+}
+.app-rail-slot[data-variant='sliver']:not([data-docked])[data-open] .app-rail-panel {
+  box-shadow: var(--shadow-floating);
+  transform: none;
+}
+.app-rail-slot[data-variant='sliver']:not([data-docked]) [data-app-rail-nav] > * {
+  opacity: 0;
+  transition: opacity 108ms var(--app-rail-ease);
+}
+.app-rail-slot[data-variant='sliver']:not([data-docked])[data-open] [data-app-rail-nav] > * {
+  opacity: 1;
+}
+.app-rail-slot[data-variant='float']:not([data-docked]) .app-rail-panel-spacer,
+.app-rail-slot[data-variant='sliver']:not([data-docked]) .app-rail-panel-spacer {
+  height: 0;
+}
+/* First launch: a short glow where the rail went. */
+.app-rail-edge-cue {
+  position: absolute;
+  top: var(--app-rail-top);
+  bottom: 0;
+  left: 0;
+  z-index: 41;
+  width: 3px;
+  pointer-events: none;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--ring) 85%, transparent), transparent);
+  opacity: 0;
+  animation: app-rail-edge-cue 1.6s ease-out;
+}
+@keyframes app-rail-edge-cue {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  25%,
+  60% {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-rail-slot,
+  .app-rail-panel,
+  .app-rail-panel-spacer {
+    transition-property: opacity !important;
+  }
+  .app-rail-slot:not([data-docked]):not([data-variant='sliver']) .app-rail-panel {
+    opacity: 0;
+    transform: none;
+  }
+  .app-rail-slot:not([data-docked]):not([data-variant='sliver'])[data-open] .app-rail-panel {
+    opacity: 1;
+  }
+}

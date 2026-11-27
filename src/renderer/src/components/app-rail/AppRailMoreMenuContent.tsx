@@ -15,6 +15,7 @@ import {
   type AppRailCustomizeRow
 } from './app-rail-menu-focus'
 import { AppRailCustomizeRows } from './AppRailCustomizeMenuContent'
+import { AppRailVisibilityRows } from './AppRailVisibilityRows'
 
 export type AppRailMoreDestination = {
   id: string
@@ -82,6 +83,7 @@ export function AppRailMoreMenuContent({
           <AppRailCustomizeRows rows={customizeRows} />
         </DropdownMenuSubContent>
       </DropdownMenuSub>
+      <AppRailVisibilityRows />
     </DropdownMenuContent>
   )
 }

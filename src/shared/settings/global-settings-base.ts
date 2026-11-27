@@ -42,6 +42,8 @@ type DesktopWindowSettings = {
   showMenuBarIcon?: boolean
   /** Linux: disables titlebar dragging and keeps only the close button. */
   linuxTilingWindowMode?: boolean
+  /** App rail: "hover" overlays it from the left window edge on demand; "always" docks it. Unset reads as hover. */
+  appRailVisibility?: 'hover' | 'always'
 }
 
 /** Settings groups owned by their feature modules and composed into GlobalSettings. */

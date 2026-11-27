@@ -9,7 +9,6 @@ import { pendingCreationOpensNativeChat } from '@/lib/workspace/creation/pending
 import { showsFloatingRightSidebarToggle } from '@/components/right-sidebar/visibility/right-sidebar-visibility'
 import Sidebar from '../components/sidebar/index'
 import { AppRail } from '../components/app-rail/AppRail'
-import { APP_RAIL_WIDTH } from '../components/app-rail/app-rail-layout'
 import RightSidebar from '../components/right-sidebar/RightSidebar'
 import { RecoverableRenderErrorBoundary } from '../components/error-boundaries/RecoverableRenderErrorBoundary'
 import { FloatingTerminalToggleButton } from '../components/floating-terminal/trigger/FloatingTerminalToggleButton'
@@ -220,7 +219,7 @@ export function AppWorkspaceShell(props: {
                 style={
                   layout.listHiddenByRailPage && layout.savedSidebarOpen
                     ? {
-                        width: APP_RAIL_WIDTH + layout.sidebarWidth,
+                        width: layout.appRailWidth + layout.sidebarWidth,
                         alignSelf: 'stretch',
                         marginRight: 0
                       }

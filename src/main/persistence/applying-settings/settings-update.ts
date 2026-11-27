@@ -90,6 +90,9 @@ export function updateSettings(
   if ('experimentalAppRail' in updates) {
     sanitizedUpdates.experimentalAppRail = updates.experimentalAppRail === true
   }
+  if ('appRailVisibility' in updates) {
+    sanitizedUpdates.appRailVisibility = updates.appRailVisibility === 'always' ? 'always' : 'hover'
+  }
   if ('nestedWorkerMaxDepth' in updates) {
     sanitizedUpdates.nestedWorkerMaxDepth = resolveNestedWorkerMaxDepth({
       nestedWorkerMaxDepth: updates.nestedWorkerMaxDepth

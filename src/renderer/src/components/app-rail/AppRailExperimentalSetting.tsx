@@ -2,6 +2,7 @@ import type { GlobalSettings } from '../../../../shared/settings/global-settings
 import { useTranslate } from '@/i18n/use-translate'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import { SettingsSegmentedControl } from '../settings/form-controls/SettingsFormControls'
 import { SearchableSetting } from '../settings/section-layout/SearchableSetting'
 import { getExperimentalSearchEntry } from '../settings/advanced/experimental-search'
 
@@ -45,6 +46,31 @@ export function AppRailExperimentalSetting({
           onCheckedChange={() => void updateSettings({ experimentalAppRail: !enabled })}
         />
       </div>
+      {enabled ? (
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0 shrink space-y-0.5">
+            <Label id="app-rail-visibility-label">
+              {t('appRail.visibility.settingLabel', 'Show the app rail')}
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              {t(
+                'appRail.visibility.settingDescription',
+                'On hover, the rail stays out of the way until you rest the pointer on the left window edge.'
+              )}
+            </p>
+          </div>
+          <SettingsSegmentedControl
+            size="sm"
+            ariaLabelledBy="app-rail-visibility-label"
+            value={settings.appRailVisibility === 'always' ? 'always' : 'hover'}
+            onChange={(value) => void updateSettings({ appRailVisibility: value })}
+            options={[
+              { value: 'hover', label: t('appRail.visibility.hover', 'Show on hover') },
+              { value: 'always', label: t('appRail.visibility.always', 'Always show') }
+            ]}
+          />
+        </div>
+      ) : null}
     </SearchableSetting>
   )
 }

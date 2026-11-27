@@ -1,6 +1,7 @@
 import { Fragment } from 'react'
 import type React from 'react'
 import type { AppChromeLayout } from './use-app-chrome-layout'
+import { AppRailAutohideSlot } from '../../components/app-rail/AppRailAutohideSlot'
 
 type LeftColumnLayout = Pick<
   AppChromeLayout,
@@ -89,11 +90,9 @@ export function AppShellLeftColumn({
         {header}
         {railOn ? (
           // One stable position across views so a page switch never remounts the rail and drops keyboard focus.
-          <div key="app-rail" className="flex min-h-0 shrink-0 flex-col">
-            {/* The left titlebar covers this gap so the traffic-light row spans rail and list. */}
-            {shouldMount ? <div className="h-(--app-header-height) shrink-0" /> : null}
+          <AppRailAutohideSlot key="app-rail" headerSpacer={shouldMount}>
             {rail}
-          </div>
+          </AppRailAutohideSlot>
         ) : null}
         {listInColumn ? (
           // Keep a shrinkable flex viewport below the fixed header so the sidebar can scroll.

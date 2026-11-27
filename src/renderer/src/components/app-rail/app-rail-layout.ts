@@ -7,14 +7,21 @@ export const APP_RAIL_WIDTH = 40
 /** The workspace list column; rail items that fill it point here with aria-controls. */
 export const WORKSPACE_LIST_REGION_ID = 'workspace-list-region'
 
-type AppRailSettingsState = { settings: Pick<GlobalSettings, 'experimentalAppRail'> | null }
+type AppRailSettingsState = {
+  settings: Pick<GlobalSettings, 'experimentalAppRail' | 'appRailVisibility'> | null
+}
 
 export function selectAppRailVisible(state: AppRailSettingsState): boolean {
   return state.settings?.experimentalAppRail === true
 }
 
+/** The rail takes layout width only when docked; in hover mode it overlays the left edge on demand. */
+export function selectAppRailDocked(state: AppRailSettingsState): boolean {
+  return selectAppRailVisible(state) && state.settings?.appRailVisibility === 'always'
+}
+
 export function selectAppRailWidth(state: AppRailSettingsState): number {
-  return selectAppRailVisible(state) ? APP_RAIL_WIDTH : 0
+  return selectAppRailDocked(state) ? APP_RAIL_WIDTH : 0
 }
 
 /** Pages that live on the rail below Workspaces, in this order. With the rail on, each fills the page and hides the list. */

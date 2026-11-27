@@ -1,9 +1,10 @@
-import React, { Suspense, useRef, useState } from 'react'
+import React, { Suspense, useCallback, useRef, useState } from 'react'
 import { Ellipsis } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { DropdownMenu, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
 import { useLatchedOpen } from '@/app-shell/root-surfaces/use-latched-open'
+import { useAppRailMenuRequest } from './app-rail-menu-request'
 import { APP_RAIL_ICON_SIZE, APP_RAIL_ICON_STROKE_WIDTH, AppRailButton } from './AppRailButton'
 import { useAppRailCustomizeLabel, type AppRailCustomizeRow } from './app-rail-menu-focus'
 
@@ -28,6 +29,7 @@ export function AppRailCustomizeMenu({
   const label = useAppRailCustomizeLabel()
   const triggerRef = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
+  useAppRailMenuRequest(useCallback(() => setOpen(true), []))
   const hasOpened = useLatchedOpen(open)
   return (
     <DropdownMenu modal={false} open={open} onOpenChange={setOpen}>

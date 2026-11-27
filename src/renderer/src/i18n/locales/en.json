@@ -31393,7 +31393,13 @@
     "customize": "Customize",
     "pageRegion": "Page",
     "account": "Account",
-    "signIn": "Sign in"
+    "signIn": "Sign in",
+    "visibility": {
+      "hover": "Show on hover",
+      "always": "Always show",
+      "settingLabel": "Show the app rail",
+      "settingDescription": "On hover, the rail stays out of the way until you rest the pointer on the left window edge."
+    }
   },
   "chats": {
     "delete": {

@@ -1,10 +1,11 @@
-import React, { Suspense, useLayoutEffect, useRef, useState } from 'react'
+import React, { Suspense, useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { Ellipsis } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { DropdownMenu, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
 import { useLatchedOpen } from '@/app-shell/root-surfaces/use-latched-open'
+import { useAppRailMenuRequest } from './app-rail-menu-request'
 import { APP_RAIL_ICON_SIZE, APP_RAIL_ICON_STROKE_WIDTH, AppRailButton } from './AppRailButton'
 import { appRailSlotCapacity } from './app-rail-overflow'
 import type { AppRailCustomizeRow } from './app-rail-menu-focus'
@@ -36,6 +37,7 @@ export function AppRailMoreMenu({
   const label = t('appRail.more', 'More')
   const triggerRef = useRef<HTMLButtonElement>(null)
   const [menuOpen, setMenuOpen] = useState(false)
+  useAppRailMenuRequest(useCallback(() => setMenuOpen(true), []))
   const hasOpenedMenu = useLatchedOpen(menuOpen)
   const current = destinations.find((destination) => destination.current)?.label
   return (

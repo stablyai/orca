@@ -7,6 +7,7 @@ import {
   useMenuHeldInPlace,
   type AppRailCustomizeRow
 } from './app-rail-menu-focus'
+import { AppRailVisibilityRows } from './AppRailVisibilityRows'
 
 /** One checkbox row per rail page; toggling keeps the menu open so several can change in one visit. */
 export function AppRailCustomizeRows({
@@ -57,6 +58,7 @@ export function AppRailCustomizeMenuContent({
       onCloseAutoFocus={() => refocusTriggerIfFocusLost(triggerRef.current)}
     >
       <AppRailCustomizeRows rows={rows} />
+      <AppRailVisibilityRows />
     </DropdownMenuContent>
   )
 }
