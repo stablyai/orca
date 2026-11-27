@@ -15,7 +15,8 @@ import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-o
 import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import {
   getRuntimeAgentInventoryEnvironmentId,
-  getRuntimeAgentInventoryKey
+  getRuntimeAgentInventoryKey,
+  type RuntimeAgentHostScope
 } from './runtime-agent-inventory-key'
 
 // Probe where the workspace runs; inventory keys distinguish host defaults from workspace-scoped results.
@@ -28,13 +29,14 @@ export type RuntimeDetectedAgentsSlice = {
   runtimeAgentDetectionNeedsServerUpdate: Record<string, boolean>
   ensureRuntimeDetectedAgents: (
     environmentId: string,
-    worktreeId?: string | null
+    worktreeId?: string | null,
+    options?: { hostScope?: RuntimeAgentHostScope }
   ) => Promise<TuiAgent[]>
   /** Refresh login-shell PATH; fall back to detectAgents only for servers predating refreshAgents. */
   refreshRuntimeDetectedAgents: (
     environmentId: string,
     worktreeId?: string | null,
-    options?: { userInitiated?: boolean }
+    options?: { userInitiated?: boolean; hostScope?: RuntimeAgentHostScope }
   ) => Promise<TuiAgent[]>
   clearRuntimeDetectedAgents: (environmentId: string) => void
   /** Prune removed environments’ inventories via setRuntimeEnvironments. */
@@ -155,8 +157,12 @@ export const createRuntimeDetectedAgentsSlice: (
     isRefreshingRuntimeAgents: {},
     runtimeAgentDetectionNeedsServerUpdate: {},
 
-    ensureRuntimeDetectedAgents: (environmentId: string, worktreeId?: string | null) => {
-      const key = getRuntimeAgentInventoryKey(environmentId, worktreeId)
+    ensureRuntimeDetectedAgents: (
+      environmentId: string,
+      worktreeId?: string | null,
+      options = {}
+    ) => {
+      const key = getRuntimeAgentInventoryKey(environmentId, worktreeId, options.hostScope)
       const inflightRefresh = runtimeRefreshPromises.get(key)
       if (inflightRefresh) {
         return inflightRefresh
@@ -182,7 +188,8 @@ export const createRuntimeDetectedAgentsSlice: (
         environmentId,
         worktreeId,
         (params) => callRuntimeRpc<TuiAgent[]>(target, 'preflight.detectAgents', params, fence),
-        nestedSshDetection(target, worktreeId, fence)
+        nestedSshDetection(target, worktreeId, fence),
+        options.hostScope
       )
         .then((typed) => {
           // Removed or re-paired environments must not regain stale entries from in-flight detection.
@@ -221,7 +228,7 @@ export const createRuntimeDetectedAgentsSlice: (
       worktreeId?: string | null,
       options = {}
     ) => {
-      const key = getRuntimeAgentInventoryKey(environmentId, worktreeId)
+      const key = getRuntimeAgentInventoryKey(environmentId, worktreeId, options.hostScope)
       const inflight = runtimeRefreshPromises.get(key)
       if (inflight && (!options.userInitiated || explicitRefreshes.has(inflight))) {
         return inflight
@@ -255,7 +262,8 @@ export const createRuntimeDetectedAgentsSlice: (
                 // Fallback only for old servers; repeating disconnect/runtime failures just doubles remote work.
                 return callRuntimeRpc<TuiAgent[]>(target, 'preflight.detectAgents', params, fence)
               }),
-          nestedSshDetection(target, worktreeId, fence)
+          nestedSshDetection(target, worktreeId, fence),
+          options.hostScope
         )
       const pending = (
         inflight
