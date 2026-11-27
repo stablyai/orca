@@ -23,7 +23,7 @@ export function getUsageErrorAlertLabel(p: ProviderRateLimits, t: Translate): st
 }
 
 /**
- * Amber alert that replaces a chip's error text; a click falls through to the usage menu, whose rows
+ * Muted alert that replaces a chip's error text; a click falls through to the usage menu, whose rows
  * carry the message, and that menu's button describes every alert for screen readers.
  */
 export function UsageErrorAlert({ label }: { label: string }): React.JSX.Element {
@@ -32,7 +32,7 @@ export function UsageErrorAlert({ label }: { label: string }): React.JSX.Element
       size={14}
       role="img"
       aria-label={label}
-      className="shrink-0 text-status-warning"
+      className="shrink-0 text-muted-foreground"
     />
   )
 }
