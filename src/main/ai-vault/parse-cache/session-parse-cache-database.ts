@@ -64,6 +64,11 @@ const ROWS_REPAIR_SQL =
   rowsRepairSql('grok_rows_version', "rows.path GLOB '*[/\\]summary.json'") +
   // Pi rows cached before session_info names became titles.
   rowsRepairSql('pi_title_rows_version', `instr(rows.session, '"agent":"pi"') > 0`) +
+  // CodeBuddy rows cached before first-prompt titles were normalized.
+  rowsRepairSql(
+    'codebuddy_title_rows_version',
+    "rows.path GLOB '*[/\\].codebuddy[/\\]projects[/\\]*'"
+  ) +
   // Claude rows titled with harness markup (such as /clear's command caveat) before it stopped naming sessions.
   rowsRepairSql(
     'claude_harness_title_rows_version',
