@@ -93,7 +93,10 @@ const FILES_REPAIR_SQL =
   // Pi transcripts indexed before session_info names became titles.
   filesRepairSql('pi_title_files_version', 'pi') +
   // CodeBuddy transcripts indexed before first-prompt titles were normalized.
-  filesRepairSql('codebuddy_title_files_version', 'codebuddy')
+  filesRepairSql('codebuddy_title_files_version', 'codebuddy') +
+  // Pi and OMP transcripts indexed before thinking block text was searchable.
+  filesRepairSql('pi_thinking_files_version', 'pi') +
+  filesRepairSql('omp_thinking_files_version', 'omp')
 
 export function openSessionSearchDatabase(path: string): SyncDatabase {
   return openVersionedCacheDatabase(path, {
