@@ -119,7 +119,7 @@ export function MobileNewTabSheet({
       dragContentToDismiss
     >
       <SheetHeader
-        title={t('session.sheets.newTab', 'New Tab')}
+        title={t('session.sheets.newTab', 'New tab')}
         {...(workspaceName ? { subtitle: workspaceName } : {})}
         onClose={onClose}
       />
@@ -208,7 +208,7 @@ export function MobileNewTabSheet({
         {canCreateMarkdownNote ? (
           <ListRow
             key="markdownNote"
-            title={t('session.sheets.markdownNote', 'Markdown Note')}
+            title={t('session.sheets.markdownNote', 'Markdown note')}
             leading={<FileText size={16} color={iconColor} />}
             onPress={() => closeAndRun(onCreateMarkdownNote)}
           />

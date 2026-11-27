@@ -2790,11 +2790,9 @@
       "shift": "Shift"
     },
     "activeContent": {
-      "createTab": "Criar Aba",
       "creatingTab": "Criando…",
       "fileTitle": "Arquivo",
       "loadingTerminal": "Carregando terminal",
-      "noTabs": "Nenhuma aba nesta sessão",
       "retryLoadingTerminal": "Tentar carregar o terminal novamente",
       "terminalTakingLonger": "O terminal está demorando mais que o esperado"
     },
@@ -2896,21 +2894,11 @@
       "workflow": "Fluxo de trabalho em segundo plano"
     },
     "browserTabActionSheet": {
-      "forward": "Avançar",
-      "reload": "Recarregar",
       "hardReload": "Forçar recarregamento",
       "title": "Navegador"
     },
     "bulkCloseSheetActions": {
       "closeOtherTabs": "Fechar Outras Abas"
-    },
-    "bulkTabClose": {
-      "confirm": "Fechar abas",
-      "description": "As abas selecionadas serão fechadas. As abas fixadas continuarão abertas.",
-      "titleEditors": "Fechar todas as abas do editor?",
-      "titleLeft": "Fechar abas à esquerda?",
-      "titleOthers": "Fechar outras abas?",
-      "titleRight": "Fechar abas à direita?"
     },
     "commandDock": {
       "liveInputHint": "O texto digitado é enviado diretamente ao terminal ativo.",
@@ -3304,7 +3292,6 @@
     },
     "sheets": {
       "browser": "Navegador",
-      "browserStreamingUnavailable": "Este host não pode transmitir abas do navegador",
       "chat": "Chat",
       "cli": "CLI",
       "cliOnly": "Somente CLI",
@@ -3321,7 +3308,6 @@
       "file": "Arquivo",
       "markdown": "Markdown",
       "markdownNote": "Nota em Markdown",
-      "newBrowser": "Novo Navegador",
       "newTab": "Nova Aba",
       "notesCopied": "Notas copiadas",
       "notesHint": "Selecione uma sessão de agente para as notas atuais.",
@@ -3340,7 +3326,6 @@
       "shellWsl": "WSL",
       "terminalName": "Nome do terminal",
       "unsavedMarkdown": "Alterações em Markdown não salvas",
-      "urlPrompt": "Digite uma URL ou deixe em branco para abrir uma nova aba.",
       "allowAutoClose": "Permitir fechamento automático",
       "agents": "Agentes",
       "renameTerminalFailed": "Não foi possível renomear o terminal. {{reason}}"
@@ -3617,8 +3602,6 @@
       "mailOwnerUnconfirmed": "Orca não conseguiu confirmar se esta mensagem ainda se destina a este chat."
     },
     "workerAutoClose": {
-      "running": "Agente de orquestração temporário · Fecha 2 minutos após terminar",
-      "finished": "Agente de orquestração temporário concluído · Fecha em {{countdown}}",
       "keepOpen": "Manter aberto"
     },
     "terminalLayoutSheet": {
@@ -3749,7 +3732,6 @@
     "tabBar": {
       "oneTab": "1 aba",
       "tabCount": "Abas: {{count}}",
-      "anotherNeedsYou": "outra aba precisa de você",
       "actionsHint": "Mostra ações para esta aba",
       "next": "Próxima aba",
       "previous": "Aba anterior",
