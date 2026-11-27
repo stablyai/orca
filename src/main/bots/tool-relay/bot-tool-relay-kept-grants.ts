@@ -18,8 +18,8 @@ import { answerCredentialsLocked } from './bot-tool-relay-sign-in-answer'
 /**
  * The daemon pipes at most `TOOL_RELAY_FRONT_MAX_PIPES` connections per front and can't tell a
  * stream from a call, so the app budgets them: event streams stop short of the cap so calls get a
- * pipe, and everything but cleanup stops short of it so DELETE does. Idle keep-alive connections
- * close within seconds.
+ * pipe, and everything but cleanup stops short of it so DELETE does. A front's connections close
+ * after each answer, so open pipes are the requests counted here.
  */
 export const FRONT_STREAM_BUDGET = TOOL_RELAY_FRONT_MAX_PIPES - 64
 export const FRONT_OPEN_BUDGET = TOOL_RELAY_FRONT_MAX_PIPES - 16
@@ -190,9 +190,20 @@ export class KeptRelayGrants {
     }
   }
 
-  /** A Host the relay answers: its own port, or a daemon-held front it serves. */
-  answers(host: string | undefined, ownPort: number): boolean {
-    const match = /^(?:127\.0\.0\.1|localhost):(\d+)$/.exec(host ?? '')
+  /**
+   * A Host the relay answers: its own port, or a daemon-held front it serves. A front's connection
+   * closes after each answer: the daemon holds a pipe for every open connection, and an idle
+   * keep-alive one would hold a pipe no budget here counts, so cleanup's reserve could fill.
+   */
+  answers(
+    req: Pick<IncomingMessage, 'headers' | 'socket'>,
+    res: { shouldKeepAlive: boolean },
+    ownPort: number
+  ): boolean {
+    if (this.frontOf.has(req.socket)) {
+      res.shouldKeepAlive = false
+    }
+    const match = /^(?:127\.0\.0\.1|localhost):(\d+)$/.exec(req.headers.host ?? '')
     const port = match ? Number(match[1]) : null
     return port !== null && (port === ownPort || this.fronts.serves(port))
   }

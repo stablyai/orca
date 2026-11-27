@@ -153,7 +153,7 @@ export class BotToolRelay {
     let label = ''
     try {
       // A browser page can reach loopback too; Orca's agents send no Origin and name this address.
-      if (req.headers.origin !== undefined || !this.kept.answers(req.headers.host, this.port)) {
+      if (!this.kept.answers(req, res, this.port) || req.headers.origin !== undefined) {
         throw new RelayRefusal(403, 'Not allowed.')
       }
       const match = relayToolPath(req.url ?? '')
