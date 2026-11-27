@@ -35,6 +35,11 @@ class DeferredPipe {
       endpoint.destroy()
       return
     }
+    // A rendezvous pipe can close while the other owner channels are still arriving.
+    if (endpoint.destroyed) {
+      this.stream.destroy()
+      return
+    }
     let ended = false
     endpoint.once('end', () => (ended = true))
     endpoint.once('close', () => {
