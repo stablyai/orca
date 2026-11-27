@@ -206,7 +206,7 @@ export function PaneTopBanner({
         role={announcement === undefined ? 'status' : undefined}
         data-tone="quiet"
         className={cn(
-          // Why these insets: the text starts at the terminal's first column, and the action ends where the terminal's last
+          // Why these insets: the text starts at the terminal's first column, and the content ends where the terminal's last
           // column does or, under floating pane controls, a gap before them.
           'relative flex h-8 items-center border-b border-border pr-[max(var(--pane-padding-x,4px),calc(var(--orca-pane-top-banner-controls-inset,0px)+0.5rem))] pl-(--pane-padding-x,4px) text-xs',
           actionPlacement === 'start' ? 'gap-1' : 'gap-2',

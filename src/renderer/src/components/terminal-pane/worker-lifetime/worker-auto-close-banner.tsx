@@ -55,7 +55,8 @@ export function workerAutoCloseBannerProps(
         : (Date.parse(state.closesAt) - nowMs) / WORKER_AUTO_CLOSE_GRACE_MS,
     actionPlacement: 'start',
     primaryAction: (
-      <Button type="button" variant="ghost-muted" size="xs-compact" onClick={keepOpen}>
+      // Why ghost, not ghost-muted: beside the muted title it must read as the action; a terminal pane recolours it to its surface.
+      <Button type="button" variant="ghost" size="xs-compact" onClick={keepOpen}>
         {workerKeepOpenLabel(t)}
       </Button>
     )
