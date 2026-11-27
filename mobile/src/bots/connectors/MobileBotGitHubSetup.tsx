@@ -3,6 +3,7 @@
 // phone waits; GitHub's install page works in any browser, so it opens in the phone's, and the host
 // notices the install.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { joinSentences } from '../../../../src/shared/text/sentence-joining'
 import { ActivityIndicator } from 'react-native'
 import { ArrowUpRight } from 'lucide-react-native'
 import {
@@ -171,9 +172,15 @@ export function MobileBotGitHubSetup(props: {
               footer={
                 failed
                   ? undefined
-                  : `${t('bots.connect.opensOnHost', 'Opens in Orca’s browser on {{host}}.', {
-                      host: hostName
-                    })} ${t('bots.github.connect.readsOnly', 'Orca only reads your GitHub username and id.')}`
+                  : joinSentences([
+                      t('bots.connect.opensOnHost', 'Opens in Orca’s browser on {{host}}.', {
+                        host: hostName
+                      }),
+                      t(
+                        'bots.github.connect.readsOnly',
+                        'Orca only reads your GitHub username and id.'
+                      )
+                    ])
               }
             >
               <ListRow
