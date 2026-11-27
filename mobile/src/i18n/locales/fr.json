@@ -364,9 +364,7 @@
     },
     "message": {
       "copyMessage": "Copier le message",
-      "forkFromResponse": "Créer une branche à partir de cette réponse",
-      "scrollMessageToTop": "Revenir au début du message",
-      "forkFromResponseHint": "Une nouvelle conversation avec toute cette réponse, jusqu’à la fin de son tour"
+      "forkFromResponse": "Créer une branche à partir de cette réponse"
     },
     "messageActionsSheet": {
       "clipboardRejected": "Le presse-papiers a refusé le texte.",
@@ -398,10 +396,8 @@
     },
     "nativeChatToolLine": {
       "added": "A ajouté",
-      "copyCommand": "Copier la commande",
       "deleted": "A supprimé",
       "durationHours": "{{hours}} h {{minutes}} min {{seconds}} s",
-      "durationMilliseconds": "{{milliseconds}} ms",
       "durationMinutes": "{{minutes}} min {{seconds}} s",
       "durationSeconds": "{{seconds}} s",
       "edited": "A modifié",
@@ -1509,9 +1505,9 @@
     },
     "native-chat": {
       "turnDiff": {
-        "changedFiles_many": "{{count}} fichiers modifiés",
-        "changedFiles_one": "{{count}} fichier modifié",
-        "changedFiles_other": "{{count}} fichiers modifiés",
+        "changed_many": "{{count}} fichiers modifiés",
+        "changed_one": "{{count}} fichier modifié",
+        "changed_other": "{{count}} fichiers modifiés",
         "partial": "Diff partiel",
         "showMoreFiles": "Afficher {{count}} de plus"
       },
@@ -2995,11 +2991,8 @@
     },
     "nativeChatRenderData": {
       "defaultAgentLabel": "l'agent",
-      "emptySubtitle": "Demandez à {{agent}} d'examiner le code, d'expliquer la sortie ou d'effectuer une modification.",
       "emptyTitle": "Démarrez un chat avec {{agent}}",
-      "errorSubtitle": "La transcription n'a pas pu être lue. Rebasculez sur le terminal pour continuer à travailler.",
       "errorTitle": "Impossible de charger la conversation",
-      "notFoundSubtitle": "Envoyez un message pour en démarrer une, ou ouvrez la vue du terminal pour voir ce que fait {{agent}}.",
       "notFoundTitle": "Conversation introuvable pour le moment"
     },
     "nativeChatToggleAction": {

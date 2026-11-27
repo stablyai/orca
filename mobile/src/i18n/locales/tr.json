@@ -357,9 +357,7 @@
     },
     "message": {
       "copyMessage": "Mesajı kopyala",
-      "forkFromResponse": "Bu yanıttan çatalla",
-      "scrollMessageToTop": "Bu mesajı yukarı kaydır",
-      "forkFromResponseHint": "Bu yanıtın tamamını turun sonuna kadar içeren yeni bir sohbet"
+      "forkFromResponse": "Bu yanıttan çatalla"
     },
     "messageActionsSheet": {
       "clipboardRejected": "Metin panoya kopyalanamadı.",
@@ -391,10 +389,8 @@
     },
     "nativeChatToolLine": {
       "added": "Eklendi",
-      "copyCommand": "Komutu kopyala",
       "deleted": "Silindi",
       "durationHours": "{{hours}} sa {{minutes}} dk {{seconds}} sn",
-      "durationMilliseconds": "{{milliseconds}} ms",
       "durationMinutes": "{{minutes}} dk {{seconds}} sn",
       "durationSeconds": "{{seconds}} sn",
       "edited": "Düzenlendi",
@@ -1776,9 +1772,9 @@
         "sentAsGoal": "Hedef olarak gönderildi"
       },
       "turnDiff": {
-        "changedFiles_one": "{{count}} dosya değişti",
-        "changedFiles_other": "{{count}} dosya değişti",
         "partial": "Kısmi diff",
+        "changed_one": "{{count}} dosya değişti",
+        "changed_other": "{{count}} dosya değişti",
         "showMoreFiles": "{{count}} tane daha göster"
       },
       "connectorAsker": {
@@ -3262,11 +3258,8 @@
     },
     "nativeChatRenderData": {
       "defaultAgentLabel": "ajan",
-      "emptySubtitle": "{{agent}} ile sohbette kodu incelemesini, çıktıyı açıklamasını veya bir değişiklik yapmasını isteyin.",
       "emptyTitle": "{{agent}} ile sohbet başlatın",
-      "errorSubtitle": "Döküm okunamadı. Çalışmaya devam etmek için terminale geri geçin.",
       "errorTitle": "Konuşma yüklenemedi",
-      "notFoundSubtitle": "Bir konuşma başlatmak için mesaj gönderin veya {{agent}} tarafından yapılanları görmek için terminal görünümünü açın.",
       "notFoundTitle": "Bu konuşma henüz bulunamadı"
     },
     "nativeChatToggleAction": {
