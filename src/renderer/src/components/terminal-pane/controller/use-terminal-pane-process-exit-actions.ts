@@ -3,6 +3,10 @@ import { usePaneProcessRestart } from '../process-exit/use-pane-process-restart'
 import { useExitedPaneActions } from '../process-exit/use-exited-pane-actions'
 import { useSavedPanePtyBindings } from '../layout/ownership/use-saved-pane-pty-bindings'
 import { useReadyPaneAccountRestarts } from '../account-restart/use-ready-pane-account-restarts'
+import { useMissingFolderPaneRetry } from '../process-exit/use-missing-folder-pane-retry'
+import { useAppStore } from '@/store/index'
+import { getKnownExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 
 import type { TerminalPaneCloseController } from '../layout/close/use-terminal-pane-close-actions'
 
@@ -43,6 +47,7 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
     suppressPtyExit,
     syncPanePtyLayoutBinding,
     tabId,
+    terminalErrorsByPaneId,
     updateTabPtyId,
     updateTabTitle,
     worktreeId
@@ -85,6 +90,17 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
     updateTabPtyId,
     updateTabTitle,
     worktreeId
+  })
+
+  // Why: an SSH, runtime, or not-yet-known host has folders this client cannot probe.
+  const paneOnClient = useAppStore(
+    (state) => getKnownExecutionHostIdForWorktree(state, worktreeId) === LOCAL_EXECUTION_HOST_ID
+  )
+  useMissingFolderPaneRetry({
+    terminalErrorsByPaneId,
+    paneOnClient,
+    paneTransportsRef,
+    handleRestartPane
   })
 
   const { handleRestartExitedPane, handleCloseExitedPane } = useExitedPaneActions({
