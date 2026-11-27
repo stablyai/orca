@@ -5,9 +5,9 @@ import { TransientToast } from '../../components/feedback/TransientToast'
 import { isConnectionOutage } from '../../transport/connection/connection-health'
 import type { CollapsingTitle } from '../../components/nav-bar/PageTitle'
 import { WorktreeListRow } from '../../worktree/row-presentation/WorktreeListRow'
-import { worktreeListRowStyles as rowStyles } from '../../worktree/row-presentation/worktree-list-row-styles'
-import { colors, spacing } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { worktreeListRowStylesSheet as rowStylesSheet } from '../../worktree/row-presentation/worktree-list-row-styles'
+import { spacing } from '../../theme/mobile-theme'
+import { useMobileColorScheme, useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { getWorktreeRowIdentity } from '../../worktree/row-presentation/worktree-host-row-identity'
 import {
   HostWorkspaceListReopen,
@@ -24,7 +24,7 @@ import type {
 } from '../../worktree/workspace-list/workspace-list-types'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../../src/shared/repository/appearance/repo-badge-color'
 import { getWorktreeCardDetails } from '../../../../src/shared/worktree/row-display/card-properties'
-import { hostScreenStyles as styles } from '../host-screen-styles'
+import { hostScreenStylesSheet as stylesSheet } from '../host-screen-styles'
 import { useRepoLookById } from '../catalog/host-repo-looks'
 import { HostSectionHeader } from './host-section-header'
 import { useSlowPendingKeys } from './use-slow-pending-keys'
@@ -33,6 +33,7 @@ import { workspaceRenameDraftKey } from '../workspace-actions/workspace-rename-s
 import type { HostScreenController } from '../use-host-screen-controller'
 import { isWorktreePinned } from '../../worktree/workspace-list/workspace-list-sections'
 import { folderIdOfSelector } from '../../../../src/shared/workspace/identity/workspace-scope'
+import { useThemedStyles } from '../../theme/themed-styles'
 
 export function HostWorkspaceList({
   controller,
@@ -45,6 +46,9 @@ export function HostWorkspaceList({
   /** The host name at the top of the list, folding into the bar as it scrolls. */
   pageTitle?: { element: ReactElement; collapsing: CollapsingTitle }
 }) {
+  const styles = useThemedStyles(stylesSheet)
+  const rowStyles = useThemedStyles(rowStylesSheet)
+  const colors = useMobileColors()
   const colorScheme = useMobileColorScheme()
   const {
     actions,
@@ -347,7 +351,7 @@ function unsavedRename(
 }
 
 function ListSeparator({ leadingItem }: { leadingItem?: WorkspaceListItem }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   // A separator keeps the neighbours it mounted with, so the Bots list draws its own dividers.
   return isBotsListRow(leadingItem?.view) ? null : <View style={styles.separator} />
 }

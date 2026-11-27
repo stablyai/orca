@@ -5,17 +5,19 @@ import type {
   TerminalHostSettings,
   TerminalWebViewCommand
 } from './terminal-webview-messages'
-import { colors } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { getMobilePalette, type MobilePalette } from '../../theme/mobile-theme'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 /** The selection menu's colours from the app's current scheme. */
-export function terminalChromeColors(): TerminalChromeColors {
+export function terminalChromeColors(
+  palette: MobilePalette = getMobilePalette()
+): TerminalChromeColors {
   return {
-    surface: colors.bgRaised,
-    text: colors.textPrimary,
-    line: colors.borderSubtle,
-    pressed: colors.translucentFill,
-    accent: colors.accentBlue
+    surface: palette.bgRaised,
+    text: palette.textPrimary,
+    line: palette.borderSubtle,
+    pressed: palette.translucentFill,
+    accent: palette.accentBlue
   }
 }
 
@@ -26,10 +28,10 @@ export function useTerminalDocumentSettingsSync(
   terminalTheme: RuntimeMobileTerminalTheme | undefined,
   hostSettings: TerminalHostSettings | undefined
 ): RefObject<TerminalHostSettings | undefined> {
-  const scheme = useMobileColorScheme()
+  const palette = useMobileColors()
   useEffect(() => {
-    postMessage({ type: 'set-chrome', chrome: terminalChromeColors() })
-  }, [postMessage, scheme])
+    postMessage({ type: 'set-chrome', chrome: terminalChromeColors(palette) })
+  }, [postMessage, palette])
   const hostSettingsRef = useRef(hostSettings)
   const terminalThemeKey = useMemo(() => JSON.stringify(terminalTheme ?? null), [terminalTheme])
   useEffect(() => {

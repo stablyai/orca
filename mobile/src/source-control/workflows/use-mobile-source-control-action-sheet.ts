@@ -45,7 +45,7 @@ export function useMobileSourceControlActionSheet(
           // Create intent may publish or push before review creation.
           prAvailable: upstreamKnown,
           prHint: upstreamKnown ? undefined : mobileCommitDropdownCopy(t).checkingBranchStatus,
-          forcePushBlockedReason: getMobileForcePushBlockedReason(review),
+          forcePushBlockedReason: getMobileForcePushBlockedReason(review, t),
           handlers: {
             commit: () => void runActionSheetCommit(),
             commitPush: (forceWithLease) =>

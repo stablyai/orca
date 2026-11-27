@@ -2,20 +2,20 @@ import { Text, View, useWindowDimensions } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useNativeChatProseText } from '../session/native-chat/preferences/native-chat-text-settings'
 import { MobileNativeChatMarkdown } from '../session/native-chat/transcript/message-content/MobileNativeChatMarkdown'
-import { styles as messageStyles } from '../session/native-chat/transcript/messages/mobile-native-chat-message-styles'
+import { stylesSheet as messageStylesSheet } from '../session/native-chat/transcript/messages/mobile-native-chat-message-styles'
 import {
-  toolStyles,
+  toolStylesSheet,
   toolType
 } from '../session/native-chat/transcript/tool-results/mobile-native-chat-tool-styles'
-import { colors, radii, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-
+import { radii, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 const CODE = '```ts\nawait vi.waitFor(() =>\n  expect(rows).toHaveLength(3))\n```'
 
 /** The chat's own parts at the chosen text settings: your bubble, a tool line, prose and code. */
 export function NativeChatTextPreview({ fontScale: chatScale }: { fontScale: number }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const toolStyles = useThemedStyles(toolStylesSheet)
+  const messageStyles = useThemedStyles(messageStylesSheet)
   const t = useMobileTranslation()
   // Native text grows with the phone's Text Size and the chat page's doesn't; undo it so sizes match the chat.
   const fontScale = chatScale / useWindowDimensions().fontScale
@@ -51,7 +51,7 @@ export function NativeChatTextPreview({ fontScale: chatScale }: { fontScale: num
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   preview: {
     gap: spacing.md,
     padding: spacing.md,

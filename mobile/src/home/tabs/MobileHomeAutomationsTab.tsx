@@ -17,14 +17,14 @@ import { describeLoadError } from '../../components/feedback/load-error-descript
 import { useNow } from '../../hooks/use-now'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
-import { colors, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { useHostClient } from '../../transport/connection/host-client-hooks'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import type { HostProfile } from '../../host-catalog/host-profile'
 import { useHostDisplay } from '../../host-descriptors/use-host-display'
-import { homeListStyles as list } from '../home-list-styles'
+import { homeListStylesSheet } from '../home-list-styles'
 import { MobileHomeSectionHeading } from '../MobileHomeSectionHeading'
 import { MobileHomeAutomationRow, MobileHomeAutomationRunRow } from './MobileHomeAutomationRows'
 import { MobileHomeHostPill, useHomeTabHost } from './MobileHomeHostPill'
@@ -45,7 +45,7 @@ export function MobileHomeAutomationsTab(props: {
   onHostChange: (hostId: string | null) => void
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const { host, pick } = useHomeTabHost(props.hosts, props.connectedHosts)
   const hostId = host?.id ?? null
   const { onHostChange } = props
@@ -94,8 +94,10 @@ function HostAutomations(props: {
   state: ConnectionState | undefined
   onOpen: () => void
 }) {
+  const list = useThemedStyles(homeListStylesSheet)
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const desktop = useHostDisplay(props.host).title
   const { client } = useHostClient(props.host.id)
   const catalog = useAutomationCatalog(props.host.id, client)
@@ -149,7 +151,9 @@ function HostAutomations(props: {
     )
   }
   if (catalog.rows.length === 0) {
-    return <AutomationsEmpty title={automationsEmptyTitle()} message={automationsEmptyMessage()} />
+    return (
+      <AutomationsEmpty title={automationsEmptyTitle(t)} message={automationsEmptyMessage(t)} />
+    )
   }
   const runs = history.runs.slice(0, RECENT_RUN_LIMIT)
   return (
@@ -246,8 +250,8 @@ function useOptimisticEnabled(catalog: AutomationCatalog) {
           name: row.automation.name
         }),
         outcome.failure === null
-          ? automationOutcomeUnknownMessage()
-          : automationErrorMessage(outcome.failure)
+          ? automationOutcomeUnknownMessage(t)
+          : automationErrorMessage(outcome.failure, t)
       )
     }
   }
@@ -259,7 +263,8 @@ function useOptimisticEnabled(catalog: AutomationCatalog) {
 }
 
 function AutomationsEmpty(props: { title: string; message: string }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View style={styles.empty}>
       <CalendarClock size={28} color={colors.textMuted} />
@@ -271,7 +276,7 @@ function AutomationsEmpty(props: { title: string; message: string }) {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   content: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
   loading: { alignItems: 'center', paddingVertical: spacing.xl, marginTop: 32 },
   empty: {

@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { Search, X } from 'lucide-react-native'
-import { colors, pressedStyle } from '../../../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { pressedStyle } from '../../../../theme/mobile-theme'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import type { Translate } from '../../../../i18n/mobile-i18n'
 import type { GitHubWorkItemDetails } from '../../../../../../src/shared/github/work-items/work-item-types'
@@ -15,11 +15,12 @@ import {
 import { useReviewerPeople } from './use-reviewer-people'
 import { SheetHeader } from '../../../../components/nav-bar/SheetHeader'
 import { ListGroup, ListRow } from '../../../../components/list/ListGroup'
-import { composerInputStyles } from '../../../../components/composer-input/composer-input-styles'
+import { composerInputStylesSheet } from '../../../../components/composer-input/composer-input-styles'
 import { TextField } from '../../../../components/composer-input/TextField'
 import { livePrDetails, readyPrData, type MobilePrTab } from '../use-mobile-pr-tab'
 import type { PrTabSheetRequest } from '../pr-tab-requests'
-import { prSheetStyles as sheetStyles } from '../pr-tab-styles'
+import { prSheetStylesSheet } from '../pr-tab-styles'
+import { useThemedStyles } from '../../../../theme/themed-styles'
 
 function reviewerStateLabel(
   item: GitHubWorkItemDetails['item'],
@@ -62,7 +63,9 @@ export function PrReviewersSheet({
   tab: MobilePrTab
   request: PrTabSheetRequest
 }) {
-  useMobileColorScheme()
+  const composerInputStyles = useThemedStyles(composerInputStylesSheet)
+  const sheetStyles = useThemedStyles(prSheetStylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { actions, client, worktreeId } = tab
   const rawDetails = readyPrData(tab)?.details ?? null
@@ -86,7 +89,7 @@ export function PrReviewersSheet({
   // Without candidates, an outage the calm presentation reveals explains the wait with the header's verdict.
   const connectionLabel =
     !users && !error && connState !== 'connected' && presentedConnState !== 'connected'
-      ? verdictDisplayLabel(classifyConnection({ state: connState, ...hostConnection }))
+      ? verdictDisplayLabel(classifyConnection({ state: connState, ...hostConnection }, t), t)
       : null
 
   const rows = useMemo(

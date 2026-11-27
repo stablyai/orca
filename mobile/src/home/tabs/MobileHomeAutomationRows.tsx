@@ -14,14 +14,15 @@ import {
 import { automationRowSubtitle } from '../../automations/AutomationList'
 import { AgentSpinner } from '../../agents/presentation/AgentSpinner'
 import { MobileSwitch } from '../../components/controls/MobileSwitch'
-import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { intlLocaleFor } from '../../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../../i18n/use-mobile-translation'
 import { MobileAgentIcon } from '../../components/icons/MobileAgentIcon'
 import { mobileTuiAgentLabel } from '../../agents/mobile-tui-agents'
-import { colors, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { formatTimeAgo } from '../../worktree/agent-lineage/agent-row-display'
-import { homeListStyles as list } from '../home-list-styles'
+import { homeListStylesSheet as listSheet } from '../home-list-styles'
 
 /** A scheduled automation, as the Automations page draws it: its name, one line of schedule and
  *  project, and the switch that pauses or resumes it. Tap opens the page. */
@@ -33,11 +34,14 @@ export function MobileHomeAutomationRow(props: {
   onToggle: (enabled: boolean) => void
   onOpen: () => void
 }) {
+  const styles = useThemedStyles(stylesSheet)
+  const list = useThemedStyles(listSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const [pressed, setPressed] = useState(false)
   const { automation } = props.row
-  const { subtitle, orphan } = automationRowSubtitle(props.row, props.project)
+  const { subtitle, orphan } = automationRowSubtitle(props.row, props.project, t, intlLocale)
   return (
     // Siblings, not nested, so screen readers reach the switch apart from the row.
     <View style={[list.row, pressed && list.rowPressed]}>
@@ -82,18 +86,21 @@ export function MobileHomeAutomationRunRow(props: {
   now: number
   onOpen: () => void
 }) {
+  const styles = useThemedStyles(stylesSheet)
+  const list = useThemedStyles(listSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const { run } = props
-  const status = automationRunStatusLabel(run.status)
-  const reason = automationRunErrorText(run)
+  const status = automationRunStatusLabel(run.status, t)
+  const reason = automationRunErrorText(run, t)
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={t('automations.mobile.runSummary', '{{title}}, {{status}}, {{date}}', {
         title: run.title,
         status,
-        date: automationDate(run.scheduledFor)
+        date: automationDate(run.scheduledFor, t, intlLocale)
       })}
       onPress={props.onOpen}
       style={({ pressed }) => [list.row, pressed && list.rowPressed]}
@@ -111,7 +118,7 @@ export function MobileHomeAutomationRunRow(props: {
       </View>
       <View style={list.trailing}>
         <Text style={styles.age}>
-          {formatTimeAgo(run.startedAt ?? run.scheduledFor, props.now)}
+          {formatTimeAgo(run.startedAt ?? run.scheduledFor, props.now, t)}
         </Text>
         <ChevronRight size={16} color={colors.textMuted} />
       </View>
@@ -129,7 +136,7 @@ function runSpinnerStatus(run: MobileAutomationRun) {
   return run.status === 'dispatch_failed' ? 'failed' : 'inactive'
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   subtitleLine: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: 1 },
   subtitle: { flexShrink: 1, marginTop: 0 },
   age: { fontSize: 15, color: colors.textMuted }

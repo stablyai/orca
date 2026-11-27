@@ -3,7 +3,6 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNo
 import { AppState, type HostInstance } from 'react-native'
 import type { MobileBrowserTab } from '../session/tabs/mobile-session-tabs'
 import { translate } from '../i18n/mobile-i18n'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { BrowserScreencastFrameMetadata } from './screencast/browser-screencast-protocol'
 import type { MobileBrowserViewMode } from './screencast/browser-screencast-request-parameters'
@@ -79,7 +78,6 @@ export function MobileBrowserPane({
   bare,
   pageOverlay
 }: MobileBrowserPaneProps) {
-  useMobileTranslation()
   const [browserViewMode, setBrowserViewMode] = useState<MobileBrowserViewMode>(() =>
     getInitialMobileBrowserViewMode(worktreeId, tab.browserPageId, tab.url)
   )

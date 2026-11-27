@@ -3,10 +3,8 @@ import { CircleAlert } from 'lucide-react-native'
 import { StyleSheet, View } from 'react-native'
 import { translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { colors } from '../../theme/mobile-theme'
 import { MobileStateView } from '../../components/feedback/MobileStateView'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 
 export type NativeWebViewEngineEvent = {
   readonly nativeEvent?: object
@@ -82,7 +80,7 @@ export function TerminalWebViewEngineErrorOverlay({
   message,
   onReload
 }: TerminalWebViewEngineErrorOverlayProps) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   // The engine's own words stay one tap away for support, not in the sentence.
   return (
@@ -101,7 +99,7 @@ export function TerminalWebViewEngineErrorOverlay({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   errorOverlay: {
     ...StyleSheet.absoluteFill,
     backgroundColor: colors.bgBase

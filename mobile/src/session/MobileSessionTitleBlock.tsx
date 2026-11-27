@@ -5,9 +5,8 @@ import { StatusDot } from '../components/feedback/StatusDot'
 import type { ConnectionState } from '../transport/connection/connection-state'
 import type { ConnectionVerdict } from '../transport/connection/connection-health'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, pressedStyle } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { pressedStyle } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import { MobileForkMarkedName } from './fork/MobileForkMarkedName'
 import { isPathTitle } from './tabs/mobile-session-tab-rows'
 
@@ -37,7 +36,7 @@ export function MobileSessionTitleBlock({
   showConnectionRetry: boolean
   onRetry: () => void
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const subtitleRow = (
     <>
@@ -97,7 +96,7 @@ export function MobileSessionTitleBlock({
 }
 
 // NavBar's title and subtitle, so the session bar reads like every other screen's.
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   block: { maxWidth: '100%', minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   titleAction: { maxWidth: '100%', alignItems: 'center' },
   // Without a reconnect row the title action keeps the whole 44 pt bar.

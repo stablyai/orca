@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Text, View } from 'react-native'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { TextField } from '../../components/composer-input/TextField'
 import { ConfirmModal } from '../../components/sheets/ConfirmModal'
 import { useLastShownData } from '../../query/use-last-shown-data'
@@ -11,7 +10,8 @@ import {
   mobileBrowserPermissionLine,
   mobileBrowserSiteName
 } from './mobile-browser-page-prompt-copy'
-import { mobileBrowserPaneStyles as styles } from './mobile-browser-pane-styles'
+import { mobileBrowserPaneStylesSheet as stylesSheet } from './mobile-browser-pane-styles'
+import { useThemedStyles } from '../../theme/themed-styles'
 
 type Translate = ReturnType<typeof useMobileTranslation>
 
@@ -26,9 +26,9 @@ function promptCopy(state: MobileBrowserPagePromptState, t: Translate) {
           origin === BROWSER_SITE_PERMISSION_LOCAL_FILES_ORIGIN
             ? t('browser.pagePrompt.fileTitle', 'This file wants to')
             : t('browser.pagePrompt.permissionTitle', '{{site}} wants to', {
-                site: mobileBrowserSiteName(origin)
+                site: mobileBrowserSiteName(origin, t)
               }),
-        lines: permissions.map(mobileBrowserPermissionLine),
+        lines: permissions.map((permission) => mobileBrowserPermissionLine(permission, t)),
         cancel: t('browser.pagePrompt.block', 'Block'),
         confirm: t('browser.pagePrompt.allow', 'Allow')
       }
@@ -94,8 +94,8 @@ export function MobileBrowserPagePrompt({
   prompt: MobileBrowserPagePromptState | null
   answer: (value: unknown) => Promise<void>
 }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
-  useMobileColorScheme()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   // Kept through the sheet's close, after the host has taken the answer.

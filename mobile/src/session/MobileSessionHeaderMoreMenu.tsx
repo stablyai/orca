@@ -4,8 +4,7 @@ import { ALargeSmall, Columns2, SquareChevronRight } from 'lucide-react-native'
 import { MobileAgentSessionHistoryIcon } from '../agent-history/MobileAgentSessionHistoryIcon'
 import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
 import { PullDownMenu } from '../components/nav-bar/PullDownMenu'
-import { colors } from '../theme/mobile-theme'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { getMobileNativeChatCliForkActions } from './native-chat/history/mobile-native-chat-cli-fork'
@@ -17,7 +16,7 @@ type Props = {
 }
 
 export function MobileSessionHeaderMoreMenu({ controller, anchorRef }: Props) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const {
     isFolderWorkspaceRoute,
@@ -103,7 +102,8 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef }: Props) {
     controller,
     tab: activeSessionTab?.type === 'agent-session' ? activeSessionTab : null,
     workspaceOnPairedHost,
-    onDismiss: () => setShowHeaderMoreActions(false)
+    onDismiss: () => setShowHeaderMoreActions(false),
+    t
   }).map((action) => ({ ...action, disabled: tabActionsDisabled }))
   return (
     <PullDownMenu

@@ -1,5 +1,4 @@
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { ReactNode } from 'react'
 import { MobileSegmentedControl } from '../components/controls/MobileSegmentedControl'
 import { Plus } from 'lucide-react-native'
@@ -7,7 +6,8 @@ import { describeLoadError } from '../components/feedback/load-error-description
 import { MobileLoadErrorState } from '../components/feedback/MobileStateView'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { SettingsNote } from '../settings/settings-screen-frame'
-import { automationStyles as styles } from './automation-styles'
+import { automationStylesSheet as stylesSheet } from './automation-styles'
+import { useThemedStyles } from '../theme/themed-styles'
 
 export type AutomationHeaderBar = {
   /** On an automation's page: its name, next run and the way back to the list, in place of the tabs. */
@@ -58,8 +58,8 @@ export function AutomationTabs(props: {
   onSelect: (tab: 'automations' | 'runs') => void
   disabled: boolean
 }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
-  useMobileColorScheme()
   return (
     <MobileSegmentedControl
       fill

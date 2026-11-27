@@ -7,9 +7,9 @@ import { HostKindIcon } from '../components/icons/HostKindIcon'
 import { ListRow } from '../components/list/ListGroup'
 import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, radii, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { radii, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { MobileBotAvatarSource } from './host-bot-row-facts'
 import { botAgentLabel } from './mobile-bot-sheet-copy'
@@ -23,7 +23,8 @@ import {
 
 /** New bot's picture, with Another picture's shuffle on its corner. */
 export function NewBotPicture(props: { avatar: MobileBotAvatarSource; onShuffle: () => void }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   return (
     <View>
@@ -114,7 +115,7 @@ export function NewBotAgentRow(props: {
   loading: boolean
   onPick: () => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { agent } = props
   return (
@@ -207,7 +208,7 @@ export function NewBotAgentSheet(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   shuffle: {
     position: 'absolute',
     right: -spacing.sm,

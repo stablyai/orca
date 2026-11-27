@@ -70,7 +70,8 @@ export async function runPortScanCommandInProcess(
         args,
         {
           timeout: PORT_SCAN_COMMAND_TIMEOUT_MS,
-          maxBuffer: 2 * 1024 * 1024,
+          // Why: Windows runs only `netstat -ano` here, which lists TCP and UDP for IPv4 and IPv6.
+          maxBuffer: (process.platform === 'win32' ? 8 : 2) * 1024 * 1024,
           windowsHide: true,
           env: psLocaleEnvironment()
         },

@@ -1,9 +1,9 @@
 import { StyleSheet } from 'react-native'
-import { colors, feedback, radii, spacing, typography } from '../../theme/mobile-theme'
+import { feedback, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { WORKTREE_ROW_LAYOUT } from './worktree-list-row-layout'
 
-export const worktreeListRowStyles = themedStyleSheet(() => ({
+export const worktreeListRowStylesSheet = themedStyleSheet((colors) => ({
   worktreeRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',

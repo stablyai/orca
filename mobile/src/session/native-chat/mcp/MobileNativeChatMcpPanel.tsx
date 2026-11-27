@@ -17,17 +17,18 @@ import { MobileSwitch } from '../../../components/controls/MobileSwitch'
 import { TextField } from '../../../components/composer-input/TextField'
 import type { Translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { colors, spacing } from '../../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
-import { queuedMessageStyles } from '../input/queued-messages/mobile-native-chat-queued-message-styles'
-import { trayStripStyles } from '../input/tasks/mobile-native-chat-tray-strip-styles'
+import { spacing } from '../../../theme/mobile-theme'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
+import { queuedMessageStylesSheet } from '../input/queued-messages/mobile-native-chat-queued-message-styles'
+import { trayStripStylesSheet } from '../input/tasks/mobile-native-chat-tray-strip-styles'
 import {
   mobileMcpServerStatusLine,
   mobileMcpSourceLabel,
   mobileMcpTraySummary
 } from './mobile-native-chat-mcp-server-copy'
-import { mcpPanelStyles as styles } from './mobile-native-chat-mcp-panel-styles'
-import { composerInputStyles } from '../../../components/composer-input/composer-input-styles'
+import { mcpPanelStylesSheet as stylesSheet } from './mobile-native-chat-mcp-panel-styles'
+import { composerInputStylesSheet } from '../../../components/composer-input/composer-input-styles'
+import { useThemedStyles } from '../../../theme/themed-styles'
 
 type McpAction = Exclude<AgentSessionMcpOperation, { action: 'status' }>
 
@@ -45,7 +46,9 @@ export type MobileNativeChatMcpPanelProps = AgentSessionMcpPanelState & {
 
 /** The `/mcp` tray on the composer's top edge: a summary line over the chat's MCP servers. */
 export function MobileNativeChatMcpPanel(props: MobileNativeChatMcpPanelProps): React.JSX.Element {
-  useMobileColorScheme()
+  const queuedMessageStyles = useThemedStyles(queuedMessageStylesSheet)
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const listed = props.result?.status === 'ok' && props.servers.length > 0
   const summary = listed ? mobileMcpTraySummary(props.servers, props.signIn, t) : []
@@ -93,6 +96,8 @@ export function MobileNativeChatMcpPanel(props: MobileNativeChatMcpPanelProps): 
 }
 
 function McpTrayBody(props: MobileNativeChatMcpPanelProps & { t: Translate }) {
+  const trayStripStyles = useThemedStyles(trayStripStylesSheet)
+  const styles = useThemedStyles(stylesSheet)
   const { result, servers, t } = props
   if (result === null) {
     return null
@@ -151,6 +156,7 @@ function McpTrayBody(props: MobileNativeChatMcpPanelProps & { t: Translate }) {
 }
 
 function Notice({ text, action }: { text: string; action?: React.ReactNode }) {
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View style={styles.notice} accessibilityLiveRegion="polite">
       <Text style={styles.noticeText}>{text}</Text>
@@ -169,6 +175,7 @@ function McpServerRow({
   openUrl,
   t
 }: MobileNativeChatMcpPanelProps & { server: AgentSessionMcpServer; t: Translate }) {
+  const styles = useThemedStyles(stylesSheet)
   const mine = pending !== null && pending.server === server.name ? pending : null
   const signingIn = signIn?.server === server.name ? signIn : null
   const busy = pending !== null
@@ -271,6 +278,7 @@ function McpServerRow({
 }
 
 function StatusMark({ status }: { status: AgentSessionMcpServer['status'] }) {
+  const styles = useThemedStyles(stylesSheet)
   switch (status) {
     case 'connected':
       return <View style={[styles.dot, styles.dotConnected]} />
@@ -300,6 +308,8 @@ function McpPasteBox({
   run: (operation: McpAction) => void
   t: Translate
 }) {
+  const styles = useThemedStyles(stylesSheet)
+  const composerInputStyles = useThemedStyles(composerInputStylesSheet)
   const [address, setAddress] = useState('')
   const callbackUrl = address.trim()
   const finish = (): void => {
@@ -356,6 +366,8 @@ function McpButton({
   disabled?: boolean
   onPress: () => void
 }) {
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   return (
     <MobilePendingButton
       label={label}

@@ -10,9 +10,8 @@ import {
 } from '../../../components/controls/MobileSegmentedControl'
 import { PickerModal, type PickerOption } from '../../../components/sheets/PickerModal'
 import { SettingsSection } from '../../../settings/settings-screen-frame'
-import { colors, spacing } from '../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { spacing } from '../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../theme/themed-styles'
 import {
   TERMINAL_FONT_WEIGHTS,
   TERMINAL_LINE_HEIGHTS,
@@ -82,7 +81,7 @@ export function TerminalFontSection({
   settings: TerminalFontSettings
   onOpenFontPicker: () => void
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const { fontStyle, selectFontStyle } = settings
   const px = terminalFontPxForScale(settings.textScale)
@@ -147,7 +146,7 @@ export function TerminalTextSizeRow({
   onPreview: (px: number) => void
   onCommit: (px: number) => void
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   return (
     <View style={styles.row}>
@@ -197,7 +196,7 @@ export function TerminalFontPicker({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   row: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,

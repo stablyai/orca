@@ -32,7 +32,7 @@ import { formatConnectionLogHistory } from '../src/diagnostics/connection-diagno
 import type { PairingOffer } from '../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import { useRefreshHostClient } from '../src/transport/connection/host-client-hooks'
 import { spacing, pressedStyle } from '../src/theme/mobile-theme'
-import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
+import { useThemedStyles } from '../src/theme/themed-styles'
 import { useMobileTranslation } from '../src/i18n/use-mobile-translation'
 import { TextInputModal } from '../src/components/sheets/TextInputModal'
 import { NavBar } from '../src/components/nav-bar/NavBar'
@@ -42,7 +42,7 @@ import {
   loadMobileOnboardingSteps,
   mobileOnboardingDestination
 } from '../src/onboarding/mobile-onboarding-plan'
-import { CAMERA_INK, pairScanStyles as styles } from '../src/pair-scan-styles'
+import { CAMERA_INK, pairScanStylesSheet } from '../src/pair-scan-styles'
 import {
   PAIRING_SUCCESS_HOLD_MS,
   PairingProgress,
@@ -57,7 +57,7 @@ import { getPairingFailureMessage } from '../src/pairing/pairing-failure-message
 const PAIRING_OVERALL_TIMEOUT_MS = 25_000
 
 export default function PairScanScreen() {
-  useMobileColorScheme()
+  const styles = useThemedStyles(pairScanStylesSheet)
   const t = useMobileTranslation()
   const router = useRouter()
   const refreshHostClient = useRefreshHostClient()
@@ -121,7 +121,7 @@ export default function PairScanScreen() {
       setDecoded(true)
       void waitForBeat(SCAN_DECODE_BEAT_MS).then(() => testAndSave(offer))
     },
-    [router, t]
+    [t]
   )
 
   const handlePasteSubmit = useCallback(

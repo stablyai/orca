@@ -8,9 +8,9 @@ import { AutoHeight, Presence } from '../../components/motion/AutoHeight'
 import { SHEET_HEIGHT_DURATION_MS } from '../../components/motion/sheet-motion-values'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { agentStateLabel } from '../../worktree/agent-lineage/agent-row-display'
-import { colors, radii, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { radii, spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import {
   buildMobileSessionTabRow,
   groupMobileSessionSplitTabs,
@@ -33,7 +33,7 @@ import {
   SidebarRowMark,
   SidebarLabel,
   SidebarRowText,
-  sidebarRowStyles
+  sidebarRowStylesSheet
 } from './MobileSessionSidebarRow'
 import type { MobileSessionController } from '../use-mobile-session-controller'
 
@@ -62,10 +62,12 @@ export const MobileSessionSidebarTabs = memo(function MobileSessionSidebarTabs({
   /** Asks before a close that needs it. */
   onStopTabs: (stop: MobileSessionTabStop) => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const sidebarRowStyles = useThemedStyles(sidebarRowStylesSheet)
   const t = useMobileTranslation()
   // Why: the preview scans each agent's last message, so only the open sidebar pays for it (STA-15103).
-  const rows = useMemo(() => tabs.map((tab) => buildMobileSessionTabRow(tab)), [tabs])
+  const rows = useMemo(() => tabs.map((tab) => buildMobileSessionTabRow(tab, t)), [tabs, t])
   const entries = useMemo(() => groupMobileSessionSplitTabs(rows), [rows])
   // Rows hold their section and fold while the sidebar is shown, so none moves under a finger.
   const [placement] = useState(() => placeMobileSessionTabEntries(entries, now, activeSessionTabId))
@@ -151,7 +153,7 @@ export const MobileSessionSidebarTabs = memo(function MobileSessionSidebarTabs({
       row.tab.id,
       <SidebarRow
         accessibilityLabel={[
-          isForkedChatTab(row.tab) ? mobileForkAccessibleName(row.title) : row.title,
+          isForkedChatTab(row.tab) ? mobileForkAccessibleName(row.title, t) : row.title,
           row.stateWord,
           row.group === 'needs-you' ? row.content : null,
           row.unread ? t('agents.list.unread', 'Unread') : null
@@ -196,7 +198,7 @@ export const MobileSessionSidebarTabs = memo(function MobileSessionSidebarTabs({
             panes.length === 1
               ? t('session.tabsSheet.panes_one', '{{count}} pane', { count: panes.length })
               : t('session.tabsSheet.panes_other', '{{count}} panes', { count: panes.length }),
-            badgeState ? agentStateLabel(badgeState) : null,
+            badgeState ? agentStateLabel(badgeState, t) : null,
             entry.unread ? t('agents.list.unread', 'Unread') : null
           ]
             .filter(Boolean)
@@ -292,7 +294,7 @@ export const MobileSessionSidebarTabs = memo(function MobileSessionSidebarTabs({
   )
 })
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   // Agents list's fold: chevron, then "3 older", lined up with the row text.
   foldRow: {
     flexDirection: 'row',

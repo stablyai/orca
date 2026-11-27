@@ -1,10 +1,10 @@
 import type { ReactElement, ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { ChevronDown, ShieldAlert, type LucideIcon } from 'lucide-react-native'
-import { colors, pressedStyle, radii, spacing, typography } from '../../../../theme/mobile-theme'
+import { pressedStyle, radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { COMPOSER_CONTROL_SIZE } from '../../../../components/composer-input/composer-input-styles'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import type { Translate } from '../../../../i18n/mobile-i18n'
 import { LIST_ROW_PADDING, ListRow } from '../../../../components/list/ListGroup'
@@ -23,13 +23,25 @@ import {
   loneFastTier,
   speedButtonTiers
 } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-session-speed-tiers'
-import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
+import { mobileNativeChatSessionOptionSay } from './native-chat-session-option-copy'
 import { orderEffortLevels } from '../../../../../../src/shared/agent-session/options/view/effort-level-order'
 import { MobileSwitch } from '../../../../components/controls/MobileSwitch'
 
 export function SessionOptionCaption({ children }: { children: string }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   return <Text style={styles.caption}>{children}</Text>
+}
+
+export function SessionOptionLockCaption(): React.JSX.Element {
+  const t = useMobileTranslation()
+  return (
+    <SessionOptionCaption>
+      {t(
+        'chat.sessionOptionPickers.settingsLocked',
+        'Model settings unlock when this turn finishes.'
+      )}
+    </SessionOptionCaption>
+  )
 }
 
 /** One target for the chat's options: the model's name (or a value), with Full access's shield. */
@@ -51,7 +63,8 @@ export function ModelPill({
   disabled: boolean
   onPress: () => void
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   // A held pick's clock never hides the full-access warning.
   const PillIcon = Icon ?? (warning ? ShieldAlert : leading)
   return (
@@ -87,7 +100,7 @@ export function ModelPill({
 
 /** A trailing value in a colour of its own, as Full access reads in amber. */
 function TintedValue({ value, color }: { value: string; color: string }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <Text style={[styles.value, { color }]} numberOfLines={1}>
       {value}
@@ -178,6 +191,7 @@ export function descriptorRowElements(
   }: DescriptorRowsProps,
   t: Translate
 ): ReactElement[] {
+  const say = mobileNativeChatSessionOptionSay(t)
   const locked = disabled || !descriptor.settable
   // Why: flip-only and agent-picker options are actions, not values or radio choices.
   if (descriptor.action) {
@@ -292,7 +306,7 @@ export function selectItemRow(
   return (
     <ListRow
       key={item.value}
-      title={nativeChatSessionChoiceLabel(item, say, descriptor.id)}
+      title={nativeChatSessionChoiceLabel(item, mobileNativeChatSessionOptionSay(t), descriptor.id)}
       subtitle={item.description}
       leading={choiceLeading ? (choiceLeading(item.value) ?? null) : undefined}
       selected={item.value === marked}
@@ -307,7 +321,7 @@ export function DescriptorRows(props: DescriptorRowsProps): React.JSX.Element {
   return <>{descriptorRowElements(props, t)}</>
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   pill: {
     flexDirection: 'row',
     alignItems: 'center',

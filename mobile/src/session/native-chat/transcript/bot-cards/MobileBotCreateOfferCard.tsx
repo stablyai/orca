@@ -24,8 +24,8 @@ import { mobileBotAvatarSource } from '../../../../bots/host-bot-row-facts'
 import { workspaceLineageRead, type PhoneBot } from '../../../../bots/host-bots-operations'
 import { MobileBotAvatar } from '../../../../bots/MobileBotAvatar'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { colors, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
+import { spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 import type { RpcClient } from '../../../../transport/rpc/rpc-client-contract'
 import { useRouteCapability } from '../../../../worktree/execution-hosts/use-route-capability'
 import { scaledType } from '../messages/mobile-native-chat-message-styles'
@@ -40,6 +40,7 @@ import {
   MobileBotCardFrame,
   MobileBotCardMeta
 } from './MobileBotCardFrame'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 
 const NO_BOTS: readonly PhoneBot[] = []
 
@@ -90,6 +91,8 @@ export function MobileBotCreateOfferCard({
   fallback: string
   fontScale: number
 }): React.JSX.Element {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const say = mobileBotCreateOfferSay(t)
   const host = useMobileBotCardHost()
@@ -249,7 +252,7 @@ export function MobileBotCreateOfferCard({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   fallback: { color: colors.textMuted },
   metaLine: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   chevron: { marginLeft: 'auto' },

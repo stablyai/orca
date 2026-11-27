@@ -3,9 +3,7 @@ import { Pressable, StyleSheet, View, type HostInstance } from 'react-native'
 import { GestureDetector } from 'react-native-gesture-handler'
 import Animated, { useAnimatedStyle } from 'react-native-reanimated'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { colors, getMobileColorScheme } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import {
   SIDEBAR_DOCKED_WIDTH,
   SIDEBAR_PEEK,
@@ -37,7 +35,7 @@ export function MobileSessionSidebarStage({
   cardLabel: string
   children: ReactNode
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const { progress, width, reducedMotion: reduced, docked, shown, open } = sidebar
   const moves = !docked && !reduced
@@ -148,8 +146,8 @@ export function MobileSessionSidebarStage({
   )
 }
 
-const styles = themedStyleSheet(() => {
-  const dark = getMobileColorScheme() === 'dark'
+const stylesSheet = themedStyleSheet((colors, scheme) => {
+  const dark = scheme === 'dark'
   // The ground under the card: the panel colour dark, the off-white raised colour light.
   const ground = dark ? colors.bgPanel : colors.bgRaised
   return {

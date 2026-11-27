@@ -19,11 +19,11 @@ import {
   Quote,
   Strikethrough
 } from 'lucide-react-native'
-import { colors, feedback, radii, spacing } from '../../theme/mobile-theme'
+import { feedback, radii, spacing } from '../../theme/mobile-theme'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { useKeyboardPersistingTaps } from '../../platform/keyboard/keyboard-persisting-taps'
 import type { MobileRichMarkdownCommand } from './mobile-rich-markdown-editor-contract'
 
@@ -118,7 +118,7 @@ export const MobileRichMarkdownToolbar = memo(function MobileRichMarkdownToolbar
   onDismissKeyboard: () => void
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   // A tap on a button must not take the caret, or the row would vanish under the finger.
   const keepsKeyboard = useKeyboardPersistingTaps('always')
   const heading = headingStep(active)
@@ -156,6 +156,7 @@ export const MobileRichMarkdownToolbar = memo(function MobileRichMarkdownToolbar
 
 /** The terminal key row's dismiss key: a keyboard with a chevron under it. */
 function DismissKeyboardGlyph({ color }: { color?: string }) {
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View style={styles.dismissGlyph}>
       <Keyboard size={15} color={color} strokeWidth={2} />
@@ -175,6 +176,8 @@ function ToolbarButton({
   lit?: boolean
   onPress: () => void
 }) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <Pressable
       accessibilityRole="button"
@@ -191,7 +194,7 @@ function ToolbarButton({
 }
 
 // The terminal key row's 46 pt bar with real 44 pt buttons, as the page ignores hitSlop.
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   toolbar: {
     height: 46,
     flexDirection: 'row',

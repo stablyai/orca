@@ -1,11 +1,11 @@
 import { StyleSheet } from 'react-native'
-import { colors, spacing, radii, typography } from '../src/theme/mobile-theme'
+import { spacing, radii, typography } from '../src/theme/mobile-theme'
 import { themedStyleSheet } from '../src/theme/themed-styles'
 
 /** Text and glyphs over the camera, which stays dark in both themes. */
 export const CAMERA_INK = '#ffffff'
 
-export const pairScanStyles = themedStyleSheet(() => ({
+export const pairScanStylesSheet = themedStyleSheet((colors) => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase

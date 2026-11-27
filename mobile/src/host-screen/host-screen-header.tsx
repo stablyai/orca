@@ -18,11 +18,10 @@ import type { CollapsingTitle } from '../components/nav-bar/PageTitle'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { PullDownMenu } from '../components/nav-bar/PullDownMenu'
 import { StatusDot } from '../components/feedback/StatusDot'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { useMobileTranslation, useMobileUiLocale } from '../i18n/use-mobile-translation'
 import { useRefreshHint } from '../query/refresh-hint'
-import { colors, pressedStyle } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { pressedStyle } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import { useCalmConnectionState } from '../transport/connection/calm-connection-state'
 import {
   isConnectionOutage,
@@ -51,8 +50,9 @@ export function HostConnectionStatus({
   /** The page title's line, which has room for Reconnect; the bar's stays one quiet line. */
   withReconnect?: boolean
 }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const uiLocale = useMobileUiLocale()
   const { client, catalog, connectionVerdict, connState, hostDisplay, lastConnectedAt } = controller
   // Why: a drop healed in a few seconds must not flash the host dot amber.
   const presentedConnState = useCalmConnectionState(connState, lastConnectedAt)
@@ -73,18 +73,18 @@ export function HostConnectionStatus({
   const offlineSince =
     outage && !connectionVerdict.detail && offlineAsOf !== null
       ? t('hostScreen.hostScreenHeader.offlineSince', 'Offline since {{time}}', {
-          time: formatOfflineAsOfTime(offlineAsOf)
+          time: formatOfflineAsOfTime(offlineAsOf, t, uiLocale)
         })
       : null
   const statusText =
     offlineSince !== null
       ? outage && connectionVerdict.hint
-        ? verdictDisplayLabel({ ...connectionVerdict, label: offlineSince })
+        ? verdictDisplayLabel({ ...connectionVerdict, label: offlineSince }, t)
         : offlineSince
       : connectionVerdict.kind === 'auth-failed'
         ? t('hostScreen.hostScreenHeader.notConnected', 'Not connected')
         : isErrorVerdict(connectionVerdict)
-          ? verdictDisplayLabel(connectionVerdict)
+          ? verdictDisplayLabel(connectionVerdict, t)
           : presentedConnState === 'connected'
             ? (hostDisplay.machineLine ??
               hostDisplay.descriptorLine ??
@@ -131,7 +131,6 @@ export function HostScreenHeader({
   collapsingTitle?: CollapsingTitle
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
   const {
     actions,
     connState,
@@ -219,8 +218,8 @@ export function HostScreenHeader({
   ]
   // Unlike the screens above, these work on the saved host, so they stay offered while disconnected.
   const hostGroup: ActionSheetAction[] = [
-    hostEditAction(() => actions.navigateFromHostList(`${hostPath}/edit`)),
-    hostDiagnosticsAction(() => router.push({ pathname: '/connection-log', params: { hostId } }))
+    hostEditAction(() => actions.navigateFromHostList(`${hostPath}/edit`), t),
+    hostDiagnosticsAction(() => router.push({ pathname: '/connection-log', params: { hostId } }), t)
   ]
   return (
     <>
@@ -273,7 +272,7 @@ export function HostScreenHeader({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   // Right-aligned on the subtitle line, like a section's link.
   reconnect: {
     marginLeft: 'auto'

@@ -7,9 +7,9 @@ import type { DiffComment } from '../../../../../src/shared/file-review/diff-com
 import type { MobileDiffLine } from '../diff-state/mobile-diff-lines'
 import type { MobileHighlightedDiffLine } from '../../../files/session-documents/mobile-file-syntax'
 import { mobileDiffLineNumber, mobileDiffLinePrefix } from '../diff-state/mobile-diff-format'
-import { colors, typography } from '../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { typography } from '../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../theme/themed-styles'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import { MobileSyntaxSegments } from '../../../components/code-presentation/MobileSyntaxSegments'
 
 // Each pickable line row carries this id, so a drag finds the row under the finger in the page itself.
@@ -58,8 +58,9 @@ export const MobileDiffReviewLine = memo(function MobileDiffReviewLine({
   onSelectLine,
   onEditNote
 }: Props) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
   const lineNumber = mobileDiffLineNumber(line)
   const canComment = onSelectLine !== undefined && canCommentOnLine(line)
   const ground = [
@@ -162,6 +163,7 @@ export function MobileDiffReviewCharWidthProbe({
 }: {
   onCharWidth: (width: number) => void
 }) {
+  const styles = useThemedStyles(stylesSheet)
   return (
     <Text
       aria-hidden
@@ -197,7 +199,7 @@ const webPinned: ViewStyle =
     : {}
 
 // Use 18px lineHeight alone without padding/minHeight to match desktop diff density (STA-1239).
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   row: {
     flexDirection: 'row',
     alignItems: 'stretch'

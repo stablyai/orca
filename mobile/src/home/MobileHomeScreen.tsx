@@ -15,9 +15,8 @@ import { useMobileDictationClearance } from '../dictation/mobile-dictation-host-
 import { useAgentListRowActions } from '../agents/use-agent-list-row-actions'
 import { useOpenMobileTasks } from '../tasks/use-open-mobile-tasks'
 import { useOpenMobileAutomations } from '../automations/use-open-mobile-automations'
-import { colors, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import {
   useDisconnectHostClient,
   useForceReconnect,
@@ -50,8 +49,8 @@ import { MobileHomeUsageTab } from './tabs/MobileHomeUsageTab'
 const FAB_CLEARANCE = 56 + spacing.lg
 
 export function MobileHomeScreen() {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
-  useMobileColorScheme()
   const data = useMobileHomeData()
   useHomeSparePage(data.hostCatalogLoaded ? data.sortedHosts.map((host) => host.id) : [])
   const insets = useSafeAreaInsets()
@@ -190,8 +189,8 @@ export function MobileHomeScreen() {
   const { bots, allClients } = data
   // + shows only when a connected computer takes a new bot; the tab's lines say why not.
   const canCreateBot = useMemo(
-    () => homeNewBotComputers(bots).some((computer) => computer.refusal === undefined),
-    [bots]
+    () => homeNewBotComputers(bots, t).some((computer) => computer.refusal === undefined),
+    [bots, t]
   )
   const openNewBot = useCallback(() => setNewBotOpen(true), [])
   const clientOf = useCallback(
@@ -315,7 +314,7 @@ export function MobileHomeScreen() {
               ? [
                   [
                     actionTargetConnected && actionTargetPath
-                      ? mobileConnectionPathLabel(actionTargetPath)
+                      ? mobileConnectionPathLabel(actionTargetPath, t)
                       : null,
                     hostEndpointLabel(actionTarget.endpoint)
                   ]
@@ -351,7 +350,8 @@ export function MobileHomeScreen() {
             onDiagnostics: (hostId) =>
               data.router.push({ pathname: '/connection-log', params: { hostId } }),
             onEdit: openMobileHostEdit,
-            onRemove: (host) => setConfirmRemove(host)
+            onRemove: (host) => setConfirmRemove(host),
+            t
           })}
           onClose={() => setActionTarget(null)}
         />
@@ -377,12 +377,13 @@ export function MobileHomeScreen() {
 
 // The keyboard covers the tab bar, so it steps out and a tab's bottom search bar sits right on the keyboard.
 function HomeTabBarUnderKeyboard(props: { focused: boolean; children: ReactNode }) {
+  const styles = useThemedStyles(stylesSheet)
   const keyboardUp = useSoftKeyboard().visible
   // Hidden, not unmounted, so its badges don't replay their entrance; a keyboard above Home leaves it be.
   return <View style={props.focused && keyboardUp && styles.hidden}>{props.children}</View>
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   container: { flex: 1, backgroundColor: colors.bgBase },
   fill: { flex: 1 },
   hidden: { display: 'none' }

@@ -1,7 +1,6 @@
-import { colors } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 
-export const hostScreenPrimaryStyles = themedStyleSheet(() => ({
+export const hostScreenPrimaryStylesSheet = themedStyleSheet((colors) => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase

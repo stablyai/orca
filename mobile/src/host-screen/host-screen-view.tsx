@@ -5,16 +5,16 @@ import { MobileStateView } from '../components/feedback/MobileStateView'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { PageTitle, useCollapsingTitle } from '../components/nav-bar/PageTitle'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { hostScreenStyles as styles } from './host-screen-styles'
+import { hostScreenStylesSheet as stylesSheet } from './host-screen-styles'
 import { HostBottomBar } from './host-bottom-bar'
 import { HostConnectionStatus, HostScreenHeader } from './host-screen-header'
 import { HostScreenOverlays } from './host-screen-overlays'
 import { HostWorkspaceList } from './workspace-list/host-workspace-list'
 import type { HostScreenController } from './use-host-screen-controller'
+import { useThemedStyles } from '../theme/themed-styles'
 
 export function HostScreenView({ controller }: { controller: HostScreenController }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const [bottomBarHeight, setBottomBarHeight] = useState(0)
   const listRef = controller.activeWorktreeScroll.sectionListRef

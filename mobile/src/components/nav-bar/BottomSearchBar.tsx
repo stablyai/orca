@@ -6,9 +6,9 @@ import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-na
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useKeyboardOcclusion } from '../../platform/keyboard/keyboard-occlusion'
 import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
-import { colors, feedback, radii, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { feedback, radii, spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { BOTTOM_DRAWER_EASING } from '../bottom-drawer/bottom-drawer-constants'
 import { MobileSearchField } from '../controls/MobileSearchField'
 import { useMobileDictationClearance } from '../../dictation/mobile-dictation-host-context'
@@ -73,7 +73,8 @@ export function BottomSearchBar({
   accessibilityLabel,
   inSheet = false
 }: BottomSearchBarProps) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const keyboardHeight = useKeyboardOcclusion()
   const keyboardUp = keyboardHeight > 0
@@ -165,6 +166,7 @@ export function BottomSearchBar({
 
 // Folds the leading button's slot away while searching, so the field grows instead of jumping.
 function LeadingSlot({ button, hidden }: { button: BarButton; hidden: boolean }) {
+  const styles = useThemedStyles(stylesSheet)
   const reducedMotion = useReducedMotionEnabled()
   const shown = useSharedValue(hidden ? 0 : 1)
   useEffect(() => {
@@ -192,6 +194,8 @@ function LeadingSlot({ button, hidden }: { button: BarButton; hidden: boolean })
 }
 
 function RoundButton({ button, emphasis = false }: { button: BarButton; emphasis?: boolean }) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const { icon: Icon, badge = 0 } = button
   const lit = badge > 0
   return (
@@ -224,7 +228,7 @@ function RoundButton({ button, emphasis = false }: { button: BarButton; emphasis
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   bar: {
     position: 'absolute',
     left: 0,

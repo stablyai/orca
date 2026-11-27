@@ -571,7 +571,7 @@
 1 src/main/ipc/browser/browser-passwords-import-ipc.ts
 1 src/main/ipc/browser/browser-passwords-ipc.ts
 5 src/main/ipc/browser/browser-session-profile-ipc.ts
-1 src/main/ipc/browser/browser.ts
+1 src/main/ipc/browser/lazy-browser-session-profile-ipc.ts # session-profile charge moved from browser.ts; the module imports on first invoke, so readFileSync never runs at boot
 7 src/main/ipc/cli.ts
 2 src/main/ipc/computer-use-permissions.ts
 2 src/main/ipc/custom-app-icon.ts
