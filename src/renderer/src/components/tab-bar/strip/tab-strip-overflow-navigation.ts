@@ -348,7 +348,14 @@ export function useTabStripOverflowNavigation({
       return
     }
     revealFocusedSlot()
-  }, [isFocused, recordScrollAnchor, revealFocusedSlot, updateTabStripOverflowState])
+  }, [
+    activeDockSlotId,
+    activeVisibleTabId,
+    isFocused,
+    recordScrollAnchor,
+    revealFocusedSlot,
+    updateTabStripOverflowState
+  ])
 
   // Dock ownership and drag transitions change sticky layout without scrolling or resizing.
   useLayoutEffect(() => {
