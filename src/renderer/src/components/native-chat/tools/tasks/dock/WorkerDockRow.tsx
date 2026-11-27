@@ -7,11 +7,15 @@ import {
 import { memo } from 'react'
 import { cn } from '@/lib/class-names'
 import { WorkerDockRowAction } from './WorkerDockRowAction'
-import { WorkerDockGlyph } from './WorkerDockGlyph'
 import { workerDockGlyph } from './worker-dock-card-order'
 import { useNowSnapshot } from '@/lib/window-activity/use-now'
 import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
+import {
+  NativeChatAgentEventIcon,
+  type NativeChatEventBadge
+} from '../../../messages/events/NativeChatEventRow'
 import type { WorkerDockEntry } from '../../../../../../../shared/orchestration/dock/worker-dock'
+import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
 
 export type WorkerDockRowView = WorkerDockEntry & {
   retired?: boolean
@@ -24,6 +28,17 @@ export type WorkerDockRowView = WorkerDockEntry & {
  *  once (the ticket name stays in the tooltip, so it is never repeated in front of the title). */
 export function workerDockRowTitle(row: WorkerDockRowView): string {
   return (row.state === 'needs-you' && row.question) || row.title || row.name
+}
+
+function workerDockBadge(row: WorkerDockRowView | undefined): NativeChatEventBadge | null {
+  switch (row && workerDockGlyph(row)) {
+    case 'running':
+      return 'running'
+    case 'failed':
+      return 'failed'
+    default:
+      return null
+  }
 }
 
 function Age({ at, visible }: { at: number | null; visible: boolean }) {
@@ -120,7 +135,10 @@ export const WorkerDockRow = memo(function WorkerDockRow({
         }}
       >
         <span className="flex h-5 shrink-0 items-center">
-          <WorkerDockGlyph glyph={row ? workerDockGlyph(row) : 'queued'} />
+          <NativeChatAgentEventIcon
+            agentType={(row?.agent as AgentType | null | undefined) ?? null}
+            badge={workerDockBadge(row)}
+          />
         </span>
         <span className="flex min-w-0 flex-1 flex-col">
           {/* A command is one mono line; the tooltip carries the whole of it. */}

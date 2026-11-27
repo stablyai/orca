@@ -3,6 +3,8 @@ import { ChevronRight, X } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { AgentWorkingSpinner } from '@/components/agent/status/AgentWorkingSpinner'
+import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
+import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import {
   NativeChatMessageTimestamp,
   useNativeChatMessageTimeLabel
@@ -43,6 +45,21 @@ export function NativeChatEventIcon({
         </span>
       ) : null}
     </span>
+  )
+}
+
+/** The provider mark and lifecycle badge used by orchestration rows in the transcript. */
+export function NativeChatAgentEventIcon({
+  agentType,
+  badge
+}: {
+  agentType: AgentType | null | undefined
+  badge?: NativeChatEventBadge | null
+}): React.JSX.Element {
+  return (
+    <NativeChatEventIcon badge={badge}>
+      <AgentTypeIcon agentType={agentType} size={14} />
+    </NativeChatEventIcon>
   )
 }
 

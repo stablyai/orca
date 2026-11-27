@@ -181,6 +181,7 @@ export function readWorkerDock(
         source,
         name: row.display_name ?? launch.name ?? launch.agent ?? 'Worker',
         title: row.title,
+        ...(launch.agent ? { agent: launch.agent } : {}),
         model: workerLaunchModel(launch.launch),
         changedAt: identity.changedAt,
         startedAt: epoch(row.created_at),
