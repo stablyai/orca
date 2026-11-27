@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import type { HeapProfiler } from 'node:inspector'
 import { Session } from 'node:inspector/promises'
+import { isRecord } from '../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 import type { CrashReportDetailValue } from '../../shared/crash-reporting/crash-reporting'
 
 /**
@@ -122,17 +123,18 @@ function startIpcTally(): () => Map<string, ChannelTally> {
     entry.bytes += approxBytes(payload)
     tally.set(key, entry)
   }
-  const invokeHandlers: unknown = Reflect.get(ipcMain, '_invokeHandlers')
   const handlers: Map<unknown, unknown> | null =
-    invokeHandlers instanceof Map ? invokeHandlers : null
-  const wrapped = new Map<unknown, { original: unknown; wrapper: InvokeHandler }>()
+    '_invokeHandlers' in ipcMain && ipcMain._invokeHandlers instanceof Map
+      ? ipcMain._invokeHandlers
+      : null
+  const wrapped = new Map<unknown, { original: InvokeHandler; wrapper: InvokeHandler }>()
   for (const [channel, original] of handlers ?? []) {
-    if (typeof original !== 'function') {
+    if (!isInvokeHandler(original)) {
       continue
     }
     const wrapper: InvokeHandler = (event, ...args) => {
       count(channel, args)
-      const result: unknown = Reflect.apply(original, undefined, [event, ...args])
+      const result = original(event, ...args)
       if (result instanceof Promise) {
         void result.then(
           (value) => count(channel, value, 0),
@@ -186,6 +188,10 @@ function summarizeIpcTally(tally: Map<string, ChannelTally>): Details {
   return details
 }
 
+function isInvokeHandler(value: unknown): value is InvokeHandler {
+  return typeof value === 'function'
+}
+
 function safeChannel(channel: unknown): string {
   return typeof channel === 'string' && /^[\w:.-]{1,80}$/.test(channel) ? channel : '(other)'
 }
@@ -207,10 +213,10 @@ export function approxBytes(value: unknown): number {
       bytes += item.byteLength
     } else if (Array.isArray(item)) {
       pending.push(...item.slice(0, budget))
-    } else if (item && typeof item === 'object') {
+    } else if (isRecord(item)) {
       for (const key in item) {
         bytes += key.length
-        pending.push(Reflect.get(item, key))
+        pending.push(item[key])
         if (pending.length > budget) {
           break
         }
