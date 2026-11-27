@@ -57,22 +57,30 @@ function isChildWorkerThread(thread: AgentPaneThread): boolean {
  * Whether one pane lights the dot, by the same rules the list's status and `activityInboxKind` use, so the dot
  * never lights for a row the list leaves out (or misses one it lists). Only the current turn counts.
  */
-function paneNeedsAttention(entry: AgentStatusEntry, mutedAt: number, now: number): boolean {
+// 'failed' is an outcome the list keeps even for a bot: a failure is something only you can fix.
+function paneAttention(
+  entry: AgentStatusEntry,
+  mutedAt: number,
+  now: number
+): ActivityInboxKind | 'failed' | null {
   const unread = entry.sessionBoundary !== true && mutedAt < entry.stateStartedAt
   const mark = agentVerdictDisplayMark(entry)
   // A failed main agent outranks its still-live row: the list shows it as a Failed outcome.
   if (mark === 'failed') {
-    return unread
+    return unread ? 'failed' : null
   }
   const live = freshActivityLiveAgentState(entry, now)
   if (live === 'waiting' || live === 'blocked') {
-    return true
+    return 'ask'
   }
   // A cancelled or replaced turn shows as Interrupted, which the list never lists.
   if (entry.state === 'done' && mark === 'interrupted') {
-    return false
+    return null
   }
-  return isHistoricalActivityState(entry.state) && unread
+  if (!isHistoricalActivityState(entry.state) || !unread) {
+    return null
+  }
+  return entry.state === 'done' ? 'outcome' : 'ask'
 }
 
 type AgentAttentionSource = Pick<
@@ -83,8 +91,15 @@ type AgentAttentionSource = Pick<
   | 'activityClearedAtByPaneKey'
 >
 
-/** Whether any agent waits on you or has an outcome you haven't read; stops at the first. */
-export function hasActivityInboxAgentAttention(source: AgentAttentionSource, now: number): boolean {
+/**
+ * Whether any agent waits on you or has an outcome you haven't read; stops at the first. `isBotWorkspace` says
+ * whether a row's workspace is a bot's: a bot's finished turns are not listed, so they don't light the dot.
+ */
+export function hasActivityInboxAgentAttention(
+  source: AgentAttentionSource,
+  now: number,
+  isBotWorkspace: ((worktreeId: string) => boolean) | null = null
+): boolean {
   const { projection } = source.agentStatusByPaneKey
   for (const unsupported of Object.values(source.migrationUnsupportedByPtyId)) {
     // Only a pane with a workspace row has an Activity row to show it.
@@ -95,14 +110,21 @@ export function hasActivityInboxAgentAttention(source: AgentAttentionSource, now
   }
   for (const [paneKey, entry] of source.agentStatusByPaneKey.entries()) {
     // Panes with no workspace row have no Activity row to clear; child workers are never listed.
-    if (!projection.rowWorktree(paneKey) || isChildWorkerEntry(entry)) {
+    const worktreeId = projection.rowWorktree(paneKey)
+    if (!worktreeId || isChildWorkerEntry(entry)) {
       continue
     }
     const mutedAt = Math.max(
       source.acknowledgedAgentsByPaneKey[paneKey] ?? 0,
       source.activityClearedAtByPaneKey?.[paneKey] ?? 0
     )
-    if (paneNeedsAttention(entry, mutedAt, now)) {
+    const kind = paneAttention(entry, mutedAt, now)
+    // The bot check runs only for a pane that would otherwise light the dot, so it costs nothing per heartbeat.
+    if (
+      kind === 'ask' ||
+      kind === 'failed' ||
+      (kind === 'outcome' && !isBotWorkspace?.(worktreeId))
+    ) {
       return true
     }
   }

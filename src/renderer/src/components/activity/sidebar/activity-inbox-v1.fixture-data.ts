@@ -205,7 +205,7 @@ const accessRequest = {
   createdAt: now - 40 * MIN
 } as unknown as HostAccessRequest
 
-/** The inbox as ActivityInbox builds it: one list, newest first. The local Triage bot chat shows as the bot. */
+/** The inbox as ActivityInbox builds it: one list, newest first. The Triage bot's finished chat turn is left out. */
 const UNSORTED_ENTRIES: ActivityInboxEntry[] = [
   ...THREADS.flatMap((entry): ActivityInboxEntry[] => {
     const kind = activityInboxKind(entry)
@@ -213,6 +213,10 @@ const UNSORTED_ENTRIES: ActivityInboxEntry[] = [
       return []
     }
     const bot = entry.repo === null ? triageBot : null
+    // A bot's finished turns are not listed; only what it needs from you is.
+    if (bot && kind === 'outcome') {
+      return []
+    }
     return [
       {
         kind: 'agent',

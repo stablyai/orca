@@ -113,6 +113,25 @@ describe('hasActivityInboxAgentAttention', () => {
     expect(hasActivityInboxAgentAttention(blocked, NOW)).toBe(false)
   })
 
+  it("stays dark for a bot's finished turn but lights for a bot waiting on you", () => {
+    const isBotWorkspace = (worktreeId: string): boolean => worktreeId === 'wt'
+    expect(hasActivityInboxAgentAttention(source({ a: entry() }), NOW, isBotWorkspace)).toBe(false)
+    expect(
+      hasActivityInboxAgentAttention(
+        source({ a: entry({ state: 'waiting' }) }),
+        NOW,
+        isBotWorkspace
+      )
+    ).toBe(true)
+    // A bot's failure still lights it: only you can fix it.
+    const failed = entry({
+      mainAgent: { state: 'done', outcome: 'failure' }
+    } as Partial<AgentStatusEntry>)
+    expect(hasActivityInboxAgentAttention(source({ a: failed }), NOW, isBotWorkspace)).toBe(true)
+    // Your own agent's finished turn still lights it.
+    expect(hasActivityInboxAgentAttention(source({ a: entry() }), NOW, () => false)).toBe(true)
+  })
+
   it('ignores panes with no Activity row', () => {
     expect(hasActivityInboxAgentAttention(source({ a: entry() }, { rows: [] }), NOW)).toBe(false)
   })

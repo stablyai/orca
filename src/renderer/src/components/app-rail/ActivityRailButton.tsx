@@ -12,15 +12,12 @@ import {
 /** Activity's rail button, right under Workspaces: a bell, with the unread dot when the inbox has something. */
 export function ActivityRailButton({
   active,
-  dotMounted,
   expanded,
   controls,
   tabStop,
   onClick
 }: {
   active: boolean
-  /** Only while the list's rows are mounted, as the rail-off badge is, so a collapsed list does no new work. */
-  dotMounted: boolean
   expanded: boolean | undefined
   controls: string | undefined
   tabStop: boolean
@@ -37,7 +34,8 @@ export function ActivityRailButton({
         icon={
           <>
             <Bell size={APP_RAIL_ICON_SIZE} strokeWidth={APP_RAIL_ICON_STROKE_WIDTH} aria-hidden />
-            {dotMounted ? <ActivityRailDot id={dotId} /> : null}
+            {/* Always mounted: with the list collapsed, the rail is the only place left to show it. */}
+            <ActivityRailDot id={dotId} />
           </>
         }
         label={label}
@@ -45,7 +43,7 @@ export function ActivityRailButton({
         aria-expanded={expanded}
         aria-controls={controls}
         // The button's name stays "Activity"; the dot's text describes it while it shows.
-        aria-describedby={dotMounted ? dotId : undefined}
+        aria-describedby={dotId}
         tabStop={tabStop}
         onClick={onClick}
       />
@@ -58,22 +56,22 @@ const ActivityRailDot = React.memo(function ActivityRailDot({
   id
 }: {
   id: string
-}): React.JSX.Element | null {
+}): React.JSX.Element {
   const t = useTranslate()
   const hasActivity = useActivityInboxDot()
-  if (!hasActivity) {
-    return null
-  }
   return (
     <>
+      {/* Always present, so the button's aria-describedby never names a missing element; empty without activity. */}
       <span id={id} className="sr-only">
-        {t('appRail.activityNew', 'New activity')}
+        {hasActivity ? t('appRail.activityNew', 'New activity') : ''}
       </span>
-      <span
-        aria-hidden
-        // The workspace cards' unread dot, ringed in the rail's color so it reads as cut out of the bell.
-        className="pointer-events-none absolute top-[5px] right-[5px] size-[7px] rounded-full bg-unread ring-2 ring-worktree-sidebar"
-      />
+      {hasActivity ? (
+        <span
+          aria-hidden
+          // The workspace cards' unread dot, ringed in the rail's color so it reads as cut out of the bell.
+          className="pointer-events-none absolute top-[5px] right-[5px] size-[7px] rounded-full bg-unread ring-2 ring-worktree-sidebar"
+        />
+      ) : null}
     </>
   )
 })

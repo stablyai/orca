@@ -45,8 +45,9 @@ export function AppRail({
   style?: React.CSSProperties
 }): React.JSX.Element {
   const t = useTranslate()
-  const { workspacesActive, activityActive, listShowsWorkspaces, listRowsMounted } =
-    decodeRailListState(useAppStore(selectRailListState))
+  const { workspacesActive, activityActive, listShowsWorkspaces } = decodeRailListState(
+    useAppStore(selectRailListState)
+  )
   const settingsActive = useAppStore((s) => s.activeView === 'settings')
   const shownDestinationsKey = useAppStore(selectShownRailDestinationsKey)
   const currentDestination = useAppStore(selectCurrentRailDestination)
@@ -319,7 +320,6 @@ export function AppRail({
           </RailItem>
           <ActivityRailButton
             active={activityActive}
-            dotMounted={listRowsMounted}
             expanded={listShowsWorkspaces ? undefined : listVisible}
             controls={
               !listShowsWorkspaces && listRegionPresent ? WORKSPACE_LIST_REGION_ID : undefined

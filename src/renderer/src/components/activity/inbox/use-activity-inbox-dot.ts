@@ -5,6 +5,15 @@ import { createAgentStatusEpochSelector } from '@/lib/agent-status/evidence/agen
 import { getAgentStatusEpochNow } from '@/lib/agent-status/evidence/agent-status-epoch-clock'
 import { readBots, readLiveBotHostIds, subscribeToBotChanges } from '@/lib/bot-catalog-snapshot'
 import { useAccessRequests } from '@/lib/bot-access-requests'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
+import {
+  selectDetectedWorktreesByRepo,
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
+import type { Bot } from '../../../../../shared/bot-types'
+import { isBotWorkspaceId } from './activity-inbox-bot-workspace'
 import {
   hasActivityInboxAgentAttention,
   hasActivityInboxBotAttention,
@@ -20,7 +29,10 @@ const createAgentAttentionSelector = () =>
       acknowledgedAgentsByPaneKey: AppState['acknowledgedAgentsByPaneKey'],
       activityClearedAtByPaneKey: AppState['activityClearedAtByPaneKey'],
       // Closing a tab can drop a pane's row without a status write.
-      _rowOwnersRevision: number
+      _rowOwnersRevision: number,
+      // Null without bots. A new value (bots, nesting or host status changed) re-runs the scan.
+      bots: readonly Bot[] | null,
+      _botNesting: unknown
     ) =>
       hasActivityInboxAgentAttention(
         {
@@ -29,7 +41,8 @@ const createAgentAttentionSelector = () =>
           acknowledgedAgentsByPaneKey,
           activityClearedAtByPaneKey
         },
-        getAgentStatusEpochNow(state.agentStatusEpoch)
+        getAgentStatusEpochNow(state.agentStatusEpoch),
+        bots ? (worktreeId) => isBotWorkspaceId(state, bots, worktreeId) : null
       )
   )
 
@@ -43,13 +56,30 @@ export type ActivityInboxAttention = {
 /** What the Activity inbox has for you. Reads only what the renderer already holds; never fetches. */
 export function useActivityInboxAttention(): ActivityInboxAttention {
   const [selectAgentAttention] = useState(createAgentAttentionSelector)
+  const allBots = useSyncExternalStore(subscribeToBotChanges, readBots)
+  const bots = allBots.length > 0 ? allBots : null
+  // Which bot a workspace belongs to reads its nesting and host status; with no bots this reads nothing.
+  const botNesting = useAppStoreWithHostStatuses((s, statuses) =>
+    bots ? selectSidebarLineageParentIdentities(s, statuses) : null
+  )
+  const botFolders = useAppStore((s) => (bots ? selectFolderWorkspaces(s) : null))
+  // The bot check also looks workspaces up by id, so rows that load late must re-run the scan too.
+  const botRows = useAppStore((s) => (bots ? selectWorktreesByRepo(s) : null))
+  const botDetectedRows = useAppStore((s) => (bots ? selectDetectedWorktreesByRepo(s) : null))
+  // One stable value per change, so the epoch selector re-runs its scan only when one of these moves.
+  const botNestingKey = useMemo(
+    () => (bots ? [botNesting, botFolders, botRows, botDetectedRows] : null),
+    [bots, botNesting, botFolders, botRows, botDetectedRows]
+  )
   const agents = useAppStore((state) =>
     selectAgentAttention(
       state,
       state.migrationUnsupportedByPtyId,
       state.acknowledgedAgentsByPaneKey,
       state.activityClearedAtByPaneKey,
-      state.agentStatusByPaneKey.projection.rowOwnersRevision()
+      state.agentStatusByPaneKey.projection.rowOwnersRevision(),
+      bots,
+      botNestingKey
     )
   )
   // Never useBots(): it would start a bots.list. The snapshot notifies only when its lists change.
@@ -57,11 +87,10 @@ export function useActivityInboxAttention(): ActivityInboxAttention {
   const requests = useAccessRequests()
   // Whether a request is live reads its host's state and the bot list, so re-check when either changes.
   const liveHosts = useSyncExternalStore(subscribeToBotChanges, readLiveBotHostIds)
-  const bots = useSyncExternalStore(subscribeToBotChanges, readBots)
   const access = useMemo(
     () => requests.some((request) => isLiveAccessRequest(request)),
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- liveHosts and bots are what isLiveAccessRequest reads.
-    [requests, liveHosts, bots]
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- liveHosts and allBots are what isLiveAccessRequest reads.
+    [requests, liveHosts, allBots]
   )
   return { agents, bots: botTasks || access }
 }
