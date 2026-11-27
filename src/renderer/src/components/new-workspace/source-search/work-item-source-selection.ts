@@ -14,7 +14,7 @@ import { bindJiraIssueSourceContext } from './use-jira-url-source'
 import type { RowEntry } from '../name-field/smart-workspace-name-field-model'
 
 export type WorkItemSourceContexts = Record<
-  'github' | 'gitlab' | 'linear' | 'jira',
+  'github' | 'gitlab' | 'linear' | 'jira' | 'itsaplan',
   TaskSourceContext | null
 >
 export function resolveWorkItemSourceRow(
@@ -65,6 +65,26 @@ export function resolveWorkItemSourceRow(
             }
           }
         : undefined
+    }
+  }
+  if (row.kind === 'itsaplan') {
+    const context = contexts.itsaplan
+    const identity = context?.providerIdentity
+    if (!context || identity?.provider !== 'itsaplan') {
+      return null
+    }
+    // Why: bind the issue's own project, which may differ from the searched one.
+    return {
+      provider: 'itsaplan',
+      type: 'issue',
+      number: row.issue.sequenceNumber,
+      title: `${row.issue.identifier} ${row.issue.title}`,
+      url: row.issue.url,
+      identifier: row.issue.identifier,
+      taskSourceContext: {
+        ...context,
+        providerIdentity: { ...identity, projectRef: row.issue.projectRef }
+      }
     }
   }
   if (row.kind === 'jira') {

@@ -8,6 +8,20 @@ import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { getItsaplanIssueWorkspaceSeed } from '../task-page-source-context'
 
+export function buildItsaplanLinkedWorkItem(issue: ItsaplanIssue): LinkedWorkItemSummary {
+  const description = issue.description.trim()
+  return {
+    type: 'issue',
+    provider: 'itsaplan',
+    number: issue.sequenceNumber,
+    title: `${issue.identifier} ${issue.title}`,
+    url: issue.url,
+    ...(description
+      ? { linkedContext: { provider: 'itsaplan', version: 1, renderedText: description } }
+      : {})
+  }
+}
+
 export function openItsaplanIssueComposer({
   issue,
   instanceId,
@@ -33,17 +47,7 @@ export function openItsaplanIssueComposer({
     ...sourceContext,
     providerIdentity: { provider: 'itsaplan', instanceId, projectRef: issue.projectRef }
   }
-  const description = issue.description.trim()
-  const linkedWorkItem: LinkedWorkItemSummary = {
-    type: 'issue',
-    provider: 'itsaplan',
-    number: issue.sequenceNumber,
-    title: `${issue.identifier} ${issue.title}`,
-    url: issue.url,
-    ...(description
-      ? { linkedContext: { provider: 'itsaplan', version: 1, renderedText: description } }
-      : {})
-  }
+  const linkedWorkItem = buildItsaplanLinkedWorkItem(issue)
   const mappedRepo = repos.find(
     (repo) =>
       repo.defaultItsaplanProject?.instanceId === instanceId &&

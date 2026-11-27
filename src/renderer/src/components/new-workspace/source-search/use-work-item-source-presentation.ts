@@ -18,6 +18,7 @@ import {
 import { isSmartWorkspaceSourceQueryWithinLimit } from '../../../../../shared/new-workspace/smart-workspace-source-query'
 import { RESULT_LIMIT, type RowEntry } from '../name-field/smart-workspace-name-field-model'
 import type { useWorkItemSourceFoundation } from './use-work-item-source-foundation'
+import type { ItsaplanIssue } from '../../../../../shared/itsaplan/itsaplan-types'
 
 type Foundation = ReturnType<typeof useWorkItemSourceFoundation>
 
@@ -31,8 +32,12 @@ export function useWorkItemSourcePresentation(
     linearUrlIntent?: ReturnType<typeof parseBoundedSmartWorkspaceLinearIssueUrlIntent>
     linearUrlIntentOwnsInput?: boolean
     linearQuery?: string
+    itsaplanIssues?: ItsaplanIssue[]
+    itsaplanLoading?: boolean
   }
 ) {
+  const itsaplanIssues = options?.itsaplanIssues
+  const itsaplanLoading = options?.itsaplanLoading === true
   const {
     jiraSource,
     branches,
@@ -119,6 +124,11 @@ export function useWorkItemSourcePresentation(
         value,
         debouncedQuery
       }),
+      itsaplanIssues: getVisibleHeldProviderResults({
+        items: itsaplanIssues ?? [],
+        value,
+        debouncedQuery
+      }),
       linearAvailable: linearAvailable && !linearUrlLookupFailed,
       linearIssues: prioritizeSmartWorkspaceLinearIssueResults(
         value,
@@ -152,6 +162,7 @@ export function useWorkItemSourcePresentation(
     jiraSource.intent,
     jiraSource.issue,
     jiraIssues,
+    itsaplanIssues,
     linearAvailable,
     linearIssues,
     linearUrlIntentOwnsInput,
@@ -238,7 +249,12 @@ export function useWorkItemSourcePresentation(
     linearLoading && (!linearUrlIntentOwnsInput || showLinearUrlLoadingFeedback)
   const loading = jiraSource.intent
     ? jiraSource.loading
-    : githubLoading || gitlabLoading || branchesLoading || visibleLinearLoading || jiraLoading
+    : githubLoading ||
+      gitlabLoading ||
+      branchesLoading ||
+      visibleLinearLoading ||
+      jiraLoading ||
+      itsaplanLoading
   // Why: only spin on first load, not refreshes with retained rows.
   const showSearchSpinner = loading && searchResultRows.length === 0
   const ActiveInputIcon =

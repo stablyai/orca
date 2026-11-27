@@ -17119,6 +17119,7 @@
             "retryJira": "Retry",
             "searchJira": "Search Jira issues or paste an issue URL",
             "jiraMode": "Jira",
+            "itsaplanMode": "It's a Plan",
             "jiraSelectBindFailed": "Couldn’t link this Jira issue. Pick the matching site or reconnect Jira, then try again.",
             "emoji": "Emoji",
             "loadingLinearIssue": "Loading Linear issue…",
@@ -17159,7 +17160,8 @@
                   "b1418294ea": "Start typing to search GitLab MRs and issues.",
                   "80e7791c93": "No matching branches.",
                   "b4e65d98a6": "Start typing to search Linear issues.",
-                  "5ba5d3e516": "Start typing to search Jira issues, or paste an issue URL."
+                  "5ba5d3e516": "Start typing to search Jira issues, or paste an issue URL.",
+                  "itsaplan": "Start typing to search It's a Plan issues."
                 }
               }
             }

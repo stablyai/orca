@@ -8,6 +8,7 @@ import {
   GitPullRequest
 } from 'lucide-react'
 import { LinearIcon } from '@/components/icons/LinearIcon'
+import { ItsaplanIcon } from '@/components/icons/ItsaplanIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { Trans } from 'react-i18next'
 import { i18n } from '@/i18n/i18n'
@@ -46,6 +47,9 @@ export function RowIcon({ row }: { row: RowEntry }): React.JSX.Element {
   if (row.kind === 'jira' || row.kind === 'jira-account') {
     return <JiraIcon className="size-3.5 shrink-0 text-muted-foreground" />
   }
+  if (row.kind === 'itsaplan') {
+    return <ItsaplanIcon className="size-3.5 shrink-0 text-muted-foreground" />
+  }
   return <LinearIcon className="size-3.5 shrink-0 text-muted-foreground" />
 }
 
@@ -68,6 +72,9 @@ export function SelectionIcon({
   }
   if (kind === 'jira') {
     return <JiraIcon className="size-3.5 shrink-0 text-muted-foreground" />
+  }
+  if (kind === 'itsaplan') {
+    return <ItsaplanIcon className="size-3.5 shrink-0 text-muted-foreground" />
   }
   return <LinearIcon className="size-3.5 shrink-0 text-muted-foreground" />
 }

@@ -115,6 +115,9 @@ export function useSmartWorkspaceFieldAvailability({
     if (item.id === 'jira') {
       return jiraSourceConnected
     }
+    if (item.id === 'itsaplan') {
+      return itsaplanConnected && !repoBackedSourcesDisabled
+    }
     if (item.id === 'branches') {
       return branchesEnabled && !repoBackedSourcesDisabled
     }
