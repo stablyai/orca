@@ -3,7 +3,6 @@ import { createReadStream } from 'node:fs'
 import { link, lstat, mkdir, open, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { pipeline } from 'node:stream/promises'
-import { renameLocalPathSerializedByDestination } from '../destination-serialized-local-rename'
 import { NEW_IPYNB_CONTENT } from '../../../shared/editor/notebooks/new-ipynb-content'
 import { isENOENT } from './filesystem-path-containment'
 
@@ -45,8 +44,9 @@ export async function createLocalFileFromSource(
   }
 }
 
-// A hard link is an atomic create that fails on a taken name. Volumes without hard links (FAT,
-// some network shares) fall back to the file explorer's no-clobber rename.
+// A hard link is the one portable create that is atomic and fails on a taken name. A volume
+// without them (exFAT, some network shares) refuses: a check-then-rename could replace a file
+// another program creates in between.
 async function publishNoClobber(tempPath: string, filePath: string): Promise<void> {
   try {
     await link(tempPath, filePath)
@@ -54,7 +54,12 @@ async function publishNoClobber(tempPath: string, filePath: string): Promise<voi
     if (error instanceof Error && 'code' in error && error.code === 'EEXIST') {
       throw error
     }
-    await renameLocalPathSerializedByDestination(tempPath, filePath)
+    throw new Error(
+      `Can't add '${basename(filePath)}' here: this drive can't create files safely`,
+      {
+        cause: error
+      }
+    )
   }
 }
 
