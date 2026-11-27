@@ -77,13 +77,19 @@ function normalizeMimeHeader(value: string): string {
       }
       index++
     } else if (commentDepth > 0) {
-      if (character === '(') commentDepth++
-      if (character === ')') commentDepth--
+      if (character === '(') {
+        commentDepth++
+      }
+      if (character === ')') {
+        commentDepth--
+      }
     } else if (!quoted && character === '(') {
       commentDepth = 1
       tokens.push(' ')
     } else {
-      if (character === '"') quoted = !quoted
+      if (character === '"') {
+        quoted = !quoted
+      }
       tokens.push(character)
     }
   }
@@ -93,7 +99,9 @@ function normalizeMimeHeader(value: string): string {
   return tokens
     .join('')
     .replace(/"(?:\\[\s\S]|[^"\\])*"?|[ \t\r\n]+/g, (token, offset: number, source: string) => {
-      if (token.startsWith('"')) return token
+      if (token.startsWith('"')) {
+        return token
+      }
       const before = source[offset - 1]
       const after = source[offset + token.length]
       return before === '=' || after === '=' || before === '/' || after === '/' ? '' : ' '
@@ -109,13 +117,19 @@ function mixedBodyParts(children: Part[][], textOf: (part: Part) => string): Par
       plainCounts.set(text, (plainCounts.get(text) ?? 0) + 1)
     }
   }
-  if (plainCounts.size === 0) return children.flat()
+  if (plainCounts.size === 0) {
+    return children.flat()
+  }
   return children
     .filter((child) => {
-      if (child.length !== 1 || child[0].mimeType !== 'text/html') return true
+      if (child.length !== 1 || child[0].mimeType !== 'text/html') {
+        return true
+      }
       const text = equivalentText(child[0])
       const remaining = plainCounts.get(text) ?? 0
-      if (remaining === 0) return true
+      if (remaining === 0) {
+        return true
+      }
       plainCounts.set(text, remaining - 1)
       return false
     })
@@ -127,7 +141,9 @@ export function bodyText(part: Part | undefined): string {
   const decoded = new Map<Part, string>()
   const textOf = (node: Part): string => {
     const cached = decoded.get(node)
-    if (cached !== undefined) return cached
+    if (cached !== undefined) {
+      return cached
+    }
     const source = decode(node.body?.data)
     const text = node.mimeType === 'text/html' ? htmlToText(source) : source
     decoded.set(node, text)
