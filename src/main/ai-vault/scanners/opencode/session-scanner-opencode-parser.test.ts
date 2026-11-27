@@ -23,6 +23,7 @@ it('keeps message content when a numeric timestamp is outside the Date range', a
 
     const session = await parseOpenCodeSessionFile({
       path,
+      mtimeMs: Date.parse('2026-11-01T00:00:00.000Z'),
       modifiedAt: '2026-11-01T00:00:00.000Z'
     })
 
