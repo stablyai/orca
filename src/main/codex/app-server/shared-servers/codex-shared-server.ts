@@ -1,6 +1,6 @@
 import { spawnCodexAppServerConnection } from '../codex-app-server-connection'
 import type { CodexAppServerConnection } from '../codex-app-server-connection-types'
-import { initializeCodexAppServerConnection } from '../codex-app-server-handshake'
+import { initializeCodexAppServerConnection as initAppServer } from '../codex-app-server-handshake'
 import {
   stopCodexSharedChatWorkload,
   unsubscribeCodexThreads,
@@ -30,6 +30,7 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
   /** Not offered to new chats; stops once its last chat leaves. */
   draining = false
   private physical: CodexAppServerConnection | null = null
+  initializeResult: unknown = undefined
   private hasExited = false
   private reaping: Promise<void> | null = null
   /** Threads a leaving chat is still cleaning up; a chat resuming one waits for that. */
@@ -78,7 +79,7 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     })
     this.physical = connection
     try {
-      await initializeCodexAppServerConnection(connection, INITIALIZE_TIMEOUT_MS)
+      this.initializeResult = await initAppServer(connection, INITIALIZE_TIMEOUT_MS)
     } catch (error) {
       // A server that never initialized serves nobody; the next chat gets a fresh one.
       this.draining = true
@@ -106,14 +107,7 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     return this.physical
   }
 
-  claim(
-    threadId: string,
-    lease: CodexSharedServerLease,
-    opened?: boolean,
-    history?: boolean
-  ): void {
-    this.router.claim(threadId, lease, opened, history)
-  }
+  claim: CodexSharedLeaseHost['claim'] = (...args) => this.router.claim(...args)
 
   backlog = (lease: CodexSharedServerLease, deltaBytes: number): void =>
     this.backlogs.change(lease, deltaBytes)

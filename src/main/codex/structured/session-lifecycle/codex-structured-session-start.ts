@@ -39,6 +39,7 @@ import {
   reportedCodexThreadOptions
 } from '../catalog/codex-structured-service-tier'
 import { readCodexConfiguredLaunchDefaults } from '../launch/codex-configured-launch-defaults'
+import { captureCodexLaunchedCli } from '../launch/codex-launched-cli-freshness'
 import {
   assertCodexConnectionOpen,
   codexSessionLifecycle,
@@ -92,7 +93,7 @@ export async function openCodexStructuredSession(
     assertCodexConnectionOpen(connection, sessionId)
   }
   current()
-  await waitForPromiseWithSignal(
+  const initializeResult = await waitForPromiseWithSignal(
     initializeCodexAppServerConnection(connection, null),
     openInput.signal
   )
@@ -201,12 +202,18 @@ export async function openCodexStructuredSession(
         ? (configured.serviceTier ?? CODEX_DEFAULT_SERVICE_TIER)
         : undefined
       : (opened.serviceTier ?? CODEX_DEFAULT_SERVICE_TIER)
+  const launchedCli = await waitForPromiseWithSignal(
+    captureCodexLaunchedCli(launch, initializeResult),
+    openInput.signal
+  )
+  current()
   const catalogAccess = codexAcquireCatalogAccess(deps, launch, sessionId)
   const session: CodexSession = {
     ...(launch.readOnly ? { readOnly: launch.readOnly } : {}),
     events: input.events,
     account: start.account,
     codexHome: launch.codexHome,
+    launchedCli,
     connection,
     ...codexSessionLifecycle(input.fence, generation),
     threadId: opened.threadId,

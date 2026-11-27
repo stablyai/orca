@@ -46,6 +46,9 @@ export function createStructuredAgentSessionOutgrownRetirement(input: {
           fence: session.child.fence,
           executionOptions: submission.options
         }) === true,
+      launchCliOutdated: async () =>
+        session?.child?.phase === 'ready' &&
+        (await deps.adapter.requiresCliUpgradeRestart?.(sessionId, session.child.fence)) === true,
       work: input.retainedWork(sessionId, continuingId),
       launchPermission: async () => {
         const record = deps.store.getRecord(sessionId)

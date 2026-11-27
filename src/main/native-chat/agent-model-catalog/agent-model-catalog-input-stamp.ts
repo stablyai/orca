@@ -11,6 +11,18 @@ import { agentModelCatalogScriptEntry } from './agent-model-catalog-script-entry
 // Config files are small; anything larger keeps the cheaper file-identity stamp.
 const MAX_HASHED_CONFIG_BYTES = 1024 * 1024
 
+async function fileIdentity(
+  path: string
+): Promise<[string, number, number, number, number] | null> {
+  try {
+    const target = await realpath(path)
+    const info = await stat(target)
+    return [target, info.ino, info.size, info.ctimeMs, info.mtimeMs]
+  } catch {
+    return null
+  }
+}
+
 async function fileStamp(path: string, byContent = false): Promise<unknown> {
   try {
     const target = await realpath(path)
@@ -35,14 +47,12 @@ async function fileStamp(path: string, byContent = false): Promise<unknown> {
   }
 }
 
-/** Observe install/config identity without running the CLI; config contents are only hashed. */
-export async function agentModelCatalogInputStamp(input: {
+async function resolveCommandPaths(input: {
   command: string
   prefixArgs?: readonly string[]
   cwd: string
   env: NodeJS.ProcessEnv
-  configFiles?: readonly string[]
-}): Promise<string> {
+}): Promise<{ executable: string; script: string | undefined }> {
   const pathEnv = input.env.PATH ?? input.env.Path ?? ''
   let executable = resolve(input.cwd, input.command)
   if (!isAbsolute(input.command) && !/[\\/]/.test(input.command)) {
@@ -62,6 +72,37 @@ export async function agentModelCatalogInputStamp(input: {
     .toLowerCase()
   const operand = agentModelCatalogScriptEntry(interpreter, input.prefixArgs ?? [])
   const script = operand ? resolve(input.cwd, operand) : undefined
+  return { executable, script }
+}
+
+/** Observe executable + script identity without running the CLI; null when unreadable so callers fail closed. */
+export async function agentExecutableStamp(input: {
+  command: string
+  prefixArgs?: readonly string[]
+  cwd: string
+  env: NodeJS.ProcessEnv
+}): Promise<string | null> {
+  const { executable, script } = await resolveCommandPaths(input)
+  const executableId = await fileIdentity(executable)
+  if (!executableId) {
+    return null
+  }
+  if (!script) {
+    return JSON.stringify([executableId, null])
+  }
+  const scriptId = await fileIdentity(script)
+  return scriptId ? JSON.stringify([executableId, scriptId]) : null
+}
+
+/** Observe install/config identity without running the CLI; config contents are only hashed. */
+export async function agentModelCatalogInputStamp(input: {
+  command: string
+  prefixArgs?: readonly string[]
+  cwd: string
+  env: NodeJS.ProcessEnv
+  configFiles?: readonly string[]
+}): Promise<string> {
+  const { executable, script } = await resolveCommandPaths(input)
   return JSON.stringify([
     await fileStamp(executable),
     script ? await fileStamp(script) : null,

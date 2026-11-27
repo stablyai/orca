@@ -12,6 +12,7 @@ import type { CodexAppServerConnection } from '../../app-server/codex-app-server
 import type { openCodexAppServerConnection } from '../../app-server/codex-app-server-connection'
 import { CodexAcquisitionWindow } from '../acquisition/codex-structured-acquisition-window'
 import type { CodexBotLaunchOptions } from '../launch/codex-bot-launch-options'
+import type { CodexLaunchedCli } from '../launch/codex-launched-cli-freshness'
 import { AgentSessionStartEndings } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
 import {
   createCodexTurnOpenWaits,
@@ -147,6 +148,8 @@ export type CodexSession = Pick<CodexBotLaunchOptions, 'readOnly'> & {
   account?: AgentSessionAccountKind
   /** CODEX_HOME this app-server launched under. */
   codexHome?: string | null
+  /** CLI binary/version identity captured at launch for upgrade detection. */
+  launchedCli?: CodexLaunchedCli
   connection: CodexAppServerConnection
   ended: boolean
   /** First observed child exit survives rejected settlement admission. */

@@ -93,6 +93,17 @@ async function launchedWithOtherTools(
   return await changed().catch(() => false)
 }
 
+/** The installed CLI changed since this child launched; a start resumes on the new binary. */
+async function launchedWithOutdatedCli(
+  child: OutgrownChildReading['child'],
+  outdated: (() => Promise<boolean>) | undefined
+): Promise<boolean> {
+  if (!child || child.phase === 'starting' || child.close || !outdated) {
+    return false
+  }
+  return await outdated().catch(() => false)
+}
+
 /** Retire under serialization only when no work is owed; failed Stop leaves a close for startup to join. */
 export async function retireOutgrownStructuredAgentSessionChild(
   sessionId: string,
@@ -105,6 +116,7 @@ export async function retireOutgrownStructuredAgentSessionChild(
     launchPermission?: () => Promise<AgentChatPermissionChoice | null>
     launchAccountHome?: () => Promise<AgentSessionAccountHome | null>
     launchToolsChanged?: () => Promise<boolean>
+    launchCliOutdated?: () => Promise<boolean>
     /** The send about to be handed over; a new model pick may need the requested approval mode. */
     next?: AgentJournalSubmission
     requiresModelTransitionRestart?: (next: AgentJournalSubmission) => boolean
@@ -173,7 +185,8 @@ export async function retireOutgrownStructuredAgentSessionChild(
         deps.permissionRequiresAcquisition
       )) ||
       (await launchedUnderOtherAccount(session.child, deps.launchAccountHome)) ||
-      (await launchedWithOtherTools(session.child, deps.launchToolsChanged))
+      (await launchedWithOtherTools(session.child, deps.launchToolsChanged)) ||
+      (await launchedWithOutdatedCli(session.child, deps.launchCliOutdated))
     ) ||
     structuredAgentSessionChildHasOpenWork(deps.work, await deps.work.currentWork()) ||
     owesWakeUp(facts.newestTurnCompletedAt, deps.work.childWork())

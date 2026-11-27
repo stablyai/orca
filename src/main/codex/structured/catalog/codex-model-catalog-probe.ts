@@ -26,6 +26,7 @@ import {
   resolveCodexStructuredInvocation,
   type CodexStructuredInvocationDeps
 } from '../launch/codex-structured-launch-resolution'
+import { observeCodexCatalogCliVersion } from '../launch/codex-launched-cli-freshness'
 import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type {
   AgentModelCatalogProgress,
@@ -73,14 +74,15 @@ export function createCodexModelCatalogProbe(
       lookup !== 'recover'
         ? (deps.resolveSavedEnvironment ?? deps.resolveEnvironment)
         : deps.resolveEnvironment
-    const { command, prefixArgs, environment } = await resolveCodexStructuredInvocation({
-      ...deps,
-      operation,
-      resolveEnvironment: async () =>
-        overlayEnvironmentVariables((await readEnvironment?.()) ?? {}, overlay, process.platform),
-      ...(lookup === 'recover' ? {} : { refreshEnvironmentAfterMiss: undefined }),
-      ...(launchDirectory ? { resolveWorkingDirectory: () => launchDirectory } : {})
-    })
+    const { command, prefixArgs, environment, configuredProgram } =
+      await resolveCodexStructuredInvocation({
+        ...deps,
+        operation,
+        resolveEnvironment: async () =>
+          overlayEnvironmentVariables((await readEnvironment?.()) ?? {}, overlay, process.platform),
+        ...(lookup === 'recover' ? {} : { refreshEnvironmentAfterMiss: undefined }),
+        ...(launchDirectory ? { resolveWorkingDirectory: () => launchDirectory } : {})
+      })
     assertStructuredAgentResolutionCurrent(operation)
     const userArgs = [
       ...prefixArgs,
@@ -161,6 +163,10 @@ export function createCodexModelCatalogProbe(
             ...(signal ? { signal } : {})
           },
           async (rpc) => {
+            observeCodexCatalogCliVersion(
+              { command, customCommand: configuredProgram !== undefined },
+              rpc.initializeResult
+            )
             let latest: Awaited<ReturnType<typeof fetchCodexModelCatalogListing>> | undefined
             let accountKnown = false
             let unavailable: AgentModelCatalogSuccess['unavailable']

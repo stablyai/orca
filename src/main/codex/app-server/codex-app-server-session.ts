@@ -51,6 +51,7 @@ type JsonRpcResponse = {
 
 export type CodexAppServerRpc = {
   signal?: AbortSignal
+  readonly initializeResult?: unknown
   /** Per-call deadline within the session deadline; absent/null uses only the session deadline. */
   request: (
     method: string,
@@ -293,12 +294,12 @@ export async function runCodexAppServerSession<T>(
 
   try {
     const session = async (): Promise<T> => {
-      await requestRpc('initialize', {
+      const initializeResult = await requestRpc('initialize', {
         clientInfo: { name: 'orca_desktop', title: 'Orca', version: '0.0.0' },
         ...(invocation.experimentalApi ? { capabilities: { experimentalApi: true } } : {})
       })
       notify('initialized')
-      return body({ request: requestRpc, notify, signal: lifetime.signal })
+      return body({ request: requestRpc, notify, signal: lifetime.signal, initializeResult })
     }
     // Killing the child cannot settle a callback awaiting unrelated work; race the whole callback.
     return await Promise.race([session(), deadlinePromise])
