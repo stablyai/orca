@@ -14,7 +14,7 @@ export const connectionDiagnosticsScreenStyles = themedStyleSheet(() => ({
     paddingVertical: spacing.xs + 2,
     paddingHorizontal: spacing.md,
     borderRadius: radii.pill,
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.sheetGroup
   },
   hostChipActive: {
     backgroundColor: colors.bgPanel,
@@ -61,7 +61,7 @@ export const connectionDiagnosticsScreenStyles = themedStyleSheet(() => ({
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     borderRadius: radii.control,
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.sheetGroup
   },
   sendButtonText: {
     fontSize: typography.metaSize,
@@ -75,7 +75,7 @@ export const connectionDiagnosticsScreenStyles = themedStyleSheet(() => ({
     paddingVertical: spacing.xs + 2,
     paddingHorizontal: spacing.md,
     borderRadius: radii.control,
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.sheetGroup
   },
   copyButtonText: {
     fontSize: typography.metaSize,
