@@ -40,7 +40,8 @@
 2 src/main/ai-vault/listing/cached-session-list.ts
 9 src/main/ai-vault/parse-cache/session-parse-cache-database.ts
 1 src/main/ai-vault/parse-cache/session-parse-cache-legacy-json.ts
-14 src/main/ai-vault/parse-cache/session-parse-cache-persistence.ts
+15 src/main/ai-vault/parse-cache/session-parse-cache-persistence.ts # +1: pruneOtherSessionParseCacheVersions once per scanner-child database open
+3 src/main/ai-vault/parse-cache/session-parse-cache-version-files.ts # once per scanner-child database open: probe and prune the few other-version cache files; not Electron main
 1 src/main/ai-vault/parse-cache/session-scanner-sidecar-enrichment.ts
 1 src/main/ai-vault/prompts/session-first-user-prompt-handler.ts
 5 src/main/ai-vault/scan-service/session-scanner-background.ts

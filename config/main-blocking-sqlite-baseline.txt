@@ -3,6 +3,7 @@
 10 src/main/ai-vault-search/storage/session-search-message-rows.ts
 13 src/main/ai-vault-search/storage/session-search-schema.ts
 20 src/main/ai-vault/parse-cache/session-parse-cache-database.ts
+2 src/main/ai-vault/parse-cache/session-parse-cache-version-files.ts # once per scanner-child database open: probe and prune the few other-version cache files; not Electron main
 13 src/main/ai-vault/parse-cache/session-scope-cwds-table.ts
 2 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-open.ts
 13 src/main/bots/bot-group-store-tables.ts # store-open table setup moved out of the store, keep-field triggers and the incremental remote-ask index pass (one-shot startup)
