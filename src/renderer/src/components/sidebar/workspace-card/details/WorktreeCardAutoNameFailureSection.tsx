@@ -40,7 +40,7 @@ export function WorktreeCardAutoNameFailureSection({
           {canRetry ? (
             <AutoNameAction
               label={tryAgain}
-              disabled={retrying}
+              disabled={retrying || dismissing}
               busy={retrying}
               onClick={failure.tryAgain}
             >

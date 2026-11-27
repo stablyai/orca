@@ -20,6 +20,8 @@ export type AutoNameFailure = {
 /** One failure on one workspace: dismiss state never outlives it, even when the same error returns. */
 type FailureState = {
   failure: string | null
+  /** Distinct per occurrence, so a reply for an earlier, identical error can't land on this one. */
+  occurrence: object
   dismissed: boolean
   dismissing: boolean
   canDismiss: boolean
@@ -28,7 +30,7 @@ type FailureState = {
 const noop = (): void => {}
 
 function freshState(failure: string | null): FailureState {
-  return { failure, dismissed: false, dismissing: false, canDismiss: false }
+  return { failure, occurrence: {}, dismissed: false, dismissing: false, canDismiss: false }
 }
 
 /** A row's failed auto-name, shared by its row mark and its hover card section; null when there's none. */
@@ -51,8 +53,8 @@ export function useAutoNameFailure({
     setState(current)
   }
   const update = useCallback(
-    (owner: string, patch: Partial<FailureState>) =>
-      setState((prev) => (prev.failure === owner ? { ...prev, ...patch } : prev)),
+    (owner: object, patch: Partial<FailureState>) =>
+      setState((prev) => (prev.occurrence === owner ? { ...prev, ...patch } : prev)),
     []
   )
   // Follows the row's lifetime, not the hover card's, so a retry keeps its spinner after the card closes.
@@ -63,14 +65,15 @@ export function useAutoNameFailure({
     onRenamed: noop,
     onAttemptFinished: noop
   })
+  const { occurrence } = current
   useEffect(() => {
     if (failure === null) {
       return
     }
     void canDismissAutoName({ worktreeId, executionHostId }).then((canDismiss) =>
-      update(failure, { canDismiss })
+      update(occurrence, { canDismiss })
     )
-  }, [failure, update, worktreeId, executionHostId])
+  }, [failure, occurrence, update, worktreeId, executionHostId])
 
   const retrying = retry.running
   const { dismissed, dismissing } = current
@@ -78,11 +81,11 @@ export function useAutoNameFailure({
     if (failure === null || dismissing || retrying) {
       return
     }
-    update(failure, { dismissing: true })
+    update(occurrence, { dismissing: true })
     void dismissAutoName({ worktreeId, executionHostId })
-      .then((result) => update(failure, { dismissed: result.dismissed, dismissing: false }))
-      .catch(() => update(failure, { dismissing: false }))
-  }, [failure, dismissing, retrying, update, worktreeId, executionHostId])
+      .then((result) => update(occurrence, { dismissed: result.dismissed, dismissing: false }))
+      .catch(() => update(occurrence, { dismissing: false }))
+  }, [failure, occurrence, dismissing, retrying, update, worktreeId, executionHostId])
 
   if (!error || dismissed) {
     return null

@@ -72,6 +72,17 @@ describe('useAutoNameFailure', () => {
     expect(hook.result.current?.dismissing).toBe(false)
   })
 
+  it('drops a dismiss reply for an earlier occurrence of the same error', async () => {
+    const hook = render({ worktreeId: 'wt-1', error: ERROR })
+    await settle()
+    act(() => hook.result.current?.dismiss())
+
+    hook.rerender({ worktreeId: 'wt-1', error: undefined })
+    hook.rerender({ worktreeId: 'wt-1', error: ERROR })
+    await act(async () => mocks.dismissReplies.shift()?.({ dismissed: true }))
+    expect(hook.result.current).not.toBeNull()
+  })
+
   it('does not carry Dismiss over to the next workspace before its own check answers', async () => {
     const hook = render({ worktreeId: 'wt-1', error: ERROR })
     await settle()
