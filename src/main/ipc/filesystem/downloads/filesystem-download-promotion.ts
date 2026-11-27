@@ -37,26 +37,15 @@ export async function inspectDownloadDestination(
   }
 }
 
-export async function assertDestinationStillUnclaimed(destinationPath: string): Promise<void> {
-  try {
-    await stat(destinationPath)
-  } catch (error) {
-    if (isENOENT(error)) {
-      return
-    }
-    throw error
-  }
-  throw new Error('Destination file appeared before download completed')
-}
-
 export async function promoteDownloadedFile(
   tempPath: string,
   destinationPath: string,
   destinationExisted: boolean
 ): Promise<void> {
   if (!destinationExisted) {
-    await assertDestinationStillUnclaimed(destinationPath)
-    await rename(tempPath, destinationPath)
+    await promoteDownloadedFileWithoutOverwrite(tempPath, destinationPath, () =>
+      Promise.reject(new Error('Destination file appeared before download completed'))
+    )
     return
   }
 
