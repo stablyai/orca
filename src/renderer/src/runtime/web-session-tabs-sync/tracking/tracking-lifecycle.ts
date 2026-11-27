@@ -57,13 +57,8 @@ import {
 import { clearHostSessionMirrorHydration } from '../hydration/host-session-mirror-hydration'
 import { clearHostMirrorHandleGapVerdictsForEnvironment } from '@/lib/agent-session/resume/host-mirror-handle-gap-wait'
 import { createBoundedGenerationMap } from '@/lib/bounded-generation-map'
-import { forgetWebChatReadMarkCensus } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-web-copy'
 import { clearHostSessionTabIdMappings } from '../identity/tracking-mappings'
-import {
-  untrackWebSessionTabsWorktree,
-  removeWebSessionTabsEnvironment,
-  retireWebSessionTabsReadMarkWorkspace
-} from './tracking'
+import { untrackWebSessionTabsWorktree, removeWebSessionTabsEnvironment } from './tracking'
 import {
   clearDirectlyOpenedChats,
   clearDirectlyOpenedChatsForWorktree
@@ -120,8 +115,7 @@ export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
 
 export function clearWebSessionTabsTrackingForWorktree(
   environmentId: string,
-  worktreeId: string,
-  runtimeId?: string
+  worktreeId: string
 ): void {
   const key = sessionTabsFreshnessKey(environmentId, worktreeId)
   clearDirectlyOpenedChatsForWorktree(environmentId, worktreeId)
@@ -143,7 +137,6 @@ export function clearWebSessionTabsTrackingForWorktree(
   clearWebSessionTerminalPlacementsForWorktree(environmentId, worktreeId)
   forgetMirroredTerminalHandles(environmentId, worktreeId)
   forgetVisibleTabPicksForWorktree(environmentId, worktreeId)
-  retireWebSessionTabsReadMarkWorkspace(environmentId, worktreeId, runtimeId)
 }
 
 export function clearWebSessionTabsTrackingForEnvironment(environmentId: string): void {
@@ -152,7 +145,6 @@ export function clearWebSessionTabsTrackingForEnvironment(environmentId: string)
     return
   }
   const keyPrefix = `${trimmedEnvironmentId}:`
-  forgetWebChatReadMarkCensus(trimmedEnvironmentId)
   clearDirectlyOpenedChats((key) => key.startsWith(keyPrefix))
   sessionTabsTrackingGenerations.advance(trimmedEnvironmentId)
   forgetRetiredEpochCensuses((key) => key.startsWith(keyPrefix))

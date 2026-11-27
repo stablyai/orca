@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { activityThreadStatusId } from '../threads/activity-thread-presentation'
 import type { AgentPaneThread } from '../threads/activity-thread-types'
-import { readWebChatMark } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-web-copy'
+import { readWebChatMark } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-aliases'
 
 export type ClearCompletedActivityPlan = {
   /** Panes whose activity gets a cleared-at cutoff stamped. */
@@ -27,7 +27,6 @@ export function planClearCompletedActivity(
   threads: readonly AgentPaneThread[],
   state: {
     activityClearedAtByPaneKey: Record<string, number>
-    chatReadMarksCopiedHere?: boolean
   },
   now: number = Date.now()
 ): ClearCompletedActivityPlan {

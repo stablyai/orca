@@ -37,7 +37,7 @@ import {
   type ActivityEventOwner
 } from './activity-event-builder-context'
 import type { Translate } from '@/i18n/use-translate'
-import { readWebChatMark } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-web-copy'
+import { readWebChatMark } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-aliases'
 
 export type BuildActivityEventsArgs = {
   chatNames: StructuredChatTabNames
@@ -58,7 +58,6 @@ export type BuildActivityEventsArgs = {
   acknowledgedAgentsByPaneKey: Record<string, number>
   /** Per-pane "Clear completed" cutoffs; events stamped at or before the cutoff are hidden. */
   activityClearedAtByPaneKey?: Record<string, number>
-  chatReadMarksCopiedHere?: boolean
   now: number
 }
 
@@ -78,7 +77,6 @@ function paneBuildInputs(args: BuildActivityEventsArgs, t: Translate | undefined
     args.resolveWorktree,
     args.acknowledgedAgentsByPaneKey,
     args.activityClearedAtByPaneKey,
-    args.chatReadMarksCopiedHere,
     t,
     standaloneActivityWorktreeScope(),
     // A fresh object never matches, so an untracked resolver always rebuilds.

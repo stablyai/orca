@@ -36,7 +36,6 @@ export type PersistedUIWriteBaseline = {
   acknowledgedAgentsByPaneKey: Record<string, number>
   activityClearedAtByPaneKey: Record<string, number>
   manuallyUnreadTurnsByPaneKey: Record<string, number>
-  chatReadMarksCopiedHere: boolean
 }
 
 // Require exhaustive Record coverage; keyof arrays validate members but silently omit new fields, losing persistence (ui-state-schema-parity.ts).
@@ -72,8 +71,7 @@ const PERSISTED_UI_WRITE_BASELINE_FIELD_SET = {
   filterRepoIds: true,
   acknowledgedAgentsByPaneKey: true,
   activityClearedAtByPaneKey: true,
-  manuallyUnreadTurnsByPaneKey: true,
-  chatReadMarksCopiedHere: true
+  manuallyUnreadTurnsByPaneKey: true
 } satisfies Record<keyof PersistedUIWriteBaseline, true>
 
 export const PERSISTED_UI_WRITE_BASELINE_FIELDS = Object.keys(

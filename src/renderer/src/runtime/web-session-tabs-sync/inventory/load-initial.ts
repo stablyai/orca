@@ -10,7 +10,6 @@ import { recoverMirroredTerminalOrphansBeforeApply } from '../terminal-handles/m
 import {
   isSessionTabsListAllResult,
   recordReceivedWebSessionTabsSnapshot,
-  recordWebSessionTabsCensusForChatReadMarks,
   shouldApplyRecoveredWebSessionTabsSnapshot
 } from '../tracking/tracking'
 import { decideWebSessionTabsSnapshot } from '../tracking/tracking-decisions'
@@ -95,12 +94,6 @@ export function loadInitialWebSessionTabs({
           'bootstrap',
           true
         )
-      )
-      recordWebSessionTabsCensusForChatReadMarks(
-        environmentId,
-        result.snapshots,
-        runtimeId,
-        requestReceivedFrame
       )
       applyReceivedAgentSenderPublications(environmentId, result.snapshots, runtimeId)
       const recovered = await Promise.all(

@@ -67,7 +67,7 @@ export function decideWebSessionTabsSnapshot(
   if ((snapshot as { removed?: unknown }).removed === true) {
     // Why: removed worktrees can stop publishing, so clean up their tracking now instead of waiting for a replacement snapshot that may never arrive.
     // Retraction does not retire the live publisher; its same-epoch republication must return. receivedFrame fences delayed predecessors instead.
-    clearWebSessionTabsTrackingForWorktree(environmentId, snapshot.worktree, runtimeId)
+    clearWebSessionTabsTrackingForWorktree(environmentId, snapshot.worktree)
     queueAcceptedWebSessionTerminalSnapshot(snapshot, environmentId)
     return WEB_SESSION_TABS_FRAME_APPLIED
   }

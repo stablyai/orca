@@ -25,20 +25,21 @@ import {
   mergeHostWebUIState,
   mergeOsc52ClipboardNoticePending,
   mergeWebUIState,
+  prepareLocalWebUIState,
   readLocalWebUIState
 } from './web-ui-state'
 import { callRuntimeResult } from '../../runtime/client/web-runtime-calls'
 import { requireActiveEnvironmentOrNull } from '../../runtime/client/web-runtime-session'
 import { UI_STORAGE_KEY, noopUnsubscribe, writeJson } from '../web-storage'
-import { mergeWebChatReadMarkEdits, type ChatReadMarks } from './web-chat-read-mark-storage'
+import { writeWebChatReadMarkEdits, type WebChatReadMarks } from './web-chat-read-mark-storage'
 
 type UIUpdates = Parameters<PreloadApi['ui']['set']>[0]
 export type WebUiApi = NonNullable<PreloadApi['ui']> & {
   setPersistedUIWithAck: (
     updates: UIUpdates,
-    marks: Partial<ChatReadMarks>,
-    baseline: ChatReadMarks
-  ) => Promise<void>
+    marks: Partial<WebChatReadMarks>,
+    baseline: WebChatReadMarks
+  ) => { marks: WebChatReadMarks; request: Promise<void> }
 }
 
 /** Combines browser-local preferences with host persistence; acknowledged writes remain distinct from best-effort writes. */
@@ -63,15 +64,8 @@ export function createWebUiApi(): WebUiApi {
     }
   }
   let zoomLevel = readLocalWebUIState().uiZoomLevel
-  const persistLocalUpdates = (
-    updates: UIUpdates,
-    marks?: Partial<ChatReadMarks>,
-    baseline?: ChatReadMarks
-  ): void => {
+  const persistLocalUpdates = (updates: UIUpdates): void => {
     const next = mergeWebUIState(readLocalWebUIState(), updates)
-    if (marks && baseline) {
-      mergeWebChatReadMarkEdits(next, marks, baseline)
-    }
     writeJson(UI_STORAGE_KEY, next)
     zoomLevel = next.uiZoomLevel
   }
@@ -127,8 +121,17 @@ export function createWebUiApi(): WebUiApi {
       await sendHostUpdatesWithAck(updates)
     },
     setPersistedUIWithAck: (updates, marks, baseline) => {
-      persistLocalUpdates(updates, marks, baseline)
-      return sendHostUpdatesWithAck(updates)
+      const project = prepareLocalWebUIState()
+      let nextZoomLevel = zoomLevel
+      const persisted = writeWebChatReadMarkEdits(marks, baseline, {
+        mergeUI: (stored) => {
+          const next = mergeWebUIState(project(stored), updates)
+          nextZoomLevel = next.uiZoomLevel
+          return next
+        }
+      })
+      zoomLevel = nextZoomLevel
+      return { marks: persisted, request: sendHostUpdatesWithAck(updates) }
     },
     recordFeatureInteraction: async (id: FeatureInteractionId) => {
       const current = readLocalWebUIState()

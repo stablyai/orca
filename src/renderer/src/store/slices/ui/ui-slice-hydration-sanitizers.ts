@@ -18,7 +18,7 @@ import { resolveVisibleWorkspaceHostIds } from '../../../../../shared/workspace-
 import { persistedUIValuesEqual } from '../../../../../shared/collections/persisted-ui-equality'
 import '../../../../../shared/orca-profiles/constants'
 import type { UISlice } from './ui-slice-contract'
-import { chatPaneKeySessionId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
+import { isSafePersistedRecordKey } from '../../../../../shared/agent-session/view/pane-key-timestamp-record'
 
 export {
   sanitizeActivityBarArrangement,
@@ -32,9 +32,7 @@ export function isPlainPersistedRecord(value: unknown): value is Record<string, 
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
-export function isSafePersistedRecordKey(key: string): boolean {
-  return key !== '__proto__' && key !== 'constructor' && key !== 'prototype'
-}
+export { isSafePersistedRecordKey }
 
 export function sanitizePersistedRepoIds(value: unknown): string[] {
   if (!Array.isArray(value)) {
@@ -97,85 +95,6 @@ export function sanitizePersistedSidebarWidth(
     return fallback
   }
   return Math.min(maxWidth, Math.max(MIN_SIDEBAR_WIDTH, width))
-}
-
-// Agent rows hydrate at any age (structured chats, and terminal panes still placed), so pane-keyed
-// read state is never age-pruned; the newest entries bound growth instead.
-const PANE_KEY_TIMESTAMP_MAX_ENTRIES = 500
-
-export function sanitizePaneKeyTimestampRecord(
-  value: unknown,
-  current?: Readonly<Record<string, number>>
-): Record<string, number> {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
-    return {}
-  }
-  const out: Record<string, number> = {}
-  for (const [key, at] of Object.entries(value as Record<string, unknown>)) {
-    if (!isSafePersistedRecordKey(key)) {
-      continue
-    }
-    if (typeof at !== 'number' || !Number.isFinite(at) || at <= 0) {
-      continue
-    }
-    out[key] = at
-  }
-  const entries = Object.entries(out)
-  if (entries.length <= PANE_KEY_TIMESTAMP_MAX_ENTRIES) {
-    return out
-  }
-  // A chat's mark kept under its tab's old key (chat-read-mark-copy.ts) shares its conversation
-  // key's leaf, so the two count once and rank by the newer value, even after only one changes.
-  const leaf = (key: string) => key.slice(key.lastIndexOf(':') + 1)
-  const conversationLeaves = new Set(
-    entries.flatMap(([key]) => (chatPaneKeySessionId(key) === null ? [] : [leaf(key)]))
-  )
-  const groups = new Map<string, { at: number; keys: [string, number][]; retained: boolean }>()
-  const retained: [string, number][] = []
-  let retainedGroups = 0
-  for (const entry of entries) {
-    const group = conversationLeaves.has(leaf(entry[0])) ? `\0${leaf(entry[0])}` : entry[0]
-    const keep = current !== undefined && Object.hasOwn(current, entry[0])
-    const found = groups.get(group)
-    if (keep) {
-      retained.push(entry)
-      if (!found?.retained) {
-        retainedGroups += 1
-      }
-    }
-    if (found) {
-      found.keys.push(entry)
-      found.at = Math.max(found.at, entry[1])
-      found.retained ||= keep
-    } else {
-      groups.set(group, { at: entry[1], keys: [entry], retained: keep })
-    }
-  }
-  if (
-    groups.size <= PANE_KEY_TIMESTAMP_MAX_ENTRIES &&
-    entries.length <= 2 * PANE_KEY_TIMESTAMP_MAX_ENTRIES
-  ) {
-    return out
-  }
-  // Web writes reserve space for this tab's marks before applying the hydration limits.
-  const available = 2 * PANE_KEY_TIMESTAMP_MAX_ENTRIES - retained.length
-  if (available <= 0) {
-    return Object.fromEntries(retained)
-  }
-  const remaining = [...groups.values()]
-    .toSorted((left, right) => Number(right.retained) - Number(left.retained) || right.at - left.at)
-    .slice(0, Math.max(PANE_KEY_TIMESTAMP_MAX_ENTRIES, retainedGroups))
-    .flatMap(({ keys }) =>
-      keys
-        .filter(([key]) => current === undefined || !Object.hasOwn(current, key))
-        .toSorted(([leftKey, leftAt], [rightKey, rightAt]) => {
-          const rightIsConversationKey = Number(chatPaneKeySessionId(rightKey) !== null)
-          const leftIsConversationKey = Number(chatPaneKeySessionId(leftKey) !== null)
-          return rightIsConversationKey - leftIsConversationKey || rightAt - leftAt
-        })
-    )
-    .slice(0, available)
-  return Object.fromEntries([...retained, ...remaining])
 }
 
 export function sanitizeWorkspaceCleanupDismissals(

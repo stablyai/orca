@@ -24,9 +24,9 @@ import { getSessionTabsRuntimeIdFromResponse } from '../tracking/publisher-ident
 import { isWebSessionTabsWorktreeRemovalFrame } from '../tracking/session-tabs-inventory-absence'
 import {
   admitWebSessionTabsChatRead,
-  recordWebSessionTabsReplyCandidates
+  recordWebSessionTabsReplyForChatReadMarks
 } from '../tracking/tracking'
-import { isWebChatReadMarkCopyPending } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-web-copy'
+import { canMoveWebChatReadMarks } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-aliases'
 import { waitForChatLinkSessionTabs } from './remote-runtime-session-tabs-inflight'
 
 /** Materialize one listed chat before its subscription frame arrives. */
@@ -77,13 +77,13 @@ export async function readPairedChatTab(args: {
       const reply = response.result
       const replyRuntimeId = getSessionTabsRuntimeIdFromResponse(response)
       if (
-        isWebChatReadMarkCopyPending() &&
+        canMoveWebChatReadMarks() &&
         isSameConnection() &&
         reply?.worktree === worktreeId &&
         !isWebSessionTabsWorktreeRemovalFrame(reply) &&
         hostSnapshotAffirmsWorktreeContents(reply)
       ) {
-        recordWebSessionTabsReplyCandidates(environmentId, reply, frame, replyRuntimeId)
+        recordWebSessionTabsReplyForChatReadMarks(environmentId, reply, frame, replyRuntimeId)
       }
       return { snapshot: reply, runtimeId: replyRuntimeId }
     }

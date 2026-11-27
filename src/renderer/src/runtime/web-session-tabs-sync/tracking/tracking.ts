@@ -23,9 +23,7 @@ export {
   recordReceivedWebSessionTabsInventory,
   recordReceivedWebSessionTabsRemoval,
   recordReceivedWebSessionTabsSnapshot,
-  recordWebSessionTabsCensusForChatReadMarks,
-  recordWebSessionTabsReplyCandidates,
-  retireWebSessionTabsReadMarkWorkspace
+  recordWebSessionTabsReplyForChatReadMarks
 } from './session-tabs-receipts'
 
 export function isSessionTabsListAllResult(value: unknown): value is SessionTabsListAllResult {

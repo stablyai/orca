@@ -7,7 +7,6 @@ import { queueAcceptedWebSessionTerminalSnapshot } from '../terminal-handles/web
 import {
   recordReceivedWebSessionTabsInventory,
   recordReceivedWebSessionTabsSnapshot,
-  recordWebSessionTabsCensusForChatReadMarks,
   shouldApplyRecoveredWebSessionTabsSnapshot
 } from '../tracking/tracking'
 import {
@@ -60,9 +59,7 @@ export function handleGlobalSessionInventoryEvent({
       environmentId,
       snapshot,
       undefined,
-      runtimeId,
-      'stream',
-      true
+      runtimeId
     )
     coordinator.recordSnapshotReceipt(environmentId, snapshot, frame, runtimeId)
     return frame
@@ -80,7 +77,6 @@ export function handleGlobalSessionInventoryEvent({
     )
   })
   const inventoryFrame = recordReceivedWebSessionTabsInventory(environmentId)
-  recordWebSessionTabsCensusForChatReadMarks(environmentId, event.snapshots, runtimeId)
   const missing = coordinator.recordInventoryReceipt(
     environmentId,
     visibilityGeneration,

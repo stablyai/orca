@@ -37,9 +37,9 @@ import {
 } from '../../repos/wsl-moved-repo-ui-retention'
 
 import {
-  type PersistedUIWriteBaseline,
   capturePersistedUIWriteBaseline,
-  diffPersistedUIWriteFields
+  diffPersistedUIWriteFields,
+  PERSISTED_UI_WRITE_BASELINE_FIELDS
 } from './persisted-ui-write-baseline'
 import {
   hydrateTrustedOrcaHooks,
@@ -63,14 +63,7 @@ import { hydrateStatusBarItems } from './ui-slice-hydration-status-bar-items'
 import { sanitizeActivityBarArrangement } from './ui-slice-hydration-activity-bar'
 import { hydrateWorkspaceFilters } from './ui-slice-hydration-workspace-filters'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
-import {
-  startWebChatReadMarkCopy,
-  shouldUseWebChatReadMarkFallback
-} from '../agent-status/structured-sessions/chat-read-mark-web-copy'
-import {
-  applyWebChatReadMarkEdits,
-  CHAT_READ_MARK_FIELDS
-} from '@/web/preload-api/preferences/web-chat-read-mark-storage'
+import { hydrateChatReadMarks } from './hydrate-chat-read-marks'
 
 const MAX_LEFT_SIDEBAR_WIDTH = 500
 const MAX_RIGHT_SIDEBAR_WIDTH = 4000
@@ -101,6 +94,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
         // Migration: one-shot old-'recent'→'smart' runs in main (_sortBySmartMigrated), not here, so a deliberate 'recent' choice survives restart.
         const sortBy = ui.sortBy
         const statusBarItemsWithGrok = hydrateStatusBarItems(ui)
+        const web = isWebClientLocation()
         const hydrated = {
           // Why: persisted widths may be stale/corrupt/hand-edited; clamp during hydration so invalid values can't break layout.
           sidebarWidth: sanitizePersistedSidebarWidth(
@@ -243,46 +237,25 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
         }
         keepUnchangedHydratedFields(s, hydrated as Partial<UISlice>)
         // Capture authoritative baseline before overlaying dirty/in-flight local fields or their diff vanishes (STA-5781). Nonnumeric width fallback may differ from main until the next drag.
-        let nextWriteBaseline = capturePersistedUIWriteBaseline(hydrated)
+        const authoritative = capturePersistedUIWriteBaseline(hydrated)
         const previousBaseline = s.persistedUIWriteBaseline
-        const web = isWebClientLocation()
-        if (previousBaseline) {
-          const pendingLocalEdits = diffPersistedUIWriteFields(
-            capturePersistedUIWriteBaseline(s),
-            previousBaseline
-          )
-          Object.assign(hydrated, pendingLocalEdits)
-          if (web) {
-            for (const field of CHAT_READ_MARK_FIELDS) {
-              if (pendingLocalEdits[field]) {
-                hydrated[field] = applyWebChatReadMarkEdits(
-                  nextWriteBaseline[field],
-                  pendingLocalEdits[field],
-                  previousBaseline[field]
-                )
-              }
-            }
-          }
-          // In-flight fields too: a flip-back to the baseline value diffs empty,
-          // yet the in-flight write's echo must not revert it (PR#17057 review).
-          for (const field of Object.keys(
-            s.persistedUIWriteInFlightCounts
-          ) as (keyof PersistedUIWriteBaseline)[]) {
-            ;(hydrated as Record<string, unknown>)[field] = s[field]
-          }
-        }
-        if (web) {
-          if (source === 'startup' && !s.persistedUIReady) {
-            const copied = startWebChatReadMarkCopy(nextWriteBaseline)
-            if (copied) {
-              hydrated.activityClearedAtByPaneKey = copied.activityClearedAtByPaneKey
-              hydrated.manuallyUnreadTurnsByPaneKey = copied.manuallyUnreadTurnsByPaneKey
-              hydrated.chatReadMarksCopiedHere = true
-              nextWriteBaseline = copied.persistedUIWriteBaseline
-            }
-          } else if (shouldUseWebChatReadMarkFallback()) {
-            hydrated.chatReadMarksCopiedHere = false
-            nextWriteBaseline.chatReadMarksCopiedHere = false
+        const pending = previousBaseline
+          ? diffPersistedUIWriteFields(capturePersistedUIWriteBaseline(s), previousBaseline)
+          : {}
+        const { baseline: nextWriteBaseline, localMarks } = hydrateChatReadMarks(
+          s,
+          authoritative,
+          pending,
+          web
+        )
+        hydrated.acknowledgedAgentsByPaneKey = nextWriteBaseline.acknowledgedAgentsByPaneKey
+        hydrated.activityClearedAtByPaneKey = nextWriteBaseline.activityClearedAtByPaneKey
+        hydrated.manuallyUnreadTurnsByPaneKey = nextWriteBaseline.manuallyUnreadTurnsByPaneKey
+        Object.assign(hydrated, pending, localMarks)
+        // In-flight fields too: a flip-back to the baseline value diffs empty.
+        for (const field of PERSISTED_UI_WRITE_BASELINE_FIELDS) {
+          if (s.persistedUIWriteInFlightCounts[field]) {
+            Object.assign(hydrated, { [field]: s[field] })
           }
         }
         // Identical hydration preserves root identity; advance only baseline keys on baseline movement so acks cannot erase remote edits or spur redundant resends.

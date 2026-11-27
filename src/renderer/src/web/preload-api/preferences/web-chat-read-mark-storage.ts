@@ -1,113 +1,152 @@
-import { copyChatReadMarksToConversationKeys } from '../../../../../shared/agent-session/view/chat-read-mark-copy'
-import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
-import type { PersistedUIWriteBaseline } from '@/store/slices/ui/persisted-ui-write-baseline'
 import {
-  isPlainPersistedRecord,
-  isSafePersistedRecordKey,
-  sanitizePaneKeyTimestampRecord
-} from '@/store/slices/ui/ui-slice-hydration-sanitizers'
-import { UI_STORAGE_KEY, readJson, writeJson } from '../web-storage'
+  moveChatReadMark,
+  setChatReadMark,
+  type ChatReadMarks
+} from '../../../../../shared/agent-session/view/chat-read-mark-move'
+import {
+  capPaneKeyTimestampRecord,
+  readPaneKeyTimestampRecord
+} from '../../../../../shared/agent-session/view/pane-key-timestamp-record'
+import {
+  adoptChatReadMarkAliases,
+  aliasesAtChatReadMarkLeaf,
+  chatReadMarkAliases,
+  confirmChatReadMarkMatches,
+  loadedChatReadMarkMatches,
+  stopWebChatReadMarkMoves
+} from '@/store/slices/agent-status/structured-sessions/chat-read-mark-aliases'
+import { isPlainPersistedRecord } from '@/store/slices/ui/ui-slice-hydration-sanitizers'
+import { UI_STORAGE_KEY, writeJson } from '../web-storage'
 
-export const CHAT_READ_MARK_FIELDS = [
+type WebChatReadMarkField = 'activityClearedAtByPaneKey' | 'manuallyUnreadTurnsByPaneKey'
+export type WebChatReadMarks = Pick<ChatReadMarks, WebChatReadMarkField>
+
+const WEB_CHAT_READ_MARK_FIELDS: readonly WebChatReadMarkField[] = [
   'activityClearedAtByPaneKey',
   'manuallyUnreadTurnsByPaneKey'
-] as const
-export type ChatReadMarkField = (typeof CHAT_READ_MARK_FIELDS)[number]
-export type ChatReadMarks = Pick<PersistedUIWriteBaseline, ChatReadMarkField>
+]
 
-export function applyWebChatReadMarkEdits(
+function webChatReadMarkRecords(stored: Record<string, unknown>): WebChatReadMarks {
+  return {
+    activityClearedAtByPaneKey: readPaneKeyTimestampRecord(stored.activityClearedAtByPaneKey),
+    manuallyUnreadTurnsByPaneKey: readPaneKeyTimestampRecord(stored.manuallyUnreadTurnsByPaneKey)
+  }
+}
+
+function readStoredWebUI(): Record<string, unknown> {
+  const raw = window.localStorage.getItem(UI_STORAGE_KEY)
+  const stored: unknown = raw === null ? {} : JSON.parse(raw)
+  if (
+    !isPlainPersistedRecord(stored) ||
+    WEB_CHAT_READ_MARK_FIELDS.some(
+      (field) => Object.hasOwn(stored, field) && !isPlainPersistedRecord(stored[field])
+    )
+  ) {
+    throw new TypeError('Invalid browser UI storage')
+  }
+  return stored
+}
+
+function applyWebChatReadMarkEdits(
   stored: Record<string, number>,
   current: Record<string, number>,
   baseline: Record<string, number>
-): Record<string, number> {
-  const next = { ...stored }
+): void {
   for (const key of Object.keys(baseline)) {
     if (!Object.hasOwn(current, key)) {
-      delete next[key]
+      delete stored[key]
     }
   }
   for (const [key, value] of Object.entries(current)) {
     if (value !== baseline[key]) {
-      next[key] = value
+      stored[key] = value
     }
   }
-  return next
 }
 
-function storedMarkRecord(record: Record<string, number> | undefined): Record<string, number> {
-  return isPlainPersistedRecord(record) ? record : {}
-}
-
-export function mergeWebChatReadMarkEdits(
-  stored: Partial<PersistedUIState>,
-  changes: Partial<ChatReadMarks>,
-  baseline: ChatReadMarks
-): void {
-  for (const field of CHAT_READ_MARK_FIELDS) {
+export function rebaseWebChatReadMarks(
+  stored: WebChatReadMarks,
+  changes: Partial<WebChatReadMarks>,
+  baseline: WebChatReadMarks,
+  moveKeys?: ReadonlySet<string>,
+  currentTurn?: (key: string) => number | undefined
+): { marks: WebChatReadMarks; changed: boolean } {
+  const marks: WebChatReadMarks = {
+    activityClearedAtByPaneKey: stored.activityClearedAtByPaneKey,
+    manuallyUnreadTurnsByPaneKey: stored.manuallyUnreadTurnsByPaneKey
+  }
+  let changed = false
+  confirmChatReadMarkMatches(marks)
+  for (const field of WEB_CHAT_READ_MARK_FIELDS) {
     const current = changes[field]
+    if (!current && !moveKeys?.size) {
+      continue
+    }
+    const record = { ...stored[field] }
+    let moved = false
     if (current) {
-      stored[field] = sanitizePaneKeyTimestampRecord(
-        applyWebChatReadMarkEdits(storedMarkRecord(stored[field]), current, baseline[field]),
-        current
-      )
+      applyWebChatReadMarkEdits(record, current, baseline[field])
+    }
+    for (const [leaf, key] of loadedChatReadMarkMatches()) {
+      if (key === null) {
+        // A newly ambiguous leaf cannot retire a physical key from an earlier edit.
+        for (const alias of aliasesAtChatReadMarkLeaf(field, leaf)) {
+          if (Object.hasOwn(stored[field], alias)) {
+            record[alias] = stored[field][alias]
+          } else {
+            delete record[alias]
+          }
+        }
+        continue
+      }
+      const aliases = chatReadMarkAliases(field, key)
+      if (!aliases) {
+        continue
+      }
+      if (
+        current &&
+        (current[key] !== baseline[field][key] ||
+          aliases.some((alias) => current[alias] !== baseline[field][alias]))
+      ) {
+        setChatReadMark(record, key, aliases, current[key])
+      } else if (moveKeys?.has(key)) {
+        const turn = field === 'manuallyUnreadTurnsByPaneKey' ? currentTurn?.(key) : undefined
+        moved = moveChatReadMark(record, key, aliases, turn) || moved
+      }
+    }
+    if (current || moved) {
+      marks[field] = capPaneKeyTimestampRecord(readPaneKeyTimestampRecord(record))
+      changed = true
     }
   }
+  return { marks, changed }
 }
 
 export function writeWebChatReadMarkEdits(
-  changes: Partial<ChatReadMarks>,
-  baseline: ChatReadMarks
-): void {
-  const stored = readJson<Partial<PersistedUIState>>(UI_STORAGE_KEY, {})
-  mergeWebChatReadMarkEdits(stored, changes, baseline)
-  writeJson(UI_STORAGE_KEY, stored)
-}
-
-export function commitWebChatReadMarkCopy(
-  changes: Partial<ChatReadMarks>,
-  baseline: ChatReadMarks,
-  sessionIds?: () => Iterable<string>
-): ChatReadMarks & { chatReadMarksCopiedHere: true } {
-  const stored = readJson<Partial<PersistedUIState>>(UI_STORAGE_KEY, {})
-  const marks = {
-    activityClearedAtByPaneKey: storedMarkRecord(stored.activityClearedAtByPaneKey),
-    manuallyUnreadTurnsByPaneKey: storedMarkRecord(stored.manuallyUnreadTurnsByPaneKey)
+  changes: Partial<WebChatReadMarks>,
+  baseline: WebChatReadMarks,
+  options?: {
+    moveKeys?: ReadonlySet<string>
+    currentTurn?: (key: string) => number | undefined
+    mergeUI?: (stored: Record<string, unknown>) => Record<string, unknown>
   }
-  for (const field of CHAT_READ_MARK_FIELDS) {
-    const current = changes[field]
-    if (current) {
-      marks[field] = applyWebChatReadMarkEdits(marks[field], current, baseline[field])
+): WebChatReadMarks {
+  try {
+    const stored = readStoredWebUI()
+    const { marks, changed } = rebaseWebChatReadMarks(
+      webChatReadMarkRecords(stored),
+      changes,
+      baseline,
+      options?.moveKeys,
+      options?.currentTurn
+    )
+    if (changed || options?.mergeUI) {
+      writeJson(UI_STORAGE_KEY, { ...(options?.mergeUI?.(stored) ?? stored), ...marks })
     }
+    adoptChatReadMarkAliases(marks)
+    return marks
+  } catch (error) {
+    stopWebChatReadMarkMoves()
+    throw error
   }
-  let copied: Partial<ChatReadMarks> | null = null
-  if (stored.chatReadMarksCopiedHere !== true && sessionIds) {
-    const sources = { ...marks }
-    for (const field of CHAT_READ_MARK_FIELDS) {
-      sources[field] = Object.fromEntries(
-        Object.entries(marks[field]).filter(
-          ([key, value]) => isSafePersistedRecordKey(key) && Number.isFinite(value) && value > 0
-        )
-      )
-    }
-    copied = copyChatReadMarksToConversationKeys(sources, sessionIds())
-  }
-  for (const field of CHAT_READ_MARK_FIELDS) {
-    const current = changes[field] ?? baseline[field]
-    let retained: Record<string, number> | undefined
-    for (const [key, value] of Object.entries(copied?.[field] ?? {})) {
-      // A pending deletion, including one of a stored destination, remains a deletion.
-      if (
-        !Object.hasOwn(marks[field], key) &&
-        !(changes[field] && Object.hasOwn(baseline[field], key))
-      ) {
-        marks[field][key] = value
-        retained ??= { ...current }
-        retained[key] = value
-      }
-    }
-    marks[field] = sanitizePaneKeyTimestampRecord(marks[field], retained ?? current)
-  }
-  const result = { ...marks, chatReadMarksCopiedHere: true as const }
-  writeJson(UI_STORAGE_KEY, { ...stored, ...result })
-  return result
 }

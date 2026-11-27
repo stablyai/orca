@@ -7,7 +7,7 @@ import type { AppState } from '@/store/types'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 
 import { freshActivityLiveAgentState, isHistoricalActivityState } from './activity-event-state'
-import { readWebChatMark } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-web-copy'
+import { readWebChatMark } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-aliases'
 
 type ActivityUnreadCountSource = Pick<
   AppState,
@@ -15,7 +15,6 @@ type ActivityUnreadCountSource = Pick<
 > & {
   /** Per-pane "Clear completed" cutoffs; hidden events must not count as unread. */
   activityClearedAtByPaneKey?: Record<string, number>
-  chatReadMarksCopiedHere?: boolean
 }
 
 /** Counts unread historical activity and fresh current turns. */
@@ -73,7 +72,6 @@ const createActivityUnreadCountSelector = () =>
       migrationUnsupportedByPtyId: AppState['migrationUnsupportedByPtyId'],
       acknowledgedAgentsByPaneKey: AppState['acknowledgedAgentsByPaneKey'],
       activityClearedAtByPaneKey: AppState['activityClearedAtByPaneKey'],
-      chatReadMarksCopiedHere: boolean,
       // Closing a tab can drop a pane's row without a status write.
       _rowOwnersRevision: number
     ) =>
@@ -81,8 +79,7 @@ const createActivityUnreadCountSelector = () =>
         agentStatusByPaneKey: state.agentStatusByPaneKey,
         migrationUnsupportedByPtyId,
         acknowledgedAgentsByPaneKey,
-        activityClearedAtByPaneKey,
-        chatReadMarksCopiedHere
+        activityClearedAtByPaneKey
       })
   )
 
@@ -94,7 +91,6 @@ export function useActivityUnreadCount(): number {
       state.migrationUnsupportedByPtyId,
       state.acknowledgedAgentsByPaneKey,
       state.activityClearedAtByPaneKey,
-      state.chatReadMarksCopiedHere,
       state.agentStatusByPaneKey.projection.rowOwnersRevision()
     )
   )

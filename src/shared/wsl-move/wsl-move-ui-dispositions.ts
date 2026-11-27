@@ -202,8 +202,6 @@ export const UI_STATE_GLOBAL_FIELDS = [
   '_grokStatusBarDefaultAdded',
   '_hostWorktreeCardPropertyDefaulted',
   '_inlineAgentsDefaultedForAllUsers',
-  '_chatReadMarksCopiedToConversationKeys',
-  'chatReadMarksCopiedHere',
   '_inlineAgentsDefaultedForExperiment',
   '_jiraIssueWorktreeCardPropertyDefaulted',
   '_kimiStatusBarDefaultAdded',

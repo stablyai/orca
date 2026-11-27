@@ -4,8 +4,9 @@ import { useAppStore } from '../../store/index'
 import { isWebClientLocation } from '../platform/web-client-location'
 import {
   writeWebChatReadMarkEdits,
-  type ChatReadMarks
+  type WebChatReadMarks
 } from '@/web/preload-api/preferences/web-chat-read-mark-storage'
+import { adoptChatReadMarkAliases } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-aliases'
 import type { WebUiApi } from '@/web/preload-api/preferences/web-ui-api'
 import {
   capturePersistedUIWriteBaseline,
@@ -61,15 +62,13 @@ function createPersistedUIWriteController(): PersistedUIWriteController {
     }
     const state = useAppStore.getState()
     const baseline = state.persistedUIWriteBaseline
-    let marks: Partial<ChatReadMarks> | undefined
+    let marks: Partial<WebChatReadMarks> | undefined
     if (isWebClientLocation()) {
       const {
         activityClearedAtByPaneKey,
         manuallyUnreadTurnsByPaneKey,
-        chatReadMarksCopiedHere: _copiedHere,
         ...hostAndOtherLocalChanges
       } = changed
-      void _copiedHere
       if (activityClearedAtByPaneKey || manuallyUnreadTurnsByPaneKey) {
         marks = {
           ...(activityClearedAtByPaneKey && { activityClearedAtByPaneKey }),
@@ -84,8 +83,11 @@ function createPersistedUIWriteController(): PersistedUIWriteController {
     if (fields.length === 0) {
       if (baseline && marks) {
         try {
-          writeWebChatReadMarkEdits(marks, baseline)
-          useAppStore.setState({ persistedUIWriteBaseline: { ...baseline, ...marks } })
+          const persisted = writeWebChatReadMarkEdits(marks, baseline)
+          useAppStore.setState({
+            ...persisted,
+            persistedUIWriteBaseline: { ...baseline, ...persisted }
+          })
         } catch {
           // Leave local marks dirty when storage rejects the write.
         }
@@ -105,9 +107,12 @@ function createPersistedUIWriteController(): PersistedUIWriteController {
         if (typeof setPersistedUIWithAck !== 'function') {
           throw new TypeError('Web UI persistence is unavailable')
         }
-        request = setPersistedUIWithAck.call(ui, updates, marks, baseline)
-        // The local write settled synchronously, independently of the host acknowledgement.
-        useAppStore.setState({ persistedUIWriteBaseline: { ...baseline, ...marks } })
+        const persisted = setPersistedUIWithAck.call(ui, updates, marks, baseline)
+        request = persisted.request
+        useAppStore.setState({
+          ...persisted.marks,
+          persistedUIWriteBaseline: { ...baseline, ...persisted.marks }
+        })
       } else {
         const send = window.api.ui.setWithAck ?? window.api.ui.set
         request = send(updates)
@@ -120,7 +125,11 @@ function createPersistedUIWriteController(): PersistedUIWriteController {
     // Use two-argument then so an ack-handler throw cannot trigger double settlement in the rejection branch.
     request.then(
       () => {
-        useAppStore.getState().notePersistedUIWriteSettled(fields, changed, { sentAtGeneration })
+        const latest = useAppStore.getState()
+        if (latest.persistedUIWriteBaselineGeneration === sentAtGeneration) {
+          adoptChatReadMarkAliases(changed)
+        }
+        latest.notePersistedUIWriteSettled(fields, changed, { sentAtGeneration })
         scheduleTrailing()
       },
       () => {
@@ -206,8 +215,7 @@ export function usePersistedUIWriter(): void {
       // Retain Clear completed across restart.
       activityClearedAtByPaneKey: s.activityClearedAtByPaneKey,
       // Retain explicit mark-unread across restart.
-      manuallyUnreadTurnsByPaneKey: s.manuallyUnreadTurnsByPaneKey,
-      chatReadMarksCopiedHere: s.chatReadMarksCopiedHere
+      manuallyUnreadTurnsByPaneKey: s.manuallyUnreadTurnsByPaneKey
     }))
   )
   useEffect(() => {
