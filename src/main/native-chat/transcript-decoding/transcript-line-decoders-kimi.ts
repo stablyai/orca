@@ -23,7 +23,13 @@ export function decodeKimiWireLine(
     if (!message || !id || message.role !== 'user' || asRecord(message.origin)?.kind !== 'user') {
       return null
     }
-    const blocks = claudeContentBlocks(message.content)
+    // Kimi keeps pasted images as inline data; history shows where one was, as Hermes's import does.
+    const content = Array.isArray(message.content)
+      ? message.content.map((part) =>
+          asRecord(part)?.type === 'image_url' ? { type: 'text', text: '[image]' } : part
+        )
+      : message.content
+    const blocks = claudeContentBlocks(content)
     return blocks.length > 0
       ? { recordId: id, message: { id, role: 'user', blocks, timestamp, source: 'transcript' } }
       : null
