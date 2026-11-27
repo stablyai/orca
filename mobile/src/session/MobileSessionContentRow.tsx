@@ -33,11 +33,13 @@ export function MobileSessionContentRow({ controller }: { controller: MobileSess
     handleSessionContentRowLayout
   } = controller
   const dictationLive = useMobileDictationLive(dictation, cancelDictation, hostId)
-  // A chat and a note are this page's own content, so a leftward swipe across them opens the tabs
-  // sidebar. A terminal is its own document and a browser tab's page takes its own swipes.
+  // A leftward swipe across a chat, a note or a terminal opens the tabs sidebar (a terminal decides
+  // its own touches and hands the swipe over). A browser tab's page and diffs take their own swipes.
   const swipeOpensSidebar = useSidebarContentSwipe(
     useContext(SidebarPageDragContext),
-    controller.showNativeChat || controller.activeMarkdownTab != null
+    controller.showNativeChat ||
+      controller.activeMarkdownTab != null ||
+      controller.activeSessionTab?.type === 'terminal'
   )
   return (
     <View style={styles.sessionContentRow} onLayout={handleSessionContentRowLayout}>

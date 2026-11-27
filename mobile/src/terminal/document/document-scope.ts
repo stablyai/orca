@@ -281,7 +281,12 @@ function createTerminalDocumentState(): TerminalDocumentState {
       pinchDist: 0,
       pinchScale: 0,
       pinchSurfX: 0,
-      pinchSurfY: 0
+      pinchSurfY: 0,
+      startX: 0,
+      startY: 0,
+      startAt: 0,
+      swipe: 'terminal',
+      keepTouchId: null
     }
   }
 }
@@ -300,6 +305,7 @@ function createTerminalDocumentHostSeams(): TerminalDocumentHostSeams {
     start: windowStart,
     viewportRect: windowViewportRect,
     observeViewport: observeWindowViewport,
+    handsSwipesToPage: false,
     root: null
   }
 }
