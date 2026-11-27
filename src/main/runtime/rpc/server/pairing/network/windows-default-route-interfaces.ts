@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { win32 } from 'node:path'
+import { windowsPowerShellPath } from '@orca/process-host/windows-system-binary'
 
 const POWERSHELL_TIMEOUT_MS = 3_000
 
@@ -13,8 +13,7 @@ export type WindowsDefaultRouteEnvironment = {
 
 export async function getWindowsDefaultRouteInterfaceNames(
   environment: WindowsDefaultRouteEnvironment = {
-    platform: process.platform,
-    systemRoot: process.env.SystemRoot
+    platform: process.platform
   }
 ): Promise<ReadonlySet<string> | null> {
   if (environment.platform !== 'win32') {
@@ -42,13 +41,11 @@ $names = @(Get-NetRoute -ErrorAction Stop | Where-Object { $_.State -eq 'Alive' 
 ConvertTo-Json -InputObject $names -Compress`
 }
 
-function createPowerShellRunner(systemRoot = 'C:\\Windows'): PowerShellRunner {
-  const powershellPath = win32.join(
-    systemRoot,
-    'System32',
-    'WindowsPowerShell',
-    'v1.0',
-    'powershell.exe'
+function createPowerShellRunner(systemRoot?: string): PowerShellRunner {
+  // Why: a blank override would replace the resolver's view of the real env, hiding WINDIR on an
+  // install that lives off C:. Only a nonblank value is worth passing along (#44676 review).
+  const powershellPath = windowsPowerShellPath(
+    systemRoot?.trim() ? { SystemRoot: systemRoot } : undefined
   )
   return (script, timeoutMs) =>
     new Promise((resolve, reject) => {

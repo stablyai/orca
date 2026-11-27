@@ -1,8 +1,12 @@
 import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { link, lstat, mkdir, readFile, readlink, unlink, writeFile } from 'node:fs/promises'
-import { join, win32 } from 'node:path'
+import { join } from 'node:path'
 import { promisify } from 'node:util'
+import {
+  windowsPowerShellPath,
+  windowsSystem32Binary
+} from '@orca/process-host/windows-system-binary'
 
 const runtimeHostIdentity = `runtime:${randomUUID()}`
 const runtimeProcessIdentity = `runtime:${randomUUID()}`
@@ -11,20 +15,6 @@ let bootIdentityPromise: Promise<string | undefined> | undefined
 let selfProcessIdentityPromise: Promise<string | null | undefined> | undefined
 const HOST_TOKEN_PATTERN = /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/i
 const WINDOWS_PROCESS_IDENTITY_TIMEOUT_MS = 5_000
-
-function getWindowsPowerShellPath(): string {
-  return win32.join(
-    process.env.SystemRoot ?? 'C:\\Windows',
-    'System32',
-    'WindowsPowerShell',
-    'v1.0',
-    'powershell.exe'
-  )
-}
-
-function getWindowsRegistryPath(): string {
-  return win32.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'reg.exe')
-}
 
 function hasCode(error: unknown, code: string): boolean {
   return error instanceof Error && 'code' in error && error.code === code
@@ -117,7 +107,7 @@ async function readHostIdentity(): Promise<string> {
   if (process.platform === 'win32') {
     try {
       const { stdout } = await promisify(execFile)(
-        getWindowsRegistryPath(),
+        windowsSystem32Binary('reg.exe'),
         ['query', 'HKLM\\SOFTWARE\\Microsoft\\Cryptography', '/v', 'MachineGuid'],
         { encoding: 'utf8', timeout: 1_000, windowsHide: true }
       )
@@ -221,7 +211,7 @@ async function readProcessIdentity(pid: number): Promise<string | null | undefin
   if (process.platform === 'win32') {
     try {
       const { stdout } = await promisify(execFile)(
-        getWindowsPowerShellPath(),
+        windowsPowerShellPath(),
         [
           '-NoProfile',
           '-NonInteractive',
