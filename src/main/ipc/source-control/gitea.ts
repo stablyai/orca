@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import type { z } from 'zod'
 import {
   connect,
@@ -42,8 +43,8 @@ export function parseGiteaRepoArgs<Schema extends z.ZodObject>(
   return { target, params: schema.parse({ ...args, repo: target.repoPath }) }
 }
 
-export function registerGiteaHandlers(store: Store): void {
-  ipcMain.handle('gitea:connect', async (_event, args: unknown) => {
+export function registerGiteaHandlers(store: Store, ipc: IpcHandleRegistrar = ipcMain): void {
+  ipc.handle('gitea:connect', async (_event, args: unknown) => {
     const result = await connect(GiteaConnectParams.parse(args))
     if (result.ok) {
       _resetPreflightCache()
@@ -51,47 +52,41 @@ export function registerGiteaHandlers(store: Store): void {
     return result
   })
 
-  ipcMain.handle('gitea:disconnect', async (_event, args: unknown) => {
+  ipc.handle('gitea:disconnect', async (_event, args: unknown) => {
     await disconnect(GiteaServerIdParams.parse(args).serverId)
     _resetPreflightCache()
   })
 
-  ipcMain.handle('gitea:status', async () => getStatus())
+  ipc.handle('gitea:status', async () => getStatus())
 
-  ipcMain.handle('gitea:testConnection', async (_event, args: unknown) =>
+  ipc.handle('gitea:testConnection', async (_event, args: unknown) =>
     testConnection(GiteaServerIdParams.parse(args).serverId)
   )
 
-  ipcMain.handle(
-    'gitea:listWorkItems',
-    async (_event, args: RepoScoped<typeof GiteaWorkItemsList>) => {
-      const { target, params } = parseGiteaRepoArgs(GiteaWorkItemsList, args, store)
-      return listGiteaWorkItems(target, params.filter, params.limit, params.kind)
-    }
-  )
+  ipc.handle('gitea:listWorkItems', async (_event, args: RepoScoped<typeof GiteaWorkItemsList>) => {
+    const { target, params } = parseGiteaRepoArgs(GiteaWorkItemsList, args, store)
+    return listGiteaWorkItems(target, params.filter, params.limit, params.kind)
+  })
 
-  ipcMain.handle('gitea:issue', async (_event, args: RepoScoped<typeof GiteaIssueByNumber>) => {
+  ipc.handle('gitea:issue', async (_event, args: RepoScoped<typeof GiteaIssueByNumber>) => {
     const { target, params } = parseGiteaRepoArgs(GiteaIssueByNumber, args, store)
     return getGiteaIssue(target, params.number)
   })
 
-  ipcMain.handle(
-    'gitea:issueComments',
-    async (_event, args: RepoScoped<typeof GiteaIssueByNumber>) => {
-      const { target, params } = parseGiteaRepoArgs(GiteaIssueByNumber, args, store)
-      return listGiteaIssueComments(target, params.number)
-    }
-  )
+  ipc.handle('gitea:issueComments', async (_event, args: RepoScoped<typeof GiteaIssueByNumber>) => {
+    const { target, params } = parseGiteaRepoArgs(GiteaIssueByNumber, args, store)
+    return listGiteaIssueComments(target, params.number)
+  })
 
-  ipcMain.handle('gitea:labels', async (_event, args: GiteaRepoSelectorArgs) =>
+  ipc.handle('gitea:labels', async (_event, args: GiteaRepoSelectorArgs) =>
     listGiteaLabels(giteaRepoTarget(args, store))
   )
 
-  ipcMain.handle('gitea:assignees', async (_event, args: GiteaRepoSelectorArgs) =>
+  ipc.handle('gitea:assignees', async (_event, args: GiteaRepoSelectorArgs) =>
     listGiteaAssignees(giteaRepoTarget(args, store))
   )
 
-  ipcMain.handle('gitea:createIssue', async (_event, args: RepoScoped<typeof GiteaCreateIssue>) => {
+  ipc.handle('gitea:createIssue', async (_event, args: RepoScoped<typeof GiteaCreateIssue>) => {
     const { target, params } = parseGiteaRepoArgs(GiteaCreateIssue, args, store)
     return createGiteaIssue(target, {
       title: params.title,
@@ -101,12 +96,12 @@ export function registerGiteaHandlers(store: Store): void {
     })
   })
 
-  ipcMain.handle('gitea:updateIssue', async (_event, args: RepoScoped<typeof GiteaUpdateIssue>) => {
+  ipc.handle('gitea:updateIssue', async (_event, args: RepoScoped<typeof GiteaUpdateIssue>) => {
     const { target, params } = parseGiteaRepoArgs(GiteaUpdateIssue, args, store)
     return updateGiteaIssue(target, params.number, params.updates)
   })
 
-  ipcMain.handle(
+  ipc.handle(
     'gitea:addIssueComment',
     async (_event, args: RepoScoped<typeof GiteaAddIssueComment>) => {
       const { target, params } = parseGiteaRepoArgs(GiteaAddIssueComment, args, store)
@@ -114,5 +109,5 @@ export function registerGiteaHandlers(store: Store): void {
     }
   )
 
-  registerGiteaPullRequestHandlers(store)
+  registerGiteaPullRequestHandlers(store, ipc)
 }
