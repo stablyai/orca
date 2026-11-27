@@ -57,6 +57,12 @@ describe('LinuxOrcaCensus', () => {
     expect(() => discovered(census)).toThrow()
   })
 
+  it('is unsure when a live descendant is unreadable at the first census, before anything is known', () => {
+    const proc = fakeProc()
+    proc.faults.set('30:exe', 'EACCES')
+    expect(() => discovered(new LinuxOrcaCensus(proc))).toThrow()
+  })
+
   it('is unsure when a counted process is still running but no longer reached', () => {
     const proc = fakeProc()
     const census = new LinuxOrcaCensus(proc)
