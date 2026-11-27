@@ -1,5 +1,5 @@
 import { mkdir, writeFile } from 'node:fs/promises'
-import { dirname, isAbsolute, relative, resolve } from 'node:path'
+import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
 
 /** Unpacks a verified CRX's zip archive without letting any entry land outside the target folder. */
 
@@ -58,7 +58,13 @@ export async function writeBrowserExtensionArchive(
   for (const entry of entries) {
     const target = resolve(root, entry.path)
     const rel = relative(root, target)
-    if (!isSafeArchiveEntryName(entry.path) || !rel || rel.startsWith('..') || isAbsolute(rel)) {
+    if (
+      !isSafeArchiveEntryName(entry.path) ||
+      !rel ||
+      rel === '..' ||
+      rel.startsWith(`..${sep}`) ||
+      isAbsolute(rel)
+    ) {
       throw new Error(`Extension package has an unsafe file name: ${JSON.stringify(entry.path)}`)
     }
     await mkdir(dirname(target), { recursive: true })
