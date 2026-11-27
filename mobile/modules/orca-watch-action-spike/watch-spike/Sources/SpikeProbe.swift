@@ -26,7 +26,9 @@ final class SpikeProbe: NSObject, URLSessionTaskDelegate, URLSessionDownloadDele
     monitor.start(queue: DispatchQueue(label: "orca.watchspike.path"))
     return monitor
   }()
-  private var waitingSince: [Int: Date] = [:]
+  // Task identifiers are only unique per session, and each session calls back on its own queue.
+  private var waitingSince: [String: Date] = [:]
+  private let waitingLock = NSLock()
   private(set) lazy var background: URLSession = {
     let configuration = URLSessionConfiguration.background(withIdentifier: backgroundSessionId)
     configuration.sessionSendsLaunchEvents = true
@@ -44,17 +46,9 @@ final class SpikeProbe: NSObject, URLSessionTaskDelegate, URLSessionDownloadDele
   func runForTap(label: String, tapAt: Date, done: @escaping () -> Void) {
     SpikeLog.add("\(label) at-tap \(pathSummary())")
     let heartbeat = startHeartbeat(label: label, tapAt: tapAt)
-    // Ask watchOS for extra time; the expiry callback tells us how much it actually gave.
-    ProcessInfo.processInfo.performExpiringActivity(withReason: "orca-watch-spike") { expired in
-      if expired {
-        SpikeLog.add("\(label) expiring-activity EXPIRED at +\(millis(since: tapAt))ms")
-      } else {
-        SpikeLog.add("\(label) expiring-activity granted at +\(millis(since: tapAt))ms")
-      }
-    }
-
     var request = URLRequest(url: probeURL)
     request.timeoutInterval = 25
+    let finished = DispatchSemaphore(value: 0)
     let task = ephemeral.dataTask(with: request) { _, response, error in
       let status = (response as? HTTPURLResponse)?.statusCode ?? 0
       let ms = millis(since: tapAt)
@@ -72,10 +66,27 @@ final class SpikeProbe: NSObject, URLSessionTaskDelegate, URLSessionDownloadDele
         SpikeLog.add("\(label) heartbeat stopped normally at +\(millis(since: tapAt))ms")
       }
       done()
+      finished.signal()
     }
     task.taskDescription = "\(label) fg"
-    task.resume()
-    SpikeLog.add("\(label) fg-request started +\(millis(since: tapAt))ms")
+    // The extra time only lasts while this block runs, so the request runs inside it until it finishes.
+    // watchOS calls the block again with expired=true when time runs out; cancelling ends the wait.
+    ProcessInfo.processInfo.performExpiringActivity(withReason: "orca-watch-spike") { expired in
+      if expired {
+        SpikeLog.add("\(label) expiring-activity EXPIRED at +\(millis(since: tapAt))ms")
+        if task.state == .suspended {
+          task.resume()
+        } else {
+          task.cancel()
+        }
+        return
+      }
+      SpikeLog.add("\(label) expiring-activity granted at +\(millis(since: tapAt))ms")
+      task.resume()
+      SpikeLog.add("\(label) fg-request started +\(millis(since: tapAt))ms")
+      finished.wait()
+      SpikeLog.add("\(label) expiring-activity released at +\(millis(since: tapAt))ms")
+    }
 
     let backgroundTask = background.downloadTask(with: probeURL)
     backgroundTask.taskDescription = "\(label) bg tapAt=\(tapAt.timeIntervalSince1970)"
@@ -91,16 +102,29 @@ final class SpikeProbe: NSObject, URLSessionTaskDelegate, URLSessionDownloadDele
     return timer
   }
 
+  private func waitKey(_ session: URLSession, _ task: URLSessionTask) -> String {
+    "\(session.configuration.identifier ?? "ephemeral")#\(task.taskIdentifier)"
+  }
+
   func urlSession(_ session: URLSession, taskIsWaitingForConnectivity task: URLSessionTask) {
-    waitingSince[task.taskIdentifier] = Date()
+    waitingLock.withLock { waitingSince[waitKey(session, task)] = Date() }
     SpikeLog.add("\(task.taskDescription ?? "?") waiting for connectivity \(pathSummary())")
   }
 
   func urlSession(
     _ session: URLSession, task: URLSessionTask, didFinishCollecting metrics: URLSessionTaskMetrics
   ) {
-    if let since = waitingSince.removeValue(forKey: task.taskIdentifier) {
-      SpikeLog.add("\(task.taskDescription ?? "?") waited \(millis(since: since))ms for network")
+    let since = waitingLock.withLock { waitingSince.removeValue(forKey: waitKey(session, task)) }
+    if let since {
+      // The wait ends when a connection starts, not when the request finishes.
+      let connected = metrics.transactionMetrics.compactMap { $0.connectStartDate ?? $0.fetchStartDate }
+        .first { $0 >= since }
+      let description = task.taskDescription ?? "?"
+      if let connected {
+        SpikeLog.add("\(description) waited \(Int(connected.timeIntervalSince(since) * 1000))ms for network")
+      } else {
+        SpikeLog.add("\(description) waited \(millis(since: since))ms for network and never connected")
+      }
     }
     guard let last = metrics.transactionMetrics.last else { return }
     SpikeLog.add(

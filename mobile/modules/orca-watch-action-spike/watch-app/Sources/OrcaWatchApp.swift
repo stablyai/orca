@@ -88,37 +88,61 @@ final class PromptStore: ObservableObject {
   @Published var status = ""
   @Published var pushStatus = ""
   @Published var loading = false
+  // Confirmed answers: a refresh that started before the answer landed mustn't bring them back.
+  private var answered: Set<String> = []
+  // A token the bridge couldn't take yet; retried after the next successful refresh.
+  private var unregisteredToken: String?
 
-  func refresh() async {
+  /// False when the bridge couldn't be reached; the list is then left as it was.
+  @discardableResult
+  func refresh() async -> Bool {
     loading = true
     defer { loading = false }
     let started = Date()
     do {
-      prompts = try await BridgeClient.shared.prompts()
+      let fresh = try await BridgeClient.shared.prompts()
+      answered.formIntersection(fresh.map(\.id))
+      prompts = fresh.filter { !answered.contains($0.id) }
       status = "Updated in \(Int(Date().timeIntervalSince(started) * 1000)) ms"
     } catch {
       status = error.localizedDescription
+      return false
     }
+    if let token = unregisteredToken {
+      await register(deviceToken: token)
+    }
+    return true
   }
 
   func register(deviceToken: String) async {
     pushStatus = "Push: sending token…"
     do {
       try await BridgeClient.shared.register(deviceToken: deviceToken, environment: "development")
+      unregisteredToken = nil
       pushStatus = "Push: on"
     } catch {
-      pushStatus = "Push: bridge refused token: \(error.localizedDescription)"
+      unregisteredToken = deviceToken
+      pushStatus = "Push: will retry token: \(error.localizedDescription)"
     }
   }
 
-  // Returns nil on success, otherwise the error to show.
-  func answer(_ answer: PromptAnswer) async -> String? {
+  enum AnswerOutcome {
+    case answered
+    case sentUnconfirmed
+    case failed(String)
+  }
+
+  func answer(_ answer: PromptAnswer) async -> AnswerOutcome {
     do {
-      try await BridgeClient.shared.answer(answer)
+      guard try await BridgeClient.shared.answer(answer) else {
+        // The key went in but the prompt may still be up; keep it so a refresh shows the truth.
+        return .sentUnconfirmed
+      }
+      answered.insert(answer.promptId)
       prompts.removeAll { $0.id == answer.promptId }
-      return nil
+      return .answered
     } catch {
-      return error.localizedDescription
+      return .failed(error.localizedDescription)
     }
   }
 
@@ -128,12 +152,18 @@ final class PromptStore: ObservableObject {
     if let optionId {
       status = "Sending…"
       let started = Date()
-      let failure = await answer(PromptAnswer(promptId: promptId, decision: "option", optionId: optionId))
-      status = failure ?? "Answered in \(Int(Date().timeIntervalSince(started) * 1000)) ms"
+      let outcome = await answer(
+        PromptAnswer(promptId: promptId, decision: "option", optionId: optionId))
+      switch outcome {
+      case .answered: status = "Answered in \(Int(Date().timeIntervalSince(started) * 1000)) ms"
+      case .sentUnconfirmed: status = "Sent, not confirmed. Check the prompt below."
+      case .failed(let message): status = message
+      }
       await refreshKeepingStatus()
       return
     }
-    await refresh()
+    // Only a successful fetch can say the prompt is gone; otherwise keep the network error.
+    guard await refresh() else { return }
     if let prompt = prompts.first(where: { $0.id == promptId }) {
       path = [prompt]
     } else {
@@ -256,12 +286,14 @@ struct PromptDetailView: View {
     sending = true
     error = ""
     Task {
-      let failure = await store.answer(answer)
+      let outcome = await store.answer(answer)
       sending = false
-      if let failure {
-        error = failure
-      } else {
-        dismiss()
+      switch outcome {
+      case .answered: dismiss()
+      case .sentUnconfirmed:
+        error = "Sent, not confirmed. Go back and refresh to check."
+        await store.refresh()
+      case .failed(let message): error = message
       }
     }
   }

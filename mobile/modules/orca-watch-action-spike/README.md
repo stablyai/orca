@@ -16,13 +16,13 @@ Decisions in force:
 
 ## What the build contains
 
-| Piece                 | Path                                                                | Role                                                                                                                                           |
-| --------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Native module         | `mobile/modules/orca-watch-action-spike/ios/`                       | Logs every launch and spike tap natively (works even if JS never runs), holds ~30s of background time, switches pairing keychain accessibility |
-| Category, arm, result | `mobile/src/watch-action-spike/watch-action-spike-notifications.ts` | Yes/No/Reply category, local test notification, result notification                                                                            |
-| Tap handler           | `mobile/src/watch-action-spike/watch-action-spike-response.ts`      | Started from `mobile/index.js`; refuses taps that reach JS more than 30s late (`stale`)                                                        |
-| Round trip            | `mobile/src/watch-action-spike/watch-action-spike-round-trip.ts`    | Keychain read → `openHostLogicalClient` → `status.get`                                                                                         |
-| UI                    | `mobile/src/watch-action-spike/WatchActionSpikeRow.tsx`             | "Watch test" section in Settings → Troubleshoot                                                                                                |
+| Piece                 | Path                                                                | Role                                                                                                  |
+| --------------------- | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Native module         | `mobile/modules/orca-watch-action-spike/ios/`                       | Logs every launch and spike tap natively (works even if JS never runs), holds ~30s of background time |
+| Category, arm, result | `mobile/src/watch-action-spike/watch-action-spike-notifications.ts` | Yes/No/Reply category, local test notification, result notification                                   |
+| Tap handler           | `mobile/src/watch-action-spike/watch-action-spike-response.ts`      | Started from `mobile/index.js`; refuses taps that reach JS more than 30s late (`stale`)               |
+| Round trip            | `mobile/src/watch-action-spike/watch-action-spike-round-trip.ts`    | Keychain read → `openHostLogicalClient` → `status.get`                                                |
+| UI                    | `mobile/src/watch-action-spike/WatchActionSpikeRow.tsx`             | "Watch test" section in Settings → Troubleshoot                                                       |
 
 Everything is gated on `ORCA_WATCH_SPIKE=1` at build time (`app.config.js` → `extra.orcaWatchSpike`),
 except the native module, which links unconditionally but only acts on its own notification category.
@@ -70,7 +70,6 @@ first Xcode error back to the agent. The likely spots are the `NotificationCente
 2. iPhone **Watch** app → Notifications → Orca → **Mirror iPhone Alerts** on.
 3. Orca → Settings → **Troubleshoot** → scroll to the **Watch test** section.
    - **Watch test host** shows the host it will dial. Tap it to cycle if you have several.
-   - **Pairing readable while locked** stays **Off** until test 4.
 
 Notifications only go to the Watch while the iPhone is **locked** and the Watch is on your wrist and
 unlocked.
@@ -80,21 +79,23 @@ unlocked.
 For every test: tap **Arm**, lock the iPhone immediately with the side button, raise your wrist and wait.
 Note the result notification on the Watch.
 
-| #   | Steps                                                                         | What it answers                                 | Expected                                              |
-| --- | ----------------------------------------------------------------------------- | ----------------------------------------------- | ----------------------------------------------------- |
-| 1   | **Arm 15s**, stay in the app, long-press the banner, tap **Yes**              | Plumbing works                                  | `✓ Yes reached host`                                  |
-| 2   | **Arm 60s**, lock, tap **Yes** on the Watch                                   | Does a locked phone with today's keychain fail? | `✗ Yes failed at keychain`                            |
-| 3   | Same as 2, but **Double Tap** instead of tapping                              | Does Double Tap fire Yes?                       | Same result as 2, action `yes`                        |
-| 4   | Turn **Pairing readable while locked** **On** (phone unlocked), then repeat 2 | Does decision 1 fix it, and how fast?           | `✓ Yes reached host in …ms`                           |
-| 5   | **Arm 60s**, lock, tap **Reply**, dictate a sentence                          | Dictation reaches the phone                     | Result quotes your sentence                           |
-| 6   | iPhone Settings → Wi-Fi **off** (not Control Center), repeat 4                | Does it work over the cloud relay?              | `path relay`                                          |
-| 7   | **Arm 60s**, swipe Orca out of the app switcher, lock, tap **Yes**            | Cold launch: app not in memory                  | Prediction: no result; after reopening, a `stale` row |
+| #   | Steps                                                              | What it answers                                | Expected                                              |
+| --- | ------------------------------------------------------------------ | ---------------------------------------------- | ----------------------------------------------------- |
+| 1   | **Arm 15s**, stay in the app, long-press the banner, tap **Yes**   | Plumbing works                                 | `✓ Yes reached host`                                  |
+| 2   | **Arm 60s**, lock, tap **Yes** on the Watch                        | Does a locked phone read the pairing keychain? | `✓ Yes reached host in …ms`                           |
+| 3   | Same as 2, but **Double Tap** instead of tapping                   | Does Double Tap fire Yes?                      | Same result as 2, action `yes`                        |
+| 4   | Retired: compared keychain classes with a toggle (see below)       |                                                |                                                       |
+| 5   | **Arm 60s**, lock, tap **Reply**, dictate a sentence               | Dictation reaches the phone                    | Result quotes your sentence                           |
+| 6   | iPhone Settings → Wi-Fi **off** (not Control Center), repeat 2     | Does it work over the cloud relay?             | `path relay` (see the relay-only caveat in section 8) |
+| 7   | **Arm 60s**, swipe Orca out of the app switcher, lock, tap **Yes** | Cold launch: app not in memory                 | Prediction: no result; after reopening, a `stale` row |
 
 Why 60s: iOS keeps "when unlocked" keychain items readable briefly after locking, so a 15s test can
 pass by accident.
 
-Turn **Pairing readable while locked** back **Off** when you're done, or leave it On if test 4 is the
-behavior we want.
+Tests 2 and 4 originally compared the old `WHEN_UNLOCKED_THIS_DEVICE_ONLY` class (`✗ Yes failed at keychain`)
+with after-first-unlock (`✓ Yes reached host in 651ms`). #42634 made after-first-unlock the default and
+migrates old items on first read, so the toggle that switched classes was removed. To rerun the old
+baseline, build from a commit before #42634.
 
 ## 5. Reading the results
 
@@ -129,9 +130,8 @@ the wrong button.
 
 ## 7. Decisions this unblocks
 
-- **Test 4 passes:** move pairing items to `AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY` in
-  `mobile/src/transport/hosts/pairing-keychain.ts`, with a migration (`setItemAsync` never changes an
-  existing item's accessibility).
+- **Test 4 passed:** pairing items move to `AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY` in
+  `mobile/src/host-credentials/pairing-keychain.ts`, with a migration on first read (#42634).
 - **Test 7 fails as predicted:** a production tap needs either a native Swift handler for the response
   (E2EE + relay in Swift) or a way to start React Native when iOS relaunches the app in the background.
   That's the next spike.
@@ -154,6 +154,10 @@ the wrong button.
   relay. A Watch tap only gets ~30s of background time, so the relay must be tried first or in parallel when
   no direct route exists. Caveat: the normal app couldn't reach this host without Tailscale either, so the
   host had no working relay route. Rerun once the relay works for this host.
+  Also expect this for any relay-only host: with the phone locked the endpoint lifecycle is background, which
+  only suspends an existing relay and never starts dialing one, and the probe sends `status.get` without a
+  foreground nudge. Whether a notification action may start a relay dial in the background is the product
+  decision for #42627; until then test 6 fails at `host-answer` for relay-only hosts.
 
 - **Standalone watchOS app, background action (2026-11-15, `watch-spike/`):** iPhone Bluetooth off, Watch on
   cellular, Watch-only app answering its own notification. A background action (`Yes`) got ≥25s of runtime
@@ -175,7 +179,7 @@ notification **Yes** opens the app and answers in ~0.75s.
   `~/.orca/watch-apns/AuthKey_<id>.p8`; Watch push tokens in `~/.orca/watch-bridge-devices.json`.
 - **Service:** `~/Library/LaunchAgents/com.cjna.orca-watch-bridge.plist` runs a copy at
   `~/.orca/watch-bridge/` (launchd can't read `~/Desktop`). After editing the script:
-  `cp watch-bridge/watch-bridge.mjs ~/.orca/watch-bridge/ && launchctl kickstart -k gui/$(id -u)/com.cjna.orca-watch-bridge`.
+  `cp watch-bridge/*.mjs ~/.orca/watch-bridge/ && launchctl kickstart -k gui/$(id -u)/com.cjna.orca-watch-bridge`.
   Log: `~/Library/Logs/orca-watch-bridge.log`. Stop: `launchctl bootout gui/$(id -u)/com.cjna.orca-watch-bridge`.
 - **Public URL:** `tailscale funnel --bg --https=8443 http://127.0.0.1:6790` (off: `tailscale funnel --https=8443 off`).
 - **Watch build:** `cd watch-app && xcodegen generate`, then build with

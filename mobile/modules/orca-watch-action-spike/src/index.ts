@@ -19,9 +19,6 @@ export type OrcaWatchActionSpikeModule = {
   clearEvents(): Promise<void>
   endHold(): Promise<void>
   isProtectedDataAvailable(): Promise<boolean>
-  setPairingKeychainReadableWhileLocked(
-    enabled: boolean
-  ): Promise<{ updated: number; status: number }>
 }
 
 /** Null on Android and in binaries built before the module existed. */

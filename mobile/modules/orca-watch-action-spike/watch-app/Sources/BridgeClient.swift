@@ -66,8 +66,12 @@ final class BridgeClient {
     _ = try await send(path: "watch/v1/register", method: "POST", body: body)
   }
 
-  func answer(_ answer: PromptAnswer) async throws {
-    _ = try await send(path: "watch/v1/answer", method: "POST", body: try JSONEncoder().encode(answer))
+  /// True once the bridge saw the prompt leave; false means the key went in but that wasn't confirmed.
+  func answer(_ answer: PromptAnswer) async throws -> Bool {
+    struct Body: Decodable { let confirmed: Bool? }
+    let data = try await send(
+      path: "watch/v1/answer", method: "POST", body: try JSONEncoder().encode(answer))
+    return (try? JSONDecoder().decode(Body.self, from: data).confirmed) ?? false
   }
 
   private func send(path: String, method: String, body: Data?) async throws -> Data {

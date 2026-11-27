@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { Watch } from 'lucide-react-native'
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Notifications from 'expo-notifications'
 import {
   OrcaWatchActionSpike,
@@ -24,7 +23,6 @@ import {
 
 // 60s outlasts the keychain's short post-lock grace, so a pass there proves locked reads.
 const ARM_DELAYS_SECONDS = [15, 60] as const
-const RELAXED_KEYCHAIN_KEY = 'orca:watch-spike:keychain-relaxed'
 
 function time(at: number): string {
   return new Date(at).toLocaleTimeString()
@@ -50,14 +48,12 @@ export function WatchActionSpikeRow() {
   const [hosts, setHosts] = useState<readonly HostProfile[]>([])
   const [hostIndex, setHostIndex] = useState(0)
   const [status, setStatus] = useState<string | null>(null)
-  const [relaxed, setRelaxed] = useState(false)
   const [results, setResults] = useState<WatchActionSpikeResult[]>([])
   const [events, setEvents] = useState<WatchActionSpikeNativeEvent[]>([])
 
   const refresh = useCallback(async () => {
     setResults(await readWatchActionSpikeResults())
     setEvents((await OrcaWatchActionSpike?.readEvents().catch(() => [])) ?? [])
-    setRelaxed((await AsyncStorage.getItem(RELAXED_KEYCHAIN_KEY).catch(() => null)) === '1')
   }, [])
 
   useEffect(() => {
@@ -112,23 +108,6 @@ export function WatchActionSpikeRow() {
     }
   }
 
-  const toggleKeychain = async () => {
-    if (!OrcaWatchActionSpike) {
-      setStatus(t('watchActionSpike.nativeMissing', 'Native spike module missing from this build.'))
-      return
-    }
-    const next = !relaxed
-    const outcome = await OrcaWatchActionSpike.setPairingKeychainReadableWhileLocked(next)
-    await AsyncStorage.setItem(RELAXED_KEYCHAIN_KEY, next ? '1' : '0')
-    setRelaxed(next)
-    setStatus(
-      t('watchActionSpike.keychainMoved', 'Moved {{count}} keychain items (status {{status}}).', {
-        count: outcome.updated,
-        status: outcome.status
-      })
-    )
-  }
-
   const clear = async () => {
     await clearWatchActionSpikeResults()
     await OrcaWatchActionSpike?.clearEvents()
@@ -145,12 +124,6 @@ export function WatchActionSpikeRow() {
             host ? (host.personalName ?? host.name) : t('watchActionSpike.noHost', 'No paired host')
           }
           onPress={hosts.length > 1 ? () => setHostIndex((index) => index + 1) : undefined}
-        />
-        <ListRow
-          key="keychain"
-          title={t('watchActionSpike.keychain', 'Pairing readable while locked')}
-          value={relaxed ? t('watchActionSpike.on', 'On') : t('watchActionSpike.off', 'Off')}
-          onPress={() => void toggleKeychain()}
         />
       </ListGroup>
       {ARM_DELAYS_SECONDS.map((seconds) => (
