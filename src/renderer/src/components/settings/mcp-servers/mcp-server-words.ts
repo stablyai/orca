@@ -18,7 +18,8 @@ export function mcpServerLine(server: Pick<McpServer, 'detail' | 'transport'>): 
   return server.transport === 'http' ? server.detail.replace(/^https?:\/\//i, '') : server.detail
 }
 
-function urlHost(detail: string): string {
+/** A server address's host, for "Can’t reach …". */
+export function urlHost(detail: string): string {
   try {
     return new URL(detail).host
   } catch {
