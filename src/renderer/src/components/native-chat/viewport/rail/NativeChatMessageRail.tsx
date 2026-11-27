@@ -7,16 +7,12 @@ import {
   selectNativeChatRailTicks,
   type NativeChatRailItem
 } from './native-chat-message-rail-items'
+import { forwardWheelToScroller } from './forward-wheel-to-scroller'
 import { nativeChatRailItemLabel } from './native-chat-rail-item-label'
 import { NativeChatRailMessagePanel } from './NativeChatRailMessagePanel'
 import type { NativeChatMessageRailState } from './use-native-chat-message-rail'
 import { useNativeChatRailListOpen } from './use-native-chat-rail-list-open'
 import { useNativeChatTranscriptInteractive } from '../../conversation/projection/NativeChatContextClearFade'
-
-const WHEEL_DELTA_LINE = 1
-const WHEEL_DELTA_PAGE = 2
-/** Nominal line height for line-mode wheel deltas, which arrive as ~3 per notch. */
-const WHEEL_LINE_PX = 16
 
 /** Where the card sits, and the reply it showed, latched on close for its exit animation. */
 type NativeChatRailPreviewTarget = { id: string; top: number; reply: string }
@@ -221,17 +217,10 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
               if (!element) {
                 return
               }
-              const scale =
-                event.deltaMode === WHEEL_DELTA_LINE
-                  ? WHEEL_LINE_PX
-                  : event.deltaMode === WHEEL_DELTA_PAGE
-                    ? element.clientHeight
-                    : 1
-              if (event.ctrlKey) {
-                return
+              const deltaPx = forwardWheelToScroller(element, event)
+              if (deltaPx !== null) {
+                onReaderScroll?.(deltaPx)
               }
-              onReaderScroll?.(event.deltaY * scale)
-              element.scrollTop += event.deltaY * scale
             }}
             // Dimmed at rest; hover, keyboard focus or scrolling light it, and it fades back once idle.
             className={cn(

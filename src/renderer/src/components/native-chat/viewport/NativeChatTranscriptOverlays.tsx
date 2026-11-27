@@ -44,6 +44,8 @@ export function NativeChatTranscriptOverlays({
           items={rail.items}
           readerAtEnd={readerAtEnd}
           onJump={onSelect}
+          scrollRef={scrollRef}
+          onReaderScroll={onReaderScroll}
         />
       ) : null}
       <NativeChatMessageRail

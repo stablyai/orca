@@ -6,6 +6,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { NativeChatRailItem } from './native-chat-message-rail-items'
 import { findNativeChatPinnedPrompt } from './native-chat-pinned-prompt'
+import { forwardWheelToScroller } from './forward-wheel-to-scroller'
 
 /** Keeps focus where the reader was typing: a pointer press never moves it here. */
 function keepFocus(event: React.MouseEvent): void {
@@ -16,12 +17,17 @@ export function NativeChatPinnedPrompt({
   activeId,
   items,
   readerAtEnd,
-  onJump
+  onJump,
+  scrollRef,
+  onReaderScroll
 }: {
   activeId: string | null
   items: readonly NativeChatRailItem[]
   readerAtEnd: boolean
   onJump: (item: NativeChatRailItem) => void
+  scrollRef: React.RefObject<HTMLDivElement | null>
+  /** The reader scrolled the transcript through the header. */
+  onReaderScroll?: (deltaY: number) => void
 }): React.JSX.Element | null {
   const t = useTranslate()
   useUiLanguageRevision()
@@ -31,7 +37,21 @@ export function NativeChatPinnedPrompt({
   }
   return (
     // Opaque, so rows sliding under it stay hidden; its height matches the transcript's entry header.
-    <div className="absolute inset-x-0 top-0 z-10 flex h-10 items-center bg-chat-pane px-3 sm:px-4">
+    <div
+      className="absolute inset-x-0 top-0 z-10 flex h-10 items-center bg-chat-pane px-3 sm:px-4"
+      // The header covers the top of the transcript but sits outside its scroller, so without this
+      // a wheel gesture over it is a dead band.
+      onWheel={(event) => {
+        const element = scrollRef.current
+        if (!element) {
+          return
+        }
+        const deltaPx = forwardWheelToScroller(element, event)
+        if (deltaPx !== null) {
+          onReaderScroll?.(deltaPx)
+        }
+      }}
+    >
       <div className="mx-auto flex w-full min-w-0 max-w-(--chat-content-max-width) items-center px-[5px]">
         <button
           type="button"
