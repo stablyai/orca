@@ -17,7 +17,11 @@ export function* htmlTagAttributes(
   tagName: string,
   xml = false
 ): Generator<Map<string, string>> {
-  for (const { attributesStart, end } of scanHtmlTags(html, new Set([tagName.toLowerCase()]), xml)) {
+  for (const { attributesStart, end } of scanHtmlTags(
+    html,
+    new Set([tagName.toLowerCase()]),
+    xml
+  )) {
     yield readAttributes(html.slice(attributesStart, end))
   }
 }
