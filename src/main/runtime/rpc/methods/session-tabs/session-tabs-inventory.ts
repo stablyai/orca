@@ -58,8 +58,7 @@ export async function subscribeSessionTabsInventory(
       snapshot,
       context.clientKind,
       context.capabilitySource?.current ?? context.clientCapabilities,
-      context.runtime,
-      teammate?.person
+      context.runtime
     ) as SessionTabsChange
   const withoutNavigationIntent = (snapshot: SessionTabsChange): SessionTabsChange => {
     if (snapshot.navigationIntent === undefined) {

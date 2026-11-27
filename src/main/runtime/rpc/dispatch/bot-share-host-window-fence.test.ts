@@ -8,8 +8,13 @@ import { RpcDispatcher } from '../dispatcher'
 import { defineMethod, type RpcAnyMethodDeclaration } from '../core'
 import { ALL_RPC_METHODS } from '../methods/rpc-method-registry'
 import { callerScopeOf } from '../server/pairing/device-principal'
-import { reachesHostWindow } from './bot-share-host-window-fence'
+import { reachesHostWindow } from '../../../bots/team-share/teammate-rules'
 import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
+
+const callerOf = (runtime: OrcaRuntimeService) => ({
+  pageDeviceOf: (page: string) =>
+    getRuntimeBrowserPageRegistry(runtime).getPage(page)?.pairedDeviceId
+})
 
 let dispatcher: RpcDispatcher
 const ran: string[] = []
@@ -174,9 +179,7 @@ it('leaves the tier’s refusals of the host’s own screen in place', async () 
   }
   expect(ran).toEqual([])
   // The host-window check refuses an unclassified method on its own too, for either tier.
-  expect(reachesHostWindow('test.unclassified', {}, { runtime: new OrcaRuntimeService() })).toBe(
-    true
-  )
+  expect(reachesHostWindow('test.unclassified', {}, callerOf(new OrcaRuntimeService()))).toBe(true)
 })
 
 it('is never a teammate in a shipped build, whatever the switch says', () => {
@@ -191,10 +194,12 @@ it('reads each param on its own, and matches no page to a caller without a devic
     reachesHostWindow(
       'session.tabs.activate',
       { worktree: 'id:wt', tabId: 't', navigation: 'host', placement: { groupId: 'g' } },
-      { runtime }
+      callerOf(runtime)
     )
   ).toBe(true)
   const { pairedDeviceId: _, ...anonymous } = clientPage('anonymous-page', 'unused')
   getRuntimeBrowserPageRegistry(runtime).publishClientPage(anonymous)
-  expect(reachesHostWindow('browser.goto', { page: 'anonymous-page' }, { runtime })).toBe(true)
+  expect(reachesHostWindow('browser.goto', { page: 'anonymous-page' }, callerOf(runtime))).toBe(
+    true
+  )
 })

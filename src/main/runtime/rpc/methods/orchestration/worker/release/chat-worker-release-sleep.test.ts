@@ -407,7 +407,8 @@ describe('reopening a released worker chat', () => {
   }
   const runtime: Parameters<typeof reopenWorkerChat>[0] = {
     ensureStructuredAgentSessionHost: async () => {},
-    publishStructuredAgentSessionTab: async () => {}
+    publishStructuredAgentSessionTab: async () => {},
+    chatTabPerson: () => 'owner'
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the identity read that takes it is mocked.
   const db = {} as OrchestrationDb

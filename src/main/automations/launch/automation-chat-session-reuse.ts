@@ -121,7 +121,7 @@ export async function reuseAutomationChat(
 
 /** A closed chat still receives the queued prompt, so publish that tab without taking focus. */
 async function openReusedAutomationChat(
-  runtime: Pick<OrcaRuntimeService, 'publishStructuredAgentSessionTab'>,
+  runtime: Pick<OrcaRuntimeService, 'publishStructuredAgentSessionTab' | 'chatTabPerson'>,
   host: NonNullable<ReturnType<typeof getStructuredAgentSessionHost>>,
   sessionId: string
 ): Promise<void> {

@@ -235,13 +235,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithBots {
       showRepo: (selector) => this.showRepo(selector),
       showManagedWorktree: (selector, hostId) => this.showManagedWorktree(selector, hostId)
     })
-    const persistedClientTabSelections = store?.getMobileClientTabSelections?.()
-    if (persistedClientTabSelections) {
-      this.clientSessionTabSelections.hydrate(persistedClientTabSelections)
-    }
-    this.clientSessionTabSelections.setPersistListener((state) => {
-      this.store?.setMobileClientTabSelections?.(state)
-    })
+    this.wireSessionTabLists(store?.getMobileClientTabSelections?.())
     this.orchestrationEnvironmentTransport = deps?.orchestrationEnvironmentTransport ?? null
     this.workspaceSleepPlatform = deps?.workspaceSleepPlatform ?? null
     this.orchestrationFederation = new RuntimeOrchestrationFederation(

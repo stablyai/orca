@@ -223,6 +223,7 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends Runtim
       this.acceptedRendererMobileSnapshotByWorktree.delete(worktreeId)
       this.cancelScheduledMobileSessionTabsChanged(worktreeId)
       this.notifyMobileSessionTabsRemoved(worktreeId)
+      this.forgetPersonTabListsIn(worktreeId)
       dropRemovedWorktreeProcessState(worktreeId)
       this.releaseRemovedWorktreeHostSessions(worktreeId, 'worktree-removal')
     }

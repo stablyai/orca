@@ -1,15 +1,14 @@
 // Main remembers close-before-create because its layout-owning window has no local cancel tombstone; refuse pending creates or close them on arrival.
 
+import { callerTabPerson } from '../../../../../bots/team-share/teammate-rules'
+import { closeCapturedStructuredSession } from '../../../../agent-session/lifecycle/structured-session-captured-close'
 import {
   type AgentSessionWireRefusal,
   refuseUnclassified
 } from '../../../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { RpcContext } from '../../../core'
-import {
-  type StructuredSessionSurface,
-  closeCapturedStructuredSession
-} from '../../../../agent-session/lifecycle/structured-agent-session-close'
+import type { StructuredSessionSurface } from '../../../../agent-session/lifecycle/structured-agent-session-close'
 
 // Per-launch ids prevent cross-create matches; cap entries whose create never arrives.
 const MAX_CLOSED_BEFORE_CREATE = 256
@@ -99,6 +98,11 @@ async function closeCreatedChat(
   sessionId: string,
   surface: StructuredSessionSurface | null
 ): Promise<void> {
+  // A teammate's create landed in their own list: close it there; the host's tab is not this create's.
+  if (surface?.personList) {
+    ctx.runtime.closeChatTabs({ people: [callerTabPerson(ctx.callerScope)], sessionId })
+    return
+  }
   const host = getStructuredAgentSessionHost()
   if (!host) {
     return

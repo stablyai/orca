@@ -1,4 +1,3 @@
-import type { BotShareDevices } from '../../bots/team-share/bot-share-access'
 import type { RuntimeTerminalAgentStatus } from '../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { RuntimeGitCommands } from '../integrations/git/orca-runtime-git'
 import { RuntimeHostedReviewCommands } from '../integrations/reviews/runtime-hosted-review-commands'
@@ -174,9 +173,6 @@ export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithF
     getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo),
     getStore: () => this.store
   })
-
-  /** Set by the RPC server once it starts (`OrcaRuntimeWithBots`). */
-  declare botShareDevices: BotShareDevices | null
 
   protected readonly clientHostedBrowserRows = new ClientHostedBrowserRowPublisher({
     listClientPages: (worktreeId) => getRuntimeBrowserPageRegistry(this).listPages(worktreeId),

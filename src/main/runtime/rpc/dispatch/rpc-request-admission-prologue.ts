@@ -27,7 +27,8 @@ import {
 import { admitOrchestrationPeerCall } from '../orchestration/callers/orchestration-peer-caller'
 import { waitForRestoredWorkerCallerIdentity } from '../orchestration/callers/worker-caller-identity-restore-wait'
 import { admitBotShareCall } from './bot-share-call-admission'
-import { reachesHostWindow } from './bot-share-host-window-fence'
+import { reachesHostWindow } from '../../../bots/team-share/teammate-rules'
+import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
 import { admitTeammateCall } from '../../../bots/team-share/teammate-call-admission'
 import { rpcCallContext } from '../rpc-call-context'
 
@@ -106,8 +107,8 @@ export function admitRpcRequest<M extends RpcMethod | RpcStreamingMethod>(
     // Every teammate call, either tier: nothing it opens, focuses or drives lands on the host's window.
     if (
       reachesHostWindow(method.name, admitted.params, {
-        runtime,
-        pairedDeviceId: options?.pairedDeviceId
+        pairedDeviceId: options?.pairedDeviceId,
+        pageDeviceOf: (page) => getRuntimeBrowserPageRegistry(runtime).getPage(page)?.pairedDeviceId
       })
     ) {
       reportAgentShareFailure({ stage: 'admission_refused', reason: 'host_window' })

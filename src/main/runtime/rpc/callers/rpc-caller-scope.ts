@@ -1,6 +1,6 @@
 /** Transport stamps proven scope; unstamped calls are local desktop/owner CLI. Non-owner methods require an explicitly granted permission. */
 import { MOBILE_RPC_METHOD_ALLOWLIST } from '../server/runtime-rpc-mobile-method-allowlist'
-import { teammateMethodClass } from './teammate-method-classes'
+import { teammateMethodClass } from '../../../bots/team-share/teammate-rules'
 import type { RpcMethodPermission, RuntimeDeviceGrant } from './rpc-method-permission'
 import type { RpcMethodShare } from '../../../../shared/bots/bot-share-rpc-methods'
 

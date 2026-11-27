@@ -1,14 +1,14 @@
 import {
   admitStructuredSessionTabPublication,
   projectStructuredSessionTab,
-  type StructuredSessionRawPublicationInput,
-  type StructuredSessionTabPublicationInput
+  type StructuredSessionRawPublicationInput
 } from './structured-session-tab-publication'
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as ScheduleMobileSessionTabsChangedMethods } from '../publication/session-tabs-change-publication'
 import { OrcaRuntimeWithGetStructuredAgentSessionCreateSupport } from './structured-session-create-support'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { restoredChatTabChanges } from './restored-chat-tab-changes'
+import type { PersonChatTabPublication } from '../person/person-session-tab-writes'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { RuntimeRepoSearchRefs } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { RepoSearchRefSelectorForm } from '../../../git/refs/resolution/legacy-ref-selectors'
@@ -81,6 +81,8 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
       )
     }
     const savedOrders = new Map<string, MainSessionTabRows | undefined>()
+    // The host's saved visible rows are the host's own list (HOST_STATE_PERSON): only an owner
+    // person's write makes one, so a teammate's chat the owner opened restores to the owner.
     for (const session of restored) {
       if (host?.isSessionTabVisible(session.sessionId)) {
         if (!savedOrders.has(session.workspaceId)) {
@@ -109,10 +111,13 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
     }
   }
 
-  async publishStructuredAgentSessionTab(
-    input: StructuredSessionTabPublicationInput
-  ): Promise<void> {
+  /** The one chat tab write. `person` is whom it is for, always named by the writer: a teammate's
+   *  in their own Home goes to their own list, any other to the host's (teammate-rules.ts, rule 4). */
+  async publishStructuredAgentSessionTab(input: PersonChatTabPublication): Promise<void> {
     input.workspaceAuthority?.check()
+    if (await this.publishPersonChatTab(input)) {
+      return
+    }
     const { tabId, current, eligible } = await admitStructuredSessionTabPublication(input, () =>
       input.workspaceAuthority
         ? this.prepareStructuredAgentSessionStartupRestoration()
@@ -167,7 +172,7 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
   }
 
   /** The caller owns the store write; this publishes only its current raw surface. */
-  projectStructuredAgentSessionTab(input: StructuredSessionRawPublicationInput): void {
+  protected projectStructuredAgentSessionTab(input: StructuredSessionRawPublicationInput): void {
     // Publication supplies the owner's result, including an explicit absence; direct restores read it.
     const savedOrder =
       'savedOrder' in input

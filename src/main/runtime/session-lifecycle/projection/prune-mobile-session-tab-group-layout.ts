@@ -1,3 +1,7 @@
+import {
+  collectReturnedSessionTabIds,
+  sanitizeMobileSessionTabGroups
+} from '../../session-tabs/publication/returned-session-tab-groups'
 import { rendererStatusReplica } from '../../session-graph/renderer-status-replica'
 import { selectFreshAgentRowForMobileTab } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
 import { OrcaRuntimeWithSavedConversationTitlePublication } from '../../session-tabs/chat/saved-conversation-title-publication'
@@ -13,7 +17,6 @@ import type {
 } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { mergeMobileSessionTabGroups } from './mobile-session-tab-merge'
 import { buildHeadlessMobileSessionTabGroups } from '../../terminal/surface/mobile-session-layout-projection'
-import { projectTabsWithBotHomePins } from './bot-home-pinned-projection'
 import { inlineRuntimeBrowserTabFavicons } from './browser-tab-favicon-data-urls'
 import type { RuntimeMobileSessionProjectionHost } from './runtime-mobile-session-projection-contract'
 import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
@@ -30,7 +33,7 @@ import { getStructuredAgentSessionHost } from '../../../native-chat/agent-sessio
 import { structuredWorkerHandleAgentStatus } from '../../orchestration/addressing/groups/structured-worker-group-addressing'
 import {
   retitleStructuredConversationTabs,
-  titleStructuredConversationTabs
+  structuredConversationForked
 } from '../../session-tabs/chat/structured-conversation-tab-title'
 import { structuredConversationTabNamer } from '../../session-tabs/chat/structured-conversation-tab-namer'
 import { hostMobileTerminalTheme } from './host-mobile-terminal-theme'
@@ -87,15 +90,15 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
   protected toMobileSessionTabsResult(
     snapshot: RuntimeMobileSessionTabsSnapshot
   ): RuntimeMobileSessionTabsResult {
-    snapshot = titleStructuredConversationTabs(
+    return this.titledSessionTabsResult(
       inlineRuntimeBrowserTabFavicons(this, this.settleOwedMobileSessionSnapshotVersion(snapshot)),
-      structuredConversationTabNamer(snapshot.worktree, this.savedWorkspaceTabs(snapshot.worktree)),
-      structuredConversationForked
+      this.savedWorkspaceTabs(snapshot.worktree)
     )
-    return projectTabsWithBotHomePins(this.store, snapshot, this.getMobileSessionProjectionHost())
   }
 
   refreshStructuredConversationTabTitle(workspaceId: string, sessionId: string): void {
+    // A teammate's own list titles its tabs as it is read; its devices redraw with the new name.
+    this.republishPersonListsHolding(workspaceId, sessionId)
     const snapshot = this.mobileSessionTabsByWorktree.get(workspaceId)
     if (!snapshot) {
       return
@@ -152,10 +155,10 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
       recordPty: (ptyId, worktreeId, state) => this.recordPtyWorktree(ptyId, worktreeId, state),
       buildPtyStatus: (pty, tab, terminalHandle, retained, getRows) =>
         this.buildPtyMobileAgentStatus(pty, tab, terminalHandle, retained, getRows),
-      sanitizeGroups: (groups, tabs) => this.sanitizeMobileSessionTabGroups(groups, tabs),
+      sanitizeGroups: sanitizeMobileSessionTabGroups,
       pruneGroupLayout: (layout, validGroupIds) =>
         this.pruneMobileSessionTabGroupLayout(layout, validGroupIds),
-      collectTabIds: (tabs) => this.collectReturnedSessionTabIds(tabs),
+      collectTabIds: collectReturnedSessionTabIds,
       hostTerminalTheme: this.hostMobileTerminalTheme
     }
   }
@@ -312,8 +315,4 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
   getAgentStatusTerminalHandleForPaneKey(paneKey: string): string | undefined {
     return this.getTerminalHandleForPaneKey(paneKey) ?? undefined
   }
-}
-
-function structuredConversationForked(sessionId: string): boolean {
-  return !!getStructuredAgentSessionHost()?.deps?.store?.getConversation(sessionId)?.forkedFrom
 }

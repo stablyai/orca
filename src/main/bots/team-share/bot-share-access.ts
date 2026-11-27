@@ -35,6 +35,9 @@ export type BotShareDevices = {
   getE2EEPublicKey: () => string | null
   /** One of the owner's own paired computers, as known now: not a teammate's, not revoked or unknown. */
   isOwnerDevice: (deviceId: string) => boolean
+  /** The share a teammate's device (their desktop or its phone) calls as, by the scope admission
+   *  stamps on it; null for anyone else's. */
+  teammateOfDevice: (deviceId: string) => { botId: string; accountId: string } | null
   /** Each bot's teammates (accounts) with a share device on it. */
   reachedAccounts: () => ReadonlyMap<string, ReadonlySet<string>>
   deliverBotShareHeldMessage: (

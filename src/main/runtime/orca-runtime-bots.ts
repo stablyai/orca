@@ -109,6 +109,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithBotTeamShare {
       this.lookAround.forget(botId)
       void this.botWork.forgetBot(botId)
       this.bots.memory.removed(botId)
+      this.pruneTeammateTabLists()
       await revokeDeletedBotShareDevices(this.botShareDevices, botId)
       void this.bots.slackIcons.forget(botId).catch(() => undefined)
     }

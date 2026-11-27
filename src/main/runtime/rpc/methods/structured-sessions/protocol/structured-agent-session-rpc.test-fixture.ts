@@ -166,6 +166,9 @@ export function dispatcher(
     currentLocalStructuredSessionPresentation: vi.fn(() => null),
     captureStructuredAgentSessionPresentation: vi.fn(() => ({ raw: null, saved: [] })),
     removeCapturedStructuredSessionSavedTabs: vi.fn(),
+    chatTabPerson: vi.fn(() => 'owner' as const),
+    chatTabPeople: vi.fn(() => ['owner' as const]),
+    closeChatTabs: vi.fn(() => ({ hostList: true })),
     publishStructuredAgentSessionTab: vi.fn<OrcaRuntimeService['publishStructuredAgentSessionTab']>(
       async (input) => input.capture?.({ tableId: null, presentation: { raw: null, saved: [] } })
     )

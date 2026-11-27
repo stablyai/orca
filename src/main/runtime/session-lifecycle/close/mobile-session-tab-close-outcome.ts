@@ -1,3 +1,4 @@
+import type { TabPerson } from '../../../bots/team-share/teammate-rules'
 import type {
   RuntimeMobileSessionTabCloseResult,
   RuntimeSessionTabCloseReason
@@ -6,6 +7,9 @@ import type { RuntimePtyTabCloseAuthority } from '../../terminal/records/runtime
 import type { ClientSessionTabSelectionStore } from '../../client/navigation/client-session-tab-selection'
 
 export type MobileSessionTabCloseOptions = {
+  /** Whom the close is for (rule 4, teammate-rules.ts): the caller's at an RPC handler, the host's
+   *  for its own terminals. A teammate's in their own Home closes in their own list. */
+  person: TabPerson
   reason?: RuntimeSessionTabCloseReason
   expectedPublicationEpoch?: string
   expectedTerminalHandle?: string

@@ -1,4 +1,6 @@
 import { OrcaRuntimeWithCloseMobileRowInMainLayout } from './close-mobile-row-in-main-layout'
+import { isTeammateTabList } from '../../../bots/team-share/teammate-rules'
+import { findAddressedSessionTab } from '../../session-tabs/layout/addressed-session-tab'
 import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import {
   adjudicateAbsentMobileSessionTabClose,
@@ -45,12 +47,18 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
   async closeMobileSessionTab(
     worktreeSelector: string,
     tabId: string,
-    options: MobileSessionTabCloseOptions = {}
+    options: MobileSessionTabCloseOptions
   ): Promise<MobileSessionTabCloseOutcome> {
     const graphFence = options.clientNavigationId ? this.captureRendererGraphFence() : undefined
     const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorkspaceSelector(worktreeSelector)).id
+    const owner = this.homeTabListOf(options.person, worktreeId)
+    if (isTeammateTabList(owner)) {
+      // Closed already, or now: a teammate's own list is theirs alone to close from.
+      this.closePersonSessionTab(owner, worktreeId, tabId)
+      return committedMobileSessionTabClose(this.clientSessionTabSelections, worktreeId, [])
+    }
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
     const observedPtyIds = await this.refreshMobileSessionPtyRecords()
     if (graphFence !== undefined) {
@@ -79,13 +87,7 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
       : null
     const tab = options.expectedPtyCloseAuthority
       ? ptyCloseAuthority?.surface.tab
-      : (snapshot?.tabs.find((candidate) => candidate.id === tabId) ??
-        snapshot?.tabs.find(
-          (candidate) => candidate.type === 'terminal' && candidate.parentTabId === tabId
-        ) ??
-        snapshot?.tabs.find(
-          (candidate) => candidate.type === 'browser' && candidate.browserWorkspaceId === tabId
-        ))
+      : findAddressedSessionTab(snapshot?.tabs, tabId)
     const lifecycleClose = resolveMobileSessionLifecycleCloseContext({
       host: this.getMobileSessionLifecycleCloseHost(),
       worktreeId,

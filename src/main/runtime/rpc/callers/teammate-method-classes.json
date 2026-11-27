@@ -366,9 +366,11 @@
     "session.tabs.close",
     "session.tabs.closeLifecycle",
     "session.tabs.createTerminal",
+    "session.tabs.list",
     "session.tabs.move",
     "session.tabs.movePaneToNewTab",
     "session.tabs.setTabProps",
+    "session.tabs.subscribe",
     "session.tabs.terminalShellChoices",
     "session.tabs.unsubscribe",
     "session.tabs.updatePaneLayout",
@@ -453,9 +455,7 @@
     "projectGroup.list",
     "repo.list",
     "runtime.clientEvents.subscribe",
-    "session.tabs.list",
     "session.tabs.listAll",
-    "session.tabs.subscribe",
     "session.tabs.subscribeAll",
     "status.get",
     "terminal.list",
@@ -1728,5 +1728,38 @@
       "worktree.sleep",
       "worktree.teardownMissingTerminals"
     ]
+  },
+  "homeTabs": {
+    "person": [
+      "agentSession.close",
+      "agentSession.create",
+      "agentSession.reveal",
+      "session.tabs.activate",
+      "session.tabs.close",
+      "session.tabs.list",
+      "session.tabs.listAll",
+      "session.tabs.subscribe",
+      "session.tabs.subscribeAll",
+      "session.tabs.unsubscribe",
+      "session.tabs.unsubscribeAll"
+    ],
+    "hostList": [
+      "agent.launch",
+      "agent.launchReplay",
+      "browser.openUrl",
+      "browser.tabCreate",
+      "markdown.readTab",
+      "markdown.saveTab",
+      "session.tabs.closeLifecycle",
+      "session.tabs.createTerminal",
+      "session.tabs.move",
+      "session.tabs.movePaneToNewTab",
+      "session.tabs.setTabProps",
+      "session.tabs.updatePaneLayout",
+      "terminal.create",
+      "terminal.createAgentSession",
+      "terminal.ensureAgentSession"
+    ],
+    "none": ["session.tabs.terminalShellChoices"]
   }
 }

@@ -2,8 +2,6 @@ import type { StructuredAgentSessionCloseWork } from '../../../native-chat/agent
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { runsForBot } from '../../../bots/bot-session-tabs'
-import type { StructuredAgentSessionCloseCause } from '../../../native-chat/agent-session-wire/termination/structured-agent-session-host-lifetime'
 import {
   observeStructuredSession,
   structuredSessionCloseSettled
@@ -24,10 +22,15 @@ export type StructuredSessionSurfaceRuntime = Pick<
   | 'captureStructuredAgentSessionPresentation'
   | 'retireStructuredAgentSessionTabFromSnapshot'
   | 'removeCapturedStructuredSessionSavedTabs'
+  | 'chatTabPerson'
+  | 'chatTabPeople'
+  | 'closeChatTabs'
 >
 
 export type StructuredSessionSurface = {
   tableId: string | null
+  /** Landed in a teammate's own list: the host's tab is not this write's. */
+  personList?: true
   presentation?: ReturnType<
     StructuredSessionSurfaceRuntime['captureStructuredAgentSessionPresentation']
   >
@@ -39,6 +42,8 @@ export type StructuredAgentSessionCloseOptions = {
   afterClose?: () => void
   // Last word in the session lane before Stop.
   admitClose?: (work: StructuredAgentSessionCloseWork) => boolean
+  /** The chat stops existing (it is deleted): its tab closes in every person's list. */
+  chatGone?: true
 }
 
 export async function closeStructuredAgentSessionChild(
@@ -94,7 +99,13 @@ export async function closeStructuredAgentSessionChild(
       stopped: false,
       closeAttempted: true,
       reason: STARTING_AGENT_STOPPING_REASON,
-      whenStartEnds: settleCancelledStart(host, sessionId, surface, options.runtime)
+      whenStartEnds: settleCancelledStart(
+        host,
+        sessionId,
+        surface,
+        options.runtime,
+        options.chatGone
+      )
     }
   }
   if (!admitted || !structuredSessionCloseSettled(sessionId)) {
@@ -107,7 +118,7 @@ export async function closeStructuredAgentSessionChild(
         'The structured session is still attached after close.'
     }
   }
-  await retireCapturedStructuredSessionSurface(host, sessionId, surface, options.runtime)
+  await retireClosedChatTabs(host, sessionId, surface, options.runtime, options.chatGone)
   return {
     stopped: true,
     closeAttempted: true,
@@ -125,14 +136,15 @@ async function settleCancelledStart(
   host: StructuredAgentSessionHost,
   sessionId: string,
   surface: StructuredSessionSurface | null,
-  runtime: StructuredSessionSurfaceRuntime | undefined
+  runtime: StructuredSessionSurfaceRuntime | undefined,
+  chatGone: true | undefined
 ): Promise<boolean> {
   try {
     await host.reads.startAttemptsEnded(sessionId)
     if (!structuredSessionCloseSettled(sessionId)) {
       return false
     }
-    await retireCapturedStructuredSessionSurface(host, sessionId, surface, runtime)
+    await retireClosedChatTabs(host, sessionId, surface, runtime, chatGone)
     return true
   } catch (error) {
     host.deps.logger.warn('settling a cancelled start failed', {
@@ -195,6 +207,27 @@ export function structuredSessionSurfaceIsCurrent(
     )
   } catch {
     return false
+  }
+}
+
+/** A system close's tabs (rule 4, teammate-rules.ts). A chat that is gone closes in every list that
+ *  holds it, each by its person: the owner's (the host's list) and each teammate's. Otherwise it is
+ *  for whom the chat was created, read from its stamp: a teammate's chat in their Home closes in
+ *  their own list only, and the host's list and window keep whatever the owner opened. */
+async function retireClosedChatTabs(
+  host: StructuredAgentSessionHost,
+  sessionId: string,
+  surface: StructuredSessionSurface | null,
+  runtime: StructuredSessionSurfaceRuntime | undefined,
+  chatGone: true | undefined
+): Promise<void> {
+  const closed = !runtime
+    ? { hostList: true }
+    : chatGone
+      ? runtime.closeChatTabs({ people: runtime.chatTabPeople(sessionId), sessionId })
+      : runtime.closeChatTabs({ people: [runtime.chatTabPerson(sessionId)], sessionId })
+  if (closed.hostList) {
+    await retireCapturedStructuredSessionSurface(host, sessionId, surface, runtime)
   }
 }
 
@@ -263,39 +296,6 @@ export async function retireCapturedStructuredSessionSurface(
     })
   }
   return { committed, ...(failure === undefined ? {} : { error: failure }) }
-}
-
-/** Phone closes and cancelled creates admit the captured surface before stopping its provider. */
-export async function closeCapturedStructuredSession(
-  host: StructuredAgentSessionHost,
-  sessionId: string,
-  cause: StructuredAgentSessionCloseCause,
-  surface: StructuredSessionSurface | null,
-  runtime: StructuredSessionSurfaceRuntime & Partial<Pick<OrcaRuntimeService, 'bots'>>
-): Promise<boolean> {
-  if (surface && !structuredSessionSurfaceIsCurrent(host, sessionId, surface, runtime)) {
-    return false
-  }
-  // A bot's thread or run keeps working when its tab closes; it waits in the bot's Activity.
-  const keepRunning =
-    cause === 'user-close' && runtime.bots !== undefined && runsForBot(runtime.bots, sessionId)
-  const result = await retireCapturedStructuredSessionSurface(
-    host,
-    sessionId,
-    surface,
-    runtime,
-    keepRunning
-  )
-  if (
-    surface &&
-    !structuredSessionSurfaceIsCurrent(host, sessionId, surface, runtime, result.committed)
-  ) {
-    return false
-  }
-  if (!keepRunning) {
-    await host.close(sessionId, cause)
-  }
-  return result.committed
 }
 
 export function captureInstalledStructuredSessionSurface(

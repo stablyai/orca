@@ -40,6 +40,23 @@ export function botShareAsker(
   }
 }
 
+/** A chat a teammate creates in their agent's Home is theirs: whom it acts for is written as it is
+ *  created, the one stamp its tab's person is read from (`chatTabPerson`). Written once; an existing
+ *  record (a Home Chat's, a New chat's) wins. */
+export async function stampTeammateHomeChat(
+  context: Pick<RpcContext, 'callerScope' | 'runtime'>,
+  worktreeSelector: string,
+  sessionId: string
+): Promise<void> {
+  const scope = botShareScopeOf(context)
+  const bot = scope && context.runtime.bots.list().find((entry) => entry.id === scope.botId)
+  if (scope && bot && (await context.runtime.namesTeammateHome(worktreeSelector, scope))) {
+    context.runtime
+      .getOrchestrationDb()
+      .recordBotConversationActsFor(sessionId, { actsFor: [botShareAsker(bot, scope)] })
+  }
+}
+
 /** By chat id (its /clear root): the teammate's when Orca's record says it acts for them alone. */
 export function botShareChatFilter(
   sources: BotConversationActsForSources,
