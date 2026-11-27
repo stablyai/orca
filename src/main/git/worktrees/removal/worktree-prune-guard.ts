@@ -1,6 +1,6 @@
 // Windows and WSL Git cannot resolve each other’s worktree links; lock foreign entries during prune to preserve their metadata.
-import { readdir, readFile, rm, writeFile } from 'node:fs/promises'
-import { isAbsolute, join } from 'node:path'
+import { readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { dirname, isAbsolute, join } from 'node:path'
 import {
   isDrvfsLinuxPath,
   toWindowsWslDrivePath,
@@ -11,6 +11,7 @@ import type { GitExecOptions } from '../../command-runner/git-exec-options'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { pendingWslDriveCheckoutGitRouting } from '../../command-runner/host-routing/wsl-drive-checkout-git-routing'
 import { usesHostGitForWslLinkedWorktree } from '../../command-runner/host-routing/wsl-linked-worktree-git-routing'
+import { getErrorCode } from '../worktree-operation-options'
 
 /** Marks only the locks this module writes, so it never removes a user's own lock. */
 export const PRUNE_GUARD_LOCK_REASON =
@@ -52,48 +53,63 @@ async function pruneWithForeignEntriesLocked(
   adminRoot: string,
   runsInWsl: boolean
 ): Promise<void> {
-  const locked = await lockForeignWorktreeEntries(adminRoot, runsInWsl)
+  const locked: string[] = []
   try {
+    // A record this process cannot read or lock rejects here, before the prune deletes it.
+    for (const { entry, link } of await readWorktreeLinks(adminRoot)) {
+      if (!isForeignLink(link, runsInWsl)) {
+        continue
+      }
+      const lockFile = join(entry, 'locked')
+      const owned = await writeFile(lockFile, PRUNE_GUARD_LOCK_REASON, { flag: 'wx' }).then(
+        () => true,
+        async (error: unknown) => {
+          // An existing lock is the user's, unless a crash left one of ours behind.
+          if (getErrorCode(error) !== 'EEXIST') {
+            throw error
+          }
+          return (await readFile(lockFile, 'utf8').catch(() => '')) === PRUNE_GUARD_LOCK_REASON
+        }
+      )
+      if (owned) {
+        locked.push(lockFile)
+      }
+    }
     await gitExecFileAsync(['worktree', 'prune'], options)
   } finally {
     await Promise.all(locked.map((lockFile) => rm(lockFile, { force: true })))
   }
 }
 
-/** Returns the lock files this module owns now; an entry the user locked is left alone. */
-async function lockForeignWorktreeEntries(
-  adminRoot: string,
-  runsInWsl: boolean
-): Promise<string[]> {
-  const locked: string[] = []
-  for (const { entry, link } of await readWorktreeLinks(adminRoot)) {
-    if (!isForeignLink(link, runsInWsl)) {
-      continue
-    }
-    const lockFile = join(entry, 'locked')
-    const owned = await writeFile(lockFile, PRUNE_GUARD_LOCK_REASON, { flag: 'wx' }).then(
-      () => true,
-      // An existing lock is the user's, unless a crash left one of ours behind.
-      async () => (await readFile(lockFile, 'utf8').catch(() => '')) === PRUNE_GUARD_LOCK_REASON
-    )
-    if (owned) {
-      locked.push(lockFile)
-    }
-  }
-  return locked
-}
-
-/** Each linked worktree's admin entry and its `gitdir` link; none when the folder is missing. */
+/**
+ * Each linked worktree's admin entry and its `gitdir` link; none when the folder is missing. A
+ * folder or record this process cannot read rejects: it may be one a prune would delete.
+ */
 export async function readWorktreeLinks(
   adminRoot: string
 ): Promise<{ entry: string; link: string }[]> {
-  const entries = (await readdir(adminRoot).catch(() => [])).map((name) => join(adminRoot, name))
+  const entries = (
+    await readdir(adminRoot).catch((error: unknown) => {
+      // Only a readable parent makes a missing folder a repo without linked worktrees.
+      if (getErrorCode(error) !== 'ENOENT') {
+        throw error
+      }
+      return stat(dirname(adminRoot)).then(() => [])
+    })
+  ).map((name) => join(adminRoot, name))
   const links = await Promise.all(
     entries.map(async (entry) => ({
       entry,
       link: await readFile(join(entry, 'gitdir'), 'utf8').then(
         (text) => text.trim(),
-        () => ''
+        (error: unknown) => {
+          // A stray file, or an entry Git prunes itself, has no link.
+          const code = getErrorCode(error)
+          if (code === 'ENOENT' || code === 'ENOTDIR') {
+            return ''
+          }
+          throw error
+        }
       )
     }))
   )

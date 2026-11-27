@@ -94,7 +94,7 @@ export function collectWslProjects(
 /**
  * Windows-drive WSL git repos with a linked worktree whose link is a Linux path (WSL Git made it).
  * File reads only, one folder per such repo; no Git is spawned, so a repo whose `.git` is a file
- * (bare, or itself a linked worktree) reads as having none.
+ * (bare, itself a linked worktree, or unreadable) reads as having none.
  */
 export async function countWindowsDriveReposWithWslWorktrees(
   store: WslUsageStore
@@ -112,7 +112,7 @@ export async function countWindowsDriveReposWithWslWorktrees(
     if (project?.location !== 'windows_drive' || project.kind !== 'git') {
       continue
     }
-    const links = await readWorktreeLinks(join(repo.path, '.git', 'worktrees'))
+    const links = await readWorktreeLinks(join(repo.path, '.git', 'worktrees')).catch(() => [])
     // As Windows Git would read it: a POSIX link, not a `//server/share` one.
     if (links.some(({ link }) => isForeignLink(link, false))) {
       total += 1
