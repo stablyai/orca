@@ -13,14 +13,13 @@ export const NATIVE_CHAT_IMAGE_LABEL_ENGLISH: NativeChatImageLabelCopy = {
 }
 
 const PASTED_IMAGE_NAME = new RegExp(
-  `^orca-paste-.+${AGENT_SESSION_PASTED_IMAGE_SUFFIX_SOURCE}$`,
+  `^orca-paste-\\d+-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}${AGENT_SESSION_PASTED_IMAGE_SUFFIX_SOURCE}$`,
   'i'
 )
 
 /** Use friendly UI labels for Orca clipboard-image temp filenames. */
 export function isNativeChatPastedImagePath(path: string): boolean {
-  const base = path.split(/[\\/]/).findLast(Boolean) ?? path
-  return PASTED_IMAGE_NAME.test(base)
+  return PASTED_IMAGE_NAME.test(getRuntimePathBasename(path))
 }
 
 /** True for a long text paste Orca saved as a file (`orca-paste-<ts>-<uuid>.txt`). */
