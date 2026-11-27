@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: GlobalSettings is the single settings shape; one migration flag per provider cannot move elsewhere. */
 import type { AgentLaunchChoices } from './agent-launch/choices/agent-launch-choices'
 import type { TelemetrySettings } from './telemetry-settings-types'
 import type { BrowserProfileScope } from './browser/profiles/browser-profile-scope'
@@ -386,13 +385,10 @@ export type GlobalSettings = GlobalSettingsBase & {
    *  into ~/.codex, and removes nothing already linked (#24511). Absent means on (#10770). */
   codexShareHistoryAcrossAccounts?: boolean
   /** Custom CODEX_HOME for Codex session-history discovery (defaults to ~/.codex).
-   *  History-only: does not change which account/config/hooks Orca uses. */
-  codexSessionSourceHome?: {
-    /** Absolute host path; empty/undefined falls back to ~/.codex. */
-    host?: string
-    /** Per-WSL-distro absolute Linux path; missing distro falls back to <wslHome>/.codex. */
-    wsl?: Record<string, string>
-  }
+   *  History-only: does not change which account/config/hooks Orca uses. `host` is an absolute host
+   *  path (empty falls back to ~/.codex); `wsl` maps a distro to its absolute Linux path (missing
+   *  distro falls back to <wslHome>/.codex). */
+  codexSessionSourceHome?: { host?: string; wsl?: Record<string, string> }
   /** Per-agent default CLI arguments appended after the binary/path and before prompts. */
   agentDefaultArgs?: Partial<Record<TuiAgent, string>>
   agentLaunchChoices?: AgentLaunchChoices

@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: the defaults mirror GlobalSettings field-for-field, so one migration flag per provider cannot move elsewhere. */
 import type { GlobalSettings } from './global-settings-types'
 import type { NotificationSettings } from './notification-settings-types'
 import type { VoiceSettings } from './speech-types'
@@ -301,12 +300,7 @@ export function buildDefaultSettings(args: {
     // Why: local desktop stays the default until the user picks a saved runtime environment.
     activeRuntimeEnvironmentId: null,
     // Why: hydrate a stable empty shape so renderer optional-chained reads never hit undefined.
-    githubProjects: {
-      pinned: [],
-      recent: [],
-      lastViewByProject: {},
-      activeProject: null
-    },
+    githubProjects: { pinned: [], recent: [], lastViewByProject: {}, activeProject: null },
     // Why: keep agent/model maps empty so first use follows the default agent's model, not a frozen stale choice.
     commitMessageAi: {
       enabled: true,
