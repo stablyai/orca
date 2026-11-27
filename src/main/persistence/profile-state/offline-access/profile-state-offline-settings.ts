@@ -89,6 +89,9 @@ export function updateAgentHookSettingsInProfileState(
       nativeChatAutoContinueAfterUsageLimitDefaultedOn: _autoContinueMigrated,
       agentLaunchChoices: _launchChoices,
       artifactSharingEnabled: _artifactSharingEnabled,
+      // Why: written here they would read as saved choices and skip the existing-profile pin at load.
+      experimentalAppRail: _appRail,
+      nativeChatMarkNewMessages: _markNewMessages,
       ...settingsDefaults
     } = getDefaultPersistedState(homedir()).settings
     const settings = {

@@ -9,6 +9,7 @@ import { savedChatUiWithTerminalDefaultView } from '../../applying-settings/term
 
 import type { StoreRuntimeState } from '../store-runtime-state'
 
+/** Changed new-profile defaults; offline settings writers must leave these keys out too. */
 const PRIOR_DEFAULTS_FOR_EXISTING_PROFILES = {
   experimentalAppRail: false,
   nativeChatMarkNewMessages: true

@@ -3,7 +3,16 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { nativeChatMarksNewMessages } from '../../shared/native-chat/settings/native-chat-appearance-settings'
-import { closeTestStores, createStore, testState, writeDataFile } from './persistence-test-harness'
+import {
+  closeTestStores,
+  createStore,
+  dataFile,
+  testState,
+  writeDataFile,
+  writePersistedStateJson
+} from './persistence-test-harness'
+import { profileStateDatabaseFile } from '../../shared/orca-profiles/profile-state-storage-paths'
+import { updateAgentHookSettingsInProfileState } from './profile-state/offline-access/profile-state-offline-settings'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -89,5 +98,21 @@ describe('existing-profile default cohorts', () => {
 
     writeDataFile(legacyProfile({ nativeChatMarkNewMessages: false }))
     expect(nativeChatMarksNewMessages(createStore().getSettings())).toBe(false)
+  })
+
+  it('keeps the existing-profile pin after an offline agent-hooks write', async () => {
+    writePersistedStateJson(dataFile(), JSON.stringify(legacyProfile({ theme: 'dark' })))
+    updateAgentHookSettingsInProfileState(
+      {
+        dataFile: dataFile(),
+        databaseFile: profileStateDatabaseFile(testState.dir),
+        profileId: 'persistence-test'
+      },
+      true
+    )
+    const settings = createStore().getSettings()
+    expect(settings.agentStatusHooksEnabled).toBe(true)
+    expect(nativeChatMarksNewMessages(settings)).toBe(true)
+    expect(settings.experimentalAppRail).toBe(false)
   })
 })
