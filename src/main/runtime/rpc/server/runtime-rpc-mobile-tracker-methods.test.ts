@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { withDefaultScopeServer } from './runtime-rpc-mobile-tracker-methods'
 
-const server = 'runtime:server-a' as ExecutionHostId
+const server: ExecutionHostId = 'runtime:server-a'
 const runtime = { getClientDefaultScopeHost: () => server }
 const relayDown = { relayReady: async () => false }
 
