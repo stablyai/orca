@@ -46,10 +46,11 @@ export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWit
   protected mailForegroundShellProbe(ptyId: string): ForegroundShellProbe | null {
     const agent = this.getPaneTerminalAgent(ptyId)
     const host = this.launchedAgentHost(ptyId)
-    if (
-      !isTuiAgent(agent) ||
-      (!host.remote && !host.windows && !this.ptyController?.supportsForegroundObservation?.(ptyId))
-    ) {
+    // Windows proves only a local non-WSL shell alone; wsl.exe and SSH reads never see the agent.
+    const unprovable = host.windows
+      ? !host.shellAloneProvable
+      : !host.remote && !this.ptyController?.supportsForegroundObservation?.(ptyId)
+    if (!isTuiAgent(agent) || unprovable) {
       return null
     }
     return {

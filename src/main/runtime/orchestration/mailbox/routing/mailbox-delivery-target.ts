@@ -6,7 +6,7 @@ export type ForegroundShellProbe = {
   read: () => Promise<boolean>
 }
 
-type ProbeDeferral = { mailboxes: Set<string>; joinedInFlight: boolean }
+type ProbeDeferral = { mailboxes: Set<string>; started: boolean; joinedInFlight: boolean }
 
 type OrchestrationMailboxDeliveryTargetDependencies = {
   getDb: () => OrchestrationDb | null
@@ -112,12 +112,20 @@ export class OrchestrationMailboxDeliveryTarget {
     const inFlight = this.probeDeferrals.get(ptyId)
     if (inFlight) {
       inFlight.mailboxes.add(mailboxHandle)
-      // A later edge (the agent back at its prompt) may postdate the probe's reading.
-      inFlight.joinedInFlight = true
+      // A later edge (the agent back at its prompt) may postdate the reading; one terminal's
+      // mailboxes delivered in the same turn don't.
+      inFlight.joinedInFlight ||= inFlight.started
       return true
     }
-    const deferral: ProbeDeferral = { mailboxes: new Set([mailboxHandle]), joinedInFlight: false }
+    const deferral: ProbeDeferral = {
+      mailboxes: new Set([mailboxHandle]),
+      started: false,
+      joinedInFlight: false
+    }
     this.probeDeferrals.set(ptyId, deferral)
+    queueMicrotask(() => {
+      deferral.started = true
+    })
     void Promise.all([
       probeAbsence ? this.deps.isLeafPtyProvenAbsent(ptyId) : false,
       probeShell ? probeShell.read() : false
@@ -131,15 +139,16 @@ export class OrchestrationMailboxDeliveryTarget {
         if (shellInFront && !deferral.joinedInFlight) {
           return
         }
-        for (const deferredMailbox of deferral.mailboxes) {
-          setTimeout(() => {
-            const stale =
-              shellInFront ||
-              (probeShell !== null &&
-                this.deps.foregroundShellProbe(ptyId)?.incarnationId !== probeShell.incarnationId)
+        // One turn for every mailbox, so a re-probe coalesces them again instead of joining itself.
+        setTimeout(() => {
+          const stale =
+            shellInFront ||
+            (probeShell !== null &&
+              this.deps.foregroundShellProbe(ptyId)?.incarnationId !== probeShell.incarnationId)
+          for (const deferredMailbox of deferral.mailboxes) {
             redeliver(deferredMailbox, stale)
-          }, 0)
-        }
+          }
+        }, 0)
       })
       .catch(() => this.probeDeferrals.delete(ptyId))
     return true
