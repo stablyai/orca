@@ -101,7 +101,11 @@ async function loadLinkPreview(url: string): Promise<LinkPreviewResult> {
   if (!page) {
     return UNAVAILABLE
   }
-  const metadata = readLinkPreviewMetadata(decodeHtmlBody(page.body, page.contentType), page.url)
+  const metadata = readLinkPreviewMetadata(
+    decodeHtmlBody(page.body, page.contentType),
+    page.url,
+    page.contentType
+  )
   if (!metadata.title && !metadata.description) {
     return UNAVAILABLE
   }

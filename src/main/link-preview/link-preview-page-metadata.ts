@@ -1,6 +1,5 @@
 import {
-  extractHtmlTitle,
-  findIconHref,
+  readHtmlHead,
   htmlTagAttributes,
   normalizeHtmlText
 } from '../network/page-metadata/html-head-tags'
@@ -20,7 +19,7 @@ export type LinkPreviewPageMetadata = {
 
 /** Decodes with the BOM's encoding, else the header charset, else `<meta charset>` or http-equiv, else UTF-8. */
 export function decodeHtmlBody(body: Buffer, contentType: string): string {
-  const label = bomCharset(body) ?? charsetOf(contentType) ?? sniffMetaCharset(body)
+  const label = bomCharset(body) ?? charsetOf(contentType) ?? sniffMetaCharset(body, contentType)
   try {
     return new TextDecoder(label ?? 'utf-8').decode(body)
   } catch {
@@ -45,9 +44,13 @@ function charsetOf(contentType: string): string | null {
   return /charset\s*=\s*["']?([^"';\s]+)/i.exec(contentType)?.[1] ?? null
 }
 
-function sniffMetaCharset(body: Buffer): string | null {
+function sniffMetaCharset(body: Buffer, contentType: string): string | null {
   // Latin-1 keeps every byte, and tag syntax is ASCII in any charset a page can declare this way.
-  for (const attributes of htmlTagAttributes(body.toString('latin1'), 'meta')) {
+  for (const attributes of htmlTagAttributes(
+    body.toString('latin1'),
+    'meta',
+    isXhtml(contentType)
+  )) {
     const charset =
       attributes.get('charset') ??
       (attributes.get('http-equiv')?.toLowerCase() === 'content-type'
@@ -60,20 +63,16 @@ function sniffMetaCharset(body: Buffer): string | null {
   return null
 }
 
-export function readLinkPreviewMetadata(html: string, pageUrl: URL): LinkPreviewPageMetadata {
-  const meta = new Map<string, string>()
-  for (const attributes of htmlTagAttributes(html, 'meta')) {
-    const content = attributes.get('content')
-    if (content === undefined) {
-      continue
-    }
-    for (const key of [attributes.get('property'), attributes.get('name')]) {
-      const name = key?.toLowerCase()
-      if (name && !meta.has(name)) {
-        meta.set(name, content)
-      }
-    }
-  }
+function isXhtml(contentType: string): boolean {
+  return contentType.split(';')[0].trim().toLowerCase() === 'application/xhtml+xml'
+}
+
+export function readLinkPreviewMetadata(
+  html: string,
+  pageUrl: URL,
+  contentType = 'text/html'
+): LinkPreviewPageMetadata {
+  const { meta, title: htmlTitle, iconHref } = readHtmlHead(html, isXhtml(contentType))
   const pick = (...names: string[]): string | null => {
     for (const name of names) {
       const text = normalizeHtmlText(meta.get(name) ?? '')
@@ -83,7 +82,7 @@ export function readLinkPreviewMetadata(html: string, pageUrl: URL): LinkPreview
     }
     return null
   }
-  const title = pick('og:title', 'twitter:title') ?? extractHtmlTitle(html)
+  const title = pick('og:title', 'twitter:title') ?? htmlTitle
   const description = pick('og:description', 'twitter:description', 'description')
   const siteName = pick('og:site_name')
   const image = pick('og:image', 'og:image:secure_url', 'twitter:image')
@@ -92,7 +91,7 @@ export function readLinkPreviewMetadata(html: string, pageUrl: URL): LinkPreview
     description: description && clamp(description, MAX_DESCRIPTION_CHARS),
     siteName: siteName && clamp(siteName, MAX_TITLE_CHARS),
     imageUrl: image && absoluteUrl(image, pageUrl),
-    iconHref: findIconHref(html) ?? '/favicon.ico'
+    iconHref: iconHref ?? '/favicon.ico'
   }
 }
 
