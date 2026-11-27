@@ -217,6 +217,7 @@ export const UiUpdateFields = lazyZodSchema(() =>
       statusBarUsageFormat: z
         .object({
           template: z.string(),
+          compactResetCountdown: z.boolean().optional(),
           byProvider: z
             .object({
               claude: z.string().optional(),

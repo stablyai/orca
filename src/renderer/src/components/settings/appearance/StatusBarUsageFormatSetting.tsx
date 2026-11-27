@@ -12,7 +12,7 @@ import {
   renderUsageFormatTemplate
 } from '../../status-bar/usage/usage-format-template'
 import { getStatusBarUsageFormatEntry } from './appearance-status-bar-usage-format-search'
-import { SettingsRow } from '../form-controls/SettingsFormControls'
+import { SettingsRow, SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 
 type StatusBarUsageFormatSettingProps = {
   format: StatusBarUsageFormat
@@ -124,6 +124,16 @@ export function StatusBarUsageFormatSetting({
 
   return (
     <div className="space-y-2">
+      <SettingsSwitchRow
+        label={t(
+          'auto.components.settings.StatusBarUsageFormatSetting.compactResetCountdown',
+          'Show reset countdown in Compact mode'
+        )}
+        checked={format.compactResetCountdown === true}
+        onChange={() =>
+          onChange({ ...format, compactResetCountdown: !format.compactResetCountdown })
+        }
+      />
       <SettingsRow
         alignTop
         label={entry.title}

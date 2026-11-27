@@ -30,6 +30,10 @@ export const getStatusBarUsageFormatEntry = createLocalizedCatalog((): SettingsS
     ...translateSearchKeyword(
       'auto.components.settings.appearance.search.statusBarUsageFormat.placeholder',
       'placeholder'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.statusBarUsageFormat.resetCountdown',
+      'reset countdown'
     )
   ]
 }))

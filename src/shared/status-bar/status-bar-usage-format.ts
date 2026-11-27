@@ -17,6 +17,7 @@ const STATUS_BAR_USAGE_PROVIDERS: ReadonlySet<string> = new Set<StatusBarUsagePr
 /** User-defined footer usage text. Empty `template` means Orca's built-in rendering. */
 export type StatusBarUsageFormat = {
   template: string
+  compactResetCountdown?: boolean
   /** Per-provider templates that win over `template`; absent providers fall back to it. */
   byProvider?: Partial<Record<StatusBarUsageProvider, string>>
 }
@@ -46,7 +47,11 @@ export function normalizeStatusBarUsageFormat(value: unknown): StatusBarUsageFor
       }
     }
   }
-  return Object.keys(byProvider).length > 0 ? { template, byProvider } : { template }
+  return {
+    template,
+    ...(value.compactResetCountdown === true ? { compactResetCountdown: true } : {}),
+    ...(Object.keys(byProvider).length > 0 ? { byProvider } : {})
+  }
 }
 
 /** The template to render for `provider`, or null when the built-in rendering should be used. */

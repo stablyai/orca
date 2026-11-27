@@ -11438,7 +11438,8 @@
               "description": "Customize how each provider’s usage is written in the status bar with placeholders.",
               "format": "format",
               "template": "template",
-              "placeholder": "placeholder"
+              "placeholder": "placeholder",
+              "resetCountdown": "reset countdown"
             },
             "37e6b58b0e": "UI zoom",
             "931c53cd16": "Claude usage",
@@ -15211,7 +15212,8 @@
             "resetAt": "reset clock time, e.g. 20:50",
             "optional": "dropped when a placeholder inside is empty",
             "namedUsagePools": "named usage pools, e.g. Cursor plan pools"
-          }
+          },
+          "compactResetCountdown": "Show reset countdown in Compact mode"
         },
         "RepositoryRemoveProjectSection": {
           "filesNoteVmRecipe": "VM recipes decide whether their environments and files are deleted.",
