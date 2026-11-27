@@ -42,6 +42,8 @@ export type RightSidebarActivityItems = {
   isBotPage: boolean
 }
 
+/** The active workspace's right-sidebar tabs. `isBotPage` is true on a bot's or a group's home,
+ *  which lead with Home and keep the bot-page tab order. */
 export function useRightSidebarActivityItems({
   rightSidebarOpen
 }: {

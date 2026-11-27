@@ -13,6 +13,8 @@ type RightSidebarActivityVisibilityState = {
   hasChatWorkers?: boolean
 }
 
+/** The right sidebar's tabs for a workspace: a group's home keeps Home and plugin panels, a bot's
+ *  home leads with its own tabs, and other workspaces drop the tabs their kind can't use. */
 export function getVisibleRightSidebarActivityItems(
   items: ActivityBarItem[],
   {
