@@ -36,8 +36,6 @@ import { HideBotCreatedFilterRow } from '@/components/bots/HideBotCreatedFilterR
 import { selectDrawsNewWorktreeCards } from '@/store/appearance/worktree-card-style'
 import { trackWorktreeCardStyleChanged } from '../../workspace-card/template/worktree-card-style-telemetry'
 
-export { useWorkspaceOptionsFilterBadge } from './use-workspace-options-filter-badge'
-
 type OptionItemProps = {
   preserveWorkspaceBoardOpen: boolean
   hostOptions: SidebarHostOption[]
