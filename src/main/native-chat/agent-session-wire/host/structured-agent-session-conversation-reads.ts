@@ -26,6 +26,7 @@ import {
 import type { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
 import type { JournalMailAttempt } from '../../agent-session-journal/journal-mail-observation'
 import { compareAgentJournalItems } from '../../../../shared/agent-session/journal/agent-session-journal-position'
+import { quitKeepsStructuredAgent } from '../termination/structured-agent-session-quit-keeps-agent'
 
 type ReadContext = {
   deps: StructuredAgentSessionHostDeps
@@ -217,6 +218,11 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
       const { runtimeState, sessions } = context()
       return runtimeState.startFlights.has(id) || sessions.get(id)?.child != null
     },
+    /** Chats whose running agent an app quit would stop rather than hand to the terminal daemon. */
+    agentsStoppedByQuit: (): string[] =>
+      [...context().sessions].flatMap(([id, { child }]) =>
+        child && !quitKeepsStructuredAgent(id, child) ? [id] : []
+      ),
     /** A decided start's acquire is still out, and no later start's child is attached. */
     startWindingDown: (id: string): boolean => {
       const { runtimeState, sessions } = context()
