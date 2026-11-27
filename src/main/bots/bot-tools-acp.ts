@@ -10,13 +10,14 @@ export function acpBotMcpServers(tools: SessionMcpTools): McpServer[] {
 }
 
 /** A launch's servers: Orca's (none when its tools are off) beside the agent's own, Orca's winning
- *  a shared name; `toolsKey` keys only Orca's, which the agent's own config doesn't change. */
+ *  a shared name. `toolsKey` keys only Orca's; none when the agent's own couldn't be read (`ownRead`
+ *  false: their names decide which of Orca's it gets), so no launch compares an unknown set. */
 export function acpLaunchMcpServers(
   tools: SessionMcpTools,
   own: readonly McpServer[],
-  toolsOff: unknown
-): { mcpServers: McpServer[]; toolsKey: string } {
-  const orca = toolsOff ? [] : acpBotMcpServers(tools)
+  options: { toolsOff: unknown; ownRead: boolean }
+): { mcpServers: McpServer[]; toolsKey?: string } {
+  const orca = options.toolsOff ? [] : acpBotMcpServers(tools)
   const mcpServers = [...orca, ...own.filter((one) => !orca.some((bot) => bot.name === one.name))]
-  return { mcpServers, toolsKey: mcpServerSetKey(orca) }
+  return { mcpServers, ...(options.ownRead ? { toolsKey: mcpServerSetKey(orca) } : {}) }
 }

@@ -17,7 +17,13 @@ export const acpLaunchNote = (fullAccess: boolean, toolsKey = ''): string =>
 
 /** The kept agent was launched with other MCP servers than this launch's (or by a build that
  *  didn't say), so only a fresh agent has this launch's tools. */
-export function acpKeptToolsDiffer(note: string | undefined, toolsKey = ''): boolean {
+export function acpKeptToolsDiffer(
+  note: string | undefined,
+  toolsKey: string | undefined
+): boolean {
+  if (toolsKey === undefined) {
+    return false
+  }
   const at = note?.indexOf(TOOLS_KEY) ?? -1
   const kept = note !== undefined && at !== -1 ? note.slice(at + TOOLS_KEY.length) : null
   return kept !== toolsKey

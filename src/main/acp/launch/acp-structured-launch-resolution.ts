@@ -273,7 +273,9 @@ export function acpStructuredLaunchPart(
     const visualsLoaded = skillLoaded ?? (delivered.visuals ? visuals : null)
     const fullAccess = basis.permissionMode === 'full-access'
     // The host list's never shares a name with the agent's own (above).
-    const { mcpServers, toolsKey } = acpLaunchMcpServers(tools, ownServers, toolsOff)
+    // A loader that needs the agent's version reads nothing without it (a kept agent's launch).
+    const ownRead = !spec.ownMcpServers || (launchedVersion ?? null) !== null
+    const { mcpServers, toolsKey } = acpLaunchMcpServers(tools, ownServers, { toolsOff, ownRead })
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
     // A load restores the conversation's own model, and a stale role there would stop the agent
     // before it opens; resumed chats apply their model through the session instead.
@@ -304,7 +306,7 @@ export function acpStructuredLaunchPart(
           : {}),
         ...(instructions?.release ? { release: instructions.release } : {}),
         ...(mcpServers.length > 0 ? { mcpServers } : {}),
-        toolsKey,
+        ...(toolsKey ? { toolsKey } : {}),
         // A token this app's tool relay issued for this run ends with it, so the agent does too.
         ...(tools.appBound ? { appBoundGrants: true as const } : {}),
         ...(model ? { launchModel: model } : {}),
