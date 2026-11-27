@@ -10,6 +10,8 @@ import { isProcessRunning } from './runtime-pid-liveness'
 const ABANDONED_QUIT_AFTER_MS = 45_000
 export const RUNTIME_RESTART_WAIT_BUDGET_MS = 30_000
 const RUNTIME_RESTART_POLL_MS = 1_000
+// A restarted runtime publishes metadata about half a second before its graph serves.
+export const RUNTIME_GRAPH_READY_POLL_MS = 250
 
 // Socket errors that fire before connect, so the request was never sent.
 const CONNECT_FAILURE_CODES = new Set(['ECONNREFUSED', 'ENOENT', 'ENOTSOCK'])
@@ -67,6 +69,19 @@ export class RuntimeRestartWait {
   settle(): void {
     this.deadline = null
     this.restart = null
+  }
+
+  /** Sleeps within the budget a wait already started; false once it is spent or none started. */
+  async pause(ms = RUNTIME_RESTART_POLL_MS): Promise<boolean> {
+    if (this.deadline === null) {
+      return false
+    }
+    const remaining = this.deadline - this.now()
+    if (remaining <= 0) {
+      return false
+    }
+    await this.sleep(Math.min(ms, remaining))
+    return true
   }
 
   /** True after pausing when another unsent attempt is worth making; false at once without a live restart. */

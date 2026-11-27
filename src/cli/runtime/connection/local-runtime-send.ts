@@ -4,10 +4,15 @@ import type {
   RuntimeRequestSelection,
   RuntimeRpcResponse
 } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { readMetadata } from '../profile/metadata'
 import { isRequestUnsent } from './client-error-recovery'
 import { runtimeAccessDeniedError } from './runtime-access-denied'
-import { isConnectFailureCode, type RuntimeRestartWait } from './runtime-restart-wait'
+import {
+  isConnectFailureCode,
+  RUNTIME_GRAPH_READY_POLL_MS,
+  type RuntimeRestartWait
+} from './runtime-restart-wait'
 import {
   runtimeRestartedSincePreflightError,
   runtimeRestartingError
@@ -67,6 +72,15 @@ export async function sendLocalRuntimeRequest<TResult>(
       }
       throw restartingOr(error)
     }
+    // After waiting out a restart, send only once the new runtime's graph serves, so the request isn't refused.
+    if (
+      restartWait.restart &&
+      request.method !== 'status.get' &&
+      !(await isGraphReady(metadata)) &&
+      (await restartWait.pause(RUNTIME_GRAPH_READY_POLL_MS))
+    ) {
+      continue
+    }
     let socketErrorCode: unknown
     try {
       const response = await sendRequest<TResult>(
@@ -99,6 +113,15 @@ export async function sendLocalRuntimeRequest<TResult>(
       // A pre-send refusal has no outcome to recover; retry advice would resend the same bytes.
       throw isRequestUnsent(error) ? error : request.recover(error, metadata.runtimeId ?? null)
     }
+  }
+}
+
+async function isGraphReady(metadata: RuntimeMetadata): Promise<boolean> {
+  try {
+    const status = await sendRequest<RuntimeStatus>(metadata, 'status.get', undefined, 1000)
+    return status.ok && status.result.graphStatus === 'ready'
+  } catch {
+    return false
   }
 }
 
