@@ -91,7 +91,8 @@ export function createWorktreePurgeOmitters(
       deleteChatReadMark(draft, field, paneKey)
     }
     for (const paneKey of Object.keys(marks)) {
-      if (isDoomedPaneKey(knownChatReadMarkKey(field, paneKey) ?? paneKey)) {
+      const chatKey = knownChatReadMarkKey(field, paneKey)
+      if (chatKey !== null && isDoomedPaneKey(chatKey ?? paneKey)) {
         draft.delete(paneKey)
       }
     }

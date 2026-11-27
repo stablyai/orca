@@ -148,13 +148,17 @@ export function aliasesAtChatReadMarkLeaf(
   return legacyIndex.get(leaf)?.[field] ?? []
 }
 
-export function knownChatReadMarkKey(field: ChatReadMarkField, alias: string): string | undefined {
+// Null means the alias is indexed but its conversation has no unique match.
+export function knownChatReadMarkKey(
+  field: ChatReadMarkField,
+  alias: string
+): string | null | undefined {
   if (legacyIndex.size === 0) {
     return undefined
   }
   const leaf = paneKeyLeaf(alias)
   if (legacyIndex.get(leaf)?.[field]?.has(alias)) {
-    return matches.get(leaf) ?? undefined
+    return matches.get(leaf) ?? null
   }
   return undefined
 }
