@@ -86,6 +86,7 @@ export type RuntimeRpcFailure = {
 export type RuntimeRpcResponse<TResult> = RuntimeRpcSuccess<TResult> | RuntimeRpcFailure
 
 export type RuntimeOrchestrationEnvelope = {
+  linearRequestRef?: string
   orchestrationCapability?: string
   orchestrationContractVersion?: number
   orchestrationRequestId?: string

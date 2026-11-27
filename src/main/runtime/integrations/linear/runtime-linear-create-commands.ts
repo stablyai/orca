@@ -1,3 +1,4 @@
+import { checkLinearCreateOrigin, type LinearCreateAuthority } from './linear-create-origin'
 import { randomUUID } from 'node:crypto'
 import { LINEAR_WRITE_BODY_CAP } from '../../../../shared/linear/agent-access'
 import { createIssueForAgent as createLinearIssueForAgent } from '../../../linear/issues/linear-issue-mutations'
@@ -27,7 +28,8 @@ export class RuntimeLinearCreateCommands extends RuntimeLinearSaveFieldCommands 
       writeId?: string
       context?: LinearCurrentIssueContextHints
     },
-    cancellation?: AbortSignal
+    cancellation?: AbortSignal,
+    authority?: LinearCreateAuthority | null
   ): Promise<LinearCreateResult> {
     if ((params.body?.length ?? 0) > LINEAR_WRITE_BODY_CAP) {
       throw linearError('linear_body_too_large', 'Linear issue body is too large.')
@@ -79,6 +81,10 @@ export class RuntimeLinearCreateCommands extends RuntimeLinearSaveFieldCommands 
         return { team, parent, parentId, createFields, existing }
       },
       async ({ team, parent, parentId, createFields, existing }, options) => {
+        const recheckOrigin =
+          authority === undefined
+            ? undefined
+            : await checkLinearCreateOrigin(authority, team.workspaceId, createFields.projectId)
         if (existing) {
           return { issue: existing, deduplicated: true }
         }
@@ -93,7 +99,8 @@ export class RuntimeLinearCreateCommands extends RuntimeLinearSaveFieldCommands 
               id: writeId,
               parentId,
               ...createFields,
-              ...options
+              ...options,
+              recheckOrigin
             }
           )
           if (!this.linearCreatedIssueMatchesIntent(issue, createFields)) {

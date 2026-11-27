@@ -52,6 +52,8 @@ export function rpcContextFromTransport(
     runtime,
     signal: options?.signal,
     requestId: request.id,
+    linearRequestRef:
+      typeof request.linearRequestRef === 'string' ? request.linearRequestRef : undefined,
     connectionId: options?.connectionId,
     // Session tabs always need this fence. COMPAT(terminal request-addressed unsubscribe): terminal only for phones without `requestId`.
     // Capture before middleware yields to a replacement subscribe on the same connection.

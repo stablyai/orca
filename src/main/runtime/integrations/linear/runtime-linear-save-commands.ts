@@ -1,3 +1,4 @@
+import type { LinearCreateAuthority } from './linear-create-origin'
 import { LINEAR_WRITE_BODY_CAP } from '../../../../shared/linear/agent-access'
 import { updateIssueForAgent as updateLinearIssueForAgent } from '../../../linear/issues/linear-issue-mutations'
 import { LinearWriteFailure } from '../../../linear/issues/linear-issue-write-support'
@@ -15,7 +16,8 @@ import { RuntimeLinearCommentCommands } from './runtime-linear-comment-commands'
 export class RuntimeLinearSaveCommands extends RuntimeLinearCommentCommands {
   async linearSaveIssue(
     params: LinearSaveIssueRequest,
-    cancellation?: AbortSignal
+    cancellation?: AbortSignal,
+    authority?: LinearCreateAuthority | null
   ): Promise<LinearSaveIssueResult> {
     if ((params.description?.length ?? 0) > LINEAR_WRITE_BODY_CAP) {
       throw linearError('linear_body_too_large', 'Linear issue body is too large.')
@@ -44,7 +46,8 @@ export class RuntimeLinearSaveCommands extends RuntimeLinearCommentCommands {
           writeId: params.writeId,
           context: params.context
         },
-        cancellation
+        cancellation,
+        authority
       )
       return { ...created, meta: { ...created.meta, created: true } }
     }

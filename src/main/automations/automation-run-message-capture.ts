@@ -56,14 +56,17 @@ export function captureAutomationRunMessage(
   automation: BotAutomationFactsSource & Pick<Automation, 'prompt'>,
   run: Pick<AutomationRun, 'id' | 'trigger' | 'scheduledFor' | 'event'>,
   text: string,
-  asker: AutomationEventAsker | null
+  asker: AutomationEventAsker | null,
+  receivingBotId?: string
 ): AutomationRunMessage | undefined {
   if (!text.startsWith(automation.prompt)) {
     return undefined
   }
+  const intake = run.trigger === 'event' ? run.event?.webhook?.linearIssueIntake : undefined
   const wait = onceRunEnding(automation, run)
   return {
     runId: run.id,
+    ...(intake && receivingBotId ? { linearIssueIntake: { ...intake, receivingBotId } } : {}),
     automation: botAutomationFacts(automation),
     trigger: run.trigger,
     ...(run.trigger === 'scheduled' ? { scheduledFor: run.scheduledFor } : {}),

@@ -102,6 +102,7 @@ export type RpcFailure = {
 export type RpcResponse = RpcSuccess | RpcFailure
 
 export type RpcRequest = {
+  linearRequestRef?: string
   id: string
   authToken: string
   method: string
@@ -127,6 +128,8 @@ export type LegacyCoordinatorAuthorityProof = Readonly<{
 }>
 
 export type RpcContext = {
+  /** Bound independently for this dispatch by its host. Never deserialize this from RPC parameters. */
+  linearRequestRef?: string
   runtime: OrcaRuntimeService
   // Release long-poll handlers immediately when the client disconnects.
   signal?: AbortSignal

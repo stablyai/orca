@@ -1,6 +1,7 @@
 import { clampLinearIssueListLimit } from '../../../../shared/linear/issue-read-limits'
 import { addIssueComment as addLinearIssueComment } from '../../../linear/issues/linear-issue-comments'
 import {
+  type LinearCreateFence,
   createIssue as createLinearIssue,
   updateIssue as updateLinearIssue
 } from '../../../linear/issues/linear-issue-mutations'
@@ -36,13 +37,21 @@ export class RuntimeLinearContextCommands extends RuntimeLinearStateCommands {
       dueDate?: string | null
       assigneeId?: string | null
       labelIds?: string[]
-    }
+    },
+    beforeCreate?: (workspaceId: string, projectId?: string | null) => Promise<LinearCreateFence>
   ): ReturnType<typeof createLinearIssue> {
-    return createLinearIssue(teamId, title, description, workspaceId, {
-      parentId: parentIssueId,
-      projectId,
-      ...options
-    })
+    return createLinearIssue(
+      teamId,
+      title,
+      description,
+      workspaceId,
+      {
+        parentId: parentIssueId,
+        projectId,
+        ...options
+      },
+      beforeCreate
+    )
   }
 
   linearGetIssue(id: string, workspaceId?: string): ReturnType<typeof getLinearIssue> {

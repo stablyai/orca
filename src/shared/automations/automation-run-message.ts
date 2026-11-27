@@ -1,6 +1,7 @@
 // What Orca records about a bot automation run on the message it sends, so a chat draws the run as
 // the automation's own row, never as the owner's message. Host-written; a client never sends it.
 import * as z from 'zod'
+import { LinearRunIntakeSchema, type LinearRunIntake } from '../linear/issue-intake'
 import type { AutomationRunEvent } from '../automation-event-triggers'
 import type { WaitEnding } from '../automation-once'
 import type { BotAutomationFacts } from '../bots/bot-automation-rows'
@@ -41,6 +42,7 @@ export type AutomationRunMessage = {
   toConversation?: true
   event?: AutomationRunMessageEvent
   /** UTF-16 length of the saved prompt at the head of the sent text. */
+  linearIssueIntake?: LinearRunIntake
   instructionsLength: number
 }
 
@@ -117,6 +119,7 @@ export const AutomationRunMessageSchema = lazyZodSchema(() =>
     wait: WaitEndingSchema.optional(),
     toConversation: z.literal(true).optional(),
     event: EventSchema.optional(),
+    linearIssueIntake: LinearRunIntakeSchema.optional(),
     instructionsLength: z.number().int().nonnegative()
   })
 )

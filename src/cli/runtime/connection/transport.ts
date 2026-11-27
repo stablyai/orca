@@ -244,6 +244,7 @@ export async function sendRequest<TResult>(
           authToken: metadata.authToken,
           method: requestedMethod,
           params: requestedParams,
+          linearRequestRef: orchestration?.linearRequestRef,
           orchestrationCapability: orchestration?.orchestrationCapability,
           orchestrationContractVersion: orchestration?.orchestrationContractVersion,
           orchestrationRequestId: orchestration?.orchestrationRequestId,

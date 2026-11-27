@@ -17,6 +17,11 @@ import {
   type LinearIssueWriteRecord
 } from './linear-issue-write-support'
 
+export type LinearCreateFence = {
+  current: () => Promise<boolean>
+  refused: () => Promise<never>
+}
+
 export async function createIssue(
   teamId: string,
   title: string,
@@ -32,7 +37,8 @@ export async function createIssue(
     dueDate?: string | null
     assigneeId?: string | null
     labelIds?: string[]
-  }
+  },
+  beforeCreate?: (workspaceId: string, projectId?: string | null) => Promise<LinearCreateFence>
 ): Promise<
   | { ok: true; id: string; identifier: string; title: string; url: string }
   | { ok: false; error: string }
@@ -42,38 +48,41 @@ export async function createIssue(
     return taskProviderFailure('linear.notConnected', 'Not connected to Linear')
   }
 
+  const recheck = await beforeCreate?.(entry.workspace.id, options?.projectId)
   await acquire()
   try {
-    const result = await entry.client.createIssue({
-      ...(options?.id ? { id: options.id } : {}),
-      teamId,
-      title,
-      ...(description ? { description } : {}),
-      ...(options?.parentId ? { parentId: options.parentId } : {}),
-      ...(options?.projectId ? { projectId: options.projectId } : {}),
-      ...(options?.stateId ? { stateId: options.stateId } : {}),
-      ...(options?.priority !== undefined ? { priority: options.priority } : {}),
-      ...(options?.estimate !== undefined ? { estimate: options.estimate } : {}),
-      ...(options?.dueDate !== undefined ? { dueDate: options.dueDate } : {}),
-      ...(options?.assigneeId ? { assigneeId: options.assigneeId } : {}),
-      ...(options?.labelIds ? { labelIds: options.labelIds } : {})
-    })
-    if (!result.success) {
-      return taskProviderFailure('linear.createFailed', 'Linear create failed')
-    }
-    const issue = await result.issue
-    if (!issue) {
-      return taskProviderFailure(
-        'linear.createdButUnavailable',
-        'Issue was created but could not be retrieved'
-      )
-    }
-    return {
-      ok: true,
-      id: issue.id,
-      identifier: issue.identifier,
-      title: issue.title,
-      url: issue.url
+    if (!recheck || (await recheck.current())) {
+      const result = await entry.client.createIssue({
+        ...(options?.id ? { id: options.id } : {}),
+        teamId,
+        title,
+        ...(description ? { description } : {}),
+        ...(options?.parentId ? { parentId: options.parentId } : {}),
+        ...(options?.projectId ? { projectId: options.projectId } : {}),
+        ...(options?.stateId ? { stateId: options.stateId } : {}),
+        ...(options?.priority !== undefined ? { priority: options.priority } : {}),
+        ...(options?.estimate !== undefined ? { estimate: options.estimate } : {}),
+        ...(options?.dueDate !== undefined ? { dueDate: options.dueDate } : {}),
+        ...(options?.assigneeId ? { assigneeId: options.assigneeId } : {}),
+        ...(options?.labelIds ? { labelIds: options.labelIds } : {})
+      })
+      if (!result.success) {
+        return taskProviderFailure('linear.createFailed', 'Linear create failed')
+      }
+      const issue = await result.issue
+      if (!issue) {
+        return taskProviderFailure(
+          'linear.createdButUnavailable',
+          'Issue was created but could not be retrieved'
+        )
+      }
+      return {
+        ok: true,
+        id: issue.id,
+        identifier: issue.identifier,
+        title: issue.title,
+        url: issue.url
+      }
     }
   } catch (error) {
     if (isAuthError(error)) {
@@ -85,6 +94,7 @@ export async function createIssue(
   } finally {
     release()
   }
+  return recheck.refused()
 }
 
 export async function createIssueForAgent(
@@ -104,6 +114,7 @@ export async function createIssueForAgent(
     labelIds?: string[]
     signal?: AbortSignal
     beforeInvoke?: () => void
+    recheckOrigin?: LinearCreateFence
   }
 ): Promise<LinearIssueWriteRecord> {
   const entry = (await getClients(workspaceId))[0]
@@ -111,41 +122,49 @@ export async function createIssueForAgent(
     throw new LinearWriteFailure('failed', 'Not connected to Linear')
   }
 
-  return runLinearWrite(
-    entry,
-    options.signal,
-    async (client) => {
-      const result = await client.createIssue({
-        id: options.id,
-        teamId,
-        title,
-        ...(description ? { description } : {}),
-        ...(options.parentId ? { parentId: options.parentId } : {}),
-        ...(options.projectId ? { projectId: options.projectId } : {}),
-        ...(options.stateId ? { stateId: options.stateId } : {}),
-        ...(options.assigneeId !== undefined ? { assigneeId: options.assigneeId } : {}),
-        ...(options.priority !== undefined ? { priority: options.priority } : {}),
-        ...(options.estimate !== undefined ? { estimate: options.estimate } : {}),
-        ...(options.dueDate !== undefined ? { dueDate: options.dueDate } : {}),
-        ...(options.labelIds !== undefined ? { labelIds: options.labelIds } : {})
-      })
-      if (!result.success) {
-        throw new LinearWriteFailure('failed', 'Linear create failed')
-      }
-      options.signal?.throwIfAborted()
-      const issue = await confirmLinearWrite(
-        'Issue was created but could not be retrieved',
-        async () => result.issue
-      )
-      if (!issue?.id) {
-        throw new LinearWriteFailure('unconfirmed', 'Issue was created but could not be retrieved')
-      }
-      return confirmLinearWrite('Issue was created but could not be retrieved', () =>
-        getCreatedIssueRecord(issue.id, client, options.signal)
-      )
-    },
-    options.beforeInvoke
-  )
+  const fence = options.recheckOrigin
+  const record = await runLinearWrite(entry, options.signal, async (client) => {
+    if (fence && !(await fence.current())) {
+      return null
+    }
+    options.signal?.throwIfAborted()
+    options.beforeInvoke?.()
+    const result = await client.createIssue({
+      id: options.id,
+      teamId,
+      title,
+      ...(description ? { description } : {}),
+      ...(options.parentId ? { parentId: options.parentId } : {}),
+      ...(options.projectId ? { projectId: options.projectId } : {}),
+      ...(options.stateId ? { stateId: options.stateId } : {}),
+      ...(options.assigneeId !== undefined ? { assigneeId: options.assigneeId } : {}),
+      ...(options.priority !== undefined ? { priority: options.priority } : {}),
+      ...(options.estimate !== undefined ? { estimate: options.estimate } : {}),
+      ...(options.dueDate !== undefined ? { dueDate: options.dueDate } : {}),
+      ...(options.labelIds !== undefined ? { labelIds: options.labelIds } : {})
+    })
+    if (!result.success) {
+      throw new LinearWriteFailure('failed', 'Linear create failed')
+    }
+    options.signal?.throwIfAborted()
+    const issue = await confirmLinearWrite(
+      'Issue was created but could not be retrieved',
+      async () => result.issue
+    )
+    if (!issue?.id) {
+      throw new LinearWriteFailure('unconfirmed', 'Issue was created but could not be retrieved')
+    }
+    return confirmLinearWrite('Issue was created but could not be retrieved', () =>
+      getCreatedIssueRecord(issue.id, client, options.signal)
+    )
+  })
+  if (record === null && fence) {
+    return fence.refused()
+  }
+  if (record === null) {
+    throw new LinearWriteFailure('unconfirmed', 'Create could not be confirmed')
+  }
+  return record
 }
 
 async function getCreatedIssueRecord(

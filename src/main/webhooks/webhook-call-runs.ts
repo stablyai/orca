@@ -1,10 +1,10 @@
 // A hook's calls on its execution host: taken into the ledger before the delivery is acknowledged,
 // then run through the same event path as every trigger. Outcomes stay in the ledger.
 import { randomUUID } from 'node:crypto'
+import { webhookRunCall } from './linear-issue-origin'
 import {
   automationWebhookTrigger,
-  type AutomationRunEvent,
-  type AutomationRunWebhookCall
+  type AutomationRunEvent
 } from '../../shared/automation-event-triggers'
 import type { Automation } from '../../shared/automations/automation-definition'
 import type { AutomationRun } from '../../shared/automations/history/automation-run'
@@ -236,13 +236,7 @@ export class WebhookCallRuns {
   ): Promise<void> {
     const rule = target && automationWebhookTrigger(target)
     const folder = target?.bot ? this.deps.botFolder(target.bot.botId) : null
-    const webhook: AutomationRunWebhookCall = {
-      hookId: call.hookId,
-      callId: call.callId,
-      file: null,
-      ...(call.sample ? { sample: true as const } : {}),
-      ...(call.first ? { firstCall: true as const } : {})
-    }
+    const webhook = webhookRunCall(value, call, rule ?? undefined, target?.bot?.botId)
     const event: AutomationRunEvent = {
       triggerId: call.triggerId,
       source: 'webhook',
