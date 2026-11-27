@@ -43,6 +43,8 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
   const ctxParam = ', ctx'
   const bareCtxParams = '_event, ctx'
   const captureSessionMetadata = ['    updateRuntimeOmpSessionMetadata(ctx)']
+  // OMP auto-learn runs capture tools after agent_end with no agent_start; they must not reopen a done pane.
+  const skipOmpToolOutsideTurn = ['    if (isOmpRuntime() && !isTurnInFlight()) return']
   const primeDaemonWorkerGuard =
     kind === 'prime-agent'
       ? [
@@ -70,9 +72,11 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
           `  onStatus('tool_approval_resolved', (event${ctxParam}) => {`,
           ...captureSessionMetadata,
           '    if (!isOmpRuntime()) return',
+          // Auto-learn capture approvals resolve after agent_end, and no later end returns the pane to done.
           "    post('tool_approval_resolved', {",
           '      tool_name: event.toolName,',
           '      approved: event.approved,',
+          '      is_idle: !isTurnInFlight() && !isHeldByChildren(),',
           '    })',
           '  })',
           ''
@@ -156,6 +160,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '',
     `  onStatus('tool_execution_start', (event${ctxParam}) => {`,
     ...captureSessionMetadata,
+    ...skipOmpToolOutsideTurn,
     "    post('tool_execution_start', {",
     '      tool_name: event.toolName,',
     '      tool_input: sanitizeStatusToolInput(event.args),',
@@ -164,6 +169,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '',
     `  onStatus('tool_call', (event${ctxParam}) => {`,
     ...captureSessionMetadata,
+    ...skipOmpToolOutsideTurn,
     "    post('tool_call', {",
     '      tool_name: event.toolName,',
     '      tool_input: sanitizeStatusToolInput(event.input),',
@@ -172,6 +178,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '',
     `  onStatus('tool_execution_end', (event${ctxParam}) => {`,
     ...captureSessionMetadata,
+    ...skipOmpToolOutsideTurn,
     "    post('tool_execution_end', {",
     '      tool_name: event.toolName,',
     '    })',

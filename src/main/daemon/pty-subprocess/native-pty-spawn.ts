@@ -2,6 +2,7 @@ import type { PtyCreationDisposition } from '../../../shared/terminal/pty/lifecy
 import type { TerminalCreationWork } from '../terminal-host/terminal-creation-work'
 import { createDaemonPtyPhysicalOwner } from './daemon-pty-physical-owner'
 import type { DaemonPtyPhysicalOwner } from './subprocess-handle'
+import { dropInheritedNiceBoost } from '@orca/process-host/native-process-spawn'
 import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
 import type * as pty from 'node-pty'
 import {
@@ -81,8 +82,8 @@ export async function spawnNativeDaemonPty(args: {
     const attempt = Promise.withResolvers<PtyCreationDisposition>()
     args.creationWork?.join(attempt.promise)
     let proc: pty.IPty
-    const spawnPty = (useConptyDll: boolean): pty.IPty =>
-      nodePty.spawn(wrapped.file, wrapped.args, {
+    const spawnPty = (useConptyDll: boolean): pty.IPty => {
+      const spawned = nodePty.spawn(wrapped.file, wrapped.args, {
         name: args.env.TERM ?? 'xterm-256color',
         cols: args.cols,
         rows: args.rows,
@@ -91,6 +92,9 @@ export async function spawnNativeDaemonPty(args: {
         // Bundled ConPTY provides the wrap-marker behavior xterm expects.
         ...(process.platform === 'win32' ? { useConptyDll } : {})
       })
+      dropInheritedNiceBoost(spawned.pid)
+      return spawned
+    }
     try {
       // Retries on the system ConPTY when the bundled one cannot start (#47506).
       proc = spawnWithSystemConptyFallback(spawnPty, shellPath)

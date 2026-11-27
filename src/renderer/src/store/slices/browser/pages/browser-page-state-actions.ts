@@ -1,3 +1,5 @@
+import { redactBrowserMetadata } from '../../../../../../shared/browser/browser-metadata-redaction'
+import { discardKagiPrivateInitialNavigation } from '@/lib/kagi-private-initial-navigation'
 import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from '../browser-slice-contract'
 import type { AppState } from '../../../types'
 import {
@@ -44,6 +46,7 @@ export function createBrowserPageStateActions(
       get().updateBrowserPageState(pageId, updates, loadingOwner),
 
     updateBrowserPageState: (pageId, updates, loadingOwner) => {
+      updates = redactBrowserMetadata(updates)
       set((s) => {
         const page = findPage(s.browserPagesByWorkspace, pageId)
         if (!page) {
@@ -197,6 +200,7 @@ export function createBrowserPageStateActions(
     setBrowserTabUrl: (pageId, url) => get().setBrowserPageUrl(pageId, url),
 
     setBrowserPageUrl: (pageId, url, options) => {
+      discardKagiPrivateInitialNavigation(pageId)
       const nextUrl = normalizeUrl(url)
       if (nextUrl !== 'about:blank' && nextUrl !== ORCA_BROWSER_BLANK_URL) {
         const currentPage = findPage(get().browserPagesByWorkspace, pageId)

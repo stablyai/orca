@@ -55,6 +55,8 @@ export type CodexStructuredLaunch = CodexBotLaunchOptions & {
   codexVersion?: string
   /** Launched through the user's Command setting rather than the stock CLI. */
   customCommand?: boolean
+  /** Carries grants that end with this app (a bot's tool-relay token), so it can't outlive it. */
+  appBoundGrants?: true
 }
 
 /** Boundaries retain host receipt time through buffering and retries. */

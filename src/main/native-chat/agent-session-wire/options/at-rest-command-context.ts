@@ -10,6 +10,7 @@ const launchSettings = new Set([
   'codexManagedAccounts',
   'activeCodexManagedAccountId',
   'activeCodexManagedAccountIdsByRuntime',
+  'antigravityChatAuth',
   'floatingTerminalCwd',
   'agentCmdOverrides',
   'agentDefaultArgs',

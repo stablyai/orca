@@ -1,3 +1,4 @@
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { CreateWorktreeArgs } from '../../../shared/worktree/create-types'
 import type {
   AutomationWorkspaceProvenance,
@@ -32,8 +33,12 @@ export type RemoveWorktreeArgs = {
 
 export type DetectedWorktreeRequestArgs = { repoId: string } | ListDetectedWorktreesArgs
 
-export const NullableWorkspaceLinkedItemSchema = WorkspaceLinkedItemSchema.nullable()
-export const NullableTaskSourceContextSchema = TaskSourceContextSchema.nullable()
+export const NullableWorkspaceLinkedItemSchema = lazyZodSchema(() =>
+  WorkspaceLinkedItemSchema.nullable()
+)
+export const NullableTaskSourceContextSchema = lazyZodSchema(() =>
+  TaskSourceContextSchema.nullable()
+)
 
 export function normalizeLinkedWorkItemFields<
   T extends {
