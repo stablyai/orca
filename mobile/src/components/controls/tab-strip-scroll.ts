@@ -39,6 +39,25 @@ export function resolveTabStripScrollOffset({
 
 type TabLayouts = ReadonlyMap<string, { x: number; width: number }>
 
+// React Native Web's onLayout fires via ResizeObserver, so tabs shifted horizontally without resizing keep stale x values; derive x from live order instead.
+export function buildTabStripLayouts(
+  tabs: readonly { id: string }[],
+  widths: ReadonlyMap<string, number>,
+  leadingInset = 0
+): Map<string, { x: number; width: number }> {
+  const layouts = new Map<string, { x: number; width: number }>()
+  let x = leadingInset
+  for (const tab of tabs) {
+    const width = widths.get(tab.id)
+    if (width === undefined || width <= 0) {
+      continue
+    }
+    layouts.set(tab.id, { x, width })
+    x += width
+  }
+  return layouts
+}
+
 export function resolveTabStripTapOffset(args: {
   tabId: string
   tabs: readonly { id: string }[]

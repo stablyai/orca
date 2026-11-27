@@ -9,6 +9,7 @@ import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduce
 import { useNow } from '../../hooks/use-now'
 import { agentStateLabel, type AgentDotState } from '../../worktree/agent-lineage/agent-row-display'
 import {
+  buildTabStripLayouts,
   resolveTabStripEdgeHint,
   resolveTabStripHiddenTabs,
   resolveTabStripScrollOffset,
@@ -16,7 +17,7 @@ import {
   type TabStripEdgeHint,
   type TabStripHiddenTabs
 } from '../../components/controls/tab-strip-scroll'
-import { colors } from '../../theme/mobile-theme'
+import { colors, spacing } from '../../theme/mobile-theme'
 import { mobileSessionTabStripStyles as styles } from './mobile-session-tab-strip-styles'
 import { useKeyboardPersistingTaps } from '../../platform/keyboard/keyboard-persisting-taps'
 import { buildMobileSessionTabSummary, isForkedChatTab } from './mobile-session-tab-rows'
@@ -100,7 +101,16 @@ export function MobileSessionTabStrip({
   const offsetRef = useRef(0)
   const viewportWidthRef = useRef(0)
   const contentWidthRef = useRef(0)
-  const tabLayoutsRef = useRef(new Map<string, { x: number; width: number }>())
+  const tabWidthsRef = useRef(new Map<string, number>())
+  const visibleTabsRef = useRef(visibleTabs)
+  visibleTabsRef.current = visibleTabs
+  const leadingInsetRef = useRef(inTopBar ? 0 : spacing.md)
+  leadingInsetRef.current = inTopBar ? 0 : spacing.md
+  const getTabLayouts = useCallback(
+    () =>
+      buildTabStripLayouts(visibleTabsRef.current, tabWidthsRef.current, leadingInsetRef.current),
+    []
+  )
   const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastTabTapRef = useRef<{ id: string; at: number } | null>(null)
   const activeTabIdRef = useRef(activeSessionTabId)
@@ -132,7 +142,7 @@ export function MobileSessionTabStrip({
   const [hiddenTabs, setHiddenTabs] = useState<TabStripHiddenTabs>({ left: [], right: [] })
   const refreshHiddenTabs = useCallback(() => {
     const next = resolveTabStripHiddenTabs({
-      layouts: tabLayoutsRef.current,
+      layouts: getTabLayouts(),
       viewportWidth: viewportWidthRef.current,
       currentOffset: offsetRef.current
     })
@@ -142,28 +152,32 @@ export function MobileSessionTabStrip({
         ? prev
         : next
     )
-  }, [])
+  }, [getTabLayouts])
 
-  const scrollActiveTabIntoView = useCallback((tabId: string | null, animated: boolean) => {
-    if (!tabId || holdTimerRef.current !== null) {
-      return
-    }
-    const layout = tabLayoutsRef.current.get(tabId)
-    if (!layout) {
-      return
-    }
-    const nextOffset = resolveTabStripScrollOffset({
-      tabX: layout.x,
-      tabWidth: layout.width,
-      viewportWidth: viewportWidthRef.current,
-      contentWidth: contentWidthRef.current,
-      currentOffset: offsetRef.current
-    })
-    if (Math.abs(nextOffset - offsetRef.current) > 0.5) {
-      offsetRef.current = nextOffset
-      scrollRef.current?.scrollTo({ x: nextOffset, animated })
-    }
-  }, [])
+  const scrollActiveTabIntoView = useCallback(
+    (tabId: string | null, animated: boolean) => {
+      if (!tabId || holdTimerRef.current !== null) {
+        return
+      }
+      const layout = getTabLayouts().get(tabId)
+      if (!layout) {
+        return
+      }
+      const nextOffset = resolveTabStripScrollOffset({
+        tabX: layout.x,
+        tabWidth: layout.width,
+        viewportWidth: viewportWidthRef.current,
+        contentWidth: contentWidthRef.current,
+        currentOffset: offsetRef.current
+      })
+      if (Math.abs(nextOffset - offsetRef.current) > 0.5) {
+        offsetRef.current = nextOffset
+        scrollRef.current?.scrollTo({ x: nextOffset, animated })
+        refreshHiddenTabs()
+      }
+    },
+    [getTabLayouts, refreshHiddenTabs]
+  )
 
   const cancelHeldReveal = useCallback(() => {
     if (holdTimerRef.current !== null) {
@@ -177,15 +191,25 @@ export function MobileSessionTabStrip({
       cancelHeldReveal()
       offsetRef.current = targetOffset
       scrollRef.current?.scrollTo({ x: targetOffset, animated: true })
+      refreshHiddenTabs()
       holdTimerRef.current = setTimeout(() => {
         holdTimerRef.current = null
         scrollActiveTabIntoView(activeTabIdRef.current, true)
       }, durationMs)
     },
-    [cancelHeldReveal, scrollActiveTabIntoView]
+    [cancelHeldReveal, refreshHiddenTabs, scrollActiveTabIntoView]
   )
 
   useEffect(() => cancelHeldReveal, [cancelHeldReveal])
+  useEffect(() => {
+    const activeIds = new Set(visibleTabs.map((tab) => tab.id))
+    for (const id of tabWidthsRef.current.keys()) {
+      if (!activeIds.has(id)) {
+        tabWidthsRef.current.delete(id)
+      }
+    }
+    refreshHiddenTabs()
+  }, [visibleTabs, inTopBar, refreshHiddenTabs])
   useEffect(() => {
     scrollActiveTabIntoView(activeSessionTabId, true)
   }, [activeSessionTabId, scrollActiveTabIntoView])
@@ -216,7 +240,7 @@ export function MobileSessionTabStrip({
       const nextOffset = resolveTabStripTapOffset({
         tabId: tab.id,
         tabs: visibleTabs,
-        layouts: tabLayoutsRef.current,
+        layouts: getTabLayouts(),
         viewportWidth: viewportWidthRef.current,
         contentWidth: contentWidthRef.current,
         currentOffset: offsetRef.current
@@ -226,7 +250,15 @@ export function MobileSessionTabStrip({
       }
       switchSessionTab(tab)
     },
-    [cancelHeldReveal, holdReveal, setRenameTarget, switchSessionTab, terminals, visibleTabs]
+    [
+      cancelHeldReveal,
+      getTabLayouts,
+      holdReveal,
+      setRenameTarget,
+      switchSessionTab,
+      terminals,
+      visibleTabs
+    ]
   )
 
   const attachTabStrip = useCallback((view: ScrollViewInstance | null) => {
@@ -234,7 +266,7 @@ export function MobileSessionTabStrip({
       offsetRef.current = 0
       viewportWidthRef.current = 0
       contentWidthRef.current = 0
-      tabLayoutsRef.current.clear()
+      tabWidthsRef.current.clear()
     }
     scrollRef.current = view
   }, [])
@@ -270,6 +302,12 @@ export function MobileSessionTabStrip({
           }}
           onContentSizeChange={(width) => {
             contentWidthRef.current = width
+            if (viewportWidthRef.current > 0) {
+              const maxOffset = Math.max(0, width - viewportWidthRef.current)
+              if (offsetRef.current > maxOffset) {
+                offsetRef.current = maxOffset
+              }
+            }
             scrollActiveTabIntoView(activeTabIdRef.current, false)
             refreshHiddenTabs()
           }}
@@ -290,9 +328,10 @@ export function MobileSessionTabStrip({
                   pressed && styles.tabPressed
                 ]}
                 onLayout={(e) => {
-                  const { x, width } = e.nativeEvent.layout
-                  tabLayoutsRef.current.set(tab.id, { x, width })
-                  if (tab.id === activeTabIdRef.current) {
+                  const { width } = e.nativeEvent.layout
+                  const prevWidth = tabWidthsRef.current.get(tab.id)
+                  tabWidthsRef.current.set(tab.id, width)
+                  if (tab.id === activeTabIdRef.current && prevWidth !== width) {
                     scrollActiveTabIntoView(tab.id, false)
                   }
                   refreshHiddenTabs()
