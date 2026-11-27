@@ -49,6 +49,7 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
   const fileSearchUseRegex = searchState?.useRegex ?? false
   const fileSearchIncludePattern = searchState?.includePattern ?? ''
   const fileSearchExcludePattern = searchState?.excludePattern ?? ''
+  const fileSearchIncludeIgnored = searchState?.includeIgnored ?? false
   const fileSearchResults = searchState?.results ?? null
   const fileSearchResultOwner = searchState?.resultOwner ?? null
   const fileSearchLoading = searchState?.loading ?? false
@@ -289,6 +290,7 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
     filtersProps: {
       includePattern: fileSearchIncludePattern,
       excludePattern: fileSearchExcludePattern,
+      includeIgnored: fileSearchIncludeIgnored,
       includeInputRef,
       excludeInputRef,
       onIncludeChange: (value: string) => {
@@ -297,6 +299,10 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
       },
       onExcludeChange: (value: string) => {
         updateActiveSearchState({ excludePattern: value })
+        rerunSearch()
+      },
+      onIncludeIgnoredChange: (value: boolean) => {
+        updateActiveSearchState({ includeIgnored: value })
         rerunSearch()
       }
     },

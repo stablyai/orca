@@ -28,5 +28,7 @@ export type SearchOptions = {
   useRegex?: boolean
   includePattern?: string
   excludePattern?: string
+  /** Search git-ignored files too; still honours .ignore/.rgignore. */
+  includeIgnored?: boolean
   maxResults?: number
 }

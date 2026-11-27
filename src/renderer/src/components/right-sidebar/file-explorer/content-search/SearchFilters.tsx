@@ -3,14 +3,17 @@ import { Ellipsis } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { useTranslate } from '@/i18n/use-translate'
 
 export type SearchFiltersProps = {
   includePattern: string
   excludePattern: string
+  includeIgnored: boolean
   onIncludeChange: (value: string) => void
   onExcludeChange: (value: string) => void
+  onIncludeIgnoredChange: (value: boolean) => void
   includeInputRef?: React.RefObject<HTMLInputElement | null>
   excludeInputRef?: React.RefObject<HTMLInputElement | null>
 }
@@ -18,14 +21,18 @@ export type SearchFiltersProps = {
 export function SearchFilters({
   includePattern,
   excludePattern,
+  includeIgnored,
   onIncludeChange,
   onExcludeChange,
+  onIncludeIgnoredChange,
   includeInputRef,
   excludeInputRef
 }: SearchFiltersProps): React.JSX.Element {
   const t = useTranslate()
   const activeCount =
-    Number(Boolean(includePattern.trim())) + Number(Boolean(excludePattern.trim()))
+    Number(Boolean(includePattern.trim())) +
+    Number(Boolean(excludePattern.trim())) +
+    Number(includeIgnored)
 
   return (
     <Collapsible
@@ -97,6 +104,16 @@ export function SearchFilters({
               onChange={(e) => onExcludeChange(e.target.value)}
               spellCheck={false}
             />
+          </label>
+          <label className="flex items-center gap-2 text-2xs text-muted-foreground">
+            <Checkbox
+              checked={includeIgnored}
+              onCheckedChange={(checked) => onIncludeIgnoredChange(checked === true)}
+            />
+            {t(
+              'auto.components.right.sidebar.SearchFilters.6722e5652a',
+              'Include git-ignored files'
+            )}
           </label>
         </div>
       </CollapsibleContent>

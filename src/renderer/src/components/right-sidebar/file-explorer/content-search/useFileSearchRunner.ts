@@ -159,6 +159,7 @@ export function useFileSearchRunner({
               useRegex: activeSearchState?.useRegex ?? false,
               includePattern: activeSearchState?.includePattern || undefined,
               excludePattern: activeSearchState?.excludePattern || undefined,
+              includeIgnored: activeSearchState?.includeIgnored ?? false,
               maxResults: SEARCH_MAX_RESULTS
             },
             controller.signal

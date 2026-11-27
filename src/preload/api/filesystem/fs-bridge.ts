@@ -233,6 +233,7 @@ export const fsApi = {
     useRegex?: boolean
     includePattern?: string
     excludePattern?: string
+    includeIgnored?: boolean
     maxResults?: number
     connectionId?: string
   }): Promise<SearchResult> => ipcRenderer.invoke('fs:search', args),

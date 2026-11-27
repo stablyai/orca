@@ -7,6 +7,7 @@ const DEFAULT_FILE_SEARCH_STATE = {
   useRegex: false,
   includePattern: '',
   excludePattern: '',
+  includeIgnored: false,
   results: null,
   resultOwner: null,
   loading: false,

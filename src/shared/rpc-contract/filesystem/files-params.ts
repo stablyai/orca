@@ -122,6 +122,7 @@ export const FileSearch = WorktreeSelector.extend({
   useRegex: z.boolean().optional(),
   includePattern: z.string().optional(),
   excludePattern: z.string().optional(),
+  includeIgnored: z.boolean().optional(),
   maxResults: z.number().int().positive().optional()
 })
 
