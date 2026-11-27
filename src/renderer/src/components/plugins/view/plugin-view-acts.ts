@@ -24,6 +24,8 @@ export type { PluginPanelActDeps } from './plugin-view-data-acts'
 
 const NOT_RUN = 'not run: an earlier action failed'
 
+const toLf = (raw: string): string => raw.replace(/\r\n?/g, '\n')
+
 const TAKES = {
   type: {
     types: ['Input', 'Textarea', 'CodeInput'],
@@ -110,11 +112,16 @@ async function runFormAct(act: PluginShotAct, context: PluginPanelActContext): P
     const element = resolve(act.type, 'type')
     expectTaken(element, 'type')
     const target = editable(element, 'type')
-    let value = act.replace ? '' : String(target.value())
-    if (act.replace) {
+    const base = act.replace ? '' : String(target.value())
+    // A person's input reaches a CodeInput with `\n` line breaks only: normalize the seed and the
+    // whole text once, so a `\r\n` pair types as one line break.
+    const code = element.type === 'CodeInput'
+    let value = code ? toLf(base) : base
+    const text = code ? toLf(act.text) : act.text
+    if (act.replace || (text === '' && value !== base)) {
       change(target, value, 'type')
     }
-    for (const character of act.text) {
+    for (const character of text) {
       value += character
       change(target, value, 'type')
     }
