@@ -7,7 +7,7 @@ import type { McpServer } from '../generated/acp-protocol.generated'
 import { botToolsOffInstruction } from '../../bots/bot-launch-tools'
 import { withSessionMcpToolsEnv } from '../../mcp-servers/session-mcp-tools'
 import { deliverHostMcpServersBesideConfig } from '../../mcp-servers/session-host-mcp-delivery'
-import { acpLaunchMcpServers } from '../../bots/bot-tools-acp'
+import { acpLaunchServers } from '../../bots/bot-tools-acp'
 import { overlayEnvironmentVariables } from '../../../shared/shell/launch/environment-overlay'
 
 import {
@@ -275,10 +275,7 @@ export function acpStructuredLaunchPart(
     // The host list's never shares a name with the agent's own (above).
     // A loader that needs the agent's version reads nothing without it (a kept agent's launch).
     const ownRead = !spec.ownMcpServers || (launchedVersion ?? null) !== null
-    const { mcpServers, toolsKey } = await acpLaunchMcpServers(tools, ownServers, {
-      toolsOff,
-      ownRead
-    })
+    const { mcpServers, toolsKey } = await acpLaunchServers(tools, ownServers, toolsOff, ownRead)
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
     // A load restores the conversation's own model, and a stale role there would stop the agent
     // before it opens; resumed chats apply their model through the session instead.
