@@ -31,9 +31,10 @@ import {
   canReuseBrowserPageInventory,
   canReuseMobileSessionSnapshot
 } from './mobile-session-capture'
-import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import {
   collectDirtyMobileSessionWorkspaces,
+  getLiveFolderWorkspaceIds,
+  getMobileSessionWorktreeIds,
   mobileSessionWorkspaceSourcesUnchanged,
   readMobileSessionWorkspaceSources
 } from './mobile-session-dirty-workspaces'
@@ -62,16 +63,8 @@ export function buildMobileSessionTabSnapshots(
     generatedTitlesEnabled: state.settings?.tabAutoGenerateTitle === true,
     terminalTheme: getMobileTerminalTheme(state, systemPrefersDark)
   }
-  const liveFolderWorkspaceIds = new Set(
-    (selectFolderWorkspaces(state) ?? []).map((workspace) => workspace.id)
-  )
-  const worktreeIds = new Set<string>([
-    ...Object.keys(state.tabsByWorktree),
-    ...Object.keys(state.groupsByWorktree),
-    ...Object.keys(state.unifiedTabsByWorktree),
-    ...Object.keys(browserTabsByWorktree),
-    ...state.openFiles.map((file) => file.worktreeId)
-  ])
+  const liveFolderWorkspaceIds = getLiveFolderWorkspaceIds(state)
+  const worktreeIds = getMobileSessionWorktreeIds(state, browserTabsByWorktree)
   const snapshots: RuntimeMobileSessionTabsSnapshot[] = []
   const sources = { state, publication: publicationInputs, ambiguousTerminalTabIds }
   const dirtyWorkspaces = collectDirtyMobileSessionWorkspaces(
@@ -80,13 +73,15 @@ export function buildMobileSessionTabSnapshots(
   )
 
   for (const worktreeId of worktreeIds) {
-    const workspaceScope = parseWorkspaceKey(worktreeId)
-    if (
-      workspaceScope?.type === 'folder' &&
-      !liveFolderWorkspaceIds.has(workspaceScope.folderWorkspaceId)
-    ) {
-      graphState.mobileSessionSnapshotCacheByWorktree.delete(worktreeId)
-      continue
+    if (worktreeId.startsWith('folder:')) {
+      const workspaceScope = parseWorkspaceKey(worktreeId)
+      if (
+        workspaceScope?.type === 'folder' &&
+        !liveFolderWorkspaceIds.has(workspaceScope.folderWorkspaceId)
+      ) {
+        graphState.mobileSessionSnapshotCacheByWorktree.delete(worktreeId)
+        continue
+      }
     }
     const cached = graphState.mobileSessionSnapshotCacheByWorktree.get(worktreeId)
     if (

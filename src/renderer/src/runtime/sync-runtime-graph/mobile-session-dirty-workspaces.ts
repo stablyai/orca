@@ -1,4 +1,5 @@
 import type { AppState } from '@/store/types'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { WorktreeOperationRouteState } from '@/lib/workspace/ownership/worktree-operation-route'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import { readRecordChanges } from '@/store/record-transitions/keyed-record-change-reads'
@@ -182,6 +183,71 @@ function addPresent(dirty: Set<string>, worktreeId: string | null | undefined): 
   if (worktreeId) {
     dirty.add(worktreeId)
   }
+}
+
+let cachedFolderWorkspaceSource: unknown
+let cachedLiveFolderWorkspaceIds: ReadonlySet<string> = new Set()
+
+let cachedWorktreeIdsSources:
+  | readonly [
+      AppState['tabsByWorktree'],
+      AppState['groupsByWorktree'],
+      AppState['unifiedTabsByWorktree'],
+      AppState['browserTabsByWorktree'],
+      AppState['openFiles']
+    ]
+  | null = null
+let cachedWorktreeIds: ReadonlySet<string> = new Set()
+
+export function getLiveFolderWorkspaceIds(state: AppState): ReadonlySet<string> {
+  const folderWorkspaces = selectFolderWorkspaces(state)
+  if (folderWorkspaces === cachedFolderWorkspaceSource) {
+    return cachedLiveFolderWorkspaceIds
+  }
+  cachedFolderWorkspaceSource = folderWorkspaces
+  cachedLiveFolderWorkspaceIds = new Set((folderWorkspaces ?? []).map((workspace) => workspace.id))
+  return cachedLiveFolderWorkspaceIds
+}
+
+export function getMobileSessionWorktreeIds(
+  state: AppState,
+  browserTabsByWorktree: AppState['browserTabsByWorktree']
+): ReadonlySet<string> {
+  if (
+    cachedWorktreeIdsSources &&
+    cachedWorktreeIdsSources[0] === state.tabsByWorktree &&
+    cachedWorktreeIdsSources[1] === state.groupsByWorktree &&
+    cachedWorktreeIdsSources[2] === state.unifiedTabsByWorktree &&
+    cachedWorktreeIdsSources[3] === browserTabsByWorktree &&
+    cachedWorktreeIdsSources[4] === state.openFiles
+  ) {
+    return cachedWorktreeIds
+  }
+  const ids = new Set<string>()
+  for (const key of Object.keys(state.tabsByWorktree)) {
+    ids.add(key)
+  }
+  for (const key of Object.keys(state.groupsByWorktree)) {
+    ids.add(key)
+  }
+  for (const key of Object.keys(state.unifiedTabsByWorktree)) {
+    ids.add(key)
+  }
+  for (const key of Object.keys(browserTabsByWorktree)) {
+    ids.add(key)
+  }
+  for (const file of state.openFiles) {
+    ids.add(file.worktreeId)
+  }
+  cachedWorktreeIdsSources = [
+    state.tabsByWorktree,
+    state.groupsByWorktree,
+    state.unifiedTabsByWorktree,
+    browserTabsByWorktree,
+    state.openFiles
+  ]
+  cachedWorktreeIds = ids
+  return ids
 }
 
 function sameMembers(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
