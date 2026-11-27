@@ -122,7 +122,7 @@ export async function sendCodexLeaseRequest(
         if (CARRIES_HISTORY.has(method) && owner.open && !callerGone) {
           // A helper another chat already holds stays with it, with its liveness and cleanup.
           for (const child of codexChildThreadIdsInHistory(result)) {
-            if (!owner.heldByOther(child)) {
+            if (owner.open && !owner.heldByOther(child)) {
               owner.claim(child, false, true)
             }
           }

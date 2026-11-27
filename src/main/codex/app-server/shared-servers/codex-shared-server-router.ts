@@ -81,6 +81,10 @@ export class CodexSharedServerRouter {
   /** `opened`: claimed by a thread open's reply, the only claim that can find its early frames
    *  dropped; a helper's lost frames don't cost its parent chat its running turn. */
   claim(threadId: string, lease: CodexSharedServerLease, opened = false, history = false): void {
+    if (!lease.routable) {
+      // Ended (a claim before it may have handed it back): the thread waits for the reopen.
+      return
+    }
     const previous = this.owners.get(threadId)
     if (previous && previous !== lease) {
       previous.threads.delete(threadId)
