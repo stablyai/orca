@@ -2,26 +2,19 @@ import type React from 'react'
 import { useState } from 'react'
 import { Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '../../ui/button'
-import { Progress } from '../../ui/progress'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
-import { uiNumberFormat } from '@/i18n/ui-intl-formatters'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
-import { updaterMessageText } from '@/app-shell/updates/updater-message-copy'
 import {
   getUpdateCheckClickOptions,
   getUpdateCheckHint
 } from '@/app-shell/updates/update-check-click-options'
 import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
 import { cn } from '@/lib/class-names'
-import { getUpdateInstallBlockGuidance } from '../../maintenance/update-card/update-install-block-guidance'
 import { getReleaseNotesUrlForVersion } from '../../../../../shared/updater/release-channel'
 import type { UpdateStatus } from '../../../../../shared/updater/update-status-types'
 import { formatUpdateDelayDate } from './update-delay-copy'
 import type { UpdateStatusLine, UpdateStatusRowModel } from './update-status-row-model'
 import { UpdateStatusDetails } from './UpdateStatusDetails'
-
-// Intl formatter caches key on option identity, so this must be a module constant.
-const PERCENT_FORMAT: Intl.NumberFormatOptions = { style: 'percent', maximumFractionDigits: 0 }
 
 type UpdateStatusRowProps = {
   model: UpdateStatusRowModel
@@ -29,15 +22,12 @@ type UpdateStatusRowProps = {
   appVersion: string | null
   iconUrl: string
   onDownload: () => void
-  onRestart: () => void
 }
 
 /** Full and narrow copy for one line; the narrow form shows when the card is under 20rem and never drops a version. */
-type LineCopy = { full: string; narrow?: string; tone?: 'destructive' }
+type LineCopy = { full: string; narrow?: string }
 
 function lineCopy(line: UpdateStatusLine, t: Translate, intlLocale: string): LineCopy | null {
-  const percent = (value: number): string =>
-    uiNumberFormat(PERCENT_FORMAT, intlLocale).format(Math.round(value) / 100)
   switch (line.kind) {
     case 'none':
       return null
@@ -65,38 +55,6 @@ function lineCopy(line: UpdateStatusLine, t: Translate, intlLocale: string): Lin
       }
     case 'unsupported-system':
       return { full: t('settings.about.status.latestForMac', 'Latest for this Mac') }
-    case 'downloading':
-      return {
-        full: t('settings.about.status.downloadingPercent', 'Downloading {{percent}}', {
-          percent: percent(line.percent)
-        })
-      }
-    case 'ready':
-      return {
-        full: t('settings.about.status.ready', '{{version}} ready', { version: line.version })
-      }
-    case 'installing':
-      return {
-        full: t('settings.about.status.installing', 'Installing {{version}}…', {
-          version: line.version
-        })
-      }
-    case 'install-on-quit':
-      return { full: t('settings.about.status.installOnQuit', 'Quit to install') }
-    case 'install-blocked':
-      return {
-        full: t('settings.about.status.installBlocked', 'Install blocked'),
-        tone: 'destructive'
-      }
-    case 'failed':
-      return {
-        full:
-          line.phase === 'update'
-            ? t('settings.about.status.updateFailed', 'Update failed')
-            : t('settings.about.status.checkFailed', 'Check failed'),
-        narrow: t('settings.about.status.failed', 'Failed'),
-        tone: 'destructive'
-      }
   }
 }
 
@@ -108,15 +66,6 @@ function detailsText(
   switch (model.details) {
     case null:
       return null
-    case 'message':
-      return status.state === 'error' ? updaterMessageText(status) : null
-    case 'install-block': {
-      if (status.state !== 'error' || !status.installBlock) {
-        return null
-      }
-      const guidance = getUpdateInstallBlockGuidance(status.installBlock, t)
-      return `${guidance.summary} ${guidance.explainer}`
-    }
     case 'unsupported-system':
       return status.state === 'not-available' && status.unsupportedSystemUpdate
         ? t(
@@ -160,8 +109,7 @@ export function UpdateStatusRow({
   status,
   appVersion,
   iconUrl,
-  onDownload,
-  onRestart
+  onDownload
 }: UpdateStatusRowProps): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
@@ -169,10 +117,7 @@ export function UpdateStatusRow({
   const copy = lineCopy(model.line, t, intlLocale)
   const details = detailsText(model, status, t)
   const showDetails = detailsOpen && details !== null
-  const percent = model.line.kind === 'downloading' ? Math.round(model.line.percent) : null
   const version = splitVersion(appVersion)
-  const hasAction =
-    model.secondaryCheck || (model.action.kind !== 'none' && model.action.kind !== 'progress')
   const hasNotes = Boolean(model.notesVersion)
 
   return (
@@ -184,12 +129,7 @@ export function UpdateStatusRow({
           aria-hidden
           className="col-start-1 row-start-1 row-end-3 size-7 rounded-md"
         />
-        <div
-          className={cn(
-            'col-start-2 row-start-1 flex min-w-0 text-sm font-medium',
-            !hasAction && 'col-end-4'
-          )}
-        >
+        <div className="col-start-2 row-start-1 flex min-w-0 text-sm font-medium">
           <span className="shrink-0">
             {t('settings.general.about.version', 'Orca {{version}}', { version: version.semver })}
           </span>
@@ -197,17 +137,13 @@ export function UpdateStatusRow({
         </div>
         <div
           className={cn(
-            'relative col-start-2 row-start-2 min-w-0 self-start',
-            !hasAction && 'col-end-4',
+            'col-start-2 row-start-2 min-w-0 self-start',
             hasNotes && '@max-xs/about-status:col-end-4'
           )}
         >
           {/* The live region stays mounted, empty when idle, so state changes are announced. */}
           <div className="flex min-w-0 items-center whitespace-nowrap text-settings-detail text-muted-foreground">
-            <span
-              role="status"
-              className={cn('min-w-0 truncate', copy?.tone === 'destructive' && 'text-destructive')}
-            >
+            <span role="status" className="min-w-0 truncate">
               {copy ? (
                 <>
                   <span className={cn(copy.narrow && '@max-xs/about-status:hidden')}>
@@ -267,52 +203,39 @@ export function UpdateStatusRow({
               </>
             ) : null}
           </div>
-          {percent !== null ? (
-            // Inside the row's bottom padding, so a download never changes the row's height.
-            <div className="absolute inset-x-0 -bottom-1.5">
-              <Progress
-                value={percent}
-                aria-label={t('settings.about.status.downloadProgress', 'Download progress')}
-                className="h-0.5"
-              />
-            </div>
-          ) : null}
         </div>
-        {hasAction ? (
-          <div
-            className={cn(
-              'col-start-3 row-start-1 row-end-3 flex items-center gap-3',
-              hasNotes && '@max-xs/about-status:row-end-2'
-            )}
-          >
-            {model.secondaryCheck ? (
-              <span className="@max-xs/about-status:hidden">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost-muted"
-                      size="icon-sm"
-                      aria-label={t('settings.about.action.checkForUpdates', 'Check for updates')}
-                      disabled={model.secondaryCheck.disabled}
-                      // Modifier clicks pick a one-off release track, not a saved setting.
-                      onClick={(event) =>
-                        void window.api.updater.check(getUpdateCheckClickOptions(event))
-                      }
-                    >
-                      <RefreshCw />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" sideOffset={4} className="max-w-xs">
-                    {t('settings.about.action.checkForUpdates', 'Check for updates')}
-                    <span className="block text-muted-foreground">{getUpdateCheckHint()}</span>
-                  </TooltipContent>
-                </Tooltip>
-              </span>
-            ) : null}
-            <UpdateStatusAction model={model} onDownload={onDownload} onRestart={onRestart} />
-          </div>
-        ) : null}
+        <div
+          className={cn(
+            'col-start-3 row-start-1 row-end-3 flex items-center gap-3',
+            hasNotes && '@max-xs/about-status:row-end-2'
+          )}
+        >
+          {model.secondaryCheck ? (
+            <span className="@max-xs/about-status:hidden">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost-muted"
+                    size="icon-sm"
+                    aria-label={t('settings.about.action.checkForUpdates', 'Check for updates')}
+                    // Modifier clicks pick a one-off release track, not a saved setting.
+                    onClick={(event) =>
+                      void window.api.updater.check(getUpdateCheckClickOptions(event))
+                    }
+                  >
+                    <RefreshCw />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={4} className="max-w-xs">
+                  {t('settings.about.action.checkForUpdates', 'Check for updates')}
+                  <span className="block text-muted-foreground">{getUpdateCheckHint()}</span>
+                </TooltipContent>
+              </Tooltip>
+            </span>
+          ) : null}
+          <UpdateStatusAction model={model} onDownload={onDownload} />
+        </div>
       </div>
       {showDetails ? <UpdateStatusDetails text={details} /> : null}
     </div>
@@ -321,38 +244,28 @@ export function UpdateStatusRow({
 
 function UpdateStatusAction({
   model,
-  onDownload,
-  onRestart
+  onDownload
 }: {
   model: UpdateStatusRowModel
   onDownload: () => void
-  onRestart: () => void
-}): React.JSX.Element | null {
+}): React.JSX.Element {
   const t = useTranslate()
-  const { kind, busy, disabled } = model.action
-  const spinner = busy ? <Loader2 className="animate-spin" /> : null
+  const { kind, busy } = model.action
   switch (kind) {
-    case 'none':
-    case 'progress':
-      // Download progress lives in the state line and its bar; there's nothing to press.
-      return null
     case 'check':
-    case 'retry-check':
       return (
         <Button
           type="button"
           variant="outline"
           size="sm"
-          disabled={disabled}
+          disabled={busy}
           title={getUpdateCheckHint()}
           // Modifier clicks pick a one-off release track, not a saved setting.
           onClick={(event) => void window.api.updater.check(getUpdateCheckClickOptions(event))}
         >
           <span className="relative inline-grid place-items-center">
             <span className={busy ? 'opacity-0' : undefined}>
-              {kind === 'check'
-                ? t('settings.about.action.check', 'Check')
-                : t('settings.about.action.retry', 'Retry')}
+              {t('settings.about.action.check', 'Check')}
             </span>
             {busy ? <Loader2 aria-hidden className="absolute animate-spin" /> : null}
           </span>
@@ -377,29 +290,6 @@ function UpdateStatusAction({
       return (
         <Button type="button" size="sm" onClick={onDownload}>
           {t('settings.about.action.update', 'Update')}
-        </Button>
-      )
-    case 'restart':
-      return (
-        <Button type="button" size="sm" disabled={disabled} onClick={onRestart}>
-          {spinner}
-          {t('settings.about.action.restart', 'Restart')}
-        </Button>
-      )
-    case 'retry-install':
-      return (
-        <Button type="button" variant="outline" size="sm" onClick={onRestart}>
-          {t('settings.about.action.retry', 'Retry')}
-        </Button>
-      )
-    case 'quit':
-      return (
-        <Button
-          type="button"
-          size="sm"
-          onClick={() => void window.api.app.quit().catch(console.error)}
-        >
-          {t('updates.installOnQuit.quit', 'Quit Orca')}
         </Button>
       )
   }

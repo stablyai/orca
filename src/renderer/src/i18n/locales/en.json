@@ -2285,9 +2285,7 @@
       "action": {
         "update": "Update",
         "check": "Check",
-        "retry": "Retry",
         "skipDelay": "Skip delay",
-        "restart": "Restart",
         "checkForUpdates": "Check for updates"
       },
       "channel": {
@@ -2303,23 +2301,14 @@
         "held": "{{version}} on hold",
         "available": "{{version}} available",
         "latestForMac": "Latest for this Mac",
-        "ready": "{{version}} ready",
-        "installing": "Installing {{version}}…",
-        "installOnQuit": "Quit to install",
-        "installBlocked": "Install blocked",
-        "updateFailed": "Update failed",
-        "checkFailed": "Check failed",
-        "failed": "Failed",
         "notes": "Notes",
         "hideDetails": "Hide details",
         "showDetails": "Show details",
         "hide": "Hide",
         "details": "Details",
-        "downloadProgress": "Download progress",
         "copyDetails": "Copy details",
         "copied": "Copied",
-        "copyFailed": "Could not copy details.",
-        "downloadingPercent": "Downloading {{percent}}"
+        "copyFailed": "Could not copy details."
       }
     }
   },

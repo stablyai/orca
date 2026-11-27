@@ -88,6 +88,7 @@ export function UpdateDelaySetting(): React.JSX.Element {
       <SettingsRow
         label={title}
         labelId={labelId}
+        className={teamDelayDays === undefined ? 'flex-nowrap' : undefined}
         control={
           teamDelayDays === undefined ? (
             <Select
