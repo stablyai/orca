@@ -16,6 +16,7 @@ import {
 } from '../../../messages/events/NativeChatEventRow'
 import type { WorkerDockEntry } from '../../../../../../../shared/orchestration/dock/worker-dock'
 import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
+import { formatAgentTypeLabel } from '../../../../../../../shared/agent-status/presentation/agent-type-label'
 
 export type WorkerDockRowView = WorkerDockEntry & {
   retired?: boolean
@@ -39,6 +40,10 @@ function workerDockBadge(row: WorkerDockRowView | undefined): NativeChatEventBad
     default:
       return null
   }
+}
+
+function workerDockAgentLabel(agent: string | null | undefined): string {
+  return formatAgentTypeLabel(agent as AgentType | null | undefined)
 }
 
 function Age({ at, visible }: { at: number | null; visible: boolean }) {
@@ -103,6 +108,7 @@ export const WorkerDockRow = memo(function WorkerDockRow({
   const command = row?.kind === 'command'
   const label = [
     mixed && row ? workerDockKindLabel(t, row.kind) : '',
+    row ? workerDockAgentLabel(row.agent) : '',
     row ? workerDockSpokenTitle(row.kind, title) : title,
     state,
     progress,
