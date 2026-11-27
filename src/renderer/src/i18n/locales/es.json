@@ -170,7 +170,6 @@
         "sshToggleDescription": "Muestra hosts SSH configurados y hosts remotos de Orca cuando haya alguno disponible.",
         "resourceUsageToggleDescription": "Muestra el Administrador de recursos. Haz clic para ver CPU, memoria, sesiones, controles del daemon y análisis de disco de los espacios de trabajo.",
         "portsToggleDescription": "Muestra los puertos activos de los espacios de trabajo. Haz clic para ver los puertos de cada espacio de trabajo y los puertos externos.",
-        "antigravityToggleDescription": "Muestra el uso de suscripción de Antigravity para el espacio de trabajo activo.",
         "grokToggleDescription": "Muestra el uso de créditos de suscripción de Grok cuando has iniciado sesión con Grok CLI.",
         "cursorToggleDescription": "Muestra el uso del plan de Cursor cuando inicias sesión con cursor-agent o el IDE de Cursor.",
         "zcodeToggleDescription": "Mostrar el uso de la cuota del plan de codificación ZCode.",
@@ -1545,14 +1544,16 @@
         },
         "worktrees": {
           "e50495aae6": "Forzar eliminación de rama",
-          "14bc053a47": "No se actualizó el {{value0}} local",
-          "localBaseRefRefreshFailedForWorktree": "No se actualizó el {{value0}} local para \"{{value1}}\"",
-          "903b51c2ed": "Espacio de trabajo creado desde {{value0}}, pero Orca no pudo hacer fast-forward del {{value1}} local. {{value2}}",
-          "localBaseRefRefreshFailedDescriptionNamed": "El espacio de trabajo \"{{value0}}\" se creó desde {{value1}}, pero Orca no pudo hacer fast-forward del {{value2}} local. {{value3}}",
           "localBaseRefRefreshFailedDetailDirtyNamed": "El worktree en {{value0}} (donde está checked out el {{value1}} local) tiene cambios sin confirmar. Haz commit, stash o descarta esos cambios y luego actualiza el {{value1}} local manualmente.",
           "localBaseRefRefreshFailedDetailDirty": "El worktree donde está checked out el {{value0}} local tiene cambios sin confirmar. Haz commit, stash o descarta esos cambios y luego actualiza el {{value0}} local manualmente.",
           "localBaseRefRefreshFailedDetailNotFastForward": "El {{value0}} local no existe o no se puede hacer fast-forward de forma limpia desde la base remota. Revisa si hay commits solo locales antes de actualizarlo manualmente.",
           "localBaseRefRefreshFailedDetailError": "Git devolvió un error al actualizar el {{value0}} local. Revisa el repo por refs bloqueados o un estado de worktree inusual y luego actualiza el {{value0}} local manualmente.",
+          "localBaseRefNotUpdated": "{{value0}} no actualizado",
+          "localBaseRefNotUpdatedDirty": "Cambios sin confirmar en {{value0}}.",
+          "localBaseRefNotUpdatedNotFastForward": "Commits solo locales en {{value0}}.",
+          "localBaseRefNotUpdatedError": "Error de Git.",
+          "localBaseRefHideDetails": "Ocultar detalles",
+          "localBaseRefShowDetails": "Detalles",
           "0216895fb5": "No se pudo eliminar la rama",
           "5366d13eec": "Espacio de trabajo eliminado, rama conservada",
           "2e17f825d4": "Worktree eliminado, rama conservada",
@@ -3086,9 +3087,9 @@
         "connectHost": "Connect",
         "addHost": "Add host",
         "addSshHost": "Add SSH host",
-        "addSshHostHint": "Utilice una máquina existente sobre SSH",
+        "addSshHostHint": "Conectar por SSH",
         "addRemoteOrcaServer": "Agregar servidor remoto Orca",
-        "addRemoteOrcaServerHint": "Emparejar otro tiempo de ejecución Orca",
+        "addRemoteOrcaServerHint": "Orca en otro equipo",
         "hostConnectionFailed": "Connection failed",
         "defaultBranchUpdateFailed": "No se pudo actualizar la rama predeterminada del proyecto. Inténtalo de nuevo.",
         "setLocation": "Establecer ubicación del proyecto",
@@ -4656,6 +4657,11 @@
             "waitingTitle": "Esperando a {{server}}",
             "waitingBody": "Orca reconectará este terminal cuando el servidor vuelva a ofrecerlo o cambie la conexión. Pulsa Reconectar para intentarlo ahora.",
             "downFor": "Sin conexión desde hace {{duration}}",
+            "cantReachTitle": "No se puede conectar con {{server}}",
+            "detailsButton": "Detalles",
+            "tailscaleHintTitle": "Comprueba la ruta de Tailscale",
+            "reconnectNowButton": "Reconectar ahora",
+            "copyPingCommand": "Copiar comando",
             "tailscaleHint": "Comprueba la ruta de Tailscale:",
             "fallbackServerName": "el servidor",
             "connectionLostTitle": "Reconectando con {{server}}",
@@ -5128,7 +5134,6 @@
             "c0e972d726": "Cancelar",
             "3bbf140864": "Uso de MiniMax",
             "remoteServerLabel": "Servidor remoto",
-            "antigravityUsage": "Uso de Antigravity",
             "grokUsageMenu": "Uso de Grok",
             "floatingTerminalNewActivity": "{{label}}, nueva actividad",
             "4fba7dc1e7": "saldo {{value0}}",
@@ -5607,16 +5612,9 @@
             "mainWorktree": "worktree principal",
             "detached": "desacoplado"
           },
-          "antigravity": {
-            "unknownAccount": "Cuenta de Google",
-            "accounts": "Cuentas de Antigravity guardadas",
-            "readAgo": "Consultado {{time}}",
-            "notRead": "Uso desconocido: aún no consultado"
-          },
           "AccountSwitchList": {
             "used": "Usado",
             "left": "Restante",
-            "reset": "Restablecimiento",
             "accounts": "Cuentas"
           },
           "InlineUsageBars": {
@@ -7566,8 +7564,8 @@
           "addSshHost": "Agregar host SSH",
           "addRemoteServer": "Agregar servidor remoto",
           "addRemoteHost": "Agregar host remoto",
-          "addSshHostDetail": "Usa una máquina existente mediante SSH.",
-          "addRemoteServerDetail": "Empareja con Orca ejecutándose en otro equipo.",
+          "addSshHostDetail": "Conectarse a una máquina por SSH.",
+          "addRemoteServerDetail": "Orca en otro equipo, sin SSH.",
           "addRemoteHostDetail": "Host SSH o servidor Orca",
           "addWslHost": "Agregar distro WSL",
           "addWslHostDetail": "Ejecuta un servidor Orca dentro de una distro WSL 2. Experimental.",
@@ -7696,7 +7694,7 @@
           "serverSaveFailed": "No se pudo agregar el servidor remoto.",
           "serverTitle": "Agregar servidor remoto",
           "sshTitle": "Agregar host SSH",
-          "serverDescription": "Empareja con Orca ejecutándose en otro equipo.",
+          "serverDescription": "Emparejar con Orca en otro equipo de la misma red.",
           "serverRunsAsYou": "Este dispositivo podrá ejecutar comandos como tú en este servidor.",
           "sshDescription": "Agrega una máquina persistente donde puedas iniciar sesión por SSH.",
           "serverSshTitle": "Añadir host SSH a {{server}}",
@@ -10478,7 +10476,6 @@
             "d77537b580": "opencode-go",
             "a9d56852eb": "opencode",
             "7f72de7cbe": "Muestra el consumo de tokens y el costo de OpenCode Go en la barra de estado.",
-            "51b0ccd6a2": "Google",
             "97957e374e": "openai",
             "8dfd676c28": "codex",
             "e9e4412545": "Muestra el consumo de tokens y el costo de Codex en la barra de estado.",
@@ -10521,8 +10518,6 @@
               "pr": "pr",
               "duplicate": "duplicado"
             },
-            "antigravityUsageDescription": "Muestra el uso de suscripción de Antigravity en la barra de estado.",
-            "antigravityKeyword": "antigravity",
             "e7d1b0f3a5": "Muestra el uso semanal de créditos de Grok desde OAuth de Grok CLI.",
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
@@ -10576,8 +10571,7 @@
             "c29089716e": "Uso de Kimi",
             "96e32c1118": "Uso de MiniMax",
             "e8d2710689": "Uso de Muse",
-            "aff6e6afdf": "Fuente IDE",
-            "ba1f9d39a6": "Uso de Antigravity"
+            "aff6e6afdf": "Fuente IDE"
           }
         },
         "auto": {
@@ -14362,8 +14356,7 @@
             "windows": "porcentaje de la ventana",
             "reset": "tiempo hasta el restablecimiento, p. ej. 3h 15m",
             "resetAt": "hora del restablecimiento, p. ej. 20:50",
-            "optional": "se omite cuando un marcador interior está vacío",
-            "usagePools": "grupos de uso con nombre, p. ej. modelos de Antigravity"
+            "optional": "se omite cuando un marcador interior está vacío"
           }
         },
         "RepositoryRemoveProjectSection": {
@@ -14480,7 +14473,8 @@
             "741ff8a0d2": "Hacer push y crear {{value0}}"
           },
           "FileExplorer": {
-            "79b1537dd3": "Selecciona un espacio de trabajo para explorar archivos"
+            "79b1537dd3": "Selecciona un espacio de trabajo para explorar archivos",
+            "2f4483d6c4": "No hay archivos que coincidan con este filtro"
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "Nueva carpeta",
@@ -14523,6 +14517,7 @@
             "31b4c3195d": "Más acciones del explorador",
             "d95e30fe28": "Actualizar explorador",
             "6026b16950": "Contraer todo",
+            "c1f3f3ec70": "Buscar en el contenido de los archivos",
             "openInApp": "Abrir en {{app}}"
           },
           "FileExplorerTreeStatus": {
@@ -14635,6 +14630,19 @@
             "localPortInUse": "El puerto {{port}} ya está en uso. Elige otro puerto local.",
             "localPortRequiresPrivileges": "El puerto {{port}} requiere privilegios elevados. Usa un puerto local ≥ 1024."
           },
+          "Search": {
+            "1abfb25a66": "Escriba para buscar en archivos",
+            "d56d140747": "Presione Enter para buscar",
+            "98c8435e36": "Seleccione un espacio de trabajo para buscar",
+            "dcc294f28d": "(resultados truncados)",
+            "resultsInFiles": "{{results}} en {{files}}",
+            "resultCount_one": "{{count}} resultado",
+            "resultCount_other": "{{count}} resultados",
+            "resultCount_many": "{{count}} resultados",
+            "fileCount_one": "{{count}} archivo",
+            "fileCount_other": "{{count}} archivos",
+            "fileCount_many": "{{count}} archivos"
+          },
           "SearchFilters": {
             "01e4671ccf": "archivos a excluir (por ejemplo, *.min.js, dist/**)",
             "0a6412a895": "Archivos para excluir",
@@ -14644,9 +14652,11 @@
           "SearchHeader": {
             "6234a5ef85": "Usar expresión regular",
             "4567e6e0b6": "Coincidir palabra completa",
-            "464ae3974f": "Distinguir mayúsculas y minúsculas"
+            "464ae3974f": "Distinguir mayúsculas y minúsculas",
+            "693cbeadd0": "Buscar"
           },
           "SearchQueryRow": {
+            "queryLabel": "Buscar archivos",
             "clearLabel": "Borrar búsqueda"
           },
           "SearchResultItems": {
@@ -14677,7 +14687,6 @@
             "476b77745b": "Cambiar referencia base",
             "ed34038d0d": "Actualizar comparación de ramas",
             "493f963029": "Cambiar ref base",
-            "11b5dd8e41": "Comparando contra",
             "a9bf7c171a": "Falló el commit",
             "011f9713fc": "Commit bloqueado",
             "cc199ccc5f": "Más commits y acciones remotas",
@@ -14821,8 +14830,6 @@
             "c8e4a1f902": "Filtro: {{value0}}",
             "b3c8f1a902": "Filtrar archivos por nombre",
             "d4f8c2a901": "Limpiar y cerrar filtro",
-            "e8a1c4b203": "vs",
-            "4b4a7de138": "Abrir página de revisión en el navegador",
             "createPrIntentCommitBlockedSummary": "Commit bloqueado: {{value0}} Corrige el issue y reintenta crear PR.",
             "pushRecovery": {
               "4b37ae99b0": "Iniciar el agente de AI predeterminado para corregir este fallo de push",
@@ -14842,7 +14849,6 @@
             "97e7124eac": "No se pudo actualizar el control de código fuente. Vuelve a intentarlo.",
             "b8c2e1a904": "{{value0}} → {{value1}}",
             "a4e93c21d7": "Rama actual: {{value0}}",
-            "c7d4e2f801": "Cambiar ref base: {{value0}}",
             "createPrIntentGenerateDetailsFailed": "No se pudieron generar los detalles de revisión. Reintentar Crear PR.",
             "entryStageFailed": "No se pudo preparar \"{{value0}}\"",
             "entryUnstageFailed": "No se pudo eliminar la etapa \"{{value0}}\"",
@@ -14900,9 +14906,6 @@
             "keepFile": "Conservar archivo",
             "keepDeletion": "Mantener eliminación",
             "refreshAll": "Actualizar todo",
-            "baseUpToDate": "Actualizado",
-            "rebaseOperationInProgress": "Espera a que termine la operación de Git actual",
-            "rebaseButton": "Rebase",
             "rebaseConflictCount_one": "{{count}} conflicto",
             "rebaseConflictCount_other": "{{count}} conflictos",
             "rebaseConflictCount_many": "{{count}} conflictos",
@@ -14935,9 +14938,7 @@
             "scopeUncommitted": "Sin confirmar",
             "scopeAllChanges": "Todos los cambios",
             "scopeNone": "Ninguno",
-            "scopeOpenDiff": "Abrir diff",
             "scopeShowAll": "Mostrar todos los cambios",
-            "scopeLoadingBranchChanges": "Cargando cambios de la rama…",
             "scopeBranchCommits": "Commits de esta rama",
             "scopeRecentCommits": "Commits recientes",
             "scopeCompareTo": "Comparar con {{ref}}",
@@ -14954,7 +14955,8 @@
             "scopeOlderHistory": "Historial anterior en Git Graph",
             "scopeNoUncommitted": "No hay cambios sin confirmar.",
             "scopeCommitFiles": "Archivos",
-            "gitGraphButton": "Grafo"
+            "gitGraphButton": "Grafo",
+            "compareLoadingAgainst": "Comparando con {{base}}"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "No se pudo iniciar el agente seleccionado.",
@@ -15842,6 +15844,16 @@
             "description": "\"{{value0}}\" se eliminará. Una vez eliminada, tampoco podrá reanudarse desde la línea de comandos propia de {{value1}}.",
             "remoteDescription": "\"{{value0}}\" se eliminará de {{value2}}. Una vez eliminada, tampoco se podrá reanudar desde la línea de comandos de {{value1}}.",
             "confirm": "Eliminar"
+          },
+          "FileExplorerNameFilter": {
+            "26fb73c6e3": "Buscar archivos",
+            "4d5a6b2a49": "Borrar filtro de archivos",
+            "7a9fb1e6aa": "Contenido"
+          },
+          "FileExplorerViewSwitch": {
+            "c4e9a2b713": "Nombres",
+            "b3c8f1a902": "Filtrar archivos por nombre",
+            "f8a2c4d1e0": "Modo de búsqueda del explorador"
           },
           "GitHistoryCommitFiles": {
             "b2c3d4e5f6": "No hay cambios de archivos en este commit"
@@ -18473,8 +18485,6 @@
             "fa6ea61de3": "Cancelar",
             "c2ef0359b9": "Copiar contenido",
             "f2d0c22d67": "Eliminar anotación {{value0}}",
-            "11c5084aa2": "Borrar anotaciones",
-            "734e4343ec": "Borrar anotaciones del navegador",
             "95af781091": "Enviar comentarios a un agente",
             "ac39b9366b": "Enviar",
             "366bf5d62c": "Nueva pestaña",
@@ -18507,21 +18517,14 @@
             "143204e423": "Cambiar",
             "d51ef37351": "Copiar",
             "6f4ab3592b": "Copiado",
-            "499b31b84e": "Copiar todo",
             "168350ae6a": "Haz clic o pon el cursor sobre un elemento, luego presiona C para copiar o S para hacer una captura de pantalla.",
-            "e852e20cea": "Copiado — presiona S para hacer una captura de pantalla o selecciona otro elemento",
             "777b5bc4ec": "Haz clic en un elemento para agregar comentarios para el agente.",
             "b733a91bd9": "Agrega comentarios para el elemento seleccionado.",
             "4328a0a062": "Captura fallida: {{value0}}",
             "759f32af29": "Descargando",
             "4300f38145": "Descargando desde {{value0}}{{value1}}",
-            "cc4a071d3a": "Anotar elemento de la página ({{value0}})",
             "572046436a": "Navegador remoto",
             "b313a7275b": "Abrir navegador remoto",
-            "ea6af700da": "{{value0}} anotación",
-            "c13693fe27": "{{value0}} anotaciones",
-            "074f0ed10b": "{{value0}} anotación lista. Seleccione otro elemento o copie todos los comentarios.",
-            "a2164a6e5a": "{{value0}} anotaciones listas. Seleccione otro elemento o copie todos los comentarios.",
             "9f6f2e8c19": "La ruta del archivo descargado no está disponible.",
             "0c79b7634d": "No se pudo abrir el archivo descargado. Puede haberse movido o eliminado.",
             "397d9dc923": "No se pudo mostrar el archivo descargado. Puede haberse movido o eliminado.",
@@ -18533,7 +18536,9 @@
             "09a9489aa5": "Mostrar",
             "2a4c4b8e1f": "Copiar",
             "b71dc3d930": "Reconectar",
-            "fileUrlUnsupported": "Esta pestaña del navegador no puede abrir archivos locales. Usa \"Abrir vista previa al lado\" en el archivo."
+            "fileUrlUnsupported": "Esta pestaña del navegador no puede abrir archivos locales. Usa \"Abrir vista previa al lado\" en el archivo.",
+            "11c5084aa2": "Borrar anotaciones",
+            "734e4343ec": "Borrar anotaciones del navegador"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "Cancelar",
@@ -18616,8 +18621,6 @@
                     "c16f932cb3": "Ahorrar",
                     "09a7c1df70": "Editar anotación {{value0}}",
                     "449d2c2629": "Intención de la anotación",
-                    "38d320108c": "Contraer anotaciones",
-                    "9f209891a7": "Expandir anotaciones",
                     "includePageDetails": "Incluir detalles de la página",
                     "copyFeedback": "Copiar comentarios",
                     "copyFeedbackWithPageDetails": "Copiar comentarios con detalles de la página"
@@ -21025,7 +21028,6 @@
         "expand": "Expandir"
       },
       "question": {
-        "step": "Paso {{value0}}",
         "otherPlaceholder": "Escribe tu respuesta",
         "cancel": "Cancelar",
         "send": "Enviar",
@@ -21037,12 +21039,11 @@
         "recommended": "Recomendado",
         "stepOf": "{{value0}} de {{value1}}",
         "answered": "Respondida",
-        "title": "Pregunta",
         "previous": "Pregunta anterior",
         "nextQuestion": "Siguiente pregunta",
         "back": "Atrás",
         "skipAndSubmit": "Omitir y enviar",
-        "stepLabel": "{{value0}}, {{value1}} de {{value2}}: {{value3}}"
+        "questionStepLabel": "{{value0}}, {{value1}} de {{value2}}"
       },
       "approval": {
         "needsNewerOrca": "Esta solicitud necesita una versión más reciente de Orca.",
@@ -22163,10 +22164,7 @@
         "notNow": "Ahora no",
         "retry": "Reintentar",
         "dismiss": "Descartar",
-        "openWorker": "Abrir trabajador",
         "remoteOwner": "Detenlo o bórralo desde el equipo en el que se ejecuta",
-        "workspaceRemoved": "Se eliminó el espacio de trabajo de este trabajador",
-        "restore": "Volver a mostrar en el panel",
         "alreadyStopped": "Ya detenido",
         "cantStop": "No se puede detener ahora",
         "clearAllLabel_one": "Borrar el trabajador con error",
@@ -22174,11 +22172,7 @@
         "clearAllLabel_many": "Borrar los {{count}} trabajadores con error",
         "loadingWorker": "Cargando trabajador…",
         "resultUnavailable": "Resultado del trabajador no disponible",
-        "showDetails": "Mostrar detalles",
-        "hideDetails": "Ocultar detalles",
-        "close": "Cerrar",
         "workersRegion": "Trabajadores",
-        "doneResult": "Terminado · abrir resultado",
         "clearName": "Borrar {{name}}",
         "stopUnavailable": "Detener {{name}} · {{title}} no disponible · {{reason}}",
         "stopName": "Detener {{name}} · {{title}}",
@@ -22203,8 +22197,6 @@
         "workerCount_one": "{{count}} trabajador",
         "workerCount_other": "{{count}} trabajadores",
         "workerCount_many": "{{count}} trabajadores",
-        "stopped": "Detenido",
-        "finished": "Terminado",
         "failedCount": "{{count}} con error",
         "needsYouCount": "Esperando tu respuesta: {{count}}",
         "newQuestions_one": "{{count}} pregunta nueva de un trabajador espera tu respuesta",
@@ -24220,12 +24212,6 @@
         "pageChanged": "Esta página se cerró o cambió de perfil durante la importación. Inténtalo de nuevo."
       },
       "notice": {
-        "importedMore_one": "Se importó {{count}} cookie para {{domains}} +{{more}} más. Recarga la página para usarla.",
-        "importedMore_other": "Se importaron {{count}} cookies para {{domains}} +{{more}} más. Recarga la página para usarlas.",
-        "importedMore_many": "Se importaron {{count}} cookies para {{domains}} +{{more}} más. Recarga la página para usarlas.",
-        "imported_one": "Se importó {{count}} cookie para {{domains}}. Recarga la página para usarla.",
-        "imported_other": "Se importaron {{count}} cookies para {{domains}}. Recarga la página para usarlas.",
-        "imported_many": "Se importaron {{count}} cookies para {{domains}}. Recarga la página para usarlas.",
         "failed": "No se pudieron importar las cookies: {{reason}}"
       },
       "routedPage": {
@@ -24548,10 +24534,13 @@
       "label": "Raíz del explorador",
       "full": "Raíz del repositorio",
       "back": "Volver a {{path}}",
+      "searchScope": "Ámbito: archivos del espacio de trabajo",
       "retry": "Reintentar",
       "sparseStatus": "Checkout disperso",
       "scopeDetails": "Acerca del alcance del checkout disperso",
       "scopeExplanation": "El selector de carpetas cambia lo que ves, no los archivos del checkout. La raíz del repositorio incluye los archivos presentes en la raíz y en las carpetas superiores.",
+      "searchExplanation": "Nombres filtra la carpeta que estás viendo. Contenido busca en todo el espacio de trabajo. No se buscan los archivos omitidos por el checkout disperso.",
+      "findInFolder": "Buscar en {{path}}",
       "folderLoadError": "No se pudo cargar esta carpeta:",
       "emptyFolder": "No hay archivos en esta carpeta"
     },
@@ -24669,11 +24658,8 @@
       "chatReadFailed": "No se pudo comprobar el inicio de sesión en {{host}}.",
       "retry": "Reintentar",
       "remove": "Eliminar",
-      "usage": "Actualizar uso",
-      "usageWithReading": "Actualizar uso ({{reading}})",
       "changed": "La cuenta nativa cambió. Selecciona de nuevo una cuenta guardada antes de iniciar agy.",
       "refresh": "Actualizar cuentas",
-      "usageReading": "Sesión: {{session}} · Semanal: {{weekly}}",
       "saved": "Cuenta de Google guardada",
       "searchDescription": "Guarda y selecciona cuentas nativas de Google de agy en el host de ejecución.",
       "title": "Antigravity",
@@ -24693,8 +24679,6 @@
       "settingsIncomplete": "Elige un tipo de cuenta de Antigravity e introduce su proyecto y ubicación de Google Cloud.",
       "settingsLoadFailed": "Orca no pudo cargar tus ajustes de inicio de sesión de Antigravity. Inténtalo de nuevo.",
       "settingsSaveFailed": "Orca no pudo guardar tus ajustes de inicio de sesión de Antigravity. Inténtalo de nuevo.",
-      "lastReading": "{{reading}} · Consultado {{time}}",
-      "noReading": "Uso desconocido: aún no consultado",
       "fd47b5a5dd": "Cuentas de Antigravity",
       "personalOption": "Tu plan personal de Google AI",
       "enterpriseOption": "La licencia de tu organización",
@@ -24725,7 +24709,6 @@
       "currentNotSaved": "Inicio de sesión actual de agy · sin guardar",
       "noEmailNotSaved": "agy no indicó ningún correo electrónico · sin guardar",
       "saveShort": "Guardar",
-      "readAt": "Consultado {{time}}",
       "active": "Activa",
       "runtime": "Runtime",
       "chatTitle": "Chat de Antigravity",
@@ -25560,9 +25543,6 @@
         "planModelWithoutThinking": "El modelo «{{model}}» no admite un nivel de esfuerzo de razonamiento.",
         "planThinkingLevelInvalid": "El nivel de razonamiento «{{level}}» no es válido para {{model}}.",
         "openCodeInvalidEvents": "OpenCode devolvió eventos JSON no válidos.",
-        "antigravityInvalidEvents": "Antigravity devolvió eventos JSON no válidos.",
-        "antigravityInvalidResult": "Antigravity devolvió un resultado no válido.",
-        "antigravityNoFinalResult": "Antigravity no devolvió ningún resultado final.",
         "kimiUnreadableOutput": "Kimi devolvió una salida que Orca no pudo leer. Vuelve a intentarlo.",
         "kimiSessionOccupied": "Kimi no pudo usar esta sesión porque está activa en otro cliente. Detén la sesión allí o sal de ese cliente y vuelve a intentarlo.",
         "kimiInterrupted": "Kimi se interrumpió antes de terminar de generar texto. Vuelve a intentarlo.",
@@ -25760,7 +25740,8 @@
     "filters": {
       "toggle": "Mostrar u ocultar detalles de búsqueda",
       "active": "{{count}} activos"
-    }
+    },
+    "noResults": "No hay resultados. Prueba otra búsqueda o ajusta los filtros."
   },
   "resourceManager": {
     "pty": {
@@ -28261,6 +28242,7 @@
     "usageLimit": {
       "continuesAt": "Continúa a las {{time}}",
       "continuesShort": "Continúa {{time}}",
+      "rowLine": "Límite de uso · {{time}}",
       "continuesTip": "Continúa automáticamente a las {{time}}",
       "hitLimit": "Límite alcanzado · se restablece a las {{time}}",
       "hitShort": "Límite alcanzado",

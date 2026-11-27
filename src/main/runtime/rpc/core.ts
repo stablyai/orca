@@ -184,6 +184,8 @@ export type RpcContext = {
   // Pin authenticated federation identity without exposing its token to handlers or storage.
   authenticatedCallerFingerprint?: string
   pairing?: PairingRpcContext
+  // Authenticated phones only: this host's current direct endpoints, so a moved address can be followed.
+  pairingDirectEndpoints?: () => Promise<string[]>
   pairingOffers?: PairingOffersRpcContext
   deviceSelf?: DeviceSelfRpcContext
   // Available only on a desktop relay for its configured servers.

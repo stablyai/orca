@@ -141,9 +141,12 @@ export function installChats(records: AgentSessionRecord[]) {
   const store = {
     hostId: 'local',
     getRecord: vi.fn((sessionId: string) => byId.get(sessionId) ?? null),
-    listConversations: vi.fn(() => records.map(agentSessionConversationView))
+    listConversations: vi.fn(() => records.map(agentSessionConversationView)),
+    conversationsKeyedBy: vi.fn((keys: AgentSessionConversationKeys, key: string) =>
+      records.map(agentSessionConversationView).filter((view) => keys(view).includes(key))
+    )
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the ownership read touches only `deps.store.listConversations`, `getRecord` and `hostId`; the rest of the host is never reached.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the ownership read touches only `deps.store.listConversations`, `conversationsKeyedBy`, `getRecord` and `hostId`; the rest of the host is never reached.
   setStructuredAgentSessionHost({ deps: { store } } as never)
   return store
 }

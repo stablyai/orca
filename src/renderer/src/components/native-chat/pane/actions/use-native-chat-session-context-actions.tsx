@@ -1,3 +1,4 @@
+import { runWithFinally } from '@/lib/run-with-finally'
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { executionHostIdForStructuredTarget } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { useTranslate } from '@/i18n/use-translate'
@@ -36,25 +37,29 @@ export function useNativeChatSessionContextActions(
     if (!source?.epoch || busy.current) {
       return
     }
+    const epoch = source.epoch
     const current = ++operation.current
     busy.current = true
     setPending(true)
-    try {
-      const context = await resolveNativeChatSessionContext({ ...source, epoch: source.epoch })
-      if (operation.current !== current || !context) {
-        return
+    await runWithFinally(
+      async () => {
+        const context = await resolveNativeChatSessionContext({ ...source, epoch })
+        if (operation.current !== current || !context) {
+          return
+        }
+        const noContext = t(
+          'components.native-chat.contextMenu.noSessionContext',
+          'No chat context is available.'
+        )
+        await copyAgentSessionContext(context.capturedText, source.focusSource, noContext)
+      },
+      () => {
+        if (operation.current === current) {
+          busy.current = false
+          setPending(false)
+        }
       }
-      const noContext = t(
-        'components.native-chat.contextMenu.noSessionContext',
-        'No chat context is available.'
-      )
-      await copyAgentSessionContext(context.capturedText, source.focusSource, noContext)
-    } finally {
-      if (operation.current === current) {
-        busy.current = false
-        setPending(false)
-      }
-    }
+    )
   }
   return {
     available: Boolean(source?.epoch),

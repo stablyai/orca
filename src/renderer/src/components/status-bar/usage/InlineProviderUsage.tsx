@@ -177,10 +177,11 @@ export function InlineUsageSignInAction({
         event.preventDefault()
         onSignIn()
       }}
+      variant="account-row-action"
     >
       <Button
         type="button"
-        variant="outline"
+        variant="theme-accent-link"
         size="xs"
         disabled={disabled}
         aria-label={`${t('auto.components.status.bar.StatusBar.c35af53b73', 'Sign in')}: ${accountLabel}`}

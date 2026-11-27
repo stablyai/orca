@@ -46,9 +46,6 @@ vi.mock('../providers/cursor/cursor-auth', () => ({
 vi.mock('../providers/zcode/zcode-usage-fetcher', () => ({
   fetchZcodeRateLimits: unavailable('zcode')
 }))
-vi.mock('../providers/antigravity/antigravity-usage-fetcher', () => ({
-  fetchAntigravityRateLimits: unavailable('antigravity')
-}))
 vi.mock('../providers/muse/muse-usage-fetcher', () => ({
   fetchMuseRateLimits: unavailable('muse')
 }))
