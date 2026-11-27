@@ -1,10 +1,13 @@
 // Waits cancelled before they ended, kept on the bot so a wait's chat card can say so after a reload.
 import * as z from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 
-export const BotCancelledWaitSchema = z.object({
-  automationId: z.string().min(1).max(512),
-  at: z.number()
-})
+export const BotCancelledWaitSchema = lazyZodSchema(() =>
+  z.object({
+    automationId: z.string().min(1).max(512),
+    at: z.number()
+  })
+)
 
 export type BotCancelledWait = z.infer<typeof BotCancelledWaitSchema>
 

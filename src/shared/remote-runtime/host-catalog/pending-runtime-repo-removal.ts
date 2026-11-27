@@ -1,10 +1,13 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
-const PendingRuntimeRepoRemovalSchema = z.object({
-  environmentId: z.string().min(1),
-  repoId: z.string().min(1),
-  requestedAt: z.number().finite()
-})
+const PendingRuntimeRepoRemovalSchema = lazyZodSchema(() =>
+  z.object({
+    environmentId: z.string().min(1),
+    repoId: z.string().min(1),
+    requestedAt: z.number().finite()
+  })
+)
 
 /** A project this desktop removed while its paired server was unreachable; `repo.rm` replays on reconnect. */
 export type PendingRuntimeRepoRemoval = z.infer<typeof PendingRuntimeRepoRemovalSchema>

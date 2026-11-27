@@ -4,16 +4,19 @@
  */
 import { join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { writeSecureJsonFileWithinLimit } from '../../../shared/secure-storage/bounded-secure-json-file'
 import { readNodeFileSyncWithinLimit } from '../../../shared/file-content/node-bounded-file-reader'
 
 const KEPT_FILE = 'orca-wsl-hosts-kept-for-peers.json'
 const MAX_KEPT_FILE_BYTES = 64 * 1024
 
-const KeptListSchema = z.object({
-  version: z.literal(1),
-  environmentIds: z.array(z.string().min(1).max(256))
-})
+const KeptListSchema = lazyZodSchema(() =>
+  z.object({
+    version: z.literal(1),
+    environmentIds: z.array(z.string().min(1).max(256))
+  })
+)
 
 function keptFile(userDataPath: string): string {
   return join(userDataPath, KEPT_FILE)
