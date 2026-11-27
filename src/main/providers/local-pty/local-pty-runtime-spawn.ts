@@ -20,7 +20,10 @@ export async function loadLocalPtyRuntimeSpawn(): Promise<LocalPtySpawn> {
   const ptySpawn: typeof pty.spawn = (file, args, options) => {
     assertWslDistroAllowed(file, args)
     const spawned = pty.spawn(file, args, options)
-    dropInheritedNiceBoost(spawned.pid)
+    // Linux-only; see native-pty-spawn.ts (#51055).
+    if (process.platform === 'linux') {
+      dropInheritedNiceBoost(spawned.pid)
+    }
     return spawned
   }
   return (params) => spawnShellWithFallback({ ...params, ptySpawn })
