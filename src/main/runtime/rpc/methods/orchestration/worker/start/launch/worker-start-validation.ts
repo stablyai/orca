@@ -117,7 +117,7 @@ export function prepareLocalWorkerStart(args: {
   }
 }
 
-function resolveWorkerClaudeAccount(
+export function resolveWorkerClaudeAccount(
   runtime: OrcaRuntimeService,
   selector: string
 ): ClaudeLaunchAccountResolution {
