@@ -28,11 +28,9 @@ import {
   findRunnableLocalCommand,
   isCommandAvailable
 } from '../ipc/preflight/preflight-command-exec'
-import {
-  _resetGlabOnlyCache,
-  isGlabAuthenticated,
-  readGlabOnly
-} from './default-wsl-glab-preflight'
+import { buildLocalPreflightEnv } from '../ipc/preflight/preflight-local-env'
+import { withConfiguredProxyEnv } from '../network/configured-proxy-child-env'
+import { _resetGlabOnlyCache, readGlabOnly } from './default-wsl-glab-preflight'
 import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import {
   detectRemoteWindowsTerminalCapabilities,
@@ -190,6 +188,26 @@ async function isGhAuthenticated(probe: CommandRuntime): Promise<boolean> {
   }
 }
 
+// glab versions split auth status across stdout/stderr; inspect both.
+async function isGlabAuthenticated(
+  probe: Pick<CommandRuntime, 'wslTarget' | 'binary'>
+): Promise<boolean> {
+  try {
+    await (probe.wslTarget
+      ? execCommandInWslOrThrow(probe.wslTarget, `${quotePosixShell('glab')} auth status`)
+      : execLocalPreflightCommandOrThrow(probe.binary ?? 'glab', ['auth', 'status'], {
+          // `auth status` calls the GitLab API, so it needs the Settings proxy too.
+          env: withConfiguredProxyEnv(buildLocalPreflightEnv())
+        }))
+    return true
+  } catch (error) {
+    const stdout = (error as { stdout?: string }).stdout ?? ''
+    const stderr = (error as { stderr?: string }).stderr ?? ''
+    const output = `${stdout}\n${stderr}`
+    return output.includes('Logged in')
+  }
+}
+
 export async function runPreflightCheck(
   force = false,
   context?: PreflightRuntimeContext
@@ -209,7 +227,7 @@ export async function runPreflightCheck(
     return { ...status, glab: entry.result.glab }
   }
   try {
-    return { ...status, glab: await readGlabOnly(distro, force) }
+    return { ...status, glab: await readGlabOnly(distro, force, isGlabAuthenticated) }
   } catch {
     // A stopped distro is not booted for a background read (E9); the next read asks again.
     return status
