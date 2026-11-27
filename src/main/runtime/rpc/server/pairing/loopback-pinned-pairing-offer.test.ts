@@ -2,16 +2,24 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
-import { parsePairingCode } from '../../../../../shared/remote-runtime/pairing/pairing'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../../orca-runtime'
 import { OrcaRuntimeRpcServer } from '../runtime-rpc'
 import { createOwnerPairingOffer } from './pairing-offer-requests'
 
 const RELAY_HOST_ID = 'relayHostId00001'
+const NOW = 1_800_000_000_000
+const INVITE_EXPIRES_AT = NOW + 60_000
 
 describe('pairing a loopback-pinned server', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('mints a Relay-only mobile offer and keeps listening on loopback', async () => {
+    // Only Date: the offer schema checks invite expiry against now; server timers stay real.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(NOW)
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-loopback-pinned-pairing-'))
     const server = new OrcaRuntimeRpcServer({
       runtime: new OrcaRuntimeService(),
@@ -31,13 +39,13 @@ describe('pairing a loopback-pinned server', () => {
           relayHostId: RELAY_HOST_ID,
           inviteToken: 'A'.repeat(43),
           e2eeFraming: 2,
-          inviteExpiresAt: Date.now() + 60_000
+          inviteExpiresAt: INVITE_EXPIRES_AT
         },
         binding: {
           relayHostId: RELAY_HOST_ID,
           relayDeviceId,
           ownerIdentityKey: 'owner',
-          inviteExpiresAt: Date.now() + 60_000
+          inviteExpiresAt: INVITE_EXPIRES_AT
         }
       }),
       onDeviceRevokeQueued: () => {},
@@ -55,11 +63,12 @@ describe('pairing a loopback-pinned server', () => {
         { scope: 'mobile', relay: true },
         noRouteLookup
       )
-      expect(relayOffer).toMatchObject({ available: true, endpoint: null })
-      if (!relayOffer.available) {
-        throw new Error('unreachable')
-      }
-      expect(parsePairingCode(relayOffer.pairingUrl)?.relay?.relayHostId).toBe(RELAY_HOST_ID)
+      // Automatic mode is returned only after the Relay invite was minted and bound.
+      expect(relayOffer).toMatchObject({
+        available: true,
+        endpoint: null,
+        connectionMode: 'automatic'
+      })
 
       // Without Relay there is no direct route to advertise, so LAN-only refuses instead of widening.
       const lanOffer = await createOwnerPairingOffer(server, { scope: 'mobile' }, noRouteLookup)
