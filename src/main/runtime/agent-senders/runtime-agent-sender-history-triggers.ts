@@ -1,9 +1,12 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { projectionMutationTriggers } from '../orchestration/db/projection-mutation-triggers'
 import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import { tolerant } from './agent-sender-row-decoding'
 
-const dirtyRow = z.object({ kind: z.enum(['pane', 'dispatch']), key: z.string() })
+const dirtyRow = lazyZodSchema(() =>
+  z.object({ kind: z.enum(['pane', 'dispatch']), key: z.string() })
+)
 
 /** Per table: the columns whose change can change a sender, and the pane and Dispatch keys a
  *  row's old and new values name, so a write marks exactly the history it can affect. */

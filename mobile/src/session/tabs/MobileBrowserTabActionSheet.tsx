@@ -44,7 +44,7 @@ export function MobileBrowserTabActionSheet(props: {
   } = props
   const url = target && !isBlankBrowserUrl(target.url) ? target.url : null
   const externalUrl = url ? phoneOpenableBrowserUrl(url) : null
-  const header = mobileSessionTabMenuHeader(target, [])
+  const header = mobileSessionTabMenuHeader(target, [], t)
   return (
     <ActionSheetModal
       visible={target != null}
@@ -58,7 +58,7 @@ export function MobileBrowserTabActionSheet(props: {
       groupDestructive
       title={
         target
-          ? getMobileSessionTabTitle(target)
+          ? getMobileSessionTabTitle(target, t)
           : t('session.browserTabActionSheet.title', 'Browser')
       }
       actions={[

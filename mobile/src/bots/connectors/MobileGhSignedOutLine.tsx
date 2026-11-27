@@ -5,10 +5,8 @@ import { MobileSourceCopyButton } from '../../components/code-presentation/Mobil
 import { LIST_ROW_PADDING } from '../../components/list/ListGroup'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { scaledType } from '../../session/native-chat/transcript/messages/mobile-native-chat-message-styles'
-import { colors, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-
+import { spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 const GH_AUTH_LOGIN = 'gh auth login'
 
 /** `card`: a chat card's meta line at the chat's font scale; otherwise a settings page's note. */
@@ -20,7 +18,7 @@ export function MobileGhSignedOutLine({
   host: string
   card?: { fontScale: number }
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   return (
     <View style={[styles.line, !card && styles.note]}>
@@ -49,7 +47,7 @@ export function MobileGhSignedOutLine({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   line: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm - 2 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.statusAmber },
   text: { flexShrink: 1 },

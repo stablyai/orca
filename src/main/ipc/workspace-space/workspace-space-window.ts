@@ -1,4 +1,5 @@
 import { BrowserWindow, ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import { getTrustedUIRendererWebContents, isTrustedUIRenderer } from '../ui'
 import {
   createOrFocusWorkspaceSpaceWindow,
@@ -15,37 +16,40 @@ import { createStoreNativeSettingsProjection } from '../../core-desktop/native-s
 
 export function registerWorkspaceSpaceWindowHandlers(
   store: Store,
-  keybindings?: KeybindingService
+  keybindings?: KeybindingService,
+  ipc: IpcHandleRegistrar = ipcMain
 ): void {
   const nativeSettings = createStoreNativeSettingsProjection(store)
-  for (const channel of [
-    'workspaceSpace:openWindow',
-    'workspaceSpace:publishWindowState',
-    'workspaceSpace:requestWindowState',
-    'workspaceSpace:revealWorktree',
-    'workspaceSpace:requestWorktreeRefresh',
-    'workspaceSpace:requestIssueRefresh',
-    'workspaceSpace:publishWindowAnalysis'
-  ]) {
-    ipcMain.removeHandler(channel)
+  if (ipc === ipcMain) {
+    for (const channel of [
+      'workspaceSpace:openWindow',
+      'workspaceSpace:publishWindowState',
+      'workspaceSpace:requestWindowState',
+      'workspaceSpace:revealWorktree',
+      'workspaceSpace:requestWorktreeRefresh',
+      'workspaceSpace:requestIssueRefresh',
+      'workspaceSpace:publishWindowAnalysis'
+    ]) {
+      ipcMain.removeHandler(channel)
+    }
   }
 
-  ipcMain.handle('workspaceSpace:openWindow', (event): void => {
+  ipc.handle('workspaceSpace:openWindow', (event): void => {
     if (isTrustedUIRenderer(event.sender)) {
       createOrFocusWorkspaceSpaceWindow(nativeSettings, () => keybindings?.getOverrides())
     }
   })
-  ipcMain.handle('workspaceSpace:publishWindowState', (event, state: unknown): void => {
+  ipc.handle('workspaceSpace:publishWindowState', (event, state: unknown): void => {
     if (isTrustedUIRenderer(event.sender)) {
       getWorkspaceSpaceWindow()?.webContents.send('workspaceSpace:windowState', state)
     }
   })
-  ipcMain.handle('workspaceSpace:requestWindowState', (event): void => {
+  ipc.handle('workspaceSpace:requestWindowState', (event): void => {
     if (isWorkspaceSpaceWindowRenderer(event.sender)) {
       getTrustedUIRendererWebContents()?.send('workspaceSpace:windowStateRequested')
     }
   })
-  ipcMain.handle(
+  ipc.handle(
     'workspaceSpace:revealWorktree',
     (event, worktreeId: unknown, hostId: unknown, change: unknown): void => {
       if (!isWorkspaceSpaceWindowRenderer(event.sender) || typeof worktreeId !== 'string') {
@@ -74,13 +78,13 @@ export function registerWorkspaceSpaceWindowHandlers(
       main.send('workspaceSpace:revealWorktree', worktreeId, executionHostId ?? undefined, change)
     }
   )
-  ipcMain.handle('workspaceSpace:requestWorktreeRefresh', (event): void => {
+  ipc.handle('workspaceSpace:requestWorktreeRefresh', (event): void => {
     if (isWorkspaceSpaceWindowRenderer(event.sender)) {
       getTrustedUIRendererWebContents()?.send('workspaceSpace:worktreeRefreshRequested')
     }
   })
   // Why: the main window owns issueCache and publishes it to the Space window; Space asks rather than writing its own copy.
-  ipcMain.handle(
+  ipc.handle(
     'workspaceSpace:requestIssueRefresh',
     (event, worktreeId: unknown, hostId: unknown): void => {
       if (!isWorkspaceSpaceWindowRenderer(event.sender) || typeof worktreeId !== 'string') {
@@ -100,7 +104,7 @@ export function registerWorkspaceSpaceWindowHandlers(
       )
     }
   )
-  ipcMain.handle('workspaceSpace:publishWindowAnalysis', (event, analysis: unknown): void => {
+  ipc.handle('workspaceSpace:publishWindowAnalysis', (event, analysis: unknown): void => {
     if (isWorkspaceSpaceWindowRenderer(event.sender) && analysis && typeof analysis === 'object') {
       getTrustedUIRendererWebContents()?.send('workspaceSpace:windowAnalysis', analysis)
     }

@@ -1,9 +1,9 @@
 import { Pressable, StyleSheet, Text } from 'react-native'
 import { Check } from 'lucide-react-native'
 import { isResolvedPRCommentGroup } from '../../../../../src/shared/source-control/review-comments/pr-comment-groups'
-import { colors, spacing } from '../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { spacing } from '../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../theme/themed-styles'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type { MobileDiffReviewThread } from '../diff-actions/mobile-diff-review-github'
 import {
@@ -26,7 +26,8 @@ export function MobileDiffReviewThreadRow({
   now: number
   onOpenThread: (focusReply: boolean) => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   if (!isResolvedPRCommentGroup(thread)) {
     return (
@@ -64,7 +65,7 @@ export function MobileDiffReviewThreadRow({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   resolved: {
     minHeight: 44,
     flexDirection: 'row',

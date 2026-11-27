@@ -1,5 +1,4 @@
 import type { TuiAgent } from '../../../../../src/shared/agent-launch/catalog/tui-agent'
-import { translate } from '../../../i18n/mobile-i18n'
 import { MOBILE_AGENT_CATALOG } from '../../../agents/mobile-agent-catalog'
 import {
   normalizeWorkspaceAgent,
@@ -20,12 +19,8 @@ export type NewWorktreeAgentOption = {
 
 const NEW_WORKTREE_AGENT_OPTIONS: NewWorktreeAgentOption[] = MOBILE_AGENT_CATALOG
 
-export const NEW_WORKTREE_BLANK_AGENT: NewWorktreeAgentOption = {
-  id: '__blank__',
-  get label() {
-    return translate('components.newWorktreeAgentSelection.blankTerminal', 'Blank Terminal')
-  }
-}
+// useNewWorkspaceAgentSelection names it in the UI language.
+export const NEW_WORKTREE_BLANK_AGENT: NewWorktreeAgentOption = { id: '__blank__', label: '' }
 
 export function newWorktreeAgentOptionFor(id: string | null | undefined): NewWorktreeAgentOption {
   if (id === 'blank' || id === '__blank__') {

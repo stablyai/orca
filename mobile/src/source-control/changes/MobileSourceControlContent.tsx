@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ActivityIndicator, Animated, Easing, ScrollView, Text, View } from 'react-native'
-import { colors, spacing } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing } from '../../theme/mobile-theme'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import { SHEET_CURVE } from '../../components/motion/sheet-motion-values'
@@ -9,14 +9,16 @@ import { MobileSourceControlChangesHeader } from './MobileSourceControlChangesHe
 import { MobileCommitFailurePanel } from '../commits/MobileCommitFailurePanel'
 import { MobileSourceControlFileList } from './MobileSourceControlFileList'
 import type { MobileSourceControlState } from '../use-mobile-source-control-state'
-import { styles } from '../mobile-source-control-styles'
-import { hubStyles } from '../panel/mobile-source-control-hub-styles'
+import { stylesSheet } from '../mobile-source-control-styles'
+import { hubStylesSheet } from '../panel/mobile-source-control-hub-styles'
+import { useThemedStyles } from '../../theme/themed-styles'
 
 const CLEAN_FADE_MS = 240
 const REDUCED_CLEAN_FADE_MS = 150
 
 // The clean state settles in when a commit empties the list; on load it is simply there.
 function CleanStateFade({ animate, children }: { animate: boolean; children: ReactNode }) {
+  const styles = useThemedStyles(stylesSheet)
   const reducedMotion = useReducedMotionEnabled() === true
   const shown = useRef(new Animated.Value(animate ? 0 : 1)).current
   useEffect(() => {
@@ -54,7 +56,9 @@ export function MobileSourceControlContent({
   bottomInset,
   onOpenCommits
 }: Props) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const hubStyles = useThemedStyles(hubStylesSheet)
   const t = useMobileTranslation()
   const { busyAction, hasVisibleChanges } = state
   // Commit runners keep busyAction set ('commit…') until the refreshed status has landed.

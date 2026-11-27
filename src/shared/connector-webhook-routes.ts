@@ -10,8 +10,8 @@ import {
 } from './connector-webhook-contract'
 import { lazyZodSchema } from './schema/lazy-zod-schema'
 
-const HookId = z.string().regex(WEBHOOK_HOOK_ID_PATTERN)
-const CallId = z.string().regex(WEBHOOK_CALL_ID_PATTERN)
+const HookId = lazyZodSchema(() => z.string().regex(WEBHOOK_HOOK_ID_PATTERN))
+const CallId = lazyZodSchema(() => z.string().regex(WEBHOOK_CALL_ID_PATTERN))
 const CallState = lazyZodSchema(() => z.enum(WEBHOOK_CALL_STATES))
 
 /** A hook as every route answering one returns it; never a key. */

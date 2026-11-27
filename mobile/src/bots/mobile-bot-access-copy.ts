@@ -7,7 +7,6 @@ import {
   type BotAccessHost
 } from '../../../src/shared/bots/bot-access-copy'
 import type { Translate } from '../i18n/mobile-i18n'
-import { getUiIntlLocale } from '../i18n/ui-intl-locale'
 
 export function mobileBotAccessCopy(
   t: Translate,
@@ -26,8 +25,6 @@ export function mobileBotAccessPlace(
 }
 
 /** People named in this copy: narrow lists keep English "a, b" and give CJK its own comma. */
-export function mobileBotAccessNames(names: readonly string[]): string {
-  return new Intl.ListFormat(getUiIntlLocale(), { type: 'conjunction', style: 'narrow' }).format(
-    names
-  )
+export function mobileBotAccessNames(names: readonly string[], intlLocale: string): string {
+  return new Intl.ListFormat(intlLocale, { type: 'conjunction', style: 'narrow' }).format(names)
 }

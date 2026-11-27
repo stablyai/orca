@@ -16,7 +16,7 @@ import {
   type DecodedSessionMessage
 } from '../transcripts/session-decoded-message'
 
-const SESSION_PREVIEW_MESSAGE_LIMIT = 5
+export const SESSION_PREVIEW_MESSAGE_LIMIT = 5
 
 type SessionMessageOptions = { seedFirstUserPrompt?: boolean; previewScanLimit?: number }
 

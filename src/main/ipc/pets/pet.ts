@@ -10,6 +10,7 @@ import { copyFile, mkdir, readFile, rm, stat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { basename, extname, join, normalize, sep } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { CustomPet } from '../../../shared/pets/pet-types'
 import { importPetBundle } from './pet-bundle-import'
 import { classifyFile } from './pet-image-formats'
@@ -17,11 +18,13 @@ import { MAX_BYTES } from './pet-import-size-limits'
 import { getPetsDir, isSafeId, resolvePetFile } from './pet-storage-paths'
 
 // Validate untrusted IPC shape before resolvePetFile applies path constraints.
-const PetFileRequestSchema = z.object({
-  id: z.string(),
-  fileName: z.string(),
-  kind: z.enum(['image', 'bundle']).optional()
-})
+const PetFileRequestSchema = lazyZodSchema(() =>
+  z.object({
+    id: z.string(),
+    fileName: z.string(),
+    kind: z.enum(['image', 'bundle']).optional()
+  })
+)
 
 // Known refusals return as data so the renderer can translate them by code.
 async function withPetImportFailure(

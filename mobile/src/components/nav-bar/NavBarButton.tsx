@@ -7,13 +7,13 @@ import {
   type StyleProp,
   type ViewStyle
 } from 'react-native'
-import { colors, feedback, radii } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { feedback, radii } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 export const NAV_BAR_BUTTON_SIZE = 36
 
-/** Set by a sheet's header: bgRaised is the light sheet's own colour, so its buttons take a fill that reads on it. */
+/** Set by a bar on light grey (a sheet's header, a grouped page): bgRaised is that grey, so its buttons take a fill that reads on it. */
 export const NavBarButtonOnSheetContext = createContext(false)
 
 type IconProps = { size?: number; color?: string; strokeWidth?: number }
@@ -43,7 +43,8 @@ export function NavBarButton({
   iconColor,
   badge
 }: NavBarButtonProps) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const onSheet = useContext(NavBarButtonOnSheetContext)
   return (
     <Pressable
@@ -76,7 +77,7 @@ export function NavBarButton({
 export function NavBarBadge({
   count,
   color,
-  ringColor = colors.bgBase,
+  ringColor,
   style
 }: {
   count: number
@@ -84,18 +85,25 @@ export function NavBarBadge({
   ringColor?: string
   style?: StyleProp<ViewStyle>
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   if (count <= 0) {
     return null
   }
   return (
-    <View style={[styles.badge, { backgroundColor: color, borderColor: ringColor }, style]}>
+    <View
+      style={[
+        styles.badge,
+        { backgroundColor: color, borderColor: ringColor ?? colors.bgBase },
+        style
+      ]}
+    >
       <Text style={styles.badgeText}>{count > 99 ? '99+' : count}</Text>
     </View>
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   button: {
     width: NAV_BAR_BUTTON_SIZE,
     height: NAV_BAR_BUTTON_SIZE,

@@ -17,6 +17,7 @@ import { MobileAgentSessionTabActionSheet } from './tabs/MobileAgentSessionTabAc
 import { MobileTerminalTabActionSheet } from './tabs/MobileTerminalTabActionSheet'
 import { mobileSessionTabMenuHeader } from './tabs/MobileSessionTabMark'
 import { MobileSessionBotSheet } from './MobileSessionBotSheet'
+import { MobileSessionLeaveDraftsSheet } from './MobileSessionLeaveDraftsSheet'
 import { MobileNewTabSheet } from './tabs/MobileNewTabSheet'
 import { MobileNewHomeChatConfirm } from './MobileNewHomeChatConfirm'
 import {
@@ -49,8 +50,6 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     browserActionTarget,
     discardMarkdownTarget,
     setDiscardMarkdownTarget,
-    leaveDrafts,
-    setLeaveDrafts,
     setCustomKeys,
     showCustomKeyModal,
     setShowCustomKeyModal,
@@ -62,9 +61,10 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     quickCommandsSupported,
     showToast,
     readFileTab,
-    leaveSessionDroppingDrafts,
     discardMarkdownLocalContent,
     copyMarkdownPath,
+    copyMarkdownText,
+    markdownDocs,
     confirmDiscardMarkdown,
     handleDeleteCustomKey,
     handleCreateTerminal,
@@ -79,6 +79,9 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     sendDiffNotesAgentActions
   } = controller
   const clipboard = useClipboardWriter()
+  const markdownActionDoc = markdownActionTarget
+    ? markdownDocs.get(markdownActionTarget.id)
+    : undefined
   const onPairedHost = useWorkspaceOnPairedHost()
   // The host owns which shells it would start here, as desktop's menu does for its own projects.
   const terminalShells = useMobileWindowsShellChoices({
@@ -176,10 +179,35 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
       <MobileTerminalTabActionSheet controller={controller} />
       <ActionSheetModal
         visible={markdownActionTarget != null}
-        {...mobileSessionTabMenuHeader(markdownActionTarget, [])}
+        {...mobileSessionTabMenuHeader(markdownActionTarget, [], t)}
         groupDestructive
         title={markdownActionTarget?.title || t('session.sheets.markdown', 'Markdown')}
         actions={[
+          // Copies what the phone shows, edits included, and leaves the draft in place.
+          ...(markdownActionDoc?.status === 'ready'
+            ? [
+                {
+                  id: 'copy',
+                  label: markdownActionDoc.truncated
+                    ? t('session.markdownReader.copyLoaded', 'Copy loaded')
+                    : t('common.copy', 'Copy'),
+                  icon: Copy,
+                  onPress: () => void copyMarkdownText(markdownActionDoc.localContent)
+                }
+              ]
+            : []),
+          {
+            id: 'copyPath',
+            label: t('session.sheets.copyPath', 'Copy path'),
+            icon: FileText,
+            onPress: () => {
+              const target = markdownActionTarget
+              setMarkdownActionTarget(null)
+              if (target) {
+                void copyMarkdownPath(target)
+              }
+            }
+          },
           {
             id: 'refresh',
             label: t('common.refresh', 'Refresh'),
@@ -194,25 +222,13 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
               }
             }
           },
-          {
-            id: 'copyPath',
-            label: t('session.sheets.copyPath', 'Copy path'),
-            icon: FileText,
-            onPress: () => {
-              const target = markdownActionTarget
-              setMarkdownActionTarget(null)
-              if (target) {
-                void copyMarkdownPath(target)
-              }
-            }
-          },
           ...closeWithBulkActions(markdownActionTarget, () => setMarkdownActionTarget(null))
         ]}
         onClose={() => setMarkdownActionTarget(null)}
       />
       <ActionSheetModal
         visible={fileActionTarget != null}
-        {...mobileSessionTabMenuHeader(fileActionTarget, [])}
+        {...mobileSessionTabMenuHeader(fileActionTarget, [], t)}
         groupDestructive
         title={fileActionTarget?.title || t('session.sheets.file', 'File')}
         actions={[
@@ -245,44 +261,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         controller={controller}
         workspaceOnPairedHost={onPairedHost}
       />
-      <ActionSheetModal
-        visible={leaveDrafts != null}
-        title={t('session.sheets.unsavedMarkdown', 'Unsaved markdown changes')}
-        message={t('session.sheets.draftsHint', 'Copy or discard phone drafts before leaving.')}
-        actions={[
-          {
-            id: 'copyAllAndLeave',
-            label: t('session.sheets.copyAllAndLeave', 'Copy All & Leave'),
-            icon: FileText,
-            onPress: () => {
-              const drafts = leaveDrafts ?? []
-              const combined = drafts
-                .map((draft) => `# ${draft.title}\n\n${draft.content}`)
-                .join('\n\n---\n\n')
-              void clipboard
-                .writeText(combined)
-                .then(() => {
-                  setLeaveDrafts(null)
-                  leaveSessionDroppingDrafts(drafts)
-                })
-                .catch(() => {
-                  triggerError()
-                  showToast(t('session.sheets.copyDraftsFailed', "Couldn't copy drafts"), 1500)
-                })
-            }
-          },
-          {
-            id: 'discardAndLeave',
-            label: t('session.sheets.discardAndLeave', 'Discard & Leave'),
-            destructive: true,
-            onPress: () => {
-              setLeaveDrafts(null)
-              leaveSessionDroppingDrafts(leaveDrafts ?? [])
-            }
-          }
-        ]}
-        onClose={() => setLeaveDrafts(null)}
-      />
+      <MobileSessionLeaveDraftsSheet controller={controller} />
       <ConfirmModal
         visible={discardMarkdownTarget != null}
         title={t('session.sheets.discardChanges', 'Discard Changes')}

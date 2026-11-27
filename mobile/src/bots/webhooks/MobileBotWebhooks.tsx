@@ -14,8 +14,7 @@ import { randomV4Uuid } from '../../platform/random-v4-uuid'
 import { isHostNotConnectedError } from '../../query/host-query-errors'
 import { SettingsSection } from '../../settings/settings-screen-frame'
 import { mobileWebhookStatus } from '../../session/native-chat/transcript/bot-cards/MobileBotWebhookCard'
-import { colors } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
 import { MobileBotWebhookDetail } from './MobileBotWebhookDetail'
@@ -107,7 +106,7 @@ export function useMobileBotWebhookSettings(
 
 /** The desktop's Webhooks row face: how many hooks, the last call, and one status. */
 function WebhooksRow(props: { hooks: readonly PhoneWebhook[]; onOpen: () => void }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const now = useNow(30_000)
   const { hooks } = props
@@ -156,7 +155,7 @@ type WebhooksPageProps = {
 
 /** The bot's hooks, and one hook as a page with its ⋯ actions. */
 function WebhooksPage(props: WebhooksPageProps) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const now = useNow(30_000)
   const { changed } = props

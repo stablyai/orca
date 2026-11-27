@@ -1,6 +1,7 @@
 import { redactKagiSessionToken } from '../../../../shared/browser/navigation/browser-url'
 import type { BrowserScreenshotOptions } from '../../../../shared/rpc-contract/browser/browser-observation-params'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { app, nativeImage, type WebContents } from 'electron'
 import type {
   BrowserScreenshotResult,
@@ -139,9 +140,11 @@ export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBrid
   }
 }
 
-const CssViewportMetrics = z.object({
-  cssVisualViewport: z.object({ clientWidth: z.number(), clientHeight: z.number() })
-})
+const CssViewportMetrics = lazyZodSchema(() =>
+  z.object({
+    cssVisualViewport: z.object({ clientWidth: z.number(), clientHeight: z.number() })
+  })
+)
 
 // Captures come back in device pixels (HiDPI, zoom, emulated DPR); CSS pixels keep x/y equal to page coordinates.
 async function encodeInCssPixels(

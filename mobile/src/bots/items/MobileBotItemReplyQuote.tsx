@@ -2,8 +2,9 @@
 import { Pressable, Text, View } from 'react-native'
 import { CornerDownRight } from 'lucide-react-native'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { colors, pressedStyle, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
+import { pressedStyle, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 export function MobileBotItemReplyQuote({
   text,
@@ -13,6 +14,8 @@ export function MobileBotItemReplyQuote({
   /** Null while the question isn't in the Activity read so far. */
   onShowQuestion: (() => void) | null
 }) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const line = (
     <>
@@ -43,7 +46,7 @@ export function MobileBotItemReplyQuote({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   row: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -1019,20 +1019,11 @@
   "auto.components.github.PRFilterDropdowns.b27b7e526c": {
     "ko": "리뷰 요청 대상"
   },
-  "auto.components.github.PRFilterSections.1e9b5244f2": {
-    "ko": "켜짐"
-  },
   "auto.components.github.PRFilterSections.24754c44ad": {
     "ko": "작성자"
   },
-  "auto.components.github.PRFilterSections.2b2f019091": {
-    "ko": "모든 상태"
-  },
   "auto.components.github.PRFilterSections.b1d9fdea08": {
     "ko": "라벨"
-  },
-  "auto.components.github.PRFilterSections.f0cf6dd591": {
-    "ko": "꺼짐"
   },
   "auto.components.github.github.rate.limit.display.budget_scope_prefix": {
     "ko": "예산 범위"

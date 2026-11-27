@@ -16,6 +16,7 @@ import {
   PLUGIN_PANEL_PATH_ICON_STROKE_VIEW_BOX_MAX,
   pluginPanelPathIconSchema
 } from './plugin-panel-path-icon'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
 export const PLUGIN_PANEL_LIMIT = 64
 
@@ -105,10 +106,9 @@ export type PluginPanelUi = (typeof PLUGIN_PANEL_UI_KINDS)[number]
 const COMPONENTS_PANEL_ENTRY = /\.(?:m?js|tsx?|mts|jsx)$/i
 
 /** A built-in icon name, or (format 2) one inline SVG path drawn in the theme color. */
-export const pluginPanelIconSchema = z.union([
-  z.enum(PLUGIN_PANEL_ICONS),
-  pluginPanelPathIconSchema
-])
+export const pluginPanelIconSchema = lazyZodSchema(() =>
+  z.union([z.enum(PLUGIN_PANEL_ICONS), pluginPanelPathIconSchema])
+)
 
 export const pluginPanelContributionSchema = z
   .object({

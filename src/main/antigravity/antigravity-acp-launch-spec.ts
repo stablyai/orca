@@ -33,6 +33,7 @@ import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/launc
 import { deliverAntigravityInstructions } from '../acp/launch/acp-instructions'
 import { scrubAgyOrcaHomeEnvironment } from './antigravity-agy-orca-home-environment'
 import { ANTIGRAVITY_LAUNCH_GATE } from './antigravity-chat-account'
+import { restoreAntigravityAccountForChat } from './native-account-launch'
 import { discardAgyListingSession } from './agy-listing-session-discard'
 import { AGY_ACP_CLIENT_INFO } from './antigravity-acp-runtime-probe'
 import {
@@ -113,7 +114,10 @@ const ANTIGRAVITY_AGY_LAUNCH_SPEC = {
         throw new Error("this chat runs on the host's agy")
       }
       return env
-    }
+    },
+    // An older agy may have written its own login back over the selected account (#50100).
+    prepare: (env, _auth, _assertCurrent, purpose = 'chat') =>
+      purpose === 'chat' ? restoreAntigravityAccountForChat(env) : Promise.resolve()
   },
   minimumVersions: [ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION],
   installDirectories: ({ env, homePath }) => [

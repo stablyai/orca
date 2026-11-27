@@ -16,12 +16,6 @@
     }
   },
   "agents": {
-    "desktops": {
-      "agents_one": "{{count}} agent",
-      "agents_other": "{{count}} agents",
-      "needsYou_one": "{{count}} needs you",
-      "needsYou_other": "{{count}} need you"
-    },
     "list": {
       "workers_one": "{{count}} worker",
       "workers_other": "{{count}} workers"
@@ -116,6 +110,12 @@
     }
   },
   "automations": {
+    "mobile": {
+      "catchUpHours_one": "Within {{count}} hour",
+      "catchUpHours_other": "Within {{count}} hours",
+      "catchUpMinutes_one": "Within {{count}} minute",
+      "catchUpMinutes_other": "Within {{count}} minutes"
+    },
     "orphanIssues": {
       "hostReselection": "Edit this automation and reselect its host before running it.",
       "malformed": "Its stored host record is incomplete.",
@@ -1068,8 +1068,8 @@
         "earlierMessages_other": "{{count}} earlier messages in the thread"
       },
       "turnDiff": {
-        "changedFiles_one": "{{count}} changed file",
-        "changedFiles_other": "{{count}} changed files"
+        "changed_one": "Changed {{count}} file",
+        "changed_other": "Changed {{count}} files"
       },
       "workerDock": {
         "taskCount_one": "{{count}} task",
@@ -1087,6 +1087,12 @@
     "worktreeListRow": {
       "children_one": "{{count}} child",
       "children_other": "{{count}} children"
+    }
+  },
+  "diagnostics": {
+    "troubleshootView": {
+      "problems_one": "{{count}} problem",
+      "problems_other": "{{count}} problems"
     }
   },
   "dictation": {
@@ -1362,16 +1368,12 @@
       "teams_other": "{{count}} teams"
     },
     "filterSheet": {
-      "projectItems_one": "{{count}} item",
-      "projectItems_other": "{{count}} items"
+      "done": "Done",
+      "title": "Filter & display"
     },
     "githubProjectList": {
       "moreFields_one": "+{{count}} field",
       "moreFields_other": "+{{count}} fields"
-    },
-    "itemDetailContent": {
-      "pipelineJobs_one": "{{count}} jobs",
-      "pipelineJobs_other": "{{count}} jobs"
     },
     "pickerProjection": {
       "repos_one": "{{count}} repo",
