@@ -1,3 +1,4 @@
+import { runWithFinally } from '@/lib/run-with-finally'
 import { useCallback, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
@@ -192,13 +193,16 @@ export function RuntimeHostStatusRow({
       return
     }
     setBusy(true)
-    try {
-      await transportAction()
-    } finally {
-      if (mountedRef.current) {
-        setBusy(false)
+    await runWithFinally(
+      async () => {
+        await transportAction()
+      },
+      () => {
+        if (mountedRef.current) {
+          setBusy(false)
+        }
       }
-    }
+    )
   }, [mountedRef, onRecover, repairs, transportAction])
 
   const lastConnectedLabel = diagnostics?.lastConnectedAt

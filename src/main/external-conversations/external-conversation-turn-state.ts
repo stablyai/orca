@@ -7,6 +7,7 @@ import type {
   ConnectorTurnOrigin
 } from '../../shared/connectors/connector-cloud-contract'
 import type { EndedChatTurn } from './external-conversation-ended-turn'
+import { typedOnAnotherDevice } from '../bots/bot-typed-in-orca'
 
 /** The lead agent's own state; background work can keep the combined row working across turns. */
 export function leadOf(row: AgentStatusIpcPayload): {
@@ -47,13 +48,22 @@ export function conversationWorking(row: AgentStatusIpcPayload | null): boolean 
 export function chatTurnFor(
   origin: ConnectorTurnOrigin,
   actsFor: ConnectorActsFor | undefined
-): (turn: Pick<EndedChatTurn, 'opener' | 'stamps'>) => { turnFor?: ConnectorTurnFor } {
+): (turn: Pick<EndedChatTurn, 'opener' | 'stamps' | 'typedByAnother'>) => {
+  turnFor?: ConnectorTurnFor
+} {
   return (turn) => {
     const opened = origin === 'delivery' ? 'delivery' : journalTurnOpening(turn)
     if (opened === 'delivery') {
       return {}
     }
-    return { turnFor: opened === 'local' && actsFor === 'owner' ? 'owner' : 'someone_else' }
+    // A paired device Orca can't place as the owner opened it or steered into it: never the
+    // owner's, as bot-turn-for.ts.
+    const owner =
+      opened === 'local' &&
+      actsFor === 'owner' &&
+      turn.typedByAnother !== true &&
+      !(turn.opener && typedOnAnotherDevice(turn.opener))
+    return { turnFor: owner ? 'owner' : 'someone_else' }
   }
 }
 

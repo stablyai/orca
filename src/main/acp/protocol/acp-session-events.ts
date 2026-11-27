@@ -1,20 +1,25 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { getCompiledSchema } from '../../schema-validation/zod-schema-compilation'
 import {
   SessionNotificationSchema,
   type SessionNotification
 } from '../generated/acp-protocol.generated'
 
-export const acpNotificationEnvelopeSchema = z.looseObject({
-  sessionId: z.string(),
-  update: z.looseObject({ sessionUpdate: z.string() }),
-  _meta: z.looseObject({ isReplay: z.boolean().optional() }).nullish()
-})
+export const acpNotificationEnvelopeSchema = lazyZodSchema(() =>
+  z.looseObject({
+    sessionId: z.string(),
+    update: z.looseObject({ sessionUpdate: z.string() }),
+    _meta: z.looseObject({ isReplay: z.boolean().optional() }).nullish()
+  })
+)
 
-const updateEnvelopeSchema = z.looseObject({
-  sessionId: z.string(),
-  update: z.looseObject({ sessionUpdate: z.string() })
-})
+const updateEnvelopeSchema = lazyZodSchema(() =>
+  z.looseObject({
+    sessionId: z.string(),
+    update: z.looseObject({ sessionUpdate: z.string() })
+  })
+)
 
 export type AcpSessionEvent =
   | { kind: 'known'; notification: SessionNotification }

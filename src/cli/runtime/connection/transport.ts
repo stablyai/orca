@@ -75,6 +75,8 @@ export async function sendRequest<TResult>(
     const statusRequestId = requestSelection ? randomUUID() : null
     let awaitingStatus = statusRequestId !== null
     let selectedParams = params
+    // Until the request itself is written, a timeout proves it never reached the runtime.
+    let requestWritten = false
 
     const timeout = setTimeout(() => {
       if (settled) {
@@ -86,7 +88,8 @@ export async function sendRequest<TResult>(
       reject(
         new RuntimeClientError(
           'runtime_timeout',
-          'Timed out waiting for the Orca runtime to respond.'
+          'Timed out waiting for the Orca runtime to respond.',
+          requestWritten ? undefined : { requestSent: false }
         )
       )
     }, timeoutMs)
@@ -234,16 +237,18 @@ export async function sendRequest<TResult>(
     })
     const send = (id: string, requestedMethod: string, requestedParams: unknown): void => {
       try {
+        // The status pre-request carries no orchestration fields: it must not read as the request.
+        const orchestration = id === requestId ? envelope : undefined
         const serialized = `${JSON.stringify({
           id,
           authToken: metadata.authToken,
           method: requestedMethod,
           params: requestedParams,
-          orchestrationCapability: envelope?.orchestrationCapability,
-          orchestrationContractVersion: envelope?.orchestrationContractVersion,
-          orchestrationRequestId: envelope?.orchestrationRequestId,
-          compatibilityInvocationId: envelope?.compatibilityInvocationId,
-          orchestrationCompatibilityEvidence: envelope?.orchestrationCompatibilityEvidence,
+          orchestrationCapability: orchestration?.orchestrationCapability,
+          orchestrationContractVersion: orchestration?.orchestrationContractVersion,
+          orchestrationRequestId: orchestration?.orchestrationRequestId,
+          compatibilityInvocationId: orchestration?.compatibilityInvocationId,
+          orchestrationCompatibilityEvidence: orchestration?.orchestrationCompatibilityEvidence,
           expectedRuntimeSource
         })}\n`
         if (Buffer.byteLength(serialized, 'utf8') > MAX_LOCAL_RUNTIME_RPC_MESSAGE_BYTES) {
@@ -255,6 +260,7 @@ export async function sendRequest<TResult>(
         }
         if (id === requestId) {
           requestSelection?.onDispatch?.()
+          requestWritten = true
         }
         socket.write(serialized)
       } catch (error) {

@@ -12,6 +12,7 @@ import { useTabBarItemActions } from './model/use-tab-bar-item-actions'
 import { useActiveClientHostedBrowserRowId } from '@/runtime/browser/client-hosting/client-hosted-browser-row-state'
 import { useEditorGroupFileDropOwner } from '../editor/file-drop/use-editor-group-file-drop-owner'
 import { findBotByWorkspace, useBotGroupForWorkspace } from '../bots/bot-workspace'
+import { homeBotLookupFor } from '../bots/bot-home-tab-order'
 import { useBots, useBotsEnabled } from '@/lib/bot-catalog'
 import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { useTranslate } from '@/i18n/use-translate'
@@ -28,6 +29,23 @@ import { resolveRenderedTabStrip } from './strip/rendered-tab-strip'
 const EMPTY_ROWS: readonly ClientHostedBrowserRow[] = []
 const itemIdOf = (item: TabBarItem): string => item.id
 const idOf = (id: string): string => id
+
+type TabBarSurfaceRef = (node: HTMLDivElement | null) => void
+
+// Why: a hook result stays referentially stable under React Compiler; an inline ref is rebuilt
+// every render, detaching the file-drop owner and cancelling the pending menu focus handoff.
+function useTabBarSurfaceRef(
+  clearPendingNewTabMenuFocusOnUnmount: TabBarSurfaceRef,
+  attachFileDropOwner: (node: HTMLElement | null) => void
+): TabBarSurfaceRef {
+  return useCallback(
+    (node: HTMLDivElement | null) => {
+      clearPendingNewTabMenuFocusOnUnmount(node)
+      attachFileDropOwner(node)
+    },
+    [attachFileDropOwner, clearPendingNewTabMenuFocusOnUnmount]
+  )
+}
 
 function TabBarInner(props: TabBarProps): React.JSX.Element {
   const t = useTranslate()
@@ -90,12 +108,11 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
   // One catalog subscription: the page's bot (as useBotForWorkspace finds it) and each chat's Home lookup.
   const bot = findBotByWorkspace(bots, worktreeId)
   // Each chat asks for the bot on its own host, as its row does, so a mixed-host group never borrows another's Home.
+  // Null on a strip no bot calls home (any Git worktree, bots off), which then skips the walk over its tabs.
+  const homeBotFor = useMemo(() => homeBotLookupFor(bots, worktreeId), [bots, worktreeId])
   const pinnedHomeId = useMemo(
-    () =>
-      findPinnedHomeTabId(projectedItems.orderedItems, (hostId) =>
-        findBotByWorkspace(bots, worktreeId, hostId)
-      ),
-    [projectedItems.orderedItems, bots, worktreeId]
+    () => findPinnedHomeTabId(projectedItems.orderedItems, homeBotFor),
+    [projectedItems.orderedItems, homeBotFor]
   )
   // Why memoized: dnd-kit re-renders every tab in a context whose items array changes identity.
   const orderedItems = useMemo(
@@ -176,13 +193,7 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
   )
   const attachFileDropOwner = useEditorGroupFileDropOwner({ worktreeId, groupId })
   const { clearPendingNewTabMenuFocusOnUnmount } = createMenu
-  const surfaceRef = useCallback(
-    (node: HTMLDivElement | null) => {
-      clearPendingNewTabMenuFocusOnUnmount(node)
-      attachFileDropOwner(node)
-    },
-    [attachFileDropOwner, clearPendingNewTabMenuFocusOnUnmount]
-  )
+  const surfaceRef = useTabBarSurfaceRef(clearPendingNewTabMenuFocusOnUnmount, attachFileDropOwner)
   const tabStripDragScroll = useTabStripDragScrollHandlers(tabStripNavigation.scrollTabStrip, {
     start: tabStripNavigation.tabStripOverflowState.canScrollStart,
     end: tabStripNavigation.tabStripOverflowState.canScrollEnd

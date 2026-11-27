@@ -30,3 +30,16 @@ export function getPreflightWslTarget(
   }
   return context?.wslDefault ? {} : null
 }
+
+/** No workspace picked a runtime, so a CLI runs as a cwd-less call does: native, else the default distro. */
+export function isWindowsHostDefault(
+  context?: PreflightRuntimeContext,
+  platform: string = process.platform
+): boolean {
+  return (
+    platform === 'win32' &&
+    !context?.projectRuntime &&
+    !context?.wslDistro?.trim() &&
+    !context?.wslDefault
+  )
+}

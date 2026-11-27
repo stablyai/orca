@@ -23,6 +23,7 @@ export function importFederatedRelayItem(
       type: MessageType
       priority: MessagePriority
       threadId?: string
+      replyTo?: string
       payload?: string
     }
     lifecycle:

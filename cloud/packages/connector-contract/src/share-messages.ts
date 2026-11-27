@@ -44,6 +44,22 @@ const Name = z.string().min(1).max(CONNECTOR_LIMITS.maxDisplayTextLength)
 // A bot's purpose, as its owner wrote it (ConnectorBotSchema.botPurpose and the /mine entry).
 export const BotPurposeSchema = z.string().min(1).max(CONNECTOR_LIMITS.maxBotPurposeLength)
 
+// What a teammate's invite shows of a shared agent besides its name and purpose (agentCard in the
+// hello and on the /mine entry): its bundled mascot with that tile color and outfit, and the services it
+// answers on besides Orca. Ids, not pictures: an uploaded picture stays on the owner's computer. A card that
+// doesn't parse is dropped, never the hello or list that carries it, so a newer client's values pass.
+const CardId = z.string().min(1).max(CONNECTOR_LIMITS.maxAgentCardIdLength)
+export const AgentCardSchema = z
+  .object({
+    mascot: CardId.optional(),
+    color: CardId.optional(),
+    outfit: CardId.optional(),
+    services: z.array(CardId).max(CONNECTOR_LIMITS.maxAgentCardServices).optional()
+  })
+  .optional()
+  .catch(undefined)
+export type AgentCard = NonNullable<z.infer<typeof AgentCardSchema>>
+
 // One person a bot is shared with, in its hello: an Orca account, or an email not yet resolved to one.
 export const ConnectorBotShareSchema = z.union([
   z.object({ shareId: ShareIdSchema, accountId: OpaqueIdSchema }),
@@ -134,11 +150,12 @@ export const ConnectorSharesMineSchema = z.object({
       botName: Name,
       // The owner's hello ownerName, else their verified email, else the host's name: never empty.
       ownerName: Name,
-      avatarUrl: z.string().url().max(2048).optional(),
       hostOnline: z.boolean(),
       state: z.enum(['ready', 'needs-accept']),
       // The owner's hello botPurpose for the bot; absent when it sends none.
       botPurpose: BotPurposeSchema.optional(),
+      // The owner's hello agentCard; absent when it sends none.
+      agentCard: AgentCardSchema,
       // The host's E2EE key, which held messages are sealed to: present only once the host's hello
       // carries hostKey, which it sends when it takes share_send. Absent, the teammate's Orca holds
       // nothing and sends only while the host is online.

@@ -10,19 +10,16 @@ export const BOT_REQUEST_OUTCOME_METHOD = defineMethod({
   name: 'bots.request.outcome',
   permission: 'workspace',
   params: BotRequestOutcomeParams,
-  handler: (
-    { messageId, onClient },
-    { runtime, pairedDeviceId, callerScope }
-  ): BotRequestCardReading => {
+  handler: ({ messageId, onClient }, context): BotRequestCardReading => {
+    const db = context.runtime.getOrchestrationDb()
     // Any window showing the asking chat reads it: what it says is that chat's own mail.
     if (onClient) {
-      return readClientAskOutcome(runtime.getOrchestrationDb(), messageId)
+      return readClientAskOutcome(db, messageId)
     }
-    // The owner reads here or from a paired phone, which acts as the owner; paired computers do not.
-    if (pairedDeviceId !== undefined && callerScope?.kind !== 'mobile') {
-      throw new InvalidArgumentError('Bot requests are read on the computer that runs the bots.')
+    // People's paired windows and phones read it as they read that chat; an agent over a device's pairing does not.
+    if (context.caller?.kind === 'paired-device' && context.caller.agent) {
+      throw new InvalidArgumentError('Bot requests are read in Orca.')
     }
-    const db = runtime.getOrchestrationDb()
     const request = db.getBotRequest(messageId) ? db.getMessageById(messageId) : undefined
     if (!request) {
       return { outcome: null, answer: null, mailIds: [], chatId: null }

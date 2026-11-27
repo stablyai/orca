@@ -146,40 +146,46 @@ function permissionFixture({
       if (!pill) {
         throw new Error('The composer must show the permission pill')
       }
-      // The closed pill is the mode's icon and a chevron at every width; the name lives in its
+      // The closed pill is the mode's neutral icon alone at every width; the name lives in its
       // accessible name and tooltip.
       const glyphs = Array.from(pill.querySelectorAll('svg'))
       if (
         pill.innerText.trim() !== '' ||
-        glyphs.length !== 2 ||
-        glyphs.some((glyph) => getComputedStyle(glyph).visibility !== 'visible')
+        glyphs.length !== 1 ||
+        getComputedStyle(glyphs[0]).visibility !== 'visible'
       ) {
-        throw new Error('The permission pill must show only its icon and chevron')
+        throw new Error('The permission pill must show only its icon')
       }
       const accessibleName = pill.getAttribute('aria-label') ?? ''
       if (language === 'en' ? !accessibleName.includes(state.name) : accessibleName === '') {
         throw new Error(`The permission pill must be named "${state.name}" for assistive tech`)
       }
-      const model = host.querySelector<HTMLElement>('[data-composer-control="model"] button')
       const pillBox = pill.getBoundingClientRect()
-      if (!model || Math.abs(model.getBoundingClientRect().height - pillBox.height) > 0.5) {
-        throw new Error('The permission pill must match the model picker height')
+      if (Math.abs(pillBox.width - 28) > 0.5 || Math.abs(pillBox.height - 28) > 0.5) {
+        throw new Error('The permission pill must be a 28px square')
       }
       // The narrower pill leaves room for the model name even in the narrowest composer.
-      if (!model.innerText.includes('Opus 5.5')) {
+      const model = host.querySelector<HTMLElement>('[data-composer-control="model"] button')
+      if (!model?.innerText.includes('Opus 5.5')) {
         throw new Error('The model name must stay visible beside the permission pill')
       }
-      const [icon, chevron] = glyphs.map((glyph) => glyph.getBoundingClientRect())
-      if (Math.abs(icon.left - pillBox.left - (pillBox.right - chevron.right)) > 1) {
-        throw new Error('The permission pill must pad its icon and chevron evenly')
+      const icon = glyphs[0].getBoundingClientRect()
+      const attach = host.querySelector<HTMLElement>('[data-composer-control="attach"] button')!
+      const attachBox = attach.getBoundingClientRect()
+      const centerY = (box: DOMRect): number => box.top + box.height / 2
+      if (
+        Math.abs(icon.left - pillBox.left - (pillBox.right - icon.right)) > 0.5 ||
+        Math.abs(centerY(icon) - centerY(pillBox)) > 0.5 ||
+        Math.abs(centerY(pillBox) - centerY(attachBox)) > 0.5
+      ) {
+        throw new Error('The permission icon must sit centered in its pill, in line with Attach')
       }
       if (!glyphs[0].classList.contains(`lucide-${state.icon}`)) {
         throw new Error(`The permission pill must show the ${state.icon} icon`)
       }
-      // Full access alone tints its icon; every other state matches the neutral chevron.
-      const tinted = getComputedStyle(glyphs[0]).color !== getComputedStyle(glyphs[1]).color
-      if (tinted !== (state.current === 'full-access')) {
-        throw new Error('Only Full access may tint the permission icon')
+      // Every mode, Full access included, shares Attach's neutral colour on the closed pill.
+      if (getComputedStyle(glyphs[0]).color !== getComputedStyle(attach).color) {
+        throw new Error('The permission icon must stay neutral like its neighbours')
       }
       if (accessibleName.split(/\s+/).filter((word) => word === 'Permissions').length > 1) {
         throw new Error('The permission pill must not repeat its title in its accessible name')

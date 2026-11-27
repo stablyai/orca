@@ -8,7 +8,7 @@ import { ShortcutsPane } from '../shortcuts/ShortcutsPane'
 import { SettingsSection } from '../section-layout/SettingsSection'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { SettingsRenderContext } from './settings-render-context'
+import { getSettingsHostServerName, type SettingsRenderContext } from './settings-render-context'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { SettingsHostScopeUnavailableNotice } from '../host-scope/SettingsHostScopePicker'
 
@@ -109,12 +109,7 @@ export function renderNotificationsSettingsSection(
   t: Translate = translate
 ): React.JSX.Element | null {
   const { model, navigation, view } = context
-  const { target } = model.settingsHostScope
-  const serverName =
-    target.kind === 'environment'
-      ? (model.runtimeEnvironments.find((entry) => entry.id === target.environmentId)?.name ??
-        t('components.settings.notifications.server.fallbackHost', 'this server'))
-      : null
+  const serverName = getSettingsHostServerName(model, t)
   return model.showDesktopOnlySettings ? (
     <SettingsSection
       id="notifications"

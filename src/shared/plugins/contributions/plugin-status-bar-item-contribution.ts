@@ -1,4 +1,5 @@
 import { z, type RefinementCtx } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { safePluginDisplayText } from '../manifest/plugin-display-text'
 import { pluginCommandIdSchema, pluginIdSchema } from '../manifest/plugin-manifest-fields'
 import { pluginFieldDoc } from '../manifest/plugin-schema-field-docs'
@@ -31,40 +32,44 @@ export const pluginStatusBarItemDisplayFields = {
     .meta(pluginFieldDoc('Shown on hover. Defaults to the plugin name.', SINCE))
 }
 
-export const pluginStatusBarItemContributionSchema = z
-  .object({
-    id: pluginIdSchema.meta(
-      pluginFieldDoc(
-        "Item id, unique among this plugin's status bar items; `statusBar.update` names it.",
-        SINCE,
-        ['blocked-count']
-      )
-    ),
-    ...pluginStatusBarItemDisplayFields,
-    command: pluginCommandIdSchema
-      .optional()
-      .meta(
+export const pluginStatusBarItemContributionSchema = lazyZodSchema(() =>
+  z
+    .object({
+      id: pluginIdSchema.meta(
         pluginFieldDoc(
-          'Id of a command this plugin contributes in `contributes.commands`, run when the item is pressed.',
+          "Item id, unique among this plugin's status bar items; `statusBar.update` names it.",
           SINCE,
-          ['guard.showLog']
+          ['blocked-count']
         )
-      )
-  })
-  .strict()
-  .meta({
-    id: 'StatusBarItemContribution',
-    description:
-      'An item in the status bar. Requires the `declarative` profile; a `trusted-worker` can change it with `statusBar.update`.'
-  })
+      ),
+      ...pluginStatusBarItemDisplayFields,
+      command: pluginCommandIdSchema
+        .optional()
+        .meta(
+          pluginFieldDoc(
+            'Id of a command this plugin contributes in `contributes.commands`, run when the item is pressed.',
+            SINCE,
+            ['guard.showLog']
+          )
+        )
+    })
+    .strict()
+    .meta({
+      id: 'StatusBarItemContribution',
+      description:
+        'An item in the status bar. Requires the `declarative` profile; a `trusted-worker` can change it with `statusBar.update`.'
+    })
+)
 
 export type PluginStatusBarItemContribution = z.infer<typeof pluginStatusBarItemContributionSchema>
 
 /** What `statusBar.update` sets; an absent field keeps its value, `visible: false` hides it. */
-export const pluginStatusBarItemPatchSchema = z.strictObject({
-  ...pluginStatusBarItemDisplayFields,
-  visible: z.boolean().optional()
-})
+export const pluginStatusBarItemPatchSchema = lazyZodSchema(() =>
+  z.strictObject({
+    ...pluginStatusBarItemDisplayFields,
+    visible: z.boolean().optional()
+  })
+)
 export type PluginStatusBarItemPatch = z.infer<typeof pluginStatusBarItemPatchSchema>
 
 export function validatePluginStatusBarItems(

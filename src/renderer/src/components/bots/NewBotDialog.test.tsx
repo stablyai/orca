@@ -14,7 +14,7 @@ vi.mock('@/lib/bot-catalog', () => ({
   useHostBots: () => []
 }))
 vi.mock('./use-bot-agent-choices', () => ({
-  useBotAgentMenu: () => ({ model: { state: 'loading' }, choices: ['codex'] })
+  useNewBotAgentMenu: () => ({ model: { state: 'loading' }, choices: ['codex'] })
 }))
 
 afterEach(() => {

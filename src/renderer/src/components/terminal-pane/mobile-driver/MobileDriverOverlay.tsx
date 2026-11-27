@@ -22,6 +22,21 @@ type Props = {
 }
 
 // Driving preserves streamed output and permits a collapsed chip; held-fit has no live output and stays prominent until Restore (docs/mobile-presence-lock.md).
+async function runOverlayAction(
+  action: () => Promise<void> | void,
+  setPending: (pending: boolean) => void,
+  mountedRef: { current: boolean }
+): Promise<void> {
+  setPending(true)
+  try {
+    await action()
+  } finally {
+    if (mountedRef.current) {
+      setPending(false)
+    }
+  }
+}
+
 export function MobileDriverOverlay({
   driver,
   hasFitOverride,
@@ -65,28 +80,14 @@ export function MobileDriverOverlay({
     if (actionPending || allActionPending) {
       return
     }
-    setActionPending(true)
-    try {
-      await onAction()
-    } finally {
-      if (mountedRef.current) {
-        setActionPending(false)
-      }
-    }
+    await runOverlayAction(onAction, setActionPending, mountedRef)
   }
 
   const handleAllAction = async (): Promise<void> => {
     if (!onAllAction || actionPending || allActionPending) {
       return
     }
-    setAllActionPending(true)
-    try {
-      await onAllAction()
-    } finally {
-      if (mountedRef.current) {
-        setAllActionPending(false)
-      }
-    }
+    await runOverlayAction(onAllAction, setAllActionPending, mountedRef)
   }
 
   if (isHeldAtPhoneFit) {

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { isPluginJsonObject } from '../manifest/plugin-json-object'
 import { EDITOR_METHODS } from './plugin-frame-bridge'
 import { pluginError, type PluginError } from './plugin-protocol'
@@ -37,14 +38,16 @@ export type CustomEditorDocument = {
   ancestor?: CustomEditorContent
 }
 
-const customEditorEditSchema = z.strictObject({
-  // Why required: an edit that names no version could silently overwrite an outside change.
-  baseVersion: z.number().int().nonnegative(),
-  content: z.discriminatedUnion('kind', [
-    z.strictObject({ kind: z.literal('text'), text: z.string() }),
-    z.strictObject({ kind: z.literal('bytes'), bytes: z.instanceof(ArrayBuffer) })
-  ])
-})
+const customEditorEditSchema = lazyZodSchema(() =>
+  z.strictObject({
+    // Why required: an edit that names no version could silently overwrite an outside change.
+    baseVersion: z.number().int().nonnegative(),
+    content: z.discriminatedUnion('kind', [
+      z.strictObject({ kind: z.literal('text'), text: z.string() }),
+      z.strictObject({ kind: z.literal('bytes'), bytes: z.instanceof(ArrayBuffer) })
+    ])
+  })
+)
 
 export type CustomEditorEdit = z.infer<typeof customEditorEditSchema>
 
