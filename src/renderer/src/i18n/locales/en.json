@@ -1099,6 +1099,12 @@
           "browse": "Chrome Web Store",
           "openFailed": "Open a workspace to browse the Chrome Web Store."
         },
+        "failure": {
+          "supportDisabled": "Turn on browser extensions in Settings › Browser › Extensions",
+          "invalidWebStoreInput": "Paste a Chrome Web Store link or a 32-letter extension ID",
+          "profileUnavailable": "Browser profile is not available for extensions",
+          "alreadyAdded": "{{name}} is already added"
+        },
         "enabledToggleLabel": "Turn browser extensions on or off"
       },
       "passwords": {
@@ -2086,6 +2092,9 @@
     },
     "computerUse": {
       "teamDisabled": "Computer Use is turned off by your team."
+    },
+    "browserUse": {
+      "teamDisabled": "Browser Use is turned off by your team."
     },
     "artifacts": {
       "teamDisabled": "Artifact sharing is turned off by your team."
@@ -3538,6 +3547,9 @@
       }
     },
     "components": {
+      "railPage": {
+        "closeSearch": "Close search"
+      },
       "hostPicker": {
         "searchHosts": "Search hosts…",
         "noHostsMatch": "No hosts match.",
@@ -4278,6 +4290,8 @@
         "8c967b4d15": "Later"
       },
       "TaskPage": {
+        "issueFilterState": "State",
+        "issueFilterPreset": "Preset",
         "gitlabLoadFailed": "Could not load GitLab work items. Refresh to try again.",
         "ff69a30681": "Cancel",
         "8ff6fdc368": "Creating…",
@@ -4986,12 +5000,7 @@
           "ea3416d646": "Assignee",
           "b1d9fdea08": "Label",
           "24754c44ad": "Author",
-          "764a0b4ce1": "Status",
-          "f0cf6dd591": "off",
-          "1e9b5244f2": "on",
           "b930de7194": "Draft only",
-          "e0002f1eba": "selected",
-          "2b2f019091": "Any state",
           "0fd3249e2e": "Closed",
           "d78b60b5c2": "Open",
           "bd162b7d5a": "Merged",
@@ -5000,7 +5009,6 @@
           "labelCount_other": "{{count}} labels",
           "authorCount_one": "{{count}} author",
           "authorCount_other": "{{count}} authors",
-          "allStates": "All",
           "filterPullRequests": "Filter pull requests",
           "filterIssues": "Filter issues",
           "filterOrTypeLogin": "Filter or type a login...",
@@ -5632,11 +5640,6 @@
             "waitingTitle": "Waiting for {{server}}",
             "waitingBody": "Orca reattaches this terminal when the server offers it again or the connection changes. Reconnect to try now.",
             "downFor": "Down for {{duration}}",
-            "cantReachTitle": "Can't reach {{server}}",
-            "detailsButton": "Details",
-            "tailscaleHintTitle": "Check the Tailscale path",
-            "reconnectNowButton": "Reconnect now",
-            "copyPingCommand": "Copy command",
             "tailscaleHint": "Check the Tailscale path:",
             "fallbackServerName": "the server",
             "connectionLostTitle": "Reconnecting to {{server}}",
@@ -6885,7 +6888,6 @@
           "c13b82793c": "Manage installs",
           "aee7b99cc6": "Install from link",
           "filterProvider": "Filter by agent",
-          "filterSource": "Filter by source",
           "allSources": "All",
           "clearFilters": "Clear filters",
           "closeSkills": "Close skills",
@@ -13572,7 +13574,12 @@
             "terminalRun": "Run commands in your terminals, including SSH",
             "terminalRead": "Read the output of your terminals, including SSH",
             "workspaceWrite": "Open your workspaces and files, and run built-in commands",
-            "agentLaunch": "Start agents in your workspaces, including SSH"
+            "agentLaunch": "Start agents in your workspaces, including SSH",
+            "appearanceWrite": "Publish and select desktop application, editor and terminal colors",
+            "workspaceCreate": "Create workspaces (new Git branches and worktrees) in your projects, local and SSH; a project's setup script runs as its settings say",
+            "automationRead": "Read your automations: their names, prompts, agents, projects, workspaces and schedules",
+            "automationWrite": "Create automations that start agents in your projects on a schedule, even when the plugin is not running, and change or delete them (Orca asks you first for ones the plugin did not create, and before it changes what one with extra agent settings runs)",
+            "historyRead": "Read the list of your past agent sessions on this computer, from the history files of the coding agents Orca supports, including running WSL distributions on Windows (not SSH or other machines, Antigravity IDE conversations or subagent transcripts): each session's title, which is often the start of its first message, agent, workspace, branch, times, and message and token counts; never the conversation itself"
           },
           "decisionFailed": "Could not save the permission decision. Try again.",
           "fullAccessWarning": "Full access: runs as a normal program and can read your files, use your saved logins and SSH keys, use the network, run other programs and control Orca, including your terminals and agents.",
@@ -17272,34 +17279,11 @@
             "0bb39f8fe6": "Send",
             "69334b4b10": "Voice dictation",
             "29f2d13839": "Type a command…",
-            "817090af40": "Ctrl+C",
-            "53ff909568": "Tab",
-            "4930eaaae7": "Esc",
             "fa22927f13": "Paste",
             "985373052e": "Switch to phone mode",
-            "58a9ee6003": "tool-call formatting. Want me to add the diff next?",
-            "aa64b519c6": "terminal screen. Tokyonight palette, Menlo, real claude",
-            "e75112c834": "I've replaced the pair-scan slide with a high-fidelity",
-            "3ce3e8c892": "14 passed, 1 skipped (1.8s)",
-            "4b3666f9a9": "src/cache/worktree-cache.test.ts",
-            "1d448b69f7": "PASS",
-            "d39445686a": "src/transport/host-store.test.ts",
-            "a6e7cdc688": "pnpm test --filter mobile",
-            "21b67dfc92": "Bash",
-            "d6d1041a1c": "⎿ Replaced pair-scan slide with terminal session",
-            "336c0e070e": "mobile/orca-mobile-sidebar-mock-v3.html",
-            "6d4ebd5833": "Edit",
-            "fc83e0d5ef": "⎿ Read 2103 lines",
-            "80cc356591": "Read",
-            "2c10d43745": "claude",
-            "e0f98be657": "orca/feat-mobile-page",
-            "2defc05141": "dev@mac",
-            "da121ba48d": "PLAN.md",
-            "e4befee569": "shell",
             "606aa93192": "Files",
             "94febb0976": "Source control",
             "8d6516312d": "2 terminals · claude active",
-            "8432787c4e": "feat/mobile-page",
             "8fd998acd3": "Back"
           },
           "WorktreeListSlide": {
@@ -19750,10 +19734,10 @@
           "failed": "Failed",
           "succeeded": "Succeeded",
           "neverRan": "Never ran",
-          "filters": "Filters",
           "all": "All",
           "clear": "Clear filters",
           "agent": "Agent",
+          "bot": "Bot",
           "lastRun": "Last run"
         },
         "AutomationListSortHeader": {
@@ -20403,7 +20387,6 @@
       "linear-issue-attribute-filter-dropdowns": {
         "removeFilter": "Remove {{value0}} filter",
         "teamRequired": "Select a team to load status, assignees, and labels for this workspace.",
-        "filters": "Filters",
         "allWorkspacesTitle": "Select one workspace",
         "allWorkspacesBody": "Status, assignee, and label filters use ids from a single Linear workspace. Choose one workspace to filter by those attributes.",
         "clearAll": "Clear all filters",
@@ -20956,18 +20939,8 @@
         "create": "Create"
       },
       "NativeChatResumeToast": {
-        "resumingOn_one": "Resuming {{count}} agent on {{machine}}…",
-        "resumingOn_other": "Resuming {{count}} agents on {{machine}}…",
         "resuming_one": "Resuming {{count}} agent…",
         "resuming_other": "Resuming {{count}} agents…",
-        "resumedOn_one": "Resumed {{count}} agent on {{machine}}.",
-        "resumedOn_other": "Resumed {{count}} agents on {{machine}}.",
-        "resumedUpdate_one": "Resumed {{count}} agent after the update.",
-        "resumedUpdate_other": "Resumed {{count}} agents after the update.",
-        "resumedRestart_one": "Resumed {{count}} agent after the restart.",
-        "resumedRestart_other": "Resumed {{count}} agents after the restart.",
-        "partial_one": "Resumed {{resumed}} of {{total}} agents. {{count}} needs you.",
-        "partial_other": "Resumed {{resumed}} of {{total}} agents. {{count}} need you.",
         "stoppedOn_one": "{{count}} agent stopped on {{machine}}.",
         "stoppedOn_other": "{{count}} agents stopped on {{machine}}.",
         "stoppedUpdate_one": "{{count}} agent stopped when Orca updated.",
@@ -20980,8 +20953,6 @@
         "close": "Close",
         "listLabel": "Agents",
         "untitled": "Untitled agent",
-        "willAsk": "Orca asks agents to continue. Queued messages may be sent.",
-        "asked": "Orca asked agents to continue. Queued messages may be sent.",
         "resumedAutomatically": "Resumed automatically.",
         "changeInSettings": "Change in Settings",
         "dismissAll": "Dismiss all",
@@ -20991,7 +20962,16 @@
         "stateResumed": "Resumed",
         "stateNeedsYou": "Needs you",
         "stateResuming": "Resuming",
-        "stateStopped": "Stopped"
+        "stateStopped": "Stopped",
+        "resumingOne": "Resuming {{name}}…",
+        "failedOne": "Couldn’t resume {{name}}",
+        "failedSome_one": "Couldn’t resume {{count}} of {{total}}",
+        "failedSome_other": "Couldn’t resume {{count}} of {{total}}",
+        "resumedOne": "Resumed {{name}}",
+        "resumedMany_one": "Resumed {{count}} agent",
+        "resumedMany_other": "Resumed {{count}} agents",
+        "needYou_one": "{{count}} needs you",
+        "needYou_other": "{{count}} need you"
       },
       "RunTargetCombobox": {
         "noWslDistros": "No WSL distros found",
@@ -22184,6 +22164,14 @@
           "followedUp": "Follow-up",
           "handedOff": "Handed off",
           "task": "Task"
+        },
+        "unnamedRecipient": "an agent",
+        "recipientName": "{{name}}",
+        "event": {
+          "followedUp": "Sent follow-up",
+          "update": "Update",
+          "message": "Message",
+          "handedOff": "Handed off"
         }
       },
       "goal": {
@@ -22285,6 +22273,7 @@
       "explicitChatWslMoveToHost": "Chat is not available in a WSL folder opened from Windows. Run the project on a WSL host to chat there, or open the agent in a terminal.",
       "explicitChatWslRunAsHost": "Run {{distro}} as a host",
       "explicitChatSsh": "Chat is not available over SSH. Open the agent in a terminal instead.",
+      "explicitChatWorkspaceAccess": "Orca doesn't have permission to open this workspace folder. Check the folder's permissions and try again.",
       "explicitChatUnavailable": "This workspace cannot run the chat. Check the agent installation or open it in a terminal.",
       "structuredSessionHostDeclined": "Opened {{value0}} in a terminal",
       "structuredSessionTerminalNotVisible": "Orca opened {{value0}} in a terminal, but couldn't show it here when the launch finished. Your chat draft was kept.",
@@ -23151,7 +23140,18 @@
         "unlisted": "Background work running",
         "unread": "Workers couldn’t load",
         "unreadDetail": "Workers will show here once they load",
-        "chipLabel": "{{label}}, latest: {{title}}"
+        "chipLabel": "{{label}}, latest: {{title}}",
+        "backgroundCommandCount_one": "{{count}} background command",
+        "backgroundCommandCount_other": "{{count}} background commands",
+        "commandCount_one": "{{count}} command",
+        "commandCount_other": "{{count}} commands",
+        "mixedRegion": "Workers and background commands",
+        "commandsRegion": "Background commands",
+        "stopSubagentsAndCommands": "Stop subagents and commands",
+        "workersKeepRunning": "Workers keep running",
+        "clearFailedWorkers": "Clear failed workers",
+        "mixedCount": "{{workers}} · {{commands}}",
+        "mixedCountSpoken": "{{workers}}, {{commands}}"
       },
       "webhookSetup": {
         "heading": "Set up a webhook",
@@ -25363,6 +25363,8 @@
     }
   },
   "common": {
+    "new": "New",
+    "search": "Search",
     "retry": "Retry",
     "cancel": "Cancel",
     "unassigned": "Unassigned",
@@ -25645,7 +25647,9 @@
       "chatOtherWindow": "Sign-in is in progress in another window.",
       "chatPageDidntOpen": "Page didn't open?",
       "chatPasteCode": "Paste the code",
-      "chatPasteCodeLabel": "The code Google shows after you sign in, or that page's address"
+      "chatPasteCodeLabel": "The code Google shows after you sign in, or that page's address",
+      "launchesUse": "New agy launches use this account",
+      "loginNow": "agy's login right now"
     },
     "claude": {
       "added": "Account added. Select it to use it for the next Claude you start.",
@@ -26261,7 +26265,9 @@
     "statusFilters": {
       "loadFailed": "Could not load Jira status filters.",
       "saveFailed": "Could not save Jira status filters.",
+      "unavailable": "No statuses are available for this view yet.",
       "manualQuery": "Status filters apply to preset views. Clear the search to use them.",
+      "favouriteActive": "Clear the Jira favourite or choose a preset view to use status filters.",
       "label": "Filter Jira issues by status",
       "clear": "Clear statuses",
       "jql": "Status filter JQL",
@@ -26731,6 +26737,7 @@
       "fileExplorerCopyPath": "Copy file path",
       "fileExplorerCopyRelativePath": "Copy relative file path",
       "fileExplorerDelete": "Delete file",
+      "fileExplorerToggleDotfiles": "Toggle dotfiles",
       "terminalCopySelection": "Copy terminal selection",
       "terminalSelectAll": "Select all terminal text",
       "terminalPaste": "Paste into terminal",
@@ -26798,7 +26805,8 @@
       "d286d1ab85": "Clear pane title",
       "botItemBack": "Back to items",
       "botItemPrevious": "Previous item",
-      "botItemNext": "Next item"
+      "botItemNext": "Next item",
+      "pageSearch": "Search this page"
     },
     "group": {
       "global": "Global",
@@ -27816,7 +27824,7 @@
       "takesOver": "Takes over",
       "agentsKeepRunning": "Their agents keep running.",
       "fromTemplate": "Template",
-      "uploadDropOrPaste": "<upload>Upload</upload>, drop, or paste an image",
+      "uploadOrPaste": "<upload>Upload</upload> or paste",
       "purposeLabel": "Identity",
       "purposePlaceholder": "Who it is and what it does",
       "uploadPasteOrDrop": "or upload, paste or drop your own",
@@ -28447,7 +28455,13 @@
       },
       "repositoriesIn": "Repositories in {{accounts}}",
       "repositoryCount_one": "{{count}} repository in {{accounts}}",
-      "repositoryCount_other": "{{count}} repositories in {{accounts}}"
+      "repositoryCount_other": "{{count}} repositories in {{accounts}}",
+      "ghSignedOut": {
+        "thisComputer": "this computer",
+        "status": "gh signed out on {{host}}",
+        "line": "gh is signed out on {{host}}. Run <code>gh auth login</code> there.",
+        "copy": "Copy {{text}}"
+      }
     },
     "automations": {
       "paused": "Paused",
@@ -28960,7 +28974,8 @@
       },
       "deliveryUnconfirmed": "Delivery unconfirmed",
       "starting": "Starting…",
-      "notStarted": "Not started"
+      "notStarted": "Not started",
+      "renameThreadNeedsHostUpdate": "Update Orca on {{host}} to rename threads."
     },
     "google": {
       "turnOn": {

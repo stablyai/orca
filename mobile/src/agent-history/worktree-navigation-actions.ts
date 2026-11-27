@@ -29,7 +29,7 @@ export function buildWorktreeNavigationActions(args: Args): ActionSheetAction[] 
   const actions: ActionSheetAction[] = [
     {
       id: 'sourceControl',
-      label: translate('agentHistory.worktreeNavigationActions.sourceControl', 'Source Control'),
+      label: translate('agentHistory.worktreeNavigationActions.sourceControl', 'Source control'),
       icon: GitBranch,
       onPress: () => {
         const params = new URLSearchParams({ name: args.worktreeName, origin: 'host' })
@@ -59,10 +59,7 @@ export function buildWorktreeNavigationActions(args: Args): ActionSheetAction[] 
   }
   actions.push({
     id: 'agentSessionHistory',
-    label: translate(
-      'agentHistory.worktreeNavigationActions.agentSessionHistory',
-      'Agent Session History'
-    ),
+    label: translate('agentHistory.worktreeNavigationActions.agentSessionHistory', 'Agent history'),
     renderIcon: () =>
       MobileAgentSessionHistoryIcon({ size: 16, color: colors.textSecondary, strokeWidth: 2 }),
     onPress: () => openHistory()

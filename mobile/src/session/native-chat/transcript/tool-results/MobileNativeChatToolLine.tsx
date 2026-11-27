@@ -18,7 +18,6 @@ import type {
   NativeChatToolCallBlock,
   NativeChatToolResultBlock
 } from '../../../../../../src/shared/native-chat/native-chat-types'
-import { MobileSourceCopyButton } from '../../../../components/code-presentation/MobileSourceCopyButton'
 import { MobileSyntaxSegments } from '../../../../components/code-presentation/MobileSyntaxSegments'
 import { MarkdownLinkHandlerContext } from '../../../../components/markdown/links/markdown-link-handler'
 import { INLINE_TEXT_SELECTION } from '../../../../platform/text-selection/inline-text-selection'
@@ -38,10 +37,9 @@ function toolDuration(durationMs: unknown, t: Translate): string | null {
   if (typeof durationMs !== 'number' || !Number.isFinite(durationMs) || durationMs < 0) {
     return null
   }
+  // Under a second is not worth a word on the row.
   if (durationMs < 1000) {
-    return t('chat.nativeChatToolLine.durationMilliseconds', '{{milliseconds}}ms', {
-      milliseconds: Math.round(durationMs)
-    })
+    return null
   }
   const totalSeconds = Math.floor(durationMs / 1000)
   const seconds = totalSeconds % 60
@@ -200,7 +198,6 @@ export function MobileNativeChatToolLine({
     [block, result]
   )
   const commandDetail = label?.commandDetail ?? null
-  const fullCommand = label?.fullCommand ?? null
   const verb = label?.verb ? nativeChatToolRowVerbCopy(t)[label.verb] : null
   const commandAlone = label?.command === true && verb !== null && label.target.length > 0
   const mcp = call ? mcpToolIdentity(call.name, call.mcpIdentity) : null
@@ -213,7 +210,9 @@ export function MobileNativeChatToolLine({
   const filePath = label?.filePath ?? null
   const type = toolType(fontScale)
   const iconSize = 15 * fontScale
-  const exitCode = call && Number.isSafeInteger(call.exitCode) ? call.exitCode : undefined
+  // Success is the norm, so only a failing exit code is shown.
+  const exitCode =
+    call && Number.isSafeInteger(call.exitCode) && call.exitCode !== 0 ? call.exitCode : undefined
   const duration = call ? toolDuration(call.durationMs, t) : null
 
   return (
@@ -254,7 +253,7 @@ export function MobileNativeChatToolLine({
           {/* Held at the row's right edge, so the carets of a run line up in one column. */}
           <View style={styles.lineTrailing}>
             {exitCode !== undefined ? (
-              <Text style={[styles.lineMeta, type.meta, exitCode !== 0 && styles.errorText]}>
+              <Text style={[styles.lineMeta, type.meta, styles.errorText]}>
                 {t('chat.nativeChatToolLine.exitCode', 'exit {{exitCode}}', { exitCode })}
               </Text>
             ) : null}
@@ -266,12 +265,6 @@ export function MobileNativeChatToolLine({
             ) : null}
           </View>
         </Pressable>
-        {fullCommand ? (
-          <MobileSourceCopyButton
-            text={fullCommand}
-            accessibilityLabel={t('chat.nativeChatToolLine.copyCommand', 'Copy command')}
-          />
-        ) : null}
       </View>
       {hasDetail && expanded ? (
         <ToolLineDetail

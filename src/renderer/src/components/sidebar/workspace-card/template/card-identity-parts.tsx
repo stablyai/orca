@@ -122,14 +122,11 @@ export const CARD_IDENTITY_PARTS = {
       hostLabel={card.runtimeHostLabel}
     />
   )),
-  RenameError: part(['hasHoverDetails'], (props, _children, card) =>
-    card.worktree.firstAgentMessageRenameError ? (
+  RenameError: part([], (_props, _children, card) =>
+    card.autoNameFailure ? (
       <AutoNameFailedIndicator
         card={card}
-        hasHoverDetails={props.hasHoverDetails === true}
-        worktreeId={card.worktree.id}
-        executionHostId={card.worktree.hostId}
-        error={card.worktree.firstAgentMessageRenameError}
+        failure={card.autoNameFailure}
         onPointerDown={card.stopQuickActionPointerPropagation}
       />
     ) : null

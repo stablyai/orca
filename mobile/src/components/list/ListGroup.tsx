@@ -138,6 +138,8 @@ type ListRowProps = {
   subtitleColor?: string
   /** A status after the subtitle on its line, in its tone's colour: "Daily at 9 AM · Needs sign-in". */
   subtitleNote?: { text: string; color: string }
+  /** A status before the subtitle, in its tone's colour, kept when a long subtitle cuts: "Checks failed · acme-web #482". */
+  subtitleLead?: { text: string; color: string }
   /** A muted mark in a fixed-width column before the title, e.g. a step's number. */
   marker?: string
   /** A muted mark inline before the title, e.g. an item's `#35`, so titles keep one start. */
@@ -152,6 +154,8 @@ type ListRowProps = {
   leading?: ReactNode
   /** The current value in grey, e.g. "This computer". */
   value?: string
+  /** A value that is a status, e.g. "2 failing", in its tone's colour. */
+  valueColor?: string
   /** A small mark before the value, e.g. an agent's logo. */
   valueIcon?: ReactNode
   /** Anything after the value: a switch, a badge, a spinner. */
@@ -185,6 +189,7 @@ export function ListRow({
   subtitleMono = false,
   subtitleColor,
   subtitleNote,
+  subtitleLead,
   marker,
   titlePrefix,
   subtitleLines = 2,
@@ -192,6 +197,7 @@ export function ListRow({
   detail,
   leading,
   value,
+  valueColor,
   valueIcon,
   accessory,
   navigates = false,
@@ -242,6 +248,12 @@ export function ListRow({
             ]}
             numberOfLines={subtitleLines}
           >
+            {subtitleLead ? (
+              <>
+                <Text style={{ color: subtitleLead.color }}>{subtitleLead.text}</Text>
+                {' · '}
+              </>
+            ) : null}
             {subtitle}
             {subtitleNote ? (
               <Text style={{ color: subtitleNote.color }}>{` · ${subtitleNote.text}`}</Text>
@@ -267,7 +279,10 @@ export function ListRow({
       )}
       {value !== undefined ? (
         <WithIcon icon={valueIcon} shrink>
-          <Text style={listRowStyles.value} numberOfLines={1}>
+          <Text
+            style={[listRowStyles.value, valueColor !== undefined && { color: valueColor }]}
+            numberOfLines={1}
+          >
             {value}
           </Text>
         </WithIcon>

@@ -34,6 +34,7 @@ export function PrThreadScreen({
   onOpenFile,
   now,
   onBack,
+  backLabel,
   bottomInset
 }: {
   thread: Extract<PRCommentGroup, { kind: 'thread' }> | null
@@ -45,6 +46,8 @@ export function PrThreadScreen({
   onOpenFile?: (filePath: string) => void
   now: number
   onBack: () => void
+  /** Where back goes, for screen readers; the Comments page by default. */
+  backLabel?: string
   bottomInset: number
 }) {
   useMobileColorScheme()
@@ -55,7 +58,7 @@ export function PrThreadScreen({
       <ScreenFrame
         title={t('pullRequest.screens.thread', 'Thread')}
         onBack={onBack}
-        backLabel={t('pullRequest.screens.backToComments', 'Back to comments')}
+        backLabel={backLabel ?? t('pullRequest.screens.backToComments', 'Back to comments')}
       >
         <MobileStateView
           title={t(
@@ -86,7 +89,7 @@ export function PrThreadScreen({
             })
       }
       onBack={onBack}
-      backLabel={t('pullRequest.screens.backToComments', 'Back to comments')}
+      backLabel={backLabel ?? t('pullRequest.screens.backToComments', 'Back to comments')}
       trailing={
         canResolve ? (
           <PrMiniButton

@@ -7,6 +7,7 @@ import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { searchMobilePrBaseRefs } from '../../creation/mobile-pr-create-draft'
 import { SheetHeader } from '../../../../components/nav-bar/SheetHeader'
 import { ListGroup, ListRow } from '../../../../components/list/ListGroup'
+import { composerInputStyles } from '../../../../components/composer-input/composer-input-styles'
 import { TextField } from '../../../../components/composer-input/TextField'
 import type { MobilePrTab } from '../use-mobile-pr-tab'
 import { prSheetStyles as sheetStyles } from '../pr-tab-styles'
@@ -69,6 +70,7 @@ export function PrBasePicker({
       <View style={sheetStyles.body}>
         <TextField
           leading={<Search size={16} color={colors.textMuted} />}
+          style={composerInputStyles.filledField}
           value={query}
           onChangeText={setQuery}
           placeholder={t('pullRequest.createSheet.searchBranches', 'Search branches')}

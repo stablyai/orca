@@ -1,3 +1,4 @@
+import { runWithFinally } from '@/lib/run-with-finally'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { useAppStore } from '../../../store/index'
@@ -84,17 +85,20 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
       return
     }
     setIsRefreshing(true)
-    try {
-      // Why: re-run PATH detection so a freshly-installed/removed CLI's bar appears/hides without restarting Orca.
-      await Promise.all([
-        (refreshRemote ?? refreshRateLimits)(),
-        refreshDetectedAgents(undefined, { wakeWslDistro: true, userInitiated: true })
-      ])
-    } finally {
-      if (mountedRef.current) {
-        setIsRefreshing(false)
+    await runWithFinally(
+      async () => {
+        // Why: re-run PATH detection so a freshly-installed/removed CLI's bar appears/hides without restarting Orca.
+        await Promise.all([
+          (refreshRemote ?? refreshRateLimits)(),
+          refreshDetectedAgents(undefined, { wakeWslDistro: true, userInitiated: true })
+        ])
+      },
+      () => {
+        if (mountedRef.current) {
+          setIsRefreshing(false)
+        }
       }
-    }
+    )
   }, [isRefreshing, remoteOwner, refreshRemote, refreshRateLimits, refreshDetectedAgents])
 
   if (!statusBarVisible) {

@@ -33,8 +33,8 @@ import { botCreate } from './bot-sheet-operations'
 import type { ListedBot, PhoneBot } from './host-bots-operations'
 import { mobileBotAvatarSource } from './host-bot-row-facts'
 import type { NewBotComputer } from './new-bot-computers'
+import { groupFieldStyles } from '../components/composer-input/composer-input-styles'
 import {
-  groupFieldStyles,
   newBotComputerNote,
   NewBotAgentRow,
   NewBotAgentSheet,

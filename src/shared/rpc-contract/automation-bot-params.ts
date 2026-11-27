@@ -6,10 +6,14 @@ import { WEBHOOK_WHERE_OPS } from '../connector-webhook-contract'
 import { requiredString } from './rpc-param-primitives'
 import { BotAgentSetupSchema } from '../bots/bot-agent-setup'
 
-const ResultPlaceRef = { ref: z.string().min(1).optional(), label: z.string().optional() }
+const createResultPlaceRef = () => ({
+  ref: z.string().min(1).optional(),
+  label: z.string().optional()
+})
 
-export const AutomationBotTarget = lazyZodSchema(() =>
-  z.object({
+export const AutomationBotTarget = lazyZodSchema(() => {
+  const ResultPlaceRef = createResultPlaceRef()
+  return z.object({
     botId: requiredString('Missing bot id'),
     runsIn: z.enum(['new', 'chat']),
     // No homeIfGone or toConversation: only the host sets them, when it picks the chat that made a wait.
@@ -27,10 +31,10 @@ export const AutomationBotTarget = lazyZodSchema(() =>
       z.object({ linearIssue: requiredString('Missing Linear issue'), ...ResultPlaceRef })
     ])
   })
-)
+})
 
 const FilterText = lazyZodSchema(() => z.string().min(1))
-const EventTriggerFields = {
+const createEventTriggerFields = () => ({
   id: FilterText,
   in: z.array(FilterText).optional(),
   textContains: FilterText.optional(),
@@ -47,11 +51,12 @@ const EventTriggerFields = {
   onOwnerMessage: z.literal(true).optional(),
   // The owner's own events too; the store keeps it to github.pr_opened.
   fromOwner: z.literal(true).optional()
-}
+})
 
 // Strict, so a filter this host can't read fails instead of widening the rule; the store checks limits.
-export const AutomationEventTriggers = lazyZodSchema(() =>
-  z
+export const AutomationEventTriggers = lazyZodSchema(() => {
+  const EventTriggerFields = createEventTriggerFields()
+  return z
     .array(
       z.discriminatedUnion('source', [
         z
@@ -125,7 +130,7 @@ export const AutomationEventTriggers = lazyZodSchema(() =>
       ])
     )
     .optional()
-)
+})
 
 // Strict, so a host that can't read a deadline refuses it rather than waiting forever.
 export const AutomationOnceParam = lazyZodSchema(() =>

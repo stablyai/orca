@@ -408,6 +408,7 @@ export function MobileNativeChatView({
               </MobileBotCardSendContext.Provider>
             </MobileNativeChatDisclosureContext.Provider>
             <MobileNativeChatFloatingControls
+              canvasFades
               showJumpToTail={tail.showJumpToTail}
               onJumpToTail={jumpToTail}
             />

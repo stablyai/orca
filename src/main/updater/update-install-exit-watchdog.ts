@@ -4,7 +4,7 @@ import { recordAgentSessionRuntimeEnd } from '../runtime/agent-session/records/a
 
 // Leave time for normal checkpoints, but do not strand the installer behind a wedged shutdown.
 export const UPDATE_INSTALL_EXIT_TIMEOUT_MS = 20_000
-// Windows' installer terminates install-folder processes after ORCA_UPDATE_EXIT_GRACE_MS (10 s,
+// Windows' installer terminates install-folder processes after ORCA_UPDATE_EXIT_GRACE_MS (22 s,
 // config/nsis/orca-process-check.nsh); exit on our own first rather than be killed mid-write.
 export const WINDOWS_UPDATE_INSTALL_EXIT_TIMEOUT_MS = 8_000
 

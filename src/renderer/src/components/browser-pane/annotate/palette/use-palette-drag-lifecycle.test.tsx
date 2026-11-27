@@ -4,6 +4,7 @@ import { useRef, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { isWebviewDragPassthroughActive } from '../../host-guest/drag/webview-drag-passthrough'
 import { usePaletteDrag } from './use-palette-drag'
+import { PALETTE_BOTTOM_INSET_PX, PALETTE_EDGE_INSET_PX } from './palette-placement'
 
 // One observer per test: the hook observes the bounds and the palette with it.
 let notifyResize: (() => void) | null = null
@@ -49,7 +50,8 @@ beforeEach(() => {
   })
   Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
     configurable: true,
-    get: () => sizes.boundsHeight
+    // Plus the extra bottom gap, so the layout height is boundsHeight.
+    get: () => sizes.boundsHeight + PALETTE_BOTTOM_INSET_PX - PALETTE_EDGE_INSET_PX
   })
   Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
     configurable: true,

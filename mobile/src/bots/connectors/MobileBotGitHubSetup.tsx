@@ -11,6 +11,7 @@ import {
   type ConnectorGitHubInstallation
 } from '../../../../src/shared/connector-bot-github-contract'
 import { BOT_CONNECTOR_NAMES } from '../../../../src/shared/bots/bot-templates'
+import { joinSentences } from '../../../../src/shared/text/sentence-joining'
 import { MobileStateView } from '../../components/feedback/MobileStateView'
 import { ListRow } from '../../components/list/ListGroup'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
@@ -171,9 +172,15 @@ export function MobileBotGitHubSetup(props: {
               footer={
                 failed
                   ? undefined
-                  : `${t('bots.connect.opensOnHost', 'Opens in Orca’s browser on {{host}}.', {
-                      host: hostName
-                    })} ${t('bots.github.connect.readsOnly', 'Orca only reads your GitHub username and id.')}`
+                  : joinSentences([
+                      t('bots.connect.opensOnHost', 'Opens in Orca’s browser on {{host}}.', {
+                        host: hostName
+                      }),
+                      t(
+                        'bots.github.connect.readsOnly',
+                        'Orca only reads your GitHub username and id.'
+                      )
+                    ])
               }
             >
               <ListRow

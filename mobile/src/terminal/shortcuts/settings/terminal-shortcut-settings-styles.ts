@@ -1,8 +1,9 @@
-import { colors, feedback, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { colors, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { LIST_ROW_PADDING } from '../../../components/list/ListGroup'
 
 // Drag-reorder rows keep their own layout: the reorder list fixes their height and adds the grip.
+// Text matches ListRow's title, value and subtitle so a row reads the same in and out of Edit.
 export const styles = themedStyleSheet(() => ({
   reorderRowContent: {
     flex: 1,
@@ -20,33 +21,17 @@ export const styles = themedStyleSheet(() => ({
     fontSize: 15,
     color: colors.textPrimary
   },
+  rowLabelEmphasis: {
+    fontWeight: '500'
+  },
+  rowValue: {
+    fontSize: 15,
+    color: colors.textSecondary
+  },
   rowSublabel: {
     fontSize: 13,
     color: colors.textSecondary,
+    fontFamily: typography.monoFamily,
     marginTop: 2
-  },
-  keycap: {
-    minWidth: 62,
-    alignItems: 'center',
-    backgroundColor: colors.translucentFill,
-    borderRadius: radii.control,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs
-  },
-  keycapText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontFamily: typography.monoFamily
-  },
-  deleteButton: {
-    width: 32,
-    height: 32,
-    borderRadius: radii.control,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.translucentFill
-  },
-  deleteButtonPressed: {
-    opacity: feedback.pressedOpacity
   }
 }))
