@@ -40,8 +40,8 @@ export function WorktreeJumpPaletteSurface({
     (item) => item.id === controller.commandSelectedItemId
   )
   const modKey = navigator.userAgent.includes('Mac') ? '⌘' : 'Ctrl'
-  // Set by the Search shortcut card while it offers Mod+Enter; a selected task row keeps the chord.
-  const acceptSearchShortcutRef: SearchShortcutAcceptRef = useRef(null)
+  // The Search shortcut card's Switch button while it offers Mod+Enter; a selected task row keeps the chord.
+  const acceptSearchShortcutRef: SearchShortcutAcceptRef = useRef<HTMLButtonElement>(null)
   const emptyState = getWorktreeJumpPaletteEmptyState(controller, t)
   const resultCount = getWorktreeJumpPaletteResultCount(controller)
   const { scoped, botsEnabled } = controller.botScope
@@ -97,11 +97,11 @@ export function WorktreeJumpPaletteSurface({
             controller.handleSelectTask(selectedTask.result, true)
             return
           }
-          const acceptSearchShortcut = acceptSearchShortcutRef.current
-          if (modEnter && acceptSearchShortcut) {
+          const switchSearchShortcut = acceptSearchShortcutRef.current
+          if (modEnter && switchSearchShortcut) {
             event.preventDefault()
             event.stopPropagation()
-            acceptSearchShortcut()
+            switchSearchShortcut.click()
             return
           }
           if (

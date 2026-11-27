@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useState } from 'react'
+import React, { memo, useState } from 'react'
 import { Check, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
@@ -11,6 +11,7 @@ import {
   useSearchShortcutOfferState,
   type SearchShortcutOfferState
 } from '@/lib/keyboard/search-shortcut-offer'
+import { formatKeybindingList } from '../../../../shared/keybindings/formatting'
 import type { KeybindingFileSnapshot } from '../../../../shared/keybindings/types'
 
 type Translate = ReturnType<typeof useTranslate>
@@ -23,7 +24,8 @@ type SettledCard =
   | { kind: 'unconfirmed' }
   | { kind: 'undone'; keys: KeyLabels }
 
-export type SearchShortcutAcceptRef = React.MutableRefObject<(() => void) | null>
+/** Points at the Switch button while it may take Mod+Enter; the palette clicks it so disabled states hold. */
+export type SearchShortcutAcceptRef = React.RefObject<HTMLButtonElement | null>
 
 /** Undecided existing profiles only; stays until they pick Switch or Not now. */
 export const WorktreeJumpPaletteSearchShortcutOffer = memo(
@@ -113,14 +115,6 @@ function SearchShortcutOfferCard({
     }
   }
 
-  const accept = pending || !modEnterFree ? null : () => void choose('accepted')
-  useEffect(() => {
-    acceptShortcutRef.current = accept
-    return () => {
-      acceptShortcutRef.current = null
-    }
-  }, [acceptShortcutRef, accept])
-
   return (
     <SearchShortcutCardFrame label={title} stackWhenNarrow>
       <div className="col-start-1 min-w-0 font-semibold text-foreground">{title}</div>
@@ -136,6 +130,7 @@ function SearchShortcutOfferCard({
           {t('searchShortcutOptIn.notNow', 'Not now')}
         </Button>
         <Button
+          ref={modEnterFree ? acceptShortcutRef : undefined}
           size="xs"
           disabled={pending}
           onMouseDown={keepPaletteInputFocus}
@@ -144,7 +139,9 @@ function SearchShortcutOfferCard({
         >
           {t('searchShortcutOptIn.switch', 'Switch')}
           {modEnterFree ? (
-            <span className="text-3xs font-normal opacity-60">{mac ? '⌘↵' : 'Ctrl+↵'}</span>
+            <span className="text-3xs font-normal opacity-60">
+              {formatKeybindingList(['Mod+Enter'], state.platform)}
+            </span>
           ) : null}
         </Button>
       </div>
