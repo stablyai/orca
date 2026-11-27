@@ -27,7 +27,8 @@ import {
   historyRowOfDeletedChat,
   historyRowOwners,
   historyRowOwnershipLookup,
-  oneRowPerChat
+  oneRowPerChat,
+  type HistoryRowWithOwner
 } from './history-row-ownership-lookup'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../../runtime/agent-session/installation/structured-agent-session-host-refusal'
 import {
@@ -60,7 +61,7 @@ export function projectStructuredAiVaultSessions(
     return result
   }
   const sessions = oneRowPerChat(
-    result.sessions.flatMap((session) => {
+    result.sessions.flatMap((session): HistoryRowWithOwner<(typeof result.sessions)[number]>[] => {
       const local = session.executionHostId === LOCAL_EXECUTION_HOST_ID
       if (local && deleted?.(session)) {
         return []
@@ -83,10 +84,13 @@ export function projectStructuredAiVaultSessions(
       return [{ row, ownership }]
     })
   )
-  return sessions.length === result.sessions.length &&
-    sessions.every((row, index) => row === result.sessions[index])
-    ? result
-    : { ...result, sessions }
+  const hidden = result.sessions.length - sessions.length
+  if (hidden === 0 && sessions.every((row, index) => row === result.sessions[index])) {
+    return result
+  }
+  return hidden === 0
+    ? { ...result, sessions }
+    : { ...result, sessions, hiddenRowCount: (result.hiddenRowCount ?? 0) + hidden }
 }
 
 /** Owned search hits open their chat and omit terminal resume commands, matching history rows. */
@@ -103,7 +107,7 @@ export function projectStructuredAiVaultSearchResponse(
   return {
     ...response,
     hits: oneRowPerChat(
-      response.hits.flatMap((hit) => {
+      response.hits.flatMap((hit): HistoryRowWithOwner<(typeof response.hits)[number]>[] => {
         if (deleted?.(hit)) {
           return []
         }

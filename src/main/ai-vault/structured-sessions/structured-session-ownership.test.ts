@@ -103,4 +103,6 @@ it('lists a chat that holds a rewound-away conversation once, as its head', () =
       structuredSession: { sessionId: 'chat-1', workspaceId: 'workspace-1' }
     })
   ])
+  // Show more still sees a full scan.
+  expect(result.hiddenRowCount).toBe(1)
 })

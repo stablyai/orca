@@ -43,10 +43,13 @@ export function historyRowOwnershipLookup():
   }
 }
 
+export type HistoryRowWithOwner<Row> = {
+  row: Row
+  ownership: StructuredProviderSessionOwnership | null
+}
+
 /** Every conversation a chat held opens and deletes that one chat, so it lists once: its head row, else its first. */
-export function oneRowPerChat<Row>(
-  rows: readonly { row: Row; ownership: StructuredProviderSessionOwnership | null }[]
-): Row[] {
+export function oneRowPerChat<Row>(rows: readonly HistoryRowWithOwner<Row>[]): Row[] {
   const kept = new Map<string, { index: number; head: boolean }>()
   rows.forEach(({ ownership }, index) => {
     if (!ownership) {
