@@ -35,7 +35,8 @@ export function SourceControlContentStatus({
   filterTooLarge,
   hasFilteredUncommittedEntries,
   hasFilteredBranchEntries,
-  filterQuery
+  filterQuery,
+  filterFeedbackInline = true
 }: {
   unresolvedConflictCount: number
   conflictOperation: GitConflictOperation
@@ -60,6 +61,8 @@ export function SourceControlContentStatus({
   hasFilteredUncommittedEntries: boolean
   hasFilteredBranchEntries: boolean
   filterQuery: string
+  /** False when the file-list header renders the filter feedback under itself. */
+  filterFeedbackInline?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   // Why: a stopped or still-connecting host can't answer git, so its read error or "clean" result is not the workspace's.
@@ -175,6 +178,36 @@ export function SourceControlContentStatus({
           )}
         />
       ) : null}
+      {filterFeedbackInline ? (
+        <SourceControlFilterFeedback
+          normalizedFilter={normalizedFilter}
+          filterTooLarge={filterTooLarge}
+          hasFilteredUncommittedEntries={hasFilteredUncommittedEntries}
+          hasFilteredBranchEntries={hasFilteredBranchEntries}
+          filterQuery={filterQuery}
+        />
+      ) : null}
+    </>
+  )
+}
+
+/** Filter results feedback; rendered under the file-list header so typing never moves the input. */
+export function SourceControlFilterFeedback({
+  normalizedFilter,
+  filterTooLarge,
+  hasFilteredUncommittedEntries,
+  hasFilteredBranchEntries,
+  filterQuery
+}: {
+  normalizedFilter: string
+  filterTooLarge: boolean
+  hasFilteredUncommittedEntries: boolean
+  hasFilteredBranchEntries: boolean
+  filterQuery: string
+}): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <>
       {filterTooLarge && (
         <EmptyState
           heading={t(

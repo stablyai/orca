@@ -39,7 +39,7 @@ export type AgentForegroundProcessResolution = {
   processId?: number
   /** Windows: the anchor's creation time, when the scan read it. */
   processCreationTimeMs?: number
-  /** Windows: the scan proved the caller's `anchorProcessId` is now a non-agent. */
+  /** Windows: the scan proved the caller's `anchorProcessId` no longer holds the cached agent. */
   anchorPidForeign?: boolean
 }
 

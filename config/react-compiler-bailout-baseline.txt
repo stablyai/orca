@@ -54,7 +54,7 @@
 1 src/renderer/src/components/bots/webhooks/use-webhook-actions.ts
 1 src/renderer/src/components/bots/webhooks/use-webhook-key.ts
 2 src/renderer/src/components/browser-pane/annotate/MarkupOverlay.tsx
-11 src/renderer/src/components/browser-pane/annotate/browser-guest-annotate-overlays.tsx
+3 src/renderer/src/components/browser-pane/annotate/browser-guest-annotate-overlays.tsx
 5 src/renderer/src/components/browser-pane/annotate/grab/use-browser-page-grab-annotations.ts
 4 src/renderer/src/components/browser-pane/assemble-chrome/address-bar/BrowserAddressBar.tsx
 1 src/renderer/src/components/browser-pane/assemble-chrome/feedback/BrowserMobileDriverOverlay.tsx

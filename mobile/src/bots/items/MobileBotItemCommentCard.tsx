@@ -9,7 +9,7 @@ import { botItemActorName } from '../../../../src/shared/bots/bot-item-actor-nam
 import { botItemQuestionShape } from '../../../../src/shared/bots/bot-item-ask'
 import type { BotItem } from '../../../../src/shared/bots/bot-items'
 import type { BotItemSentAnswers } from '../../../../src/shared/bots/use-bot-item-question-steps'
-import { MobileMarkdown } from '../../components/markdown/MobileMarkdown'
+import { MobileNativeChatMarkdown } from '../../session/native-chat/transcript/message-content/MobileNativeChatMarkdown'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { INLINE_TEXT_SELECTION } from '../../platform/text-selection/inline-text-selection'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
@@ -41,7 +41,10 @@ export function MobileBotItemCommentCard({
   item: BotItem
   entry: Pick<Extract<BotItemActivityEntry, { kind: 'comment' }>, 'event' | 'replyTo' | 'waiting'> &
     Partial<
-      Pick<Extract<BotItemActivityEntry, { kind: 'comment' }>, 'answers' | 'byOrder' | 'ended'>
+      Pick<
+        Extract<BotItemActivityEntry, { kind: 'comment' }>,
+        'answers' | 'byOrder' | 'ended' | 'beside'
+      >
     >
   attachments: MobileBotItemAttachmentSource
   /** A comment sent from the box that didn't reach the host; no Retry when it may have. */
@@ -64,9 +67,13 @@ export function MobileBotItemCommentCard({
   const { event, replyTo, waiting } = entry
   const time = useMobileMessageTime()
   const shape = botItemQuestionShape(event.data)
-  const text = mobileBotItemCommentWords({ ...event.data, text: shape.body })
+  const text = mobileBotItemCommentWords({ ...event.data, text: entry.beside ?? shape.body })
   // A question's lines too, as the agent wrote them.
-  const quoted = onQuote ? mobileBotItemCommentWords(event.data).trim() : ''
+  const quoted = onQuote
+    ? mobileBotItemCommentWords(
+        entry.beside === undefined ? event.data : { ...event.data, text: entry.beside }
+      ).trim()
+    : ''
   return (
     <View ref={ref} style={styles.row}>
       {flash ? <CommentFlash key={flash.at} still={flash.still} end={flash.end} /> : null}
@@ -102,7 +109,7 @@ export function MobileBotItemCommentCard({
         ) : null}
         <MobileBotItemCommentAttachments data={event.data} {...attachments}>
           {text.trim() ? (
-            <MobileMarkdown content={text} rangeSelectable={INLINE_TEXT_SELECTION} />
+            <MobileNativeChatMarkdown content={text} rangeSelectable={INLINE_TEXT_SELECTION} />
           ) : null}
         </MobileBotItemCommentAttachments>
         {shape.decisions.length > 0 ? (

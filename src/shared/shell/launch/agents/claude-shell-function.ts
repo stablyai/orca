@@ -99,21 +99,22 @@ if test "$__orca_claude_type" = file; and begin; test -n "$ORCA_CLAUDE_PROFILE_P
       command claude $argv
       return $status
     end
+    # Why command env: a user env function (e.g. grc's) pipes stdout, so Claude would start in --print mode.
     if test -z "$profile"; and test -n "$CLAUDE_CONFIG_DIR"; and test -n "$ORCA_CLAUDE_USER_CONFIG_DIR"
       set -l plugins (__orca_claude_hook_plugin "$ORCA_CLAUDE_USER_CONFIG_DIR")
       test -n "$plugins"; and set -lx CLAUDE_CODE_PLUGIN_DIRS "$plugins"
-      env -u ORCA_CLAUDE_INJECTED_CONFIG_DIR CLAUDE_CONFIG_DIR="$ORCA_CLAUDE_USER_CONFIG_DIR" claude $argv
+      command env -u ORCA_CLAUDE_INJECTED_CONFIG_DIR CLAUDE_CONFIG_DIR="$ORCA_CLAUDE_USER_CONFIG_DIR" claude $argv
       return $status
     end
     if test -z "$profile"
-      env -u CLAUDE_CONFIG_DIR -u ORCA_CLAUDE_INJECTED_CONFIG_DIR claude $argv
+      command env -u CLAUDE_CONFIG_DIR -u ORCA_CLAUDE_INJECTED_CONFIG_DIR claude $argv
       return $status
     end
     if not string match -qr '^(/|[A-Za-z]:)' -- "$profile"
       return 1
     end
     test -d "$profile"; or mkdir -p -m 700 -- "$profile" 2>/dev/null
-    env CLAUDE_CONFIG_DIR="$profile" ORCA_CLAUDE_INJECTED_CONFIG_DIR="$profile" claude $argv
+    command env CLAUDE_CONFIG_DIR="$profile" ORCA_CLAUDE_INJECTED_CONFIG_DIR="$profile" claude $argv
   end
 end
 set -e __orca_claude_type

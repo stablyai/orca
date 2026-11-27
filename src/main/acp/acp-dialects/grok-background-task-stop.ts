@@ -1,16 +1,19 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { AcpDialect } from './acp-dialect'
 
-const response = z.union([
-  z.object({
-    error: z.null().optional(),
-    result: z.object({
-      taskId: z.string(),
-      outcome: z.enum(['killed', 'already_exited', 'not_found'])
-    })
-  }),
-  z.object({ result: z.null(), error: z.string() })
-])
+const response = lazyZodSchema(() =>
+  z.union([
+    z.object({
+      error: z.null().optional(),
+      result: z.object({
+        taskId: z.string(),
+        outcome: z.enum(['killed', 'already_exited', 'not_found'])
+      })
+    }),
+    z.object({ result: z.null(), error: z.string() })
+  ])
+)
 
 export const grokBackgroundTaskStop: NonNullable<AcpDialect['backgroundTaskStop']> = {
   probe: { method: '_x.ai/task/kill', params: {} },

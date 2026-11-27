@@ -2,7 +2,7 @@ import { TerminalPaneRecentImages } from './TerminalRecentImages'
 import { useAppStore } from '@/store'
 import type { PaneTitleOverlayRect } from './pane-title-overlay-rects'
 import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
-import { useRef, type CSSProperties, type RefObject } from 'react'
+import type { CSSProperties, RefObject } from 'react'
 import { MessageSquarePlus, SquareSplitVertical, SquareTerminal, X } from 'lucide-react'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
@@ -19,7 +19,6 @@ import { TerminalPaneHeaderDropSurface } from '../input/file-drop/TerminalPaneHe
 import { TerminalPaneResumeInChatButton } from '../chat/TerminalPaneResumeInChatButton'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { NativeChatSettingsButton } from '../../native-chat/appearance/NativeChatSettingsButton'
-import { usePaneTitleTopRowHover } from './use-pane-title-top-row-hover'
 
 type TerminalPaneHeaderOverlayProps = {
   tabId: string
@@ -103,8 +102,6 @@ export default function TerminalPaneHeaderOverlay({
   onRenameBlur
 }: TerminalPaneHeaderOverlayProps): React.JSX.Element {
   const t = useTranslate()
-  const layerRef = useRef<HTMLDivElement>(null)
-  usePaneTitleTopRowHover(layerRef)
   const recentImagesEnabled = useAppStore(
     (state) => state.settings?.terminalDroppedImagesPreview !== false
   )
@@ -345,7 +342,6 @@ export default function TerminalPaneHeaderOverlay({
 
   return (
     <div
-      ref={layerRef}
       className="pane-title-overlay-layer"
       data-pane-title-surface={titleUsesLightSurface ? 'light' : 'dark'}
       style={{

@@ -28,7 +28,7 @@ import { acpProcessEnvironment } from '../launch/acp-structured-launch-resolutio
 import { SharedToolProcessSession } from '../../runtime/agent-session/environment/shared-tool-process-callers'
 import { AcpStructuredOptions } from '../options/acp-structured-options'
 import { AcpStructuredPrompts } from '../requests/acp-structured-prompts'
-import { acpStructuredPermissionHandler } from '../requests/acp-structured-permission-handler'
+import { acpRunRequests, acpToolFreeRun, stopAtToolWork } from './acp-tool-free-run'
 import { withAcpUrlElicitation } from '../requests/acp-url-elicitation'
 import { AcpLoadHistory } from '../history/acp-history-replay'
 import { asReattachHistory } from '../history/acp-reattach-history'
@@ -51,6 +51,8 @@ export async function acquireAcpStructuredSession(input: {
   onConnectionLost: (session: childState.AcpStructuredChild | null, error: Error) => void
   onSettled: AcpStructuredTurnsDeps['settle']
   forceClose: (sessionId: string, reason: string) => void
+  /** Like `forceClose`, and its running turn ends interrupted at once. */
+  interrupt: (sessionId: string, reason: string) => void
 }): Promise<{
   acquisition: AgentSessionAcquisition
   session: childState.AcpStructuredChild
@@ -71,7 +73,8 @@ export async function acquireAcpStructuredSession(input: {
     }
   }
   closedBeforeSpawn()
-  const launch = await prepareAcpStructuredLaunch(deps, acquire, closedBeforeSpawn)
+  const prepared = await prepareAcpStructuredLaunch(deps, input.acquire, closedBeforeSpawn)
+  const { launch, acquire: run } = acpToolFreeRun(prepared, input.acquire)
   // The chat's account home pins its backend.
   const { spec } = launch
   let session: childState.AcpStructuredChild | null = null
@@ -100,7 +103,7 @@ export async function acquireAcpStructuredSession(input: {
   const { command, args, cwd } = launch
   const processLaunch = { command, args, cwd, ...acpProcessEnvironment(launch) }
   const relayed = await launchRelayedAcpAgent(input, launch, processLaunch)
-  const launchPermission = await keptAcpLaunchPermission(spec, relayed, launch, acquire)
+  const launchPermission = await keptAcpLaunchPermission(spec, relayed, launch, run)
   // Cancellation owns no connection yet: the relayed agent goes as a tracked one would.
   if (relayed && input.abandoned()) {
     await relayed.managed.close().catch(() => undefined)
@@ -108,13 +111,12 @@ export async function acquireAcpStructuredSession(input: {
   const fullAccess = launchPermission.permission === 'full-access'
   const connection = connect(processLaunch, {
     ...(relayed ? { relayed } : {}),
-    clientInfo: acpClientInfo(spec, launch.version ?? null),
+    clientInfo: acpClientInfo(spec),
     // Only a chat can show a URL request's card, so other connections never advertise it.
     clientCapabilities: withAcpUrlElicitation(spec.dialect.clientCapabilities),
     retryBusyPrompts: spec.agent === 'omp',
     ...(spec.signIn ? { signIn: spec.signIn } : {}),
-    onPermission: acpStructuredPermissionHandler(() => session, spec, prompts),
-    onRequest: (method, params, context) => prompts.handle(method, params, context),
+    ...acpRunRequests(launch, () => session, prompts),
     onExtensionNotification: (method, params) =>
       whenLane(() => {
         relayed?.turns.observeSessionUpdate(params)
@@ -149,6 +151,7 @@ export async function acquireAcpStructuredSession(input: {
   }
   // From here, cancellation closes this connection even before exit is proven.
   input.track(connection)
+  stopAtToolWork(launch, connection, (reason) => input.interrupt(sessionId, reason))
   connection.subscribe((event: AcpSessionEvent) =>
     whenLane(() => {
       relayed?.turns.observeSessionUpdate(event.kind === 'known' ? event.notification : event.raw)
@@ -269,7 +272,7 @@ export async function acquireAcpStructuredSession(input: {
     exitObservedAt: null,
     open: (signal) =>
       initializeAcpStructuredSession({
-        acquire,
+        acquire: run,
         signal,
         deps,
         generation,

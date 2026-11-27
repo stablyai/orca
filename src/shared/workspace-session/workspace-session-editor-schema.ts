@@ -1,16 +1,19 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 
-export const persistedOpenFileSchema = z.object({
-  filePath: z.string(),
-  relativePath: z.string(),
-  worktreeId: z.string(),
-  language: z.string(),
-  isPreview: z.boolean().optional(),
-  runtimeEnvironmentId: z.string().nullable().optional(),
-  mirroredFromRuntimeSession: z.literal(true).optional(),
-  externalSshTargetId: z.string().trim().min(1).optional(),
-  dirtyDraftContent: z.string().optional(),
-  lastKnownDiskSignature: z.string().optional(),
-  readOnly: z.boolean().optional(),
-  liveTail: z.boolean().optional()
-})
+export const persistedOpenFileSchema = lazyZodSchema(() =>
+  z.object({
+    filePath: z.string(),
+    relativePath: z.string(),
+    worktreeId: z.string(),
+    language: z.string(),
+    isPreview: z.boolean().optional(),
+    runtimeEnvironmentId: z.string().nullable().optional(),
+    mirroredFromRuntimeSession: z.literal(true).optional(),
+    externalSshTargetId: z.string().trim().min(1).optional(),
+    dirtyDraftContent: z.string().optional(),
+    lastKnownDiskSignature: z.string().optional(),
+    readOnly: z.boolean().optional(),
+    liveTail: z.boolean().optional()
+  })
+)

@@ -23,7 +23,7 @@ let relay: BotToolRelay
 function toolsFolder(url: string, id: string, secret = SECRET): string {
   const folder = mkdtempSync(join(tmpdir(), 'relay-bot-'))
   dirs.push(folder)
-  changeBotToolCredentials(folder, new Map([[id, { url, headers: { 'x-api-key': secret } }]]))
+  changeBotToolCredentials(folder, new Map([[id, { url, headers: { 'X-Api-Key': secret } }]]))
   writeToolsFile(folder, { [id]: url })
   return folder
 }
@@ -53,9 +53,14 @@ afterEach(() => {
 })
 
 describe("Orca's tool relay", () => {
-  it("adds the tool's saved headers and drops the bot's token on the way to its server", async () => {
+  it("passes every other header both ways, the saved ones win, and the agent's token stays behind", async () => {
     const tool = await upstream((_seen, res) => {
-      res.writeHead(200, { 'content-type': 'application/json', 'mcp-session-id': 's1' })
+      res.writeHead(200, {
+        'content-type': 'application/json',
+        'mcp-session-id': 's1',
+        'x-upstream-custom': 'u1',
+        'www-authenticate': 'Bearer realm="x"'
+      })
       res.end('{"jsonrpc":"2.0","id":1,"result":{}}')
     })
     const bot = await botWith(tool.url)
@@ -66,17 +71,22 @@ describe("Orca's tool relay", () => {
         cookie: 'c=1',
         'mcp-method': 'tools/call',
         'mcp-name': 'search',
-        'mcp-param-region': 'us-west1'
+        'mcp-param-region': 'us-west1',
+        'x-custom': 'c1',
+        'X-Api-Key': 'agent-value'
       },
       body: '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search","arguments":{"region":"us-west1"}}}'
     })
     expect(answer.status).toBe(200)
     expect(answer.headers['mcp-session-id']).toBe('s1')
+    expect(answer.headers['x-upstream-custom']).toBe('u1')
+    expect(answer.headers['www-authenticate']).toBeUndefined()
     expect(answer.body).toContain('"result"')
     expect(tool.seen[0]?.headers['x-api-key']).toBe(SECRET)
     expect(tool.seen[0]?.headers['mcp-method']).toBe('tools/call')
     expect(tool.seen[0]?.headers['mcp-name']).toBe('search')
     expect(tool.seen[0]?.headers['mcp-param-region']).toBe('us-west1')
+    expect(tool.seen[0]?.headers['x-custom']).toBe('c1')
     expect(tool.seen[0]?.headers.authorization).toBeUndefined()
     expect(tool.seen[0]?.headers.cookie).toBeUndefined()
     expect(tool.seen[0]?.body).toContain('tools/call')

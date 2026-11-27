@@ -89,7 +89,7 @@ export async function copyAcpConversation(
           env: launch.env,
           envToDelete: launch.envToDelete
         },
-        { clientInfo: acpClientInfo(launch.spec, launch.version ?? null) }
+        { clientInfo: acpClientInfo(launch.spec) }
       )
       options.track(connection)
       const sessionId = await waitForPromiseWithSignal(

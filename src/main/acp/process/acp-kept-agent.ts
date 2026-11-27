@@ -221,13 +221,17 @@ export async function launchRelayedAcpAgent(
     abandoned: () => boolean
   },
   /** `resume`: the session the chat reopens; a kept agent running another one can't carry on. */
-  launch: Pick<AcpStructuredLaunch, 'resume' | 'release' | 'appBoundGrants' | 'fullAccess'>,
+  launch: Pick<
+    AcpStructuredLaunch,
+    'resume' | 'release' | 'appBoundGrants' | 'fullAccess' | 'toolFree'
+  >,
   processLaunch: ProviderProcessLaunch
 ): Promise<AcpRelayedProcess | null> {
   const { spec } = input.deps
   const versionSkipped = takeAcpKeptVersionSkip(input.acquire.identity.sessionId)
-  // A bot's tool grants live only in this app, so a kept bot would lose its tools.
-  if (!acpSpecRelays(spec) || launch.appBoundGrants) {
+  // A bot's tool grants live only in this app, so a kept bot would lose its tools; a tool-free run's
+  // folder goes with its launch, so it ends with this app.
+  if (!acpSpecRelays(spec) || launch.appBoundGrants || launch.toolFree) {
     return null
   }
   const refuse = async (refused: unknown): Promise<never> => {
