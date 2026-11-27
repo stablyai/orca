@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { ConfirmationDialogProvider } from '../../dismiss/confirmation/confirmation-dialog'
 import PullRequestPage from './surface'
+import { workItemDetailsCache } from '../../github-item-dialog/load-item-details/work-item-details-cache'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 
 // Synthetic data only: invented repo, author and link.
@@ -15,11 +16,15 @@ const item: GitHubWorkItem = {
   labels: [],
   updatedAt: '2026-01-05T09:00:00Z',
   author: 'sample-author',
+  // Why: an empty avatar URL falls back to github.com/<login>.png, which can fetch a real account's picture.
+  authorAvatarUrl: 'data:,',
   repoId: 'fixture-repo'
 }
 
 // Why: every GitHub read stays pending, so the page is an uncached PR whose details never arrive.
 function holdGitHubReads(): void {
+  // Why: fixtures share one page; clear details left by an earlier fixture so each one opens uncached.
+  workItemDetailsCache.clear()
   const gh = window.api.gh
   Reflect.set(
     window.api,
@@ -38,7 +43,12 @@ function FirstCommit({ children }: { children: React.ReactNode }): React.JSX.Ele
   const ref = useRef<HTMLDivElement>(null)
   const [html, setHtml] = useState<string | null>(null)
   useLayoutEffect(() => {
-    setHtml((current) => current ?? ref.current?.innerHTML ?? '')
+    const frame = ref.current?.cloneNode(true)
+    // Why: replayed markup has no image error handler, so drop avatars rather than show a fetched picture.
+    if (frame instanceof HTMLElement) {
+      frame.querySelectorAll('img').forEach((img) => img.remove())
+    }
+    setHtml((current) => current ?? (frame instanceof HTMLElement ? frame.innerHTML : ''))
   }, [])
   return html === null ? (
     <div ref={ref}>{children}</div>
