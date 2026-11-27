@@ -32,14 +32,11 @@ import { registerOnboardingHandlers } from '../onboarding'
 import { registerDashboardPopoutHandlers } from '../dashboard/dashboard-popout'
 import { registerWorkspaceSpaceWindowHandlers } from '../workspace-space/workspace-space-window'
 import { registerTerminalPreviewHandlers } from '../terminal-views/terminal-preview'
-import { registerDeveloperPermissionHandlers } from '../developer-permissions/developer-permissions'
-import { registerComputerUsePermissionHandlers } from '../computer-use-permissions'
 import { setAgentBrowserBridgeRef, registerBrowserHandlers } from '../browser/browser'
 import { registerBrowserServerDownloadCopyHandlers } from '../browser/browser-server-download-copy-ipc'
 import { setTrustedBrowserRendererWebContentsId } from '../browser/browser-renderer-trust'
 import { registerSessionHandlers } from '../session'
 import { registerSettingsHandlers } from '../settings/settings'
-import { registerDiagnosticsHandlers } from '../diagnostics'
 import { registerSkillsHandlers } from '../skills/skills'
 import { registerSkillDeleteIpcHandlers } from '../skill-delete/handlers'
 import { registerWorkspaceSpaceHandlers } from '../workspace-space/workspace-space'
@@ -60,11 +57,6 @@ import { registerAgentHookHandlers } from '../agent-hooks/agent-hooks'
 import { registerCodexConfigSyncHandlers } from '../accounts/codex-config-sync'
 import { getPtyIdForPaneKey } from '../pty/pane/key-state'
 import { registerClaudeAccountHandlers } from '../accounts/claude-accounts'
-import { registerOpenCodeGoCredentialsHandlers } from '../accounts/opencode-go-credentials'
-import { registerMiniMaxCredentialsHandlers } from '../accounts/minimax-credentials'
-import { registerZcodePlanCredentialsHandlers } from '../accounts/zcode-plan-credentials'
-import { registerGrokAccountHandlers } from '../accounts/grok-accounts'
-import { registerCursorAccountHandlers } from '../accounts/cursor-accounts'
 import { registerUpdaterHandlers } from '../../updater/lifecycle/main-window-updater'
 import { registerClipboardHandlers } from '../../window/clipboard/clipboard-ipc-handlers'
 import { setTrustedClipboardRendererWebContentsId } from '../../window/clipboard/clipboard-ipc-sender-trust'
@@ -98,6 +90,7 @@ import {
   type CoreHandlerLifecycleOptions
 } from './core-handler-lifecycle'
 import { registerLazyRareIpcHandlers } from './lazy-rare-ipc-handlers'
+import { registerLazyAccountAndDiagnosticIpcHandlers } from './lazy-account-and-diagnostic-ipc-handlers'
 
 let registration: Promise<void> | null = null
 
@@ -144,11 +137,7 @@ export async function registerCoreHandlers(
     registerClaudeAccountHandlers(claudeAccounts, (change, held) =>
       runtime.moveRunningClaudePanes(change, held)
     )
-    registerOpenCodeGoCredentialsHandlers(rateLimits)
-    registerMiniMaxCredentialsHandlers(rateLimits)
-    registerZcodePlanCredentialsHandlers(rateLimits)
-    registerGrokAccountHandlers()
-    registerCursorAccountHandlers()
+    registerLazyAccountAndDiagnosticIpcHandlers(rateLimits)
     registerRateLimitHandlers(rateLimits, codexAccounts, () => store.getSettings())
     registerGitHubHandlers(store, stats, runtime)
     registerGitLabHandlers(store)
@@ -165,11 +154,7 @@ export async function registerCoreHandlers(
     registerDashboardPopoutHandlers(store, keybindings)
     registerWorkspaceSpaceWindowHandlers(store)
     registerTerminalPreviewHandlers(runtime)
-    registerDeveloperPermissionHandlers()
-    // Diagnostics and telemetry register independent channels and keep separate data paths.
-    registerDiagnosticsHandlers()
     registerTerminalRenderDesyncEvidenceHandler()
-    registerComputerUsePermissionHandlers()
     registerSettingsHandlers(store, agentAwakeService)
     registerSkillsHandlers(store, runtime)
     registerSkillDeleteIpcHandlers(store, runtime)
