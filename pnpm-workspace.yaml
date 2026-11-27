@@ -132,6 +132,8 @@ patchedDependencies:
   mermaid@11.17.2: config/patches/mermaid@11.17.2.patch
   serve-sim@0.1.47: config/patches/serve-sim@0.1.47.patch
   ssh2@1.17.0: config/patches/ssh2@1.17.0.patch
+  # Raise the 20 s Authenticode check limit to 120 s: slow PCs take 15-42 s on the installer (#42900).
+  electron-updater@6.8.12: config/patches/electron-updater@6.8.12.patch
 permissions:
   agent-browser:
     skills: false
