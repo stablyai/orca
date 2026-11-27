@@ -3,6 +3,8 @@ import type { ReadClipboardTextOptions } from './clipboard-text'
 export type ReadClipboardPasteContentOptions = ReadClipboardTextOptions & {
   /** Also return the HTML flavor when it may carry links. */
   linkHtml?: boolean
+  /** Skip the copied-file list when the paste event already supplied it. */
+  skipFilePaths?: boolean
   /** When to check for an image: always, only with no text, or only for copied files with no text. Omitted: never. */
   imageProbe?: ClipboardPasteImageProbe
 }

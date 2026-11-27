@@ -68,7 +68,8 @@ export async function readClipboardPasteText(
   const read = await window.api.ui.readClipboardPasteContent({
     maxBytes,
     linkHtml: true,
-    imageProbe
+    imageProbe,
+    skipFilePaths: eventFilePaths !== undefined
   })
   const { text, hasImage } = read
   const filePaths = eventFilePaths ?? read.filePaths

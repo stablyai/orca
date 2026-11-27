@@ -25,7 +25,7 @@ export async function readClipboardPasteContent(
   if (textOnly) {
     return { text, filePaths: [], linkHtml: '', hasImage: false }
   }
-  const filePaths = await readClipboardCopiedFilePaths(reader)
+  const filePaths = options.skipFilePaths ? [] : await readClipboardCopiedFilePaths(reader)
   const linkHtml = options.linkHtml
     ? await reader
         .readHtml()
