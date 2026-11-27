@@ -45,8 +45,15 @@ export function moveChatReadMarksAtLoad(state: PersistedState): PersistedState {
       }
     }
     if (record) {
-      moved[field] = capPaneKeyTimestampRecord(record)
+      moved[field] = record
     }
   }
-  return changed ? { ...state, ui: { ...state.ui, ...moved } } : state
+  if (!changed) {
+    return state
+  }
+  const ui = { ...state.ui }
+  for (const field of CHAT_READ_MARK_FIELDS) {
+    ui[field] = capPaneKeyTimestampRecord(moved[field] ?? readPaneKeyTimestampRecord(ui[field]))
+  }
+  return { ...state, ui }
 }

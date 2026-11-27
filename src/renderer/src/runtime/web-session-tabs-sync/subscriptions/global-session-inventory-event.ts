@@ -6,7 +6,7 @@ import { recoverMirroredTerminalOrphansBeforeApply } from '../terminal-handles/m
 import { queueAcceptedWebSessionTerminalSnapshot } from '../terminal-handles/web-session-terminal-handle-events'
 import {
   recordReceivedWebSessionTabsInventory,
-  recordReceivedWebSessionTabsSnapshot,
+  recordReceivedWebSessionTabsSnapshots,
   shouldApplyRecoveredWebSessionTabsSnapshot
 } from '../tracking/tracking'
 import {
@@ -54,15 +54,10 @@ export function handleGlobalSessionInventoryEvent({
 }: GlobalSessionInventoryEventArgs): void {
   const skipUnchangedResumeWork = awaitingVisibilityResumeInventory.value && !replayed
   awaitingVisibilityResumeInventory.value = false
-  const receivedFrames = event.snapshots.map((snapshot) => {
-    const frame = recordReceivedWebSessionTabsSnapshot(
-      environmentId,
-      snapshot,
-      undefined,
-      runtimeId
-    )
-    coordinator.recordSnapshotReceipt(environmentId, snapshot, frame, runtimeId)
-    return frame
+  const receivedFrames = recordReceivedWebSessionTabsSnapshots(environmentId, event.snapshots, {
+    runtimeId,
+    onReceipt: (snapshot, frame) =>
+      coordinator.recordSnapshotReceipt(environmentId, snapshot, frame, runtimeId)
   })
   applyReceivedAgentSenderPublications(environmentId, event.snapshots, runtimeId)
   // After receipt: a held close dropped at receipt marks its unchanged frame for redraw.

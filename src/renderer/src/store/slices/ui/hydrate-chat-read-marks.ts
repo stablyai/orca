@@ -5,20 +5,18 @@ import {
 import { capPaneKeyTimestampRecord } from '../../../../../shared/agent-session/view/pane-key-timestamp-record'
 import {
   adoptChatReadMarkAliases,
+  canMoveWebChatReadMarks,
   hasLoadedChatReadMarkAliases,
   indexLoadedChatReadMarks
 } from '../agent-status/structured-sessions/chat-read-mark-aliases'
 import { moveLoadedWebChatReadMarks } from '../agent-status/structured-sessions/chat-read-mark-web-move'
 import {
   rebaseWebChatReadMarks,
+  WEB_CHAT_READ_MARK_FIELDS,
   type WebChatReadMarks
 } from '@/web/preload-api/preferences/web-chat-read-mark-storage'
 import type { AppState } from '../../types'
 import type { PersistedUIWriteBaseline } from './persisted-ui-write-baseline'
-
-function capHydratedMark(field: ChatReadMarkField, record: Record<string, number>) {
-  return hasLoadedChatReadMarkAliases(field) ? record : capPaneKeyTimestampRecord(record)
-}
 
 export function hydrateChatReadMarks(
   state: AppState,
@@ -45,20 +43,25 @@ export function hydrateChatReadMarks(
     adoptChatReadMarkAliases(incoming)
   }
 
+  const deferWebCap = web && canMoveWebChatReadMarks()
+  const deferCap = (field: ChatReadMarkField): boolean =>
+    deferWebCap && field !== 'acknowledgedAgentsByPaneKey' && hasLoadedChatReadMarkAliases(field)
   baseline = { ...baseline }
   for (const field of CHAT_READ_MARK_FIELDS) {
-    baseline[field] = capHydratedMark(field, baseline[field])
+    if (!deferCap(field)) {
+      baseline[field] = capPaneKeyTimestampRecord(baseline[field])
+    }
   }
 
   if (localMarks) {
-    localMarks.activityClearedAtByPaneKey = capHydratedMark(
-      'activityClearedAtByPaneKey',
-      localMarks.activityClearedAtByPaneKey
-    )
-    localMarks.manuallyUnreadTurnsByPaneKey = capHydratedMark(
-      'manuallyUnreadTurnsByPaneKey',
-      localMarks.manuallyUnreadTurnsByPaneKey
-    )
+    for (const field of WEB_CHAT_READ_MARK_FIELDS) {
+      if (!deferCap(field)) {
+        const current = pending[field]
+        localMarks[field] = current
+          ? capPaneKeyTimestampRecord(localMarks[field], current)
+          : baseline[field]
+      }
+    }
   }
   return { baseline, localMarks }
 }

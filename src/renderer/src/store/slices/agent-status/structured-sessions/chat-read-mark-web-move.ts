@@ -54,24 +54,32 @@ export function moveLoadedWebChatReadMarks(state: MarkState, baseline: Persisted
   return undefined
 }
 
-export function receiveWebChatReadMarkTabs(
-  state: MarkState & Pick<AppState, 'persistedUIWriteBaseline'>,
-  tabs: readonly RuntimeMobileSessionSnapshotTab[],
-  scanChatSessions?: (visit: (sessionId: string) => void) => void
-) {
-  if (!canMoveWebChatReadMarks() || !state.persistedUIWriteBaseline) {
+export function createWebChatReadMarkReceiptBatch() {
+  if (!canMoveWebChatReadMarks()) {
     return undefined
   }
   const candidates: ChatReadMarkMatches = new Map()
   const visit = (sessionId: string) => matchWebChatReadMarkReceipt(candidates, sessionId)
-  if (scanChatSessions) {
-    scanChatSessions(visit)
-  } else {
-    for (const tab of tabs) {
-      if (tab.type === 'agent-session') {
-        visit(tab.sessionId)
+  return {
+    collect(
+      tabs: readonly RuntimeMobileSessionSnapshotTab[],
+      scanChatSessions?: (visitSession: (sessionId: string) => void) => void
+    ): void {
+      if (scanChatSessions) {
+        scanChatSessions(visit)
+      } else {
+        for (const tab of tabs) {
+          if (tab.type === 'agent-session') {
+            visit(tab.sessionId)
+          }
+        }
       }
+    },
+    move(state: MarkState & Pick<AppState, 'persistedUIWriteBaseline'>) {
+      if (candidates.size > 0 && state.persistedUIWriteBaseline && canMoveWebChatReadMarks()) {
+        return moveMatches(state, state.persistedUIWriteBaseline, candidates)
+      }
+      return undefined
     }
   }
-  return moveMatches(state, state.persistedUIWriteBaseline, candidates)
 }

@@ -16,12 +16,12 @@ import {
   stopWebChatReadMarkMoves
 } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-aliases'
 import { isPlainPersistedRecord } from '@/store/slices/ui/ui-slice-hydration-sanitizers'
-import { UI_STORAGE_KEY, writeJson } from '../web-storage'
+import { UI_STORAGE_KEY, readJson, writeJson } from '../web-storage'
 
 type WebChatReadMarkField = 'activityClearedAtByPaneKey' | 'manuallyUnreadTurnsByPaneKey'
 export type WebChatReadMarks = Pick<ChatReadMarks, WebChatReadMarkField>
 
-const WEB_CHAT_READ_MARK_FIELDS: readonly WebChatReadMarkField[] = [
+export const WEB_CHAT_READ_MARK_FIELDS: readonly WebChatReadMarkField[] = [
   'activityClearedAtByPaneKey',
   'manuallyUnreadTurnsByPaneKey'
 ]
@@ -33,7 +33,7 @@ function webChatReadMarkRecords(stored: Record<string, unknown>): WebChatReadMar
   }
 }
 
-function readStoredWebUI(): Record<string, unknown> {
+function readStoredWebUIForMove(): Record<string, unknown> {
   const raw = window.localStorage.getItem(UI_STORAGE_KEY)
   const stored: unknown = raw === null ? {} : JSON.parse(raw)
   if (
@@ -115,7 +115,7 @@ export function rebaseWebChatReadMarks(
       }
     }
     if (current || moved) {
-      marks[field] = capPaneKeyTimestampRecord(readPaneKeyTimestampRecord(record))
+      marks[field] = readPaneKeyTimestampRecord(record)
       changed = true
     }
   }
@@ -132,15 +132,24 @@ export function writeWebChatReadMarkEdits(
   }
 ): WebChatReadMarks {
   try {
-    const stored = readStoredWebUI()
+    const stored = options?.moveKeys?.size
+      ? readStoredWebUIForMove()
+      : readJson<Record<string, unknown>>(UI_STORAGE_KEY, {})
+    const storedMarks = webChatReadMarkRecords(stored)
     const { marks, changed } = rebaseWebChatReadMarks(
-      webChatReadMarkRecords(stored),
+      storedMarks,
       changes,
       baseline,
       options?.moveKeys,
       options?.currentTurn
     )
     if (changed || options?.mergeUI) {
+      // Keep this tab's cutoffs available for Undo until the next hydration cap.
+      for (const field of WEB_CHAT_READ_MARK_FIELDS) {
+        if (marks[field] !== storedMarks[field]) {
+          marks[field] = capPaneKeyTimestampRecord(marks[field], changes[field])
+        }
+      }
       writeJson(UI_STORAGE_KEY, { ...(options?.mergeUI?.(stored) ?? stored), ...marks })
     }
     adoptChatReadMarkAliases(marks)

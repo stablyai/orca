@@ -20,12 +20,26 @@ import { hostSnapshotAffirmsWorktreeContents } from '../../../../../shared/remot
 import { replayWebSessionClosesDueForSnapshot } from '../closing/web-session-close-replay'
 import { appPairedTerminalTabCloseIntentStore } from '../closing/paired-terminal-tab-close-intent-store'
 import { useAppStore } from '@/store/index'
-import { canMoveWebChatReadMarks } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-aliases'
-import { receiveWebChatReadMarkTabs } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-web-move'
+import { createWebChatReadMarkReceiptBatch } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-web-move'
 import { isHostMirroredWorktree } from '../identity/host-mirrored-worktree'
 import { isWebSessionTabsWorktreeRemovalFrame } from './session-tabs-inventory-absence'
 import { collectCancelledStructuredSessionIds } from '../../native-chat/tab-retirement/structured-agent-session-tab-retirement'
 import type { TerminalOrphanRecoveryOptions } from '../../hosted-terminals/recovery/web-session-terminal-orphan-recovery-options'
+
+type MarkBatch = ReturnType<typeof createWebChatReadMarkReceiptBatch>
+type SnapshotReceiptOptions = {
+  receivedFrame?: number
+  runtimeId?: string
+  source?: 'stream' | 'bootstrap'
+  recoveryOptions?: TerminalOrphanRecoveryOptions
+}
+
+function applyChatReadMarkBatch(batch: MarkBatch): void {
+  const moved = batch?.move(useAppStore.getState())
+  if (moved) {
+    useAppStore.setState(moved)
+  }
+}
 
 export function recordReceivedWebSessionTabsSnapshot(
   environmentId: string,
@@ -36,15 +50,48 @@ export function recordReceivedWebSessionTabsSnapshot(
   allowBootstrapMarkMoves = false,
   recoveryOptions?: TerminalOrphanRecoveryOptions
 ): number {
+  const batch =
+    source === 'stream' || allowBootstrapMarkMoves ? createWebChatReadMarkReceiptBatch() : undefined
+  const frame = recordSnapshotReceipt(
+    environmentId,
+    snapshot,
+    { receivedFrame, runtimeId, source, recoveryOptions },
+    batch
+  )
+  applyChatReadMarkBatch(batch)
+  return frame
+}
+
+export function recordReceivedWebSessionTabsSnapshots(
+  environmentId: string,
+  snapshots: readonly RuntimeMobileSessionTabsResult[],
+  options: Pick<SnapshotReceiptOptions, 'receivedFrame' | 'runtimeId' | 'source'> & {
+    onReceipt?: (snapshot: RuntimeMobileSessionTabsResult, frame: number) => void
+  }
+): number[] {
+  const batch = createWebChatReadMarkReceiptBatch()
+  const frames = snapshots.map((snapshot) => {
+    const frame = recordSnapshotReceipt(environmentId, snapshot, options, batch)
+    options.onReceipt?.(snapshot, frame)
+    return frame
+  })
+  applyChatReadMarkBatch(batch)
+  return frames
+}
+
+function recordSnapshotReceipt(
+  environmentId: string,
+  snapshot: RuntimeMobileSessionTabsResult,
+  { receivedFrame, runtimeId, source = 'stream', recoveryOptions }: SnapshotReceiptOptions,
+  batch: MarkBatch
+): number {
   const frame = receivedFrame ?? nextReceivedSessionTabsFrame()
   recordBrowserInitializationReceipt(environmentId, snapshot, frame)
   const key = sessionTabsFreshnessKey(environmentId, snapshot.worktree)
   const current = latestReceivedSessionTabsSnapshotByWorktree.get(key)
   // A late bootstrap can verify chat marks without changing receipt or publisher history.
   if (source === 'bootstrap' && current && frame < current.receivedFrame) {
-    if (allowBootstrapMarkMoves) {
-      recordWebSessionTabsReplyForChatReadMarks(environmentId, snapshot, frame, runtimeId)
-    }
+    collectReplyMarkMatches(batch, environmentId, snapshot, frame, runtimeId)
     return frame
   }
   if (runtimeId && !acceptSessionTabsRuntimeId(environmentId, runtimeId, frame)) {
@@ -82,9 +129,7 @@ export function recordReceivedWebSessionTabsSnapshot(
     snapshot.snapshotVersion > current.snapshotVersion ||
     (snapshot.snapshotVersion === current.snapshotVersion && current.receivedFrame <= frame)
   if (!recordsLatestReceipt) {
-    if (allowBootstrapMarkMoves) {
-      recordWebSessionTabsReplyForChatReadMarks(environmentId, snapshot, frame, runtimeId)
-    }
+    collectReplyMarkMatches(batch, environmentId, snapshot, frame, runtimeId)
     return frame
   }
   setBoundedSessionTabsReceipt(
@@ -103,15 +148,14 @@ export function recordReceivedWebSessionTabsSnapshot(
     return frame
   }
   if (
-    !canMoveWebChatReadMarks() ||
-    (source !== 'stream' && !allowBootstrapMarkMoves) ||
+    !batch ||
     precedesWebSessionTabsRemoval(key, frame) ||
+    !hostSnapshotAffirmsWorktreeContents(snapshot) ||
     !isHostMirroredWorktree(snapshot.worktree)
   ) {
     return frame
   }
-  const moved = receiveWebChatReadMarkTabs(
-    useAppStore.getState(),
+  batch.collect(
     snapshot.tabs,
     recoveryOptions
       ? (visit) => {
@@ -122,9 +166,6 @@ export function recordReceivedWebSessionTabsSnapshot(
         }
       : undefined
   )
-  if (moved) {
-    useAppStore.setState(moved)
-  }
   return frame
 }
 
@@ -134,22 +175,32 @@ export function recordWebSessionTabsReplyForChatReadMarks(
   receivedFrame: number,
   runtimeId?: string
 ): void {
-  if (!canMoveWebChatReadMarks() || !isCurrentSessionTabsRuntimeFrame(environmentId, runtimeId)) {
+  const batch = createWebChatReadMarkReceiptBatch()
+  collectReplyMarkMatches(batch, environmentId, snapshot, receivedFrame, runtimeId)
+  applyChatReadMarkBatch(batch)
+}
+
+function collectReplyMarkMatches(
+  batch: MarkBatch,
+  environmentId: string,
+  snapshot: RuntimeMobileSessionTabsResult,
+  receivedFrame: number,
+  runtimeId?: string
+): void {
+  if (!batch || !isCurrentSessionTabsRuntimeFrame(environmentId, runtimeId)) {
     return
   }
   const key = sessionTabsFreshnessKey(environmentId, snapshot.worktree)
   if (
     isWebSessionTabsWorktreeRemovalFrame(snapshot) ||
+    !hostSnapshotAffirmsWorktreeContents(snapshot) ||
     isRetiredSessionTabsPublicationEpoch(key, snapshot.publicationEpoch) ||
     precedesWebSessionTabsRemoval(key, receivedFrame) ||
     !isHostMirroredWorktree(snapshot.worktree)
   ) {
     return
   }
-  const moved = receiveWebChatReadMarkTabs(useAppStore.getState(), snapshot.tabs)
-  if (moved) {
-    useAppStore.setState(moved)
-  }
+  batch.collect(snapshot.tabs)
 }
 
 export function recordReceivedWebSessionTabsInventory(environmentId: string): number {

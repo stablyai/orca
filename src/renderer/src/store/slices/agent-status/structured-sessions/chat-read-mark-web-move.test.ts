@@ -15,14 +15,17 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-it('resolves collisions before capping and keeps the protection for the live turn', () => {
+it.each([
+  [600, 500],
+  [500, 600]
+])('resolves cutoff collisions (%i, %i) and keeps protection for the live turn', (old, chat) => {
   const unrelated: Record<string, number> = {}
   for (let index = 1; index <= 499; index++) {
     unrelated[`terminal-${index}:pane`] = index
   }
   const marks = browserChatMarks({
     sidebarOpen: false,
-    activityClearedAtByPaneKey: { ...unrelated, [OLD]: 600, [CHAT]: 500 },
+    activityClearedAtByPaneKey: { ...unrelated, [OLD]: old, [CHAT]: chat },
     manuallyUnreadTurnsByPaneKey: { [OLD]: 100, [CHAT]: 200 }
   })
   const { store } = marks.open(undefined, 100)
@@ -38,13 +41,18 @@ it('resolves collisions before capping and keeps the protection for the live tur
 
 it('uses the same live protection in the pending reader and lapse pass', () => {
   vi.mocked(performance.now).mockReturnValue(120_000)
+  const unrelated: Record<string, number> = {}
+  for (let index = 1; index <= 499; index++) {
+    unrelated[`terminal-${index}:pane`] = index
+  }
   const marks = browserChatMarks({
     activityClearedAtByPaneKey: { [CHAT]: 50, [OLD]: 200 },
-    manuallyUnreadTurnsByPaneKey: { [CHAT]: 100, [OLD]: 200 }
+    manuallyUnreadTurnsByPaneKey: { ...unrelated, [CHAT]: 100, [OLD]: 200 }
   })
   const { store } = marks.open(undefined, 200)
   const state = store.getState()
 
+  expect(Object.keys(state.manuallyUnreadTurnsByPaneKey)).toHaveLength(500)
   expect(readWebChatMark(state, 'activityClearedAtByPaneKey', CHAT)).toBe(200)
   expect(readWebChatMark(state, 'manuallyUnreadTurnsByPaneKey', CHAT, 200)).toBe(200)
   expect(
@@ -56,6 +64,36 @@ it('uses the same live protection in the pending reader and lapse pass', () => {
       new Set([CHAT])
     )
   ).toEqual([])
+})
+
+it('preserves all held cutoffs when Clear completed is saved and then undone at the cap', () => {
+  const cutoffs: Record<string, number> = {}
+  for (let index = 1; index <= 500; index++) {
+    cutoffs[`terminal-${index}:pane`] = index
+  }
+  const marks = browserChatMarks({ activityClearedAtByPaneKey: cutoffs })
+  const { store } = marks.open()
+  const save = () => {
+    const state = store.getState()
+    const baseline = state.persistedUIWriteBaseline
+    if (!baseline) {
+      throw new Error('Expected a hydrated UI baseline')
+    }
+    const persisted = writeWebChatReadMarkEdits(
+      diffPersistedUIWriteFields(state, baseline),
+      baseline
+    )
+    store.setState({ ...persisted, persistedUIWriteBaseline: { ...baseline, ...persisted } })
+  }
+
+  store.getState().applyActivityClearedAt({ [CHAT]: 600 })
+  save()
+  expect(store.getState().activityClearedAtByPaneKey).toEqual({ ...cutoffs, [CHAT]: 600 })
+
+  store.getState().applyActivityClearedAt({ [CHAT]: null })
+  save()
+  expect(marks.stored().activityClearedAtByPaneKey).toEqual(cutoffs)
+  expect(marks.open().store.getState().activityClearedAtByPaneKey).toEqual(cutoffs)
 })
 
 it('retires an alias on Undo after the receipt window and preserves it on reload', () => {

@@ -4,7 +4,7 @@ import type { RuntimeMobileSessionAgentTab } from '../../../../../../shared/remo
 import type { PersistedUIState } from '../../../../../../shared/orca-profiles/persisted-ui-state-types'
 import { createUIStore, makePersistedUI } from '../../ui/ui-slice-test-harness'
 import { AcceptedAgentStatuses } from '../status-ownership/accepted-agent-statuses'
-import { receiveWebChatReadMarkTabs } from './chat-read-mark-web-move'
+import { createWebChatReadMarkReceiptBatch } from './chat-read-mark-web-move'
 
 const LEAF = '5d906140-8048-412d-a539-25aed45333a1'
 export const OLD = `agent-chat-tab-v1-abc:${LEAF}`
@@ -54,7 +54,9 @@ export function browserChatMarks(initial: Partial<PersistedUIState>) {
     store.setState({ agentStatusByPaneKey })
     store.getState().hydratePersistedUI(makePersistedUI(snapshot), 'startup')
     const receive = (tabs: readonly RuntimeMobileSessionAgentTab[]) => {
-      const moved = receiveWebChatReadMarkTabs(store.getState(), tabs)
+      const batch = createWebChatReadMarkReceiptBatch()
+      batch?.collect(tabs)
+      const moved = batch?.move(store.getState())
       if (moved) {
         store.setState(moved)
       }

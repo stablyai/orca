@@ -92,17 +92,23 @@ it('moves a saved tab’s marks and schedules only a UI save', async () => {
   expect(saved.manuallyUnreadTurnsByPaneKey).toEqual({ [CONVERSATION_KEY]: 600 })
 })
 
-it('moves a closed chat using its canonical marks and keeps the newer stamps', () => {
-  const state = getDefaultPersistedState(tmpdir())
-  state.ui.acknowledgedAgentsByPaneKey = { [TAB_KEY]: 200, [CONVERSATION_KEY]: 100 }
-  state.ui.activityClearedAtByPaneKey = { [TAB_KEY]: 400, [CONVERSATION_KEY]: 300 }
-  state.ui.manuallyUnreadTurnsByPaneKey = { [TAB_KEY]: 600, [CONVERSATION_KEY]: 500 }
+it.each([
+  [200, 100],
+  [100, 200]
+])(
+  'moves a closed chat using its canonical marks and keeps the newer stamps (%i, %i)',
+  (old, chat) => {
+    const state = getDefaultPersistedState(tmpdir())
+    state.ui.acknowledgedAgentsByPaneKey = { [TAB_KEY]: old, [CONVERSATION_KEY]: chat }
+    state.ui.activityClearedAtByPaneKey = { [TAB_KEY]: old + 200, [CONVERSATION_KEY]: chat + 200 }
+    state.ui.manuallyUnreadTurnsByPaneKey = { [TAB_KEY]: old + 400, [CONVERSATION_KEY]: chat + 400 }
 
-  const moved = moveChatReadMarksAtLoad(state)
-  expect(moved.ui.acknowledgedAgentsByPaneKey).toEqual({ [CONVERSATION_KEY]: 200 })
-  expect(moved.ui.activityClearedAtByPaneKey).toEqual({ [CONVERSATION_KEY]: 400 })
-  expect(moved.ui.manuallyUnreadTurnsByPaneKey).toEqual({ [CONVERSATION_KEY]: 600 })
-})
+    const moved = moveChatReadMarksAtLoad(state)
+    expect(moved.ui.acknowledgedAgentsByPaneKey).toEqual({ [CONVERSATION_KEY]: 200 })
+    expect(moved.ui.activityClearedAtByPaneKey).toEqual({ [CONVERSATION_KEY]: 400 })
+    expect(moved.ui.manuallyUnreadTurnsByPaneKey).toEqual({ [CONVERSATION_KEY]: 600 })
+  }
+)
 
 it('skips saved tab discovery when all marks already use conversation keys', () => {
   const state = getDefaultPersistedState(tmpdir())

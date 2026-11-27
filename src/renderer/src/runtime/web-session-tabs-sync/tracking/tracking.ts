@@ -23,6 +23,7 @@ export {
   recordReceivedWebSessionTabsInventory,
   recordReceivedWebSessionTabsRemoval,
   recordReceivedWebSessionTabsSnapshot,
+  recordReceivedWebSessionTabsSnapshots,
   recordWebSessionTabsReplyForChatReadMarks
 } from './session-tabs-receipts'
 
