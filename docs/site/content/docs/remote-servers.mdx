@@ -76,6 +76,11 @@ On the computer that should keep the sessions running:
 
 If the Tailscale address is missing, confirm Tailscale is connected and click the refresh button beside **Address**.
 
+<ImagePlaceholder
+  src="/docs/remote-server-share-desktop.png"
+  caption="On the server: Share this computer → Another device → Create link, then copy the Access link. The link code is redacted in this example."
+/>
+
 <Callout title="Keep the access link private">
   The pairing URL grants access to this Orca runtime. Treat it like a password and send it only to
   the client you intend to pair.
@@ -96,12 +101,7 @@ You can also add it from the sidebar: in the add-project menu, open the project 
 
 <ImagePlaceholder
   src="/docs/remote-server-add-client.png"
-  caption="On the client: name the server, paste its access link, and add it. The pairing code is redacted in this example."
-/>
-
-<ImagePlaceholder
-  src="/docs/remote-server-share-desktop.png"
-  caption="Share an Orca desktop runtime with another client over a private network."
+  caption="On the client: paste the access link, check its destination, and add the server. The link code is redacted in this example."
 />
 
 Adding a server saves it without forcing every new project onto it. Change **New projects open on** in **Settings → Remote Orca Servers** only when you want server-routed projects, terminals, provider checks, and browser or mobile handoff to use that server by default.
