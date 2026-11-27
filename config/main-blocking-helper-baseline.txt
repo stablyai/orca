@@ -1164,6 +1164,7 @@
 2 src/main/runtime/orchestration/db/maintenance/settled-run-retention.ts
 5 src/main/runtime/orchestration/db/maintenance/settled-run-retirement.ts
 1 src/main/runtime/orchestration/db/messages/message-insert.ts
+1 src/main/runtime/orchestration/db/messages/settled-request-mail.ts # one savepoint around orchestration DB writes that were already synchronous, so a request's settled state and its read mail commit together
 3 src/main/runtime/orchestration/db/messages/structured-mail-send-store.ts
 2 src/main/runtime/orchestration/db/mutation-receipts/mutation-receipt-capacity.ts
 2 src/main/runtime/orchestration/db/mutation-receipts/mutation-receipt-store.ts
