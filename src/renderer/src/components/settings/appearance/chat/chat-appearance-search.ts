@@ -88,6 +88,15 @@ const getChatAppearanceCatalog = createLocalizedCatalog(
           ...getChatWidthOptions().map((option) => option.label)
         ]
       },
+      messageStyle: {
+        targetSectionId: 'chat-message-style',
+        title: translate('settings.appearance.chat.messageStyle', 'Message style'),
+        description: translate(
+          'settings.appearance.chat.messageStyleDescription',
+          'Bubble layout for one-to-one bot chats. Coding chats keep the default layout.'
+        ),
+        keywords: getChatMessageStyleOptions().map((option) => option.label)
+      },
       reset: {
         targetSectionId: 'chat-reset',
         title: translate('settings.appearance.chat.resetAppearance', 'Reset chat appearance'),
@@ -137,5 +146,12 @@ export function getChatWidthOptions(t: Translate = translate) {
     },
     { value: 'wide', label: t('settings.appearance.chat.wide', 'Wide') },
     { value: 'full', label: t('settings.appearance.chat.full', 'Full') }
+  ] as const
+}
+
+export function getChatMessageStyleOptions(t: Translate = translate) {
+  return [
+    { value: 'default', label: t('settings.appearance.chat.messageStyleDefault', 'Default') },
+    { value: 'messaging', label: t('settings.appearance.chat.messageStyleMessaging', 'Messaging') }
   ] as const
 }

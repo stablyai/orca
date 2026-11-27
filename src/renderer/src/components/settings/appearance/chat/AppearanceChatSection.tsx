@@ -21,7 +21,8 @@ import {
   chatTerminalControlledHint,
   chatTerminalControlledTooltip,
   getChatAppearanceEntriesByKey,
-  getChatWidthOptions
+  getChatWidthOptions,
+  getChatMessageStyleOptions
 } from './chat-appearance-search'
 import { writeNativeChatAppearance } from '../../../native-chat/appearance/native-chat-appearance-write'
 import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
@@ -120,6 +121,24 @@ export function AppearanceChatSection({
               onChange={(width) => update({ width })}
               options={getChatWidthOptions(t)}
               ariaLabel={entries.width.title}
+            />
+          }
+        />
+      </SearchableSetting>
+      <SearchableSetting
+        id={entries.messageStyle.targetSectionId}
+        {...entries.messageStyle}
+        forceVisible={forceVisiblePrimary}
+      >
+        <SettingsRow
+          label={entries.messageStyle.title}
+          description={entries.messageStyle.description}
+          control={
+            <SettingsSegmentedControl
+              value={appearance.messageStyle}
+              onChange={(messageStyle) => update({ messageStyle })}
+              options={getChatMessageStyleOptions(t)}
+              ariaLabel={entries.messageStyle.title}
             />
           }
         />

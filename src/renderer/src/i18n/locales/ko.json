@@ -221,7 +221,11 @@
         "terminalControlledHint": "터미널 인터페이스 설정을 따릅니다.",
         "terminalControlledTooltip": "터미널 모양에 맞추는 중입니다. 변경하려면 터미널 모양에 맞추기를 끄세요.",
         "fontKeywordTypeface": "서체",
-        "fontKeywordTypography": "타이포그래피"
+        "fontKeywordTypography": "타이포그래피",
+        "messageStyle": "메시지 스타일",
+        "messageStyleDefault": "기본값",
+        "messageStyleMessaging": "메신저",
+        "messageStyleDescription": "봇과의 일대일 채팅에 말풍선을 표시합니다. 코딩 채팅은 기본 레이아웃을 유지합니다."
       },
       "editorTheme": {
         "light": "밝은 편집기 테마",

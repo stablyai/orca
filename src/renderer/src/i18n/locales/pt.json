@@ -1674,7 +1674,11 @@
         "terminalControlledHint": "Definido pela interface do terminal.",
         "terminalControlledTooltip": "Usando a aparência da interface do terminal. Desative Usar aparência da interface do terminal para alterar isto.",
         "fontKeywordTypeface": "tipo de letra",
-        "fontKeywordTypography": "tipografia"
+        "fontKeywordTypography": "tipografia",
+        "messageStyle": "Estilo de mensagens",
+        "messageStyleDefault": "Padrão",
+        "messageStyleMessaging": "Mensagens",
+        "messageStyleDescription": "Balões para conversas individuais com bots. Os chats de programação mantêm o layout padrão."
       },
       "editorTheme": {
         "light": "Tema claro do editor",

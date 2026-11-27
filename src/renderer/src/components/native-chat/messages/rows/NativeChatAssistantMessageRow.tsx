@@ -53,6 +53,7 @@ export function NativeChatAssistantMessageRow({
   const t = useTranslate()
   const {
     message,
+    messaging = false,
     activeTurnIsWorking,
     trailingRun,
     continuesTurn = false,
@@ -88,6 +89,22 @@ export function NativeChatAssistantMessageRow({
     (words.length > 0 || hasImages) &&
     activeTurnIsWorking !== true
 
+  const reply = shownWords ? (
+    <NativeChatPacedMarkdown
+      rowKey={message.id}
+      savedRevision={message.journalRevision}
+      content={shownWords}
+      variant="document"
+      className="text-sm"
+      renderCodeBlock={isSystem ? NativeChatPlainCodeBlock : NativeChatCodeBlock}
+      linkifyFilePaths
+      {...(isSystem ? {} : NATIVE_CHAT_QUOTE_SOURCE_PROPS)}
+      visualMessageId={message.role === 'assistant' ? message.id : undefined}
+      // Only the live turn’s prose frontier can be mid-sentence; structured rows have no per-row streaming flag.
+      streaming={streaming}
+    />
+  ) : null
+
   return (
     <div
       ref={rowRef}
@@ -104,21 +121,18 @@ export function NativeChatAssistantMessageRow({
         runtimeContext={runtimeContext}
         enablePreview={runtimeContext !== undefined}
       />
-      {shownWords ? (
-        <NativeChatPacedMarkdown
-          rowKey={message.id}
-          savedRevision={message.journalRevision}
-          content={shownWords}
-          variant="document"
-          className="text-sm"
-          renderCodeBlock={isSystem ? NativeChatPlainCodeBlock : NativeChatCodeBlock}
-          linkifyFilePaths
-          {...(isSystem ? {} : NATIVE_CHAT_QUOTE_SOURCE_PROPS)}
-          visualMessageId={message.role === 'assistant' ? message.id : undefined}
-          // Only the live turn’s prose frontier can be mid-sentence; structured rows have no per-row streaming flag.
-          streaming={streaming}
-        />
-      ) : null}
+      {reply && messaging && !isSystem ? (
+        <div
+          className={cn(
+            'min-w-0 max-w-[80%] rounded-2xl rounded-bl-md bg-chat-messaging-assistant-surface px-3.5 py-2.5 text-chat-foreground-strong',
+            streaming ? 'w-full' : 'w-fit'
+          )}
+        >
+          {reply}
+        </div>
+      ) : (
+        reply
+      )}
       {quiet.nothingToReport ? (
         <p className="text-xs text-chat-foreground-faint">
           {t('bots.chat.nothingToReport', 'Nothing to report')}

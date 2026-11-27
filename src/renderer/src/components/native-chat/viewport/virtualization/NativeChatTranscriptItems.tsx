@@ -1,6 +1,6 @@
+import { Fragment, useMemo } from 'react'
 import { stageBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { NativeChatWaitingAgentMailRows } from '../../queue/NativeChatWaitingAgentMailRows'
-import { Fragment, useMemo } from 'react'
 import {
   NativeChatTranscriptRow,
   type NativeChatTranscriptRowContext
@@ -8,7 +8,10 @@ import {
 import { nativeChatSlotKey } from '../../conversation/slots/native-chat-transcript-slot-selection'
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
 import { nativeChatSlotLeavesWhole } from '../../conversation/slots/native-chat-quiet-turn-rows'
-import { nativeChatSlotJoinsActivityAbove } from '../../conversation/slots/native-chat-activity-row-joins'
+import {
+  nativeChatSlotJoinsActivityAbove,
+  nativeChatSlotJoinsMessageAbove
+} from '../../conversation/slots/native-chat-activity-row-joins'
 import {
   useNativeChatTimedRows,
   type NativeChatTimedRow
@@ -80,6 +83,13 @@ export function NativeChatTranscriptItems({
                       <NativeChatTranscriptRow
                         slot={slot}
                         context={rowContext}
+                        joinsMessageAbove={nativeChatSlotJoinsMessageAbove({
+                          slot,
+                          previous: slots[item.index - 1],
+                          timedRowsAfter: rowContext.timedRows,
+                          markerKey: newRowsMarker?.key,
+                          leavesWhole
+                        })}
                         newRowsMarker={
                           rowKeys[item.index] === newRowsMarker?.key ? newRowsMarker : undefined
                         }
@@ -137,6 +147,13 @@ export function NativeChatWaitingTranscriptItems({
           key={nativeChatSlotKey(slot)}
           slot={slot}
           context={context}
+          joinsMessageAbove={nativeChatSlotJoinsMessageAbove({
+            slot,
+            previous: slots[index - 1],
+            timedRowsAfter: context.timedRows,
+            markerKey: undefined,
+            leavesWhole: nativeChatSlotLeavesWhole(slot)
+          })}
           joinsActivityAbove={nativeChatSlotJoinsActivityAbove({
             slot,
             previous: slots[index - 1],

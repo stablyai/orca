@@ -221,7 +221,11 @@
         "terminalControlledHint": "Lo controla la interfaz del terminal.",
         "terminalControlledTooltip": "Coincide con la interfaz del terminal. Desactiva Usar la interfaz del terminal para cambiarlo.",
         "fontKeywordTypeface": "tipo de letra",
-        "fontKeywordTypography": "tipografía"
+        "fontKeywordTypography": "tipografía",
+        "messageStyle": "Estilo de mensajes",
+        "messageStyleDefault": "Predeterminado",
+        "messageStyleMessaging": "Mensajería",
+        "messageStyleDescription": "Burbujas para chats individuales con bots. Los chats de programación conservan el diseño predeterminado."
       },
       "editorTheme": {
         "light": "Tema claro del editor",

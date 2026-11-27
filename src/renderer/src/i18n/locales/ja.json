@@ -221,7 +221,11 @@
         "terminalControlledHint": "ターミナルの外観設定に従います。",
         "terminalControlledTooltip": "ターミナルの外観に合わせています。変更するには「ターミナルの外観に合わせる」をオフにしてください。",
         "fontKeywordTypeface": "書体",
-        "fontKeywordTypography": "タイポグラフィ"
+        "fontKeywordTypography": "タイポグラフィ",
+        "messageStyle": "メッセージスタイル",
+        "messageStyleDefault": "デフォルト",
+        "messageStyleMessaging": "メッセージ形式",
+        "messageStyleDescription": "ボットとの1対1のチャットを吹き出しで表示します。コーディングチャットはデフォルトのレイアウトを維持します。"
       },
       "editorTheme": {
         "light": "エディターのライトテーマ",

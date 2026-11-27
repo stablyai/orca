@@ -860,7 +860,11 @@
         "softer": "更柔和",
         "sharper": "更清晰",
         "terminalControlledHint": "由終端機介面設定。",
-        "terminalControlledTooltip": "目前與終端機介面一致。若要變更此項，請關閉「與終端機介面一致」。"
+        "terminalControlledTooltip": "目前與終端機介面一致。若要變更此項，請關閉「與終端機介面一致」。",
+        "messageStyle": "訊息樣式",
+        "messageStyleDefault": "預設",
+        "messageStyleMessaging": "即時通訊",
+        "messageStyleDescription": "以對話泡泡顯示與機器人的一對一聊天。程式設計聊天保留預設版面配置。"
       },
       "editorTheme": {
         "light": "淺色編輯器主題",

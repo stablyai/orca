@@ -9,6 +9,7 @@ export type NativeChatAppearanceSettings = {
   codeFontSize?: number
   /** Transcript and composer width; absent = comfortable (46rem). */
   width?: 'comfortable' | 'wide' | 'full'
+  messageStyle?: 'default' | 'messaging'
   /** Chat contrast, 50–150; absent = 100. */
   contrast?: number
   /** Follow the terminal interface font and theme; absent = false. */
@@ -105,6 +106,8 @@ export function normalizeNativeChatAppearanceSettings(
     'matchTerminalInterface' in value && value.matchTerminalInterface === true
   const width =
     'width' in value && (value.width === 'wide' || value.width === 'full') ? value.width : undefined
+  const messageStyle =
+    'messageStyle' in value && value.messageStyle === 'messaging' ? 'messaging' : undefined
   const normalized: NativeChatAppearanceSettings = {
     ...Object.fromEntries(
       Object.entries(value).filter(
@@ -114,6 +117,7 @@ export function normalizeNativeChatAppearanceSettings(
             'fontSize',
             'codeFontSize',
             'width',
+            'messageStyle',
             'contrast',
             'matchTerminalInterface'
           ].includes(key)
@@ -123,6 +127,7 @@ export function normalizeNativeChatAppearanceSettings(
     ...(fontSize !== DEFAULT_NATIVE_CHAT_FONT_SIZE ? { fontSize } : {}),
     ...(codeFontSize !== DEFAULT_NATIVE_CHAT_CODE_FONT_SIZE ? { codeFontSize } : {}),
     ...(width ? { width } : {}),
+    ...(messageStyle ? { messageStyle } : {}),
     ...(contrast !== DEFAULT_NATIVE_CHAT_CONTRAST ? { contrast } : {}),
     ...(matchTerminalInterface ? { matchTerminalInterface } : {})
   }
@@ -138,6 +143,7 @@ export function resolveNativeChatAppearanceSettings(
     fontSize: normalized?.fontSize ?? DEFAULT_NATIVE_CHAT_FONT_SIZE,
     codeFontSize: normalized?.codeFontSize ?? DEFAULT_NATIVE_CHAT_CODE_FONT_SIZE,
     width: normalized?.width ?? 'comfortable',
+    messageStyle: normalized?.messageStyle ?? 'default',
     contrast: normalized?.contrast ?? DEFAULT_NATIVE_CHAT_CONTRAST,
     matchTerminalInterface: normalized?.matchTerminalInterface ?? false
   }
@@ -155,6 +161,7 @@ export function resetNativeChatAppearanceSettings(
             'fontSize',
             'codeFontSize',
             'width',
+            'messageStyle',
             'contrast',
             'matchTerminalInterface'
           ].includes(key)

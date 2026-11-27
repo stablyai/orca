@@ -545,7 +545,11 @@
         "terminalControlledHint": "Défini par l’interface du terminal.",
         "terminalControlledTooltip": "Suit l’interface du terminal. Désactivez Utiliser l’interface du terminal pour le modifier.",
         "fontKeywordTypeface": "police de caractères",
-        "fontKeywordTypography": "typographie"
+        "fontKeywordTypography": "typographie",
+        "messageStyle": "Style des messages",
+        "messageStyleDefault": "Par défaut",
+        "messageStyleMessaging": "Messagerie",
+        "messageStyleDescription": "Bulles pour les conversations individuelles avec les bots. Les chats de programmation conservent la disposition par défaut."
       },
       "editorTheme": {
         "light": "Thème clair de l’éditeur",

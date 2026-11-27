@@ -942,7 +942,11 @@
         "softer": "Daha yumuşak",
         "sharper": "Daha keskin",
         "terminalControlledHint": "Terminal arayüzü tarafından belirlenir.",
-        "terminalControlledTooltip": "Terminal arayüzünüzle eşleşiyor. Değiştirmek için Terminal arayüzüyle eşleştir seçeneğini kapatın."
+        "terminalControlledTooltip": "Terminal arayüzünüzle eşleşiyor. Değiştirmek için Terminal arayüzüyle eşleştir seçeneğini kapatın.",
+        "messageStyle": "Mesaj stili",
+        "messageStyleDefault": "Varsayılan",
+        "messageStyleMessaging": "Mesajlaşma",
+        "messageStyleDescription": "Botlarla bire bir sohbetler için mesaj balonları. Kodlama sohbetleri varsayılan düzeni korur."
       },
       "editorTheme": {
         "light": "Açık düzenleyici teması",
