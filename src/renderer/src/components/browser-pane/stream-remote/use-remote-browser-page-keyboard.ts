@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { useTranslate } from '@/i18n/use-translate'
@@ -14,6 +14,7 @@ import { keybindingMatchesAction } from '../../../../../shared/keybindings/match
 import {
   getRemoteBrowserKeyboardShortcut,
   getRemoteBrowserKeypressKey,
+  getRemoteBrowserProxyBeforeInputKey,
   isRemoteBrowserProxyTextKey,
   takeRemoteBrowserProxyText
 } from './remote-browser-keyboard'
@@ -60,6 +61,7 @@ export function useRemoteBrowserPageKeyboard({
   runtimeTarget,
   lifecycle,
   runtimeWorktree,
+  keyboardProxyRef,
   enqueueRemoteInput,
   createRemoteOperationToken,
   isCurrentRemoteOperationToken,
@@ -73,6 +75,8 @@ export function useRemoteBrowserPageKeyboard({
   runtimeTarget: () => RemoteBrowserRuntimeTarget | null
   lifecycle: RemoteBrowserStreamLifecycle
   runtimeWorktree: string
+  /** The proxy to attach the native beforeinput listener to; omitted by callers that have none. */
+  keyboardProxyRef?: React.RefObject<HTMLTextAreaElement | null>
   enqueueRemoteInput: (operation: () => Promise<void>) => Promise<void>
   createRemoteOperationToken: (remotePageId?: string | null) => RemoteBrowserOperationToken | null
   isCurrentRemoteOperationToken: (token: RemoteBrowserOperationToken) => boolean
@@ -252,6 +256,34 @@ export function useRemoteBrowserPageKeyboard({
       enqueueRemoteKeyboardInput({ method: 'typedText', text })
     }
   }
+
+  // Why a native listener: React's onBeforeInput is not a passthrough — it only reports text and
+  // composition ends, so the edit types a soft keyboard sends would never reach it. The listener
+  // reads the latest callbacks through a ref, so a re-render does not rebound it.
+  const handleBeforeInputRef = useRef<(proxy: HTMLTextAreaElement, event: InputEvent) => void>(
+    () => {}
+  )
+  handleBeforeInputRef.current = (proxy, event) => {
+    const key = getRemoteBrowserProxyBeforeInputKey({ inputType: event.inputType, currentTarget: proxy })
+    if (key && enqueueRemoteKeyboardInput({ method: 'browser.keypress', key })) {
+      // Why: the key is pressed on the page, so the empty proxy must not apply the edit too.
+      event.preventDefault()
+    }
+  }
+  useEffect(() => {
+    const proxy = keyboardProxyRef?.current
+    if (!proxy) {
+      return
+    }
+    const onBeforeInput = (event: Event): void => {
+      // Why narrowed here: the DOM types a `beforeinput` listener's event as the base Event.
+      if (event instanceof InputEvent) {
+        handleBeforeInputRef.current(proxy, event)
+      }
+    }
+    proxy.addEventListener('beforeinput', onBeforeInput)
+    return () => proxy.removeEventListener('beforeinput', onBeforeInput)
+  }, [keyboardProxyRef])
 
   const handleRemoteScreenshotPaste = (event: React.ClipboardEvent<HTMLTextAreaElement>): void => {
     // Why text only: markup and files would be staged in the page over several requests, and a page

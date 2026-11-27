@@ -79,10 +79,44 @@ export function takeRemoteBrowserProxyText(event: {
   nativeEvent: Event
   currentTarget: HTMLTextAreaElement
 }): string | null {
+  // Why the dataset too: ComposingKeyboardProxy maintains it because mobile browsers leave
+  // isComposing unset on the input events that arrive mid-composition.
+  if ('composing' in event.currentTarget.dataset) {
+    return null
+  }
   if (event.nativeEvent instanceof InputEvent && event.nativeEvent.isComposing) {
     return null
   }
   const text = event.currentTarget.value
   event.currentTarget.value = ''
   return text || null
+}
+
+// Input types a soft keyboard produces for keys that change nothing in an empty proxy.
+const PROXY_EDIT_INPUT_KEYS: Record<string, string> = {
+  deleteContentBackward: 'Backspace',
+  deleteContentForward: 'Delete',
+  insertLineBreak: 'Enter',
+  insertParagraph: 'Enter'
+}
+
+/**
+ * The key an `beforeinput` stands for when the proxy is empty, or null when the event is the
+ * proxy's own to apply.
+ *
+ * Why: Android soft keyboards (Gboard, Samsung) report Backspace/Delete/Enter as keyCode 229 and
+ * signal them through `beforeinput`. Deleting an empty `<textarea>` changes nothing, so no `input`
+ * event follows and the press is lost; Enter inserts a newline, which the `input` event then
+ * forwards as typed text instead of the Enter key that submits a one-line form.
+ */
+export function getRemoteBrowserProxyBeforeInputKey(event: {
+  inputType: string
+  currentTarget: HTMLTextAreaElement
+}): string | null {
+  const key = PROXY_EDIT_INPUT_KEYS[event.inputType]
+  // With text in the proxy the textarea applies the edit itself and `input` forwards the result.
+  if (!key || event.currentTarget.value !== '') {
+    return null
+  }
+  return 'composing' in event.currentTarget.dataset ? null : key
 }

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
-import { fireEvent, render } from '@testing-library/react'
-import { createElement } from 'react'
-import { expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render } from '@testing-library/react'
+import { createElement, type RefObject } from 'react'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createHarness } from './remote-browser-stream-lifecycle-test-harness'
 
 const calls = vi.hoisted((): { method: string; params: Record<string, unknown> }[] => [])
@@ -15,6 +15,14 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
 vi.mock('@/store', () => ({ useAppStore: { getState: () => ({ keybindings: {} }) } }))
 
 const { useRemoteBrowserPageKeyboard } = await import('./use-remote-browser-page-keyboard')
+
+beforeEach(() => {
+  calls.length = 0
+})
+
+afterEach(() => {
+  cleanup()
+})
 
 it('pastes only the plain text into a streamed page, even when the clipboard carries markup and files', async () => {
   const { lifecycle } = createHarness()
@@ -59,4 +67,93 @@ it('pastes only the plain text into a streamed page, even when the clipboard car
       params: { worktree: 'wt', page: 'page', text: 'plain' }
     }
   ])
+})
+
+function renderProxyTextarea(): HTMLTextAreaElement {
+  const { lifecycle } = createHarness()
+  lifecycle.tokens.setRemotePage('page')
+  const queued: Promise<void>[] = []
+  const proxyRef: RefObject<HTMLTextAreaElement | null> = { current: null }
+  function StreamedPage() {
+    const { handleRemoteKeyboardProxyText } = useRemoteBrowserPageKeyboard({
+      pickerAvailable: false,
+      runtimeTarget: () => ({ kind: 'environment', environmentId: 'env-1' }),
+      lifecycle,
+      runtimeWorktree: 'wt',
+      keyboardProxyRef: proxyRef,
+      enqueueRemoteInput: (operation) => {
+        const run = operation()
+        queued.push(run)
+        return run
+      },
+      createRemoteOperationToken: (pageId) => lifecycle.tokens.createOperationToken(pageId),
+      isCurrentRemoteOperationToken: (token) => lifecycle.tokens.isCurrent(token),
+      closeMissingRemotePage: vi.fn(),
+      scheduleRemoteTabInfoRefresh: vi.fn(),
+      setPaneNotice: vi.fn(),
+      closeSelectPopupForPageInput: vi.fn(),
+      readSelectPopupAfterKey: vi.fn()
+    })
+    return createElement('textarea', {
+      'data-testid': 'proxy',
+      ref: (node: HTMLTextAreaElement | null) => {
+        proxyRef.current = node
+      },
+      onInput: handleRemoteKeyboardProxyText
+    })
+  }
+  const { getByTestId } = render(createElement(StreamedPage))
+  const proxy = getByTestId('proxy')
+  if (!(proxy instanceof HTMLTextAreaElement)) {
+    throw new Error('The proxy fixture rendered something other than a textarea')
+  }
+  return proxy
+}
+
+it('presses Backspace on the page when the empty proxy cannot delete anything', async () => {
+  const proxy = renderProxyTextarea()
+  proxy.focus()
+  const beforeInput = new InputEvent('beforeinput', {
+    inputType: 'deleteContentBackward',
+    bubbles: true,
+    cancelable: true
+  })
+  fireEvent(proxy, beforeInput)
+
+  // Already pressed on the page, so the proxy must not also apply an edit of its own.
+  expect(beforeInput.defaultPrevented).toBe(true)
+  await vi.waitFor(() =>
+    expect(calls).toEqual([
+      { method: 'browser.keypress', params: { worktree: 'wt', page: 'page', key: 'Backspace' } }
+    ])
+  )
+})
+
+it('presses Enter instead of forwarding the newline a one-line page form cannot submit', async () => {
+  const proxy = renderProxyTextarea()
+  proxy.focus()
+  fireEvent(
+    proxy,
+    new InputEvent('beforeinput', { inputType: 'insertLineBreak', bubbles: true, cancelable: true })
+  )
+
+  await vi.waitFor(() =>
+    expect(calls).toEqual([
+      { method: 'browser.keypress', params: { worktree: 'wt', page: 'page', key: 'Enter' } }
+    ])
+  )
+})
+
+it('forwards text the proxy already holds rather than pressing a key for it', async () => {
+  const proxy = renderProxyTextarea()
+  proxy.value = 'abc'
+  fireEvent(
+    proxy,
+    new InputEvent('beforeinput', {
+      inputType: 'deleteContentBackward',
+      bubbles: true,
+      cancelable: true
+    })
+  )
+  expect(calls).toEqual([])
 })

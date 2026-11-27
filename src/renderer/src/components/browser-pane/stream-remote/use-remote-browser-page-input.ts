@@ -217,6 +217,11 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
     }
     const modifiers = readRemoteBrowserMouseModifiers(event, target)
     event.preventDefault()
+    // Why the release too: a touch press grants no transient user activation, so focusing the proxy
+    // on pointerdown does not open the soft keyboard. The release does grant it.
+    if (event.pointerType !== 'mouse') {
+      keyboardProxyRef.current?.focus({ preventScroll: true })
+    }
     setPaneNotice(null)
     enqueueRemoteInput(async () => {
       if (!isCurrentRemoteOperationToken(operationToken)) {
@@ -270,6 +275,7 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
     runtimeTarget,
     lifecycle,
     runtimeWorktree,
+    keyboardProxyRef,
     enqueueRemoteInput,
     createRemoteOperationToken,
     isCurrentRemoteOperationToken,
