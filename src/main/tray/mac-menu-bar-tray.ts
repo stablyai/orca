@@ -26,12 +26,18 @@ export class MacMenuBarTray {
   private readonly suspend = (): void => this.owner.suspend()
   private readonly resume = (): void => this.owner.resume()
 
-  constructor(image: NativeImage, onCreated?: () => void) {
+  constructor(
+    image: NativeImage,
+    callbacks: Pick<
+      ConstructorParameters<typeof MacMenuBarProcess>[0],
+      'onCreated' | 'onOwnerChange' | 'onUnavailable'
+    > = {}
+  ) {
     this.image = image
     this.owner = new MacMenuBarProcess({
       qa: process.env.ORCA_E2E_MENU_BAR === '1' && Boolean(process.env.ORCA_E2E_USER_DATA_DIR),
       executable: app.isPackaged ? undefined : process.env.ORCA_DEV_MENU_BAR_EXECUTABLE,
-      onCreated,
+      ...callbacks,
       onAction: (action: MenuBarAction) => this.menu.find((item) => item.id === action)?.click?.()
     })
     powerMonitor.on('suspend', this.suspend)

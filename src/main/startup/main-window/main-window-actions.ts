@@ -246,11 +246,14 @@ export function getAppMenuQuitHandlers(): AppMenuQuitHandlers {
     : { onQuitAndStopAllSessions: quitAndStopAllSessionsFromUserCommand }
 }
 
+// Every caller waits for the saved rollout block so the launch's icon owner is decided once, correctly.
 export function syncMacMenuBarIcon(showMenuBarIcon: boolean, onCreated?: () => void): void {
-  const options = process.platform === 'darwin' && !state.isServeMode && getSystemTrayOptions()
-  if (options) {
-    setMacMenuBarIconVisible(showMenuBarIcon, { ...options, onCreated })
-  }
+  void loadCachedRolloutConfig().then(() => {
+    const options = process.platform === 'darwin' && !state.isServeMode && getSystemTrayOptions()
+    if (options && !state.isQuitting) {
+      setMacMenuBarIconVisible(showMenuBarIcon, { ...options, onCreated })
+    }
+  })
 }
 
 export function createSystemTrayDeferred(
@@ -264,11 +267,7 @@ export function createSystemTrayDeferred(
     }
     trayCreated = true
     if (process.platform === 'darwin') {
-      void loadCachedRolloutConfig().then(() => {
-        if (!window.isDestroyed() && !state.isQuitting && state.store) {
-          syncMacMenuBarIcon(state.store.getSettings().showMenuBarIcon !== false, onCreated)
-        }
-      })
+      syncMacMenuBarIcon(state.store.getSettings().showMenuBarIcon !== false, onCreated)
       return
     }
     const options = getSystemTrayOptions()

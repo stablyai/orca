@@ -125,23 +125,43 @@ it.each(['pipe', 'oversized'])(
   }
 )
 
-it('continues UI probes with a pending snapshot and replaces only an unresponsive helper', () => {
+it('keeps no timer while an idle helper shows the icon and replaces one that misses a reply', () => {
   const { process } = owner()
   const helper = helpers[0]
   helper.send({ type: 'ready' })
-  for (let probe = 0; probe < 5; probe++) {
-    vi.advanceTimersByTime(5_000)
-    const ping = helper.requests.findLast((request) => request.type === 'ping')!
-    helper.send({ type: 'pong', id: ping.id })
-  }
-  expect(helper.kill).not.toHaveBeenCalled()
+  helper.send({ type: 'applied', id: helper.requests[0].id })
+  expect(vi.getTimerCount()).toBe(0)
   process.suspend()
+  process.update({ ...snapshot, tooltip: 'during sleep' })
   vi.advanceTimersByTime(60_000)
-  process.resume()
-  vi.advanceTimersByTime(5_000)
   expect(helper.kill).not.toHaveBeenCalled()
-  vi.advanceTimersByTime(20_000)
+  process.resume()
+  vi.advanceTimersByTime(15_000)
   expect(helper.kill).toHaveBeenCalledWith('SIGKILL')
+})
+
+it('gives up after three helpers fail before showing the icon', () => {
+  const onUnavailable = vi.fn()
+  const spawn = vi.fn(() => {
+    const helper = new Helper()
+    helpers.push(helper)
+    return helper
+  })
+  const process = new MacMenuBarProcess({
+    onAction: vi.fn(),
+    onUnavailable,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake implements every child/stream member used by this owner; no real process is signaled.
+    spawn: spawn as unknown as typeof spawnProcess
+  })
+  owners.push(process)
+  process.update(snapshot)
+  for (let attempt = 0; attempt < 3; attempt++) {
+    helpers.at(-1)!.exit()
+    vi.advanceTimersByTime(60_000)
+  }
+  expect(spawn).toHaveBeenCalledTimes(3)
+  expect(onUnavailable).toHaveBeenCalledOnce()
+  expect(vi.getTimerCount()).toBe(0)
 })
 
 it('forces its owned child during immediate parent exit without waiting for helper execution', async () => {

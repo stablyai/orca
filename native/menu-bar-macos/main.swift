@@ -67,8 +67,11 @@ private final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate {
         self.pending = command
         self.applyPending()
       }
+      // perform(inModes:) does not wake an idle run loop.
+      CFRunLoopWakeUp(CFRunLoopGetMain())
     } else if command.type == "qa", qaEnabled {
       RunLoop.main.perform(inModes: [.default]) { self.qa(command) }
+      CFRunLoopWakeUp(CFRunLoopGetMain())
     } else { _exit(1) }
   }
 
@@ -158,6 +161,26 @@ private final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate {
     } else { emit(["type": "qa", "error": "Invalid QA action"]) }
   }
 }
+
+// The parent keeps no idle timer; a UI thread stuck in an AppKit scene wait exits here so Orca can replace it.
+private var uiBeat: UInt64 = 0
+private let beatLock = NSLock()
+private let uiWatchdog = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .utility))
+private var lastSeenBeat: UInt64 = .max
+uiWatchdog.schedule(deadline: .now() + 15, repeating: 15, leeway: .seconds(5))
+uiWatchdog.setEventHandler {
+  beatLock.lock()
+  let beat = uiBeat
+  beatLock.unlock()
+  if beat == lastSeenBeat { _exit(3) }
+  lastSeenBeat = beat
+  DispatchQueue.main.async {
+    beatLock.lock()
+    uiBeat &+= 1
+    beatLock.unlock()
+  }
+}
+uiWatchdog.resume()
 
 signal(SIGPIPE, SIG_IGN)
 guard fcntl(STDOUT_FILENO, F_SETFL, fcntl(STDOUT_FILENO, F_GETFL) | O_NONBLOCK) != -1 else { _exit(1) }

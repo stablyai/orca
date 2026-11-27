@@ -159,6 +159,10 @@ export function createSystemTray(opts: SystemTrayOptions): SystemTray | null {
     return null
   }
   if (tray && !tray.isDestroyed()) {
+    // A settings toggle can create the in-process icon before the deferred startup call; keep its milestone.
+    if (process.platform === 'darwin' && !(tray instanceof MacMenuBarTray)) {
+      opts.onCreated?.()
+    }
     return tray
   }
 
@@ -181,17 +185,14 @@ export function createSystemTray(opts: SystemTrayOptions): SystemTray | null {
 
   // The helper owns NSStatusItem so AppKit scene deadlocks cannot freeze main.
   if (process.platform === 'darwin' && launchMacMenuBarHost(opts.installId) === 'helper') {
-    tray = new MacMenuBarTray(baseTrayImage, opts.onCreated)
+    const helperTray: MacMenuBarTray = new MacMenuBarTray(baseTrayImage, {
+      onCreated: opts.onCreated,
+      onOwnerChange: (owned) => reportMenuBarHost(owned ? 'helper' : null),
+      onUnavailable: () => deferAppKitSceneMutation(() => fallBackToInProcessTray(helperTray))
+    })
+    tray = helperTray
   } else {
-    const nativeTray = new Tray(baseTrayImage)
-    if (process.platform === 'win32') {
-      // Windows left-click restores the app; macOS uses its attached menu.
-      nativeTray.on(
-        'click',
-        safeMenuAction(() => opts.onOpen())
-      )
-    }
-    tray = nativeTray
+    tray = createNativeTray(baseTrayImage, opts)
   }
   applyTrayImage()
   trayOptions = opts
@@ -200,12 +201,34 @@ export function createSystemTray(opts: SystemTrayOptions): SystemTray | null {
     tray.setToolTip(baseTooltip())
   } else {
     watchMacAppearance()
-    reportMenuBarHost(tray instanceof MacMenuBarTray ? 'helper' : 'in-process')
-    if (!(tray instanceof MacMenuBarTray)) {
-      opts.onCreated?.()
-    }
   }
   return tray
+}
+
+function createNativeTray(image: NativeImage, opts: SystemTrayOptions): Tray {
+  const nativeTray = new Tray(image)
+  if (process.platform === 'win32') {
+    // Windows left-click restores the app; macOS uses its attached menu.
+    nativeTray.on(
+      'click',
+      safeMenuAction(() => opts.onOpen())
+    )
+  } else {
+    reportMenuBarHost('in-process')
+    opts.onCreated?.()
+  }
+  return nativeTray
+}
+
+// A helper that can't show the icon must not leave the user without one for the whole launch.
+function fallBackToInProcessTray(failed: MacMenuBarTray): void {
+  if (tray !== failed || !trayOptions || !baseTrayImage) {
+    return
+  }
+  void failed.destroy()
+  tray = createNativeTray(baseTrayImage, trayOptions)
+  setTrayMenu(trayOptions)
+  applyTrayImage()
 }
 
 function setTrayMenu(opts: SystemTrayOptions): void {

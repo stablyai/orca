@@ -249,7 +249,6 @@ function prepareMacDevElectronApp() {
     chromiumResourcePath,
     path.join(appPath, 'Contents', 'MacOS', 'orca-keyboard-layout'),
     path.join(appPath, 'Contents', 'MacOS', 'orca-process-footprint'),
-    ...menuBar.menuBarAppFiles(path.join(appPath, 'Contents', 'Resources', 'Orca Menu Bar.app')),
     path.join(appPath, 'Contents', 'MacOS', 'orca-socket-owner')
   ]
 
@@ -346,7 +345,12 @@ function prepareMacDevElectronApp() {
   }
 
   buildDevSwiftCliHelpers(path.join(appPath, 'Contents', 'MacOS'))
-  menuBar.buildDevMenuBarApp(appPath, bundleId)
+  try {
+    menuBar.buildDevMenuBarApp(appPath, bundleId)
+  } catch (error) {
+    // The app falls back to its in-process icon when the helper can't start.
+    console.warn('[dev] menu-bar helper build failed; continuing without it', error)
+  }
 
   // Re-sign after copy/plist edits or macOS rejects notification registration (UNErrorDomain 1); signing failure stays nonfatal for dev.
   let signed = true

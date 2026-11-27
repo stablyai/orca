@@ -10,8 +10,10 @@ import {
   type MenuBarQACommand,
   type MenuBarSnapshot
 } from './mac-menu-bar-protocol'
-const PROBE_INTERVAL = 5_000
-const PROBE_TIMEOUT = 15_000
+// Only an outstanding reply arms a deadline, so an idle helper costs main no timer; the helper exits itself on a UI stall.
+const REPLY_TIMEOUT = 15_000
+// Consecutive helpers that never showed the icon before main falls back to the in-process tray.
+const MAX_FAILED_STARTS = 3
 type Generation = {
   child: ChildProcessWithoutNullStreams
   exited: Promise<void>
@@ -21,14 +23,17 @@ type Generation = {
   sentRevision: number
   appliedRevision: number
   sequence: number
-  probe: number | null
-  deadline: number
+  awaiting: boolean
   started: number
 }
 
 type Options = {
   onAction: (action: MenuBarAction) => void
   onCreated?: () => void
+  /** True once a helper shows the icon, false when that helper exits. */
+  onOwnerChange?: (owned: boolean) => void
+  /** Helpers keep failing before showing the icon; the caller should use another owner. */
+  onUnavailable?: () => void
   spawn?: typeof spawnProcess
   qa?: boolean
   executable?: string
@@ -39,7 +44,8 @@ export class MacMenuBarProcess {
   private current: Generation | null = null
   private desired: MenuBarSnapshot | null = null
   private revision = 0
-  private probeId = 0
+  private created = false
+  private failedStarts = 0
   private retryDelay = 1_000
   private timer: ReturnType<typeof setTimeout> | null = null
   private suspended = false
@@ -66,10 +72,9 @@ export class MacMenuBarProcess {
 
   resume(): void {
     this.suspended = false
-    if (this.current) {
-      this.current.deadline = performance.now() + PROBE_TIMEOUT
+    if (this.current?.awaiting) {
+      this.arm(this.current)
     }
-    this.schedule(PROBE_INTERVAL)
   }
 
   destroy(): Promise<void> {
@@ -116,8 +121,7 @@ export class MacMenuBarProcess {
       sentRevision: 0,
       appliedRevision: 0,
       sequence: 0,
-      probe: null,
-      deadline: performance.now() + PROBE_TIMEOUT,
+      awaiting: false,
       started: performance.now()
     }
     this.current = generation
@@ -135,15 +139,28 @@ export class MacMenuBarProcess {
       child.stdout.destroy()
       child.stderr.destroy()
       observeExit()
+      if (generation.appliedRevision > 0) {
+        this.options.onOwnerChange?.(false)
+      }
       if (this.current !== generation) {
         return
       }
       this.current = null
       this.clearTimer()
       this.qa.reject()
-      if (!this.stopped) {
-        this.retry()
+      if (this.stopped) {
+        return
       }
+      this.failedStarts = generation.appliedRevision > 0 ? 0 : this.failedStarts + 1
+      // A helper that dies soon after showing the icon keeps backing off.
+      this.retryDelay = performance.now() - generation.started > 60_000 ? 1_000 : this.retryDelay
+      if (this.failedStarts >= MAX_FAILED_STARTS) {
+        console.warn('[menu-bar] helper keeps failing; falling back to the in-process icon')
+        this.stopped = true
+        this.options.onUnavailable?.()
+        return
+      }
+      this.retry()
     }
     child.once('exit', finish)
     const fault = (): void => {
@@ -164,7 +181,7 @@ export class MacMenuBarProcess {
     child.stdout.setEncoding('utf8')
     child.stdout.on('data', (chunk: string) => this.read(generation, chunk))
     child.stdin.on('drain', () => this.flush())
-    this.schedule(PROBE_INTERVAL)
+    this.arm(generation)
   }
 
   private read(generation: Generation, chunk: string): void {
@@ -178,21 +195,20 @@ export class MacMenuBarProcess {
         }
         if (message.type === 'ready' && !generation.ready) {
           generation.ready = true
-          generation.deadline = performance.now() + PROBE_TIMEOUT
+          this.disarm(generation)
           this.flush()
         } else if (message.type === 'applied' && message.id === generation.sentRevision) {
           const first = generation.appliedRevision === 0
           generation.appliedRevision = message.id
+          this.disarm(generation)
           if (first) {
-            this.options.onCreated?.()
+            this.options.onOwnerChange?.(true)
+            if (!this.created) {
+              this.created = true
+              this.options.onCreated?.()
+            }
           }
           this.flush()
-        } else if (message.type === 'pong' && message.id === generation.probe) {
-          generation.probe = null
-          generation.deadline = performance.now() + PROBE_TIMEOUT
-          if (performance.now() - generation.started > 60_000) {
-            this.retryDelay = 1_000
-          }
         } else if (
           message.type === 'action' &&
           generation.ready &&
@@ -232,6 +248,7 @@ export class MacMenuBarProcess {
     }
     generation.sentRevision = this.revision
     this.write(generation, { type: 'state', id: this.revision, snapshot: this.desired })
+    this.arm(generation)
   }
 
   private write(generation: Generation, message: unknown): void {
@@ -254,6 +271,23 @@ export class MacMenuBarProcess {
     }
   }
 
+  private arm(generation: Generation): void {
+    generation.awaiting = true
+    this.clearTimer()
+    this.timer = setTimeout(() => {
+      this.timer = null
+      if (this.current === generation && generation.awaiting && !this.suspended) {
+        void this.retire(generation)
+      }
+    }, REPLY_TIMEOUT)
+    this.timer.unref()
+  }
+
+  private disarm(generation: Generation): void {
+    generation.awaiting = false
+    this.clearTimer()
+  }
+
   private schedule(delay: number): void {
     this.clearTimer()
     if (this.stopped) {
@@ -261,26 +295,9 @@ export class MacMenuBarProcess {
     }
     this.timer = setTimeout(() => {
       this.timer = null
-      const generation = this.current
-      if (!generation) {
+      if (!this.current) {
         this.start()
-        return
       }
-      if (!generation.retired && !this.suspended) {
-        if (performance.now() >= generation.deadline) {
-          void this.retire(generation)
-          return
-        }
-        if (
-          generation.ready &&
-          generation.probe === null &&
-          !generation.child.stdin.writableNeedDrain
-        ) {
-          generation.probe = ++this.probeId
-          this.write(generation, { type: 'ping', id: generation.probe })
-        }
-      }
-      this.schedule(PROBE_INTERVAL)
     }, delay)
     this.timer.unref()
   }
@@ -302,9 +319,7 @@ export class MacMenuBarProcess {
   }
 
   private clearTimer(): void {
-    if (this.timer) {
-      clearTimeout(this.timer)
-    }
+    clearTimeout(this.timer ?? undefined)
     this.timer = null
   }
 }

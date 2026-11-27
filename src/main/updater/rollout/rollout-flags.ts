@@ -122,8 +122,8 @@ export function cachedRolloutConfig(): RolloutConfig | null {
 }
 
 /** Saves each successfully read block; a failed fetch keeps the last one so a network blip can't lift a kill switch. */
-export async function recordRolloutConfig(config: RolloutConfig | null): Promise<void> {
-  const text = JSON.stringify(config ?? {})
+export async function recordRolloutConfig(config: RolloutConfig): Promise<void> {
+  const text = JSON.stringify(config)
   await loadCachedRolloutConfig()
   if (text === cachedText) {
     return

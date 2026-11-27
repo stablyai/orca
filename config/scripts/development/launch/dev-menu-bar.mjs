@@ -46,9 +46,10 @@ export function prepareStandaloneDevMenuBar(
       signApp(stagedApp)
       renameSync(staging, cacheDir)
     } catch (error) {
-      // Another launch may have published the same immutable artifact concurrently.
+      // Another launch may have published the same artifact; otherwise the app uses its in-process icon.
       if (!files.every(existsSync)) {
-        throw error
+        console.warn('[dev] menu-bar helper unavailable; using the in-process icon', error)
+        return
       }
     } finally {
       rmSync(staging, { recursive: true, force: true })
