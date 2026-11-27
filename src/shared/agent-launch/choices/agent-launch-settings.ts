@@ -130,7 +130,10 @@ export function projectAgentLaunchSettings(
     defaultTuiAgent: settings.defaultTuiAgent ?? null,
     newWorkspaceSetupOnly: false,
     disabledTuiAgents: normalizeDisabledTuiAgents(settings.disabledTuiAgents),
-    disabledTuiAgentsCustomized: settings.disabledTuiAgentsCustomized === true,
+    // Lists saved before the marker existed were set by the user.
+    disabledTuiAgentsCustomized:
+      settings.disabledTuiAgentsCustomized ??
+      normalizeDisabledTuiAgents(settings.disabledTuiAgents).length > 0,
     agentCmdOverrides: { ...settings.agentCmdOverrides },
     agentDefaultArgs: normalizeTuiAgentArgsRecord(composed.agentDefaultArgs),
     environmentNames: Object.fromEntries(
