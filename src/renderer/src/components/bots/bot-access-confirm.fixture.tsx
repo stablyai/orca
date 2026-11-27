@@ -144,7 +144,10 @@ function accessFixture(options: {
           // The confirmation surface is lazy-loaded, so the dialog mounts after the click.
           await waitForDialog(frame)
         }
-      : undefined
+      : options.trigger
+        ? undefined
+        : // Opens on mount, but the lazy surface can land after the first paint on a cold load.
+          (frame) => waitForDialog(frame)
   })
 }
 
