@@ -1,6 +1,7 @@
 import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
 import { OrcaRuntimeWithListManagedWorktrees } from '../managed-workspace-operations'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import {
   describeLaunchedAgentHost,
   readAdoptedRootAgentForeground,
@@ -37,6 +38,14 @@ export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWit
     return this.ptysById.get(ptyId) === pty && pty?.incarnationId === incarnation
       ? result
       : 'unknown'
+  }
+
+  /** Mail waits while a shell is in front: the pane's agent status outlives the agent's exit. */
+  protected mailForegroundShellProbe(ptyId: string): (() => Promise<boolean>) | null {
+    const agent = this.getPaneTerminalAgent(ptyId)
+    return isTuiAgent(agent)
+      ? async () => (await this.readLaunchedAgentForeground(ptyId, agent)) === 'shell'
+      : null
   }
 
   /** Whether a command mark's agent is itself still in front: any other program is the shell's turn. */

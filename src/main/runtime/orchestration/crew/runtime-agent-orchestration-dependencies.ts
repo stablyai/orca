@@ -11,6 +11,8 @@ import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-s
 
 export abstract class OrcaRuntimeWithAgentOrchestrationDependencies extends OrcaRuntimeWithRuntimeId {
   abstract retrySleptMailboxWakes(): void
+  /** Reads whether a shell, not the pane's agent, is in front; null when the pane names no agent. */
+  protected abstract mailForegroundShellProbe(ptyId: string): (() => Promise<boolean>) | null
   protected abstract requestSleptMailboxWake(
     mailbox: string,
     reservedTypes?: ReadonlySet<string>

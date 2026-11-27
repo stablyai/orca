@@ -15,12 +15,17 @@ function target(shellInFront: boolean | null) {
   })
 }
 
-async function probe(shellInFront: boolean | null): Promise<{ deferred: boolean; redelivered: string[] }> {
+async function probe(
+  shellInFront: boolean | null
+): Promise<{ deferred: boolean; redelivered: string[] }> {
   vi.useFakeTimers()
   try {
     const redelivered: string[] = []
-    const deferred = target(shellInFront).deferForTerminalProbe('pty-1', 'term_a', false, (mailbox) =>
-      redelivered.push(mailbox)
+    const deferred = target(shellInFront).deferForTerminalProbe(
+      'pty-1',
+      'term_a',
+      false,
+      (mailbox) => redelivered.push(mailbox)
     )
     await vi.runAllTimersAsync()
     return { deferred, redelivered }
