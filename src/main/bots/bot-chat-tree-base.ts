@@ -11,7 +11,7 @@ import type { Bot } from '../../shared/bot-types'
 import { botOfHomeWorkspace } from '../../shared/bots/bot-homes'
 import type { BotChatOrigin, BotChatTreeChat } from '../../shared/bots/bot-chat-tree'
 import { HOME_CHAT_TITLE } from '../../shared/bots/bot-chat-tree-model'
-import { botHomeRoots, botHomes, type BotHomeOf } from '../../shared/bots/bot-home-of'
+import { botHomeName, botHomeRoots, botHomes, type BotHomeOf } from '../../shared/bots/bot-home-of'
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 import {
   isOrcaSessionId,
@@ -74,7 +74,8 @@ export function botChatInputsKey(inputs: BotChatInputs): string {
   const { bot } = inputs
   return JSON.stringify([
     bot.folderWorkspaceId,
-    botHomes(bot).map((home) => home.sessionId),
+    // With each teammate Home's title, so a name that reaches a share retitles it.
+    botHomes(bot).map((home) => [home.sessionId, botHomeName(bot, home.of)]),
     inputs.runs.map((run) => [
       run.id,
       run.automationId,
@@ -131,13 +132,13 @@ type BotChatBasePartial = Pick<BotChatBaseBuild, 'rootOf' | 'homeRoots' | 'origi
  *  background run). */
 function botChatBaseRow(
   ctx: BotChatBaseContext,
-  bot: Pick<Bot, 'folderWorkspaceId'>,
+  bot: Pick<Bot, 'folderWorkspaceId' | 'shares'>,
   record: AgentSessionConversationView,
   build: BotChatBasePartial
 ): BotChatRecordRow | null {
   return botOfHomeWorkspace([bot], record.location.workspaceId) &&
     !isBotBackgroundRun(ctx.backgroundRuns, record)
-    ? botChatRecordRow(record, build.rootOf, build.homeRoots)
+    ? botChatRecordRow(record, build.rootOf, build.homeRoots, bot)
     : null
 }
 
@@ -145,7 +146,7 @@ function botChatBaseRow(
 export function botChatBaseChat(
   ctx: BotChatBaseContext,
   store: AgentSessionRecordReader,
-  bot: Pick<Bot, 'folderWorkspaceId'>,
+  bot: Pick<Bot, 'folderWorkspaceId' | 'shares'>,
   record: AgentSessionConversationView,
   build: BotChatBasePartial
 ): BotChatBaseChat | null {

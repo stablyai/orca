@@ -7,10 +7,16 @@ import {
   type BotChatHostChat,
   type BotChatHostTree
 } from '../../shared/bots/bot-chat-tree-model'
-import { botHomePlaceholderAccount, type BotHomeOf } from '../../shared/bots/bot-home-of'
+import type { Bot } from '../../shared/bot-types'
+import {
+  botHomeName,
+  botHomePlaceholderAccount,
+  botSharePersonName,
+  type BotHomeOf
+} from '../../shared/bots/bot-home-of'
 
 export type BotChatTreeViewer =
-  | { kind: 'owner'; personName: (accountId: string) => string }
+  | { kind: 'owner'; bot: Pick<Bot, 'shares'> }
   | { kind: 'teammate'; accountId: string; owns: (chatId: string) => boolean }
 
 function wireChat({ whoseHome: _internal, ...chat }: BotChatHostChat): BotChatTreeChat {
@@ -53,8 +59,13 @@ function ownerView(
       return []
     }
     // Titled from the share row as it is now, never from the chat's record.
-    const name = viewer.personName(of.accountId)
-    return [{ ...wireChat(chat), homeOf: name, title: `${name}’s Home` }]
+    return [
+      {
+        ...wireChat(chat),
+        homeOf: botSharePersonName(viewer.bot, of.accountId),
+        title: botHomeName(viewer.bot, of)
+      }
+    ]
   })
   const shown = new Set(chats.map((chat) => chat.chatId))
   return {

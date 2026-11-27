@@ -142,6 +142,22 @@ export function botHomeName(bot: Pick<Bot, 'shares'>, of: BotHomeOf): string {
     : `${botSharePersonName(bot, of.accountId)}’s ${BOT_HOME_NAME}`
 }
 
+/** Every name an older build may have saved on a teammate's Home ("<name>’s Home", by the name the
+ *  share had then: its display name, else its email, else the account id). */
+export function legacyTeammateHomeNames(
+  bot: Pick<Bot, 'shares'>,
+  of: Exclude<BotHomeOf, 'owner'>
+): string[] {
+  const share = bot.shares?.find(
+    (entry): entry is BotAccountShare =>
+      entry.kind === 'account' && entry.accountId === of.accountId
+  )
+  const people = [share?.name, share?.email, of.accountId].filter((name): name is string =>
+    Boolean(name)
+  )
+  return [...new Set(people)].map((name) => `${name}’s ${BOT_HOME_NAME}`)
+}
+
 /** A chat's Home as its viewer titles it: their own Home slot ("Home", whatever the host named it),
  *  a teammate's (named from their share row as it is now), or null for any other chat. The one rule
  *  desktop and phone tabs both title by. */

@@ -44,7 +44,8 @@ function chats(names: Record<string, Partial<AgentSessionRecord>>) {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a row reads the record's name and turn.
       records.get(id) as never,
       (sessionId) => sessionId,
-      new Map()
+      new Map(),
+      {}
     )?.title
   return { title }
 }

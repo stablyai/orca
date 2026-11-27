@@ -4,11 +4,18 @@ import {
   botHome,
   botHomeOfSession,
   botHomeTitleOf,
-  botSharePersonName,
   withBotHome,
   type BotHomeOf
 } from '../../shared/bots/bot-home-of'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { buildBotChatTree } from '../../shared/bots/bot-chat-tree-model'
+import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
+import { conversationRecordReader } from '../runtime/orchestration/addressing/session-lineage/structured-session-lineage'
+import { readBotOwnChatPanes } from './bot-own-chat-panes'
+import { searchBotChats } from './bot-chat-search-host'
+import { readBotChatTreeParts, type BotChatTreeHost } from './bot-chat-tree-host'
 import { botChatTreeForViewer } from './bot-chat-tree-viewer'
 import { resolveBotShareInvite } from './bot-team-share-deliveries'
 import { botShareAsker } from './team-share/bot-share-chats'
@@ -21,6 +28,7 @@ import {
   type QueuedMessageTestRig
 } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
 import {
+  HOST_TEST_LOCATION,
   HOST_TEST_SESSION,
   hostTestAttachParams,
   hostTestOperationId
@@ -54,7 +62,7 @@ describe('a Home Chat for each person', () => {
     rig = undefined
   })
 
-  async function setup() {
+  async function setup(aliceHomeName = 'Alice’s Home') {
     rig = await createQueuedMessageTestRig()
     const current = rig
     // The rig's host names nothing; names go through the record store's own write rule.
@@ -73,13 +81,15 @@ describe('a Home Chat for each person', () => {
             expectedRuntimeFence: null,
             payloadFingerprint: ''
           },
-          providerHandle: { kind: 'codex', threadId: `thread-${sessionId}` }
+          providerHandle: { kind: 'codex', threadId: `thread-${sessionId}` },
+          // In the agent's home, as its chats are.
+          location: { ...HOST_TEST_LOCATION, workspaceId: 'folder:home', workspaceKind: 'folder' }
         })
       )
       expect(attached).toMatchObject({ ok: true })
     }
     await attach(ALICE_HOME)
-    await host.setUserConversationName(ALICE_HOME, 'Alice’s Home', 'rename')
+    await host.setUserConversationName(ALICE_HOME, aliceHomeName, 'rename')
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the Home owner reads only these fields.
     let bot = {
       id: 'bot-1',
@@ -197,11 +207,7 @@ describe('a Home Chat for each person', () => {
       extras: [],
       homeWorkspaceIds: []
     })
-    const ownerTree = botChatTreeForViewer(
-      tree,
-      { kind: 'owner', personName: (accountId) => botSharePersonName(bot(), accountId) },
-      { page: false }
-    )
+    const ownerTree = botChatTreeForViewer(tree, { kind: 'owner', bot: bot() }, { page: false })
     expect(ownerTree.chats.find((entry) => entry.chatId === home)).toMatchObject({
       homeOf: 'Alice Lee',
       title: 'Alice Lee’s Home'
@@ -209,6 +215,74 @@ describe('a Home Chat for each person', () => {
     expect(
       botShareAsker(bot(), { kind: 'bot-share', botId: 'bot-1', accountId: ALICE.accountId })
     ).toMatchObject({ name: 'Alice Lee' })
+  })
+
+  it('names a Home an older build saved by email after the name arrives: line, search and reset', async () => {
+    // An older build named Alice's Home by her email, before her name reached the host.
+    const { chats, bot, bots } = await setup('alice@example.com’s Home')
+    await bots.update('bot-1', (saved) => ({
+      shares: saved.shares?.map((entry) =>
+        entry.kind === 'account' && entry.accountId === ALICE.accountId
+          ? { ...entry, name: undefined }
+          : entry
+      )
+    }))
+    const named: Parameters<typeof resolveBotShareInvite>[1] = {
+      kind: 'share_resolved',
+      deliveryId: 'share-named:1',
+      expiresAt: Number.MAX_SAFE_INTEGER,
+      conversation: { source: 'orca', externalId: 'share-Alice' },
+      shareId: 'share-Alice',
+      botId: 'bot-1',
+      email: 'alice@example.com',
+      accountId: ALICE.accountId,
+      name: 'Alice Lee'
+    }
+    expect(await resolveBotShareInvite(bots, named)).toBe(true)
+    const directory = mkdtempSync(join(tmpdir(), 'teammate-home-names-'))
+    const db = new OrchestrationDb(join(directory, 'orchestration.db'))
+    try {
+      // The owner's chat host as bots.chats.own and bots.chats.search read it.
+      const treeHost: BotChatTreeHost = {
+        bots: () => [bot()],
+        sessionRecords: async () => conversationRecordReader(rig!.store),
+        db: () => db,
+        backgroundRuns: { botOfLook: () => null, botOfTidyUp: () => null },
+        externalConversations: () => [],
+        // The owner's open tab still says what an older build labelled it.
+        chatTabs: async () => [{ sessionId: ALICE_HOME, title: 'alice@example.com’s Home' }],
+        statusRows: () => [],
+        automations: () => [],
+        automationRuns: () => new Map(),
+        recordedWorkers: async () => [],
+        dispatchWorkers: async () => []
+      }
+      const line = await readBotOwnChatPanes(treeHost)
+      expect(line['bot-1']?.map((chat) => chat.title)).toContain('Alice Lee’s Home')
+      const found = await searchBotChats(
+        {
+          ...treeHost,
+          treeParts: (botId) => readBotChatTreeParts(treeHost, { botId }),
+          contentMatches: async () => []
+        },
+        { botId: 'bot-1', query: 'Alice Lee' }
+      )
+      expect(found.chats).toEqual([
+        expect.objectContaining({
+          chatId: ALICE_HOME,
+          title: 'Alice Lee’s Home',
+          homeOf: 'Alice Lee'
+        })
+      ])
+    } finally {
+      db.close()
+      rmSync(directory, { recursive: true, force: true })
+    }
+    // Replaced, the Home gives up the name it was saved with.
+    await chats.reset('bot-1', ALICE)
+    expect(rig!.store.getConversation(ALICE_HOME)?.conversationName).not.toBe(
+      'alice@example.com’s Home'
+    )
   })
 
   it('opens a teammate’s Home as it is, with no tab shown, and the owner’s with its tab', async () => {

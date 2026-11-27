@@ -1,7 +1,12 @@
 // A Home Chat bears its person's Home name exactly while a pointer names it; a Home a new one
 // replaced gives the name up and becomes an ordinary chat of the agent's.
 import type { Bot } from '../../shared/bot-types'
-import { BOT_HOME_NAME, botHomeName, botHomes, type BotHomeOf } from '../../shared/bots/bot-home-of'
+import {
+  BOT_HOME_NAME,
+  botHomes,
+  legacyTeammateHomeNames,
+  type BotHomeOf
+} from '../../shared/bots/bot-home-of'
 import { isOrcaSessionId } from '../../shared/agent-session/identity/orca-session-address'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
@@ -55,8 +60,9 @@ export async function nameNewHome(
     await host.setSessionTabVisibility(replaced, false)
   }
   if (replaced && of !== 'owner') {
-    // Older builds named a teammate's Home "<name>’s Home".
-    await releaseName(host, replaced, botHomeName(bot, of))
+    for (const name of legacyTeammateHomeNames(bot, of)) {
+      await releaseName(host, replaced, name)
+    }
   }
   await releaseReplacedHomes(host, bot)
 }

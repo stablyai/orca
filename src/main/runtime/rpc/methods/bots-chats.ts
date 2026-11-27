@@ -149,7 +149,9 @@ export function botChatRecordRow(
   record: AgentSessionConversationView,
   rootOf: (id: string) => string,
   /** Each Home's /clear root, by whose Home it is. */
-  homeRoots: ReadonlyMap<string, BotHomeOf>
+  homeRoots: ReadonlyMap<string, BotHomeOf>,
+  /** Whose shares name a teammate's Home: its title is theirs as it is now, never the record's. */
+  bot: Pick<Bot, 'shares'>
 ): Omit<BotChatRow, 'self' | 'closed'> | null {
   if (!isOrcaSessionId(record.sessionId) || clearedInto(record) !== null) {
     return null
@@ -159,7 +161,8 @@ export function botChatRecordRow(
   const homeOf = homeRoots.get(id)
   return {
     id,
-    title: record.conversationName ?? null,
+    title:
+      homeOf && homeOf !== 'owner' ? botHomeName(bot, homeOf) : (record.conversationName ?? null),
     lastActivityAt: turn?.at ?? record.updatedAt,
     lastAsked: turn?.prompt ?? null,
     lastSaid: turn?.reply ?? null,
@@ -209,7 +212,7 @@ export function listBotChatsWith(
       const row =
         botOfHomeWorkspace([bot], record.location.workspaceId) &&
         !isBotBackgroundRun(backgroundRuns, record)
-          ? botChatRecordRow(record, rootOfChat, homes)
+          ? botChatRecordRow(record, rootOfChat, homes, bot)
           : null
       if (!row || !isOrcaSessionId(record.sessionId)) {
         return []
@@ -223,8 +226,6 @@ export function listBotChatsWith(
       return [
         {
           ...row,
-          // A teammate's Home by their share row's name as it is now, never the record's.
-          ...(row.homeOf && row.homeOf !== 'owner' ? { title: botHomeName(bot, row.homeOf) } : {}),
           self: row.id === self,
           closed: refusal !== null,
           ...(refusal ? { reason: refusal.unreachable ?? 'unverifiable' } : {})
