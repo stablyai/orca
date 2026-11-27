@@ -51,15 +51,17 @@ export type MobileBotCardSend = {
 export const MobileBotCardSendContext = createContext<MobileBotCardSend | null>(null)
 
 /** How a card tells its agent `text`: a card answer, which waits for a running turn, when the host
- *  takes one (`cardAnswer`) and the chat has a session; else typed, which follows the follow-up setting. */
+ *  takes one (`cardAnswer`) and the chat has a session; else typed, which follows the follow-up setting.
+ *  A card answer carries `answerKey`, so a host that already queued it doesn't tell the bot twice. */
 export function mobileBotOfferTell(
   card: MobileBotCardSend | null,
-  cardAnswer: ((text: string, sessionId: string) => Promise<boolean>) | null,
-  text: string
+  cardAnswer: ((text: string, sessionId: string, answerKey: string) => Promise<boolean>) | null,
+  text: string,
+  answerKey: string
 ): Promise<boolean> {
   const sessionId = card?.sessionId
   if (cardAnswer && sessionId) {
-    return cardAnswer(text, sessionId)
+    return cardAnswer(text, sessionId, answerKey)
   }
   return card ? card.typed(text) : Promise.resolve(false)
 }

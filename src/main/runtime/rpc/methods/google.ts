@@ -282,7 +282,7 @@ export const GOOGLE_METHODS = [
     name: 'google.bot.connected',
     permission: 'workspace',
     params: GoogleBotConnectedParams,
-    handler: async ({ botToken, botId, account, sessionId }, ctx) => {
+    handler: async ({ botToken, botId, account, sessionId, answerKey }, ctx) => {
       refuseFromBot(botToken, ctx)
       // The card runs in the owner's Orca; an agent's CLI never answers for it.
       if (isAgentRpcCaller(ctx.caller)) {
@@ -295,7 +295,7 @@ export const GOOGLE_METHODS = [
       }
       // Read now, not at the click: the sign-in can take minutes.
       const line = googleConnectedLine(account, await connect.defaultAccount())
-      return tellBotCardAnswer(ctx.runtime, botId, sessionId, line)
+      return tellBotCardAnswer(ctx.runtime, botId, sessionId, line, answerKey)
     }
   })
 ] as const

@@ -18,6 +18,9 @@ import { botErrorMessage } from '../bots/bot-presentation'
 import { NativeChatCardActions } from './NativeChatCardFrame'
 import { NativeChatBotKickoffContext } from './native-chat-bot-kickoff-view'
 
+/** Tells the bot one card answer; a hidden one carries `answerKey`, so the host drops a repeat. */
+type CardTell = (answerKey: string) => Promise<boolean>
+
 export type NativeChatOffer = {
   dismissed: boolean
   /** What the card's action was taken on, once it was: workspace ids, or import item indices. */
@@ -28,8 +31,8 @@ export type NativeChatOffer = {
   /** Like `send`, for a further action on a card already answered: replaces its answer. */
   sendAgain: (text: string, chosen: readonly string[]) => void
   /** Like `send` (`again`: `sendAgain`), told by `tell` instead of a typed message, such as a hidden
-   *  card answer; `tell` resolves false when it was refused. */
-  answer: (tell: () => Promise<boolean>, chosen: readonly string[], again?: boolean) => void
+   *  card answer carrying `answerKey`; `tell` resolves false when it was refused. */
+  answer: (tell: CardTell, chosen: readonly string[], again?: boolean) => void
 }
 
 export function useNativeChatOffer(botId: string, cardId: string): NativeChatOffer {
@@ -37,11 +40,12 @@ export function useNativeChatOffer(botId: string, cardId: string): NativeChatOff
   const view = useContext(NativeChatBotKickoffContext)
   const { bot, ref } = useCardBot(botId)
   const answer = bot?.offerAnswers?.find((entry) => entry.cardId === cardId)
-  // Claimed on the host before the send, so a second window, device or press sends nothing; a refused send gives
-  // the claim back and leaves the card to press again.
+  // Claimed on the host before the send, so a second window, device or press sends nothing; a refused or failed
+  // send gives the claim back and leaves the card to press again. A press again after a lost reply carries the
+  // same answer key, so a host that already queued it doesn't tell the bot twice.
   const answerOffer = async (
     update: Parameters<typeof answerBotOffer>[0],
-    tell: () => Promise<boolean>,
+    tell: CardTell,
     again = false
   ): Promise<void> => {
     const ops = {
@@ -64,18 +68,22 @@ export function useNativeChatOffer(botId: string, cardId: string): NativeChatOff
       )
     }
   }
-  const typed = (text: string) => async (): Promise<boolean> => (await view?.send(text)) === true
+  const typed =
+    (text: string): CardTell =>
+    async () =>
+      (await view?.send(text)) === true
   // Typed follows the follow-up setting and can steer a running turn; a card answer always waits for it.
   const sessionId = view?.sessionId
   const asCardAnswer = !!sessionId && botHostTakes(ref, BOTS_OFFER_ANSWER_RUNTIME_CAPABILITY)
-  const told = (text: string) =>
+  const told = (text: string): CardTell =>
     asCardAnswer
-      ? async (): Promise<boolean> =>
+      ? async (answerKey) =>
           (
             await callBotRpc<{ sent: boolean }>(ref, 'bots.offer.answer', {
               botId,
               sessionId,
-              text
+              text,
+              answerKey
             })
           ).sent
       : typed(text)

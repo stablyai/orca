@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   answerBotOffer,
   answerBotOfferAgain,
+  botOfferAnswerKey,
   withBotOfferAnswer,
   type BotOfferAnswer,
   type BotOfferAnswerUpdate
@@ -76,5 +77,39 @@ describe('a first answer whose send outcome is unknown', () => {
       'already_answered'
     )
     expect(card.sent).toEqual([])
+  })
+})
+
+describe('the answer key a card answer carries', () => {
+  it('is the same for every press of one answer, and differs between answers', async () => {
+    const keys: string[] = []
+    const card = host([])
+    const ops = (accepted: boolean) => ({
+      ...card.ops('Import', accepted),
+      send: async (answerKey: string) => (keys.push(answerKey), accepted)
+    })
+    // A refused first press gives the card back; the next press keys the same answer.
+    expect(await answerBotOffer({ cardId: 'card', sent: { chosen: ['ws-1'] } }, ops(false))).toBe(
+      'refused'
+    )
+    expect(await answerBotOffer({ cardId: 'card', sent: { chosen: ['ws-2'] } }, ops(true))).toBe(
+      'sent'
+    )
+    expect(keys[0]).toBe(keys[1])
+
+    // A further action keys its own choice, so each one still reaches the bot.
+    await answerBotOfferAgain(
+      { cardId: 'card', sent: { chosen: ['ws-2', 'ws-3'] } },
+      undefined,
+      ops(true)
+    )
+    await answerBotOfferAgain(
+      { cardId: 'card', sent: { chosen: ['ws-2', 'ws-4'] } },
+      undefined,
+      ops(true)
+    )
+    expect(new Set(keys.slice(1)).size).toBe(3)
+    expect(botOfferAnswerKey('card', 'dismissed')).not.toBe(keys[0])
+    expect(botOfferAnswerKey('other', 'sent')).not.toBe(keys[0])
   })
 })

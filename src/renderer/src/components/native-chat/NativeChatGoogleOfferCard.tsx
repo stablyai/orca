@@ -77,12 +77,13 @@ export function NativeChatGoogleOfferCard({
       // A hidden card answer: the Connected card already shows the account, and the bot reads a fact.
       hidden: () =>
         answering.answer(
-          async () =>
+          async (answerKey) =>
             (
               await callBotRpc<{ sent: boolean }>(bot, 'google.bot.connected', {
                 botId: bot.id,
                 account: connected.email,
-                ...(chat?.sessionId ? { sessionId: chat.sessionId } : {})
+                ...(chat?.sessionId ? { sessionId: chat.sessionId } : {}),
+                answerKey
               })
             ).sent,
           chosen,

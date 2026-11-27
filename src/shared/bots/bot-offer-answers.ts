@@ -16,13 +16,18 @@ export const BotOfferAnswerSchema = lazyZodSchema(() =>
 
 export type BotOfferAnswer = z.infer<typeof BotOfferAnswerSchema>
 
+/** The same for every attempt at one card answer (`botOfferAnswerKey`): a host that already queued it
+ *  returns that result again, so a retry after a lost reply never tells the bot twice. */
+export const BotOfferAnswerKeySchema = lazyZodSchema(() => z.string().min(1).max(1024))
+
 /** `bots.offer.answer`: a press on an offer card, which the bot hears as a card answer queued behind its running turn. */
 export const BotOfferAnswerParams = lazyZodSchema(() =>
   z.object({
     botId: z.string().min(1, 'Missing bot id'),
     /** The chat the card sits in; the bot's Chat when absent. */
     sessionId: z.string().min(1).optional(),
-    text: z.string().trim().min(1).max(100_000)
+    text: z.string().trim().min(1).max(100_000),
+    answerKey: BotOfferAnswerKeySchema.optional()
   })
 )
 
@@ -65,6 +70,26 @@ export function withBotOfferAnswer(
   return [...others, next]
 }
 
+/** The idempotency key of a card's first answer of one kind: every press, window and device answering
+ *  that card that way sends the same one. A further action (`answerBotOfferAgain`) keys its own choice. */
+export function botOfferAnswerKey(
+  cardId: string,
+  field: BotOfferAnswerField,
+  chosen?: readonly string[]
+): string {
+  return chosen ? `${cardId}\n${field}\n${textHash(JSON.stringify(chosen))}` : `${cardId}\n${field}`
+}
+
+// FNV-1a: short and deterministic on every client. A collision only matters between two further actions on one card.
+function textHash(text: string): string {
+  let hash = 0x811c9dc5
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index)
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return (hash >>> 0).toString(36)
+}
+
 /** How one press on an offer card ended. */
 export type BotOfferAnswerOutcome = 'sent' | 'already_answered' | 'refused'
 
@@ -75,8 +100,8 @@ export async function answerBotOffer(
   ops: {
     /** `bots.update` with this `offerAnswer`. */
     update: (offerAnswer: BotOfferAnswerUpdate) => Promise<unknown>
-    /** Tells the bot; false when the chat refused it. */
-    send: () => Promise<boolean>
+    /** Tells the bot, with `answerKey` for the host to drop a repeat of; false when the chat refused it. */
+    send: (answerKey: string) => Promise<boolean>
     /** The send threw after it may have reached the host (a lost reply): the claim stays, so a second
      *  press can't tell the bot twice. */
     deliveryUnknown?: (error: unknown) => boolean
@@ -94,7 +119,7 @@ export async function answerBotOffer(
   let sent = false
   let maybeSent = false
   try {
-    sent = await ops.send()
+    sent = await ops.send(botOfferAnswerKey(answer.cardId, field))
   } catch (error) {
     maybeSent = ops.deliveryUnknown?.(error) === true
     throw error
@@ -116,13 +141,13 @@ export async function answerBotOfferAgain(
   previous: BotOfferAnswer['sent'],
   ops: {
     update: (offerAnswer: BotOfferAnswerUpdate) => Promise<unknown>
-    send: () => Promise<boolean>
+    send: (answerKey: string) => Promise<boolean>
   }
 ): Promise<Exclude<BotOfferAnswerOutcome, 'already_answered'>> {
   await ops.update(answer)
   let sent = false
   try {
-    sent = await ops.send()
+    sent = await ops.send(botOfferAnswerKey(answer.cardId, 'sent', answer.sent.chosen))
   } finally {
     if (!sent) {
       await ops.update(
