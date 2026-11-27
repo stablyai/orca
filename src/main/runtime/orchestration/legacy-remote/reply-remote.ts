@@ -3,6 +3,7 @@ import type { MessageRow } from '../db/orchestration-records'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { remoteRunHomeUnreachable } from '../../rpc/methods/orchestration/routing'
 import { sendRemoteMessage } from './send-remote'
+import { replySubject } from '../../../../shared/orchestration/mailbox/reply-subject'
 
 /** Reply to mirrored remote-Run mail only at its home, through this pane's own Dispatch link. */
 export async function replyToRemoteRunHome(args: {
@@ -25,7 +26,7 @@ export async function replyToRemoteRunHome(args: {
   ) {
     throw remoteRunHomeUnreachable(db, original.run_id)
   }
-  const subject = `Re: ${original.subject}`
+  const subject = replySubject(original.subject)
   const sent = await sendRemoteMessage({
     params: {
       from,
@@ -40,7 +41,8 @@ export async function replyToRemoteRunHome(args: {
     senderPaneKey: paneKey,
     remoteAttachment: attachment,
     processIncarnation: runtime.getTerminalProcessIncarnation(from) ?? undefined,
-    signal: args.signal
+    signal: args.signal,
+    replyTo: original.id
   })
   db.markAsRead([original.id], { kind: 'reply' })
   // Preserve message: every shipped CLI reads its reply id there.

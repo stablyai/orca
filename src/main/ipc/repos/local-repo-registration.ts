@@ -29,6 +29,7 @@ export async function addLocalRepoFromPath(
   if (gitInfo && !gitInfo.isRepo) {
     return {
       error:
+        gitInfo.ownershipError ??
         (await describeWslUncAccessDenied(path, store.getSettings())) ??
         `Not a valid git repository: ${path}`
     }

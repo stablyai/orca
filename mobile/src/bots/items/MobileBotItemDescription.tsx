@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { MobileMarkdown } from '../../components/markdown/MobileMarkdown'
+import { MobileNativeChatMarkdown } from '../../session/native-chat/transcript/message-content/MobileNativeChatMarkdown'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { INLINE_TEXT_SELECTION } from '../../platform/text-selection/inline-text-selection'
 import { colors, spacing } from '../../theme/mobile-theme'
@@ -18,7 +18,7 @@ export function MobileBotItemDescription({ text }: { text: string }) {
     <View style={styles.description}>
       <View style={!open && clamps ? styles.clamped : undefined}>
         <View onLayout={(event) => setHeight(event.nativeEvent.layout.height)}>
-          <MobileMarkdown content={text} rangeSelectable={INLINE_TEXT_SELECTION} />
+          <MobileNativeChatMarkdown content={text} rangeSelectable={INLINE_TEXT_SELECTION} />
         </View>
       </View>
       {clamps ? (

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { PI_THINKING_LEVELS } from '../../../../shared/agent-session/options/reconciliation/structured-agent-session-effective-effort'
 import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/protocol/agent-session-options-result'
 import { isPiModelOptionId } from '../../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-pi'
@@ -17,7 +18,7 @@ export const modelSchema = piRpcModelSchema.safeExtend({
   id: z.string().min(1),
   thinkingLevelMap: z.record(z.string(), z.string().nullable()).optional()
 })
-const modelsSchema = z.object({ models: z.array(modelSchema) })
+const modelsSchema = lazyZodSchema(() => z.object({ models: z.array(modelSchema) }))
 
 export function piModelOptionId(provider: string, modelId: string): string {
   if (!provider || !modelId || provider.includes('/')) {

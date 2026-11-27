@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { OpenCodeTextTaskSession } from './opencode-text-task-session'
 import type { createOpenCodeTextTaskHttp } from './opencode-text-task-http'
 
@@ -12,12 +13,14 @@ const RULES = [
   ['read', 'mcp:*', 'deny']
 ] as const
 
-const v1PolicyRules = z.array(
-  z.object({
-    permission: z.string(),
-    pattern: z.string(),
-    action: z.enum(['allow', 'deny', 'ask'])
-  })
+const v1PolicyRules = lazyZodSchema(() =>
+  z.array(
+    z.object({
+      permission: z.string(),
+      pattern: z.string(),
+      action: z.enum(['allow', 'deny', 'ask'])
+    })
+  )
 )
 
 export function acknowledgesOpenCodeV1Policy(

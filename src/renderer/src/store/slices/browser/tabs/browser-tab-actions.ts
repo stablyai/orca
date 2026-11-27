@@ -1,3 +1,4 @@
+import { queueKagiPrivateInitialNavigation } from '@/lib/kagi-private-initial-navigation'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import { translate } from '@/i18n/i18n'
 import {
@@ -56,6 +57,9 @@ export function createBrowserTabActions(
         browserPageId,
         options?.docLocation
       )
+      if (!options?.browserRuntimeEnvironmentId && !options?.docLocation) {
+        queueKagiPrivateInitialNavigation(page.id, url)
+      }
       if (
         !options?.browserRuntimeEnvironmentId &&
         !options?.docLocation &&

@@ -5,6 +5,7 @@ import { Check, ChevronsUpDown, GitBranch } from 'lucide-react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Button } from '@/components/ui/button'
 import { Command, CommandInput, CommandList } from '@/components/ui/command'
+import { isCommandInputCaretKey } from '@/lib/keyboard/command-input-caret-keys'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
@@ -307,6 +308,9 @@ function ParentWorktreeCandidateList({
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {
+      if (isCommandInputCaretKey(event)) {
+        return
+      }
       // Why: cmdk's root handler only knows the mounted virtual window, so own navigation here.
       const navigate = (nextIndex: number): void => {
         event.preventDefault()

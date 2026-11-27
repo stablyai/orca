@@ -329,6 +329,30 @@ describe('agent mail between paired Orca servers', () => {
     expect(notes).toEqual([])
   })
 
+  it('keeps local replies in the original thread with a stable subject', async () => {
+    const opened = await cli(
+      a,
+      'send',
+      '--from',
+      'term_a',
+      '--to',
+      'term_b',
+      '--subject',
+      '  re:build notes'
+    )
+    expect(opened).toMatchObject({ result: { message: { to_handle: 'term_b' } } })
+    const [original] = mailFor(a, 'term_b')
+    await cli(a, 'reply', '--id', original!.id, '--body', 'Green.', '--from', 'term_b')
+    const [reply] = mailFor(a, 'term_a')
+    await cli(a, 'reply', '--id', reply!.id, '--body', 'Re: Thanks.', '--from', 'term_a')
+    const [followup] = mailFor(a, 'term_b')
+    expect(followup).toMatchObject({
+      subject: 'Re:   re:build notes',
+      body: 'Re: Thanks.',
+      thread_id: original!.id
+    })
+  })
+
   it('carries a terminal agent mail to the paired server and its flagless reply back', async () => {
     const sent = await cli(
       a,
@@ -379,6 +403,39 @@ describe('agent mail between paired Orca servers', () => {
       mutation(a, 'orchestration.reply', { id: back!.id, body: 'Thanks.', from: 'term_a' })
     ).resolves.toMatchObject({ ok: true })
     expect(mailFor(b, 'term_b').map((message) => message.body)).toEqual(['Thanks.'])
+  })
+
+  it('settles only the question a reply names when two share a thread', async () => {
+    const ask = (subject: string, threadId?: string) =>
+      cli(
+        a,
+        'send',
+        '--from',
+        'term_a',
+        '--on',
+        'devB',
+        '--to',
+        'term_b',
+        '--subject',
+        subject,
+        '--type',
+        'question',
+        ...(threadId ? ['--thread-id', threadId] : [])
+      )
+    const first: string = (await ask('Which branch?')).result.message.id
+    const second: string = (await ask('Which port?', first)).result.message.id
+    expect(mailFor(b, 'term_b').map((m) => m.id)).toEqual([first, second])
+
+    await cli(b, 'reply', '--id', second, '--body', '5173', '--from', 'term_b')
+    a.runtime.ensureOrchestrationFederationRelay()
+    await vi.waitFor(() => expect(mailFor(a, 'term_a')).toHaveLength(1))
+
+    expect(mailFor(a, 'term_a')[0]).toMatchObject({ thread_id: first, reply_to: second })
+    const awaiting = a.db.db
+      .prepare('SELECT message_id FROM peer_questions_out WHERE awaiting = 1')
+      .all()
+      .map((row) => row.message_id)
+    expect(awaiting).toEqual([first])
   })
 
   it("reports the server's delivery hold, as a local send does", async () => {

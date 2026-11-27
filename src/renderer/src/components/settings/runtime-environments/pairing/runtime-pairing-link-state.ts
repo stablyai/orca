@@ -1,8 +1,53 @@
 import type { RuntimePairingReach } from '../../../../../../shared/remote-runtime/pairing/runtime-pairing-reach'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 
 export const RUNTIME_PAIRING_LOOPBACK_ADDRESS = '127.0.0.1'
 
 export type RuntimePairingIntent = 'another' | 'local' | 'custom'
+
+export type RuntimePairingInterface = NonNullable<GlobalSettings['runtimePairingInterface']>
+
+// Returns the stored object itself so store selectors stay referentially stable.
+export function readRuntimePairingInterface(
+  saved: GlobalSettings['runtimePairingInterface']
+): RuntimePairingInterface | null {
+  return typeof saved?.name === 'string' && typeof saved.address === 'string' && saved.address
+    ? saved
+    : null
+}
+
+export function resolveAnotherDeviceAddress(
+  interfaces: readonly RuntimePairingInterface[],
+  selectedAddress: string,
+  chosen: RuntimePairingInterface | null
+): string {
+  if (interfaces.some((iface) => iface.address === selectedAddress)) {
+    return selectedAddress
+  }
+  if (!chosen || interfaces.length === 0) {
+    return interfaces[0]?.address ?? ''
+  }
+  if (interfaces.some((iface) => iface.address === chosen.address)) {
+    return chosen.address
+  }
+  // Why: follow the chosen interface by name when its IPv4 changed; while it is absent (Thunderbolt Bridge
+  // dropout), hold its address so new links are not silently pointed at the top-ranked interface instead.
+  return interfaces.find((iface) => iface.name === chosen.name)?.address ?? chosen.address
+}
+
+// The chosen interface at its new address when `address` is where the resolver followed it, so callers can persist it.
+export function followedRuntimePairingInterface(
+  interfaces: readonly RuntimePairingInterface[],
+  address: string,
+  chosen: RuntimePairingInterface | null
+): RuntimePairingInterface | null {
+  if (!chosen || address === chosen.address) {
+    return null
+  }
+  return interfaces.some((iface) => iface.name === chosen.name && iface.address === address)
+    ? { name: chosen.name, address }
+    : null
+}
 
 // Only explicit local intent forbids network reach; custom loopback addresses may front SSH/reverse-proxy tunnels.
 export function runtimePairingReachForIntent(intent: RuntimePairingIntent): RuntimePairingReach {
@@ -58,15 +103,16 @@ export function cacheGeneratedRuntimePairingLink(args: {
 
 export function selectRuntimePairingIntent(
   intent: RuntimePairingIntent,
-  networkInterfaces: { address: string }[],
-  customAddress: string
+  networkInterfaces: readonly RuntimePairingInterface[],
+  customAddress: string,
+  chosenInterface: RuntimePairingInterface | null
 ): string {
   runtimePairingLinkCache.intent = intent
   const selectedAddress =
     intent === 'local'
       ? RUNTIME_PAIRING_LOOPBACK_ADDRESS
       : intent === 'another'
-        ? (networkInterfaces[0]?.address ?? '')
+        ? resolveAnotherDeviceAddress(networkInterfaces, '', chosenInterface)
         : customAddress
   runtimePairingLinkCache.selectedAddress = selectedAddress
   return selectedAddress

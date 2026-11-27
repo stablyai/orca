@@ -238,7 +238,6 @@
       "browser-pane": {
         "markup": {
           "errorAttach": "Could not attach the markup screenshot.",
-          "errorCapture": "Could not capture the page to draw on.",
           "errorUnavailable": "Screenshot markup is not available on this page."
         }
       },
@@ -1667,6 +1666,9 @@
       "commentImageNotStored": "Only pasted or attached images can go on a comment.",
       "commentImagesTooLarge": "These images add up to {{totalMb}} MB. A comment takes up to {{maxMb}} MB.",
       "commentImagesTooMany": "Comments take up to {{max}} images.",
+      "composioKeyCantCreateSessions": "This Composio key can’t create sessions. It needs {{permission}}.",
+      "composioKeyMissingPermission": "This Composio key is missing a permission Orca needs.",
+      "composioKeyNeedsPermission": "This Composio key is missing a permission. It needs {{permission}}.",
       "googleAccountsChanged": "Its Google accounts changed since you opened them. Check them and save again.",
       "groupAttachFailed": "Couldn't attach the files. Try sending again in a moment.",
       "groupAttachmentsUnavailable": "This computer can't take attachments right now. Try sending again in a moment.",
@@ -2352,10 +2354,8 @@
         "sshHostDisconnected": "This page is no longer connected through its SSH host. Reconnect and try again."
       },
       "notice": {
-        "importedMore_one": "Imported {{count}} cookie for {{domains}} +{{more}} more. Reload the page to use them.",
-        "importedMore_other": "Imported {{count}} cookies for {{domains}} +{{more}} more. Reload the page to use them.",
-        "imported_one": "Imported {{count}} cookie for {{domains}}. Reload the page to use them.",
-        "imported_other": "Imported {{count}} cookies for {{domains}}. Reload the page to use them."
+        "importedCount_one": "Imported {{countLabel}} cookie",
+        "importedCount_other": "Imported {{countLabel}} cookies"
       }
     },
     "loadFailure": {
@@ -3621,6 +3621,22 @@
       "serverCount_one": "{{count}} server",
       "serverCount_other": "{{count}} servers"
     },
+    "mcpServers": {
+      "toast": {
+        "restart_one": "Restart {{count}} session",
+        "restart_other": "Restart {{count}} sessions",
+        "staleTerminalsOnHost_one": "{{count}} agent terminal on {{host}} uses an older MCP setup",
+        "staleTerminalsOnHost_other": "{{count}} agent terminals on {{host}} use an older MCP setup",
+        "staleTerminalsRestartManual_one": "Restart it yourself to reconnect Orca’s MCP servers.",
+        "staleTerminalsRestartManual_other": "Restart them yourself to reconnect Orca’s MCP servers.",
+        "staleTerminalsRestartSome_one": "{{restartable}} can be resumed here. Restart the other one yourself.",
+        "staleTerminalsRestartSome_other": "{{restartable}} can be resumed here. Restart the other {{count}} yourself.",
+        "staleTerminalsRestart_one": "Restart it to reconnect Orca’s MCP servers.",
+        "staleTerminalsRestart_other": "Restart them to reconnect Orca’s MCP servers.",
+        "staleTerminals_one": "{{count}} agent terminal uses an older MCP setup",
+        "staleTerminals_other": "{{count}} agent terminals use an older MCP setup"
+      }
+    },
     "network": {
       "proxyUrlErrors": {
         "invalid": "Enter a valid proxy URL.",
@@ -3845,9 +3861,6 @@
         "agentCouldNotStart": "{{label}} could not be started. Check the agent command in Settings and try again.",
         "agentFailedToStart": "{{label}} failed to start. Check the agent command in Settings and try again.",
         "agentReportedError": "{{label}} reported an error.",
-        "antigravityInvalidEvents": "Antigravity returned invalid JSON events.",
-        "antigravityInvalidResult": "Antigravity returned an invalid result.",
-        "antigravityNoFinalResult": "Antigravity returned no final result.",
         "chatNameAgentUnsupported": "Choose a supported chat name agent for this action in Settings -> Chat -> Chat names. Supported agents: {{agents}}, or Custom command.",
         "chatNameCustomCommandEmpty": "Custom command is empty. Add one in Settings -> Chat -> Chat names.",
         "cliFailed": "{{label}} CLI command failed with code {{exitCode}}.",
