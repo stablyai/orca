@@ -5,6 +5,8 @@ export type NativeChatWebSearchResult = { title: string; url: string }
 export type NativeChatMcpIdentity = { server: string; tool: string }
 
 export type NativeChatToolMetadata = {
+  /** Set by the Codex command producer, independently of its display label. */
+  codexCommandExecution?: true
   mcpIdentity?: NativeChatMcpIdentity
   exitCode?: number
   durationMs?: number

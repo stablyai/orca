@@ -8,6 +8,7 @@
 import { BOT_JOURNAL_ITEM_BODIES } from './agent-session-journal-bot-item-schemas'
 import { BoundedPayload, ProviderFrame } from './agent-session-journal-bounded-payload-schema'
 import * as z from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { AgentSessionContextUsageSchema } from '../conversation-context/agent-session-context-usage-schema'
 import { AgentJournalThreadGoalStateSchema } from './agent-session-journal-thread-goal-schema'
 import { AgentSessionFailureFactSchema } from '../failures/agent-session-failure-fact-schema'
@@ -23,6 +24,7 @@ import type {
 import { AGENT_JOURNAL_PROMPT_INTENTS } from './agent-session-journal-types'
 
 const ToolMetadata = {
+  codexCommandExecution: lazyZodSchema(() => z.literal(true).optional()),
   mcpIdentity: z.object({ server: z.string(), tool: z.string() }).optional(),
   exitCode: z.number().int().optional(),
   durationMs: z.number().nonnegative().optional(),

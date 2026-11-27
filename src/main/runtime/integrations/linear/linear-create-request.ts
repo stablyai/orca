@@ -105,7 +105,7 @@ async function readLinearCreateRequest(
         item.turnScope.turnItemId === pinned.turnId &&
         item.body.kind === 'tool-call' &&
         item.body.callId === call &&
-        item.body.name === 'shell' &&
+        item.body.codexCommandExecution === true &&
         item.body.state === 'running'
       )
     } catch {
