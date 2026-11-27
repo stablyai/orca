@@ -669,3 +669,37 @@ it('keeps ambiguous URL authorities active through real Markdown read-back', asy
     })
   }
 })
+
+it('keeps expand titles ahead of their bodies, including nestedExpand inside a table', () => {
+  const paragraph = (text: string) => ({ type: 'paragraph', content: [{ type: 'text', text }] })
+  const doc = {
+    type: 'doc',
+    content: [
+      { type: 'expand', attrs: { title: ' Linux *only* ' }, content: [paragraph('Reproduce.')] },
+      { type: 'expand', attrs: { title: '' }, content: [paragraph('Untitled body.')] },
+      {
+        type: 'table',
+        content: [
+          {
+            type: 'tableRow',
+            content: [
+              {
+                type: 'tableCell',
+                content: [
+                  {
+                    type: 'nestedExpand',
+                    attrs: { title: 'Expected result' },
+                    content: [paragraph('Keep the session.')]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+  expect(adfToMarkdownText(doc)).toBe(
+    '**Linux \\*only\\***\n\nReproduce.\n\nUntitled body.\n\n**Expected result**\n\nKeep the session.'
+  )
+})
