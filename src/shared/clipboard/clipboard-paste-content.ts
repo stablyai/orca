@@ -37,4 +37,6 @@ export type ClipboardPasteContent = {
   linkHtml: string
   /** False when `imageProbe` skipped the check. */
   hasImage: boolean
+  /** Why the image check failed; text and files are still usable. */
+  imageProbeError?: string
 }

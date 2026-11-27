@@ -10,6 +10,7 @@ import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import {
   clipboardEventCopiedFilePaths,
   clipboardEventPastedText,
+  clipboardPasteHasImage,
   readClipboardPasteText,
   type ClipboardEventLike
 } from './native-chat-clipboard-payload'
@@ -281,12 +282,12 @@ export function useNativeChatComposerPaste({
         }
         return
       }
-      // A failed read (e.g. text too large) or an unprobed web read can still carry a picture.
-      const hasImage =
-        read && (probeBesideText || read.text === '')
-          ? read.hasImage
-          : await window.api.ui.clipboardHasImage().catch(() => null)
-      if (hasImage !== true) {
+      const hasImage = await clipboardPasteHasImage(read, probeBesideText, (error) => {
+        if (canPaste()) {
+          setNativeChatPasteFailure(setNotice, error)
+        }
+      })
+      if (!hasImage) {
         return
       }
       if (!canComplete()) {

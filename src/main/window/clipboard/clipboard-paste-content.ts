@@ -32,11 +32,14 @@ export async function readClipboardPasteContent(
         .then((html) => (clipboardHtmlMayHaveLinks(html) ? html : ''))
         .catch(() => '')
     : ''
-  const hasImage = shouldProbeClipboardPasteImage(options.imageProbe, text, filePaths)
-    ? await readClipboardImageSource(reader).then(
-        (source) => source !== null,
-        () => false
-      )
-    : false
-  return { text, filePaths, linkHtml, hasImage }
+  if (!shouldProbeClipboardPasteImage(options.imageProbe, text, filePaths)) {
+    return { text, filePaths, linkHtml, hasImage: false }
+  }
+  try {
+    const hasImage = (await readClipboardImageSource(reader)) !== null
+    return { text, filePaths, linkHtml, hasImage }
+  } catch (error) {
+    const imageProbeError = error instanceof Error ? error.message : String(error)
+    return { text, filePaths, linkHtml, hasImage: false, imageProbeError }
+  }
 }
