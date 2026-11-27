@@ -1,11 +1,14 @@
+import { Suspense } from 'react'
 import { createPortal } from 'react-dom'
-import NativeChatView from '../../native-chat/NativeChatView'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { canContinueAgentSessionInNewSession } from '../session-continuation/terminal-agent-session-continuation'
 import type { TerminalPaneController } from '../controller/use-terminal-pane-controller'
 import { useAppStore } from '@/store/index'
 import { resolvePaneAgentSessionId } from '../../../lib/agent-session/identity/pane-agent-session-id'
 import { NativeChatPaneCover } from './NativeChatPaneCover'
+
+const NativeChatView = lazy(() => import('../../native-chat/NativeChatView'))
 
 export function TerminalPaneNativeChatPortal({
   controller
@@ -69,19 +72,21 @@ export function TerminalPaneNativeChatPortal({
 
   return createPortal(
     <NativeChatPaneCover pane={chatPane}>
-      <NativeChatView
-        terminalTabId={tabId}
-        isVisible={isRendererVisible}
-        isFocusedGroup={isActive && activePaneIsChatLeaf}
-        paneKey={makePaneKey(tabId, chatPane.leafId)}
-        targetPtyId={chatPanePtyId}
-        launchAgent={chatPaneLaunchAgent}
-        resolvedAgent={chatPaneResolvedAgent}
-        ownsTabWideLaunchDraft={chatPaneOwnsTabWideLaunchDraft}
-        onSwitchToTerminal={switchNativeChatToTerminal}
-        readTerminalDraft={readNativeChatTerminalDraft}
-        contextMenuActions={contextMenuActions}
-      />
+      <Suspense fallback={null}>
+        <NativeChatView
+          terminalTabId={tabId}
+          isVisible={isRendererVisible}
+          isFocusedGroup={isActive && activePaneIsChatLeaf}
+          paneKey={makePaneKey(tabId, chatPane.leafId)}
+          targetPtyId={chatPanePtyId}
+          launchAgent={chatPaneLaunchAgent}
+          resolvedAgent={chatPaneResolvedAgent}
+          ownsTabWideLaunchDraft={chatPaneOwnsTabWideLaunchDraft}
+          onSwitchToTerminal={switchNativeChatToTerminal}
+          readTerminalDraft={readNativeChatTerminalDraft}
+          contextMenuActions={contextMenuActions}
+        />
+      </Suspense>
     </NativeChatPaneCover>,
     chatPane.container,
     `native-chat-${tabId}-${chatPane.leafId}`
