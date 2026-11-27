@@ -51,13 +51,13 @@ export async function sampleMainAllocations(
     const channels = stopIpcTally()
     stopIpcTally = null
     // Read before stopSampling, whose forced GC would hide the window's growth.
-    const heapGrowthMB = Math.round(process.memoryUsage().heapUsed / MB - heapBeforeMB)
+    const netHeapChangeMB = Math.round(process.memoryUsage().heapUsed / MB - heapBeforeMB)
     const { profile } = await session.post('HeapProfiler.stopSampling')
     return {
       // The window starts once the spike is seen, so a burst that already ended reads as quiet.
       allocationWindow: 'after-spike',
       allocationWindowMs: windowMs,
-      allocationWindowHeapGrowthMB: heapGrowthMB,
+      allocationWindowNetHeapChangeMB: netHeapChangeMB,
       ...summarizeAllocationProfile(profile.head),
       ...summarizeIpcTally(channels)
     }
@@ -151,6 +151,7 @@ function startIpcTally(): () => IpcTally {
       : null
   const wrapped = new Map<unknown, { original: InvokeHandler; wrapper: InvokeHandler }>()
   const originalEmit = ipcMain.emit
+  const emitWasOwn = Object.hasOwn(ipcMain, 'emit')
   let emitWrapper: typeof ipcMain.emit | null = null
   let contentsProto: { send?: unknown } | null = null
   let originalSend: unknown = undefined
@@ -165,7 +166,11 @@ function startIpcTally(): () => IpcTally {
       }
     }
     if (emitWrapper && ipcMain.emit === emitWrapper) {
-      ipcMain.emit = originalEmit
+      if (emitWasOwn) {
+        ipcMain.emit = originalEmit
+      } else {
+        Reflect.deleteProperty(ipcMain, 'emit')
+      }
     }
     if (contentsProto && sendWrapper && contentsProto.send === sendWrapper) {
       if (sendWasOwn) {
