@@ -77,8 +77,7 @@ export function createUiAgentActions(
         targets.some((target) => target.status === 'eligible') &&
         (previousMode?.id !== args.id || previousMode.worktreeId !== args.worktreeId)
       ) {
-        // Why switch: the send targets render on workspace cards, not activity rows.
-        get().setSidebarBody('workspaces')
+        // Agents view keeps its body: its rows render the picker, and this reveal no-ops there.
         get().revealWorktreeInSidebar(args.worktreeId, { behavior: 'auto', highlight: true })
       }
     },

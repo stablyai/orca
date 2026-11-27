@@ -2,6 +2,7 @@ import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { ActivityThreadRow } from './activity-thread-row'
 import { ActivityThreadHoverCardSummary } from '../thread-preview/activity-thread-hover-card-summary'
 import type { AgentPaneThread } from '../threads/activity-thread-types'
+import { ActivityThreadSendTargetsContext } from './activity-thread-send-targets'
 
 function thread(minutesAgo: number, unread: boolean): AgentPaneThread {
   return {
@@ -99,5 +100,24 @@ export const hoverCard = defineFixture({
         />
       </div>
     </div>
+  )
+})
+
+// Send picker open: eligible, sending, and disabled rows.
+const SEND_TARGETS = {
+  targets: new Map([
+    ['activity-fixture-2', { status: 'eligible' as const }],
+    ['activity-fixture-125', { status: 'sending' as const, disabledReason: 'Sending...' }],
+    ['activity-fixture-3000', { status: 'disabled' as const, disabledReason: 'Agent is busy' }]
+  ]),
+  onSend: () => {}
+}
+
+export const sendTargets = defineFixture({
+  width: 320,
+  render: () => (
+    <ActivityThreadSendTargetsContext.Provider value={SEND_TARGETS}>
+      <ActivityCards />
+    </ActivityThreadSendTargetsContext.Provider>
   )
 })

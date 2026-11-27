@@ -1,5 +1,5 @@
 import React from 'react'
-import { Bell, ExternalLink, X } from 'lucide-react'
+import { Bell, ExternalLink, Send, X } from 'lucide-react'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { formatAgentTypeLabel } from '../../../../../shared/agent-status/presentation/agent-type-label'
 import { Button } from '@/components/ui/button'
@@ -20,6 +20,7 @@ import { ProjectChip } from '@/components/repo/project-chip'
 import type { ActivityGroupBy } from '../../../../../shared/agent-status/presentation/agents-view-thread-filters'
 import type { AgentPaneThread } from '../threads/activity-thread-types'
 import type { ActivityThreadClickEvent } from './use-activity-thread-selection'
+import { useActivityThreadSendTarget } from './activity-thread-send-targets'
 
 function ActivityThreadRowAction({
   label,
@@ -100,24 +101,47 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
   const { showProject, showWorkspace } = activityThreadRowIdentity(thread, groupBy)
   const showMarkdownStatus = statusKind === 'message'
   const agentLabel = formatAgentTypeLabel(thread.agentType)
+  const sendTarget = useActivityThreadSendTarget(thread.paneKey)
+  const sendStatus = sendTarget?.target.status
+  // While the send picker is open, a click on a target row picks it instead of opening the thread; row controls and links keep their own action.
+  const handleSendTargetClickCapture = (event: React.MouseEvent) => {
+    if (
+      !sendTarget ||
+      (event.target instanceof Element && event.target.closest('[data-activity-thread-control], a'))
+    ) {
+      return
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    if (sendTarget.target.status === 'eligible') {
+      sendTarget.onSend(thread.paneKey)
+    }
+  }
 
   return (
     <ActivityThreadHoverCard
       thread={thread}
       onJumpToWorkspace={onJump}
       canJumpToWorkspace={canJump}
-      suppressed={previewSuppressed}
+      suppressed={previewSuppressed || Boolean(sendTarget)}
     >
       <div
         data-current={selected ? 'true' : undefined}
         data-worktree-card-surface="true"
         data-worktree-card-active={selected ? 'primary' : undefined}
         data-worktree-card-selected={multiSelected || undefined}
+        onClickCapture={handleSendTargetClickCapture}
         onClick={(event) => onSelect(thread, event)}
+        data-agent-send-target={sendStatus}
+        title={sendTarget?.target.disabledReason}
         role="listitem"
         aria-label={taskTitle}
         aria-current={selected ? 'true' : undefined}
-        className="group relative flex w-full cursor-pointer flex-col gap-1 rounded-lg border border-transparent px-1.5 py-1.5 text-left transition-[background-color,border-color,opacity,box-shadow] duration-200 outline-none select-none worktree-sidebar-card-hover focus-visible:ring-1 focus-visible:ring-ring"
+        className={cn(
+          'group relative flex w-full cursor-pointer flex-col gap-1 rounded-lg border border-transparent px-1.5 py-1.5 text-left transition-[background-color,border-color,opacity,box-shadow] duration-200 outline-none select-none worktree-sidebar-card-hover focus-visible:ring-1 focus-visible:ring-ring',
+          sendStatus === 'sending' && 'cursor-progress opacity-75',
+          sendStatus === 'disabled' && 'cursor-default opacity-60'
+        )}
       >
         <div className="flex min-w-0 items-start gap-1.5">
           <span className="mt-0.5 inline-flex shrink-0">
@@ -129,6 +153,16 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
               <button
                 type="button"
                 aria-label={taskTitle}
+                // The picker turns this button into the send action, so screen readers hear that instead of "open".
+                aria-description={
+                  sendTarget
+                    ? (sendTarget.target.disabledReason ??
+                      t(
+                        'auto.components.dashboard.DashboardAgentRow.0272969e28',
+                        'Send to this agent'
+                      ))
+                    : undefined
+                }
                 aria-keyshortcuts="Enter Space"
                 onClick={(event) => {
                   event.stopPropagation()
@@ -194,6 +228,23 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
                   </span>
                 ) : null}
               </span>
+              {sendStatus === 'eligible' || sendStatus === 'sending' ? (
+                <button
+                  type="button"
+                  disabled={sendStatus === 'sending'}
+                  className={cn(
+                    'worktree-agent-send-target-button inline-flex h-5 shrink-0 items-center gap-1 rounded-md border px-1.5 text-[10px] font-medium leading-none whitespace-nowrap',
+                    sendStatus === 'sending' && 'cursor-progress opacity-75'
+                  )}
+                  aria-label={t(
+                    'auto.components.dashboard.DashboardAgentRow.0272969e28',
+                    'Send to this agent'
+                  )}
+                >
+                  <Send className="size-3" />
+                  <span>{t('auto.components.dashboard.DashboardAgentRow.912e136cd9', 'Send')}</span>
+                </button>
+              ) : null}
               <TooltipProvider delayDuration={800} skipDelayDuration={0}>
                 {canJump && showJumpAction ? (
                   <ActivityThreadRowAction
