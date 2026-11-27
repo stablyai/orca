@@ -31,11 +31,16 @@ function isProxyFakeIpIPv4Address(address: string): boolean {
   return /^198\.(?:18|19)\./.test(address)
 }
 
-/** `listenerHost` is the WS listener's network bind; only addresses of a family it accepts are offered. */
+/** `listenerHost` is the WS listener's network bind; only addresses it answers on are offered. */
 export async function getPairingNetworkInterfaces(
   listenerHost: string,
   getDefaultRouteInterfaceNames: DefaultRouteInterfaceLookup = getWindowsDefaultRouteInterfaceNames
 ): Promise<NetworkInterface[]> {
+  const pinned = pinnedListenerAddress(listenerHost)
+  if (pinned === null) {
+    return []
+  }
+  const pinnedCanonical = pinned === undefined ? undefined : canonicalIpLiteral(pinned)
   const result: NetworkInterface[] = []
   const interfaces = networkInterfaces()
   const hasHyperVInterface = Object.keys(interfaces).some((name) => /^vEthernet /i.test(name))
@@ -55,7 +60,8 @@ export async function getPairingNetworkInterfaces(
         (addr.family !== 'IPv4' && addr.family !== 'IPv6') ||
         (addr.family === 'IPv4' && isProxyFakeIpIPv4Address(addr.address)) ||
         // An APIPA/idle adapter's 169.254 or fe80 address is never dialable from the phone.
-        isLinkLocalAddress(addr.address)
+        isLinkLocalAddress(addr.address) ||
+        (pinnedCanonical !== undefined && canonicalIpLiteral(addr.address) !== pinnedCanonical)
       ) {
         continue
       }
@@ -84,11 +90,16 @@ function rankInterface({ name, address, hasDefaultRoute }: NetworkInterface): nu
   return (address.includes(':') ? 2 : 1) + bridgePenalty - defaultRouteBonus
 }
 
+// Every spelling of an IPv6 literal (`::`, `0:0:0:0:0:0:0:1`, `::ffff:127.0.0.1`) compares alike.
+function canonicalIpLiteral(address: string): string {
+  const host = address.replace(/^\[|\]$/g, '')
+  return isIP(host) === 6 ? new URL(`http://[${host}]`).hostname.slice(1, -1) : host
+}
+
 /** A pinned listener answers only on its own address, and on none a client can dial when it is loopback; undefined for a wildcard listener. */
 export function pinnedListenerAddress(listenerHost: string): string | null | undefined {
   const host = listenerHost.replace(/^\[|\]$/g, '')
-  // Canonical IPv6 so every spelling of `::`, `::1` or `::ffff:127.0.0.1` classifies alike.
-  const canonical = isIP(host) === 6 ? new URL(`http://[${host}]`).hostname.slice(1, -1) : host
+  const canonical = canonicalIpLiteral(host)
   if (isPairingWildcardHostname(canonical)) {
     return undefined
   }

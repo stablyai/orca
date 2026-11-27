@@ -43,14 +43,24 @@ const NO_PAIRING_ADDRESS_GUIDANCE =
   'No reachable network address is available for pairing. Connect to Wi‑Fi or Tailscale, or pick an address manually.'
 
 const LOOPBACK_PINNED_GUIDANCE =
-  'This Orca listens only on loopback, so nothing can dial it directly. Pair a phone through Orca Relay (--mobile --relay), or pass --address for a tunnel or SSH port-forward to it.'
+  'This Orca listens only on loopback, so nothing can dial it directly. Pass --address for a tunnel or SSH port-forward to it.'
 
-function noPairingAddress(server: PairingOfferServer): PairingOfferUnavailable {
+function isLoopbackPinned(server: PairingOfferServer): boolean {
+  return pinnedListenerAddress(server.getNetworkExposureBindHost()) === null
+}
+
+function noPairingAddress(
+  server: PairingOfferServer,
+  scope: 'mobile' | 'runtime'
+): PairingOfferUnavailable {
+  if (!isLoopbackPinned(server)) {
+    return pairingUnavailable('invalid_advertised_endpoint', NO_PAIRING_ADDRESS_GUIDANCE)
+  }
   return pairingUnavailable(
     'invalid_advertised_endpoint',
-    pinnedListenerAddress(server.getNetworkExposureBindHost()) === null
-      ? LOOPBACK_PINNED_GUIDANCE
-      : NO_PAIRING_ADDRESS_GUIDANCE
+    scope === 'mobile'
+      ? `${LOOPBACK_PINNED_GUIDANCE} Or pair the phone through Orca Relay with --relay.`
+      : LOOPBACK_PINNED_GUIDANCE
   )
 }
 
@@ -90,7 +100,7 @@ export async function requestMobilePairingOffer(
   const ip = await pairingAddress(server, args.address, lookup)
   // Relay works without a direct candidate; LAN-only must refuse when none is usable.
   if (!ip && args.connectionMode === 'local-only') {
-    return noPairingAddress(server)
+    return noPairingAddress(server, 'mobile')
   }
   // Reuse never-scanned tokens until explicit rotation; authenticated entries remain independent.
   const offer = await server.createMobilePairingOffer({
@@ -122,7 +132,7 @@ export async function requestRuntimePairingOffer(
 ): Promise<ReturnType<PairingOfferServer['createPairingOffer']>> {
   const ip = await pairingAddress(server, args.address, lookup)
   if (!ip) {
-    return noPairingAddress(server)
+    return noPairingAddress(server, 'runtime')
   }
   // Widen before advertising remote reach; this-computer intent must not trigger the irreversible widening (STA-2370).
   const thisComputerOnly = servesThisComputerOnly(args.reach, ip)
@@ -151,18 +161,24 @@ export async function requestRuntimePairingOffer(
   })
 }
 
-// The terminal has no Relay notice; name the one fix for refusals a retry can't clear.
-function ownerRelayGuidance(failure: MobileRelayMintFailure | undefined): string | null {
-  if (failure?.stage === 'provider_missing') {
-    return 'Orca Relay isn’t available on this host.'
+// The terminal has no Relay notice: name the fix, and never suggest LAN to a loopback-only host.
+function ownerRelayGuidance(
+  failure: MobileRelayMintFailure | undefined,
+  loopbackPinned: boolean
+): string | null {
+  if (!failure) {
+    return null
   }
-  if (failure?.code === 'relay_signed_out') {
+  if (failure.code === 'relay_signed_out') {
     return 'Orca Relay needs this host signed in to Orca. Run `orca auth login` here, then retry.'
   }
-  if (failure?.code === 'relay_not_entitled') {
+  if (failure.code === 'relay_not_entitled') {
     return 'Orca Relay isn’t included with the Orca account this host is signed in to.'
   }
-  return null
+  if (failure.stage === 'provider_missing') {
+    return 'Orca Relay isn’t running on this host yet. Retry in a moment; `orca auth status` shows whether this host is signed in.'
+  }
+  return loopbackPinned ? 'Orca Relay could not create a pairing invite. Retry.' : null
 }
 
 export async function createOwnerPairingOffer(
@@ -187,7 +203,7 @@ export async function createOwnerPairingOffer(
       return {
         available: false,
         reason: offer.reason,
-        guidance: ownerRelayGuidance(offer.relayFailure) ?? offer.guidance
+        guidance: ownerRelayGuidance(offer.relayFailure, isLoopbackPinned(server)) ?? offer.guidance
       }
     }
     return {
