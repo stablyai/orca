@@ -1,4 +1,5 @@
 import { hasWorkspaceFileDragType } from '@/lib/files/drop/workspace-file-drag'
+import { hasWebImageDragTypes } from '@/lib/files/drop/web-image-drag'
 import { hasNativeFileDragTypes } from '../../../../../../shared/file-import/native-file-drop'
 import {
   type DroppedPathConsumer,
@@ -6,8 +7,8 @@ import {
 } from '../../../../../../shared/file-import/native-file-drop-preparation'
 import type { NativeChatResolvedPathSink } from './use-native-chat-workspace-file-drop'
 
-/** Workspace files use composer handlers; OS files use the pane’s native file owner. */
-export type NativeChatPaneDragKind = 'os' | 'workspace'
+/** Workspace files use composer handlers; OS files use the pane’s native file owner; a web page's image is saved first. */
+export type NativeChatPaneDragKind = 'os' | 'workspace' | 'web-image'
 
 export type NativeChatPaneDragEvent = {
   currentTarget: { contains: (node: Node | null) => boolean }
@@ -62,7 +63,10 @@ export function nativeChatPaneDragKind(
   if (hasWorkspaceFileDragType(dataTransfer)) {
     return 'workspace'
   }
-  return hasNativeFileDragTypes(dataTransfer.types) ? 'os' : null
+  if (hasNativeFileDragTypes(dataTransfer.types)) {
+    return 'os'
+  }
+  return hasWebImageDragTypes(dataTransfer.types) ? 'web-image' : null
 }
 
 /** Crossing child boundaries must not end pane hover state. */
@@ -87,6 +91,8 @@ function overNestedOwner(event: NativeChatPaneDragEvent): boolean {
 export function makeNativeChatPaneFileDropHandlers(host: {
   getClaim: (event: NativeChatPaneDragEvent) => NativeChatPaneDropClaim | null
   setDragActive: (active: boolean) => void
+  /** The dropped HTML of a web page's image, for the claim the drop landed on. */
+  dropWebImage: (html: string, claim: NativeChatPaneDropClaim) => void
 }): {
   onDragEnterCapture: (event: React.DragEvent<HTMLDivElement>) => void
   onDragLeaveCapture: (event: React.DragEvent<HTMLDivElement>) => void
@@ -135,8 +141,13 @@ export function makeNativeChatPaneFileDropHandlers(host: {
       } else if (overNestedOwner(event)) {
         host.setDragActive(false)
       }
-      if (nativeChatPaneDragKind(event.dataTransfer) === 'workspace') {
+      const kind = nativeChatPaneDragKind(event.dataTransfer)
+      if (kind === 'workspace') {
         host.getClaim(event)?.onDragOverCapture(event)
+      } else if (kind === 'web-image' && showsDropTarget(event)) {
+        // No native owner takes HTML drags, so the pane must accept the drop itself.
+        event.preventDefault()
+        event.dataTransfer.dropEffect = 'copy'
       }
     },
     onDragLeaveCapture(event) {
@@ -151,6 +162,13 @@ export function makeNativeChatPaneFileDropHandlers(host: {
     onDropCapture(event) {
       clearNestedHover()
       host.setDragActive(false)
+      const claim = showsDropTarget(event) ? host.getClaim(event) : null
+      if (claim && nativeChatPaneDragKind(event.dataTransfer) === 'web-image') {
+        // Keep the editor from inserting the image's HTML as text.
+        event.preventDefault()
+        host.dropWebImage(event.dataTransfer.getData('text/html'), claim)
+        return
+      }
       if (nativeChatPaneDragKind(event.dataTransfer) === 'workspace') {
         const owner = nestedOwner(event)
         host
