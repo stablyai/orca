@@ -9,6 +9,7 @@ import {
   getRemoteServerEntryHelp,
   getRemoteServerVersionDescription
 } from '../runtime-environments/updates/remote-server-update-entry-copy'
+import { MiddleEllipsisLabel } from '../../new-workspace/run-target/MiddleEllipsisLabel'
 import { ServerRestartButton } from './ServerRestartButton'
 import {
   UPDATING_PHASES,
@@ -131,8 +132,9 @@ export function RemoteServerAboutRow({
       >
         <StatusGlyph entry={entry} />
       </span>
-      <div title={entry.name} className="col-start-2 row-start-1 truncate text-sm">
-        {entry.name}
+      {/* Shortened in the middle so hosts sharing a long prefix stay distinguishable. */}
+      <div title={entry.name} className="col-start-2 row-start-1 flex min-w-0 text-sm">
+        <MiddleEllipsisLabel text={entry.name} />
       </div>
       <div className="col-start-2 row-start-2 min-w-0 @max-xs/about-servers:col-end-4">
         {subtitle}
@@ -156,6 +158,11 @@ export function RemoteServerAboutRow({
             disabled={disabled}
             confirmBlocked={disabled}
             target={entry.name}
+            restingName={
+              failed
+                ? t('settings.about.servers.retryOne', 'Retry {{name}}', { name: entry.name })
+                : t('settings.about.servers.updateOne', 'Update {{name}}', { name: entry.name })
+            }
             describedBy={failed && help ? errorId : undefined}
             onArm={onArm}
             onDisarm={onDisarm}

@@ -41,9 +41,9 @@ function lineCopy(line: UpdateStatusLine, t: Translate, intlLocale: string): Lin
           version: line.version,
           date: formatUpdateDelayDate(line.availableAt, intlLocale)
         }),
-        // Short enough to sit beside Notes on the 256px card without cutting the date.
-        narrow: t('settings.about.status.heldNarrow', '{{version}} on {{date}}', {
-          version: line.version,
+        // Short enough to sit beside Notes on the 256px card; the full status stays readable to
+        // screen readers.
+        narrow: t('settings.about.status.heldNarrow', 'Held until {{date}}', {
           date: formatUpdateDelayDate(line.availableAt, intlLocale, true)
         })
       }
@@ -150,11 +150,14 @@ export function UpdateStatusRow({
             <span role="status" className="min-w-0 truncate">
               {copy ? (
                 <>
-                  <span className={cn(copy.narrow && '@max-xs/about-status:hidden')}>
+                  {/* When narrow, the full copy stays in the accessibility tree; the short form is visual only. */}
+                  <span className={cn(copy.narrow && '@max-xs/about-status:sr-only')}>
                     {copy.full}
                   </span>
                   {copy.narrow ? (
-                    <span className="hidden @max-xs/about-status:inline">{copy.narrow}</span>
+                    <span aria-hidden className="hidden @max-xs/about-status:inline">
+                      {copy.narrow}
+                    </span>
                   ) : null}
                 </>
               ) : null}

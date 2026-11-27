@@ -18,6 +18,8 @@ type ServerRestartButtonProps = {
   disabledReason?: string
   /** The full host name, shown on hover and keyboard focus. */
   target?: string
+  /** Resting accessible name when the visible label alone is ambiguous, e.g. "Update build-box". */
+  restingName?: string
   describedBy?: string
   onArm: () => void
   /** Must be stable (useCallback): the armed listeners re-subscribe when it changes. */
@@ -38,6 +40,7 @@ export function ServerRestartButton({
   confirmBlocked = false,
   disabledReason,
   target,
+  restingName,
   describedBy,
   onArm,
   onDisarm,
@@ -75,7 +78,7 @@ export function ServerRestartButton({
       variant={armed ? 'default' : 'outline'}
       size="sm"
       disabled={!armed && disabled}
-      aria-label={armed ? question : undefined}
+      aria-label={armed ? question : restingName}
       aria-disabled={(armed && confirmBlocked) || undefined}
       aria-busy={(armed && confirmBlocked) || undefined}
       aria-describedby={describedBy}

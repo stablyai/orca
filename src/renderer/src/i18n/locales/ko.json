@@ -1519,6 +1519,25 @@
         "open": "{{file}} 열기"
       },
       "unreadable": "저장된 로그인 또는 키를 이 컴퓨터에서 열 수 없습니다"
+    },
+    "about": {
+      "servers": {
+        "readyCount": "{{value0}}개 준비됨",
+        "updateAll": "모두 업데이트",
+        "title": "서버",
+        "otherCount": "기타 {{value0}}개",
+        "confirmOne": "{{name}}을(를) 다시 시작할까요?",
+        "confirmMany": "서버 {{count}}개를 다시 시작할까요?",
+        "liveMayDrop": "활성 세션이 끊길 수 있습니다.",
+        "sessionsMayDrop": "세션이 끊길 수 있음",
+        "restartCount": "{{count}}개 다시 시작?",
+        "restartOne": "다시 시작?",
+        "updateOne": "{{name}} 업데이트",
+        "retryOne": "{{name}} 다시 시도",
+        "updatingCount": "{{value0}}개 업데이트 중",
+        "failedCount": "{{value0}}개 실패",
+        "failed": "실패"
+      }
     }
   },
   "menu": {

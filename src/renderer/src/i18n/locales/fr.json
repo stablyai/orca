@@ -1916,6 +1916,25 @@
         "open": "Ouvrir {{file}}"
       },
       "unreadable": "La connexion ou la clé enregistrée ne peut pas être ouverte sur cet ordinateur"
+    },
+    "about": {
+      "servers": {
+        "readyCount": "{{value0}} prêts",
+        "updateAll": "Tout mettre à jour",
+        "title": "Serveurs",
+        "otherCount": "{{value0}} autres",
+        "confirmOne": "Redémarrer {{name}} ?",
+        "confirmMany": "Redémarrer {{count}} serveurs ?",
+        "liveMayDrop": "Les sessions actives peuvent être coupées.",
+        "sessionsMayDrop": "Sessions parfois coupées",
+        "restartCount": "Redémarrer {{count}} ?",
+        "restartOne": "Redémarrer ?",
+        "updateOne": "Mettre à jour {{name}}",
+        "retryOne": "Réessayer {{name}}",
+        "updatingCount": "{{value0}} en cours",
+        "failedCount": "{{value0}} en échec",
+        "failed": "Échec"
+      }
     }
   },
   "menu": {

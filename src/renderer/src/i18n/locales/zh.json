@@ -1512,6 +1512,25 @@
       "accounts": {
         "description": "可以选择为 Claude、Codex、Antigravity、OpenCode Go、MiniMax 和 Grok 配置账户切换和用量"
       }
+    },
+    "about": {
+      "servers": {
+        "readyCount": "{{value0}} 个就绪",
+        "updateAll": "全部更新",
+        "title": "服务器",
+        "otherCount": "其他 {{value0}} 个",
+        "confirmOne": "重启 {{name}}？",
+        "confirmMany": "重启 {{count}} 台服务器？",
+        "liveMayDrop": "活动会话可能会中断。",
+        "sessionsMayDrop": "会话可能中断",
+        "restartCount": "重启 {{count}} 台？",
+        "restartOne": "重启？",
+        "updateOne": "更新 {{name}}",
+        "retryOne": "重试 {{name}}",
+        "updatingCount": "{{value0}} 个更新中",
+        "failedCount": "{{value0}} 个失败",
+        "failed": "失败"
+      }
     }
   },
   "menu": {

@@ -381,3 +381,16 @@ export const noServersNarrow = narrow(noServers)
 export const checkingNarrow = narrow(checking)
 export const errorNarrow = narrow(error)
 export const heldReleaseNarrow = narrow(heldRelease)
+
+/** Long hosts that share a prefix lose their middle, not their distinguishing end. */
+export const serversSamePrefixNarrow = narrow(
+  serversIn(
+    new Map(
+      [
+        server('env-1', 'lab-runner-west-builder-01.internal', 'available', '1.4.270'),
+        server('env-2', 'lab-runner-west-builder-02.internal', 'available', '1.4.268')
+      ].map((entry) => [entry.environmentId, entry])
+    ),
+    false
+  )
+)

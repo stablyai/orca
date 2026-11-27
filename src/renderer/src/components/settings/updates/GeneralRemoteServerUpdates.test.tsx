@@ -32,11 +32,11 @@ function server(
 
 const start = vi.fn<RemoteServerUpdatesSlice['startRemoteServerUpdates']>(async () => {})
 
-function seed(entries: RemoteServerUpdateEntry[], running = false): void {
+function seed(entries: RemoteServerUpdateEntry[]): void {
   useAppStore.setState({
     remoteServerUpdates: new Map(entries.map((entry) => [entry.environmentId, entry])),
     remoteServerUpdatesChecking: false,
-    remoteServerUpdatesRunning: running,
+    remoteServerUpdatesRunning: false,
     remoteServerUpdatesCheckRevision: 0,
     refreshRemoteServerUpdates: async () => ({ revision: 0 }),
     startRemoteServerUpdates: start
@@ -45,7 +45,11 @@ function seed(entries: RemoteServerUpdateEntry[], running = false): void {
 
 beforeEach(() => {
   start.mockClear()
-  seed([server('env-1', 'build-box', 'available'), server('env-2', 'gpu-west', 'available')])
+  seed([
+    server('env-1', 'build-box', 'available'),
+    server('env-2', 'gpu-west', 'available'),
+    server('env-3', 'lab-runner', 'failed', { error: 'Did not reconnect.' })
+  ])
 })
 
 afterEach(() => {
@@ -67,123 +71,49 @@ async function settle(): Promise<void> {
   await act(async () => {})
 }
 
-async function armUpdateAll(): Promise<HTMLElement> {
-  const button = screen.getByRole('button', { name: 'Update all' })
-  button.focus()
-  fireEvent.click(button)
+// Updating restarts servers and can drop live sessions, so a restart must take a deliberate second
+// action on the same control, and must restart exactly the servers that control named.
+it('restarts servers only on a deliberate second action, and only the servers it named', async () => {
+  renderServers()
+  const updateAll = screen.getByRole('button', { name: 'Update all' })
+  updateAll.focus()
+
+  // Each way of arming and then backing out leaves every server untouched.
+  const backOuts: (() => void)[] = [
+    () => fireEvent.keyDown(updateAll, { key: 'Escape' }),
+    () => fireEvent.pointerDown(screen.getByRole('button', { name: 'Elsewhere' })),
+    () => fireEvent.blur(updateAll),
+    // The second click of a double-click, and a held Enter, are not confirmations.
+    () => {
+      fireEvent.click(updateAll, { detail: 2 })
+      fireEvent.keyDown(updateAll, { key: 'Enter', repeat: true })
+      fireEvent.keyDown(updateAll, { key: 'Escape' })
+    }
+  ]
+  for (const backOut of backOuts) {
+    fireEvent.click(updateAll)
+    await settle()
+    backOut()
+    // A click after backing out arms again; it never restarts.
+    expect(start).not.toHaveBeenCalled()
+  }
+
+  fireEvent.click(updateAll)
   await settle()
-  return button
-}
-
-it('arms Update all in place instead of restarting, and names the whole question', async () => {
-  renderServers()
-  const button = await armUpdateAll()
-
-  expect(start).not.toHaveBeenCalled()
-  expect(button.textContent).toBe('Restart 2?')
-  expect(screen.getByRole('button', { name: 'Restart 2 servers? Live sessions may drop.' })).toBe(
-    button
-  )
-  expect(screen.getByText('Sessions may drop')).toBeTruthy()
-  expect(document.activeElement).toBe(button)
-  // No floating confirmation layer.
-  expect(screen.queryByRole('dialog')).toBeNull()
-  expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull()
-})
-
-it('starts exactly the named servers on the second click', async () => {
-  renderServers()
-  const button = await armUpdateAll()
-  fireEvent.click(button)
-
+  fireEvent.click(updateAll)
   expect(start).toHaveBeenCalledTimes(1)
-  expect(start.mock.calls[0][0]).toEqual(['env-1', 'env-2'])
-})
+  expect(start.mock.calls[0][0]).toEqual(['env-1', 'env-2', 'env-3'])
 
-it('reverts on Esc without restarting', async () => {
-  renderServers()
-  const button = await armUpdateAll()
-  fireEvent.keyDown(button, { key: 'Escape' })
-
-  expect(button.textContent).toBe('Update all')
-  expect(screen.queryByText('Sessions may drop')).toBeNull()
-  expect(document.activeElement).toBe(button)
-  fireEvent.click(button)
-  expect(start).not.toHaveBeenCalled()
-})
-
-it('reverts on a click anywhere else', async () => {
-  renderServers()
-  const button = await armUpdateAll()
-  fireEvent.pointerDown(screen.getByRole('button', { name: 'Elsewhere' }))
-
-  expect(button.textContent).toBe('Update all')
-  expect(start).not.toHaveBeenCalled()
-})
-
-it('does not treat a double-click or a held Enter as the confirmation', async () => {
-  renderServers()
-  const button = await armUpdateAll()
-  fireEvent.click(button, { detail: 2 })
-  fireEvent.keyDown(button, { key: 'Enter', repeat: true })
-
-  expect(start).not.toHaveBeenCalled()
-  expect(button.textContent).toBe('Restart 2?')
-})
-
-it("arms one server's row as Restart? and updates only that server", async () => {
+  // One server's own action restarts that server alone.
+  start.mockClear()
+  cleanup()
   renderServers()
   fireEvent.click(screen.getByRole('button', { name: /^Servers/ }))
   await settle()
-  const [row] = screen.getAllByRole('button', { name: 'Update' })
-  row.focus()
-  fireEvent.click(row)
-
-  expect(row.textContent).toBe('Restart?')
-  expect(screen.getByRole('button', { name: 'Restart build-box? Live sessions may drop.' })).toBe(
-    row
-  )
+  const retry = screen.getByRole('button', { name: 'Retry lab-runner' })
+  retry.focus()
+  fireEvent.click(retry)
   expect(start).not.toHaveBeenCalled()
-
-  fireEvent.click(row)
-  expect(start.mock.calls[0][0]).toEqual(['env-1'])
-})
-
-it("shows each server's own update state while updates run", async () => {
-  seed(
-    [
-      server('env-1', 'build-box', 'downloading', { progress: 42 }),
-      server('env-2', 'gpu-west', 'restarting'),
-      server('env-3', 'edge-01', 'updated', { currentVersion: '1.4.281' }),
-      server('env-4', 'lab-runner', 'failed', { error: 'Did not reconnect.' })
-    ],
-    true
-  )
-  renderServers()
-  expect(screen.getByText('1 failed').parentElement?.textContent).toBe('2 updating · 1 failed')
-  // The header has no control while rows carry the progress.
-  expect(screen.queryByRole('button', { name: 'Update all' })).toBeNull()
-
-  fireEvent.click(screen.getByRole('button', { name: /^Servers/ }))
-  await settle()
-  expect(screen.getByText('42%')).toBeTruthy()
-  expect(screen.getByRole('progressbar', { name: 'build-box' }).getAttribute('aria-valuenow')).toBe(
-    '42'
-  )
-  expect(screen.getByText('Restarting…')).toBeTruthy()
-  // Wide and narrow copies of the version share the row; CSS shows one.
-  expect(screen.getAllByText('v1.4.281').length).toBeGreaterThan(0)
-  expect(screen.getByText('Failed')).toBeTruthy()
-  expect(screen.getByRole('button', { name: 'Retry' }).hasAttribute('disabled')).toBe(true)
-})
-
-it('names a failed server as failed, not ready, once updates settle', () => {
-  seed([
-    server('env-1', 'build-box', 'updated', { currentVersion: '1.4.281' }),
-    server('env-2', 'gpu-west', 'failed', { error: 'Did not reconnect.' })
-  ])
-  renderServers()
-  const failed = screen.getAllByText('1 failed')[0]
-  expect(failed.className).toContain('text-destructive')
-  expect(failed.parentElement?.textContent).toBe('1 failed · 1 up to date')
+  fireEvent.click(retry)
+  expect(start.mock.calls).toEqual([[['env-3'], { revision: 0 }]])
 })

@@ -2263,6 +2263,25 @@
         "open": "{{file}} dosyasını aç"
       },
       "unreadable": "Kayıtlı oturum açma bilgisi veya anahtar bu bilgisayarda açılamıyor"
+    },
+    "about": {
+      "servers": {
+        "readyCount": "{{value0}} hazır",
+        "updateAll": "Tümünü güncelle",
+        "title": "Sunucular",
+        "otherCount": "{{value0}} diğer",
+        "confirmOne": "{{name}} yeniden başlatılsın mı?",
+        "confirmMany": "{{count}} sunucu yeniden başlatılsın mı?",
+        "liveMayDrop": "Canlı oturumlar kopabilir.",
+        "sessionsMayDrop": "Oturumlar kopabilir",
+        "restartCount": "{{count}} yeniden başlatılsın mı?",
+        "restartOne": "Yeniden başlatılsın mı?",
+        "updateOne": "{{name}} güncelle",
+        "retryOne": "{{name}} için yeniden dene",
+        "updatingCount": "{{value0}} güncelleniyor",
+        "failedCount": "{{value0}} başarısız",
+        "failed": "Başarısız"
+      }
     }
   },
   "menu": {

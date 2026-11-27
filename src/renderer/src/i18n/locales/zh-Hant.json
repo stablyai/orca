@@ -2224,6 +2224,25 @@
       "keywordDelay": "延遲",
       "keywordCooldown": "等待",
       "keywordSecurity": "安全性"
+    },
+    "about": {
+      "servers": {
+        "readyCount": "{{value0}} 個就緒",
+        "updateAll": "全部更新",
+        "title": "伺服器",
+        "otherCount": "其他 {{value0}} 個",
+        "confirmOne": "要重新啟動 {{name}} 嗎？",
+        "confirmMany": "要重新啟動 {{count}} 台伺服器嗎？",
+        "liveMayDrop": "使用中的工作階段可能會中斷。",
+        "sessionsMayDrop": "工作階段可能中斷",
+        "restartCount": "重新啟動 {{count}} 台？",
+        "restartOne": "重新啟動？",
+        "updateOne": "更新 {{name}}",
+        "retryOne": "重試 {{name}}",
+        "updatingCount": "{{value0}} 個更新中",
+        "failedCount": "{{value0}} 個失敗",
+        "failed": "失敗"
+      }
     }
   },
   "menu": {

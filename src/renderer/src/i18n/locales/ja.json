@@ -1510,6 +1510,25 @@
         "open": "{{file}} を開く"
       },
       "unreadable": "保存されたサインインまたはキーをこのコンピューターで開けません"
+    },
+    "about": {
+      "servers": {
+        "readyCount": "{{value0}} 件準備完了",
+        "updateAll": "すべて更新",
+        "title": "サーバー",
+        "otherCount": "ほか {{value0}} 件",
+        "confirmOne": "{{name}} を再起動しますか？",
+        "confirmMany": "{{count}} 台のサーバーを再起動しますか？",
+        "liveMayDrop": "ライブセッションが切断される可能性があります。",
+        "sessionsMayDrop": "セッション切断の可能性",
+        "restartCount": "{{count}} 台を再起動？",
+        "restartOne": "再起動？",
+        "updateOne": "{{name}} を更新",
+        "retryOne": "{{name}} を再試行",
+        "updatingCount": "{{value0}} 件更新中",
+        "failedCount": "{{value0}} 件失敗",
+        "failed": "失敗"
+      }
     }
   },
   "menu": {

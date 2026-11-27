@@ -1538,6 +1538,25 @@
         "open": "Abrir {{file}}"
       },
       "unreadable": "El inicio de sesión o la clave guardados no se pueden abrir en este equipo"
+    },
+    "about": {
+      "servers": {
+        "readyCount": "{{value0}} listos",
+        "updateAll": "Actualizar todo",
+        "title": "Servidores",
+        "otherCount": "{{value0}} más",
+        "confirmOne": "¿Reiniciar {{name}}?",
+        "confirmMany": "¿Reiniciar {{count}} servidores?",
+        "liveMayDrop": "Las sesiones activas pueden cortarse.",
+        "sessionsMayDrop": "Las sesiones pueden cortarse",
+        "restartCount": "¿Reiniciar {{count}}?",
+        "restartOne": "¿Reiniciar?",
+        "updateOne": "Actualizar {{name}}",
+        "retryOne": "Reintentar {{name}}",
+        "updatingCount": "{{value0}} actualizando",
+        "failedCount": "{{value0}} con error",
+        "failed": "Error"
+      }
     }
   },
   "menu": {

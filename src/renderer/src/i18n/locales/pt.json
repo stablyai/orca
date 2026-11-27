@@ -3174,6 +3174,25 @@
         "open": "Abrir {{file}}"
       },
       "unreadable": "O login ou a chave salvos não podem ser abertos neste computador"
+    },
+    "about": {
+      "servers": {
+        "readyCount": "{{value0}} prontos",
+        "updateAll": "Atualizar tudo",
+        "title": "Servidores",
+        "otherCount": "{{value0}} outros",
+        "confirmOne": "Reiniciar {{name}}?",
+        "confirmMany": "Reiniciar {{count}} servidores?",
+        "liveMayDrop": "Sessões ativas podem cair.",
+        "sessionsMayDrop": "Sessões podem cair",
+        "restartCount": "Reiniciar {{count}}?",
+        "restartOne": "Reiniciar?",
+        "updateOne": "Atualizar {{name}}",
+        "retryOne": "Tentar {{name}} de novo",
+        "updatingCount": "{{value0}} atualizando",
+        "failedCount": "{{value0}} com falha",
+        "failed": "Falhou"
+      }
     }
   },
   "auto": {

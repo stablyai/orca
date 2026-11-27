@@ -2263,6 +2263,25 @@
         "open": "{{file}} öffnen"
       },
       "unreadable": "Gespeicherte Anmeldung oder Schlüssel lässt sich auf diesem Computer nicht öffnen"
+    },
+    "about": {
+      "servers": {
+        "readyCount": "{{value0}} bereit",
+        "updateAll": "Alle aktualisieren",
+        "title": "Server",
+        "otherCount": "{{value0}} weitere",
+        "confirmOne": "{{name}} neu starten?",
+        "confirmMany": "{{count}} Server neu starten?",
+        "liveMayDrop": "Aktive Sitzungen können abbrechen.",
+        "sessionsMayDrop": "Sitzungen können abbrechen",
+        "restartCount": "{{count}} neu starten?",
+        "restartOne": "Neu starten?",
+        "updateOne": "{{name}} aktualisieren",
+        "retryOne": "{{name}} erneut versuchen",
+        "updatingCount": "{{value0}} in Aktualisierung",
+        "failedCount": "{{value0}} fehlgeschlagen",
+        "failed": "Fehlgeschlagen"
+      }
     }
   },
   "menu": {

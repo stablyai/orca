@@ -1,27 +1,23 @@
 import type React from 'react'
-import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store/index'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   getUpdateCheckClickOptions,
   getUpdateCheckHint
 } from '@/app-shell/updates/update-check-click-options'
-import { getRemoteServerNewerThanClientVersion } from '@/runtime/hosts/updates/remote-server-version-skew'
 import type { RemoteServerUpdateEntry } from '@/runtime/hosts/updates/remote-server-update-coordinator'
 import type { RemoteServerUpdateCheck } from '@/store/slices/runtime-host-updates/remote-server-updates'
 import type { UpdateCheckOptions } from '../../../../../shared/updater/update-status-types'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { AboutDisclosureRow } from './AboutDisclosureRow'
 import { RemoteServerAboutRow } from './RemoteServerAboutRow'
+import { ServerUpdateSummary } from './ServerUpdateSummary'
 import { ServerRestartButton } from './ServerRestartButton'
-import {
-  UPDATING_PHASES,
-  getServerRestartQuestion,
-  getSessionsMayDropLabel
-} from './server-restart-copy'
+import { getServerRestartQuestion } from './server-restart-copy'
 
 const isEligible = (entry: RemoteServerUpdateEntry): boolean =>
   entry.phase === 'available' || entry.phase === 'failed'
@@ -30,148 +26,6 @@ type Snapshot =
   | { phase: 'owed' | 'failed' }
   | { phase: 'running'; request: Promise<RemoteServerUpdateCheck | undefined> }
   | { phase: 'ready'; check: RemoteServerUpdateCheck }
-
-type SummaryPart = { text: string; count: number; destructive?: boolean }
-
-function serverSummaryParts(entries: RemoteServerUpdateEntry[], t: Translate): SummaryPart[] {
-  const count = (phase: RemoteServerUpdateEntry['phase']): number =>
-    entries.filter((entry) => entry.phase === phase).length
-  const available = count('available')
-  const failed = count('failed')
-  const settled = entries.filter((entry) => entry.phase === 'current' || entry.phase === 'updated')
-  // A newer server needs nothing from its own updater; this app is the one behind.
-  const newer = settled.filter((entry) => getRemoteServerNewerThanClientVersion(entry)).length
-  const current = settled.length - newer
-  const manual = count('manual')
-  const offline = count('offline')
-  const parts: SummaryPart[] = [
-    // First, so the narrow summary never folds a failure into "N other".
-    {
-      count: failed,
-      destructive: true,
-      text: t('settings.about.servers.failedCount', '{{value0}} failed', { value0: failed })
-    },
-    {
-      count: available,
-      text: t('settings.about.servers.readyCount', '{{value0}} ready', {
-        value0: available
-      })
-    },
-    {
-      count: current,
-      text: t(
-        'auto.components.settings.GeneralRemoteServerUpdates.currentCount',
-        '{{value0}} up to date',
-        { value0: current }
-      )
-    },
-    {
-      count: newer,
-      text: t(
-        'auto.components.settings.GeneralRemoteServerUpdates.newerCount',
-        '{{value0}} newer than this app',
-        { value0: newer }
-      )
-    },
-    {
-      count: manual,
-      text: t(
-        'auto.components.settings.GeneralRemoteServerUpdates.manualCount',
-        '{{value0}} manual',
-        {
-          value0: manual
-        }
-      )
-    },
-    {
-      count: offline,
-      text: t(
-        'auto.components.settings.GeneralRemoteServerUpdates.offlineCount',
-        '{{value0}} offline',
-        { value0: offline }
-      )
-    }
-  ].filter((part) => part.count > 0)
-  if (parts.length > 0) {
-    return parts
-  }
-  return [
-    {
-      count: entries.length,
-      text:
-        entries.length === 1
-          ? t(
-              'auto.components.settings.GeneralRemoteServerUpdates.serverCountOne',
-              '1 paired server'
-            )
-          : t(
-              'auto.components.settings.GeneralRemoteServerUpdates.serverCount',
-              '{{value0}} paired servers',
-              { value0: entries.length }
-            )
-    }
-  ]
-}
-
-/** All counts; when narrow, the first count plus the rest folded into "N other" so none disappear. */
-function SummaryText({ part }: { part: SummaryPart }): React.JSX.Element {
-  return part.destructive ? <span className="text-destructive">{part.text}</span> : <>{part.text}</>
-}
-
-function ServerSummary({ parts }: { parts: SummaryPart[] }): React.JSX.Element {
-  const t = useTranslate()
-  const [first, ...rest] = parts
-  const other = rest.reduce((total, part) => total + part.count, 0)
-  return (
-    <>
-      <span className={rest.length > 0 ? '@max-xs/about-row:hidden' : undefined}>
-        {parts.map((part, index) => (
-          <Fragment key={part.text}>
-            {index > 0 ? ' · ' : null}
-            <SummaryText part={part} />
-          </Fragment>
-        ))}
-      </span>
-      {rest.length > 0 ? (
-        <span className="hidden @max-xs/about-row:inline">
-          <SummaryText part={first} />
-          {' · '}
-          {t('settings.about.servers.otherCount', '{{value0}} other', {
-            value0: other
-          })}
-        </span>
-      ) : null}
-    </>
-  )
-}
-
-/** While updates run: "2 updating · 1 failed", with the failures in red. */
-function UpdatingSummary({
-  updating,
-  failed
-}: {
-  updating: number
-  failed: number
-}): React.JSX.Element {
-  const t = useTranslate()
-  return (
-    <>
-      {t('settings.about.servers.updatingCount', '{{value0}} updating', {
-        value0: updating
-      })}
-      {failed > 0 ? (
-        <>
-          {' · '}
-          <span className="text-destructive">
-            {t('settings.about.servers.failedCount', '{{value0}} failed', {
-              value0: failed
-            })}
-          </span>
-        </>
-      ) : null}
-    </>
-  )
-}
 
 /** Which button is waiting for its second click, bound to the servers it would restart. */
 type Armed = {
@@ -195,6 +49,9 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
   const disarm = useCallback((): void => setArmed(null), [])
   const toggleRef = useRef<HTMLButtonElement>(null)
   const bulkActionRef = useRef<HTMLDivElement>(null)
+  const actionRef = useRef<HTMLDivElement>(null)
+  // Set while keyboard focus is in the header action; a removed button leaves it set.
+  const actionHadFocus = useRef(false)
   const [snapshot, setSnapshot] = useState<Snapshot>({ phase: 'owed' })
   const refreshSnapshot = useCallback(
     (options?: UpdateCheckOptions): void => {
@@ -262,6 +119,24 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
   ) {
     setArmed(null)
   }
+
+  const hasEligible = entries.some(isEligible)
+  // The header action swaps buttons when servers become eligible or updates start or finish. If
+  // that unmounted the focused button, hand focus to whatever replaced it instead of the page.
+  useLayoutEffect(() => {
+    const container = actionRef.current
+    if (!container || !actionHadFocus.current) {
+      return
+    }
+    const active = container.ownerDocument.activeElement
+    if (active && active !== container.ownerDocument.body) {
+      return
+    }
+    const next = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(
+      (button) => !button.disabled && button.getClientRects().length > 0
+    )
+    ;(next ?? toggleRef.current)?.focus()
+  }, [hasEligible, running])
 
   if (entries.length === 0) {
     return null
@@ -380,18 +255,6 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
     checkAction
   )
 
-  const updatingCount = entries.filter((entry) => UPDATING_PHASES.has(entry.phase)).length
-  const summary = allArmed ? (
-    <span className="text-status-warning-text">{getSessionsMayDropLabel(t)}</span>
-  ) : updatingCount > 0 ? (
-    <UpdatingSummary
-      updating={updatingCount}
-      failed={entries.filter((entry) => entry.phase === 'failed').length}
-    />
-  ) : (
-    <ServerSummary parts={serverSummaryParts(entries, t)} />
-  )
-
   return (
     <SearchableSetting
       title={t(
@@ -408,10 +271,25 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
       <AboutDisclosureRow
         label={t('settings.about.servers.title', 'Servers')}
         toggleRef={toggleRef}
-        summary={summary}
+        summary={<ServerUpdateSummary entries={entries} armed={allArmed} />}
         open={open}
         onOpenChange={setOpenAndRefresh}
-        control={action}
+        control={
+          <div
+            ref={actionRef}
+            onFocus={() => {
+              actionHadFocus.current = true
+            }}
+            onBlur={(event) => {
+              // A removed button blurs with no next target; keep the flag so focus can be restored.
+              if (event.relatedTarget) {
+                actionHadFocus.current = false
+              }
+            }}
+          >
+            {action}
+          </div>
+        }
       >
         {open
           ? entries.map((entry) => (

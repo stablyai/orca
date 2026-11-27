@@ -2281,6 +2281,8 @@
         "sessionsMayDrop": "Sessions may drop",
         "restartCount": "Restart {{count}}?",
         "restartOne": "Restart?",
+        "updateOne": "Update {{name}}",
+        "retryOne": "Retry {{name}}",
         "updatingCount": "{{value0}} updating",
         "failedCount": "{{value0}} failed",
         "failed": "Failed"
@@ -2302,7 +2304,7 @@
         "checking": "Checking…",
         "upToDate": "Up to date",
         "heldUntil": "{{version}} on hold until {{date}}",
-        "heldNarrow": "{{version}} on {{date}}",
+        "heldNarrow": "Held until {{date}}",
         "available": "{{version}} available",
         "latestForMac": "Latest for this Mac",
         "notes": "Notes",
