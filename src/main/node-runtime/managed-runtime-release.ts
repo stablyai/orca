@@ -115,7 +115,7 @@ export type InstalledRuntimeRelease = {
   current: boolean
 }
 
-type ReleaseRead = { releaseId: string } | 'broken' | 'unreadable'
+type ReleaseRead = { releaseId: string; version: string } | 'broken' | 'unreadable'
 
 export type InstalledRuntimeReleases = {
   /** Prefer the whole pinned release, then newest whole fallback; ignore staging, links and partial copies. */
@@ -233,12 +233,38 @@ export async function reclaimRuntimeReleases(
   )
   const stale = names.filter((name) => !keep.includes(name))
   const results = await Promise.allSettled(
-    stale.map((name) => rm(join(root, name), { recursive: true, force: true }))
+    stale.map(async (name) => {
+      const path = join(root, name)
+      if (name.startsWith('.download-') && (await hasUnreplacedRuntime(path, root, keep))) {
+        throw new Error(`Previous runtime release is still kept at ${join(path, 'damaged')}`)
+      }
+      await rm(path, { recursive: true, force: true })
+    })
   )
   return stale.filter((_, index) => results[index]?.status === 'rejected')
 }
 
-function readRelease(folder: string, version: string): ReleaseRead {
+async function hasUnreplacedRuntime(
+  staging: string,
+  root: string,
+  keep: readonly string[]
+): Promise<boolean> {
+  const damaged = join(staging, 'damaged')
+  try {
+    await lstat(damaged)
+  } catch (error) {
+    return !isDefinitiveAbsence(error)
+  }
+  // Failed repair backups become stale only once a whole replacement is published.
+  const previous = readRelease(damaged)
+  return (
+    typeof previous !== 'object' ||
+    !keep.includes(previous.version) ||
+    typeof readRelease(join(root, previous.version), previous.version) !== 'object'
+  )
+}
+
+function readRelease(folder: string, version?: string): ReleaseRead {
   try {
     const receiptPath = join(folder, RUNTIME_RELEASE_RECEIPT)
     const stat = lstatSync(receiptPath)
@@ -250,7 +276,7 @@ function readRelease(folder: string, version: string): ReleaseRead {
     )
     const whole =
       receipt.success &&
-      receipt.data.version === version &&
+      (version === undefined || receipt.data.version === version) &&
       receipt.data.platform === process.platform &&
       receipt.data.arch === process.arch &&
       receipt.data.members.every((member) => {
@@ -265,7 +291,7 @@ function readRelease(folder: string, version: string): ReleaseRead {
           (process.platform === 'win32' || (file.mode & 0o111) !== 0)
         )
       })
-    return whole ? { releaseId: receipt.data.releaseId } : 'broken'
+    return whole ? { releaseId: receipt.data.releaseId, version: receipt.data.version } : 'broken'
   } catch (error) {
     return isDefinitiveAbsence(error) ? 'broken' : 'unreadable'
   }

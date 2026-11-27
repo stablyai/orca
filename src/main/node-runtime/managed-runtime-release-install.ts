@@ -24,6 +24,7 @@ import {
 } from './managed-runtime-release'
 import { verifyFileSha256 } from './pinned-runtime-materializer'
 import { extractPinnedZipMembers } from './pinned-zip-members'
+import { publishRuntimeRelease, RuntimeReleaseRestoreError } from './publish-runtime-release'
 import {
   downloadFailureMessage,
   downloadVerifiedArchive,
@@ -99,6 +100,7 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
   assertFreeSpace(label, space ? space.bavail * space.bsize : null, needed, input)
   const staging = join(root, `.download-${process.pid}-${randomUUID()}`)
   const release = join(staging, 'release')
+  let keepStaging = false
   try {
     await mkdir(release, { recursive: true })
     const archive = join(staging, basename(new URL(pin.url).pathname))
@@ -151,13 +153,15 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
     await validate(input, release)
     await writeRuntimeReleaseReceipt(release, pin)
     signal.throwIfAborted()
-    if (existsSync(folder)) {
-      await rename(folder, join(staging, 'damaged'))
-    }
-    await rename(release, folder)
+    await publishRuntimeRelease(release, folder, label)
     input.commit()
+  } catch (error) {
+    keepStaging = error instanceof RuntimeReleaseRestoreError
+    throw error
   } finally {
-    await rm(staging, { recursive: true, force: true })
+    if (!keepStaging) {
+      await rm(staging, { recursive: true, force: true })
+    }
   }
 }
 
