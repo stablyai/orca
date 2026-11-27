@@ -68,10 +68,34 @@ export function listCopyRoots(accountHome: string, storeHome: string): CopyRoot[
   return roots.filter((root) => realDirectory(root.root))
 }
 
-export function* rolloutFiles(folder: string): Generator<string> {
+const byName = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0)
+
+/** Orders home-relative paths the way the walk visits them: folder by folder, names sorted. */
+export function compareWalkPaths(a: string[], b: string[]): number {
+  for (let index = 0; index < Math.min(a.length, b.length); index += 1) {
+    const order = byName(a[index], b[index])
+    if (order !== 0) {
+      return order
+    }
+  }
+  return a.length - b.length
+}
+
+export type WalkedCopy = { root: CopyRoot; copy: string; segments: string[] }
+
+/**
+ * Rollouts under `folder` in walk order, lazily; with `after`, only those past it, skipping whole
+ * folders that sort before it unread.
+ */
+function* sortedRolloutFiles(
+  root: CopyRoot,
+  folder: string,
+  segments: string[],
+  after: string[] | null
+): Generator<WalkedCopy> {
   let entries
   try {
-    entries = readdirSync(folder, { withFileTypes: true })
+    entries = readdirSync(folder, { withFileTypes: true }).sort((a, b) => byName(a.name, b.name))
   } catch (error) {
     if (isDefinitiveAbsence(error)) {
       return
@@ -79,11 +103,53 @@ export function* rolloutFiles(folder: string): Generator<string> {
     throw error
   }
   for (const entry of entries) {
+    const next = [...segments, entry.name]
+    let from = after
+    if (after) {
+      const order = compareWalkPaths(next, after.slice(0, next.length))
+      // Before the cursor, or the cursor itself (visited last launch): skipped.
+      if (order < 0 || (order === 0 && !entry.isDirectory())) {
+        continue
+      }
+      from = order > 0 ? null : after
+    }
     const path = join(folder, entry.name)
     if (entry.isDirectory()) {
-      yield* rolloutFiles(path)
+      yield* sortedRolloutFiles(root, path, next, from)
     } else if (entry.isFile() && ROLLOUT_FILE.test(entry.name)) {
-      yield path
+      yield { root, copy: path, segments: next }
+    }
+  }
+}
+
+/**
+ * The home's copies in walk order, starting just past `after` (a home-relative path the last
+ * launch stopped at) and wrapping round, so a launch its deadline cuts short resumes there.
+ */
+export function* walkCopies(
+  accountHome: string,
+  storeHome: string,
+  after?: string
+): Generator<WalkedCopy> {
+  const cursor = after ? after.split('/') : null
+  const roots = listCopyRoots(accountHome, storeHome)
+    .map((root) => ({ root, segments: relative(accountHome, root.root).split(/[\\/]/) }))
+    .sort((a, b) => compareWalkPaths(a.segments, b.segments))
+  for (const { root, segments } of roots) {
+    const order = cursor ? compareWalkPaths(segments, cursor.slice(0, segments.length)) : 1
+    if (order >= 0) {
+      yield* sortedRolloutFiles(root, root.root, segments, order === 0 ? cursor : null)
+    }
+  }
+  if (!cursor) {
+    return
+  }
+  for (const { root, segments } of roots) {
+    for (const item of sortedRolloutFiles(root, root.root, segments, null)) {
+      if (compareWalkPaths(item.segments, cursor) > 0) {
+        return
+      }
+      yield item
     }
   }
 }

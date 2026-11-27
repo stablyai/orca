@@ -133,9 +133,19 @@ export function writeKeptCopies(
   accountHome: string,
   { differs, settled, progress = {}, verified = {} }: KeptCopiesRecord
 ): void {
-  const text = `${JSON.stringify({ version: 1, differs, settled, progress, verified })}\n`
+  // Keys sorted: the same record always serializes the same, whatever order a walk visited it in.
+  const text = `${JSON.stringify({
+    version: 1,
+    differs: sortedKeys(differs),
+    settled,
+    progress: sortedKeys(progress),
+    verified: sortedKeys(verified)
+  })}\n`
   writeIfChanged(join(accountHome, KEPT_COPIES_FILE), text, false)
 }
+
+const sortedKeys = <T>(record: Record<string, T>): Record<string, T> =>
+  Object.fromEntries(Object.entries(record).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
 
 // A launch that learned nothing new leaves the file alone; `empty` text means no file at all.
 function writeIfChanged(target: string, text: string, empty: boolean): void {

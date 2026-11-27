@@ -1,3 +1,4 @@
+import type * as NodeFs from 'node:fs'
 import {
   appendFileSync,
   chmodSync,
@@ -8,6 +9,7 @@ import {
   readdirSync,
   renameSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync
 } from 'node:fs'
@@ -15,12 +17,24 @@ import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { zstdCompressSync } from 'node:zlib'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { writeKeptCopies } from './codex-account-copies-kept'
 import { cleanUpCodexAccountCopies } from './codex-account-copies-cleanup'
 import { verifyCodexAccountCopies } from './codex-account-copies'
 import { runCodexAccountCopiesRequest } from './codex-account-copies-requests'
 import { TRASH_GRACE_MS } from './codex-account-copies-trash-entries'
 import { recheckTrashedCopies } from './codex-account-copies-trash-recheck'
 import type { CodexHistoryMoveOutcome } from '../../../telemetry/codex-history-move-telemetry'
+
+// Lets a test make every directory listing cost time, as on a slow or network disk.
+const listings = vi.hoisted(() => ({ onRead: null as null | (() => void) }))
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeFs>()
+  const readdirSync = ((...args: Parameters<typeof actual.readdirSync>) => {
+    listings.onRead?.()
+    return actual.readdirSync(...args)
+  }) as typeof actual.readdirSync
+  return { ...actual, readdirSync, default: { ...actual, readdirSync } }
+})
 
 const REL = '2026/11/20/rollout-2026-11-20T10-00-00-0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b.jsonl'
 const LINE_1 = '{"type":"session_meta"}\n'
@@ -603,5 +617,57 @@ describe('a launch cut short by its deadline', () => {
     } finally {
       clock.mockRestore()
     }
+  })
+})
+
+describe('a home on a slow disk', () => {
+  it('spends each launch past where the last one stopped, not relisting every folder first', async () => {
+    const folders = 200
+    for (let f = 0; f < folders; f += 1) {
+      for (let i = 0; i < 10; i += 1) {
+        const id = (f * 10 + i).toString(16).padStart(12, '0')
+        const rel = `2026/11/${String(f).padStart(3, '0')}/rollout-2026-11-20T10-00-00-0199a1b2-c3d4-7e5f-8a9b-${id}.jsonl`
+        put(storeFile(rel), LINE_1)
+        put(conflictCopy(rel), LINE_1)
+      }
+    }
+    // Time passes only as the walk reads the clock or lists a folder, which costs five ticks.
+    let tick = 0
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => (tick += 1))
+    listings.onRead = () => {
+      tick += 5
+    }
+    try {
+      const offered = new Set<string>()
+      for (let launch = 0; launch < 30; launch += 1) {
+        const result = await verifyCodexAccountCopies({
+          accountHome: home,
+          storeHome: store,
+          budget: { maxBytes: 4 * 1024 ** 3, deadline: tick + 400 },
+          version: `test-${launch}`,
+          managedAccountsRoot: join(root, 'codex-accounts')
+        })
+        for (const copy of result.verified) {
+          offered.add(copy.copy)
+        }
+      }
+      expect(offered.size).toBe(folders * 10)
+    } finally {
+      listings.onRead = null
+      clock.mockRestore()
+    }
+  })
+})
+
+describe('writeKeptCopies', () => {
+  it('leaves an unchanged record alone whatever order its entries arrive in', () => {
+    const file = join(home, '.orca-history-copies-kept.json')
+    writeKeptCopies(home, { differs: { b: 'two', a: 'one' }, settled: null })
+    const before = statSync(file, { bigint: true })
+
+    writeKeptCopies(home, { differs: { a: 'one', b: 'two' }, settled: null })
+
+    const after = statSync(file, { bigint: true })
+    expect([after.ino, after.mtimeNs]).toEqual([before.ino, before.mtimeNs])
   })
 })

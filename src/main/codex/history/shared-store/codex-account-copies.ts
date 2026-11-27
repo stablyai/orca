@@ -1,10 +1,9 @@
 import type { BigIntStats } from 'node:fs'
 import { basename, dirname, relative } from 'node:path'
 import { COMPRESSED_ROLLOUT_SUFFIX } from '../rollouts/codex-rollout-compressed-twin'
-import { findOriginal, listCopyRoots, rolloutFiles, sharedSince } from './codex-account-copy-roots'
+import { findOriginal, sharedSince, walkCopies } from './codex-account-copy-roots'
 import { originalHoldsCopy } from './codex-account-copy-content'
 import {
-  inTurnOrder,
   readCursor,
   readKeptCopies,
   takeInTurn,
@@ -127,20 +126,14 @@ export async function verifyCodexAccountCopies(args: {
   }
   const cursor = readCursor(args.accountHome)
   // Each launch starts after the copy the last one stopped at, so a walk the deadline cuts short
-  // still reaches every copy over a few launches.
-  const walk = inTurnOrder(
-    listCopyRoots(args.accountHome, args.storeHome).flatMap((root) =>
-      [...rolloutFiles(root.root)].map((copy) => ({
-        root,
-        copy,
-        name: homeName(args.accountHome, copy)
-      }))
-    ),
-    (item) => item.name,
-    cursor.walkAfter
-  )
+  // still reaches every copy over a few launches; folders before it are skipped unread.
   let lastVisited: string | undefined
-  for (const { root, copy, name } of walk) {
+  for (const { root, copy, segments } of walkCopies(
+    args.accountHome,
+    args.storeHome,
+    cursor.walkAfter
+  )) {
+    const name = segments.join('/')
     if (Date.now() > args.budget.deadline || verified.length >= MAX_VERIFIED_PER_HOME) {
       // The rest waits for a later launch, unvisited: its cost stays within the deadline.
       outOfTime = true
