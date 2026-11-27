@@ -76,3 +76,56 @@ it('sends a Samsung Keyboard Backspace that arrives as keyCode 229 plus deleteCo
 
   expect(sent.join('')).toBe('\x7f')
 })
+
+it('presses Enter through the Kitty encoder when every key is an escape code', async () => {
+  const { sent, textarea } = await openKittyPane('\x1b[>8u')
+
+  dispatchKey(textarea, 'keydown', 'Unidentified', '', 229)
+  dispatchInput(textarea, 'beforeinput', 'insertLineBreak', null)
+  await nextEventLoop()
+  dispatchKey(textarea, 'keyup', 'Unidentified', '', 229)
+  await nextEventLoop()
+
+  // Report-all does not exempt Enter, so a bare \r would be the one key outside the mode.
+  expect(sent.join('')).toBe('\x1b[13u')
+})
+
+it('reports Delete as the tilde form with its release when event types are on', async () => {
+  const { sent, textarea } = await openKittyPane('\x1b[>10u')
+
+  dispatchKey(textarea, 'keydown', 'Unidentified', '', 229)
+  dispatchInput(textarea, 'beforeinput', 'deleteContentForward', null)
+  await nextEventLoop()
+  dispatchKey(textarea, 'keyup', 'Unidentified', '', 229)
+  await nextEventLoop()
+
+  // Delete has no CSI-u spelling; it stays 3~ and owes the release, trailers unchanged.
+  expect(sent.join('')).toBe('\x1b[3~' + '\x1b[3;1:3~')
+})
+
+it('reports Delete release under event types even without report-all', async () => {
+  const { sent, textarea } = await openKittyPane('\x1b[>2u')
+
+  dispatchKey(textarea, 'keydown', 'Unidentified', '', 229)
+  dispatchInput(textarea, 'beforeinput', 'deleteContentForward', null)
+  await nextEventLoop()
+  dispatchKey(textarea, 'keyup', 'Unidentified', '', 229)
+  await nextEventLoop()
+
+  expect(sent.join('')).toBe('\x1b[3~' + '\x1b[3;1:3~')
+})
+
+it('reports Backspace in CSI-u form with its release only under report-all', async () => {
+  const { sent, textarea } = await openKittyPane('\x1b[>10u')
+
+  textarea.value = 'ab'
+  dispatchKey(textarea, 'keydown', 'Unidentified', '', 229)
+  dispatchInput(textarea, 'beforeinput', 'deleteContentBackward', null)
+  textarea.value = 'a'
+  dispatchInput(textarea, 'input', 'deleteContentBackward', null)
+  await nextEventLoop()
+  dispatchKey(textarea, 'keyup', 'Unidentified', '', 229)
+  await nextEventLoop()
+
+  expect(sent.join('')).toBe('\x1b[127u' + '\x1b[127;1:3u')
+})

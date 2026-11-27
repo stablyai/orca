@@ -37,20 +37,55 @@ export function isAndroidClient(): boolean {
   return typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent)
 }
 
+/**
+ * A functional key's spelling in the Kitty protocol, with its release when event reporting is on.
+ *
+ * The three keys do not share one rule (kitty's `encode_function_key` is the reference):
+ * - Enter, Tab and Backspace keep `\r`, `\t` and `0x7f` unless every key is reported as an escape
+ *   code, where they become `CSI 13 u`, `CSI 9 u` and `CSI 127 u`.
+ * - Delete is `CSI 3 ~` in every mode. It has no CSI-u form, and its release keeps the `~`.
+ * - Enter, Tab and Backspace have no release unless every key is reported as an escape code;
+ *   Delete has one whenever event types are on.
+ *
+ * Soft keyboards leave Shift down after shift-typed text, so Shift is omitted rather than
+ * reported as a held modifier.
+ */
 function encodeSoftKeyboardKey(key: SoftKeyboardKey, kittyKeyboardFlags: number): string {
-  if (key === 'Enter') {
-    return '\r'
+  if (kittyKeyboardFlags === 0) {
+    return LEGACY_SOFT_KEYBOARD_BYTES[key]
   }
-  const plain = key === 'Backspace' ? '\x7f' : '\x1b[3~'
-  if (!kittyReportsAllKeysAsEscapeCodes(kittyKeyboardFlags)) {
-    return plain
+  const reportsAllKeys = kittyReportsAllKeysAsEscapeCodes(kittyKeyboardFlags)
+  const reportsReleases = (kittyKeyboardFlags & KITTY_REPORT_EVENT_TYPES) !== 0
+  // Delete owes a release whenever event types are on; the other two only under report-all.
+  const owesRelease = reportsReleases && (key === 'Delete' || reportsAllKeys)
+  const press = encodeSoftKeyboardKeyEvent(key, 'press', reportsAllKeys)
+  return owesRelease ? `${press}${encodeSoftKeyboardKeyEvent(key, 'release', reportsAllKeys)}` : press
+}
+
+const LEGACY_SOFT_KEYBOARD_BYTES: Readonly<Record<SoftKeyboardKey, string>> = {
+  Backspace: '\x7f',
+  Delete: '\x1b[3~',
+  Enter: '\r'
+}
+
+const KITTY_FUNCTIONAL_CODES: Readonly<Record<SoftKeyboardKey, { codePoint: number; trailer: 'u' | '~' }>> = {
+  Backspace: { codePoint: 127, trailer: 'u' },
+  Delete: { codePoint: 3, trailer: '~' },
+  Enter: { codePoint: 13, trailer: 'u' }
+}
+
+function encodeSoftKeyboardKeyEvent(
+  key: SoftKeyboardKey,
+  type: 'press' | 'release',
+  reportsAllKeys: boolean
+): string {
+  if (!reportsAllKeys && key !== 'Delete') {
+    // Without report-all these keys are plain legacy bytes, which carry no release at all.
+    return type === 'press' ? LEGACY_SOFT_KEYBOARD_BYTES[key] : ''
   }
-  // CSI 127 u is the kitty spelling of Backspace; Delete has no dedicated encoding and stays 3~.
-  const codePoint = key === 'Backspace' ? 127 : 3
-  const press = `\x1b[${codePoint}u`
-  return (kittyKeyboardFlags & KITTY_REPORT_EVENT_TYPES) === 0
-    ? press
-    : `${press}\x1b[${codePoint};1:3u`
+  const { codePoint, trailer } = KITTY_FUNCTIONAL_CODES[key]
+  // A release always carries an event-type field, so the modifier slot is written even when empty.
+  return type === 'press' ? `\x1b[${codePoint}${trailer}` : `\x1b[${codePoint};1:3${trailer}`
 }
 
 export function installTerminalSoftKeyboardInputRepair(args: {
