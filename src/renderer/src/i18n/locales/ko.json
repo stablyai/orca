@@ -23475,6 +23475,11 @@
           "bodyWithoutShortcut": "이 버튼을 클릭하거나 프로젝트 헤더를 {{modifier}}-클릭하세요.",
           "action": "확인"
         }
+      },
+      "clientHostedBrowser": {
+        "intro": {
+          "teammateBody": "이제 원격 브라우저 탭이 이 기기에서 렌더링됩니다. localhost 페이지는 공유 호스트를 거치고, 다른 사이트는 내 네트워크에서 로드됩니다."
+        }
       }
     },
     "dictation": {

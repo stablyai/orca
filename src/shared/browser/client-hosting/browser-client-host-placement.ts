@@ -9,6 +9,9 @@ export type BrowserClientHostPlacementPreference = z.infer<
   typeof BrowserClientHostPlacementPreference
 >
 
+/** Whose computer a client-hosted page browses for: one of this user's own, or a teammate's host. */
+export type BrowserClientHostViewer = 'own-computer' | 'teammate'
+
 export const BrowserClientHostPlacementPreparationRequest = lazyZodSchema(() =>
   z.object({
     selector: z.string().min(1),

@@ -23704,6 +23704,11 @@
           "bodyWithoutShortcut": "Haz clic en este botón o haz clic con {{modifier}} en el encabezado de cualquier proyecto.",
           "action": "Entendido"
         }
+      },
+      "clientHostedBrowser": {
+        "intro": {
+          "teammateBody": "Las pestañas del navegador remoto ahora se representan en este dispositivo. Las páginas de localhost pasan por el host compartido; los demás sitios se cargan desde tu red."
+        }
       }
     },
     "dictation": {

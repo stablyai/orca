@@ -27,7 +27,8 @@ import type {
 import type { VerifyAndAddRuntimeEnvironmentResult } from '../../../shared/remote-runtime/pairing/remote-pairing-verification'
 import type {
   BrowserClientHostPlacementPreparationRequest,
-  BrowserPageCreationPlacement
+  BrowserPageCreationPlacement,
+  BrowserClientHostViewer
 } from '../../../shared/browser/client-hosting/browser-client-host-placement'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../shared/remote-runtime/control/remote-runtime-shared-control-types'
 import type { WslOrcadAccountNotAppliedEvent } from '../../../shared/remote-runtime/wsl-hosts/wsl-orcad-account-notice'
@@ -155,6 +156,8 @@ export type RuntimeApi = {
     prepareBrowserClientHostPlacement: (
       args: BrowserClientHostPlacementPreparationRequest
     ) => Promise<BrowserPageCreationPlacement>
+    // Absent in the web client, which hosts no browser pages.
+    browserClientHostViewer?: (environmentId: string) => Promise<BrowserClientHostViewer | null>
     // Resume/online events advance only pending shared-control reconnect timers.
     retryConnectionsNow?: () => Promise<void>
     call: (args: {

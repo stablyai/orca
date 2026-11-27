@@ -23116,6 +23116,11 @@
           "bodyWithoutShortcut": "Cliquez sur ce bouton, ou faites {{modifier}}-clic sur l'en-tête d'un projet.",
           "action": "Compris"
         }
+      },
+      "clientHostedBrowser": {
+        "intro": {
+          "teammateBody": "Les onglets du navigateur distant s'affichent désormais sur cet appareil. Les pages localhost passent par l'hôte partagé ; les autres sites se chargent depuis votre réseau."
+        }
       }
     },
     "dictation": {

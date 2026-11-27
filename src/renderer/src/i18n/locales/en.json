@@ -24391,6 +24391,11 @@
           "bodyWithoutShortcut": "Click this button, or {{modifier}}-click any project header.",
           "action": "Got it"
         }
+      },
+      "clientHostedBrowser": {
+        "intro": {
+          "teammateBody": "Remote browser tabs now render on this device. Localhost pages go through the shared host; other sites load from your network."
+        }
       }
     },
     "tabGroup": {

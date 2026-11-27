@@ -23713,6 +23713,11 @@
           "bodyWithoutShortcut": "按一下這個按鈕，或按住 {{modifier}} 並按一下任一專案標題。",
           "action": "知道了"
         }
+      },
+      "clientHostedBrowser": {
+        "intro": {
+          "teammateBody": "遠端瀏覽器分頁現在在此裝置上呈現。localhost 頁面透過共用主機；其他網站從你的網路載入。"
+        }
       }
     },
     "dictation": {

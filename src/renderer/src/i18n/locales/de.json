@@ -23997,6 +23997,11 @@
           "bodyWithoutShortcut": "Klicke auf diese Schaltfläche oder klicke mit {{modifier}} auf eine beliebige Projektüberschrift.",
           "action": "Verstanden"
         }
+      },
+      "clientHostedBrowser": {
+        "intro": {
+          "teammateBody": "Tabs des entfernten Browsers werden jetzt auf diesem Gerät dargestellt. Localhost-Seiten laufen über den freigegebenen Host; andere Websites laden über dein Netzwerk."
+        }
       }
     },
     "dictation": {

@@ -25142,6 +25142,11 @@
           "bodyWithoutShortcut": "Clique neste botão ou clique com {{modifier}} em qualquer cabeçalho do projeto.",
           "action": "Entendi"
         }
+      },
+      "clientHostedBrowser": {
+        "intro": {
+          "teammateBody": "As abas do navegador remoto agora são renderizadas neste dispositivo. Páginas de localhost passam pelo host compartilhado; outros sites carregam pela sua rede."
+        }
       }
     },
     "orchestrationCrew": {

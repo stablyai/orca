@@ -24321,6 +24321,11 @@
           "bodyWithoutShortcut": "Bu düğmeye tıklayın veya {{modifier}} tuşunu basılı tutarak herhangi bir proje başlığına tıklayın.",
           "action": "Anladım"
         }
+      },
+      "clientHostedBrowser": {
+        "intro": {
+          "teammateBody": "Uzak tarayıcı sekmeleri artık bu cihazda görüntüleniyor. Localhost sayfaları paylaşılan sunucu üzerinden geçiyor; diğer siteler kendi ağınızdan yükleniyor."
+        }
       }
     },
     "dictation": {

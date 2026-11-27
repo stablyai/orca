@@ -1,6 +1,7 @@
 import { BROWSER_CLIENT_PROFILE_SWITCH_CAPABILITY } from '../../../../shared/browser/client-hosting/browser-client-profile-switch-protocol'
 import type { BrowserRouteViewer } from '../../routing/sessions/browser-route-session-policy'
 import { sharedHostKey } from '../../../../shared/remote-runtime/pairing/shared-host-keys'
+import { recordClientHostViewer } from './paired-runtime-browser-client-host-viewers'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { app } from 'electron'
@@ -98,8 +99,12 @@ const browserClientHosts =
         (browserPageId) => executor?.pageCookieJar(browserPageId) ?? null,
         (params) => executor?.recordPublishedPageUrl(params)
       )
+      const releaseViewer = recordClientHostViewer(input.environmentId, input.viewer)
       return new PairedRuntimeBrowserClientHostComposition({
-        onClosing: routes.release,
+        onClosing: () => {
+          releaseViewer()
+          routes.release()
+        },
         initialInput: input,
         createRoutes: (next, authority) =>
           createNetworkRoutes(next.connection, authority, next.storageScope, input),

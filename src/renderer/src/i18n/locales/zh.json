@@ -23352,6 +23352,11 @@
           "bodyWithoutShortcut": "点击此按钮，或按住 {{modifier}} 点击任意项目标题",
           "action": "知道了"
         }
+      },
+      "clientHostedBrowser": {
+        "intro": {
+          "teammateBody": "远程浏览器标签页现在会在此设备上渲染。localhost 页面通过共享主机，其他网站从你的网络加载。"
+        }
       }
     },
     "toastFallbacks": {

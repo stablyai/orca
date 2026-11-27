@@ -23057,6 +23057,11 @@
           "bodyWithoutShortcut": "このボタンをクリックするか、任意のプロジェクトヘッダーを {{modifier}} キーを押しながらクリックします。",
           "action": "了解"
         }
+      },
+      "clientHostedBrowser": {
+        "intro": {
+          "teammateBody": "リモートブラウザのタブがこのデバイス上でレンダリングされるようになりました。localhost のページは共有ホストを経由し、その他のサイトはお使いのネットワークから読み込まれます。"
+        }
       }
     },
     "dictation": {
