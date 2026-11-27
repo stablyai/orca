@@ -22,25 +22,30 @@ import { AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH as MAX_RESPONSE_OPTION_ID_L
 import { AGENT_SESSION_THREAD_GOAL_OBJECTIVE_MAX_LENGTH } from '../../agent-session/thread-goals/agent-session-thread-goal-wire'
 import { MutationEnvelope } from './structured-agent-session-mutation-envelope'
 import { SOURCE_FIELDS, ResumeWriterAdmission } from './structured-agent-session-resume-params'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
 /** Matches the journal's bounds on one grouped prompt. */
 
 /** One relaunch cannot offer more chats than a profile plausibly holds. */
 export const MAX_RESTART_RESUME_SESSIONS = 512
 
-export const ProviderHandle = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('codex'), threadId: Identifier('Invalid thread id') }).strict(),
-  z
-    .object({
-      kind: z.literal('claude'),
-      sessionId: Identifier('Invalid provider session id'),
-      leafUuid: Identifier('Invalid leaf uuid').nullable()
-    })
-    .strict()
-])
+export const ProviderHandle = lazyZodSchema(() =>
+  z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('codex'), threadId: Identifier('Invalid thread id') }).strict(),
+    z
+      .object({
+        kind: z.literal('claude'),
+        sessionId: Identifier('Invalid provider session id'),
+        leafUuid: Identifier('Invalid leaf uuid').nullable()
+      })
+      .strict()
+  ])
+)
 
 /** Host-registered agents; clients gate names beyond Claude/Codex on the registered-agents capability. */
-export const StructuredAgent = z.string().refine(isStructuredAgentId, 'Invalid agent')
+export const StructuredAgent = lazyZodSchema(() =>
+  z.string().refine(isStructuredAgentId, 'Invalid agent')
+)
 
 export const ExecutionHostId = z
   .string()
@@ -128,7 +133,7 @@ export const CreateIntentParams = z
   })
   .strict()
 
-export const CreateParams = z.union([AttachParams, CreateIntentParams])
+export const CreateParams = lazyZodSchema(() => z.union([AttachParams, CreateIntentParams]))
 
 export const CancelParams = z
   .object({
@@ -180,11 +185,13 @@ export const RespondParams = z
   })
   .strict()
 
-export const SetOptionParams = z.strictObject({
-  envelope: MutationEnvelope,
-  key: Identifier('Invalid option key'),
-  value: z.string().max(MAX_OPTION_LABEL)
-})
+export const SetOptionParams = lazyZodSchema(() =>
+  z.strictObject({
+    envelope: MutationEnvelope,
+    key: Identifier('Invalid option key'),
+    value: z.string().max(MAX_OPTION_LABEL)
+  })
+)
 
 export const OptionsParams = z.object({ sessionId: SessionId }).strict()
 export const RevealParams = OptionsParams.extend({
@@ -238,25 +245,29 @@ export const ToolCallerParams = z.object({ token: z.string().min(1).max(256) }).
 export const SleepWorkspaceParams = z
   .object({ workspaceId: z.string().min(1), markAsleep: z.literal(true).optional() })
   .strict()
-export const AcknowledgeAttentionParams = OptionsParams.extend({ observedCursor: JournalCursor })
+export const AcknowledgeAttentionParams = lazyZodSchema(() =>
+  OptionsParams.extend({ observedCursor: JournalCursor })
+)
 
 export const AgentsParams = z.object({}).strict()
 
-export const AvailabilityParams = z.strictObject({})
+export const AvailabilityParams = lazyZodSchema(() => z.strictObject({}))
 
 /** Session pins the account; otherwise use the account/config a launch in worktree would select.
  * Send waitForListing only after the host reports one in progress; old hosts refuse the key. */
-export const ModelCatalogParams = z.strictObject({
-  agent: StructuredAgent,
-  sessionId: SessionId.optional(),
-  worktree: Identifier('Invalid worktree selector').optional(),
-  waitForListing: z.boolean().optional(),
-  // Read saved data without starting a listing; gate on saved-only capability because older hosts refuse unknown keys.
-  savedOnly: z.boolean().optional(),
-  // Lists the agent's catalog again first; gate on the relist capability for the same reason.
-  relist: z.literal(true).optional(),
-  selectedModel: Identifier('Invalid selected model').optional()
-})
+export const ModelCatalogParams = lazyZodSchema(() =>
+  z.strictObject({
+    agent: StructuredAgent,
+    sessionId: SessionId.optional(),
+    worktree: Identifier('Invalid worktree selector').optional(),
+    waitForListing: z.boolean().optional(),
+    // Read saved data without starting a listing; gate on saved-only capability because older hosts refuse unknown keys.
+    savedOnly: z.boolean().optional(),
+    // Lists the agent's catalog again first; gate on the relist capability for the same reason.
+    relist: z.literal(true).optional(),
+    selectedModel: Identifier('Invalid selected model').optional()
+  })
+)
 
 export const ConversationCommandParams = z
   .object({
@@ -324,7 +335,9 @@ export const HistoryParams = z
   .strict()
 
 // Not strict: an older host ignores these params entirely, and this host must ignore a newer client's.
-export const SubscribeTurnCompletionsParams = z.object({ includePrompts: z.boolean().optional() })
+export const SubscribeTurnCompletionsParams = lazyZodSchema(() =>
+  z.object({ includePrompts: z.boolean().optional() })
+)
 
 export const UnsubscribeParams = z
   .object({
