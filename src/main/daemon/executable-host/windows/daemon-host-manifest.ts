@@ -1,7 +1,8 @@
 import { existsSync } from 'node:fs'
 import { createHash } from 'node:crypto'
-import { copyFile, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises'
-import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
+import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mapWithConcurrencyUntilFailure } from '../../../../shared/concurrency/map-with-concurrency'
+import { listDaemonHostTree } from './daemon-host-tree-walk'
 import { dirname, join, win32 as winPath } from 'node:path'
 
 /** Preserve signed bytes and basename; path-based NSIS sweeps spare the copy, but taskkill /IM can still kill it. */
@@ -191,27 +192,6 @@ export function buildDaemonHostManifest(sources: DaemonHostSources): CopyOp[] {
 // Parallel copies hide per-file Defender scan latency without flooding the libuv threadpool.
 const COPY_CONCURRENCY = 16
 
-type FileCopy = { sourcePath: string; destRel: string }
-
-// Follow links (stat, not lstat) so the mirror survives removal of the install directory.
-async function listFileCopies(
-  sourcePath: string,
-  destRel: string,
-  filter: CopyOp['filter']
-): Promise<FileCopy[]> {
-  if (filter && !filter(sourcePath)) {
-    return []
-  }
-  if (!(await stat(sourcePath)).isDirectory()) {
-    return [{ sourcePath, destRel }]
-  }
-  const names = await readdir(sourcePath)
-  const nested = await mapWithConcurrency(names, COPY_CONCURRENCY, (name) =>
-    listFileCopies(join(sourcePath, name), `${destRel}/${name}`, filter)
-  )
-  return nested.flat()
-}
-
 // Verify the bytes written; rereading a just-written file waits on Defender's scan of it.
 async function copyVerifiedFile(sourcePath: string, dest: string, sha256: string): Promise<void> {
   const bytes = await readFile(sourcePath)
@@ -235,32 +215,26 @@ export async function executeManifest(
   if (missing) {
     throw new Error(`daemon-host relocation: missing required input ${missing.sourcePath}`)
   }
-  const listed = await mapWithConcurrency(present, COPY_CONCURRENCY, (op) =>
-    listFileCopies(op.sourcePath, op.destRel, op.filter)
-  )
-  const copies = listed.flat()
-  const listedRels = new Set(copies.map((copy) => copy.destRel))
+  const { files, dirs } = await listDaemonHostTree(present, COPY_CONCURRENCY)
+  const listedRels = new Set(files.map((file) => file.destRel))
   const unlisted = [...expectedHashes.keys()].find((destRel) => !listedRels.has(destRel))
   if (unlisted) {
     throw new Error(`daemon-host relocation: ${unlisted} is outside the copy manifest`)
   }
-  for (const dir of new Set(copies.map((copy) => dirname(destPath(stagingRoot, copy.destRel))))) {
+  // Keep accepted empty directories, matching the recursive copy this replaced.
+  const destDirs = new Set([
+    ...dirs.map((dir) => destPath(stagingRoot, dir.destRel)),
+    ...files.map((file) => dirname(destPath(stagingRoot, file.destRel)))
+  ])
+  for (const dir of destDirs) {
     await mkdir(dir, { recursive: true })
   }
-  // Settle every copy before failing so staging cleanup cannot race a copy still writing into it.
-  const results = await mapWithConcurrency(copies, COPY_CONCURRENCY, (copy) => {
-    const dest = destPath(stagingRoot, copy.destRel)
-    const sha256 = expectedHashes.get(copy.destRel)
-    const done = sha256
-      ? copyVerifiedFile(copy.sourcePath, dest, sha256)
-      : copyFile(copy.sourcePath, dest)
-    return done.then(
-      () => null,
-      (error: unknown) => error
-    )
+  // Settles in-flight copies before failing, so staging cleanup cannot race a copy still writing.
+  await mapWithConcurrencyUntilFailure(files, COPY_CONCURRENCY, (file) => {
+    const dest = destPath(stagingRoot, file.destRel)
+    const sha256 = expectedHashes.get(file.destRel)
+    return sha256
+      ? copyVerifiedFile(file.sourcePath, dest, sha256)
+      : copyFile(file.sourcePath, dest)
   })
-  const failure = results.find((error) => error !== null)
-  if (failure !== undefined) {
-    throw failure
-  }
 }

@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
-import { readdir, stat, writeFile } from 'node:fs/promises'
+import { writeFile } from 'node:fs/promises'
 import { join, win32 as winPath } from 'node:path'
-import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
+import { mapWithConcurrencyUntilFailure } from '../../../../shared/concurrency/map-with-concurrency'
 import { hashDaemonHostFile, hashDaemonHostFileAsync } from './daemon-host-file-hash-cache'
+import { listDaemonHostTree } from './daemon-host-tree-walk'
 import {
   buildDaemonHostManifest,
   daemonHostExeName,
@@ -52,17 +53,6 @@ function listCodeFiles(sourcePath: string, destRel: string): CodeFileSource[] {
   return readdirSync(sourcePath)
     .sort()
     .flatMap((name) => listCodeFiles(join(sourcePath, name), `${destRel}/${name}`))
-}
-
-async function listCodeFilesAsync(sourcePath: string, destRel: string): Promise<CodeFileSource[]> {
-  if ((await stat(sourcePath)).isFile()) {
-    return [{ sourcePath, destRel }]
-  }
-  const names = (await readdir(sourcePath)).sort()
-  const nested = await mapWithConcurrency(names, HASH_CONCURRENCY, (name) =>
-    listCodeFilesAsync(join(sourcePath, name), `${destRel}/${name}`)
-  )
-  return nested.flat()
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -180,10 +170,8 @@ export async function collectDaemonHostBuildInventoryAsync(
     if (!roots) {
       return null
     }
-    const listed = await mapWithConcurrency(roots, HASH_CONCURRENCY, (root) =>
-      listCodeFilesAsync(root.sourcePath, root.destRel)
-    )
-    const files = await mapWithConcurrency(listed.flat(), HASH_CONCURRENCY, async (file) => ({
+    const { files: listed } = await listDaemonHostTree(roots, HASH_CONCURRENCY)
+    const files = await mapWithConcurrencyUntilFailure(listed, HASH_CONCURRENCY, async (file) => ({
       path: file.destRel,
       sha256: await hashDaemonHostFileAsync(file.sourcePath)
     }))
@@ -257,10 +245,13 @@ export async function daemonHostBuildInventoryMatchesAsync(
   inventory: DaemonHostBuildInventory
 ): Promise<boolean> {
   try {
-    const hashes = await mapWithConcurrency(inventory.files, HASH_CONCURRENCY, (file) =>
-      hashDaemonHostFileAsync(destPath(root, file.path))
-    )
-    return hashes.every((sha256, index) => sha256 === inventory.files[index].sha256)
+    // A mismatch stops admitting files, as the sync verifier's every() does.
+    await mapWithConcurrencyUntilFailure(inventory.files, HASH_CONCURRENCY, async (file) => {
+      if ((await hashDaemonHostFileAsync(destPath(root, file.path))) !== file.sha256) {
+        throw new Error('daemon-host relocation: copied code does not match its marker')
+      }
+    })
+    return true
   } catch {
     return false
   }
