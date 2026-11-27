@@ -37,8 +37,36 @@ async function probeGlabInDistro(
   return { installed: true, authenticated: await isGlabAuthenticated({ wslTarget }) }
 }
 
+/** When this distro's fresh glab-only answer expires; same TTL as the full entry, so later means newer. */
+function glabOnlyExpiresAt(distro: string): number {
+  const entry = glabOnlyByDistro.get(distro)
+  return entry && entry.expiresAt > Date.now() ? entry.expiresAt : 0
+}
+
+/**
+ * glab in the default distro. The distro's full preflight entry answers while it is fresh and not
+ * older than the glab-only answer; re-running it for glab alone would waste 3 launches.
+ */
+export async function readDefaultDistroGlab(
+  distro: string,
+  force: boolean,
+  fullEntry: { result: { glab?: GlabStatus }; expiresAt: number } | undefined,
+  isGlabAuthenticated: GlabAuthProbe
+): Promise<GlabStatus> {
+  const fullGlab = fullEntry?.result.glab
+  if (
+    !force &&
+    fullGlab &&
+    fullEntry.expiresAt > Date.now() &&
+    fullEntry.expiresAt >= glabOnlyExpiresAt(distro)
+  ) {
+    return fullGlab
+  }
+  return readGlabOnly(distro, force, isGlabAuthenticated)
+}
+
 /** glab in `distro`; rejects while the distro is stopped, and caches nothing for that. */
-export async function readGlabOnly(
+async function readGlabOnly(
   distro: string,
   force: boolean,
   isGlabAuthenticated: GlabAuthProbe

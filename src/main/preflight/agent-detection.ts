@@ -30,7 +30,7 @@ import {
 } from '../ipc/preflight/preflight-command-exec'
 import { buildLocalPreflightEnv } from '../ipc/preflight/preflight-local-env'
 import { withConfiguredProxyEnv } from '../network/configured-proxy-child-env'
-import { _resetGlabOnlyCache, readGlabOnly } from './default-wsl-glab-preflight'
+import { _resetGlabOnlyCache, readDefaultDistroGlab } from './default-wsl-glab-preflight'
 import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import {
   detectRemoteWindowsTerminalCapabilities,
@@ -221,13 +221,10 @@ export async function runPreflightCheck(
   if (!distro) {
     return status
   }
-  // The distro's full entry owns the answer while fresh; re-running it for glab alone wastes 3 launches.
-  const entry = force ? undefined : cachedByWslDistro.get(preflightCacheKey({ distro }))
-  if (entry && entry.expiresAt > Date.now() && entry.result.glab) {
-    return { ...status, glab: entry.result.glab }
-  }
+  const fullEntry = cachedByWslDistro.get(preflightCacheKey({ distro }))
   try {
-    return { ...status, glab: await readGlabOnly(distro, force, isGlabAuthenticated) }
+    const glab = await readDefaultDistroGlab(distro, force, fullEntry, isGlabAuthenticated)
+    return { ...status, glab }
   } catch {
     // A stopped distro is not booted for a background read (E9); the next read asks again.
     return status
