@@ -502,9 +502,10 @@
 4 src/main/filesystem/rolling-file-backup.ts # stageRollingFileBackup + commit (same sync copy and rename); the staged-copy rmSync moved into removeFileWithWindowsRetry so Windows AV locks are retried
 1 src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry-path.ts
 5 src/main/foreign-sqlite-readers/foreign-sqlite-reader-spawn.ts
+2 src/main/git/command-runner/git-buffered-read.ts # moved from git-exec-file.ts with its execFileCapture call, plus execFileCaptureToTermination so catalog image reads hold Git ownership until the child exits; both reach statSync only via command-path resolution
 1 src/main/git/command-runner/git-environment/git-ssh-policy-env.ts
 1 src/main/git/command-runner/git-exec-file-sync.ts
-3 src/main/git/command-runner/git-exec-file.ts
+2 src/main/git/command-runner/git-exec-file.ts
 4 src/main/git/command-runner/host-routing/git-command-resolution.ts
 1 src/main/git/command-runner/host-routing/wsl-aware-spawn.ts
 4 src/main/git/command-runner/host-routing/wsl-command-resolution.ts

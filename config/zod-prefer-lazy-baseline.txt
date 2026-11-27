@@ -10,7 +10,6 @@
 23 src/main/native-chat/agent-session-journal/outcomes/journal-outcome-format-1.ts
 2 src/main/native-chat/agent-session-journal/outcomes/journal-state-schema.ts
 4 src/main/orcad/browser-providers/electron/electron-serve-browser-process.ts
-2 src/main/plugins/catalog/plugin-marketplace-store.ts
 1 src/main/plugins/workers/host-api/plugin-host-method-bindings.ts
 1 src/main/runtime/rpc/methods/orchestration/worker/stop/worker-stop-remote-receipt.ts
 30 src/shared/agent-session/journal/agent-session-journal-schemas.ts

@@ -11,25 +11,25 @@ import {
 const sourceIdSchema = lazyZodSchema(() => z.string().regex(/^[0-9a-f]{32}$/))
 export const SNAPSHOT_FILE_MAX_BYTES = 16 * 1024 * 1024
 
-const snapshotFields = {
+const snapshotFields = () => ({
   sourceId: sourceIdSchema,
   source: pluginMarketplaceGitSourceSchema,
   marketplaceCommit: z.string().regex(PLUGIN_COMMIT_PATTERN),
   fetchedAt: z.number().finite().nonnegative()
-}
+})
 // Why two cache keys: builds that predate release records parse `<id>.json` strictly, so a
 // downgrade must find only v1-shaped data there and refetch rather than fail.
 const legacySnapshotSchema = lazyZodSchema(() =>
   z.strictObject({
     schemaVersion: z.literal(1),
-    ...snapshotFields,
+    ...snapshotFields(),
     marketplace: pluginMarketplaceSchema
   })
 )
 export const cachedSnapshotSchema = lazyZodSchema(() =>
   z.strictObject({
     schemaVersion: z.literal(2),
-    ...snapshotFields,
+    ...snapshotFields(),
     catalogRepository: z.enum(['repository', 'replacement']).optional(),
     marketplace: pluginMarketplaceListingSchema
   })
