@@ -2,8 +2,6 @@ import { registerAppHandlers } from '../app'
 import { canCreateWslHostService } from '../wsl/wsl-host-service-availability'
 import { registerNonWindowsWslIpcStubs } from '../wsl/non-windows-wsl-ipc-stubs'
 import { installProjectRuntimeGitRouter } from '../../workspaces/execution-host/project-runtime-git-router'
-import { registerCliHandlers } from '../cli'
-import { registerPreflightHandlers } from '../preflight/preflight'
 import type { Store } from '../../persistence/loading-store/store'
 import { resolveDesktopAuthorizedPath } from '../filesystem/access/local-file-access-resolution'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
@@ -24,7 +22,6 @@ import { registerLazyEphemeralVmHandlers } from '../ephemeral-vm/lazy-ephemeral-
 import { registerLazyAiVaultHandlers } from '../ai-vault/lazy-ai-vault-handlers'
 import { registerNativeChatHandlers } from '../native-chat'
 import { registerNotificationHandlers } from '../notifications/notifications'
-import { registerOnboardingHandlers } from '../onboarding'
 import { registerDashboardPopoutHandlers } from '../dashboard/dashboard-popout'
 import { setAgentBrowserBridgeRef, registerBrowserHandlers } from '../browser/browser'
 import { setTrustedBrowserRendererWebContentsId } from '../browser/browser-renderer-trust'
@@ -35,7 +32,6 @@ import {
   registerLazySkillsHandlers
 } from '../skills/lazy-skills-handlers'
 import { registerWorkspacePortHandlers } from '../ports/workspace-ports'
-import { registerLocalhostWorktreeLabelHandlers } from '../ports/localhost-worktree-labels'
 import { registerAutomationHandlers } from '../automations'
 import { registerKeybindingHandlers } from '../keybindings'
 import { registerTelemetryHandlers } from '../telemetry'
@@ -47,7 +43,6 @@ import { registerLazySpeechHandlers } from '../lazy-speech-handlers'
 import { registerOrcaProfileHandlers } from '../profiles/orca-profiles'
 import { registerCodexAccountHandlers } from '../accounts/codex-accounts'
 import { registerAgentHookHandlers } from '../agent-hooks/agent-hooks'
-import { registerCodexConfigSyncHandlers } from '../accounts/codex-config-sync'
 import { getPtyIdForPaneKey } from '../pty/pane/key-state'
 import { registerClaudeAccountHandlers } from '../accounts/claude-accounts'
 import { registerUpdaterHandlers } from '../../updater/lifecycle/main-window-updater'
@@ -75,6 +70,7 @@ import {
 import { registerLazyRareIpcHandlers } from './lazy-rare-ipc-handlers'
 import { registerLazyAccountAndDiagnosticIpcHandlers } from './lazy-account-and-diagnostic-ipc-handlers'
 import { registerLazySecondaryIpcHandlers } from './lazy-secondary-ipc-handlers'
+import { registerLazySetupIpcHandlers } from './lazy-setup-ipc-handlers'
 
 let registration: Promise<void> | null = null
 
@@ -112,12 +108,10 @@ export async function registerCoreHandlers(
       // Restart/profile switching closes this through will-quit; this callback covers relaunch exit.
       onBeforeRelaunchExit: () => closeNotificationDismissalsBeforeRelaunch(runtime)
     })
-    registerCliHandlers()
     registerLazyRareIpcHandlers(store)
-    registerPreflightHandlers(store)
+    registerLazySetupIpcHandlers(store, codexAccounts)
     registerCodexAccountHandlers(codexAccounts, () => store.getSettings())
     registerAgentHookHandlers(runtime, { getPtyIdForPaneKey })
-    registerCodexConfigSyncHandlers(codexAccounts.runtimeHomeService)
     registerClaudeAccountHandlers(claudeAccounts, (change, held) =>
       runtime.moveRunningClaudePanes(change, held)
     )
@@ -133,7 +127,6 @@ export async function registerCoreHandlers(
     }
     registerStatsHandlers(stats)
     registerNotificationHandlers(store, runtime)
-    registerOnboardingHandlers(store)
     registerDashboardPopoutHandlers(store, keybindings)
     registerSettingsHandlers(store, agentAwakeService)
     registerLazySkillsHandlers(store, runtime)
@@ -162,7 +155,6 @@ export async function registerCoreHandlers(
     registerUIHandlers(store, { isDashboardPopoutRenderer })
     registerLazyEmulatorHandlers((id) => runtime.getEmulatorBridge()?.getIosVideoStreamUrl(id))
     registerWorkspacePortHandlers(store)
-    registerLocalhostWorktreeLabelHandlers(store)
     registerFilesystemHandlers(store, commitMessageAgentEnv)
     registerFilesystemWatcherHandlers()
     registerRuntimeHandlers(runtime)

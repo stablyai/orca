@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import { URL } from 'node:url'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import {
   LOOPBACK_LOCALHOST_HOSTS,
   normalizeLocalhostHostname,
@@ -13,8 +14,11 @@ import {
   scanWorkspacePortProbes
 } from '../../ports/workspace-port-ownership'
 
-export function registerLocalhostWorktreeLabelHandlers(store: Store): void {
-  ipcMain.handle(
+export function registerLocalhostWorktreeLabelHandlers(
+  store: Store,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
+  ipc.handle(
     'localhostWorktreeLabels:register',
     async (_event, rawArgs: unknown): Promise<LocalhostWorktreeLabelResult> => {
       const route = parseRegisterArgs(rawArgs)
