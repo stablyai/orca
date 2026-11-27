@@ -6510,7 +6510,6 @@
     }
   },
   "mcpServers": {
-    "agentBlocked": "已被你所屬組織的 Claude 設定阻止",
-    "removeMessage": "新的工作階段將不會包含它。你隨時可以再次新增。"
+    "agentBlocked": "已被你所屬組織的 Claude 設定阻止"
   }
 }
