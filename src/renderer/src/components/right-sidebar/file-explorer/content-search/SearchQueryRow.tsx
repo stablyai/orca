@@ -25,7 +25,7 @@ export type SearchQueryRowProps = {
   wholeWord: boolean
   useRegex: boolean
   filtersOpen: boolean
-  /** Include/exclude patterns in effect, e.g. "src/**, !dist/**"; empty when none. */
+  /** Include/exclude patterns in effect, e.g. "Include: src/** · Exclude: dist/**"; empty when none. */
   filterSummary: string
   filtersRegionId?: string
   onQueryChange: (e: React.ChangeEvent<HTMLInputElement>) => void
@@ -99,10 +99,12 @@ export function SearchQueryRow({
         <span
           className={cn(
             'flex shrink-0 items-center',
-            // Why: invisible, not hidden, so revealing the options never shifts the input.
+            // Why: transparent, not invisible or hidden, so the options stay in the tab order and
+            // the a11y tree, tabbing onto one reveals them, and revealing never shifts the input.
+            // Touch has no hover, so coarse pointers always show them.
             pinOptions
-              ? 'visible'
-              : 'invisible group-hover/search:visible group-focus-within/search:visible'
+              ? 'opacity-100'
+              : 'opacity-0 group-hover/search:opacity-100 group-focus-within/search:opacity-100 pointer-coarse:opacity-100'
           )}
           onMouseDown={(event) => {
             // Why: the options keep the query input's focus, but the disclosure takes it, since

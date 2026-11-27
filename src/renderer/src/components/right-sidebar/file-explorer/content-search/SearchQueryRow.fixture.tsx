@@ -5,18 +5,21 @@ import { FileExplorerNameFilter } from '../panel/FileExplorerNameFilter'
 import { FileExplorerQueryStrip } from '../panel/FileExplorerQueryStrip'
 import { SearchFilters } from './SearchFilters'
 import { SearchQueryRow } from './SearchQueryRow'
+import { useSearchFilterSummary } from './use-search-filters-disclosure'
 
 /** The explorer's real query strip with local state; no IPC or store wiring. */
 function QueryStripHarness({
   initialView = 'search',
   initialQuery = '',
   initialRegex = false,
-  initialInclude = ''
+  initialInclude = '',
+  initialExclude = ''
 }: {
   initialView?: RightSidebarExplorerView
   initialQuery?: string
   initialRegex?: boolean
   initialInclude?: string
+  initialExclude?: string
 }): React.JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null)
   const [view, setView] = useState(initialView)
@@ -27,11 +30,11 @@ function QueryStripHarness({
     regex: initialRegex
   })
   const [include, setInclude] = useState(initialInclude)
-  const [exclude, setExclude] = useState('')
-  const [filtersOpen, setFiltersOpen] = useState(initialInclude.length > 0)
-  const filterSummary = [include.trim(), exclude.trim() && `!${exclude.trim()}`]
-    .filter(Boolean)
-    .join(', ')
+  const [exclude, setExclude] = useState(initialExclude)
+  const [filtersOpen, setFiltersOpen] = useState(
+    initialInclude.length > 0 || initialExclude.length > 0
+  )
+  const filterSummary = useSearchFilterSummary(include, exclude)
 
   return (
     <div className="flex h-[220px] flex-col bg-sidebar text-foreground">
@@ -85,7 +88,8 @@ function QueryStripHarness({
           </div>
         </div>
       </FileExplorerQueryStrip>
-      <div className="px-2 pt-2 text-xs text-muted-foreground">
+      {/* Focusable like the real results list, so Shift+Tab from it reaches the field. */}
+      <div tabIndex={0} aria-label="Results" className="px-2 pt-2 text-xs text-muted-foreground">
         <div className="rounded-md bg-accent px-2 py-1 text-foreground">cartStore.ts</div>
         <div className="px-2 py-1">CartDrawer.tsx</div>
       </div>
@@ -110,11 +114,11 @@ export const withQuery = defineFixture({
 })
 export const filtersSet = defineFixture({
   width: 332,
-  render: () => <QueryStripHarness initialInclude="src/**" />
+  render: () => <QueryStripHarness initialInclude="src/**" initialExclude="*.min.js, dist/**" />
 })
 export const filtersSetMinWidth = defineFixture({
   width: 252,
-  render: () => <QueryStripHarness initialInclude="src/**" />
+  render: () => <QueryStripHarness initialInclude="src/**" initialExclude="*.min.js, dist/**" />
 })
 /** Escape on a toggle, not the input, still clears the query and moves focus out of the field. */
 export const escapeFromToggle = defineFixture({

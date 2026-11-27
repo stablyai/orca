@@ -25776,7 +25776,9 @@
     "failed": "Search failed. Try again.",
     "filters": {
       "toggle": "Toggle search details",
-      "active": "{{count}} active"
+      "active": "{{count}} active",
+      "includeSummary": "Include: {{patterns}}",
+      "excludeSummary": "Exclude: {{patterns}}"
     },
     "noResults": "No results. Try another search or adjust your filters."
   },

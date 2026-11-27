@@ -24778,7 +24778,9 @@
     "failed": "La recherche a échoué. Essayer à nouveau.",
     "filters": {
       "toggle": "Afficher ou masquer les détails de la recherche",
-      "active": "{{count}} actifs"
+      "active": "{{count}} actifs",
+      "includeSummary": "Inclure : {{patterns}}",
+      "excludeSummary": "Exclure : {{patterns}}"
     },
     "noResults": "Aucun résultat. Essayez une autre recherche ou ajustez vos filtres."
   },

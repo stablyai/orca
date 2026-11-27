@@ -25039,7 +25039,9 @@
     "failed": "搜尋失敗。再試一次。",
     "filters": {
       "toggle": "顯示或隱藏搜尋詳細設定",
-      "active": "已啟用 {{count}} 個"
+      "active": "已啟用 {{count}} 個",
+      "includeSummary": "包含：{{patterns}}",
+      "excludeSummary": "排除：{{patterns}}"
     },
     "noResults": "沒有結果。請嘗試其他搜尋內容或調整篩選條件。"
   },

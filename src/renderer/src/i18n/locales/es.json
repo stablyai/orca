@@ -25741,7 +25741,9 @@
     "failed": "La búsqueda falló. Reintenta.",
     "filters": {
       "toggle": "Mostrar u ocultar detalles de búsqueda",
-      "active": "{{count}} activos"
+      "active": "{{count}} activos",
+      "includeSummary": "Incluir: {{patterns}}",
+      "excludeSummary": "Excluir: {{patterns}}"
     },
     "noResults": "No hay resultados. Prueba otra búsqueda o ajusta los filtros."
   },
