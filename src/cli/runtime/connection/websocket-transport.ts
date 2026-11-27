@@ -5,7 +5,10 @@ import type {
   RuntimeRpcResponse
 } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
-import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
+import {
+  AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_RUNTIME_CAPABILITY
+} from '../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import {
   AGENT_SESSION_RENAME_ONLY_CLIENT_CAPABILITY,
   PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY,
@@ -34,6 +37,7 @@ import { readRuntimeRpcStagedReply } from '../../../shared/remote-runtime/reques
 // Paired CLI callers are not exempt from the host's agent.launch or chat rename gates like the local socket is.
 export const CLI_CLIENT_CAPABILITIES = [
   AGENT_LAUNCH_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY,
   REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
   REPO_SEARCH_CANONICAL_REFS_RUNTIME_CAPABILITY,
   AGENT_SESSION_RENAME_ONLY_CLIENT_CAPABILITY,

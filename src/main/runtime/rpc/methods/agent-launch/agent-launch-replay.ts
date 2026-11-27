@@ -234,18 +234,24 @@ export async function admitAgentLaunchOperation(
         launch: result
       }
     })
+  let surfaceCommit: Promise<void> | undefined
   let deferredPrompt: AgentLaunchOpening['settlement'] | undefined
   return {
     decision: 'execute',
     attachOperationId,
     callerKey,
-    record: succeeded,
+    record: (provisional) => {
+      surfaceCommit = succeeded(provisional)
+      return surfaceCommit
+    },
     deferPrompt: (settlement) => {
       deferredPrompt = settlement
     },
     settle: async (result, onSettled) => {
       try {
-        return await succeeded(result)
+        return await (deferredPrompt && surfaceCommit
+          ? surfaceCommit.catch(() => succeeded(result))
+          : succeeded(result))
       } finally {
         if (deferredPrompt) {
           // Publish the pending receipt before any definite gate outcome can replace it.

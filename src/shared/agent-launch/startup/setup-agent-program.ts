@@ -61,9 +61,11 @@ export function buildPosixSetupAgentRecheck(timeoutSeconds: number): string[] {
     '  exec 2>/dev/null;',
     '  interrupted=;',
     "  trap 'interrupted=1' HUP INT TERM;",
+    // macOS Bash 3.2 needs a fresh shell to read the supervisor PID.
+    '  supervisor_pid=${BASHPID:-$(BASH_ENV= exec "$BASH" -c \'printf "%s" "$PPID"\')};',
     '  set -m;',
     `  (set +m; eval "$${SETUP_AGENT_RECHECK_ENV}") </dev/null & worker=$!;`,
-    `  (set +m; command -p sleep ${timeoutSeconds} && kill -KILL -- "-$worker") </dev/null & watchdog=$!;`,
+    `  (set +m; command -p sleep ${timeoutSeconds} && { kill -KILL -- "-$worker" || :; kill -TERM "$supervisor_pid"; }) </dev/null & watchdog=$!;`,
     '  cleanup() { kill -KILL -- "-$worker" "-$watchdog" || :; };',
     "  trap 'cleanup; exit 1' HUP INT TERM;",
     '  [ -z "$interrupted" ] || { cleanup; exit 1; };',

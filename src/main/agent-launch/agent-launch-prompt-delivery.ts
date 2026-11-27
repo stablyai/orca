@@ -74,7 +74,8 @@ export async function settleLaunchPromptDisposal(
     const started = await waitForPromiseWithSignal(gate.started, execution.signal).catch(
       () => undefined
     )
-    return started === undefined ? UNCONFIRMED : started ? HANDED_TO_TERMINAL : NOT_DELIVERED
+    // The setup marker precedes the agent wrapper, so it cannot confirm argv handoff.
+    return started === false ? NOT_DELIVERED : UNCONFIRMED
   }
   if (created.structured || created.promptRodeLaunchCommand || gate?.verified === false) {
     return settledAtCreation(execution.intent, created)
