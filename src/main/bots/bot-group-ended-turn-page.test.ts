@@ -116,7 +116,14 @@ it('keeps a removed member’s frozen result rows in the bounded room page', () 
       revision: 1,
       sequence: 1,
       observedAt: 1,
-      body: { kind: 'turn', state: 'completed', outcome: 'failure', completedAt: 2, startedAt: 1 }
+      body: {
+        kind: 'turn',
+        turnId: 'removed-turn',
+        state: 'completed',
+        outcome: 'failure',
+        completedAt: 2,
+        startedAt: 1
+      }
     },
     {
       itemId: 'worker',
