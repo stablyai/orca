@@ -113,12 +113,12 @@ async function readLinearCreateRequest(
     }
   }
   const byTool = referenced?.startsWith('[') === true
-  if (referenced !== undefined && !(byTool ? await toolOwnsTurn() : isLinearUuid(referenced))) {
+  if (!referenced || !(byTool ? await toolOwnsTurn() : isLinearUuid(referenced))) {
     return
   }
   const message = pinned?.opener
   const delivery = message?.origin === 'connector' ? message.connectorDelivery : undefined
-  if (delivery && pinned && (!referenced || byTool) && !delivery.carried?.length) {
+  if (delivery && pinned && byTool && !delivery.carried?.length) {
     const { source, externalId } = delivery.conversation
     const requestId = delivery.deliveryId
     const replyTo = JSON.stringify([source, externalId])
@@ -127,7 +127,7 @@ async function readLinearCreateRequest(
       replyTo,
       readCurrent: async () => null,
       async askOriginOnce(text) {
-        if ((await active())?.key !== pinned.key) {
+        if (!(await sameTurn())) {
           throw new Error('Original turn changed')
         }
         const target = runtime.getExternalConversationSeam()?.replyTarget(chatPaneKey(session))
@@ -162,7 +162,7 @@ async function readLinearCreateRequest(
   ) {
     return
   }
-  if (referenced && !byTool && referenced !== run.runId) {
+  if (!byTool && referenced !== run.runId) {
     return
   }
   const { sourceIssueId, sourceIssueKey, sourceWorkspaceId } = intake
@@ -256,6 +256,9 @@ async function readLinearCreateRequest(
       }
     },
     async askOriginOnce(message) {
+      if (!(await sameTurn())) {
+        throw new Error('Original request is no longer active')
+      }
       await verifyIssue()
       // The return address is the already pinned original Issue, even if the seat has since changed.
       const writeId = clarificationId(requestId, replyTo)

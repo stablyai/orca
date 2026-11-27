@@ -20,6 +20,13 @@ const LedgerCall = lazyZodSchema(() =>
     automationId: z.string().min(1),
     triggerId: z.string().min(1),
     occurredAt: z.number(),
+    linearAdmission: z
+      .object({
+        configuredBotId: z.string().uuid(),
+        ruleRevision: z.number().int().nonnegative(),
+        assignedProjectId: z.string().uuid().nullable()
+      })
+      .optional(),
     subject: z.string().optional(),
     epoch: Epoch,
     sample: z.literal(true).optional(),

@@ -1,9 +1,12 @@
 // Evidence observed at admission. Neither webhook content nor this snapshot is a write grant.
+import type { LedgerCall, LedgerHook } from './webhook-host-ledger'
+import type { Automation } from '../../shared/automations/automation-definition'
+import type { ConnectorDelivery } from '../../shared/connectors/connector-cloud-contract'
 import type { WebhookEnvelope } from '../../shared/connector-webhook-routes'
 import type { LinearIssueIntake } from '../../shared/linear/issue-intake'
-import type {
-  AutomationRunWebhookCall,
-  AutomationWebhookTrigger
+import {
+  automationWebhookTrigger,
+  type AutomationRunWebhookCall
 } from '../../shared/automation-event-triggers'
 import { LINEAR_ISSUE_KEY_PATTERN } from '../../shared/connector-bot-linear-contract'
 import { isLinearUuid } from '../../shared/linear/uuid'
@@ -16,34 +19,61 @@ function uuid(value: unknown): value is string {
   return typeof value === 'string' && isLinearUuid(value)
 }
 
-export function captureLinearIssueIntake(
-  envelope: WebhookEnvelope,
-  call: {
-    callId: string
-    hookId: string
-    triggerId: string
-    subject?: string
-    sample?: true
-    routed?: true
-  },
-  rule: AutomationWebhookTrigger | undefined,
-  configuredBotId: string | undefined
-): LinearIssueIntake | undefined {
+export function linearSeatAtReceipt(
+  delivery: Extract<ConnectorDelivery, { kind: 'trigger' }>,
+  hook: LedgerHook | undefined,
+  automations: readonly Automation[]
+): LedgerCall['linearAdmission'] {
+  const fields = delivery.event.webhook
   if (
-    call.sample ||
-    call.routed ||
-    envelope.truncated ||
-    envelope.body.kind !== 'json' ||
+    !fields ||
+    fields.sample ||
+    !hook ||
+    hook.state !== 'live' ||
+    hook.epoch !== fields.epoch ||
+    hook.automationId !== delivery.automationId
+  ) {
+    return
+  }
+  const target = automations.find((entry) => entry.id === hook.automationId)
+  if (!target?.enabled || target.bot?.botId !== hook.botId) {
+    return
+  }
+  const configuredBotId = hook.botId
+  const rule = automationWebhookTrigger(target)
+  if (
     !rule ||
-    rule.id !== call.triggerId ||
-    rule.id !== `wh-${call.hookId}` ||
+    rule.id !== delivery.triggerId ||
+    rule.id !== `wh-${hook.hookId}` ||
     rule.subjectFrom !== 'body.data.id' ||
     rule.subject !== undefined ||
     !uuid(configuredBotId)
   ) {
     return
   }
+  const filters = rule.where?.filter((filter) => filter.path === 'body.data.projectId') ?? []
+  const filter = filters[0]
+  const project = filter?.values?.[0]
+  const assignedProjectId =
+    filters.length === 1 && filter.op === '=' && filter.values?.length === 1 && uuid(project)
+      ? project
+      : null
+  return { configuredBotId, assignedProjectId, ruleRevision: rule.rev }
+}
 
+function captureLinearIssueIntake(
+  envelope: WebhookEnvelope,
+  call: Pick<LedgerCall, 'subject' | 'sample' | 'routed' | 'linearAdmission'>
+): LinearIssueIntake | undefined {
+  if (
+    !call.linearAdmission ||
+    call.sample ||
+    call.routed ||
+    envelope.truncated ||
+    envelope.body.kind !== 'json'
+  ) {
+    return
+  }
   const body = envelope.body.value
   if (
     !record(body) ||
@@ -56,13 +86,6 @@ export function captureLinearIssueIntake(
     return
   }
 
-  const filters = rule.where?.filter((filter) => filter.path === 'body.data.projectId') ?? []
-  const filter = filters[0]
-  const project = filter?.values?.[0]
-  const assignedProjectId =
-    filters.length === 1 && filter.op === '=' && filter.values?.length === 1 && uuid(project)
-      ? project
-      : null
   return {
     sourceWorkspaceId: body.organizationId,
     sourceIssueKey:
@@ -72,27 +95,18 @@ export function captureLinearIssueIntake(
         : null,
     sourceIssueId: body.data.id,
     sourceProjectId: uuid(body.data.projectId) ? body.data.projectId : null,
-    configuredBotId,
-    assignedProjectId,
-    ruleRevision: rule.rev
+    ...call.linearAdmission
   }
 }
 
 export function webhookRunCall(
   envelope: WebhookEnvelope,
-  call: {
-    callId: string
-    hookId: string
-    triggerId: string
-    subject?: string
-    first?: boolean
-    sample?: true
-    routed?: true
-  },
-  rule: AutomationWebhookTrigger | undefined,
-  configuredBotId: string | undefined
+  call: Pick<
+    LedgerCall,
+    'hookId' | 'callId' | 'first' | 'sample' | 'subject' | 'routed' | 'linearAdmission'
+  >
 ): AutomationRunWebhookCall {
-  const origin = captureLinearIssueIntake(envelope, call, rule, configuredBotId)
+  const origin = captureLinearIssueIntake(envelope, call)
   return {
     ...(origin ? { linearIssueIntake: origin } : {}),
     hookId: call.hookId,
