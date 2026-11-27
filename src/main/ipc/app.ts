@@ -8,7 +8,11 @@ import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'el
 import type { AppIdentity } from '../../shared/app-lifecycle/identity/app-identity'
 import type { MarkdownDocument } from '../../shared/file-listing/file-document'
 import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome/ui-chrome-types'
-import { relaunchApp, runBeforeRelaunchCleanup } from '../startup/quit/app-relaunch'
+import {
+  announceRuntimeRelaunch,
+  relaunchApp,
+  runBeforeRelaunchCleanup
+} from '../startup/quit/app-relaunch'
 import { setWindowMaterialSuppressed } from '../window/presentation/window-material-suppression'
 import { isTrustedUIRenderer } from './ui'
 import { handleAppQuitRequest } from './renderer-requests/app-quit-request'
@@ -204,6 +208,7 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
   ipcMain.handle('app:relaunch', async () => {
     // Delay teardown so the renderer can paint Restarting after cleanup.
     await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
+    await announceRuntimeRelaunch()
     await runBeforeRelaunchCleanup(options.onBeforeRelaunchExit)
     setTimeout(() => {
       // app.exit skips before-quit; remove the Windows tray to avoid a stale icon.
@@ -218,6 +223,7 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
   ipcMain.handle('app:restart', async () => {
     // Normal quit flushes daemon checkpoints and telemetry.
     await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
+    await announceRuntimeRelaunch()
     setTimeout(() => {
       relaunchApp('admin-restart')
       quitProcess()
@@ -227,6 +233,7 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
   ipcMain.handle('app:restartAsAdministrator', async () => {
     const relaunchOptions = prepareWindowsAdministratorRestart()
     await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
+    await announceRuntimeRelaunch()
     setTimeout(() => {
       relaunchApp('windows-administrator', undefined, relaunchOptions)
       quitProcess()
