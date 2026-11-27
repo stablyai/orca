@@ -1,0 +1,73 @@
+import { ipcMain, type BrowserWindow } from 'electron'
+import type { SleepingAgentWakeRequest } from '../../../shared/workspace/lifecycle/workspace-sleep'
+import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
+import { addFanoutListener } from '../../runtime/events/event-listener-fanout'
+import { requestRendererReply } from './renderer-reply-request'
+import { toRuntimeExecutionHostId } from '../../../shared/execution-host/execution-host'
+
+export function requestSleepingPaneWake(
+  window: BrowserWindow,
+  payload: SleepingAgentWakeRequest
+): Promise<boolean> {
+  return requestRendererReply<{ requestId: string; woke: boolean }>(window, {
+    requestChannel: 'ui:resumeSleepingAgents',
+    replyChannel: 'ui:resumeSleepingAgentsReply',
+    payload,
+    timeoutMs: 30_000,
+    timeoutError: 'The agent could not be resumed; open its workspace to try again'
+  }).then((reply) => reply.woke)
+}
+
+/** A pane's wake answers once the window has resumed it; a whole workspace's resume is only sent. */
+export function resumeSleepingAgentsInWindow(
+  window: BrowserWindow,
+  send: (channel: string, payload: unknown) => void,
+  worktreeId: string,
+  paneKey?: string,
+  prepareOnly?: boolean,
+  launchToken?: string
+): Promise<boolean> | void {
+  return paneKey
+    ? requestSleepingPaneWake(window, { worktreeId, paneKey, prepareOnly, launchToken })
+    : send('ui:resumeSleepingAgents', { worktreeId })
+}
+
+export function registerSleepingMailAvailability(
+  window: BrowserWindow,
+  runtime: Pick<OrcaRuntimeService, 'retrySleptMailboxWakes' | 'resendSleepingMailWorktrees'>
+): () => void {
+  const releaseSnapshot = addFanoutListener(
+    ipcMain,
+    'ui:sleepingMailSnapshot',
+    (event: Electron.IpcMainEvent) => {
+      if (
+        event.sender === window.webContents &&
+        event.senderFrame === window.webContents.mainFrame
+      ) {
+        runtime.resendSleepingMailWorktrees()
+      }
+    }
+  )
+  const releaseAvailability = addFanoutListener(
+    ipcMain,
+    'ui:sleepingMailAvailability',
+    (event: Electron.IpcMainEvent, paneKey: unknown, environmentId: unknown) => {
+      if (
+        event.sender === window.webContents &&
+        event.senderFrame === window.webContents.mainFrame &&
+        (paneKey === undefined || typeof paneKey === 'string')
+      ) {
+        // No pane key: a runtime environment became available, so only its failed or tracked wakes retry.
+        const named = typeof environmentId === 'string' && environmentId
+        runtime.retrySleptMailboxWakes(
+          paneKey,
+          paneKey === undefined && (named ? toRuntimeExecutionHostId(named) : true)
+        )
+      }
+    }
+  )
+  return () => {
+    releaseSnapshot()
+    releaseAvailability()
+  }
+}

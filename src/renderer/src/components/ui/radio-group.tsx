@@ -9,7 +9,8 @@ const radioGroupVariants = cva('', {
     layout: {
       default: 'grid gap-2',
       // Sidebar-style rows carry their own padding.
-      rows: 'grid gap-0.5',
+      // Why: an auto column widens to a row's nowrap text; grid-cols-1 lets rows truncate.
+      rows: 'grid grid-cols-1 gap-0.5',
       cards: 'grid gap-3 md:grid-cols-2',
       inline: 'flex flex-wrap items-center gap-2.5'
     }

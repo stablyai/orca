@@ -36,7 +36,6 @@ import {
 } from './agent-session-directories'
 
 export const DEFAULT_CODEX_HOME_DIR = join(homedir(), '.codex')
-const GEMINI_SESSIONS_DIR = join(homedir(), '.gemini', 'tmp')
 const COPILOT_SESSIONS_DIR = join(
   resolveAbsoluteDirOverride(process.env.COPILOT_HOME, join(homedir(), '.copilot')),
   'session-state'
@@ -135,14 +134,6 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     filePredicate: (filePath) =>
       !filePath.toLowerCase().endsWith('.zst') ||
       /^rollout-.+\.jsonl\.zst$/.test(basename(filePath))
-  },
-  gemini: {
-    rootDirs: (options, wslHomeDirs) =>
-      sessionRootDirs(options.geminiSessionsDir ?? GEMINI_SESSIONS_DIR, wslHomeDirs, [
-        '.gemini',
-        'tmp'
-      ]),
-    extensions: ['.json', '.jsonl']
   },
   copilot: {
     rootDirs: (options, wslHomeDirs) =>

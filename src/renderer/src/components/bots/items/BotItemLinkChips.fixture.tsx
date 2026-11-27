@@ -1,5 +1,6 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { fixtureCos } from '../../../component-fixtures/fixture-bot-panel'
+import type { BotItemLinkView } from '../../../../../shared/bots/bot-items'
 import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
 import {
   now,
@@ -34,7 +35,7 @@ export const hoverMergedPr = defineFixture({
   width: 720,
   store,
   setup: signedIn(),
-  render: () => header(LINKS.slice(1, 2)),
+  render: () => header(),
   interact: (frame) => hover(frame, '#41188')
 })
 
@@ -42,7 +43,7 @@ export const hoverIssue = defineFixture({
   width: 720,
   store,
   setup: signedIn(),
-  render: () => header(LINKS.slice(2, 3)),
+  render: () => header(),
   interact: (frame) => hover(frame, '#41201')
 })
 
@@ -72,7 +73,11 @@ export const hoverPassingPr = defineFixture({
   width: 720,
   store,
   setup: signedIn(),
-  render: () => header([pr(41236, 'open', 'success', 'Share link API with expiring tokens')]),
+  render: () =>
+    header([
+      pr(41236, 'open', 'success', 'Share link API with expiring tokens'),
+      pr(41230, 'open', 'failure', 'Share dialog: view-only links by default')
+    ]),
   interact: (frame) => hover(frame, '#41236')
 })
 
@@ -94,14 +99,17 @@ export const lookupFails = defineFixture({
   interact: (frame) => hover(frame, `#${FAILING}`)
 })
 
-/** A GitHub row in the links menu shows the same card. */
+/** "+N": a GitHub row in its popover shows the same card. */
 export const overflowRow = defineFixture({
   width: 420,
   store,
   setup: signedIn(),
-  render: () => header(LINKS),
+  render: () => header(),
   interact: async (frame) => {
-    frame.querySelector<HTMLButtonElement>('button[aria-label="4 links"]')?.click()
+    const more = [...frame.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
+      button.textContent?.startsWith('+')
+    )
+    more?.click()
     await new Promise((resolve) => setTimeout(resolve, 300))
     const row = [
       ...document.querySelectorAll<HTMLButtonElement>('[data-radix-popper-content-wrapper] button')
@@ -129,7 +137,7 @@ export const fileChipTooltip = defineFixture({
   width: 720,
   store,
   setup: signedIn(),
-  render: () => header(LINKS.slice(3, 4)),
+  render: () => header(),
   interact: async (frame) => {
     hoverElement(chip(frame, 'share-dialog-mock'))
     await new Promise((resolve) => setTimeout(resolve, 900))
@@ -182,7 +190,7 @@ export const clickOpensLink = defineFixture({
   width: 720,
   store,
   setup: signedIn(),
-  render: () => <PaneProbe links={LINKS.slice(1, 2)} />,
+  render: () => <PaneProbe />,
   interact: async (frame) => {
     const target = chip(frame, '#41188')
     hoverElement(target)
@@ -210,7 +218,8 @@ export const idle = defineFixture({
   render: () => <PaneProbe />
 })
 
-/** The first lookup fails and a retry answers from the links menu. */
+/** The failing PR's first lookup fails and a retry answers: for driving Retry and a reopened card with
+ *  a real pointer and keyboard, on a chip and, in a short window, in the "+N" list. */
 export const retryRecovers = defineFixture({
   width: 720,
   store,
@@ -231,4 +240,42 @@ export const staleChecksOmitted = defineFixture({
   render: () =>
     header([pr(STALE_CHECKS, 'open', 'success', 'Share dialog: copy-link button', now - 3 * hour)]),
   interact: (frame) => hover(frame, `#${STALE_CHECKS}`)
+})
+
+const MANY: BotItemLinkView[] = Array.from({ length: 1000 }, (_, i): BotItemLinkView => {
+  switch (i % 4) {
+    case 0:
+      return {
+        kind: 'dispatch',
+        ref: `ctx_${i}`,
+        latest: null,
+        title: `Worker ${i}`,
+        state: 'completed',
+        host: null,
+        startedAt: now - hour,
+        settledAt: now - hour / 2,
+        report: { subject: 'Done.', body: null },
+        pr: null
+      }
+    case 1:
+      return { kind: 'url', ref: `https://example.com/runs/${i}` }
+    case 2:
+      return { kind: 'file', ref: `notes/run-${i}.md` }
+    default:
+      return pr(40000 + i, 'merged', 'success', `Change ${i}`)
+  }
+})
+
+/** A busy item's 1,000 links: "+N" lists the first page, scrolled to its Show more. */
+export const thousandLinks = defineFixture({
+  width: 720,
+  store,
+  render: () => header(MANY),
+  interact: async (frame) => {
+    frame.querySelector<HTMLButtonElement>('button[aria-label$="more links"]')?.click()
+    await wait(100)
+    const list = document.querySelector('[data-radix-popper-content-wrapper] .overflow-y-auto')
+    list?.scrollTo({ top: list.scrollHeight })
+    await wait(100)
+  }
 })

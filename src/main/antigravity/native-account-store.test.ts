@@ -286,6 +286,30 @@ describe('protected Antigravity account snapshots', () => {
     expect(h.backend.write).not.toHaveBeenCalled()
   })
 
+  it('restores the selected account at launch after another running agy refreshes a saved login over it', async () => {
+    const h = harness()
+    const selected = (await h.service.addCurrentAccount()).activeAccountId!
+    h.setNative(credential('b', 2))
+    await h.service.addCurrentAccount()
+    await h.service.selectAccount(selected)
+    // An agy still running on b refreshes its token and writes b's login back.
+    h.setNative(refreshedWithoutIdToken(3, 'refresh-2'))
+    // Orca's own sign-in may be about to put an unsaved login there: never restore over it.
+    h.setSignInHeld(true)
+    await expect(h.service.prepareForLaunch()).rejects.toThrow('sign-in is in progress')
+    expect(h.getNative()).toBe(refreshedWithoutIdToken(3, 'refresh-2'))
+    h.setSignInHeld(false)
+    await h.service.prepareForLaunch()
+    expect(h.getNative()).toBe(credential('a'))
+    expect(h.getVault()).toMatchObject({
+      selectedAccountId: selected,
+      accounts: [
+        { credentials: credential('a') },
+        { credentials: refreshedWithoutIdToken(3, 'refresh-2') }
+      ]
+    })
+  })
+
   it('removes the selected account after agy signs in to another one, unblocking launches', async () => {
     const h = harness()
     const id = (await h.service.addCurrentAccount()).activeAccountId!

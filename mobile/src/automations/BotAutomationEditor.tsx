@@ -1,5 +1,6 @@
 // An agent's automation, edited as on the desktop: its name and prompt, the agent it runs as, When,
 // its events (changed by chatting with the agent), where it runs and where its results go.
+import { translate } from '../i18n/mobile-i18n'
 import { useEffect, useRef, useState } from 'react'
 import { Text, View } from 'react-native'
 import { Zap } from 'lucide-react-native'
@@ -14,9 +15,9 @@ import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { FieldTextInput } from '../components/composer-input/FieldTextInput'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { MobileBotAvatar } from '../bots/MobileBotAvatar'
 import { mobileBotAvatarSource } from '../bots/host-bot-row-facts'
@@ -26,7 +27,7 @@ import { readBotAgentChoices } from '../bots/new-bot-host-reads'
 import type { MobileAutomation } from './automation-reply-schema'
 import { automationShowRead, automationUpdateWrite } from './automation-operations'
 import { automationErrorMessage } from './automation-error'
-import { automationStyles } from './automation-styles'
+import { automationStylesSheet } from './automation-styles'
 import {
   botAutomationChanged,
   botAutomationDraft,
@@ -71,8 +72,12 @@ export function BotAutomationEditor(props: {
   present: PresentAutomationSheet
   /** Filled while open, so the page's tab and host switches ask before dropping its edits. */
   leaveGuard?: AutomationLeaveSlot
+  /** In a sheet of its own: Cancel instead of Back, and told while edits or a save are pending. */
+  sheet?: { onChanged: (changed: boolean) => void }
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const automationStyles = useThemedStyles(automationStylesSheet)
   const t = useMobileTranslation()
   const [saved, setSaved] = useState<MobileAutomation | null>(null)
   const [draft, setDraft] = useState<BotAutomationDraft | null>(null)
@@ -109,7 +114,7 @@ export function BotAutomationEditor(props: {
       })
       .catch((failure: unknown) => {
         if (active) {
-          setError(automationErrorMessage(failure))
+          setError(automationErrorMessage(failure, translate))
         }
       })
     void readBotAgentChoices(client).then((choices) => active && setAgents(choices))
@@ -123,6 +128,10 @@ export function BotAutomationEditor(props: {
   const events = saved ? savedTriggers(saved) : []
   const changed = saved !== null && draft !== null && botAutomationChanged(saved, draft)
   const disabled = busy || !props.online || !draft
+  const onChanged = props.sheet?.onChanged
+  useEffect(() => {
+    onChanged?.(changed || busy)
+  }, [changed, busy, onChanged])
   const askInChat = props.onAskInChat
   const leave = (then: () => void) =>
     changed
@@ -192,7 +201,7 @@ export function BotAutomationEditor(props: {
         props.onSaved(automation)
       }
     } catch (failure) {
-      setError(automationErrorMessage(failure))
+      setError(automationErrorMessage(failure, translate))
     } finally {
       setBusy(false)
     }
@@ -202,10 +211,20 @@ export function BotAutomationEditor(props: {
     <SheetHeader
       title={t('automations.mobile.editAutomation', 'Edit automation')}
       subtitle={bot?.name}
-      onBack={{
-        label: t('automations.mobile.back', 'Back'),
-        onPress: () => leave(props.onBack)
-      }}
+      {...(props.sheet
+        ? {
+            leading: {
+              label: t('automations.mobile.cancel', 'Cancel'),
+              onPress: () => leave(props.onBack),
+              disabled: busy
+            }
+          }
+        : {
+            onBack: {
+              label: t('automations.mobile.back', 'Back'),
+              onPress: () => leave(props.onBack)
+            }
+          })}
       trailing={{
         label: t('common.save', 'Save'),
         onPress: () => void save(),
@@ -337,7 +356,7 @@ export function BotAutomationEditor(props: {
                 ...events.map((trigger) => (
                   <ListRow
                     key={trigger.id}
-                    title={eventLabel(trigger)}
+                    title={eventLabel(trigger, t)}
                     wrapTitle
                     leading={<Zap size={17} color={colors.statusAmber} strokeWidth={1.8} />}
                   />
@@ -389,6 +408,6 @@ export function BotAutomationEditor(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   content: { gap: spacing.sm, paddingBottom: spacing.xl }
 }))

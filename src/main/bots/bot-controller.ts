@@ -24,6 +24,7 @@ import { botTemplate } from '../../shared/bots/bot-templates'
 import { templateBotFolderName } from '../../shared/bots/bot-template-view'
 import { botOfferCreation } from './bot-offer-creation'
 import { assertBotOwnsHome, type BotHomeFilesystem, botHomeFolder, writeBotHome } from './bot-home'
+import { type BotSlackIcons, botSlackIconsOf } from './bot-slack-icon-store'
 import { type BotMemoryRecord, hostBotMemoryRecord } from './bot-memory-record'
 import { stampBotLinkOwners } from '../../shared/bot-link-owners'
 import {
@@ -60,6 +61,8 @@ export type BotControllerDependencies = {
   /** Takes the bot out of every group room, as removing it from each would. */
   leaveBotGroups?: (botId: string) => Promise<void>
   botsRoot: () => string
+  /** App-owned folder for the bots' drawn Slack icons, outside their homes. */
+  slackIconsRoot: () => string
   filesystem: BotHomeFilesystem
   /** The Orca account signed in now, recorded on the links a bot gets. */
   accountUserId?: () => string | null
@@ -73,9 +76,12 @@ export class BotController {
 
   /** Each bot's MEMORY.md as Orca last recorded it: turn ends restore against it, Forget edits it. */
   readonly memory: BotMemoryRecord
+  /** The drawn Slack icons of colored or dressed mascots, kept in Orca's app data. */
+  readonly slackIcons: BotSlackIcons
 
   constructor(private readonly deps: BotControllerDependencies) {
     this.memory = hostBotMemoryRecord(deps.filesystem)
+    this.slackIcons = botSlackIconsOf(this, deps, (work) => this.serialize(work))
   }
 
   /** Off, bots take no conversations or runs, and nothing creates or opens one; their homes stay. */

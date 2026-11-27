@@ -1,3 +1,4 @@
+import { childProcessHasExited } from '@orca/process-host/process-tree-termination'
 import { stopSupervisedChildProcess } from '../../provider-process/supervised-child-process-stop'
 import { terminateWindowsProcessTree } from '../../pty/process-retirement/windows-process-tree-kill'
 import type { SpawnedSourceControlAgentProcess } from '../source-control-text-generation-types'
@@ -18,7 +19,7 @@ export async function killSourceControlAgentProcess(
   if (!pid) {
     return
   }
-  if (process.platform === 'win32') {
+  if (process.platform === 'win32' && !childProcessHasExited(child)) {
     // Tree-walk refusal must not release the home lock having killed nothing; root handle kill cannot hit a recycled PID.
     await terminateWindowsProcessTree(pid, { site: SOURCE_CONTROL_KILL_SITE })
   }

@@ -89,8 +89,7 @@ const ENTRIES: AgentPickerEntry[] = [
   entry('claude-agent-teams', 'Claude agent teams', ['terminal'], claudeModels),
   entry('codex', 'Codex', ['chat', 'terminal'], codexModels),
   entry('grok', 'Grok', ['terminal']),
-  entry('opencode', 'OpenCode', []),
-  entry('gemini', 'Gemini', ['terminal'])
+  entry('opencode', 'OpenCode', [])
 ]
 
 function menuModel(entries: AgentPickerEntry[]): NewTabAgentMenuModel {

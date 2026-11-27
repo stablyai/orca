@@ -111,12 +111,19 @@ function applyLaunchPath(env: NodeJS.ProcessEnv, key: string, value: string | nu
   env[key] = value
 }
 
+/** Copy `env` with Orca's launch PATH, so profiles add their entries to a clean PATH, not Orca's merged one. */
+export function withLaunchPath(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const next = { ...env }
+  applyLaunchPath(
+    next,
+    launchPathOverride?.key ?? LAUNCH_PATH_KEY,
+    launchPathOverride?.value ?? LAUNCH_PATH
+  )
+  return next
+}
+
 function shellProbeEnv(): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...process.env, [PROBE_MARKER_ENV_VAR]: '1' }
-  const key = launchPathOverride?.key ?? LAUNCH_PATH_KEY
-  const value = launchPathOverride?.value ?? LAUNCH_PATH
-  applyLaunchPath(env, key, value)
-  return env
+  return withLaunchPath({ ...process.env, [PROBE_MARKER_ENV_VAR]: '1' })
 }
 
 /** Run a synchronous launcher without passing Orca's seeded PATH to its child. */

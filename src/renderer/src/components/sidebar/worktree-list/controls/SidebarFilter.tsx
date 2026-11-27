@@ -304,6 +304,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
                         <RepoBadgeLabel
                           name={r.displayName}
                           color={r.badgeColor}
+                          repo={r}
                           className="max-w-full"
                         />
                         {r.connectionId && (

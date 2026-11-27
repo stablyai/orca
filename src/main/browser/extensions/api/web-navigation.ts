@@ -6,6 +6,7 @@ import {
 
 import { webFrameMain } from 'electron'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { emitBrowserExtensionEvent } from '../api-runtime/browser-extension-api-host'
 import {
   BrowserExtensionApiError,
@@ -63,16 +64,18 @@ function emitNavigation(
   emitBrowserExtensionEvent({ session: contents.session }, 'webNavigation', event, [details])
 }
 
-const getFrameSchema = z
-  .object({
-    tabId: z.number().int(),
-    frameId: z.number().int(),
-    processId: z.number().int(),
-    documentId: z.string()
-  })
-  .partial()
-  .loose()
-const getAllFramesSchema = z.object({ tabId: z.number().int() }).loose()
+const getFrameSchema = lazyZodSchema(() =>
+  z
+    .object({
+      tabId: z.number().int(),
+      frameId: z.number().int(),
+      processId: z.number().int(),
+      documentId: z.string()
+    })
+    .partial()
+    .loose()
+)
+const getAllFramesSchema = lazyZodSchema(() => z.object({ tabId: z.number().int() }).loose())
 
 // Preload-only (see browser-extension-document-targets.ts): Orca's ids for native scripting targets.
 const DOCUMENT_TARGETS_NAMESPACE = 'orcaDocumentTargets'

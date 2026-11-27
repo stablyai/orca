@@ -117,10 +117,12 @@ export async function readPairedHandedAgents(
             state: agent.state,
             ...(agent.workingMode ? { workingMode: agent.workingMode } : {}),
             prompt: agent.prompt,
-            stateStartedAt: agent.stateStartedAt
+            stateStartedAt: agent.stateStartedAt,
+            ...(agent.toolName ? { toolName: agent.toolName } : {})
           },
           worktreeId: row.worktreeId,
           ...(agent.taskTitle ? { taskTitle: agent.taskTitle } : {}),
+          ...(agent.conversationName ? { title: agent.conversationName } : {}),
           hostId
         })
       }

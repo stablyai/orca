@@ -1,7 +1,8 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES } from '../../text-generation/execution/source-control-generation-limits'
 
-const envelope = z.looseObject({ data: z.unknown().optional() })
+const envelope = lazyZodSchema(() => z.looseObject({ data: z.unknown().optional() }))
 
 function unwrap(value: unknown): unknown {
   const parsed = envelope.safeParse(value)

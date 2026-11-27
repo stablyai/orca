@@ -7,7 +7,7 @@ import {
 } from './codex-rollout-prefetch-scope'
 
 import {
-  childIsComplete,
+  childTurnState,
   readChildModel,
   readTurnEnd,
   reconcileCodexTranscriptTurn,
@@ -26,6 +26,12 @@ import type { CodexApprovalsReviewer } from './codex-subagent-reviewer'
 
 import { codexSubagentPathLabel } from './codex-agent-path'
 import {
+  keepCodexSubagentHidden,
+  rememberInterruptedCodexSubagent,
+  takeInterruptedCodexSubagent,
+  type InterruptedCodexSubagent
+} from './codex-interrupted-subagents'
+import {
   finishCodexSubagent,
   queueCodexSubagentIdentity,
   setCodexSubagentModel,
@@ -43,6 +49,10 @@ export type TrackedTranscriptSubagent = JsonlCursor & {
   model?: string
   startedAt: number
   unresolvedSince?: number
+  /** Re-messaged after an interrupt: its interrupted turn ends it, since send_message starts no new turn. */
+  interrupted?: true
+  /** When a resumed child's turn ended; for a grace it is still read, unshown, so a new turn shows it again. */
+  hiddenSince?: number
 }
 
 export type CodexSubagentTranscriptState = {
@@ -50,6 +60,8 @@ export type CodexSubagentTranscriptState = {
   rootTurn: CodexTranscriptTurn
   turnEnds: Map<string, 'completed' | 'failed'>
   subagents: Map<string, TrackedTranscriptSubagent>
+  /** Children retired by an interrupt, kept so a later message can show them working again. */
+  interruptedSubagents: Map<string, InterruptedCodexSubagent>
   /** Incremental reviewer cursors for child rollouts, which must not replace the parent cursor. */
   reviewerCursorsByPath: Map<string, JsonlCursor>
   /** Reviewer ownership discovered from child rollouts, keyed by their bounded cursor paths. */
@@ -64,17 +76,26 @@ function readActivity(recordValue: JsonRecord):
       description?: string
       kind: 'started' | 'interacted' | 'interrupted'
       startedAt: number
+      fromItem: boolean
     }
   | undefined {
   if (recordValue.type !== 'event_msg') {
     return undefined
   }
   const payload = record(recordValue.payload)
-  if (payload?.type !== 'sub_agent_activity') {
+  // Paginated-history rollouts persist activity only as items.
+  const item = payload?.type === 'item_completed' ? record(payload.item) : undefined
+  const activity =
+    payload?.type === 'sub_agent_activity'
+      ? payload
+      : item?.type === 'SubAgentActivity'
+        ? item
+        : undefined
+  if (!activity) {
     return undefined
   }
-  const id = typeof payload.agent_thread_id === 'string' ? payload.agent_thread_id.trim() : ''
-  const rawKind = typeof payload.kind === 'string' ? payload.kind.toLowerCase() : ''
+  const id = typeof activity.agent_thread_id === 'string' ? activity.agent_thread_id.trim() : ''
+  const rawKind = typeof activity.kind === 'string' ? activity.kind.toLowerCase() : ''
   if (
     !SAFE_THREAD_ID.test(id) ||
     (rawKind !== 'started' && rawKind !== 'interacted' && rawKind !== 'interrupted')
@@ -84,13 +105,15 @@ function readActivity(recordValue: JsonRecord):
   return {
     id,
     description:
-      codexSubagentPathLabel(typeof payload.agent_path === 'string' ? payload.agent_path : null) ??
-      undefined,
+      codexSubagentPathLabel(
+        typeof activity.agent_path === 'string' ? activity.agent_path : null
+      ) ?? undefined,
     kind: rawKind,
     startedAt:
-      typeof payload.occurred_at_ms === 'number' && Number.isFinite(payload.occurred_at_ms)
-        ? payload.occurred_at_ms
-        : Date.now()
+      typeof activity.occurred_at_ms === 'number' && Number.isFinite(activity.occurred_at_ms)
+        ? activity.occurred_at_ms
+        : Date.now(),
+    fromItem: activity === item
   }
 }
 
@@ -100,6 +123,7 @@ export function createCodexSubagentTranscriptState(): CodexSubagentTranscriptSta
     rootTurn: { interrupted: false },
     turnEnds: new Map(),
     subagents: new Map(),
+    interruptedSubagents: new Map(),
     reviewerCursorsByPath: new Map(),
     reviewersByPath: new Map()
   }
@@ -115,7 +139,13 @@ export function codexTranscriptTurnEnd(
 export function hasTrackedCodexTranscriptSubagents(
   state: CodexSubagentTranscriptState | undefined
 ): boolean {
-  return Boolean(state && state.subagents.size > 0)
+  // Hidden children only ride along on reads that happen anyway; they never keep the poll alive.
+  for (const child of state?.subagents.values() ?? []) {
+    if (child.hiddenSince === undefined) {
+      return true
+    }
+  }
+  return false
 }
 
 /** Resets per-session state when the parent rollout changes; undefined for an unusable path. */
@@ -138,6 +168,7 @@ function beginCodexTranscriptReconcile(
   state.rootTurn = { interrupted: false }
   state.turnEnds.clear()
   state.subagents.clear()
+  state.interruptedSubagents.clear()
   state.reviewerCursorsByPath.clear()
   state.reviewersByPath.clear()
   // Why: a different rollout is a different session, so its predecessor's reviewer is void.
@@ -180,23 +211,30 @@ export function applyCodexParentTranscript(
     if (!activity) {
       continue
     }
+    const tracked = state.subagents.get(activity.id)
     if (activity.kind === 'interrupted') {
       finishCodexSubagent(roster, activity.id)
       state.subagents.delete(activity.id)
+      if (tracked) {
+        rememberInterruptedCodexSubagent(state, activity.id, tracked)
+      }
       continue
     }
-    const tracked = state.subagents.get(activity.id) ?? {
-      offset: 0,
-      carry: '',
-      startedAt: activity.startedAt
+    const resumed = takeInterruptedCodexSubagent(state, activity.id, activity.startedAt)
+    // Why: hooks already announce children, and a resume's bounded reread must not re-add finished
+    // ones, so items only re-add a child this session saw interrupted.
+    if (activity.fromItem && !resumed) {
+      continue
     }
-    tracked.description = activity.description ?? tracked.description
-    state.subagents.set(activity.id, tracked)
+    const next: TrackedTranscriptSubagent = resumed ??
+      tracked ?? { offset: 0, carry: '', startedAt: activity.startedAt }
+    next.description = activity.description ?? next.description
+    state.subagents.set(activity.id, next)
     upsertCodexSubagent(
       roster,
       activity.id,
-      { description: tracked.description, state: 'working' },
-      tracked.startedAt
+      { description: next.description, state: 'working' },
+      next.startedAt
     )
   }
   return changed
@@ -217,7 +255,10 @@ export function applyCodexChildTranscripts(
   const now = Date.now()
   for (const [id, tracked] of state.subagents) {
     const records = readChild(id, tracked)
-    if (records === 'deferred') {
+    if (
+      records === 'deferred' ||
+      keepCodexSubagentHidden(state, roster, id, tracked, records, now)
+    ) {
       continue
     }
     changed ||= Boolean(records?.length)
@@ -237,13 +278,20 @@ export function applyCodexChildTranscripts(
       tracked.model = readChildModel(records) ?? tracked.model
       // Reapply each poll because parent activity can rebuild the child row and erase its discovered model.
       setCodexSubagentModel(roster, id, tracked.model)
-      if (!childIsComplete(records)) {
+      if (childTurnState(records, tracked.interrupted) !== 'ended') {
         continue
       }
     }
     changed = true
     finishCodexSubagent(roster, id)
+    if (records && tracked.interrupted) {
+      tracked.hiddenSince = now
+      continue
+    }
     state.subagents.delete(id)
+    if (tracked.interrupted) {
+      rememberInterruptedCodexSubagent(state, id, tracked)
+    }
   }
   return changed
 }

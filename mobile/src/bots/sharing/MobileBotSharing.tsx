@@ -7,12 +7,12 @@ import { LoadingSpinner } from '../../components/feedback/LoadingSpinner'
 import { LIST_LEADING_INSET, ListRow } from '../../components/list/ListGroup'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { ConfirmContent } from '../../components/sheets/ConfirmModal'
-import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { intlLocaleFor } from '../../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { DrillRow } from '../../host-screen/workspace-options/workspace-option-rows'
 import { useClipboardWriter } from '../../platform/clipboard/clipboard'
 import { SettingsSection } from '../../settings/settings-screen-frame'
-import { colors } from '../../theme/mobile-theme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { useHostBotsListing } from '../host-bot-store'
 import { mobileBotAvatarSource, type MobileBotAvatarSource } from '../host-bot-row-facts'
@@ -24,6 +24,7 @@ import { stopPhoneBotShare } from './bot-share-operations'
 import { MobileBotShareFlow } from './MobileBotShareFlow'
 import { MobileSharedLinks } from './MobileSharedLinks'
 import { usePhoneBotShareLink, type PhoneShareLinkRead } from './use-phone-bot-share-link'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 type SettingsContext = {
   client: RpcClient | null
@@ -225,7 +226,9 @@ function SharingPage(props: {
   onStop: () => void
   onManageLinks: () => void
 }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const clipboard = useClipboardWriter()
   const { read } = props
   const link = read.kind === 'read' ? read.link : null
@@ -314,7 +317,7 @@ function SharingPage(props: {
           leading={<Link2 size={18} color={colors.textSecondary} />}
           title={botShareUrlText(link.url)}
           subtitle={t('bots.share.updatedAt', 'Updated {{date}}', {
-            date: botShareDate(link.updatedAt, true)
+            date: botShareDate(link.updatedAt, intlLocale, true)
           })}
           accessory={
             <MobileBotTextButton

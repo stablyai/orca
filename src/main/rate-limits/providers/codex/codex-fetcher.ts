@@ -32,6 +32,7 @@ import {
   supplementCodexUsageWindows
 } from './codex-backend-usage-client'
 import type { CodexRateLimitFetchOptions } from './codex-rate-limit-fetch-options'
+import { readCodexBackendOnlyUsage } from './codex-backend-only-usage'
 import { abortedCodexRateLimitResult } from './codex-rate-limit-fetch-result'
 import { terminateCodexProbeChild } from '../../../codex-cli/codex-probe-termination'
 import {
@@ -177,10 +178,11 @@ function codexUnavailable(error: string, status: 'error' | 'unavailable'): Provi
 }
 
 async function fetchBackendUsage(
-  options: CodexRateLimitFetchOptions | undefined
+  options: CodexRateLimitFetchOptions | undefined,
+  readUsage = fetchCodexRateLimitsViaBackend
 ): Promise<ProviderRateLimits | null> {
   try {
-    const result = await fetchCodexRateLimitsViaBackend(requestCodexBackend, options)
+    const result = await readUsage(requestCodexBackend, options)
     if (options?.signal?.aborted) {
       return abortedCodexRateLimitResult()
     }
@@ -222,6 +224,12 @@ async function readCodexRateLimits(
     )
   }
 
+  if (options?.backendUsageOnly) {
+    return (
+      (await fetchBackendUsage(options, readCodexBackendOnlyUsage)) ??
+      codexUnavailable('Codex usage is unavailable', 'error')
+    )
+  }
   const isWslHome = Boolean(options?.codexHomePath && parseWslUncPath(options.codexHomePath))
   const wslBackendResult = isWslHome ? await fetchBackendUsage(options) : null
   if (options?.signal?.aborted) {

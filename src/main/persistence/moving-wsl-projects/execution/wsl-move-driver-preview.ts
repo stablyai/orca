@@ -11,6 +11,13 @@ import {
   wslMoveClaimRefusal
 } from '../orchestration/wsl-move-running-moves'
 import { unreadableSleptHistory } from '../terminal-state/wsl-move-slept-scrollback'
+import { wslMoveScopeCounts } from '../manifest-scope/wsl-move-scope-counts'
+import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime/remote-runtime-client-error'
+import { isRecoverableRemoteRuntimeConnectionError } from '../../../../shared/remote-runtime/remote-runtime-client-error-classification'
+
+export const WSL_MOVE_PREVIEW_RETRY_MS = 1_500
+
+const defaultWait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
 export async function previewWslMove(
   deps: WslMoveDriverDeps,
@@ -19,7 +26,7 @@ export async function previewWslMove(
   options: { settleInterrupted?: WslMoveInterruptedSettle } = {}
 ): Promise<WslMovePreview> {
   if (!options.settleInterrupted) {
-    return previewPrepared(deps, request, false)
+    return previewRetryingTransientHost(deps, request)
   }
   // Settling writes the journal and asks the host, so it holds the distro's run like a move.
   const running = claimWslMoveRun(request.distro)
@@ -30,6 +37,29 @@ export async function previewWslMove(
     return await previewPrepared(deps, request, options.settleInterrupted)
   } finally {
     releaseWslMoveRun(request.distro, running)
+  }
+}
+
+/**
+ * A host still coming up (or a distro slow under load) drops its first call; the preview writes
+ * nothing, so one retry after a pause beats sending the user to "Check again".
+ */
+async function previewRetryingTransientHost(
+  deps: WslMoveDriverDeps,
+  request: WslMoveRequest
+): Promise<WslMovePreview> {
+  try {
+    return await previewPrepared(deps, request, false)
+  } catch (error) {
+    if (
+      !(error instanceof RemoteRuntimeClientError) ||
+      !isRecoverableRemoteRuntimeConnectionError(error)
+    ) {
+      throw error
+    }
+    console.warn('[wsl-move] The host dropped the preview; retrying once:', error.code)
+    await (deps.quiesce.wait ?? defaultWait)(WSL_MOVE_PREVIEW_RETRY_MS)
+    return await previewPrepared(deps, request, false)
   }
 }
 
@@ -63,6 +93,7 @@ async function previewPrepared(
     refused: plan.refused,
     blockers: prepared.blockers,
     mappedDrives: plan.mappedDrives ?? [],
+    counts: wslMoveScopeCounts(prepared.exported),
     ...(host.browserLoginsNotCarried
       ? { browserLoginsNotCarried: host.browserLoginsNotCarried }
       : {})

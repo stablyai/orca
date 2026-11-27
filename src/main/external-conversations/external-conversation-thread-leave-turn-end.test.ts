@@ -93,6 +93,7 @@ it('confirms a leave once, on its own after the answer, and only while the threa
   const outbox = {
     lastAssistantMessage: 'Summary: canary is green.',
     turnProse: 'Summary: canary is green.',
+    turnBotProse: 'Summary: canary is green.',
     turnItemId: 'turn-1',
     stamps: [{ account: 'acct', conversation: thread, deliveryId: 'd1' }]
   }

@@ -1,12 +1,9 @@
 // Markdown cut at a height with Show more: the item's description and its long comments.
-import { createContext, useContext, useId, useLayoutEffect, useRef, useState } from 'react'
+import { useId, useLayoutEffect, useRef, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { BotItemMarkdown } from './BotItemMarkdown'
-
-/** Bumped to open every cut text inside it (a jump to an entry shows its whole question). */
-export const BotItemClampedOpenContext = createContext(0)
 
 export function BotItemClampedText({
   text,
@@ -15,7 +12,8 @@ export function BotItemClampedText({
   quietToggle = false,
   startOpen = false,
   className,
-  render
+  render,
+  onToggle
 }: {
   text: string
   /** The cut's max height. */
@@ -29,18 +27,12 @@ export function BotItemClampedText({
   className?: string
   /** Draws the text in place of the item's Markdown (a question's heading). */
   render?: (text: string) => React.ReactNode
+  /** Before Show more or Show less changes the height. */
+  onToggle?: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [clamped, setClamped] = useState(false)
-  const opened = useContext(BotItemClampedOpenContext)
-  const [seenOpened, setSeenOpened] = useState(opened)
-  if (opened !== seenOpened) {
-    setSeenOpened(opened)
-    if (clamped) {
-      setOpen(true)
-    }
-  }
   const opening = useRef(startOpen)
   const body = useRef<HTMLDivElement | null>(null)
   const id = useId()
@@ -99,7 +91,10 @@ export function BotItemClampedText({
               ? 'mt-1 flex items-center gap-0.5 rounded-sm text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring'
               : 'text-xs font-medium text-foreground hover:underline'
           }
-          onClick={() => setOpen(!open)}
+          onClick={() => {
+            onToggle?.()
+            setOpen(!open)
+          }}
         >
           {open
             ? t('bots.items.view.showLess', 'Show less')

@@ -14,15 +14,16 @@ import { nativeChatToolRowVerbCopy } from './native-chat-tool-row-verb-copy'
 import { nativeChatDiffCardCopy } from '../../../../source-control/review/review-notes/native-chat-diff-card-copy'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { MobileSourceCopyButton } from '../../../../components/code-presentation/MobileSourceCopyButton'
-import { colors, pressedStyle } from '../../../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { pressedStyle } from '../../../../theme/mobile-theme'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileNativeChatOpenedDetail } from '../../visual/mobile-native-chat-opened-detail'
 import { useMobileNativeChatDisclosure } from '../viewport/mobile-native-chat-disclosure-store'
-import { toolStyles as styles, toolType } from './mobile-native-chat-tool-styles'
+import { toolStylesSheet, toolType } from './mobile-native-chat-tool-styles'
 import { useMobileNativeChatOpenFile } from '../../links/mobile-native-chat-open-file-context'
+import { useThemedStyles } from '../../../../theme/themed-styles'
 
 function VerbIcon({ kind, size }: { kind: NativeChatEditFile['changeKind']; size: number }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   const Icon = kind === 'added' ? FilePlus2 : kind === 'deleted' ? FileMinus2 : FilePen
   return <Icon size={size} color={colors.textMuted} strokeWidth={2} />
 }
@@ -36,7 +37,7 @@ function DiffRow({
   gutterChars: number
   type: ReturnType<typeof toolType>['code']
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(toolStylesSheet)
   const t = useMobileTranslation()
   if (line.kind === 'gap') {
     return (
@@ -95,7 +96,7 @@ function DiffCardRows({
   disclosureKey?: string
   rootIdentity?: string
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(toolStylesSheet)
   const onLayout = useMobileNativeChatOpenedDetail()
   const type = toolType(fontScale).code
   const gutterChars = nativeChatEditGutterChars(file)
@@ -139,7 +140,8 @@ export function MobileNativeChatDiffCard({
   rootIdentity?: string
   initialOpen?: boolean
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(toolStylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const copy = nativeChatDiffCardCopy(t)
   const verbs = nativeChatToolRowVerbCopy(t)

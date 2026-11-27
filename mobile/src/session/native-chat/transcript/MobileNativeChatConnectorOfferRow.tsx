@@ -18,11 +18,14 @@ import {
 import { useMobileBotOfferAnswer } from './bot-cards/use-mobile-bot-offer-answer'
 import { MobileNativeChatNoticePill } from './notices/MobileNativeChatNoticePill'
 import { MobileConnectorLogo } from '../../../bots/MobileConnectorSourceIcon'
+import { MobileGhSignedOutLine } from '../../../bots/connectors/MobileGhSignedOutLine'
+import { usePhoneGitHubAccount } from '../../../bots/connectors/use-phone-connector-account'
+import { ghSignedOut } from '../../../../../src/shared/connector-bot-github-contract'
 import type { Translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { colors, typography } from '../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { typography } from '../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../theme/themed-styles'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import { scaledType } from './messages/mobile-native-chat-message-styles'
 
 type ConnectorCardOffer = ConnectorOffer & { source: ConnectorOfferSource }
@@ -109,7 +112,8 @@ export function MobileNativeChatConnectorOfferRow({
   cardId: string
   fontScale: number
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const bot = useHostBotById(offer.botId)
   const answer = useMobileBotOfferAnswer(offer.botId, cardId)
@@ -119,6 +123,15 @@ export function MobileNativeChatConnectorOfferRow({
   const host = useMobileBotCardHost()
   const cloudStatus = useHostBotsEntry(host?.hostKey ?? null)?.connectorStatus
   const paused = connected && offer.source !== 'google' && cloudStatus === 'signed-out'
+  // The host's GitHub read, shared with its Connectors pages, says whether its gh is signed in.
+  const github = usePhoneGitHubAccount(
+    host?.client ?? null,
+    host?.hostKey ?? '',
+    connected && offer.source === 'github',
+    0
+  )
+  const ghOut =
+    offer.source === 'github' && github.view.status === 'ready' && ghSignedOut(github.view.value)
   const panel = useBotPanelOpener(offer.botId)
   const openSetup = panel ? () => panel.open({ settings: connectPage(offer.source, bot) }) : null
   // As the desktop: an offer naming another workspace of a source the bot has adds that workspace.
@@ -157,6 +170,9 @@ export function MobileNativeChatConnectorOfferRow({
               {t('bots.connectorOffer.connected', 'Connected')}
             </Text>
           </View>
+          {ghOut && host ? (
+            <MobileGhSignedOutLine host={host.hostLabel} card={{ fontScale }} />
+          ) : null}
           {/* As the desktop card's add action. */}
           {offer.addAccess && offer.source !== 'google' ? (
             openSetup ? (
@@ -218,7 +234,7 @@ export function MobileNativeChatConnectorOfferRow({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   connected: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   detail: { color: colors.textMuted },
   error: { color: colors.statusRed }

@@ -1,4 +1,6 @@
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import { z } from 'zod'
 import { isChromeExtensionId } from '../../../shared/browser/extensions/browser-extension-url'
 import type {
@@ -19,8 +21,10 @@ import { registerBrowserExtensionToolbarHandlers } from './browser-extension-too
 import { registerBrowserExtensionSidePanelHandlers } from './browser-extension-side-panels'
 import { registerBrowserExtensionWebStoreHandlers } from './browser-extension-webstore'
 
-const profileArgs = z.object({ profileId: z.string().min(1) })
-const extensionArgs = profileArgs.extend({ extensionId: z.string().refine(isChromeExtensionId) })
+const profileArgs = lazyZodSchema(() => z.object({ profileId: z.string().min(1) }))
+const extensionArgs = lazyZodSchema(() =>
+  profileArgs.extend({ extensionId: z.string().refine(isChromeExtensionId) })
+)
 const UNTRUSTED: BrowserExtensionActionResult = { ok: false, error: 'Not allowed' }
 
 const CHANNELS = [
@@ -34,14 +38,16 @@ const CHANNELS = [
 ] as const
 
 /** Settings › Browser › Extensions; only the trusted Orca renderer may manage extensions. */
-export function registerBrowserExtensionHandlers(): void {
-  for (const channel of CHANNELS) {
-    ipcMain.removeHandler(channel)
+export function registerBrowserExtensionHandlers(ipc: IpcHandleRegistrar = ipcMain): void {
+  if (ipc === ipcMain) {
+    for (const channel of CHANNELS) {
+      ipcMain.removeHandler(channel)
+    }
   }
-  registerBrowserExtensionToolbarHandlers()
-  registerBrowserExtensionSidePanelHandlers()
-  registerBrowserExtensionWebStoreHandlers()
-  ipcMain.handle(
+  registerBrowserExtensionToolbarHandlers(ipc)
+  registerBrowserExtensionSidePanelHandlers(ipc)
+  registerBrowserExtensionWebStoreHandlers(ipc)
+  ipc.handle(
     'browserExtensions:list',
     (event, args: unknown): Promise<BrowserExtensionListResult> => {
       const parsed = profileArgs.safeParse(args)
@@ -51,7 +57,7 @@ export function registerBrowserExtensionHandlers(): void {
       return listBrowserExtensionsForProfile(parsed.data.profileId)
     }
   )
-  ipcMain.handle('browserExtensions:setEnabled', (event, args: unknown) => {
+  ipc.handle('browserExtensions:setEnabled', (event, args: unknown) => {
     const parsed = extensionArgs.extend({ enabled: z.boolean() }).safeParse(args)
     if (!isTrustedBrowserRenderer(event.sender) || !parsed.success) {
       return UNTRUSTED
@@ -59,35 +65,35 @@ export function registerBrowserExtensionHandlers(): void {
     const { profileId, extensionId, enabled } = parsed.data
     return setBrowserExtensionEnabled(profileId, extensionId, enabled)
   })
-  ipcMain.handle('browserExtensions:remove', (event, args: unknown) => {
+  ipc.handle('browserExtensions:remove', (event, args: unknown) => {
     const parsed = extensionArgs.safeParse(args)
     if (!isTrustedBrowserRenderer(event.sender) || !parsed.success) {
       return UNTRUSTED
     }
     return removeBrowserExtension(parsed.data.extensionId)
   })
-  ipcMain.handle('browserExtensions:loadUnpacked', (event, args: unknown) => {
+  ipc.handle('browserExtensions:loadUnpacked', (event, args: unknown) => {
     const parsed = profileArgs.extend({ directory: z.string().min(1) }).safeParse(args)
     if (!isTrustedBrowserRenderer(event.sender) || !parsed.success) {
       return UNTRUSTED
     }
     return addUnpackedBrowserExtension(parsed.data.profileId, parsed.data.directory)
   })
-  ipcMain.handle('browserExtensions:reload', (event, args: unknown) => {
+  ipc.handle('browserExtensions:reload', (event, args: unknown) => {
     const parsed = extensionArgs.safeParse(args)
     if (!isTrustedBrowserRenderer(event.sender) || !parsed.success) {
       return UNTRUSTED
     }
     return reloadUnpackedBrowserExtension(parsed.data.extensionId)
   })
-  ipcMain.handle('browserExtensions:openOptions', (event, args: unknown) => {
+  ipc.handle('browserExtensions:openOptions', (event, args: unknown) => {
     const parsed = extensionArgs.safeParse(args)
     if (!isTrustedBrowserRenderer(event.sender) || !parsed.success) {
       return UNTRUSTED
     }
     return openBrowserExtensionOptions(parsed.data.profileId, parsed.data.extensionId)
   })
-  ipcMain.handle('browserExtensions:reviewUpdate', (event, args: unknown) => {
+  ipc.handle('browserExtensions:reviewUpdate', (event, args: unknown) => {
     const parsed = extensionArgs.safeParse(args)
     if (!isTrustedBrowserRenderer(event.sender) || !parsed.success) {
       return UNTRUSTED

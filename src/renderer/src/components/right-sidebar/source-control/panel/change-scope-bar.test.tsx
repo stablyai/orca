@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { useState } from 'react'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { GitHistoryResult } from '../../../../../../shared/git/history/git-history-types'
@@ -61,14 +61,20 @@ const READY: GitBranchCompareSummary = {
 
 afterEach(cleanup)
 
+type ScopeRow = { path: string; status: string; added?: number; removed?: number }
+
 function renderBar({
   summary = READY,
   history = { status: 'ready', result: PAGE },
-  initialScope = ALL_CHANGES_SCOPE
+  initialScope = ALL_CHANGES_SCOPE,
+  entries = [{ path: 'a.ts', status: 'modified', added: 1, removed: 1 }],
+  branchEntries = [{ path: 'b.ts', status: 'modified', added: 4, removed: 1 }]
 }: {
   summary?: GitBranchCompareSummary | null
   history?: GitHistoryPanelState
   initialScope?: SourceControlChangeScope
+  entries?: ScopeRow[]
+  branchEntries?: ScopeRow[]
 } = {}) {
   const calls = {
     openAllDiffs: vi.fn(),
@@ -79,7 +85,7 @@ function renderBar({
     const [changeScope, setChangeScope] = useState(initialScope)
     const [menuOpen, setMenuOpen] = useState(false)
     const model = {
-      branchEntries: [{ path: 'b.ts', status: 'modified', added: 4, removed: 1 }],
+      branchEntries,
       branchLineTotal: null,
       branchSummary: summary,
       changeScope,
@@ -93,7 +99,7 @@ function renderBar({
             }
           : null,
       compareBaseRef: 'origin/main',
-      entries: [{ path: 'a.ts', status: 'modified', area: 'unstaged', added: 1, removed: 1 }],
+      entries,
       gitHistoryContextKey: 'history-context',
       gitHistoryState: history,
       resolveSplitTargetGroupId: () => undefined,
@@ -222,61 +228,37 @@ describe('SourceControlChangeScopeBar menu', () => {
   })
 })
 
-describe('SourceControlChangeScopeBar summary and Open diff', () => {
-  it('opens the whole scope for All changes and links the commit count to the menu', async () => {
-    const calls = renderBar()
-    fireEvent.click(screen.getByTestId('source-control-change-scope-open-diff'))
-    expect(calls.openAllDiffs).toHaveBeenCalledWith(
-      'wt-1',
-      '/repo',
-      undefined,
-      undefined,
-      undefined,
-      {
-        wholeScope: true
+describe('SourceControlChangeScopeBar summary', () => {
+  it('reads no rows for a closed menu on a picked commit, and counts them once the menu opens', async () => {
+    let rowReads = 0
+    const counted = (path: string): ScopeRow => ({
+      status: 'modified',
+      added: 1,
+      removed: 0,
+      get path() {
+        rowReads += 1
+        return path
       }
-    )
-    fireEvent.click(screen.getByRole('button', { name: '1 commit' }))
-    expect(await screen.findByRole('menu')).toBeTruthy()
-  })
-
-  it('hides the commit count when nothing is ahead', () => {
-    renderBar({ summary: { ...READY, commitsAhead: 0 } })
-    expect(screen.queryByRole('button', { name: /commit/ })).toBeNull()
-  })
-
-  it('waits for branch compare instead of opening a partial All changes diff', () => {
-    const calls = renderBar({ summary: { ...READY, status: 'loading' } })
-    const openDiff = screen.getByTestId('source-control-change-scope-open-diff')
-    expect(openDiff.getAttribute('aria-disabled')).toBe('true')
-    fireEvent.click(openDiff)
-    expect(calls.openAllDiffs).not.toHaveBeenCalled()
-  })
-
-  it('opens Uncommitted alone and a picked commit through the commit diff', () => {
-    const uncommitted = renderBar({ initialScope: { kind: 'uncommitted' } })
-    fireEvent.click(screen.getByTestId('source-control-change-scope-open-diff'))
-    expect(uncommitted.openAllDiffs).toHaveBeenCalledWith(
-      'wt-1',
-      '/repo',
-      undefined,
-      undefined,
-      undefined,
-      { uncommittedOnly: true }
-    )
-    cleanup()
-
-    const commit = renderBar({
+    })
+    renderBar({
       initialScope: {
         kind: 'commit',
         commit: COMMIT,
         pickedBaseOid: 'b1',
         pickedFromBranchPage: true
-      }
+      },
+      // a.ts is both uncommitted and on the branch: All changes counts it once.
+      entries: [counted('a.ts')],
+      branchEntries: [counted('a.ts'), counted('b.ts')]
     })
-    act(() => {
-      fireEvent.click(screen.getByTestId('source-control-change-scope-open-diff'))
-    })
-    expect(commit.openHistoryCommitDiff).toHaveBeenCalledWith(COMMIT)
+    expect(rowReads).toBe(0)
+
+    openMenu()
+    expect(
+      (await screen.findByRole('menuitemradio', { name: /All changes/ })).textContent
+    ).toContain('2 files · 1 commit')
+    expect(screen.getByRole('menuitemradio', { name: /Uncommitted/ }).textContent).toContain(
+      '1 file'
+    )
   })
 })

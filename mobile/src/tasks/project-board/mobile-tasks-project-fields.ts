@@ -2,7 +2,7 @@ import {
   projectContentField,
   projectContentFieldLabel
 } from '../../../../src/shared/github/projects/project-content-field'
-import { translate } from '../../i18n/mobile-i18n'
+import type { Translate } from '../../i18n/mobile-i18n'
 import type { GitHubProjectTable as SharedGitHubProjectTable } from '../../../../src/shared/github/projects/project-types'
 import {
   isIterationCurrent,
@@ -55,7 +55,11 @@ export function projectFieldValueLabel(row: GitHubProjectRow, field: GitHubProje
   return 'Empty'
 }
 
-export function projectFieldDisplayLabel(row: GitHubProjectRow, field: GitHubProjectField): string {
+export function projectFieldDisplayLabel(
+  t: Translate,
+  row: GitHubProjectRow,
+  field: GitHubProjectField
+): string {
   const contentValue = projectContentField(row.content, field.dataType)
   if (contentValue !== undefined) {
     if (!contentValue) {
@@ -69,7 +73,7 @@ export function projectFieldDisplayLabel(row: GitHubProjectRow, field: GitHubPro
     return [
       label,
       overflow > 0
-        ? translate('tasks.githubProjectList.linkedPullRequestsOverflow', '+{{count}} more', {
+        ? t('tasks.githubProjectList.linkedPullRequestsOverflow', '+{{count}} more', {
             count: overflow
           })
         : ''

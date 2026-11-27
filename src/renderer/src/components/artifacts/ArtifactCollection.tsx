@@ -1,14 +1,15 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import type { ArtifactListItem } from '../../../../shared/artifacts/artifacts'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/class-names'
 import { clampArtifactListSearchQuery, filterArtifactsBySearchQuery } from './artifact-list-search'
 import { ArtifactListRows } from './ArtifactListRows'
 import { ArtifactListTableHeader } from './ArtifactListTableHeader'
-import { ArtifactListToolbar } from './ArtifactListToolbar'
-import { LIST_TABLE_CONTAINER_CLASS } from '@/lib/list-interaction/list-table-layout'
+import { ArtifactListSearchField } from './ArtifactListSearchField'
+import { RailPageBody, RailPageScroll } from '@/components/rail-page/RailPage'
+import { RailPageToolbar } from '@/components/rail-page/RailPageToolbar'
+import { RailPageSearch } from '@/components/rail-page/RailPageSearch'
 
 export function ArtifactCollection({
   artifacts,
@@ -19,8 +20,7 @@ export function ArtifactCollection({
   hasMore,
   loadingMore,
   loadMore,
-  onRefresh,
-  isRefreshing
+  notice
 }: {
   artifacts: readonly ArtifactListItem[]
   deletingId: string | null
@@ -30,11 +30,12 @@ export function ArtifactCollection({
   hasMore: boolean
   loadingMore: boolean
   loadMore: () => void
-  onRefresh: () => void
-  isRefreshing: boolean
+  /** The page's notice band (load error), drawn under the toolbar. */
+  notice?: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
   const [query, setQuery] = useState('')
+  const searchInputRef = useRef<HTMLInputElement>(null)
   // Clamp before state/filtering so multi-MB pastes cannot reach either.
   const onQueryChange = (next: string): void => setQuery(clampArtifactListSearchQuery(next))
   const matches = useMemo(() => filterArtifactsBySearchQuery(artifacts, query), [artifacts, query])
@@ -42,17 +43,25 @@ export function ArtifactCollection({
   const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null)
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-4 md:px-5">
-      <div className="flex min-h-0 flex-1 flex-col gap-4">
-        <ArtifactListToolbar
-          query={query}
-          onQueryChange={onQueryChange}
-          onRefresh={onRefresh}
-          isRefreshing={isRefreshing}
-        />
-        <div
+    <>
+      <RailPageToolbar
+        end={
+          <RailPageSearch inputRef={searchInputRef} hasValue={query !== ''} focusTarget="page">
+            <ArtifactListSearchField
+              inputRef={searchInputRef}
+              query={query}
+              onQueryChange={onQueryChange}
+              onClear={() => onQueryChange('')}
+            />
+          </RailPageSearch>
+        }
+      />
+      {notice}
+      <RailPageBody>
+        {/* Not padded: rows pad from the page gutter so hairlines and sticky cells share the page edges. */}
+        <RailPageScroll
           ref={setScrollElement}
-          className={cn('scrollbar-sleek min-h-0 flex-1 overflow-auto', LIST_TABLE_CONTAINER_CLASS)}
+          className="scrollbar-sleek min-h-0 flex-1 overflow-auto"
         >
           <ArtifactListTableHeader />
           {/* Avoid w-fit row bands: they extend hover/selection washes to scroll width beyond the viewport. */}
@@ -72,7 +81,7 @@ export function ArtifactCollection({
             </p>
           )}
           {hasMore ? (
-            <div className="border-t border-border/50 p-2">
+            <div className="border-t border-border/50 rail-page-row-gutter py-2">
               <Button
                 type="button"
                 variant="ghost"
@@ -86,8 +95,8 @@ export function ArtifactCollection({
               </Button>
             </div>
           ) : null}
-        </div>
-      </div>
-    </section>
+        </RailPageScroll>
+      </RailPageBody>
+    </>
   )
 }

@@ -16,6 +16,7 @@ import {
   SESSION_TABS_TAB_DELTA_RUNTIME_CAPABILITY
 } from './session-tabs-runtime-capabilities'
 import { WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY } from './worktree-runtime-capabilities'
+import { AI_VAULT_CHAT_ROWS_CLIENT_CAPABILITY } from '../../ai-vault/contracts/ai-vault-runtime-capabilities'
 import { ORCHESTRATION_PERSON_APPROVALS_CLIENT_CAPABILITY } from '../../orchestration/orchestration-runtime-capabilities'
 import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
@@ -50,5 +51,7 @@ export const ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
   // A person answers worker approvals in this window.
   ORCHESTRATION_PERSON_APPROVALS_CLIENT_CAPABILITY,
   // The renderer draws an agent's Google setup cards, Connect included.
-  GOOGLE_SETUP_CARDS_CLIENT_CAPABILITY
+  GOOGLE_SETUP_CARDS_CLIENT_CAPABILITY,
+  // History's Show more counts the rows a host hid, so a chat may list once.
+  AI_VAULT_CHAT_ROWS_CLIENT_CAPABILITY
 ] as const

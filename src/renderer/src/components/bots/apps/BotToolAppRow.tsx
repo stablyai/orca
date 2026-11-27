@@ -30,7 +30,8 @@ export function BotToolLogo({
   name: string
   /** The tool's server URL, whose host can name the app. */
   detail?: string
-  size?: 'sm' | 'md'
+  /** lg: a server page's header. */
+  size?: 'sm' | 'md' | 'lg'
 }): React.JSX.Element {
   const source = botAppLogoSource(name, detail)
   if (source?.kind === 'brand') {
@@ -43,7 +44,7 @@ export function BotToolLogo({
     <BotAppLogo
       plain
       size={size}
-      icon={<Wrench className={size === 'sm' ? 'size-3' : 'size-4'} />}
+      icon={<Wrench className={size === 'sm' ? 'size-3' : size === 'lg' ? 'size-5' : 'size-4'} />}
     />
   )
 }

@@ -1,26 +1,29 @@
 // The owner hands a workspace to a bot (Hand to bot…): what Orca tells the bot, and what its chat shows.
 import * as z from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 import { TOOK_OVER_GOAL_HEADING, TOOK_OVER_TURN_PREFIX } from '../native-chat/took-over-notice'
 
 export const BOT_TAKE_OVER_GOAL_MAX = 4_000
 
-const Name = z.string().trim().min(1).max(200)
+const Name = lazyZodSchema(() => z.string().trim().min(1).max(200))
 
-export const BotTakeOverSchema = z.object({
-  workspace: z.object({
-    id: z.string().min(1),
-    name: Name,
-    project: Name.optional(),
-    /** The paired computer it runs on, by the name the owner sees; absent on this computer. */
-    computer: Name.optional(),
-    /** Its environment id, for `--environment` on a paired computer. */
-    environment: z.string().min(1).optional()
-  }),
-  /** Its agents, as the sidebar card names them ("Codex"); they keep running and work for the bot. */
-  agents: z.array(Name).max(50),
-  /** What the owner wants done with it, in their words; absent, the bot asks. */
-  goal: z.string().trim().min(1).max(BOT_TAKE_OVER_GOAL_MAX).optional()
-})
+export const BotTakeOverSchema = lazyZodSchema(() =>
+  z.object({
+    workspace: z.object({
+      id: z.string().min(1),
+      name: Name,
+      project: Name.optional(),
+      /** The paired computer it runs on, by the name the owner sees; absent on this computer. */
+      computer: Name.optional(),
+      /** Its environment id, for `--environment` on a paired computer. */
+      environment: z.string().min(1).optional()
+    }),
+    /** Its agents, as the sidebar card names them ("Codex"); they keep running and work for the bot. */
+    agents: z.array(Name).max(50),
+    /** What the owner wants done with it, in their words; absent, the bot asks. */
+    goal: z.string().trim().min(1).max(BOT_TAKE_OVER_GOAL_MAX).optional()
+  })
+)
 
 export type BotTakeOver = z.infer<typeof BotTakeOverSchema>
 

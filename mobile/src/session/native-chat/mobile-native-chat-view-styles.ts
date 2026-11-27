@@ -1,16 +1,16 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { feedback, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 
 const FLOATING_CONTROLS_BOTTOM = spacing.md
 const LOAD_EARLIER_HEIGHT = 44
 const RETRY_PILL_HEIGHT = 28
 
-export const styles = themedStyleSheet(() => ({
+export const stylesSheet = themedStyleSheet((colors) => ({
   hidden: { display: 'none' },
   root: {
     flex: 1,
-    backgroundColor: colors.bgBase
+    backgroundColor: colors.chatCanvas
   },
   inputLockStatusRow: {
     flexDirection: 'row',
@@ -52,30 +52,10 @@ export const styles = themedStyleSheet(() => ({
     flex: 1,
     position: 'relative'
   },
+  // Clear of the edge fades at either end.
   listContent: {
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.lg,
     flexGrow: 1
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xl
-  },
-  emptyPicture: {
-    marginBottom: spacing.sm
-  },
-  emptyTitle: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    textAlign: 'center',
-    marginBottom: spacing.xs
-  },
-  emptySubtitle: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    textAlign: 'center'
   },
   fab: {
     width: 38,
@@ -108,7 +88,7 @@ export const styles = themedStyleSheet(() => ({
     borderColor: colors.borderSubtle
   },
   retryPillPressed: {
-    opacity: 0.6
+    opacity: feedback.pressedOpacity
   },
   retryPillLabel: {
     color: colors.textSecondary,

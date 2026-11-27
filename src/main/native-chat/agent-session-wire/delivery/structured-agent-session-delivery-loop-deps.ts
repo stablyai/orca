@@ -44,8 +44,8 @@ export type StructuredAgentSessionDeliveryLoopDeps = {
   immediatePermission?: (sessionId: string) => AgentChatPermissionChoice | null
   stopPermissionTransitionChild?: (sessionId: string) => Promise<void>
   retainedWork?: (sessionId: string, continuingId: string) => Promise<boolean>
-  /** Orca changed the bot's tools since this child launched and it owes no work (see
-   *  `StructuredAgentSessionHostDeps.launchTools.outdated`): the input needs a child that has them. */
+  /** Orca changed this chat's tools since its child launched and it owes no work (see
+   *  `launchToolsRefreshDue`): the input needs a child that has them. */
   launchToolsRefreshDue?: (sessionId: string, continuingId: string) => Promise<boolean>
   readiness: (
     sessionId: string,
@@ -75,4 +75,38 @@ export type StructuredAgentSessionDeliveryLoopDeps = {
   acquireAborts: Pick<StructuredAgentSessionAcquireAborts, 'begin'>
   recordRanOptions?: StructuredAgentSessionRanRecorder
   turnContext?: StructuredAgentSessionTurnContext | undefined
+}
+
+/**
+ * `launchTools.outdated` (no I/O) says Orca wrote some tools a chat may use since its child launched;
+ * only `changed` says they are this chat's, so an edit to tools it doesn't get never restarts it.
+ */
+export function launchToolsRefreshDue(
+  launchTools:
+    | {
+        outdated: (sessionId: string) => boolean
+        changed: (sessionId: string) => Promise<boolean>
+      }
+    | undefined,
+  owesWork: (sessionId: string, continuingId: string) => Promise<boolean>,
+  /** See `StructuredAgentSessionAdapter.keptLaunchOutgrown`. */
+  keptLaunchOutgrown?: (
+    sessionId: string,
+    toolsOutdated: boolean
+  ) => boolean | undefined | Promise<boolean | undefined>
+): ((sessionId: string, continuingId: string) => Promise<boolean>) | undefined {
+  if (!launchTools && !keptLaunchOutgrown) {
+    return undefined
+  }
+  return async (sessionId, continuingId) => {
+    const outdated = launchTools?.outdated(sessionId) === true
+    const kept = await keptLaunchOutgrown?.(sessionId, outdated)
+    const outgrown = kept === true
+    return (
+      kept !== false &&
+      (outgrown || outdated) &&
+      !(await owesWork(sessionId, continuingId)) &&
+      (outgrown || (await launchTools?.changed(sessionId)) === true)
+    )
+  }
 }
