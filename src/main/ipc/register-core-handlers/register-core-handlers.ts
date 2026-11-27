@@ -1,4 +1,3 @@
-import { app } from 'electron'
 import { registerAppHandlers } from '../app'
 import { canCreateWslHostService } from '../wsl/wsl-host-service-availability'
 import { registerNonWindowsWslIpcStubs } from '../wsl/non-windows-wsl-ipc-stubs'
@@ -22,8 +21,7 @@ import { registerRateLimitHandlers } from '../rate-limits'
 import { registerRuntimeHandlers } from '../runtime'
 import { registerRuntimeHostHandlers } from './runtime-host-handler-registration'
 import { registerLazyEphemeralVmHandlers } from '../ephemeral-vm/lazy-ephemeral-vm-handlers'
-import { registerAiVaultHandlers } from '../ai-vault/ai-vault'
-import { registerAiVaultSearchHandlers } from '../ai-vault/ai-vault-search'
+import { registerLazyAiVaultHandlers } from '../ai-vault/lazy-ai-vault-handlers'
 import { registerNativeChatHandlers } from '../native-chat'
 import { registerNotificationHandlers } from '../notifications/notifications'
 import { registerOnboardingHandlers } from '../onboarding'
@@ -64,22 +62,12 @@ import type { AgentAwakeService } from '../../power/agent-awake-service'
 import type { CrashReportStore } from '../../crash-reporting/reports/crash-report-store'
 import type { KeybindingService } from '../../keybindings/keybinding-service'
 import {
-  getSavedRuntimeAiVaultHostInfos,
-  deleteRuntimeAiVaultSession,
-  prepareRuntimeAiVaultSessionResume,
-  resolveRuntimeAiVaultSessionTitles,
-  scanRuntimeAiVaultSessions
-} from '../../ai-vault/runtime-hosts/runtime-session-scanner'
-import { callRuntimeSessionSearch } from '../../ai-vault/runtime-hosts/runtime-session-search-call'
-import { configureRuntimeAiVaultSessionDelete } from '../ai-vault/ai-vault-delete'
-import {
   ensurePersistedStructuredAgentSessionHostUnlessRefused,
   ensureStructuredAgentSessionHostUnlessRefused
 } from '../../runtime/agent-session/installation/structured-agent-session-host-refusal'
 import { getAgentSessionAttachmentStore } from '../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import type { PluginService } from '../../plugins/plugin-service'
 import type { PluginMarketplaceHandlerServices } from '../plugins/plugin-marketplaces'
-import { getRuntimeEnvironmentRegistryRoot } from '../runtime-environments/catalog/runtime-environment-registry-root'
 import {
   closeNotificationDismissalsBeforeRelaunch,
   type CoreHandlerLifecycleOptions
@@ -196,42 +184,11 @@ export async function registerCoreHandlers(
       ensurePersistedStructuredAgentSessionHostUnlessRefused(() =>
         runtime.ensureStructuredAgentSessionHost()
       )
-    registerAiVaultSearchHandlers({
-      callRuntimeSearch: (environmentId, method, params) =>
-        callRuntimeSessionSearch(
-          getRuntimeEnvironmentRegistryRoot(),
-          environmentId,
-          method,
-          params
-        ),
-      ensureStructuredSessionOwnership
-    })
-    registerAiVaultHandlers({
-      getUserDataPath: () => app.getPath('userData'),
+    registerLazyAiVaultHandlers({
       ensureStructuredSessionOwnership,
       getAdditionalCodexHomePaths: lifecycleOptions.getAdditionalAiVaultCodexHomePaths,
-      prepareSessionResume: lifecycleOptions.prepareAiVaultSessionResume,
-      getActiveRuntimeAiVaultHostInfos: async () =>
-        await getSavedRuntimeAiVaultHostInfos(getRuntimeEnvironmentRegistryRoot()),
-      scanRuntimeAiVaultSessions: async (environmentId, args, options) =>
-        scanRuntimeAiVaultSessions(
-          getRuntimeEnvironmentRegistryRoot(),
-          environmentId,
-          args,
-          options
-        ),
-      resolveRuntimeAiVaultSessionTitles: async (environmentId, args) =>
-        resolveRuntimeAiVaultSessionTitles(
-          getRuntimeEnvironmentRegistryRoot(),
-          environmentId,
-          args
-        ),
-      prepareRuntimeSessionResume: async (environmentId, args) =>
-        prepareRuntimeAiVaultSessionResume(getRuntimeEnvironmentRegistryRoot(), environmentId, args)
+      prepareSessionResume: lifecycleOptions.prepareAiVaultSessionResume
     })
-    configureRuntimeAiVaultSessionDelete((environmentId, args) =>
-      deleteRuntimeAiVaultSession(getRuntimeEnvironmentRegistryRoot(), environmentId, args)
-    )
     registerNativeChatHandlers()
     registerClipboardHandlers((path) => resolveDesktopAuthorizedPath(path, store), {
       localChatAttachmentStore: async () => {

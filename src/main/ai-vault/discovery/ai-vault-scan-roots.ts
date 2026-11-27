@@ -13,21 +13,13 @@ import { managedOpenCodeAccountDataDirs } from '../../opencode/accounts/opencode
 import { antigravityChatBrainDir } from '../../antigravity/antigravity-chat-home'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import { prepareOpenCodeWslReaders } from '../scanners/opencode/reader-transport/opencode-wsl-runtime-preparation'
+import { getAiVaultSessionSources } from './ai-vault-session-sources-registry'
 
-// Configure sources through the runtime service; headless serve never runs window-only IPC registration.
-export type AiVaultSessionSources = {
-  getAdditionalCodexHomePaths?: () => readonly string[]
-}
-
-let sources: AiVaultSessionSources = {}
-
-export function configureAiVaultSessionSources(next: AiVaultSessionSources): void {
-  sources = next
-}
-
-export function resetAiVaultSessionSourcesForTests(): void {
-  sources = {}
-}
+export {
+  configureAiVaultSessionSources,
+  resetAiVaultSessionSourcesForTests,
+  type AiVaultSessionSources
+} from './ai-vault-session-sources-registry'
 
 type LocalAiVaultScanRoots = Required<
   Pick<AiVaultScanOptions, 'additionalCodexSessionsDirs' | 'wslHomeDirs'>
@@ -79,7 +71,7 @@ export async function resolveLocalAiVaultScanRoots(): Promise<{
 
 /** Resume validation must use the same extra Codex homes that discovery lists. */
 export function configuredAdditionalCodexHomePaths(): readonly string[] {
-  return sources.getAdditionalCodexHomePaths?.() ?? []
+  return getAiVaultSessionSources().getAdditionalCodexHomePaths?.() ?? []
 }
 
 /** Trust cached absence of any distro; otherwise a confirmed running list (E9). */
