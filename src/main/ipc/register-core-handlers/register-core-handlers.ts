@@ -37,8 +37,10 @@ import { registerBrowserServerDownloadCopyHandlers } from '../browser/browser-se
 import { setTrustedBrowserRendererWebContentsId } from '../browser/browser-renderer-trust'
 import { registerSessionHandlers } from '../session'
 import { registerSettingsHandlers } from '../settings/settings'
-import { registerSkillsHandlers } from '../skills/skills'
-import { registerSkillDeleteIpcHandlers } from '../skill-delete/handlers'
+import {
+  registerLazySkillDeleteIpcHandlers,
+  registerLazySkillsHandlers
+} from '../skills/lazy-skills-handlers'
 import { registerWorkspaceSpaceHandlers } from '../workspace-space/workspace-space'
 import { registerWorkspacePortHandlers } from '../ports/workspace-ports'
 import { registerLocalhostWorktreeLabelHandlers } from '../ports/localhost-worktree-labels'
@@ -156,8 +158,8 @@ export async function registerCoreHandlers(
     registerTerminalPreviewHandlers(runtime)
     registerTerminalRenderDesyncEvidenceHandler()
     registerSettingsHandlers(store, agentAwakeService)
-    registerSkillsHandlers(store, runtime)
-    registerSkillDeleteIpcHandlers(store, runtime)
+    registerLazySkillsHandlers(store, runtime)
+    registerLazySkillDeleteIpcHandlers(store, runtime)
     if (automations) {
       registerAutomationHandlers(store, automations)
     }
