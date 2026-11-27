@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { testOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
+import { formatOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
 import { dispatchReportMailbox } from '../../../orchestration/workers/reports/dispatch-report-mailbox'
 import { OrchestrationDb } from '../../../orchestration/db/orchestration-db'
 import { observeWorkerWorking } from '../../../orchestration/workers/turn-stops/worker-working-observation'
@@ -64,10 +65,12 @@ const worktree = {
 
 const paneKey = mintStructuredWorkerPaneKey(SESSION_Y)
 const SUCCESSOR = testOrcaSessionId('8c673b73-db35-4202-a1b7-9d9dacfd17fb')
+const NATIVE_SESSION = testOrcaSessionId('2df381c4-5547-40d1-832e-f1ba372df683')
+const NATIVE_ADDRESS = formatOrcaSessionAddress(NATIVE_SESSION)
 const processIncarnation = structuredWorkerProcessIncarnation(SESSION_Y)
 const hostScope = JSON.stringify({ kind: 'local', hostId: 'local' })
 
-describe('follow-up custody for a closed retained worker chat', () => {
+describe('follow-up custody for retained worker chats', () => {
   let h: SessionCallerHarness
   let runId: string
   let handle: string
@@ -76,6 +79,7 @@ describe('follow-up custody for a closed retained worker chat', () => {
   let observedCustody: unknown[]
   let observedStages: unknown[]
   let deliveredTo: { sessionId: string; expectedRuntimeFence: number | null }[]
+  let surfaces: Pick<StructuredAgentSessionHost, 'isSessionTabVisible' | 'revealSession' | 'send'>
 
   function custodyRows(): unknown[] {
     return h.db.db
@@ -139,6 +143,73 @@ describe('follow-up custody for a closed retained worker chat', () => {
     )
   }
 
+  async function settledNativeChat() {
+    h.records.set(NATIVE_SESSION, sessionRecord(NATIVE_SESSION))
+    visible.add(NATIVE_SESSION)
+    const queue = surfaces.send
+    const submitAtOnce: StructuredAgentSessionHost['send'] = async (caller, request) => {
+      const sent = await queue(caller, request)
+      const clientMessageId = request.envelope.clientOperationId
+      return sent.ok
+        ? {
+            ...sent,
+            value: {
+              clientMessageId,
+              submission: {
+                clientMessageId,
+                fence: 7,
+                payloadFingerprint: 'native-chat-task',
+                dispatchState: 'accepted',
+                providerItemId: 'native-turn',
+                reason: null,
+                submittedAt: 1,
+                resolvedAt: 2
+              }
+            }
+          }
+        : sent
+    }
+    Object.assign(hostRef.current!, { send: submitAtOnce })
+    const started = resultOf(
+      await h.dispatch(
+        orchestrationRequest(
+          'orchestration.workerStart',
+          {
+            from: ADDRESS_X,
+            run: runId,
+            spec: 'Use the existing engineer chat',
+            terminal: NATIVE_ADDRESS,
+            keepOpen: true
+          },
+          { sessionId: SESSION_X }
+        )
+      )
+    )
+    const dispatchId = String(started.dispatchId)
+    const taskId = String(started.taskId)
+    expect(started).toMatchObject({ state: 'ready' })
+    expect(h.db.getWorkerDispatch(dispatchId)).toMatchObject({ worktree_id: WORKSPACE_X })
+    expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)).toMatchObject({
+      terminal_handle: NATIVE_ADDRESS,
+      ownership_state: 'external'
+    })
+    resultOf(
+      await h.dispatch(
+        orchestrationRequest(
+          'orchestration.send',
+          {
+            from: NATIVE_ADDRESS,
+            type: 'worker_done',
+            subject: 'First work finished',
+            payload: JSON.stringify({ taskId, dispatchId, outcome: 'succeeded' })
+          },
+          { sessionId: NATIVE_SESSION }
+        )
+      )
+    )
+    return { dispatchId, taskId }
+  }
+
   beforeEach(async () => {
     visible = new Set([SESSION_X])
     observedCustody = []
@@ -154,10 +225,7 @@ describe('follow-up custody for a closed retained worker chat', () => {
         lease: { claimStatus: 'released', ownerProcess: null, reservedSpawnToken: null }
       })
     )
-    const surfaces: Pick<
-      StructuredAgentSessionHost,
-      'isSessionTabVisible' | 'revealSession' | 'send'
-    > = {
+    surfaces = {
       isSessionTabVisible: (sessionId) => visible.has(sessionId),
       revealSession: async (sessionId) => ({
         sessionId,
@@ -238,6 +306,141 @@ describe('follow-up custody for a closed retained worker chat', () => {
       assignee_orca_session_id: SESSION_Y,
       creator_orca_session_id: SESSION_X
     })
+  })
+
+  it('continues an existing native chat without taking ownership or creating a new chat', async () => {
+    const { dispatchId, taskId } = await settledNativeChat()
+    const continued = resultOf(
+      await h.dispatch(
+        orchestrationRequest(
+          'orchestration.send',
+          {
+            from: ADDRESS_X,
+            to: `dispatch:${dispatchId}`,
+            subject: 'Review follow-up',
+            body: 'Continue in the existing engineer chat'
+          },
+          { sessionId: SESSION_X }
+        )
+      )
+    )
+    expect(continued).toMatchObject({ delivery: 'follow_up', followUpOf: dispatchId })
+    const successor = String(continued.dispatchId)
+    expect(h.db.getDispatchContextById(dispatchId)).toMatchObject({ status: 'completed' })
+    expect(h.db.getTask(taskId)).toMatchObject({ status: 'completed' })
+    expect(h.db.getDispatchContextById(successor)).toMatchObject({
+      status: 'dispatched',
+      assignee_handle: NATIVE_ADDRESS,
+      assignee_orca_session_id: NATIVE_SESSION,
+      follow_up_of_dispatch_id: dispatchId
+    })
+    expect(h.db.getTask(String(continued.taskId))).toMatchObject({ status: 'dispatched' })
+    expect(h.db.getWorkerDispatch(successor)).toMatchObject({
+      state: 'ready',
+      agent_terminal_handle: NATIVE_ADDRESS
+    })
+    resultOf(
+      await h.dispatch(
+        orchestrationRequest(
+          'orchestration.send',
+          {
+            from: NATIVE_ADDRESS,
+            type: 'worker_done',
+            subject: 'Follow-up finished',
+            payload: JSON.stringify({
+              taskId: continued.taskId,
+              dispatchId: successor,
+              outcome: 'succeeded'
+            })
+          },
+          { sessionId: NATIVE_SESSION }
+        )
+      )
+    )
+    expect(h.db.getDispatchContextById(successor)).toMatchObject({ status: 'completed' })
+    expect(h.db.getTask(String(continued.taskId))).toMatchObject({ status: 'completed' })
+    const nativeResources = h.db.db
+      .prepare(
+        `SELECT owner_dispatch_id, ownership_state, auto_release_at
+           FROM worker_terminal_resources WHERE terminal_handle = ? ORDER BY created_at, id`
+      )
+      .all(NATIVE_ADDRESS)
+    expect(nativeResources).toHaveLength(2)
+    expect(nativeResources).toEqual(
+      expect.arrayContaining([
+        {
+          owner_dispatch_id: dispatchId,
+          ownership_state: 'external',
+          auto_release_at: null
+        },
+        {
+          owner_dispatch_id: successor,
+          ownership_state: 'external',
+          auto_release_at: null
+        }
+      ])
+    )
+    expect(h.db.requestWorkerTerminalRelease(dispatchId)).toMatchObject({
+      disposition: 'retained',
+      reason: 'external_terminal'
+    })
+    expect(h.db.requestWorkerTerminalRelease(successor)).toMatchObject({
+      disposition: 'retained',
+      reason: 'external_terminal'
+    })
+    expect(deliveredTo.filter(({ sessionId }) => sessionId === NATIVE_SESSION)).toEqual([
+      { sessionId: NATIVE_SESSION, expectedRuntimeFence: 7 },
+      { sessionId: NATIVE_SESSION, expectedRuntimeFence: 7 }
+    ])
+  })
+
+  it.each([
+    {
+      change: 'moved to another workspace',
+      error: () => ({ code: 'terminal_worktree_mismatch' }),
+      apply: () =>
+        h.records.set(
+          NATIVE_SESSION,
+          sessionRecord(NATIVE_SESSION, { location: { workspaceId: 'other-workspace' } })
+        )
+    },
+    {
+      change: 'closed',
+      error: (dispatchId: string) => ({
+        code: 'runtime_error',
+        message: expect.stringContaining(`Dispatch ${dispatchId} has no worker Orca started`)
+      }),
+      apply: () => visible.delete(NATIVE_SESSION)
+    }
+  ])('refuses a native chat $change before creating follow-up work', async ({ error, apply }) => {
+    const { dispatchId } = await settledNativeChat()
+    const before = [
+      h.db.db.prepare('SELECT id, status FROM tasks ORDER BY id').all(),
+      h.db.db.prepare('SELECT id, status FROM dispatch_contexts ORDER BY id').all(),
+      h.db.db.prepare('SELECT * FROM worker_terminal_resources ORDER BY id').all()
+    ]
+    apply()
+    const refused = await h.dispatch(
+      orchestrationRequest(
+        'orchestration.send',
+        {
+          from: ADDRESS_X,
+          to: `dispatch:${dispatchId}`,
+          subject: 'Follow up after the chat moved',
+          body: 'Keep the original workspace'
+        },
+        { sessionId: SESSION_X }
+      )
+    )
+    expect(refused).toMatchObject({ ok: false, error: error(dispatchId) })
+    expect([
+      h.db.db.prepare('SELECT id, status FROM tasks ORDER BY id').all(),
+      h.db.db.prepare('SELECT id, status FROM dispatch_contexts ORDER BY id').all(),
+      h.db.db.prepare('SELECT * FROM worker_terminal_resources ORDER BY id').all()
+    ]).toEqual(before)
+    expect(deliveredTo.filter(({ sessionId }) => sessionId === NATIVE_SESSION)).toEqual([
+      { sessionId: NATIVE_SESSION, expectedRuntimeFence: 7 }
+    ])
   })
 
   it('reconciles a replacement history that ends in the outgoing owner', async () => {
