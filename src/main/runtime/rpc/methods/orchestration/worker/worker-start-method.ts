@@ -84,12 +84,13 @@ export async function startWorker(
     startParams.origin !== undefined
       ? await checkedWorkerOrigin(startParams.origin, ctx, startFollowUp?.of)
       : undefined
+  const prepared = await prepareWorkerStart(
+    checked ? { ...startParams, origin: checked.origin } : startParams,
+    ctx,
+    startFollowUp
+  )
   const { params, followUp, coordinator, bindRun, helperCreator, taskDeps, existingTask, withRun } =
-    await prepareWorkerStart(
-      checked ? { ...startParams, origin: checked.origin } : startParams,
-      ctx,
-      startFollowUp
-    )
+    prepared
   const db = runtime.getOrchestrationDb()
   const questionLink =
     params.forQuestion !== undefined
@@ -138,9 +139,7 @@ export async function startWorker(
   })
   await stopHelperAfterStart(runtime, receipt, orchestrationMutation)
   const note = { itemUid: checked?.itemUid, chatLineage, terminal: params.terminal }
-  void noteTerminalFallbackOnItem(runtime, note, receipt).catch((error: unknown) => {
-    console.warn('[orchestration] item fallback note failed', error)
-  })
+  void noteTerminalFallbackOnItem(runtime, note, receipt).catch(warnItemNote)
   const next = withKeepOpenDefault(runtime, params.worktree, withWorkerStartNext(receipt))
   const started = withTerminalUsage(runtime, withLink(withRun(next)))
   return checked && started && typeof started === 'object'
@@ -258,7 +257,11 @@ export async function prepareWorkerStart(
     )
   }
   if (helperCreator && !followUp) {
-    assertHelperStartScope(db, helperCreator, { task: existingTask, params })
+    assertHelperStartScope(db, helperCreator, {
+      task: existingTask,
+      params,
+      ...(followUp ? { followUp } : {})
+    })
   }
   if (existingTask) {
     await assertWorkerStartTaskSpecWithinPromptBudget(existingTask.spec)
@@ -299,4 +302,8 @@ export async function prepareWorkerStart(
     existingTask,
     withRun
   }
+}
+
+function warnItemNote(error: unknown): void {
+  console.warn('[orchestration] item fallback note failed', error)
 }
