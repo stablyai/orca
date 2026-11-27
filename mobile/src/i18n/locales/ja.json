@@ -34,7 +34,6 @@
   "agentHistory": {
     "panel": {
       "all": "全て",
-      "emptyScope": "この範囲には過去の Agent セッションがありません。",
       "hideDetails": "詳細を非表示",
       "showDetails": "詳細を表示",
       "loading": "Agent セッションを読み込み中…",
@@ -65,14 +64,10 @@
       "untitledSession": "無題のセッション"
     },
     "sessionHistoryList": {
-      "currentWorktree": "現在のワークツリー",
       "messages_one": "{{count}} 件のメッセージ",
       "messages_other": "{{count}} 件のメッセージ",
       "resumeSession": "Agent セッションを再開",
-      "continueInCli": "CLIで続行",
-      "hidePreview": "最近のメッセージを非表示にします。",
-      "showPreview": "最近のメッセージを表示します。",
-      "you": "あなた"
+      "continueInCli": "CLIで続行"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "ホストに接続できません",

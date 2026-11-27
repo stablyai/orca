@@ -34,7 +34,6 @@
   "agentHistory": {
     "panel": {
       "all": "Toutes",
-      "emptyScope": "Aucune session d'agent passée dans ce périmètre.",
       "hideDetails": "Masquer les détails",
       "showDetails": "Afficher les détails",
       "loading": "Chargement des sessions d'agent…",
@@ -66,15 +65,11 @@
       "untitledSession": "Session sans titre"
     },
     "sessionHistoryList": {
-      "currentWorktree": "worktree actuel",
       "messages_many": "{{count}} messages",
       "messages_one": "{{count}} message",
       "messages_other": "{{count}} messages",
       "resumeSession": "Reprendre la session d'agent",
-      "continueInCli": "Continuer en CLI",
-      "hidePreview": "Masque les messages récents.",
-      "showPreview": "Affiche les messages récents.",
-      "you": "Vous"
+      "continueInCli": "Continuer en CLI"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "Impossible de joindre l'hôte",

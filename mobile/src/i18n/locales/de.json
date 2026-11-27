@@ -34,7 +34,6 @@
   "agentHistory": {
     "panel": {
       "all": "Alle",
-      "emptyScope": "Keine früheren Agentensitzungen in diesem Bereich.",
       "hideDetails": "Details ausblenden",
       "showDetails": "Details anzeigen",
       "loading": "Agentensitzungen werden geladen…",
@@ -65,14 +64,10 @@
       "untitledSession": "Sitzung ohne Titel"
     },
     "sessionHistoryList": {
-      "currentWorktree": "Aktueller Worktree",
       "messages_one": "{{count}} Nachricht",
       "messages_other": "{{count}} Nachrichten",
       "resumeSession": "Agentensitzung fortsetzen",
-      "continueInCli": "In CLI fortsetzen",
-      "hidePreview": "Blendet die letzten Nachrichten aus.",
-      "showPreview": "Zeigt die letzten Nachrichten an.",
-      "you": "Du"
+      "continueInCli": "In CLI fortsetzen"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "Host nicht erreichbar",

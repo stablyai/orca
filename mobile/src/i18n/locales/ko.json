@@ -34,7 +34,6 @@
   "agentHistory": {
     "panel": {
       "all": "모두",
-      "emptyScope": "이 범위에는 이전 에이전트 세션이 없습니다.",
       "hideDetails": "세부 정보 숨기기",
       "showDetails": "세부 정보 표시",
       "loading": "에이전트 세션 로드 중…",
@@ -65,14 +64,10 @@
       "untitledSession": "제목 없는 세션"
     },
     "sessionHistoryList": {
-      "currentWorktree": "현재 워크트리",
       "messages_one": "메시지 {{count}}개",
       "messages_other": "메시지 {{count}}개",
       "resumeSession": "에이전트 세션 재개",
-      "continueInCli": "CLI에서 계속",
-      "hidePreview": "최근 메시지를 숨깁니다.",
-      "showPreview": "최근 메시지를 표시합니다.",
-      "you": "나"
+      "continueInCli": "CLI에서 계속"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "호스트에 연결할 수 없습니다.",

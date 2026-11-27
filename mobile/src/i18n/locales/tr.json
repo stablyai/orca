@@ -34,7 +34,6 @@
   "agentHistory": {
     "panel": {
       "all": "Tümü",
-      "emptyScope": "Bu kapsamda geçmiş ajan oturumu yok.",
       "missingResumeId": "Bu oturumun devam ettirme kimliği eksik.",
       "noSearchResults": "Aramanızla eşleşen oturum yok.",
       "noSessions": "Ajan oturumu yok",
@@ -65,14 +64,10 @@
       "untitledSession": "Başlıksız oturum"
     },
     "sessionHistoryList": {
-      "currentWorktree": "mevcut worktree",
       "messages_one": "{{count}} mesaj",
       "messages_other": "{{count}} mesaj",
       "resumeSession": "Ajan oturumuna devam et",
-      "continueInCli": "CLI'de Devam Et",
-      "hidePreview": "Son mesajları gizler.",
-      "showPreview": "Son mesajları gösterir.",
-      "you": "Siz"
+      "continueInCli": "CLI'de Devam Et"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "Sunucuya ulaşılamadı",
