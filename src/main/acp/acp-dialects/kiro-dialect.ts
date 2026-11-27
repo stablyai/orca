@@ -1,11 +1,14 @@
 import { fileURLToPath } from 'node:url'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
 import type { AcpDialect } from './acp-dialect'
 
-const skillMetaSchema = z.looseObject({
-  _meta: z.looseObject({ kiro: z.looseObject({ type: z.literal('skill') }) })
-})
+const skillMetaSchema = lazyZodSchema(() =>
+  z.looseObject({
+    _meta: z.looseObject({ kiro: z.looseObject({ type: z.literal('skill') }) })
+  })
+)
 
 // Kiro's V3 engine names a diff's file with a file:// URI where ACP expects a path.
 function diffPath(path: string): string {

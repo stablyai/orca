@@ -6,11 +6,8 @@ import type { StructuredAgentSessionAtRestCommands } from '../../native-chat/age
 import type { StructuredAgentSessionChildWorkProducer } from '../../native-chat/agent-session-wire/observations/structured-agent-session-subagent-rows'
 import type { StructuredAgentSessionLifecycleEvent } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
-import type {
-  AgentJournalItemIdentity,
-  AgentSessionJournalIdentity
-} from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { AgentJournalDispatchRejection } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AcpDispatchSettlement } from '../turns/acp-turn-dispatch-contract'
 import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
 import type { ConnectAcpAgent } from '../process/acp-structured-connection'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
@@ -38,6 +35,11 @@ export type AcpStructuredSessionAdapterDeps = {
   /** Protected by this host's instance lock. */
   dataDirectory: string
   connect: ConnectAcpAgent
+  /** The chat's running turn and its latest unanswered send, for a kept agent to carry on, and
+   *  when the prompt it owes was sent. */
+  keptWork?: (
+    sessionId: string
+  ) => Promise<{ turnId: string | null; unansweredSendId: string | null; sentAt?: number | null }>
   readProcessStartTime?: (pid: number) => Promise<number | null>
   onEvent?: (event: StructuredAgentSessionLifecycleEvent) => void
   /** `producer` is the reporting child's sink for durable changes. */
@@ -46,13 +48,7 @@ export type AcpStructuredSessionAdapterDeps = {
     evidence: AgentChildWorkEvidence[],
     producer?: StructuredAgentSessionChildWorkProducer
   ) => void
-  onDispatchSettledLate?: (
-    settlement: { sessionId: string; clientMessageId: string } & (
-      | { providerIdentity: AgentJournalItemIdentity }
-      | ({ state: 'rejected' } & AgentJournalDispatchRejection)
-      | { state: 'unknown'; reason: string }
-    )
-  ) => void
+  onDispatchSettledLate?: (settlement: { sessionId: string } & AcpDispatchSettlement) => void
   logger?: StructuredAgentSessionLogger
   now?: () => number
   mintGeneration?: () => string

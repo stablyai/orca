@@ -82,14 +82,31 @@ export type StructuredAgentSessionDeliveryLoopDeps = {
  * only `changed` says they are this chat's, so an edit to tools it doesn't get never restarts it.
  */
 export function launchToolsRefreshDue(
-  launchTools: {
-    outdated: (sessionId: string) => boolean
-    changed: (sessionId: string) => Promise<boolean>
-  },
-  owesWork: (sessionId: string, continuingId: string) => Promise<boolean>
-): (sessionId: string, continuingId: string) => Promise<boolean> {
-  return async (sessionId, continuingId) =>
-    launchTools.outdated(sessionId) &&
-    !(await owesWork(sessionId, continuingId)) &&
-    (await launchTools.changed(sessionId))
+  launchTools:
+    | {
+        outdated: (sessionId: string) => boolean
+        changed: (sessionId: string) => Promise<boolean>
+      }
+    | undefined,
+  owesWork: (sessionId: string, continuingId: string) => Promise<boolean>,
+  /** See `StructuredAgentSessionAdapter.keptLaunchOutgrown`. */
+  keptLaunchOutgrown?: (
+    sessionId: string,
+    toolsOutdated: boolean
+  ) => boolean | undefined | Promise<boolean | undefined>
+): ((sessionId: string, continuingId: string) => Promise<boolean>) | undefined {
+  if (!launchTools && !keptLaunchOutgrown) {
+    return undefined
+  }
+  return async (sessionId, continuingId) => {
+    const outdated = launchTools?.outdated(sessionId) === true
+    const kept = await keptLaunchOutgrown?.(sessionId, outdated)
+    const outgrown = kept === true
+    return (
+      kept !== false &&
+      (outgrown || outdated) &&
+      !(await owesWork(sessionId, continuingId)) &&
+      (outgrown || (await launchTools?.changed(sessionId)) === true)
+    )
+  }
 }

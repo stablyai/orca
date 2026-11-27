@@ -9,6 +9,8 @@ const CALL_QUIET_MS = 120_000
 type AcpAgentTurnLane = {
   readonly translator: AcpTimelineTranslator
   apply(events: readonly ProviderTimelineEvent[]): void
+  /** An agent turn ended: nothing more of it streams. */
+  agentTurnEnded?(): void
 }
 
 /** Unprompted agent work has no end of its own; quiet, Stop or the next send ends it. */
@@ -33,9 +35,13 @@ export class AcpAgentTurnQuiet {
     this.timer = setTimeout(
       () => {
         this.timer = null
-        this.lane.apply(this.lane.translator.endAgentTurn(at))
+        const events = this.lane.translator.endAgentTurn(at)
+        this.lane.apply(events)
+        if (events.length > 0) {
+          this.lane.agentTurnEnded?.()
+        }
       },
-      calls === 'running' ? CALL_QUIET_MS : QUIET_MS
+      calls.running ? CALL_QUIET_MS : QUIET_MS
     )
   }
 
@@ -50,6 +56,7 @@ export class AcpAgentTurnQuiet {
     const events = this.lane.translator.endAgentTurn(this.now(), stopReason)
     if (events.length > 0) {
       this.lane.apply(events)
+      this.lane.agentTurnEnded?.()
     }
     return events.length > 0
   }

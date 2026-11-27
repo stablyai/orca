@@ -45,6 +45,8 @@ export class AcpStructuredChildren {
   readonly sessions = new Map<string, AcpStructuredChild>()
   /** Children that ended before they were ready answer for that ending, open included. */
   readonly endings = new AgentSessionStartEndings()
+  /** Per chat, its acquisition that reattached a kept agent which had already ended. */
+  readonly endedBeforeAcquire = new Map<string, string>()
   readonly starts = new ProviderAcquisitionStarts<AcpStructuredConnection>()
   constructor(private readonly deps: AcpStructuredSessionAdapterDeps) {}
   capturePendingOutput: StructuredAgentSessionAdapter['capturePendingOutput'] = (input) => {
@@ -198,6 +200,7 @@ export class AcpStructuredChildren {
         sessionId: session.sessionId,
         fence: session.fence,
         acquisitionGeneration: session.acquisitionGeneration,
+        ...(session.endedBeforeAcquire ? { endedBeforeAcquire: true as const } : {}),
         observedAt,
         cause: session.closeRequested ? 'requested-close' : 'unexpected-exit',
         reason:

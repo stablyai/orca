@@ -10,7 +10,7 @@ import {
 } from './native-chat-turn-status-copy'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import type { AgentTurnOutcome } from '../../../../../../src/shared/agent-status/lifecycle/agent-turn-outcome'
-import { colors, spacing, typography } from '../../../../theme/mobile-theme'
+import { colors, feedback, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { useNow } from '../../../../hooks/use-now'
@@ -115,7 +115,7 @@ const styles = themedStyleSheet(() => ({
     borderBottomColor: colors.borderSubtle
   },
   pressed: {
-    opacity: 0.6
+    opacity: feedback.pressedOpacity
   },
   // A room names who spoke, as a chat's header names its agent.
   name: {

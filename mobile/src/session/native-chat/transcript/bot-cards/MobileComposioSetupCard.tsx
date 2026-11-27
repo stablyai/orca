@@ -34,6 +34,7 @@ import {
   MobileGoogleSetupOnComputer,
   MobileGoogleSetupReceipt
 } from './MobileGoogleSetupCardParts'
+import { composerInputStyles } from '../../../../components/composer-input/composer-input-styles'
 
 function KeyCard({
   scope,
@@ -105,7 +106,7 @@ function KeyCard({
       {asking ? (
         <>
           <TextField
-            label={t('chat.botCards.composio.keyLabel', 'Composio API key')}
+            accessibilityLabel={t('chat.botCards.composio.keyLabel', 'Composio API key')}
             placeholder={t('chat.botCards.composio.keyPlaceholder', 'Paste your key')}
             value={key}
             onChangeText={setKey}
@@ -115,6 +116,7 @@ function KeyCard({
             monospace
             editable={!busy}
             onSubmitEditing={trimmed && !busy ? save : undefined}
+            style={composerInputStyles.filledField}
           />
           <MobileGoogleSetupMuted
             text={

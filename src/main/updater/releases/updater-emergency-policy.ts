@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { isPerfPrereleaseAppVersion } from '../../../shared/app-lifecycle/identity/app-version'
 import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { getVersionChannel } from '../../../shared/updater/release-channel'
@@ -9,17 +10,19 @@ import {
 } from '../../remote-policies/release-asset-policy-live-update'
 import { getMainHttpClient } from '../../network/http-client'
 
-const emergencyUpdatePolicySchema = z.object({
-  revision: z.number().int().positive(),
-  minimumVersion: z
-    .string()
-    .max(64)
-    .refine((version) => {
-      const channel = getVersionChannel(version)
-      return channel === 'stable' || (channel === 'rc' && !isPerfPrereleaseAppVersion(version))
-    })
-    .nullable()
-})
+const emergencyUpdatePolicySchema = lazyZodSchema(() =>
+  z.object({
+    revision: z.number().int().positive(),
+    minimumVersion: z
+      .string()
+      .max(64)
+      .refine((version) => {
+        const channel = getVersionChannel(version)
+        return channel === 'stable' || (channel === 'rc' && !isPerfPrereleaseAppVersion(version))
+      })
+      .nullable()
+  })
+)
 
 type EmergencyUpdatePolicy = z.infer<typeof emergencyUpdatePolicySchema>
 

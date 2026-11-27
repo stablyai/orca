@@ -32,6 +32,7 @@ import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 type HostRemoveDialogProps = {
   open: boolean
@@ -125,48 +126,51 @@ function HostRemoveDialogBody({
       return
     }
     setBusy(true)
-    try {
-      if (target.kind === 'ssh' && deleteWorkspaces && sshResolution) {
-        const { failedIds } = await clearSshHostWorkspaces(
-          sshResolution,
-          confirmUnsavedDiscard(useAppStore.getState, unsavedTargets)
-        )
-        // Keep the host if workspace cleanup fails so stranded rows remain reachable for retry.
-        if (failedIds.length > 0) {
-          toast.error(
-            t(
-              'auto.components.sidebar.HostRemoveDialog.workspacesFailed',
-              'Could not remove {{count}} of this host’s workspaces. The host was kept so you can retry.',
-              { count: failedIds.length }
+    await runWithFinally(
+      async () => {
+        try {
+          if (target.kind === 'ssh' && deleteWorkspaces && sshResolution) {
+            const { failedIds } = await clearSshHostWorkspaces(
+              sshResolution,
+              confirmUnsavedDiscard(useAppStore.getState, unsavedTargets)
             )
+            // Keep the host if workspace cleanup fails so stranded rows remain reachable for retry.
+            if (failedIds.length > 0) {
+              toast.error(
+                t(
+                  'auto.components.sidebar.HostRemoveDialog.workspacesFailed',
+                  'Could not remove {{count}} of this host’s workspaces. The host was kept so you can retry.',
+                  { count: failedIds.length }
+                )
+              )
+              return
+            }
+          }
+          if (target.kind === 'wsl') {
+            await removeWslHost(target.environmentId)
+            dropOverridesForHost()
+          } else {
+            // Main refuses a managed server's host, and on success clears the target's live state and rename.
+            await window.api.ssh.removeTarget({ id: target.targetId })
+          }
+          if (mountedRef.current) {
+            onOpenChange(false)
+          }
+          toast.success(
+            t('auto.components.sidebar.HostRemoveDialog.1a2b3c4d5e', 'Removed {{value0}}', {
+              value0: label
+            })
           )
-          return
+        } catch (err) {
+          toast.error(
+            err instanceof Error
+              ? err.message
+              : t('auto.components.sidebar.HostRemoveDialog.2b3c4d5e6f', 'Failed to remove host')
+          )
         }
-      }
-      if (target.kind === 'wsl') {
-        await removeWslHost(target.environmentId)
-        dropOverridesForHost()
-      } else {
-        // Main refuses a managed server's host, and on success clears the target's live state and rename.
-        await window.api.ssh.removeTarget({ id: target.targetId })
-      }
-      if (mountedRef.current) {
-        onOpenChange(false)
-      }
-      toast.success(
-        t('auto.components.sidebar.HostRemoveDialog.1a2b3c4d5e', 'Removed {{value0}}', {
-          value0: label
-        })
-      )
-    } catch (err) {
-      toast.error(
-        err instanceof Error
-          ? err.message
-          : t('auto.components.sidebar.HostRemoveDialog.2b3c4d5e6f', 'Failed to remove host')
-      )
-    } finally {
-      setBusy(false)
-    }
+      },
+      () => setBusy(false)
+    )
   }
 
   const description =

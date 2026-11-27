@@ -2,6 +2,7 @@
 // GitHub installation (a hello carries no more, so anyone past it could never ask). An add that would
 // pass either is refused whole, naming who and why, so access is never granted in part or in silence.
 import * as z from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 import {
   BOT_MAX_MEMBERS,
   botMemberSource,
@@ -11,13 +12,15 @@ import {
 } from '../bot-types'
 import { CONNECTOR_CLIENT_LIMITS } from '../connectors/connector-cloud-contract'
 
-const BotMembersFullSchema = z.object({
-  /** `bot`: the bot's own limit; `workspace`: one Linear workspace's or GitHub installation's. */
-  scope: z.enum(['bot', 'workspace']),
-  limit: z.number(),
-  /** Who could not be added, by name. */
-  names: z.array(z.string())
-})
+const BotMembersFullSchema = lazyZodSchema(() =>
+  z.object({
+    /** `bot`: the bot's own limit; `workspace`: one Linear workspace's or GitHub installation's. */
+    scope: z.enum(['bot', 'workspace']),
+    limit: z.number(),
+    /** Who could not be added, by name. */
+    names: z.array(z.string())
+  })
+)
 
 export type BotMembersFull = z.infer<typeof BotMembersFullSchema>
 

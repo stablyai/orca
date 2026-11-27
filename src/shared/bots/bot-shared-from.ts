@@ -1,16 +1,19 @@
 import * as z from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 import { BOT_CREATED_KICKOFF } from '../bot-created-kickoff'
 
 /** Where a bot made from a link came from: the link, and the version it was made from. Re-opening the
  *  same link finds this bot by `shareId`. */
-export const BotSharedFromSchema = z.object({
-  shareId: z.string().min(1).max(128),
-  packageId: z.string().min(1).max(128),
-  versionId: z.string().min(1).max(128),
-  /** The sharer's account name; null when the account has none. */
-  sharedBy: z.string().max(200).nullable(),
-  sharedAt: z.string().max(64)
-})
+export const BotSharedFromSchema = lazyZodSchema(() =>
+  z.object({
+    shareId: z.string().min(1).max(128),
+    packageId: z.string().min(1).max(128),
+    versionId: z.string().min(1).max(128),
+    /** The sharer's account name; null when the account has none. */
+    sharedBy: z.string().max(200).nullable(),
+    sharedAt: z.string().max(64)
+  })
+)
 export type BotSharedFrom = z.infer<typeof BotSharedFromSchema>
 
 /** In a bot made from a link: what its sharer used that its owner hasn't set up yet. */

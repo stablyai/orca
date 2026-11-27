@@ -6246,7 +6246,6 @@
             "page": "page-1",
             "worktree": "id:worktree-1",
             "button": "left",
-            "modifiers": [],
             "radius": 14,
             "x": 40,
             "y": 80

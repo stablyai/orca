@@ -25,7 +25,7 @@ export async function loadGitHistoryRefs(
   const { stdout } = await git(
     [
       'for-each-ref',
-      '--format=%(objectname)%00%(objecttype)%00%(*objectname)%00%(*objecttype)%00%(symref)%00%(refname)%00%(worktreepath)',
+      '--format=%(objectname)%00%(objecttype)%00%(*objectname)%00%(*objecttype)%00%(symref)%00%(refname)%00%(worktreepath)%00',
       'refs/heads',
       'refs/remotes',
       'refs/tags'
@@ -34,7 +34,7 @@ export async function loadGitHistoryRefs(
   )
   const search = query?.toLowerCase()
   const rows = stdout
-    .split('\n')
+    .split('\0\n')
     .filter(Boolean)
     .map((line) => line.split('\0'))
     .filter((row) => !search || row[5]?.toLowerCase().includes(search))

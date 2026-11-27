@@ -8,8 +8,7 @@ const saved = {
   subject: 'work',
   authMethod: 'consumer',
   createdAt: 0,
-  updatedAt: 0,
-  usage: null
+  updatedAt: 0
 }
 
 function rows(state: AntigravityAccountState): React.JSX.Element {
@@ -17,7 +16,6 @@ function rows(state: AntigravityAccountState): React.JSX.Element {
     <div className="bg-background px-5">
       <AntigravityAgyAccountRows
         state={state}
-        usage={null}
         error={null}
         busy={false}
         windowsHost={false}
@@ -53,6 +51,25 @@ export const selectedAccountActive = defineFixture({
       currentAccount: {
         email: saved.email,
         subject: saved.subject,
+        authMethod: 'consumer',
+        identityKnown: true
+      }
+    })
+})
+
+const personal = { ...saved, id: 'personal', email: 'personal@example.com', subject: 'personal' }
+
+export const otherSavedAccountHoldsLogin = defineFixture({
+  width: 640,
+  render: () =>
+    rows({
+      accounts: [saved, personal],
+      activeAccountId: personal.id,
+      selectedAccountId: saved.id,
+      restoresSelectionAtLaunch: true,
+      currentAccount: {
+        email: personal.email,
+        subject: personal.subject,
         authMethod: 'consumer',
         identityKnown: true
       }

@@ -7,7 +7,7 @@
     "002a5bcbde42": {
       "name": "browser.mouseClick#1",
       "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"browser.mouseClick\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"x\":40,\"y\":80,\"button\":\"left\",\"modifiers\":[],\"radius\":14}}"
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"browser.mouseClick\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"x\":40,\"y\":80,\"button\":\"left\",\"radius\":14}}"
     },
     "08224c934905": {
       "name": "browser.mouseDown#1",
@@ -67,9 +67,7 @@
       },
       "error": {
         "$rpc": "null"
-      },
-      "keyboardValue": "hello",
-      "pointerModifiers": []
+      }
     },
     "d333a2a9fd72": {
       "name": "browser.mouseClick#1",
@@ -83,7 +81,6 @@
           "name": "params",
           "value": {
             "button": "left",
-            "modifiers": [],
             "page": "page-1",
             "radius": 14,
             "worktree": "id:worktree-1",

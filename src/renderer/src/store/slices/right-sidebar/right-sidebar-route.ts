@@ -9,16 +9,8 @@ export type RightSidebarRoute = {
   rightSidebarExplorerView: RightSidebarExplorerView
 }
 
-/** The Files tree hides under search results; consumers that watch or decorate it treat that like the old search view. */
-export function getExplorerTreeView(state: {
-  rightSidebarExplorerView: RightSidebarExplorerView
-  activeWorktreeId?: string | null
-  fileSearchStateByWorktree?: Record<string, { active?: boolean } | undefined>
-}): RightSidebarExplorerView {
-  const searchState = state.activeWorktreeId
-    ? state.fileSearchStateByWorktree?.[state.activeWorktreeId]
-    : undefined
-  return searchState?.active ? 'search' : state.rightSidebarExplorerView
+function normalizeRightSidebarExplorerView(view: unknown): RightSidebarExplorerView {
+  return view === 'search' ? 'search' : 'files'
 }
 
 export type NormalizeRightSidebarRouteOptions = {
@@ -28,11 +20,12 @@ export type NormalizeRightSidebarRouteOptions = {
 
 export function normalizeRightSidebarRoute(
   tab: unknown,
+  explorerView?: unknown,
   options?: NormalizeRightSidebarRouteOptions
 ): RightSidebarRoute {
-  // Why: older builds persisted Search as a standalone activity tab; search now lives in the Files view.
+  // Why: older builds persisted Search as a standalone activity tab.
   if (tab === 'search') {
-    return { rightSidebarTab: 'explorer', rightSidebarExplorerView: 'files' }
+    return { rightSidebarTab: 'explorer', rightSidebarExplorerView: 'search' }
   }
   // Plugin keys are open-ended; validate shape so restart does not reset valid routes to Explorer.
   if (typeof tab === 'string' && isPluginPanelTabKey(tab)) {
@@ -56,8 +49,8 @@ export function normalizeRightSidebarRoute(
   ) {
     return {
       rightSidebarTab: tab,
-      // Why: the Files view searches names and text together; a persisted 'search' view maps to it.
-      rightSidebarExplorerView: 'files'
+      rightSidebarExplorerView:
+        tab === 'explorer' ? normalizeRightSidebarExplorerView(explorerView) : 'files'
     }
   }
   return { rightSidebarTab: 'explorer', rightSidebarExplorerView: 'files' }

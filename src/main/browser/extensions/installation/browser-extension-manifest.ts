@@ -35,14 +35,38 @@ function isHostPermission(permission: string): boolean {
   return permission === '<all_urls>' || permission.includes('://')
 }
 
-/** Resolves only paths that stay inside the extension folder. */
+const IS_WINDOWS = process.platform === 'win32'
+
+/** Mirrors Chromium's FilePath::ReferencesParent per segment. Its IS_WIN branch: only dots and
+ *  whitespace, holding `..` (`...`, `.. `). Its POSIX branch: exactly `..`. `..assets` is a child. */
+export function isParentDirectorySegment(segment: string): boolean {
+  if (!IS_WINDOWS) {
+    return segment === '..'
+  }
+  return segment.includes('..') && /^[. \t\r\n]*$/.test(segment)
+}
+
+/** Windows splits on `\` and `/`, as Chromium's IS_WIN separators do; POSIX looks for a `/`-bounded
+ *  `..` without splitting, which keeps long crafted names cheap. */
+export function referencesParentDirectory(path: string): boolean {
+  if (!IS_WINDOWS) {
+    return /(?:^|\/)\.\.(?:\/|$)/.test(path)
+  }
+  return (
+    path.includes('..') && path.split(/[\\/]/).some((segment) => isParentDirectorySegment(segment))
+  )
+}
+
+/** Resolves only paths that stay inside the extension folder; an inner `..` may stay inside.
+ *  Why: resolve() collapses every real `..`, so one left in `rel` (or a Win32 alias such as
+ *  `.. `) is an escape. */
 export function resolveInsideExtensionDirectory(
   directory: string,
   relativePath: string
 ): string | null {
   const target = resolve(directory, relativePath.replace(/^\/+/, ''))
   const rel = relative(resolve(directory), target)
-  return rel && !rel.startsWith('..') && !isAbsolute(rel) ? target : null
+  return rel && !isAbsolute(rel) && !referencesParentDirectory(rel) ? target : null
 }
 
 async function readJson(path: string): Promise<unknown> {

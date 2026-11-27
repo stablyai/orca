@@ -151,7 +151,8 @@ export abstract class OrcaRuntimeWithClaudeRunningPaneAccountMove extends OrcaRu
         !folder ||
         (handle !== undefined && this.claudeAgentTeams.holdsHandle(handle)) ||
         (holders.get(pane.session.id) ?? 0) > 1 ||
-        !this.terminalViewSubscribers.everyRemoteViewFollowsHostRespawn(pane.pty.ptyId)
+        // A restart would refuse it: counted here, so the switch's toast says it stayed behind.
+        this.restartRefusalBeforeStop(pane.pty) !== null
       ) {
         notMoved += 1
         continue

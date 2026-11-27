@@ -4,19 +4,24 @@ import {
   registerRuntimeEnvironmentHandlers,
   invalidateRuntimeEnvironmentTransport
 } from '../runtime-environments/runtime-environments'
-import { registerWslHostHandlers } from '../wsl/wsl-host-handlers'
+import { canCreateWslHostService } from '../wsl/wsl-host-service-availability'
 
 export async function registerRuntimeHostHandlers(
   store: Store,
   hostInitialization?: Promise<void>
 ): Promise<void> {
-  await Promise.all([
-    registerRuntimeEnvironmentHandlers(store, hostInitialization),
-    registerWslHostHandlers({
-      store,
-      hostInitialization,
-      getUserDataPath: () => app.getPath('userData'),
-      invalidateTransport: invalidateRuntimeEnvironmentTransport
-    })
-  ])
+  const tasks: Promise<void>[] = [registerRuntimeEnvironmentHandlers(store, hostInitialization)]
+  if (process.platform === 'win32' || canCreateWslHostService()) {
+    tasks.push(
+      import('../wsl/wsl-host-handlers').then(({ registerWslHostHandlers }) =>
+        registerWslHostHandlers({
+          store,
+          hostInitialization,
+          getUserDataPath: () => app.getPath('userData'),
+          invalidateTransport: invalidateRuntimeEnvironmentTransport
+        })
+      )
+    )
+  }
+  await Promise.all(tasks)
 }

@@ -1,5 +1,5 @@
 import {
-  NOTIFICATION_COOLDOWN_MS,
+  isNotificationCooldownActive,
   reserveNotificationCooldown
 } from '../../../shared/notifications/notification-burst-cooldown'
 import type { NotificationPushCoverageRequest } from '../../../shared/rpc-contract/notifications/notifications-params'
@@ -70,7 +70,7 @@ export class PushBurstSlots {
     const answers = askedDevices(devices, request).map(async ({ deviceId, digest }) => {
       const slot = slotKey(deviceId, request.subject)
       const at = this.reservedAt.get(slot)
-      const held = at !== undefined && now - at < NOTIFICATION_COOLDOWN_MS
+      const held = isNotificationCooldownActive(at, now)
       return held && (await this.deliveries.get(slot)) === digest ? [digest] : []
     })
     return (await Promise.all(answers)).flat()

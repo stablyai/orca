@@ -9,6 +9,8 @@ export type ProviderTimelineContext = {
   sessionId: string
   agent: AgentType
   generation: string
+  /** Request rows' generation when it outlives this acquisition (a relayed agent's). */
+  requestGeneration?: string
   rows: ProviderTimelineRows
   /** Other provider threads are subagent work. */
   ownThread?: () => string | null
@@ -26,7 +28,8 @@ export function providerTimelineRequest(
   context: ProviderTimelineContext,
   key: string
 ): ProviderTimelineRequest {
-  return { agent: context.agent, sessionId: context.sessionId, generation: context.generation, key }
+  const generation = context.requestGeneration ?? context.generation
+  return { agent: context.agent, sessionId: context.sessionId, generation, key }
 }
 
 export function providerTimelineScopeItemIds(

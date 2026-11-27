@@ -245,6 +245,8 @@ export type GitLabTodo = {
 export type GitLabPipelineJob = {
   id: number
   pipelineId?: number
+  /** Project that owns the job; absent means the MR project. */
+  projectRef?: GitLabProjectRef
   name: string
   /** GitLab stage name, e.g. 'build' / 'test' / 'deploy'. */
   stage: string

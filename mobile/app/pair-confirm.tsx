@@ -1,8 +1,8 @@
 import { useCallback, useRef, useState } from 'react'
-import { View, Text, Pressable, BackHandler, type HostInstance } from 'react-native'
+import { View, BackHandler, ScrollView, type HostInstance } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
-import { ChevronLeft } from 'lucide-react-native'
+import { ChevronLeft, CircleAlert, Laptop } from 'lucide-react-native'
 import {
   resolvePairConfirmRouteState,
   type PairConfirmRouteState
@@ -13,11 +13,16 @@ import {
 } from '../src/pairing/pre-profile-pairing-coordinator'
 import type { ConnectionLogEntry } from '../src/diagnostics/connection/connection-log-types'
 import { useRefreshHostClient } from '../src/transport/connection/host-client-hooks'
-import { colors, spacing, radii, typography, pressedStyle } from '../src/theme/mobile-theme'
+import { colors, spacing, typography } from '../src/theme/mobile-theme'
 import { themedStyleSheet } from '../src/theme/themed-styles'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../src/i18n/use-mobile-translation'
-import { ConnectionLog } from '../src/components/host-connection/ConnectionLog'
+import { formatConnectionLogHistory } from '../src/diagnostics/connection-diagnostics-report'
+import { MobileStateView } from '../src/components/feedback/MobileStateView'
+import { NavBar } from '../src/components/nav-bar/NavBar'
+import { NavBarButton } from '../src/components/nav-bar/NavBarButton'
+import { SheetPrimaryButton } from '../src/components/sheets/SheetPrimaryButton'
+import { SheetSecondaryButton } from '../src/components/sheets/SheetSecondaryButton'
 import {
   loadMobileOnboardingSteps,
   mobileOnboardingDestination
@@ -166,91 +171,62 @@ function PairConfirmContent({ routeState }: { routeState: PairConfirmRouteState 
     }
   }
 
-  const containerPadding = { paddingTop: insets.top + spacing.sm }
+  let body
+  if (offer && resolvedStatus === 'awaiting-confirm') {
+    body = (
+      <>
+        <MobileStateView
+          icon={Laptop}
+          title={t('app.pairConfirm.pairThisComputer', 'Pair with this computer?')}
+          message={t('app.pairConfirm.onlyYourOwn', 'Only pair with a computer you trust.')}
+        />
+        <View style={[styles.foot, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
+          <SheetPrimaryButton
+            label={t('app.pairConfirm.pairButton', 'Pair')}
+            onPress={() => void confirm()}
+          />
+          <SheetSecondaryButton label={t('common.cancel', 'Cancel')} onPress={cancel} />
+        </View>
+      </>
+    )
+  } else if (resolvedStatus === 'connecting') {
+    body = (
+      <View style={[styles.centered, { paddingBottom: insets.bottom }]}>
+        <PairingProgress
+          succeeded={paired}
+          connectingLabel={t('app.pairConfirm.connecting', 'Connecting…')}
+          labelStyle={styles.connectingText}
+        />
+      </View>
+    )
+  } else {
+    // Scrolls so an opened log never pushes Back to home off screen.
+    body = (
+      <ScrollView contentContainerStyle={styles.scrollFill}>
+        <MobileStateView
+          icon={CircleAlert}
+          title={t('app.pairScan.couldNotPair', 'Couldn’t pair')}
+          message={resolvedErrorMessage}
+          details={logs.length > 0 ? formatConnectionLogHistory(logs) : null}
+          action={{ label: t('app.pairConfirm.backToHome', 'Back to home'), onPress: cancel }}
+          bottomInset={insets.bottom}
+        />
+      </ScrollView>
+    )
+  }
 
   return (
-    <View ref={setPairConfirmRootRef} style={[styles.container, containerPadding]}>
-      <Pressable
-        style={({ pressed }) => [styles.backButton, pressed && pressedStyle]}
-        onPress={cancel}
-        hitSlop={8}
-        accessibilityRole="button"
-        accessibilityLabel={t('common.back', 'Back')}
-      >
-        <ChevronLeft size={22} color={colors.textSecondary} />
-      </Pressable>
-
-      <View style={styles.content}>
-        {offer && resolvedStatus === 'awaiting-confirm' && (
-          <>
-            <Text style={styles.title}>
-              {t('app.pairConfirm.title', 'Pair with this desktop?')}
-            </Text>
-            <Text style={styles.subtitle}>
-              {t(
-                'app.pairConfirm.description',
-                'You opened a pairing link from your desktop. Confirm to add it to your hosts.'
-              )}
-            </Text>
-            <View style={styles.actionStack}>
-              <Pressable
-                style={({ pressed }) => [styles.primaryButton, pressed && pressedStyle]}
-                onPress={() => void confirm()}
-              >
-                <Text style={styles.primaryButtonText}>
-                  {t('app.pairConfirm.pairButton', 'Pair')}
-                </Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [styles.secondaryButton, pressed && pressedStyle]}
-                onPress={cancel}
-              >
-                <Text style={styles.secondaryButtonText}>{t('common.cancel', 'Cancel')}</Text>
-              </Pressable>
-            </View>
-          </>
-        )}
-
-        {resolvedStatus === 'connecting' && (
-          <>
-            <PairingProgress
-              succeeded={paired}
-              connectingLabel={t('app.pairConfirm.connecting', 'Connecting…')}
-              labelStyle={styles.connectingText}
-            />
-            <View style={styles.logSlot}>
-              <ConnectionLog
-                entries={logs}
-                title={t('app.pairConfirm.pairingLog', 'Pairing log')}
-              />
-            </View>
-          </>
-        )}
-
-        {resolvedStatus === 'error' && (
-          <>
-            <Text style={styles.errorText}>{resolvedErrorMessage}</Text>
-            {logs.length > 0 && (
-              <View style={styles.logSlot}>
-                <ConnectionLog
-                  entries={logs}
-                  title={t('app.pairConfirm.pairingLog', 'Pairing log')}
-                />
-              </View>
-            )}
-            <View style={styles.actionStack}>
-              <Pressable
-                style={({ pressed }) => [styles.primaryButton, pressed && pressedStyle]}
-                onPress={cancel}
-              >
-                <Text style={styles.primaryButtonText}>
-                  {t('app.pairConfirm.backToHome', 'Back to home')}
-                </Text>
-              </Pressable>
-            </View>
-          </>
-        )}
-      </View>
+    <View ref={setPairConfirmRootRef} style={[styles.container, { paddingTop: insets.top }]}>
+      <NavBar
+        leading={
+          <NavBarButton
+            icon={ChevronLeft}
+            accessibilityLabel={t('common.back', 'Back')}
+            onPress={cancel}
+          />
+        }
+      />
+      {body}
     </View>
   )
 }
@@ -258,87 +234,21 @@ function PairConfirmContent({ routeState }: { routeState: PairConfirmRouteState 
 const styles = themedStyleSheet(() => ({
   container: {
     flex: 1,
-    backgroundColor: colors.bgBase,
-    padding: spacing.lg
+    backgroundColor: colors.bgBase
   },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: radii.control,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.sm
+  scrollFill: { flexGrow: 1 },
+  foot: {
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg
   },
-  content: {
+  centered: {
     flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
-    // Offset above geometric center to balance home-indicator/nav-bar space.
-    paddingBottom: spacing.xl * 2
-  },
-  title: {
-    fontSize: typography.titleSize,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    marginBottom: spacing.sm,
-    textAlign: 'center'
-  },
-  subtitle: {
-    fontSize: typography.bodySize,
-    color: colors.textSecondary,
-    lineHeight: 20,
-    marginBottom: spacing.xl,
-    textAlign: 'center',
-    maxWidth: 520,
-    alignSelf: 'center'
-  },
-  actionStack: {
-    width: '100%',
-    maxWidth: 360,
-    alignSelf: 'center'
-  },
-  primaryButton: {
-    width: '100%',
-    backgroundColor: colors.textPrimary,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radii.control,
     alignItems: 'center',
-    marginBottom: spacing.sm
-  },
-  primaryButtonText: {
-    color: colors.bgBase,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
-  secondaryButton: {
-    width: '100%',
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radii.control,
-    alignItems: 'center'
-  },
-  secondaryButtonText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    fontWeight: '500'
+    justifyContent: 'center'
   },
   connectingText: {
     color: colors.textSecondary,
     fontSize: typography.bodySize,
-    marginTop: spacing.lg,
-    textAlign: 'center'
-  },
-  logSlot: {
-    width: '100%',
-    marginTop: spacing.lg,
-    marginBottom: spacing.md
-  },
-  errorText: {
-    color: colors.statusRed,
-    fontSize: typography.bodySize,
-    textAlign: 'center',
-    marginBottom: spacing.xl,
-    lineHeight: 20
+    marginTop: spacing.lg
   }
 }))

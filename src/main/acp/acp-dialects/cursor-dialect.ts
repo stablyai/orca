@@ -227,6 +227,7 @@ export const CURSOR_ACP_DIALECT: AcpDialect = {
         ? fallbackQuestionRequest(params)
         : undefined,
   settleRequest,
+  detachedReplies: Object.fromEntries(REPORTS.map((method) => [method, {}])),
   normalizeToolUpdate,
   skillDescription: ({ description }) => {
     const untagged = description.replace(SKILL_SCOPE_TAG, '')

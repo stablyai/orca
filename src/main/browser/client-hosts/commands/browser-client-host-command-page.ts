@@ -1,4 +1,5 @@
 import { sameBrowserClientPageAuthority } from './browser-client-host-command-authority'
+import { browserCommandUrlDigest, retainBrowserCommandEvent } from './browser-command-retention'
 import type { BrowserClientHostCommandEvent } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import type { BrowserClientAutomationResult as BrowserClientHostCommandResult } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import {
@@ -42,7 +43,7 @@ export function selectCommandPage(
       previous?.result?.status === 'completed' &&
       previous.event.pageHostGeneration === command.pageHostGeneration &&
       previous.event.commandId === command.commandId &&
-      commandsMatch(previous.event, command)
+      commandsMatch(previous, command)
     ) {
       return { page, commit: () => {} }
     }
@@ -79,7 +80,7 @@ export function findExistingCommand(
     if (!existing) {
       throw new Error('browser_host_command_result_expired')
     }
-    if (existing.event.commandId !== command.commandId || !commandsMatch(existing.event, command)) {
+    if (existing.event.commandId !== command.commandId || !commandsMatch(existing, command)) {
       throw new Error('browser_host_command_sequence_conflict')
     }
     return existing
@@ -93,10 +94,15 @@ export function findExistingCommand(
   return undefined
 }
 
-function commandsMatch(
-  first: BrowserClientHostCommandEvent,
-  second: BrowserClientHostCommandEvent
-): boolean {
+function commandsMatch(record: CommandRecord, incoming: BrowserClientHostCommandEvent): boolean {
+  const first = record.event
+  const second = record.retainedUrlDigest ? retainBrowserCommandEvent(incoming).event : incoming
+  if (
+    record.retainedUrlDigest &&
+    record.retainedUrlDigest !== browserCommandUrlDigest(incoming.command)
+  ) {
+    return false
+  }
   if (first.command.type !== second.command.type) {
     return false
   }

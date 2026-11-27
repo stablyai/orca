@@ -21,7 +21,7 @@ import type {
   MobileDiffReviewQueueItem
 } from '../diff-state/mobile-diff-review-queue'
 import type { MobileDiffReviewThread } from '../diff-actions/mobile-diff-review-github'
-import type { PRCommentCardActions } from '../pull-request/comments/PRCommentCard'
+import type { PrThreadActions } from '../pull-request/comments/PrThreadRow'
 
 type Props = {
   commentsByLine: ReadonlyMap<number, DiffComment[]>
@@ -31,9 +31,10 @@ type Props = {
   screenState: ReviewScreenState
   staleCommentIds: ReadonlySet<string>
   threadsByLine: ReadonlyMap<number, readonly MobileDiffReviewThread[]>
-  threadActions: PRCommentCardActions | undefined
+  threadActions: PrThreadActions | undefined
   selectedRange: LineRange | null
-  onPickLines: (range: LineRange) => void
+  onSelectLines: (range: LineRange | null) => void
+  onOpenThread: (threadId: string, focusReply: boolean) => void
   /** Scroll to this line once, then report it done. */
   scrollToLine: number | null
   onScrolledToLine: () => void
@@ -56,7 +57,8 @@ export function MobileDiffReviewBody({
   threadsByLine,
   threadActions,
   selectedRange,
-  onPickLines,
+  onSelectLines,
+  onOpenThread,
   scrollToLine,
   onScrolledToLine,
   onEditNote,
@@ -147,7 +149,8 @@ export function MobileDiffReviewBody({
       selectedRange={selectedRange}
       scrollToLine={scrollToLine}
       onScrolledToLine={onScrolledToLine}
-      {...(currentItem?.scope === 'commit' ? {} : { onPickLines })}
+      {...(currentItem?.scope === 'commit' ? {} : { onSelectLines })}
+      onOpenThread={onOpenThread}
       onEditNote={onEditNote}
     />
   )

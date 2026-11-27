@@ -91,14 +91,19 @@ export function RailPageHeader({
         <h1
           {...headingProps}
           className={cn(
-            'min-w-0 shrink-0 truncate text-[15px] font-semibold tracking-tight outline-none',
+            'min-w-0 truncate text-[15px] font-semibold tracking-tight outline-none',
             headingProps?.className
           )}
         >
           {title}
         </h1>
         {typeof count === 'number' ? <RailPageCount value={count} /> : null}
-        {scope ? <div className="flex min-w-0 shrink items-center gap-1.5">{scope}</div> : null}
+        {scope ? (
+          // Reserve a compact scope before truncating the title, then give the picker spare width.
+          <div className="flex min-w-0 max-w-max grow shrink-0 basis-[min(calc(var(--spacing)*64),70%)] items-center gap-1.5">
+            {scope}
+          </div>
+        ) : null}
         {meta ? (
           <span
             className={cn('min-w-0 truncate text-xs text-muted-foreground', RAIL_PAGE_HIDE_NARROW)}

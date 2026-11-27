@@ -11,7 +11,7 @@ export type NativeChatQuestionCardLook = {
   frameClassName?: string
   /** Emphasis on the bordered body. */
   surfaceClassName?: string
-  /** A line above the question inside the body (who asks, and that it waits on you). */
+  /** A line below the band question (who asks, and that it waits on you). */
   header?: React.ReactNode
   /** Draws the question's words in place of the plain heading (an item clamps a long ask). */
   renderQuestion?: (content: string) => React.ReactNode

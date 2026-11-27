@@ -177,6 +177,13 @@ export function useHostScreenController({
   )
   const existingWorktreePaths = useMemo(() => state.worktrees.map((w) => w.path), [state.worktrees])
   const activeWorktreeScroll = useActiveWorktreeScroll(sectionsResult.sections, collapsedGroups)
+  // Rebuilds the connection where this document owns it; a page in the app shell can only nudge it.
+  const reconnect =
+    hostId && forceReconnectHost
+      ? () => void forceReconnectHost(hostId)
+      : client
+        ? () => client.notifyForeground('focus')
+        : null
 
   return {
     actions,
@@ -205,6 +212,7 @@ export function useHostScreenController({
     lastConnectedAt,
     noticeParam,
     onHideSidebar,
+    reconnect,
     reconnectAttempts,
     relayRecovery,
     routeNotice,

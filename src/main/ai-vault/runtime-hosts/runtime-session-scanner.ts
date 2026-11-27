@@ -1,6 +1,7 @@
 import { aiVaultScanIssueText } from '../../../shared/ai-vault/scanning/ai-vault-scan-issue-copy'
 import { AiVaultChatForkSourceSchema } from '../../../shared/ai-vault/contracts/ai-vault-chat-fork-contract'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import {
   AI_VAULT_AGENTS,
   AI_VAULT_SCOPE_PATHS_MAX_COUNT,
@@ -37,18 +38,20 @@ import {
 import type { RuntimeAiVaultHostInfo, RuntimeAiVaultScanOptions } from './ai-vault-runtime-scan'
 
 // Zod strips undeclared keys; keep the repinned home so resume uses the correct account.
-const aiVaultPrepareSessionResumeResultSchema = z.object({
-  useRealCodexHome: z.boolean(),
-  cliForkSource: AiVaultChatForkSourceSchema.optional(),
-  substituteCodexHome: z.string().optional(),
-  forkedSession: z
-    .object({
-      sessionId: z.string(),
-      agent: z.enum(AI_VAULT_AGENTS),
-      filePath: z.string().optional()
-    })
-    .optional()
-})
+const aiVaultPrepareSessionResumeResultSchema = lazyZodSchema(() =>
+  z.object({
+    useRealCodexHome: z.boolean(),
+    cliForkSource: AiVaultChatForkSourceSchema.optional(),
+    substituteCodexHome: z.string().optional(),
+    forkedSession: z
+      .object({
+        sessionId: z.string(),
+        agent: z.enum(AI_VAULT_AGENTS),
+        filePath: z.string().optional()
+      })
+      .optional()
+  })
+)
 
 export async function getSavedRuntimeAiVaultHostInfos(
   userDataPath: string
@@ -226,6 +229,7 @@ function withRuntimeExecutionHost(
     sessions: result.sessions.map((session) =>
       retagRuntimeSession(session, executionHostId, pairingRevision)
     ),
+    ...(result.hiddenRowCount ? { hiddenRowCount: result.hiddenRowCount } : {}),
     issues: result.issues.map((issue) => ({ ...issue, executionHostId })),
     scannedAt: result.scannedAt,
     ...(result.fingerprint ? { fingerprint: result.fingerprint } : {})

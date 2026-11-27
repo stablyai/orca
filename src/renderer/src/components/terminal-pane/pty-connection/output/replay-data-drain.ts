@@ -222,6 +222,11 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
   }
 
   session.scheduleReplayDataDrain = (): void => {
+    if (session.disposed) {
+      // A disposed coordinator skips the drain, so this payload would keep requeuing itself.
+      session.pendingReplayData = null
+      return
+    }
     if (replayDrainQueued) {
       return
     }

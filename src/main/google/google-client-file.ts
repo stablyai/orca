@@ -1,6 +1,7 @@
 // Google's own client file format, read and written only on the host that keeps the client: what an
 // admin downloads (a "Desktop app" client), and what `orca google client export` hands a teammate.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import {
   GOOGLE_CLIENT_FILE_MAX_BYTES,
   GOOGLE_CREDENTIALS_PAGE,
@@ -9,14 +10,16 @@ import {
 
 const DESKTOP_CLIENT_STEPS = `In Google Cloud Console, open Credentials (${GOOGLE_CREDENTIALS_PAGE}), choose Create credentials › OAuth client ID › Desktop app, then download its file.`
 
-const InstalledClient = z.object({
-  client_id: z
-    .string()
-    .trim()
-    .regex(/^[\w.-]+\.apps\.googleusercontent\.com$/, 'bad client id'),
-  client_secret: z.string().trim().min(1).max(512),
-  project_id: z.string().trim().min(1).max(256).optional()
-})
+const InstalledClient = lazyZodSchema(() =>
+  z.object({
+    client_id: z
+      .string()
+      .trim()
+      .regex(/^[\w.-]+\.apps\.googleusercontent\.com$/, 'bad client id'),
+    client_secret: z.string().trim().min(1).max(512),
+    project_id: z.string().trim().min(1).max(256).optional()
+  })
+)
 
 export type ParsedGoogleClient =
   | { ok: true; clientId: string; clientSecret: string; projectId?: string }

@@ -2,12 +2,15 @@
 // profile, so publishing never rewrites the bot record.
 import { readFile } from 'node:fs/promises'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { writeFileAtomically } from '../../filesystem/atomic-file-publication'
 import { BotSharePicksSchema, type BotSharePicks } from '../../../shared/bots/bot-share-picks'
 
-const FileSchema = z.object({
-  bots: z.record(z.string(), BotSharePicksSchema.optional().catch(undefined))
-})
+const FileSchema = lazyZodSchema(() =>
+  z.object({
+    bots: z.record(z.string(), BotSharePicksSchema.optional().catch(undefined))
+  })
+)
 
 export class BotSharePicksStore {
   private writes: Promise<unknown> = Promise.resolve()
