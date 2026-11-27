@@ -38,4 +38,14 @@ describe('readTextOrFileFlag --body-file', () => {
     const message = await failureMessage(readBodyFile('reply.md', cwd))
     expect(message).toBe(`Could not read ${resolve(cwd, 'reply.md')}: ENOENT`)
   })
+
+  it('preserves a native absolute path verbatim when no WSL translation applies', async () => {
+    vi.stubEnv('ORCA_CLI_WSL_DISTRO', '')
+    const raw =
+      process.platform === 'win32'
+        ? 'C:\\orca-nonexistent-link\\..\\reply.md'
+        : '/orca-nonexistent-link/../reply.md'
+    const message = await failureMessage(readBodyFile(raw, resolve('orca-body-file-test')))
+    expect(message).toContain(`Could not read ${raw}:`)
+  })
 })
