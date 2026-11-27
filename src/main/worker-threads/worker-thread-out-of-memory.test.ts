@@ -96,5 +96,6 @@ describe('spawnWorkerThread heap limit', () => {
     } finally {
       queue.dispose()
     }
+    // Filling a 512 MB worker heap takes seconds on a loaded CI runner.
   }, 60_000)
 })
