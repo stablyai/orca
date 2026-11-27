@@ -21930,6 +21930,7 @@
       "explicitChatWslMoveToHost": "Chat ist in einem unter Windows geöffneten WSL-Ordner nicht verfügbar. Das Projekt auf einem WSL-Host ausführen, um dort zu chatten, oder den Agenten in einem Terminal öffnen.",
       "explicitChatWslRunAsHost": "{{distro}} als Host ausführen",
       "explicitChatSsh": "Chat ist über SSH nicht verfügbar. Den Agenten stattdessen in einem Terminal öffnen.",
+      "explicitChatWorkspaceAccess": "Orca hat keine Berechtigung, diesen Arbeitsbereichsordner zu öffnen. Die Berechtigungen des Ordners prüfen und es erneut versuchen.",
       "explicitChatUnavailable": "In diesem Arbeitsbereich kann der Chat nicht ausgeführt werden. Die Agenten-Installation prüfen oder den Agenten in einem Terminal öffnen.",
       "structuredSessionHostDeclined": "{{value0}} in einem Terminal geöffnet",
       "structuredSessionTerminalNotVisible": "Orca hat {{value0}} in einem Terminal geöffnet, konnte es hier nach dem Start aber nicht anzeigen. Der Chat-Entwurf wurde beibehalten.",
@@ -22614,7 +22615,18 @@
         "unlisted": "Hintergrundarbeit läuft",
         "unread": "Worker konnten nicht geladen werden",
         "unreadDetail": "Worker werden hier angezeigt, sobald sie geladen sind",
-        "chipLabel": "{{label}}, zuletzt: {{title}}"
+        "chipLabel": "{{label}}, zuletzt: {{title}}",
+        "backgroundCommandCount_one": "{{count}} Hintergrundbefehl",
+        "backgroundCommandCount_other": "{{count}} Hintergrundbefehle",
+        "commandCount_one": "{{count}} Befehl",
+        "commandCount_other": "{{count}} Befehle",
+        "mixedRegion": "Worker und Hintergrundbefehle",
+        "commandsRegion": "Hintergrundbefehle",
+        "stopSubagentsAndCommands": "Subagenten und Befehle stoppen",
+        "workersKeepRunning": "Worker laufen weiter",
+        "clearFailedWorkers": "Fehlgeschlagene Worker entfernen",
+        "mixedCount": "{{workers}} · {{commands}}",
+        "mixedCountSpoken": "{{workers}}, {{commands}}"
       },
       "webhookSetup": {
         "heading": "Webhook einrichten",

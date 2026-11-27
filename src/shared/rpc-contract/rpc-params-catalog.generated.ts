@@ -200,6 +200,16 @@ import {
   BotItemsShow
 } from './bots-items-params'
 import {
+  BotAccessDecide,
+  BotAccessRedeem,
+  BotCreate,
+  BotCreateOfferRequest,
+  BotDelete,
+  BotSkillProjectsScan,
+  BotUpdate,
+  WorktreeReleaseBotHome
+} from './bots-lifecycle-params'
+import {
   BotConnectorOffer,
   BotConnectors,
   BotLookAroundSet,
@@ -212,8 +222,6 @@ import {
   BotUpNextSeen
 } from './bots-look-around-params'
 import {
-  BotAccessDecide,
-  BotAccessRedeem,
   BotActivityRead,
   BotChat,
   BotChatReset,
@@ -222,19 +230,13 @@ import {
   BotChats,
   BotChatsOwn,
   BotChatsSeen,
-  BotCreate,
-  BotCreateOfferRequest,
-  BotDelete,
   BotMemoryEdit,
   BotMemoryForget,
   BotMemoryUndo,
   BotRoster,
   BotRunSendAgainParams,
   BotSessionStart,
-  BotSkillProjectsScan,
-  BotTakeOverParams,
-  BotUpdate,
-  WorktreeReleaseBotHome
+  BotTakeOverParams
 } from './bots-params'
 import { BotRunChats } from './bots-run-chats-params'
 import {
@@ -953,33 +955,35 @@ import { ReadVisualParams } from './structured-agent-session/agent-session-visua
 import { SkipAsyncQuestionsParams } from './structured-agent-session/skip-async-questions-params'
 import { AutoReviewApprovalParams } from './structured-agent-session/structured-agent-session-auto-review-params'
 import { ContinueInterruptedParams } from './structured-agent-session/structured-agent-session-continue-params'
+import {
+  AttachParams,
+  CancelParams,
+  CreateParams,
+  CreateSupportParams,
+  OptionsParams,
+  QueuedMessageActionParams,
+  QueuedMessagesResumeParams,
+  RespondParams,
+  SendParams,
+  SetOptionParams
+} from './structured-agent-session/structured-agent-session-core-params'
 import { ContinuationContextParams } from './structured-agent-session/structured-agent-session-identifiers'
 import { AgentSessionMcpParams } from './structured-agent-session/structured-agent-session-mcp-params'
 import {
   AcknowledgeAttentionParams,
   AgentsParams,
-  AttachParams,
   AvailabilityParams,
-  CancelParams,
   ConversationCommandParams,
-  CreateParams,
-  CreateSupportParams,
   HandoffStatusParams,
   HistoryParams,
   HoldParams,
   ItemParams,
   ModelCatalogParams,
-  OptionsParams,
-  QueuedMessageActionParams,
-  QueuedMessagesResumeParams,
-  RespondParams,
   RestartLaunchSettledParams,
   RestartResumableParams,
   RestartResumeParams,
   RevealParams,
   RewindParams,
-  SendParams,
-  SetOptionParams,
   SleepWorkspaceParams,
   SubscribeTurnCompletionsParams,
   ThreadGoalParams,

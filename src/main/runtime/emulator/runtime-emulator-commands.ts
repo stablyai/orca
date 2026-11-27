@@ -27,6 +27,7 @@ type EmulatorHostSettings = Pick<
 
 export type RuntimeEmulatorCommandHost = {
   getEmulatorBridge(): EmulatorBridge | null
+  ensureEmulatorBridge?(): Promise<EmulatorBridge | null>
   resolveEmulatorWorkspaceId(selector: string): Promise<string>
   resolveEmulatorCleanupWorkspaceId(selector: string): Promise<string>
   getAuthoritativeWindowId(): number

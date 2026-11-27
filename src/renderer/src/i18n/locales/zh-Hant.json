@@ -21629,6 +21629,7 @@
       "explicitChatWslMoveToHost": "無法在從 Windows 開啟的 WSL 資料夾中使用聊天。請在 WSL 主機上執行此專案以便在那裡聊天，或在終端機中開啟代理程式。",
       "explicitChatWslRunAsHost": "將 {{distro}} 作為主機執行",
       "explicitChatSsh": "無法透過 SSH 使用聊天功能。請改在終端機中開啟代理程式。",
+      "explicitChatWorkspaceAccess": "Orca 沒有開啟此工作區資料夾的權限。請檢查該資料夾的權限，然後再試一次。",
       "explicitChatUnavailable": "此工作區無法執行聊天。請檢查代理程式的安裝狀態，或在終端機中開啟代理程式。",
       "structuredSessionHostDeclined": "已在終端機中開啟 {{value0}}",
       "structuredSessionTerminalNotVisible": "Orca 已在終端機中開啟 {{value0}}，但啟動完成時無法在此處顯示。聊天草稿已保留。",
@@ -22309,7 +22310,16 @@
         "unlisted": "背景工作執行中",
         "unread": "無法載入工作者",
         "unreadDetail": "工作者載入後會顯示在這裡",
-        "chipLabel": "{{label}}，最新：{{title}}"
+        "chipLabel": "{{label}}，最新：{{title}}",
+        "backgroundCommandCount_other": "{{count}} 個背景命令",
+        "commandCount_other": "{{count}} 個命令",
+        "mixedRegion": "工作者和背景命令",
+        "commandsRegion": "背景命令",
+        "stopSubagentsAndCommands": "停止子代理和命令",
+        "workersKeepRunning": "工作者會繼續執行",
+        "clearFailedWorkers": "清除失敗的工作者",
+        "mixedCount": "{{workers}} · {{commands}}",
+        "mixedCountSpoken": "{{workers}}，{{commands}}"
       },
       "webhookSetup": {
         "heading": "設定 Webhook",

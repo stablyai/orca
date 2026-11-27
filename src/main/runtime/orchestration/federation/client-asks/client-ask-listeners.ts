@@ -1,9 +1,15 @@
 // Which paired computers are taking asks from this Orca's agents right now. A computer listens from
 // its first pull in a session until a pull's caller goes away or it leaves; an answered pull keeps it,
-// since it pulls again at once. Nothing is timed, and a server restart starts with none.
+// since it pulls again at once, and a server restart starts with none. A computer seen within the last
+// minute is live: `orca bot list` shows only those, and when two computers answer to one address only
+// the live ones count, so one that crashed or lost its network between pulls, leaving no pull to end,
+// stops showing and never hides or blocks a live one. A lone match still routes however long ago.
 import type { z } from 'zod'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { OrchestrationError } from '../../orchestration-error'
+import type { BotRosterClient } from '../../../../../shared/bot-roster'
+import { toSafeDisplayLine } from '../../../../../shared/text/display-text-safety'
+import { systemPowerGeneration } from '../../../../power/system-power-lifecycle'
 import type { PeerMailClientAsksPull } from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 
 export type ClientAskListener = {
@@ -13,9 +19,50 @@ export type ClientAskListener = {
   /** The pairing fingerprint this Orca keys the computer's conversations by. */
   fingerprint: string
   session: string
+  /** Its agents it said a person always lets this Orca's agents ask, as of its latest pull. */
+  bots: { id: string; name: string }[]
+  /** It allows more than it could name. */
+  moreBots?: true
+  /** When a pull of its last started or was answered, on `monotonicNow`'s clock. */
+  seenAt: number
+  /** `systemPowerGeneration()` then: a suspend or resume since means it hasn't been seen awake since. */
+  powerGeneration: number
+  /** The pull that put this here: only it may end or refresh it, since one session's pulls overlap
+   *  across a reconnect. */
+  pullId: number
 }
 
-export type ClientAskPull = { key: string; session: string }
+export type ClientAskPull = {
+  key: string
+  session: string
+  powerGeneration: number
+  pullId: number
+}
+
+// Each started pull's identity, so an older pull of the same session ending late never touches the
+// state a newer one installed.
+let lastPullId = 0
+
+/** How recently a computer must have pulled for `orca bot list` to show it: over twice the longest
+ *  pull's wait, so one pulling steadily is never missed between pulls. */
+export const CLIENT_ROSTER_LIVE_MS = 60_000
+
+/** The most installations one paired device keeps listening at once; its least recently seen goes
+ *  first. A real computer has one, a few copies at most, so a device naming more can't grow this. */
+export const CLIENT_INSTALLATIONS_PER_DEVICE = 8
+
+/** Elapsed ms on a clock that never moves back, so setting the system clock can't revive or hide one. */
+export function monotonicNow(): number {
+  return performance.now()
+}
+
+// performance.now() stops while the system sleeps on Linux, so a computer last seen before this
+// computer's latest suspend or resume counts as live only once it pulls again; one still connected
+// pulls again at once. A headless server gets no power events, so there only the lease applies.
+const isLive = (listener: ClientAskListener, now: number, generation: number): boolean =>
+  listener.powerGeneration === generation &&
+  now - listener.seenAt >= 0 &&
+  now - listener.seenAt <= CLIENT_ROSTER_LIVE_MS
 
 /** The runtime whose server the computers listen on; a test's runtimes keep separate listeners. */
 export type ClientAskListenerOwner = Pick<OrcaRuntimeService, 'getOrchestrationDb'>
@@ -42,7 +89,9 @@ const keyOf = (deviceId: string, installationId: string): string => `${deviceId}
 export function clientAskPullStarted(
   owner: ClientAskListenerOwner,
   caller: { deviceId: string; fingerprint: string },
-  pull: z.infer<typeof PeerMailClientAsksPull>
+  pull: z.infer<typeof PeerMailClientAsksPull>,
+  now: number = monotonicNow(),
+  generation: number = systemPowerGeneration()
 ): ClientAskPull | null {
   const listeners = listenersOf(owner)
   const key = keyOf(caller.deviceId, pull.installationId)
@@ -82,21 +131,47 @@ export function clientAskPullStarted(
     installationId: pull.installationId,
     name: pull.name,
     fingerprint: caller.fingerprint,
-    session: pull.session
+    session: pull.session,
+    bots: pull.bots ?? [],
+    ...(pull.moreBots ? { moreBots: true as const } : {}),
+    seenAt: now,
+    powerGeneration: generation,
+    pullId: (lastPullId += 1)
   })
-  return { key, session: pull.session }
+  const ofDevice = [...listeners].filter(
+    ([other, listener]) => other !== key && listener.deviceId === caller.deviceId
+  )
+  if (ofDevice.length >= CLIENT_INSTALLATIONS_PER_DEVICE) {
+    ofDevice.sort(([, a], [, b]) => a.seenAt - b.seenAt)
+    for (const [other] of ofDevice.slice(
+      0,
+      ofDevice.length - CLIENT_INSTALLATIONS_PER_DEVICE + 1
+    )) {
+      listeners.delete(other)
+    }
+  }
+  return { key, session: pull.session, powerGeneration: generation, pullId: lastPullId }
 }
 
-/** An answered pull keeps its session; one whose caller went away ends it. Either touches only its own session. */
+/** An answered pull keeps its session; one whose caller went away ends it. Either touches only the
+ *  state its own pull installed: a newer pull of the same session (a reconnect) supersedes it. */
 export function clientAskPullEnded(
   owner: ClientAskListenerOwner,
   pull: ClientAskPull,
-  outcome: 'answered' | 'caller_gone'
+  outcome: 'answered' | 'caller_gone',
+  now: number = monotonicNow(),
+  generation: number = systemPowerGeneration()
 ): void {
   const listeners = listenersOf(owner)
   const current = listeners.get(pull.key)
-  if (outcome === 'caller_gone' && current?.session === pull.session) {
+  if (current?.session !== pull.session || current.pullId !== pull.pullId) {
+    return
+  }
+  if (outcome === 'caller_gone') {
     listeners.delete(pull.key)
+  } else if (pull.powerGeneration === generation) {
+    // A pull begun before a suspend or resume proves nothing about the computer after it.
+    current.seenAt = now
   }
 }
 
@@ -109,6 +184,56 @@ export function listeningClients(
   return [...listenersOf(owner).values()].filter(
     (listener) =>
       listener.installationId === selector.trim() || listener.name.trim().toLowerCase() === wanted
+  )
+}
+
+// The id `--on-client` and a mention token take: a generated UUID, so anything else a computer
+// claims is never printed where a server's agent reads it as text or a command.
+const PLAIN_ID = /^[\w-]{1,100}$/
+
+/** Every computer seen within the last minute, as this Orca's own `orca bot list` names it: by its
+ *  installation id, which `--on-client` takes, with the agents there it said this Orca's agents may ask
+ *  without a card. Only a computer that id reaches alone among those seen within the minute is listed,
+ *  the same rule `requireListeningClient` settles a tie by, so a listed command never comes back
+ *  ambiguous; ids of another shape are left out, and
+ *  names, which came from that computer, stay one line. One pass over the listeners. */
+export function connectedClientRosters(
+  owner: ClientAskListenerOwner,
+  now: number = monotonicNow(),
+  generation: number = systemPowerGeneration()
+): BotRosterClient[] {
+  // Only computers seen within the lease count, so one that went silent never hides a live one.
+  const listeners = [...listenersOf(owner).values()].filter((listener) =>
+    isLive(listener, now, generation)
+  )
+  // How many listeners a selector matches, by id or by name, counting one matching both once.
+  const byId = new Map<string, number>()
+  const byName = new Map<string, number>()
+  const byBoth = new Map<string, number>()
+  const count = (map: Map<string, number>, key: string) => map.set(key, (map.get(key) ?? 0) + 1)
+  for (const listener of listeners) {
+    const name = listener.name.trim().toLowerCase()
+    count(byId, listener.installationId)
+    count(byName, name)
+    if (name === listener.installationId.toLowerCase()) {
+      count(byBoth, listener.installationId)
+    }
+  }
+  const matches = (id: string) =>
+    (byId.get(id) ?? 0) + (byName.get(id.toLowerCase()) ?? 0) - (byBoth.get(id) ?? 0)
+  return listeners.flatMap((listener) =>
+    PLAIN_ID.test(listener.installationId) && matches(listener.installationId) === 1
+      ? [
+          {
+            name: toSafeDisplayLine(listener.name) || listener.installationId,
+            onClient: listener.installationId,
+            bots: listener.bots
+              .filter((bot) => PLAIN_ID.test(bot.id))
+              .map((bot) => ({ id: bot.id, name: toSafeDisplayLine(bot.name) || bot.id })),
+            ...(listener.moreBots ? { moreBots: true as const } : {})
+          }
+        ]
+      : []
   )
 }
 
@@ -129,13 +254,20 @@ export function forgetClientAskDevice(owner: ClientAskListenerOwner, deviceId: s
   }
 }
 
-/** The one listening computer a selector names; refused when none is connected or two share it. */
+/** The one listening computer a selector names; refused when none is connected or two share it.
+ *  When two match, only those seen within the lease count, so one that crashed between pulls never
+ *  blocks a live one; a lone match routes as it always has, however long since it pulled. */
 export function requireListeningClient(
   owner: ClientAskListenerOwner,
   selector: string,
-  nothingDone: string
+  nothingDone: string,
+  now: number = monotonicNow(),
+  generation: number = systemPowerGeneration()
 ): ClientAskListener {
-  const listening = listeningClients(owner, selector)
+  const matched = listeningClients(owner, selector)
+  const live =
+    matched.length > 1 ? matched.filter((listener) => isLive(listener, now, generation)) : matched
+  const listening = live.length === 1 ? live : matched
   if (listening.length > 1) {
     throw new OrchestrationError(
       'invalid_argument',

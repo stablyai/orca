@@ -21033,6 +21033,7 @@
       "explicitChatWslRunAsHost": "{{distro}} をホストとして実行",
       "explicitChatSsh": "SSH 接続ではチャットを利用できません。ターミナルで Agent を開いてください。",
       "structuredSessionTerminalNotVisible": "Orca はターミナルで {{value0}} を開きましたが、起動が終了したときにここに表示できませんでした。チャットの下書きが保存されました。",
+      "explicitChatWorkspaceAccess": "Orca にはこのワークスペースフォルダーを開く権限がありません。フォルダーの権限を確認してから、もう一度お試しください。",
       "explicitChatUnavailable": "このワークスペースではチャットを実行できません。Agent のインストール状況を確認するか、ターミナルで開いてください。",
       "goalControl": {
         "settingsRejected": "Codex は選択したモデルと推論量を適用できませんでした。目標の変更は送信されていません。選択内容を確認して、もう一度お試しください。",
@@ -21424,7 +21425,16 @@
         "unlisted": "バックグラウンド処理を実行中",
         "unread": "ワーカーを読み込めませんでした",
         "unreadDetail": "読み込みが終わると、ここにワーカーが表示されます",
-        "chipLabel": "{{label}}、最新: {{title}}"
+        "chipLabel": "{{label}}、最新: {{title}}",
+        "backgroundCommandCount_other": "{{count}} 件のバックグラウンドコマンド",
+        "commandCount_other": "{{count}} 件のコマンド",
+        "mixedRegion": "ワーカーとバックグラウンドコマンド",
+        "commandsRegion": "バックグラウンドコマンド",
+        "stopSubagentsAndCommands": "サブ Agent とコマンドを停止",
+        "workersKeepRunning": "ワーカーは実行を続けます",
+        "clearFailedWorkers": "失敗したワーカーをクリア",
+        "mixedCount": "{{workers}} · {{commands}}",
+        "mixedCountSpoken": "{{workers}}、{{commands}}"
       },
       "webhookSetup": {
         "heading": "Webhook を設定",

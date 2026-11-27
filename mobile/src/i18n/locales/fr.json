@@ -35,6 +35,10 @@
     "panel": {
       "all": "Toutes",
       "emptyScope": "Aucune session d'agent passée dans ce périmètre.",
+      "hideDetails": "Masquer les détails",
+      "showDetails": "Afficher les détails",
+      "loading": "Chargement des sessions d'agent…",
+      "showAllAgents": "Afficher tous les agents",
       "missingResumeId": "Cette session n'a pas d'identifiant de reprise.",
       "noSearchResults": "Aucune session ne correspond à votre recherche.",
       "noSessions": "Aucune session d'agent",
@@ -67,7 +71,10 @@
       "messages_one": "{{count}} message",
       "messages_other": "{{count}} messages",
       "resumeSession": "Reprendre la session d'agent",
-      "continueInCli": "Continuer en CLI"
+      "continueInCli": "Continuer en CLI",
+      "hidePreview": "Masque les messages récents.",
+      "showPreview": "Affiche les messages récents.",
+      "you": "Vous"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "Impossible de joindre l'hôte",
@@ -77,6 +84,44 @@
     "worktreeNavigationActions": {
       "agentSessionHistory": "Historique des sessions d'agent",
       "sourceControl": "Contrôle de code source"
+    },
+    "resume": {
+      "hostConnectionChanged": "La connexion à l'hôte a changé. Réessayez de reprendre la session."
+    },
+    "interrupted": {
+      "failed": "Impossible de reprendre les chats interrompus.",
+      "count_many": "{{count}} chats ont été interrompus",
+      "count_one": "{{count}} chat a été interrompu",
+      "count_other": "{{count}} chats ont été interrompus",
+      "resumeAll": "Tout reprendre",
+      "failedCount_many": "{{count}} chats n'ont pas pu être repris",
+      "failedCount_one": "{{count}} chat n'a pas pu être repris",
+      "failedCount_other": "{{count}} chats n'ont pas pu être repris"
+    },
+    "viewControls": {
+      "allAgents": "Tous les agents",
+      "lastUpdated": "Dernière mise à jour",
+      "created": "Date de création",
+      "agents": "Agents"
+    },
+    "filterSheet": {
+      "title": "Filtrer et trier",
+      "activeLabel": "Filtrer et trier, filtres actifs : {{count}}",
+      "reset": "Réinitialiser",
+      "done": "Terminé",
+      "sortBy": "Trier par"
+    },
+    "actions": {
+      "resume": "Reprendre"
+    },
+    "handoff": {
+      "title": "Passer à un agent",
+      "context": "Contexte",
+      "latestStatus": "Dernier état",
+      "fullTranscript": "Transcription complète",
+      "noContext": "Aucun contexte de session disponible pour continuer dans une nouvelle session.",
+      "launchFailed": "Impossible de démarrer une nouvelle session.",
+      "promptCopied": "Prompt copié. Ouvrez l'agent pour le coller."
     }
   },
   "app": {
@@ -293,9 +338,17 @@
   },
   "chat": {
     "ask": {
+      "send": "Envoyer",
+      "notNow": "Pas maintenant",
       "answerPlaceholder": "Saisissez votre réponse",
+      "optionPreview": "Aperçu de {{option}}",
+      "previewPosition": "{{current}} sur {{total}}",
+      "chosen": "Choisi",
+      "chooseThis": "Choisir",
+      "viewPreview": "Afficher",
       "next": "Suivant",
       "other": "Autre…",
+      "recommended": "Recommandé",
       "skip": "Ignorer",
       "step": "Étape {{step}}"
     },
@@ -329,6 +382,7 @@
       "file": "Fichier",
       "fileMeta": "{{type}} · {{size}}",
       "removeFile": "Retirer {{name}}",
+      "uploadingImage": "Envoi de l'image",
       "removeImage": "Retirer l'image",
       "uploadingFile": "Envoi de {{name}}"
     },
@@ -372,7 +426,9 @@
       "saveFailed": "Impossible d'enregistrer l'image",
       "shareFailed": "Impossible de partager l'image",
       "photosAccessDenied": "Autorisez Orca à ajouter des photos dans Réglages",
-      "imageTooLarge": "Cette image est trop volumineuse"
+      "imageTooLarge": "Cette image est trop volumineuse",
+      "previousImage": "Image précédente",
+      "nextImage": "Image suivante"
     },
     "nativeChatProse": {
       "attachedImage": "Image jointe",
@@ -431,6 +487,7 @@
       "permissionDenied": "{{agent}} a refusé la permission. Voir les détails.",
       "safetyReviewApproved": "{{agent}} a approuvé cette action. Voir les détails.",
       "safetyReview": "{{agent}} a signalé un avertissement de sécurité. Voir les détails.",
+      "autoReviewDenied": "La revue automatique de {{agent}} a refusé : {{action}}",
       "truncatedResponse": "Réponse du fournisseur tronquée (taille d’origine : {{bytes}} octets).",
       "modelFallback": "Claude a changé de modèle : {{from}} → {{to}}.",
       "signIn": "Se connecter",
@@ -453,6 +510,12 @@
     "interruptedContinue": {
       "failed": "Impossible de poursuivre cette conversation. Réessayez ou envoyez un message.",
       "explanation": "Continuez, et l'agent vérifiera d'abord si sa dernière étape s'est terminée."
+    },
+    "restartNote": {
+      "continued": "Orca a demandé à cet agent de poursuivre après un redémarrage. Votre propre message n'a pas été renvoyé.",
+      "refused": "Orca n'a pas pu poursuivre ce chat après le redémarrage. Envoyez un message pour le poursuivre.",
+      "unconfirmed": "Orca a demandé à cet agent de poursuivre après le redémarrage, mais n'a pas pu confirmer qu'il l'a fait. Vérifiez sa dernière réponse avant d'envoyer un autre message.",
+      "notConnected": "Orca n'a pas pu reconnecter ce chat après le redémarrage et n'a donc pas demandé à l'agent de poursuivre."
     },
     "sendError": {
       "dismiss": "Ignorer"
@@ -503,10 +566,28 @@
       "unavailable": "Réponse sélectionnée indisponible",
       "thisPhone": "ce téléphone",
       "computer": "l’ordinateur",
-      "otherDevice": "un autre appareil"
+      "otherDevice": "un autre appareil",
+      "questionCancelled": "Question annulée",
+      "youAnswered": "Vous avez répondu : <answer>{{answer}}</answer>",
+      "answeredCount_many": "Vous avez répondu à <answer>{{count}} questions</answer>",
+      "answeredCount_one": "Vous avez répondu à <answer>{{count}} question</answer>",
+      "answeredCount_other": "Vous avez répondu à <answer>{{count}} questions</answer>",
+      "answeredCount": "Vous avez répondu à <answer>{{count}} questions</answer>"
+    },
+    "approvalRecord": {
+      "cancelled": "Demande pour <tool>{{tool}}</tool> annulée",
+      "coordinatorAllowed": "Le coordinateur a autorisé <tool>{{tool}}</tool>",
+      "coordinatorDenied": "Le coordinateur a refusé <tool>{{tool}}</tool>",
+      "allowedUnnamed": "<tool>{{tool}}</tool> autorisé",
+      "deniedUnnamed": "<tool>{{tool}}</tool> refusé",
+      "youAllowed": "Vous avez autorisé <tool>{{tool}}</tool>",
+      "youAllowedForSession": "Vous avez autorisé <tool>{{tool}}</tool> pour cette session",
+      "youDenied": "Vous avez refusé <tool>{{tool}}</tool>",
+      "youAnswered": "Vous avez répondu à <tool>{{tool}}</tool> : <answer>{{answer}}</answer>"
     },
     "sessionOptionCopy": {
       "none": "Aucun",
+      "ultracode": "Ultracode",
       "availableAfterSessionStarts": "Disponible après le démarrage de la session.",
       "chooseInAgentPicker": "Choisir dans le sélecteur d'agents…",
       "effort": "Effort",
@@ -525,6 +606,11 @@
       "on": "Activé",
       "permissions": "Autorisations",
       "sessionOptions": "Options de session",
+      "permissionAppliesNextMessage": "{{saved}} s'applique à votre prochain message ; réglage utilisé actuellement : {{active}}",
+      "permissionAppliesNextMessageCompact": "{{saved}} · prochain message",
+      "permissionAppliesNextMessageTiming": "S'applique au prochain message · actuel : {{active}}",
+      "modelsLoading": "Chargement des modèles…",
+      "signInForModels": "Connectez-vous pour voir les modèles utilisables.",
       "setWhenSessionStarts": "Défini au démarrage de la session.",
       "speed": "Vitesse",
       "standard": "Standard",
@@ -541,6 +627,10 @@
       "modelFullAccessLabel": "Modèle, {{value}}, accès complet",
       "modelLabel": "Modèle, {{value}}",
       "permissions": "Autorisations",
+      "applying": "Application en cours…",
+      "onAttach": "S'applique quand le chat se connecte",
+      "heldPickRefused": "{{picked}} n'est pas disponible dans ce chat. {{kept}} est conservé.",
+      "optionsSection": "Options",
       "permissionsLabel": "Autorisations, {{value}}",
       "settingsLocked": "Les paramètres du modèle seront déverrouillés à la fin de ce tour.",
       "workingAnnouncement": "L'agent travaille. Les paramètres du modèle seront déverrouillés à la fin de ce tour."
@@ -779,7 +869,11 @@
       "collapse": "Masquer l'objectif complet",
       "attachmentsUnsupported": "Supprimez les pièces jointes avant de définir un objectif.",
       "pause": "Mettre en pause",
-      "resume": "Reprendre"
+      "resume": "Reprendre",
+      "checks_many": "{{count}} vérifications",
+      "checks_one": "{{count}} vérification",
+      "checks_other": "{{count}} vérifications",
+      "last-check": "Dernière vérification de l'objectif"
     },
     "rewind": {
       "title": "Revenir ici ?",
@@ -800,6 +894,15 @@
       "timeout": "Le chat ne s'est pas actualisé après le retour à ce message. Rouvrez-le pour voir les derniers échanges.",
       "pending": "Attendez que la conversation revienne au message antérieur."
     },
+    "urlRequest": {
+      "title": "Connexion demandée",
+      "open": "Ouvrir la page de connexion",
+      "decline": "Refuser",
+      "opened": "Page de connexion ouverte dans votre navigateur.",
+      "openAgain": "Rouvrir",
+      "finished": "Connexion effectuée",
+      "finishedWith": "Connexion effectuée · {{message}}"
+    },
     "fork": {
       "busy": "Une autre conversation ou un terminal s’ouvre. Patientez, puis créez à nouveau une branche de la conversation {{agent}}.",
       "unconfirmed": "{{agent}} n’a pas pu confirmer la création de la branche. Elle s’est peut-être ouverte malgré tout ; consultez l’historique des sessions avant de réessayer.",
@@ -812,8 +915,44 @@
       "action": "Citer",
       "hint": "Ajoute le texte sélectionné au message sous forme de citation"
     },
+    "eventRow": {
+      "running": "En cours",
+      "failed": "Échec"
+    },
+    "workerApproval": {
+      "allowFor": "Autoriser {{tool}} pour {{worker}} ?",
+      "title": "{{worker}} · {{title}}",
+      "allow": "Autoriser",
+      "deny": "Refuser",
+      "waiting": "{{count}} workers en attente · les plus anciens d'abord",
+      "countdown": "Claude refuse automatiquement dans {{time}} si personne ne répond.",
+      "openWorker": "Ouvrir le worker",
+      "record": {
+        "youAllowedFor": "Vous avez autorisé <tool>{{tool}}</tool> pour <task>{{task}}</task>",
+        "youDeniedFor": "Vous avez refusé <tool>{{tool}}</tool> pour <task>{{task}}</task>",
+        "coordinatorAllowed": "Le coordinateur a autorisé <tool>{{tool}}</tool> pour <task>{{task}}</task>",
+        "coordinatorDenied": "Le coordinateur a refusé <tool>{{tool}}</tool> pour <task>{{task}}</task>",
+        "allowedInTerminal": "<tool>{{tool}}</tool> pour <task>{{task}}</task> autorisé dans son terminal",
+        "deniedInTerminal": "<tool>{{tool}}</tool> pour <task>{{task}}</task> refusé dans son terminal",
+        "allowedInChat": "<tool>{{tool}}</tool> pour <task>{{task}}</task> autorisé dans son chat",
+        "deniedInChat": "<tool>{{tool}}</tool> pour <task>{{task}}</task> refusé dans son chat",
+        "timedOut": "<tool>{{tool}}</tool> pour <task>{{task}}</task> expiré",
+        "waitsInTerminal": "<tool>{{tool}}</tool> pour <task>{{task}}</task> attend dans son terminal",
+        "workerEnded": "<tool>{{tool}}</tool> pour <task>{{task}}</task> clos : le worker s'est terminé",
+        "closedUnnamed": "<tool>{{tool}}</tool> pour <task>{{task}}</task> clos sans réponse enregistrée",
+        "reasonSentAsMessage": "Raison, envoyée sous forme de message",
+        "coordinatorReason": "Raison du coordinateur"
+      }
+    },
     "messageTime": {
       "yesterday": "Hier {{time}}"
+    },
+    "pairedServerAsk": {
+      "title": "{{from}} veut envoyer un message à {{to}} sur cet ordinateur",
+      "once": "Autoriser une fois",
+      "always": "Toujours autoriser {{server}}",
+      "deny": "Refuser",
+      "thisServer": "ce serveur"
     },
     "mcp": {
       "status": {
@@ -861,9 +1000,29 @@
         "failed": "Échecs : {{count}}",
         "needsAuth_many": "{{count}} connexions requises"
       },
-      "pasteHint": "Lorsque le navigateur arrive sur une page qui ne se charge pas, copiez son adresse et collez-la ici."
+      "pasteHint": "Lorsque le navigateur arrive sur une page qui ne se charge pas, copiez son adresse et collez-la ici.",
+      "manage": "Gérer les serveurs MCP"
     },
     "agentMessage": {
+      "open": "Ouvrir {{name}}",
+      "row": {
+        "started": "Démarré",
+        "forItems": "pour",
+        "reopened": "Rouvert",
+        "followedUp": "Suivi envoyé à",
+        "handedOff": "Transféré à",
+        "task": "Tâche envoyée par",
+        "update": "Mise à jour envoyée par",
+        "message": "Message envoyé par",
+        "notSentYet": "pas encore envoyé"
+      },
+      "kind": {
+        "started": "Démarré",
+        "reopened": "Rouvert",
+        "followedUp": "Suivi",
+        "handedOff": "Transféré",
+        "task": "Tâche"
+      },
       "unnamedRecipient": "un agent",
       "event": {
         "followedUp": "Suivi envoyé",
@@ -2614,7 +2773,10 @@
       "dismissKeyboard": "Masquer le clavier",
       "sendKey": "Envoyer {{label}}",
       "typeCharacter": "Saisir {{character}}",
+      "control": "Control",
       "interrupt": "Interrompre le terminal",
+      "alt": "Alt",
+      "shift": "Shift",
       "keysModeLabel": "Mode touches : la saisie va directement au terminal. Passer en mode message",
       "messageModeLabel": "Mode message : écrivez, puis envoyez. Passer en mode touches",
       "moreKeys": "Plus de touches et d’actions",
@@ -2735,6 +2897,7 @@
     "browserTabActionSheet": {
       "forward": "Suivant",
       "reload": "Recharger",
+      "hardReload": "Forcer le rechargement",
       "title": "Navigateur"
     },
     "bulkCloseSheetActions": {
@@ -2750,6 +2913,7 @@
     },
     "commandDock": {
       "liveInputHint": "Le texte saisi est envoyé directement au terminal actif.",
+      "tapToShowKeyboard": "Touchez pour afficher le clavier",
       "liveInputLabel": "Saisie en direct dans le terminal"
     },
     "contentRow": {
@@ -2767,21 +2931,40 @@
       "committedChangesFailed": "Échec du chargement des modifications committées",
       "committedChangesUnavailable": "Modifications committées indisponibles",
       "committedDiffUnavailable": "Le diff des modifications committées est indisponible",
+      "commitLoadFailed": "Impossible de charger ce commit",
+      "commitDiffUnavailable": "Le diff du commit est indisponible",
       "desktopUpdateRequired": "Mettez à jour Orca sur cet hôte pour examiner les modifications sur mobile.",
       "diffLoadFailed": "Impossible de charger le diff",
       "reviewNotesLoadFailed": "Impossible de charger les notes de revue"
     },
     "diffReviewQueue": {
       "committedOnBranch": "Committé sur la branche",
+      "inCommit": "Dans ce commit",
       "staged": "Dans l’index",
       "unstaged": "Hors de l’index"
     },
     "diffReviewScreenModel": {
       "branch": "Branche",
       "staged": "Dans l’index",
-      "unstaged": "Hors de l’index"
+      "unstaged": "Hors de l’index",
+      "positionUncommitted": "Non commité : {{position}} sur {{count}}",
+      "positionInCommit": "{{position}} sur {{count}} dans ce commit",
+      "positionViewed": "{{position}} sur {{count}} · consultés : {{viewedCount}}",
+      "commitFiles_many": "{{count}} fichiers",
+      "commitFiles_one": "{{count}} fichier",
+      "commitFiles_other": "{{count}} fichiers",
+      "uncommittedFiles_many": "{{count}} non commités",
+      "uncommittedFiles_one": "{{count}} non commité",
+      "uncommittedFiles_other": "{{count}} non commités",
+      "viewedOfCount": "Consultés : {{viewedCount}} sur {{count}}"
     },
     "failure": {
+      "forkOriginalMissing": "{{agent}} n'a pas trouvé cette réponse dans le chat d'origine. Ouvrez-le et créez une branche à partir de là.",
+      "forkOriginalUnavailable": "{{agent}} ne peut pas créer de branche à partir de cette réponse dans le chat d'origine. Ouvrez-le et créez une branche à partir de là.",
+      "forkOriginalMissingNamed": "{{agent}} n'a pas trouvé cette réponse dans « {{detail}} ». Ouvrez ce chat et créez une branche à partir de là.",
+      "forkOriginalUnavailableNamed": "{{agent}} ne peut pas créer de branche à partir de cette réponse dans « {{detail}} ». Ouvrez ce chat et créez une branche à partir de là.",
+      "forkOriginalLatestOnly": "{{agent}} ne peut créer une branche qu'à partir de la dernière réponse du chat d'origine. Ouvrez ce chat et créez une branche à partir de sa dernière réponse une fois qu'elle est terminée.",
+      "forkOriginalLatestOnlyNamed": "{{agent}} ne peut créer une branche qu'à partir de la dernière réponse de « {{detail}} ». Ouvrez ce chat et créez une branche à partir de sa dernière réponse une fois qu'elle est terminée.",
       "accountSwitchInProgress": "La configuration de {{agent}} est en cours de modification sur cet hôte. Réessayez une fois l'opération terminée.",
       "agentCommandNotRunnable": "{{agent}} : la Commande dans Paramètres → Agents doit être le chemin ou le nom d'un programme qu'Orca peut trouver, sans arguments ni variables. Modifiez-la ou réinitialisez-la.",
       "agentCommandFailed": "La Commande de {{agent}} dans Réglages → Agents n’a pas lancé {{agent}} : {{detail}}. Modifiez-la ou réinitialisez-la.",
@@ -2792,6 +2975,7 @@
       "answerUnconfirmed": "Votre réponse a été enregistrée, mais l'agent ne l'a pas confirmée.",
       "pluginInputRequired": "{{agent}} s’est arrêté car le plugin « {{plugin}} » attend une saisie dans un volet de terminal. Désactivez le plugin pour les sessions de chat ou exécutez la tâche dans un terminal {{agent}}.",
       "antigravityNotSignedIn": "Antigravity n’est pas connecté. Connectez-vous dans Paramètres → Comptes → Antigravity. Puis renvoyez votre message.",
+      "antigravitySystemNotSignedIn": "Antigravity n'est pas connecté. Connectez-vous en exécutant `agy` sur l'ordinateur qui exécute ce chat, puis renvoyez votre message.",
       "argumentsMissingValue": "Les arguments enregistrés nécessitent une valeur pour {{option}}.",
       "argumentsMultipleValues": "Les arguments enregistrés donnent plusieurs valeurs à {{option}}.",
       "argumentsPositionalPrompt": "Les arguments enregistrés contiennent un message.",
@@ -2818,6 +3002,7 @@
       "chooseClaudeAccount": "Choisissez-en un ou ajoutez-en un dans les paramètres Comptes Claude.",
       "chooseClaudeAccountThenRunCommand": "Choisissez-en un ou ajoutez-en un dans les paramètres Comptes Claude, puis relancez /{{command}}.",
       "chooseClaudeAccountThenSend": "Choisissez-en un ou ajoutez-en un dans les paramètres Comptes Claude, puis renvoyez votre message.",
+      "unconfirmed": "Impossible de confirmer l'envoi. Le message n'a pas été renvoyé.",
       "claudeAccountFolderMissing": "Le dossier du compte Claude sélectionné est introuvable. Reconnectez-vous à ce compte ou choisissez-en un autre.",
       "claudeAccountSetupFailed": "Le compte Claude sélectionné n'a pas pu être configuré. Réessayez ou choisissez un autre compte.",
       "claudeEffortInvalid": "Le niveau d'effort de Claude est invalide ; choisissez low, medium, high, xhigh ou max, puis renvoyez le message.",
@@ -2919,6 +3104,7 @@
       "imageLabel": "Image : {{title}}",
       "noReviewNotes": "Aucune note de revue",
       "previewLabel": "Aperçu de {{title}}",
+      "loading": "Chargement du fichier…",
       "reviewNotes_many": "{{count}} notes de revue",
       "reviewNotes_one": "{{count}} note de revue",
       "reviewNotes_other": "{{count}} notes de revue",
@@ -2930,6 +3116,7 @@
     },
     "githubPrMutations": {
       "reviewThreadUpdateFailed": "Impossible de mettre à jour le fil de revue.",
+      "fileViewedFailed": "Impossible de mettre à jour l'état « consulté » du fichier.",
       "titleUpdateFailed": "Impossible de mettre à jour le titre."
     },
     "githubPrRpc": {
@@ -2948,7 +3135,8 @@
       "sourceControl": "Contrôle de code source",
       "newTab": "Nouvel onglet",
       "quickCommands": "Commandes rapides",
-      "items": "Éléments"
+      "items": "Éléments",
+      "textSize": "Taille du texte"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "Historique des agents",
@@ -2961,6 +3149,7 @@
       "copyLoaded": "Copier le contenu chargé",
       "copyLoadedSource": "Copier la source Markdown chargée",
       "copyPath": "Copier le chemin",
+      "loading": "Chargement du document…",
       "copyPathLabel": "Copier le chemin du fichier Markdown",
       "copySource": "Copier la source Markdown",
       "discard": "Abandonner",
@@ -3114,7 +3303,10 @@
     },
     "sheets": {
       "browser": "Navigateur",
+      "browserStreamingUnavailable": "Cet hôte ne peut pas diffuser les onglets du navigateur",
       "chat": "Chat",
+      "cli": "CLI",
+      "cliOnly": "CLI uniquement",
       "copyAllAndLeave": "Tout copier et quitter",
       "copyDraftsFailed": "Impossible de copier les brouillons",
       "copyNotes": "Copier les notes",
@@ -3138,6 +3330,9 @@
       "shortcut": "Raccourci",
       "terminal": "Terminal",
       "terminalWithShell": "Terminal: {{shell}}",
+      "more": "Plus",
+      "linkCopied": "Lien copié",
+      "copyLinkFailed": "Impossible de copier le lien",
       "shellPowerShell": "PowerShell",
       "shellCmd": "Invite CMD",
       "shellGitBash": "Git Bash",
@@ -3217,7 +3412,8 @@
       "browserUnavailable": "La page du navigateur n'est pas encore disponible.",
       "invalidUrl": "Saisissez une URL valide",
       "noteCreateFailed": "Échec de la création de la note Markdown",
-      "untitledNoteCreateFailed": "Impossible de créer une note Markdown sans titre"
+      "untitledNoteCreateFailed": "Impossible de créer une note Markdown sans titre",
+      "browserStreamingUnavailable": "Cet hôte ne peut pas diffuser les onglets du navigateur"
     },
     "useDiffComments": {
       "copyNotesFailed": "Impossible de copier les notes",
@@ -3233,6 +3429,7 @@
     },
     "useDiffReviewController": {
       "loadFailed": "Impossible de charger la revue",
+      "commitMissing": "Mettez à jour l'app Orca pour ouvrir ici les fichiers du commit.",
       "missingWorktree": "Worktree manquant"
     },
     "useDiffReviewDiffLoading": {
@@ -3393,6 +3590,7 @@
       "reattachFiles": "Retirez-les et joignez-les à nouveau.",
       "recordFailed": "Orca n'a pas pu enregistrer ceci dans l'historique du chat.",
       "recordUnreadable": "Orca n'a pas pu lire l'état enregistré de ce chat.",
+      "mailOwnerUnconfirmed": "Orca n'a pas pu confirmer que ce message est toujours destiné à ce chat.",
       "reopenChat": "Rouvrez le chat pour vérifier à nouveau.",
       "restartFailed": "L'agent n'a pas pu redémarrer.",
       "runClearWhenDone": "Lancez /clear quand il aura terminé.",
@@ -3460,18 +3658,77 @@
       "inputPane": "{{title}} · Saisie"
     },
     "structuredOpen": {
+      "goneGeneric": "Le chat de l'agent n'est plus sur cet hôte, il ne peut donc pas être rouvert ici.",
+      "unknownGeneric": "Le chat de l'agent est introuvable sur cet hôte. Reconnectez-vous à son ordinateur et réessayez.",
+      "unsupportedGeneric": "Le chat de l'agent ne peut pas être rouvert tant qu'Orca n'est pas mis à jour.",
+      "unreachableGeneric": "Le chat de l'agent n'est pas encore disponible. Réessayez dans un instant.",
+      "gone": "Le chat de {{agent}} n'est plus sur cet hôte, il ne peut donc pas être rouvert ici.",
+      "unknown": "Le chat de {{agent}} est introuvable sur cet hôte. Reconnectez-vous à son ordinateur et réessayez.",
+      "unsupported": "Le chat de {{agent}} ne peut pas être rouvert tant qu'Orca n'est pas mis à jour.",
+      "unreachable": "Le chat de {{agent}} n'est pas encore disponible. Réessayez dans un instant.",
+      "paneUnavailable": "Le volet de l'agent n'est plus disponible.",
       "worktreeDeleted": "Le worktree a été supprimé.",
       "projectRemoved": "Le projet a été retiré d’Orca.",
       "folderWorkspaceRemoved": "L’espace de travail de type dossier a été retiré."
     },
     "nativeChatView": {
+      "loading": "Chargement de la conversation…",
       "linkedMessageMissing": "Ce message est introuvable."
+    },
+    "contentState": {
+      "connectingTo": "Connexion à {{host}}…",
+      "connecting": "Connexion…",
+      "tabsStalled": "Le chargement des onglets prend plus de temps que prévu",
+      "tabsAsOf": "Dernier état des onglets : {{time}}"
+    },
+    "presentation": {
+      "loadingTabs": "Chargement des onglets",
+      "tapToRetry": "{{status}} — touchez pour réessayer"
+    },
+    "documentReaders": {
+      "markdownFailed": "Impossible de charger le Markdown",
+      "diffFailed": "Impossible de charger l'aperçu du diff",
+      "fileFailed": "Impossible de charger l'aperçu du fichier",
+      "outsideWorkspace": "Ce fichier se trouve en dehors de l'espace de travail. Ouvrez-le sur l'ordinateur pour le consulter."
+    },
+    "linkActionSheet": {
+      "openInOrca": "Ouvrir dans le navigateur Orca",
+      "openInBrowser": "Ouvrir dans le navigateur système",
+      "copyLink": "Copier le lien"
+    },
+    "usePrTextAction": {
+      "updateFailed": "Impossible de mettre à jour la pull request."
+    },
+    "smartKeys": {
+      "always": "Toujours",
+      "answer": "Répondre",
+      "background": "Arrière-plan",
+      "cancel": "Annuler",
+      "confirm": "Confirmer",
+      "edit": "Modifier",
+      "history": "Historique",
+      "keyLabel": "{{word}}, envoie {{combo}}",
+      "mode": "Mode",
+      "no": "Non",
+      "queue": "Mettre en file",
+      "reject": "Refuser",
+      "rewind": "Revenir",
+      "sendNow": "Envoyer maintenant",
+      "skip": "Ignorer",
+      "stop": "Arrêter",
+      "yes": "Oui"
     },
     "tabsSheet": {
       "needsYou": "Nécessitent votre attention",
       "working": "En cours",
       "everythingElse": "Tout le reste",
-      "closeTab": "Fermer {{title}}"
+      "closeTab": "Fermer {{title}}",
+      "panes_many": "{{count}} volets",
+      "panes_one": "{{count}} volet",
+      "panes_other": "{{count}} volets"
+    },
+    "tabMenu": {
+      "closeTab": "Fermer l'onglet"
     },
     "tabRows": {
       "browser": "Navigateur",
@@ -3481,7 +3738,12 @@
       "terminal": "Terminal"
     },
     "browserProfile": {
-      "default": "Par défaut"
+      "title": "Profil",
+      "default": "Par défaut",
+      "workspaceDefault": "Par défaut (espace de travail)"
+    },
+    "orcaCommands": {
+      "desktopOnly": "Disponible dans l'application de bureau"
     },
     "tabBar": {
       "oneTab": "1 onglet",
@@ -3491,6 +3753,14 @@
       "next": "Onglet suivant",
       "previous": "Onglet précédent",
       "hint": "Affiche tous les onglets"
+    },
+    "textSizeSheet": {
+      "chatTitle": "Texte du chat",
+      "size": "Taille",
+      "moreChat": "Autres paramètres de texte",
+      "terminalTitle": "Texte du terminal",
+      "pointsAndColumns": "{{points}} · {{count}} colonnes",
+      "moreTerminal": "Autres paramètres du terminal"
     }
   },
   "settings": {

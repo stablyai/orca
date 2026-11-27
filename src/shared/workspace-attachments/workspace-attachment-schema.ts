@@ -1,11 +1,11 @@
 import { normalizeWorkspaceAttachmentOrigins } from './workspace-attachment-origins'
 import * as z from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 import { normalizeWorkspaceAttachment } from './workspace-attachment-normalization'
 import type { WorkspaceAttachment } from '../worktree/types'
 
-export const WorkspaceAttachmentSchema = z
-  .unknown()
-  .transform((value, ctx): WorkspaceAttachment => {
+export const WorkspaceAttachmentSchema = lazyZodSchema(() =>
+  z.unknown().transform((value, ctx): WorkspaceAttachment => {
     const item = normalizeWorkspaceAttachment(value)
     if (!item) {
       ctx.addIssue({ code: 'custom', message: 'Invalid workspace attachment' })
@@ -35,5 +35,6 @@ export const WorkspaceAttachmentSchema = z
     }
     return item
   })
+)
 
-export const WorkspaceAttachmentsSchema = z.array(WorkspaceAttachmentSchema)
+export const WorkspaceAttachmentsSchema = lazyZodSchema(() => z.array(WorkspaceAttachmentSchema))

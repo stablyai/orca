@@ -4033,6 +4033,11 @@
       "commitSync": "Commit e Sincronizar",
       "commitThenPullPush": "Faça commit e depois pull e push",
       "enterMessage": "Digite uma mensagem de commit para fazer commit",
+      "statusConflicts": "Conflitos",
+      "statusNothingStaged": "Nada em stage",
+      "statusNeedsMessage": "Falta mensagem",
+      "statusNotPublished": "Não publicada",
+      "statusNoBranch": "Sem branch",
       "linkedReviewTargetUnavailable": "O destino da branch de revisão vinculada não está disponível",
       "prAlreadyMerged": "O PR já foi mergeado",
       "publishBranchFirstToPush": "Publique a branch primeiro para fazer push de commits",
@@ -4238,6 +4243,22 @@
       "unavailableTitle": "Controle de Código-Fonte Indisponível",
       "loading": "Carregando alterações…"
     },
+    "folder": {
+      "emptyTitle": "Ainda sem worktrees anexadas",
+      "emptyCopy": "Worktrees criadas a partir deste espaço de trabalho vão aparecer aqui.",
+      "statusUnavailable": "Indisponível",
+      "backToFolder": "Voltar para a pasta",
+      "createSection": "Criar uma worktree",
+      "createIn": "Criar uma worktree em {{repo}}",
+      "created": "Worktree {{name}} criada em {{repo}}",
+      "createdNamed": "Worktree {{name}} criada",
+      "createFailed": "Não foi possível criar uma worktree em {{repo}}.",
+      "loadReposRetry": "Carregar repositórios",
+      "setupChoiceTitle": "Tentar novamente sem configuração?",
+      "setupChoiceMessage": "O Orca não conseguiu confirmar a última criação em {{repo}}. Para tentar novamente, é preciso escolher a configuração: a worktree será criada sem executar a configuração do repositório.",
+      "setupChoiceSkip": "Tentar novamente sem configuração",
+      "checking": "Uma worktree de {{repo}} pode já ter sido criada. Verificando a pasta…"
+    },
     "prCreate": {
       "authRequired": "Autentique-se antes de criar um {{reviewLabel}}.",
       "baseNotOnRemote": "Faça push da branch base antes de criar um {{reviewLabel}}.",
@@ -4323,6 +4344,14 @@
       "rebaseFromBase": "Rebase a partir da base",
       "rebaseFromNamedBase": "Rebase a partir de {{baseRef}}",
       "rebaseWithLatestFrom": "Fazer rebase da branch atual com os commits mais recentes de {{baseRef}}",
+      "statusUpToDate": "Atualizada",
+      "statusSetsUpstream": "Define o upstream",
+      "statusNotPublished": "Não publicada",
+      "statusNoBranch": "Sem branch",
+      "statusMayFail": "Pode falhar",
+      "statusPublished": "Publicada",
+      "statusStashFirst": "Faça stash primeiro",
+      "statusReplaces": "Substitui ↓{{behind}}",
       "sync": "Sincronizar",
       "tryFastForwardPull": "Tente um pull com fast-forward; o git pode rejeitar commits locais",
       "tryRegularPush": "Tente um push normal; o git pode exigir force push",
@@ -5408,6 +5437,15 @@
       "discardChangesMessage": "As edições não salvas nesta automação serão perdidas.",
       "discard": "Descartar",
       "keepEditing": "Continuar editando",
+      "on": "Ativado",
+      "repeats": "Repetição",
+      "newOnePerRun": "Um novo por execução",
+      "moreActions": "Mais ações",
+      "noRunsYet": "Ainda não há execuções",
+      "nextRunToday": "Próxima execução hoje às {{time}}",
+      "nextRunTomorrow": "Próxima execução amanhã às {{time}}",
+      "nextRunWeekday": "Próxima execução {{day}} às {{time}}",
+      "nextRunDate": "Próxima execução em {{date}}",
       "chooseHost": "Automações em {{host}}, escolha outro host"
     },
     "orphanIssues": {
@@ -5680,6 +5718,87 @@
           }
         }
       }
+    }
+  },
+  "agents": {
+    "list": {
+      "idleCount": "Ociosos: {{count}}",
+      "offlineTitle": "{{desktop}} está offline",
+      "offlineMessage": "Reconecte-o para abrir este agente.",
+      "actions": "Ações para {{title}}",
+      "workers_many": "{{count}} workers",
+      "workers_one": "{{count}} worker",
+      "workers_other": "{{count}} workers",
+      "noMatches": "Nenhum agente corresponde a “{{query}}”",
+      "emptyTitle": "Nenhum agente em execução",
+      "pairDesktop": "Pareie um desktop para ver os agentes dele aqui.",
+      "emptyBody": "Inicie um agente em qualquer espaço de trabalho e ele aparecerá aqui.",
+      "unread": "Não lido",
+      "noDesktopTitle": "Nenhum desktop conectado",
+      "noDesktopBody": "Os agentes aparecem aqui quando um desktop se conecta.",
+      "hideWorkers": "Ocultar {{workers}}",
+      "showWorkers": "Mostrar {{workers}}"
+    },
+    "actions": {
+      "offlineHint": "O desktop dele está offline.",
+      "open": "Abrir",
+      "goToWorkspace": "Ir para o espaço de trabalho",
+      "copyTitle": "Copiar título",
+      "copied": "Copiado",
+      "copyFailed": "Não foi possível copiar o título",
+      "markRead": "Marcar como lido",
+      "markUnread": "Marcar como não lido",
+      "clear": "Remover da lista"
+    },
+    "groupBy": {
+      "status": "Status",
+      "workspace": "Espaço de trabalho",
+      "project": "Projeto",
+      "agent": "Agente",
+      "desktop": "Desktop"
+    },
+    "options": {
+      "groupBy": "Agrupar por",
+      "showWorkers": "Mostrar agentes worker",
+      "open": "Opções da lista de agentes",
+      "unreadOnly": "Somente não lidos",
+      "markAllRead": "Marcar tudo como lido",
+      "clearFinished": "Limpar concluídos"
+    },
+    "search": {
+      "toggle": "Buscar agentes",
+      "placeholder": "Buscar agentes"
+    },
+    "desktops": {
+      "pickerTitle": "Mostrar agentes em",
+      "agents_many": "{{count}} agentes",
+      "agents_one": "{{count}} agente",
+      "agents_other": "{{count}} agentes",
+      "all": "Todos os desktops",
+      "offline": "Offline",
+      "needsYou_many": "{{count}} precisam de você",
+      "needsYou_one": "{{count}} precisa de você",
+      "needsYou_other": "{{count}} precisam de você"
+    },
+    "sections": {
+      "needsYou": "Precisam de você",
+      "working": "Trabalhando",
+      "done": "Concluídos",
+      "offline": "Offline",
+      "offlineSeenAgo": "Offline · visto há {{ago}}",
+      "offlineSeenJustNow": "Offline · visto agora mesmo",
+      "seenAgo": "Visto há {{ago}}",
+      "seenJustNow": "Visto agora mesmo",
+      "clear": "Limpar"
+    },
+    "swipe": {
+      "read": "Lido",
+      "unread": "Não lido",
+      "clear": "Limpar"
+    },
+    "activity": {
+      "needsWindow": "Não foi possível atualizar. Abra o Orca em {{desktop}}.",
+      "failed": "Não foi possível atualizar a lista de agentes."
     }
   },
   "bots": {

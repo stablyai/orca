@@ -81,7 +81,8 @@ const HOST_SUPPORT_REASON: Record<StructuredAgentCreateSupportReason, AgentLaunc
     remote: 'remote_execution_host',
     wsl: 'wsl_execution_runtime',
     windows: 'chat_unavailable_on_windows',
-    'chat-program': 'chat_runtime_not_installed'
+    'chat-program': 'chat_runtime_not_installed',
+    'workspace-access': 'structured_unsupported_on_host'
   }
 
 /** Apply shared feasibility policy to facts available before resolving the workspace. */

@@ -21530,6 +21530,7 @@
       "explicitChatWslMoveToHost": "El chat no está disponible en una carpeta WSL abierta desde Windows. Ejecuta el proyecto en un host WSL para chatear allí, o abre el agente en una terminal.",
       "explicitChatWslRunAsHost": "Ejecutar {{distro}} como host",
       "structuredSessionTerminalNotVisible": "Orca abrió {{value0}} en una terminal, pero no pudo mostrarlo aquí cuando finalizó el lanzamiento. Se mantuvo el borrador de tu chat.",
+      "explicitChatWorkspaceAccess": "Orca no tiene permiso para abrir esta carpeta del espacio de trabajo. Verifique los permisos de la carpeta e inténtelo de nuevo.",
       "explicitChatUnavailable": "Este espacio de trabajo no puede ejecutar el chat. Verifique la instalación del agente o ábralo en una terminal.",
       "goalControl": {
         "settingsRejected": "Codex no pudo aplicar el modelo y el esfuerzo seleccionados. No se envió este cambio de objetivo. Revisa la selección e inténtalo de nuevo.",
@@ -22199,7 +22200,20 @@
         "unlisted": "Trabajo en segundo plano en ejecución",
         "unread": "No se pudieron cargar los trabajadores",
         "unreadDetail": "Los trabajadores aparecerán aquí cuando se carguen",
-        "chipLabel": "{{label}}, el más reciente: {{title}}"
+        "chipLabel": "{{label}}, el más reciente: {{title}}",
+        "backgroundCommandCount_one": "{{count}} comando en segundo plano",
+        "backgroundCommandCount_many": "{{count}} comandos en segundo plano",
+        "backgroundCommandCount_other": "{{count}} comandos en segundo plano",
+        "commandCount_one": "{{count}} comando",
+        "commandCount_many": "{{count}} comandos",
+        "commandCount_other": "{{count}} comandos",
+        "mixedRegion": "Trabajadores y comandos en segundo plano",
+        "commandsRegion": "Comandos en segundo plano",
+        "stopSubagentsAndCommands": "Detener subagentes y comandos",
+        "workersKeepRunning": "Los trabajadores siguen en ejecución",
+        "clearFailedWorkers": "Borrar trabajadores con error",
+        "mixedCount": "{{workers}} · {{commands}}",
+        "mixedCountSpoken": "{{workers}}, {{commands}}"
       },
       "webhookSetup": {
         "heading": "Configura un webhook",

@@ -9,6 +9,7 @@ import {
   type RichMarkdownImageInsertionTarget
 } from './rich-markdown-image-insertion-target'
 import { translate } from '@/i18n/i18n'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 export function useLocalImagePick(
   editor: Editor | null,
@@ -34,36 +35,41 @@ export function useLocalImagePick(
       return
     }
     pendingTargetsRef.current.add(target)
-    try {
-      const srcPath = await window.api.shell.pickImage()
-      if (!srcPath) {
-        return
-      }
-      if (!target.getRange()) {
-        showRichMarkdownImageInsertionCanceled()
-        return
-      }
-      await insertRichMarkdownImageFromPath({
-        editor,
-        filePath,
-        sourcePath: srcPath,
-        worktreeId,
-        runtimeEnvironmentId,
-        getInsertionRange: target.getRange
-      })
-    } catch (err) {
-      toast.error(
-        extractIpcErrorMessage(
-          err,
-          translate(
-            'auto.components.editor.useLocalImagePick.175cb8b8ce',
-            'Failed to insert image.'
+    await runWithFinally(
+      async () => {
+        try {
+          const srcPath = await window.api.shell.pickImage()
+          if (!srcPath) {
+            return
+          }
+          if (!target.getRange()) {
+            showRichMarkdownImageInsertionCanceled()
+            return
+          }
+          await insertRichMarkdownImageFromPath({
+            editor,
+            filePath,
+            sourcePath: srcPath,
+            worktreeId,
+            runtimeEnvironmentId,
+            getInsertionRange: target.getRange
+          })
+        } catch (err) {
+          toast.error(
+            extractIpcErrorMessage(
+              err,
+              translate(
+                'auto.components.editor.useLocalImagePick.175cb8b8ce',
+                'Failed to insert image.'
+              )
+            )
           )
-        )
-      )
-    } finally {
-      target.dispose()
-      pendingTargetsRef.current.delete(target)
-    }
+        }
+      },
+      () => {
+        target.dispose()
+        pendingTargetsRef.current.delete(target)
+      }
+    )
   }, [editor, filePath, runtimeEnvironmentId, worktreeId])
 }
