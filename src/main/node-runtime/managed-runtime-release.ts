@@ -1,7 +1,7 @@
 // Launch reads use receipts and member sizes; full hashing belongs to installation.
 
-import { lstatSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs'
-import { lstat, readdir, rm, writeFile } from 'node:fs/promises'
+import { lstatSync, readFileSync, readdirSync, realpathSync, statSync, type Stats } from 'node:fs'
+import { lstat, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { z } from 'zod'
 import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
@@ -115,7 +115,7 @@ export type InstalledRuntimeRelease = {
   current: boolean
 }
 
-type ReleaseRead = { releaseId: string } | 'broken' | 'unreadable'
+type ReleaseRead = { releaseId: string; version: string } | 'broken' | 'unreadable'
 
 export type InstalledRuntimeReleases = {
   /** Prefer the whole pinned release, then newest whole fallback; ignore staging, links and partial copies. */
@@ -233,42 +233,108 @@ export async function reclaimRuntimeReleases(
   )
   const stale = names.filter((name) => !keep.includes(name))
   const results = await Promise.allSettled(
-    stale.map((name) => rm(join(root, name), { recursive: true, force: true }))
+    stale.map(async (name) => {
+      const path = join(root, name)
+      if (name.startsWith('.download-') && (await hasUnreplacedRuntime(path, root, keep))) {
+        throw new Error(`Previous runtime release is still kept at ${join(path, 'damaged')}`)
+      }
+      await rm(path, { recursive: true, force: true })
+    })
   )
   return stale.filter((_, index) => results[index]?.status === 'rejected')
 }
 
-function readRelease(folder: string, version: string): ReleaseRead {
+async function hasUnreplacedRuntime(
+  staging: string,
+  root: string,
+  keep: readonly string[]
+): Promise<boolean> {
+  const damaged = join(staging, 'damaged')
+  try {
+    await lstat(damaged)
+  } catch (error) {
+    return !isDefinitiveAbsence(error)
+  }
+  // Failed repair backups become stale only once a whole replacement is published.
+  const previous = await readReleaseReceipt(damaged)
+  if (typeof previous !== 'object' || !keep.includes(previous.version)) {
+    return true
+  }
+  const folder = join(root, previous.version)
+  const replacement = await readReleaseReceipt(folder, previous.version)
+  if (typeof replacement !== 'object') {
+    return true
+  }
+  try {
+    for (const member of replacement.members) {
+      if (
+        !isWholeRuntimeMember(await lstat(join(folder, ...member.path.split('/'))), member.bytes)
+      ) {
+        return true
+      }
+    }
+    return false
+  } catch {
+    return true
+  }
+}
+
+function readRelease(folder: string, version?: string): ReleaseRead {
   try {
     const receiptPath = join(folder, RUNTIME_RELEASE_RECEIPT)
     const stat = lstatSync(receiptPath)
     if (!lstatSync(folder).isDirectory() || !stat.isFile() || stat.size > RECEIPT_MAX_BYTES) {
       return 'broken'
     }
-    const receipt = runtimeReleaseReceiptSchema.safeParse(
-      parseJson(readFileSync(receiptPath, 'utf8'))
+    const receipt = parseReleaseReceipt(readFileSync(receiptPath, 'utf8'), version)
+    const whole = receipt?.members.every((member) =>
+      isWholeRuntimeMember(lstatSync(join(folder, ...member.path.split('/'))), member.bytes)
     )
-    const whole =
-      receipt.success &&
-      receipt.data.version === version &&
-      receipt.data.platform === process.platform &&
-      receipt.data.arch === process.arch &&
-      receipt.data.members.every((member) => {
-        const segments = member.path.split('/')
-        if (segments.some((segment) => !segment || segment === '.' || segment === '..')) {
-          return false
-        }
-        const file = lstatSync(join(folder, ...segments))
-        return (
-          file.isFile() &&
-          file.size === member.bytes &&
-          (process.platform === 'win32' || (file.mode & 0o111) !== 0)
-        )
-      })
-    return whole ? { releaseId: receipt.data.releaseId } : 'broken'
+    return whole && receipt ? { releaseId: receipt.releaseId, version: receipt.version } : 'broken'
   } catch (error) {
     return isDefinitiveAbsence(error) ? 'broken' : 'unreadable'
   }
+}
+
+async function readReleaseReceipt(
+  folder: string,
+  version?: string
+): Promise<z.infer<typeof runtimeReleaseReceiptSchema> | 'broken' | 'unreadable'> {
+  try {
+    const receiptPath = join(folder, RUNTIME_RELEASE_RECEIPT)
+    const [directory, receipt] = await Promise.all([lstat(folder), lstat(receiptPath)])
+    if (!directory.isDirectory() || !receipt.isFile() || receipt.size > RECEIPT_MAX_BYTES) {
+      return 'broken'
+    }
+    return parseReleaseReceipt(await readFile(receiptPath, 'utf8'), version) ?? 'broken'
+  } catch (error) {
+    return isDefinitiveAbsence(error) ? 'broken' : 'unreadable'
+  }
+}
+
+function parseReleaseReceipt(
+  text: string,
+  version?: string
+): z.infer<typeof runtimeReleaseReceiptSchema> | null {
+  const receipt = runtimeReleaseReceiptSchema.safeParse(parseJson(text))
+  const valid =
+    receipt.success &&
+    (version === undefined || receipt.data.version === version) &&
+    receipt.data.platform === process.platform &&
+    receipt.data.arch === process.arch &&
+    receipt.data.members.every((member) => {
+      const segments = member.path.split('/')
+      return !segments.some((segment) => !segment || segment === '.' || segment === '..')
+    })
+  return valid ? receipt.data : null
+}
+
+function isWholeRuntimeMember(file: Stats, bytes: number): boolean {
+  return (
+    file.isFile() &&
+    file.size === bytes &&
+    (process.platform === 'win32' || (file.mode & 0o111) !== 0)
+  )
 }
 
 function parseJson(text: string): unknown {
