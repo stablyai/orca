@@ -1,12 +1,13 @@
 export class HostedReviewApiRequestError extends Error {
   readonly status: number | null
-  readonly timedOut: boolean
+  // The request may have written remotely: it timed out or its JSON success body was unreadable.
+  readonly unconfirmed: boolean
 
-  constructor(message: string, options: { status?: number | null; timedOut?: boolean } = {}) {
+  constructor(message: string, options: { status?: number | null; unconfirmed?: boolean } = {}) {
     super(message)
     this.name = 'HostedReviewApiRequestError'
     this.status = options.status ?? null
-    this.timedOut = options.timedOut ?? false
+    this.unconfirmed = options.unconfirmed ?? false
   }
 }
 
@@ -31,14 +32,25 @@ export async function requestHostedReviewJson<T>(
         status: response.status
       })
     }
-    return (await response.json()) as T
+    try {
+      return (await response.json()) as T
+    } catch (error) {
+      // A non-JSON success (an SSO, proxy or sign-in HTML page) never reached the provider's API.
+      if (!response.headers.get('content-type')?.includes('json')) {
+        throw error
+      }
+      throw new HostedReviewApiRequestError('Could not read the successful response body', {
+        status: response.status,
+        unconfirmed: true
+      })
+    }
   } catch (error) {
     if (error instanceof HostedReviewApiRequestError) {
       throw error
     }
     // AbortSignal.timeout() rejects with a TimeoutError, not an AbortError.
     if (error instanceof Error && error.name === 'TimeoutError') {
-      throw new HostedReviewApiRequestError('Request timed out', { timedOut: true })
+      throw new HostedReviewApiRequestError('Request timed out', { unconfirmed: true })
     }
     throw error
   }
