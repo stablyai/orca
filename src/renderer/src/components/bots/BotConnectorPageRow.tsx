@@ -2,7 +2,9 @@ import React, { useEffect, useRef } from 'react'
 import { ChevronLeft, ChevronRight, LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import { AttentionDot } from './AttentionDot'
+import { BARE_LOGO_BOX, BotLogoBare } from './apps/BotAppRow'
 import {
   BotConnectorPageSections,
   BotConnectorRowKey,
@@ -86,19 +88,30 @@ export function BotConnectorPageRow({
             </div>
             <div className="flex shrink-0 items-center gap-1.5 pt-0.5">
               {props.notice}
-              <RowFixOrStatus props={props} onOpen={open} />
+              <RowFixOrStatus
+                props={props.status?.listOnly ? { ...props, status: null } : props}
+                onOpen={open}
+              />
               {props.trailing}
-              {actions ? <BotConnectorMenu name={nameText} actions={actions} alwaysShown /> : null}
+              {actions ? (
+                <BotConnectorMenu
+                  name={nameText}
+                  actions={actions}
+                  alwaysShown
+                  popover={props.menuPopover}
+                />
+              ) : null}
             </div>
           </div>
         </>
       ) : (
         <div className="group/header relative flex min-h-[52px] items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent/40">
-          {props.logo ?? (
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted">
-              {props.icon}
-            </span>
-          )}
+          {/* Every row's logo is its bare mark in one 20 px box; the page's heading keeps its tile. */}
+          <BotLogoBare.Provider value={true}>
+            {props.logo ?? (
+              <span className={cn(BARE_LOGO_BOX, 'text-muted-foreground')}>{props.icon}</span>
+            )}
+          </BotLogoBare.Provider>
           <div className="min-w-0 flex-1">
             {/* Stretched over the row, so a click anywhere but the fix opens its page. */}
             <button

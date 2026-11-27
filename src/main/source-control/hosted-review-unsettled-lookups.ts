@@ -46,9 +46,3 @@ export function lookupCapacityRefusal(key: string): string | null {
   }
   return null
 }
-
-/** @internal - exposed for tests only */
-export function __resetUnsettledHostedReviewLookupsForTests(): void {
-  unsettledByKey.clear()
-  detachedTotal = 0
-}

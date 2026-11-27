@@ -43,8 +43,20 @@ async function main() {
       ? (resolved.endsWith(sep) ? resolved.slice(0, -1) : resolved) +
         (suffix.startsWith(sep) || (sep === '\\' && suffix.startsWith('/')) ? '' : sep) + suffix
       : resolved);
-    if (candidate && comparison(candidate) === source) {
+    const compared = candidate && comparison(candidate);
+    if (compared === source) {
       process.stdout.write(JSON.stringify({version:1, matched:true}));
+      return;
+    }
+    // A conversation saved in a sub-folder belongs to the workspace, as Session History lists it.
+    // Name it by the segments past the workspace, so the host can spell it from the workspace path.
+    if (compared && source.startsWith(/^(?:[a-z]:)?\/$/.test(compared) ? compared : compared + '/')) {
+      const depth = compared.split('/').filter(Boolean).length;
+      const raw = request.sourceCwd.trim();
+      // Only Windows paths separate with a backslash; POSIX names may contain one.
+      const windows = /^[A-Za-z]:[\\/]/.test(raw) || raw.startsWith('\\\\') || raw.startsWith('//');
+      const inside = raw.split(windows ? /[\\/]+/ : /\/+/).filter(Boolean).slice(depth).join('/');
+      process.stdout.write(JSON.stringify({version:1, matched:true, inside}));
       return;
     }
     const parent = dirname(prefix);
@@ -65,7 +77,13 @@ export class AdoptedDirectoryProbes {
     return this.owned.size
   }
 
-  async matches(workspaceCwd: string, sourceCwd: string, signal?: AbortSignal): Promise<boolean> {
+  /** The source folder's path inside the workspace after resolving the workspace's links: '' for the
+   *  workspace itself, `/`-separated segments for a sub-folder, null for neither. */
+  async relate(
+    workspaceCwd: string,
+    sourceCwd: string,
+    signal?: AbortSignal
+  ): Promise<string | null> {
     const job = {}
     this.owned.add(job)
     const env = pickAllowedEnv(RUNTIME_ENV_ALLOWLIST, process.env, process.platform)
@@ -97,7 +115,14 @@ export class AdoptedDirectoryProbes {
       ) {
         throw new Error('Invalid directory verification response')
       }
-      return value.matched
+      if (!value.matched) {
+        return null
+      }
+      const inside = 'inside' in value ? value.inside : ''
+      if (typeof inside !== 'string') {
+        throw new Error('Invalid directory verification response')
+      }
+      return inside
     } catch {
       throw new Error('The conversation directory could not be verified. Try Resume again.')
     }

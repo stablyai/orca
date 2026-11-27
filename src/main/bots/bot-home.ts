@@ -3,6 +3,7 @@ import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
+import { BOT_MEMORY_SEED_INTRO } from '../../shared/bot-memory-lines'
 import type { Bot } from '../../shared/bot-types'
 import { starterSoul } from '../../shared/bot-soul'
 import { normalizeRuntimePathForComparison } from '../../shared/file-access/cross-platform-path'
@@ -10,6 +11,7 @@ import { errnoCodeOrUnknown } from '../../shared/errors/errno-code'
 import type { ProjectGroup } from '../../shared/project/groups/project-group-types'
 import { getDiskBaselineSignature } from '../../shared/file-write/disk-baseline-signature'
 import { writeLocalTextFileWithDiskPrecondition } from '../filesystem/local-file-io/local-disk-write-precondition'
+import { durableWriteTempPath, writeFileDurable } from '../filesystem/durable-file-write'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 
 /** The disk a bot home lives on; only this computer's today, an SSH/WSL adapter later. */
@@ -23,6 +25,8 @@ export type BotHomeFilesystem = {
   /** A file's size and last change; null when it is missing or unreadable. */
   statFile(path: string): Promise<{ size: number; mtimeMs: number } | null>
   writeBytes(path: string, bytes: Uint8Array): Promise<void>
+  /** Replaces the file whole or not at all: a crash mid-write leaves the old one. */
+  replaceBytes(path: string, bytes: Uint8Array): Promise<void>
   /** `exclusive` leaves an existing file untouched and reports false. */
   writeText(path: string, text: string, options?: { exclusive?: boolean }): Promise<boolean>
   /** Writes `text` only if the file still holds `expected`; false when it changed meanwhile. */
@@ -43,6 +47,7 @@ export const localBotHomeFilesystem: BotHomeFilesystem = {
       () => null
     ),
   writeBytes: (path, bytes) => writeFile(path, bytes),
+  replaceBytes: (path, bytes) => writeFileDurable(durableWriteTempPath(path), path, bytes),
   writeText: async (path, text, options) => {
     try {
       await writeFile(path, text, options?.exclusive ? { flag: 'wx' } : undefined)
@@ -143,6 +148,7 @@ type BotHomeFile = { path: string; text: string }
 
 /** Orca owns these and rewrites them whenever they differ. */
 export function generatedBotHomeFiles(bot: Bot): BotHomeFile[] {
+  const clearedLook = bot.avatarRevision ? null : undefined
   return [
     {
       path: 'AGENTS.md',
@@ -168,6 +174,13 @@ export function generatedBotHomeFiles(bot: Bot): BotHomeFile[] {
           name: bot.name,
           agent: bot.agent,
           avatar: bot.avatar,
+          avatarColor: bot.avatarColor ?? clearedLook,
+          avatarOutfit: bot.avatarOutfit ?? clearedLook,
+          generatedOverMascot: bot.generatedOverMascot,
+          avatarRevisionEpoch: bot.avatarRevisionEpoch,
+          // Kept here as well as in the record, which saves on a debounce: after a crash the higher of
+          // the two is still at least every revision a write acknowledged.
+          ...(bot.avatarRevision ? { avatarRevision: bot.avatarRevision } : {}),
           members: bot.members,
           ...(bot.skillProjects?.length ? { skillProjects: bot.skillProjects } : {})
         },
@@ -190,8 +203,7 @@ export function seededBotHomeFiles(bot: Bot, soul?: string): BotHomeFile[] {
   ]
 }
 
-export const BOT_MEMORY_SEED =
-  '# Memory\n\nOne line per fact, newest first. Longer notes go in memory/<topic>.md.\n'
+export const BOT_MEMORY_SEED = `# Memory\n\n${BOT_MEMORY_SEED_INTRO}\n`
 
 /** Safe to repeat: seeded files are never overwritten and generated ones are written only on change. */
 export async function writeBotHome(

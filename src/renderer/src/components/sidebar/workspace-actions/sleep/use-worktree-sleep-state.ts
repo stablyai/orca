@@ -85,7 +85,3 @@ export function selectIsSleepingWorktree(state: SleepStateInput, worktreeId: str
 export function useIsSleepingWorktree(worktreeId: string): boolean {
   return useAppStore((state) => selectIsSleepingWorktree(state, worktreeId))
 }
-
-export function resetWorktreeSleepStateCacheForTests(): void {
-  liveAgentGeneration = null
-}

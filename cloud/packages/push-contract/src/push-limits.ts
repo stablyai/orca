@@ -12,6 +12,9 @@ export const PUSH_LIMITS = {
   clockSkewToleranceMs: 30_000,
   sessionTtlMs: 24 * 60 * 60 * 1000,
   notificationTtlSeconds: 5 * 60,
+  maxBadgeCount: 99_999,
+  // The desktop's push registration lease; a phone renews it while it uses that host.
+  registrationLeaseMs: 7 * 24 * 60 * 60 * 1000,
   // Rate-limit unauthenticated challenge/session writes before generating keys.
   unauthenticatedRequestsPerMinutePerIp: 30,
   authenticatedRequestsPerMinutePerIp: 6_000,

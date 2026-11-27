@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
 import { codeHostReadExecutionScope as githubReadExecutionScope } from '../../../source-control/code-host-read-execution-scope'
 import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from '../../api/rate-limit'
@@ -15,10 +16,6 @@ const COMMIT_PULLS_PAGE_SIZE = 100
 const COMMIT_PULLS_MAX_PAGES = 5
 export type MergedPRHeadRelationship = MergedPRCommitMembership | 'associated'
 const membershipMemo = new MergedReviewMembershipMemo<MergedPRHeadRelationship>()
-
-export function resetMergedPRCommitMembershipCacheForTest(): void {
-  membershipMemo.clear()
-}
 
 /** Force-push history proves association only; it cannot prove those changes landed. */
 export async function getMergedPRHeadRelationship(args: {
@@ -87,24 +84,26 @@ export async function getMergedPRHeadRelationship(args: {
 
 const FORCE_PUSH_EVENTS_LIMIT = 100
 
-const forcePushTimelineSchema = z.object({
-  data: z.object({
-    repository: z
-      .object({
-        pullRequest: z
-          .object({
-            timelineItems: z.object({
-              pageInfo: z.object({ hasPreviousPage: z.boolean() }),
-              nodes: z.array(
-                z.object({ beforeCommit: z.object({ oid: z.string() }).nullish() }).nullable()
-              )
+const forcePushTimelineSchema = lazyZodSchema(() =>
+  z.object({
+    data: z.object({
+      repository: z
+        .object({
+          pullRequest: z
+            .object({
+              timelineItems: z.object({
+                pageInfo: z.object({ hasPreviousPage: z.boolean() }),
+                nodes: z.array(
+                  z.object({ beforeCommit: z.object({ oid: z.string() }).nullish() }).nullable()
+                )
+              })
             })
-          })
-          .nullable()
-      })
-      .nullable()
+            .nullable()
+        })
+        .nullable()
+    })
   })
-})
+)
 
 // A rebase pushed from another checkout drops this commit's PR association; the PR's force-push
 // history still names it, so the checkout provably held this PR's head.

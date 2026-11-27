@@ -25,6 +25,9 @@ import {
   scrollSubsectionIntoView,
   SETTINGS_TARGET_HIGHLIGHT_MS
 } from '../navigation/settings-navigation-foundations'
+import { cancelPendingSettingsTargetFocus } from '../navigation/settings-target-focus'
+
+const RESOLVED_WRITE_QUEUE = Promise.resolve()
 
 export type SettingsInteractionModel = Pick<
   SettingsStoreModel,
@@ -82,10 +85,12 @@ export function useSettingsInteractionController(model: SettingsInteractionModel
   const pendingScrollTargetRef = useRef<string | null>(null)
   const pendingSubsectionScrollFrameRef = useRef<number | null>(null)
   const pendingScrollTargetWatchRef = useRef<SettingsDeepLinkTargetWatch | null>(null)
+  // A deep link that asked for focus: the subsection id, until its reveal starts the focus watch.
+  const pendingFocusTargetRef = useRef<string | null>(null)
+  const pendingFocusWatchRef = useRef<SettingsDeepLinkTargetWatch | null>(null)
   const repoHooksRequestSeqRef = useRef(0)
   const shortcutsEscapeConfirmUntilRef = useRef(0)
-  const sourceControlAiWriteQueueRef = useRef<Promise<void>>(undefined!)
-  sourceControlAiWriteQueueRef.current ??= Promise.resolve()
+  const sourceControlAiWriteQueueRef = useRef<Promise<void>>(RESOLVED_WRITE_QUEUE)
 
   const hasUnsavedSourceControlAiPromptChanges =
     hasUnsavedCommitPromptChanges || hasUnsavedBranchPromptChanges || hasUnsavedChatPromptChanges
@@ -141,6 +146,7 @@ export function useSettingsInteractionController(model: SettingsInteractionModel
     // Cancel pending subsection jumps so stale frames cannot run after close.
     cancelPendingSettingsSubsectionScrollFrame(pendingSubsectionScrollFrameRef)
     cancelPendingSettingsDeepLinkTargetWatch(pendingScrollTargetWatchRef)
+    cancelPendingSettingsTargetFocus({ pendingFocusTargetRef, pendingFocusWatchRef })
   }, [])
 
   useEffect(() => {
@@ -287,6 +293,8 @@ export function useSettingsInteractionController(model: SettingsInteractionModel
     pendingScrollTargetRef,
     pendingSubsectionScrollFrameRef,
     pendingScrollTargetWatchRef,
+    pendingFocusTargetRef,
+    pendingFocusWatchRef,
     repoHooksRequestSeqRef,
     shortcutsEscapeConfirmUntilRef,
     hasUnsavedSourceControlAiPromptChanges,

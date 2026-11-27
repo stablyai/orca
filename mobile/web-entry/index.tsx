@@ -5,8 +5,8 @@ import type { QueryClient } from '@tanstack/react-query'
 import { ExpoRoot } from 'expo-router'
 import {
   applyMobileColorScheme,
-  colors,
   getMobileColorScheme,
+  getMobilePalette,
   subscribeMobileColorScheme
 } from '../src/theme/mobile-theme'
 import type { BridgeRpcClient } from '../src/mobile-web-shell/bridge/client-state/bridge-rpc-client-contract'
@@ -16,7 +16,10 @@ import {
   stampPageMountState,
   type PageMountTarget
 } from '../src/mobile-web-shell/bridge/page-lifecycle/page-bootstrap'
-import { storageReadResultSchema } from '../src/mobile-web-shell/bridge/native-capabilities/bridge-native-verbs'
+import {
+  linkOpenResultSchema,
+  storageReadResultSchema
+} from '../src/mobile-web-shell/bridge/native-capabilities/bridge-native-verbs'
 import { BRIDGE_HOST_CATALOGS_GRANT } from '../src/mobile-web-shell/bridge/protocol/bridge-frame-fields'
 import {
   publishPageStorage,
@@ -138,6 +141,7 @@ if (!container) {
 const target = document.documentElement
 // Keep <html> transparent: overlay routes show the native screen through it, and the shell paints bgBase behind the rest.
 function paintDocumentScheme(): void {
+  const colors = getMobilePalette()
   target.style.setProperty('--muted-foreground', colors.textMuted)
   target.style.setProperty('--foreground', colors.textPrimary)
   target.style.colorScheme = getMobileColorScheme()
@@ -173,7 +177,21 @@ bootstrapShellPage({
     })
     // Publish plain-function seams before first render because effects and initial list paint already read them.
     publishPageHostProfile(session.host)
-    publishExternalLinkOpener((url) => client.notifyExternalLink(url))
+    publishExternalLinkOpener(
+      // Older shells only take the link; this one says whether an app opened it.
+      session.grants.native.includes('native.link.open')
+        ? async (url) => {
+            try {
+              return linkOpenResultSchema.parse(
+                (await client.callNativeVerb('native.link.open', { url })).result
+              ).opened
+            } catch {
+              // A reply lost while the phone was in the other app doesn't mean nothing opened.
+              return true
+            }
+          }
+        : (url) => client.notifyExternalLink(url)
+    )
     publishHapticsNotifier((kind) => client.notifyHaptics(kind))
     // Expose shell keyboard height to hooks and plain functions.
     publishShellKeyboardSource({

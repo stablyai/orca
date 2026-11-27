@@ -28,6 +28,7 @@ export type GitHubWorkItem = {
   url: string
   labels: string[]
   updatedAt: string
+  createdAt?: string
   author: string | null
   branchName?: string
   baseRefName?: string

@@ -13,6 +13,8 @@ type HostBotsEntry = {
   needsYou: Readonly<Record<string, number>>
   /** This host's Orca Cloud link. A list that omits it clears a status kept from an older read. */
   connectorStatus?: ConnectorCloudStatus
+  /** Its Orca Cloud answers an event in that event's thread; false from an older host. */
+  threadReplies: boolean
 }
 
 const entries = new Map<string, HostBotsEntry>()
@@ -30,14 +32,15 @@ function subscribe(listener: () => void): () => void {
 export function publishHostBots(
   key: string,
   read: Pick<HostBotsEntry, 'bots' | 'hideBotCreated'> &
-    Partial<Pick<HostBotsEntry, 'needsYou' | 'connectorStatus'>>
+    Partial<Pick<HostBotsEntry, 'needsYou' | 'connectorStatus' | 'threadReplies'>>
 ): void {
-  const { bots, hideBotCreated, needsYou = {}, connectorStatus } = read
+  const { bots, hideBotCreated, needsYou = {}, connectorStatus, threadReplies = false } = read
   entries.set(key, {
     bots,
     hideBotCreated,
     needsYou,
     connectorStatus,
+    threadReplies,
     statusByBotId: entries.get(key)?.statusByBotId ?? new Map()
   })
   notify()
@@ -97,6 +100,26 @@ export function useHostBotById(botId: string): PhoneBot | null {
     subscribe,
     () => botById(botId),
     () => null
+  )
+}
+
+const NO_BOTS: readonly PhoneBot[] = []
+
+function botsListing(botId: string): readonly PhoneBot[] {
+  for (const entry of entries.values()) {
+    if (entry.bots.some((candidate) => candidate.id === botId)) {
+      return entry.bots
+    }
+  }
+  return NO_BOTS
+}
+
+/** Every bot on the computer that lists this one; empty until a list holding it has been read. */
+export function useHostBotsListing(botId: string): readonly PhoneBot[] {
+  return useSyncExternalStore(
+    subscribe,
+    () => botsListing(botId),
+    () => NO_BOTS
   )
 }
 

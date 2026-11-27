@@ -10,6 +10,7 @@ import { structuredMailWasDeliveredWhole } from './structured-mail-whole'
 import type { JournalMailObservation } from '../../../../native-chat/agent-session-journal/journal-mail-observation'
 import { reconcileLifecycleMessage } from '../../workers/lifecycle/lifecycle-reconciliation'
 import type { QueuedMessageOwed } from '../../../../native-chat/agent-session-journal/queued-messages/queued-message-consume-error'
+import { sessionMailTaker } from '../../db/messages/mail-taker'
 import {
   orchestrationMailNotice,
   type AgentMessageSource
@@ -224,7 +225,13 @@ export function settleStructuredMailAttempt(
   }
   const owed = currentOwed()
   const state = observation.state
-  const retire = (consumed: boolean) => db.retireStructuredMailSend(row, consumed)
+  const taker = sessionMailTaker(row.session_id)
+  // Taken whole, so read; or left unread, still with this chat when owed here, else with nobody.
+  const retire = (consumed: boolean) =>
+    db.retireStructuredMailSend(
+      row,
+      consumed ? { read: true, taker } : { read: false, taker: owed === 'owed' ? taker : null }
+    )
   const release = () => {
     decision.released = db.releaseStructuredMailSend(row)
   }
@@ -267,7 +274,7 @@ export function settleStructuredMailAttempt(
       break
     case 'rejected':
       if (state.cancelled) {
-        retire(false)
+        db.retireStructuredMailSend(row, { read: false, taker: null })
       } else if (owed === 'stale') {
         release()
       } else {
@@ -283,7 +290,11 @@ export function settleStructuredMailAttempt(
       ) {
         release()
       } else if (observation.withdrawal === 'person' && owed === 'owed') {
-        retire(true)
+        // The person removed it before the agent read it.
+        db.retireStructuredMailSend(row, {
+          read: true,
+          taker: { kind: 'dropped', why: 'withdrawn' }
+        })
       } else {
         decision.outstanding = true
       }

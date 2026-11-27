@@ -162,7 +162,7 @@ export function ManagedServerPrimaryAction({
   )
 }
 
-function ConfirmStrip({
+export function ConfirmStrip({
   message,
   confirmLabel,
   keepLabel,
@@ -231,7 +231,7 @@ export function ManagedServerConfirmations({
   if (forceUpdate) {
     return (
       <ConfirmStrip
-        message={forceUpdateMessage(t)}
+        message={forceUpdateMessage(t, forceUpdate.uncounted === true)}
         confirmLabel={t(
           'auto.components.settings.managedServers.row.updateAnyway',
           'Update anyway'

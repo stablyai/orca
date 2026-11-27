@@ -13,6 +13,7 @@ import { awaitWindowsHostGitEnvironmentReady } from '../../git/command-runner/ho
 import { getRepoName } from '../../git/repositories/repository-name'
 import { inspectGitRepoForRegistrationAsync } from '../../git/repositories/discovery/repo-detection'
 import {
+  ensureCloneDestination,
   getClonePathComparisonKey,
   getSavedProjectPathKeys
 } from '../../git/repositories/cloning/repo-clone-path'
@@ -86,7 +87,8 @@ export class RuntimeRepositoryRegistrationController {
     const gitInfo = kind === 'git' ? await inspectGitRepoForRegistrationAsync(path) : null
     if (gitInfo && !gitInfo.isRepo) {
       throw new Error(
-        (await describeWslUncAccessDenied(path, store.getSettings())) ??
+        gitInfo.ownershipError ??
+          (await describeWslUncAccessDenied(path, store.getSettings())) ??
           `Not a valid git repository: ${path}`
       )
     }
@@ -202,7 +204,7 @@ export class RuntimeRepositoryRegistrationController {
 
     let createdDir = false
     try {
-      await mkdir(trimmedParentPath, { recursive: true })
+      await ensureCloneDestination(trimmedParentPath)
       const existingStat = await stat(targetPath).catch((error: unknown) => {
         if (isENOENT(error)) {
           return null

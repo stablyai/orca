@@ -14,6 +14,7 @@ import {
   type SystemSshBuildArgsOptions
 } from '../system-ssh-args'
 import { spawnSystemSshCommand } from '../system-ssh-command'
+import { terminateSystemSsh } from '../system-ssh-termination'
 import {
   isWindowsRemoteHost,
   joinRemotePath,
@@ -66,8 +67,10 @@ export async function uploadDirectoryViaSystemSsh(
   throwIfAborted(options?.signal)
   // Why: Windows bsdtar reads argv in the ANSI code page, so a non-ASCII localDir would turn into
   // '?'. Node passes cwd through CreateProcessW, which keeps the path intact.
-  const tarCreate = spawn(tarProgram, ['-czf', '-', '.'], {
-    cwd: localDir,
+  // Why `-C` elsewhere: a child cwd would also change how relative PATH entries find tar.
+  const onWindows = process.platform === 'win32'
+  const tarCreate = spawn(tarProgram, ['-czf', '-', ...(onWindows ? [] : ['-C', localDir]), '.'], {
+    ...(onWindows ? { cwd: localDir } : {}),
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true
   })
@@ -88,7 +91,7 @@ export async function uploadDirectoryViaSystemSsh(
       options?.signal,
       () => {
         killProcess(tarCreate)
-        killProcess(sshExtract)
+        terminateSystemSsh(sshExtract)
       },
       settleUploadPipeline(
         waitForProcess(tarCreate, 'local tar relay upload'),
@@ -98,7 +101,7 @@ export async function uploadDirectoryViaSystemSsh(
     )
   } catch (err) {
     killProcess(tarCreate)
-    killProcess(sshExtract)
+    terminateSystemSsh(sshExtract)
     throw err
   }
 

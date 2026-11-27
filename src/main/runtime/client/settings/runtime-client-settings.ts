@@ -14,6 +14,7 @@ import { normalizeSourceControlGroupOrder } from '../../../../shared/source-cont
 import { applyNativeChatSessionOptionSettingsMutation } from '../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import type { NativeChatSessionOptionSettingsMutation } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { getHostDisplayLabelOverrides } from '../../../../shared/execution-host/host-setting-overrides'
+import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { getDefaultWorkspaceCleanupRules } from '../../../../shared/workspace-cleanup/workspace-cleanup-policy'
 import { nativeChatQueueFollowUps } from '../../../../shared/native-chat/input/composer/native-chat-follow-up-behavior'
 import { nativeChatShowsCiResultLines } from '../../../../shared/native-chat/settings/native-chat-appearance-settings'
@@ -21,7 +22,6 @@ import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/termi
 import { TERMINAL_DEFAULT_WORD_SEPARATOR } from '../../../../shared/terminal/input/terminal-word-separator'
 import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import { recordManagedHookInstallFailure } from '../../../agent-hooks/installation/install-telemetry'
-import { applyAgentStatusHooksEnabled } from '../../../agent-hooks/installation/managed-agent-hook-controls'
 import { isWslHostOrcadProcess } from '../../../wsl/filesystem/wsl-guest-windows-drive-path'
 import { isAgentStatusHooksEnabledForAgent } from '../../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
@@ -139,6 +139,7 @@ export class RuntimeClientSettingsController {
       // Resolved, so a phone can tell a reported value from an older host's absence.
       nativeChatCiResultLines: nativeChatShowsCiResultLines(settings),
       hostNotifications: projectHostNotificationSettings(settings.notifications),
+      trackerAccountHost: getSettingsFocusedExecutionHostId(settings),
       // Why projected: a paired client's AI buttons start these actions' agents, and must honour
       // the agent saved for each one as the desktop does. Absent on older hosts.
       sourceControlAi: projectSourceControlLaunchRecipes(settings),
@@ -303,6 +304,8 @@ export class RuntimeClientSettingsController {
       if (!settings) {
         return
       }
+      const { applyAgentStatusHooksEnabled } =
+        await import('../../../agent-hooks/installation/managed-agent-hook-controls')
       await applyAgentStatusHooksEnabled(settings.agentStatusHooksEnabled !== false, settings, {
         // R42, COMPAT(wsl-bridge): the bridge's panes in this distro share these entries; drop at D4.
         keepSharedEntries: isWslHostOrcadProcess(),

@@ -13,6 +13,8 @@ import type { PersistedUIState } from '../../../../../shared/orca-profiles/persi
 import { isWorkspaceHostScope } from '../../../../../shared/orcad-migration/orcad-migration-client-state-value-validation'
 import { defineMethod, type RpcContext } from '../../core'
 import { keepSessionPicksOnBot } from '../../../../bots/bot-session-option-picks'
+import { assertTeamAllowsBots, botsBlockedByTeam } from '../../../../bots/bot-team-policy'
+import { withoutSendCheckedEffortPicks } from '../../../../native-chat/agent-session-wire/options/send-checked-effort-picks'
 import { isHostOwnPhone } from '../../callers/host-own-phone'
 import {
   NativeChatSessionOptionsMutation,
@@ -96,15 +98,24 @@ export const CLIENT_UI_METHODS = [
     name: 'settings.get',
     permission: 'workspace',
     params: null,
-    handler: (_params, { runtime }) => ({ settings: runtime.getClientSettings() })
+    handler: (_params, { runtime }) => ({
+      settings: runtime.getClientSettings(),
+      ...(botsBlockedByTeam() ? { botsBlockedByTeam: true } : {})
+    })
   }),
   defineMethod({
     name: 'settings.update',
     permission: 'settings-write',
     params: SettingsUpdate,
-    handler: async (params, { runtime }) => ({
-      settings: await runtime.updateClientSettings(params)
-    })
+    handler: async (params, { runtime }) => {
+      if (params.botsEnabled !== undefined) {
+        assertTeamAllowsBots()
+      }
+      return {
+        settings: await runtime.updateClientSettings(params),
+        ...(botsBlockedByTeam() ? { botsBlockedByTeam: true } : {})
+      }
+    }
   }),
   defineMethod({
     name: 'settings.getTerminalQuickCommands',
@@ -149,8 +160,12 @@ export const CLIENT_UI_METHODS = [
     permission: 'settings-write',
     params: NativeChatSessionOptionsMutation,
     handler: async (params, { runtime }) => {
-      if (!(await keepSessionPicksOnBot(runtime.bots, params))) {
-        runtime.updateClientNativeChatSessionOptions(params)
+      const mutation = withoutSendCheckedEffortPicks(params)
+      if (mutation.type === 'apply-picks' && mutation.picks.length === 0) {
+        return { ok: true as const }
+      }
+      if (!(await keepSessionPicksOnBot(runtime.bots, mutation))) {
+        runtime.updateClientNativeChatSessionOptions(mutation)
       }
       return { ok: true as const }
     }

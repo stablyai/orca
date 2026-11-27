@@ -11,7 +11,8 @@ import {
 } from '../../../orchestration/mutations/orchestration-mutation-receipt'
 import { exposeMessage } from './mailbox-message-receipt'
 import { recordReceiptBeforeNudge, replayMutationNudge } from './mutation-replay-nudge'
-import { botAnswerPayload } from './bot-request-outcome'
+import { botAnswerPayload, groupAnswerTurn } from './bot-request-outcome'
+import { runtimeBotGroups } from '../../../../../bots/bot-group-runtime'
 import { resolveCheckedReplyRecipient } from './reply-follow-up'
 import { replyAccess } from './reply-access'
 import { replyToRemoteRunHome } from '../../../../orchestration/legacy-remote/reply-remote'
@@ -24,6 +25,8 @@ import {
 } from '../../../../orchestration/workers/reports/report-follow-up-action'
 import { formatFinishedReportReplyRefusal } from '../../../../../../shared/orchestration/mailbox/orchestration-report-follow-up'
 import { sessionCallerOf } from '../../../../orchestration/addressing/orchestration-caller-identity'
+import { runLifecycleWriteTransaction } from '../../../../orchestration/db/lifecycle-write-transaction-runner'
+import { replySubject } from '../../../../../../shared/orchestration/mailbox/reply-subject'
 
 export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
   name: 'orchestration.reply',
@@ -161,21 +164,37 @@ export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
       terminalRecipient
     })
     const replyFrom = params.from ?? original.to_handle
-    const reply = db.insertMessage({
-      from: replyFrom,
-      senderDispatchId: db.getActiveDispatchForIdentity(
-        replyFrom,
-        runtime.getTerminalPaneKey(replyFrom) ?? undefined
-      )?.id,
-      to: recipient.to,
-      subject: `Re: ${original.subject}`,
-      body: params.body,
-      threadId: original.thread_id ?? original.id,
-      runId: recipient.runId,
-      // Refuses a second answer to a bot request, before the original is marked read.
-      payload: botAnswerPayload(db, original)
+    const answerTurn = await groupAnswerTurn(
+      runtime,
+      original,
+      sessionCallerOf(orchestrationCaller)?.sessionId,
+      params.body
+    )
+    const senderDispatchId = db.getActiveDispatchForIdentity(
+      replyFrom,
+      runtime.getTerminalPaneKey(replyFrom) ?? undefined
+    )?.id
+    // The answer's record and its mail commit together, so a crash between them can't keep one alone.
+    const reply = runLifecycleWriteTransaction(db.db, 'reply_with_answer', () => {
+      const stored = db.insertMessage({
+        from: replyFrom,
+        senderDispatchId,
+        to: recipient.to,
+        subject: replySubject(original.subject),
+        body: params.body,
+        threadId: original.thread_id ?? original.id,
+        replyTo: original.id,
+        runId: recipient.runId,
+        // Refuses a second answer to a bot request, before the original is marked read.
+        payload: botAnswerPayload(db, original, answerTurn !== null)
+      })
+      db.markAsRead([original.id], { kind: 'reply' })
+      return stored
     })
-    db.markAsRead([original.id])
+    // Written only now, so a reply refused above (a second answer) never shows in the room.
+    if (answerTurn) {
+      runtimeBotGroups(runtime).saveAnswer(answerTurn, params.body)
+    }
 
     const receipt = {
       message: exposeMessage(reply),

@@ -1,7 +1,6 @@
 import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import { getPtyExecutionHost } from '../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 import type { LegacyWorkerTerminalRecoveryPlan } from './release/orchestration-legacy-worker-terminal-recovery'
-import { runLegacyWorkerTerminalRecovery } from './runtime-legacy-worker-terminal-recovery-runner'
 import type {
   LegacyWorkerRecoveryOptions,
   LegacyWorkerRecoveryPorts,
@@ -18,13 +17,6 @@ type RecoveryRetry = {
 
 // Retain controllers only while timers need cancellation during test teardown.
 const controllersWithArmedRetries = new Set<RuntimeLegacyWorkerTerminalRecoveryController>()
-
-/** Stop every armed recovery retry. Test-only: a retry loop must not outlive the test that armed it. */
-export function __cancelLegacyWorkerTerminalRecoveryRetriesForTests(): void {
-  for (const controller of Array.from(controllersWithArmedRetries)) {
-    controller.cancelAllRetries()
-  }
-}
 
 export class RuntimeLegacyWorkerTerminalRecoveryController {
   private queue: Promise<void> = Promise.resolve()
@@ -76,6 +68,11 @@ export class RuntimeLegacyWorkerTerminalRecoveryController {
         }
         if (!options.retry) {
           this.cancelScope(options.connectionId ? `ssh:${options.connectionId}` : 'local')
+        }
+        const { runLegacyWorkerTerminalRecovery } =
+          await import('./runtime-legacy-worker-terminal-recovery-runner')
+        if (this.stopped) {
+          throw new Error('worker_terminal_recovery_stopped')
         }
         resolveResult(await runLegacyWorkerTerminalRecovery(this, this.ports, options))
       } catch (error) {

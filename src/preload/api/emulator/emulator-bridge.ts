@@ -60,8 +60,8 @@ export const emulatorApi = {
   }): void => ipcRenderer.send('emulator:scrcpyTouch', touch),
   sendScrcpyKeyboard: (
     input:
-      | { deviceId: string; text: string; paste?: boolean }
-      | { deviceId: string; key: string; shift: boolean }
+      | { deviceId: string; text: string; paste?: boolean; hid?: { usage: number; shift: boolean } }
+      | { deviceId: string; key: string; shift: boolean; hid?: { usage: number; shift: boolean } }
   ): Promise<boolean> => ipcRenderer.invoke('emulator:scrcpyKeyboard', input),
   onVideoStreamFrame: (
     callback: (data: {

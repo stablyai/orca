@@ -1,14 +1,10 @@
-import {
-  formatUsageLimitResetClock,
-  type AgentSessionUsageLimit
-} from '../../../../../../src/shared/agent-session/failures/agent-session-usage-limit'
+import type { AgentSessionUsageLimit } from '../../../../../../src/shared/agent-session/failures/agent-session-usage-limit'
 import type { NativeChatUsageLimitAutoContinueKind } from '../../../../../../src/shared/native-chat/transcript/continuation/native-chat-usage-limit-auto-continue'
 import type { Translate } from '../../../../i18n/mobile-i18n'
-import { getUiIntlLocale } from '../../../../i18n/ui-intl-locale'
+import { mobileUsageLimitClock } from '../../../../bots/mobile-usage-limit-copy'
 
-/** A reset time in the phone's UI language. */
-function usageLimitResetClock(resetsAt: number): string {
-  return formatUsageLimitResetClock(resetsAt, Date.now(), getUiIntlLocale())
+function usageLimitResetClock(resetsAt: number, locale: string): string {
+  return mobileUsageLimitClock(resetsAt, Date.now(), locale)
 }
 
 /** The card's headline; the reset time and what Orca will do sit on its status line. */
@@ -39,7 +35,8 @@ export function nativeChatUsageLimitStatusText(
     resetPassed: boolean
     autoContinue: Exclude<NativeChatUsageLimitAutoContinueKind, 'off'> | null
   },
-  t: Translate
+  t: Translate,
+  locale: string
 ): string {
   const { resetsAt, resetPassed, autoContinue } = status
   const parts = [
@@ -47,10 +44,10 @@ export function nativeChatUsageLimitStatusText(
       ? null
       : resetPassed
         ? t('chat.usageLimit.statusResetAt', 'Reset at {{time}}', {
-            time: usageLimitResetClock(resetsAt)
+            time: usageLimitResetClock(resetsAt, locale)
           })
         : t('chat.usageLimit.statusResetsAt', 'Resets at {{time}}', {
-            time: usageLimitResetClock(resetsAt)
+            time: usageLimitResetClock(resetsAt, locale)
           }),
     autoContinue === 'scheduled'
       ? resetPassed

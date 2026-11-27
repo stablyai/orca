@@ -1,3 +1,4 @@
+import { redactBrowserMetadata } from '../../../../../shared/browser/browser-metadata-redaction'
 import type {
   BrowserPage,
   BrowserWorkspace
@@ -34,7 +35,7 @@ export function buildPersistedBrowserTabsByWorktree(
   return Object.fromEntries(
     Object.entries(browserTabsByWorktree).map(([worktreeId, tabs]) => [
       worktreeId,
-      tabs.map((tab) => ({ ...tab, loading: false }))
+      tabs.map((tab) => ({ ...redactBrowserMetadata(tab), loading: false }))
     ])
   )
 }
@@ -47,10 +48,12 @@ export function buildPersistedBrowserPagesByWorkspace(
   return Object.fromEntries(
     Object.entries(browserPagesByWorkspace).map(([workspaceId, pages]) => [
       workspaceId,
-      pages.map((page) => {
+      pages.map(({ remoteBrowserPagePlacedHere: _stalePlacedHere, ...page }) => {
+        // Placed-here is recomputed from the live handle; a stale saved flag must not outlive it.
+        void _stalePlacedHere
         const annotations = browserAnnotationsByPageId[page.id]
         return {
-          ...page,
+          ...redactBrowserMetadata(page),
           loading: false,
           ...persistedRemoteBrowserPageIdentity(remoteBrowserPageHandlesByPageId[page.id]),
           ...(annotations?.length ? { annotations } : {})
@@ -63,13 +66,18 @@ export function buildPersistedBrowserPagesByWorkspace(
 // Persist host page identity/client-hosted status before republished placement arrives; restored markers must survive a second quit too.
 function persistedRemoteBrowserPageIdentity(
   handle: RemoteBrowserPageHandle | undefined
-): Pick<BrowserPage, 'remoteBrowserPageId' | 'remoteBrowserPageClientHosted'> {
+): Pick<
+  BrowserPage,
+  'remoteBrowserPageId' | 'remoteBrowserPageClientHosted' | 'remoteBrowserPagePlacedHere'
+> {
   if (!handle) {
     return {}
   }
   const clientHosted = handle.placement?.kind === 'client' || handle.restoredClientHosted === true
+  const placedHere = handle.placedHere === true
   return {
     remoteBrowserPageId: handle.remotePageId,
-    ...(clientHosted ? { remoteBrowserPageClientHosted: true } : {})
+    ...(clientHosted ? { remoteBrowserPageClientHosted: true } : {}),
+    ...(clientHosted && placedHere ? { remoteBrowserPagePlacedHere: true } : {})
   }
 }

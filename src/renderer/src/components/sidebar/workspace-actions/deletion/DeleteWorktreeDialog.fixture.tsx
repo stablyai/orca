@@ -123,6 +123,7 @@ function dialogFixture(
     incomplete?: boolean
     /** Git status resolves with readError, as a worktree folder removed outside Orca does. */
     statusReadFailed?: boolean
+    statusPending?: boolean
     ignored?: boolean
     localFiles?: WorktreeAtRiskLocalFiles | 'pending' | 'unsupported'
     heightClassName?: string
@@ -133,7 +134,7 @@ function dialogFixture(
   const target = options.target ?? worktree
   const entries = options.entries ?? dirtyEntries
   const all = options.batch ? [target, shortWorktree, thirdWorktree] : [target]
-  const unchecked = options.incomplete || options.statusReadFailed
+  const unchecked = options.incomplete || options.statusReadFailed || options.statusPending
   return defineFixture({
     width: 640,
     store: {
@@ -157,13 +158,15 @@ function dialogFixture(
         ? async () => {
             throw new Error('Fixture: Git scan unavailable')
           }
-        : options.statusReadFailed
-          ? async () => ({
-              entries: [],
-              conflictOperation: 'unknown',
-              readError: 'fatal: not a git repository'
-            })
-          : defaultGitStatus
+        : options.statusPending
+          ? () => new Promise<never>(() => {})
+          : options.statusReadFailed
+            ? async () => ({
+                entries: [],
+                conflictOperation: 'unknown',
+                readError: 'fatal: not a git repository'
+              })
+            : defaultGitStatus
       window.api.git.atRiskLocalFiles = () => {
         if (options.localFiles === 'pending') {
           return new Promise(() => {})
@@ -217,9 +220,7 @@ export const cleanWithIgnoredFiles = dialogFixture({
 })
 
 export const showChangesOpen = dialogFixture({ target: shortWorktree, unsaved: true }, () => {
-  ;[...document.querySelectorAll<HTMLButtonElement>('button[aria-expanded]')]
-    .find((button) => button.textContent?.includes('Show changes'))
-    ?.click()
+  document.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')?.click()
 })
 
 export const longName = dialogFixture()
@@ -265,7 +266,12 @@ export const forceDelete = dialogFixture({
   }
 })
 
-export const checking = dialogFixture({ entries: [], localFiles: 'pending' })
+export const checking = dialogFixture({
+  target: shortWorktree,
+  statusPending: true,
+  localFiles: 'pending'
+})
+export const cleanIgnoredChecking = dialogFixture({ entries: [], localFiles: 'pending' })
 export const ignoredFilesUnchecked = dialogFixture({ entries: [], localFiles: 'unsupported' })
 export const ignoredFiles = dialogFixture({ entries: [], localFiles: atRiskLocalFiles })
 export const ignoredFilesOpen = dialogFixture({ entries: [], localFiles: atRiskLocalFiles }, () => {
@@ -273,6 +279,18 @@ export const ignoredFilesOpen = dialogFixture({ entries: [], localFiles: atRiskL
 })
 export const ignoredFilesScrolling = dialogFixture(
   { entries: [], localFiles: manyAtRiskLocalFiles, heightClassName: 'h-[580px]' },
+  () => {
+    document.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')?.click()
+  }
+)
+export const dirtyAndIgnoredOpen = dialogFixture(
+  {
+    target: shortWorktree,
+    entries: dirtyEntries,
+    unsaved: true,
+    localFiles: manyAtRiskLocalFiles,
+    heightClassName: 'h-[580px]'
+  },
   () => {
     document.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')?.click()
   }

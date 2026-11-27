@@ -170,8 +170,14 @@ function snapshot(workspace: Workspace): unknown {
 }
 
 /** Restores a workspace's saved chat drafts once per page; later calls wait for that load. */
-export function loadMobileNativeChatDrafts(hostId: string, worktreeId: string): Promise<void> {
-  return workspaceFor(hostId, worktreeId).row.load()
+/** True once the saved drafts are in; a refused read leaves them for a later retry. */
+export async function loadMobileNativeChatDrafts(
+  hostId: string,
+  worktreeId: string
+): Promise<boolean> {
+  const { row } = workspaceFor(hostId, worktreeId)
+  await row.load()
+  return row.state() === 'loaded'
 }
 
 /** Typing coalesces; clears save at once so a sent draft cannot come back. */

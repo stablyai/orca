@@ -6,17 +6,12 @@ import {
   type BotShareReview
 } from '../../../../../shared/bots/bot-share-received'
 import { textLineCount } from '../../../../../shared/bots/bot-text-scan'
-import {
-  botShareFlagLabel,
-  botShareFlagPage,
-  botShareFlagWhere,
-  type BotShareFlagSpot
-} from './bot-share-flags'
+import { botShareFlagLabel, botShareFlagPage, botShareFlagWhere } from './bot-share-flags'
+import type { BotShareFlagSpot } from '../../../../../shared/bots/bot-share-flag-spots'
+import { reviewPartFiles, toolHost } from '../../../../../shared/bots/bot-share-review-files'
 import {
   reviewAccounts,
   reviewFlagPage,
-  reviewPartFiles,
-  toolHost,
   type BotShareReviewList,
   type BotShareReviewPage
 } from './bot-share-review-parts'

@@ -12,10 +12,12 @@ import {
 } from '../../../../../../src/shared/agent-session/view/agent-session-thread-goal-presentation'
 import { useNow } from '../../../../hooks/use-now'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
-import { queuedMessageStyles } from '../queued-messages/mobile-native-chat-queued-message-styles'
+import { MobilePendingButton } from '../../../../components/controls/MobilePendingButton'
+import { useMobilePendingControl } from '../../../../components/controls/use-mobile-pending-control'
+import { radii, spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
+import { queuedMessageStylesSheet } from '../queued-messages/mobile-native-chat-queued-message-styles'
 import type { MobileStructuredThreadGoal } from './use-mobile-structured-thread-goal'
 
 type Translate = ReturnType<typeof useMobileTranslation>
@@ -41,9 +43,12 @@ export function MobileNativeChatThreadGoalStrip({
 }: {
   threadGoal: MobileStructuredThreadGoal
 }): React.JSX.Element | null {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const queuedMessageStyles = useThemedStyles(queuedMessageStylesSheet)
   const t = useMobileTranslation()
   const [expanded, setExpanded] = useState(false)
+  const { pending, run } = useMobilePendingControl<'status' | 'clear'>()
   const { goal, runningTurn, changes, locked } = threadGoal
   const now = useNow(1_000, goal?.status === 'active' && runningTurn !== null)
   const label = goal ? agentSessionThreadGoalStatusLabel(goal.status, runningTurn !== null) : null
@@ -111,14 +116,12 @@ export function MobileNativeChatThreadGoalStrip({
           {changes !== null ? (
             <View style={styles.actions}>
               {statusChange !== null ? (
-                <GoalAction
+                <MobilePendingButton
                   label={
                     statusChange === 'paused'
                       ? t('chat.goal.pause', 'Pause')
                       : t('chat.goal.resume', 'Resume')
                   }
-                  disabled={changes === 'agent' ? threadGoal.clearLocked : locked}
-                  onPress={() => void threadGoal.change({ kind: 'status', status: statusChange })}
                   icon={
                     statusChange === 'paused' ? (
                       <Pause size={13} color={colors.textPrimary} strokeWidth={2} />
@@ -126,14 +129,29 @@ export function MobileNativeChatThreadGoalStrip({
                       <Play size={13} color={colors.textPrimary} strokeWidth={2} />
                     )
                   }
+                  hitSlop={6}
+                  style={styles.action}
+                  labelStyle={styles.actionLabel}
+                  spinnerColor={colors.textPrimary}
+                  pending={pending === 'status'}
+                  disabled={changes === 'agent' ? threadGoal.clearLocked : locked}
+                  onPress={() =>
+                    void run('status', () =>
+                      threadGoal.change({ kind: 'status', status: statusChange })
+                    )
+                  }
                 />
               ) : null}
-              <GoalAction
+              <MobilePendingButton
                 label={t('chat.goal.clear', 'Clear goal')}
-                destructive
-                disabled={threadGoal.clearLocked}
-                onPress={() => void threadGoal.change({ kind: 'clear' })}
                 icon={<Trash2 size={13} color={colors.statusRed} strokeWidth={2} />}
+                hitSlop={6}
+                style={styles.action}
+                labelStyle={[styles.actionLabel, styles.destructive]}
+                spinnerColor={colors.statusRed}
+                pending={pending === 'clear'}
+                disabled={threadGoal.clearLocked}
+                onPress={() => void run('clear', () => threadGoal.change({ kind: 'clear' }))}
               />
             </View>
           ) : null}
@@ -161,41 +179,12 @@ export function MobileNativeChatThreadGoalStrip({
   )
 }
 
-function GoalAction(props: {
-  label: string
-  icon: React.ReactNode
-  disabled: boolean
-  destructive?: boolean
-  onPress: () => void
-}): React.JSX.Element {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={props.label}
-      accessibilityState={{ disabled: props.disabled }}
-      disabled={props.disabled}
-      hitSlop={6}
-      style={({ pressed }) => [
-        styles.action,
-        pressed && styles.actionPressed,
-        props.disabled && styles.disabled
-      ]}
-      onPress={props.onPress}
-    >
-      {props.icon}
-      <Text style={[styles.actionLabel, props.destructive && styles.destructive]}>
-        {props.label}
-      </Text>
-    </Pressable>
-  )
-}
-
 // Line height of the strip's meta text; the icon aligns with its first line.
 const LINE_HEIGHT = 17
 const LINE_MIN_HEIGHT = 34
 const CHEVRON_SIZE = 32
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   line: {
     minHeight: LINE_MIN_HEIGHT,
     flexDirection: 'row',
@@ -267,9 +256,6 @@ const styles = themedStyleSheet(() => ({
     borderRadius: radii.control,
     backgroundColor: colors.composerControl
   },
-  actionPressed: {
-    backgroundColor: colors.bgRaised
-  },
   actionLabel: {
     color: colors.textPrimary,
     fontSize: typography.metaSize,
@@ -280,8 +266,5 @@ const styles = themedStyleSheet(() => ({
   },
   pressed: {
     backgroundColor: colors.bgRaised
-  },
-  disabled: {
-    opacity: 0.5
   }
 }))

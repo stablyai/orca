@@ -11,11 +11,17 @@ import { botToolErrorMessage, removeBotTool } from '@/components/bots/bot-tools-
 import { useBotToolSignInAction } from '@/components/bots/bot-tool-sign-in-action'
 import { useBotTools } from '@/components/bots/bot-tool-checks'
 import { retryBotToolCheck } from '@/components/bots/bot-tools-revision'
-import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { botAgentLabel } from '@/components/bots/bot-presentation'
 import { toolsLine } from '@/components/bots/bot-settings-row-states'
 import type { Bot } from '../../../../../shared/bot-types'
-import type { BotInheritedTool, BotOwnTool, BotToolProblem } from '../../../../../shared/bot-tools'
+import type {
+  BotInheritedTool,
+  BotOwnTool,
+  BotToolProblem,
+  BotTools
+} from '../../../../../shared/bot-tools'
+import { BotHostMcpServersRow } from './BotHostMcpServersRow'
 import { SettingsSubsectionHeader } from '../form-controls/SettingsFormControls'
 import { ComposioToolRow } from '@/components/bots/composio/ComposioToolRow'
 import { BotToolLogo } from '@/components/bots/apps/BotToolAppRow'
@@ -205,6 +211,13 @@ function AddToolRow({ onOpen }: { onOpen: () => void }): React.JSX.Element {
   )
 }
 
+/** The Tools line with the host's servers first: "Your MCP servers, Sentry · 3 more from Claude Code". */
+function hostMcpLine(t: Translate, line: string | null, tools: BotTools): string {
+  return line && (tools.own.length > 0 || tools.inherited.length > 0)
+    ? t('settings.bots.tools.hostMcpAndMore', 'Your MCP servers, {{rest}}', { rest: line })
+    : t('settings.bots.tools.hostMcp', 'Your MCP servers')
+}
+
 /** Settings › Bots › this bot › Tools: its own tools, then the ones it gets from its owner's agent. */
 export function BotToolsSection({ bot }: { bot: Bot }): React.JSX.Element {
   const t = useTranslate()
@@ -216,9 +229,17 @@ export function BotToolsSection({ bot }: { bot: Bot }): React.JSX.Element {
     <section className="space-y-3">
       <SettingsSubsectionHeader
         title={t('settings.bots.tools.title', 'Tools')}
-        description={toolsLine(tools, botAgentLabel(bot.agent), intlLocale)}
+        description={
+          tools?.hostMcpServers
+            ? hostMcpLine(t, toolsLine(tools, botAgentLabel(bot.agent), intlLocale), tools)
+            : toolsLine(tools, botAgentLabel(bot.agent), intlLocale)
+        }
       />
       <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card shadow-xs">
+        {/* Present only from a host that serves MCP servers. */}
+        {tools?.hostMcpServers !== undefined ? (
+          <BotHostMcpServersRow bot={bot} enabled={tools.hostMcpServers} />
+        ) : null}
         <ComposioToolRow bot={bot} />
         {tools
           ? tools.own

@@ -1,9 +1,31 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
+import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { UsageSection } from './usage-headline-sections'
 import {
   getDisplayedUsagePercentage,
   type UsagePercentageDisplay
 } from '../../../../../shared/agent-usage/display/usage-percentage-display'
+
+/** MCP windows are not weekly, so they get no weekly-limit title. */
+export function formatScopedUsageTitle(
+  p: ProviderRateLimits,
+  section: UsageSection,
+  display: UsagePercentageDisplay,
+  t: Translate
+): string | undefined {
+  if (section.window !== p.fableWeekly) {
+    return undefined
+  }
+  return t(
+    'auto.components.status.bar.UsageRosterPanel.modelWeeklyLimit',
+    '{{model}} weekly limit: {{usage}}',
+    {
+      model: section.label,
+      usage: formatUsagePercentageLabel(section.window.usedPercent, display, t)
+    }
+  )
+}
 
 export function formatUsagePercentageLabel(
   usedPercent: number,

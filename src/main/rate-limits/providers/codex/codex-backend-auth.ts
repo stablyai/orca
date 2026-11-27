@@ -63,6 +63,32 @@ function getCodexHomePath(codexHomePath?: string | null): string {
   return codexHomePath ?? process.env.CODEX_HOME ?? join(homedir(), '.codex')
 }
 
+export type CodexBackendTokens = { accessToken: string; accountId: string | null }
+
+/** The ChatGPT tokens in a home's auth.json; null for an API-key or other login without an access token. */
+export async function readCodexBackendTokens(
+  options: CodexRateLimitFetchOptions | { codexHomePath?: string | null } | undefined,
+  signal: AbortSignal
+): Promise<CodexBackendTokens | null> {
+  const authPath = join(getCodexHomePath(options?.codexHomePath), 'auth.json')
+  const auth = JSON.parse(await readBackendAuth(authPath, signal)) as CodexAuthFile
+  const accessToken = auth.tokens?.access_token
+  return accessToken ? { accessToken, accountId: auth.tokens?.account_id ?? null } : null
+}
+
+export function codexBackendAuthHeaders(tokens: CodexBackendTokens): Record<string, string> {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${tokens.accessToken}`,
+    'User-Agent': 'codex-cli',
+    'OpenAI-Beta': 'codex-1',
+    originator: 'Codex Desktop'
+  }
+  if (tokens.accountId) {
+    headers['ChatGPT-Account-Id'] = tokens.accountId
+  }
+  return headers
+}
+
 export async function getCodexBackendAuthHeaders(
   options: CodexRateLimitFetchOptions | { codexHomePath?: string | null } | undefined,
   signal: AbortSignal
@@ -70,21 +96,6 @@ export async function getCodexBackendAuthHeaders(
   if (signal.aborted) {
     return null
   }
-  const authPath = join(getCodexHomePath(options?.codexHomePath), 'auth.json')
-  const auth = JSON.parse(await readBackendAuth(authPath, signal)) as CodexAuthFile
-  const accessToken = auth.tokens?.access_token
-  if (!accessToken) {
-    return null
-  }
-
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${accessToken}`,
-    'User-Agent': 'codex-cli',
-    'OpenAI-Beta': 'codex-1',
-    originator: 'Codex Desktop'
-  }
-  if (auth.tokens?.account_id) {
-    headers['ChatGPT-Account-Id'] = auth.tokens.account_id
-  }
-  return headers
+  const tokens = await readCodexBackendTokens(options, signal)
+  return tokens ? codexBackendAuthHeaders(tokens) : null
 }

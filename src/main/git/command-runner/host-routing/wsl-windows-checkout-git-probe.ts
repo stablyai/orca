@@ -302,8 +302,3 @@ export function pendingWslWindowsCheckoutGitConfig(
     deps
   )
 }
-
-export function resetWslWindowsCheckoutProbesForTests(): void {
-  pending.clear()
-  failures.clear()
-}

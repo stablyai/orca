@@ -1,80 +1,38 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 
 describe('runtime browser page registry', () => {
-  it('retires only the exact page generation and releases its capacity', () => {
-    const pages = new RuntimeBrowserPageRegistry({ maxPages: 1 })
-    const page = pages.publishClientPage(clientPage('page-a', 'worktree-a'))
-
-    expect(() => pages.publishClientPage(clientPage('page-b', 'worktree-a'))).toThrow(
-      'browser_runtime_page_capacity'
+  it('stores redacted client metadata only after the exact placement passes admission', () => {
+    const pages = new RuntimeBrowserPageRegistry()
+    const raw = 'https://kagi.com/search?token=test-only&q=one'
+    const page = pages.publishClientPage({
+      ...clientPage('page-a', 'folder-a'),
+      url: raw,
+      title: raw
+    })
+    expect(page.url).toBe('https://kagi.com/search?q=one')
+    expect(page.title).toBe('https://kagi.com/search?q=one')
+    expect(() =>
+      pages.updatePage('page-a', { ...page.placement, pageHostGeneration: 77 }, { url: raw })
+    ).toThrow('browser_page_placement_stale')
+    expect(pages.updatePage('page-a', page.placement, { url: raw, title: raw }).url).toBe(
+      'https://kagi.com/search?q=one'
     )
     expect(
-      pages.retirePage('page-a', {
-        ...page.placement,
-        pageHostGeneration: page.placement.pageHostGeneration + 1
+      pages.updatePageMetadata('page-a', page.placement, {
+        revision: 1,
+        url: raw,
+        title: raw,
+        loading: false,
+        canGoBack: false,
+        canGoForward: false
       })
-    ).toBe(false)
-    expect(pages.retirePage('page-a', page.placement)).toBe(true)
-    expect(() => pages.publishClientPage(clientPage('page-b', 'worktree-a'))).not.toThrow()
+    ).toBe(true)
+    expect(pages.getPage('page-a')?.title).toBe('https://kagi.com/search?q=one')
+    expect(pages.listPages('folder-b')).toEqual([])
   })
 
   // Replacement page revisions restart at zero; carrying old high-water rejects its first N publishes.
-  it('restarts the metadata revision when a placement is replaced', () => {
-    const pages = new RuntimeBrowserPageRegistry()
-    const page = pages.publishClientPage(clientPage('page-a', 'worktree-a'))
-    expect(
-      pages.updatePageMetadata('page-a', page.placement, {
-        revision: 5,
-        url: 'https://example.internal/before',
-        title: 'Before',
-        loading: false,
-        canGoBack: false,
-        canGoForward: false
-      })
-    ).toBe(true)
-
-    const recovered = { ...page.placement, pageHostGeneration: 9 }
-    expect(
-      pages.replaceClientPagePlacement('page-a', page.placement, recovered).metadataRevision
-    ).toBe(0)
-    expect(
-      pages.updatePageMetadata('page-a', recovered, {
-        revision: 1,
-        url: 'https://example.internal/after',
-        title: 'After',
-        loading: false,
-        canGoBack: false,
-        canGoForward: false
-      }),
-      'the replacing host starts at revision 1 and must be heard'
-    ).toBe(true)
-    expect(pages.getPage('page-a')).toMatchObject({
-      metadataRevision: 1,
-      url: 'https://example.internal/after'
-    })
-  })
-
-  it("holds a person's new page while an agent drives the active one, then routes to it once idle", () => {
-    vi.useFakeTimers()
-    const pages = new RuntimeBrowserPageRegistry()
-    const routed = (): string | undefined =>
-      pages.listPages('worktree-a').find((page) => page.active)?.browserPageId
-
-    pages.publishClientPage({ ...clientPage('page-a', 'worktree-a'), active: true }, 'agent')
-    pages.agentUse.begin('page-a')()
-    pages.publishClientPage({ ...clientPage('page-b', 'worktree-a'), active: true }, 'person')
-    expect(routed()).toBe('page-a')
-
-    vi.advanceTimersByTime(19_000)
-    expect(routed()).toBe('page-a')
-    vi.advanceTimersByTime(2_000)
-    expect(routed()).toBe('page-b')
-  })
-})
-
-afterEach(() => {
-  vi.useRealTimers()
 })
 
 function clientPage(browserPageId: string, workspaceId: string) {

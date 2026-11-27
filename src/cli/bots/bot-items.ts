@@ -1,6 +1,8 @@
 // `orca bot item …`: a bot's items over `bots.items.*`. Writes run from the bot's own chat, which the
 // host checks.
+import { z } from 'zod'
 import type { BotItemStatus } from '../../shared/bots/bot-items'
+import { BOTS_ITEM_SET_VERSION_RUNTIME_CAPABILITY } from '../../shared/bots/bot-item-version-capability'
 import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import {
@@ -21,6 +23,7 @@ import {
 import { RuntimeClientError } from '../runtime/connection/types'
 import { callerChat } from '../automations/automation-caller-chat'
 import { callBots, findBot } from './bot'
+import { botItemAskAdviceWithout } from '../../shared/bots/bot-item-ask-advice'
 import { botItemAskFromFlags, botItemAskParams } from './bot-item-ask-flags'
 import { BOT_ITEM_ASK_BOOLEAN_FLAGS } from '../specs/bot-items'
 import {
@@ -33,6 +36,7 @@ import {
 } from './bot-items-format'
 
 type Flags = HandlerContext['flags']
+const ItemVersionHostStatus = z.object({ capabilities: z.array(z.string()).optional() })
 
 function statusFlag(value: string): BotItemStatus {
   const known = botItemStatusFromCli(value)
@@ -56,12 +60,39 @@ function print<T extends BotItemsView>(
 }
 
 async function write(
-  { client, json }: HandlerContext,
+  { client, json, flags }: HandlerContext,
   method: string,
-  params: Record<string, unknown>
+  params: Record<string, unknown> & { expectedVersion?: number }
 ): Promise<void> {
-  const result = await callBots<BotItemWriteView>(client, method, { ...callerChat(), ...params })
-  print(result, json, formatBotItemWrite)
+  const request = { ...callerChat(), ...params }
+  const result =
+    params.expectedVersion === undefined
+      ? await callBots<BotItemWriteView>(client, method, request)
+      : await client.call<BotItemWriteView>(method, request, {
+          requestSelection: {
+            paramsForStatus: (raw) => {
+              const status = ItemVersionHostStatus.safeParse(raw)
+              if (!status.success) {
+                throw new RuntimeClientError(
+                  'invalid_runtime_response',
+                  'The Orca host returned an invalid status response.'
+                )
+              }
+              if (!status.data.capabilities?.includes(BOTS_ITEM_SET_VERSION_RUNTIME_CAPABILITY)) {
+                throw new RuntimeClientError(
+                  'incompatible_runtime',
+                  'This Orca host cannot check an item version before writing. Update Orca on that host.'
+                )
+              }
+              return request
+            }
+          }
+        })
+  const { advice, ...view } = result.result
+  // Context read from --comment-file already follows the long-context tip; only the CLI knows.
+  const kept =
+    advice && flags.has('comment-file') ? botItemAskAdviceWithout(advice, 'long_context') : advice
+  print({ ...result, result: kept ? { ...view, advice: kept } : view }, json, formatBotItemWrite)
 }
 
 function itemId(flags: Flags): string {
@@ -96,10 +127,18 @@ export const BOT_ITEM_HANDLERS: Record<string, CommandHandler> = {
   'bot item set': async (ctx) => {
     const { flags, cwd } = ctx
     const status = getOptionalStringFlag(flags, 'status')
+    const expectedVersion = getOptionalPositiveIntegerFlag(flags, 'expected-version')
+    if (flags.has('expected-version') && expectedVersion === undefined) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--expected-version needs a positive integer.'
+      )
+    }
     const ask = botItemAskFromFlags(ctx, BOT_ITEM_ASK_BOOLEAN_FLAGS)
     const comment = await readTextOrFileFlag(flags, cwd, 'comment', false)
     await write(ctx, 'bots.items.set', {
       item: itemId(flags),
+      ...(expectedVersion === undefined ? {} : { expectedVersion }),
       ...optional('title', getOptionalStringFlag(flags, 'title')),
       ...optional('description', await readTextOrFileFlag(flags, cwd, 'description', false)),
       ...optional('doneMeans', await readTextOrFileFlag(flags, cwd, 'done-means', false)),

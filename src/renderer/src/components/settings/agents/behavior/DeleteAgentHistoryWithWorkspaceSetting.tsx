@@ -14,6 +14,7 @@ import {
   DialogTitle
 } from '../../../ui/dialog'
 import { SettingsBadge, SettingsSwitchRow } from '../../form-controls/SettingsFormControls'
+import { SettingsTitleWithBadge } from '../../form-controls/SettingsTitleWithBadge'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import type { SettingsHostScope } from '../../host-scope/settings-host-scope'
 import { useHostSetting, useSettingsHostLabel } from '../../host-scope/use-host-setting'
@@ -61,23 +62,22 @@ export function DeleteAgentHistoryWithWorkspaceSetting({
       <SearchableSetting {...search}>
         <SettingsSwitchRow
           label={
-            <span className="inline-flex items-center gap-2">
-              {search.title}
-              <SettingsBadge>
-                {t(
-                  'components.settings.agents.deleteHistoryWithWorkspace.recommended',
-                  'Recommended'
-                )}
-              </SettingsBadge>
+            <SettingsTitleWithBadge
+              title={<span className="inline-block align-middle">{search.title}</span>}
+              badge={t(
+                'components.settings.agents.deleteHistoryWithWorkspace.recommended',
+                'Recommended'
+              )}
+            >
               {historySize && diskUsage ? (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     {/* Focusable so keyboard users reach the explanation too. */}
                     <span
                       tabIndex={0}
-                      className="inline-flex shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="ml-2 inline-flex rounded-full align-middle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
-                      <SettingsBadge tone="muted" className="whitespace-nowrap">
+                      <SettingsBadge tone="muted" className="wrap-anywhere">
                         {diskUsage.complete
                           ? t(
                               'components.settings.agents.deleteHistoryWithWorkspace.codexHistoryBadge',
@@ -107,7 +107,7 @@ export function DeleteAgentHistoryWithWorkspaceSetting({
                   </TooltipContent>
                 </Tooltip>
               ) : null}
-            </span>
+            </SettingsTitleWithBadge>
           }
           description={
             setting.state === 'unsupported'

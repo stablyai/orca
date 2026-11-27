@@ -12,19 +12,19 @@ import {
   type GoogleSetupCard,
   type GoogleSetupRun
 } from '../../../../../../shared/google/google-setup-run'
+import type { GoogleServiceChoice } from '../../../../../../shared/google/google-scopes'
 import {
-  googleChoices,
-  GOOGLE_SERVICE_CHOICES,
-  type GoogleServiceChoice
-} from '../../../../../../shared/google/google-scopes'
+  googleSetupAnsweredServices,
+  googleSetupChoiceChangeable,
+  googleSetupChoiceLocked
+} from '../../../../../../shared/google/google-setup-card-view'
 import { importGoogleApp } from '../google-connect-client'
 import { GoogleServicePicker } from '../GoogleServicePicker'
 import { useGoogleClientFile } from '../use-google-client-file'
 import {
   GoogleSetupCardFrame,
   GoogleSetupChoiceRow,
-  GoogleSetupReceipt,
-  googleSetupChoiceChangeable
+  GoogleSetupReceipt
 } from './GoogleSetupCardParts'
 import {
   googleSetupPathNote,
@@ -67,7 +67,7 @@ export function GoogleSetupPathCard({
   const { reopened, reopen, busy, answer } = useAnswer(bot, 'path')
   const answered = run.answers.path?.values[0]
   const chosen = GOOGLE_SETUP_MODES.find((mode) => mode === answered)
-  const locked = answered !== undefined && !reopened
+  const locked = googleSetupChoiceLocked(run, answered !== undefined, reopened)
   const file = useGoogleClientFile(async (text) => {
     await importGoogleApp(botTarget(bot), text)
     await answer(['import'])
@@ -137,7 +137,7 @@ export function GoogleSetupPathCard({
           </p>
         ) : null}
       </GoogleSetupCardFrame>
-      {locked ? (
+      {locked && answered !== undefined ? (
         <GoogleSetupReceipt
           text={receipt()}
           onChange={googleSetupChoiceChangeable(run) ? reopen : undefined}
@@ -159,7 +159,7 @@ export function GoogleSetupAccountCard({
   const t = useTranslate()
   const { reopened, reopen, busy, answer } = useAnswer(bot, 'account')
   const answered = run.answers.account?.values[0]
-  const locked = answered !== undefined && !reopened
+  const locked = googleSetupChoiceLocked(run, answered !== undefined, reopened)
   return (
     <div>
       <GoogleSetupCardFrame heading={t('bots.googleSetup.progress.heading', 'Setting up Google')}>
@@ -207,14 +207,6 @@ export function GoogleSetupAccountCard({
   )
 }
 
-function answeredServices(run: GoogleSetupRun): GoogleServiceChoice[] | null {
-  const values = run.answers.services?.values
-  if (!values) {
-    return null
-  }
-  return googleChoices(GOOGLE_SERVICE_CHOICES.filter((choice) => values.includes(choice)))
-}
-
 export function GoogleSetupServicesCard({
   bot,
   run
@@ -224,8 +216,8 @@ export function GoogleSetupServicesCard({
 }): React.JSX.Element {
   const t = useTranslate()
   const { reopened, reopen, busy, answer } = useAnswer(bot, 'services')
-  const answered = answeredServices(run)
-  const locked = answered !== null && !reopened
+  const answered = googleSetupAnsweredServices(run)
+  const locked = googleSetupChoiceLocked(run, answered !== null, reopened)
   const [picked, setPicked] = useState<GoogleServiceChoice[]>(answered ?? ['gmail'])
   const shown = locked && answered ? answered : picked
   return (

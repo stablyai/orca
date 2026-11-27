@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { useBots } from '@/lib/bot-catalog'
 import { useBotGroups } from '@/lib/bot-group-list'
+import { botGroupRoomLabel } from '@/lib/bot-group-room-label'
 import { useBotGroupTranscript } from './use-bot-group-transcript'
 import { useBotGroupRoomRead } from './use-bot-group-room-read'
 import {
@@ -24,6 +25,7 @@ import { useBotGroupComposerRoom } from './use-bot-group-composer-room'
 import { useBotGroupComposerTransport } from './use-bot-group-composer-transport'
 import { useBotTranscriptFollow } from './use-bot-transcript-follow'
 import { NativeChatMentionNamesContext } from '../native-chat/native-chat-markdown-mentions'
+import { botGroupRoomOrder } from '../../../../shared/bots/bot-group-room-order'
 import { BotGroupPeerRequestLine } from './BotGroupPeerRequestLine'
 import { NativeChatTranscriptColumn } from '../native-chat/NativeChatTranscriptColumn'
 import { NativeChatTranscriptViewport } from '../native-chat/NativeChatTranscriptViewport'
@@ -33,6 +35,7 @@ import { useBotGroupLinkContextFor, type BotGroupRoomLinks } from './use-bot-gro
 import { MessageRow } from '../native-chat/messages/rows/NativeChatMessageRow'
 import { BotGroupSessionReader, type BotGroupSession } from './BotGroupSessionReader'
 import { BotGroupTurn } from './BotGroupTurn'
+import { BotGroupRemoteAsk } from './BotGroupRemoteAsk'
 import { BotGroupTranscriptRows, useBotGroupTranscriptRows } from './bot-group-transcript-rows'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { BotGroupApprovalDock } from './BotGroupApprovalDock'
@@ -61,13 +64,12 @@ export function BotGroupChat({
   const place = findBotGroupRoom(groups, roomId)
   const threadId = place?.threadId
   const found = place ? botGroupRoom(place.group, threadId) : undefined
-  // A thread's tab takes its name once the host names it from the first post.
-  const threadTitle = place?.group.threads?.find((thread) => thread.id === threadId)?.title
+  const roomName = place ? botGroupRoomLabel(place.group, threadId) : undefined
   useEffect(() => {
-    if (threadTitle) {
-      useAppStore.getState().setTabLabel(tabId, threadTitle)
+    if (roomName) {
+      useAppStore.getState().setTabLabel(tabId, roomName)
     }
-  }, [tabId, threadTitle])
+  }, [tabId, roomName])
   const bots = useBots()
 
   const [error, setError] = useState<string | null>(null)
@@ -95,7 +97,8 @@ export function BotGroupChat({
   const fileContexts = useBotGroupFileContexts(bots, group, tabId)
   const roomContext = (group && fileContexts.get(group.id)) ?? null
   useBotGroupRoomRead(group?.folderWorkspaceId, isVisible)
-  const messages = data?.messages ?? EMPTY_MESSAGES
+  const loaded = data?.messages ?? EMPTY_MESSAGES
+  const messages = useMemo(() => botGroupRoomOrder(loaded), [loaded])
   const readers = useMemo(() => {
     if (!group) {
       return []
@@ -152,7 +155,8 @@ export function BotGroupChat({
                     role: 'user',
                     blocks: botGroupOwnerMessageBlocks(message),
                     timestamp: message.createdAt,
-                    source: 'transcript'
+                    source: 'transcript',
+                    ...(message.automationRun ? { automationRun: message.automationRun } : {})
                   }
                 ]
               ]
@@ -165,7 +169,14 @@ export function BotGroupChat({
   useBotGroupTranscriptRows(rows, 'room', ownerRowList)
   const follow = useBotTranscriptFollow({
     messageCopyText: rows.messageCopyText,
-    itemCount: messages.reduce((count, message) => count + 1 + message.turns.length, 0),
+    itemCount: messages.reduce(
+      (count, message) =>
+        count +
+        1 +
+        message.turns.length +
+        (message.remoteAsks?.filter((ask) => ask.reply).length ?? 0),
+      0
+    ),
     isWorking: working,
     isVisible
   })
@@ -265,6 +276,7 @@ export function BotGroupChat({
           <NativeChatTranscriptViewport
             scrollRef={follow.scrollRef}
             scrollerProps={follow.scrollerProps}
+            toolRunScroll={follow.toolRunScroll}
             forwardedGesture={follow.forwardedGesture}
             showJump={follow.showJump}
             onJump={follow.jumpToLatest}
@@ -325,6 +337,9 @@ export function BotGroupChat({
                           onReply={reply}
                           scrollMessageToTop={follow.scrollMessageToTop}
                         />
+                      ))}
+                      {message.remoteAsks?.map((ask) => (
+                        <BotGroupRemoteAsk key={ask.requestId} ask={ask} />
                       ))}
                     </div>
                   ))

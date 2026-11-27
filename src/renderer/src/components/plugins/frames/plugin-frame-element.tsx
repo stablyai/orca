@@ -2,6 +2,7 @@ import React from 'react'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../../shared/browser/guest-lifecycle/browser-guest-web-preferences'
 import type { PluginFrameGuest } from '../../../../../shared/plugins/frames/plugin-frame-bridge'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
+import { useWebviewDragPassthroughActive } from '../../browser-pane/host-guest/drag/use-webview-drag-passthrough-active'
 import './plugin-frame-host'
 import { pluginWebviewFrameWindow, type PluginFrameWindow } from './plugin-frame-host-lanes'
 
@@ -85,6 +86,12 @@ export function PluginFrameView({
   onLoad,
   hidden = false
 }: PluginFrameViewProps): React.JSX.Element {
+  // Why: a frame takes the pointer stream from Orca's document, so a tab dragged over it could not drop here.
+  // Native drags are left alone so plugins still receive file drops from Orca's explorer.
+  const dragPassthrough = useWebviewDragPassthroughActive(!hidden, { ignoreNativeDrags: true })
+  const dragStyle: React.CSSProperties | undefined = dragPassthrough
+    ? { pointerEvents: 'none' }
+    : undefined
   const setFrame = (element: PluginFrameElement | null): void => {
     frameRef.current = element
   }
@@ -120,6 +127,7 @@ export function PluginFrameView({
         src={guest.url}
         title={title}
         className="flex min-h-0 w-full flex-1 border-0 bg-background"
+        style={dragStyle}
       />
     )
   }
@@ -135,6 +143,7 @@ export function PluginFrameView({
       onLoad={onLoad}
       title={title}
       className="min-h-0 w-full flex-1 border-0 bg-background"
+      style={dragStyle}
     />
   )
 }

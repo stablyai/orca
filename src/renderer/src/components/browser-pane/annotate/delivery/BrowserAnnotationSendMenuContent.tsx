@@ -1,8 +1,14 @@
-import React from 'react'
-import { ReviewNotesSendMenuContent } from '@/components/editor/review-note-delivery/ReviewNotesSendMenuContent'
+import React, { Suspense } from 'react'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { DropdownMenuCheckboxItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
+
+const ReviewNotesSendMenuContent = lazy(() =>
+  import('@/components/editor/review-note-delivery/ReviewNotesSendMenuContent').then((module) => ({
+    default: module.ReviewNotesSendMenuContent
+  }))
+)
 
 export type BrowserAnnotationSendMenuContentProps = {
   worktreeId: string
@@ -41,16 +47,18 @@ export function BrowserAnnotationSendMenuContent({
   const t = useTranslate()
   return (
     <>
-      <ReviewNotesSendMenuContent
-        worktreeId={worktreeId}
-        groupId={groupId}
-        prompt={prompt}
-        // Keep annotation delivery and telemetry stable when shared menu defaults change.
-        promptDelivery="submit-after-ready"
-        launchSource="notes_send"
-        onPromptDelivered={onPromptDelivered}
-        onPromptHandedOff={onPromptHandedOff}
-      />
+      <Suspense fallback={null}>
+        <ReviewNotesSendMenuContent
+          worktreeId={worktreeId}
+          groupId={groupId}
+          prompt={prompt}
+          // Keep annotation delivery and telemetry stable when shared menu defaults change.
+          promptDelivery="submit-after-ready"
+          launchSource="notes_send"
+          onPromptDelivered={onPromptDelivered}
+          onPromptHandedOff={onPromptHandedOff}
+        />
+      </Suspense>
       <DropdownMenuSeparator />
       <DropdownMenuCheckboxItem
         checked={includePageDetails}

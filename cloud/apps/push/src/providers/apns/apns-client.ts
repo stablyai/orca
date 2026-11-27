@@ -29,12 +29,17 @@ function readReason(body: string): string {
 }
 
 export function apnsBody(delivery: PushDelivery): string {
+  // No orca data: an app that predates badges has nothing to present in the foreground.
+  if (delivery.orca.kind === 'badge') {
+    return JSON.stringify({ aps: { badge: delivery.badge ?? 0 } })
+  }
   return JSON.stringify({
     aps:
       delivery.orca.kind === 'dismiss'
         ? { 'content-available': 1 }
         : {
             alert: { title: delivery.title, body: delivery.body },
+            ...(delivery.badge === undefined ? {} : { badge: delivery.badge }),
             ...(delivery.sound === false ? {} : { sound: 'default' }),
             'thread-id': delivery.hostFingerprint
           },
@@ -67,8 +72,11 @@ export class ApnsClient {
           'apns-topic': this.options.topic,
           'apns-push-type': delivery.orca.kind === 'dismiss' ? 'background' : 'alert',
           'apns-priority': delivery.orca.kind === 'dismiss' ? '5' : '10',
-          'apns-expiration': String(expiration),
-          ...(delivery.orca.kind === 'dismiss' ? {} : { 'apns-collapse-id': delivery.collapseId })
+          // Never stored: APNs keeps one push per app for an offline phone, and a badge must not displace an alert.
+          'apns-expiration': delivery.orca.kind === 'badge' ? '0' : String(expiration),
+          ...(delivery.orca.kind === 'alert' || delivery.orca.kind === undefined
+            ? { 'apns-collapse-id': delivery.collapseId }
+            : {})
         },
         body: apnsBody(delivery)
       })

@@ -1,3 +1,5 @@
+import { noteRevisedInPlace, positionsRevisedFrom } from './revised-in-place-lists'
+import { onlyStreamedTextChanged } from './structured-agent-session-streamed-text-rows'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
@@ -19,6 +21,7 @@ import {
   sameQuestionTurnBoundary
 } from '../../native-chat/transcript/messages/structured-agent-question-projection'
 import { projectStructuredItemsToNativeChat } from './structured-agent-session-projection'
+import { deliveredAgentMailRow } from './structured-agent-session-echo-rows'
 import {
   projectStructuredAgentSessionMessageRows,
   type StructuredAgentSessionItemProjector,
@@ -82,15 +85,25 @@ function reuseMessages(
   items: readonly AgentJournalRenderItem[],
   projectItems: StructuredAgentSessionItemProjector
 ): MessageStream | null {
-  if (previous.hasStoppedSends || items.length < previous.items.length) {
+  // Stopped sends are placed among the rows, so only a revision of a reply's streamed text keeps
+  // them where they were; any other change (a turn's opener corrected) places them again.
+  if (
+    items.length < previous.items.length ||
+    (previous.hasStoppedSends && items.length !== previous.items.length)
+  ) {
     return null
   }
   let output: NativeChatMessage[] | null = null
-  for (let index = 0; index < previous.items.length; index += 1) {
+  const revisedAt: number[] = []
+  // A revision in place names its rows; anything else is compared row by row.
+  for (const index of positionsRevisedFrom(items, previous.items) ?? previous.items.keys()) {
     const before = previous.items[index]!
     const item = items[index]!
     if (before === item) {
       continue
+    }
+    if (previous.hasStoppedSends && !onlyStreamedTextChanged(before, item)) {
+      return null
     }
     if (
       !drawsOnlyItsOwnRow(before) ||
@@ -109,20 +122,30 @@ function reuseMessages(
       continue
     }
     const at = previous.rowAt.get(old.id)
+    const drawn = at === undefined ? undefined : previous.output[at]
+    // A delivered agent message is drawn with its queued id; it is the same row.
+    const queuedId = drawn !== old ? drawn?.queuedMessageId : undefined
     if (
       at === undefined ||
-      previous.output[at] !== old ||
+      (drawn !== old && (!queuedId || deliveredAgentMailRow(old, queuedId) !== drawn)) ||
       !independentRow(old) ||
       !independentRow(row) ||
       !sameNativeChatRowPlacement(old, row)
     ) {
       return null
     }
-    ;(output ??= previous.output.slice())[at] = row
+    ;(output ??= previous.output.slice())[at] = queuedId
+      ? deliveredAgentMailRow(row, queuedId)
+      : row
+    revisedAt.push(at)
   }
   const appended = items.slice(previous.items.length)
   if (appended.length === 0) {
-    return output ? { ...previous, items, output } : { ...previous, items }
+    if (!output) {
+      return { ...previous, items }
+    }
+    noteRevisedInPlace(output, previous.output, revisedAt)
+    return { ...previous, items, output }
   }
   if (
     appended.some(

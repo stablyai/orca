@@ -1,7 +1,9 @@
 import type { ChildProcess } from 'node:child_process'
+import { setTimeout as delay } from 'node:timers/promises'
 import {
   signalProcessTree,
   forceTerminateProcessTree,
+  posixProcessGroupQuiet,
   processGroupExists
 } from './process-tree-termination'
 
@@ -11,7 +13,8 @@ export const PROCESS_EXIT_GRACE_MS = 2_000
 /** Only for children launched in an owned native POSIX group. Normal close preserves hook daemons. */
 export function createPosixGroupTermination(
   child: ChildProcess,
-  onTerminated: () => void
+  onTerminated: () => void,
+  waitForGroup = false
 ): { stop: () => Promise<boolean>; close: () => void } {
   let stopping = false
   let reported = false
@@ -51,7 +54,7 @@ export function createPosixGroupTermination(
       grace = setTimeout(() => {
         void forceTerminateProcessTree(child)
           .catch(() => false)
-          .then((verified) => {
+          .then(async (verified) => {
             if (verified) {
               report()
             } else {
@@ -60,11 +63,20 @@ export function createPosixGroupTermination(
               } catch {
                 /* handle already closed */
               }
+              if (waitForGroup && child.pid) {
+                // SIGKILL may still be pending on a busy host after the supervisor's proof deadline.
+                while (!reported && !(await posixProcessGroupQuiet(child.pid))) {
+                  await delay(1_000)
+                }
+                report()
+              }
             }
             resolveAttempt?.(verified)
           })
       }, PROCESS_EXIT_GRACE_MS)
-      grace.unref?.()
+      if (!waitForGroup) {
+        grace.unref?.()
+      }
       return attempt
     },
     close() {

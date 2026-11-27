@@ -74,6 +74,8 @@ export async function launchAgentInExistingWorkspace(args: {
   launchSource?: string
   reservation?: MobileAgentLaunchReservation
   placement?: AgentLaunchPlacement
+  /** The host starts a terminal when this falls outside the workspace. */
+  cwd?: string
   mintOperationId?: () => string
 }): Promise<MobileExistingAgentLaunch> {
   if (!supportsMobileExistingAgentLaunch(args.hostCapabilities)) {
@@ -96,6 +98,7 @@ export async function launchAgentInExistingWorkspace(args: {
       : {}),
     ...(args.launchSource ? { launchSource: args.launchSource } : {}),
     ...(args.placement ? { placement: args.placement } : {}),
+    ...(args.cwd ? { cwd: args.cwd } : {}),
     ...(args.reservation ? reservedAgentLaunchFields(args.reservation) : {})
   })
   if (args.reservation?.sessionId) {

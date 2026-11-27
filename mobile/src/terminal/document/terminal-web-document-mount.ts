@@ -20,6 +20,7 @@ import geistMonoLatinUrl from '../../../assets/fonts/GeistMono-Latin.woff2'
 import geistMonoLatinExtUrl from '../../../assets/fonts/GeistMono-LatinExt.woff2'
 import { terminalBundledFontCss, terminalNerdFontCss } from '../fonts/terminal-font-face-css.mjs'
 import { createTerminalDocument } from './create-terminal-document'
+import { SIDEBAR_SWIPE_OWNER_ATTRIBUTE } from './surface-input/sidebar-swipe-handoff'
 import type { TerminalWebViewCommand } from '../webview/terminal-webview-messages'
 
 // Mount the native document factory with page-owned seams and fresh scope so overlapping terminals cannot share state.
@@ -88,6 +89,8 @@ export function mountTerminalWebDocument(
 ): TerminalWebDocument {
   ensureDocumentStyle()
   host.classList.add(HOST_CLASS)
+  // The terminal decides its own swipes and hands the page a sidebar swipe; the page leaves its touches alone.
+  host.setAttribute(SIDEBAR_SWIPE_OWNER_ATTRIBUTE, '')
   host.innerHTML = TERMINAL_DOCUMENT_MARKUP
   const viewport = pageViewport(host)
   const started = startDocumentOrGiveTheHostBack(host, receive, start, viewport)
@@ -101,6 +104,7 @@ export function mountTerminalWebDocument(
       started.stop()
       host.innerHTML = ''
       host.classList.remove(HOST_CLASS)
+      host.removeAttribute(SIDEBAR_SWIPE_OWNER_ATTRIBUTE)
     }
   }
 }
@@ -194,6 +198,8 @@ function startPageDocument(
     installHostTransport: () => () => {},
 
     hasEngine: () => true,
+
+    handsSwipesToPage: true,
 
     start: () => start,
 

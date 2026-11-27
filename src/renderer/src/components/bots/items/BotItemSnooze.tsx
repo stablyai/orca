@@ -1,6 +1,6 @@
 // Snoozing items from a menu: a Snooze submenu with Later today, Tomorrow, Monday and Pick a time…,
 // Unsnooze while snoozed, and the Snooze until dialog. The item keeps its status; the bot isn't mailed.
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { AlarmClock, AlarmClockOff, CalendarDays } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
 import type { BotRef } from '@/lib/bot-hosts'
+import { useLatestHandler } from '@/lib/use-latest-handler'
 import { isBotItemSnoozed, type BotItem } from '../../../../../shared/bots/bot-items'
 import {
   botItemSnoozePresetName,
@@ -38,29 +39,33 @@ export function useBotItemSnoozing(
   done?: () => void
 ): BotItemSnoozing {
   const [picking, setPicking] = useState<readonly BotItem[] | null>(null)
-  const snooze = (items: readonly BotItem[], until: number | null): void => {
+  // Stable across renders, so the rows it's handed to stay memoized.
+  const snooze = useLatestHandler((items: readonly BotItem[], until: number | null): void => {
     void Promise.all(
       botItemsByBot(items, bot).map(([ref, mine]) => snoozeBotItems(ref, mine, until))
     )
       .then(() => done?.())
       .catch((error: unknown) => toast.error(botErrorMessage(error)))
-  }
-  return {
-    snooze,
-    pick: setPicking,
-    dialog: (
-      <BotItemSnoozeDialog
-        open={picking !== null}
-        onSnooze={(until) => {
-          if (picking) {
-            snooze(picking, until)
-          }
-          setPicking(null)
-        }}
-        onClose={() => setPicking(null)}
-      />
-    )
-  }
+  })
+  return useMemo(
+    () => ({
+      snooze,
+      pick: setPicking,
+      dialog: (
+        <BotItemSnoozeDialog
+          open={picking !== null}
+          onSnooze={(until) => {
+            if (picking) {
+              snooze(picking, until)
+            }
+            setPicking(null)
+          }}
+          onClose={() => setPicking(null)}
+        />
+      )
+    }),
+    [snooze, picking]
+  )
 }
 
 export function BotItemSnoozeMenuItems({

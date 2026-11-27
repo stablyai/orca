@@ -1,21 +1,24 @@
 // The bots on this host's paired servers, as `bot list` and an `@` pick of one read them: each
 // server's own roster, read from it, with the `--on` that reaches it.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import type { BotRosterEntry, BotRosterServer } from '../../shared/bot-roster'
-import { BOT_AGENTS } from '../../shared/bot-types'
+import { BotAgentReadSchema } from '../../shared/bot-types'
 
 const ROSTER_READ_TIMEOUT_MS = 4_000
 
-const PairedRosterEntry = z.object({
-  id: z.string().min(1),
-  name: z.string().min(1),
-  agent: z.enum(BOT_AGENTS),
-  paused: z.boolean(),
-  specialty: z.string().nullable(),
-  linked: z.array(z.string())
-})
+const PairedRosterEntry = lazyZodSchema(() =>
+  z.object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+    agent: BotAgentReadSchema,
+    paused: z.boolean(),
+    specialty: z.string().nullable(),
+    linked: z.array(z.string())
+  })
+)
 
-const PairedRoster = z.object({ bots: z.array(z.unknown()) })
+const PairedRoster = lazyZodSchema(() => z.object({ bots: z.array(z.unknown()) }))
 
 export type PairedBotServers = {
   listOrchestrationWorkerServers(): Promise<readonly { environmentId: string; name: string }[]>
@@ -72,14 +75,50 @@ export type KnownPairedBotRoster = {
   bots: readonly BotRosterEntry[] | null
 }
 
+/** A paired server's roster as one read answered it, under its current name and `--on`. */
+export type CachedPairedBotRoster = {
+  environmentId: string
+  server: BotRosterServer
+  bots: readonly BotRosterEntry[]
+}
+
+export type PairedBotRosterCache = {
+  /** The asked servers as last read, refreshing them in the background for the next ask. */
+  read(servers: ReadonlySet<string>): Promise<KnownPairedBotRoster[]>
+  /** Each server any read answered, without listing servers or touching the network. */
+  lastRead(): readonly CachedPairedBotRoster[]
+  /** Keeps what a read just answered, so the next ask needn't wait on it. `complete`: the read
+   *  covered every paired server, so one it didn't list is no longer paired. */
+  remember(rosters: readonly PairedBotRoster[], options?: { complete?: boolean }): void
+}
+
 /** The paired servers' bots without waiting on the network: what each was last read to hold, while
  *  a read in the background brings it up to date for the next ask. A server that can't be read keeps
- *  its last answer. */
-export function pairedBotRosterCache(
-  runtime: PairedBotServers
-): (servers: ReadonlySet<string>) => Promise<KnownPairedBotRoster[]> {
-  const known = new Map<string, readonly BotRosterEntry[]>()
+ *  its last answer, under the name and `--on` it has now. */
+export function pairedBotRosterCache(runtime: PairedBotServers): PairedBotRosterCache {
+  const known = new Map<string, CachedPairedBotRoster>()
   const reading = new Set<string>()
+  const remember: PairedBotRosterCache['remember'] = (rosters, options) => {
+    // An empty list may be a failed server listing, so it keeps what is known.
+    if (options?.complete && rosters.length > 0) {
+      const listed = new Set(rosters.map((roster) => roster.environmentId))
+      for (const id of known.keys()) {
+        if (!listed.has(id)) {
+          known.delete(id)
+        }
+      }
+    }
+    for (const roster of rosters) {
+      const bots = 'bots' in roster ? roster.bots : known.get(roster.environmentId)?.bots
+      if (bots) {
+        known.set(roster.environmentId, {
+          environmentId: roster.environmentId,
+          server: roster.server,
+          bots
+        })
+      }
+    }
+  }
   const refresh = (ids: readonly string[]): void => {
     const stale = ids.filter((id) => !reading.has(id))
     if (stale.length === 0) {
@@ -87,25 +126,23 @@ export function pairedBotRosterCache(
     }
     stale.forEach((id) => reading.add(id))
     void readPairedBotRosters(runtime, new Set(stale))
-      .then((rosters) => {
-        for (const roster of rosters) {
-          if ('bots' in roster) {
-            known.set(roster.environmentId, roster.bots)
-          }
-        }
-      })
+      .then((rosters) => remember(rosters))
       .catch(() => {})
       .finally(() => stale.forEach((id) => reading.delete(id)))
   }
-  return async (servers) => {
-    const all = await runtime.listOrchestrationWorkerServers().catch(() => [])
-    const asked = all.filter((server) => servers.has(server.environmentId))
-    refresh(asked.map((server) => server.environmentId))
-    return asked.map(({ environmentId, name }) => ({
-      environmentId,
-      server: { name, on: serverSelector(all, environmentId, name) },
-      bots: known.get(environmentId) ?? null
-    }))
+  return {
+    read: async (servers) => {
+      const all = await runtime.listOrchestrationWorkerServers().catch(() => [])
+      const asked = all.filter((server) => servers.has(server.environmentId))
+      refresh(asked.map((server) => server.environmentId))
+      return asked.map(({ environmentId, name }) => ({
+        environmentId,
+        server: { name, on: serverSelector(all, environmentId, name) },
+        bots: known.get(environmentId)?.bots ?? null
+      }))
+    },
+    lastRead: () => [...known.values()],
+    remember
   }
 }
 

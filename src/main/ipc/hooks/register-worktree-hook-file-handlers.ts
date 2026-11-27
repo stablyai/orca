@@ -1,5 +1,6 @@
 import { getLocalProjectWorktreeGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import {
   getRepoDialableSshTargetId,
   type ExecutionHostId
@@ -16,10 +17,13 @@ import type { WorktreeIpcContext } from '../worktrees/worktree-ipc-context'
 import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 
 /** Route private command overrides to the owning host without changing shared hook settings. */
-export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): void {
+export function registerWorktreeHookFileHandlers(
+  context: WorktreeIpcContext,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
   const { store } = context
 
-  ipcMain.handle(
+  ipc.handle(
     'hooks:readIssueCommand',
     async (_event, args: { repoId: string; hostId?: ExecutionHostId; wakeWslDistro?: boolean }) => {
       const repo = resolveRepoForExecutionHost(store, args.repoId, args.hostId)
@@ -57,7 +61,7 @@ export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): v
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'hooks:writeIssueCommand',
     async (
       _event,

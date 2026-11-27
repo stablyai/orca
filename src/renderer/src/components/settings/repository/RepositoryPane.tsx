@@ -17,7 +17,7 @@ import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../../sha
 import { Label } from '../../ui/label'
 import { useShallow } from 'zustand/react/shallow'
 import { RepositoryHooksSection } from './hooks/RepositoryHooksSection'
-import { McpConfigSection } from './mcp/McpConfigSection'
+import { RepositoryMcpSection } from './mcp/RepositoryMcpSection'
 import { WorktreeSymlinksSection } from './worktrees/WorktreeSymlinksSection'
 import { SparsePresetSettingsSection } from './worktrees/SparsePresetSettingsSection'
 import { RepositorySourceControlAiSection } from './source-control/RepositorySourceControlAiSection'
@@ -396,7 +396,7 @@ export function RepositoryPane({
       <SparsePresetSettingsSection key={`sparse-presets:${repo.id}`} repoId={repo.id} />
     ) : null,
     !isFolder && (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, mcpEntries)) ? (
-      <McpConfigSection key={`mcp-configs:${selectedHostId}:${repo.id}`} repo={repo} />
+      <RepositoryMcpSection key={`mcp-configs:${selectedHostId}:${repo.id}`} repo={repo} />
     ) : null,
     forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, [sidebarVisibilityEntry]) ? (
       <RepositorySidebarVisibilitySection

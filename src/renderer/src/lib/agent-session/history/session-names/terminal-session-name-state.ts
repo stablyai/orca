@@ -104,11 +104,3 @@ export function replaceLastSeen(next: ReadonlyMap<string, { key: string; name: s
     lastSeenByTabId.set(tabId, seen)
   }
 }
-
-export function resetTerminalSessionNameStateForTest(): void {
-  localNameWriteByTabId.clear()
-  pendingHostRenameByTabId.clear()
-  deferredByTabId.clear()
-  renamedFromByTabId.clear()
-  lastSeenByTabId.clear()
-}

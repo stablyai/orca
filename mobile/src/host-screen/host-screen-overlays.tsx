@@ -10,7 +10,6 @@ import { OrcaHookTrustDrawer } from '../components/hook-trust/OrcaHookTrustDrawe
 import { NewWorktreeModalController } from '../new-workspace/creation/modal/NewWorktreeModalController'
 import { hostNewWorktreeSessionRoute } from '../host-new-worktree-session-route'
 import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { WorkspaceOptionsSheet } from './workspace-options/workspace-options-sheet'
 import { HostNewBotSheet } from './host-new-bot-sheet'
 import { WorkspaceDetailsSheet } from './workspace-actions/workspace-details-sheet'
@@ -18,12 +17,25 @@ import { WorkspaceRenameSheet } from './workspace-actions/workspace-rename-sheet
 import { WorkspaceStatusSheet } from './workspace-actions/workspace-status-sheet'
 import { WorkspaceDeleteConfirmSheet } from './workspace-actions/workspace-delete-confirm-sheet'
 import { useWorkspaceRowMenuActions } from './workspace-actions/use-workspace-row-menu-actions'
+import { useWorkspaceHandToBot } from './workspace-actions/use-workspace-hand-to-bot'
+import { useBottomDrawerFollowUp } from '../components/bottom-drawer/use-bottom-drawer-follow-up'
 import type { HostScreenController } from './use-host-screen-controller'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
+import { MobileRepoIcon } from '../components/icons/MobileRepoIcon'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
+import { useRepoLookById } from './catalog/host-repo-looks'
+
+// The sheet's one muted line: the project, then the branch when the name doesn't already say it.
+function workspaceSubjectLine(row: Worktree): string {
+  const branch = row.branch.replace(/^refs\/heads\//, '')
+  const name = row.displayName || row.repo
+  return [row.repo, branch && branch !== name ? branch : null].filter(Boolean).join(' · ')
+}
 
 export function HostScreenOverlays({ controller }: { controller: HostScreenController }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
-  useMobileColorScheme()
   const {
     actions,
     catalog,
@@ -36,15 +48,25 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
     state
   } = controller
   const actionTarget = state.actionTarget
+  const repoLookById = useRepoLookById(controller.sectionsResult.repoById)
   // Tied to the menu's row, so a menu closed elsewhere never reopens on the rename sheet.
   const [renameTarget, setRenameTarget] = useState<Worktree | null>(null)
   const [statusTarget, setStatusTarget] = useState<Worktree | null>(null)
+  // Hand off's two choices, swapped into the drawer when both are offered.
+  const [handOffChoices, setHandOffChoices] = useState<ActionSheetAction[] | null>(null)
+  const handToBot = useWorkspaceHandToBot({
+    controller,
+    closeMenuThen: (then) => menuFollowUp.closeThen(then)
+  })
   const closeActionSheet = () => {
     setRenameTarget(null)
     setStatusTarget(null)
+    setHandOffChoices(null)
+    handToBot.reset()
     state.setConfirmDelete(null)
     state.setActionTarget(null)
   }
+  const menuFollowUp = useBottomDrawerFollowUp(closeActionSheet)
   // A server row's screens are offered by what that server supports, not the desktop.
   const actionServer = useWorkspaceServer({
     client,
@@ -57,17 +79,25 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
     row: actionTarget,
     server: actionServer,
     onRename: setRenameTarget,
-    onMoveToStatus: setStatusTarget
+    onMoveToStatus: setStatusTarget,
+    onHandToBot: handToBot.open,
+    onChooseHandOff: setHandOffChoices
   })
+  const repoLook = actionTarget ? repoLookById.get(actionTarget.repoId) : undefined
 
   return (
     <>
       <WorkspaceOptionsSheet controller={controller} />
       <HostNewBotSheet controller={controller} />
+      {handToBot.newBotSheet}
 
       {/* iOS cannot present over a closing sibling Modal; delete's confirm, trust prompt and failure share one. */}
       <BottomDrawerModalHost>
-        <BottomDrawer visible={actionTarget != null} onClose={closeActionSheet}>
+        <BottomDrawer
+          visible={actionTarget != null}
+          dismissible={!handToBot.busy}
+          {...menuFollowUp.drawerProps}
+        >
           {state.confirmDelete ? (
             <WorkspaceDeleteConfirmSheet
               row={state.confirmDelete}
@@ -103,8 +133,34 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
               onPick={actions.setWorktreeStatus}
               onClose={closeActionSheet}
             />
+          ) : actionTarget && handToBot.target === actionTarget ? (
+            handToBot.sheet(actionTarget, closeActionSheet)
+          ) : handOffChoices ? (
+            <ActionSheetContent
+              title={t('hostScreen.hostScreenOverlays.handOff', 'Hand off')}
+              actions={handOffChoices.map((choice) => ({
+                ...choice,
+                onPress: () => {
+                  setHandOffChoices(null)
+                  choice.onPress()
+                }
+              }))}
+            />
           ) : (
-            <ActionSheetContent actions={rowMenuActions}>
+            <ActionSheetContent
+              actions={rowMenuActions}
+              title={actionTarget ? actionTarget.displayName || actionTarget.repo : undefined}
+              message={actionTarget ? workspaceSubjectLine(actionTarget) : undefined}
+              headerIcon={
+                actionTarget ? (
+                  <MobileRepoIcon
+                    repoIcon={repoLook?.icon ?? null}
+                    size={17}
+                    color={repoLook?.color ?? colors.textSecondary}
+                  />
+                ) : undefined
+              }
+            >
               {actionTarget ? (
                 <WorkspaceDetailsSheet
                   row={actionTarget}

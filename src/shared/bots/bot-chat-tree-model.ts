@@ -2,6 +2,7 @@
 import {
   sessionWorkerAgentState,
   sessionWorkerIsRunning,
+  sessionWorkerNeverStarted,
   sessionWorkerRestsOnAsk,
   type OrchestrationSessionWorker
 } from '../orchestration-session-workers'
@@ -13,6 +14,7 @@ import {
   type BotChatTreeRead,
   type BotChatTreeWorker
 } from './bot-chat-tree'
+import { botWorkspaceChats } from './bot-workspace-chats'
 
 /** A chat's own facts, before its workers are placed. */
 export type BotChatFacts = Omit<
@@ -34,9 +36,16 @@ export type BotChatTreeDispatch = {
   failed: boolean
   /** Settled: when; else when it started. */
   at: number
+  /** Settled with no completion time on record (an early failure writer left it out): `at` is then
+   *  when it was created, which orders it but dates nothing. */
+  undated?: true
   worktreeId: string | null
   /** Its Task's title, for search; absent when the host read none. */
   title?: string
+  /** The paired server that runs it as its own; this host keeps no worker record for it. */
+  serverEnvironmentId?: string
+  /** The agent that server named for it. */
+  agent?: string
 }
 
 /** A row that is not a Dispatch of the bot's: a handed-over agent or a terminal-only automation run. */
@@ -86,12 +95,15 @@ function finishedOrder(a: FinishedRef, b: FinishedRef): number {
 }
 
 /** A chat's finished list as a surface shows it: the host's newest plus the pages it read, each once,
- *  in list order. Rows read earlier stay, so one finishing between pages never opens a gap. */
+ *  in list order. Rows read earlier stay, so one finishing between pages never opens a gap; one running
+ *  again (its terminal turned up) shows only as running. */
 export function mergeShownFinished(
   newest: readonly BotChatTreeWorker[],
-  loaded: readonly BotChatTreeWorker[]
+  loaded: readonly BotChatTreeWorker[],
+  runningKeys?: ReadonlySet<string>
 ): BotChatTreeWorker[] {
-  const byKey = new Map([...loaded, ...newest].map((worker) => [worker.key, worker]))
+  const retained = runningKeys ? loaded.filter((worker) => !runningKeys.has(worker.key)) : loaded
+  const byKey = new Map([...retained, ...newest].map((worker) => [worker.key, worker]))
   const order = (a: BotChatTreeWorker, b: BotChatTreeWorker): number =>
     finishedOrder({ ...botChatTreeCursor(a), key: a.key }, { ...botChatTreeCursor(b), key: b.key })
   return [...byKey.values()].sort(order)
@@ -108,10 +120,13 @@ type ChatRefs = {
   finished: FinishedRef[]
 }
 
+/** With `workers`, an open Dispatch whose record reads ended (exited without reporting, or its terminal gone) is
+ *  history, as Activity shows it: in its own chat, where it stays once settled, keyed by start as its cursor is. */
 function refsByChat(
   placed: readonly BotChatTreePlaced[],
   extras: readonly BotChatTreeExtra[],
-  home: string
+  home: string,
+  workers?: ReadonlyMap<string, OrchestrationSessionWorker>
 ): Map<string, ChatRefs> {
   const byChat = new Map<string, ChatRefs>()
   const refs = (chatId: string): ChatRefs => {
@@ -123,6 +138,15 @@ function refsByChat(
     return found
   }
   for (const entry of placed) {
+    const worker = entry.dispatch.settled ? undefined : workers?.get(entry.dispatch.id)
+    if (worker && !sessionWorkerIsRunning(worker)) {
+      // A closed chat's open worker waited under Home; ended, it goes back to its chat. Its outcome is the record's.
+      const chatId = (entry.note === 'from-closed-chat' && entry.dispatch.chatId) || entry.chatId
+      const dispatch = { ...entry.dispatch, failed: worker.state === 'failed' }
+      const key = `worker:${dispatch.id}`
+      refs(chatId).finished.push({ key, at: worker.startedAt, placed: { dispatch, chatId } })
+      continue
+    }
     const chat = refs(entry.chatId)
     if (entry.dispatch.settled) {
       chat.finished.push({
@@ -168,10 +192,11 @@ export function botChatTreeDispatchIds(
 ): string[] {
   const ids: string[] = []
   for (const [chatId, chat] of refsByChat(placed, extras, homeIdOf(chats))) {
+    // Every running record, even for one chat's page: one that reads ended moves to its own chat's history.
+    ids.push(...chat.running.map((entry) => entry.dispatch.id))
     if (page && page.chatId !== chatId) {
       continue
     }
-    ids.push(...chat.running.map((entry) => entry.dispatch.id))
     for (const ref of finishedSlice(chat.finished, page)) {
       if (ref.placed) {
         ids.push(ref.placed.dispatch.id)
@@ -211,17 +236,33 @@ export function botChatTreeDispatchWorker(
       state: dispatch.settled ? (dispatch.failed ? 'failed' : 'done') : 'running',
       startedAt: dispatch.at,
       ...(dispatch.settled ? { settledAt: dispatch.at } : {}),
+      ...(dispatch.settled && dispatch.undated ? { settledUndated: true as const } : {}),
+      ...(dispatch.worktreeId && !dispatch.serverEnvironmentId
+        ? { placedWorktreeId: dispatch.worktreeId }
+        : {}),
       ...(note ? { note } : {}),
-      dispatchId: dispatch.id
+      dispatchId: dispatch.id,
+      // A paired server's own worker: its record there names its host and workspace.
+      ...(dispatch.serverEnvironmentId
+        ? {
+            hostId: toRuntimeExecutionHostId(dispatch.serverEnvironmentId),
+            host: 'remote' as const,
+            ...(dispatch.worktreeId ? { worktreeId: dispatch.worktreeId } : {})
+          }
+        : {}),
+      ...(dispatch.agent ? { agent: dispatch.agent } : {})
     }
   }
+  const state = workerState(worker)
   return {
     key,
     title: clipActivityTitle(worker.title),
-    state: workerState(worker),
+    state,
+    ...(state === 'running' && worker.backgroundWait ? { waitsOnBackground: true as const } : {}),
     startedAt: worker.startedAt,
     // The list's own order and cursor read this time.
     ...(dispatch.settled ? { settledAt: dispatch.at } : {}),
+    ...(dispatch.settled && dispatch.undated ? { settledUndated: true as const } : {}),
     ...(worker.worktreeId ? { worktreeId: worker.worktreeId } : {}),
     ...(worker.paneKey ? { paneKey: worker.paneKey } : {}),
     ...(note ? { note } : {}),
@@ -230,7 +271,9 @@ export function botChatTreeDispatchWorker(
       ? { hostId: toRuntimeExecutionHostId(worker.hostEnvironmentId) }
       : {}),
     ...(worker.agent ? { agent: worker.agent } : {}),
-    ...(worker.summary ? { summary: worker.summary } : {})
+    ...(worker.summary ? { summary: worker.summary } : {}),
+    ...(sessionWorkerNeverStarted(worker) ? { neverStarted: true as const } : {}),
+    host: worker.host
   }
 }
 
@@ -256,7 +299,7 @@ export function buildBotChatTree(input: {
 }): BotChatTreeRead {
   const home = homeIdOf(input.chats)
   const extras = input.extras ?? []
-  const byChat = refsByChat(input.placed, extras, home)
+  const byChat = refsByChat(input.placed, extras, home, input.workers)
   const facts = input.chats.some((chat) => chat.chatId === home)
     ? input.chats
     : [
@@ -298,38 +341,4 @@ export function buildBotChatTree(input: {
     chats,
     workspaceChats: botWorkspaceChats(input.placed, extras, home, input.homeWorkspaceIds)
   }
-}
-
-/** Each workspace under the chat of its newest Dispatch; one no Dispatch ran in sits under Home. */
-function botWorkspaceChats(
-  placed: readonly BotChatTreePlaced[],
-  extras: readonly BotChatTreeExtra[],
-  home: string,
-  homeWorkspaceIds: readonly string[] = []
-): Record<string, string> {
-  const newest = new Map<string, { chatId: string; at: number }>()
-  const consider = (worktreeId: string | null | undefined, chatId: string, at: number): void => {
-    const current = worktreeId ? newest.get(worktreeId) : undefined
-    if (worktreeId && (!current || current.at < at)) {
-      newest.set(worktreeId, { chatId, at })
-    }
-  }
-  for (const { dispatch, chatId } of placed) {
-    consider(dispatch.worktreeId, chatId, dispatch.at)
-  }
-  // A workspace a Dispatch ran in stays with that Dispatch's chat, whatever else works there later.
-  const placedWorktrees = new Set(newest.keys())
-  for (const extra of extras) {
-    if (!placedWorktrees.has(extra.worker.worktreeId ?? '')) {
-      consider(extra.worker.worktreeId, home, extra.at)
-    }
-  }
-  const map: Record<string, string> = {}
-  for (const worktreeId of homeWorkspaceIds) {
-    map[worktreeId] = home
-  }
-  for (const [worktreeId, { chatId }] of newest) {
-    map[worktreeId] = chatId
-  }
-  return map
 }

@@ -7,7 +7,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useTranslate } from '@/i18n/use-translate'
 import { useBots } from '@/lib/bot-catalog'
 import { ownBotHost } from '@/lib/bot-hosts'
-import { botImportNudge, useBotImportSources } from './bot-import-sources'
+import { botImportNudge } from '../../../../shared/bots/bot-import'
+import { useBotImportSources } from './bot-import-sources'
 
 const DISMISSED_KEY = 'orca.bots.import-nudge-dismissed'
 

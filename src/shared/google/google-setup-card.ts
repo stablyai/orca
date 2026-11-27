@@ -1,12 +1,13 @@
 // A Google setup card in a bot's chat. Orca writes it when the bot asks for one; the card itself
-// draws from the bot's setup run, so it locks and updates on every client. Older clients and the
-// phone paint its `text` as a plain line.
+// draws from the bot's setup run, so it locks and updates on every client. Older clients paint its
+// `text` as a plain line.
 import * as z from 'zod'
 import type {
   AgentJournalItemBody,
   AgentJournalPlainStatusItem
 } from '../agent-session/journal/agent-session-journal-types'
 import { GOOGLE_SETUP_STEPS } from './google-setup-run'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 
 export const GOOGLE_SETUP_CARD_PRESENTATION = 'google-setup'
 
@@ -28,16 +29,18 @@ export const GOOGLE_SETUP_CARD_KINDS = [
 ] as const
 export type GoogleSetupCardKind = (typeof GOOGLE_SETUP_CARD_KINDS)[number]
 
-export const GoogleSetupCardRefSchema = z.object({
-  botId: z.string().min(1).max(200),
-  /** The run it belongs to; a card from an earlier run says it ended rather than showing this one. */
-  runId: z.string().min(1).max(80),
-  card: z.enum(GOOGLE_SETUP_CARD_KINDS),
-  /** The step a `step` card is about. */
-  step: z.enum(GOOGLE_SETUP_STEPS).optional(),
-  /** Which copy this is, when Orca writes the card more than once; the run names the newest. */
-  copy: z.number().int().nonnegative().optional()
-})
+export const GoogleSetupCardRefSchema = lazyZodSchema(() =>
+  z.object({
+    botId: z.string().min(1).max(200),
+    /** The run it belongs to; a card from an earlier run says it ended rather than showing this one. */
+    runId: z.string().min(1).max(80),
+    card: z.enum(GOOGLE_SETUP_CARD_KINDS),
+    /** The step a `step` card is about. */
+    step: z.enum(GOOGLE_SETUP_STEPS).optional(),
+    /** Which copy this is, when Orca writes the card more than once; the run names the newest. */
+    copy: z.number().int().nonnegative().optional()
+  })
+)
 export type GoogleSetupCardRef = z.infer<typeof GoogleSetupCardRefSchema>
 
 /** One card in the run, whichever copy: `connect`, or `step:branding`. */

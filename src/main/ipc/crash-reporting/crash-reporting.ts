@@ -1,4 +1,5 @@
 import { clipboard, ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import { getCanonicalUserDataPath } from '../../persistence/loading-store/user-data-path'
 import { nativeHangCaptureDirectory } from '../../hang-watchdog/native-hang-capture-store'
 import { createPreviousNativeHangReport } from '../../hang-watchdog/previous-native-hang-report'
@@ -14,10 +15,7 @@ import {
   isClipboardTextWriteTooLargeError
 } from '../../../shared/clipboard/clipboard-text'
 import { formatCrashReportCopyText } from '../../crash-reporting/reports/crash-report-copy-text'
-import {
-  recentRendererErrorReportKeys,
-  recordRendererErrorReport
-} from './crash-reporting-renderer-error-report'
+import { recordRendererErrorReport } from './crash-reporting-renderer-error-report'
 import { recordRendererBreadcrumbFromRenderer } from './crash-reporting-renderer-breadcrumbs'
 import {
   getLatestPendingReport,
@@ -28,25 +26,10 @@ import {
 } from './crash-reporting-sendable-reports'
 import { buildUncapturedCrashReportText, submitCrashReport } from './crash-reporting-submission'
 
-export function _resetRendererErrorReportDedupeForTests(): void {
-  recentRendererErrorReportKeys.clear()
-  submittedReportIds.clear()
-  inFlightSubmissions.clear()
-}
-
-export function _getCrashReportingStateSizesForTests(): {
-  submittedReportIds: number
-  inFlightSubmissions: number
-  recentRendererErrorReportKeys: number
-} {
-  return {
-    submittedReportIds: submittedReportIds.size,
-    inFlightSubmissions: inFlightSubmissions.size,
-    recentRendererErrorReportKeys: recentRendererErrorReportKeys.size
-  }
-}
-
-export function registerCrashReportingHandlers(store: CrashReportStore): void {
+export function registerCrashReportingHandlers(
+  store: CrashReportStore,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
   const directory = nativeHangCaptureDirectory(getCanonicalUserDataPath())
   const previousHang =
     process.platform === 'darwin'
@@ -56,17 +39,37 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
           processStartedAt: Date.now() - process.uptime() * 1000
         })
       : null
-  ipcMain.removeHandler('crashReports:getLatestPending')
-  ipcMain.handle('crashReports:getLatestPending', () => getLatestPendingReport(store))
+  if (ipc === ipcMain) {
+    for (const channel of [
+      'crashReports:getLatestPending',
+      'crashReports:getLatestReport',
+      'crashReports:dismiss',
+      'crashReports:copyLatestDiagnostics',
+      'crashReports:recordRendererError',
+      'crashReports:submit'
+    ]) {
+      ipcMain.removeHandler(channel)
+    }
+    ipcMain.removeAllListeners('crashReports:recordBreadcrumb')
+    ipcMain.on(
+      'crashReports:recordBreadcrumb',
+      (event, args?: { name?: unknown; data?: unknown }) => {
+        const sender = event?.sender
+        const origin =
+          typeof sender?.id === 'number' ? rendererCrashBreadcrumbOrigin(sender.id) : undefined
+        recordRendererBreadcrumbFromRenderer(args, origin)
+      }
+    )
+  }
 
-  ipcMain.removeHandler('crashReports:getLatestReport')
-  ipcMain.handle('crashReports:getLatestReport', async () => {
+  ipc.handle('crashReports:getLatestPending', () => getLatestPendingReport(store))
+
+  ipc.handle('crashReports:getLatestReport', async () => {
     await previousHang?.ensureImported()
     return getLatestSendableReport(store)
   })
 
-  ipcMain.removeHandler('crashReports:dismiss')
-  ipcMain.handle('crashReports:dismiss', async (_event, args: { reportId: string }) => {
+  ipc.handle('crashReports:dismiss', async (_event, args: { reportId: string }) => {
     if (inFlightSubmissions.has(args.reportId)) {
       return store.getById(args.reportId)
     }
@@ -77,19 +80,7 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
     return store.dismiss(args.reportId)
   })
 
-  ipcMain.removeAllListeners('crashReports:recordBreadcrumb')
-  ipcMain.on(
-    'crashReports:recordBreadcrumb',
-    (event, args?: { name?: unknown; data?: unknown }) => {
-      const sender = event?.sender
-      const origin =
-        typeof sender?.id === 'number' ? rendererCrashBreadcrumbOrigin(sender.id) : undefined
-      recordRendererBreadcrumbFromRenderer(args, origin)
-    }
-  )
-
-  ipcMain.removeHandler('crashReports:copyLatestDiagnostics')
-  ipcMain.handle(
+  ipc.handle(
     'crashReports:copyLatestDiagnostics',
     async (_event, args?: CrashReportCopyDiagnosticsArgs) => {
       const report = await getRequestedCrashReport(store, args)
@@ -97,7 +88,7 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
         ? formatCrashReportText(report, args?.notes)
         : buildUncapturedCrashReportText(args?.notes)
       try {
-        clipboard.writeText(
+        await clipboard.writeText(
           assertClipboardTextWriteWithinLimit(
             formatCrashReportCopyText(baseText, args?.submissionFailure)
           )
@@ -112,8 +103,7 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
     }
   )
 
-  ipcMain.removeHandler('crashReports:recordRendererError')
-  ipcMain.handle('crashReports:recordRendererError', async (event, args: unknown) => {
+  ipc.handle('crashReports:recordRendererError', async (event, args: unknown) => {
     try {
       return await recordRendererErrorReport(store, args, event?.sender?.id)
     } catch (error) {
@@ -122,8 +112,7 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
     }
   })
 
-  ipcMain.removeHandler('crashReports:submit')
-  ipcMain.handle('crashReports:submit', async (_event, args: CrashReportSubmitArgs) =>
+  ipc.handle('crashReports:submit', async (_event, args: CrashReportSubmitArgs) =>
     submitCrashReport(store, args)
   )
 }

@@ -18,7 +18,7 @@ const CHECKING_STATE: DeleteWorktreeLocalFilesState = { status: 'checking' }
 const UNSUPPORTED_STATE: DeleteWorktreeLocalFilesState = { status: 'unsupported' }
 const EMPTY_STATES = new Map<string, DeleteWorktreeLocalFilesState>()
 
-/** Per-target ignored-file check state, pre-seeded on render so async completion never resizes the dialog. */
+/** Per-target ignored-file check state, including targets whose scans have yet to start. */
 export function useDeleteWorktreeAtRiskLocalFiles({
   isOpen,
   deleteTargets,

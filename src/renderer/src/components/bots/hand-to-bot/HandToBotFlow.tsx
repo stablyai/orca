@@ -42,14 +42,16 @@ import { useBotPurposes } from '../use-bot-purposes'
 import { closeHandToBot, type HandToBotRequest } from './hand-to-bot-open'
 import {
   botHomeParentFor,
-  handOverWorkspace,
   moveUnderParent,
   placementOf,
-  restorePlacement,
+  restorePlacement
+} from './hand-to-bot-workspace'
+import {
+  handOverWorkspace,
   suggestedBotAgent,
   suggestedBotName,
   suggestedBotPurpose
-} from './hand-to-bot-workspace'
+} from '../../../../../shared/bots/hand-over-workspace'
 
 const NEW_BOT_TILE =
   'flex size-7 items-center justify-center rounded-lg border border-dashed border-input text-muted-foreground'

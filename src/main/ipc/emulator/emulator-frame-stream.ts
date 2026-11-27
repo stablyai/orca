@@ -1,4 +1,5 @@
 import { BrowserWindow, ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import { randomUUID } from 'node:crypto'
 import { MjpegFrameStream } from '../../emulator/mjpeg-frame-stream'
 import { abortWhenRendererGone } from '../renderer-requests/renderer-lifetime-abort'
@@ -26,8 +27,8 @@ function frameToArrayBuffer(frame: Buffer<ArrayBufferLike>): ArrayBuffer {
   return arrayBuffer
 }
 
-export function registerEmulatorFrameStreamHandlers(): void {
-  ipcMain.handle(
+export function registerEmulatorFrameStreamHandlers(ipc: IpcHandleRegistrar = ipcMain): void {
+  ipc.handle(
     'emulator:frameStreamStart',
     (event, args: { streamUrl: string; streamKey?: string }): { streamId: string } => {
       const owner = event.sender
@@ -78,7 +79,7 @@ export function registerEmulatorFrameStreamHandlers(): void {
     }
   )
 
-  ipcMain.handle('emulator:frameStreamStop', (_event, args: { streamId: string }) => {
+  ipc.handle('emulator:frameStreamStop', (_event, args: { streamId: string }) => {
     stopFrameStream(args.streamId)
   })
 }

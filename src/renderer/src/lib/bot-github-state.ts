@@ -2,7 +2,8 @@
 // by every GitHub surface for that host (createConnectorHostState).
 import {
   BOT_GITHUB_OFF,
-  type ConnectorGitHubState
+  type ConnectorGitHubState,
+  gitHubLinkedAccounts
 } from '../../../shared/connector-bot-github-contract'
 import { BOT_SLACK_DESKTOP_ERRORS } from '../../../shared/connector-bot-slack-contract'
 import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
@@ -44,9 +45,9 @@ function linkShape(current: BotGitHubView): string | null {
   if (current.status !== 'ready') {
     return null
   }
-  const { account, installations } = current.github
+  const { installations } = current.github
   return JSON.stringify([
-    account?.userId ?? null,
+    gitHubLinkedAccounts(current.github).map((account) => account.userId),
     // Repositories too: adding some to an existing install keeps its id.
     installations.map((installation) => [
       installation.installationId,

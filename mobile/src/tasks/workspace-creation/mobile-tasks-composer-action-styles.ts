@@ -1,7 +1,7 @@
-import { concentricRadius, colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { concentricRadius, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 
-export const mobileTasksComposerActionStyles = themedStyleSheet(() => ({
+export const mobileTasksComposerActionStylesSheet = themedStyleSheet((colors) => ({
   createForm: {
     gap: spacing.sm
   },

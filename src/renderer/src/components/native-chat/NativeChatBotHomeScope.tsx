@@ -1,8 +1,14 @@
-import { useState } from 'react'
+import { useContext, useState } from 'react'
 import { cn } from '@/lib/class-names'
 import { BotFirstScreen } from '../bots/BotFirstScreen'
+import { NativeChatWaitingAgentMailRows } from './queue/NativeChatWaitingAgentMailRows'
+import { NativeChatWaitingAgentMailRowsContext } from './queue/NativeChatWaitingAgentMailActions'
 import {
-  nativeChatFirstScreenSignIn,
+  NativeChatDisclosureContext,
+  useNativeChatDisclosures
+} from './messages/disclosure/native-chat-disclosure-store'
+import { nativeChatFirstScreenSignIn } from '../../../../shared/bots/bot-first-screen'
+import {
   NativeChatBotKickoffContext,
   useNativeChatBotKickoffView,
   type NativeChatBotKickoffView
@@ -16,13 +22,19 @@ type BotHomeController = Parameters<typeof useNativeChatBotKickoffView>[1] &
 
 /** A bot Chat's kickoff view, and Stop controls that know when a new bot is first speaking. */
 export function useNativeChatBotHome(
-  session: { messages: readonly NativeChatMessage[] },
+  session: { messages: readonly NativeChatMessage[]; sessionId: string | null },
   controller: BotHomeController,
   transport: NativeChatStructuredComposerTransport,
   workspaceId: string | null,
   hostExecution: { stopping: boolean }
 ) {
-  const kickoff = useNativeChatBotKickoffView(session.messages, controller, transport, workspaceId)
+  const kickoff = useNativeChatBotKickoffView(
+    session.messages,
+    controller,
+    transport,
+    workspaceId,
+    session.sessionId
+  )
   return {
     kickoff,
     /** Its setup card stands in for the transcript, and offers what setup needs. */
@@ -45,6 +57,7 @@ export function NativeChatBotHomeScope({
   children: React.ReactNode
 }): React.JSX.Element {
   const firstScreen = kickoff?.firstScreen ?? null
+  const mail = useContext(NativeChatWaitingAgentMailRowsContext)
   const [shownFirstScreen, setShownFirstScreen] = useState(false)
   if (firstScreen && !shownFirstScreen) {
     setShownFirstScreen(true)
@@ -66,13 +79,43 @@ export function NativeChatBotHomeScope({
             )}
             aria-hidden={firstScreen ? true : undefined}
           >
-            {children}
+            {/* While setup covers the transcript, its waiting mail is drawn once, below setup. */}
+            <NativeChatWaitingAgentMailRowsContext.Provider value={firstScreen ? null : mail}>
+              {children}
+            </NativeChatWaitingAgentMailRowsContext.Provider>
           </div>
-          {firstScreen ? <BotFirstScreen firstScreen={firstScreen} isVisible={isVisible} /> : null}
+          {firstScreen ? (
+            // Setup takes the room the waiting mail leaves, so the mail never covers its controls.
+            <div className="absolute inset-0 flex flex-col">
+              <div className="relative min-h-0 flex-1">
+                <BotFirstScreen firstScreen={firstScreen} isVisible={isVisible} />
+              </div>
+              {mail ? <NativeChatSetupWaitingMail shown={mail.length > 0} /> : null}
+            </div>
+          ) : null}
         </div>
       ) : (
         children
       )}
     </NativeChatBotKickoffContext.Provider>
+  )
+}
+
+/** Waiting mail under bot setup, below it rather than over it. Kept while empty, so its first
+ *  arrival is announced; its own open-state store, so rows scrolled away keep what was open. */
+function NativeChatSetupWaitingMail({ shown }: { shown: boolean }): React.JSX.Element {
+  const disclosures = useNativeChatDisclosures()
+  return (
+    <div
+      data-native-chat-waiting-mail-scroll
+      className={cn(
+        'mx-auto flex w-full max-w-(--chat-content-max-width) shrink-0 flex-col gap-2',
+        shown && 'max-h-1/2 scrollbar-sleek overflow-y-auto px-4 pt-2 pb-2'
+      )}
+    >
+      <NativeChatDisclosureContext.Provider value={disclosures}>
+        <NativeChatWaitingAgentMailRows />
+      </NativeChatDisclosureContext.Provider>
+    </div>
   )
 }

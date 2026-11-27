@@ -67,15 +67,3 @@ export function deleteInstalledAgentSkillDiscoveryCache(matches: (key: string) =
     }
   }
 }
-
-export function getInstalledAgentSkillDiscoveryCacheSizeForTests(): number {
-  return cachedDiscoveryByTarget.size
-}
-
-export function hasInstalledAgentSkillDiscoveryCacheEntryForTests(key: string): boolean {
-  return cachedDiscoveryByTarget.has(key)
-}
-
-export function resetInstalledAgentSkillDiscoveryCacheForTests(): void {
-  cachedDiscoveryByTarget = new Map()
-}

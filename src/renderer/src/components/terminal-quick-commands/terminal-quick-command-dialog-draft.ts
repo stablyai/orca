@@ -2,8 +2,24 @@ import {
   getTerminalQuickCommandScope,
   isTerminalAgentQuickCommand
 } from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
-import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
+import type {
+  TerminalQuickCommand,
+  TerminalQuickCommandScope
+} from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+
+export function createTerminalQuickCommandDraft(
+  scope: TerminalQuickCommandScope = { type: 'global' }
+): TerminalQuickCommand {
+  return {
+    id: `quick-command-${createBrowserUuid()}`,
+    label: '',
+    command: '',
+    appendEnter: true,
+    scope
+  }
+}
 
 export type TerminalQuickCommandDialogAction = 'terminal-command' | 'agent-prompt'
 

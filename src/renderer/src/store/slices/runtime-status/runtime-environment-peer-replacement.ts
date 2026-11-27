@@ -25,10 +25,6 @@ export function replacedRuntimeEnvironmentIds(
 // Re-pairs of a managed server whose host key was not yet known: the host key and pairing it had before.
 const deferredHostKeyById = new Map<string, { hostKey: string | null; revision: number | null }>()
 
-export function resetDeferredPeerChecksForTests(): void {
-  deferredHostKeyById.clear()
-}
-
 function sameRegistration(
   before: CatalogEnvironment | undefined,
   after: CatalogEnvironment | undefined

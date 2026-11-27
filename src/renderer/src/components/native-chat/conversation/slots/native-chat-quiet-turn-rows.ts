@@ -65,7 +65,7 @@ export function nativeChatShownRows(
   return { quiet, leaving, messages }
 }
 
-/** A new bot's first turn when it only greeted: the header above already says who and when, so its
+/** A new bot's first turn when it only greeted: the intro already shows its start time, so its
  *  bar and response actions don't draw. One that ran tools (an import) or failed keeps them. */
 export function nativeChatBotIntroTurn(
   input: Pick<NativeChatTranscriptSlotsInput, 'turnKeys' | 'turnStatuses'>,

@@ -36,7 +36,7 @@ import {
   SOURCE_CONTROL_TEXT_ACTION_ID_SET,
   getSourceControlActionAgentSupportText,
   getSourceControlActionAgentWarningText,
-  getSourceControlAgentArgsPlaceholder
+  SOURCE_CONTROL_AGENT_ARGS_PLACEHOLDER
 } from '../../source-control/source-control-action-recipe-options'
 import {
   ACTION_MODE_INHERIT,
@@ -173,16 +173,7 @@ const SelectedRepositoryActionRows = memo(
               : (pickerAgent
                   ? sourceControlActionExecutionArgs(recipe, pickerAgent)
                   : inheritedAgentArgs) ||
-                (isLaunchAction
-                  ? ''
-                  : getSourceControlAgentArgsPlaceholder(
-                      resolveAgentArgsPlaceholderAgent(
-                        effectiveAgent,
-                        source,
-                        actionId,
-                        defaultTuiAgent
-                      )
-                    ))
+                (isLaunchAction ? '' : SOURCE_CONTROL_AGENT_ARGS_PLACEHOLDER)
           const agentWarningText = getSourceControlActionAgentWarningText(
             actionId,
             effectiveAgent,

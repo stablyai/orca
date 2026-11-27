@@ -140,7 +140,8 @@ export function createAgentCompletionNotificationController({
     return (
       previous.agentIdentity !== null &&
       completionIdentity.agentIdentity !== null &&
-      previous.agentIdentity === completionIdentity.agentIdentity
+      previous.agentIdentity === completionIdentity.agentIdentity &&
+      !identityScope.previousTurnRetired()
     )
   }
 

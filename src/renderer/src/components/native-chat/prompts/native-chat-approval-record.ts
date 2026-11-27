@@ -1,12 +1,8 @@
 import { z } from 'zod'
 import type { Translate } from '@/i18n/use-translate'
 import { normalizeToolInput } from '../../../../../shared/native-chat/tools/native-chat-tool-summary'
+import { ownApprovalRecord } from '../../../../../shared/agent-session/requests/prompts/agent-session-approval-record'
 import type { AgentJournalApprovalItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import {
-  ORCHESTRATION_APPROVAL_CALLER_PREFIX,
-  ORCHESTRATION_COORDINATOR_APPROVAL_CALLER_PREFIX,
-  ORCHESTRATION_PERSON_APPROVAL_CALLER_PREFIX
-} from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 
 /** Which shield the line shows: an answer either way, or a prompt that closed with none. */
 export type NativeChatApprovalRecordTone = 'allowed' | 'denied' | 'open' | 'closed'
@@ -22,11 +18,6 @@ export type NativeChatApprovalRecordLine = {
   reason?: { label: string; text: string }
   at: number | null
   opensWorker?: true
-}
-
-/** The tool's own name when the provider gave one; otherwise the prompt's title as it read. */
-export function approvalRecordTool(toolName: string | undefined, title: string): string {
-  return toolName?.trim() || title
 }
 
 // A tool call's input as the agent wrote it: its shell command, when it has one.
@@ -45,99 +36,89 @@ export function ownApprovalRecordLine(
   body: AgentJournalApprovalItem,
   t: Translate
 ): NativeChatApprovalRecordLine {
-  const { resolution } = body
-  const tool = approvalRecordTool(body.toolName, body.displayName ?? body.title)
-  const base = { detail: approvalRecordDetail(body.detail), at: resolution.resolvedAt }
-  if (resolution.state !== 'resolved') {
-    return {
-      ...base,
-      tone: 'closed',
-      sentence: t(
-        'components.native-chat.approval.record.cancelled',
-        'Request for <tool>{{tool}}</tool> cancelled'
-      ),
-      values: { tool }
-    }
+  const record = ownApprovalRecord(body)
+  const { tool } = record
+  const line = {
+    tone: record.tone,
+    detail: approvalRecordDetail(body.detail),
+    at: body.resolution.resolvedAt
   }
-  const option = body.options.find((entry) => entry.id === resolution.selectedOptionId)
-  const resolvedBy = resolution.resolvedBy ?? ''
-  // Orca answers a worker's prompt only by allowing or refusing this one call.
-  const allows = option?.intent === 'allow_once'
-  if (allows || option?.intent === 'reject_once') {
-    if (resolvedBy.startsWith(ORCHESTRATION_COORDINATOR_APPROVAL_CALLER_PREFIX)) {
+  switch (record.sentence) {
+    case 'cancelled':
       return {
-        ...base,
-        tone: allows ? 'allowed' : 'denied',
-        sentence: allows
-          ? t(
-              'components.native-chat.approval.record.coordinatorAllowedHere',
-              'Coordinator allowed <tool>{{tool}}</tool>'
-            )
-          : t(
-              'components.native-chat.approval.record.coordinatorDeniedHere',
-              'Coordinator denied <tool>{{tool}}</tool>'
-            ),
+        ...line,
+        sentence: t(
+          'components.native-chat.approval.record.cancelled',
+          'Request for <tool>{{tool}}</tool> cancelled'
+        ),
         values: { tool }
       }
-    }
-    // Older builds named no one: the coordinator or a person in its chat.
-    if (
-      resolvedBy.startsWith(ORCHESTRATION_APPROVAL_CALLER_PREFIX) &&
-      !resolvedBy.startsWith(ORCHESTRATION_PERSON_APPROVAL_CALLER_PREFIX)
-    ) {
+    case 'coordinatorAllowed':
       return {
-        ...base,
-        tone: allows ? 'allowed' : 'denied',
-        sentence: allows
-          ? t(
-              'components.native-chat.approval.record.allowedUnnamed',
-              'Allowed <tool>{{tool}}</tool>'
-            )
-          : t(
-              'components.native-chat.approval.record.deniedUnnamed',
-              'Denied <tool>{{tool}}</tool>'
-            ),
+        ...line,
+        sentence: t(
+          'components.native-chat.approval.record.coordinatorAllowedHere',
+          'Coordinator allowed <tool>{{tool}}</tool>'
+        ),
         values: { tool }
       }
-    }
-  }
-  switch (option?.intent) {
-    case 'allow_once':
+    case 'coordinatorDenied':
       return {
-        ...base,
-        tone: 'allowed',
+        ...line,
+        sentence: t(
+          'components.native-chat.approval.record.coordinatorDeniedHere',
+          'Coordinator denied <tool>{{tool}}</tool>'
+        ),
+        values: { tool }
+      }
+    case 'allowedUnnamed':
+      return {
+        ...line,
+        sentence: t(
+          'components.native-chat.approval.record.allowedUnnamed',
+          'Allowed <tool>{{tool}}</tool>'
+        ),
+        values: { tool }
+      }
+    case 'deniedUnnamed':
+      return {
+        ...line,
+        sentence: t(
+          'components.native-chat.approval.record.deniedUnnamed',
+          'Denied <tool>{{tool}}</tool>'
+        ),
+        values: { tool }
+      }
+    case 'youAllowed':
+      return {
+        ...line,
         sentence: t(
           'components.native-chat.approval.record.youAllowed',
           'You allowed <tool>{{tool}}</tool>'
         ),
         values: { tool }
       }
-    case 'allow_always':
+    case 'youAllowedForSession':
       return {
-        ...base,
-        tone: 'allowed',
+        ...line,
         sentence: t(
           'components.native-chat.approval.record.youAllowedForSession',
           'You allowed <tool>{{tool}}</tool> for this session'
         ),
         values: { tool }
       }
-    case 'reject_once':
-    case 'reject_always':
+    case 'youDenied':
       return {
-        ...base,
-        tone: 'denied',
+        ...line,
         sentence: t(
           'components.native-chat.approval.record.youDenied',
           'You denied <tool>{{tool}}</tool>'
         ),
         values: { tool }
       }
-    case undefined:
-      // An option that neither grants nor refuses (a stop), or one this build cannot read.
+    case 'youAnswered':
       return {
-        ...base,
-        tone: 'closed',
+        ...line,
         sentence: t(
           'components.native-chat.approval.record.youAnswered',
           'You answered <tool>{{tool}}</tool>: {{answer}}'
@@ -145,7 +126,7 @@ export function ownApprovalRecordLine(
         values: {
           tool,
           answer:
-            option?.label ??
+            record.answer ??
             t('components.native-chat.receipt.unavailable', 'Selected answer unavailable')
         }
       }

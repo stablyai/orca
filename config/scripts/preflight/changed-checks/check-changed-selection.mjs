@@ -57,6 +57,11 @@ const RATCHET_INPUTS = {
     'config/main-blocking-worker-entries.json',
     'config/scripts/static-analysis/process-boundaries/main-blocking-source-paths.mjs'
   ],
+  'check-mobile-react-compiler-hazard-ratchet.mjs': [
+    'mobile/app/',
+    'mobile/src/',
+    'mobile/web-entry/'
+  ],
   'check-react-compiler-compat-ratchet.mjs': ['src/renderer/src/'],
   'check-recurring-timer-ratchet.mjs': [
     'src/main/',
@@ -75,6 +80,12 @@ const RATCHET_INPUTS = {
     'src/renderer/src/',
     'config/oxlint-plugins/app-store-performance.mjs',
     'config/oxlint-whole-hot-map-ratchet.json'
+  ],
+  'check-zod-prefer-lazy-ratchet.mjs': [
+    'src/main/',
+    'src/shared/',
+    'config/oxlint-plugins/zod-prefer-lazy-schema.mjs',
+    'config/oxlint-zod-prefer-lazy-ratchet.json'
   ],
   'check-workspace-record-read-ratchet.mjs': ['src/renderer/src/'],
   'check-worktree-id-composer-ratchet.mjs': ['src/', 'mobile/src/']
@@ -131,9 +142,14 @@ export const VERIFY_CHECKS = [
     ],
     inputs: [
       'src/renderer/src/',
+      'src/shared/bots/',
+      'src/shared/composio/',
+      'config/localization-coverage-allowlist.json',
       LOCALES,
       'config/scripts/localization/source-extraction/audit-localization-coverage',
-      'config/scripts/localization/source-extraction/localization-visible-object-keys'
+      'config/scripts/localization/source-extraction/localization-visible-object-keys',
+      'config/scripts/localization/source-extraction/localization-ast-queries',
+      'config/scripts/localization/source-extraction/localization-coded-copy-rules'
     ]
   },
   {
@@ -154,6 +170,8 @@ export const VERIFY_CHECKS = [
       'src/shared/worktree/',
       'config/scripts/localization/source-extraction/audit-localization-coverage',
       'config/scripts/localization/source-extraction/localization-visible-object-keys',
+      'config/scripts/localization/source-extraction/localization-ast-queries',
+      'config/scripts/localization/source-extraction/localization-coded-copy-rules',
       'config/startup-worktree-localization-allowlist.json'
     ]
   },
@@ -199,7 +217,9 @@ export const VERIFY_CHECKS = [
       'config/mobile-localization-coverage-allowlist.json',
       'config/scripts/audit-localization-coverage',
       'config/scripts/localization/source-extraction/audit-localization-coverage',
-      'config/scripts/localization/source-extraction/localization-visible-object-keys'
+      'config/scripts/localization/source-extraction/localization-visible-object-keys',
+      'config/scripts/localization/source-extraction/localization-ast-queries',
+      'config/scripts/localization/source-extraction/localization-coded-copy-rules'
     ]
   },
   {
@@ -274,6 +294,9 @@ export const VERIFY_CHECKS = [
 const TRANSLATION_USE = /\b(?:t|translate\w*)\(|useTranslation|i18n/
 // Mirrors KEY_LITERAL_RE in verify-localization-extraction.mjs: quoted dotted literals keep keys referenced.
 const KEY_LITERAL = /['"`]([A-Za-z][\w-]*(?:\.[\w-]+)+)['"`]/g
+// A plain exported string may be a namespace that an unchanged consumer passes to useTranslation.
+const EXPORTED_STRING_CONSTANT =
+  /\bexport\s+(?:const|default)\b[^;]*?['"`]|^\s*const\s+\w+\s*(?::[^=\n]+)?=\s*['"`]/m
 const SCRIPT_SOURCE = /\.[cm]?[jt]sx?$/
 
 function flattenCatalogKeys(value, prefix = '', keys = new Set()) {
@@ -311,7 +334,11 @@ function translationEvidence(readVersions) {
         return true
       }
       return readVersions(file).some(
-        (text) => text !== null && (TRANSLATION_USE.test(text) || namesCatalogKey(text))
+        (text) =>
+          text !== null &&
+          (TRANSLATION_USE.test(text) ||
+            EXPORTED_STRING_CONSTANT.test(text) ||
+            namesCatalogKey(text))
       )
     }
   }
@@ -394,10 +421,12 @@ const RATCHET_SHARED_MODULES = {
     'check-main-blocking-helper-ratchet.mjs'
   ],
   'config/scripts/static-analysis/ratchets/react-compiler/react-compiler-hazards.mjs': [
+    'check-mobile-react-compiler-hazard-ratchet.mjs',
     'check-react-compiler-compat-ratchet.mjs'
   ],
   'config/react-compiler-uncompiled-files.txt': ['check-react-compiler-compat-ratchet.mjs'],
   'config/scripts/localization/reactive-translate/render-path-translate.mjs': [
+    'check-mobile-react-compiler-hazard-ratchet.mjs',
     'check-render-path-translate-ratchet.mjs'
   ]
 }

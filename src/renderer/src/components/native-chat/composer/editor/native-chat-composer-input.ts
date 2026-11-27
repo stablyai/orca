@@ -5,6 +5,7 @@ import {
 } from '../../../../../../shared/orchestration/mailbox/orchestration-agent-reference'
 import type { HTMLAttributes, RefObject } from 'react'
 import { linkedSelectionText } from '../../paste/native-chat-pasted-links'
+import { toLfPastedText } from '@/lib/clipboard/clipboard-line-endings'
 import { applyMentionSuggestion } from '../../../../../../shared/native-chat/input/composer/native-chat-composer-autocomplete'
 
 /** Text coordinates keep transport, attachments, and picker logic independent of the editor. */
@@ -18,6 +19,8 @@ export type NativeChatComposerInput = Pick<
   | 'select'
   | 'setSelectionRange'
 > & {
+  /** Follows a surviving character through edits; null means it was replaced or deleted. */
+  trackTextPosition?: (offset: number, onChange: (offset: number | null) => void) => () => void
   insertAgentReferences?: (references: OrchestrationAgentReference[]) => void
   contains?: (node: Node | null) => boolean
   insertText?: (text: string) => void
@@ -30,6 +33,8 @@ export type NativeChatComposerInput = Pick<
     token: string,
     agent?: OrchestrationAgentReference
   ) => void
+  /** Shows a draft-leading `/btw ` or `/side ` as the side-chat pill; its text stays the same. */
+  pillSideChatCommand?: () => void
   /** Deletes every chip of one image, as when its thumbnail goes. */
   removeImageReferences?: (attachmentId: string) => void
   /** Inserts each file at the caret as a pill; its text stays the `@path` reference. */
@@ -53,6 +58,8 @@ export type NativeChatPromptEditorProps = Omit<
   initialValue: string
   disabled: boolean
   placeholder: string
+  /** This chat opens side chats: `/btw ` and `/side ` become the side-chat pill. */
+  sideChat?: boolean
   onChange: (input: NativeChatComposerInput) => void
   onSelect: (input: NativeChatComposerInput) => void
 }
@@ -66,12 +73,13 @@ export function insertNativeChatPastedText(
   }
   // A paste routed from a hidden terminal or a transcript click must leave the caret in the composer.
   input.focus()
+  const pasted = toLfPastedText(text)
   const { selectionStart, selectionEnd } = input
   const linked =
     selectionStart !== null && selectionEnd !== null && selectionStart < selectionEnd
-      ? linkedSelectionText(input.value.slice(selectionStart, selectionEnd), text)
+      ? linkedSelectionText(input.value.slice(selectionStart, selectionEnd), pasted)
       : null
-  input.insertText(linked ?? text)
+  input.insertText(linked ?? pasted)
   return true
 }
 
@@ -103,7 +111,8 @@ export function applyNativeChatMention(
   mention?: NativeChatMentionToken,
   /** Where the replaced text starts when it isn't the `@query` before the caret: a bot's chat,
    *  picked one level under it, whose filter may hold spaces the `@query` can't. */
-  from?: number
+  from?: number,
+  mentionNameMatches?: (query: string) => boolean
 ): { draft: string; caret: number } {
   const agent = typeof mention === 'object' ? mention : undefined
   const token = typeof mention === 'object' ? agentReferenceToken(mention) : mention
@@ -116,7 +125,7 @@ export function applyNativeChatMention(
     }
     return { draft: before + text.slice(at).replace(/^ /, ''), caret: before.length }
   }
-  const result = applyMentionSuggestion(text, at, path, token)
+  const result = applyMentionSuggestion(text, at, path, token, mentionNameMatches)
   if (token && result.draft !== text) {
     insertMentionToken(input, text, result.caret - token.length - 1, at, token, agent)
   }

@@ -36,13 +36,16 @@ export async function getWindowsDefaultRouteInterfaceNames(
 }
 
 function buildDefaultRouteScript(): string {
+  // PowerShell 5.1 otherwise writes the OEM code page, which mangles CJK adapter aliases.
+  // Constrained Language Mode rejects this line; keep the OEM output rather than fail the lookup.
   return `$ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
+try { [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false) } catch {}
 $names = @(Get-NetRoute -ErrorAction Stop | Where-Object { $_.State -eq 'Alive' -and ($_.DestinationPrefix -eq '0.0.0.0/0' -or $_.DestinationPrefix -eq '::/0') } | Select-Object -ExpandProperty InterfaceAlias -Unique)
 ConvertTo-Json -InputObject $names -Compress`
 }
 
-function createPowerShellRunner(systemRoot = 'C:\\Windows'): PowerShellRunner {
+export function createPowerShellRunner(systemRoot = 'C:\\Windows'): PowerShellRunner {
   const powershellPath = win32.join(
     systemRoot,
     'System32',

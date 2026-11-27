@@ -5,8 +5,8 @@ import { structuredAgentRuntimeMetadata } from '../../agent-session/installation
 import { resolveHostStructuredAgentLaunchEnvironment } from '../../agent-session/launch/structured-agent-launch-support'
 import { findStructuredAgentSessionAdoptionTranscript } from '../../agent-session/ownership/structured-agent-session-adoption-transcript'
 import {
-  assertAdoptedTranscriptFolder,
-  importChecksAdoptedFolder
+  resolveAdoptedTranscriptFolder,
+  adoptionChecksFolder
 } from '../../../native-chat/agent-session-journal/history-import/adopted-transcript-source'
 import { StructuredSessionWorkspaceScope } from './structured-session-workspace-scope'
 
@@ -18,7 +18,7 @@ export abstract class OrcaRuntimeWithStructuredResumeFolderCheck extends Structu
     agent: StructuredAgentId,
     providerSessionId: string
   ): Promise<void> {
-    if (!importChecksAdoptedFolder(agent)) {
+    if (!adoptionChecksFolder(agent)) {
       return
     }
     const found = await this.findStructuredResumeTranscript(
@@ -27,7 +27,7 @@ export abstract class OrcaRuntimeWithStructuredResumeFolderCheck extends Structu
       providerSessionId
     ).catch(() => null)
     if (found) {
-      await assertAdoptedTranscriptFolder({
+      await resolveAdoptedTranscriptFolder({
         agent,
         filePath: found.transcriptPath,
         source: { providerSessionId, workspaceCwd: found.workspaceCwd }

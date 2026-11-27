@@ -9,7 +9,8 @@ import { cn } from '@/lib/class-names'
 import type { Bot } from '../../../../../shared/bot-types'
 import { BotAvatar } from '../BotAvatar'
 import { SettingsInsetGroup } from '../settings-view/BotSettingsRows'
-import { botShareFlagLabel, type BotShareFlagSpot } from './bot-share-flags'
+import { botShareFlagLabel } from './bot-share-flags'
+import type { BotShareFlagSpot } from '../../../../../shared/bots/bot-share-flag-spots'
 import type { BotShareContext, BotSharePage } from './bot-share-pages'
 import { BotShareListPage } from './BotShareLists'
 import { pageTitle } from './BotShareOverview'
@@ -44,6 +45,7 @@ export function BotShareHero({
     <div className="flex flex-col items-center px-3 pt-1 text-center">
       <BotAvatar
         bot={bot}
+        size={compact ? 'small' : 'large'}
         className={cn(
           compact ? 'size-12 rounded-[12px] text-xl' : 'size-16 rounded-[16px] text-[26px]'
         )}

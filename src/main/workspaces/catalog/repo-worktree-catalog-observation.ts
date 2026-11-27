@@ -22,13 +22,15 @@ export type WorktreeCatalogObservation = {
   readonly outcome: WorktreeCatalogOutcome
   /** Scan start: verification never moves it, so the full-list ceiling cannot slide. */
   readonly startedAt: number
+  /** Scan end: freshness windows run from here, so a scan slower than the window still yields usable rows. */
+  readonly completedAt: number
   readonly generation: number
   readonly revision: number
-  /** Only runtime-started flights fingerprint first; without one the rows cannot be verified. */
-  readonly adminFingerprint: Promise<string | null> | null
+  /** Settled before the scan started; without one the rows cannot be verified. */
+  readonly adminFingerprint: string | null
   readonly startedBy: WorktreeCatalogReaderKind
   witness: WorktreeCatalogWitness | undefined
-  /** Scan start, or the latest verifier answer that let a runtime reader reuse these rows. */
+  /** Scan end (scan start when fingerprinted before the scan), or the latest verifier answer that let a reader reuse these rows. */
   confirmedAt: number
 }
 
@@ -38,12 +40,15 @@ export type WorktreeCatalogFlightPlan = {
   observed?: (observation: WorktreeCatalogObservation) => void
 }
 
+/** A settled probe (null: admin state unreadable), or 'timeout' once its budget expired. */
+export type WorktreeAdminProbeResult = { fingerprint: string | null } | 'timeout'
+
 export type WorktreeCatalogVerifier = {
   /** Full-list ceiling measured from scan start. */
   ceilingMs: number
-  /** One outstanding probe per repo; 'in-flight' and timeouts reuse rows without proving them (#19312). */
-  probe: () => Promise<string | null> | 'in-flight'
-  timeoutMs: number
+  /** One outstanding probe per repo, shared by concurrent callers and bounded by its own budget;
+   * 'timeout' reuses rows without proving them (#19312). */
+  probe: () => Promise<WorktreeAdminProbeResult>
   onUnknown?: (reason: string) => void
 }
 

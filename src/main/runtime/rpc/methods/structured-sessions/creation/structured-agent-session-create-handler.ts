@@ -160,10 +160,9 @@ export async function handleStructuredAgentSessionCreateSupport(
   ctx: RpcContext
 ) {
   requireStructuredCreateSupportAdmission(ctx, params.agent)
-  const support = await ctx.runtime.getStructuredAgentSessionCreateSupport(
-    params.worktree,
-    params.agent
-  )
+  // The installed release stays host-side: the reply keeps its released shape.
+  const { installation: _installation, ...support } =
+    await ctx.runtime.getStructuredAgentSessionCreateSupport(params.worktree, params.agent)
   if (support.supported && params.resumeFrom) {
     // Create refuses the same writer and folder; asked here, the client refuses before it closes or opens anything.
     await Promise.all([

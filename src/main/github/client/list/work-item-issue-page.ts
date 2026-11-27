@@ -20,13 +20,14 @@ type IssueNode = {
   title: string
   state: string
   url: string
+  createdAt: string
   updatedAt: string
   author: Actor | null
   labels: { nodes: { name: string }[]; pageInfo: { hasNextPage: boolean } }
   assignees: { nodes: Actor[]; pageInfo: { hasNextPage: boolean } }
 }
 const ISSUE_NODE_SELECTION = `__typename ... on Issue {
-  number title state url updatedAt
+  number title state url createdAt updatedAt
   author { __typename login avatarUrl }
   labels(first: 100) { nodes { name } pageInfo { hasNextPage } }
   assignees(first: 100) { nodes { __typename login avatarUrl } pageInfo { hasNextPage } }
@@ -91,13 +92,16 @@ export async function listIssueWorkItemPage(args: {
           continue
         }
         items.push(
-          mapIssueWorkItem({
-            ...node,
-            state: node.state.toLowerCase(),
-            user: restIssueActor(node.author),
-            labels: node.labels.nodes,
-            assignees: node.assignees.nodes.map(restIssueActor)
-          })
+          mapIssueWorkItem(
+            {
+              ...node,
+              state: node.state.toLowerCase(),
+              user: restIssueActor(node.author),
+              labels: node.labels.nodes,
+              assignees: node.assignees.nodes.map(restIssueActor)
+            },
+            args.ownerRepo
+          )
         )
       }
       return items
@@ -118,5 +122,5 @@ export async function listIssueWorkItemPage(args: {
     .array(z.record(z.string(), z.unknown()))
     .parse(JSON.parse(stdout))
     .filter((item) => !('pull_request' in item))
-    .map(mapIssueWorkItem)
+    .map((item) => mapIssueWorkItem(item, args.ownerRepo))
 }

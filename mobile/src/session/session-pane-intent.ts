@@ -10,7 +10,12 @@ export function nextPaneIntent(): string {
 }
 
 /** A session screen's per-request params: forwarded to its page, never part of its remount identity. */
-export const SESSION_REQUEST_PARAMS = ['paneKey', 'botItem', SESSION_PANE_INTENT_PARAM] as const
+export const SESSION_REQUEST_PARAMS = [
+  'paneKey',
+  'botItem',
+  'homeDraft',
+  SESSION_PANE_INTENT_PARAM
+] as const
 
 /** The params that name a session screen: a new pane request updates its page instead of remounting it. */
 export function sessionScreenIdentity(

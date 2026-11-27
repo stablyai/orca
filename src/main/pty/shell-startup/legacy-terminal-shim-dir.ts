@@ -260,8 +260,3 @@ function removeLiteralPathEntry(
     searchStart = Math.max(0, index - 1)
   }
 }
-
-export function __resetLegacyTerminalShimNeutralizationForTests(): void {
-  neutralized = false
-  clearNeutralizationRetry()
-}

@@ -1,7 +1,8 @@
-import { mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createCipheriv, randomBytes } from 'node:crypto'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { runProcess } from '@orca/process-host'
 import { readCursorDesktopProfile } from '../../../foreign-sqlite-readers/foreign-sqlite-reader-spawn'
 import { readCursorAuthSession } from './cursor-auth'
@@ -15,178 +16,118 @@ vi.mock('../../../foreign-sqlite-readers/foreign-sqlite-reader-spawn', () => ({
 const jwt = 'e30.eyJzdWIiOiJhdXRoMHx1c2VyXzEifQ.sig'
 let dir: string
 
-type AuthFileContents = { accessToken?: string; storedIn?: string; signedOut?: boolean }
-
-function readWithAuthFile(contents: AuthFileContents) {
-  writeFileSync(join(dir, 'auth.json'), JSON.stringify(contents))
-  return readAgain()
-}
-
-function readAgain() {
-  return readCursorAuthSession({
-    cliAuthPath: join(dir, 'auth.json'),
-    cliConfigPath: join(dir, 'cli-config.json'),
-    desktopStateDbPath: join(dir, 'state.vscdb')
-  })
-}
-
-// Fixed, increasing mtimes so each bump differs from the last without reading the clock.
-const MTIME_BASE_MS = Date.UTC(2026, 0, 1)
-let mtimeBumps = 0
-function bumpAuthFileMtime() {
-  mtimeBumps += 1
-  const at = new Date(MTIME_BASE_MS + mtimeBumps * 60_000)
-  utimesSync(join(dir, 'auth.json'), at, at)
-}
-
-const lockedItem = {
-  code: 0,
-  signal: null,
-  stdout: '[/1]\nlabel = Cursor CLI credentials (cursor)\ncreated = 2026-11-19 10:00:00\n',
-  stderr: 'secret-tool: Cannot get secret of a locked object\n',
-  timedOut: false
-}
-const lockedError =
-  "Orca couldn't read the Cursor login from your Linux keyring (locked or access not granted)."
-
-function keyringItem(token: string) {
-  return {
-    code: 0,
-    signal: null,
-    stdout: `[/1]\nlabel = Cursor CLI credentials (cursor)\nsecret = {"accessToken":"${token}","refreshToken":"r"}\ncreated = 2026-11-19 10:00:00\n`,
-    stderr: 'attribute.service = cursor-credentials\nattribute.account = cursor-user\n',
-    timedOut: false
-  }
-}
-
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'cursor-auth-'))
-  vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
-  vi.stubEnv('DBUS_SESSION_BUS_ADDRESS', 'unix:path=/run/user/1000/bus')
+  vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
   vi.mocked(runProcess).mockReset()
 })
 
 afterEach(() => {
   rmSync(dir, { recursive: true, force: true })
   vi.restoreAllMocks()
-  vi.unstubAllEnvs()
 })
 
-describe('Cursor Linux keyring session', () => {
-  it('reads the cursor-agent token from the Secret Service when auth.json points there', async () => {
-    vi.mocked(runProcess).mockResolvedValueOnce(keyringItem(jwt))
-
-    const result = await readWithAuthFile({ storedIn: 'os-secret-store' })
-
-    expect(result).toMatchObject({
-      status: 'ok',
-      session: { source: 'keychain', token: { raw: jwt, subject: 'auth0|user_1' } }
-    })
-    // `search` without --unlock does not ask the keyring to unlock during background refreshes.
-    expect(runProcess).toHaveBeenCalledWith(
-      expect.objectContaining({
-        program: 'secret-tool',
-        args: ['search', 'service', 'cursor-credentials', 'account', 'cursor-user']
-      })
-    )
+it('reads the cursor-agent token from auth.dpapi when auth.json points to the Windows secret store', async () => {
+  // cursor-agent 2026.11.22 writes {version:1,dpapi} next to auth.json and leaves only the marker there.
+  const blob = 'AQAAANCMnd8BFdERjHoAwE/Cl+sBAAAA'
+  writeFileSync(join(dir, 'auth.json'), JSON.stringify({ storedIn: 'os-secret-store' }))
+  writeFileSync(join(dir, 'auth.dpapi'), JSON.stringify({ version: 1, dpapi: blob }))
+  const plaintext = JSON.stringify({ accessToken: jwt, refreshToken: 'r' })
+  vi.mocked(runProcess).mockResolvedValue({
+    code: 0,
+    signal: null,
+    stdout: `${Buffer.from(plaintext).toString('base64')}\r\n`,
+    stderr: '',
+    timedOut: false
   })
 
-  it('reads the keyring again only after cursor-agent rewrites auth.json', async () => {
-    // Payload {"sub":"auth0|user_2"}.
-    const nextJwt = 'e30.eyJzdWIiOiJhdXRoMHx1c2VyXzIifQ.sig'
-    vi.mocked(runProcess)
-      .mockResolvedValueOnce(keyringItem(jwt))
-      .mockResolvedValueOnce(keyringItem(nextJwt))
-
-    await readWithAuthFile({ storedIn: 'os-secret-store' })
-    // Providers that confirm each secret read would prompt on every background refresh.
-    expect(await readAgain()).toMatchObject({ session: { token: { raw: jwt } } })
-    expect(runProcess).toHaveBeenCalledTimes(1)
-
-    bumpAuthFileMtime()
-    expect(await readAgain()).toMatchObject({ session: { token: { raw: nextJwt } } })
-    expect(runProcess).toHaveBeenCalledTimes(2)
+  const result = await readCursorAuthSession({
+    cliAuthPath: join(dir, 'auth.json'),
+    cliConfigPath: join(dir, 'cli-config.json'),
+    desktopStateDbPath: join(dir, 'state.vscdb')
   })
 
-  it('reuses a failed keyring read until cursor-agent rewrites auth.json', async () => {
-    vi.mocked(runProcess).mockResolvedValueOnce(lockedItem).mockResolvedValueOnce(keyringItem(jwt))
+  expect(result).toMatchObject({
+    status: 'ok',
+    session: { source: 'cli', token: { raw: jwt, subject: 'auth0|user_1' } }
+  })
+  // The encrypted credential travels over stdin, never argv.
+  const spec = vi.mocked(runProcess).mock.calls[0]?.[0]
+  expect(spec?.input).toBe(blob)
+  expect(spec?.args?.join(' ')).not.toContain(blob)
+})
 
-    expect(await readWithAuthFile({ storedIn: 'os-secret-store' })).toEqual({
-      status: 'error',
-      error: lockedError
-    })
-    // KeePassXC's unlock-before-search dialog must not reappear on each background refresh.
-    expect(await readAgain()).toEqual({ status: 'error', error: lockedError })
-    expect(runProcess).toHaveBeenCalledTimes(1)
+// Cursor 3.x encrypts the IDE token at rest: `cursor-safe-storage:v1:` + v10 + AES-256-GCM under the
+// DPAPI-wrapped os_crypt key in the profile's Local State.
+function safeStorageEncrypt(token: string, key: Buffer): string {
+  const nonce = randomBytes(12)
+  const cipher = createCipheriv('aes-256-gcm', key, nonce)
+  const ciphertext = Buffer.concat([cipher.update(token, 'utf8'), cipher.final()])
+  return `cursor-safe-storage:v1:${Buffer.concat([
+    Buffer.from('v10'),
+    nonce,
+    ciphertext,
+    cipher.getAuthTag()
+  ]).toString('base64')}`
+}
 
-    bumpAuthFileMtime()
-    expect(await readAgain()).toMatchObject({ session: { token: { raw: jwt } } })
-    expect(runProcess).toHaveBeenCalledTimes(2)
+function ideProfile(accessToken: string) {
+  vi.mocked(readCursorDesktopProfile).mockResolvedValue({
+    status: 'ok',
+    profile: {
+      accessToken,
+      email: 'ide@example.com',
+      membershipType: 'ultra',
+      subscriptionStatus: 'active'
+    }
+  })
+}
+
+function writeLocalState(root: string, wrappedKey: Buffer) {
+  writeFileSync(
+    join(root, 'Local State'),
+    JSON.stringify({ os_crypt: { encrypted_key: wrappedKey.toString('base64') } })
+  )
+}
+
+function desktopSessionOptions() {
+  return {
+    cliAuthPath: join(dir, 'auth.json'),
+    cliConfigPath: join(dir, 'cli-config.json'),
+    desktopStateDbPath: join(dir, 'User', 'globalStorage', 'state.vscdb')
+  }
+}
+
+it('decrypts the Cursor IDE token encrypted at rest via the DPAPI-wrapped os_crypt key (#37785)', async () => {
+  const key = randomBytes(32)
+  const wrappedKey = Buffer.concat([Buffer.from('DPAPI'), randomBytes(29)])
+  writeLocalState(dir, wrappedKey)
+  ideProfile(safeStorageEncrypt(jwt, key))
+  vi.mocked(runProcess).mockResolvedValue({
+    code: 0,
+    signal: null,
+    stdout: `${key.toString('base64')}\r\n`,
+    stderr: '',
+    timedOut: false
   })
 
-  it('falls back to the Cursor IDE session when secret-tool fails', async () => {
-    vi.mocked(runProcess).mockResolvedValueOnce({
-      code: 1,
-      signal: null,
-      stdout: '',
-      stderr: 'secret-tool: Cannot autolaunch D-Bus without X11 $DISPLAY\n',
-      timedOut: false
-    })
-    vi.mocked(readCursorDesktopProfile).mockResolvedValueOnce({
-      status: 'ok',
-      profile: { accessToken: jwt, email: null, membershipType: null, subscriptionStatus: null }
-    })
-
-    const result = await readWithAuthFile({ storedIn: 'os-secret-store' })
-
-    expect(result).toMatchObject({ status: 'ok', session: { source: 'desktop' } })
+  expect(await readCursorAuthSession(desktopSessionOptions())).toMatchObject({
+    status: 'ok',
+    session: { source: 'desktop', token: { raw: jwt } }
   })
+})
 
-  it('never runs secret-tool without the auth.json keyring marker', async () => {
-    expect(await readWithAuthFile({ accessToken: jwt })).toMatchObject({
-      session: { source: 'cli' }
-    })
-    expect(await readWithAuthFile({ signedOut: true })).toEqual({ status: 'missing' })
-    expect(runProcess).not.toHaveBeenCalled()
-  })
+it('reports a failed encryption-key read instead of expired-login guidance', async () => {
+  writeLocalState(dir, Buffer.concat([Buffer.from('DPAPI'), randomBytes(29)]))
+  ideProfile(safeStorageEncrypt(jwt, randomBytes(32)))
+  const expired = `e30.${Buffer.from(JSON.stringify({ sub: 'auth0|user_stale', exp: 1 })).toString(
+    'base64url'
+  )}.sig`
+  writeFileSync(join(dir, 'auth.json'), JSON.stringify({ accessToken: expired }))
+  vi.mocked(runProcess).mockRejectedValue(new Error('PowerShell DPAPI decryption did not finish'))
 
-  it('shares one secret-tool run between concurrent cold reads', async () => {
-    // Hold secret-tool open until both reads have started, so the second joins the first.
-    let finishRead: () => void = () => {}
-    vi.mocked(runProcess).mockImplementation(
-      () => new Promise((resolve) => (finishRead = () => resolve(keyringItem(jwt))))
-    )
-    writeFileSync(join(dir, 'auth.json'), JSON.stringify({ storedIn: 'os-secret-store' }))
-
-    const reads = Promise.all([readAgain(), readAgain()])
-    await vi.waitFor(() => expect(runProcess).toHaveBeenCalled())
-    finishRead()
-    const [first, second] = await reads
-
-    expect(first).toMatchObject({ session: { token: { raw: jwt } } })
-    expect(second).toMatchObject({ session: { token: { raw: jwt } } })
-    expect(runProcess).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not reuse an in-flight read started for an older auth.json', async () => {
-    // Payload {"sub":"auth0|user_2"}.
-    const nextJwt = 'e30.eyJzdWIiOiJhdXRoMHx1c2VyXzIifQ.sig'
-    let finishStaleRead: () => void = () => {}
-    vi.mocked(runProcess)
-      .mockImplementationOnce(
-        () => new Promise((resolve) => (finishStaleRead = () => resolve(keyringItem(jwt))))
-      )
-      .mockResolvedValueOnce(keyringItem(nextJwt))
-    writeFileSync(join(dir, 'auth.json'), JSON.stringify({ storedIn: 'os-secret-store' }))
-
-    const stale = readAgain()
-    await vi.waitFor(() => expect(runProcess).toHaveBeenCalledTimes(1))
-    bumpAuthFileMtime()
-    expect(await readAgain()).toMatchObject({ session: { token: { raw: nextJwt } } })
-    finishStaleRead()
-    await stale
-
-    expect(await readAgain()).toMatchObject({ session: { token: { raw: nextJwt } } })
-    expect(runProcess).toHaveBeenCalledTimes(2)
+  expect(await readCursorAuthSession(desktopSessionOptions())).toEqual({
+    status: 'error',
+    error: 'Unable to read the Cursor IDE encryption key'
   })
 })

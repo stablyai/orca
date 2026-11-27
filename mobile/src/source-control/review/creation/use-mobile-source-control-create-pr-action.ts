@@ -42,20 +42,23 @@ export function useMobileSourceControlCreatePrAction({
 
   return useMemo(
     () =>
-      buildMobileCreatePrAction({
-        branch: status?.branch,
-        eligibilityState,
-        busyAction,
-        prepareInputs: {
-          stagedCount: commitArea.stagedCount,
-          hasStageableChanges: commitArea.stageablePaths.length > 0,
-          hasMessage: commitArea.commitMessage.trim().length > 0,
-          hasUnresolvedConflicts: commitArea.hasUnresolvedConflicts,
-          upstreamStatus: upstream,
-          branchCommitsAhead: getMobileBranchCommitsAhead(commitArea)
+      buildMobileCreatePrAction(
+        {
+          branch: status?.branch,
+          eligibilityState,
+          busyAction,
+          prepareInputs: {
+            stagedCount: commitArea.stagedCount,
+            hasStageableChanges: commitArea.stageablePaths.length > 0,
+            hasMessage: commitArea.commitMessage.trim().length > 0,
+            hasUnresolvedConflicts: commitArea.hasUnresolvedConflicts,
+            upstreamStatus: upstream,
+            branchCommitsAhead: getMobileBranchCommitsAhead(commitArea)
+          },
+          onCreatePr: createPr
         },
-        onCreatePr: createPr
-      }),
+        t
+      ),
     [busyAction, commitArea, createPr, eligibilityState, status?.branch, upstream, t]
   )
 }

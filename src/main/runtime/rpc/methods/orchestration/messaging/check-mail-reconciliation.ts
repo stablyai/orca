@@ -1,6 +1,7 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { MessageRow } from '../../../../orchestration/db/orchestration-records'
+import type { MailTaker } from '../../../../orchestration/db/messages/mail-taker'
 import type { StructuredMailSendRow } from '../../../../orchestration/db/messages/structured-mail-send-store'
 import type {
   MailboxDeliveryBatch,
@@ -41,6 +42,8 @@ export class CheckMailReconciliation {
   constructor(
     private readonly runtime: OrcaRuntimeService,
     private readonly db: OrchestrationDb,
+    /** Who this check hands the questions it reads to. */
+    readonly taker: MailTaker,
     private readonly signal?: AbortSignal
   ) {}
 
@@ -222,7 +225,10 @@ export class CheckMailReconciliation {
       ...args,
       direct: true,
       finalize: (messages) => {
-        this.db.markAsRead(messages.map((message) => message.id))
+        this.db.markAsRead(
+          messages.map((message) => message.id),
+          this.taker
+        )
         const response = args.respond(messages)
         args.record?.(response)
         return response
@@ -266,7 +272,12 @@ export class CheckMailReconciliation {
         return args.wake ? args.wake.share(key, take) : take()
       },
       finalize: (messages) => {
-        const batch = this.db.finalizeMailboxDelivery({ ...args.mailbox, claim, messages })
+        const batch = this.db.finalizeMailboxDelivery({
+          ...args.mailbox,
+          claim,
+          messages,
+          taker: this.taker
+        })
         if (batch) {
           batch.finalResponse = args.respond(batch)
         }

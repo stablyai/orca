@@ -267,20 +267,3 @@ export function useSkillFreshness(target: BundledSkillTarget | null): SkillFresh
     refresh: target ? refreshSkillFreshness : skipSkillFreshnessRefresh
   }
 }
-
-export const _skillFreshnessCacheForTests = {
-  reset(): void {
-    activeTarget = null
-    cachedPlan = null
-    pendingPlan = null
-    invalidationRevision = 0
-    lastCompletedScanAt = 0
-    refreshSequence = 0
-    pendingReenableRefresh = null
-    if (scheduledFocusRescan !== null) {
-      window.clearTimeout(scheduledFocusRescan)
-      scheduledFocusRescan = null
-    }
-    snapshot = { ...IDLE, targetKey: null }
-  }
-}

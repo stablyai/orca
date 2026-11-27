@@ -3,7 +3,7 @@ import {
   observedExistsSync as existsSync
 } from '../../../filesystem/file-content-observation'
 
-import { parse as parseToml } from 'smol-toml'
+import { isLoadableToml } from '../../../agent-hooks/installation/configuration/loadable-toml'
 import { writeTomlConfigAtomically } from '../../configuration/toml/config-toml-atomic-write'
 import { ConcurrentFileEditError } from '../../../filesystem/concurrent-file-edit-guard'
 import { findAllHookTrustBlocks } from './config-toml-hook-trust-blocks'
@@ -30,6 +30,7 @@ export type CodexEventLabel =
   | 'pre_compact'
   | 'post_compact'
   | 'session_start'
+  | 'session_end'
   | 'user_prompt_submit'
   | 'subagent_start'
   | 'subagent_stop'
@@ -164,15 +165,6 @@ export function restoreHookTrustBlocks(
   editLoadableHookTrustConfig(configPath, 'skip', (existing) =>
     restoreHookTrustBlockContent(existing, restores)
   )
-}
-
-function isLoadableToml(content: string): boolean {
-  try {
-    parseToml(stripLeadingBom(content))
-    return true
-  } catch {
-    return false
-  }
 }
 
 export function moveHookTrustEntries(

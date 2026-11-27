@@ -13,6 +13,7 @@ import {
   backfillAutomationRunNumbers,
   pruneAutomationRuns
 } from '../../../../shared/automations/history/automation-run-retention'
+import { repairAnsweredTogetherRun } from '../../../../shared/automations/history/automation-run-answered-together'
 import {
   parseWorkspaceSessionsByHostId,
   workspaceSessionSalvageLogDetails
@@ -76,7 +77,7 @@ export function normalizeLoadedAutomationRuns(
     markNeedsSave()
   }
   return runs.map((run) => {
-    const decoded = decodeSavedLocalAutomationRun(run)
+    const decoded = repairAnsweredTogetherRun(decodeSavedLocalAutomationRun(run))
     if (decoded !== run) {
       markNeedsSave()
     }

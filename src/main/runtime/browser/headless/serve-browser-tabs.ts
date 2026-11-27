@@ -1,3 +1,4 @@
+import { redactBrowserMetadata } from '../../../../shared/browser/browser-metadata-redaction'
 // List saved headless browser tabs immediately; start pages lazily on first use, never merely on host restart.
 
 import type { BrowserBackend } from '../../../browser/browser-backend'
@@ -17,6 +18,9 @@ import {
   withoutServeBrowserPages,
   withServeBrowserPageRecord,
   withServeBrowserPageState,
+  withServeBrowserTabProfile,
+  serveBrowserTabProfileCommand,
+  type ServeBrowserPageProfile,
   type ServeBrowserPageState
 } from './serve-browser-tab-layout'
 
@@ -52,6 +56,7 @@ export class ServeBrowserTabs {
   private readonly pendingOpens = new Map<string, ServeBrowserPageState>()
 
   opened(page: ServeBrowserPageState & { profileId?: string; groupId?: string }): void {
+    page = redactBrowserMetadata(page)
     // Main commits the tab layout before its page address is saved.
     if (ORCA_LAYOUT_OWNER_IS_MAIN && this.deps.applyLayout) {
       this.openThroughLayout(page, this.deps.applyLayout)
@@ -64,12 +69,28 @@ export class ServeBrowserTabs {
 
   /** A saved tab follows its page; a page whose tab was closed is not saved again. */
   navigated(page: ServeBrowserPageState): void {
+    page = redactBrowserMetadata(page)
     // While layout open is pending, retain the latest page address for its eventual save.
     if (ORCA_LAYOUT_OWNER_IS_MAIN && this.pendingOpens.has(page.pageId)) {
       this.pendingOpens.set(page.pageId, page)
       return
     }
     this.write(page.worktreeId, (_hostId, session) => withServeBrowserPageState(session, page))
+  }
+
+  /** A saved tab follows its page into another profile, so the page wakes in it. */
+  profileChanged(page: ServeBrowserPageProfile): void {
+    if (ORCA_LAYOUT_OWNER_IS_MAIN && this.deps.applyLayout) {
+      const session = this.deps.backend() ? this.deps.session(page.worktreeId) : null
+      const command = session ? serveBrowserTabProfileCommand(session, page) : null
+      if (command) {
+        void this.applyLogged(this.deps.applyLayout, page.worktreeId, command)
+      }
+      return
+    }
+    this.write(page.worktreeId, (hostId, session) =>
+      withServeBrowserTabProfile(hostId, session, page)
+    )
   }
 
   /** A closed page's tab, true when one was saved; a page destroyed with the process is not a close. */
@@ -122,6 +143,37 @@ export class ServeBrowserTabs {
         ? this.activeIn(worktreeId)
         : undefined
     return found ? this.restore(found) : false
+  }
+
+  /** Saved web pages, started or not and active or not, whose tab names this profile. */
+  pagesInProfile(profileId: string): { worktreeId: string; pageId: string; tabId: string }[] {
+    if (!this.deps.backend()) {
+      return []
+    }
+    return [...new Set(this.deps.savedWorktreeIds())].flatMap((worktreeId) => {
+      const session = this.deps.session(worktreeId)
+      return (session?.browserTabsByWorktree?.[worktreeId] ?? [])
+        .filter((tab) => tab.sessionProfileId === profileId)
+        .flatMap((tab) =>
+          (session?.browserPagesByWorkspace?.[tab.id] ?? [])
+            .filter((page) => !page.docLocation && !page.remoteBrowserPageId)
+            .map((page) => ({ worktreeId, pageId: page.id, tabId: tab.id }))
+        )
+    })
+  }
+
+  /** Profiles that saved tabs name; a tab with no profile is Default's. */
+  savedProfileIds(): Set<string> {
+    if (!this.deps.backend()) {
+      return new Set()
+    }
+    return new Set(
+      [...new Set(this.deps.savedWorktreeIds())].flatMap((worktreeId) =>
+        (this.deps.session(worktreeId)?.browserTabsByWorktree?.[worktreeId] ?? []).flatMap((tab) =>
+          tab.sessionProfileId ? [tab.sessionProfileId] : []
+        )
+      )
+    )
   }
 
   /** Whether the page's tab is saved, so a freed page can start again from it. */

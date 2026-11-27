@@ -92,10 +92,6 @@ export function setTerminalRenderDesyncSentinelArmed(armed: boolean): void {
   }
 }
 
-export function stopTerminalRenderDesyncTriggerForTesting(): void {
-  removeClickListener()
-}
-
 function removeClickListener(): void {
   if (clickListener != null) {
     document.removeEventListener('mouseup', clickListener, true)

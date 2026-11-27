@@ -6,7 +6,8 @@ import {
 import {
   BROWSER_AGENT_LEAD_CHANNEL,
   BROWSER_AGENT_LEAD_QUERY_CHANNEL,
-  BROWSER_PRINT_REFUSED_CHANNEL
+  BROWSER_PRINT_REFUSED_CHANNEL,
+  BROWSER_PRINTS_HERE_CHANNEL
 } from '../shared/browser/guest-lifecycle/browser-system-dialogs'
 import { installBrowserPasskeyRequestWatch } from './browser/passkeys/browser-passkey-request-watch'
 import { installBrowserPrintGuard } from './browser/printing/browser-print-guard'
@@ -23,6 +24,11 @@ const { contextBridge, ipcRenderer } = electron
 let agentLed: boolean | null = null
 ipcRenderer.on(BROWSER_AGENT_LEAD_CHANNEL, (_event, led: unknown) => {
   agentLed = led === true
+})
+// A server page has no screen to print on; main sends its print() to the devices streaming it.
+let printsHere = false
+ipcRenderer.on(BROWSER_PRINTS_HERE_CHANNEL, (_event, here: unknown) => {
+  printsHere = here === true
 })
 ipcRenderer.send(BROWSER_AGENT_LEAD_QUERY_CHANNEL)
 // Only Windows hands a passkey request to a system dialog (Windows Hello).
@@ -44,7 +50,7 @@ contextBridge.executeInMainWorld({
   func: installBrowserPrintGuard,
   args: [
     () => {
-      if (agentLed === false) {
+      if (agentLed === false && printsHere) {
         return true
       }
       ipcRenderer.send(BROWSER_PRINT_REFUSED_CHANNEL)

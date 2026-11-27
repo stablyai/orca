@@ -1,43 +1,56 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { runClaudeCommandProcess } from './claude-command-process'
 
-const spawnProcess = vi.hoisted(() => vi.fn())
-vi.mock('@orca/process-host', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  spawnProcess
+const { spawnProcess, resolveClaudeCommand } = vi.hoisted(() => ({
+  spawnProcess: vi.fn(),
+  resolveClaudeCommand: vi.fn()
 }))
-vi.mock('../../codex-cli/command', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  resolveClaudeCommand: () => 'C:\\Tools\\claude.exe'
+
+vi.mock('@orca/process-host', () => ({ spawnProcess }))
+vi.mock('../../codex-cli/command', () => ({ resolveClaudeCommand }))
+vi.mock('../../providers/shell-launch/windows/windows-interactive-login-spawn', () => ({
+  buildWindowsHostInteractiveLoginSpawn: () => ({
+    command: 'cmd.exe',
+    args: [],
+    stdio: 'ignore',
+    windowsHide: true,
+    cleanup: async () => {},
+    getTerminationPid: () => null,
+    waitForTerminationPid: async () => null,
+    readExitCode: async () => 1
+  })
 }))
-vi.mock('../../providers/shell-launch/windows/windows-interactive-login-spawn', async () => {
-  const { fakeWindowsInteractiveLoginSpawn } =
-    await import('../../providers/shell-launch/windows/windows-interactive-login-spawn.test-fixture')
-  return { buildWindowsHostInteractiveLoginSpawn: () => fakeWindowsInteractiveLoginSpawn(1) }
-})
+
+import { runClaudeCommandProcess } from './claude-command-process'
 
 const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
 
-afterEach(() => {
-  Object.defineProperty(process, 'platform', platform)
-})
+function runWindowsLogin(resolvedCommand: string): Promise<string> {
+  Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+  resolveClaudeCommand.mockReturnValue(resolvedCommand)
+  const child = new EventEmitter()
+  spawnProcess.mockReturnValue(child)
+  const login = runClaudeCommandProcess(
+    ['auth', 'login'],
+    { windowsPath: 'C:\\config', linuxPath: null, wslDistro: null },
+    60_000
+  )
+  child.emit('exit', 0)
+  return login
+}
 
-describe('runClaudeCommandProcess', () => {
-  it('fails a Windows login whose relayed exit code is non-zero although start /wait exits 0', async () => {
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    spawnProcess.mockImplementationOnce(() => {
-      const child = Object.assign(new EventEmitter(), { stdout: null, stderr: null, stdin: null })
-      setImmediate(() => child.emit('exit', 0))
-      return child
-    })
+describe('runClaudeCommandProcess Windows interactive login', () => {
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', platform)
+  })
 
-    await expect(
-      runClaudeCommandProcess(
-        ['auth', 'login', '--claudeai'],
-        { windowsPath: 'C:\\claude-home', linuxPath: null, wslDistro: null },
-        10_000
-      )
-    ).rejects.toThrow('Claude command exited with code 1.')
+  it('reports a missing CLI when no install was resolved', async () => {
+    await expect(runWindowsLogin('claude')).rejects.toThrow('Claude Code CLI not found.')
+  })
+
+  it('reports the exit code when a resolved install fails', async () => {
+    await expect(runWindowsLogin('C:\\Tools\\claude.exe')).rejects.toThrow(
+      'Claude command exited with code 1.'
+    )
   })
 })

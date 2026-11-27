@@ -4,7 +4,14 @@ import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { CodexSharedSettingsNoticeCard } from '../../components/terminal-pane/provider-notices/codex-settings/CodexSharedSettingsNoticeCard'
 import { NotificationCardStack } from '../../components/notifications/NotificationCardStack'
 import { StarNagCard } from '../../components/star-nag/StarNagCard'
+import { WorkspaceCleanupRunCard } from '../../components/workspace-cleanup/removal/run/WorkspaceCleanupRunCard'
 import { OverlayBoundary } from './app-root-surface-boundaries'
+
+const AgentCliUpdateCard = lazy(() =>
+  import('../../components/agent-cli-update/AgentCliUpdateCard').then((module) => ({
+    default: module.AgentCliUpdateCard
+  }))
+)
 
 const ChatUiHereCornerCard = lazy(() =>
   import('../../components/feature-tips/ChatUiHereCornerCard').then((module) => ({
@@ -21,6 +28,9 @@ const UnexpectedSignoutCard = lazy(() =>
     default: module.UnexpectedSignoutCard
   }))
 )
+
+// Temporarily disabled while fixing a bug where the card can stay stuck open.
+const AGENT_CLI_UPDATE_CARD_ENABLED = false
 
 /** The bottom-right notification stack and every card that shares it. */
 export function AppNotificationCards({
@@ -43,6 +53,13 @@ export function AppNotificationCards({
           </OverlayBoundary>
         </Suspense>
       ) : null}
+      {AGENT_CLI_UPDATE_CARD_ENABLED ? (
+        <Suspense fallback={null}>
+          <OverlayBoundary boundaryId="overlay.agent-cli-update-card" resetKey={activeView}>
+            <AgentCliUpdateCard />
+          </OverlayBoundary>
+        </Suspense>
+      ) : null}
       {shouldMountUpdateCard ? (
         <Suspense fallback={null}>
           <OverlayBoundary boundaryId="overlay.update-card" resetKey={activeView}>
@@ -55,6 +72,9 @@ export function AppNotificationCards({
           <UnexpectedSignoutCard />
         </OverlayBoundary>
       </Suspense>
+      <OverlayBoundary boundaryId="overlay.workspace-cleanup-run" resetKey={activeView}>
+        <WorkspaceCleanupRunCard />
+      </OverlayBoundary>
       <OverlayBoundary boundaryId="overlay.star-nag" resetKey={activeView}>
         <StarNagCard />
       </OverlayBoundary>

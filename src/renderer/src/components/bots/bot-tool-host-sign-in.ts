@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from 'react'
 import { callBotRpc, type BotRef } from '@/lib/bot-hosts'
 import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 import { botHostUnroutedMessage, openOnServer } from '@/lib/bot-host-page'
 import { readBotHostStatus } from '@/lib/bot-host-status'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
@@ -23,8 +24,6 @@ import {
   startedKey,
   type HostAttempt
 } from './bot-tool-sign-in-state'
-
-const NOT_THIS_SIGN_IN = 'That address isn’t from this sign-in. Paste the address you landed on.'
 
 /** A paste this window refuses before sending it; its words are fixed and safe to show. */
 export class BotToolPasteRefused extends Error {}
@@ -228,7 +227,12 @@ export async function finishOnHost(key: string, address: string): Promise<void> 
   }
   const query = botToolSignInPastedQuery(address, view)
   if (query === null) {
-    throw new BotToolPasteRefused(NOT_THIS_SIGN_IN)
+    throw new BotToolPasteRefused(
+      translate(
+        'bots.tools.signIn.notThisSignIn',
+        'That address isn’t from this sign-in. Paste the address you landed on.'
+      )
+    )
   }
   take(key, { ...view, state: 'finishing' })
   try {

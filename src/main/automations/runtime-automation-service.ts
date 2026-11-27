@@ -39,6 +39,7 @@ export function createRuntimeAutomationService(input: {
   codexUsage?: AutomationUsageClient
   /** Only server processes execute remote_host_service schedules. */
   allowRemoteHostScheduling: boolean
+  isHostQuitting?: () => boolean
 }): AutomationService {
   const { store, runtime, claudeUsage, codexUsage } = input
   // Launch handles remain usable before pane-key lookup resolves.
@@ -128,7 +129,11 @@ export function createRuntimeAutomationService(input: {
           }
           if (run.sessionKind === 'chat') {
             try {
-              return await observeAutomationChatRun(runtime, run, options.signal)
+              // A bot automation sends its own prompt; any other chat run is launched with a receipt.
+              const sentByRun = Boolean(
+                store.listAutomations().find((entry) => entry.id === run?.automationId)?.bot
+              )
+              return await observeAutomationChatRun(runtime, run, options.signal, sentByRun)
             } catch (error) {
               if (options.signal.aborted) {
                 throw error
@@ -159,6 +164,7 @@ export function createRuntimeAutomationService(input: {
         return observation
       }
     },
+    isHostQuitting: input.isHostQuitting,
     onAutomationsChanged: (payload) => runtime.notifyAutomationsChanged(payload),
     allowRemoteHostScheduling: input.allowRemoteHostScheduling,
     ...botAutomationServiceOptions(runtime),

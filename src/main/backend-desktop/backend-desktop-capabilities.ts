@@ -9,10 +9,11 @@ import {
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { agentTokenUsageSchema } from '../../shared/telemetry/schemas/telemetry-agent-token-usage-schema'
+import { agentTokenUsageDailySchema } from '../../shared/telemetry/schemas/telemetry-agent-token-usage-schema'
 import { claudeProfileTranscriptDirs } from '../claude-usage/transcript-file-discovery'
 import { readUsageWorktreeCatalog } from '../usage/worktree-attribution/usage-worktree-metadata'
-import { isTelemetryEnabled, track } from '../telemetry/client'
+import { isTelemetryEnabled } from '../telemetry/client'
+import { captureAgentTokenUsageDaily } from '../telemetry/agent-token-usage-capture'
 import type { UsageWorktreeSource } from '../usage/worktree-attribution/usage-worktree-metadata'
 import { currentWorkerEntryLayout } from '../worker-threads/worker-thread-entry-path'
 import { isRendererDocumentNavigation } from '../window/security/renderer-document-navigation'
@@ -60,8 +61,8 @@ export function createBackendDesktopCapabilities(
     if (method === 'usage.telemetry.enabled') {
       return isTelemetryEnabled()
     }
-    if (method === 'usage.telemetry.capture') {
-      return track('agent_token_usage', agentTokenUsageSchema.parse(params))
+    if (method === 'usage.telemetry.captureDaily') {
+      return captureAgentTokenUsageDaily(agentTokenUsageDailySchema.parse(params))
     }
     throw new Error('This desktop capability is not supported.')
   }
@@ -161,4 +162,113 @@ export function trackBackendDocument(
   contents.on('did-frame-navigate', navigation)
   contents.once('destroyed', retire)
   return document
+}
+
+export const BACKEND_IDLE_STOP_MS = 2 * 60_000
+
+/** Schedules one-shot idle teardown when no renderer documents or control calls remain. */
+export class BackendIdleStopTimer {
+  private timer: ReturnType<typeof setTimeout> | undefined
+
+  constructor(private readonly delayMs = BACKEND_IDLE_STOP_MS) {}
+
+  schedule(onIdle: () => void): void {
+    this.clear()
+    this.timer = setTimeout(() => {
+      this.timer = undefined
+      onIdle()
+    }, this.delayMs)
+    this.timer.unref?.()
+  }
+
+  clear(): void {
+    if (this.timer !== undefined) {
+      clearTimeout(this.timer)
+      this.timer = undefined
+    }
+  }
+}
+
+/** Admits a renderer port request, ensures the backend is ready, and delivers the bound MessagePort. */
+export async function handleBackendPortRequest(
+  event: Pick<IpcMainInvokeEvent, 'sender' | 'senderFrame'>,
+  token: unknown,
+  purpose: unknown,
+  deps: {
+    documents: Map<number, BackendDocument>
+    isDesiredRunning: () => boolean
+    onActivity: () => void
+    onDocumentRetired: (documentId: string) => void
+    acquireReady: (purpose: BackendConnectionPurpose) => {
+      ready: Promise<void> | null
+      child: UtilityProcess | null
+    }
+    getCurrentChild: () => UtilityProcess | null
+    getIncarnation: () => string | undefined
+  }
+): Promise<string> {
+  const admitted = admitBackendPortRequest(event, token, purpose)
+  const { sender, senderFrame, role } = admitted
+  deps.onActivity()
+  const document = trackBackendDocument(
+    deps.documents,
+    sender,
+    senderFrame,
+    { token: admitted.token, role },
+    deps.onDocumentRetired
+  )
+  if (!deps.isDesiredRunning()) {
+    throw new Error('Orca is shutting down.')
+  }
+  const { ready, child } = deps.acquireReady(admitted.purpose)
+  if (!ready) {
+    throw new Error('Usage is unavailable. Try refreshing the usage view.')
+  }
+  await ready
+  const incarnation = deps.getIncarnation()
+  if (
+    deps.documents.get(sender.id) !== document ||
+    !deps.isDesiredRunning() ||
+    !child ||
+    deps.getCurrentChild() !== child ||
+    !incarnation ||
+    sender.isDestroyed() ||
+    sender.mainFrame !== senderFrame
+  ) {
+    throw new Error('The document was replaced before Orca connected.')
+  }
+  deliverBackendDocumentPort(child, document, incarnation)
+  return document.token
+}
+
+/** Cleanly closes the control RPC channel and kills the backend child if it does not exit in time. */
+export async function stopBackendUtilityChild(args: {
+  child: UtilityProcess | null
+  control: { close(): void } | null
+  exited: Promise<void>
+  isCurrentChild: (child: UtilityProcess) => boolean
+  deadlineMs: number
+}): Promise<void> {
+  if (!args.child) {
+    return
+  }
+  const child = args.child
+  const deadline = setTimeout(() => {
+    if (args.isCurrentChild(child)) {
+      child.kill()
+    }
+  }, args.deadlineMs)
+  args.control?.close()
+  await args.exited
+  clearTimeout(deadline)
+}
+
+export function terminateBackendChild(
+  child: UtilityProcess,
+  control: { close(): void } | null
+): void {
+  control?.close()
+  try {
+    child.kill()
+  } catch {}
 }

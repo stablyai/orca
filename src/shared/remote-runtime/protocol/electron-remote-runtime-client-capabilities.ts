@@ -9,12 +9,14 @@ import {
   STRUCTURED_CHAT_PROMPT_TELEMETRY_CLIENT_CAPABILITY
 } from '../../agent-session/requests/structured-chat-dispatch-telemetry'
 import { NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from './protocol-version'
+import { GOOGLE_SETUP_CARDS_CLIENT_CAPABILITY } from '../../google/google-connect-types'
 import {
   AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY,
   SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY,
   SESSION_TABS_TAB_DELTA_RUNTIME_CAPABILITY
 } from './session-tabs-runtime-capabilities'
 import { WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY } from './worktree-runtime-capabilities'
+import { AI_VAULT_CHAT_ROWS_CLIENT_CAPABILITY } from '../../ai-vault/contracts/ai-vault-runtime-capabilities'
 import { ORCHESTRATION_PERSON_APPROVALS_CLIENT_CAPABILITY } from '../../orchestration/orchestration-runtime-capabilities'
 import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
@@ -47,5 +49,9 @@ export const ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
   // The renderer shows a restored, unconfirmed agent row as identity only.
   AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY,
   // A person answers worker approvals in this window.
-  ORCHESTRATION_PERSON_APPROVALS_CLIENT_CAPABILITY
+  ORCHESTRATION_PERSON_APPROVALS_CLIENT_CAPABILITY,
+  // The renderer draws an agent's Google setup cards, Connect included.
+  GOOGLE_SETUP_CARDS_CLIENT_CAPABILITY,
+  // History's Show more counts the rows a host hid, so a chat may list once.
+  AI_VAULT_CHAT_ROWS_CLIENT_CAPABILITY
 ] as const

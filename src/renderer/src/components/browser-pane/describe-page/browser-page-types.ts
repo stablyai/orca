@@ -55,7 +55,17 @@ export type BrowserPageGrabToastState = {
   y: number
   below: boolean
   payload: BrowserGrabPayload | null
+  /** A text copy, the only success the palette's Copy button reports as Copied. */
+  copied?: boolean
 }
+
+/** Shows the toast beside the element; `copied` marks a text copy (see BrowserPageGrabToastState). */
+export type ShowGrabToast = (
+  message: string,
+  type: BrowserPageGrabToastState['type'],
+  payload?: BrowserGrabPayload | null,
+  copied?: boolean
+) => void
 
 export type BrowserPageGrabAnnotationsOptions = {
   /** Scopes the stored annotations. Stable for the life of the surface. */
@@ -84,8 +94,9 @@ export type BrowserPageGrabAnnotations = {
   dismissGrabToast: () => void
   /** Copies a grab screenshot; `onSettled` runs only while that copy still owns the toast. */
   copyGrabScreenshot: (dataUrl: string, onSettled: (copied: boolean) => void) => void
-  handleGrabCopy: () => void
-  handleGrabCopyScreenshot: () => void
+  /** Copies the picker's current pick, or a pick the palette still holds after the picker rearmed. */
+  handleGrabCopy: (held?: BrowserGrabPayload) => void
+  handleGrabCopyScreenshot: (held?: BrowserGrabPayload) => void
   grabMenuActionTakenRef: MutableRefObject<boolean>
   handleAddBrowserAnnotation: (
     comment: string,
@@ -116,6 +127,12 @@ export type BrowserPageFailLoadEvent = {
 }
 
 export type BrowserPageAnnotationTrayProps = {
+  /** Bumped by the palette's note count: expand the list and move focus to it. */
+  revealSignal?: number
+  /** Set while the annotate palette owns the list: Esc closes it. */
+  onDismiss?: () => void
+  /** Where the list sits when opened from the palette's note count (under the chip); default bottom-right. */
+  placement?: React.CSSProperties
   browserAnnotations: BrowserPageAnnotation[]
   currentUrl?: string
   annotationTraySendOpen: boolean

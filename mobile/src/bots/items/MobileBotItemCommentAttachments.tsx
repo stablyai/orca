@@ -14,10 +14,8 @@ import { MobileImageViewer } from '../../files/media/presentation/MobileImageVie
 import { readHostChatImage } from '../../session/native-chat/visual/mobile-native-chat-image-preview'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { colors, feedback, radii, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-
+import { feedback, radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 const SHOWN = 5
 const GAP = 6
 const ONE_MAX_HEIGHT = 220
@@ -75,6 +73,7 @@ function Tile({
   height: number | null
   onOpen: () => void
 }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const [aspect, setAspect] = useState<number | null>(null)
   const { read } = reads
@@ -134,15 +133,16 @@ function Viewer({
 }) {
   const image = images[index]!
   const { read } = reads
-  // The neighbours too, so a step lands on a read image.
+  // The neighbours too, so a step lands on a read image. Keyed by path, not the images array (fresh
+  // each render): a read that fails re-renders, and must not ask again until the viewer steps.
+  const nearby = [index - 1, index, index + 1]
+    .flatMap((near) => images[near]?.path ?? [])
+    .join('\0')
   useEffect(() => {
-    for (const near of [index - 1, index, index + 1]) {
-      const path = images[near]?.path
-      if (path) {
-        read(path)
-      }
+    for (const path of nearby ? nearby.split('\0') : []) {
+      read(path)
     }
-  }, [read, images, index])
+  }, [read, index, nearby])
   // Shown until the next image's bytes arrive, so a step never closes the viewer.
   const [shown, setShown] = useState<string | null>(null)
   const fresh = reads.uris[image.path]
@@ -194,7 +194,7 @@ export function MobileBotItemCommentAttachments({
   data: Record<string, unknown>
   children?: ReactNode
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const images = botItemCommentImages(data)
   const { files } = botItemCommentFiles(typeof data.text === 'string' ? data.text : '')
   const t = useMobileTranslation()
@@ -285,7 +285,7 @@ export function MobileBotItemCommentAttachments({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: GAP, marginTop: spacing.xs },
   tile: {
     borderRadius: radii.surface,

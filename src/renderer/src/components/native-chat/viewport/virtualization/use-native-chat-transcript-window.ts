@@ -1,5 +1,6 @@
 // Virtualizer owns row anchoring; scroll hook owns follow intent. Use container coordinates and never reattach a parked reader from geometry alone.
 
+import { stageBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { elementScroll, useVirtualizer, type VirtualItem } from '@tanstack/react-virtual'
 import { createProgrammaticScrollMarks } from '@/lib/list-interaction/virtualized-scrolling/programmatic-scroll-marks'
@@ -9,28 +10,27 @@ import {
   DEFAULT_ROW_TYPOGRAPHY
 } from './native-chat-row-height-estimate'
 import { nativeChatPinnedRowIndexes, nativeChatTranscriptRange } from './native-chat-pinned-rows'
+import { useNativeChatRowMeasure } from './use-native-chat-row-measure'
 import { nativeChatSlotKey } from '../../conversation/slots/native-chat-transcript-slot-selection'
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
 import {
-  nativeChatScrollOffsetWithin,
   useNativeChatViewportAlign,
   type NativeChatAlignEdge
 } from './use-native-chat-viewport-align'
+import { UNSEEN_SCROLL_PX, useNativeChatScrollMargin } from './use-native-chat-scroll-margin'
 import { useNativeChatRetiredMeasurements } from './use-native-chat-retired-measurements'
 
 /** Overscan by row because chat rows vary widely in height and rendering cost. */
 export const NATIVE_CHAT_WINDOW_OVERSCAN = 6
 
 const FALLBACK_ROW_PX = 48
-/** Past this gap the DOM's offset is a write the virtualizer has yet to hear of. */
-const UNSEEN_SCROLL_PX = 1
 
 export type NativeChatTranscriptWindow = {
   virtualItems: VirtualItem[]
   totalSize: number
   scrollMargin: number
   sizerRef: (node: HTMLDivElement | null) => void
-  measureRow: (node: HTMLElement | null) => void
+  measureRow: React.RefCallback<HTMLDivElement>
   /** Scroll so this element's top meets the top of the viewport. */
   alignToViewportTop: (element: HTMLElement, edge?: NativeChatAlignEdge) => void
   /** Whether a jump is still settling as its target row is measured. */
@@ -42,6 +42,7 @@ export type NativeChatTranscriptWindow = {
   scrollToEnd: () => void
   /** Restore a detached reader offset through the virtualizer's scroll owner. */
   restoreScrollOffset: (offset: number) => void
+  markProgrammaticScroll: (offset: number) => void
   /** True when this scroll event is the echo of a registered application write. */
   consumeProgrammaticScroll: (event: Event) => boolean
   /** Rebase a pending end reconcile while the reader takes over this frame. */
@@ -66,10 +67,14 @@ export function useNativeChatTranscriptWindow({
   /** Chat text scale; gap scales with the text size. */
   typography?: NativeChatRowTypography
 }): NativeChatTranscriptWindow {
-  const sizerElementRef = useRef<HTMLDivElement | null>(null)
-  const [scrollMargin, setScrollMargin] = useState(0)
-  const measuredScrollMargin = useRef(0)
   const [programmaticScrollMarks] = useState(createProgrammaticScrollMarks)
+  const virtualizerScrollOffset = useRef<(() => number | null | undefined) | null>(null)
+  const { scrollMargin, sizerRef } = useNativeChatScrollMargin({
+    scrollRef,
+    isVisible,
+    programmaticScrollMarks,
+    scrollOffset: virtualizerScrollOffset
+  })
   const readerTakeoverFrameRef = useRef<number | null>(null)
   const pinned = useMemo(
     () => nativeChatPinnedRowIndexes({ count: slots.length, revealIndex, newRowsMarkerIndex }),
@@ -77,7 +82,8 @@ export function useNativeChatTranscriptWindow({
   )
   // Keep measured offsets through content-only growth to preserve the end anchor; rebuild only on structural changes.
   // Encoded only when the slots change: scroll and range renders reuse it.
-  const encodedItemKeys = useMemo(() => JSON.stringify(slots.map(nativeChatSlotKey)), [slots])
+  const keySlots = stageBesideStreamedText(slots)
+  const encodedItemKeys = useMemo(() => JSON.stringify(keySlots.map(nativeChatSlotKey)), [keySlots])
   const itemKeys = useMemo(() => JSON.parse(encodedItemKeys) as string[], [encodedItemKeys])
   const estimateSize = useCallback(
     (index: number) => slots[index]?.estimatedHeight ?? FALLBACK_ROW_PX,
@@ -122,6 +128,9 @@ export function useNativeChatTranscriptWindow({
       }
     }
   })
+  useLayoutEffect(() => {
+    virtualizerScrollOffset.current = () => virtualizer.scrollOffset
+  }, [virtualizer])
   const finishReaderTakeover = useCallback(() => {
     if (readerTakeoverFrameRef.current !== null) {
       window.cancelAnimationFrame(readerTakeoverFrameRef.current)
@@ -130,49 +139,7 @@ export function useNativeChatTranscriptWindow({
   }, [])
   useEffect(() => finishReaderTakeover, [finishReaderTakeover])
 
-  // Measure actual in-flow predecessors; stale margins misplace every row, so older-history controls stay out of flow.
-  const readScrollMargin = useCallback(() => {
-    const container = scrollRef.current
-    const sizer = sizerElementRef.current
-    // Avoid rect fallback without layout: it reports scrollTop as margin and would pin the window at the transcript’s start.
-    const offset = container && sizer ? nativeChatScrollOffsetWithin(sizer, container) : null
-    if (offset !== null && offset !== measuredScrollMargin.current) {
-      measuredScrollMargin.current = offset
-      setScrollMargin(offset)
-    }
-  }, [scrollRef])
-  // A hidden pane is display:none: its offset walk would only force layout on every retained chat's render.
-  useLayoutEffect(() => {
-    if (isVisible) {
-      readScrollMargin()
-    }
-  })
-
-  useLayoutEffect(() => {
-    const container = scrollRef.current
-    if (!container) {
-      return
-    }
-    readScrollMargin()
-    if (typeof ResizeObserver === 'undefined') {
-      return
-    }
-    const observer = new ResizeObserver(readScrollMargin)
-    observer.observe(container)
-    return () => observer.disconnect()
-  }, [readScrollMargin, scrollRef])
-
   useNativeChatRetiredMeasurements({ itemKeys, scrollRef, virtualizer })
-
-  const sizerRef = useCallback(
-    (node: HTMLDivElement | null) => {
-      sizerElementRef.current = node
-      if (node) {
-        readScrollMargin()
-      }
-    },
-    [readScrollMargin]
-  )
 
   const {
     alignToViewportTop,
@@ -307,13 +274,14 @@ export function useNativeChatTranscriptWindow({
     totalSize: virtualizer.getTotalSize(),
     scrollMargin,
     sizerRef,
-    measureRow: virtualizer.measureElement,
+    measureRow: useNativeChatRowMeasure(virtualizer, isVisible),
     alignToViewportTop,
     isAlignPending,
     cancelAlign,
     releaseEndPin,
     scrollToEnd,
     restoreScrollOffset,
+    markProgrammaticScroll: programmaticScrollMarks.mark,
     consumeProgrammaticScroll,
     reconcileReaderScroll
   }

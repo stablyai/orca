@@ -10,18 +10,32 @@ import {
   TerminalAgentTurnNews,
   type TerminalAgentTurnNewsItem
 } from '../../../push/notifications/terminal-agent-turn-news'
-import type { OrchestrationDb } from '../../db/orchestration-db'
-import { readCoordinatorMailCount } from '../../db/messages/dispatch-read-mail'
+import { readCoordinatorMailSnapshot } from '../../db/messages/dispatch-read-mail'
 import { redactWorkerTerminalView } from '../../terminal-authority/views/worker-terminal-redaction'
 import {
+  failedLeadTurnFence,
+  stopReportId,
   workerTurnStopDispatchId,
   type WorkerTurnStopDispatch,
   type WorkerTurnStopReportDeps
 } from './worker-turn-stop-report'
+import type { OrchestrationDb } from '../../db/orchestration-db'
 import { observeWorker, type WorkerRest } from './worker-presence-report'
 import { firstWithin } from '../approvals/first-within'
 import { showsClaudeDialog } from '../../../terminal/wait/claude-open-dialog-hold'
 import type { WorkerApprovalPayload } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
+import {
+  agentBackgroundWait,
+  agentLeadTurnFailedUnderChildWork
+} from '../../../../../shared/agent-status/lifecycle/agent-background-wait'
+import { WorkerBackgroundWaits } from './worker-background-waits'
+import {
+  hasRelayedWorkerReport,
+  readWorkingTurnAfterSequence
+} from '../../db/worker-presence/worker-presence-store'
+import { resolveTerminalWorkerDispatch } from './terminal-worker-dispatch'
+import { terminalRequestError } from './terminal-request-error'
+export { resolveTerminalWorkerDispatch }
 
 export type TerminalWorkerTurnStopsDeps = WorkerTurnStopReportDeps & {
   readHookRow: (paneKey: string) => AgentStatusIpcPayload | null
@@ -36,24 +50,33 @@ export type TerminalWorkerTurnStopsDeps = WorkerTurnStopReportDeps & {
 }
 
 /** Report a terminal worker whose turn ended (or stopped at a prompt) while its Dispatch is open. */
-type PreparedStop = TerminalAgentTurnNewsItem & { dispatchId: string | null; mailTaken?: number }
+type PreparedStop = TerminalAgentTurnNewsItem & {
+  dispatchId: string | null
+  mailTaken?: number
+  latestCoordinatorSequence?: number
+  turnStartedAfterSequence?: number
+}
 
 export class TerminalWorkerTurnStops {
   private readonly news: TerminalAgentTurnNews<PreparedStop>
+  /** Turns held open only by their own background tasks, terminal or chat: rests of their own. */
+  readonly backgroundWaits: WorkerBackgroundWaits
 
   constructor(private readonly deps: TerminalWorkerTurnStopsDeps) {
+    this.backgroundWaits = new WorkerBackgroundWaits(deps)
     this.news = new TerminalAgentTurnNews({
       readHookRow: deps.readHookRow,
       // The Dispatch the stop belongs to is the one active when the stop was seen.
       prepare: (news) => {
         const resolved = this.resolve(news.paneKey)
         const dispatchId = resolved && workerTurnStopDispatchId(resolved.target)
+        const turnStartedAfterSequence =
+          resolved && dispatchId ? readWorkingTurnAfterSequence(resolved.db, dispatchId) : undefined
         return {
           ...news,
           dispatchId,
-          ...(resolved && dispatchId
-            ? { mailTaken: readCoordinatorMailCount(resolved.db, dispatchId) }
-            : {})
+          ...(resolved && dispatchId ? readCoordinatorMailSnapshot(resolved.db, dispatchId) : {}),
+          ...(turnStartedAfterSequence !== undefined ? { turnStartedAfterSequence } : {})
         }
       },
       deliver: (stop, row) => void this.report(stop, row),
@@ -65,12 +88,19 @@ export class TerminalWorkerTurnStops {
 
   observe(change: AgentPaneChange): void {
     this.news.observe(change)
+    this.backgroundWaits.observe(change)
     // A turn starting is the worker's own news: once per edge, not per hook post.
     const working =
       change.kind === 'moved'
         ? change.to === 'working'
         : change.kind === 'seeded' && change.phase === 'working'
-    if (working && !this.deps.readHookRow(change.paneKey)?.structuredHost) {
+    const row = working ? this.deps.readHookRow(change.paneKey) : null
+    // A turn held open only by its background tasks, or failed under them, is a rest those waits record.
+    if (
+      working &&
+      !row?.structuredHost &&
+      !(row && (agentBackgroundWait(row) || agentLeadTurnFailedUnderChildWork(row)))
+    ) {
       const resolved = this.resolve(change.paneKey)
       if (resolved) {
         observeWorker(resolved.db, resolved.target, { presence: 'working' }, this.deps)
@@ -80,21 +110,24 @@ export class TerminalWorkerTurnStops {
 
   /** A pane restored at rest: its stop came while Orca was down, so no live edge announced it. A turn
    *  its user stopped, or a session boundary, is no news here either, as it is live. */
-  reportRestingPane(paneKey: string): Promise<void> {
+  async reportRestingPane(paneKey: string): Promise<void> {
     const row = this.deps.readHookRow(paneKey)
+    if (this.backgroundWaits.reportFailedLeadTurn(paneKey, row)) {
+      return
+    }
     const news = row && hookRowTransition('working', hookRowAgentPhase(row), row) !== null
     const resolved = news ? this.resolve(paneKey) : null
     if (!row || !resolved) {
-      return Promise.resolve()
+      return
     }
     const dispatchId = workerTurnStopDispatchId(resolved.target)
-    return this.report(
+    await this.report(
       {
         paneKey,
         worktreeId: row.worktreeId ?? '',
         row,
         dispatchId,
-        mailTaken: readCoordinatorMailCount(resolved.db, dispatchId)
+        ...readCoordinatorMailSnapshot(resolved.db, dispatchId)
       },
       row
     )
@@ -114,13 +147,16 @@ export class TerminalWorkerTurnStops {
         : agentVerdictDisplayMark(stop.row) === 'failed'
           ? 'errored'
           : 'finished'
+    // A failure the agent typed is worded as chat workers word it; the screen adds nothing.
+    const requestError = reason === 'errored' ? terminalRequestError(stop.row) : null
     // A clean finish has the agent's own last words; an error or prompt is on the screen.
-    const lastOutput =
-      (reason === 'finished' && (latest.lastAssistantMessage || stop.row.lastAssistantMessage)) ||
-      (await this.readStopScreen(
-        stopped.handle,
-        reason === 'needs-input' && stop.row.agentType === 'claude'
-      ))
+    const lastOutput = requestError
+      ? undefined
+      : (reason === 'finished' && (latest.lastAssistantMessage || stop.row.lastAssistantMessage)) ||
+        (await this.readStopScreen(
+          stopped.handle,
+          reason === 'needs-input' && stop.row.agentType === 'claude'
+        ))
     const before = this.stillStopped(stop)
     // One report per approval; the screen shows Claude's own reason for asking.
     const approval =
@@ -135,20 +171,27 @@ export class TerminalWorkerTurnStops {
     ) {
       return
     }
+    // A failed turn already reported while its children ran is the same failure once they settle.
+    const reportedFence = reportedFailedLeadFence(resolved.db, resolved.target, stop.row, reason)
     const sent = observeWorker(
       resolved.db,
       resolved.target,
       {
         presence: 'at-rest',
         // An approval seen on a prompt already reported is news of its own.
-        fence: `${incarnation}:${stop.row.stateStartedAt}${approval ? `:approval:${approval.approvalId}` : ''}`,
+        fence:
+          reportedFence ??
+          `${incarnation}:${stop.row.stateStartedAt}${approval ? `:approval:${approval.approvalId}` : ''}`,
         legacyStopKey: `${stop.paneKey}:${stop.row.stateStartedAt}`,
         rest: {
           from: resolved.handle,
           turnStartedAt: stop.row.turnStartedAt,
+          turnStartedAfterSequence: stop.turnStartedAfterSequence,
           reason,
           mailTaken: stop.mailTaken,
+          latestCoordinatorSequence: stop.latestCoordinatorSequence,
           lastOutput,
+          ...(requestError ? { requestError } : {}),
           ...(approval ? { approval } : {})
         }
       },
@@ -193,32 +236,22 @@ export class TerminalWorkerTurnStops {
   }
 }
 
-/** The Dispatch a pane's worker runs now: its active local one, or the current remote attachment. */
-export function resolveTerminalWorkerDispatch(
-  deps: Pick<TerminalWorkerTurnStopsDeps, 'getDb' | 'getHandle' | 'getProcessIncarnation'>,
-  paneKey: string
-): {
-  db: OrchestrationDb
-  handle: string
-  target: WorkerTurnStopDispatch
-} | null {
-  const db = deps.getDb()
-  const handle = db ? deps.getHandle(paneKey) : null
-  if (!db || !handle) {
+/** The fence of this errored turn's failed-lead report, when one already reached the coordinator. */
+function reportedFailedLeadFence(
+  db: OrchestrationDb,
+  target: WorkerTurnStopDispatch,
+  row: AgentStatusIpcPayload,
+  reason: WorkerRest['reason']
+): string | null {
+  if (reason !== 'errored' || !row.mainAgent) {
     return null
   }
-  const dispatch = db.getActiveDispatchForTerminal(handle, paneKey)
-  if (dispatch) {
-    return { db, handle, target: { kind: 'local', dispatch } }
-  }
-  // A paired server holds its remote workers as attachments; their Dispatch lives at the Run home.
-  const attachment = db.findActiveRemoteAttachmentForPane(paneKey)
-  return attachment &&
-    db.isRemoteAttachmentProcessCurrent({
-      dispatchId: attachment.dispatch_id,
-      paneKey,
-      processIncarnation: deps.getProcessIncarnation(handle)
-    })
-    ? { db, handle, target: { kind: 'remote', attachment } }
-    : null
+  const fence = failedLeadTurnFence(row.mainAgent.stateStartedAt)
+  const dispatchId = workerTurnStopDispatchId(target)
+  const id = stopReportId(dispatchId, fence)
+  const reported =
+    target.kind === 'local'
+      ? db.getMessageById(id) !== undefined
+      : hasRelayedWorkerReport(db, dispatchId, id)
+  return reported ? fence : null
 }

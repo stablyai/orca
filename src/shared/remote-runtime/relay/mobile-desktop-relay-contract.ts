@@ -11,10 +11,15 @@ export const MOBILE_RELAY_HOST_WORKTREE_DELTAS_RUNTIME_CAPABILITY =
 export const MOBILE_RELAY_HOSTS_CHANGED_EVENT_RUNTIME_CAPABILITY =
   'mobile.relay-hosts-changed-event.v1' as const
 
+// Hosts that publish relayHostRowsChanged while a phone that read a server's rows stays connected.
+export const MOBILE_RELAY_HOST_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY =
+  'mobile.relay-host-rows-changed-event.v1' as const
+
 /** A desktop relays a phone to a server that mints delegated phone devices; each side advertises. */
 export const MOBILE_RELAY_RUNTIME_CAPABILITIES = [
   DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY,
   MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY,
   MOBILE_RELAY_HOST_WORKTREE_DELTAS_RUNTIME_CAPABILITY,
-  MOBILE_RELAY_HOSTS_CHANGED_EVENT_RUNTIME_CAPABILITY
+  MOBILE_RELAY_HOSTS_CHANGED_EVENT_RUNTIME_CAPABILITY,
+  MOBILE_RELAY_HOST_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY
 ] as const

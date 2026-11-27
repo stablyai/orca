@@ -1,3 +1,5 @@
+// @protected-copy scope=file
+// A permission's name and description: a language pack must never make Full access read as Ask.
 import type { LucideIcon } from 'lucide-react'
 import { FilePenLine, Hand, ShieldAlert, ShieldCheck } from 'lucide-react'
 import { translate } from '@/i18n/i18n'

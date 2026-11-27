@@ -22,6 +22,7 @@ import type {
   AutomationWorkspaceMode
 } from '../../../../../shared/automations/automation-definition'
 import type { Bot } from '../../../../../shared/bot-types'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { AutomationEventTrigger } from '../../../../../shared/automation-event-triggers'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { OrcaHooks } from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
@@ -54,6 +55,8 @@ export type AutomationDraft = {
   extraAgentArgs: string
   /** Set when the automation runs as a bot; the project, workspace, session and agent are then the bot's. */
   bot: AutomationBotTarget | null
+  /** The host listing the picked bot: ids are random per host, so the id alone can name two. */
+  botHostId?: ExecutionHostId
   launchPreferences?: AutomationLaunchPreferences
   agentArgs?: string | null
   launchSetupPatch?: AutomationLaunchSetupPatch & { legacyOnly?: true }
@@ -204,7 +207,8 @@ export function AutomationEditorDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="flex h-[min(880px,90vh)] w-[min(1080px,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[1080px]"
+        surface="panel"
+        className="@container flex h-[min(880px,90vh)] w-[min(1080px,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] flex-col overflow-hidden sm:max-w-[1080px]"
         aria-describedby={undefined}
         ref={dialogContentRef}
         onPointerDownOutside={guardOutsideDismiss}
@@ -242,7 +246,7 @@ export function AutomationEditorDialog({
           }}
         />
 
-        <div className="flex min-h-0 flex-1 flex-row">
+        <div className="flex min-h-0 flex-1 flex-col scrollbar-sleek @max-[35rem]:overflow-y-auto @min-[35rem]:flex-row">
           <AutomationEditorPromptSection
             draft={draft}
             onDraftChange={handleDraftChange}

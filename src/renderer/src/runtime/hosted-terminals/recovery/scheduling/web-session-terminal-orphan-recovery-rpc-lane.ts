@@ -25,8 +25,3 @@ export async function runInTerminalRecoveryRpcLane<T>(
     release()
   }
 }
-
-export function clearTerminalRecoveryRpcLaneForTests(): void {
-  recoveryRpcLane = new PrioritySemaphore(MAX_CONCURRENT_RECOVERY_RPCS)
-  waitingRecoveryRpcs = 0
-}

@@ -1,3 +1,4 @@
+import { redactKagiSessionToken } from '../../../../shared/browser/navigation/browser-url'
 import { createBrowserTabInRenderer } from './browser-tab-renderer-create'
 import type { RuntimeNavigationTarget } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import type { BrowserPageCreationPlacement } from '../../../../shared/browser/client-hosting/browser-client-host-placement'
@@ -65,9 +66,16 @@ export class RuntimeBrowserTabCreation {
   ) {}
 
   async browserTabCreate(
-    params: BrowserTabCreateRequest,
+    requested: BrowserTabCreateRequest,
     caller?: BrowserTabCreateCaller
   ): Promise<{ browserPageId: string }> {
+    // A host with no window has no layout to split: its tab opens plain, here or on a paired desktop.
+    const params =
+      requested.split &&
+      requested.placement?.kind !== 'client' &&
+      this.host.getAvailableAuthoritativeWindowId() === null
+        ? { ...requested, split: undefined, splitFromTabId: undefined }
+        : requested
     const url = params.url ?? 'about:blank'
     const focus = resolveBrowserTabCreateFocus({
       activate: params.activate,
@@ -87,11 +95,7 @@ export class RuntimeBrowserTabCreation {
       )
     }
     // Why reject rather than ignore: a caller asking for a split pane should learn it got none.
-    if (
-      params.split &&
-      (params.placement?.kind === 'client' ||
-        this.host.getAvailableAuthoritativeWindowId() === null)
-    ) {
+    if (params.split && params.placement?.kind === 'client') {
       throw new BrowserError(
         'invalid_argument',
         'Opening a browser tab in a split pane needs an Orca desktop window on this host.'
@@ -131,7 +135,7 @@ export class RuntimeBrowserTabCreation {
     }
     const { browserPageId } = await createBrowserTabInRenderer(
       this.host,
-      url,
+      redactKagiSessionToken(url),
       worktreeId,
       params.profileId,
       params.profileId ? sessionPartition : undefined,
@@ -160,11 +164,13 @@ export class RuntimeBrowserTabCreation {
       targetGroupId: params.targetGroupId
     })
 
-    // The webview starts at about:blank; bridge navigation preserves registered ownership.
     if (url && url !== 'about:blank') {
       const navigate = async (): Promise<void> => {
         // Nobody reads a new tab's effects, so its first load skips the settle.
-        const result = await bridge.goto(url, worktreeId, browserPageId, { reportEffects: false })
+        const result = await bridge.goto(url, worktreeId, browserPageId, {
+          reportEffects: false,
+          awaitFirstLoad: true
+        })
         this.targets.notifyRendererNavigation(browserPageId, result.url, result.title)
         if (this.host.getAvailableAuthoritativeWindowId() === null && worktreeId) {
           this.host.notifyHeadlessBrowserSessionTabsChanged?.(worktreeId)

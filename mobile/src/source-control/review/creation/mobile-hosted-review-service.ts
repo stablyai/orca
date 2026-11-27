@@ -193,7 +193,7 @@ function formatMobileHostedReviewCreateError(
     'sourceControl.hostedReviewCreate.pushSucceeded',
     'Push succeeded, but {{shortLabel}} creation failed: {{error}}',
     {
-      shortLabel: hostedReviewCopy(provider).shortLabel,
+      shortLabel: hostedReviewCopy(provider, translate).shortLabel,
       error: result.error.replace(prefix, '')
     }
   )

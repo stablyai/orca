@@ -105,7 +105,12 @@ export function decodeSessionMessage(
     if (type !== null && !TEXT_BLOCK_TYPES.has(type) && !reasoning) {
       continue
     }
-    const text = typeof item.text === 'string' ? item.text : item.content
+    const text =
+      typeof item.text === 'string'
+        ? item.text
+        : type === 'thinking' && item.redacted !== true && typeof item.thinking === 'string'
+          ? item.thinking
+          : item.content
     if (typeof text === 'string' && text) {
       blocks.push({ kind: reasoning ? 'reasoning' : 'text', text })
     }

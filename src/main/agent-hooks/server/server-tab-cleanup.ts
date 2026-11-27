@@ -75,7 +75,7 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
     }
     this.reconcileEndedProcessForPaneKeys([resolved], {
       preserveResumeIdentity: true,
-      confirmedExit: true,
+      confirmedExit: alone === true ? 'proven' : true,
       known: { paneKey: resolved, identity }
     })
     return true
@@ -112,7 +112,8 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
     }
     this.reconcileEndedProcessForPaneKeys([resolved], {
       preserveResumeIdentity: true,
-      confirmedExit: confirmedExit === true,
+      // Only the host's proof reports the exit; an unanswered check still clears the row.
+      confirmedExit: confirmedExit === true ? 'proven' : confirmedExit === null,
       known: { paneKey: resolved, identity }
     })
   }

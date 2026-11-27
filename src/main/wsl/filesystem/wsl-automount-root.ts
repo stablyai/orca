@@ -249,13 +249,3 @@ export function parseWslAutomountRoot(drivePath: string | null): string | null {
   const match = drivePath?.trim().match(/^(\/(?:[^\n]*\/)?)[a-zA-Z]\/?$/)
   return match ? match[1] : null
 }
-
-export function resetWslAutomountRootsForTests(): void {
-  roots.clear()
-  readSinceStart.clear()
-  readAt.clear()
-  pending.clear()
-  failedAt.clear()
-  stopCounts.clear()
-  changeListeners.clear()
-}
