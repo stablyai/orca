@@ -36,7 +36,7 @@ import {
   closeAcpChildSessions,
   stopAcpChildren
 } from '../turns/acp-structured-child-stop'
-import { acpChildRelayOpenWork } from './acp-child-relay-open-work'
+import { acpChildKeptLaunchOutgrown, acpChildRelayOpenWork } from './acp-child-relay-open-work'
 import * as childState from './children/acp-structured-child'
 import { AcpStructuredChildren } from './children/acp-structured-child-lifecycle'
 import { AcpConversationCopies } from '../conversation-copy/acp-conversation-copies'
@@ -294,12 +294,7 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
   }
 
   relayOpenWork = (id: string) => acpChildRelayOpenWork(this.children.sessions.get(id))
-  keptLaunchOutgrown = (id: string) => {
-    const session = this.children.sessions.get(id)
-    return childState.isAcpReadySession(session)
-      ? session.connection.kept?.launchOutgrown
-      : undefined
-  }
+  keptLaunchOutgrown = (id: string) => acpChildKeptLaunchOutgrown(this.children.sessions.get(id))
 
   endedBeforeAcquire = (sessionId: string, generation: string): boolean =>
     this.children.endedBeforeAcquire.get(sessionId) === generation

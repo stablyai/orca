@@ -1,5 +1,5 @@
 import { ACP_UNKNOWN_WORK, acpRelayOpenWork } from '../process/acp-relay-work-markers'
-import type { AcpStructuredChild } from './children/acp-structured-child'
+import { isAcpReadySession, type AcpStructuredChild } from './children/acp-structured-child'
 
 /**
  * The open work a detached agent's idle stop counts. OMP's, like its open-app idle, is unknown.
@@ -29,4 +29,11 @@ export function acpChildRelayOpenWork(
       translator.subagents.anyStarted ||
       (session.connection.kept?.openWork(ACP_UNKNOWN_WORK).length ?? 0) > 0)
   return droidUnknown ? { ...work, [ACP_UNKNOWN_WORK]: [['subagent']] } : work
+}
+
+/** See `StructuredAgentSessionAdapter.keptLaunchOutgrown`; only a ready chat's kept agent answers. */
+export function acpChildKeptLaunchOutgrown(
+  session: AcpStructuredChild | undefined
+): boolean | undefined {
+  return isAcpReadySession(session) ? session.connection.kept?.launchOutgrown : undefined
 }
