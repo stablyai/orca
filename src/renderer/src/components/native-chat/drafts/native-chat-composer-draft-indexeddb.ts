@@ -53,8 +53,13 @@ export function createIndexedDbNativeChatComposerDraftStorage(
       settledRequest(
         (await database()).transaction(DRAFTS, 'readonly').objectStore(DRAFTS).get(scopeKey)
       ),
-    write: (scopeKey, draft: StoredNativeChatComposerDraft) =>
-      change((drafts) => drafts.put(draft, scopeKey)),
+    write: (scopeKey, draft: StoredNativeChatComposerDraft, retire?: readonly string[]) =>
+      change((drafts) => {
+        drafts.put(draft, scopeKey)
+        for (const source of retire ?? []) {
+          drafts.delete(source)
+        }
+      }),
     remove: (scopeKeys) =>
       change((drafts) => {
         for (const scopeKey of scopeKeys) {

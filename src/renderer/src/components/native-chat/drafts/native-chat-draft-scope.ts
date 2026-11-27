@@ -1,4 +1,5 @@
 export const STRUCTURED_AGENT_SESSION_DRAFT_SCOPE_PREFIX = 'agent-session:'
+export const PENDING_CREATION_DRAFT_SCOPE_PREFIX = 'pending-worktree-creation:'
 
 /** A structured chat's draft belongs to its conversation, so it outlives the tab showing it. */
 export function structuredAgentSessionDraftScopeKey(sessionId: string): string {

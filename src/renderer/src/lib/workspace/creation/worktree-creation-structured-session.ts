@@ -10,15 +10,7 @@ import {
   type WorktreeCreationRequest
 } from '@/lib/workspace/creation/pending-worktree-creation'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
-import { moveStructuredAgentLaunchDraft } from '@/lib/agent-session/launch/structured-agent-session-launch-draft'
-import { getStructuredAgentSessionLaunchOwner } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
-import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/workspace-mounting/background-terminal-worktree-mount'
-import {
-  nativeChatComposerSelection,
-  waitForNativeChatComposerHandoff
-} from '@/components/native-chat/composer/focus/native-chat-composer-mount'
-import '@/components/native-chat/composer/focus/use-native-chat-composer-reveal-focus'
-import { captureNativeChatComposerFocusIntent } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
+import { handOffPendingWorktreeChatDraft } from './worktree-creation-chat-draft-handoff'
 import { openBackgroundDeclinedTerminal } from '@/lib/workspace/creation/worktree-creation-background-mount'
 import { settleAgentTabLaunch } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-host-agents'
 import {
@@ -26,8 +18,6 @@ import {
   hasNativeChatStagedFiles
 } from '@/components/native-chat/drafts/native-chat-draft-attachment-staging'
 import { nativeChatComposerHasUserContent } from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
-
-const HANDOFF_READY_TIMEOUT_MS = 5000
 
 export type WorktreeCreationStructuredSessionResult = {
   accepted: boolean
@@ -155,44 +145,6 @@ export async function launchStructuredWorktreeSession(
       revealAbandoned.abort()
     }
   })
-  const handOffDraft = async (tabId: string | null): Promise<void> => {
-    const tab = tabId ? useAppStore.getState().getTab(tabId) : null
-    if (tab?.contentType !== 'agent-session') {
-      return
-    }
-    const state = useAppStore.getState()
-    if (
-      args.shouldActivateOnCompletion &&
-      state.activeView === 'terminal' &&
-      state.activePendingCreationId === args.creationId
-    ) {
-      requestBackgroundTerminalWorktreeMount({ worktreeId: args.worktreeId, tabIds: [tab.id] })
-      await waitForNativeChatComposerHandoff(
-        sourceScope,
-        tab.id,
-        revealAbandoned.signal,
-        HANDOFF_READY_TIMEOUT_MS
-      )
-    }
-    if (abandoned.signal.aborted) {
-      return
-    }
-    const selection = revealAbandoned.signal.aborted
-      ? undefined
-      : nativeChatComposerSelection(sourceScope)
-    if (selection) {
-      captureNativeChatComposerFocusIntent().request(tab.id)
-    }
-    const executionHostId =
-      tab.executionHostId ?? getStructuredAgentSessionLaunchOwner(tab.entityId)
-    if (executionHostId) {
-      moveStructuredAgentLaunchDraft(
-        { sessionId: tab.entityId, worktreeId: args.worktreeId, executionHostId },
-        sourceScope,
-        selection
-      )
-    }
-  }
   // The surfaces that took the input: a published chat, or (plain text only) a terminal.
   let chatOpened = false
   let reached = false
@@ -219,7 +171,12 @@ export async function launchStructuredWorktreeSession(
       beforeOpen: () => !abandoned.signal.aborted && !isCancelled(),
       onTabOpenSettled: (tabId, reason) => {
         layoutRefused = reason === 'layout-refused'
-        void handOffDraft(tabId).then(
+        void handOffPendingWorktreeChatDraft(
+          args,
+          tabId,
+          abandoned.signal,
+          revealAbandoned.signal
+        ).then(
           () => tabOpen.resolve(tabId),
           (error: unknown) => {
             console.error('worktree create: draft handoff failed', args.worktreeId, error)

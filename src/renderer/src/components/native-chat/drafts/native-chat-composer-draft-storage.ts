@@ -1,6 +1,11 @@
 // Use IndexedDB so drafts do not compete with settings for localStorage quota.
 
+import { basename } from '@/lib/path'
+import { isNativeChatKeptPastePath } from '../paste/native-chat-image-paste'
+import { isNativeChatPastedImagePath } from '../../../../../shared/native-chat/attachments/native-chat-image-label'
+import { isAgentSessionAttachmentStorePath } from '../../../../../shared/agent-session/agent-session-attachments'
 import type { JSONContent } from '@tiptap/react'
+import { isOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address'
 import {
   parseExecutionHostId,
   type ExecutionHostId
@@ -33,13 +38,19 @@ export type NativeChatComposerDraftOwner = {
 export type StoredNativeChatComposerDraft = NativeChatComposerDraft & {
   readonly savedAt: number
   readonly owner?: NativeChatComposerDraftOwner
+  /** The published chat that accepted this pending workspace's draft. */
+  readonly handoffSessionId?: string
 }
 
 /** Resolve writes/removals only after commit; reject refused persistence. */
 export type NativeChatComposerDraftStorage = {
   loadAll(): Promise<ReadonlyMap<string, unknown>>
   read(scopeKey: string): Promise<unknown>
-  write(scopeKey: string, draft: StoredNativeChatComposerDraft): Promise<void>
+  write(
+    scopeKey: string,
+    draft: StoredNativeChatComposerDraft,
+    retire?: readonly string[]
+  ): Promise<void>
   remove(scopeKeys: readonly string[]): Promise<void>
   /** Reads the stored record and writes what `apply` makes of it, as one change. */
   update(
@@ -59,11 +70,14 @@ export function createMemoryNativeChatComposerDraftStorage(): NativeChatComposer
     refuseWrites: false,
     loadAll: async () => new Map(drafts),
     read: async (scopeKey: string) => drafts.get(scopeKey),
-    write: (scopeKey: string, draft: StoredNativeChatComposerDraft) => {
+    write: (scopeKey: string, draft: StoredNativeChatComposerDraft, retire?: readonly string[]) => {
       if (storage.refuseWrites) {
         return Promise.reject(new DOMException('refused', 'QuotaExceededError'))
       }
       drafts.set(scopeKey, draft)
+      for (const source of retire ?? []) {
+        drafts.delete(source)
+      }
       return Promise.resolve()
     },
     remove: (scopeKeys: readonly string[]) => {
@@ -114,6 +128,39 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 /** Only the editor's own root node is restored; anything else falls back to the plain text. */
 function isEditorDocument(value: unknown): value is JSONContent {
   return isRecord(value) && value.type === 'doc'
+}
+
+/** An image the draft names but can no longer send, so the user can attach it again. */
+export function unavailableNativeChatComposerDraftImage(
+  image: NativeChatComposerDraftImage
+): NativeChatComposerDraftImage {
+  return image.unavailableName === undefined
+    ? { id: image.id, path: '', unavailableName: basename(image.path) }
+    : image
+}
+
+/** A local paste in Orca's paste folder: it outlives the run, so a restore can show and send it. */
+export function isKeptLocalPaste(image: NativeChatComposerDraftImage): boolean {
+  return !image.connectionId && isNativeChatKeptPastePath(image.path)
+}
+
+/** Omit launch seeds; retain durable local/server pastes, reduce other pastes to unavailable names, and drop empty records. */
+export function savedNativeChatComposerDraft(
+  record: StoredNativeChatComposerDraft & { readonly unsavedText?: string }
+): StoredNativeChatComposerDraft | null {
+  const { unsavedText, ...saved } = record
+  const images = saved.images.map((image) =>
+    isNativeChatPastedImagePath(image.path) &&
+    !isKeptLocalPaste(image) &&
+    !isAgentSessionAttachmentStorePath(image.path)
+      ? unavailableNativeChatComposerDraftImage(image)
+      : image
+  )
+  const text = saved.text === unsavedText ? '' : saved.text
+  if (text === '' && images.length === 0) {
+    return null
+  }
+  return { ...saved, text, images }
 }
 
 function parseImage(value: unknown): NativeChatComposerDraftImage | null {
@@ -174,6 +221,11 @@ export function parseStoredNativeChatComposerDraft(
     ...(isEditorDocument(document) ? { document } : {}),
     images: images.flatMap((image) => parseImage(image) ?? []),
     savedAt,
+    ...(owner &&
+    typeof value.handoffSessionId === 'string' &&
+    isOrcaSessionId(value.handoffSessionId)
+      ? { handoffSessionId: value.handoffSessionId }
+      : {}),
     ...(owner ? { owner } : {})
   }
 }
