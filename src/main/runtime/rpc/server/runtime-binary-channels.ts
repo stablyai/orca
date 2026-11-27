@@ -39,8 +39,8 @@ export class RuntimeBinaryChannels {
   constructor(private readonly releaseConnection: (connectionId: string) => void) {}
 
   /**
-   * The channel's connection, opened by its first request and released when that request's
-   * dispatch ends (the stream is over), the client closes it, or the socket closes. Later requests
+   * The channel's connection, opened by its first request and released when a reply ends that
+   * request's stream (see `dispatchForDevice`), the client closes it, or the socket closes. Later requests
    * naming an open channel (a stream's own calls) run under the same connection, as they did on
    * that stream's own socket.
    */
