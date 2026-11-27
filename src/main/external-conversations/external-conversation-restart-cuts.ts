@@ -115,32 +115,44 @@ export function heldTurnEnds(seam: () => Pick<ExternalConversationSeam, 'tellTur
   }
 }
 
-/** Once the launch continuation settled, the linked chats it left cut end their open turn. */
+/** Once the launch continuation settled, the linked chats it left cut end their open turn; then
+ *  so do kept chats whose agent ended before its reattach, cut after it. */
 export function endRestartCutTurns(
   store: ExternalConversationLinkStore,
-  launch: { continued: Promise<{ cutByLastRun: ReadonlySet<string> }> } | undefined,
+  launch:
+    | {
+        continued: Promise<{
+          cutByLastRun: ReadonlySet<string>
+          goneCut?: Promise<ReadonlySet<string>>
+        }>
+      }
+    | undefined,
   signal: AbortSignal,
   tell: (event: TurnEnded) => void
 ): void {
+  const end = async (cutByLastRun: ReadonlySet<string>) => {
+    const host = getStructuredAgentSessionHost()
+    if (!host || signal.aborted || cutByLastRun.size === 0) {
+      return
+    }
+    const ends = await restartCutTurnEnds({
+      cutByLastRun,
+      linksFor: (sessionId) => findLinksForSession(store, sessionId),
+      open: (sessionId) => host.revealSession(sessionId).catch(() => null),
+      offeredCuts: () => host.restartResume.offeredCuts(),
+      cutOf: (sessionId, offered) => host.restartResume.cutOf(sessionId, offered),
+      openerOf: (sessionId, turnId) => turnOpenerOf(host, sessionId, turnId),
+      startedAt: Math.trunc(performance.timeOrigin),
+      now: Date.now
+    })
+    if (!signal.aborted) {
+      ends.forEach(tell)
+    }
+  }
   void launch?.continued
-    .then(async ({ cutByLastRun }) => {
-      const host = getStructuredAgentSessionHost()
-      if (!host || signal.aborted) {
-        return
-      }
-      const ends = await restartCutTurnEnds({
-        cutByLastRun,
-        linksFor: (sessionId) => findLinksForSession(store, sessionId),
-        open: (sessionId) => host.revealSession(sessionId).catch(() => null),
-        offeredCuts: () => host.restartResume.offeredCuts(),
-        cutOf: (sessionId, offered) => host.restartResume.cutOf(sessionId, offered),
-        openerOf: (sessionId, turnId) => turnOpenerOf(host, sessionId, turnId),
-        startedAt: Math.trunc(performance.timeOrigin),
-        now: Date.now
-      })
-      if (!signal.aborted) {
-        ends.forEach(tell)
-      }
+    .then(async ({ cutByLastRun, goneCut }) => {
+      await end(cutByLastRun)
+      await end((await goneCut) ?? new Set())
     })
     .catch((error: unknown) => {
       console.warn('[connector] ending turns a restart cut failed', error)

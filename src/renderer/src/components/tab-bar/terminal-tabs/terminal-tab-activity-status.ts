@@ -8,6 +8,7 @@ import {
   AGENT_STATUS_STALE_AFTER_MS
 } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import { resolveWorktreeStatus } from '@/lib/workspace/activity/worktree-status'
+import type { TitleDerivedPaneForeground } from '@/components/sidebar/workspace-card/activity/title-derived-pane-agent-identity'
 
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { agentVerdictDisplayMark } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
@@ -163,6 +164,7 @@ type TerminalTabActivityInput = {
   runtimePaneTitlesByTabId?: Record<string, Record<number, string>>
   ptyIdsByTabId?: Record<string, string[]>
   terminalLayout?: TerminalLayoutSnapshot
+  paneForegroundAgentByPaneKey?: Record<string, TitleDerivedPaneForeground>
 }
 
 /** Resolve fresh hook state and live title fallback like the sidebar, returning a primitive to avoid unrelated rerenders. */
@@ -172,7 +174,8 @@ export function resolveTerminalTabActivityStatus({
   agentStatusEpoch,
   runtimePaneTitlesByTabId,
   ptyIdsByTabId,
-  terminalLayout
+  terminalLayout,
+  paneForegroundAgentByPaneKey
 }: TerminalTabActivityInput): TerminalTabActivityStatus {
   const flags = getTerminalTabActivityFlags(agentStatusByPaneKey, agentStatusEpoch).get(tab.id)
   return resolveWorktreeStatus({
@@ -183,6 +186,7 @@ export function resolveTerminalTabActivityStatus({
     agentStatusPaneIdsByTabId: { [tab.id]: flags?.paneIds ?? EMPTY_PANE_IDS },
     stalePaneIdsByTabId: { [tab.id]: flags?.stalePaneIds ?? EMPTY_PANE_IDS },
     terminalLayoutsByTabId: terminalLayout ? { [tab.id]: terminalLayout } : undefined,
+    paneForegroundAgentByPaneKey,
     hasPermission: flags?.hasPermission ?? false,
     hasLiveWorking: flags?.hasLiveWorking ?? false,
     hasLiveMonitoring: flags?.hasLiveMonitoring ?? false,

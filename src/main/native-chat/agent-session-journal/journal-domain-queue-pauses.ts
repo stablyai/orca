@@ -3,6 +3,7 @@ import type { AgentJournalCursor } from '../../../shared/agent-session/journal/a
 import type { JournalQueuePauseMarks } from './queued-messages/queued-message-pause-marks'
 import {
   createQueuePauseContext,
+  failedQueueTurnSequence,
   type QueuePauseContext
 } from './queued-messages/queued-message-pause'
 import { JOURNAL_SQL_ACCEPTED_INPUT_COLUMNS } from './journal-sql-accepted-inputs'
@@ -77,7 +78,7 @@ export function readJournalDomainQueuePauseContext(
       ...accepted,
       latestPersonAcceptedTurnSequence: accepted.latestPersonAcceptedSequence,
       failedAt,
-      ...(failedAt > 0 && turnItemId !== null
+      ...(failedQueueTurnSequence(failedAt, marks.resumedSequence) && turnItemId !== null
         ? {
             failedAtUsageLimit:
               readJournalSqlTurnUsageLimit(

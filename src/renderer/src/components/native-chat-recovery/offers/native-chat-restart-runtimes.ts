@@ -1,4 +1,5 @@
 import { useEffect, useSyncExternalStore } from 'react'
+import { recomputeOn } from '@/lib/recompute-on'
 import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '../../../store/index'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
@@ -48,7 +49,7 @@ export function nativeChatRestartStillStarting(
 export function useNativeChatRestartRuntimes() {
   const environments = useAppStore((state) => state.runtimeEnvironments)
   const statuses = useRuntimeStatusByEnvironmentId()
-  useSyncExternalStore(
+  const storeRevision = useSyncExternalStore(
     subscribe,
     () => revision,
     () => revision
@@ -77,8 +78,10 @@ export function useNativeChatRestartRuntimes() {
       listeners.forEach((listener) => listener())
     }
   }, [environments, statuses])
-  return environments.flatMap((environment) => {
-    const store = stores.get(environment.id)
-    return store ? [{ environment, store }] : []
-  })
+  return recomputeOn([storeRevision], () =>
+    environments.flatMap((environment) => {
+      const store = stores.get(environment.id)
+      return store ? [{ environment, store }] : []
+    })
+  )
 }

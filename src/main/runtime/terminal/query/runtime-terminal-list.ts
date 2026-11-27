@@ -41,6 +41,7 @@ type RuntimeTerminalListDependencies = {
     pty: RuntimePtyWorktreeRecord,
     worktrees: Map<string, ResolvedWorktree>
   ): RuntimeTerminalSummary
+  alternateScreenGridPreview(ptyId: string | null, preview: string): string
   getSnapshots(): ReadonlyMap<string, RuntimeMobileSessionTabsSnapshot>
   getTabTitle(tabId: string): string | null
   getTopologyRevision(worktreeId: string): number
@@ -71,6 +72,7 @@ export class RuntimeTerminalList {
       handles?: readonly string[]
       requireFreshPtyLiveness?: boolean
       includeVisualLayouts?: boolean
+      alternateScreenGridPreviews?: boolean
     }
   ): Promise<RuntimeTerminalListResult> {
     if (!Number.isInteger(limit) || limit <= 0) {
@@ -173,7 +175,14 @@ export class RuntimeTerminalList {
     const matching = requestedHandles
       ? terminals.filter((terminal) => requestedHandles.has(terminal.handle))
       : terminals
-    const listed = matching.slice(0, limit)
+    // Grid reads cost per pane, so only the returned rows of a preview-wanting list pay them.
+    const returned = matching.slice(0, limit)
+    const listed = opts.alternateScreenGridPreviews
+      ? returned.map((terminal) => ({
+          ...terminal,
+          preview: this.deps.alternateScreenGridPreview(terminal.ptyId, terminal.preview)
+        }))
+      : returned
     const snapshots = this.deps.getSnapshots()
     const visualLayouts =
       opts.includeVisualLayouts === false

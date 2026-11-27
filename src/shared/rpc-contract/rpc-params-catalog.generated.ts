@@ -14,6 +14,7 @@ import {
   BotGroupDelete,
   BotGroupNewThread,
   BotGroupRead,
+  BotGroupRenameThread,
   BotGroupReorder,
   BotGroupSend,
   BotGroupStop,
@@ -280,14 +281,8 @@ import {
   GrabViewportBridge
 } from './browser/browser-grab-params'
 import { BrowserIdentitySet, ProfileCreate } from './browser/browser-identity-params'
-import { Screenshot, Snapshot } from './browser/browser-observation-params'
 import {
   Check,
-  ClipboardWrite,
-  CookieDelete,
-  CookieGet,
-  CookieSet,
-  DialogAccept,
   Drag,
   Element,
   Eval,
@@ -295,31 +290,19 @@ import {
   Fill,
   Find,
   FullScreenshot,
-  Geolocation,
   Get,
   Goto,
   Highlight,
-  InterceptEnable,
   Is,
   KeyboardInsert,
   Keypress,
   LimitParam,
-  MouseButton,
-  MouseWheel,
-  MouseXY,
   ProfileClearCookies,
   ProfileDelete,
   ProfileImportFromBrowser,
   Scroll,
   Select,
   SelectorPath,
-  SetCredentials,
-  SetDevice,
-  SetHeaders,
-  SetMedia,
-  SetOffline,
-  StorageKey,
-  StorageKeyValue,
   TabClose,
   TabCurrent,
   TabList,
@@ -329,8 +312,28 @@ import {
   TabSwitch,
   Type,
   Upload,
-  Viewport,
   Wait
+} from './browser/browser-interaction-params'
+import { Screenshot, Snapshot } from './browser/browser-observation-params'
+import {
+  ClipboardWrite,
+  CookieDelete,
+  CookieGet,
+  CookieSet,
+  DialogAccept,
+  Geolocation,
+  InterceptEnable,
+  MouseButton,
+  MouseWheel,
+  MouseXY,
+  SetCredentials,
+  SetDevice,
+  SetHeaders,
+  SetMedia,
+  SetOffline,
+  StorageKey,
+  StorageKeyValue,
+  Viewport
 } from './browser/browser-params'
 import {
   DownloadCopyStream,
@@ -862,35 +865,37 @@ import {
   GitBlame,
   GitBranchCompare,
   GitBranchDiff,
-  GitBulkPaths,
-  GitBulkStage,
   GitCheckIgnored,
-  GitCheckout,
   GitCommit,
   GitCommitAction,
   GitCommitCompare,
   GitCommitDiff,
-  GitContinueRebase,
   GitCreateBranch,
   GitDiff,
-  GitDiscoverCommitMessageModels,
   GitFilePath,
-  GitForkSync,
-  GitGenerateCommitMessage,
-  GitGeneratePullRequestFields,
   GitHistory,
-  GitPush,
-  GitRebaseFromBase,
   GitRefs,
-  GitRemoteCommitUrl,
-  GitRemoteFileUrl,
   GitResolveConflict,
   GitSequencer,
   GitStatusParams,
   GitSubmoduleStatus,
+  WorktreeSelector as WorktreeSelectorOfGitCoreParams
+} from './source-control/git-core-params'
+import {
+  GitBulkPaths,
+  GitBulkStage,
+  GitCheckout,
+  GitContinueRebase,
+  GitDiscoverCommitMessageModels,
+  GitForkSync,
+  GitGenerateCommitMessage,
+  GitGeneratePullRequestFields,
+  GitPush,
+  GitRebaseFromBase,
+  GitRemoteCommitUrl,
+  GitRemoteFileUrl,
   GitSwitchBranch,
-  GitTargetedRemote,
-  WorktreeSelector as WorktreeSelectorOfGitParams
+  GitTargetedRemote
 } from './source-control/git-params'
 import {
   AddIssueComment,
@@ -997,22 +1002,8 @@ import { CancelUsageLimitContinueParams } from './structured-agent-session/usage
 import { CreateAgentSessionParams, EnsureAgentSessionParams } from './terminal/agent-session-params'
 import { TerminalInferCodexQuestionSkip } from './terminal/terminal-codex-question-params'
 import { TerminalDaemonRestartSeveredParams } from './terminal/terminal-daemon-params'
-import { TerminalLimitUpdateParams } from './terminal/terminal-limit-params'
-import { TerminalAdoptOrphans } from './terminal/terminal-orphan-params'
-import { TerminalQuickCommandsUpdate } from './terminal/terminal-quick-command-params'
-import { TerminalSplit } from './terminal/terminal-split-params'
 import {
-  TerminalAckOutput,
-  TerminalMultiplex,
-  TerminalResizeForClient,
-  TerminalSubscribe
-} from './terminal/terminal-stream-params'
-import {
-  AgentTeamsPrepareLaunch,
-  AgentTeamsTmuxCompat,
   TerminalAgentId,
-  TerminalCloseAll,
-  TerminalCreateParams,
   TerminalFocus,
   TerminalHandle,
   TerminalInspectProcess,
@@ -1027,10 +1018,26 @@ import {
   TerminalReveal,
   TerminalSend,
   TerminalSetPaneTitle,
-  TerminalSetViewerColors,
-  TerminalStopExact,
   TerminalViewClaudeAgent,
   TerminalWait
+} from './terminal/terminal-handle-params'
+import { TerminalLimitUpdateParams } from './terminal/terminal-limit-params'
+import { TerminalAdoptOrphans } from './terminal/terminal-orphan-params'
+import { TerminalQuickCommandsUpdate } from './terminal/terminal-quick-command-params'
+import { TerminalSplit } from './terminal/terminal-split-params'
+import {
+  TerminalAckOutput,
+  TerminalMultiplex,
+  TerminalResizeForClient,
+  TerminalSubscribe
+} from './terminal/terminal-stream-params'
+import {
+  AgentTeamsPrepareLaunch,
+  AgentTeamsTmuxCompat,
+  TerminalCloseAll,
+  TerminalCreateParams,
+  TerminalSetViewerColors,
+  TerminalStopExact
 } from './terminal/terminal-unary-params'
 import { TerminalGetAutoRestoreFitParams } from './terminal/terminal-viewport-methods-params'
 import {
@@ -1338,6 +1345,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'bots.groups.list': null,
   'bots.groups.newThread': BotGroupNewThread,
   'bots.groups.read': BotGroupRead,
+  'bots.groups.renameThread': BotGroupRenameThread,
   'bots.groups.reorder': BotGroupReorder,
   'bots.groups.send': BotGroupSend,
   'bots.groups.stop': BotGroupStop,
@@ -1655,25 +1663,25 @@ export const RPC_PARAMS_BY_METHOD = {
   'folderWorkspace.getPathStatus': FolderWorkspacePathStatus,
   'folderWorkspace.list': null,
   'folderWorkspace.update': FolderWorkspaceUpdate,
-  'git.abortMerge': WorktreeSelectorOfGitParams,
-  'git.abortRebase': WorktreeSelectorOfGitParams,
-  'git.atRiskLocalFiles': WorktreeSelectorOfGitParams,
+  'git.abortMerge': WorktreeSelectorOfGitCoreParams,
+  'git.abortRebase': WorktreeSelectorOfGitCoreParams,
+  'git.atRiskLocalFiles': WorktreeSelectorOfGitCoreParams,
   'git.blame': GitBlame,
   'git.branchCompare': GitBranchCompare,
   'git.branchDiff': GitBranchDiff,
   'git.bulkDiscard': GitBulkPaths,
   'git.bulkStage': GitBulkStage,
   'git.bulkUnstage': GitBulkPaths,
-  'git.cancelGenerateCommitMessage': WorktreeSelectorOfGitParams,
-  'git.cancelGeneratePullRequestFields': WorktreeSelectorOfGitParams,
+  'git.cancelGenerateCommitMessage': WorktreeSelectorOfGitCoreParams,
+  'git.cancelGeneratePullRequestFields': WorktreeSelectorOfGitCoreParams,
   'git.checkIgnored': GitCheckIgnored,
   'git.checkout': GitCheckout,
   'git.cherryPick': GitCommitAction,
   'git.commit': GitCommit,
   'git.commitCompare': GitCommitCompare,
   'git.commitDiff': GitCommitDiff,
-  'git.completeMerge': WorktreeSelectorOfGitParams,
-  'git.conflictOperation': WorktreeSelectorOfGitParams,
+  'git.completeMerge': WorktreeSelectorOfGitCoreParams,
+  'git.conflictOperation': WorktreeSelectorOfGitCoreParams,
   'git.continueRebase': GitContinueRebase,
   'git.createBranch': GitCreateBranch,
   'git.diff': GitDiff,
@@ -1685,11 +1693,11 @@ export const RPC_PARAMS_BY_METHOD = {
   'git.generateCommitMessage': GitGenerateCommitMessage,
   'git.generatePullRequestFields': GitGeneratePullRequestFields,
   'git.history': GitHistory,
-  'git.localBranches': WorktreeSelectorOfGitParams,
-  'git.mutationInFlight': WorktreeSelectorOfGitParams,
+  'git.localBranches': WorktreeSelectorOfGitCoreParams,
+  'git.mutationInFlight': WorktreeSelectorOfGitCoreParams,
   'git.pull': GitTargetedRemote,
   'git.push': GitPush,
-  'git.rebaseAutoStash': WorktreeSelectorOfGitParams,
+  'git.rebaseAutoStash': WorktreeSelectorOfGitCoreParams,
   'git.rebaseFromBase': GitRebaseFromBase,
   'git.refs': GitRefs,
   'git.remoteCommitUrl': GitRemoteCommitUrl,

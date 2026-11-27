@@ -16362,34 +16362,11 @@
             "0bb39f8fe6": "发送",
             "69334b4b10": "语音输入",
             "29f2d13839": "输入命令…",
-            "817090af40": "Ctrl+C",
-            "53ff909568": "选项卡",
-            "4930eaaae7": "Esc键",
             "fa22927f13": "Paste",
             "985373052e": "切换到手机模式",
-            "58a9ee6003": "工具调用格式，接下来要我补上 diff 吗？",
-            "aa64b519c6": "终端界面，采用 Tokyonight 配色和 Menlo 字体，并还原 Claude 的",
-            "e75112c834": "我已将配对扫码页换成高保真",
-            "3ce3e8c892": "14 项通过，1 项跳过（1.8 秒）",
-            "4b3666f9a9": "src/cache/worktree-cache.test.ts",
-            "1d448b69f7": "经过",
-            "d39445686a": "src/transport/host-store.test.ts",
-            "a6e7cdc688": "pnpm 测试 -- 搜索手机设备",
-            "21b67dfc92": "Bash",
-            "d6d1041a1c": "⎿ 已将配对扫码页替换为终端会话",
-            "336c0e070e": "手机/orca-mobile-sidebar-mock-v3.html",
-            "6d4ebd5833": "编辑",
-            "fc83e0d5ef": "⎿ 读取了 2103 行",
-            "80cc356591": "读取",
-            "2c10d43745": "claude",
-            "e0f98be657": "Orca/壮举-手机页面",
-            "2defc05141": "开发@mac",
-            "da121ba48d": "计划.md",
-            "e4befee569": "Shell",
             "606aa93192": "文件",
             "94febb0976": "源代码管理",
             "8d6516312d": "2 个终端 · Claude 活跃",
-            "8432787c4e": "壮举/手机页面",
             "8fd998acd3": "返回"
           },
           "WorktreeListSlide": {
@@ -20716,7 +20693,6 @@
         "expand": "展开"
       },
       "question": {
-        "step": "步骤 {{value0}}",
         "otherPlaceholder": "输入你的回答",
         "cancel": "取消",
         "send": "提交",
@@ -20728,12 +20704,11 @@
         "recommended": "推荐",
         "stepOf": "第 {{value0}} 个，共 {{value1}} 个",
         "answered": "已回答",
-        "title": "问题",
         "previous": "上一个问题",
         "nextQuestion": "下一个问题",
         "back": "返回",
         "skipAndSubmit": "跳过并提交",
-        "stepLabel": "{{value0}}，第 {{value1}} 个，共 {{value2}} 个：{{value3}}"
+        "questionStepLabel": "{{value0}}，第 {{value1}} 个，共 {{value2}} 个"
       },
       "approval": {
         "needsNewerOrca": "此请求需要更新版本的 Orca",
@@ -21011,7 +20986,7 @@
         "unreported": "此会话无法提供上下文用量"
       },
       "agentMessage": {
-        "unnamedSender": "一个代理",
+        "unnamedSender": "一个智能体",
         "senderReplaced": "{{name}} 已不在其终端中运行；现在有另一个智能体在该终端中运行。如有需要，请从侧边栏打开该终端。",
         "senderAmbiguous": "Orca 无法确定 {{name}} 在哪个终端中运行。请从侧边栏打开终端。",
         "senderNotRunning": "{{name}} 已停止运行。请从侧边栏启动新智能体以继续其工作。",
@@ -21035,7 +21010,14 @@
           "handedOff": "已移交",
           "task": "任务"
         },
-        "goToAgent": "转到智能体"
+        "goToAgent": "转到智能体",
+        "unnamedRecipient": "一个智能体",
+        "event": {
+          "followedUp": "已发送后续消息",
+          "update": "更新",
+          "message": "消息",
+          "handedOff": "已移交"
+        }
       },
       "goal": {
         "placeholder": "描述您的目标，定义可衡量的结果以获得最佳结果",
