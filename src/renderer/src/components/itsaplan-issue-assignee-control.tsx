@@ -30,7 +30,8 @@ export function ItsaplanIssueAssigneeControl({
     >
       <SelectTrigger
         size="sm"
-        className="w-full text-xs"
+        density="compact"
+        className="w-full"
         aria-label={t('auto.components.TaskPage.d2a876ca53', 'Assignee')}
       >
         <SelectValue />

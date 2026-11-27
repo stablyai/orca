@@ -261,6 +261,7 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
     hasLinearProjectContext: Boolean(selectedLinearProject),
     hasLinearViewContext: Boolean(selectedLinearCustomView)
   })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every added field is assigned below before the model is returned.
   const nextModel = model as typeof model & {
     openComposerForLinearItem: typeof openComposerForLinearItem
     handleUseLinearItem: typeof handleUseLinearItem

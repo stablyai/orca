@@ -22501,7 +22501,9 @@
       "storage": "The API key is stored locally and encrypted when local storage supports it.",
       "cancel": "Cancel",
       "verifying": "Verifying…",
-      "connect": "Connect"
+      "connect": "Connect",
+      "appUrlPlaceholder": "https://plan.example.com",
+      "apiUrlPlaceholder": "https://api.plan.example.com"
     },
     "RepositoryItsaplanProjectSection": {
       "title": "Default It's a Plan project",

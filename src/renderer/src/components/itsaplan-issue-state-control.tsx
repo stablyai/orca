@@ -59,7 +59,8 @@ export function ItsaplanIssueStateControl({
     >
       <SelectTrigger
         size="sm"
-        className="w-full text-xs"
+        density="compact"
+        className="w-full"
         aria-label={t('auto.components.TaskPage.154b0fa623', 'Status')}
       >
         <SelectValue />

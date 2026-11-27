@@ -93,7 +93,7 @@ function ItsaplanIssueWorkspaceIssue({
             variant="ghost"
             size="sm"
             onClick={onClose}
-            className="-ml-2 shrink-0 gap-1.5"
+            className="-ml-2 shrink-0"
             aria-label={backLabel}
           >
             <ChevronLeft className="size-4" />
@@ -125,7 +125,7 @@ function ItsaplanIssueWorkspaceIssue({
             type="button"
             size="sm"
             onClick={() => onUse(displayed)}
-            className="gap-1.5 whitespace-nowrap"
+            className="whitespace-nowrap"
           >
             {t('auto.components.LinearIssueWorkspace.e1e0a9bca9', 'Start workspace')}
             <ArrowRight className="size-3.5" />

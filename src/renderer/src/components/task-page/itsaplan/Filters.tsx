@@ -1,5 +1,5 @@
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
-import { ChevronDown, LoaderCircle, Plus, RefreshCw, Search, X } from 'lucide-react'
+import { ChevronDown, LoaderCircle, Plus, RefreshCw, X } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -37,9 +37,6 @@ function parseAssigneeFilterValue(value: string): ItsaplanAssigneeFilter {
 function toggle<T>(values: readonly T[], value: T): T[] {
   return values.includes(value) ? values.filter((entry) => entry !== value) : [...values, value]
 }
-
-const triggerClassName =
-  'h-8 gap-1 rounded-md border-border/50 bg-background px-2.5 text-xs font-normal shadow-none'
 
 export function TaskPageItsaplanFilters({
   model
@@ -101,7 +98,7 @@ export function TaskPageItsaplanFilters({
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className={triggerClassName}>
+            <Button variant="outline" size="sm">
               <span className="max-w-[180px] truncate">{stateLabel}</span>
               <ChevronDown className="size-3 text-muted-foreground" />
             </Button>
@@ -126,12 +123,12 @@ export function TaskPageItsaplanFilters({
         </DropdownMenu>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className={triggerClassName}>
+            <Button variant="outline" size="sm">
               <span className="max-w-[160px] truncate">{assigneeLabel}</span>
               <ChevronDown className="size-3 text-muted-foreground" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto scrollbar-sleek">
+          <DropdownMenuContent align="start">
             <DropdownMenuRadioGroup
               value={assigneeFilterValue(itsaplanAssignee)}
               onValueChange={(value) => setItsaplanAssignee(parseAssigneeFilterValue(value))}
@@ -159,14 +156,14 @@ export function TaskPageItsaplanFilters({
             <Button
               variant="outline"
               size="sm"
-              className={triggerClassName}
+
               disabled={labels.length === 0}
             >
               <span className="max-w-[140px] truncate">{labelsLabel}</span>
               <ChevronDown className="size-3 text-muted-foreground" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto scrollbar-sleek">
+          <DropdownMenuContent align="start">
             {labels.map((label) => (
               <DropdownMenuCheckboxItem
                 key={label.id}
@@ -180,7 +177,6 @@ export function TaskPageItsaplanFilters({
           </DropdownMenuContent>
         </DropdownMenu>
         <div className="relative min-w-0 flex-1 basis-64">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={itsaplanSearchInput}
             onChange={(event) => setItsaplanSearchInput(event.target.value)}
@@ -198,7 +194,9 @@ export function TaskPageItsaplanFilters({
               applySearch(itsaplanSearchInput.trim())
             }}
             placeholder={t('taskProviders.itsaplan.searchPlaceholder', 'Search issues...')}
-            className="h-8 rounded-md border-border/50 bg-background pl-8 pr-8 text-xs"
+            density="compact"
+            adornment="trailing"
+            className="h-8"
           />
           {itsaplanSearchInput ? (
             <button
@@ -219,7 +217,7 @@ export function TaskPageItsaplanFilters({
               onClick={() => setNewItsaplanIssueOpen(true)}
               disabled={!itsaplanProjectRef}
               aria-label={t('taskProviders.itsaplan.newIssue', 'New issue')}
-              className="size-8 border-border/50 bg-transparent hover:bg-muted/50"
+              className="size-8"
             >
               <Plus className="size-4" />
             </Button>
@@ -236,7 +234,7 @@ export function TaskPageItsaplanFilters({
               onClick={refreshItsaplan}
               disabled={itsaplanLoading}
               aria-label={t('taskProviders.itsaplan.refresh', 'Refresh')}
-              className="size-8 border-border/50 bg-transparent hover:bg-muted/50"
+              className="size-8"
             >
               {itsaplanLoading ? (
                 <LoaderCircle className="size-4 animate-spin" />

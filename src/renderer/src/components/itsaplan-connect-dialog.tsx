@@ -47,7 +47,11 @@ function failureMessage(failure: ItsaplanFailure, t: Translate): string {
         'components.itsaplanConnectDialog.errors.unreachable',
         "Could not reach It's a Plan. Check the URL and your network."
       )
-    default:
+    case 'forbidden':
+    case 'notConnected':
+    case 'notFound':
+    case 'rateLimited':
+    case 'requestFailed':
       return failure.message
   }
 }
@@ -181,8 +185,8 @@ export function ItsaplanConnectDialog({
         onPointerDownOutside={guardOutsideDismiss}
         onInteractOutside={guardOutsideDismiss}
       >
-        <DialogHeader className="gap-3">
-          <DialogTitle className="leading-tight">
+        <DialogHeader>
+          <DialogTitle>
             {t('components.itsaplanConnectDialog.title', "Connect It's a Plan")}
           </DialogTitle>
           <DialogDescription>
@@ -202,13 +206,16 @@ export function ItsaplanConnectDialog({
         >
           <div className="flex flex-col gap-3">
             <div className="space-y-2">
-              <Label htmlFor={appUrlId} className="text-xs">
+              <Label htmlFor={appUrlId} variant="settings">
                 {t('components.itsaplanConnectDialog.appUrl', 'App URL')}
               </Label>
               <Input
                 id={appUrlId}
                 autoFocus
-                placeholder="https://plan.example.com"
+                placeholder={t(
+                  'components.itsaplanConnectDialog.appUrlPlaceholder',
+                  'https://plan.example.com'
+                )}
                 value={appUrl}
                 onChange={(event) => {
                   setAppUrl(event.target.value)
@@ -222,7 +229,7 @@ export function ItsaplanConnectDialog({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor={apiKeyId} className="text-xs">
+              <Label htmlFor={apiKeyId} variant="settings">
                 {t('components.itsaplanConnectDialog.apiKey', 'API key')}
               </Label>
               <Input
@@ -240,7 +247,7 @@ export function ItsaplanConnectDialog({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor={apiUrlId} className="text-xs">
+              <Label htmlFor={apiUrlId} variant="settings">
                 {t('components.itsaplanConnectDialog.apiUrl', 'API URL')}
               </Label>
               <Input
@@ -248,7 +255,10 @@ export function ItsaplanConnectDialog({
                 placeholder={
                   state === 'detecting'
                     ? t('components.itsaplanConnectDialog.detecting', 'Detecting…')
-                    : 'https://api.plan.example.com'
+                    : t(
+                        'components.itsaplanConnectDialog.apiUrlPlaceholder',
+                        'https://api.plan.example.com'
+                      )
                 }
                 value={apiUrl}
                 onChange={(event) => {

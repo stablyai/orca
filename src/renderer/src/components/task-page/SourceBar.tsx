@@ -227,7 +227,8 @@ export function TaskPageSourceBar({
       {taskSource === 'itsaplan' && itsaplanConnected && itsaplanProjects?.length ? (
         <Select value={itsaplanProjectRef ?? undefined} onValueChange={selectItsaplanProject}>
           <SelectTrigger
-            className="h-8 w-[220px] rounded-md border-border/50 bg-muted/50 text-xs font-medium shadow-sm"
+            density="compact"
+            className="h-8 w-[220px]"
             aria-label={t('taskProviders.itsaplan.project', 'Project')}
           >
             <SelectValue />

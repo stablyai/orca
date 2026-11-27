@@ -98,7 +98,7 @@ function ItsaplanIssueForm({
         })
   return (
     <div
-      className="flex flex-col"
+      className="-m-6 flex flex-col"
       onKeyDown={(event) => {
         if (isScreenSubmitShortcut(event)) {
           event.preventDefault()
@@ -107,7 +107,7 @@ function ItsaplanIssueForm({
       }}
     >
       <div className="flex items-center gap-2 border-b border-border/60 bg-muted/10 px-5 py-3">
-        <DialogTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <DialogTitle size="compact">
           {t('auto.components.TaskPage.c11105dac5', 'New Issue')}
         </DialogTitle>
         <span className="text-xs text-muted-foreground/40">/</span>
@@ -154,7 +154,8 @@ function ItsaplanIssueForm({
           >
             <SelectTrigger
               size="sm"
-              className="w-[160px] text-xs"
+              density="compact"
+              className="w-[160px]"
               aria-label={t('auto.components.TaskPage.154b0fa623', 'Status')}
             >
               <SelectValue placeholder={t('auto.components.TaskPage.154b0fa623', 'Status')} />
@@ -174,7 +175,8 @@ function ItsaplanIssueForm({
           >
             <SelectTrigger
               size="sm"
-              className="w-[180px] text-xs"
+              density="compact"
+              className="w-[180px]"
               aria-label={t('auto.components.TaskPage.d2a876ca53', 'Assignee')}
             >
               <SelectValue />
@@ -195,13 +197,13 @@ function ItsaplanIssueForm({
               <Button
                 variant="outline"
                 size="sm"
-                className="text-xs font-normal"
+
                 disabled={submitting || labels.length === 0}
               >
                 {labelsLabel}
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto scrollbar-sleek">
+            <DropdownMenuContent align="start">
               {labels.map((label) => (
                 <DropdownMenuCheckboxItem
                   key={label.id}
@@ -267,10 +269,7 @@ export function TaskPageItsaplanIssueDialog({
   }
   return (
     <Dialog open={newItsaplanIssueOpen} onOpenChange={setNewItsaplanIssueOpen}>
-      <DialogContent
-        showCloseButton={false}
-        className="flex flex-col gap-0 overflow-hidden rounded-xl border-border bg-background p-0 shadow-2xl sm:max-w-2xl"
-      >
+      <DialogContent showCloseButton={false} className="flex flex-col overflow-hidden sm:max-w-2xl">
         {newItsaplanIssueOpen ? (
           <ItsaplanIssueForm
             key={itsaplanProjectRef}
