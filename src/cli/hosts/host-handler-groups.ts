@@ -30,6 +30,11 @@ export const HOST_HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./managed-server.js')).MANAGED_SERVER_HANDLERS
   },
   {
+    name: 'settings-sync',
+    keys: ['settings push', 'settings pull'],
+    load: async () => (await import('./settings-sync.js')).SETTINGS_SYNC_HANDLERS
+  },
+  {
     name: 'vm',
     keys: ['vm recipe doctor'],
     load: async () => (await import('./vm.js')).VM_HANDLERS

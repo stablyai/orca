@@ -794,6 +794,7 @@ import {
   PluginUpdateParams,
   PluginsPanelActionParams
 } from './plugins/plugins-params'
+import { PortableSettingsImport } from './portable-settings-params'
 import {
   PreflightAgentDetection,
   PreflightAgentRefresh,
@@ -2163,9 +2164,11 @@ export const RPC_PARAMS_BY_METHOD = {
   'session.tabs.unsubscribe': SessionTabsUnsubscribe,
   'session.tabs.unsubscribeAll': SessionTabsUnsubscribeAllParams,
   'session.tabs.updatePaneLayout': UpdatePaneLayout,
+  'settings.exportPortable': null,
   'settings.get': null,
   'settings.getAgentLaunch': null,
   'settings.getTerminalQuickCommands': null,
+  'settings.importPortable': PortableSettingsImport,
   'settings.mutateAgentLaunch': AgentLaunchSettingsMutation,
   'settings.mutateNativeChatSessionOptions': NativeChatSessionOptionsMutation,
   'settings.update': SettingsUpdate,
