@@ -52,16 +52,27 @@ beforeEach(() => {
   )
 })
 afterEach(() => {
-  act(() => {
-    toast.dismiss()
-    vi.runAllTimers()
-  })
+  // Why settle, not runAllTimers: sonner's removal needs React effects between its frame and timer.
+  act(() => toast.dismiss())
+  settle()
   cleanup()
   vi.unstubAllGlobals()
   vi.useRealTimers()
 })
 
 describe('local base ref refresh toast', () => {
+  // First: module state is shared across tests, and this race needs a target with no history.
+  it('keeps the latest result when the wall clock jumps past pending frames', () => {
+    act(() => {
+      show(REFRESH)
+      show(SHALLOW)
+      vi.setSystemTime(Date.now() + 2000)
+      show(REFRESH)
+    })
+    settle()
+    expect(shownTitles()).toEqual([REFRESH_TITLE])
+  })
+
   it.each([
     [[REFRESH, SHALLOW, REFRESH], REFRESH_TITLE],
     [[SHALLOW, REFRESH, SHALLOW], SHALLOW_TITLE],
@@ -102,15 +113,34 @@ describe('local base ref refresh toast', () => {
     expect(shownTitles()).toEqual([SHALLOW_TITLE])
   })
 
-  it('reuses ids once closed toasts are gone, so toast history stays bounded', () => {
+  it('shows the latest result that arrives while a closed toast is leaving, despite late timers', () => {
+    act(() => show(SHALLOW))
+    act(() => vi.advanceTimersByTime(0))
+    act(() => fireEvent.click(screen.getAllByRole('button', { name: /^Close/ })[0]))
+    // Late timers and frames: the clock jumps while sonner has not removed the closed toast yet.
+    act(() => {
+      vi.setSystemTime(Date.now() + 10_000)
+      show(SHALLOW)
+      show(REFRESH)
+    })
+    settle()
+    expect(shownTitles()).toEqual([REFRESH_TITLE])
+  })
+
+  it('adds history only per shown notice, never per result', () => {
     const before = toast.getHistory().length
     for (let i = 0; i < 50; i++) {
       act(() => show(i % 2 ? SHALLOW : REFRESH))
-      act(() => vi.advanceTimersByTime(0))
+    }
+    settle()
+    expect(toast.getHistory().length - before).toBe(1)
+    for (let i = 0; i < 20; i++) {
       act(() => fireEvent.click(screen.getAllByRole('button', { name: /^Close/ })[0]))
+      act(() => show(i % 2 ? REFRESH : SHALLOW))
       settle()
     }
-    expect(toast.getHistory().length - before).toBeLessThanOrEqual(4)
+    expect(toast.getHistory().length - before).toBe(21)
+    expect(shownTitles()).toEqual([REFRESH_TITLE])
   })
 
   it('shows a result that arrives while the closed card is still leaving', () => {
