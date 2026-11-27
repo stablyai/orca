@@ -6,7 +6,6 @@ import { TerminalLegacyWorkspaceSurface } from './TerminalLegacyWorkspaceSurface
 import { TerminalWorkspaceDialogs } from './TerminalWorkspaceDialogs'
 import { WslHostStoppedWorkspaceNotice } from '../../wsl-host-stopped/WslHostStoppedWorkspaceNotice'
 import type { TerminalController } from './use-terminal-controller'
-import { RemoteServerOutageCards } from '../../terminal-pane/pty-transport/recovery/server-outage/RemoteServerOutageCards'
 
 export function TerminalSurface({
   controller
@@ -31,7 +30,6 @@ export function TerminalSurface({
       <TerminalTitlebarTabs controller={controller} />
       <TerminalSplitWorkspaceSurfaces controller={controller} />
       <TerminalLegacyWorkspaceSurface controller={controller} />
-      <RemoteServerOutageCards />
       <WslHostStoppedWorkspaceNotice worktreeId={renderedActiveWorktreeId} />
       <TerminalWorkspaceDialogs controller={controller} />
     </div>
