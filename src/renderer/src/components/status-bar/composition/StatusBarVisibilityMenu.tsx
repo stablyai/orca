@@ -63,18 +63,6 @@ export function StatusBarVisibilityMenu({
             {t('auto.components.status.bar.StatusBar.c0909c686e', 'Codex Usage')}
           </DropdownMenuCheckboxItem>
         )}
-        {isStatusBarItemAvailable('antigravity', detectedAgentIds) && (
-          <DropdownMenuCheckboxItem
-            checked={statusBarItems.includes('antigravity')}
-            onCheckedChange={() => {
-              recordFeatureInteraction('usage-tracking')
-              toggleStatusBarItem('antigravity')
-            }}
-          >
-            <AgentIcon agent="antigravity" size={14} />
-            {t('auto.components.status.bar.StatusBar.antigravityUsage', 'Antigravity Usage')}
-          </DropdownMenuCheckboxItem>
-        )}
         <DropdownMenuCheckboxItem
           checked={statusBarItems.includes('opencode-go')}
           onCheckedChange={() => {

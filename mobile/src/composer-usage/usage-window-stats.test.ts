@@ -80,8 +80,20 @@ describe('buildUsageChartModel', () => {
   it('mirrors values and the pace line when counting what remains', () => {
     const model = buildUsageChartModel(weekly(20), samples, NOW, 'remaining')
     expect(model?.points.map((point) => point.value)).toEqual([98, 80])
-    expect(model?.pace).toEqual({ from: 100, to: 0 })
-    expect(model?.startsAt).toBe(NOW - 2 * DAY)
-    expect(model?.endsAt).toBe(NOW + 5 * DAY)
+    // Two days into a week: the even burn has spent 2/7 by now.
+    expect(model?.pace?.from).toBeCloseTo(100 - 100 / 7 / 24, 6)
+    expect(model?.pace?.to).toBeCloseTo(100 - 200 / 7, 6)
+  })
+
+  it('zooms to the recorded history, never less than six hours, ending now', () => {
+    const recent = [
+      { at: NOW - 2 * HOUR, usedPercent: 30 },
+      { at: NOW - HOUR, usedPercent: 35 }
+    ]
+    const zoomed = buildUsageChartModel(weekly(35), recent, NOW, 'used')
+    expect(zoomed?.startsAt).toBe(NOW - 6 * HOUR)
+    expect(zoomed?.endsAt).toBe(NOW)
+    const long = buildUsageChartModel(weekly(20), samples, NOW, 'used')
+    expect(long?.startsAt).toBe(NOW - 2 * DAY + HOUR)
   })
 })

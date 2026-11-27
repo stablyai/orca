@@ -3,132 +3,185 @@ import { writePluginFileAtomically } from '../../plugins/installation/plugin-ato
 import type { ProviderRateLimits } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 import {
   listUsageWindowSlots,
-  parseUsageHistory,
   pruneEndedUsageHistory,
   recordUsageWindowSample,
   usageHistoryKey,
-  type UsageHistoryByWindow,
-  type UsageWindowHistory
+  type UsageHistoryByWindow
 } from '../../../shared/agent-usage/rate-limits/usage-window-history'
+import {
+  parseUsageHistoryFile,
+  serializeUsageHistoryFile,
+  USAGE_HISTORY_FILE_MAX_BYTES,
+  usageReadingAccountKey,
+  type AccountUsageSeries,
+  type PersistedUsageHistory
+} from './usage-history-file'
 
 const SAVE_DELAY_MS = 5_000
+// Every window of every account a host has read in one window's span stays far below this.
+export const USAGE_HISTORY_MAX_SERIES = 128
+const MAX_PENDING_READINGS = 32
 
-/** Claude/Codex readings name the account; older hosts omit it, and a missing name must not wipe history. */
-function readingOwner(limits: ProviderRateLimits): string | null {
-  const reading = limits.usageMetadata?.readingAccount
-  if (!reading) {
-    return null
+type UsageState = Record<string, ProviderRateLimits | null>
+
+const seriesKey = (provider: string, account: string, windowId: string): string =>
+  JSON.stringify([provider, account, windowId])
+
+async function readSavedHistory(filePath: string): Promise<PersistedUsageHistory> {
+  try {
+    const text = await readFile(filePath, 'utf8')
+    if (text.length > USAGE_HISTORY_FILE_MAX_BYTES) {
+      console.warn('[rate-limits] Usage history file is too large; starting fresh')
+      return { activeAccounts: {}, series: [] }
+    }
+    return parseUsageHistoryFile(JSON.parse(text))
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      console.warn('[rate-limits] Unreadable usage history; starting fresh', error)
+    }
+    return { activeAccounts: {}, series: [] }
   }
-  return reading.wslDistro
-    ? `${reading.accountId}@${reading.runtime}:${reading.wslDistro}`
-    : `${reading.accountId}@${reading.runtime}`
 }
 
-function ownersDiffer(previous: string | undefined, next: string | null): boolean {
-  return previous !== undefined && next !== null && previous !== next
-}
-
-function stampOwner(series: UsageWindowHistory, owner: string | undefined): UsageWindowHistory {
-  return owner ? { ...series, owner } : series
-}
-
-/** Samples each active provider window's used percent at every usage reading; no fetches of its own. */
+/** Samples each active provider window's used percent at every usage reading; no fetches of its own.
+ *  Series are kept per provider account, and the graph shows the account read last. */
 export class UsageHistoryRecorder {
-  private history: UsageHistoryByWindow = {}
+  private readonly series = new Map<string, AccountUsageSeries>()
+  private readonly activeAccounts = new Map<string, string>()
   private saveTimer: ReturnType<typeof setTimeout> | null = null
   private saving: Promise<void> | null = null
   private dirty = false
   private readonly lastReadingAt = new Map<string, number>()
-  /** Settles once the saved history has been merged in. */
+  // Readings before the file loads replay onto it, so a restored reading cannot replace saved history.
+  private pending: { state: UsageState; now: number }[] | null = []
+  /** Settles once the saved history has been loaded and any earlier readings replayed onto it. */
   readonly loaded: Promise<void>
-  /** Writes already queued, including follow-ups marked dirty while one was in flight. */
-  private drain: Promise<void> = Promise.resolve()
 
   constructor(private readonly filePath: string | null) {
-    this.loaded = !filePath
-      ? Promise.resolve()
-      : readFile(filePath, 'utf8')
-          .then((text) => parseUsageHistory(JSON.parse(text)))
-          .catch(() => ({}))
-          .then((saved) => {
-            // Replay startup readings onto the saved series. A spread would drop every saved sample for that key.
-            let history = saved
-            for (const [key, series] of Object.entries(this.history)) {
-              if (series.samples.length === 0) {
-                continue
-              }
-              // A startup reading from another account replaces the saved series instead of appending to it.
-              let base = ownersDiffer(history[key]?.owner, series.owner ?? null)
-                ? undefined
-                : history[key]
-              for (const sample of series.samples) {
-                const recorded = recordUsageWindowSample(
-                  base,
-                  {
-                    usedPercent: sample.usedPercent,
-                    windowMinutes: series.windowMinutes,
-                    resetsAt: series.resetsAt
-                  },
-                  sample.at
-                )
-                base = stampOwner(recorded, series.owner ?? base?.owner)
-              }
-              if (base) {
-                history = { ...history, [key]: base }
-              }
-            }
-            this.history = pruneEndedUsageHistory(history, Date.now())
-          })
+    this.loaded = (filePath ? readSavedHistory(filePath) : Promise.resolve(null)).then(
+      (saved: PersistedUsageHistory | null) => {
+        for (const entry of saved?.series ?? []) {
+          this.series.set(seriesKey(entry.provider, entry.account, entry.windowId), entry)
+        }
+        for (const [provider, account] of Object.entries(saved?.activeAccounts ?? {})) {
+          this.activeAccounts.set(provider, account)
+        }
+        const pending = this.pending ?? []
+        this.pending = null
+        this.prune(Date.now())
+        for (const reading of pending) {
+          this.record(reading.state, reading.now)
+        }
+      }
+    )
   }
 
-  record(state: Record<string, ProviderRateLimits | null>, now: number = Date.now()): void {
+  record(state: UsageState, now: number = Date.now()): void {
+    if (this.pending) {
+      this.pending.push({ state: { ...state }, now })
+      this.pending.splice(0, Math.max(0, this.pending.length - MAX_PENDING_READINGS))
+      return
+    }
     let changed = false
-    for (const [provider, limits] of Object.entries(state)) {
+    for (const [slotKey, limits] of Object.entries(state)) {
       // Only fresh successful readings: an error keeps the last windows, which are not a new reading.
       if (
         !limits ||
         limits.status !== 'ok' ||
-        this.lastReadingAt.get(provider) === limits.updatedAt
+        this.lastReadingAt.get(slotKey) === limits.updatedAt
       ) {
         continue
       }
-      this.lastReadingAt.set(provider, limits.updatedAt)
-      const owner = readingOwner(limits)
+      this.lastReadingAt.set(slotKey, limits.updatedAt)
+      // Keyed by the provider id mobile reads, so the graph finds its window whatever the state slot is called.
+      const provider = limits.provider
+      const account = usageReadingAccountKey(limits)
+      if (!this.activeAccounts.has(provider) && account !== '') {
+        this.adoptUnattributedSeries(provider, account)
+      }
+      if (this.activeAccounts.get(provider) !== account) {
+        this.activeAccounts.set(provider, account)
+        changed = true
+      }
       for (const slot of listUsageWindowSlots(limits)) {
         const { window } = slot
         if (window.windowMinutes <= 0 || (window.resetsAt !== null && window.resetsAt <= now)) {
           continue
         }
-        // Keyed by the provider id mobile reads, so the graph finds its window whatever the state slot is called.
-        const key = usageHistoryKey(limits.provider, slot.id)
-        const previous = this.history[key]
-        const recorded = recordUsageWindowSample(
-          ownersDiffer(previous?.owner, owner) ? undefined : previous,
+        const key = seriesKey(provider, account, slot.id)
+        const history = recordUsageWindowSample(
+          this.series.get(key)?.history,
           window,
           limits.updatedAt || now
         )
-        this.history[key] = stampOwner(recorded, owner ?? previous?.owner)
+        this.series.set(key, { provider, account, windowId: slot.id, history })
         changed = true
       }
     }
     if (changed) {
-      this.history = pruneEndedUsageHistory(this.history, now)
+      this.prune(now)
       this.scheduleSave()
     }
   }
 
+  /** The active account's current windows, keyed `${provider}:${windowId}` as clients read them. */
   snapshot(now: number = Date.now()): UsageHistoryByWindow {
-    return pruneEndedUsageHistory(this.history, now)
+    const shown: UsageHistoryByWindow = {}
+    for (const entry of this.series.values()) {
+      if (entry.account === (this.activeAccounts.get(entry.provider) ?? '')) {
+        shown[usageHistoryKey(entry.provider, entry.windowId)] = entry.history
+      }
+    }
+    return pruneEndedUsageHistory(shown, now)
   }
 
   /** Writes now instead of after the save delay; used when the service stops. */
   flush(): Promise<void> {
-    if (this.saveTimer) {
-      clearTimeout(this.saveTimer)
-      this.saveTimer = null
-      return this.save()
+    if (!this.saveTimer) {
+      return this.saving ?? Promise.resolve()
     }
-    return this.saving ?? Promise.resolve()
+    clearTimeout(this.saveTimer)
+    this.saveTimer = null
+    return this.save()
+  }
+
+  /** A version 1 file kept no accounts: its series belong to whichever login is read first. */
+  private adoptUnattributedSeries(provider: string, account: string): void {
+    for (const [key, entry] of this.series) {
+      if (entry.provider === provider && entry.account === '') {
+        this.series.delete(key)
+        this.series.set(seriesKey(provider, account, entry.windowId), { ...entry, account })
+      }
+    }
+  }
+
+  /** Drops ended windows, then the stalest series past the cap, keeping active accounts first. */
+  private prune(now: number): void {
+    const entries = [...this.series.entries()]
+    const live = pruneEndedUsageHistory(
+      Object.fromEntries(entries.map(([key, entry]) => [key, entry.history])),
+      now
+    )
+    const isActive = (entry: AccountUsageSeries): boolean =>
+      entry.account === (this.activeAccounts.get(entry.provider) ?? '')
+    const kept = entries
+      .filter(([key]) => key in live)
+      .sort(
+        ([, a], [, b]) =>
+          Number(isActive(b)) - Number(isActive(a)) ||
+          (b.history.samples.at(-1)?.at ?? 0) - (a.history.samples.at(-1)?.at ?? 0)
+      )
+      .slice(0, USAGE_HISTORY_MAX_SERIES)
+    this.series.clear()
+    for (const [key, entry] of kept) {
+      this.series.set(key, entry)
+    }
+    const providers = new Set(kept.map(([, entry]) => entry.provider))
+    for (const provider of this.activeAccounts.keys()) {
+      if (!providers.has(provider)) {
+        this.activeAccounts.delete(provider)
+      }
+    }
   }
 
   private scheduleSave(): void {
@@ -142,25 +195,26 @@ export class UsageHistoryRecorder {
     this.saveTimer.unref?.()
   }
 
-  private save(): Promise<void> {
+  private async save(): Promise<void> {
     if (!this.filePath) {
-      return Promise.resolve()
+      return
     }
-    this.dirty = true
-    const filePath = this.filePath
-    this.drain = this.drain.then(async () => {
-      // A flush during startup must not replace the file with only the samples taken so far.
-      await this.loaded
-      while (this.dirty) {
-        this.dirty = false
-        await writePluginFileAtomically(filePath, JSON.stringify(this.history), {
-          mode: 0o600
-        }).catch((error: unknown) =>
-          console.warn('[rate-limits] Failed to save usage history', error)
-        )
-      }
+    if (this.saving) {
+      this.dirty = true
+      return
+    }
+    const contents = serializeUsageHistoryFile({
+      activeAccounts: Object.fromEntries(this.activeAccounts),
+      series: [...this.series.values()]
     })
-    this.saving = this.drain
-    return this.drain
+    this.saving = writePluginFileAtomically(this.filePath, contents, { mode: 0o600 }).catch(
+      (error: unknown) => console.warn('[rate-limits] Failed to save usage history', error)
+    )
+    await this.saving
+    this.saving = null
+    if (this.dirty) {
+      this.dirty = false
+      await this.save()
+    }
   }
 }

@@ -2,7 +2,6 @@ import React from 'react'
 import { LoaderCircle } from 'lucide-react'
 
 import { cn } from '@/lib/class-names'
-import { AutoRenameFailedDialog } from '../identity/AutoRenameFailedDialog'
 import WorktreeContextMenu from '../../workspace-actions/context-menu/WorktreeContextMenu'
 import { useIsSleepingWorktree } from '../../workspace-actions/sleep/use-worktree-sleep-state'
 import { getWorktreeCardFrameGeometry } from './worktree-card-frame-geometry'
@@ -45,8 +44,6 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
     handleDragStart,
     handleDragEnd,
     handleContextMenuSelect,
-    showRenameErrorDialog,
-    setShowRenameErrorDialog,
     contentIndent
   } = card
   const isSleeping = useIsSleepingWorktree(worktree.id)
@@ -146,35 +143,17 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
     </div>
   )
 
-  return (
-    <>
-      {affiliateListMode ? (
-        cardBody
-      ) : (
-        <WorktreeContextMenu
-          worktree={worktree}
-          selectedWorktrees={selectedWorktrees}
-          onContextMenuSelect={handleContextMenuSelect}
-          onAssignWorkspaceStatus={onAssignWorkspaceStatus}
-          onOpenChange={card.detailsHoverControl.setContextMenuOpen}
-        >
-          {cardBody}
-        </WorktreeContextMenu>
-      )}
-
-      {/* Stays mounted while open: a final retry result clears the error but keeps its reason visible. */}
-      {(showRenameErrorDialog ||
-        (typeof worktree.firstAgentMessageRenameError === 'string' &&
-          worktree.firstAgentMessageRenameError.length > 0)) && (
-        <AutoRenameFailedDialog
-          open={showRenameErrorDialog}
-          onOpenChange={setShowRenameErrorDialog}
-          worktreeId={worktree.id}
-          executionHostId={worktree.hostId}
-          worktreeName={worktree.displayName}
-          error={worktree.firstAgentMessageRenameError ?? ''}
-        />
-      )}
-    </>
+  return affiliateListMode ? (
+    cardBody
+  ) : (
+    <WorktreeContextMenu
+      worktree={worktree}
+      selectedWorktrees={selectedWorktrees}
+      onContextMenuSelect={handleContextMenuSelect}
+      onAssignWorkspaceStatus={onAssignWorkspaceStatus}
+      onOpenChange={card.detailsHoverControl.setContextMenuOpen}
+    >
+      {cardBody}
+    </WorktreeContextMenu>
   )
 }

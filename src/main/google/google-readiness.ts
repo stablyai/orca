@@ -1,6 +1,7 @@
 // One bounded, harmless read per Google API, so status can say which services work and what to do
 // about the rest: grant the permission, turn the API on in the project, or ask the company admin.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import type {
   GoogleServiceReadiness,
   GoogleServiceState
@@ -44,21 +45,27 @@ export type GoogleApiError = {
 }
 
 // Google's error body: `details` (ErrorInfo, newer APIs) and `errors` (older ones) both carry a reason.
-const ErrorEntry = z.object({
-  reason: z.string().optional().catch(undefined),
-  metadata: z.object({ activationUrl: z.string().optional() }).optional().catch(undefined)
-})
-const ErrorEntries = z
-  .array(z.unknown())
-  .transform((entries) => entries.flatMap((entry) => ErrorEntry.safeParse(entry).data ?? []))
-const ApiErrorBody = z.object({
-  error: z.object({
-    message: z.string().optional(),
-    status: z.string().optional(),
-    details: ErrorEntries.optional().catch(undefined),
-    errors: ErrorEntries.optional().catch(undefined)
+const ErrorEntry = lazyZodSchema(() =>
+  z.object({
+    reason: z.string().optional().catch(undefined),
+    metadata: z.object({ activationUrl: z.string().optional() }).optional().catch(undefined)
   })
-})
+)
+const ErrorEntries = lazyZodSchema(() =>
+  z
+    .array(z.unknown())
+    .transform((entries) => entries.flatMap((entry) => ErrorEntry.safeParse(entry).data ?? []))
+)
+const ApiErrorBody = lazyZodSchema(() =>
+  z.object({
+    error: z.object({
+      message: z.string().optional(),
+      status: z.string().optional(),
+      details: ErrorEntries.optional().catch(undefined),
+      errors: ErrorEntries.optional().catch(undefined)
+    })
+  })
+)
 const CONSOLE_URL = /^https:\/\/console\.(developers|cloud)\.google\.com\//
 
 export function readGoogleApiError(status: number, body: unknown): GoogleApiError {

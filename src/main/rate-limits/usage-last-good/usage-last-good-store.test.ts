@@ -41,9 +41,6 @@ vi.mock('../providers/cursor/cursor-auth', () => ({
 vi.mock('../providers/zcode/zcode-usage-fetcher', () => ({
   fetchZcodeRateLimits: failing('zcode')
 }))
-vi.mock('../providers/antigravity/antigravity-usage-fetcher', () => ({
-  fetchAntigravityRateLimits: failing('antigravity')
-}))
 vi.mock('../providers/muse/muse-usage-fetcher', () => ({ fetchMuseRateLimits: failing('muse') }))
 vi.mock('../../minimax/minimax-cookie-store', () => ({
   hasMiniMaxSessionCookie: async () => false
@@ -84,7 +81,6 @@ async function persistThenRestart(
     codex: null,
     opencodeGo: null,
     kimi: readings.kimi ?? null,
-    antigravity: null,
     minimax: null,
     grok: null,
     cursor: null,
