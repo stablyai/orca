@@ -125,7 +125,14 @@ const messages = [
     ),
     { minute: 9 }
   ),
-  mail('image', longName, [{ type: 'image-ref', url: image, alt: 'Gauge capture' }], { minute: 12 })
+  mail('image', longName, [{ type: 'image-ref', url: image, alt: 'Gauge capture' }], {
+    minute: 12
+  }),
+  // Yesterday's time is the widest the row's end gets; a long name gives way to it.
+  mail('yesterday', longName, text('Rebased onto main.\n\nCI is running.'), {
+    task: true,
+    minute: -24 * 60
+  })
 ]
 const started = projectStructuredAgentStartItem({
   itemId: 'preview-started',
@@ -264,6 +271,7 @@ export const wide = defineFixture({ width: 720, store, render: rows })
 export const medium = defineFixture({ width: 480, store, render: rows })
 export const narrow = defineFixture({ width: 300, store, render: rows })
 export const panel = defineFixture({ width: 400, store, render: rows })
+
 export const openWide = defineFixture({
   width: 720,
   store,
@@ -281,4 +289,14 @@ export const keyboardFocus = defineFixture({
   store,
   render: rows,
   interact: focusFirst
+})
+// Just past the wrapped layout, with yesterday's row focused so its wide time shows.
+export const between = defineFixture({
+  width: 440,
+  store,
+  render: rows,
+  interact: (frame) =>
+    [...frame.querySelectorAll<HTMLButtonElement>('button[aria-expanded="false"]')]
+      .at(-1)
+      ?.focus(keyboardFocusOptions)
 })

@@ -105,7 +105,7 @@ export function NativeChatAgentMessageRow({
   timestamp: number | null
   /** Said after the sender's state, never drawn: e.g. "not sent yet". */
   spokenState?: string
-  /** Controls shown on hover or keyboard focus, after the chevron. */
+  /** Controls shown on hover or keyboard focus, before the time and chevron. */
   action?: React.ReactNode
   /** Null when there is nothing to open. */
   details: React.ReactNode | null
@@ -141,6 +141,7 @@ export function NativeChatAgentMessageRow({
     // A narrower chat cuts the line; a wider one can show it whole again.
     const observer = new ResizeObserver(measure)
     observer.observe(node)
+    observer.observe(end)
     if (row.parentElement) {
       observer.observe(row.parentElement)
     }
@@ -207,11 +208,11 @@ export function NativeChatAgentMessageRow({
         <span
           className={cn(
             content,
-            // The first line gives way first, down to a few words or to the room a name and an item
-            // need to keep a few letters each. It never shrinks, since any shrink at all cuts its last
-            // letters for an ellipsis; past its cap the name, then its items, cut short. Several items
-            // can need more than the cap, so it clips sideways only, keeping focus rings whole.
-            'flex min-w-0 max-w-[max(100cqw-13rem,14rem)] shrink-0 items-center overflow-x-clip gap-1 font-medium whitespace-nowrap text-chat-foreground',
+            // The first line takes only the room left, so it gives way first, down to a few words or to
+            // the room a name and an item need to keep a few letters each. Past its cap, or once the
+            // row's end leaves too little, the name, then its items, cut short. Several items can need
+            // more than the cap, so it clips sideways only, keeping focus rings whole.
+            'flex min-w-0 max-w-[max(100cqw-13rem,14rem)] shrink items-center overflow-x-clip gap-1 font-medium whitespace-nowrap text-chat-foreground',
             '@max-[360px]/agent-row:max-w-fit @max-[360px]/agent-row:shrink @max-[360px]/agent-row:grow @max-[360px]/agent-row:basis-0'
           )}
         >
@@ -226,7 +227,7 @@ export function NativeChatAgentMessageRow({
             aria-hidden={toggles || undefined}
             className={cn(
               content,
-              'min-w-0 max-w-[48ch] truncate',
+              'min-w-0 max-w-[48ch] grow basis-0 truncate',
               '@max-[360px]/agent-row:order-last @max-[360px]/agent-row:max-w-none @max-[360px]/agent-row:basis-full @max-[360px]/agent-row:pl-5'
             )}
           >
