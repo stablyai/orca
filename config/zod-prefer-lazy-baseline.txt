@@ -61,7 +61,6 @@
 1 src/main/ipc/pets/pet.ts
 2 src/main/ipc/plugins/plugin-frame-entry-ipc.ts
 1 src/main/ipc/plugins/plugin-panel-push-ipc.ts
-3 src/main/ipc/plugins/plugin-settings-ipc.ts
 4 src/main/ipc/skills/skill-install-management-ipc-handlers.ts
 1 src/main/ipc/slack-hand-off.ts
 1 src/main/ipc/wsl/wsl-move-undo-wiring.ts
@@ -92,7 +91,6 @@
 1 src/main/pi/rpc/history/rpc-session-file-tail.ts
 1 src/main/pi/rpc/launch/pi-session-header.ts
 1 src/main/pi/rpc/options/rpc-model-catalog-probe.ts
-3 src/main/pi/rpc/options/rpc-model-options.ts
 1 src/main/plugins/bootstrap/plugin-bundled-bootstrap.ts
 2 src/main/plugins/catalog/plugin-marketplace-store.ts
 1 src/main/plugins/catalog/plugin-update-review-notices.ts
@@ -114,10 +112,8 @@
 1 src/main/runtime/host-instance-identity.ts
 2 src/main/runtime/mobile-cloud-relay/director/relay-http-client.ts
 1 src/main/runtime/mobile-cloud-relay/region-selection/relay-region-preference.ts
-3 src/main/runtime/mobile-cloud-relay/region-selection/relay-region-probe.ts
 1 src/main/runtime/mobile-desktop-relay/hosted-browser-page-route.ts
 1 src/main/runtime/mobile-desktop-relay/server-worktree-fetch.ts
-3 src/main/runtime/orchestration/crew/crew-mutation-scopes.ts
 2 src/main/runtime/orchestration/db/messages/message-sender-dispatch.ts
 1 src/main/runtime/orchestration/federation/paired-server-asks/paired-server-ask-import.ts
 1 src/main/runtime/orchestration/federation/paired-server-asks/paired-server-asks-loop.ts
@@ -185,7 +181,6 @@
 2 src/shared/connector-bot-access-contract.ts
 2 src/shared/connector-bot-github-contract.ts
 2 src/shared/connector-bot-linear-contract.ts
-3 src/shared/connector-message-asker.ts
 1 src/shared/connector-pr-event-contract.ts
 2 src/shared/connector-review-contract.ts
 1 src/shared/connector-webhook-contract.ts
@@ -199,7 +194,6 @@
 1 src/shared/github/work-items/exact-work-item-operation.ts
 1 src/shared/google/google-client-config.ts
 1 src/shared/google/google-setup-card.ts
-3 src/shared/google/google-setup-run.ts
 2 src/shared/mcp-servers/mcp-servers.ts
 2 src/shared/mobile-web-bundle/locale-catalog-contract.ts
 2 src/shared/orcad-migration/orcad-migration-terminal-restore-hints.ts
@@ -234,7 +228,6 @@
 1 src/shared/plugins/manifest/plugin-manifest-engine-range.ts
 4 src/shared/plugins/manifest/plugin-manifest-fields.ts
 14 src/shared/plugins/manifest/plugin-manifest.ts
-3 src/shared/plugins/view/plugin-editor-shot-acts.ts
 3 src/shared/plugins/workers/plugin-host-api-appearance.ts
 1 src/shared/plugins/workers/plugin-host-api-editor-typography.ts
 1 src/shared/plugins/workers/plugin-host-api-major.ts
@@ -279,25 +272,16 @@
 1 src/shared/sidebar-list/feed-facts/paired-server-rows.ts
 2 src/shared/sidebar-list/feed-facts/workspace-creations.ts
 1 src/shared/sidebar-list/feed-facts/workspace-live-content.ts
-2 src/shared/sidebar-list/feed-facts/workspace-review-facts.ts
 1 src/shared/sidebar-list/feed/sidebar-feed-domains.ts
-2 src/shared/sidebar-list/feed/sidebar-temporal-snapshot.ts
-2 src/shared/skills/installation/skill-install-failure.ts
 1 src/shared/skills/sharing/agent-skill-sharing-contract.ts
-2 src/shared/telemetry/schemas/telemetry-codex-history-move-event-schemas.ts
 1 src/shared/telemetry/schemas/telemetry-codex-legacy-history-event-schemas.ts
-2 src/shared/telemetry/schemas/telemetry-plugin-event-schemas.ts
 3 src/shared/telemetry/schemas/telemetry-repository-event-schemas.ts
-3 src/shared/telemetry/schemas/telemetry-ssh-host-server-event-schemas.ts
 1 src/shared/work-items/task-source-context-schema.ts
-2 src/shared/workspace-attachments/workspace-attachment-schema.ts
 1 src/shared/workspace-attachments/workspace-linked-item-schema.ts
 1 src/shared/workspace-layout/terminal-surfaces/closed-terminal-panes.ts
 1 src/shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones.ts
 1 src/shared/workspace-layout/terminal-surfaces/terminal-tab-id-schema.ts
-2 src/shared/workspace-layout/terminal-topology/terminal-layout-snapshot-schema.ts
 1 src/shared/workspace-session/client-hosted-browser-close-intent.ts
 2 src/shared/workspace-session/workspace-session-close-intent-schema.ts
-2 src/shared/workspace-session/workspace-session-tab-type-schema.ts
 1 src/shared/workspace/ports/port-forward-loopback-host.ts
 1 src/shared/wsl-move/wsl-mapped-drive-paths.ts
