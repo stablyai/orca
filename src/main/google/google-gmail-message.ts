@@ -1,4 +1,5 @@
 // The Gmail message shape Orca reads, and what it takes from one: headers, text and attachments.
+import { MIMEType } from 'node:util'
 import { z } from 'zod'
 import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import type { GmailAttachment } from '../../shared/google/google-read-types'
@@ -64,25 +65,53 @@ function decode(data: string | undefined): string {
   return data ? Buffer.from(data, 'base64url').toString('utf-8') : ''
 }
 
-/** The message's text: its plain part, else its HTML as text. */
+/** Keep mixed sections in order; prefer plain text within each alternative. */
 export function bodyText(part: Part | undefined): string {
-  const plain: string[] = []
-  const html: string[] = []
-  const walk = (node: Part): void => {
+  const select = (node: Part): Part[] => {
     if (node.filename) {
-      return
+      return []
     }
-    if (node.mimeType === 'text/plain') {
-      plain.push(decode(node.body?.data))
-    } else if (node.mimeType === 'text/html') {
-      html.push(decode(node.body?.data))
+    if (node.mimeType === 'text/plain' || node.mimeType === 'text/html') {
+      return [node]
     }
-    node.parts?.forEach(walk)
+    if (node.mimeType === 'multipart/related') {
+      // Related siblings are resources of one root, not independent body representations.
+      const contentType = node.headers?.find(
+        (entry) => entry.name.toLowerCase() === 'content-type'
+      )?.value
+      let contentId: string | null = null
+      try {
+        contentId = new MIMEType(contentType ?? 'multipart/related').params.get('start')
+      } catch {
+        // A missing or malformed header retains the implicit first-part root.
+      }
+      const root = contentId
+        ? node.parts?.find((child) =>
+            child.headers?.some(
+              (entry) =>
+                entry.name.toLowerCase() === 'content-id' && entry.value.trim() === contentId
+            )
+          )
+        : node.parts?.[0]
+      return root ? select(root) : []
+    }
+    const children = (node.parts ?? []).map(select).filter((child) => child.length > 0)
+    if (node.mimeType === 'multipart/alternative') {
+      return (
+        children.findLast((child) => child.some((leaf) => leaf.mimeType === 'text/plain')) ??
+        children.at(-1) ??
+        []
+      )
+    }
+    return children.flat()
   }
-  if (part) {
-    walk(part)
-  }
-  return (plain.length > 0 ? plain.join('\n') : html.map(htmlToText).join('\n')).trim()
+  return (part ? select(part) : [])
+    .map((node) => {
+      const text = decode(node.body?.data)
+      return node.mimeType === 'text/html' ? htmlToText(text) : text
+    })
+    .join('\n')
+    .trim()
 }
 
 export function attachmentsOf(message: Message): GmailAttachment[] {
