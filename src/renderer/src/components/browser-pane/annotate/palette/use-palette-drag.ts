@@ -13,6 +13,7 @@ import {
   type AnnotatePalettePosition
 } from './annotate-palette-position-store'
 import {
+  PALETTE_BOTTOM_INSET_PX,
   PALETTE_EDGE_INSET_PX,
   clampPaletteOffset,
   paletteKeyMove,
@@ -34,7 +35,11 @@ type PaletteSizes = Pick<
 function measurePaletteSizes(bounds: HTMLElement, palette: HTMLElement): PaletteSizes {
   return {
     boundsWidth: bounds.clientWidth,
-    boundsHeight: bounds.clientHeight,
+    // Shortened so every vertical limit keeps the larger bottom gap; the hint above it still has room.
+    boundsHeight: Math.max(
+      0,
+      bounds.clientHeight - (PALETTE_BOTTOM_INSET_PX - PALETTE_EDGE_INSET_PX)
+    ),
     paletteWidth: palette.offsetWidth,
     paletteHeight: palette.offsetHeight
   }
