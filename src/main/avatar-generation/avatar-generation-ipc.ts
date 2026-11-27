@@ -2,6 +2,7 @@
 // paired client or runtime RPC reaches this; the picked image saves through the normal upload.
 import { ipcMain } from 'electron'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import {
   AVATAR_IMAGE_AGENTS,
   MAX_AVATAR_DESCRIPTION_CHARS,
@@ -20,12 +21,14 @@ import {
 import { abortWhenOwnerDocumentEnds } from './avatar-run-owner-lifetime'
 import { runAvatarImageAgent } from './avatar-image-agent-run'
 
-const GenerateArgs = z.object({
-  requestId: z.string().min(1).max(128),
-  description: z.string().trim().min(1).max(MAX_AVATAR_DESCRIPTION_CHARS),
-  agent: z.enum(AVATAR_IMAGE_AGENTS)
-})
-const CancelArgs = z.object({ requestId: z.string().min(1).max(128) })
+const GenerateArgs = lazyZodSchema(() =>
+  z.object({
+    requestId: z.string().min(1).max(128),
+    description: z.string().trim().min(1).max(MAX_AVATAR_DESCRIPTION_CHARS),
+    agent: z.enum(AVATAR_IMAGE_AGENTS)
+  })
+)
+const CancelArgs = lazyZodSchema(() => z.object({ requestId: z.string().min(1).max(128) }))
 
 // Sign-in can change while the picker is open, so a probe is reused only briefly.
 const CAPABILITY_TTL_MS = 30_000

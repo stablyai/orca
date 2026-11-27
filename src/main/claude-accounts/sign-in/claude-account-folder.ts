@@ -12,6 +12,7 @@ import { readFile, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { resolveClaudeGlobalConfigFile } from '../../claude/configuration/claude-folder-trust-file'
 import { execSecurityCommand } from '../../macos-keychain/generic-password'
 import { describeClaudeProfile, readClaudeProfileObject } from '../profiles/claude-profile-paths'
@@ -23,16 +24,20 @@ export type ClaudeFolderLogin = {
   organizationName: string | null
 }
 
-const text = z
-  .string()
-  .transform((value) => value.trim() || null)
-  .nullish()
-  .catch(null)
-const oauthAccount = z.object({
-  emailAddress: text,
-  organizationUuid: text,
-  organizationName: text
-})
+const text = lazyZodSchema(() =>
+  z
+    .string()
+    .transform((value) => value.trim() || null)
+    .nullish()
+    .catch(null)
+)
+const oauthAccount = lazyZodSchema(() =>
+  z.object({
+    emailAddress: text,
+    organizationUuid: text,
+    organizationName: text
+  })
+)
 
 export function claudeStateFile(
   configDir: string | undefined,
