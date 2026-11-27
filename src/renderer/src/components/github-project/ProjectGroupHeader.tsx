@@ -30,6 +30,10 @@ export default function ProjectGroupHeader({
   const dateRange = group.iteration
     ? formatDateRange(group.iteration.startDate, group.iteration.duration)
     : null
+  const label =
+    group.key === EMPTY_PROJECT_GROUP_KEY
+      ? t('projectBoard.noField', 'No {{field}}', { field: groupFieldName })
+      : group.label || t('auto.components.github.project.ProjectGroupHeader.244c9e7d06', 'All')
   return (
     <button
       type="button"
@@ -38,24 +42,28 @@ export default function ProjectGroupHeader({
         'flex items-center border-b border-border/50 bg-muted/40 px-3 py-1.5 text-left text-xs',
         'hover:bg-muted/60',
         // Keep the band painted to the pane’s edge when the timeline is narrower.
-        bandWidth == null ? 'w-full' : 'min-w-full'
+        // Why: in the table a long label must not widen its group past the header and other groups.
+        bandWidth == null ? 'w-full contain-inline-size' : 'min-w-full'
       )}
       style={bandWidth == null ? undefined : { width: bandWidth }}
     >
-      <span className={cn('flex items-center gap-2', bandWidth != null && 'sticky left-3')}>
-        {expanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
-        <span className="font-medium">
-          {group.key === EMPTY_PROJECT_GROUP_KEY
-            ? t('projectBoard.noField', 'No {{field}}', { field: groupFieldName })
-            : group.label ||
-              t('auto.components.github.project.ProjectGroupHeader.244c9e7d06', 'All')}
+      <span className={cn('flex min-w-0 items-center gap-2', bandWidth != null && 'sticky left-3')}>
+        {expanded ? (
+          <ChevronDown className="size-3.5 shrink-0" />
+        ) : (
+          <ChevronRight className="size-3.5 shrink-0" />
+        )}
+        <span className="truncate font-medium" title={label}>
+          {label}
         </span>
-        <span className="rounded-full border border-border/50 bg-background px-1.5 text-[10px] text-muted-foreground">
+        <span className="shrink-0 rounded-full border border-border/50 bg-background px-1.5 text-[10px] text-muted-foreground">
           {group.rows.length}
         </span>
-        {dateRange ? <span className="text-[10px] text-muted-foreground">{dateRange}</span> : null}
+        {dateRange ? (
+          <span className="shrink-0 text-[10px] text-muted-foreground">{dateRange}</span>
+        ) : null}
         {isCurrent ? (
-          <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-1.5 text-[10px] text-emerald-700 dark:text-emerald-300">
+          <span className="shrink-0 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-1.5 text-[10px] text-emerald-700 dark:text-emerald-300">
             {t('auto.components.github.project.ProjectGroupHeader.82a22d2079', 'Current')}
           </span>
         ) : null}
