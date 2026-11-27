@@ -6,7 +6,6 @@ import { ORCAD_TERMINAL_CENSUS_METHODS } from './orcad/orcad-terminal-census'
 import { ORCAD_MIGRATION_METHODS } from './orcad/orcad-migration'
 import { SESSION_TERMINAL_SCROLLBACK_METHODS } from './terminal/session-terminal-scrollback'
 import { AI_VAULT_METHODS } from './history/ai-vault'
-import { AUTOMATION_METHODS } from './automations/automations'
 import { REPO_METHODS } from './projects/repo'
 import { WORKTREE_METHODS } from './workspaces/worktree'
 import { WORKTREE_AUTO_NAME_METHODS } from './workspaces/worktree-auto-name-methods'
@@ -30,39 +29,29 @@ import { NOTIFICATION_METHODS } from './notifications/notifications'
 import { PAIRED_SERVER_ASKS_METHODS } from './paired-server-asks/paired-server-asks-methods'
 import { STATS_METHODS } from './host-management/stats'
 import { USAGE_ANALYTICS_METHODS } from './host-management/usage-analytics'
-import { DIAGNOSTICS_METHODS } from './host-management/diagnostics'
 import { TERMINAL_DAEMON_METHODS } from './terminal/terminal-daemon'
 import { ACCOUNT_METHODS } from './accounts/accounts'
 import { ANTIGRAVITY_ACCOUNT_METHODS } from './accounts/antigravity-accounts'
 import { ORCA_ACCOUNT_METHODS } from './orca-account'
 import { USAGE_CREDENTIAL_METHODS } from './accounts/usage-credentials'
 import { PREFLIGHT_METHODS } from './preflight/preflight'
-import { COMPUTER_METHODS } from './computer/computer'
 import { SESSION_TAB_METHODS } from './session-tabs/session-tabs'
 import { NATIVE_CHAT_METHODS } from './native-chat/native-chat'
 import { FILE_METHODS } from './files/files'
 import { GIT_METHODS } from './source-control/git/git'
 import { GITHUB_METHODS } from './source-control/github/github'
-import { GITLAB_METHODS } from './source-control/gitlab/gitlab'
-import { HOSTED_REVIEW_METHODS } from './source-control/reviews/hosted-review'
-import { LINEAR_METHODS } from './integrations/linear/linear'
-import { LINEAR_AGENT_ACCESS_METHODS } from './integrations/linear/linear-agent-access'
-import { JIRA_METHODS } from './integrations/jira/jira'
 import { SSH_METHODS } from './ssh/ssh'
-import { MANAGED_SERVER_METHODS } from './host-management/managed-server'
 import { RECIPE_VM_WAKE_METHODS } from './host-management/recipe-vm-wake'
 import { ENVIRONMENT_DOCTOR_METHODS } from './host-management/environment-doctor'
 import { CLIENT_UI_METHODS } from './client-state/client-ui'
 import { CLIENT_EVENT_METHODS } from './client-events/client-events'
 import { WORKSPACE_PORT_METHODS } from './workspace-ports/workspace-ports'
 import { NETWORK_PORT_FORWARD_METHODS } from './workspace-ports/network-port-forward'
-import { LINK_PREVIEW_METHODS } from './link-preview/link-preview'
 import { PLUGIN_METHODS } from './plugins/plugins'
 import { PLUGIN_VIEW_METHODS } from './plugins/plugin-view'
 import { PLUGIN_DEV_EMIT_METHODS } from './plugins/plugin-dev-emit'
 import { PLUGIN_DEV_REQUEST_METHODS } from './plugins/plugin-dev-request'
 import { PLUGIN_INSTALL_METHODS } from './plugins/plugin-install-methods'
-import { SKILL_METHODS } from './skills/skills'
 import { CLIPBOARD_METHODS } from './clipboard/clipboard'
 import { HOST_CAPABILITY_METHODS } from './host-management/host-capabilities'
 import { MOBILE_WEB_BUNDLE_METHODS } from './mobile-delivery/mobile-web-bundle'
@@ -71,7 +60,6 @@ import { PAIRING_METHODS } from './pairing/pairing'
 import { MOBILE_RELAY_HOSTS_METHODS } from './pairing/mobile-relay-hosts'
 import { MOBILE_PROJECT_SECTIONS_METHODS } from './mobile-delivery/mobile-project-sections'
 import { UPDATER_METHODS } from './updater/updater'
-import { AUTOMATIC_WORK_METHODS } from './automations/automatic-work'
 import { AGENT_SESSION_METHODS } from './terminal/agent-session'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-sessions/structured-agent-session'
 import { STRUCTURED_AGENT_SESSION_ATTACHMENT_METHODS } from './structured-sessions/attachments/structured-agent-session-attachments'
@@ -79,7 +67,6 @@ import { STRUCTURED_AGENT_SESSION_VISUAL_METHODS } from './structured-sessions/a
 import { STRUCTURED_AGENT_SESSION_AGENTS_METHODS } from './structured-sessions/catalog/structured-agent-session-agents'
 import { MANAGED_RUNTIME_INSTALL_METHODS } from './host-management/managed-runtime-install'
 import { AGENT_CLI_UPDATE_METHODS } from './host-management/agent-cli-update'
-import { ARTIFACT_METHODS } from './artifacts/artifacts'
 import { AGENT_HOOK_METHODS } from './agent-hooks/agent-hooks'
 import { AGENT_LAUNCH_METHODS } from './agent-launch/agent-launch'
 import { AGENT_CONVERSATION_METHODS } from './agent-conversations/agent-conversation-methods'
@@ -101,8 +88,6 @@ export const EAGER_CORE_RPC_METHODS = [
   ...SESSION_TERMINAL_SCROLLBACK_METHODS,
   ...AGENT_HOOK_METHODS,
   ...AI_VAULT_METHODS,
-  ...ARTIFACT_METHODS,
-  ...AUTOMATION_METHODS,
   ...REPO_METHODS,
   ...WORKTREE_METHODS,
   ...WORKTREE_AUTO_NAME_METHODS,
@@ -138,14 +123,12 @@ export const EAGER_SERVICE_RPC_METHODS = [
   ...NOTIFICATION_METHODS,
   ...STATS_METHODS,
   ...USAGE_ANALYTICS_METHODS,
-  ...DIAGNOSTICS_METHODS,
   ...TERMINAL_DAEMON_METHODS,
   ...ACCOUNT_METHODS,
   ...ANTIGRAVITY_ACCOUNT_METHODS,
   ...ORCA_ACCOUNT_METHODS,
   ...USAGE_CREDENTIAL_METHODS,
   ...PREFLIGHT_METHODS,
-  ...COMPUTER_METHODS,
   ...SESSION_TAB_METHODS,
   ...WORKSPACE_LAYOUT_METHODS,
   // Switch point: a window-owned build registers no layout command.
@@ -154,23 +137,15 @@ export const EAGER_SERVICE_RPC_METHODS = [
   ...FILE_METHODS,
   ...GIT_METHODS,
   ...GITHUB_METHODS,
-  ...GITLAB_METHODS,
-  ...HOSTED_REVIEW_METHODS,
-  ...LINEAR_METHODS,
-  ...LINEAR_AGENT_ACCESS_METHODS,
-  ...JIRA_METHODS,
   ...SSH_METHODS,
-  ...MANAGED_SERVER_METHODS,
   ...RECIPE_VM_WAKE_METHODS,
   ...ENVIRONMENT_DOCTOR_METHODS,
   ...WORKSPACE_PORT_METHODS,
-  ...LINK_PREVIEW_METHODS,
   ...PLUGIN_METHODS,
   ...PLUGIN_VIEW_METHODS,
   ...PLUGIN_DEV_EMIT_METHODS,
   ...PLUGIN_DEV_REQUEST_METHODS,
   ...PLUGIN_INSTALL_METHODS,
-  ...SKILL_METHODS,
   ...CLIPBOARD_METHODS,
   ...HOST_CAPABILITY_METHODS,
   ...MOBILE_WEB_BUNDLE_METHODS,
@@ -183,8 +158,7 @@ export const EAGER_SERVICE_RPC_METHODS = [
   // Switch point: a window-fed build publishes no sidebar input.
   ...(ORCA_SIDEBAR_INPUTS_IS_MAIN ? SIDEBAR_INPUT_METHODS : []),
   ...SIDEBAR_REPO_ICON_METHODS,
-  ...UPDATER_METHODS,
-  ...AUTOMATIC_WORK_METHODS
+  ...UPDATER_METHODS
 ] as const
 
 export const EAGER_RPC_METHODS = [...EAGER_CORE_RPC_METHODS, ...EAGER_SERVICE_RPC_METHODS] as const
@@ -225,7 +199,55 @@ export const DEFAULT_LAZY_RPC_METHOD_GROUPS: readonly LazyRpcMethodGroup[] = [
     ['emulator.'],
     async () => (await import('./emulator/emulator')).EMULATOR_METHODS
   ),
-  prefixRpcMethodGroup(['speech.'], async () => (await import('./speech/speech')).SPEECH_METHODS)
+  prefixRpcMethodGroup(['speech.'], async () => (await import('./speech/speech')).SPEECH_METHODS),
+  prefixRpcMethodGroup(
+    ['gitlab.'],
+    async () => (await import('./source-control/gitlab/gitlab')).GITLAB_METHODS
+  ),
+  prefixRpcMethodGroup(
+    ['hostedReview.'],
+    async () => (await import('./source-control/reviews/hosted-review')).HOSTED_REVIEW_METHODS
+  ),
+  prefixRpcMethodGroup(['linear.'], async () => {
+    const [{ LINEAR_METHODS }, { LINEAR_AGENT_ACCESS_METHODS }] = await Promise.all([
+      import('./integrations/linear/linear'),
+      import('./integrations/linear/linear-agent-access')
+    ])
+    return [...LINEAR_METHODS, ...LINEAR_AGENT_ACCESS_METHODS]
+  }),
+  prefixRpcMethodGroup(
+    ['jira.'],
+    async () => (await import('./integrations/jira/jira')).JIRA_METHODS,
+    { streamingNames: ['jira.attachmentImage', 'jira.getIssueStream', 'jira.issueCommentsStream'] }
+  ),
+  prefixRpcMethodGroup(
+    ['computer.'],
+    async () => (await import('./computer/computer')).COMPUTER_METHODS
+  ),
+  prefixRpcMethodGroup(['automation.', 'runtime.automaticWork.'], async () => {
+    const [{ AUTOMATION_METHODS }, { AUTOMATIC_WORK_METHODS }] = await Promise.all([
+      import('./automations/automations'),
+      import('./automations/automatic-work')
+    ])
+    return [...AUTOMATION_METHODS, ...AUTOMATIC_WORK_METHODS]
+  }),
+  prefixRpcMethodGroup(
+    ['artifacts.'],
+    async () => (await import('./artifacts/artifacts')).ARTIFACT_METHODS
+  ),
+  prefixRpcMethodGroup(['skills.'], async () => (await import('./skills/skills')).SKILL_METHODS),
+  prefixRpcMethodGroup(
+    ['linkPreview.'],
+    async () => (await import('./link-preview/link-preview')).LINK_PREVIEW_METHODS
+  ),
+  prefixRpcMethodGroup(
+    ['diagnostics.'],
+    async () => (await import('./host-management/diagnostics')).DIAGNOSTICS_METHODS
+  ),
+  prefixRpcMethodGroup(
+    ['managedServer.'],
+    async () => (await import('./host-management/managed-server')).MANAGED_SERVER_METHODS
+  )
 ]
 
 export const DEFAULT_RPC_DISPATCH_CONFIG = {
