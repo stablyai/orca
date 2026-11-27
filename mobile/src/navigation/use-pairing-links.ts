@@ -5,9 +5,18 @@ import { extractPairingCodeFromUrl } from '../pairing/pairing'
 import { consumeInitialLaunchIntent } from './initial-launch-intent'
 import { parseBotLinkTarget } from '../bots/bot-link-target'
 import { publishBotLink } from '../bots/pending-bot-link'
+import { loadHostCatalog } from '../host-catalog/host-store'
+import { getNotificationNavigationTarget } from '../notifications/navigation/notification-routing'
+import { useOpenNotificationRoute } from '../notifications/navigation/use-open-notification-route'
+import {
+  hostSessionLinkRouteData,
+  parseHostSessionLink,
+  type HostSessionLink
+} from './host-session-link'
 
 export function usePairingLinks(): void {
   const router = useRouter()
+  const openNotificationRoute = useOpenNotificationRoute()
   useEffect(() => {
     let disposed = false
     function handleUrl(url: string) {
@@ -25,6 +34,26 @@ export function usePairingLinks(): void {
         // Leave the unmatched orca://bot route for Home; the bot opens from there once a host claims it.
         router.dismissTo('/')
         publishBotLink(botLink)
+        return
+      }
+      const sessionLink = parseHostSessionLink(url)
+      if (sessionLink) {
+        router.dismissTo('/')
+        void openHostSessionLink(sessionLink)
+      }
+    }
+
+    async function openHostSessionLink(link: HostSessionLink) {
+      const hosts = await loadHostCatalog().catch(() => null)
+      if (disposed || !hosts) {
+        return
+      }
+      const target = getNotificationNavigationTarget(hostSessionLinkRouteData(link, hosts), {
+        credentialStatusByHostId: new Map(hosts.map((host) => [host.id, host.credentialStatus]))
+      })
+      // An unknown host stays on Home, as an unmatched notification does.
+      if (target) {
+        openNotificationRoute(target)
       }
     }
 
@@ -43,5 +72,5 @@ export function usePairingLinks(): void {
       disposed = true
       sub.remove()
     }
-  }, [router])
+  }, [openNotificationRoute, router])
 }
