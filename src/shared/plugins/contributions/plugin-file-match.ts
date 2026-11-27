@@ -1,26 +1,31 @@
 import { z } from 'zod'
 import { pluginFieldDoc } from '../manifest/plugin-schema-field-docs'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
 const PLUGIN_FILE_MATCH_LIMIT = 32
 
 /** A file-name suffix with its dot: `.gleam`, or a compound one like `.excalidraw.json`. */
-export const pluginFileExtensionSchema = z
-  .string()
-  .max(64)
-  .regex(/^\.[A-Za-z0-9_+-]+(?:\.[A-Za-z0-9_+-]+)*$/, 'must look like .ext')
+export const pluginFileExtensionSchema = lazyZodSchema(() =>
+  z
+    .string()
+    .max(64)
+    .regex(/^\.[A-Za-z0-9_+-]+(?:\.[A-Za-z0-9_+-]+)*$/, 'must look like .ext')
+)
 
-export const pluginFileNameSchema = z
-  .string()
-  .min(1)
-  .max(128)
-  .refine(
-    (name) =>
-      name !== '.' &&
-      name !== '..' &&
-      !/[<>:"/\\|?*]/.test(name) &&
-      Array.from(name).every((character) => character.charCodeAt(0) >= 32),
-    'must be a portable file name'
-  )
+export const pluginFileNameSchema = lazyZodSchema(() =>
+  z
+    .string()
+    .min(1)
+    .max(128)
+    .refine(
+      (name) =>
+        name !== '.' &&
+        name !== '..' &&
+        !/[<>:"/\\|?*]/.test(name) &&
+        Array.from(name).every((character) => character.charCodeAt(0) >= 32),
+      'must be a portable file name'
+    )
+)
 
 /** The one file matcher syntaxes and custom editors share. `subject` names what opens the files. */
 export function pluginFileMatchFields(

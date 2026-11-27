@@ -5,16 +5,19 @@ import {
   readPluginImageHeader
 } from '../../../../shared/plugins/images/plugin-image-format'
 import { readContainedPluginArtifactBytes } from '../../artifacts/plugin-contained-artifact'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 
 /** One `Image` (or Markdown image) file; larger images belong in the plugin's own HTML panels. */
 export const PLUGIN_PANEL_IMAGE_MAX_BYTES = 8 * 1024 * 1024
 
-export const pluginPanelImageRequestSchema = z
-  .object({
-    sessionToken: z.string().min(1).max(256),
-    path: z.string().max(512).refine(isPluginDeclarativeImagePath)
-  })
-  .strict()
+export const pluginPanelImageRequestSchema = lazyZodSchema(() =>
+  z
+    .object({
+      sessionToken: z.string().min(1).max(256),
+      path: z.string().max(512).refine(isPluginDeclarativeImagePath)
+    })
+    .strict()
+)
 
 export type PluginPanelImage = { contentType: string; bytes: Uint8Array }
 

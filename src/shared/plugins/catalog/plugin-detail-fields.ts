@@ -14,23 +14,24 @@ const SPDX_EXPRESSION_RE = new RegExp(
   `^\\(?${SPDX_ID}(?: (?:AND|OR|WITH) \\(?${SPDX_ID}\\)?)*\\)?$`
 )
 
-const spdxLicenseSchema = z
-  .string()
-  .max(128)
-  .regex(SPDX_EXPRESSION_RE, 'must be an SPDX expression')
+const spdxLicenseSchema = lazyZodSchema(() =>
+  z.string().max(128).regex(SPDX_EXPRESSION_RE, 'must be an SPDX expression')
+)
 
-const httpsUrlSchema = z
-  .string()
-  .max(2048)
-  .regex(/^https:\/\/\S+$/, 'must be an https URL')
-  .refine((value) => URL.canParse(value), 'must be an https URL')
+const httpsUrlSchema = lazyZodSchema(() =>
+  z
+    .string()
+    .max(2048)
+    .regex(/^https:\/\/\S+$/, 'must be an https URL')
+    .refine((value) => URL.canParse(value), 'must be an https URL')
+)
 
 const releaseDateSchema = lazyZodSchema(() =>
   z.union([z.iso.date(), z.iso.datetime({ offset: true })])
 )
 
 // Why plain text: the detail page renders it as text, so markup would show literally.
-const changelogSchema = z.string().min(1).max(PLUGIN_CHANGELOG_MAX_LENGTH)
+const changelogSchema = lazyZodSchema(() => z.string().min(1).max(PLUGIN_CHANGELOG_MAX_LENGTH))
 
 const NEXT = PLUGIN_MANIFEST_V2_SINCE
 

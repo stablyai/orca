@@ -8,13 +8,16 @@ import {
   type PluginCatalogImages,
   type PluginImageKind
 } from './plugin-image-fields'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
 // Why loose: only the image fields matter here; full manifest checks run at install.
-const manifestImagesSchema = z.object({
-  name: z.string().optional(),
-  icon: pluginRelativePathSchema.optional(),
-  ...pluginManifestImageFields
-})
+const manifestImagesSchema = lazyZodSchema(() =>
+  z.object({
+    name: z.string().optional(),
+    icon: pluginRelativePathSchema.optional(),
+    ...pluginManifestImageFields
+  })
+)
 
 type CatalogImage = NonNullable<PluginCatalogImages['cover']>
 

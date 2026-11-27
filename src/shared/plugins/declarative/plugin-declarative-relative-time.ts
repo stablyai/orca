@@ -1,21 +1,24 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
 /** How a `RelativeTime` (or a relative Table cell) reads: `long` "5 minutes ago", `short`
  *  "5m ago", `duration` "5m" (time since `at`, for "running for" columns). */
 export const PLUGIN_RELATIVE_TIME_FORMATS = ['long', 'short', 'duration'] as const
 export type PluginRelativeTimeFormat = (typeof PLUGIN_RELATIVE_TIME_FORMATS)[number]
 
-export const pluginRelativeTimeAt = z
-  .number()
-  .refine(Number.isFinite, 'must be a finite time in milliseconds')
+export const pluginRelativeTimeAt = lazyZodSchema(() =>
+  z.number().refine(Number.isFinite, 'must be a finite time in milliseconds')
+)
 /** A Table cell Orca keeps current: `{ type: 'relative', at }`. */
-export const pluginRelativeTimeCellSchema = z
-  .object({
-    type: z.literal('relative'),
-    at: pluginRelativeTimeAt,
-    format: z.enum(PLUGIN_RELATIVE_TIME_FORMATS).optional()
-  })
-  .strict()
+export const pluginRelativeTimeCellSchema = lazyZodSchema(() =>
+  z
+    .object({
+      type: z.literal('relative'),
+      at: pluginRelativeTimeAt,
+      format: z.enum(PLUGIN_RELATIVE_TIME_FORMATS).optional()
+    })
+    .strict()
+)
 export type PluginRelativeTimeCell = z.infer<typeof pluginRelativeTimeCellSchema>
 
 export type PluginRelativeTimeUnit = 'second' | 'minute' | 'hour' | 'day'

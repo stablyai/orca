@@ -11,45 +11,48 @@ import { retireBundledPlugin } from '../installation/plugin-removal'
 import { inspectPluginInstallTree } from '../installation/plugin-install-staging'
 import { readPluginCurrentPointer } from '../installation/plugin-current-pointer'
 import { hashPluginTree } from '../artifacts/plugin-content-hash'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 
 export const BUNDLED_PLUGIN_INDEX_FILENAME = 'bundled-plugins.json'
 const BUNDLED_PLUGIN_INDEX_MAX_BYTES = 64 * 1024
 
-const bundledPluginIndexSchema = z
-  .object({
-    version: z.literal(1),
-    plugins: z
-      .array(
-        z
-          .object({
-            pluginKey: z
-              .string()
-              .refine(isQualifiedPluginKey, 'invalid qualified plugin identity')
-              .refine(
-                hasOfficialPluginPublisher,
-                'bundled plugins must use the official publisher'
-              ),
-            path: pluginRelativeDirectorySchema,
-            contentHash: z.string().regex(/^[0-9a-f]{64}$/)
+const bundledPluginIndexSchema = lazyZodSchema(() =>
+  z
+    .object({
+      version: z.literal(1),
+      plugins: z
+        .array(
+          z
+            .object({
+              pluginKey: z
+                .string()
+                .refine(isQualifiedPluginKey, 'invalid qualified plugin identity')
+                .refine(
+                  hasOfficialPluginPublisher,
+                  'bundled plugins must use the official publisher'
+                ),
+              path: pluginRelativeDirectorySchema,
+              contentHash: z.string().regex(/^[0-9a-f]{64}$/)
+            })
+            .strict()
+        )
+        .max(32)
+    })
+    .strict()
+    .superRefine((index, ctx) => {
+      const keys = new Set<string>()
+      for (const [entryIndex, plugin] of index.plugins.entries()) {
+        if (keys.has(plugin.pluginKey)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['plugins', entryIndex, 'pluginKey'],
+            message: 'duplicate bundled plugin identity'
           })
-          .strict()
-      )
-      .max(32)
-  })
-  .strict()
-  .superRefine((index, ctx) => {
-    const keys = new Set<string>()
-    for (const [entryIndex, plugin] of index.plugins.entries()) {
-      if (keys.has(plugin.pluginKey)) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['plugins', entryIndex, 'pluginKey'],
-          message: 'duplicate bundled plugin identity'
-        })
+        }
+        keys.add(plugin.pluginKey)
       }
-      keys.add(plugin.pluginKey)
-    }
-  })
+    })
+)
 
 export type PluginBundledBootstrapResult = {
   installed: string[]

@@ -1,10 +1,11 @@
 import { z } from 'zod'
 import type { PluginFileMatch } from './plugin-file-match'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
 /** A file extension without its dot, as catalogs list it. */
-export const pluginFileTypeSchema = z
-  .string()
-  .regex(/^[a-z0-9][a-z0-9+_-]{0,15}$/, 'must be a lowercase extension without the dot')
+export const pluginFileTypeSchema = lazyZodSchema(() =>
+  z.string().regex(/^[a-z0-9][a-z0-9+_-]{0,15}$/, 'must be a lowercase extension without the dot')
+)
 
 const MAX_DISMISSED_FILE_TYPES = 256
 
