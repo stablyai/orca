@@ -38,6 +38,8 @@ export type AcpAdvertisedEfforts = {
   efforts: AgentSessionOptionChoice[]
   defaultEffort?: string
   declaredDefaultEffort?: string | null
+  /** A model with no effort support must stay disabled rather than show an empty picker. */
+  effortsKnown?: false
 }
 
 export type AcpRequestPresentation = {

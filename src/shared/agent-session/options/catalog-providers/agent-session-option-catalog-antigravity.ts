@@ -22,17 +22,21 @@ export function composeAntigravityLaunchModel(modelId: string, effort: unknown):
   return typeof effort === 'string' && match && match[2] !== effort ? match[1] : modelId
 }
 
+/** UI-selectable agy effort levels; Orchestrator models take --effort independently of --model. */
+export const ANTIGRAVITY_EFFORT_CHOICES = [
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+  { value: 'xhigh', label: 'XHigh' }
+] as const
+
 const ANTIGRAVITY_EFFORT: CatalogOption = {
   id: 'effort',
   label: 'Reasoning effort',
   category: 'thought_level',
   kind: {
     type: 'select',
-    choices: [
-      { value: 'low', label: 'Low' },
-      { value: 'medium', label: 'Medium' },
-      { value: 'high', label: 'High' }
-    ],
+    choices: [...ANTIGRAVITY_EFFORT_CHOICES],
     defaultValue: 'high'
   },
   apply: {
