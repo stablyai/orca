@@ -157,15 +157,14 @@ describe('structured agent session create closingPaneKeys', () => {
       }
     )
 
+    const proto: unknown = OrcaRuntimeWithGetStructuredAgentSessionCreateSupport.prototype
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: invokes protected resolveStructuredAgentSessionIntent directly to verify writer-check forwarding.
-    const resolveIntent = (
-      OrcaRuntimeWithGetStructuredAgentSessionCreateSupport.prototype as unknown as {
-        resolveStructuredAgentSessionIntent: (
-          input: StructuredAgentSessionCreateIntentInput,
-          resolveAccountHome: () => AgentSessionAccountHome
-        ) => Promise<unknown>
-      }
-    ).resolveStructuredAgentSessionIntent
+    const { resolveStructuredAgentSessionIntent: resolveIntent } = proto as {
+      resolveStructuredAgentSessionIntent: (
+        input: StructuredAgentSessionCreateIntentInput,
+        resolveAccountHome: () => AgentSessionAccountHome
+      ) => Promise<unknown>
+    }
 
     const params = createResumeParams(['tab-1:leaf-1'])
     await expect(

@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+import { createReadStream } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import {
   agentSessionRefusalError,
@@ -147,10 +149,13 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(
         source: { providerSessionId: input.providerSessionId, workspaceCwd: input.workspaceCwd }
       })
     ])
-    // A copy misses whatever a closing pane appends after it, so a live writer must refuse the create.
-    if (await isSnapshotOfSource(adoption.transcriptPath, prepared.transcriptPath)) {
-      await input.writerGate?.(input.providerSessionId)
-    }
+    const { writerGate } = input
+    // A copy misses whatever a closing pane appends after it, so a live writer or post-copy write must refuse the create.
+    await assertAdoptedSnapshotCurrent({
+      sourcePath: adoption.transcriptPath,
+      preparedPath: prepared.transcriptPath,
+      writerGate: writerGate ? () => writerGate(input.providerSessionId) : undefined
+    })
     return { ...prepared, conversationName, folder }
   } catch (error) {
     if (isAgentSessionRefusalError(error)) {
@@ -160,6 +165,25 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(
       'agent_session_identity_required',
       { reason: 'transcriptUnreadable' },
       error instanceof Error ? error.message : String(error)
+    )
+  }
+}
+
+/** Refuse a copied rollout if a writer is still live or appended to the source before exiting. */
+export async function assertAdoptedSnapshotCurrent(input: {
+  sourcePath: string
+  preparedPath: string
+  writerGate?: () => Promise<void>
+}): Promise<void> {
+  if (!(await isSnapshotOfSource(input.sourcePath, input.preparedPath))) {
+    return
+  }
+  await input.writerGate?.()
+  if (!(await transcriptFilesHaveSameContents(input.sourcePath, input.preparedPath))) {
+    throw agentSessionRefusalError(
+      'agent_session_identity_required',
+      { reason: 'transcriptUnreadable' },
+      'The conversation changed after its transcript copy was prepared.'
     )
   }
 }
@@ -177,6 +201,31 @@ export async function isSnapshotOfSource(
     stat(preparedPath, { bigint: true })
   ])
   return source.dev !== prepared.dev || source.ino !== prepared.ino
+}
+
+async function transcriptFilesHaveSameContents(
+  sourcePath: string,
+  preparedPath: string
+): Promise<boolean> {
+  const [source, prepared] = await Promise.all([stat(sourcePath), stat(preparedPath)])
+  if (source.size !== prepared.size) {
+    return false
+  }
+  const [sourceDigest, preparedDigest] = await Promise.all([
+    sha256File(sourcePath),
+    sha256File(preparedPath)
+  ])
+  return sourceDigest === preparedDigest
+}
+
+async function sha256File(filePath: string): Promise<string> {
+  const hash = createHash('sha256')
+  for await (const chunk of createReadStream(filePath)) {
+    if (typeof chunk === 'string' || chunk instanceof Uint8Array) {
+      hash.update(chunk)
+    }
+  }
+  return hash.digest('hex')
 }
 
 const ADOPTED_CONVERSATION_NAME_TIMEOUT_MS = 2_000
