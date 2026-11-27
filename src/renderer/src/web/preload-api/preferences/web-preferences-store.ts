@@ -14,7 +14,7 @@ import {
   mergeSettings,
   stripRetiredWebChatSettings,
   migrateStoredWebSettings,
-  keepExistingWebProfileDefaults,
+  seedWebProfileCohorts,
   needsChatUiChoiceCarry,
   retainOriginalWebChatSetting,
   runtimeChatPermissionSetting
@@ -51,9 +51,7 @@ export function getStoredSettings(): GlobalSettings {
   const hasStoredSettings = isStoredSettingsObject(rawStoredSettings)
   const stored = readJson<Partial<GlobalSettings>>(SETTINGS_STORAGE_KEY, {})
   const migratedStored = migrateStoredWebSettings(stored)
-  if (hasStoredSettings) {
-    keepExistingWebProfileDefaults(migratedStored)
-  }
+  seedWebProfileCohorts(migratedStored, hasStoredSettings)
   delete migratedStored.nativeChatAutoContinueAfterUsageLimit
   if (
     hasStoredSettings &&

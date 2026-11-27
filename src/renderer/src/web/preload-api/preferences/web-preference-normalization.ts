@@ -50,13 +50,13 @@ export function migrateStoredWebSettings(
   }
 }
 
-/** Existing browser profiles keep the app rail off and the composer's details row on unless they chose. */
-export function keepExistingWebProfileDefaults(settings: Partial<GlobalSettings>): void {
-  if (typeof settings.experimentalAppRail !== 'boolean') {
+/** Unless they chose, existing browser profiles keep the app rail off and the composer's details row on; new ones start with the row off. */
+export function seedWebProfileCohorts(settings: Partial<GlobalSettings>, existing: boolean): void {
+  if (existing && typeof settings.experimentalAppRail !== 'boolean') {
     settings.experimentalAppRail = false
   }
   if (typeof settings.nativeChatComposerDetails !== 'boolean') {
-    settings.nativeChatComposerDetails = true
+    settings.nativeChatComposerDetails = existing
   }
 }
 
