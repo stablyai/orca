@@ -103,9 +103,12 @@ export abstract class RuntimeMobileSessionTabSubscriptions extends RuntimeWorksp
 
   /** Whether a pane's hook status reaches any listener: chat-scoped listeners read chat panes only. */
   protected hasPaneStatusListeners(paneKey: string): boolean {
-    if (isStructuredAgentSessionAddressPaneKey(paneKey)) {
-      return this.mobileSessionTabListeners.size > 0
-    }
+    return isStructuredAgentSessionAddressPaneKey(paneKey)
+      ? this.mobileSessionTabListeners.size > 0
+      : this.hasTerminalStatusListeners()
+  }
+
+  protected hasTerminalStatusListeners(): boolean {
     for (const { scope } of this.mobileSessionTabListeners) {
       if (scope !== 'agent-sessions') {
         return true
