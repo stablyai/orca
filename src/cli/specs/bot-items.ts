@@ -17,7 +17,7 @@ export const BOT_ITEM_COMMAND_SPECS: CommandSpec[] = [
     hidden: true,
     summary: 'Track a deliverable or a decision for your owner as an item',
     usage:
-      'orca bot item add --title <text> [--description <markdown>] [--done-means <text>] [--status planned|in-progress] [--link <ref>]... [--for bot:<name>] [--chat <id>] [--json]',
+      'orca bot item add --title <text> [--description <markdown>] [--done-means <text>] [--status planned|in-progress] [--link <ref>]... [--for bot:<name>] [--chat <id>] [--from-item <id>] [--json]',
     allowedFlags: [
       ...WRITE_FLAGS,
       'title',
@@ -28,14 +28,16 @@ export const BOT_ITEM_COMMAND_SPECS: CommandSpec[] = [
       'status',
       'link',
       'for',
-      'chat'
+      'chat',
+      'from-item'
     ],
     repeatableFlags: ['link'],
     notes: [
       ...ITEM_NOTES,
       'Before adding an item about a PR, issue or thread, run `orca bot item list --link <it>`; if one already covers it, update that item.',
       'For work already underway, --link its workers (dispatch:<ctx_id>) and its PR by full URL when known; workers started later with `worker-start --item <n>` link themselves.',
-      '--for bot:<name> makes the item for another bot, in its Home Chat or --chat; --chat alone makes it in another of your own chats. Either is sent as a request, carrying whom your turn is for, and a refused request makes no item.'
+      '--for bot:<name> makes the item for another bot, in its Home Chat or --chat; --chat alone makes it in another of your own chats. Either is sent as a request, carrying whom your turn is for, and a refused request makes no item.',
+      "--from-item <id> names one of your own items this one's work comes from: the new item, and with --for its request, join that item's request (origin.rootKey), so a report's follow-up lists with it."
     ]
   },
   {
@@ -128,7 +130,7 @@ export const BOT_ITEM_COMMAND_SPECS: CommandSpec[] = [
     hidden: true,
     summary: "List a bot's items, newest change first",
     usage:
-      'orca bot item list [--bot <name>] [--status <s>[,<s>]] [--all] [--chat <id>|--here] [--link <ref>] [--limit <n>] [--cursor <c>] [--json]',
+      'orca bot item list [--bot <name>] [--status <s>[,<s>]] [--all] [--chat <id>|--here] [--link <ref>] [--root-key <key>] [--limit <n>] [--cursor <c>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'bot',
@@ -137,12 +139,14 @@ export const BOT_ITEM_COMMAND_SPECS: CommandSpec[] = [
       'chat',
       'here',
       'link',
+      'root-key',
       'limit',
       'cursor'
     ],
     notes: [
       'Open items (Needs you, In progress, Waiting, Planned) by default; --all adds closed ones; --status picks exact statuses and wins over --all.',
       '--link <ref> lists only items linking that PR, URL or file; a PR URL and pr:<owner/repo#n> match.',
+      "--root-key <key> lists only this bot's items made for one request: the origin.rootKey `--json` prints. Other bots' items for it list with their own --bot.",
       '50 a page (at most 100 with --limit); pass the printed --cursor for the next page.'
     ]
   },

@@ -172,6 +172,9 @@ export const BotGroupMessageSchema = z.object({
   ]),
   text: z.string(),
   images: z.array(BotGroupMessageImageSchema).optional(),
+  /** Posted at the host's own window; absent for a paired device (its account is only a claim),
+   *  anyone else, an automation's post and lines older builds saved. Only such a post's words are kept. */
+  typedByOwner: z.literal(true).optional().catch(undefined),
   createdAt: z.number(),
   rootRequestId: z.string().optional(),
   rootSequence: z.number().optional(),

@@ -6,6 +6,13 @@ import type {
   AgentJournalSubmission
 } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalTypedBy } from '../../shared/agent-session/journal/agent-journal-typed-by'
+
+/** Orca's record of the send that put this row in the chat; undefined for a row no send made. */
+export const submissionOf = (
+  item: AgentJournalRenderItem,
+  submissions: readonly AgentJournalSubmission[]
+): AgentJournalSubmission | undefined => sendsByItem(submissions).get(item.itemId)
 
 /** Whether a person sent a journal item, by Orca's record of the send. Made for one read of a chat's
  *  journal and dropped with it, so it never answers from submissions another read holds. */
@@ -67,12 +74,17 @@ export function typedInOrcaByPerson(item: AgentJournalRenderItem, sends: PersonS
   )
 }
 
-/** The owner typed it in Orca, as the host itself saw: at its own window. A paired device's account is
- *  only what it declares, so even one matching the host's is not proof; it never makes a turn the
- *  owner's over whom its conversation acts for. No stamp, or any device, is not. */
+/** Typed at the host's own window, as the host itself saw. A paired device's account is only what it
+ *  declares, so even one matching the host's is not proof; no stamp, any device or an agent is not. */
+export const typedByOwner = (typedBy: AgentJournalTypedBy | undefined): boolean =>
+  typedBy?.by === 'host'
+
+/** The owner typed it in Orca (typedByOwner), as a person's own send. */
 export function typedInOrcaByOwner(item: AgentJournalRenderItem, sends: PersonSends): boolean {
-  const typedBy = item.body.kind === 'message' ? item.body.typedBy : undefined
-  return typedBy?.by === 'host' && typedInOrcaByPerson(item, sends)
+  return (
+    typedByOwner(item.body.kind === 'message' ? item.body.typedBy : undefined) &&
+    typedInOrcaByPerson(item, sends)
+  )
 }
 
 /** Typed on a paired device the host did not find on its own account (another account, or one it

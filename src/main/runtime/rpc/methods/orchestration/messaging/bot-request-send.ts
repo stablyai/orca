@@ -3,7 +3,6 @@
 import { isBotGroupMemberSession } from '../../../../../../shared/bots/bot-group'
 import { runtimeBotGroups } from '../../../../../bots/bot-group-runtime'
 import { randomUUID } from 'node:crypto'
-import type { z } from 'zod'
 import { runtimeBotChats } from '../../../../../bots/bot-chat-session'
 import {
   failureHeldChat,
@@ -28,7 +27,7 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import type { RunRow } from '../../../../orchestration/db/orchestration-records'
 import type { RpcContext } from '../../../core'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { SendParams } from './send-params'
+import type { SendParamsInput } from './send-params'
 import {
   botAddressReach,
   readActingSender,
@@ -45,11 +44,6 @@ import { answersRequest, askedInConversation, botRequestSender } from './bot-req
 import type { PairedSender } from '../../../../../../shared/orchestration/mailbox/paired-sender-name'
 import { resolveBareOrchestrationRecipient } from './recipient-routing'
 import { sessionCallerOf } from '../../../../orchestration/addressing/orchestration-caller-identity'
-
-type SendParamsInput = Pick<
-  z.infer<typeof SendParams>,
-  'subject' | 'body' | 'type' | 'priority' | 'threadId'
->
 
 /** Whether an address could reach a bot; decided without waiting, so other mail is stored as before. */
 export function mayReachBot(
@@ -75,11 +69,12 @@ export async function sendToBot(
     messageId?: string
     /** The recipient isn't woken until the caller runs `nudge`: an item it names is made first. */
     holdNudge?: boolean
+    /** `item add --for --from-item`: the request the named item was made for, which this one joins. */
+    fromItemKey?: string
   } & Pick<SendBotRequestArgs, 'senderSnapshot' | 'pairedSender' | 'images' | 'onAdmitted'>
 ): Promise<{ receipt: unknown; nudge: () => void } | null> {
   const { runtime } = context
   const db = runtime.getOrchestrationDb()
-  const senderRunId = mail.routing.run?.id
   const reach = botAddressReach(runtime, db, mail.to, mail.sender)
   const found = await receivingBot(runtime, reach, mail.to)
   if (!found) {
@@ -102,8 +97,8 @@ export async function sendToBot(
     db,
     ...mail,
     receiving,
-    acting,
-    senderRunId,
+    acting: mail.fromItemKey ? { ...acting, fromItemKey: mail.fromItemKey } : acting,
+    senderRunId: mail.routing.run?.id,
     senderPaneKey: mail.sender.paneKey ?? undefined,
     recordMutationReceipt: context.recordMutationReceipt,
     ...(mail.holdNudge ? { held } : {})
@@ -153,7 +148,7 @@ async function admitBotRequestMail(
   asked: Pick<BotRequestRecord, 'askedInConversation'>
 ): Promise<unknown> {
   const { runtime, db, params, receiving, acting } = args
-  const chain = botRequestChain(db, acting.sessionId, acting.turn)
+  const chain = botRequestChain(db, acting.sessionId, acting.turn, acting)
   /** Checked now and again just before storing, after every wait, against the bot as it is then. */
   const check = () => {
     const bot = runtime.bots.list().find((entry) => entry.id === receiving.bot.id)
@@ -203,6 +198,7 @@ async function admitBotRequestMail(
     askers: requestAskersOf(acting.turn),
     askedBy: acting.turn.askedBy,
     request: groupScope?.originalHumanInstruction ?? acting.turn.request,
+    start: chain.start,
     conversation: acting.conversation,
     ...(acting.triggeredBy ? { triggeredBy: acting.triggeredBy } : {}),
     ...(acting.turn.origin ? { origin: acting.turn.origin } : {}),

@@ -18,6 +18,15 @@ export const rootOf = (message: {
   rootSequence: message.rootSequence ?? message.sequence
 })
 
+/** The room request a bot request's record names; null for a request sent outside a room. */
+export function groupScopeOfRecord(record: string): BotGroupPeerScope | null {
+  const parsed: unknown = JSON.parse(record)
+  const scope = BotGroupPeerScopeSchema.safeParse(
+    typeof parsed === 'object' && parsed !== null && 'group' in parsed ? parsed.group : null
+  )
+  return scope.success ? scope.data : null
+}
+
 /** Mail that starts a request of its own: a change to the member's items, or a worker's report
  *  that lands after the request it served was stopped, which the bot's own chat reads too. */
 export type OwnRequestMail = 'items' | 'reports'
@@ -77,11 +86,7 @@ export function mailRoot(
   const request =
     db.getBotRequest(mail.id) ?? (mail.thread_id ? db.getBotRequest(mail.thread_id) : undefined)
   if (request) {
-    const parsed: unknown = JSON.parse(request.record)
-    const scope = BotGroupPeerScopeSchema.safeParse(
-      typeof parsed === 'object' && parsed !== null && 'group' in parsed ? parsed.group : null
-    )
-    return scope.success ? scope.data : null
+    return groupScopeOfRecord(request.record)
   }
   // A worker's final report settles its Dispatch as it lands, so its recorded sender comes first.
   const dispatch =

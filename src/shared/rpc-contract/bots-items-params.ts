@@ -45,7 +45,9 @@ export const BotItemsAdd = lazyZodSchema(() =>
     /** `--for bot:<name>`: the item is made for that bot, through its request mail. */
     forBot: OptionalString,
     /** With `--for`, that bot's chat; alone, another chat of the caller's bot. */
-    chat: OptionalString
+    chat: OptionalString,
+    /** `--from-item <n>`: one of the caller's own items whose work this one comes from. */
+    fromItem: OptionalString
   })
 )
 
@@ -114,6 +116,8 @@ export const BotItemsList = lazyZodSchema(() =>
     here: OptionalBoolean,
     /** Only items linking this PR, URL or file (a PR URL and `owner/repo#n` match). */
     link: OptionalString,
+    /** Only items made for this request: their origin's `rootKey`. */
+    rootKey: OptionalString,
     limit: OptionalPositiveInt,
     cursor: OptionalString
   })

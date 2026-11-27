@@ -5,6 +5,7 @@ import {
   type BotItemActor,
   type BotItemCommentImage,
   type BotItemLinkKind,
+  type BotItemOrigin,
   type BotItemStatus
 } from '../../shared/bots/bot-items'
 import { BotItemAskSchema, botItemAskText, type BotItemAsk } from '../../shared/bots/bot-item-ask'
@@ -34,6 +35,10 @@ export type BotItemAddInput = {
   links: BotItemLinkInput[]
   /** The thread, issue or pull request the adding turn's work started in, kept on its `made` event. */
   startedIn?: string
+  /** The request the adding turn acted on, kept on its `made` event. */
+  origin?: BotItemOrigin
+  /** `--from-item`: the item whose work this one comes from, kept on its `made` event. */
+  fromItem?: { uid: string }
 }
 
 export type BotItemSetInput = {

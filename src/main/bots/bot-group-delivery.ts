@@ -30,6 +30,8 @@ import { remoteAsksFor } from './bot-group-remote-question'
 export type SendBotGroupMessageOptions = {
   /** This host's own window sent: local dropped images are copied into the store. */
   local?: boolean
+  /** Typed at this host's own window (typedByOwner). */
+  typedByOwner?: boolean
 }
 
 export async function sendBotGroupMessage(
@@ -105,6 +107,7 @@ export async function sendBotGroupMessage(
         author: { kind: 'owner' },
         text: input.text,
         ...(images.length > 0 ? { images } : {}),
+        ...(options.typedByOwner ? { typedByOwner: true } : {}),
         createdAt: Date.now(),
         turns,
         ...(remote ? { remoteAsks: remote.asks } : {})
