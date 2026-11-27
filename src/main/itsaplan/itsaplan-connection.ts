@@ -84,25 +84,26 @@ export async function itsaplanTestConnection(): Promise<
   return result
 }
 
-export async function itsaplanGetViewer(): Promise<ItsaplanViewer | null> {
+async function resolveViewer(): Promise<ItsaplanResult<{ viewer: ItsaplanViewer }>> {
   const instance = readItsaplanInstance()
-  if (!instance) {
-    return null
+  if (instance && cachedViewer?.instanceId === instance.id) {
+    return { ok: true, viewer: cachedViewer.viewer }
   }
-  if (cachedViewer?.instanceId === instance.id) {
-    return cachedViewer.viewer
-  }
-  const result = await itsaplanTestConnection()
+  return itsaplanTestConnection()
+}
+
+export async function itsaplanGetViewer(): Promise<ItsaplanViewer | null> {
+  const result = await resolveViewer()
   return result.ok ? result.viewer : null
 }
 
-/** The viewer id behind the "me" assignee filter. */
+/** The viewer id behind the "me" assignee filter; keeps the real failure code. */
 export async function itsaplanRequireViewerId(): Promise<string> {
-  const viewer = await itsaplanGetViewer()
-  if (!viewer) {
-    throw new ItsaplanApiError('invalidApiKey')
+  const result = await resolveViewer()
+  if (!result.ok) {
+    throw new ItsaplanApiError(result.error, null, result.message)
   }
-  return viewer.id
+  return result.viewer.id
 }
 
 export async function itsaplanStatus(): Promise<ItsaplanConnectionStatus> {

@@ -1,5 +1,6 @@
 import {
   ITSAPLAN_LIST_LIMIT_MAX,
+  type ItsaplanComment,
   type ItsaplanIssue,
   type ItsaplanIssueDetail,
   type ItsaplanIssueListQuery,
@@ -17,6 +18,7 @@ import { itsaplanGetProjectMetadata, resolveItsaplanProjectRef } from './itsapla
 import { readItsaplanInstance } from './instance-credential-store'
 
 const DEFAULT_LIST_LIMIT = 100
+const MAX_FEED_PAGES = 10
 
 type RawIssueHit = ItsaplanRawIssue & { archived?: boolean }
 type RawIssueDetail = ItsaplanRawIssue & { projectId: number }
@@ -87,6 +89,28 @@ export async function itsaplanListIssues(query: ItsaplanIssueListQuery): Promise
     .map((hit) => mapItsaplanIssue(hit, { metadata, appUrl }))
 }
 
+type RawFeedPage = {
+  items: ItsaplanRawFeedItem[]
+  nextCursor: { ts: string; id: number } | null
+}
+
+// The feed pages top-level entries and appends their replies, so order is rebuilt here.
+async function readAllComments(issueId: number): Promise<ItsaplanComment[]> {
+  const comments: ItsaplanComment[] = []
+  let cursor: string | undefined
+  for (let page = 0; page < MAX_FEED_PAGES; page += 1) {
+    const feed = await itsaplanRequest<RawFeedPage>(`/issues/${issueId}/feed`, {
+      query: { filter: 'comments', order: 'asc', limit: 100, cursor }
+    })
+    comments.push(...feed.items.flatMap((item) => mapItsaplanComment(item) ?? []))
+    if (!feed.nextCursor) {
+      break
+    }
+    cursor = JSON.stringify(feed.nextCursor)
+  }
+  return comments.sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id - b.id)
+}
+
 export async function itsaplanGetIssue(args: {
   issueId: number
 }): Promise<ItsaplanIssueDetail | null> {
@@ -102,17 +126,15 @@ export async function itsaplanGetIssue(args: {
   }
   const projectRef = await resolveItsaplanProjectRef(raw.projectId)
   const metadata = await itsaplanGetProjectMetadata({ projectRef })
-  const [subtaskHits, feed] = await Promise.all([
+  const [subtaskHits, comments] = await Promise.all([
     itsaplanRequest<RawIssueHit[]>(`${projectPath(projectRef)}/issues`, {
       query: { parentId: raw.id, limit: ITSAPLAN_LIST_LIMIT_MAX }
     }),
-    itsaplanRequest<{ items: ItsaplanRawFeedItem[] }>(`/issues/${raw.id}/feed`, {
-      query: { filter: 'comments', order: 'asc', limit: 100 }
-    })
+    readAllComments(raw.id)
   ])
   return {
     ...mapItsaplanIssue(raw, { metadata, appUrl }),
     subtasks: subtaskHits.map((hit) => mapItsaplanIssue(hit, { metadata, appUrl })),
-    comments: feed.items.flatMap((item) => mapItsaplanComment(item) ?? [])
+    comments
   }
 }
