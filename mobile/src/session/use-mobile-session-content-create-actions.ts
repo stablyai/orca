@@ -1,5 +1,6 @@
 import { isBlankBrowserUrl, normalizeBrowserUrl } from '../browser/pane-view/browser-url'
 import { markNewBrowserTabForAddressFocus } from '../browser/pane-view/new-browser-tab-address-focus'
+import { saveMobileBrowserViewMode } from '../browser/pane-view/mobile-browser-view-mode-state'
 import { translate } from '../i18n/mobile-i18n'
 import { captureMobileFileMutationOwnership } from '../files/mutation-ownership/mobile-file-mutation-ownership'
 import {
@@ -149,6 +150,8 @@ export function useMobileSessionContentCreateActions(
       // Poll briefly for async host registration before focusing the new browser tab.
       if (created.browserPageId) {
         pendingBrowserFocusPageIdRef.current = created.browserPageId
+        // A tab the phone opened is read on the phone, so it starts at phone width.
+        saveMobileBrowserViewMode(worktreeId, created.browserPageId, 'mobile')
         // A blank tab has nothing to show yet, so its address field takes the first tap's place.
         if (isBlankBrowserUrl(url)) {
           markNewBrowserTabForAddressFocus(created.browserPageId)
