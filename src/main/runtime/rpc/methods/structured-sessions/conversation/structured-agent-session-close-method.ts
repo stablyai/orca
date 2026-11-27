@@ -35,6 +35,12 @@ export const STRUCTURED_AGENT_SESSION_CLOSE_METHOD = defineMethod({
       )
     }
     const host = requireStructuredCleanupHost(ctx)
+    if (ctx.runtime.closeActiveTeammateChatTab(params.sessionId)) {
+      if (!keepRunning) {
+        await host.close(params.sessionId, 'user-close')
+      }
+      return { ok: true as const }
+    }
     const surface = captureStructuredSessionSurface(host, params.sessionId, ctx.runtime)
     try {
       const result = await retireCapturedStructuredSessionSurface(

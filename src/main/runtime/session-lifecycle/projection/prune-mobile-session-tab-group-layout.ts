@@ -1,3 +1,7 @@
+import {
+  collectReturnedSessionTabIds,
+  sanitizeMobileSessionTabGroups
+} from '../../session-tabs/publication/returned-session-tab-groups'
 import { rendererStatusReplica } from '../../session-graph/renderer-status-replica'
 import { selectFreshAgentRowForMobileTab } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
 import { OrcaRuntimeWithSavedConversationTitlePublication } from '../../session-tabs/chat/saved-conversation-title-publication'
@@ -151,10 +155,10 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
       recordPty: (ptyId, worktreeId, state) => this.recordPtyWorktree(ptyId, worktreeId, state),
       buildPtyStatus: (pty, tab, terminalHandle, retained, getRows) =>
         this.buildPtyMobileAgentStatus(pty, tab, terminalHandle, retained, getRows),
-      sanitizeGroups: (groups, tabs) => this.sanitizeMobileSessionTabGroups(groups, tabs),
+      sanitizeGroups: sanitizeMobileSessionTabGroups,
       pruneGroupLayout: (layout, validGroupIds) =>
         this.pruneMobileSessionTabGroupLayout(layout, validGroupIds),
-      collectTabIds: (tabs) => this.collectReturnedSessionTabIds(tabs),
+      collectTabIds: collectReturnedSessionTabIds,
       hostTerminalTheme: this.hostMobileTerminalTheme
     }
   }

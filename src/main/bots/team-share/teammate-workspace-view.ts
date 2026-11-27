@@ -1,15 +1,12 @@
 // What a workspace teammate (a share caller whose Orca works in the agent's workspaces) is listed: the
 // one place that scopes every list and stream to `agentWorkspaceSet`, the agent's home and its workers'
 // worktrees. It narrows what the host lists, never what it lets them do there; the owner gets null.
-import type { RuntimeMobileSessionTabsResult } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import type { WorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import {
   agentHasWorkspace,
   type AgentWorkspaceSet
 } from '../../runtime/workspaces/process-listing/agent-workspace-set'
 import type { BotShareCallerScope } from '../../runtime/rpc/callers/rpc-caller-scope'
 import type { RpcContext } from '../../runtime/rpc/core'
-import { botShareOwnsSession } from './bot-share-chats'
 import { chatWorkspaceOf } from './teammate-client-events'
 import {
   openTracker,
@@ -67,49 +64,6 @@ function teammateWorkspaceListsOf(set: AgentWorkspaceSet) {
         totalCount: worktrees.length,
         truncated: worktrees.length > limit
       }
-    }
-  }
-}
-
-/** In the agent's home a teammate sees only their own chats' tabs (each person their own); in its
- *  workers' workspaces, every tab. */
-export function teammateSessionTabs(
-  runtime: Parameters<typeof botShareOwnsSession>[0],
-  scope: BotShareCallerScope,
-  homeKey: WorkspaceKey
-): (snapshot: RuntimeMobileSessionTabsResult) => RuntimeMobileSessionTabsResult {
-  return (snapshot) => {
-    if (snapshot.worktree !== homeKey) {
-      return snapshot
-    }
-    const tabs = snapshot.tabs.filter(
-      (tab) => tab.type === 'agent-session' && botShareOwnsSession(runtime, scope, tab.sessionId)
-    )
-    if (tabs.length === snapshot.tabs.length) {
-      return snapshot
-    }
-    const kept = new Set(tabs.map((tab) => tab.id))
-    const active = snapshot.activeTabId !== null && kept.has(snapshot.activeTabId)
-    return {
-      ...snapshot,
-      tabs,
-      activeTabId: active ? snapshot.activeTabId : null,
-      activeTabType: active ? snapshot.activeTabType : null,
-      ...(snapshot.tabGroups
-        ? {
-            tabGroups: snapshot.tabGroups.map((group) => ({
-              ...group,
-              activeTabId:
-                group.activeTabId !== null && kept.has(group.activeTabId)
-                  ? group.activeTabId
-                  : null,
-              tabOrder: group.tabOrder.filter((id) => kept.has(id)),
-              ...(group.recentTabIds
-                ? { recentTabIds: group.recentTabIds.filter((id) => kept.has(id)) }
-                : {})
-            }))
-          }
-        : {})
     }
   }
 }

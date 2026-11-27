@@ -1,7 +1,6 @@
-// Whose tab list a client reads and writes (teammate-rules.ts, rule 4), and the operations on a
-// teammate's own list in their Home: read, open, activate, close and publish. A call `tabOwnerOf` sends
-// here never reads or writes the host's list (mobileSessionTabsByWorktree, the saved workspace
-// session, visible agent_session_tabs).
+// Whose tab list a client reads and writes (teammate-rules.ts, rule 4): the routing, the guards on the
+// host's list and window, the reads of a teammate's own list, and its lifetime (that of their share).
+// The writes are in person-session-tab-writes.ts.
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
@@ -19,15 +18,18 @@ import {
   type TeammateTabListKey
 } from '../../../bots/team-share/teammate-rules'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import { getActiveRpcCaller } from '../../rpc/callers/active-call'
 import {
   sessionTabListName,
   type SessionTabListName
 } from '../../client/navigation/client-session-tab-selection'
 import { OrcaRuntimeWithRuntimeId } from '../../construction/runtime-identity-state'
-import { resolveChatTabActivation } from '../chat/agent-session-tab-identity'
-import type { StructuredSessionTabPublicationInput } from '../chat/structured-session-tab-publication'
 import { PersonSessionTabLists } from './person-session-tab-lists'
+import { activeCallMayTouchHostTabs, hostTabListWriteAdmission } from './host-tab-list-admission'
+import { admitRendererRequestsBy } from '../../construction/runtime-desktop-surface'
+import {
+  hostWindowLookups,
+  rendererRequestAdmission
+} from '../../client/events/teammate-host-window-guard'
 import {
   structuredConversationForked,
   titleStructuredConversationTabs
@@ -40,7 +42,7 @@ import { projectTabsWithBotHomePins } from '../../session-lifecycle/projection/b
 import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout as Projection } from '../../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as Publication } from '../publication/session-tabs-change-publication'
 
-type OwnList = { person: TeammateTabListKey; worktreeId: string }
+export type OwnList = { person: TeammateTabListKey; worktreeId: string }
 
 export abstract class OrcaRuntimeWithPersonSessionTabs extends OrcaRuntimeWithRuntimeId {
   /** Set by the RPC server once it starts (`OrcaRuntimeWithBots`). */
@@ -96,10 +98,22 @@ export abstract class OrcaRuntimeWithPersonSessionTabs extends OrcaRuntimeWithRu
     if (persisted) {
       this.clientSessionTabSelections.hydrate(persisted)
       this.personSessionTabs.hydrate(persisted)
+      this.pruneTeammateTabLists()
     }
+    const bots = () => this.store?.getBots?.() ?? []
     this.clientSessionTabSelections.setPersistListener(() => this.persistSessionTabLists())
+    // Until the share devices load, a device in an agent's Home may be a teammate's: left alone.
     this.clientSessionTabSelections.setTabOwnerResolver((client, worktreeId) =>
-      this.tabOwnerOfClient(client, worktreeId)
+      this.botShareDevices || tabOwnerOf(worktreeId, null, bots()) === 'shared'
+        ? this.tabOwnerOfClient(client, worktreeId)
+        : null
+    )
+    this.mobileSessionTabsByWorktree.admitWritesBy(hostTabListWriteAdmission(bots))
+    admitRendererRequestsBy(
+      rendererRequestAdmission(
+        (worktreeId) => activeCallMayTouchHostTabs(worktreeId, bots),
+        hostWindowLookups(this.mobileSessionTabsByWorktree)
+      )
     )
   }
 
@@ -211,110 +225,26 @@ export abstract class OrcaRuntimeWithPersonSessionTabs extends OrcaRuntimeWithRu
     )
   }
 
-  /** A share ended (one teammate's, or the bot's for everyone): their lists in its Home go. */
-  forgetTeammateTabLists(botId: string, accountId?: string): void {
-    const bot = teammateTabListKey({ botId, accountId: '' })
-    this.personSessionTabs.forgetPeople((person) =>
-      accountId === undefined
-        ? person.startsWith(bot)
-        : person === teammateTabListKey({ botId, accountId })
+  /** A person's list lives as long as their share of the agent: it goes when the share or the
+   *  agent does, whichever path removed it and whether or not their devices were reached. */
+  pruneTeammateTabLists(): void {
+    const live = new Set(
+      (this.store?.getBots?.() ?? []).flatMap((bot) =>
+        (bot.shares ?? []).flatMap((share) =>
+          share.kind === 'account'
+            ? [teammateTabListKey({ botId: bot.id, accountId: share.accountId })]
+            : []
+        )
+      )
     )
+    this.personSessionTabs.forgetPeople((person) => !live.has(person))
   }
 
-  /** A teammate's own list changed: every device of theirs listening redraws it. */
-  protected publishPersonSessionTabs(person: TeammateTabListKey, worktreeId: string): void {
-    void this.createMobileSessionTabsDelivery(person)(
-      this.personSessionTabsFrame(person, worktreeId),
-      ++this.mobileSessionTabsChangeSequence
-    )
-  }
-
-  /** A chat was renamed: the lists holding it redraw, titled as they are read. */
-  protected republishPersonListsHolding(worktreeId: string, sessionId: string): void {
-    for (const person of this.personSessionTabs.holdersOf(worktreeId, sessionId)) {
-      this.publishPersonSessionTabs(person, worktreeId)
+  /** The workspace is gone: each person's list there, and their devices' picks in it, go too. */
+  protected forgetPersonTabListsIn(worktreeId: string): void {
+    for (const person of this.personSessionTabs.holdersOf(worktreeId, () => true)) {
+      this.clientSessionTabSelections.forgetWorktree(worktreeId, person)
     }
-  }
-
-  /** The chat tab write (reveal, create, Fork, publish) for the active RPC caller's list: true when it
-   *  was a teammate's own list, which then holds the tab; false leaves it to the host's list. */
-  protected async publishCallerPersonChatTab(
-    input: StructuredSessionTabPublicationInput
-  ): Promise<boolean> {
-    const caller = getActiveRpcCaller()
-    const owner = this.tabOwnerOfClient(
-      caller?.kind === 'paired-device' ? caller.deviceId : undefined,
-      input.workspaceId
-    )
-    if (!isTeammateTabList(owner)) {
-      return false
-    }
-    const host = getStructuredAgentSessionHost()
-    // A create founds a host tab row for its new chat; a chat the host's list shows keeps its tab.
-    const hostListed = this.mobileSessionTabsByWorktree
-      .get(input.workspaceId)
-      ?.tabs.some((tab) => tab.type === 'agent-session' && tab.sessionId === input.sessionId)
-    if (host?.getSessionTabId(input.sessionId) && !hostListed) {
-      await host.setSessionTabVisibility(input.sessionId, false, undefined, { background: true })
-    }
-    input.workspaceAuthority?.check()
-    this.personSessionTabs.open(owner, input.workspaceId, input.sessionId, input.activate)
-    input.workspaceAuthority?.committed()
-    input.capture?.({
-      tableId: null,
-      presentation: {
-        raw: this.currentLocalStructuredSessionPresentation(input.sessionId),
-        saved: []
-      }
-    })
-    if (input.notify !== false) {
-      this.publishPersonSessionTabs(owner, input.workspaceId)
-    }
-    return true
-  }
-
-  /** Activates a tab of a teammate's own list on the caller's device alone: it never reaches the
-   *  host's window or anyone else's screen. */
-  protected activatePersonSessionTab(
-    person: TeammateTabListKey,
-    worktreeId: string,
-    tabId: string,
-    opts: {
-      clientNavigationId?: string
-      beforeActivate?: (target: { sessionId?: string; worktreeId: string }) => void
-    }
-  ): RuntimeMobileSessionTabsResult {
-    const frame = this.personSessionTabsFrame(person, worktreeId, false)
-    const resolved = resolveChatTabActivation(frame.tabs, tabId)
-    const tab = frame.tabs.find((candidate) => candidate.id === resolved)
-    if (!tab || tab.type !== 'agent-session' || !opts.clientNavigationId) {
-      throw new Error('tab_not_found')
-    }
-    opts.beforeActivate?.({ sessionId: tab.sessionId, worktreeId })
-    const projected = this.clientSessionTabSelections.activate(
-      frame,
-      opts.clientNavigationId,
-      tab.id
-    )
-    this.emitMobileSessionTabsSnapshotToClient(projected, opts.clientNavigationId)
-    return projected
-  }
-
-  /** Closes a tab of a teammate's own list, if it is there. The chat keeps running, as a closed tab's
-   *  chat does. */
-  protected closePersonSessionTab(
-    person: TeammateTabListKey,
-    worktreeId: string,
-    tabId: string
-  ): void {
-    if (!this.personSessionTabs.close(person, worktreeId, tabId)) {
-      return
-    }
-    this.clientSessionTabSelections.forgetTabs(worktreeId, [tabId], person)
-    this.clientSessionTabSelections.settleClosedTabs(
-      this.personSessionTabsFrame(person, worktreeId, false),
-      person
-    )
-    this.publishPersonSessionTabs(person, worktreeId)
+    this.personSessionTabs.forgetWorktree(worktreeId)
   }
 }

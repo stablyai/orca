@@ -1,18 +1,13 @@
 import { createMobileSessionTabsDelivery } from './mobile-session-tabs-delivery'
 import { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab } from '../restoration/mobile-session-publication-preservation'
 import type { BrowserTabInfo } from '../../../../shared/browser/runtime/runtime-browser-contracts'
+import type { RuntimeMobileSessionMarkdownTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type {
-  RuntimeMobileSessionClientTab,
-  RuntimeMobileSessionMarkdownTab
-} from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
-import type {
-  RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
 } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
-import { getMobileSessionTabOrderIds } from '../../session-lifecycle/projection/mobile-session-tab-merge'
 import { readCreatedWorkspaceLaunch } from '../../../agent-launch/agent-launch-created-workspace'
 import type { AgentSenderRevision } from '../../../../shared/orchestration/mailbox/agent-sender-associations'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
@@ -289,38 +284,5 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
       byPageId.set(tab.browserPageId, tab)
     }
     return byPageId
-  }
-
-  protected collectReturnedSessionTabIds(
-    tabs: readonly RuntimeMobileSessionClientTab[]
-  ): Set<string> {
-    return new Set(tabs.flatMap(getMobileSessionTabOrderIds))
-  }
-
-  protected sanitizeMobileSessionTabGroups(
-    groups: readonly RuntimeMobileSessionTabGroup[] | undefined,
-    returnedTabs: readonly RuntimeMobileSessionClientTab[]
-  ): RuntimeMobileSessionTabGroup[] | undefined {
-    if (!groups || groups.length === 0) {
-      return undefined
-    }
-    const returnedIds = this.collectReturnedSessionTabIds(returnedTabs)
-    const sanitized = groups
-      .map((group): RuntimeMobileSessionTabGroup | null => {
-        const tabOrder = group.tabOrder.filter((tabId) => returnedIds.has(tabId))
-        if (tabOrder.length === 0) {
-          return null
-        }
-        const recentTabIds = group.recentTabIds?.filter((tabId) => tabOrder.includes(tabId))
-        return {
-          id: group.id,
-          activeTabId:
-            group.activeTabId && tabOrder.includes(group.activeTabId) ? group.activeTabId : null,
-          tabOrder,
-          ...(recentTabIds && recentTabIds.length > 0 ? { recentTabIds } : {})
-        }
-      })
-      .filter((group): group is RuntimeMobileSessionTabGroup => group !== null)
-    return sanitized.length > 0 ? sanitized : undefined
   }
 }

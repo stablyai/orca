@@ -49,7 +49,8 @@ export const SESSION_TAB_CLOSE_METHODS = [
           if (!params.reason && requiresIntent) {
             const result = await context.runtime.refuseUnattributedMobileSessionTabClose(
               params.worktree,
-              params.tabId
+              params.tabId,
+              context.pairedDeviceId
             )
             span.setAttribute('decision', `refused-${result.refusalReason ?? 'missing-intent'}`)
             return result

@@ -4,9 +4,11 @@ import type { RuntimeMobileSessionTabCloseResult } from '../../../../shared/remo
 export abstract class OrcaRuntimeWithRefuseUnattributedMobileSessionTabClose extends OrcaRuntimeWithMcpStaleTerminals {
   async refuseUnattributedMobileSessionTabClose(
     worktreeSelector: string,
-    tabId: string
+    tabId: string,
+    clientNavigationId?: string
   ): Promise<RuntimeMobileSessionTabCloseResult> {
-    const snapshot = await this.listMobileSessionTabs(worktreeSelector, undefined, {
+    // The caller's own list: a teammate's in their Home, the host's anywhere else.
+    const snapshot = await this.listMobileSessionTabs(worktreeSelector, clientNavigationId, {
       includeAgentSenders: false
     })
     const tabExists = snapshot.tabs.some(
@@ -19,7 +21,17 @@ export abstract class OrcaRuntimeWithRefuseUnattributedMobileSessionTabClose ext
       throw new Error('tab_not_found')
     }
     // Legacy clients may hide their mirror first; republish it without authorizing an unattributed destructive close.
-    this.republishMobileSessionTabsSnapshot(snapshot.worktree)
+    const own = clientNavigationId
+      ? this.ownSessionTabListFrame(snapshot.worktree, clientNavigationId)
+      : null
+    if (own) {
+      this.emitMobileSessionTabsSnapshotToClient(
+        this.projectMobileSessionTabsForClient(own, clientNavigationId),
+        clientNavigationId!
+      )
+    } else {
+      this.republishMobileSessionTabsSnapshot(snapshot.worktree)
+    }
     return {
       closed: true,
       refused: true,

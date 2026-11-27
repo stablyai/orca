@@ -14,6 +14,18 @@ import { withTeammateLists } from './teammate-workspace-lists'
 
 type Admitted = { method: RpcMethod | RpcStreamingMethod; params: unknown }
 
+function namedObject(params: unknown, key: string): unknown {
+  return typeof params === 'object' && params !== null && key in params
+    ? (params as Record<string, unknown>)[key]
+    : null
+}
+
+/** `worktree` as a call names it, at the top level or in a launch's `target`. */
+function namedWorktree(params: unknown): string | null {
+  const named = namedObject(params, 'worktree')
+  return typeof named === 'string' ? named : null
+}
+
 /** Rule 4: in their own Home a teammate's list holds their chats, so nothing they call opens, moves or
  *  reshapes a tab of the host's list there. */
 async function writesHostTabsInOwnHome(
@@ -25,9 +37,8 @@ async function writesHostTabsInOwnHome(
   if (!writesHostTabList(methodName)) {
     return false
   }
-  const named =
-    typeof params === 'object' && params !== null && 'worktree' in params ? params.worktree : null
-  return typeof named === 'string' && (await context.runtime.namesTeammateHome(named, scope))
+  const named = namedWorktree(params) ?? namedWorktree(namedObject(params, 'target'))
+  return named !== null && (await context.runtime.namesTeammateHome(named, scope))
 }
 
 export async function admitTeammateCall<A extends Admitted>(

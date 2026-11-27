@@ -129,6 +129,7 @@ export const BOT_TEAM_SHARES_METHODS = [
         botId,
         shareId
       )
+      context.runtime.pruneTeammateTabLists()
       console.info('[bots] person removed from the share list', {
         botId,
         shareId,

@@ -34,15 +34,20 @@ export class ClientSessionTabSelectionStore {
   private statesByClient = new Map<string, Map<string, StoredClientSessionTabSelection>>()
   private persistListener: ((state: PersistedMobileClientTabSelections) => void) | null = null
   // Whose list each client sees in a workspace (`tabOwnerOf`); a list's change touches only its clients.
-  private listOf: (clientNavigationId: string, worktreeId: string) => TabOwner = () => 'shared'
+  // null: not known yet (an agent's Home before the share devices load), so no bulk change touches it.
+  private listOf: (clientNavigationId: string, worktreeId: string) => TabOwner | null = () =>
+    'shared'
 
-  setTabOwnerResolver(listOf: (clientNavigationId: string, worktreeId: string) => TabOwner): void {
+  setTabOwnerResolver(
+    listOf: (clientNavigationId: string, worktreeId: string) => TabOwner | null
+  ): void {
     this.listOf = listOf
   }
 
   private seesList(worktreeId: string, list: SessionTabListName): (client: string) => boolean {
     return (client) => {
-      return sessionTabListName(this.listOf(client, worktreeId)) === list
+      const owner = this.listOf(client, worktreeId)
+      return owner !== null && sessionTabListName(owner) === list
     }
   }
 
@@ -259,9 +264,11 @@ export class ClientSessionTabSelectionStore {
         continue
       }
       if (snapshot.tabs.length === 0) {
+        // Nothing is left to hide, so a tab that opens here again shows on every device.
         statesByWorktree.set(snapshot.worktree, {
           ...state,
           selection: emptyClientSessionTabSelection(),
+          closedTabIds: new Set(),
           revision: state.revision + 1
         })
       } else {

@@ -49,10 +49,6 @@ export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
             )
         )
       : false
-    if (ended) {
-      // Their own tab lists go with the share.
-      this.runtime.forgetTeammateTabLists(botId, accountId)
-    }
     return ended
   }
 

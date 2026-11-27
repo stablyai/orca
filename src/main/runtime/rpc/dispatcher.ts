@@ -9,7 +9,7 @@ import {
   type RpcResponse,
   type RpcStreamingMethod
 } from './core'
-import { guardedRpcCallContext, rpcCallContext } from './rpc-call-context'
+import { guardedRpcCallContext, rpcCallContext, runInCallerScope } from './rpc-call-context'
 
 import { successResponse } from './responses/rpc-response'
 import { withoutMethodsThisHostDoesNotServe } from './methods/terminal/session-terminal-scrollback'
@@ -164,10 +164,9 @@ export class RpcDispatcher {
       reply
     )
     try {
-      const result = await method.handler(
-        params,
+      const result = await runInCallerScope(
         rpcCallContext(this.runtime, request, options, this.pinnedCallerScope, caller, params),
-        emit
+        (context) => method.handler(params, context, emit)
       )
       recordRuntimeFeatureInteraction(
         this.runtime,
@@ -291,7 +290,8 @@ export class RpcDispatcher {
             orchestrationCompatibilityEvidence: request.orchestrationCompatibilityEvidence
           }),
         request.orchestrationCompatibilityEvidence?.agentSessionId,
-        context.deviceSelf?.clientInstanceId()
+        context.deviceSelf?.clientInstanceId(),
+        context.callerScope
       )
     }
     const result = await orchestrationMutations.run(

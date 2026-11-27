@@ -9,18 +9,21 @@
 //     Home and its workers' worktrees): `filtered` methods, through `withTeammateLists` or their
 //     handlers (`TEAMMATE_HANDLER_FILTERED`, teammate-workspace-view.ts).
 //  3. Host window. Nothing a teammate calls opens, focuses or drives the host's own window:
-//     `reachesHostWindow`, by each reachable method's `hostWindow` class.
+//     `reachesHostWindow` refuses by each reachable method's `hostWindow` class, and the window's two
+//     entry points (the notifier and renderer requests, teammate-host-window-guard.ts) refuse a
+//     teammate's call outside a shared workspace.
 //  4. Tabs. Each person on the host has their own tab list in the agent's Home; every other workspace
 //     has one list, shared by everyone who can reach it. `tabOwnerOf` names the list, and the tab store
 //     reads and writes only that list:
 //       - 'owner': the agent's Home, for the host's window and the owner's devices;
 //       - `teammate:<botId>:<accountId>`: that bot's Home, for that teammate's devices;
 //       - 'shared': every other workspace, for anyone (worker workspaces stay one list).
-//     A teammate's Home list holds chats. A call that would open, move or reshape a tab of the host's
-//     list in the teammate's own Home (`homeTabs.hostList`) is refused there; every session.tabs read,
-//     stream, activate and close (`homeTabs.person`), and every chat tab write (reveal, create, Fork,
-//     restore, publish), goes to the list `tabOwnerOf` names. `homeTabs.none` touch no list.
-//     `TEAMMATE_TAB_WRITES` classifies every host tab writer.
+//     A teammate's Home list holds chats. Every session.tabs read, stream, activate and close, and
+//     every chat tab write (reveal, create, Fork, restore, publish, close: `homeTabs.person`), goes to
+//     the list `tabOwnerOf` names. The host's list has one write point (MobileSessionSnapshotsByWorktree),
+//     which throws on a teammate's call that changes its tabs outside a shared workspace
+//     (host-tab-list-admission.ts), whichever writer made it; `homeTabs.hostList` methods are refused
+//     earlier, at admission, when they name the teammate's Home. `homeTabs.none` touch no list.
 //  5. Name and asker. A teammate is named by their share row's `name`, and every chat or turn they start
 //     acts for them (`botShareAsker`).
 import classes from '../../runtime/rpc/callers/teammate-method-classes.json'
@@ -168,54 +171,4 @@ const HOME_TAB_HOST_LIST: ReadonlySet<string> = new Set(classes.homeTabs.hostLis
 /** Rule 4: a call that writes the host's tab list of a workspace, refused in a teammate's own Home. */
 export function writesHostTabList(methodName: string): boolean {
   return HOME_TAB_HOST_LIST.has(methodName)
-}
-
-/** Every host tab writer (each file that writes `mobileSessionTabsByWorktree` or publishes a chat tab),
- *  and how a teammate's write stays off another person's list:
- *  - 'routed': it asks `tabOwnerOf`, so a teammate's chat in their Home lands in their own list;
- *  - 'host-list': it writes the host's list only, which a teammate reaches in their Home only through
- *    `homeTabs.hostList` methods (refused there), or never (the host's window, restart, the owner).
- *  The census test fails on a writer missing here. */
-export const TEAMMATE_TAB_WRITES: Readonly<Record<string, 'routed' | 'host-list'>> = {
-  'src/main/bots/bot-session-tab-show.ts': 'routed',
-  'src/main/runtime/construction/runtime-identity-state.ts': 'host-list',
-  'src/main/runtime/construction/runtime-service-state.ts': 'host-list',
-  'src/main/runtime/orchestration/terminal-authority/legacy-worker-terminal-surface.ts':
-    'host-list',
-  'src/main/runtime/rpc/methods/structured-sessions/conversation/structured-agent-session-reveal.ts':
-    'routed',
-  'src/main/runtime/rpc/methods/structured-sessions/creation/structured-agent-session-create.ts':
-    'routed',
-  'src/main/runtime/session-graph/session-window-graph.ts': 'host-list',
-  'src/main/runtime/session-graph/session-window-publisher.ts': 'host-list',
-  'src/main/runtime/session-lifecycle/close/close-mobile-row-in-main-layout.ts': 'host-list',
-  'src/main/runtime/session-lifecycle/projection/apply-mobile-session-tab-navigation.ts':
-    'host-list',
-  'src/main/runtime/session-lifecycle/projection/build-headless-mobile-session-browser-tabs.ts':
-    'host-list',
-  'src/main/runtime/session-lifecycle/projection/prune-mobile-session-tab-group-layout.ts':
-    'host-list',
-  'src/main/runtime/session-lifecycle/projection/reconcile-headless-mobile-session-browser-tabs.ts':
-    'host-list',
-  'src/main/runtime/session-lifecycle/projection/restart-agent-pane-in-place.ts': 'host-list',
-  'src/main/runtime/session-tabs/chat/background-chat-tab-publication.ts': 'routed',
-  'src/main/runtime/session-tabs/chat/restored-chat-tab-changes.ts': 'host-list',
-  'src/main/runtime/session-tabs/chat/saved-conversation-title-publication.ts': 'host-list',
-  'src/main/runtime/session-tabs/chat/structured-session-tab-close.ts': 'host-list',
-  'src/main/runtime/session-tabs/chat/structured-session-tab-publication.ts': 'host-list',
-  'src/main/runtime/session-tabs/chat/structured-session-tab-restoration.ts': 'routed',
-  'src/main/runtime/session-tabs/inventory/session-tabs-inventory.ts': 'host-list',
-  'src/main/runtime/session-tabs/layout/headless-pane-move-to-new-tab.ts': 'host-list',
-  'src/main/runtime/session-tabs/layout/headless-tab-group-moves.ts': 'host-list',
-  'src/main/runtime/session-tabs/layout/headless-tab-properties.ts': 'host-list',
-  'src/main/runtime/session-tabs/layout/main-layout-session-tab-move.ts': 'host-list',
-  'src/main/runtime/session-tabs/publication/pty-backed-session-publication.ts': 'host-list',
-  'src/main/runtime/session-tabs/restoration/headless-editor-tabs.ts': 'host-list',
-  'src/main/runtime/session-tabs/restoration/mobile-session-hydration.ts': 'host-list',
-  'src/main/runtime/session-tabs/restoration/mobile-session-membership.ts': 'host-list',
-  'src/main/runtime/session-tabs/restoration/mobile-session-reconciliation.ts': 'host-list',
-  'src/main/runtime/session-tabs/restoration/renderer-session-terminal-rescue.ts': 'host-list',
-  'src/main/runtime/session-tabs/terminal-retirement/headless-terminal-tab-close.ts': 'host-list',
-  'src/main/runtime/session-tabs/terminal-retirement/terminal-surface-retirements.ts': 'host-list',
-  'src/main/runtime/terminal/launch/mobile-terminal-owned-create.ts': 'host-list'
 }

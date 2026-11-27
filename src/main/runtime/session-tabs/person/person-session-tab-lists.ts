@@ -110,11 +110,34 @@ export class PersonSessionTabLists {
     return this.lists.get(person)?.get(worktreeId) ?? this.clock
   }
 
-  /** The people whose list in this workspace holds the chat. */
-  holdersOf(worktreeId: string, sessionId: string): TeammateTabListKey[] {
+  /** The people whose list in this workspace holds a chat that `holds` matches. */
+  holdersOf(worktreeId: string, holds: (sessionId: string) => boolean): TeammateTabListKey[] {
     return [...this.lists].flatMap(([person, lists]) =>
-      lists.get(worktreeId)?.sessionIds.includes(sessionId) ? [person] : []
+      lists.get(worktreeId)?.sessionIds.some(holds) ? [person] : []
     )
+  }
+
+  /** What the list shows changed (a title): it moves to a new version, so clients take the frame. */
+  touch(person: TeammateTabListKey, worktreeId: string): void {
+    const list = this.lists.get(person)?.get(worktreeId)
+    if (list) {
+      this.set(person, worktreeId, { ...list, version: ++this.clock })
+    }
+  }
+
+  /** The workspace is gone: every person's list there goes. */
+  forgetWorktree(worktreeId: string): void {
+    let changed = false
+    for (const [person, lists] of this.lists) {
+      changed = lists.delete(worktreeId) || changed
+      if (lists.size === 0) {
+        this.lists.delete(person)
+      }
+    }
+    if (changed) {
+      this.clock += 1
+      this.persist()
+    }
   }
 
   /** Teammates lost the share (one, or every teammate of the bot): their lists go. */

@@ -26,6 +26,9 @@ import { remoteRuntimeClientCapabilities } from '../../../shared/remote-runtime/
 import { makeTestBot } from '../bot.test-fixture'
 import { structuredAgentSessionCreateFingerprint } from '../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
+import { runWithActiveTeammate } from '../../runtime/rpc/callers/active-call'
+import { setRuntimeDesktopSurface } from '../../runtime/construction/runtime-desktop-surface'
+import type { RuntimeNotifier } from '../../runtime/client/events/runtime-notifier-contract'
 
 const TEAMMATE = { botId: 'bot-1', accountId: 'usr_mate' }
 const SCOPE: BotShareCallerScope = {
@@ -88,6 +91,8 @@ function shareDevices(): BotShareDevices {
 /** `home`: which folder is the agent's Home; the rig's own workspace by default, else a second one
  *  (so the rig's workspace is one of the agent's workers' workspaces). */
 async function rig(options: { home?: 'rig' | 'other'; opened?: AuthorityRig } = {}) {
+  // Agents' runtime homes (chat create, bots.session.start) go under the test's own data folder.
+  vi.stubEnv('ORCA_USER_DATA_PATH', root)
   const opened =
     options.opened ??
     (await openAuthorityRuntime(await authorityProfile([], { records: [B, C, O] })))
@@ -171,8 +176,6 @@ async function rig(options: { home?: 'rig' | 'other'; opened?: AuthorityRig } = 
     return frames
   }
   const create = async (deviceId: string, where = worktree) => {
-    // The agent's runtime home is made under the app's data folder: the test's own.
-    vi.stubEnv('ORCA_USER_DATA_PATH', root)
     const sessionId = randomUUID()
     await call(deviceId, 'agentSession.create', {
       envelope: {
@@ -442,4 +445,162 @@ it('lists a teammate’s chats in the owner’s chat list under their name; the 
   expect(await r.hostChats()).toEqual([C])
   expect(sessions(await r.list('owner-phone'))).toEqual([C])
   expect(await mates()).toBe(before)
+})
+
+it('shows a chat a teammate closed as their last tab again on their offline device when it reopens', async () => {
+  const r = await rig()
+  await r.reveal('mate-desk', C)
+  expect(sessions(await r.list('mate-phone'))).toEqual([C])
+  // The phone is away while the desk closes the Home's only tab, then opens the chat again.
+  await r.close('mate-desk', C)
+  await r.reveal('mate-desk', C)
+
+  expect(sessions(await r.list('mate-phone'))).toEqual([C])
+})
+
+it('moves a teammate’s list to a new version when a chat in it is renamed', async () => {
+  const r = await rig()
+  await r.reveal('mate-desk', C)
+  const before = await r.list('mate-phone')
+
+  // Where a rename (or a title the agent picks) lands: the chat's tabs retitle.
+  r.runtime.refreshStructuredConversationTabTitle(r.workspace, C)
+
+  // A desktop drops a frame that does not outrank the one it holds.
+  const after = await r.list('mate-phone')
+  expect(after.publicationEpoch).toBe(before.publicationEpoch)
+  expect(after.snapshotVersion).toBeGreaterThan(before.snapshotVersion)
+})
+
+it('activates a bot link only on the chat it names, in a teammate’s own list', async () => {
+  const r = await rig()
+  await r.reveal('mate-desk', B)
+  await r.reveal('mate-desk', C)
+  const link = (sessionId: string) => ({
+    botId: TEAMMATE.botId,
+    conversation: { source: 'slack', externalId: 'thread-1' },
+    leadSessionId: sessionId,
+    sessionId,
+    worktreeId: r.workspace
+  })
+  const activate = (botLinkTarget: unknown) =>
+    r.send('mate-desk', 'session.tabs.activate', {
+      worktree: `id:${r.workspace}`,
+      tabId: `agent-session:${C}`,
+      navigation: 'caller',
+      botLinkTarget
+    })
+  const before = (await r.list('mate-desk')).activeTabId
+
+  // The link names B, the tab is C: the check reads the tab's own chat, so it refuses.
+  expect(await activate(link(B))).toMatchObject({
+    ok: false,
+    error: { message: 'bot_link_target_changed' }
+  })
+  expect((await r.list('mate-desk')).activeTabId).toBe(before)
+  expect(await r.hostChats()).toEqual([])
+})
+
+it('closes only a teammate’s own tab when they close a chat in their Home', async () => {
+  const r = await rig()
+  await r.reveal('owner-desk', C)
+  await r.reveal('mate-desk', C)
+  const before = await r.ownerView()
+
+  await r.call('mate-desk', 'agentSession.close', { sessionId: C })
+  await chatTabCommandsSettled()
+
+  expect(sessions(await r.list('mate-phone'))).toEqual([])
+  expect(await r.hostChats()).toEqual([C])
+  expect(await r.ownerView()).toBe(before)
+})
+
+it('answers a teammate’s close with no reason from their own list, never republishing the owner’s', async () => {
+  const r = await rig()
+  await r.reveal('owner-desk', O)
+  await r.reveal('mate-desk', C)
+  const owner = await r.subscribe('owner-desk')
+  const seen = owner.length
+
+  const reply = await r.call('mate-desk', 'session.tabs.close', {
+    worktree: `id:${r.workspace}`,
+    tabId: `agent-session:${C}`
+  })
+  await chatTabCommandsSettled()
+
+  expect(reply).toMatchObject({ refused: true, refusalReason: 'missing-intent' })
+  expect(owner.slice(seen)).toEqual([])
+  expect(sessions(await r.list('mate-desk'))).toEqual([C])
+})
+
+it('refuses a teammate’s agent launch into their own Home before it writes a tab', async () => {
+  const r = await rig()
+  await r.reveal('owner-desk', O)
+  const before = await r.ownerView()
+  for (const method of ['agent.launch', 'agent.launchReplay']) {
+    const refused = await r.send('mate-desk', method, {
+      agent: 'codex',
+      target: { kind: 'existing', worktree: `id:${r.workspace}` },
+      surface: 'terminal',
+      operationId: `${Date.now()}-${randomUUID().replaceAll('-', '')}`
+    })
+    expect(refused, method).toMatchObject({ ok: false, error: { code: 'not_found' } })
+  }
+  expect(await r.ownerView()).toBe(before)
+})
+
+it('never opens a tab in the host’s window for a teammate’s terminal with no workspace', async () => {
+  const r = await rig()
+  const requested: string[] = []
+  setRuntimeDesktopSurface({
+    showNotification: () => false,
+    hasWindow: () => true,
+    hasLiveRenderer: () => true,
+    sendToWindow: () => true,
+    requestRenderer: (_windowId, request) => {
+      requested.push(request.channel)
+      return Promise.reject(new Error('the window is not part of this test'))
+    }
+  })
+  try {
+    r.runtime.attachWindow(1)
+    r.runtime['graphStatus'] = 'ready'
+    expect(await r.send('mate-desk', 'terminal.create', {})).toMatchObject({ ok: false })
+    expect(requested).toEqual([])
+    // The owner's devices still reach it, so the refusal is the teammate's alone.
+    await r.send('owner-desk', 'terminal.create', {})
+    expect(requested).toEqual(['terminal:requestTabCreate'])
+  } finally {
+    setRuntimeDesktopSurface(null)
+  }
+})
+
+it('throws on any teammate write of the host’s list or window in their Home, at the one write point', async () => {
+  const r = await rig({ home: 'other' })
+  await r.reveal('owner-desk', O)
+  const focused: string[] = []
+  const notifier = { focusTerminal: (_tab: string, worktreeId: string) => focused.push(worktreeId) }
+  r.runtime.setNotifier(notifier as unknown as RuntimeNotifier)
+  const store = r.runtime.mobileSessionTabsByWorktree
+  const worker = store.get(r.workspace)!
+  const homeList = { ...worker, worktree: r.home }
+  // The owner's own write of their Home's list, as the host's window publishes it.
+  store.set(r.home, homeList)
+
+  runWithActiveTeammate(SCOPE, () => {
+    // Every writer reaches the list through the store: a teammate's call adding, dropping or
+    // activating a tab of their Home's host list fails, with no person list named.
+    expect(() => store.set(r.home, { ...homeList, tabs: [] })).toThrow('teammate_host_tab_write')
+    expect(() => store.delete(r.home)).toThrow('teammate_host_tab_write')
+    // A refresh that changes no tab is the host's own bookkeeping.
+    store.set(r.home, { ...homeList, snapshotVersion: homeList.snapshotVersion + 1 })
+    expect(() => r.runtime['notifier']?.focusTerminal('tab-1', r.home)).toThrow(
+      'teammate_host_tab_write'
+    )
+    // Their worker workspace's one shared list and window tabs stay theirs to change.
+    store.set(r.workspace, { ...worker, snapshotVersion: worker.snapshotVersion + 1 })
+    r.runtime['notifier']?.focusTerminal('tab-1', r.workspace)
+  })
+  expect(focused).toEqual([r.workspace])
+  r.runtime.setNotifier(null)
 })

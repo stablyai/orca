@@ -1,14 +1,11 @@
-// The census of teammate-rules.ts: every RPC method and every host tab writer is classified for
-// teammates, so a new one can't reach a teammate (or the owner's list) without a decision.
+// The census of teammate-rules.ts: every RPC method is classified for teammates, and the host's tab
+// list and window each have one write point, so a new method or writer can't reach a teammate (or
+// the owner's list) without a decision.
 import { readdirSync, readFileSync } from 'node:fs'
-import { join, relative } from 'node:path'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { ALL_RPC_METHODS } from '../../runtime/rpc/methods/rpc-method-registry'
-import {
-  TEAMMATE_METHOD_CLASS_TABLE,
-  TEAMMATE_METHOD_CLASSES,
-  TEAMMATE_TAB_WRITES
-} from './teammate-rules'
+import { TEAMMATE_METHOD_CLASS_TABLE, TEAMMATE_METHOD_CLASSES } from './teammate-rules'
 import { TEAMMATE_HANDLER_FILTERED, TEAMMATE_LISTED_METHODS } from './teammate-workspace-lists'
 import { TEAMMATE_CLIENT_EVENT_DECISIONS } from './teammate-client-events'
 
@@ -98,7 +95,12 @@ function paramKeys(schema: unknown): string[] {
     return []
   }
   if ('shape' in schema && typeof schema.shape === 'object' && schema.shape !== null) {
-    return Object.keys(schema.shape)
+    // A launch names its workspace in `target`, read as `target.worktree`.
+    const { target } = schema.shape as { target?: unknown }
+    return [
+      ...Object.keys(schema.shape),
+      ...(target ? paramKeys(target).map((key) => `target.${key}`) : [])
+    ]
   }
   const def = 'def' in schema && typeof schema.def === 'object' ? schema.def : null
   if (!def) {
@@ -134,44 +136,51 @@ describe('a teammate’s own Home tab list (rule 4)', () => {
     )
   })
 
-  it('reads the workspace of every host-list writer it refuses in a teammate’s Home', () => {
-    // A chats-only teammate reaches none of them; the workspace tier's call names its workspace.
+  it('reads the workspace of every host-list writer it refuses early in a teammate’s Home', () => {
+    // A chats-only teammate reaches none of them; the workspace tier's call names its workspace
+    // (`worktree`, or a launch's `target.worktree`). One naming none still meets the store's and the
+    // window's guards.
     for (const name of hostList) {
       const method = byName.get(name)!
       expect(method.share, name).toBe('not-shared')
-      expect(paramKeys(method.params), name).toContain('worktree')
+      expect(
+        paramKeys(method.params).filter((key) => ['worktree', 'target.worktree'].includes(key)),
+        name
+      ).not.toEqual([])
     }
   })
 
-  it('classifies every file that writes a host tab list or publishes a chat tab', () => {
+  it('gives the host’s tab list and window one write point each, which every writer goes through', () => {
     const src = join(import.meta.dirname, '../../..')
-    const writes =
-      /mobileSessionTabsByWorktree\.set\(|storeMobileSessionSnapshot\(|publishStructuredAgentSessionTab\(|projectStructuredAgentSessionTab\(|projectStructuredSessionTab\(/
-    const writers = readdirSync(join(src, 'main'), { recursive: true, encoding: 'utf8' })
-      .filter(
-        (file) =>
-          file.endsWith('.ts') && !/\.test\.|test-fixture|test-support|test-harness/.test(file)
-      )
-      .filter((file) => writes.test(readFileSync(join(src, 'main', file), 'utf8')))
-      .map((file) => relative(join(src, '..'), join(src, 'main', file)).replaceAll('\\', '/'))
-      .sort()
-    expect(writers, 'classify these in TEAMMATE_TAB_WRITES (teammate-rules.ts)').toEqual(
-      Object.keys(TEAMMATE_TAB_WRITES).sort()
+    const files = readdirSync(join(src, 'main'), { recursive: true, encoding: 'utf8' }).filter(
+      (file) =>
+        file.endsWith('.ts') && !/\.test\.|test-fixture|test-support|test-harness/.test(file)
     )
-    // A routed writer publishes through the one chat tab write, which asks `tabOwnerOf` first.
-    for (const [file, verdict] of Object.entries(TEAMMATE_TAB_WRITES)) {
-      if (verdict === 'routed') {
-        expect(readFileSync(join(src, '..', file), 'utf8'), file).toMatch(
-          /publishStructuredAgentSessionTab\(/
-        )
-      }
-    }
-    const publish = readFileSync(
-      join(src, 'main/runtime/session-tabs/chat/structured-session-tab-restoration.ts'),
-      'utf8'
-    )
-    expect(publish).toMatch(
-      /publishStructuredAgentSessionTab\([^)]*\)[^{]*\{\s*input\.workspaceAuthority\?\.check\(\)[^]*?if \(await this\.publishCallerPersonChatTab\(input\)\)/
+    const matching = (pattern: RegExp) =>
+      files
+        .filter((file) => pattern.test(readFileSync(join(src, 'main', file), 'utf8')))
+        .map((file) => file.replaceAll('\\', '/'))
+        .sort()
+    // The one store, made once, never swapped, its admission installed once: no writer gets around it.
+    expect(matching(/new MobileSessionSnapshotsByWorktree\(/)).toEqual([
+      'runtime/construction/runtime-identity-state.ts'
+    ])
+    expect(matching(/mobileSessionTabsByWorktree\s*=[^=>]/)).toEqual([
+      'runtime/construction/runtime-identity-state.ts'
+    ])
+    expect(matching(/\.admitWritesBy\(/)).toEqual([
+      'runtime/session-tabs/person/person-session-tab-publication.ts'
+    ])
+    // The window: the notifier is held only as the guard wraps it, and renderer requests pass the
+    // surface's admission (a channel the guard does not name is refused to a teammate).
+    expect(matching(/this\.notifier\s*=[^=]/)).toEqual([
+      'runtime/client/events/runtime-notifier-binding.ts'
+    ])
+    expect(
+      readFileSync(join(src, 'main/runtime/client/events/runtime-notifier-binding.ts'), 'utf8')
+    ).toMatch(/this\.notifier = notifier\s*\?\s*guardNotifierForTeammates\(/)
+    expect(matching(/\.requestRenderer</).filter((file) => !file.startsWith('runtime/'))).toEqual(
+      []
     )
   })
 })

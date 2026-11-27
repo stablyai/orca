@@ -1731,6 +1731,7 @@
   },
   "homeTabs": {
     "person": [
+      "agentSession.close",
       "agentSession.create",
       "agentSession.reveal",
       "session.tabs.activate",
@@ -1743,6 +1744,8 @@
       "session.tabs.unsubscribeAll"
     ],
     "hostList": [
+      "agent.launch",
+      "agent.launchReplay",
       "browser.openUrl",
       "browser.tabCreate",
       "markdown.readTab",
