@@ -1,7 +1,7 @@
 import { shallow } from 'zustand/shallow'
 import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useCallback, useRef, useState } from 'react'
-import { FilePlus, Globe, Smartphone, TerminalSquare } from 'lucide-react'
+import { FileCode, FilePlus, Globe, Smartphone, TerminalSquare } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useAppStore } from '../../../store/index'
 import { useOptionalShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
@@ -97,6 +97,12 @@ export function SplitPaneLanding({
       .openNewMarkdownInActiveWorkspace(groupId)
       .catch(showClientCreationActionError)
   }
+  const openNewFile = (): void => {
+    void useAppStore
+      .getState()
+      .openNewFileInActiveWorkspace(groupId)
+      .catch(showClientCreationActionError)
+  }
   const openEmulator = (): void => {
     // A workspace has one emulator; the + menu brings an existing one forward the same way.
     if (getSimulatorTabForWorktree(worktreeId)) {
@@ -131,6 +137,13 @@ export function SplitPaneLanding({
       label: t('components.tabGroup.splitPaneLanding.markdown', 'Markdown'),
       shortcut: markdownShortcut,
       onSelect: openMarkdown
+    },
+    {
+      id: 'new-file',
+      icon: FileCode,
+      label: t('components.tabGroup.splitPaneLanding.newFile', 'New File'),
+      shortcut: null,
+      onSelect: openNewFile
     },
     emulatorEnabled
       ? {

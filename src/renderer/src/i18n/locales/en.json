@@ -24410,6 +24410,35 @@
     "editor": {
       "formatOnSave": {
         "failed": "Could not format {{file}}. Saving without formatting: {{reason}}"
+      },
+      "newFileExtensionPicker": {
+        "title": "New File",
+        "description": "Choose or type a file extension.",
+        "placeholder": "Type an extension (e.g. ts, js, py)...",
+        "invalidExtension": "Enter a valid file extension (e.g. ts, .py, d.ts).",
+        "customHeading": "Custom",
+        "createCustom": "Create untitled{{extension}}",
+        "fileTypesHeading": "File Types",
+        "types": {
+          "ts": "TypeScript",
+          "tsx": "TypeScript React",
+          "js": "JavaScript",
+          "jsx": "JavaScript React",
+          "json": "JSON",
+          "py": "Python",
+          "txt": "Plain Text",
+          "md": "Markdown",
+          "html": "HTML",
+          "css": "CSS",
+          "yaml": "YAML",
+          "toml": "TOML",
+          "sh": "Shell Script",
+          "sql": "SQL",
+          "rs": "Rust",
+          "go": "Go",
+          "xml": "XML",
+          "csv": "CSV"
+        }
       }
     },
     "contextualTours": {
@@ -24455,7 +24484,8 @@
         "noMatches": "No matches",
         "searchAgentsAndFiles": "Search agents and files",
         "searchShort": "Search",
-        "terminal": "Terminal"
+        "terminal": "Terminal",
+        "newFile": "New File"
       }
     },
     "toastFallbacks": {
@@ -24559,6 +24589,23 @@
         "disconnectedHostLine": "{{host}} isn’t connected. Its files stay on the host.",
         "filesStayLine": "Its files stay on {{host}}.",
         "removing": "Removing…"
+      }
+    },
+    "cmdJ": {
+      "quickActions": {
+        "newFile": "New File",
+        "newFileDescription": "Create an untitled file with any extension in the active workspace.",
+        "verbs": {
+          "createFile": "create file",
+          "fileExtension": "file extension"
+        }
+      }
+    },
+    "tabBar": {
+      "createMenu": {
+        "newFile": "New File",
+        "newFileKeywordExtension": "file extension",
+        "newFileKeywordUntitled": "untitled"
       }
     }
   },

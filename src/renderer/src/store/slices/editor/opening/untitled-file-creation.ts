@@ -11,6 +11,7 @@ import {
   createUntitledMarkdownFile,
   type UntitledMarkdownFileInfo
 } from '@/lib/editor/file-operations/create-untitled-markdown'
+import { requestNewFileExtension } from '@/lib/editor/file-operations/new-file-extension-picker-request'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { EditorFileOperationProvenance } from '@/lib/editor/file-operations/editor-file-operation-provenance'
 import { findGroupForTab } from '../../tabs/tab-group-state'
@@ -141,7 +142,12 @@ async function openSeededUntitledFile(
 export function createPluginNewFileActions(
   _set: EditorSet,
   get: EditorGet
-): Pick<EditorSlice, 'openNewPluginFileInActiveWorkspace' | 'openBlankFileInActiveWorkspace'> {
+): Pick<
+  EditorSlice,
+  | 'openNewPluginFileInActiveWorkspace'
+  | 'openBlankFileInActiveWorkspace'
+  | 'openNewFileInActiveWorkspace'
+> {
   return {
     openNewPluginFileInActiveWorkspace: async (newFile, groupId) => {
       const readTemplate = window.api?.plugins?.readNewFileTemplate
@@ -170,8 +176,15 @@ export function createPluginNewFileActions(
         groupId
       )
     },
-    openBlankFileInActiveWorkspace: async (extension) => {
-      await openSeededUntitledFile(get, extension, async () => '')
+    openBlankFileInActiveWorkspace: async (extension, groupId) => {
+      await openSeededUntitledFile(get, extension, async () => '', groupId)
+    },
+    openNewFileInActiveWorkspace: async (groupId) => {
+      const selection = await requestNewFileExtension()
+      if (selection.type !== 'extension') {
+        return
+      }
+      await openSeededUntitledFile(get, selection.extension, async () => '', groupId)
     }
   }
 }

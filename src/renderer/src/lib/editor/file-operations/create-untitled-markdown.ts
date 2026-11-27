@@ -142,7 +142,7 @@ export async function createUntitledMarkdownFile(
     }
   }
 
-  throw new Error(`Unable to create untitled markdown file after ${MAX_ATTEMPTS} attempts.`)
+  throw new Error(`Unable to create untitled file after ${MAX_ATTEMPTS} attempts.`)
 }
 
 export async function createUntitledMarkdownFileWithTemplateSelection(

@@ -1,5 +1,6 @@
 import { gitGraphSupport, openGitGraph } from '@/lib/source-control/graph/git-graph-tab'
 import {
+  FileCode,
   GitGraph,
   FileText,
   FolderPlus,
@@ -9,6 +10,7 @@ import {
   SquareTerminal,
   Trash2
 } from 'lucide-react'
+import { useAppStore } from '@/store/index'
 import type { LucideIcon } from 'lucide-react'
 import type { CmdJQuickActionAvailability, CmdJQuickActionContext } from './quick-action-context'
 import {
@@ -157,6 +159,26 @@ export const getCmdJQuickActions = createLocalizedCatalog((): CmdJQuickAction[] 
     ],
     isAvailable: workspaceActionAvailability,
     run: (ctx) => runWorkspaceAction(ctx, ctx.openNewMarkdownFile)
+  },
+  {
+    id: 'new-file',
+    kind: 'action',
+    title: translate('components.cmdJ.quickActions.newFile', 'New File'),
+    description: translate(
+      'components.cmdJ.quickActions.newFileDescription',
+      'Create an untitled file with any extension in the active workspace.'
+    ),
+    icon: FileCode,
+    verbKeywords: [
+      translate('auto.components.cmd.j.quick.actions.verbs.newFile', 'new file'),
+      translate('components.cmdJ.quickActions.verbs.createFile', 'create file'),
+      translate('components.cmdJ.quickActions.verbs.fileExtension', 'file extension')
+    ],
+    isAvailable: workspaceActionAvailability,
+    run: (ctx) =>
+      runWorkspaceAction(ctx, (groupId) =>
+        useAppStore.getState().openNewFileInActiveWorkspace(groupId)
+      )
   },
   {
     id: 'new-terminal-tab',

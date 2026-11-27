@@ -7,6 +7,7 @@ import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipbo
 export type TabCreateMenuOptionKind =
   | 'go-to-simulator'
   | 'new-browser'
+  | 'new-file'
   | 'new-markdown'
   | 'new-simulator'
   | 'new-terminal'
@@ -141,6 +142,17 @@ export function buildTabCreateMenuOptions(
         t('auto.components.tab.bar.tab.create.menu.options.fb50e3d874', 'new markdown'),
         t('auto.components.tab.bar.tab.create.menu.options.6d8b6b4117', 'new file'),
         t('auto.components.tab.bar.tab.create.menu.options.b330f72434', 'mark')
+      ]
+    })
+    const newFileLabel = t('components.tabBar.createMenu.newFile', 'New File')
+    options.push({
+      id: 'new-file',
+      kind: 'new-file',
+      label: newFileLabel,
+      keywords: [
+        t('auto.components.tab.bar.tab.create.menu.options.6d8b6b4117', 'new file'),
+        t('components.tabBar.createMenu.newFileKeywordExtension', 'file extension'),
+        t('components.tabBar.createMenu.newFileKeywordUntitled', 'untitled')
       ]
     })
   }
