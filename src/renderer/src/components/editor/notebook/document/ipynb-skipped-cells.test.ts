@@ -3,7 +3,8 @@ import {
   deleteIpynbCell,
   moveIpynbCell,
   updateIpynbCellRuns,
-  updateIpynbCellSources
+  updateIpynbCellSources,
+  withIpynbCellIds
 } from './ipynb-cell-mutations'
 import { parseIpynb } from './ipynb-parse'
 
@@ -17,10 +18,11 @@ const content = JSON.stringify({
   ]
 })
 
-it('saves sources and execution outputs to the visible cell without changing skipped cells', () => {
+it('prepares and saves execution to the visible cell without changing skipped cells', () => {
   expect(parseIpynb(content).cells.map((cell) => cell.source)).toEqual(['first', 'last'])
   const edited = updateIpynbCellSources(content, [{ index: 0, source: 'changed' }])
-  const finished = updateIpynbCellRuns(edited, [
+  const prepared = withIpynbCellIds(edited)
+  const finished = updateIpynbCellRuns(prepared, [
     {
       index: 0,
       outputs: [{ output_type: 'stream', name: 'stdout', text: 'done\n' }],
@@ -32,12 +34,13 @@ it('saves sources and execution outputs to the visible cell without changing ski
     hiddenCell,
     {
       cell_type: 'code',
+      id: expect.stringMatching(/^[A-Za-z0-9_-]{1,64}$/),
       source: ['changed'],
       outputs: [{ output_type: 'stream', name: 'stdout', text: ['done\n'] }],
       execution_count: 3
     },
     null,
-    { cell_type: 'raw', source: ['last'] }
+    { cell_type: 'raw', id: expect.stringMatching(/^[A-Za-z0-9_-]{1,64}$/), source: ['last'] }
   ])
 })
 

@@ -217,10 +217,10 @@ export function clearIpynbOutputs(content: string): string {
   return serializeNotebook(root)
 }
 
-/** Gives every cell an nbformat 4.5 id, as Jupyter does when it upgrades a 4.4 notebook. */
+/** Gives supported cells nbformat 4.5 ids, as Jupyter does when it upgrades a 4.4 notebook. */
 export function withIpynbCellIds(content: string): string {
   const root = parseNotebookRoot(content)
-  const cells = root.document.cells.filter(isRecord)
+  const cells = root.document.cells.filter(isSupportedIpynbCell)
   if (cells.every((cell) => typeof cell.id === 'string')) {
     return content
   }
