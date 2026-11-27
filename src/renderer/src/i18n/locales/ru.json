@@ -16122,13 +16122,7 @@
             "keepFile": "Сохранить файл",
             "keepDeletion": "Сохранить удаление",
             "refreshAll": "Обновить всё",
-            "rebaseConflictCount_one": "{{count}} конфликт",
-            "rebaseConflictCount_few": "{{count}} конфликта",
-            "rebaseConflictCount_many": "{{count}} конфликтов",
-            "rebaseConflictCount_other": "{{count}} конфликта",
-            "rebasePaused": "Rebase приостановлен",
             "rebaseResolveConflictsFirst": "Сначала разрешите конфликты",
-            "rebaseAbort": "Прервать",
             "rebaseContinue": "Продолжить",
             "continueRebasePausedAgain": "Rebase приостановлен на следующем конфликте",
             "continueRebaseFailed": "Не удалось продолжить rebase",
@@ -16139,7 +16133,6 @@
             "rebaseStopMovedOn": "Rebase уже продвинулся дальше. Проверьте панель и повторите попытку.",
             "rebaseEmptyStep": "На этом шаге нечего коммитить. Прервите rebase или завершите его в терминале.",
             "rebaseStepUnreadableShort": "Проверка не удалась",
-            "rebaseCheckAgain": "Проверить снова",
             "rebaseRetryInspect": "Повторить",
             "rebaseRetryInspectLabel": "Повторно проверить шаг rebase",
             "rebaseStoppedFinishInTerminal": "Git приостановил этот шаг. Завершите его в терминале или прервите.",
@@ -16175,7 +16168,11 @@
             "scopeFileCount_many": "{{count}} файлов",
             "scopeCommitCount_few": "{{count}} коммита",
             "scopeCommitCount_many": "{{count}} коммитов",
-            "compareLoadingAgainst": "Сравнение с {{base}}"
+            "compareLoadingAgainst": "Сравнение с {{base}}",
+            "operationResolve": "Разрешить",
+            "operationResolveLabel": "Разрешить конфликты с ИИ",
+            "operationMoreActions": "Другие действия",
+            "operationAbortConfirm": "Выберите ещё раз, чтобы прервать"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Не удалось запустить выбранного агента.",
@@ -16810,15 +16807,7 @@
               "conflict": {
                 "status": {
                   "cards": {
-                    "5302a1ddba": "Конфликты слияния",
-                    "7f3af87549": "Конфликты перебазирования",
-                    "6a8e9ad490": "Конфликты cherry-pick",
-                    "bdf8772106": "Конфликты",
-                    "edc2d82a2b": "Выполняется слияние",
-                    "5c3707aa44": "Выполняется перебазирование",
-                    "ffe53a1da6": "Выполняется cherry-pick",
-                    "35eb76d323": "Выполняется операция",
-                    "completeMerge": "Завершить слияние"
+                    "bdf8772106": "Конфликты"
                   }
                 }
               },
@@ -31592,13 +31581,10 @@
     "loadFailed": "Не удалось загрузить историю Git",
     "updateHost": "Обновите Orca на {{host}}, чтобы открыть граф Git",
     "title": "Граф Git",
-    "revertConflicts": "Конфликты отмены коммита",
-    "revertInProgress": "Выполняется отмена коммита",
     "abortOperationTitle": "Прервать {{operation}}?",
     "abortOperationDescription": "Текущая операция будет отменена. Выполненные во время неё разрешения конфликтов могут быть потеряны.",
     "abortOperation": "Прервать {{operation}}",
     "recoveryFailed": "Не удалось завершить операцию. Обновите панель контроля версий и повторите попытку.",
-    "continueOperation": "Продолжить {{operation}}",
     "reverting": "Отмена коммита",
     "updateActionsHost": "Обновите Orca на {{host}}, чтобы выполнять действия с коммитами",
     "thisHost": "этом хосте",

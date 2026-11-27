@@ -15207,10 +15207,7 @@
             "keepFile": "保留檔案",
             "keepDeletion": "保留刪除",
             "refreshAll": "全部重新整理",
-            "rebaseConflictCount_other": "{{count}} 個衝突",
-            "rebasePaused": "重定基底已暫停",
             "rebaseResolveConflictsFirst": "請先解決衝突",
-            "rebaseAbort": "中止",
             "rebaseContinue": "繼續",
             "continueRebasePausedAgain": "重定基底在下一個衝突處暫停",
             "continueRebaseFailed": "繼續重定基底失敗",
@@ -15221,7 +15218,6 @@
             "rebaseStopMovedOn": "重定基底已經繼續進行。請查看面板後再試一次。",
             "rebaseEmptyStep": "此步驟沒有可提交的內容。請中止重定基底，或在終端機中完成它。",
             "rebaseStepUnreadableShort": "檢查失敗",
-            "rebaseCheckAgain": "再次檢查",
             "rebaseRetryInspect": "重試",
             "rebaseRetryInspectLabel": "重新檢查重定基底步驟",
             "rebaseStoppedFinishInTerminal": "Git 已在此步驟暫停。請在終端機中完成或中止。",
@@ -15253,7 +15249,11 @@
             "scopeNoUncommitted": "沒有未提交的變更。",
             "scopeCommitFiles": "檔案",
             "gitGraphButton": "圖譜",
-            "compareLoadingAgainst": "正在與 {{base}} 比較"
+            "compareLoadingAgainst": "正在與 {{base}} 比較",
+            "operationResolve": "解決",
+            "operationResolveLabel": "用 AI 解決衝突",
+            "operationMoreActions": "更多操作",
+            "operationAbortConfirm": "再次選取以中止"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "無法啟動選定的代理程式。",
@@ -15857,15 +15857,7 @@
               "conflict": {
                 "status": {
                   "cards": {
-                    "5302a1ddba": "合併衝突",
-                    "7f3af87549": "變基衝突",
-                    "6a8e9ad490": "挑選衝突",
-                    "bdf8772106": "衝突",
-                    "edc2d82a2b": "合併正在進行中",
-                    "5c3707aa44": "變基正在進行中",
-                    "ffe53a1da6": "挑選正在進行中",
-                    "35eb76d323": "操作正在進行中",
-                    "completeMerge": "完成合併"
+                    "bdf8772106": "衝突"
                   }
                 }
               },
@@ -27876,13 +27868,10 @@
     "loadFailed": "無法載入 Git 歷史記錄",
     "updateHost": "請更新 {{host}} 上的 Orca 以開啟 Git 圖",
     "title": "Git 圖",
-    "revertConflicts": "還原提交衝突",
-    "revertInProgress": "正在還原提交",
     "abortOperationTitle": "中止{{operation}}？",
     "abortOperationDescription": "這會取消進行中的操作，並可能捨棄在此期間完成的衝突解決。",
     "abortOperation": "中止{{operation}}",
     "recoveryFailed": "無法完成操作。請重新整理原始碼管理後再試。",
-    "continueOperation": "繼續{{operation}}",
     "reverting": "正在還原提交",
     "updateActionsHost": "請更新{{host}}上的 Orca 以操作提交",
     "thisHost": "此主機",

@@ -15713,11 +15713,7 @@
             "keepDeletion": "Silmeyi koru",
             "refreshAll": "Tümünü yenile",
             "statusReadFailed": "Git bu çalışma alanını okuyamadı. Gösterilen değişiklikler güncel olmayabilir.",
-            "rebaseConflictCount_one": "{{count}} çakışma",
-            "rebaseConflictCount_other": "{{count}} çakışma",
-            "rebasePaused": "Rebase duraklatıldı",
             "rebaseResolveConflictsFirst": "Önce çakışmaları çözün",
-            "rebaseAbort": "İptal et",
             "rebaseContinue": "Devam et",
             "continueRebasePausedAgain": "Rebase sonraki çakışmada duraklatıldı",
             "continueRebaseFailed": "Rebase sürdürülemedi",
@@ -15728,7 +15724,6 @@
             "rebaseStopMovedOn": "Rebase zaten ilerledi. Paneli kontrol edip yeniden deneyin.",
             "rebaseEmptyStep": "Bu adımda commit edilecek bir şey yok. Rebase’i iptal edin veya bir terminalde tamamlayın.",
             "rebaseStepUnreadableShort": "Kontrol başarısız",
-            "rebaseCheckAgain": "Tekrar kontrol et",
             "rebaseRetryInspect": "Yeniden dene",
             "rebaseRetryInspectLabel": "Rebase adımını yeniden denetle",
             "rebaseStoppedFinishInTerminal": "Git bu adımda durakladı. Bir terminalde tamamla veya iptal et.",
@@ -15760,7 +15755,11 @@
             "scopeNoUncommitted": "Commit edilmemiş değişiklik yok.",
             "scopeCommitFiles": "Dosyalar",
             "gitGraphButton": "Grafik",
-            "compareLoadingAgainst": "{{base}} ile karşılaştırılıyor"
+            "compareLoadingAgainst": "{{base}} ile karşılaştırılıyor",
+            "operationResolve": "Çöz",
+            "operationResolveLabel": "Conflict'leri AI ile çöz",
+            "operationMoreActions": "Diğer işlemler",
+            "operationAbortConfirm": "İptal etmek için tekrar seçin"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Seçilen ajan başlatılamadı.",
@@ -16369,15 +16368,7 @@
               "conflict": {
                 "status": {
                   "cards": {
-                    "5302a1ddba": "Merge conflict'leri",
-                    "7f3af87549": "Rebase conflict'leri",
-                    "6a8e9ad490": "Cherry-pick conflict'leri",
-                    "bdf8772106": "Conflict'ler",
-                    "edc2d82a2b": "Merge devam ediyor",
-                    "5c3707aa44": "Rebase devam ediyor",
-                    "ffe53a1da6": "Cherry-pick devam ediyor",
-                    "35eb76d323": "İşlem devam ediyor",
-                    "completeMerge": "Birleştirmeyi tamamla"
+                    "bdf8772106": "Conflict'ler"
                   }
                 }
               },
@@ -31062,13 +31053,10 @@
     "loadFailed": "Git geçmişi yüklenemedi",
     "updateHost": "Git grafiğini açmak için {{host}} üzerindeki Orca’yı güncelleyin",
     "title": "Git Grafiği",
-    "revertConflicts": "Geri alma çakışmaları",
-    "revertInProgress": "Geri alma sürüyor",
     "abortOperationTitle": "{{operation}} iptal edilsin mi?",
     "abortOperationDescription": "Bu, devam eden işlemi iptal eder ve işlem sırasında yapılan çakışma çözümlerini silebilir.",
     "abortOperation": "{{operation}} işlemini iptal et",
     "recoveryFailed": "İşlem tamamlanamadı. Kaynak denetimini yenileyip tekrar deneyin.",
-    "continueOperation": "{{operation}} işlemine devam et",
     "reverting": "Geri alınıyor",
     "updateActionsHost": "Commit işlemleri için {{host}} üzerindeki Orca’yı güncelleyin",
     "thisHost": "bu makine",

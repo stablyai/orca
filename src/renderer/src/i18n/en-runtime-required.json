@@ -451,8 +451,6 @@
             "discardFailed_other": "Failed to discard {{count}} files",
             "noteCount_one": "{{count}} note",
             "noteCount_other": "{{count}} notes",
-            "rebaseConflictCount_one": "{{count}} conflict",
-            "rebaseConflictCount_other": "{{count}} conflicts",
             "scopeCommitCount_one": "{{count}} commit",
             "scopeCommitCount_other": "{{count}} commits",
             "scopeFileCount_one": "{{count}} file",
