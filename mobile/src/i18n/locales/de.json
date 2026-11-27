@@ -579,7 +579,6 @@
       "applying": "Wird angewendet…",
       "onAttach": "Wird angewendet, sobald der Chat verbunden ist",
       "heldPickRefused": "{{picked}} ist in diesem Chat nicht verfügbar. {{kept}} beibehalten.",
-      "optionsSection": "Optionen",
       "permissionsLabel": "Berechtigungen, {{value}}",
       "settingsLocked": "Die Modelleinstellungen werden nach diesem Durchgang freigegeben.",
       "workingAnnouncement": "Der Agent arbeitet. Die Modelleinstellungen werden nach diesem Durchgang freigegeben."

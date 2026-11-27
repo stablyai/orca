@@ -574,8 +574,7 @@
       "workingAnnouncement": "El agente está trabajando. La configuración del modelo se desbloqueará cuando termine este turno.",
       "applying": "Aplicando…",
       "onAttach": "Se aplica cuando el chat se conecte",
-      "heldPickRefused": "{{picked}} no está disponible en este chat. Se mantiene {{kept}}.",
-      "optionsSection": "Opciones"
+      "heldPickRefused": "{{picked}} no está disponible en este chat. Se mantiene {{kept}}."
     },
     "sessionOptionRows": {
       "defaultMarker": "Predeterminado",

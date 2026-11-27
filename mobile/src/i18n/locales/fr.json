@@ -589,7 +589,6 @@
       "applying": "Application en cours…",
       "onAttach": "S'applique quand le chat se connecte",
       "heldPickRefused": "{{picked}} n'est pas disponible dans ce chat. {{kept}} est conservé.",
-      "optionsSection": "Options",
       "permissionsLabel": "Autorisations, {{value}}",
       "settingsLocked": "Les paramètres du modèle seront déverrouillés à la fin de ce tour.",
       "workingAnnouncement": "L'agent travaille. Les paramètres du modèle seront déverrouillés à la fin de ce tour."

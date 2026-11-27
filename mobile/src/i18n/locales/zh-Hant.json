@@ -579,7 +579,6 @@
       "applying": "正在套用…",
       "onAttach": "聊天連線後套用",
       "heldPickRefused": "此聊天無法使用 {{picked}}。已保留 {{kept}}。",
-      "optionsSection": "選項",
       "permissionsLabel": "權限，{{value}}",
       "settingsLocked": "本回合結束後即可變更模型設定。",
       "workingAnnouncement": "代理程式正在執行。本回合結束後即可變更模型設定。"
@@ -5889,7 +5888,6 @@
     "chat": {
       "mentionOwnChats": "你的其他聊天",
       "mentionPaused": "已暫停",
-      "mentionPlaceholder": "隨心輸入，@ 提及機器人或檔案，/ 使用命令",
       "mentionChatsLoadFailed": "無法載入聊天"
     },
     "access": {

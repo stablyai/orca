@@ -847,7 +847,6 @@
       "applying": "적용 중…",
       "onAttach": "채팅이 연결될 때 적용됩니다",
       "heldPickRefused": "이 채팅에서는 {{picked}}을(를) 사용할 수 없습니다. {{kept}}을(를) 유지했습니다.",
-      "optionsSection": "옵션",
       "permissionsLabel": "권한, {{value}}",
       "settingsLocked": "이번 턴이 끝나면 모델 설정을 변경할 수 있습니다.",
       "workingAnnouncement": "에이전트가 작업 중입니다. 이번 턴이 끝나면 모델 설정을 변경할 수 있습니다."
@@ -5664,7 +5663,6 @@
     "chat": {
       "mentionOwnChats": "내 다른 채팅",
       "mentionPaused": "일시 중지됨",
-      "mentionPlaceholder": "무엇이든 물어보세요. @로 봇이나 파일 멘션, /로 명령어 실행",
       "mentionChatsLoadFailed": "채팅을 불러오지 못함"
     },
     "tabs": {
