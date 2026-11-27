@@ -118,11 +118,12 @@ describe('serveMcpOverStdio', () => {
     })
   })
 
-  it('reports CLI failures as tool errors but keeps an unmet wait a success', async () => {
+  it('reports CLI failures and refused sends as tool errors but keeps an unmet wait a success', async () => {
     const failure = '{"ok":false,"error":{"code":"runtime_unavailable","message":"down"}}'
     const runs: McpToolRun[] = [
       { exitCode: 1, stdout: `${failure}\n`, stderr: 'Start Orca first.\n' },
-      { exitCode: 1, stdout: '{"ok":true,"result":{"wait":{"satisfied":false}}}', stderr: '' }
+      { exitCode: 1, stdout: '{"ok":true,"result":{"wait":{"satisfied":false}}}', stderr: '' },
+      { exitCode: 1, stdout: '{"ok":true,"result":{"accepted":false}}', stderr: '' }
     ]
     const server = startServer(async () => runs.shift()!)
     server.request({ id: 1, method: 'tools/call', params: { name: 'orca_status' } })
@@ -139,6 +140,11 @@ describe('serveMcpOverStdio', () => {
         arguments: { terminal: 't', for: 'exit', timeoutMs: 10 ** 6 }
       }
     })
+    server.request({
+      id: 4,
+      method: 'tools/call',
+      params: { name: 'terminal_send', arguments: { terminal: 't', text: 'hi' } }
+    })
     const replies = await server.close()
     const byId = (id: number) => replies.find((reply) => reply.id === id)?.result
 
@@ -151,6 +157,7 @@ describe('serveMcpOverStdio', () => {
       content: [{ type: 'text', text: 'terminal_wait: "timeoutMs" must be at most 120000.' }],
       isError: true
     })
+    expect(byId(4)).toMatchObject({ isError: true })
   })
 
   it('aborts a cancelled call without answering it', async () => {

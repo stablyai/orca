@@ -18,6 +18,8 @@ export type McpToolDefinition = {
   command: readonly string[]
   args: readonly McpToolArg[]
   readOnly: boolean
+  // Can interrupt or overwrite existing work, not only add to it.
+  destructive?: boolean
   // Blocking CLI calls get headroom over their own --timeout-ms.
   maxRuntimeMs?: number
 }
@@ -35,7 +37,7 @@ export type McpToolSchema = {
   annotations: {
     title: string
     readOnlyHint: boolean
-    destructiveHint: false
+    destructiveHint: boolean
     idempotentHint: boolean
     openWorldHint: false
   }
@@ -73,7 +75,7 @@ export function describeMcpTool(tool: McpToolDefinition): McpToolSchema {
     annotations: {
       title: tool.title,
       readOnlyHint: tool.readOnly,
-      destructiveHint: false,
+      destructiveHint: tool.destructive === true,
       idempotentHint: tool.readOnly,
       openWorldHint: false
     }

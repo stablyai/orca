@@ -75,7 +75,7 @@ export function serveMcpOverStdio(options: {
       if (controller.signal.aborted) {
         return
       }
-      send({ id, result: toCallToolResult(run) })
+      send({ id, result: toCallToolResult(tool, run) })
     } catch (error) {
       if (!controller.signal.aborted) {
         send({ id, result: toolResult(`Could not run orca: ${errorMessage(error)}`, true) })
@@ -170,11 +170,11 @@ export function serveMcpOverStdio(options: {
   })
 }
 
-function toCallToolResult(run: McpToolRun): Record<string, unknown> {
+function toCallToolResult(tool: McpToolDefinition, run: McpToolRun): Record<string, unknown> {
   const stdout = run.stdout.trim()
   const stderr = run.stderr.trim()
-  // terminal wait exits 1 for an unmet condition but still reports ok: true.
-  const ok = run.exitCode === 0 || parsesAsSuccess(stdout)
+  // terminal wait exits 1 for an unmet condition but still reports ok: true; other nonzero exits failed.
+  const ok = run.exitCode === 0 || (tool.name === 'terminal_wait' && parsesAsSuccess(stdout))
   const text = (ok ? [stdout || stderr] : [stdout, stderr]).filter(Boolean).join('\n')
   return toolResult(text || `orca exited with code ${String(run.exitCode)}`, !ok)
 }

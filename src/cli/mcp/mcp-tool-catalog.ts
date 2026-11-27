@@ -5,7 +5,8 @@ const TERMINAL_WAIT_MAX_MS = 120_000
 
 const WORKTREE_SELECTOR =
   'Worktree selector: id:<worktreeId>, path:<absolute path>, branch:<name>, issue:<number>, or active. Use worktree_list to find ids.'
-const TERMINAL_HANDLE = 'Terminal handle (term_...) from terminal_list or an agent launch result.'
+const TERMINAL_HANDLE =
+  'Terminal handle (term_...) from terminal_list or from an agent launch that started a terminal.'
 
 const AGENT_OPTION_ARGS: readonly McpToolArg[] = [
   { name: 'model', flag: 'model', type: 'string', description: 'Provider model id.' },
@@ -218,7 +219,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         description: 'Send Ctrl+C first.'
       }
     ],
-    readOnly: false
+    readOnly: false,
+    destructive: true
   },
   {
     name: 'terminal_wait',
