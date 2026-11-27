@@ -18,6 +18,7 @@ import {
   findOffscreenOpenedTabStripSlot,
   getActiveTabDockSide,
   readTabStripSlotIds,
+  revealTabStripSlot,
   updateTabStripDockAvailability,
   type ActiveTabDockSide
 } from './tab-strip-slot-geometry'

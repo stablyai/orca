@@ -36,6 +36,8 @@ import { isSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
 const EMPTY_GROUPS: readonly TabGroup[] = []
 const EMPTY_CLIENT_HOSTED_ROWS: readonly ClientHostedBrowserRow[] = []
+type SplitFocusStyle = CSSProperties &
+  Record<'--tab-active-foreground' | '--tab-active-indicator', string>
 
 /** The panel draws attached strips; external hosts provide their single strip in shell chrome. */
 export type TabGroupPanelTabStrip = 'attached' | 'external'
@@ -252,7 +254,7 @@ export default function TabGroupPanel({
     'flex min-w-0 items-center gap-0.5 overflow-hidden pl-1.5 pr-0.5 transition-opacity duration-150',
     !isFocused && 'opacity-50 hover:opacity-100 focus-within:opacity-100'
   )
-  const splitFocusStyle: CSSProperties | undefined =
+  const splitFocusStyle: SplitFocusStyle | undefined =
     hasSplitGroups && !isFocused
       ? {
           ...(backdropActive ? {} : { opacity: UNFOCUSED_SPLIT_GROUP_OPACITY }),

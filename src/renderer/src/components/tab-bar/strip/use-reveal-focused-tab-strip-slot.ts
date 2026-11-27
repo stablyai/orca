@@ -1,5 +1,8 @@
 import { useCallback, useLayoutEffect, useRef, type MutableRefObject, type RefObject } from 'react'
-import { isTabStripPointerGestureActive, onTabStripPointerGestureRelease } from './tab-strip-pointer-gesture'
+import {
+  isTabStripPointerGestureActive,
+  onTabStripPointerGestureRelease
+} from './tab-strip-pointer-gesture'
 import { findTabStripSlot, revealTabStripSlot } from './tab-strip-slot-geometry'
 import { isTabStripScrolledToEnd } from './tab-strip-scroll-controls'
 
@@ -54,13 +57,13 @@ export function useRevealFocusedTabStripSlot({
   useLayoutEffect(() => {
     const strip = tabStripRef.current
     if (!strip) {
-      return
+      return undefined
     }
     const focusChanged = previousFocusRef.current !== isFocused
     previousFocusRef.current = isFocused
     if (focusChanged && !isFocused) {
       recordScrollAnchor()
-      return
+      return undefined
     }
     if (isTabStripPointerGestureActive()) {
       requestAnimationFrame(updateTabStripOverflowState)
@@ -77,9 +80,10 @@ export function useRevealFocusedTabStripSlot({
     if (tabClosedThisCommitRef.current) {
       requestAnimationFrame(updateTabStripOverflowState)
       recordScrollAnchor()
-      return
+      return undefined
     }
     revealFocusedSlot()
+    return undefined
   }, [
     activeDockSlotId,
     activeVisibleTabId,
