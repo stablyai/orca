@@ -47,7 +47,14 @@ export function createFilesystemHandlerContext(
     downloadSessions.delete(transferId)
     session.disposeRendererLifetime()
     clearTimeout(session.cleanupTimer)
-    await session.handle.close().catch(() => {})
+    try {
+      await session.handle.close()
+    } catch (error) {
+      if (!cleanupTemp) {
+        await cleanupLocalTransferPath(session.tempPath)
+        throw error
+      }
+    }
     if (cleanupTemp) {
       await cleanupLocalTransferPath(session.tempPath)
     }
