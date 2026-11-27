@@ -1,8 +1,5 @@
 import type { GitHubPrStartPoint, GitPushTarget } from '../../../../shared/worktree/types'
-import {
-  resolveRuntimeGitHubWorktreeBase,
-  type RuntimeGitHubWorktreeBaseArgs
-} from '../../integrations/github/runtime-github-worktree-base'
+import type { RuntimeGitHubWorktreeBaseArgs } from '../../integrations/github/runtime-github-worktree-base'
 import type { RuntimeGitLabWorktreeBaseArgs } from '../../integrations/gitlab/runtime-gitlab-worktree-base'
 import { RuntimeRemoteFetchOperations } from '../../repositories/runtime-remote-fetch-operations'
 
@@ -10,6 +7,8 @@ export abstract class RuntimeWorktreeReviewBase extends RuntimeRemoteFetchOperat
   async resolveManagedPrBase(
     args: RuntimeGitHubWorktreeBaseArgs
   ): Promise<GitHubPrStartPoint | { error: string }> {
+    const { resolveRuntimeGitHubWorktreeBase } =
+      await import('../../integrations/github/runtime-github-worktree-base')
     return resolveRuntimeGitHubWorktreeBase(args, {
       store: this.store ? this.requireStore() : null,
       resolveRepo: (selector) => this.resolveRepoSelector(selector)
