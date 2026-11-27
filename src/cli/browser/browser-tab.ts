@@ -17,6 +17,7 @@ import {
   getRequiredStringFlag
 } from '../arguments/flags'
 import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/connection/types'
+import { escapeTerminalControlCharacters } from '../../shared/terminal/output/terminal-control-character-escape'
 import { isBrowserTabSplitDirection } from '../../shared/browser/workspaces/browser-tab-split-direction'
 import { getBrowserWorktreeSelector } from '../workspace-selection/workspace-selector'
 import { getBrowserCommandTarget, getScopedBrowserWorktreeSelector } from './browser-command-target'
@@ -130,7 +131,9 @@ export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
 
 // Why: BROWSER callers are often phone-only or headless sessions; when no desktop opens the page, the URL is their way on (#48645).
 function withOpenUrlYourselfLine(error: unknown, url: string): RuntimeClientError {
-  const message = `${error instanceof Error ? error.message : String(error)}\nOpen it in a browser yourself: ${url}`
+  // The URL comes from whatever process ran BROWSER, so keep its control bytes off the terminal.
+  const shown = escapeTerminalControlCharacters(url, true)
+  const message = `${error instanceof Error ? error.message : String(error)}\nOpen it in a browser yourself: ${shown}`
   if (error instanceof RuntimeRpcFailureError) {
     return new RuntimeRpcFailureError({
       ...error.response,
