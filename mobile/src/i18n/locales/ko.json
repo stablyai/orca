@@ -5764,6 +5764,358 @@
       "unreachableSingle": "{{name}}에 연결할 수 없습니다. 해당 컴퓨터에서 Orca가 실행 중인지 확인한 다음 다시 시도하세요.",
       "workspaceDeleted": "이 채팅의 작업 공간이 {{name}}에서 삭제되었습니다."
     },
+    "slack": {
+      "errors": {
+        "notAToken": "구성 Refresh Token이 아닙니다. 구성 Refresh Token은 xoxe-로 시작합니다.",
+        "grantExpired": "Slack이 이 워크스페이스의 토큰을 더 이상 받지 않습니다. 새 토큰을 생성해 붙여넣으세요.",
+        "rateLimited": "시도 횟수가 너무 많습니다. 1분 뒤에 다시 시도하세요.",
+        "slackUnavailable": "Slack이 응답하지 않았습니다. 다시 시도하세요.",
+        "slackRefused": "Slack이 앱 설정을 거부했습니다.",
+        "unknownBot": "Orca Cloud에 아직 이 봇이 등록되지 않았습니다. 1분 뒤에 다시 시도하세요.",
+        "wrongWorkspace": "이 봇의 Slack 앱은 다른 워크스페이스에 있습니다. 먼저 Slack에서 제거하세요.",
+        "notInstalled": "먼저 이 봇을 Slack에 추가하세요.",
+        "unreachable": "Orca Cloud에 연결할 수 없습니다. 인터넷 연결을 확인하고 다시 시도하세요."
+      },
+      "setup": {
+        "checking": "Slack 확인 중…",
+        "isIn": "{{name}}이(가) Slack에 추가되었습니다",
+        "retry": "다시 시도",
+        "connectAnother": "다른 Slack 워크스페이스 연결",
+        "connect": "Slack 연결",
+        "cancel": "취소",
+        "reconnectShort": "다시 연결",
+        "createShort": "생성",
+        "settingUp": "Slack 앱을 설정하는 중…",
+        "readyTitle": "Slack 앱이 준비되었습니다",
+        "readyDetail": "Slack에서 승인하면 완료됩니다. 워크스페이스에서 새 앱에 관리자 승인이 필요하면, 관리자가 승인한 뒤 {{name}}이(가) 참여합니다.",
+        "approve": "Slack에서 승인",
+        "waiting": "Slack을 기다리는 중…",
+        "newLink": "새 링크 받기",
+        "uncertain": "Slack에 Orca가 사용할 수 없는 {{name}} 앱이 만들어졌을 수 있습니다. Slack 앱 설정에 그 앱이 있으면 삭제한 다음 다시 설정하세요.",
+        "uncertainChecked": "Slack을 확인했습니다. 그런 앱이 없거나 삭제했습니다",
+        "again": "다시 설정",
+        "tryIt": "아무 채널이나 DM에서 사용해 보세요",
+        "openInSlack": "Slack에서 메시지 보내기",
+        "preview": {
+          "askPlain": "@{{name}} 이 스레드 요약해 줘"
+        },
+        "pick": "Slack 워크스페이스를 선택하세요.",
+        "another": "다른 워크스페이스 연결"
+      },
+      "connection": {
+        "installedBy": "{{installer}}이(가) 설치함",
+        "waiting": "Slack에서 설치를 기다리는 중입니다.",
+        "none": "아직 Slack에 없습니다.",
+        "unfinished": "Slack 설정이 완료되지 않았습니다.",
+        "removeFromTitle": "{{place}}에서 {{name}}을(를) 제거할까요?",
+        "removeNote": "제거하면 Slack에서 새 작업을 받지 않습니다. Slack의 앱은 삭제되지 않습니다.",
+        "removeConfirm": "제거",
+        "add": "Slack에 추가",
+        "finish": "설정 완료",
+        "update": "Slack에서 업데이트",
+        "appSettings": "Slack 앱 설정",
+        "updatePermissions": "Slack 권한 업데이트…"
+      },
+      "mentionLinePlain": "채널이나 DM에서 @{{name}}을(를) 멘션하세요.",
+      "replies": "답글",
+      "postAs": {
+        "title": "게시 이름",
+        "changeOn": "{{host}}에서 변경하세요",
+        "orcaUser": "Orca 사용자",
+        "viaOrca": "{{name}} (Orca 경유)",
+        "sample": "그다음에 배포해 주세요",
+        "linePlain": "Orca에서 Slack 스레드에 답글을 달면 {{name}}(으)로 게시됩니다.",
+        "approve": "Slack에서 승인",
+        "waitingOn": "{{name}}(으)로 바꾸려면 {{installer}}이(가) Slack에서 승인해야 합니다.",
+        "waiting": "{{name}}(으)로 바꾸려면 Slack에서 승인해야 합니다."
+      },
+      "token": {
+        "open": "구성 토큰 받기",
+        "step1": "Slack 앱 설정에서 “Your App Configuration Tokens”를 찾아 Generate Token을 선택하세요.",
+        "step2": "봇을 둘 워크스페이스를 선택하세요.",
+        "step3": "Refresh Token을 복사해 아래에 붙여넣으세요.",
+        "label": "구성 Refresh Token",
+        "paste": "붙여넣기",
+        "accessPasted": "Access Token을 붙여넣었습니다. 바로 옆에 있는 Refresh Token을 복사하세요.",
+        "kept": "Orca Cloud가 이 토큰을 암호화해 보관하므로, 이 워크스페이스에 다음 봇을 추가할 때는 한 번만 누르면 됩니다.",
+        "step2Title": "워크스페이스 선택",
+        "step3Title": "Refresh Token 붙여넣기"
+      },
+      "problem": {
+        "otherUser": "다른 Slack 계정이 연결을 승인했습니다.",
+        "otherUserNext": "다른 Slack 계정으로 로그인한 사람이 Slack 링크를 승인해서 {{bot}}이(가) 나를 대신해 작업할 수 없습니다. 새 링크를 받아 내 Slack 계정으로 로그인한 상태에서 승인하세요.",
+        "expired": "Slack 로그인이 완료되지 않았습니다.",
+        "expiredNext": "아무도 연결을 승인하기 전에 Slack 링크가 만료되었습니다.",
+        "code": "코드",
+        "computer": "컴퓨터",
+        "workspace": "워크스페이스"
+      },
+      "reconnect": {
+        "whyNeeded": "Orca에 이 워크스페이스에서 사용할 수 있는 Slack 토큰이 없습니다.",
+        "continue": "계속",
+        "stopped": "Slack이 {{host}}에서 사용하는 토큰을 더 이상 받지 않습니다."
+      }
+    },
+    "connectors": {
+      "back": "커넥터로 돌아가기",
+      "addOrg": "조직 추가",
+      "addWorkspace": "워크스페이스 추가",
+      "addAnotherWorkspace": "다른 워크스페이스 추가",
+      "backShort": "뒤로",
+      "addGitHubAccess": "저장소 또는 조직 추가",
+      "addBack": "다시 추가",
+      "addBackNamed": "{{name}} 다시 추가"
+    },
+    "connector": {
+      "titleSeparator": " · ",
+      "actions": "{{name}} 작업",
+      "removeFrom": "{{place}}에서 제거…"
+    },
+    "composio": {
+      "viaComposio": "Composio 경유",
+      "group": "Composio의 더 많은 앱",
+      "showMore": "더 보기",
+      "loading": "Composio 앱을 읽는 중…",
+      "key": {
+        "label": "Composio API 키",
+        "placeholder": "키를 붙여넣으세요",
+        "getKey": "키 발급받기"
+      },
+      "signInEnded": "로그인이 거부되었거나, 실패했거나, 시간이 너무 오래 걸렸습니다.",
+      "signInOnComposio": "Composio 페이지에서 {{app}}에 로그인하세요.",
+      "tryAgain": "다시 시도",
+      "disconnectTitle": "{{app}} 연결을 해제할까요?",
+      "disconnectNote": "{{bot}}은(는) 더 이상 {{app}}을(를) 사용할 수 없습니다. 언제든 다시 연결할 수 있습니다.",
+      "disconnect": "연결 해제",
+      "signInAgainAs": "다시 로그인 필요 · {{label}}",
+      "signInAgain": "다시 로그인 필요",
+      "connectedAs": "{{label}}(으)로 연결됨",
+      "connected": "연결됨",
+      "people": "사람",
+      "peopleNote": "{{bot}}에게 요청할 수 있는 사람은 누구나 사용할 수 있습니다",
+      "signInLabel": "로그인",
+      "signInHeld": "Composio에서 보관",
+      "signInAgainMenu": "다시 로그인",
+      "disconnectNamed": "{{app}} 연결 해제",
+      "added": "이제 {{bot}}이(가) {{app}}을(를) 사용할 수 있습니다",
+      "signedOut": "로그아웃됨 · {{via}}",
+      "unreadShort": "Composio 앱을 불러오지 못했습니다.",
+      "reading": "Composio를 읽는 중…",
+      "keyRejected": "키가 거부됨",
+      "fixKey": "키 수정",
+      "signInsUnreadShort": "로그인 정보를 읽지 못함",
+      "checkAgain": "다시 확인",
+      "toolName": "Composio 앱"
+    },
+    "linear": {
+      "whoCanAsk": {
+        "needsSetup": "설정을 마쳐 {{workspace}}의 내 Linear 계정을 연결한 다음, 여기에서 사람을 선택하세요.",
+        "noMatchDetail": "{{workspace}} Linear의 멤버와 게스트를 추가할 수 있습니다. 그 밖의 사람에게는 나에게 요청하라는 공개 답글이 달립니다."
+      },
+      "errors": {
+        "off": "Linear는 곧 지원됩니다.",
+        "replaced": "Linear 연결이 완료되지 않았습니다. 더 최근에 시작한 Linear 또는 GitHub 연결이 대신했을 수 있습니다. 다시 시작하세요.",
+        "wrongAccount": "이 로그인은 다른 Orca 계정에서 시작되었습니다. 이 계정에서 Linear를 다시 연결하세요.",
+        "alreadyLinked": "이 Orca 계정은 해당 워크스페이스의 다른 Linear 사용자와 연결되어 있습니다. 먼저 Linear 페이지의 ⋯에서 연결을 해제하세요.",
+        "notAMember": "Linear 워크스페이스의 정식 멤버만 그 워크스페이스에서 사람을 선택할 수 있습니다.",
+        "rateLimited": "시도 횟수가 너무 많습니다. 1분 뒤에 다시 시도하세요.",
+        "unavailable": "Linear가 응답하지 않았습니다. 다시 시도하세요."
+      },
+      "connection": {
+        "removeNote": "{{workspace}}의 사람들이 더 이상 이 봇에 이슈를 맡길 수 없고, 봇의 Linear 사람 목록이 지워집니다. Orca는 그 워크스페이스에 계속 설치되어 있습니다.",
+        "removeConfirm": "제거",
+        "finishSetup": "설정 완료"
+      },
+      "howToAskPlain": "이슈에서 @Orca {{handle}}을(를) 멘션하거나 bot:{{handle}} 라벨을 추가하세요.",
+      "setup": {
+        "isOn": "{{name}}이(가) Linear에 연결되었습니다",
+        "checking": "Linear 확인 중…",
+        "retry": "다시 시도",
+        "install": "{{workspace}}에 아직 Orca가 설치되지 않았습니다. Linear 관리자가 모두를 위해 한 번 설치하면 됩니다.",
+        "copyForAdmin": "관리자용 링크 복사",
+        "installing": "설치를 기다리는 중…",
+        "copied": "링크를 복사했습니다.",
+        "connectTitle": "Linear 연결",
+        "close": "닫기",
+        "tryIt": "아무 Linear 이슈에서 사용해 보세요",
+        "orLabelLine": "또는 {{label}} 라벨을 추가하세요."
+      },
+      "connect": {
+        "another": "다른 워크스페이스 사용",
+        "stuck": "Linear 페이지에 “Could not find OAuth client”가 표시되고 넘어가지 않나요? Orca의 Linear 앱이 아직 이 워크스페이스에 공개되지 않았습니다. 앱을 소유한 워크스페이스의 관리자가 앱을 공개로 설정해야 합니다.",
+        "pick": "Linear 워크스페이스를 선택하세요.",
+        "handoffPick": "워크스페이스를 고른 뒤 Authorize를 선택하세요.",
+        "signIn": "Linear에 로그인",
+        "pickSubtitle": "{{name}}이(가) 작업할 워크스페이스를 선택하세요"
+      },
+      "address": "linear.app/{{urlKey}}",
+      "account": {
+        "unlink": "Linear 계정 연결 해제",
+        "reconnect": "다시 연결"
+      }
+    },
+    "github": {
+      "whoCanAsk": {
+        "needsSetup": "설정을 마쳐 내 GitHub 계정을 연결한 다음, 여기에서 사람을 선택하세요.",
+        "exactOnly": "GitHub에서는 정확한 사용자 이름으로만 사람을 찾을 수 있습니다.",
+        "search": "GitHub 사용자 이름으로 검색",
+        "found": "GitHub 사용자",
+        "noUser": "사용자 이름이 “{{query}}”인 GitHub 계정이 없습니다",
+        "typeUsername": "GitHub 사용자 이름을 입력하세요"
+      },
+      "errors": {
+        "off": "GitHub는 곧 지원됩니다.",
+        "replaced": "GitHub 연결이 완료되지 않았습니다. 더 최근에 시작한 Linear 또는 GitHub 연결이 대신했을 수 있습니다. 다시 시작하세요.",
+        "wrongAccount": "이 로그인은 다른 Orca 계정에서 시작되었습니다. 이 계정에서 GitHub로 다시 로그인하세요.",
+        "alreadyLinked": "이 Orca 계정은 다른 GitHub 사용자와 연결되어 있습니다. 먼저 GitHub 페이지의 ⋯에서 연결을 해제하세요.",
+        "unavailable": "GitHub가 응답하지 않았습니다. 다시 시도하세요."
+      },
+      "setup": {
+        "isOn": "{{name}}이(가) GitHub에 연결되었습니다",
+        "repositories": "저장소",
+        "checking": "GitHub 확인 중…",
+        "retry": "다시 시도",
+        "installing": "설치 또는 조직 소유자의 승인을 기다리는 중…",
+        "install": "Orca 앱 설치",
+        "finish": "완료",
+        "connectTitle": "GitHub 연결",
+        "close": "닫기",
+        "tryIt": "아무 이슈나 PR에서 사용해 보세요",
+        "preview": {
+          "ask": "이 PR 리뷰해 줘"
+        },
+        "pushesOnHost": "{{name}}의 코드는 {{host}}에 설정된 git 로그인으로 푸시됩니다."
+      },
+      "connection": {
+        "removeNote": "사람들이 더 이상 GitHub에서 이 봇에 요청할 수 없고, 봇의 GitHub 사람 목록이 지워집니다. Orca 앱은 계속 설치되어 있습니다.",
+        "removeConfirm": "제거",
+        "finishSetup": "설정 완료",
+        "refresh": "새로고침",
+        "addAnotherAccount": "다른 계정 추가"
+      },
+      "allRepositories": "{{account}}의 모든 저장소",
+      "account": {
+        "unlink": "GitHub 계정 연결 해제",
+        "reconnect": "다시 연결"
+      },
+      "howToAskPlain": "이슈나 PR에서 {{mention}} {{handle}} …처럼 멘션하세요.",
+      "addMore": "저장소 또는 조직 추가",
+      "checkingInstalls": "GitHub에서 변경 사항을 확인하는 중…",
+      "connect": {
+        "readsOnly": "Orca는 GitHub 사용자 이름과 ID만 읽습니다.",
+        "requested": "조직 소유자에게 Orca 앱 승인을 요청했습니다.",
+        "notInstalled": "아직 내 저장소 어디에도 Orca 앱이 설치되지 않았습니다.",
+        "handoffPick": "로그인한 뒤 저장소를 선택하세요.",
+        "signIn": "GitHub에 로그인",
+        "pickSubtitle": "작업할 수 있는 저장소를 선택하세요"
+      },
+      "allRepositoriesShort": "모든 저장소"
+    },
+    "connect": {
+      "finishOnHost": "{{host}}의 Orca에서 {{service}} 연결을 마치세요.",
+      "otherComputer": "다른 컴퓨터의 봇",
+      "askEachTime": "어느 봇인지 묻기",
+      "account": "계정",
+      "linkedAs": "연결된 계정",
+      "defaultBot": "내 요청을 맡을 기본 봇",
+      "opensOnHost": "{{host}}의 Orca 브라우저에서 열립니다.",
+      "signedInAs": "{{who}}(으)로 로그인됨",
+      "continueOn": "{{host}}에서 계속하세요",
+      "openSignInPage": "로그인 페이지 열기",
+      "cancel": "취소",
+      "signInTo": "{{app}}에 로그인",
+      "updatesWhenDone": "완료하면 여기에 반영됩니다.",
+      "turnOnShort": "켜기"
+    },
+    "google": {
+      "isOn": "{{name}}에서 Google을 켰습니다",
+      "continuesInChat": "Google 설정은 {{name}}의 채팅에서 이어집니다.",
+      "file": {
+        "notAFile": "Google 앱 파일이 아닙니다. 다른 파일을 선택하세요."
+      },
+      "turnOn": {
+        "title": "{{name}}에서 Google을 켤까요?",
+        "confirm": "켜기"
+      },
+      "connect": "Google 연결",
+      "cancel": "취소",
+      "retry": "다시 시도",
+      "checking": "Google 확인 중…",
+      "hostChoice": {
+        "continue": "계속",
+        "description": "{{bot}}이(가) 내 Gmail, 캘린더, 드라이브에 로그인할 방식을 선택하세요.",
+        "self": "직접 호스팅",
+        "selfNote": "내 Google 앱을 사용합니다.",
+        "orca": "Orca 호스팅",
+        "orcaNote": "Google로 로그인합니다.",
+        "soon": "출시 예정"
+      },
+      "importFromTeam": "팀에서 받은 설정 파일 가져오기",
+      "service": {
+        "contacts": "이름으로 사람 찾기"
+      },
+      "bot": {
+        "removeTitle": "{{name}}에서 Google을 제거할까요?",
+        "removeNoteOnHost": "{{name}}은(는) 더 이상 내 Gmail, 캘린더, 드라이브를 사용할 수 없습니다. {{host}}의 Google 연결은 유지됩니다.",
+        "removeConfirm": "제거",
+        "signedOutOnHost": "{{host}}에서 연결되지 않음",
+        "uses": "사용할 수 있는 항목",
+        "whoNote": "{{name}}에게 요청할 수 있는 사람은 누구나 내 메일, 캘린더, 파일을 읽고 보내도록 시킬 수 있습니다.",
+        "removeFrom": "{{name}}에서 Google 제거…"
+      },
+      "fix": {
+        "turnOn": "켜기",
+        "copyForAdmin": "관리자용 문구 복사",
+        "checkAgain": "다시 확인",
+        "allowAgain": "다시 허용"
+      },
+      "adminRequest": "Google 관리 콘솔(보안 › API 제어 › 서드 파티 앱 액세스 관리)에서 이 Google 앱을 ‘신뢰할 수 있음’으로 설정해 주세요: {{clientId}}",
+      "copied": "복사했습니다. Google 관리자에게 보내세요.",
+      "state": {
+        "ready": "준비됨",
+        "apiOff": "Google Cloud에서 꺼져 있음",
+        "adminBlocked": "회사의 Google 관리자가 차단함",
+        "error": "확인할 수 없음",
+        "notAllowed": "허용하지 않음",
+        "allowOnHost": "{{host}}에서 다시 허용하세요"
+      },
+      "headline": {
+        "connected": "Google이 연결되었습니다",
+        "toFixOne": "거의 다 됐습니다: 해결할 항목 1개",
+        "toFix": "거의 다 됐습니다: 해결할 항목 {{count}}개",
+        "noDefault": "기본 계정을 선택하세요",
+        "ended": "Google 접근 권한이 종료되었습니다.",
+        "endedOnHost": "Google 접근 권한이 종료되었습니다. {{host}}에서 다시 로그인하세요."
+      },
+      "defaultBadge": "기본값",
+      "setDefault": "기본값으로 설정",
+      "shareButton": "설정 공유",
+      "share": {
+        "copied": "복사했습니다. 팀원에게 보내세요."
+      },
+      "disconnect": {
+        "title": "{{email}} 연결을 해제할까요?",
+        "revokeNote": "여기에서 봇이 이 계정을 더 이상 사용하지 않으며, Google이 Orca에 허용했던 접근 권한을 모든 곳에서 취소합니다.",
+        "removeOneNote": "여기에서 봇이 이 계정을 더 이상 사용하지 않습니다.",
+        "removeNote": "여기에서 봇이 이 계정을 더 이상 사용하지 않습니다. 봇 설정은 남아 있으므로 Google 연결로 다시 켤 수 있습니다.",
+        "promotes": "{{email}}이(가) 기본값이 됩니다.",
+        "confirm": "연결 해제",
+        "removeFromHost": "{{host}}에서 제거",
+        "revoke": "제거하고 Google에서 권한 취소"
+      },
+      "accounts": "계정",
+      "row": {
+        "signedOut": "Google에 의해 로그아웃됨"
+      },
+      "reconnect": "다시 연결",
+      "addAccount": "다른 계정 추가",
+      "signIn": "Google에 로그인",
+      "handoff": "계정을 고른 뒤 허용을 선택하세요.",
+      "signInWarning": "이 앱은 내가 직접 만든 새 앱이라 Google에서 경고를 표시합니다. 고급을 선택한 다음 ‘Orca(으)로 이동’을 선택하고, 다음 화면에서 모든 항목을 체크하세요.",
+      "signInRun": {
+        "failed": "Google 로그인에 실패했습니다. 다시 시도하세요."
+      }
+    },
     "settings": {
       "remove": "제거",
       "removeName": "{{name}} 제거",
@@ -6537,7 +6889,8 @@
         "stopCancels_one": "유출된 키용. 그 키로 들어온 대기 중인 호출 {{count}}개가 취소됩니다.",
         "stopCancels_other": "유출된 키용. 그 키로 들어온 대기 중인 호출 {{count}}개가 취소됩니다.",
         "stopNote": "유출된 키용.",
-        "done": "키가 교체되었습니다. 새 URL을 복사하세요."
+        "done": "키가 교체되었습니다. 새 URL을 복사하세요.",
+        "action": "교체"
       },
       "secret": {
         "add": "서명 시크릿 추가…",
@@ -6554,6 +6907,9 @@
         "paste": "{{sender}} 시크릿",
         "save": "저장",
         "saved": "서명 시크릿 저장됨",
+        "copyInto": "{{sender}}의 웹훅 설정에 복사해 넣으세요.",
+        "title": "서명 시크릿",
+        "create": "생성",
         "changeOpen": "서명 시크릿 변경…",
         "back": "서명 시크릿으로 돌아가기"
       },
@@ -6650,6 +7006,7 @@
         "unverifiable": "확인 불가",
         "unverifiableDetail": "{{bot}}의 컴퓨터에 연결할 수 없습니다"
       },
+      "copiedKey": "키 복사됨",
       "back": "웹훅으로 돌아가기"
     },
     "errors": {
@@ -7080,12 +7437,39 @@
         "miro": "보드, 스티커 메모, 프레임",
         "reddit": "게시물, 댓글, 서브레딧"
       },
+      "added": "추가됨",
+      "filter": "필터",
+      "filterActive": "필터, {{filter}}",
+      "all": "모든 앱",
       "webhooks": {
         "line": "모든 도구나 스크립트의 이벤트"
       },
+      "category": {
+        "coding": "코딩",
+        "chat": "채팅",
+        "docs": "문서 및 프로젝트",
+        "mail": "메일 및 회의",
+        "monitoring": "모니터링",
+        "sales": "영업 및 지원",
+        "design": "디자인"
+      },
+      "search": "앱 검색",
+      "onBot": "{{bot}}의 앱",
+      "noMatch": "“{{query}}”과(와) 일치하는 앱이 없습니다.",
+      "connectors": "커넥터",
       "composio": {
+        "connectTitle": "Composio 연결",
+        "once": "한 번만 연결하면 모든 봇에서 사용",
+        "browseAll": "Composio 앱 둘러보기",
         "keyOnHost": "{{host}}에 저장되며 봇은 볼 수 없습니다."
-      }
+      },
+      "close": "닫기",
+      "couldNotSignIn": "{{app}}에 로그인하지 못함",
+      "signingIn": "로그인 중",
+      "openPageAgain": "페이지 다시 열기",
+      "closeKeepsSigningIn": "이 창을 닫아도 브라우저에서 로그인이 계속됩니다.",
+      "appsCaption": "앱",
+      "addByUrl": "URL로 추가"
     },
     "share": {
       "receive": {
