@@ -9,6 +9,7 @@ import {
 } from './automation-list-last-run'
 import type { Translate } from '../../../i18n/use-translate'
 import type { AutomationListBotFilter } from '../../../store/slices/ui/automations-page-location'
+import { rowOnBotHost, type AutomationListBotHost } from './automation-list-bot-host'
 
 export type AutomationListStatusFilter = 'all' | 'enabled' | 'paused'
 export type AutomationListLastRunFilter = 'all' | 'failed' | 'succeeded' | 'never'
@@ -187,23 +188,35 @@ function externalEntryHostStableKey(entry: ExternalAutomationListEntry): string 
   })
 }
 
-/** The attribute filter over catalog rows; identity-stable when the filter is inactive. */
+/** Waits run once and are listed in their bot's sidebar, never with automations; they stay selectable. */
+export function listedAutomationRows(
+  rows: readonly AutomationListRow[]
+): readonly AutomationListRow[] {
+  return rows.some((row) => row.automation.once) ? rows.filter((row) => !row.automation.once) : rows
+}
+
+/** The attribute filter over catalog rows; identity-stable when the filter is inactive. A bot filter
+ *  matches only on `botHost`, the catalog authority of the bot's host: another host may reuse its key. */
 export function filterAutomationListRows(
   rows: readonly AutomationListRow[],
   filter: AutomationListFilter,
-  t?: Translate
+  { t, botHost = null }: { t?: Translate; botHost?: AutomationListBotHost | null } = {}
 ): readonly AutomationListRow[] {
   if (!isAutomationListFilterActive(filter)) {
     return rows
   }
   const hostKeys = selectedHostKeys(filter)
+  const bot = filter.bot
   return rows.filter(
     (row) =>
       matchesHostFilter(row.catalogRef ? hostStableKey(row.catalogRef) : null, hostKeys) &&
       matchesStatusFilter(row.automation.enabled, filter.status) &&
       matchesLastRunFilter(getAutomationRowLastRunSnapshot(row, t), filter.lastRun) &&
       (filter.agentIds.length === 0 || filter.agentIds.includes(row.automation.agentId)) &&
-      (!filter.bot || row.automation.workspaceId === filter.bot.workspaceId)
+      (!bot ||
+        (row.automation.workspaceId === bot.workspaceId &&
+          botHost !== null &&
+          rowOnBotHost(row, botHost)))
   )
 }
 

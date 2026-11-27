@@ -211,3 +211,16 @@ export function resolveAutomationListEmptyState(
   }
   return resolveSelectedHostState(input, t)
 }
+
+const TEMPLATE_EMPTY_STATES: ReadonlySet<AutomationListEmptyStateKind> = new Set([
+  'host-empty',
+  'all-hosts-empty'
+])
+
+/** Starter templates show only where the hosts have no automations, never under a filter that emptied the list. */
+export function offersAutomationTemplates(
+  state: AutomationListEmptyState,
+  hasListItems: boolean
+): boolean {
+  return !hasListItems && TEMPLATE_EMPTY_STATES.has(state.kind)
+}

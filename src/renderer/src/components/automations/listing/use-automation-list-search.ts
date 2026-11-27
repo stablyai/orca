@@ -13,6 +13,13 @@ import {
   type AutomationWorkspaceNameLookup
 } from './automation-list-search-rows'
 import type { ExternalAutomationListEntry } from '../external/external-automation-list-entries'
+import {
+  filterAutomationListRows,
+  filterExternalAutomationListEntries,
+  listedAutomationRows,
+  type AutomationListFilter
+} from './automation-list-view'
+import type { AutomationListBotHost } from './automation-list-bot-host'
 
 /** Counts the empty-state view consumes, so it never recomputes what search already knows. */
 export type AutomationListSearchCounts = {
@@ -35,8 +42,10 @@ function useAutomationSearchRows(
 
 export function useAutomationListSearch({
   listSearchQuery,
-  rows,
-  externalAutomationEntries,
+  listFilter,
+  botHost = null,
+  rows: catalogRows,
+  externalAutomationEntries: hostExternalEntries,
   repoMap,
   worktreeMap,
   selectedRowKey,
@@ -45,6 +54,10 @@ export function useAutomationListSearch({
   selectExternalKey
 }: {
   listSearchQuery: string
+  /** Applied before the query; the host counts stay what the host has, so an emptied view names the filter. */
+  listFilter: AutomationListFilter
+  /** Where a bot filter's automations are listed; see `automationListBotHost`. */
+  botHost?: AutomationListBotHost | null
   rows: readonly AutomationListRow[]
   externalAutomationEntries: readonly ExternalAutomationListEntry[]
   repoMap: ReadonlyMap<string, Repo>
@@ -78,6 +91,15 @@ export function useAutomationListSearch({
   const activeListSearchQuery =
     deferredListSearchResolution.status === 'active' ? deferredListSearchResolution.query : null
   const isListSearchActive = activeListSearchQuery !== null
+  const hostRows = useMemo(() => listedAutomationRows(catalogRows), [catalogRows])
+  const rows = useMemo(
+    () => filterAutomationListRows(hostRows, listFilter, { botHost }),
+    [botHost, hostRows, listFilter]
+  )
+  const externalAutomationEntries = useMemo(
+    () => filterExternalAutomationListEntries(hostExternalEntries, listFilter),
+    [hostExternalEntries, listFilter]
+  )
 
   const automationSearchSources = useMemo(
     () => buildAutomationSearchRowSources(rows, { repoMap, worktreeMap }),
@@ -145,7 +167,7 @@ export function useAutomationListSearch({
     return next
   }, [externalAutomationEntries, filteredExternalAutomationKeys])
 
-  const hostRowCount = rows.length + externalAutomationEntries.length
+  const hostRowCount = hostRows.length + hostExternalEntries.length
   const visibleRowCount = filteredRows.length + filteredExternalAutomationEntries.length
 
   // Align detail/highlight with the first visible match when search hides selection; no matches preserve detail.

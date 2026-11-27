@@ -233,6 +233,22 @@ export function AutomationListFilterMenu({
         <RailPageFilterButton activeCount={activeCount} />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-48">
+        {filter.bot ? (
+          <>
+            {/* Set only by a bot's "All N automations"; listed here so the badge's count is visible. */}
+            <DropdownMenuCheckboxItem
+              checked
+              onCheckedChange={() => onChange({ ...filter, bot: null })}
+              title={filter.bot.name}
+            >
+              <span className="min-w-0 truncate">
+                {t('auto.components.automations.AutomationListFilterMenu.bot', 'Bot')}:{' '}
+                {filter.bot.name}
+              </span>
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuSeparator />
+          </>
+        ) : null}
         {hostEntries ? (
           <>
             <DropdownMenuSub>

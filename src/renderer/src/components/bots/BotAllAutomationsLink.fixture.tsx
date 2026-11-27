@@ -21,9 +21,18 @@ import {
 } from '../automations/listing/AutomationListFilterMenu'
 import {
   botListFilter,
-  filterAutomationListRows,
+  isAutomationListFilterActive,
   type AutomationListFilter
 } from '../automations/listing/automation-list-view'
+import {
+  offersAutomationTemplates,
+  resolveAutomationListEmptyState
+} from '../automations/listing/automation-list-empty-state'
+import { AutomationListEmptyView } from '../automations/listing/AutomationListEmptyView'
+import { useAutomationListSearch } from '../automations/listing/use-automation-list-search'
+import { automationListBotHost } from '../automations/listing/automation-list-bot-host'
+import { AutomationTemplateEmptyState } from '../automations/authoring/AutomationTemplateEmptyState'
+import type { AutomationHostFilterResolution } from '../automations/hosts/automation-host-filter-resolution'
 import { useAutomationsPageBotFilterRequest } from '../automations/use-automations-page-bot-filter-request'
 
 const hour = 3_600_000
@@ -56,8 +65,25 @@ const ACTIVITY: BotActivity = {
   automations,
   waits: [wait('w-1', 'Wait for build to finish'), wait('w-2', 'Wait for review')]
 }
-// What the Automations page lists: this bot's automations and another bot's.
+// What the hosts answer: this bot's automations and one of its waits (never listed), another bot's, and
+// a paired server that happens to reuse this bot's workspace key (not this bot's).
 const PAGE_ROWS = [
+  makeAutomationListRow({
+    automation: makeAutomation({
+      id: 'w-1',
+      name: 'Wait for build to finish',
+      workspaceId: home,
+      once: { by: now + 5 * hour }
+    })
+  }),
+  makeAutomationListRow({
+    automation: makeAutomation({ id: 'srv-1', name: 'Server: nightly backup', workspaceId: home }),
+    catalogRef: {
+      authority: { kind: 'runtime', environmentId: 'env-server' },
+      selector: { kind: 'self' }
+    },
+    hostLabel: 'Build server'
+  }),
   ...automations.map(({ automation: facts }) =>
     makeAutomationListRow({
       automation: makeAutomation({
@@ -80,40 +106,69 @@ const PAGE_ROWS = [
   )
 ]
 
+const NO_REPOS = new Map()
+const ALL_HOSTS_READY: AutomationHostFilterResolution = {
+  effective: { kind: 'all' },
+  entry: null,
+  status: 'ready',
+  announceFallback: false
+}
+
 function AutomationsListHarness({ pageRows }: { pageRows: typeof PAGE_ROWS }): React.JSX.Element {
   const [listFilter, setListFilter] = useState<AutomationListFilter>(() =>
     botListFilter(useAppStore.getState().automationsPageBotFilterRequest)
   )
-  const [, setListSearchQuery] = useState('')
+  const [listSearchQuery, setListSearchQuery] = useState('')
   useAutomationsPageBotFilterRequest({
     local: { setListFilter, setListSearchQuery },
     navigation: { showList: () => {} },
     selectHost: () => {}
   })
-  const rows = filterAutomationListRows(pageRows, listFilter)
+  // The page's own counting, empty-state resolver, empty view and templates.
+  const { filteredRows, hasListItems, searchCounts } = useAutomationListSearch({
+    listSearchQuery,
+    listFilter,
+    botHost: listFilter.bot ? automationListBotHost(listFilter.bot.hostId, null) : null,
+    rows: pageRows,
+    externalAutomationEntries: [],
+    repoMap: NO_REPOS,
+    selectedRowKey: null,
+    selectedExternalKey: null,
+    selectAutomationRow: () => {},
+    selectExternalKey: () => {}
+  })
+  const emptyStateInput = {
+    resolution: ALL_HOSTS_READY,
+    ...searchCounts,
+    filterActive: isAutomationListFilterActive(listFilter)
+  }
+  const emptyState = resolveAutomationListEmptyState(emptyStateInput)
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-3 p-4" data-testid="automations-list">
       <div className="flex items-center gap-2">
         <AutomationListFilterMenu filter={listFilter} onChange={setListFilter} />
-        <span className="text-xs text-muted-foreground">{rows.length} listed</span>
+        <span className="text-xs text-muted-foreground">{filteredRows.length} listed</span>
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
         <AutomationListFilterPills filter={listFilter} onChange={setListFilter} />
       </div>
-      <ul className="flex flex-col divide-y divide-border rounded-md border border-border text-sm">
-        {rows.length === 0 ? (
-          <li className="px-3 py-2 text-muted-foreground">No automations match these filters.</li>
-        ) : (
-          rows.map((row) => (
+      {filteredRows.length === 0 ? (
+        <AutomationListEmptyView {...emptyStateInput} />
+      ) : (
+        <ul className="flex flex-col divide-y divide-border rounded-md border border-border text-sm">
+          {filteredRows.map((row) => (
             <li key={row.key} className="flex justify-between px-3 py-1.5">
               <span>{row.automation.name}</span>
               <span className="text-xs text-muted-foreground">
                 {row.automation.enabled ? 'Enabled' : 'Paused'}
               </span>
             </li>
-          ))
-        )}
-      </ul>
+          ))}
+        </ul>
+      )}
+      {offersAutomationTemplates(emptyState, hasListItems) ? (
+        <AutomationTemplateEmptyState onOpenCreate={() => {}} />
+      ) : null}
     </div>
   )
 }
@@ -203,7 +258,7 @@ export const narrowLongName = defineFixture({
   }
 })
 
-// The bot's host is not listed yet, so none of its automations are on the page.
+// The bot's host is not listed yet, so none of its automations are on the page; others are.
 export const noMatches = defineFixture({
   width: 980,
   store: botPanelPage(true, null),
@@ -211,6 +266,30 @@ export const noMatches = defineFixture({
   render: () => <Frame pageRows={PAGE_ROWS.filter((row) => row.automation.workspaceId !== home)} />,
   interact: async (frame) => {
     ;(await allLink(frame)).click()
+    await settle()
+  }
+})
+
+// The Filters menu lists the Bot filter its badge counts.
+export const filtersMenu = defineFixture({
+  width: 980,
+  store: botPanelPage(true, null),
+  setup: stubBotPanel(ACTIVITY),
+  render: () => <Frame />,
+  interact: async (frame) => {
+    ;(await allLink(frame)).click()
+    await settle()
+    const trigger = [...frame.querySelectorAll('button')].find((button) =>
+      button.textContent?.startsWith('Filters')
+    )
+    trigger?.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+        pointerType: 'mouse'
+      })
+    )
     await settle()
   }
 })

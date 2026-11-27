@@ -3,6 +3,7 @@ import type {
   AutomationRun,
   AutomationRunUsage
 } from '../../../../shared/automations/history/automation-run'
+import { hostStableKey } from '../../../../shared/automations/ownership/automation-owner-key'
 import {
   automationListRowKey,
   type AutomationListRow
@@ -44,10 +45,13 @@ export function makeAutomationListRow(
   overrides: Partial<AutomationListRow> & { hostStableKey?: string } = {}
 ): AutomationListRow {
   const automation = overrides.automation ?? makeAutomation()
-  const hostStableKey = overrides.hostStableKey ?? 'host:desktop:self'
+  const hostKey =
+    overrides.hostStableKey ??
+    (overrides.catalogRef ? hostStableKey(overrides.catalogRef) : 'host:desktop:self')
   return {
-    key: overrides.key ?? automationListRowKey(hostStableKey, automation.id),
+    key: overrides.key ?? automationListRowKey(hostKey, automation.id),
     automation,
+    ...(overrides.catalogRef ? { catalogRef: overrides.catalogRef } : {}),
     hostLabel: overrides.hostLabel ?? 'This computer',
     usageSummary: overrides.usageSummary ?? null
   }

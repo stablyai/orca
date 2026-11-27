@@ -24,6 +24,8 @@ export type AutomationListBotFilter = {
   /** The bot's home workspace key; its automations are the ones that run there. */
   workspaceId: string
   name: string
+  /** The host that runs the bot, as this client routes to it: another host may reuse the key. */
+  hostId: ExecutionHostId
 }
 
 /** How the next recorded sub-page enters history: a new step, or a step back to its parent. */

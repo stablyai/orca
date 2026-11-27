@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { openBotHomeTab } from '@/lib/bot-catalog'
+import { openBotAutomations } from './bot-automation-open'
 import { useAppStore } from '@/store'
 import type { Bot } from '../../../../shared/bot-types'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
@@ -281,9 +282,10 @@ export function BotUpcomingSection({
             type="button"
             className="flex min-h-7 w-full items-center justify-between gap-2 rounded-sm pr-2 pl-8 text-left text-xs text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             onClick={() =>
-              useAppStore.getState().openAutomationsPageForBot({
+              openBotAutomations({
                 workspaceId: folderWorkspaceKey(bot.folderWorkspaceId),
-                name: bot.name
+                name: bot.name,
+                hostId: bot.hostId
               })
             }
           >
