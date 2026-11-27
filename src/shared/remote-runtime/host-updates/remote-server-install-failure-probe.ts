@@ -1,8 +1,9 @@
 import type {
   RemoteServerUpdateInstallResult,
   RemoteServerUpdaterSnapshot
-} from '../../../../../shared/remote-runtime/host-catalog/remote-server-update'
-import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+} from '../host-catalog/remote-server-update'
+import type { RuntimeStatus } from '../session-graph/runtime-session-contracts'
+import type { UpdateStatus } from '../../updater/update-status-types'
 
 type InstallFailureProbeTransport = {
   getUpdaterStatus: (
@@ -18,7 +19,7 @@ export async function readRemoteServerInstallFailure(
   install: RemoteServerUpdateInstallResult,
   runtime: RuntimeStatus,
   timeoutMs?: number
-): Promise<string | null> {
+): Promise<Extract<UpdateStatus, { state: 'error' }> | null> {
   if (runtime.runtimeId !== install.runtimeId) {
     return null
   }
@@ -27,5 +28,5 @@ export async function readRemoteServerInstallFailure(
   if (snapshot.runtimeId !== install.runtimeId || snapshot.status.state !== 'error') {
     return null
   }
-  return snapshot.status.message
+  return snapshot.status
 }

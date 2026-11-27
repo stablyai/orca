@@ -114,7 +114,7 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
         await this.runBeforeUpdateQuitCleanup()
         preparingProfile = false
         span.addEvent('pre_quit_cleanup_done')
-        if (trigger !== 'manual' && !(await this.prepareAutomaticInstall(pendingVersion))) {
+        if (trigger !== 'manual' && !(await this.prepareRendererForInstall(pendingVersion))) {
           return
         }
         if (!canProceed()) {
