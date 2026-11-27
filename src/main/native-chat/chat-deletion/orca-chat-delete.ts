@@ -99,15 +99,20 @@ function commitChatDeletion(
   })
 }
 
-/** Stops each loaded session of the chat, running or not, and closes its tab on every client. */
+/** Stops each loaded session of the chat, running or not, and closes its tab in every person's list
+ *  on every client: a deleted chat can't stay open anywhere. */
 async function stopChat(
   runtime: OrcaRuntimeService,
   host: ChatHost,
   records: readonly AgentSessionRecord[]
 ): Promise<boolean> {
   for (const { sessionId } of records) {
-    if (host.hasSession(sessionId) || host.isSessionTabVisible(sessionId)) {
-      const closed = await closeStructuredAgentSessionChild(sessionId, { runtime })
+    if (
+      host.hasSession(sessionId) ||
+      host.isSessionTabVisible(sessionId) ||
+      runtime.chatTabPeople(sessionId).length > 1
+    ) {
+      const closed = await closeStructuredAgentSessionChild(sessionId, { runtime, chatGone: true })
       if (!closed.stopped) {
         console.warn('[chat-delete] could not stop the chat', closed.reason)
         return false

@@ -1,4 +1,5 @@
 import { retireMobileSessionTabSelection } from '../layout/mobile-session-tab-selection'
+import { closeCapturedStructuredSession } from '../../agent-session/lifecycle/structured-session-captured-close'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as BrowserOwnership } from '../restoration/mobile-session-publication-preservation'
 import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout as PruneMobileSessionTabGroupLayoutMethods } from '../../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
@@ -31,10 +32,7 @@ import {
   windowlessStructuredSessionTabSaveEligible
 } from './structured-session-tab-presentation'
 import type { StructuredSessionTabPublicationInput as ChatPublication } from './structured-session-tab-publication'
-import {
-  closeCapturedStructuredSession,
-  type StructuredSessionSurface
-} from '../../agent-session/lifecycle/structured-agent-session-close'
+import type { StructuredSessionSurface } from '../../agent-session/lifecycle/structured-agent-session-close'
 
 export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends OrcaRuntimeWithStructuredSessionTabProjection {
   protected abstract isHeadlessOwnedMobileBrowserTab(

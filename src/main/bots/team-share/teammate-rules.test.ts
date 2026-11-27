@@ -160,13 +160,13 @@ describe('a teammate’s own Home tab list (rule 4)', () => {
         file: file.replaceAll('\\', '/'),
         text: readFileSync(join(src, file), 'utf8')
       }))
-    // The Home tab write API: each takes the person (`person` or `personOf`) as a required field.
+    // The Home tab write API: each takes the person (`person`, `personOf` or `people`) as a required field.
     const writes =
-      /\b(publishStructuredAgentSessionTab|activateMobileSessionTab|closeMobileSessionTab|refuseUnattributedMobileSessionTabClose|closePersonChatTab|commitStructuredAgentSessionCreate)\(/g
+      /\b(publishStructuredAgentSessionTab|activateMobileSessionTab|closeMobileSessionTab|refuseUnattributedMobileSessionTabClose|closeChatTabs|commitStructuredAgentSessionCreate)\(/g
     // Sources: the caller's scope at a handler, a chat's stamp, the host's own state; or the field
     // of a function that took one of those (its own callers are in this census too).
     const source =
-      /^(callerTabPerson\(\w+\.callerScope\)|callerTabPerson\(callerScope\)|\(?\w*\)? => callerTabPerson\(ctx\.callerScope\)|(\w+\.)?runtime\.chatTabPerson\(|(\(\w+\) => )?args\.runtime\.chatTabPerson\(|HOST_STATE_PERSON|args\.personOf\(|input\.person|options\.person|opts\.person|caller\.person)/
+      /^(callerTabPerson\(\w+\.callerScope\)|callerTabPerson\(callerScope\)|\(?\w*\)? => callerTabPerson\(ctx\.callerScope\)|(\w+\.)?runtime\.chatTab(Person|People)\(|(\(\w+\) => )?args\.runtime\.chatTabPerson\(|HOST_STATE_PERSON|args\.personOf\(|input\.person|options\.person|opts\.person|caller\.person)/
     const calls = files.flatMap(({ file, text }) =>
       [...text.matchAll(writes)].flatMap((match) => {
         const at = match.index + match[0].length
@@ -182,7 +182,8 @@ describe('a teammate’s own Home tab list (rule 4)', () => {
           end += 1
         }
         const call = text.slice(at, end)
-        const named = /\bperson(?:Of)?: ([^,\n}]+)/.exec(call)?.[1]?.trim() ?? '(none)'
+        const named =
+          /\b(?:person|personOf|people): \[?([^,\n}\]]+)/.exec(call)?.[1]?.trim() ?? '(none)'
         return [{ at: `${file} ${match[1]}`, named }]
       })
     )

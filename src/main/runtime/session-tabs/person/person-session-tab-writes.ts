@@ -134,17 +134,32 @@ export abstract class OrcaRuntimeWithPersonSessionTabWrites extends OrcaRuntimeW
     return projected
   }
 
-  /** A person's close of a chat: a teammate's in their own Home closes their tab only, and the host's
-   *  list and window keep theirs. False leaves the close to the host's list. */
-  closePersonChatTab(input: { person: TabPerson; sessionId: string }): boolean {
+  /** Every person a gone chat's tab must close for: the owner (the host's list), and each teammate
+   *  whose own list holds it. */
+  chatTabPeople(sessionId: string): TabPerson[] {
+    const worktreeId =
+      getStructuredAgentSessionHost()?.deps.store.getConversation(sessionId)?.location.workspaceId
+    const holders = worktreeId
+      ? this.personSessionTabs.holdersOf(worktreeId, (held) => held === sessionId)
+      : []
+    return ['owner', ...holders]
+  }
+
+  /** Closes a chat's tab for each person, once per list: a teammate's in their own Home closes their
+   *  own tab only. `hostList` says whether one of them is the host's list, which the caller closes. */
+  closeChatTabs(input: { people: readonly TabPerson[]; sessionId: string }): { hostList: boolean } {
     const worktreeId = getStructuredAgentSessionHost()?.deps.store.getConversation(input.sessionId)
       ?.location.workspaceId
-    const owner = worktreeId ? this.homeTabListOf(input.person, worktreeId) : 'host'
-    if (!worktreeId || !isTeammateTabList(owner)) {
-      return false
+    let hostList = false
+    for (const person of input.people) {
+      const list = worktreeId ? this.homeTabListOf(person, worktreeId) : 'host'
+      if (worktreeId && isTeammateTabList(list)) {
+        this.closePersonSessionTab(list, worktreeId, personChatTabId(input.sessionId))
+      } else {
+        hostList = true
+      }
     }
-    this.closePersonSessionTab(owner, worktreeId, personChatTabId(input.sessionId))
-    return true
+    return { hostList }
   }
 
   /** Closes a tab of a teammate's own list, if it is there. The chat keeps running, as a closed tab's

@@ -686,3 +686,25 @@ it('renames a teammate’s terminal in a worker workspace through the host windo
     r.runtime.setNotifier(null)
   }
 })
+
+it('closes a deleted chat’s tab in every person’s list, on every device', async () => {
+  const r = await rig()
+  // The teammate's chat, open in their list and in the owner's.
+  await r.reveal('mate-desk', C)
+  await r.reveal('owner-desk', C)
+  await r.reveal('owner-desk', O)
+  expect(sessions(await r.list('mate-phone'))).toEqual([C])
+  expect(await r.hostChats()).toEqual([C, O])
+
+  expect(await r.call('owner-desk', 'agentSession.delete', { sessionId: C })).toMatchObject({
+    outcome: 'deleted'
+  })
+  await chatTabCommandsSettled()
+
+  for (const device of ['mate-desk', 'mate-phone', 'owner-desk', 'owner-phone']) {
+    expect(sessions(await r.list(device)), device).not.toContain(C)
+  }
+  expect(await r.hostChats()).toEqual([O])
+  const saved = r.profile.getMobileClientTabSelections()[teammateTabListKey(TEAMMATE)]
+  expect(saved?.[r.workspace]?.personTabs ?? []).toEqual([])
+})
