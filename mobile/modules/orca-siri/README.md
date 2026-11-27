@@ -28,12 +28,15 @@ Siri / CarPlay ─> App Intent (Swift, app target) ─HTTPS + Siri token─> wat
 
 ## Intents
 
-| Intent              | Phrases                                              | Does                                                                                                                |
-| ------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| Check Orca          | "Check Orca", "What's waiting in Orca"               | Speaks the newest prompt, then offers Approve / Deny / Reply / Cancel (`requestChoice`). Reply asks you to dictate. |
-| Approve Orca Prompt | "Approve in Orca"                                    | Speaks what will run and asks you to confirm, then sends a plain **Yes**                                            |
-| Orca Agent Status   | "What's Orca doing", "What is {agent} doing in Orca" | State and last words, newest 3 agents                                                                               |
-| Message Orca Agent  | "Tell Orca", "Message {agent} in Orca"               | Sends dictated text to an agent that's done or waiting. Busy agents are refused.                                    |
+| Intent              | Phrases                                | Does                                                                                                                |
+| ------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Check Orca          | "Check Orca", "What's waiting in Orca" | Speaks the newest prompt, then offers Approve / Deny / Reply / Cancel (`requestChoice`). Reply asks you to dictate. |
+| Approve Orca Prompt | "Approve in Orca"                      | Speaks what will run and asks you to confirm, then sends a plain **Yes**                                            |
+| Orca Agent Status   | "Orca status", "What's Orca doing"     | State and last words, newest 3 agents                                                                               |
+| Message Orca Agent  | "Message Orca app"                     | Asks which agent, then sends dictated text to one that's done or waiting. Busy or exited agents are refused.        |
+
+- Say "Orca **app**" with Message or Tell. Otherwise Siri looks for a contact named Orca.
+- Phrases with `{agent}` don't match yet: the app never calls `updateAppShortcutParameters()`. Siri asks which agent instead.
 
 - Every intent uses `authenticationPolicy = .alwaysAllowed`. Approving with a locked phone is intended.
 - Siri never chooses a "Yes, and …" option. Those change Claude's mode for the rest of the session.
@@ -45,8 +48,11 @@ Siri / CarPlay ─> App Intent (Swift, app target) ─HTTPS + Siri token─> wat
   - Each agent has `id` (its pane key), `name`, `workspace`, `agentType`, `state`, `needsApproval`, `task` and `lastMessage`.
   - `task` and `lastMessage` are cleaned of markdown so they can be spoken.
 - `POST /siri/v1/answer` with `{ promptId, decision: "option", optionId }` or `{ promptId, decision: "text", text }`.
+- The first `detail` line of each prompt is a short spoken action: a file name not a path, a host not a URL, the first command of a chain ("Bash: git branch --unset-upstream, and 2 more"). The Watch endpoint still gets the full detail.
+- Folder workspaces (`folder:<uuid>`) get an empty `workspace`, so Siri never reads out an ID.
 - `POST /siri/v1/message` with `{ agentId, text }`.
   - Returns 409 if the agent is working.
+  - Returns 409 unless Claude's input box is on screen. Orca keeps a finished agent's status after Claude exits, and without this check the text would be typed into the shell.
   - On an approval prompt, it sends Esc first, then the text.
 - **Token scopes:**
   - The Watch token (`~/.orca/watch-bridge-token`) can use prompts, answer and register.
@@ -66,17 +72,29 @@ Siri / CarPlay ─> App Intent (Swift, app target) ─HTTPS + Siri token─> wat
    ```bash
    cd mobile && ORCA_SIRI=1 npx expo run:ios --device --configuration Release
    ```
-   - Add `ORCA_IOS_BUNDLE_ID=...` to use your own team.
+   - Add `ORCA_IOS_BUNDLE_ID=...` to use your own team. Xcode must be signed in to that team (Settings → Accounts). Otherwise it falls back to a wildcard profile, which can't carry Push Notifications.
    - Add `ORCA_WATCH_SPIKE=1` too if you want the Watch test row.
+   - If the install step fails with "error reading pair record", replug and unlock the phone, then install the built app: `xcrun devicectl device install app --device <udid> <DerivedData>/Build/Products/Release-iphoneos/Orca.app`.
 3. **Connect the phone:** in Orca → Settings → Troubleshoot → **Siri bridge**, enter:
-   - the Funnel URL (`https://<mac>.ts.net:8443`)
+   - the Funnel URL (`https://<mac>.ts.net:8443`). Use the host name from `tailscale funnel status`. A Tailscale IP fails because the certificate only matches the name.
    - the token from `cat ~/.orca/siri-bridge-token`
 
    Then tap **Save and test**. A good result shows what Siri would say.
 
-4. **Try it:** say "Hey Siri, check Orca" on the phone. Then try it in CarPlay Simulator (Xcode Device Hub, iPhone connected by USB).
+4. **Try it:** say "Hey Siri, check Orca" on the phone.
+   - If Siri shows its answer without speaking it, set Settings → Siri → Siri Responses → **Prefer Spoken Responses**. CarPlay always speaks.
+   - To get a prompt, run Claude with `claude --permission-mode default`. In auto mode it approves safe commands itself and nothing waits.
+5. **CarPlay Simulator:** it comes in "Additional Tools for Xcode" (developer.apple.com/download/all), under `Hardware/`. Connect the iPhone by USB and unlock it.
 
-## Verified so far (without a device)
+## Verified on a device (iPhone 16 Pro, CarPlay Simulator 27.2)
+
+- **Check Orca:** speaks the waiting prompt. Approve, Deny and Reply all work by voice, on the phone and in CarPlay.
+- **Locked phone:** same results in CarPlay with the phone locked.
+- **Approve:** sends option 1, the plain **Yes**. Four approvals in a row each moved Claude to its next step, and it stayed in manual mode.
+- **Status** and **Message Orca app** work. The message showed up in the chosen Claude terminal.
+- Round trip over Funnel: about 130 ms for an overview and 630 ms for an answer, including the check that Claude moved on.
+
+## Verified earlier (without a device)
 
 - `tsc` and `oxlint` are clean.
 - The Swift typechecks for iOS 15.1 and 26, in Swift 5 and Swift 6 modes.
@@ -94,7 +112,9 @@ Siri / CarPlay ─> App Intent (Swift, app target) ─HTTPS + Siri token─> wat
 
 ## Still to do
 
-- [ ] Run "Hey Siri, check Orca" on a device with a locked phone, then in CarPlay Simulator.
-- [ ] Check whether `requestChoice` options can be spoken in CarPlay, or whether a `requestConfirmation` fallback is needed.
+- [x] Run "Hey Siri, check Orca" on a device with a locked phone, then in CarPlay Simulator.
+- [x] Check whether `requestChoice` options can be spoken in CarPlay. They can, so no fallback is needed.
+- [ ] Rename the Message and Tell phrases so they don't collide with Messages.
+- [ ] Call `OrcaAppShortcuts.updateAppShortcutParameters()` after each overview, so "What is {agent} doing" matches agent names.
 - [ ] Native chat (agent-session) tabs are not covered: only terminal agents are. Prompts still come from reading Claude's dialog off the terminal screen.
 - [ ] Next: a CarPlay voice-based conversational app (`com.apple.developer.carplay-voice-based-conversation`, iOS 26.4+, `CPVoiceControlTemplate`).
