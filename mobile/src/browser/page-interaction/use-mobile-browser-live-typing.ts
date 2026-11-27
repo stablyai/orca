@@ -137,10 +137,16 @@ export function useMobileBrowserLiveTyping({ disabled, pageInput }: LiveTypingAr
     [send]
   )
 
-  const onSubmitEditing = useCallback(() => {
-    send([{ key: 'Enter' }])
-    resetMirror()
-  }, [resetMirror, send])
+  // A word still composing goes to the page before the key, so the key never lands ahead of it or drops it.
+  const sendAfterField = useCallback(
+    (key: string) => {
+      send([...liveTypingSteps(sentRef.current, fieldRef.current), { key }])
+      resetMirror()
+    },
+    [resetMirror, send]
+  )
+
+  const onSubmitEditing = useCallback(() => sendAfterField('Enter'), [sendAfterField])
 
   // Android's composing Return skips onSubmitEditing, and a commit's last input still reports composing.
   const bindInput = useTerminalTextFieldSubmitBinding(
@@ -150,15 +156,8 @@ export function useMobileBrowserLiveTyping({ disabled, pageInput }: LiveTypingAr
     (text) => apply(text, false)
   )
 
-  /** A key from the row above the keyboard, sent after anything still being typed. */
-  const pressKey = useCallback(
-    (key: string) => {
-      send([{ key }])
-      // Tab and the arrows move the page's caret or focus away from what the field mirrors.
-      resetMirror()
-    },
-    [resetMirror, send]
-  )
+  /** A key from the row above the keyboard; Tab and the arrows move the page away from what the field mirrors. */
+  const pressKey = sendAfterField
 
   // Must run inside the tap: iOS raises the keyboard only for a focus the gesture made.
   const focus = useCallback(() => {
