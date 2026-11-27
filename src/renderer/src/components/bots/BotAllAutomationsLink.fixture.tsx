@@ -240,7 +240,7 @@ export const afterClear = defineFixture({
   interact: async (frame) => {
     ;(await allLink(frame)).click()
     const remove = await waitFor(() =>
-      frame.querySelector<HTMLButtonElement>('button[aria-label="Remove Bot filter"]')
+      frame.querySelector<HTMLButtonElement>('button[aria-label^="Remove Bot filter"]')
     )
     remove.click()
     await settle()

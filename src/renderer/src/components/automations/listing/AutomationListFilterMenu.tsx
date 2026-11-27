@@ -3,7 +3,7 @@ import { RailPageFilterButton } from '@/components/rail-page/RailPageToolbar'
 import { X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { MENU_SUB_TRIGGER_CHEVRON_CLASS } from '@/components/ui/menu-item'
+import { BotFilterMenuRow, useRemoveBotFilterLabel } from './AutomationListBotFilterRow'
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -36,11 +36,14 @@ import {
 function FilterPill({
   label,
   value,
-  onClear
+  onClear,
+  removeLabel
 }: {
   label: string
   value: string
   onClear: () => void
+  /** Overrides "Remove <label> filter" when the value names what is removed. */
+  removeLabel?: string
 }): React.JSX.Element {
   const t = useTranslate()
   return (
@@ -56,11 +59,14 @@ function FilterPill({
       </Tooltip>
       <button
         type="button"
-        aria-label={t(
-          'auto.components.automations.AutomationListFilterMenu.removeFilter',
-          'Remove {{value0}} filter',
-          { value0: label }
-        )}
+        aria-label={
+          removeLabel ??
+          t(
+            'auto.components.automations.AutomationListFilterMenu.removeFilter',
+            'Remove {{value0}} filter',
+            { value0: label }
+          )
+        }
         onClick={onClear}
         className="rounded-full p-0.5 text-muted-foreground transition hover:bg-muted hover:text-foreground"
       >
@@ -83,6 +89,7 @@ export function AutomationListFilterPills({
   onClearHost?: () => void
 }): React.JSX.Element | null {
   const t = useTranslate()
+  const removeBotFilterLabel = useRemoveBotFilterLabel()
   const statusLabel = t('auto.components.automations.AutomationsPage.tableStatus', 'Status')
   const lastRunLabel = t('auto.components.automations.AutomationListFilterMenu.lastRun', 'Last run')
   const statusValueLabel =
@@ -121,6 +128,7 @@ export function AutomationListFilterPills({
           label={t('auto.components.automations.AutomationListFilterMenu.bot', 'Bot')}
           value={filter.bot.name}
           onClear={() => onChange({ ...filter, bot: null })}
+          removeLabel={removeBotFilterLabel(filter.bot.name)}
         />
       ) : null}
       {hostPillLabel && onClearHost ? (
@@ -236,21 +244,10 @@ export function AutomationListFilterMenu({
       <DropdownMenuContent align="start" className="w-48">
         {filter.bot ? (
           <>
-            {/* Set only by a bot's "All N automations"; listed here so the badge's count is visible. */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <DropdownMenuItem onSelect={() => onChange({ ...filter, bot: null })}>
-                  <span className="min-w-0 truncate">
-                    {t('auto.components.automations.AutomationListFilterMenu.bot', 'Bot')}:{' '}
-                    {filter.bot.name}
-                  </span>
-                  <X className={MENU_SUB_TRIGGER_CHEVRON_CLASS} aria-hidden />
-                </DropdownMenuItem>
-              </TooltipTrigger>
-              <TooltipContent side="right" sideOffset={6} className="max-w-72 break-words">
-                {filter.bot.name}
-              </TooltipContent>
-            </Tooltip>
+            <BotFilterMenuRow
+              name={filter.bot.name}
+              onClear={() => onChange({ ...filter, bot: null })}
+            />
             <DropdownMenuSeparator />
           </>
         ) : null}
