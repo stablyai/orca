@@ -14,6 +14,12 @@ import {
   testState
 } from '../../../persistence/persistence-test-harness'
 import { OrcaRuntimeService } from '../../orca-runtime'
+import { sidebarFactsRuntime } from '../orca-runtime-sidebar-temporal'
+
+// Exercise the main-owned sidebar build; the unit runner normally selects the window-owned build.
+vi.mock('../../../../shared/sidebar-list/feed/sidebar-inputs-switch', () => ({
+  ORCA_SIDEBAR_INPUTS_IS_MAIN: true
+}))
 
 // #49861: a fresh mention must not enter the all-pane sort-stamp pass when it saves an unmute.
 it.each([100, 1_000])(
@@ -65,7 +71,11 @@ it.each([100, 1_000])(
     ]
     const byPane = new Map(rows.map((row) => [row.paneKey, row]))
     const runtime = new OrcaRuntimeService(store)
-    const detach = runtime.attachAgentStatusStore({
+    const sidebar = sidebarFactsRuntime(runtime)
+    if (!sidebar) {
+      throw new Error('the main-owned sidebar is unavailable')
+    }
+    const detach = sidebar.attachAgentStatusStore({
       getStatusSnapshot: () => rows,
       getStatusSnapshotForPane: (key) => {
         const row = byPane.get(key)
@@ -74,7 +84,7 @@ it.each([100, 1_000])(
       subscribeStatusRowMutations: () => () => {},
       subscribeStatusFreshness: () => () => {}
     })
-    const fullReconciliations = vi.spyOn(runtime.sortStamps, 'noteRecordsWritten')
+    const fullReconciliations = vi.spyOn(sidebar.sortStamps, 'noteRecordsWritten')
     try {
       expect(store.getFolderWorkspace(folder.id)?.smartTier).toBe('done')
       const wake = handleThreadMute(
