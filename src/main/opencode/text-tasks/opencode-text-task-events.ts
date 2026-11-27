@@ -1,19 +1,24 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { SearchSubprocessLineAccumulator } from '../../../shared/process-streams/search-subprocess-lines'
 import { MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES } from '../../text-generation/execution/source-control-generation-limits'
 import type { createOpenCodeTextTaskHttp } from './opencode-text-task-http'
 import { openCodeTextTaskUrl } from './opencode-text-task-http'
 
-const event = z.looseObject({
-  type: z.string(),
-  data: z.looseObject({ sessionID: z.string() })
-})
-const textEvent = z.looseObject({
-  assistantMessageID: z.string(),
-  ordinal: z.number(),
-  text: z.string()
-})
-const permissionEvent = z.looseObject({ id: z.string() })
+const event = lazyZodSchema(() =>
+  z.looseObject({
+    type: z.string(),
+    data: z.looseObject({ sessionID: z.string() })
+  })
+)
+const textEvent = lazyZodSchema(() =>
+  z.looseObject({
+    assistantMessageID: z.string(),
+    ordinal: z.number(),
+    text: z.string()
+  })
+)
+const permissionEvent = lazyZodSchema(() => z.looseObject({ id: z.string() }))
 export function openCodeTextTaskEvents(input: {
   version: 'v1' | 'v2'
   url: string

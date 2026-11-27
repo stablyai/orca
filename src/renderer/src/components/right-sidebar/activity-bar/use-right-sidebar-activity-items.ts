@@ -27,21 +27,12 @@ import { getActiveChecksStatus } from '../checks-panel/status/active-checks-stat
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { ActivityBarItem } from './activity-bar-buttons'
+import { activityItemStatus } from './activity-bar-item-names'
 import { useBotForWorkspace, useBotGroupForWorkspace } from '../../bots/bot-workspace'
 import { useFocusedChatWorkers } from '@/lib/focused-chat-workers'
 import { useBotNeedsYouCount, useBotNow } from '../../bots/use-bot-now'
 import { usePublishedBotsNeedsYou } from '../../bots/bot-needs-you-published'
-import { useBots } from '@/lib/bot-catalog'
-import type { Bot } from '../../../../../shared/bot-types'
-import type { BotGroup } from '../../../../../shared/bots/bot-group'
-import { botGroupMemberBots } from '../../../../../shared/bots/bot-sidebar-entries'
-
-const NO_BOTS: readonly Bot[] = []
-
-function useGroupMembers(group: BotGroup | null): readonly Bot[] {
-  const bots = useBots(group !== null)
-  return useMemo(() => (group ? botGroupMemberBots(group, bots) : NO_BOTS), [group, bots])
-}
+import { useBotGroupMembers } from '../../bots/use-bot-group-members'
 
 export type RightSidebarActivityItems = {
   visibleItems: ActivityBarItem[]
@@ -76,7 +67,7 @@ export function useRightSidebarActivityItems({
   const isBot = bot !== null
   const group = useBotGroupForWorkspace(isFolderWorkspace ? activeWorktreeId : null)
   const isGroupHome = group !== null
-  const groupMembers = useGroupMembers(group)
+  const groupMembers = useBotGroupMembers(group)
   const now = useBotNow(bot)
   const { needs } = now
   // A bot's first tab is Home: its badge counts Orca's asks and items in Needs you. A group's counts
@@ -167,7 +158,7 @@ export function useRightSidebarActivityItems({
           isGroupHome,
           hasChatWorkers
         }),
-        (item) => item.statusIndicator ?? (item.id === 'checks' ? checksStatus : null)
+        (item) => activityItemStatus(item, checksStatus)
       ),
     [
       activityItems,

@@ -75,6 +75,7 @@ export function GitGraphOpenButton({
       recheck()
     }
   }, [support, recheck])
+  const label = t('auto.components.right.sidebar.SourceControl.gitGraphButton', 'Graph')
   const button = (
     <Button
       type="button"
@@ -91,7 +92,7 @@ export function GitGraphOpenButton({
       }}
     >
       <GitGraph className="size-3.5" />
-      {t('auto.components.right.sidebar.SourceControl.gitGraphButton', 'Graph')}
+      {label}
     </Button>
   )
   if (support !== false) {

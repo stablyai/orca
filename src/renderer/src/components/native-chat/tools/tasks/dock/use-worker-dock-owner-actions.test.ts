@@ -37,74 +37,11 @@ const row = (dispatchId: string): WorkerDockRowView => ({
   stoppable: true,
   ownerActionsAvailable: true
 })
-const result = (dispatchId: string) => ({
-  id: `report:${dispatchId}`,
-  dispatchId,
-  name: dispatchId,
-  title: dispatchId,
-  outcome: 'failed',
-  body: `${dispatchId} failed`,
-  at: null,
-  settlement: `settlement:${dispatchId}`,
-  acknowledged: true
-})
 const last = (method: string) => rpc.calls.findLast((call) => call.method === method)!
-const settle = async (run: () => void) => {
-  await act(async () => {
-    run()
-    await Promise.resolve()
-  })
-}
 function setup(identities?: Parameters<typeof useWorkerDockOwnerActions>[2]) {
   rpc.calls = []
-  return renderHook(() => useWorkerDockOwnerActions({ kind: 'local' }, party, identities, () => {}))
+  return renderHook(() => useWorkerDockOwnerActions({ kind: 'local' }, party, identities))
 }
-
-it('applies a result read only to the dialog that opened it, and restores the shown dispatch', async () => {
-  const hook = setup()
-  const opener = document.createElement('button')
-  act(() => hook.result.current.open(row('a'), opener))
-  const readA = last('orchestration.workerDockResult')
-  act(() => hook.result.current.close())
-  act(() => hook.result.current.open(row('b'), opener))
-  const readB = last('orchestration.workerDockResult')
-  await settle(() => readA.resolve(result('a')))
-  await settle(() => readA.reject(new Error('a unavailable')))
-  expect(hook.result.current.dialog).toMatchObject({ result: null, error: null })
-  await settle(() => readB.resolve(result('b')))
-  expect(hook.result.current.dialog?.result?.dispatchId).toBe('b')
-  act(() => hook.result.current.restore())
-  expect(last('orchestration.workerDockAcknowledge').params).toMatchObject({
-    settlements: [{ dispatchId: 'b', settlement: 'settlement:b' }],
-    acknowledged: false
-  })
-  await settle(() =>
-    last('orchestration.workerDockAcknowledge').reject(new Error('b restore failed'))
-  )
-  expect(hook.result.current.dialog?.error).toBe('b restore failed')
-  act(() => hook.result.current.restore())
-  await settle(() => last('orchestration.workerDockAcknowledge').resolve(undefined))
-  expect(hook.result.current.dialog).toMatchObject({
-    result: { acknowledged: false },
-    error: null
-  })
-})
-
-it('offers Retry only for the failure it retries', async () => {
-  const hook = setup()
-  act(() => hook.result.current.action(row('a'), 'stop'))
-  await settle(() => last('orchestration.workerDockStop').reject(new Error('a stop failed')))
-  expect(hook.result.current.failure?.retry).toBeTypeOf('function')
-  act(() => hook.result.current.dismissFailure())
-  act(() => hook.result.current.open(row('b'), document.createElement('button')))
-  await settle(() => last('orchestration.workerDockResult').resolve(result('b')))
-  act(() => hook.result.current.restore())
-  act(() => hook.result.current.close())
-  await settle(() =>
-    last('orchestration.workerDockAcknowledge').reject(new Error('b restore failed'))
-  )
-  expect(hook.result.current.failure).toEqual({ message: 'b restore failed' })
-})
 
 it('never sends Stop for Clear on a failed row with no settlement', () => {
   const hook = setup()

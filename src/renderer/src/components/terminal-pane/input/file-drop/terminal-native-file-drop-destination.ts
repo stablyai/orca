@@ -47,7 +47,7 @@ function captureNativeTerminalFileDropDestination(
   if (!transport) {
     return async () => undefined
   }
-  const dropTarget = captureTerminalDropTarget(pane, transport)
+  const dropTarget = captureTerminalDropTarget(pane, transport, { blockWhileVeiled: true })
   const state = useAppStore.getState()
   const owner = captureTerminalDropTransportOwner(transport)
   const worktreePath = resolveAgentStagingWorktreePath(

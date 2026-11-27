@@ -14,7 +14,7 @@ import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
 import {
   getGitRepoRootAsync,
-  isGitRepoAsync
+  inspectGitRepoAccessAsync
 } from '../../git/repositories/discovery/repo-detection'
 import { findExtraFolderWorkspaceIds } from './folder-workspace-meta-presence'
 import { findProjectHostSetup } from '../../../shared/project/host-setup/project-host-setup-target'
@@ -34,20 +34,23 @@ function resolveRealPath(pathValue: string): string {
 }
 
 /** Require the project itself to be the Git root; stamp Git’s spelling to preserve workspace ids. */
-export async function resolveFolderToGitConversion(
+export async function inspectFolderToGitConversion(
   repoPath: string
-): Promise<FolderToGitConversion | null> {
-  if (!(await isGitRepoAsync(repoPath))) {
-    return null
+): Promise<{ conversion: FolderToGitConversion | null; ownershipError?: string }> {
+  const { isRepo, ownershipError } = await inspectGitRepoAccessAsync(repoPath)
+  if (!isRepo) {
+    return { conversion: null, ownershipError }
   }
   const gitRoot = await getGitRepoRootAsync(repoPath)
   if (resolveRealPath(gitRoot) !== resolveRealPath(repoPath)) {
-    return null
+    return { conversion: null }
   }
   return {
-    updates: { folderUpgradeGitRootPath: gitRoot },
-    rootSpellingMatches:
-      normalizeRuntimePathForComparison(gitRoot) === normalizeRuntimePathForComparison(repoPath)
+    conversion: {
+      updates: { folderUpgradeGitRootPath: gitRoot },
+      rootSpellingMatches:
+        normalizeRuntimePathForComparison(gitRoot) === normalizeRuntimePathForComparison(repoPath)
+    }
   }
 }
 
@@ -67,10 +70,11 @@ export async function proveRepoKindChange(
   ) {
     return {}
   }
-  const conversion = await resolveFolderToGitConversion(repo.path)
+  const { conversion, ownershipError } = await inspectFolderToGitConversion(repo.path)
   if (!conversion) {
     throw new Error(
-      `${repo.path} isn't the top folder of a Git repository, so this project's type was not changed.`
+      ownershipError ??
+        `${repo.path} isn't the top folder of a Git repository, so this project's type was not changed.`
     )
   }
   return conversion.updates
@@ -148,6 +152,6 @@ export async function resolveClonedFolderConversion(
   if (!isFolderRepo(repo) || hasOtherWorkspaces()) {
     return null
   }
-  const conversion = await resolveFolderToGitConversion(repo.path)
+  const { conversion } = await inspectFolderToGitConversion(repo.path)
   return conversion && !hasOtherWorkspaces() ? conversion.updates : null
 }

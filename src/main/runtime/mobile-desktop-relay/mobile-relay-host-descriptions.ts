@@ -1,4 +1,5 @@
 import { DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY } from '../../../shared/remote-runtime/pairing/delegated-mobile-device-contract'
+import { WORKTREE_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY } from '../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { describePairedServerHosts } from '../../../shared/remote-runtime/host-catalog/paired-server-hosts'
 import type {
@@ -25,6 +26,21 @@ export async function describeRelayHosts(
   return describeRelayHostListing(await hosts.list(), hostLabelOverrides)
 }
 
+export function describeRelayHost(
+  listing: MobileDesktopRelayListing,
+  environmentId: string,
+  hostLabelOverrides: ReadonlyMap<ExecutionHostId, string> = new Map()
+): DescribedRelayHost | undefined {
+  const environment = listing.environments.find((entry) => entry.id === environmentId)
+  if (!environment) {
+    return undefined
+  }
+  return describeRelayHostListing(
+    { ...listing, environments: [environment] },
+    hostLabelOverrides
+  )[0]
+}
+
 export function describeRelayHostListing(
   listing: MobileDesktopRelayListing,
   hostLabelOverrides: ReadonlyMap<ExecutionHostId, string> = new Map()
@@ -48,7 +64,8 @@ export function describeRelayHostListing(
         relay: relayVerdict(host.health, answer),
         ...(host.installationId ? { installationId: host.installationId } : {}),
         ...(identity.stoppedOnDesktop ? { stoppedOnDesktop: true as const } : {}),
-        ...(identity.unavailableOnDesktop ? { unavailableOnDesktop: true as const } : {})
+        ...(identity.unavailableOnDesktop ? { unavailableOnDesktop: true as const } : {}),
+        ...(publishesRowChanges(answer) ? { rowChanges: true as const } : {})
       }
     ]
   })
@@ -56,6 +73,10 @@ export function describeRelayHostListing(
 
 export function relayHostFence(identity: DescribedRelayHost['identity']): string {
   return `${identity.pairingRevision}\0${identity.runtimeId}`
+}
+
+function publishesRowChanges(answer: RuntimeStatus | null): boolean {
+  return (answer?.capabilities ?? []).includes(WORKTREE_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY)
 }
 
 function relayVerdict(

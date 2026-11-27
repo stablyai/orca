@@ -8,8 +8,10 @@ import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import {
   getProviderRuntimeContextKey,
-  hasRemoteProviderRuntime
+  hasRemoteProviderRuntime,
+  useProviderRuntimeSessionGeneration
 } from '@/runtime/hosts/observations/provider-runtime-context'
+import { recomputeOn } from '@/lib/recompute-on'
 import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
 import { useAppStore } from '@/store/index'
 import {
@@ -39,7 +41,11 @@ export function JiraIntegrationCard(): React.JSX.Element {
   const [testingSiteId, setTestingSiteId] = useState<string | null>(null)
   const [testResultBySite, setTestResultBySite] = useState<Record<string, VerificationResult>>({})
 
-  const contextMatches = jiraStatusContextKey === getProviderRuntimeContextKey(settings)
+  const providerRuntimeSessionGeneration = useProviderRuntimeSessionGeneration()
+  const providerRuntimeContextKey = recomputeOn([providerRuntimeSessionGeneration], () =>
+    getProviderRuntimeContextKey(settings)
+  )
+  const contextMatches = jiraStatusContextKey === providerRuntimeContextKey
   const checking = !contextMatches || !jiraStatusChecked
   const connected = contextMatches && jiraStatus.connected
   const sites = jiraStatus.sites ?? []

@@ -86,7 +86,8 @@ export class RuntimeRepositoryRegistrationController {
     const gitInfo = kind === 'git' ? await inspectGitRepoForRegistrationAsync(path) : null
     if (gitInfo && !gitInfo.isRepo) {
       throw new Error(
-        (await describeWslUncAccessDenied(path, store.getSettings())) ??
+        gitInfo.ownershipError ??
+          (await describeWslUncAccessDenied(path, store.getSettings())) ??
           `Not a valid git repository: ${path}`
       )
     }

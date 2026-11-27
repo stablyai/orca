@@ -10,7 +10,10 @@ import {
 } from '../../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../../orca-runtime'
-import { createSessionWorkerLivenessReader } from '../../../../../orchestration/workers/lifecycle/session-worker-liveness'
+import {
+  createSessionWorkerLivenessReader,
+  withSleptAgentWorkers
+} from '../../../../../orchestration/workers/lifecycle/session-worker-liveness'
 import {
   applyFederatedFleetObservations,
   readFederatedFleetSnapshots
@@ -122,7 +125,13 @@ export async function projectWorkerListFleet(
     limit: options.limit,
     now,
     completeProjection: options.completeProjection,
-    observeSession: createSessionWorkerLivenessReader(db, statuses)
+    observeSession: withSleptAgentWorkers(
+      createSessionWorkerLivenessReader(db, statuses, undefined, {
+        includeResumeGuidance: true
+      }),
+      statuses,
+      (paneKey) => runtime.sleptAgentHandleForPane(paneKey)
+    )
   })
   const federated = options.includeRemote
     ? await readFederatedFleetSnapshots({

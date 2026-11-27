@@ -20,7 +20,8 @@ import { FIRST_PANE_ID } from '../../../../../../shared/workspace-layout/pane-ke
 import {
   resolveRuntimePaneTitleLeafIdFromRoot,
   resolveRuntimePaneTitleLeafIdFromSparseSlots,
-  collectRuntimePaneLeafIds
+  collectRuntimePaneLeafIds,
+  liveSlotIdsAreDense
 } from '../../../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
 import {
   isTerminalLeafId,
@@ -81,18 +82,16 @@ export function buildTitleDerivedAgentRows(args: TitleDerivedAgentRowsInput): Da
       const liveSlotIds = paneTitleEntries
         .map(([paneId]) => Number(paneId))
         .filter((paneId) => paneId >= FIRST_PANE_ID)
-      // Only dense live IDs retain mount/replay creation order; closing a pane makes IDs sparse.
-      const liveSlotsAreDense =
-        liveSlotIds.length === leafIds.length &&
-        liveSlotIds.every((paneId, index) => paneId === FIRST_PANE_ID + index)
+      const liveSlotsAreDense = liveSlotIdsAreDense(liveSlotIds, leafIds.length)
       for (const [paneId, title] of paneTitleEntries) {
+        const slot = Number(paneId)
         const leafId = resolveLeafIdForTitleFallback({
           layout,
           leafIds,
           ptyIds: ptyIdsByTabId[tab.id] ?? [],
           liveSlotIds,
           liveSlotsAreDense,
-          paneId: Number(paneId),
+          paneId: slot,
           title
         })
         if (!leafId) {
@@ -102,6 +101,7 @@ export function buildTitleDerivedAgentRows(args: TitleDerivedAgentRowsInput): Da
           tab,
           leafId,
           title,
+          runtimePaneId: slot >= FIRST_PANE_ID ? slot : undefined,
           ownerAgentType: resolveTitleDerivedPaneOwner(tab, layout, leafId),
           paneForegroundAgentByPaneKey,
           now: args.now,
@@ -144,6 +144,7 @@ function buildTitleDerivedAgentRow(args: {
   tab: TerminalTab
   leafId: string
   title: string
+  runtimePaneId?: number
   ownerAgentType: AgentType | null
   paneForegroundAgentByPaneKey: Record<string, TitleDerivedPaneForeground>
   now: number
@@ -222,6 +223,7 @@ function buildTitleDerivedAgentRow(args: {
   }
   return {
     paneKey,
+    runtimePaneId: args.runtimePaneId,
     entry,
     tab: args.tab,
     agentType,

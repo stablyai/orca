@@ -39,6 +39,7 @@ const mutations = [
   'prepareStartingWorkerAuthority',
   'markWorkerDispatchReady',
   'recordWorkerStage',
+  'recordWorkerProgress',
   'retainWorkerLaunchObservation',
   'completeDispatch',
   'completeActiveDispatchesForTask',
@@ -125,6 +126,7 @@ const mailboxScopes: Partial<Record<(typeof mutations)[number], MailboxScope>> =
       : undefined
   },
   recordWorkerStage: () => [],
+  recordWorkerProgress: () => [],
   recordAttemptObservation: () => []
 }
 
@@ -259,6 +261,10 @@ export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationP
             })
           )
         } else if (noticed && written) {
+          // Includes a Task's Dispatches when the Task changed: a completed Task hides its failures.
+          for (const id of written.dispatchIds) {
+            this.workerDockSources?.changedDispatch(id)
+          }
           // Nothing noticed: the call wrote no row a crew shows.
           if (written.dispatchIds.size > 0) {
             notify(

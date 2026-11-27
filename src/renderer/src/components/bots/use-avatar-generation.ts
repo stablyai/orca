@@ -8,7 +8,6 @@ import type {
   AvatarImageAgent,
   AvatarImageAgentStatus
 } from '../../../../shared/avatar-generation/avatar-generation-contract'
-import { describesRealPerson } from '../../../../shared/avatar-generation/avatar-generation-prompt'
 import { pickAvatarAgent } from '../../../../shared/avatar-generation/avatar-generation-agent-choice'
 import { refreshAvatarCapability, useAvatarCapability } from './avatar-generation-capability-store'
 import {
@@ -117,10 +116,6 @@ export function useAvatarGeneration(
   const generate = (description: string): void => {
     const text = description.trim()
     if (!text || !agent || avatarRequestPending(current.current)) {
-      return
-    }
-    if (describesRealPerson(text)) {
-      setRun({ kind: 'error', failure: 'real-person' })
       return
     }
     latest.current.onStart?.()
