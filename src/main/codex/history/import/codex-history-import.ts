@@ -190,9 +190,11 @@ export async function importCodexHistory(args: CodexHistoryImportArgs): Promise<
         }
   ledger.sources[sourceKey] = source
   const seedOnly = source.seeding === true
-  let unread = false
+  const listing = await listDayFolders(args.importHome)
+  // Days under an unreadable year or month wait for a later pass.
+  let unread = !listing.complete
   const handled = new Set(source.handled)
-  const folders = [ARCHIVED, ...(await listDayFolders(args.importHome))]
+  const folders = [ARCHIVED, ...listing.days]
   const store = new StoreNames(args.storeHome, args.runId)
   let copied = 0
   let unsaved = 0

@@ -1,8 +1,5 @@
 // A member's reply that names other members as @Name wakes them under the same person's post.
 import type { Nodes } from 'mdast'
-import remarkGfm from 'remark-gfm'
-import remarkParse from 'remark-parse'
-import { unified } from 'unified'
 import {
   BOT_GROUP_CONTEXT_MAX,
   fitBotGroupContext,
@@ -10,20 +7,35 @@ import {
   type BotGroupTurn
 } from '../../shared/bots/bot-group'
 import { botGroupReplyMentions } from '../../shared/bots/bot-group-mentions'
+import { startsBotGroupRequest } from '../../shared/bots/bot-group-schema'
 import { runKeyedSerializedOperation } from '../../shared/concurrency/keyed-serialized-operations'
-import { BOT_GROUP_HANDOFF_LIMIT, deliverTurn } from './bot-group-delivery'
+import { deliverTurn } from './bot-group-delivery'
 import { reserveGroupTurns } from './bot-group-turn-reservation'
 import type { BotGroupRuntime } from './bot-group-runtime'
 
+type MarkdownParser = { parse(value: string): Nodes }
+let markdownLoader: Promise<MarkdownParser> | null = null
+
 // GFM, as replies render: table cells end inline code at a pipe.
-const markdown = unified().use(remarkParse).use(remarkGfm)
+function loadMarkdownParser(): Promise<MarkdownParser> {
+  markdownLoader ??= Promise.all([import('unified'), import('remark-parse'), import('remark-gfm')])
+    .then(([{ unified }, { default: remarkParse }, { default: remarkGfm }]) =>
+      unified().use(remarkParse).use(remarkGfm)
+    )
+    .catch((error: unknown) => {
+      markdownLoader = null
+      throw error
+    })
+  return markdownLoader
+}
 
 /** `reply` with its Markdown code (fenced, indented, inline) and block quotes blanked in place,
  *  lines and offsets kept; text with no `@` has nothing to blank. */
-export function blankMarkdownCode(reply: string): string {
+export async function blankMarkdownCode(reply: string): Promise<string> {
   if (!reply.includes('@')) {
     return reply
   }
+  const markdown = await loadMarkdownParser()
   const ranges: [number, number][] = []
   const pending: Nodes[] = [markdown.parse(reply)]
   for (let node = pending.pop(); node; node = pending.pop()) {
@@ -57,18 +69,14 @@ export function blankMarkdownCode(reply: string): string {
 /** A finished member turn's reply: whole, as mentions read it, and as saved for room history. */
 export type GroupMemberReply = { full: string; saved: string }
 
-/** Wakes each member `reply` names, on a line of its own under the post `message` serves, up to
- *  that post's hand-off limit; past it the room shows one paused line, and a person's next post
- *  starts a fresh count. Explicit peer requests (mail turns) neither count nor follow mentions. */
+/** Wakes each member `reply` names, on a line of its own under the post `message` serves; mail
+ *  turns (peer replies, worker reports) follow mentions too, and a person's Stop ends the chain. */
 export async function handOffGroupMentions(
   groups: BotGroupRuntime,
   message: BotGroupMessage,
   turn: BotGroupTurn,
   reply: GroupMemberReply
 ): Promise<void> {
-  if (turn.mailbox) {
-    return
-  }
   const rootRequestId = message.rootRequestId ?? message.id
   const rootSequence = message.rootSequence ?? message.sequence
   const { groupId, threadId } = message
@@ -78,7 +86,7 @@ export async function handOffGroupMentions(
       .message(message.id)
       ?.turns.find((candidate) => candidate.operationId === turn.operationId)
     const root = groups.store.message(rootRequestId)
-    if (!speaking || speaking.handedOff || root?.author.kind !== 'owner') {
+    if (!speaking || speaking.handedOff || !root || !startsBotGroupRequest(root)) {
       return []
     }
     const room = groups.store.room(groupId, threadId)
@@ -90,10 +98,18 @@ export async function handOffGroupMentions(
           (sessionId === undefined || member.sessionId === sessionId) &&
           (member.stoppedThroughSequence ?? 0) < rootSequence
       )
+    // A member this turn already mailed (a peer request, or its answer to the requester) wakes on
+    // that mail, so naming it too would start a second turn.
+    const mailed = new Set(speaking.mailed)
+    const requester = groups.store.message(message.id)?.requester
+    if (speaking.answer !== undefined && requester) {
+      mailed.add(requester.id)
+    }
     const bots = groups.runtime.bots.list()
     const named = active(turn.botId, turn.sessionId)
-      ? botGroupReplyMentions(blankMarkdownCode(reply.full), room, bots, turn.botId).filter(
-          ({ id }) => active(id) && bots.some((bot) => bot.id === id && !bot.paused)
+      ? botGroupReplyMentions(await blankMarkdownCode(reply.full), room, bots, turn.botId).filter(
+          ({ id }) =>
+            active(id) && !mailed.has(id) && bots.some((bot) => bot.id === id && !bot.paused)
         )
       : []
     const targets = named.map(({ id }) => id)
@@ -102,9 +118,7 @@ export async function handOffGroupMentions(
       markHandedOff(groups, message.id, turn.operationId, [])
       return []
     }
-    const used = root.handoffs ?? 0
-    const waking = targets.slice(0, Math.max(0, BOT_GROUP_HANDOFF_LIMIT - used))
-    const { turns, contexts } = await reserveGroupTurns(groups, room, threadId, bots, waking)
+    const { turns, contexts } = await reserveGroupTurns(groups, room, threadId, bots, targets)
     // Each woken member sees the part of the reply that named it, however long the reply or late
     // its history was taken.
     for (const woken of turns) {
@@ -116,16 +130,10 @@ export async function handOffGroupMentions(
     }
     const place = { groupId, ...(threadId ? { threadId } : {}), rootRequestId, rootSequence }
     const speaker = { kind: 'bot' as const, id: turn.botId, name: turn.botName }
-    const pausedId = `handoffs-paused:${rootRequestId}`
     const stored: BotGroupMessage[] = []
-    // The marker, the count, each woken line with its owed delivery and the paused line commit
-    // together; each record is read as it stands now, after the reservation's reads.
+    // The marker and each woken line with its owed delivery commit together.
     groups.store.transaction(() => {
       markHandedOff(groups, message.id, turn.operationId, targets)
-      const post = groups.store.message(rootRequestId)
-      if (post) {
-        groups.store.update({ ...post, handoffs: used + turns.length })
-      }
       for (const woken of turns) {
         stored.push(
           groups.store.append(
@@ -144,19 +152,8 @@ export async function handOffGroupMentions(
           )
         )
       }
-      if (waking.length < targets.length && !groups.store.message(pausedId)) {
-        groups.store.append({
-          ...place,
-          id: pausedId,
-          author: speaker,
-          text: `Paused after ${BOT_GROUP_HANDOFF_LIMIT} hand-offs. Reply to continue.`,
-          createdAt: Date.now(),
-          pausedAfter: BOT_GROUP_HANDOFF_LIMIT,
-          turns: []
-        })
-      }
     })
-    groups.changed()
+    groups.changed(groupId)
     return stored
   })
   for (const line of woken) {
@@ -164,6 +161,26 @@ export async function handOffGroupMentions(
       void deliverTurn(groups, line, wokenTurn)
     }
   }
+}
+
+/** Records that a member's turn sent a peer request to `botId`; a send from no room turn has none. */
+export function noteGroupTurnMailed(
+  groups: BotGroupRuntime,
+  operationId: string | undefined,
+  botId: string
+): void {
+  const message = operationId ? groups.store.operationMessage(operationId) : null
+  if (!message) {
+    return
+  }
+  groups.store.update({
+    ...message,
+    turns: message.turns.map((turn) =>
+      turn.operationId === operationId && !turn.mailed?.includes(botId)
+        ? { ...turn, mailed: [...(turn.mailed ?? []), botId] }
+        : turn
+    )
+  })
 }
 
 function markHandedOff(

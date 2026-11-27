@@ -18,6 +18,7 @@ import { BotAppBrandLogo } from './BotAppBrandLogo'
 import { BotAppLogo } from './BotAppRow'
 import type { BotToolApp } from './bot-tool-apps'
 import { botAppLogoSource } from './bot-app-logo-source'
+import { botMcpAppLine } from '../../../../../shared/bots/bot-app-lines'
 
 /** A tool's or app's tile: its brand or Composio logo when one is known, else the generic tool icon. */
 export function BotToolLogo({
@@ -29,7 +30,8 @@ export function BotToolLogo({
   name: string
   /** The tool's server URL, whose host can name the app. */
   detail?: string
-  size?: 'sm' | 'md'
+  /** lg: a server page's header. */
+  size?: 'sm' | 'md' | 'lg'
 }): React.JSX.Element {
   const source = botAppLogoSource(name, detail)
   if (source?.kind === 'brand') {
@@ -42,7 +44,7 @@ export function BotToolLogo({
     <BotAppLogo
       plain
       size={size}
-      icon={<Wrench className={size === 'sm' ? 'size-3' : 'size-4'} />}
+      icon={<Wrench className={size === 'sm' ? 'size-3' : size === 'lg' ? 'size-5' : 'size-4'} />}
     />
   )
 }
@@ -64,7 +66,7 @@ export function BotToolAppRow({
   const { tool, app, problem } = entry
   const [busy, setBusy] = useState(false)
   const name = app?.name ?? botToolTitle(tool.name)
-  const line = app?.line ?? botToolSubtitle(tool)
+  const line = app ? botMcpAppLine(app, t) : botToolSubtitle(tool)
   const run = (action: () => Promise<unknown>): void => {
     setBusy(true)
     void action()
@@ -143,7 +145,7 @@ export function BotToolAppRow({
     >
       <BotConnectorDetails
         rows={[
-          ...(app ? [{ label: t('bots.toolApp.uses', 'Uses'), value: app.line }] : []),
+          ...(app ? [{ label: t('bots.toolApp.uses', 'Uses'), value: botMcpAppLine(app, t) }] : []),
           {
             label: t('bots.toolApp.address', 'Address'),
             value: <span className="font-mono break-all">{tool.detail}</span>

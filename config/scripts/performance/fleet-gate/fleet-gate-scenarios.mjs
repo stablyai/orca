@@ -11,23 +11,22 @@ const MAX_MISSED_SHARE = 0.2
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
+// A cloned seed keeps the seeding launch's endpoint beside this launch's; only the newest has a live token.
 function findHookEndpoint(root) {
   if (!fs.existsSync(root)) {
     return null
   }
-  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
-    const full = path.join(root, entry.name)
+  let newest = null
+  for (const entry of fs.readdirSync(root, { withFileTypes: true, recursive: true })) {
     if (entry.isFile() && (entry.name === 'endpoint.env' || entry.name === 'endpoint.cmd')) {
-      return full
-    }
-    if (entry.isDirectory()) {
-      const nested = findHookEndpoint(full)
-      if (nested) {
-        return nested
+      const full = path.join(entry.parentPath, entry.name)
+      const mtimeMs = fs.statSync(full).mtimeMs
+      if (!newest || mtimeMs > newest.mtimeMs) {
+        newest = { full, mtimeMs }
       }
     }
   }
-  return null
+  return newest?.full ?? null
 }
 
 function readHookEndpoint(userDataDir) {

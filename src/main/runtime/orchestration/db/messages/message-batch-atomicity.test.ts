@@ -75,7 +75,7 @@ describe('message batch atomicity', () => {
     expect(() =>
       method === 'markAsDelivered'
         ? db?.markAsDelivered(messageIds, 'recipient')
-        : db?.[method](messageIds)
+        : db?.[method](messageIds, { kind: 'orca' })
     ).toThrow('blocked')
 
     const changed = sqlite.prepare(changedCountSql).get() as { count: number }
@@ -90,7 +90,7 @@ describe('message batch atomicity', () => {
     sqlite.exec('BEGIN IMMEDIATE')
     sqlite.prepare("UPDATE messages SET subject = 'outer change' WHERE id = 'm000'").run()
 
-    expect(() => db?.markAsRead(messageIds)).toThrow('blocked')
+    expect(() => db?.markAsRead(messageIds, { kind: 'orca' })).toThrow('blocked')
     sqlite.exec('COMMIT')
 
     const first = sqlite.prepare("SELECT subject, read FROM messages WHERE id = 'm000'").get() as {

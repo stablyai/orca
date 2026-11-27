@@ -69,8 +69,3 @@ export function onDrawnTabsRedraw(listener: (workspaces: readonly string[]) => v
   redrawListeners.add(listener)
   return () => redrawListeners.delete(listener)
 }
-
-export function _resetDrawnTabHoldsForTests(): void {
-  held.clear()
-  redrawListeners.clear()
-}

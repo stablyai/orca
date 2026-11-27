@@ -20,6 +20,7 @@ import { normalizeMatchQuery, tokenizeMatchValue } from './query-token-match'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { Translate } from '@/i18n/use-translate'
 import type { ActiveOption } from './tab-create-entry-active-option'
+import type { Bot, BotAgent } from '../../../../../shared/bot-types'
 
 export type TabAgentLaunchOption = {
   agent: TuiAgent
@@ -33,7 +34,12 @@ export type TabAgentLaunchOption = {
   preset?: AgentPickerSetupIdentity
   pickerEntry?: AgentPickerEntry
   reason?: string
+  /** In a bot's home: a chat with that bot, its Home Chat or a side chat on `agent`, not a bare agent. */
+  botChat?: { bot: Bot; agent: BotAgent; home: boolean }
 }
+
+/** Ids of a bot home's chat results; a pinned one that drops out keeps Enter from moving on. */
+export const BOT_CHAT_OPTION_ID_PREFIX = 'bot-chat:'
 
 function normalizeAgentAlias(value: string): string {
   return value.trim().toLowerCase()

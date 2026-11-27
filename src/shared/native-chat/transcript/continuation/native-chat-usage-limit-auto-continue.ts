@@ -17,6 +17,18 @@ const publishedForCut = (published: PublishedUsageLimitContinue, cut: CutKey) =>
     ? published
     : undefined
 
+/** The reset the host keys this cut by: its own, or, when it has none, the time the chat moved to
+ *  another account, which the host publishes for the cut's turn. */
+export function usageLimitContinueResetForCut(
+  published: PublishedUsageLimitContinue,
+  cut: CutKey
+): number | undefined {
+  return (
+    cut?.resetsAt ??
+    (cut && published?.turnItemId === cut.turnItemId ? published.resetsAt : undefined)
+  )
+}
+
 /** The host's published state for exactly this cut; undefined when it speaks of another one. */
 export function usageLimitContinueStateForCut(
   published: PublishedUsageLimitContinue,

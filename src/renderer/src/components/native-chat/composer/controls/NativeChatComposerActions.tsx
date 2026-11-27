@@ -159,6 +159,7 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
   ) : (
     <NativeChatComposerPrimaryButton
       data-native-chat-critical-action={stops ? 'stop' : undefined}
+      focusComposer={focusComposer}
       aria-label={
         stops
           ? isStopping
@@ -200,7 +201,6 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
     {
       id: 'permissions',
       priority: 5,
-      shrink: true,
       content: (
         <NativeChatComposerPermissionPicker
           surface={sessionOptionsSurface}

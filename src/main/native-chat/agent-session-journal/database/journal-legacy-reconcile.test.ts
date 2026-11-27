@@ -802,3 +802,30 @@ it('releases failed custody holds after the older store removes the chat', async
       .get('journal.legacy-failed:rejected')
   ).toBeUndefined()
 })
+
+it('clears a failure an earlier build saved when a damaged original could not read the chat', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-legacy-reconcile-'))
+  cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+  const { db: original } = openJournalDatabase(journalDatabasePath(root))
+  cleanup.push(() => original.close())
+  olderOrcaChat(original, 'kept', rows)
+  const first = await upgrade(root)
+  // What a build before the damage check saved for each chat of a file missing journal_sessions.
+  first.db
+    .prepare('INSERT INTO agent_session_store_meta VALUES(?,?)')
+    .run(
+      'journal.legacy-failed:kept',
+      JSON.stringify({ revision: null, error: 'no such table: journal_sessions' })
+    )
+  await first.close()
+  // The repaired original is written again, and the chat reads at the revision shown here.
+  olderOrcaChat(original, 'later', rows)
+  original.pragma('wal_checkpoint(TRUNCATE)')
+  const repaired = await upgrade(root)
+  cleanup.push(repaired.close)
+  expect(
+    repaired.db
+      .prepare("SELECT 1 FROM agent_session_store_meta WHERE key='journal.legacy-failed:kept'")
+      .get()
+  ).toBeUndefined()
+})

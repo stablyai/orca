@@ -56,8 +56,7 @@ export type StructuredAgentSendTarget = RunningAgentSendTargetEligibility & {
   sessionId: string
   agentType: AgentType
   title: string
-  /** Null before the chat's first turn (the host publishes no status before one); only the
-   *  notes menu lists such chats, as the sidebar has no row for them. */
+  /** Null while the host has not published the chat yet; only the notes menu lists such chats. */
   entry: AgentStatusEntry | null
 }
 
@@ -85,7 +84,7 @@ export function deriveRunningAgentSendTargets(
   ]
 }
 
-/** Chats of the worktree that have not had their first turn yet, so no status entry exists. */
+/** Chats of the worktree with no status entry yet: the host has not published them. */
 export function deriveStatuslessStructuredAgentSendTargets(
   state: RunningAgentTargetState,
   worktreeId: string
@@ -153,7 +152,7 @@ function deriveTerminalAgentSendTargets(
   return targets
 }
 
-// Chats have workspace tabs without PTYs; list only those with status because sidebar reveal/visibility/pills require a row. Notes separately exposes first-turn chats.
+// Chats have workspace tabs without PTYs; list only those with status because sidebar reveal/visibility/pills require a row. Notes separately exposes chats the host has not published yet.
 function deriveStructuredAgentSendTargets(
   state: RunningAgentTargetState,
   worktreeId: string,

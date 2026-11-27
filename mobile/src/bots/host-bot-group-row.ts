@@ -20,7 +20,6 @@ export function hostBotGroupRow(input: {
   drawnHome: WorkspaceListItem
   sectionListKey: string
   bots: readonly ListedBot[]
-  avatarUris: ReadonlyMap<string, string>
   agentByPaneKey: ReadonlyMap<string, AgentRow>
 }): WorkspaceListItem {
   const { group, drawnHome } = input
@@ -37,7 +36,7 @@ export function hostBotGroupRow(input: {
         members: botGroupMemberBots(group, input.bots).map((bot) => ({
           id: bot.id,
           name: bot.name,
-          avatar: mobileBotAvatarSource(bot, input.avatarUris.get(bot.id))
+          avatar: mobileBotAvatarSource(bot)
         })),
         dot: botGroupStatusOf(group, (paneKey) => input.agentByPaneKey.get(paneKey))
       }

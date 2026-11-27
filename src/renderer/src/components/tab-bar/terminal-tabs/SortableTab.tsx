@@ -1,7 +1,7 @@
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { structuredAgentSessionAddressTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { useCallback, useEffect } from 'react'
-import { Minimize2, Pin } from 'lucide-react'
+import { Minimize2 } from 'lucide-react'
 import { stripLeadingAgentTitleDecoration } from '../../../../../shared/agent-status/title/agent-title-decoration'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { basename } from '@/lib/path'
@@ -247,9 +247,6 @@ export default function SortableTab({
         progress={programProgress}
         identity={identityIcon}
       />
-      {isPinned && !isEditing && (
-        <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />
-      )}
       {isEditing ? (
         <Input
           ref={setRenameInputElement}
@@ -284,6 +281,7 @@ export default function SortableTab({
       )}
       {tab.color && !isEditing && (
         <span
+          data-tab-color-dot=""
           className="mr-1.5 size-2 rounded-full shrink-0"
           style={{ backgroundColor: tab.color }}
         />

@@ -50,6 +50,10 @@ export function initializeBrowserProcessUserAgent(
   return identity
 }
 
+export function isBrowserProcessUserAgentInitialized(): boolean {
+  return identity !== null
+}
+
 export function getBrowserProcessUserAgentIdentity(): BrowserProcessUserAgentIdentity {
   if (!identity) {
     throw new Error('Browser process user agent is not initialized')

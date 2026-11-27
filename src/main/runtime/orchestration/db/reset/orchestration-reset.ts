@@ -83,7 +83,7 @@ export function resetTasks(this: OrchestrationDb): ResetRemovedWork | undefined 
     DELETE FROM decision_gates;
     DELETE FROM remote_questions;
     UPDATE question_threads
-      SET status = 'closed', closed_at = COALESCE(closed_at, datetime('now'))
+      SET status = 'closed', closed_at = COALESCE(closed_at, datetime('now')), awaiting = NULL
       WHERE status = 'pending';
     DELETE FROM legacy_mail_receipts;
     DELETE FROM legacy_operation_receipts;

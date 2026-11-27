@@ -1,6 +1,8 @@
 import { DURABLE_PUSH_SCHEMA } from './durable-push-schema.js'
 // Applied at startup for both dialects, including additive queue tables,
 // so every column type has to read the same in SQLite and PostgreSQL.
+export const PUSH_TOKEN_INDEX_CHARS = 256
+
 const PUSH_SCHEMA = `
 CREATE TABLE IF NOT EXISTS push_challenges (
   challenge_id TEXT PRIMARY KEY,
@@ -33,6 +35,11 @@ CREATE TABLE IF NOT EXISTS push_devices (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS push_devices_host_device
   ON push_devices(host_fingerprint, device_id);
+-- A phone's icon total reads every host's registration of its token. A prefix keeps every key
+-- under PostgreSQL's B-tree size limit: FCM tokens may be 4,096 characters. It keeps the name a
+-- never-deployed full-token revision used, so that revision's IF NOT EXISTS finds it and skips.
+CREATE INDEX IF NOT EXISTS push_devices_token
+  ON push_devices (substr(token, 1, ${PUSH_TOKEN_INDEX_CHARS}));
 `
 
 export function pushSchemaStatements(): string[] {

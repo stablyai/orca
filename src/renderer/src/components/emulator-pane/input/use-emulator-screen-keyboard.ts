@@ -13,8 +13,8 @@ import { translate } from '@/i18n/i18n'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { isMacUserAgent } from '@/app-shell/platform/user-agent-platform'
 import type { ServeSimKeyboardFrame } from '../../../../../shared/emulator/emulator-keyboard-frame'
+import { sendAndroidKey } from './android-keyboard-input'
 import {
-  ANDROID_KEY_BUTTONS,
   KEYBOARD_FRAME_DELAY_MS,
   type ScrcpyKeyboard
 } from '../streaming/use-emulator-control-stream'
@@ -238,12 +238,13 @@ export function useEmulatorScreenKeyboard({
         return
       }
 
-      const button = ANDROID_KEY_BUTTONS[event.key]
-      if (button) {
-        scrcpyKeyboard.sendKey(button, event.shiftKey)
-      } else if (androidText) {
-        void scrcpyKeyboard.sendText(event.key)
-      } else {
+      const sent = sendAndroidKey(scrcpyKeyboard, {
+        code: event.code,
+        key: event.key,
+        shift: event.shiftKey,
+        typesText: androidText
+      })
+      if (!sent) {
         return
       }
       event.preventDefault()

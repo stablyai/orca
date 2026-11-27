@@ -6,6 +6,7 @@ import type { TerminalTab } from '../../../../../shared/workspace-layout/termina
 import { resolveUnifiedTabLabel } from '../../../../../shared/workspace-layout/tab-groups/tab-title-resolution'
 import type { useAppStore } from '../../../store/index'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
+import { openFileIndex } from '@/store/slices/editor/tabs/workspace-editor-files'
 
 type TabGroupAppState = ReturnType<typeof useAppStore.getState>
 
@@ -50,11 +51,6 @@ export function useTabGroupItemProjections({
   const terminalTabById = useMemo(
     () => new Map(worktreeState.terminalTabs.map((item) => [item.id, item])),
     [worktreeState.terminalTabs]
-  )
-  // Index global openFiles once; scanning it per group tab made unified-tab updates quadratic.
-  const openFileById = useMemo(
-    () => new Map(worktreeState.openFiles.map((item) => [item.id, item])),
-    [worktreeState.openFiles]
   )
   const browserTabById = useMemo(
     () => new Map(worktreeState.browserTabs.map((item) => [item.id, item])),
@@ -107,11 +103,11 @@ export function useTabGroupItemProjections({
       groupTabs
         .filter((item) => isEditorTabContentType(item.contentType))
         .map((item): GroupEditorItem | null => {
-          const file = openFileById.get(item.entityId)
+          const file = openFileIndex(worktreeState.openFiles).get(item.entityId)
           return file ? { ...file, isPreview: item.isPreview, tabId: item.id } : null
         })
         .filter((item): item is GroupEditorItem => item !== null),
-    [groupTabs, openFileById]
+    [groupTabs, worktreeState.openFiles]
   )
 
   const browserItems = useMemo<GroupBrowserItem[]>(

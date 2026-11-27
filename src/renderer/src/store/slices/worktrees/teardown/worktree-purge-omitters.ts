@@ -25,6 +25,14 @@ export function createWorktreePurgeOmitters(
       obj,
       [...worktreeIdSet].map((id) => (isWorkspaceKey(id) ? id : worktreeWorkspaceKey(id)))
     )
+  // Why both forms: session-keyed maps hold bare worktree ids and `worktree:` aliases.
+  const omitWorkspaceSessionKeyByWorktree = <T>(obj: Record<string, T>): Record<string, T> =>
+    omitRecordKeys(
+      obj,
+      [...worktreeIdSet].flatMap((id) =>
+        isWorkspaceKey(id) ? [id] : [id, worktreeWorkspaceKey(id)]
+      )
+    )
   const pruneRightSidebarTabByWorktree = (): AppState['rightSidebarTabByWorktree'] => {
     const omitted = omitByWorktree(s.rightSidebarTabByWorktree)
     let changed = omitted !== s.rightSidebarTabByWorktree
@@ -74,6 +82,7 @@ export function createWorktreePurgeOmitters(
   return {
     omitByWorktree,
     omitWorkspaceLineageByWorktree,
+    omitWorkspaceSessionKeyByWorktree,
     pruneRightSidebarTabByWorktree,
     omitByTabId,
     omitByPtyId,

@@ -19,6 +19,7 @@ const EXTERNAL = [
   'fsevents',
   'cpu-features'
 ]
+const EVENT_LOOP_SOURCE_ROOTS = ['src/main', 'src/shared', 'src/preload']
 
 const externalNativeAddons = {
   name: 'external-native-addons',
@@ -219,12 +220,8 @@ export function workerOnlyFiles(graph, files, eventLoopEntries = []) {
 }
 
 /** Tracked event-loop sources under `pathspecs`: main-blocking sources minus worker-only modules. */
-export async function readEventLoopSources(root, pathspecs) {
-  const sources = readTrackedSources(
-    root,
-    ['src/main', 'src/shared', 'src/preload'],
-    isMainBlockingSource
-  )
+export async function readEventLoopSources(root, pathspecs = EVENT_LOOP_SOURCE_ROOTS) {
+  const sources = readTrackedSources(root, EVENT_LOOP_SOURCE_ROOTS, isMainBlockingSource)
   // Worker entries themselves are not main-blocking sources, but the graph must start from them.
   const entries = new Set(listTrackedFiles(root, Object.keys(MAIN_BLOCKING_WORKER_ENTRIES)))
   const graph = await collectImportGraph(root, [...sources.keys(), ...entries])

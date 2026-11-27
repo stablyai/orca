@@ -38,7 +38,7 @@ export function createDatabase(prefix: string): OrchestrationDb {
 }
 
 export function sqliteFor(db: OrchestrationDb): Database.Database {
-  return (db as unknown as { db: Database.Database }).db
+  return db.db
 }
 
 /** `rebind` then run-uses it, so the pane keeps only the new Run. */
@@ -118,6 +118,7 @@ export async function createRuntime(
     /** A headless serve: no window, only the empty headless graph. */
     headless?: boolean
     getAgentStatusSnapshot?: () => AgentStatusIpcPayload[]
+    getAgentStatusSnapshotForPane?: (paneKey: string) => AgentStatusIpcPayload[]
     checkHookAgentPresence?: (paneKey: string) => Promise<'live' | 'unverifiable' | 'exited' | null>
     launchAgent?: TuiAgent | null
     foregroundProcess?: string
@@ -128,6 +129,7 @@ export async function createRuntime(
     undefined,
     {
       getAgentStatusSnapshot: options.getAgentStatusSnapshot,
+      getAgentStatusSnapshotForPane: options.getAgentStatusSnapshotForPane,
       checkHookAgentPresence: options.checkHookAgentPresence,
       attestAgentHookCompatibilityAuthority: ({ paneKey }) =>
         paneKey === PANE_KEY || paneKey.startsWith(`${SECOND_TAB_ID}:`)
@@ -136,7 +138,7 @@ export async function createRuntime(
     }
   )
   const write = vi.fn(() => true)
-  const requestRepaint = vi.fn()
+  const requestRepaint = vi.fn(async (_ptyId: string) => true)
   runtime.setOrchestrationDb(db)
   runtime.setPtyController({
     write,

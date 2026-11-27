@@ -49,7 +49,7 @@ export const MobileFolderWorktreeRow = memo(function MobileFolderWorktreeRow({
   const unread =
     status.data?.kind === 'unavailable' || status.error !== null || read?.readError !== undefined
   const branch = read
-    ? formatBranchLabel(read.branch, read.head)
+    ? formatBranchLabel(read.branch, read.head, t)
     : worktree.branch.replace(/^refs\/heads\//, '')
   const ahead = read?.upstreamStatus?.ahead ?? 0
   const behind = read?.upstreamStatus?.behind ?? 0

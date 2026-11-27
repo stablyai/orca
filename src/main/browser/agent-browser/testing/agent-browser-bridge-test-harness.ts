@@ -134,8 +134,14 @@ export function overrideBridgeWebContentsLookup(
     enumerable: true,
     writable: true,
     value: function (id: number) {
-      const target = webContentsFromIdMock(id) as { isDestroyed: () => boolean } | null
-      return target && !target.isDestroyed() ? target : null
+      const target: unknown = webContentsFromIdMock(id)
+      return target &&
+        typeof target === 'object' &&
+        'isDestroyed' in target &&
+        typeof target.isDestroyed === 'function' &&
+        !target.isDestroyed()
+        ? target
+        : null
     }
   })
 }
@@ -161,10 +167,6 @@ export function agentBrowserCommandOf(
     start += 2
   }
   return args.slice(start).filter((arg) => arg !== '--json')
-}
-
-export function agentBrowserCommandsIn(stdinWrites: readonly string[]): string[][] {
-  return stdinWrites.map((stdin) => JSON.parse(stdin)[0])
 }
 
 type FakeAgentBrowserChild = EventEmitter & { kill: Mock }
@@ -204,35 +206,6 @@ export function answerAgentBrowserCommands(
       return child
     }
   )
-}
-
-export type AgentBrowserSpawn = { command: string[]; args: string[]; cdp: string | undefined }
-
-/** Succeeds every spawn with `data` and records each command beside its argv and CDP endpoint. */
-export function succeedRecordingAgentBrowserSpawns(
-  execFileMock: Mock,
-  stdinWrites: string[],
-  data: unknown
-): AgentBrowserSpawn[] {
-  const spawns: AgentBrowserSpawn[] = []
-  answerAgentBrowserCommands(execFileMock, stdinWrites, (command, cb, args, _child, opts) => {
-    spawns.push({ command, args, cdp: opts.env?.AGENT_BROWSER_CDP })
-    cb(null, JSON.stringify({ success: true, data }), '')
-  })
-  return spawns
-}
-
-export function createSucceedWith(execFileMock: Mock, stdinWrites: string[]) {
-  return function succeedWith(data: unknown): void {
-    execFileMock.mockImplementation(
-      (_bin: string, _args: string[], _opts: unknown, cb: ExecFileCallback) => {
-        cb(null, JSON.stringify({ success: true, data }), '')
-        return createFakeAgentBrowserChild({
-          stdin: { on: vi.fn(), end: (text: string) => stdinWrites.push(text) }
-        })
-      }
-    )
-  }
 }
 
 export function resetAgentBrowserBridgeMocks(mocks: AgentBrowserBridgeMocks): void {

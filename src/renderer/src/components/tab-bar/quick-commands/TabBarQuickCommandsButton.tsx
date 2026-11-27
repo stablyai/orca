@@ -19,6 +19,7 @@ import type { TerminalQuickCommand } from '../../../../../shared/terminal/quick-
 import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { useTranslate } from '@/i18n/use-translate'
 import { TabBarQuickCommandsMenu } from './TabBarQuickCommandsMenu'
+import { useQuickCommandEditorPresence } from './quick-command-editor-presence'
 import {
   flattenTerminalQuickCommandHosts,
   type HostedTerminalQuickCommand,
@@ -105,6 +106,7 @@ export function TabBarQuickCommandsButton({
     | { mode: 'edit'; command: TerminalQuickCommand; hostId: ExecutionHostId }
     | null
   >(null)
+  useQuickCommandEditorPresence(worktreeId, editor !== null)
 
   const totalVisible = repoCommands.length + globalCommands.length
   const hasAnyCommands = totalVisible > 0

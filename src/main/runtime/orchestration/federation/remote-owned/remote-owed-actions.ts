@@ -1,6 +1,10 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../../shared/schema/lazy-zod-schema'
 import { mapWithConcurrency } from '../../../../../shared/concurrency/map-with-concurrency'
-import { HelperStopOutcome } from '../../../../../shared/orchestration/workers/orchestration-worker-stop-receipt'
+import {
+  HelperStopOutcome,
+  isHelperStopDone
+} from '../../../../../shared/orchestration/workers/orchestration-worker-stop-receipt'
 import { PeerRunCancelResult } from '../../../../../shared/orchestration/remote-owned-wire'
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../../db/orchestration-db'
@@ -68,12 +72,14 @@ async function closeOnPairingChange(
   return false
 }
 
-const StopReceipt = z.object({
-  state: z.string(),
-  alreadySettled: z.boolean(),
-  helperStopError: z.string().optional(),
-  helpers: z.array(HelperStopOutcome).optional()
-})
+const StopReceipt = lazyZodSchema(() =>
+  z.object({
+    state: z.string(),
+    alreadySettled: z.boolean(),
+    helperStopError: z.string().optional(),
+    helpers: z.array(HelperStopOutcome).optional()
+  })
+)
 
 /** Proof a stop is done: the worker stopped or had already settled, and so did every helper, unless the user kept it open. */
 export function isRemoteStopProof(receipt: unknown): boolean {
@@ -82,9 +88,7 @@ export function isRemoteStopProof(receipt: unknown): boolean {
     parsed.success &&
     (parsed.data.state === 'stopped' || parsed.data.alreadySettled) &&
     parsed.data.helperStopError === undefined &&
-    (parsed.data.helpers ?? []).every((helper) =>
-      ['stopped', 'already_finished', 'kept_open'].includes(helper.outcome)
-    )
+    (parsed.data.helpers ?? []).every(isHelperStopDone)
   )
 }
 

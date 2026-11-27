@@ -1,4 +1,4 @@
-import { translate } from '../../i18n/mobile-i18n'
+import type { Translate } from '../../i18n/mobile-i18n'
 
 export type MobileFilePreviewParamValue = string | string[] | undefined
 
@@ -56,7 +56,8 @@ function optionalSingleParam(value: MobileFilePreviewParamValue): string | undef
 }
 
 export function normalizeMobileFilePreviewRouteParams(
-  params: RawPreviewRouteParams
+  params: RawPreviewRouteParams,
+  t: Translate
 ): MobileFilePreviewRouteState {
   const hostId = singleParam(params.hostId)
   const worktreeId = singleParam(params.worktreeId)
@@ -84,7 +85,7 @@ export function normalizeMobileFilePreviewRouteParams(
         }
       : {
           ok: false,
-          message: translate('files.filePreviewScreen.loadFailed', 'Unable to load preview')
+          message: t('files.filePreviewScreen.loadFailed', 'Unable to load preview')
         }
   }
   if (source === 'terminalArtifact') {

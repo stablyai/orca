@@ -15,6 +15,8 @@ type CandidateRowDetailsProps = {
   expanded: boolean
   /** False for rows whose git state is never read (main, folder, disconnected). */
   gitChecked: boolean
+  /** Facts the row itself no longer shows: size, review, status and git verdict chips. */
+  extraFacts: readonly { label: string; value: string }[]
 }
 
 export function CandidateRowDetails({
@@ -23,7 +25,8 @@ export function CandidateRowDetails({
   candidate,
   contextDetails,
   expanded,
-  gitChecked
+  gitChecked,
+  extraFacts
 }: CandidateRowDetailsProps): React.JSX.Element {
   const t = useTranslate()
   return (
@@ -66,6 +69,11 @@ export function CandidateRowDetails({
               ? formatGitDetail(candidate, branchSafetyDetails[0], t)
               : t('components.workspace.cleanup.browse.gitNotChecked', 'Not checked')}
           </DetailRow>
+          {extraFacts.map((fact) => (
+            <DetailRow key={fact.label} label={fact.label}>
+              {fact.value}
+            </DetailRow>
+          ))}
           {contextDetails ? (
             <DetailRow
               label={t('auto.components.workspace.cleanup.candidateRow.contextLabel', 'Context')}

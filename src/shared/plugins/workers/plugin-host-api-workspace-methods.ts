@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
 import { PLUGIN_COMMAND_ALIAS_ACTION_IDS } from '../contributions/plugin-command-actions'
 import { parseWorkspaceKey } from '../../workspace/identity/workspace-scope'
@@ -22,8 +23,8 @@ const ID_MAX = PLUGIN_HOST_ID_MAX_LENGTH
 export const PLUGIN_HOST_TEXT_MAX_LENGTH = 4096
 const TEXT_MAX = PLUGIN_HOST_TEXT_MAX_LENGTH
 
-export const pluginWorkspaceIdSchema = z.string().min(1).max(ID_MAX)
-export const pluginTerminalIdSchema = z.string().min(1).max(ID_MAX)
+export const pluginWorkspaceIdSchema = lazyZodSchema(() => z.string().min(1).max(ID_MAX))
+export const pluginTerminalIdSchema = lazyZodSchema(() => z.string().min(1).max(ID_MAX))
 const workspaceId = pluginWorkspaceIdSchema
 const terminalId = pluginTerminalIdSchema
 
@@ -37,88 +38,96 @@ export function pluginWorkspaceId(row: { id: string; identityKey?: string | null
     : row.id
 }
 
-const pluginHostIdSchema = z.string().max(ID_MAX).nullable()
+const pluginHostIdSchema = lazyZodSchema(() => z.string().max(ID_MAX).nullable())
 
-const workspaceListParams = z
-  .strictObject({
-    /** Also report each workspace's agent and terminal status. Why opt-in: it refreshes every
-     *  terminal host. Hosts before 1.7 refuse it with `invalid_params`. */
-    includeStatus: z.boolean().optional()
+const workspaceListParams = lazyZodSchema(() =>
+  z
+    .strictObject({
+      /** Also report each workspace's agent and terminal status. Why opt-in: it refreshes every
+       *  terminal host. Hosts before 1.7 refuse it with `invalid_params`. */
+      includeStatus: z.boolean().optional()
+    })
+    .optional()
+)
+const workspaceStatus = lazyZodSchema(() =>
+  z.object({
+    /** `working`: an agent works; `permission`: one waits for input; `done`: an agent finished;
+     *  `active`: a live terminal and no agent working; `inactive`: no live terminal. */
+    state: z.enum(['working', 'permission', 'done', 'active', 'inactive']),
+    /** Output arrived since the person last looked, as the sidebar's dot shows. */
+    unread: z.boolean(),
+    /** Live terminals. */
+    terminalCount: z.number().int().nonnegative(),
+    /** Milliseconds since the epoch: the last terminal output, else the last activity; null when none. */
+    lastActivityAt: z.number().finite().nullable()
   })
-  .optional()
-const workspaceStatus = z.object({
-  /** `working`: an agent works; `permission`: one waits for input; `done`: an agent finished;
-   *  `active`: a live terminal and no agent working; `inactive`: no live terminal. */
-  state: z.enum(['working', 'permission', 'done', 'active', 'inactive']),
-  /** Output arrived since the person last looked, as the sidebar's dot shows. */
-  unread: z.boolean(),
-  /** Live terminals. */
-  terminalCount: z.number().int().nonnegative(),
-  /** Milliseconds since the epoch: the last terminal output, else the last activity; null when none. */
-  lastActivityAt: z.number().finite().nullable()
-})
-const workspaceListResult = z.object({
-  workspaces: z
-    .array(
-      z.object({
-        /** What every other workspace method takes; it names the host too, so a workspace that two
-         *  hosts both have is never ambiguous. */
-        id: workspaceId,
-        /** `folder`: a plain folder, with no Git branch. */
-        kind: z.enum(['worktree', 'folder']),
-        name: z.string().max(512),
-        /** Its project's (repository's) name, or null when it has none, as for project folders.
-         *  Absent before host API 1.5. */
-        project: z.string().max(512).nullable().optional(),
-        /** The project's id, as `project.list` gives it; null for folders of a project group.
-         *  Absent before host API 1.7. */
-        projectId: z.string().max(ID_MAX).nullable().optional(),
-        /** The path on the host that owns it, which may be WSL or an SSH machine. */
-        path: z.string().max(ID_MAX),
-        branch: z.string().max(512).nullable(),
-        /** The host the workspace records: `local`, `ssh:<connection>` or `runtime:<environment>`;
-         *  null when it records none (older rows on this machine). A project-group folder gives
-         *  its folder's recorded host, null for this machine. */
-        hostId: pluginHostIdSchema,
-        /** Present only with `includeStatus`, for workspaces Orca has a status for. */
-        status: workspaceStatus.optional()
-      })
-    )
-    .max(PLUGIN_WORKSPACE_LIST_LIMIT),
-  /** More workspaces exist than the list holds, or some were left out for an over-long id or
-   *  path. */
-  truncated: z.boolean(),
-  /** With `includeStatus`: Orca's status listing stopped short, so some rows lack a status they
-   *  may have. Absent without `includeStatus` and before host API 1.7. */
-  statusTruncated: z.boolean().optional()
-})
+)
+const workspaceListResult = lazyZodSchema(() =>
+  z.object({
+    workspaces: z
+      .array(
+        z.object({
+          /** What every other workspace method takes; it names the host too, so a workspace that two
+           *  hosts both have is never ambiguous. */
+          id: workspaceId,
+          /** `folder`: a plain folder, with no Git branch. */
+          kind: z.enum(['worktree', 'folder']),
+          name: z.string().max(512),
+          /** Its project's (repository's) name, or null when it has none, as for project folders.
+           *  Absent before host API 1.5. */
+          project: z.string().max(512).nullable().optional(),
+          /** The project's id, as `project.list` gives it; null for folders of a project group.
+           *  Absent before host API 1.7. */
+          projectId: z.string().max(ID_MAX).nullable().optional(),
+          /** The path on the host that owns it, which may be WSL or an SSH machine. */
+          path: z.string().max(ID_MAX),
+          branch: z.string().max(512).nullable(),
+          /** The host the workspace records: `local`, `ssh:<connection>` or `runtime:<environment>`;
+           *  null when it records none (older rows on this machine). A project-group folder gives
+           *  its folder's recorded host, null for this machine. */
+          hostId: pluginHostIdSchema,
+          /** Present only with `includeStatus`, for workspaces Orca has a status for. */
+          status: workspaceStatus.optional()
+        })
+      )
+      .max(PLUGIN_WORKSPACE_LIST_LIMIT),
+    /** More workspaces exist than the list holds, or some were left out for an over-long id or
+     *  path. */
+    truncated: z.boolean(),
+    /** With `includeStatus`: Orca's status listing stopped short, so some rows lack a status they
+     *  may have. Absent without `includeStatus` and before host API 1.7. */
+    statusTruncated: z.boolean().optional()
+  })
+)
 
-const projectListParams = z.strictObject({}).optional()
-const projectListResult = z.object({
-  projects: z
-    .array(
-      z.object({
-        /** What `workspace.list` rows name as `projectId`. */
-        id: z.string().min(1).max(ID_MAX),
-        name: z.string().max(512),
-        /** `folder`: a plain folder, with no Git repository. */
-        kind: z.enum(['git', 'folder']),
-        /** Always named: `local` for this machine, `ssh:<connection>` or `runtime:<environment>`. */
-        hostId: pluginHostIdSchema,
-        /** The path on the host that owns it, which may be WSL or an SSH machine. */
-        path: z.string().max(ID_MAX),
-        /** Hidden from Orca's sidebar on this host (`project.setHidden`); its workspaces still
-         *  run. Absent before host API 1.9. */
-        hidden: z.boolean().optional()
-      })
-    )
-    .max(PLUGIN_PROJECT_LIST_LIMIT),
-  /** More projects exist than the list holds, or some were left out for an over-long id or path. */
-  truncated: z.boolean()
-})
+const projectListParams = lazyZodSchema(() => z.strictObject({}).optional())
+const projectListResult = lazyZodSchema(() =>
+  z.object({
+    projects: z
+      .array(
+        z.object({
+          /** What `workspace.list` rows name as `projectId`. */
+          id: z.string().min(1).max(ID_MAX),
+          name: z.string().max(512),
+          /** `folder`: a plain folder, with no Git repository. */
+          kind: z.enum(['git', 'folder']),
+          /** Always named: `local` for this machine, `ssh:<connection>` or `runtime:<environment>`. */
+          hostId: pluginHostIdSchema,
+          /** The path on the host that owns it, which may be WSL or an SSH machine. */
+          path: z.string().max(ID_MAX),
+          /** Hidden from Orca's sidebar on this host (`project.setHidden`); its workspaces still
+           *  run. Absent before host API 1.9. */
+          hidden: z.boolean().optional()
+        })
+      )
+      .max(PLUGIN_PROJECT_LIST_LIMIT),
+    /** More projects exist than the list holds, or some were left out for an over-long id or path. */
+    truncated: z.boolean()
+  })
+)
 
-const workspaceOpenParams = z.strictObject({ workspaceId })
-const workspaceOpenResult = z.object({ opened: z.literal(true) })
+const workspaceOpenParams = lazyZodSchema(() => z.strictObject({ workspaceId }))
+const workspaceOpenResult = lazyZodSchema(() => z.object({ opened: z.literal(true) }))
 
 export const PLUGIN_WORKSPACE_NAME_MAX = 200
 // Characters that are invisible or reorder text: controls, bidi controls, zero-width and
@@ -153,51 +162,67 @@ export function isPluginPlainLine(text: string): boolean {
   return ![...text].some(isHiddenOrControl)
 }
 /** A name Orca shows as a label: it could otherwise read as another item's name. */
-export const pluginLabelNameSchema = z
-  .string()
-  .max(PLUGIN_WORKSPACE_NAME_MAX)
-  .refine((name) => name.trim().length > 0, 'name must not be blank')
-  .refine(isPluginPlainLine, 'name must be one line of plain text')
-const workspaceRenameParams = z.strictObject({
-  workspaceId,
-  /** The name the sidebar shows. It replaces an automatic (branch) name or a person's rename. */
-  name: pluginLabelNameSchema
-})
-const workspaceRenameResult = z.object({ name: z.string() })
+export const pluginLabelNameSchema = lazyZodSchema(() =>
+  z
+    .string()
+    .max(PLUGIN_WORKSPACE_NAME_MAX)
+    .refine((name) => name.trim().length > 0, 'name must not be blank')
+    .refine(isPluginPlainLine, 'name must be one line of plain text')
+)
+const workspaceRenameParams = lazyZodSchema(() =>
+  z.strictObject({
+    workspaceId,
+    /** The name the sidebar shows. It replaces an automatic (branch) name or a person's rename. */
+    name: pluginLabelNameSchema
+  })
+)
+const workspaceRenameResult = lazyZodSchema(() => z.object({ name: z.string() }))
 
-const terminalCreateParams = z.strictObject({
-  workspaceId,
-  title: z.string().min(1).max(512).optional(),
-  /** Run in the new terminal's shell once it starts. */
-  command: z.string().min(1).max(TEXT_MAX).optional()
-})
-const terminalCreateResult = z.object({ terminalId })
+const terminalCreateParams = lazyZodSchema(() =>
+  z.strictObject({
+    workspaceId,
+    title: z.string().min(1).max(512).optional(),
+    /** Run in the new terminal's shell once it starts. */
+    command: z.string().min(1).max(TEXT_MAX).optional()
+  })
+)
+const terminalCreateResult = lazyZodSchema(() => z.object({ terminalId }))
 
-const terminalReadParams = z.strictObject({
-  terminalId,
-  /** The newest lines to return; default 200. */
-  maxLines: z.number().int().min(1).max(PLUGIN_TERMINAL_READ_MAX_LINES).optional()
-})
-const terminalReadResult = z.object({
-  /** Plain text, oldest first, without escape sequences. */
-  lines: z.array(z.string()).max(PLUGIN_TERMINAL_READ_MAX_LINES),
-  /** Older output exists beyond `lines`. */
-  truncated: z.boolean()
-})
+const terminalReadParams = lazyZodSchema(() =>
+  z.strictObject({
+    terminalId,
+    /** The newest lines to return; default 200. */
+    maxLines: z.number().int().min(1).max(PLUGIN_TERMINAL_READ_MAX_LINES).optional()
+  })
+)
+const terminalReadResult = lazyZodSchema(() =>
+  z.object({
+    /** Plain text, oldest first, without escape sequences. */
+    lines: z.array(z.string()).max(PLUGIN_TERMINAL_READ_MAX_LINES),
+    /** Older output exists beyond `lines`. */
+    truncated: z.boolean()
+  })
+)
 
-/** An agent Orca knows: `claude`, `codex`, `gemini`, ... */
-export const pluginAgentSchema = z.string().min(1).max(64).refine(isTuiAgent, 'unknown agent')
+/** An agent Orca knows: `claude`, `codex`, `antigravity`, ... */
+export const pluginAgentSchema = lazyZodSchema(() =>
+  z.string().min(1).max(64).refine(isTuiAgent, 'unknown agent')
+)
 
-const agentLaunchParams = z.strictObject({
-  workspaceId,
-  agent: pluginAgentSchema,
-  /** Sent to the agent as its first message. */
-  prompt: z.string().min(1).max(TEXT_MAX).optional()
-})
-const agentLaunchResult = z.object({
-  /** The agent's terminal, as `terminal.read` and `terminal.sendText` take it. */
-  terminalId
-})
+const agentLaunchParams = lazyZodSchema(() =>
+  z.strictObject({
+    workspaceId,
+    agent: pluginAgentSchema,
+    /** Sent to the agent as its first message. */
+    prompt: z.string().min(1).max(TEXT_MAX).optional()
+  })
+)
+const agentLaunchResult = lazyZodSchema(() =>
+  z.object({
+    /** The agent's terminal, as `terminal.read` and `terminal.sendText` take it. */
+    terminalId
+  })
+)
 
 /** A `/`-separated path inside the workspace: not absolute, no `..`, no drive letter. */
 export function isPluginWorkspaceRelativePath(path: string): boolean {
@@ -210,22 +235,26 @@ export function isPluginWorkspaceRelativePath(path: string): boolean {
   )
 }
 
-const editorOpenParams = z.strictObject({
-  workspaceId,
-  /** Relative to the workspace, `/`-separated; it must stay inside it. */
-  path: z
-    .string()
-    .min(1)
-    .max(ID_MAX)
-    .refine(isPluginWorkspaceRelativePath, 'path must be relative and inside the workspace')
-})
-const editorOpenResult = z.object({ opened: z.literal(true) })
+const editorOpenParams = lazyZodSchema(() =>
+  z.strictObject({
+    workspaceId,
+    /** Relative to the workspace, `/`-separated; it must stay inside it. */
+    path: z
+      .string()
+      .min(1)
+      .max(ID_MAX)
+      .refine(isPluginWorkspaceRelativePath, 'path must be relative and inside the workspace')
+  })
+)
+const editorOpenResult = lazyZodSchema(() => z.object({ opened: z.literal(true) }))
 
-const commandsRunParams = z.strictObject({
-  /** A built-in action, the same list `contributes.commands[].action` takes. */
-  action: z.enum(PLUGIN_COMMAND_ALIAS_ACTION_IDS)
-})
-const commandsRunResult = z.object({ ran: z.literal(true) })
+const commandsRunParams = lazyZodSchema(() =>
+  z.strictObject({
+    /** A built-in action, the same list `contributes.commands[].action` takes. */
+    action: z.enum(PLUGIN_COMMAND_ALIAS_ACTION_IDS)
+  })
+)
+const commandsRunResult = lazyZodSchema(() => z.object({ ran: z.literal(true) }))
 
 export const PLUGIN_WORKSPACE_ACTIONS_API = {
   'workspace.list': spec({

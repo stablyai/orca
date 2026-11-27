@@ -16,18 +16,25 @@ export function codexSpawnedProcessIdentity(
     spawnToken: string
     onSpawned?: (process: AgentSessionProcessIdentity) => Promise<void>
   },
-  readStartTime?: (pid: number) => Promise<number | null>
+  {
+    readProcessStartTime: readStartTime = readProcessStartTimeMs
+  }: {
+    readProcessStartTime?: (pid: number) => Promise<number | null>
+  },
+  /** A shared server outlives the chat; without a start time recovery never signals it. */
+  sharedServer: () => boolean = () => false
 ): {
   onSpawned: (pid: number) => Promise<void>
   read: (pid: number | undefined) => Promise<AgentSessionProcessIdentity>
 } {
   let spawned: Promise<AgentSessionProcessIdentity> | undefined
+  const startTime = async (pid: number) => (sharedServer() ? null : readStartTime(pid))
   return {
     onSpawned: async (pid) => {
-      spawned = codexProcessIdentity({ ...input, pid }, readStartTime)
+      spawned = codexProcessIdentity({ ...input, pid }, startTime)
       await input.onSpawned?.(await spawned)
     },
-    read: (pid) => spawned ?? codexProcessIdentity({ ...input, pid }, readStartTime)
+    read: (pid) => spawned ?? codexProcessIdentity({ ...input, pid }, startTime)
   }
 }
 

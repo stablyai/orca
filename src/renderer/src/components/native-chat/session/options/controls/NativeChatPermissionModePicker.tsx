@@ -1,3 +1,5 @@
+// @protected-copy scope=file
+// The pill names the policy the agent runs under: a language pack must not reword what it says.
 import { memo } from 'react'
 import { ChevronDown, PencilRuler, Settings2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -29,6 +31,7 @@ import {
   nativeChatPermissionPickerTitle
 } from './native-chat-permission-mode-labels'
 import { runSessionOptionSurfaceCall } from './native-chat-session-option-surface-call'
+import { PermissionChoiceRadioItem } from './PermissionChoiceRadioItem'
 
 export function NativeChatPermissionModeName(props: {
   mode: AgentChatPermissionMode
@@ -70,19 +73,15 @@ export function NativeChatPermissionModeItems({
   return (
     <>
       {modes.map((mode) => (
-        <DropdownMenuRadioItem
+        <PermissionChoiceRadioItem
           key={mode}
           value={mode}
+          description={nativeChatPermissionModeDescription(mode, agent, t)}
           disabled={disabled}
           onSelect={() => onSelect(mode)}
         >
-          <div className="min-w-0 py-0.5">
-            <NativeChatPermissionModeName mode={mode} />
-            <div className="text-xs font-normal text-muted-foreground">
-              {nativeChatPermissionModeDescription(mode, agent, t)}
-            </div>
-          </div>
-        </DropdownMenuRadioItem>
+          <NativeChatPermissionModeName mode={mode} />
+        </PermissionChoiceRadioItem>
       ))}
     </>
   )
@@ -97,7 +96,8 @@ export type NativeChatPermissionModePickerProps = {
   agent?: string | null
   disabled?: boolean
   currentLabel?: string
-  appearance?: 'compact' | 'form'
+  /** `icon` is the composer pill: the mode's neutral icon alone, named by its tooltip. */
+  appearance?: 'icon' | 'compact' | 'form'
   activeValue?: string
   onSelect: (mode: AgentChatPermissionMode) => void
   /** A first choice that sets no mode; shown as current while `current` is absent. */
@@ -167,7 +167,7 @@ function NativeChatPermissionModePickerInner({
     reported,
     deferred: activeLabel !== null
   })
-  const tooltipLabel =
+  const hintLabel =
     hint === 'unnamed-report'
       ? t(
           'components.native-chat.composer.permissionAgentSettingsUnnamedHint',
@@ -180,8 +180,12 @@ function NativeChatPermissionModePickerInner({
             'Uses your {{agent}} permission settings.',
             { agent: settingsAgent }
           )
-        : described
-  // `shrink` overrides the button's shrink-0 so a narrow composer truncates the mode name.
+        : null
+  // The icon-only pill shows no name, so its tooltip always names the mode before any hint.
+  const iconOnly = appearance === 'icon'
+  const TriggerIcon = isAgentChatPermissionMode(shown)
+    ? NATIVE_CHAT_PERMISSION_MODE_ICONS[shown]
+    : Icon
   return (
     <DropdownMenu>
       <Tooltip>
@@ -190,27 +194,39 @@ function NativeChatPermissionModePickerInner({
             <Button
               type="button"
               variant={appearance === 'form' ? 'outline' : 'ghost'}
-              size="xs"
-              aria-label={t(
-                'components.native-chat.composer.pillAccessibleName',
-                '{{value0}} {{value1}}',
-                { value0: title, value1: described }
-              )}
+              size={iconOnly ? 'icon-sm' : 'xs'}
+              aria-label={
+                // An unrecognized value falls back to the title, which must not be said twice.
+                described === title
+                  ? title
+                  : t(
+                      'components.native-chat.composer.pillAccessibleName',
+                      '{{value0}} {{value1}}',
+                      {
+                        value0: title,
+                        value1: described
+                      }
+                    )
+              }
               className={
-                appearance === 'form' ? 'h-8 w-64 max-w-full justify-between' : 'min-w-0 shrink'
+                appearance === 'form'
+                  ? 'h-8 w-64 max-w-full justify-between'
+                  : iconOnly
+                    ? 'size-7 pointer-coarse:size-11'
+                    : 'min-w-0 shrink'
               }
             >
-              {isAgentChatPermissionMode(shown) ? (
+              {iconOnly ? (
+                <TriggerIcon className="size-3.5 shrink-0" aria-hidden />
+              ) : isAgentChatPermissionMode(shown) ? (
                 <NativeChatPermissionModeName mode={shown} label={label} truncate />
               ) : (
                 <>
                   <Icon className="size-3.5 shrink-0" aria-hidden />
-                  <span data-composer-label className="truncate">
-                    {label}
-                  </span>
+                  <span className="truncate">{label}</span>
                 </>
               )}
-              <ChevronDown data-composer-label className="size-3" />
+              {iconOnly ? null : <ChevronDown className="size-3" />}
             </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
@@ -220,10 +236,20 @@ function NativeChatPermissionModePickerInner({
           collisionPadding={8}
           className="max-w-(--radix-tooltip-content-available-width)"
         >
-          <span className="block max-w-72 break-words">{tooltipLabel}</span>
+          <span className="block max-w-72 break-words">
+            {iconOnly ? described : (hintLabel ?? described)}
+          </span>
+          {iconOnly && hintLabel ? (
+            <span className="block max-w-72 break-words opacity-70">{hintLabel}</span>
+          ) : null}
         </TooltipContent>
       </Tooltip>
-      <DropdownMenuContent align="start" side="top" collisionPadding={8} className="w-72">
+      <DropdownMenuContent
+        align="start"
+        side="top"
+        collisionPadding={8}
+        className="w-72 max-w-(--radix-dropdown-menu-content-available-width)"
+      >
         <DropdownMenuRadioGroup
           aria-label={title}
           value={current ?? (inherit ? INHERIT_VALUE : undefined)}
@@ -286,6 +312,7 @@ export function NativeChatComposerPermissionPicker({
     <NativeChatPermissionModePicker
       current={current}
       reported={descriptor.kind.reportedValue}
+      appearance="icon"
       modes={modes}
       activeValue={descriptor.valueSource === 'dispatched' ? descriptor.activeValue : undefined}
       agent={agent ?? descriptor.kind.settingsAgent ?? null}

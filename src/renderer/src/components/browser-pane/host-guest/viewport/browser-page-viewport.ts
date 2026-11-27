@@ -1,4 +1,5 @@
 import { setBrowserGuestVisible } from '../browser-guest-activity'
+import { OFFSCREEN_ANIMATION_ATTRIBUTE } from '@/lib/window-activity/offscreen-animation-pause'
 import {
   getBrowserPageChromeInsetHeight,
   rememberBrowserPageChromeInsetHeight
@@ -306,6 +307,8 @@ export function applyBrowserPageViewportLayout(
   }
   viewport.shell.style.display = 'flex'
   viewport.shell.style.opacity = layout.active ? '1' : '0'
+  // At opacity 0 its loops (the agent glow) would still draw every frame.
+  viewport.shell.toggleAttribute(OFFSCREEN_ANIMATION_ATTRIBUTE, !layout.active)
   viewport.shell.style.pointerEvents = layout.active ? 'auto' : 'none'
   viewport.shell.style.zIndex = layout.active ? '1' : '0'
 }

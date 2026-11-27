@@ -10,7 +10,7 @@ import {
   getWorktreeMirrorDistro
 } from '../../../workspaces/execution-host/project-runtime-git-options'
 import {
-  resolveDefaultBaseRefWithLocalGit,
+  readDefaultBaseRefWithLocalGit,
   type LocalGitExecOptions
 } from '../../../git/refs/resolution/repo-default-base-ref'
 
@@ -124,7 +124,8 @@ async function performRuntimeLocalWorktreeCreate<T>(
   const baseBranchPromise = resolveWorktreeCreateBase({
     requestedBaseBranch: request.baseBranch,
     repoWorktreeBaseRef: repo.worktreeBaseRef,
-    resolveDefaultBaseRef: () => resolveDefaultBaseRefWithLocalGit(gitExecOptions),
+    resolveDefaultBaseRef: () => readDefaultBaseRefWithLocalGit(gitExecOptions),
+    explicitBaseHint: 'pass an explicit --base-branch',
     isBaseUsable: async (candidate) => {
       const remoteBase = await args.resolveRemoteTrackingBase(
         repo.path,

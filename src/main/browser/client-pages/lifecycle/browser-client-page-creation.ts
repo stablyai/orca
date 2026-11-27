@@ -121,8 +121,10 @@ export async function createReservedBrowserClientPage(
     })
     guestBound = true
     assertAvailable()
+    const { initialUrl: _initialUrl, ...createCommand } = event.command
     const retainedPage = {
       generation: event.pageHostGeneration,
+      createEvent: { ...event, command: createCommand },
       inventory: createBrowserClientPageInventory(
         event,
         event.command.initialUrl === undefined ? 'active' : 'outcomeUnknown'

@@ -3,6 +3,16 @@
 
 import type { AgentStatusIpcPayload } from '../../agent-status/contracts/agent-status-ipc-payload'
 import type { AgentStatusState, AgentType } from '../../agent-status/contracts/agent-status-types'
+import {
+  agentBackgroundWait,
+  type AgentBackgroundWait
+} from '../../agent-status/lifecycle/agent-background-wait'
+
+function withBackgroundWait(wait: AgentBackgroundWait | null): {
+  backgroundWait?: AgentBackgroundWait
+} {
+  return wait ? { backgroundWait: wait } : {}
+}
 
 /** Why a row could not be tied to a terminal. No catch-all member: a new gap needs a name. */
 export type FleetEvidenceBindingGap =
@@ -39,6 +49,8 @@ export type FleetAgentActivity = {
   worktreeId: string | null
   restoredUnconfirmed: boolean
   providerSessionOnly: boolean
+  /** The lead's turn ended while its own background tasks still run; absent otherwise. */
+  backgroundWait?: AgentBackgroundWait
 }
 
 export type FleetAgentStatusEvidence = {
@@ -92,7 +104,8 @@ export function mintFleetAgentStatusEvidence(
       model: status.model ?? null,
       worktreeId: status.worktreeId ?? null,
       restoredUnconfirmed: status.restoredUnconfirmed === true,
-      providerSessionOnly: status.providerSessionOnly === true
+      providerSessionOnly: status.providerSessionOnly === true,
+      ...withBackgroundWait(agentBackgroundWait(status))
     }
   }
 }

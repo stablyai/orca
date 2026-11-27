@@ -32,6 +32,11 @@ import {
 import { selectWebRuntimeSessionBrowserWorktree } from '../../web-session-tabs-sync/workspace-selection/web-runtime-session-workspace-selection'
 import type { BrowserClientHostPlacementPreference } from '../../../../../shared/browser/client-hosting/browser-client-host-placement'
 
+export type WebRuntimeBrowserCreationFailureInfo = {
+  stage: 'prepare' | 'create' | 'materialize'
+  code: string | null
+}
+
 export type CreateWebRuntimeSessionBrowserTabArgs = {
   worktreeId: string
   isCurrentRequest?: () => boolean
@@ -51,6 +56,8 @@ export type CreateWebRuntimeSessionBrowserTabArgs = {
   stagedTitle?: string
   stagedFocusAddressBar?: boolean
   failureLogMode?: 'details' | 'operation-only'
+  /** Receives a failure's stage and known machine code (from its first error, not cleanup's). */
+  onFailure?: (failure: WebRuntimeBrowserCreationFailureInfo) => void
   placementPreference?: BrowserClientHostPlacementPreference
 }
 

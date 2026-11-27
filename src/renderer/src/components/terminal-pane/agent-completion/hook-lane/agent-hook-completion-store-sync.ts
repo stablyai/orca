@@ -65,14 +65,3 @@ export function shouldSyncAgentHookCompletionForStoreUpdate(
 ): boolean {
   return shouldSync(current, previous)
 }
-
-export function _measureAgentHookCompletionStoreSyncForTest(
-  current: AgentHookCompletionStoreSnapshot,
-  previous: AgentHookCompletionStoreSnapshot
-): { shouldSync: boolean; tabVisits: number } {
-  let tabVisits = 0
-  const requiresSync = shouldSync(current, previous, () => {
-    tabVisits += 1
-  })
-  return { shouldSync: requiresSync, tabVisits }
-}

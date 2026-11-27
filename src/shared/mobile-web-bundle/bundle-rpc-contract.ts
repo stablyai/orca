@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 import { hostUnionArms } from '../validation/zod-salvage'
 import {
   MobileWebBundleAssetPathSchema,
@@ -48,63 +49,75 @@ export const MOBILE_WEB_BUNDLE_ERROR_CODES = hostUnionArms<MobileWebBundleErrorC
   mobile_web_bundle_read_limited: true
 })
 
-export const MobileWebBundleErrorCodeSchema = z.enum(MOBILE_WEB_BUNDLE_ERROR_CODES)
+export const MobileWebBundleErrorCodeSchema = lazyZodSchema(() =>
+  z.enum(MOBILE_WEB_BUNDLE_ERROR_CODES)
+)
 
-export const MobileWebBundleManifestResultSchema = z
-  .object({
-    manifest: MobileWebBundleManifestSchema,
-    /** Read the advertised grid; hosts may shrink it without client releases. The constant caps reply dataBase64. */
-    chunkBytes: z.number().int().positive().max(MOBILE_WEB_BUNDLE_CHUNK_BYTES),
-    /** Absent on hosts without range support; loose phone readers must fall back to chunks (Rule 1). */
-    rangeBytes: z.number().int().positive().max(MOBILE_WEB_BUNDLE_RANGE_BYTES).optional()
-  })
-  .strict()
+export const MobileWebBundleManifestResultSchema = lazyZodSchema(() =>
+  z
+    .object({
+      manifest: MobileWebBundleManifestSchema,
+      /** Read the advertised grid; hosts may shrink it without client releases. The constant caps reply dataBase64. */
+      chunkBytes: z.number().int().positive().max(MOBILE_WEB_BUNDLE_CHUNK_BYTES),
+      /** Absent on hosts without range support; loose phone readers must fall back to chunks (Rule 1). */
+      rangeBytes: z.number().int().positive().max(MOBILE_WEB_BUNDLE_RANGE_BYTES).optional()
+    })
+    .strict()
+)
 
-const windowParamsFields = {
+const createWindowParamsFields = () => ({
   buildId: z.string().regex(SHA256_PATTERN),
   path: MobileWebBundleAssetPathSchema,
   offset: z.number().int().nonnegative().max(MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES)
-}
+})
 
 /** Host validates offset alignment against advertised chunkBytes, which may be smaller than the constant; no fixed multipleOf. */
-export const MobileWebBundleChunkParamsSchema = z.object(windowParamsFields).strict()
+export const MobileWebBundleChunkParamsSchema = lazyZodSchema(() =>
+  z.object(createWindowParamsFields()).strict()
+)
 
 /** The chunk params exactly, on the `rangeBytes` grid the manifest reply advertised (over the brotli copy for brotliRange). */
 export const MobileWebBundleRangeParamsSchema = MobileWebBundleChunkParamsSchema
 
 /** What every chunk or range reply restates about the window it answers. */
-const windowHeaderFields = {
-  ...windowParamsFields,
+const createWindowHeaderFields = () => ({
+  ...createWindowParamsFields(),
   /** Whole-asset size, paired with sha256 for reassembly; never the window size. */
   assetByteLength: z.number().int().nonnegative().max(MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES),
   sha256: z.string().regex(SHA256_PATTERN),
   eof: z.boolean()
-}
+})
 
 /** Strict, so a later `contentEncoding` is only a Rule 1 optional-field addition for clients whose
  *  own reply readers are not strict. */
-export const MobileWebBundleChunkResultSchema = z
-  .object({ ...windowHeaderFields, dataBase64: z.string().max(MAX_DATA_BASE64_LENGTH) })
-  .strict()
+export const MobileWebBundleChunkResultSchema = lazyZodSchema(() =>
+  z
+    .object({ ...createWindowHeaderFields(), dataBase64: z.string().max(MAX_DATA_BASE64_LENGTH) })
+    .strict()
+)
 
 /** A chunk result plus the encoding of `dataBase64`, whose decoded length is
  *  `min(rangeBytes, assetByteLength - offset)`. */
-export const MobileWebBundleRangeResultSchema = z
-  .object({
-    ...windowHeaderFields,
-    encoding: z.enum(MOBILE_WEB_BUNDLE_RANGE_ENCODINGS),
-    dataBase64: z.string().max(MOBILE_WEB_BUNDLE_RANGE_MAX_DATA_BASE64_LENGTH)
-  })
-  .strict()
+export const MobileWebBundleRangeResultSchema = lazyZodSchema(() =>
+  z
+    .object({
+      ...createWindowHeaderFields(),
+      encoding: z.enum(MOBILE_WEB_BUNDLE_RANGE_ENCODINGS),
+      dataBase64: z.string().max(MOBILE_WEB_BUNDLE_RANGE_MAX_DATA_BASE64_LENGTH)
+    })
+    .strict()
+)
 
 /** Raw window bytes of the brotli copy: `assetByteLength` and `sha256` still describe the inflated asset,
  *  while `eof` and the decoded length of `dataBase64` follow `brotliByteLength`. */
-export const MobileWebBundleBrotliRangeResultSchema = z
-  .object({
-    ...windowHeaderFields,
-    dataBase64: z.string().max(MOBILE_WEB_BUNDLE_RANGE_MAX_DATA_BASE64_LENGTH)
-  })
-  .strict()
+export const MobileWebBundleBrotliRangeResultSchema = lazyZodSchema(() =>
+  z
+    .object({
+      ...createWindowHeaderFields(),
+      dataBase64: z.string().max(MOBILE_WEB_BUNDLE_RANGE_MAX_DATA_BASE64_LENGTH)
+    })
+    .strict()
+)
 
 export type MobileWebBundleManifestResult = z.infer<typeof MobileWebBundleManifestResultSchema>
 export type MobileWebBundleChunkParams = z.infer<typeof MobileWebBundleChunkParamsSchema>

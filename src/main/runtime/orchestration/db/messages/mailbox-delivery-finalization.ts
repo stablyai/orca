@@ -4,6 +4,7 @@ import type { MailboxDeliveryParams, MailboxDeliveryBatch } from './role-mailbox
 import { OrchestrationError } from '../../orchestration-error'
 import { exposeDeliveryTimestamps } from '../utc-timestamp'
 import { requireMailboxConsumer } from './mailbox-consumer'
+import type { MailTaker } from './mail-taker'
 
 /** The caller's transaction owns reconciliation, final membership, read/ack and its response. */
 export function finalizeMailboxDelivery(
@@ -11,6 +12,8 @@ export function finalizeMailboxDelivery(
   params: MailboxDeliveryParams & {
     claim: MailboxDeliveryBatch
     messages: MessageRow[]
+    /** Who this read hands its questions to. */
+    taker: MailTaker
   }
 ): MailboxDeliveryBatch | undefined {
   if (!this.db.isTransaction) {
@@ -52,7 +55,11 @@ export function finalizeMailboxDelivery(
     throw new Error('mailbox finalization must be a subset of its original claim')
   }
   this.db.prepare('UPDATE deliveries SET message_ids=? WHERE id=?').run(JSON.stringify(ids), raw.id)
-  const delivery = markDeliveryAcknowledged(this, { ...raw, message_ids: JSON.stringify(ids) })
+  const delivery = markDeliveryAcknowledged(
+    this,
+    { ...raw, message_ids: JSON.stringify(ids) },
+    params.taker
+  )
   return {
     delivery: exposeDeliveryTimestamps(delivery),
     messages: params.messages,
@@ -60,18 +67,14 @@ export function finalizeMailboxDelivery(
   }
 }
 
-export function markDeliveryAcknowledged(db: OrchestrationDb, delivery: DeliveryRow): DeliveryRow {
+export function markDeliveryAcknowledged(
+  db: OrchestrationDb,
+  delivery: DeliveryRow,
+  taker: MailTaker
+): DeliveryRow {
   const messageIds: string[] = JSON.parse(delivery.message_ids)
   if (messageIds.length > 0) {
-    const placeholders = messageIds.map(() => '?').join(',')
-    db.db
-      .prepare(
-        `UPDATE messages
-         SET read = 1, pointer_enter_pending = 0, pointer_pty_id = NULL,
-             pointer_process_incarnation = NULL
-         WHERE id IN (${placeholders})`
-      )
-      .run(...messageIds)
+    db.markAsRead(messageIds, taker)
   }
   db.db
     .prepare(

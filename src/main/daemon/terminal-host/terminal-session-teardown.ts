@@ -2,6 +2,7 @@ import { killWithDescendantSweep } from '../../pty/process-retirement/pty-descen
 import { excludeShellBackgroundJobs } from '../../pty/process-retirement/pty-shell-job-preservation'
 import { terminateShutdownDescendants } from '../sessions/terminal-descendant-shutdown'
 import type { Session } from '../sessions/session'
+import { getAliveTerminalHostSession } from './terminal-host-session-access'
 
 type TeardownOperation = {
   promise: Promise<void>
@@ -66,6 +67,21 @@ export class TerminalSessionTeardown {
 
   async requestImmediateAndSettleAll(): Promise<void> {
     await Promise.all(this.requestImmediateAll())
+  }
+
+  /** Join a teardown already under way (escalating it when immediate), else start one on the live session. */
+  kill(sessionId: string, immediate: boolean, onStarted: () => void): Promise<void> {
+    const pending = this.get(sessionId)
+    if (pending) {
+      return Promise.resolve(immediate ? this.requestImmediate(sessionId) : pending)
+    }
+    const killed = this.killSession(
+      sessionId,
+      getAliveTerminalHostSession(this.sessions, sessionId),
+      immediate
+    )
+    onStarted()
+    return Promise.resolve(killed)
   }
 
   killSession(sessionId: string, session: Session, immediate: boolean): void | Promise<void> {

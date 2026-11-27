@@ -92,8 +92,11 @@ Every plugin frame on desktop is an Electron `<webview>`:
   files from the verified file list (the disk, for a dev tree); `orca` and URLs are left to the import
   map and CSP; any other bare import is served as a module that throws, naming the file and import.
   Results are cached in main by sha256 of the source, transpiler version and options. A transform
-  still running after 2 s is cut short: the worker is terminated and the next file starts a fresh
-  one. A file that fails or times out is served as a throwing module, and that result is cached too
+  still running 2 s after the worker is ready is cut short: the worker is terminated and the next
+  file starts a fresh one (a worker not ready within 10 s fails the same way). A file that fails or
+  times out is served as a throwing module. A transform error is cached too; a timeout or transpiler
+  crash is retried on a later load after 1 s, doubling while it repeats up to 60 s, and loads of the
+  same file at once share one transform
   (`plugin-frame-module-transform.ts`, `plugin-source-transpile-client.ts`). A declared `.ts`/`.tsx` frame entry is served as a generated
   page whose only script is that file with `?orca-module`, which gets the JavaScript.
 - **Diagnostics**: each guest's `console-message` errors and warnings (uncaught exceptions included) go to

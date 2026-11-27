@@ -8,7 +8,8 @@ import { normalizeOpenCodeUsagePersistedDatabases } from '../../opencode-usage/p
 import {
   readClaudeUsageSourceCache,
   splitClaudeUsageCacheFile,
-  persistClaudeUsageSourceCache
+  persistClaudeUsageSourceCache,
+  writeClaudeUsageSourceCache
 } from '../../claude-usage/persisted-source-cache'
 import type { CodexUsagePersistedFile } from '../../codex-usage/types'
 import type { OpenCodeUsagePersistedDatabase } from '../../opencode-usage/types'
@@ -84,7 +85,9 @@ async function runScan(
         previous.sources,
         onFilesScanned,
         request.profileDirs,
-        previous.verifiedSources
+        previous.verifiedSources,
+        (files) =>
+          checkpointSourceCache(() => writeClaudeUsageSourceCache(request.sourceCache, files))
       )
       try {
         await persistClaudeUsageSourceCache(request.sourceCache, result.processedFiles, previous)
@@ -102,7 +105,8 @@ async function runScan(
       const result = await scanCodexUsageFiles(
         request.worktrees,
         await readUsageSourceCache<CodexUsagePersistedFile>(request.sourceCache),
-        onFilesScanned
+        onFilesScanned,
+        (files) => checkpointSourceCache(() => writeUsageSourceCache(request.sourceCache, files))
       )
       await persistSourceCache(request.sourceCache, result.processedFiles)
       return {
@@ -144,6 +148,15 @@ async function runScan(
         dailyAggregates: result.dailyAggregates
       }
     }
+  }
+}
+
+// A failed checkpoint only costs resume progress; the scan keeps going.
+async function checkpointSourceCache(write: () => Promise<void>): Promise<void> {
+  try {
+    await write()
+  } catch (error) {
+    console.warn('[usage-scan] Could not checkpoint the per-source usage cache:', error)
   }
 }
 

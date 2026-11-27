@@ -261,7 +261,8 @@ export async function getRuntimeGitHistory(
 }
 
 export async function getRuntimeGitConflictOperation(
-  context: RuntimeGitContext
+  context: RuntimeGitContext,
+  options?: { background?: boolean }
 ): Promise<GitConflictOperation> {
   const target = context.target
   if (target.kind === 'local' || !context.worktreeId) {
@@ -274,7 +275,7 @@ export async function getRuntimeGitConflictOperation(
     target,
     'git.conflictOperation',
     { worktree: toRuntimeWorktreeSelector(context.worktreeId) },
-    { timeoutMs: 15_000 }
+    { timeoutMs: 15_000, background: options?.background }
   )
 }
 

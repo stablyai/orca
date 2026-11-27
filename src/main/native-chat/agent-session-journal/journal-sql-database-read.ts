@@ -21,7 +21,13 @@ import {
   type JournalLegacyCompare
 } from './database/journal-legacy-compare'
 import { readForgottenJournalChats } from './journal-forgotten-chats'
-import { readJournalConnectorReplies } from './connector-replies/journal-connector-replies'
+import { readDeletedChats } from './journal-deleted-chats'
+import type { DeletedChat } from '../chat-deletion/deleted-chats'
+import {
+  hasUnsentJournalConnectorReply,
+  readJournalConnectorReplies,
+  readOwedJournalConnectorReplies
+} from './connector-replies/journal-connector-replies-read'
 import type { JournalConnectorReplyRow } from '../../../shared/agent-session/journal/journal-connector-reply'
 
 export type JournalSqlStoredRecords = Omit<AgentSessionStoreState, 'sessionTabs'> & {
@@ -44,12 +50,21 @@ export type JournalSqlDatabaseRead =
   | { kind: 'receipt'; scope: CommandReceiptScope; operationId: string }
   | { kind: 'epoch'; sessionId: string }
   | { kind: 'sessions'; after: string | null }
+  | { kind: 'chat-exists'; sessionId: string }
   | { kind: 'retired-heads'; after: string | null; through: string | null }
   | { kind: 'attachment-claims'; after: number }
   | { kind: 'attachment-sweeps'; after: string | null }
   | { kind: 'legacy-compares'; after: string | null }
   | { kind: 'forgotten-chats'; after: string | null }
+  | { kind: 'deleted-chats' }
   | { kind: 'connector-replies'; sessionId?: string }
+  | { kind: 'connector-replies-owed'; account: string; after: string | null; limit: number }
+  | {
+      kind: 'connector-reply-unsent'
+      sessionId: string
+      conversation: { source: string; externalId: string }
+      turnStartedAt: number
+    }
 
 export type JournalSqlDatabaseReadResult =
   | { kind: 'pr-watch'; value: PRWatchReadValues[PRWatchRead['kind']] }
@@ -57,6 +72,7 @@ export type JournalSqlDatabaseReadResult =
   | { kind: 'receipt'; receipt: ReturnType<typeof readCommandReceipt> }
   | { kind: 'epoch'; epoch: string | null }
   | { kind: 'sessions'; sessionIds: string[] }
+  | { kind: 'chat-exists'; exists: boolean }
   | { kind: 'legacy-compares'; compares: JournalLegacyCompare[] }
   | { kind: 'retired-heads'; heads: JournalRetiredHead[]; through: string | null }
   | {
@@ -65,7 +81,9 @@ export type JournalSqlDatabaseReadResult =
     }
   | { kind: 'attachment-sweeps'; uploadIds: string[] }
   | { kind: 'forgotten-chats'; sessionIds: string[] }
+  | { kind: 'deleted-chats'; chats: DeletedChat[] }
   | { kind: 'connector-replies'; rows: JournalConnectorReplyRow[] }
+  | { kind: 'connector-reply-unsent'; unsent: boolean }
 
 /** Profile metadata has no chat projection prerequisite; all reads still share one WAL snapshot. */
 export function readJournalSqlDatabase(
@@ -110,6 +128,26 @@ function read(
       return {
         kind: 'connector-replies',
         rows: readJournalConnectorReplies(db, operation.sessionId)
+      }
+    case 'connector-reply-unsent':
+      return {
+        kind: 'connector-reply-unsent',
+        unsent: hasUnsentJournalConnectorReply(
+          db,
+          operation.sessionId,
+          operation.conversation,
+          operation.turnStartedAt
+        )
+      }
+    case 'connector-replies-owed':
+      return {
+        kind: 'connector-replies',
+        rows: readOwedJournalConnectorReplies(
+          db,
+          operation.account,
+          operation.after,
+          operation.limit
+        )
       }
     case 'epoch':
       return {
@@ -194,5 +232,14 @@ function read(
     }
     case 'forgotten-chats':
       return { kind: 'forgotten-chats', sessionIds: readForgottenJournalChats(db, operation.after) }
+    case 'chat-exists':
+      return {
+        kind: 'chat-exists',
+        exists: !!db
+          .prepare('SELECT 1 FROM journal_chat_state WHERE session_id=?')
+          .get(operation.sessionId)
+      }
+    case 'deleted-chats':
+      return { kind: 'deleted-chats', chats: readDeletedChats(db) }
   }
 }

@@ -1,6 +1,5 @@
 import type React from 'react'
 import { cn } from '@/lib/class-names'
-import { SettingsScrollList } from './SettingsScrollList'
 import { SettingsSubsectionHeader } from '../form-controls/SettingsFormControls'
 
 // The card's side inset. Content that must span to the card edges cancels it with the bleed
@@ -20,7 +19,6 @@ type SettingsGroupProps = {
   children?: React.ReactNode
   className?: string
   bodyClassName?: string
-  scrollLabel?: string
   bodyRef?: React.Ref<HTMLDivElement>
   /** Anchors the card, the same element a search for the group title lands on. */
   id?: string
@@ -37,7 +35,6 @@ export function SettingsGroup({
   children,
   className,
   bodyClassName,
-  scrollLabel,
   bodyRef,
   onHeaderClick
 }: SettingsGroupProps): React.JSX.Element {
@@ -45,7 +42,8 @@ export function SettingsGroup({
     <div
       ref={bodyRef}
       data-settings-group-body=""
-      className="-mt-px [&_[data-settings-row]:not([data-settings-group-body]_[data-settings-row]_*)]:border-t [&_[data-settings-row]:not([data-settings-group-body]_[data-settings-row]_*)]:border-t-border"
+      // SettingsNavigationRow sets data-settings-row-hover; its hover fill replaces the rules above and below it.
+      className="-mt-px [&_[data-settings-row]:not([data-settings-group-body]_[data-settings-row]_*)]:border-t [&_[data-settings-row]:not([data-settings-group-body]_[data-settings-row]_*)]:border-t-border [&_[data-settings-row-hover]:hover]:border-t-transparent! [&_[data-settings-row-hover]:hover+[data-settings-row]]:border-t-transparent!"
     >
       {children}
     </div>
@@ -61,7 +59,7 @@ export function SettingsGroup({
         bodyClassName
       )}
     >
-      {scrollLabel ? <SettingsScrollList label={scrollLabel}>{body}</SettingsScrollList> : body}
+      {body}
     </div>
   )
   return (

@@ -89,7 +89,11 @@ export function refreshJournalDomainQueueFailureReports(
 }
 
 /** The tied header group is bounded by the same 200-position construction limit as history. */
-export function readJournalDomainQueueFailure(db: Database.Database, target: Target): number {
+/** The failure holding the queue, if any: its sequence and the turn that failed. */
+export function readJournalDomainQueueFailure(
+  db: Database.Database,
+  target: Target
+): { failedAt: number; turnItemId: string | null } {
   const prefix = [target.sessionId, target.epoch] as const
   const rows = db
     .prepare(`WITH newest AS (
@@ -110,13 +114,17 @@ export function readJournalDomainQueueFailure(db: Database.Database, target: Tar
     undefined
   )
   const failedAt = Number(winner?.queue_failed_at ?? 0)
-  return failedAt === 0
-    ? 0
-    : Math.max(
-        failedAt,
-        Number(winner?.queue_failure_boundary ?? 0) >
-          Number(winner?.queue_failure_witnessed_through ?? 0)
-          ? Number(winner?.queue_failure_boundary)
-          : 0
-      )
+  if (failedAt === 0) {
+    return { failedAt: 0, turnItemId: null }
+  }
+  return {
+    failedAt: Math.max(
+      failedAt,
+      Number(winner?.queue_failure_boundary ?? 0) >
+        Number(winner?.queue_failure_witnessed_through ?? 0)
+        ? Number(winner?.queue_failure_boundary)
+        : 0
+    ),
+    turnItemId: String(winner!.item_id)
+  }
 }

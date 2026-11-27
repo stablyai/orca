@@ -304,13 +304,3 @@ export function getCrashBreadcrumbSnapshot(reporterOrigin?: string): CrashReport
       ...(breadcrumb.data ? { data: { ...breadcrumb.data } } : {})
     }))
 }
-
-export function clearCrashBreadcrumbsForTest(): void {
-  breadcrumbs = []
-  retainedBreadcrumbs = new Map()
-  coalescedBreadcrumbs = new Map()
-}
-
-export function getCoalescedKeyCountForTest(): number {
-  return coalescedBreadcrumbs.size
-}

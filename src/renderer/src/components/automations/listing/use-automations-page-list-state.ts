@@ -12,16 +12,18 @@ import {
 } from '../hosts/automation-captured-owner'
 import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
 import { getWorktreePathBasenameFromId } from '../../../../../shared/worktree/id'
+import {
+  canonicalExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  toRuntimeExecutionHostId,
+  toSshExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import { buildExternalAutomationListEntries } from '../external/external-automation-list-entries'
 import { externalAutomationScopeEntries } from '../external/external-automation-scope-gating'
 import { externalAutomationUncheckedNotice } from '../external/external-automation-unchecked-hosts'
-import {
-  buildAutomationListViewItems,
-  filterAutomationListRows,
-  filterExternalAutomationListEntries,
-  sortAutomationListViewItems
-} from './automation-list-view'
+import { buildAutomationListViewItems, sortAutomationListViewItems } from './automation-list-view'
 import { useIntlLocale } from '@/i18n/use-translate'
+import { automationListBotHost } from './automation-list-bot-host'
 import { unscopedAutomationListRows } from './automation-list-row-identity'
 import { useAutomationHostCatalog } from '../hosts/use-automation-host-catalog'
 import { useAutomationListSearch } from './use-automation-list-search'
@@ -80,17 +82,17 @@ export function useAutomationsPageListState({
   const unscopedRows = useMemo(() => unscopedAutomationListRows(automations), [automations])
   const visibleRows = hostCatalog.rows.answered ? hostCatalog.rows.rows : unscopedRows
   const capturedAutomationOwners = hostCatalog.rows.capturedOwners
+  const botHostId = listFilter.bot?.hostId ?? null
+  const botHost = useMemo(
+    () =>
+      botHostId === null
+        ? null
+        : automationListBotHost(botHostId, hostCatalog.desktopAliasEnvironmentId),
+    [botHostId, hostCatalog.desktopAliasEnvironmentId]
+  )
   const externalAutomationEntries = useMemo(
     () => buildExternalAutomationListEntries(scopedExternal.managers),
     [scopedExternal.managers]
-  )
-  const attributeFilteredRows = useMemo(
-    () => filterAutomationListRows(visibleRows, listFilter),
-    [listFilter, visibleRows]
-  )
-  const attributeFilteredExternalEntries = useMemo(
-    () => filterExternalAutomationListEntries(externalAutomationEntries, listFilter),
-    [externalAutomationEntries, listFilter]
   )
   const selectAutomationRow = useCallback(
     (rowKey: string | null): void => {
@@ -134,8 +136,10 @@ export function useAutomationsPageListState({
     searchCounts
   } = useAutomationListSearch({
     listSearchQuery,
-    rows: attributeFilteredRows,
-    externalAutomationEntries: attributeFilteredExternalEntries,
+    listFilter,
+    botHost,
+    rows: visibleRows,
+    externalAutomationEntries,
     repoMap,
     worktreeMap,
     selectedRowKey: selectedRow?.key ?? null,
@@ -165,11 +169,21 @@ export function useAutomationsPageListState({
             capturedAutomationOwnerKey(
               capturedAutomationOwner(capturedAutomationOwners, selectedAutomationRuns.rowKey)
             ))
-      return resolveAutomationRunTarget(
+      const target = resolveAutomationRunTarget(
         fresh ? state : { ...state, worktreesByRepo: {}, folderWorkspaces: [] },
         run,
         fresh ? selectedAutomationRuns.authority : null
       )
+      const catalogAuthority = target.catalogAuthority
+      const workspaceCatalogHostId =
+        catalogAuthority &&
+        (catalogAuthority.kind === 'runtime'
+          ? toRuntimeExecutionHostId(catalogAuthority.environmentId)
+          : (canonicalExecutionHostId(run.runContext?.hostId) ??
+            (acquiredOwner?.selector.kind === 'ssh'
+              ? toSshExecutionHostId(acquiredOwner.selector.targetId)
+              : LOCAL_EXECUTION_HOST_ID)))
+      return { ...target, workspaceCatalogHostId }
     },
     [capturedAutomationOwners, hostCatalog.entries, selectedAutomationRuns]
   )

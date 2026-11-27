@@ -5,6 +5,7 @@ import {
   readCursorChatMeta,
   wasCursorChatMetaRefused
 } from '../scanners/cursor/session-scanner-cursor-chat-meta'
+import { isCursorAcpSessionStorePath } from '../../../shared/ai-vault/session-display/cursor-acp-session-path'
 import { devinSessionsIndexForSidecar } from '../scanners/devin/session-scanner-devin-db'
 import { enrichDroidSessionFromSettings } from '../scanners/droid/session-scanner-droid-settings'
 import type { SessionSidecarObservation } from './session-sidecar-stat'
@@ -48,7 +49,10 @@ export function reuseUnchangedSidecarSession(
 }
 
 export function sidecarEnrichesWithoutReparse(candidate: SessionFileCandidate): boolean {
-  return candidate.agent === 'cursor' || candidate.agent === 'devin'
+  return (
+    (candidate.agent === 'cursor' && !isCursorAcpSessionStorePath(candidate.file.path)) ||
+    candidate.agent === 'devin'
+  )
 }
 
 export async function enrichSessionFromSidecar(
@@ -65,6 +69,10 @@ export async function enrichSessionFromSidecar(
     return enrichDroidSessionFromSettings(foldSession, candidate.file.path, signal)
   }
   if (candidate.agent !== 'cursor' || !foldSession) {
+    return { session: foldSession, refused: false }
+  }
+  // Its meta.json is the row's only source, read by every parse.
+  if (isCursorAcpSessionStorePath(candidate.file.path)) {
     return { session: foldSession, refused: false }
   }
   const meta = await readCursorChatMeta(candidate.file.path, signal)

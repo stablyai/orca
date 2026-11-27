@@ -2,7 +2,7 @@ import type { TaskPageComposerActionsModel } from './use-task-page-composer-acti
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
-import { X, ExternalLink } from 'lucide-react'
+import { ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/class-names'
 import { LinearScopeSelector } from '@/components/task-page/source-selection/linear-scope-selector'
@@ -22,7 +22,6 @@ export function TaskPageSourceBar({
   const t = useTranslate()
   const {
     openTaskPage,
-    closeTaskPage,
     updateSettings,
     selectJiraSite,
     linearConnected,
@@ -33,8 +32,8 @@ export function TaskPageSourceBar({
     selectedJiraSiteId,
     visibleSourceOptions,
     taskSource,
-    taskSourceAvailabilityNoticeByProvider,
     taskSourceContextSummary,
+    taskSourceAvailabilityNoticeByProvider,
     taskSourceManuallyChangedRef,
     setSelectedJiraIssueKey,
     setSelectedJiraIssueFallback,
@@ -51,28 +50,11 @@ export function TaskPageSourceBar({
     handleLinearScopeOpen
   } = model
   return (
-    <div className="flex items-center justify-between gap-2">
+    <>
       <div
-        className="flex min-w-0 flex-wrap items-center gap-2"
+        className="flex shrink-0 items-center rounded-md border border-border p-0.5"
         data-contextual-tour-target="tasks-source-filters"
       >
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-7 rounded-full"
-              onClick={closeTaskPage}
-              aria-label={t('auto.components.TaskPage.1a06219d5c', 'Close tasks')}
-            >
-              <X className="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={6}>
-            {t('auto.components.TaskPage.4826fd1ad8', 'Close · Esc')}
-          </TooltipContent>
-        </Tooltip>
-        <div className="mx-1 h-5 w-px bg-border/50" aria-hidden />
         {visibleSourceOptions.map((source) => {
           const active = taskSource === source.id
           const sourceAvailabilityNotice = taskSourceAvailabilityNoticeByProvider[source.id] ?? null
@@ -111,10 +93,10 @@ export function TaskPageSourceBar({
                   aria-label={sourceAvailabilityNotice?.label ?? source.label}
                   aria-pressed={active}
                   className={cn(
-                    'group flex h-8 w-8 items-center justify-center rounded-md border transition',
+                    'flex size-6 items-center justify-center rounded-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                     active
-                      ? 'border-foreground/40 bg-muted/70 text-foreground shadow-sm'
-                      : 'border-border/40 bg-transparent text-muted-foreground hover:bg-muted/40 hover:text-foreground',
+                      ? 'bg-muted text-foreground'
+                      : 'text-muted-foreground hover:bg-accent hover:text-foreground',
                     sourceDisabled && 'cursor-not-allowed opacity-55'
                   )}
                 >
@@ -127,16 +109,11 @@ export function TaskPageSourceBar({
             </Tooltip>
           )
         })}
-        <div
-          className="hidden min-w-0 max-w-[min(420px,40vw)] items-center rounded-md border border-border/50 bg-muted/35 px-2 py-1 text-xs text-muted-foreground sm:flex"
-          title={taskSourceContextSummary.title}
-        >
-          <span className="truncate">{taskSourceContextSummary.label}</span>
-        </div>
       </div>
       {taskSource === 'linear' && linearConnected ? (
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-1.5" title={taskSourceContextSummary.title}>
           <LinearScopeSelector
+            className="h-7 min-w-0 shrink"
             workspaces={linearWorkspaces}
             selectedWorkspaceId={selectedLinearWorkspaceId}
             teams={linearTeamOptions}
@@ -151,8 +128,8 @@ export function TaskPageSourceBar({
             <TooltipTrigger asChild>
               <Button
                 type="button"
-                variant="outline"
-                size="icon-sm"
+                variant="ghost"
+                size="icon-toolbar"
                 onClick={(event) => {
                   if (!selectedLinearTeamForExternalLink?.url) {
                     return
@@ -170,7 +147,6 @@ export function TaskPageSourceBar({
                         'Select one Linear team to open in Linear'
                       )
                 }
-                className="h-8 w-8 rounded-md border-border/50 bg-muted/50 text-foreground shadow-sm transition hover:bg-muted/50"
               >
                 <ExternalLink className="size-3.5" />
               </Button>
@@ -186,7 +162,7 @@ export function TaskPageSourceBar({
         </div>
       ) : null}
       {taskSource === 'jira' && jiraConnected ? (
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-1.5" title={taskSourceContextSummary.title}>
           {jiraSites.length > 1 ? (
             <Select
               value={selectedJiraSiteId ?? undefined}
@@ -203,7 +179,7 @@ export function TaskPageSourceBar({
                 })
               }}
             >
-              <SelectTrigger className="h-8 w-[220px] rounded-md border-border/50 bg-muted/50 text-xs font-medium shadow-sm">
+              <SelectTrigger size="xs" className="max-w-55 min-w-0">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -220,6 +196,6 @@ export function TaskPageSourceBar({
           ) : null}
         </div>
       ) : null}
-    </div>
+    </>
   )
 }

@@ -3,6 +3,8 @@ import type { MobileSessionItemLink } from '../../mobile-session-item-target'
 import type { MobileComposerWriter } from '../composer/drafts/mobile-native-chat-draft-store'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import { useMobileWorkerApprovals } from '../input/prompts/use-mobile-worker-approvals'
+import { useMobilePairedServerAsks } from '../input/prompts/use-mobile-paired-server-asks'
+import { useMobileWorkerDock } from '../input/tasks/use-mobile-worker-dock'
 import type { MobileNativeChatController } from '../mobile-native-chat-controller-contract'
 import type { StructuredAgentSessionHostSupport } from '../agent-session/mobile-structured-agent-session-host-support'
 import type { ConnectionState } from '../../../transport/connection/connection-state'
@@ -53,7 +55,7 @@ export function useMobileNativeChatSessionLane({
   /** What the chat's controller shows from this lane as is. */
   controllerFields: Pick<
     MobileNativeChatController,
-    'nativeChatSessionCommands' | 'nativeChatWorkerApprovals'
+    'nativeChatSessionCommands' | 'nativeChatWorkerApprovals' | 'nativeChatWorkerDock'
   >
 } {
   const appendComposerText: MobileComposerWriter = Object.assign(
@@ -107,13 +109,27 @@ export function useMobileNativeChatSessionLane({
     onAnswered: onActionResolved,
     onAnswerError: onSendError
   })
+  const workerDock = useMobileWorkerDock({
+    client,
+    connState,
+    sessionId: structured ? sessionId : null,
+    presence: structured ? structuredSession.backgroundTasks.view.workerDock : undefined
+  })
+  // Asks from paired servers' agents wait in this agent's Home chat on its host.
+  const pairedServerAsks = useMobilePairedServerAsks({
+    client,
+    connected: connState === 'connected',
+    sessionId: structured ? sessionId : null,
+    onAnswerError: onSendError
+  })
   return {
     structuredSession,
     session: structured ? structuredSession.session : bridgeSession,
     sessionCommands,
     controllerFields: {
       nativeChatSessionCommands: sessionCommands,
-      nativeChatWorkerApprovals: workerApprovals
+      nativeChatWorkerApprovals: { ...workerApprovals, pairedServerAsks },
+      nativeChatWorkerDock: workerDock
     }
   }
 }

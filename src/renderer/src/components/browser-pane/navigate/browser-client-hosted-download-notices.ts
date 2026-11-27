@@ -12,14 +12,14 @@ import { formatBrowserRemoteDownloadMessage } from './browser-download-destinati
 import { formatByteCount } from './browser-notices'
 
 /** One toast per download, so progress, completion and failure replace each other in place. */
-function downloadToastId(downloadId: string): string {
+export function browserDownloadToastId(downloadId: string): string {
   return `browser-download:${downloadId}`
 }
 
 /** The in-progress toast, with the Cancel a local page's download row offers. */
 function downloadInProgressToast(downloadId: string) {
   return {
-    id: downloadToastId(downloadId),
+    id: browserDownloadToastId(downloadId),
     action: {
       label: translate('auto.components.browser.pane.BrowserPane.fa6ea61de3', 'Cancel'),
       onClick: (event: ReactMouseEvent) => {
@@ -102,7 +102,7 @@ export function emitBrowserClientHostedDownloadNotice(
   filename: string
 ): void {
   // Sonner merges updates into the toast with this id, so drop the in-progress Cancel explicitly.
-  const options = { id: downloadToastId(event.downloadId), action: undefined }
+  const options = { id: browserDownloadToastId(event.downloadId), action: undefined }
   if (event.status === 'completed') {
     toast.success(
       event.remoteDestination

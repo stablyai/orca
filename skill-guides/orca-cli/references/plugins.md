@@ -129,7 +129,8 @@ An update from the same repository that asks for no new access keeps its approva
 capabilities, a higher execution level, commands, shortcuts or panels, or that comes from another
 repository (even a theme or language pack), fails with `approval_required` listing exactly what
 changes; the running version keeps working until it is approved. `--all` updates everything it can and exits 3 with one
-`--approve` command per plugin still waiting.
+`--approve` command per plugin still waiting (even if others failed), else 1 listing each update that failed, with each
+plugin's own code in `error.data.failed`; updates that installed stay installed.
 
 `plugin uninstall` and `plugin catalog rm` never need approval. `plugin catalog add` always
 does: a catalog decides which repositories Orca installs and auto-updates from, so the first run

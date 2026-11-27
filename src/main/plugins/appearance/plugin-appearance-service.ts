@@ -2,6 +2,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import { writeSecureFile } from '../../../shared/secure-storage/secure-file'
 import type { PluginThemeRegistration } from '../../../shared/plugins/artifacts/plugin-theme-artifact'
@@ -28,12 +29,16 @@ export type PluginAppearanceSettingsStore = {
   updateSettings(updates: Partial<GlobalSettings>): void
 }
 
-const colors = z.strictObject({ app: z.string().max(16384), terminal: z.string().max(16384) })
-const snapshot = z.strictObject({
-  schemaVersion: z.literal(1),
-  dark: colors.optional(),
-  light: colors.optional()
-})
+const colors = lazyZodSchema(() =>
+  z.strictObject({ app: z.string().max(16384), terminal: z.string().max(16384) })
+)
+const snapshot = lazyZodSchema(() =>
+  z.strictObject({
+    schemaVersion: z.literal(1),
+    dark: colors.optional(),
+    light: colors.optional()
+  })
+)
 type Snapshot = z.infer<typeof snapshot>
 type OwnerState = { snapshot: Snapshot; themes: PreparedPluginAppearance[] }
 

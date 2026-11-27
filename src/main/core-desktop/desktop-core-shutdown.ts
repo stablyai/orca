@@ -13,6 +13,10 @@ import { wslHookRelayManager } from '../agent-hooks/wsl-relay/wsl-hook-relay-man
 import { removeManagedAgentHooksAsync } from '../agent-hooks/installation/managed-agent-hook-controls'
 import { stopStructuredAgentSessionRuntime } from '../runtime/agent-session/installation/structured-agent-session-runtime'
 import { setStructuredAgentSessionTeardownTrigger } from '../runtime/agent-session/installation/structured-agent-session-runtime-teardown'
+import {
+  beginProviderRelayQuit,
+  providerRelayDetachesSettled
+} from '../provider-relay/app-provider-relays'
 import { awaitRuntimeFileWatcherUnsubscribes } from '../runtime/files/watch/file-watcher-leases'
 import { clearRuntimeMetadataIfOwned } from '../runtime/rpc/server/runtime-metadata'
 import { stopCodexStateDbBackfillRecoveries } from '../codex/history/index/codex-state-db-backfill-recovery'
@@ -72,6 +76,10 @@ function stopPluginsAndSessions(
   // Final stats flush closes working sessions synchronously; quit supplies no terminating hook to preserve their duration.
   core.starNag?.stop()
   core.automations?.stop()
+  core.stopTeamPolicyRefresh?.()
+  core.stopTeamPolicyRefresh = null
+  core.stopTeamPluginPolicy?.()
+  core.stopTeamPluginPolicy = null
   if (core.runtime) {
     getWorkspaceCleanupRunner(core.runtime)?.stop()
   }
@@ -88,6 +96,7 @@ function stopPluginsAndSessions(
   stopCodexAccountHistoryWork()
   // Stamp resume reasons before stopping sessions; an update restart was not a user quit.
   setStructuredAgentSessionTeardownTrigger(trigger)
+  beginProviderRelayQuit()
   const structuredAgentSessionShutdown = stopStructuredAgentSessionRuntime()
   core.pluginService = null
   return { pluginHostShutdown, codexBackfillRecoveryShutdown, structuredAgentSessionShutdown }
@@ -168,6 +177,9 @@ export function beginDesktopCoreShutdown(
   // The connector was fenced at before-quit; its last turn ends and memory history rows land now.
   const connectorTurnEndsFlush = ConnectorTurnEvents.settled()
   const botMemoryHistoryFlush = runtime?.bots.memory.historySettled() ?? Promise.resolve()
+  // Which Slack drawing each bot shows, unsaved after a failed write: one bounded last try.
+  const botSlackIconRecordsFlush =
+    runtime?.bots.slackIcons.shownRecords.finalSave() ?? Promise.resolve()
   const browserJoins = native.retireBrowsers()
   const emulatorShutdown = runtime?.getEmulatorBridge()?.destroyAllSessions() ?? Promise.resolve()
   const finalStore = profile.store
@@ -229,7 +241,11 @@ export function beginDesktopCoreShutdown(
     rpcStopAndClear
   ]).then(() => runtime?.closeNotificationDismissals())
   // Normal quits preserve the detached daemon for warm reattach.
-  const daemonTeardown = removalQuiescence.then(() =>
+  // Chat agents handed to the daemon need their detach to arrive before the client goes.
+  const daemonTeardown = Promise.all([
+    removalQuiescence,
+    providerRelayDetachesSettled(structuredAgentSessionShutdown)
+  ]).then(() =>
     native.isDevParentShutdown() ? daemon.shutdownDaemon() : daemon.disconnectDaemon()
   )
   return [
@@ -253,6 +269,7 @@ export function beginDesktopCoreShutdown(
     { name: 'stats', promise: statsFlush },
     { name: 'connector-turn-ends', promise: connectorTurnEndsFlush },
     { name: 'bot-memory-history', promise: botMemoryHistoryFlush },
+    { name: 'bot-slack-icon-records', promise: botSlackIconRecordsFlush },
     { name: 'state', promise: storeFlush }
   ]
 }

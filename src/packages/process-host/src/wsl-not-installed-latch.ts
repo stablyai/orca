@@ -26,7 +26,3 @@ export function assertWslNotLatchedAbsent(program: string): void {
     })
   }
 }
-
-export function _resetWslNotInstalledLatchForTests(): void {
-  wslNotInstalled = false
-}

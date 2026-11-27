@@ -79,6 +79,10 @@ type SetupCall =
       params: { botId: string; card: GoogleSetupCard; values: string[] }
     }
   | {
+      method: 'bots.googleSetup.write'
+      params: { botId: string; change: { action: 'cancel'; runId: string } }
+    }
+  | {
       method: 'bots.googleSetup.importHostKey'
       params: { botId: string; file?: { name: string; id: string } }
     }
@@ -150,7 +154,7 @@ function subscribe(listener: () => void): () => void {
 
 /** The bot's setup run; null until read, or when it has none. A card from a run this window hasn't
  *  seen (a setup started since) reads again, once. */
-export function useGoogleSetupRun(bot: BotRef | null, runId: string): GoogleSetupRun | null {
+export function useGoogleSetupRun(bot: BotRef | null, runId?: string): GoogleSetupRun | null {
   const hostId = bot?.hostId ?? null
   const botId = bot?.id ?? null
   const key = bot ? botRefKey(bot) : null
@@ -158,7 +162,7 @@ export function useGoogleSetupRun(bot: BotRef | null, runId: string): GoogleSetu
   const run = useSyncExternalStore(subscribe, () => (key ? entries.get(key)?.run : null) ?? null)
   useEffect(() => {
     const entry = key ? entries.get(key) : undefined
-    if (!entry || !run || entry.known.has(runId)) {
+    if (!entry || !run || !runId || entry.known.has(runId)) {
       return
     }
     entry.known.add(runId)
@@ -182,6 +186,14 @@ export async function answerGoogleSetup(
   await call(bot, {
     method: 'bots.googleSetup.answer',
     params: { botId: bot.id, card, values }
+  })
+}
+
+/** The owner's Stop setup: the run ends; what's done in Google Cloud and any account signed in stay. */
+export async function stopGoogleSetup(bot: BotRef, runId: string): Promise<void> {
+  await call(bot, {
+    method: 'bots.googleSetup.write',
+    params: { botId: bot.id, change: { action: 'cancel', runId } }
   })
 }
 
@@ -216,16 +228,9 @@ export async function importGoogleSetupKeyOnHost(
 /** Opens the bot's chat and starts its Google setup there, with no message in the person's name. */
 export async function startGoogleSetupInChat(
   bot: Pick<Bot, 'id'> & Parameters<typeof openBotHomeTab>[0],
-  from: (typeof GOOGLE_SETUP_STARTED_FROM)[number]
+  from: (typeof GOOGLE_SETUP_STARTED_FROM)[number],
+  options?: { newApp?: true }
 ): Promise<void> {
-  await callBotRpc(bot, 'bots.googleSetup.start', { botId: bot.id, from })
+  await callBotRpc(bot, 'bots.googleSetup.start', { botId: bot.id, from, ...options })
   await openBotHomeTab(bot)
-}
-
-/** For tests: forget every run. */
-export function resetGoogleSetupRunsForTest(): void {
-  entries.clear()
-  attached = 0
-  stopListening?.()
-  stopListening = null
 }

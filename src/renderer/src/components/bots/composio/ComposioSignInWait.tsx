@@ -9,7 +9,8 @@ import { openComposioPage, useComposioBot } from './composio-client'
 /**
  * A Composio app's sign-in, waited for in Add to <bot>. The host drops its wait when the sign-in
  * ends: connected hands over to the new row; ended without a sign-in (denied, failed, or past
- * the host's time limit) shows why and offers Try again. Mounted once per attempt.
+ * the host's time limit) shows why and offers Try again, or Change key when the key lacks a permission.
+ * Mounted once per attempt.
  */
 export function ComposioSignInWait({
   bot,
@@ -17,6 +18,7 @@ export function ComposioSignInWait({
   connectError,
   onDone,
   onRetry,
+  onChangeKey,
   onClose
 }: {
   bot: Bot
@@ -25,6 +27,8 @@ export function ComposioSignInWait({
   connectError: string | null
   onDone: () => void
   onRetry: () => void
+  /** Set when connect failed for a permission the key lacks, which another try can't fix. */
+  onChangeKey?: () => void
   /** Leaves the sign-in running in the browser. */
   onClose: () => void
 }): React.JSX.Element {
@@ -55,7 +59,11 @@ export function ComposioSignInWait({
       <BotAppOutcome
         logo={logo}
         badge="failed"
-        title={t('bots.apps.couldNotSignIn', 'Couldn’t sign in to {{app}}', { app: app.name })}
+        title={
+          onChangeKey
+            ? t('bots.apps.couldNotConnect', 'Couldn’t connect {{app}}', { app: app.name })
+            : t('bots.apps.couldNotSignIn', 'Couldn’t sign in to {{app}}', { app: app.name })
+        }
         line={
           connectError ??
           t('bots.composio.signInEnded', 'The sign-in was turned down, failed, or took too long.')
@@ -65,9 +73,15 @@ export function ComposioSignInWait({
             <Button variant="ghost" size="sm" onClick={onClose}>
               {t('bots.apps.close', 'Close')}
             </Button>
-            <Button size="sm" onClick={onRetry}>
-              {t('bots.composio.tryAgain', 'Try again')}
-            </Button>
+            {onChangeKey ? (
+              <Button size="sm" onClick={onChangeKey}>
+                {t('bots.composio.key.changeKey', 'Change key')}
+              </Button>
+            ) : (
+              <Button size="sm" onClick={onRetry}>
+                {t('bots.composio.tryAgain', 'Try again')}
+              </Button>
+            )}
           </>
         }
       />

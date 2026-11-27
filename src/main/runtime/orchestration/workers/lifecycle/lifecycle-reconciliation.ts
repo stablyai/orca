@@ -231,6 +231,12 @@ function reconcileWorkerDoneMessage(
     )
   }
 
+  // Task id alone cannot authorize completion across racing retries.
+  const dispatch = db.getDispatchContextById(dispatchId)
+  // A paired server's own worker: the server settles it, and a follow-up it started has a Task only there.
+  if (!dispatch && getRemoteDispatch(db, dispatchId)?.task_id === taskId) {
+    return { action: 'ignored' }
+  }
   const task = db.getTask(taskId)
   if (!task) {
     return rejectLifecycleMessage(
@@ -240,13 +246,6 @@ function reconcileWorkerDoneMessage(
       `worker_done references unknown task ${taskId}.`,
       onLog
     )
-  }
-
-  // Task id alone cannot authorize completion across racing retries.
-  const dispatch = db.getDispatchContextById(dispatchId)
-  // A paired server's own worker: its report came home with the server's state, which settles the Task.
-  if (!dispatch && getRemoteDispatch(db, dispatchId)?.task_id === taskId) {
-    return { action: 'ignored' }
   }
   if (!dispatch) {
     return rejectLifecycleMessage(

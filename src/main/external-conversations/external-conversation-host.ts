@@ -58,4 +58,7 @@ export type ExternalConversationSeamDeps = {
   /** A delivery was admitted to this chat through the reply outbox. */
   replyAdmitted?: (sessionId: string) => void
   slackMirror?: () => SlackMirror | null
+  /** A watch began, after its snapshot: turn ends held while none watched (the Slack mirror's
+   *  among them) are told now. */
+  watched?: () => void
 }

@@ -1,5 +1,4 @@
 import type { RuntimeFilePreviewResult } from '../../../../../shared/file-content/runtime-file-read'
-import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import type {
   RuntimeFileDownloadResult,
   RuntimeFileOperationArgs,
@@ -23,6 +22,7 @@ import {
   readHostFileOutsideWorkspaces
 } from '../grants/runtime-terminal-artifact-read'
 import { readRemoteFilePreview } from './runtime-paged-file-read'
+import { readRuntimeAttachmentPreview } from './runtime-attachment-preview-read'
 import { downloadRemoteRuntimeFile } from './runtime-remote-file-download'
 
 /** SVG opens as editable markup; hosts send it as image bytes, or as a URL if a viewer asks. */
@@ -105,20 +105,16 @@ export async function readRuntimeFilePreview(
   )
   const remoteArgs = getRemoteFileArgs(context, filePath)
   const { target: runtimeTarget, worktreeId } = context
-  // Paired-server chat attachments live outside worktrees; owning server reads them. Older method_not_found keeps preview fallback.
+  // Paired-server chat attachments live outside worktrees; the owning server reads them.
   if (
     !remoteArgs &&
     runtimeTarget.kind === 'environment' &&
     isAgentSessionAttachmentStorePath(filePath)
   ) {
-    return callRuntimeRpc<RuntimeFilePreviewResult>(
+    return readRuntimeAttachmentPreview(
       runtimeTarget,
-      'agentSessionAttachment.read',
-      { path: filePath },
-      {
-        timeoutMs: 15_000,
-        expectedEnvironmentPairingRevision: context.expectedEnvironmentPairingRevision
-      }
+      filePath,
+      context.expectedEnvironmentPairingRevision
     )
   }
   if (!remoteArgs) {

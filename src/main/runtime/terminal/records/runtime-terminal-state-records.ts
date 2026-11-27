@@ -21,6 +21,7 @@ import type { PtyShellOwnershipMirror } from '../query/pty-shell-ownership-mirro
 import type { LaunchEvidence } from '../launch/launch-evidence'
 import type { TerminalExitCause } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import type { AgentSessionOwnerBinding } from '../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
+import type { HostTerminalUsage } from '../../../../shared/terminal/runtime-policy/terminal-limit-policy'
 
 type RuntimeTerminalTailState = {
   tailBuffer: string[]
@@ -89,8 +90,14 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
     launchToken: string | null
     result: TerminalLaunchResult
   }
+  /** Terminals on its host as its own spawn left them; absent for reattaches, older and remote hosts. */
+  spawnHostTerminalUsage?: HostTerminalUsage
   /** The ORCA_PANE_KEY the execution host reports this PTY's env exported; absent when unreported. */
   spawnPaneKey?: string | null
+  /** The line count its released transcript reached, where a slept agent's cursors continue from. */
+  releasedLinesTotal?: number
+  /** The stopped process whose handle (and line cursors) this one took over, counted once. */
+  linesContinuedFrom?: string
   launchConfig: SleepingAgentLaunchConfig | null
   launchToken: string | null
   launchIncarnationId: PtyIncarnationId | null
@@ -121,6 +128,10 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
     programSignInRequiredSince?: number
   } | null
   lastAgentStatusStartedAtEpochMs: number | null
+  /** When lastAgentStatus last turned working: a later title turn starts after an earlier Done. */
+  lastAgentStatusWorkingStartedAtEpochMs?: number | null
+  /** Whether a working status ended since the agent was last idle, so the current status is no start at rest. */
+  lastAgentStatusEndedTurn?: boolean
   lastAgentStatusRichInvalidatedAtEpochMs: number | null
   /** While lastAgentStatus is permission: a waiting/blocked hook observed after this raised the block. */
   permissionWaitHookedAfterEpochMs?: number

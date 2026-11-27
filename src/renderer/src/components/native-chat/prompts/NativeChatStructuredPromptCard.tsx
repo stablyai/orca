@@ -42,7 +42,12 @@ export function NativeChatStructuredPromptCard({
     // Collapsing only frees transcript room; the composer stays away while the agent waits on the answer.
     return (
       <>
-        <div hidden={collapsed} inert={collapsed} className="contents">
+        <div
+          data-native-chat-dock-contents
+          hidden={collapsed}
+          inert={collapsed}
+          className="contents"
+        >
           <NativeChatStructuredQuestionCard
             questions={questions}
             onAnswer={(response) => void promptResponse.respond(prompt, response)}

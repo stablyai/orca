@@ -37,8 +37,13 @@ export function journalTopic(today: string): string {
 }
 
 /** Moves the dated status lines to this month's journal; null when there are none. Undated lines
- *  stay, as every tidy-up keeps them. */
-export function statusMigrationPlan(memory: string, today: string): TidyUpPlan | null {
+ *  stay, as every tidy-up keeps them, and so does a line `exempt` reads as the owner deciding: it
+ *  stays in MEMORY.md until the owner or the bot retires it, so silence never loses a decision. */
+export function statusMigrationPlan(
+  memory: string,
+  today: string,
+  exempt: (text: string) => boolean = () => false
+): TidyUpPlan | null {
   const snapshot = memorySnapshot(memory)
   const key = (raw: string): string | null => botMemoryLineKey({ line: raw, after: null })
   // Every line grouped by its words first; a group moves only when it is one dated status line
@@ -61,6 +66,7 @@ export function statusMigrationPlan(memory: string, today: string): TidyUpPlan |
         group.length === 1 &&
         group[0].fact.date !== null &&
         isStatusLine(group[0].fact.text) &&
+        !exempt(group[0].fact.text) &&
         !secret(group[0])
     )
   )

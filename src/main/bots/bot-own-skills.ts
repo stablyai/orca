@@ -48,12 +48,12 @@ async function ownSkillEntries(home: string, realHome: string): Promise<BotOwnSk
 
 /** The bot's skills as Settings and Share both read them: skills/, then every skill each agent's
  *  folder reaches (its links into skills/ included), one entry per folder it was found through. */
-export async function readBotOwnSkills(home: string): Promise<BotOwnSkills> {
+export async function readBotOwnSkills(home: string, signal?: AbortSignal): Promise<BotOwnSkills> {
   const realHome = await realpath(home)
   const skills = await ownSkillEntries(home, realHome)
   const agentFound: BotOwnSkills['agentFound'] = []
   for (const [found, folder] of AGENT_FOLDERS) {
-    for (const skill of await scanSkillsFolder(join(home, folder))) {
+    for (const skill of await scanSkillsFolder(join(home, folder), signal)) {
       agentFound.push({ ...skill, found })
     }
   }

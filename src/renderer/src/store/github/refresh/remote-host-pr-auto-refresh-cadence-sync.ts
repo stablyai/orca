@@ -45,10 +45,6 @@ type HostRead = {
 
 const inFlight = new Map<string, HostRead>()
 
-export function _hostPRAutoRefreshReadsInFlightForTests(): number {
-  return inFlight.size
-}
-
 /**
  * Ask the host for its setting. One read per host at a time; a request made while one is pending
  * (the host's `settingsChanged`, regained contact) marks it dirty: its answer is not remembered, and

@@ -3,6 +3,7 @@ import * as z from 'zod'
 import {
   BOT_SLACK_DESKTOP_ERRORS,
   ConnectorBotSlackAppResponse,
+  ConnectorBotSlackPostAsResponse,
   ConnectorBotSlackStateResponse,
   ConnectorSlackGrantResponse
 } from '../../../../src/shared/connector-bot-slack-contract'
@@ -30,7 +31,11 @@ export const slackStateRead = bindDeferredRpcOperation(
 )
 
 function slackWrite<
-  Method extends 'bots.slack.saveGrant' | 'bots.slack.setUpApp' | 'bots.slack.remove',
+  Method extends
+    | 'bots.slack.saveGrant'
+    | 'bots.slack.setUpApp'
+    | 'bots.slack.remove'
+    | 'bots.slack.setPostAs',
   Value extends z.ZodType
 >(method: Method, value: Value) {
   return bindDeferredRpcOperation(
@@ -51,6 +56,11 @@ export const slackSaveGrant = slackWrite('bots.slack.saveGrant', ConnectorSlackG
 export const slackSetUpApp = slackWrite('bots.slack.setUpApp', ConnectorBotSlackAppResponse)
 // The host's success carries no value, which JSON drops.
 export const slackRemove = slackWrite('bots.slack.remove', z.unknown().optional())
+// A cancel answers nothing; a change answers the install link its installer approves.
+export const slackSetPostAs = slackWrite(
+  'bots.slack.setPostAs',
+  ConnectorBotSlackPostAsResponse.optional()
+)
 
 /** One Slack write: the host's answer, or its error code; a host that can't be reached says so. */
 export async function slackCall<Answer extends { ok: true } | { ok: false; error: string }>(

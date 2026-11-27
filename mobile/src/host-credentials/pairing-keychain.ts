@@ -246,8 +246,3 @@ async function deletePairingKeychainItemImpl(key: string): Promise<void> {
 export function deletePairingKeychainItem(key: string): Promise<void> {
   return enqueueKeychainMutation(() => deletePairingKeychainItemImpl(key))
 }
-
-export function resetPairingKeychainForTests(): void {
-  cachedGeneration = null
-  keychainMutation = Promise.resolve()
-}

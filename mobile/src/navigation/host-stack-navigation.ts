@@ -77,7 +77,7 @@ export const HOST_SESSION_ROUTE = '[hostId]/session/[worktreeId]'
 export const HOST_GROUP_ROUTE = '[hostId]/group/[groupId]'
 const HOST_INDEX_ROUTE = '[hostId]/index'
 
-// A session opened in its host list's place (Home's agent rows), so Back leaves the host instead of showing the list.
+// A session opened in its host list's place (Home's agent and bot rows), so Back leaves the host instead of showing the list.
 export const STANDALONE_SESSION_PARAM = 'standalone'
 
 export function isStandaloneSessionHref(href: string): boolean {

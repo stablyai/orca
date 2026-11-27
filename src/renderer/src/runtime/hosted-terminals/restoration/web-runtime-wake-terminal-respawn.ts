@@ -23,7 +23,3 @@ export function clearWebRuntimeWakeTerminalRespawnForWorktree(worktreeId: string
 export function clearAllWebRuntimeWakeTerminalRespawn(): void {
   wakeTerminalRespawnInFlightByWorktree.clear()
 }
-
-export function resetWebRuntimeWakeTerminalRespawnForTests(): void {
-  clearAllWebRuntimeWakeTerminalRespawn()
-}

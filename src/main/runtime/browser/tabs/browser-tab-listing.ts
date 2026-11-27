@@ -15,6 +15,13 @@ export type BrowserTabBarEntry = {
   profileLabel?: string | null
 }
 
+/** This window renders pages there, even in a workspace another runtime owns (This device in an SSH host's workspace). */
+export function rendersBrowserPagesIn(
+  snapshot: RuntimeMobileSessionTabsSnapshot | undefined
+): boolean {
+  return (snapshot?.browserPageInventory?.length ?? 0) > 0
+}
+
 /**
  * The browser tabs of one worktree, or of every worktree, in tab-bar order. Read from the session
  * snapshot the renderer publishes on every tab change, which keeps restored tabs that never loaded.
@@ -31,7 +38,7 @@ export function readBrowserTabBar(
   const remaining: BrowserTabBarEntry[] = []
   for (const snapshot of selected) {
     // Mirrored workspaces belong to their server, which alone can recover their pages.
-    if (!ownsWorkspace(snapshot.worktree)) {
+    if (!ownsWorkspace(snapshot.worktree) && !rendersBrowserPagesIn(snapshot)) {
       continue
     }
     const inventory = snapshot.browserPageInventory

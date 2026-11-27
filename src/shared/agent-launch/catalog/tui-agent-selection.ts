@@ -23,7 +23,6 @@ export const TUI_AGENT_AUTO_PICK_ORDER = [
   'pi',
   'omp',
   'prime-agent',
-  'gemini',
   'antigravity',
   'aider',
   'goose',
@@ -66,8 +65,9 @@ export function pickTuiAgent(
   }
   const disabledSet = new Set(normalizeDisabledTuiAgents(disabled))
   const detectedSet = detected instanceof Set ? detected : new Set(detected)
+  // An older host can still name a removed agent (Gemini CLI) as its default.
   if (
-    preferred &&
+    isTuiAgent(preferred) &&
     (detectedSet.has(preferred) || chosenUsable?.(preferred)) &&
     !disabledSet.has(preferred)
   ) {
@@ -79,6 +79,11 @@ export function pickTuiAgent(
     }
   }
   return null
+}
+
+/** A saved default naming a removed agent (Gemini CLI) falls back to automatic selection. */
+export function normalizeDefaultTuiAgent(value: unknown): TuiAgent | 'blank' | null {
+  return value === 'blank' || isTuiAgent(value) ? value : null
 }
 
 export function normalizeDisabledTuiAgents(value: unknown): TuiAgent[] {

@@ -1,25 +1,23 @@
 // Signing a bot's tool in from the phone: its page opens in the phone's browser, which ends on the
 // computer's 127.0.0.1 return address, and the address is pasted back. Orca's own sign-ins run on the
 // bot's host for this phone (bots.tools.signIn.*); a tool its agent's CLI signs in to finishes there.
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { botFailureMessage } from '../bot-failure-message'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   botToolSignInFailureWords,
   botToolSignInPastedQuery,
   type BotToolSignInFailure
 } from '../../../../src/shared/bot-tool-sign-in'
-import { BOTS_TOOLS_OWNED_SIGN_IN_RUNTIME_CAPABILITY } from '../../../../src/shared/bot-runtime-capabilities'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { openExternalLink } from '../../platform/external-links/external-link'
 import { readConnectionStatusProbe } from '../../transport/connection/runtime-status-probe'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import {
+  botOwnedSignInOps,
   botToolConnect,
   botToolFinishHeldSignIn,
-  botToolSignInCancel,
-  botToolSignInFinish,
-  botToolSignInStart,
   botToolSignInStatusRead,
-  botToolSignInWait,
+  type PhoneOwnedSignInOps,
   type PhoneOwnTool,
   type PhoneSignInAttempt
 } from './bot-tool-operations'
@@ -45,7 +43,8 @@ export type BotToolPhoneSignIn = {
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
-const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error))
+const messageOf = (error: unknown) =>
+  botFailureMessage(error) ?? (error instanceof Error ? error.message : String(error))
 
 export function useBotToolPhoneSignIn(args: {
   client: RpcClient | null
@@ -54,10 +53,30 @@ export function useBotToolPhoneSignIn(args: {
   hostName: string
   onSignedIn: () => void
 }): BotToolPhoneSignIn {
-  const t = useMobileTranslation()
-  const { client, botId, hostName } = args
+  const { botId } = args
   const name = args.tool.name
-  const owned = args.tool.signIn !== undefined
+  // A tool its agent's CLI signs in to has no Orca-owned attempt.
+  const signsIn = args.tool.signIn !== undefined
+  const owned = useMemo(
+    () => (signsIn ? botOwnedSignInOps(botId, name) : null),
+    [signsIn, botId, name]
+  )
+  return usePhoneToolSignIn({ ...args, owned, held: { botId, name } })
+}
+
+/** Signs in from the phone: by `owned` when Orca signs in, else through the bot tool's `held` CLI. */
+export function usePhoneToolSignIn(args: {
+  client: RpcClient | null
+  owned: PhoneOwnedSignInOps | null
+  held: { botId: string; name: string } | null
+  hostName: string
+  onSignedIn: () => void
+}): BotToolPhoneSignIn {
+  const t = useMobileTranslation()
+  const { client, owned, hostName } = args
+  const { held } = args
+  const botId = held?.botId ?? ''
+  const name = held?.name ?? ''
   const onSignedIn = useRef(args.onSignedIn)
   useEffect(() => {
     onSignedIn.current = args.onSignedIn
@@ -74,10 +93,10 @@ export function useBotToolPhoneSignIn(args: {
     generation.current += 1
     const flow = waiting.current
     waiting.current = null
-    if (flow && client) {
-      void botToolSignInCancel.request(client, { flowId: flow.flowId }).catch(() => {})
+    if (flow && client && owned) {
+      void owned.cancel(client, flow.flowId).catch(() => {})
     }
-  }, [client])
+  }, [client, owned])
   const cancel = useCallback(() => {
     leave()
     setAttempt(null)
@@ -105,7 +124,7 @@ export function useBotToolPhoneSignIn(args: {
         onSignedIn.current()
       } else if (view.state === 'failed') {
         setFailure(view.code)
-        setError(botToolSignInFailureWords(view.code, hostName))
+        setError(botToolSignInFailureWords(view.code, hostName, t))
       } else if (view.state === 'finishing') {
         setAttempt((shown) => (shown ? { ...shown, finishing: true } : shown))
       } else if (view.state === 'waiting') {
@@ -118,7 +137,7 @@ export function useBotToolPhoneSignIn(args: {
         setAttempt({ url: view.authorizationUrl, finishing: false })
       }
     },
-    [hostName]
+    [hostName, t]
   )
 
   const follow = useCallback(
@@ -128,10 +147,9 @@ export function useBotToolPhoneSignIn(args: {
       }
       let revision = first.revision
       while (gen === generation.current) {
-        const next = await botToolSignInWait
-          .request(client, { flowId: first.flowId, afterRevision: revision }, { timeoutMs: 60_000 })
-          .then((response) => botToolSignInWait.interpret(response))
-          .catch(() => null)
+        const next = owned
+          ? await owned.wait(client, first.flowId, revision).catch(() => null)
+          : null
         if (gen !== generation.current) {
           return
         }
@@ -150,31 +168,30 @@ export function useBotToolPhoneSignIn(args: {
         }
       }
     },
-    [client, settle]
+    [client, owned, settle]
   )
 
   const start = useCallback(() => {
-    if (!client) {
+    if (!client || (!owned && !held)) {
       return
     }
     leave()
     const gen = generation.current
     setFailure(undefined)
     setError(null)
-    if (owned) {
+    if (owned?.capability) {
       const capabilities = readConnectionStatusProbe(client)?.capabilities
-      if (capabilities && !capabilities.includes(BOTS_TOOLS_OWNED_SIGN_IN_RUNTIME_CAPABILITY)) {
+      if (capabilities && !capabilities.includes(owned.capability)) {
         setFailure('needs-update')
         return
       }
     }
     setStarting(true)
     const begin = owned
-      ? botToolSignInStart.request(client, { botId, name, mode: 'paste' }).then((response) => {
-          const view = botToolSignInStart.interpret(response)
+      ? owned.start(client).then((view) => {
           if (gen !== generation.current) {
             // Left before the host answered: end what it started.
-            void botToolSignInCancel.request(client, { flowId: view.flowId }).catch(() => {})
+            void owned.cancel(client, view.flowId).catch(() => {})
             return
           }
           settle(gen, view)
@@ -190,7 +207,7 @@ export function useBotToolPhoneSignIn(args: {
           }
           if (!authorizationUrl) {
             // Its CLI opened the page on the computer; only that browser can finish it.
-            setError(botToolSignInFailureWords('desktop-only', hostName))
+            setError(botToolSignInFailureWords('desktop-only', hostName, t))
             return
           }
           setAttempt({ url: authorizationUrl, finishing: false })
@@ -202,7 +219,7 @@ export function useBotToolPhoneSignIn(args: {
     void begin
       .catch((caught: unknown) => gen === generation.current && setError(messageOf(caught)))
       .finally(() => gen === generation.current && setStarting(false))
-  }, [client, botId, name, owned, hostName, leave, settle, follow])
+  }, [client, botId, name, owned, held, hostName, leave, settle, follow, t])
 
   const watchHeld = useCallback(
     async (gen: number) => {
@@ -268,9 +285,9 @@ export function useBotToolPhoneSignIn(args: {
         return
       }
       setAttempt({ ...attempt, finishing: true })
-      void botToolSignInFinish
-        .request(client, { flowId: flow.flowId, query })
-        .then((response) => settle(gen, botToolSignInFinish.interpret(response)))
+      void owned
+        .finish(client, flow.flowId, query)
+        .then((view) => settle(gen, view))
         .catch((caught: unknown) => {
           // A refused paste spends nothing: the page waits for the right address.
           if (gen === generation.current) {

@@ -11,7 +11,9 @@ function makeDeps(
     shouldCaptureSession: () => true,
     captureTerminalBuffers: vi.fn(),
     captureSleepingAgentSessions: vi.fn(),
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the checkpoint forwards snapshots to stageBeforeUnloadSync without reading them, and the assertions compare this exact partial shape.
     buildSessionSnapshots: () => [{ state: { activeTabId: 't1' } }] as never,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the checkpoint forwards the UI patch to stageBeforeUnloadSync without reading it, and the assertions compare this exact opaque value.
     buildUiPatch: () => ({ activeView: 'workspace' }) as never,
     hasDirtyOpenFiles: () => false,
     isDegradableShutdownInProgress: () => true,

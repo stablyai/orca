@@ -8,7 +8,6 @@ import {
 } from '../host-screen/sidebar-feed/host-sidebar-feed-operations'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../transport/connection/connection-state'
-import { readBotAvatarUploads } from './bot-avatar-uploads'
 import { botActivityRead, type SheetActivity, type SheetBot } from './bot-sheet-operations'
 import { mobileBotAvatarSource, type MobileBotAvatarSource } from './host-bot-row-facts'
 import { startHostBotRefresh } from './host-bot-refresh'
@@ -68,7 +67,6 @@ export function useRouteBot({
     entry?.bots.find(
       (candidate) => folderWorkspaceKey(candidate.folderWorkspaceId) === worktreeId
     ) ?? null
-  const [uploadUri, setUploadUri] = useState<string | undefined>(undefined)
   const scope = `${hostKey}\n${worktreeId}`
   const [activityScope, setActivityScope] = useState(scope)
   const [activity, setActivity] = useState<SheetActivity | null>(null)
@@ -77,7 +75,6 @@ export function useRouteBot({
   const [reads, setReads] = useState(0)
   const [itemReads, setItemReads] = useState(0)
   const previousScope = useRef(scope)
-  const avatarCache = useRef(new Map<string, string>())
   const readRef = useRef<() => void>(() => {})
   const ready = enabled && client !== null && connState === 'connected'
 
@@ -142,16 +139,13 @@ export function useRouteBot({
           return
         }
         routeBotId = found.id
-        const [uploads, answer] = await Promise.all([
-          readBotAvatarUploads(client, [found], avatarCache.current),
-          botActivityRead.request(client, { botId: found.id }).then(
-            (reply) => readHostMethodReply(reply, botActivityRead.interpret),
-            (error: unknown): HostMethodReply<never> => ({
-              kind: 'failed',
-              message: errorText(error)
-            })
-          )
-        ])
+        const answer = await botActivityRead.request(client, { botId: found.id }).then(
+          (reply) => readHostMethodReply(reply, botActivityRead.interpret),
+          (error: unknown): HostMethodReply<never> => ({
+            kind: 'failed',
+            message: errorText(error)
+          })
+        )
         // A failed read keeps what the sheet shows rather than blanking it.
         if (current) {
           setReads((count) => count + 1)
@@ -159,7 +153,6 @@ export function useRouteBot({
             itemsDue = false
             setItemReads((count) => count + 1)
           }
-          setUploadUri(uploads.get(found.id))
           if (answer.kind === 'answered') {
             setActivity(answer.value.activity)
           } else {
@@ -209,7 +202,7 @@ export function useRouteBot({
   }
   return {
     bot,
-    avatar: mobileBotAvatarSource(bot, uploadUri),
+    avatar: mobileBotAvatarSource(bot),
     activity: activityScope === scope ? activity : null,
     activityLoading: activityScope === scope ? activityLoading : ready,
     activityError: activityScope === scope ? activityError : null,

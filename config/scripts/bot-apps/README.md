@@ -33,4 +33,3 @@ Check the vendor's docs for a list of approved MCP clients first, and skip an ap
 - `bot-app-catalog-smoke.mjs`: entry point the workflow runs.
 - `app-kind-check.mjs`: the per-kind rules.
 - `guarded-request.mjs`, `public-address.mjs`: the restricted HTTPS client.
-- `app-kind-check.test.mjs`: offline fixtures for each rule.

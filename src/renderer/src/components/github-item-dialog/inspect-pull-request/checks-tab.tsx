@@ -1,10 +1,11 @@
 import { PRCheckEmptyDetails } from '@/components/github/pr-check-empty-details'
+import { PRChecksTabLoading } from '@/components/github/pr-check-tab-loading'
 import { isCompletePRCheckOwner } from '../../../../../shared/github/checks/complete-pr-check-owner'
 import { usePRCheckRefreshOwner } from '@/lib/work-items/github/use-pr-check-refresh-owner'
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { LoaderCircle } from 'lucide-react'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { cn } from '@/lib/class-names'
+import { SpinnerFrame } from '@/components/ui/LoadingSpinner'
 import { CHECK_COLOR } from '@/components/right-sidebar/checks-panel/presentation/check-presentation'
 import {
   createGitHubChecksTabState,
@@ -284,6 +285,7 @@ export function ChecksTab({
     canFixBrokenChecks,
     failedChecksLength: failedChecks.length,
     listLength: list.length,
+    holdRerunSlot: loading && list.length === 0,
     onRefresh: () => {
       void handleRefresh()
     },
@@ -301,6 +303,7 @@ export function ChecksTab({
       summaryColor={summaryColor}
       counts={overallCounts}
       showSummary={isCompletePRCheckOwner(checkOwner)}
+      summaryLoading={loading && list.length === 0}
       summaryLabel={summaryLabel}
       listLength={list.length}
       refreshAction={refreshAction}
@@ -310,14 +313,7 @@ export function ChecksTab({
   )
 
   if (loading && list.length === 0) {
-    return (
-      <>
-        {variant === 'compact' ? compactHeader : null}
-        <div className="flex items-center justify-center py-10">
-          <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
-        </div>
-      </>
-    )
+    return <PRChecksTabLoading variant={variant} compactHeader={compactHeader} actions={actions} />
   }
   if (list.length === 0) {
     return (
@@ -338,13 +334,13 @@ export function ChecksTab({
     return (
       <div className="flex flex-col gap-3 px-4 py-3">
         <div className="flex min-w-0 items-center gap-3">
-          <SummaryIcon
-            className={cn(
-              'size-4 shrink-0',
-              summaryColor,
-              overallCounts.pending > 0 && overallCounts.failing === 0 && 'animate-spin'
-            )}
-          />
+          {overallCounts.pending > 0 && overallCounts.failing === 0 ? (
+            <SpinnerFrame>
+              <SummaryIcon className={cn('block size-4', summaryColor)} />
+            </SpinnerFrame>
+          ) : (
+            <SummaryIcon className={cn('size-4 shrink-0', summaryColor)} />
+          )}
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <span className="truncate text-[13px] font-medium text-foreground">{summaryLabel}</span>
             {countChips.length > 1 && (

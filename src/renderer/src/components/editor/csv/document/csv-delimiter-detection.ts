@@ -12,11 +12,11 @@ export function detectCsvDelimiter(filePath: string, content: string): string {
   if (text.charCodeAt(0) === 0xfeff) {
     text = text.slice(1)
   }
-  // Skip blank leading lines, whose zero-delimiter tie would incorrectly classify TSV as comma-separated.
-  const firstLine = findFirstNonEmptyCsvSniffLine(text)
-  const tabs = countDelimiterOutsideQuotes(firstLine, '\t')
-  const semicolons = countDelimiterOutsideQuotes(firstLine, ';')
-  const commas = countDelimiterOutsideQuotes(firstLine, ',')
+  // Skip blank leading lines and keep quoted header cells within the first logical record.
+  const firstRecord = findFirstNonEmptyCsvSniffRecord(text)
+  const tabs = countDelimiterOutsideQuotes(firstRecord, '\t')
+  const semicolons = countDelimiterOutsideQuotes(firstRecord, ';')
+  const commas = countDelimiterOutsideQuotes(firstRecord, ',')
   // Keep the existing comma/tab choice unless semicolon strictly wins.
   const existingDelimiter = tabs > commas ? '\t' : ','
   if (semicolons > commas && semicolons > tabs) {
@@ -95,17 +95,23 @@ function hasConsistentExistingCsvColumns(text: string, delimiter: string): boole
   )
 }
 
-function findFirstNonEmptyCsvSniffLine(text: string): string {
-  // Scan a representative line without allocating an array entry per pasted/dropped row.
+function findFirstNonEmptyCsvSniffRecord(text: string): string {
+  // Scan a representative record without allocating an array entry per pasted/dropped row.
   const scanLength = Math.min(text.length, CSV_DELIMITER_SNIFF_SCAN_CODE_UNITS)
-  let lineStart = 0
-  let lineHasContent = false
+  let recordStart = 0
+  let recordHasContent = false
+  let inQuotes = false
+  let fieldIsEmpty = true
+  let quoteStartedAtFieldStart = false
 
   for (let index = 0; index < scanLength; index += 1) {
     const codeUnit = text.charCodeAt(index)
-    if (codeUnit === LINE_FEED_CODE_UNIT || codeUnit === CARRIAGE_RETURN_CODE_UNIT) {
-      if (lineHasContent) {
-        return text.slice(lineStart, index)
+    if (
+      (codeUnit === LINE_FEED_CODE_UNIT || codeUnit === CARRIAGE_RETURN_CODE_UNIT) &&
+      !(inQuotes && quoteStartedAtFieldStart)
+    ) {
+      if (recordHasContent) {
+        return text.slice(recordStart, index)
       }
       if (
         codeUnit === CARRIAGE_RETURN_CODE_UNIT &&
@@ -114,16 +120,30 @@ function findFirstNonEmptyCsvSniffLine(text: string): string {
       ) {
         index += 1
       }
-      lineStart = index + 1
-      lineHasContent = false
+      recordStart = index + 1
+      fieldIsEmpty = true
       continue
     }
-    if (!lineHasContent && !isCsvSniffWhitespace(codeUnit)) {
-      lineHasContent = true
+    // Mid-cell quotes shield delimiters, but only field-leading quotes extend the record.
+    if (codeUnit === 0x22) {
+      if (inQuotes && index + 1 < scanLength && text.charCodeAt(index + 1) === 0x22) {
+        index += 1
+      } else {
+        if (!inQuotes) {
+          quoteStartedAtFieldStart = fieldIsEmpty
+        }
+        inQuotes = !inQuotes
+      }
+      fieldIsEmpty = false
+    } else if (!inQuotes) {
+      fieldIsEmpty = codeUnit === 0x2c || codeUnit === 0x3b || codeUnit === 0x09
+    }
+    if (!recordHasContent && !isCsvSniffWhitespace(codeUnit)) {
+      recordHasContent = true
     }
   }
 
-  return lineHasContent ? text.slice(lineStart, scanLength) : ''
+  return recordHasContent ? text.slice(recordStart, scanLength) : ''
 }
 
 function isCsvSniffWhitespace(codeUnit: number): boolean {

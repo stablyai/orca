@@ -1,18 +1,18 @@
 import { StyleSheet, Text, View } from 'react-native'
-import { getUiIntlLocale } from '../i18n/ui-intl-locale'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { intlLocaleFor } from '../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../i18n/use-mobile-translation'
 import { formatHomeAgentTime, type HomeStatsSummary } from '../stats/home-stats-total'
-import { colors, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { homeListStyles } from './home-list-styles'
+import { spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { homeListStylesSheet } from './home-list-styles'
 import { MobileHomeSectionHeading } from './MobileHomeSectionHeading'
 
 /** "Your stats": totals across every paired desktop that has answered, in one row of three. */
 export function MobileHomeStats(props: { stats: HomeStatsSummary; first: boolean }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
-  const locale = getUiIntlLocale()
+  const homeListStyles = useThemedStyles(homeListStylesSheet)
+  const styles = useThemedStyles(stylesSheet)
+  const locale = intlLocaleFor(useMobileUiLocale())
   const cells = [
     {
       key: 'agents',
@@ -54,7 +54,7 @@ export function MobileHomeStats(props: { stats: HomeStatsSummary; first: boolean
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   row: { flexDirection: 'row' },
   cell: {
     flex: 1,

@@ -180,7 +180,14 @@ export async function resolveSpawnFileForegroundProcess(
       return resolution
     }
     return candidate
-      ? { available: true, processName: candidate.name, processId: candidate.pid }
+      ? {
+          available: true,
+          processName: candidate.name,
+          processId: candidate.pid,
+          ...(candidate.creationTimeMs !== undefined
+            ? { processCreationTimeMs: candidate.creationTimeMs }
+            : {})
+        }
       : { available: false, processName: null }
   } catch {
     return { available: false, processName: null }

@@ -130,3 +130,45 @@ export const snoozed = defineFixture({
     await new Promise((resolve) => setTimeout(resolve, 100))
   }
 })
+
+const waitItems = [
+  makeTestBotItem(52, {
+    title: 'Pick the last line of the onboarding card',
+    status: 'needs_you',
+    question: { eventId: 'e52', text: 'Which line should close the card?' },
+    lastActivityAt: now - 2 * hour
+  }),
+  makeTestBotItem(56, { title: 'Fix the right panel scroll e2e', lastActivityAt: now - 3 * hour }),
+  makeTestBotItem(49, {
+    title: 'Check the relay fix on staging',
+    status: 'waiting',
+    wait: { text: 'Staging deploy of the relay fix', at: now - 7 * hour },
+    lastActivityAt: now - 7 * hour
+  }),
+  makeTestBotItem(44, {
+    title: 'Polish the Items empty state',
+    status: 'waiting',
+    wait: { text: 'Claude usage resets Nov 26, 9:00 AM', at: now - 26 * hour },
+    lastActivityAt: now - 26 * hour
+  }),
+  makeTestBotItem(40, { title: 'Write the release note', status: 'planned', lastActivityAt: now })
+]
+
+// Waiting between In progress and Planned, open, one line per row with its age.
+export const waiting = defineFixture({
+  width: 340,
+  render: () => (
+    <div className="@container bg-sidebar p-1">
+      <BotItemsList
+        bot={bot}
+        groups={groupBotItems(waitItems, 5, now, 'e10')}
+        seenEventId="e10"
+        closedTotal={0}
+        onMoreClosed={null}
+        staleDays={5}
+        now={now}
+        onOpen={() => {}}
+      />
+    </div>
+  )
+})

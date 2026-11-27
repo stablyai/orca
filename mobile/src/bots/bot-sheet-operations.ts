@@ -123,6 +123,20 @@ export function memberRemoval(member: BotMember) {
   }
 }
 
+/** Takes each person off with its own removeMember, which every host applies to its current roster (a stale roster would restore someone revoked elsewhere), then saves `updates`; stops at the first failed save. */
+export async function saveRemovingMembers<U extends object>(
+  save: (updates: U | ReturnType<typeof memberRemoval>) => Promise<boolean>,
+  members: readonly BotMember[],
+  updates: U
+): Promise<boolean> {
+  for (const member of members) {
+    if (!(await save(memberRemoval(member)))) {
+      return false
+    }
+  }
+  return save(updates)
+}
+
 /** Keep only me: one removal each, on the host, so a concurrent edit is kept and an older host
  *  takes it. Resolves to the names of whoever couldn't be removed. */
 export async function removeEveryoneWhoCanAsk(

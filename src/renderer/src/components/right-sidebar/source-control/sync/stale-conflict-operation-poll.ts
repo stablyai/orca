@@ -85,12 +85,11 @@ export function useStaleConflictOperationPolling(args: {
           if (!isConnectionReady(connectionId) || !target) {
             continue
           }
-          const op = await getRuntimeGitConflictOperation({
-            target,
-            worktreeId: id,
-            worktreePath: path,
-            connectionId
-          })
+          // A 3 s poll: no use of an idle WSL host (#46567).
+          const op = await getRuntimeGitConflictOperation(
+            { target, worktreeId: id, worktreePath: path, connectionId },
+            { background: true }
+          )
           if (!active) {
             return
           }

@@ -9,11 +9,14 @@ import {
 } from '../../../../../src/shared/source-control/listing/source-control-tree'
 import { STATUS_LABELS } from '../../../../../src/shared/git/status/git-status-labels'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import type { MobileDiffReviewQueueItem } from '../diff-state/mobile-diff-review-queue'
+import {
+  mobileDiffReviewItemSubtitle,
+  type MobileDiffReviewQueueItem
+} from '../diff-state/mobile-diff-review-queue'
 import { statusColor } from '../../changes/mobile-git-status'
-import { colors, pressedStyle, radii, spacing, typography } from '../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { pressedStyle, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../theme/themed-styles'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import { DisclosureChevron } from '../../../components/list/DisclosureChevron'
 import { MobileSearchField } from '../../../components/controls/MobileSearchField'
 import { SheetHeader } from '../../../components/nav-bar/SheetHeader'
@@ -47,7 +50,7 @@ export function MobileDiffReviewFilesSheet({
   onToggleViewed,
   onClose
 }: Props) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const [query, setQuery] = useState('')
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set())
@@ -132,7 +135,8 @@ function FolderRow({
   expanded: boolean
   onPress: () => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <Pressable
       onPress={onPress}
@@ -170,7 +174,8 @@ function FileRow({
   onPress: () => void
   onToggleViewed: () => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const deleted = item.status === 'deleted'
   return (
@@ -179,11 +184,11 @@ function FileRow({
         onPress={onPress}
         accessibilityRole="button"
         // One path can be both staged and unstaged, so the label names which one this row opens.
-        accessibilityLabel={`${item.filePath}, ${item.subtitle}`}
+        accessibilityLabel={`${item.filePath}, ${mobileDiffReviewItemSubtitle(item.scope, t)}`}
         accessibilityState={{ selected: current }}
         style={({ pressed }) => [styles.fileMain, pressed && pressedStyle]}
       >
-        <Text style={[styles.status, { color: statusColor(item.status) }]}>
+        <Text style={[styles.status, { color: statusColor(item.status, colors) }]}>
           {STATUS_LABELS[item.status]}
         </Text>
         <Text style={[styles.fileName, deleted && styles.deletedName]} numberOfLines={1}>
@@ -215,7 +220,7 @@ function FileRow({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   sheet: {
     flex: 1,
     minHeight: 0

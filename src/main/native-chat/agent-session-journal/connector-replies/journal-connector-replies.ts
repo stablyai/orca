@@ -4,12 +4,11 @@ import type { AgentJournalMessageItem } from '../../../../shared/agent-session/j
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   answersThroughOutbox,
-  JOURNAL_CONNECTOR_REPLY_OUTCOMES,
   type JournalConnectorReplyCut,
   type JournalConnectorReplyCutRows,
   type JournalConnectorReplyFill,
   type JournalConnectorReplyKey,
-  type JournalConnectorReplyRow
+  type JournalConnectorReplyRetryRows
 } from '../../../../shared/agent-session/journal/journal-connector-reply'
 
 // The reply outbox's writes (design item 125 §2). Each runs on the journal's writer connection,
@@ -33,8 +32,8 @@ export function recordJournalConnectorReplies(
     return
   }
   const insert = db.prepare(`INSERT INTO journal_connector_replies
-    (account,delivery_id,source,external_id,session_id,epoch,message_id,queued)
-    VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(account,delivery_id) DO NOTHING`)
+    (account,delivery_id,source,external_id,session_id,epoch,message_id,queued,quiet_rule)
+    VALUES(?,?,?,?,?,?,?,?,'trailing') ON CONFLICT(account,delivery_id) DO NOTHING`)
   for (const deliveryId of [stamp.deliveryId, ...(stamp.carried ?? [])]) {
     insert.run(
       stamp.account,
@@ -110,8 +109,8 @@ export function fillJournalConnectorReplies(
 ): number {
   const fillWhere = (expect: string) =>
     db.prepare(`UPDATE journal_connector_replies SET outcome=?,answer_delivery_id=?,
-    turn_item_id=?,prose=?,failure_json=?,links_json=?,took_ms=?,filled_at=?
-    WHERE account=? AND delivery_id=? AND outcome IS NULL AND ${expect}`)
+    turn_item_id=?,prose=?,failure_json=?,links_json=?,took_ms=?,turn_started_at=?,
+    tools_ran=COALESCE(?,tools_ran),filled_at=? WHERE account=? AND delivery_id=? AND outcome IS NULL AND ${expect}`)
   const open = fillWhere(EXPECT_OPEN)
   const claimed = fillWhere(EXPECT_CLAIMED)
   const owed = fillWhere(EXPECT_CUT)
@@ -133,6 +132,8 @@ export function fillJournalConnectorReplies(
         failureJson(row.failure),
         row.links?.length ? JSON.stringify(row.links) : null,
         row.tookMs ?? null,
+        row.turnStartedAt ?? null,
+        row.toolsRan ? 1 : null,
         now,
         row.account,
         row.deliveryId,
@@ -161,6 +162,28 @@ export function cutJournalConnectorReplies(
     )
   }
   return changed
+}
+
+/** An empty turn's rows, held for its one retry (JournalConnectorReplyRetryRows); rows retried
+ *  before are never held again. */
+export function holdJournalConnectorRepliesForRetry(
+  db: Database.Database,
+  { keys, claims, cut }: JournalConnectorReplyRetryRows
+): number {
+  const set = `cut_turn_id=?,cut_kind=?,empty_retried=1`
+  const open = db.prepare(`UPDATE journal_connector_replies SET ${set}
+    WHERE account=? AND delivery_id=? AND outcome IS NULL AND empty_retried IS NULL AND ${EXPECT_OPEN}`)
+  const claimed = db.prepare(`UPDATE journal_connector_replies SET ${set},claim_message_id=NULL
+    WHERE claim_message_id=? AND outcome IS NULL AND empty_retried IS NULL`)
+  const marks = [cut.turnId, cut.kind] as const
+  let held = 0
+  for (const key of keys) {
+    held += Number(open.run(...marks, key.account, key.deliveryId).changes)
+  }
+  for (const claim of claims) {
+    held += Number(claimed.run(...marks, claim).changes)
+  }
+  return held
 }
 
 /** A continuation's own turn was cut, and a continuation of that cut is owed: the rows it claimed
@@ -282,62 +305,4 @@ export function sentJournalConnectorReplies(
     mark.run(now, key.account, key.deliveryId)
     remove.run(key.account, key.deliveryId)
   }
-}
-
-/** Rows not yet accepted: unfilled, or filled and unsent; one session's, or every one. */
-export function readJournalConnectorReplies(
-  db: Database.Database,
-  sessionId?: string
-): JournalConnectorReplyRow[] {
-  const rows =
-    sessionId === undefined
-      ? db.prepare('SELECT * FROM journal_connector_replies WHERE sent_at IS NULL').all()
-      : db
-          .prepare('SELECT * FROM journal_connector_replies WHERE session_id=? AND sent_at IS NULL')
-          .all(sessionId)
-  return rows.map((row) => {
-    const outcome = JOURNAL_CONNECTOR_REPLY_OUTCOMES.find((known) => known === row.outcome)
-    return {
-      account: String(row.account),
-      deliveryId: String(row.delivery_id),
-      conversation: { source: String(row.source), externalId: String(row.external_id) },
-      sessionId: String(row.session_id),
-      epoch: String(row.epoch),
-      messageId: String(row.message_id),
-      queued: Number(row.queued) === 1,
-      ...(row.cut_turn_id === null || row.cut_turn_id === undefined
-        ? {}
-        : {
-            cut: {
-              turnId: String(row.cut_turn_id),
-              kind: row.cut_kind === 'usage_limit' ? ('usage_limit' as const) : ('restart' as const)
-            }
-          }),
-      ...(row.claim_message_id === null || row.claim_message_id === undefined
-        ? {}
-        : { claimMessageId: String(row.claim_message_id) }),
-      // An unfilled row's failure is its usage-limit cut's, kept for that cut's close.
-      ...(outcome === undefined && row.failure_json !== null && row.failure_json !== undefined
-        ? { cutFailure: JSON.parse(String(row.failure_json)) }
-        : {}),
-      ...(outcome === undefined
-        ? {}
-        : {
-            fill: {
-              outcome,
-              answerDeliveryId: String(row.answer_delivery_id),
-              ...(row.turn_item_id === null ? {} : { turnItemId: String(row.turn_item_id) }),
-              ...(row.prose === null ? {} : { prose: String(row.prose) }),
-              ...(row.failure_json === null
-                ? {}
-                : { failure: JSON.parse(String(row.failure_json)) }),
-              ...(row.links_json === null ? {} : { links: JSON.parse(String(row.links_json)) }),
-              ...(row.took_ms === null || row.took_ms === undefined
-                ? {}
-                : { tookMs: Number(row.took_ms) }),
-              filledAt: Number(row.filled_at)
-            }
-          })
-    }
-  })
 }

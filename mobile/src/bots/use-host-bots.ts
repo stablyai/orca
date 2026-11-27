@@ -10,7 +10,6 @@ import { rpcClientForExecutionHost } from '../worktree/execution-hosts/execution
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../transport/connection/connection-state'
 import { newBotRefusal, shownHostBotListings, type HostBotListing } from './host-bot-listing'
-import { readBotAvatarUploads } from './bot-avatar-uploads'
 import {
   botHomeLinksRead,
   botOwnChatsRead,
@@ -22,7 +21,10 @@ import { groupList } from './bot-group-operations'
 import { readHostAccessRequests } from './bot-access-request-operations'
 import { HOST_REFRESH_FALLBACK_MS } from '../worktree/execution-hosts/host-worktree-refresh'
 import { useKeptServerBotListings } from './use-kept-server-bot-listings'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { createHostCountTimers } from './host-bot-count-timers'
+import { createFailedReadRetries } from './host-bot-failed-read-retries'
+import { useKeptByKey } from '../hooks/use-kept-by-key'
 
 const NO_LISTINGS: readonly HostBotListing[] = []
 
@@ -36,28 +38,29 @@ export type ListingTarget = {
   installationId?: string
 }
 
-/** A host's bots with their workers' lineage; a server older than the page gets a line instead. */
+/** A host's bots with their workers' lineage; a host older than the page gets a line instead, and
+ *  this computer's failed read says so. */
 export async function readHostBotListing(
   target: ListingTarget,
-  avatarCache: Map<string, string>,
   isServer: boolean,
   /** Whether to read thread links and side chats too. */
   threads = true
 ): Promise<HostBotListing | null> {
+  const named = { hostId: target.hostId, hostLabel: target.hostLabel }
+  // A server's failed read keeps its folders in Projects, as `shownHostBotListings` says.
+  const failed: HostBotListing | null = isServer ? null : { kind: 'read-failed', ...named }
   const bots = await readHostBots(target.client, target.key)
   if (bots.kind === 'no-capability') {
-    return isServer
-      ? { kind: 'update-needed', hostId: target.hostId, hostLabel: target.hostLabel }
-      : null
+    return { kind: 'update-needed', ...named }
   }
   if (bots.kind !== 'bots') {
-    return null
+    return failed
   }
   // Only a host with bots is asked for their workers' lineage.
   const lineageReply = await workspaceLineageRead.request(target.client).catch(() => null)
   const lineage = lineageReply && readHostMethodReply(lineageReply, workspaceLineageRead.interpret)
   if (lineage?.kind !== 'answered') {
-    return null
+    return failed
   }
   const links = lineage.value
   const [unseenReply, linksReply, ownChatsReply, accessRequests] = await Promise.all([
@@ -92,7 +95,6 @@ export async function readHostBotListing(
     view: bots.view,
     workspaceLineage: links.workspaceLineage,
     worktreeLineage: links.lineage,
-    avatarUris: await readBotAvatarUploads(target.client, bots.bots, avatarCache),
     ...(createRefusal ? { createRefusal } : {}),
     takesTemplates: bots.takesTemplates,
     // Groups read on their own: a failed read leaves them out, and the list reads again.
@@ -113,11 +115,10 @@ type BotListingReads = {
  *  after, so the answer postdates the ask without reads piling up behind each other. */
 function startBotListingReads(args: {
   hosts: readonly ListingTarget[]
-  avatarCache: Map<string, string>
   setListings: (update: (previous: readonly HostBotListing[]) => readonly HostBotListing[]) => void
   setGroupsUnread: (unread: boolean) => void
 }): BotListingReads {
-  const { hosts, avatarCache, setListings, setGroupsUnread } = args
+  const { hosts, setListings, setGroupsUnread } = args
   // Each host with a read out, and whether it was asked again meanwhile.
   const askedAgain = new Map<ExecutionHostId, boolean>()
   // Each host whose threads' facts the next read owes.
@@ -134,7 +135,11 @@ function startBotListingReads(args: {
     // A failed read keeps the host's last listing, and a failed groups read its last groups, so
     // neither flashes back into folders. Hosts this read doesn't cover keep theirs: a server that
     // went down lists its last read, dimmed. A read without threads keeps the last threads' facts.
-    if (listing) {
+    if (listing?.kind === 'read-failed') {
+      setListings((previous) =>
+        previous.some((entry) => entry.hostId === hostId) ? previous : [...previous, listing]
+      )
+    } else if (listing) {
       setListings((previous) => {
         const last = previous.find((entry) => entry.hostId === hostId)
         const kept = listing.kind === 'listed' && last && last.kind === 'listed' ? last : null
@@ -160,6 +165,7 @@ function startBotListingReads(args: {
     }
     setGroupsUnread(groupsUnread.size > 0)
   }
+  const retries = createFailedReadRetries((host: ListingTarget) => void readHost(host, true))
   const readHost = async (host: ListingTarget, threads: boolean): Promise<void> => {
     if (threads) {
       threadsOwed.add(host.hostId)
@@ -173,7 +179,6 @@ function startBotListingReads(args: {
       const withThreads = threadsOwed.delete(host.hostId)
       const listing = await readHostBotListing(
         host,
-        avatarCache,
         host.hostId !== LOCAL_EXECUTION_HOST_ID,
         withThreads
       ).catch(() => null)
@@ -183,6 +188,7 @@ function startBotListingReads(args: {
       apply(host.hostId, listing, withThreads)
       // A failed or unlisted read drops the timer; the read that follows a reconnect sets it again.
       countTimers.readAfter(host, listing?.kind === 'listed' ? listing : null)
+      retries.readAfter(host, listing?.kind === 'read-failed')
     } while (askedAgain.get(host.hostId))
     askedAgain.delete(host.hostId)
   }
@@ -199,6 +205,7 @@ function startBotListingReads(args: {
     stop: () => {
       stopped = true
       countTimers.stop()
+      retries.stop()
     }
   }
 }
@@ -222,6 +229,7 @@ export function useHostBots(args: {
    *  then does it re-read their thread links and side chats. */
   pairedThreadsKey?: number
 }): readonly HostBotListing[] {
+  const t = useMobileTranslation()
   const {
     client,
     pairedHostId,
@@ -243,12 +251,13 @@ export function useHostBots(args: {
   }
   const [groupsUnread, setGroupsUnread] = useState(false)
   const [groupsRetry, setGroupsRetry] = useState(0)
-  const avatarCache = useRef(new Map<string, string>())
   const reads = useRef<BotListingReads | null>(null)
   const readyServers = serverHosts.filter((host) => host.relay === 'ready')
   const serversKey = readyServers
     .map((host) => `${host.hostId}\n${host.label}\n${host.installationId ?? ''}`)
     .join('\n')
+  // serversKey stands for the ready servers, whose array changes on every health update.
+  const keptServers = useKeptByKey(serversKey, readyServers)
   const targets = useMemo((): { local: ListingTarget | null; servers: ListingTarget[] } => {
     if (!client || !pairedHostId || connState !== 'connected') {
       return { local: null, servers: [] }
@@ -262,7 +271,7 @@ export function useHostBots(args: {
       relaysCreate: true
     }
     const relaysCreate = hostCapabilities.includes(BOTS_CREATE_RUNTIME_CAPABILITY)
-    const servers = readyServers.flatMap((host) => {
+    const servers = keptServers.flatMap((host) => {
       const scoped = rpcClientForExecutionHost(client, hostCapabilities, host.hostId)
       return scoped
         ? [
@@ -278,8 +287,7 @@ export function useHostBots(args: {
         : []
     })
     return { local, servers }
-    // serversKey stands for the ready servers, whose array changes on every health update.
-  }, [client, pairedHostId, connState, hostCapabilities, hostLabel, serversKey])
+  }, [client, pairedHostId, connState, hostCapabilities, hostLabel, keptServers])
 
   // New targets start their own reads; a late answer from the old ones is dropped.
   useEffect(() => {
@@ -290,7 +298,6 @@ export function useHostBots(args: {
     }
     const started = startBotListingReads({
       hosts,
-      avatarCache: avatarCache.current,
       setListings,
       setGroupsUnread
     })
@@ -329,5 +336,5 @@ export function useHostBots(args: {
 
   useKeptServerBotListings({ pairedHostId, serverHosts, listings, setListings })
 
-  return useMemo(() => shownHostBotListings(listings, serverHosts), [listings, serverHosts])
+  return useMemo(() => shownHostBotListings(listings, serverHosts, t), [listings, serverHosts, t])
 }

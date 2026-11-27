@@ -15,10 +15,7 @@ import {
   readAgentMessageSenderRow,
   type SenderLocation
 } from './native-chat-agent-message-sender-source'
-import {
-  agentMessageSenderOwner,
-  unnamedSenderLabel
-} from './native-chat-agent-message-sender-label'
+import { agentMessageSenderOwner } from './native-chat-agent-message-sender-label'
 import { locateLegacyAgentMessageSender } from './native-chat-agent-message-sender-compatibility'
 
 /** Product switch: a terminal sender whose terminal exited or was respawned. 'host-lookup' keeps
@@ -139,13 +136,10 @@ export function agentMessageSenderOpens(
  *  what the user can do. */
 export function agentMessageSenderUnavailableText(
   target: AgentMessageSenderTarget,
-  name: string
+  name: string | undefined
 ): string {
-  // The unnamed label reads mid-sentence; these sentences start with the sender.
   const subject =
-    name === unnamedSenderLabel()
-      ? translate('components.native-chat.agentMessage.unnamedSenderSubject', 'An agent')
-      : name
+    name ?? translate('components.native-chat.agentMessage.unnamedSenderSubject', 'An agent')
   return target.kind === 'replaced'
     ? translate(
         'components.native-chat.agentMessage.senderReplaced',

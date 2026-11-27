@@ -19,6 +19,7 @@ export function useRemoteBrowserPageChromeChords({
   chromeShortcutScope,
   workspaceId,
   runRemoteNavigation,
+  openFind,
   setPaneNotice
 }: {
   chromeShortcutScope: BrowserChromeShortcutScope
@@ -28,6 +29,8 @@ export function useRemoteBrowserPageChromeChords({
     url?: string,
     ignoreCache?: boolean
   ) => Promise<void> | void
+  /** Null on hosts that cannot search their pages. */
+  openFind: (() => void) | null
   setPaneNotice: Dispatch<SetStateAction<RemoteBrowserPaneNotice | null>>
 }): void {
   const keybindings = useAppStore((state) => state.keybindings)
@@ -65,6 +68,10 @@ export function useRemoteBrowserPageChromeChords({
       if (keybindingMatchesAction('browser.find', event, shortcutPlatform, keybindings)) {
         event.preventDefault()
         event.stopImmediatePropagation()
+        if (openFind) {
+          openFind()
+          return
+        }
         // Decoded frames have no searchable DOM; rank this notice below stream failures and deduplicate OS key repeats by ID.
         setPaneNotice((current) =>
           current?.id === REMOTE_BROWSER_FIND_UNAVAILABLE_NOTICE_ID
@@ -120,5 +127,5 @@ export function useRemoteBrowserPageChromeChords({
         findNoticeTimerRef.current = null
       }
     }
-  }, [chromeShortcutScope, keybindings, runRemoteNavigation, setPaneNotice, workspaceId])
+  }, [chromeShortcutScope, keybindings, openFind, runRemoteNavigation, setPaneNotice, workspaceId])
 }

@@ -19,7 +19,9 @@ export const PushNotificationSchema = z
     notificationEpoch: OpaqueIdSchema,
     source: PushNotificationSourceSchema,
     sound: z.boolean().optional(),
-    kind: z.enum(['alert', 'dismiss']).optional(),
+    kind: z.enum(['alert', 'dismiss', 'badge']).optional(),
+    // The sending host's unread count; the gateway sums every host's for one phone.
+    badge: z.number().int().nonnegative().max(PUSH_LIMITS.maxBadgeCount).optional(),
     expiresAt: z.number().int().positive().optional(),
     agentState: PushAgentStateSchema.nullable(),
     title: z.string().min(1).max(PUSH_LIMITS.titleMaxChars),
@@ -37,6 +39,10 @@ export const PushNotificationSchema = z
   .refine(
     (notification) => notification.kind !== 'dismiss' || Boolean(notification.notificationId),
     { message: 'dismiss requires notificationId' }
+  )
+  .refine(
+    (notification) => (notification.kind === 'badge') === (notification.badge !== undefined),
+    { message: 'badge is sent with the badge kind only' }
   )
   .refine(
     (notification) => new TextEncoder().encode(JSON.stringify(notification)).byteLength <= 3000,

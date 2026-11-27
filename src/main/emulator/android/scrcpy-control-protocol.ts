@@ -5,7 +5,9 @@ export const SCRCPY_CONTROL_MSG_TYPE = {
   INJECT_KEYCODE: 0,
   INJECT_TEXT: 1,
   INJECT_TOUCH_EVENT: 2,
-  SET_CLIPBOARD: 9
+  SET_CLIPBOARD: 9,
+  UHID_CREATE: 12,
+  UHID_INPUT: 13
 } as const
 
 export type ScrcpyKeyAction = 'down' | 'up'
@@ -126,4 +128,23 @@ export function encodeSetClipboard(text: string, paste: boolean): Buffer {
   buf.writeUInt32BE(payload.length, 10)
   payload.copy(buf, 14)
   return buf
+}
+
+// UHID_CREATE and UHID_INPUT share one layout: type, u16 device id, u16-prefixed bytes.
+function encodeUhidMessage(type: number, id: number, data: Buffer): Buffer {
+  const buf = Buffer.alloc(5 + data.length)
+  buf.writeUInt8(type, 0)
+  buf.writeUInt16BE(id, 1)
+  buf.writeUInt16BE(data.length, 3)
+  data.copy(buf, 5)
+  return buf
+}
+
+/** Creates a HID device from its report descriptor; it lasts as long as the server. */
+export function encodeUhidCreate(id: number, reportDescriptor: Buffer): Buffer {
+  return encodeUhidMessage(SCRCPY_CONTROL_MSG_TYPE.UHID_CREATE, id, reportDescriptor)
+}
+
+export function encodeUhidInput(id: number, report: Buffer): Buffer {
+  return encodeUhidMessage(SCRCPY_CONTROL_MSG_TYPE.UHID_INPUT, id, report)
 }

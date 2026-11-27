@@ -149,7 +149,7 @@ export async function readSheet(
     origin: { row: where.row, column: where.column },
     ...(kept < rows.length
       ? {
-          nextRange: `${columnLetters(where.column)}${nextRow}:${end?.[1] || columnLetters(where.column + Math.max(...rows.map((row) => row.length)) - 1)}${end?.[2] ?? ''}`
+          nextRange: `${columnLetters(where.column)}${nextRow}:${end?.[1] || columnLetters(where.column + rows.reduce((max, row) => Math.max(max, row.length), 0) - 1)}${end?.[2] ?? ''}`
         }
       : {})
   }
@@ -252,9 +252,10 @@ export async function upsertSheet(
   const existing = current.values.map((row) => row.map((cell) => asText(cell).trim()))
   const header = existing[0] ?? []
   const keyIndex = keyColumn(header, args.key, origin.column)
-  const given = cellsForInput(args.values, args.formulas === true)
+  // Keys match the stored text; the formula escape applies only to what gets written.
+  const formulas = args.formulas === true
   // A header row passed along with the data is not a row to add.
-  const rows = given.filter((row, index) => !(index === 0 && sameRow(row, header)))
+  const rows = args.values.filter((row, index) => !(index === 0 && sameRow(row, header)))
   const updates: { range: string; values: Cell[][] }[] = []
   const additions: Cell[][] = []
   for (const row of rows) {
@@ -269,7 +270,7 @@ export async function upsertSheet(
     }
     updates.push({
       range: `${quotedTab(tab)}!${columnLetters(origin.column)}${origin.row + at}`,
-      values: [row]
+      values: cellsForInput([row], formulas)
     })
   }
   const ranges: string[] = []
@@ -286,7 +287,7 @@ export async function upsertSheet(
     ranges.push(...updates.map((update) => update.range))
   }
   if (additions.length > 0) {
-    ranges.push(await appendRows(api, sheet, tab, additions))
+    ranges.push(await appendRows(api, sheet, tab, cellsForInput(additions, formulas)))
   }
   return written(api, sheet, `Updated ${updates.length}, added ${additions.length}`, ranges)
 }

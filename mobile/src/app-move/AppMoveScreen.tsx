@@ -10,9 +10,9 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { useBackClaim } from '../navigation/use-back-claim'
 import { openExternalLink } from '../platform/external-links/external-link'
-import { colors, feedback, radii, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { feedback, radii, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import {
   keepRetiredApp,
   openDownloadFromPlayScreen,
@@ -72,7 +72,8 @@ function readLaunchedFromNotification(): boolean {
 /** Full-screen, blocking move guide for the retired GitHub Android app; Back never dismisses it. */
 export function AppMoveScreen() {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const insets = useSafeAreaInsets()
   const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
   const { screen, cameFromPlay } = useAppMoveState()
@@ -220,7 +221,7 @@ export function AppMoveScreen() {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   root: { ...StyleSheet.absoluteFill, backgroundColor: colors.bgBase },
   top: { height: 52, flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.sm },
   back: {

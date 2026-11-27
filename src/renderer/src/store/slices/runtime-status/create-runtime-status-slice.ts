@@ -1,3 +1,4 @@
+import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { createRuntimeEnvironmentStatusRetention } from './runtime-environment-status-retention'
 import type {
   RuntimeStatusSlice,
@@ -134,6 +135,10 @@ export const createRuntimeStatusSlice: (
           )
         : patch
     })
+    // A removed or replaced host's worker lineage must not nest a later host's rows.
+    for (const id of new Set([...removedIds, ...replacedEnvironmentIds])) {
+      get().setRuntimeAgentOrchestrationByPaneKey?.({}, toRuntimeExecutionHostId(id))
+    }
     // Prune removed environments’ agent/command caches; partial test stores may omit these slices.
     get().retainRuntimeDetectedAgents?.(environments.map((environment) => environment.id))
     get().retainRuntimeTerminalQuickCommands?.(environments.map((environment) => environment.id))
@@ -149,6 +154,7 @@ export const createRuntimeStatusSlice: (
     if (retiredEnvironmentIds.length > 0) {
       evictInstalledAgentSkillDiscoveryForRuntimeEnvironments(retiredEnvironmentIds)
       get().purgeStaleRuntimeHostState?.(retiredEnvironmentIds)
+      get().forgetAgentCliUpdateHosts?.(retiredEnvironmentIds)
       get().clearHostWorkspaceStatuses?.(retiredEnvironmentIds)
       retiredEnvironmentIds.forEach(dismissRuntimeDisconnectedToast)
     }

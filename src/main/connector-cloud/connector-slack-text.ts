@@ -26,7 +26,12 @@ export function slackActionArgs(args: ConnectorActionArgs): ConnectorActionArgs 
     ...args,
     ...(args.text === undefined ? {} : { text: redactLocalPaths(args.text) }),
     ...(args.title === undefined ? {} : { title: redactLocalPaths(args.title) }),
-    ...(args.items === undefined ? {} : { items: args.items.map((item) => redactLocalPaths(item)) })
+    ...(args.items === undefined
+      ? {}
+      : { items: args.items.map((item) => redactLocalPaths(item)) }),
+    ...(args.choices === undefined
+      ? {}
+      : { choices: args.choices.map((choice) => redactLocalPaths(choice)) })
   }
 }
 

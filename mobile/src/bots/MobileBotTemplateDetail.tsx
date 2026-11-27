@@ -4,14 +4,16 @@ import { LIST_ROW_PADDING, ListGroup, ListRow, SectionHeader } from '../componen
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { SheetPrimaryButton } from '../components/sheets/SheetPrimaryButton'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, radii, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { radii, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import { BOT_CONNECTOR_NAMES, type BotTemplate } from '../../../src/shared/bots/bot-templates'
 import {
-  BOT_TEMPLATE_SKILL_LINES,
-  botTemplateEventParts
-} from '../../../src/shared/bots/bot-template-view'
+  botTemplateEventWords,
+  botTemplateScheduleWords,
+  botTemplateSkillLine,
+  botTemplateSkillName,
+  botTemplateWord
+} from '../../../src/shared/bots/bot-template-text'
 import { MobileBotAvatar } from './MobileBotAvatar'
 import { useBotTemplateCategoryLabel } from './mobile-bot-template-labels'
 
@@ -20,14 +22,14 @@ export function MobileBotTemplateDetail(props: {
   onBack: () => void
   onUse: () => void
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const label = useBotTemplateCategoryLabel()
   const { template } = props
   return (
     <View style={styles.page}>
       <SheetHeader
-        title={template.name}
+        title={botTemplateWord(template, 'name', t)}
         subtitle={t('bots.templates.byOrca', '{{category}} · by Orca', {
           category: label(template.category)
         })}
@@ -40,7 +42,7 @@ export function MobileBotTemplateDetail(props: {
         <View style={styles.picture}>
           <MobileBotAvatar avatar={{ kind: 'mascot', id: template.mascot }} size={56} />
         </View>
-        <Text style={[styles.body, styles.line]}>{template.line}</Text>
+        <Text style={[styles.body, styles.line]}>{botTemplateWord(template, 'line', t)}</Text>
         <View style={styles.use}>
           <SheetPrimaryButton
             label={t('bots.templates.useTemplate', 'Use template…')}
@@ -48,18 +50,20 @@ export function MobileBotTemplateDetail(props: {
           />
         </View>
         <View style={styles.example}>
-          {template.example.map((line) => (
-            <Text key={line} style={styles.body}>
-              {line}
+          {(['example1', 'example2'] as const).map((field) => (
+            <Text key={field} style={styles.body}>
+              {botTemplateWord(template, field, t)}
             </Text>
           ))}
         </View>
         <SectionHeader title={t('bots.templates.firstChat', 'What it does first')} />
-        <Text style={[styles.body, styles.inset]}>{template.firstChat}</Text>
+        <Text style={[styles.body, styles.inset]}>{botTemplateWord(template, 'firstChat', t)}</Text>
         {template.needsSetup ? (
           <>
             <SectionHeader title={t('bots.templates.needsSetup', 'Needs setup')} />
-            <Text style={[styles.body, styles.inset]}>{template.needsSetup}</Text>
+            <Text style={[styles.body, styles.inset]}>
+              {botTemplateWord(template, 'needsSetup', t)}
+            </Text>
           </>
         ) : null}
         <SectionHeader title={t('bots.templates.comesWith', 'Comes with')} />
@@ -67,23 +71,26 @@ export function MobileBotTemplateDetail(props: {
           {template.skills.map((skill) => (
             <ListRow
               key={`skill:${skill}`}
-              title={skill}
-              subtitle={BOT_TEMPLATE_SKILL_LINES[skill]}
+              title={botTemplateSkillName(skill, t)}
+              subtitle={botTemplateSkillLine(skill, t)}
               subtitleLines={0}
             />
           ))}
-          {template.schedules.map((schedule) => (
-            <ListRow
-              key={`schedule:${schedule.id}`}
-              title={schedule.when}
-              wrapTitle
-              subtitle={schedule.what}
-              subtitleLines={0}
-              value={t('bots.templates.stateOff', 'Off')}
-            />
-          ))}
+          {template.schedules.map((schedule) => {
+            const words = botTemplateScheduleWords(template, schedule, t)
+            return (
+              <ListRow
+                key={`schedule:${schedule.id}`}
+                title={words.when}
+                wrapTitle
+                subtitle={words.what}
+                subtitleLines={0}
+                value={t('bots.templates.stateOff', 'Off')}
+              />
+            )
+          })}
           {template.events.map((event) => {
-            const parts = botTemplateEventParts(event.name)
+            const parts = botTemplateEventWords(template, event, t)
             return (
               <ListRow
                 key={`event:${event.id}`}
@@ -113,7 +120,7 @@ export function MobileBotTemplateDetail(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   page: { flex: 1, backgroundColor: colors.sheetSurface },
   scroll: { flex: 1 },
   picture: { alignItems: 'center', paddingBottom: spacing.sm },

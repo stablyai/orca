@@ -1,115 +1,122 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../../db/orchestration-db'
 import '../../db/contract-constants'
 import '../../db/messages/mailbox-routing-page'
 import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
-import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { observeUnconfirmedWorkerStart } from './unconfirmed-worker-start'
+import { WORKER_AGENT_STARTING_STAGE } from '../../db/worker-dispatch/worker-awaiting-agent-stage'
+import { readWorkerPresence } from '../../db/worker-presence/worker-presence-store'
+import { observeHeldMailNotice, observeUnconfirmedWorkerStart } from './unconfirmed-worker-start'
 import { observeWorker } from './worker-presence-report'
 
-const SUBJECT = "Worker's brief may not have been submitted"
+describe('a start whose agent was still starting when Orca restarted', () => {
+  let db: OrchestrationDb
 
-function unknownStart(stage: string, seenWorkingFirst = false) {
-  const db = new OrchestrationDb(':memory:')
-  const run = db.createRun({
-    objective: 'unconfirmed start',
-    coordinatorHandle: 'term_coordinator',
-    coordinatorPaneKey: makePaneKey('tab-coordinator', '22222222-2222-4222-8222-222222222222')
+  afterEach(() => db?.close())
+
+  it('is told to its coordinator by the restart pass', () => {
+    db = new OrchestrationDb(':memory:')
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'work' })
+    const started = db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      taskId: task.id,
+      startOptions: {}
+    })
+    const dispatchId = started.dispatch.id
+    db.prepareStartingWorkerAuthority({
+      dispatchId,
+      handle: 'term_worker',
+      paneKey: 'tab_worker:11111111-1111-4111-8111-111111111111',
+      processIncarnation: 'worker:1',
+      worktreeId: 'repo::worktree',
+      setupState: 'not_applicable',
+      effects: []
+    })
+    db.markWorkerStartUnknown(dispatchId, WORKER_AGENT_STARTING_STAGE, 'still starting')
+
+    // The new process holds the earlier process's brief, so only this alert says the start is undecided.
+    observeUnconfirmedWorkerStart(
+      db,
+      dispatchId,
+      { surface: 'chat' },
+      { getDb: () => db, isWaitingForMail: () => false, notify: () => {} }
+    )
+
+    expect(readWorkerPresence(db, dispatchId)).toMatchObject({
+      presence: 'resting',
+      fence: 'start-unconfirmed'
+    })
   })
-  const task = db.createTask({ spec: 'do the work', runId: run.id })
-  const { dispatch } = db.createStartingWorkerDispatch({
-    creator: { kind: 'system' },
-    maxDepth: Number.MAX_SAFE_INTEGER,
-    taskId: task.id,
-    startOptions: {}
+})
+
+describe('a mailbox notice still in a terminal worker prompt after its Enters', () => {
+  let db: OrchestrationDb
+
+  afterEach(() => db?.close())
+
+  const deps = () => ({ getDb: () => db, isWaitingForMail: () => false, notify: () => {} })
+  const notice = (newestMessageId: string) => ({
+    from: 'term_worker',
+    newestMessageId,
+    screen: '> notice'
   })
-  db.prepareStartingWorkerAuthority({
-    dispatchId: dispatch.id,
-    handle: 'term_worker',
-    paneKey: makePaneKey('tab-worker', '11111111-1111-4111-8111-111111111111'),
-    processIncarnation: 'worker:1',
-    worktreeId: 'repo::worktree',
-    setupState: 'not_applicable',
-    effects: []
-  })
-  const deps = { getDb: () => db, isWaitingForMail: () => false, notify: vi.fn() }
-  if (seenWorkingFirst) {
-    observeWorker(db, { kind: 'local', dispatch }, { presence: 'working' }, deps)
+
+  function localWorker() {
+    db = new OrchestrationDb(':memory:')
+    const run = db.createRun({
+      objective: 'work',
+      coordinatorHandle: 'term_coordinator',
+      coordinatorPaneKey: null
+    })
+    const task = db.createTask({ runId: run.id, spec: 'work' })
+    const dispatch = db.createDispatchContext({
+      taskId: task.id,
+      assigneeHandle: 'term_worker',
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER
+    })
+    return { kind: 'local' as const, dispatch }
   }
-  db.markWorkerStartUnknown(dispatch.id, stage, 'not seen')
-  const alerts = () =>
-    db
-      .getUnreadRunMailbox(run.id, 100, ['escalation'])
-      .filter((message) => message.subject === SUBJECT)
-  return { db, dispatchId: dispatch.id, target: { kind: 'local' as const, dispatch }, deps, alerts }
-}
 
-describe('an unconfirmed worker start', () => {
-  it('tells a chat worker’s coordinator to check the chat, not to press Enter', () => {
-    const { db, dispatchId, deps, alerts } = unknownStart('turn_start_unobserved')
+  const reports = () =>
+    db.db
+      .prepare('SELECT subject FROM messages WHERE from_handle = ?')
+      .all('term_worker')
+      .map((row) => String(row?.subject))
 
-    observeUnconfirmedWorkerStart(db, dispatchId, { surface: 'chat' }, deps)
+  it('is told to its coordinator once per notice', () => {
+    const target = localWorker()
 
-    expect(alerts()).toHaveLength(1)
-    expect(alerts()[0]?.body).toContain(`\`orchestration worker-show --dispatch ${dispatchId}\``)
-    expect(alerts()[0]?.body).not.toContain('terminal send')
+    observeHeldMailNotice(db, target, notice('msg_1'), deps())
+    observeHeldMailNotice(db, target, notice('msg_1'), deps())
+
+    expect(reports()).toEqual(["Worker's mailbox notice may not have been submitted"])
   })
 
-  it('stays quiet for a start that never handed its brief over', () => {
-    const { db, dispatchId, deps, alerts } = unknownStart('agent_readiness')
+  it('is not told, and leaves the presence working, once a turn was seen', () => {
+    const target = localWorker()
+    observeWorker(db, target, { presence: 'working' }, deps())
 
-    observeUnconfirmedWorkerStart(db, dispatchId, { surface: 'terminal' }, deps)
+    observeHeldMailNotice(db, target, notice('msg_1'), deps())
 
-    expect(alerts()).toEqual([])
+    expect(reports()).toEqual([])
+    expect(readWorkerPresence(db, target.dispatch.id)?.presence).toBe('working')
   })
 
-  it('is not sent again once the worker was seen at rest after it, which proves it ran', () => {
-    const { db, dispatchId, target, deps, alerts } = unknownStart('dispatch_input')
-    observeUnconfirmedWorkerStart(db, dispatchId, { surface: 'terminal' }, deps)
-    observeWorker(
-      db,
-      target,
-      {
-        presence: 'at-rest',
-        fence: 'term_worker:1',
-        legacyStopKey: 'rest',
-        rest: { from: 'term_worker', reason: 'needs-input', lastOutput: undefined }
-      },
-      deps
-    )
+  it("is relayed to a paired server worker's Run home", () => {
+    db = new OrchestrationDb(':memory:')
+    const target = {
+      kind: 'remote' as const,
+      attachment: { dispatch_id: 'dsp_remote', task_id: 'task_remote' }
+    }
 
-    observeUnconfirmedWorkerStart(db, dispatchId, { surface: 'terminal' }, deps)
+    observeHeldMailNotice(db, target, notice('msg_1'), deps())
 
-    expect(alerts()).toHaveLength(1)
-    expect(db.getWorkerDispatch(dispatchId)?.state).toBe('ready')
-  })
-
-  it('marks a worker seen working before the verdict ready instead of alerting', () => {
-    const { db, dispatchId, deps, alerts } = unknownStart('dispatch_input', true)
-
-    observeUnconfirmedWorkerStart(db, dispatchId, { surface: 'terminal' }, deps)
-
-    expect(alerts()).toEqual([])
-    expect(db.getWorkerDispatch(dispatchId)?.state).toBe('ready')
-  })
-
-  it('marks the start ready on a rest seen with no turn start before it', () => {
-    const { db, dispatchId, target, deps } = unknownStart('turn_start_unobserved')
-
-    observeWorker(
-      db,
-      target,
-      {
-        presence: 'at-rest',
-        fence: 'term_worker:1',
-        legacyStopKey: 'rest',
-        rest: { from: 'term_worker', reason: 'needs-input', lastOutput: undefined }
-      },
-      deps
-    )
-
-    expect(db.getWorkerDispatch(dispatchId)?.state).toBe('ready')
-    expect(db.getTask(target.dispatch.task_id)?.status).toBe('dispatched')
+    const relayed = db.db
+      .prepare('SELECT payload FROM federation_relay_items WHERE dispatch_id = ?')
+      .all('dsp_remote')
+      .map((row) => JSON.parse(String(row?.payload)).subject)
+    expect(relayed).toEqual(["Worker's mailbox notice may not have been submitted"])
   })
 })

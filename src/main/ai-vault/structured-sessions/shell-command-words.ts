@@ -1,4 +1,5 @@
 // One-pass tokenization for the resume guard’s limited shell syntax.
+import { ENV_VALUE_FLAGS } from '../../../shared/shell/launch/command-environment'
 
 const BLANKS = /[^\S\r\n]+/y
 // Unquoted text, or a redirection: `>&`, `<&` and `&>` do not end a command.
@@ -110,13 +111,24 @@ const LAUNCHERS = new Set([
   'wsl',
   'wsl.exe'
 ])
+// Launcher options that take the next word: `env -u CODEX_HOME codex` runs codex.
+const LAUNCHER_VALUE_FLAGS = new Map<string, ReadonlySet<string>>([
+  ['env', ENV_VALUE_FLAGS],
+  ['sudo', new Set(['-u', '-g', '--user', '--group'])]
+])
 
 /** Skip environment assignments and known launchers to find the program; return -1 if absent. */
 export function commandProgramIndex(words: readonly string[]): number {
-  let launched = false
+  let launcher = ''
   for (let index = 0; index < words.length; index += 1) {
     const word = words[index]!
-    if (ASSIGNMENT.test(word) || (launched && word.startsWith('-'))) {
+    if (ASSIGNMENT.test(word)) {
+      continue
+    }
+    if (launcher && word.startsWith('-')) {
+      if (LAUNCHER_VALUE_FLAGS.get(launcher)?.has(word)) {
+        index += 1
+      }
       continue
     }
     const name = commandName(word)
@@ -125,7 +137,7 @@ export function commandProgramIndex(words: readonly string[]): number {
     } else if (!LAUNCHERS.has(name)) {
       return index
     }
-    launched = true
+    launcher = name
   }
   return -1
 }
