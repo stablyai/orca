@@ -171,13 +171,14 @@ const MobileAgentListRow = memo(function MobileAgentListRow(props: {
   const needsYou = group === 'needs-you'
   const stateWord = needsYou ? agentStateLabel(row.dotState, t) : ''
   const spokenState = row.dotState === 'monitoring' ? agentStateLabel(row.dotState, t) : stateWord
-  const place = [
-    props.footer === 'project-workspace' ? agentListProjectName(row.entry) : null,
+  const project = props.footer === 'project-workspace' ? agentListProjectName(row.entry) : null
+  const where = [
     props.footer === 'agent' ? formatAgentTypeLabel(agent.agentType) : row.entry.workspaceName,
     props.nameDesktop ? desktop : null
   ]
     .filter(Boolean)
     .join(' · ')
+  const place = project ? `${project} · ${where}` : where
   const time = row.timeAt > 0 ? formatTimeAgo(row.timeAt, props.now, t) : ''
   const workerCount = row.workers.length
   const workersLabel =
@@ -312,9 +313,21 @@ const MobileAgentListRow = memo(function MobileAgentListRow(props: {
               ) : agent.agentType ? (
                 <MobileAgentIcon agentId={agent.agentType} size={13} />
               ) : null}
-              <Text style={styles.place} numberOfLines={1}>
-                {place}
-              </Text>
+              {project ? (
+                // Its own line so a long repo name truncates without hiding the workspace.
+                <View style={styles.placeLine}>
+                  <Text style={[styles.place, styles.project]} numberOfLines={1}>
+                    {project}
+                  </Text>
+                  <Text style={styles.place} numberOfLines={1}>
+                    {` · ${where}`}
+                  </Text>
+                </View>
+              ) : (
+                <Text style={styles.place} numberOfLines={1}>
+                  {place}
+                </Text>
+              )}
               <View style={styles.trailing}>
                 {unread ? (
                   <Bell size={12} color={colors.statusAmber} fill={colors.statusAmber} />
@@ -360,6 +373,8 @@ const stylesSheet = themedStyleSheet((colors) => ({
   stateFailed: { color: colors.statusRed, fontWeight: '600' },
   footer: { flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 0 },
   place: { flexShrink: 1, fontSize: 12, color: colors.textMuted },
+  placeLine: { flexDirection: 'row', flexShrink: 1, minWidth: 0 },
+  project: { maxWidth: '50%' },
   trailing: { flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: 'auto' },
   workers: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   workersLabel: { fontSize: 12, fontWeight: '500', color: colors.textSecondary },
