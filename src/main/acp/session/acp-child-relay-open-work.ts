@@ -34,17 +34,21 @@ export function acpChildRelayOpenWork(
 /** See `StructuredAgentSessionAdapter.keptLaunchOutgrown`; only a ready chat's kept agent answers. */
 export async function acpChildKeptLaunchOutgrown(
   session: AcpStructuredChild | undefined,
-  toolsOutdated: boolean
-): Promise<boolean | undefined> {
+  toolsOutdated: boolean,
+  owesWork: () => Promise<boolean>
+): Promise<boolean | 'pending' | undefined> {
   const kept = isAcpReadySession(session) ? session.connection.kept : null
   // OMP's background work is invisible here (above), so no tools refresh, this one or Orca's
   // ordinary comparison, ends its kept agent: it keeps the tools it has.
   if (session?.spec.agent === 'omp') {
     return kept ? false : undefined
   }
-  // An idle kept agent waits for its replay only when a tools refresh could follow: one owing a
-  // fresh agent, or the host's tools changed since launch.
-  if (kept && session?.turns?.running === false && (kept.freshOwed || toolsOutdated)) {
+  // A kept agent waits for its replay only when a tools refresh could follow (one owing a fresh
+  // agent, or the host's tools changed since launch) and it owes no work that would keep it.
+  if (kept && (kept.freshOwed || toolsOutdated)) {
+    if (await owesWork()) {
+      return false
+    }
     await kept.replaySettled()
   }
   return kept?.launchOutgrown

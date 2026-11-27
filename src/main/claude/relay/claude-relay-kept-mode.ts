@@ -116,24 +116,34 @@ function readKeptMode(line: string): string | null | undefined {
   }
 }
 
+/** The answer `StructuredAgentSessionAdapter.keptLaunchOutgrown` gives for a kept agent. */
+export type ClaudeKeptLaunchOutgrown = (
+  toolsOutdated: boolean,
+  owesWork: () => Promise<boolean>
+) => Promise<boolean | 'pending' | undefined>
+
 /** See `StructuredAgentSessionAdapter.keptLaunchOutgrown`, for an agent reattached for a launch
- *  with these MCP servers (and app-bound grants it lacks, when `appBound`): a fresh agent is owed when it
- *  lacks either, and not before the reattach's replay is acked; with no turn running, the owed
- *  check waits for that ack first (bounded). */
+ *  with these MCP servers (and app-bound grants it lacks, when `appBound`): a fresh agent is owed
+ *  when it lacks either. Only when a refresh could follow, and it owes no work, does it wait
+ *  (bounded) for the reattach's replay to be acked; until then an owed one is `pending`. */
 export async function claudeKeptLaunchOutgrown(
   child: RelayedProviderChild,
   launch: { mcpServers?: Readonly<Record<string, McpServerConfig>> },
   appBound?: true
-): Promise<(turnRunning: boolean) => Promise<boolean | undefined>> {
+): Promise<ClaudeKeptLaunchOutgrown> {
   // A key that can't be made matches no note: a fresh agent is owed.
   const key = await claudeLaunchToolsKey(launch.mcpServers).catch(() => '')
   const owed = appBound === true || claudeKeptToolsOutgrown(child, key)
-  return async (turnRunning) => {
-    if (owed && !turnRunning) {
-      await settleRelayedReplay(child)
+  return async (toolsOutdated, owesWork) => {
+    if (!owed && !toolsOutdated) {
+      return child.replayAcked() ? undefined : false
     }
-    if (!child.replayAcked()) {
+    if (await owesWork()) {
       return false
+    }
+    await settleRelayedReplay(child)
+    if (!child.replayAcked()) {
+      return owed ? 'pending' : false
     }
     return owed || undefined
   }

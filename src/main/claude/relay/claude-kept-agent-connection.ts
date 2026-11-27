@@ -37,7 +37,7 @@ export type ClaudeKeptAgentRelay = {
   /** It runs the user's own Claude settings, as launched: only then does that choice keep it. */
   ownSettings: boolean
   /** Reattached for a launch whose tools it lacks: a fresh agent is due once its replay is acked. */
-  launchOutgrown: (turnRunning: boolean) => Promise<boolean | undefined>
+  launchOutgrown: Awaited<ReturnType<typeof claudeKeptLaunchOutgrown>>
 }
 
 export type ClaudeKeptAgentConnection = ClaudeStreamJsonConnection & {

@@ -201,12 +201,12 @@ export function requiresAcquisition(
 }
 
 /** See `StructuredAgentSessionAdapter.keptLaunchOutgrown`: a kept agent the launch's tools outgrew
- *  is replaced, like a tools change, only once its replay is durable; none answers for others. */
+ *  is replaced, like a tools change, only once it owes no work and its replay is durable. */
 export function launchOutgrown(sessions: Sessions): NonNullable<Adapter['keptLaunchOutgrown']> {
-  return async (sessionId) => {
+  return async (sessionId, toolsOutdated, owesWork) => {
     const session = keptSession(sessions, sessionId)
-    const running = (session?.translator?.currentTurnId ?? null) !== null
-    return session ? keptClaudeAgentRelay(session.connection)?.launchOutgrown(running) : undefined
+    const relay = session ? keptClaudeAgentRelay(session.connection) : null
+    return relay?.launchOutgrown(toolsOutdated, owesWork)
   }
 }
 
