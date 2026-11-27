@@ -16449,7 +16449,6 @@
           "failed": "Falhou",
           "succeeded": "Bem-sucedida",
           "neverRan": "Nunca executada",
-          "filters": "Filtros",
           "all": "Todas",
           "clear": "Limpar filtros",
           "agent": "Agente",

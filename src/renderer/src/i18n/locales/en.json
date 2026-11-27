@@ -19739,7 +19739,6 @@
           "failed": "Failed",
           "succeeded": "Succeeded",
           "neverRan": "Never ran",
-          "filters": "Filters",
           "all": "All",
           "clear": "Clear filters",
           "agent": "Agent",

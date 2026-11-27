@@ -18555,7 +18555,6 @@
           "failed": "失敗",
           "succeeded": "成功",
           "neverRan": "未実行",
-          "filters": "フィルター",
           "clear": "フィルターをクリア",
           "removeFilter": "{{value0}} フィルターを解除"
         },
