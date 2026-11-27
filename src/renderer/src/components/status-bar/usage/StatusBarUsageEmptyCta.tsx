@@ -8,6 +8,8 @@ import { useAppStore } from '../../../store/index'
 import { ClaudeIcon, OpenAIIcon, OpenCodeGoIcon } from '../accounts/provider-icons'
 import { useTranslate } from '@/i18n/use-translate'
 import { getUsageOwnerHostScope, type RemoteUsageOwner } from './use-owner-usage-rate-limits'
+import { UsageErrorAlert } from './UsageErrorAlert'
+import { cn } from '@/lib/class-names'
 
 // Name the empty usage surface and route setup to its owning host; client-local setup cannot fill a remote bar.
 export function StatusBarUsageEmptyCta({
@@ -54,16 +56,21 @@ export function StatusBarUsageEmptyCta({
           disabled={getUsageOwnerHostScope(remoteOwner) === null}
           onClick={handleOpenSettings}
           aria-label={label}
-          className="inline-flex h-5 cursor-pointer items-center gap-1.5 rounded px-1.5 text-xs font-normal text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground"
+          className={cn(
+            'inline-flex h-5 cursor-pointer items-center rounded px-1.5 text-xs font-normal text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground',
+            remoteOwner ? 'gap-1' : 'gap-1.5'
+          )}
         >
+          {/* Why no text when remote: it is a placeholder like the chips' alerts; the card says why. */}
+          {remoteOwner ? <UsageErrorAlert label={label} /> : null}
           <BarChart3 className="size-3.5" />
-          <span>{label}</span>
+          {remoteOwner ? null : <span>{label}</span>}
         </button>
       </HoverCardTrigger>
       <HoverCardContent side="top" align="start" sideOffset={8} className="w-[260px] p-2.5">
         <div className="space-y-2 text-xs leading-[1.45]">
           <div className="flex items-start justify-between gap-2">
-            <div className="font-semibold text-foreground">
+            <div className="min-w-0 font-semibold break-words text-foreground">
               {remoteOwner
                 ? t(
                     'auto.components.status.bar.StatusBarUsageEmptyCta.remoteTitle',
@@ -121,16 +128,18 @@ export function StatusBarUsageEmptyCta({
             onClick={handleOpenSettings}
             className="mt-0.5 h-7 w-full text-xs"
           >
-            {remoteOwner
-              ? t(
-                  'auto.components.status.bar.StatusBarUsageEmptyCta.remoteOpenAccounts',
-                  'Open {{host}} accounts',
-                  { host: remoteOwner.label }
-                )
-              : t(
-                  'auto.components.status.bar.StatusBarUsageEmptyCta.828c764a79',
-                  'Connect an account'
-                )}
+            <span className="min-w-0 truncate">
+              {remoteOwner
+                ? t(
+                    'auto.components.status.bar.StatusBarUsageEmptyCta.remoteOpenAccounts',
+                    'Open {{host}} accounts',
+                    { host: remoteOwner.label }
+                  )
+                : t(
+                    'auto.components.status.bar.StatusBarUsageEmptyCta.828c764a79',
+                    'Connect an account'
+                  )}
+            </span>
           </Button>
         </div>
       </HoverCardContent>

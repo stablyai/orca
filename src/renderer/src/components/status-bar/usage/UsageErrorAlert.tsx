@@ -5,21 +5,20 @@ import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-
 import { getProviderDisplayName } from '../../../../../shared/agent-usage/display/usage-provider-windows'
 import {
   getProviderUsageStatusLabel,
-  isClaudeUsageWaitingForClaude
+  isUsageWaitingForCli
 } from '../../../../../shared/agent-usage/status-copy/usage-error-copy'
 import { getTightestUsageSection } from './usage-headline-sections'
 
 /** "<Provider>: <message>" for a chip that shows only the alert, else null. */
 export function getUsageErrorAlertLabel(p: ProviderRateLimits, t: Translate): string | null {
-  if (
-    p.status !== 'error' ||
-    p.usageMetadata?.ownerNotSetUp ||
-    isClaudeUsageWaitingForClaude(p) ||
-    getTightestUsageSection(p, t, 'all')
-  ) {
+  const name = getProviderDisplayName(p.provider)
+  if (p.status === 'unavailable') {
+    return `${name}: ${t('auto.components.status.bar.UsageRosterPanel.usageUnavailable', 'Usage unavailable')}`
+  }
+  if (p.status !== 'error' || isUsageWaitingForCli(p) || getTightestUsageSection(p, t, 'all')) {
     return null
   }
-  return `${getProviderDisplayName(p.provider)}: ${getProviderUsageStatusLabel(p, t)}`
+  return `${name}: ${getProviderUsageStatusLabel(p, t)}`
 }
 
 /**
