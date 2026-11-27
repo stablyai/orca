@@ -7977,7 +7977,11 @@
         "signIn": "登录 GitHub",
         "pickSubtitle": "选择它可以使用的仓库"
       },
-      "allRepositoriesShort": "所有仓库"
+      "allRepositoriesShort": "所有仓库",
+      "ghSignedOut": {
+        "line": "{{host}} 上的 gh 未登录。请在该电脑上运行 gh auth login。",
+        "copy": "复制 {{text}}"
+      }
     },
     "connect": {
       "finishOnHost": "请在 {{host}} 上的 Orca 中完成 {{service}} 的连接",
