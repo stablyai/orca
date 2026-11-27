@@ -10,10 +10,9 @@ import {
   type MenuBarQACommand,
   type MenuBarSnapshot
 } from './mac-menu-bar-protocol'
+import { MenuBarRestartPolicy } from './mac-menu-bar-restart-policy'
 // Only an outstanding reply arms a deadline, so an idle helper costs main no timer; the helper exits itself on a UI stall.
 const REPLY_TIMEOUT = 15_000
-// Consecutive helpers that never showed the icon before main falls back to the in-process tray.
-const MAX_FAILED_STARTS = 3
 type Generation = {
   child: ChildProcessWithoutNullStreams
   exited: Promise<void>
@@ -45,8 +44,7 @@ export class MacMenuBarProcess {
   private desired: MenuBarSnapshot | null = null
   private revision = 0
   private created = false
-  private failedStarts = 0
-  private retryDelay = 1_000
+  private readonly restarts = new MenuBarRestartPolicy()
   private timer: ReturnType<typeof setTimeout> | null = null
   private suspended = false
   private stopped = false
@@ -106,7 +104,7 @@ export class MacMenuBarProcess {
       child = spawnMenuBarChild(this.options.spawn, this.options.qa, this.options.executable)
     } catch (error) {
       console.warn('[menu-bar] helper could not start', error)
-      this.retry()
+      this.afterFailedGeneration(false, performance.now())
       return
     }
     let observeExit!: () => void
@@ -151,16 +149,7 @@ export class MacMenuBarProcess {
       if (this.stopped) {
         return
       }
-      this.failedStarts = generation.appliedRevision > 0 ? 0 : this.failedStarts + 1
-      // A helper that dies soon after showing the icon keeps backing off.
-      this.retryDelay = performance.now() - generation.started > 60_000 ? 1_000 : this.retryDelay
-      if (this.failedStarts >= MAX_FAILED_STARTS) {
-        console.warn('[menu-bar] helper keeps failing; falling back to the in-process icon')
-        this.stopped = true
-        this.options.onUnavailable?.()
-        return
-      }
-      this.retry()
+      this.afterFailedGeneration(generation.appliedRevision > 0, generation.started)
     }
     child.once('exit', finish)
     const fault = (): void => {
@@ -197,6 +186,9 @@ export class MacMenuBarProcess {
           generation.ready = true
           this.disarm(generation)
           this.flush()
+        } else if (message.type === 'deferred' && message.id === generation.sentRevision) {
+          // The menu is open; the helper applies on close and its own watchdog covers a stall.
+          this.disarm(generation)
         } else if (message.type === 'applied' && message.id === generation.sentRevision) {
           const first = generation.appliedRevision === 0
           generation.appliedRevision = message.id
@@ -302,9 +294,15 @@ export class MacMenuBarProcess {
     this.timer.unref()
   }
 
-  private retry(): void {
-    this.schedule(this.retryDelay)
-    this.retryDelay = Math.min(this.retryDelay * 2, 60_000)
+  private afterFailedGeneration(showedIcon: boolean, started: number): void {
+    const delay = this.restarts.next(showedIcon, performance.now() - started)
+    if (delay === null) {
+      console.warn('[menu-bar] helper keeps failing; falling back to the in-process icon')
+      this.stopped = true
+      this.options.onUnavailable?.()
+      return
+    }
+    this.schedule(delay)
   }
 
   private retire(generation: Generation): Promise<void> {

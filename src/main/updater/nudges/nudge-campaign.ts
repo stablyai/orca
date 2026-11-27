@@ -1,6 +1,6 @@
 import { net } from 'electron'
 import { compareVersions, isValidVersion } from '../releases/updater-fallback'
-import { parseRolloutConfig, recordRolloutConfig } from '../rollout/rollout-flags'
+import { recordRolloutPayload } from '../rollout/rollout-flags'
 
 export type NudgeConfig = {
   id: string
@@ -21,11 +21,8 @@ export async function fetchNudge(): Promise<NudgeConfig | null> {
     if (!json || typeof json !== 'object' || Array.isArray(json)) {
       return null
     }
-    // Rides the campaign poll; an unreadable block keeps the last good one so a kill switch can't drop.
-    const rollout = parseRolloutConfig(json)
-    if (rollout) {
-      void recordRolloutConfig(rollout)
-    }
+    // Rides the campaign poll, independent of whether a nudge is active.
+    void recordRolloutPayload(json)
 
     const { id, minVersion, maxVersion } = json as Record<string, unknown>
     if (typeof id !== 'string' || !id.trim()) {

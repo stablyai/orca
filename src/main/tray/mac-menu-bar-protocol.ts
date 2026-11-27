@@ -21,7 +21,7 @@ export const FRAME_LIMIT = 256 * 1024
 const ACTIONS = new Set(['open', 'settings', 'updates', 'quit-completely', 'quit'])
 type Message =
   | { type: 'ready' }
-  | { type: 'applied' | 'pong'; id: number }
+  | { type: 'applied' | 'deferred' | 'pong'; id: number }
   | { type: 'action'; sequence: number; action: MenuBarAction }
   | { type: 'qa'; [key: string]: unknown }
 
@@ -45,7 +45,7 @@ export class MenuBarOutput {
         !(
           message.type === 'ready' ||
           message.type === 'qa' ||
-          ((message.type === 'applied' || message.type === 'pong') &&
+          ((message.type === 'applied' || message.type === 'deferred' || message.type === 'pong') &&
             Number.isSafeInteger(message.id) &&
             message.id > 0) ||
           (message.type === 'action' &&

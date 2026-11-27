@@ -49,17 +49,22 @@ const campaignRolloutSchema = lazyZodSchema(() =>
   })
 )
 
-/** Reads the optional `rollout` block of a campaign payload; anything unreadable is null. */
-export function parseRolloutConfig(payload: unknown): RolloutConfig | null {
+/** Reads the optional `rollout` block; an unreadable entry keeps `previous`'s so a typo can't drop a kill switch. */
+export function parseRolloutConfig(
+  payload: unknown,
+  previous: RolloutConfig | null = null
+): RolloutConfig | null {
   const campaign = campaignRolloutSchema.safeParse(payload)
   if (!campaign.success) {
     return null
   }
   const config: RolloutConfig = {}
   for (const name of ROLLOUT_FLAG_NAMES) {
-    const parsed = rolloutFlagEntrySchema.safeParse(campaign.data.rollout.flags[name])
-    if (parsed.success) {
-      config[name] = parsed.data
+    const raw = campaign.data.rollout.flags[name]
+    const parsed = rolloutFlagEntrySchema.safeParse(raw)
+    const entry = parsed.success ? parsed.data : raw === undefined ? undefined : previous?.[name]
+    if (entry) {
+      config[name] = entry
     }
   }
   return config
@@ -103,6 +108,7 @@ export function resolveRolloutFlag(name: RolloutFlagName, context: RolloutFlagCo
 const CACHE_FILE = 'rollout-flags.json'
 let cachedConfig: RolloutConfig | null = null
 let cachedText: string | null = null
+let lastRecorded: RolloutConfig | null = null
 let loading: Promise<void> | null = null
 
 /** Launch-time flips read the last received block; a new block applies from the next launch. */
@@ -111,6 +117,7 @@ export function loadCachedRolloutConfig(): Promise<void> {
     (text) => {
       cachedText = text
       cachedConfig = parseRolloutConfig({ rollout: { version: 1, flags: JSON.parse(text) } })
+      lastRecorded = cachedConfig
     },
     () => {}
   )
@@ -121,10 +128,14 @@ export function cachedRolloutConfig(): RolloutConfig | null {
   return cachedConfig
 }
 
-/** Saves each successfully read block; a failed fetch keeps the last one so a network blip can't lift a kill switch. */
-export async function recordRolloutConfig(config: RolloutConfig): Promise<void> {
-  const text = JSON.stringify(config)
+/** Saves each readable block; a failed fetch or unreadable block keeps the last one so a kill switch can't lift. */
+export async function recordRolloutPayload(payload: unknown): Promise<void> {
   await loadCachedRolloutConfig()
+  const config = parseRolloutConfig(payload, lastRecorded)
+  if (!config) {
+    return
+  }
+  const text = JSON.stringify(config)
   if (text === cachedText) {
     return
   }
@@ -134,6 +145,7 @@ export async function recordRolloutConfig(config: RolloutConfig): Promise<void> 
     await writeFile(tmp, text, 'utf8')
     await rename(tmp, target)
     cachedText = text
+    lastRecorded = config
   } catch (error) {
     await rm(tmp, { force: true }).catch(() => {})
     console.warn('[rollout] could not save rollout flags', error)
@@ -143,5 +155,6 @@ export async function recordRolloutConfig(config: RolloutConfig): Promise<void> 
 export function resetRolloutConfigForTests(): void {
   cachedConfig = null
   cachedText = null
+  lastRecorded = null
   loading = null
 }

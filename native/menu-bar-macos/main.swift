@@ -63,7 +63,8 @@ private final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate {
       RunLoop.main.perform(inModes: [.common]) { emit(["type": "pong", "id": id]) }
       CFRunLoopWakeUp(CFRunLoopGetMain())
     } else if command.type == "state", command.id != nil, command.snapshot != nil {
-      RunLoop.main.perform(inModes: [.default]) {
+      // Common modes: an open menu still acknowledges (deferred) so Orca doesn't kill a healthy helper.
+      RunLoop.main.perform(inModes: [.common]) {
         self.pending = command
         self.applyPending()
       }
@@ -76,6 +77,10 @@ private final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate {
   }
 
   private func applyPending() {
+    if tracking, let id = pending?.id, id > 0 {
+      emit(["type": "deferred", "id": id])
+      return
+    }
     guard !tracking, let command = pending, let snapshot = command.snapshot, let id = command.id, id > 0 else { return }
     pending = nil
     guard snapshot.menu.count <= 16, snapshot.images.count <= 2, !snapshot.images.isEmpty else { _exit(1) }

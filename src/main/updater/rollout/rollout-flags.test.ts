@@ -34,3 +34,13 @@ describe('mac-menu-bar-helper rollout', () => {
     ).toBe(false)
   })
 })
+
+it('keeps a saved kill switch when the next entry is unreadable, and drops it only when removed', () => {
+  const off = flags({ state: 'off' })
+  const payload = (entry: unknown) => ({
+    rollout: { version: 1, flags: entry === undefined ? {} : { 'mac-menu-bar-helper': entry } }
+  })
+  expect(parseRolloutConfig(payload({ state: 'off', percent: '0' }), off)).toEqual(off)
+  expect(parseRolloutConfig(payload(undefined), off)).toEqual({})
+  expect(parseRolloutConfig({ id: 'campaign' }, off)).toBeNull()
+})

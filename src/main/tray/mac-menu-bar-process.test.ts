@@ -140,6 +140,17 @@ it('keeps no timer while an idle helper shows the icon and replaces one that mis
   expect(helper.kill).toHaveBeenCalledWith('SIGKILL')
 })
 
+it('keeps a helper whose open menu defers an update', () => {
+  const { process } = owner()
+  const helper = helpers[0]
+  helper.send({ type: 'ready' })
+  helper.send({ type: 'applied', id: helper.requests[0].id })
+  process.update({ ...snapshot, tooltip: 'while the menu is open' })
+  helper.send({ type: 'deferred', id: helper.requests.at(-1)!.id })
+  vi.advanceTimersByTime(60_000)
+  expect(helper.kill).not.toHaveBeenCalled()
+})
+
 it('gives up after three helpers fail before showing the icon', () => {
   const onUnavailable = vi.fn()
   const spawn = vi.fn(() => {
