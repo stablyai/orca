@@ -257,8 +257,9 @@ export async function getGiteaPullRequestForBranch(
     return null
   }
 
+  let scanComplete = true
   if (branchName) {
-    const pullRequests = await scanGiteaPullRequests(
+    const { pullRequests, complete } = await scanGiteaPullRequests(
       // Strict scans must not inherit an empty result produced by a failed lenient scan.
       throwOnFailure ? `${giteaPullRequestScanKey(repo)}::strict` : giteaPullRequestScanKey(repo),
       (page) =>
@@ -279,6 +280,7 @@ export async function getGiteaPullRequestForBranch(
       PULL_REQUEST_PAGE_LIMIT,
       MAX_PULL_REQUEST_PAGES
     )
+    scanComplete = complete
     const raw = pullRequests.find((item) => matchesBranch(item, branchName))
     if (raw) {
       const hideOnDefaultBranch = await shouldHideNonOpenReviewOnDefaultBranch({
@@ -296,16 +298,21 @@ export async function getGiteaPullRequestForBranch(
     }
   }
 
-  if (typeof linkedPRNumber !== 'number') {
-    return null
+  if (typeof linkedPRNumber === 'number') {
+    const raw = await requestJson<RawGiteaPullRequest>(
+      repo,
+      `/repos/${encodedRepoPath(repo)}/pulls/${encodeURIComponent(String(linkedPRNumber))}`,
+      { allowNotFound: true },
+      throwOnFailure
+    )
+    if (raw) {
+      return normalizePullRequest(repo, raw)
+    }
   }
-  const raw = await requestJson<RawGiteaPullRequest>(
-    repo,
-    `/repos/${encodedRepoPath(repo)}/pulls/${encodeURIComponent(String(linkedPRNumber))}`,
-    { allowNotFound: true },
-    throwOnFailure
-  )
-  return raw ? normalizePullRequest(repo, raw) : null
+  if (throwOnFailure && !scanComplete) {
+    throw new Error('Gitea pull request scan is incomplete; review absence cannot be confirmed')
+  }
+  return null
 }
 
 /** Surface lookup failures as unavailable rather than a false missing review. */
