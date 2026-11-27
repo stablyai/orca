@@ -1,3 +1,4 @@
+import { runWithFinally } from '@/lib/run-with-finally'
 import type { AgentSessionGoalDisplay } from '../../../../../../shared/agent-session/thread-goals/agent-session-goal-check-display'
 import { useCallback, useMemo, useState } from 'react'
 import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -53,16 +54,19 @@ export function useStructuredAgentSessionThreadGoal(args: {
         return command !== null && send(command) !== false
       }
       setPendingCount((count) => count + 1)
-      try {
-        const result = await mutate<AgentSessionThreadGoalResult>(
-          'agentSession.threadGoal',
-          'agentSession.threadGoal',
-          { change: next }
-        )
-        return result !== null
-      } finally {
-        setPendingCount((count) => count - 1)
-      }
+      return await runWithFinally(
+        async () => {
+          const result = await mutate<AgentSessionThreadGoalResult>(
+            'agentSession.threadGoal',
+            'agentSession.threadGoal',
+            { change: next }
+          )
+          return result !== null
+        },
+        () => {
+          setPendingCount((count) => count - 1)
+        }
+      )
     },
     [agentResumes, hostChanges, mutate, send]
   )

@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -160,3 +160,37 @@ it.each([
     expect(diff.modifiedContent).toBe(expected)
   }
 )
+
+it('decodes each committed side using the attributes that normalized its blob', async ({
+  skip
+}) => {
+  const { repo, git } = createRepo()
+  git('config', 'user.name', 'Orca Test')
+  git('config', 'user.email', 'orca@example.test')
+  git('config', 'commit.gpgSign', 'false')
+  git('config', 'core.hooksPath', '.git/no-hooks')
+  const filePath = 'sample.c'
+  // c2 a9 is 漏 in GB18030 and © in UTF-8.
+  writeFileSync(join(repo, filePath), Buffer.from('c2a9', 'hex'))
+  git('add', filePath)
+  git('commit', '-qm', 'raw GB18030')
+  const parentOid = git('rev-parse', 'HEAD')
+  skip(
+    spawnSync('git', ['check-attr', '--source=HEAD', 'working-tree-encoding', '--', filePath], {
+      cwd: repo
+    }).status !== 0,
+    'This Git cannot read attributes from a historical tree'
+  )
+
+  writeFileSync(join(repo, '.gitattributes'), 'sample.c working-tree-encoding=GB18030\n')
+  git('add', '.gitattributes')
+  git('add', '--renormalize', filePath)
+  git('commit', '-qm', 'normalize the same character')
+  const commitOid = git('rev-parse', 'HEAD')
+  const read = () =>
+    getCommitDiff(repo, { filePath, parentOid, commitOid }, { encoding: 'gb18030' })
+  expect(await read()).toMatchObject({ originalContent: '漏', modifiedContent: '漏' })
+
+  git('rm', '.gitattributes')
+  expect(await read()).toMatchObject({ originalContent: '漏', modifiedContent: '漏' })
+})

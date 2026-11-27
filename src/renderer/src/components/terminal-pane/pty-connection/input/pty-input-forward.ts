@@ -1,4 +1,5 @@
 import { subscribeToTerminalInputData } from '../../input/terminal-user-input-signal'
+import { rescalePixelMouseReport } from '../../emulation/terminal-capability-replies'
 import { isPassiveTerminalInputReport } from '../../input/terminal-passive-input-report'
 import { installTerminalImeCompositionRoute } from '../../input/ime/terminal-ime-composition-route'
 import { useAppStore } from '@/store/index'
@@ -161,7 +162,9 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
   const forwardUnclassifiedInput = (data: string): void => session.forwardPtyInput(data, false)
   session.onDataDisposable = subscribeToTerminalInputData(
     session.pane.terminal,
-    (data, wasUserInput) => {
+    (rawData, wasUserInput) => {
+      // Rescale before deferral so the report uses the geometry xterm measured the click on.
+      const data = rescalePixelMouseReport(session.pane.terminal, rawData)
       const forward = wasUserInput ? forwardUserInput : forwardUnclassifiedInput
       if (session.deps.deferPtyInput) {
         session.deps.deferPtyInput(session.pane.id, data, forward)

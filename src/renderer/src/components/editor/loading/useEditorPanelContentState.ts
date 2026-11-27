@@ -140,6 +140,15 @@ export function useEditorPanelContentState({
   const reloadContent = useCallback(
     (file: OpenFile, options?: ReloadContentOptions): void => {
       if (file.mode === 'diff') {
+        if (
+          options?.onlyIfFailed &&
+          (!diffContentsRef.current[file.id]?.loadError ||
+            !openFilesRef.current.some(
+              (tab) => tab.id === file.id && tab.diffEncoding === file.diffEncoding
+            ))
+        ) {
+          return
+        }
         setDiffContents((prev) => {
           if (!prev[file.id]) {
             return prev

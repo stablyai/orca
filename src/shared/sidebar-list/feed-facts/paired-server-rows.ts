@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,
@@ -29,77 +30,83 @@ import {
 import { HostReportedActivitySchema, type HostReportedActivity } from './workspace-activity-facts'
 
 /** One paired-server workspace as the sidebar lists it, keyed by its host-qualified id. */
-const PairedServerWorkspaceRowSchema = z
-  .object({
-    key: z.string(),
-    worktreeId: z.string(),
-    repoId: z.string(),
-    kind: z.enum(['git', 'folder']),
-    path: z.string(),
-    branch: z.string(),
-    displayName: z.string(),
-    isArchived: z.boolean(),
-    isPinned: z.boolean()
-  })
-  .extend(
-    // Server-owned sorting/filter/lineage facts; older desktops omit them. Lineage is the checked edge, not the raw record.
-    WorkspaceRowSchema.pick({
-      isMainWorktree: true,
-      removing: true,
-      removalRecorded: true,
-      removalError: true,
-      isUnread: true,
-      instanceId: true,
-      lineage: true,
-      workspaceStatus: true,
-      sortOrder: true,
-      manualOrder: true,
-      createdAt: true,
-      creatorProvenance: true,
-      defaultBranch: true,
-      automationCreated: true,
-      cliCreated: true,
-      detachedHead: true,
-      recentAt: true,
-      smartTier: true,
-      smartAt: true
-    }).partial().shape
-  )
-  .extend({
-    /** The server's own terminals and agents there; older desktops omit it. */
-    activity: HostReportedActivitySchema.optional().catch(undefined),
-    crossStoreParent: CrossStoreParentRecordSchema,
-    workspaceLineage: WorkspaceLineageEdgeSchema,
-    /** An older server's edge without instance ids; only the phone accepts it, as before. */
-    legacyLineage: z
-      .object({ parentWorktreeId: z.string(), source: z.literal('no-instance-host') })
-      .optional()
-      .catch(undefined)
-  })
+const PairedServerWorkspaceRowSchema = lazyZodSchema(() =>
+  z
+    .object({
+      key: z.string(),
+      worktreeId: z.string(),
+      repoId: z.string(),
+      kind: z.enum(['git', 'folder']),
+      path: z.string(),
+      branch: z.string(),
+      displayName: z.string(),
+      isArchived: z.boolean(),
+      isPinned: z.boolean()
+    })
+    .extend(
+      // Server-owned sorting/filter/lineage facts; older desktops omit them. Lineage is the checked edge, not the raw record.
+      WorkspaceRowSchema.pick({
+        isMainWorktree: true,
+        removing: true,
+        removalRecorded: true,
+        removalError: true,
+        isUnread: true,
+        instanceId: true,
+        lineage: true,
+        workspaceStatus: true,
+        sortOrder: true,
+        manualOrder: true,
+        createdAt: true,
+        creatorProvenance: true,
+        defaultBranch: true,
+        automationCreated: true,
+        cliCreated: true,
+        detachedHead: true,
+        recentAt: true,
+        smartTier: true,
+        smartAt: true
+      }).partial().shape
+    )
+    .extend({
+      /** The server's own terminals and agents there; older desktops omit it. */
+      activity: HostReportedActivitySchema.optional().catch(undefined),
+      crossStoreParent: CrossStoreParentRecordSchema,
+      workspaceLineage: WorkspaceLineageEdgeSchema,
+      /** An older server's edge without instance ids; only the phone accepts it, as before. */
+      legacyLineage: z
+        .object({ parentWorktreeId: z.string(), source: z.literal('no-instance-host') })
+        .optional()
+        .catch(undefined)
+    })
+)
 
 /** See PairedServerHost; health and compatibility stay open strings, as a reader only compares them. */
-const PairedServerHostFactsSchema = z.object({
-  label: z.string(),
-  health: z.string(),
-  compatibility: z.string().nullable(),
-  pairedDeviceId: z.string().nullable(),
-  /** The server's verified store identity, which cross-store records name; older desktops omit it. */
-  installationId: z.string().nullable().optional().catch(undefined)
-})
+const PairedServerHostFactsSchema = lazyZodSchema(() =>
+  z.object({
+    label: z.string(),
+    health: z.string(),
+    compatibility: z.string().nullable(),
+    pairedDeviceId: z.string().nullable(),
+    /** The server's verified store identity, which cross-store records name; older desktops omit it. */
+    installationId: z.string().nullable().optional().catch(undefined)
+  })
+)
 
 /** Every configured server main lists rows for. Unverifiable: its last rows, not confirmed current. */
-export const PairedServerRowsSnapshotSchema = z.object({
-  revision: z.number(),
-  servers: z.array(
-    z.object({
-      hostId: z.string(),
-      freshness: z.enum(['live', 'unverifiable']),
-      /** Null while the desktop does not show the server (a managed one folded into its SSH host). */
-      host: PairedServerHostFactsSchema.nullable(),
-      rows: z.array(PairedServerWorkspaceRowSchema)
-    })
-  )
-})
+export const PairedServerRowsSnapshotSchema = lazyZodSchema(() =>
+  z.object({
+    revision: z.number(),
+    servers: z.array(
+      z.object({
+        hostId: z.string(),
+        freshness: z.enum(['live', 'unverifiable']),
+        /** Null while the desktop does not show the server (a managed one folded into its SSH host). */
+        host: PairedServerHostFactsSchema.nullable(),
+        rows: z.array(PairedServerWorkspaceRowSchema)
+      })
+    )
+  })
+)
 
 export type PairedServerHostFacts = z.infer<typeof PairedServerHostFactsSchema>
 

@@ -1,3 +1,5 @@
+import { redactKagiSessionToken } from '../../../../shared/browser/navigation/browser-url'
+import { redactBrowserMetadata } from '../../../../shared/browser/browser-metadata-redaction'
 import type { BrowserLoadError } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import type { BrowserGuestMetadata } from '../../../../shared/browser/guest-lifecycle/browser-guest-metadata'
 import { readGuestNavigationState } from './browser-guest-navigation-state'
@@ -37,8 +39,10 @@ export function installBrowserGuestMetadata({
 }): () => void {
   let revision = 0
   let navigationRevision = 0
-  let committedUrl = isChromiumInternalErrorUrl(guest.getURL()) ? '' : guest.getURL()
-  let title = committedUrl ? guest.getTitle() : ''
+  let committedUrl = isChromiumInternalErrorUrl(guest.getURL())
+    ? ''
+    : redactKagiSessionToken(guest.getURL())
+  let title = committedUrl ? redactKagiSessionToken(guest.getTitle()) : ''
   let loading = guest.isLoadingMainFrame() || isBrowserPageFirstLoadHeld(guest)
   let previous: BrowserGuestMetadata | null = null
   const read = (kind: BrowserGuestMetadata['kind'] = 'snapshot'): BrowserGuestMetadata | null => {
@@ -57,7 +61,7 @@ export function installBrowserGuestMetadata({
       title,
       loading,
       errorPage,
-      loadError: readLoadError(),
+      loadError: redactBrowserMetadata({ loadError: readLoadError() }).loadError,
       hasCertificateFailure: hasCertificateFailure(),
       ...readGuestNavigationState(guest)
     }
@@ -96,8 +100,8 @@ export function installBrowserGuestMetadata({
     if (isChromiumInternalErrorUrl(url)) {
       return
     }
-    committedUrl = url
-    title = guest.getTitle()
+    committedUrl = redactKagiSessionToken(url)
+    title = redactKagiSessionToken(guest.getTitle())
     navigationRevision++
     publish('navigation')
   }
@@ -105,8 +109,8 @@ export function installBrowserGuestMetadata({
     if (!isMainFrame || isChromiumInternalErrorUrl(url)) {
       return
     }
-    committedUrl = url
-    title = guest.getTitle()
+    committedUrl = redactKagiSessionToken(url)
+    title = redactKagiSessionToken(guest.getTitle())
     navigationRevision++
     publish('in-page')
   }
@@ -114,7 +118,7 @@ export function installBrowserGuestMetadata({
     if (isChromiumInternalErrorUrl(guest.getURL())) {
       return
     }
-    title = nextTitle
+    title = redactKagiSessionToken(nextTitle)
     publish('title')
   }
   const onStart = (

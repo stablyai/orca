@@ -32,15 +32,22 @@ export type BotConnectorFix = {
   opensRow?: boolean
 }
 
-export const STATUS_DOT_CLASSES: Record<IntegrationCardStatusTone, string> = {
+/** `warning`: works, but something the owner fixes outside Orca keeps part of it from working. */
+export type BotConnectorStatusTone = IntegrationCardStatusTone | 'warning'
+
+/** A row's status; `listOnly` when its open page says it in full in its body instead. */
+export type BotConnectorStatus = { label: string; tone: BotConnectorStatusTone; listOnly?: boolean }
+
+export const STATUS_DOT_CLASSES: Record<BotConnectorStatusTone, string> = {
   connected: 'size-1.5 shrink-0 rounded-full bg-status-success',
   attention: 'size-1.5 shrink-0 rounded-full bg-foreground',
-  neutral: 'size-1.5 shrink-0 rounded-full bg-muted-foreground'
+  neutral: 'size-1.5 shrink-0 rounded-full bg-muted-foreground',
+  warning: 'size-1.5 shrink-0 rounded-full bg-status-warning'
 }
 
 export function ConnectorStatus(props: {
   label: string
-  tone: IntegrationCardStatusTone
+  tone: BotConnectorStatusTone
   checking: boolean
 }): React.JSX.Element {
   if (props.checking) {
@@ -217,7 +224,7 @@ export type BotConnectorRowFrameProps = {
   name: string | BotConnectorTitle
   description: React.ReactNode
   /** Null while all is well: a row shows a status only when something needs the owner. */
-  status: { label: string; tone: IntegrationCardStatusTone } | null
+  status: BotConnectorStatus | null
   checking?: boolean
   fix?: BotConnectorFix | null
   /** Before the status, e.g. pending access requests. */

@@ -1,3 +1,4 @@
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 // The import plan and summary cards a bot puts in its chat (`orca bot import plan|done`). Older clients and
 // the phone paint their `text` as a plain line.
 import * as z from 'zod'
@@ -14,29 +15,35 @@ export type BotImportPlanGroup = (typeof BOT_IMPORT_PLAN_GROUPS)[number]
 
 export const BOT_IMPORT_PLAN_MAX_ITEMS = 40
 
-export const BotImportPlanItemSchema = z.object({
-  group: z.enum(BOT_IMPORT_PLAN_GROUPS),
-  /** What it is, in the owner's words: "3 schedules", "Who Molty is". */
-  what: line(120),
-  /** Where it goes here: "Soul", "paused automations". */
-  to: line(80).optional(),
-  /** One line on why, or what changes. */
-  why: line(240)
-})
+export const BotImportPlanItemSchema = lazyZodSchema(() =>
+  z.object({
+    group: z.enum(BOT_IMPORT_PLAN_GROUPS),
+    /** What it is, in the owner's words: "3 schedules", "Who Molty is". */
+    what: line(120),
+    /** Where it goes here: "Soul", "paused automations". */
+    to: line(80).optional(),
+    /** One line on why, or what changes. */
+    why: line(240)
+  })
+)
 
 /** What the bot writes for `bot import plan`; Orca adds the bot. */
-export const BotImportPlanInputSchema = z.object({
-  /** The old app, as the owner knows it: "OpenClaw". */
-  app: line(60),
-  /** The old bot's name. */
-  name: line(120),
-  /** True when this bot was imported from it before, so the plan only brings what's new. */
-  again: z.boolean().optional(),
-  items: z.array(BotImportPlanItemSchema).min(1).max(BOT_IMPORT_PLAN_MAX_ITEMS)
-})
+export const BotImportPlanInputSchema = lazyZodSchema(() =>
+  z.object({
+    /** The old app, as the owner knows it: "OpenClaw". */
+    app: line(60),
+    /** The old bot's name. */
+    name: line(120),
+    /** True when this bot was imported from it before, so the plan only brings what's new. */
+    again: z.boolean().optional(),
+    items: z.array(BotImportPlanItemSchema).min(1).max(BOT_IMPORT_PLAN_MAX_ITEMS)
+  })
+)
 export type BotImportPlanInput = z.infer<typeof BotImportPlanInputSchema>
 
-export const BotImportPlanSchema = BotImportPlanInputSchema.extend({ botId: z.string().min(1) })
+export const BotImportPlanSchema = lazyZodSchema(() =>
+  BotImportPlanInputSchema.extend({ botId: z.string().min(1) })
+)
 export type BotImportPlan = z.infer<typeof BotImportPlanSchema>
 
 export const BOT_IMPORT_DONE_KINDS = [
@@ -49,28 +56,32 @@ export const BOT_IMPORT_DONE_KINDS = [
 ] as const
 
 /** What the bot writes for `bot import done`. */
-export const BotImportDoneInputSchema = z.object({
-  app: line(60),
-  name: line(120),
-  created: z
-    .array(
-      z.object({
-        kind: z.enum(BOT_IMPORT_DONE_KINDS),
-        /** "Soul", "3 automations". */
-        what: line(80),
-        /** "paused", "12 facts, 6 topics". */
-        detail: line(200).optional()
-      })
-    )
-    .max(12),
-  /** What stayed in the old app, each in a few words. */
-  stayed: z.array(line(80)).max(12),
-  /** Schedules that came over paused, so the card says to turn them on once the old bot is off. */
-  paused: z.number().int().min(0).max(500)
-})
+export const BotImportDoneInputSchema = lazyZodSchema(() =>
+  z.object({
+    app: line(60),
+    name: line(120),
+    created: z
+      .array(
+        z.object({
+          kind: z.enum(BOT_IMPORT_DONE_KINDS),
+          /** "Soul", "3 automations". */
+          what: line(80),
+          /** "paused", "12 facts, 6 topics". */
+          detail: line(200).optional()
+        })
+      )
+      .max(12),
+    /** What stayed in the old app, each in a few words. */
+    stayed: z.array(line(80)).max(12),
+    /** Schedules that came over paused, so the card says to turn them on once the old bot is off. */
+    paused: z.number().int().min(0).max(500)
+  })
+)
 export type BotImportDoneInput = z.infer<typeof BotImportDoneInputSchema>
 
-export const BotImportDoneSchema = BotImportDoneInputSchema.extend({ botId: z.string().min(1) })
+export const BotImportDoneSchema = lazyZodSchema(() =>
+  BotImportDoneInputSchema.extend({ botId: z.string().min(1) })
+)
 export type BotImportDone = z.infer<typeof BotImportDoneSchema>
 
 export const BOT_IMPORT_PLAN_PRESENTATION = 'bot-import-plan'

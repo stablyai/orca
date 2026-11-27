@@ -56,20 +56,14 @@ export function createSocksClientAdmission(
       socket.destroy()
       return
     }
-    // A connection that closes before its owner check never costs one. A half-close is not a close:
-    // forwards stay half-open, and the client may still be reading.
-    const closed = new AbortController()
-    const abort = (): void => closed.abort()
-    socket.once('close', abort)
-    // A pauseOnConnect socket doesn't notice a reset until it reads; bytes stay buffered.
-    socket.read(0)
-    void verifySocksClientOwner(socket, undefined, closed.signal).then((verdict) => {
-      socket.off('close', abort)
+    const departure = process.platform === 'darwin' ? watchClientDeparture(socket) : undefined
+    void verifySocksClientOwner(socket, undefined, departure?.signal).then((verdict) => {
+      departure?.stop()
       if (socket.destroyed) {
         return
       }
       // Its lookup was dropped because the client left; nothing to report.
-      if (!verdict.allowed && closed.signal.aborted) {
+      if (!verdict.allowed && departure?.signal.aborted) {
         socket.destroy()
         return
       }
@@ -83,6 +77,17 @@ export function createSocksClientAdmission(
       socket.destroy()
     })
   }
+}
+
+/** macOS lookups queue behind one helper, so one for a client that already left is dropped unscanned.
+ *  A half-close is not a close: forwards stay half-open, and the client may still be reading. */
+function watchClientDeparture(socket: Socket): { signal: AbortSignal; stop: () => void } {
+  const departed = new AbortController()
+  const abort = (): void => departed.abort()
+  socket.once('close', abort)
+  // A pauseOnConnect socket doesn't notice a reset until it reads; bytes stay buffered.
+  socket.read(0)
+  return { signal: departed.signal, stop: () => socket.off('close', abort) }
 }
 
 /** Uid of the socket whose local end is `client` and remote end is `listener`: the connecting side, not our accepted copy. */

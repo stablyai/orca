@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import {
   defineBrowserExtensionMethod,
   registerBrowserExtensionNamespace,
@@ -9,11 +10,13 @@ import {
   type ContentScriptMethod
 } from '../api-runtime/browser-extension-content-scripts'
 
-const scriptSchema = z.object({ id: z.string().min(1) }).loose()
-const filterSchema = z
-  .object({ ids: z.array(z.string()) })
-  .partial()
-  .loose()
+const scriptSchema = lazyZodSchema(() => z.object({ id: z.string().min(1) }).loose())
+const filterSchema = lazyZodSchema(() =>
+  z
+    .object({ ids: z.array(z.string()) })
+    .partial()
+    .loose()
+)
 
 function run(caller: BrowserExtensionCaller, method: ContentScriptMethod, args: unknown[]) {
   return runBrowserExtensionContentScriptMethod(

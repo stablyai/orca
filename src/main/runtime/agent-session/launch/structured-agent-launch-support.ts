@@ -102,14 +102,19 @@ export async function structuredAgentHostAlternativeReady(
   return program.hostAlternative(env, settings).catch(() => false)
 }
 
-/** Admission's answer in the workspace `cwd` names: only a too-old or unstartable binary keeps the
- *  terminal, or, where Orca installs no release, a host program that cannot serve the chat. A too-old
- *  release names itself, so a refusal can say which version chats need. */
+/** Admission's answer in the workspace `cwd` names: only a too-old or unstartable binary, a workspace
+ *  `cwd` the probe cannot enter, or, where Orca installs no release, a host program that cannot serve
+ *  the chat keeps the terminal. A too-old release names itself, so a refusal can say which version
+ *  chats need; an inaccessible `cwd` is flagged so the refusal blames the folder, not the agent. */
 export async function structuredAgentLaunchAdmission(
   agent: string,
   cwd: () => Promise<string>,
   runtime: LaunchSettingsRuntime
-): Promise<{ supported: boolean; installation?: AgentCliInstallationProblem }> {
+): Promise<{
+  supported: boolean
+  installation?: AgentCliInstallationProblem
+  workspaceAccessDenied?: true
+}> {
   if (structuredAgentRuntimeMetadata(agent)?.chatProgram?.onlyHostAlternative?.()) {
     return { supported: await structuredAgentHostAlternativeReady(agent, runtime) }
   }
@@ -118,6 +123,9 @@ export async function structuredAgentLaunchAdmission(
     if (release?.status === 'tooOld' && isTuiAgent(agent)) {
       const { version: installedVersion, minimumVersion } = release
       return { supported: false, installation: { agent, installedVersion, minimumVersion } }
+    }
+    if (release?.status === 'cwdAccessDenied') {
+      return { supported: false, workspaceAccessDenied: true }
     }
     return { supported: release === null || launchableRelease(release) }
   } catch (error) {
@@ -194,7 +202,8 @@ export async function resolveHostStructuredAgentCreateSupport(input: {
   const support = resolveStructuredAgentSessionCreateSupport({
     location,
     adapterSupportsCreate: launch?.supported ?? false,
-    unavailableOnPlatform: structuredChatUnavailableOnPlatform(agent, process.platform)
+    unavailableOnPlatform: structuredChatUnavailableOnPlatform(agent, process.platform),
+    workspaceAccessDenied: launch?.workspaceAccessDenied
   })
   warnStructuredAgentSessionCreateUnsupported(
     agent,

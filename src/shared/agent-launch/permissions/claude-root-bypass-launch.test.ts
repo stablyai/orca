@@ -28,7 +28,11 @@ describe('withoutClaudeRootBypass', () => {
       'claude --add-dir /a --dangerously-skip-permissions fix',
       'claude --dangerously-skip-permissions --permission-mode bypassPermissions',
       'claude --dangerously-skip-permissions --allow-dangerously-skip-permissions',
-      'IS_SANDBOX=1 claude --dangerously-skip-permissions'
+      'IS_SANDBOX=1 claude --dangerously-skip-permissions',
+      'CLAUDE_CODE_BUBBLEWRAP=1 claude --dangerously-skip-permissions',
+      // A repeated switch must not hide the word the value option would take.
+      'claude --add-dir /a --dangerously-skip-permissions --dangerously-skip-permissions fix',
+      `claude --dangerously-skip-permissions --settings '{"permissions":{"defaultMode":"bypassPermissions"}}'`
     ]) {
       expect(withoutClaudeRootBypass(command, 'claude', 'posix')).toBeNull()
     }
@@ -45,5 +49,6 @@ describe('planClaudeRootLaunch', () => {
     expect(plan(true)?.command).toBe('claude')
     expect(plan(false)).toBeNull()
     expect(plan(true, { IS_SANDBOX: '1' })).toBeNull()
+    expect(plan(true, { CLAUDE_CODE_BUBBLEWRAP: '1' })).toBeNull()
   })
 })

@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import { getIssue, searchIssues } from '../../linear/issues/linear-issue-lookups'
 import { listIssues, type LinearListFilter } from '../../linear/issues/linear-issue-listing'
 import { createIssue, updateIssue } from '../../linear/issues/linear-issue-mutations'
@@ -11,8 +12,8 @@ import type { LinearWorkspaceSelection } from '../../../shared/linear/workspace-
 
 const VALID_FILTERS = new Set<LinearListFilter>(['assigned', 'created', 'all', 'completed'])
 
-export function registerLinearIssueHandlers(): void {
-  ipcMain.handle(
+export function registerLinearIssueHandlers(ipc: IpcHandleRegistrar = ipcMain): void {
+  ipc.handle(
     'linear:searchIssues',
     async (
       _event,
@@ -26,7 +27,7 @@ export function registerLinearIssueHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'linear:listIssues',
     async (
       _event,
@@ -52,7 +53,7 @@ export function registerLinearIssueHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'linear:createIssue',
     async (
       _event,
@@ -105,14 +106,14 @@ export function registerLinearIssueHandlers(): void {
     }
   )
 
-  ipcMain.handle('linear:getIssue', async (_event, args: { id: string; workspaceId?: string }) => {
+  ipc.handle('linear:getIssue', async (_event, args: { id: string; workspaceId?: string }) => {
     if (typeof args?.id !== 'string' || !args.id.trim()) {
       return null
     }
     return getIssue(args.id.trim(), normalizeWorkspaceId(args.workspaceId))
   })
 
-  ipcMain.handle(
+  ipc.handle(
     'linear:updateIssue',
     async (_event, args: { id: string; updates: LinearIssueUpdate; workspaceId?: string }) => {
       if (typeof args?.id !== 'string' || !args.id.trim()) {
@@ -162,7 +163,7 @@ export function registerLinearIssueHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'linear:addIssueComment',
     async (_event, args: { issueId: string; body: string; workspaceId?: string }) => {
       if (typeof args?.issueId !== 'string' || !args.issueId.trim()) {
@@ -179,7 +180,7 @@ export function registerLinearIssueHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'linear:issueComments',
     async (_event, args: { issueId: string; workspaceId?: string }) => {
       if (typeof args?.issueId !== 'string' || !args.issueId.trim()) {

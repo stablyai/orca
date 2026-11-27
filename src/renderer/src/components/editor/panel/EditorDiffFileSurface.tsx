@@ -1,7 +1,13 @@
 import { DiffTooLargeNotice } from '../diff/large-files/DiffTooLargeNotice'
 import { useTranslate } from '@/i18n/use-translate'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import type { DiffContent } from '../loading/editor-panel-content-types'
+import {
+  HOST_STARTED,
+  USER_RETRY,
+  type DiffContent,
+  type ReloadContentOptions
+} from '../loading/editor-panel-content-types'
+import { EditorFileLoadErrorView } from '../loading/EditorFileLoadErrorView'
 import { getDiffContentSignature } from '../diff/sections/diff-content-signature'
 import { DiffViewer, ImageDiffViewer, MarkdownPreview } from '../editor-lazy-views'
 import { ExternalFileChangeBanner } from '../external-changes/ExternalFileChangeBanner'
@@ -43,7 +49,7 @@ export function EditorDiffFileSurface({
   markdownDocuments: MarkdownDocumentsController
   onContentChange: (content: string) => void
   onSave: (content: string) => Promise<boolean>
-  reloadContent: (file: OpenFile) => void
+  reloadContent: (file: OpenFile, options?: ReloadContentOptions) => void
 }): React.JSX.Element {
   const t = useTranslate()
   if (!diffContent || diffContent.requestedEncoding !== activeFile.diffEncoding) {
@@ -56,9 +62,12 @@ export function EditorDiffFileSurface({
 
   if (diffContent.loadError) {
     return (
-      <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
-        {diffContent.loadError}
-      </div>
+      <EditorFileLoadErrorView
+        message={diffContent.loadError}
+        worktreeId={activeFile.worktreeId}
+        onRetry={() => reloadContent(activeFile, USER_RETRY)}
+        onHostStarted={() => reloadContent(activeFile, HOST_STARTED)}
+      />
     )
   }
 

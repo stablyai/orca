@@ -31,6 +31,7 @@ import {
 } from '../../../../src/shared/bots/bot-items'
 import type { BotItemPendingComments } from '../../../../src/shared/bots/bot-item-pending-comments'
 import { botItemRepliedAsks } from '../../../../src/shared/bots/bot-item-replying'
+import { botItemPendingWordsBesideAnswers } from '../../../../src/shared/bots/bot-item-sent-answers'
 import {
   isBotItemSentComment,
   type BotItemSentAnswers
@@ -358,13 +359,16 @@ export function MobileBotItemActivity({
           </View>
         )
       )}
-      {pending.shown.map(({ event, failed, mayHaveArrived, intent }) =>
-        // Answers posted as one comment show on their lines already: that comment, not one with its words.
-        isBotItemSentComment({ failed, intent }, sent) ? null : (
+      {pending.shown.map((sending) => {
+        const { event, failed, mayHaveArrived, intent } = sending
+        // Answers posted as one comment show on their lines already: only the owner's words beside them.
+        const onLines = isBotItemSentComment({ failed, intent }, sent)
+        const beside = onLines ? botItemPendingWordsBesideAnswers(sending) : null
+        return onLines && beside === null ? null : (
           <MobileBotItemCommentCard
             key={event.id}
             item={item}
-            entry={{ event, waiting: false }}
+            entry={beside === null ? { event, waiting: false } : { event, waiting: false, beside }}
             attachments={attachments}
             failed={
               failed
@@ -377,7 +381,7 @@ export function MobileBotItemActivity({
             onQuote={failed ? undefined : onQuote}
           />
         )
-      )}
+      })}
       {entries.length > 0 || pending.shown.length > 0 ? null : (
         <Text style={[styles.line, styles.none]}>
           {t('bots.items.activity.noComments', 'No comments yet.')}

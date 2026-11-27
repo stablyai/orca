@@ -19,6 +19,7 @@ import {
 import { getLiveAgentStatusByWorktreeId } from '@/lib/workspace/activity/worktree-activity-state'
 import type { LiveAgentWorktreeStatus } from '../../../../shared/sidebar-list/feed-facts/workspace-activity-facts'
 import { getWorktreeStatus, getWorktreeStatusLabel } from '@/lib/workspace/activity/worktree-status'
+import { selectPaneForegroundAgentsForWorktree } from '@/components/sidebar/workspace-card/activity/worktree-card-status-inputs'
 import type { WorktreeStatus } from '../../../../shared/worktree/row-display/worktree-status-rollup'
 import {
   resolveRecentWorkspaceTabStatus,
@@ -203,6 +204,9 @@ export function PaletteWorktreeStatusDot({
   const hasStructuredChat = useAppStore((s) =>
     hasAwakeStructuredChat(s.unifiedTabsByWorktree[worktree.id], s.structuredChatSleptAtByPaneKey)
   )
+  const paneForegroundAgentByPaneKey = useAppStore((s) =>
+    selectPaneForegroundAgentsForWorktree(s, worktree.id)
+  )
   if (!live) {
     return null
   }
@@ -216,7 +220,8 @@ export function PaletteWorktreeStatusDot({
       hasStructuredChat,
       agentStatusPaneIdsByTabId: live.agentStatusPaneIdsByTabId,
       stalePaneIdsByTabId: live.stalePaneIdsByTabId,
-      terminalLayoutsByTabId: live.paneSources.terminalLayoutsByTabId
+      terminalLayoutsByTabId: live.paneSources.terminalLayoutsByTabId,
+      paneForegroundAgentByPaneKey
     }
   )
   return (

@@ -1,4 +1,4 @@
-import { isUtf8 } from 'node:buffer'
+import { isAscii, isUtf8 } from 'node:buffer'
 import { readFile, stat } from 'node:fs/promises'
 import type { GitDiffEncoding } from '../../../../shared/git/diff/git-diff-compare-types'
 import { isBinaryBuffer } from '../../../../shared/file-preview/binary-buffer'
@@ -14,7 +14,12 @@ import { gitExecFileAsyncBuffer } from '../../command-runner/git-exec-file'
 import { isMaxBufferOverflowError } from '../../command-runner/process-capture/max-buffer-overflow'
 import { MAX_GIT_SHOW_BYTES } from '../git-show-max-bytes'
 import { literalPathspec } from '../git-pathspec'
-import { type DiffAttributes, readDiffAttributes, isImageOrPdfPreviewPath } from './textconv-driver'
+import {
+  type DiffAttributes,
+  readDiffAttributes,
+  readTreeStoresUtf8,
+  isImageOrPdfPreviewPath
+} from './textconv-driver'
 
 export type GitBlobReadResult = {
   content: string
@@ -114,8 +119,16 @@ async function readGitBlob(
     }
   }
   const { hasTextconv, storesUtf8 } = await attributes
-  // With working-tree-encoding Git stores UTF-8; older commits may predate the attribute.
-  const rawEncoding = storesUtf8 && isUtf8(raw) ? 'utf-8' : options.encoding
+  let rawEncoding = options.encoding
+  if (rawEncoding === 'gb18030' && !isAscii(raw) && isUtf8(raw)) {
+    // Git cleans index entries with checkout attributes, but committed sides can predate those rules.
+    const normalized = oid
+      ? ((await readTreeStoresUtf8(worktreePath, gitPath, oid, options)) ?? storesUtf8)
+      : storesUtf8
+    if (normalized) {
+      rawEncoding = 'utf-8'
+    }
+  }
   if (!hasTextconv) {
     return bufferToBlob(raw, filePath, rawEncoding)
   }

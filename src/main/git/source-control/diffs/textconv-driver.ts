@@ -58,3 +58,24 @@ export async function readDiffAttributes(
     return NO_DIFF_ATTRIBUTES
   }
 }
+
+export async function readTreeStoresUtf8(
+  worktreePath: string,
+  gitPath: string,
+  treeish: string,
+  options: GitDiffReadOptions
+): Promise<boolean | undefined> {
+  if (isImageOrPdfPreviewPath(gitPath)) {
+    return false
+  }
+  try {
+    const { stdout } = await gitExecFileAsync(
+      ['check-attr', '-z', `--source=${treeish}`, 'working-tree-encoding', '--', gitPath],
+      gitReadOptionsForWorktree(worktreePath, options)
+    )
+    return hasNamedValue(stdout.split('\0')[2])
+  } catch {
+    // Older Git lacks --source. Retain the checkout-based decoding on those hosts.
+    return undefined
+  }
+}

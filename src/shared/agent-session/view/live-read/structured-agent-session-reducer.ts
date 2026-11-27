@@ -45,7 +45,7 @@ import {
 } from '../structured-agent-session-item-retention'
 import { readAgentJournalTurn } from '../../lifecycle/records/agent-session-turn-record'
 import { agentSessionHasOlderTranscript } from '../../conversation-context/agent-session-context-clear'
-import { queuePublicationField } from '../../requests/structured-agent-session-queue-publication-field'
+import { queuePublicationRetainingMail } from './retain-queued-mail-blocks'
 import {
   actionablePromptIdsAfterStructuredAgentSessionBatch,
   hostWorkingAfterStructuredAgentSessionBatch,
@@ -172,7 +172,7 @@ export function reduceStructuredAgentSession(
       promptSuggestion: state.promptSuggestion,
       commands: state.commands,
       // Live subscription state stays authoritative over a possibly stale history answer.
-      ...queuePublicationField(state, action.page),
+      ...queuePublicationRetainingMail(state.queuedMessages, state, action.page),
       ...hostClockField(action.page.hostNow, receivedAt, state.hostClock)
     }
   }
@@ -216,7 +216,7 @@ export function reduceStructuredAgentSession(
       commands: event.commands,
       promptSuggestion: state.promptSuggestion,
       // A snapshot omits the list when unchanged since the last frame sent to this subscriber.
-      ...queuePublicationField(event, event.page, state),
+      ...queuePublicationRetainingMail(state.queuedMessages, event, event.page, state),
       ...hostClockField(event.hostNow, receivedAt, state.hostClock)
     }
   }
@@ -310,7 +310,7 @@ export function reduceStructuredAgentSession(
       event
     ),
     working: hostWorkingAfterStructuredAgentSessionBatch(state.working, event),
-    ...queuePublicationField(event, state),
+    ...queuePublicationRetainingMail(state.queuedMessages, event, state),
     backgroundTasks,
     ...(activity !== undefined ? { activity } : {}),
     ...(promptSuggestion !== undefined ? { promptSuggestion } : {}),

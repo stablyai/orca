@@ -601,7 +601,9 @@
       "ultracode": "Ultracode",
       "permissionAppliesNextMessage": "{{saved}} sonraki mesajınıza uygulanacak; şu anda {{active}} kullanılıyor",
       "permissionAppliesNextMessageCompact": "{{saved}} · sonraki mesaj",
-      "permissionAppliesNextMessageTiming": "Sonraki mesajda uygulanır · şu anda {{active}} kullanılıyor"
+      "permissionAppliesNextMessageTiming": "Sonraki mesajda uygulanır · şu anda {{active}} kullanılıyor",
+      "modelsLoading": "Modeller yükleniyor…",
+      "signInForModels": "Kullanabileceğiniz modelleri görmek için oturum açın."
     },
     "sessionOptionPickers": {
       "agentWorking": "Ajan çalışıyor",
@@ -904,7 +906,8 @@
         "needsAuth_other": "{{count}} sunucuda oturum açılmalı",
         "failed": "Başarısız: {{count}}"
       },
-      "pasteHint": "Tarayıcı yüklenmeyen bir sayfaya yönlendiğinde adresi kopyalayıp buraya yapıştırın."
+      "pasteHint": "Tarayıcı yüklenmeyen bir sayfaya yönlendiğinde adresi kopyalayıp buraya yapıştırın.",
+      "manage": "MCP sunucularını yönet"
     },
     "restartNote": {
       "continued": "Orca, yeniden başlatmanın ardından bu ajandan devam etmesini istedi. İsteminiz yeniden gönderilmedi.",
@@ -929,6 +932,14 @@
         "started": "Başlatıldı",
         "reopened": "Yeniden açıldı",
         "followedUp": "Devam mesajı",
+        "handedOff": "Devredildi",
+        "task": "Görev"
+      },
+      "unnamedRecipient": "bir ajan",
+      "event": {
+        "followedUp": "Takip mesajı gönderildi",
+        "update": "Güncelleme",
+        "message": "Mesaj",
         "handedOff": "Devredildi",
         "task": "Görev"
       }
@@ -2484,7 +2495,8 @@
       "tasks": "Görevler",
       "automations": "Otomasyonlar",
       "moreActions": "Diğer işlemler",
-      "sharedLinks": "Paylaşılan bağlantılar"
+      "sharedLinks": "Paylaşılan bağlantılar",
+      "mcpServers": "MCP sunucuları"
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "“{{name}}” ({{branch}}) silinsin mi?",
@@ -2631,7 +2643,8 @@
       "tasks": "Görevler",
       "terminal": "Terminal",
       "workspace": "Çalışma Alanı",
-      "automations": "Otomasyonlar"
+      "automations": "Otomasyonlar",
+      "mcpServers": "MCP sunucuları"
     }
   },
   "newWorkspace": {
@@ -4617,9 +4630,6 @@
       "agentCouldNotStart": "{{label}} başlatılamadı. Ayarlar bölümündeki ajan komutunu kontrol edip yeniden deneyin.",
       "agentFailedToStart": "{{label}} başlatılamadı. Ayarlar bölümündeki ajan komutunu kontrol edip yeniden deneyin.",
       "agentReportedError": "{{label}} bir hata bildirdi.",
-      "antigravityInvalidEvents": "Antigravity geçersiz JSON olayları döndürdü.",
-      "antigravityInvalidResult": "Antigravity geçersiz bir sonuç döndürdü.",
-      "antigravityNoFinalResult": "Antigravity nihai bir sonuç döndürmedi.",
       "chatNameAgentUnsupported": "Bu eylem için Ayarlar -> Sohbet -> Sohbet adları bölümünde desteklenen bir sohbet adı oluşturma ajanı seçin. Desteklenen ajanlar: {{agents}} veya Özel komut.",
       "chatNameCustomCommandEmpty": "Özel komut boş. Ayarlar -> Sohbet -> Sohbet adları bölümünde bir komut ekleyin.",
       "cliFailed": "{{label}} CLI komutu {{exitCode}} hata koduyla sonlandı.",
@@ -5454,7 +5464,9 @@
       "statusUnreadable": "Bu sunucunun durumu okunamadı. Geri dönüp yeniden açın.",
       "tryAgain": "Tekrar dene",
       "isolationUnavailableAndroid": "Orca için Android System WebView veya Chrome 101 ya da daha yeni bir sürüm gerekir. Play Store’dan güncelleyin veya Geliştirici seçenekleri > WebView uygulaması bölümünden daha yeni bir sürüm seçin.",
-      "webViewInUse": "Bu cihazda {{name}} {{version}} var."
+      "webViewInUse": "Bu cihazda {{name}} {{version}} var.",
+      "downloadingLatestApp": "Uygulamanın son sürümü indiriliyor",
+      "downloadProgressFromHost": "{{host}} sunucusundan · {{progress}}"
     },
     "pageRouteUnavailable": {
       "updateTitle": "Orca’yı güncelleyin",
@@ -5462,6 +5474,9 @@
       "updateMessageNoHost": "Bu ekran için daha yeni bir Orca sürümü gerekiyor.",
       "serverTitle": "Bu sunucuya ulaşılamıyor",
       "serverMessage": "Telefonunuz bu çalışma alanının sunucusuna {{host}} üzerinden ulaşamıyor."
+    },
+    "downloadProgress": {
+      "megabytes": "{{received}} / {{total}} MB"
     }
   },
   "workspace": {
@@ -7768,7 +7783,7 @@
       "add": "Araç ekle",
       "addButton": "Ekle",
       "sourceLabel": "Sunucu URL'si veya başlatma komutu",
-      "sourcePlaceholder": "https://… or npx …",
+      "sourcePlaceholder": "https://… veya npx …",
       "details": "Ayrıntılar",
       "serverType": "Sunucu türü",
       "urlMode": "Bir URL'ye bağlan",
@@ -8572,6 +8587,95 @@
     }
   },
   "mcpServers": {
-    "agentBlocked": "Kuruluşunuzun Claude ayarları tarafından engellendi"
+    "category": {
+      "coding": "Kodlama",
+      "chat": "Sohbet",
+      "monitoring": "İzleme",
+      "docs": "Belgeler ve projeler",
+      "more": "Diğer"
+    },
+    "searchApps": "Uygulamalarda ara",
+    "filterActive": "Filtre, {{filter}}",
+    "filter": "Filtre",
+    "allApps": "Tüm uygulamalar",
+    "added": "Eklendi",
+    "addTitle": "MCP sunucusu ekle",
+    "customServer": "Özel sunucu",
+    "customServerLine": "URL, komut veya yapıştırılan yapılandırma",
+    "noMatch": "“{{query}}” ile eşleşen uygulama yok.",
+    "apps": "Uygulamalar",
+    "header": "Üstbilgi",
+    "headerName": "Ad",
+    "headerValue": "Değer",
+    "removeHeader": "Üstbilgiyi kaldır",
+    "headers": "Üstbilgiler",
+    "headerEmpty": "Boş",
+    "addHeader": "Üstbilgi ekle",
+    "addButton": "Ekle",
+    "sourceLabel": "Sunucu URL'si veya başlatma komutu",
+    "sourcePlaceholder": "https://… veya npx …",
+    "sourceNote": "Bir sunucu URL'si, başlatma komutu veya mcpServers yapılandırması yapıştırın.",
+    "details": "Ayrıntılar",
+    "trust": "Yalnızca güvendiğiniz yazılımları ekleyin.",
+    "serverType": "Sunucu türü",
+    "urlMode": "Bir URL'ye bağlan",
+    "commandMode": "Komut çalıştır",
+    "serverName": "Sunucu adı",
+    "headersNone": "Yok",
+    "yours": "Sunucularınız",
+    "addServer": "Sunucu ekle",
+    "fromPlugins": "Eklentilerden",
+    "inYourAgents": "Ajanlarınızda",
+    "needsSignIn": "Oturum açılmalı",
+    "wontStart": "Başlatılamıyor",
+    "signIn": "Oturum aç",
+    "projectsOnly": "Yalnızca {{projects}}",
+    "moreFor": "{{name}} için diğer işlemler",
+    "moveToOrca": "Orca'ya taşı",
+    "copyToOrca": "Orca'ya kopyala",
+    "signInAgain": "Yeniden oturum aç",
+    "signOut": "Oturumu kapat",
+    "workspaces": "Çalışma alanları",
+    "account": "Hesap",
+    "signedIn": "Oturum açıldı",
+    "agents": "Ajanlar",
+    "turnAllOn": "Tümünü aç",
+    "agentsUnread": "Bu bilgisayardaki ajanlar okunamadı.",
+    "agentBlocked": "Kuruluşunuzun Claude ayarları tarafından engellendi",
+    "advanced": "Gelişmiş",
+    "sharedProcess": "Ajanlar arasında tek bir işlem paylaş",
+    "sharedProcessNote": "Daha az bellek kullanır. Çalışma alanı klasörünün dışında çalışır.",
+    "removeServer": "Sunucuyu kaldır",
+    "url": "URL",
+    "command": "Komut",
+    "arguments": "Bağımsız değişkenler",
+    "title": "MCP sunucuları",
+    "reading": "MCP sunucuları okunuyor…",
+    "unavailable": "MCP sunucuları {{host}} üzerinde kullanılamıyor",
+    "signedInTo": "{{app}} için oturum açıldı",
+    "allWorkspaces": "Tüm çalışma alanları",
+    "includingLater": "Sonradan eklenenler dahil",
+    "appliesToNewNote": "Değişiklikler yeni oturumlarda geçerli olur.",
+    "allAgents": "Tüm ajanlar",
+    "agentsOf": "{{on}}/{{total}}",
+    "workspacesAll": "Tümü",
+    "workspacesAllBut": "{{names}} hariç tümü",
+    "workspacesNone": "Yok",
+    "appliesToNew": "Yeni oturumlarda geçerli olur",
+    "restartSessions": "{{count}} oturumu yeniden başlat",
+    "restarted": "{{count}} oturum yeniden başlatıldı",
+    "agentFileTitle": "{{server}}, {{agent}} için açılsın mı?",
+    "agentFileMessage": "Orca, MCP sunucularınızı {{agent}} ajanının ayar dosyasında ({{file}}) tutacak. Kendi girdileriniz olduğu gibi kalır.",
+    "agentFilesMessage": "Orca, MCP sunucularınızı bu ajanların ayar dosyalarında tutacak. Kendi girdileriniz olduğu gibi kalır.",
+    "allow": "İzin ver",
+    "removeTitle": "{{name}} kaldırılsın mı?",
+    "remove": "Kaldır",
+    "moveTitle": "{{name}}, Orca'ya taşınsın mı?",
+    "moveMessage": "Orca bunu {{agents}} ayarlarından kaldırır ve bir yedeğini saklar.",
+    "move": "Taşı",
+    "workspacesCount": "{{count}} çalışma alanı",
+    "workspacesAllButCount": "{{count}} hariç tümü",
+    "headerMissing": "Bu sunucuyu eklemek için {{header}} alanını doldurun.",
+    "servers": "Sunucular"
   }
 }

@@ -1,14 +1,15 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useQueries, type QueryObserverResult } from '@tanstack/react-query'
 import { HOST_LIST_TARGET, NO_HOST_LIST_INPUT } from '../host-screen/catalog/host-list-queries'
 import { hostObserverOptions } from '../query/host-query'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { HostWorktreeInfo } from '../worktree/catalog/home-worktree-info'
+import { relayHostsUnwatchRows } from '../worktree/execution-hosts/server-workspace-operations'
 import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
 import {
+  HOME_RELAYED_REFRESH_FLOOR_MS,
   homeRelayedServerRowsQuery,
-  homeRelayedServersQuery,
-  relayedServerRowsPollMs
+  homeRelayedServersQuery
 } from './home-relayed-server-queries'
 import {
   pickRelayedServers,
@@ -66,16 +67,15 @@ export function useHomeServerAgents(
   )
   const rowQueries = useMemo(() => {
     const clients = new Map(homeHosts.map((host) => [host.hostId, host.client]))
-    return picks.map((pick) => ({
-      ...hostObserverOptions(
+    return picks.map((pick) =>
+      hostObserverOptions(
         homeRelayedServerRowsQuery,
         clients.get(pick.desktopHostId) ?? null,
         pick.desktopHostId,
         { exec: pick.server.hostId },
         { deltas: pick.deltas, rowChanges: pick.server.rowChanges === true }
-      ),
-      refetchInterval: relayedServerRowsPollMs(pick.server)
-    }))
+      )
+    )
   }, [homeHosts, picks])
   // Like a desktop's own agents, a relayed server's show only from a read on this connection.
   const combineRows = useCallback(
@@ -89,6 +89,37 @@ export function useHomeServerAgents(
     [picks, isLive]
   )
   const rows = useQueries({ queries: rowQueries, combine: combineRows, subscribed })
+  const watchedDesktopsRef = useRef<Map<string, RpcClient>>(new Map())
+  useEffect(() => {
+    if (!subscribed) {
+      return
+    }
+    const clients = new Map(homeHosts.map((host) => [host.hostId, host.client]))
+    for (const pick of picks) {
+      if (pick.server.rowChanges === true) {
+        const client = clients.get(pick.desktopHostId)
+        if (client) {
+          watchedDesktopsRef.current.set(pick.desktopHostId, client)
+        }
+      }
+    }
+  }, [homeHosts, picks, subscribed])
+  // Release desktop row watches after Home stays blurred past staleTime so returning refetches and re-holds.
+  useEffect(() => {
+    if (subscribed || watchedDesktopsRef.current.size === 0) {
+      return
+    }
+    const timer = setTimeout(() => {
+      const watched = [...watchedDesktopsRef.current.values()]
+      watchedDesktopsRef.current.clear()
+      for (const client of watched) {
+        if (client.getState() === 'connected') {
+          void relayHostsUnwatchRows.request(client).catch(() => {})
+        }
+      }
+    }, HOME_RELAYED_REFRESH_FLOOR_MS)
+    return () => clearTimeout(timer)
+  }, [subscribed])
   return useMemo(
     () => withRelayedServerAgents(worktreeInfo, picks, rows),
     [worktreeInfo, picks, rows]

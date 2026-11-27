@@ -6,6 +6,7 @@ import { asRecord } from '../../ai-vault/parsing/session-record-fields'
 import { extractString } from '../../../shared/text/trimmed-string'
 import { parseJsonObject } from '../../ai-vault/parsing/session-json-object'
 import { timestampMs } from '../../ai-vault/parsing/session-record-time'
+import { stripGrokUserQueryEnvelope } from '../../ai-vault/scanners/grok/session-scanner-grok-user-text'
 import { claudeContentBlocks, toolResultOutput } from './transcript-record-blocks'
 import { AGENT_SESSION_PASTED_IMAGE_SUFFIX_SOURCE } from '../../../shared/agent-session/agent-session-attachments'
 
@@ -225,22 +226,6 @@ function splitGrokPastedImageQuery(text: string): { path: string; query: string 
     return null
   }
   return { path: match[1], query: (match[2] ?? '').trim() }
-}
-
-function stripGrokUserQueryEnvelope(text: string): string {
-  const opener = '<user_query>'
-  const closer = '</user_query>'
-  const lower = text.toLowerCase()
-  const start = lower.indexOf(opener)
-  if (start === -1) {
-    return text
-  }
-  const bodyStart = start + opener.length
-  const end = lower.indexOf(closer, bodyStart)
-  if (end === -1) {
-    return text.slice(bodyStart).trim()
-  }
-  return text.slice(bodyStart, end).trim()
 }
 
 function parseTimestamp(value: unknown): number | null {

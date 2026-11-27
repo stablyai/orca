@@ -1,8 +1,10 @@
 import type { Bot } from '../../shared/bot-types'
 import {
   BOT_ROSTER_COMMANDS,
+  type BotRosterClient,
   type BotRosterEntry,
   formatBotRosterEntry,
+  formatPairedClient,
   formatUnreachableBotServer
 } from '../../shared/bot-roster'
 import type { BotConnectors } from '../../shared/bot-event-sources'
@@ -121,19 +123,30 @@ export const BOT_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, (value) => formatBotChats(value))
   },
   'bot list': async ({ client, json }) => {
-    const result = await client.call<{ bots: BotRosterEntry[]; unreachable?: { name: string }[] }>(
-      'bots.roster',
-      { ...callerChat(), allComputers: true }
-    )
+    const result = await client.call<{
+      bots: BotRosterEntry[]
+      unreachable?: { name: string }[]
+      clients?: BotRosterClient[]
+    }>('bots.roster', { ...callerChat(), allComputers: true })
     printResult(result, json, (value) => {
       const unreachable = (value.unreachable ?? []).map((server) =>
         formatUnreachableBotServer(server.name)
       )
+      // Computers paired to this Orca: a server's agents reach their bots with --on-client.
+      const clients = (value.clients ?? []).map(formatPairedClient)
       return value.bots.length === 0
-        ? ['No bots.', ...unreachable].join('\n\n')
-        : [...value.bots.map(formatBotRosterEntry), ...unreachable, '', BOT_ROSTER_COMMANDS].join(
-            '\n\n'
-          )
+        ? [
+            clients.length > 0 ? 'No bots on this computer.' : 'No bots.',
+            ...unreachable,
+            ...clients
+          ].join('\n\n')
+        : [
+            ...value.bots.map(formatBotRosterEntry),
+            ...unreachable,
+            ...clients,
+            '',
+            BOT_ROSTER_COMMANDS
+          ].join('\n\n')
     })
   }
 }
