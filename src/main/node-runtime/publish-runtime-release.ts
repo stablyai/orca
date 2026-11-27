@@ -1,6 +1,6 @@
-import { existsSync } from 'node:fs'
 import { rename } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
 
 export class RuntimeReleaseRestoreError extends AggregateError {}
 
@@ -10,9 +10,14 @@ export async function publishRuntimeRelease(
   label: string
 ): Promise<void> {
   const damaged = join(dirname(release), 'damaged')
-  const replacing = existsSync(folder)
-  if (replacing) {
+  let replacing = false
+  try {
     await rename(folder, damaged)
+    replacing = true
+  } catch (error) {
+    if (!isDefinitiveAbsence(error)) {
+      throw error
+    }
   }
   try {
     await rename(release, folder)
