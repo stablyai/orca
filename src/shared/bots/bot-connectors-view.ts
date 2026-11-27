@@ -39,7 +39,8 @@ export type BotConnectorsView = {
   workspacesNote?: string
 }
 
-export const GH_SIGNED_OUT = 'Run `gh auth login` on this computer.'
+export const GH_SIGNED_OUT =
+  'gh is signed out on this computer. Ask your owner to run `gh auth login` here.'
 export const GH_MISSING = 'Install the GitHub CLI (gh) on this computer, then run `gh auth login`.'
 export const LINEAR_NO_KEY =
   'Connect Linear to your bot, or add a Linear API key in Settings › Integrations.'
@@ -196,7 +197,9 @@ function serviceLines(service: BotConnectorService, botName: string): string[] {
     ? service.actsAs === 'bot'
       ? 'Connected.'
       : 'Signed in.'
-    : `${service.actsAs === 'bot' ? 'Not connected.' : 'Not signed in.'} ${service.gap ?? ''}`.trim()
+    : service.gap === GH_SIGNED_OUT
+      ? GH_SIGNED_OUT
+      : `${service.actsAs === 'bot' ? 'Not connected.' : 'Not signed in.'} ${service.gap ?? ''}`.trim()
   const wakes =
     service.source === 'slack' || service.source === 'google'
       ? null
