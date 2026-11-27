@@ -1,3 +1,4 @@
+import { getGitLabContextLineOldNumber } from '../../../../shared/gitlab/mr-inline-comment-position'
 import { gitLabApiFor } from '@/runtime/repository-gitlab/gitlab-owner-api'
 import { useCallback } from 'react'
 import { toast } from 'sonner'
@@ -166,6 +167,7 @@ export function useGitLabReviewActions(
       )
       return
     }
+    const oldLine = getGitLabContextLineOldNumber(file.diff, line)
     setInlineCommentSubmitting(true)
     try {
       const result = await gitLabApiFor(repoSelector).addMRInlineComment({
@@ -177,6 +179,7 @@ export function useGitLabReviewActions(
           path: file.path,
           ...(file.oldPath ? { oldPath: file.oldPath } : {}),
           line,
+          ...(oldLine !== undefined ? { oldLine } : {}),
           baseSha: details.baseSha,
           startSha: details.startSha,
           headSha: details.headSha

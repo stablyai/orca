@@ -207,6 +207,7 @@ export type GitLabMRInlineCommentInput = {
   path: string
   oldPath?: string
   line: number
+  oldLine?: number
   baseSha: string
   startSha: string
   headSha: string

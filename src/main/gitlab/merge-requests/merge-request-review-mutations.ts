@@ -121,7 +121,8 @@ export async function addMRInlineComment(
             '-f',
             `position[new_path]=${input.path}`,
             '-f',
-            `position[new_line]=${input.line}`
+            `position[new_line]=${input.line}`,
+            ...(input.oldLine !== undefined ? ['-f', `position[old_line]=${input.oldLine}`] : [])
           ],
           glabRepoExecOptions(repoPath, connectionId, localGitOptions)
         )
