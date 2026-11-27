@@ -12,9 +12,10 @@ import { workerDockGlyph } from './worker-dock-card-order'
 import { useNowSnapshot } from '@/lib/window-activity/use-now'
 import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
 import {
-  NativeChatAgentEventIcon,
+  NativeChatEventIcon,
   type NativeChatEventBadge
 } from '../../../messages/events/NativeChatEventRow'
+import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import type { WorkerDockEntry } from '../../../../../../../shared/orchestration/dock/worker-dock'
 import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
 import { formatAgentTypeLabel } from '../../../../../../../shared/agent-status/presentation/agent-type-label'
@@ -149,7 +150,9 @@ export const WorkerDockRow = memo(function WorkerDockRow({
       >
         <span className="flex h-5 shrink-0 items-center">
           {row?.kind === 'worker' ? (
-            <NativeChatAgentEventIcon agentType={row.agent ?? null} badge={workerDockBadge(row)} />
+            <NativeChatEventIcon badge={workerDockBadge(row)}>
+              <AgentTypeIcon agentType={row.agent ?? null} size={14} />
+            </NativeChatEventIcon>
           ) : (
             <WorkerDockGlyph glyph={row ? workerDockGlyph(row) : 'queued'} />
           )}
