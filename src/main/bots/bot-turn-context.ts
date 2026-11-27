@@ -155,7 +155,7 @@ export function createBotTurnContext(
       const plan = text.length === 0 ? null : { text: text.join('\n\n'), given: taken }
       return withOrcaRules(sessionId, entry, held, plan)
     },
-    plan: async (sessionId, message, held) => {
+    plan: async (sessionId, message, held, clientMessageId) => {
       const stored = given.get(sessionId)
       if (!stored) {
         return null
@@ -167,7 +167,7 @@ export function createBotTurnContext(
         workNote(sessionId, message).catch(() => null),
         readTopics(stored.folder),
         recentChats(stored.botId, sessionId).catch(() => null),
-        unansweredQuestionNote(sessionId, stored.botId).catch(() => null)
+        unansweredQuestionNote(sessionId, stored.botId, clientMessageId).catch(() => null)
       ])
       const soul = fingerprint(files.soul)
       const memory = fingerprint(files.memory)
@@ -188,7 +188,8 @@ export function createBotTurnContext(
         ...(soul !== entry.soul ? ['soul' as const] : []),
         ...(memoryNow || topicsNow ? ['memory' as const] : [])
       ]
-      if (changed.length === 0 && !work && !skillsNow && !rules && !others && !unanswered) {
+      const workNotes = [work, unanswered?.text].filter(Boolean)
+      if (changed.length === 0 && !skillsNow && !rules && !others && workNotes.length === 0) {
         return withOrcaRules(sessionId, entry, held, null)
       }
       return withOrcaRules(sessionId, entry, held, {
@@ -199,8 +200,7 @@ export function createBotTurnContext(
           ...(topicsNow ? [topicsNow] : []),
           ...(skillsNow ? [skillsNow.text] : []),
           ...(others ? [others] : []),
-          ...(work ? [work] : []),
-          ...(unanswered ? [unanswered.text] : [])
+          ...workNotes
         ].join('\n\n'),
         ...(changed.length > 0
           ? { note: botContextNoteBody({ botId: entry.botId, changed }) }

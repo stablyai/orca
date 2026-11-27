@@ -31,7 +31,8 @@ export type StructuredAgentSessionTurnContext = {
   plan: (
     sessionId: string,
     message: AgentJournalMessageItem,
-    held?: HeldInstructions
+    held?: HeldInstructions,
+    clientMessageId?: string
   ) => Promise<StructuredAgentSessionTurnContextPlan | null>
   /** What a launch or a later link left the agent to learn, for a turn `plan` doesn't ride (a
    *  worker's report, an attachment); `plan` carries it on a person's words. Null adds nothing. */

@@ -49,7 +49,7 @@ export function structuredAgentSessionRideAlong(
     }
     carried = sendCarriesRideAlong(scope, submission, body)
     if (carried) {
-      return ctx.turnContext.plan(ctx.sessionId, body, held)
+      return ctx.turnContext.plan(ctx.sessionId, body, held, submission.clientMessageId)
     }
     // A command must open the prompt; the update waits for the next turn it can go ahead of.
     return isPromptCommand(body)

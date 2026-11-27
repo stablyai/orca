@@ -15,6 +15,8 @@ import {
   type TurnSectionsMemo
 } from './bot-active-work'
 import { readBotActiveWork } from './bot-active-work-read'
+import { lookAroundIdleItemFacts } from './bot-look-around-prompt'
+import { isRegisteredLookOpening } from './bot-look-around-runtime'
 import { BOT_WORK_NOTE_TIMEOUT_MS } from './bot-work-record'
 import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 import type { Bot } from '../../shared/bot-types'
@@ -126,7 +128,7 @@ export function botSessionHooks(runtime: OrcaRuntimeService): BotSessionHooks {
         ])
       ),
     // Like the recent chats: a failed or stalled read means no note this turn, never a held message.
-    unansweredQuestionNote: async (sessionId, botId) => {
+    unansweredQuestionNote: async (sessionId, botId, clientMessageId) => {
       const [unanswered, work] = await Promise.all([
         withTimeout(
           unansweredQuestionNote(sessionId).catch(() => null),
@@ -141,9 +143,20 @@ export function botSessionHooks(runtime: OrcaRuntimeService): BotSessionHooks {
           ? botNeedsYouInChatNote(needsYouSaid, sessionId, work.needsYou)
           : null
       const text = [unanswered, needsYou?.text, idle?.text].filter(Boolean).join('\n\n')
-      return text
+      const lookItems = clientMessageId && work?.idleLookItems?.length ? work.idleLookItems : null
+      return text || lookItems
         ? {
-            text,
+            get text() {
+              // Check at assembly, after the other turn context reads finish.
+              if (
+                lookItems &&
+                clientMessageId &&
+                isRegisteredLookOpening(runtime, botId, sessionId, clientMessageId)
+              ) {
+                return [text, lookAroundIdleItemFacts(lookItems)].filter(Boolean).join('\n\n')
+              }
+              return text
+            },
             given: () => {
               needsYou?.given()
               idle?.given()
