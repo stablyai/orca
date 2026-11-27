@@ -171,9 +171,10 @@ export class ProviderReceiptReaders {
     endpoint: ProviderReceiptDestination,
     input: ProviderReceiptRead,
     source: StructuredAgentSessionProviderReceipts | undefined,
-    fixedFailure?: 'closed' | 'capacity'
+    fixedFailure?: 'closed' | 'capacity',
+    signal = endpoint.document
   ): Promise<ProviderReceiptReply> {
-    if (endpoint.document.aborted || endpoint.transport.aborted) {
+    if (signal.aborted || endpoint.document.aborted || endpoint.transport.aborted) {
       throw new Error('provider_receipt_sender_retired')
     }
     if (
@@ -219,7 +220,7 @@ export class ProviderReceiptReaders {
       reject(new Error('provider_receipt_sender_retired'))
       this.credits.prune(target)
     }
-    endpoint.document.addEventListener('abort', abort, { once: true })
+    signal.addEventListener('abort', abort, { once: true })
     const wait = {
       document: endpoint.document,
       reader,
@@ -227,9 +228,7 @@ export class ProviderReceiptReaders {
       failure,
       resolve,
       reject,
-      cancelled: () => {
-        endpoint.document.removeEventListener('abort', abort)
-      }
+      cancelled: () => signal.removeEventListener('abort', abort)
     }
     target.waiting = wait
     this.wake(target)

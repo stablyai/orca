@@ -4,6 +4,7 @@ import * as z from 'zod'
 export const PROVIDER_RECEIPT_READ_METHOD = 'agentSession.readProviderReceipts'
 export const PROVIDER_RECEIPT_PORT_ACQUIRE = 'runtime:acquireProviderReceiptPort'
 export const PROVIDER_RECEIPT_PORT_DELIVERY = 'runtime:providerReceiptPort'
+export const PROVIDER_RECEIPT_DISCARD = 'runtime:discardProviderReceipt'
 export const MAX_PROVIDER_RECEIPT_REQUEST_BYTES = 512
 export const MAX_PROVIDER_RECEIPT_REPLY_BYTES = 229_376
 export const MAX_PROVIDER_RECEIPT_REPLY_KEYS = 256

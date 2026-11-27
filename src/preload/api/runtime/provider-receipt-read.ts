@@ -2,6 +2,7 @@ import { ipcRenderer } from 'electron'
 import {
   MAX_PROVIDER_RECEIPT_REPLY_BYTES,
   MAX_PROVIDER_RECEIPT_REQUEST_BYTES,
+  PROVIDER_RECEIPT_DISCARD,
   PROVIDER_RECEIPT_PORT_ACQUIRE,
   PROVIDER_RECEIPT_PORT_DELIVERY,
   PROVIDER_RECEIPT_READ_METHOD,
@@ -28,8 +29,12 @@ type ReceiptPort = {
 }
 
 let pending = false
-let unread: ProviderReceiptCursor | undefined
-let last: ProviderReceiptCursor | undefined
+let held:
+  | {
+      cursor: ProviderReceiptCursor
+      state: 'received' | 'consumed' | 'discarded' | 'discard-posted'
+    }
+  | undefined
 let active: ReceiptPort | undefined
 const encoder = new TextEncoder()
 const decoder = new TextDecoder('utf-8', { fatal: true })
@@ -46,9 +51,9 @@ function hasCursor(value: unknown, cursor: ProviderReceiptCursor): boolean {
 }
 
 export function discardProviderReceiptReply(revision: ProviderReceiptCursor): void {
-  if (active && unread && hasCursor(revision, unread)) {
-    active.port.postMessage(encoder.encode(JSON.stringify(unread)))
-    unread = undefined
+  if (held && held.state !== 'discard-posted' && hasCursor(revision, held.cursor)) {
+    ipcRenderer.send(PROVIDER_RECEIPT_DISCARD, encoder.encode(JSON.stringify(held.cursor)))
+    held.state = 'discard-posted'
   }
 }
 
@@ -158,18 +163,27 @@ async function read(args: RuntimeCall): Promise<RuntimeRpcResponse<unknown>> {
     throw new Error('provider_receipt_invalid_read')
   }
   const { reader, since } = input.data
-  if ((unread && !hasCursor(since, unread)) || (since && (!last || !hasCursor(since, last)))) {
+  if (since ? !held || !hasCursor(since, held.cursor) : held?.state === 'received') {
     throw new Error('provider_receipt_read_pending')
-  }
-  const encoded = encoder.encode(JSON.stringify(input.data))
-  if (encoded.byteLength > MAX_PROVIDER_RECEIPT_REQUEST_BYTES) {
-    throw new Error('provider_receipt_capacity')
   }
   pending = true
   try {
-    const reply = await exchange(await acquire(reader), encoded)
+    const binding = await acquire(reader)
+    if (held) {
+      if (held.state === 'received' || held.state === 'consumed') {
+        held.state = input.data.discarded ? 'discarded' : 'consumed'
+      }
+      input.data.since = held.cursor
+      input.data.discarded =
+        held.state === 'discarded' || held.state === 'discard-posted' || undefined
+    }
+    const encoded = encoder.encode(JSON.stringify(input.data))
+    if (encoded.byteLength > MAX_PROVIDER_RECEIPT_REQUEST_BYTES) {
+      throw new Error('provider_receipt_capacity')
+    }
+    const reply = await exchange(binding, encoded)
     if (reply.ok) {
-      unread = last = reply.result.revision
+      held = { cursor: reply.result.revision, state: 'received' }
     }
     return reply
   } finally {

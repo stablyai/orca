@@ -1,9 +1,17 @@
-import { app, ipcMain, MessageChannelMain, type IpcMainInvokeEvent } from 'electron'
+import {
+  app,
+  ipcMain,
+  MessageChannelMain,
+  type IpcMainEvent,
+  type IpcMainInvokeEvent
+} from 'electron'
 import {
   MAX_PROVIDER_RECEIPT_REQUEST_BYTES,
+  PROVIDER_RECEIPT_DISCARD,
   PROVIDER_RECEIPT_READ_METHOD,
   PROVIDER_RECEIPT_PORT_ACQUIRE,
   PROVIDER_RECEIPT_PORT_DELIVERY,
+  ReceiptCursor,
   ReceiptPortRequest
 } from '../../../shared/rpc-contract/structured-agent-session/structured-agent-session-provider-receipts'
 import { backendDocumentRole } from '../../backend-desktop/backend-desktop-capabilities'
@@ -42,12 +50,26 @@ export class DesktopProviderReceiptPort {
     ipcMain.handle(PROVIDER_RECEIPT_PORT_ACQUIRE, (event, data: unknown) =>
       this.acquire(event, data)
     )
+    ipcMain.on(PROVIDER_RECEIPT_DISCARD, this.discard)
     app.once('will-quit', () => {
       ipcMain.removeHandler(PROVIDER_RECEIPT_PORT_ACQUIRE)
+      ipcMain.off(PROVIDER_RECEIPT_DISCARD, this.discard)
       for (const window of this.windows.values()) {
         window.dispose()
       }
     })
+  }
+
+  private discard = (event: IpcMainEvent, bytes: unknown): void => {
+    const { sender, senderFrame } = event
+    const document = this.windows.get(sender.id)?.document
+    if (!document?.isCurrent() || senderFrame !== sender.mainFrame) {
+      return
+    }
+    const cursor = ReceiptCursor.safeParse(decodeRequest(bytes))
+    if (cursor.success) {
+      this.readers.discard(document.endpoint, cursor.data)
+    }
   }
 
   endpointFor(event: IpcMainInvokeEvent): ProviderReceiptDestination | undefined {
@@ -77,7 +99,6 @@ export class DesktopProviderReceiptPort {
       window = new DesktopProviderReceiptWindow(sender, this.readers, () => this.windows.delete(id))
       this.windows.set(id, window)
     }
-    window.observeRenderer(pid)
     if (window.document?.isCurrent()) {
       return { window, document: window.document, pid, senderFrame }
     }
@@ -131,9 +152,11 @@ export class DesktopProviderReceiptPort {
     }
     previous?.close()
     const { port1, port2 } = new MessageChannelMain()
+    const lifetime = new AbortController()
     const onClose = (): void => {
       if (document.binding === binding) {
-        document.retire()
+        binding.close()
+        this.readers.retireDocument(endpoint)
       }
     }
     let closed = false
@@ -147,6 +170,8 @@ export class DesktopProviderReceiptPort {
         closed = true
         if (document.binding === binding) {
           document.binding = undefined
+          lifetime.abort()
+          this.readers.suppress(endpoint)
         }
         port1.off('message', onMessage)
         port1.off('close', onClose)
@@ -173,10 +198,6 @@ export class DesktopProviderReceiptPort {
       if (request.kind === 'drop') {
         return
       }
-      if (request.kind === 'discard') {
-        this.readers.discard(endpoint, request.cursor)
-        return
-      }
       binding.pending = true
       void (async () => {
         let posted = false
@@ -197,7 +218,7 @@ export class DesktopProviderReceiptPort {
               caller: DESKTOP_RPC_CALLER,
               clientKind: 'runtime',
               clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES,
-              signal: endpoint.document,
+              signal: lifetime.signal,
               localProviderReceipts: { endpoint, readers: this.readers }
             }
           )
@@ -206,13 +227,14 @@ export class DesktopProviderReceiptPort {
           }
           const reply = dispatched.ok
             ? dispatched.result
-            : await this.readers.read(endpoint, request.input, undefined, 'closed')
+            : await this.readers.read(endpoint, request.input, undefined, 'closed', lifetime.signal)
           const prepared = this.readers.preparedReply(endpoint)
           posted =
             prepared !== undefined &&
             prepared.reply === reply &&
             prepared.reply.status !== 'reader_unknown' &&
             canPost() &&
+            senderFrame.osProcessId === pid &&
             window.watchRenderer(pid) &&
             this.readers.handoff(endpoint, (encoded) => port1.postMessage(encoded))
         } catch {
@@ -220,9 +242,6 @@ export class DesktopProviderReceiptPort {
         } finally {
           binding.pending = false
           if (!posted) {
-            if (request.kind === 'read') {
-              this.readers.suppress(endpoint)
-            }
             binding.close()
           }
         }

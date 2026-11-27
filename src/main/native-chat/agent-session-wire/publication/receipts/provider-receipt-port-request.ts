@@ -1,7 +1,5 @@
 import {
-  ReceiptCursor,
   ReceiptRead,
-  type ProviderReceiptCursor,
   type ProviderReceiptRead,
   type ProviderReceiptReader
 } from '../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-provider-receipts'
@@ -11,7 +9,6 @@ import type { ProviderReceiptReaders } from './provider-receipt-readers'
 type ReceiptPortRequest =
   | { kind: 'drop' }
   | { kind: 'restart' }
-  | { kind: 'discard'; cursor: ProviderReceiptCursor }
   | { kind: 'read'; input: ProviderReceiptRead }
 
 export function providerReceiptPortRequest(
@@ -23,10 +20,6 @@ export function providerReceiptPortRequest(
 ): ReceiptPortRequest {
   if (binding.pending) {
     return { kind: 'drop' }
-  }
-  if (typeof data === 'object' && data !== null && 'sequence' in data) {
-    const cursor = ReceiptCursor.safeParse(data)
-    return cursor.success && current ? { kind: 'discard', cursor: cursor.data } : { kind: 'drop' }
   }
   const input = ReceiptRead.safeParse(data)
   if (

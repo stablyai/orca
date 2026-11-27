@@ -13,10 +13,17 @@ export const LOCAL_READ_PROVIDER_RECEIPTS = defineMethod({
     if (!ctx.localProviderReceipts) {
       throw new Error('forbidden')
     }
-    return ctx.localProviderReceipts.readers.read(
-      ctx.localProviderReceipts.endpoint,
+    const { endpoint, readers } = ctx.localProviderReceipts
+    // The unary dispatch can yield after port admission.
+    if (!readers.canStartRead(endpoint, input.reader)) {
+      throw new Error('provider_receipt_sender_retired')
+    }
+    return readers.read(
+      endpoint,
       input,
-      getStructuredAgentSessionHost()?.providerReceipts
+      getStructuredAgentSessionHost()?.providerReceipts,
+      undefined,
+      ctx.signal
     )
   }
 })
