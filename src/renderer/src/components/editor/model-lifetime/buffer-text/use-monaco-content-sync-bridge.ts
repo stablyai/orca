@@ -15,7 +15,6 @@ export type MonacoContentSyncBridge = {
   isApplyingProgrammaticContentRef: MutableRefObject<boolean>
 }
 
-/** Callers update the content/mode refs during render so mount handlers can read current props before commit. */
 function withProgrammaticContentSync(
   modelKey: string,
   isApplyingRef: { current: boolean },
@@ -31,6 +30,7 @@ function withProgrammaticContentSync(
   }
 }
 
+/** Callers update the content/mode refs during render so mount handlers can read current props before commit. */
 export function useMonacoContentSyncBridge(params: {
   editorRef: MutableRefObject<editor.IStandaloneCodeEditor | null>
   mountedEditor: editor.IStandaloneCodeEditor | null

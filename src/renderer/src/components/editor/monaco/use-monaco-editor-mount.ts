@@ -28,7 +28,6 @@ import {
 
 function ignoreCursorLine(): void {}
 
-// Read changing inputs through refs so retained Monaco listeners do not require remounts.
 function withMountProgrammaticContentSync(
   modelKey: string,
   isApplyingRef: { current: boolean },
@@ -44,6 +43,7 @@ function withMountProgrammaticContentSync(
   }
 }
 
+// Read changing inputs through refs so retained Monaco listeners do not require remounts.
 export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
   const {
     fileId,
