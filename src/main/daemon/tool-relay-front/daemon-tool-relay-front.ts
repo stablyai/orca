@@ -47,6 +47,8 @@ export class DaemonToolRelayFront {
   private disposed = false
   private readonly held = new Map<string, Held>()
   private readonly pipes = new Set<Pipe>()
+  /** Control connections whose close already ends their serving. */
+  private readonly watchedControls = new WeakSet<Socket>()
 
   constructor(
     /** The daemon start holding this front. */
@@ -91,12 +93,17 @@ export class DaemonToolRelayFront {
     control: Socket,
     announce: (frontConnectionId: string) => void
   ): number | null {
-    if (this.serving?.control !== control) {
+    const replaced = this.serving?.control !== control
+    if (!this.watchedControls.has(control)) {
+      this.watchedControls.add(control)
       control.once('close', () => this.clientGone(clientId, control))
     }
     this.serving = { clientId, control, announce }
-    for (const id of this.held.keys()) {
-      announce(id)
+    // The same connection serving again already heard of every held connection.
+    if (replaced) {
+      for (const id of this.held.keys()) {
+        announce(id)
+      }
     }
     return this.port
   }

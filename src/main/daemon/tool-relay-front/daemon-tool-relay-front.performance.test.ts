@@ -1,6 +1,6 @@
 import { connect, createServer, Socket, type Server } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-// Guards this PR's front bounds: held connections, live pipes, and their release.
+// Guards #51086's front bounds: held connections, live pipes, announcements, and their release.
 import {
   DaemonToolRelayFront,
   TOOL_RELAY_FRONT_MAX_HELD,
@@ -58,8 +58,12 @@ describe.skipIf(process.platform === 'win32')('tool relay front bounds', () => {
     expect(await over.answer).toContain('503 Service Unavailable')
     expect(front.heldCount).toBe(TOOL_RELAY_FRONT_MAX_HELD)
 
-    // Registering announces every held connection; each splice frees its hold for a pipe.
-    front.serve('app', new Socket(), (id) => announced.push(id))
+    // Registering announces every held connection; the same connection registering again (one per
+    // chat launch) announces nothing more.
+    const control = new Socket()
+    for (let launch = 0; launch < 100; launch += 1) {
+      front.serve('app', control, (id) => announced.push(id))
+    }
     expect(announced).toHaveLength(TOOL_RELAY_FRONT_MAX_HELD)
     for (const id of announced) {
       front.splice(id, await appSocket(), 'app')

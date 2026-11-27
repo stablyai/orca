@@ -253,7 +253,11 @@ async function composedPart<L>(
   // A launch that resolves no tools leaves no earlier launch's pin behind.
   pinProviderRelayFront(record.sessionId, null)
   await sources.prepareLaunch?.(record, await launchDirectory())
-  const composed = await part(basis, identity)
+  const composed = await part(basis, identity).catch((error: unknown) => {
+    // A launch that never starts keeps no pin.
+    pinProviderRelayFront(record.sessionId, null)
+    throw error
+  })
   return {
     ...composed,
     // Why: applied once here so no agent can opt out of stripping the launching pane's identity.

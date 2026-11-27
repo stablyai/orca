@@ -22,7 +22,14 @@ export function restoreKeptSharedToolCallers(kept: readonly KeptSharedToolCaller
 
 /** The caller identity a token was issued for; null for a token this run never issued or ended. */
 export function sharedToolProcessCaller(token: string): Readonly<Record<string, string>> | null {
-  return callers.get(hashToken(token)) ?? null
+  const key = hashToken(token)
+  const known = callers.get(key)
+  if (known) {
+    return known
+  }
+  // A kept caller the keychain refused at startup may open now (at most once per 10 s).
+  restoreKeptSharedToolCallers(sharedToolCallerStore.unlock())
+  return callers.get(key) ?? null
 }
 
 /** One launched child's token, from spawn until its process exits (`end`). */

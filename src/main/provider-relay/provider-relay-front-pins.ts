@@ -15,8 +15,11 @@ export function pinProviderRelayFront(chatKey: string, daemonInstance: string | 
   }
 }
 
-export function providerRelayFrontPin(chatKey: string): string | null {
-  return pins.get(chatKey) ?? null
+/** Taken once, by the launch's spawn or its process commit, so no chat keeps one past its launch. */
+export function takeProviderRelayFrontPin(chatKey: string): string | null {
+  const pinned = pins.get(chatKey) ?? null
+  pins.delete(chatKey)
+  return pinned
 }
 
 const FRONT_MOVED_DETAIL =
@@ -38,11 +41,11 @@ export class ProviderRelayFrontMovedError extends Error {
  */
 export async function refuseMovedProviderRelayFront(
   chatKey: string,
+  pinned: string | null,
   daemonInstance: string | undefined,
   undo?: () => Promise<unknown>
 ): Promise<void> {
-  const pinned = pins.get(chatKey)
-  if (pinned === undefined || daemonInstance === undefined || daemonInstance === pinned) {
+  if (pinned === null || daemonInstance === undefined || daemonInstance === pinned) {
     return
   }
   await undo?.().catch(() => {})

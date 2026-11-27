@@ -7,7 +7,9 @@ import { resolve } from 'node:path'
 import { jsonObject } from '../../../shared/json-stream/json-value-property'
 import {
   relaySealingProtected,
+  relayUnlockThrottle,
   sealRelaySecret,
+  type RelayUnlockThrottle,
   unsealRelaySecret,
   type RelaySealedFile
 } from './relay-sealed-file'
@@ -74,8 +76,9 @@ export function isStoredRelayGrant(value: unknown): value is StoredRelayGrant {
   )
 }
 
-/** How often a call may retry opening sealed tokens the keychain refused. */
-export const RELAY_UNLOCK_RETRY_MS = 10_000
+/** A kept owner's token; `entry` is null until it is sealed, `durable` once it is in the file. */
+type KeptToken = { token: string; entry: StoredRelayGrant | null; durable: Promise<boolean> }
+
 
 const resolvedFolders = (folders: RelayFolders): RelayFolders => ({
   ...(folders.bot ? { bot: resolve(folders.bot) } : {}),
@@ -90,16 +93,15 @@ export class RelayGrants {
   private readonly grants = new Map<string, RelayGrant>()
   /** The token each owner's launches get now. */
   private readonly tokens = new Map<string, string>()
-  /** Owners whose token is durably in the file, with the token it holds. */
-  private readonly kept = new Map<string, { entry: StoredRelayGrant; token: string }>()
+  /** Owners whose token is in the file (or being written to it), with the token it holds. */
+  private readonly kept = new Map<string, KeptToken>()
   /** Entries in the file the keychain hasn't opened yet; kept as written. */
   private readonly locked = new Map<string, StoredRelayGrant>()
-  private lastUnlockAt = Number.NEGATIVE_INFINITY
   private loading: Promise<void> | null = null
   private file: RelaySealedFile<StoredRelayGrant> | null = null
   private current: ((owner: string) => RelayFolders | null) | undefined
 
-  constructor(private readonly now: () => number = Date.now) {}
+  constructor(private readonly throttle: RelayUnlockThrottle = relayUnlockThrottle) {}
 
   /**
    * Where kept grants live; without one every grant ends with this run, as before. `current` is
@@ -169,16 +171,33 @@ export class RelayGrants {
     if (!this.file || !token || !grant || this.locked.has(owner) || !relaySealingProtected()) {
       return false
     }
-    if (this.kept.get(owner)?.token === token) {
-      return true
+    const current = this.kept.get(owner)
+    if (current?.token === token) {
+      // A launch racing the first one waits for the same durable write.
+      return current.durable
     }
-    const entry = { owner, folders: grant.folders, sealedToken: await sealRelaySecret(token) }
-    this.kept.set(owner, { entry, token })
+    const record: KeptToken = { token, entry: null, durable: Promise.resolve(false) }
+    this.kept.set(owner, record)
+    record.durable = this.makeDurable(owner, record, grant.folders)
+    return record.durable
+  }
+
+  private async makeDurable(
+    owner: string,
+    record: KeptToken,
+    folders: RelayFolders
+  ): Promise<boolean> {
     try {
+      const sealedToken = await sealRelaySecret(record.token)
+      // Revoked or replaced while sealing: a deleted bot's token never reaches the file.
+      if (this.kept.get(owner) !== record) {
+        return false
+      }
+      record.entry = { owner, folders, sealedToken }
       await this.persist()
-      return this.kept.get(owner)?.token === token
+      return this.kept.get(owner) === record
     } catch (error) {
-      if (this.kept.get(owner)?.token === token) {
+      if (this.kept.get(owner) === record) {
         this.kept.delete(owner)
       }
       console.warn('[bot-tool-relay] could not keep a grant', error)
@@ -203,10 +222,9 @@ export class RelayGrants {
     if (this.locked.size === 0) {
       return undefined
     }
-    if (this.now() - this.lastUnlockAt < RELAY_UNLOCK_RETRY_MS) {
+    if (!this.throttle.due()) {
       return 'locked'
     }
-    this.lastUnlockAt = this.now()
     for (const entry of this.locked.values()) {
       if (this.open(entry)) {
         this.locked.delete(entry.owner)
@@ -250,7 +268,7 @@ export class RelayGrants {
     }
     this.grants.set(hashToken(token), { owner: entry.owner, folders: entry.folders })
     this.tokens.set(entry.owner, token)
-    this.kept.set(entry.owner, { entry, token })
+    this.kept.set(entry.owner, { entry, token, durable: Promise.resolve(true) })
     return true
   }
 
@@ -258,8 +276,8 @@ export class RelayGrants {
     if (!this.file) {
       return Promise.resolve()
     }
-    return this.file.write([
-      ...[...this.kept.values()].map(({ entry }) => entry),
+    return this.file.write(() => [
+      ...[...this.kept.values()].flatMap(({ entry }) => (entry ? [entry] : [])),
       ...this.locked.values()
     ])
   }

@@ -39,11 +39,15 @@ export function codexConnectionOpener(
     return deps.openConnection
   }
   // A chat's own app-server runs under the terminal daemon where it can, so it survives a restart.
-  // Windows launches its own as always, and so does a bot's chat: its grants end with this app.
+  // Windows launches its own as always. One whose tool grants end with this app starts its own too,
+  // but first reattaches the chat's kept agent, so no second one ever runs beside it.
   if (launch.customCommand || platform === 'win32' || deps.sharedServers?.() !== true) {
-    return platform === 'win32' || launch.appBoundGrants
+    return platform === 'win32'
       ? spawnCodexAppServerConnection
-      : spawnRelayedCodexAppServerConnection(sessionId)
+      : spawnRelayedCodexAppServerConnection({
+          chatKey: sessionId,
+          ...(launch.appBoundGrants ? { only: 'reattach' as const } : {})
+        })
   }
   const skillRoots = codexSkillRoots({
     ...(launch.visuals ? { visualsSkillsRoot: launch.visuals.skill.skillsRoot } : {}),

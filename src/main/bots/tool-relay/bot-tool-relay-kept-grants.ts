@@ -24,7 +24,15 @@ export class KeptRelayGrants {
   constructor(server: () => Promise<Server | null>) {
     this.fronts = new ToolRelayFronts((socket) => {
       server().then(
-        (listening) => (listening ? listening.emit('connection', socket) : socket.destroy()),
+        (listening) => {
+          if (!listening || this.fronts.isClosed) {
+            socket.destroy()
+            return
+          }
+          listening.emit('connection', socket)
+          // The hello left it paused, with any request bytes already read put back.
+          socket.resume()
+        },
         () => socket.destroy()
       )
     })
@@ -98,8 +106,12 @@ export class KeptRelayGrants {
   /** The owner's kept chats' callers go durably first, then its own entry, then its tokens. */
   async revoke(owner: string): Promise<void> {
     await this.loaded().catch(() => {})
-    await forgetKeptSharedToolCallers(owner)
-    await this.grants.revoke(owner)
+    try {
+      await forgetKeptSharedToolCallers(owner)
+    } finally {
+      // A caller file that can't be written never keeps the token working.
+      await this.grants.revoke(owner)
+    }
   }
 
   /** A Host the relay answers: its own port, or a daemon-held front it serves. */

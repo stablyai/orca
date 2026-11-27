@@ -27,12 +27,38 @@ export function unsealRelaySecret(sealed: string): string {
   return getSecretStore().decryptString(Buffer.from(sealed, 'base64'))
 }
 
+/** How often entries the keychain refused may be retried. */
+export const RELAY_UNLOCK_RETRY_MS = 10_000
+
+/** One retry of keychain-refused entries per `RELAY_UNLOCK_RETRY_MS` across every kept relay file. */
+export class RelayUnlockThrottle {
+  private last = Number.NEGATIVE_INFINITY
+
+  constructor(private readonly now: () => number = Date.now) {}
+
+  due(): boolean {
+    if (this.now() - this.last < RELAY_UNLOCK_RETRY_MS) {
+      return false
+    }
+    this.last = this.now()
+    return true
+  }
+}
+
+export const relayUnlockThrottle = new RelayUnlockThrottle()
+
 export class RelaySealedFile<Entry> {
-  private writing: Promise<unknown> = Promise.resolve()
+  private running: Promise<void> | null = null
+  private queued: Promise<void> | null = null
+  private latest: () => readonly Entry[] = () => []
 
   constructor(
     private readonly path: string,
-    private readonly isEntry: (value: unknown) => value is Entry
+    private readonly isEntry: (value: unknown) => value is Entry,
+    private readonly publish: (path: string, payload: string) => Promise<unknown> = (
+      target,
+      payload
+    ) => writeFileDurable(durableWriteTempPath(target), target, payload, 0o600)
   ) {}
 
   /** The file's entries; none when it's missing or unreadable (a bad entry alone is skipped). */
@@ -52,13 +78,37 @@ export class RelaySealedFile<Entry> {
     }
   }
 
-  /** Resolves once `entries` is durably the whole file; rejects when it couldn't be written. */
-  write(entries: readonly Entry[]): Promise<void> {
-    const payload = `${JSON.stringify({ version: 1, entries })}\n`
-    const next = this.writing.then(() =>
-      writeFileDurable(durableWriteTempPath(this.path), this.path, payload, 0o600)
+  /**
+   * Resolves once the file durably holds `snapshot()` as taken at or after this call; rejects when
+   * that write failed. Writes run one at a time and coalesce: while one runs, every later call
+   * shares the single next write, which takes the state as it is when it starts.
+   */
+  write(snapshot: () => readonly Entry[]): Promise<void> {
+    this.latest = snapshot
+    if (!this.running) {
+      return this.start()
+    }
+    this.queued ??= this.running
+      .catch(() => {})
+      .then(() => {
+        this.queued = null
+        return this.start()
+      })
+    return this.queued
+  }
+
+  private start(): Promise<void> {
+    const entries = this.latest()
+    const run = this.publish(this.path, `${JSON.stringify({ version: 1, entries })}\n`).then(
+      () => {}
     )
-    this.writing = next.catch(() => {})
-    return next
+    this.running = run
+    const settled = (): void => {
+      if (this.running === run) {
+        this.running = null
+      }
+    }
+    run.then(settled, settled)
+    return run
   }
 }

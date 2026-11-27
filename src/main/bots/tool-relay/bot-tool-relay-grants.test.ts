@@ -7,13 +7,8 @@ import {
   setSecretStore,
   type SecretStore
 } from '../../../shared/secure-storage/secret-store'
-import {
-  isStoredRelayGrant,
-  RELAY_UNLOCK_RETRY_MS,
-  RelayGrants,
-  type StoredRelayGrant
-} from './bot-tool-relay-grants'
-import { RelaySealedFile } from './relay-sealed-file'
+import { isStoredRelayGrant, RelayGrants, type StoredRelayGrant } from './bot-tool-relay-grants'
+import { RELAY_UNLOCK_RETRY_MS, RelaySealedFile, RelayUnlockThrottle } from './relay-sealed-file'
 import { jsonProperty } from '../../../shared/json-stream/json-value-property'
 
 /** A keychain that seals by reversing the bytes, and can be locked or downgraded. */
@@ -42,7 +37,7 @@ let path: string
 let clock = 0
 
 const grantsAt = (current?: (owner: string) => { bot?: string } | null) => {
-  const grants = new RelayGrants(() => clock)
+  const grants = new RelayGrants(new RelayUnlockThrottle(() => clock))
   grants.configure(new RelaySealedFile(path, isStoredRelayGrant), current)
   return grants
 }
