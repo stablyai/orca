@@ -44,6 +44,11 @@ type DesktopWindowSettings = {
   linuxTilingWindowMode?: boolean
 }
 
+type TerminalPaneChromeSettings = {
+  /** Hides the floating action buttons on terminal panes; shortcuts and the context menu stay. */
+  showTerminalPaneActionButtons?: boolean
+}
+
 /** Settings groups owned by their feature modules and composed into GlobalSettings. */
 export type GlobalSettingsBase = AntigravityChatAuthSettings &
   EmulatorOpeningSettings &
@@ -65,6 +70,7 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   PluginUpdatePolicySettings &
   PluginSystemSettings &
   TerminalScrollSettings &
+  TerminalPaneChromeSettings &
   TerminalColorOverrideGlobalSettings &
   WindowMaterialSettings &
   DesktopWindowSettings &
