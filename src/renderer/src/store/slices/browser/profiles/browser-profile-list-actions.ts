@@ -131,7 +131,7 @@ export function createBrowserProfileListActions(
           parsedHostId?.kind === 'ssh'
             ? await window.api.browser
                 .sessionClientRouteImportSources({ sshTargetId: parsedHostId.targetId })
-                .catch(() => ({}))
+                .catch(() => null)
             : null
         const profiles = sshSources
           ? localProfiles.map((profile) => ({ ...profile, source: sshSources[profile.id] ?? null }))

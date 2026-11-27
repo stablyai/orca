@@ -30,7 +30,11 @@ const PROFILES: BrowserSessionProfile[] = [
     scope: 'isolated',
     partition: 'persist:orca-browser-fixture-work',
     label: 'Work',
-    source: null
+    source: {
+      browserFamily: 'firefox',
+      profileName: 'default-release',
+      importedAt: 1735776000000
+    }
   }
 ]
 
@@ -170,6 +174,7 @@ function Toolbar({
               browserPageId: 'fixture-page',
               allProfiles: PROFILES,
               effectiveProfileId: 'default',
+              pageRoute,
               canRefreshFromChrome: true,
               onSwitchProfile: noop,
               onNewProfile: noop

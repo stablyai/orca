@@ -1,8 +1,8 @@
 import { expect, it, vi } from 'vitest'
 import type { BrowserSessionProfile } from '../../../../shared/browser/workspaces/browser-workspace-types'
-import { browserCookieImportFailure } from '../../../../shared/browser/cookies/browser-cookie-import-failure-copy'
 import { importCookiesIntoBrowserProfile } from './browser-profile-cookie-import'
 import { withCookieMutationLock } from '../mutation/cookie-mutation-lock'
+import { resolveBrowserImportSelection } from '../sources/browser-cookie-detection'
 
 const { jar, registry } = vi.hoisted(() => ({
   jar: {},
@@ -15,6 +15,8 @@ vi.mock('electron', () => ({ session: { fromPartition: () => jar } }))
 vi.mock('../../sessions/profiles/browser-session-registry', () => ({
   browserSessionRegistry: registry
 }))
+
+const importedSummary = { importedCookies: 1, skippedCookies: 0, totalCookies: 1, domains: [] }
 
 it('rejects a queued refresh after a manual import replaces the same jar’s source', async () => {
   const originalSource = {
@@ -46,30 +48,24 @@ it('rejects a queued refresh after a manual import replaces the same jar’s sou
         started.resolve()
         await write.promise
         jarValue = 'b'
-        return {
-          ok: true,
-          profileId: 'default',
-          summary: { importedCookies: 1, skippedCookies: 0, totalCookies: 1, domains: [] }
-        }
+        return { ok: true, profileId: 'default', summary: importedSummary }
       }),
     importedSource: () => newSource
   }))
   await started.promise
-  const refresh = importCookiesIntoBrowserProfile(profile, (source) =>
-    source?.chromeProfile?.id === 'profile-a'
-      ? {
-          importInto: async () => {
-            jarValue = 'a'
-            return {
-              ok: true,
-              profileId: 'default',
-              summary: { importedCookies: 1, skippedCookies: 0, totalCookies: 1, domains: [] }
-            }
-          },
-          importedSource: () => originalSource
-        }
-      : browserCookieImportFailure('savedChromeProfileUnavailable')
-  )
+  const refresh = importCookiesIntoBrowserProfile(profile, (previous) => {
+    const selection = resolveBrowserImportSelection({ refreshSourceId: 'profile-a' }, previous)
+    if ('reason' in selection) {
+      return selection
+    }
+    return {
+      importInto: async () => {
+        jarValue = 'a'
+        return { ok: true, profileId: 'default', summary: importedSummary }
+      },
+      importedSource: () => originalSource
+    }
+  })
   write.resolve()
   await expect(manual).resolves.toMatchObject({ ok: true })
   await expect(refresh).resolves.toMatchObject({
