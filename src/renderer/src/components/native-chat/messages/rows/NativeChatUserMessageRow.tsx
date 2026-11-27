@@ -163,6 +163,7 @@ export function NativeChatUserMessageRow({
                       slackMentions={drawn !== undefined}
                       className="text-sm"
                       renderCodeBlock={NativeChatCodeBlock}
+                      linkifyFilePaths
                     />
                   )}
                 />
