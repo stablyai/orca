@@ -5514,6 +5514,7 @@
           "AccountSwitchList": {
             "used": "사용량",
             "left": "남음",
+            "reset": "초기화",
             "accounts": "계정"
           },
           "InlineUsageBars": {

@@ -40,6 +40,7 @@ function accountRows(provider: 'codex' | 'claude', width = 520, language: 'en' |
   }
   return defineFixture({
     width,
+    store: { statusBarUsageMode: 'verbose' },
     interact: () => setRendererUiLanguage(language),
     render: () => (
       <div className="h-[340px] bg-background p-3">

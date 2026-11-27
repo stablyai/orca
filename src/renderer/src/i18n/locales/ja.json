@@ -5451,6 +5451,7 @@
           "AccountSwitchList": {
             "used": "使用済み",
             "left": "残り",
+            "reset": "リセット",
             "accounts": "アカウント"
           },
           "InlineUsageBars": {

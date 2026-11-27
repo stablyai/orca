@@ -6531,6 +6531,7 @@
           "AccountSwitchList": {
             "used": "Used",
             "left": "Left",
+            "reset": "Reset",
             "accounts": "Accounts"
           },
           "InlineUsageBars": {

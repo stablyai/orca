@@ -5726,6 +5726,7 @@
           "AccountSwitchList": {
             "used": "已用",
             "left": "剩余",
+            "reset": "重置",
             "accounts": "账户"
           },
           "InlineUsageBars": {

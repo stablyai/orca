@@ -6108,6 +6108,7 @@
           "AccountSwitchList": {
             "used": "已用",
             "left": "剩餘",
+            "reset": "重設",
             "accounts": "帳戶"
           },
           "InlineUsageBars": {

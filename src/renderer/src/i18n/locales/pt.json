@@ -5202,6 +5202,7 @@
           "AccountSwitchList": {
             "used": "Usado",
             "left": "Restante",
+            "reset": "Redefinição",
             "accounts": "Contas"
           },
           "InlineUsageBars": {
