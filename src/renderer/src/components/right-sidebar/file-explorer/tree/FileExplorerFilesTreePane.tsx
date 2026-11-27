@@ -28,7 +28,7 @@ import type { WslHostReadOutage } from '../../../wsl-host-stopped/use-stopped-ws
  * keyboard focus. Row presses and the inline rename input keep their own behaviour.
  */
 const FILE_EXPLORER_ROW_SELECTOR = '[data-file-explorer-row]'
-const FOCUS_OWNING_TARGETS = `${FILE_EXPLORER_ROW_SELECTOR}, [data-slot="context-menu-trigger"], input, textarea`
+const FOCUS_OWNING_TARGETS = `${FILE_EXPLORER_ROW_SELECTOR}, [data-slot="context-menu-trigger"], input, textarea, button`
 
 export function isFilesTreeBackgroundPress(target: EventTarget | null): boolean {
   if (!(target instanceof Element) || target.closest(FOCUS_OWNING_TARGETS) !== null) {

@@ -148,3 +148,16 @@ it('nothing is kept when focus was not in a pane to begin with', () => {
   expect(isFilesTreeBackgroundPress(viewport)).toBe(false)
   expect(isFilesTreeBackgroundPress(null)).toBe(false)
 })
+
+it('a control inside the pane keeps its own press and its own focus', () => {
+  renderFocusedTerminal()
+  renderTree()
+  const viewport = document.querySelector('[data-slot="scroll-area-viewport"]') as HTMLElement
+  // The root-error Retry button: pressing it must not read as a background press, so its
+  // mouse-down focus behaviour is left alone.
+  const retry = document.createElement('button')
+  viewport.appendChild(retry)
+
+  expect(isFilesTreeBackgroundPress(retry)).toBe(false)
+  expect(isFilesTreeBackgroundPress(viewport)).toBe(true)
+})
