@@ -20,6 +20,7 @@ import { appendJournalSqlEvent } from './journal-sql-event-tail'
 import { spendJournalSqlCommandCards } from './journal-sql-message-effects'
 import { writeJournalDomainLifecycleItem } from './journal-domain-lifecycle-item'
 import { observeJournalDomainInputItem } from './journal-domain-input-ends'
+import { hydrateJournalStoredItem } from './journal-stored-output-rows'
 
 export type JournalDomainLifecycleCommit = JournalWriterPublication & {
   cursor: AgentJournalCursor
@@ -146,7 +147,10 @@ export function applyJournalDomainLifecycle(
         (mutation.kind === 'tombstone'
           ? tombstone
           : previous &&
-            isDeepStrictEqual(previous.item.body, mutation.body) &&
+            isDeepStrictEqual(
+              hydrateJournalStoredItem(db, [target.sessionId, target.epoch], previous.item).body,
+              mutation.body
+            ) &&
             (!Object.hasOwn(mutation, 'echoOf') ||
               db
                 .prepare(
