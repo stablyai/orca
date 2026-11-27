@@ -5,8 +5,6 @@ import type { ReleaseBuild } from '../../../../../shared/updater/release-channel
 import type { RemoteServerUpdateEntry } from '@/runtime/hosts/updates/remote-server-update-coordinator'
 import { useAppStore } from '@/store'
 import { GeneralSupportStarAction } from '../general/GeneralSupportSection'
-import { UpdateCard } from '../../maintenance/update-card/UpdateCard'
-import { NotificationCardStack } from '../../notifications/NotificationCardStack'
 import { GeneralUpdateSettingsSection } from './GeneralUpdateSettingsSection'
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -129,25 +127,6 @@ const narrow = (fixture: ComponentFixture): ComponentFixture => ({
   width: NARROW
 })
 
-function withUpdateCard(fixture: ComponentFixture): ComponentFixture {
-  return defineFixture({
-    ...fixture,
-    store: {
-      ...fixture.store,
-      updateCardCollapsed: false,
-      updateReassuranceSeen: true
-    },
-    render: () => (
-      <>
-        {fixture.render()}
-        <NotificationCardStack>
-          <UpdateCard />
-        </NotificationCardStack>
-      </>
-    )
-  })
-}
-
 export const upToDate = about({ state: 'not-available' })
 export const upToDateNarrow = narrow(upToDate)
 export const noServers = defineFixture({
@@ -165,26 +144,26 @@ export const available = about({
   changelog: null
 })
 export const availableNarrow = narrow(available)
-export const appUpdateHandoff = withUpdateCard(available)
-export const downloading = withUpdateCard(
-  about({ state: 'downloading', version: NEXT, percent: 42 })
-)
+export const downloading = about({ state: 'downloading', version: NEXT, percent: 42 })
 export const downloadingNarrow = narrow(downloading)
-export const ready = withUpdateCard(about({ state: 'downloaded', version: NEXT }))
+export const ready = about({ state: 'downloaded', version: NEXT })
 export const readyNarrow = narrow(ready)
-export const error = withUpdateCard(
-  about({
-    state: 'error',
-    version: NEXT,
-    message: LONG_ERROR,
-    userInitiated: true
-  })
-)
-export const errorDetails = defineFixture({
-  ...error,
-  interact: (frame) => expand(frame, 'Show details')
+export const error = about({
+  state: 'error',
+  version: NEXT,
+  message: LONG_ERROR,
+  userInitiated: true
 })
-export const errorDetailsNarrow = narrow(errorDetails)
+export const errorDetails = about(
+  { state: 'error', version: NEXT, message: LONG_ERROR, userInitiated: true },
+  { interact: (frame) => expand(frame, 'Show details') }
+)
+export const errorDetailsNarrow = narrow(
+  about(
+    { state: 'error', version: NEXT, message: LONG_ERROR, userInitiated: true },
+    { interact: (frame) => expand(frame, 'Show details') }
+  )
+)
 export const heldRelease = about({
   state: 'not-available',
   delayedUpdate: {

@@ -122,7 +122,7 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
 
   const hasEligible = entries.some(isEligible)
   // The header action swaps buttons when servers become eligible or updates start or finish. If
-  // that unmounted the focused button, hand focus to whatever replaced it instead of the page.
+  // that unmounted the focused button, land on Servers instead of dropping focus to the page.
   useLayoutEffect(() => {
     const container = actionRef.current
     if (!container || !actionHadFocus.current) {
@@ -132,10 +132,8 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
     if (active && active !== container.ownerDocument.body) {
       return
     }
-    const next = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(
-      (button) => !button.disabled && button.getClientRects().length > 0
-    )
-    ;(next ?? toggleRef.current)?.focus()
+    actionHadFocus.current = false
+    toggleRef.current?.focus()
   }, [hasEligible, running])
 
   if (entries.length === 0) {
@@ -230,10 +228,24 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
       {needsRetry ? <div className="hidden @max-xs/about-row:block">{checkAction}</div> : null}
       <div ref={bulkActionRef} className={needsRetry ? '@max-xs/about-row:hidden' : undefined}>
         <ServerRestartButton
-          label={t('settings.about.servers.updateAll', 'Update all')}
-          armedLabel={t('settings.about.servers.restartCount', 'Restart {{count}}?', {
-            count: eligible.length
-          })}
+          // One server reads as that server's own action, not "Update all" / "Restart 1?".
+          label={
+            eligible.length === 1
+              ? t('settings.about.action.update', 'Update')
+              : t('settings.about.servers.updateAll', 'Update all')
+          }
+          restingName={
+            eligible.length === 1
+              ? t('settings.about.servers.updateOne', 'Update {{name}}', { name: eligible[0].name })
+              : undefined
+          }
+          armedLabel={
+            eligible.length === 1
+              ? t('settings.about.servers.restartOne', 'Restart?')
+              : t('settings.about.servers.restartCount', 'Restart {{count}}?', {
+                  count: eligible.length
+                })
+          }
           question={getServerRestartQuestion(eligible, t)}
           armed={allArmed}
           disabled={open ? updatesBlocked : busy}

@@ -59,9 +59,20 @@ export function ServerRestartButton({
       }
     }
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') {
-        onDisarm()
+      // Esc that ends an IME composition, or closes a menu or dialog layered on top, belongs to
+      // that layer; it must not also revert this button.
+      if (event.key !== 'Escape' || event.isComposing) {
+        return
       }
+      const target = event.target
+      if (
+        target instanceof Element &&
+        !ref.current?.contains(target) &&
+        target.closest('[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]')
+      ) {
+        return
+      }
+      onDisarm()
     }
     doc.addEventListener('pointerdown', onPointerDown, true)
     doc.addEventListener('keydown', onKeyDown, true)
@@ -94,7 +105,7 @@ export function ServerRestartButton({
         if (event.repeat && (event.key === 'Enter' || event.key === ' ')) {
           event.preventDefault()
         }
-        if (armed && event.key === 'Escape') {
+        if (armed && event.key === 'Escape' && !event.nativeEvent.isComposing) {
           // Revert here only; Esc must not also leave Settings.
           event.preventDefault()
           event.stopPropagation()

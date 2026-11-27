@@ -9,13 +9,33 @@ export type UpdateStatusLine =
   | { kind: 'held-ready'; version: string }
   | { kind: 'unsupported-system' }
   | { kind: 'available'; version: string }
+  | { kind: 'downloading'; version: string; percent: number }
+  | { kind: 'ready'; version: string }
+  | { kind: 'installing'; version: string }
+  | { kind: 'install-on-quit' }
+  | { kind: 'install-blocked' }
+  | { kind: 'failed'; phase: 'check' | 'update' }
 
-type UpdateStatusActionKind = 'check' | 'skip-delay' | 'download'
+export type UpdateStatusActionKind =
+  | 'check'
+  | 'skip-delay'
+  | 'download'
+  | 'progress'
+  | 'restart'
+  | 'retry-install'
+  | 'retry-check'
+  | 'quit'
+  | 'none'
 
-type UpdateStatusAction = { kind: UpdateStatusActionKind; busy: boolean }
+export type UpdateStatusAction = { kind: UpdateStatusActionKind; busy: boolean; disabled: boolean }
 
 /** Text kept behind "Show details" so the status line stays one short line. */
-type UpdateStatusDetails = 'unsupported-system' | 'externally-managed' | null
+export type UpdateStatusDetails =
+  | 'message'
+  | 'install-block'
+  | 'unsupported-system'
+  | 'externally-managed'
+  | null
 
 export type UpdateStatusRowModel = {
   line: UpdateStatusLine
@@ -24,37 +44,67 @@ export type UpdateStatusRowModel = {
   /** Version whose release notes the line links to; null hides the link. */
   notesVersion: string | null
   /** A quiet Check beside a primary that isn't Check, so modifier-click release checks stay reachable. */
-  secondaryCheck: boolean
+  secondaryCheck: { disabled: boolean } | null
 }
 
 export type UpdateStatusRowContext = {
+  /** macOS staged the update for a normal quit and a restart can't install it now. */
+  showManualRestart: boolean
+  /** Last known target, for hosts that omit the version on errors. */
+  retainedVersion: string | null
   /** False when the team owns the delay, so it can't be skipped. */
   canSkipDelay: boolean
   now: number
 }
 
-const act = (kind: UpdateStatusActionKind, busy = false): UpdateStatusAction => ({
+const act = (kind: UpdateStatusActionKind, busy = false, disabled = busy): UpdateStatusAction => ({
   kind,
-  busy
+  busy,
+  disabled
 })
 
 function notesFor(status: UpdateStatus, version: string): string | null {
   return status.source === 'local' ? null : version
 }
 
-/** About offers the check and download actions. The app-wide card handles progress and recovery. */
+const SECONDARY_CHECK_PRIMARIES = new Set<UpdateStatusActionKind>([
+  'skip-delay',
+  'download',
+  'restart',
+  'retry-install',
+  'quit'
+])
+
+/** One status line and one primary action per updater state; the About status row renders exactly this. */
 export function getUpdateStatusRowModel(
   status: UpdateStatus,
   ctx: UpdateStatusRowContext
-): UpdateStatusRowModel | null {
+): UpdateStatusRowModel {
   const primary = getPrimaryModel(status, ctx)
-  return primary && { ...primary, secondaryCheck: primary.action.kind !== 'check' }
+  const showSecondary = SECONDARY_CHECK_PRIMARIES.has(primary.action.kind) && !primary.action.busy
+  return {
+    ...primary,
+    secondaryCheck: showSecondary
+      ? {
+          // A stuck macOS staging can't be fixed by another check.
+          disabled: status.state === 'error' && status.messageCode === 'macStagingTimeout'
+        }
+      : null
+  }
 }
 
 function getPrimaryModel(
   status: UpdateStatus,
   ctx: UpdateStatusRowContext
-): Omit<UpdateStatusRowModel, 'secondaryCheck'> | null {
+): Omit<UpdateStatusRowModel, 'secondaryCheck'> {
+  if (ctx.showManualRestart) {
+    return {
+      line: { kind: 'install-on-quit' },
+      action: act('quit'),
+      details: null,
+      notesVersion: null
+    }
+  }
   switch (status.state) {
     case 'idle':
       return { line: { kind: 'none' }, action: act('check'), details: null, notesVersion: null }
@@ -107,8 +157,49 @@ function getPrimaryModel(
         notesVersion: notesFor(status, status.version)
       }
     case 'downloading':
+      return {
+        line: { kind: 'downloading', version: status.version, percent: status.percent },
+        action: act('progress'),
+        details: null,
+        notesVersion: null
+      }
     case 'downloaded':
-    case 'error':
-      return null
+      if (status.installing) {
+        return {
+          line: { kind: 'installing', version: status.version },
+          // Automatic installs restart on their own; a manual one keeps its pressed Restart.
+          action: status.automaticDownload ? act('none') : act('restart', true),
+          details: null,
+          notesVersion: null
+        }
+      }
+      return {
+        line: { kind: 'ready', version: status.version },
+        action: act('restart'),
+        details: null,
+        notesVersion: notesFor(status, status.version)
+      }
+    case 'error': {
+      const canRetryInstall = status.retryAction === 'install' && status.retryable !== false
+      // A stuck macOS staging can't be fixed by another check; the button stays visible but off.
+      const action = canRetryInstall
+        ? act('retry-install')
+        : act('retry-check', false, status.messageCode === 'macStagingTimeout')
+      if (status.installBlock) {
+        return {
+          line: { kind: 'install-blocked' },
+          action,
+          details: 'install-block',
+          notesVersion: null
+        }
+      }
+      const known = status.version ?? ctx.retainedVersion
+      return {
+        line: { kind: 'failed', phase: known ? 'update' : 'check' },
+        action,
+        details: 'message',
+        notesVersion: null
+      }
+    }
   }
 }

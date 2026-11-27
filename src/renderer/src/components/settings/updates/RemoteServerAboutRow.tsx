@@ -105,10 +105,17 @@ export function RemoteServerAboutRow({
       </div>
     )
   } else if (failed) {
-    // One word keeps the row on one line; the full reason is in the tooltip and the Retry button's description.
+    // What it still runs and why it failed, on one line; the full error is in the tooltip and the
+    // Retry button's description.
+    const failedLine = [
+      entry.currentVersion ? `v${entry.currentVersion}` : null,
+      help ?? t('settings.about.servers.failed', 'Failed')
+    ]
+      .filter(Boolean)
+      .join(' · ')
     subtitle = (
-      <div title={help ?? undefined} className="truncate text-settings-detail text-destructive">
-        {t('settings.about.servers.failed', 'Failed')}
+      <div title={help ?? failedLine} className="truncate text-settings-detail text-destructive">
+        {failedLine}
       </div>
     )
   } else {

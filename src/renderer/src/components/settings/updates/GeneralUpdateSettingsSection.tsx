@@ -21,11 +21,36 @@ export function GeneralUpdateSettingsSection({
 }: { headerAction?: React.ReactNode } = {}): React.JSX.Element {
   const t = useTranslate()
   const updateStatus = useAppStore((s) => s.updateStatus)
+  // Older hosts omit error versions; retain the target for accurate failure copy. Derived state,
+  // not a ref, so the render stays pure.
+  const [retainedVersion, setRetainedVersion] = useState<string | null>(null)
+  const nextRetainedVersion =
+    'version' in updateStatus && updateStatus.version
+      ? updateStatus.version
+      : updateStatus.state === 'checking' ||
+          updateStatus.state === 'idle' ||
+          updateStatus.state === 'not-available'
+        ? // Clear old targets on clean/new cycles so later check failures cannot look like stale download failures.
+          null
+        : retainedVersion
+  if (nextRetainedVersion !== retainedVersion) {
+    setRetainedVersion(nextRetainedVersion)
+  }
+
   const [appVersion, setAppVersion] = useState<string | null>(null)
+  const installTarget = useAppStore((s) => s.retainedUpdateTarget)
   const appIcon = useAppStore((s) => s.settings?.appIcon)
   const teamDelayDays = useAppStore(
     (s) => getOrcaCloudTeamCapabilities(s.orcaProfileAuthStatus)?.teamPolicy?.updateDelayDays
   )
+  const [failedRestartTarget, setFailedRestartTarget] = useState<typeof installTarget>(null)
+  const showManualRestart =
+    updateStatus.installOnQuit === true &&
+    (updateStatus.state === 'error' ||
+      (updateStatus.state === 'downloaded' &&
+        !updateStatus.installing &&
+        installTarget !== null &&
+        failedRestartTarget === installTarget))
   const now = useNow(
     60_000,
     updateStatus.state === 'not-available' && Boolean(updateStatus.delayedUpdate)
@@ -45,22 +70,36 @@ export function GeneralUpdateSettingsSection({
     }
   }, [])
 
+  const handleRestartToUpdate = (): void => {
+    void window.api.updater.quitAndInstall().catch((error: unknown) => {
+      setFailedRestartTarget(installTarget)
+      if (!updateStatus.installOnQuit) {
+        toast.error(
+          t(
+            'auto.components.UpdateCard.restartToInstallFailed',
+            'Could not restart to install the update.'
+          ),
+          { description: error instanceof Error ? error.message : String(error) }
+        )
+      }
+    })
+  }
+
   const handleDownload = (): void => {
-    // The app-wide update card follows the status emitted by the existing downloader.
-    void window.api.updater.download().catch((error: unknown) => {
-      const message =
-        typeof error === 'object' && error !== null && 'message' in error ? error.message : error
+    void window.api.updater.download().catch((error) => {
       toast.error(
         t(
           'auto.components.settings.GeneralUpdateSettingsSection.02dc082e70',
           'Could not start the update download.'
         ),
-        { description: String(message ?? error) }
+        { description: String((error as Error)?.message ?? error) }
       )
     })
   }
 
   const model = getUpdateStatusRowModel(updateStatus, {
+    showManualRestart,
+    retainedVersion: nextRetainedVersion,
     canSkipDelay: teamDelayDays === undefined,
     now
   })
@@ -92,21 +131,14 @@ export function GeneralUpdateSettingsSection({
         )}
         keywords={['about', 'update', 'version', 'release notes', 'download']}
       >
-        {model ? (
-          <UpdateStatusRow
-            model={model}
-            status={updateStatus}
-            appVersion={appVersion}
-            iconUrl={getBuiltInAppIconUrl(appIcon)}
-            onDownload={handleDownload}
-          />
-        ) : (
-          <span className="min-w-0 truncate text-sm">
-            {t('settings.general.about.version', 'Orca {{version}}', {
-              version: appVersion ?? '…'
-            })}
-          </span>
-        )}
+        <UpdateStatusRow
+          model={model}
+          status={updateStatus}
+          appVersion={appVersion}
+          iconUrl={getBuiltInAppIconUrl(appIcon)}
+          onDownload={handleDownload}
+          onRestart={handleRestartToUpdate}
+        />
       </SearchableSetting>
       {isWebClientLocation() ? null : <AutomaticUpdatesSetting />}
       <UpdateDelaySetting />
