@@ -47,6 +47,7 @@ export type AgentLaunchSettingsSource = Partial<
     | 'defaultTuiAgent'
     | 'newWorkspaceSetupOnly'
     | 'disabledTuiAgents'
+    | 'disabledTuiAgentsCustomized'
     | 'agentCmdOverrides'
     | 'agentLaunchChoices'
     | 'agentDefaultArgs'
@@ -62,6 +63,8 @@ export type AgentLaunchSettings = {
   defaultTuiAgent: GlobalSettings['defaultTuiAgent']
   newWorkspaceSetupOnly?: boolean
   disabledTuiAgents: TuiAgent[]
+  /** Absent from older hosts. */
+  disabledTuiAgentsCustomized?: boolean
   agentCmdOverrides: NonNullable<GlobalSettings['agentCmdOverrides']>
   agentDefaultArgs: NonNullable<GlobalSettings['agentDefaultArgs']>
   environmentNames: Partial<Record<TuiAgent, string[]>>
@@ -127,6 +130,7 @@ export function projectAgentLaunchSettings(
     defaultTuiAgent: settings.defaultTuiAgent ?? null,
     newWorkspaceSetupOnly: false,
     disabledTuiAgents: normalizeDisabledTuiAgents(settings.disabledTuiAgents),
+    disabledTuiAgentsCustomized: settings.disabledTuiAgentsCustomized === true,
     agentCmdOverrides: { ...settings.agentCmdOverrides },
     agentDefaultArgs: normalizeTuiAgentArgsRecord(composed.agentDefaultArgs),
     environmentNames: Object.fromEntries(

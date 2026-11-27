@@ -73,6 +73,7 @@ export function hostAgentLaunchSettingsSource(
     // An older host can still report a removed agent (Gemini CLI) as its default.
     defaultTuiAgent: normalizeDefaultTuiAgent(snapshot.defaultTuiAgent),
     disabledTuiAgents: snapshot.disabledTuiAgents,
+    disabledTuiAgentsCustomized: snapshot.disabledTuiAgentsCustomized,
     agentCmdOverrides: snapshot.agentCmdOverrides,
     ...migrateAgentPermissionChoice(
       {

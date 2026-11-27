@@ -18,6 +18,8 @@ import {
 export type AgentLaunchPreferences = Readonly<{
   defaultTuiAgent: GlobalSettings['defaultTuiAgent'] | undefined
   disabledTuiAgents: GlobalSettings['disabledTuiAgents'] | undefined
+  /** False: the host's list was never set, so the desktop's list applies. */
+  disabledTuiAgentsCustomized?: boolean
   agentLaunchChoices?: GlobalSettings['agentLaunchChoices']
   agentDefaultArgs?: GlobalSettings['agentDefaultArgs']
   agentPermissionDefault?: GlobalSettings['agentPermissionDefault']
@@ -96,6 +98,9 @@ function refresh(entry: Resource): void {
           ? {
               defaultTuiAgent: settings.defaultTuiAgent,
               disabledTuiAgents: settings.disabledTuiAgents,
+              // Older hosts omit the marker; a non-empty list there was set by someone.
+              disabledTuiAgentsCustomized:
+                settings.disabledTuiAgentsCustomized ?? !!settings.disabledTuiAgents?.length,
               agentLaunchChoices: settings.agentLaunchChoices,
               agentDefaultArgs: settings.agentDefaultArgs,
               agentPermissionDefault: settings.agentPermissionDefault,
@@ -185,5 +190,10 @@ export function effectiveAgentLaunchPreferences(
     getRuntimeEnvironmentRevision(owner.environmentId) === owner.pairingRevision &&
     (!entry?.snapshot || entry.snapshot.pairingRevision === owner.pairingRevision) &&
     (!owner.runtimeId || !status?.runtimeId || owner.runtimeId === status.runtimeId)
-  return currentOwner && snapshot && snapshot !== 'inherited' ? snapshot : INHERITED
+  if (!currentOwner || !snapshot || snapshot === 'inherited') {
+    return INHERITED
+  }
+  return snapshot.disabledTuiAgentsCustomized
+    ? snapshot
+    : { ...snapshot, disabledTuiAgents: desktop.disabledTuiAgents }
 }
