@@ -1,4 +1,5 @@
 import type { RuntimeTerminalCreate } from '../../shared/terminal/runtime/runtime-terminal-create-contract'
+import { readReachableCliStatus } from '../runtime/status/reachable-cli-status'
 import type {
   RuntimeTerminalFocus,
   RuntimeTerminalListResult,
@@ -181,7 +182,7 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
         )
       }
       // Older hosts ignore shell and successfully create the wrong default shell; check support first.
-      const status = await client.getCliStatus()
+      const status = await readReachableCliStatus(client)
       // An unreachable host reports no capabilities at all; that is not evidence it lacks --shell.
       if (!status.result.runtime.reachable) {
         throw new RuntimeClientError(
@@ -231,7 +232,7 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     // Why refused rather than sent: an older host strips the unknown param and splits again,
     // starting a second copy of the command the retry exists to avoid.
     if (retrySplit !== undefined) {
-      const status = await client.getCliStatus()
+      const status = await readReachableCliStatus(client)
       if (!status.result.runtime.reachable) {
         throw new RuntimeClientError(
           'runtime_unavailable',
