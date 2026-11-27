@@ -30,10 +30,16 @@ export function parseFreshRuntimeRestartMarker(
   } catch {
     return null
   }
-  if (value === null || typeof value !== 'object') {
+  if (
+    value === null ||
+    typeof value !== 'object' ||
+    !('reason' in value) ||
+    !('writtenAt' in value) ||
+    !('pid' in value)
+  ) {
     return null
   }
-  const { reason, writtenAt, pid } = value as Record<string, unknown>
+  const { reason, writtenAt, pid } = value
   if (
     (reason !== 'update' && reason !== 'relaunch') ||
     typeof writtenAt !== 'number' ||

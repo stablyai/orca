@@ -60,7 +60,7 @@ export async function sendLocalRuntimeRequest<TResult>(
         expectedRuntimeSource,
         {
           classifySocketError: (socketError) => {
-            socketErrorCode = (socketError as NodeJS.ErrnoException).code
+            socketErrorCode = 'code' in socketError ? socketError.code : undefined
             return runtimeAccessDeniedError(socketError)
           },
           ...(request.requestSelection ? { requestSelection: request.requestSelection } : {})
