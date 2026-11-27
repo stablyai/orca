@@ -50,6 +50,8 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
   private readonly children: AcpStructuredChildren
   private readonly copies: AcpConversationCopies
   private readonly textTasks: AcpTextTasks
+  /** Mail still preparing holds the steering slot, so the host keeps the next one unprepared. */
+  private readonly preparingMail = new WeakMap<AcpStructuredSession, number>()
   constructor(private readonly deps: AcpStructuredSessionAdapterDeps) {
     this.atRestCommands = deps.atRestCommands
     this.children = new AcpStructuredChildren(deps)
@@ -111,6 +113,22 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
       return rejectedAcpDispatch(lost)
     }
     const session = this.live(input.sessionId)
+    if (orchestrationMailNotice(input.body.from) === null) {
+      return this.dispatchTo(session, input, false)
+    }
+    this.preparingMail.set(session, (this.preparingMail.get(session) ?? 0) + 1)
+    try {
+      return await this.dispatchTo(session, input, true)
+    } finally {
+      this.preparingMail.set(session, (this.preparingMail.get(session) ?? 1) - 1)
+    }
+  }
+
+  private async dispatchTo(
+    session: AcpStructuredSession,
+    input: Parameters<SessionAdapter['dispatch']>[0],
+    mail: boolean
+  ): Promise<DispatchOutcome> {
     const prompt = await acpDispatchPrompt(input.body, session)
     if (!Array.isArray(prompt)) {
       return { state: 'rejected', ...prompt }
@@ -122,7 +140,6 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     const { sessionId, fence, signal } = input
     signal?.throwIfAborted()
     input.onInputPreparation?.()
-    const mail = orchestrationMailNotice(input.body.from) !== null
     return withAcpModelFallback(session, this.writeBound(session, signal), async (fallback) => {
       const { command } = fallback
       const optionsApplied = await applyAcpMessageOptions(
@@ -268,7 +285,8 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     return childState.isAcpReadySession(session) &&
       session.turns.running &&
       session.turns.steersMail &&
-      !session.turns.holdsSteers
+      !session.turns.holdsSteers &&
+      !this.preparingMail.get(session)
       ? 'inject'
       : 'queue'
   }
