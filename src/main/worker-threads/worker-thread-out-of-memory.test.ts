@@ -15,8 +15,13 @@ parentPort.on('message', (request) => {
 `
 
 const originalType = process.type
+// V8 flags are process-wide; put back any launch heap flag (e.g. CI's NODE_OPTIONS) for later files.
+const launchHeapFlag = [...process.execArgv, ...(process.env.NODE_OPTIONS ?? '').split(/\s+/)].find(
+  (arg) => arg.startsWith('--max-old-space-size=')
+)
 afterEach(() => {
   Object.defineProperty(process, 'type', { value: originalType, configurable: true })
+  setFlagsFromString(launchHeapFlag ?? '--max-old-space-size=0')
 })
 
 function asMainProcess(): void {
@@ -26,14 +31,22 @@ function asMainProcess(): void {
 describe('spawnWorkerThread heap limit', () => {
   it('caps workers in main except durable writers, and leaves other processes alone', async () => {
     asMainProcess()
-    const capped = spawnWorkerThread(ECHO_OR_EXHAUST, { eval: true, execArgv: [], name: 'orca-port-scan' })
+    const capped = spawnWorkerThread(ECHO_OR_EXHAUST, {
+      eval: true,
+      execArgv: [],
+      name: 'orca-port-scan'
+    })
     const writer = spawnWorkerThread(ECHO_OR_EXHAUST, {
       eval: true,
       execArgv: [],
       name: 'orca-journal-sql-writer'
     })
     Object.defineProperty(process, 'type', { value: 'utility', configurable: true })
-    const utility = spawnWorkerThread(ECHO_OR_EXHAUST, { eval: true, execArgv: [], name: 'orca-port-scan' })
+    const utility = spawnWorkerThread(ECHO_OR_EXHAUST, {
+      eval: true,
+      execArgv: [],
+      name: 'orca-port-scan'
+    })
     try {
       expect(capped.resourceLimits?.maxOldGenerationSizeMb).toBe(MAIN_WORKER_HEAP_LIMIT_MB)
       expect(writer.resourceLimits?.maxOldGenerationSizeMb).not.toBe(MAIN_WORKER_HEAP_LIMIT_MB)
@@ -54,13 +67,17 @@ describe('spawnWorkerThread heap limit', () => {
     >({
       factory: () => {
         spawned++
-        // A small cap keeps the test fast; the default only changes the size.
-        return spawnWorkerThread(ECHO_OR_EXHAUST, {
+        const worker = spawnWorkerThread(ECHO_OR_EXHAUST, {
           eval: true,
           execArgv: [],
-          name: 'orca-port-scan',
-          resourceLimits: { maxOldGenerationSizeMb: 32 }
+          name: 'orca-port-scan'
         })
+        // Uncapped, the exhaust request would grow to V8's multi-GB default instead of failing.
+        if (worker.resourceLimits?.maxOldGenerationSizeMb !== MAIN_WORKER_HEAP_LIMIT_MB) {
+          void worker.terminate()
+          throw new Error('worker spawned without the main-process heap cap')
+        }
+        return worker
       },
       idleTeardownMs: 60_000,
       maxConsecutiveDeaths: 3,

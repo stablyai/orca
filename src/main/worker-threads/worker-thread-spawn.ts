@@ -8,7 +8,7 @@ export const WORKER_CODE_RANGE_MB = 64
 
 /** Main's isolate and its workers share one V8 cage: an uncapped worker that keeps allocating fills
  * it and aborts the app. Capped, it ends alone with ERR_WORKER_OUT_OF_MEMORY while main has headroom.
- * Measured workers stay under ~100 MB. */
+ * Measured workers stay under ~100 MB. A launch-time --max-old-space-size V8 flag overrides it. */
 export const MAIN_WORKER_HEAP_LIMIT_MB = 512
 
 /** Owners of unflushed durable writes: losing one mid-session would drop writes silently. */
