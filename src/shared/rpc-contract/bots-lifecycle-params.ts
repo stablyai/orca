@@ -1,3 +1,4 @@
+import { BOT_TAG_LENGTH, BOT_TAG_LIMIT } from '../bots/bot-tags'
 import { TIDY_UP_EVERY_CHOICES } from '../bots/bot-tidy-up'
 import * as z from 'zod'
 import { lazyZodSchema } from '../schema/lazy-zod-schema'
@@ -139,6 +140,11 @@ export const BotUpdate = lazyZodSchema(() =>
         avatarOutfit: BotStoredOutfitSchema.nullable().optional(),
         paused: z.boolean().optional(),
         sidebarOrder: z.number().int().nonnegative().optional(),
+        // A Unicode code point can take two UTF-16 units.
+        tags: z
+          .array(z.string().max(BOT_TAG_LENGTH * 2))
+          .max(BOT_TAG_LIMIT)
+          .optional(),
         /** null clears the override. */
         permissionMode: z.enum(AGENT_CHAT_PERMISSION_MODES).nullable().optional(),
         /** null clears it; a new agent without one clears it too, since it belongs to the old agent. */

@@ -30553,6 +30553,12 @@
       "homeTitle": "Home"
     },
     "settingsView": {
+      "tags": {
+        "label": "Tags",
+        "add": "Add a tag",
+        "limit": "Tag limit reached",
+        "remove": "Remove tag {{tag}}"
+      },
       "pathCopied": "Path copied",
       "computerOnHostFoot": "Its connectors, tools and files live on {{host}}. Settings for all of {{host}}’s bots are in Settings › Bots.",
       "computerFoot": "Its connectors, tools and files live on this computer.",

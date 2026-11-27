@@ -12,6 +12,7 @@ import {
 } from '../bot-types'
 import { botMembersFullError, planBotMemberAdds } from '../bots/bot-member-capacity'
 import { BotTakeOverSchema } from '../bots/bot-take-over'
+import { normalizeBotTags } from '../bots/bot-tags'
 import { botLookAround, patchLookAround } from '../bots/bot-look-around'
 import { withBotOfferAnswer } from '../bots/bot-offer-answers'
 import { type BotCancelledWait, withBotCancelledWait } from '../bots/bot-cancelled-waits'
@@ -173,6 +174,7 @@ export function applyBotMemberUpdates(
 export function applyBotUpdates(bot: Bot, updates: BotHostUpdates): Bot {
   const {
     permissionMode,
+    tags,
     launch,
     removeMember,
     removeMembers,
@@ -186,6 +188,14 @@ export function applyBotUpdates(bot: Bot, updates: BotHostUpdates): Bot {
     ...rest
   } = updates
   const next: Bot = { ...bot, ...rest }
+  if (tags !== undefined) {
+    const normalized = normalizeBotTags(tags)
+    if (normalized.length > 0) {
+      next.tags = normalized
+    } else {
+      delete next.tags
+    }
+  }
   if (
     bot.generatedOverMascot &&
     lookAtRevision !== undefined &&
