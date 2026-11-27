@@ -1440,10 +1440,11 @@ final class Provider {
             try requireBackgroundInputReachable(snapshot, input: "paste")
         }
         let insertion = TextInput.Insertion(into: focused, text: text)
-        // Why: refuse before the clipboard is replaced, as above; check after the insertion's reads so typing that
-        // starts during them is caught here rather than after the clipboard already holds the text.
-        try requireUncontendedInput(snapshot, foreground: isForegroundRequest(params), sendsKeys: true)
-        try Input.withPasteboardText(text) {
+        // Why: refuse before the clipboard is replaced, as above; checked after the insertion's and the clipboard
+        // backup's reads so typing that starts during them is caught before the clipboard holds the text.
+        try Input.withPasteboardText(text, beforeReplacing: {
+            try requireUncontendedInput(snapshot, foreground: isForegroundRequest(params), sendsKeys: true)
+        }) {
             try deliverKeys(pasteKeys, snapshot: snapshot, params: params)
         }
         return actionMetadata(
@@ -3762,7 +3763,11 @@ private enum Input {
         }
     }
 
-    static func withPasteboardText(_ text: String, _ body: () throws -> Void) throws {
+    static func withPasteboardText(
+        _ text: String,
+        beforeReplacing: () throws -> Void = {},
+        _ body: () throws -> Void
+    ) throws {
         let pasteboard = NSPasteboard.general
         let previousItems: [NSPasteboardItem] = pasteboard.pasteboardItems?.map { item in
             let copy = NSPasteboardItem()
@@ -3773,6 +3778,7 @@ private enum Input {
             }
             return copy
         } ?? []
+        try beforeReplacing()
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
         let changeCount = pasteboard.changeCount
