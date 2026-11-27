@@ -21,6 +21,22 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings([])
   },
   {
+    id: 'editor.navigateBack',
+    title: 'Go Back in Editor',
+    group: 'Editors',
+    scope: 'editor',
+    searchKeywords: ['editor', 'navigation', 'history', 'cursor', 'back', 'previous'],
+    defaultBindings: platformBindings(['Alt+ArrowLeft'])
+  },
+  {
+    id: 'editor.navigateForward',
+    title: 'Go Forward in Editor',
+    group: 'Editors',
+    scope: 'editor',
+    searchKeywords: ['editor', 'navigation', 'history', 'cursor', 'forward', 'next'],
+    defaultBindings: platformBindings(['Alt+ArrowRight'])
+  },
+  {
     id: 'terminal.expandPane',
     title: 'Expand / collapse pane',
     group: 'Terminal Panes',

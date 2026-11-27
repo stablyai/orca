@@ -102,6 +102,8 @@ export type KeybindingActionId =
   | 'editor.toggleWordWrap'
   | 'editor.toggleChangesView'
   | 'editor.copyContext'
+  | 'editor.navigateBack'
+  | 'editor.navigateForward'
   | 'editor.previousChange'
   | 'editor.nextChange'
   | 'editor.addReviewNote'
