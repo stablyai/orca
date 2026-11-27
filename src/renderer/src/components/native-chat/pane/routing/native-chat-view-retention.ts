@@ -2,8 +2,6 @@ import { useCallback, useSyncExternalStore } from 'react'
 
 // Why: a hidden chat view holds its transcript DOM, fibers and editor; keeping every visited one grows memory with use.
 export const RETAINED_HIDDEN_CHAT_VIEWS = 3
-// Chats held for an open queued-message edit: beyond these, the oldest is released and its typing goes back to its composer.
-export const HELD_CHAT_VIEWS = 3
 
 const EMPTY: ReadonlySet<string> = new Set()
 
@@ -57,7 +55,8 @@ class ChatViewRetention {
     // keeps its place for when it hides.
     const kept = new Set(hidden)
     this.order = this.order.filter((id) => shown.has(id) || kept.has(id))
-    const held = [...this.holds.keys()].slice(-HELD_CHAT_VIEWS)
+    // Every open queued-message edit keeps its chat: releasing one would end its delivery hold unsaved.
+    const held = this.holds.keys()
     const next = new Set([...shown, ...hidden, ...held])
     const previous = this.retained
     this.retained = next

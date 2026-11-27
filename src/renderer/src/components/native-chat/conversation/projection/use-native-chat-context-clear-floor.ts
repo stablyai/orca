@@ -37,7 +37,7 @@ export function useNativeChatContextClearFloor(
   rows: readonly AgentJournalRenderItem[]
   clearing: boolean
   clears: number
-  /** Names the conversation shown: its journal and the latest `/clear` it starts from. */
+  /** Names the conversation shown: its journal and the live `/clear`s this tab has seen in it. */
   conversationKey: string
   /** Call as this view's /clear goes out; the returned restore shows the transcript again if refused. */
   onClearSent: () => () => void
@@ -124,7 +124,7 @@ export function useNativeChatContextClearFloor(
 
   const floor = current.floor
   const rows = useMemo(() => streamedRowsFromFloor(items, floor), [floor, items])
-  const conversationKey = useNativeChatConversationKey(epoch, floor)
+  const conversationKey = useNativeChatConversationKey(epoch, current.clears)
   return {
     rows,
     clearing: fading !== null || awaitingDivider,

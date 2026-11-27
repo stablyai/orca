@@ -156,6 +156,20 @@ export function useNativeChatViewStateRef<T>(
   return [value, setValue, shown]
 }
 
+/** A mutable ref kept with the tab, so a guard a released view set still holds in the view that replaces it. */
+export function useNativeChatViewRef<T>(key: string, initial: T): { current: T } {
+  const tab = useContext(NativeChatViewTabContext)
+  const [ref] = useState(
+    () => (tab ? readNativeChatViewMemory<{ current: T }>(tab, key) : undefined) ?? { current: initial }
+  )
+  useLayoutEffect(() => {
+    if (tab) {
+      writeNativeChatViewMemory(tab, key, ref)
+    }
+  }, [tab, key, ref])
+  return ref
+}
+
 /** A tab-kept value read once when the view mounts; without a key or a tab, nothing is kept. */
 export function useNativeChatViewMemory<T>(
   key: string | undefined,

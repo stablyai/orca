@@ -160,6 +160,11 @@ const keepsEditor = (editor: Editor): boolean =>
   !editor.isEmpty || undoDepth(editor.state) > 0 || redoDepth(editor.state) > 0
 
 function keepEditors(tabId: string, editors: ComposerEditors): void {
+  // A pane remounted in one commit kept its old editors after the new owner started; only one set stays.
+  const previous = keptEditorsByTab.get(tabId)
+  if (previous && previous !== editors) {
+    previous.destroyAll()
+  }
   keptEditorsByTab.set(tabId, editors)
   if (!editors.holdsNoText()) {
     return

@@ -1,24 +1,19 @@
 import { useEffect } from 'react'
-import { useNativeChatViewState } from '../../pane/ownership/native-chat-view-memory'
+import { useNativeChatViewMemory } from '../../pane/ownership/native-chat-view-memory'
 
-// Journals a tab keeps its latest /clear for: a rewind starts a new one.
-const KEPT_CLEAR_FLOORS = 4
+// Journals a tab keeps its /clear count for: a rewind starts a new one.
+const KEPT_CLEAR_COUNTS = 4
 
 /**
- * Names the conversation a chat tab shows: its journal and the latest /clear the tab has seen in it. Kept with the
- * tab, because a remounted view may load only rows past that /clear's divider.
+ * Names the conversation a chat tab shows: its journal and the live /clears the tab has seen in it. Kept with the
+ * tab, because a remounted view counts its own clears from 0; an older /clear found in history changes nothing.
  */
-export function useNativeChatConversationKey(epoch: string | null, clearFloor: number): string {
-  const [seenFloor, setSeenFloor] = useNativeChatViewState(
-    `clear-floor:${epoch ?? ''}`,
-    0,
-    KEPT_CLEAR_FLOORS
+export function useNativeChatConversationKey(epoch: string | null, clears: number): string {
+  const { saved, write } = useNativeChatViewMemory<number>(
+    `clear-count:${epoch ?? ''}`,
+    KEPT_CLEAR_COUNTS
   )
-  const floor = Math.max(clearFloor, seenFloor)
-  useEffect(() => {
-    if (floor > seenFloor) {
-      setSeenFloor(floor)
-    }
-  }, [floor, seenFloor, setSeenFloor])
-  return `${epoch ?? ''}:${floor}`
+  const seen = (saved ?? 0) + clears
+  useEffect(() => write(seen === 0 ? undefined : seen), [write, seen])
+  return `${epoch ?? ''}:${seen}`
 }
