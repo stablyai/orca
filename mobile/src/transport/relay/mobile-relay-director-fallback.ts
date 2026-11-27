@@ -26,6 +26,8 @@ export async function dialRelayThroughDirectorFallback(args: {
   persistResolvedRelay: (resolved: MobileRelayEndpoint) => Promise<void>
   // False when the director already answered this host within its admission window.
   canResolve?: boolean
+  // False when a director answer naming the same cell gives this credential no new reason to redial.
+  redialUnchanged?: boolean
 }): Promise<RelayDialResult> {
   const first = await args.dial()
   const relay = args.relay()
@@ -45,7 +47,7 @@ export async function dialRelayThroughDirectorFallback(args: {
     // keep the normal host-offline wait instead of redialing at once.
     const unchanged =
       resolved.cellUrl === relay.cellUrl && resolved.assignmentEpoch === relay.assignmentEpoch
-    if (persistentHostOffline && unchanged) {
+    if (unchanged && (persistentHostOffline || args.redialUnchanged === false)) {
       return first
     }
     // An unchanged route needs no write; persisting it rereads every saved host.

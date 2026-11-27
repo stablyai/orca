@@ -232,8 +232,8 @@ describe('Relay credential recovery', () => {
     }
   })
 
-  // A refused pending may still commit, so it stays dialable, but only on the slow reprobe and only until its lease ages out.
-  it('backs a refused pending off to the slow reprobe and stops trying it after its lease expires', async () => {
+  // A refused pending may still commit, so it stays dialable, but only on the slow credential reprobe.
+  it('backs a refused pending off to the slow credential reprobe', async () => {
     vi.useFakeTimers()
     const start = Date.now()
     const refused: MobileRelayCredentialBundle = {
@@ -267,13 +267,6 @@ describe('Relay credential recovery', () => {
       expect(pendingDials()).toBe(1)
       await vi.advanceTimersByTimeAsync(60_000)
       expect(pendingDials()).toBe(2)
-
-      // Past current's expiry plus a full resume lease, the pending lease has aged out locally.
-      vi.setSystemTime(start + 3_600_000 + 31 * 24 * 3_600_000)
-      const dialsBefore = openRelay.mock.calls.length
-      await vi.advanceTimersByTimeAsync(60 * 60_000)
-      expect(openRelay.mock.calls.length).toBe(dialsBefore)
-      expect(logical.getState()).toBe('disconnected')
     } finally {
       supervisor.stop()
     }

@@ -65,8 +65,9 @@ export class MobileRelaySessionEstablisher {
   }
 
   async adoptRelay(relay: MobileRelayEndpoint): Promise<void> {
-    // A stopped supervisor’s successor owns routing after removal/re-pairing.
-    if (this.args.isStopped()) {
+    // A stopped supervisor’s successor owns routing after removal/re-pairing; a late lookup after a direct win
+    // is stale and must not overwrite the route.
+    if (this.args.isStopped() || directWon(this.args.logical)) {
       return
     }
     await this.args.setRelayRouting(this.args.hostId, relay)
@@ -101,7 +102,11 @@ export class MobileRelaySessionEstablisher {
         continue
       }
       // The director admits one resolve per host per window, so after any lookup the rest only dial the cell.
-      const result = await this.dial(credential, !this.resolvedThisAttempt)
+      const result = await this.dial(
+        credential,
+        !this.resolvedThisAttempt,
+        credential.token !== pendingToken
+      )
       if (result.ok) {
         return { outcome: 'established' }
       }
@@ -112,8 +117,8 @@ export class MobileRelaySessionEstablisher {
       this.args.onDialFailure(result.error)
       if (isExplicitCredentialRejection(result.error)) {
         // Why: a rejected version stays invalid; retry only the later credentials. Pending is the exception: its
-        // install may commit after this refusal, so it stays dialable (on the slow credential reprobe) until its
-        // local lease ages out, and only a confirmed version is retired.
+        // install may commit after this refusal, so it stays dialable on the slow credential reprobe, and only a
+        // confirmed version is retired.
         if (credential.token !== pendingToken) {
           this.args.controller.recordRejectedCredential(credential.version)
         }
@@ -136,12 +141,15 @@ export class MobileRelaySessionEstablisher {
     }
   }
 
+  // redialUnchanged: false for pending, which a same-cell answer gives no new reason to retry this attempt.
   dial(
     credential: { token: string; version: number },
-    canResolve = true
+    canResolve = true,
+    redialUnchanged = true
   ): Promise<EstablishResult> {
     return dialRelayThroughDirectorFallback({
       canResolve,
+      redialUnchanged,
       resumeToken: credential.token,
       hostOfflineStreak: this.hostOfflineStreak,
       relay: () => this.relay,

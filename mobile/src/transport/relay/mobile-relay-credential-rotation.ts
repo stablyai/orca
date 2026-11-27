@@ -98,11 +98,9 @@ export function mobileRelayCredentialNeedsRotation(
   )
 }
 
-// The relay's resume-credential lifetime (relay contract `resumeTtlMs`).
-const RELAY_RESUME_LEASE_MS = 30 * 24 * 60 * 60 * 1000
-
-// A committed install can only follow `expectedCurrentHash`, so the relay numbered it current + 1. Rotation starts
-// near current's expiry, so an install would expire about a lease after that; a pending that never committed ages out.
+// A committed install can only follow `expectedCurrentHash`, so the relay numbered it current + 1.
+// The relay alone knows its expiry; the lease stays dialable until the relay answers, and a refused one only
+// retries on the slow credential reprobe.
 export function pendingRelayCredentialLease(
   bundle: MobileRelayCredentialBundle
 ): MobileRelayCredentialBundle['current'] | null {
@@ -113,7 +111,7 @@ export function pendingRelayCredentialLease(
     token: bundle.pending.token,
     hash: bundle.pending.hash,
     version: bundle.current.version + 1,
-    expiresAt: Math.min(bundle.current.expiresAt + RELAY_RESUME_LEASE_MS, Number.MAX_SAFE_INTEGER)
+    expiresAt: Number.MAX_SAFE_INTEGER
   }
 }
 

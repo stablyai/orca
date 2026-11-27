@@ -116,6 +116,8 @@ export function classifyConnection(args: {
   // Include host identity because header labels can appear without a row title.
   hostName?: string
   nowMs?: number
+  // Callers that read only the verdict's kind (Home's unreachable projection) skip formatting refusal advice.
+  omitAdvice?: boolean
 }): ConnectionVerdict {
   const { state, reconnectAttempts, lastConnectedAt } = args
   const now = args.nowMs ?? Date.now()
@@ -155,7 +157,7 @@ export function classifyConnection(args: {
           label: copy.label(host),
           reason: staleReason,
           detail:
-            reachability === 'credential-refused'
+            reachability === 'credential-refused' && !args.omitAdvice
               ? refusedCredentialDetail(host, args.endpoint)
               : copy.detail,
           relay: reachability
